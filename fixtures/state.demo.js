@@ -1,0 +1,857 @@
+window.TIRITH_STATE = {
+  "version": 1,
+  "generated_at": "2026-10-28T19:40:00Z",
+  "brain": {
+    "enabled": true,
+    "model": "muse-spark",
+    "last_error": null
+  },
+  "steward": {
+    "name": "Aldric of the Tower",
+    "title": "The Steward",
+    "activity": "Reviewing Ivren's performance report before merging",
+    "since": "2026-10-28T19:31:00Z",
+    "notes": [
+      {
+        "at": "2026-10-28T19:05:00Z",
+        "project": "chromasol",
+        "text": "Merged Halvard's Room database lane into integration",
+        "session": "2026-10-28-chromasol-release"
+      },
+      {
+        "at": "2026-10-28T19:20:00Z",
+        "project": "chromasol",
+        "text": "Launched Ivren on performance; owner's phone assigned to her",
+        "session": "2026-10-28-chromasol-release"
+      },
+      {
+        "at": "2026-10-28T19:31:00Z",
+        "project": "tirith",
+        "text": "Contract v1 fixed; two lanes can start in parallel",
+        "session": "2026-10-28-tirith-web"
+      }
+    ]
+  },
+  "waiting_on_you": [
+    {
+      "id": "w-1",
+      "project": "chromasol",
+      "text": "Tick the AI asset declaration on the store listing and press Save",
+      "since": "2026-10-28T18:50:00Z",
+      "link": null,
+      "session": "2026-10-28-chromasol-release"
+    },
+    {
+      "id": "w-2",
+      "project": "tirith",
+      "text": "Install the commit guard in the Tirith repository",
+      "since": "2026-10-28T19:38:00Z",
+      "link": null,
+      "session": "2026-10-28-tirith-web"
+    }
+  ],
+  "projects": [
+    {
+      "id": "chromasol",
+      "name": "ChromaSol",
+      "color": "#2f7d5b",
+      "architecture": {
+        "nodes": [
+          {
+            "id": "photos",
+            "label": "Photos",
+            "kind": "input",
+            "files": 2
+          },
+          {
+            "id": "subject",
+            "label": "Person cutout",
+            "kind": "service",
+            "files": 11
+          },
+          {
+            "id": "engine",
+            "label": "Colour engine (C)",
+            "kind": "core",
+            "files": 14
+          },
+          {
+            "id": "dictionary",
+            "label": "Wada dictionary",
+            "kind": "data",
+            "files": 3
+          },
+          {
+            "id": "database",
+            "label": "Room database",
+            "kind": "data",
+            "files": 6
+          },
+          {
+            "id": "ui",
+            "label": "Screens",
+            "kind": "ui",
+            "files": 31
+          }
+        ],
+        "edges": [
+          {
+            "from": "photos",
+            "to": "subject",
+            "label": "bitmap"
+          },
+          {
+            "from": "subject",
+            "to": "engine",
+            "label": "masks"
+          },
+          {
+            "from": "dictionary",
+            "to": "engine",
+            "label": "348 combos"
+          },
+          {
+            "from": "engine",
+            "to": "database",
+            "label": "scans"
+          },
+          {
+            "from": "database",
+            "to": "ui",
+            "label": "feed"
+          }
+        ],
+        "generated_at": "2026-10-28T19:00:00Z",
+        "source": "muse"
+      },
+      "folder": "/Users/you/DEVELOP/ChromaSol",
+      "auto": false,
+      "counts": {
+        "agents_working": 1,
+        "agents_total": 3,
+        "pipelines_running": 1,
+        "flows_24h": 7
+      }
+    },
+    {
+      "id": "tirith",
+      "name": "Tirith",
+      "color": "#c9a227",
+      "architecture": {
+        "nodes": [
+          {
+            "id": "cli",
+            "label": "tirith CLI",
+            "kind": "input",
+            "files": 3
+          },
+          {
+            "id": "collector",
+            "label": "Collector",
+            "kind": "service",
+            "files": 5
+          },
+          {
+            "id": "brain",
+            "label": "Muse brain",
+            "kind": "core",
+            "files": 2
+          },
+          {
+            "id": "state",
+            "label": "state.json",
+            "kind": "data",
+            "files": 1
+          },
+          {
+            "id": "world",
+            "label": "3D citadel",
+            "kind": "ui",
+            "files": 20
+          }
+        ],
+        "edges": [
+          {
+            "from": "cli",
+            "to": "collector",
+            "label": "events"
+          },
+          {
+            "from": "collector",
+            "to": "brain",
+            "label": "log tails"
+          },
+          {
+            "from": "brain",
+            "to": "state",
+            "label": "summaries"
+          },
+          {
+            "from": "collector",
+            "to": "state",
+            "label": "every 2 s"
+          },
+          {
+            "from": "state",
+            "to": "world",
+            "label": "poll"
+          }
+        ],
+        "generated_at": "2026-10-28T19:35:00Z",
+        "source": "manual"
+      },
+      "folder": "/Users/you/DEVELOP/Tirith",
+      "auto": false,
+      "counts": {
+        "agents_working": 1,
+        "agents_total": 2,
+        "pipelines_running": 0,
+        "flows_24h": 2
+      }
+    },
+    {
+      "id": "relagame",
+      "name": "RelaGame",
+      "color": "#d9772b",
+      "architecture": {
+        "nodes": [],
+        "edges": [],
+        "generated_at": null,
+        "source": "none"
+      },
+      "folder": "/Users/you/DEVELOP/RelaGame",
+      "auto": false,
+      "counts": {
+        "agents_working": 0,
+        "agents_total": 0,
+        "pipelines_running": 0,
+        "flows_24h": 0
+      }
+    },
+    {
+      "id": "sketchbook",
+      "name": "sketchbook",
+      "color": "#8a5fb0",
+      "folder": "/Users/you/DEVELOP/sketchbook",
+      "auto": true,
+      "architecture": {
+        "nodes": [],
+        "edges": [],
+        "generated_at": null,
+        "source": "none"
+      },
+      "guard": {
+        "ok": false,
+        "problems": [
+          "auto-discovered folder: no commit guard configured"
+        ]
+      },
+      "counts": {
+        "agents_working": 0,
+        "agents_total": 0,
+        "pipelines_running": 0,
+        "flows_24h": 0
+      }
+    }
+  ],
+  "agents": [
+    {
+      "id": "w6-perf",
+      "project": "chromasol",
+      "name": "Ivren",
+      "epithet": "of the Seventh Gate",
+      "class": "swiftrider",
+      "rank": "captain",
+      "renown": 760,
+      "feature": "Performance and size on the owner's phone",
+      "status": "working",
+      "started_at": "2026-10-28T17:40:00Z",
+      "ended_at": null,
+      "elapsed_s": 7200,
+      "summary": "Measuring the 200-photo scan on the phone: 1.39 s per photo after reusing the pose task.",
+      "log_tail": [
+        "scan 200: persons 5.32 s/photo, none 0.70 s/photo",
+        "A/B ratio median 0.70"
+      ],
+      "files_changed": 7,
+      "insertions": 412,
+      "deletions": 96,
+      "report": null,
+      "session": "2026-10-28-chromasol-release"
+    },
+    {
+      "id": "w1-data",
+      "project": "chromasol",
+      "name": "Halvard",
+      "epithet": "Stonehand",
+      "class": "stonewright",
+      "rank": "sergeant",
+      "renown": 340,
+      "feature": "Room database with the iOS migrations",
+      "status": "done",
+      "started_at": "2026-10-28T13:30:00Z",
+      "ended_at": "2026-10-28T15:10:00Z",
+      "elapsed_s": 6000,
+      "summary": "Finished: Room v1 to v4 migrations, curated names and the strings check, all green.",
+      "log_tail": [
+        "Finished 20 tests",
+        "strings OK"
+      ],
+      "files_changed": 31,
+      "insertions": 2210,
+      "deletions": 140,
+      "report": "Room database with the same schema and v1-v4 migrations as iOS; 19 new device tests.",
+      "session": "2026-10-28-chromasol-release"
+    },
+    {
+      "id": "icon-2",
+      "project": "chromasol",
+      "name": "Sefa",
+      "epithet": "Prismhand",
+      "class": "glasswright",
+      "rank": "sentinel",
+      "renown": 120,
+      "feature": "Crystal C icon in Blender",
+      "status": "failed",
+      "started_at": "2026-10-28T16:00:00Z",
+      "ended_at": "2026-10-28T16:50:00Z",
+      "elapsed_s": 3000,
+      "summary": "The render matches the outline but the owner preferred the generated image.",
+      "log_tail": [
+        "IoU 0.9271",
+        "SSIM 0.7953"
+      ],
+      "files_changed": 4,
+      "insertions": 600,
+      "deletions": 0,
+      "report": "Silhouette matches; inner contour still differs from the target.",
+      "session": "2026-10-28-chromasol-release"
+    },
+    {
+      "id": "t-world",
+      "project": "tirith",
+      "name": "Marrow",
+      "epithet": "Quickstep",
+      "class": "stonewright",
+      "rank": "recruit",
+      "renown": 0,
+      "feature": "The 3D citadel",
+      "status": "working",
+      "started_at": "2026-10-28T19:40:00Z",
+      "ended_at": null,
+      "elapsed_s": 60,
+      "summary": "Laying out the hill, the rings and the districts.",
+      "log_tail": [],
+      "files_changed": 0,
+      "insertions": 0,
+      "deletions": 0,
+      "report": null,
+      "session": "2026-10-28-tirith-web"
+    },
+    {
+      "id": "t-collector",
+      "project": "tirith",
+      "name": "Odile",
+      "epithet": "Inkwell",
+      "class": "loremaster",
+      "rank": "recruit",
+      "renown": 0,
+      "feature": "Collector, CLI and the brain",
+      "status": "stalled",
+      "started_at": "2026-10-28T19:10:00Z",
+      "ended_at": null,
+      "elapsed_s": 1800,
+      "summary": "Waiting: no log output for 12 minutes.",
+      "log_tail": [
+        "retrying model turn in 2000ms"
+      ],
+      "files_changed": 3,
+      "insertions": 150,
+      "deletions": 0,
+      "report": null,
+      "session": "2026-10-28-tirith-web"
+    }
+  ],
+  "pipelines": [
+    {
+      "run": "android-release#7",
+      "project": "chromasol",
+      "pipeline": "android-release",
+      "status": "running",
+      "started_at": "2026-10-28T19:30:00Z",
+      "ended_at": null,
+      "stages": [
+        {
+          "name": "build",
+          "status": "passed",
+          "started_at": "2026-10-28T19:30:00Z",
+          "ended_at": "2026-10-28T19:30:34Z",
+          "duration_s": 34,
+          "log_tail": [
+            "BUILD SUCCESSFUL in 34s"
+          ]
+        },
+        {
+          "name": "tests",
+          "status": "passed",
+          "started_at": "2026-10-28T19:30:34Z",
+          "ended_at": "2026-10-28T19:31:20Z",
+          "duration_s": 46,
+          "log_tail": [
+            "tests 82 failures 0"
+          ]
+        },
+        {
+          "name": "lint",
+          "status": "passed",
+          "started_at": "2026-10-28T19:31:20Z",
+          "ended_at": "2026-10-28T19:31:45Z",
+          "duration_s": 25,
+          "log_tail": [
+            "no network: OK"
+          ]
+        },
+        {
+          "name": "16kb",
+          "status": "passed",
+          "started_at": "2026-10-28T19:31:45Z",
+          "ended_at": "2026-10-28T19:31:47Z",
+          "duration_s": 2,
+          "log_tail": [
+            "16 KB: OK"
+          ]
+        },
+        {
+          "name": "sign",
+          "status": "running",
+          "started_at": "2026-10-28T19:31:47Z",
+          "ended_at": null,
+          "duration_s": null,
+          "log_tail": [
+            "signReleaseBundle"
+          ]
+        },
+        {
+          "name": "device",
+          "status": "pending",
+          "started_at": null,
+          "ended_at": null,
+          "duration_s": null,
+          "log_tail": []
+        },
+        {
+          "name": "store",
+          "status": "pending",
+          "started_at": null,
+          "ended_at": null,
+          "duration_s": null,
+          "log_tail": []
+        },
+        {
+          "name": "review",
+          "status": "pending",
+          "started_at": null,
+          "ended_at": null,
+          "duration_s": null,
+          "log_tail": []
+        }
+      ],
+      "session": "2026-10-28-chromasol-release"
+    },
+    {
+      "run": "ios-testflight#3",
+      "project": "relagame",
+      "pipeline": "ios-testflight",
+      "status": "failed",
+      "started_at": "2026-10-28T09:00:00Z",
+      "ended_at": "2026-10-28T09:12:00Z",
+      "stages": [
+        {
+          "name": "export",
+          "status": "passed",
+          "started_at": "2026-10-28T09:00:00Z",
+          "ended_at": "2026-10-28T09:04:00Z",
+          "duration_s": 240,
+          "log_tail": []
+        },
+        {
+          "name": "archive",
+          "status": "failed",
+          "started_at": "2026-10-28T09:04:00Z",
+          "ended_at": "2026-10-28T09:12:00Z",
+          "duration_s": 480,
+          "log_tail": [
+            "error: No signing certificate"
+          ]
+        },
+        {
+          "name": "upload",
+          "status": "skipped",
+          "started_at": null,
+          "ended_at": null,
+          "duration_s": null,
+          "log_tail": []
+        }
+      ],
+      "session": "2026-10-28-relagame-ios"
+    }
+  ],
+  "rooms": [
+    {
+      "id": "chromasol-war-room",
+      "url": "https://agentsmessenger.com/r/chromasol-war-room",
+      "title": "Chromasol War Room",
+      "project": "chromasol",
+      "summary": "The ChromaSol lanes are coordinating the 1.0.0 release while it is in store review, with the icon export still failing.",
+      "summary_source": "muse",
+      "needs_owner": [],
+      "message_count": 7,
+      "last_message_at": "2026-10-28T19:19:05.000Z",
+      "activity_per_hour": 3,
+      "messages_last_day": 7,
+      "polled_at": "2026-10-28T19:39:50Z",
+      "error": null,
+      "participants": [
+        {
+          "name": "Ivren",
+          "kind": "tirith-agent",
+          "hero_id": "w6-perf",
+          "hero_name": "Ivren",
+          "last_seen": "2026-10-28T19:10:44.000Z",
+          "messages": 2,
+          "present": true
+        },
+        {
+          "name": "Halvard",
+          "kind": "tirith-agent",
+          "hero_id": "w1-data",
+          "hero_name": "Halvard",
+          "last_seen": "2026-10-28T19:19:05.000Z",
+          "messages": 2,
+          "present": true
+        },
+        {
+          "name": "Sefa",
+          "kind": "tirith-agent",
+          "hero_id": "icon-2",
+          "hero_name": "Sefa",
+          "last_seen": "2026-10-28T19:01:09.000Z",
+          "messages": 1,
+          "present": false
+        },
+        {
+          "name": "andres",
+          "kind": "owner",
+          "hero_id": null,
+          "hero_name": null,
+          "last_seen": "2026-10-28T19:18:20.000Z",
+          "messages": 1,
+          "present": true
+        },
+        {
+          "name": "play-console-bot",
+          "kind": "external",
+          "hero_id": null,
+          "hero_name": null,
+          "last_seen": "2026-10-28T18:52:11.000Z",
+          "messages": 1,
+          "present": false
+        }
+      ],
+      "reply_edges": [
+        {
+          "from": "Halvard",
+          "to": "Ivren",
+          "count": 1
+        },
+        {
+          "from": "Sefa",
+          "to": "Ivren",
+          "count": 1
+        },
+        {
+          "from": "Ivren",
+          "to": "Sefa",
+          "count": 1
+        },
+        {
+          "from": "andres",
+          "to": "Halvard",
+          "count": 1
+        },
+        {
+          "from": "andres",
+          "to": "Ivren",
+          "count": 1
+        },
+        {
+          "from": "Halvard",
+          "to": "andres",
+          "count": 1
+        }
+      ],
+      "messages": [
+        {
+          "n": 1,
+          "at": "2026-10-28T18:40:00.000Z",
+          "from": "Ivren",
+          "text": "Release build 1.0.0 (2) is on the device farm. Cold start is 410 ms.",
+          "re": [],
+          "agreed": [],
+          "signed": "self",
+          "kind": "message",
+          "truncated": false
+        },
+        {
+          "n": 2,
+          "at": "2026-10-28T18:44:30.000Z",
+          "from": "Halvard",
+          "text": "The Room migration v3 to v4 is merged. Tests are green on all three devices.",
+          "re": [
+            1
+          ],
+          "agreed": [
+            "Ivren"
+          ],
+          "signed": "self",
+          "kind": "message",
+          "truncated": false
+        },
+        {
+          "n": 3,
+          "at": "2026-10-28T18:52:11.000Z",
+          "from": "play-console-bot",
+          "text": "Review status changed: In review. Typical wait is 1 to 3 days.",
+          "re": [],
+          "agreed": [],
+          "signed": "platform",
+          "kind": "message",
+          "truncated": false
+        },
+        {
+          "n": 4,
+          "at": "2026-10-28T19:01:09.000Z",
+          "from": "Sefa",
+          "text": "The adaptive icon export failed on the foreground layer; retrying with a 432 px canvas.",
+          "re": [
+            1
+          ],
+          "agreed": [],
+          "signed": "platform",
+          "kind": "message",
+          "truncated": false
+        },
+        {
+          "n": 5,
+          "at": "2026-10-28T19:10:44.000Z",
+          "from": "Ivren",
+          "text": "Sefa, the store listing wants the 512 px icon too. andres, the AI asset declaration still needs your tick.",
+          "re": [
+            4
+          ],
+          "agreed": [],
+          "signed": "self",
+          "kind": "message",
+          "truncated": false
+        },
+        {
+          "n": 6,
+          "at": "2026-10-28T19:18:20.000Z",
+          "from": "andres",
+          "text": "On it. Halvard, please freeze the migration until the review lands.",
+          "re": [
+            2,
+            5
+          ],
+          "agreed": [
+            "Halvard"
+          ],
+          "signed": "self",
+          "kind": "message",
+          "truncated": false
+        },
+        {
+          "n": 7,
+          "at": "2026-10-28T19:19:05.000Z",
+          "from": "Halvard",
+          "text": "Frozen. Standing by.",
+          "re": [
+            6
+          ],
+          "agreed": [
+            "andres"
+          ],
+          "signed": "self",
+          "kind": "message",
+          "truncated": false
+        }
+      ]
+    }
+  ],
+  "flows": [
+    {
+      "id": "f-1",
+      "at": "2026-10-28T18:30:00Z",
+      "from": "steward",
+      "to": "agent:w6-perf",
+      "from_name": "The Steward",
+      "to_name": "Ivren of the Seventh Gate",
+      "kind": "brief",
+      "text": "Brief: Performance and size on the owner's phone",
+      "ref": "briefs/w6.md",
+      "project": "chromasol",
+      "session": "2026-10-28-chromasol-release"
+    },
+    {
+      "id": "f-3",
+      "at": "2026-10-28T18:50:00Z",
+      "from": "steward",
+      "to": "owner",
+      "from_name": "The Steward",
+      "to_name": "You",
+      "kind": "request",
+      "text": "Tick the AI asset declaration on the store listing",
+      "ref": null,
+      "project": "chromasol",
+      "session": "2026-10-28-chromasol-release"
+    },
+    {
+      "id": "f-4",
+      "at": "2026-10-28T19:02:00Z",
+      "from": "agent:icon-2",
+      "to": "steward",
+      "from_name": "Sefa Prismhand",
+      "to_name": "The Steward",
+      "kind": "report",
+      "text": "failed: adaptive icon export broke",
+      "ref": null,
+      "project": "chromasol",
+      "session": "2026-10-28-chromasol-release"
+    },
+    {
+      "id": "f-5",
+      "at": "2026-10-28T19:05:00Z",
+      "from": "agent:w1-data",
+      "to": "steward",
+      "from_name": "Halvard Stonehand",
+      "to_name": "The Steward",
+      "kind": "report",
+      "text": "done: migrations green",
+      "ref": null,
+      "project": "chromasol",
+      "session": "2026-10-28-chromasol-release"
+    },
+    {
+      "id": "f-6",
+      "at": "2026-10-28T19:10:00Z",
+      "from": "steward",
+      "to": "agent:t-world",
+      "from_name": "The Steward",
+      "to_name": "Marrow Quickstep",
+      "kind": "message",
+      "text": "Owner wants a much smaller compact world",
+      "ref": null,
+      "project": "tirith",
+      "session": "2026-10-28-tirith-web"
+    },
+    {
+      "id": "f-8",
+      "at": "2026-10-28T19:20:00Z",
+      "from": "pipeline:android-release#7",
+      "to": "steward",
+      "from_name": "android-release#7",
+      "to_name": "The Steward",
+      "kind": "report",
+      "text": "android-release failed: lint failed",
+      "ref": null,
+      "project": "chromasol",
+      "session": "2026-10-28-chromasol-release"
+    },
+    {
+      "id": "f-9",
+      "at": "2026-10-28T19:25:00Z",
+      "from": "guard",
+      "to": "owner",
+      "from_name": "The Guard",
+      "to_name": "You",
+      "kind": "alert",
+      "text": "Commit guard needs attention in Tirith",
+      "ref": null,
+      "project": "chromasol",
+      "session": "2026-10-28-chromasol-release"
+    },
+    {
+      "id": "f-10",
+      "at": "2026-10-28T19:36:00Z",
+      "from": "owner",
+      "to": "steward",
+      "from_name": "You",
+      "to_name": "The Steward",
+      "kind": "answer",
+      "text": "Done: declaration ticked",
+      "ref": null,
+      "project": "chromasol",
+      "session": "2026-10-28-chromasol-release"
+    },
+    {
+      "id": "f-11",
+      "at": "2026-10-28T19:38:00Z",
+      "from": "steward",
+      "to": "agent:t-collector",
+      "from_name": "The Steward",
+      "to_name": "Odile Inkwell",
+      "kind": "decision",
+      "text": "Merge the rooms poller after tests",
+      "ref": null,
+      "project": "tirith",
+      "session": "2026-10-28-tirith-web"
+    }
+  ],
+  "sessions": [
+    {
+      "id": "2026-10-28-tirith-web",
+      "title": "Tirith web and collector",
+      "started_at": "2026-10-28T19:00:00Z",
+      "ended_at": null,
+      "projects": [
+        "tirith"
+      ],
+      "counts": {
+        "agents": 2,
+        "pipelines": 0,
+        "flows": 2,
+        "notes": 1
+      }
+    },
+    {
+      "id": "2026-10-28-relagame-ios",
+      "title": "RelaGame TestFlight",
+      "started_at": "2026-10-28T08:30:00Z",
+      "ended_at": "2026-10-28T10:00:00Z",
+      "projects": [
+        "relagame"
+      ],
+      "counts": {
+        "agents": 0,
+        "pipelines": 1,
+        "flows": 0,
+        "notes": 0
+      }
+    },
+    {
+      "id": "2026-10-28-chromasol-release",
+      "title": "ChromaSol release train",
+      "started_at": "2026-10-28T08:00:00Z",
+      "ended_at": null,
+      "projects": [
+        "chromasol"
+      ],
+      "counts": {
+        "agents": 3,
+        "pipelines": 1,
+        "flows": 7,
+        "notes": 2
+      }
+    }
+  ]
+};

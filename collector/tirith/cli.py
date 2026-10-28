@@ -1,0 +1,807 @@
+"""The ``tirith`` command line: lanes, pipelines, notes, waits, guard, brain.
+
+Every subcommand only touches files under TIRITH_HOME (plus, for
+``lane run``/``run``, the child command it wraps and, for ``guard install``,
+the hooks folder of the repo the owner named). No command opens a port.
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+from tirith.collector import Collector, collect_tree, git_head, heuristic_architecture
+from tirith.guardwrap import default_words, install_guard, verify_guard
+from tirith import flows as flows_mod
+from tirith import projects as projects_mod
+from tirith import rooms as rooms_mod
+from tirith.home import ensure_home, load_config, now_iso, tirith_home
+from tirith.store import (
+    append_jsonl, lane_path, read_json, read_jsonl, write_json_atomic, write_lane,
+)
+
+
+def _home(args) -> Path:
+    return ensure_home(tirith_home(getattr(args, "home", None)))
+
+
+def _slug(text: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", (text or "").lower()).strip("-")
+    return slug[:32] or "lane"
+
+
+def _unique_lane_id(home: Path, wanted: str) -> str:
+    candidate, suffix = wanted, 2
+    while lane_path(home, candidate).exists():
+        candidate = f"{wanted}-{suffix}"
+        suffix += 1
+    return candidate
+
+
+def register_lane(home: Path, *, lane_id: str | None, project: str, hero_class: str,
+                  feature: str, workspace: str | None, log: str | None,
+                  pid: int | None, brief: str | None) -> dict:
+    """Write a new lane registration; returns the stored dict."""
+    if not lane_id:
+        lane_id = _unique_lane_id(home, _slug(feature))
+    elif lane_path(home, lane_id).exists():
+        raise SystemExit(f"lane already exists: {lane_id}")
+    workspace_abs = str(Path(workspace).expanduser().resolve()) if workspace else None
+    lane = {
+        "id": lane_id, "project": project, "class": hero_class, "feature": feature,
+        "workspace": workspace_abs,
+        "log": str(Path(log).expanduser().resolve()) if log else None,
+        "pid": pid,
+        "brief": str(Path(brief).expanduser().resolve()) if brief else None,
+        "started_at": now_iso(), "ended_at": None, "result": None,
+        "start_commit": git_head(workspace_abs), "report": None,
+        "session": projects_mod.current_session(home),
+    }
+    write_lane(home, lane)
+    flows_mod.append_flow(home, "steward", f"agent:{lane_id}", "brief",
+                          f"Brief: {feature}", lane["brief"], project=project)
+    return lane
+
+
+def end_lane(home: Path, lane_id: str, result: str, report: str | None = None) -> dict:
+    """Mark a lane ended with done/failed; returns the stored dict."""
+    lane = read_json(lane_path(home, lane_id), None)
+    if not isinstance(lane, dict):
+        raise SystemExit(f"unknown lane: {lane_id}")
+    lane["ended_at"] = now_iso()
+    lane["result"] = result
+    if report is not None:
+        lane["report"] = report
+    write_lane(home, lane)
+    flows_mod.append_flow(
+        home, f"agent:{lane_id}", "steward", "report",
+        f"{result}: " + (flows_mod.first_line(report) or str(lane.get("feature") or "")),
+        session=lane.get("session") or projects_mod.current_session(home),
+        project=str(lane.get("project") or "") or None)
+    return lane
+
+
+def _cmd_lane_start(args) -> int:
+    home = _home(args)
+    lane = register_lane(
+        home, lane_id=args.id, project=args.project, hero_class=args.hero_class,
+        feature=args.feature, workspace=args.workspace, log=args.log,
+        pid=args.pid, brief=args.brief)
+    print(lane["id"])
+    return 0
+
+
+def _cmd_lane_end(args) -> int:
+    home = _home(args)
+    report = args.report
+    if args.report_file:
+        report = Path(args.report_file).expanduser().read_text(encoding="utf-8")
+    end_lane(home, args.lane_id, args.result, report)
+    print(f"lane {args.lane_id}: {args.result}")
+    return 0
+
+
+def _wrapper_path_env(home: Path | None = None) -> dict:
+    """Environment with the owner's git wrapper folder first in PATH."""
+    env = dict(os.environ)
+    session = projects_mod.current_session(home or tirith_home())
+    if session:
+        env["TIRITH_SESSION"] = session
+    wrapper_dir = str(Path.home() / ".local" / "bin")
+    env["PATH"] = wrapper_dir + os.pathsep + env.get("PATH", "")
+    return env
+
+
+def _project_or_exit(home: Path, project_id: str):
+    config = load_config(home)
+    proj = config.project(project_id)
+    if proj is None:
+        auto = next((p for p in projects_mod.load_auto(home)["projects"]
+                     if str(p["id"]) == project_id), None)
+        if auto is not None:
+            from tirith.home import ProjectConfig
+            return config, ProjectConfig(id=project_id, name=str(auto.get("name") or project_id),
+                                         repo=Path(auto["folder"]), color=str(auto.get("color") or "#888888"))
+        raise SystemExit(f"unknown project '{project_id}' (not in {home / 'config.toml'})")
+    return config, proj
+
+
+def _cmd_lane_run(args) -> int:
+    home = _home(args)
+    command = list(args.command or [])
+    if command and command[0] == "--":
+        command = command[1:]
+    if not command:
+        raise SystemExit("lane run needs a command after --")
+    config, proj = _project_or_exit(home, args.project)
+    workspace = Path(args.workspace).expanduser().resolve() if args.workspace else proj.repo
+    if workspace is None:
+        raise SystemExit(f"project '{args.project}' has no repo; pass --workspace")
+    problems = verify_guard(Path(workspace), config.words_for(proj, default_words()))
+    if problems:
+        print("refusing to start: commit guard is not intact:", file=sys.stderr)
+        for problem in problems:
+            print(f"  {problem}", file=sys.stderr)
+        return 3
+    lane_id = args.id or _unique_lane_id(home, _slug(args.feature))
+    log_path = Path(args.log).expanduser().resolve() if args.log \
+        else home / "logs" / f"{lane_id}.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    lane = register_lane(
+        home, lane_id=lane_id, project=args.project, hero_class=args.hero_class,
+        feature=args.feature, workspace=str(workspace), log=str(log_path),
+        pid=None, brief=args.brief)
+    with log_path.open("ab") as log_handle:
+        proc = subprocess.Popen(
+            command, cwd=str(workspace), env=_wrapper_path_env(home),
+            stdout=log_handle, stderr=subprocess.STDOUT)
+        lane["pid"] = proc.pid
+        write_lane(home, lane)
+        exit_code = proc.wait()
+    end_lane(home, lane_id, "done" if exit_code == 0 else "failed")
+    print(lane_id)
+    return exit_code
+
+
+def _pipeline_book(home: Path) -> dict:
+    data = read_json(home / "pipelines.json", {})
+    return data if isinstance(data, dict) else {}
+
+
+def _cmd_pipeline_declare(args) -> int:
+    home = _home(args)
+    stages = [s.strip() for s in (args.stages or "").split(",") if s.strip()]
+    if not stages:
+        raise SystemExit("pipeline declare needs --stages a,b,c")
+    book = _pipeline_book(home)
+    key = f"{args.project}/{args.pipeline}" if args.project else f"*/{args.pipeline}"
+    entry = book.get(key) if isinstance(book.get(key), dict) else {}
+    entry.update({"stages": stages})
+    entry.setdefault("counter", 0)
+    book[key] = entry
+    write_json_atomic(home / "pipelines.json", book)
+    print(f"{args.pipeline}: {','.join(stages)}")
+    return 0
+
+
+def _resolve_run(home: Path, project: str, pipeline: str,
+                 explicit: str | None, new_run: bool) -> str:
+    if explicit:
+        return explicit
+    book = _pipeline_book(home)
+    key = f"{project}/{pipeline}"
+    entry = book.get(key) if isinstance(book.get(key), dict) else None
+    if entry is None:
+        entry = book.get(f"*/{pipeline}") if isinstance(book.get(f"*/{pipeline}"), dict) else {}
+        key = f"{project}/{pipeline}"
+    counter = int(entry.get("counter") or 0)
+    if new_run or counter == 0:
+        counter += 1
+        entry = {**entry, "counter": counter, "current_run": f"{pipeline}#{counter}"}
+        book[key] = entry
+        write_json_atomic(home / "pipelines.json", book)
+    return str(entry.get("current_run") or f"{pipeline}#{counter}")
+
+
+def _wrapper_env_session(home: Path) -> dict:
+    """Child environment that carries the current session to nested tirith calls."""
+    env = dict(os.environ)
+    session = projects_mod.current_session(home)
+    if session:
+        env["TIRITH_SESSION"] = session
+    return env
+
+
+def _cmd_run(args) -> int:
+    home = _home(args)
+    command = list(args.command or [])
+    if command and command[0] == "--":
+        command = command[1:]
+    if not command:
+        raise SystemExit("tirith run needs a command after --")
+    run_id = _resolve_run(home, args.project, args.pipeline, args.run, args.new_run)
+    safe_run = run_id.replace("#", "-").replace("/", "-")
+    log_path = Path(args.log).expanduser().resolve() if args.log \
+        else home / "logs" / f"{safe_run}-{args.stage}.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    base = {"run": run_id, "project": args.project, "pipeline": args.pipeline,
+            "stage": args.stage, "log": str(log_path), "cwd": str(Path.cwd().resolve()),
+            "session": projects_mod.current_session(home)}
+    if args.agent:
+        base["agent"] = args.agent
+    append_jsonl(home / "events.jsonl",
+                 {"at": now_iso(), **base, "event": "start", "status": "running"})
+    exit_code = 1
+    try:
+        with log_path.open("ab") as log_handle:
+            proc = subprocess.Popen(command, stdout=subprocess.PIPE,
+                                    stderr=subprocess.STDOUT, env=_wrapper_env_session(home))
+            assert proc.stdout is not None
+            for chunk in proc.stdout:
+                log_handle.write(chunk)
+                log_handle.flush()
+                buffer = getattr(sys.stdout, "buffer", None)
+                if buffer is not None:
+                    buffer.write(chunk)
+                    buffer.flush()
+                else:
+                    sys.stdout.write(chunk.decode(errors="replace"))
+                    sys.stdout.flush()
+            exit_code = proc.wait()
+    finally:
+        append_jsonl(home / "events.jsonl", {
+            "at": now_iso(), **base, "event": "end",
+            "status": "passed" if exit_code == 0 else "failed"})
+    return exit_code
+
+
+def _cmd_note(args) -> int:
+    home = _home(args)
+    append_jsonl(home / "notes.jsonl",
+                 {"at": now_iso(), "project": args.project, "text": args.text,
+                  "session": projects_mod.current_session(home)})
+    print("noted")
+    return 0
+
+
+def _next_wait_id(home: Path) -> str:
+    highest = 0
+    for row in read_jsonl(home / "waits.jsonl"):
+        match = re.match(r"w-(\d+)$", str(row.get("id") or ""))
+        if match:
+            highest = max(highest, int(match.group(1)))
+    return f"w-{highest + 1}"
+
+
+def _cmd_wait_add(args) -> int:
+    home = _home(args)
+    wait_id = args.id or _next_wait_id(home)
+    append_jsonl(home / "waits.jsonl", {
+        "id": wait_id, "at": now_iso(), "project": args.project,
+        "text": args.text, "link": args.link, "done_at": None,
+        "session": projects_mod.current_session(home)})
+    flows_mod.append_flow(home, "steward", "owner", "request", args.text, args.link,
+                          project=args.project)
+    print(wait_id)
+    return 0
+
+
+def _cmd_wait_done(args) -> int:
+    home = _home(args)
+    rows = read_jsonl(home / "waits.jsonl")
+    original = next((r for r in reversed(rows) if str(r.get("id")) == args.wait_id), None)
+    if original is None:
+        raise SystemExit(f"unknown wait: {args.wait_id}")
+    append_jsonl(home / "waits.jsonl", {
+        **original, "done_at": now_iso(), "session": original.get("session"),
+        "done_session": projects_mod.current_session(home)})
+    flows_mod.append_flow(home, "owner", "steward", "answer",
+                          f"Done: {original.get('text') or args.wait_id}",
+                          session=original.get("session") or projects_mod.current_session(home),
+                          project=original.get("project"))
+    print(f"{args.wait_id}: done")
+    return 0
+
+
+def _cmd_flow(args) -> int:
+    home = _home(args)
+    for label, value in (("--from", args.src), ("--to", args.dst)):
+        if not flows_mod.valid_endpoint(value):
+            raise SystemExit(
+                f"{label} must be steward, owner, guard, agent:<lane>, room:<room> or "
+                f"pipeline:<run>, got {value!r}")
+    if not args.text.strip():
+        raise SystemExit("--text is empty")
+    row = flows_mod.append_flow(home, args.src, args.dst, args.kind, args.text, args.ref)
+    print(row["id"])
+    return 0
+
+
+def _cmd_project_add(args) -> int:
+    home = _home(args)
+    words = [w.strip() for w in (args.guard_words or "").split(",") if w.strip()] or None
+    try:
+        pid, folder, created = projects_mod.add_project(
+            home, args.folder, args.name, args.color, words)
+    except ValueError as exc:
+        raise SystemExit(str(exc))
+    print(f"{pid}: {folder}" if created else f"{folder} is already registered as {pid}")
+    return 0
+
+
+def _cmd_project_remove(args) -> int:
+    home = _home(args)
+    try:
+        where = projects_mod.remove_project(home, args.project_id)
+    except ValueError as exc:
+        raise SystemExit(str(exc))
+    if where is None:
+        print(f"unknown project: {args.project_id}", file=sys.stderr)
+        return 1
+    print(f"removed {args.project_id}" + (" (auto-discovered; it will not come back)"
+                                          if where == "auto" else ""))
+    return 0
+
+
+def _cmd_project_list(args) -> int:
+    home = _home(args)
+    items = projects_mod.entries(load_config(home), projects_mod.load_auto(home))
+    if not items:
+        print("no projects; try: tirith project add <folder>")
+        return 0
+    for item in items:
+        print(f"{item.id}  {item.folder or '-'}  {item.name}  {item.color}"
+              + ("  [auto]" if item.auto else ""))
+    return 0
+
+
+def _cmd_session_start(args) -> int:
+    home = _home(args)
+    title = " ".join((args.title or "").split())
+    if not title:
+        raise SystemExit("session start needs a title")
+    try:
+        row = projects_mod.start_session(home, title, args.id)
+    except ValueError as exc:
+        raise SystemExit(str(exc))
+    print(row["id"])
+    print(f"export TIRITH_SESSION={row['id']}")
+    return 0
+
+
+def _cmd_session_end(args) -> int:
+    home = _home(args)
+    row = projects_mod.end_session(home, args.session_id)
+    if row is None:
+        print(f"unknown session: {args.session_id}" if args.session_id
+              else "no current session", file=sys.stderr)
+        return 1
+    print(f"session {row['id']}: ended")
+    return 0
+
+
+def _cmd_session_list(args) -> int:
+    home = _home(args)
+    rows = projects_mod.read_sessions(home)
+    if not rows:
+        print("no sessions; try: tirith session start \"<title>\"")
+        return 0
+    current = projects_mod.current_session(home)
+    for row in sorted(rows, key=lambda r: (str(r.get("started_at") or ""), str(r["id"])),
+                      reverse=True):
+        mark = "*" if row["id"] == current else " "
+        print(f"{mark} {row['id']}  {row.get('started_at') or '-'}  "
+              f"{'ended ' + row['ended_at'] if row.get('ended_at') else 'open'}  "
+              f"{row.get('title') or ''}")
+    return 0
+
+
+def _cmd_steward(args) -> int:
+    home = _home(args)
+    write_json_atomic(home / "orchestrator.json",
+                      {"activity": args.activity, "since": now_iso()})
+    print("steward updated")
+    return 0
+
+
+def _cmd_map(args) -> int:
+    home = _home(args)
+    config, proj = _project_or_exit(home, args.project)
+    collector = Collector(home)
+    target = home / "brain" / f"architecture-{proj.id}.json"
+    if collector.worker.enabled and proj.repo is not None:
+        tree_text, _count = collect_tree(proj.repo)
+        if tree_text.strip():
+            from tirith import brain as brain_mod
+            try:
+                result = brain_mod.job_architecture(collector.worker.client, tree_text)
+            except Exception as exc:
+                print(f"brain map failed ({exc}); using folder map", file=sys.stderr)
+                result = {}
+            if result.get("nodes"):
+                arch = {**result, "generated_at": now_iso(), "source": "muse"}
+                write_json_atomic(target, arch)
+                collector.cache.put("architecture", tree_text, result)
+                print(f"{proj.id}: {len(arch['nodes'])} nodes (brain) -> {target}")
+                return 0
+    arch = heuristic_architecture(proj.repo)
+    write_json_atomic(target, arch)
+    print(f"{proj.id}: {len(arch['nodes'])} nodes (folder map) -> {target}")
+    return 0
+
+
+def _cmd_collect(args) -> int:
+    home = _home(args)
+    collector = Collector(home)
+    try:
+        collector.run(interval=args.interval, once=args.once)
+    except KeyboardInterrupt:
+        return 130
+    if args.once:
+        print(home / "state.json")
+    return 0
+
+
+def _cmd_status(args) -> int:
+    home = _home(args)
+    state = read_json(home / "state.json", None)
+    if not isinstance(state, dict):
+        print(f"no state yet at {home / 'state.json'}; run: tirith collect --once",
+              file=sys.stderr)
+        return 1
+    brain = state.get("brain") or {}
+    steward = state.get("steward") or {}
+    print(f"Tirith state {state.get('generated_at')}  brain: "
+          f"{'on' if brain.get('enabled') else 'off'} ({brain.get('model')})"
+          + (f"  last error: {brain['last_error']}" if brain.get("last_error") else ""))
+    print(f"Steward: {steward.get('activity') or '(idle)'}")
+    waits = state.get("waiting_on_you") or []
+    print(f"Waiting on you: {len(waits)}")
+    for wait in waits:
+        print(f"  [{wait.get('project')}] {wait.get('text')}")
+    print("Agents:")
+    for agent in state.get("agents") or []:
+        print(f"  {agent['name']} {agent['epithet']}, {agent['rank']} {agent['class']} "
+              f"[{agent['status']}] {agent['feature']} -- {agent['summary']}")
+    print("Pipelines:")
+    for pipe in state.get("pipelines") or []:
+        stages = " ".join(f"{s['name']}:{s['status']}" for s in pipe.get("stages") or [])
+        print(f"  {pipe['run']} [{pipe['status']}] {stages}")
+    print("Projects:")
+    for proj in state.get("projects") or []:
+        guard = proj.get("guard") or {}
+        print(f"  {proj['id']} guard: {'OK' if guard.get('ok') else 'NOT OK'}"
+              + ("" if guard.get("ok") else f" ({'; '.join(guard.get('problems') or [])})"))
+    return 0
+
+
+def _guard_targets(args, home: Path) -> list[tuple[str, Path, list[str]]]:
+    config = load_config(home)
+    defaults = default_words()
+    targets: list[tuple[str, Path, list[str]]] = []
+    if args.all or (not args.project and config.projects):
+        for proj in config.projects:
+            if proj.repo is not None:
+                targets.append((proj.id, proj.repo, config.words_for(proj, defaults)))
+        return targets
+    if not args.project:
+        raise SystemExit("guard needs a project id, a repo path, or --all")
+    proj = config.project(args.project)
+    if proj is not None:
+        if proj.repo is None:
+            raise SystemExit(f"project '{proj.id}' has no repo in config.toml")
+        return [(proj.id, proj.repo, config.words_for(proj, defaults))]
+    candidate = Path(args.project).expanduser()
+    if candidate.exists():
+        return [(str(candidate), candidate.resolve(), config.words_for(None, defaults))]
+    raise SystemExit(f"unknown project or path: {args.project}")
+
+
+def _cmd_guard(args) -> int:
+    home = _home(args)
+    targets = _guard_targets(args, home)
+    if not targets:
+        print("no configured projects with a repo", file=sys.stderr)
+        return 1
+    exit_code = 0
+    for label, repo, words in targets:
+        problems = install_guard(repo, words) if args.action == "install" \
+            else verify_guard(repo, words)
+        if problems:
+            exit_code = 1
+            print(f"{label}: guard NOT OK")
+            for problem in problems:
+                print(f"  {problem}")
+        else:
+            print(f"{label}: guard OK")
+    return exit_code
+
+
+def _transport(args):
+    """The room transport; tests replace this to avoid the network."""
+    return rooms_mod.HttpTransport()
+
+
+def _room_id(args) -> str:
+    room_id = args.room.strip()
+    if not rooms_mod.valid_room_id(room_id):
+        raise SystemExit(f"invalid room id: {room_id!r} (letters, digits, . _ - only)")
+    return room_id
+
+
+def _cmd_room_add(args) -> int:
+    home = _home(args)
+    room_id = _room_id(args)
+    aliases: dict[str, str] = {}
+    for item in args.alias or []:
+        name, sep, lane = item.partition("=")
+        if not sep or not name.strip() or not lane.strip():
+            raise SystemExit(f"--alias needs NAME=LANE-ID, got {item!r}")
+        aliases[name.strip()] = lane.strip()
+    if rooms_mod.add_room_to_config(home, room_id, args.project, aliases):
+        print(f"watching {rooms_mod.room_url(room_id)}")
+    else:
+        print(f"{room_id} is already in config.toml")
+    return 0
+
+
+def _cmd_room_remove(args) -> int:
+    home = _home(args)
+    room_id = _room_id(args)
+    if rooms_mod.remove_room_from_config(home, room_id):
+        print(f"no longer watching {room_id} (cached messages kept in "
+              f"{rooms_mod.room_cache_path(home, room_id)})")
+        return 0
+    print(f"{room_id} is not in config.toml", file=sys.stderr)
+    return 1
+
+
+def _cmd_room_list(args) -> int:
+    home = _home(args)
+    config = load_config(home)
+    if not config.rooms:
+        print("no rooms configured; try: tirith room add <room>")
+        return 0
+    for room in config.rooms:
+        cache = rooms_mod.read_room_cache(home, room.id)
+        last = (cache.get("messages") or [{}])[-1].get("at") if cache.get("messages") else None
+        extras = []
+        if room.project:
+            extras.append(f"project={room.project}")
+        if room.aliases:
+            extras.append("aliases=" + ",".join(f"{k}->{v}" for k, v in room.aliases.items()))
+        print(f"{room.id}  messages={cache.get('count', 0)}  last={last or '-'}  "
+              f"polled={cache.get('polled_at') or 'never'}"
+              + (f"  error={cache['error']}" if cache.get("error") else "")
+              + ("  " + " ".join(extras) if extras else ""))
+    return 0
+
+
+def _cmd_room_tail(args) -> int:
+    home = _home(args)
+    room_id = _room_id(args)
+    config = load_config(home)
+    if config.room(room_id) is not None:
+        poller = rooms_mod.RoomPoller(home, _transport(args))
+        if not poller.poll_room(room_id):
+            print("could not reach the room; showing cached messages", file=sys.stderr)
+        messages = rooms_mod.read_room_cache(home, room_id).get("messages") or []
+    else:
+        try:
+            data = _transport(args).get(room_id, None)
+        except rooms_mod.RoomError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        messages = [m for m in map(rooms_mod.normalize_message, data.get("messages") or []) if m]
+    for message in messages[-max(1, args.lines):]:
+        reply = " re " + ",".join(f"#{n}" for n in message["re"]) if message["re"] else ""
+        agreed = f"  [agreed: {', '.join(message['agreed'])}]" if message["agreed"] else ""
+        text = " ".join(message["text"].split())
+        print(f"#{message['n']} {message['at'] or '?'} {message['from']}{reply}: "
+              f"{text[:400]}{agreed}")
+    return 0
+
+
+def _cmd_room_say(args) -> int:
+    """The only command that writes to a room (an explicit POST by the owner)."""
+    room_id = _room_id(args)
+    name = rooms_mod.clean_name(args.as_name)
+    text = args.text.strip()
+    if not name:
+        raise SystemExit("--as needs a name (letters, digits, . _ -)")
+    if not text:
+        raise SystemExit("nothing to say: the text is empty")
+    if len(text) > rooms_mod.MAX_SAY:
+        raise SystemExit(f"text too long ({len(text)} > {rooms_mod.MAX_SAY} characters)")
+    payload: dict = {"from": name, "text": text}
+    if args.re:
+        payload["re"] = sorted(set(args.re))
+    try:
+        answer = _transport(args).post(room_id, payload)
+    except rooms_mod.RoomError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    posted = answer.get("message") if isinstance(answer.get("message"), dict) else answer
+    number = posted.get("n")
+    print(f"said in {room_id} as {name}" + (f" (#{number})" if number else ""))
+    return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    """The full ``tirith`` argument parser."""
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--home", default=argparse.SUPPRESS,
+                        help="TIRITH_HOME override (default: env or ~/.tirith)")
+    parser = argparse.ArgumentParser(prog="tirith", parents=[common],
+                                     description="Tirith: watch your coding agents.")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    # NOTE: parent options such as --home must come before the subcommand
+    # when given on the top level; they are also accepted per subcommand.
+    lane = sub.add_parser("lane", parents=[common], help="agent lanes")
+    lane_sub = lane.add_subparsers(dest="lane_command", required=True)
+    start = lane_sub.add_parser("start", parents=[common], help="register a lane")
+    start.add_argument("--project", required=True)
+    start.add_argument("--class", dest="hero_class", required=True)
+    start.add_argument("--feature", required=True)
+    start.add_argument("--id", default=None)
+    start.add_argument("--workspace", default=None)
+    start.add_argument("--log", default=None)
+    start.add_argument("--pid", type=int, default=None)
+    start.add_argument("--brief", default=None)
+    start.set_defaults(func=_cmd_lane_start)
+    end = lane_sub.add_parser("end", parents=[common], help="finish a lane")
+    end.add_argument("lane_id")
+    end.add_argument("--result", choices=["done", "failed"], required=True)
+    end.add_argument("--report", default=None)
+    end.add_argument("--report-file", default=None)
+    end.set_defaults(func=_cmd_lane_end)
+    lane_run = lane_sub.add_parser("run", parents=[common],
+                                   help="start an agent command as a lane")
+    lane_run.add_argument("--project", required=True)
+    lane_run.add_argument("--class", dest="hero_class", required=True)
+    lane_run.add_argument("--feature", required=True)
+    lane_run.add_argument("--id", default=None)
+    lane_run.add_argument("--workspace", default=None)
+    lane_run.add_argument("--log", default=None)
+    lane_run.add_argument("--brief", default=None)
+    lane_run.add_argument("command", nargs=argparse.REMAINDER)
+    lane_run.set_defaults(func=_cmd_lane_run)
+
+    run = sub.add_parser("run", parents=[common], help="run one pipeline stage")
+    run.add_argument("--project", required=True)
+    run.add_argument("--pipeline", required=True)
+    run.add_argument("--stage", required=True)
+    run.add_argument("--run", dest="run", default=None, help="explicit run id")
+    run.add_argument("--new-run", action="store_true", help="start a new run number")
+    run.add_argument("--log", default=None)
+    run.add_argument("--agent", default=None, help="lane id to credit renown to")
+    run.add_argument("command", nargs=argparse.REMAINDER)
+    run.set_defaults(func=_cmd_run)
+
+    pipe = sub.add_parser("pipeline", parents=[common], help="pipeline declarations")
+    pipe_sub = pipe.add_subparsers(dest="pipeline_command", required=True)
+    declare = pipe_sub.add_parser("declare", parents=[common], help="fix stage order")
+    declare.add_argument("pipeline")
+    declare.add_argument("--project", default=None)
+    declare.add_argument("--stages", required=True, help="comma-separated stage names")
+    declare.set_defaults(func=_cmd_pipeline_declare)
+
+    note = sub.add_parser("note", parents=[common], help="record a steward note")
+    note.add_argument("text")
+    note.add_argument("--project", default=None)
+    note.set_defaults(func=_cmd_note)
+
+    wait = sub.add_parser("wait", parents=[common], help="things waiting on you")
+    wait_sub = wait.add_subparsers(dest="wait_command", required=True)
+    wait_add = wait_sub.add_parser("add", parents=[common])
+    wait_add.add_argument("text")
+    wait_add.add_argument("--project", default=None)
+    wait_add.add_argument("--link", default=None)
+    wait_add.add_argument("--id", default=None)
+    wait_add.set_defaults(func=_cmd_wait_add)
+    wait_done = wait_sub.add_parser("done", parents=[common])
+    wait_done.add_argument("wait_id")
+    wait_done.set_defaults(func=_cmd_wait_done)
+
+    flow = sub.add_parser("flow", parents=[common],
+                          help="record information passed between endpoints")
+    flow.add_argument("--from", dest="src", required=True)
+    flow.add_argument("--to", dest="dst", required=True)
+    flow.add_argument("--kind", choices=flows_mod.KINDS, default="message")
+    flow.add_argument("--text", required=True)
+    flow.add_argument("--ref", default=None)
+    flow.set_defaults(func=_cmd_flow)
+
+    project = sub.add_parser("project", parents=[common], help="projects are folders")
+    project_sub = project.add_subparsers(dest="project_command", required=True)
+    p_add = project_sub.add_parser("add", parents=[common], help="register a folder")
+    p_add.add_argument("folder")
+    p_add.add_argument("--name", default=None)
+    p_add.add_argument("--color", default=None)
+    p_add.add_argument("--guard-words", default=None, help="comma-separated")
+    p_add.set_defaults(func=_cmd_project_add)
+    p_rm = project_sub.add_parser("remove", parents=[common], help="unregister a project")
+    p_rm.add_argument("project_id")
+    p_rm.set_defaults(func=_cmd_project_remove)
+    p_ls = project_sub.add_parser("list", parents=[common], help="registered and auto projects")
+    p_ls.set_defaults(func=_cmd_project_list)
+
+    session = sub.add_parser("session", parents=[common], help="orchestration sessions")
+    session_sub = session.add_subparsers(dest="session_command", required=True)
+    s_start = session_sub.add_parser("start", parents=[common], help="start and select a session")
+    s_start.add_argument("title")
+    s_start.add_argument("--id", default=None)
+    s_start.set_defaults(func=_cmd_session_start)
+    s_end = session_sub.add_parser("end", parents=[common], help="close a session")
+    s_end.add_argument("session_id", nargs="?", default=None)
+    s_end.set_defaults(func=_cmd_session_end)
+    s_ls = session_sub.add_parser("list", parents=[common], help="all sessions")
+    s_ls.set_defaults(func=_cmd_session_list)
+
+    steward = sub.add_parser("steward", parents=[common], help="set steward activity")
+    steward.add_argument("activity")
+    steward.set_defaults(func=_cmd_steward)
+
+    map_cmd = sub.add_parser("map", parents=[common], help="map project architecture")
+    map_cmd.add_argument("project")
+    map_cmd.set_defaults(func=_cmd_map)
+
+    collect = sub.add_parser("collect", parents=[common], help="run the collector")
+    collect.add_argument("--once", action="store_true")
+    collect.add_argument("--interval", type=float, default=2.0)
+    collect.set_defaults(func=_cmd_collect)
+
+    status = sub.add_parser("status", parents=[common], help="summarize state.json")
+    status.set_defaults(func=_cmd_status)
+
+    room = sub.add_parser("room", parents=[common], help="agentsmessenger.com rooms")
+    room_sub = room.add_subparsers(dest="room_command", required=True)
+    room_add = room_sub.add_parser("add", parents=[common], help="watch a room")
+    room_add.add_argument("room")
+    room_add.add_argument("--project", default=None)
+    room_add.add_argument("--alias", action="append", metavar="NAME=LANE-ID",
+                          help="room name that speaks for a Tirith lane (repeatable)")
+    room_add.set_defaults(func=_cmd_room_add)
+    room_rm = room_sub.add_parser("remove", parents=[common], help="stop watching a room")
+    room_rm.add_argument("room")
+    room_rm.set_defaults(func=_cmd_room_remove)
+    room_ls = room_sub.add_parser("list", parents=[common], help="configured rooms")
+    room_ls.set_defaults(func=_cmd_room_list)
+    room_tail = room_sub.add_parser("tail", parents=[common], help="latest messages (GET)")
+    room_tail.add_argument("room")
+    room_tail.add_argument("-n", "--lines", type=int, default=20)
+    room_tail.set_defaults(func=_cmd_room_tail)
+    room_say = room_sub.add_parser("say", parents=[common],
+                                   help="post a message (the only command that writes)")
+    room_say.add_argument("room")
+    room_say.add_argument("--as", dest="as_name", required=True)
+    room_say.add_argument("--re", type=int, action="append", metavar="N")
+    room_say.add_argument("text")
+    room_say.set_defaults(func=_cmd_room_say)
+
+    guard = sub.add_parser("guard", parents=[common], help="commit guard")
+    guard.add_argument("action", choices=["install", "verify"])
+    guard.add_argument("project", nargs="?", default=None,
+                       help="project id or repo path")
+    guard.add_argument("--all", action="store_true")
+    guard.set_defaults(func=_cmd_guard)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Console entry point; returns the process exit code."""
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    try:
+        return int(args.func(args))
+    except BrokenPipeError:
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

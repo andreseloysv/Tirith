@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tirith-collector"
+version = "0.1.0"
+description = "Tirith collector: the tirith CLI, state collector and Spark brain"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+dependencies = []
+
+[project.scripts]
+tirith = "tirith.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8", "jsonschema>=4.20"]
+
+[tool.setuptools]
+py-modules = ["tirith_guard"]
+packages = ["tirith"]
+
+[tool.uv]
+package = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tirith</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header id="top">
+  <div class="brand"><svg width="30" height="30" viewBox="0 0 30 30"><polygon points="15,2 17,8 23,8 18,12 20,18 15,14.500 10,18 12,12 7,8 13,8" fill="#f3d99a"/><path d="M11 28V17h8v11z" fill="#c9a24a"/></svg><span>TIRITH</span></div>
+  <nav id="counters"></nav>
+  <div id="src" class="src"></div>
+</header>
+<section id="filters">
+  <label>Session <select id="f-session"></select></label>
+  <label>Project <i id="f-dot" class="pdot"></i><select id="f-project"></select></label>
+  <label class="grow"><input id="f-q" type="search" placeholder="Search heroes, features, pipelines, stages, messages, waits..." autocomplete="off"></label>
+  <button id="f-clear" class="fchip" title="Clear all filters">Clear</button>
+  <span id="f-count" class="mut"></span>
+</section>
+<main>
+  <section id="mappane">
+    <svg id="map" preserveAspectRatio="xMidYMid meet"></svg>
+    <div id="empty" class="overlay" hidden></div>
+    <div id="legend"></div>
+    <div id="wm" aria-hidden="true">DEMO DATA</div>
+  </section>
+  <aside id="panel">
+    <div id="tabs"></div>
+    <div id="tabbody"></div>
+  </aside>
+</main>
+<div id="tip"></div>
+<script src="js/util.js"></script>
+<script src="js/panel.js"></script>
+<script src="js/map.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

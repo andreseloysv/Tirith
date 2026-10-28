@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# Starts Tirith with one command: the collector in the background and the web page in the browser.
+#
+#   ./run            live data from ~/.tirith (or $TIRITH_HOME); Ctrl+C stops the collector
+#   ./run --demo     the web page on the demo state (no collector)
+#   ./run --3d       the optional Godot 3D citadel instead of the web page
+#
+# The page is a local file: no server and no open ports. If a collector is already running it is
+# reused and left running; a collector started here stops on Ctrl+C. Environment: TIRITH_HOME, the Meta
+# Model API key (META_API_KEY or META_SI_API_KEY) for the brain, GODOT for --3d.
+set -euo pipefail
+
+ROOT=$(cd "$(dirname "$0")" && pwd)
+HOME_DIR=${TIRITH_HOME:-$HOME/.tirith}
+PAGE="$ROOT/web/index.html"
+
+open_page() {  # $1 = absolute path of the state.js the page should follow
+    # macOS `open` drops the #fragment of file:// URLs, so the page would lose #state= and show the
+    # demo. Open a tiny redirect page instead; it carries the full URL.
+    local url="file://$PAGE#state=file://$1"
+    local bridge="$HOME_DIR/open-tirith.html"
+    mkdir -p "$HOME_DIR"
+    printf '<!doctype html><meta charset="utf-8"><title>Tirith</title><script>location.replace(%s)</script>\n' \
+        "\"$url\"" > "$bridge"
+    if [ -d "/Applications/Google Chrome.app" ]; then
+        open -a "Google Chrome" "$bridge"
+    else
+        open "$bridge"
+    fi
+}
+
+case "${1:-}" in
+    --demo)
+        open_page "$ROOT/fixtures/state.demo.js"
+        exit 0 ;;
+    --3d)
+        GODOT=${GODOT:-/Applications/Godot.app/Contents/MacOS/Godot}
+        [ -x "$GODOT" ] || { echo "Godot not found at $GODOT (set GODOT=/path/to/Godot)"; exit 1; }
+        exec "$GODOT" --path "$ROOT/world" -- --state "$HOME_DIR/state.json" ;;
+esac
+
+command -v uv >/dev/null || { echo "uv not found: https://docs.astral.sh/uv/"; exit 1; }
+mkdir -p "$HOME_DIR/logs"
+
+started=""
+if pgrep -f "tirith collect" >/dev/null; then
+    echo "Collector already running: reusing it."
+else
+    (cd "$ROOT/collector" && exec uv run -q tirith collect --interval 2) \
+        >>"$HOME_DIR/logs/collector.log" 2>&1 &
+    started=$!
+    echo "Collector started (log: $HOME_DIR/logs/collector.log)."
+fi
+
+for _ in $(seq 1 40); do
+    [ -s "$HOME_DIR/state.js" ] && break
+    sleep 0.25
+done
+open_page "$HOME_DIR/state.js"
+echo "Tirith is open in your browser."
+
+if [ -n "$started" ]; then
+    trap 'kill "$started" 2>/dev/null; echo; echo "Collector stopped."; exit 0' INT TERM
+    echo "Press Ctrl+C to stop the collector."
+    wait "$started"
+fi

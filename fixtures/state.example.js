@@ -1,0 +1,438 @@
+window.TIRITH_STATE = {
+  "version": 1,
+  "generated_at": "2026-10-28T19:40:00Z",
+  "brain": {
+    "enabled": true,
+    "model": "muse-spark",
+    "last_error": null
+  },
+  "steward": {
+    "name": "Aldric of the Tower",
+    "title": "The Steward",
+    "activity": "Reviewing Ivren's performance report before merging",
+    "since": "2026-10-28T19:31:00Z",
+    "notes": [
+      {
+        "at": "2026-10-28T19:05:00Z",
+        "project": "chromasol",
+        "text": "Merged Halvard's Room database lane into integration"
+      },
+      {
+        "at": "2026-10-28T19:20:00Z",
+        "project": "chromasol",
+        "text": "Launched Ivren on performance; owner's phone assigned to her"
+      },
+      {
+        "at": "2026-10-28T19:31:00Z",
+        "project": "tirith",
+        "text": "Contract v1 fixed; two lanes can start in parallel"
+      }
+    ]
+  },
+  "waiting_on_you": [
+    {
+      "id": "w-1",
+      "project": "chromasol",
+      "text": "Tick the AI asset declaration on the store listing and press Save",
+      "since": "2026-10-28T18:50:00Z",
+      "link": null
+    },
+    {
+      "id": "w-2",
+      "project": "tirith",
+      "text": "Install the commit guard in the Tirith repository",
+      "since": "2026-10-28T19:38:00Z",
+      "link": null
+    }
+  ],
+  "projects": [
+    {
+      "id": "chromasol",
+      "name": "ChromaSol",
+      "color": "#2f7d5b",
+      "architecture": {
+        "nodes": [
+          {
+            "id": "photos",
+            "label": "Photos",
+            "kind": "input",
+            "files": 2
+          },
+          {
+            "id": "subject",
+            "label": "Person cutout",
+            "kind": "service",
+            "files": 11
+          },
+          {
+            "id": "engine",
+            "label": "Colour engine (C)",
+            "kind": "core",
+            "files": 14
+          },
+          {
+            "id": "dictionary",
+            "label": "Wada dictionary",
+            "kind": "data",
+            "files": 3
+          },
+          {
+            "id": "database",
+            "label": "Room database",
+            "kind": "data",
+            "files": 6
+          },
+          {
+            "id": "ui",
+            "label": "Screens",
+            "kind": "ui",
+            "files": 31
+          }
+        ],
+        "edges": [
+          {
+            "from": "photos",
+            "to": "subject",
+            "label": "bitmap"
+          },
+          {
+            "from": "subject",
+            "to": "engine",
+            "label": "masks"
+          },
+          {
+            "from": "dictionary",
+            "to": "engine",
+            "label": "348 combos"
+          },
+          {
+            "from": "engine",
+            "to": "database",
+            "label": "scans"
+          },
+          {
+            "from": "database",
+            "to": "ui",
+            "label": "feed"
+          }
+        ],
+        "generated_at": "2026-10-28T19:00:00Z",
+        "source": "muse"
+      }
+    },
+    {
+      "id": "tirith",
+      "name": "Tirith",
+      "color": "#c9a227",
+      "architecture": {
+        "nodes": [
+          {
+            "id": "cli",
+            "label": "tirith CLI",
+            "kind": "input",
+            "files": 3
+          },
+          {
+            "id": "collector",
+            "label": "Collector",
+            "kind": "service",
+            "files": 5
+          },
+          {
+            "id": "brain",
+            "label": "Muse brain",
+            "kind": "core",
+            "files": 2
+          },
+          {
+            "id": "state",
+            "label": "state.json",
+            "kind": "data",
+            "files": 1
+          },
+          {
+            "id": "world",
+            "label": "3D citadel",
+            "kind": "ui",
+            "files": 20
+          }
+        ],
+        "edges": [
+          {
+            "from": "cli",
+            "to": "collector",
+            "label": "events"
+          },
+          {
+            "from": "collector",
+            "to": "brain",
+            "label": "log tails"
+          },
+          {
+            "from": "brain",
+            "to": "state",
+            "label": "summaries"
+          },
+          {
+            "from": "collector",
+            "to": "state",
+            "label": "every 2 s"
+          },
+          {
+            "from": "state",
+            "to": "world",
+            "label": "poll"
+          }
+        ],
+        "generated_at": "2026-10-28T19:35:00Z",
+        "source": "manual"
+      }
+    },
+    {
+      "id": "relagame",
+      "name": "RelaGame",
+      "color": "#d9772b",
+      "architecture": {
+        "nodes": [],
+        "edges": [],
+        "generated_at": null,
+        "source": "none"
+      }
+    }
+  ],
+  "agents": [
+    {
+      "id": "w6-perf",
+      "project": "chromasol",
+      "name": "Ivren",
+      "epithet": "of the Seventh Gate",
+      "class": "swiftrider",
+      "rank": "captain",
+      "renown": 760,
+      "feature": "Performance and size on the owner's phone",
+      "status": "working",
+      "started_at": "2026-10-28T17:40:00Z",
+      "ended_at": null,
+      "elapsed_s": 7200,
+      "summary": "Measuring the 200-photo scan on the phone: 1.39 s per photo after reusing the pose task.",
+      "log_tail": [
+        "scan 200: persons 5.32 s/photo, none 0.70 s/photo",
+        "A/B ratio median 0.70"
+      ],
+      "files_changed": 7,
+      "insertions": 412,
+      "deletions": 96,
+      "report": null
+    },
+    {
+      "id": "w1-data",
+      "project": "chromasol",
+      "name": "Halvard",
+      "epithet": "Stonehand",
+      "class": "stonewright",
+      "rank": "sergeant",
+      "renown": 340,
+      "feature": "Room database with the iOS migrations",
+      "status": "done",
+      "started_at": "2026-10-28T13:30:00Z",
+      "ended_at": "2026-10-28T15:10:00Z",
+      "elapsed_s": 6000,
+      "summary": "Finished: Room v1 to v4 migrations, curated names and the strings check, all green.",
+      "log_tail": [
+        "Finished 20 tests",
+        "strings OK"
+      ],
+      "files_changed": 31,
+      "insertions": 2210,
+      "deletions": 140,
+      "report": "Room database with the same schema and v1-v4 migrations as iOS; 19 new device tests."
+    },
+    {
+      "id": "icon-2",
+      "project": "chromasol",
+      "name": "Sefa",
+      "epithet": "Prismhand",
+      "class": "glasswright",
+      "rank": "sentinel",
+      "renown": 120,
+      "feature": "Crystal C icon in Blender",
+      "status": "failed",
+      "started_at": "2026-10-28T16:00:00Z",
+      "ended_at": "2026-10-28T16:50:00Z",
+      "elapsed_s": 3000,
+      "summary": "The render matches the outline but the owner preferred the generated image.",
+      "log_tail": [
+        "IoU 0.9271",
+        "SSIM 0.7953"
+      ],
+      "files_changed": 4,
+      "insertions": 600,
+      "deletions": 0,
+      "report": "Silhouette matches; inner contour still differs from the target."
+    },
+    {
+      "id": "t-world",
+      "project": "tirith",
+      "name": "Marrow",
+      "epithet": "Quickstep",
+      "class": "stonewright",
+      "rank": "recruit",
+      "renown": 0,
+      "feature": "The 3D citadel",
+      "status": "working",
+      "started_at": "2026-10-28T19:40:00Z",
+      "ended_at": null,
+      "elapsed_s": 60,
+      "summary": "Laying out the hill, the rings and the districts.",
+      "log_tail": [],
+      "files_changed": 0,
+      "insertions": 0,
+      "deletions": 0,
+      "report": null
+    },
+    {
+      "id": "t-collector",
+      "project": "tirith",
+      "name": "Odile",
+      "epithet": "Inkwell",
+      "class": "loremaster",
+      "rank": "recruit",
+      "renown": 0,
+      "feature": "Collector, CLI and the brain",
+      "status": "stalled",
+      "started_at": "2026-10-28T19:10:00Z",
+      "ended_at": null,
+      "elapsed_s": 1800,
+      "summary": "Waiting: no log output for 12 minutes.",
+      "log_tail": [
+        "retrying model turn in 2000ms"
+      ],
+      "files_changed": 3,
+      "insertions": 150,
+      "deletions": 0,
+      "report": null
+    }
+  ],
+  "pipelines": [
+    {
+      "run": "android-release#7",
+      "project": "chromasol",
+      "pipeline": "android-release",
+      "status": "running",
+      "started_at": "2026-10-28T19:30:00Z",
+      "ended_at": null,
+      "stages": [
+        {
+          "name": "build",
+          "status": "passed",
+          "started_at": "2026-10-28T19:30:00Z",
+          "ended_at": "2026-10-28T19:30:34Z",
+          "duration_s": 34,
+          "log_tail": [
+            "BUILD SUCCESSFUL in 34s"
+          ]
+        },
+        {
+          "name": "tests",
+          "status": "passed",
+          "started_at": "2026-10-28T19:30:34Z",
+          "ended_at": "2026-10-28T19:31:20Z",
+          "duration_s": 46,
+          "log_tail": [
+            "tests 82 failures 0"
+          ]
+        },
+        {
+          "name": "lint",
+          "status": "passed",
+          "started_at": "2026-10-28T19:31:20Z",
+          "ended_at": "2026-10-28T19:31:45Z",
+          "duration_s": 25,
+          "log_tail": [
+            "no network: OK"
+          ]
+        },
+        {
+          "name": "16kb",
+          "status": "passed",
+          "started_at": "2026-10-28T19:31:45Z",
+          "ended_at": "2026-10-28T19:31:47Z",
+          "duration_s": 2,
+          "log_tail": [
+            "16 KB: OK"
+          ]
+        },
+        {
+          "name": "sign",
+          "status": "running",
+          "started_at": "2026-10-28T19:31:47Z",
+          "ended_at": null,
+          "duration_s": null,
+          "log_tail": [
+            "signReleaseBundle"
+          ]
+        },
+        {
+          "name": "device",
+          "status": "pending",
+          "started_at": null,
+          "ended_at": null,
+          "duration_s": null,
+          "log_tail": []
+        },
+        {
+          "name": "store",
+          "status": "pending",
+          "started_at": null,
+          "ended_at": null,
+          "duration_s": null,
+          "log_tail": []
+        },
+        {
+          "name": "review",
+          "status": "pending",
+          "started_at": null,
+          "ended_at": null,
+          "duration_s": null,
+          "log_tail": []
+        }
+      ]
+    },
+    {
+      "run": "ios-testflight#3",
+      "project": "relagame",
+      "pipeline": "ios-testflight",
+      "status": "failed",
+      "started_at": "2026-10-28T09:00:00Z",
+      "ended_at": "2026-10-28T09:12:00Z",
+      "stages": [
+        {
+          "name": "export",
+          "status": "passed",
+          "started_at": "2026-10-28T09:00:00Z",
+          "ended_at": "2026-10-28T09:04:00Z",
+          "duration_s": 240,
+          "log_tail": []
+        },
+        {
+          "name": "archive",
+          "status": "failed",
+          "started_at": "2026-10-28T09:04:00Z",
+          "ended_at": "2026-10-28T09:12:00Z",
+          "duration_s": 480,
+          "log_tail": [
+            "error: No signing certificate"
+          ]
+        },
+        {
+          "name": "upload",
+          "status": "skipped",
+          "started_at": null,
+          "ended_at": null,
+          "duration_s": null,
+          "log_tail": []
+        }
+      ]
+    }
+  ]
+};
