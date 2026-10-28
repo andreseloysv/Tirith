@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Template only: replace both __REPLACE__ paths, copy to
+     ~/Library/LaunchAgents/com.tirith.collector.plist and load it yourself
+     with: launchctl load ~/Library/LaunchAgents/com.tirith.collector.plist
+     Set META_API_KEY via the EnvironmentVariables block if you use the brain. -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.tirith.collector</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__REPLACE__/tirith</string>
+    <string>collect</string>
+    <string>--interval</string>
+    <string>2</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>__REPLACE__/collector.log</string>
+  <key>StandardErrorPath</key>
+  <string>__REPLACE__/collector.log</string>
+</dict>
+</plist>

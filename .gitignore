@@ -1,0 +1,11 @@
+# Godot import cache (regenerated on open)
+world/.godot/
+# Python
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+# macOS
+.DS_Store
+# Image tool lock files
+generated_images/

@@ -1,0 +1,988 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tirith/state/v1",
+  "title": "Tirith state.json v1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "version",
+    "generated_at",
+    "brain",
+    "steward",
+    "waiting_on_you",
+    "projects",
+    "agents",
+    "pipelines"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "generated_at": {
+      "type": "string"
+    },
+    "brain": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "enabled",
+        "model",
+        "last_error"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "model": {
+          "type": "string"
+        },
+        "last_error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "steward": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "name",
+        "title",
+        "activity",
+        "since",
+        "notes"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "activity": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "since": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/note"
+          }
+        }
+      }
+    },
+    "waiting_on_you": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/wait"
+      }
+    },
+    "projects": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/project"
+      }
+    },
+    "agents": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/agent"
+      }
+    },
+    "pipelines": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/pipeline"
+      }
+    },
+    "rooms": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/room"
+      }
+    },
+    "flows": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/flow"
+      }
+    },
+    "sessions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/session"
+      }
+    }
+  },
+  "$defs": {
+    "note": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "at",
+        "project",
+        "text"
+      ],
+      "properties": {
+        "at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "project": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "text": {
+          "type": "string"
+        },
+        "session": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "wait": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "id",
+        "project",
+        "text",
+        "since",
+        "link"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "project": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "text": {
+          "type": "string"
+        },
+        "since": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "link": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "manual",
+            "brain",
+            "guard",
+            "room"
+          ]
+        },
+        "session": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "guard": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "ok",
+        "problems"
+      ],
+      "properties": {
+        "ok": {
+          "type": "boolean"
+        },
+        "problems": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "architecture": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "nodes",
+        "edges",
+        "generated_at",
+        "source"
+      ],
+      "properties": {
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": [
+              "id",
+              "label",
+              "kind",
+              "files"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "files": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        },
+        "edges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": [
+              "from",
+              "to",
+              "label"
+            ],
+            "properties": {
+              "from": {
+                "type": "string"
+              },
+              "to": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "generated_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "muse",
+            "manual",
+            "none"
+          ]
+        }
+      }
+    },
+    "project": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "id",
+        "name",
+        "color",
+        "architecture"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "color": {
+          "type": "string"
+        },
+        "architecture": {
+          "$ref": "#/$defs/architecture"
+        },
+        "guard": {
+          "$ref": "#/$defs/guard"
+        },
+        "folder": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "auto": {
+          "type": "boolean"
+        },
+        "counts": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "agents_working",
+            "agents_total",
+            "pipelines_running",
+            "flows_24h"
+          ],
+          "properties": {
+            "agents_working": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "agents_total": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "pipelines_running": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "flows_24h": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      }
+    },
+    "agent": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "id",
+        "project",
+        "name",
+        "epithet",
+        "class",
+        "rank",
+        "renown",
+        "feature",
+        "status",
+        "started_at",
+        "ended_at",
+        "elapsed_s",
+        "summary",
+        "log_tail",
+        "files_changed",
+        "insertions",
+        "deletions",
+        "report"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "epithet": {
+          "type": "string"
+        },
+        "class": {
+          "type": "string"
+        },
+        "rank": {
+          "type": "string",
+          "enum": [
+            "recruit",
+            "sentinel",
+            "sergeant",
+            "captain",
+            "marshal"
+          ]
+        },
+        "renown": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "feature": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "working",
+            "done",
+            "failed",
+            "stalled"
+          ]
+        },
+        "started_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ended_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "elapsed_s": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "summary": {
+          "type": "string"
+        },
+        "log_tail": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "files_changed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "insertions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "deletions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "report": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "session": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "stage": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "name",
+        "status",
+        "started_at",
+        "ended_at",
+        "duration_s",
+        "log_tail"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "passed",
+            "running",
+            "failed",
+            "pending",
+            "skipped"
+          ]
+        },
+        "started_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ended_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "duration_s": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "log_tail": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "pipeline": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "run",
+        "project",
+        "pipeline",
+        "status",
+        "started_at",
+        "ended_at",
+        "stages"
+      ],
+      "properties": {
+        "run": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        },
+        "pipeline": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "running",
+            "passed",
+            "failed"
+          ]
+        },
+        "started_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ended_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "stages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/stage"
+          }
+        },
+        "session": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "room_message": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "n",
+        "at",
+        "from",
+        "text",
+        "re",
+        "agreed",
+        "signed",
+        "kind",
+        "truncated"
+      ],
+      "properties": {
+        "n": {
+          "type": "integer"
+        },
+        "at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "from": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "re": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "agreed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "signed": {
+          "enum": [
+            "self",
+            "platform",
+            "none"
+          ]
+        },
+        "kind": {
+          "type": "string"
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      }
+    },
+    "room_participant": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "name",
+        "kind",
+        "hero_id",
+        "hero_name",
+        "last_seen",
+        "messages",
+        "present"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "tirith-agent",
+            "external",
+            "owner"
+          ]
+        },
+        "hero_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "hero_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "last_seen": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "messages": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "present": {
+          "type": "boolean"
+        }
+      }
+    },
+    "room": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "id",
+        "url",
+        "title",
+        "project",
+        "summary",
+        "summary_source",
+        "needs_owner",
+        "message_count",
+        "last_message_at",
+        "activity_per_hour",
+        "messages_last_day",
+        "polled_at",
+        "error",
+        "participants",
+        "reply_edges",
+        "messages"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "project": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "summary": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "summary_source": {
+          "enum": [
+            "muse",
+            "fallback",
+            "none"
+          ]
+        },
+        "needs_owner": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": [
+              "n",
+              "from",
+              "reason",
+              "source"
+            ],
+            "properties": {
+              "n": {
+                "type": "integer"
+              },
+              "from": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "source": {
+                "enum": [
+                  "brain",
+                  "room"
+                ]
+              }
+            }
+          }
+        },
+        "message_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "last_message_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "activity_per_hour": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "messages_last_day": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "polled_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "participants": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/room_participant"
+          }
+        },
+        "reply_edges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": [
+              "from",
+              "to",
+              "count"
+            ],
+            "properties": {
+              "from": {
+                "type": "string"
+              },
+              "to": {
+                "type": "string"
+              },
+              "count": {
+                "type": "integer"
+              }
+            }
+          }
+        },
+        "messages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/room_message"
+          }
+        }
+      }
+    },
+    "flow": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "id",
+        "at",
+        "from",
+        "to",
+        "from_name",
+        "to_name",
+        "kind",
+        "text",
+        "ref"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "from_name": {
+          "type": "string"
+        },
+        "to_name": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "brief",
+            "message",
+            "report",
+            "request",
+            "answer",
+            "decision",
+            "merge",
+            "alert"
+          ]
+        },
+        "text": {
+          "type": "string"
+        },
+        "ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "session": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "project": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "session": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "id",
+        "title",
+        "started_at",
+        "ended_at",
+        "projects",
+        "counts"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "started_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ended_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "projects": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "counts": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "agents",
+            "pipelines",
+            "flows",
+            "notes"
+          ],
+          "properties": {
+            "agents": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "pipelines": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "flows": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "notes": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      }
+    }
+  }
+}

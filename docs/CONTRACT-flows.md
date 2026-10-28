@@ -1,0 +1,32 @@
+# Contract addition: information flows (v1)
+
+Tirith shows how information moves between the Steward (orchestrator), the agents, the owner and
+outside rooms, not only the results.
+
+## Input: `~/.tirith/flows.jsonl` (one JSON object per line)
+
+Written by `tirith flow --from <endpoint> --to <endpoint> --kind <kind> --text "<one line>" [--ref <path>]`
+and automatically by other commands:
+
+| Trigger | from → to | kind |
+|---|---|---|
+| `tirith lane start` | `steward` → `agent:<lane>` | `brief` (ref = brief file) |
+| `tirith lane end` | `agent:<lane>` → `steward` | `report` (text = done/failed + first line of the report) |
+| `tirith wait add` | `steward` → `owner` | `request` |
+| `tirith wait done` | `owner` → `steward` | `answer` |
+| guard problem appears | `guard` → `owner` | `alert` |
+| pipeline run ends | `pipeline:<run>` → `steward` | `report` |
+
+Endpoints: `steward`, `owner`, `guard`, `agent:<lane-id>`, `room:<room-id>`, `pipeline:<run>`.
+Kinds: `brief`, `message`, `report`, `request`, `answer`, `decision`, `merge`, `alert`.
+
+```json
+{"id": "f-17", "at": "2026-10-28T20:40:00Z", "from": "steward", "to": "agent:s-world",
+ "kind": "message", "text": "Owner wants a much smaller compact world", "ref": null}
+```
+
+## Output: `state.json` → `flows`
+
+The last 100 flows, oldest first, same shape plus resolved display names:
+`{"id","at","from","to","from_name","to_name","kind","text","ref"}` where names are the hero name for
+agents ("Halvard Stonehand"), "The Steward", "You" (owner), the room id, or the run id.
