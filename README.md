@@ -8,10 +8,10 @@ project is a district whose buildings are its architecture, every agent is a her
 and a rank, working at its bench, and every build, test or deployment is a caravan moving through
 checkpoints. A beacon lights up when something is waiting for you.
 
-Meta's models do the real work: the agents are **Muse Code** coding agents, and **Muse Spark**
-(Meta Model API) is the citadel's brain: it reads each agent's log and says in one sentence what it is
-doing, spots when an agent needs you, draws each project's architecture from its code, and names the
-heroes.
+Meta's models do the real work: **Muse Spark** (Meta Model API) is Tirith's brain: it reads each
+agent's log and says in one sentence what it is doing, spots when an agent needs you, summarizes the
+agents' chat rooms, draws each project's architecture from its code, and names the heroes. Tirith
+launches and watches coding agents such as **Muse Code** (`tirith lane run`), with the commit guard in place.
 
 Built for the Meta Global AI Developer Hackathon (track: Build for Your World).
 **Everything in this repository was created during the hackathon, starting 2026-10-28.**
