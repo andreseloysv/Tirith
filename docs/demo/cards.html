@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Tirith demo cards</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root{--fg:#111;--mut:#6b7280;--line:#eceef1;--blue:#2f6fed;--green:#2ea44f}
+*{box-sizing:border-box}html,body{height:100%;margin:0}
+body{background:#f6f7f9;color:var(--fg);overflow:hidden;font:20px/1.45 -apple-system,"SF Pro Text",Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+#blobs{position:fixed;inset:0;overflow:hidden}#blobs i{position:absolute;border-radius:50%;filter:blur(80px);opacity:.75}
+#blobs i:nth-child(1){width:46vw;height:46vw;left:-12vw;top:-14vw;background:#b4ece1}
+#blobs i:nth-child(2){width:38vw;height:38vw;right:-8vw;top:-10vw;background:#ffd9c4}
+#blobs i:nth-child(3){width:42vw;height:42vw;right:-10vw;bottom:-16vw;background:#d6cdfb}
+#blobs i:nth-child(4){width:34vw;height:34vw;left:18vw;bottom:-18vw;background:#bfe3f7}
+.card{position:fixed;inset:14px;border-radius:30px;background:rgba(255,255,255,.62);border:1px solid rgba(255,255,255,.9);box-shadow:0 20px 60px rgba(16,24,40,.10);backdrop-filter:blur(30px);display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:60px 120px}
+.card.on{display:flex}
+.brand{display:flex;align-items:center;gap:22px;font-weight:650;font-size:112px;letter-spacing:-.03em}
+.brand svg{width:110px;height:110px}
+.sub{margin-top:26px;font-size:40px;color:#374151;font-weight:500;letter-spacing:-.01em}
+.small{margin-top:60px;font-size:26px;color:var(--mut)}
+.url{margin-top:40px;font:500 40px ui-monospace,SFMono-Regular,Menlo,monospace;background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px 34px}
+h1{font-size:64px;letter-spacing:-.025em;margin:0 0 10px;font-weight:650}
+.lead{color:var(--mut);font-size:30px;margin:0 0 46px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:28px;width:100%;max-width:1500px;text-align:left}
+.box{background:#fff;border:1px solid var(--line);border-radius:22px;padding:30px 36px;box-shadow:0 1px 3px rgba(16,24,40,.05)}
+.box h2{margin:0 0 14px;font-size:30px;font-weight:650}.box h2 em{font-style:normal;color:var(--blue)}
+.box ul{margin:0;padding:0;list-style:none;font-size:25px;color:#374151}
+.box li{padding:7px 0 7px 30px;position:relative}.box li:before{content:"";position:absolute;left:0;top:19px;width:12px;height:12px;border-radius:50%;background:linear-gradient(135deg,#6fdccb,#79a8ff,#c79bf2)}
+.pill{display:inline-block;background:#e8effd;color:var(--blue);border-radius:99px;padding:6px 20px;font-size:26px;font-weight:600;margin-bottom:26px}
+.term{width:100%;max-width:1300px;background:#fff;border:1px solid var(--line);border-radius:22px;box-shadow:0 20px 50px rgba(16,24,40,.10);overflow:hidden;text-align:left}
+.term .bar{height:46px;background:#f3f4f6;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;padding:0 20px}
+.term .bar i{width:14px;height:14px;border-radius:50%;background:#d1d5db}
+.term pre{margin:0;padding:34px 40px;font:30px/1.7 ui-monospace,SFMono-Regular,Menlo,monospace;min-height:340px;color:#1f2937;white-space:pre-wrap}
+.term .p{color:var(--green)}.term .m{color:var(--mut)}
+.caret{display:inline-block;width:16px;height:32px;background:#111;vertical-align:-6px;animation:b 1s steps(2) infinite}@keyframes b{50%{opacity:0}}
+.q{font-size:30px;line-height:1.5;color:#111;text-align:left;max-width:1400px}
+.q small{display:block;font-size:24px;color:var(--mut);margin-bottom:10px}
+.row{display:flex;gap:28px;width:100%;max-width:1500px;text-align:left;margin-bottom:20px}.row .box{flex:1}
+.k{font:600 22px ui-monospace,Menlo,monospace;color:var(--mut);margin-bottom:12px}
+</style></head><body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6fdccb"/><stop offset=".45" stop-color="#79a8ff"/><stop offset=".75" stop-color="#c79bf2"/><stop offset="1" stop-color="#ffb299"/></linearGradient></defs></svg>
+<div id="blobs"><i></i><i></i><i></i><i></i></div>
+
+<section class="card" id="title">
+  <div class="brand"><svg viewBox="0 0 24 24"><path d="M12 2l8 8-8 12L4 10z" fill="url(#lg)" fill-opacity=".85"/><path d="M12 2l8 8H4z" fill="#fff" fill-opacity=".45"/><path d="M12 2l8 8-8 12L4 10z" fill="none" stroke="#fff" stroke-opacity=".9"/></svg>Tirith</div>
+  <div class="sub">See your coding agents work</div>
+  <div class="small">Meta Global AI Developer Hackathon · Build for Your World</div>
+</section>
+
+<section class="card" id="terminal">
+  <div class="term"><div class="bar"><i></i><i></i><i></i></div>
+  <pre id="tty"></pre></div>
+</section>
+
+<section class="card" id="brain">
+  <span class="pill">Muse Spark · Meta Model API</span>
+  <h1>The brain, in the state file</h1>
+  <p class="lead" style="margin-bottom:30px">Written by the model while the demo ran, read from <code>~/.tirith/state.js</code></p>
+  <div class="row"><div class="box"><div class="k" id="b-k1"></div><div class="q" id="b-agent"></div></div></div>
+  <div class="row"><div class="box"><div class="k" id="b-k3"></div><div class="q" id="b-hero"></div></div></div>
+  <div class="row"><div class="box"><div class="k" id="b-k2"></div><div class="q" id="b-room"></div></div></div>
+</section>
+
+<section class="card" id="built">
+  <span class="pill">Built during the hackathon · since 2026-10-28</span>
+  <h1>All of it, from the first commit</h1>
+  <p class="lead">Nothing existed before the hackathon began</p>
+  <div class="grid">
+    <div class="box"><h2>What was built</h2><ul>
+      <li>The <code>tirith</code> CLI and the collector</li>
+      <li>Pipelines, agents, flows, rooms and sessions</li>
+      <li>The commit guard, installed in every repo</li>
+      <li>The browser UI and the <code>./run</code> command</li></ul></div>
+    <div class="box"><h2>Which Meta models do the work</h2><ul>
+      <li><em>Muse Code</em> coding agents, launched and watched by Tirith</li>
+      <li><em>Muse Spark</em> is the brain in the product: one-line summaries, needs-you detection, room summaries, hero names</li></ul></div>
+  </div>
+</section>
+
+<section class="card" id="close">
+  <div class="brand"><svg viewBox="0 0 24 24"><path d="M12 2l8 8-8 12L4 10z" fill="url(#lg)" fill-opacity=".85"/><path d="M12 2l8 8H4z" fill="#fff" fill-opacity=".45"/><path d="M12 2l8 8-8 12L4 10z" fill="none" stroke="#fff" stroke-opacity=".9"/></svg>Tirith</div>
+  <div class="sub">See your coding agents work</div>
+  <div class="url">github.com/andreseloysv/Tirith</div>
+  <div class="small">Built for the Meta Global AI Developer Hackathon · Muse Code agents · Muse Spark brain</div>
+</section>
+
+<script>
+var id = (location.hash || '#title').slice(1).split('&')[0];
+document.getElementById(id).classList.add('on');
+window.setBrain = function (o) {
+  document.getElementById('b-k1').textContent = o.k1; document.getElementById('b-agent').textContent = o.agent;
+  document.getElementById('b-k3').textContent = o.k3; document.getElementById('b-hero').textContent = o.hero;
+  document.getElementById('b-k2').textContent = o.k2; document.getElementById('b-room').textContent = o.room;
+};
+if (id === 'terminal') {
+  var tty = document.getElementById('tty'), cmd = './run', i = 0;
+  var out = ['Collector already running: reusing it.', 'Tirith is open in your browser.'];
+  function draw(t, caret) { tty.innerHTML = t + (caret ? '<span class="caret"></span>' : ''); }
+  var base = '<span class="p">~/Tirith</span> <span class="m">$</span> ';
+  draw(base, true);
+  setTimeout(function typing() {
+    if (i < cmd.length) { i++; draw(base + cmd.slice(0, i), true); setTimeout(typing, 180); }
+    else setTimeout(function () {
+      draw(base + cmd + '\n' + out[0], false);
+      setTimeout(function () { draw(base + cmd + '\n' + out[0] + '\n' + out[1], true); }, 1400);
+    }, 700);
+  }, 1200);
+}
+</script>
+</body></html>
