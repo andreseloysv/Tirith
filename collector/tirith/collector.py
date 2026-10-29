@@ -469,6 +469,8 @@ class Collector:
                 status = "failed"
             elif stages and all(s["status"] == "passed" for s in stages):
                 status = "passed"
+            elif not starts:
+                status = "pending"
             else:
                 status = "running"
             project = resolve(run["project"], run["_cwd"]) if resolve else run["project"]
@@ -485,7 +487,7 @@ class Collector:
     def _flow_pipeline_ends(self, pipelines: list[dict]) -> None:
         """One ``report`` flow per pipeline run the first time it is seen finished."""
         seen = flows_mod.seen_set(self.home, "pipeline_runs")
-        fresh = {p["run"] for p in pipelines if p["status"] != "running"} - seen
+        fresh = {p["run"] for p in pipelines if p["status"] in ("passed", "failed")} - seen
         for run in pipelines:
             if run["run"] in fresh:
                 stages = ", ".join(f"{s['name']} {s['status']}" for s in run["stages"]
