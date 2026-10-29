@@ -39,6 +39,8 @@ web fix is visible without rebuilding the app.
   is gone: it ran a second, separate session; its permission questions are now Allow / Deny items in the
   manager chat. The streaming arguments still come from `[agents.<alias>] chat_args`
   (`docs/CONTRACT-agents.md`); `tools/chat_check.py` runs that exchange once by hand.
+- **Attachments**: the paperclip calls `attachment_pick` (native file picker, Rust reads the files); dropping files
+  on the chat uses Tauri's native drop events (`attachment_dropped`). Details in `docs/CONTRACT-inbox.md`.
 
 ## Run
 

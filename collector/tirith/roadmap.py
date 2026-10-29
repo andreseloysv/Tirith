@@ -33,7 +33,26 @@ _NOTE_WORDS = {"en curso": STATE_PROGRESS, "en revisión": STATE_REVIEW, "bloque
                "reabierto": STATE_REOPENED}
 _NOTE_RE = re.compile(r"\s*\((en curso|en revisión|bloqueado|reabierto)(?::\s*([^()]*?))?\s*\)\s*$", re.IGNORECASE)
 
+# A done check an item may carry before its status note: ``(check: `cmd`)``. The item is done only when it passes.
+_CHECK_RE = re.compile(r"\s*\((?:check|comprobación)\s*:\s*`([^`]+)`\s*\)", re.IGNORECASE)
+
 _cache: dict[str, tuple[int, int, list[dict]]] = {}
+
+
+def check_of(text: str) -> str | None:
+    """The done-check command of an item's text, else None."""
+    found = _CHECK_RE.search(text)
+    return found.group(1).strip() if found else None
+
+
+def without_check(text: str) -> str:
+    """The item's text without its ``(check: ...)`` note."""
+    return norm(_CHECK_RE.sub("", text, count=1))
+
+
+def with_check(text: str, command: str) -> str:
+    """``text`` followed by the ``(check: `command`)`` note (backticks in the command are not allowed)."""
+    return f"{norm(text)} (check: `{command.strip()}`)"
 
 
 def tag(text: str) -> tuple[str, str | None]:
@@ -357,6 +376,8 @@ def build(folder: str | Path | None, project: str, agents: list[dict], today: da
             item = {"text": raw["text"], "done": raw["done"], "who": who, "state": state}
             if detail:
                 item["detail"] = detail
+            if check_of(raw["text"]):
+                item["check"] = check_of(raw["text"])
             if who == "date":
                 item["until"] = tag(raw["text"])[1]
             elif who == "owner" and not raw["done"]:
