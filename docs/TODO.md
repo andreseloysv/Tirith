@@ -66,12 +66,13 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 ## 5. Agentes soportados (modo no interactivo, salida JSON)
 
 - [x] Actividad en vivo leída de los logs JSON de los lanes (herramientas, comandos, archivos).
-- [ ] Tokens y coste por lane.
-- [ ] Permisos estándar por agente (flags / perfiles), porque no pueden preguntar.
-- [ ] Verificar dentro del sandbox de cada agente que el wrapper de git está en `PATH`.
+- [x] Tokens y coste por lane.
+- [x] Permisos estándar por agente (flags / perfiles), porque no pueden preguntar.
+- [x] `tirith doctor --agent <alias>`: comprueba ejecutable, `PATH` del wrapper y que saltarse los hooks falla.
 - [ ] Confirmar el formato JSON de Muse Code con una ejecución real.
 - [ ] Codex y Copilot probados con `lane run` (el dueño los instala y hace login; hoy no están).
-- [ ] Agentes en la nube (Copilot coding agent, etc.): actividad desde GitHub (PRs, Actions).
+- [x] Agentes en la nube y CI remoto desde GitHub (PRs y Actions).
+- [ ] Token de GitHub y `agent_logins` en `config.toml` (dueño).
 
 ## 6. Pipelines con autodescubrimiento (`tirith.toml`)
 
@@ -80,9 +81,9 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Formato documentado en `docs/CONTRACT-manifest.md`.
 - [x] `tirith run --stage <nombre>` resuelve proyecto, pipeline y comando desde el manifiesto.
 - [x] Pipelines declarados que nunca corrieron aparecen como pendientes.
-- [ ] Hooks de git propios llaman a `tirith run --stage pre-commit -- <check>`.
-- [ ] Registrar cada ejecución de hook de git (permitido / bloqueado), incluida la guarda.
-- [ ] (Opcional) Leer CI remoto (GitHub Actions) como etapas.
+- [x] Hooks de git propios llaman a `tirith run --stage pre-commit -- <check>`.
+- [x] Registrar cada ejecución de hook de git (permitido / bloqueado), incluida la guarda.
+- [x] (Opcional) Leer CI remoto (GitHub Actions) como etapas.
 
 ## 7. Reglas de código ("errores de compilación" para agentes)
 
@@ -92,10 +93,12 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Shims en `~/.local/bin` por alias: en modo no interactivo no arrancan sin el token de `lane run`.
 - [x] `PreToolUse` bloquea etapas crudas (o las reescribe a `tirith run`).
 - [x] `lane run` exige brief y se niega a arrancar si `tirith check` falla.
-- [ ] Git `pre-commit` / `pre-push` con `tirith check`.
-- [ ] Check obligatorio en CI + protección de rama (en repos privados requiere GitHub Pro).
+- [x] Git `pre-commit` / `pre-push` con `tirith check` (nueva versión de la guarda).
+- [ ] Reinstalar la guarda nueva en cada repo (dueño).
+- [x] Workflow de CI con tests y `tirith check --ci`.
+- [ ] Hacerlo obligatorio con protección de rama (dueño; en repos privados requiere GitHub Pro).
 - [x] El collector registra cada violación bloqueada (`state.violations`) y la pone en "esperando por ti".
-- [ ] Violaciones visibles en la web, con el agente responsable.
+- [x] Violaciones visibles en la web, con el agente responsable.
 - [ ] Activar las puertas en la máquina del dueño (hooks de usuario + shims).
 - [x] `tirith.toml` en ChromaSol y RelaGame.
 - [ ] ChromaSol: unir su hook `pre-commit` de rutas protegidas con la guarda de palabras (dueño); hasta entonces `lane run` no arranca allí.
@@ -106,9 +109,9 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Vista Flow: cada agente se expande con toda su información.
 - [x] Logs legibles: más nuevos arriba, colores por tipo, JSON convertido en información clara.
 - [x] Detección de tests sin falsos positivos.
-- [ ] Guardar el diff real por lane.
-- [ ] Totales de coste y tiempo por sesión.
-- [ ] Registro de decisiones ("por qué") visible en la vista Flow.
+- [x] Guardar el diff real por lane.
+- [x] Totales de coste y tiempo por sesión.
+- [x] Registro de decisiones ("por qué") visible en la vista Flow.
 
 ## 9. App de escritorio (Tauri) con chat
 
@@ -133,9 +136,11 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 
 ## 11. Lanzar un sub-agente desde el Plan
 
-- [ ] `tirith launch --project <id> --step <n>`: worktree, brief generado de las tareas abiertas, lane en segundo plano.
-- [ ] Enlaces `tirith://` con un manejador local (sin servidores) y token para que ninguna otra web lance agentes.
-- [ ] Botón «Terminar con un agente» en cada paso no terminado del Plan.
+- [x] `tirith launch --project <id> --step <n>`: worktree, brief generado de las tareas abiertas, lane en segundo plano.
+- [x] Enlaces `tirith://` con un manejador local (sin servidores) y token para que ninguna otra web lance agentes.
+- [x] Botón «Terminar con un agente» en cada paso no terminado del Plan.
+- [ ] Registrar el manejador `tirith://` en macOS y probar un lanzamiento real.
+- [ ] Al terminar un lane lanzado así: botón «Revisar y unir» (tests + merge).
 - [x] Markdown en todo el texto de los agentes (respuestas, objetivos, mensajes).
 
 ## Orden
