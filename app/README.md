@@ -3,6 +3,23 @@
 The existing web UI (`../web`) in a native window. No servers and no open ports: the page and Rust
 talk through Tauri IPC only. The web UI is not copied; `frontendDist` points at `../../web`.
 
+## Live web (no rebuild)
+
+The window can show the current files of `web/` instead of the copy embedded at build time, so a merged
+web fix is visible without rebuilding the app.
+
+- A custom URI scheme, `tirithweb://localhost/index.html` (Windows: `http://tirithweb.localhost/`), is
+  answered by Rust from disk (`src/liveweb.rs`). No HTTP server, no port. Paths are decoded; `..`,
+  backslashes, NUL and symlinks leading outside the folder are refused (403/400). MIME types come from the
+  extension; responses are `no-store`.
+- Folder: `[app] web_dir = "<path>"` in `~/.tirith/config.toml`. Without it, debug builds
+  (`npm run tauri dev`) use this repo's `web/`; release builds keep the embedded page. With `web_dir`
+  set, a release build uses the live folder too (it needs an `index.html`, else the embedded page is used).
+- Cmd/Ctrl+R reloads the files (the URL hash stays, so the same view returns). Rust checks the folder every
+  2 s (names, sizes, mtimes) and emits `tirith://web-changed`; the page then shows a "New version of the
+  page · Reload" pill (`web/js/live.js`).
+- `capabilities/default.json` lists the scheme as a remote origin so that page can use the app's commands.
+
 ## What it does
 
 - **State**: Rust reads `~/.tirith/state.json` (or `$TIRITH_HOME`) every 2 s and emits the
@@ -55,7 +72,7 @@ cd app
 npm install
 npm run tauri dev      # opens the window; hot reload is not needed, the page is plain files
 npm run tauri build    # bundles for the current platform
-cd src-tauri && cargo test     # permission reply and line classification
+cd src-tauri && cargo test     # permission reply, line classification, live web paths and MIME types
 ```
 
 ## Agents per platform
@@ -142,7 +159,8 @@ Linux: signing is optional; nothing needed.
 ## Not done
 
 - Resuming chats, tool-call display.
-- Opening the window in dev mode and looking at it was not done in this session;
+- Loading `tirithweb://` in a real window was not tried (no GUI session); the handler is covered by
+  unit tests only. Opening the window in dev mode and looking at it was not done in this session;
   `cargo check` and `cargo test` pass.
 - Auto-update, actual signing, a Windows shim/guard tested on Windows (`scripts/package.ps1` was not
   run on Windows either).

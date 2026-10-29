@@ -872,3 +872,5 @@ button.vwho:hover b { text-decoration: underline; }
 .mc-to { display: flex; align-items: center; gap: 6px; padding: 3px 4px 3px 10px; font-size: 12px; color: var(--mut); background: rgba(47,111,237,.08); border-radius: 10px; }
 .mc-to span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .mc-to b { font-weight: 500; color: var(--fg); }
 .mc-to button { font-size: 16px; line-height: 1; padding: 0 7px; color: var(--mut); border-radius: 6px; } .mc-to button:hover { background: var(--soft); }
+.webpill { position: fixed; right: 16px; bottom: 16px; z-index: 50; display: flex; align-items: center; gap: 10px; padding: 6px 8px 6px 14px; font-size: 12.5px; color: var(--fg); background: rgba(255,255,255,.72); border: 1px solid var(--line); border-radius: 999px; box-shadow: var(--shadow); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+.webpill button { height: 24px; padding: 0 12px; font-size: 12px; color: #fff; background: var(--blue); border: 0; border-radius: 12px; cursor: pointer; }

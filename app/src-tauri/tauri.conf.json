@@ -9,7 +9,7 @@
   "app": {
     "withGlobalTauri": true,
     "windows": [
-      { "title": "Tirith", "width": 1440, "height": 900 }
+      { "label": "main", "title": "Tirith", "width": 1440, "height": 900, "create": false }
     ],
     "security": { "csp": null }
   },
