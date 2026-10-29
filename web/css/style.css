@@ -179,7 +179,6 @@ section { margin-bottom: 30px; }
 .canvas { flex: 1; min-height: 0; overflow: auto; border: 1px solid var(--line); border-radius: 12px; background-color: #fbfbfc;
   background-image: radial-gradient(#d9dde4 1px, transparent 1px); background-size: 18px 18px; }
 .canvas { display: flex; } .zoomer { margin: auto; flex: none; padding: 0; } .zstage { transform-origin: 0 0; width: max-content; }
-.flowcol { width: 360px; display: flex; flex-direction: column; align-items: stretch; }
 .node { background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 1px 2px rgba(16,24,40,.05), 0 4px 12px rgba(16,24,40,.04); display: flex; align-items: center; gap: 12px; padding: 12px 14px; position: relative; width: 100%; }
 button.node:hover { border-color: #d3d7de; } .node.sel { border-color: var(--blue); box-shadow: 0 0 0 1px var(--blue), 0 4px 12px rgba(47,111,237,.12); }
 .gico { width: 40px; height: 40px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; flex: none; box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--grey); }
@@ -208,15 +207,6 @@ button.node:hover { border-color: #d3d7de; } .node.sel { border-color: var(--blu
   font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; word-break: break-word; }
 .sum { margin: 0 0 6px; } .files { margin: 0 0 12px; }
 
-/* flow graph */
-.fgraph { position: relative; margin: 8px; }
-.edge { fill: none; stroke: #c9cfda; } .edge.on { stroke: var(--blue); }
-.port { fill: #fff; stroke: #b9c0cc; stroke-width: 1.5; } .port.on { stroke: var(--blue); }
-.fnode { position: absolute; padding: 0 14px; }
-.init { color: #fff; font-size: 16px; }
-.epill { position: absolute; transform: translate(-50%, -50%); display: inline-flex; align-items: center; gap: 6px; max-width: 190px; background: #fff; border: 1px solid var(--line); border-radius: 11px; line-height: 20px; padding: 0 9px 0 4px; font-size: 11.5px; color: var(--mut); box-shadow: var(--shadow); z-index: 2; }
-.epill b { background: var(--soft); color: var(--fg); border-radius: 8px; padding: 0 6px; font-weight: 600; flex: none; }
-.epill span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .epill:hover { border-color: #c5ccd8; } .epill.on { border-color: var(--blue); } .epill.on b { background: #e8effd; color: var(--blue); }
 
 /* agents view */
 .toolbar { display: flex; padding: 0 var(--page-pad) 14px; flex: none; }
@@ -256,9 +246,6 @@ button.node:hover { border-color: #d3d7de; } .node.sel { border-color: var(--blu
 .view:has(> .drawer) .board { margin-right: 452px; }
 .view:has(> .drawer) .listwrap { margin-right: 452px; }
 
-.epill span { display: none; } .epill:hover span, .epill.on span, .epill:focus-visible span { display: inline; }
-.epill { padding-right: 4px; } .epill:hover, .epill.on, .epill:focus-visible { padding-right: 9px; z-index: 9; }
-.fnode .tt { font-size: 13px; line-height: 1.25; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; }
 .aname { max-width: 100%; } .aname .pill { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .ahead { min-width: 0; }
 
@@ -291,8 +278,6 @@ body { background: #eaf1f5; }
 .nav:hover { background: rgba(255,255,255,.55); } .nav.on { background: rgba(255,255,255,.75); box-shadow: inset 0 1px 0 #fff, 0 2px 8px rgba(70,95,130,.08); }
 .nav em { background: rgba(255,255,255,.8); }
 .pill { background: rgba(255,255,255,.7); border: 1px solid rgba(255,255,255,.9); }
-.dpill, .epill { background: rgba(255,255,255,.82); }
-.epill b { background: rgba(120,135,160,.12); }
 .bar { background: rgba(120,135,160,.15); }
 .col { background: rgba(255,255,255,.32); border: 1px solid rgba(255,255,255,.85); border-top: 1px solid rgba(255,255,255,.85); box-shadow: inset 0 1px 0 #fff; }
 .col::before { content: ""; position: absolute; left: 14px; right: 14px; top: 8px; height: 3px; border-radius: 2px; background: linear-gradient(90deg, var(--grey), transparent); }
@@ -313,8 +298,6 @@ body { background: #eaf1f5; }
 .nav { position: relative; }
 .zbar { bottom: 20px; }
 @media (max-width: 800px) { #shell { margin: 0; height: 100%; border-radius: 0; } }
-.zbar, .drawer, .fnode { position: absolute; } .fnode::before { display: none; }
-.fnode.sel::before { display: block; }
 
 /* hook activity (agent panel) */
 .act { margin: 0 0 12px; padding: 8px 10px; border-radius: 10px; background: rgba(255,255,255,.55); border: 1px solid var(--glass-line); box-shadow: inset 0 1px 0 #fff; }
@@ -323,7 +306,7 @@ body { background: #eaf1f5; }
 .act .t { font: 11px ui-monospace, Menlo, monospace; flex: none; } .act .tool { font-weight: 600; flex: none; min-width: 48px; }
 .act .what { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* agent activity (shared by Flow and the Agents drawer) */
+/* agent activity (used by the Agents drawer) */
 .activity { display: flex; flex-direction: column; gap: 12px; font-size: 12.5px; }
 .asec { margin: 0; }
 .asec h4 { margin: 0 0 5px; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--mut); }
@@ -351,24 +334,6 @@ body { background: #eaf1f5; }
 .erows .what { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sico { flex: none; width: 18px; height: 18px; border-radius: 5px; display: inline-flex; align-items: center; justify-content: center; } .sn { flex: 1; min-width: 0; }
 
-/* flow: nodes flow in columns, an expanded node grows in place */
-.fgraph { width: max-content; }
-.fcols { position: relative; display: flex; align-items: center; gap: 96px; }
-.fcol { display: flex; flex-direction: column; gap: 22px; align-items: stretch; }
-.fnode { position: relative; display: block; padding: 0; min-width: 184px; }
-.fnode.ex { width: 252px; } .fnode.open { width: 380px; }
-.fhead { display: flex; align-items: center; gap: 12px; padding: 0 14px; min-height: 58px; width: 100%; }
-button.fhead { border-radius: 12px; }
-.fhead .nt { min-width: 0; flex: 1; display: flex; flex-direction: column; }
-.fhead .ov { display: flex; align-items: center; gap: 6px; }
-.fnode:not(.ex) .tt { max-width: 150px; }
-.fnode .gl { font-size: 11.5px; color: var(--mut); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.caret { flex: none; width: 7px; height: 7px; border-right: 1.6px solid #8b93a1; border-bottom: 1.6px solid #8b93a1; transform: rotate(45deg); margin: -3px 2px 0 0; }
-.fnode.open .caret { transform: rotate(-135deg); margin-top: 3px; }
-.fbody { padding: 12px 14px 14px; border-top: 1px solid rgba(120,135,160,.16); }
-.fsvg { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
-.fpills { position: absolute; left: 0; top: 0; }
-.fnode.open { z-index: 1; }
 
 /* agent log: one look per kind (js/logview.js) */
 :root { --l-cmd: rgba(47,111,237,.09); --l-cmd-fg: #1d3f91; --l-err: #e5484d; --l-err-bg: rgba(229,72,77,.08); --l-done: rgba(46,164,79,.12); --l-done-line: rgba(46,164,79,.4);
@@ -552,8 +517,6 @@ button.vwho:hover b { text-decoration: underline; }
 .vline { display: flex; justify-content: space-between; gap: 8px; }
 .rbadge { align-self: flex-start; font-size: 11px; font-weight: 600; color: #b4252b; background: #fde8e8; border-radius: 10px; padding: 0 8px; line-height: 19px; }
 .drows li { display: flex; flex-direction: column; gap: 1px; } .dtext { font-weight: 600; color: #1f2937; } .dwhy { color: var(--mut); }
-.edge.bad { stroke: var(--red); stroke-opacity: .75; }
-.epill.bad { border-color: rgba(229,72,77,.5); } .epill.bad b { background: #fde8e8; color: #b4252b; }
 .dlabel { position: absolute; transform: translate(-50%, -50%); display: inline-flex; align-items: center; gap: 5px; max-width: 200px; z-index: 2; font-size: 11px; line-height: 17px; padding: 0 8px 0 6px; border-radius: 9px; color: #5b3fb8; background: rgba(238,232,255,.92); border: 1px solid rgba(167,139,250,.5); }
 .dlabel i { width: 6px; height: 6px; border-radius: 50%; background: #a78bfa; flex: none; }
 .dlabel span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .dlabel:hover, .dlabel.on { border-color: #7c5ce0; z-index: 9; } .dlabel.more { padding: 0 8px; }
