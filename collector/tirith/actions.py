@@ -225,6 +225,19 @@ def list_actions(home: Path) -> list[dict]:
     return list(seen.values())
 
 
+def dedupe_actions(actions: list[dict]) -> list[dict]:
+    """Each action once: unique by id, then by command + label (the first one wins)."""
+    out, ids, shapes = [], set(), set()
+    for action in actions:
+        shape = (str(action.get("command") or ""), str(action.get("label") or ""))
+        if str(action.get("id") or "") in ids or shape in shapes:
+            continue
+        ids.add(str(action.get("id") or ""))
+        shapes.add(shape)
+        out.append(action)
+    return out
+
+
 def attach_last_runs(home: Path, containers: list[dict]) -> None:
     """Set ``last_run`` on every action of ``containers`` (answers or waits) in place."""
     rows = run_rows(home)
