@@ -42,8 +42,9 @@ readable `command` differs from what ran, `full` (the whole line, up to 400 char
 
 ## Request and report
 
-- `agents[].request`: `{text (≤ 2 KB), at, agent_session_id}` or null. `tirith lane run|start` records
-  it: the request file (`~/.tirith/requests/<session>.json`, written by `tirith hook`) of the agent
+- `agents[].request`: `{text (≤ 2 KB), at, agent_session_id}` or null. `tirith lane run` records
+  the lane's own brief (the task it was given, cut at 2 KB) when it has one. `lane start` records
+  the owner's request: the request file (`~/.tirith/requests/<session>.json`, written by `tirith hook`) of the agent
   session in env `TIRITH_AGENT_SESSION`, else the newest request of the last 6 hours. Children inherit
   the nearest ancestor's request in the state; the page shows "Asked by you" on the root lane only.
 - `agents[].report`: the lane's final answer in markdown, whole (stored and exposed up to 16 KB, cut at a

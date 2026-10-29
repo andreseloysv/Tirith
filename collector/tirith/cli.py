@@ -117,6 +117,18 @@ def owner_request(home: Path, environ=None) -> dict | None:
             "agent_session_id": str(best.get("agent_session_id") or "")}
 
 
+def lane_request(home: Path, brief: str | None) -> dict | None:
+    """The request a lane answers: the brief it was given (its own task), else the owner's latest request."""
+    path = Path(brief).expanduser() if brief else None
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace").strip() if path and path.is_file() else ""
+    except OSError:
+        text = ""
+    if text:
+        return {"text": bound_text(text, REQUEST_MAX), "at": now_iso(), "agent_session_id": ""}
+    return owner_request(home)
+
+
 def register_lane(home: Path, *, lane_id: str | None, project: str, hero_class: str,
                   feature: str, workspace: str | None, log: str | None,
                   pid: int | None, brief: str | None, step: str | None = None,
@@ -139,7 +151,7 @@ def register_lane(home: Path, *, lane_id: str | None, project: str, hero_class: 
         "session": projects_mod.current_session(home),
         "step": str(step) if step else None,
         "request_id": str(request_id) if request_id else None,
-        "request": owner_request(home),
+        "request": lane_request(home, brief),
     }
     write_lane(home, lane)
     source = "manager" if parent in ("manager", "steward") else f"agent:{parent}"
@@ -355,11 +367,48 @@ def _cmd_doctor(args) -> int:
     return 1 if failed else 0
 
 
+def in_manager_session(environ=None) -> bool:
+    """True inside the manager (the on-call lane or a session with ``TIRITH_ROLE=manager``)."""
+    env = os.environ if environ is None else environ
+    return (str(env.get("TIRITH_LANE") or "").startswith(managerd_mod.LANE_PREFIX)
+            or env.get("TIRITH_ROLE") == "manager")
+
+
+def _lane_workspace(repo: Path, lane_id: str, explicit: bool) -> Path:
+    """A lane never runs in the main checkout: a new worktree ``<repo>-lanes/<lane-id>`` on branch
+    ``lane/<lane-id>`` from the current ``main`` (else HEAD); an existing one is reused."""
+    path = launch_mod.worktree_path(repo, lane_id)
+    if path.exists():
+        return path
+    try:
+        return launch_mod.create_worktree(repo, lane_id, base="main" if launch_mod.branch_exists(repo, "main") else None)
+    except launch_mod.LaunchError as error:
+        raise SystemExit(f"lane run: {error}. Pass --workspace <folder> to run elsewhere.")
+
+
+def _detached_argv(args, home: Path, lane_id: str, workspace: Path, command: list[str]) -> list[str]:
+    """``tirith lane run`` again with the same arguments, resolved, that runs in the foreground (``--no-detach``)."""
+    argv = [*launch_mod.tirith_argv(home), "lane", "run", "--id", lane_id, "--project", args.project,
+            "--class", args.hero_class, "--feature", args.feature, "--workspace", str(workspace),
+            "--no-detach"]
+    for flag, value in (("--log", args.log), ("--brief", args.brief), ("--step", args.step),
+                        ("--request", args.request), ("--agent", args.agent), ("--as-agent", args.as_agent),
+                        ("--fallback-from", args.fallback_from), ("--tried", args.tried),
+                        ("--model", args.model), ("--effort", args.effort), ("--prompt", args.prompt),
+                        ("--prompt-file", args.prompt_file)):
+        if value:
+            argv += [flag, str(value)]
+    if args.by_tirith:
+        argv.append("--by-tirith")
+    return [*argv, "--", *command]
+
+
 def _cmd_lane_run(args) -> int:
     home = _home(args)
     command = list(args.command or [])
     if command and command[0] == "--":
         command = command[1:]
+    raw_command = list(command)
     config, proj = _project_or_exit(home, args.project)
     if args.agent:
         if command:
@@ -374,8 +423,23 @@ def _cmd_lane_run(args) -> int:
     if refusal:
         print(refusal, file=sys.stderr)
         return 3
-    lane_id = args.id or _unique_lane_id(home, _slug(args.feature))
     interactive = bool(getattr(args, "interactive", False))
+    manager_lane = bool(args.id and args.id.startswith(managerd_mod.LANE_PREFIX)
+                        and args.hero_class == managerd_mod.HERO_CLASS)
+    lane_id = args.id or _unique_lane_id(home, _slug(args.feature))
+    if not args.workspace and not manager_lane:
+        repo = Path(workspace)
+        while not args.id and (launch_mod.worktree_path(repo, lane_id).exists()
+                               or launch_mod.branch_exists(repo, f"lane/{lane_id}")):
+            lane_id = _unique_lane_id(home, f"{lane_id}-2")
+        workspace = _lane_workspace(repo, lane_id, False)
+    if (not interactive and not args.no_detach and (args.detach or (
+            not args.by_tirith and in_manager_session()))):  # a manager's turn must end right away
+        launch_mod.spawn_detached(_detached_argv(args, home, lane_id, Path(workspace), raw_command), home,
+                                  home / "logs" / f"{lane_id}.launch.log")
+        print(lane_id)
+        print(f"detached; worktree: {workspace}")
+        return 0
     log_path = None if interactive else (
         Path(args.log).expanduser().resolve() if args.log else home / "logs" / f"{lane_id}.log")
     if log_path is not None:
@@ -1712,6 +1776,10 @@ def build_parser() -> argparse.ArgumentParser:
     lane_run.add_argument("--as-agent", default=None, help="alias this command runs (recorded on the lane)")
     lane_run.add_argument("--fallback-from", default=None, help="lane id this one continues (out of credits)")
     lane_run.add_argument("--by-tirith", action="store_true", help=argparse.SUPPRESS)
+    lane_run.add_argument("--detach", action="store_true",
+                          help="start the lane in its own session and return its id at once "
+                               "(the default inside the manager)")
+    lane_run.add_argument("--no-detach", action="store_true", help=argparse.SUPPRESS)
     lane_run.add_argument("--tried", default="", help="comma list of aliases already used for this brief")
     lane_run.add_argument("--model", default=None)
     lane_run.add_argument("--effort", default=None)
