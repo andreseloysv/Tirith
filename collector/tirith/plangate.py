@@ -187,12 +187,18 @@ def _message(what: str, step: str, who: str) -> str:
 # -- start ------------------------------------------------------------------------------------
 
 
+def manager_lane(lane_id: str | None, hero_class: str | None = None) -> bool:
+    """A manager lane (the session or a one-shot turn): they share the standing manager item."""
+    return str(hero_class or "") in STANDING_CLASSES or str(lane_id or "").startswith("manager")
+
+
 def check_start(home: Path, repo: Path, project: str, step: str | None, item: str | None,
-                lane_id: str | None = None) -> str:
+                lane_id: str | None = None, hero_class: str | None = None) -> str:
     """The clean text of the open plan item an agent may start on; raises ``PlanGateError`` otherwise.
 
     The item is found by its exact text (any status note is ignored) or by its id (``i-xxxxxxxx``) in step
-    ``step``. An item another lane is working on, in review or blocked is not startable."""
+    ``step``. An item another lane is working on, in review or blocked is not startable, except the standing
+    manager item for a manager lane: that lane takes it over (:func:`begin` moves the note to it)."""
     step = str(step or "").strip()
     if not step or not str(item or "").strip():
         raise PlanGateError("an agent starts on a plan item: pass --step <N> --item \"<exact text of the open item>\". "
@@ -211,7 +217,8 @@ def check_start(home: Path, repo: Path, project: str, step: str | None, item: st
         raise PlanGateError("that item is in review; it is done when the review passes")
     if state == roadmap_mod.STATE_BLOCKED:
         raise PlanGateError(f"that item is blocked ({detail or 'no reason given'}); unblock it in the plan first")
-    if state == roadmap_mod.STATE_PROGRESS and detail and detail != lane_id:
+    if state == roadmap_mod.STATE_PROGRESS and detail and detail != lane_id \
+            and not (clean == MANAGER_ITEM and manager_lane(lane_id, hero_class)):
         other = read_json(lane_path(home, detail), None)
         if isinstance(other, dict) and not other.get("ended_at"):
             raise PlanGateError(f"that item is already in progress by lane {detail}")
@@ -225,6 +232,17 @@ def begin(home: Path, repo: Path, project: str, step: str, item: str, lane_id: s
         home, repo, project,
         lambda text: roadmap_mod.set_item(text, step, clean, roadmap_mod.with_status(clean, roadmap_mod.STATE_PROGRESS, lane_id)),
         _message("start", step, lane_id))
+
+
+def holds(repo: Path, step: str, item: str, lane_id: str) -> bool:
+    """True unless the plan shows the item held ("en curso") by another lane."""
+    path = plan_file(repo)
+    steps = roadmap_mod.parse(path.read_text(encoding="utf-8")) if path else None
+    found = roadmap_mod.find_item(steps, step, item) if steps else None
+    if found is None:
+        return True
+    _, state, detail = roadmap_mod.split_status(found["text"])
+    return not (state == roadmap_mod.STATE_PROGRESS and detail and detail != lane_id)
 
 
 def release(home: Path, repo: Path, project: str, step: str, item: str, lane_id: str) -> bool:
@@ -365,7 +383,7 @@ def lane_ended(home: Path, lane: dict) -> str:
                     commit_change(home, repo, str(lane["project"]),
                                   lambda text: roadmap_mod.set_item(text, linked[0], clean, clean, tick=True),
                                   _message("done", linked[0], str(lane["id"])))
-                else:
+                elif holds(repo, linked[0], linked[1], str(lane["id"])):  # a later manager may have taken it over
                     release(home, repo, str(lane["project"]), linked[0], linked[1], str(lane["id"]))
             except PlanGateError:
                 pass

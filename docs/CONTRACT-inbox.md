@@ -514,8 +514,8 @@ can be removed before sending. Up to 6 files per message, at most 10 MB each, no
 WebP is a picture only when its bytes say so, never because of its name.
 
 ```
-app:     drop on the window -> HTML5 drop with the files (the main window turns the native drop handler off)
-         (native handler on) -> tauri://drag-drop {paths, position} -> attachment_dropped(paths)
+app:     paperclip -> attachment_pick() (native file picker in Rust) -> [{name, type, size, b64} | {name, error}]
+         drop on the window (native handler on) -> tauri://drag-drop {paths, position} -> attachment_dropped(paths)
                                                          -> [{name, type, size, b64} | {name, error}]
          attachment_save(message_id, name, mime, bytes_base64) -> <home>/attachments/<message-id>/<n>.<ext> | <n>-<name>
          inbox_add(kind: "chat", ..., id, attachments)   -> inbox.jsonl row with `attachments`
@@ -525,13 +525,14 @@ manager: tirith inbox watch line / hook context list the absolute paths -> open 
          tirith inbox answer <id> "<markdown>" --attach FILE ...    -> the answer shows them too
 ```
 
-- The main window is built with `disable_drag_drop_handler()`, so the page gets the HTML5 `dragover`/`drop`
-  events with the files, as in a browser, and reads them itself. A window that keeps Tauri's native handler
-  takes the drop instead (the page gets no HTML5 drop with the files): Tauri's
+- The main window keeps Tauri's native drop handler on (a web view's HTML5 drop with files is not the same on every
+  platform), so the page gets no HTML5 drop with files there: Tauri's
   `tauri://drag-enter|over|leave|drop` events carry the pointer in physical pixels, the page divides by
   `devicePixelRatio` and marks the chat under it. `attachment_dropped` reads only paths of the last native drop
   (the app remembers them from `WindowEvent::DragDrop`), refuses folders, empty files and files over 10 MB with a
-  reason per file, and types a picture by its bytes, anything else by its extension.
+  reason per file, and types a picture by its bytes, anything else by its extension. The paperclip calls
+  `attachment_pick`, which opens the native picker in Rust and reads the chosen files the same way (the page never
+  passes a path); a browser keeps the `<input type=file>`. The chat never scrolls sideways (`.mchat` clips x).
 - `<message-id>` is the request id (`in-` and 8 hex digits). The page picks it, saves every file with
   `attachment_save`, then calls `inbox_add` with the same `id`. `attachment_save` refuses a bad id, an empty file
   or one over 10 MB, picks the file name itself (`<n>.png|jpg|gif|webp` for a picture, `<n>-<name>` with the name
