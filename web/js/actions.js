@@ -59,6 +59,12 @@
   T.actions = function (list, state, pid) {
     if (state) lastState = state;
     if (!list || !list.length) return '';
+    var ids = {}, shapes = {};
+    list = list.filter(function (a) {   /* each action once: by id, then by command + label */
+      var shape = (a.command || '') + '\n' + (a.label || '');
+      if (ids[a.id] || shapes[shape]) return false;
+      ids[a.id] = shapes[shape] = true; return true;
+    });
     return '<ul class="acts">' + list.map(function (a) { return row(a, pid); }).join('') + '</ul>';
   };
 

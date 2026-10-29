@@ -687,7 +687,8 @@ class Collector:
                 "kind": row.get("kind") if row.get("kind") in asks_mod.ASK_KINDS
                 else asks_mod.default_kind(options, command),
                 "options": options, "command": command, "status": "open",
-                "actions": [dict(a) for a in row.get("actions") or [] if isinstance(a, dict)],
+                "actions": actions_mod.dedupe_actions(
+                    [dict(a) for a in row.get("actions") or [] if isinstance(a, dict)]),
             }
             reply = replied.get(wait["id"])
             if reply is not None:
@@ -766,9 +767,17 @@ class Collector:
     def _enforce_cta(self, waiting: list[dict]) -> list[dict]:
         """The rule: nothing reaches the owner without a one-click option or a Run action. An item without
         one goes to the manager's queue (once) instead of the list."""
-        shown = []
+        shown, seen = [], {}
         for wait in waiting:
             if asks_mod.has_call_to_action(wait):
+                key = (str(wait.get("project") or ""), " ".join(str(wait.get("text") or "").split()).lower())
+                if key in seen:  # the same text for the same project is one item
+                    first = seen[key]
+                    first["actions"] = actions_mod.dedupe_actions(
+                        (first.get("actions") or []) + (wait.get("actions") or []))
+                    continue
+                seen[key] = wait
+                wait["actions"] = actions_mod.dedupe_actions(wait.get("actions") or [])
                 shown.append(wait)
             else:
                 asks_mod.queue_add(self.home, str(wait.get("project") or ""), "", wait["text"],

@@ -73,7 +73,8 @@
     opts(w).forEach(function (o, i) {
       h += '<button class="nbtn' + (i === 0 ? ' primary' : '') + '" data-act="nopt" data-key="' + esc(w.id) + '" data-i="' + i + '">' + esc(o.label) + '</button>';
     });
-    if (w.command) h += '<button class="nbtn" data-act="copy" data-key="' + esc(w.command) + '" title="Copy the command">Copy</button><code class="ncmd" title="' + esc(w.command) + '">' + esc(w.command) + '</code>';
+    var dup = (w.actions || []).some(function (a) { return a.command === w.command; });   /* the Run row already has it */
+    if (w.command && !dup) h += '<button class="nbtn" data-act="copy" data-key="' + esc(w.command) + '" title="Copy the command">Copy</button><code class="ncmd" title="' + esc(w.command) + '">' + esc(w.command) + '</code>';
     if (w.link) h += '<a class="nbtn" href="' + esc(w.link) + '" target="_blank" rel="noopener">Open</a>';
     h += '</div>' + (w.actions && w.actions.length ? T.actions(w.actions, lastState, w.project) : '') + '<div class="nwrite"><input class="iin" type="text" data-act="ntext" data-key="' + esc(w.id) + '" maxlength="1000" placeholder="Or write what you need…" aria-label="Your reply" value="' + esc(ui.needsDraft[w.id] || '') + '"></div>';
     if (ui.needsErr[w.id]) h += '<div class="ierr">' + esc(ui.needsErr[w.id]) + '</div>';
@@ -93,6 +94,12 @@
     var answeredIds = {}, waits = (s.waiting_on_you || []).filter(function (w) { return w.status !== 'answered'; }), mine = [], older = [], answered;
     answered = (s.answered_waits || []).slice();
     answered.forEach(function (w) { answeredIds[w.id] = 1; delete sent[w.id]; });
+    var seen = {};
+    waits = waits.filter(function (w) {   /* the same text for the same project is one item */
+      var k = (w.project || '') + '\n' + String(w.text || '').replace(/\s+/g, ' ').trim().toLowerCase();
+      if (seen[k]) return false;
+      seen[k] = 1; return true;
+    });
     waits.slice().sort(function (a, b) { return (T.ms(b.since) || 0) - (T.ms(a.since) || 0); }).forEach(function (w) {
       if (sent[w.id]) {   /* sent from this page, the collector has not shown the answer yet */
         answered.unshift({ id: w.id, project: w.project, text: w.text, since: w.since, status: 'answered', answer: { label: sent[w.id].label, text: sent[w.id].text } });
