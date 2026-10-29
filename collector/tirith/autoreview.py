@@ -27,7 +27,7 @@ from tirith import projects as projects_mod
 from tirith import review as review_mod
 from tirith import roadmap as roadmap_mod
 from tirith.home import Config, now_iso, parse_iso
-from tirith.store import lane_path, read_json
+from tirith.store import read_lane
 
 OVERDUE_AFTER_S = 1800.0
 AUTO_WINDOW_S = 86400.0  # older finished lanes are not merged behind the owner's back; they are overdue
@@ -301,7 +301,7 @@ def run(home: Path, config: Config, now: datetime, state: dict, lanes: list[dict
     overdue = state.setdefault("overdue", {})
     for seen in lanes:
         lane_id = str(seen.get("id") or "")
-        lane = read_json(lane_path(home, lane_id), None) if lane_id else None
+        lane = read_lane(home, lane_id) if lane_id else None
         if not isinstance(lane, dict) or not lane.get("ended_at") or lane.get("result") != "done":
             continue
         repo = repo_of(config, lane)
