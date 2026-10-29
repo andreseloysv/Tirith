@@ -12,6 +12,7 @@ import subprocess
 from pathlib import Path
 
 from tirith import manifest as manifest_mod
+from tirith import runstage as runstage_mod
 from tirith.home import now_iso
 from tirith.launch import worktree_path
 from tirith.store import lane_path, read_json, write_lane
@@ -63,13 +64,19 @@ def public(lane: dict, repo: Path | None) -> dict | None:
     return None
 
 
-def test_command(folder: Path) -> str | None:
-    """The ``run`` of the first test stage of the project's manifest."""
+def test_stage(folder: Path):
+    """``(pipeline id, stage)`` of the first test stage with a ``run`` in the project's manifest."""
     for pipe in manifest_mod.load(folder).pipelines:
         for stage in pipe.stages:
             if stage.run and manifest_mod.stage_kind(stage) == "test":
-                return stage.run
+                return pipe.id, stage
     return None
+
+
+def test_command(folder: Path) -> str | None:
+    """The ``run`` of the first test stage of the project's manifest."""
+    found = test_stage(folder)
+    return found[1].run if found else None
 
 
 def check_ready(home: Path, lane_id: str, repo: Path | None) -> dict:
@@ -110,14 +117,18 @@ def _set(home: Path, lane: dict, status: str, message: str | None = None, **extr
     return lane["review"]
 
 
-def run_tests(workspace: Path, command: str) -> tuple[bool, str]:
+def run_tests(home: Path, project: str, pipeline: str, stage: str, workspace: Path, command: str,
+              lane_id: str | None = None) -> tuple[bool, str]:
+    """Run the test stage as a recorded pipeline run (same path as ``tirith run``), tagged with the lane."""
     env = {k: v for k, v in os.environ.items() if k != "TIRITH_LANE"}
-    try:
-        done = subprocess.run(command, shell=True, cwd=workspace, capture_output=True, text=True,
-                              timeout=TEST_TIMEOUT_S, env=env)
-    except subprocess.TimeoutExpired:
+    tags = runstage_mod.lane_tags(home, workspace)
+    code, output = runstage_mod.run_stage(
+        home, project, pipeline, stage, command, workspace, lane=lane_id or tags.get("lane"),
+        worktree=tags.get("worktree") or str(workspace), branch=tags.get("branch"),
+        echo=False, env=env, timeout=TEST_TIMEOUT_S, new_run=True)
+    if output.startswith("the stage did not finish"):
         return False, f"tests did not finish in {TEST_TIMEOUT_S} s"
-    return done.returncode == 0, _tail(done.stdout + "\n" + done.stderr)
+    return code == 0, output
 
 
 def merge_lane(repo: Path, workspace: Path, lane_id: str, feature: str) -> str:
@@ -146,12 +157,14 @@ def review_lane(home: Path, lane_id: str, repo: Path | None, merge: bool = True)
     """Tests, then (when ``merge``) the merge. Returns the stored review; failures are stored too."""
     lane = check_ready(home, lane_id, repo)
     workspace = Path(str(lane["workspace"]))
-    command = test_command(workspace)
-    if not command:
+    found = test_stage(workspace)
+    if not found:
         raise ReviewError("the manifest has no test stage with a run command. "
                           "Fix: add a [[pipelines.stages]] with kind = \"test\" and run = \"...\" to tirith.toml")
+    pipeline, stage = found
     _set(home, lane, RUNNING)
-    ok, output = run_tests(workspace, command)
+    ok, output = run_tests(home, str(lane.get("project") or ""), pipeline, stage.name, workspace,
+                           stage.run, lane_id)
     if not ok:
         return _set(home, lane, TESTS_FAILED, output or "tests failed")
     if not merge:

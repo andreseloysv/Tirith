@@ -69,6 +69,12 @@ section { margin-bottom: 30px; }
 .mn.running { background: var(--blue); border-color: var(--blue); box-shadow: 0 0 0 3px #e3ecff; animation: pulse 1.4s ease-in-out infinite; }
 .ml { flex: 1; height: 2px; background: var(--line); min-width: 6px; } .ml.on { background: var(--green); }
 .mcur { color: var(--blue); font-size: 12.5px; }
+.plist { display: flex; flex-direction: column; margin-top: 8px; }
+.grid2 + .plist { margin-top: 14px; }
+.prow { display: flex; align-items: baseline; gap: 10px; padding: 8px 4px; border: 0; border-top: 1px solid var(--line); background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; width: 100%; }
+.prow:first-child { border-top: 0; } .prow:hover { background: var(--soft); }
+.pm { font-style: normal; font-weight: 700; width: 14px; } .pm.ok { color: var(--green); } .pm.bad { color: var(--red); }
+.pwho { color: var(--mut); font-size: 12.5px; margin-left: auto; } .prow .rtime { margin-left: 0; min-width: 44px; text-align: right; }
 .acard { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; width: 100%; }
 .acard:hover, .runcard:hover { border-color: #d9dce2; } .acard.sel, .runcard.sel { border-color: var(--blue); box-shadow: 0 0 0 1px var(--blue); }
 .ahead { display: flex; align-items: center; gap: 10px; } .aname { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; } .aname b { font-weight: 600; }

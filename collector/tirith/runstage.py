@@ -1,0 +1,151 @@
+"""One recorded pipeline stage run: the single code path behind ``tirith run`` and ``tirith lane review``.
+
+Everything Tirith (or an agent) builds or tests goes through :func:`run_stage`, so the owner sees it as a
+pipeline run with its stage, log and result. In a lane's git worktree the run is tagged with the lane,
+the worktree and the branch. See ``docs/CONTRACT-manifest.md`` ("Runs").
+"""
+
+from __future__ import annotations
+
+import os
+import subprocess
+import sys
+import threading
+from pathlib import Path
+
+from tirith import projects as projects_mod
+from tirith.home import now_iso
+from tirith.store import append_jsonl, read_json, read_lanes, write_json_atomic
+
+OUTPUT_MAX = 4000
+
+
+def pipeline_book(home: Path) -> dict:
+    data = read_json(home / "pipelines.json", {})
+    return data if isinstance(data, dict) else {}
+
+
+def resolve_run(home: Path, project: str, pipeline: str, explicit: str | None, new_run: bool) -> str:
+    """The run id of ``project/pipeline``: ``explicit``, the current run, or the next one."""
+    if explicit:
+        return explicit
+    book = pipeline_book(home)
+    key = f"{project}/{pipeline}"
+    entry = book.get(key) if isinstance(book.get(key), dict) else None
+    if entry is None:
+        entry = book.get(f"*/{pipeline}") if isinstance(book.get(f"*/{pipeline}"), dict) else {}
+    counter = int(entry.get("counter") or 0)
+    if new_run or counter == 0:
+        counter += 1
+        entry = {**entry, "counter": counter, "current_run": f"{pipeline}#{counter}"}
+        book[key] = entry
+        write_json_atomic(home / "pipelines.json", book)
+    return str(entry.get("current_run") or f"{pipeline}#{counter}")
+
+
+def _git(folder: Path, *args: str) -> str | None:
+    try:
+        done = subprocess.run(["git", "-C", str(folder), *args], capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return done.stdout.strip() if done.returncode == 0 else None
+
+
+def worktree_info(folder: str | Path) -> dict | None:
+    """``{"worktree", "branch"}`` when ``folder`` is inside a linked git worktree, else None."""
+    folder = Path(folder)
+    if not folder.is_dir():
+        return None
+    top = _git(folder, "rev-parse", "--show-toplevel")
+    git_dir = _git(folder, "rev-parse", "--path-format=absolute", "--git-dir")
+    common = _git(folder, "rev-parse", "--path-format=absolute", "--git-common-dir")
+    if not (top and git_dir and common) or projects_mod.real(git_dir) == projects_mod.real(common):
+        return None
+    return {"worktree": str(projects_mod.real(top)),
+            "branch": _git(folder, "branch", "--show-current") or None}
+
+
+def lane_of_worktree(home: Path, worktree: str | Path) -> str | None:
+    """Id of the lane whose ``workspace`` is that worktree (the newest one when several)."""
+    wanted = projects_mod.real(worktree)
+    found = [lane for lane in read_lanes(home)
+             if lane.get("workspace") and projects_mod.real(str(lane["workspace"])) == wanted]
+    found.sort(key=lambda lane: str(lane.get("started_at") or ""))
+    return str(found[-1]["id"]) if found else None
+
+
+def lane_tags(home: Path, folder: str | Path | None) -> dict:
+    """``lane``/``worktree``/``branch`` tags for a run started in ``folder`` (``{}`` outside a lane worktree)."""
+    info = worktree_info(folder) if folder else None
+    if info is None:
+        return {}
+    lane = lane_of_worktree(home, info["worktree"])
+    return {k: v for k, v in {"lane": lane, **info}.items() if v}
+
+
+def _tail(text: str) -> str:
+    text = text.strip()
+    return text if len(text) <= OUTPUT_MAX else "…" + text[-OUTPUT_MAX:]
+
+
+def run_stage(home: Path, project: str, pipeline: str, stage: str, command: list[str] | str,
+              cwd: str | Path | None, lane: str | None = None, run_id: str | None = None, *,
+              worktree: str | None = None, branch: str | None = None, agent: str | None = None,
+              log: str | Path | None = None, echo: bool = True, env: dict | None = None,
+              timeout: float | None = None, new_run: bool = False) -> tuple[int, str]:
+    """Run one stage command, recording start and end in ``events.jsonl``; returns ``(exit code, output tail)``.
+
+    ``command`` is an argv list, or a shell line. ``echo`` copies the output to this process's stdout.
+    The run id is resolved from ``pipelines.json`` when not given."""
+    run_id = resolve_run(home, project, pipeline, run_id, new_run)
+    safe_run = run_id.replace("#", "-").replace("/", "-")
+    log_path = Path(log).expanduser().resolve() if log else home / "logs" / f"{safe_run}-{stage}.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    work = str(Path(cwd).resolve()) if cwd else str(Path.cwd().resolve())
+    base = {"run": run_id, "project": project, "pipeline": pipeline, "stage": stage,
+            "log": str(log_path), "cwd": work, "session": projects_mod.current_session(home)}
+    for key, value in (("agent", agent), ("lane", lane), ("worktree", worktree), ("branch", branch)):
+        if value:
+            base[key] = value
+    child_env = dict(os.environ if env is None else env)
+    session = projects_mod.current_session(home)
+    if session:
+        child_env["TIRITH_SESSION"] = session
+    append_jsonl(home / "events.jsonl", {"at": now_iso(), **base, "event": "start", "status": "running"})
+    exit_code, kept = 1, b""
+    timer, expired = None, threading.Event()
+
+    def _expire(victim) -> None:
+        expired.set()
+        victim.kill()
+
+    try:
+        with log_path.open("ab") as log_handle:
+            proc = subprocess.Popen(command, shell=isinstance(command, str), stdout=subprocess.PIPE,
+                                    stderr=subprocess.STDOUT, cwd=work, env=child_env)
+            if timeout:
+                timer = threading.Timer(timeout, _expire, (proc,))
+                timer.start()
+            assert proc.stdout is not None
+            for chunk in proc.stdout:
+                log_handle.write(chunk)
+                log_handle.flush()
+                kept = (kept + chunk)[-OUTPUT_MAX * 4:]
+                if echo:
+                    buffer = getattr(sys.stdout, "buffer", None)
+                    if buffer is not None:
+                        buffer.write(chunk)
+                        buffer.flush()
+                    else:
+                        sys.stdout.write(chunk.decode(errors="replace"))
+                        sys.stdout.flush()
+            exit_code = proc.wait()
+    finally:
+        if timer:
+            timer.cancel()
+        append_jsonl(home / "events.jsonl", {
+            "at": now_iso(), **base, "event": "end", "status": "passed" if exit_code == 0 else "failed"})
+    output = _tail(kept.decode(errors="replace"))
+    if expired.is_set():
+        output = f"the stage did not finish in {int(timeout)} s\n{output}".strip()
+    return exit_code, output

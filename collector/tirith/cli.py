@@ -34,6 +34,7 @@ from tirith import brain as brain_mod
 from tirith import inbox as inbox_mod
 from tirith import launch as launch_mod
 from tirith import review as review_mod
+from tirith import runstage as runstage_mod
 from tirith import projects as projects_mod
 from tirith import rooms as rooms_mod
 from tirith.home import ensure_home, load_config, now_iso, parse_iso, tirith_home
@@ -449,21 +450,7 @@ def _cmd_pipeline_declare(args) -> int:
 
 def _resolve_run(home: Path, project: str, pipeline: str,
                  explicit: str | None, new_run: bool) -> str:
-    if explicit:
-        return explicit
-    book = _pipeline_book(home)
-    key = f"{project}/{pipeline}"
-    entry = book.get(key) if isinstance(book.get(key), dict) else None
-    if entry is None:
-        entry = book.get(f"*/{pipeline}") if isinstance(book.get(f"*/{pipeline}"), dict) else {}
-        key = f"{project}/{pipeline}"
-    counter = int(entry.get("counter") or 0)
-    if new_run or counter == 0:
-        counter += 1
-        entry = {**entry, "counter": counter, "current_run": f"{pipeline}#{counter}"}
-        book[key] = entry
-        write_json_atomic(home / "pipelines.json", book)
-    return str(entry.get("current_run") or f"{pipeline}#{counter}")
+    return runstage_mod.resolve_run(home, project, pipeline, explicit, new_run)
 
 
 def _wrapper_env_session(home: Path) -> dict:
@@ -489,6 +476,10 @@ def _project_folder_of(home: Path, project: str | None) -> tuple[str, Path | Non
 def _manifest_stage(args, home: Path, command: list[str]) -> list[str]:
     """Fill project, pipeline and command from ``tirith.toml`` when ``run`` leaves them out."""
     args.project, folder = _project_folder_of(home, args.project)
+    info = runstage_mod.worktree_info(Path.cwd())
+    if info and folder and (Path(info["worktree"]) / manifest_mod.FILENAME).is_file() \
+            and projects_mod.canonical(info["worktree"]) == projects_mod.real(folder):
+        folder = Path(info["worktree"])  # in a lane's worktree the stages run from the worktree
     if args.stage in manifest_mod.GIT_EVENTS and command and not args.pipeline:
         # a git hook's `[[hooks]]` entry: one "git-hooks" pipeline per project
         args.pipeline = manifest_mod.GIT_HOOKS_PIPELINE
@@ -524,41 +515,14 @@ def _cmd_run(args) -> int:
     if command and command[0] == "--":
         command = command[1:]
     command = _manifest_stage(args, home, command)
-    run_id = _resolve_run(home, args.project, args.pipeline, args.run, args.new_run)
-    safe_run = run_id.replace("#", "-").replace("/", "-")
-    log_path = Path(args.log).expanduser().resolve() if args.log \
-        else home / "logs" / f"{safe_run}-{args.stage}.log"
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    base = {"run": run_id, "project": args.project, "pipeline": args.pipeline,
-            "stage": args.stage, "log": str(log_path),
-            "cwd": getattr(args, "stage_cwd", None) or str(Path.cwd().resolve()),
-            "session": projects_mod.current_session(home)}
-    if args.agent:
-        base["agent"] = args.agent
-    append_jsonl(home / "events.jsonl",
-                 {"at": now_iso(), **base, "event": "start", "status": "running"})
-    exit_code = 1
-    try:
-        with log_path.open("ab") as log_handle:
-            proc = subprocess.Popen(command, stdout=subprocess.PIPE, cwd=getattr(args, "stage_cwd", None),
-                                    stderr=subprocess.STDOUT, env=_wrapper_env_session(home))
-            assert proc.stdout is not None
-            for chunk in proc.stdout:
-                log_handle.write(chunk)
-                log_handle.flush()
-                buffer = getattr(sys.stdout, "buffer", None)
-                if buffer is not None:
-                    buffer.write(chunk)
-                    buffer.flush()
-                else:
-                    sys.stdout.write(chunk.decode(errors="replace"))
-                    sys.stdout.flush()
-            exit_code = proc.wait()
-    finally:
-        append_jsonl(home / "events.jsonl", {
-            "at": now_iso(), **base, "event": "end",
-            "status": "passed" if exit_code == 0 else "failed"})
-    return exit_code
+    cwd = getattr(args, "stage_cwd", None) or str(Path.cwd().resolve())
+    tags = runstage_mod.lane_tags(home, cwd)
+    code, _ = runstage_mod.run_stage(
+        home, args.project, args.pipeline, args.stage, command, cwd,
+        lane=tags.get("lane") or (os.environ.get("TIRITH_LANE") or None), run_id=args.run,
+        worktree=tags.get("worktree"), branch=tags.get("branch"), agent=args.agent,
+        log=args.log, new_run=args.new_run)
+    return code
 
 
 def _cmd_note(args) -> int:

@@ -196,6 +196,47 @@ def _runs_tests(words: list[str]) -> bool:
     return False
 
 
+def _runner_kind(words: list[str]) -> str | None:
+    """``"test"`` / ``"build"`` when one simple command's program is a test or build runner."""
+    if not words:
+        return None
+    prog, rest = os.path.basename(words[0]), words[1:]
+    if prog == "tirith":
+        return None
+    if prog in _RUNNER_PREFIXES:
+        need = _RUNNER_PREFIXES[prog]
+        return _runner_kind(_skip_opts(rest[len(need):])) if rest[:len(need)] == list(need) else None
+    if _runs_tests(words):
+        return "test"
+    if prog in ("go", "cargo", "swift"):
+        return "build" if rest[:1] == ["build"] else None
+    if prog in _PKG_MANAGERS:
+        rest = _skip_opts(rest)
+        if rest[:1] == ["run"]:
+            rest = rest[1:]
+        return "build" if rest and re.fullmatch(r"build(?::\S+)?", rest[0]) else None
+    if prog in ("gradle", "gradlew"):
+        return "build" if any(not w.startswith("-") and re.search(r"(^|:)(build|assemble\w*)$", w)
+                              for w in rest) else None
+    if prog == "make":
+        return "build" if "build" in rest else None
+    if prog == "xcodebuild":
+        return "build" if any(w in ("build", "archive", "build-for-testing") for w in rest) else None
+    if prog == "node":
+        return "build" if "--check" in rest or "-c" in rest else None
+    return None
+
+
+def runner_kinds(command) -> list[tuple[str, str]]:
+    """``(kind, command text)`` of each test or build runner in the shell line (kind: test | build)."""
+    out = []
+    for words in _split_commands(command):
+        kind = _runner_kind(words)
+        if kind:
+            out.append((kind, " ".join(words)))
+    return out
+
+
 def is_test_command(command) -> bool:
     """True when a simple command of the shell line runs a test suite (not just mentions one)."""
     return any(_runs_tests(words) for words in _split_commands(command))
