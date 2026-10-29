@@ -1249,7 +1249,9 @@ def _cmd_shim(args) -> int:
         raise SystemExit("tirith shim: no [agents.<alias>] command in config.toml; add "
                          "[agents.<alias>] command = \"<executable name>\"")
     if args.action == "verify":
-        problems = gates_mod.verify_shims(config, shim_dir)
+        # shims only have to come first inside lanes, whose PATH `lane run` builds
+        lane_path = _wrapper_path_env(_home(args))["PATH"] if not args.dir else None
+        problems = gates_mod.verify_shims(config, shim_dir, lane_path)
         for problem in problems:
             print(problem)
         if not problems:
