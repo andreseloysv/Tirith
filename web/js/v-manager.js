@@ -70,6 +70,8 @@
       if (!KINDS[r.kind]) return;
       var ctx = ctxOf(r);
       out.push({ side: 'me', text: r.kind === 'finish' ? 'Finish this step' : r.text, at: r.at, ctx: ctx, req: r.id, project: r.project, pics: r.attachments });
+      var run = T.liveForRequest ? T.liveForRequest(state, r.id) : null;   /* what the manager does for it, like the CLI */
+      if (run) out.push({ side: 'live', row: run, at: new Date((T.ms(r.at) || 0) + 1).toISOString(), req: r.id });
       (r.answers || []).forEach(function (a) {
         out.push({ side: 'mgr', text: a.text, at: a.at, ctx: who(a) + (a.auto ? ', automatic' : ''), actions: a.actions, req: r.id, project: r.project, pics: a.attachments });
       });
@@ -119,6 +121,7 @@
   }
   function msg(m, state) {
     if (m.item) return turnMsg(m, state);
+    if (m.side === 'live') return T.liveBlock(m.row);
     var body = m.side === 'me' ? esc(m.text).replace(/\n/g, '<br>') : T.md(m.text, T.fileOpts(state, m.project));
     var meta = (m.ctx ? esc(m.ctx) + ' · ' : '') + esc(T.clockTime(m.at));
     if (m.local === 'sending') meta = 'Sending… · ' + meta;
@@ -172,7 +175,10 @@
   /* the line under the newest message; never "typing" unless something is writing */
   function status(state) {
     var rows = (state.inbox || []).filter(pending), i, r, re;
-    for (i = 0; i < rows.length; i++) if (writing(rows[i], state)) return typing(rows[i].at);
+    for (i = 0; i < rows.length; i++) {
+      if (T.liveWorking && T.liveWorking(T.liveForRequest(state, rows[i].id))) return '';   /* its live block shows the work */
+      if (writing(rows[i], state)) return typing(rows[i].at);
+    }
     r = rows[0];
     if (r) {
       re = reopened(r);
