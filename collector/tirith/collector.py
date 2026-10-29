@@ -17,6 +17,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from tirith import activity as activity_mod
 from tirith import brain as brain_mod
 from tirith.guardwrap import default_words, verify_guard
 from tirith.home import Config, ProjectConfig, ensure_home, load_config, now_iso, parse_iso
@@ -241,6 +242,7 @@ class Collector:
         self._agents_dirty = False
         self.rooms = RoomsService(self.home, rooms_transport)
         self._one_shot = False
+        self.activity = activity_mod.ActivityTracker()
 
     # -- identities / renown -------------------------------------------------
 
@@ -534,8 +536,11 @@ class Collector:
             self.config = load_config(self.home)
         lanes = read_lanes(self.home)
         events = [e for e in read_jsonl(self.home / "events.jsonl") if e.get("kind") != "hook"]
-        hook_events, loose_events = hooks_mod.attach(
-            hooks_mod.read_hook_rows(self.home / "events.jsonl"), [str(l["id"]) for l in lanes])
+        hook_rows = hooks_mod.read_hook_rows(self.home / "events.jsonl")
+        _, loose_events = hooks_mod.attach(hook_rows, [str(l["id"]) for l in lanes])
+        rows_by_lane: dict[str, list[dict]] = {}
+        for row in hook_rows:
+            rows_by_lane.setdefault(str(row.get("lane")), []).append(row)
         # Projects are folders: derive auto projects for folders no project covers yet.
         room_folders = [r.project for r in self.config.rooms if _looks_like_path(r.project)]
         folders = ([lane.get("workspace") for lane in lanes]
@@ -574,8 +579,8 @@ class Collector:
             started = parse_iso(lane.get("started_at"))
             end_ref = ended or now
             elapsed = max(0, int((end_ref - started).total_seconds())) if started else 0
-            files, insertions, deletions = git_shortstat(
-                lane.get("workspace"), lane.get("start_commit"))
+            act = self.activity.lane(lane, status, rows_by_lane.get(str(lane["id"]), []), now)
+            files, insertions, deletions = act.pop("totals")
             renown = int(identity.get("renown") or 0)
             # Summary first: it may upgrade the epithet on the identity.
             summary = self._summary_for(lane, status, log_tail, now, identity)
@@ -594,7 +599,7 @@ class Collector:
                 "files_changed": files, "insertions": insertions, "deletions": deletions,
                 "report": lane.get("report"),
                 "parent": str(lane.get("parent") or "steward"),
-                "events": hook_events.get(str(lane["id"]), []),
+                **act,
             })
             for wait in self._brain_waits({**lane, "project": lane_project}):
                 brain_waits.append({**wait, "session": lane.get("session") or None})

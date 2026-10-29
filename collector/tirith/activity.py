@@ -1,0 +1,494 @@
+"""Per-agent goal and live activity: brief goal, git files, tools, tests, log events.
+
+Everything is cheap by design (the collector cycle runs every 2 s): the lane log is read
+incrementally and bounded, the brief is cached by mtime, git runs one diff pair per working lane.
+Contract: ``docs/CONTRACT-activity.md``.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import subprocess
+from collections import Counter, deque
+from datetime import datetime, timezone
+from pathlib import Path
+
+from tirith import hooks as hooks_mod
+from tirith.home import now_iso, parse_iso
+
+LOG_BYTES = 512 * 1024
+BRIEF_BYTES = 32 * 1024
+GOAL_MAX = 400
+ACTIVE_WINDOW_S = 300
+EVENTS_MAX = 50
+TESTS_MAX = 20
+FILES_MAX = 100
+UNTRACKED_COUNT_BYTES = 256 * 1024
+GIT_TIMEOUT_S = 10
+
+# -- goal -------------------------------------------------------------------------------------
+
+_HEADING = re.compile(r"^\s{0,3}#{1,6}\s+(.*?)\s*#*\s*$")
+_GOAL_HEADING = re.compile(r"^(why|goal|goals|objective|purpose)\b", re.I)
+_SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
+
+
+def strip_markdown(text: str) -> str:
+    """Plain text of one markdown paragraph (links, emphasis, code marks, bullets removed)."""
+    text = re.sub(r"!?\[([^\]]*)\]\([^)]*\)", r"\1", text)
+    text = re.sub(r"(\*\*|__|\*|`)", "", text)
+    text = re.sub(r"(?m)^\s*(?:[-*+]|\d+[.)])\s+", "", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _paragraphs(lines: list[str]) -> list[tuple[str | None, str]]:
+    """``(heading, paragraph)`` pairs; code fences are skipped, a heading ends a paragraph."""
+    out: list[tuple[str | None, str]] = []
+    heading: str | None = None
+    block: list[str] = []
+    fenced = False
+
+    def flush() -> None:
+        if block:
+            out.append((heading, " ".join(block)))
+            block.clear()
+
+    for line in lines:
+        if line.strip().startswith("```"):
+            flush()
+            fenced = not fenced
+        elif fenced:
+            continue
+        elif (match := _HEADING.match(line)):
+            flush()
+            heading = match.group(1)
+        elif not line.strip():
+            flush()
+        else:
+            block.append(line.strip())
+    flush()
+    return out
+
+
+def goal_from_text(text: str) -> str | None:
+    """First paragraph under a Why/Goal heading, else under the first heading, else the first."""
+    paras = [(h, strip_markdown(p)) for h, p in _paragraphs(text.splitlines())]
+    paras = [(h, p) for h, p in paras if p]
+    if not paras:
+        return None
+    pick = next((p for h, p in paras if h and _GOAL_HEADING.match(strip_markdown(h))), None)
+    if pick is None:
+        pick = next((p for h, p in paras if h), paras[0][1])
+    sentences = _SENTENCE_END.split(pick)
+    pick = " ".join(sentences[:3])
+    return pick if len(pick) <= GOAL_MAX else pick[:GOAL_MAX - 1].rstrip() + "…"
+
+
+# -- test detection ---------------------------------------------------------------------------
+
+_TEST_RES = [re.compile(p) for p in (
+    r"\bpytest\b", r"\bnpm (?:run )?test\b", r"\bpnpm (?:run )?test\b", r"\byarn (?:run )?test\b",
+    r"\bvitest\b", r"\bjest\b", r"\bgo test\b", r"\bcargo test\b", r"\bgradlew?\b.*\btest",
+    r"\bmake (?:test|check)\b", r"\bxcodebuild\b.*\btest\b", r"\bswift test\b",
+    r"\btirith run\b.*--stage[ =]test\b")]
+_SEGMENT = re.compile(r"&&|\|\||[;|\n]")
+_NOT_RUNNERS = ("grep", "rg", "cat", "echo", "head", "tail", "sed", "ls", "git", "find", "less",
+                "vim", "cd", "which", "man", "wc")
+_FAIL_TEXT = re.compile(r"\b[1-9]\d* (?:failed|errors?)\b|^FAILED\b|\bTests? failed\b", re.M)
+
+
+def is_test_command(command) -> bool:
+    """True when a shell command runs a test suite (not just mentions one)."""
+    for segment in _SEGMENT.split(str(command or "")):
+        words = segment.split()
+        if not words or words[0] in _NOT_RUNNERS:
+            continue
+        if any(rx.search(segment) for rx in _TEST_RES):
+            return True
+    return False
+
+
+def _one_line(text, limit: int = 200) -> str:
+    line = " ".join(str(text or "").split())
+    return line if len(line) <= limit else line[:limit - 1] + "…"
+
+
+def _result_text(content) -> str:
+    """Text of a tool_result ``content`` (string or list of text blocks)."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "\n".join(str(b.get("text") or "") for b in content if isinstance(b, dict))
+    return ""
+
+
+# -- log parsing ------------------------------------------------------------------------------
+
+
+class _LaneLog:
+    """Incremental parse state of one lane log."""
+
+    def __init__(self) -> None:
+        self.offset = 0
+        self.stamp: tuple[int, float] | None = None  # (size, mtime) last seen
+        self.events: deque[dict] = deque(maxlen=EVENTS_MAX)
+        self.tools: Counter = Counter()
+        self.tests: deque[dict] = deque(maxlen=TESTS_MAX)
+        self.calls: dict[str, dict] = {}  # tool call id -> its test row (or {} when not a test)
+        self.seen_ids: set[str] = set()
+        self.has_tools = False
+
+    # -- one record --------------------------------------------------------------------------
+
+    def _event(self, agent: str, lane: str, name: str, tool, summary: str, ts: str) -> None:
+        self.events.append({"ts": ts, "agent": agent, "event": name, "lane": lane, "tool": tool,
+                            "summary": summary, "source": "log"})
+
+    def _tool(self, agent, lane, tool, summary, ts, call_id=None, command=None,
+              count=True) -> None:
+        if count:
+            self.tools[tool] += 1
+            self.has_tools = True
+        self._event(agent, lane, "tool", tool, summary, ts)
+        if call_id:
+            self.seen_ids.add(str(call_id))
+        if command is not None and is_test_command(command):
+            row = {"at": ts, "command": _one_line(command), "result": "running"}
+            self.tests.append(row)
+            if call_id:
+                self.calls[str(call_id)] = row
+        if len(self.calls) > 4 * TESTS_MAX:
+            self.calls = {k: v for k, v in self.calls.items() if v in self.tests}
+
+    def _finish(self, call_id, failed: bool) -> None:
+        row = self.calls.get(str(call_id))
+        if row is not None:
+            row["result"] = "failed" if failed else "passed"
+
+    def feed(self, record: dict, lane: str, cwd, ts: str) -> None:
+        """Turn one JSON record from the log into events/tool counts/test rows."""
+        ts = _record_ts(record) or ts
+        kind = record.get("type")
+        if kind == "assistant":
+            self._assistant_tools(record, lane, cwd, ts)
+        elif kind == "user":
+            self._tool_results(record)
+        elif kind in ("item.started", "item.completed"):
+            self._item(record, lane, ts)
+        elif kind == "result":
+            self._event("anthropic", lane, "done", None,
+                        hooks_mod._clip(record.get("result") or record.get("subtype") or "done"), ts)
+        elif "payload_type" in record:
+            self._muse(record, lane, ts)
+
+    def _assistant_tools(self, record, lane, cwd, ts) -> None:
+        message = record.get("message")
+        content = message.get("content") if isinstance(message, dict) else None
+        for block in content if isinstance(content, list) else []:
+            if not isinstance(block, dict) or block.get("type") != "tool_use":
+                continue
+            tool = str(block.get("name") or "tool")
+            data = block.get("input") if isinstance(block.get("input"), dict) else {}
+            command = data.get("command") if tool == "Bash" else None
+            self._tool("anthropic", lane, tool, hooks_mod._tool_summary(tool, data, cwd), ts,
+                       block.get("id"), command)
+
+    def _tool_results(self, record) -> None:
+        message = record.get("message")
+        content = message.get("content") if isinstance(message, dict) else None
+        for block in content if isinstance(content, list) else []:
+            if isinstance(block, dict) and block.get("type") == "tool_result":
+                failed = bool(block.get("is_error")) or bool(
+                    _FAIL_TEXT.search(_result_text(block.get("content"))))
+                self._finish(block.get("tool_use_id"), failed)
+
+    def _item(self, record, lane, ts) -> None:
+        item = record.get("item")
+        if not isinstance(item, dict):
+            return
+        started = record["type"] == "item.started"
+        item_id = str(item.get("id") or "")
+        first = not item_id or item_id not in self.seen_ids
+        if item.get("type") == "command_execution":
+            command = item.get("command")
+            if first:
+                self._tool("agent", lane, "Bash", "Bash: " + _one_line(command, 160), ts,
+                           item_id, command)
+            code = item.get("exit_code")
+            if not started and code is not None:
+                self._finish(item_id, code != 0)
+        elif item.get("type") == "file_change" and first:
+            changes = item.get("changes") if isinstance(item.get("changes"), list) else []
+            paths = ", ".join(str(c.get("path")) for c in changes if isinstance(c, dict))
+            self._tool("agent", lane, "file_change", "file_change " + (paths or "(files)"), ts,
+                       item_id)
+
+    def _muse(self, record, lane, ts) -> None:
+        kind = str(record.get("payload_type") or "")
+        payload = record.get("payload") if isinstance(record.get("payload"), dict) else {}
+        if kind.startswith("run.terminal"):
+            self._event("muse", lane, "done", None, hooks_mod._clip(payload.get("text") or kind), ts)
+            return
+        toolish = kind.startswith("tool.") or (
+            not kind.startswith("runtime.") and re.search(r"(^|\.)(command|file)(\.|_|$)", kind))
+        if not toolish:
+            return
+        parts = kind.split(".")
+        tool = str(payload.get("tool") or payload.get("tool_name") or payload.get("name")
+                   or (parts[1] if len(parts) > 1 else parts[0]))
+        command = payload.get("command")
+        path = payload.get("path") or payload.get("file_path")
+        summary = ("Bash: " + _one_line(command, 160)) if command else (
+            f"{tool} {path}" if path else f"{tool} ({kind})")
+        call_id = payload.get("tool_call_id") or payload.get("call_id") or payload.get("id")
+        code = payload.get("exit_code")
+        if call_id and str(call_id) in self.seen_ids:
+            if code is not None:
+                self._finish(call_id, code != 0)
+            return
+        self._tool("muse", lane, tool, summary, ts, call_id, command)
+        if code is not None:
+            self._finish(call_id, code != 0)
+
+
+def _record_ts(record: dict) -> str | None:
+    """ISO time of a record that carries its own ``timestamp``/``ts``."""
+    for key in ("timestamp", "ts"):
+        value = record.get(key)
+        if isinstance(value, str) and parse_iso(value):
+            return now_iso(parse_iso(value))
+    return None
+
+
+def _read_new(path: Path, offset: int, size: int) -> tuple[bytes, int]:
+    """Complete lines in ``[offset, size)`` (at most the last 512 KB); returns ``(data, offset)``."""
+    start = max(offset, size - LOG_BYTES)
+    with path.open("rb") as handle:
+        handle.seek(start)
+        raw = handle.read(size - start)
+    if start > offset:  # skipped ahead: the first line is cut in half
+        cut = raw.find(b"\n")
+        if cut < 0:
+            return b"", start
+        raw, start = raw[cut + 1:], start + cut + 1
+    end = raw.rfind(b"\n")
+    return (raw[:end + 1], start + end + 1) if end >= 0 else (b"", start)
+
+
+# -- git files --------------------------------------------------------------------------------
+
+_CHANGES = {"A": "added", "M": "modified", "D": "deleted", "R": "renamed", "T": "modified",
+            "C": "added"}
+
+
+def _git(workspace: str, *args: str) -> str | None:
+    try:
+        out = subprocess.run(["git", "-C", workspace, *args], capture_output=True,
+                             timeout=GIT_TIMEOUT_S)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return out.stdout.decode("utf-8", errors="replace") if out.returncode == 0 else None
+
+
+def _numstat(text: str) -> dict[str, tuple[int, int]]:
+    """``git diff --numstat -z`` -> ``{path: (insertions, deletions)}`` (new path for renames)."""
+    parts = text.split("\0")
+    stats: dict[str, tuple[int, int]] = {}
+    i = 0
+    while i < len(parts):
+        fields = parts[i].split("\t")
+        i += 1
+        if len(fields) < 3:
+            continue
+        path = fields[2]
+        if not path:  # rename: "ins\tdel\t\0old\0new\0"
+            path = parts[i + 1] if i + 1 < len(parts) else ""
+            i += 2
+        ins = int(fields[0]) if fields[0].isdigit() else 0
+        dele = int(fields[1]) if fields[1].isdigit() else 0
+        if path:
+            stats[path] = (ins, dele)
+    return stats
+
+
+def _name_status(text: str) -> list[tuple[str, str]]:
+    """``git diff --name-status -z`` -> ``[(change, path)]`` (new path for renames/copies)."""
+    parts = text.split("\0")
+    out: list[tuple[str, str]] = []
+    i = 0
+    while i < len(parts) and parts[i]:
+        code = parts[i][0]
+        if code in "RC":
+            path = parts[i + 2] if i + 2 < len(parts) else ""
+            i += 3
+        else:
+            path = parts[i + 1] if i + 1 < len(parts) else ""
+            i += 2
+        if path:
+            out.append((_CHANGES.get(code, "modified"), path))
+    return out
+
+
+def _count_lines(path: Path) -> int:
+    try:
+        if path.stat().st_size > UNTRACKED_COUNT_BYTES:
+            return 0
+        data = path.read_bytes()
+    except OSError:
+        return 0
+    return 0 if b"\0" in data else data.count(b"\n") + (1 if data and not data.endswith(b"\n") else 0)
+
+
+def git_files(workspace, start_commit) -> tuple[list[dict], tuple[int, int, int]]:
+    """Files changed since ``start_commit`` (diff pair + untracked) and tracked totals.
+
+    Returns ``(files, (tracked_files, insertions, deletions))``; ``files`` is capped at 100.
+    """
+    if not workspace or not start_commit or not Path(workspace).is_dir():
+        return [], (0, 0, 0)
+    base = str(start_commit)
+    stat = _git(str(workspace), "diff", "--numstat", "-z", "-M", base)
+    names = _git(str(workspace), "diff", "--name-status", "-z", "-M", base)
+    if stat is None or names is None:
+        return [], (0, 0, 0)
+    stats = _numstat(stat)
+    files = [{"path": path, "change": change, "insertions": stats.get(path, (0, 0))[0],
+              "deletions": stats.get(path, (0, 0))[1]} for change, path in _name_status(names)]
+    totals = (len(files), sum(f["insertions"] for f in files), sum(f["deletions"] for f in files))
+    untracked = _git(str(workspace), "ls-files", "--others", "--exclude-standard", "-z") or ""
+    for path in filter(None, untracked.split("\0")):
+        if len(files) >= FILES_MAX:
+            break
+        files.append({"path": path, "change": "untracked",
+                      "insertions": _count_lines(Path(workspace) / path), "deletions": 0})
+    return files[:FILES_MAX], totals
+
+
+# -- tools / tests from hook rows ---------------------------------------------------------------
+
+
+def hook_tools_and_tests(rows: list[dict]) -> tuple[Counter, list[dict]]:
+    """Tool counts and test runs from a lane's hook rows (one count per call)."""
+    tooled = [r for r in rows if r.get("tool")]
+    calls = [r for r in tooled if r.get("event") == "PreToolUse"] or \
+        [r for r in tooled if r.get("event") == "PostToolUse"]
+    tools = Counter(str(r["tool"]) for r in calls)
+    tests = []
+    for row in calls:
+        summary = str(row.get("summary") or "")
+        if row["tool"] == "Bash" and is_test_command(summary[len("Bash: "):]):
+            tests.append({"at": row.get("ts"), "command": _one_line(summary[len("Bash: "):]),
+                          "result": None})
+    return tools, tests[-TESTS_MAX:]
+
+
+# -- tracker ------------------------------------------------------------------------------------
+
+
+def _iso(ts: float) -> str:
+    return now_iso(datetime.fromtimestamp(ts, timezone.utc))
+
+
+class ActivityTracker:
+    """Keeps per-lane caches (log parse, brief goal, ended-lane files) across cycles."""
+
+    def __init__(self) -> None:
+        self._logs: dict[str, _LaneLog] = {}
+        self._goals: dict[str, tuple[float, str | None]] = {}
+        self._ended_files: dict[str, tuple[list[dict], tuple[int, int, int]]] = {}
+
+    def _log(self, lane: dict) -> _LaneLog | None:
+        """Bring the lane's log state up to date (read only what is new)."""
+        lane_id, path = str(lane["id"]), lane.get("log")
+        if not path:
+            return None
+        state = self._logs.setdefault(lane_id, _LaneLog())
+        try:
+            info = Path(path).stat()
+        except OSError:
+            return state
+        stamp = (info.st_size, info.st_mtime)
+        if state.stamp == stamp:
+            return state
+        if info.st_size < state.offset:
+            state = self._logs[lane_id] = _LaneLog()
+        try:
+            data, state.offset = _read_new(Path(path), state.offset, info.st_size)
+        except OSError:
+            return state
+        state.stamp = stamp
+        for line in data.decode("utf-8", errors="replace").splitlines():
+            if not line.startswith("{"):
+                continue
+            try:
+                record = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(record, dict):
+                state.feed(record, lane_id, lane.get("workspace"), _iso(info.st_mtime))
+        return state
+
+    def goal(self, lane: dict) -> str | None:
+        """Goal text from the lane's brief file (cached by mtime), else the feature."""
+        path = lane.get("brief")
+        goal = None
+        if path:
+            try:
+                mtime = os.stat(path).st_mtime
+                cached = self._goals.get(str(path))
+                if cached and cached[0] == mtime:
+                    return cached[1] or str(lane.get("feature") or "") or None
+                with open(path, "rb") as handle:
+                    text = handle.read(BRIEF_BYTES).decode("utf-8", errors="replace")
+                goal = goal_from_text(text)
+                self._goals[str(path)] = (mtime, goal)
+            except OSError:
+                goal = None
+        return goal or str(lane.get("feature") or "") or None
+
+    def files(self, lane: dict, ended: bool) -> tuple[list[dict], tuple[int, int, int]]:
+        """Live git files; an ended lane keeps the list computed once."""
+        lane_id = str(lane["id"])
+        if ended and lane_id in self._ended_files:
+            return self._ended_files[lane_id]
+        result = git_files(lane.get("workspace"), lane.get("start_commit"))
+        if ended:
+            self._ended_files[lane_id] = result
+        else:
+            self._ended_files.pop(lane_id, None)
+        return result
+
+    def lane(self, lane: dict, status: str, hook_rows: list[dict], now: datetime) -> dict:
+        """The activity fields of one agent row (see ``docs/CONTRACT-activity.md``)."""
+        ended = bool(lane.get("ended_at"))
+        log = self._log(lane)
+        use_log = log is not None and log.has_tools
+        if use_log:
+            tools, tests = log.tools, [dict(t) for t in log.tests]
+        else:
+            tools, tests = hook_tools_and_tests(hook_rows)
+        if status != "working":
+            for row in tests:
+                if row["result"] == "running":
+                    row["result"] = None
+        hooks = [{**hooks_mod.public(r), "source": "hook"} for r in hook_rows][-EVENTS_MAX:]
+        merged = sorted(hooks + list(log.events if log else []), key=lambda e: str(e["ts"]))
+        files, totals = self.files(lane, ended)
+        times = [e["ts"] for e in merged[-1:]]
+        mtime = None
+        if log is not None and log.stamp:
+            mtime = _iso(log.stamp[1])
+            times.append(mtime)
+        last = max(times) if times else None
+        recent = parse_iso(last)
+        active = status == "working" and recent is not None and \
+            (now - recent).total_seconds() <= ACTIVE_WINDOW_S
+        return {
+            "goal": self.goal(lane), "active": bool(active), "last_activity_at": last,
+            "files": files, "totals": totals,
+            "tools": [{"name": n, "count": c} for n, c in
+                      sorted(tools.items(), key=lambda kv: (-kv[1], kv[0]))],
+            "tests": tests[-TESTS_MAX:], "events": merged[-EVENTS_MAX:],
+        }

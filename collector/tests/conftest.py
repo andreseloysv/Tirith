@@ -91,3 +91,10 @@ def _unlock_guard_hooks(tmp_path):
                 os.chflags(path, path.stat().st_flags & ~stat.UF_IMMUTABLE)
         except OSError:
             pass
+
+
+@pytest.fixture(autouse=True)
+def _no_outer_lane(monkeypatch):
+    """Tests run the same inside a lane (TIRITH_LANE / TIRITH_SESSION set by lane run) as outside."""
+    monkeypatch.delenv("TIRITH_LANE", raising=False)
+    monkeypatch.delenv("TIRITH_SESSION", raising=False)

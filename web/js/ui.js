@@ -1,7 +1,7 @@
 /* App shell: sidebar, breadcrumb, shared components, Overview. Views live in v-*.js */
 (function () {
   var T = window.T, esc = T.esc;
-  var ui = T.ui = { selRun: null, stageSel: {}, drawer: null, openAgent: null, edge: null, showEarlier: false, fit: true, zoom: 1 };
+  var ui = T.ui = { selRun: null, stageSel: {}, drawer: null, openAgent: null, edge: null, showEarlier: false, fit: true, zoom: 1, fopen: {}, fids: [] };
   var state = null, raw = null, common = null;
   T.views = {};
 
@@ -228,6 +228,11 @@
     (T.views[T.filter.view] || overview)(state, el);
     restore(sc);
     if (document.querySelector('.canvas')) applyZoom();
+    if (ui.reveal) {
+      var rn = [].filter.call(document.querySelectorAll('.fnode'), function (x) { return x.getAttribute('data-id') === ui.reveal; })[0];
+      if (rn) rn.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      ui.reveal = null;
+    }
     if (fk && fk[0]) {
       var q = '[data-act="' + fk[0] + '"]' + (fk[1] ? '[data-key="' + (window.CSS && CSS.escape ? CSS.escape(fk[1]) : fk[1]) + '"]' : '') + (fk[2] != null ? '[data-i="' + fk[2] + '"]' : '');
       var n = document.querySelector(q); if (n) n.focus();
@@ -248,6 +253,8 @@
       if (act === 'run') { ui.selRun = key; ui.drawer = null; ui.fit = true; }
       else if (act === 'stage') { ui.selRun = key; ui.stageSel[key] = +b.getAttribute('data-i'); ui.drawer = 'stage'; }
       else if (act === 'agent') { ui.openAgent = ui.openAgent === key && T.filter.mode === 'list' ? null : key; ui.drawer = 'agent'; }
+      else if (act === 'fnode') { ui.fopen[key] = !ui.fopen[key]; if (ui.fopen[key]) { ui.fit = false; ui.zoom = Math.max(ui.zoom, .85); ui.reveal = key; } }
+      else if (act === 'fall') { var all = (ui.fids || []).every(function (i) { return ui.fopen[i]; }); ui.fopen = {}; if (!all) (ui.fids || []).forEach(function (i) { ui.fopen[i] = true; }); }
       else if (act === 'edge') { ui.edge = key; ui.drawer = 'edge'; }
       else if (act === 'close') { ui.drawer = null; if (T.filter.mode !== 'list') ui.openAgent = null; ui.edge = null; }
       else if (act === 'earlier') ui.showEarlier = !ui.showEarlier;

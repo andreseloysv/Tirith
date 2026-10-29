@@ -152,6 +152,8 @@
     for (i = 0; i < els.length; i++) els[i].textContent = T.dur(T.elapsed(els[i].getAttribute('data-start')));
     els = document.querySelectorAll('.ago');
     for (i = 0; i < els.length; i++) els[i].textContent = T.ago(els[i].getAttribute('data-at'));
+    els = document.querySelectorAll('.agol');
+    for (i = 0; i < els.length; i++) els[i].textContent = T.agoLong(els[i].getAttribute('data-at'));
     srcLine();
   }
 

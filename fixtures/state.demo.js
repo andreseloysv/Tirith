@@ -278,7 +278,161 @@ window.TIRITH_STATE = {
       "insertions": 412,
       "deletions": 96,
       "report": null,
-      "session": "2026-10-28-chromasol-release"
+      "session": "2026-10-28-chromasol-release",
+      "goal": "Make the 200-photo scan fast enough on the owner's phone: reuse the pose task between photos and keep the APK under the size budget.",
+      "active": true,
+      "last_activity_at": "2026-10-28T19:39:48Z",
+      "files": [
+        {
+          "path": "app/src/main/java/scan/PoseRunner.kt",
+          "change": "modified",
+          "insertions": 96,
+          "deletions": 31
+        },
+        {
+          "path": "app/src/test/java/scan/PoseRunnerTest.kt",
+          "change": "added",
+          "insertions": 74,
+          "deletions": 0
+        },
+        {
+          "path": "app/src/main/java/scan/ScanQueue.kt",
+          "change": "modified",
+          "insertions": 38,
+          "deletions": 12
+        },
+        {
+          "path": "bench/scan200.sh",
+          "change": "untracked",
+          "insertions": 21,
+          "deletions": 0
+        },
+        {
+          "path": "app/build.gradle.kts",
+          "change": "modified",
+          "insertions": 6,
+          "deletions": 2
+        },
+        {
+          "path": "app/src/main/assets/pose_lite.tflite",
+          "change": "renamed",
+          "insertions": 0,
+          "deletions": 0
+        }
+      ],
+      "tools": [
+        {
+          "name": "Bash",
+          "count": 41
+        },
+        {
+          "name": "Edit",
+          "count": 23
+        },
+        {
+          "name": "Read",
+          "count": 18
+        },
+        {
+          "name": "Grep",
+          "count": 9
+        },
+        {
+          "name": "Write",
+          "count": 3
+        }
+      ],
+      "tests": [
+        {
+          "at": "2026-10-28T19:09:00Z",
+          "command": "./gradlew testDebugUnitTest",
+          "result": "failed"
+        },
+        {
+          "at": "2026-10-28T19:26:00Z",
+          "command": "./gradlew testDebugUnitTest",
+          "result": "passed"
+        },
+        {
+          "at": "2026-10-28T19:39:20Z",
+          "command": "./gradlew testDebugUnitTest --tests PoseRunnerTest",
+          "result": "running"
+        }
+      ],
+      "events": [
+        {
+          "ts": "2026-10-28T19:09:00Z",
+          "agent": "w6-perf",
+          "event": "tool",
+          "lane": "w6",
+          "tool": "Bash",
+          "summary": "Bash: ./gradlew testDebugUnitTest",
+          "source": "hook"
+        },
+        {
+          "ts": "2026-10-28T19:18:00Z",
+          "agent": "w6-perf",
+          "event": "tool",
+          "lane": "w6",
+          "tool": "Edit",
+          "summary": "Edit app/src/main/java/scan/PoseRunner.kt",
+          "source": "hook"
+        },
+        {
+          "ts": "2026-10-28T19:23:40Z",
+          "agent": "w6-perf",
+          "event": "tool",
+          "lane": "w6",
+          "tool": "Edit",
+          "summary": "Edit app/src/test/java/scan/PoseRunnerTest.kt",
+          "source": "hook"
+        },
+        {
+          "ts": "2026-10-28T19:26:00Z",
+          "agent": "w6-perf",
+          "event": "tool",
+          "lane": "w6",
+          "tool": "Bash",
+          "summary": "Bash: ./gradlew testDebugUnitTest",
+          "source": "hook"
+        },
+        {
+          "ts": "2026-10-28T19:36:55Z",
+          "agent": "w6-perf",
+          "event": "tool",
+          "lane": "w6",
+          "tool": "Read",
+          "summary": "Read app/src/main/java/scan/ScanQueue.kt",
+          "source": "log"
+        },
+        {
+          "ts": "2026-10-28T19:38:30Z",
+          "agent": "w6-perf",
+          "event": "tool",
+          "lane": "w6",
+          "tool": "Edit",
+          "summary": "Edit app/src/main/java/scan/ScanQueue.kt",
+          "source": "hook"
+        },
+        {
+          "ts": "2026-10-28T19:39:20Z",
+          "agent": "w6-perf",
+          "event": "tool",
+          "lane": "w6",
+          "tool": "Bash",
+          "summary": "Bash: ./gradlew testDebugUnitTest --tests PoseRunnerTest",
+          "source": "hook"
+        },
+        {
+          "ts": "2026-10-28T19:39:48Z",
+          "agent": "w6-perf",
+          "event": "tool",
+          "lane": "w6",
+          "tool": "Bash",
+          "summary": "Bash: bench/scan200.sh --photos 200",
+          "source": "hook"
+        }
+      ]
     },
     {
       "id": "w1-data",
@@ -303,7 +457,107 @@ window.TIRITH_STATE = {
       "insertions": 2210,
       "deletions": 140,
       "report": "Room database with the same schema and v1-v4 migrations as iOS; 19 new device tests.",
-      "session": "2026-10-28-chromasol-release"
+      "session": "2026-10-28-chromasol-release",
+      "goal": "Port the iOS database to Room with the same schema, v1 to v4 migrations, curated names and the strings check.",
+      "active": false,
+      "last_activity_at": "2026-10-28T17:15:00Z",
+      "files": [
+        {
+          "path": "app/src/main/java/data/Migrations.kt",
+          "change": "added",
+          "insertions": 412,
+          "deletions": 0
+        },
+        {
+          "path": "app/src/main/java/data/AppDatabase.kt",
+          "change": "modified",
+          "insertions": 120,
+          "deletions": 40
+        },
+        {
+          "path": "app/src/test/java/data/MigrationTest.kt",
+          "change": "added",
+          "insertions": 280,
+          "deletions": 0
+        },
+        {
+          "path": "app/src/main/res/values/strings.xml",
+          "change": "modified",
+          "insertions": 64,
+          "deletions": 8
+        },
+        {
+          "path": "app/schemas/4.json",
+          "change": "added",
+          "insertions": 190,
+          "deletions": 0
+        },
+        {
+          "path": "tools/check_strings.py",
+          "change": "untracked",
+          "insertions": 55,
+          "deletions": 0
+        }
+      ],
+      "tools": [
+        {
+          "name": "Edit",
+          "count": 88
+        },
+        {
+          "name": "Bash",
+          "count": 64
+        },
+        {
+          "name": "Read",
+          "count": 52
+        },
+        {
+          "name": "Write",
+          "count": 14
+        },
+        {
+          "name": "Grep",
+          "count": 11
+        }
+      ],
+      "tests": [
+        {
+          "at": "2026-10-28T17:00:00Z",
+          "command": "./gradlew testDebugUnitTest",
+          "result": "failed"
+        },
+        {
+          "at": "2026-10-28T17:08:00Z",
+          "command": "./gradlew testDebugUnitTest",
+          "result": "passed"
+        },
+        {
+          "at": "2026-10-28T17:14:00Z",
+          "command": "python3 tools/check_strings.py && ./gradlew test",
+          "result": "passed"
+        }
+      ],
+      "events": [
+        {
+          "ts": "2026-10-28T17:14:30Z",
+          "agent": "w1-data",
+          "event": "tool",
+          "lane": "w1",
+          "tool": "Bash",
+          "summary": "Bash: python3 tools/check_strings.py && ./gradlew test",
+          "source": "hook"
+        },
+        {
+          "ts": "2026-10-28T17:15:00Z",
+          "agent": "w1-data",
+          "event": "done",
+          "lane": "w1",
+          "tool": "done",
+          "summary": "Finished: 20 tests, strings OK",
+          "source": "log"
+        }
+      ]
     },
     {
       "id": "icon-2",
@@ -328,7 +582,71 @@ window.TIRITH_STATE = {
       "insertions": 600,
       "deletions": 0,
       "report": "Silhouette matches; inner contour still differs from the target.",
-      "session": "2026-10-28-chromasol-release"
+      "session": "2026-10-28-chromasol-release",
+      "goal": "Model the Crystal C icon in Blender so its silhouette and inner contour match the target outline.",
+      "active": false,
+      "last_activity_at": "2026-10-28T16:50:00Z",
+      "files": [
+        {
+          "path": "icon/crystal_c.blend",
+          "change": "added",
+          "insertions": 0,
+          "deletions": 0
+        },
+        {
+          "path": "icon/render.py",
+          "change": "added",
+          "insertions": 210,
+          "deletions": 0
+        },
+        {
+          "path": "icon/compare.py",
+          "change": "added",
+          "insertions": 95,
+          "deletions": 0
+        },
+        {
+          "path": "icon/out/render_v3.png",
+          "change": "untracked",
+          "insertions": 0,
+          "deletions": 0
+        }
+      ],
+      "tools": [
+        {
+          "name": "Bash",
+          "count": 37
+        },
+        {
+          "name": "Write",
+          "count": 9
+        },
+        {
+          "name": "Read",
+          "count": 8
+        }
+      ],
+      "tests": [],
+      "events": [
+        {
+          "ts": "2026-10-28T16:49:00Z",
+          "agent": "icon-2",
+          "event": "tool",
+          "lane": "icon",
+          "tool": "Bash",
+          "summary": "Bash: blender -b icon/crystal_c.blend -P icon/render.py",
+          "source": "hook"
+        },
+        {
+          "ts": "2026-10-28T16:50:00Z",
+          "agent": "icon-2",
+          "event": "tool",
+          "lane": "icon",
+          "tool": "Bash",
+          "summary": "Bash: python3 icon/compare.py out/render_v3.png (IoU 0.9271, SSIM 0.7953)",
+          "source": "hook"
+        }
+      ]
     },
     {
       "id": "t-world",
@@ -350,7 +668,80 @@ window.TIRITH_STATE = {
       "insertions": 0,
       "deletions": 0,
       "report": null,
-      "session": "2026-10-28-tirith-web"
+      "session": "2026-10-28-tirith-web",
+      "goal": "Build the 3D citadel for the web view: the hill, the rings and one district per project.",
+      "active": true,
+      "last_activity_at": "2026-10-28T19:39:55Z",
+      "files": [
+        {
+          "path": "world/hill.js",
+          "change": "added",
+          "insertions": 140,
+          "deletions": 0
+        },
+        {
+          "path": "world/rings.js",
+          "change": "added",
+          "insertions": 96,
+          "deletions": 0
+        },
+        {
+          "path": "world/index.html",
+          "change": "modified",
+          "insertions": 12,
+          "deletions": 3
+        },
+        {
+          "path": "world/districts.js",
+          "change": "untracked",
+          "insertions": 22,
+          "deletions": 0
+        }
+      ],
+      "tools": [
+        {
+          "name": "Edit",
+          "count": 6
+        },
+        {
+          "name": "Read",
+          "count": 4
+        },
+        {
+          "name": "Write",
+          "count": 3
+        }
+      ],
+      "tests": [],
+      "events": [
+        {
+          "ts": "2026-10-28T19:39:00Z",
+          "agent": "t-world",
+          "event": "tool",
+          "lane": "t-world",
+          "tool": "Read",
+          "summary": "Read world/index.html",
+          "source": "log"
+        },
+        {
+          "ts": "2026-10-28T19:39:10Z",
+          "agent": "t-world",
+          "event": "tool",
+          "lane": "t-world",
+          "tool": "Edit",
+          "summary": "Edit world/rings.js",
+          "source": "hook"
+        },
+        {
+          "ts": "2026-10-28T19:39:55Z",
+          "agent": "t-world",
+          "event": "tool",
+          "lane": "t-world",
+          "tool": "Write",
+          "summary": "Write world/districts.js",
+          "source": "hook"
+        }
+      ]
     },
     {
       "id": "t-collector",
@@ -374,7 +765,71 @@ window.TIRITH_STATE = {
       "insertions": 150,
       "deletions": 0,
       "report": null,
-      "session": "2026-10-28-tirith-web"
+      "session": "2026-10-28-tirith-web",
+      "goal": "Collect lane state into one JSON file for the web view: the CLI, the collector and the brain that tells the steward what needs the owner.",
+      "active": false,
+      "last_activity_at": "2026-10-28T19:28:00Z",
+      "files": [
+        {
+          "path": "collector/lanes.py",
+          "change": "modified",
+          "insertions": 88,
+          "deletions": 14
+        },
+        {
+          "path": "collector/brain.py",
+          "change": "added",
+          "insertions": 62,
+          "deletions": 0
+        },
+        {
+          "path": "tests/test_lanes.py",
+          "change": "untracked",
+          "insertions": 40,
+          "deletions": 0
+        }
+      ],
+      "tools": [
+        {
+          "name": "Bash",
+          "count": 12
+        },
+        {
+          "name": "Read",
+          "count": 10
+        },
+        {
+          "name": "Edit",
+          "count": 7
+        }
+      ],
+      "tests": [
+        {
+          "at": "2026-10-28T19:26:00Z",
+          "command": "uv run pytest -q",
+          "result": "failed"
+        }
+      ],
+      "events": [
+        {
+          "ts": "2026-10-28T19:27:00Z",
+          "agent": "t-collector",
+          "event": "tool",
+          "lane": "t-collector",
+          "tool": "Edit",
+          "summary": "Edit collector/lanes.py",
+          "source": "hook"
+        },
+        {
+          "ts": "2026-10-28T19:28:00Z",
+          "agent": "t-collector",
+          "event": "tool",
+          "lane": "t-collector",
+          "tool": "Bash",
+          "summary": "Bash: uv run pytest -q",
+          "source": "hook"
+        }
+      ]
     }
   ],
   "pipelines": [
