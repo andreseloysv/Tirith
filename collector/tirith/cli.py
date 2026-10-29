@@ -11,6 +11,7 @@ import argparse
 import os
 import re
 import secrets
+import signal
 import subprocess
 import sys
 import time
@@ -229,25 +230,33 @@ def _cmd_lane_run(args) -> int:
         print(refusal, file=sys.stderr)
         return 3
     lane_id = args.id or _unique_lane_id(home, _slug(args.feature))
-    log_path = Path(args.log).expanduser().resolve() if args.log \
-        else home / "logs" / f"{lane_id}.log"
-    log_path.parent.mkdir(parents=True, exist_ok=True)
+    interactive = bool(getattr(args, "interactive", False))
+    log_path = None if interactive else (
+        Path(args.log).expanduser().resolve() if args.log else home / "logs" / f"{lane_id}.log")
+    if log_path is not None:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
     lane = register_lane(
         home, lane_id=lane_id, project=args.project, hero_class=args.hero_class,
-        feature=args.feature, workspace=str(workspace), log=str(log_path),
+        feature=args.feature, workspace=str(workspace),
+        log=str(log_path) if log_path else None,
         pid=None, brief=args.brief, step=args.step)
     lane["token"] = secrets.token_urlsafe(24)
     write_lane(home, lane)
     began = time.monotonic()
-    with log_path.open("ab") as log_handle:
-        proc = subprocess.Popen(
-            command, cwd=str(workspace), env=_wrapper_path_env(home, lane_id, lane["token"]),
-            stdout=log_handle, stderr=subprocess.STDOUT)
-        lane["pid"] = proc.pid
-        write_lane(home, lane)
-        exit_code = proc.wait()
+    env = _wrapper_path_env(home, lane_id, lane["token"])
+    if interactive:
+        exit_code = _run_interactive(home, lane, command, workspace, env)
+        answer = _last_stop_message(home, lane_id, lane.get("started_at"))
+    else:
+        with log_path.open("ab") as log_handle:
+            proc = subprocess.Popen(
+                command, cwd=str(workspace), env=env,
+                stdout=log_handle, stderr=subprocess.STDOUT)
+            lane["pid"] = proc.pid
+            write_lane(home, lane)
+            exit_code = proc.wait()
+        answer, _ = final_answer(log_path)
     result = "done" if exit_code == 0 else "failed"
-    answer, _ = final_answer(log_path)
     end_lane(home, lane_id, result, answer or None)
     if result == "failed":
         add_wait(home, args.project, f"lane {lane_id} failed")
@@ -260,6 +269,55 @@ def _cmd_lane_run(args) -> int:
         print()
         print(answer)
     return exit_code
+
+
+FORWARDED_SIGNALS = tuple(getattr(signal, name) for name in ("SIGINT", "SIGTERM", "SIGHUP")
+                          if hasattr(signal, name))
+
+
+def _run_interactive(home: Path, lane: dict, command: list[str], workspace: Path, env: dict) -> int:
+    """Run ``command`` on the owner's terminal; signals go to the child, which is always awaited.
+
+    Returns the exit code (128 + signal number when the child died of a signal).
+    """
+    proc = subprocess.Popen(command, cwd=str(workspace), env=env)  # inherits stdin/stdout/stderr
+    lane["pid"] = proc.pid
+    write_lane(home, lane)
+
+    def forward(signum, _frame):
+        try:
+            proc.send_signal(signum)
+        except (OSError, ProcessLookupError):
+            pass
+
+    previous = {}
+    for signum in FORWARDED_SIGNALS:
+        try:
+            previous[signum] = signal.signal(signum, forward)
+        except ValueError:  # not the main thread: no forwarding, still waits
+            break
+    try:
+        while True:
+            try:
+                code = proc.wait()
+                break
+            except KeyboardInterrupt:  # SIGINT raced our handler install
+                forward(signal.SIGINT, None)
+    finally:
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)
+    return code if code >= 0 else 128 - code
+
+
+def _last_stop_message(home: Path, lane_id: str, since: str | None) -> str:
+    """Message of the lane's last ``Stop`` hook event (the final answer of an interactive lane)."""
+    rows = hooks_mod.read_hook_rows(home / hooks_mod.EVENTS_FILE)
+    for row in reversed(rows):
+        if row.get("lane") == lane_id and row.get("event") == "Stop" \
+                and (not since or str(row.get("ts") or "") >= since):
+            text = str(row.get("summary") or "").strip()
+            return "" if text in ("", "Stop") else text
+    return ""
 
 
 def _duration(seconds: float) -> str:
@@ -877,6 +935,8 @@ def build_parser() -> argparse.ArgumentParser:
     lane_run.add_argument("--log", default=None)
     lane_run.add_argument("--brief", default=None)
     lane_run.add_argument("--step", default=None, help="roadmap step this lane works on")
+    lane_run.add_argument("--interactive", action="store_true",
+                          help="give the agent the terminal (no log capture); activity comes from hooks")
     lane_run.add_argument("command", nargs=argparse.REMAINDER)
     lane_run.set_defaults(func=_cmd_lane_run)
 
