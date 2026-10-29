@@ -123,11 +123,12 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
   - [ ] Revisar: Tirith no se bloquea solo: duplicados por elemento (no por paso) y recupera un bloqueo de git abandonado en el checkout principal. (en curso: revisión de reglas-de-c-digo-errores-de-comp)
 - [ ] Todo comando tiene timeout por código (collector, etapas y comandos de los agentes): Tirith lo aprende del historial, los agentes pueden subirlo o bajarlo dentro de límites con motivo, y al vencer se detiene el proceso con sus hijos y se limpian sus bloqueos. (en revisión)
 - [ ] Un elemento se marca hecho en cuanto su trabajo está en main y verificado, aunque la lane se haya fusionado sola; lo ya fusionado hoy se marca con su commit. (en revisión)
-- [ ] Llevar a main el trabajo de la lane reglas-de-c-digo-errores-de-comp: aplicar ~/.tirith/diffs/reglas-de-c-digo-errores-de-comp.patch sobre main y reportar solo lo que está en el diff (2 tests nuevos, no 3; no nombrar index.lock como archivo cambiado). (en curso: reglas-de-c-digo-errores-de-comp-2)
+- [ ] Llevar a main el trabajo de la lane reglas-de-c-digo-errores-de-comp: aplicar ~/.tirith/diffs/reglas-de-c-digo-errores-de-comp.patch sobre main y reportar solo lo que está en el diff (2 tests nuevos, no 3; no nombrar index.lock como archivo cambiado). (bloqueado: Patch already in main nothing to apply, tree clean ; the test stage was killed exit 144 at ~67% with no failures, so a full pass was never confirmed.)
 - [ ] Integrar: lane/reglas-de-c-digo-errores-de-comp (duplicados por elemento y bloqueo de git abandonado). (en revisión)
-- [ ] Los agentes no piden permisos: dentro de su copia pueden ejecutar cualquier comando y solo los hooks de Tirith deciden (reglas actuales + límite: escribir solo en su copia y su temporal, nunca leer credenciales, sin servidores ni puertos, sin matar procesos ajenos). (en curso: u-perms)
-- [ ] Cada bloqueo de un hook enseña la alternativa exacta y el agente sigue; varios bloqueos seguidos van al manager, nunca al dueño. (en curso: u-teach)
-- [ ] Tests rápidos en la lane (solo lo relacionado con el cambio) y suite completa en la cola de fusión; el paralelismo se ajusta a CPU y disco. (en curso: u-fasttests)
+- [ ] Los agentes no piden permisos: dentro de su copia pueden ejecutar cualquier comando y solo los hooks de Tirith deciden (reglas actuales + límite: escribir solo en su copia y su temporal, nunca leer credenciales, sin servidores ni puertos, sin matar procesos ajenos). (en curso: u-perms2)
+- [ ] Cada bloqueo de un hook enseña la alternativa exacta y el agente sigue; varios bloqueos seguidos van al manager, nunca al dueño. (en curso: u-teach2)
+- [ ] Tests rápidos en la lane (solo lo relacionado con el cambio) y suite completa en la cola de fusión; el paralelismo se ajusta a CPU y disco. (en curso: u-fasttests2)
+- [ ] El tiempo límite de un agente mide inactividad (sin salida ni progreso durante N minutos), no el tiempo total; una lane que sigue trabajando nunca se corta por durar mucho. (en curso: u-idletimeout)
 
 ## 8. Más visibilidad por agente
 
@@ -164,6 +165,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Llevar a main el cambio de la lane app-de-escritorio-tauri-con-chat-7 (clip, arrastrar, sin scroll horizontal; tests ya verdes): reaplicar a mano /Users/andreseloyasanchezva/.tirith/diffs/app-de-escritorio-tauri-con-chat-7.patch sobre main, sin rediseñar, y resolver el conflicto en app/README.md conservando lo de main. (reabierto: the merge did not go through: the review was interrupted; run it again)
   - [x] Revisar: Llevar a main el cambio de la lane app-de-escritorio-tauri-con-chat-7 (clip, arrastrar, sin scroll horizontal; tests ya verdes): reaplicar a mano /Users/andreseloyasanchezva/.tirith/diffs/app-de-escritorio-tauri-con-chat-7.patch sobre main, sin rediseñar, y resolver el conflicto en app/README.md conservando lo de main. — falló: the tests failed: …tauri-con-chat-8/collector/.venv/lib/python3.12/site-packages/_pytest/pathlib.py:123: PytestWarning
 - [ ] La app de escritorio se recompila y se reinicia sola cuando cambia su código Rust en main (firmada), sin que el dueño tenga que hacer nada.
+- [ ] Integrar en main el arreglo de adjuntos (clip y arrastrar) de la lane app-de-escritorio-tauri-con-chat-8, hoy sin commit. (en curso: u-attachland)
 
 ## 10. Plan visible en el Overview
 
@@ -257,18 +259,19 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Regla en código: ningún agente termina sin informar a Tirith del resultado de su elemento (hecho / en parte + nuevos elementos / bloqueado + motivo); Tirith es el único que escribe el plan y marca «hecho» solo cuando la revisión pasa.
 - [ ] Llevar a main el commit 0a71483 de la rama lane/chat-wrap-long-reply-buttons-dra-2 (botones de respuesta largos que se ajustan, adjuntar o arrastrar cualquier archivo al chat): resolver los conflictos con main y pasar los tests
 - [ ] El collector se reinicia solo cuando cambia su código en main (así ningún cambio fusionado queda sin cargar). (en revisión)
-- [ ] El piloto automático no lanza agentes: avisa al manager en el chat de cada paso listo y el manager decide (lanzar con buenas instrucciones, juntar, esperar o descartar). (en curso: u-pilotask)
+- [ ] El piloto automático no lanza agentes: avisa al manager en el chat de cada paso listo y el manager decide (lanzar con buenas instrucciones, juntar, esperar o descartar). (en curso: u-pilotask2)
 - [ ] Tirith libera disco solo cuando queda poco (carpetas de lanes ya fusionadas y cachés de compilación) y nunca se lo pide al dueño. (en curso: u-diskauto)
 - [ ] El manager persistente arranca siempre: comparte el elemento fijo del manager con los turnos sueltos (sin bloquearse por «ya en curso») y, si falla, el modo de respaldo responde en menos de 1 minuto. (en revisión)
 - [ ] Los permisos de comandos seguros (solo lectura, comandos de Tirith) se aprueban por código; al dueño nunca le llega una pregunta de permiso que no sea suya.
 - [ ] La autorrevisión no escribe en el chat lo que arregló sola: queda en el punto de salud (al hacer clic); el chat solo muestra lo que necesita al dueño.
 - [ ] Llevar a main el trabajo de la lane manager-de-guardia-chat-y-piloto-2: aplicar a mano ~/.tirith/diffs/manager-de-guardia-chat-y-piloto-2.patch sobre main y resolver los conflictos en collector/tirith/agentrun.py y collector/tirith/managerd.py conservando lo que ya hay en main (los tests de la lane pasaban: 1113).
 - [ ] Bucle «sigue hasta terminar» por código: si al acabar falta informe, verificación, tests o rama lista, Tirith reanuda la misma sesión con la lista de lo que falta (hasta 3 veces) y solo después avisa al manager. (en revisión)
-- [ ] Cola única de fusión: los agentes no tocan main; Tirith fusiona de uno en uno (trae main, suite completa, fusiona, empuja) y un conflicto vuelve al mismo agente. (en curso: u-mergeq)
+- [ ] Cola única de fusión: los agentes no tocan main; Tirith fusiona de uno en uno (trae main, suite completa, fusiona, empuja) y un conflicto vuelve al mismo agente. (en curso: u-mergeq2)
 - [ ] Elementos pequeños con su comprobación: el manager parte cada pedido en elementos de ~30 min con un comando de «hecho»; Tirith rechaza elementos enormes. (en revisión)
-- [ ] Integrar en main todo el trabajo terminado y sin fusionar de las lanes (lista del 2026-10-29) y descartar con motivo lo reemplazado. (en curso: u-landall)
+- [ ] Integrar en main todo el trabajo terminado y sin fusionar de las lanes (lista del 2026-10-29) y descartar con motivo lo reemplazado. (en curso: u-landall2)
 - [ ] README y docs/SUBMISSION.md al día para el jurado del hackathon: qué hace Tirith hoy (autonomía con reglas en código, plan, manager en el chat, app notarizada), cómo usa los modelos de Meta, cómo probarlo y capturas reales. (en revisión)
 - [ ] Quitar todo el GDScript: la carpeta world/ (ciudadela 3D de Godot), ./run --3d y toda referencia a Godot en el código, la web y los docs. (en curso: u-nogodot)
+- [ ] Integrar en main lane/smallitems (elementos pequeños con comprobación; ya commiteado, cortado por el límite de 1 h antes de fusionar). (en curso: u-smallland)
 
 ## 15. Collector y CLI en Rust
 
