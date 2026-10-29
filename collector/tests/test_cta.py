@@ -16,6 +16,7 @@ import pytest
 
 import tirith_guard
 from conftest import GIT, make_hooks_mutable, make_repo, write_config, write_lane_manifest
+from tirith import tirithcmd
 from tirith import actions as actions_mod
 from tirith import asks as asks_mod
 from tirith import dispatch as dispatch_mod
@@ -134,11 +135,11 @@ def test_missing_guard_item_runs_install(home: Path, tmp_path: Path) -> None:
     repo = make_repo(tmp_path / "repo")
     write_config(home, [{"id": "demo", "name": "Demo", "repo": str(repo), "color": "#123456"}])
     wait = _guard_wait(_state(home))
-    assert wait and [a["command"] for a in wait["actions"]] == ["tirith guard install demo"]
+    assert wait and [a["command"] for a in wait["actions"]] == [tirithcmd.resolved(home) + " guard install demo"]
     assert wait["actions"][0]["cwd"] == str(repo)
     assert [o["value"] for o in wait["options"]] == ["snooze", "never"]
     found = actions_mod.find_action(home, wait["actions"][0]["id"])  # the Run path finds it by id
-    assert found and found["command"] == "tirith guard install demo" and found["project"] == "demo"
+    assert found and found["command"] == tirithcmd.resolved(home) + " guard install demo" and found["project"] == "demo"
 
 
 def test_own_hook_guard_item_offers_the_chain(home: Path, tmp_path: Path) -> None:
@@ -150,7 +151,7 @@ def test_own_hook_guard_item_offers_the_chain(home: Path, tmp_path: Path) -> Non
     wait = _guard_wait(_state(home))
     assert "without the FORBIDDEN_WORDS_GUARD marker" in wait["text"]
     action = wait["actions"][0]
-    assert action["command"] == "tirith guard install demo --chain"
+    assert action["command"] == tirithcmd.resolved(home) + " guard install demo --chain"
     assert action["label"] == "Add the word guard and keep ChromaSol's hook"
     assert [o["label"] for o in wait["options"]] == ["Not now", "Never for this project"]
 
