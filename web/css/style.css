@@ -936,3 +936,26 @@ button.vwho:hover b { text-decoration: underline; }
 .livesteps .ls-sum { font: inherit; color: inherit; display: block; width: 100%; } .livesteps .ls-sum:hover .ls-show { text-decoration: underline; }
 .livesteps .ls-show { color: var(--blue); } .livesteps.open .ls-list { margin-top: 6px; }
 :root[data-theme="dark"] .livesteps { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.12); }
+
+/* the persistent manager session in the chat: diffs, task list, nested lanes, Stop */
+.livesteps .ls-diff { margin: 3px 0 2px; border: 1px solid rgba(120,135,160,.25); border-radius: 6px; overflow: hidden; background: rgba(255,255,255,.5); }
+.livesteps .ls-dh { padding: 2px 8px; color: var(--mut); border-bottom: 1px solid rgba(120,135,160,.2); }
+.livesteps .ls-dn { margin-left: 6px; opacity: .8; }
+.livesteps .ls-dl { display: flex; gap: 6px; padding: 0 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.livesteps .ls-dl.add { background: rgba(40,160,80,.16); color: #1b6b3a; } .livesteps .ls-dl.del { background: rgba(215,60,60,.15); color: #a22a2a; }
+.livesteps .ls-sg { flex: none; width: 8px; }
+.livesteps .ls-more { display: block; width: 100%; text-align: left; padding: 2px 8px; font: inherit; color: var(--blue); border-top: 1px solid rgba(120,135,160,.2); }
+.livesteps .ls-more:hover { text-decoration: underline; }
+.livesteps .ls-todo { display: block; padding: 3px 0 4px; }
+.livesteps .ls-checks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+.livesteps .ls-ck.completed .ls-t { text-decoration: line-through; opacity: .6; } .livesteps .ls-ck.in_progress { color: var(--blue); }
+.livesteps .ls-cur { margin-left: 1px; animation: lsblink 1s steps(2) infinite; }
+@keyframes lsblink { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .livesteps .ls-cur { animation: none; } }
+.livesteps .ls-nest { margin: 5px 0 0 6px; padding-left: 8px; border-left: 2px solid rgba(120,135,160,.3); display: flex; flex-direction: column; gap: 5px; }
+.livesteps .ls-lh { color: var(--mut); margin-bottom: 2px; } .livesteps .ls-who { color: var(--fg); }
+.livesteps .ls-none { opacity: .6; }
+.livesteps .ls-stop, .mchat .mc-stop { font: inherit; padding: 0 8px; margin-left: 4px; border: 1px solid var(--red); color: var(--red); border-radius: 999px; background: transparent; cursor: pointer; }
+.livesteps .ls-stop:hover, .mchat .mc-stop:hover { background: var(--red); color: #fff; }
+:root[data-theme="dark"] .livesteps .ls-diff { background: rgba(255,255,255,.04); }
+:root[data-theme="dark"] .livesteps .ls-dl.add { color: #7fd69a; } :root[data-theme="dark"] .livesteps .ls-dl.del { color: #f09a9a; }
