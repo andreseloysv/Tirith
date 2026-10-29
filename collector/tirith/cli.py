@@ -642,6 +642,32 @@ def _cmd_wait_add(args) -> int:
     return 0
 
 
+def _cmd_chat_say(args) -> int:
+    """The manager writes to the owner in the chat: an owner item with options or Run actions, else a plain message."""
+    text = (args.text or "").strip()
+    if not text:
+        raise SystemExit("chat say needs the message")
+    try:
+        options = [asks_mod.parse_option(o) for o in args.option or []]
+    except asks_mod.AskError as error:
+        raise SystemExit(f"chat say: {error}")
+    try:
+        actions_mod.check_text(text, "wait")
+        actions = actions_mod.make_actions(list(args.run or []), args.label, args.cwd)
+    except actions_mod.ActionError as error:
+        print(error, file=sys.stderr)
+        return 2
+    home = _home(args)
+    if options or actions:
+        print(add_wait(home, args.project, text, options=options, actions=actions))
+        return 0
+    try:
+        print(inbox_mod.add_say(home, text, args.project or "")["id"])
+    except inbox_mod.InboxError as error:
+        raise SystemExit(f"chat say: {error}")
+    return 0
+
+
 def _cmd_wait_done(args) -> int:
     home = _home(args)
     rows = read_jsonl(home / "waits.jsonl")
@@ -1677,6 +1703,17 @@ def build_parser() -> argparse.ArgumentParser:
     wait_done = wait_sub.add_parser("done", parents=[common])
     wait_done.add_argument("wait_id")
     wait_done.set_defaults(func=_cmd_wait_done)
+
+    chat = sub.add_parser("chat", parents=[common], help="write to the owner in the chat")
+    chat_sub = chat.add_subparsers(dest="chat_command", required=True)
+    chat_say = chat_sub.add_parser("say", parents=[common],
+                                   help="a manager message (an owner item when it has options or actions)")
+    chat_say.add_argument("text", help="the message (markdown)")
+    chat_say.add_argument("--project", default=None)
+    chat_say.add_argument("--option", action="append", metavar="LABEL|VALUE",
+                          help="a one-click answer; repeat for more (max 6)")
+    _add_action_args(chat_say)
+    chat_say.set_defaults(func=_cmd_chat_say)
 
     flow = sub.add_parser("flow", parents=[common],
                           help="record information passed between endpoints")

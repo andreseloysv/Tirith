@@ -237,7 +237,6 @@
     var h = '<div class="ovg"><div class="ovmain" data-scroll="ovmain">';
     var spent = T.sumUsage && T.sumUsage(s.agents || []);
     if (spent) h += '<p class="mut sm usage ovusage" title="All agents in this view">Spent ' + esc(T.usageLine(spent)) + '</p>';
-    if (T.needs) h += T.needs(s);
     if (T.plan) h += T.plan(s);
     if (T.setup) h += T.setup(s);
     if (T.rulesSection) h += T.rulesSection(s);

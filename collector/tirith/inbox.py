@@ -214,6 +214,25 @@ def find_request(home: Path, request_id: str) -> dict | None:
     return next((r for r in requests(home) if r["id"] == request_id), None)
 
 
+def add_say(home: Path, text: str, project: str = "", at: str | None = None) -> dict:
+    """Append a plain message from the manager to the owner (no call to action, nothing to answer)."""
+    text = clip(str(text or "").strip())
+    if not text:
+        raise InboxError("a message needs text")
+    row = {"id": new_id(), "at": at or now_iso(), "kind": "say", "project": str(project or "").strip(),
+           "text": text, "from": "manager"}
+    append_jsonl(inbox_path(home), row)
+    return row
+
+
+def says(home: Path) -> list[dict]:
+    """The manager's plain messages to the owner (``say`` rows), oldest first, the last ``STATE_ROWS``."""
+    out = [{"id": str(r["id"]), "at": r.get("at"), "project": str(r.get("project") or ""),
+            "text": str(r.get("text") or ""), "from": "manager"}
+           for r in read_jsonl(inbox_path(home)) if r.get("kind") == "say" and r.get("id") and r.get("text")]
+    return out[-STATE_ROWS:]
+
+
 def add_answer(home: Path, request_id: str, text: str, by: str = "manager", auto: bool = False,
                at: str | None = None, lane: str | None = None, actions: list[dict] | None = None,
                attachments: list[dict] | None = None) -> dict:
