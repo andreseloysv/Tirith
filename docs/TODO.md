@@ -96,7 +96,8 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] El collector registra cada violación bloqueada (`state.violations`) y la pone en "esperando por ti".
 - [ ] Violaciones visibles en la web, con el agente responsable.
 - [ ] Activar las puertas en la máquina del dueño (hooks de usuario + shims).
-- [ ] `tirith.toml` en ChromaSol y RelaGame (sin él, `lane run` no arranca allí).
+- [x] `tirith.toml` en ChromaSol y RelaGame.
+- [ ] ChromaSol: unir su hook `pre-commit` de rutas protegidas con la guarda de palabras (dueño); hasta entonces `lane run` no arranca allí.
 
 ## 8. Más visibilidad por agente
 
