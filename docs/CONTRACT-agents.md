@@ -51,6 +51,32 @@ added-file patches (text bounded at 1 MB, a file over 256 KB is cut, binary file
 `window.TIRITH_DIFFS[<lane>]`, because a `file://` page cannot fetch). `agents[].diff` =
 `{path, size, script}` or null. The Files section of the drawer has "View diff".
 
+## State size and agent detail files
+
+`state.json` (and `state.js`) is written compact and stays under 800 KB; the desktop app and the page
+re-parse it every 2 s. `state.agents` is therefore trimmed:
+
+- At most 60 agents, working ones first, then the most recently ended.
+- Working agents and agents ended in the last 2 hours keep their detail, capped: 30 `log_entries`, 12
+  `events` (only `ts`, `agent`, `event`, `tool`, `summary`, `source`), 10 `files`, 5 `tests`, 5 `log_tail` lines,
+  every string of an entry cut at 160 characters (80 for `system` entries), `fields` dropped when over
+  120 bytes, `report` cut at 4 KB. Past a byte budget for all agents (480 KB) the oldest ended ones
+  drop to summaries too.
+- Older ended agents keep only the summary fields (id, name, feature, status, times, project, step,
+  review, usage, the first paragraph of the report); `log_entries`, `log_tail`, `events`, `files` and
+  `tests` are `[]`.
+- `report_clipped` is true when `report` was cut; `detail_more` is true when anything was cut.
+- `agents[].detail` = `{path, hash}`: `~/.tirith/agents/<id>.js` sets `window.TIRITH_AGENT` to
+  `{id, log_entries, log_tail, events, files, tests, report}` in full (the report bounded at 16 KB). The
+  collector rewrites it only when `hash` (of that content) changes, and writes one for every agent,
+  also those not listed in the state. The file name is the id with characters outside `[A-Za-z0-9_.-]`
+  (and a leading dot) replaced by `_`.
+
+The drawer loads the file with a `<script>` tag when it opens an agent with `detail_more` (works from
+`file://`); the desktop app asks the Tauri command `agent_detail(id)`, which reads and parses the same
+file. The app pushes `state.json` to the page only when `generated_at` changed and the content (without
+`generated_at`) did; when only the time moved it sends `tirith://alive` with the new `generated_at`.
+
 ## Doctor
 
 `tirith doctor --agent <alias>` prints `ok` / `FAIL` per check and exits 1 on any failure:
