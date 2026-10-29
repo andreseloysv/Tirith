@@ -1295,6 +1295,7 @@ class Collector:
             "says": says,
             "file_refs": filerefs_mod.build(
                 filerefs_mod.chat_texts(inbox_rows, says, waiting + answered_waits), projects),
+            "disk": dispatch_mod.load_state(self.home).get("disk"),
             "autopilot": autopilot_mod.public(self.home, self.config, agent_rows, projects, now),
             "launch": {"token": launch_mod.launch_token(self.home),
                        "available": launch_mod.handler_installed()},

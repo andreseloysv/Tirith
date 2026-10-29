@@ -288,15 +288,15 @@ def _live(own: dict, agents: list[dict], now: datetime) -> set[str]:
 
 
 def run(home: Path, config: Config, now: datetime, state: dict, *, agents: list[dict], projects: list[dict],
-        launcher: Callable) -> bool:
-    """One autopilot pass; True when ``state`` changed."""
+        launcher: Callable, launch: bool = True) -> bool:
+    """One autopilot pass; True when ``state`` changed. ``launch`` False (disk almost full): no new lane."""
     own = _own(state)
     changed = _switch(home, state, now)
     planned = [p for p in projects if p.get("roadmap")]
     changed |= _owner_items(home, state, planned, now_iso(now))
     changed |= _settle(home, state, planned, agents, now)
     changed |= _unpause(home, state, _steps(planned))
-    if not effective(config, state):
+    if not launch or not effective(config, state):
         return changed
     by_id = _agents_by_id(agents)
     running = len(_live(own, agents, now))
