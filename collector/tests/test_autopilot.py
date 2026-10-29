@@ -29,7 +29,7 @@ PLAN = """# TODO
 ## 2. Second
 
 - [ ] Build the second thing.
-- [ ] Log in to the portal (dueño: https://portal.example.invalid/login).
+- [ ] Log in to the portal (dueño: credentials https://portal.example.invalid/login).
 
 ## 3. Third
 
@@ -37,8 +37,8 @@ PLAN = """# TODO
 
 ## 4. Owner only
 
-- [ ] Install it (dueño) `tirith url install`.
-- [ ] Decide the colour (dueño).
+- [ ] Install it (dueño: physical-device) `tirith url install`.
+- [ ] Decide the colour (dueño: owner-decision).
 
 ## 5. Later
 
@@ -158,7 +158,7 @@ def test_owner_switch_off_and_on(home, repo) -> None:
         inbox_mod.add_request(home, "autopilot", "all", "autopilot", "maybe")
 
 
-def test_refused_launch_is_one_owner_item_and_retried_later(home, repo) -> None:
+def test_refused_launch_is_one_manager_item_and_retried_later(home, repo) -> None:
     pilot = Pilot(home, repo)
 
     def refuse(home, project, step, request_id=None):
@@ -166,9 +166,10 @@ def test_refused_launch_is_one_owner_item_and_retried_later(home, repo) -> None:
     pilot.launcher = refuse
     pilot.cycle()
     pilot.cycle()
-    items = [i for i in _waits(home) if i.startswith("autopilot-demo-")]
-    assert sorted(items) == ["autopilot-demo-1", "autopilot-demo-2", "autopilot-demo-3"]
-    assert _waits(home)["autopilot-demo-1"]["options"][0]["command"] == "tirith check --project demo"
+    assert not [i for i in _waits(home) if i.startswith("autopilot-demo-")]  # never the owner's
+    items = {q["id"]: q for q in asks_mod.queue_items(home, only_open=True) if q["kind"] == "launch-refused"}
+    assert sorted(items) == ["sq-autopilot-demo-1", "sq-autopilot-demo-2", "sq-autopilot-demo-3"]
+    assert "Fix it: tirith check --project demo" in items["sq-autopilot-demo-1"]["text"]
 
 
 # -- not converging -----------------------------------------------------------------------------
@@ -216,7 +217,7 @@ def test_paused_step_resumes_when_its_items_change(home, repo) -> None:
     path.write_text(path.read_text().replace("Build the first thing.", "Build the first thing, smaller."))
     pilot.cycle()
     assert "demo|1" not in pilot.state()["paused"]
-    assert asks_mod.queue_items(home, only_open=True) == []
+    assert [q for q in asks_mod.queue_items(home, only_open=True) if q["kind"] != "launch-refused"] == []
 
 
 # -- owner items --------------------------------------------------------------------------------
@@ -245,7 +246,7 @@ def test_owner_items_are_deduplicated_and_closed_when_ticked(home, repo) -> None
     pilot.cycle()
     ids = [r["id"] for r in read_jsonl(home / "waits.jsonl") if r["id"].startswith("owner-demo-")]
     assert len(ids) == 3
-    pilot.tick("Decide the colour (dueño).")
+    pilot.tick("Decide the colour (dueño: owner-decision).")
     pilot.cycle()
     rows = [r for r in read_jsonl(home / "waits.jsonl") if r["id"].startswith("owner-demo-") and r.get("done_at")]
     assert len(rows) == 1 and "colour" in rows[0]["text"]
@@ -320,7 +321,7 @@ def test_report_saying_already_built_asks_the_plan_updater_to_tick(home, repo, r
     assert pilot.launched.count(("demo", "1")) == 1
     pilot.cycle()
     assert len([r for r in inbox_mod.requests(home) if r["kind"] == "plan-refresh"]) == 1  # asked once
-    assert asks_mod.queue_items(home, only_open=True) == []
+    assert [q for q in asks_mod.queue_items(home, only_open=True) if q["kind"] != "launch-refused"] == []
 
 
 @pytest.mark.parametrize("report", CANNOT_DO)

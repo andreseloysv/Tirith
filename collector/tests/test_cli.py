@@ -37,7 +37,7 @@ def test_note_wait_manager(home: Path, capsys) -> None:
     assert main(["note", "Merged the data lane", "--project", "demo"]) == 0
     notes = read_jsonl(home / "notes.jsonl")
     assert notes[0]["project"] == "demo" and "Merged" in notes[0]["text"]
-    assert main(["wait", "add", "Tick the declaration", "--project", "demo", "--option", "Done|done"]) == 0
+    assert main(["wait", "add", "--why-owner", "owner-decision", "Tick the declaration", "--project", "demo", "--option", "Done|done"]) == 0
     wait_id = capsys.readouterr().out.strip().splitlines()[-1]
     assert wait_id == "w-1"
     assert main(["wait", "done", wait_id]) == 0
