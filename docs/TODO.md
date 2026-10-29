@@ -228,7 +228,6 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 ## 15. Collector y CLI en Rust
 
 - [x] Base: crate Rust compartido (workspace con la app), arnés de paridad que corre el collector de Python y el de Rust sobre las mismas carpetas de prueba y compara `state.json`.
-  - [ ] Rust: pipelines, guarda y reglas (`pipelines`, `violations`, `rules`, `guard`, `setup`, `env`) (fuera de este plan: port a Rust pausado por el dueño el 2026-10-29).
   - [ ] Rust: salas, flujos y manager (`rooms`, `flows`, `sessions`, `autopilot`, `models`, `disk`, `health`) (fuera de este plan: port a Rust pausado por el dueño el 2026-10-29).
 - [ ] Dispatcher, piloto automático, manager de guardia y revisiones en Rust, con paridad (fuera de este plan: port a Rust pausado por el dueño el 2026-10-29).
 - [ ] La CLI `tirith` en Rust (mismos comandos y salidas), un solo binario para los agentes (fuera de este plan: port a Rust pausado por el dueño el 2026-10-29).
