@@ -29,9 +29,52 @@ NO_CTA_KIND = "no-call-to-action"
 NOT_OWNER_KIND = "not-owner-item"  # an item with a call to action but a source the owner is not shown
 AGENT_WAITING_KIND = "agent-waiting"  # what the brain guesses a working agent waits on
 AUTO_CLOSED = "no longer waiting"
-# options of the owner items Tirith itself generates (violations, brain-detected waits, room waits)
-GOT_IT_OPTIONS = [{"label": "Let the manager handle it", "value": "manager"},
-                  {"label": "Got it", "value": "ack"}]
+# options of the owner items Tirith itself generates (violations, brain-detected waits, room waits).
+# There is no "let the manager handle it": the manager's work is the default, never an option.
+GOT_IT_OPTIONS = [{"label": "Got it", "value": "ack"}]
+
+# Why an item may be on the owner's list at all: what the manager refuses to do or cannot do.
+OWNER_REASONS = {
+    "security": "installs on your Mac",
+    "credentials": "needs your credentials",
+    "account": "needs your account settings",
+    "device": "needs a physical device",
+    "payment": "involves a payment",
+    "legal": "needs your legal sign-off",
+}
+
+
+def reason_tag(reason: str) -> str:
+    """``"Needs you: installs on your Mac"`` for a key of ``OWNER_REASONS``."""
+    return "Needs you: " + OWNER_REASONS[reason]
+
+
+_BUTTON_CLAIM = re.compile(
+    r"\(?\b(?:(?:bot[oó]n|button|click|clic|pulsa|press|haz\s+clic\s+en)\s+[\"“'`]?(?P<a>run|open|done|abrir|ejecutar)\b"
+    r"|(?P<b>run|open|done)\s+button)[^()]*?\)?", re.IGNORECASE)
+_BUTTON_KIND = {"run": "run", "ejecutar": "run", "open": "open", "abrir": "open", "done": "done"}
+
+
+def button_claims(text: str) -> set[str]:
+    """The buttons (``run`` / ``open`` / ``done``) a text promises ("botón Run", "click Run", "Run button")."""
+    return {_BUTTON_KIND[(m.group("a") or m.group("b")).lower()] for m in _BUTTON_CLAIM.finditer(str(text or ""))}
+
+
+def missing_buttons(text: str, options=None, actions=None, link: str | None = None) -> set[str]:
+    """Buttons the text promises that the item does not have."""
+    labels = {str(o.get("label") or "").strip().lower() for o in options or [] if isinstance(o, dict)}
+    present = {"run": any(isinstance(a, dict) and a.get("command") for a in actions or [])
+               or any(isinstance(o, dict) and o.get("command") for o in options or []),
+               "open": bool(link), "done": "done" in labels}
+    return {kind for kind in button_claims(text) if not present[kind]}
+
+
+def drop_button_claims(text: str) -> str:
+    """The text without the phrases that promise a button ("(dueño: botón Run)" and the like)."""
+    out = _BUTTON_CLAIM.sub("", str(text or ""))
+    out = re.sub(r"\(\s*(?:due[ñn]o|owner)?\s*:?\s*\)", "", out, flags=re.IGNORECASE)
+    out = re.sub(r"\s+([.,;:])", r"\1", re.sub(r"\s+", " ", out))
+    return out.strip(" :;,-")
 
 LANE_OPTIONS = [{"label": "Retry", "value": "retry"}, {"label": "Show the log", "value": "log"},
                 {"label": "Drop it", "value": "drop"}]
