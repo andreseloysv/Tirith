@@ -254,6 +254,31 @@ def _raw_stage(segments: list[list[str]], folder: Path | None, project: str | No
     return None
 
 
+def _raw_runner(line: str, folder: Path | None, project: str | None) -> Violation | None:
+    """A build/test runner started outside ``tirith run`` in a project that has a ``tirith.toml``."""
+    from tirith.activity import runner_kinds  # activity imports hooks, which imports this module
+    if folder is None:
+        return None
+    manifest = manifest_mod.load(folder)
+    found = runner_kinds(line) if manifest.exists else []
+    if not found:
+        return None
+    kind, text = found[0]
+    flag = project or "<project-id>"
+    named = [(pipe, stage) for pipe in manifest.pipelines for stage in pipe.stages
+             if manifest_mod.stage_kind(stage) == kind]
+    if named:
+        pipe, stage = named[0]
+        same = sum(1 for p in manifest.pipelines for s in p.stages if s.name == stage.name)
+        extra = f" --pipeline {pipe.id}" if same > 1 else ""
+        instead = f"tirith run --project {flag}{extra} --stage {stage.name} [-- <cmd>]"
+    else:
+        instead = (f"tirith setup add-stage --project {flag} --name {kind} --kind {kind} -- <cmd>, "
+                   f"then tirith run --project {flag} --stage {kind}")
+    return Violation("raw-stage", f"{_clip(text)} must run as a pipeline stage so the owner sees it",
+                     instead)
+
+
 def _contains(haystack: list[list[str]], needle: list[list[str]]) -> bool:
     for start in range(len(haystack) - len(needle) + 1):
         if haystack[start:start + len(needle)] == needle:
@@ -297,7 +322,8 @@ def check_call(config: Config, tool: str | None, tool_input, cwd, project: str |
         if alias and alias not in seen:
             seen.add(alias)
             out.append(_agent_cli(alias, line, project, commands))
-    stage = _raw_stage(segments, find_manifest_folder(cwd), project)
+    folder = find_manifest_folder(cwd)
+    stage = _raw_stage(segments, folder, project) or _raw_runner(line, folder, project)
     if stage:
         out.append(stage)
     return out
