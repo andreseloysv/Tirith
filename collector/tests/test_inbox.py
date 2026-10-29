@@ -267,3 +267,58 @@ def test_state_inbox_lanes_come_from_answers_and_agents(home: Path) -> None:
     assert {a["id"]: a["request_id"] for a in state["agents"]} == {"new-lane": asked, "old-lane": asked, "other": None}
     schema = json.loads((Path(__file__).resolve().parents[1] / "state.schema.json").read_text(encoding="utf-8"))
     jsonschema.validate(state, schema)
+
+
+# -- kind "chat": the owner's conversation with the manager -------------------------------------
+
+
+def test_chat_needs_text_but_no_project_or_step(home: Path, capsys) -> None:
+    rid = _add(capsys, "--kind", "chat", "--text", "How is the build going?")
+    (row,) = read_jsonl(home / "inbox.jsonl")
+    assert (row["id"], row["kind"], row["project"], row["step"], row["from"]) == (rid, "chat", "", "", "owner")
+    assert main(["inbox", "add", "--kind", "chat"]) == 3
+    assert "needs text" in capsys.readouterr().err
+    assert main(["inbox", "add", "--kind", "ask", "--text", "q"]) == 3  # other kinds still need project and step
+    assert len(read_jsonl(home / "inbox.jsonl")) == 1
+
+
+def test_chat_with_a_project_keeps_it(home: Path, capsys) -> None:
+    _add(capsys, "--kind", "chat", "--project", "demo", "--text", "hi")
+    (req,) = inbox_mod.requests(home)
+    assert req["kind"] == "chat" and req["project"] == "demo" and req["step"] == ""
+
+
+def test_chat_is_pending_until_the_manager_answers(home: Path, capsys) -> None:
+    rid = _add(capsys, "--kind", "chat", "--text", "status?")
+    assert inbox_mod.requests(home)[0]["manager_pending"] is True
+    inbox_mod.add_answer(home, rid, "auto", by="brain", auto=True)
+    assert inbox_mod.requests(home)[0]["manager_pending"] is True  # a brain answer does not settle it
+    assert main(["inbox", "answer", rid, "All green."]) == 0
+    req = inbox_mod.requests(home)[0]
+    assert req["manager_pending"] is False and req["status"] == "answered"
+    assert [a["by"] for a in req["answers"]] == ["brain", "manager"]
+
+
+def test_chat_comes_back_pending_after_the_owner_runs_an_answer_action(home: Path, capsys) -> None:
+    from tirith.store import append_jsonl
+    rid = _add(capsys, "--kind", "chat", "--text", "fix it")
+    inbox_mod.add_answer(home, rid, "Run this.", actions=[dict(id="act-chat-1", label="Go", command="true")])
+    assert inbox_mod.requests(home)[0]["manager_pending"] is False
+    append_jsonl(home / "inbox.jsonl", dict(kind="action-run", action_id="act-chat-1", status="passed",
+                                            exit_code=0, at="2999-01-01T00:00:00Z"))
+    assert inbox_mod.requests(home)[0]["manager_pending"] is True
+
+
+def test_watch_emits_a_pending_chat_message(home: Path) -> None:
+    row = inbox_mod.add_request(home, "chat", text="anyone there?")
+    seen: list[dict] = []
+    inbox_mod.watch(home, seen.append, should_stop=lambda: True, sleep=lambda _s: None)
+    assert [r["id"] for r in seen] == [row["id"]]
+    assert json.loads(inbox_mod.watch_line(seen[0]))["kind"] == "chat"
+
+
+def test_chat_link_adds_a_chat_message(home: Path) -> None:
+    fields = inbox_mod.parse_url(inbox_mod.build_url("chat", "", "", "hello **manager**", "tok"))
+    inbox_mod.add_request(home, fields["kind"], fields["project"], fields["step"], fields["text"])
+    (req,) = inbox_mod.requests(home)
+    assert req["kind"] == "chat" and req["text"] == "hello **manager**"
