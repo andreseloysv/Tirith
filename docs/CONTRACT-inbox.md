@@ -123,6 +123,16 @@ project, and the question. A manager answer within the 120 s means the brain nev
 retried at most every 5 minutes. Brain disabled: nothing happens. With the dispatcher on (the default) the brain
 answers an `ask` in the first cycle, not after 120 s.
 
+### Client id (`cid`) and safe retries
+
+A request may carry `cid`: the id the page made for this send (1 to 64 characters of `[A-Za-z0-9_-]`; the
+`tirith://` link takes `&cid=`, the CLI `--cid`, the Tauri command `cid`). It is stored on the row and shown as
+`cid` in `state.inbox`. A request whose `cid` is already on a row is ignored (the existing row is returned), so
+the page can retry a send without ever writing it twice. Rows without a `cid` never collide.
+
+The app writes every `inbox_add` attempt and its result (`ok id=...` or `error: ...`, never the text) to
+`<home>/logs/chat-send.log`.
+
 ## Web (`web/js/v-manager.js`): chat with the manager
 
 - The Overview's right column is the chat "Manager" (it replaces Activity, whose flows stay in the Flow view).
@@ -402,3 +412,12 @@ manager: tirith inbox watch line / hook context list the absolute paths -> open 
 - Web: thumbnails sit above the bubble, in the owner's messages and in the manager's answers; a click opens
   the image full size in a lightbox (click or Esc closes). In the app the thumbnail of a message sent from
   this window comes from the picked file; others load `file://<path>`.
+
+### Sending never loses a message
+
+- The page gives each chat send a `cid` and shows the message as "Sending…" in the thread until the next state
+  has a row with that `cid`. The Tauri command failing, or no such row within 10 s, turns it into
+  "Not sent · Retry · Copy text" and puts the text back in the composer. Retry resends with the same `cid`.
+- Drafts are kept in `localStorage` per project (`tirith.chat.draft.<project>`), and sends still unconfirmed are
+  kept in `tirith.chat.unsent`; after a reload they come back as "Sending…" and are checked against the state.
+  Storage that is blocked only means nothing survives a reload.
