@@ -591,6 +591,14 @@
           }
         },
         "goal": {"type": ["string", "null"]},
+        "request": {
+          "type": ["object", "null"],
+          "properties": {
+            "text": {"type": "string"},
+            "at": {"type": "string"},
+            "agent_session_id": {"type": "string"}
+          }
+        },
         "active": {"type": "boolean"},
         "last_activity_at": {"type": ["string", "null"]},
         "files": {"type": "array", "maxItems": 100, "items": {"$ref": "#/$defs/agent_file"}},
@@ -612,6 +620,9 @@
             "properties": {
               "at": {"type": ["string", "null"]},
               "command": {"type": "string"},
+              "full": {"type": "string"},
+              "passed": {"type": "integer", "minimum": 0},
+              "failed": {"type": "integer", "minimum": 0},
               "result": {"type": ["string", "null"],
                          "enum": ["passed", "failed", "running", null]}
             }

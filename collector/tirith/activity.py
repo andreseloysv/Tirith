@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shlex
 import subprocess
 from collections import Counter, deque
 from datetime import datetime, timezone
@@ -88,26 +89,126 @@ def goal_from_text(text: str) -> str | None:
 
 # -- test detection ---------------------------------------------------------------------------
 
-_TEST_RES = [re.compile(p) for p in (
-    r"\bpytest\b", r"\bnpm (?:run )?test\b", r"\bpnpm (?:run )?test\b", r"\byarn (?:run )?test\b",
-    r"\bvitest\b", r"\bjest\b", r"\bgo test\b", r"\bcargo test\b", r"\bgradlew?\b.*\btest",
-    r"\bmake (?:test|check)\b", r"\bxcodebuild\b.*\btest\b", r"\bswift test\b",
-    r"\btirith run\b.*--stage[ =]test\b")]
-_SEGMENT = re.compile(r"&&|\|\||[;|\n]")
-_NOT_RUNNERS = ("grep", "rg", "cat", "echo", "head", "tail", "sed", "ls", "git", "find", "less",
-                "vim", "cd", "which", "man", "wc")
-_FAIL_TEXT = re.compile(r"\b[1-9]\d* (?:failed|errors?)\b|^FAILED\b|\bTests? failed\b", re.M)
+_OPERATORS = re.compile(r"&&|\|\||[;|\n]")
+_ENV_ASSIGN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+_WRAPPERS = {"time", "env", "sudo", "nohup", "exec", "command", "noglob", "nice", "caffeinate"}
+_RUNNER_PREFIXES = {"uv": ("run",), "poetry": ("run",), "pipenv": ("run",), "pdm": ("run",),
+                    "hatch": ("run",), "rye": ("run",), "uvx": (), "npx": (), "bunx": (),
+                    "pnpx": ()}
+_VALUE_OPTS = {"--project", "--with", "--with-requirements", "--python", "-p", "--directory",
+               "--package", "--extra", "--group", "--env-file", "--from", "-C", "--prefix"}
+_PKG_MANAGERS = {"npm", "pnpm", "yarn", "bun"}
+_PASSED_N = re.compile(r"\b(\d+) (?:passed|passing)\b")
+_FAILED_N = re.compile(r"\b(\d+) (?:failed|failing|errors?)\b")
+_FAIL_LINE = re.compile(r"^(?:FAIL\b|--- FAIL\b|FAILED\b)|\bBUILD FAILED\b|\bTests? failed\b", re.M)
+_OK_LINE = re.compile(r"^ok\s|\bBUILD SUCCESSFUL\b|\btest result: ok\b", re.M)
+
+
+def _split_commands(command: str) -> list[list[str]]:
+    """Simple commands of a shell line as word lists (operators outside quotes split)."""
+    text, simple, buf, quote, i = str(command or ""), [], [], None, 0
+    while i < len(text):
+        ch = text[i]
+        if quote:
+            quote = None if ch == quote else quote
+            buf.append(ch)
+        elif ch in "'\"":
+            quote = ch
+            buf.append(ch)
+        else:
+            m = _OPERATORS.match(text, i)
+            if m:
+                simple.append("".join(buf))
+                buf, i = [], m.end()
+                continue
+            buf.append(ch)
+        i += 1
+    simple.append("".join(buf))
+    out = []
+    for part in simple:
+        try:
+            words = shlex.split(part)
+        except ValueError:
+            words = part.split()
+        while words and (_ENV_ASSIGN.match(words[0]) or words[0] in _WRAPPERS):
+            words.pop(0)
+        if words:
+            out.append(words)
+    return out
+
+
+def _skip_opts(words: list[str]) -> list[str]:
+    """Words after leading ``-x`` / ``--opt value`` options."""
+    i = 0
+    while i < len(words) and words[i].startswith("-"):
+        i += 2 if words[i] in _VALUE_OPTS else 1
+    return words[i:]
+
+
+def _runs_tests(words: list[str]) -> bool:
+    """True when one simple command's program (and subcommand) is a test runner."""
+    if not words:
+        return False
+    prog, rest = os.path.basename(words[0]), words[1:]
+    if prog in _RUNNER_PREFIXES:
+        need = _RUNNER_PREFIXES[prog]
+        if rest[:len(need)] != list(need):
+            return False
+        return _runs_tests(_skip_opts(rest[len(need):]))
+    if re.fullmatch(r"python[\d.]*", prog):
+        return rest[:2] == ["-m", "pytest"] or rest[:2] == ["-m", "unittest"]
+    if prog in ("pytest", "py.test", "vitest", "jest"):
+        return True
+    if prog in _PKG_MANAGERS:
+        rest = _skip_opts(rest)
+        if rest[:1] == ["run"]:
+            rest = rest[1:]
+        return bool(rest) and re.fullmatch(r"test(?::\S+)?", rest[0]) is not None
+    if prog in ("go", "cargo", "swift"):
+        return rest[:1] == ["test"]
+    if prog in ("gradle", "gradlew"):
+        return any(not w.startswith("-") and re.search(r"(^|:)(test\w*|\w*Test)$", w) for w in rest)
+    if prog == "make":
+        return any(w in ("test", "check") for w in rest)
+    if prog == "xcodebuild":
+        return any(w in ("test", "test-without-building") for w in rest)
+    if prog == "tirith":
+        return rest[:1] == ["run"] and any(
+            w == "--stage=test" or (w == "--stage" and rest[i + 1:i + 2] == ["test"])
+            for i, w in enumerate(rest))
+    return False
 
 
 def is_test_command(command) -> bool:
-    """True when a shell command runs a test suite (not just mentions one)."""
-    for segment in _SEGMENT.split(str(command or "")):
-        words = segment.split()
-        if not words or words[0] in _NOT_RUNNERS:
-            continue
-        if any(rx.search(segment) for rx in _TEST_RES):
-            return True
-    return False
+    """True when a simple command of the shell line runs a test suite (not just mentions one)."""
+    return any(_runs_tests(words) for words in _split_commands(command))
+
+
+def readable_command(command, workspace=None) -> str:
+    """The shell line without leading ``cd … &&``, paths relative to the workspace."""
+    text = str(command or "").strip()
+    while True:
+        m = re.match(r"cd\s+(?:'[^']*'|\"[^\"]*\"|\S+)\s*(?:&&|;)\s*", text)
+        if not m:
+            break
+        text = text[m.end():]
+    ws = str(workspace or "").rstrip("/")
+    if ws and len(ws) > 1:
+        text = text.replace(ws + "/", "").replace(ws, ".")
+    return text.replace(str(Path.home()) + "/", "~/")
+
+
+def run_outcome(text, failed_flag=False) -> tuple[str, int | None, int | None]:
+    """``(result, passed, failed)`` from a test run's output; the flag only decides when the
+    output has no summary (a pipe to ``tail`` hides the exit code)."""
+    text = str(text or "")
+    passed = sum(int(n) for n in _PASSED_N.findall(text)) if _PASSED_N.search(text) else None
+    failed = sum(int(n) for n in _FAILED_N.findall(text)) if _FAILED_N.search(text) else None
+    if failed or _FAIL_LINE.search(text):
+        return "failed", passed, failed
+    if passed or _OK_LINE.search(text):
+        return "passed", passed, failed
+    return ("failed" if failed_flag else "passed"), passed, failed
 
 
 def _one_line(text, limit: int = 200) -> str:
@@ -139,6 +240,7 @@ class _LaneLog:
         self.calls: dict[str, dict] = {}  # tool call id -> its test row (or {} when not a test)
         self.seen_ids: set[str] = set()
         self.has_tools = False
+        self.workspace = None
 
     # -- one record --------------------------------------------------------------------------
 
@@ -155,21 +257,28 @@ class _LaneLog:
         if call_id:
             self.seen_ids.add(str(call_id))
         if command is not None and is_test_command(command):
-            row = {"at": ts, "command": _one_line(command), "result": "running"}
+            row = {"at": ts, "command": _one_line(readable_command(command, self.workspace)),
+                   "result": "running"}
+            if _one_line(command) != row["command"]:
+                row["full"] = _one_line(command, 400)
             self.tests.append(row)
             if call_id:
                 self.calls[str(call_id)] = row
         if len(self.calls) > 4 * TESTS_MAX:
             self.calls = {k: v for k, v in self.calls.items() if v in self.tests}
 
-    def _finish(self, call_id, failed: bool) -> None:
+    def _finish(self, call_id, failed: bool, text="") -> None:
         row = self.calls.get(str(call_id))
         if row is not None:
-            row["result"] = "failed" if failed else "passed"
+            row["result"], passed, bad = run_outcome(text, failed)
+            for key, n in (("passed", passed), ("failed", bad)):
+                if n is not None:
+                    row[key] = n
 
     def feed(self, record: dict, lane: str, cwd, ts: str) -> None:
         """Turn one JSON record from the log into events/tool counts/test rows."""
         ts = _record_ts(record) or ts
+        self.workspace = cwd
         kind = record.get("type")
         if kind == "assistant":
             self._assistant_tools(record, lane, cwd, ts)
@@ -200,9 +309,8 @@ class _LaneLog:
         content = message.get("content") if isinstance(message, dict) else None
         for block in content if isinstance(content, list) else []:
             if isinstance(block, dict) and block.get("type") == "tool_result":
-                failed = bool(block.get("is_error")) or bool(
-                    _FAIL_TEXT.search(_result_text(block.get("content"))))
-                self._finish(block.get("tool_use_id"), failed)
+                self._finish(block.get("tool_use_id"), bool(block.get("is_error")),
+                             _result_text(block.get("content")))
 
     def _item(self, record, lane, ts) -> None:
         item = record.get("item")
@@ -218,7 +326,7 @@ class _LaneLog:
                            item_id, command)
             code = item.get("exit_code")
             if not started and code is not None:
-                self._finish(item_id, code != 0)
+                self._finish(item_id, code != 0, item.get("aggregated_output"))
         elif item.get("type") == "file_change" and first:
             changes = item.get("changes") if isinstance(item.get("changes"), list) else []
             paths = ", ".join(str(c.get("path")) for c in changes if isinstance(c, dict))
@@ -246,11 +354,15 @@ class _LaneLog:
         code = payload.get("exit_code")
         if call_id and str(call_id) in self.seen_ids:
             if code is not None:
-                self._finish(call_id, code != 0)
+                self._finish(call_id, code != 0, _muse_output(payload))
             return
         self._tool("muse", lane, tool, summary, ts, call_id, command)
         if code is not None:
-            self._finish(call_id, code != 0)
+            self._finish(call_id, code != 0, _muse_output(payload))
+
+
+def _muse_output(payload: dict) -> str:
+    return "\n".join(str(payload.get(k) or "") for k in ("output", "stdout", "stderr", "text"))
 
 
 def _record_ts(record: dict) -> str | None:
