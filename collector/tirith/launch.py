@@ -140,12 +140,17 @@ def pick_class(title: str) -> str:
     return DEFAULT_CLASS
 
 
-def working_lane(lanes: list[dict], project: str, step_id: str, status_of) -> dict | None:
+def working_lane(lanes: list[dict], project: str, step_id: str, status_of, item: str | None = None) -> dict | None:
+    """The working lane of ``project`` in step ``step_id``; with ``item``, only one working on that same item
+    (a lane that names no item holds its whole step). Two lanes on different items of a step are no duplicates."""
     now = datetime.now(timezone.utc)
+    want = roadmap_mod.split_status(item)[0] if item else None
     for lane in lanes:
         if (lane.get("project") == project and str(lane.get("step") or "") == str(step_id)
                 and status_of(lane, now) == "working"):
-            return lane
+            have = roadmap_mod.split_status(str(lane.get("item") or ""))[0]
+            if want is None or not have or have == want:
+                return lane
     return None
 
 

@@ -42,6 +42,7 @@ from tirith import collectlock as collectlock_mod
 from tirith import selfreload as selfreload_mod
 from tirith import inbox as inbox_mod
 from tirith import setup as setup_mod
+from tirith import keepgoing as keepgoing_mod
 from tirith import lanestop as lanestop_mod
 from tirith import managerd as managerd_mod
 from tirith import launch as launch_mod
@@ -235,7 +236,8 @@ def _plan_start(home: Path, args, lane_id: str | None) -> tuple[str | None, str]
         repo = plangate_mod.repo_of(home, args.project)
         if repo is None:
             raise plangate_mod.PlanGateError(f"project '{args.project}' has no repo folder, so it has no plan")
-        return plangate_mod.check_start(home, repo, args.project, step, getattr(args, "item", None), lane_id), ""
+        return plangate_mod.check_start(home, repo, args.project, step, getattr(args, "item", None), lane_id,
+                                        getattr(args, "hero_class", None)), ""
     except plangate_mod.PlanGateError as error:
         return None, f"tirith: plan-item: no agent starts without a plan item: {error}"
 
@@ -448,13 +450,54 @@ def _detached_argv(args, home: Path, lane_id: str, workspace: Path, command: lis
     return [*argv, "--", *command]
 
 
-def _duplicate_lane(home: Path, args) -> dict | None:
-    """The working lane of the same project and step that ``lane run --step`` would duplicate, else None.
+def _duplicate_lane(home: Path, args, item: str | None) -> dict | None:
+    """The working lane of the same project and plan item that ``lane run --step`` would duplicate, else None.
     A lane that continues another (``--fallback-from``: fallback, relaunch, claim re-send) is no duplicate."""
     if not args.step or args.fallback_from:
         return None
     others = [l for l in read_lanes(home) if l.get("id") != args.id]
-    return launch_mod.working_lane(others, args.project, str(args.step), lane_status)
+    return launch_mod.working_lane(others, args.project, str(args.step), lane_status, item)
+
+
+def _run_child(home: Path, lane: dict, lane_id: str, command: list[str], workspace: Path, env: dict,
+               log_path: Path, stdin_text: str | None) -> tuple[int, str]:
+    """One run of the lane's agent process: ``(exit code, final answer)``."""
+    with log_path.open("ab") as log_handle:
+        proc = subprocess.Popen(
+            command, cwd=str(workspace), env=env,
+            stdin=subprocess.PIPE if stdin_text else subprocess.DEVNULL,
+            stdout=log_handle, stderr=subprocess.STDOUT,
+            start_new_session=os.name == "posix")  # its own process group: `lane stop` ends all of it
+        lane = read_json(lane_path(home, lane_id), None) or lane  # keeps what the agent recorded (outcome)
+        lane["pid"] = proc.pid
+        if os.name == "posix":
+            lane["pgid"] = proc.pid
+        write_lane(home, lane)
+        if stdin_text:  # a long prompt (the brief) is read from stdin, not from argv
+            try:
+                proc.stdin.write(stdin_text.encode("utf-8"))
+                proc.stdin.close()
+            except OSError:  # the agent exited before reading it; its exit code tells
+                pass
+        watch = timeouts_mod.supervise(proc, "agent-turn", home=home, what=f"lane {lane_id}")
+        exit_code = proc.wait()
+        ended = watch()
+    answer, _ = final_answer(log_path)
+    if ended["timed_out"]:
+        exit_code, answer = timeouts_mod.EXIT_TIMED_OUT, ended["message"]
+    return exit_code, answer
+
+
+def _resume_child(home: Path, config, args, lane: dict, command: list[str], log_path: Path, answer: str,
+                  text: str) -> tuple[list[str], str | None] | None:
+    """The command (and stdin text) that sends ``text`` to the lane's agent again, or None."""
+    alias = str(args.agent or getattr(args, "as_agent", None) or "")
+    try:
+        brief = Path(str(lane.get("brief") or "")).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        brief = ""
+    return keepgoing_mod.resume_command(config, alias, args.project, command,
+                                        keepgoing_mod.session_id(log_path), text, answer, brief)
 
 
 def _cmd_lane_run(args) -> int:
@@ -477,13 +520,13 @@ def _cmd_lane_run(args) -> int:
     if refusal:
         print(refusal, file=sys.stderr)
         return 3
-    busy = _duplicate_lane(home, args)
-    if busy:
-        print(f"{busy['id']} is already working on step {args.step}", file=sys.stderr)
-        return 3
     item, refusal = _plan_start(home, args, args.id)
     if item is None:
         print(refusal, file=sys.stderr)
+        return 3
+    busy = _duplicate_lane(home, args, item)
+    if busy:
+        print(f"{busy['id']} is already working on item \"{item}\" of step {args.step}", file=sys.stderr)
         return 3
     args.item = item
     interactive = bool(getattr(args, "interactive", False))
@@ -536,29 +579,25 @@ def _cmd_lane_run(args) -> int:
         exit_code = _run_interactive(home, lane, command, workspace, env)
         answer = _last_stop_message(home, lane_id, lane.get("started_at"))
     else:
-        with log_path.open("ab") as log_handle:
-            stdin_text = getattr(args, "stdin_text", None)
-            proc = subprocess.Popen(
-                command, cwd=str(workspace), env=env,
-                stdin=subprocess.PIPE if stdin_text else subprocess.DEVNULL,
-                stdout=log_handle, stderr=subprocess.STDOUT,
-                start_new_session=os.name == "posix")  # its own process group: `lane stop` ends all of it
-            lane["pid"] = proc.pid
-            if os.name == "posix":
-                lane["pgid"] = proc.pid
-            write_lane(home, lane)
-            if stdin_text:  # a long prompt (the brief) is read from stdin, not from argv
-                try:
-                    proc.stdin.write(stdin_text.encode("utf-8"))
-                    proc.stdin.close()
-                except OSError:  # the agent exited before reading it; its exit code tells
-                    pass
-            watch = timeouts_mod.supervise(proc, "agent-turn", home=home, what=f"lane {lane_id}")
-            exit_code = proc.wait()
-            ended = watch()
-        answer, _ = final_answer(log_path)
-        if ended["timed_out"]:
-            exit_code, answer = timeouts_mod.EXIT_TIMED_OUT, ended["message"]
+        stdin_text = getattr(args, "stdin_text", None)
+        rounds, missing = 0, []
+        while True:
+            exit_code, answer = _run_child(home, lane, lane_id, command, workspace, env, log_path, stdin_text)
+            stopped = lanestop_mod.marker(read_json(lane_path(home, lane_id), None) or {})
+            if stopped or exit_code != 0 or not (args.agent or getattr(args, "as_agent", None)):
+                break
+            missing = keepgoing_mod.gaps(home, lane, proj.repo, answer)
+            if not missing or rounds >= keepgoing_mod.MAX_ROUNDS:
+                break
+            rounds += 1
+            keepgoing_mod.note_round(home, lane_id, rounds, missing)
+            resumed = _resume_child(home, config, args, lane, command, log_path, answer,
+                                    keepgoing_mod.message(missing, rounds))
+            if resumed is None:
+                break
+            command, stdin_text = resumed
+        if missing and not stopped and exit_code == 0:
+            keepgoing_mod.queue_gaps(home, lane, missing)
     stopped = lanestop_mod.marker(read_json(lane_path(home, lane_id), None) or {})
     if stopped:  # `tirith lane stop`: failed, with who stopped it and why
         exit_code, answer = exit_code or 1, lanestop_mod.report_for(stopped["by"], stopped.get("reason"))
@@ -1315,9 +1354,6 @@ def launch_step(home: Path, project_id: str, step_id: str, agent: str | None = N
                                          "(they wait for the owner or for a date)")
         raise launch_mod.LaunchError(f"step {step['id']} ({title}) is already done" if step["items"]
                                      else f"step {step['id']} ({title}) has no items to finish")
-    busy = launch_mod.working_lane(read_lanes(home), project_id, step["id"], lane_status)
-    if busy:
-        raise launch_mod.LaunchError(f"step {step['id']} already has a working lane: {busy['id']}")
     failed = manifest_mod.check(repo, config.words_for(proj, default_words()))
     if failed:
         raise launch_mod.LaunchError(
@@ -1329,6 +1365,9 @@ def launch_step(home: Path, project_id: str, step_id: str, agent: str | None = N
         item = plangate_mod.check_start(home, repo, project_id, step["id"], item)
     except plangate_mod.PlanGateError as error:
         raise launch_mod.LaunchError(f"no agent starts without a plan item: {error}")
+    busy = launch_mod.working_lane(read_lanes(home), project_id, step["id"], lane_status, item)
+    if busy:
+        raise launch_mod.LaunchError(f"that item of step {step['id']} already has a working lane: {busy['id']}")
     lane_id = launch_mod.lane_id_for(title, {str(l["id"]) for l in read_lanes(home)}, repo)
     brief_path = home / "briefs" / f"{lane_id}.md"
     brief = launch_mod.build_brief(title, intro, open_items, step["id"], item)
@@ -1508,6 +1547,21 @@ def _cmd_plan_add(args) -> int:
         print(f"tirith plan add: {error}", file=sys.stderr)
         return 3
     print(f"added to step {args.step}: {text}")
+    return 0
+
+
+def _cmd_plan_done(args) -> int:
+    home = _home(args)
+    repo = plangate_mod.repo_of(home, args.project)
+    if repo is None:
+        print(f"tirith plan done: unknown project '{args.project}'", file=sys.stderr)
+        return 3
+    try:
+        sha = plangate_mod.mark_done(home, repo, args.project, str(args.step), args.item, args.commit)
+    except plangate_mod.PlanGateError as error:
+        print(f"tirith plan done: {error}", file=sys.stderr)
+        return 3
+    print(f"step {args.step}: ticked (hecho: {sha})")
     return 0
 
 
@@ -2443,6 +2497,13 @@ def build_parser() -> argparse.ArgumentParser:
     pl_rep.add_argument("--add", action="append", default=[], help="a new item for the same step (repeatable)")
     pl_rep.add_argument("--reason", default=None, help="why (needed for blocked)")
     pl_rep.set_defaults(func=_cmd_plan_report)
+    pl_done = plan_sub.add_parser("done", parents=[common],
+                                  help="tick an item whose work is already on main (the manager names the commit)")
+    pl_done.add_argument("--project", required=True)
+    pl_done.add_argument("--step", required=True, help="step number")
+    pl_done.add_argument("--item", required=True, help="the exact text of the item")
+    pl_done.add_argument("--commit", required=True, help="the commit on main that did the work")
+    pl_done.set_defaults(func=_cmd_plan_done)
 
     inbox = sub.add_parser("inbox", parents=[common], help="the owner's requests on plan steps")
     inbox_sub = inbox.add_subparsers(dest="inbox_command", required=True)
