@@ -528,6 +528,8 @@ def _cmd_lane_run(args) -> int:
     write_lane(home, lane)
     began = time.monotonic()
     env = _wrapper_path_env(home, lane_id, lane["token"], args.project)
+    if args.agent:
+        env = agentrun_mod.child_env(config, args.agent, args.project, env)
     if interactive:
         exit_code = _run_interactive(home, lane, command, workspace, env)
         answer = _last_stop_message(home, lane_id, lane.get("started_at"))
