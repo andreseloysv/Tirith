@@ -1295,9 +1295,11 @@ def _worker_alias(config, project_id: str, step_id: str) -> str | None:
     return alias if alias in config.agents else None
 
 
-def relaunch_lane(home: Path, lane: dict, alias: str, by_tirith: bool = False) -> str:
+def relaunch_lane(home: Path, lane: dict, alias: str, by_tirith: bool = False, note: str | None = None) -> str:
     """Start the brief of a failed ``lane`` again with agent ``alias``; returns the new lane id. The
-    worktree is kept when it has no uncommitted changes, else a new one is made from the repo."""
+    worktree is kept when it has no uncommitted changes, else a new one is made from the repo. With a
+    ``note`` (a failed claim check) the brief gets the note appended and the new lane continues the old
+    lane's work: it is committed on the old branch and the new worktree starts from it."""
     config, proj = _project_or_exit(home, str(lane.get("project") or ""))
     repo = projects_mod.real(proj.repo) if proj.repo else None
     brief = Path(str(lane.get("brief") or ""))
@@ -1306,11 +1308,19 @@ def relaunch_lane(home: Path, lane: dict, alias: str, by_tirith: bool = False) -
     title = str(lane.get("feature") or lane["id"])
     lane_id = launch_mod.lane_id_for(title, {str(l["id"]) for l in read_lanes(home)}, repo)
     old = Path(str(lane.get("workspace") or ""))
-    dirty = subprocess.run(["git", "-C", str(old), "status", "--porcelain"], capture_output=True, text=True)
-    if old.is_dir() and dirty.returncode == 0 and not dirty.stdout.strip():
-        workspace = old
+    if note:
+        subprocess.run(["git", "-C", str(old), "add", "-A"], capture_output=True)
+        subprocess.run(["git", "-C", str(old), "commit", "-q", "-m", f"Lane {lane['id']}: work before the claim check"],
+                       capture_output=True)
+        workspace = launch_mod.create_worktree(repo, lane_id, base=f"lane/{lane['id']}")
+        brief = brief.with_name(f"{brief.stem}-{lane_id}.md")
+        brief.write_text(Path(str(lane["brief"])).read_text(encoding="utf-8") + "\n\n" + note, encoding="utf-8")
     else:
-        workspace = launch_mod.create_worktree(repo, lane_id)
+        dirty = subprocess.run(["git", "-C", str(old), "status", "--porcelain"], capture_output=True, text=True)
+        if old.is_dir() and dirty.returncode == 0 and not dirty.stdout.strip():
+            workspace = old
+        else:
+            workspace = launch_mod.create_worktree(repo, lane_id)
     step = lane.get("step")
     command = launch_mod.agent_command(config, alias, brief, workspace, str(lane.get("project") or ""), step)
     argv = launch_mod.lane_run_argv(
