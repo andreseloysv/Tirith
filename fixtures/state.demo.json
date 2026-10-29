@@ -3535,6 +3535,15 @@
       "lanes": []
     }
   ],
+  "says": [
+    {
+      "id": "in-5a1d0c11",
+      "at": "2026-10-28T19:38:00Z",
+      "project": "tirith",
+      "text": "The commit guard is intact in all three projects. Nothing else needs you right now.",
+      "from": "manager"
+    }
+  ],
   "answered_waits": [
     {
       "id": "w-2",
