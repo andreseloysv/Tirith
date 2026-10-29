@@ -253,8 +253,6 @@ def unrelated(message: str, files: list[str]) -> bool:
 
 def _rerun(home: Path, config: Config, lane_id: str, spawn: Callable) -> None:
     argv = [*launch_mod.tirith_argv(home), "lane", "review", lane_id]
-    if not config.review_auto_merge:
-        argv.append("--tests-only")
     spawn(argv, home, home / "logs" / f"{lane_id}.review.log")
 
 

@@ -146,19 +146,40 @@ def test_a_retry_that_passes_is_settled_too(env, home: Path) -> None:
     assert not [r for r in owner_items(home) if r["id"].startswith("review-web-panel")]
 
 
-def test_auto_merge_off_only_tests_and_offers_merge_or_drop(env, home: Path) -> None:
+def test_merging_is_never_an_owner_question(env, home: Path) -> None:
     repo = env
     with (home / "config.toml").open("a") as handle:
-        handle.write("\n[review]\nauto_merge = false\n")
+        handle.write("\n[review]\nauto_merge = false\n")  # no longer a switch: a passing lane always merges
     _lane(home, repo)
     spawn = Spawner(home, repo)
     cycle(home, spawn)
     cycle(home, spawn)
-    assert "--tests-only" in spawn.calls[0]
-    assert not (repo / "feature.txt").exists()
-    (item,) = [i for i in owner_items(home) if i["id"].startswith("review-web-panel")]
-    assert [a["label"] for a in item["actions"]] == ["Merge", "Drop"]
-    assert len(asks_mod.queue_items(home, only_open=True)) == 1
+    assert "--tests-only" not in spawn.calls[0]
+    assert (repo / "feature.txt").exists()
+    assert not [i for i in owner_items(home) if i["id"].startswith("review-web-panel")]
+
+
+def test_a_lane_left_ready_by_a_tests_only_run_is_merged(env, home: Path) -> None:
+    repo = env
+    _lane(home, repo)
+    assert main(["lane", "review", "web-panel", "--tests-only"]) == 0
+    spawn = Spawner(home, repo)
+    cycle(home, spawn)
+    cycle(home, spawn)
+    assert (repo / "feature.txt").exists() and "--tests-only" not in spawn.calls[0]
+    assert owner_items(home) == []
+
+
+def test_a_ready_result_that_settles_goes_to_the_manager_queue(env, home: Path) -> None:
+    repo = env
+    _lane(home, repo)
+    assert main(["lane", "review", "web-panel", "--tests-only"]) == 0
+    lane = read_json(lane_path(home, "web-panel"), None)
+    review = review_mod.public(lane, repo)
+    autoreview_mod.settle(home, load_config(home), lane, review, {}, datetime.now(timezone.utc), repo)
+    assert owner_items(home) == []
+    (queued,) = asks_mod.queue_items(home, only_open=True)
+    assert "not merged" in queued["text"] and "tirith lane review web-panel" in queued["text"]
 
 
 def test_drop_removes_worktree_and_branch(env, home: Path, capsys) -> None:

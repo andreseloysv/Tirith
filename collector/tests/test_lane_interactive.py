@@ -13,6 +13,7 @@ import pytest
 
 from conftest import make_hooks_mutable
 from test_lane_run import _lane_run_setup
+from tirith import asks as asks_mod
 from tirith.cli import main
 from tirith.store import read_json, read_jsonl
 
@@ -55,7 +56,8 @@ def test_interactive_failure_ends_lane(home: Path, tmp_path: Path, capsys,
         make_hooks_mutable(repo)
     assert code == 4
     assert read_json(home / "lanes" / "bad.json", {})["result"] == "failed"
-    assert [w["id"] for w in read_jsonl(home / "waits.jsonl")] == ["lane-bad"]
+    assert not read_jsonl(home / "waits.jsonl")
+    assert [q["id"] for q in asks_mod.queue_items(home, only_open=True)] == ["sq-lane-bad"]
 
 
 @pytest.mark.parametrize("name,exit_code", [("SIGINT", 0), ("SIGTERM", 0), ("SIGHUP", 7)])
