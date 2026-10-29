@@ -21,7 +21,8 @@ GIT_EVENTS = ("pre-commit", "commit-msg", "pre-push")  # the hooks the guard ins
 GIT_HOOKS_PIPELINE = "git-hooks"
 RULE_ACTIONS = ("block", "warn")
 BUILT_IN_RULES = ("subagent-tool", "agent-cli", "no-verify", "hooks-path", "git-hooks", "settings-edit", "roadmap-edit", "raw-stage",
-                  "lane-brief", "project-check", "commit-guard")
+                  "lane-brief", "project-check", "commit-guard", "workspace-write", "no-secrets", "no-servers",
+                  "own-processes")
 _KIND_RE = re.compile(r"build|compile|test|check|lint|deploy|release|publish|ship")
 _KIND_ALIASES = {"compile": "build", "check": "test", "lint": "test",
                  "release": "deploy", "publish": "deploy", "ship": "deploy"}

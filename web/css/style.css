@@ -1017,6 +1017,12 @@ button.vwho:hover b { text-decoration: underline; }
 .livesteps .ls-line { flex-wrap: wrap; min-width: 0; }
 .livesteps .ls-dh { overflow-wrap: anywhere; }
 .mc-pics, .mc-strip { max-width: 100%; }
+/* the chat never scrolls sideways: every box in it can shrink, long words and file names wrap or are cut */
+.mchat { min-width: 0; max-width: 100%; overflow-x: hidden; }
+.mc-log { overflow-x: hidden; } .mc-comp, .mc-box, .mc-row, .mc-strip, .mc-pics { min-width: 0; max-width: 100%; box-sizing: border-box; }
+.mc-m, .mc-m .mc-b, .mc-m.turn { min-width: 0; box-sizing: border-box; }
+.mc-b pre, .mc-b code { max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; } .mc-b table { display: block; max-width: 100%; overflow-x: auto; }
+.mc-b img { max-width: 100%; height: auto; } .mc-box textarea { box-sizing: border-box; max-width: 100%; }
 
 /* Settings sits in the same page margin as the header */
 .msettings { padding: 4px var(--page-pad) 40px; }
