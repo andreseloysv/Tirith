@@ -16,7 +16,7 @@ background commands; a test stage ran far longer than usual and nobody noticed.
 | `git-commit` | 180 s | 30 s | 900 s | a commit, with the checks that run before it |
 | `stage` | 1800 s | 60 s | 7200 s | a build or test stage (`stage:<name>` keeps its own history) |
 | `agent-bash` | 120 s | 10 s | 600 s | a shell command an agent runs |
-| `agent-turn` | 3600 s | 300 s | 21600 s | one run of an agent in a lane (`tirith lane run`) |
+| `agent-turn` | 28800 s | 300 s | 86400 s | one run of an agent in a lane (`tirith lane run`): the hard cap, see Idle limits |
 | `muse` | 600 s | 60 s | 3600 s | a request to the model |
 | `cargo` | 1800 s | 60 s | 7200 s | a cargo build or test |
 | `npm` | 900 s | 60 s | 3600 s | an npm install or script |
@@ -29,6 +29,30 @@ The value in force for a class, first match wins:
 3. **learned**: `clamp(p95 of the recorded durations x 3, min, max)` once 5 durations are recorded
    (`stage:<name>` uses its own durations, else the class's);
 4. **default**.
+
+## Idle limits
+
+An agent run and a stage are not cut because they last long, only because nothing happens. `agent-turn` and
+`stage` have an idle limit next to their hard cap (the table above):
+
+| class | idle default | min | max |
+|---|---|---|---|
+| `agent-turn` | 1200 s | 60 s | 7200 s |
+| `stage` | 900 s | 60 s | 3600 s |
+
+Progress is any of: a byte written to the lane log / stage output, a file changed in the worktree (build output
+and `.git` skipped), CPU used by the processes of the run's group. The run is stopped (SIGTERM, then SIGKILL on
+the group) after the idle limit without progress, or at the hard cap; the report says which
+(`no progress for N s` or `timed out after N s`). Short commands (git, npm, agent shell commands) keep the plain
+deadline.
+
+The idle limit in force: `[timeouts] <class>-idle` in `config.toml`, else `tirith timeout set --class X --idle N`,
+else learned (p95 of the longest silences of finished runs x 3, never below the default), else the default.
+`tirith timeout set` takes `--cap N` (or `--seconds N`), `--idle N`, or both. Each change is a `decision` flow.
+
+A headless agent lane stopped for silence that has work in its worktree (uncommitted changes, or commits since it
+started) is resumed in the same session with "You were idle for N min; continue or report", up to 3 attempts
+(`idle_resumes` on the lane); after them, or without work, the lane fails and reaches the manager as before.
 
 ## History file
 
@@ -79,8 +103,8 @@ their commands get the runner's timeout where they run through Tirith.
 
 ## Settings and self-check
 
-`state.timeouts`: one row per class `{class, label, words, seconds, source (default|learned|agent|owner|config),
-default, min, max, reason?, samples, last}`. Settings > Timeouts shows them in plain words (read-only; the
+`state.timeouts`: one row per class `{class, label, words, seconds, source (default|learned|agent|owner|config), idle ({seconds, source, min, max} or null),
+default, min, max, reason?, samples, last}`. Settings > Timeouts shows them in plain words, the idle limit above the hard cap (read-only; the
 owner fixes a value in `config.toml`).
 
 Self-check `timeouts`: 3 timeouts of one class within an hour put one manager queue item (kind `selfcheck`) with
