@@ -23,6 +23,7 @@ from tirith import fallback as fallback_mod
 from tirith import flows as flows_mod
 from tirith import inbox as inbox_mod
 from tirith import launch as launch_mod
+from tirith import roadmap as roadmap_mod
 from tirith.home import Config, now_iso, parse_iso
 
 STUCK_AFTER = 2          # lanes in a row that ended without ticking anything
@@ -32,7 +33,6 @@ KEPT_LANES = 200
 STARTED_SHOWN = 50
 REVIEW_BUSY = ("pending", "running", "ready", "tests-failed", "merge-failed")
 REVIEW_OPEN = ("pending", "running")
-_URL = re.compile(r"https?://[^\s)>\]`]+")
 
 
 def _own(state: dict) -> dict:
@@ -79,21 +79,19 @@ def _switch(home: Path, state: dict, now: datetime) -> bool:
 
 def _owner_item(home: Path, project: dict, step: dict, item: dict, at: str) -> None:
     from tirith.dispatch import add_owner_item  # late: dispatch imports this module
-    text = item["text"]
-    shown = f"{project['name']} step {step['id']} ({step['title']}): {text}"
-    command = actions_mod.find_owner_command(text)
-    url = _URL.search(text)
+    parts = roadmap_mod.owner_parts(item["text"])
     actions = options = link = None
-    if command:
+    if parts["command"]:
         action_id = "ac-" + hashlib.sha1(item["owner_item"].encode()).hexdigest()[:8]
-        actions = [actions_mod.register_generated(home, project["id"], action_id, f"Run {command}"[:60],
-                                                  command, project.get("folder"))]
+        actions = [actions_mod.register_generated(home, project["id"], action_id, parts["label"],
+                                                  parts["command"], project.get("folder"))]
         options = []
-    elif url:
-        link, options = url.group(0).rstrip(".,;"), [{"label": "Done", "value": "done"}]
+    elif parts["url"]:
+        link, options = parts["url"], [{"label": "Done", "value": "done"}]
     else:
         options = [{"label": "Done", "value": "done"}, {"label": "Not now", "value": "later"}]
-    add_owner_item(home, item["owner_item"], project["id"], shown, options, at, actions, link=link)
+    add_owner_item(home, item["owner_item"], project["id"], parts["sentence"], options, at, actions, link=link,
+                   reason=parts["reason"])
 
 
 def _owner_items(home: Path, state: dict, projects: list[dict], at: str) -> bool:

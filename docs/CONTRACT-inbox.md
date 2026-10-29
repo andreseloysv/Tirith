@@ -315,12 +315,19 @@ copy, a link or a text box is not enough.
 - `dispatch.add_owner_item` raises on an empty option list.
 - Items the collector generates carry options or actions: lane failures (`Retry`, `Show the log`,
   `Drop it`), dispatcher items (`Fix it`/`Try again`, `Wait`/...), guard checks (below), and violations,
-  brain-detected waits and room waits (`Let the manager handle it|manager`, `Got it|ack`).
+  brain-detected waits and room waits (`Got it|ack`).
 - The collector enforces it again on the final list (`_enforce_cta`): an item without one (an old row of
   `waits.jsonl`, a future generator) is **not** shown. It becomes one manager queue item
   (`kind: "no-call-to-action"`, id `sq-cta-<wait id>`, added once).
 - A reply to a generated item (`violation-*`, `brain-*`, `room-*`) answers it: it moves to
-  `answered_waits`. The value `manager` also adds a manager queue item (`kind: "owner-handoff"`).
+  `answered_waits`.
+- **Your turn is only for what the manager refuses or cannot do.** There is no "Let the manager handle it" (or
+  any hand-back) option anywhere: the manager's work is the default. An owner item raised for a roadmap item
+  states why in `reason` (a key of `asks.OWNER_REASONS`: `security`, `credentials`, `account`, `device`,
+  `payment`, `legal`) and `reason_tag` ("Needs you: installs on your Mac"), both passed through on the wait and
+  shown as a chip on the card. `dispatch.add_owner_item(..., reason=)` refuses an unknown key.
+- **Text matches buttons.** `add_owner_item` rewrites a text that promises a button the item lacks ("botón
+  Run", "click Run", "Run button", same for Open / Done; `asks.missing_buttons` / `drop_button_claims`).
 - The web card shows the item's Run actions (`web/js/actions.js`) between its option buttons and the text box.
 
 ### Guard items (`guard-<project>`)
