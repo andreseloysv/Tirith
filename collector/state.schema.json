@@ -556,6 +556,16 @@
           "type": "string",
           "description": "Lane id of the agent that spawned this one, or 'steward'."
         },
+        "review": {
+          "type": ["object", "null"],
+          "description": "Review and merge of a lane started by `tirith launch`; null for other lanes.",
+          "required": ["status"],
+          "properties": {
+            "status": {"enum": ["pending", "running", "tests-failed", "ready", "merge-failed", "merged"]},
+            "at": {"type": "string"},
+            "message": {"type": "string"}
+          }
+        },
         "step": {
           "type": ["string", "null"],
           "description": "Roadmap step id this lane works on (tirith lane run --step)."

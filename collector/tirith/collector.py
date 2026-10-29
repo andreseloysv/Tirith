@@ -30,6 +30,7 @@ from tirith import roadmap as roadmap_mod
 from tirith import hooks as hooks_mod
 from tirith import inbox as inbox_mod
 from tirith import launch as launch_mod
+from tirith import review as review_mod
 from tirith.logview import entries_from_events, log_entries
 from tirith import projects as projects_mod
 from tirith.rooms import RoomsService
@@ -770,6 +771,7 @@ class Collector:
                 "request": lane.get("request") if isinstance(lane.get("request"), dict) else None,
                 "parent": str(lane.get("parent") or "steward"),
                 "step": str(lane["step"]) if lane.get("step") else None,
+                "review": review_mod.public(lane, (entry_by_id[lane_project].folder if lane_project in entry_by_id else None)),
                 **act,
             })
             for wait in self._brain_waits({**lane, "project": lane_project}):
