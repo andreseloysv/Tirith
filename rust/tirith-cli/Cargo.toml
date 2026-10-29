@@ -3,6 +3,7 @@ name = "tirith-cli"
 version = "0.1.0"
 description = "Tirith command line (tirith-rs while the Python tirith is live)"
 edition = "2021"
+license = "MIT"
 
 [[bin]]
 name = "tirith-rs"

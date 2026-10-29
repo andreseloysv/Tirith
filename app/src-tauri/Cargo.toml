@@ -3,6 +3,7 @@ name = "tirith-app"
 version = "0.1.0"
 description = "Tirith desktop app"
 edition = "2021"
+license = "MIT"
 
 [lib]
 name = "tirith_app_lib"
