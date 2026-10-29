@@ -1444,7 +1444,11 @@
         }
       ],
       "step": "2",
-      "request_id": null
+      "request_id": null,
+      "ran": {
+        "model": "model-large",
+        "effort": "high"
+      }
     },
     {
       "id": "w1-data",
@@ -1621,7 +1625,20 @@
         }
       ],
       "step": null,
-      "request_id": null
+      "request_id": null,
+      "ran": {
+        "model": "model-small",
+        "effort": "medium"
+      },
+      "usage": {
+        "input_tokens": 18200,
+        "output_tokens": 9400,
+        "cache_tokens": 212000,
+        "cost_usd": 0.84,
+        "model": "model-small",
+        "turns": 23,
+        "duration_s": 410
+      }
     },
     {
       "id": "icon-2",
@@ -1746,7 +1763,11 @@
         }
       ],
       "step": null,
-      "request_id": null
+      "request_id": null,
+      "ran": {
+        "model": "model-small",
+        "effort": "medium"
+      }
     },
     {
       "id": "t-world",
@@ -1853,7 +1874,11 @@
         }
       ],
       "step": "3",
-      "request_id": "in-c20d85a4"
+      "request_id": "in-c20d85a4",
+      "ran": {
+        "model": "model-small",
+        "effort": "medium"
+      }
     },
     {
       "id": "t-collector",
@@ -1962,7 +1987,11 @@
         }
       ],
       "step": null,
-      "request_id": null
+      "request_id": null,
+      "ran": {
+        "model": "model-small",
+        "effort": "medium"
+      }
     },
     {
       "id": "w7-a11y",
@@ -2015,7 +2044,11 @@
         }
       ],
       "step": "2",
-      "request_id": null
+      "request_id": null,
+      "ran": {
+        "model": "model-small",
+        "effort": "low"
+      }
     },
     {
       "id": "w8-shots",
@@ -2061,7 +2094,11 @@
         }
       ],
       "step": "3",
-      "request_id": null
+      "request_id": null,
+      "ran": {
+        "model": "model-small",
+        "effort": "medium"
+      }
     }
   ],
   "pipelines": [
@@ -2872,5 +2909,55 @@
       "status": "open",
       "text": "- Decide whether the token is rotated before the release."
     }
-  ]
+  ],
+  "models": {
+    "manager": {
+      "agent": "anthropic",
+      "model": "model-large",
+      "effort": "high",
+      "settings": {
+        "path": "~/.config/agent/settings.json",
+        "model": "model-small",
+        "effort": null
+      },
+      "in_sync": false,
+      "effort_key": false
+    },
+    "workers": {
+      "agent": "anthropic",
+      "model": "model-small",
+      "effort": "medium"
+    },
+    "projects": {
+      "chromasol": {
+        "model": "model-large"
+      }
+    },
+    "steps": {
+      "tirith/3": {
+        "effort": "low"
+      },
+      "chromasol/2": {
+        "model": "model-large",
+        "effort": "high"
+      }
+    },
+    "choices": [
+      "model-large",
+      "model-small",
+      "model-mini"
+    ],
+    "efforts": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+    ],
+    "agents": [
+      "anthropic",
+      "muse"
+    ],
+    "pending": []
+  }
 }

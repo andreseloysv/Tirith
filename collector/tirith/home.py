@@ -101,6 +101,7 @@ class Config:
     dispatch_enabled: bool = True  # [dispatch] enabled: Tirith itself handles the owner's requests
     dispatch_auto_launch: bool = True  # [dispatch] auto_launch: a "finish" request starts a lane
     steward_session_cwd: str | None = None  # [steward] session_cwd: the folder the steward runs in
+    models: dict = field(default_factory=dict)  # [models]: manager, workers (+ overrides), choices
 
     def room(self, room_id: str) -> RoomConfig | None:
         for room in self.rooms:
@@ -199,6 +200,8 @@ def load_config(home: Path) -> Config:
     launch = raw.get("launch") if isinstance(raw.get("launch"), dict) else {}
     if isinstance(launch.get("command"), (str, list)) and launch["command"]:
         cfg.launch_command = launch["command"]
+    if isinstance(raw.get("models"), dict):
+        cfg.models = raw["models"]
     rooms_raw = raw.get("rooms")
     if isinstance(rooms_raw, list):
         for item in rooms_raw:

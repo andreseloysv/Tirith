@@ -39,7 +39,7 @@
   function applyHash(initial) {
     var o = parseHash();
     filt.session = o.session || ''; filt.project = o.project || ''; filt.q = o.q || '';
-    filt.view = /^(overview|pipelines|agents|flow)$/.test(o.view) ? o.view : 'overview';
+    filt.view = /^(overview|pipelines|agents|flow|settings)$/.test(o.view) ? o.view : 'overview';
     filt.mode = o.mode === 'list' || o.mode === 'tree' ? o.mode : 'kanban';
     if (o.open) {
       T.ui.selRun = o.open; T.ui.openAgent = o.open; T.ui.edge = o.open === 'edge' ? 'first' : null;

@@ -174,6 +174,21 @@
         }
       }
     },
+    "models": {
+      "description": "Model and effort of the manager and of the workers, with the lists the Settings page offers. See docs/CONTRACT-models.md.",
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "manager": {"type": "object", "additionalProperties": true},
+        "workers": {"type": "object", "additionalProperties": true},
+        "projects": {"type": "object", "additionalProperties": true},
+        "steps": {"type": "object", "additionalProperties": true},
+        "choices": {"type": "array", "items": {"type": "string"}},
+        "efforts": {"type": "array", "items": {"type": "string"}},
+        "agents": {"type": "array", "items": {"type": "string"}},
+        "pending": {"type": "array", "items": {"type": "string"}}
+      }
+    },
     "launch": {
       "type": "object",
       "additionalProperties": true,
@@ -794,6 +809,11 @@
           }
         },
         "usage": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/usage"}]},
+        "ran": {
+          "description": "The model and effort the lane was started with (docs/CONTRACT-models.md).",
+          "oneOf": [{"type": "null"}, {"type": "object", "additionalProperties": true,
+                    "properties": {"model": {"type": ["string", "null"]}, "effort": {"type": ["string", "null"]}}}]
+        },
         "diff": {
           "description": "Full patch of the lane, stored at lane end (docs/CONTRACT-agents.md).",
           "oneOf": [{"type": "null"}, {"$ref": "#/$defs/diff"}]
