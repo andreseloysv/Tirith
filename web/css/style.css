@@ -291,3 +291,33 @@ button.fhead { border-radius: 12px; }
 .fsvg { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
 .fpills { position: absolute; left: 0; top: 0; }
 .fnode.open { z-index: 1; }
+
+/* ===== Plan (Overview) ===== */
+.pcard { padding: 6px 18px 8px; margin-bottom: 12px; }
+.phead { display: flex; align-items: center; gap: 12px; padding: 10px 0 8px; }
+.phead b { font-size: 14px; }
+.ptotal { flex: 1; height: 6px; min-width: 60px; }
+.pcnt { color: var(--mut); font-variant-numeric: tabular-nums; font-size: 12px; white-space: nowrap; }
+.pcnt.big { font-size: 13px; color: var(--fg); font-weight: 500; }
+.pcd { font-size: 12px; color: var(--mut); background: rgba(255,255,255,.7); border: 1px solid rgba(255,255,255,.9); border-radius: 10px; padding: 0 9px; line-height: 20px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pcd.hot { color: var(--red); background: #fdecec; border-color: #f8d0d2; font-weight: 500; }
+.psteps { list-style: none; margin: 0; padding: 0; }
+.pstep { border-top: 1px solid rgba(120,135,160,.14); }
+.prow { display: flex; align-items: center; gap: 8px; }
+.ptog { flex: 1; min-width: 0; display: grid; grid-template-columns: 18px minmax(0, 1fr) 110px 38px; align-items: center; gap: 12px; padding: 8px 0; text-align: left; border-radius: 6px; }
+.ptog:hover .ptit { color: var(--blue); }
+.pico { display: inline-flex; } .pico.pulse svg { animation: pulse 1.4s ease-in-out infinite; }
+.ptit { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pn { color: var(--mut); font-variant-numeric: tabular-nums; }
+.pstep.done .ptit { color: var(--mut); } .pstep.todo .ptit, .pstep.empty .ptit { color: #4b5563; }
+.pstep.active .ptit { font-weight: 500; }
+.pbar { height: 4px; } .pcnt { text-align: right; }
+.pavas { display: flex; flex: none; min-width: 22px; }
+.pava { display: inline-flex; margin-left: -6px; border-radius: 50%; box-shadow: 0 0 0 2px #fff; } .pava:first-child { margin-left: 0; }
+.pava:hover { transform: translateY(-1px); }
+.pitems { list-style: none; margin: 0 0 8px 30px; padding: 0 0 0 12px; border-left: 2px solid rgba(120,135,160,.16); }
+.pitems li { display: flex; gap: 8px; align-items: baseline; padding: 3px 0; font-size: 12.5px; }
+.pitems li.ok { color: var(--mut); } .pitems li.ok .pi { color: var(--green); }
+.pitems .pi { display: inline-flex; flex: none; transform: translateY(2px); } .pitems li.none { color: var(--mut); }
+.pitems code { font-size: 11.5px; }
+.pcard.compact { padding: 4px 16px 6px; } .pcard.compact .ptog { padding: 6px 0; }
