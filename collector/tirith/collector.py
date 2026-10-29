@@ -30,6 +30,7 @@ from tirith import manifest as manifest_mod
 from tirith import setup as setup_mod
 from tirith import roadmap as roadmap_mod
 from tirith import hooks as hooks_mod
+from tirith import autopilot as autopilot_mod
 from tirith import dispatch as dispatch_mod
 from tirith import actions as actions_mod
 from tirith import inbox as inbox_mod
@@ -944,7 +945,7 @@ class Collector:
                 "folder": str(folder) if folder else None, "auto": False,
                 "architecture": self.architecture_for(proj),
                 "guard": {"ok": guard_ok, "problems": problems, **({"disabled": True} if not proj.guard else {})},
-                "roadmap": roadmap_mod.build(folder, proj.id, agent_rows),
+                "roadmap": roadmap_mod.build(folder, proj.id, agent_rows, now.astimezone().date()),
             })
         for entry in entries:
             if entry.id in known_ids:
@@ -955,7 +956,7 @@ class Collector:
                 "folder": str(entry.folder) if entry.folder else None, "auto": True,
                 "architecture": self.architecture_for(ProjectConfig(id=entry.id, name=entry.name)),
                 "guard": {"ok": False, "problems": ["auto-discovered folder: no commit guard configured"]},
-                "roadmap": roadmap_mod.build(entry.folder, entry.id, agent_rows),
+                "roadmap": roadmap_mod.build(entry.folder, entry.id, agent_rows, now.astimezone().date()),
             })
         git_runs = self._git_hook_events(resolve)
         local_runs = self._pipelines(sorted(events + git_runs, key=lambda e: str(e.get("at") or ""))
@@ -1059,6 +1060,7 @@ class Collector:
             "loose_events": loose_events,
             "violations": violations,
             "inbox": inbox_rows,
+            "autopilot": autopilot_mod.public(self.home, self.config),
             "launch": {"token": launch_mod.launch_token(self.home),
                        "available": launch_mod.handler_installed()},
             "models": models_mod.state(self.config, [
@@ -1071,7 +1073,7 @@ class Collector:
         """``state.inbox``; the dispatcher handles ``finish``, an unanswered question gets one brain answer
         (at once when the dispatcher is on, else after ``AUTO_ANSWER_AFTER_S``)."""
         rows = dispatch_mod.run(self.home, self.config, now, agents=agents, lanes=lanes or [],
-                                status_of=lane_status)
+                                status_of=lane_status, projects=projects)
         wait_s = 0 if self.config.dispatch_enabled else inbox_mod.AUTO_ANSWER_AFTER_S
         if self.worker.enabled:
             by_project = {p["id"]: p for p in projects}

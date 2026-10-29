@@ -100,6 +100,8 @@ class Config:
     launch_command: str | list[str] | None = None  # [launch] command template: {brief}, {workspace}
     dispatch_enabled: bool = True  # [dispatch] enabled: Tirith itself handles the owner's requests
     dispatch_auto_launch: bool = True  # [dispatch] auto_launch: a "finish" request starts a lane
+    autopilot_enabled: bool = True  # [autopilot] enabled: Tirith starts a lane on every ready plan step
+    autopilot_max_parallel: int = 4  # [autopilot] max_parallel: autopilot lanes running at once
     review_auto_merge: bool = True  # [review] auto_merge: a passing lane is merged; false = tests only
     manager_session_cwd: str | None = None  # [manager] session_cwd: the folder the manager runs in
     models: dict = field(default_factory=dict)  # [models]: manager, workers (+ overrides), choices
@@ -189,6 +191,10 @@ def load_config(home: Path) -> Config:
     dispatch = raw.get("dispatch") if isinstance(raw.get("dispatch"), dict) else {}
     cfg.dispatch_enabled = dispatch.get("enabled", True) is not False
     cfg.dispatch_auto_launch = dispatch.get("auto_launch", True) is not False
+    autopilot = raw.get("autopilot") if isinstance(raw.get("autopilot"), dict) else {}
+    cfg.autopilot_enabled = autopilot.get("enabled", True) is not False
+    max_parallel = autopilot.get("max_parallel", 4)
+    cfg.autopilot_max_parallel = max_parallel if isinstance(max_parallel, int) and not isinstance(max_parallel, bool) and max_parallel >= 0 else 4
     review = raw.get("review") if isinstance(raw.get("review"), dict) else {}
     cfg.review_auto_merge = review.get("auto_merge", True) is not False
     agents_raw = raw.get("agents") if isinstance(raw.get("agents"), dict) else {}

@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
+from tirith import autopilot as autopilot_mod
 from tirith import autoreview as autoreview_mod
 from tirith import flows as flows_mod
 from tirith import inbox as inbox_mod
@@ -41,7 +42,7 @@ OLD_MANAGER_ROLE = "steward"  # the old name, still accepted in TIRITH_ROLE
 def load_state(home: Path) -> dict:
     data = read_json(Path(home) / STATE_FILE, {})
     data = data if isinstance(data, dict) else {}
-    for key in ("handled", "escalated", "stop", "reviews", "overdue"):
+    for key in ("handled", "escalated", "stop", "reviews", "overdue", "autopilot"):
         if not isinstance(data.get(key), dict):
             data[key] = {}
     return data
@@ -68,15 +69,15 @@ def _step_name(req: dict) -> str:
 
 
 def add_owner_item(home: Path, item_id: str, project: str | None, text: str, options: list[dict],
-                   at: str, actions: list[dict] | None = None) -> None:
-    """One item on the owner's waiting list with ``options`` (``[{label, command}]``) and Run ``actions``;
-    once per id."""
+                   at: str, actions: list[dict] | None = None, link: str | None = None) -> None:
+    """One item on the owner's waiting list with ``options`` (``[{label, command}]``), Run ``actions`` and
+    an optional ``link`` to open; once per id."""
     if not options and not actions:
         raise ValueError(f"owner item {item_id} has no option: every item for the owner needs a call to action")
     if any(r.get("id") == item_id for r in read_jsonl(Path(home) / "waits.jsonl")):
         return
     append_jsonl(Path(home) / "waits.jsonl", {
-        "id": item_id, "at": at, "project": project, "text": text, "link": None, "done_at": None,
+        "id": item_id, "at": at, "project": project, "text": text, "link": link, "done_at": None,
         "session": None, "options": options, **({"actions": actions} if actions else {})})
     flows_mod.append_flow(home, "tirith", "owner", "request", text, project=project, session=None, at=at)
 
@@ -174,7 +175,8 @@ def escalate(home: Path, req: dict, notify: Callable[[str, str], None], at: str)
 
 def run(home: Path, config: Config, now: datetime, *, agents: list[dict], lanes: list[dict],
         status_of: Callable, launcher: Callable | None = None,
-        notify: Callable[[str, str], None] = macos_notify, spawn: Callable | None = None) -> list[dict]:
+        notify: Callable[[str, str], None] = macos_notify, spawn: Callable | None = None,
+        projects: list[dict] | None = None) -> list[dict]:
     """One dispatcher pass; returns the requests re-read afterwards. Safe to call every cycle."""
     home = Path(home)
     if not config.dispatch_enabled:
@@ -182,9 +184,11 @@ def run(home: Path, config: Config, now: datetime, *, agents: list[dict], lanes:
     state = load_state(home)
     launcher = launcher or _default_launcher
     changed = False
+    if autopilot_mod.run(home, config, now, state, agents=agents, projects=projects or [], launcher=launcher):
+        changed = True
     for req in inbox_mod.requests(home):
         rid = req["id"]
-        if req["status"] == "done":
+        if req["status"] == "done" or req["kind"] == "autopilot":
             continue
         if rid not in state["handled"]:
             if req["kind"] == "finish" and not req["answers"]:

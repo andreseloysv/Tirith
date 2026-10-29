@@ -18,10 +18,11 @@ from tirith.home import now_iso
 from tirith.store import append_jsonl, read_jsonl
 
 INBOX_FILE = "inbox.jsonl"
-KINDS = ("finish", "ask", "setup")
+KINDS = ("finish", "ask", "setup", "autopilot")
 MODELS_ACTIONS = ("models-set", "apply-manager")  # the Settings page; the request's project is "settings"
 SETUP_ACTIONS = ("add-stage", "add-rule", "remove-stage", "remove-rule", "run-stage") + MODELS_ACTIONS
 SETUP_STEP = "setup"
+AUTOPILOT_STEP = "autopilot"  # the step of an ``autopilot`` request (text ``on`` or ``off``)
 ANSWERERS = ("manager", "steward", "brain", "tirith")  # "steward" is the old name of "manager"
 TEXT_MAX_BYTES = 4096
 STATE_ROWS = 100
@@ -58,6 +59,10 @@ def add_request(home: Path, kind: str, project: str, step: str, text: str = "",
     if kind == "setup":
         step = step or SETUP_STEP
         text = json.dumps(parse_setup(text), ensure_ascii=False, separators=(",", ":"))
+    if kind == "autopilot":
+        project, step, text = project or "all", step or AUTOPILOT_STEP, text.lower()
+        if text not in ("on", "off"):
+            raise InboxError("an autopilot request needs text 'on' or 'off'")
     if not project or not step:
         raise InboxError("a request needs a project and a step")
     if kind == "ask" and not text:
@@ -193,7 +198,7 @@ def manager_pending(req: dict) -> bool:
 
     A ``finish`` is Tirith's own job (the dispatcher answers it), so any answer settles it; every
     other kind stays pending until the manager itself answers, whatever the brain said."""
-    if req["status"] == "done":
+    if req["status"] == "done" or req["kind"] == "autopilot":  # the dispatcher's own switch
         return False
     runs = req.get("action_runs") or []
     if runs:
