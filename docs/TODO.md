@@ -159,10 +159,13 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Regla en código: una respuesta con un comando de terminal en el texto se rechaza; hay que usar `--run`.
 - [x] Todo build y test pasa por `tirith run` (bloqueo en código) y el Overview muestra también los pipelines recién terminados.
 - [ ] Cada lane terminado se revisa por código: tests como pipeline visible, merge automático si pasan, hook que impide al steward terminar con revisiones pendientes, violación a los 30 min.
-- [ ] Todo aviso al dueño tiene al menos una opción o acción (regla en código); los avisos automáticos (guarda, checks) traen su botón.
-- [ ] Botón «Stop» para parar un lane desde la UI.
-- [ ] Vista Pipelines al estilo GitLab: cada ejecución en una fila con sus etapas como círculos, tooltip por etapa y quién la lanzó.
-- [ ] Guarda compatible con hooks existentes (encadenar el `pre-commit` de ChromaSol).
+- [x] Todo aviso al dueño tiene al menos una opción o acción (regla en código); los avisos automáticos (guarda, checks) traen su botón.
+- [x] Botón «Stop» para parar un lane desde la UI.
+- [x] Vista Pipelines al estilo GitLab: cada ejecución en una fila con sus etapas como círculos, tooltip por etapa y quién la lanzó.
+- [x] Guarda compatible con hooks existentes (encadenar el `pre-commit` de ChromaSol).
+- [x] Un resultado de acción del dueño reabre la petición para el manager (aviso al instante y respuesta obligatoria).
+- [ ] Renombrar «steward» a «manager» en toda la UI, la CLI y la documentación.
+- [ ] Settings: modelo y esfuerzo del manager y de los agentes que crea (por defecto, por proyecto y por paso).
 
 ## 13. Configuración del proyecto visible y editable
 
