@@ -181,6 +181,7 @@
       var age = Math.max(0, Math.round((Date.now() - T.ms(raw.generated_at)) / 1000));
       cls = age > 60 ? 'red' : (age > 10 || srcErr) ? 'amber' : 'green';
       txt = (srcErr ? 'state unreadable, ' : '') + 'updated ' + age + ' s ago';
+      if (raw.collector && raw.collector.warming) txt += ' · warming up';
     }
     var st = document.getElementById('stale');
     if (st) st.hidden = demo || !raw || !(Date.now() - T.ms(raw.generated_at) > 30000);
