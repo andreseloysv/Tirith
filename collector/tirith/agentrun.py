@@ -70,11 +70,14 @@ PRESET_DEFAULTS: dict[str, dict] = {
         "effort_flag": "--reasoning-effort",
         "add_dir_flag": "--add-dir",
         "prompt_flag": "-p",
+        # its own /login is the credential: a classic GITHUB_TOKEN in the owner's shell is refused
+        # by the CLI and would win over the login
+        "unset_env": ["GITHUB_TOKEN", "GH_TOKEN"],
     },
 }
 
 _OVERRIDABLE = ("command", "args", "permissions", "model", "effort", "add_dirs", "prompt_flag",
-                "print_flag", "stdin", "prompt_file_flag")
+                "print_flag", "stdin", "prompt_file_flag", "unset_env")
 STDIN_MIN = 2000  # a prompt this long (a brief) goes through stdin when the alias reads it
 
 
@@ -94,6 +97,14 @@ def agent_settings(config: Config, alias: str, project: str | None = None) -> di
             if key in _OVERRIDABLE or key in merged:
                 merged[key] = value
     return merged
+
+
+def child_env(config: Config, alias: str | None, project: str | None, env: dict) -> dict:
+    """``env`` without the variables the preset of ``alias`` says would override its own login."""
+    if not alias:
+        return env
+    drop = {str(n) for n in (agent_settings(config, alias, project).get("unset_env") or [])}
+    return {k: v for k, v in env.items() if k not in drop}
 
 
 def wants_stdin(config: Config, alias: str, project: str | None, prompt: str) -> bool:

@@ -36,6 +36,15 @@ def test_answer_from_agent_message_item(tmp_path: Path) -> None:
     assert final_answer(log) == ("Fixed it.", True)
 
 
+def test_answer_from_copilot_final_answer_message(tmp_path: Path) -> None:
+    log = _log(tmp_path, [
+        {"type": "assistant.message", "data": {"phase": "commentary", "content": "working"}},
+        {"type": "assistant.message_delta", "data": {"deltaContent": "do"}},
+        {"type": "assistant.message", "data": {"phase": "final_answer", "content": "done"}},
+        {"type": "result", "exitCode": 0, "usage": {"premiumRequests": 1}}])
+    assert final_answer(log) == ("done", True)
+
+
 def test_answer_from_terminal_payload(tmp_path: Path) -> None:
     log = _log(tmp_path, [
         "banner line",

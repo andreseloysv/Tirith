@@ -160,7 +160,8 @@ def _manager(home: Path, config: Config, now: datetime, state: dict, book: dict,
                    f"min after its answer and could not be closed. pid {lane.get('pid')}, pgid {lane.get('pgid')}.")
             return _check("failed", "A manager process stayed open and could not be closed.")
     waiting = _chat_waiting(home)
-    if not waiting or managerd_mod.attached(home, now) or managerd_mod.running(mbook, lanes, now):
+    if not waiting or managerd_mod.attached(home, now) or managerd_mod.running(mbook, lanes, now) \
+            or managerd_mod.session_busy(home):
         return _check("ok", OK_TEXT["manager"])
     oldest = min(waiting, key=lambda r: str(r["at"] or ""))
     age = _age_s(oldest["at"], now)
