@@ -99,7 +99,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Hacerlo obligatorio con protección de rama (dueño; en repos privados requiere GitHub Pro).
 - [x] El collector registra cada violación bloqueada (`state.violations`) y la pone en "esperando por ti".
 - [x] Violaciones visibles en la web, con el agente responsable.
-- [ ] Activar las puertas en la máquina del dueño (hooks de usuario + shims).
+- [x] Activar las puertas en la máquina del dueño (hooks de usuario + shims).
 - [x] `tirith.toml` en ChromaSol y RelaGame.
 - [ ] ChromaSol: unir su hook `pre-commit` de rutas protegidas con la guarda de palabras (dueño); hasta entonces `lane run` no arranca allí.
 
