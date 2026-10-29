@@ -110,6 +110,37 @@ def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
     return timeouts_mod.run(["git", "-C", str(repo), *args], "git", text=True)
 
 
+LOCK_STALE_SECONDS = 60  # a git index lock older than this was left by a crash (git holds it for milliseconds)
+
+
+def _held(path: Path) -> bool:
+    """True when a process has ``path`` open (``lsof``); a missing or failing ``lsof`` says nobody does."""
+    try:
+        return subprocess.run(["lsof", "-t", "--", str(path)], capture_output=True, text=True,
+                              timeout=10).stdout.strip() != ""
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def recover_git_lock(repo: Path) -> bool:
+    """Remove an abandoned ``index.lock`` of ``repo`` (the main checkout); True when one was removed.
+
+    Only a lock older than ``LOCK_STALE_SECONDS`` is abandoned; a live git command holds its lock for moments."""
+    found = _git(repo, "rev-parse", "--git-path", "index.lock")
+    if found.returncode != 0:
+        return False
+    lock = Path(found.stdout.strip())
+    if not lock.is_absolute():
+        lock = repo / lock
+    try:
+        if time.time() - lock.stat().st_mtime < LOCK_STALE_SECONDS or _held(lock):
+            return False
+        lock.unlink()
+    except OSError:
+        return False
+    return True
+
+
 def commit_change(home: Path, repo: Path, project: str, mutate: Callable[[str], str], message: str,
                   path: Path | None = None) -> bool:
     """Apply ``mutate`` to the plan file and commit only that file; False when nothing changed.
@@ -133,8 +164,13 @@ def commit_change(home: Path, repo: Path, project: str, mutate: Callable[[str], 
         if new == text:
             return False
         path.write_text(new, encoding="utf-8")
-        _git(repo, "add", "--", rel)
+        recover_git_lock(repo)
+        added = _git(repo, "add", "--", rel)
+        if "index.lock" in added.stderr and recover_git_lock(repo):
+            _git(repo, "add", "--", rel)
         made = _git(repo, "commit", "-q", "-m", message, "--", rel)
+        if "index.lock" in made.stderr and recover_git_lock(repo):
+            made = _git(repo, "commit", "-q", "-m", message, "--", rel)
         if made.returncode != 0 and "nothing to commit" in (made.stdout + made.stderr).lower():
             return False  # the plan already was in the target state: success
         if made.returncode != 0:  # the guard (or git) refused: leave the plan as it was
