@@ -27,6 +27,7 @@ try:
 except ImportError:  # Windows: the lock is a no-op there (one dispatcher, one writer)
     fcntl = None  # type: ignore[assignment]
 
+from tirith import timeouts as timeouts_mod
 from tirith import asks as asks_mod
 from tirith import manifest as manifest_mod
 from tirith import projects as projects_mod
@@ -106,7 +107,7 @@ def writer_lock(home: Path, project: str):
 
 
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True)
+    return timeouts_mod.run(["git", "-C", str(repo), *args], "git", text=True)
 
 
 def commit_change(home: Path, repo: Path, project: str, mutate: Callable[[str], str], message: str,

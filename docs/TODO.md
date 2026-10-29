@@ -26,8 +26,10 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Muse protocol probe 1: read muse serve help
 - [x] Muse protocol probe 2: export the MSP schema
 - [x] Muse protocol probe 3: generate the MSP JSON schema
-- [ ] Manager de guardia: atender el chat (en curso: manager-f16218b0)
+- [x] Manager de guardia: atender el chat
 - [ ] Revisar el plan (2026-10-29) (en revisión)
+- [x] Manager de guardia: atender el chat
+- [x] Manager de guardia: atender el chat
 - [x] Muse chat real check: one tiny session
 
 ## 1. `lane run` devuelve la respuesta final
@@ -75,7 +77,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Tokens y coste por lane.
 - [x] Permisos estándar por agente (flags / perfiles), porque no pueden preguntar.
 - [x] `tirith doctor --agent <alias>`: comprueba ejecutable, `PATH` del wrapper y que saltarse los hooks falla.
-- [ ] Confirmar el formato JSON de Muse Code con una ejecución real (desde 2026-11-02: cuota de Muse).
+- [ ] Confirmar el formato JSON de Muse Code con una ejecución real (capturada el 2026-10-29; adaptador en main, lane museformat2).
 - [x] Codex y Copilot instalados (dueño).
 - [ ] Codex y Copilot probados con `lane run` (presets por alias, salida JSON, permisos). (en revisión)
 - [x] Agentes en la nube y CI remoto desde GitHub (PRs y Actions).
@@ -113,7 +115,8 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Tirith no se bloquea solo: duplicados por elemento (no por paso) y recupera un bloqueo de git abandonado en el checkout principal. (en revisión)
   - [ ] Revisar: Tirith no se bloquea solo: duplicados por elemento (no por paso) y recupera un bloqueo de git abandonado en el checkout principal. (en curso: revisión de reglas-de-c-digo-errores-de-comp)
 - [ ] Todo comando tiene timeout por código (collector, etapas y comandos de los agentes): Tirith lo aprende del historial, los agentes pueden subirlo o bajarlo dentro de límites con motivo, y al vencer se detiene el proceso con sus hijos y se limpian sus bloqueos. (en revisión)
-- [ ] Un elemento se marca hecho en cuanto su trabajo está en main y verificado, aunque la lane se haya fusionado sola; lo ya fusionado hoy se marca con su commit.
+- [ ] Un elemento se marca hecho en cuanto su trabajo está en main y verificado, aunque la lane se haya fusionado sola; lo ya fusionado hoy se marca con su commit. (en revisión)
+- [ ] Llevar a main el trabajo de la lane reglas-de-c-digo-errores-de-comp: aplicar ~/.tirith/diffs/reglas-de-c-digo-errores-de-comp.patch sobre main y reportar solo lo que está en el diff (2 tests nuevos, no 3; no nombrar index.lock como archivo cambiado).
 
 ## 8. Más visibilidad por agente
 
@@ -147,6 +150,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Los mensajes del chat nunca se cortan ni se salen por la derecha: texto, rutas y código largos se parten o tienen su propio scroll dentro del bloque. (en revisión)
 - [ ] Probar a mano en la app Tauri real (npm run tauri dev): clip, arrastrar y sin scroll horizontal; no hubo sesión gráfica
 - [ ] Integrar en main la rama lane/chatoverflow (mensajes del chat sin cortes). (en revisión)
+- [ ] Llevar a main el cambio de la lane app-de-escritorio-tauri-con-chat-7 (clip, arrastrar, sin scroll horizontal; tests ya verdes): reaplicar a mano /Users/andreseloyasanchezva/.tirith/diffs/app-de-escritorio-tauri-con-chat-7.patch sobre main, sin rediseñar, y resolver el conflicto en app/README.md conservando lo de main. (en curso: app-de-escritorio-tauri-con-chat-8)
 
 ## 10. Plan visible en el Overview
 
@@ -243,6 +247,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] El manager persistente arranca siempre: comparte el elemento fijo del manager con los turnos sueltos (sin bloquearse por «ya en curso») y, si falla, el modo de respaldo responde en menos de 1 minuto. (en curso: u-sessionstart)
 - [ ] Los permisos de comandos seguros (solo lectura, comandos de Tirith) se aprueban por código; al dueño nunca le llega una pregunta de permiso que no sea suya.
 - [ ] La autorrevisión no escribe en el chat lo que arregló sola: queda en el punto de salud (al hacer clic); el chat solo muestra lo que necesita al dueño.
+- [ ] Llevar a main el trabajo de la lane manager-de-guardia-chat-y-piloto-2: aplicar a mano ~/.tirith/diffs/manager-de-guardia-chat-y-piloto-2.patch sobre main y resolver los conflictos en collector/tirith/agentrun.py y collector/tirith/managerd.py conservando lo que ya hay en main (los tests de la lane pasaban: 1113).
 
 ## 15. Collector y CLI en Rust
 
