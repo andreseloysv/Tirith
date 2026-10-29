@@ -729,6 +729,9 @@
                   "properties": {
                     "text": {"type": "string"}, "done": {"type": "boolean"},
                     "who": {"enum": ["agent", "owner", "date", "out"]},
+                    "state": {"enum": ["open", "progress", "review", "blocked", "reopened", "done"],
+                              "description": "from the note Tirith keeps at the end of the item"},
+                    "detail": {"type": "string", "description": "the lane (progress) or the reason (blocked, reopened)"},
                     "until": {"type": "string"},
                     "owner_item": {"type": "string", "description": "id of the owner item raised for this item"}
                   }
@@ -784,6 +787,14 @@
         "step": {
           "type": ["string", "null"],
           "description": "Roadmap step id this lane works on (tirith lane run --step)."
+        },
+        "item": {
+          "type": ["string", "null"],
+          "description": "The plan item this lane works on (tirith lane run --item); every agent has one."
+        },
+        "outcome": {
+          "type": ["string", "null"],
+          "description": "What the lane reported with `tirith plan report`: done, partial or blocked; null until it does."
         },
         "request_id": {
           "type": ["string", "null"],

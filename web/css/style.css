@@ -913,6 +913,10 @@ button.vwho:hover b { text-decoration: underline; }
 .pedadd:hover, .pedadd:focus-visible { color: var(--blue); outline: none; }
 .pitems li.psav { color: var(--mut); } .pitems li.psav.gone .pit { text-decoration: line-through; }
 .pwhen.saving { font-style: italic; }
+.pstate { flex: none; font-size: 11.5px; line-height: 18px; padding: 0 8px; border-radius: 9px; border: 1px solid var(--glass-line); color: var(--mut); white-space: nowrap; max-width: 46%; overflow: hidden; text-overflow: ellipsis; }
+.pstate.progress { color: var(--ink); background: rgba(255,255,255,.7); }
+.pstate.blocked, .pstate.reopened { color: #b3261e; border-color: currentColor; }
+.chip.aitem { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pdelpop { position: absolute; right: 0; top: calc(100% - 2px); z-index: 20; display: flex; align-items: center; gap: 8px; padding: 7px 10px; font-size: 12px; white-space: nowrap;
   background: rgba(255,255,255,.96); border: 1px solid rgba(120,135,160,.35); border-radius: 10px; box-shadow: 0 8px 24px rgba(40,55,90,.18); }
 .isend.danger { background: var(--red); border-color: var(--red); color: #fff; }

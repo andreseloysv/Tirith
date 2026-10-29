@@ -68,6 +68,44 @@ item: the generator drops a promise of a button the item does not have.
 `out` wins over `owner`, `owner` over `date`. A malformed date is not a tag. Done items keep their `who`
 but never raise owner items.
 
+## Item states
+
+Tirith keeps a status note at the end of an item's text, so the plan file itself says where each item stands:
+
+| Note | State | Meaning |
+|---|---|---|
+| (none) | `open` | an agent can take it |
+| `(en curso: <lane>)` | `progress` | the lane works on it |
+| `(en revisión)` | `review` | its agent reported it done; ticked `[x]` when the review passes |
+| `(bloqueado: <reason>)` | `blocked` | its agent reported it blocked |
+| `(reabierto: <reason>)` | `reopened` | a review failed or the lane ended without a report; an agent can take it again |
+| `[x]` | `done` | |
+
+An item is found by its text without the note (or by its id `i-` and 8 hex digits of that text). Items in
+`progress`, `review` or `blocked` are not "agent items" (the autopilot and `tirith launch` skip them, and a step
+with only those is `todo`, or `active` while a lane works on it). `state.projects[].roadmap.steps[].items[]` has
+`state` and, for `progress` (the lane), `blocked` and `reopened` (the reason), `detail`. The Plan shows the state as
+a chip ("In progress · <agent>", "In review", "Blocked: …", "Reopened: …") and the Agents view shows the item of
+each lane (`agents[].item`, `agents[].outcome`).
+
+Step `0` "Trabajo automático de Tirith" holds Tirith's own work (reviews of other items are sub-items instead). It
+is created on first use, and the autopilot never starts a lane on it.
+
+## The plan gate
+
+*The plan is the only way to start and to finish an agent* (`tirith/plangate.py`):
+
+- **Single writer.** Only Tirith writes the plan file, on the project's main checkout, one commit per change
+  `Roadmap: <what> in step N (<who>)` (`<who>` is `owner`, `manager`, a lane id or `tirith`), through the normal
+  hooks, serialized with a lock (`<home>/locks/roadmap-<project>.lock`). A plan with uncommitted changes is never
+  written. The `roadmap-edit` gate (`docs/CONTRACT-gates.md`) blocks every agent's edit of the file.
+- **Start = a linked open item**, no exceptions: `--step N --item "…"` checked by code (`docs/CONTRACT-launch.md`).
+- **`tirith plan add --project P --step N --text "…" [--title "…"]`** adds an open item at the end of the step
+  (`--title` creates the step when it is not in the plan). It is the manager's way to update the TODO, e.g. to add a
+  review; the owner's plan edits from the Plan card (below) use the same writer.
+- **Finish = an outcome**: `tirith plan report --lane L --status done|partial|blocked [--add …]… [--reason …]`.
+- **Done only when verified**: the review ticks the item, or reopens it with the reason.
+
 ## `state.projects[].roadmap`
 
 ```json
@@ -76,6 +114,7 @@ but never raise owner items.
             "items": [{"text": "…", "done": true, "who": "agent"},
                       {"text": "… (dueño: …)", "done": false, "who": "owner", "owner_item": "owner-tirith-3-1a2b3c4d"},
                       {"text": "… (desde 2026-11-02)", "done": false, "who": "date", "until": "2026-11-02"}],
+            (each item also has "state": "open|progress|review|blocked|reopened|done" and, when it has one, "detail")
             "agents": ["lane-id"]}]}
 ```
 

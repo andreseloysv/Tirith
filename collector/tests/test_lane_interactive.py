@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import make_hooks_mutable
+from conftest import PLAN_ARGS, make_hooks_mutable
 from test_lane_run import _lane_run_setup
 from tirith.cli import main
 from tirith.store import read_json, read_jsonl
@@ -20,7 +20,7 @@ from tirith.store import read_json, read_jsonl
 def _interactive(repo: Path, lane_id: str, code: str) -> int:
     return main(["lane", "run", "--interactive", "--project", "demo", "--class", "warden",
                  "--feature", "Chat", "--brief", str(repo / "brief.md"), "--id", lane_id,
-                 "--", sys.executable, "-c", code])
+                 *PLAN_ARGS, "--", sys.executable, "-c", code])
 
 
 def test_interactive_inherits_env_and_uses_stop_event(home: Path, tmp_path: Path, capsys,

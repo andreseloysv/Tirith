@@ -97,8 +97,9 @@
   function workingFoot(a) {
     var files = a.files_changed || a.insertions || a.deletions ? '<span class="afiles">' + T.agentFiles(a).replace(/ changed/, '') + '</span>' : '',
         step = a.step ? '<span class="chip astep" title="Plan step">Step ' + esc(a.step) + '</span>' : '',
+        item = a.item ? '<span class="chip aitem" title="The plan item this agent works on' + (a.outcome ? ' \u00b7 reported ' + esc(a.outcome) : '') + '">' + esc(a.item.length > 60 ? a.item.slice(0, 57) + '\u2026' : a.item) + '</span>' : '',
         proj = T.proj(a.project);
-    return '<span class="afoot">' + files + testBadge(a) + step + '<span class="aproj">' + esc(proj) + '</span>' +
+    return '<span class="afoot">' + files + testBadge(a) + step + item + '<span class="aproj">' + esc(proj) + '</span>' +
       '<span class="aclock">' + T.lineIcon(T.ICON.clock, 13, 'currentColor', 1.7) + '<span>' + T.agentClock(a) + '</span></span></span>';
   }
   /* remote work (source "github"): a small mark and an "Open on GitHub" link */
