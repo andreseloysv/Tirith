@@ -1652,6 +1652,75 @@ window.TIRITH_STATE = {
         }
       ],
       "session": "2026-10-28-relagame-ios"
+    },
+    {
+      "run": "ci#12",
+      "project": "tirith",
+      "pipeline": "ci",
+      "status": "passed",
+      "started_at": "2026-10-28T19:24:00Z",
+      "ended_at": "2026-10-28T19:25:10Z",
+      "stages": [
+        {
+          "name": "build",
+          "status": "passed",
+          "started_at": "2026-10-28T19:24:00Z",
+          "ended_at": "2026-10-28T19:24:08Z",
+          "duration_s": 8,
+          "log_tail": [
+            "ok"
+          ]
+        },
+        {
+          "name": "test",
+          "status": "passed",
+          "started_at": "2026-10-28T19:24:08Z",
+          "ended_at": "2026-10-28T19:25:10Z",
+          "duration_s": 62,
+          "log_tail": [
+            "366 passed in 57.54s"
+          ]
+        }
+      ],
+      "session": null,
+      "lane": "t-collector",
+      "worktree": "/Users/owner/DEVELOP/Tirith-lanes/t-collector",
+      "branch": "lane/t-collector"
+    },
+    {
+      "run": "ci#13",
+      "project": "tirith",
+      "pipeline": "ci",
+      "status": "failed",
+      "started_at": "2026-10-28T19:36:00Z",
+      "ended_at": "2026-10-28T19:36:41Z",
+      "stages": [
+        {
+          "name": "build",
+          "status": "passed",
+          "started_at": "2026-10-28T19:36:00Z",
+          "ended_at": "2026-10-28T19:36:06Z",
+          "duration_s": 6,
+          "log_tail": [
+            "ok"
+          ]
+        },
+        {
+          "name": "test",
+          "status": "failed",
+          "started_at": "2026-10-28T19:36:06Z",
+          "ended_at": "2026-10-28T19:36:41Z",
+          "duration_s": 35,
+          "log_tail": [
+            "FAILED tests/test_gates.py::test_raw - assert 0 == 2",
+            "1 failed, 365 passed"
+          ]
+        }
+      ],
+      "session": null,
+      "lane": null,
+      "worktree": null,
+      "branch": null
     }
   ],
   "rooms": [

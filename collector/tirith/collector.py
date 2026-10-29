@@ -499,8 +499,11 @@ class Collector:
             run = runs.setdefault(run_id, {
                 "run": run_id, "project": str(event.get("project") or ""),
                 "pipeline": str(event.get("pipeline") or ""), "_stages": {}, "_order": [],
-                "session": None, "_cwd": None,
+                "session": None, "_cwd": None, "lane": None, "worktree": None, "branch": None,
             })
+            for tag in ("lane", "worktree", "branch"):
+                if not run[tag] and event.get(tag):
+                    run[tag] = str(event[tag])
             if not run["session"] and event.get("session"):
                 run["session"] = str(event["session"])
             if not run["_cwd"] and event.get("cwd"):
@@ -564,7 +567,8 @@ class Collector:
             project = resolve(run["project"], run["_cwd"]) if resolve else run["project"]
             output.append({
                 "run": run["run"], "project": project, "pipeline": run["pipeline"],
-                "session": run["session"], "status": status,
+                "session": run["session"], "lane": run.get("lane"), "worktree": run.get("worktree"),
+                "branch": run.get("branch"), "status": status,
                 "started_at": min(starts) if starts else None,
                 "ended_at": (max(ends) if ends else None) if status != "running" else None,
                 "stages": stages,

@@ -219,6 +219,30 @@
   };
 
   /* ---------- Overview ---------- */
+  var RECENT_MS = 30 * 60 * 1000;
+  function runCard(p) {
+    var st = p.stages || [], cur = T.curStage(p);
+    return '<button class="card rcard" data-act="gorun" data-key="' + esc(p.run) + '"><span class="rhead"><b>' + esc(T.runName(p)) + ' <span class="mut">' + esc(T.runNum(p)) + '</span></b><span class="mut">' + esc(T.proj(p.project)) + '</span><span class="rtime">' + T.span(p.started_at, null) + '</span></span>' +
+      '<span class="mini">' + st.map(function (x, i) { return (i ? '<i class="ml ' + (st[i - 1].status === 'passed' ? 'on' : '') + '"></i>' : '') + '<i class="mn ' + esc(x.status) + '" title="' + esc(x.name + ' · ' + x.status) + '"></i>'; }).join('') + '</span>' +
+      '<span class="mcur">' + esc((p.lane ? p.lane + ' · ' : 'steward · ') + (cur ? cur.name : 'running')) + '</span></button>';
+  }
+  function doneRow(p) {
+    var ok = p.status === 'passed', mark = ok ? '✓' : '✗';
+    return '<button class="prow" data-act="gorun" data-key="' + esc(p.run) + '"><i class="pm ' + (ok ? 'ok' : 'bad') + '" title="' + esc(p.status) + '">' + mark + '</i>' +
+      '<b>' + esc(T.runName(p)) + ' <span class="mut">' + esc(T.runNum(p)) + '</span></b><span class="mut sm">' + esc(T.proj(p.project)) + '</span>' +
+      '<span class="pwho">' + esc(p.lane || 'steward') + '</span><span class="rtime">' + esc(T.dur(T.elapsed(p.started_at, p.ended_at))) + '</span></button>';
+  }
+  function pipelinesSection(s, running) {
+    var now = T.now(), recent = (s.pipelines || []).filter(function (p) {
+      var e = T.ms(p.ended_at);
+      return (p.status === 'passed' || p.status === 'failed') && e != null && now - e <= RECENT_MS;
+    }).sort(function (a, b) { return T.ms(b.ended_at) - T.ms(a.ended_at); });
+    var h = '<section><h2>Pipelines <span class="n">' + (running.length + recent.length) + '</span></h2>';
+    if (!running.length && !recent.length) return h + T.empty('No pipelines running or finished in the last 30 minutes') + '</section>';
+    if (running.length) h += '<div class="grid2">' + running.map(runCard).join('') + '</div>';
+    if (recent.length) h += '<div class="plist">' + recent.map(doneRow).join('') + '</div>';
+    return h + '</section>';
+  }
   function overview(s, el) {
     var runs = (s.pipelines || []).filter(function (p) { return p.status === 'running'; });
     var ags = (s.agents || []).filter(function (a) { return a.status === 'working' || a.status === 'stalled'; });
@@ -228,12 +252,7 @@
     if (T.needs) h += T.needs(s);
     if (T.plan) h += T.plan(s);
     if (T.rulesSection) h += T.rulesSection(s);
-    h += '<section><h2>Running pipelines <span class="n">' + runs.length + '</span></h2>' + (runs.length ? '<div class="grid2">' + runs.map(function (p) {
-      var st = p.stages || [], cur = T.curStage(p);
-      return '<button class="card rcard" data-act="gorun" data-key="' + esc(p.run) + '"><span class="rhead"><b>' + esc(T.runName(p)) + ' <span class="mut">' + esc(T.runNum(p)) + '</span></b><span class="mut">' + esc(T.proj(p.project)) + '</span><span class="rtime">' + T.span(p.started_at, null) + '</span></span>' +
-        '<span class="mini">' + st.map(function (x, i) { return (i ? '<i class="ml ' + (st[i - 1].status === 'passed' ? 'on' : '') + '"></i>' : '') + '<i class="mn ' + esc(x.status) + '" title="' + esc(x.name + ' · ' + x.status) + '"></i>'; }).join('') + '</span>' +
-        (cur ? '<span class="mcur">' + esc(cur.name) + '</span>' : '') + '</button>';
-    }).join('') + '</div>' : T.empty('No pipelines running')) + '</section>';
+    h += pipelinesSection(s, runs);
     h += '<section><h2>Working agents <span class="n">' + ags.length + '</span></h2>' + (ags.length ? '<div class="grid2">' + ags.map(function (a) { return T.agentCard(a, false).replace('data-act="agent"', 'data-act="goagent"'); }).join('') + '</div>' : T.empty('No agents working')) + '</section>';
     h += '</div><aside class="ovside" data-scroll="ovside">' + activity(s) + '</aside></div>';
     el.innerHTML = h;

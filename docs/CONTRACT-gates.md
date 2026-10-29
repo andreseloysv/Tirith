@@ -17,12 +17,16 @@ Message format, one block per violation:
 | `hooks-path` | any command naming `core.hooksPath` | `PreToolUse` hook | edit `[[hooks]]` in `tirith.toml`, run `tirith check` |
 | `git-hooks` | editing/removing files under `.git/hooks` (shell mutators, redirects, Edit/Write tools) | `PreToolUse` hook | leave it; the owner uses `tirith guard install` |
 | `raw-stage` | a stage `run` of the project's `tirith.toml` executed raw (the whole sequence, or the stage's last command with its args) | `PreToolUse` hook | `tirith run [--project <id>] [--pipeline <id>] --stage <name>` |
+| `raw-stage` (runner) | in a folder that belongs to a project with a `tirith.toml`, a build or test runner not wrapped by `tirith run`: pytest (also `python -m pytest`, `uv run … pytest`), `npm`/`pnpm`/`yarn` `test` or `build`, vitest, jest, `go test`/`build`, `cargo test`/`build`, `gradle`/`gradlew` test/build/assemble, `make test`/`check`/`build`, `xcodebuild`, `swift test`/`build`, `node --check` | `PreToolUse` hook | `tirith run --project <id> --stage <stage> [-- <cmd>]` (test runners: the project's test stage; builds: its build stage, by stage kind; with no such stage: `tirith setup add-stage …`) |
 | `lane-brief` | `lane run` with no `--brief`, or a missing/empty brief file (exit 3) | `lane run` | write the task into a file, pass `--brief <file>` |
 | `project-check` | `lane run` while `tirith check` fails for the project (exit 3) | `lane run` | fix the listed problems, run `tirith check --project <id>` |
 | (guard) | `lane run` while the commit guard is not intact (exit 3) | `lane run` | `tirith guard install <project>` |
 
 `tirith run --stage …`, `tirith lane run … -- <agent>` and commands that merely mention an agent name
-(`echo`, `cat`, file names) are never blocked.
+(`echo`, `cat`, file names) are never blocked. Here-document bodies are data and never count
+(`strip_heredocs`); a runner on a later line of the same command still does. The runner check reuses
+the detection of `tirith.activity` (`runner_kinds`); only one `raw-stage` message is given per call,
+the exact-stage-match one first. Folders without a `tirith.toml` are not gated.
 
 ## Blocking
 
