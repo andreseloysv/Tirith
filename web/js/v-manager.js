@@ -8,7 +8,7 @@
   ui.chatOpen = !!ui.chatOpen;       /* the drawer (other views) */
   ui.chatDraft = ui.chatDraft || ''; /* text typed so far */
   ui.chatProj = ui.chatProj == null ? null : ui.chatProj; /* project chip: null follows the sidebar filter */
-  ui.chatOut = ui.chatOut || [];     /* sent from here, not yet in the state: {cid, id, text, project, at, state: "sending"|"failed", err, pics} */
+  ui.chatOut = ui.chatOut || [];     /* sent from here, not yet in the state: {cid, id, text, project, at, state: "sending"|"sent"|"failed", err, pics} */
   ui.chatCli = ui.chatCli || null;   /* CLI line to copy (no way to send from here) */
   ui.chatErr = ui.chatErr || null;   /* why the send failed */
   ui.chatPics = ui.chatPics || [];   /* images waiting in the composer: {name, type, size, url, w, h, b64} */
@@ -16,7 +16,7 @@
   ui.chatReplyTo = ui.chatReplyTo || null; /* id of the owner item the composer answers */
   ui.chatJump = ui.chatJump || 0;    /* index of the last item "Jump to next" went to */
   ui.chatStick = true;               /* scroll to the newest message after the next render */
-  var lastState = null, SEND_WAIT = 10000, PENDING_MAX = 6 * 3600 * 1000, KINDS = { chat: 1, ask: 1, finish: 1 };
+  var lastState = null, SEND_WAIT = 30000, PENDING_MAX = 6 * 3600 * 1000, KINDS = { chat: 1, ask: 1, finish: 1 };
 
   /* drafts and unconfirmed sends survive a refresh: localStorage, keyed by project, never trusted to work */
   var DRAFT_KEY = 'tirith.chat.draft.', UNSENT_KEY = 'tirith.chat.unsent';
@@ -95,7 +95,7 @@
     if (ui.chatOut.length !== before) saveUnsent();
     ui.chatOut.forEach(function (o) {
       var saved = (o.pics || []).map(function (p) { return p.saved; }).filter(Boolean);
-      out.push({ side: 'me', text: o.text, at: new Date(o.at).toISOString(), ctx: o.project ? T.proj(o.project) : '', local: o.state, cid: o.cid, err: o.err, pics: saved });
+      out.push({ side: 'me', text: o.text, at: new Date(o.at).toISOString(), ctx: o.project ? T.proj(o.project) : '', local: o.state, cid: o.cid, err: o.err, unconfirmed: o.unconfirmed, pics: saved });
     });
     out.sort(function (a, b) { return (T.ms(a.at) || 0) - (T.ms(b.at) || 0); });
     var rest = out.filter(function (m) { return !m.open; }).slice(-80);   /* an item that waits for the owner is never cut off */
@@ -104,7 +104,7 @@
   /* ISO time of the oldest message the manager still owes an answer to, or null */
   function waitingSince(state) {
     var ats = (state.inbox || []).filter(pending).map(function (r) { return r.at; });
-    ui.chatOut.forEach(function (o) { if (o.state === 'sending') ats.push(new Date(o.at).toISOString()); });
+    ui.chatOut.forEach(function (o) { if (o.state === 'sending' || o.state === 'sent') ats.push(new Date(o.at).toISOString()); });
     ats.sort(function (a, b) { return (T.ms(a) || 0) - (T.ms(b) || 0); });
     return ats[0] || null;
   }
@@ -122,7 +122,8 @@
     var body = m.side === 'me' ? esc(m.text).replace(/\n/g, '<br>') : T.md(m.text);
     var meta = (m.ctx ? esc(m.ctx) + ' · ' : '') + esc(T.clockTime(m.at));
     if (m.local === 'sending') meta = 'Sending… · ' + meta;
-    else if (m.local === 'failed') meta = '<b class="mc-bad">Not sent</b> · <button type="button" class="mc-lnk" data-act="mc-retry" data-cid="' + esc(m.cid) + '">Retry</button> · ' +
+    else if (m.local === 'sent') meta = '<span class="mc-wait" title="Written to the inbox; waiting for the manager to pick it up">Delivered ✓</span> · ' + meta;
+    else if (m.local === 'failed') meta = '<b class="mc-bad">' + (m.unconfirmed ? 'Not confirmed' : 'Not sent') + '</b> · <button type="button" class="mc-lnk" data-act="mc-retry" data-cid="' + esc(m.cid) + '">Retry</button> · ' +
       '<button type="button" class="mc-lnk" data-act="mc-copy" data-cid="' + esc(m.cid) + '">Copy text</button>' + (m.err ? '<br><span class="mc-why">' + esc(m.err) + '</span>' : '');
     return '<div class="mc-m ' + m.side + (m.local ? ' local ' + m.local : '') + '"' + (m.cid ? ' data-cid="' + esc(m.cid) + '"' : '') + '>' + thumbs(m.pics) + (m.text ? '<div class="mc-b' + (m.side === 'me' ? '' : ' md') + '">' +
       body + '</div>' : '') +
@@ -281,15 +282,15 @@
   }
   function newCid() { return 'c-' + newId().slice(3) + Date.now().toString(36); }
   function findOut(cid) { return ui.chatOut.filter(function (o) { return o.cid === cid; })[0]; }
-  /* nothing in the state after SEND_WAIT: the message was not sent, give the owner the text back */
+  /* link or copy path only: nothing in the state after SEND_WAIT, so delivery is not confirmed; give the owner the text back */
   function arm(o) {
     clearTimeout(o.timer);
-    o.timer = setTimeout(function () { fail(o, 'It did not reach the inbox within ' + SEND_WAIT / 1000 + ' s.'); }, SEND_WAIT);
+    o.timer = setTimeout(function () { fail(o, 'Not confirmed: it was not in the inbox within ' + SEND_WAIT / 1000 + ' s. It may still arrive; Retry is safe.', true); }, SEND_WAIT);
   }
-  function fail(o, why) {
+  function fail(o, why, unconfirmed) {
     if (o.state !== 'sending' || !findOut(o.cid)) return;
     clearTimeout(o.timer);
-    o.state = 'failed'; o.err = why; ui.chatErr = null; ui.chatStick = true;
+    o.state = 'failed'; o.err = why; o.unconfirmed = !!unconfirmed; ui.chatErr = null; ui.chatStick = true;
     if (!o.restored) {
       o.restored = true;
       ui.chatDraft = ui.chatDraft.trim() && ui.chatDraft !== o.text ? o.text + '\n' + ui.chatDraft : o.text;
@@ -323,9 +324,13 @@
   function dispatch(o, viaLink) {
     o.state = 'sending'; o.err = null; o.at = T.now(); ui.chatStick = true;
     if (!findOut(o.cid)) ui.chatOut.push(o);
-    saveUnsent(); arm(o);
-    if (viaLink) openLink(linkOf(o));
-    else transmit(o).catch(function (err) { fail(o, 'Could not send: ' + (err && err.message || err)); });
+    o.unconfirmed = false;
+    saveUnsent();
+    if (viaLink) { arm(o); openLink(linkOf(o)); }
+    else transmit(o).then(function () {
+      /* the app wrote the inbox row: delivered, however slowly the collector shows it */
+      if (o.state === 'sending' && findOut(o.cid)) { o.state = 'sent'; T.render(); }
+    }, function (err) { fail(o, 'Could not send: ' + (err && err.message || err)); });
     T.render();
   }
   function canLink() { var L = lastState && lastState.launch; return !hasTauri() && !!(L && L.token && L.available); }
