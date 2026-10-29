@@ -10,6 +10,10 @@ tirith lane run --project <id> --class <class> --feature "<text>" --brief <file>
 Builds the headless command from `~/.tirith/config.toml`; `-- <cmd>` keeps working (not together with
 `--agent`). Without `--prompt` / `--prompt-file` the brief file is the prompt.
 
+Without `--workspace` the lane gets its own worktree (`<repo>-lanes/<lane-id>`, branch `lane/<lane-id>`);
+`--detach` starts it in its own session and prints the lane id at once (the default inside the manager).
+The lane record's `request` is the brief it was given.
+
 ```toml
 [agents.anthropic]
 command = "<executable name>"      # always from config, never from code
