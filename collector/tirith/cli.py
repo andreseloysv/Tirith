@@ -49,7 +49,7 @@ def _unique_lane_id(home: Path, wanted: str) -> str:
 
 def register_lane(home: Path, *, lane_id: str | None, project: str, hero_class: str,
                   feature: str, workspace: str | None, log: str | None,
-                  pid: int | None, brief: str | None) -> dict:
+                  pid: int | None, brief: str | None, step: str | None = None) -> dict:
     """Write a new lane registration; returns the stored dict."""
     if not lane_id:
         lane_id = _unique_lane_id(home, _slug(feature))
@@ -66,6 +66,7 @@ def register_lane(home: Path, *, lane_id: str | None, project: str, hero_class: 
         "started_at": now_iso(), "ended_at": None, "result": None,
         "start_commit": git_head(workspace_abs), "report": None,
         "session": projects_mod.current_session(home),
+        "step": str(step) if step else None,
     }
     write_lane(home, lane)
     source = "steward" if parent == "steward" else f"agent:{parent}"
@@ -97,7 +98,7 @@ def _cmd_lane_start(args) -> int:
     lane = register_lane(
         home, lane_id=args.id, project=args.project, hero_class=args.hero_class,
         feature=args.feature, workspace=args.workspace, log=args.log,
-        pid=args.pid, brief=args.brief)
+        pid=args.pid, brief=args.brief, step=args.step)
     print(lane["id"])
     return 0
 
@@ -163,7 +164,7 @@ def _cmd_lane_run(args) -> int:
     lane = register_lane(
         home, lane_id=lane_id, project=args.project, hero_class=args.hero_class,
         feature=args.feature, workspace=str(workspace), log=str(log_path),
-        pid=None, brief=args.brief)
+        pid=None, brief=args.brief, step=args.step)
     began = time.monotonic()
     with log_path.open("ab") as log_handle:
         proc = subprocess.Popen(
@@ -765,6 +766,7 @@ def build_parser() -> argparse.ArgumentParser:
     start.add_argument("--log", default=None)
     start.add_argument("--pid", type=int, default=None)
     start.add_argument("--brief", default=None)
+    start.add_argument("--step", default=None, help="roadmap step this lane works on")
     start.set_defaults(func=_cmd_lane_start)
     end = lane_sub.add_parser("end", parents=[common], help="finish a lane")
     end.add_argument("lane_id")
@@ -781,6 +783,7 @@ def build_parser() -> argparse.ArgumentParser:
     lane_run.add_argument("--workspace", default=None)
     lane_run.add_argument("--log", default=None)
     lane_run.add_argument("--brief", default=None)
+    lane_run.add_argument("--step", default=None, help="roadmap step this lane works on")
     lane_run.add_argument("command", nargs=argparse.REMAINDER)
     lane_run.set_defaults(func=_cmd_lane_run)
 
