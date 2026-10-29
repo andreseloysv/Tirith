@@ -21,6 +21,7 @@ from tirith import brain as brain_mod
 from tirith.guardwrap import default_words, verify_guard
 from tirith.home import Config, ProjectConfig, ensure_home, load_config, now_iso, parse_iso
 from tirith import flows as flows_mod
+from tirith import manifest as manifest_mod
 from tirith import projects as projects_mod
 from tirith.rooms import RoomsService
 from tirith.names import (
@@ -391,7 +392,7 @@ class Collector:
 
     # -- pipelines -----------------------------------------------------------
 
-    def _pipelines(self, events: list[dict], resolve=None) -> list[dict]:
+    def _pipelines(self, events: list[dict], resolve=None, entries=()) -> list[dict]:
         declarations = read_json(self.home / "pipelines.json", {})
         if not isinstance(declarations, dict):
             declarations = {}
@@ -400,6 +401,10 @@ class Collector:
             if isinstance(value, dict) and isinstance(value.get("stages"), list):
                 project, _, pipeline = str(key).partition("/")
                 declared[(project, pipeline)] = [str(s) for s in value["stages"]]
+        manifests = [(e.id, manifest_mod.load(e.folder)) for e in entries if e.folder]
+        for pid, loaded in manifests:
+            for pipe in loaded.pipelines:
+                declared.setdefault((pid, pipe.id), [s.name for s in pipe.stages])
         runs: dict[str, dict] = {}
         for event in events:
             run_id = str(event.get("run") or "")
@@ -434,6 +439,12 @@ class Collector:
                 start, end = parse_iso(stage["started_at"]), parse_iso(stage["ended_at"])
                 if start and end:
                     stage["duration_s"] = max(0, int((end - start).total_seconds()))
+        for pid, loaded in manifests:
+            for pipe in loaded.pipelines:
+                if not any(r["project"] == pid and r["pipeline"] == pipe.id for r in runs.values()):
+                    runs[f"{pid}/{pipe.id}#0"] = {
+                        "run": f"{pipe.id}#0", "project": pid, "pipeline": pipe.id,
+                        "_stages": {}, "_order": [], "session": None, "_cwd": None}
         output: list[dict] = []
         for run in runs.values():
             order = declared.get((run["project"], run["pipeline"])) \
@@ -627,7 +638,7 @@ class Collector:
                 "architecture": self.architecture_for(ProjectConfig(id=entry.id, name=entry.name)),
                 "guard": {"ok": False, "problems": ["auto-discovered folder: no commit guard configured"]},
             })
-        runs = self._pipelines(events, resolve)
+        runs = self._pipelines(events, resolve, entries)
         for pid in [row["project"] for row in agent_rows] + [r["project"] for r in runs]:
             if pid and pid not in known_ids:
                 known_ids.add(pid)
