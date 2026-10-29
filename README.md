@@ -159,7 +159,5 @@ Under construction, honestly. What is described above runs today on `main`.
 - a fix so the persistent manager always starts;
 - chat with Muse Code through `muse serve` (blocked on its protocol).
 
-Optional extra: a 3D citadel of your agents in Godot 4.7 (`./run --3d`, folder `world/`). It reads the same state file.
-
 Layout: `collector/` CLI and collector · `web/` page · `app/` desktop app · `rust/` Rust port in progress ·
-`world/` optional 3D · `fixtures/` demo state · `docs/` contracts.
+`fixtures/` demo state · `docs/` contracts.
