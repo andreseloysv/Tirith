@@ -5,6 +5,7 @@
 **An autonomous manager for your coding agents. They finish the plan; you see everything and decide only what only you can.**
 
 [![CI](https://github.com/andreseloysv/Tirith/actions/workflows/tirith.yml/badge.svg)](https://github.com/andreseloysv/Tirith/actions/workflows/tirith.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 ![Platform: macOS](https://img.shields.io/badge/platform-macOS-lightgrey?logo=apple)
 ![Built for the Meta Global AI Developer Hackathon](https://img.shields.io/badge/built%20for-Meta%20AI%20Hackathon-0467DF?logo=meta&logoColor=white)
 [![GitHub stars](https://img.shields.io/github/stars/andreseloysv/Tirith?style=social)](https://github.com/andreseloysv/Tirith)
@@ -182,3 +183,5 @@ Under construction, honestly. What is described above runs today on `main`.
 
 Layout: `collector/` CLI and collector · `web/` page · `app/` desktop app · `rust/` Rust port in progress ·
 `fixtures/` demo state · `docs/` contracts.
+
+License: MIT. See [LICENSE](LICENSE).
