@@ -28,6 +28,7 @@ from tirith import github as github_mod
 from tirith import manifest as manifest_mod
 from tirith import roadmap as roadmap_mod
 from tirith import hooks as hooks_mod
+from tirith import dispatch as dispatch_mod
 from tirith import inbox as inbox_mod
 from tirith import launch as launch_mod
 from tirith.logview import entries_from_events, log_entries
@@ -661,6 +662,7 @@ class Collector:
                 "id": str(row["id"]), "project": row.get("project"),
                 "text": str(row.get("text") or ""), "since": row.get("at"),
                 "link": row.get("link"), "source": "manual",
+                **({"options": row["options"]} if row.get("options") else {}),
                 "session": row.get("session") or None,
             })
         waits.sort(key=lambda w: str(w["since"] or ""))
@@ -885,7 +887,7 @@ class Collector:
             self.home, {a["id"]: f"{a['name']} {a['epithet']}".strip() for a in agent_rows},
             projects=endpoint_projects, limit=None)
         self._fill_counts(projects, agent_rows, runs, all_flows, now)
-        inbox_rows = self._inbox(projects, agent_rows, all_flows, now)
+        inbox_rows = self._inbox(projects, agent_rows, all_flows, now, lanes)
         sessions = self._sessions(lanes, events, all_flows, raw_notes, waiting, resolve)
         for sess in sessions:
             sess["usage"] = agentrun_mod.sum_usage(
@@ -919,9 +921,12 @@ class Collector:
         }
 
     def _inbox(self, projects: list[dict], agents: list[dict], flows: list[dict],
-               now: datetime) -> list[dict]:
-        """``state.inbox``; an unanswered question gets one brain answer after ``AUTO_ANSWER_AFTER_S``."""
-        rows = inbox_mod.requests(self.home)
+               now: datetime, lanes: list[dict] | None = None) -> list[dict]:
+        """``state.inbox``; the dispatcher handles ``finish``, an unanswered question gets one brain answer
+        (at once when the dispatcher is on, else after ``AUTO_ANSWER_AFTER_S``)."""
+        rows = dispatch_mod.run(self.home, self.config, now, agents=agents, lanes=lanes or [],
+                                status_of=lane_status)
+        wait_s = 0 if self.config.dispatch_enabled else inbox_mod.AUTO_ANSWER_AFTER_S
         if self.worker.enabled:
             by_project = {p["id"]: p for p in projects}
             retry_after = 300.0
@@ -929,7 +934,7 @@ class Collector:
                 if req["kind"] != "ask" or req["status"] != "open":
                     continue
                 asked = parse_iso(req["at"])
-                if asked is None or (now - asked).total_seconds() < inbox_mod.AUTO_ANSWER_AFTER_S:
+                if asked is None or (now - asked).total_seconds() < wait_s:
                     continue
                 cached = self.cache.get("inbox-answer", req["id"])
                 if cached is not None:
@@ -938,6 +943,8 @@ class Collector:
                                                    auto=True, at=now_iso(now))
                         req["answers"].append({"at": row["at"], "by": "brain", "text": row["text"], "auto": True})
                         req["status"] = "answered"
+                        if self.config.dispatch_enabled:
+                            dispatch_mod.note_brain_answer(self.home, req, row["at"])
                     continue
                 last = self._inbox_tried.get(req["id"])
                 if last is not None and time.monotonic() - last < retry_after:
