@@ -172,7 +172,7 @@ def _rows(home: Path):
     inbox = read_jsonl(Path(home) / "inbox.jsonl")
     projects = {}
     for row in inbox:
-        if row.get("kind") in ("finish", "ask") and row.get("id"):
+        if row.get("kind") in ("finish", "ask", "chat") and row.get("id"):
             projects.setdefault(str(row["id"]), str(row.get("project") or ""))
     for row in inbox:
         if row.get("kind") == "answer":
