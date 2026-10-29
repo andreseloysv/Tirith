@@ -32,10 +32,9 @@ PRESET_DEFAULTS: dict[str, dict] = {
                  "--permission-mode", "acceptEdits"],
         "print_flag": "-p",
         "stdin": True,
-        "permissions": ["Read", "Edit", "Write", "Glob", "Grep", "NotebookEdit",
-                        "Bash(git status:*)", "Bash(git diff:*)", "Bash(git log:*)",
-                        "Bash(ls:*)", "Bash(uv run:*)", "Bash(python3:*)", "Bash(node:*)",
-                        "Bash(tirith:*)"],
+        # everything is allowed: a headless agent cannot ask, and the Tirith hooks decide
+        "permissions": ["Bash", "Read", "Edit", "Write", "Glob", "Grep", "WebFetch", "WebSearch",
+                        "NotebookEdit"],
         "permissions_flag": "--allowedTools",
         "permissions_join": ",",
         "model_flag": "--model",
@@ -63,9 +62,7 @@ PRESET_DEFAULTS: dict[str, dict] = {
     },
     "copilot": {
         "args": ["--output-format", "json", "--no-ask-user"],
-        "permissions": ["write", "shell(git status)", "shell(git diff)", "shell(git log)",
-                        "shell(ls)", "shell(uv run)", "shell(python3)", "shell(node)",
-                        "shell(tirith)"],
+        "permissions": ["write", "shell"],  # all shell and writes; the Tirith hooks decide
         "permissions_flag": "--allow-tool",
         "model_flag": "--model",
         "effort_flag": "--reasoning-effort",
