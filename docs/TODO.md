@@ -78,7 +78,6 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Codex y Copilot probados con `lane run` (presets por alias, salida JSON, permisos). (en curso: u-copilotreal)
 - [x] Agentes en la nube y CI remoto desde GitHub (PRs y Actions).
 - [x] Token de GitHub disponible para el collector.
-- [ ] Usuarios de agentes en la nube en `agent_logins` (fuera de este plan: solo si se usan).
 
 ## 6. Pipelines con autodescubrimiento (`tirith.toml`)
 
