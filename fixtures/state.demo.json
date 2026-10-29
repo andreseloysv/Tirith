@@ -2023,5 +2023,51 @@
   "launch": {
     "token": "demo-launch-token-0123456789",
     "available": true
-  }
+  },
+  "inbox": [
+    {
+      "id": "in-3f9a21c0",
+      "at": "2026-10-28T19:31:00Z",
+      "kind": "ask",
+      "project": "tirith",
+      "step": "4",
+      "text": "Is this step blocked on anything I have to decide?",
+      "status": "answered",
+      "answers": [
+        {
+          "at": "2026-10-28T19:33:10Z",
+          "by": "steward",
+          "auto": false,
+          "text": "Not blocked. It waits for step 3 to merge, then **one agent** starts on it.\n\n- Nothing needed from you\n- Expected: this evening"
+        }
+      ]
+    },
+    {
+      "id": "in-7be410d2",
+      "at": "2026-10-28T19:36:00Z",
+      "kind": "ask",
+      "project": "tirith",
+      "step": "2",
+      "text": "What is going on with this step?",
+      "status": "answered",
+      "answers": [
+        {
+          "at": "2026-10-28T19:38:05Z",
+          "by": "brain",
+          "auto": true,
+          "text": "Two of the three items are done. The remaining one, the link handler tests, has no agent on it yet.\n\nNo agent is working on this step right now."
+        }
+      ]
+    },
+    {
+      "id": "in-c20d85a4",
+      "at": "2026-10-28T19:39:00Z",
+      "kind": "finish",
+      "project": "tirith",
+      "step": "3",
+      "text": "",
+      "status": "open",
+      "answers": []
+    }
+  ]
 }
