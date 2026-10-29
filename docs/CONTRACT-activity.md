@@ -22,13 +22,36 @@ New fields on each `state.agents[]` item:
 
 ## Test commands
 
-A shell command counts as a test run when one of its segments (split on `&&`, `||`, `;`, `|`) runs
-`pytest` (so `uv run … pytest` too), `npm test` / `npm run test`, `pnpm test`, `yarn test`, `vitest`,
-`jest`, `go test`, `cargo test`, `gradle`/`gradlew … test`, `make test` / `make check`,
-`xcodebuild … test`, `swift test` or `tirith run … --stage test`. Segments starting with `grep`, `cat`,
-`echo`, `git`, `tail` and similar viewers are ignored. `result`: `running` until the tool result
-arrives, then `failed` when the result is an error (or its text reports `N failed` / `N errors`),
-else `passed`. When the lane is no longer working, a still-`running` test becomes null.
+The shell line is split into simple commands (`&&`, `||`, `;`, `|`, newline, outside quotes); `cd`,
+`VAR=x` assignments and wrappers (`time`, `env`, `sudo`, `nohup`) are skipped. It counts as a test run
+only when a simple command's PROGRAM (and subcommand) is a test runner: `pytest`, `python -m pytest`,
+`uv run [opts] pytest` (also `poetry run`, `uvx`, `npx`), `npm|pnpm|yarn|bun [run] test[:x]`, `vitest`,
+`jest`, `go test`, `cargo test`, `swift test`, `gradle`/`gradlew … test*`, `make test|check`,
+`xcodebuild … test`, `tirith run … --stage test`. A path or word containing "test" is never enough
+(`cd …/tests && ls`, `sed -i … tests/x.py`, `echo pytest` are not tests).
+
+`result`: `running` until the tool result arrives, then read from the OUTPUT when it has a summary
+(`N passed`, `N failed`, `N errors`, jest/vitest `Tests:` lines, gradle `BUILD SUCCESSFUL|FAILED`, go
+`ok`/`FAIL`, cargo `test result: ok`): any failure or error means `failed`, else `passed`. Only when the
+output has no summary does the tool's error flag / exit code decide (a pipe to `tail` hides the exit
+code). When the lane is no longer working, a still-`running` test becomes null.
+
+Each test row also carries `passed` / `failed` (integers, when the output gave counts) and, when the
+readable `command` differs from what ran, `full` (the whole line, up to 400 chars). `command` has leading
+`cd … &&` dropped and paths relative to the workspace; the page shows it, with `full` on hover.
+
+## Request and report
+
+- `agents[].request`: `{text (≤ 2 KB), at, agent_session_id}` or null. `tirith lane run|start` records
+  it: the request file (`~/.tirith/requests/<session>.json`, written by `tirith hook`) of the agent
+  session in env `TIRITH_AGENT_SESSION`, else the newest request of the last 6 hours. Children inherit
+  the nearest ancestor's request in the state; the page shows "Asked by you" on the root lane only.
+- `agents[].report`: the lane's final answer in markdown, whole (stored and exposed up to 16 KB, cut at a
+  line boundary), never shortened for the UI. `summary` is one line (cut at a word); the page shows the
+  report instead of the summary when there is one.
+- The page renders every agent-written text (`report`, `summary`, `goal`, `request`, `say`/`done` log
+  entries, room messages, waits) as markdown with `web/js/md.js` (HTML escaped first, links only
+  http/https/file) and clamps long text to about 8 lines with "Show all".
 
 ## Events from the lane log
 

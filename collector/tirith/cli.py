@@ -13,6 +13,7 @@ import re
 import subprocess
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 from tirith.collector import (
@@ -24,7 +25,7 @@ from tirith import manifest as manifest_mod
 from tirith import hooks as hooks_mod
 from tirith import projects as projects_mod
 from tirith import rooms as rooms_mod
-from tirith.home import ensure_home, load_config, now_iso, tirith_home
+from tirith.home import ensure_home, load_config, now_iso, parse_iso, tirith_home
 from tirith.store import (
     append_jsonl, final_answer, lane_path, read_json, read_jsonl, write_json_atomic, write_lane,
 )
@@ -47,6 +48,49 @@ def _unique_lane_id(home: Path, wanted: str) -> str:
     return candidate
 
 
+REQUEST_MAX = 2048
+REQUEST_WINDOW_S = 6 * 3600
+REPORT_MAX = 16 * 1024
+
+
+def bound_text(text, limit: int) -> str:
+    """``text`` cut at a line boundary under ``limit`` characters (whole lines only)."""
+    text = str(text or "")
+    if len(text) <= limit:
+        return text
+    cut = text[:limit - 3]
+    head = cut.rsplit("\n", 1)[0] if "\n" in cut else cut
+    return head.rstrip() + "\n\n…"
+
+
+def owner_request(home: Path, environ=None) -> dict | None:
+    """The owner's request this lane answers: the parent's agent session (``TIRITH_AGENT_SESSION``)
+    else the most recent request within the last 6 hours, as ``{text, at, agent_session_id}``."""
+    env = os.environ if environ is None else environ
+    folder = home / hooks_mod.REQUESTS_DIR
+    wanted = re.sub(r"[^A-Za-z0-9._-]", "_", env.get("TIRITH_AGENT_SESSION") or "")
+    best, best_at = None, None
+    for path in sorted(folder.glob("*.json")) if folder.is_dir() else []:
+        data = read_json(path, None)
+        when = parse_iso(data.get("at")) if isinstance(data, dict) else None
+        if not when or not data.get("prompt"):
+            continue
+        if wanted:
+            if path.stem == wanted:
+                best, best_at = data, when
+                break
+            continue
+        if best_at is None or when > best_at:
+            best, best_at = data, when
+    if best is None and wanted:
+        return owner_request(home, {})
+    if best is None or (not wanted and (datetime.now(timezone.utc) - best_at).total_seconds()
+                        > REQUEST_WINDOW_S):
+        return None
+    return {"text": bound_text(best["prompt"], REQUEST_MAX), "at": best["at"],
+            "agent_session_id": str(best.get("agent_session_id") or "")}
+
+
 def register_lane(home: Path, *, lane_id: str | None, project: str, hero_class: str,
                   feature: str, workspace: str | None, log: str | None,
                   pid: int | None, brief: str | None, step: str | None = None) -> dict:
@@ -67,6 +111,7 @@ def register_lane(home: Path, *, lane_id: str | None, project: str, hero_class: 
         "start_commit": git_head(workspace_abs), "report": None,
         "session": projects_mod.current_session(home),
         "step": str(step) if step else None,
+        "request": owner_request(home),
     }
     write_lane(home, lane)
     source = "steward" if parent == "steward" else f"agent:{parent}"
@@ -83,7 +128,7 @@ def end_lane(home: Path, lane_id: str, result: str, report: str | None = None) -
     lane["ended_at"] = now_iso()
     lane["result"] = result
     if report is not None:
-        lane["report"] = report
+        lane["report"] = bound_text(report, REPORT_MAX)
     write_lane(home, lane)
     flows_mod.append_flow(
         home, f"agent:{lane_id}", "steward", "report",

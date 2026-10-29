@@ -23,14 +23,32 @@
     var st = T.agentState(a), h = '<div class="astat"><span class="sbadge ' + st + '">' + (st === 'active' ? '<i class="pdot2"></i>' : '') + T.cap(st) + '</span>';
     if (o.clock) h += '<span class="mut">' + (a.status === 'working' ? 'running ' : 'took ') + T.agentClock(a) + '</span>';
     if (a.last_activity_at && st !== 'done' && st !== 'failed') h += '<span class="mut">last activity ' + agoLong(a.last_activity_at) + '</span>';
-    return h + '</div>' + (a.summary ? '<p class="sum">' + esc(a.summary) + '</p>' : '');
+    /* the report is the full answer; the one-line summary only shows when it says something else */
+    var text = a.report || (T.sameText(a.summary, a.report) ? '' : a.summary);
+    return h + '</div>' + (text ? '<div class="sum">' + T.mdBox(text, a.id + ':status') + '</div>' : '');
+  }
+  /* true when one text starts like (or sits inside) the other, ignoring markdown marks and spacing */
+  function flat(t) { return String(t || '').toLowerCase().replace(/[`*_#>~\[\]()|-]/g, '').replace(/\s+/g, ' ').trim(); }
+  T.sameText = function (a, b) {
+    var x = flat(a), y = flat(b);
+    if (!x || !y) return false;
+    return y.indexOf(x.slice(0, 60)) >= 0 || x.indexOf(y.slice(0, 60)) >= 0;
+  };
+  /* the owner's request, on the root lane of a tree only (children inherit it from the collector) */
+  function asked(a) {
+    var s = T.rawState && T.rawState();
+    if (!a.request || !a.request.text) return '';
+    if (a.parent && s && T.agentById(s, a.parent)) return '';
+    return sec('Asked by you', T.mdBox(a.request.text, a.id + ':asked'));
   }
   function tests(a) {
     var l = (a.tests || []).slice().reverse();
     if (!l.length) return none('No tests yet');
     return '<ul class="trows">' + l.map(function (t) {
       var r = RES[t.result] || 'unknown';
-      return '<li><span class="rb ' + r + '">' + (r === 'unknown' ? 'no result' : r) + '</span><code title="' + esc(t.command) + '">' + esc(t.command) + '</code><span class="mut when">' + esc(T.clockTime(t.at)) + '</span></li>';
+      var cnt = t.passed != null ? t.passed + ' passed' + (t.failed ? ', ' + t.failed + ' failed' : '') : '';
+      return '<li><span class="rb ' + r + '">' + (r === 'unknown' ? 'no result' : r) + '</span><code title="' + esc(t.full || t.command) + '">' + esc(t.command) + '</code>' +
+        (cnt ? '<span class="mut tcnt">' + esc(cnt) + '</span>' : '') + '<span class="mut when">' + esc(T.clockTime(t.at)) + '</span></li>';
     }).join('') + '</ul>';
   }
   function tools(a) {
@@ -62,7 +80,8 @@
      opts.clock: show the running time (off when the card beside it already shows it) */
   T.activity = function (a, opts) {
     var o = opts || {}, h = '';
-    if (o.goal !== false && a.goal) h += sec('Goal', '<p class="agoal">' + esc(a.goal) + '</p>');
+    h += asked(a);
+    if (o.goal !== false && a.goal) h += sec('Goal', '<div class="agoal">' + T.mdBox(a.goal, a.id + ':goal') + '</div>');
     h += sec('Status', status(a, o));
     if (o.log !== false) h += sec('Log', T.logView(a));
     h += sec('Tests', tests(a), (a.tests || []).length || null);

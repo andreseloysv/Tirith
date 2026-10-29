@@ -364,3 +364,35 @@ button.fhead { border-radius: 12px; }
 .pitems .pi { display: inline-flex; flex: none; transform: translateY(2px); } .pitems li.none { color: var(--mut); }
 .pitems code { font-size: 11.5px; }
 .pcard.compact { padding: 4px 16px 6px; } .pcard.compact .ptog { padding: 6px 0; }
+
+/* ---------- markdown (md.js) ---------- */
+.md { font-size: 12.5px; line-height: 1.45; color: #1f2937; word-break: break-word; overflow-wrap: anywhere; }
+.md > :first-child { margin-top: 0; } .md > :last-child { margin-bottom: 0; }
+.md p { margin: 0 0 6px; }
+.md .mdh { font-weight: 600; color: #111827; margin: 8px 0 3px; line-height: 1.3; }
+.md .mdh1 { font-size: 14px; } .md .mdh2 { font-size: 13.5px; } .md .mdh3 { font-size: 12.5px; }
+.md .mdh4 { font-size: 11.5px; letter-spacing: .03em; text-transform: uppercase; color: var(--mut); }
+.md ul, .md ol { margin: 0 0 6px; padding-left: 18px; } .md li { margin: 1px 0; } .md li > ul, .md li > ol { margin: 1px 0 0; }
+.md code { font-size: 11.5px; padding: 0 4px; background: rgba(120,135,160,.14); border-radius: 4px; }
+.md .mdpre { margin: 4px 0 6px; padding: 7px 9px; overflow-x: auto; background: rgba(31,41,55,.06); border: 1px solid rgba(120,135,160,.16); border-radius: 8px; }
+.md .mdpre code { display: block; padding: 0; background: none; font-size: 11.5px; line-height: 1.5; white-space: pre; }
+.md blockquote { margin: 4px 0 6px; padding: 1px 0 1px 9px; border-left: 3px solid rgba(120,135,160,.3); color: #4b5563; }
+.md hr { border: 0; border-top: 1px solid rgba(120,135,160,.2); margin: 8px 0; }
+.md a { color: #1d4fc4; }
+.md .mdtbl { overflow-x: auto; margin: 4px 0 6px; }
+.md table { border-collapse: collapse; font-size: 12px; } .md th, .md td { padding: 3px 9px; border: 1px solid rgba(120,135,160,.2); text-align: left; }
+.md th { background: rgba(120,135,160,.1); font-weight: 600; }
+.md li.mdtask { list-style: none; margin-left: -16px; } .mdchk { display: inline-block; width: 11px; height: 11px; margin-right: 6px; vertical-align: -1px; border: 1.5px solid #9aa3b2; border-radius: 3px; }
+.mdchk.on { background: #2ea44f; border-color: #2ea44f; box-shadow: inset 0 0 0 2px #fff; } .mdtask.done { color: var(--mut); }
+.md.mdi { display: inline; font-size: inherit; }
+
+/* clamp to ~8 lines after rendering, with a fade; the button shows only when there is more */
+.mdc { position: relative; }
+.mdc:not(.open) > .md { max-height: calc(var(--mdl, 8) * 1.45em * 1.0); overflow: hidden;
+  -webkit-mask-image: linear-gradient(#000 calc(100% - 2.2em), transparent); mask-image: linear-gradient(#000 calc(100% - 2.2em), transparent); }
+.mdc:not(.over) > .md { -webkit-mask-image: none; mask-image: none; }
+.mdc .mdmore { display: none; margin-top: 3px; font-size: 11.5px; } .mdc.over .mdmore { display: inline-block; }
+.txt.mdt { display: block; -webkit-line-clamp: unset; overflow: visible; }
+.asec .sum .md, .asec .agoal .md { color: #1f2937; }
+.trows .tcnt { font-size: 11px; white-space: nowrap; }
+.lsay .mdc, .ldt .mdc { min-width: 0; }
