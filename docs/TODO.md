@@ -150,7 +150,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Enlaces `tirith://` con un manejador local (sin servidores) y token para que ninguna otra web lance agentes.
 - [x] Botón «Terminar con un agente» en cada paso no terminado del Plan.
 - [x] Registrar el manejador `tirith://` en macOS.
-- [ ] Probar un lanzamiento real desde el navegador con el enlace `tirith://` (dueño: pulsa «Finish this step» en un paso desde el navegador).
+- [x] Probar un lanzamiento real desde el navegador con el enlace `tirith://` (probado por un agente el 2026-10-29: el enlace llega al inbox y queda en el log del handler).
 - [x] Al terminar un lane lanzado así: botón «Revisar y unir» (tests + merge).
 - [x] Buzón del dueño: «Termínalo» y «¿Qué pasa?» en cada paso; el aviso llega al steward.
 - [x] Respuestas bajo cada paso (steward, o Muse Spark automático si el steward no responde en 2 min).
@@ -194,7 +194,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Editar, borrar o añadir elementos del Plan con un botón; el plan se vuelve a comprobar después.
 - [x] `state.json` pequeño y rápido (detalle del agente bajo demanda); `tirith` se encuentra fuera de una terminal.
 - [x] La app de escritorio muestra la web actual sin recompilar y arranca el collector aun abierta desde Finder.
-- [ ] Comprobar en pantalla que el piloto automático y la lista «Agents» coinciden (el dueño vio «5 agents working» sin agentes).
+- [x] Comprobar en pantalla que el piloto automático y la lista «Agents» coinciden (comprobado con captura el 2026-10-29).
 
 ## Orden
 
