@@ -38,6 +38,7 @@ from tirith import actions as actions_mod
 from tirith import inbox as inbox_mod
 from tirith import launch as launch_mod
 from tirith import fallback as fallback_mod
+from tirith import filerefs as filerefs_mod
 from tirith import models as models_mod
 from tirith import review as review_mod
 from tirith.logview import entries_from_events, log_entries
@@ -1221,6 +1222,7 @@ class Collector:
             "live": self._manager_live(),
         }
         manager_queue = asks_mod.queue_items(self.home, only_open=True)[-asks_mod.QUEUE_STATE_ROWS:]
+        says = inbox_mod.says(self.home)
         return {
             "version": 1,
             "generated_at": now_iso(now),
@@ -1243,7 +1245,9 @@ class Collector:
             "violations": violations,
             "rules": rules_state,
             "inbox": inbox_rows,
-            "says": inbox_mod.says(self.home),
+            "says": says,
+            "file_refs": filerefs_mod.build(
+                filerefs_mod.chat_texts(inbox_rows, says, waiting + answered_waits), projects),
             "autopilot": autopilot_mod.public(self.home, self.config, agent_rows, projects, now),
             "launch": {"token": launch_mod.launch_token(self.home),
                        "available": launch_mod.handler_installed()},

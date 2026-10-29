@@ -30,6 +30,7 @@ from tirith import actions as actions_mod
 from tirith import agentrun as agentrun_mod
 from tirith import asks as asks_mod
 from tirith import fallback as fallback_mod
+from tirith import filerefs as filerefs_mod
 from tirith import flows as flows_mod
 from tirith import gates as gates_mod
 from tirith import manifest as manifest_mod
@@ -1148,6 +1149,26 @@ def _cmd_launch(args) -> int:
     return 0
 
 
+def _open_file(home: Path, project: str, path: str, line: int | None, col: int | None) -> None:
+    """Open one file named in the chat, checked against the registered project folders."""
+    config = load_config(home)
+    entries = projects_mod.entries(config, projects_mod.load_auto(home))
+    target = filerefs_mod.open_file(
+        [{"id": e.id, "folder": str(e.folder)} for e in entries if e.folder], project, path, line, col,
+        config.app_editor)
+    print(f"opened {target}")
+
+
+def _cmd_open(args) -> int:
+    """``tirith open --project P --path X [--line N]``: the desktop app's click on a file in the chat."""
+    try:
+        _open_file(_home(args), args.project or "", args.path, args.line, args.col)
+    except filerefs_mod.FileRefError as error:
+        print(f"tirith open: {error}", file=sys.stderr)
+        return 3
+    return 0
+
+
 def _cmd_url_open(args) -> int:
     home = _home(args)
     launch_mod.log_handler(home, "received " + launch_mod.redact_url(args.url))
@@ -1159,7 +1180,7 @@ def _cmd_url_open(args) -> int:
 def _url_open(args, home: Path) -> int:
     try:
         link = launch_mod.parse_url(args.url)
-        if link["action"] not in ("launch", "inbox", "review", "run", "stop"):
+        if link["action"] not in ("launch", "inbox", "review", "run", "stop", "open"):
             raise launch_mod.LaunchError(f"unknown action '{link['action']}' in {args.url!r}")
         if not launch_mod.token_ok(home, link["token"]):
             gates_mod.record_violation(
@@ -1180,6 +1201,10 @@ def _url_open(args, home: Path) -> int:
             inbox_mod.add_request(home, fields["kind"], fields["project"], fields["step"], fields["text"],
                                   cid=fields["cid"])
             return 0
+        if link["action"] == "open":
+            ref = filerefs_mod.parse_open_url(args.url)
+            _open_file(home, ref["project"], ref["path"], ref["line"], ref["col"])
+            return 0
         if link["action"] == "stop":
             lane = read_json(lane_path(home, link["lane"]), None)
             if not isinstance(lane, dict) or lane.get("ended_at"):
@@ -1197,7 +1222,7 @@ def _url_open(args, home: Path) -> int:
             return 0
         launch_step(home, link["project"], link["step"], link["agent"])
     except (launch_mod.LaunchError, inbox_mod.InboxError, review_mod.ReviewError,
-            actions_mod.ActionError) as error:
+            actions_mod.ActionError, filerefs_mod.FileRefError) as error:
         print(f"tirith url open: {error}", file=sys.stderr)
         return 3
     return 0
@@ -2036,6 +2061,14 @@ def build_parser() -> argparse.ArgumentParser:
     url_open = url_sub.add_parser("open", parents=[common], help="handle one tirith:// link")
     url_open.add_argument("url")
     url_open.set_defaults(func=_cmd_url_open)
+
+    open_cmd = sub.add_parser("open", parents=[common],
+                              help="open a file named in the chat (inside a registered project folder)")
+    open_cmd.add_argument("--project", default="", help="the message's project ('' = the tirith repo)")
+    open_cmd.add_argument("--path", required=True, help="the path as the message names it")
+    open_cmd.add_argument("--line", type=int, default=None)
+    open_cmd.add_argument("--col", type=int, default=None)
+    open_cmd.set_defaults(func=_cmd_open)
     return parser
 
 
