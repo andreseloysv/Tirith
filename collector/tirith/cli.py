@@ -226,6 +226,17 @@ def _cmd_lane_stop(args) -> int:
     return 0
 
 
+def _cmd_lane_drop(args) -> int:
+    home = _home(args)
+    try:
+        review_mod.drop_lane(home, args.lane_id, _lane_repo(home, args.lane_id))
+    except review_mod.ReviewError as error:
+        print(f"tirith lane drop: {error}", file=sys.stderr)
+        return 3
+    print(f"lane {args.lane_id}: dropped")
+    return 0
+
+
 def _cmd_lane_end(args) -> int:
     home = _home(args)
     report = args.report
@@ -1400,6 +1411,9 @@ def build_parser() -> argparse.ArgumentParser:
     review.add_argument("lane_id")
     review.add_argument("--tests-only", action="store_true", help="run the tests, do not merge")
     review.set_defaults(func=_cmd_lane_review)
+    drop = lane_sub.add_parser("drop", parents=[common], help="throw away a launched lane's worktree and branch")
+    drop.add_argument("lane_id")
+    drop.set_defaults(func=_cmd_lane_drop)
     lane_run = lane_sub.add_parser("run", parents=[common],
                                    help="start an agent command as a lane")
     lane_run.add_argument("--project", required=True)

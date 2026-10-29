@@ -100,6 +100,7 @@ class Config:
     launch_command: str | list[str] | None = None  # [launch] command template: {brief}, {workspace}
     dispatch_enabled: bool = True  # [dispatch] enabled: Tirith itself handles the owner's requests
     dispatch_auto_launch: bool = True  # [dispatch] auto_launch: a "finish" request starts a lane
+    review_auto_merge: bool = True  # [review] auto_merge: a passing lane is merged; false = tests only
     steward_session_cwd: str | None = None  # [steward] session_cwd: the folder the steward runs in
 
     def room(self, room_id: str) -> RoomConfig | None:
@@ -186,6 +187,8 @@ def load_config(home: Path) -> Config:
     dispatch = raw.get("dispatch") if isinstance(raw.get("dispatch"), dict) else {}
     cfg.dispatch_enabled = dispatch.get("enabled", True) is not False
     cfg.dispatch_auto_launch = dispatch.get("auto_launch", True) is not False
+    review = raw.get("review") if isinstance(raw.get("review"), dict) else {}
+    cfg.review_auto_merge = review.get("auto_merge", True) is not False
     agents_raw = raw.get("agents") if isinstance(raw.get("agents"), dict) else {}
     cfg.agents = {str(alias): dict(table) for alias, table in agents_raw.items()
                   if isinstance(table, dict)}

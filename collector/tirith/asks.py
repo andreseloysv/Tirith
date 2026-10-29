@@ -118,10 +118,13 @@ def queue_add(home: Path, project: str, lane: str, text: str, kind: str = "revie
     return row
 
 
-def queue_done(home: Path, item_id: str) -> None:
+def queue_done(home: Path, item_id: str, result: str | None = None) -> None:
     if not any(r["id"] == item_id for r in queue_items(home)):
         raise AskError(f"no steward queue item {item_id}")
-    append_jsonl(queue_path(home), {"id": item_id, "at": now_iso(), "done": True})
+    row = {"id": item_id, "at": now_iso(), "done": True}
+    if result:
+        row["result"] = str(result)[:QUEUE_TEXT_MAX]
+    append_jsonl(queue_path(home), row)
 
 
 def queue_items(home: Path, only_open: bool = False) -> list[dict]:
@@ -133,6 +136,8 @@ def queue_items(home: Path, only_open: bool = False) -> list[dict]:
         if row.get("done"):
             if rid in out:
                 out[rid]["status"] = "done"
+                if row.get("result"):
+                    out[rid]["result"] = str(row["result"])
         elif rid not in out:
             out[rid] = {"id": rid, "at": row.get("at"), "kind": row.get("kind") or "review",
                         "project": row.get("project"), "lane": row.get("lane"),

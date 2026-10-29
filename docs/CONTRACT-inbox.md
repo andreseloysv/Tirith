@@ -202,6 +202,11 @@ token check as before. The app has `inbox_reply(wait, project, value, text)` nex
 
 ## Lane endings
 
+- Every launched lane that ends `done` is reviewed automatically by the dispatcher (see
+  `docs/CONTRACT-launch.md`, "Automatic review"); its merge answers the request that started it
+  (`by: "tirith"`), and its steward queue item (`kind: "review"`, closed with `result`) blocks the steward's
+  `Stop` while it is older than 60 s and open. Owner items of a failed review carry Run `actions`.
+
 - A lane that ends `done` with an "open / needs the owner / left for you" section in its report creates
   **no** ask for the owner. It adds one `kind: "review"` item to the steward queue (`tirith lane end` and
   `tirith lane run` both do it). The steward triages it (`tirith queue list`, `tirith queue done <id>`)
