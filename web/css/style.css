@@ -396,3 +396,8 @@ button.fhead { border-radius: 12px; }
 .asec .sum .md, .asec .agoal .md { color: #1f2937; }
 .trows .tcnt { font-size: 11px; white-space: nowrap; }
 .lsay .mdc, .ldt .mdc { min-width: 0; }
+
+.usage { margin: 0 0 8px; font-variant-numeric: tabular-nums; } .ovusage { margin: 0 0 10px; }
+.diff { margin: 6px 0 0; padding: 8px 0; max-height: 360px; overflow: auto; font: 11px/1.45 ui-monospace, Menlo, monospace; background: rgba(255,255,255,.6); border: 1px solid var(--glass-line); border-radius: 8px; }
+.diff .dl { display: block; padding: 0 10px; white-space: pre; }
+.diff .da { background: #e3f6e9; color: #1e7a3c; } .diff .dd { background: #fde8e8; color: #b4252b; } .diff .dh { color: #6b3fb0; background: #efe6fb; } .diff .dm { color: var(--mut); font-weight: 600; }
