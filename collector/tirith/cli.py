@@ -996,7 +996,9 @@ def _cmd_collect(args) -> int:
     collector = Collector(home)
     if not args.once and hasattr(signal, "SIGTERM"):
         # the desktop app stops the collector with SIGTERM: unwind so the lock file handle closes cleanly
+        # a second SIGTERM (e.g. forwarded by uv) must not raise again while the interpreter shuts down
         def _terminate(signum, frame):
+            signal.signal(signal.SIGTERM, signal.SIG_IGN)
             raise SystemExit(0)
         signal.signal(signal.SIGTERM, _terminate)
     try:
