@@ -42,6 +42,7 @@ from tirith import collectlock as collectlock_mod
 from tirith import selfreload as selfreload_mod
 from tirith import inbox as inbox_mod
 from tirith import setup as setup_mod
+from tirith import keepgoing as keepgoing_mod
 from tirith import lanestop as lanestop_mod
 from tirith import managerd as managerd_mod
 from tirith import launch as launch_mod
@@ -457,6 +458,47 @@ def _duplicate_lane(home: Path, args, item: str | None) -> dict | None:
     return launch_mod.working_lane(others, args.project, str(args.step), lane_status, item)
 
 
+def _run_child(home: Path, lane: dict, lane_id: str, command: list[str], workspace: Path, env: dict,
+               log_path: Path, stdin_text: str | None) -> tuple[int, str]:
+    """One run of the lane's agent process: ``(exit code, final answer)``."""
+    with log_path.open("ab") as log_handle:
+        proc = subprocess.Popen(
+            command, cwd=str(workspace), env=env,
+            stdin=subprocess.PIPE if stdin_text else subprocess.DEVNULL,
+            stdout=log_handle, stderr=subprocess.STDOUT,
+            start_new_session=os.name == "posix")  # its own process group: `lane stop` ends all of it
+        lane = read_json(lane_path(home, lane_id), None) or lane  # keeps what the agent recorded (outcome)
+        lane["pid"] = proc.pid
+        if os.name == "posix":
+            lane["pgid"] = proc.pid
+        write_lane(home, lane)
+        if stdin_text:  # a long prompt (the brief) is read from stdin, not from argv
+            try:
+                proc.stdin.write(stdin_text.encode("utf-8"))
+                proc.stdin.close()
+            except OSError:  # the agent exited before reading it; its exit code tells
+                pass
+        watch = timeouts_mod.supervise(proc, "agent-turn", home=home, what=f"lane {lane_id}")
+        exit_code = proc.wait()
+        ended = watch()
+    answer, _ = final_answer(log_path)
+    if ended["timed_out"]:
+        exit_code, answer = timeouts_mod.EXIT_TIMED_OUT, ended["message"]
+    return exit_code, answer
+
+
+def _resume_child(home: Path, config, args, lane: dict, command: list[str], log_path: Path, answer: str,
+                  text: str) -> tuple[list[str], str | None] | None:
+    """The command (and stdin text) that sends ``text`` to the lane's agent again, or None."""
+    alias = str(args.agent or getattr(args, "as_agent", None) or "")
+    try:
+        brief = Path(str(lane.get("brief") or "")).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        brief = ""
+    return keepgoing_mod.resume_command(config, alias, args.project, command,
+                                        keepgoing_mod.session_id(log_path), text, answer, brief)
+
+
 def _cmd_lane_run(args) -> int:
     home = _home(args)
     command = list(args.command or [])
@@ -536,29 +578,25 @@ def _cmd_lane_run(args) -> int:
         exit_code = _run_interactive(home, lane, command, workspace, env)
         answer = _last_stop_message(home, lane_id, lane.get("started_at"))
     else:
-        with log_path.open("ab") as log_handle:
-            stdin_text = getattr(args, "stdin_text", None)
-            proc = subprocess.Popen(
-                command, cwd=str(workspace), env=env,
-                stdin=subprocess.PIPE if stdin_text else subprocess.DEVNULL,
-                stdout=log_handle, stderr=subprocess.STDOUT,
-                start_new_session=os.name == "posix")  # its own process group: `lane stop` ends all of it
-            lane["pid"] = proc.pid
-            if os.name == "posix":
-                lane["pgid"] = proc.pid
-            write_lane(home, lane)
-            if stdin_text:  # a long prompt (the brief) is read from stdin, not from argv
-                try:
-                    proc.stdin.write(stdin_text.encode("utf-8"))
-                    proc.stdin.close()
-                except OSError:  # the agent exited before reading it; its exit code tells
-                    pass
-            watch = timeouts_mod.supervise(proc, "agent-turn", home=home, what=f"lane {lane_id}")
-            exit_code = proc.wait()
-            ended = watch()
-        answer, _ = final_answer(log_path)
-        if ended["timed_out"]:
-            exit_code, answer = timeouts_mod.EXIT_TIMED_OUT, ended["message"]
+        stdin_text = getattr(args, "stdin_text", None)
+        rounds, missing = 0, []
+        while True:
+            exit_code, answer = _run_child(home, lane, lane_id, command, workspace, env, log_path, stdin_text)
+            stopped = lanestop_mod.marker(read_json(lane_path(home, lane_id), None) or {})
+            if stopped or exit_code != 0 or not (args.agent or getattr(args, "as_agent", None)):
+                break
+            missing = keepgoing_mod.gaps(home, lane, proj.repo, answer)
+            if not missing or rounds >= keepgoing_mod.MAX_ROUNDS:
+                break
+            rounds += 1
+            keepgoing_mod.note_round(home, lane_id, rounds, missing)
+            resumed = _resume_child(home, config, args, lane, command, log_path, answer,
+                                    keepgoing_mod.message(missing, rounds))
+            if resumed is None:
+                break
+            command, stdin_text = resumed
+        if missing and not stopped and exit_code == 0:
+            keepgoing_mod.queue_gaps(home, lane, missing)
     stopped = lanestop_mod.marker(read_json(lane_path(home, lane_id), None) or {})
     if stopped:  # `tirith lane stop`: failed, with who stopped it and why
         exit_code, answer = exit_code or 1, lanestop_mod.report_for(stopped["by"], stopped.get("reason"))
