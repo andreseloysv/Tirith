@@ -38,6 +38,20 @@ _COMMIT_VALUE_FLAGS = "mFCctSu"  # short commit options that take a value: the r
 _BUILTINS = {"cd", "export", "set", "for", "do", "done", "if", "then", "else", "fi", "exit", "true",
              "while", "case", "esac", "pushd", "popd"}
 
+# rule id -> one plain sentence for a non-programmer (shown in the web page; a test fails when a
+# built-in rule of ``manifest.BUILT_IN_RULES`` has none)
+DESCRIPTIONS: dict[str, str] = {
+    "subagent-tool": "Agents may not start helpers on their own; every helper starts through Tirith so you can see it.",
+    "agent-cli": "Agents may only be started through Tirith, so each one shows up as a lane you can follow.",
+    "no-verify": "Nobody may skip the safety checks that run before a commit.",
+    "hooks-path": "Nobody may switch off the commit checks by pointing git at other hooks.",
+    "git-hooks": "Agents may not edit or delete the commit checks that guard the project.",
+    "raw-stage": "Tests and builds must run through Tirith, so you can see them in Pipelines.",
+    "lane-brief": "Every lane starts with a written task, so the agent knows what to do.",
+    "project-check": "No new lane starts while the project's setup has problems.",
+    "commit-guard": "Commits are checked for banned words and failing tests before they are accepted.",
+}
+
 
 @dataclass
 class Violation:

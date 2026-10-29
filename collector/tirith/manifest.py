@@ -5,6 +5,8 @@ See ``docs/CONTRACT-manifest.md``. Parsing never raises: problems come back as d
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 import tomllib
 from dataclasses import dataclass, field
@@ -69,6 +71,14 @@ class Rule:
     match: str | None = None
     regex: str | None = None
     paths: list[str] = field(default_factory=list)
+    description: str = ""  # one plain sentence for a non-programmer
+    described: str | None = None  # hash of the match fields when the description was written
+
+
+def match_hash(action: str, match: str | None, regex: str | None, paths: list[str]) -> str:
+    """Short hash of what a rule matches, stored as ``described`` next to its description."""
+    text = json.dumps([action, match or "", regex or "", list(paths or [])], ensure_ascii=False)
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:10]
 
 
 @dataclass
@@ -211,6 +221,11 @@ def parse_text(text: str, path: Path) -> Manifest:
         if rule:
             rule_ids.add(rule.id)
             manifest.rules.append(rule)
+            if rule.described and rule.described != match_hash(rule.action, rule.match, rule.regex, rule.paths):
+                _problem(manifest, line, "rule-stale",
+                         f"rule '{rule.id}': what it matches changed but its description may be stale",
+                         "reread description, fix it if needed, then run tirith setup describe-rule "
+                         f"--id {rule.id} (or remove the described line)")
     if data.get("rules") is not None and not isinstance(data.get("rules"), list):
         _problem(manifest, 1, "rule-shape", "rules must be written as [[rules]] tables",
                  "use [[rules]] (double brackets) once per rule")
@@ -259,11 +274,16 @@ def rule_problems(row, ids: set[str]) -> tuple[Rule | None, list[tuple[str, str,
     if not instead:
         bad.append(("rule-instead", f"{label} has no instead",
                     'add instead = "the command or step the agent should use"'))
+    description, described = str(row.get("description") or "").strip(), row.get("described")
+    if not description:
+        bad.append(("rule-description", f"{label} has no description",
+                    'add description = "one plain sentence saying what this rule does"'))
     if bad:
         return None, bad
     return Rule(rid, action, message, instead, match if isinstance(match, str) else None,
                 regex if isinstance(regex, str) else None,
-                list(paths) if isinstance(paths, list) else []), []
+                list(paths) if isinstance(paths, list) else [], description,
+                described if isinstance(described, str) and described else None), []
 
 
 def load(folder: str | Path) -> Manifest:
