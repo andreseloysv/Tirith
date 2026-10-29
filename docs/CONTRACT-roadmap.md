@@ -98,7 +98,8 @@ is created on first use, and the autopilot never starts a lane on it.
 - **Single writer.** Only Tirith writes the plan file, on the project's main checkout, one commit per change
   `Roadmap: <what> in step N (<who>)` (`<who>` is `owner`, `manager`, a lane id or `tirith`), through the normal
   hooks, serialized with a lock (`<home>/locks/roadmap-<project>.lock`). A plan with uncommitted changes is never
-  written. The `roadmap-edit` gate (`docs/CONTRACT-gates.md`) blocks every agent's edit of the file.
+  written. A git `index.lock` left in the main checkout (older than 60 s) is removed
+  before the commit, and the commit retried once if git reports it. The `roadmap-edit` gate (`docs/CONTRACT-gates.md`) blocks every agent's edit of the file.
 - **Start = a linked open item**, no exceptions: `--step N --item "…"` checked by code (`docs/CONTRACT-launch.md`).
 - **`tirith plan add --project P --step N --text "…" [--title "…"]`** adds an open item at the end of the step
   (`--title` creates the step when it is not in the plan). It is the manager's way to update the TODO, e.g. to add a

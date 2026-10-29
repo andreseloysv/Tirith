@@ -16,6 +16,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
+from tirith import timeouts as timeouts_mod
 from tirith import asks as asks_mod
 from tirith import claimcheck as claimcheck_mod
 from tirith import flows as flows_mod
@@ -50,7 +51,7 @@ def repo_of(config: Config, lane: dict) -> Path | None:
 
 
 def _git(folder: Path, *args: str) -> str:
-    done = subprocess.run(["git", "-C", str(folder), *args], capture_output=True, text=True)
+    done = timeouts_mod.run(["git", "-C", str(folder), *args], "git", text=True)
     return done.stdout.strip() if done.returncode == 0 else ""
 
 
@@ -170,13 +171,13 @@ def update_plan(home: Path, repo: Path, lane: dict) -> str:
         rel = str(path.relative_to(repo)) if path.is_relative_to(repo) else str(path)
         if done and new != text and not _git(repo, "status", "--porcelain", "--", rel):
             path.write_text(new, encoding="utf-8")
-            subprocess.run(["git", "-C", str(repo), "add", "--", rel], capture_output=True)
-            made = subprocess.run(
+            timeouts_mod.run(["git", "-C", str(repo), "add", "--", rel], "git")
+            made = timeouts_mod.run(
                 ["git", "-C", str(repo), "commit", "-q", "-m", f"Roadmap: step {step} progress from {lane['id']}",
-                 "--", rel], capture_output=True, text=True)
+                 "--", rel], "git-commit", text=True)
             if made.returncode != 0:  # the guard (or git) refused: leave the plan as it was
-                subprocess.run(["git", "-C", str(repo), "reset", "-q", "--", rel], capture_output=True)
-                subprocess.run(["git", "-C", str(repo), "checkout", "--", rel], capture_output=True)
+                timeouts_mod.run(["git", "-C", str(repo), "reset", "-q", "--", rel], "git")
+                timeouts_mod.run(["git", "-C", str(repo), "checkout", "--", rel], "git")
                 candidates = [*done, *candidates]
                 note = f"committing the plan failed: {flows_mod.one_line(made.stderr or made.stdout, 200)}"
         elif done:

@@ -20,6 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlsplit
 
+from tirith import timeouts as timeouts_mod
 from tirith import manifest as manifest_mod
 from tirith import models as models_mod
 from tirith import roadmap as roadmap_mod
@@ -139,12 +140,17 @@ def pick_class(title: str) -> str:
     return DEFAULT_CLASS
 
 
-def working_lane(lanes: list[dict], project: str, step_id: str, status_of) -> dict | None:
+def working_lane(lanes: list[dict], project: str, step_id: str, status_of, item: str | None = None) -> dict | None:
+    """The working lane of ``project`` in step ``step_id``; with ``item``, only one working on that same item
+    (a lane that names no item holds its whole step). Two lanes on different items of a step are no duplicates."""
     now = datetime.now(timezone.utc)
+    want = roadmap_mod.split_status(item)[0] if item else None
     for lane in lanes:
         if (lane.get("project") == project and str(lane.get("step") or "") == str(step_id)
                 and status_of(lane, now) == "working"):
-            return lane
+            have = roadmap_mod.split_status(str(lane.get("item") or ""))[0]
+            if want is None or not have or have == want:
+                return lane
     return None
 
 
@@ -173,8 +179,8 @@ def worktree_path(repo: Path, lane_id: str) -> Path:
 
 
 def branch_exists(repo: Path, branch: str) -> bool:
-    return subprocess.run(["git", "-C", str(repo), "rev-parse", "--verify", "-q", f"refs/heads/{branch}"],
-                          capture_output=True).returncode == 0
+    return timeouts_mod.run(["git", "-C", str(repo), "rev-parse", "--verify", "-q", f"refs/heads/{branch}"],
+                            "git").returncode == 0
 
 
 def lane_id_for(title: str, taken: set[str], repo: Path) -> str:
@@ -190,8 +196,8 @@ def create_worktree(repo: Path, lane_id: str, base: str | None = None) -> Path:
     """The worktree ``<repo>-lanes/<lane-id>`` on a new branch ``lane/<lane-id>`` (from ``base``, else HEAD)."""
     path = worktree_path(repo, lane_id)
     path.parent.mkdir(parents=True, exist_ok=True)
-    done = subprocess.run(["git", "-C", str(repo), "worktree", "add", "-q", "-b", f"lane/{lane_id}", str(path),
-                           *([base] if base else [])], capture_output=True, text=True)
+    done = timeouts_mod.run(["git", "-C", str(repo), "worktree", "add", "-q", "-b", f"lane/{lane_id}", str(path),
+                             *([base] if base else [])], "git", text=True)
     if done.returncode != 0:
         raise LaunchError(f"git worktree add failed: {(done.stderr or done.stdout).strip()}")
     return path
@@ -331,7 +337,7 @@ def install_handler(base: Path | None = None, home_env: str | None = None, regis
     tirith = tirith or tirithcmd.resolved(Path(home_env) if home_env else None)
     source.write_text(applescript(home_env, tirith), encoding="utf-8")
     try:
-        done = subprocess.run(["osacompile", "-o", str(app), str(source)], capture_output=True, text=True)
+        done = timeouts_mod.run(["osacompile", "-o", str(app), str(source)], "generic", text=True)
     finally:
         source.unlink(missing_ok=True)
     if done.returncode != 0:
@@ -350,7 +356,7 @@ def register_app(app: Path, unregister: bool = False) -> None:
     lsregister = ("/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework"
                   "/Support/lsregister")
     if Path(lsregister).is_file():
-        subprocess.run([lsregister, "-u" if unregister else "-f", str(app)], capture_output=True)
+        timeouts_mod.run([lsregister, "-u" if unregister else "-f", str(app)], "generic")
 
 
 def uninstall_handler(base: Path | None = None, register: bool = True) -> bool:

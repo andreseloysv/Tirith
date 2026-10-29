@@ -25,6 +25,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
+from tirith import timeouts as timeouts_mod
 from tirith import agentrun as agentrun_mod
 from tirith import howto as howto_mod
 from tirith import asks as asks_mod
@@ -111,8 +112,7 @@ def session_pid() -> int:
     """The pid of the agent session that runs this hook: the parent, or its parent when that is a shell."""
     pid = os.getppid()
     try:
-        done = subprocess.run(["ps", "-o", "ppid=,comm=", "-p", str(pid)], capture_output=True, text=True,
-                              timeout=2)
+        done = timeouts_mod.run(["ps", "-o", "ppid=,comm=", "-p", str(pid)], "generic", text=True, timeout=2)
         ppid, _, comm = done.stdout.strip().partition(" ")
         if ppid.isdigit() and Path(comm.strip()).name in ("sh", "bash", "zsh", "dash", "fish"):
             return int(ppid)
