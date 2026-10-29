@@ -74,7 +74,7 @@ def test_wait_add_refuses_commands(home: Path, capsys) -> None:
     assert not (home / "waits.jsonl").exists()
 
 
-REAL_ANSWERS = [  # the steward's answers that started this rule (copied, not read from the home folder)
+REAL_ANSWERS = [  # the manager's answers that started this rule (copied, not read from the home folder)
     "Recibido. La tarea de registrar el manejador es tuya:\n\n```sh\ncd ~/DEVELOP/Tirith/collector && uv run tirith url install\n```",
     "1. Instalar los hooks:\n```sh\ncd ~/DEVELOP/Tirith/collector && uv run tirith hook install --agent anthropic\n```\n2. Protegerlos.",
     "Pruébalo tú en una terminal:\n\n```sh\ncd ~/DEVELOP/Tirith/collector && uv run tirith lane run --interactive --project tirith -- agent\n```",
@@ -98,7 +98,7 @@ def test_answer_with_actions_is_stored_and_folded(home: Path, capsys) -> None:
     (row,) = [r for r in read_jsonl(home / "inbox.jsonl") if r.get("kind") == "answer"]
     first, second = row["actions"]
     assert first["id"].startswith("ac-") and first["label"] == "Install the link handler"
-    assert first["command"] == "uv run tirith url install" and first["created_by"] == "steward"
+    assert first["command"] == "uv run tirith url install" and first["created_by"] == "manager"
     assert second["label"] == "echo two" and second["cwd"] == "/tmp" and first["cwd"] == "/tmp"
     (req,) = inbox_mod.requests(home)
     assert [a["id"] for a in req["answers"][0]["actions"]] == [first["id"], second["id"]]

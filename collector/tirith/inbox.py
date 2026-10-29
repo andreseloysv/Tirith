@@ -1,7 +1,7 @@
 """The owner's inbox: "Finish it" and "What's going on?" requests on plan steps, and replies to asks.
 
 The web page cannot run commands, so a request is one line appended to ``<home>/inbox.jsonl``;
-the steward watches the file (``tirith inbox watch``) and answers with ``tirith inbox answer``.
+the manager watches the file (``tirith inbox watch``) and answers with ``tirith inbox answer``.
 The collector folds the rows into ``state.inbox``. See ``docs/CONTRACT-inbox.md``.
 """
 
@@ -21,7 +21,7 @@ INBOX_FILE = "inbox.jsonl"
 KINDS = ("finish", "ask", "setup")
 SETUP_ACTIONS = ("add-stage", "add-rule", "remove-stage", "remove-rule", "run-stage")
 SETUP_STEP = "setup"
-ANSWERERS = ("steward", "brain", "tirith")
+ANSWERERS = ("manager", "steward", "brain", "tirith")  # "steward" is the old name of "manager"
 TEXT_MAX_BYTES = 4096
 STATE_ROWS = 100
 AUTO_ANSWER_AFTER_S = 120
@@ -90,10 +90,11 @@ def find_request(home: Path, request_id: str) -> dict | None:
     return next((r for r in requests(home) if r["id"] == request_id), None)
 
 
-def add_answer(home: Path, request_id: str, text: str, by: str = "steward", auto: bool = False,
+def add_answer(home: Path, request_id: str, text: str, by: str = "manager", auto: bool = False,
                at: str | None = None, lane: str | None = None, actions: list[dict] | None = None) -> dict:
     if by not in ANSWERERS:
         raise InboxError(f"--by must be one of {', '.join(ANSWERERS)}")
+    by = "manager" if by == "steward" else by
     if find_request(home, request_id) is None:
         raise InboxError(f"no request {request_id}")
     text = clip(text.strip())
@@ -144,7 +145,7 @@ def requests(home: Path) -> list[dict]:
         rid, kind = str(row.get("id") or ""), row.get("kind")
         if kind == "action-run" and row.get("status") in ("passed", "failed"):
             owner = action_owner.get(str(row.get("action_id") or ""))
-            if owner in out:  # the owner ran one of the steward's actions: the steward owes an answer
+            if owner in out:  # the owner ran one of the manager's actions: the manager owes an answer
                 out[owner]["action_runs"].append({"action_id": row.get("action_id"), "status": row["status"],
                                                   "exit_code": row.get("exit_code"), "at": row.get("at")})
             continue
@@ -156,14 +157,14 @@ def requests(home: Path) -> list[dict]:
             out[rid] = {"id": rid, "at": row.get("at"), "kind": kind, "project": str(row.get("project") or ""),
                         "step": str(row.get("step") if row.get("step") is not None else ""),
                         "text": str(row.get("text") or ""), "from": row.get("from") or "owner",
-                        "status": "open", "answers": [], "steward_pending": True, "action_runs": []}
+                        "status": "open", "answers": [], "manager_pending": True, "action_runs": []}
             if kind == "setup":
                 try:
                     out[rid]["setup"] = parse_setup(out[rid]["text"])
                 except InboxError:
                     del out[rid]
         elif rid in out and kind == "answer":
-            answer = {"at": row.get("at"), "by": row.get("by") or "steward",
+            answer = {"at": row.get("at"), "by": "manager" if row.get("by") in (None, "", "steward") else row["by"],
                       "text": str(row.get("text") or ""), "auto": bool(row.get("auto")),
                       "lane": str(row["lane"]) if row.get("lane") else None}
             if row.get("actions"):
@@ -177,25 +178,26 @@ def requests(home: Path) -> list[dict]:
         elif rid in out and kind == "done":
             out[rid]["status"] = "done"
     for req in out.values():
-        req["steward_pending"] = steward_pending(req)
+        req["manager_pending"] = manager_pending(req)
+        req["steward_pending"] = req["manager_pending"]  # old key, same value
     return list(out.values())
 
 
-def steward_pending(req: dict) -> bool:
-    """True while the steward owes this request something.
+def manager_pending(req: dict) -> bool:
+    """True while the manager owes this request something.
 
     A ``finish`` is Tirith's own job (the dispatcher answers it), so any answer settles it; every
-    other kind stays pending until the steward itself answers, whatever the brain said."""
+    other kind stays pending until the manager itself answers, whatever the brain said."""
     if req["status"] == "done":
         return False
     runs = req.get("action_runs") or []
     if runs:
-        last_steward = max((str(a["at"] or "") for a in req["answers"] if a["by"] == "steward"), default="")
-        if max(str(r["at"] or "") for r in runs) > last_steward:
-            return True  # the owner ran an action the steward gave: the steward must answer the result
+        last_manager = max((str(a["at"] or "") for a in req["answers"] if a["by"] == "manager"), default="")
+        if max(str(r["at"] or "") for r in runs) > last_manager:
+            return True  # the owner ran an action the manager gave: the manager must answer the result
     if req["kind"] == "finish":
         return not req["answers"]
-    return not any(a["by"] == "steward" for a in req["answers"])
+    return not any(a["by"] == "manager" for a in req["answers"])
 
 
 def state_rows(home: Path) -> list[dict]:
@@ -212,7 +214,7 @@ def link_lanes(rows: list[dict], agents: list[dict]) -> None:
 
 
 def replies(home: Path) -> list[dict]:
-    """The owner's replies to asks in file order; ``status`` is ``done`` once the steward closed one."""
+    """The owner's replies to asks in file order; ``status`` is ``done`` once the manager closed one."""
     out: dict[str, dict] = {}
     for row in read_jsonl(inbox_path(home)):
         rid, kind = str(row.get("id") or ""), row.get("kind")
@@ -238,8 +240,8 @@ def watch(home: Path, emit: Callable[[dict], None], *, poll_s: float = 1.0, incl
           should_stop: Callable[[], bool] = lambda: False, sleep: Callable[[float], None] = time.sleep) -> None:
     """Call ``emit`` once for each open request, then for each new one; blocks until ``should_stop``.
 
-    A request the steward owes nothing on (done, or answered by the steward) when first seen is not
-    emitted. The owner's replies to asks (``kind: "reply"``) are emitted the same way until the steward
+    A request the manager owes nothing on (done, or answered by the manager) when first seen is not
+    emitted. The owner's replies to asks (``kind: "reply"``) are emitted the same way until the manager
     closes them with ``inbox done``."""
     seen: set[str] = set()
     first = True
@@ -256,7 +258,7 @@ def watch(home: Path, emit: Callable[[dict], None], *, poll_s: float = 1.0, incl
             if key in seen:
                 continue
             seen.add(key)
-            if (first and not include_existing) or not req["steward_pending"]:
+            if (first and not include_existing) or not req["manager_pending"]:
                 continue
             emit(req)
         first = False

@@ -116,7 +116,7 @@ def new_id() -> str:
 
 
 def make_actions(runs: list[str] | None, labels: list[str] | None = None, cwds: list[str] | None = None,
-                 created_by: str = "steward", at: str | None = None) -> list[dict]:
+                 created_by: str = "manager", at: str | None = None) -> list[dict]:
     """``--run/--label/--cwd`` (repeatable, matched by position) -> action dicts.
 
     A single ``--cwd`` applies to every action; a missing label falls back to the command."""

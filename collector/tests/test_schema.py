@@ -26,7 +26,7 @@ def test_collected_state_validates(home: Path) -> None:
           "--feature", "Ship it", "--id", "h-1", "--pid", str(os.getpid())])
     main(["wait", "add", "Press the release button", "--project", "demo", "--option", "Pressed|done"])
     main(["note", "Release train left", "--project", "demo"])
-    main(["steward", "Watching the release"])
+    main(["manager", "Watching the release"])
     main(["collect", "--once"])
     state = json.loads((home / "state.json").read_text(encoding="utf-8"))
     jsonschema.validate(state, SCHEMA)

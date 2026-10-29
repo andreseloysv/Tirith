@@ -29,14 +29,14 @@
     return hit;
   }
 
-  /* who started it: an agent (avatar + name), the steward, the owner, a git hook or GitHub */
+  /* who started it: an agent (avatar + name), the manager, the owner, a git hook or GitHub */
   function trigger(p) {
     var a = p.lane ? T.agentById(raw(), p.lane) : null, name, av = '';
     if (a) { name = a.name; av = T.avatar(a, 20); }
     else if (p.source === 'github') { name = 'GitHub'; av = '<span class="ptw-ic">' + T.ghMark(p) + '</span>'; }
     else if (p.pipeline === 'git-hooks') { name = 'git hook'; av = '<span class="ptw-ic">' + T.lineIcon(T.ICON.pipe, 12, 'currentColor', 2) + '</span>'; }
     else if (p.lane === 'owner') { name = 'owner'; av = '<span class="ptw-ic">' + T.lineIcon(T.ICON.owner, 12, 'currentColor', 2) + '</span>'; }
-    else { name = p.lane && p.lane !== 'steward' ? p.lane : 'steward'; av = '<span class="ptw-ic">' + T.lineIcon(T.ICON.guard, 12, 'currentColor', 2) + '</span>'; }
+    else { name = p.lane && p.lane !== 'steward' && p.lane !== 'manager' ? p.lane : 'manager'; av = '<span class="ptw-ic">' + T.lineIcon(T.ICON.guard, 12, 'currentColor', 2) + '</span>'; }
     return '<span class="ptw">' + av + '<b>' + esc(name) + '</b></span>' + (p.branch ? '<span class="pbr" title="' + esc(p.branch) + '">' + esc(p.branch) + '</span>' : '');
   }
 
@@ -66,7 +66,7 @@
     var key = p.project + '|' + p.pipeline + '|' + f.name, at = ui.setupPend && ui.setupPend[key + '|run'];
     var busy = at && T.now() - at < 30000;
     return '<button class="srun pact' + (busy ? ' busy' : '') + '" data-act="srun" data-key="' + esc(key) + '"' + (busy ? ' disabled' : '') +
-      ' title="Ask the steward to run ' + esc(f.name) + ' again" aria-label="Retry ' + esc(f.name) + '">' + PLAY + '<span>' + (busy ? 'Asked' : 'Retry') + '</span></button>';
+      ' title="Ask the manager to run ' + esc(f.name) + ' again" aria-label="Retry ' + esc(f.name) + '">' + PLAY + '<span>' + (busy ? 'Asked' : 'Retry') + '</span></button>';
   }
 
   function runRow(p, open) {

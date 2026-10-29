@@ -6,9 +6,9 @@ window.TIRITH_STATE = {
     "model": "muse-spark",
     "last_error": null
   },
-  "steward": {
+  "manager": {
     "name": "Aldric of the Tower",
-    "title": "The Steward",
+    "title": "The Manager",
     "activity": "Reviewing Ivren's performance report before merging",
     "since": "2026-10-28T19:31:00Z",
     "notes": [
@@ -77,7 +77,7 @@ window.TIRITH_STATE = {
           "label": "Install the commit guard",
           "command": "tirith guard install tirith",
           "cwd": null,
-          "created_by": "steward",
+          "created_by": "manager",
           "at": "2026-10-28T19:41:00Z",
           "last_run": null
         }
@@ -1100,7 +1100,7 @@ window.TIRITH_STATE = {
   "agents": [
     {
       "id": "w6-perf",
-      "parent": "steward",
+      "parent": "manager",
       "project": "chromasol",
       "name": "Ivren",
       "epithet": "of the Seventh Gate",
@@ -1750,7 +1750,7 @@ window.TIRITH_STATE = {
     },
     {
       "id": "t-world",
-      "parent": "steward",
+      "parent": "manager",
       "project": "tirith",
       "name": "Marrow",
       "epithet": "Quickstep",
@@ -1878,7 +1878,7 @@ window.TIRITH_STATE = {
       "deletions": 0,
       "report": null,
       "session": "2026-10-28-tirith-web",
-      "goal": "Collect lane state into one JSON file for the web view: the CLI, the collector and the brain that tells the steward what needs the owner.",
+      "goal": "Collect lane state into one JSON file for the web view: the CLI, the collector and the brain that tells the manager what needs the owner.",
       "active": false,
       "last_activity_at": "2026-10-28T19:28:00Z",
       "files": [
@@ -1966,7 +1966,7 @@ window.TIRITH_STATE = {
     },
     {
       "id": "w7-a11y",
-      "parent": "steward",
+      "parent": "manager",
       "project": "chromasol",
       "name": "Tamsin",
       "epithet": "of the Watch",
@@ -2019,7 +2019,7 @@ window.TIRITH_STATE = {
     },
     {
       "id": "w8-shots",
-      "parent": "steward",
+      "parent": "manager",
       "project": "chromasol",
       "name": "Corvin",
       "epithet": "Lensgrinder",
@@ -2453,9 +2453,9 @@ window.TIRITH_STATE = {
     {
       "id": "f-1",
       "at": "2026-10-28T18:30:00Z",
-      "from": "steward",
+      "from": "manager",
       "to": "agent:w6-perf",
-      "from_name": "The Steward",
+      "from_name": "The Manager",
       "to_name": "Ivren of the Seventh Gate",
       "kind": "brief",
       "text": "Brief: Performance and size on the owner's phone",
@@ -2466,9 +2466,9 @@ window.TIRITH_STATE = {
     {
       "id": "f-3",
       "at": "2026-10-28T18:50:00Z",
-      "from": "steward",
+      "from": "manager",
       "to": "owner",
-      "from_name": "The Steward",
+      "from_name": "The Manager",
       "to_name": "You",
       "kind": "request",
       "text": "Tick the AI asset declaration on the store listing",
@@ -2480,9 +2480,9 @@ window.TIRITH_STATE = {
       "id": "f-12",
       "at": "2026-10-28T18:58:00Z",
       "from": "agent:w1-data",
-      "to": "steward",
+      "to": "manager",
       "from_name": "Halvard",
-      "to_name": "The Steward",
+      "to_name": "The Manager",
       "kind": "decision",
       "text": "Keep the Room schema flat, no nested tables",
       "why": "One migration file per version is enough, and the 16 KB device check reads it without extra work",
@@ -2494,9 +2494,9 @@ window.TIRITH_STATE = {
       "id": "f-4",
       "at": "2026-10-28T19:02:00Z",
       "from": "agent:icon-2",
-      "to": "steward",
+      "to": "manager",
       "from_name": "Sefa Prismhand",
-      "to_name": "The Steward",
+      "to_name": "The Manager",
       "kind": "report",
       "text": "failed: adaptive icon export broke",
       "ref": null,
@@ -2507,9 +2507,9 @@ window.TIRITH_STATE = {
       "id": "f-5",
       "at": "2026-10-28T19:05:00Z",
       "from": "agent:w1-data",
-      "to": "steward",
+      "to": "manager",
       "from_name": "Halvard Stonehand",
-      "to_name": "The Steward",
+      "to_name": "The Manager",
       "kind": "report",
       "text": "done: migrations green",
       "ref": null,
@@ -2519,9 +2519,9 @@ window.TIRITH_STATE = {
     {
       "id": "f-6",
       "at": "2026-10-28T19:10:00Z",
-      "from": "steward",
+      "from": "manager",
       "to": "agent:t-world",
-      "from_name": "The Steward",
+      "from_name": "The Manager",
       "to_name": "Marrow Quickstep",
       "kind": "message",
       "text": "Owner wants a much smaller compact world",
@@ -2533,9 +2533,9 @@ window.TIRITH_STATE = {
       "id": "f-13",
       "at": "2026-10-28T19:15:00Z",
       "from": "agent:t-world",
-      "to": "steward",
+      "to": "manager",
       "from_name": "Marrow",
-      "to_name": "The Steward",
+      "to_name": "The Manager",
       "kind": "decision",
       "text": "Draw edges from measured boxes, not a layout library",
       "why": "Expanded nodes push their neighbours, so the edges must follow the real positions",
@@ -2547,9 +2547,9 @@ window.TIRITH_STATE = {
       "id": "f-8",
       "at": "2026-10-28T19:20:00Z",
       "from": "pipeline:android-release#7",
-      "to": "steward",
+      "to": "manager",
       "from_name": "android-release#7",
-      "to_name": "The Steward",
+      "to_name": "The Manager",
       "kind": "report",
       "text": "android-release failed: lint failed",
       "ref": null,
@@ -2573,9 +2573,9 @@ window.TIRITH_STATE = {
       "id": "f-10",
       "at": "2026-10-28T19:36:00Z",
       "from": "owner",
-      "to": "steward",
+      "to": "manager",
       "from_name": "You",
-      "to_name": "The Steward",
+      "to_name": "The Manager",
       "kind": "answer",
       "text": "Done: declaration ticked",
       "ref": null,
@@ -2585,9 +2585,9 @@ window.TIRITH_STATE = {
     {
       "id": "f-11",
       "at": "2026-10-28T19:38:00Z",
-      "from": "steward",
+      "from": "manager",
       "to": "agent:t-collector",
-      "from_name": "The Steward",
+      "from_name": "The Manager",
       "to_name": "Odile Inkwell",
       "kind": "decision",
       "text": "Merge the rooms poller after tests",
@@ -2691,7 +2691,7 @@ window.TIRITH_STATE = {
       "answers": [
         {
           "at": "2026-10-28T19:33:10Z",
-          "by": "steward",
+          "by": "manager",
           "auto": false,
           "text": "Not blocked. It waits for step 3 to merge, then **one agent** starts on it.\n\n- Nothing needed from you\n- Expected: this evening",
           "lane": null
@@ -2729,7 +2729,7 @@ window.TIRITH_STATE = {
       "answers": [
         {
           "at": "2026-10-28T19:39:25Z",
-          "by": "steward",
+          "by": "manager",
           "auto": false,
           "lane": "t-world",
           "text": "Marrow already has this step. **No new agent needed.**\n\n- Working on: hooks in the agent settings\n- Next: protect the hooks from removal"
@@ -2761,7 +2761,7 @@ window.TIRITH_STATE = {
       "answers": [
         {
           "at": "2026-10-28T19:40:40Z",
-          "by": "steward",
+          "by": "manager",
           "auto": false,
           "lane": null,
           "text": "Three things need your Mac, because they install or change something outside the repository. Press **Run** on each; I check the result.",
@@ -2771,7 +2771,7 @@ window.TIRITH_STATE = {
               "label": "Install the link handler",
               "command": "uv run tirith url install",
               "cwd": "~/DEVELOP/Tirith/collector",
-              "created_by": "steward",
+              "created_by": "manager",
               "at": "2026-10-28T19:41:00Z"
             },
             {
@@ -2779,7 +2779,7 @@ window.TIRITH_STATE = {
               "label": "Run the collector tests",
               "command": "uv run -q pytest -q",
               "cwd": "~/DEVELOP/Tirith/collector",
-              "created_by": "steward",
+              "created_by": "manager",
               "at": "2026-10-28T19:41:00Z",
               "last_run": {
                 "status": "passed",
@@ -2796,7 +2796,7 @@ window.TIRITH_STATE = {
               "label": "Install the commit guard",
               "command": "tirith guard install tirith",
               "cwd": null,
-              "created_by": "steward",
+              "created_by": "manager",
               "at": "2026-10-28T19:41:00Z",
               "last_run": {
                 "status": "failed",
@@ -2861,14 +2861,14 @@ window.TIRITH_STATE = {
       }
     }
   ],
-  "steward_queue": [
+  "manager_queue": [
     {
       "id": "sq-1c04a7b2",
       "at": "2026-10-28T19:30:00Z",
       "kind": "review",
       "project": "tirith",
       "lane": "inbox-reply",
-      "to": "steward",
+      "to": "manager",
       "status": "open",
       "text": "- Decide whether the token is rotated before the release."
     }

@@ -64,11 +64,11 @@
     for (var i = 0; i < as.length; i++) if (as[i].id === id) return as[i];
     return null;
   };
-  /* display name of a flow endpoint ("agent:w1", "steward", "room:x") */
+  /* display name of a flow endpoint ("agent:w1", "manager", "room:x") */
   T.endpointName = function (state, ep, f, side) {
     var given = f && f[side + '_name'];
     if (given) return given;
-    if (ep === 'steward') return 'The Steward';
+    if (ep === 'manager' || ep === 'steward') return 'The Manager';
     if (ep === 'owner') return 'You';
     if (ep === 'guard') return 'Guard';
     if (ep === 'tirith') return 'Tirith';
@@ -88,7 +88,8 @@
     herald:      { label: 'Herald',      color: '#c62f3a', glyph: 'M5 3h2.2v18H5z M7.2 4h12.3l-3.4 4.2 3.4 4.2H7.2z' },
     glasswright: { label: 'Glasswright', color: '#3da5cf', glyph: 'M12 2.5l7.5 7.5-7.5 11.5L4.5 10z' },
     archivist:   { label: 'Archivist',   color: '#5f9a3a', glyph: 'M8 3.5a4.5 4.5 0 100 9 4.5 4.5 0 000-9z M11 11l9.5 9.5-2.2 2-2-2-2 2-2.2-2.2-1.6-1.6z' },
-    steward:     { label: 'Steward',     color: '#2f5fc4', glyph: 'M12 2l2.6 6.4 6.9.6-5.2 4.6 1.6 6.8L12 16.7 6.1 20.4l1.6-6.8L2.5 9l6.9-.6z' }
+    manager:     { label: 'Manager',     color: '#2f5fc4', glyph: 'M12 2l2.6 6.4 6.9.6-5.2 4.6 1.6 6.8L12 16.7 6.1 20.4l1.6-6.8L2.5 9l6.9-.6z' },
+    steward:     { label: 'Manager',     color: '#2f5fc4', glyph: 'M12 2l2.6 6.4 6.9.6-5.2 4.6 1.6 6.8L12 16.7 6.1 20.4l1.6-6.8L2.5 9l6.9-.6z' }
   };
   T.clsOf = function (c) { return T.CLS[c] || { label: T.cap(c || 'hero'), color: '#7b8494', glyph: 'M12 3a5 5 0 100 10 5 5 0 000-10z M4 21c0-5 3.5-7 8-7s8 2 8 7z' }; };
   /* One color per agent, not per class (the class shows through the glyph). Ordered so that

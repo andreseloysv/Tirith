@@ -62,7 +62,7 @@ def main() -> int:
         'color = "#2f7d5b"\n', encoding="utf-8")
 
     run_cli(env, "guard", "install", "demo", check=False)
-    run_cli(env, "steward", "Watching the demo lanes from the tower")
+    run_cli(env, "manager", "Watching the demo lanes from the tower")
     run_cli(env, "note", "Demo seeded for the citadel world", "--project", "demo")
     run_cli(env, "wait", "add", "Look at the demo citadel and press on", "--project", "demo")
     run_cli(env, "map", "demo", check=False)

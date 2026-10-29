@@ -13,7 +13,7 @@ game: the citadel's emblem is a **seven-pointed star above a watchtower**, never
 
 | Class | Job in the system | Accent colour | Silhouette and gear |
 |---|---|---|---|
-| **The Steward** | The orchestrator: plans, launches lanes, reviews, merges, talks to you | Royal blue and gold | Tall robed figure with a high collar, a gold chain of office, a long staff topped by the star emblem, a seeing-glass on a strap. Stands on the tower balcony |
+| **The Manager** | The orchestrator: plans, launches lanes, reviews, merges, talks to you | Royal blue and gold | Tall robed figure with a high collar, a gold chain of office, a long staff topped by the star emblem, a seeing-glass on a strap. Stands on the tower balcony |
 | **Stonewright** | Builds features (implementation lanes) | Warm orange | Broad, stocky builder in a leather apron over light plate, rolled sleeves, a hammer on the belt and a chisel in hand, stone dust on the boots, a small lantern at the hip |
 | **Loremaster** | Research, docs, reading code, architecture maps | Deep violet | Slim scholar in layered robes, a satchel bursting with scrolls, ink-stained fingers, round spectacles, a floating quill, a book chained to the belt |
 | **Warden** | Tests, verification, quality gates | Steel teal | Armoured sentinel with a tall shield bearing the star emblem, a spear, a winged helm with a T-shaped visor, a checklist scroll tucked in the bracer |
@@ -44,7 +44,7 @@ agent; the Muse model may propose the epithet from what the agent actually did.
 
 ## The world (what you see)
 
-- **The citadel** in the centre: the Steward's tower with the star at the top. A beacon on the
+- **The citadel** in the centre: the Manager's tower with the star at the top. A beacon on the
   tower lights up when something is **waiting for you**; the "Waiting for you" scroll hangs below.
 - **Districts** on the rings of the hill, one per project, each with its own banner colour. Its
   **architecture** is built as small buildings (one per module) joined by roads; light particles run

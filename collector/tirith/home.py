@@ -21,8 +21,8 @@ CLASSES = (
 
 DEFAULT_MODEL = "muse-spark-1.3"
 DEFAULT_BASE_URL = "https://api.meta.ai/v1"
-DEFAULT_STEWARD_NAME = "Aldric of the Tower"
-DEFAULT_STEWARD_TITLE = "The Steward"
+DEFAULT_MANAGER_NAME = "Aldric of the Tower"
+DEFAULT_MANAGER_TITLE = "The Manager"
 
 
 def tirith_home(explicit: str | Path | None = None) -> Path:
@@ -87,8 +87,8 @@ class Config:
     brain_base_url: str = DEFAULT_BASE_URL
     brain_enabled: bool = True
     brain_reasoning_effort: str = "low"
-    steward_name: str = DEFAULT_STEWARD_NAME
-    steward_title: str = DEFAULT_STEWARD_TITLE
+    manager_name: str = DEFAULT_MANAGER_NAME
+    manager_title: str = DEFAULT_MANAGER_TITLE
     guard_words: list[str] | None = None
     rooms: list[RoomConfig] = field(default_factory=list)
     owner_names: list[str] = field(default_factory=list)
@@ -100,7 +100,7 @@ class Config:
     launch_command: str | list[str] | None = None  # [launch] command template: {brief}, {workspace}
     dispatch_enabled: bool = True  # [dispatch] enabled: Tirith itself handles the owner's requests
     dispatch_auto_launch: bool = True  # [dispatch] auto_launch: a "finish" request starts a lane
-    steward_session_cwd: str | None = None  # [steward] session_cwd: the folder the steward runs in
+    manager_session_cwd: str | None = None  # [manager] session_cwd: the folder the manager runs in
 
     def room(self, room_id: str) -> RoomConfig | None:
         for room in self.rooms:
@@ -176,13 +176,14 @@ def load_config(home: Path) -> Config:
         cfg.brain_enabled = bool(brain["enabled"])
     if "reasoning_effort" in brain:
         cfg.brain_reasoning_effort = str(brain["reasoning_effort"] or "")
-    steward = raw.get("steward") if isinstance(raw.get("steward"), dict) else {}
-    if steward.get("name"):
-        cfg.steward_name = str(steward["name"])
-    if steward.get("title"):
-        cfg.steward_title = str(steward["title"])
-    if steward.get("session_cwd"):
-        cfg.steward_session_cwd = str(Path(str(steward["session_cwd"])).expanduser())
+    # [manager]; the old [steward] table is the fallback
+    manager = next((raw[k] for k in ("manager", "steward") if isinstance(raw.get(k), dict)), {})
+    if manager.get("name"):
+        cfg.manager_name = str(manager["name"])
+    if manager.get("title"):
+        cfg.manager_title = str(manager["title"])
+    if manager.get("session_cwd"):
+        cfg.manager_session_cwd = str(Path(str(manager["session_cwd"])).expanduser())
     dispatch = raw.get("dispatch") if isinstance(raw.get("dispatch"), dict) else {}
     cfg.dispatch_enabled = dispatch.get("enabled", True) is not False
     cfg.dispatch_auto_launch = dispatch.get("auto_launch", True) is not False

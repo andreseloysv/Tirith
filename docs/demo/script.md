@@ -31,7 +31,7 @@ them through the `tirith` CLI while filming. Words used: "coding agents" only; n
 
 **0:26 3. Live Overview**
 
-> This is the Overview, for a fresh session called Hackathon demo. I ask the Steward to check the Android build. An agent starts, a request for me appears, and the activity feed fills in. All live.
+> This is the Overview, for a fresh session called Hackathon demo. I ask the Manager to check the Android build. An agent starts, a request for me appears, and the activity feed fills in. All live.
 
 **0:40 4. Pipelines**
 
@@ -39,7 +39,7 @@ them through the `tirith` CLI while filming. Words used: "coding agents" only; n
 
 > Next, a real Android build of my app, ChromaSol: build, test, lint, compiled by Gradle right now. Click a step while it runs, and the log is right there.
 
-> When a run ends, it turns green, and the Steward gets a report.
+> When a run ends, it turns green, and the Manager gets a report.
 
 **1:22 5. Agents**
 
@@ -47,7 +47,7 @@ them through the `tirith` CLI while filming. Words used: "coding agents" only; n
 
 **1:41 6. Flow**
 
-> Flow shows how information passes. I talk to the Steward, the orchestrator. The Steward briefs the agents, they report back, and rooms on agents messenger join in. Every edge counts its messages. Click one, and you can read them all.
+> Flow shows how information passes. I talk to the Manager, the orchestrator. The Manager briefs the agents, they report back, and rooms on agents messenger join in. Every edge counts its messages. Click one, and you can read them all.
 
 **2:02 7. The brain**
 

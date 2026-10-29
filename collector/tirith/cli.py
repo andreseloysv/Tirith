@@ -117,7 +117,7 @@ def register_lane(home: Path, *, lane_id: str | None, project: str, hero_class: 
     elif lane_path(home, lane_id).exists():
         raise SystemExit(f"lane already exists: {lane_id}")
     workspace_abs = str(Path(workspace).expanduser().resolve()) if workspace else None
-    parent = os.environ.get("TIRITH_LANE") or "steward"
+    parent = os.environ.get("TIRITH_LANE") or "manager"
     lane = {
         "id": lane_id, "parent": parent, "project": project, "class": hero_class, "feature": feature,
         "workspace": workspace_abs,
@@ -132,7 +132,7 @@ def register_lane(home: Path, *, lane_id: str | None, project: str, hero_class: 
         "request": owner_request(home),
     }
     write_lane(home, lane)
-    source = "steward" if parent == "steward" else f"agent:{parent}"
+    source = "manager" if parent in ("manager", "steward") else f"agent:{parent}"
     flows_mod.append_flow(home, source, f"agent:{lane_id}", "brief",
                           f"Brief: {feature}", lane["brief"], project=project)
     return lane
@@ -153,7 +153,7 @@ def end_lane(home: Path, lane_id: str, result: str, report: str | None = None) -
         lane["report"] = bound_text(report, REPORT_MAX)
     write_lane(home, lane)
     flows_mod.append_flow(
-        home, f"agent:{lane_id}", "steward", "report",
+        home, f"agent:{lane_id}", "manager", "report",
         f"{result}: " + (flows_mod.first_line(report) or str(lane.get("feature") or "")),
         session=lane.get("session") or projects_mod.current_session(home),
         project=str(lane.get("project") or "") or None)
@@ -163,7 +163,7 @@ def end_lane(home: Path, lane_id: str, result: str, report: str | None = None) -
 
 def _lane_follow_up(home: Path, lane: dict, result: str, report: str | None) -> None:
     """A finished lane whose report has an "open / needs the owner" section: one review item for the
-    steward, never raw items for the owner. The steward re-asks with ``tirith wait add --option``."""
+    manager, never raw items for the owner. The manager re-asks with ``tirith wait add --option``."""
     section = asks_mod.open_section(report) if result == "done" else ""
     if section:
         asks_mod.queue_add(home, str(lane.get("project") or ""), str(lane["id"]), section)
@@ -214,7 +214,7 @@ def _cmd_lane_review(args) -> int:
 
 def _cmd_lane_stop(args) -> int:
     home = _home(args)
-    by = args.by or ("steward" if os.environ.get("TIRITH_LANE") or not sys.stdin.isatty() else "owner")
+    by = args.by or ("manager" if os.environ.get("TIRITH_LANE") or not sys.stdin.isatty() else "owner")
     try:
         lane = lanestop_mod.stop_lane(home, args.lane_id, by, args.reason)
     except lanestop_mod.StopError as error:
@@ -593,7 +593,7 @@ def add_wait(home: Path, project: str, text: str, link: str | None = None,
     if actions:
         row["actions"] = actions
     append_jsonl(home / "waits.jsonl", row)
-    flows_mod.append_flow(home, "steward", "owner", "request", text, link, project=project)
+    flows_mod.append_flow(home, "manager", "owner", "request", text, link, project=project)
     return wait_id
 
 
@@ -626,7 +626,7 @@ def _cmd_wait_done(args) -> int:
     append_jsonl(home / "waits.jsonl", {
         **original, "done_at": now_iso(), "session": original.get("session"),
         "done_session": projects_mod.current_session(home)})
-    flows_mod.append_flow(home, "owner", "steward", "answer",
+    flows_mod.append_flow(home, "owner", "manager", "answer",
                           f"Done: {original.get('text') or args.wait_id}",
                           session=original.get("session") or projects_mod.current_session(home),
                           project=original.get("project"))
@@ -639,7 +639,7 @@ def _cmd_flow(args) -> int:
     for label, value in (("--from", args.src), ("--to", args.dst)):
         if not flows_mod.valid_endpoint(value):
             raise SystemExit(
-                f"{label} must be steward, owner, guard, agent:<lane>, room:<room> or "
+                f"{label} must be manager, owner, guard, agent:<lane>, room:<room> or "
                 f"pipeline:<run>, got {value!r}")
     if not args.text.strip():
         raise SystemExit("--text is empty")
@@ -649,7 +649,7 @@ def _cmd_flow(args) -> int:
 
 
 def _cmd_decide(args) -> int:
-    """Record a decision and its reason: agent -> steward, or steward -> owner without a lane."""
+    """Record a decision and its reason: agent -> manager, or manager -> owner without a lane."""
     home = _home(args)
     if not args.decision.strip():
         raise SystemExit("the decision is empty")
@@ -660,7 +660,7 @@ def _cmd_decide(args) -> int:
     if args.lane and not isinstance(lane, dict):
         raise SystemExit(f"unknown lane: {args.lane}")
     lane = lane if isinstance(lane, dict) else {}
-    src, dst = (f"agent:{lane_id}", "steward") if lane else ("steward", "owner")
+    src, dst = (f"agent:{lane_id}", "manager") if lane else ("manager", "owner")
     row = flows_mod.append_flow(
         home, src, dst, "decision", args.decision, why=args.why,
         session=lane.get("session") or projects_mod.current_session(home),
@@ -748,11 +748,11 @@ def _cmd_session_list(args) -> int:
     return 0
 
 
-def _cmd_steward(args) -> int:
+def _cmd_manager(args) -> int:
     home = _home(args)
     write_json_atomic(home / "orchestrator.json",
                       {"activity": args.activity, "since": now_iso()})
-    print("steward updated")
+    print("manager updated")
     return 0
 
 
@@ -802,11 +802,11 @@ def _cmd_status(args) -> int:
               file=sys.stderr)
         return 1
     brain = state.get("brain") or {}
-    steward = state.get("steward") or {}
+    manager = state.get("manager") or state.get("steward") or {}
     print(f"Tirith state {state.get('generated_at')}  brain: "
           f"{'on' if brain.get('enabled') else 'off'} ({brain.get('model')})"
           + (f"  last error: {brain['last_error']}" if brain.get("last_error") else ""))
-    print(f"Steward: {steward.get('activity') or '(idle)'}")
+    print(f"Manager: {manager.get('activity') or '(idle)'}")
     waits = state.get("waiting_on_you") or []
     print(f"Waiting on you: {len(waits)}")
     for wait in waits:
@@ -1385,7 +1385,7 @@ def build_parser() -> argparse.ArgumentParser:
     stop.add_argument("lane_id")
     stop.add_argument("--reason", default=None)
     stop.add_argument("--by", choices=list(lanestop_mod.STOPPERS), default=None,
-                      help="who stops it (default: steward from a script or an agent, owner at a terminal)")
+                      help="who stops it (default: manager from a script or an agent, owner at a terminal)")
     stop.set_defaults(func=_cmd_lane_stop)
     review = lane_sub.add_parser("review", parents=[common],
                                  help="run the tests of a launched lane, then merge it")
@@ -1432,7 +1432,7 @@ def build_parser() -> argparse.ArgumentParser:
     declare.add_argument("--stages", required=True, help="comma-separated stage names")
     declare.set_defaults(func=_cmd_pipeline_declare)
 
-    note = sub.add_parser("note", parents=[common], help="record a steward note")
+    note = sub.add_parser("note", parents=[common], help="record a manager note")
     note.add_argument("text")
     note.add_argument("--project", default=None)
     note.set_defaults(func=_cmd_note)
@@ -1497,9 +1497,9 @@ def build_parser() -> argparse.ArgumentParser:
     s_ls = session_sub.add_parser("list", parents=[common], help="all sessions")
     s_ls.set_defaults(func=_cmd_session_list)
 
-    steward = sub.add_parser("steward", parents=[common], help="set steward activity")
-    steward.add_argument("activity")
-    steward.set_defaults(func=_cmd_steward)
+    manager = sub.add_parser("manager", parents=[common], help="set manager activity")
+    manager.add_argument("activity")
+    manager.set_defaults(func=_cmd_manager)
 
     map_cmd = sub.add_parser("map", parents=[common], help="map project architecture")
     map_cmd.add_argument("project")
@@ -1549,8 +1549,9 @@ def build_parser() -> argparse.ArgumentParser:
     hook.add_argument("--event", default=None, help="event name if the payload has none")
     hook.add_argument("--settings", default=None, help="agent settings file (install/uninstall)")
     hook.add_argument("--tirith", default="tirith", help="tirith executable to write on install")
-    hook.add_argument("--role", choices=["steward"], default=None,
-                      help="install: mark the hooks as the steward's (TIRITH_ROLE=steward in the command)")
+    hook.add_argument("--role", choices=["manager", "steward"], default=None,
+                      help="install: mark the hooks as the manager's (TIRITH_ROLE=manager in the command; "
+                           "steward is the old spelling)")
     hook.set_defaults(func=_cmd_hook)
 
     guard = sub.add_parser("guard", parents=[common], help="commit guard")
@@ -1599,7 +1600,7 @@ def build_parser() -> argparse.ArgumentParser:
     i_ans = inbox_sub.add_parser("answer", parents=[common], help="answer a request (markdown)")
     i_ans.add_argument("id")
     i_ans.add_argument("text")
-    i_ans.add_argument("--by", choices=inbox_mod.ANSWERERS, default="steward")
+    i_ans.add_argument("--by", choices=inbox_mod.ANSWERERS, default="manager")
     i_ans.add_argument("--lane", default=None, help="id of the lane (agent) that took the request")
     i_reply = inbox_sub.add_parser("reply", parents=[common], help="the owner's answer to an ask")
     i_reply.add_argument("--wait", required=True, help="id of the ask (tirith wait add)")
@@ -1618,7 +1619,7 @@ def build_parser() -> argparse.ArgumentParser:
     for i_cmd in (i_add, i_ls, i_ans, i_reply, i_done, i_brain, i_watch):
         i_cmd.set_defaults(func=_cmd_inbox)
 
-    queue = sub.add_parser("queue", parents=[common], help="the steward's own review queue")
+    queue = sub.add_parser("queue", parents=[common], help="the manager's own review queue")
     queue_sub = queue.add_subparsers(dest="queue_command", required=True)
     q_ls = queue_sub.add_parser("list", parents=[common], help="open review items")
     q_ls.add_argument("--all", action="store_true", help="include closed items")
@@ -1682,6 +1683,9 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     """Console entry point; returns the process exit code."""
     parser = build_parser()
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] == "steward":  # hidden alias: the old name of "manager"
+        argv[0] = "manager"
     args = parser.parse_args(argv)
     try:
         return int(args.func(args))

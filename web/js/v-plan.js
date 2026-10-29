@@ -128,7 +128,7 @@
       (a.status === 'working' && a.summary ? '<div class="inow">' + T.mdInline(a.summary) + '</div>' : '') + '</div></li>';
   }
   function answerLabel(a) {
-    return a.by === 'brain' ? (a.auto ? 'Muse Spark answered automatically' : 'Muse Spark answered') : 'Steward answered';
+    return a.by === 'brain' ? (a.auto ? 'Muse Spark answered automatically' : 'Muse Spark answered') : 'Manager answered';
   }
   /* One request as a timeline: asked -> answered -> handled by an agent -> done. Only from state.inbox. */
   function thread(r, state) {
@@ -147,7 +147,7 @@
       h += handled(id, state);
     });
     if (!answers.length && !lanes.length && r.status === 'open') {
-      h += '<li class="ie"><i class="ido wait"></i><div class="ib iwait">Waiting for the steward · <span class="tick" data-start="' + esc(r.at) + '">' + esc(T.dur(T.elapsed(r.at))) + '</span>' +
+      h += '<li class="ie"><i class="ido wait"></i><div class="ib iwait">Waiting for the manager · <span class="tick" data-start="' + esc(r.at) + '">' + esc(T.dur(T.elapsed(r.at))) + '</span>' +
         (T.elapsed(r.at) >= ESCALATE ? '<div class="inow">No answer yet. Tirith will escalate this.</div>' : '') + '</div></li>';
     }
     if (r.status === 'done') h += '<li class="ie"><i class="ido ok"></i><div class="ib"><b>Done</b></div></li>';
@@ -156,7 +156,7 @@
   function inboxBelow(s, p, state, key) {
     var reqs = reqsFor(state, p.id, s.id), pend = ui.inboxPend[key], h = '';
     if (pend && reqs.some(function (r) { return (T.ms(r.at) || 0) >= pend - 2000; })) { delete ui.inboxPend[key]; pend = null; }
-    if (pend && T.now() - pend < PEND_WAIT) h += '<div class="ichip-row"><span class="ichip" title="Sent; it shows here as soon as the collector has it">Sent · waiting for the steward</span></div>';
+    if (pend && T.now() - pend < PEND_WAIT) h += '<div class="ichip-row"><span class="ichip" title="Sent; it shows here as soon as the collector has it">Sent · waiting for the manager</span></div>';
     if (ui.inboxErr[key]) h += '<div class="ierr">' + esc(ui.inboxErr[key]) + '</div>';
     if (ui.inboxCli[key]) {
       h += '<div class="icli">Tirith cannot send from this page. Run in a terminal:<code>' + esc(ui.inboxCli[key]) + '</code></div>';
@@ -242,7 +242,7 @@
     });
     if (!ps.length) return '';
     var n = openCount(ps, state);
-    return '<section class="plan"><h2>Plan' + (n ? ' <span class="icount" title="Requests the steward has not answered yet">' + n + ' open</span>' : '') + '</h2>' + ps.map(function (p) { return card(p, state, ps.length > 1); }).join('') + '</section>';
+    return '<section class="plan"><h2>Plan' + (n ? ' <span class="icount" title="Requests the manager has not answered yet">' + n + ' open</span>' : '') + '</h2>' + ps.map(function (p) { return card(p, state, ps.length > 1); }).join('') + '</section>';
   };
 
   function openLink(url) {

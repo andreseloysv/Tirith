@@ -72,7 +72,7 @@ RUNS = [
     make_run("tirith", "git-hooks", 31, 22, [(P, 3), (P, 44)], None, "main"),
     make_run("tirith", "ci", 14, 41, [(P, 22), (F, 41)], "t-world", "lane/world"),
     make_run("chromasol", "android-release", 6, 95, [(P, 33), (P, 51), (P, 24), (P, 2), (P, 18), (P, 190), (P, 95), (P, 3600)], "owner", "release/1.4"),
-    make_run("relagame", "ios-testflight", 3, 150, [(P, 240), (F, 480)], "steward", "main"),
+    make_run("relagame", "ios-testflight", 3, 150, [(P, 240), (F, 480)], "manager", "main"),
     make_run("tirith", "ci", 13, 175, [(P, 21), (W, 40), (P, 12)], "t-collector", "lane/collector", source="github"),
     make_run("chromasol", "android-release", 5, 240, [(P, 36), (F, 74)], "w1-data", "lane/data"),
     make_run("tirith", "git-hooks", 30, 262, [(P, 4), (F, 44)], None, "lane/hooks"),
@@ -80,7 +80,7 @@ RUNS = [
     make_run("relagame", "ios-testflight", 2, 700, [(P, 236), (P, 410), (P, 95)], "owner", "main"),
     make_run("chromasol", "android-release", 4, 900, [(P, 35), (P, 47), (F, 3)], "w7-a11y", "lane/a11y"),
     make_run("tirith", "ci", 11, 1560, [(P, 21), (P, 39), (P, 12)], "t-collector", "main"),
-    make_run("chromasol", "android-release", 3, 1700, [(P, 34), (P, 45), (P, 25), (P, 2), (P, 17), (P, 180), (P, 88), (P, 3000)], "steward", "release/1.3"),
+    make_run("chromasol", "android-release", 3, 1700, [(P, 34), (P, 45), (P, 25), (P, 2), (P, 17), (P, 180), (P, 88), (P, 3000)], "manager", "release/1.3"),
     make_run("tirith", "git-hooks", 29, 1900, [(P, 3), (P, 41)], None, "main"),
 ]
 PENDING = {"run": "ios-internal#0", "project": "relagame", "pipeline": "ios-internal", "status": "pending", "started_at": None,

@@ -31,9 +31,9 @@ def test_decide_command_records_agent_decision(home: Path, monkeypatch) -> None:
     assert cli.main(["decide", "Ship Friday", "--why", "owner asked"]) == 0
     rows = [r for r in read_jsonl(home / "flows.jsonl") if r["kind"] == "decision"]
     assert [(r["from"], r["to"], r["text"], r["why"]) for r in rows] == [
-        ("agent:w-1", "steward", "Use SQLite", "one file, no server"),
-        ("agent:w-1", "steward", "Keep the schema flat", "easier to migrate"),
-        ("steward", "owner", "Ship Friday", "owner asked")]
+        ("agent:w-1", "manager", "Use SQLite", "one file, no server"),
+        ("agent:w-1", "manager", "Keep the schema flat", "easier to migrate"),
+        ("manager", "owner", "Ship Friday", "owner asked")]
     assert rows[0]["project"] == "demo"
     with pytest.raises(SystemExit):
         cli.main(["decide", "x", "--why", "y", "--lane", "nope"])
@@ -81,7 +81,7 @@ def test_collector_extracts_decisions_from_reports_once(home: Path) -> None:
     decisions = [(f["text"], f.get("why")) for f in state["flows"] if f["kind"] == "decision"]
     assert decisions == [("Use SQLite", "one file"), ("Flat schema", "simple")]
     row = next(f for f in state["flows"] if f["text"] == "Flat schema")
-    assert row["from"] == "agent:w-1" and row["to"] == "steward" and row["project"] == "demo"
+    assert row["from"] == "agent:w-1" and row["to"] == "manager" and row["project"] == "demo"
 
 
 def test_state_violations_split_blocked_and_instead(home: Path) -> None:

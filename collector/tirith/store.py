@@ -1,7 +1,7 @@
 """Reading and writing the small input files under TIRITH_HOME.
 
 The CLI writes lane registrations, pipeline events, notes, waits and the
-steward activity; the collector reads them back every cycle. Keeping all
+manager activity; the collector reads them back every cycle. Keeping all
 file formats here means the CLI and collector cannot drift apart.
 """
 

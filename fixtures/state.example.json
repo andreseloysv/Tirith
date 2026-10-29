@@ -6,9 +6,9 @@
     "model": "muse-spark",
     "last_error": null
   },
-  "steward": {
+  "manager": {
     "name": "Aldric of the Tower",
-    "title": "The Steward",
+    "title": "The Manager",
     "activity": "Reviewing Ivren's performance report before merging",
     "since": "2026-10-28T19:31:00Z",
     "notes": [
@@ -513,7 +513,7 @@
   "agents": [
     {
       "id": "w6-perf",
-      "parent": "steward",
+      "parent": "manager",
       "project": "chromasol",
       "name": "Ivren",
       "epithet": "of the Seventh Gate",
@@ -834,7 +834,7 @@
     },
     {
       "id": "t-world",
-      "parent": "steward",
+      "parent": "manager",
       "project": "tirith",
       "name": "Marrow",
       "epithet": "Quickstep",
@@ -1063,14 +1063,14 @@
       }
     }
   ],
-  "steward_queue": [
+  "manager_queue": [
     {
       "id": "sq-1c04a7b2",
       "at": "2026-10-28T19:30:00Z",
       "kind": "review",
       "project": "tirith",
       "lane": "inbox-reply",
-      "to": "steward",
+      "to": "manager",
       "status": "open",
       "text": "- Decide whether the token is rotated before the release."
     }

@@ -278,7 +278,7 @@ fn reply_row(wait: &str, project: &str, value: &str, text: &str, now: SystemTime
     }))
 }
 
-/// Appends the owner's answer to an ask to `<home>/inbox.jsonl` (the steward watches it) and returns its id.
+/// Appends the owner's answer to an ask to `<home>/inbox.jsonl` (the manager watches it) and returns its id.
 #[tauri::command]
 fn inbox_reply(wait: String, project: Option<String>, value: Option<String>, text: Option<String>) -> Result<String, String> {
     let row = reply_row(
@@ -610,7 +610,7 @@ mod action_tests {
         let w = json!({"id": "ac-2", "label": "W", "command": "true"});
         write_lines(home.join("inbox.jsonl"), &[
             json!({"id": "in-1", "kind": "ask", "project": "demo", "step": "1", "text": "q"}),
-            json!({"id": "in-1", "kind": "answer", "by": "steward", "text": "t", "actions": [a]}),
+            json!({"id": "in-1", "kind": "answer", "by": "manager", "text": "t", "actions": [a]}),
         ]);
         write_lines(home.join("waits.jsonl"), &[json!({"id": "w-1", "project": "other", "actions": [w]})]);
         let (found, project) = find_action(&home, "ac-1").unwrap();

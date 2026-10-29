@@ -1,18 +1,18 @@
-/* Flow view: how information passes between you, the Steward, agents, rooms and pipelines. */
+/* Flow view: how information passes between you, the Manager, agents, rooms and pipelines. */
 (function () {
   var T = window.T, esc = T.esc, ui = T.ui;
   var MAXEXT = 7, MAXDEC = 3;
-  var STEWARD = T.CLS.steward.color;
+  var MANAGER = T.CLS.manager.color;
 
   function kindOf(id) {
     if (id === 'owner' || id === 'guard') return 0;
-    if (id === 'steward') return 1;
+    if (id === 'manager') return 1;
     if (/^(agent|pipeline):/.test(id)) return 2;
     if (/^room:/.test(id)) return 3;
     return 4;
   }
   function nodeLook(s, id, name) {
-    if (id === 'steward') return { bg: T.grad(STEWARD), svg: T.fillIcon(T.CLS.steward.glyph, 20), ov: 'Orchestrator' };
+    if (id === 'manager') return { bg: T.grad(MANAGER), svg: T.fillIcon(T.CLS.manager.glyph, 20), ov: 'Orchestrator' };
     if (id === 'owner') return { bg: 'linear-gradient(135deg,#f2b84b,#e8892b)', svg: T.fillIcon(T.ICON.owner, 20), ov: 'You' };
     if (id === 'guard') return { bg: 'linear-gradient(135deg,#9aa3b2,#6b7280)', svg: T.fillIcon(T.ICON.guard, 20), ov: 'Guard' };
     if (/^room:/.test(id)) return { bg: 'linear-gradient(135deg,#4aa8e8,#3b6bd9)', svg: T.fillIcon(T.ICON.room, 19), ov: 'Room' };
@@ -41,7 +41,7 @@
     msgs.forEach(function (m) {
       var a = map(m.fromId), b = map(m.toId);
       [[a, m.fromName], [b, m.toName]].forEach(function (x) {
-        if (!nodes[x[0]]) nodes[x[0]] = { id: x[0], name: x[0] === 'ext:*' ? nOthers + ' others' : x[0] === 'steward' ? 'The Steward' : x[1], col: kindOf(x[0]) };
+        if (!nodes[x[0]]) nodes[x[0]] = { id: x[0], name: x[0] === 'ext:*' ? nOthers + ' others' : x[0] === 'manager' ? 'The Manager' : x[1], col: kindOf(x[0]) };
       });
       var k = [a, b].sort().join('>'), e = edges[k] || (edges[k] = { key: k, a: a, b: b, msgs: [], dec: [], all: [] });
       e.all.push(m);

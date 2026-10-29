@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Real activity for the demo recording, driven through the tirith CLI. Usage: activity.sh <step>
 #   session     start the "Hackathon demo" session
-#   events      steward line, owner message, a coding-agent lane, a request for the owner
+#   events      manager line, owner message, a coding-agent lane, a request for the owner
 #   pipelines   two real pipelines, one after the other (Tirith checks, then ChromaSol Android build/test/lint)
 #   finish      answer the request, close the lane, end the session
 # Nothing here edits source code, commits, or posts to a room.
@@ -18,8 +18,8 @@ case "${1:-}" in
 session)
     T session start "Hackathon demo" --id hackathon-demo ;;
 events)
-    T steward "Checking the Android build before release"
-    T flow --from owner --to steward --kind message --text "Check that the Android build is healthy before we release"
+    T manager "Checking the Android build before release"
+    T flow --from owner --to manager --kind message --text "Check that the Android build is healthy before we release"
     : > "$WORK/agent.log"
     # a lane: an agent process with a name, a rank and a log; it follows the recorder's progress lines
     nohup uv run -q --project "$ROOT/collector" tirith lane run --project tirith --class herald \
@@ -49,7 +49,7 @@ schema = json.load(open('state.schema.json')); state = json.load(open('../fixtur
 jsonschema.validate(state, schema); print('state.demo.json matches state.schema.json')"
     run_ci web-check bash -c 'for f in ../web/js/*.js; do node --check "$f" && echo "ok $f"; done'
     run_ci muse-spark-live uv run -q pytest -q tests/test_live.py
-    T flow --from steward --to owner --kind decision --text "Tirith checks are green; moving to the Android build"
+    T flow --from manager --to owner --kind decision --text "Tirith checks are green; moving to the Android build"
     T pipeline declare android-release --project chromasol --stages build,test,lint
     cd "$HOME/DEVELOP/colorsApp"   # the ChromaSol project folder; the Makefile lives in the integration worktree
     # --rerun-tasks makes Gradle really rebuild (it only touches build outputs); the make targets are the project's own
@@ -59,7 +59,7 @@ jsonschema.validate(state, schema); print('state.demo.json matches state.schema.
     T run --project chromasol --pipeline android-release --stage lint -- make -C "$CHROMA" android-lint ;;
 finish)
     T wait done demo-w1
-    T steward "Android build approved; idle"
+    T manager "Android build approved; idle"
     echo "== finished: the demo is recorded" >> "$WORK/agent.log"
     sleep 3
     T session end hackathon-demo ;;
