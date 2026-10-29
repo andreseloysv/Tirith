@@ -22,23 +22,19 @@ from tirith.home import Config
 KIND_ORDER = ("build", "test", "deploy")
 _ANY_HEADER = re.compile(r"^\s*\[")
 
-# id -> (label, enforced_by, description); the labels match the Rules list of the web page
-BUILT_IN: tuple[tuple[str, str, list[str], str], ...] = (
-    ("subagent-tool", "Sub-agent tool", ["hook"],
-     "Blocks the agent's internal sub-agent tool; sub-agents start with tirith lane run."),
-    ("agent-cli", "Agent without lane run", ["hook", "shim"],
-     "Blocks starting an agent CLI outside tirith lane run."),
-    ("no-verify", "Skipped git hooks", ["hook"], "Blocks git commit -n and --no-verify."),
-    ("hooks-path", "Changed hooks path", ["hook"], "Blocks changing core.hooksPath."),
-    ("git-hooks", "Edited git hooks", ["hook", "git"], "Blocks editing or removing files under .git/hooks."),
-    ("settings-edit", "Edited agent settings", ["hook"],
-     "Blocks editing an agent's settings file or ~/.tirith/config.toml, so the hooks cannot be removed."),
-    ("raw-stage", "Raw pipeline stage", ["hook"],
-     "Blocks running a tirith.toml stage by hand; use tirith run --stage."),
-    ("lane-brief", "Lane without brief", ["lane run"], "tirith lane run needs a non-empty --brief file."),
-    ("project-check", "Project check failing", ["lane run"],
-     "tirith lane run refuses while tirith check fails for the project."),
-    ("commit-guard", "Commit guard", ["git"], "The git hooks that run the project's stages and block bad commits."),
+# (id, label, enforced_by); the labels match the Rules list of the web page, the descriptions
+# come from ``gates.DESCRIPTIONS``
+BUILT_IN: tuple[tuple[str, str, list[str]], ...] = (
+    ("subagent-tool", "Sub-agent tool", ["hook"]),
+    ("agent-cli", "Agent without lane run", ["hook", "shim"]),
+    ("no-verify", "Skipped git hooks", ["hook"]),
+    ("hooks-path", "Changed hooks path", ["hook"]),
+    ("git-hooks", "Edited git hooks", ["hook", "git"]),
+    ("settings-edit", "Edited agent settings", ["hook"]),
+    ("raw-stage", "Raw pipeline stage", ["hook"]),
+    ("lane-brief", "Lane without brief", ["lane run"]),
+    ("project-check", "Project check failing", ["lane run"]),
+    ("commit-guard", "Commit guard", ["git"]),
 )
 
 

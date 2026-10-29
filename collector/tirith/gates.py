@@ -416,7 +416,7 @@ def _settings_bash(line: str, segments: list[list[str]], protected: list[Path], 
     for tokens in segments:
         name, args = _program(tokens)
         text = _expand_home(" ".join(tokens))
-        if name == "tirith" and "hook" in args and "uninstall" in args:
+        if re.search(r"\btirith\b.*\bhook\s+uninstall\b", text):
             target = "tirith hook uninstall removes the hooks"
         else:
             hit = next((p for p in protected if str(p) in text
