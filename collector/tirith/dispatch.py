@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
+from tirith import timeouts as timeouts_mod
 from tirith import asks as asks_mod
 from tirith import autopilot as autopilot_mod
 from tirith import autoreview as autoreview_mod
@@ -203,7 +204,7 @@ def _plan(home: Path, req: dict, config: Config, lanes: list[dict], status_of: C
 
 
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True)
+    return timeouts_mod.run(["git", "-C", str(repo), *args], "git", text=True)
 
 
 def _plan_file(repo: Path, plan: str) -> Path | None:

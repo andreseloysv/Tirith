@@ -17,6 +17,7 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
+from tirith import timeouts as timeouts_mod
 from tirith import flows as flows_mod
 from tirith.home import now_iso, parse_iso
 from tirith.store import append_jsonl, read_json, read_jsonl, write_json_atomic
@@ -139,9 +140,10 @@ def applescript(command: str) -> str:
 
 def _run_check(command: str) -> bool:
     try:
-        return subprocess.run(["/bin/sh", "-c", command], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                              stderr=subprocess.DEVNULL, timeout=CHECK_TIMEOUT_S).returncode == 0
-    except (OSError, subprocess.TimeoutExpired):
+        return timeouts_mod.run(["/bin/sh", "-c", command], "generic", stdin=subprocess.DEVNULL,
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                timeout=CHECK_TIMEOUT_S).returncode == 0
+    except OSError:
         return False
 
 

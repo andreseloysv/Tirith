@@ -94,7 +94,7 @@ def test_run_stage_records_a_failure_and_returns_the_output(home, tmp_path) -> N
 
 def test_run_stage_timeout_ends_the_run_as_failed(home, tmp_path) -> None:
     code, output = runstage.run_stage(home, "p", "ci", "test", "sleep 5", tmp_path, echo=False, timeout=0.3)
-    assert code != 0 and "did not finish" in output
+    assert code != 0 and "timed out after" in output
     assert events(home)[-1]["status"] == "failed"
 
 
