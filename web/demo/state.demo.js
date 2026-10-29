@@ -3173,6 +3173,8 @@ window.TIRITH_STATE = {
   "autopilot": {
     "enabled": true,
     "max_parallel": 4,
+    "working": 1,
+    "queued": 2,
     "started": [
       {
         "lane": "t-world",
