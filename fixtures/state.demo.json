@@ -1856,5 +1856,9 @@
         "notes": 2
       }
     }
-  ]
+  ],
+  "launch": {
+    "token": "demo-launch-token-0123456789",
+    "available": true
+  }
 }

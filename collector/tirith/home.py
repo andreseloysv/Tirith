@@ -94,6 +94,7 @@ class Config:
     rooms_interval_s: float = 15.0
     agents: dict[str, dict] = field(default_factory=dict)  # alias -> {command, settings}
     gates_enabled: bool = True  # [gates] enabled = false is the only off switch
+    launch_command: str | list[str] | None = None  # [launch] command template: {brief}, {workspace}
 
     def room(self, room_id: str) -> RoomConfig | None:
         for room in self.rooms:
@@ -178,6 +179,9 @@ def load_config(home: Path) -> Config:
                   if isinstance(table, dict)}
     gates = raw.get("gates") if isinstance(raw.get("gates"), dict) else {}
     cfg.gates_enabled = gates.get("enabled", True) is not False
+    launch = raw.get("launch") if isinstance(raw.get("launch"), dict) else {}
+    if isinstance(launch.get("command"), (str, list)) and launch["command"]:
+        cfg.launch_command = launch["command"]
     rooms_raw = raw.get("rooms")
     if isinstance(rooms_raw, list):
         for item in rooms_raw:
