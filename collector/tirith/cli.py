@@ -44,7 +44,9 @@ from tirith import lanestop as lanestop_mod
 from tirith import managerd as managerd_mod
 from tirith import launch as launch_mod
 from tirith import models as models_mod
+from tirith import ownergate as ownergate_mod
 from tirith import planlane as planlane_mod
+from tirith import verifylane as verifylane_mod
 from tirith import roadmap as roadmap_mod
 from tirith import review as review_mod
 from tirith import roadmap as roadmap_mod
@@ -220,6 +222,7 @@ def add_lane_ask(home: Path, lane: dict, what: str, log_tail: str = "") -> str:
     return add_wait(home, str(lane.get("project") or ""),
                     f"Lane **{lane.get('feature') or lane['id']}** ({lane['id']}) {what}. What now?",
                     wait_id=wait_id, options=list(asks_mod.LANE_OPTIONS), kind="decision",
+                    why_owner="owner-decision", why_detail="choice: retry, show the log or drop it",
                     command=f"tail -n 80 {shlex.quote(str(log))}" if log else None)
 
 
@@ -695,8 +698,12 @@ def _next_wait_id(home: Path) -> str:
 
 def add_wait(home: Path, project: str, text: str, link: str | None = None,
              wait_id: str | None = None, options=None, command: str | None = None,
-             kind: str | None = None, actions: list[dict] | None = None) -> str:
-    """Add an ask to the owner's list; returns its id.
+             kind: str | None = None, actions: list[dict] | None = None,
+             why_owner: str | None = None, why_detail: str | None = None) -> str:
+    """Add an ask to the owner's list; returns its id (``""`` when the gate kept it from the owner).
+
+    ``why_owner`` (a key of ``asks.WHY_OWNER``) is required by the owner gate: without it the text is
+    queued for the manager as "agent can do" and nothing reaches the owner (``tirith.ownergate``).
 
     ``options`` are one-click answers (``{"label", "value"}`` or ``"Label|value"``), ``command`` is a
     shell line the owner can copy, ``kind`` is decision|action|approval|info, ``actions`` are commands
@@ -711,9 +718,15 @@ def add_wait(home: Path, project: str, text: str, link: str | None = None,
     if kind not in asks_mod.ASK_KINDS:
         raise SystemExit(f"wait add: --kind must be one of {', '.join(asks_mod.ASK_KINDS)}")
     wait_id = wait_id or _next_wait_id(home)
+    verdict = ownergate_mod.admit(home, wait_id, project, text, why_owner, via="wait-add")
+    if verdict != ownergate_mod.OWNER:
+        return ""
+    why = asks_mod.why_key(why_owner)
     row = {"id": wait_id, "at": now_iso(), "project": project,
            "text": text, "link": link, "done_at": None,
-           "session": projects_mod.current_session(home)}
+           "session": projects_mod.current_session(home),
+           "why_owner": why, **({"why_detail": why_detail} if why_detail else {}),
+           "reason_tag": asks_mod.reason_tag(why, why_detail)}
     if options or command or kind != "info":
         row.update({"kind": kind, "options": options, "command": command or None})
     if actions:
@@ -721,6 +734,20 @@ def add_wait(home: Path, project: str, text: str, link: str | None = None,
     append_jsonl(home / "waits.jsonl", row)
     flows_mod.append_flow(home, "manager", "owner", "request", text, link, project=project)
     return wait_id
+
+
+OWNER_GATE_NOTE = (
+    "tirith: owner-gate: not an owner item, so the owner was not asked. Only these reach the owner: "
+    + ", ".join(asks_mod.WHY_OWNER) + " (pass --why-owner KEY). The text went to the manager queue as "
+    '"agent can do" (or was dropped when out of plan); an agent does it.')
+
+
+def _add_why_args(parser) -> None:
+    parser.add_argument("--why-owner", default=None, metavar="KEY",
+                        help="why only the owner can do it: " + ", ".join(asks_mod.WHY_OWNER)
+                        + " (without it the item goes to the manager queue, not to the owner)")
+    parser.add_argument("--why-detail", default=None, metavar="WORDS",
+                        help='plain words for the chip, e.g. "Apple account" -> "Needs your Apple account"')
 
 
 def _cmd_wait_add(args) -> int:
@@ -738,8 +765,17 @@ def _cmd_wait_add(args) -> int:
     except actions_mod.ActionError as error:
         print(error, file=sys.stderr)
         return 2
-    print(add_wait(_home(args), args.project, text, args.link, args.id, options=options,
-                   command=args.command, kind=args.kind, actions=actions))
+    wait_id = add_wait(_home(args), args.project, text, args.link, args.id, options=options,
+                       command=args.command, kind=args.kind, actions=actions,
+                       why_owner=args.why_owner, why_detail=args.why_detail)
+    return _print_wait(wait_id)
+
+
+def _print_wait(wait_id: str) -> int:
+    if wait_id:
+        print(wait_id)
+        return 0
+    print(OWNER_GATE_NOTE, file=sys.stderr)
     return 0
 
 
@@ -760,8 +796,8 @@ def _cmd_chat_say(args) -> int:
         return 2
     home = _home(args)
     if options or actions:
-        print(add_wait(home, args.project, text, options=options, actions=actions))
-        return 0
+        return _print_wait(add_wait(home, args.project, text, options=options, actions=actions,
+                                    why_owner=args.why_owner, why_detail=args.why_detail))
     try:
         print(inbox_mod.add_say(home, text, args.project or "")["id"])
     except inbox_mod.InboxError as error:
@@ -1221,6 +1257,34 @@ def launch_plan(home: Path, project_id: str, kind: str, request_id: str | None =
     launch_mod.create_worktree(repo, lane_id)
     brief_path.parent.mkdir(parents=True, exist_ok=True)
     brief_path.write_text(brief, encoding="utf-8")
+    launch_mod.spawn_detached(argv, home, home / "logs" / f"{lane_id}.launch.log")
+    print(f"lane {lane_id}", file=out)
+    return lane_id
+
+
+def launch_verify(home: Path, project_id: str, text: str, out=None, by_tirith: bool = False) -> str:
+    """Start the verification lane for one "agent can do" check (``tirith.verifylane``); returns the lane id.
+
+    Raises ``launch_mod.LaunchError`` with the reason when it must not start."""
+    out = out or sys.stdout
+    config, proj = _project_or_exit(home, project_id)
+    repo = projects_mod.real(proj.repo) if proj.repo else None
+    if repo is None:
+        raise launch_mod.LaunchError(f"project '{project_id}' has no repo folder")
+    failed = manifest_mod.check(repo, config.words_for(proj, default_words()))
+    if failed:
+        raise launch_mod.LaunchError(f"tirith check fails for '{project_id}', so no lane may start")
+    lanes = read_lanes(home)
+    title = verifylane_mod.lane_title(text)
+    lane_id = launch_mod.lane_id_for(title, {str(l["id"]) for l in lanes}, repo)
+    brief_path = home / "briefs" / f"{lane_id}.md"
+    workspace = launch_mod.worktree_path(repo, lane_id)
+    command = launch_mod.agent_command(config, None, brief_path, workspace, project_id, verifylane_mod.LANE_STEP)
+    argv = launch_mod.lane_run_argv(project_id, verifylane_mod.LANE_STEP, verifylane_mod.HERO_CLASS, title,
+                                    brief_path, workspace, lane_id, command, None, by_tirith=by_tirith)
+    launch_mod.create_worktree(repo, lane_id)
+    brief_path.parent.mkdir(parents=True, exist_ok=True)
+    brief_path.write_text(verifylane_mod.brief(project_id, text), encoding="utf-8")
     launch_mod.spawn_detached(argv, home, home / "logs" / f"{lane_id}.launch.log")
     print(f"lane {lane_id}", file=out)
     return lane_id
@@ -1946,6 +2010,7 @@ def build_parser() -> argparse.ArgumentParser:
     wait_add.add_argument("--project", default=None)
     wait_add.add_argument("--link", default=None)
     wait_add.add_argument("--id", default=None)
+    _add_why_args(wait_add)
     _add_action_args(wait_add)
     wait_add.set_defaults(func=_cmd_wait_add)
     wait_done = wait_sub.add_parser("done", parents=[common])
@@ -1961,6 +2026,7 @@ def build_parser() -> argparse.ArgumentParser:
     chat_say.add_argument("--option", action="append", metavar="LABEL|VALUE",
                           help="a one-click answer; repeat for more (max 6)")
     _add_action_args(chat_say)
+    _add_why_args(chat_say)
     chat_say.set_defaults(func=_cmd_chat_say)
 
     flow = sub.add_parser("flow", parents=[common],

@@ -22,6 +22,7 @@ from pathlib import Path
 
 from tirith import activity as activity_mod
 from tirith import asks as asks_mod
+from tirith import ownergate as ownergate_mod
 from tirith import brain as brain_mod
 from tirith.guardwrap import default_words, verify_guard
 from tirith.home import Config, ProjectConfig, ensure_home, load_config, now_iso, parse_iso
@@ -461,6 +462,7 @@ class Collector:
         self.worker = brain_mod.BrainWorker(resolved, self.cache)
         self._agents_dirty = False
         self._brain_pending: set[str] = set()  # lanes whose brain answer has not landed yet
+        self._owner_items_checked = False
         self.rooms =RoomsService(self.home, rooms_transport)
         self._one_shot = False
         self.activity = activity_mod.ActivityTracker()
@@ -867,8 +869,9 @@ class Collector:
                 "options": options, "command": command, "status": "open",
                 "actions": actions_mod.dedupe_actions(
                     [dict(a) for a in row.get("actions") or [] if isinstance(a, dict)]),
-                **({"reason": row["reason"], "reason_tag": row.get("reason_tag")}
-                   if row.get("reason") in asks_mod.OWNER_REASONS else {}),
+                **({"why_owner": row["why_owner"], "why_detail": row.get("why_detail"),
+                    "reason_tag": row.get("reason_tag") or asks_mod.reason_tag(row["why_owner"], row.get("why_detail"))}
+                   if asks_mod.why_key(row.get("why_owner")) else {}),
             }
             reply = replied.get(wait["id"])
             actions_mod.attach_last_runs(self.home, [wait])
@@ -941,6 +944,8 @@ class Collector:
             "id": f"guard-{proj.id}", "project": proj.id,
             "text": f"Commit guard needs attention in {proj.name}: {problems[0]}",
             "since": since, "link": None, "source": "guard", "kind": "action",
+            "why_owner": "owner-decision", "why_detail": "choice: install the guard, not now or never",
+            "reason_tag": asks_mod.reason_tag("owner-decision", "install the guard, not now or never"),
             "options": [{"label": "Not now", "value": "snooze"},
                         {"label": "Never for this project", "value": "never"}],
             "actions": [action],
@@ -1042,6 +1047,9 @@ class Collector:
         now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
         if self._fixed_config is None:
             self.config = load_config(self.home)
+        if not self._owner_items_checked:  # once at startup: every open owner item passes the gate again
+            self._owner_items_checked = True
+            ownergate_mod.migrate(self.home, now_iso(now))
         lanes = read_lanes(self.home)
         close_dead_lanes(self.home, lanes, now)
         events = [e for e in read_jsonl(self.home / "events.jsonl") if e.get("kind") not in ("hook", "violation", "git-hook")]
