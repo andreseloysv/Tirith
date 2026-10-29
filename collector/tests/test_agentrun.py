@@ -35,7 +35,8 @@ def test_anthropic_preset_defaults() -> None:
     assert cmd[3:8] == ["--output-format", "stream-json", "--verbose",
                         "--permission-mode", "acceptEdits"]
     allowed = cmd[cmd.index("--allowedTools") + 1]
-    assert "Edit" in allowed.split(",") and "Bash(git status:*)" in allowed
+    assert allowed.split(",") == ["Bash", "Read", "Edit", "Write", "Glob", "Grep", "WebFetch", "WebSearch",
+                                  "NotebookEdit"]
 
 
 def test_config_and_project_override_win() -> None:
@@ -59,7 +60,8 @@ def test_codex_and_copilot_presets() -> None:
     cmd = agentrun.build_command(cfg, "copilot", None, "hi")
     assert cmd[:4] == ["agent-p", "--output-format", "json", "--no-ask-user"]
     assert cmd[cmd.index("--model") + 1] == "m1"
-    assert "shell(git status)" in cmd and cmd[-2:] == ["-p", "hi"]
+    assert cmd[cmd.index("--allow-tool") + 1:cmd.index("--allow-tool") + 3] == ["write", "shell"]
+    assert not any(w.startswith("shell(") for w in cmd) and cmd[-2:] == ["-p", "hi"]
     with pytest.raises(SystemExit):
         agentrun.build_command(cfg, "codex", None, "hi", effort="high")
     cmd = agentrun.build_command(cfg, "copilot", None, "hi", effort="high")
@@ -295,3 +297,18 @@ def test_doctor_wrapper_letting_it_through(tmp_path: Path) -> None:
 def test_doctor_cli(home: Path, capsys) -> None:
     code = main(["--home", str(home), "doctor", "--agent", "anthropic"])
     assert code == 1 and "FAIL executable" in capsys.readouterr().out
+
+
+def test_presets_need_no_approval() -> None:
+    """Agents run headless and never ask: every tool is allowed, the Tirith hooks decide."""
+    cfg = _config(anthropic={"command": "a"}, copilot={"command": "p"}, codex={"command": "c"},
+                  muse={"command": "m"})
+    cmd = agentrun.build_command(cfg, "anthropic", None, "go")
+    allowed = cmd[cmd.index("--allowedTools") + 1].split(",")
+    assert "Bash" in allowed and not any(t.startswith("Bash(") for t in allowed)
+    assert {"Read", "Edit", "Write", "Glob", "Grep", "WebFetch", "WebSearch", "NotebookEdit"} <= set(allowed)
+    cmd = agentrun.build_command(cfg, "copilot", None, "go")
+    assert cmd[cmd.index("--allow-tool") + 1:cmd.index("--allow-tool") + 3] == ["write", "shell"]
+    assert agentrun.build_command(cfg, "codex", None, "go")[:5] == [
+        "c", "exec", "--json", "--sandbox", "workspace-write"]
+    assert agentrun.build_command(cfg, "muse", None, "go")[:3] == ["m", "exec", "--json"]
