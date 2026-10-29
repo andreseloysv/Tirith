@@ -235,7 +235,8 @@ def test_context_over_the_limit_compacts_then_restarts_with_a_handoff(rig: Rig, 
     rig.clock.tick(60)
     rig.until(lambda: len([r for r in rig.fake_log() if "start" in r]) == 2, timeout=10)
     assert [r for r in rig.fake_log() if "start" in r][1]["resume"] is None
-    rig.until(lambda: "## Rules" in [r.get("message", "") for r in rig.fake_log()][-1])
+    # the fresh session got the whole handoff (it may be asked to compact right after: the fake context stays big)
+    rig.until(lambda: len([r for r in rig.fake_log() if "## Rules" in r.get("message", "")]) >= 2)
 
 
 def test_long_conversation_compacts_after_max_turns(rig: Rig) -> None:
