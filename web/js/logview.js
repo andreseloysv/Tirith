@@ -1,5 +1,5 @@
-/* Agent log: structured entries, newest first, one look per kind. Shared by the Agents drawer and the
-   Flow expanded node (both call T.logView). The collector classifies and parses; this only renders. */
+/* Agent log: structured entries, newest first, one look per kind. Shared by the Agents drawer
+   (T.logView). The collector classifies and parses; this only renders. */
 (function () {
   var T = window.T, esc = T.esc, ui = T.ui;
   ui.logFilter = ui.logFilter || 'all';
