@@ -425,6 +425,8 @@ button.fhead { border-radius: 12px; }
 #chat .chat-log { flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 6px; }
 .chat-msg { white-space: pre-wrap; padding: 6px 10px; border-radius: 10px; background: var(--soft); }
 .chat-msg.me { align-self: flex-end; background: rgba(121, 168, 255, .25); }
+.chat-msg.ask { border: 1px solid var(--mut); font-size: 12px; }
+.chat-msg.ask div { margin-top: 6px; display: flex; gap: 6px; }
 .chat-msg.sys, .chat-msg.err { color: var(--mut); font-size: 12px; }
 /* remote work (source "github") */
 .ghmark { vertical-align: -2px; color: var(--mut); flex: none; }
