@@ -1,6 +1,6 @@
 # Contract addition: launching a sub-agent from the plan (v1)
 
-Each unfinished step of the Plan in the Overview has a "Finish with an agent" button. The web is a
+Each unfinished step of the Plan in the Overview has a "Start an agent now" button (in the expanded step). The web is a
 file:// page (no servers, no open ports), so a click cannot run commands: it opens a `tirith://` link
 that a small local handler turns into `tirith launch`.
 
@@ -83,9 +83,11 @@ A link with a wrong or missing token is refused (exit 3) and recorded as a `laun
 
 ## Web (`web/js/v-plan.js`)
 
-On every step that is not done and has no working agent: a rocket button "Finish with an agent" (icon in
-the row, labelled in the expanded step).
+On every step that is not done and has no working agent, in the expanded step: a rocket button
+"Start an agent now" (the direct path; the row's buttons are the owner's inbox, `docs/CONTRACT-inbox.md`).
 
 - `available`: click opens the link; the button shows "Starting…" until a working agent appears on the
   step (the lane is tagged with `--step`, so its avatar shows) or 90 s pass.
 - not `available`: click shows a tooltip with the one command to install the handler (`tirith url install`).
+
+`tirith url open` also accepts `tirith://inbox?kind=..&project=..&step=..&text=..&token=..` (same token check): see `docs/CONTRACT-inbox.md`.

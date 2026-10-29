@@ -135,6 +135,37 @@
         "$ref": "#/$defs/violation"
       }
     },
+    "inbox": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["id", "at", "kind", "project", "step", "text", "status", "answers"],
+        "properties": {
+          "id": {"type": "string"},
+          "at": {"type": ["string", "null"]},
+          "kind": {"enum": ["finish", "ask"]},
+          "project": {"type": "string"},
+          "step": {"type": "string"},
+          "text": {"type": "string"},
+          "status": {"enum": ["open", "answered", "done"]},
+          "answers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true,
+              "required": ["at", "by", "text", "auto"],
+              "properties": {
+                "at": {"type": ["string", "null"]},
+                "by": {"enum": ["steward", "brain"]},
+                "text": {"type": "string"},
+                "auto": {"type": "boolean"}
+              }
+            }
+          }
+        }
+      }
+    },
     "launch": {
       "type": "object",
       "additionalProperties": true,
