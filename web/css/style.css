@@ -90,7 +90,7 @@ h2 { font-size: 13px; font-weight: 600; margin: 0 0 10px; } h3 { font-size: 12px
 .mc-note { margin: 0 !important; }
 .mc-box { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border-radius: 14px; background: rgba(255,255,255,.7); border: 1px solid rgba(255,255,255,.9); box-shadow: inset 0 1px 0 #fff, 0 4px 16px rgba(70,95,130,.08); }
 .mc-box:focus-within { border-color: var(--blue); }
-.mc-box textarea { width: 100%; border: 0; outline: 0; resize: none; background: none; font: inherit; color: var(--fg); line-height: 1.45; max-height: 140px; }
+.mc-box textarea { width: 100%; border: 0; outline: 0; resize: none; background: none; font: inherit; color: var(--fg); line-height: 1.45; overflow-y: hidden; }
 .mc-row { display: flex; align-items: center; gap: 8px; }
 .mc-hint { margin-left: auto; font-size: 11px; color: var(--mut); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mc-chip { display: inline-flex; align-items: center; gap: 5px; max-width: 150px; padding: 0 6px 0 8px; line-height: 22px; font-size: 11.5px; color: var(--mut); background: var(--soft); border-radius: 11px; }
