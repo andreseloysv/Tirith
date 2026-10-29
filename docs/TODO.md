@@ -122,7 +122,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Agentes por stdin/stdout (modo stream-json del CLI `anthropic`, `muse serve`).
 - [x] Preguntas de permiso del agente en la UI.
 - [x] La app arranca el collector si no hay uno (con uv; Python aún no va empaquetado).
-- [ ] Abrir la app en modo dev y comprobar que se ve y se actualiza.
+- [x] Abrir la app en modo dev y comprobar que se ve y se actualiza.
 - [x] Windows: shims propios (`.cmd`).
 - [ ] Windows: versión propia del wrapper de git y de la guarda.
 - [ ] Confirmar qué agentes existen en cada plataforma.
@@ -141,7 +141,8 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] `tirith launch --project <id> --step <n>`: worktree, brief generado de las tareas abiertas, lane en segundo plano.
 - [x] Enlaces `tirith://` con un manejador local (sin servidores) y token para que ninguna otra web lance agentes.
 - [x] Botón «Terminar con un agente» en cada paso no terminado del Plan.
-- [ ] Registrar el manejador `tirith://` en macOS y probar un lanzamiento real.
+- [x] Registrar el manejador `tirith://` en macOS.
+- [ ] Probar un lanzamiento real desde el navegador con el enlace `tirith://`.
 - [x] Al terminar un lane lanzado así: botón «Revisar y unir» (tests + merge).
 - [x] Buzón del dueño: «Termínalo» y «¿Qué pasa?» en cada paso; el aviso llega al steward.
 - [x] Respuestas bajo cada paso (steward, o Muse Spark automático si el steward no responde en 2 min).
@@ -165,7 +166,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Vista Pipelines al estilo GitLab: cada ejecución en una fila con sus etapas como círculos, tooltip por etapa y quién la lanzó.
 - [x] Guarda compatible con hooks existentes (encadenar el `pre-commit` de ChromaSol).
 - [x] Un resultado de acción del dueño reabre la petición para el manager (aviso al instante y respuesta obligatoria).
-- [ ] Renombrar «steward» a «manager» en toda la UI, la CLI y la documentación.
+- [x] Renombrar «steward» a «manager» en toda la UI, la CLI y la documentación.
 - [ ] Settings: modelo y esfuerzo del manager y de los agentes que crea (por defecto, por proyecto y por paso).
 
 ## 13. Configuración del proyecto visible y editable
