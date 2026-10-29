@@ -1,7 +1,7 @@
 /* Flow view: how information passes between you, the Steward, agents, rooms and pipelines. */
 (function () {
   var T = window.T, esc = T.esc, ui = T.ui;
-  var NW = 184, NH = 58, GX = 96, GY = 22, MAXEXT = 7;
+  var MAXEXT = 7;
   var STEWARD = T.CLS.steward.color;
 
   function kindOf(id) {
@@ -43,30 +43,55 @@
     return { nodes: nodes, edges: Object.keys(edges).map(function (k) { return edges[k]; }) };
   }
 
-  function view(s, el) {
-    var g = build(s), ids = Object.keys(g.nodes);
-    if (!ids.length) { el.innerHTML = '<div class="pad">' + T.empty('No information has flowed in this session') + '</div>'; return; }
-    var cols = {}, used = [];
-    ids.forEach(function (id) { var c = g.nodes[id].col; (cols[c] = cols[c] || []).push(g.nodes[id]); });
-    Object.keys(cols).map(Number).sort().forEach(function (c) { used.push(c); });
-    var maxN = Math.max.apply(null, used.map(function (c) { return cols[c].length; }));
-    var H = maxN * (NH + GY) - GY, W = used.length * NW + (used.length - 1) * GX;
-    used.forEach(function (c, ci) {
-      var l = cols[c]; l.sort(function (a, b) { return a.name < b.name ? -1 : 1; });
-      var top = (H - (l.length * (NH + GY) - GY)) / 2;
-      l.forEach(function (n, i) { n.x = ci * (NW + GX); n.y = top + i * (NH + GY); n.ci = ci; });
+
+  /* ---------- nodes ---------- */
+  function pipelinePanel(p) {
+    var st = p.stages || [], col = p.status === 'failed' ? 'failed' : p.status === 'running' ? 'active' : p.status === 'pending' ? 'idle' : 'done';
+    var time = p.status === 'running' ? T.span(p.started_at, null) : p.status === 'pending' ? '' : esc(T.dur(T.elapsed(p.started_at, p.ended_at)));
+    return '<div class="activity"><section class="asec"><h4>Status</h4><div class="astat"><span class="sbadge ' + col + '">' + esc(T.cap(p.status)) + '</span>' + (time ? '<span class="mut">' + time + '</span>' : '') + '</div></section>' +
+      '<section class="asec"><h4>Stages <span class="n">' + st.length + '</span></h4>' + (st.length ? '<ul class="srows">' + st.map(function (x) {
+        var ic = T.stageIcon(x.name, 12), dur = T.stageDur(x);
+        return '<li><span class="sico" style="background:' + ic.bg + '">' + ic.svg + '</span><span class="sn">' + esc(x.name) + '</span><span class="rb ' + esc(x.status) + '">' + esc(x.status) + '</span><span class="mut when">' + dur + '</span></li>';
+      }).join('') + '</ul>' : T.empty('No stages yet')) + '</section></div>';
+  }
+  function nodeHtml(s, n) {
+    var id = n.id, lk = nodeLook(s, id, n.name), a = /^agent:/.test(id) && T.agentById(s, id.slice(6)), p, body = '', open = !!ui.fopen[id], ov = esc(lk.ov), sub = '';
+    if (a) {
+      var st = T.agentState(a);
+      ov = '<i class="dot ' + (st === 'active' ? 'green pulse' : 'grey') + '" title="' + st + '"></i>' + ov;
+      if (open) body = T.activity(a, { clock: true });
+      else if (a.goal) sub = '<span class="gl" title="' + esc(a.goal) + '">' + esc(a.goal) + '</span>';
+    } else if (/^pipeline:/.test(id)) {
+      p = (s.pipelines || []).filter(function (x) { return x.run === id.slice(9); })[0];
+      if (p && open) body = pipelinePanel(p);
+      if (!p) open = false;
+    }
+    var can = /^(agent|pipeline):/.test(id) && (a || p);
+    var head = '<span class="gico" style="background:' + lk.bg + '">' + lk.svg + '</span><span class="nt"><span class="ov">' + ov + '</span><span class="tt">' + esc(n.name) + '</span>' + sub + '</span>' + (can ? '<i class="caret"></i>' : '');
+    return '<div class="node fnode' + (can ? ' ex' : '') + (open ? ' open' : '') + '" data-id="' + esc(id) + '">' +
+      (can ? '<button class="fhead" data-act="fnode" data-key="' + esc(id) + '" aria-expanded="' + open + '">' + head + '</button>' : '<div class="fhead">' + head + '</div>') +
+      (open && body ? '<div class="fbody">' + body + '</div>' : '') + '</div>';
+  }
+
+  /* Nodes flow in columns (so an expanded node pushes its neighbours); edges are drawn from the measured boxes. */
+  function layoutEdges(el, g) {
+    var gr = el.querySelector('.fgraph'); if (!gr) return;
+    var box = {}, W = gr.offsetWidth, H = gr.offsetHeight;
+    [].forEach.call(gr.querySelectorAll('.fnode'), function (n) {
+      var h = n.querySelector('.fhead');
+      box[n.getAttribute('data-id')] = { x: n.offsetLeft, w: n.offsetWidth, cy: n.offsetTop + h.offsetHeight / 2 };
     });
     var paths = '', pills = '', maxc = 1;
     g.edges.forEach(function (e) { maxc = Math.max(maxc, e.msgs.length); });
-    g.edges.sort(function (a, b) { return b.msgs.length - a.msgs.length; });
     if (ui.edge === 'first' && g.edges.length) ui.edge = g.edges[0].key;
     g.edges.forEach(function (e) {
-      var A = g.nodes[e.a], B = g.nodes[e.b], x1, x2, y1 = A.y + NH / 2, y2 = B.y + NH / 2, d, mx, my;
-      if (A.ci === B.ci) {
-        x1 = A.x + NW; x2 = B.x + NW; var o = 70;
+      var A = box[e.a], B = box[e.b]; if (!A || !B) return;
+      var x1, x2, y1 = A.cy, y2 = B.cy, d, mx, my, same = g.nodes[e.a].ci === g.nodes[e.b].ci;
+      if (same) {
+        x1 = A.x + A.w; x2 = B.x + B.w; var o = 70;
         d = 'M' + x1 + ',' + y1 + ' C' + (x1 + o) + ',' + y1 + ' ' + (x2 + o) + ',' + y2 + ' ' + x2 + ',' + y2; mx = x1 + o * .75; my = (y1 + y2) / 2;
       } else {
-        if (A.ci < B.ci) { x1 = A.x + NW; x2 = B.x; } else { x1 = A.x; x2 = B.x + NW; }
+        if (g.nodes[e.a].ci < g.nodes[e.b].ci) { x1 = A.x + A.w; x2 = B.x; } else { x1 = A.x; x2 = B.x + B.w; }
         var dx = Math.abs(x2 - x1) / 2;
         d = 'M' + x1 + ',' + y1 + ' C' + (x1 + (x2 > x1 ? dx : -dx)) + ',' + y1 + ' ' + (x2 - (x2 > x1 ? dx : -dx)) + ',' + y2 + ' ' + x2 + ',' + y2;
         mx = (x1 + x2) / 2; my = (y1 + y2) / 2;
@@ -76,11 +101,28 @@
                '<circle class="port' + (on ? ' on' : '') + '" cx="' + x1 + '" cy="' + y1 + '" r="3.5"/><circle class="port' + (on ? ' on' : '') + '" cx="' + x2 + '" cy="' + y2 + '" r="3.5"/>';
       pills += '<button class="epill' + (on ? ' on' : '') + '" data-act="edge" data-key="' + esc(e.key) + '" style="left:' + mx + 'px;top:' + my + 'px" title="' + esc(latest.text) + '"><b>' + e.msgs.length + '</b><span>' + esc(latest.text) + '</span></button>';
     });
-    var nodesH = ids.map(function (id) {
-      var n = g.nodes[id], lk = nodeLook(s, id, n.name);
-      return '<div class="node fnode" style="left:' + n.x + 'px;top:' + n.y + 'px;width:' + NW + 'px;height:' + NH + 'px"><span class="gico" style="background:' + lk.bg + '">' + lk.svg + '</span><span class="nt"><span class="ov">' + esc(lk.ov) + '</span><span class="tt">' + esc(n.name) + '</span></span></div>';
-    }).join('');
-    var inner = '<div class="fgraph" style="width:' + W + 'px;height:' + H + 'px"><svg width="' + W + '" height="' + H + '" style="position:absolute;left:0;top:0;overflow:visible">' + paths + '</svg>' + nodesH + pills + '</div>';
+    var svg = gr.querySelector('.fsvg');
+    svg.setAttribute('width', W); svg.setAttribute('height', H); svg.innerHTML = paths;   /* innerHTML on svg is fine in current browsers */
+    gr.querySelector('.fpills').innerHTML = pills;
+  }
+
+  function view(s, el) {
+    var g = build(s), ids = Object.keys(g.nodes);
+    if (!ids.length) { el.innerHTML = '<div class="pad">' + T.empty('No information has flowed in this session') + '</div>'; return; }
+    var cols = {}, used = [];
+    ids.forEach(function (id) { var c = g.nodes[id].col; (cols[c] = cols[c] || []).push(g.nodes[id]); });
+    Object.keys(cols).map(Number).sort().forEach(function (c) { used.push(c); });
+    used.forEach(function (c, ci) {
+      cols[c].sort(function (a, b) { return a.name < b.name ? -1 : 1; });
+      cols[c].forEach(function (n) { n.ci = ci; });
+    });
+    ui.fids = ids.filter(function (id) { return /^(agent|pipeline):/.test(id); });
+    var nodesH = '<div class="fcols">' + used.map(function (c) {
+      return '<div class="fcol">' + cols[c].map(function (n) { return nodeHtml(s, n); }).join('') + '</div>';
+    }).join('') + '</div>';
+    var allOpen = ui.fids.length && ui.fids.every(function (id) { return ui.fopen[id]; });
+    var bar = ui.fids.length ? '<span class="sepv"></span><button data-act="fall">' + (allOpen ? 'Collapse all' : 'Expand all') + '</button>' : '';
+    var inner = '<div class="fgraph"><svg class="fsvg"></svg>' + nodesH + '<div class="fpills"></div></div>';
     var drawer = '';
     if (ui.drawer === 'edge') {
       var e = g.edges.filter(function (x) { return x.key === ui.edge; })[0];
@@ -88,7 +130,8 @@
         return '<li><span class="when">' + esc(T.clockTime(m.at)) + '</span><span class="who"><i class="dot" style="background:' + (T.KIND[m.kind] || '#9ca3af') + '" title="' + esc(m.kind) + '"></i>' + esc(m.fromName) + ' <span class="arr">→</span> ' + esc(m.toName) + '</span><span class="txt">' + esc(m.text) + '</span></li>';
       }).join('') + '</ul>');
     }
-    el.innerHTML = '<div class="fv">' + T.canvas(inner) + drawer + '</div>';
+    el.innerHTML = '<div class="fv">' + T.canvas(inner, bar) + drawer + '</div>';
+    layoutEdges(el, g);
   }
   T.views.flow = view;
 })();

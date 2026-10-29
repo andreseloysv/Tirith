@@ -149,7 +149,20 @@
         "project": {"type": ["string", "null"]},
         "tool": {"type": ["string", "null"]},
         "summary": {"type": "string"},
-        "agent_session_id": {"type": ["string", "null"]}
+        "agent_session_id": {"type": ["string", "null"]},
+        "source": {"type": "string", "enum": ["hook", "log"]}
+      }
+    },
+    "agent_file": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["path", "change", "insertions", "deletions"],
+      "properties": {
+        "path": {"type": "string"},
+        "change": {"type": "string",
+                   "enum": ["added", "modified", "deleted", "renamed", "untracked"]},
+        "insertions": {"type": "integer", "minimum": 0},
+        "deletions": {"type": "integer", "minimum": 0}
       }
     },
     "note": {
@@ -494,6 +507,33 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/hook_event"
+          }
+        },
+        "goal": {"type": ["string", "null"]},
+        "active": {"type": "boolean"},
+        "last_activity_at": {"type": ["string", "null"]},
+        "files": {"type": "array", "maxItems": 100, "items": {"$ref": "#/$defs/agent_file"}},
+        "tools": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "count"],
+            "properties": {"name": {"type": "string"},
+                           "count": {"type": "integer", "minimum": 0}}
+          }
+        },
+        "tests": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "type": "object",
+            "required": ["at", "command", "result"],
+            "properties": {
+              "at": {"type": ["string", "null"]},
+              "command": {"type": "string"},
+              "result": {"type": ["string", "null"],
+                         "enum": ["passed", "failed", "running", null]}
+            }
           }
         },
         "files_changed": {

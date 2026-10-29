@@ -18,16 +18,10 @@
     if (open) h += '<div class="detail">' + detail(a) + '</div>';
     return h + '</li>';
   }
-  function activity(a) {
-    var ev = (a.events || []).slice(-30).reverse();
-    if (!ev.length) return '';
-    return '<div class="act"><b class="mut sm">Activity</b><ul>' + ev.map(function (e) {
-      return '<li><span class="mut t">' + esc(T.clockTime(e.ts)) + '</span><span class="tool">' + esc(e.tool || e.event) + '</span><span class="what" title="' + esc(e.summary) + '">' + esc(e.summary) + '</span></li>';
-    }).join('') + '</ul></div>';
-  }
+  /* the card beside the drawer already shows the feature and the clock; the file list replaces the totals line */
   function detail(a) {
-    var ch = T.agentFiles(a);
-    return (a.summary ? '<p class="sum">' + esc(a.summary) + '</p>' : '') + (ch ? '<p class="mut files">' + ch + '</p>' : '') + activity(a) + T.logBox(a.log_tail);
+    var ch = a.files && a.files.length ? '' : T.agentFiles(a);
+    return T.activity(a, { goal: !!a.goal && a.goal !== a.feature, clock: false }) + (ch ? '<p class="mut files">' + ch + '</p>' : '') + '<h4 class="logh">Log</h4>' + T.logBox(a.log_tail);
   }
 
   function view(s, el) {
