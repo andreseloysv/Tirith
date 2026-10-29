@@ -29,6 +29,7 @@ from tirith.guardwrap import (
 from tirith import actions as actions_mod
 from tirith import agentrun as agentrun_mod
 from tirith import asks as asks_mod
+from tirith import fallback as fallback_mod
 from tirith import flows as flows_mod
 from tirith import gates as gates_mod
 from tirith import manifest as manifest_mod
@@ -368,6 +369,12 @@ def _cmd_lane_run(args) -> int:
         request_id=getattr(args, "request", None))
     lane["token"] = secrets.token_urlsafe(24)
     lane["ran"] = models_mod.command_choice(command)  # the model and effort this lane was started with
+    lane["agent"] = args.agent or getattr(args, "as_agent", None) or None  # the alias that runs it
+    if getattr(args, "fallback_from", None):
+        before = read_json(lane_path(home, args.fallback_from), None) or {}
+        lane["fallback_from"] = before.get("agent")
+        lane["fallback_lane"] = args.fallback_from
+    lane["tried"] = [a for a in str(getattr(args, "tried", "") or "").split(",") if a]
     write_lane(home, lane)
     began = time.monotonic()
     env = _wrapper_path_env(home, lane_id, lane["token"])
@@ -949,9 +956,12 @@ def launch_step(home: Path, project_id: str, step_id: str, agent: str | None = N
     brief_path = home / "briefs" / f"{lane_id}.md"
     brief = launch_mod.build_brief(title, intro, open_items, step["id"])
     workspace = launch_mod.worktree_path(repo, lane_id)
+    if agent is None:  # the first agent of the chain that did not run out of credits in the last hour
+        agent = fallback_mod.pick_alias(config, read_lanes(home), datetime.now(timezone.utc), project_id, step["id"])
     command = launch_mod.agent_command(config, agent, brief_path, workspace, project_id, step["id"])
     argv = launch_mod.lane_run_argv(project_id, step["id"], launch_mod.pick_class(title), title,
-                                    brief_path, workspace, lane_id, command, request_id)
+                                    brief_path, workspace, lane_id, command, request_id,
+                                    alias=agent or _worker_alias(config, project_id, step["id"]))
     if dry_run:
         print(f"lane {lane_id} (dry run)\nworktree: {workspace} (branch lane/{lane_id})\n"
               f"brief: {brief_path}\ncommand: {' '.join(argv)}\n\n{brief}", file=out)
@@ -1014,6 +1024,37 @@ def launch_plan(home: Path, project_id: str, kind: str, request_id: str | None =
     brief_path.write_text(brief, encoding="utf-8")
     launch_mod.spawn_detached(argv, home, home / "logs" / f"{lane_id}.launch.log")
     print(f"lane {lane_id}", file=out)
+    return lane_id
+
+
+def _worker_alias(config, project_id: str, step_id: str) -> str | None:
+    alias = models_mod.resolve_workers(config, project_id, step_id).agent
+    return alias if alias in config.agents else None
+
+
+def relaunch_lane(home: Path, lane: dict, alias: str) -> str:
+    """Start the brief of a failed ``lane`` again with agent ``alias``; returns the new lane id. The
+    worktree is kept when it has no uncommitted changes, else a new one is made from the repo."""
+    config, proj = _project_or_exit(home, str(lane.get("project") or ""))
+    repo = projects_mod.real(proj.repo) if proj.repo else None
+    brief = Path(str(lane.get("brief") or ""))
+    if repo is None or not brief.is_file():
+        raise launch_mod.LaunchError(f"lane {lane.get('id')} has no repo or brief to start again from")
+    title = str(lane.get("feature") or lane["id"])
+    lane_id = launch_mod.lane_id_for(title, {str(l["id"]) for l in read_lanes(home)}, repo)
+    old = Path(str(lane.get("workspace") or ""))
+    dirty = subprocess.run(["git", "-C", str(old), "status", "--porcelain"], capture_output=True, text=True)
+    if old.is_dir() and dirty.returncode == 0 and not dirty.stdout.strip():
+        workspace = old
+    else:
+        workspace = launch_mod.create_worktree(repo, lane_id)
+    step = lane.get("step")
+    command = launch_mod.agent_command(config, alias, brief, workspace, str(lane.get("project") or ""), step)
+    argv = launch_mod.lane_run_argv(
+        str(lane.get("project") or ""), str(step or ""), str(lane.get("class") or launch_mod.DEFAULT_CLASS),
+        title, brief, workspace, lane_id, command, lane.get("request_id"), alias=alias,
+        fallback_from=str(lane["id"]), tried=fallback_mod.tried_of(lane))
+    launch_mod.spawn_detached(argv, home, home / "logs" / f"{lane_id}.launch.log")
     return lane_id
 
 
@@ -1481,7 +1522,8 @@ def _models_apply(home: Path, request_id: str, setup: dict) -> int:
                 home, str(setup.get("role") or ""), model=setup.get("model") or None,
                 effort=setup.get("effort") or None, agent=setup.get("agent") or None,
                 project=setup.get("project") or None, step=setup.get("step") or None,
-                clear=bool(setup.get("clear")))
+                clear=bool(setup.get("clear")),
+                fallback=[str(a) for a in setup["fallback"]] if isinstance(setup.get("fallback"), list) else None)
     except models_mod.ModelsError as error:
         inbox_mod.add_answer(home, request_id, f"Could not apply: {error}")
         inbox_mod.mark_done(home, request_id)
@@ -1491,6 +1533,11 @@ def _models_apply(home: Path, request_id: str, setup: dict) -> int:
     inbox_mod.mark_done(home, request_id)
     print(note)
     return 0
+
+
+def _fallback_arg(value: str | None) -> list[str] | None:
+    """``--fallback a,b`` -> ``["a", "b"]``; ``--fallback ""`` -> ``[]`` (no fallback); absent -> None."""
+    return None if value is None else [a.strip() for a in value.split(",") if a.strip()]
 
 
 def _cmd_models(args) -> int:
@@ -1506,7 +1553,7 @@ def _cmd_models(args) -> int:
         else:
             print(models_mod.set_models(home, args.role, model=args.model, effort=args.effort,
                                         agent=args.agent, project=args.project, step=args.step,
-                                        clear=args.clear))
+                                        clear=args.clear, fallback=_fallback_arg(args.fallback)))
     except models_mod.ModelsError as error:
         print(f"tirith models {args.models_command}: {error}", file=sys.stderr)
         return 3
@@ -1573,6 +1620,9 @@ def build_parser() -> argparse.ArgumentParser:
     lane_run.add_argument("--interactive", action="store_true",
                           help="give the agent the terminal (no log capture); activity comes from hooks")
     lane_run.add_argument("--agent", default=None, help="agent alias from [agents.<alias>]")
+    lane_run.add_argument("--as-agent", default=None, help="alias this command runs (recorded on the lane)")
+    lane_run.add_argument("--fallback-from", default=None, help="lane id this one continues (out of credits)")
+    lane_run.add_argument("--tried", default="", help="comma list of aliases already used for this brief")
     lane_run.add_argument("--model", default=None)
     lane_run.add_argument("--effort", default=None)
     lane_run.add_argument("--prompt", default=None)
@@ -1854,6 +1904,8 @@ def build_parser() -> argparse.ArgumentParser:
     mo_set.add_argument("--model", default=None)
     mo_set.add_argument("--effort", default=None)
     mo_set.add_argument("--agent", default=None, help="agent alias")
+    mo_set.add_argument("--fallback", default=None,
+                        help="workers: agents to use, in order, when the agent is out of credits (a,b; empty = none)")
     mo_set.add_argument("--project", default=None, help="workers: override for this project")
     mo_set.add_argument("--step", default=None, help="workers: override for this step (with --project)")
     mo_set.add_argument("--clear", action="store_true", help="remove the project or step override")

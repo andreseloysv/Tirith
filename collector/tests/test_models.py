@@ -239,7 +239,7 @@ def test_setup_request_applies_models_set_and_apply_manager(cfg_home: Path, tmp_
 def test_state_models_block(cfg_home: Path) -> None:
     st = models.state(load_config(cfg_home), ["models workers model=m"])
     assert st["manager"]["model"] == "m-big" and st["manager"]["effort_key"] is False
-    assert st["workers"] == {"agent": "anthropic", "model": "m-small", "effort": "medium"}
+    assert st["workers"] == {"agent": "anthropic", "model": "m-small", "effort": "medium", "fallback": []}
     assert st["projects"]["demo"] == {"model": "m-mid"} and "demo/3" in st["steps"]
     assert st["choices"] == ["m-big", "m-small"] and "high" in st["efforts"]
     assert "anthropic" in st["agents"] and st["pending"] == ["models workers model=m"]

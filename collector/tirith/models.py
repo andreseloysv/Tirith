@@ -58,16 +58,24 @@ def _table(raw) -> dict:
 
 
 def _pick(table: dict) -> dict:
-    return {k: str(table[k]).strip() for k in FIELDS if isinstance(table.get(k), str) and table[k].strip()}
+    out = {k: str(table[k]).strip() for k in FIELDS if isinstance(table.get(k), str) and table[k].strip()}
+    if isinstance(table.get("fallback"), list):  # an explicit empty list means "no fallback" here
+        out["fallback"] = [str(a).strip() for a in table["fallback"] if str(a).strip()]
+    return out
+
+
+def _strings(raw) -> list[str]:
+    return [str(c) for c in raw if str(c).strip()] if isinstance(raw, list) else []
 
 
 def parse(raw) -> dict:
     """The ``[models]`` table normalised: ``{choices, manager, workers, projects, steps}``."""
     raw = _table(raw)
     workers = _table(raw.get("workers"))
-    choices = raw.get("choices")
     return {
-        "choices": [str(c) for c in choices if str(c).strip()] if isinstance(choices, list) else [],
+        "choices": _strings(raw.get("choices")),
+        "efforts": _strings(raw.get("efforts")),
+        "patterns": _strings(raw.get("out_of_credits_patterns")),
         "manager": _pick(_table(raw.get("manager"))),
         "workers": _pick(workers),
         "projects": {str(k): _pick(_table(v)) for k, v in _table(workers.get("projects")).items()},
@@ -83,6 +91,31 @@ def resolve_workers(config: Config, project: str | None = None, step: str | None
     if project and step is not None:
         merged.update(cfg["steps"].get(f"{project}/{step}", {}))
     return Choice(merged.get("agent"), merged.get("model"), merged.get("effort"))
+
+
+def resolve_chain(config: Config, project: str | None = None, step: str | None = None) -> list[str]:
+    """The agent aliases to try for a worker, in order: its agent, then ``fallback`` (step override,
+    project override, ``[models.workers]``; the first level that sets one wins). Each alias once."""
+    cfg = parse(config.models)
+    levels = [cfg["workers"]]
+    if project:
+        levels.append(cfg["projects"].get(str(project), {}))
+        if step is not None:
+            levels.append(cfg["steps"].get(f"{project}/{step}", {}))
+    merged = {}
+    for level in levels:
+        merged.update(level)
+    chain = ([merged["agent"]] if merged.get("agent") else []) + list(merged.get("fallback") or [])
+    return list(dict.fromkeys(chain))
+
+
+def choices_for(config: Config, alias: str | None = None) -> list[str]:
+    """The model ids offered for ``alias``: those starting with one of its ``model_prefixes``; every id
+    when the alias declares none (or no alias is given)."""
+    choices = parse(config.models)["choices"]
+    prefixes = (config.agents.get(alias or "") or {}).get("model_prefixes")
+    prefixes = [str(p) for p in prefixes if str(p)] if isinstance(prefixes, list) else []
+    return [c for c in choices if any(c.startswith(p) for p in prefixes)] if prefixes else list(choices)
 
 
 def resolve_manager(config: Config) -> Choice:
@@ -210,13 +243,20 @@ def _check_alias(agent: str) -> None:
         raise ModelsError(f"'{agent}' is not a valid agent alias")
 
 
+def _line(key: str, value) -> str | None:
+    if value is None:
+        return None
+    if key == "fallback":
+        return f"fallback = [{', '.join(_agent(a) for a in value)}]\n"
+    return f"{key} = {_agent(value) if key == 'agent' else _value(value)}\n"
+
+
 def edit_table(text: str, header: str, values: dict[str, str | None]) -> str:
     """``text`` with ``[header]`` holding ``values`` (None removes a key); other lines are untouched."""
     target = _path_of(f"[{header}]")
     lines = text.splitlines(keepends=True)
     start = next((i for i, ln in enumerate(lines) if _path_of(ln) == target), None)
-    rendered = {k: (None if v is None else f"{k} = {_value(v) if k != 'agent' else _agent(v)}\n")
-                for k, v in values.items()}
+    rendered = {k: _line(k, v) for k, v in values.items()}
     if start is None:
         body = [r for r in rendered.values() if r]
         if not body:
@@ -265,7 +305,7 @@ def remove_table(text: str, header: str) -> str:
 
 def set_models(home: Path, role: str, *, model: str | None = None, effort: str | None = None,
                agent: str | None = None, project: str | None = None, step: str | None = None,
-               clear: bool = False) -> str:
+               clear: bool = False, fallback: list[str] | None = None) -> str:
     """Write the setting into ``<home>/config.toml`` and return a one-line description."""
     if role not in ROLES:
         raise ModelsError(f"role must be one of {', '.join(ROLES)}")
@@ -277,17 +317,23 @@ def set_models(home: Path, role: str, *, model: str | None = None, effort: str |
             raise ModelsError("--clear removes a per-project or per-step override only")
         new = remove_table(text, header)
     else:
-        if not (model or effort or agent):
-            raise ModelsError("nothing to set: pass --model, --effort or --agent")
+        if not (model or effort or agent) and fallback is None:
+            raise ModelsError("nothing to set: pass --model, --effort, --agent or --fallback")
+        if fallback is not None and role != "workers":
+            raise ModelsError("only the workers have a fallback chain")
         given = {"agent": agent, "model": model, "effort": effort}
-        new = edit_table(text, header, {k: v for k, v in given.items() if v})  # unset keys stay
+        values = {k: v for k, v in given.items() if v}  # unset keys stay
+        if fallback is not None:
+            values["fallback"] = list(dict.fromkeys(fallback))
+        new = edit_table(text, header, values)
     try:
         tomllib.loads(new)
     except tomllib.TOMLDecodeError as error:
         raise ModelsError(f"the edit would break config.toml: {error}")
     if new != text:
         write_text_atomic(path, new)
-    what = ", ".join(f"{k} {v}" for k, v in (("agent", agent), ("model", model), ("effort", effort)) if v)
+    what = ", ".join(f"{k} {v}" for k, v in (("agent", agent), ("model", model), ("effort", effort),
+                                             ("fallback", ", ".join(fallback) if fallback else None)) if v)
     return f"{'cleared' if clear else 'set'} [{header}]" + (f": {what}" if what and not clear else "")
 
 
@@ -350,7 +396,7 @@ def apply_manager(config: Config) -> list[str]:
 # -- state and show ----------------------------------------------------------------------------
 
 
-def state(config: Config, pending: list[str] | None = None) -> dict:
+def state(config: Config, pending: list[str] | None = None, status: dict | None = None) -> dict:
     """``state.models``: the settings, what the manager's file holds, and the lists the page offers."""
     cfg = parse(config.models)
     manager = resolve_manager(config).as_dict()
@@ -362,9 +408,11 @@ def state(config: Config, pending: list[str] | None = None) -> dict:
     return {
         "manager": {**manager, "settings": held, "in_sync": synced,
                     "effort_key": bool(SETTINGS_KEYS.get(manager["agent"] or "", {}).get("effort"))},
-        "workers": {**{k: cfg["workers"].get(k) for k in FIELDS}},
+        "workers": {**{k: cfg["workers"].get(k) for k in FIELDS}, "fallback": cfg["workers"].get("fallback") or []},
         "projects": cfg["projects"], "steps": cfg["steps"],
-        "choices": cfg["choices"], "efforts": list(EFFORTS), "agents": aliases,
+        "choices": cfg["choices"], "choices_by_agent": {a: choices_for(config, a) for a in aliases},
+        "efforts": cfg["efforts"] or list(EFFORTS), "agents": aliases,
+        "agent_status": status or {},
         "pending": pending or [],
     }
 
@@ -375,6 +423,8 @@ def show_lines(config: Config) -> list[str]:
     def fmt(d: dict) -> str:
         return "  ".join(f"{k}={d[k]}" for k in FIELDS if d.get(k)) or "(not set)"
     out = [f"manager: {fmt(cfg['manager'])}", f"workers: {fmt(cfg['workers'])}"]
+    if cfg["workers"].get("fallback"):
+        out.append("workers fallback: " + " -> ".join(cfg["workers"]["fallback"]))
     out += [f"workers project {k}: {fmt(v)}" for k, v in sorted(cfg["projects"].items())]
     out += [f"workers step {k}: {fmt(v)}" for k, v in sorted(cfg["steps"].items())]
     if cfg["choices"]:
