@@ -118,6 +118,16 @@ p { margin: 0 0 12px; }
 footer { border-top: 1px solid var(--line); padding: 26px 0 40px; color: var(--muted); font-size: 0.92rem; }
 footer .wrap { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; }
 
+/* 3D renders */
+.brand img { width: 32px; height: 32px; }
+.logo3d { position: relative; width: 220px; height: 220px; margin: 0 auto 10px; border-radius: 36px; background: #f4f8fb; box-shadow: var(--shadow); overflow: hidden; }
+.logo3d .still, .logo3d .spin { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.logo3d .spin { background: transparent; }
+.render { margin: 18px 0 0; }
+.render img { display: block; width: 100%; height: auto; }
+.feature .render { margin-top: 14px; }
+@media (prefers-reduced-motion: reduce) { .logo3d .spin { display: none; } }
+
 /* On-scroll reveals (scroll.js). Hidden only with JS and when motion is allowed; transform/opacity only. */
 @media (prefers-reduced-motion: no-preference) {
   html.js .rv { opacity: 0; transform: translate3d(0, 20px, 0); will-change: opacity, transform; }
