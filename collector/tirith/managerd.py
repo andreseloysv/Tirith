@@ -11,10 +11,12 @@ answers everything pending and exits, and the next pending item starts another. 
 
 from __future__ import annotations
 
+import json
 import os
+import signal
 import subprocess
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
@@ -42,12 +44,20 @@ LANE_PREFIX = "manager-"
 HERO_CLASS = "steward"
 FEATURE = "Manager"
 DEFAULT_ALIAS = "anthropic"
+LINGER_S = 30.0  # a manager process still alive this long after its ``result`` event is terminated
+TAIL_BYTES = 65536
 
 RULES = (
     "You are the owner's manager, started by Tirith because the owner is not at a terminal. The owner talks to "
     "you only through the Tirith chat.",
     "Delegate everything to sub-agents (`tirith lane run`, `tirith launch --project P --step N`). Never edit "
     "code or files of a project yourself.",
+    "`tirith lane run` from here starts the lane detached, in its own worktree, and prints the lane id at "
+    "once. Never run it as a background task of your own shell and do not wait for it: your turn ends when "
+    "you have answered.",
+    "A request a lane works on is settled only when the lane reports, not when you start it: do not run "
+    "`tirith inbox done` for it at launch. Answer that the lane started and leave the request open; the "
+    "lane's report comes back as a queue item, then close the request.",
     "Answer every pending message below with `tirith inbox answer <id> \"<markdown>\"`, then "
     "`tirith inbox done <id>` when it is settled. Answer the question that was asked, briefly.",
     "Put something on the owner's list (`tirith wait add ... --option ...`) only for what you must refuse or "
@@ -283,8 +293,63 @@ def launch(home: Path, config: Config, items: dict, now: datetime, spawn: Callab
     return lane_id
 
 
+def result_at(lane: dict) -> datetime | None:
+    """When the manager's log got its ``result`` event (the end of its turn), else None.
+
+    The time is the log's last write: the ``result`` event is the last thing the agent writes."""
+    log = lane.get("log")
+    if not log:
+        return None
+    try:
+        with open(log, "rb") as fh:
+            fh.seek(0, 2)
+            fh.seek(max(0, fh.tell() - TAIL_BYTES))
+            text = fh.read().decode("utf-8", errors="replace")
+        mtime = os.path.getmtime(log)
+    except OSError:
+        return None
+    for line in reversed(text.splitlines()):
+        line = line.strip()
+        if not line.startswith("{"):
+            continue
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(event, dict) and event.get("type") == "result":
+            return datetime.fromtimestamp(mtime, timezone.utc)
+    return None
+
+
+def terminate_group(lane: dict) -> None:
+    """SIGTERM the manager's process group. Lanes it started are detached (own session), so they survive."""
+    pgid, pid = lane.get("pgid"), lane.get("pid")
+    try:
+        if isinstance(pgid, int) and pgid > 1 and pgid != os.getpgrp():
+            os.killpg(pgid, signal.SIGTERM)
+        elif isinstance(pid, int) and pid > 1 and pid != os.getpid():
+            os.kill(pid, signal.SIGTERM)
+    except (OSError, AttributeError):
+        pass
+
+
+def reap_finished(state: dict, lanes: list[dict], now: datetime, kill: Callable | None = None) -> bool:
+    """Terminate a manager still alive ``LINGER_S`` after its ``result``; True when it did."""
+    mine = {state.get("lane"), state.get("ended")}  # "ended": its turn is over, the process may linger
+    lane = next((l for l in lanes if l.get("id") in mine and l.get("id")), None)
+    if lane is None or lane.get("ended_at") or not pid_alive(lane.get("pid")):
+        return False
+    done = result_at(lane)
+    if done is None or (now - done).total_seconds() < LINGER_S:
+        return False
+    (kill or terminate_group)(lane)
+    return True
+
+
 def running(state: dict, lanes: list[dict], now: datetime) -> str | None:
-    """Id of the headless manager that is still alive, else None."""
+    """Id of the headless manager whose turn is not finished, else None.
+
+    The turn is finished by the ``result`` event in its log or by the process exiting, whichever is first."""
     mine = state.get("lane")
     if not mine:
         return None
@@ -292,7 +357,9 @@ def running(state: dict, lanes: list[dict], now: datetime) -> str | None:
     if lane is None:
         started = parse_iso(state.get("at"))
         return mine if started and (now - started).total_seconds() < SPAWN_GRACE_S else None
-    return None if lane.get("ended_at") or not pid_alive_or_unset(lane) else mine
+    if lane.get("ended_at") or not pid_alive_or_unset(lane) or result_at(lane) is not None:
+        return None
+    return mine
 
 
 def pid_alive_or_unset(lane: dict) -> bool:
@@ -346,10 +413,11 @@ def _pause_check(home: Path, book: dict, lanes: list[dict], now: datetime) -> bo
 
 
 def run(home: Path, config: Config, now: datetime, state: dict, lanes: list[dict],
-        spawn: Callable | None = None) -> bool:
+        spawn: Callable | None = None, kill: Callable | None = None) -> bool:
     """One pass: start the headless manager when something is pending and nobody is attached.
     Returns True when ``state`` (``state["manager"]``) changed."""
     book = state.setdefault("manager", {})
+    reap_finished(book, lanes, now, kill)
     live = running(book, lanes, now)
     if live:
         return False
@@ -370,10 +438,12 @@ def run(home: Path, config: Config, now: datetime, state: dict, lanes: list[dict
             changed = True
         return changed
     key = pending_key(items)
-    if book.get("key") != key:
+    fresh = book.get("key") != key
+    if fresh:
         book["key"], book["tries"] = key, 0
     last = parse_iso(book.get("at"))
-    if book["tries"] >= MAX_TRIES or (last and (now - last).total_seconds() < RETRY_AFTER_S):
+    # new messages after a finished turn start the next turn at once; only a retry of the same set waits
+    if book["tries"] >= MAX_TRIES or (last and not fresh and (now - last).total_seconds() < RETRY_AFTER_S):
         return True
     try:
         lane_id = launch(home, config, items, now, spawn)

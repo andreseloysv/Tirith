@@ -477,7 +477,11 @@ The owner can close the terminal: chat messages are still answered. No server, n
   model from `[models.manager]` (default alias `anthropic`), the command built like the workers' presets
   (`tirith.agentrun.build_command`: headless print mode, stream JSON). It runs in the folder of the first
   pending request's project (else the first project) and exits when done; the next pending item starts
-  another. `[dispatch] auto_launch = false` or `enabled = false` switches it off. A set of pending ids that
+  another. A manager turn is finished as soon as its log has a `result` event (or its process exits): the
+  next pending item starts the next turn at once, without the 60 s retry wait (that wait only applies to a
+  retry of the same set of ids). A manager process still alive 30 s after its `result` is terminated
+  (SIGTERM to its process group; `managerd.reap_finished`); lanes it started are detached and survive.
+  `[dispatch] auto_launch = false` or `enabled = false` switches it off. A set of pending ids that
   survives two headless runs is not started again (the usual escalation to the owner applies); a refusal to
   start is kept in `dispatch.json` `manager.error`.
 - **Brief** (`<home>/briefs/manager-<hex>.md`, generated): the manager's rules (delegate everything with
@@ -490,7 +494,18 @@ The owner can close the terminal: chat messages are still answered. No server, n
 - **Detached lanes.** Lanes started by `tirith launch`, the autopilot, the dispatcher, the auto review and the
   headless manager go through `launch.spawn_detached`: new session (process group on Windows), stdin from
   `/dev/null`, output to `<home>/logs/<lane>.launch.log`. Closing a terminal or the app never kills them.
-  `tirith lane run` typed in a terminal stays attached.
+  `tirith lane run` typed in a terminal stays attached, except inside a manager session
+  (`TIRITH_LANE=manager-…` or `TIRITH_ROLE=manager`): there it detaches by default (same as `--detach`),
+  prints the lane id and the worktree and returns at once, so the manager's turn ends. `--no-detach` (hidden)
+  is what the detached copy runs with; `--by-tirith` lanes never re-detach.
+- **Worktrees.** `tirith lane run` without `--workspace` creates the git worktree
+  `<repo>-lanes/<lane-id>` on branch `lane/<lane-id>` from the current `main` (HEAD when there is no `main`);
+  an existing one is reused. The only lane that runs in the main checkout is the manager itself (class
+  `steward`, id `manager-…`).
+- **Dead lanes.** A lane with a `pid` that has no `ended_at`, whose pid and process group are gone and that
+  started more than 30 s ago, is closed by the collector with `result: "stopped"` (shown as failed).
+- **Settling.** The manager brief tells it not to close a request at launch: the request is settled when the
+  lane reports (its report comes back as a queue item).
 - **State.** `state.manager.presence = {mode: "live" | "on_call", working, lane}`. The chat header shows
   "Manager: live session", "Manager: on call (starts when you write)" or, while the headless manager runs,
   "Manager is working on your message…".

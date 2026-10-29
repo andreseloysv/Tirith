@@ -49,7 +49,7 @@ from tirith.names import (
     apply_renown, hero_epithet, hero_name, rank_for,
 )
 from tirith.store import (
-    agent_detail_js, agent_file_name, append_jsonl, read_json, read_jsonl, read_lanes, state_js, tail_lines, write_json_atomic, write_text_atomic,
+    agent_detail_js, agent_file_name, append_jsonl, read_json, read_jsonl, read_lanes, state_js, tail_lines, write_json_atomic, write_lane, write_text_atomic,
 )
 
 STALLED_AFTER_S = 600
@@ -81,6 +81,50 @@ def pid_alive(pid) -> bool:
     except OSError:
         return False
     return True
+
+
+def group_alive(pgid) -> bool:
+    """True when a process group still has a member (``killpg`` signal 0)."""
+    try:
+        group = int(pgid)
+    except (TypeError, ValueError):
+        return False
+    if group <= 1 or not hasattr(os, "killpg"):
+        return False
+    try:
+        os.killpg(group, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+    return True
+
+
+DEAD_LANE_GRACE_S = 30.0  # a lane that just started (or is just ending by itself) is left alone
+
+
+def close_dead_lanes(home: Path, lanes: list[dict], now: datetime) -> list[str]:
+    """Close a lane whose pid and process group are gone but that has no ``ended_at``
+    (``result: "stopped"``), so it stops showing as working. Returns the ids closed."""
+    closed = []
+    for lane in lanes:
+        if lane.get("ended_at") or lane.get("pid") is None:
+            continue
+        if pid_alive(lane["pid"]) or group_alive(lane.get("pgid")):
+            continue
+        started = parse_iso(lane.get("started_at"))
+        if started and (now - started).total_seconds() < DEAD_LANE_GRACE_S:
+            continue
+        lane["ended_at"] = now_iso(now)
+        lane["result"] = "stopped"
+        lane.pop("token", None)
+        if not lane.get("report"):
+            lane["report"] = "The lane's process is gone; closed as stopped."
+        write_lane(home, lane)
+        closed.append(str(lane["id"]))
+    return closed
 
 
 def git_head(workspace: str | Path | None) -> str | None:
@@ -990,6 +1034,7 @@ class Collector:
         if self._fixed_config is None:
             self.config = load_config(self.home)
         lanes = read_lanes(self.home)
+        close_dead_lanes(self.home, lanes, now)
         events = [e for e in read_jsonl(self.home / "events.jsonl") if e.get("kind") not in ("hook", "violation", "git-hook")]
         hook_rows = hooks_mod.read_hook_rows(self.home / "events.jsonl")
         _, loose_events = hooks_mod.attach(hook_rows, [str(l["id"]) for l in lanes])
