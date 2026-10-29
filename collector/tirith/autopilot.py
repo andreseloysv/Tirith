@@ -40,7 +40,7 @@ GRACE_S = 180.0          # a lane that has not shown up as an agent yet still co
 RETRY_REFUSED_S = 600.0
 KEPT_LANES = 200
 STARTED_SHOWN = 50
-REVIEW_BUSY = ("pending", "running", "ready", "tests-failed", "merge-failed")
+REVIEW_BUSY = ("pending", "running", "ready", "tests-failed", "claims-failed", "merge-failed")
 REVIEW_OPEN = ("pending", "running")
 
 
