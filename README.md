@@ -2,6 +2,8 @@
 
 **An autonomous manager for your coding agents. They finish the plan; you see everything and decide only what only you can.**
 
+Landing page: https://andreseloysv.github.io/Tirith/
+
 - **Problem.** You run several coding agents at once. You ask "what is everyone doing?" all day, you
   re-explain the rules, and the agents ask you things they could settle themselves.
 - **Solution.** Tirith keeps a plan, starts agents only from plan items, checks what they report, merges what
