@@ -257,11 +257,68 @@ def ensure_item(home: Path, repo: Path, project: str, step: str, text: str, lane
     return clean
 
 
-def add_item(home: Path, repo: Path, project: str, step: str, text: str, who: str, title: str | None = None) -> str:
-    """``tirith plan add``: one new open item at the end of step ``step``; returns its clean text."""
+MAX_ITEM_CHARS = 300  # an item is ~30 minutes of work: longer ones bundle several deliverables
+MAX_LANE_FILES, MAX_LANE_LINES = 40, 1500  # a lane diff beyond this should have been split
+_ALSO_RE = re.compile(r"\b(?:and also|and then|as well as|además|y también|y luego)\b|;\s+\S", re.IGNORECASE)
+CHECK_TIMEOUT_S = 600
+
+
+def size_problem(text: str) -> str | None:
+    """Why ``text`` is too big for one plan item (``None`` when it is fine). Heuristics: long, several
+    sentences, or an explicit "and also"."""
+    body = roadmap_mod.without_check(text)
+    if len(body) > MAX_ITEM_CHARS:
+        return f"it is {len(body)} characters (the limit is {MAX_ITEM_CHARS})"
+    if len(re.findall(r"[.!?](?:\s+[A-ZÁÉÍÓÚÑ¿¡])", body)) >= 2:
+        return "it has several sentences, so it bundles several deliverables"
+    if _ALSO_RE.search(body):
+        return 'it joins deliverables ("and also", ";")'
+    return None
+
+
+def budget_note(files: int, plus: int, minus: int) -> str | None:
+    """The message for a lane whose diff is beyond the budget, else None."""
+    if files <= MAX_LANE_FILES and plus + minus <= MAX_LANE_LINES:
+        return None
+    return (f"this lane changed {files} files, +{plus} -{minus} lines, beyond the budget of {MAX_LANE_FILES} files / "
+            f"{MAX_LANE_LINES} lines: split it. Report partial with `tirith plan report --status partial "
+            f'--add "<what is left>"` and one new item per remaining deliverable (about 30 minutes each).')
+
+
+def run_check(command: str, cwd: Path, timeout: float = CHECK_TIMEOUT_S) -> tuple[bool, str]:
+    """Run an item's done check in ``cwd``: ``(passed, output tail)``."""
+    try:
+        done = subprocess.run(command, shell=True, cwd=str(cwd), capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return False, f"timed out after {int(timeout)} s"
+    return done.returncode == 0, (done.stdout + done.stderr)[-2000:]
+
+
+def check_item(repo: Path, step: str, item: str) -> tuple[bool, str]:
+    """Run the done check of an item of the plan; an item without one passes."""
+    _, steps = _read(repo)
+    found = roadmap_mod.find_item(steps, step, roadmap_mod.split_status(item)[0])
+    if found is None:
+        raise PlanGateError(f"that item is not in step {step}")
+    command = roadmap_mod.check_of(found["text"])
+    return (True, "") if command is None else run_check(command, repo)
+
+
+def add_item(home: Path, repo: Path, project: str, step: str, text: str, who: str, title: str | None = None,
+             check: str | None = None) -> str:
+    """``tirith plan add``: one new open item at the end of step ``step``; returns its clean text.
+    Refuses an item too big for ~30 minutes; ``check`` is the command that says it is done."""
     text = roadmap_mod.norm(text)
     if not text:
         raise PlanGateError("the new item is empty")
+    problem = size_problem(text)
+    if problem:
+        raise PlanGateError(f"split it: {problem}. Add one item per deliverable (about 30 minutes each), "
+                            f"each with --check \"<command>\" that passes when it is done")
+    if check:
+        if "`" in check or not check.strip():
+            raise PlanGateError("--check must be a command without backticks")
+        text = roadmap_mod.with_check(text, check)
     return ensure_item(home, repo, project, step, text, None, who, title=title)
 
 
@@ -523,8 +580,14 @@ def mark_done(home: Path, repo: Path, project: str, step: str, item: str, commit
     if not any(s["id"] == step for s in steps):
         raise PlanGateError(f"step {step} is not in the plan")
     clean = roadmap_mod.split_status(item)[0]
-    if roadmap_mod.find_item(steps, step, clean) is None:
+    found = roadmap_mod.find_item(steps, step, clean)
+    if found is None:
         raise PlanGateError(f"that item is not an open item of step {step}")
+    command = roadmap_mod.check_of(found["text"])
+    if command:  # an item with a done check is done only when it passes
+        passed, output = run_check(command, repo)
+        if not passed:
+            raise PlanGateError(f"the item's check failed, so it is not done: `{command}`\n{output}")
     commit_change(home, repo, project,
                   lambda text: roadmap_mod.set_item(text, step, clean, done_note(clean, short), tick=True),
                   _message("done", step, "manager"))
