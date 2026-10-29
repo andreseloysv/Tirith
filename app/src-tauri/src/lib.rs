@@ -116,12 +116,72 @@ fn spawn_web_watch(app: AppHandle, root: PathBuf) {
     });
 }
 
-/// `uv run --project <collector> tirith <args>`, ready to spawn.
+/// Quotes one word for `/bin/sh`.
+fn sh_quote(word: &str) -> String {
+    if !word.is_empty() && word.chars().all(|c| c.is_ascii_alphanumeric() || "/._-+=:@%".contains(c)) {
+        word.to_string()
+    } else {
+        format!("'{}'", word.replace('\'', "'\\''"))
+    }
+}
+
+/// The argv that runs the collector CLI from anywhere: `[app] tirith`, else the repo's `bin/tirith`, else
+/// `uv run --project <collector> tirith`.
+fn tirith_cmd_argv(cfg: &toml::Table) -> Vec<String> {
+    if let Some(t) = app_setting(cfg, "tirith").filter(|t| !t.trim().is_empty()) {
+        return vec![expand(&t).to_string_lossy().into_owned()];
+    }
+    let script = collector_dir(cfg).join("../bin/tirith");
+    if script.is_file() {
+        let script = script.canonicalize().unwrap_or(script);
+        return vec![script.to_string_lossy().into_owned()];
+    }
+    let uv = app_setting(cfg, "uv").unwrap_or_else(|| "uv".into());
+    let dir = collector_dir(cfg).to_string_lossy().into_owned();
+    vec![uv, "run".into(), "--project".into(), dir, "tirith".into()]
+}
+
+/// The same, as one shell-ready string (the resolved `tirith`).
+fn tirith_cmd() -> String {
+    tirith_cmd_argv(&config()).iter().map(|w| sh_quote(w)).collect::<Vec<_>>().join(" ")
+}
+
+/// `command` with each bare leading `tirith` word (line start, or after `&&` `||` `;` `|` `(`) replaced by
+/// `cmd`. Mirrors `tirithcmd.rewrite` of the collector.
+fn rewrite_tirith(command: &str, cmd: &str) -> String {
+    let mut out = String::with_capacity(command.len());
+    let mut start = true; // at the start of a command
+    let mut rest = command;
+    while let Some(ch) = rest.chars().next() {
+        if start && (ch == ' ' || ch == '\t') {
+            out.push(ch);
+            rest = &rest[1..];
+            continue;
+        }
+        if start && rest.starts_with("tirith") && rest[6..].chars().next().map_or(true, |a| a == ' ' || a == '\t' || a == '\n') {
+            out.push_str(cmd);
+            rest = &rest[6..];
+            start = false;
+            continue;
+        }
+        start = matches!(ch, '\n' | ';' | '|' | '(');
+        if rest.starts_with("&&") {
+            out.push_str("&&");
+            rest = &rest[2..];
+            start = true;
+            continue;
+        }
+        out.push(ch);
+        rest = &rest[ch.len_utf8()..];
+    }
+    out
+}
+
+/// `tirith <args>` by the resolved command, ready to spawn.
 fn tirith_command(args: &[&str]) -> Command {
-    let cfg = config();
-    let uv = app_setting(&cfg, "uv").unwrap_or_else(|| "uv".into());
-    let mut c = Command::new(uv);
-    c.arg("run").arg("--project").arg(collector_dir(&cfg)).arg("tirith").args(args);
+    let argv = tirith_cmd_argv(&config());
+    let mut c = Command::new(&argv[0]);
+    c.args(&argv[1..]).args(args);
     c.env("TIRITH_HOME", tirith_home());
     c
 }
@@ -1221,7 +1281,7 @@ fn run_action(app: AppHandle, action_id: String) -> Result<(), String> {
         }
     };
     std::thread::spawn(move || {
-        let code = run_shell(&command, &cwd, &dir.join(format!("{action_id}.log")));
+        let code = run_shell(&rewrite_tirith(&command, &tirith_cmd()), &cwd, &dir.join(format!("{action_id}.log")));
         let _ = append_run_row(&home, &action_id, if code == 0 { "passed" } else { "failed" }, Some(code));
         app.state::<App>().running.lock().unwrap().remove(&action_id);
     });
@@ -1259,6 +1319,24 @@ mod action_tests {
         assert_eq!(find_action(&home, "ac-2").unwrap().1, "other");
         assert!(find_action(&home, "echo hi").is_none());
         assert!(find_action(&home, "ac-9").is_none());
+    }
+
+    #[test]
+    fn bare_tirith_becomes_the_resolved_command() {
+        let c = "/r/bin/tirith";
+        assert_eq!(rewrite_tirith("tirith shim install", c), "/r/bin/tirith shim install");
+        assert_eq!(rewrite_tirith("cd x && tirith url install; tirith check", c), "cd x && /r/bin/tirith url install; /r/bin/tirith check");
+        assert_eq!(rewrite_tirith("echo tirith\ntirith a", c), "echo tirith\n/r/bin/tirith a");
+        for same in ["echo tirith", "/r/bin/tirith x", "tirithx y", "git commit -m 'tirith: x'"] {
+            assert_eq!(rewrite_tirith(same, c), same);
+        }
+    }
+
+    #[test]
+    fn the_resolved_command_is_absolute_and_quoted() {
+        let cmd = tirith_cmd();
+        assert!(cmd.starts_with('/') || cmd.starts_with("uv ") || cmd.starts_with('\''), "{cmd}");
+        assert_eq!(sh_quote("a b"), "'a b'");
     }
 
     #[test]
