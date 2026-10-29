@@ -112,6 +112,7 @@ class Config:
     manager_max_turns: int = 40  # [manager] max_turns: compact, then restart with a handoff after this many turns
     manager_context_tokens: int = 150000  # [manager] context_tokens: compact when the context is this large
     models: dict = field(default_factory=dict)  # [models]: manager, workers (+ overrides), choices
+    timeouts: dict[str, float] = field(default_factory=dict)  # [timeouts] <class> = seconds: the owner's fixed values
 
     def room(self, room_id: str) -> RoomConfig | None:
         for room in self.rooms:
@@ -233,6 +234,9 @@ def load_config(home: Path) -> Config:
         cfg.launch_command = launch["command"]
     if isinstance(raw.get("models"), dict):
         cfg.models = raw["models"]
+    timeouts = raw.get("timeouts") if isinstance(raw.get("timeouts"), dict) else {}
+    cfg.timeouts = {str(k): float(v) for k, v in timeouts.items()
+                    if isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0}
     rooms_raw = raw.get("rooms")
     if isinstance(rooms_raw, list):
         for item in rooms_raw:
