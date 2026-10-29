@@ -30,7 +30,9 @@ from tirith import inbox as inbox_mod
 from tirith import launch as launch_mod
 from tirith import managerd as managerd_mod
 from tirith import manifest as manifest_mod
+from tirith import ownergate as ownergate_mod
 from tirith import planlane as planlane_mod
+from tirith import verifylane as verifylane_mod
 from tirith import projects as projects_mod
 from tirith import roadmap as roadmap_mod
 from tirith import selfcheck as selfcheck_mod
@@ -83,23 +85,34 @@ def _step_name(req: dict) -> str:
 
 def add_owner_item(home: Path, item_id: str, project: str | None, text: str, options: list[dict],
                    at: str, actions: list[dict] | None = None, link: str | None = None,
-                   reason: str | None = None) -> None:
+                   why_owner: str | None = None, why_detail: str | None = None) -> str:
     """One item on the owner's waiting list with ``options`` (``[{label, command}]``), Run ``actions`` and
-    an optional ``link`` to open; once per id. ``reason`` is a key of ``asks.OWNER_REASONS`` (why only the
-    owner can do it). A text that promises a button the item does not have is rewritten without it."""
+    an optional ``link`` to open; once per id. It passes ``ownergate.admit``: ``why_owner`` is a key of
+    ``asks.WHY_OWNER`` (why only the owner can do it), else the text goes to the manager queue as "agent can
+    do" (or is dropped when it is about something out of plan). Returns ``owner``, ``manager`` or ``dropped``.
+    A text that promises a button the item does not have is rewritten without it."""
     if not options and not actions:
         raise ValueError(f"owner item {item_id} has no option: every item for the owner needs a call to action")
-    if reason is not None and reason not in asks_mod.OWNER_REASONS:
-        raise ValueError(f"owner item {item_id}: unknown reason {reason!r} (one of {', '.join(asks_mod.OWNER_REASONS)})")
+    verdict = ownergate_mod.admit(home, item_id, project, text, why_owner, via="owner-item", at=at)
+    if verdict != ownergate_mod.OWNER:
+        return verdict
+    why = asks_mod.why_key(why_owner)
     if asks_mod.missing_buttons(text, options, actions, link):
         text = asks_mod.drop_button_claims(text)
     if any(r.get("id") == item_id for r in read_jsonl(Path(home) / "waits.jsonl")):
-        return
+        return ownergate_mod.OWNER
     append_jsonl(Path(home) / "waits.jsonl", {
         "id": item_id, "at": at, "project": project, "text": text, "link": link, "done_at": None,
         "session": None, "options": options, **({"actions": actions} if actions else {}),
-        **({"reason": reason, "reason_tag": asks_mod.reason_tag(reason)} if reason else {})})
+        "why_owner": why, **({"why_detail": why_detail} if why_detail else {}),
+        "reason_tag": asks_mod.reason_tag(why, why_detail)})
     flows_mod.append_flow(home, "tirith", "owner", "request", text, project=project, session=None, at=at)
+    return ownergate_mod.OWNER
+
+
+def refused(home: Path, item_id: str, project: str | None, text: str) -> None:
+    """A launch Tirith could not do is the manager's to fix, never the owner's: one manager queue item."""
+    asks_mod.queue_add(home, str(project or ""), "", text, kind="launch-refused", item_id="sq-" + item_id)
 
 
 def close_owner_item(home: Path, item_id: str, at: str) -> None:
@@ -128,6 +141,14 @@ def _default_plan_launcher(home: Path, project: str, kind: str, request_id: str 
     from tirith.cli import launch_plan
     try:
         return launch_plan(home, project, kind, request_id, out=io.StringIO(), by_tirith=True)
+    except SystemExit as err:
+        raise launch_mod.LaunchError(str(err.code or "launch failed"))
+
+
+def _default_verify_launcher(home: Path, project: str, text: str) -> str:
+    from tirith.cli import launch_verify
+    try:
+        return launch_verify(home, project, text, out=io.StringIO(), by_tirith=True)
     except SystemExit as err:
         raise launch_mod.LaunchError(str(err.code or "launch failed"))
 
@@ -169,10 +190,8 @@ def _plan(home: Path, req: dict, config: Config, lanes: list[dict], status_of: C
     inbox_mod.add_answer(home, req["id"], f"Could not start an agent for \"{what}\" on {project}: {reason}",
                          by="tirith", auto=True, at=at)
     _flow(home, "tirith", "owner", "alert", f"Could not start \"{what}\" on {project}: {_short(reason)}", req, at)
-    add_owner_item(home, f"dispatch-{req['id']}", project or None,
-                   f"Tirith could not start an agent for \"{what}\" on {project}: {_short(reason)}",
-                   [{"label": "Try again", "command": retry} if kind == "plan-refresh" else
-                    {"label": "Start it again from the Plan card", "command": None}], at)
+    refused(home, f"dispatch-{req['id']}", project,
+            f"Tirith could not start an agent for \"{what}\" on {project}: {_short(reason)}\nTry again: {retry}")
     return "refused"
 
 
@@ -300,11 +319,9 @@ def _finish(home: Path, req: dict, config: Config, agents: list[dict], lanes: li
     inbox_mod.add_answer(home, req["id"], f"Could not start an agent on {_step_name(req)}: {reason}\n\n"
                          f"Fix: `{fix}`", by="tirith", auto=True, at=at)
     _flow(home, "tirith", "owner", "alert", f"Could not start {_step_name(req)}: {_short(reason)}", req, at)
-    add_owner_item(home, f"dispatch-{req['id']}", req["project"] or None,
-                   f"Tirith could not start an agent on {_step_name(req)}: {_short(reason)}",
-                   [{"label": "Fix it", "command": fix},
-                    {"label": "Try again", "command": f"tirith launch --project {req['project']} --step {req['step']}"}],
-                   at)
+    refused(home, f"dispatch-{req['id']}", req["project"] or None,
+            f"Tirith could not start an agent on {_step_name(req)}: {_short(reason)}\nFix it: {fix}\n"
+            f"Try again: tirith launch --project {req['project']} --step {req['step']}")
     return "refused"
 
 
@@ -322,13 +339,15 @@ def escalate(home: Path, req: dict, notify: Callable[[str, str], None], at: str)
     if req["kind"] != "chat":  # a chat message is not about a step
         options.append({"label": "Start an agent", "command": f"tirith launch --project {project} --step {step}"})
     options.append({"label": "Answer it with the brain", "command": f"tirith inbox brain {req['id']}"})
-    add_owner_item(home, f"manager-silent-{req['id']}", project or None, text, options, at)
+    add_owner_item(home, f"manager-silent-{req['id']}", project or None, text, options, at,
+                   why_owner="owner-decision", why_detail="choice: wait, start an agent or use the brain")
 
 
 def run(home: Path, config: Config, now: datetime, *, agents: list[dict], lanes: list[dict],
         status_of: Callable, launcher: Callable | None = None,
         notify: Callable[[str, str], None] = macos_notify, spawn: Callable | None = None,
         plan_launcher: Callable | None = None, projects: list[dict] | None = None,
+        verify_launcher: Callable | None = None,
         relauncher: Callable | None = None, manager_spawn: Callable | None = None, manager_kill: Callable | None = None,
         free: Callable | None = None) -> list[dict]:
     """One dispatcher pass; returns the requests re-read afterwards. Safe to call every cycle."""
@@ -347,6 +366,9 @@ def run(home: Path, config: Config, now: datetime, *, agents: list[dict], lanes:
     room = not diskdiet_mod.low(state)  # disk almost full: no new lane (the manager queue says why)
     if autopilot_mod.run(home, config, now, state, agents=agents, projects=projects or [], launcher=launcher,
                          launch=room):
+        changed = True
+    # what the owner gate found an agent can do becomes a verification lane, never an owner item
+    if verifylane_mod.run(home, config, verify_launcher or _default_verify_launcher, room=room):
         changed = True
     for req in inbox_mod.requests(home):
         rid = req["id"]
@@ -458,7 +480,9 @@ def manager_context(home: Path, now: datetime) -> str:
         text += ("\n" if text else "") + (
             f"Tirith queue: {len(waiting)} working agent(s) look to be waiting on something (a guess from "
             "their logs; the owner is not told). Check each, unblock the agent or ask the owner with "
-            "`tirith wait add ... --option ...` only if it needs their hand.\n"
+            "`tirith wait add ... --option ... --why-owner KEY` only if only the owner can do it "
+            "(credentials, payment, personal-account, physical-device, owner-decision; without a key "
+            "nothing reaches the owner).\n"
             + "\n".join(f"- {i['id']} ({i['project']}, lane {i['lane']}): {_short(i['text'], 300)}\n"
                         f"    tirith queue done {i['id']}" for i in waiting))
     return text

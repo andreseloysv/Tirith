@@ -46,6 +46,7 @@ FEATURE = "Manager"
 DEFAULT_ALIAS = "anthropic"
 LINGER_S = 30.0  # a manager process still alive this long after its ``result`` event is terminated
 TAIL_BYTES = 65536
+TURNS_KEPT = 30
 
 RULES = (
     "You are the owner's manager, started by Tirith because the owner is not at a terminal. The owner talks to "
@@ -459,6 +460,10 @@ def run(home: Path, config: Config, now: datetime, state: dict, lanes: list[dict
         book["tries"] += 1
         return True
     book.update(lane=lane_id, at=now_iso(now), tries=book["tries"] + 1)
+    turns = book.setdefault("turns", {})  # lane id -> the request ids this turn answers (the chat's live block)
+    turns[lane_id] = [r["id"] for r in items["requests"]]
+    for old in list(turns)[:-TURNS_KEPT]:
+        turns.pop(old)
     book.pop("error", None)
     book.pop("evidence", None)
     flows_mod.append_flow(home, "tirith", f"agent:{lane_id}", "brief",
