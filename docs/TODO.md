@@ -281,7 +281,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Landing page pública de Tirith (GitHub Pages): qué es, qué hace, cómo usa los modelos de Meta, capturas reales y cómo probarlo. (en revisión)
 - [ ] Vídeo de demo de 3 min del Tirith actual (manager en el chat, plan, reglas en código, agentes trabajando) grabado por script, más un GIF corto para el README. (en curso: u-video)
 - [ ] Repo preparado para conseguir estrellas: README con GIF y estrella arriba, badges, inicio en una línea, imagen social, CONTRIBUTING y plantillas de issues. (en revisión)
-- [ ] Licencia MIT (elegida por el dueño): archivo LICENSE, campo license en los manifiestos y badge en el README. (en curso: u-license)
+- [ ] Licencia MIT (elegida por el dueño): archivo LICENSE, campo license en los manifiestos y badge en el README. (en revisión)
 - [ ] La app reinicia el collector si el estado deja de actualizarse aunque el proceso siga vivo. (check: `cd app/src-tauri && cargo test -q staleness`) (en curso: u-watchdog)
 - [ ] El recargado automático del collector nunca lo deja bloqueado. (check: `cd collector && uv run -q pytest -q tests -k reload`)
 - [ ] Tras arrancar o recargar, el collector escribe un estado útil en menos de 30 s. (check: `cd collector && uv run -q pytest -q tests -k first_cycle`) (en curso: u-firstcycle)
