@@ -914,8 +914,9 @@ class Collector:
                       hooks_mod.read_violation_rows(self.home / "events.jsonl")][-hooks_mod.VIOLATIONS_KEPT:]
         manual_waits, answered_waits = self._manual_waits(
             {p["id"]: p["guard"]["ok"] for p in projects if p.get("guard")})
-        waiting = (manual_waits + brain_waits + room_waits + guard_waits
-                   + self._violation_waits(violations, now))
+        # violations are not the owner's turn: the blocked agent already got what to do instead;
+        # they are shown in the Rules section only
+        waiting = manual_waits + brain_waits + room_waits + guard_waits
         for wait in waiting + answered_waits:
             wait.setdefault("session", None)
             if wait.get("project"):

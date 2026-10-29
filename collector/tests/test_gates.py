@@ -155,8 +155,8 @@ def test_violations_reach_state_and_waiting(proj, home, monkeypatch) -> None:
     mine = next(v for v in state["violations"] if v["rule"] == "no-verify")
     assert mine["lane"] == "w1" and mine["agent"] == "anthropic"
     assert mine["message"].startswith("tirith: no-verify")
-    waits = [w for w in state["waiting_on_you"] if w["source"] == "violation"]
-    assert len(waits) == 1 and "no-verify" in waits[0]["text"]  # the 2020 one is too old
+    # violations are not the owner's turn (the agent was already told what to do instead)
+    assert not [w for w in state["waiting_on_you"] if w["source"] == "violation"]
 
 
 def test_violations_capped_at_fifty(proj, home) -> None:
