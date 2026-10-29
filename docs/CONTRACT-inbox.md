@@ -18,7 +18,7 @@ collector: state.inbox -> the Plan shows the chip and the answers under the step
 
 | Row | Fields |
 |---|---|
-| request | `id`, `at`, `kind` (`finish`, `ask`, `setup`, `chat`, `autopilot`, `plan-refresh`, `plan-new` or `plan-edit`), `project`, `step`, `text`, `from` (`"owner"`), `status` (`"open"`) |
+| request | `id`, `at`, `kind` (`finish`, `ask`, `setup`, `chat`, `autopilot`, `autopilot-proposal`, `plan-refresh`, `plan-new` or `plan-edit`), `project`, `step`, `text`, `from` (`"owner"`, or `"tirith"` for `autopilot-proposal`), `status` (`"open"`) |
 | answer | `id` (of the request), `at`, `kind: "answer"`, `by` (`manager`, `brain` or `tirith`), `text` (markdown), `auto` (bool), optional `lane` (id of the lane that took the request) |
 | done | `id`, `at`, `kind: "done"` |
 
@@ -80,6 +80,18 @@ rejected), `project` is `all` and `step` is `autopilot` (both may be left out). 
 `[autopilot] enabled`), records the flow `owner` -> `tirith` ("Autopilot off") and closes it. Running lanes
 are not stopped; no new lane is started while it is off. Sent by the Plan header's Pause / Resume button
 (`tirith inbox add --kind autopilot --text off`).
+
+### Kind `autopilot-proposal`
+
+Tirith's own request to the manager (`from: "tirith"`), written by the autopilot (`CONTRACT-roadmap.md`) for an
+open plan item nobody works on. `project`/`step` name the item; the first line of `text` is
+`Autopilot: <project> step <n> — <item>`, then why it is open, the plan file, the last attempts of the step
+(lane, outcome, review status, claims, report summary) and the options. It is `manager_pending` like an owner
+message: the manager (on-call turn or persistent session) decides launch / combine / wait / drop, answers with
+one short line ("Autopilot: step 9 item … -> started lane X") and closes it (`tirith inbox done`). The dispatcher
+adds no flow and never escalates it to the owner. One open proposal per item; a new one only when the item's text or
+note changes; when the item is ticked or gone, Tirith answers `by: tirith` and closes it. Unanswered for more
+than 10 min: `selfcheck` (manager and autopilot checks). The chat shows the first line as an "Autopilot" line.
 
 ## CLI
 
@@ -216,8 +228,8 @@ The app writes every `inbox_add` attempt and its result (`ok id=...` or `error: 
   chip "Sent · waiting for the manager".
 - Answers show under the step as rendered markdown, newest last, with "Manager" or "Muse Spark, automatic";
   each request is collapsible (closed by default once done). The last 9 entries per step are shown.
-- The Plan header shows the number of open requests. Below it: "Autopilot on · 2 agents working · 3 queued"
-  (or "paused") with a Pause / Resume button that sends the `autopilot` request.
+- The Plan header shows the number of open requests. Below it: "Autopilot on · 2 steps in progress · 1 waiting for a review"
+  (or "Paused") with a Pause / Resume button that sends the `autopilot` request.
 - Under a step the latest entry (a request thread, or "Autopilot started <agent>" from `state.autopilot.started`)
   stays open; every older entry folds into one "N earlier messages" line (click to unfold, answers inside closed).
 - The "Finish with an agent" launch button is only in the expanded step, labelled "Start an agent now"
@@ -244,6 +256,7 @@ handles everything by hand), `auto_launch = false` leaves `finish` to the manage
 | `plan-edit`, item text changed meanwhile (or ticked), step or plan gone, plan file has uncommitted changes, commit refused | changes nothing, answers `Could not <verb> the plan: <reason>` and adds an alert flow |
 | `plan-edit` after another edit with a `plan-refresh` of that project still unanswered | no second refresh: the answer says one is already queued (at most one queued refresh per project) |
 | `autopilot` | sets the autopilot on or off, closes the request |
+| `autopilot-proposal` | left to the manager (`manager_pending`); no flow, never escalated to the owner |
 | `setup` and other kinds | left to the manager (`manager_pending`) |
 
 **The plan lanes.** The auditor's brief is generated: the current plan file, the project's merged lanes with

@@ -54,8 +54,11 @@ from tirith import plangate as plangate_mod
 from tirith import verifylane as verifylane_mod
 from tirith import roadmap as roadmap_mod
 from tirith import review as review_mod
+from tirith import mergeq as mergeq_mod
 from tirith import roadmap as roadmap_mod
 from tirith import runstage as runstage_mod
+from tirith import fasttests as fasttests_mod
+from tirith import loadlimit as loadlimit_mod
 from tirith import projects as projects_mod
 from tirith import projenv as projenv_mod
 from tirith import rooms as rooms_mod
@@ -459,9 +462,14 @@ def _duplicate_lane(home: Path, args, item: str | None) -> dict | None:
     return launch_mod.working_lane(others, args.project, str(args.step), lane_status, item)
 
 
+_IDLE: dict[str, bool] = {}  # lane id -> its last agent run was stopped for silence
+
+
 def _run_child(home: Path, lane: dict, lane_id: str, command: list[str], workspace: Path, env: dict,
                log_path: Path, stdin_text: str | None) -> tuple[int, str]:
-    """One run of the lane's agent process: ``(exit code, final answer)``."""
+    """One run of the lane's agent process: ``(exit code, final answer)``. The deadline is inactivity (no log
+    output, worktree change or CPU for the idle limit) with the hard cap as the safety net; ``_IDLE`` keeps
+    whether the run was stopped for silence, for the continue loop."""
     with log_path.open("ab") as log_handle:
         proc = subprocess.Popen(
             command, cwd=str(workspace), env=env,
@@ -479,10 +487,14 @@ def _run_child(home: Path, lane: dict, lane_id: str, command: list[str], workspa
                 proc.stdin.close()
             except OSError:  # the agent exited before reading it; its exit code tells
                 pass
-        watch = timeouts_mod.supervise(proc, "agent-turn", home=home, what=f"lane {lane_id}")
+        watch = timeouts_mod.supervise(
+            proc, "agent-turn", home=home, what=f"lane {lane_id}",
+            idle=timeouts_mod.effective_idle(home, None, "agent-turn"),
+            probe=timeouts_mod.Probe(log=log_path, workspace=workspace, pgid=proc.pid))
         exit_code = proc.wait()
         ended = watch()
     answer, _ = final_answer(log_path)
+    _IDLE[lane_id] = bool(ended.get("idle"))
     if ended["timed_out"]:
         exit_code, answer = timeouts_mod.EXIT_TIMED_OUT, ended["message"]
     return exit_code, answer
@@ -580,11 +592,24 @@ def _cmd_lane_run(args) -> int:
         answer = _last_stop_message(home, lane_id, lane.get("started_at"))
     else:
         stdin_text = getattr(args, "stdin_text", None)
-        rounds, missing = 0, []
+        rounds, idle_rounds, missing = 0, 0, []
         while True:
             exit_code, answer = _run_child(home, lane, lane_id, command, workspace, env, log_path, stdin_text)
             stopped = lanestop_mod.marker(read_json(lane_path(home, lane_id), None) or {})
-            if stopped or exit_code != 0 or not (args.agent or getattr(args, "as_agent", None)):
+            agent_lane = bool(args.agent or getattr(args, "as_agent", None))
+            if (not stopped and agent_lane and exit_code == timeouts_mod.EXIT_TIMED_OUT
+                    and _IDLE.pop(lane_id, False) and idle_rounds < keepgoing_mod.MAX_ROUNDS
+                    and keepgoing_mod.has_work(workspace, lane.get("start_commit"))):
+                # silent for the idle limit but with work in its worktree: the same session is asked to go on
+                idle_rounds += 1
+                minutes = max(1, round((timeouts_mod.effective_idle(home, config, "agent-turn") or 0) / 60))
+                keepgoing_mod.note_idle(home, lane_id, idle_rounds, minutes)
+                resumed = _resume_child(home, config, args, lane, command, log_path, answer,
+                                        keepgoing_mod.idle_message(minutes, idle_rounds))
+                if resumed is not None:
+                    command, stdin_text = resumed
+                    continue
+            if stopped or exit_code != 0 or not agent_lane:
                 break
             missing = keepgoing_mod.gaps(home, lane, proj.repo, answer)
             if not missing or rounds >= keepgoing_mod.MAX_ROUNDS:
@@ -766,7 +791,22 @@ def _manifest_stage(args, home: Path, command: list[str]) -> list[str]:
     if not stage.run:
         raise SystemExit(f"stage '{args.stage}' has no run command in {loaded.path}")
     args.stage_cwd = str(Path(loaded.path).parent)  # manifest commands run from the project root
-    return ["/bin/sh", "-c", stage.run]
+    fast = _fast_command(args, home, info, Path(args.stage_cwd))
+    return ["/bin/sh", "-c", fast or stage.run]
+
+
+def _fast_command(args, home: Path, info: dict | None, folder: Path) -> str | None:
+    """``--stage test|rust-test`` in a lane's worktree runs only what the change touches (``--full`` and the
+    merge queue, which runs outside a lane, run everything); the selection is recorded in ``selections.jsonl``."""
+    if args.stage not in ("test", "rust-test") or getattr(args, "full", False):
+        return None
+    if not (getattr(args, "changed", False) or info):
+        return None
+    sel = fasttests_mod.select(folder, args.stage)
+    append_jsonl(home / "selections.jsonl", {"at": now_iso(), "project": args.project, "worktree": str(folder),
+                                              **sel.record()})
+    print(f"tirith: {args.stage}: {sel.summary()}", flush=True)
+    return fasttests_mod.command(sel)
 
 
 def _cmd_run(args) -> int:
@@ -777,11 +817,14 @@ def _cmd_run(args) -> int:
     command = _manifest_stage(args, home, command)
     cwd = getattr(args, "stage_cwd", None) or str(Path.cwd().resolve())
     tags = runstage_mod.lane_tags(home, cwd)
-    code, _ = runstage_mod.run_stage(
-        home, args.project, args.pipeline, args.stage, command, cwd,
-        lane=tags.get("lane") or (os.environ.get("TIRITH_LANE") or None), run_id=args.run,
-        worktree=tags.get("worktree"), branch=tags.get("branch"), agent=args.agent,
-        log=args.log, new_run=args.new_run)
+    config = load_config(home)
+    allowed, _ = loadlimit_mod.current(config, home)
+    with loadlimit_mod.slot(home, allowed):  # concurrent stage runs adapt to load and free disk
+        code, _ = runstage_mod.run_stage(
+            home, args.project, args.pipeline, args.stage, command, cwd,
+            lane=tags.get("lane") or (os.environ.get("TIRITH_LANE") or None), run_id=args.run,
+            worktree=tags.get("worktree"), branch=tags.get("branch"), agent=args.agent,
+            log=args.log, new_run=args.new_run)
     return code
 
 
@@ -966,17 +1009,29 @@ def _cmd_timeout(args) -> int:
         classes = [args.cls] if args.cls else list(timeouts_mod.POLICY)
         for cls in classes:
             row = timeouts_mod.describe(home, config, cls)
-            print(f"{cls}: {row['seconds']:g} s ({row['source']}; allowed {row['min']:g} to {row['max']:g} s)")
+            idle = timeouts_mod.describe_idle(home, config, cls)
+            print(f"{cls}: {'cap ' if idle else ''}{row['seconds']:g} s ({row['source']}; allowed "
+                  f"{row['min']:g} to {row['max']:g} s)")
+            if idle:
+                print(f"{cls}: idle {idle['seconds']:g} s ({idle['source']}; allowed "
+                      f"{idle['min']:g} to {idle['max']:g} s)")
         return 0
     lane = _lane_of_caller(home)
-    try:
-        row = timeouts_mod.set_timeout(home, config, args.cls, args.seconds, args.reason or "", lane=lane)
-    except timeouts_mod.TimeoutRefused as error:
-        raise SystemExit(f"tirith timeout: {error}")
-    flows_mod.append_flow(
-        home, f"agent:{lane}" if lane else "owner", "guard", "decision",
-        f"timeout of '{args.cls}' set to {args.seconds:g} s", why=row["reason"] or None)
-    print(f"{args.cls}: {args.seconds:g} s" + (" until the lane ends" if lane else ""))
+    cap = args.cap if args.cap is not None else args.seconds
+    wanted = [(label, value, idle) for label, value, idle in (("cap", cap, False), ("idle", args.idle, True))
+              if value is not None]
+    if not wanted:
+        raise SystemExit("tirith timeout: give --cap (or --seconds) and/or --idle")
+    for label, value, idle in wanted:
+        try:
+            row = timeouts_mod.set_timeout(home, config, args.cls, value, args.reason or "", lane=lane, idle=idle)
+        except timeouts_mod.TimeoutRefused as error:
+            raise SystemExit(f"tirith timeout: {error}")
+        what = f"idle limit of '{args.cls}'" if idle else f"timeout of '{args.cls}'"
+        flows_mod.append_flow(
+            home, f"agent:{lane}" if lane else "owner", "guard", "decision",
+            f"{what} set to {value:g} s", why=row["reason"] or None)
+        print(f"{args.cls}: {label} {value:g} s" + (" until the lane ends" if lane else ""))
     return 0
 
 
@@ -1599,6 +1654,41 @@ def _cmd_plan_report(args) -> int:
     new = f", {len(outcome['added'])} new item(s)" if outcome["added"] else ""
     later = "" if outcome.get("applied") else f" (recorded; the plan will be updated: {outcome.get('error')})"
     print(f"lane {lane_id}: {args.status}{new}{later}")
+    return 0
+
+
+def _cmd_merge_request(args) -> int:
+    home = _home(args)
+    lane_id = args.lane or os.environ.get("TIRITH_LANE")
+    if not lane_id:
+        print("tirith merge request: pass --lane <id> (or run it inside a lane)", file=sys.stderr)
+        return 3
+    try:
+        position = mergeq_mod.enqueue(home, lane_id)
+    except review_mod.ReviewError as error:
+        print(f"tirith merge request: {error}", file=sys.stderr)
+        return 3
+    print(f"lane {lane_id}: queued for merge (position {position}); Tirith merges one lane at a time")
+    return 0
+
+
+def _cmd_merge_run(args) -> int:
+    home = _home(args)
+    rows = mergeq_mod.drain(home, load_config(home), push=not args.no_push)
+    for row in rows:
+        print(f"lane {row['lane']}: {row['result']}" + (f" ({row['message'].splitlines()[0]})" if row.get("message") else ""))
+    return 0 if all(r["result"] in (mergeq_mod.MERGED, mergeq_mod.PUSH_FAILED) for r in rows) else 1
+
+
+def _cmd_merge_status(args) -> int:
+    home = _home(args)
+    shown = mergeq_mod.view(home, args.project)
+    for item in shown["items"]:
+        print(f"{item['position']}. {item['lane']} [{item['status']}]")
+    if shown["last"]:
+        print(f"last: {shown['last']['lane']} {shown['last']['result']} at {shown['last']['at']}")
+    elif not shown["items"]:
+        print("the merge queue is empty")
     return 0
 
 
@@ -2274,6 +2364,9 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--new-run", action="store_true", help="start a new run number")
     run.add_argument("--log", default=None)
     run.add_argument("--agent", default=None, help="lane id to credit renown to")
+    run.add_argument("--changed", action="store_true",
+                     help="test stages: only the tests related to the changed files (the default in a lane)")
+    run.add_argument("--full", action="store_true", help="test stages: the full suite (what the merge queue runs)")
     run.add_argument("command", nargs=argparse.REMAINDER)
     run.set_defaults(func=_cmd_run)
 
@@ -2337,7 +2430,10 @@ def build_parser() -> argparse.ArgumentParser:
     t_get.set_defaults(func=_cmd_timeout)
     t_set = tmo_sub.add_parser("set", parents=[common], help="raise or lower it within its limits, with a reason")
     t_set.add_argument("--class", dest="cls", required=True)
-    t_set.add_argument("--seconds", type=float, required=True)
+    t_set.add_argument("--seconds", type=float, default=None, help="the hard cap (same as --cap)")
+    t_set.add_argument("--cap", type=float, default=None, help="the hard cap: the longest a run may take")
+    t_set.add_argument("--idle", type=float, default=None,
+                       help="how long a run may go without progress (agent-turn and stage)")
     t_set.add_argument("--reason", default=None)
     t_set.set_defaults(func=_cmd_timeout)
 
@@ -2529,6 +2625,18 @@ def build_parser() -> argparse.ArgumentParser:
     pl_done.add_argument("--item", required=True, help="the exact text of the item")
     pl_done.add_argument("--commit", required=True, help="the commit on main that did the work")
     pl_done.set_defaults(func=_cmd_plan_done)
+
+    merge = sub.add_parser("merge", parents=[common], help="the single merge queue (agents never merge into main)")
+    merge_sub = merge.add_subparsers(dest="merge_command", required=True)
+    m_req = merge_sub.add_parser("request", parents=[common], help="queue a finished lane for Tirith to merge")
+    m_req.add_argument("--lane", default=None, help="lane id (default: $TIRITH_LANE)")
+    m_req.set_defaults(func=_cmd_merge_request)
+    m_run = merge_sub.add_parser("run", parents=[common], help="merge the waiting lanes, one at a time")
+    m_run.add_argument("--no-push", action="store_true", help="do not push main")
+    m_run.set_defaults(func=_cmd_merge_run)
+    m_st = merge_sub.add_parser("status", parents=[common], help="show the queue and the last result")
+    m_st.add_argument("--project", default=None)
+    m_st.set_defaults(func=_cmd_merge_status)
 
     inbox = sub.add_parser("inbox", parents=[common], help="the owner's requests on plan steps")
     inbox_sub = inbox.add_subparsers(dest="inbox_command", required=True)
