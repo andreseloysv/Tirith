@@ -824,3 +824,18 @@ button.pc22.sel { box-shadow: 0 0 0 2px #fff, 0 0 0 4px rgba(47,111,237,.55); }
 .ncard.flash { animation: nflash 1.6s ease-out; }
 @keyframes nflash { from { box-shadow: 0 0 0 3px rgba(47,111,237,.45); } to { box-shadow: inset 0 1px 0 #fff, 0 4px 16px rgba(90,110,170,.08); } }
 @media (max-width: 640px) { .pstat { display: none; } }
+/* ---------- the quiet plan: open items, one state line, History (v-plan.js) ---------- */
+.pstep.done .ptog { grid-template-columns: 18px minmax(0, 1fr) 38px; padding: 5px 0; } .pstep.done .ptit { font-size: 13px; }
+.pquiet { margin-top: -2px; }
+.pquiet .pit { flex: 1; min-width: 0; }
+.pitbtn { flex: none; height: 20px; padding: 0 9px; font-size: 11.5px; color: #8a5a00; background: #fff4d6; border: 1px solid #f1dc9c; border-radius: 10px; }
+.pitbtn:hover:not(:disabled) { border-color: #e0b84a; }
+.pwhen { flex: none; font-size: 11.5px; color: var(--mut); }
+.pstate { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 8px 30px; font-size: 12.5px; color: var(--mut); }
+.pstate.live, .pstate.ready { color: var(--blue); } .pstate.live .md, .pstate.live b { color: var(--fg); }
+.pstate.wait { color: #8a5a00; } .pstate.bad { color: #b42318; }
+.pstate .pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--blue); }
+.pstate .link { padding: 0; font: inherit; color: inherit; background: none; border: 0; cursor: pointer; text-decoration: underline dotted; } .pstate .link:disabled { cursor: default; text-decoration: none; }
+.pneed { margin: 0 0 8px 30px; }
+.phist { margin: 0 0 6px 30px; } .phist .iahead { font-size: 12px; color: var(--mut); }
+.phistbody { opacity: .9; }
