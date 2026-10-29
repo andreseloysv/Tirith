@@ -162,7 +162,7 @@
       h += '<div class="grp">Projects</div>' + prj.map(function (p) {
         var n = (r.pipelines || []).filter(function (x) { return x.project === p.id && x.status === 'running'; }).length +
                 (r.agents || []).filter(function (x) { return x.project === p.id && x.status === 'working'; }).length;
-        return '<button class="nav' + (f.project === p.id ? ' on' : '') + '" data-nav="project" data-v="' + esc(p.id) + '"><i class="pdot" style="background:' + esc(p.color || '#9ca3af') + '"></i><span>' + esc(p.name) + '</span>' + (n ? '<em>' + n + '</em>' : '') + '</button>';
+        return '<button class="nav' + ((f.project || (f.view === 'overview' ? T.effProject(r) : '')) === p.id ? ' on' : '') + '" data-nav="project" data-v="' + esc(p.id) + '"><i class="pdot" style="background:' + esc(p.color || '#9ca3af') + '"></i><span>' + esc(p.name) + '</span>' + (n ? '<em>' + n + '</em>' : '') + '</button>';
       }).join('');
     }
     var ses = (r.sessions || []).slice(0, 6);
@@ -248,6 +248,7 @@
     return h + '</section>';
   }
   function overview(s, el) {
+    s = T.scopeProject(s, T.effProject(s));
     var runs = (s.pipelines || []).filter(function (p) { return p.status === 'running'; });
     var ags = (s.agents || []).filter(function (a) { return a.status === 'working' || a.status === 'stalled'; });
     var h = '<div class="ovg"><div class="ovmain" data-scroll="ovmain">';
