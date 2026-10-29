@@ -20,6 +20,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from tirith import timeouts as timeouts_mod
 from tirith import dispatch, gates, managerd
 from tirith import projects as projects_mod
 from tirith.home import load_config, now_iso
@@ -247,7 +248,20 @@ def decide(agent: str, event: dict, payload, home: Path | None = None) -> int:
             session=event.get("session"), project=event.get("project"), tool=event.get("tool"),
             cwd=fields.get("cwd") or event.get("cwd"))
         print(violation.message(), file=sys.stderr)
-    return 2 if any(v.action == "block" for v in found) else 0
+    if any(v.action == "block" for v in found):
+        return 2
+    if agent == "anthropic" and event.get("lane") and event.get("tool") == "Bash":
+        _bash_timeout(home, config, tool_input)
+    return 0
+
+
+def _bash_timeout(home: Path, config, tool_input) -> None:
+    """Answer a lane's Bash call with its ``timeout`` from the policy (``docs/CONTRACT-timeouts.md``)."""
+    updated = timeouts_mod.bash_update(home, config, tool_input)
+    if updated is not None:
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow",
+                                                 "permissionDecisionReason": "Tirith sets the command timeout",
+                                                 "updatedInput": updated}}))
 
 
 def run_hook(home: Path, agent: str, event: str | None, stdin) -> int:

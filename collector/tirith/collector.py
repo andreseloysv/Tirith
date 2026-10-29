@@ -20,6 +20,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from tirith import timeouts as timeouts_mod
 from tirith import activity as activity_mod
 from tirith import asks as asks_mod
 from tirith import howto as howto_mod
@@ -138,10 +139,7 @@ def git_head(workspace: str | Path | None) -> str | None:
     if not workspace:
         return None
     try:
-        out = subprocess.run(
-            ["git", "-C", str(workspace), "rev-parse", "HEAD"],
-            capture_output=True, text=True, timeout=10,
-        )
+        out = timeouts_mod.run(["git", "-C", str(workspace), "rev-parse", "HEAD"], "git", text=True)
     except (OSError, subprocess.SubprocessError):
         return None
     return out.stdout.strip() or None if out.returncode == 0 else None
@@ -165,10 +163,8 @@ def git_shortstat(workspace: str | Path | None, start_commit: str | None) -> tup
     if not workspace or not start_commit:
         return (0, 0, 0)
     try:
-        out = subprocess.run(
-            ["git", "-C", str(workspace), "diff", "--shortstat", str(start_commit)],
-            capture_output=True, text=True, timeout=15,
-        )
+        out = timeouts_mod.run(["git", "-C", str(workspace), "diff", "--shortstat", str(start_commit)],
+                               "git", text=True)
     except (OSError, subprocess.SubprocessError):
         return (0, 0, 0)
     if out.returncode != 0:
@@ -1350,6 +1346,7 @@ class Collector:
                 filerefs_mod.chat_texts(inbox_rows, says, waiting + answered_waits), projects),
             "disk": dispatch_mod.load_state(self.home).get("disk"),
             "health": selfcheck_mod.public(dispatch_mod.load_state(self.home).get("health")),
+            "timeouts": timeouts_mod.table(self.home, self.config),
             "autopilot": autopilot_mod.public(self.home, self.config, agent_rows, projects, now),
             "launch": {"token": launch_mod.launch_token(self.home),
                        "available": launch_mod.handler_installed()},
