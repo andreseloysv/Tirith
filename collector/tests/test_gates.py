@@ -113,6 +113,40 @@ def test_subagent_tool_blocked_with_inferred_feature(proj, monkeypatch, capsys) 
     assert _call(monkeypatch, proj, "Read", {"file_path": "a.py"}) == 0
 
 
+@pytest.fixture
+def settings_file(home: Path, proj: Path, tmp_path: Path) -> Path:
+    path = tmp_path / "agent" / "settings.json"
+    path.parent.mkdir()
+    path.write_text("{}", encoding="utf-8")
+    write_config(home, [{"id": "demo", "name": "Demo", "repo": str(proj)}],
+                 AGENTS.replace('command = "alpha-cli"', f'command = "alpha-cli"\nsettings = "{path}"'))
+    return path
+
+
+@pytest.mark.parametrize("template", [
+    "rm {p}", "echo '{{}}' > {p}", "sed -i '' s/a/b/ {p}", "mv {p} {p}.off", "tee {p}",
+    "cd /tmp && rm ../{rel}", "tirith hook uninstall --agent anthropic",
+    "uv run tirith hook uninstall --agent muse --settings /x",
+])
+def test_agent_hooks_cannot_be_removed(proj, home, settings_file, monkeypatch, capsys, template) -> None:
+    command = template.format(p=settings_file, rel=settings_file.relative_to(settings_file.parents[1]))
+    if command.startswith("cd /tmp"):
+        command = f"rm {settings_file}"
+    assert _bash(monkeypatch, proj, command) == 2
+    assert "tirith: agent-hooks: " in capsys.readouterr().err
+    assert [r["rule"] for r in read_jsonl(home / "events.jsonl") if r["kind"] == "violation"] == ["agent-hooks"]
+
+
+def test_agent_settings_are_protected_from_edit_tools_but_readable(
+        proj, settings_file, monkeypatch, capsys) -> None:
+    for tool in ("Edit", "Write", "MultiEdit"):
+        assert _call(monkeypatch, proj, tool, {"file_path": str(settings_file)}) == 2
+        assert "tirith: agent-hooks: " in capsys.readouterr().err
+    assert _call(monkeypatch, proj, "Read", {"file_path": str(settings_file)}) == 0
+    assert _bash(monkeypatch, proj, f"cat {settings_file}") == 0
+    assert _bash(monkeypatch, proj, "tirith hook install --agent anthropic") == 0
+
+
 def test_edit_tools_cannot_touch_git_hooks(proj, monkeypatch, capsys) -> None:
     assert _call(monkeypatch, proj, "Write", {"file_path": str(proj / ".git/hooks/pre-commit")}) == 2
     assert "tirith: git-hooks: " in capsys.readouterr().err
