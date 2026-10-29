@@ -155,6 +155,22 @@ Web: in the expanded Plan step, a done launched lane shows "Review and merge" in
 now": "Testing…" while running, a "Tests failed" / "Merge failed" chip with the output tail, "Merged" at the end.
 The step's checkboxes in the roadmap are still ticked by the owner.
 
+## Real launch from the browser (owner checklist)
+
+A lane cannot do this itself: it registers a URL scheme in the owner's Launch Services and starts an agent.
+
+1. `tirith url install`, then `tirith url verify` prints `handler OK`.
+2. `tirith launch --project <id> --step <n> --dry-run` on an unfinished step prints the worktree, brief and command
+   and creates nothing (checks `tirith check`, the agent command and that no lane has the step).
+3. Open the Overview in the browser, expand that step in the Plan and click "Start an agent now". The browser asks once
+   to open "Tirith Launcher"; accept.
+4. Expected: the button shows "Starting…", then the step shows the working agent's avatar (lane tagged with `--step`)
+   within 90 s; `<home>/logs/<lane-id>.launch.log` has the output; `tirith lane list` shows the lane.
+5. If nothing happens: run `tirith url open "<the link>"` by hand (a wrong token exits 3 and records a `launch-token`
+   violation), and read `launch.log`.
+
+Status: automated parts pass (see "Link-to-command check"); steps 3 and 4 are still to be done by the owner.
+
 ## Installing the handler (macOS)
 
 `tirith url install` builds `~/Applications/Tirith Launcher.app` and registers it with Launch Services; run
