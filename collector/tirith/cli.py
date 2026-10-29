@@ -24,6 +24,7 @@ from tirith.collector import (
     Collector, collect_tree, git_head, git_shortstat, heuristic_architecture, lane_status,
 )
 from tirith.guardwrap import default_words, guard_upgrade_steps, install_guard, verify_guard
+from tirith import actions as actions_mod
 from tirith import agentrun as agentrun_mod
 from tirith import asks as asks_mod
 from tirith import flows as flows_mod
@@ -581,11 +582,12 @@ def _next_wait_id(home: Path) -> str:
 
 def add_wait(home: Path, project: str, text: str, link: str | None = None,
              wait_id: str | None = None, options=None, command: str | None = None,
-             kind: str | None = None) -> str:
+             kind: str | None = None, actions: list[dict] | None = None) -> str:
     """Add an ask to the owner's list; returns its id.
 
     ``options`` are one-click answers (``{"label", "value"}`` or ``"Label|value"``), ``command`` is a
-    shell line the owner can copy, ``kind`` is decision|action|approval|info."""
+    shell line the owner can copy, ``kind`` is decision|action|approval|info, ``actions`` are commands
+    the owner runs with a button (see ``tirith.actions``)."""
     options = asks_mod.clean_options(options)
     kind = kind or asks_mod.default_kind(options, command)
     if kind not in asks_mod.ASK_KINDS:
@@ -596,6 +598,8 @@ def add_wait(home: Path, project: str, text: str, link: str | None = None,
            "session": projects_mod.current_session(home)}
     if options or command or kind != "info":
         row.update({"kind": kind, "options": options, "command": command or None})
+    if actions:
+        row["actions"] = actions
     append_jsonl(home / "waits.jsonl", row)
     flows_mod.append_flow(home, "steward", "owner", "request", text, link, project=project)
     return wait_id
@@ -609,8 +613,15 @@ def _cmd_wait_add(args) -> int:
         options = [asks_mod.parse_option(o) for o in args.option or []]
     except asks_mod.AskError as error:
         raise SystemExit(f"wait add: {error}")
+    try:
+        actions_mod.check_text(text, "wait")
+        runs = list(args.run or []) + ([args.command] if args.command else [])  # never text to copy
+        actions = actions_mod.make_actions(runs, args.label, args.cwd)
+    except actions_mod.ActionError as error:
+        print(error, file=sys.stderr)
+        return 2
     print(add_wait(_home(args), args.project, text, args.link, args.id, options=options,
-                   command=args.command, kind=args.kind))
+                   command=args.command, kind=args.kind, actions=actions))
     return 0
 
 
@@ -948,7 +959,7 @@ def _cmd_url_open(args) -> int:
     home = _home(args)
     try:
         link = launch_mod.parse_url(args.url)
-        if link["action"] not in ("launch", "inbox", "review"):
+        if link["action"] not in ("launch", "inbox", "review", "run"):
             raise launch_mod.LaunchError(f"unknown action '{link['action']}' in {args.url!r}")
         if not launch_mod.token_ok(home, link["token"]):
             gates_mod.record_violation(
@@ -959,6 +970,8 @@ def _cmd_url_open(args) -> int:
                 ts=now_iso(), agent=None, lane=None, session=None,
                 project=link["project"] or None, tool=None, cwd=None)
             raise launch_mod.LaunchError("refusing: wrong or missing token")
+        if link["action"] == "run":
+            return _run_action(home, actions_mod.parse_run_url(args.url))
         if link["action"] == "inbox":
             fields = inbox_mod.parse_url(args.url)
             if fields["kind"] == "reply":
@@ -974,8 +987,37 @@ def _cmd_url_open(args) -> int:
             print(f"reviewing {lane_id}")
             return 0
         launch_step(home, link["project"], link["step"], link["agent"])
-    except (launch_mod.LaunchError, inbox_mod.InboxError, review_mod.ReviewError) as error:
+    except (launch_mod.LaunchError, inbox_mod.InboxError, review_mod.ReviewError,
+            actions_mod.ActionError) as error:
         print(f"tirith url open: {error}", file=sys.stderr)
+        return 3
+    return 0
+
+
+def _run_action(home: Path, action_id: str) -> int:
+    action = actions_mod.find_action(home, action_id)
+    if action is None:
+        raise actions_mod.ActionError("no action " + action_id)
+    _, folder = _project_folder_of(home, action["project"] or None)
+    result = actions_mod.run_action(home, action_id, folder)
+    print(action_id + ": " + result["status"] + " (exit " + str(result["exit_code"]) + ")")
+    return 0 if result["status"] == "passed" else 1
+
+
+def _cmd_action(args) -> int:
+    home = _home(args)
+    try:
+        if args.action_command == "run":
+            return _run_action(home, args.id)
+        for action in actions_mod.list_actions(home):
+            run = action["last_run"]
+            if args.json:
+                print(json.dumps(action))
+            else:
+                print(action["id"] + "  " + (run["status"] if run else "never run").ljust(9) + " "
+                      + (action["project"] or "-") + "  " + action["label"] + "  $ " + action["command"][:60])
+    except actions_mod.ActionError as error:
+        print("tirith action " + args.action_command + ": " + str(error), file=sys.stderr)
         return 3
     return 0
 
@@ -999,7 +1041,13 @@ def _cmd_inbox(args) -> int:
                 read_jsonl(home / "waits.jsonl")) if str(r.get("id")) == args.wait), "")
             print(inbox_mod.add_reply(home, args.wait, project, args.value, args.text)["id"])
         elif action == "answer":
-            inbox_mod.add_answer(home, args.id, args.text, by=args.by, lane=args.lane)
+            try:
+                actions_mod.check_text(args.text)
+                actions = actions_mod.make_actions(args.run, args.label, args.cwd, created_by=args.by)
+            except actions_mod.ActionError as error:
+                print(error, file=sys.stderr)
+                return 2
+            inbox_mod.add_answer(home, args.id, args.text, by=args.by, lane=args.lane, actions=actions)
         elif action == "done":
             inbox_mod.mark_done(home, args.id)
         elif action == "brain":
@@ -1212,6 +1260,13 @@ def _cmd_shim(args) -> int:
     return 1 if any(status == "skipped" for _, status, _ in rows) else 0
 
 
+def _add_action_args(parser) -> None:
+    parser.add_argument("--run", action="append", default=[], metavar="COMMAND",
+                        help="a command for the owner: shown as a Run button (repeatable)")
+    parser.add_argument("--label", action="append", default=[], help="what the matching --run does")
+    parser.add_argument("--cwd", action="append", default=[], help="folder for the matching --run")
+
+
 def build_parser() -> argparse.ArgumentParser:
     """The full ``tirith`` argument parser."""
     common = argparse.ArgumentParser(add_help=False)
@@ -1300,11 +1355,12 @@ def build_parser() -> argparse.ArgumentParser:
     wait_add.add_argument("--text", dest="text_opt", default=None, help="the question, as an option")
     wait_add.add_argument("--option", action="append", metavar="LABEL|VALUE",
                           help="a one-click answer; repeat for more (max 6)")
-    wait_add.add_argument("--command", default=None, help="a shell command the owner can copy")
+    wait_add.add_argument("--command", default=None, help="a shell command the owner runs with a button (same as --run)")
     wait_add.add_argument("--kind", default=None, choices=asks_mod.ASK_KINDS)
     wait_add.add_argument("--project", default=None)
     wait_add.add_argument("--link", default=None)
     wait_add.add_argument("--id", default=None)
+    _add_action_args(wait_add)
     wait_add.set_defaults(func=_cmd_wait_add)
     wait_done = wait_sub.add_parser("done", parents=[common])
     wait_done.add_argument("wait_id")
@@ -1458,6 +1514,7 @@ def build_parser() -> argparse.ArgumentParser:
     i_reply.add_argument("--project", default=None)
     i_reply.add_argument("--value", default="", help="the option chosen")
     i_reply.add_argument("--text", default="", help="free text")
+    _add_action_args(i_ans)
     i_done = inbox_sub.add_parser("done", parents=[common], help="close a request or a reply")
     i_done.add_argument("id")
     i_brain = inbox_sub.add_parser("brain", parents=[common], help="answer a request with the brain now")
@@ -1478,6 +1535,14 @@ def build_parser() -> argparse.ArgumentParser:
     q_done.add_argument("id")
     for q_cmd in (q_ls, q_done):
         q_cmd.set_defaults(func=_cmd_queue)
+    action = sub.add_parser("action", parents=[common], help="commands the owner runs with a button")
+    action_sub = action.add_subparsers(dest="action_command", required=True)
+    a_run = action_sub.add_parser("run", parents=[common], help="run a declared action (owner's click)")
+    a_run.add_argument("id")
+    a_ls = action_sub.add_parser("list", parents=[common], help="list declared actions with their last run")
+    a_ls.add_argument("--json", action="store_true", help="one JSON object per line")
+    for a_cmd in (a_run, a_ls):
+        a_cmd.set_defaults(func=_cmd_action)
 
     url = sub.add_parser("url", parents=[common], help="the tirith:// link handler (macOS)")
     url_sub = url.add_subparsers(dest="url_command", required=True)

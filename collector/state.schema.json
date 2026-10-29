@@ -161,7 +161,8 @@
                 "by": {"enum": ["steward", "brain", "tirith"]},
                 "text": {"type": "string"},
                 "auto": {"type": "boolean"},
-                "lane": {"type": ["string", "null"], "description": "Lane id of the agent that took the request."}
+                "lane": {"type": ["string", "null"], "description": "Lane id of the agent that took the request."},
+                "actions": {"type": "array", "items": {"$ref": "#/$defs/action"}}
               }
             }
           },
@@ -280,6 +281,29 @@
         }
       }
     },
+    "action": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["id", "label", "command"],
+      "description": "A command for the owner: a Run button (docs/CONTRACT-actions.md).",
+      "properties": {
+        "id": {"type": "string"},
+        "label": {"type": "string"},
+        "command": {"type": "string"},
+        "cwd": {"type": ["string", "null"]},
+        "created_by": {"type": "string"},
+        "at": {"type": ["string", "null"]},
+        "last_run": {
+          "type": ["object", "null"],
+          "properties": {
+            "status": {"enum": ["running", "passed", "failed"]},
+            "exit_code": {"type": ["integer", "null"]},
+            "at": {"type": ["string", "null"]},
+            "log_tail": {"type": "array", "items": {"type": "string"}}
+          }
+        }
+      }
+    },
     "wait": {
       "type": "object",
       "additionalProperties": true,
@@ -291,6 +315,7 @@
         "link"
       ],
       "properties": {
+        "actions": {"type": "array", "items": {"$ref": "#/$defs/action"}},
         "id": {
           "type": "string"
         },
