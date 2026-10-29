@@ -192,7 +192,14 @@
         "steps": {"type": "object", "additionalProperties": true},
         "choices": {"type": "array", "items": {"type": "string"}},
         "efforts": {"type": "array", "items": {"type": "string"}},
+        "choices_by_agent": {"type": "object", "additionalProperties": {"type": "array", "items": {"type": "string"}}},
         "agents": {"type": "array", "items": {"type": "string"}},
+        "agent_status": {
+          "description": "Per agent alias: state ok, or out (a lane of the last hour ended out of credits) since a time.",
+          "type": "object",
+          "additionalProperties": {"type": "object", "properties": {
+            "state": {"enum": ["ok", "out"]}, "since": {"type": ["string", "null"]}}}
+        },
         "pending": {"type": "array", "items": {"type": "string"}}
       }
     },
@@ -867,6 +874,8 @@
           "oneOf": [{"type": "null"}, {"type": "object", "additionalProperties": true,
                     "properties": {"model": {"type": ["string", "null"]}, "effort": {"type": ["string", "null"]}}}]
         },
+        "agent": {"type": ["string", "null"], "description": "Agent alias that ran the lane (docs/CONTRACT-models.md)."},
+        "fallback_from": {"type": ["string", "null"], "description": "Agent alias that ran out of credits before this lane continued its brief."},
         "diff": {
           "description": "Full patch of the lane, stored at lane end (docs/CONTRACT-agents.md).",
           "oneOf": [{"type": "null"}, {"$ref": "#/$defs/diff"}]
