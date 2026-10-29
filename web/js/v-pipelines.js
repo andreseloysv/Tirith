@@ -6,13 +6,14 @@
 
   function runCard(p, sel) {
     var cur = T.curStage(p), pct = T.pct(p), pn = T.proj(p.project), body;
-    var col = p.status === 'failed' ? 'red' : p.status === 'running' ? 'blue' : 'green';
-    if (p.status === 'running') body = '<span class="rline"><span class="rcur">' + esc(cur ? cur.name : '') + '</span><span class="mut">' + pct + '%</span></span>';
+    var col = p.status === 'failed' ? 'red' : p.status === 'running' ? 'blue' : p.status === 'pending' ? 'grey' : 'green';
+    if (p.status === 'pending') body = '<span class="mut sm">Declared in tirith.toml, not run yet</span>';
+    else if (p.status === 'running') body = '<span class="rline"><span class="rcur">' + esc(cur ? cur.name : '') + '</span><span class="mut">' + pct + '%</span></span>';
     else if (p.status === 'failed') body = '<span class="rerr">' + esc(T.errLine(p)) + '</span><span class="mut sm">' + esc(T.ago(p.ended_at)) + ' ago</span>';
     else body = '<span class="mut sm">' + esc(T.ago(p.ended_at)) + ' ago</span>';
     return '<button class="card runcard' + (sel ? ' sel' : '') + '" data-act="run" data-key="' + esc(p.run) + '" aria-pressed="' + sel + '">' +
       '<span class="rhead"><b>' + esc(T.runName(p)) + ' <span class="mut">' + esc(T.runNum(p)) + '</span></b><span class="mut sm">' + esc(pn) + '</span></span>' +
-      '<span class="bar"><i class="' + col + '" style="width:' + (p.status === 'running' ? pct : 100) + '%"></i></span>' + body + '</button>';
+      '<span class="bar"><i class="' + col + '" style="width:' + (p.status === 'running' ? pct : p.status === 'pending' ? 0 : 100) + '%"></i></span>' + body + '</button>';
   }
 
   function stageNode(p, st, i, sel) {
@@ -31,13 +32,13 @@
     var sel = all.filter(function (p) { return p.run === ui.selRun; })[0] ||
       all.filter(function (p) { return p.status === 'running'; })[0] || all.filter(function (p) { return p.status === 'failed'; })[0] || all[0];
     ui.selRun = sel.run;
-    var groups = [['running', 'Running'], ['failed', 'Failed'], ['passed', 'Passed']];
+    var groups = [['running', 'Running'], ['failed', 'Failed'], ['passed', 'Passed'], ['pending', 'Not run yet']];
     var list = groups.map(function (g) {
       var l = all.filter(function (p) { return p.status === g[0]; });
       return l.length ? '<h3>' + g[1] + ' <span class="n">' + l.length + '</span></h3>' + l.map(function (p) { return runCard(p, p.run === sel.run); }).join('') : '';
     }).join('');
     var st = sel.stages || [], si = ui.stageSel[sel.run] != null ? ui.stageSel[sel.run] : T.defaultStage(sel);
-    var total = sel.status === 'running' ? T.span(sel.started_at, null) : esc(T.dur(T.elapsed(sel.started_at, sel.ended_at)));
+    var total = sel.status === 'running' ? T.span(sel.started_at, null) : sel.status === 'pending' ? '' : esc(T.dur(T.elapsed(sel.started_at, sel.ended_at)));
     var graph = '<div class="flowcol">' + st.map(function (x, i) { return stageNode(sel, x, i, ui.drawer === 'stage' && i === si); }).join('') + '</div>';
     var drawer = ui.drawer === 'stage' && st[si] ? T.drawer('Log', T.logBox(st[si].log_tail)) : '';
     el.innerHTML = '<div class="pv"><div class="plist" data-scroll="plist">' + list + '</div><div class="stagearea">' +

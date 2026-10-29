@@ -6,5 +6,9 @@ id = "ci"
 name = "CI"
 
 [[pipelines.stages]]
+name = "build"
+run = "cd collector && uv run -q python -m compileall -q tirith && for f in ../web/js/*.js; do node --check \"$f\" || exit 1; done"
+
+[[pipelines.stages]]
 name = "test"
 run = "cd collector && uv run -q pytest -q"

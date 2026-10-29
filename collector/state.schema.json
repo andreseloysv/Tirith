@@ -566,6 +566,7 @@
         "status": {
           "type": "string",
           "enum": [
+            "pending",
             "running",
             "passed",
             "failed"

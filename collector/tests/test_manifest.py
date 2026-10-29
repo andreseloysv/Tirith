@@ -130,3 +130,20 @@ def test_collector_declares_manifest_pipelines(tmp_path: Path, home: Path) -> No
     assert len(runs) == 1 and runs[0]["project"] == "repo"
     assert [(s["name"], s["status"]) for s in runs[0]["stages"]] == [
         ("build", "pending"), ("test", "pending"), ("ship", "pending")]
+
+
+def test_declared_pipeline_that_never_ran_is_pending(tmp_path):
+    """A pipeline only declared in tirith.toml must not look like it is running."""
+    from tirith.collector import Collector
+    home = tmp_path / "home"
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "tirith.toml").write_text(
+        '[[pipelines]]\nid = "ci"\n[[pipelines.stages]]\nname = "build"\nrun = "true"\n',
+        encoding="utf-8")
+    home.mkdir()
+    (home / "config.toml").write_text(
+        f'[[projects]]\nid = "p"\nname = "P"\nrepo = "{repo}"\n', encoding="utf-8")
+    state = Collector(home, client=None).cycle()
+    runs = [r for r in state["pipelines"] if r["pipeline"] == "ci"]
+    assert runs and runs[0]["status"] == "pending"
