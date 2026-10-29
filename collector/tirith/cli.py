@@ -38,6 +38,7 @@ from tirith import manifest as manifest_mod
 from tirith import hooks as hooks_mod
 from tirith import brain as brain_mod
 from tirith import collectlock as collectlock_mod
+from tirith import selfreload as selfreload_mod
 from tirith import inbox as inbox_mod
 from tirith import setup as setup_mod
 from tirith import lanestop as lanestop_mod
@@ -1102,12 +1103,19 @@ def _cmd_collect(args) -> int:
             signal.signal(signal.SIGTERM, signal.SIG_IGN)
             raise SystemExit(0)
         signal.signal(signal.SIGTERM, _terminate)
+    reload_now = False
     try:
         if args.once:  # a single cycle may overlap a running collector
             collector.run(interval=args.interval, once=True)
         else:
             with collectlock_mod.hold_collector_lock(home):
-                collector.run(interval=args.interval, once=False)
+                try:
+                    collector.run(interval=args.interval, once=False,
+                                  reload_check=selfreload_mod.CodeWatch().changed)
+                except selfreload_mod.ReloadRequested:
+                    reload_now = True  # re-exec only after the lock is released
+        if reload_now:
+            selfreload_mod.reexec()
     except collectlock_mod.CollectorRunning as running:
         print(running)
         return 0
