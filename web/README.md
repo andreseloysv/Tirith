@@ -20,12 +20,9 @@ again to clear. The selected view lives in the hash (`#view=`).
   total time is only in the floating bar.
 - **Agents**: Kanban (Working, Stalled, Done, Failed; count in each header) or List (`#mode=list`). Card click
   opens summary, files changed and log in a drawer. Finished agents older than 24 h sit behind "Show N earlier".
-- **Flow**: how information passes: nodes for You, the Manager, agents, pipelines, rooms and room speakers;
-  one edge per pair with its message count (hover or select it to see the latest message). Click an edge to
-  list all its messages in a drawer. Respects the session, project and search filters.
 - The project name is left off rows and cards when every visible item shares one project; it then appears once
   in the breadcrumb (or is the selected filter).
-- The Overview no longer has an Activity column: every flow and room message is in the Flow view.
+- The Overview no longer has an Activity column: flow and room messages are no longer shown as a view.
 
 ## Data
 
@@ -41,7 +38,7 @@ run ./run"; once loaded, the status is a dot plus "updated N s ago" (green, ambe
 `demo/state.sessions.js` is the demo plus sessions, to try the filters.
 
 Hash parameters (all optional, joined with `&`; encode `&` inside values): `state=`, `session=<id>`,
-`project=<id>`, `q=<text>`, `view=overview|pipelines|agents|flow`, `mode=list`, `open=<run or agent id | edge>`
+`project=<id>`, `q=<text>`, `view=overview|pipelines|agents|settings`, `mode=list`, `open=<run or agent id>`
 (select it and open its drawer; `#` as `%23`).
 Filters are written back to the hash, so a view can be bookmarked.
 
@@ -54,5 +51,5 @@ only show when no session is selected.
 ## Files
 
 `index.html`, `css/style.css`, `js/util.js` (time formatting, icons, helpers), `js/ui.js` (shell, shared
-components, Overview, merged messages), `js/v-pipelines.js`, `js/v-agents.js`, `js/v-flow.js`, `js/main.js`
+components, Overview, merged messages), `js/v-pipelines.js`, `js/v-agents.js`, `js/main.js`
 (loader, hash, filters, status). `screenshots/` holds headless captures (Edge, 1600x900 and 1920x1080).
