@@ -211,6 +211,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Sub-agentes anidados en la conversación; permisos seguros aprobados por código y el resto como botones Allow/Deny.
 - [ ] Autorrevisión cada minuto (collector, manager, piloto, disco, revisiones) con arreglo automático y una línea en el chat.
 - [ ] Lo que dice un agente en su informe se verifica contra su cambio real antes de fusionar.
+- [ ] Regla en código: ningún agente arranca sin estar ligado a un elemento abierto del plan (paso + texto exacto).
 
 ## Orden
 
