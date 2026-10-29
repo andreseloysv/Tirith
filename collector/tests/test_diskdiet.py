@@ -27,6 +27,15 @@ def git(repo: Path, *args: str) -> str:
                            *args], capture_output=True, text=True, check=True).stdout
 
 
+@pytest.fixture(autouse=True)
+def no_real_scans(monkeypatch) -> None:
+    """Never look at the real home, processes or temp folder from a test."""
+    monkeypatch.setattr(diskdiet_mod, "_biggest", lambda count=3: [])
+    monkeypatch.setattr(diskdiet_mod, "busy_folders", lambda: [])
+    monkeypatch.setattr(diskdiet_mod, "process_running", lambda *names: False)
+    monkeypatch.setattr(diskdiet_mod, "clear_pytest_leftovers", lambda *a, **k: 0)
+
+
 def now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -170,3 +179,100 @@ def test_the_limit_is_configurable_and_the_autopilot_gets_no_room(home: Path, re
     cycle(home, 1.0, [])
     cycle(home, 0.2, [])
     assert seen == [True, False]
+
+
+# -- 4. it frees space by itself --------------------------------------------------------------
+
+
+def manual_tree(repo: Path, name: str, commit: bool = False) -> Path:
+    tree = repo.parent / f"{repo.name}-lanes" / name
+    git(repo, "worktree", "add", "-q", "-b", f"lane/{name}", str(tree))
+    if commit:
+        (tree / f"{name}.txt").write_text("x\n", encoding="utf-8")
+        git(tree, "add", "-A")
+        git(tree, "commit", "-q", "-m", name)
+    return tree
+
+
+def say_texts(home: Path) -> list[str]:
+    return [s["text"] for s in inbox_mod.says(home)]
+
+
+def test_sweep_removes_any_merged_clean_idle_worktree_in_the_lanes_folder(home: Path, repo: Path) -> None:
+    old = manual_tree(repo, "old")  # not made by tirith launch, no lane record
+    (old / "big.bin").write_bytes(b"0" * 4096)
+    git(old, "add", "-A")
+    git(old, "commit", "-q", "-m", "big")
+    git(repo, "merge", "--no-ff", "-q", "-m", "m", "lane/old")
+    dirty, unmerged, busy = manual_tree(repo, "dirty"), manual_tree(repo, "unmerged", True), manual_tree(repo, "busy")
+    (dirty / "x.txt").write_text("u\n", encoding="utf-8")
+    outside = repo.parent / "outside"
+    git(repo, "worktree", "add", "-q", "-b", "lane/outside", str(outside))
+    working = lane(home, repo, "working", end=False)
+    result = diskdiet_mod.sweep(home, load_config(home), now(), busy=lambda: [busy.resolve()])
+    assert result["worktrees"] == 1 and result["bytes"] >= 4096
+    assert not old.exists() and "lane/old" not in git(repo, "branch", "--list")
+    assert dirty.is_dir() and unmerged.is_dir() and busy.is_dir() and outside.is_dir() and working.is_dir()
+    assert repo.is_dir()
+
+
+def test_sweep_skips_the_shared_target_and_a_busy_subfolder(home: Path, repo: Path) -> None:
+    target = repo.parent / "demo-lanes" / ".cargo-target" / "debug"
+    target.mkdir(parents=True)
+    tree = manual_tree(repo, "idle")
+    assert diskdiet_mod.sweep(home, load_config(home), now(), busy=lambda: [tree / "sub"])["worktrees"] == 0
+    assert tree.is_dir() and target.is_dir()
+
+
+def test_low_space_frees_lanes_and_cache_and_says_it_once_calmly(home: Path, repo: Path) -> None:
+    manual_tree(repo, "merged")
+    incremental = repo.parent / "demo-lanes" / ".cargo-target" / "debug" / "incremental"
+    incremental.mkdir(parents=True)
+    (incremental / "c.bin").write_bytes(b"0" * 2048)
+    state: dict = {}
+    assert diskdiet_mod.free_space(home, load_config(home), state, now(), free=lambda f: 2 * GB)
+    (text,) = say_texts(home)
+    assert text.startswith("Freed ") and "1 old lane folder" in text and "build cache" in text
+    assert not incremental.exists() and not (repo.parent / "demo-lanes" / "merged").exists()
+    assert (home / "diskdiet.jsonl").is_file()
+
+
+def test_enough_space_or_cargo_running_cleans_nothing(home: Path, repo: Path, monkeypatch) -> None:
+    incremental = repo.parent / "demo-lanes" / ".cargo-target" / "debug" / "incremental"
+    incremental.mkdir(parents=True)
+    assert not diskdiet_mod.free_space(home, load_config(home), {}, now(), free=lambda f: 50 * GB)
+    assert incremental.is_dir() and say_texts(home) == []
+    assert diskdiet_mod.clear_build_cache(home, load_config(home), running=lambda: True) == 0
+    assert incremental.is_dir()
+
+
+def test_nothing_to_clean_tells_the_owner_once_which_folders_are_biggest(home: Path, repo: Path) -> None:
+    state: dict = {}
+    big = lambda: [("Movies", 40 * GB), ("Games", 20 * GB)]
+    assert diskdiet_mod.free_space(home, load_config(home), state, now(), free=lambda f: 2 * GB, biggest=big)
+    assert not diskdiet_mod.free_space(home, load_config(home), state, now(), free=lambda f: 2 * GB, biggest=big)
+    (text,) = say_texts(home)
+    assert "nothing left to clean" in text and "Movies 40.0 GB" in text
+    assert not (home / "waits.jsonl").exists()
+
+
+def test_pytest_leftovers_are_removed_only_when_old_and_tirith_made(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.undo()
+    import getpass
+    base = tmp_path / f"pytest-of-{getpass.getuser()}"
+    mine, other = base / "pytest-1", base / "pytest-2"
+    (mine / "t0" / "tirith-home").mkdir(parents=True)
+    (other / "t0").mkdir(parents=True)
+    later = mine.stat().st_mtime + 7200
+    assert diskdiet_mod.clear_pytest_leftovers(tmp_path, now_s=mine.stat().st_mtime + 10, running=lambda: False) == 0
+    diskdiet_mod.clear_pytest_leftovers(tmp_path, now_s=later, running=lambda: False)
+    assert not mine.exists() and other.is_dir()
+
+
+def test_the_owner_gate_sends_disk_space_items_to_the_manager(home: Path) -> None:
+    from tirith import ownergate as gate
+    for text in ("Free up disk space: remove 38 old lane worktrees", "Disk is almost full, clear the cargo cache"):
+        assert gate.admit(home, "i1", "demo", text, "owner-decision") == gate.MANAGER
+    (item, *_) = asks_mod.queue_items(home, only_open=True)
+    assert item["kind"] == gate.DISK_KIND
+    assert gate.admit(home, "i2", "demo", "Sign in to the store", "credentials") == gate.OWNER
