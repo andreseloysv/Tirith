@@ -36,6 +36,12 @@ entries into the agent's user-level settings (the path comes from `[agents.<alia
 keeping every other hook; idempotent. Uninstall only removes entries whose command contains
 `hook --agent <name>`. The Muse entry layout assumes the same `hooks` block layout as the anthropic CLI (unverified).
 
+`tirith hook verify --agent <alias>` checks that all hook entries are in the settings file: prints
+`Hooks protected · last check <n> s ago` (the collector's last check) and exits 0, or says what is
+missing and exits 1. The collector does the same every cycle and reinstalls removed hooks, see
+`docs/CONTRACT-gates.md` ("Hooks stay installed"); editing the settings file is blocked by the
+`settings-edit` rule.
+
 ## In `state.json`
 
 `agents[].events`: the last 50 hook events of that lane (newest last). `loose_events`: the last 50

@@ -977,7 +977,7 @@ class Collector:
                 })
         if guard_dirty:
             write_json_atomic(self.home / "guard-state.json", guard_since)
-        machine = setup_mod.machine_state(self.config)
+        machine = setup_mod.machine_state(self.config, protection=hooks_mod.protect(self.home, self.config, now))
         setup_requests = [r for r in inbox_mod.requests(self.home) if r["kind"] == "setup"]
         for proj_row in projects:
             guard = proj_row.get("guard") or {}
