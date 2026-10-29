@@ -32,15 +32,37 @@
     return '<span class="vwho"><b>' + esc(v.lane || v.agent || 'An agent') + '</b></span>';
   }
 
+  /* Overview: one row per rule that fired in the last 24 hours; the blocked commands are behind the row */
+  T.ui.ruleOpen = T.ui.ruleOpen || {};  /* rule id -> true while its blocked commands are shown */
+  function describe(s, id) {
+    var r = (s.rules || []).filter(function (x) { return x.id === id; })[0];
+    return r && r.description ? r.description : T.ruleLabel(id);
+  }
+  function byWho(s, v) {
+    var a = v.lane && T.agentById(s, v.lane);
+    if (a) return '<span class="vwho">' + T.avatar(a, 18) + '<b>' + esc(a.name) + '</b></span>';
+    return '<span class="vwho"><b>' + esc(v.lane || v.agent || 'An agent') + '</b></span>';
+  }
   T.rulesSection = function (s) {
-    var list = T.recentViolations(s);
-    if (!list.length) return '';
-    return '<section><h2>Rules <span class="n bad">' + list.length + '</span></h2><ul class="vlist card">' + list.map(function (v) {
-      return '<li><span class="vt">' + esc(T.clockTime(v.ts)) + '</span>' + who(s, v) +
-        '<span class="vbody"><span class="vrule">' + esc(T.ruleLabel(v.rule)) + '</span><span class="vblocked" title="' + esc(v.blocked || v.message) + '">' + esc(v.blocked || v.message) + '</span></span>' +
-        doThis(v) + '</li>';
+    var list = T.recentViolations(s), order = [], by = {};
+    list.forEach(function (v) { if (!by[v.rule]) { by[v.rule] = []; order.push(v.rule); } by[v.rule].push(v); });
+    if (!order.length) return '';
+    return '<section><h2>Rules <span class="n bad">' + list.length + '</span></h2><ul class="vlist card">' + order.map(function (id) {
+      var vs = by[id], last = vs[0], open = !!T.ui.ruleOpen[id];
+      return '<li class="rrow' + (open ? ' open' : '') + '"><button class="rhead" data-act="ruletoggle" data-key="' + esc(id) + '" aria-expanded="' + open + '">' +
+        '<span class="rdesc">' + esc(describe(s, id)) + '</span>' +
+        '<span class="rmeta">' + vs.length + (vs.length === 1 ? ' time' : ' times') + ' today · last ' + esc(T.clockTime(last.ts)) + ' by ' + byWho(s, last) + '</span>' +
+        '<span class="rchev" aria-hidden="true">' + (open ? '▾' : '▸') + '</span></button>' +
+        (open ? '<ul class="rblocked">' + vs.map(function (v) {
+          return '<li><span class="vt">' + esc(T.clockTime(v.ts)) + '</span>' + byWho(s, v) +
+            '<span class="vblocked" title="' + esc(v.blocked || v.message) + '">' + esc(v.blocked || v.message) + '</span></li>';
+        }).join('') + '</ul>' : '') + '</li>';
     }).join('') + '</ul></section>';
   };
+  document.getElementById('view').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-act="ruletoggle"]'); if (!b) return;
+    var id = b.getAttribute('data-key'); T.ui.ruleOpen[id] = !T.ui.ruleOpen[id]; T.render();
+  });
 
   /* agent panel: red list of what this agent was not allowed to do */
   T.agentRules = function (a) {

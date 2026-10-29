@@ -56,9 +56,8 @@
 
   function ruleRow(r) {
     return '<li class="srule ' + (r.active ? 'on' : 'off') + (r.source !== 'built-in' ? ' custom' : '') + '" title="' + esc(r.description) + '">' +
-      '<span class="dot ' + (r.active ? 'green' : 'grey') + '"></span><span class="rname">' + esc(r.label) + '</span>' +
+      '<span class="dot ' + (r.active ? 'green' : 'grey') + '"></span><span class="rname">' + esc(r.description) + '</span>' +
       (r.source !== 'built-in' ? '<span class="rtag">' + esc(r.action || 'block') + '</span>' : '') +
-      '<span class="rby">' + esc(r.enforced_by.join(' · ')) + '</span>' +
       '<span class="rstate">' + (r.active ? 'Active' : 'Inactive') + '</span></li>';
   }
   function rulesRow(su) {
@@ -111,7 +110,8 @@
       { f: 'paths', label: 'or edited paths', ph: 'harness/**, *.lock' },
       { f: 'regex', label: 'or regex', ph: 'curl .*\\| *sh' },
       { f: 'message', label: 'Message', ph: 'force pushes rewrite history', req: 1, wide: 1 },
-      { f: 'instead', label: 'Instead', ph: 'git push (without --force); ask the owner', req: 1, wide: 1 }
+      { f: 'instead', label: 'Instead', ph: 'git push (without --force); ask the owner', req: 1, wide: 1 },
+      { f: 'description', label: 'In plain words', ph: 'Nobody may rewrite the shared history.', req: 1, wide: 1 }
     ]
   };
   function form(p, su) {
@@ -204,14 +204,14 @@
       return;
     }
     var n = ['match', 'paths', 'regex'].filter(function (k) { return (d[k] || '').trim(); });
-    if (!(d.id || '').trim() || !(d.message || '').trim() || !(d.instead || '').trim() || n.length !== 1) {
-      ui.setupErr[pid] = 'A rule needs an id, a message, an instead, and exactly one of command glob, edited paths or regex.'; T.render(); return;
+    if (!(d.id || '').trim() || !(d.description || '').trim() || !(d.message || '').trim() || !(d.instead || '').trim() || n.length !== 1) {
+      ui.setupErr[pid] = 'A rule needs an id, a description, a message, an instead, and exactly one of command glob, edited paths or regex.'; T.render(); return;
     }
-    var rule = { action: 'add-rule', id: d.id.trim(), effect: d.effect || 'block', message: d.message.trim(), instead: d.instead.trim() };
+    var rule = { action: 'add-rule', id: d.id.trim(), effect: d.effect || 'block', message: d.message.trim(), instead: d.instead.trim(), description: d.description.trim() };
     rule[n[0]] = d[n[0]].trim();
     var flag = n[0] === 'match' ? '--match' : n[0] === 'regex' ? '--regex' : '--paths';
     var rcli = 'tirith setup add-rule --project ' + shq(pid) + ' --id ' + shq(rule.id) + ' ' + flag + ' ' + shq(rule[n[0]]) + ' --action ' + rule.effect +
-      ' --message ' + shq(rule.message) + ' --instead ' + shq(rule.instead);
+      ' --message ' + shq(rule.message) + ' --instead ' + shq(rule.instead) + ' --description ' + shq(rule.description);
     done(pid, which); send(pid, rule, 'add-rule ' + rule.id + ': ' + (rule.match || rule.regex || rule.paths), rcli);
   }
   function done(pid, which) { ui.setupForm[pid] = null; ui.setupDraft[pid + '|' + which] = {}; ui.setupErr[pid] = null; }
