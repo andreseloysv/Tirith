@@ -15,6 +15,7 @@ import json
 import os
 import re
 import shlex
+import shutil
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -97,13 +98,26 @@ def adapt_anthropic(payload: dict, event: str | None = None) -> dict:
             "prompt": prompt if name in PROMPT_EVENTS else None}
 
 
+# Other agent CLIs name their tools differently (lowercase shell tool, patch tools); the rules know one set.
+TOOL_ALIASES = {"bash": "Bash", "shell": "Bash", "shell_command": "Bash", "exec_command": "Bash",
+                "local_shell": "Bash", "run_shell_command": "Bash",
+                "edit": "Edit", "write": "Write", "create": "Write", "str_replace": "Edit",
+                "str_replace_editor": "Edit", "apply_patch": "Edit", "multiedit": "MultiEdit"}
+
+
+def canonical_tool(tool) -> str | None:
+    """The tool name the rules use (``bash`` -> ``Bash``); unknown names stay as they are."""
+    if not tool:
+        return None
+    return TOOL_ALIASES.get(str(tool).lower(), str(tool))
+
+
 def adapt_generic(payload: dict, event: str | None = None) -> dict:
     """Any agent: reads the common field names (also used for Muse Code, see ``ADAPTERS``)."""
     name = str(_pick(payload, "hook_event_name", "event", "event_name", "hook") or event or "")
     cwd = _pick(payload, "cwd", "workdir", "working_directory")
-    tool = _pick(payload, "tool_name", "tool")
-    tool = str(tool) if tool else None
-    tool_input = _pick(payload, "tool_input", "input", "arguments", "args")
+    tool = canonical_tool(_pick(payload, "tool_name", "toolName", "tool"))
+    tool_input = _pick(payload, "tool_input", "input", "arguments", "args", "toolArgs")
     prompt = _pick(payload, "prompt", "user_prompt", "message", "text")
     if name == "UserPromptSubmit":
         summary = _clip(prompt) or "Prompt"
@@ -121,7 +135,9 @@ def adapt_generic(payload: dict, event: str | None = None) -> dict:
 # ([agents.<alias>] command = "...", settings = "..."), written at setup, never in this repo.
 # Muse Code lists the same event names as the anthropic CLI, but its docs (dev.meta.ai
 # /docs/muse-code/extending) give no stdin payload fields: the generic reader covers it.
-ADAPTERS = {"anthropic": adapt_anthropic, "muse": adapt_generic}
+# Codex and Copilot CLI send the same snake_case payload as the anthropic CLI to PascalCase hooks.
+ADAPTERS = {"anthropic": adapt_anthropic, "muse": adapt_generic, "codex": adapt_generic,
+            "copilot": adapt_generic}
 
 
 def adapt(agent: str, payload, event: str | None = None) -> dict:
@@ -222,7 +238,7 @@ def decide(agent: str, event: dict, payload, home: Path | None = None) -> int:
         return 0
     data = payload if isinstance(payload, dict) else {}
     fields = adapt(agent, data)
-    tool_input = _pick(data, "tool_input", "input", "arguments", "args")
+    tool_input = _pick(data, "tool_input", "input", "arguments", "args", "toolArgs")
     found = gates.check_call(config, event.get("tool"), tool_input, event.get("cwd"),
                              event.get("project"), home)
     for violation in found:
@@ -250,13 +266,33 @@ def run_hook(home: Path, agent: str, event: str | None, stdin) -> int:
 # -- install / uninstall ----------------------------------------------------------------------
 
 
+FLAT_AGENTS = ("copilot",)  # their hook entries are flat ({"type", "bash"}), not matcher groups
+
+
+def builtin_settings(agent: str) -> Path | None:
+    """Where an agent CLI reads user-level hooks when config.toml names no ``settings``.
+
+    muse: ``~/.config/muse/settings.json``; codex: ``~/.codex/hooks.json``; copilot: its own file
+    ``~/.copilot/hooks/tirith.json`` (``$COPILOT_HOME`` moves it), so no user file of theirs is edited."""
+    home = Path.home()
+    if agent == "muse":
+        return home / ".config" / "muse" / "settings.json"
+    if agent == "codex":
+        return home / ".codex" / "hooks.json"
+    if agent == "copilot":
+        base = Path(os.environ["COPILOT_HOME"]).expanduser() if os.environ.get("COPILOT_HOME") else home / ".copilot"
+        return base / "hooks" / "tirith.json"
+    return None
+
+
 def default_settings(agent: str, agents: dict | None = None) -> Path:
     """User-level settings file of ``agent``: ``[agents.<alias>] settings`` in config.toml."""
     configured = (agents or {}).get(agent) or {}
     if configured.get("settings"):
         return Path(str(configured["settings"])).expanduser()
-    if agent == "muse":
-        return Path.home() / ".config" / "muse" / "settings.json"
+    builtin = builtin_settings(agent)
+    if builtin:
+        return builtin
     raise ValueError(f"no settings path for agent {agent!r}: add [agents.{agent}] settings = "
                      f"\"<path to its user settings.json>\" to ~/.tirith/config.toml")
 
@@ -271,35 +307,67 @@ def _ours(command, agent: str) -> bool:
     return isinstance(command, str) and f"hook --agent {shlex.quote(agent)} " in command + " "
 
 
+def _handlers(group, agent: str) -> list[dict]:
+    """The command handlers of one entry: a matcher group holds them in ``hooks``; a flat agent entry is one."""
+    if not isinstance(group, dict):
+        return []
+    items = [group] if agent in FLAT_AGENTS else group.get("hooks") or []
+    return [h for h in items if isinstance(h, dict)]
+
+
+def _command_of(handler: dict):
+    return handler.get("bash") or handler.get("command")
+
+
+def _new_entry(agent: str, command: str) -> dict:
+    if agent in FLAT_AGENTS:
+        return {"type": "command", "bash": command, "timeoutSec": 10}
+    return {"hooks": [{"type": "command", "command": command}]}
+
+
 def _load_settings(path: Path, agent: str) -> dict:
     if not path.exists():
-        return {"schema_version": 1} if agent == "muse" else {}
+        return {"schema_version": 1} if agent == "muse" else {"version": 1} if agent in FLAT_AGENTS else {}
     data = json.loads(path.read_text(encoding="utf-8") or "{}")
     if not isinstance(data, dict):
         raise ValueError(f"{path} is not a JSON object")
     return data
 
 
+def backup(path: Path) -> Path | None:
+    """Copy an existing file to ``<name>.tirith-bak`` before Tirith changes it (the first copy is kept)."""
+    path = Path(path)
+    saved = path.with_name(path.name + ".tirith-bak")
+    if path.is_file() and not saved.exists():
+        shutil.copy2(path, saved)
+        return saved
+    return None
+
+
 def install(agent: str, settings: Path | None = None, tirith: str = "tirith",
             agents: dict | None = None, role: str | None = None) -> Path:
     """Add our hook entries to the user settings, keeping everything else; idempotent.
 
-    ``role="manager"`` writes ``TIRITH_ROLE=manager`` into each command (the manager's own settings)."""
+    ``role="manager"`` writes ``TIRITH_ROLE=manager`` into each command (the manager's own settings).
+    An existing file is copied to ``<name>.tirith-bak`` first."""
     path = Path(settings) if settings else default_settings(agent, agents)
     data = _load_settings(path, agent)
+    before = json.dumps(data, sort_keys=True)
     hooks = data.setdefault("hooks", {})
     for event in INSTALL_EVENTS:
         groups = hooks.setdefault(event, [])
         command = hook_command(agent, event, tirith, role)
         present = False
         for group in groups:
-            for handler in group.get("hooks", []):
-                if _ours(handler.get("command"), agent):
-                    handler["command"] = command  # refresh a moved executable
+            for handler in _handlers(group, agent):
+                if _ours(_command_of(handler), agent):
+                    handler["bash" if "bash" in handler else "command"] = command  # refresh a moved executable
                     present = True
         if not present:
-            groups.append({"hooks": [{"type": "command", "command": command}]})
-    write_json_atomic(path, data)
+            groups.append(_new_entry(agent, command))
+    if json.dumps(data, sort_keys=True) != before or not path.exists():
+        backup(path)
+        write_json_atomic(path, data)
     return path
 
 
@@ -314,6 +382,10 @@ def uninstall(agent: str, settings: Path | None = None, agents: dict | None = No
         for event in list(hooks):
             kept = []
             for group in hooks[event]:
+                if agent in FLAT_AGENTS:
+                    if not _ours(_command_of(group) if isinstance(group, dict) else None, agent):
+                        kept.append(group)
+                    continue
                 group["hooks"] = [h for h in group.get("hooks", [])
                                   if not _ours(h.get("command"), agent)]
                 if group["hooks"]:
@@ -324,8 +396,42 @@ def uninstall(agent: str, settings: Path | None = None, agents: dict | None = No
                 del hooks[event]
         if not hooks:
             del data["hooks"]
+    backup(path)
     write_json_atomic(path, data)
     return path
+
+
+def _tilde(path: Path) -> str:
+    text = str(path)
+    home = str(Path.home())
+    return "~" + text[len(home):] if text == home or text.startswith(home + os.sep) else text
+
+
+def record_settings(home: Path, agents: dict, only: str | None = None) -> list[tuple[str, str]]:
+    """Write ``settings = "<path>"`` into ``[agents.<alias>]`` of config.toml for each agent that lacks one.
+
+    Text edit: comments and every other line stay. The file is copied to ``config.toml.tirith-bak`` first.
+    Agents Tirith has no built-in location for are skipped. Returns ``[(alias, path written)]``."""
+    config = Path(home) / "config.toml"
+    lines = config.read_text(encoding="utf-8").splitlines()
+    done: list[tuple[str, str]] = []
+    for alias, table in agents.items():
+        if (only and alias != only) or table.get("settings") or not builtin_settings(alias):
+            continue
+        value = _tilde(builtin_settings(alias))
+        head = f"[agents.{alias}]"
+        index = next((i for i, line in enumerate(lines) if line.strip() == head), None)
+        if index is None:
+            continue
+        at = index + 1
+        while at < len(lines) and lines[at].strip() and not lines[at].lstrip().startswith("["):
+            at += 1
+        lines.insert(at, f"settings = {json.dumps(value)}")
+        done.append((alias, value))
+    if done:
+        backup(config)
+        config.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return done
 
 
 # -- protection: the hooks stay in the settings file ----------------------------------------------
@@ -346,9 +452,7 @@ def has_hooks(path: Path, agent: str) -> bool:
     for event in INSTALL_EVENTS:
         groups = hooks.get(event)
         if not isinstance(groups, list) or not any(
-                isinstance(g, dict) and any(isinstance(h, dict) and _ours(h.get("command"), agent)
-                                            for h in g.get("hooks") or [])
-                for g in groups):
+                _ours(_command_of(h), agent) for g in groups for h in _handlers(g, agent)):
             return False
     return True
 
@@ -358,8 +462,8 @@ def _installed_form(path: Path, agent: str) -> tuple[str, str | None]:
     try:
         groups = json.loads(Path(path).read_text(encoding="utf-8"))["hooks"]["PreToolUse"]
         for group in groups:
-            for handler in group.get("hooks", []):
-                command = handler.get("command")
+            for handler in _handlers(group, agent):
+                command = _command_of(handler)
                 if _ours(command, agent):
                     tokens = shlex.split(command)
                     role = next((t.split("=", 1)[1] for t in tokens
