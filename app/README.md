@@ -67,7 +67,8 @@ for Windows or Linux is listed in `docs/PLATFORMS.md` (`muse` is not checked). C
 - Commit guard: `tirith_guard` renders the hooks for Git for Windows' own `sh` (LF, read-only attribute),
   and `tirith safegit install` writes `git.cmd` plus a Python core that refuses the flags that skip
   hooks (`docs/CONTRACT-gates.md`, "Windows"). Both are simulated in tests, not run on Windows.
-- `collector_running()` is still Unix-only: Windows always starts its own collector.
+- `collector_running()` asks PowerShell (`Get-CimInstance Win32_Process`) for a `tirith collect` command
+  line; if that fails the app starts its own collector. Not tried on Windows.
 
 ## Packaging
 
