@@ -174,11 +174,12 @@ def lane_id_for(title: str, taken: set[str], repo: Path) -> str:
     return candidate
 
 
-def create_worktree(repo: Path, lane_id: str) -> Path:
+def create_worktree(repo: Path, lane_id: str, base: str | None = None) -> Path:
+    """The worktree ``<repo>-lanes/<lane-id>`` on a new branch ``lane/<lane-id>`` (from ``base``, else HEAD)."""
     path = worktree_path(repo, lane_id)
     path.parent.mkdir(parents=True, exist_ok=True)
-    done = subprocess.run(["git", "-C", str(repo), "worktree", "add", "-q", "-b", f"lane/{lane_id}", str(path)],
-                          capture_output=True, text=True)
+    done = subprocess.run(["git", "-C", str(repo), "worktree", "add", "-q", "-b", f"lane/{lane_id}", str(path),
+                           *([base] if base else [])], capture_output=True, text=True)
     if done.returncode != 0:
         raise LaunchError(f"git worktree add failed: {(done.stderr or done.stdout).strip()}")
     return path
