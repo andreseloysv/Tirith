@@ -91,3 +91,35 @@ On every step that is not done and has no working agent, in the expanded step: a
 - not `available`: click shows a tooltip with the one command to install the handler (`tirith url install`).
 
 `tirith url open` also accepts `tirith://inbox?kind=..&project=..&step=..&text=..&token=..` (same token check): see `docs/CONTRACT-inbox.md`.
+
+## Review and merge (`tirith lane review <lane-id> [--tests-only]`)
+
+For a lane that `tirith launch` started (its workspace is `<repo>-lanes/<lane-id>`) and that ended `done`.
+The agent leaves its work uncommitted in the worktree; review finishes the job:
+
+1. Refuses (exit 3) when the lane is unknown, still running, not `done`, not a launched lane, already
+   merged or already being reviewed, or when the manifest has no test stage with a `run` command.
+2. Runs the first test stage of `tirith.toml` (kind `test`, else a name like `test`) in the worktree.
+   Failing tests: `review.status = "tests-failed"`, nothing is merged (exit 1).
+3. With `--tests-only`: stops with `ready`.
+4. Otherwise: refuses (`merge-failed`) if the repo has uncommitted tracked changes; commits the worktree
+   (`Lane <id>: <feature>`), merges `lane/<id>` into the branch checked out in the repo with `--no-ff`
+   (a conflict is aborted: `merge-failed`), then removes the worktree and the branch: `merged`.
+
+The result is stored on the lane file as `review` `{status, at, pid, message?, commit?}`. `state.agents[].review`
+is `{status, at?, message?}` with `status` one of `pending` (launched lane, done, not reviewed), `running`,
+`tests-failed`, `ready`, `merge-failed`, `merged`; `null` for lanes not started by `tirith launch`. A `running`
+review whose process died shows as `merge-failed` ("interrupted").
+
+Link: `tirith://review?lane=<lane-id>&token=<t>` (same token check as launch). `tirith url open` validates
+the lane, starts `tirith lane review <lane-id>` detached (log `<home>/logs/<lane-id>.review.log`) and exits.
+
+Web: in the expanded Plan step, a done launched lane shows "Review and merge" instead of "Start an agent
+now": "Testing…" while running, a "Tests failed" / "Merge failed" chip with the output tail, "Merged" at the end.
+The step's checkboxes in the roadmap are still ticked by the owner.
+
+## Installing the handler (macOS)
+
+`tirith url install` builds `~/Applications/Tirith Launcher.app` and registers it with Launch Services; run
+it once. Verified with `--apps-dir <dir>`: the bundle compiles, `verify` passes and the bundle declares
+`CFBundleURLSchemes = [tirith]`. A wrong-token link is refused with exit 3.
