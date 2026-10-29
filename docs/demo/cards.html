@@ -34,6 +34,8 @@ h1{font-size:64px;letter-spacing:-.025em;margin:0 0 10px;font-weight:650}
 .q{font-size:30px;line-height:1.5;color:#111;text-align:left;max-width:1400px}
 .q small{display:block;font-size:24px;color:var(--mut);margin-bottom:10px}
 .row{display:flex;gap:28px;width:100%;max-width:1500px;text-align:left;margin-bottom:20px}.row .box{flex:1}
+.qs{margin-top:50px}.qq{font-size:64px;font-weight:600;letter-spacing:-.02em;margin:16px 0;opacity:0;transform:translateY(14px);transition:all .6s}.qq.on{opacity:1;transform:none}.qd{color:var(--blue)}.tag{opacity:0;transition:opacity .8s}.tag.on{opacity:1}
+.star{margin-top:34px;font-size:44px;font-weight:600;color:#b45309;background:#fff7e0;border:1px solid #f6dfa0;border-radius:99px;padding:12px 38px}
 .k{font:600 22px ui-monospace,Menlo,monospace;color:var(--mut);margin-bottom:12px}
 </style></head><body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6fdccb"/><stop offset=".45" stop-color="#79a8ff"/><stop offset=".75" stop-color="#c79bf2"/><stop offset="1" stop-color="#ffb299"/></linearGradient></defs></svg>
@@ -45,41 +47,32 @@ h1{font-size:64px;letter-spacing:-.025em;margin:0 0 10px;font-weight:650}
   <div class="small">Meta Global AI Developer Hackathon · Build for Your World</div>
 </section>
 
-<section class="card" id="terminal">
-  <div class="term"><div class="bar"><i></i><i></i><i></i></div>
-  <pre id="tty"></pre></div>
+<section class="card" id="problem">
+  <div class="brand" style="font-size:64px"><svg viewBox="0 0 24 24" style="width:64px;height:64px"><path d="M12 2l8 8-8 12L4 10z" fill="url(#lg)" fill-opacity=".85"/><path d="M12 2l8 8H4z" fill="#fff" fill-opacity=".45"/><path d="M12 2l8 8-8 12L4 10z" fill="none" stroke="#fff" stroke-opacity=".9"/></svg>Tirith</div>
+  <div class="qs">
+    <div class="qq">What is everyone doing?</div>
+    <div class="qq">Is something stuck?</div>
+    <div class="qq">Is something waiting for me?</div>
+    <div class="qq qd">Why do I explain the rules again?</div>
+  </div>
+  <div class="sub tag" style="margin-top:56px">An autonomous manager for your coding agents</div>
 </section>
 
 <section class="card" id="brain">
   <span class="pill">Muse Spark · Meta Model API</span>
-  <h1>The brain, in the state file</h1>
-  <p class="lead" style="margin-bottom:30px">Written by the model while the demo ran, read from <code>~/.tirith/state.js</code></p>
+  <h1>The brain writes what you would otherwise ask</h1>
+  <p class="lead" style="margin-bottom:30px">Cached by input hash, written into the state the page shows</p>
   <div class="row"><div class="box"><div class="k" id="b-k1"></div><div class="q" id="b-agent"></div></div></div>
   <div class="row"><div class="box"><div class="k" id="b-k3"></div><div class="q" id="b-hero"></div></div></div>
   <div class="row"><div class="box"><div class="k" id="b-k2"></div><div class="q" id="b-room"></div></div></div>
 </section>
 
-<section class="card" id="built">
-  <span class="pill">Built during the hackathon · since 2026-10-28</span>
-  <h1>All of it, from the first commit</h1>
-  <p class="lead">Nothing existed before the hackathon began</p>
-  <div class="grid">
-    <div class="box"><h2>What was built</h2><ul>
-      <li>The <code>tirith</code> CLI and the collector</li>
-      <li>Pipelines, agents, flows, rooms and sessions</li>
-      <li>The commit guard, installed in every repo</li>
-      <li>The browser UI and the <code>./run</code> command</li></ul></div>
-    <div class="box"><h2>Which Meta models do the work</h2><ul>
-      <li><em>Muse Code</em> coding agents, launched and watched by Tirith</li>
-      <li><em>Muse Spark</em> is the brain in the product: one-line summaries, needs-you detection, room summaries, hero names</li></ul></div>
-  </div>
-</section>
-
 <section class="card" id="close">
   <div class="brand"><svg viewBox="0 0 24 24"><path d="M12 2l8 8-8 12L4 10z" fill="url(#lg)" fill-opacity=".85"/><path d="M12 2l8 8H4z" fill="#fff" fill-opacity=".45"/><path d="M12 2l8 8-8 12L4 10z" fill="none" stroke="#fff" stroke-opacity=".9"/></svg>Tirith</div>
-  <div class="sub">See your coding agents work</div>
+  <div class="sub">They finish the plan. You decide only what only you can.</div>
   <div class="url">github.com/andreseloysv/Tirith</div>
-  <div class="small">Built for the Meta Global AI Developer Hackathon · Muse Code agents · Muse Spark brain</div>
+  <div class="star">&#9733; If it saves you a question, star it</div>
+  <div class="small">Built for the Meta Global AI Developer Hackathon · Build for Your World · Muse Spark brain · Muse Code agents</div>
 </section>
 
 <script>
@@ -90,19 +83,10 @@ window.setBrain = function (o) {
   document.getElementById('b-k3').textContent = o.k3; document.getElementById('b-hero').textContent = o.hero;
   document.getElementById('b-k2').textContent = o.k2; document.getElementById('b-room').textContent = o.room;
 };
-if (id === 'terminal') {
-  var tty = document.getElementById('tty'), cmd = './run', i = 0;
-  var out = ['Collector already running: reusing it.', 'Tirith is open in your browser.'];
-  function draw(t, caret) { tty.innerHTML = t + (caret ? '<span class="caret"></span>' : ''); }
-  var base = '<span class="p">~/Tirith</span> <span class="m">$</span> ';
-  draw(base, true);
-  setTimeout(function typing() {
-    if (i < cmd.length) { i++; draw(base + cmd.slice(0, i), true); setTimeout(typing, 180); }
-    else setTimeout(function () {
-      draw(base + cmd + '\n' + out[0], false);
-      setTimeout(function () { draw(base + cmd + '\n' + out[0] + '\n' + out[1], true); }, 1400);
-    }, 700);
-  }, 1200);
+if (id === 'problem') {
+  var qs = document.querySelectorAll('.qq');
+  [].forEach.call(qs, function (e, i) { setTimeout(function () { e.classList.add('on'); }, 600 + i * 1900); });
+  setTimeout(function () { document.querySelector('.tag').classList.add('on'); }, 600 + qs.length * 1900);
 }
 </script>
 </body></html>

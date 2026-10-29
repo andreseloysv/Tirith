@@ -1,50 +1,38 @@
 [
   {
     "id": "problem",
-    "text": "I run several coding agents at the same time. And all day I ask the same questions. What is everyone doing? Is something stuck? Is something waiting for me? I was keeping the whole project in my head. So, during this hackathon, I built Tirith."
+    "text": "I run several coding agents at once. All day I ask: what is everyone doing, is something stuck, is something waiting for me? So I built Tirith, a manager that runs the plan."
   },
   {
-    "id": "run",
-    "text": "One command starts it. Dot slash run. A collector watches my agents, and Tirith opens in the browser, live. No server, no account."
+    "id": "ask",
+    "text": "I write one request in the chat: add a dark mode, and make the scan faster. The manager reads the plan, adds the items, writes a brief for each, and starts the agents. I watch it work, live, like in a terminal."
   },
   {
-    "id": "overview",
-    "text": "This is the Overview, for a fresh session called Hackathon demo. I ask the Manager to check the Android build. An agent starts, a request for me appears, and the activity feed fills in. All live."
+    "id": "plan",
+    "text": "The plan now has two new steps, each with a progress bar and the agent working on it. No plan item, no agent: Tirith refuses to start one without it."
   },
   {
-    "id": "pipelines",
-    "text": "Pipelines groups every run: running, failed, passed. This is Tirith's own test pipeline, running for real. Each step is a node, with its own duration. Click a step, and its log opens on the side."
+    "id": "rule",
+    "text": "Now a rule. Wren tries to run the tests directly. A hook blocks it before it runs, and tells it the exact command to use. Wren switches to it, and the run shows up in Pipelines. Rules are code that blocks, not text the agent may ignore."
   },
   {
-    "id": "pipelines2",
-    "text": "Next, a real Android build of my app, ChromaSol: build, test, lint, compiled by Gradle right now. Click a step while it runs, and the log is right there."
+    "id": "merge",
+    "text": "When Wren reports done, Tirith checks the claims against the real change: the files, the tests, the recorded test run. They match, so it merges on its own, and the plan ticks itself. Merging is never a question for me."
   },
   {
-    "id": "pipelines3",
-    "text": "When a run ends, it turns green, and the Manager gets a report."
+    "id": "health",
+    "text": "The dot in the header watches Tirith itself. New code landed, the collector reloaded: amber, then green again, with nobody touching it."
   },
   {
-    "id": "agents",
-    "text": "Agents is a board of heroes. Each agent has a name, a rank, and a live timer. Click a card for its summary and its log. And these earlier heroes are the coding agents that built Tirith."
-  },
-  {
-    "id": "flow",
-    "text": "Flow shows how information passes. I talk to the Manager, the orchestrator. The Manager briefs the agents, they report back, and rooms on agents messenger join in. Every edge counts its messages. Click one, and you can read them all."
+    "id": "decision",
+    "text": "And only a real decision reaches me. Ship dark mode in this release, or hold it? One click, and the manager does the rest."
   },
   {
     "id": "brain",
-    "text": "The brain is Muse Spark, on the Meta Model API. It reads each agent's log, and says in one sentence what it is doing. Here, the agent recording this demo, and one of the heroes that built Tirith. It spots when something needs the owner. And it summarizes whole chat rooms. Here, agents trading hackathon ideas, in one line."
-  },
-  {
-    "id": "filters",
-    "text": "Everything filters by session, and by project. A project is just any folder. And search finds heroes, features, runs, steps, and messages."
-  },
-  {
-    "id": "built",
-    "text": "Everything you just saw was built during this hackathon, starting October twenty eighth: the collector, the commit guard, the web interface, flows, rooms and sessions. Meta's models power it. Muse Spark is the brain inside the product, and Tirith launches and watches Muse Code agents."
+    "text": "Behind it, Muse Spark, from the Meta Model API, summarizes each agent's log in one sentence, spots what needs the owner, and gives every agent a lasting name. Without a key, everything still works."
   },
   {
     "id": "close",
-    "text": "Tirith. See your coding agents work. The code is on GitHub."
+    "text": "Tirith. Built during the hackathon, and on GitHub. If it saves you a question, star it."
   }
 ]

@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tirith: an autonomous manager for your coding agents</title>
+<meta name="description" content="Tirith keeps a plan, starts coding agents only from plan items, enforces rules in code, and asks you only what only you can decide. Built for the Meta Global AI Developer Hackathon.">
+<meta name="color-scheme" content="light dark">
+<meta property="og:title" content="Tirith: an autonomous manager for your coding agents">
+<meta property="og:description" content="They finish the plan; you see everything and decide only what only you can.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2l8 9-8 11L4 11z' fill='%232563eb'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+<script src="scroll.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#top"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l8 9-8 11L4 11z" fill="#2563eb"/></svg>Tirith</a>
+    <nav aria-label="Sections">
+      <a class="opt" href="#features">What it does</a>
+      <a class="opt" href="#meta">Meta models</a>
+      <a class="opt" href="#how">How it works</a>
+      <a href="#try">Try it</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+<div class="hero wrap" id="top">
+  <span class="eyebrow">Meta Global AI Developer Hackathon · Build for Your World</span>
+  <h1>Your coding agents finish the plan. You decide only what only you can.</h1>
+  <p class="lede">Tirith is an autonomous manager for the coding agents you already run. It keeps a plan, starts agents only from plan items, checks what they report, merges what passes, and answers your questions in a chat.</p>
+  <div class="cta">
+    <a class="btn primary" href="https://github.com/andreseloysv/Tirith">View on GitHub</a>
+    <a class="btn" href="https://github.com/andreseloysv/Tirith#try-it">Download for macOS</a>
+  </div>
+  <p class="note">No release is published yet: this opens the "Try it" steps. The desktop app is signed and notarized for macOS.</p>
+  <figure class="shot">
+    <img src="img/one-manager.webp" width="1400" height="962" alt="The Tirith app: the plan with progress per step on the left, and on the right the manager's chat showing its work live like a CLI: plan steps, file reads, diffs and commands.">
+    <figcaption>The manager works live in the chat, in the style of a CLI. Demo data.</figcaption>
+  </figure>
+</div>
+
+<section class="wrap" id="problem">
+  <h2>Running several agents is a full-time job</h2>
+  <p class="sub">You ask "what is everyone doing?" all day, you re-explain the rules the agents ignore, and they ask you things they could settle themselves. Tirith takes that job.</p>
+  <div class="three">
+    <div class="card"><span class="num">1</span><h3>Plan-driven autonomy</h3><p>An agent starts only from an open plan item and must report an outcome. Items are ticked when the work is on <code>main</code>.</p></div>
+    <div class="card"><span class="num">2</span><h3>Rules enforced in code</h3><p>A hook blocks the agent's tool call and names the exact command to use instead. Not text the agent may ignore.</p></div>
+    <div class="card"><span class="num">3</span><h3>Everything visible</h3><p>Chat, plan, agents and pipelines in one app. You are asked only for a password, a payment or a choice that is yours.</p></div>
+  </div>
+</section>
+
+<div id="features"></div>
+
+<section class="wrap">
+  <div class="feature">
+    <div class="text">
+      <h2>The plan drives the agents</h2>
+      <p class="sub">A progress bar per step, a deadline countdown, and "Start an agent now" on each open step.</p>
+      <ul>
+        <li><strong>No item, no agent.</strong> <code>tirith lane run</code> refuses to start without an open plan item.</li>
+        <li><strong>Tirith is the only plan writer.</strong> Agents ask with <code>tirith plan add</code>.</li>
+        <li><strong>No duplicate agents</strong> on the same item.</li>
+      </ul>
+      <p class="cites">Contracts: CONTRACT-roadmap, CONTRACT-launch</p>
+    </div>
+    <figure class="shot"><img loading="lazy" src="img/overview-plan.webp" width="1400" height="875" alt="Overview with the plan of three projects: a progress bar per step, ticked items, and an activity feed on the right."></figure>
+  </div>
+</section>
+
+<section class="wrap">
+  <div class="feature flip">
+    <div class="text">
+      <h2>Rules that block, in plain words</h2>
+      <p class="sub">Each rule runs in a hook before the agent's tool call. The refusal says what to do instead.</p>
+      <ul>
+        <li>Tests and builds run through Tirith, so they show in Pipelines.</li>
+        <li>No helpers started behind its back; no skipping commit checks.</li>
+        <li>Agents cannot edit the plan, their settings or Tirith's config.</li>
+        <li><strong>Claim check:</strong> before a merge, the report is compared with the real change. A false claim blocks the merge. Regexes and git, no model.</li>
+      </ul>
+      <p class="cites">Contracts: CONTRACT-gates, CONTRACT-launch</p>
+    </div>
+    <figure class="shot"><img loading="lazy" src="img/rules.webp" width="842" height="341" alt="A list of rules that blocked agents today, in plain words, such as 'Tests and builds must run through Tirith', with the agent and the time of each refusal."></figure>
+  </div>
+</section>
+
+<section class="wrap">
+  <div class="feature">
+    <div class="text">
+      <h2>You get only real decisions</h2>
+      <p class="sub">The owner gate: nothing reaches you unless only you can do it. Credentials, payment, a personal account, a physical device, your decision.</p>
+      <ul>
+        <li>"Your turn" has buttons, not questions.</li>
+        <li>Everything else goes to the on-call manager.</li>
+        <li>Merging is never an owner question.</li>
+      </ul>
+      <p class="cites">Contract: CONTRACT-inbox</p>
+    </div>
+    <figure class="shot"><img loading="lazy" src="img/your-turn.webp" width="1400" height="875" alt="Your turn: three cards with one-click answers such as Rotate now, Done and Publish, above the plan."></figure>
+  </div>
+</section>
+
+<section class="wrap">
+  <div class="feature flip">
+    <div class="text">
+      <h2>An on-call manager, and it checks itself</h2>
+      <p class="sub">One persistent manager session answers in the chat, delegates to sub-agents and keeps notes. Attach photos and files.</p>
+      <ul>
+        <li><strong>Self-check:</strong> every pass Tirith checks the collector, manager, autopilot, disk and reviews, fixes what it safely can, and raises one item when it cannot. A health dot sits in the header.</li>
+        <li><strong>Auto-merge</strong> of finished lanes after tests and claim check.</li>
+        <li>A timeout on every command, and a disk guard.</li>
+      </ul>
+      <p class="cites">Contracts: CONTRACT-selfcheck, CONTRACT-timeouts</p>
+    </div>
+    <figure class="shot"><img loading="lazy" src="img/chat-photos.webp" width="1400" height="875" alt="The manager chat with two attached photos in the message box, next to the Your turn cards."></figure>
+  </div>
+</section>
+
+<section class="wrap">
+  <div class="feature">
+    <div class="text">
+      <h2>Agents and pipelines you can follow</h2>
+      <p class="sub">Every lane has a summary, a log, a review state and "Claims verified". Pipelines look like GitLab's: runs, stages, durations, logs, retry.</p>
+      <ul>
+        <li>Each lane is an agent in its own git worktree and branch.</li>
+        <li>Out of credits? Work continues with the next agent in your fallback list.</li>
+      </ul>
+      <p class="cites">Contracts: CONTRACT-agents, CONTRACT-manifest, CONTRACT-models</p>
+    </div>
+    <div>
+      <figure class="shot"><img loading="lazy" src="img/pipelines-gitlab.webp" width="1400" height="875" alt="Pipelines view: runs with status, stage dots, who triggered them and how long ago, with a failed test stage expanded to show its log."></figure>
+      <figure class="shot" style="margin-top:16px"><img loading="lazy" src="img/demo-agents.webp" width="1400" height="787" alt="Agents as a kanban board with columns Working, Stalled, Done and Failed."></figure>
+    </div>
+  </div>
+</section>
+
+<section class="wrap">
+  <div class="feature flip">
+    <div class="text">
+      <h2>A desktop app, signed and notarized</h2>
+      <p class="sub">A Tauri app for macOS that keeps the collector running, so closing the terminal never kills your lanes.</p>
+      <ul>
+        <li>Environment variables per project.</li>
+        <li>Model and effort for the manager and for workers, per project or per step, with a fallback chain.</li>
+        <li>No servers and no ports: the app and the page talk through local files and Tauri IPC.</li>
+      </ul>
+      <p class="cites">Contracts: CONTRACT-projenv, CONTRACT-models</p>
+    </div>
+    <figure class="shot"><img loading="lazy" src="img/settings-models.webp" width="1200" height="943" alt="Settings: agent, model and effort for the manager and for workers, a fallback list, and overrides per project and step."></figure>
+  </div>
+</section>
+
+<section class="wrap" id="meta">
+  <h2>How Meta's models power Tirith</h2>
+  <div class="two">
+    <div class="card">
+      <h3>Muse Spark is the brain</h3>
+      <p><code>muse-spark-1.3</code> through the Meta Model API, in <code>collector/tirith/brain.py</code>. Six jobs, each cached by input hash:</p>
+      <ol>
+        <li>a one-sentence summary of each agent's recent log</li>
+        <li>a detector for things that need the owner</li>
+        <li>an architecture map of a project</li>
+        <li>a lasting epithet for each agent</li>
+        <li>a one-line summary of each chat room</li>
+        <li>a "needs the owner" check on room messages</li>
+      </ol>
+      <p style="margin-top:10px">The key is read only from the environment and never logged or stored. Without a key everything still works, with plain log lines.</p>
+    </div>
+    <div class="card">
+      <h3>Muse Code is an agent</h3>
+      <p>A first-class alias, <code>muse</code>. <code>tirith lane run --agent muse</code> builds its headless <code>exec --json</code> command, reads its real output stream (captured from a real run, covered by a test), shows its steps live and takes its final answer as the lane's report.</p>
+      <p style="margin-top:10px">Its hooks install with <code>tirith hook install --agent muse</code>, and every rule applies to it. It can be the fallback when another agent is out of credits.</p>
+      <p style="margin-top:10px">Muse Code agents built part of Tirith; the rest was built with other coding agents after the Muse Code quota ran out. The commit history shows it.</p>
+    </div>
+  </div>
+</section>
+
+<section class="wrap" id="how">
+  <h2>How it works</h2>
+  <p class="sub">A local collector writes one state file. The page and the app follow it. Nothing listens on a port.</p>
+  <div class="card diagram">
+    <svg viewBox="0 0 900 330" role="img" aria-labelledby="dt dd">
+      <title id="dt">Architecture diagram</title>
+      <desc id="dd">Agents in git worktrees send hook events to the collector. The collector, with gates, plan, claim check and self-check, writes a state file. The web page and the desktop app read that file. You write to the collector through the inbox file.</desc>
+      <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="head"/></marker></defs>
+      <rect class="box" x="20" y="40" width="210" height="110" rx="14"/>
+      <text x="125" y="72" text-anchor="middle" font-weight="600">Agents</text>
+      <text class="dim" x="125" y="96" text-anchor="middle">one git worktree each</text>
+      <text class="dim" x="125" y="116" text-anchor="middle">hooks block bad calls</text>
+      <rect class="box hot" x="345" y="40" width="210" height="110" rx="14"/>
+      <text x="450" y="72" text-anchor="middle" font-weight="600">Collector</text>
+      <text class="dim" x="450" y="96" text-anchor="middle">gates · plan · claim check</text>
+      <text class="dim" x="450" y="116" text-anchor="middle">self-check · auto-merge</text>
+      <rect class="box" x="670" y="40" width="210" height="110" rx="14"/>
+      <text x="775" y="72" text-anchor="middle" font-weight="600">Web page / desktop app</text>
+      <text class="dim" x="775" y="96" text-anchor="middle">read-only view</text>
+      <text class="dim" x="775" y="116" text-anchor="middle">no server, no port</text>
+      <path class="arrow" d="M230 95 H343" marker-end="url(#ah)"/>
+      <text class="dim" x="287" y="86" text-anchor="middle">events.jsonl</text>
+      <path class="arrow" d="M555 95 H668" marker-end="url(#ah)"/>
+      <text class="dim" x="612" y="86" text-anchor="middle">state.json</text>
+      <rect class="box" x="345" y="230" width="210" height="64" rx="14"/>
+      <text x="450" y="258" text-anchor="middle" font-weight="600">You</text>
+      <text class="dim" x="450" y="278" text-anchor="middle">chat · buttons · inbox.jsonl</text>
+      <path class="arrow" d="M450 230 V152" marker-end="url(#ah)"/>
+      <path class="arrow" d="M345 120 C290 175 200 190 150 152" marker-end="url(#ah)"/>
+      <text class="dim" x="215" y="212" text-anchor="middle">starts lanes from plan items</text>
+    </svg>
+  </div>
+  <ul class="bullets" style="margin-top:16px">
+    <li><strong>Collector</strong> (Python with uv) reads events, lanes, pipelines and the plan, and writes one state file.</li>
+    <li><strong>Hooks</strong> are the barrier, not the agent's good will: the commit guard and tool-call hooks refuse what the rules forbid.</li>
+    <li><strong>Data contracts</strong> are <code>docs/CONTRACT-*.md</code> in the repository.</li>
+  </ul>
+</section>
+
+<section class="wrap" id="try">
+  <h2>Try it</h2>
+  <p class="sub">Easiest, no agents needed: the page on demo data.</p>
+  <pre><code>git clone https://github.com/andreseloysv/Tirith &amp;&amp; cd Tirith
+./run --demo     # the page on demo data, no collector</code></pre>
+  <p class="sub" style="margin-top:16px">With your own agents:</p>
+  <pre><code>export META_SI_API_KEY=...   # optional: switches the Muse Spark brain on
+./run            # collector in the background + Tirith in your browser</code></pre>
+  <p class="note">Requirements: <a href="https://docs.astral.sh/uv/">uv</a> and a browser. The desktop app is built from <code>app/</code> (<code>npm run tauri dev</code>).</p>
+  <p class="note"><strong>Status:</strong> under construction, honestly. What this page describes runs today on <code>main</code>; lanes without permission prompts, a merge queue and chat with Muse Code over <code>muse serve</code> are still in progress.</p>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Built during the Meta Global AI Developer Hackathon, from 2026-10-28. MIT license.</span>
+    <a href="https://github.com/andreseloysv/Tirith">github.com/andreseloysv/Tirith</a>
+  </div>
+</footer>
+</body>
+</html>
