@@ -266,3 +266,19 @@ def test_state_json_carries_the_autopilot_and_item_ids(home, repo) -> None:
     owner = [i for i in road["steps"][3]["items"] if i["who"] == "owner"]
     assert len(owner) == 2 and all(i["owner_item"] in _waits(home) for i in owner)
     assert len(read_json(home / "dispatch.json", {})["autopilot"]["owner_items"]) == 3
+
+
+def test_a_fallback_relaunch_is_the_same_steps_lane(home, repo) -> None:
+    pilot = Pilot(home, repo, "[autopilot]\nmax_parallel = 2")
+    pilot.cycle()
+    pilot.end("lane-1")  # ran out of credits; the fallback continued it as lane-1b
+    pilot.agents.append({"id": "lane-1b", "project": "demo", "step": "1", "status": "working"})
+    state = dispatch_mod.load_state(home)
+    state["fallbacks"] = {"lane-1": "lane-1b"}
+    dispatch_mod.save_state(home, state)
+    pilot.cycle()
+    assert pilot.launched == [("demo", "1"), ("demo", "2")]  # no second lane on step 1
+    assert pilot.state()["stuck"] == {} and pilot.state()["lanes"]["lane-1b"]["settled"] is False
+    pilot.end("lane-1b", {"status": "merged"})
+    pilot.cycle()
+    assert pilot.state()["lanes"]["lane-1b"]["settled"] is True
