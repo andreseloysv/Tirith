@@ -1,5 +1,7 @@
 # Tirith
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 **An autonomous manager for your coding agents. They finish the plan; you see everything and decide only what only you can.**
 
 - **Problem.** You run several coding agents at once. You ask "what is everyone doing?" all day, you
@@ -163,3 +165,5 @@ Optional extra: a 3D citadel of your agents in Godot 4.7 (`./run --3d`, folder `
 
 Layout: `collector/` CLI and collector · `web/` page · `app/` desktop app · `rust/` Rust port in progress ·
 `world/` optional 3D · `fixtures/` demo state · `docs/` contracts.
+
+License: MIT. See [LICENSE](LICENSE).

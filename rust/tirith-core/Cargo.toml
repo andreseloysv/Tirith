@@ -3,6 +3,7 @@ name = "tirith-core"
 version = "0.1.0"
 description = "Tirith core: home, config, stores, roadmap and state types shared by the CLI and the desktop app"
 edition = "2021"
+license = "MIT"
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
