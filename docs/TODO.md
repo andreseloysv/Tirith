@@ -95,14 +95,15 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] `lane run` exige brief y se niega a arrancar si `tirith check` falla.
 - [x] Git `pre-commit` / `pre-push` con `tirith check` (nueva versión de la guarda).
 - [x] Reinstalar la guarda nueva en Tirith.
-- [ ] Reinstalar la guarda nueva en ChromaSol y RelaGame.
+- [x] Reinstalar la guarda nueva en ChromaSol.
+- [ ] Reinstalar la guarda nueva en RelaGame.
 - [x] Workflow de CI con tests y `tirith check --ci`.
 - [ ] Hacerlo obligatorio con protección de rama (dueño; en repos privados requiere GitHub Pro).
 - [x] El collector registra cada violación bloqueada (`state.violations`) y la pone en "esperando por ti".
 - [x] Violaciones visibles en la web, con el agente responsable.
 - [x] Activar las puertas en la máquina del dueño (hooks de usuario + shims).
 - [x] `tirith.toml` en ChromaSol y RelaGame.
-- [ ] ChromaSol: unir su hook `pre-commit` de rutas protegidas con la guarda de palabras (dueño); hasta entonces `lane run` no arranca allí.
+- [x] ChromaSol: unir su hook `pre-commit` de rutas protegidas con la guarda de palabras (dueño); hasta entonces `lane run` no arranca allí.
 
 ## 8. Más visibilidad por agente
 
