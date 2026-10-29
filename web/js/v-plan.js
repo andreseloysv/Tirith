@@ -133,8 +133,9 @@
   /* One request as a timeline: asked -> answered -> handled by an agent -> done. Only from state.inbox. */
   function thread(r, state) {
     var open = r.id in ui.inboxOpen ? ui.inboxOpen[r.id] : r.status !== 'done', answers = r.answers || [], lanes = r.lanes || [], h;
-    h = '<div class="ithread" data-req="' + esc(r.id) + '"><ol class="itl"><li class="ie"><i class="ido me"></i><div class="ib"><b>' +
-      (r.kind === 'ask' ? 'You asked: ' + plain(r.text) : 'You asked to finish this step') + '</b> <span class="iwhen">· ' + esc(T.clockTime(r.at)) + '</span></div></li>';
+    /* a "finish" click needs no row of its own (the answers below say what happened); a question keeps its text */
+    h = '<div class="ithread" data-req="' + esc(r.id) + '"><ol class="itl">' + (r.kind === 'ask' ?
+      '<li class="ie"><i class="ido me"></i><div class="ib"><b>You asked: ' + plain(r.text) + '</b> <span class="iwhen">· ' + esc(T.clockTime(r.at)) + '</span></div></li>' : '');
     answers.forEach(function (a) {
       h += '<li class="ie"><i class="ido ok"></i><div class="ib ians' + (open ? ' open' : '') + '"><button class="iahead" data-act="iatog" data-key="' + esc(r.id) + '" aria-expanded="' + open + '">' + CHEV +
         '<b>' + esc(answerLabel(a)) + '</b> <span class="iwhen">· ' + esc(T.clockTime(a.at)) + '</span></button>' +
