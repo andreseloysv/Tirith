@@ -158,3 +158,11 @@ The step's checkboxes in the roadmap are still ticked by the owner.
 `tirith url install` builds `~/Applications/Tirith Launcher.app` and registers it with Launch Services; run
 it once. Verified with `--apps-dir <dir>`: the bundle compiles, `verify` passes and the bundle declares
 `CFBundleURLSchemes = [tirith]`. A wrong-token link is refused with exit 3.
+
+### Verified on macOS
+
+`tirith url install --apps-dir <dir>` compiles the bundle with `osacompile`, writes `CFBundleURLSchemes = [tirith]`
+and `LSUIElement`, registers it with `lsregister`; `tirith url verify --apps-dir <dir>` reports `handler OK`;
+`tirith url uninstall` unregisters and removes it. Not done by the lane: the real install in `~/Applications`
+and a real click-to-launch (they change the owner's Launch Services and start an agent). The owner runs
+`tirith url install` once, then clicks "Start an agent now" in the Plan.
