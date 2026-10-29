@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
+import json
 import os
 import re
 import subprocess
@@ -47,7 +48,7 @@ from tirith.names import (
     apply_renown, hero_epithet, hero_name, rank_for,
 )
 from tirith.store import (
-    append_jsonl, read_json, read_jsonl, read_lanes, state_js, tail_lines, write_json_atomic, write_text_atomic,
+    agent_detail_js, agent_file_name, append_jsonl, read_json, read_jsonl, read_lanes, state_js, tail_lines, write_json_atomic, write_text_atomic,
 )
 
 STALLED_AFTER_S = 600
@@ -168,6 +169,92 @@ def _bounded_report(report):
     if len(text) <= REPORT_MAX:
         return text
     return text[:REPORT_MAX].rsplit("\n", 1)[0].rstrip() + "\n\n…"
+
+
+# -- state.json size: full detail only where it is looked at -------------------------------------------
+
+FULL_DETAIL_WINDOW = timedelta(hours=2)   # ended agents keep full detail this long
+STATE_AGENTS_MAX = 60
+STATE_AGENTS_BYTES = 480 * 1024   # past this the oldest ended agents drop to summaries (working ones never do)
+STATE_LOG_ENTRIES = 30
+STATE_EVENTS = 12            # the drawer shows 12; the detail file has the rest
+STATE_LOG_TAIL = 5          # raw lines: only the page without structured entries reads them
+STATE_TEXT_MAX = 160         # longest string of a log entry or event kept in the state
+STATE_SYSTEM_TEXT_MAX = 80   # and of the system noise (heartbeats, init)
+STATE_FILES = 10
+STATE_TESTS = 5
+STATE_REPORT_MAX = 4 * 1024
+SLIM_REPORT_MAX = 300
+EVENT_STATE_KEYS = ("ts", "agent", "event", "tool", "summary", "source")   # what the drawer reads of a live event
+DETAIL_KEYS = ("log_entries", "log_tail", "events", "files", "tests", "report")
+
+
+def _first_paragraph(text, limit: int = SLIM_REPORT_MAX):
+    if not text:
+        return text
+    return _word_cut(str(text).strip().split("\n\n", 1)[0].strip(), limit)
+
+
+def _detail_hash(detail: dict) -> str:
+    return hashlib.sha1(json.dumps(detail, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()[:12]
+
+
+def _clip_texts(item, limit: int = STATE_TEXT_MAX):
+    """``item`` (a log entry or event) with every long string cut; (copy, whether anything was cut)."""
+    cut = False
+
+    def walk(value):
+        nonlocal cut
+        if isinstance(value, str) and len(value) > limit:
+            cut = True
+            return value[:limit - 1] + "…"
+        if isinstance(value, dict):
+            return {k: walk(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [walk(v) for v in value]
+        return value
+    return walk(item), cut
+
+
+def _slim_row(row: dict, full: bool) -> dict:
+    """The state row of one agent: all of it for ``full``, else the summary fields only. Sets
+    ``report_clipped`` when the report was cut and ``detail_more`` when the detail file has more."""
+    out = dict(row)
+    report = str(row.get("report") or "")
+    more = False
+    if full:
+        for key, cap in (("log_entries", STATE_LOG_ENTRIES), ("events", STATE_EVENTS),
+                         ("files", STATE_FILES), ("tests", STATE_TESTS)):
+            items = row.get(key) or []
+            if len(items) > cap:
+                items = items[-cap:]
+                more = True
+            if key == "events":
+                items = [{k: e[k] for k in EVENT_STATE_KEYS if k in e} for e in items]
+            if key == "log_entries":
+                items = [{**e, "fields": None} if len(json.dumps(e.get("fields"))) > 120 else e for e in items]
+            if key in ("log_entries", "events"):
+                clipped = [_clip_texts(i, STATE_SYSTEM_TEXT_MAX if i.get("kind") == "system" else STATE_TEXT_MAX)
+                           for i in items]
+                items = [c for c, _ in clipped]
+                more = more or any(flag for _, flag in clipped)
+            out[key] = items
+        tail = row.get("log_tail") or []
+        if len(tail) > STATE_LOG_TAIL:
+            out["log_tail"] = [str(t)[:STATE_TEXT_MAX] for t in tail[-STATE_LOG_TAIL:]]
+            more = True
+        if len(report) > STATE_REPORT_MAX:
+            out["report"] = report[:STATE_REPORT_MAX].rsplit("\n", 1)[0].rstrip() + "\n\n…"
+            more = True
+    else:
+        more = bool(row.get("log_entries") or row.get("events") or row.get("files") or row.get("tests")
+                    or row.get("log_tail") or len(report) > SLIM_REPORT_MAX)
+        for key in ("log_entries", "log_tail", "events", "files", "tests"):
+            out[key] = []
+        out["report"] = _first_paragraph(report) or row.get("report")
+    out["report_clipped"] = bool(more and report and out.get("report") != row.get("report"))
+    out["detail_more"] = more
+    return out
 
 
 def fallback_summary(status: str, log_tail: list[str], feature: str, now: datetime,
@@ -326,6 +413,7 @@ class Collector:
         self.activity = activity_mod.ActivityTracker()
         self.github = github_mod.GithubReader(github_transport)
         self._usage_cache: dict = {}
+        self._detail_hashes: dict[str, str] = {}
         self._inbox_tried: dict[str, float] = {}  # request id -> monotonic time of the last brain try
 
     # -- identities / renown -------------------------------------------------
@@ -1285,12 +1373,53 @@ class Collector:
         out.sort(key=lambda e: (str(e["started_at"] or ""), e["id"]), reverse=True)
         return out
 
+    def _write_detail(self, row: dict) -> dict:
+        """Write ``agents/<id>.js`` when the agent's full detail changed; ``{path, hash}`` for the state row."""
+        detail = {"id": row["id"], **{k: row.get(k) for k in DETAIL_KEYS}}
+        digest = _detail_hash(detail)
+        path = self.home / "agents" / agent_file_name(row["id"])
+        if self._detail_hashes.get(row["id"]) != digest or not path.exists():
+            write_text_atomic(path, agent_detail_js(detail))
+            self._detail_hashes[row["id"]] = digest
+        return {"path": str(path), "hash": digest}
+
+    def slim_state(self, state: dict, now: datetime) -> dict:
+        """``state`` as written to ``state.json``: the agents trimmed to full detail for working and
+        recently ended ones, the summary fields for the rest, at most ``STATE_AGENTS_MAX`` of them.
+        Writes ``agents/<id>.js`` (the full detail) for every agent whose detail changed."""
+        rows = state.get("agents") or []
+        cutoff = now - FULL_DETAIL_WINDOW
+
+        def full(row: dict) -> bool:
+            ended = parse_iso(row.get("ended_at"))
+            return ended is None or ended >= cutoff
+
+        order = sorted(range(len(rows)), key=lambda i: (
+            0 if full(rows[i]) else 1,
+            -(parse_iso(rows[i].get("ended_at")) or now).timestamp(), i))
+        keep = sorted(order[:STATE_AGENTS_MAX])
+        slim: dict[int, dict] = {}
+        for i, row in enumerate(rows):  # every agent gets its detail file, listed or not
+            ref = self._write_detail(row)
+            if i in keep:
+                slim[i] = {**_slim_row(row, full(row)), "detail": ref}
+        sizes = {i: len(json.dumps(r, separators=(",", ":"))) for i, r in slim.items()}
+        for i in order[::-1]:  # past the byte budget the oldest full ended agents become summaries
+            if sum(sizes.values()) <= STATE_AGENTS_BYTES:
+                break
+            if i in slim and rows[i].get("ended_at") and full(rows[i]):
+                slim[i] = {**_slim_row(rows[i], False), "detail": slim[i]["detail"]}
+                sizes[i] = len(json.dumps(slim[i], separators=(",", ":")))
+        out = [slim[i] for i in keep]
+        return {**state, "agents": out}
+
     def cycle(self, now: datetime | None = None) -> dict:
         """One collector cycle: build state and write it atomically."""
-        state = self.build_state(now)
-        write_json_atomic(self.home / "state.json", state)
+        now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+        state = self.slim_state(self.build_state(now), now)
+        write_json_atomic(self.home / "state.json", state, compact=True)
         # The same JSON as a script, so a page opened from file:// can load it without CORS.
-        write_text_atomic(self.home / "state.js", state_js(state))
+        write_text_atomic(self.home / "state.js", state_js(state, compact=True))
         return state
 
     def run(self, interval: float = 2.0, once: bool = False) -> dict:
