@@ -98,7 +98,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Git `pre-commit` / `pre-push` con `tirith check` (nueva versión de la guarda).
 - [x] Reinstalar la guarda nueva en Tirith.
 - [x] Reinstalar la guarda nueva en ChromaSol.
-- [ ] Reinstalar la guarda nueva en RelaGame (dueño: run `uv run tirith guard reinstall relagame`).
+- [ ] Reinstalar la guarda nueva en RelaGame (dueño: run `uv run tirith guard reinstall relagame`) (fuera de este plan: descartado por el dueño el 2026-10-29)
 - [x] Workflow de CI con tests y `tirith check --ci`.
 - [x] Hacer obligatorio el CI con protección de rama en GitHub (dueño: https://github.com/andreseloysv/Tirith/settings/branches).
 - [x] El collector registra cada violación bloqueada (`state.violations`) y la pone en "esperando por ti".
