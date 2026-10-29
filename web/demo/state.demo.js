@@ -6,9 +6,9 @@ window.TIRITH_STATE = {
     "model": "muse-spark",
     "last_error": null
   },
-  "steward": {
+  "manager": {
     "name": "Aldric of the Tower",
-    "title": "The Steward",
+    "title": "The Manager",
     "activity": "Reviewing Ivren's performance report before merging",
     "since": "2026-10-28T19:31:00Z",
     "notes": [
@@ -342,7 +342,7 @@ window.TIRITH_STATE = {
         }
       ],
       "session": "2026-10-28-chromasol-release",
-      "parent": "steward",
+      "parent": "manager",
       "active": true,
       "last_activity_at": "2026-10-28T19:39:30Z",
       "files": [],
@@ -387,7 +387,7 @@ window.TIRITH_STATE = {
       "step": "3",
       "tests": [],
       "session": "2026-10-28-chromasol-release",
-      "parent": "steward",
+      "parent": "manager",
       "active": true,
       "last_activity_at": "2026-10-28T19:39:30Z",
       "files": [],
@@ -728,9 +728,9 @@ window.TIRITH_STATE = {
     {
       "id": "f-1",
       "at": "2026-10-28T18:30:00Z",
-      "from": "steward",
+      "from": "manager",
       "to": "agent:w6-perf",
-      "from_name": "The Steward",
+      "from_name": "The Manager",
       "to_name": "Ivren of the Seventh Gate",
       "kind": "brief",
       "text": "Brief: Performance and size on the owner's phone",
@@ -739,9 +739,9 @@ window.TIRITH_STATE = {
     {
       "id": "f-3",
       "at": "2026-10-28T18:50:00Z",
-      "from": "steward",
+      "from": "manager",
       "to": "owner",
-      "from_name": "The Steward",
+      "from_name": "The Manager",
       "to_name": "You",
       "kind": "request",
       "text": "Tick the AI asset declaration on the store listing",
@@ -751,9 +751,9 @@ window.TIRITH_STATE = {
       "id": "f-4",
       "at": "2026-10-28T19:02:00Z",
       "from": "agent:icon-2",
-      "to": "steward",
+      "to": "manager",
       "from_name": "Sefa Prismhand",
-      "to_name": "The Steward",
+      "to_name": "The Manager",
       "kind": "report",
       "text": "failed: adaptive icon export broke",
       "ref": null
@@ -762,9 +762,9 @@ window.TIRITH_STATE = {
       "id": "f-5",
       "at": "2026-10-28T19:05:00Z",
       "from": "agent:w1-data",
-      "to": "steward",
+      "to": "manager",
       "from_name": "Halvard Stonehand",
-      "to_name": "The Steward",
+      "to_name": "The Manager",
       "kind": "report",
       "text": "done: migrations green",
       "ref": null
@@ -772,9 +772,9 @@ window.TIRITH_STATE = {
     {
       "id": "f-6",
       "at": "2026-10-28T19:10:00Z",
-      "from": "steward",
+      "from": "manager",
       "to": "agent:t-world",
-      "from_name": "The Steward",
+      "from_name": "The Manager",
       "to_name": "Marrow Quickstep",
       "kind": "message",
       "text": "Owner wants a much smaller compact world",
@@ -784,9 +784,9 @@ window.TIRITH_STATE = {
       "id": "f-8",
       "at": "2026-10-28T19:20:00Z",
       "from": "pipeline:android-release#7",
-      "to": "steward",
+      "to": "manager",
       "from_name": "android-release#7",
-      "to_name": "The Steward",
+      "to_name": "The Manager",
       "kind": "report",
       "text": "android-release failed: lint failed",
       "ref": null
@@ -806,9 +806,9 @@ window.TIRITH_STATE = {
       "id": "f-10",
       "at": "2026-10-28T19:36:00Z",
       "from": "owner",
-      "to": "steward",
+      "to": "manager",
       "from_name": "You",
-      "to_name": "The Steward",
+      "to_name": "The Manager",
       "kind": "answer",
       "text": "Done: declaration ticked",
       "ref": null
@@ -816,9 +816,9 @@ window.TIRITH_STATE = {
     {
       "id": "f-11",
       "at": "2026-10-28T19:38:00Z",
-      "from": "steward",
+      "from": "manager",
       "to": "agent:t-collector",
-      "from_name": "The Steward",
+      "from_name": "The Manager",
       "to_name": "Odile Inkwell",
       "kind": "decision",
       "text": "Merge the rooms poller after tests",
@@ -837,7 +837,7 @@ window.TIRITH_STATE = {
       "answers": [
         {
           "at": "2026-10-28T19:33:10Z",
-          "by": "steward",
+          "by": "manager",
           "auto": false,
           "text": "Not blocked. It waits for step 3 to merge, then **one agent** starts on it.\n\n- Nothing needed from you\n- Expected: this evening"
         }

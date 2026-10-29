@@ -1,6 +1,6 @@
 """The collector: merge CLI inputs with live facts into ``state.json``.
 
-One cycle reads config, lanes, events, notes, waits and the steward file,
+One cycle reads config, lanes, events, notes, waits and the manager file,
 enriches them with process/log/git facts and cached brain results, verifies
 every project's commit guard, updates hero renown, and writes ``state.json``
 atomically. Brain jobs are only enqueued here; the worker fills the cache
@@ -627,7 +627,7 @@ class Collector:
                 stages = ", ".join(f"{s['name']} {s['status']}" for s in run["stages"]
                                    if s["status"] in ("passed", "failed"))
                 flows_mod.append_flow(
-                    self.home, f"pipeline:{run['run']}", "steward", "report",
+                    self.home, f"pipeline:{run['run']}", "manager", "report",
                     f"{run['pipeline']} {run['status']}" + (f": {stages}" if stages else ""),
                     session=run.get("session"), project=run.get("project"))
         if fresh:
@@ -648,7 +648,7 @@ class Collector:
                 if (f"agent:{lane['id']}", text) in known:  # already recorded with `tirith decide`
                     continue
                 flows_mod.append_flow(
-                    self.home, f"agent:{lane['id']}", "steward", "decision", text, why=why,
+                    self.home, f"agent:{lane['id']}", "manager", "decision", text, why=why,
                     at=lane.get("ended_at"), session=lane.get("session") or None,
                     project=str(lane.get("project") or "") or None)
         if fresh:
@@ -743,7 +743,7 @@ class Collector:
 
     def _settle_generated(self, waits: list[dict]) -> tuple[list[dict], list[dict]]:
         """``(open, answered)`` for the items Tirith raises itself: an owner reply answers one; "let the
-        steward handle it" also puts it in the steward's queue."""
+        manager handle it" also puts it in the manager's queue."""
         replied: dict[str, dict] = {}
         for reply in inbox_mod.replies(self.home):
             replied.setdefault(reply["wait"], reply)
@@ -753,7 +753,7 @@ class Collector:
             if reply is None:
                 open_items.append(wait)
                 continue
-            if reply["value"] == "steward":
+            if reply["value"] in ("manager", "steward"):
                 asks_mod.queue_add(self.home, str(wait.get("project") or ""), "", wait["text"],
                                    kind="owner-handoff", item_id="sq-" + reply["id"])
             label = next((o["label"] for o in wait.get("options") or [] if o["value"] == reply["value"]),
@@ -764,7 +764,7 @@ class Collector:
 
     def _enforce_cta(self, waiting: list[dict]) -> list[dict]:
         """The rule: nothing reaches the owner without a one-click option or a Run action. An item without
-        one goes to the steward's queue (once) instead of the list."""
+        one goes to the manager's queue (once) instead of the list."""
         shown = []
         for wait in waiting:
             if asks_mod.has_call_to_action(wait):
@@ -877,7 +877,7 @@ class Collector:
                 "usage": self._usage(lane, ended is not None),
                 "diff": self._diff(lane),
                 "request": lane.get("request") if isinstance(lane.get("request"), dict) else None,
-                "parent": str(lane.get("parent") or "steward"),
+                "parent": "manager" if lane.get("parent") in (None, "", "steward") else str(lane["parent"]),
                 "step": str(lane["step"]) if lane.get("step") else None,
                 "request_id": str(lane["request_id"]) if lane.get("request_id") else None,
                 "review": review_mod.public(lane, (entry_by_id[lane_project].folder if lane_project in entry_by_id else None)),
@@ -1020,20 +1020,24 @@ class Collector:
         for proj in projects:
             proj["usage"] = agentrun_mod.sum_usage(
                 [a.get("usage") for a in agent_rows if a.get("project") == proj["id"]])
+        manager = {
+            "name": self.config.manager_name, "title": self.config.manager_title,
+            "activity": orchestrator.get("activity"),
+            "since": orchestrator.get("since"), "notes": notes,
+        }
+        manager_queue = asks_mod.queue_items(self.home, only_open=True)[-asks_mod.QUEUE_STATE_ROWS:]
         return {
             "version": 1,
             "generated_at": now_iso(now),
             "brain": {"enabled": self.worker.enabled,
                       "model": self.config.brain_model,
                       "last_error": self.worker.last_error},
-            "steward": {
-                "name": self.config.steward_name, "title": self.config.steward_title,
-                "activity": orchestrator.get("activity"),
-                "since": orchestrator.get("since"), "notes": notes,
-            },
+            "manager": manager,
+            "steward": manager,  # old key, same value
             "waiting_on_you": waiting,
             "answered_waits": answered_waits,
-            "steward_queue": asks_mod.queue_items(self.home, only_open=True)[-asks_mod.QUEUE_STATE_ROWS:],
+            "manager_queue": manager_queue,
+            "steward_queue": manager_queue,  # old key, same value
             "projects": projects,
             "agents": agent_rows,
             "pipelines": events_pipelines,

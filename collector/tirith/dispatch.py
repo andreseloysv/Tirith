@@ -3,9 +3,9 @@
 Every collector cycle ``run`` walks the open requests once (idempotent, state in
 ``<home>/dispatch.json``): a ``finish`` is answered by Tirith (the lane that already has the step, or a new
 one started in-process like ``tirith launch``); an ``ask`` is answered by the brain (see
-``Collector._inbox``) and stays pending for the steward; anything else is left to the steward. A request the
-steward leaves unanswered for ``ESCALATE_AFTER_S`` is escalated to the owner. The steward session itself is
-held to the inbox by hooks (``steward_context`` / ``steward_stop`` here, called from ``tirith.hooks``).
+``Collector._inbox``) and stays pending for the manager; anything else is left to the manager. A request the
+manager leaves unanswered for ``ESCALATE_AFTER_S`` is escalated to the owner. The manager session itself is
+held to the inbox by hooks (``manager_context`` / ``manager_stop`` here, called from ``tirith.hooks``).
 See ``docs/CONTRACT-inbox.md``.
 """
 
@@ -30,7 +30,8 @@ STOP_BLOCKS_MAX = 3
 ESCALATE_AFTER_S = 600.0
 TEXT_SHOWN = 160
 ROLE_ENV = "TIRITH_ROLE"
-STEWARD_ROLE = "steward"
+MANAGER_ROLE = "manager"
+OLD_MANAGER_ROLE = "steward"  # the old name, still accepted in TIRITH_ROLE
 
 
 # -- state ------------------------------------------------------------------------------------
@@ -113,7 +114,7 @@ def refusal_fix(project: str, step: str, reason: str) -> str:
 
 def _finish(home: Path, req: dict, config: Config, agents: list[dict], lanes: list[dict],
             status_of: Callable, launcher: Callable, now: datetime) -> str | None:
-    """Handle one ``finish``; returns what was done (``steward``: left to the steward)."""
+    """Handle one ``finish``; returns what was done (``manager``: left to the manager)."""
     at = now_iso(now)
     _flow(home, "owner", "tirith", "request",
           f"Finish {_step_name(req)}" + (f": {_short(req['text'])}" if req["text"] else ""), req, at)
@@ -129,7 +130,7 @@ def _finish(home: Path, req: dict, config: Config, agents: list[dict], lanes: li
               f"{_step_name(req)} is already yours; the owner asked for it again", req, at)
         return f"running:{busy['id']}"
     if not config.dispatch_auto_launch:
-        return "steward"
+        return "manager"
     try:
         lane_id = launcher(home, req["project"], req["step"], req["id"])
     except launch_mod.LaunchError as err:
@@ -166,11 +167,11 @@ def macos_notify(title: str, message: str) -> None:
 
 
 def escalate(home: Path, req: dict, notify: Callable[[str, str], None], at: str) -> None:
-    text = f"The steward has not answered: {_short(req['text']) or req['kind'] + ' ' + _step_name(req)}"
+    text = f"The manager has not answered: {_short(req['text']) or req['kind'] + ' ' + _step_name(req)}"
     notify("Tirith", text)
     _flow(home, "tirith", "owner", "alert", text, req, at)
     project, step = req["project"], req["step"]
-    add_owner_item(home, f"steward-silent-{req['id']}", project or None, text,
+    add_owner_item(home, f"manager-silent-{req['id']}", project or None, text,
                    [{"label": "Wait", "command": None},
                     {"label": "Start an agent", "command": f"tirith launch --project {project} --step {step}"},
                     {"label": "Answer it with the brain", "command": f"tirith inbox brain {req['id']}"}], at)
@@ -194,21 +195,21 @@ def run(home: Path, config: Config, now: datetime, *, agents: list[dict], lanes:
             if req["kind"] == "finish" and not req["answers"]:
                 done = _finish(home, req, config, agents, lanes, status_of, launcher, now)
             else:
-                done = "steward" if req["kind"] != "finish" else "answered"
+                done = "manager" if req["kind"] != "finish" else "answered"
                 if req["kind"] != "finish":
                     _flow(home, "owner", "tirith", "request",
                           f"{req['kind'].capitalize()} on {_step_name(req)}: {_short(req['text'])}", req, now_iso(now))
             if done:
                 state["handled"][rid] = done
                 changed = True
-        if req["steward_pending"] and _age_s(req, now) >= ESCALATE_AFTER_S and rid not in state["escalated"]:
+        if req["manager_pending"] and _age_s(req, now) >= ESCALATE_AFTER_S and rid not in state["escalated"]:
             escalate(home, req, notify, now_iso(now))
             state["escalated"][rid] = now_iso(now)
             changed = True
-    for rid in list(state["escalated"]):  # the steward caught up: take the item off the owner's list
+    for rid in list(state["escalated"]):  # the manager caught up: take the item off the owner's list
         req = next((r for r in inbox_mod.requests(home) if r["id"] == rid), None)
-        if req is not None and not req["steward_pending"]:
-            close_owner_item(home, f"steward-silent-{rid}", now_iso(now))
+        if req is not None and not req["manager_pending"]:
+            close_owner_item(home, f"manager-silent-{rid}", now_iso(now))
     if changed:
         save_state(home, state)
     return inbox_mod.requests(home)
@@ -220,18 +221,18 @@ def note_brain_answer(home: Path, req: dict, at: str) -> None:
     _flow(home, "brain", "owner", "answer", f"Answered the question on {_step_name(req)}", req, at)
 
 
-# -- the steward session ----------------------------------------------------------------------
+# -- the manager session ----------------------------------------------------------------------
 
 
-def is_steward(config: Config, environ, cwd) -> bool:
-    """The steward session: ``TIRITH_ROLE=steward``, or a cwd inside ``[steward] session_cwd``.
+def is_manager(config: Config, environ, cwd) -> bool:
+    """The manager session: ``TIRITH_ROLE=manager``, or a cwd inside ``[manager] session_cwd``.
 
-    A lane (``TIRITH_LANE``) is never the steward, whatever its folder."""
+    A lane (``TIRITH_LANE``) is never the manager, whatever its folder."""
     if environ.get("TIRITH_LANE"):
         return False
-    if environ.get(ROLE_ENV) == STEWARD_ROLE:
+    if environ.get(ROLE_ENV) in (MANAGER_ROLE, OLD_MANAGER_ROLE):
         return True
-    root = config.steward_session_cwd
+    root = config.manager_session_cwd
     if not root or not cwd:
         return False
     root, here = str(root).rstrip("/"), str(cwd).rstrip("/")
@@ -240,7 +241,7 @@ def is_steward(config: Config, environ, cwd) -> bool:
 
 def pending(home: Path, now: datetime, min_age_s: float = 0.0) -> list[dict]:
     return [r for r in inbox_mod.requests(home)
-            if r["steward_pending"] and _age_s(r, now) >= min_age_s]
+            if r["manager_pending"] and _age_s(r, now) >= min_age_s]
 
 
 def _age_text(seconds: float) -> str:
@@ -253,7 +254,7 @@ def _age_text(seconds: float) -> str:
 def pending_text(rows: list[dict], now: datetime) -> str:
     lines = []
     for r in rows:
-        said = [a for a in r["answers"] if a["by"] != "steward"]
+        said = [a for a in r["answers"] if a["by"] != "manager"]
         lines.append(
             f"- {r['id']} ({r['kind']}, {r['project']} step {r['step']}, {_age_text(_age_s(r, now))} ago): "
             f"{_short(r['text'], 300) or '(no text)'}"
@@ -262,7 +263,7 @@ def pending_text(rows: list[dict], now: datetime) -> str:
     return "\n".join(lines)
 
 
-def steward_context(home: Path, now: datetime) -> str:
+def manager_context(home: Path, now: datetime) -> str:
     """Text for ``additionalContext`` at ``SessionStart`` / ``UserPromptSubmit`` ('' = nothing to add)."""
     rows = pending(home, now)
     if not rows:
@@ -271,10 +272,10 @@ def steward_context(home: Path, now: datetime) -> str:
             "before anything else, with the commands shown.\n" + pending_text(rows, now))
 
 
-def steward_stop(home: Path, now: datetime) -> str | None:
+def manager_stop(home: Path, now: datetime) -> str | None:
     """The reason to block a ``Stop`` (None = let it stop).
 
-    Blocks while a request pending for more than ``STOP_AFTER_S`` is unanswered by the steward, at most
+    Blocks while a request pending for more than ``STOP_AFTER_S`` is unanswered by the manager, at most
     ``STOP_BLOCKS_MAX`` times in a row for the same set; then it records an ``inbox-ignored`` violation
     once and lets the session stop."""
     rows = pending(home, now, STOP_AFTER_S)
@@ -291,7 +292,7 @@ def steward_stop(home: Path, now: datetime) -> str | None:
             from tirith import gates
             gates.record_violation(
                 home, gates.Violation("inbox-ignored",
-                                      f"the steward stopped with {len(rows)} unanswered inbox request(s): {key}",
+                                      f"the manager stopped with {len(rows)} unanswered inbox request(s): {key}",
                                       "tirith inbox answer <id> \"<markdown>\" for each, then tirith inbox done <id>"),
                 ts=now_iso(now), agent="anthropic", lane=None, session=None, project=rows[0]["project"] or None,
                 tool=None, cwd=None)

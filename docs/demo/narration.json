@@ -9,7 +9,7 @@
   },
   {
     "id": "overview",
-    "text": "This is the Overview, for a fresh session called Hackathon demo. I ask the Steward to check the Android build. An agent starts, a request for me appears, and the activity feed fills in. All live."
+    "text": "This is the Overview, for a fresh session called Hackathon demo. I ask the Manager to check the Android build. An agent starts, a request for me appears, and the activity feed fills in. All live."
   },
   {
     "id": "pipelines",
@@ -21,7 +21,7 @@
   },
   {
     "id": "pipelines3",
-    "text": "When a run ends, it turns green, and the Steward gets a report."
+    "text": "When a run ends, it turns green, and the Manager gets a report."
   },
   {
     "id": "agents",
@@ -29,7 +29,7 @@
   },
   {
     "id": "flow",
-    "text": "Flow shows how information passes. I talk to the Steward, the orchestrator. The Steward briefs the agents, they report back, and rooms on agents messenger join in. Every edge counts its messages. Click one, and you can read them all."
+    "text": "Flow shows how information passes. I talk to the Manager, the orchestrator. The Manager briefs the agents, they report back, and rooms on agents messenger join in. Every edge counts its messages. Click one, and you can read them all."
   },
   {
     "id": "brain",

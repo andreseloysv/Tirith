@@ -19,7 +19,7 @@ Start it with `./run`. A small collector watches your agents, pipelines and mess
 - **Overview:** what needs you, what is running now, and the activity feed.
 - **Pipelines:** runs grouped Running, Failed and Passed; the selected run is a node graph with per-step durations and logs.
 - **Agents:** a board of heroes, each coding agent with a name, a rank and a live timer; click a card for its summary and log.
-- **Flow:** a graph of how information passes: You, the Steward (orchestrator), the agents, pipeline reports and agentsmessenger.com rooms. Every edge counts its messages; click one to read them.
+- **Flow:** a graph of how information passes: You, the Manager (orchestrator), the agents, pipeline reports and agentsmessenger.com rooms. Every edge counts its messages; click one to read them.
 - **Filters:** by session and by project (a project is any folder), plus search over heroes, features, runs, steps and messages.
 
 A commit guard is installed in every managed repository, and the Overview raises a request if it breaks. Agents, pipelines, notes and flows are reported through one small command, `tirith`.

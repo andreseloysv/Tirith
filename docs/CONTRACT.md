@@ -8,6 +8,12 @@ Tirith has two halves that only meet through files in `~/.tirith/` (overridable 
 - **The world** (`world/`, Godot 4.7): reads `state.json` (polling its mtime every second), never
   writes. It must run against `fixtures/state.example.json` with no collector at all.
 
+Naming: the orchestrator is the **manager**. "steward" is its old name and is still accepted in data
+and flags (`--by steward`, `--role steward`, `TIRITH_ROLE=steward`, `tirith steward ...`, `[steward]` in
+`config.toml`, flow endpoint `steward`, answers `by: steward`); `state.json` keeps the old keys
+`steward`, `steward_pending` and `steward_queue` next to `manager`, `manager_pending` and `manager_queue`
+(same values).
+
 No servers, no open ports. The only network access is the collector's optional calls to the
 Meta Model API for the brain (see below); everything works without it.
 
@@ -20,7 +26,7 @@ Meta Model API for the brain (see below); everything works without it.
 | `events.jsonl` | `tirith run`, `tirith hook` | pipeline stage events (below) and agent hook events (`kind: "hook"`, see `CONTRACT-hooks.md`), one JSON object per line |
 | `notes.jsonl` | `tirith note` | `{"at","project","text"}` orchestrator decisions |
 | `waits.jsonl` | `tirith wait add/done` | `{"id","at","project","text","link","done_at"}` |
-| `orchestrator.json` | `tirith steward "<activity>"` | `{"activity","since"}` what the Steward is doing now |
+| `orchestrator.json` | `tirith manager "<activity>"` | `{"activity","since"}` what the Manager is doing now |
 | `agents.json` | collector | persistent hero identity per agent id: name, epithet, class, renown |
 | `brain/` | collector | cached Muse outputs (summaries, architecture) keyed by input hash |
 
@@ -60,7 +66,7 @@ Pipeline events (`tirith run --project chromasol --pipeline android-release --st
   "version": 1,
   "generated_at": "2026-10-28T19:40:00Z",
   "brain": {"enabled": true, "model": "muse-spark", "last_error": null},
-  "steward": {"name": "Aldric of the Tower", "title": "The Steward", "activity": "Reviewing W6",
+  "manager": {"name": "Aldric of the Tower", "title": "The Manager", "activity": "Reviewing W6",
               "since": "...", "notes": [{"at": "...", "project": "chromasol", "text": "Merged W5"}]},
   "waiting_on_you": [{"id": "w-3", "project": "chromasol", "text": "Tick the AI asset declaration",
                       "since": "...", "link": null}],
@@ -72,7 +78,7 @@ Pipeline events (`tirith run --project chromasol --pipeline android-release --st
       "generated_at": "...", "source": "muse|manual|none"}
   }],
   "agents": [{
-    "id": "w1-data", "project": "chromasol", "parent": "steward|<lane id of the spawning agent>",
+    "id": "w1-data", "project": "chromasol", "parent": "manager|<lane id of the spawning agent>",
     "name": "Halvard", "epithet": "Stonehand", "class": "stonewright", "rank": "sergeant", "renown": 340,
     "feature": "Room database", "status": "working|done|failed|stalled",
     "started_at": "...", "ended_at": null, "elapsed_s": 1840,

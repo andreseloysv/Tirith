@@ -265,7 +265,7 @@ func _run() -> void:
 	check("9 flow row nodes", flow_rows.size() == 9)
 	var f3: Node = _find_meta(flow_rows, "flow_id", "f-3")
 	check("flow row from and to names",
-		_label_text(f3, "FromLabel") == "The Steward"
+		_label_text(f3, "FromLabel") == "The Manager"
 		and _label_text(f3, "ToLabel") == "Ivren of the Seventh Gate")
 	check("flow row text and kind chip",
 		_label_text(f3, "TextLabel").contains("Measure scan speed")

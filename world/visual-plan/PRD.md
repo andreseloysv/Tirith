@@ -60,7 +60,7 @@ beacon and star visibly blooming; no label overlaps a hero it does not belong to
 1. Overview reads at a glance: star tower centre, ring walls, coloured districts, caravan road outside.
 2. District close-up: building kinds distinguishable, roads with flowing light, banner in project colour.
 3. Hero close-up: class gear + accent colour readable, nameplate legible, status obvious from colour/pose.
-4. Beacon visibly lit (fixture has 2 waiting items); steward bubble shows the current activity.
+4. Beacon visibly lit (fixture has 2 waiting items); manager bubble shows the current activity.
 5. Caravan: cart at the running station, station colours green/amber/grey correct.
 6. Parchment panel readable over the 3D view; HUD counts match the fixture (2 working, 1 done, 1 failed,
    1 stalled, 1 pipeline running, 2 waiting).

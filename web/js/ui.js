@@ -193,6 +193,7 @@
   }
 
   /* ---------- merged messages (flows + room messages) ---------- */
+  function mgr(e) { return e === 'steward' ? 'manager' : e; }  /* old flow rows */
   function norm(x) { return String(x || '').toLowerCase().replace(/\s+/g, ' ').trim(); }
   T.messages = function (s) {
     var out = [], seen = {}, roomTitle = {};
@@ -212,7 +213,7 @@
       var ep = [f.from, f.to].filter(function (e) { return /^room:/.test(e); })[0];
       if (ep && seen[ep.slice(5) + '|' + String(f.text).slice(0, 60)]) return;
       var nm = function (e, side) { return /^room:/.test(e) ? (roomTitle[e.slice(5)] || T.endpointName(s, e, f, side)) : T.endpointName(s, e, f, side); };
-      out.push({ at: f.at, fromId: f.from, toId: f.to, fromName: nm(f.from, 'from'), toName: nm(f.to, 'to'), text: f.text, kind: f.kind, src: 'flow', id: f.id, why: f.why });
+      out.push({ at: f.at, fromId: mgr(f.from), toId: mgr(f.to), fromName: nm(f.from, 'from'), toName: nm(f.to, 'to'), text: f.text, kind: f.kind, src: 'flow', id: f.id, why: f.why });
     });
     out.sort(function (a, b) { return (T.ms(b.at) || 0) - (T.ms(a.at) || 0); });
     return out;
@@ -224,13 +225,13 @@
     var st = p.stages || [], cur = T.curStage(p);
     return '<button class="card rcard" data-act="gorun" data-key="' + esc(p.run) + '"><span class="rhead"><b>' + esc(T.runName(p)) + ' <span class="mut">' + esc(T.runNum(p)) + '</span></b><span class="mut">' + esc(T.proj(p.project)) + '</span><span class="rtime">' + T.span(p.started_at, null) + '</span></span>' +
       '<span class="mini">' + st.map(function (x, i) { return (i ? '<i class="ml ' + (st[i - 1].status === 'passed' ? 'on' : '') + '"></i>' : '') + '<i class="mn ' + esc(x.status) + '" title="' + esc(x.name + ' · ' + x.status) + '"></i>'; }).join('') + '</span>' +
-      '<span class="mcur">' + esc((p.lane ? p.lane + ' · ' : 'steward · ') + (cur ? cur.name : 'running')) + '</span></button>';
+      '<span class="mcur">' + esc((p.lane && p.lane !== 'steward' ? p.lane + ' · ' : 'manager · ') + (cur ? cur.name : 'running')) + '</span></button>';
   }
   function doneRow(p) {
     var ok = p.status === 'passed', mark = ok ? '✓' : '✗';
     return '<button class="prow" data-act="gorun" data-key="' + esc(p.run) + '"><i class="pm ' + (ok ? 'ok' : 'bad') + '" title="' + esc(p.status) + '">' + mark + '</i>' +
       '<b>' + esc(T.runName(p)) + ' <span class="mut">' + esc(T.runNum(p)) + '</span></b><span class="mut sm">' + esc(T.proj(p.project)) + '</span>' +
-      '<span class="pwho">' + esc(p.lane || 'steward') + '</span><span class="rtime">' + esc(T.dur(T.elapsed(p.started_at, p.ended_at))) + '</span></button>';
+      '<span class="pwho">' + esc(p.lane && p.lane !== 'steward' ? p.lane : 'manager') + '</span><span class="rtime">' + esc(T.dur(T.elapsed(p.started_at, p.ended_at))) + '</span></button>';
   }
   function pipelinesSection(s, running) {
     var now = T.now(), recent = (s.pipelines || []).filter(function (p) {

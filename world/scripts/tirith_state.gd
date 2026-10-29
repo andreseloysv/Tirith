@@ -8,7 +8,7 @@ const SUPPORTED_VERSION: int = 1
 
 ## Class accent colours and display names, from docs/LORE.md.
 const CLASS_INFO: Dictionary = {
-	"steward": {"label": "Steward", "color": Color(0.16, 0.32, 0.85)},
+	"steward": {"label": "Manager", "color": Color(0.16, 0.32, 0.85)},
 	"stonewright": {"label": "Stonewright", "color": Color(0.95, 0.52, 0.16)},
 	"loremaster": {"label": "Loremaster", "color": Color(0.48, 0.25, 0.78)},
 	"warden": {"label": "Warden", "color": Color(0.12, 0.62, 0.62)},
@@ -92,7 +92,7 @@ func waiting() -> Array:
 
 
 func steward() -> Dictionary:
-	return raw.get("steward", {}) as Dictionary
+	return raw.get("manager", raw.get("steward", {})) as Dictionary
 
 
 func brain() -> Dictionary:

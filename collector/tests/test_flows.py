@@ -22,7 +22,7 @@ def _flows(home: Path) -> list[dict]:
 
 
 def test_flow_command_records_and_validates(home: Path) -> None:
-    assert cli.main(["flow", "--from", "steward", "--to", "agent:s-world", "--kind", "message",
+    assert cli.main(["flow", "--from", "manager", "--to", "agent:s-world", "--kind", "message",
                      "--text", "Owner wants a much smaller\ncompact world", "--ref", "x.md"]) == 0
     assert cli.main(["flow", "--from", "room:talk", "--to", "owner", "--text", "hi"]) == 0
     rows = _flows(home)
@@ -32,9 +32,9 @@ def test_flow_command_records_and_validates(home: Path) -> None:
     with pytest.raises(SystemExit):
         cli.main(["flow", "--from", "nobody", "--to", "owner", "--text", "x"])
     with pytest.raises(SystemExit):
-        cli.main(["flow", "--from", "owner", "--to", "steward", "--kind", "gossip", "--text", "x"])
+        cli.main(["flow", "--from", "owner", "--to", "manager", "--kind", "gossip", "--text", "x"])
     with pytest.raises(SystemExit):
-        cli.main(["flow", "--from", "owner", "--to", "steward", "--text", " "])
+        cli.main(["flow", "--from", "owner", "--to", "manager", "--text", " "])
 
 
 def test_automatic_flows(home: Path, tmp_path: Path) -> None:
@@ -53,9 +53,9 @@ def test_automatic_flows(home: Path, tmp_path: Path) -> None:
     Collector(home, client=None).build_state(NOW)   # a second cycle adds nothing
     pairs = [(f["from"], f["to"], f["kind"]) for f in _flows(home) if f["kind"] != "alert"]
     assert pairs == [
-        ("steward", "agent:w-1", "brief"), ("steward", "owner", "request"),
-        ("owner", "steward", "answer"), ("agent:w-1", "steward", "report"),
-        ("pipeline:rel#1", "steward", "report")]
+        ("manager", "agent:w-1", "brief"), ("manager", "owner", "request"),
+        ("owner", "manager", "answer"), ("agent:w-1", "manager", "report"),
+        ("pipeline:rel#1", "manager", "report")]
     flows = state["flows"]
     hero = state["agents"][0]
     flows = [f for f in flows if f["kind"] != "alert"]
@@ -76,7 +76,7 @@ def test_guard_problem_raises_one_alert(home: Path, tmp_path: Path) -> None:
 
 
 def test_state_flows_limited_and_malformed_skipped(home: Path) -> None:
-    rows = [{"id": f"f-{i}", "at": "2026-10-28T19:00:00Z", "from": "steward", "to": "owner",
+    rows = [{"id": f"f-{i}", "at": "2026-10-28T19:00:00Z", "from": "manager", "to": "owner",
              "kind": "message", "text": f"m{i}", "ref": None} for i in range(1, 131)]
     rows.insert(5, {"id": "bad", "from": "nowhere", "to": "owner"})
     (home / "flows.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\nnot json\n")
@@ -87,5 +87,5 @@ def test_state_flows_limited_and_malformed_skipped(home: Path) -> None:
 def test_flows_validate_against_schema(home: Path) -> None:
     jsonschema = pytest.importorskip("jsonschema")
     schema = json.loads((Path(__file__).resolve().parents[1] / "state.schema.json").read_text())
-    cli.main(["flow", "--from", "steward", "--to", "owner", "--kind", "decision", "--text", "ok"])
+    cli.main(["flow", "--from", "manager", "--to", "owner", "--kind", "decision", "--text", "ok"])
     jsonschema.validate(Collector(home, client=None).build_state(NOW), schema)

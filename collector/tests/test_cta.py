@@ -70,7 +70,7 @@ def test_dispatcher_items_need_an_option(home: Path) -> None:
                                 "2026-10-29T00:00:00Z")
 
 
-def test_collector_sends_an_item_without_call_to_action_to_the_steward(home: Path) -> None:
+def test_collector_sends_an_item_without_call_to_action_to_the_manager(home: Path) -> None:
     append_jsonl(home / "waits.jsonl", {"id": "w-old", "at": "2026-10-29T00:00:00Z", "project": "demo",
                                          "text": "Old row with no way to answer", "link": None, "done_at": None})
     for _ in range(2):  # twice: queued once
@@ -78,7 +78,7 @@ def test_collector_sends_an_item_without_call_to_action_to_the_steward(home: Pat
         assert all(w["id"] != "w-old" for w in state["waiting_on_you"])
     queued = [r for r in asks_mod.queue_items(home) if r["kind"] == asks_mod.NO_CTA_KIND]
     assert len(queued) == 1 and "Old row" in queued[0]["text"]
-    assert any(r["id"] == queued[0]["id"] for r in state["steward_queue"])
+    assert any(r["id"] == queued[0]["id"] for r in state["manager_queue"])
 
 
 def test_every_generator_produces_items_with_a_call_to_action(home: Path, tmp_path: Path) -> None:
@@ -318,10 +318,10 @@ def test_lane_stop_kills_a_child_that_ignores_sigterm(home: Path, tmp_path: Path
     runner, repo, lane = _start_lane(home, tmp_path, "stubborn-1", STUBBORN)
     try:
         started = time.monotonic()
-        ended = lanestop_mod.stop_lane(home, "stubborn-1", "steward", None, term_wait=1.0)
+        ended = lanestop_mod.stop_lane(home, "stubborn-1", "manager", None, term_wait=1.0)
         assert time.monotonic() - started < 15
         runner.wait(timeout=20)
-        assert ended["result"] == "failed" and ended["report"] == "Stopped by steward."
+        assert ended["result"] == "failed" and ended["report"] == "Stopped by manager."
         assert _gone(lane["pid"])
     finally:
         if runner.poll() is None:

@@ -25,7 +25,7 @@ All steps take an optional output folder (default `../../../Tirith-video/work`; 
 - Opens `web/index.html#state=file://~/.tirith/state.js` (the live page; `TIRITH_HOME` is honoured) and drives it with
   eased cursor moves, clicks, typing and filters. Scenes: problem, one command, Overview, Pipelines, Agents, Flow, brain,
   filters, built-during-the-hackathon.
-- `activity.sh` makes the activity real through the `tirith` CLI: starts the session "Hackathon demo", sets the Steward
+- `activity.sh` makes the activity real through the `tirith` CLI: starts the session "Hackathon demo", sets the Manager
   line, records flows, starts a lane (an agent process with a log), adds a request for the owner, runs the pipelines
   `tirith-checks` (collector tests, schema, web check, a live Muse Spark call) and `android-release` (the ChromaSol
   `make android-build`, `android-test`, `android-lint`, rebuilt with Gradle `--rerun-tasks`), then answers the request and

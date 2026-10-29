@@ -1,4 +1,4 @@
-"""Asks: `wait add` with options, lane-ending rules, the owner's reply path and the steward queue."""
+"""Asks: `wait add` with options, lane-ending rules, the owner's reply path and the manager queue."""
 
 from __future__ import annotations
 
@@ -143,16 +143,16 @@ def test_open_section_extraction() -> None:
     assert asks_mod.open_section(None) == ""
 
 
-def test_open_section_makes_a_steward_item_and_no_owner_wait(home: Path) -> None:
+def test_open_section_makes_a_manager_item_and_no_owner_wait(home: Path) -> None:
     _lane(home)
     end_lane(home, "l1", "done", REPORT)
     assert not (home / "waits.jsonl").exists()
     (item,) = asks_mod.queue_items(home, only_open=True)
-    assert item["kind"] == "review" and item["to"] == "steward" and item["lane"] == "l1"
+    assert item["kind"] == "review" and item["to"] == "manager" and item["lane"] == "l1"
     assert "auto-answer" in item["text"] and item["project"] == "demo"
     state = _state(home)
     assert _manual(state["waiting_on_you"]) == []
-    assert [q["id"] for q in state["steward_queue"]] == [item["id"]]
+    assert [q["id"] for q in state["manager_queue"]] == [item["id"]]
 
 
 def test_report_without_open_section_queues_nothing(home: Path) -> None:
@@ -170,10 +170,10 @@ def test_queue_cli_lists_and_closes(home: Path, capsys) -> None:
     assert main(["queue", "list"]) == 0 and capsys.readouterr().out.strip() == ""
     assert asks_mod.queue_items(home, only_open=True) == []
     assert main(["queue", "done", "sq-nope"]) == 3
-    assert _state(home)["steward_queue"] == []
+    assert _state(home)["manager_queue"] == []
 
 
-def test_failed_lane_end_by_the_steward_adds_no_owner_item(home: Path) -> None:
+def test_failed_lane_end_by_the_manager_adds_no_owner_item(home: Path) -> None:
     _lane(home)
     end_lane(home, "l1", "failed", "boom")
     assert not (home / "waits.jsonl").exists()

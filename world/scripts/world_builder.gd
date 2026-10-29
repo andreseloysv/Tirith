@@ -229,8 +229,8 @@ func _build_tower() -> void:
 	_banners.append(scroll)
 	_scroll_label = Mats.label3d("", Vector3(0, y - 0.95, 3.9), Color(0.45, 0.2, 0.05), 56, 0.011)
 	tower.add_child(_scroll_label)
-	# The Steward on the balcony, with his speech bubble.
-	_steward_name = Mats.label3d("The Steward", Vector3(-2.4, y + 3.1, 3.4), Color(0.65, 0.78, 1.0), 44, 0.007)
+	# The Manager on the balcony, with his speech bubble.
+	_steward_name = Mats.label3d("The Manager", Vector3(-2.4, y + 3.1, 3.4), Color(0.65, 0.78, 1.0), 44, 0.007)
 	tower.add_child(_steward_name)
 	_steward_bubble = Mats.label3d("", Vector3(-2.4, y + 4.4, 3.4), Color.WHITE, 40, 0.0075)
 	_steward_bubble.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -263,7 +263,7 @@ func _build_tower() -> void:
 	board.add_child(Mats.mesh_box(Vector3(2.7, 1.6, 0.12), Mats.wood(), Vector3(0, 1.65, 0)))
 	board.add_child(Mats.mesh_box(Vector3(2.4, 1.3, 0.05), Mats.solid(Color(0.95, 0.90, 0.78)), Vector3(0, 1.65, 0.09)))
 	board.add_child(Mats.mesh_box(Vector3(3.0, 0.14, 0.7), Mats.stone_dark(), Vector3(0, 2.6, 0)))
-	board.add_child(Mats.label3d("Steward's board", Vector3(0, 3.1, 0), Color(1.0, 0.92, 0.7), 44, 0.007))
+	board.add_child(Mats.label3d("Manager's board", Vector3(0, 3.1, 0), Color(1.0, 0.92, 0.7), 44, 0.007))
 	for i: int in range(3):
 		board.add_child(Mats.mesh_box(Vector3(0.6, 0.42, 0.03), Mats.solid(Color.WHITE),
 			Vector3(-0.7 + 0.7 * float(i), 1.8 - 0.25 * float(i % 2), 0.14)))
@@ -426,7 +426,7 @@ func apply_state(state: TirithState, first: bool) -> void:
 	if _steward_bubble != null:
 		_steward_bubble.text = str(steward.get("activity", ""))
 	if _steward_name != null and str(steward.get("name", "")) != "":
-		_steward_name.text = "%s\n%s" % [str(steward.get("name")), str(steward.get("title", "The Steward"))]
+		_steward_name.text = "%s\n%s" % [str(steward.get("name")), str(steward.get("title", "The Manager"))]
 	if _board_body != null:
 		_board_body.set_meta("payload", steward)
 	var waiting: Array = state.waiting()

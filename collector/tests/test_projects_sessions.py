@@ -215,7 +215,7 @@ def test_events_record_session_and_state_exposes_it(home: Path, tmp_path: Path, 
     main(["note", "during", "--project", "demo"])
     main(["wait", "add", "Press go", "--project", "demo", "--option", "Go|go"])
     wait_id = capsys.readouterr().out.strip().splitlines()[-1]
-    main(["flow", "--from", "steward", "--to", "owner", "--text", "hello"])
+    main(["flow", "--from", "manager", "--to", "owner", "--text", "hello"])
     main(["lane", "end", "h1", "--result", "done", "--report", "ok"])
     assert read_json(home / "lanes" / "h1.json", {})["session"] == "rel"
     assert all(e["session"] == "rel" for e in read_jsonl(home / "events.jsonl"))
@@ -233,7 +233,7 @@ def test_events_record_session_and_state_exposes_it(home: Path, tmp_path: Path, 
     agent = state["agents"][0]
     assert agent["session"] == "rel" and agent["project"] == "demo"
     assert state["pipelines"][0]["session"] == "rel"
-    notes = {n["text"]: n["session"] for n in state["steward"]["notes"]}
+    notes = {n["text"]: n["session"] for n in state["manager"]["notes"]}
     assert notes == {"before": None, "during": "rel", "via env": "env-only"}
     assert all(f["session"] in ("rel", None) and "project" in f for f in state["flows"])
     assert {f["project"] for f in state["flows"] if f["kind"] == "brief"} == {"demo"}

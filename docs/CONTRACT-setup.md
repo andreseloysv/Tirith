@@ -7,7 +7,7 @@ edits.
 
 ```
 collector: tirith.toml + runs + agent settings + shims  -> state.projects[].setup (read only)
-UI form / chat -> inbox request kind "setup" -> steward: tirith setup apply <id> -> tirith.toml -> tirith check
+UI form / chat -> inbox request kind "setup" -> manager: tirith setup apply <id> -> tirith.toml -> tirith check
 ```
 
 ## Custom rules: `[[rules]]` in `tirith.toml`
@@ -99,7 +99,7 @@ is given.
   `verify_shims` clean and `[gates] enabled` not false. `gates_problems` says why not, `gates_fix` is the
   list of install commands (`tirith hook install --agent <alias>`, `tirith shim install --dir <dir>`).
   Nothing is installed by collecting.
-- `pending`: open `setup` requests of the project that the steward has not closed.
+- `pending`: open `setup` requests of the project that the manager has not closed.
 
 ## Web (`web/js/v-setup.js`)
 
@@ -114,4 +114,4 @@ A "Setup" card per project in the Overview, under the Plan (project filter appli
 - **+ Stage** and **+ Rule** open a small form; send puts a `setup` request in the inbox: Tauri
   `inbox_add`, else the `tirith://inbox` link, else the equivalent `tirith setup …` / `tirith run …`
   command to copy. Until the collector shows the request closed, the card lists it as "Waiting for the
-  steward".
+  manager".

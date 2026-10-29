@@ -8,7 +8,7 @@
     "version",
     "generated_at",
     "brain",
-    "steward",
+    "manager",
     "waiting_on_you",
     "projects",
     "agents",
@@ -44,7 +44,8 @@
         }
       }
     },
-    "steward": {
+    "steward": {"$ref": "#/properties/manager", "description": "Old key for manager, same value."},
+    "manager": {
       "type": "object",
       "additionalProperties": true,
       "required": [
@@ -145,7 +146,8 @@
           "id": {"type": "string"},
           "at": {"type": ["string", "null"]},
           "kind": {"enum": ["finish", "ask", "setup"]},
-          "steward_pending": {"type": "boolean"},
+          "manager_pending": {"type": "boolean"},
+          "steward_pending": {"type": "boolean", "description": "Old key for manager_pending, same value."},
           "project": {"type": "string"},
           "step": {"type": "string"},
           "text": {"type": "string"},
@@ -158,7 +160,7 @@
               "required": ["at", "by", "text", "auto"],
               "properties": {
                 "at": {"type": ["string", "null"]},
-                "by": {"enum": ["steward", "brain", "tirith"]},
+                "by": {"enum": ["manager", "brain", "tirith"]},
                 "text": {"type": "string"},
                 "auto": {"type": "boolean"},
                 "lane": {"type": ["string", "null"], "description": "Lane id of the agent that took the request."},
@@ -660,7 +662,7 @@
         },
         "parent": {
           "type": "string",
-          "description": "Lane id of the agent that spawned this one, or 'steward'."
+          "description": "Lane id of the agent that spawned this one, or 'manager'."
         },
         "review": {
           "type": ["object", "null"],

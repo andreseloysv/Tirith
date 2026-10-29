@@ -1,7 +1,7 @@
 # Ops board (`world/ops/`)
 
 A GitLab-style 2D overlay for the citadel: pipelines with stage graphs and live durations, agents
-with live elapsed timers, the owner's waiting list, and the message flows between the Steward,
+with live elapsed timers, the owner's waiting list, and the message flows between the Manager,
 the agents and the owner. Self-contained: it needs only `world/scripts/tirith_state.gd` and does
 not depend on `main.gd`. It only reads state; it opens no ports and writes no files.
 

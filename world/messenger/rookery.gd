@@ -5,7 +5,7 @@ extends Node3D
 ## (wax seal = agreement, small seal = signed, faint arcs = replies) and a roosting bird.
 ## When a message arrives a messenger bird flies from the speaker (its hero if it is a
 ## Tirith agent, otherwise a visiting envoy on the plaza) to the room's perch, and a short
-## speech scroll pops above the speaker. The same messengers carry the Steward's information
+## speech scroll pops above the speaker. The same messengers carry the Manager's information
 ## flows (briefs, reports, requests, answers...) along an arc between any two endpoints.
 ##
 ## Self-contained: needs only the files in res://messenger/. Public API, see README.md:
@@ -28,10 +28,10 @@ const TOWER_Z: float = -5.0
 const TOWER_R: float = 2.5
 const PARCHMENT: Color = Color(0.96, 0.91, 0.78)
 
-## Maps an endpoint ("agent:<lane>", "owner", "steward", "pipeline:<run>") to a global
+## Maps an endpoint ("agent:<lane>", "owner", "manager", "pipeline:<run>") to a global
 ## Vector3, or returns null when unknown. Set by the main scene; `room:<id>` is handled here.
 var locator: Callable = Callable()
-## Where "steward" resolves when the locator gives nothing (default: the Rookery's own top).
+## Where "manager" resolves when the locator gives nothing (default: the Rookery's own top).
 var steward_position: Variant = null
 ## Flights per message/flow are skipped for the very first state (the existing history).
 var animate_initial: bool = false
@@ -346,7 +346,7 @@ func endpoint_position(endpoint: String) -> Vector3:
 		var got: Variant = locator.call(endpoint)
 		if typeof(got) == TYPE_VECTOR3:
 			return got as Vector3
-	if endpoint == "steward":
+	if endpoint == "manager" or endpoint == "steward":
 		return steward_position as Vector3 if typeof(steward_position) == TYPE_VECTOR3 else tower_top_position()
 	if endpoint == "owner":
 		return to_global(Vector3(0.0, 2.6, 8.4))
@@ -748,8 +748,8 @@ func stamp_seal(room_id: String, n: int) -> void:
 # ----------------------------------------------------------------- flows
 
 func play_flow(flow: Dictionary) -> void:
-	send_flow(endpoint_position(str(flow.get("from", "steward"))),
-		endpoint_position(str(flow.get("to", "steward"))),
+	send_flow(endpoint_position(str(flow.get("from", "manager"))),
+		endpoint_position(str(flow.get("to", "manager"))),
 		str(flow.get("kind", "message")), str(flow.get("text", "")), -1.0, Data.flow_color(flow))
 
 

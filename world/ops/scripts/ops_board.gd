@@ -1417,7 +1417,7 @@ func _sync_flow_filters() -> void:
 	_ms_endpoint.add_item("Everyone")
 	_ms_endpoint.set_item_metadata(0, "")
 	var sel: int = 0
-	var entries: Array = [["steward", "The Steward"], ["owner", "You"]]
+	var entries: Array = [["manager", "The Manager"], ["owner", "You"]]
 	for a: Variant in _state.agents():
 		var ad: Dictionary = a
 		entries.append(["agent:" + str(ad.get("id", "")), str(ad.get("name", ad.get("id", "?")))])
@@ -1456,7 +1456,7 @@ func _agent_class_of(agent_id: String) -> String:
 func _endpoint_icon(endpoint: String) -> Control:
 	var kind: String = endpoint.get_slice(":", 0)
 	match kind:
-		"steward":
+		"manager", "steward":
 			return OpsIcon.new().setup("mark", OpsTheme.GOLD, 18)
 		"owner":
 			return OpsIcon.new().setup("owner", OpsTheme.TEXT, 18)
