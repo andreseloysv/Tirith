@@ -351,7 +351,7 @@ def test_chat_row_keeps_its_attachments(home: Path, tmp_path: Path, capsys) -> N
     rid = _add(capsys, "--kind", "chat", "--text", "look", "--attach", str(img))
     (row,) = read_jsonl(home / "inbox.jsonl")
     assert row["attachments"] == [{"path": str(img.resolve()), "type": "image/png", "size": len(PNG_3x2),
-                                   "width": 3, "height": 2}]
+                                   "width": 3, "height": 2, "name": "shot.png"}]
     (req,) = inbox_mod.requests(home)
     assert req["id"] == rid and req["attachments"] == row["attachments"]
     assert inbox_mod.state_rows(home)[0]["attachments"][0]["width"] == 3
@@ -360,16 +360,29 @@ def test_chat_row_keeps_its_attachments(home: Path, tmp_path: Path, capsys) -> N
 def test_chat_may_be_only_images_but_not_empty(home: Path, tmp_path: Path) -> None:
     att = [inbox_mod.describe_attachment(_png(tmp_path))]
     assert inbox_mod.add_request(home, "chat", text="", attachments=att)["text"] == ""
-    with pytest.raises(inbox_mod.InboxError, match="text or an image"):
+    with pytest.raises(inbox_mod.InboxError, match="text or an attachment"):
         inbox_mod.add_request(home, "chat", text="")
 
 
-def test_attach_refuses_non_images_big_files_and_too_many(home: Path, tmp_path: Path, capsys) -> None:
-    text = tmp_path / "notes.png"
-    text.write_text("not an image")
-    assert main(["inbox", "add", "--kind", "chat", "--text", "x", "--attach", str(text)]) == 3
-    assert "not a PNG, JPEG, GIF or WebP" in capsys.readouterr().err
+def test_attach_takes_any_file_but_refuses_big_empty_missing_and_too_many(home: Path, tmp_path: Path, capsys) -> None:
+    notes = tmp_path / "notes.png"
+    notes.write_text("not an image")
+    blob = tmp_path / "dump.qqq"
+    blob.write_text("error: boom\n")
+    rid = _add(capsys, "--kind", "chat", "--text", "x", "--attach", str(notes), "--attach", str(blob))
+    (row,) = read_jsonl(home / "inbox.jsonl")
+    assert row["id"] == rid
+    # a file named .png that is not one is a plain file: the type comes from the bytes, never the name
+    assert [(a["name"], a["type"], a["width"]) for a in row["attachments"]] == [
+        ("notes.png", inbox_mod.FILE_TYPE, 0), ("dump.qqq", inbox_mod.FILE_TYPE, 0)]
+    (home / "inbox.jsonl").unlink()
     assert main(["inbox", "add", "--kind", "chat", "--text", "x", "--attach", str(tmp_path / "missing.png")]) == 3
+    empty = tmp_path / "empty.txt"
+    empty.write_text("")
+    assert main(["inbox", "add", "--kind", "chat", "--text", "x", "--attach", str(empty)]) == 3
+    assert "is empty" in capsys.readouterr().err
+    assert main(["inbox", "add", "--kind", "chat", "--text", "x", "--attach", str(tmp_path)]) == 3
+    assert "not a file" in capsys.readouterr().err
     big = tmp_path / "big.png"
     big.write_bytes(PNG_3x2 + b"\0" * inbox_mod.ATTACH_MAX_BYTES)
     assert main(["inbox", "add", "--kind", "chat", "--text", "x", "--attach", str(big)]) == 3
@@ -379,16 +392,29 @@ def test_attach_refuses_non_images_big_files_and_too_many(home: Path, tmp_path: 
     assert not (home / "inbox.jsonl").exists()
 
 
+def test_a_text_file_gets_its_type_from_its_name(tmp_path: Path) -> None:
+    doc = tmp_path / "spec.json"
+    doc.write_text("{}")
+    att = inbox_mod.describe_attachment(doc)
+    assert att == {"path": str(doc.resolve()), "type": "application/json", "size": 2, "width": 0, "height": 0,
+                   "name": "spec.json"}
+
+
 def test_malformed_attachments_in_a_row_are_dropped(home: Path) -> None:
     from tirith.store import append_jsonl
     row = {"id": "in-aaaaaaaa", "at": "2026-01-01T00:00:00Z", "kind": "chat", "project": "", "step": "",
            "text": "hi", "from": "owner",
            "attachments": [{"path": "rel.png", "type": "image/png"},
-                           {"path": "/x/1.svg", "type": "image/svg+xml"},
+                           {"path": "/x/a.bin", "type": "<script>"},
+                           {"path": "/x/b.bin"},
+                           {"path": "/x/1.svg", "type": "image/svg+xml", "width": 9, "name": "logo\u0007.svg"},
                            {"path": "/x/1.png", "type": "image/png", "size": 4}]}
     append_jsonl(home / "inbox.jsonl", row)
     (req,) = inbox_mod.requests(home)
-    assert req["attachments"] == [{"path": "/x/1.png", "type": "image/png", "size": 4, "width": 0, "height": 0}]
+    # an SVG is a plain file (no picture, no size), the name loses its control characters
+    assert req["attachments"] == [{"path": "/x/1.svg", "type": "image/svg+xml", "size": 0, "width": 0, "height": 0,
+                                   "name": "logo.svg"},
+                                  {"path": "/x/1.png", "type": "image/png", "size": 4, "width": 0, "height": 0}]
 
 
 def test_watch_line_lists_the_absolute_paths(home: Path, tmp_path: Path) -> None:
@@ -410,8 +436,13 @@ def test_answer_with_images_and_manager_context(home: Path, tmp_path: Path) -> N
                                 attachments=[inbox_mod.describe_attachment(img)])["id"]
     ctx = dispatch_mod.manager_context(home, datetime.now(timezone.utc) + timedelta(seconds=5))
     assert str(img.resolve()) in ctx and "image/png" in ctx
+    log = tmp_path / "trace.txt"
+    log.write_text("boom")
+    inbox_mod.add_request(home, "chat", text="and this", attachments=[inbox_mod.describe_attachment(log)])
+    ctx = dispatch_mod.manager_context(home, datetime.now(timezone.utc) + timedelta(seconds=5))
+    assert f"file: {log.resolve()} (trace.txt, text/plain, 4 bytes)" in ctx
     assert main(["inbox", "answer", rid, "It is a button.", "--attach", str(img)]) == 0
-    (req,) = inbox_mod.requests(home)
+    req = next(r for r in inbox_mod.requests(home) if r["id"] == rid)
     assert req["answers"][0]["attachments"][0]["path"] == str(img.resolve())
 
 

@@ -8,12 +8,12 @@ const noop = () => {};
 const view = { addEventListener: noop };
 const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const T = {
-  esc, ui: {}, md: esc, fileOpts: () => null, proj: esc, ms: s => Date.parse(s) || 0, now: () => Date.parse('2026-10-29T12:00:00Z'), render: noop,
+  esc, ui: {}, md: esc, chatOpts: () => null, proj: esc, ms: s => Date.parse(s) || 0, now: () => Date.parse('2026-10-29T12:00:00Z'), render: noop,
   empty: t => '<p>' + t + '</p>', copyText: noop, clockTime: () => '12:00', filter: {}, keepCapture: noop, keepRestore: noop,
   dur: () => '1s', elapsed: () => 1
 };
 const el = { addEventListener: noop, insertAdjacentHTML: noop, classList: { toggle: noop } };
-const sandbox = { window: { T, addEventListener: noop }, document: { getElementById: id => (id === 'view' ? view : el), querySelector: () => null }, localStorage: { getItem: () => null, setItem: noop } };
+const sandbox = { window: { T, addEventListener: noop }, document: { getElementById: id => (id === 'view' ? view : el), querySelector: () => null, addEventListener: noop }, localStorage: { getItem: () => null, setItem: noop } };
 vm.createContext(sandbox);
 for (const f of ['./actions.js', './v-needs.js', './v-manager.js']) vm.runInContext(fs.readFileSync(new URL(f, import.meta.url), 'utf8'), sandbox);
 

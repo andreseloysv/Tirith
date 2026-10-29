@@ -19,7 +19,7 @@ from tirith.store import append_jsonl, read_jsonl
 
 ASK_KINDS = ("decision", "action", "approval", "info")
 MAX_OPTIONS = 6
-LABEL_MAX = 60
+LABEL_MAX = 200  # an option label is a whole sentence at times; the page wraps it (the reply value keeps 200 too)
 QUEUE_FILE = "manager_queue.jsonl"
 OLD_QUEUE_FILE = "steward_queue.jsonl"  # before the rename; read while the new file does not exist
 QUEUE_TEXT_MAX = 1500
@@ -102,10 +102,21 @@ class AskError(Exception):
     """An ask that cannot be recorded; the message says why."""
 
 
+def cut_label(label: str) -> str:
+    """``label`` in at most ``LABEL_MAX`` characters: a longer one ends at a word with "…"."""
+    label = " ".join(str(label).split())
+    if len(label) <= LABEL_MAX:
+        return label
+    head = label[:LABEL_MAX - 1]
+    if " " in head:
+        head = head.rsplit(" ", 1)[0]
+    return head.rstrip(" ,;:.-") + "…"
+
+
 def parse_option(spec: str) -> dict:
     """``"Label|value"`` -> ``{"label", "value"}`` (the value defaults to the label)."""
     label, sep, value = str(spec).partition("|")
-    label, value = label.strip()[:LABEL_MAX], value.strip()
+    label, value = cut_label(label), value.strip()
     if not label:
         raise AskError(f"an option needs a label: {spec!r}")
     return {"label": label, "value": value if sep and value else label}
@@ -117,7 +128,7 @@ def clean_options(options) -> list[dict]:
         if isinstance(item, str):
             item = parse_option(item)
         if isinstance(item, dict) and str(item.get("label") or "").strip():
-            label = str(item["label"]).strip()[:LABEL_MAX]
+            label = cut_label(item["label"])
             option = {"label": label, "value": str(item.get("value") or label)}
             if item.get("command"):  # an option that runs a command (dispatcher "Fix it" / "Try again")
                 option["command"] = str(item["command"])

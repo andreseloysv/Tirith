@@ -183,6 +183,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Reglas propias en `tirith.toml` (`[[rules]]`), aplicadas por las puertas y validadas por `tirith check`.
 - [x] Crear etapas y reglas pidiéndolo (chat o formulario «+ Etapa» / «+ Regla»); la UI se actualiza sola.
 - [x] Aviso con un clic cuando las reglas no están activas en la máquina.
+- [x] Setup explica por qué una regla no está activa (agente sin `settings`, si puede ejecutarse sin reglas y cómo arreglarlo).
 
 ## 14. Manager de guardia, chat y piloto automático
 
@@ -194,6 +195,13 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Editar, borrar o añadir elementos del Plan con un botón; el plan se vuelve a comprobar después.
 - [x] `state.json` pequeño y rápido (detalle del agente bajo demanda); `tirith` se encuentra fuera de una terminal.
 - [x] La app de escritorio muestra la web actual sin recompilar y arranca el collector aun abierta desde Finder.
+- [x] Variables de entorno por proyecto, editables en Settings.
+- [x] Los lanes no llenan el disco: `target` de cargo compartido, worktrees ya unidos borrados, guarda de espacio libre.
+- [x] Referencias a archivos clicables en el chat; la caja del chat crece con el texto.
+- [x] Cerrar la app detiene todo el proceso del collector; un segundo SIGTERM durante el cierre se ignora; un archivo de bloqueo decide si ya hay un collector.
+- [x] Los nombres de lanes en el chat del manager son enlaces que abren el lane.
+- [x] Los enlaces web del chat se abren en el navegador predeterminado desde la app de escritorio.
+- [x] Las opciones largas de respuesta se ajustan en varias líneas; cualquier archivo se puede arrastrar al chat o adjuntar.
 - [x] Comprobar en pantalla que el piloto automático y la lista «Agents» coinciden (comprobado con captura el 2026-10-29).
 - [x] El turno del manager termina al responder; sus sub-agentes arrancan desacoplados y cada lane tiene su propia carpeta.
 - [x] El chat marca «Delivered» lo que la app aceptó (nunca «Not sent»); rutas de archivo clicables; la caja crece con el texto.
