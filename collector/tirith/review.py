@@ -12,6 +12,7 @@ import re
 import subprocess
 from pathlib import Path
 
+from tirith import timeouts as timeouts_mod
 from tirith import claimcheck as claimcheck_mod
 from tirith import manifest as manifest_mod
 from tirith import plangate as plangate_mod
@@ -107,7 +108,7 @@ def check_ready(home: Path, lane_id: str, repo: Path | None) -> dict:
 
 
 def _git(folder: Path, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", "-C", str(folder), *args], capture_output=True, text=True)
+    return timeouts_mod.run(["git", "-C", str(folder), *args], "git", text=True)
 
 
 def _tail(text: str) -> str:

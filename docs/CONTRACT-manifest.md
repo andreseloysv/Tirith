@@ -53,8 +53,8 @@ the run in `state.json` `pipelines[]`, with:
 | `worktree` | absolute path of the worktree, or `null` |
 | `branch` | the checked-out branch there (`lane/<id>`), or `null` |
 
-Status is truthful. The `start` event records the stage `pid` (and `timeout` when given). A run is `running` only
-while a stage has a start, no end, a live pid and is younger than its timeout (default 3600 s); otherwise that
+Status is truthful. The `start` event records the stage `pid` and its `timeout` (always; `CONTRACT-timeouts.md`). A run is `running` only
+while a stage has a start, no end, a live pid and is younger than its timeout (3600 s for an older run without one); otherwise that
 stage is `failed` with `reason: "interrupted"`. In a finished run (no running stage) the stages that never started
 are `skipped`, and the run is `passed`/`failed` by the stages that ran.
 

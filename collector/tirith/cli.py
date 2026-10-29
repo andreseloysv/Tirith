@@ -21,6 +21,7 @@ import time
 from datetime import date, datetime, timezone
 from pathlib import Path
 
+from tirith import timeouts as timeouts_mod
 from tirith.collector import (
     Collector, collect_tree, git_head, git_shortstat, heuristic_architecture, lane_status,
 )
@@ -38,6 +39,7 @@ from tirith import manifest as manifest_mod
 from tirith import hooks as hooks_mod
 from tirith import brain as brain_mod
 from tirith import collectlock as collectlock_mod
+from tirith import selfreload as selfreload_mod
 from tirith import inbox as inbox_mod
 from tirith import setup as setup_mod
 from tirith import lanestop as lanestop_mod
@@ -58,7 +60,7 @@ from tirith import projenv as projenv_mod
 from tirith import rooms as rooms_mod
 from tirith.home import ensure_home, load_config, now_iso, parse_iso, tirith_home
 from tirith.store import (
-    append_jsonl, final_answer, lane_path, read_json, read_jsonl, read_lanes, write_json_atomic,
+    append_jsonl, final_answer, lane_path, read_json, read_jsonl, read_lane, read_lanes, write_json_atomic,
     write_lane,
 )
 
@@ -551,8 +553,12 @@ def _cmd_lane_run(args) -> int:
                     proc.stdin.close()
                 except OSError:  # the agent exited before reading it; its exit code tells
                     pass
+            watch = timeouts_mod.supervise(proc, "agent-turn", home=home, what=f"lane {lane_id}")
             exit_code = proc.wait()
+            ended = watch()
         answer, _ = final_answer(log_path)
+        if ended["timed_out"]:
+            exit_code, answer = timeouts_mod.EXIT_TIMED_OUT, ended["message"]
     stopped = lanestop_mod.marker(read_json(lane_path(home, lane_id), None) or {})
     if stopped:  # `tirith lane stop`: failed, with who stopped it and why
         exit_code, answer = exit_code or 1, lanestop_mod.report_for(stopped["by"], stopped.get("reason"))
@@ -562,7 +568,7 @@ def _cmd_lane_run(args) -> int:
         pass
     elif result == "failed":
         add_lane_ask(home, lane, "failed", log_tail=_log_tail(log_path))
-    elif not answer:
+    elif not answer and not (interactive and manager_lane):  # the manager session has no final answer
         add_lane_ask(home, lane, "ended without an answer")
     files, plus, minus = git_shortstat(str(workspace), lane.get("start_commit"))
     print(f"lane {lane_id}: {result}, {files} files +{plus} -{minus}, "
@@ -903,6 +909,35 @@ def _cmd_flow(args) -> int:
     return 0
 
 
+def _lane_of_caller(home: Path) -> str | None:
+    """The lane the caller works for: ``$TIRITH_LANE`` when it names a lane that has not ended."""
+    lane_id = os.environ.get("TIRITH_LANE") or None
+    lane = read_lane(home, lane_id) if lane_id else None
+    return lane_id if isinstance(lane, dict) and not lane.get("ended_at") else None
+
+
+def _cmd_timeout(args) -> int:
+    """``timeout get|set``: the value in force per command class, and a bounded change with a reason."""
+    home = _home(args)
+    config = load_config(home)
+    if args.timeout_command == "get":
+        classes = [args.cls] if args.cls else list(timeouts_mod.POLICY)
+        for cls in classes:
+            row = timeouts_mod.describe(home, config, cls)
+            print(f"{cls}: {row['seconds']:g} s ({row['source']}; allowed {row['min']:g} to {row['max']:g} s)")
+        return 0
+    lane = _lane_of_caller(home)
+    try:
+        row = timeouts_mod.set_timeout(home, config, args.cls, args.seconds, args.reason or "", lane=lane)
+    except timeouts_mod.TimeoutRefused as error:
+        raise SystemExit(f"tirith timeout: {error}")
+    flows_mod.append_flow(
+        home, f"agent:{lane}" if lane else "owner", "guard", "decision",
+        f"timeout of '{args.cls}' set to {args.seconds:g} s", why=row["reason"] or None)
+    print(f"{args.cls}: {args.seconds:g} s" + (" until the lane ends" if lane else ""))
+    return 0
+
+
 def _cmd_decide(args) -> int:
     """Record a decision and its reason: agent -> manager, or manager -> owner without a lane."""
     home = _home(args)
@@ -1052,10 +1087,38 @@ def _cmd_session_list(args) -> int:
     return 0
 
 
+MANAGER_VERBS = ("say", "interrupt", "stop", "restart", "status")
+
+
+def _cmd_manager_session(args, words: list[str]) -> int:
+    """``tirith manager say <text> | interrupt | stop | restart [--fresh] | status`` (the persistent session)."""
+    from tirith import msession as msession_mod
+    home = _home(args)
+    verb, rest = words[0], words[1:]
+    if verb == "say":
+        text = " ".join(rest).strip()
+        if not text:
+            raise SystemExit("manager say needs the message")
+        print(inbox_mod.add_request(home, "chat", text=text)["id"])  # queued into the same session
+        return 0
+    if verb == "status":
+        from tirith import dispatch as dispatch_mod
+        book = (dispatch_mod.load_state(home).get("manager") or {}).get("session") or {}
+        print(json.dumps({k: book.get(k) for k in ("lane", "session_id", "turns_total", "stopped", "error")}))
+        return 0
+    fresh = verb == "restart" and "--fresh" in rest
+    msession_mod.send_control(home, verb, "fresh" if fresh else "")
+    print(f"manager {verb}: sent")
+    return 0
+
+
 def _cmd_manager(args) -> int:
     home = _home(args)
+    words = list(args.activity)
+    if words[0] in MANAGER_VERBS and (words[0] == "say" or len(words) == 1 or words[1:] == ["--fresh"]):
+        return _cmd_manager_session(args, words)
     write_json_atomic(home / "orchestrator.json",
-                      {"activity": args.activity, "since": now_iso()})
+                      {"activity": " ".join(words), "since": now_iso()})
     print("manager updated")
     return 0
 
@@ -1104,12 +1167,19 @@ def _cmd_collect(args) -> int:
             signal.signal(signal.SIGTERM, signal.SIG_IGN)
             raise SystemExit(0)
         signal.signal(signal.SIGTERM, _terminate)
+    reload_now = False
     try:
         if args.once:  # a single cycle may overlap a running collector
             collector.run(interval=args.interval, once=True)
         else:
             with collectlock_mod.hold_collector_lock(home):
-                collector.run(interval=args.interval, once=False)
+                try:
+                    collector.run(interval=args.interval, once=False,
+                                  reload_check=selfreload_mod.CodeWatch().changed)
+                except selfreload_mod.ReloadRequested:
+                    reload_now = True  # re-exec only after the lock is released
+        if reload_now:
+            selfreload_mod.reexec()
     except collectlock_mod.CollectorRunning as running:
         print(running)
         return 0
@@ -1400,14 +1470,14 @@ def relaunch_lane(home: Path, lane: dict, alias: str | None, by_tirith: bool = F
     lane_id = launch_mod.lane_id_for(title, {str(l["id"]) for l in read_lanes(home)}, repo)
     old = Path(str(lane.get("workspace") or ""))
     if note:
-        subprocess.run(["git", "-C", str(old), "add", "-A"], capture_output=True)
-        subprocess.run(["git", "-C", str(old), "commit", "-q", "-m", f"Lane {lane['id']}: work before the claim check"],
-                       capture_output=True)
+        timeouts_mod.run(["git", "-C", str(old), "add", "-A"], "git")
+        timeouts_mod.run(["git", "-C", str(old), "commit", "-q", "-m", f"Lane {lane['id']}: work before the claim check"],
+                         "git-commit")
         workspace = launch_mod.create_worktree(repo, lane_id, base=f"lane/{lane['id']}")
         brief = brief.with_name(f"{brief.stem}-{lane_id}.md")
         brief.write_text(Path(str(lane["brief"])).read_text(encoding="utf-8") + "\n\n" + note, encoding="utf-8")
     else:
-        dirty = subprocess.run(["git", "-C", str(old), "status", "--porcelain"], capture_output=True, text=True)
+        dirty = timeouts_mod.run(["git", "-C", str(old), "status", "--porcelain"], "git", text=True)
         if old.is_dir() and dirty.returncode == 0 and not dirty.stdout.strip():
             workspace = old
         else:
@@ -1975,7 +2045,7 @@ def _setup_apply(home: Path, request_id: str) -> int:
                     "--stage", str(setup.get("name") or "")]
             if setup.get("pipeline"):
                 argv += ["--pipeline", str(setup["pipeline"])]
-            code = subprocess.run(argv, cwd=folder).returncode
+            code = timeouts_mod.run(argv, "stage", cwd=folder, capture_output=False).returncode
             note = f"ran stage `{setup.get('name')}`: " + ("passed" if code == 0 else f"failed (exit {code})")
         else:
             note, code = setup_mod.apply_request(folder, setup), 0
@@ -2187,6 +2257,17 @@ def build_parser() -> argparse.ArgumentParser:
     flow.add_argument("--ref", default=None)
     flow.set_defaults(func=_cmd_flow)
 
+    tmo = sub.add_parser("timeout", parents=[common], help="the timeout of each class of command")
+    tmo_sub = tmo.add_subparsers(dest="timeout_command", required=True)
+    t_get = tmo_sub.add_parser("get", parents=[common], help="show the value in force")
+    t_get.add_argument("--class", dest="cls", default=None)
+    t_get.set_defaults(func=_cmd_timeout)
+    t_set = tmo_sub.add_parser("set", parents=[common], help="raise or lower it within its limits, with a reason")
+    t_set.add_argument("--class", dest="cls", required=True)
+    t_set.add_argument("--seconds", type=float, required=True)
+    t_set.add_argument("--reason", default=None)
+    t_set.set_defaults(func=_cmd_timeout)
+
     decide = sub.add_parser("decide", parents=[common],
                             help="record a decision and why (shown in the Flow view)")
     decide.add_argument("decision")
@@ -2235,8 +2316,9 @@ def build_parser() -> argparse.ArgumentParser:
     s_ls = session_sub.add_parser("list", parents=[common], help="all sessions")
     s_ls.set_defaults(func=_cmd_session_list)
 
-    manager = sub.add_parser("manager", parents=[common], help="set manager activity")
-    manager.add_argument("activity")
+    manager = sub.add_parser("manager", parents=[common], help="set manager activity, or control the "
+                             "persistent session: say <text> | interrupt | stop | restart [--fresh] | status")
+    manager.add_argument("activity", nargs="+")
     manager.set_defaults(func=_cmd_manager)
 
     manager_note = sub.add_parser("manager-note", parents=[common],
