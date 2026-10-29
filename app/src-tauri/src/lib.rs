@@ -31,6 +31,8 @@ struct App {
     chats: Mutex<HashMap<String, ChatSession>>,
     /// Action ids with a run in progress (one run at a time per action).
     running: Mutex<HashSet<String>>,
+    /// Set once the app is on its way out: the supervisor must not bring the collector back.
+    quitting: std::sync::atomic::AtomicBool,
 }
 
 // -- paths and config ---------------------------------------------------------------------------
@@ -475,6 +477,65 @@ fn start_collector(app: &App) {
     }
 }
 
+/// Whether the supervisor should start the collector now. `child_exited` is `None` when the app holds no
+/// collector child, else whether that child has ended; `since_attempt` is the time since the last start and
+/// `backoff` the wait required between starts.
+fn supervisor_should_start(
+    quitting: bool,
+    child_exited: Option<bool>,
+    lock_held: bool,
+    since_attempt: std::time::Duration,
+    backoff: std::time::Duration,
+) -> bool {
+    if quitting || child_exited == Some(false) {
+        return false;
+    }
+    if child_exited.is_none() && lock_held {
+        return false; // someone else's collector is running
+    }
+    since_attempt >= backoff
+}
+
+/// The next wait between restarts: 5 s, doubling up to 60 s.
+fn supervisor_backoff(prev: std::time::Duration) -> std::time::Duration {
+    (prev * 2).clamp(std::time::Duration::from_secs(5), std::time::Duration::from_secs(60))
+}
+
+/// Every 5 s: if the collector this app started has exited, or nothing holds the collector lock, start it again.
+fn spawn_collector_supervisor(handle: AppHandle) {
+    use std::sync::atomic::Ordering;
+    use std::time::{Duration, Instant};
+    std::thread::spawn(move || {
+        let base = Duration::from_secs(5);
+        let mut backoff = base;
+        let mut last_attempt = Instant::now() - Duration::from_secs(60);
+        loop {
+            std::thread::sleep(base);
+            let app = handle.state::<App>();
+            let quitting = app.quitting.load(Ordering::SeqCst);
+            let child_exited = {
+                let mut slot = app.collector.lock().unwrap();
+                let exited = slot.as_mut().map(|c| !matches!(c.try_wait(), Ok(None)));
+                if exited == Some(true) {
+                    *slot = None;
+                }
+                exited
+            };
+            let held = collector_running();
+            if !supervisor_should_start(quitting, child_exited, held, last_attempt.elapsed(), backoff) {
+                if held && last_attempt.elapsed() > backoff * 2 {
+                    backoff = base; // healthy for a while: the next failure starts from 5 s again
+                }
+                continue;
+            }
+            last_attempt = Instant::now();
+            backoff = supervisor_backoff(backoff);
+            log_line("app.log", &format!("collector is not running, restarting (next wait {}s)", backoff.as_secs()));
+            start_collector(&app);
+        }
+    });
+}
+
 /// Puts the child in a process group of its own (pgid = its pid) so the whole tree can be stopped at once.
 #[cfg(unix)]
 fn own_process_group(c: &mut Command) {
@@ -527,6 +588,41 @@ fn stop_tree(child: &mut Child, _grace: std::time::Duration) {
 fn stop_collector(app: &App) {
     if let Some(mut child) = app.collector.lock().unwrap().take() {
         stop_tree(&mut child, std::time::Duration::from_secs(3));
+    }
+}
+
+#[cfg(test)]
+mod supervisor_tests {
+    use super::*;
+    use std::time::Duration;
+
+    fn s(n: u64) -> Duration {
+        Duration::from_secs(n)
+    }
+
+    #[test]
+    fn restarts_when_our_child_exited_or_the_lock_is_free() {
+        assert!(supervisor_should_start(false, Some(true), false, s(10), s(5)), "child exited");
+        assert!(supervisor_should_start(false, None, false, s(10), s(5)), "no child, no lock holder");
+    }
+
+    #[test]
+    fn leaves_a_live_collector_alone() {
+        assert!(!supervisor_should_start(false, Some(false), false, s(99), s(5)), "our child is running");
+        assert!(!supervisor_should_start(false, None, true, s(99), s(5)), "another collector holds the lock");
+    }
+
+    #[test]
+    fn never_restarts_while_quitting_or_inside_the_backoff() {
+        assert!(!supervisor_should_start(true, Some(true), false, s(99), s(5)));
+        assert!(!supervisor_should_start(false, Some(true), false, s(3), s(5)));
+    }
+
+    #[test]
+    fn backoff_doubles_from_5_to_60() {
+        assert_eq!(supervisor_backoff(s(5)), s(10));
+        assert_eq!(supervisor_backoff(s(40)), s(60));
+        assert_eq!(supervisor_backoff(s(60)), s(60));
     }
 }
 
@@ -1926,6 +2022,7 @@ pub fn run() {
                 .disable_drag_drop_handler()
                 .build()?;
             start_collector(&app.state::<App>());
+            spawn_collector_supervisor(app.handle().clone());
             spawn_state_pump(app.handle().clone());
             Ok(())
         })
@@ -1933,8 +2030,12 @@ pub fn run() {
         .expect("error while building the Tirith app");
 
     app.run(|handle, event| {
+        if let RunEvent::ExitRequested { .. } = event {
+            handle.state::<App>().quitting.store(true, std::sync::atomic::Ordering::SeqCst);
+        }
         if let RunEvent::Exit = event {
             let state = handle.state::<App>();
+            state.quitting.store(true, std::sync::atomic::Ordering::SeqCst);
             for (_, mut s) in state.chats.lock().unwrap().drain() {
                 terminate(&mut s.child);
                 let _ = s.child.wait();
