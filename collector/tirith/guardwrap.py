@@ -56,10 +56,11 @@ def verify_guard(repo: Path | None, words: list[str]) -> list[str]:
         return [f"guard check failed: {exc}"]
 
 
-def install_guard(repo: Path, words: list[str]) -> list[str]:
-    """Install missing hooks via the guard module; returns problems left."""
+def install_guard(repo: Path, words: list[str], chain: bool = False) -> list[str]:
+    """Install missing hooks via the guard module (``chain``: keep the repo's own hooks as ``.local``);
+    returns problems left."""
     try:
-        return list(guard_module().install(Path(repo), list(words)))
+        return list(guard_module().install(Path(repo), list(words), chain=chain))
     except Exception as exc:
         return [f"guard install failed: {exc}"]
 

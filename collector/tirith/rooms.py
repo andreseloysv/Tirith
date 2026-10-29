@@ -26,6 +26,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable, Protocol
 
+from tirith import asks as asks_mod
 from tirith import brain as brain_mod
 from tirith.home import Config, RoomConfig, now_iso, parse_iso
 from tirith.store import read_json, write_json_atomic
@@ -576,6 +577,7 @@ class RoomsService:
                 "project": room_cfg.project,
                 "text": f"{room_title(room_cfg.id)}: {item['from']} (#{item['n']}) {item['reason']}",
                 "since": item["at"], "link": url, "source": needs_source,
+                "options": [dict(o) for o in asks_mod.GOT_IT_OPTIONS],
             })
         room = {
             "id": room_cfg.id, "url": url,

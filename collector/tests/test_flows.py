@@ -43,7 +43,7 @@ def test_automatic_flows(home: Path, tmp_path: Path) -> None:
     brief.write_text("do it", encoding="utf-8")
     cli.main(["lane", "start", "--project", "demo", "--class", "warden", "--feature", "Tests",
               "--id", "w-1", "--brief", str(brief), "--pid", str(os.getpid())])
-    cli.main(["wait", "add", "Tick the box", "--project", "demo", "--id", "w-9"])
+    cli.main(["wait", "add", "Tick the box", "--project", "demo", "--id", "w-9", "--option", "Done|done"])
     cli.main(["wait", "done", "w-9"])
     cli.main(["lane", "end", "w-1", "--result", "failed", "--report", "\nTwo tests red\nmore"])
     cli.main(["pipeline", "declare", "rel", "--project", "demo", "--stages", "build"])

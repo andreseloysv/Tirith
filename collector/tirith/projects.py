@@ -270,6 +270,35 @@ def _remove_from_config(home: Path, pid: str) -> bool:
     return removed
 
 
+def set_project_guard(home: Path, pid: str, enabled: bool) -> bool:
+    """Set ``guard = false`` (or remove the line again) in the ``[[projects]]`` block of ``pid``.
+
+    Returns False when the project is not in a ``[[projects]]`` block of config.toml."""
+    path = Path(home) / "config.toml"
+    if not path.exists():
+        return False
+    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+    index = 0
+    while index < len(lines):
+        if lines[index].strip() == "[[projects]]":
+            end = index + 1
+            while end < len(lines) and not lines[end].strip().startswith("["):
+                end += 1
+            id_at = next((i for i in range(index + 1, end) if (m := _ID_LINE_RE.match(lines[i]))
+                          and m.group(1) == pid), None)
+            if id_at is not None:
+                block = [ln for ln in lines[index:end] if not re.match(r"\s*guard\s*=", ln)]
+                if not enabled:
+                    at = next(i for i, ln in enumerate(block) if _ID_LINE_RE.match(ln))
+                    block.insert(at + 1, "guard = false\n")
+                write_text_atomic(path, "".join(lines[:index] + block + lines[end:]))
+                return True
+            index = end
+            continue
+        index += 1
+    return False
+
+
 def remove_project(home: Path, pid: str) -> str | None:
     """Remove a registered or auto project. Returns ``"config"``/``"auto"`` or None."""
     config = load_config(home)
