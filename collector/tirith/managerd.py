@@ -82,6 +82,8 @@ RULES = (
     "`tirith inbox done <id>` when it is settled. Answer the question that was asked, briefly.",
     "Put something on the owner's list (`tirith wait add ... --option ...`) only for what you must refuse or "
     "cannot do yourself. No operating-system notifications.",
+    "A Tirith block is not a stop: use the alternative it gives and continue. Repeated blocks of a lane reach "
+    "you as a queue item with the exact commands; they never go to the owner.",
     *howto_mod.RULES,
     "Queue items: handle each (look at the lane, unblock it, review it) and close it with "
     "`tirith queue done <id>`.",
