@@ -10,6 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from tirith import asks as asks_mod
+from tirith import howto as howto_mod
 from tirith import planlane as planlane_mod
 from tirith.home import Config
 from tirith.store import read_json, write_json_atomic
@@ -41,6 +42,7 @@ def brief(project: str, text: str) -> str:
            "in brackets, `[credentials]`, `[payment]`, `[personal-account]`, `[physical-device]` or "
            "`[owner-decision]`, and only for something you really could not do).", "",
            "## Hard rules", *(f"- {rule}" for rule in planlane_mod.RULES),
+           *(f"- {rule}" for rule in howto_mod.RULES),
            "- Do not change any file that is tracked by git; this lane only looks and reports.", ""]
     return "\n".join(out)
 

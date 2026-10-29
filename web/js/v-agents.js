@@ -21,7 +21,7 @@
   /* The card beside the drawer already shows what it shows: a working card has the feature, a
      2-3 line goal, the "now doing" line, the clock and the totals; the other cards only the feature
      and the clock. The drawer adds the rest and never repeats those. */
-  var RV = { running: 'Testing…', merged: 'Merged', 'tests-failed': 'Tests failed', 'merge-failed': 'Merge failed', ready: 'Tests passed, not merged', dropped: 'Dropped' };
+  var RV = { running: 'Testing…', merged: 'Merged', 'tests-failed': 'Tests failed', 'merge-failed': 'Merge failed', 'claims-failed': 'Report does not match the change', ready: 'Tests passed, not merged', dropped: 'Dropped' };
   /* the review result of a finished launched lane (pending = not started yet, nothing to show) */
   function reviewNote(a) {
     var r = a.review; if (!r || !RV[r.status]) return '';
@@ -29,6 +29,8 @@
       (r.at && r.status !== 'running' ? ' · ' + esc(T.clockTime(r.at)) : '') +
       (r.files != null ? ' <span class="mut">· ' + esc(r.files) + ' files' + (r.passed != null ? ', ' + esc(r.passed) + ' tests passed' : '') + '</span>' : '') +
       (r.run ? ' · <button class="link" data-act="gorun" data-key="' + esc(r.run) + '">test run</button>' : '') +
+      (r.claims && r.claims.ok ? ' <span class="mut">· Claims verified ✓</span>' : '') +
+      (r.claims && !r.claims.ok ? '<ul class="rvout">' + r.claims.mismatches.map(function (m) { return '<li>' + esc(m) + '</li>'; }).join('') + '</ul>' : '') +
       (r.message && (r.status === 'tests-failed' || r.status === 'merge-failed') ? '<pre class="rvout">' + esc(r.message) + '</pre>' : '') + '</p>';
   }
   function detail(a, onCard) {
