@@ -67,7 +67,7 @@ def find_request(home: Path, request_id: str) -> dict | None:
 
 
 def add_answer(home: Path, request_id: str, text: str, by: str = "steward", auto: bool = False,
-               at: str | None = None) -> dict:
+               at: str | None = None, lane: str | None = None) -> dict:
     if by not in ANSWERERS:
         raise InboxError(f"--by must be one of {', '.join(ANSWERERS)}")
     if find_request(home, request_id) is None:
@@ -76,6 +76,8 @@ def add_answer(home: Path, request_id: str, text: str, by: str = "steward", auto
     if not text:
         raise InboxError("an answer needs text")
     row = {"id": request_id, "at": at or now_iso(), "kind": "answer", "by": by, "text": text, "auto": bool(auto)}
+    if lane:
+        row["lane"] = str(lane)  # the agent (lane id) that took the request
     append_jsonl(inbox_path(home), row)
     return row
 
@@ -109,7 +111,8 @@ def requests(home: Path) -> list[dict]:
                         "status": "open", "answers": []}
         elif rid in out and kind == "answer":
             out[rid]["answers"].append({"at": row.get("at"), "by": row.get("by") or "steward",
-                                        "text": str(row.get("text") or ""), "auto": bool(row.get("auto"))})
+                                        "text": str(row.get("text") or ""), "auto": bool(row.get("auto")),
+                                        "lane": str(row["lane"]) if row.get("lane") else None})
             if out[rid]["status"] == "open":
                 out[rid]["status"] = "answered"
         elif rid in out and kind == "done":
@@ -119,6 +122,15 @@ def requests(home: Path) -> list[dict]:
 
 def state_rows(home: Path) -> list[dict]:
     return requests(home)[-STATE_ROWS:]
+
+
+def link_lanes(rows: list[dict], agents: list[dict]) -> None:
+    """Set ``lanes`` on each request: the lane ids named by its answers, then the agents whose
+    ``request_id`` is the request."""
+    for req in rows:
+        ids = [a["lane"] for a in req["answers"] if a.get("lane")]
+        ids += [a["id"] for a in agents if a.get("request_id") == req["id"]]
+        req["lanes"] = list(dict.fromkeys(ids))
 
 
 # -- the watcher ------------------------------------------------------------------------------

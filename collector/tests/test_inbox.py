@@ -11,7 +11,7 @@ import pytest
 from conftest import make_repo, write_config, write_lane_manifest
 from tirith import inbox as inbox_mod
 from tirith import launch as launch_mod
-from tirith.cli import main
+from tirith.cli import main, register_lane
 from tirith.collector import Collector
 from tirith.store import read_jsonl
 
@@ -177,7 +177,8 @@ def test_state_inbox_folds_rows_and_keeps_the_last_100(home: Path) -> None:
     assert len(state["inbox"]) == 100
     assert state["inbox"][-1]["status"] == "answered"
     assert state["inbox"][-1]["answers"] == [{"at": state["inbox"][-1]["answers"][0]["at"], "by": "steward",
-                                              "text": "a", "auto": False}]
+                                              "text": "a", "auto": False, "lane": None}]
+    assert state["inbox"][-1]["lanes"] == []
 
 
 def test_state_inbox_validates_against_the_schema(home: Path) -> None:
@@ -225,3 +226,42 @@ def test_no_brain_no_auto_answer(project, home: Path) -> None:
     inbox_mod.add_request(home, "ask", "demo", "1", "What is left?", at=_at(300))
     state = Collector(home, client=None).build_state(NOW)
     assert state["inbox"][0]["status"] == "open" and state["inbox"][0]["answers"] == []
+
+
+# -- the link between requests and lanes ----------------------------------------------------------
+
+
+def test_answer_lane_is_stored_and_listed(home: Path, capsys) -> None:
+    rid = _add(capsys, "--kind", "finish", "--project", "demo", "--step", "1")
+    assert main(["inbox", "answer", rid, "Taken.", "--lane", "web-panel"]) == 0
+    assert read_jsonl(home / "inbox.jsonl")[-1]["lane"] == "web-panel"
+    assert inbox_mod.requests(home)[0]["answers"][0]["lane"] == "web-panel"
+    assert main(["inbox", "answer", rid, "Plain."]) == 0
+    assert "lane" not in read_jsonl(home / "inbox.jsonl")[-1]
+
+
+def test_lane_start_and_run_store_request_id(home: Path, capsys) -> None:
+    assert main(["lane", "start", "--project", "demo", "--class", "warden", "--feature", "x", "--id", "l1",
+                 "--request", "in-abc12345"]) == 0
+    assert main(["lane", "start", "--project", "demo", "--class", "warden", "--feature", "y", "--id", "l2"]) == 0
+    capsys.readouterr()
+    assert json.loads((home / "lanes" / "l1.json").read_text())["request_id"] == "in-abc12345"
+    assert json.loads((home / "lanes" / "l2.json").read_text())["request_id"] is None
+
+
+def test_state_inbox_lanes_come_from_answers_and_agents(home: Path) -> None:
+    jsonschema = pytest.importorskip("jsonschema")
+    asked = inbox_mod.add_request(home, "finish", "demo", "1")["id"]
+    plain = inbox_mod.add_request(home, "finish", "demo", "2")["id"]
+    inbox_mod.add_answer(home, asked, "Taken.", lane="old-lane")
+    for lane_id, request_id in (("new-lane", asked), ("old-lane", asked), ("other", None)):
+        register_lane(home, lane_id=lane_id, project="demo", hero_class="warden", feature=lane_id,
+                      workspace=None, log=None, pid=None, brief=None, step="1", request_id=request_id)
+    state = Collector(home, client=None).build_state(NOW)
+    by_id = {r["id"]: r for r in state["inbox"]}
+    assert by_id[asked]["lanes"] == ["old-lane", "new-lane"]
+    assert by_id[asked]["answers"][0]["lane"] == "old-lane"
+    assert by_id[plain]["lanes"] == []
+    assert {a["id"]: a["request_id"] for a in state["agents"]} == {"new-lane": asked, "old-lane": asked, "other": None}
+    schema = json.loads((Path(__file__).resolve().parents[1] / "state.schema.json").read_text(encoding="utf-8"))
+    jsonschema.validate(state, schema)

@@ -864,7 +864,8 @@
           "path": null
         }
       ],
-      "step": "2"
+      "step": "2",
+      "request_id": null
     },
     {
       "id": "w1-data",
@@ -1040,7 +1041,8 @@
           "path": null
         }
       ],
-      "step": null
+      "step": null,
+      "request_id": null
     },
     {
       "id": "icon-2",
@@ -1164,7 +1166,8 @@
           "path": "/Users/owner/DEVELOP/Chromasol/icons/crystal_c.blend"
         }
       ],
-      "step": null
+      "step": null,
+      "request_id": null
     },
     {
       "id": "t-world",
@@ -1270,7 +1273,8 @@
           "path": null
         }
       ],
-      "step": "3"
+      "step": "3",
+      "request_id": "in-c20d85a4"
     },
     {
       "id": "t-collector",
@@ -1378,7 +1382,8 @@
           "path": null
         }
       ],
-      "step": null
+      "step": null,
+      "request_id": null
     },
     {
       "id": "w7-a11y",
@@ -1430,7 +1435,8 @@
           "path": null
         }
       ],
-      "step": "2"
+      "step": "2",
+      "request_id": null
     },
     {
       "id": "w8-shots",
@@ -1475,7 +1481,8 @@
           "path": null
         }
       ],
-      "step": "3"
+      "step": "3",
+      "request_id": null
     }
   ],
   "pipelines": [
@@ -2038,9 +2045,11 @@
           "at": "2026-10-28T19:33:10Z",
           "by": "steward",
           "auto": false,
-          "text": "Not blocked. It waits for step 3 to merge, then **one agent** starts on it.\n\n- Nothing needed from you\n- Expected: this evening"
+          "text": "Not blocked. It waits for step 3 to merge, then **one agent** starts on it.\n\n- Nothing needed from you\n- Expected: this evening",
+          "lane": null
         }
-      ]
+      ],
+      "lanes": []
     },
     {
       "id": "in-7be410d2",
@@ -2055,9 +2064,11 @@
           "at": "2026-10-28T19:38:05Z",
           "by": "brain",
           "auto": true,
-          "text": "Two of the three items are done. The remaining one, the link handler tests, has no agent on it yet.\n\nNo agent is working on this step right now."
+          "text": "Two of the three items are done. The remaining one, the link handler tests, has no agent on it yet.\n\nNo agent is working on this step right now.",
+          "lane": null
         }
-      ]
+      ],
+      "lanes": []
     },
     {
       "id": "in-c20d85a4",
@@ -2066,8 +2077,30 @@
       "project": "tirith",
       "step": "3",
       "text": "",
+      "status": "answered",
+      "answers": [
+        {
+          "at": "2026-10-28T19:39:25Z",
+          "by": "steward",
+          "auto": false,
+          "lane": "t-world",
+          "text": "Marrow already has this step. **No new agent needed.**\n\n- Working on: hooks in the agent settings\n- Next: protect the hooks from removal"
+        }
+      ],
+      "lanes": [
+        "t-world"
+      ]
+    },
+    {
+      "id": "in-9d04e6b1",
+      "at": "2026-10-28T19:39:20Z",
+      "kind": "finish",
+      "project": "tirith",
+      "step": "7",
+      "text": "",
       "status": "open",
-      "answers": []
+      "answers": [],
+      "lanes": []
     }
   ]
 }

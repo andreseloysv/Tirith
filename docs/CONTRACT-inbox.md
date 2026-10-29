@@ -19,7 +19,7 @@ collector: state.inbox -> the Plan shows the chip and the answers under the step
 | Row | Fields |
 |---|---|
 | request | `id`, `at`, `kind` (`finish` or `ask`), `project`, `step`, `text`, `from` (`"owner"`), `status` (`"open"`) |
-| answer | `id` (of the request), `at`, `kind: "answer"`, `by` (`steward` or `brain`), `text` (markdown), `auto` (bool) |
+| answer | `id` (of the request), `at`, `kind: "answer"`, `by` (`steward` or `brain`), `text` (markdown), `auto` (bool), optional `lane` (id of the lane that took the request) |
 | done | `id`, `at`, `kind: "done"` |
 
 - `id` is `in-` plus 8 hex digits. `step` is the roadmap step number as a string.
@@ -33,7 +33,7 @@ collector: state.inbox -> the Plan shows the chip and the answers under the step
 |---|---|
 | `tirith inbox add --kind finish\|ask --project P --step N [--text T]` | appends a request, prints its id |
 | `tirith inbox list [--open] [--json]` | lists requests (`--open`: only those with no answer and not done) |
-| `tirith inbox answer <id> "<markdown>" [--by steward\|brain]` | appends an answer (default `steward`, `auto: false`) |
+| `tirith inbox answer <id> "<markdown>" [--by steward\|brain] [--lane L]` | appends an answer (default `steward`, `auto: false`); `--lane` names the agent that has the request |
 | `tirith inbox done <id>` | closes the request |
 | `tirith inbox watch [--new-only] [--interval S]` | blocks; prints each open request as one JSON line, then each new one as it arrives |
 
@@ -61,6 +61,10 @@ The last 100 requests, oldest first:
  "status": "answered", "answers": [{"at": "...", "by": "steward", "text": "...", "auto": false}]}
 ```
 
+Each row also has `lanes`: the lane ids from `answers[].lane`, then the agents whose `request_id` is the
+request. A lane gets its `request_id` from `--request <id>` on `tirith lane run`, `lane start` and
+`tirith launch` (`state.agents[].request_id`). All optional; without them nothing changes.
+
 `status` is `open` (no answer yet), `answered` (at least one answer) or `done` (a done row).
 
 ### Automatic answer
@@ -74,6 +78,12 @@ retried at most every 5 minutes. Brain disabled: nothing happens. `finish` reque
 automatically.
 
 ## Web (`web/js/v-plan.js`)
+
+- Buttons are pills with words: **Finish this step** and **Ask**, with a tooltip saying what happens.
+- Under the step, one timeline per request (newest first, built only from `state.inbox`): asked, answered
+  (steward, Tirith started an agent, or Muse Spark automatically), handled by the agent in `lanes` with its
+  live status, done. Unanswered: "Waiting for the steward · N s"; after 2 min a note that Tirith will
+  escalate. The local "sent" chip lasts only until the request shows up in the state (max 10 s).
 
 - Every step row has the two buttons on the right: visible on hover or focus, always on touch screens.
 - **Ask** opens a text box under the step: Enter sends, Esc closes (the draft is kept). **Finish it** sends
