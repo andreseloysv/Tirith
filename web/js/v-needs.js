@@ -61,7 +61,7 @@
 
   function card(w, done) {
     var open = !!ui.needsOpen[w.id], pn = w.project ? T.proj(w.project) : '', h;
-    h = '<li class="ncard' + (done ? ' done' : '') + '"><div class="nhead">' +
+    h = '<li class="ncard' + (done ? ' done' : '') + '" data-wait="' + esc(w.id) + '"><div class="nhead">' +
       '<div class="ntitle' + (open ? ' open' : '') + '"' + (long(w) ? ' data-act="nopen" data-key="' + esc(w.id) + '" role="button" tabindex="0" title="' + (open ? 'Show less' : 'Show all') + '"' : '') + '>' + T.md(w.text) + '</div>' +
       (pn ? '<span class="nchip">' + esc(pn) + '</span>' : '') + '<span class="nage">' + T.agoSpan(w.since) + '</span></div>';
     if (done) {

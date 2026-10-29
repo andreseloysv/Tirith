@@ -145,7 +145,7 @@
         "properties": {
           "id": {"type": "string"},
           "at": {"type": ["string", "null"]},
-          "kind": {"enum": ["finish", "ask", "setup"]},
+          "kind": {"enum": ["finish", "ask", "setup", "autopilot"]},
           "manager_pending": {"type": "boolean"},
           "steward_pending": {"type": "boolean", "description": "Old key for manager_pending, same value."},
           "project": {"type": "string"},
@@ -189,6 +189,23 @@
         "efforts": {"type": "array", "items": {"type": "string"}},
         "agents": {"type": "array", "items": {"type": "string"}},
         "pending": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "autopilot": {
+      "description": "The autopilot: Tirith starts a lane on every ready plan step. See docs/CONTRACT-roadmap.md.",
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["enabled", "max_parallel", "started"],
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "max_parallel": {"type": "integer", "minimum": 0},
+        "started": {"type": "array", "items": {
+          "type": "object", "required": ["lane", "project", "step", "at"],
+          "properties": {"lane": {"type": "string"}, "project": {"type": "string"},
+                         "step": {"type": "string"}, "at": {"type": "string"}}}},
+        "paused_steps": {"type": "array", "items": {
+          "type": "object", "required": ["project", "step", "at"],
+          "properties": {"project": {"type": "string"}, "step": {"type": "string"}, "at": {"type": "string"}}}}
       }
     },
     "launch": {
@@ -631,7 +648,8 @@
             "properties": {
               "id": {"type": "string"},
               "title": {"type": "string"},
-              "status": {"enum": ["done", "active", "todo", "empty"]},
+              "status": {"enum": ["done", "active", "ready", "blocked-owner", "blocked-date", "todo", "empty"]},
+              "until": {"type": "string", "description": "blocked-date: the earliest YYYY-MM-DD an item can start"},
               "done": {"type": "integer", "minimum": 0},
               "total": {"type": "integer", "minimum": 0},
               "items": {
@@ -639,7 +657,12 @@
                 "items": {
                   "type": "object",
                   "required": ["text", "done"],
-                  "properties": {"text": {"type": "string"}, "done": {"type": "boolean"}}
+                  "properties": {
+                    "text": {"type": "string"}, "done": {"type": "boolean"},
+                    "who": {"enum": ["agent", "owner", "date", "out"]},
+                    "until": {"type": "string"},
+                    "owner_item": {"type": "string", "description": "id of the owner item raised for this item"}
+                  }
                 }
               },
               "agents": {"type": "array", "items": {"type": "string"}}
