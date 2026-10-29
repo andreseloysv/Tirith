@@ -655,6 +655,11 @@
         },
         "usage": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/usage"}]},
         "setup": {"$ref": "#/$defs/setup"},
+        "env": {
+          "description": "The project's environment variables (KEY -> value), shown in full on Settings. See docs/CONTRACT-projenv.md.",
+          "type": "object",
+          "additionalProperties": {"type": "string"}
+        },
         "roadmap": {
           "description": "The project's plan read from its markdown checklist; null when there is none. See docs/CONTRACT-roadmap.md.",
           "oneOf": [{"type": "null"}, {"$ref": "#/$defs/roadmap"}]

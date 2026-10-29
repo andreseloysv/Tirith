@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from urllib.parse import parse_qs, urlsplit
 import os
 import re
 import secrets
@@ -49,6 +50,7 @@ from tirith import review as review_mod
 from tirith import roadmap as roadmap_mod
 from tirith import runstage as runstage_mod
 from tirith import projects as projects_mod
+from tirith import projenv as projenv_mod
 from tirith import rooms as rooms_mod
 from tirith.home import ensure_home, load_config, now_iso, parse_iso, tirith_home
 from tirith.store import (
@@ -286,9 +288,11 @@ def _cmd_lane_end(args) -> int:
 
 
 def _wrapper_path_env(home: Path | None = None, lane_id: str | None = None,
-                      token: str | None = None) -> dict:
-    """Environment with the owner's git wrapper folder first in PATH (and the lane, if any)."""
-    env = dict(os.environ)
+                      token: str | None = None, project: str | None = None) -> dict:
+    """Environment with the owner's git wrapper folder first in PATH (and the lane, if any).
+
+    The project's own variables (``tirith project env``) are laid over the inherited ones."""
+    env = projenv_mod.apply(home or tirith_home(), project)
     if lane_id:
         env["TIRITH_LANE"] = lane_id
     if token:
@@ -463,7 +467,7 @@ def _cmd_lane_run(args) -> int:
     lane["tried"] = [a for a in str(getattr(args, "tried", "") or "").split(",") if a]
     write_lane(home, lane)
     began = time.monotonic()
-    env = _wrapper_path_env(home, lane_id, lane["token"])
+    env = _wrapper_path_env(home, lane_id, lane["token"], args.project)
     if interactive:
         exit_code = _run_interactive(home, lane, command, workspace, env)
         answer = _last_stop_message(home, lane_id, lane.get("started_at"))
@@ -852,6 +856,55 @@ def _cmd_project_list(args) -> int:
     for item in items:
         print(f"{item.id}  {item.folder or '-'}  {item.name}  {item.color}"
               + ("  [auto]" if item.auto else ""))
+    return 0
+
+
+def _env_project(args, home: Path) -> str:
+    project, _ = _project_folder_of(home, args.project)
+    if not project:
+        raise SystemExit("project env: no project; pass --project <id> (see: tirith project list)")
+    _project_or_exit(home, project)
+    return project
+
+
+def _cmd_project_env(args) -> int:
+    """``tirith project env set|unset|list --project P``: the variables every run of the project gets."""
+    home = _home(args)
+    project = _env_project(args, home)
+    try:
+        if args.env_command == "list":
+            env = projenv_mod.load(home, project)
+            if args.json:
+                print(json.dumps(env, indent=2, sort_keys=True))
+            else:
+                for key, value in env.items():
+                    print(f"{key}={value}")
+            return 0
+        if args.env_command == "unset":
+            projenv_mod.unset_vars(home, project, args.keys)
+            print(f"{project}: unset {', '.join(args.keys)}")
+            return 0
+        if args.replace_stdin:
+            try:
+                given = json.loads(sys.stdin.read() or "{}")
+            except ValueError:
+                raise SystemExit("project env set: stdin is not a JSON object")
+            if not isinstance(given, dict):
+                raise SystemExit("project env set: stdin is not a JSON object")
+            projenv_mod.save(home, project, given)
+            print(f"{project}: {len(given)} variable(s) saved")
+            return 0
+        pairs = {}
+        for item in args.pairs:
+            key, eq, value = item.partition("=")
+            if not eq:
+                raise SystemExit(f"project env set: '{item}' is not KEY=VALUE")
+            pairs[key] = value
+        projenv_mod.set_vars(home, project, pairs)
+        print(f"{project}: set {', '.join(pairs)}")
+    except projenv_mod.EnvError as exc:
+        print(f"project env: {exc}", file=sys.stderr)
+        return 3
     return 0
 
 
@@ -1246,7 +1299,7 @@ def _cmd_url_open(args) -> int:
 def _url_open(args, home: Path) -> int:
     try:
         link = launch_mod.parse_url(args.url)
-        if link["action"] not in ("launch", "inbox", "review", "run", "stop", "open"):
+        if link["action"] not in ("launch", "inbox", "review", "run", "stop", "open", "env-set"):
             raise launch_mod.LaunchError(f"unknown action '{link['action']}' in {args.url!r}")
         if not launch_mod.token_ok(home, link["token"]):
             gates_mod.record_violation(
@@ -1257,6 +1310,18 @@ def _url_open(args, home: Path) -> int:
                 ts=now_iso(), agent=None, lane=None, session=None,
                 project=link["project"] or None, tool=None, cwd=None)
             raise launch_mod.LaunchError("refusing: wrong or missing token")
+        if link["action"] == "env-set":  # tirith://env-set?project=P&env=<json object>&token=T: replaces the set
+            _project_or_exit(home, link["project"])
+            raw = parse_qs(urlsplit(args.url).query).get("env", ["{}"])[-1]
+            try:
+                given = json.loads(raw)
+            except ValueError:
+                given = None
+            if not isinstance(given, dict):
+                raise launch_mod.LaunchError("env-set needs env=<JSON object>")
+            projenv_mod.save(home, link["project"], given)
+            print(f"{link['project']}: {len(given)} variable(s) saved")
+            return 0
         if link["action"] == "run":
             return _run_action(home, actions_mod.parse_run_url(args.url))
         if link["action"] == "inbox":
@@ -1288,7 +1353,7 @@ def _url_open(args, home: Path) -> int:
             return 0
         launch_step(home, link["project"], link["step"], link["agent"])
     except (launch_mod.LaunchError, inbox_mod.InboxError, review_mod.ReviewError,
-            actions_mod.ActionError, filerefs_mod.FileRefError) as error:
+            actions_mod.ActionError, filerefs_mod.FileRefError, projenv_mod.EnvError) as error:
         print(f"tirith url open: {error}", file=sys.stderr)
         return 3
     return 0
@@ -1897,6 +1962,21 @@ def build_parser() -> argparse.ArgumentParser:
     p_rm.set_defaults(func=_cmd_project_remove)
     p_ls = project_sub.add_parser("list", parents=[common], help="registered and auto projects")
     p_ls.set_defaults(func=_cmd_project_list)
+    p_env = project_sub.add_parser("env", parents=[common], help="environment variables of a project")
+    env_sub = p_env.add_subparsers(dest="env_command", required=True)
+    env_set = env_sub.add_parser("set", parents=[common], help="set KEY=VALUE pairs (or replace all from stdin)")
+    env_set.add_argument("pairs", nargs="*", metavar="KEY=VALUE")
+    env_set.add_argument("--project", default=None)
+    env_set.add_argument("--replace-stdin", action="store_true",
+                         help="read a JSON object from stdin; it becomes the whole set")
+    env_unset = env_sub.add_parser("unset", parents=[common], help="remove variables")
+    env_unset.add_argument("keys", nargs="+", metavar="KEY")
+    env_unset.add_argument("--project", default=None)
+    env_list = env_sub.add_parser("list", parents=[common], help="show the variables")
+    env_list.add_argument("--project", default=None)
+    env_list.add_argument("--json", action="store_true")
+    for env_cmd in (env_set, env_unset, env_list):
+        env_cmd.set_defaults(func=_cmd_project_env)
 
     session = sub.add_parser("session", parents=[common], help="orchestration sessions")
     session_sub = session.add_subparsers(dest="session_command", required=True)

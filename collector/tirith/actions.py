@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlsplit
 
+from tirith import projenv as projenv_mod
 from tirith import tirithcmd
 from tirith.home import now_iso, parse_iso
 from tirith.store import append_jsonl, read_json, read_jsonl, tail_lines, write_json_atomic
@@ -284,6 +285,7 @@ def run_action(home: Path, action_id: str, project_folder: Path | None = None,
     try:
         with log.open("wb") as out:
             code = subprocess.run(["/bin/sh", "-c", tirithcmd.rewrite(action["command"], home)], cwd=cwd, stdin=subprocess.DEVNULL,
+                                  env=projenv_mod.apply(home, str(action.get("project") or "")),
                                   stdout=out, stderr=subprocess.STDOUT, timeout=timeout).returncode
     except (OSError, subprocess.TimeoutExpired) as error:
         with log.open("ab") as out:
