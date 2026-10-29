@@ -5,6 +5,8 @@ world/.godot/
 __pycache__/
 .pytest_cache/
 *.pyc
+# Rust workspace build output
+/target/
 # macOS
 .DS_Store
 # Image tool lock files

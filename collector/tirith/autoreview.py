@@ -18,6 +18,7 @@ from typing import Callable
 
 from tirith import actions as actions_mod
 from tirith import asks as asks_mod
+from tirith import claimcheck as claimcheck_mod
 from tirith import flows as flows_mod
 from tirith import tirithcmd
 from tirith import inbox as inbox_mod
@@ -28,13 +29,13 @@ from tirith import projects as projects_mod
 from tirith import review as review_mod
 from tirith import roadmap as roadmap_mod
 from tirith.home import Config, now_iso, parse_iso
-from tirith.store import lane_path, read_json
+from tirith.store import read_lane
 
 OVERDUE_AFTER_S = 1800.0
 AUTO_WINDOW_S = 86400.0  # older finished lanes are not merged behind the owner's back; they are overdue
 TICK_AT = 0.7            # share of an item's words found in the report's "What changed" lines
 CANDIDATE_AT = 0.3
-TERMINAL = (review_mod.MERGED, review_mod.TESTS_FAILED, review_mod.MERGE_FAILED, review_mod.READY,
+TERMINAL = (review_mod.MERGED, review_mod.TESTS_FAILED, review_mod.CLAIMS_FAILED, review_mod.MERGE_FAILED, review_mod.READY,
             review_mod.DROPPED)
 _WORD = re.compile(r"[a-z0-9]{4,}")
 _CHANGED = re.compile(r"^\s*(?:#{1,6}\s*|\*\*|__)?\s*what\s+changed\b[^\n]*$", re.IGNORECASE)
@@ -232,6 +233,9 @@ def settle(home: Path, config: Config, lane: dict, review: dict, rec: dict, now:
         if rec.get("owner_item"):
             dispatch.close_owner_item(home, rec["owner_item"], at)
         return
+    if status == review_mod.CLAIMS_FAILED:
+        _claims_failed(home, config, lane, review, rec, project, at)
+        return
     key = f"review-{lane_id}-{re.sub(r'[^0-9]', '', str(review.get('at') or ''))}"
     drop = ("Drop the lane", f"tirith lane drop {lane_id}")
     if status == review_mod.READY:  # auto_merge is off: the owner decides
@@ -249,6 +253,45 @@ def settle(home: Path, config: Config, lane: dict, review: dict, rec: dict, now:
         flows_mod.append_flow(home, "tirith", "manager", "alert", text, session=None, project=project, at=at)
         return
     _owner_item(home, rec, key, project, text, rows, at)  # auto_merge off: the owner chose to decide
+
+
+def _brief_text(lane: dict) -> str:
+    try:
+        return Path(str(lane.get("brief") or "")).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+
+
+def _claims_failed(home: Path, config: Config, lane: dict, review: dict, rec: dict, project: str | None,
+                   at: str) -> None:
+    """The report said things the diff does not show: the lane goes back to its agent once with the list
+    (never to the owner); a lane that was already sent back goes to the manager's queue."""
+    lane_id = str(lane["id"])
+    note = str(review.get("message") or "")
+    text = (f"Review of {lane.get('feature') or lane_id} ({lane_id}): the report does not match the change. "
+            + flows_mod.one_line(note.replace(claimcheck_mod.MARK, ""), 400))
+    sent = None
+    if claimcheck_mod.MARK not in _brief_text(lane):
+        alias = str(lane.get("agent") or "")
+        if alias in config.agents:
+            try:
+                sent = relauncher(home, lane, alias, note)
+            except (Exception, SystemExit) as error:  # the manager decides when it cannot be sent back
+                text += f" (sending it back failed: {flows_mod.one_line(str(error), 120)})"
+    if sent:
+        rec["claims_sent"] = sent
+        close_queue(home, rec, f"claims did not match; sent back to the agent as {sent}")
+        flows_mod.append_flow(home, "tirith", f"agent:{sent}", "brief", f"Sent back: {text}", session=None,
+                              project=project, at=at)
+        return
+    rows = [("Retry the review", f"tirith lane review {lane_id}"), ("Drop the lane", f"tirith lane drop {lane_id}")]
+    _manager_item(home, rec, project, lane_id, text, rows)
+    flows_mod.append_flow(home, "tirith", "manager", "alert", text, session=None, project=project, at=at)
+
+
+def relauncher(home: Path, lane: dict, alias: str, note: str) -> str:
+    from tirith.cli import relaunch_lane  # late: cli imports this module
+    return relaunch_lane(home, lane, alias, by_tirith=True, note=note)
 
 
 def _manager_item(home: Path, rec: dict, project: str | None, lane_id: str, text: str,
@@ -278,7 +321,7 @@ def run(home: Path, config: Config, now: datetime, state: dict, lanes: list[dict
     overdue = state.setdefault("overdue", {})
     for seen in lanes:
         lane_id = str(seen.get("id") or "")
-        lane = read_json(lane_path(home, lane_id), None) if lane_id else None
+        lane = read_lane(home, lane_id) if lane_id else None
         if not isinstance(lane, dict) or not lane.get("ended_at") or lane.get("result") != "done":
             continue
         repo = repo_of(config, lane)
