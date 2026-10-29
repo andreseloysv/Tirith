@@ -10,7 +10,9 @@ use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde_json::{json, Value};
-use tauri::{AppHandle, Emitter, Manager, RunEvent, State};
+use tauri::{AppHandle, Emitter, Manager, RunEvent, State, WebviewUrl, WebviewWindowBuilder};
+
+mod liveweb;
 
 const STATE_EVENT: &str = "tirith://state";
 const CHAT_EVENT: &str = "tirith://chat";
@@ -85,6 +87,32 @@ fn collector_dir(cfg: &toml::Table) -> PathBuf {
         return expand(&d);
     }
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../collector")
+}
+
+/// The folder the window serves the page from at runtime: `[app] web_dir`, else (debug builds only)
+/// this repo's `web/`. None means the page embedded in the build (release builds without `web_dir`).
+fn web_dir(cfg: &toml::Table) -> Option<PathBuf> {
+    let dir = match app_setting(cfg, "web_dir") {
+        Some(d) => expand(&d),
+        None if cfg!(debug_assertions) => PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../web"),
+        None => return None,
+    };
+    dir.join("index.html").is_file().then_some(dir)
+}
+
+/// Tell the page when the files under `root` change (checked every 2 s).
+fn spawn_web_watch(app: AppHandle, root: PathBuf) {
+    std::thread::spawn(move || {
+        let mut seen = liveweb::signature(&root);
+        loop {
+            std::thread::sleep(Duration::from_secs(2));
+            let now = liveweb::signature(&root);
+            if now != seen {
+                seen = now;
+                let _ = app.emit(liveweb::CHANGED_EVENT, ());
+            }
+        }
+    });
 }
 
 /// `uv run --project <collector> tirith <args>`, ready to spawn.
@@ -861,8 +889,22 @@ fn chat_stop(state: State<'_, App>, id: String) {
 // -- entry --------------------------------------------------------------------------------------
 
 pub fn run() {
+    let live = web_dir(&config());
+    let serve = live.clone();
     let app = tauri::Builder::default()
         .manage(App::default())
+        .register_uri_scheme_protocol(liveweb::SCHEME, move |_ctx, req| {
+            let (code, ty, body) = match &serve {
+                Some(root) => liveweb::respond(root, req.uri().path()),
+                None => (404, "text/plain; charset=utf-8", b"live web is off".to_vec()),
+            };
+            tauri::http::Response::builder()
+                .status(code)
+                .header("Content-Type", ty)
+                .header("Cache-Control", "no-store")
+                .body(body)
+                .unwrap()
+        })
         .invoke_handler(tauri::generate_handler![
             current_state,
             launch_step,
@@ -878,6 +920,17 @@ pub fn run() {
             chat_stop
         ])
         .setup(|app| {
+            let url = match &live {
+                Some(root) => {
+                    spawn_web_watch(app.handle().clone(), root.clone());
+                    WebviewUrl::External(liveweb::page_url().parse().expect("live page url"))
+                }
+                None => WebviewUrl::App("index.html".into()),
+            };
+            WebviewWindowBuilder::new(app, "main", url)
+                .title("Tirith")
+                .inner_size(1440.0, 900.0)
+                .build()?;
             start_collector(&app.state::<App>());
             spawn_state_pump(app.handle().clone());
             Ok(())
