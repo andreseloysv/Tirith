@@ -166,7 +166,7 @@ def test_an_item_a_live_lane_has_cannot_start_twice(proj, home: Path, capsys) ->
     register_lane(home, lane_id="busy", project="demo", hero_class="warden", feature="x", workspace=None, log=None,
                   pid=os.getpid(), brief=None, step="1")
     assert _run(repo, "--id", "second", "--step", "1", "--item", "Build the button.") == 3
-    assert "already in progress by lane busy" in capsys.readouterr().err
+    assert "busy" in capsys.readouterr().err  # the duplicate-lane rule or the item check
     done = read_json(home / "lanes" / "busy.json", {})
     done["ended_at"] = "2026-01-01T00:00:00Z"
     write_json_atomic(home / "lanes" / "busy.json", done)

@@ -85,7 +85,7 @@ def _lane_run_setup(home: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     monkeypatch.delenv("TIRITH_LANE", raising=False)
     monkeypatch.setattr("tirith.cli.verify_guard", lambda *a, **k: [])
     write_lane_manifest(repo)
-    write_plan(repo)
+    write_plan(repo, "".join(f"## {n}. Step {n}\n\n- [ ] Do the thing.\n\n" for n in (1, 14, 15, 16)))
     return repo
 
 
@@ -149,7 +149,7 @@ def _step_lane(home: Path, lane_id: str, step: str, ended: bool = False) -> None
 def _run_step(repo: Path, lane_id: str, step: str, *extra: str) -> int:
     try:
         return main(["lane", "run", "--project", "demo", "--class", "warden", "--feature", lane_id,
-                     "--brief", str(repo / "brief.md"), "--id", lane_id, "--step", step, *extra,
+                     "--brief", str(repo / "brief.md"), "--id", lane_id, "--step", step, "--item", "Do the thing.", *extra,
                      "--", sys.executable, "-c", "print('x')"])
     finally:
         make_hooks_mutable(repo)
