@@ -26,6 +26,7 @@ from tirith import fallback as fallback_mod
 from tirith import flows as flows_mod
 from tirith import inbox as inbox_mod
 from tirith import launch as launch_mod
+from tirith import loadlimit as loadlimit_mod
 from tirith import plangate as plangate_mod
 from tirith import roadmap as roadmap_mod
 from tirith.home import Config, now_iso, parse_iso
@@ -328,9 +329,10 @@ def run(home: Path, config: Config, now: datetime, state: dict, *, agents: list[
     if not launch or not effective(config, state):
         return changed
     running = len(_live(own, agents, now))
+    allowed = loadlimit_mod.current(config, home)[0]  # lowered while the machine is loaded or the disk is low
     for project in planned:
         for step in project["roadmap"]["steps"]:
-            if running >= config.autopilot_max_parallel:
+            if running >= allowed:
                 return changed
             if step["status"] != "ready" or step["id"] == plangate_mod.OPS_STEP \
                     or _why_not(own, agents, project["id"], step, now):
@@ -370,7 +372,9 @@ def public(home: Path, config: Config, agents: list[dict] | None = None, project
                 skipped.append({"project": p["id"], "step": st["id"], "why": why})
             else:
                 queued += 1
+    allowed, why = loadlimit_mod.current(config, home)
     return {"enabled": effective(config, state), "max_parallel": config.autopilot_max_parallel,
+            "limit": allowed, "limit_why": why,
             "working": len(live), "queued": queued,
             "started": started[-STARTED_SHOWN:], "skipped": skipped,
             "paused_steps": [{"project": k.partition("|")[0], "step": k.partition("|")[2], "at": v["at"]}
