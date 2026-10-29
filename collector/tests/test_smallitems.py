@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import re
+import subprocess
 from pathlib import Path
 
 import pytest
 
-from tirith import gates, managerd, plangate, roadmap
+from tirith import collector, gates, managerd, plangate, roadmap
 
 
 def test_check_note_round_trip() -> None:
@@ -73,3 +74,32 @@ def test_existing_gate_ids_still_present_and_active() -> None:
     assert hasattr(gates, "_subagent") and hasattr(gates, "_agent_cli") and hasattr(gates, "_git_rules")
     assert hasattr(gates, "_roadmap_bash") and hasattr(gates, "_settings_bash") and hasattr(gates, "_raw_stage")
     assert 'tool in SUBAGENT_TOOLS' in source and "_commit_no_verify" in source
+
+
+def _git(repo: Path, *args: str) -> None:
+    subprocess.run(["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@t", *args],
+                   check=True, capture_output=True)
+
+
+def test_budget_counts_only_the_lane_change(tmp_path: Path) -> None:
+    repo = tmp_path / "r"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    (repo / "big.txt").write_text("x\n" * 5000)
+    (repo / "a.txt").write_text("a\n")
+    _git(repo, "add", "."), _git(repo, "commit", "-qm", "base")
+    start = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+    _git(repo, "checkout", "-qb", "lane")
+    (repo / "a.txt").write_text("a\nb\nc\n")
+    (repo / "pic.png").write_bytes(b"\x89PNG\x00\x01" * 100)
+    (repo / "uv.lock").write_text("l\n" * 3000)
+    _git(repo, "add", "."), _git(repo, "commit", "-qm", "lane work")
+    _git(repo, "checkout", "-q", "main")
+    (repo / "big.txt").unlink()
+    (repo / "m.txt").write_text("m\n" * 300)
+    _git(repo, "add", "-A"), _git(repo, "commit", "-qm", "main removes a lot")
+    _git(repo, "checkout", "-q", "lane")
+    _git(repo, "merge", "-q", "--no-ff", "-m", "merge main", "main")
+    assert collector.git_shortstat(str(repo), start)[2] >= 5000  # the old measure blames the lane
+    assert collector.lane_shortstat(str(repo), start) == (1, 2, 0)
+    assert plangate.budget_note(*collector.lane_shortstat(str(repo), start)) is None
