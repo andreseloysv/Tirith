@@ -37,12 +37,12 @@ workspace-write`, `--model`, `--add-dir`; `copilot` = `--output-format json --no
 only accepts `-c model_reasoning_effort=...`). Both CLIs must be logged in for the user running the lane
 (a `401` from `codex` or "No authentication information found" from `copilot` is a login problem, not a
 preset problem). `codex` is confirmed end to end: a real lane wrote a file, its `agent_message` became the report, the
-`turn.completed` usage was parsed and the lane ended `done`. A `copilot` lane reached the CLI through the
-shim (the lane's `TIRITH_HOME` is exported so the shim finds the lane file, also with `--home`) but stopped
-at authentication: a classic `ghp_` token in `GITHUB_TOKEN` is refused by `copilot`, it needs a
-fine-grained token, `/login` or `gh auth login`. `copilot --allow-all-tools` is documented as required for non-interactive mode; the
-preset uses the `--allow-tool` list instead and that is unconfirmed (owner: run one tiny task per alias
-and check the JSON log, usage and permissions). Config needed for each:
+`turn.completed` usage was parsed and the lane ended `done`. `copilot` is confirmed too: after `/login` a real lane
+created a file, its `assistant.message` with `phase: final_answer` became the report and the lane ended
+`done`; the `result` record carries only `premiumRequests` (no tokens). The preset's `unset_env`
+(`GITHUB_TOKEN`, `GH_TOKEN`) is removed from the child environment of a `copilot` lane, so the CLI uses its
+own login instead of a classic `ghp_` token from the shell (which it refuses). The `--allow-tool` list
+was enough for a file write in non-interactive mode. Config needed for each:
 
 ```toml
 [agents.codex]
