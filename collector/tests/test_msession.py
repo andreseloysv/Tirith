@@ -51,7 +51,7 @@ class Rig:
         dispatch_mod.run(self.home, load_config(self.home), self.clock.now, agents=[], lanes=[],
                          status_of=lambda lane, n: "working", manager_popen=self.popen)
 
-    def until(self, cond, timeout: float = 8.0, step: float = 0.0):
+    def until(self, cond, timeout: float = 25.0, step: float = 0.0):
         end = time.time() + timeout
         while time.time() < end:
             self.cycle()

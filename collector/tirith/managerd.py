@@ -649,6 +649,7 @@ def _settle_asks(home: Path, book: dict, sess, now: datetime) -> bool:
             waits[rid] = f"perm-{rid}"
             add_wait(home, str(book.get("project") or ""), f"The manager asks to run **{ask['summary']}**. Allow it?",
                      wait_id=waits[rid], kind="approval",
+                     why_owner="owner-decision", why_detail="permission",
                      options=[{"label": "Allow", "value": "allow"}, {"label": "Deny", "value": "deny"}])
             changed = True
         reply = replies.get(waits[rid])
