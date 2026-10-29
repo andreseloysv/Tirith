@@ -92,6 +92,18 @@
         }
       }
     },
+    "health": {
+      "type": ["object", "null"],
+      "description": "Tirith's own checks in plain words (docs/CONTRACT-selfcheck.md); null before the first pass.",
+      "properties": {
+        "level": {"enum": ["green", "amber", "red"]},
+        "at": {"type": "string"},
+        "checks": {"type": "array", "items": {
+          "type": "object", "required": ["id", "label", "level", "text"],
+          "properties": {"id": {"type": "string"}, "label": {"type": "string"},
+                         "level": {"enum": ["ok", "healing", "failed"]}, "text": {"type": "string"}}}}
+      }
+    },
     "waiting_on_you": {
       "type": "array",
       "items": {
