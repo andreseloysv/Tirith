@@ -271,16 +271,20 @@ def _start_lane(home: Path, tmp_path: Path, lane_id: str, code: str):
                          "guard": "false"}])
     config = (home / "config.toml").read_text().replace('guard = "false"', "guard = false")
     (home / "config.toml").write_text(config)
+    ready = tmp_path / f"{lane_id}.ready"
+    # the child touches the marker once its setup (signal handlers) is done
+    marker = "import pathlib as _p\n"
+    code = code.replace("while True:", f"_p.Path({str(ready)!r}).write_text('x')\nwhile True:", 1)
+    code = marker + code
     env = dict(os.environ, TIRITH_HOME=str(home), PYTHONPATH=str(Path(__file__).resolve().parent.parent))
     runner = subprocess.Popen(
         [sys.executable, "-m", "tirith", "lane", "run", "--project", "demo", "--class", "warden",
          "--feature", "Long job", "--id", lane_id, "--brief", str(repo / "brief.md"), "--",
          sys.executable, "-c", code], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-    deadline = time.monotonic() + 20
+    deadline = time.monotonic() + 60
     while time.monotonic() < deadline:
         lane = read_json(home / "lanes" / f"{lane_id}.json", {}) or {}
-        if lane.get("pid") and lane.get("pgid"):
-            time.sleep(0.5)  # the child is past its imports
+        if lane.get("pid") and lane.get("pgid") and ready.exists():
             return runner, repo, lane
         time.sleep(0.1)
     runner.kill()

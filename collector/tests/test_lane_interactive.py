@@ -7,6 +7,7 @@ import signal
 import sys
 import threading
 import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -30,7 +31,9 @@ def test_interactive_inherits_env_and_uses_stop_event(home: Path, tmp_path: Path
     mark = tmp_path / "mark"
     monkeypatch.setenv("MARK", str(mark))
     child = "import os;open(os.environ['MARK'],'w').write(os.environ['TIRITH_LANE'])"
-    append_jsonl(home / "events.jsonl", {"kind": "hook", "ts": now_iso(), "event": "Stop",
+    # stamped ahead: the lane's start (second resolution) may land after "now" and would hide the event
+    later = now_iso(datetime.now(timezone.utc) + timedelta(minutes=5))
+    append_jsonl(home / "events.jsonl", {"kind": "hook", "ts": later, "event": "Stop",
                                          "lane": "chat", "summary": "All wrapped up"})
     try:
         code = _interactive(repo, "chat", child)
