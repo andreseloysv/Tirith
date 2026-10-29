@@ -952,6 +952,7 @@
         },
         "agent": {"type": ["string", "null"], "description": "Agent alias that ran the lane (docs/CONTRACT-models.md)."},
         "fallback_from": {"type": ["string", "null"], "description": "Agent alias that ran out of credits before this lane continued its brief."},
+        "keep_going": {"type": ["string", "null"], "description": "\"round N/3\" while Tirith sends the lane back with what is missing (tirith.keepgoing); null when never sent back."},
         "diff": {
           "description": "Full patch of the lane, stored at lane end (docs/CONTRACT-agents.md).",
           "oneOf": [{"type": "null"}, {"$ref": "#/$defs/diff"}]
