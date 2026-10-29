@@ -3,7 +3,7 @@
   var T = window.T, esc = T.esc;
   var raw = null, sig = '', genSeen = null, srcErr = '';
   var filt = T.filter = { session: '', project: '', q: '', view: 'overview', mode: 'kanban' };
-  var statePath = '', defaultMode = false;
+  var statePath = '', defaultMode = false, demoOn = false;
   var tauri = window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.event ? window.__TAURI__ : null;
   T.tauri = tauri;
 
@@ -172,7 +172,9 @@
     if (changed) renderAll(true);
     srcLine();
   }
-  function isDemo() { return defaultMode || /(^|\/)(fixtures|demo)\//.test(statePath); }
+  /* first-run screen: show the bundled demo state, clearly labelled, until a real project exists */
+  T.showDemo = function (s) { demoOn = true; sig = ''; gotState(s); };
+  function isDemo() { return defaultMode || demoOn || /(^|\/)(fixtures|demo)\//.test(statePath); }
   function srcLine() {
     var el = document.getElementById('src'), demo = isDemo(), txt, cls;
     if (demo) { cls = 'demo'; txt = 'Demo data'; }
@@ -225,7 +227,11 @@
     if (tauri) {
       /* desktop app: Rust reads ~/.tirith/state.json and pushes it by event; no polling, no files */
       tauri.core.invoke('current_state').then(function (s) { if (s) gotState(s); });
-      tauri.event.listen('tirith://state', function (e) { gotState(e.payload); });
+      tauri.event.listen('tirith://state', function (e) {
+        /* the demo stays until a real project shows up */
+        if (demoOn && !(e.payload.projects || []).length) return;
+        demoOn = false; gotState(e.payload);
+      });
       /* nothing changed but the clock: only the new generated_at arrives, so "updated N s ago" stays right */
       tauri.event.listen('tirith://alive', function (e) { if (raw) { raw.generated_at = e.payload; srcLine(); } });
     } else {
