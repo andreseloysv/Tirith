@@ -371,3 +371,78 @@ def tick(text: str, step_id: str, wanted: set[str]) -> tuple[str, list[str]]:
             parts.append(line.strip())
     flush()
     return "".join(lines), ticked
+
+
+class EditError(ValueError):
+    """The plan could not be edited as asked; the message is for the owner."""
+
+
+def _step_span(lines: list[str], step_id: str) -> tuple[int, int] | None:
+    """``(first line after the heading, end)`` of step ``step_id``."""
+    start = None
+    for index, raw in enumerate(lines):
+        line = raw.rstrip("\r\n")
+        found = _STEP_RE.match(line)
+        if start is None:
+            if found and found.group(1) == str(step_id):
+                start = index + 1
+        elif found or _HEADING_RE.match(line):
+            return start, index
+    return (start, len(lines)) if start is not None else None
+
+
+def _item_blocks(lines: list[str], start: int, end: int) -> list[tuple[int, int, str, bool]]:
+    """Items of a step as ``(first line, end line, joined text, done)``; the end covers wrapped lines."""
+    out: list[tuple[int, int, str, bool]] = []
+    for index in range(start, end):
+        line = lines[index].rstrip("\r\n")
+        item = _ITEM_RE.match(line)
+        if item:
+            out.append((index, index + 1, item.group(2).strip(), item.group(1) != " "))
+        elif out and line.strip() and not _BULLET_RE.match(line) and out[-1][1] == index:
+            first, _, text, done = out[-1]
+            out[-1] = (first, index + 1, f"{text} {line.strip()}", done)
+    return out
+
+
+def edit(text: str, step_id: str, item_text: str = "", new_text: str | None = None,
+         delete: bool = False, add: str | None = None) -> str:
+    """``text`` with one change in step ``step_id``: the open item whose text is exactly ``item_text`` gets
+    ``new_text`` (its checkbox, bullet and indent stay; a wrapped item becomes one line) or is removed
+    (``delete``); ``add`` appends a new open item after the step's last open item.
+
+    Raises ``EditError`` when the step or the item is not there (the plan changed meanwhile)."""
+    lines = text.splitlines(keepends=True)
+    span = _step_span(lines, step_id)
+    if span is None:
+        raise EditError(f"step {step_id} is not in the plan any more")
+    start, end = span
+    eol = "\r\n" if text.count("\r\n") > text.count("\n") / 2 else "\n"
+    blocks = _item_blocks(lines, start, end)
+    if add is not None:
+        add = " ".join(add.split())
+        if not add:
+            raise EditError("the new item is empty")
+        open_blocks = [b for b in blocks if not b[3]] or blocks
+        if open_blocks:
+            at, line = open_blocks[-1][1], "- [ ] " + add + eol
+        else:
+            at, line = start, eol + "- [ ] " + add + eol
+        if at > 0 and not lines[at - 1].endswith(("\n", "\r")):
+            lines[at - 1] += eol
+        lines.insert(at, line)
+        return "".join(lines)
+    wanted = " ".join(item_text.split())
+    hit = next((b for b in blocks if not b[3] and " ".join(b[2].split()) == wanted), None)
+    if hit is None:
+        raise EditError("that item changed in the plan meanwhile (or was ticked); reload the Plan and try again")
+    first, last = hit[0], hit[1]
+    if delete:
+        del lines[first:last]
+        return "".join(lines)
+    new_text = " ".join((new_text or "").split())
+    if not new_text:
+        raise EditError("the new text is empty")
+    head = _ITEM_RE.match(lines[first].rstrip("\r\n"))
+    lines[first:last] = [lines[first][:head.start(2)] + new_text + eol]
+    return "".join(lines)
