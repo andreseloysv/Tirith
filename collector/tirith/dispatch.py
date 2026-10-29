@@ -342,6 +342,7 @@ def pending_text(rows: list[dict], now: datetime) -> str:
             f"- {r['id']} ({r['kind']}, {r['project']} step {r['step']}, {_age_text(_age_s(r, now))} ago): "
             f"{_short(r['text'], 300) or '(no text)'}"
             + (f" [already answered by {said[-1]['by']}; follow up]" if said else "")
+            + ("\n" + inbox_mod.attachment_lines(r) if r.get("attachments") else "")
             + f"\n    tirith inbox answer {r['id']} \"<markdown>\"   then   tirith inbox done {r['id']}")
     return "\n".join(lines)
 

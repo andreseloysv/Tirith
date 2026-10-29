@@ -1147,7 +1147,8 @@ def _cmd_inbox(args) -> int:
     try:
         if action == "add":
             text = args.text if args.text is not None else ""
-            print(inbox_mod.add_request(home, args.kind, args.project, str(args.step or ""), text)["id"])
+            print(inbox_mod.add_request(home, args.kind, args.project, str(args.step or ""), text,
+                                        attachments=inbox_mod.attachment_list(args.attach))["id"])
         elif action == "list":
             for req in inbox_mod.requests(home):
                 if args.open and req["status"] != "open":
@@ -1167,7 +1168,8 @@ def _cmd_inbox(args) -> int:
             except actions_mod.ActionError as error:
                 print(error, file=sys.stderr)
                 return 2
-            inbox_mod.add_answer(home, args.id, args.text, by=args.by, lane=args.lane, actions=actions)
+            inbox_mod.add_answer(home, args.id, args.text, by=args.by, lane=args.lane, actions=actions,
+                                 attachments=inbox_mod.attachment_list(args.attach))
         elif action == "done":
             inbox_mod.mark_done(home, args.id)
         elif action == "brain":
@@ -1813,6 +1815,8 @@ def build_parser() -> argparse.ArgumentParser:
     i_add.add_argument("--step", default=None, help="roadmap step number (not for setup)")
     i_add.add_argument("--text", default=None,
                        help="the question (required for ask); for setup the request as JSON, see CONTRACT-setup")
+    i_add.add_argument("--attach", action="append", default=[], metavar="IMAGE",
+                       help="an image file to attach (PNG, JPEG, GIF, WebP; up to 6, 10 MB each); repeatable")
     i_ls = inbox_sub.add_parser("list", parents=[common], help="list requests")
     i_ls.add_argument("--open", action="store_true", help="only open requests")
     i_ls.add_argument("--json", action="store_true", help="one JSON object per line")
@@ -1821,6 +1825,8 @@ def build_parser() -> argparse.ArgumentParser:
     i_ans.add_argument("text")
     i_ans.add_argument("--by", choices=inbox_mod.ANSWERERS, default="manager")
     i_ans.add_argument("--lane", default=None, help="id of the lane (agent) that took the request")
+    i_ans.add_argument("--attach", action="append", default=[], metavar="IMAGE",
+                       help="an image file the answer refers to (up to 6); repeatable")
     i_reply = inbox_sub.add_parser("reply", parents=[common], help="the owner's answer to an ask")
     i_reply.add_argument("--wait", required=True, help="id of the ask (tirith wait add)")
     i_reply.add_argument("--project", default=None)
