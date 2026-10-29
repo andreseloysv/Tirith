@@ -70,7 +70,7 @@ def _unique_lane_id(home: Path, wanted: str) -> str:
 REQUEST_MAX = 2048
 REQUEST_WINDOW_S = 6 * 3600
 REPORT_MAX = 16 * 1024
-REPO_BIN = str(Path(__file__).resolve().parents[2] / "bin")  # `tirith` for agents lives in the repo
+REPO_BIN = gates_mod.REPO_BIN
 
 
 def bound_text(text, limit: int) -> str:
@@ -260,10 +260,7 @@ def _wrapper_path_env(home: Path | None = None, lane_id: str | None = None,
     session = projects_mod.current_session(home or tirith_home())
     if session:
         env["TIRITH_SESSION"] = session
-    wrapper_dir = str(Path.home() / ".local" / "bin")
-    shim_dir = str((home or tirith_home()) / "shims")  # agent shims first, then the git wrapper
-    env["PATH"] = (shim_dir + os.pathsep + wrapper_dir + os.pathsep + REPO_BIN + os.pathsep +
-                   env.get("PATH", ""))
+    env["PATH"] = gates_mod.lane_path(home or tirith_home(), env.get("PATH", ""))  # shims, git wrapper, repo
     return env
 
 
@@ -1272,8 +1269,7 @@ def _cmd_shim(args) -> int:
                          "[agents.<alias>] command = \"<executable name>\"")
     if args.action == "verify":
         # shims only have to come first inside lanes, whose PATH `lane run` builds
-        lane_path = _wrapper_path_env(_home(args))["PATH"] if not args.dir else None
-        problems = gates_mod.verify_shims(config, shim_dir, lane_path)
+        problems = gates_mod.verify_home_shims(config, _home(args), shim_dir if args.dir else None)
         for problem in problems:
             print(problem)
         if not problems:

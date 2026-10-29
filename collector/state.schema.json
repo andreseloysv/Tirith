@@ -254,6 +254,8 @@
         "gates_active": {"type": "boolean"},
         "gates_problems": {"type": "array", "items": {"type": "string"}},
         "gates_fix": {"type": "array", "items": {"type": "string"}},
+        "gates_summary": {"type": "string"},
+        "gates_actions": {"type": "array", "items": {"$ref": "#/$defs/action"}},
         "pending": {"type": "array", "items": {
           "type": "object", "additionalProperties": true, "required": ["id", "at", "action", "summary"],
           "properties": {"id": {"type": "string"}, "at": {"type": ["string", "null"]},

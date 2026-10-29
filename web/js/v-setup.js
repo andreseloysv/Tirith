@@ -66,12 +66,10 @@
     return '<div class="srow"><span class="slabel">Rules</span><div class="sbody"><ul class="srules">' + custom.concat(built).map(ruleRow).join('') + '</ul></div></div>';
   }
 
-  function banner(p, su) {
-    var cmds = su.gates_fix && su.gates_fix.length ? su.gates_fix : ['tirith hook install --agent <alias>', 'tirith shim install'];
-    return '<div class="sban" role="alert"><b>Rules are not active on this machine</b><span class="mut"> · agents can still bypass them until these are installed:</span>' +
-      cmds.map(function (c) {
-        return '<span class="vdo"><code title="' + esc(c) + '">' + esc(c) + '</code><button class="vcopy" data-act="copy" data-key="' + esc(c) + '" aria-label="Copy command">Copy</button></span>';
-      }).join('') + '</div>';
+  /* What is missing, in one sentence, with Run buttons (owner actions); nothing when all is active. */
+  function banner(p, su, state) {
+    return '<div class="sban" role="alert"><span>' + esc(su.gates_summary || 'Agents could bypass the rules, because Tirith is not fully installed.') + '</span>' +
+      T.actions(su.gates_actions, state, p.id) + '</div>';
   }
 
   function checkRow(su) {
@@ -148,7 +146,7 @@
       (su.manifest ? '' : ' · no tirith.toml') + '</span><span class="sbtns">' +
       '<button class="sadd" data-act="sopen" data-key="' + esc(p.id + '|stage') + '">+ Stage</button>' +
       '<button class="sadd" data-act="sopen" data-key="' + esc(p.id + '|rule') + '">+ Rule</button></span></div>' +
-      (!su.gates_active && first ? banner(p, su) : '') + checkRow(su) +
+      (!su.gates_active && first ? banner(p, su, state) : '') + checkRow(su) +
       pipelinesRow(p, su) + hooksRow(su) + rulesRow(su) + pending(p, su) + form(p, su) + cliBlock(p) + '</div>';
   }
 

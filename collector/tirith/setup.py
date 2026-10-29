@@ -49,6 +49,8 @@ class Machine:
     shims_ok: bool
     problems: list[str]
     fix: list[str]
+    summary: str = ""  # one plain sentence: what is missing and why it matters ("" = all active)
+    steps: tuple[tuple[str, str], ...] = ()  # (button label, command) for each owner fix
 
 
 def _settings_has_hooks(path: Path, agent: str) -> bool:
@@ -69,13 +71,17 @@ def _settings_has_hooks(path: Path, agent: str) -> bool:
     return True
 
 
-def machine_state(config: Config, shim_dir: Path | None = None) -> Machine:
-    """Hooks installed in every configured agent's settings and the shims intact (read only)."""
-    from tirith import gates
+def machine_state(config: Config, shim_dir: Path | None = None, home: Path | None = None) -> Machine:
+    """Hooks installed in every configured agent's settings and the shims intact (read only).
 
-    shim_dir = shim_dir or Path.home() / ".local" / "bin"
+    The shims are checked like ``tirith shim verify``: ``<home>/shims`` against the lane PATH (or
+    ``shim_dir`` against the plain PATH)."""
+    from tirith.home import tirith_home
+
     problems: list[str] = []
     fix: list[str] = []
+    steps: list[tuple[str, str]] = []
+    missing: list[str] = []
     aliases = [a for a in config.agents]
     if not aliases:
         problems.append("no [agents.<alias>] in config.toml: no agent is guarded")
@@ -88,16 +94,31 @@ def machine_state(config: Config, shim_dir: Path | None = None) -> Machine:
         if not _settings_has_hooks(settings, alias):
             problems.append(f"{alias}: tirith hooks are not in {settings}")
             fix.append(f"tirith hook install --agent {alias}")
+            steps.append((f"Install the hooks for {alias}", fix[-1]))
+            missing.append(alias)
     hooks_ok = bool(aliases) and not problems
-    shim_problems = gates.verify_shims(config, shim_dir) if aliases else []
+    shim_problems = gates_mod.verify_home_shims(config, home or tirith_home(), shim_dir) if aliases else []
     if shim_problems:
         problems += shim_problems
-        fix.append(f"tirith shim install --dir {shim_dir}")
-    if not config.gates_enabled:
+        fix.append(f"tirith shim install --dir {shim_dir}" if shim_dir else "tirith shim install")
+        steps.append(("Install the agent shims", fix[-1]))
+    gates_off = not config.gates_enabled
+    if gates_off:
         problems.append("[gates] enabled = false in config.toml")
     shims_ok = not shim_problems
-    active = hooks_ok and shims_ok and config.gates_enabled
-    return Machine(active, hooks_ok, shims_ok, problems, fix)
+    active = hooks_ok and shims_ok and not gates_off
+    parts: list[str] = []
+    if not aliases:
+        parts.append("No agent is set up in config.toml, so no agent is guarded.")
+    if missing:
+        parts.append(f"Tirith cannot see what agents do ({', '.join(missing)}), because their hooks are not "
+                     "installed.")
+    if shim_problems:
+        parts.append("Agents could start other agents without Tirith seeing them, because the agent "
+                     "shims are not installed.")
+    if gates_off:
+        parts.append("The rules are switched off in config.toml ([gates] enabled = false).")
+    return Machine(active, hooks_ok, shims_ok, problems, fix, " ".join(parts), tuple(steps))
 
 
 def _last(runs: list[dict], project: str, pipeline: str, stage: str) -> dict | None:
@@ -133,7 +154,8 @@ def _pending(requests: list[dict], project: str) -> list[dict]:
 
 
 def build(folder: Path | None, project: str, machine: Machine, runs: list[dict], requests: list[dict],
-          guard_ok: bool, guard_problems: list[str], words: list[str]) -> dict:
+          guard_ok: bool, guard_problems: list[str], words: list[str],
+          gates_actions: list[dict] | None = None) -> dict:
     """``state.projects[].setup`` for one project folder."""
     loaded = manifest_mod.load(folder) if folder else None
     exists = bool(loaded and loaded.exists)
@@ -160,6 +182,8 @@ def build(folder: Path | None, project: str, machine: Machine, runs: list[dict],
         "gates_active": machine.active,
         "gates_problems": machine.problems,
         "gates_fix": machine.fix,
+        "gates_summary": machine.summary,
+        "gates_actions": list(gates_actions or []),
         "pending": _pending(requests, project),
     }
 

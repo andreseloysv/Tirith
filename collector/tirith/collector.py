@@ -718,6 +718,14 @@ class Collector:
                 reply["value"], at + GUARD_SNOOZE if at is not None else None)
         return out
 
+    def _gates_actions(self, proj_row: dict, machine) -> list[dict]:
+        """Run buttons for the Setup banner: one stored action per missing install step."""
+        return [actions_mod.register_generated(
+                    self.home, proj_row["id"],
+                    "ac-gates-" + re.sub(r"[^a-z0-9]+", "-", command.lower()).strip("-") + "-" + proj_row["id"],
+                    label, command, proj_row.get("folder"))
+                for label, command in machine.steps]
+
     def _guard_wait(self, proj: ProjectConfig, problems: list[str], since: str) -> dict:
         """The owner item for a guard that is not intact: what is wrong and the buttons that fix it.
 
@@ -1002,13 +1010,14 @@ class Collector:
                 })
         if guard_dirty:
             write_json_atomic(self.home / "guard-state.json", guard_since)
-        machine = setup_mod.machine_state(self.config)
+        machine = setup_mod.machine_state(self.config, home=self.home)
         setup_requests = [r for r in inbox_mod.requests(self.home) if r["kind"] == "setup"]
         for proj_row in projects:
             guard = proj_row.get("guard") or {}
             proj_row["setup"] = setup_mod.build(
                 Path(proj_row["folder"]) if proj_row.get("folder") else None, proj_row["id"], machine, runs,
-                setup_requests, bool(guard.get("ok")), list(guard.get("problems") or []), [])
+                setup_requests, bool(guard.get("ok")), list(guard.get("problems") or []), [],
+                self._gates_actions(proj_row, machine))
 
         orchestrator = read_json(self.home / "orchestrator.json", {})
         if not isinstance(orchestrator, dict):
