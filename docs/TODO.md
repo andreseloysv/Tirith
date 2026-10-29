@@ -154,6 +154,8 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Despachador en el collector: «Termínalo» lanza el agente (o responde por qué no); «¿Qué pasa?» lo responde Muse Spark al momento.
 - [ ] Hooks del steward: le inyectan las peticiones abiertas y le impiden terminar el turno sin responderlas.
 - [ ] Escalado: petición sin respuesta en 10 min → notificación de macOS y opciones para el dueño.
+- [ ] Comandos para el dueño como acciones con botón «Run» (confirmación, salida y resultado en la UI).
+- [ ] Regla en código: una respuesta con un comando de terminal en el texto se rechaza; hay que usar `--run`.
 
 ## 13. Configuración del proyecto visible y editable
 
