@@ -1,5 +1,9 @@
 """A manager that lives inside Tirith: the owner can close the terminal and keep talking in the chat.
 
+Since the persistent session (``msession.py``, ``run_session`` below) there is ONE manager process per home,
+owned by the collector, that the chat feeds; the one-shot lanes described next remain for ``[manager] session =
+false`` and as the fallback when the session cannot start.
+
 Two halves. **Presence**: the interactive manager session writes a heartbeat (``<home>/manager.json``:
 ``pid``, ``session``, ``at``) from its hooks; it counts as *attached* while the heartbeat is younger than
 ``ATTACHED_S`` and the pid is alive. **On call**: when something is pending for the manager (chat message,
@@ -27,9 +31,10 @@ from tirith import flows as flows_mod
 from tirith import inbox as inbox_mod
 from tirith import launch as launch_mod
 from tirith import models as models_mod
+from tirith import msession as msession_mod
 from tirith import plangate as plangate_mod
 from tirith.home import Config, now_iso, parse_iso
-from tirith.store import read_json, write_json_atomic
+from tirith.store import lane_path, read_json, write_json_atomic, write_lane
 
 PRESENCE_FILE = "manager.json"
 NOTES_FILE = "manager-notes.md"
@@ -219,14 +224,13 @@ def _plan_summary(config: Config, home: Path) -> str:
     return "\n".join(lines) or "(no projects)"
 
 
-def build_brief(home: Path, config: Config, items: dict, now: datetime) -> str:
+def pending_sections(items: dict, now: datetime) -> list[str]:
+    """The pending messages, failed actions and queue items as brief lines."""
     def age(at) -> str:
         parsed = parse_iso(at)
         return f"{int((now - parsed).total_seconds())}s ago" if parsed else "?"
 
-    out = ["# Lane: Manager (on call)", "", "## Why",
-           "The owner closed the terminal; Tirith started you to answer what is waiting in the chat and act on it.", "",
-           "## Rules", *(f"- {r}" for r in RULES), "", "## Pending messages"]
+    out = ["## Pending messages"]
     for r in items["requests"]:
         said = [a for a in r["answers"] if a["by"] != "manager"]
         out.append(f"- {r['id']} ({r['kind']}, {r['project'] or 'no project'}"
@@ -246,6 +250,13 @@ def build_brief(home: Path, config: Config, items: dict, now: datetime) -> str:
                        f"{flows_mod.one_line(str(q.get('text') or ''), 300)}")
     if items.get("evidence"):
         out += ["", "## Self-check", str(items["evidence"])]
+    return out
+
+
+def build_brief(home: Path, config: Config, items: dict, now: datetime) -> str:
+    out = ["# Lane: Manager (on call)", "", "## Why",
+           "The owner closed the terminal; Tirith started you to answer what is waiting in the chat and act on it.", "",
+           "## Rules", *(f"- {r}" for r in RULES), "", *pending_sections(items, now)]
     out += ["", "## Plan", _plan_summary(config, home)]
     recent = flows_mod.flows_state(home, {}, limit=12)
     if recent:
@@ -384,7 +395,7 @@ def pid_alive_or_unset(lane: dict) -> bool:
 
 def _failed_in_a_row(lanes: list[dict], since: str | None) -> list[dict]:
     """The newest ended manager lanes (after ``since``) while they all failed, newest first."""
-    ended = [l for l in lanes if str(l.get("id") or "").startswith(LANE_PREFIX) and l.get("ended_at")
+    ended = [l for l in lanes if str(l.get("id") or "").startswith(LANE_PREFIX) and l.get("ended_at") and not l.get("stop")
              and not (since and str(l["ended_at"]) <= since)]
     ended.sort(key=lambda l: str(l.get("ended_at")), reverse=True)
     out = []
@@ -428,8 +439,8 @@ def _pause_check(home: Path, book: dict, lanes: list[dict], now: datetime) -> bo
     return True
 
 
-def run(home: Path, config: Config, now: datetime, state: dict, lanes: list[dict],
-        spawn: Callable | None = None, kill: Callable | None = None) -> bool:
+def run_oneshot(home: Path, config: Config, now: datetime, state: dict, lanes: list[dict],
+                spawn: Callable | None = None, kill: Callable | None = None) -> bool:
     """One pass: start the headless manager when something is pending and nobody is attached.
     Returns True when ``state`` (``state["manager"]``) changed."""
     book = state.setdefault("manager", {})
@@ -484,8 +495,333 @@ def run(home: Path, config: Config, now: datetime, state: dict, lanes: list[dict
     return True
 
 
+def session_busy(home: Path) -> bool:
+    """True while the persistent session is in a turn."""
+    sess = msession_mod.current(home)
+    return bool(sess is not None and sess.alive and sess.busy)
+
+
 def public(home: Path, state: dict, lanes: list[dict], now: datetime) -> dict:
-    """``state.manager.presence``: ``{mode: live|on_call, working, lane}`` for the chat header."""
+    """``state.manager.presence``: ``{mode: live|on_call, working, lane, session}`` for the chat header."""
     live = attached(home, now)
+    sess = msession_mod.current(home)
+    if sess is not None and sess.alive:
+        return {"mode": "live" if live else "on_call", "working": sess.busy, "lane": sess.lane_id,
+                "session": {"lane": sess.lane_id, "busy": sess.busy, "turns": sess.turns_done,
+                            "context_tokens": sess.context_tokens, "asks": len(sess.open_asks())}}
     lane = running(state.get("manager", {}), lanes, now)
     return {"mode": "live" if live else "on_call", "working": bool(lane), "lane": lane}
+
+
+def turn_views(home: Path, state: dict) -> list[dict]:
+    """The session's turns, oldest first: the finished ones (their files) and the one running now."""
+    sess = msession_mod.current(home)
+    live = {v["id"]: v for v in (sess.views() if sess is not None else [])}
+    out = []
+    for rec in ((state.get("manager") or {}).get("session") or {}).get("turns") or []:
+        view = live.get(rec["id"]) or msession_mod.read_turn(home, rec["id"])
+        if view and view.get("requests"):  # a /compact turn answers no one
+            out.append(view)
+    return out
+
+
+# -- the persistent session -------------------------------------------------------------------
+
+RULES_SESSION = (*RULES[:-1],
+                 "Before you finish a turn, append what you decided and launched with `tirith manager-note "
+                 "\"<text>\"`; a later manager reads it. You stay running: the next messages arrive as new "
+                 "user messages in this same conversation.")
+RESTART_AFTER_S = 15.0  # times the number of fast deaths in a row
+FALLBACK_AFTER = 2  # fast deaths in a row: the one-shot manager answers for FALLBACK_S, then the session is tried again
+FALLBACK_S = 600.0
+RESUME_FAIL_S = 20.0  # a resumed session that dies this fast is started fresh next time
+
+
+def _book(state: dict) -> dict:
+    return state.setdefault("manager", {}).setdefault("session", {})
+
+
+def _parts(items: dict) -> dict[str, dict]:
+    """Pending key -> the part of ``items`` it stands for (a request is offered again when it changes)."""
+    out = {}
+    for r in items["requests"]:
+        out[f"{r['id']}:{len(r['answers'])}:{len(r.get('action_runs') or [])}"] = {"requests": [r]}
+    for r in items["results"]:
+        out[f"act:{r.get('wait')}:{r.get('at')}"] = {"results": [r]}
+    for q in items["queue"]:
+        out[f"q:{q['id']}"] = {"queue": [q]}
+    return out
+
+
+def _subset(items: dict, keys: list[str]) -> dict:
+    parts = _parts(items)
+    out: dict = {"requests": [], "results": [], "queue": [], "evidence": items.get("evidence")}
+    for key in keys:
+        for name, rows in parts.get(key, {}).items():
+            out[name] += rows
+    return out
+
+
+def build_message(home: Path, config: Config, items: dict, now: datetime, primed: bool) -> str:
+    """The user message for one turn: the whole brief for a conversation the session is new to (rules, plan,
+    its notes), else only what is new."""
+    if not primed:
+        out = ["# You are the owner's manager (a persistent session run by Tirith)", "",
+               "The owner talks to you through the Tirith chat, whether the app is open or not. This conversation "
+               "stays open: more messages keep arriving here.", "", "## Rules", *(f"- {r}" for r in RULES_SESSION),
+               "", *pending_sections(items, now), "", "## Plan", _plan_summary(config, home)]
+        notes = notes_tail(home)
+        if notes:
+            out += ["", "## Your notes from earlier sessions", notes]
+        return "\n".join(out) + "\n"
+    return "\n".join(["New for you:", "", *pending_sections(items, now)]) + "\n"
+
+
+def _end_session(home: Path, book: dict, now: datetime, intentional: str | None = None) -> None:
+    """The session is gone: remember why, and whether the next start may resume."""
+    msession_mod.register(home, None)
+    book["ended_at"] = now_iso(now)
+    book.pop("lane", None)
+    if intentional:
+        book["fast"] = 0
+        return
+    started = parse_iso(book.get("started_at"))
+    fast = bool(started and (now - started).total_seconds() < RESUME_FAIL_S)
+    if book.get("resumed") and fast:
+        book["session_id"], book["primed"] = None, False  # resume did not work: fresh, with the handoff
+    book["fast"] = (book.get("fast", 0) + 1) if fast else 0
+
+
+def _stop_session(home: Path, book: dict, sess, now: datetime, by: str, reason: str) -> None:
+    """End the session on purpose: its lane file says who and why, then its process group gets SIGTERM."""
+    lane = read_json(lane_path(home, sess.lane_id), None)
+    if isinstance(lane, dict):
+        lane["stop"] = {"by": by, "reason": reason, "at": now_iso(now)}
+        write_lane(home, lane)
+    sess.terminate()
+    _end_session(home, book, now, intentional=by)
+
+
+def _start_session(home: Path, config: Config, items: dict, now: datetime, book: dict,
+                   popen: Callable | None) -> None:
+    from tirith import projects as projects_mod
+    proj = _project_for(home, config, items)
+    repo = projects_mod.real(proj.repo) if proj is not None and proj.repo else None
+    if repo is None:
+        raise launch_mod.LaunchError("no project with a repo folder to run the manager in")
+    alias, choice = manager_alias(config)
+    model = choice.model if models_mod.applies_to(choice, alias) else None
+    effort = choice.effort if models_mod.applies_to(choice, alias) else None
+    resume = book.get("session_id") if book.get("primed") else None
+    try:
+        command = msession_mod.chat_command(config, alias, model, effort, resume)
+    except SystemExit as err:
+        raise launch_mod.LaunchError(str(err.code))
+    lane_id = LANE_PREFIX + uuid.uuid4().hex[:8]
+    brief = Path(home) / "briefs" / f"{lane_id}.md"
+    brief.parent.mkdir(parents=True, exist_ok=True)
+    brief.write_text("The owner's manager: one persistent session run by Tirith; the chat feeds it.\n",
+                     encoding="utf-8")
+    try:  # the manager's own standing item, in the plan before it starts (``tirith.plangate``)
+        item = plangate_mod.ops_item(home, repo, proj.id, plangate_mod.MANAGER_ITEM, lane_id)[1]
+    except plangate_mod.PlanGateError as err:
+        raise launch_mod.LaunchError(f"the manager's plan item could not be added: {err}")
+    argv = [*launch_mod.tirith_argv(), "lane", "run", "--interactive", "--id", lane_id, "--project", proj.id,
+            "--class", HERO_CLASS, "--feature", FEATURE, "--brief", str(brief), "--workspace", str(repo),
+            "--as-agent", alias, "--by-tirith", "--item", item, "--item-step", plangate_mod.OPS_STEP, "--", *command]
+    try:
+        proc = msession_mod.spawn(argv, home, Path(home) / "logs" / f"{lane_id}.launch.log", popen)
+    except OSError as err:
+        raise launch_mod.LaunchError(f"could not start the manager session: {err}")
+    project_id = proj.id
+
+    def decide(tool, data):
+        return msession_mod.decide(config, home, alias, tool, data, repo, project_id)
+
+    msession_mod.register(home, msession_mod.Session(home, lane_id, proc, decide, repo, resumed=bool(resume)))
+    book.update(lane=lane_id, project=project_id, started_at=now_iso(now), resumed=bool(resume))
+    if not resume:
+        book["primed"], book["session_id"] = False, None
+    flows_mod.append_flow(home, "tirith", f"agent:{lane_id}", "brief",
+                          "Manager session started" + (" (resumed)" if resume else ""), session=None, at=now_iso(now))
+
+
+def _close_wait(home: Path, wait_id: str, now: datetime) -> None:
+    from tirith.dispatch import close_owner_item
+    close_owner_item(home, wait_id, now_iso(now))
+
+
+def _settle_asks(home: Path, book: dict, sess, now: datetime) -> bool:
+    """Permission questions the code did not settle: one Allow / Deny item each on the owner's list, and the
+    owner's answer written back to the session."""
+    from tirith.cli import add_wait
+    changed = False
+    waits = book.setdefault("asks", {})
+    open_asks = sess.open_asks() if sess is not None else {}
+    replies = {r["wait"]: r for r in inbox_mod.replies(home)}
+    for rid, ask in open_asks.items():
+        if rid not in waits:
+            waits[rid] = f"perm-{rid}"
+            add_wait(home, str(book.get("project") or ""), f"The manager asks to run **{ask['summary']}**. Allow it?",
+                     wait_id=waits[rid], kind="approval",
+                     why_owner="owner-decision", why_detail="permission",
+                     options=[{"label": "Allow", "value": "allow"}, {"label": "Deny", "value": "deny"}])
+            changed = True
+        reply = replies.get(waits[rid])
+        if reply is not None:
+            sess.answer_ask(rid, reply.get("value") == "allow")
+            _close_wait(home, waits.pop(rid), now)
+            changed = True
+    for rid in [r for r in waits if r not in open_asks]:  # the turn ended or the session died
+        _close_wait(home, waits.pop(rid), now)
+        changed = True
+    return changed
+
+
+def _finish_turns(home: Path, sess, book: dict) -> bool:
+    """Turns that ended since the last pass: the answer lands in the inbox when the manager did not write it
+    itself, and a request left open is offered again (``MAX_TRIES`` at most)."""
+    changed = False
+    done = book.setdefault("done_turns", [])
+    pending = {r["id"] for r in inbox_mod.requests(home) if r["manager_pending"]}
+    for view in sess.views():
+        if not view["ended_at"] or view["id"] in done:
+            continue
+        done.append(view["id"])
+        changed = True
+        record = next((t for t in book.get("turns", []) if t["id"] == view["id"]), {})
+        for key in record.get("keys", []):
+            book.get("sent", {}).pop(key, None)
+            if view.get("interrupted"):
+                book.setdefault("tries", {})[key] = MAX_TRIES  # the owner stopped it: not offered again
+        text = view.get("answer") or ""
+        for rid in view["requests"]:
+            if rid in pending and text.strip() and not view.get("error"):
+                inbox_mod.add_answer(home, rid, text, by="manager", lane=sess.lane_id)
+        book["turns_total"] = book.get("turns_total", 0) + 1
+    del done[:-msession_mod.TURNS_KEPT]
+    return changed
+
+
+def _control(home: Path, book: dict, now: datetime) -> bool:
+    """``tirith manager interrupt|stop|restart`` (``manager/control.jsonl``)."""
+    changed = False
+    for row in msession_mod.new_controls(home, book.get("control_seen")):
+        book["control_seen"] = row["id"]
+        changed = True
+        sess = msession_mod.current(home)
+        if row["op"] == "interrupt":
+            if sess is not None:
+                sess.interrupt()
+            continue
+        if row["op"] == "stop":
+            book["stopped"] = now_iso(now)
+        else:
+            book.pop("stopped", None)
+            if row.get("text") == "fresh":
+                book["session_id"], book["primed"] = None, False
+        if sess is not None:
+            _stop_session(home, book, sess, now, "owner", "stopped" if row["op"] == "stop" else "restarted")
+    return changed
+
+
+def _compact_or_restart(home: Path, config: Config, book: dict, sess, now: datetime) -> bool:
+    """An idle session whose context is large or whose conversation is long gets ``/compact`` once; if that did
+    not help (or it gets long again) it is restarted fresh with a handoff. True when it did either."""
+    turns = book.get("turns_total", 0)
+    compacted = book.get("compact_turn")
+    big = sess.context_tokens >= config.manager_context_tokens
+    long = turns - (compacted or 0) >= config.manager_max_turns
+    if not (big or long):
+        return False
+    if compacted is None:
+        if not sess.send("/compact", [], now):
+            return False
+        book["compact_turn"] = turns + 1
+        book.setdefault("turns", []).append({"id": sess.turn.id, "keys": []})
+        return True
+    _stop_session(home, book, sess, now, "manager", "fresh start with a handoff: the conversation got long")
+    book.update(session_id=None, primed=False, compact_turn=None, turns_total=0)
+    return True
+
+
+def run_session(home: Path, config: Config, now: datetime, state: dict, lanes: list[dict],
+                popen: Callable | None = None, spawn: Callable | None = None,
+                kill: Callable | None = None) -> bool:
+    """One pass of the persistent session: keep it alive, hand it what is pending, settle its questions."""
+    book = _book(state)
+    changed = _control(home, book, now)
+    sess = msession_mod.current(home)
+    if sess is not None and not sess.alive:
+        changed = _finish_turns(home, sess, book) or changed  # its last turn ended with the process
+        if not sess.got_event:  # it never said a word: say why in the state, the manager queue has the lane
+            log = Path(home) / "logs" / f"{sess.lane_id}.launch.log"
+            tail = log.read_text(encoding="utf-8", errors="replace").strip().splitlines()[-3:] if log.is_file() else []
+            book["error"] = "the session exited at once: " + (" / ".join(tail)[-300:] or f"code {sess.exit_code}")
+        _end_session(home, book, now)
+        sess, changed = None, True
+    if sess is not None:
+        if sess.session_id and book.get("session_id") != sess.session_id:
+            book["session_id"] = sess.session_id
+            changed = True
+        changed = _finish_turns(home, sess, book) or changed
+    changed = _settle_asks(home, book, sess, now) or changed
+    if attached(home, now) or (sess is not None and sess.busy):
+        return changed  # a terminal manager answers / the session is in a turn
+    if sess is not None and _compact_or_restart(home, config, book, sess, now):
+        return True
+    ended = parse_iso(book.get("ended_at"))
+    if sess is None and book.get("fast", 0) >= FALLBACK_AFTER and ended and (now - ended).total_seconds() < FALLBACK_S:
+        return run_oneshot(home, config, now, state, lanes, spawn, kill) or changed  # a session that keeps dying
+    items = pending_items(home, now)
+    if not has_work(items):
+        return changed
+    stopped = parse_iso(book.get("stopped"))
+    if stopped is not None:  # stopped from the chat: a message written after that wants it back
+        newest = max((t for t in (parse_iso(r["at"]) for r in items["requests"]) if t), default=None)
+        if newest is None or newest <= stopped:
+            return changed
+        book.pop("stopped")
+        changed = True
+    if _pause_check(home, book.setdefault("pause", {}), lanes, now):
+        return True
+    items["evidence"] = state.get("manager", {}).get("evidence")  # from tirith.selfcheck: why it is asked again
+    sent, tries = book.setdefault("sent", {}), book.setdefault("tries", {})
+    parts = _parts(items)
+    for key in [k for k in tries if k not in parts]:  # settled: forgotten
+        tries.pop(key), sent.pop(key, None)
+    fresh = [k for k in parts if k not in sent and tries.get(k, 0) < MAX_TRIES]
+    if not fresh:
+        return changed
+    if sess is None:
+        ended = parse_iso(book.get("ended_at"))
+        if ended and (now - ended).total_seconds() < RESTART_AFTER_S * max(1, book.get("fast", 0)):
+            return changed
+        try:
+            _start_session(home, config, items, now, book, popen)
+        except Exception as err:  # the session cannot start: the one-shot manager still answers
+            book.update(error=f"{type(err).__name__}: {err}", ended_at=now_iso(now), fast=book.get("fast", 0) + 1)
+            return run_oneshot(home, config, now, state, lanes, spawn, kill) or True
+        book.pop("error", None)
+        sess, changed = msession_mod.current(home), True
+    sub = _subset(items, fresh)
+    if not sess.send(build_message(home, config, sub, now, bool(book.get("primed"))),
+                     [r["id"] for r in sub["requests"]], now):
+        return changed
+    book["primed"] = True
+    state["manager"].pop("evidence", None)
+    for key in fresh:
+        sent[key] = now_iso(now)
+        tries[key] = tries.get(key, 0) + 1
+    book.setdefault("turns", []).append({"id": sess.turn.id, "keys": fresh})
+    del book["turns"][:-msession_mod.TURNS_KEPT]
+    return True
+
+
+def run(home: Path, config: Config, now: datetime, state: dict, lanes: list[dict],
+        spawn: Callable | None = None, kill: Callable | None = None, popen: Callable | None = None) -> bool:
+    """One pass of the manager: the persistent session, or (``[manager] session = false``, or when the
+    session cannot start) one print-mode turn per batch of pending messages."""
+    if config.manager_session:
+        return run_session(home, config, now, state, lanes, popen=popen, spawn=spawn, kill=kill)
+    return run_oneshot(home, config, now, state, lanes, spawn, kill)

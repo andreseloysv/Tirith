@@ -107,7 +107,8 @@ with the wrapper on PATH; reported as FAIL "cannot test" when there is no `~/.lo
 
 ## Chat arguments: `chat_args`
 
-The desktop chat (`app/README.md`) starts `<command> <chat_args>` under `tirith lane run --interactive`.
+The persistent manager session (`docs/CONTRACT-inbox.md`, "One manager") starts `<command> <chat_args>` under
+`tirith lane run --interactive`; without `chat_args` in the config the same arguments are used for `anthropic`.
 For `anthropic`: `["-p", "--input-format", "stream-json", "--output-format", "stream-json",
 "--verbose", "--permission-prompt-tool", "stdio"]`. stdin takes one JSON object per line:
 `{"type":"user","message":{"role":"user","content":[{"type":"text","text":"..."}]}}`. stdout streams
