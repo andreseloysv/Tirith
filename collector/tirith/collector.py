@@ -28,6 +28,7 @@ from tirith import github as github_mod
 from tirith import manifest as manifest_mod
 from tirith import roadmap as roadmap_mod
 from tirith import hooks as hooks_mod
+from tirith import actions as actions_mod
 from tirith import inbox as inbox_mod
 from tirith import launch as launch_mod
 from tirith.logview import entries_from_events, log_entries
@@ -662,7 +663,9 @@ class Collector:
                 "text": str(row.get("text") or ""), "since": row.get("at"),
                 "link": row.get("link"), "source": "manual",
                 "session": row.get("session") or None,
+                "actions": [dict(a) for a in row.get("actions") or [] if isinstance(a, dict)],
             })
+        actions_mod.attach_last_runs(self.home, waits)
         waits.sort(key=lambda w: str(w["since"] or ""))
         return waits
 
@@ -949,7 +952,9 @@ class Collector:
                                       lambda c, t=context: {"text": brain_mod.job_inbox_answer(c, t)}):
                     self._inbox_tried[req["id"]] = time.monotonic()
         inbox_mod.link_lanes(rows, agents)
-        return rows[-inbox_mod.STATE_ROWS:]
+        rows = rows[-inbox_mod.STATE_ROWS:]
+        actions_mod.attach_last_runs(self.home, [a for req in rows for a in req["answers"]])
+        return rows
 
     @staticmethod
     def _fill_counts(projects: list[dict], agents: list[dict], runs: list[dict],

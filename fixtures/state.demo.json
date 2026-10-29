@@ -47,7 +47,18 @@
       "text": "Install the commit guard in the Tirith repository",
       "since": "2026-10-28T19:38:00Z",
       "link": null,
-      "session": "2026-10-28-tirith-web"
+      "session": "2026-10-28-tirith-web",
+      "actions": [
+        {
+          "id": "ac-5e1a0004",
+          "label": "Install the commit guard",
+          "command": "tirith guard install tirith",
+          "cwd": null,
+          "created_by": "steward",
+          "at": "2026-10-28T19:41:00Z",
+          "last_run": null
+        }
+      ]
     }
   ],
   "projects": [
@@ -2100,6 +2111,69 @@
       "text": "",
       "status": "open",
       "answers": [],
+      "lanes": []
+    },
+    {
+      "id": "in-a1b2c3d4",
+      "at": "2026-10-28T19:40:00Z",
+      "kind": "ask",
+      "project": "tirith",
+      "step": "2",
+      "text": "What do I have to do for this step myself?",
+      "status": "answered",
+      "answers": [
+        {
+          "at": "2026-10-28T19:40:40Z",
+          "by": "steward",
+          "auto": false,
+          "lane": null,
+          "text": "Three things need your Mac, because they install or change something outside the repository. Press **Run** on each; I check the result.",
+          "actions": [
+            {
+              "id": "ac-5e1a0001",
+              "label": "Install the link handler",
+              "command": "uv run tirith url install",
+              "cwd": "~/DEVELOP/Tirith/collector",
+              "created_by": "steward",
+              "at": "2026-10-28T19:41:00Z"
+            },
+            {
+              "id": "ac-5e1a0002",
+              "label": "Run the collector tests",
+              "command": "uv run -q pytest -q",
+              "cwd": "~/DEVELOP/Tirith/collector",
+              "created_by": "steward",
+              "at": "2026-10-28T19:41:00Z",
+              "last_run": {
+                "status": "passed",
+                "exit_code": 0,
+                "at": "2026-10-28T19:44:12Z",
+                "log_tail": [
+                  "........................................",
+                  "318 passed in 41.20s"
+                ]
+              }
+            },
+            {
+              "id": "ac-5e1a0003",
+              "label": "Install the commit guard",
+              "command": "tirith guard install tirith",
+              "cwd": null,
+              "created_by": "steward",
+              "at": "2026-10-28T19:41:00Z",
+              "last_run": {
+                "status": "failed",
+                "exit_code": 2,
+                "at": "2026-10-28T19:45:30Z",
+                "log_tail": [
+                  "tirith guard: the hooks folder of the repository is read-only",
+                  "Do this instead: make it writable, then run it again"
+                ]
+              }
+            }
+          ]
+        }
+      ],
       "lanes": []
     }
   ]

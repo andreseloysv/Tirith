@@ -2,7 +2,7 @@
 //! Tauri events, keeps a collector running, launches steps and hosts the (flagged) chat.
 //! No servers and no open ports: everything between the page and Rust is Tauri IPC.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
 use std::process::{Child, ChildStdin, Command, Stdio};
@@ -26,6 +26,8 @@ struct App {
     /// The collector this app started (None when one was already running).
     collector: Mutex<Option<Child>>,
     chats: Mutex<HashMap<String, ChatSession>>,
+    /// Action ids with a run in progress (one run at a time per action).
+    running: Mutex<HashSet<String>>,
 }
 
 // -- paths and config ---------------------------------------------------------------------------
@@ -270,6 +272,251 @@ mod inbox_tests {
     }
 }
 
+// -- actions: the owner's "Run" buttons ----------------------------------------------------------
+//
+// The page sends an action id and nothing else: the command is looked up in `inbox.jsonl` (answers)
+// and `waits.jsonl`, run with `/bin/sh -c`, and its output goes to `<home>/actions/<id>.log`.
+// See docs/CONTRACT-actions.md.
+
+const ACTION_STALE_S: u64 = 3600;
+
+/// Every JSON object of a JSONL file (bad lines skipped).
+fn read_jsonl(path: &std::path::Path) -> Vec<Value> {
+    std::fs::read_to_string(path)
+        .map(|t| t.lines().filter_map(|l| serde_json::from_str::<Value>(l).ok()).collect())
+        .unwrap_or_default()
+}
+
+/// `(action, project)` for an action id: from an answer row of `inbox.jsonl`, else a wait of `waits.jsonl`.
+fn find_action(home: &std::path::Path, action_id: &str) -> Option<(Value, String)> {
+    let inbox = read_jsonl(&home.join("inbox.jsonl"));
+    let has = |row: &Value| -> Option<Value> {
+        row.get("actions")?.as_array()?.iter().find(|a| a["id"] == action_id).cloned()
+    };
+    for row in inbox.iter().filter(|r| r["kind"] == "answer") {
+        if let Some(action) = has(row) {
+            let project = inbox
+                .iter()
+                .find(|r| r["id"] == row["id"] && (r["kind"] == "ask" || r["kind"] == "finish"))
+                .and_then(|r| r["project"].as_str())
+                .unwrap_or("");
+            return Some((action, project.to_string()));
+        }
+    }
+    let mut waits: HashMap<String, Value> = HashMap::new();
+    for row in read_jsonl(&home.join("waits.jsonl")) {
+        if let Some(id) = row["id"].as_str() {
+            waits.insert(id.to_string(), row);
+        }
+    }
+    waits.values().find_map(|row| {
+        has(row).map(|a| (a, row["project"].as_str().unwrap_or("").to_string()))
+    })
+}
+
+/// Unix seconds of `YYYY-MM-DDTHH:MM:SSZ`.
+fn parse_iso_utc(text: &str) -> Option<u64> {
+    let b = text.as_bytes();
+    if b.len() < 20 || b[4] != b'-' || b[10] != b'T' {
+        return None;
+    }
+    let n = |r: std::ops::Range<usize>| text.get(r)?.parse::<i64>().ok();
+    let (y, m, d) = (n(0..4)?, n(5..7)?, n(8..10)?);
+    let (hh, mm, ss) = (n(11..13)?, n(14..16)?, n(17..19)?);
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = y.div_euclid(400);
+    let yoe = y.rem_euclid(400);
+    let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    let days = era * 146097 + doe - 719468;
+    u64::try_from(days * 86400 + hh * 3600 + mm * 60 + ss).ok()
+}
+
+/// True when the latest `action-run` row of the action says `running` and is not stale.
+fn disk_running(home: &std::path::Path, action_id: &str, now: u64) -> bool {
+    let rows = read_jsonl(&home.join("inbox.jsonl"));
+    let last = rows.iter().rev().find(|r| r["kind"] == "action-run" && r["action_id"] == action_id);
+    match last {
+        Some(r) if r["status"] == "running" => {
+            let at = r["at"].as_str().and_then(parse_iso_utc);
+            at.map(|t| now.saturating_sub(t) < ACTION_STALE_S).unwrap_or(true)
+        }
+        _ => false,
+    }
+}
+
+/// Appends `{kind: "action-run", action_id, status, exit_code, at}` to `inbox.jsonl` (one write).
+fn append_run_row(home: &std::path::Path, action_id: &str, status: &str, exit_code: Option<i32>) -> Result<(), String> {
+    let at = iso_utc(SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs());
+    let row = json!({ "kind": "action-run", "action_id": action_id, "status": status, "exit_code": exit_code, "at": at });
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(home.join("inbox.jsonl"))
+        .map_err(|e| e.to_string())?;
+    file.write_all(format!("{row}\n").as_bytes()).map_err(|e| e.to_string())
+}
+
+/// The folder an action runs in: its `cwd`, else the project's folder, else the user's home.
+fn action_cwd(action: &Value, project: &str, home: &std::path::Path) -> PathBuf {
+    if let Some(cwd) = action["cwd"].as_str().filter(|c| !c.is_empty()) {
+        return expand(cwd);
+    }
+    if let Some(repo) = project_repo(&config(), project) {
+        return repo;
+    }
+    let auto = std::fs::read_to_string(home.join("projects-auto.json"))
+        .ok()
+        .and_then(|t| serde_json::from_str::<Value>(&t).ok());
+    auto.and_then(|a| {
+        a["projects"].as_array()?.iter().find(|p| p["id"] == project)?["folder"].as_str().map(expand)
+    })
+    .unwrap_or_else(user_home)
+}
+
+/// Runs `command` with `/bin/sh -c` in `cwd`, output (both streams) into `log`. Returns the exit code
+/// (127 when it could not start).
+fn run_shell(command: &str, cwd: &std::path::Path, log: &std::path::Path) -> i32 {
+    let started = std::fs::File::create(log).and_then(|out| {
+        let err = out.try_clone()?;
+        Command::new("/bin/sh")
+            .arg("-c")
+            .arg(command)
+            .current_dir(cwd)
+            .stdin(Stdio::null())
+            .stdout(out)
+            .stderr(err)
+            .status()
+    });
+    match started {
+        Ok(status) => status.code().unwrap_or(1),
+        Err(e) => {
+            let _ = std::fs::write(log, format!("tirith: {e}\n"));
+            127
+        }
+    }
+}
+
+/// Runs a declared action: `running` row now, `passed` or `failed` when the command ends.
+/// Returns at once; the page follows the rows through the state.
+#[tauri::command]
+fn run_action(app: AppHandle, action_id: String) -> Result<(), String> {
+    let home = tirith_home();
+    let (action, project) = find_action(&home, &action_id).ok_or_else(|| format!("no action {action_id}"))?;
+    let command = action["command"].as_str().filter(|c| !c.trim().is_empty()).ok_or("the action has no command")?.to_string();
+    let cwd = action_cwd(&action, &project, &home);
+    if !cwd.is_dir() {
+        return Err(format!("the folder {} does not exist", cwd.display()));
+    }
+    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
+    let app_state = app.state::<App>();
+    if !app_state.running.lock().unwrap().insert(action_id.clone()) {
+        return Err(format!("action {action_id} is already running"));
+    }
+    let started = if disk_running(&home, &action_id, now) {
+        Err(format!("action {action_id} is already running"))
+    } else {
+        let dir = home.join("actions");
+        std::fs::create_dir_all(&dir)
+            .map_err(|e| e.to_string())
+            .and_then(|_| append_run_row(&home, &action_id, "running", None))
+            .map(|_| dir)
+    };
+    let dir = match started {
+        Ok(dir) => dir,
+        Err(e) => {
+            app_state.running.lock().unwrap().remove(&action_id);
+            return Err(e);
+        }
+    };
+    std::thread::spawn(move || {
+        let code = run_shell(&command, &cwd, &dir.join(format!("{action_id}.log")));
+        let _ = append_run_row(&home, &action_id, if code == 0 { "passed" } else { "failed" }, Some(code));
+        app.state::<App>().running.lock().unwrap().remove(&action_id);
+    });
+    Ok(())
+}
+
+#[cfg(test)]
+mod action_tests {
+    use super::*;
+
+    fn temp_home(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("tirith-actions-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn write_lines(path: PathBuf, rows: &[Value]) {
+        let text: String = rows.iter().map(|r| format!("{r}\n")).collect();
+        std::fs::write(path, text).unwrap();
+    }
+
+    #[test]
+    fn finds_actions_in_answers_and_waits_only_by_id() {
+        let home = temp_home("find");
+        let a = json!({"id": "ac-1", "label": "L", "command": "echo hi", "cwd": null});
+        let w = json!({"id": "ac-2", "label": "W", "command": "true"});
+        write_lines(home.join("inbox.jsonl"), &[
+            json!({"id": "in-1", "kind": "ask", "project": "demo", "step": "1", "text": "q"}),
+            json!({"id": "in-1", "kind": "answer", "by": "steward", "text": "t", "actions": [a]}),
+        ]);
+        write_lines(home.join("waits.jsonl"), &[json!({"id": "w-1", "project": "other", "actions": [w]})]);
+        let (found, project) = find_action(&home, "ac-1").unwrap();
+        assert_eq!((found["command"].as_str(), project.as_str()), (Some("echo hi"), "demo"));
+        assert_eq!(find_action(&home, "ac-2").unwrap().1, "other");
+        assert!(find_action(&home, "echo hi").is_none());
+        assert!(find_action(&home, "ac-9").is_none());
+    }
+
+    #[test]
+    fn iso_roundtrip() {
+        for secs in [0u64, 1_782_734_400, 1_709_164_800] {
+            assert_eq!(parse_iso_utc(&iso_utc(secs)), Some(secs));
+        }
+        assert_eq!(parse_iso_utc("nope"), None);
+    }
+
+    #[test]
+    fn running_row_blocks_until_stale_or_finished() {
+        let home = temp_home("running");
+        let now = 1_782_734_400;
+        let at = iso_utc(now - 60);
+        write_lines(home.join("inbox.jsonl"), &[
+            json!({"kind": "action-run", "action_id": "ac-1", "status": "running", "exit_code": null, "at": at}),
+        ]);
+        assert!(disk_running(&home, "ac-1", now));
+        assert!(!disk_running(&home, "ac-1", now + ACTION_STALE_S + 120));
+        assert!(!disk_running(&home, "ac-2", now));
+        append_run_row(&home, "ac-1", "passed", Some(0)).unwrap();
+        assert!(!disk_running(&home, "ac-1", now));
+        let rows = read_jsonl(&home.join("inbox.jsonl"));
+        assert_eq!(rows.last().unwrap()["status"], "passed");
+        assert_eq!(rows.last().unwrap()["exit_code"], 0);
+    }
+
+    #[test]
+    fn shell_runs_in_the_folder_and_logs_both_streams() {
+        let home = temp_home("shell");
+        let log = home.join("a.log");
+        assert_eq!(run_shell("pwd; echo out; echo err >&2", &home, &log), 0);
+        let text = std::fs::read_to_string(&log).unwrap();
+        assert!(text.contains("out") && text.contains("err") && text.contains("tirith-actions-shell"));
+        assert_eq!(run_shell("exit 3", &home, &log), 3);
+        assert_eq!(run_shell("true", &home.join("missing"), &log), 127);
+    }
+
+    #[test]
+    fn cwd_prefers_the_action_then_falls_back() {
+        let home = temp_home("cwd");
+        let with = json!({"cwd": "/tmp/x"});
+        assert_eq!(action_cwd(&with, "demo", &home), PathBuf::from("/tmp/x"));
+        let none = json!({"cwd": null});
+        assert!(!action_cwd(&none, "no-such-project", &home).as_os_str().is_empty());
+    }
+}
+
 // -- chat (behind a flag) -----------------------------------------------------------------------
 //
 // TODO: permission questions from the agent in the UI, resuming a conversation, and showing tool
@@ -431,6 +678,7 @@ pub fn run() {
             current_state,
             launch_step,
             inbox_add,
+            run_action,
             chat_enabled,
             chat_agents,
             chat_start,
