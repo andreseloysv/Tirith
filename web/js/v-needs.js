@@ -1,19 +1,17 @@
-/* "Your turn" on the Overview: one card per thing that needs the owner, each with a clear call to action.
-   One-click options, a command to copy, a link to open, and a box to write what you want. */
+/* "Your turn" items, as the chat sees them: every thing that needs the owner is a manager message (v-manager.js),
+   with its one-click options, command, link and Run actions under it. This file builds the items from the state
+   and sends the replies; the thread itself is v-manager.js. docs/CONTRACT-asks.md, "Web". */
 (function () {
   var T = window.T, esc = T.esc, ui = T.ui;
-  ui.needsOpen = ui.needsOpen || {};    /* id -> true: title shown in full */
-  ui.needsDraft = ui.needsDraft || {};  /* id -> text typed so far */
   ui.needsCli = ui.needsCli || {};      /* id -> CLI line to copy (no way to send from here) */
   ui.needsErr = ui.needsErr || {};      /* id -> why the send failed */
-  ui.needsFold = ui.needsFold || {};    /* 'older' | 'answered' -> true while open */
-  var lastState = null, OLD_MS = 48 * 3600 * 1000, STORE = 'tirith.needs.sent', sent = load();
+  var lastState = null, STORE = 'tirith.needs.sent', sent = load();
   var DEFAULTS = {
     approval: [{ label: 'Approve', value: 'approve' }, { label: 'Decline', value: 'decline' }],
     info: [{ label: 'Got it', value: 'ack' }]
   };
 
-  /* what the owner already sent, kept across reloads so a card never comes back after the click */
+  /* what the owner already sent, kept across reloads so an item never comes back after the click */
   function load() { try { return JSON.parse(localStorage.getItem(STORE) || '{}') || {}; } catch (e) { return {}; } }
   function save() { try { localStorage.setItem(STORE, JSON.stringify(sent)); } catch (e) {} }
 
@@ -23,8 +21,7 @@
       (value ? ' --value ' + shq(value) : '') + (text ? ' --text ' + shq(text) : '');
   }
   function find(id) {
-    var s = lastState || {}, all = (s.waiting_on_you || []);
-    return all.filter(function (w) { return w.id === id; })[0];
+    return ((lastState || {}).waiting_on_you || []).filter(function (w) { return w.id === id && w.status !== 'answered'; })[0];
   }
   function opts(w) {
     if (w.options && w.options.length) return w.options;
@@ -55,20 +52,44 @@
     T.render();
   }
 
-  function age(w) { var t = T.ms(w.since); return t == null ? 0 : T.now() - t; }
-  function isOld(w) { return age(w) > OLD_MS && !(w.options && w.options.length) && !w.command && !w.link; }
-  function long(w) { return w.text.length > 150 || w.text.split('\n').length > 2; }
+  /* [{w, done, answer}] oldest first: the open items, then the answered ones (the last 10 the collector lists,
+     plus those answered from this page that the collector has not shown yet) */
+  T.turnItems = function (s) {
+    lastState = s;
+    var out = [], seen = {}, answered = (s.answered_waits || []).slice();
+    answered.forEach(function (w) { delete sent[w.id]; });
+    (s.waiting_on_you || []).filter(function (w) { return w.status !== 'answered'; }).forEach(function (w) {
+      var k = (w.project || '') + '\n' + String(w.text || '').replace(/\s+/g, ' ').trim().toLowerCase();
+      if (seen[k]) return;   /* the same text for the same project is one item */
+      seen[k] = 1;
+      if (sent[w.id]) answered.push({ id: w.id, project: w.project, text: w.text, since: w.since, actions: w.actions, status: 'answered', answer: { at: sent[w.id].at, label: sent[w.id].label, text: sent[w.id].text } });
+      else out.push({ w: w, done: false });
+    });
+    answered.forEach(function (w) { out.push({ w: w, done: true, answer: w.answer || {} }); });
+    return out;
+  };
+  T.turnOpen = function (s) { return T.turnItems(s).filter(function (it) { return !it.done; }).length; };
+  T.turnFind = function (id) { return find(id); };
 
-  function card(w, done) {
-    var open = !!ui.needsOpen[w.id], pn = w.project ? T.proj(w.project) : '', h;
-    h = '<li class="ncard' + (done ? ' done' : '') + '" data-wait="' + esc(w.id) + '"><div class="nhead">' +
-      '<div class="ntitle' + (open ? ' open' : '') + '"' + (long(w) ? ' data-act="nopen" data-key="' + esc(w.id) + '" role="button" tabindex="0" title="' + (open ? 'Show less' : 'Show all') + '"' : '') + '>' + T.md(w.text) + '</div>' +
-      (pn ? '<span class="nchip">' + esc(pn) + '</span>' : '') + (w.reason_tag ? '<span class="nchip nreason">' + esc(w.reason_tag) + '</span>' : '') + '<span class="nage">' + T.agoSpan(w.since) + '</span></div>';
-    if (done) {
-      var a = w.answer || {};
-      return h + '<div class="nsent"><svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="M2.6 6.3l2.3 2.3 4.5-4.9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>' + (a.value === 'action-passed' ? esc((a.label || '').replace(/^✓\s*/, '')) : 'Sent to the manager' +
-        (a.label || a.text ? ' · <b>' + esc(a.label || '') + '</b>' + (a.label && a.text ? ' · ' : '') + esc(a.text || '') : '')) + '</div></li>';
-    }
+  /* what the owner chose, as the "You:" line */
+  T.turnAnswer = function (a) {
+    var label = String(a.label || '').replace(/^✓\s*/, '');
+    return [label, a.text].filter(Boolean).join(' · ') || a.value || 'Done';
+  };
+
+  /* Free text typed in the chat composer as the reply to item `id`. */
+  T.turnReply = function (id, text) {
+    var w = find(id); if (!w || !text) return false;
+    reply(w, '', '', text);
+    return true;
+  };
+
+  /* The part under the message of an open item: options, command, link, Run actions, errors. Nothing for an answered one
+     (its Run actions stay, as they show what ran). */
+  T.turnBlock = function (it, state) {
+    var w = it.w, h = '';
+    if (state) lastState = state;
+    if (it.done) return w.actions && w.actions.length ? '<div class="mc-acts">' + T.actions(w.actions, lastState, w.project, true) + '</div>' : '';
     h += '<div class="nacts">';
     opts(w).forEach(function (o, i) {
       h += '<button class="nbtn' + (i === 0 ? ' primary' : '') + '" data-act="nopt" data-key="' + esc(w.id) + '" data-i="' + i + '">' + esc(o.label) + '</button>';
@@ -76,63 +97,19 @@
     var dup = (w.actions || []).some(function (a) { return a.command === w.command; });   /* the Run row already has it */
     if (w.command && !dup) h += '<button class="nbtn" data-act="copy" data-key="' + esc(w.command) + '" title="Copy the command">Copy</button><code class="ncmd" title="' + esc(w.command) + '">' + esc(w.command) + '</code>';
     if (w.link) h += '<a class="nbtn" href="' + esc(w.link) + '" target="_blank" rel="noopener">Open</a>';
-    h += '</div>' + (w.actions && w.actions.length ? T.actions(w.actions, lastState, w.project) : '') + '<div class="nwrite"><input class="iin" type="text" data-act="ntext" data-key="' + esc(w.id) + '" maxlength="1000" placeholder="Or write what you need…" aria-label="Your reply" value="' + esc(ui.needsDraft[w.id] || '') + '"></div>';
+    h += '<button class="nreply" data-act="mc-reply" data-key="' + esc(w.id) + '" type="button" title="Write your answer in the chat box">Reply</button></div>';
+    if (w.actions && w.actions.length) h += '<div class="mc-acts">' + T.actions(w.actions, lastState, w.project) + '</div>';
     if (ui.needsErr[w.id]) h += '<div class="ierr">' + esc(ui.needsErr[w.id]) + '</div>';
     if (ui.needsCli[w.id]) h += '<div class="icli">Tirith cannot send from this page. Run in a terminal:<code>' + esc(ui.needsCli[w.id]) + '</code></div>';
-    return h + '</li>';
-  }
-
-  function fold(key, label, items, done) {
-    if (!items.length) return '';
-    var open = !!ui.needsFold[key];
-    return '<div class="nfold"><button class="nfoldh" data-act="nfold" data-key="' + key + '" aria-expanded="' + open + '"><svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true" style="transform:rotate(' + (open ? 0 : -90) + 'deg)"><path d="M3 4.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>' + label + '<span class="n">' + items.length + '</span></button>' +
-      (open ? '<ul class="nlist">' + items.map(function (w) { return card(w, done); }).join('') + '</ul>' : '') + '</div>';
-  }
-
-  T.needs = function (s) {
-    lastState = s;
-    var answeredIds = {}, waits = (s.waiting_on_you || []).filter(function (w) { return w.status !== 'answered'; }), mine = [], older = [], answered;
-    answered = (s.answered_waits || []).slice();
-    answered.forEach(function (w) { answeredIds[w.id] = 1; delete sent[w.id]; });
-    var seen = {};
-    waits = waits.filter(function (w) {   /* the same text for the same project is one item */
-      var k = (w.project || '') + '\n' + String(w.text || '').replace(/\s+/g, ' ').trim().toLowerCase();
-      if (seen[k]) return false;
-      seen[k] = 1; return true;
-    });
-    waits.slice().sort(function (a, b) { return (T.ms(b.since) || 0) - (T.ms(a.since) || 0); }).forEach(function (w) {
-      if (sent[w.id]) {   /* sent from this page, the collector has not shown the answer yet */
-        answered.unshift({ id: w.id, project: w.project, text: w.text, since: w.since, status: 'answered', answer: { label: sent[w.id].label, text: sent[w.id].text } });
-      } else (isOld(w) ? older : mine).push(w);
-    });
-    var h = '<section class="needs-sec"><h2>Your turn' + (mine.length ? ' <span class="icount">' + mine.length + '</span>' : '') + '</h2>';
-    h += mine.length ? '<ul class="nlist">' + mine.map(function (w) { return card(w, false); }).join('') + '</ul>'
-      : T.empty('Nothing needs you. The manager will ask here.');
-    return h + fold('older', 'Older', older, false) + fold('answered', 'Answered', answered, true) + '</section>';
+    return h;
   };
 
-  var view = document.getElementById('view');
-  view.addEventListener('click', function (e) {
-    var b = e.target.closest('[data-act="nopt"],[data-act="nopen"],[data-act="nfold"]'); if (!b) return;
-    var act = b.getAttribute('data-act'), key = b.getAttribute('data-key');
-    if (act === 'nfold') { ui.needsFold[key] = !ui.needsFold[key]; T.render(); return; }
-    if (act === 'nopen') { ui.needsOpen[key] = !ui.needsOpen[key]; T.render(); return; }
-    var w = find(key); if (!w) return;
+  document.getElementById('view').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-act="nopt"]'); if (!b) return;
+    var key = b.getAttribute('data-key'), w = find(key); if (!w) return;
     var o = opts(w)[+b.getAttribute('data-i')]; if (!o) return;
-    var text = (ui.needsDraft[key] || '').trim(); ui.needsDraft[key] = '';
+    var text = ui.chatReplyTo === key ? (ui.chatDraft || '').trim() : '';   /* a draft aimed at this item goes along */
+    if (text) { ui.chatDraft = ''; ui.chatReplyTo = null; }
     reply(w, o.value, o.label, text);
-  });
-  view.addEventListener('input', function (e) {
-    var t = e.target; if (t.getAttribute && t.getAttribute('data-act') === 'ntext') ui.needsDraft[t.getAttribute('data-key')] = t.value;
-  });
-  view.addEventListener('keydown', function (e) {
-    var t = e.target; if (!t.getAttribute) return;
-    var act = t.getAttribute('data-act'), key = t.getAttribute('data-key');
-    if (act === 'nopen' && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); ui.needsOpen[key] = !ui.needsOpen[key]; T.render(); return; }
-    if (act !== 'ntext' || e.key !== 'Enter' || e.isComposing) return;
-    e.preventDefault();
-    var text = t.value.trim(), w = find(key); if (!text || !w) return;
-    ui.needsDraft[key] = '';
-    reply(w, '', '', text);
   });
 })();

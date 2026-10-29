@@ -858,3 +858,17 @@ button.vwho:hover b { text-decoration: underline; }
 .ap-act { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 .ap-b { padding: 6px 14px; border-radius: 9px; border: 1px solid var(--line); background: rgba(255,255,255,.8); font-size: 13px; }
 .ap-b:hover { background: #fff; } .ap-b.pri { background: var(--blue); border-color: var(--blue); color: #fff; } .ap-b.pri:hover { filter: brightness(1.08); } .ap-b:disabled { opacity: .6; }
+/* ---------- owner items as manager messages in the chat (v-manager.js, v-needs.js) ---------- */
+.mc-m.turn { max-width: 96%; width: 100%; }
+.mc-m.turn .nacts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 2px; }
+.mc-m.turn.wait .mc-b { border-color: rgba(47,111,237,.35); }
+.mc-m.turn .mc-b .md > :first-child, .mc-m.turn .mc-b > :first-child { margin-top: 0; } .mc-m.turn .mc-b > :last-child { margin-bottom: 0; }
+.mc-m.turn .ierr, .mc-m.turn .icli { margin: 2px 0 0; }
+.mc-await { font-weight: 600; color: var(--amber); }
+.nreply { height: 28px; padding: 0 8px; font-size: 12.5px; color: var(--mut); border-radius: 8px; } .nreply:hover { color: var(--blue); background: var(--soft); }
+.mc-m.replying .mc-b { border-color: var(--blue); }
+.mc-m.flash .mc-b { animation: nflash 1.6s ease-out; }
+.mc-jump { margin-left: auto; margin-right: 6px; font-size: 12px; color: var(--blue); padding: 3px 9px; border-radius: 8px; } .mc-jump:hover { background: var(--soft); }
+.mc-to { display: flex; align-items: center; gap: 6px; padding: 3px 4px 3px 10px; font-size: 12px; color: var(--mut); background: rgba(47,111,237,.08); border-radius: 10px; }
+.mc-to span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .mc-to b { font-weight: 500; color: var(--fg); }
+.mc-to button { font-size: 16px; line-height: 1; padding: 0 7px; color: var(--mut); border-radius: 6px; } .mc-to button:hover { background: var(--soft); }

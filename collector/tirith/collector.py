@@ -1154,6 +1154,7 @@ class Collector:
             "violations": violations,
             "rules": rules_state,
             "inbox": inbox_rows,
+            "says": inbox_mod.says(self.home),
             "autopilot": autopilot_mod.public(self.home, self.config),
             "launch": {"token": launch_mod.launch_token(self.home),
                        "available": launch_mod.handler_installed()},

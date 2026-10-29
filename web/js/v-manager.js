@@ -1,6 +1,8 @@
 /* Chat with the manager: the right column of the Overview, and a drawer from the header in every other view.
    One thread, built only from state.inbox: the owner's chat messages (kind "chat"), the questions and finish
-   requests of the Plan, and every answer to them (markdown, Run actions). docs/CONTRACT-inbox.md, "Chat". */
+   requests of the Plan, and every answer to them (markdown, Run actions). The things that need the owner ("Your
+   turn", v-needs.js) and the manager's plain messages (state.says) are manager messages in the same thread.
+   docs/CONTRACT-inbox.md, "Chat". */
 (function () {
   var T = window.T, esc = T.esc, ui = T.ui;
   ui.chatOpen = !!ui.chatOpen;       /* the drawer (other views) */
@@ -11,6 +13,8 @@
   ui.chatErr = ui.chatErr || null;   /* why the send failed */
   ui.chatPics = ui.chatPics || [];   /* images waiting in the composer: {name, type, size, url, w, h, b64} */
   ui.chatPicUrl = ui.chatPicUrl || {}; /* saved path -> data URL, for thumbnails the page cannot open by path */
+  ui.chatReplyTo = ui.chatReplyTo || null; /* id of the owner item the composer answers */
+  ui.chatJump = ui.chatJump || 0;    /* index of the last item "Jump to next" went to */
   ui.chatStick = true;               /* scroll to the newest message after the next render */
   var lastState = null, OUT_MAX = 30000, PENDING_MAX = 6 * 3600 * 1000, KINDS = { chat: 1, ask: 1, finish: 1 };
 
@@ -46,6 +50,15 @@
         out.push({ side: 'mgr', text: a.text, at: a.at, ctx: who(a) + (a.auto ? ', automatic' : ''), actions: a.actions, req: r.id, project: r.project, pics: a.attachments });
       });
     });
+    (state.says || []).forEach(function (s) {
+      out.push({ side: 'mgr', text: s.text, at: s.at, ctx: 'Manager' + (s.project ? ' · ' + T.proj(s.project) : ''), project: s.project });
+    });
+    var items = T.turnItems ? T.turnItems(state) : [];
+    items.forEach(function (it) {
+      var w = it.w, ctx = 'Manager' + (w.project ? ' · ' + T.proj(w.project) : '');
+      out.push({ side: 'mgr', text: w.text, at: w.since, ctx: ctx, project: w.project, item: it, open: !it.done });
+      if (it.done) out.push({ side: 'me', text: T.turnAnswer(it.answer), at: it.answer.at || w.since, ctx: 'You', project: w.project, req: w.id });
+    });
     var now = T.now();
     ui.chatOut = ui.chatOut.filter(function (o) {
       return now - o.at < OUT_MAX && !rows.some(function (r) { return r.kind === 'chat' && r.text === o.text && (r.attachments || []).length === (o.pics || []).length && (T.ms(r.at) || 0) >= o.at - 2000; });
@@ -54,7 +67,8 @@
       out.push({ side: 'me', text: o.text, at: new Date(o.at).toISOString(), ctx: o.project ? T.proj(o.project) : '', local: true, pics: o.pics });
     });
     out.sort(function (a, b) { return (T.ms(a.at) || 0) - (T.ms(b.at) || 0); });
-    return out.slice(-80);
+    var rest = out.filter(function (m) { return !m.open; }).slice(-80);   /* an item that waits for the owner is never cut off */
+    return out.filter(function (m) { return m.open || rest.indexOf(m) >= 0; });
   }
   /* ISO time of the oldest message the manager still owes an answer to, or null */
   function waitingSince(state) {
@@ -73,11 +87,20 @@
     }).join('') + '</div>' : '';
   }
   function msg(m, state) {
+    if (m.item) return turnMsg(m, state);
     var body = m.side === 'me' ? esc(m.text).replace(/\n/g, '<br>') : T.md(m.text);
     return '<div class="mc-m ' + m.side + (m.local ? ' local' : '') + '">' + thumbs(m.pics) + (m.text ? '<div class="mc-b' + (m.side === 'me' ? '' : ' md') + '">' +
       body + '</div>' : '') +
       (m.actions && m.actions.length ? '<div class="mc-acts">' + T.actions(m.actions, state, m.project) + '</div>' : '') +
       '<div class="mc-meta">' + (m.ctx ? esc(m.ctx) + ' · ' : '') + esc(T.clockTime(m.at)) + '</div></div>';
+  }
+  /* a message that needs the owner (open) or needed it (answered): the text, then options and Run actions */
+  function turnMsg(m, state) {
+    var w = m.item.w, replying = ui.chatReplyTo === w.id;
+    return '<div class="mc-m mgr turn' + (m.open ? ' wait' : '') + (replying ? ' replying' : '') + '" data-wait="' + esc(w.id) + '"><div class="mc-b md">' + T.md(m.text) + '</div>' +
+      (w.reason_tag ? '<div class="nacts"><span class="nchip nreason">' + esc(w.reason_tag) + '</span></div>' : '') +
+      T.turnBlock(m.item, state) +
+      '<div class="mc-meta">' + (m.open ? '<b class="mc-await">Waits for you</b> · ' : '') + esc(m.ctx) + ' · ' + esc(T.clockTime(m.at)) + '</div></div>';
   }
   function typing(since) {
     return '<div class="mc-m mgr"><div class="mc-b mc-typing" role="status" aria-label="Manager is typing"><i></i><i></i><i></i></div>' +
@@ -97,9 +120,12 @@
   }
   function composer(state) {
     var rows = Math.max(1, Math.min(6, ui.chatDraft.split('\n').length));
-    return '<div class="mc-comp">' + (ui.chatErr ? '<div class="ierr mc-note">' + esc(ui.chatErr) + '</div>' : '') +
+    var target = ui.chatReplyTo && T.turnFind ? T.turnFind(ui.chatReplyTo) : null;
+    if (ui.chatReplyTo && !target) ui.chatReplyTo = null;   /* answered meanwhile */
+    return '<div class="mc-comp">' + (target ? '<div class="mc-to"><span>Replying to <b>' + esc(plainHead(target.text)) + '</b></span>' +
+      '<button data-act="mc-unreply" type="button" aria-label="Reply to nothing in particular" title="Stop replying to it">&times;</button></div>' : '') + (ui.chatErr ? '<div class="ierr mc-note">' + esc(ui.chatErr) + '</div>' : '') +
       (ui.chatCli ? '<div class="icli mc-note">Tirith cannot send from this page. Run in a terminal:<code>' + esc(ui.chatCli) + '</code></div>' : '') +
-      '<div class="mc-box">' + picStrip() + '<textarea data-act="mc-text" data-keep="mc-text" rows="' + rows + '" maxlength="4000" placeholder="Message the manager…" aria-label="Message to the manager">' + esc(ui.chatDraft) + '</textarea>' +
+      '<div class="mc-box">' + picStrip() + '<textarea data-act="mc-text" data-keep="mc-text" rows="' + rows + '" maxlength="4000" placeholder="' + (target ? 'Your answer…' : 'Message the manager…') + '" aria-label="Message to the manager">' + esc(ui.chatDraft) + '</textarea>' +
       '<div class="mc-row"><button class="mc-clip" type="button" data-act="mc-attach" aria-label="Attach images" title="Attach images (or paste, or drop them here)">' + CLIP + '</button>' +
       '<input type="file" data-act="mc-file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden>' + projectChip(state) + '<span class="mc-hint">Enter sends · Shift+Enter new line</span>' +
       '<button class="mc-send" data-act="mc-send" type="button" aria-label="Send" title="Send to the manager">' + SEND + '</button></div></div></div>';
@@ -113,14 +139,22 @@
     return '<span class="mc-presence ' + (p.working ? 'work' : p.mode) + '" role="status">' + esc(txt) + '</span>';
   }
 
+  function plainHead(t) {
+    t = String(t || '').replace(/[`*_#>\[\]]/g, '').replace(/\s+/g, ' ').trim();
+    return t.length > 48 ? t.slice(0, 47) + '…' : t;
+  }
+
   /* the chat as HTML; `drawer` adds a close button */
   T.managerChat = function (state, drawer) {
     lastState = state;
     var list = messages(state), since = waitingSince(state), h;
-    h = '<section class="mchat' + (drawer ? ' in-drawer' : '') + '"><div class="mc-head"><h2>Manager</h2>' + presence(state) +
+    var open = T.turnOpen ? T.turnOpen(state) : 0;
+    h = '<section class="mchat' + (drawer ? ' in-drawer' : '') + '"><div class="mc-head"><h2>Manager' +
+      (open ? ' <span class="icount" title="Messages that wait for you">' + open + '</span>' : '') + '</h2>' + presence(state) +
+      (open ? '<button class="mc-jump" data-act="mc-jump" type="button">' + (open > 1 ? 'Jump to next' : 'Jump to it') + '</button>' : '') +
       (drawer ? '<button class="mc-x" data-act="mc-close" type="button" aria-label="Close the chat">&times;</button>' : '') + '</div>' +
       '<div class="mc-log" id="mc-log">';
-    h += list.length ? list.map(function (m) { return msg(m, state); }).join('') : T.empty('Write to the manager here. Its answers, and the answers to your Plan questions, show in this thread.');
+    h += list.length ? list.map(function (m) { return msg(m, state); }).join('') : T.empty('Write to the manager here. Its answers, and what it needs from you, show in this thread.');
     if (since) h += typing(since);
     return h + '</div>' + composer(state) + '</section>';
   };
@@ -198,6 +232,12 @@
     if (!text) return;
     var project = ui.chatProj != null ? ui.chatProj : (T.filter.project || '');
     ui.chatErr = null; ui.chatCli = null;
+    if (ui.chatReplyTo) {   /* the answer to an item that waits for the owner: a reply, not a new chat message */
+      var to = ui.chatReplyTo;
+      ui.chatReplyTo = null; ui.chatDraft = ''; ui.chatStick = true;
+      if (T.turnReply(to, text)) return;
+      ui.chatDraft = text;
+    }
     function sent() {
       ui.chatDraft = ''; ui.chatStick = true;
       ui.chatOut.push({ text: text, project: project, at: T.now() });
@@ -219,6 +259,15 @@
     T.render();
   }
 
+  /* scroll to the next message that waits for the owner, round and round */
+  function jump() {
+    var els = document.querySelectorAll('#mc-log .mc-m.turn.wait'); if (!els.length) return;
+    ui.chatJump = ui.chatJump >= els.length ? 0 : ui.chatJump;
+    var el = els[ui.chatJump]; ui.chatJump = (ui.chatJump + 1) % els.length;
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
+  }
+
   /* ---------- the drawer and the header button ---------- */
   var view = document.getElementById('view'), btn = document.getElementById('mc-btn'), base = T.render;
   function inDrawer() { return T.filter.view !== 'overview'; }
@@ -237,7 +286,7 @@
     if (btn) {
       btn.hidden = !inDrawer();
       btn.classList.toggle('on', ui.chatOpen);
-      btn.classList.toggle('wait', T.chatPending(lastState));
+      btn.classList.toggle('wait', T.chatPending(lastState) || (T.turnOpen ? T.turnOpen(lastState) > 0 : false));
     }
   };
   if (btn) btn.addEventListener('click', function () {
@@ -253,6 +302,11 @@
     else if (act === 'mc-attach') { var f =view.querySelector('[data-act="mc-file"]'); if (f) f.click(); }
     else if (act === 'mc-unpic') { ui.chatPics.splice(+b.getAttribute('data-i'), 1); T.render(); }
     else if (act === 'mc-zoom') lightbox(b.getAttribute('data-src'));
+    else if (act === 'mc-reply') {
+      ui.chatReplyTo = b.getAttribute('data-key'); T.render();
+      var ta = document.querySelector('[data-act="mc-text"]'); if (ta) ta.focus();
+    } else if (act === 'mc-unreply') { ui.chatReplyTo = null; T.render(); }
+    else if (act === 'mc-jump') jump();
   });
   /* full size: one overlay on the body, closed by a click or Esc */
   function lightbox(src) {

@@ -191,6 +191,22 @@
         }
       }
     },
+    "says": {
+      "description": "Plain messages the manager wrote to the owner (tirith chat say), oldest first. Shown in the chat thread. See docs/CONTRACT-inbox.md.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["id", "at", "text"],
+        "properties": {
+          "id": {"type": "string"},
+          "at": {"type": ["string", "null"]},
+          "project": {"type": "string"},
+          "text": {"type": "string"},
+          "from": {"const": "manager"}
+        }
+      }
+    },
     "models": {
       "description": "Model and effort of the manager and of the workers, with the lists the Settings page offers. See docs/CONTRACT-models.md.",
       "type": "object",

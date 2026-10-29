@@ -35,7 +35,7 @@ const TEXT = 'The quick brown fox jumps over lazy dogs!!';   /* 41 chars, trimme
 const WORDS = TEXT.slice(0, 40);
 
 const cases = [
-  { name: 'Your turn reply', view: 'overview', sel: 'input[data-act="ntext"]' },
+  { name: 'reply to a manager message', view: 'overview', sel: 'textarea[data-act="mc-text"]', setup: async p => { await p.locator('button[data-act="mc-reply"]').first().click(); } },
   { name: 'manager chat composer', view: 'overview', sel: 'textarea[data-act="mc-text"]' },
   { name: 'plan Ask box', view: 'overview', sel: 'input[data-act="itext"]', setup: async p => { await p.locator('button[data-act="iask"]').first().click(); } },
   { name: 'plan form title', view: 'overview', sel: 'input[data-act="pnf"][data-field="title"]', setup: async p => { await p.locator('button[data-act="pnew"]').first().click(); } },
