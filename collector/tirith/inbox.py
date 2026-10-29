@@ -67,7 +67,7 @@ def find_request(home: Path, request_id: str) -> dict | None:
 
 
 def add_answer(home: Path, request_id: str, text: str, by: str = "steward", auto: bool = False,
-               at: str | None = None, lane: str | None = None) -> dict:
+               at: str | None = None, lane: str | None = None, actions: list[dict] | None = None) -> dict:
     if by not in ANSWERERS:
         raise InboxError(f"--by must be one of {', '.join(ANSWERERS)}")
     if find_request(home, request_id) is None:
@@ -78,6 +78,8 @@ def add_answer(home: Path, request_id: str, text: str, by: str = "steward", auto
     row = {"id": request_id, "at": at or now_iso(), "kind": "answer", "by": by, "text": text, "auto": bool(auto)}
     if lane:
         row["lane"] = str(lane)  # the agent (lane id) that took the request
+    if actions:
+        row["actions"] = actions  # commands for the owner's "Run" buttons (tirith.actions)
     append_jsonl(inbox_path(home), row)
     return row
 
@@ -110,9 +112,12 @@ def requests(home: Path) -> list[dict]:
                         "text": str(row.get("text") or ""), "from": row.get("from") or "owner",
                         "status": "open", "answers": []}
         elif rid in out and kind == "answer":
-            out[rid]["answers"].append({"at": row.get("at"), "by": row.get("by") or "steward",
-                                        "text": str(row.get("text") or ""), "auto": bool(row.get("auto")),
-                                        "lane": str(row["lane"]) if row.get("lane") else None})
+            answer = {"at": row.get("at"), "by": row.get("by") or "steward",
+                      "text": str(row.get("text") or ""), "auto": bool(row.get("auto")),
+                      "lane": str(row["lane"]) if row.get("lane") else None}
+            if row.get("actions"):
+                answer["actions"] = [dict(a) for a in row["actions"] if isinstance(a, dict)]
+            out[rid]["answers"].append(answer)
             if out[rid]["status"] == "open":
                 out[rid]["status"] = "answered"
         elif rid in out and kind == "done":
