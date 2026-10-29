@@ -83,6 +83,16 @@
       }).join('') + '</ul></div>';
   }
 
+  /* one line per agent: hooks present in its settings file (machine wide, so only in the first card) */
+  function protectRow(su) {
+    return (su.protection || []).map(function (x) {
+      var at = x.checked_at ? ' · last check ' + esc(T.agoLong(x.checked_at)) : '';
+      var healed = x.healed_at ? ' · restored ' + esc(T.agoLong(x.healed_at)) : '';
+      return x.ok ? '<div class="scheck ok"><span class="dot green"></span><b>Hooks protected</b><span class="mut sm"> · ' + esc(x.agent) + at + healed + '</span></div>' :
+        '<div class="scheck bad"><span class="dot red"></span><b>Hooks missing</b><span class="mut sm"> · ' + esc(x.agent) + at + ' · tirith hook install --agent ' + esc(x.agent) + '</span></div>';
+    }).join('');
+  }
+
   function pending(p, su) {
     var h = (su.pending || []).map(function (x) {
       return '<span class="ichip" title="The manager applies it from its inbox">Waiting for the manager · ' + esc(x.summary) + '</span>';
@@ -148,7 +158,7 @@
       (su.manifest ? '' : ' · no tirith.toml') + '</span><span class="sbtns">' +
       '<button class="sadd" data-act="sopen" data-key="' + esc(p.id + '|stage') + '">+ Stage</button>' +
       '<button class="sadd" data-act="sopen" data-key="' + esc(p.id + '|rule') + '">+ Rule</button></span></div>' +
-      (!su.gates_active && first ? banner(p, su) : '') + checkRow(su) +
+      (!su.gates_active && first ? banner(p, su) : '') + checkRow(su) + (first ? protectRow(su) : '') +
       pipelinesRow(p, su) + hooksRow(su) + rulesRow(su) + pending(p, su) + form(p, su) + cliBlock(p) + '</div>';
   }
 

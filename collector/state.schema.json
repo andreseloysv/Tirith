@@ -254,6 +254,10 @@
         "gates_active": {"type": "boolean"},
         "gates_problems": {"type": "array", "items": {"type": "string"}},
         "gates_fix": {"type": "array", "items": {"type": "string"}},
+        "protection": {"type": "array", "items": {
+          "type": "object", "additionalProperties": true, "required": ["agent", "ok", "checked_at"],
+          "properties": {"agent": {"type": "string"}, "ok": {"type": "boolean"},
+                         "checked_at": {"type": "string"}, "healed_at": {"type": ["string", "null"]}}}},
         "pending": {"type": "array", "items": {
           "type": "object", "additionalProperties": true, "required": ["id", "at", "action", "summary"],
           "properties": {"id": {"type": "string"}, "at": {"type": ["string", "null"]},
