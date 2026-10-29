@@ -273,7 +273,8 @@ token check as before. The app has `inbox_reply(wait, project, value, text)` nex
 - `state.manager_queue[]`: open items addressed to the manager, `{id, at, kind: "review", project, lane,
   text, to: "manager", status}`, from `<home>/manager_queue.jsonl`.
 - A manual ask that only says to install the commit guard disappears once the project's guard is intact.
-  Brain-detected asks exist only for working agents.
+  Brain-detected waits exist only for working agents and are **not** in `waiting_on_you` (see
+  "Only owner items reach the owner").
 
 ## Lane endings
 
@@ -315,13 +316,34 @@ copy, a link or a text box is not enough.
 - `dispatch.add_owner_item` raises on an empty option list.
 - Items the collector generates carry options or actions: lane failures (`Retry`, `Show the log`,
   `Drop it`), dispatcher items (`Fix it`/`Try again`, `Wait`/...), guard checks (below), and violations,
-  brain-detected waits and room waits (`Let the manager handle it|manager`, `Got it|ack`).
-- The collector enforces it again on the final list (`_enforce_cta`): an item without one (an old row of
-  `waits.jsonl`, a future generator) is **not** shown. It becomes one manager queue item
-  (`kind: "no-call-to-action"`, id `sq-cta-<wait id>`, added once).
-- A reply to a generated item (`violation-*`, `brain-*`, `room-*`) answers it: it moves to
+  and room waits (`Let the manager handle it|manager`, `Got it|ack`).
+- The collector enforces it again on the final list (`_enforce_cta`, through `asks.is_owner_item`): an item
+  without one (an old row of `waits.jsonl`, a future generator) is **not** shown. It becomes one manager
+  queue item (`kind: "no-call-to-action"`, id `sq-cta-<wait id>`, added once).
+- A reply to a generated item (`room-*`) answers it: it moves to
   `answered_waits`. The value `manager` also adds a manager queue item (`kind: "owner-handoff"`).
 - The web card shows the item's Run actions (`web/js/actions.js`) between its option buttons and the text box.
+
+### Only owner items reach the owner
+
+Agents report to the manager. Everything the collector generates for the owner passes one function,
+`asks.is_owner_item(item)`: it needs a one-click option or a Run action **and** a `source` in
+`asks.OWNER_SOURCES` = `manual` (asks the manager or the dispatcher wrote with `tirith wait add`, plan owner
+items, lane failures), `guard` (guard/setup actions), `setup`, `plan`, `lane`, `room` (a room message that
+names the owner). `_enforce_cta` applies it to the final list; an item that fails it is queued for the manager
+(`kind: "no-call-to-action"` without a call to action, `kind: "not-owner-item"` with a source that is not
+allowed, id `sq-cta-<wait id>`, once). A new generator needs its source in the allow-list on purpose.
+
+What the brain guesses from a **working** agent's log ("it seems to wait for X") is never an owner item. It is a
+manager queue item, `kind: "agent-waiting"` (`asks.sync_agent_waiting`, every cycle):
+
+- one open item per lane + text (id `sq-aw-<hash of lane and text>`), not added twice;
+- closed by itself (`result: "no longer waiting"`) when the lane ends or leaves the list, or when the brain's
+  answer for that lane no longer has the text (no change while the brain's answer is still pending). The same
+  text said again after an automatic close opens a new item; one the manager closed (`tirith queue done`)
+  stays closed;
+- listed in the manager hook context (`SessionStart` / `UserPromptSubmit`): "Tirith queue: N working agent(s)
+  look to be waiting ...", each with its `tirith queue done <id>`; it does not block `Stop`.
 
 ### Guard items (`guard-<project>`)
 

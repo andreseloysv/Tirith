@@ -55,6 +55,7 @@ GUARD_SNOOZE = timedelta(days=7)
 GUARD_MARKER = "FORBIDDEN_WORDS_GUARD"
 DROP_ENDED_AFTER = timedelta(hours=24)
 MAX_PIPELINE_RUNS = 20
+STAGE_TIMEOUT_S = 3600  # a started stage with no end event is "interrupted" after this long (or when its pid is gone)
 GIT_HOOK_FLOWS_FIRST = 20
 LOG_TAIL_LINES = 20
 SUMMARY_LOG_LINES = 200
@@ -289,6 +290,23 @@ def _looks_like_path(value: str | None) -> bool:
 _AUTO_CLIENT = object()
 
 
+def _stage_alive(stage: dict, now: datetime) -> bool:
+    """A started stage without an end event still runs: its process exists and the stage timeout has not passed."""
+    started = parse_iso(stage.get("started_at"))
+    limit = stage.get("_timeout") or STAGE_TIMEOUT_S
+    if started and (now - started).total_seconds() > limit:
+        return False
+    pid = stage.get("_pid")
+    if pid:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except OSError:
+            pass
+    return True
+
+
 class Collector:
     """Owns one home directory and builds ``state.json`` cycle by cycle."""
 
@@ -301,7 +319,8 @@ class Collector:
         resolved = brain_mod.make_client(self.config) if client is _AUTO_CLIENT else client
         self.worker = brain_mod.BrainWorker(resolved, self.cache)
         self._agents_dirty = False
-        self.rooms = RoomsService(self.home, rooms_transport)
+        self._brain_pending: set[str] = set()  # lanes whose brain answer has not landed yet
+        self.rooms =RoomsService(self.home, rooms_transport)
         self._one_shot = False
         self.activity = activity_mod.ActivityTracker()
         self.github = github_mod.GithubReader(github_transport)
@@ -438,15 +457,16 @@ class Collector:
         if cached is None:
             self.worker.submit("waiting", log_text,
                                lambda c, t=log_text: {"items": brain_mod.job_waiting(c, t)})
+            self._brain_pending.add(str(lane.get("id")))
             return []
         since = cached.get("created_at") or lane.get("started_at")
         waits = []
         for index, item in enumerate(cached.get("items") or []):
+            # a guess about a working agent: it goes to the manager's queue, never to the owner
             waits.append({
                 "id": f"brain-{brain_mod.cache_key('waiting', log_text)[:8]}-{index}",
-                "project": str(lane.get("project") or ""),
+                "project": str(lane.get("project") or ""), "lane": str(lane.get("id")),
                 "text": str(item), "since": since, "link": None, "source": "brain",
-                "options": [dict(o) for o in asks_mod.GOT_IT_OPTIONS],
             })
         return waits
 
@@ -530,6 +550,8 @@ class Collector:
             if event.get("event") == "start":
                 stage["status"] = "running"
                 stage["started_at"] = event.get("at")
+                stage["_pid"] = event.get("pid") if isinstance(event.get("pid"), int) else None
+                stage["_timeout"] = event.get("timeout") if isinstance(event.get("timeout"), (int, float)) else None
             elif event.get("event") == "end":
                 stage["status"] = str(event.get("status") or "failed")
                 stage["ended_at"] = event.get("at")
@@ -560,18 +582,29 @@ class Collector:
                 elif stage["status"] == "failed":
                     failed_seen = True
                 stages.append(stage)
+            now = datetime.now(timezone.utc)
             for stage in stages:
+                if stage["status"] == "running" and not _stage_alive(stage, now):
+                    stage["status"], stage["reason"] = "failed", "interrupted"
                 stage["log_tail"] = tail_lines(stage.pop("_log"), LOG_TAIL_LINES)
+                stage.pop("_pid", None)
+                stage.pop("_timeout", None)
+            if run["pipeline"] != manifest_mod.GIT_HOOKS_PIPELINE and any(s["started_at"] for s in stages) \
+                    and not any(s["status"] == "running" for s in stages):
+                for stage in stages:  # a finished run: what never started was skipped, not pending
+                    if stage["status"] == "pending":
+                        stage["status"] = "skipped"
             starts = [s["started_at"] for s in stages if s["started_at"]]
             ends = [s["ended_at"] for s in stages if s["ended_at"]]
+            ran = [s for s in stages if s["status"] not in ("pending", "skipped")]
             if any(s["status"] == "failed" for s in stages):
                 status = "failed"
-            elif stages and all(s["status"] == "passed" for s in stages):
-                status = "passed"
-            elif not starts:
-                status = "pending"
-            else:
+            elif any(s["status"] == "running" for s in stages):
                 status = "running"
+            elif ran and all(s["status"] == "passed" for s in ran):
+                status = "passed"
+            else:
+                status = "pending"
             project = resolve(run["project"], run["_cwd"]) if resolve else run["project"]
             output.append({
                 "run": run["run"], "project": project, "pipeline": run["pipeline"],
@@ -790,11 +823,11 @@ class Collector:
         return open_items, answered
 
     def _enforce_cta(self, waiting: list[dict]) -> list[dict]:
-        """The rule: nothing reaches the owner without a one-click option or a Run action. An item without
-        one goes to the manager's queue (once) instead of the list."""
+        """The rule: nothing reaches the owner unless ``asks.is_owner_item`` (a one-click option or a Run
+        action, and an allow-listed source). Any other item goes to the manager's queue (once)."""
         shown, seen = [], {}
         for wait in waiting:
-            if asks_mod.has_call_to_action(wait):
+            if asks_mod.is_owner_item(wait):
                 key = (str(wait.get("project") or ""), " ".join(str(wait.get("text") or "").split()).lower())
                 if key in seen:  # the same text for the same project is one item
                     first = seen[key]
@@ -805,8 +838,9 @@ class Collector:
                 wait["actions"] = actions_mod.dedupe_actions(wait.get("actions") or [])
                 shown.append(wait)
             else:
-                asks_mod.queue_add(self.home, str(wait.get("project") or ""), "", wait["text"],
-                                   kind=asks_mod.NO_CTA_KIND, item_id="sq-cta-" + re.sub(r"[^\w.-]", "-", wait["id"]))
+                kind = asks_mod.NO_CTA_KIND if not asks_mod.has_call_to_action(wait) else asks_mod.NOT_OWNER_KIND
+                asks_mod.queue_add(self.home, str(wait.get("project") or ""), str(wait.get("lane") or ""),
+                                   wait["text"], kind=kind, item_id="sq-cta-" + re.sub(r"[^\w.-]", "-", wait["id"]))
         return shown
 
     @staticmethod
@@ -895,7 +929,8 @@ class Collector:
                 if _looks_like_path(r.project) else r for r in config.rooms])
         agents = self._load_agents()
         self._agents_dirty = False
-        scored = self._score_lanes(agents, lanes, events)
+        self._brain_pending = set()
+        scored =self._score_lanes(agents, lanes, events)
 
         cutoff = now - DROP_ENDED_AFTER
         agent_rows: list[dict] = []
@@ -1061,7 +1096,8 @@ class Collector:
             {p["id"]: p["guard"]["ok"] for p in projects if p.get("guard")})
         # violations are not the owner's turn (the blocked agent was already told what to do instead);
         # they are shown in the Rules section only
-        generated, generated_answered = self._settle_generated(brain_waits + room_waits)
+        asks_mod.sync_agent_waiting(self.home, brain_waits, self._brain_pending)  # manager only
+        generated, generated_answered = self._settle_generated(room_waits)
         answered_waits = sorted(answered_waits + generated_answered,
                                 key=lambda w: str(w["answer"]["at"] or ""), reverse=True)[:ANSWERED_KEPT]
         waiting = self._enforce_cta(manual_waits + generated + guard_waits)

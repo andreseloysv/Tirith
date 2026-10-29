@@ -93,8 +93,12 @@
   }
 
   /* ---------- render ---------- */
-  function renderAll() {
-    T.render(applyFilters(raw), raw);
+  var pending = false;
+  function renderAll(polled) {
+    /* new state while the owner types: leave the DOM alone, render when the field loses the cursor */
+    if (polled === true && T.typing && T.typing()) { pending = true; return; }
+    pending = false; T.polling = polled === true;
+    try { T.render(applyFilters(raw), raw); } finally { T.polling = false; }
     writeHash();
   }
 
@@ -144,7 +148,7 @@
     var k = JSON.stringify(s, function (key, v) { return key === 'generated_at' ? undefined : v; });
     var changed = k !== sig;
     sig = k; raw = s;
-    if (changed) renderAll();
+    if (changed) renderAll(true);
     srcLine();
   }
   function isDemo() { return defaultMode || /(^|\/)(fixtures|demo)\//.test(statePath); }
@@ -188,6 +192,9 @@
       var o = parseHash();
       if ((o.session || '') === filt.session && (o.project || '') === filt.project && (o.q || '') === filt.q && (o.view || 'overview') === filt.view && (o.mode === 'list' || o.mode === 'tree' ? o.mode : 'kanban') === filt.mode && (o.state || '') === (defaultMode || tauri ? '' : statePath)) return;
       applyHash(false); qi.value = filt.q;
+    });
+    document.addEventListener('focusout', function () {
+      setTimeout(function () { if (pending && raw && !T.typing()) renderAll(true); }, 0);
     });
     srcLine();
     if (tauri) {
