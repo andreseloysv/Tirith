@@ -104,7 +104,7 @@ def test_a_passing_lane_is_merged_once_and_the_owner_is_told(env, home: Path) ->
     text = [a["text"] for a in answers if a["by"] == "tirith"][-1]
     branch = git(repo, "rev-parse", "--abbrev-ref", "HEAD").strip()
     assert text.startswith(f"Merged web-panel into {branch}: ") and "files, tests 3 passed" in text
-    assert asks_mod.queue_items(home, only_open=True) == []
+    assert [q for q in asks_mod.queue_items(home, only_open=True) if q["kind"] != "launch-refused"] == []
     (done,) = [i for i in asks_mod.queue_items(home) if i["status"] == "done"]
     assert "Merged web-panel" in done["result"]
     assert read_json(home / "dispatch.json", {})["reviews"]["web-panel"]["settled"]

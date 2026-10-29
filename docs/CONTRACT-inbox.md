@@ -234,12 +234,12 @@ handles everything by hand), `auto_launch = false` leaves `finish` to the manage
 |---|---|
 | `finish`, a working lane already has that project and step | answers `by: tirith`, naming the lane and its now-doing line |
 | `finish`, no such lane | runs the `tirith launch` code in-process (detached, like the CLI) and answers with the new lane id |
-| `finish`, launch refused (step done, `tirith check` fails, no agent command, ...) | answers with the reason and the exact fix command, and adds an owner item with options `Fix it` / `Try again` (`waits.jsonl` row with `options: [{label, command}]`, also in `state.waiting_on_you[].options`) |
+| `finish`, launch refused (step done, `tirith check` fails, no agent command, ...) | answers with the reason and the exact fix command, and queues a manager item `launch-refused` (`sq-dispatch-<request id>`) with the `Fix it` and `Try again` commands; nothing reaches the owner |
 | `ask` | the brain answers at once (`by: brain`, `auto: true`); the request stays `manager_pending` |
 | `plan-refresh`, no working lane of that project with `step: "plan-refresh"` | starts the auditor lane (`tirith.planlane`, same path as `tirith launch`: worktree `<repo>-lanes/<id>`, branch `lane/<id>`, generated brief in `<home>/briefs/`), `step: "plan-refresh"`, and answers with the lane id |
 | `plan-refresh`, one already running for the project | answers naming that lane (one refresh at a time per project) |
 | `plan-new` | starts the planner lane (`step: "plan-new"`) and answers with the lane id; several may run |
-| `plan-refresh` / `plan-new`, launch refused | answers with the reason and adds an owner item (`Try again` with the `tirith inbox add` command for a refresh) |
+| `plan-refresh` / `plan-new`, launch refused | answers with the reason and queues a manager item `launch-refused` (with the `tirith inbox add` retry command for a refresh) |
 | `plan-edit` | applies the change to the project's plan file by code: the step's open item whose text is exactly `item_text` (a wrapped item counts as one) is replaced, removed, or the new item is appended after the step's last open item; commits **only that file** with `Roadmap: <edit\|delete\|add> in step N (owner)` through the normal git hooks (the commit guard); answers `by: tirith` and queues one `plan-refresh` |
 | `plan-edit`, item text changed meanwhile (or ticked), step or plan gone, plan file has uncommitted changes, commit refused | changes nothing, answers `Could not <verb> the plan: <reason>` and adds an alert flow |
 | `plan-edit` after another edit with a `plan-refresh` of that project still unanswered | no second refresh: the answer says one is already queued (at most one queued refresh per project) |
@@ -375,20 +375,55 @@ copy, a link or a text box is not enough.
   ...`). What only the manager must see goes to its own queue (`tirith queue`), not to the owner.
 - `dispatch.add_owner_item` raises on an empty option list.
 - Items the collector generates carry options or actions: lane failures (`Retry`, `Show the log`,
-  `Drop it`), dispatcher items (`Fix it`/`Try again`, `Wait`/...), guard checks (below), and violations,
+  `Drop it`), dispatcher items (`Wait` / `Start an agent` when the manager is silent), guard checks (below), and violations,
   brain-detected waits and room waits (`Got it|ack`).
 - The collector enforces it again on the final list (`_enforce_cta`, through `asks.is_owner_item`): an item
   without one (an old row of `waits.jsonl`, a future generator) is **not** shown. It becomes one manager
   queue item (`kind: "no-call-to-action"`, id `sq-cta-<wait id>`, added once).
 - A reply to a generated item (`room-*`) answers it: it moves to `answered_waits`.
 - **Your turn is only for what the manager refuses or cannot do.** There is no "Let the manager handle it" (or
-  any hand-back) option anywhere: the manager's work is the default. An owner item raised for a roadmap item
-  states why in `reason` (a key of `asks.OWNER_REASONS`: `security`, `credentials`, `account`, `device`,
-  `payment`, `legal`) and `reason_tag` ("Needs you: installs on your Mac"), both passed through on the wait and
-  shown as a chip on the card. `dispatch.add_owner_item(..., reason=)` refuses an unknown key.
+  any hand-back) option anywhere: the manager's work is the default. What enforces it is "The owner gate" below.
 - **Text matches buttons.** `add_owner_item` rewrites a text that promises a button the item lacks ("botón
   Run", "click Run", "Run button", same for Open / Done; `asks.missing_buttons` / `drop_button_claims`).
 - The web message shows the item's Run actions (`web/js/actions.js`) between its option buttons and the text box.
+
+### The owner gate (`tirith/ownergate.py`)
+
+Nothing reaches the owner unless only the owner can do it, enforced by one function, `ownergate.admit`. Every
+path that raises an owner item or an owner-directed message calls it: `dispatch.add_owner_item`,
+`tirith wait add` / `tirith chat say` with options (`cli.add_wait`), a roadmap `(dueño: …)` tag
+(`autopilot`), the "Needs the owner" list of a plan-refresh report (`ownergate.filter_report`, called by the
+automatic review before the report is posted), the autoreview "merge it?" item and the manager-silent escalation.
+
+- The item must name `why_owner`, one of `asks.WHY_OWNER`: `credentials` (passwords, keys, store/developer
+  accounts), `payment`, `personal-account` (a login only the owner can do), `physical-device`, `owner-decision`
+  (a product choice with options). `tirith wait add --why-owner KEY [--why-detail "Apple account"]`; in a
+  roadmap tag `(dueño: personal-account (Apple account) …)`; in a report bullet `- [credentials] …` or
+  `- [personal-account: Apple ID] …`. Old keys map (`account` → `personal-account`, `device` →
+  `physical-device`, `legal` → `owner-decision`); `security` and a missing key are not reasons.
+- Missing or unknown `why_owner`: not an owner item. It becomes a manager queue item `kind: "agent-can-do"`,
+  text `agent can do: <text>`, id `sq-acd-<hash>` (once). `tirith wait add` prints why on stderr and exits 0
+  with nothing written to `waits.jsonl`.
+- **The dispatcher turns each `agent-can-do` item into one verification lane** (`tirith/verifylane.py`,
+  `cli.launch_verify`, one per cycle, step `verify`, none while the disk is low, none for an item without a
+  project). The brief says: open `tirith://` links with `open`, take screenshots with playwright, read state
+  or files, and report **Checked / Result / Needs the owner**. The queue item closes with the lane id; a
+  refused launch stays in the queue for the manager. State in `<home>/verify-state.json`.
+- Text with `(fuera de este plan` / `(out of this plan`, or one that mostly repeats an item that has it, is
+  dropped: never shown, one row in `<home>/owner_dropped.jsonl` (`at, id, project, via, text`).
+- A launch Tirith could not do (dispatcher, plan lanes, autopilot) is the manager's, not the owner's: a
+  queue item `kind: "launch-refused"` (id `sq-dispatch-…` / `sq-autopilot-…`) with the fix and retry commands.
+- The owner item shows its reason in plain words: `why_owner`, `why_detail` and `reason_tag` ("Needs your
+  Apple account", "Needs your decision: pick a date") are on the wait and in `state.waiting_on_you`, shown
+  as a chip on the card.
+- On the first cycle of the collector every open row of `waits.jsonl` is re-checked (`ownergate.migrate`):
+  one with an old reason key stays and gets its `why_owner`; the others are closed
+  (`done_reason: "moved to the manager queue"`) and queued as `agent-can-do` (or dropped when out of plan).
+- The plan-refresh brief and the verification brief tell the lane this list, that a check an agent can do
+  is never an owner check, and that out-of-plan items are never listed.
+- `asks.is_owner_item` (the collector's last gate) also requires a valid `why_owner`; the guard reminder is an
+  `owner-decision`. A brain guess or a room message that names the owner has none: it goes to the manager
+  queue (`not-owner-item`).
 
 ### Only owner items reach the owner
 

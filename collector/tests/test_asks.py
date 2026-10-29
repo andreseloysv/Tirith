@@ -28,7 +28,7 @@ def _manual(waits: list[dict]) -> list[dict]:
 
 def test_wait_add_stores_options_command_kind(home: Path, capsys) -> None:
     write_config(home, [{"id": "demo", "name": "Demo"}])
-    assert main(["wait", "add", "--project", "demo", "--text", "Ship **v2**?",
+    assert main(["wait", "add", "--why-owner", "owner-decision", "--project", "demo", "--text", "Ship **v2**?",
                  "--option", "Ship it|ship", "--option", "Hold", "--command", "make ship",
                  "--link", "https://example.com", "--kind", "approval"]) == 0
     wait_id = capsys.readouterr().out.strip().splitlines()[-1]
@@ -42,18 +42,18 @@ def test_wait_add_stores_options_command_kind(home: Path, capsys) -> None:
 
 def test_wait_without_option_or_action_is_refused(home: Path, capsys) -> None:
     with pytest.raises(SystemExit) as refused:
-        main(["wait", "add", "Tick the box", "--project", "demo"])
+        main(["wait", "add", "--why-owner", "owner-decision", "Tick the box", "--project", "demo"])
     assert "call-to-action" in str(refused.value)
-    assert main(["wait", "add", "Tick the box", "--project", "demo", "--option", "Done|done"]) == 0
+    assert main(["wait", "add", "--why-owner", "owner-decision", "Tick the box", "--project", "demo", "--option", "Done|done"]) == 0
     (row,) = read_jsonl(home / "waits.jsonl")
     assert row["options"] == [{"label": "Done", "value": "done"}]
 
 
 def test_wait_add_rejects_bad_input(home: Path) -> None:
     with pytest.raises(SystemExit):
-        main(["wait", "add", "--project", "demo"])
+        main(["wait", "add", "--why-owner", "owner-decision", "--project", "demo"])
     with pytest.raises(SystemExit):
-        main(["wait", "add", "q", "--option", "|x"])
+        main(["wait", "add", "--why-owner", "owner-decision", "q", "--option", "|x"])
 
 
 def test_options_are_capped_and_labels_cut() -> None:
@@ -64,7 +64,7 @@ def test_options_are_capped_and_labels_cut() -> None:
 
 def test_reply_marks_the_ask_answered_and_reaches_the_inbox(home: Path, capsys) -> None:
     write_config(home, [{"id": "demo", "name": "Demo"}])
-    main(["wait", "add", "Which?", "--project", "demo", "--option", "A|a", "--option", "B|b", "--id", "w-7"])
+    main(["wait", "add", "--why-owner", "owner-decision", "Which?", "--project", "demo", "--option", "A|a", "--option", "B|b", "--id", "w-7"])
     capsys.readouterr()
     assert main(["inbox", "reply", "--wait", "w-7", "--value", "b", "--text", "but later"]) == 0
     reply_id = capsys.readouterr().out.strip()
@@ -185,10 +185,10 @@ def test_failed_lane_end_by_the_manager_adds_no_owner_item(home: Path) -> None:
 def test_commit_guard_reminder_goes_away_when_the_guard_is_intact(
         home: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     write_config(home, [{"id": "demo", "name": "Demo", "repo": str(tmp_path)}])
-    main(["wait", "add", "Install the commit guard in the repo", "--project", "demo",
+    main(["wait", "add", "--why-owner", "owner-decision", "Install the commit guard in the repo", "--project", "demo",
           "--run", "tirith guard install demo", "--label", "Install the guard"])
-    main(["wait", "add", "Pick a colour", "--project", "demo", "--option", "Blue|blue"])
-    main(["wait", "add", "Reinstall the commit guard?", "--project", "demo", "--option", "Yes|yes"])
+    main(["wait", "add", "--why-owner", "owner-decision", "Pick a colour", "--project", "demo", "--option", "Blue|blue"])
+    main(["wait", "add", "--why-owner", "owner-decision", "Reinstall the commit guard?", "--project", "demo", "--option", "Yes|yes"])
     monkeypatch.setattr("tirith.collector.verify_guard", lambda *_a, **_k: [])
     texts = [w["text"] for w in _state(home)["waiting_on_you"] if w["source"] == "manual"]
     assert texts == ["Pick a colour", "Reinstall the commit guard?"]   # a real question stays
