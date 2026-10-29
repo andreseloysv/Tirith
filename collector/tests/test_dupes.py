@@ -19,7 +19,8 @@ ACTION = {"id": "ac-c5967d8e", "label": "Update ChromaSol's old guard",
 def _row(wait_id: str, actions: list[dict]) -> dict:
     return {"id": wait_id, "at": "2026-10-29T07:44:39Z", "project": "demo", "text": "Replace the old guard.",
             "link": None, "done_at": None, "session": "s", "kind": "decision",
-            "options": [{"label": "Not now", "value": "later"}], "command": None, "actions": actions}
+            "options": [{"label": "Not now", "value": "later"}], "command": None, "actions": actions,
+            "why_owner": "owner-decision"}
 
 
 def _manual(home: Path, rows: list[dict]) -> list[dict]:
