@@ -22,7 +22,8 @@ Message format, one block per violation:
 | `no-verify` | the git flag that skips hooks (long form), `git commit -n` (also `-an`) | `PreToolUse` hook | run the git command without it; fix what the hook reports |
 | `hooks-path` | any command naming `core.hooksPath` | `PreToolUse` hook | edit `[[hooks]]` in `tirith.toml`, run `tirith check` |
 | `git-hooks` | editing/removing files under `.git/hooks` (shell mutators, redirects, Edit/Write tools) | `PreToolUse` hook | leave it; the owner uses `tirith guard install` |
-| `agent-hooks` | removing the agent hooks: editing/removing an agent's user settings file (`[agents.<alias>] settings`, Muse's default path; shell mutators, redirects, Edit/Write tools; reading is fine) or running `tirith hook uninstall` | `PreToolUse` hook | leave it; the owner manages the hooks with `tirith hook install\|uninstall` |
+| `settings-edit` | an edit/write tool or shell command touching a configured agent settings file (`[agents.<alias>] settings`) or `~/.tirith/config.toml` (plain readers such as `cat`, `grep`, `ls` are allowed), and `tirith hook uninstall` | `PreToolUse` hook | leave them alone; the owner changes them (`tirith hook install --agent <alias>` restores the hooks) |
+| `hooks-removed` | not a block: recorded as a violation when the collector found the hooks gone from an agent's settings and put them back | collector (every cycle) | nothing to do; the hooks are already restored |
 | `raw-stage` | a stage `run` of the project's `tirith.toml` executed raw (the whole sequence, or the stage's last command with its args) | `PreToolUse` hook | `tirith run [--project <id>] [--pipeline <id>] --stage <name>` |
 | `raw-stage` (runner) | in a folder that belongs to a project with a `tirith.toml`, a build or test runner not wrapped by `tirith run`: pytest (also `python -m pytest`, `uv run … pytest`), `npm`/`pnpm`/`yarn` `test` or `build`, vitest, jest, `go test`/`build`, `cargo test`/`build`, `gradle`/`gradlew` test/build/assemble, `make test`/`check`/`build`, `xcodebuild`, `swift test`/`build`, `node --check` | `PreToolUse` hook | `tirith run --project <id> --stage <stage> [-- <cmd>]` (test runners: the project's test stage; builds: its build stage, by stage kind; with no such stage: `tirith setup add-stage …`) |
 | `lane-brief` | `lane run` with no `--brief`, or a missing/empty brief file (exit 3) | `lane run` | write the task into a file, pass `--brief <file>` |
@@ -132,3 +133,13 @@ worktree is kept."). It sends only the lane id: the Tauri command `lane_stop(lan
 against the running local lanes in `state.json`, then runs `tirith lane stop <id> --by owner` in the
 background), or the `tirith://stop?lane=<id>&token=<launch token>` link (`tirith url open` checks the
 token and that the lane is running), or the line `tirith lane stop <id> --by owner` to copy.
+
+## Hooks stay installed: `hooks.protect`
+
+Every collector cycle checks, for each `[agents.<alias>]`, that all `INSTALL_EVENTS` entries are in its
+settings file (`hooks.has_hooks`). If an agent whose hooks were seen intact before lost them (edited
+file, deleted file), `hooks.install` puts them back, merging, never deleting another key, with the same
+executable and role as before, and a `hooks-removed` violation is recorded with the time. An agent never
+installed is reported but not touched. `[gates] enabled = false` switches the healing off too. The result
+is kept in `~/.tirith/protect.json` and shown in `state.projects[].setup.protection`
+(`[{agent, ok, checked_at, healed_at}]`); the Setup card shows "Hooks protected · last check 2 s ago".

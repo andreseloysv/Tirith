@@ -46,7 +46,7 @@ DESCRIPTIONS: dict[str, str] = {
     "no-verify": "Nobody may skip the safety checks that run before a commit.",
     "hooks-path": "Nobody may switch off the commit checks by pointing git at other hooks.",
     "git-hooks": "Agents may not edit or delete the commit checks that guard the project.",
-    "agent-hooks": "Agents may not remove the hooks that let you see what every agent does.",
+    "settings-edit": "Agents may not edit the settings that hold their hooks, nor Tirith's own config.",
     "raw-stage": "Tests and builds must run through Tirith, so you can see them in Pipelines.",
     "lane-brief": "Every lane starts with a written task, so the agent knows what to do.",
     "project-check": "No new lane starts while the project's setup has problems.",
@@ -202,48 +202,6 @@ def _clip(text: str, limit: int = 100) -> str:
 
 def _hooks_target(tokens: list[str]) -> bool:
     return any(".git/hooks" in token for token in tokens)
-
-
-def protected_settings(config: Config) -> list[str]:
-    """User-level settings files that hold our hook entries: ``[agents.<alias>] settings`` + Muse's default."""
-    paths = [str(Path(str(t["settings"])).expanduser()) for t in config.agents.values() if t.get("settings")]
-    paths.append(str(Path.home() / ".config" / "muse" / "settings.json"))
-    return list(dict.fromkeys(paths))
-
-
-def _is_settings(path: str, protected: list[str]) -> bool:
-    """``path`` (``~``/``$HOME`` allowed, ``..`` resolved) names one of the ``protected`` files."""
-    text = str(path).strip().strip("\"'")
-    home = str(Path.home())
-    for prefix in ("~", "$HOME", "${HOME}"):
-        if text == prefix or text.startswith(prefix + "/"):
-            text = home + text[len(prefix):]
-    if not text:
-        return False
-    try:
-        resolved = os.path.realpath(os.path.expanduser(text))
-    except (OSError, ValueError):
-        resolved = text
-    return resolved in protected or os.path.normpath(text) in protected or any(
-        text.endswith("/" + p[len(home) + 1:]) for p in protected if p.startswith(home + "/"))
-
-
-def _hook_removal(line: str, segments: list[list[str]], protected: list[str]) -> Violation | None:
-    """A shell command that edits a protected settings file or runs ``tirith hook uninstall``."""
-    hit = bool(re.search(r"\btirith\b.*\bhook\s+uninstall\b", line))
-    for tokens in segments:
-        name, _ = _program(tokens)
-        if any(_is_settings(t.lstrip("<>"), protected) for t in tokens) and (
-                name in _MUTATORS or any(t.startswith((">", ">>")) for t in tokens)):
-            hit = True
-    if not hit and re.search(r"(>|\btee\b|\bsed\s+-i)\s*\S*settings", line):
-        hit = any(_is_settings(t, protected) for t in re.split(r"[\s;|&<>]+", line))
-    if not hit:
-        return None
-    return Violation(
-        "agent-hooks", f"removing or editing the agent hooks is not allowed: {_clip(line)}",
-        "leave the agents' settings.json alone; the owner manages the hooks with "
-        "`tirith hook install|uninstall`")
 
 
 def _commit_no_verify(args: list[str]) -> bool:
@@ -417,7 +375,64 @@ def find_manifest_folder(cwd) -> Path | None:
     return None
 
 
-def check_call(config: Config, tool: str | None, tool_input, cwd, project: str | None = None) -> list[Violation]:
+_READ_ONLY = {"cat", "ls", "head", "tail", "grep", "rg", "less", "more", "wc", "stat", "jq", "file",
+              "diff", "bat", "test", "["}
+SETTINGS_HINT = ("leave the agent settings and ~/.tirith/config.toml alone; the owner changes them "
+                 "(`tirith hook install --agent <alias>` restores the hooks)")
+
+
+def protected_paths(config: Config, home: Path | None = None) -> list[Path]:
+    """Settings file of every configured agent plus ``<home>/config.toml`` (absolute, unresolved)."""
+    from tirith import hooks as hooks_mod
+    from tirith.home import tirith_home
+
+    paths: list[Path] = []
+    for alias in config.agents:
+        try:
+            paths.append(hooks_mod.default_settings(alias, config.agents))
+        except ValueError:
+            continue
+    paths.append((home or tirith_home()) / "config.toml")
+    return [Path(os.path.abspath(p)) for p in paths]
+
+
+def _expand_home(text: str) -> str:
+    home = os.path.expanduser("~")
+    return text.replace("$" + "{HOME}", home).replace("$HOME", home).replace("~/", home + "/")
+
+
+def _same(text: str, path: Path, cwd) -> bool:
+    text = _expand_home(text.strip("'\""))
+    if not text:
+        return False
+    if not os.path.isabs(text):
+        text = os.path.join(str(cwd or ""), text) if cwd else text
+    return os.path.abspath(text) in (str(path), os.path.realpath(str(path)))
+
+
+def _settings_bash(line: str, segments: list[list[str]], protected: list[Path], cwd) -> Violation | None:
+    """A shell command that touches a protected file other than with a plain reader."""
+    flat = _expand_home(line)
+    for tokens in segments:
+        name, args = _program(tokens)
+        text = _expand_home(" ".join(tokens))
+        if name == "tirith" and "hook" in args and "uninstall" in args:
+            target = "tirith hook uninstall removes the hooks"
+        else:
+            hit = next((p for p in protected if str(p) in text
+                        or any(_same(t.lstrip("<>").split("=", 1)[-1], p, cwd) for t in tokens)
+                        or (str(p.parent) in flat and any(t.lstrip("<>") == p.name for t in tokens))), None)
+            if hit is None:
+                continue
+            if name in _READ_ONLY and not any(">" in t for t in tokens):
+                continue
+            target = f"{hit} is protected"
+        return Violation("settings-edit", f"{target}: {_clip(line)}", SETTINGS_HINT)
+    return None
+
+
+def check_call(config: Config, tool: str | None, tool_input, cwd, project: str | None = None,
+               home: Path | None = None) -> list[Violation]:
     """Every rule that blocks one ``PreToolUse`` call (``[]`` = allowed)."""
     data = tool_input if isinstance(tool_input, dict) else {}
     tool = tool or ""
@@ -429,19 +444,18 @@ def check_call(config: Config, tool: str | None, tool_input, cwd, project: str |
             return [Violation("git-hooks", f"editing files under .git/hooks is not allowed: {path}",
                               "leave .git/hooks alone; the owner manages it with "
                               "`tirith guard install <project>`")]
-        if _is_settings(path, protected_settings(config)):
-            return [Violation("agent-hooks", f"editing the agent settings that hold the hooks is not allowed: {path}",
-                              "leave the agents' settings.json alone; the owner manages the hooks with "
-                              "`tirith hook install|uninstall`")]
+        hit = next((p for p in protected_paths(config, home) if _same(path, p, cwd)), None)
+        if hit:
+            return [Violation("settings-edit", f"{hit} is protected: {path}", SETTINGS_HINT)]
         return _custom_rules(find_manifest_folder(cwd), tool, data, "", [], cwd)
     if tool != "Bash":
         return []
     line = strip_heredocs(str(data.get("command") or data.get("cmd") or ""))
     segments = split_commands(line)
     out = _git_rules(line, segments)
-    removal = _hook_removal(line, segments, protected_settings(config))
-    if removal:
-        out.append(removal)
+    protect = _settings_bash(line, segments, protected_paths(config, home), cwd)
+    if protect:
+        out.append(protect)
     commands = agent_commands(config)
     seen: set[str] = set()
     for tokens in segments:

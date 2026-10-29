@@ -133,15 +133,15 @@ def test_agent_hooks_cannot_be_removed(proj, home, settings_file, monkeypatch, c
     if command.startswith("cd /tmp"):
         command = f"rm {settings_file}"
     assert _bash(monkeypatch, proj, command) == 2
-    assert "tirith: agent-hooks: " in capsys.readouterr().err
-    assert [r["rule"] for r in read_jsonl(home / "events.jsonl") if r["kind"] == "violation"] == ["agent-hooks"]
+    assert "tirith: settings-edit: " in capsys.readouterr().err
+    assert [r["rule"] for r in read_jsonl(home / "events.jsonl") if r["kind"] == "violation"] == ["settings-edit"]
 
 
 def test_agent_settings_are_protected_from_edit_tools_but_readable(
         proj, settings_file, monkeypatch, capsys) -> None:
     for tool in ("Edit", "Write", "MultiEdit"):
         assert _call(monkeypatch, proj, tool, {"file_path": str(settings_file)}) == 2
-        assert "tirith: agent-hooks: " in capsys.readouterr().err
+        assert "tirith: settings-edit: " in capsys.readouterr().err
     assert _call(monkeypatch, proj, "Read", {"file_path": str(settings_file)}) == 0
     assert _bash(monkeypatch, proj, f"cat {settings_file}") == 0
     assert _bash(monkeypatch, proj, "tirith hook install --agent anthropic") == 0
