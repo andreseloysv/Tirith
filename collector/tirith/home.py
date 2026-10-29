@@ -105,7 +105,7 @@ class Config:
     dispatch_auto_launch: bool = True  # [dispatch] auto_launch: a "finish" request starts a lane
     autopilot_enabled: bool = True  # [autopilot] enabled: Tirith starts a lane on every ready plan step
     autopilot_max_parallel: int = 4  # [autopilot] max_parallel: autopilot lanes running at once
-    review_auto_merge: bool = True  # [review] auto_merge: a passing lane is merged; false = tests only
+    review_auto_merge: bool = True  # [review] auto_merge: ignored; a passing lane is always merged
     disk_min_free_gb: float = 5.0  # [disk] min_free_gb: below this free space no new lane is started
     manager_session_cwd: str | None = None  # [manager] session_cwd: the folder the manager runs in
     models: dict = field(default_factory=dict)  # [models]: manager, workers (+ overrides), choices

@@ -17,7 +17,9 @@ button click -> tirith://launch?project=<id>&step=<n>&token=<t>
    title, before the first `##`) from the project's roadmap (`docs/CONTRACT-roadmap.md`).
 2. Refuses (exit 3, reason on stderr) when: the step is unknown, done or has no items; a working lane of
    the same project already has that step (the message names it); `tirith check` fails for the project;
-   no agent command is configured.
+   no agent command is configured. `tirith lane run --step N` (what every start ends in: autopilot,
+   dispatcher, manager lanes) refuses the same way (exit 3, "<lane> is already working on step N") unless it
+   continues that lane (`--fallback-from`: fallback, relaunch, claims re-send).
 3. Creates a git worktree `<repo>-lanes/<lane-id>` next to the repo on a new branch `lane/<lane-id>`
    from the current branch. `<lane-id>` is the slug of the step title, made unique against lanes,
    worktrees and branches.
@@ -148,15 +150,17 @@ No finished lane is left unreviewed, by code. State in `<home>/dispatch.json` un
 `overdue`.
 
 1. A launched lane that ended `done` (within the last 24 h) gets, once, a manager queue item
-   (`kind: "review"`) and a detached `tirith lane review <lane>` (`--tests-only` when `[review] auto_merge =
-   false` in `config.toml`; default `true`). The tests are an ordinary pipeline run tagged with the lane.
+   (`kind: "review"`) and a detached `tirith lane review <lane>` (it merges when the tests pass; `[review] auto_merge`
+   is ignored: merging is never a question for the owner). The tests are an ordinary pipeline run tagged with the lane.
 2. When the review has a result, the dispatcher settles it once per result:
    - `merged`: the lane's `request_id` gets an answer `by: "tirith"` "Merged <lane> into <branch>: <n> files,
      tests <n> passed"; the review item is closed with that result; the plan is updated (below).
-   - `tests-failed` / `merge-failed`: nothing is merged; one owner item `review-<lane>-<time>` with Run actions
-     "Retry the review", "Start an agent to fix it", "Show the log", "Drop the lane"; the queue item stays open.
-   - `ready` (auto_merge off): owner item with Run actions "Merge" and "Drop"; the queue item stays open.
-   A later result of the same lane (a retry) is settled again and closes the earlier owner item.
+   - `tests-failed` / `merge-failed` (conflict, dirty main checkout, low disk, ...): nothing is merged; ONE
+     manager queue item with the reason and the commands "Retry the review", "Start an agent to fix it",
+     "Show the log", "Drop the lane". Never an owner item.
+   - `ready` (a manual `--tests-only` run): a lane with no review record is merged by the next pass; a settled
+     `ready` result is one manager queue item "not merged".
+   A later result of the same lane (a retry) replaces the earlier queue item.
 3. Plan update on merge: the brief lists the step's open items under "What to build"; items whose words
    (at least 70 %) appear in the report's "What changed" lines are ticked in the repo's roadmap file and
    committed as "Roadmap: step N progress from <lane>" (through the git hooks; a refused commit or an edited
