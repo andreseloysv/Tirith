@@ -227,7 +227,7 @@
         "steps": [
           {
             "id": "1",
-            "title": "Datos y migraci\u00f3n",
+            "title": "Datos y migración",
             "status": "done",
             "done": 2,
             "total": 2,
@@ -673,7 +673,7 @@
           },
           {
             "id": "2",
-            "title": "\u00c1rbol de delegaci\u00f3n",
+            "title": "Árbol de delegación",
             "status": "done",
             "done": 3,
             "total": 3,
@@ -698,7 +698,7 @@
           },
           {
             "id": "3",
-            "title": "Hooks de agentes \u2192 `tirith hook`",
+            "title": "Hooks de agentes → `tirith hook`",
             "status": "active",
             "done": 3,
             "total": 6,
@@ -1793,7 +1793,7 @@
           "ts": "2026-10-28T19:39:02Z",
           "kind": "edit",
           "text": "app/src/main/java/scan/PersonPool.kt",
-          "detail": "+12 \u22123",
+          "detail": "+12 −3",
           "fields": null,
           "path": "/Users/owner/DEVELOP/Chromasol/app/src/main/java/scan/PersonPool.kt"
         },
@@ -1833,7 +1833,7 @@
           "ts": "2026-10-28T19:37:30Z",
           "kind": "edit",
           "text": "app/src/main/java/scan/ScanViewModel.kt",
-          "detail": "+4 \u22121",
+          "detail": "+4 −1",
           "fields": null,
           "path": "/Users/owner/DEVELOP/Chromasol/app/src/main/java/scan/ScanViewModel.kt"
         },
@@ -2036,7 +2036,7 @@
           "ts": "2026-10-28T18:38:20Z",
           "kind": "edit",
           "text": "app/src/main/java/db/Migrations.kt",
-          "detail": "+58 \u22122",
+          "detail": "+58 −2",
           "fields": null,
           "path": "/Users/owner/DEVELOP/Chromasol/app/src/main/java/db/Migrations.kt"
         },
@@ -2725,6 +2725,101 @@
       "lane": null,
       "worktree": null,
       "branch": null
+    },
+    {
+      "run": "ci#14",
+      "project": "tirith",
+      "pipeline": "ci",
+      "status": "failed",
+      "started_at": "2026-10-28T19:30:00Z",
+      "ended_at": "2026-10-28T19:31:20Z",
+      "stages": [
+        {
+          "name": "build",
+          "status": "passed",
+          "started_at": "2026-10-28T19:30:00Z",
+          "ended_at": "2026-10-28T19:30:09Z",
+          "duration_s": 9,
+          "log_tail": [
+            "Finished dev profile"
+          ]
+        },
+        {
+          "name": "clippy",
+          "status": "passed",
+          "started_at": "2026-10-28T19:30:09Z",
+          "ended_at": "2026-10-28T19:30:40Z",
+          "duration_s": 31,
+          "log_tail": [
+            "no warnings"
+          ]
+        },
+        {
+          "name": "rust-test",
+          "status": "failed",
+          "started_at": "2026-10-28T19:30:40Z",
+          "ended_at": "2026-10-28T19:31:20Z",
+          "duration_s": 40,
+          "log_tail": [
+            "running 41 tests",
+            "test world::tests::tile_edges ... FAILED",
+            "assertion failed: left == right",
+            "test result: FAILED. 40 passed; 1 failed"
+          ]
+        },
+        {
+          "name": "package",
+          "status": "skipped",
+          "started_at": null,
+          "ended_at": null,
+          "duration_s": null,
+          "log_tail": []
+        }
+      ],
+      "session": null,
+      "lane": "t-collector",
+      "worktree": "/Users/owner/DEVELOP/Tirith-lanes/t-collector",
+      "branch": "lane/t-collector"
+    },
+    {
+      "run": "release#21",
+      "project": "tirith",
+      "pipeline": "release",
+      "status": "passed",
+      "started_at": "2026-10-28T19:10:00Z",
+      "ended_at": "2026-10-28T19:13:30Z",
+      "stages": [
+        {
+          "name": "lint",
+          "status": "passed",
+          "started_at": "2026-10-28T19:10:00Z",
+          "ended_at": "2026-10-28T19:10:40Z",
+          "duration_s": 40,
+          "log_tail": []
+        },
+        {
+          "name": "test",
+          "status": "passed",
+          "started_at": "2026-10-28T19:10:40Z",
+          "ended_at": "2026-10-28T19:12:30Z",
+          "duration_s": 110,
+          "log_tail": []
+        },
+        {
+          "name": "publish",
+          "status": "passed",
+          "started_at": "2026-10-28T19:12:30Z",
+          "ended_at": "2026-10-28T19:13:30Z",
+          "duration_s": 60,
+          "log_tail": []
+        }
+      ],
+      "session": null,
+      "lane": null,
+      "worktree": null,
+      "branch": "main",
+      "source": "github",
+      "html_url": "https://github.com/owner/tirith/actions/runs/21"
     }
   ],
   "rooms": [
@@ -3150,9 +3245,9 @@
       "agent": "anthropic",
       "lane": "icon-2",
       "project": "chromasol",
-      "message": "tirith: subagent-tool: the agent's internal sub-agent tool (Task) is not allowed. Do this instead: tirith lane run --project chromasol --class glasswright --feature \"<description>\" --brief <file> -- <agent cmd> \u2026",
+      "message": "tirith: subagent-tool: the agent's internal sub-agent tool (Task) is not allowed. Do this instead: tirith lane run --project chromasol --class glasswright --feature \"<description>\" --brief <file> -- <agent cmd> …",
       "blocked": "the agent's internal sub-agent tool (Task) is not allowed",
-      "instead": "tirith lane run --project chromasol --class glasswright --feature \"<description>\" --brief <file> -- <agent cmd> \u2026"
+      "instead": "tirith lane run --project chromasol --class glasswright --feature \"<description>\" --brief <file> -- <agent cmd> …"
     },
     {
       "ts": "2026-10-28T19:12:00Z",
