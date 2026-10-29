@@ -1661,6 +1661,62 @@ fn run_action(app: AppHandle, action_id: String) -> Result<(), String> {
     Ok(())
 }
 
+/// The AppleScript that opens macOS Terminal with `command` typed in (same text as `howto.applescript`).
+fn terminal_script(command: &str) -> String {
+    let escaped = command.replace('\\', "\\\\").replace('"', "\\\"");
+    format!("tell application \"Terminal\"\nactivate\ndo script \"{escaped}\"\nend tell")
+}
+
+/// The `terminal` command of step `step` of the latest row of wait `wait_id`; the page sends ids, never text.
+fn howto_terminal(home: &std::path::Path, wait_id: &str, step: usize) -> Option<String> {
+    let row = read_jsonl(&home.join("waits.jsonl")).into_iter().rev().find(|r| r["id"] == wait_id)?;
+    let command = row["howto"]["steps"].as_array()?.get(step)?["terminal"].as_str()?.trim().to_string();
+    (!command.is_empty()).then_some(command)
+}
+
+#[tauri::command]
+fn open_in_terminal(wait_id: String, step: usize) -> Result<(), String> {
+    let command = howto_terminal(&tirith_home(), &wait_id, step).ok_or_else(|| format!("no terminal step {step} in {wait_id}"))?;
+    Command::new("osascript")
+        .arg("-e")
+        .arg(terminal_script(&command))
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .spawn()
+        .map(|mut child| {
+            std::thread::spawn(move || {
+                let _ = child.wait();
+            });
+        })
+        .map_err(|e| format!("could not run osascript: {e}"))
+}
+
+#[cfg(test)]
+mod terminal_tests {
+    use super::*;
+
+    #[test]
+    fn the_command_is_typed_into_terminal_escaped() {
+        let script = terminal_script("xcrun notarytool store-credentials \"tirith-notary\" --apple-id a@b.c");
+        assert!(script.starts_with("tell application \"Terminal\""));
+        assert!(script.contains("do script \"xcrun notarytool store-credentials \\\"tirith-notary\\\" --apple-id a@b.c\""));
+        assert!(terminal_script("echo a\\b").contains("echo a\\\\b"));
+    }
+
+    #[test]
+    fn only_a_stored_terminal_step_is_found() {
+        let home = std::env::temp_dir().join(format!("tirith-howto-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        std::fs::create_dir_all(&home).unwrap();
+        let row = json!({"id": "w-1", "howto": {"steps": [{"text": "open"}, {"text": "run", "terminal": "echo hi"}]}});
+        std::fs::write(home.join("waits.jsonl"), format!("{row}\n")).unwrap();
+        assert_eq!(howto_terminal(&home, "w-1", 1).as_deref(), Some("echo hi"));
+        assert!(howto_terminal(&home, "w-1", 0).is_none());
+        assert!(howto_terminal(&home, "w-1", 7).is_none());
+        assert!(howto_terminal(&home, "echo hi", 1).is_none());
+    }
+}
+
 #[cfg(test)]
 mod action_tests {
     use super::*;
@@ -1999,6 +2055,7 @@ pub fn run() {
             attachment_save,
             inbox_reply,
             run_action,
+            open_in_terminal,
             lane_stop,
             chat_enabled,
             chat_agents,

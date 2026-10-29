@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Callable
 
 from tirith import agentrun as agentrun_mod
+from tirith import howto as howto_mod
 from tirith import asks as asks_mod
 from tirith import flows as flows_mod
 from tirith import inbox as inbox_mod
@@ -63,6 +64,7 @@ RULES = (
     "`tirith inbox done <id>` when it is settled. Answer the question that was asked, briefly.",
     "Put something on the owner's list (`tirith wait add ... --option ...`) only for what you must refuse or "
     "cannot do yourself. No operating-system notifications.",
+    *howto_mod.RULES,
     "Queue items: handle each (look at the lane, unblock it, review it) and close it with "
     "`tirith queue done <id>`.",
     "Do not commit. Name agents only by their alias.",
