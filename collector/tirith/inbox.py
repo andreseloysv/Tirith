@@ -19,7 +19,8 @@ from tirith.store import append_jsonl, read_jsonl
 
 INBOX_FILE = "inbox.jsonl"
 KINDS = ("finish", "ask", "setup")
-SETUP_ACTIONS = ("add-stage", "add-rule", "remove-stage", "remove-rule", "run-stage")
+MODELS_ACTIONS = ("models-set", "apply-manager")  # the Settings page; the request's project is "settings"
+SETUP_ACTIONS = ("add-stage", "add-rule", "remove-stage", "remove-rule", "run-stage") + MODELS_ACTIONS
 SETUP_STEP = "setup"
 ANSWERERS = ("manager", "steward", "brain", "tirith")  # "steward" is the old name of "manager"
 TEXT_MAX_BYTES = 4096
@@ -81,6 +82,10 @@ def parse_setup(text: str) -> dict:
 
 def setup_summary(setup: dict) -> str:
     """One line for a setup request: ``add-stage ci/lint: make lint``."""
+    if setup.get("action") == "models-set":
+        what = " ".join(f"{k}={setup[k]}" for k in ("agent", "model", "effort") if setup.get(k))
+        where = "/".join(str(setup[k]) for k in ("project", "step") if setup.get(k))
+        return " ".join(f"models {setup.get('role')} {where} {what}".split())
     where = "/".join(str(setup[k]) for k in ("pipeline", "name", "id") if setup.get(k))
     detail = setup.get("run") or setup.get("match") or setup.get("regex") or setup.get("message") or ""
     return " ".join(f"{setup.get('action')} {where}: {detail}".split()).rstrip(": ")
