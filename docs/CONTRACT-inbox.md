@@ -159,7 +159,12 @@ The app writes every `inbox_add` attempt and its result (`ok id=...` or `error: 
   separate "Your turn" section in the Overview.
 - The chat header shows a badge with the number of items that still wait for the owner and **Jump to next**
   (scrolls to the next one, round and round). The header **Chat** button of other views gets its dot too.
-- While a chat, ask or finish request is `manager_pending`: "Manager is typing…" with the seconds waited.
+- While a chat, ask or finish request is `manager_pending`, the thread ends with what is really happening:
+  "Manager is typing…" (animated dots, age) only if a live manager session's heartbeat (`state.manager.live`,
+  from `manager.json`, at most 5 min old) moved after the message, or a lane of that request is working.
+  Otherwise a plain line without dots: "Waiting for the manager · 12 min", and after 30 min "The manager has
+  not answered yet" in amber. A request reopened by an action result shows that result ("✗ Install the agent
+  shims failed") as the reason instead. Timestamps without a zone are read as UTC.
 - Composer: Enter sends, Shift+Enter is a new line, an optional project chip (default: the sidebar's project
   filter). Sending: `window.__TAURI__` -> `inbox_add` (kind `chat`); else, with the link handler installed, the
   `tirith://inbox?kind=chat&project=..&step=&text=..&token=..` link; else the `tirith inbox add --kind chat ...`

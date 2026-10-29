@@ -171,3 +171,11 @@ def test_pipeline_stage_order_pending_and_skipped(home: Path, tmp_path: Path) ->
     assert [(s["name"], s["status"], s["duration_s"]) for s in pipe["stages"]] == [
         ("build", "failed", 60), ("test", "skipped", None), ("ship", "skipped", None)]
     assert read_json(home / "state.json", {})["pipelines"][0]["run"] == "release#1"
+
+
+def test_manager_live_follows_manager_json(home: Path) -> None:
+    assert _collector(home).cycle()["manager"]["live"] is None
+    (home / "manager.json").write_text(json.dumps({"heartbeat": "2026-10-29T09:00:00"}), encoding="utf-8")
+    assert _collector(home).cycle()["manager"]["live"] == {"heartbeat": "2026-10-29T09:00:00Z"}
+    (home / "manager.json").write_text("not json", encoding="utf-8")
+    assert _collector(home).cycle()["manager"]["live"] is None
