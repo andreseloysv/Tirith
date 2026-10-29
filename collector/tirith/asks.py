@@ -33,20 +33,32 @@ AUTO_CLOSED = "no longer waiting"
 # There is no "let the manager handle it": the manager's work is the default, never an option.
 GOT_IT_OPTIONS = [{"label": "Got it", "value": "ack"}]
 
-# Why an item may be on the owner's list at all: what the manager refuses to do or cannot do.
-OWNER_REASONS = {
-    "security": "installs on your Mac",
-    "credentials": "needs your credentials",
-    "account": "needs your account settings",
-    "device": "needs a physical device",
-    "payment": "involves a payment",
-    "legal": "needs your legal sign-off",
+# Why an item may be on the owner's list at all: only what an agent cannot do (``why_owner``).
+# Anything else, or no reason, is not an owner item (see ``tirith.ownergate``).
+WHY_OWNER = {
+    "credentials": "credentials",  # passwords, keys, store/developer accounts
+    "payment": "payment",
+    "personal-account": "personal account",  # a login only the owner can do
+    "physical-device": "physical device",
+    "owner-decision": "decision",  # a product choice with options
 }
+LEGACY_WHY = {"account": "personal-account", "device": "physical-device", "legal": "owner-decision"}
+AGENT_CAN_DO_KIND = "agent-can-do"  # a manager queue item the dispatcher turns into a verification lane
 
 
-def reason_tag(reason: str) -> str:
-    """``"Needs you: installs on your Mac"`` for a key of ``OWNER_REASONS``."""
-    return "Needs you: " + OWNER_REASONS[reason]
+def why_key(why) -> str | None:
+    """The key of ``WHY_OWNER`` for ``why`` (an old key is mapped), else ``None``."""
+    key = str(why or "").strip().lower().replace("_", "-").replace(" ", "-")
+    key = LEGACY_WHY.get(key, key)
+    return key if key in WHY_OWNER else None
+
+
+def reason_tag(why: str, detail: str | None = None) -> str:
+    """``"Needs your Apple account"`` for a key of ``WHY_OWNER`` and an optional detail."""
+    detail = re.sub(r"^your\s+", "", " ".join(str(detail or "").split()), flags=re.IGNORECASE)[:60]
+    if why in ("credentials", "personal-account", "physical-device"):
+        return f"Needs your {detail or WHY_OWNER[why]}"
+    return f"Needs your {WHY_OWNER[why]}" + (f": {detail}" if detail else "")
 
 
 _BUTTON_CLAIM = re.compile(
@@ -125,8 +137,9 @@ OWNER_SOURCES = ("manual", "guard", "setup", "plan", "lane", "room")
 
 
 def is_owner_item(item: dict) -> bool:
-    """The one gate for owner items: a one-click option or Run action AND an allow-listed source."""
-    return has_call_to_action(item) and str(item.get("source") or "") in OWNER_SOURCES
+    """The collector's last gate: a one-click option or Run action, an allow-listed source AND a ``why_owner``."""
+    return has_call_to_action(item) and str(item.get("source") or "") in OWNER_SOURCES \
+        and why_key(item.get("why_owner")) is not None
 
 
 def default_kind(options, command) -> str:
