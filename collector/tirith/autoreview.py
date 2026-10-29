@@ -273,6 +273,10 @@ def run(home: Path, config: Config, now: datetime, state: dict, lanes: list[dict
                 book[lane_id] = {"seen": now_iso(now), "settled": _result_key(review) or "gone"}  # nothing to start
                 changed = True
                 continue
+            if not unmerged_work(repo, lane):  # merged by hand: nothing to review, settled
+                book[lane_id] = {"seen": now_iso(now), "settled": "merged"}
+                changed = True
+                continue
             if age <= AUTO_WINDOW_S:
                 item = asks_mod.queue_add(home, str(lane.get("project") or ""), lane_id,
                                           f"Review lane {lane_id} ({lane.get('feature') or ''}): tests, then merge")

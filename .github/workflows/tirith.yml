@@ -36,3 +36,5 @@ jobs:
         run: for f in web/js/*.js; do node --check "$f" || exit 1; done
       - name: Markdown tests
         run: node web/js/md.test.mjs
+      - name: Your turn tests
+        run: node web/js/needs.test.mjs

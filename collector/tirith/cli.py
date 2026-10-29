@@ -69,6 +69,7 @@ def _unique_lane_id(home: Path, wanted: str) -> str:
 REQUEST_MAX = 2048
 REQUEST_WINDOW_S = 6 * 3600
 REPORT_MAX = 16 * 1024
+REPO_BIN = str(Path(__file__).resolve().parents[2] / "bin")  # `tirith` for agents lives in the repo
 
 
 def bound_text(text, limit: int) -> str:
@@ -260,7 +261,8 @@ def _wrapper_path_env(home: Path | None = None, lane_id: str | None = None,
         env["TIRITH_SESSION"] = session
     wrapper_dir = str(Path.home() / ".local" / "bin")
     shim_dir = str((home or tirith_home()) / "shims")  # agent shims first, then the git wrapper
-    env["PATH"] = shim_dir + os.pathsep + wrapper_dir + os.pathsep + env.get("PATH", "")
+    env["PATH"] = (shim_dir + os.pathsep + wrapper_dir + os.pathsep + REPO_BIN + os.pathsep +
+                   env.get("PATH", ""))
     return env
 
 
@@ -474,13 +476,14 @@ def _cmd_pipeline_declare(args) -> int:
     stages = [s.strip() for s in (args.stages or "").split(",") if s.strip()]
     if not stages:
         raise SystemExit("pipeline declare needs --stages a,b,c")
-    book = _pipeline_book(home)
     key = f"{args.project}/{args.pipeline}" if args.project else f"*/{args.pipeline}"
-    entry = book.get(key) if isinstance(book.get(key), dict) else {}
-    entry.update({"stages": stages})
-    entry.setdefault("counter", 0)
-    book[key] = entry
-    write_json_atomic(home / "pipelines.json", book)
+    with runstage_mod.pipelines_lock(home):
+        book = _pipeline_book(home)
+        entry = book.get(key) if isinstance(book.get(key), dict) else {}
+        entry.update({"stages": stages})
+        entry.setdefault("counter", 0)
+        book[key] = entry
+        write_json_atomic(home / "pipelines.json", book)
     print(f"{args.pipeline}: {','.join(stages)}")
     return 0
 

@@ -46,7 +46,7 @@ started=""
 if pgrep -f "tirith collect" >/dev/null; then
     echo "Collector already running: reusing it."
 else
-    (cd "$ROOT/collector" && exec uv run -q tirith collect --interval 2) \
+    (cd "$ROOT/collector" && PATH="$ROOT/bin:$PATH" exec uv run -q tirith collect --interval 2) \
         >>"$HOME_DIR/logs/collector.log" 2>&1 &
     started=$!
     echo "Collector started (log: $HOME_DIR/logs/collector.log)."

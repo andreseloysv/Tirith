@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# `tirith` for agents: the collector CLI of this repo, run in the current folder.
+set -euo pipefail
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+exec uv run -q --project "$ROOT/collector" tirith "$@"

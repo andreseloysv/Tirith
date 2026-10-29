@@ -44,7 +44,8 @@ HARD_RULES = (
     "Do NOT commit; leave the changes in the working tree for the owner to review.",
     "Name agents only by their alias (see `docs/CONTRACT-hooks.md` \"Agent aliases\"), never by product or model name.",
     "No servers and no open ports.",
-    "The tests must pass before you finish.",
+    "The tests must pass before you finish. Run them only with `tirith run --project <id> --stage test` "
+    "(`<id>` is the project id of this lane); never call the test runner directly.",
     "Do not touch git hooks, `.git/`, or anything outside this worktree.",
     "Do not start sub-agents except with `tirith lane run`.",
     "Finish with a short report: what changed (files), the test result, and anything left open.",
