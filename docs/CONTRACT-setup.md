@@ -86,7 +86,7 @@ is given.
             "enforced_by": ["hook"], "active": true, "description": "…"},
            {"id": "no-force-push", "label": "no-force-push", "source": "tirith.toml", "action": "block",
             "enforced_by": ["hook"], "active": true, "description": "…"}],
- "gates_active": true, "gates_problems": [], "gates_fix": [],
+ "gates_active": true, "gates_problems": [], "gates_fix": [], "gates_summary": "", "gates_actions": [],
  "pending": [{"id": "in-5a41c9e2", "at": "…", "action": "add-stage", "summary": "add-stage ci/lint: make lint"}]}
 ```
 
@@ -102,15 +102,19 @@ is given.
   intact and hooks installed, `git` = the commit guard is intact, `lane run` and `CI` always.
 - `gates_active` = hooks installed for every `[agents.<alias>]` (settings file read, never written) and
   `verify_shims` clean and `[gates] enabled` not false. `gates_problems` says why not, `gates_fix` is the
-  list of install commands (`tirith hook install --agent <alias>`, `tirith shim install --dir <dir>`).
-  Nothing is installed by collecting.
+  list of install commands (`tirith hook install --agent <alias>`, `tirith shim install`).
+  The shims are checked by `gates.verify_home_shims`, the same function as `tirith shim verify`:
+  `<home>/shims` against the lane PATH. `gates_summary` is one plain sentence on what is missing and why
+  it matters ("" when all is active); `gates_actions` are Run actions (generated, stable ids) for the
+  install steps. Nothing is installed by collecting.
 - `pending`: open `setup` requests of the project that the manager has not closed.
 
 ## Web (`web/js/v-setup.js`)
 
 A "Setup" card per project in the Overview, under the Plan (project filter applies):
 
-- banner "Rules are not active on this machine" with `gates_fix` as copyable commands (first card only);
+- banner (first card only, only when `gates_active` is false): the `gates_summary` sentence with the
+  `gates_actions` as Run buttons (`T.actions`); no copyable commands; nothing at all when all is active;
 - `tirith check`: green "Ready", or the problems with their `Fix` lines;
 - Pipelines: each stage as a chip `build · make build ✓ 2 min ago` (kind icon, last result, `never run`),
   with a **Run** button that sends a `run-stage` request;
