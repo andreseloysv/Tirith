@@ -177,6 +177,154 @@ fn launch_step(project: String, step: u32) -> Result<String, String> {
     }
 }
 
+// -- add a project -----------------------------------------------------------------------------
+
+/// Folders under a temp directory are scratch space, never a project.
+fn in_temp_dir(folder: &std::path::Path) -> bool {
+    let mut roots: Vec<PathBuf> = ["/tmp", "/var/tmp", "/private/tmp", "/private/var/tmp", "/private/var/folders"]
+        .iter()
+        .map(PathBuf::from)
+        .collect();
+    roots.push(std::env::temp_dir());
+    roots
+        .iter()
+        .filter_map(|r| r.canonicalize().ok().or_else(|| Some(r.clone())))
+        .any(|r| folder.starts_with(r))
+}
+
+/// The real folder to register, or why it cannot be one.
+fn validate_project_folder(folder: &str) -> Result<PathBuf, String> {
+    if folder.trim().is_empty() {
+        return Err("pick a folder".into());
+    }
+    let path = expand(folder.trim());
+    let real = path.canonicalize().map_err(|_| format!("folder not found: {folder}"))?;
+    if !real.is_dir() {
+        return Err(format!("not a folder: {folder}"));
+    }
+    if in_temp_dir(&real) {
+        return Err("a temporary folder cannot be a project".into());
+    }
+    Ok(real)
+}
+
+/// `#rrggbb` or nothing (the collector picks a color).
+fn validate_project_color(color: &str) -> Result<Option<String>, String> {
+    let c = color.trim();
+    if c.is_empty() {
+        return Ok(None);
+    }
+    let ok = c.len() == 7 && c.starts_with('#') && c[1..].chars().all(|ch| ch.is_ascii_hexdigit());
+    if ok { Ok(Some(c.to_string())) } else { Err(format!("color must look like #2f7d5b, got {c:?}")) }
+}
+
+/// The argv for `tirith project add`; every value is one argument, never a shell string.
+fn project_add_args(folder: &std::path::Path, name: &str, color: &str) -> Result<Vec<String>, String> {
+    let name = name.trim();
+    if name.chars().count() > 80 || name.chars().any(|c| c.is_control()) {
+        return Err("the name must be one line of at most 80 characters".into());
+    }
+    let mut args = vec!["project".to_string(), "add".to_string(), folder.to_string_lossy().into_owned()];
+    if !name.is_empty() {
+        args.push(format!("--name={name}"));
+    }
+    if let Some(c) = validate_project_color(color)? {
+        args.push(format!("--color={c}"));
+    }
+    Ok(args)
+}
+
+/// Registers a folder with `tirith project add` and reports the new project and whether the folder
+/// already has a `tirith.toml`.
+#[tauri::command]
+fn project_add(folder: String, name: String, color: String) -> Result<Value, String> {
+    let real = validate_project_folder(&folder)?;
+    let args = project_add_args(&real, &name, &color)?;
+    let argv: Vec<&str> = args.iter().map(String::as_str).collect();
+    let out = tirith_command(&argv)
+        .stdin(Stdio::null())
+        .output()
+        .map_err(|e| format!("could not run tirith: {e}"))?;
+    let text = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if !out.status.success() {
+        let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        return Err(if err.is_empty() { text } else { err });
+    }
+    // "<id>: <folder>" when created, "<folder> is already registered as <id>" otherwise
+    let created = !text.contains(" is already registered as ");
+    let id = match text.rsplit_once(" is already registered as ") {
+        Some((_, id)) => id.trim().to_string(),
+        None => text.split(':').next().unwrap_or("").trim().to_string(),
+    };
+    Ok(json!({
+        "id": id,
+        "folder": real.to_string_lossy(),
+        "created": created,
+        "hasToml": real.join("tirith.toml").is_file(),
+        "message": text,
+    }))
+}
+
+#[cfg(test)]
+mod project_add_tests {
+    use super::*;
+
+    fn scratch_in_home(tag: &str) -> PathBuf {
+        let dir = user_home().join(format!(".tirith-test-{tag}-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn rejects_missing_empty_and_file_paths() {
+        assert!(validate_project_folder("").is_err());
+        assert!(validate_project_folder("/definitely/not/here-4821").is_err());
+        let file = std::env::current_exe().unwrap();
+        assert!(validate_project_folder(file.to_str().unwrap()).unwrap_err().contains("not a folder"));
+    }
+
+    #[test]
+    fn rejects_temp_folders_even_through_symlinks() {
+        let tmp = std::env::temp_dir().join(format!("tirith-pa-{}", std::process::id()));
+        std::fs::create_dir_all(&tmp).unwrap();
+        assert!(validate_project_folder(tmp.to_str().unwrap()).unwrap_err().contains("temporary"));
+        assert!(validate_project_folder("/tmp").is_err());
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn accepts_a_real_folder_outside_temp() {
+        let dir = scratch_in_home("ok");
+        let got = validate_project_folder(dir.to_str().unwrap());
+        let _ = std::fs::remove_dir_all(&dir);
+        if in_temp_dir(&user_home()) {
+            return; // a sandboxed HOME under a temp folder: nothing to assert
+        }
+        assert_eq!(got.unwrap().file_name(), dir.file_name());
+    }
+
+    #[test]
+    fn color_is_a_hex_triplet_or_empty() {
+        assert_eq!(validate_project_color("").unwrap(), None);
+        assert_eq!(validate_project_color(" #2f7d5b ").unwrap().as_deref(), Some("#2f7d5b"));
+        assert!(validate_project_color("red").is_err());
+        assert!(validate_project_color("#12345").is_err());
+        assert!(validate_project_color("#12345g").is_err());
+    }
+
+    #[test]
+    fn argv_keeps_every_value_a_single_argument() {
+        let folder = PathBuf::from("/Users/me/my project; rm -rf ~");
+        let args = project_add_args(&folder, "  --evil name ", "#112233").unwrap();
+        assert_eq!(args, vec!["project", "add", "/Users/me/my project; rm -rf ~", "--name=--evil name", "--color=#112233"]);
+        let bare = project_add_args(&folder, "", "").unwrap();
+        assert_eq!(bare.len(), 3);
+        assert!(project_add_args(&folder, "two\nlines", "").is_err());
+        assert!(project_add_args(&folder, &"x".repeat(81), "").is_err());
+        assert!(project_add_args(&folder, "ok", "nope").is_err());
+    }
+}
+
 // -- inbox requests ----------------------------------------------------------------------------
 
 const INBOX_TEXT_MAX: usize = 4096;
@@ -1051,10 +1199,12 @@ fn chat_stop(state: State<'_, App>, id: String) {
 
 pub fn run() {
     let app = tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .manage(App::default())
         .invoke_handler(tauri::generate_handler![
             current_state,
             launch_step,
+            project_add,
             inbox_add,
             attachment_save,
             inbox_reply,
