@@ -18,8 +18,8 @@ collector: state.inbox -> the Plan shows the chip and the answers under the step
 
 | Row | Fields |
 |---|---|
-| request | `id`, `at`, `kind` (`finish` or `ask`), `project`, `step`, `text`, `from` (`"owner"`), `status` (`"open"`) |
-| answer | `id` (of the request), `at`, `kind: "answer"`, `by` (`steward` or `brain`), `text` (markdown), `auto` (bool), optional `lane` (id of the lane that took the request) |
+| request | `id`, `at`, `kind` (`finish`, `ask` or `setup`), `project`, `step`, `text`, `from` (`"owner"`), `status` (`"open"`) |
+| answer | `id` (of the request), `at`, `kind: "answer"`, `by` (`steward`, `brain` or `tirith`), `text` (markdown), `auto` (bool), optional `lane` (id of the lane that took the request) |
 | done | `id`, `at`, `kind: "done"` |
 
 - `id` is `in-` plus 8 hex digits. `step` is the roadmap step number as a string.
@@ -31,14 +31,15 @@ collector: state.inbox -> the Plan shows the chip and the answers under the step
 
 | Command | Does |
 |---|---|
-| `tirith inbox add --kind finish\|ask --project P --step N [--text T]` | appends a request, prints its id |
+| `tirith inbox add --kind finish\|ask\|setup --project P --step N [--text T]` | appends a request, prints its id |
 | `tirith inbox list [--open] [--json]` | lists requests (`--open`: only those with no answer and not done) |
 | `tirith inbox answer <id> "<markdown>" [--by steward\|brain] [--lane L]` | appends an answer (default `steward`, `auto: false`); `--lane` names the agent that has the request |
 | `tirith inbox done <id>` | closes the request |
+| `tirith inbox brain <id>` | answers the request with the brain now (`by: brain`, `auto: true`) |
 | `tirith inbox watch [--new-only] [--interval S]` | blocks; prints each open request as one JSON line, then each new one as it arrives |
 
-`watch` prints the requests that are open when it starts (so none is lost between steward sessions);
-`--new-only` skips them. Requests already answered or done are not printed. Use it with a monitor:
+`watch` prints the requests the steward still owes something (`steward_pending`) when it starts (so none is lost between steward sessions);
+`--new-only` skips them. Requests the steward already answered, or that are done, are not printed. Use it with a monitor:
 every printed line is something the owner is waiting on. Unknown id or bad input: exit 3, reason on stderr.
 
 ## `tirith://inbox` link (browser fallback)
@@ -58,7 +59,7 @@ The last 100 requests, oldest first:
 
 ```json
 {"id": "in-3f9a21c0", "at": "...", "kind": "ask", "project": "tirith", "step": "4", "text": "...",
- "status": "answered", "answers": [{"at": "...", "by": "steward", "text": "...", "auto": false}]}
+ "status": "answered", "steward_pending": true, "answers": [{"at": "...", "by": "steward", "text": "...", "auto": false}]}
 ```
 
 Each row also has `lanes`: the lane ids from `answers[].lane`, then the agents whose `request_id` is the
@@ -67,15 +68,19 @@ request. A lane gets its `request_id` from `--request <id>` on `tirith lane run`
 
 `status` is `open` (no answer yet), `answered` (at least one answer) or `done` (a done row).
 
+`steward_pending` is true while the steward owes the request something: a `finish` with no answer at
+all (Tirith's dispatcher normally settles it within a cycle), any other kind until the steward itself has
+answered (`by: steward`) or it is done. A brain or Tirith answer never clears it for an `ask` or `setup`.
+
 ### Automatic answer
 
-An `ask` that is still `open` 120 s after `at` gets one answer from the brain (the same worker and
+With `[dispatch] enabled = false` an `ask` that is still `open` 120 s after `at` gets one answer from the brain (the same worker and
 `brain/` cache as the other brain jobs, job `inbox-answer`, keyed by the request id), stored in
 `inbox.jsonl` as `by: "brain", auto: true`. The brain receives the step title, its open and done items,
 the agents on that step (goal, what they are doing now, last tests, files), the recent flows of the
 project, and the question. A steward answer within the 120 s means the brain never runs. Failed calls are
-retried at most every 5 minutes. Brain disabled: nothing happens. `finish` requests are never answered
-automatically.
+retried at most every 5 minutes. Brain disabled: nothing happens. With the dispatcher on (the default) the brain
+answers an `ask` in the first cycle, not after 120 s.
 
 ## Web (`web/js/v-plan.js`)
 
@@ -97,3 +102,45 @@ automatically.
 - The Plan header shows the number of open requests.
 - The "Finish with an agent" launch button is only in the expanded step, labelled "Start an agent now"
   (the direct path).
+
+## Dispatcher (`collector/tirith/dispatch.py`)
+
+No rule depends on an agent's good will: every cycle the collector runs the dispatcher (idempotent; what it
+did is in `<home>/dispatch.json`: `handled`, `escalated`, `stop`). `[dispatch] enabled = true` and
+`auto_launch = true` are the defaults; `enabled = false` switches the whole thing off (the steward then
+handles everything by hand), `auto_launch = false` leaves `finish` to the steward.
+
+| Request | The dispatcher |
+|---|---|
+| `finish`, a working lane already has that project and step | answers `by: tirith`, naming the lane and its now-doing line |
+| `finish`, no such lane | runs the `tirith launch` code in-process (detached, like the CLI) and answers with the new lane id |
+| `finish`, launch refused (step done, `tirith check` fails, no agent command, ...) | answers with the reason and the exact fix command, and adds an owner item with options `Fix it` / `Try again` (`waits.jsonl` row with `options: [{label, command}]`, also in `state.waiting_on_you[].options`) |
+| `ask` | the brain answers at once (`by: brain`, `auto: true`); the request stays `steward_pending` |
+| `setup` and other kinds | left to the steward (`steward_pending`) |
+
+Every action is a flow (`flows.jsonl`): `owner` -> `tirith` (the request), then `tirith` -> `agent:<lane>`
+(`brief` when started, `message` when already running), `tirith` -> `brain` and `brain` -> `owner` for an
+answered `ask`, `tirith` -> `owner` (`alert`) for a refusal or an escalation. `tirith` and `brain` are flow
+endpoints.
+
+### The steward is forced to answer (hooks)
+
+For the steward session only: `TIRITH_ROLE=steward` in the environment, or a working folder inside
+`[steward] session_cwd` of `config.toml`. A lane (`TIRITH_LANE` set) is never the steward. Agent alias
+`anthropic`; `tirith hook install --agent anthropic --role steward` writes the hook commands with
+`TIRITH_ROLE=steward` in front (`--settings <file>` to write elsewhere).
+
+| Hook | Does |
+|---|---|
+| `SessionStart`, `UserPromptSubmit` | prints `{"hookSpecificOutput": {"hookEventName": ..., "additionalContext": ...}}` listing every `steward_pending` request: id, kind, project, step, text, age, and the commands `tirith inbox answer <id> "<markdown>"` / `tirith inbox done <id>` |
+| `Stop` | exit 2 with the same list on stderr while a `steward_pending` request older than 60 s has no steward answer. After 3 blocks in a row for the same set of requests it lets the session stop and records one `inbox-ignored` violation. A new set starts counting again |
+
+Each injection (`kind: "inbox-injection"`) and block (`kind: "inbox-block"`) is a row in `events.jsonl`.
+
+### Escalation
+
+A `steward_pending` request unanswered for 10 minutes: once per request, a macOS notification
+(`osascript display notification`; nothing on other systems), a `tirith` -> `owner` alert flow, and the owner
+item "The steward has not answered: <text>" with options `Wait`, `Start an agent`
+(`tirith launch --project P --step N`) and `Answer it with the brain` (`tirith inbox brain <id>`). The item
+closes itself once the steward answers.

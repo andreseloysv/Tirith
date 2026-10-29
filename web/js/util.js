@@ -71,6 +71,8 @@
     if (ep === 'steward') return 'The Steward';
     if (ep === 'owner') return 'You';
     if (ep === 'guard') return 'Guard';
+    if (ep === 'tirith') return 'Tirith';
+    if (ep === 'brain') return 'The Brain';
     var i = ep.indexOf(':'), kind = ep.slice(0, i), id = ep.slice(i + 1);
     if (kind === 'agent') { var a = T.agentById(state, id); return a ? a.name : id; }
     return id;

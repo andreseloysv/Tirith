@@ -28,6 +28,7 @@ from tirith import flows as flows_mod
 from tirith import gates as gates_mod
 from tirith import manifest as manifest_mod
 from tirith import hooks as hooks_mod
+from tirith import brain as brain_mod
 from tirith import inbox as inbox_mod
 from tirith import launch as launch_mod
 from tirith import projects as projects_mod
@@ -925,6 +926,16 @@ def _cmd_inbox(args) -> int:
             inbox_mod.add_answer(home, args.id, args.text, by=args.by, lane=args.lane)
         elif action == "done":
             inbox_mod.mark_done(home, args.id)
+        elif action == "brain":
+            req = inbox_mod.find_request(home, args.id)
+            client = brain_mod.make_client(load_config(home))
+            if req is None or client is None:
+                raise inbox_mod.InboxError(f"no request {args.id}" if req is None else "the brain is not enabled")
+            state = read_json(home / "state.json", {})
+            project = next((p for p in state.get("projects") or [] if p.get("id") == req["project"]), None)
+            text = brain_mod.job_inbox_answer(client, inbox_mod.answer_prompt(
+                req, project, state.get("agents") or [], state.get("flows") or []))
+            inbox_mod.add_answer(home, args.id, text, by="brain", auto=True)
         elif action == "watch":
             def emit(req: dict) -> None:
                 print(inbox_mod.watch_line(req), flush=True)
@@ -1074,7 +1085,7 @@ def _cmd_hook(args) -> int:
     if args.action in ("install", "uninstall"):
         try:
             fn = hooks_mod.install if args.action == "install" else hooks_mod.uninstall
-            kwargs = {"tirith": args.tirith} if args.action == "install" else {}
+            kwargs = {"tirith": args.tirith, "role": args.role} if args.action == "install" else {}
             kwargs["agents"] = load_config(_home(args)).agents
             path = fn(args.agent, Path(args.settings).expanduser() if args.settings else None,
                       **kwargs)
@@ -1291,6 +1302,8 @@ def build_parser() -> argparse.ArgumentParser:
     hook.add_argument("--event", default=None, help="event name if the payload has none")
     hook.add_argument("--settings", default=None, help="agent settings file (install/uninstall)")
     hook.add_argument("--tirith", default="tirith", help="tirith executable to write on install")
+    hook.add_argument("--role", choices=["steward"], default=None,
+                      help="install: mark the hooks as the steward's (TIRITH_ROLE=steward in the command)")
     hook.set_defaults(func=_cmd_hook)
 
     guard = sub.add_parser("guard", parents=[common], help="commit guard")
@@ -1340,11 +1353,13 @@ def build_parser() -> argparse.ArgumentParser:
     i_ans.add_argument("--lane", default=None, help="id of the lane (agent) that took the request")
     i_done = inbox_sub.add_parser("done", parents=[common], help="close a request")
     i_done.add_argument("id")
+    i_brain = inbox_sub.add_parser("brain", parents=[common], help="answer a request with the brain now")
+    i_brain.add_argument("id")
     i_watch = inbox_sub.add_parser("watch", parents=[common],
                                    help="block; print each open request as one JSON line, then each new one")
     i_watch.add_argument("--new-only", action="store_true", help="skip the requests already in the file")
     i_watch.add_argument("--interval", type=float, default=1.0, help="seconds between reads")
-    for i_cmd in (i_add, i_ls, i_ans, i_done, i_watch):
+    for i_cmd in (i_add, i_ls, i_ans, i_done, i_brain, i_watch):
         i_cmd.set_defaults(func=_cmd_inbox)
 
     url = sub.add_parser("url", parents=[common], help="the tirith:// link handler (macOS)")

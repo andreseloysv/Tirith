@@ -190,6 +190,8 @@ def test_state_inbox_validates_against_the_schema(home: Path) -> None:
 
 
 def test_brain_answers_an_unanswered_question_after_120_s(project, home: Path) -> None:
+    cfg = home / "config.toml"
+    cfg.write_text(cfg.read_text() + "\n[dispatch]\nenabled = false\n")
     client = AnswerClient()
     collector = Collector(home, client=client)
     old = inbox_mod.add_request(home, "ask", "demo", "1", "What is left?", at=_at(130))["id"]

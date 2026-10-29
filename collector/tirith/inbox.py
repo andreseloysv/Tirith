@@ -18,8 +18,8 @@ from tirith.home import now_iso
 from tirith.store import append_jsonl, read_jsonl
 
 INBOX_FILE = "inbox.jsonl"
-KINDS = ("finish", "ask")
-ANSWERERS = ("steward", "brain")
+KINDS = ("finish", "ask", "setup")
+ANSWERERS = ("steward", "brain", "tirith")
 TEXT_MAX_BYTES = 4096
 STATE_ROWS = 100
 AUTO_ANSWER_AFTER_S = 120
@@ -108,7 +108,7 @@ def requests(home: Path) -> list[dict]:
             out[rid] = {"id": rid, "at": row.get("at"), "kind": kind, "project": str(row.get("project") or ""),
                         "step": str(row.get("step") if row.get("step") is not None else ""),
                         "text": str(row.get("text") or ""), "from": row.get("from") or "owner",
-                        "status": "open", "answers": []}
+                        "status": "open", "answers": [], "steward_pending": True}
         elif rid in out and kind == "answer":
             out[rid]["answers"].append({"at": row.get("at"), "by": row.get("by") or "steward",
                                         "text": str(row.get("text") or ""), "auto": bool(row.get("auto")),
@@ -117,7 +117,21 @@ def requests(home: Path) -> list[dict]:
                 out[rid]["status"] = "answered"
         elif rid in out and kind == "done":
             out[rid]["status"] = "done"
+    for req in out.values():
+        req["steward_pending"] = steward_pending(req)
     return list(out.values())
+
+
+def steward_pending(req: dict) -> bool:
+    """True while the steward owes this request something.
+
+    A ``finish`` is Tirith's own job (the dispatcher answers it), so any answer settles it; every
+    other kind stays pending until the steward itself answers, whatever the brain said."""
+    if req["status"] == "done":
+        return False
+    if req["kind"] == "finish":
+        return not req["answers"]
+    return not any(a["by"] == "steward" for a in req["answers"])
 
 
 def state_rows(home: Path) -> list[dict]:
@@ -140,7 +154,7 @@ def watch(home: Path, emit: Callable[[dict], None], *, poll_s: float = 1.0, incl
           should_stop: Callable[[], bool] = lambda: False, sleep: Callable[[float], None] = time.sleep) -> None:
     """Call ``emit`` once for each open request, then for each new one; blocks until ``should_stop``.
 
-    A request already answered or done when first seen is not emitted."""
+    A request the steward owes nothing on (done, or answered by the steward) when first seen is not emitted."""
     seen: set[str] = set()
     first = True
     while True:
@@ -148,7 +162,7 @@ def watch(home: Path, emit: Callable[[dict], None], *, poll_s: float = 1.0, incl
             if req["id"] in seen:
                 continue
             seen.add(req["id"])
-            if (first and not include_existing) or req["status"] != "open":
+            if (first and not include_existing) or not req["steward_pending"]:
                 continue
             emit(req)
         first = False

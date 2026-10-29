@@ -16,9 +16,10 @@ import os
 import re
 import shlex
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
-from tirith import gates
+from tirith import dispatch, gates
 from tirith import projects as projects_mod
 from tirith.home import load_config, now_iso
 from tirith.store import append_jsonl, read_json, write_json_atomic
@@ -176,12 +177,41 @@ def record(home: Path, agent: str, payload, event: str | None = None) -> dict:
     return row
 
 
+def _steward_inbox(agent: str, event: dict, home: Path, environ=None) -> int:
+    """Hold the steward session to the inbox (``tirith.dispatch``); other sessions are never touched.
+
+    ``SessionStart`` / ``UserPromptSubmit``: the pending requests as ``additionalContext``. ``Stop``: exit 2
+    with the list on stderr while a request older than 60 s is unanswered (3 blocks at most per set)."""
+    name = event.get("event")
+    if agent != "anthropic" or name not in ("SessionStart", "UserPromptSubmit", "Stop"):
+        return 0
+    env = os.environ if environ is None else environ
+    config = load_config(home)
+    if not config.dispatch_enabled or not dispatch.is_steward(config, env, event.get("cwd")):
+        return 0
+    now = datetime.now(timezone.utc)
+    if name == "Stop":
+        reason = dispatch.steward_stop(home, now)
+        if reason is None:
+            return 0
+        dispatch.record_event(home, name, reason, event.get("ts") or now_iso())
+        print(reason, file=sys.stderr)
+        return 2
+    text = dispatch.steward_context(home, now)
+    if text:
+        dispatch.record_event(home, name, text, event.get("ts") or now_iso())
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": name, "additionalContext": text}}))
+    return 0
+
+
 def decide(agent: str, event: dict, payload, home: Path | None = None) -> int:
     """Block a ``PreToolUse`` call that breaks a rule (``tirith.gates``): exit 2, message on stderr.
 
     Each violation is also recorded as a ``kind: "violation"`` event. Only ``[gates] enabled = false``
     in config.toml switches this off; no environment variable does.
     """
+    if home is not None and event.get("event") != "PreToolUse":
+        return _steward_inbox(agent, event, home)
     if event.get("event") != "PreToolUse" or home is None:
         return 0
     config = load_config(home)
@@ -228,8 +258,9 @@ def default_settings(agent: str, agents: dict | None = None) -> Path:
                      f"\"<path to its user settings.json>\" to ~/.tirith/config.toml")
 
 
-def hook_command(agent: str, event: str, tirith: str = "tirith") -> str:
-    return f"{shlex.quote(tirith)} hook --agent {shlex.quote(agent)} --event {shlex.quote(event)}"
+def hook_command(agent: str, event: str, tirith: str = "tirith", role: str | None = None) -> str:
+    prefix = f"{dispatch.ROLE_ENV}={shlex.quote(role)} " if role else ""
+    return f"{prefix}{shlex.quote(tirith)} hook --agent {shlex.quote(agent)} --event {shlex.quote(event)}"
 
 
 def _ours(command, agent: str) -> bool:
@@ -246,14 +277,16 @@ def _load_settings(path: Path, agent: str) -> dict:
 
 
 def install(agent: str, settings: Path | None = None, tirith: str = "tirith",
-            agents: dict | None = None) -> Path:
-    """Add our hook entries to the user settings, keeping everything else; idempotent."""
+            agents: dict | None = None, role: str | None = None) -> Path:
+    """Add our hook entries to the user settings, keeping everything else; idempotent.
+
+    ``role="steward"`` writes ``TIRITH_ROLE=steward`` into each command (the steward's own settings)."""
     path = Path(settings) if settings else default_settings(agent, agents)
     data = _load_settings(path, agent)
     hooks = data.setdefault("hooks", {})
     for event in INSTALL_EVENTS:
         groups = hooks.setdefault(event, [])
-        command = hook_command(agent, event, tirith)
+        command = hook_command(agent, event, tirith, role)
         present = False
         for group in groups:
             for handler in group.get("hooks", []):
