@@ -1286,6 +1286,23 @@ def _cmd_shim(args) -> int:
     return 1 if any(status == "skipped" for _, status, _ in rows) else 0
 
 
+def _cmd_safegit(args) -> int:
+    from tirith import safegit as safegit_mod
+    shim_dir = Path(args.dir).expanduser() if args.dir else _home(args) / "shims"
+    if args.action == "verify":
+        lane_path = _wrapper_path_env(_home(args))["PATH"] if not args.dir else None
+        problems = safegit_mod.verify(shim_dir, lane_path)
+        for problem in problems:
+            print(problem)
+        if not problems:
+            print(f"safe-git in {shim_dir}: intact")
+        return 1 if problems else 0
+    status, detail = (safegit_mod.install(shim_dir) if args.action == "install"
+                      else safegit_mod.uninstall(shim_dir))
+    print(f"git: {status} {detail}")
+    return 1 if status == "skipped" else 0
+
+
 def _add_action_args(parser) -> None:
     parser.add_argument("--run", action="append", default=[], metavar="COMMAND",
                         help="a command for the owner: shown as a Run button (repeatable)")
@@ -1639,6 +1656,12 @@ def build_parser() -> argparse.ArgumentParser:
     shim.add_argument("action", choices=["install", "uninstall", "verify"])
     shim.add_argument("--dir", default=None, help="shim folder (default: ~/.tirith/shims, first in every lane's PATH)")
     shim.set_defaults(func=_cmd_shim)
+
+    safegit = sub.add_parser("safegit", parents=[common],
+                             help="Windows safe-git shim: refuses git flags that skip hooks (git.cmd + Python core)")
+    safegit.add_argument("action", choices=["install", "uninstall", "verify"])
+    safegit.add_argument("--dir", default=None, help="shim folder (default: ~/.tirith/shims, first in every lane's PATH)")
+    safegit.set_defaults(func=_cmd_safegit)
 
     check = sub.add_parser("check", parents=[common],
                            help="check a project is set up (tirith.toml, pipelines, hooks, guard)")

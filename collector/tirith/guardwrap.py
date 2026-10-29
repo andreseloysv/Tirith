@@ -77,7 +77,9 @@ def reinstall_guard(repo: Path, words: list[str], chain: bool = False) -> list[s
         for name in mod.render(list(words)):
             hook = folder / name
             if hook.is_file() and mod.MARKER in hook.read_text(errors="replace"):
-                if hasattr(os, "chflags"):
+                if hasattr(mod, "_unlock"):
+                    mod._unlock(hook)  # chflags nouchg, or the read-only attribute on Windows
+                elif hasattr(os, "chflags"):
                     os.chflags(hook, hook.stat().st_flags & ~stat.UF_IMMUTABLE)
                 hook.unlink()
     except Exception as exc:
