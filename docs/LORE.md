@@ -54,14 +54,3 @@ agent; the Muse model may propose the epithet from what the agent actually did.
 - **Caravans**: each pipeline run is a cart travelling a road with stations (build, tests, lint,
   sign, device, store, review). Stations glow amber while running, green when passed, red when failed.
 - Clicking anything opens a parchment-style 2D panel with the details (logs, files, report).
-
-## 3D models wanted (for the owner)
-
-One GLB per class, stylized heroic proportions (slightly big hands, head and gear), game-ready:
-- 8k–25k triangles, PBR textures up to 2K, Y-up, metres, facing +Z, feet at origin, in A-pose or T-pose.
-- Rigged humanoid (Mixamo-compatible bone names if possible) so shared animations can be retargeted:
-  idle, work (hammering / writing / inspecting by class), celebrate, fail/slump, walk.
-- Rank gear as separate meshes if possible (shoulder trim, chest stars, capes) so ranks can be toggled;
-  otherwise Tirith tints and adds procedural capes.
-- Drop them in `world/assets/characters/<class>.glb` (`steward`, `stonewright`, `loremaster`, `warden`,
-  `swiftrider`, `herald`, `glasswright`, `archivist`). Until they exist, the world uses placeholders.

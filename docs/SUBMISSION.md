@@ -42,7 +42,7 @@ The demo video was recorded by a script in this repository (`docs/demo/`), again
 
 ## What was built during the hackathon
 
-Everything in the repository. The first commit is dated 2026-10-28, the first day of building, and nothing existed before it: the `tirith` CLI and collector (lanes, pipelines, notes, waits, flows, rooms, projects as folders, sessions), the Muse Spark brain client, the commit guard, the browser interface (Overview, Pipelines, Agents, Flow, search and filters), the optional Godot 3D citadel, the `./run` command, the tests (70+) and the demo tooling in `docs/demo/`. No code or assets were reused from earlier projects.
+Everything in the repository. The first commit is dated 2026-10-28, the first day of building, and nothing existed before it: the `tirith` CLI and collector (lanes, pipelines, notes, waits, flows, rooms, projects as folders, sessions), the Muse Spark brain client, the commit guard, the browser interface (Overview, Pipelines, Agents, Flow, search and filters), the `./run` command, the tests (70+) and the demo tooling in `docs/demo/`. No code or assets were reused from earlier projects.
 
 ## How to run
 

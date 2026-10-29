@@ -21,11 +21,9 @@ Built for the Meta Global AI Developer Hackathon (track: Build for Your World).
 ```bash
 ./run          # collector in the background + Tirith in your browser (live data from ~/.tirith)
 ./run --demo   # the page on the demo state, no collector
-./run --3d     # the optional Godot 3D citadel
 ```
 
-The page is a local file (no server, no ports). Requirements: [uv](https://docs.astral.sh/uv/); Godot 4.7
-only for `--3d`. Set `META_SI_API_KEY` (or `META_API_KEY`) to switch the Muse brain on.
+The page is a local file (no server, no ports). Requirements: [uv](https://docs.astral.sh/uv/). Set `META_SI_API_KEY` (or `META_API_KEY`) to switch the Muse brain on.
 
 ## Run Tirith without a terminal
 
@@ -40,8 +38,7 @@ header says which one you are talking to. No servers, no ports. Details: `docs/C
 
 - `collector/` — the `tirith` CLI and collector (Python, uv): lanes, pipelines, notes, the brain.
 - `web/` — the Tirith page (plain HTML/JS, opened from disk) that follows `~/.tirith/state.js`.
-- `world/` — the optional Godot 4.7 3D citadel that reads `~/.tirith/state.json`.
-- `fixtures/` — demo state used by the world and the tests.
-- `docs/CONTRACT.md` — the data contract between both halves. `docs/LORE.md` — classes, ranks, names.
+- `fixtures/` — demo state used by the tests.
+- `docs/CONTRACT.md` — the data contract between the collector and its readers. `docs/LORE.md` — classes, ranks, names.
 
 Status: under construction.
