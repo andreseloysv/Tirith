@@ -236,7 +236,8 @@ def _plan_start(home: Path, args, lane_id: str | None) -> tuple[str | None, str]
         repo = plangate_mod.repo_of(home, args.project)
         if repo is None:
             raise plangate_mod.PlanGateError(f"project '{args.project}' has no repo folder, so it has no plan")
-        return plangate_mod.check_start(home, repo, args.project, step, getattr(args, "item", None), lane_id), ""
+        return plangate_mod.check_start(home, repo, args.project, step, getattr(args, "item", None), lane_id,
+                                        getattr(args, "hero_class", None)), ""
     except plangate_mod.PlanGateError as error:
         return None, f"tirith: plan-item: no agent starts without a plan item: {error}"
 
