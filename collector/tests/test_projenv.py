@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import make_hooks_mutable, make_repo, write_config, write_lane_manifest
+from conftest import make_hooks_mutable, make_repo, write_config, write_lane_manifest, write_plan
 from tirith import actions as actions_mod
 from tirith import inbox as inbox_mod
 from tirith import launch as launch_mod
@@ -151,12 +151,13 @@ def test_a_lane_gets_the_variables(home: Path, demo: Path, capsys, monkeypatch) 
     monkeypatch.delenv("TIRITH_LANE", raising=False)
     monkeypatch.setattr("tirith.cli.verify_guard", lambda *a, **k: [])
     write_lane_manifest(demo)
+    write_plan(demo)
     projenv.save(home, "demo", {"LANE_VAR": "from-settings"})
     child = ("import json,os;"
              "print(json.dumps({'type':'result','result':'got '+os.environ['LANE_VAR']}))")
     try:
         code = main(["lane", "run", "--project", "demo", "--class", "warden", "--feature", "Env",
-                     "--brief", str(demo / "brief.md"), "--id", "envlane", "--", sys.executable, "-c", child])
+                     "--brief", str(demo / "brief.md"), "--id", "envlane", "--step", "1", "--item", "Do the thing.", "--", sys.executable, "-c", child])
     finally:
         make_hooks_mutable(demo)
     assert code == 0

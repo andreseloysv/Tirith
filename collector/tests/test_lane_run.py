@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import make_hooks_mutable, make_repo, write_config, write_lane_manifest
+from conftest import make_hooks_mutable, make_repo, write_config, write_lane_manifest, write_plan, REPORT_DONE
 from tirith import asks as asks_mod
 from tirith.cli import main, register_lane
 from tirith.store import final_answer, read_json, read_jsonl
@@ -85,16 +85,17 @@ def _lane_run_setup(home: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     monkeypatch.delenv("TIRITH_LANE", raising=False)
     monkeypatch.setattr("tirith.cli.verify_guard", lambda *a, **k: [])
     write_lane_manifest(repo)
+    write_plan(repo, "".join(f"## {n}. Step {n}\n\n- [ ] Do the thing.\n\n" for n in (1, 14, 15, 16)))
     return repo
 
 
 def test_lane_run_prints_summary_and_answer(home: Path, tmp_path: Path, capsys,
                                             monkeypatch: pytest.MonkeyPatch) -> None:
     repo = _lane_run_setup(home, tmp_path, monkeypatch)
-    child = ("import json,os;"
+    child = (REPORT_DONE + "import json,os;"
              "print(json.dumps({'type':'result','result':'Answer: '+os.environ['TIRITH_LANE']}))")
     try:
-        code = main(["lane", "run", "--project", "demo", "--class", "warden", "--feature", "Echo", "--brief", str(repo / "brief.md"),
+        code = main(["lane", "run", "--project", "demo", "--class", "warden", "--feature", "Echo", "--brief", str(repo / "brief.md"), "--step", "1", "--item", "Do the thing.",
                      "--id", "echo", "--", sys.executable, "-c", child])
     finally:
         make_hooks_mutable(repo)
@@ -111,7 +112,7 @@ def test_lane_run_failure_adds_wait(home: Path, tmp_path: Path, capsys,
                                     monkeypatch: pytest.MonkeyPatch) -> None:
     repo = _lane_run_setup(home, tmp_path, monkeypatch)
     try:
-        code = main(["lane", "run", "--project", "demo", "--class", "warden", "--feature", "Boom", "--brief", str(repo / "brief.md"),
+        code = main(["lane", "run", "--project", "demo", "--class", "warden", "--feature", "Boom", "--brief", str(repo / "brief.md"), "--step", "1", "--item", "Do the thing.",
                      "--id", "boom", "--", sys.executable, "-c", "import sys;sys.exit(3)"])
     finally:
         make_hooks_mutable(repo)
@@ -126,7 +127,7 @@ def test_lane_run_without_answer_adds_wait(home: Path, tmp_path: Path, capsys,
                                            monkeypatch: pytest.MonkeyPatch) -> None:
     repo = _lane_run_setup(home, tmp_path, monkeypatch)
     try:
-        code = main(["lane", "run", "--project", "demo", "--class", "warden", "--feature", "Mute", "--brief", str(repo / "brief.md"),
+        code = main(["lane", "run", "--project", "demo", "--class", "warden", "--feature", "Mute", "--brief", str(repo / "brief.md"), "--step", "1", "--item", "Do the thing.",
                      "--id", "mute", "--", sys.executable, "-c", "pass"])
     finally:
         make_hooks_mutable(repo)
@@ -148,7 +149,7 @@ def _step_lane(home: Path, lane_id: str, step: str, ended: bool = False) -> None
 def _run_step(repo: Path, lane_id: str, step: str, *extra: str) -> int:
     try:
         return main(["lane", "run", "--project", "demo", "--class", "warden", "--feature", lane_id,
-                     "--brief", str(repo / "brief.md"), "--id", lane_id, "--step", step, *extra,
+                     "--brief", str(repo / "brief.md"), "--id", lane_id, "--step", step, "--item", "Do the thing.", *extra,
                      "--", sys.executable, "-c", "print('x')"])
     finally:
         make_hooks_mutable(repo)

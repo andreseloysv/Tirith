@@ -47,6 +47,7 @@ from tirith import models as models_mod
 from tirith import howto as howto_mod
 from tirith import ownergate as ownergate_mod
 from tirith import planlane as planlane_mod
+from tirith import plangate as plangate_mod
 from tirith import verifylane as verifylane_mod
 from tirith import roadmap as roadmap_mod
 from tirith import review as review_mod
@@ -138,7 +139,8 @@ def lane_request(home: Path, brief: str | None) -> dict | None:
 def register_lane(home: Path, *, lane_id: str | None, project: str, hero_class: str,
                   feature: str, workspace: str | None, log: str | None,
                   pid: int | None, brief: str | None, step: str | None = None,
-                  request_id: str | None = None) -> dict:
+                  request_id: str | None = None, item: str | None = None, item_step: str | None = None,
+                  retry_of: str | None = None) -> dict:
     """Write a new lane registration; returns the stored dict."""
     if not lane_id:
         lane_id = _unique_lane_id(home, _slug(feature))
@@ -159,6 +161,11 @@ def register_lane(home: Path, *, lane_id: str | None, project: str, hero_class: 
         "request_id": str(request_id) if request_id else None,
         "request": lane_request(home, brief),
     }
+    if item:  # the plan item this lane works on (``tirith.plangate``)
+        lane["item"] = str(item)
+        lane["item_step"] = str(item_step or step or "")
+    if retry_of:
+        lane["retry_of"] = retry_of
     write_lane(home, lane)
     source = "manager" if parent in ("manager", "steward") else f"agent:{parent}"
     flows_mod.append_flow(home, source, f"agent:{lane_id}", "brief",
@@ -173,6 +180,7 @@ def end_lane(home: Path, lane_id: str, result: str, report: str | None = None) -
         raise SystemExit(f"unknown lane: {lane_id}")
     lane["ended_at"] = now_iso()
     lane["result"] = result
+    lane["result"] = result = plangate_mod.lane_ended(home, lane)  # ``no-outcome``: no plan report
     lane.pop("token", None)  # the shims accept the token of a running lane only
     stored = agentrun_mod.store_diff(home, lane)
     if stored:
@@ -216,15 +224,50 @@ def add_lane_ask(home: Path, lane: dict, what: str, log_tail: str = "") -> str:
     return f"sq-lane-{lane['id']}"
 
 
+def _plan_start(home: Path, args, lane_id: str | None) -> tuple[str | None, str]:
+    """The plan check of an agent start (``tirith.plangate``): ``(clean item, "")`` or ``(None, refusal text)``.
+
+    The step is ``--item-step`` (Tirith's own work lives in another step than the lane's) else ``--step``."""
+    step = getattr(args, "item_step", None) or args.step
+    try:
+        repo = plangate_mod.repo_of(home, args.project)
+        if repo is None:
+            raise plangate_mod.PlanGateError(f"project '{args.project}' has no repo folder, so it has no plan")
+        return plangate_mod.check_start(home, repo, args.project, step, getattr(args, "item", None), lane_id), ""
+    except plangate_mod.PlanGateError as error:
+        return None, f"tirith: plan-item: no agent starts without a plan item: {error}"
+
+
 def _cmd_lane_start(args) -> int:
     home = _home(args)
+    item = None
+    if getattr(args, "item", None):  # `lane start` only records an agent that already runs; with an item it is linked
+        item, refusal = _plan_start(home, args, args.id)
+        if item is None:
+            print(refusal, file=sys.stderr)
+            return 3
     lane = register_lane(
         home, lane_id=args.id, project=args.project, hero_class=args.hero_class,
         feature=args.feature, workspace=args.workspace, log=args.log,
         pid=args.pid, brief=args.brief, step=args.step,
-        request_id=getattr(args, "request", None))
+        request_id=getattr(args, "request", None), item=item,
+        item_step=getattr(args, "item_step", None))
+    _plan_begin(home, lane)
     print(lane["id"])
     return 0
+
+
+def _plan_begin(home: Path, lane: dict) -> None:
+    """Mark the lane's item "(en curso: <lane>)"; the check already passed, so a plan that cannot be written
+    right now (uncommitted edits) only leaves the note out."""
+    linked = plangate_mod.lane_item(lane)
+    repo = plangate_mod.repo_of(home, str(lane.get("project") or ""))
+    if linked is None or repo is None:
+        return
+    try:
+        plangate_mod.begin(home, repo, str(lane["project"]), linked[0], linked[1], str(lane["id"]))
+    except plangate_mod.PlanGateError as error:
+        print(f"tirith: the plan was not marked: {error}", file=sys.stderr)
 
 
 def _lane_repo(home: Path, lane_id: str) -> Path | None:
@@ -391,6 +434,7 @@ def _detached_argv(args, home: Path, lane_id: str, workspace: Path, command: lis
             "--class", args.hero_class, "--feature", args.feature, "--workspace", str(workspace),
             "--no-detach"]
     for flag, value in (("--log", args.log), ("--brief", args.brief), ("--step", args.step),
+                        ("--item", args.item), ("--item-step", args.item_step), ("--retry-of", args.retry_of),
                         ("--request", args.request), ("--agent", args.agent), ("--as-agent", args.as_agent),
                         ("--fallback-from", args.fallback_from), ("--tried", args.tried),
                         ("--model", args.model), ("--effort", args.effort), ("--prompt", args.prompt),
@@ -435,6 +479,11 @@ def _cmd_lane_run(args) -> int:
     if busy:
         print(f"{busy['id']} is already working on step {args.step}", file=sys.stderr)
         return 3
+    item, refusal = _plan_start(home, args, args.id)
+    if item is None:
+        print(refusal, file=sys.stderr)
+        return 3
+    args.item = item
     interactive = bool(getattr(args, "interactive", False))
     manager_lane = bool(args.id and args.id.startswith(managerd_mod.LANE_PREFIX)
                         and args.hero_class == managerd_mod.HERO_CLASS)
@@ -461,8 +510,12 @@ def _cmd_lane_run(args) -> int:
         feature=args.feature, workspace=str(workspace),
         log=str(log_path) if log_path else None,
         pid=None, brief=args.brief, step=args.step,
-        request_id=getattr(args, "request", None))
+        request_id=getattr(args, "request", None), item=item, item_step=args.item_step,
+        retry_of=args.retry_of)
+    _plan_begin(home, lane)
     lane["token"] = secrets.token_urlsafe(24)
+    if interactive:
+        lane["interactive"] = True  # the owner's own conversation: no plan report is asked of it
     lane["ran"] = models_mod.command_choice(command)  # the model and effort this lane was started with
     lane["agent"] = args.agent or getattr(args, "as_agent", None) or None  # the alias that runs it
     if getattr(args, "by_tirith", False) or lane_id.startswith(managerd_mod.LANE_PREFIX):
@@ -1197,10 +1250,12 @@ def _cmd_check(args) -> int:
 
 def launch_step(home: Path, project_id: str, step_id: str, agent: str | None = None,
                 dry_run: bool = False, out=None, request_id: str | None = None,
-                by_tirith: bool = False) -> str:
-    """Start a sub-agent lane for one open roadmap step; returns the lane id.
+                by_tirith: bool = False, item: str | None = None, auto_item: bool = False) -> str:
+    """Start a sub-agent lane for one open item of a roadmap step; returns the lane id.
 
-    Raises ``launch_mod.LaunchError`` with the reason when it must not start.
+    ``item`` is the exact text of the open plan item (``tirith.plangate``); without one, only a caller that
+    is Tirith itself (``by_tirith``: the autopilot; ``auto_item``: a click on a step) takes the first open item
+    an agent can do. Raises ``launch_mod.LaunchError`` with the reason when it must not start.
     """
     out = out or sys.stdout
     config, proj = _project_or_exit(home, project_id)
@@ -1224,9 +1279,15 @@ def launch_step(home: Path, project_id: str, step_id: str, agent: str | None = N
         raise launch_mod.LaunchError(
             f"tirith check fails for '{project_id}', so no lane may start. Fix these, then run "
             f"`tirith check --project {project_id}`:\n" + "\n".join(f"  {p}" for p in failed))
+    if not item and (by_tirith or auto_item):
+        item = open_items[0]
+    try:
+        item = plangate_mod.check_start(home, repo, project_id, step["id"], item)
+    except plangate_mod.PlanGateError as error:
+        raise launch_mod.LaunchError(f"no agent starts without a plan item: {error}")
     lane_id = launch_mod.lane_id_for(title, {str(l["id"]) for l in read_lanes(home)}, repo)
     brief_path = home / "briefs" / f"{lane_id}.md"
-    brief = launch_mod.build_brief(title, intro, open_items, step["id"])
+    brief = launch_mod.build_brief(title, intro, open_items, step["id"], item)
     workspace = launch_mod.worktree_path(repo, lane_id)
     if agent is None:  # the first agent of the chain that did not run out of credits in the last hour
         agent = fallback_mod.pick_alias(config, read_lanes(home), datetime.now(timezone.utc), project_id, step["id"])
@@ -1234,7 +1295,7 @@ def launch_step(home: Path, project_id: str, step_id: str, agent: str | None = N
     argv = launch_mod.lane_run_argv(project_id, step["id"], launch_mod.pick_class(title), title,
                                     brief_path, workspace, lane_id, command, request_id,
                                     alias=agent or _worker_alias(config, project_id, step["id"]),
-                                    by_tirith=by_tirith)
+                                    by_tirith=by_tirith, item=item)
     if dry_run:
         print(f"lane {lane_id} (dry run)\nworktree: {workspace} (branch lane/{lane_id})\n"
               f"brief: {brief_path}\ncommand: {' '.join(argv)}\n\n{brief}", file=out)
@@ -1292,8 +1353,12 @@ def launch_plan(home: Path, project_id: str, kind: str, request_id: str | None =
     brief_path = home / "briefs" / f"{lane_id}.md"
     workspace = launch_mod.worktree_path(repo, lane_id)
     command = launch_mod.agent_command(config, None, brief_path, workspace, project_id, step)
+    item_text = (f"Revisar el plan ({date.today().isoformat()})" if kind == "plan-refresh"
+                 else f"Plan nuevo: {plan['title']}")
+    item = _ops_item(home, repo, project_id, item_text, lane_id)
     argv = launch_mod.lane_run_argv(project_id, step, planlane_mod.HERO_CLASS, title, brief_path, workspace,
-                                    lane_id, command, request_id, by_tirith=by_tirith)
+                                    lane_id, command, request_id, by_tirith=by_tirith, item=item,
+                                    item_step=plangate_mod.OPS_STEP)
     launch_mod.create_worktree(repo, lane_id)
     brief_path.parent.mkdir(parents=True, exist_ok=True)
     brief_path.write_text(brief, encoding="utf-8")
@@ -1320,8 +1385,10 @@ def launch_verify(home: Path, project_id: str, text: str, out=None, by_tirith: b
     brief_path = home / "briefs" / f"{lane_id}.md"
     workspace = launch_mod.worktree_path(repo, lane_id)
     command = launch_mod.agent_command(config, None, brief_path, workspace, project_id, verifylane_mod.LANE_STEP)
+    item = _ops_item(home, repo, project_id, f"Verificar: {verifylane_mod.lane_title(text)}", lane_id)
     argv = launch_mod.lane_run_argv(project_id, verifylane_mod.LANE_STEP, verifylane_mod.HERO_CLASS, title,
-                                    brief_path, workspace, lane_id, command, None, by_tirith=by_tirith)
+                                    brief_path, workspace, lane_id, command, None, by_tirith=by_tirith, item=item,
+                                    item_step=plangate_mod.OPS_STEP)
     launch_mod.create_worktree(repo, lane_id)
     brief_path.parent.mkdir(parents=True, exist_ok=True)
     brief_path.write_text(verifylane_mod.brief(project_id, text), encoding="utf-8")
@@ -1330,16 +1397,26 @@ def launch_verify(home: Path, project_id: str, text: str, out=None, by_tirith: b
     return lane_id
 
 
+def _ops_item(home: Path, repo: Path, project_id: str, text: str, lane_id: str) -> str:
+    """The plan item for work Tirith starts by itself (created, already "(en curso)", before the lane starts)."""
+    try:
+        return plangate_mod.ops_item(home, repo, project_id, text, lane_id)[1]
+    except plangate_mod.PlanGateError as error:
+        raise launch_mod.LaunchError(f"the plan item for \"{text}\" could not be added: {error}")
+
+
 def _worker_alias(config, project_id: str, step_id: str) -> str | None:
     alias = models_mod.resolve_workers(config, project_id, step_id).agent
     return alias if alias in config.agents else None
 
 
-def relaunch_lane(home: Path, lane: dict, alias: str, by_tirith: bool = False, note: str | None = None) -> str:
-    """Start the brief of a failed ``lane`` again with agent ``alias``; returns the new lane id. The
-    worktree is kept when it has no uncommitted changes, else a new one is made from the repo. With a
-    ``note`` (a failed claim check) the brief gets the note appended and the new lane continues the old
-    lane's work: it is committed on the old branch and the new worktree starts from it."""
+def relaunch_lane(home: Path, lane: dict, alias: str | None, by_tirith: bool = False,
+                  note: str | None = None) -> str:
+    """Start the brief of a failed ``lane`` again with agent ``alias`` (None: the configured worker); returns
+    the new lane id. The worktree is kept when it has no uncommitted changes, else a new one is made from the
+    repo. With a ``note`` (a failed claim check, or a lane that ended without a plan outcome) the brief gets the
+    note appended and the new lane continues the old lane's work: it is committed on the old branch and the new
+    worktree starts from it."""
     config, proj = _project_or_exit(home, str(lane.get("project") or ""))
     repo = projects_mod.real(proj.repo) if proj.repo else None
     brief = Path(str(lane.get("brief") or ""))
@@ -1362,20 +1439,57 @@ def relaunch_lane(home: Path, lane: dict, alias: str, by_tirith: bool = False, n
         else:
             workspace = launch_mod.create_worktree(repo, lane_id)
     step = lane.get("step")
-    command = launch_mod.agent_command(config, alias, brief, workspace, str(lane.get("project") or ""), step)
+    command = launch_mod.agent_command(config, alias or None, brief, workspace, str(lane.get("project") or ""), step)
+    linked = plangate_mod.lane_item(lane)
     argv = launch_mod.lane_run_argv(
         str(lane.get("project") or ""), str(step or ""), str(lane.get("class") or launch_mod.DEFAULT_CLASS),
-        title, brief, workspace, lane_id, command, lane.get("request_id"), alias=alias,
-        fallback_from=str(lane["id"]), tried=fallback_mod.tried_of(lane), by_tirith=by_tirith)
+        title, brief, workspace, lane_id, command, lane.get("request_id"), alias=alias or None,
+        fallback_from=str(lane["id"]), tried=fallback_mod.tried_of(lane), by_tirith=by_tirith,
+        item=linked[1] if linked else None, item_step=linked[0] if linked else None,
+        retry_of=str(lane["id"]) if note else None)
     launch_mod.spawn_detached(argv, home, home / "logs" / f"{lane_id}.launch.log")
     return lane_id
+
+
+def _cmd_plan_add(args) -> int:
+    home = _home(args)
+    repo = plangate_mod.repo_of(home, args.project)
+    if repo is None:
+        print(f"tirith plan add: unknown project '{args.project}'", file=sys.stderr)
+        return 3
+    who = os.environ.get("TIRITH_LANE") or ("manager" if in_manager_session() else "owner")
+    try:
+        text = plangate_mod.add_item(home, repo, args.project, str(args.step), args.text, who, args.title)
+    except plangate_mod.PlanGateError as error:
+        print(f"tirith plan add: {error}", file=sys.stderr)
+        return 3
+    print(f"added to step {args.step}: {text}")
+    return 0
+
+
+def _cmd_plan_report(args) -> int:
+    home = _home(args)
+    lane_id = args.lane or os.environ.get("TIRITH_LANE")
+    if not lane_id:
+        print("tirith plan report: pass --lane <id> (or run it inside a lane)", file=sys.stderr)
+        return 3
+    try:
+        lane = plangate_mod.report(home, lane_id, args.status, args.add, args.reason)
+    except plangate_mod.PlanGateError as error:
+        print(f"tirith plan report: {error}", file=sys.stderr)
+        return 3
+    outcome = lane["outcome"]
+    new = f", {len(outcome['added'])} new item(s)" if outcome["added"] else ""
+    later = "" if outcome.get("applied") else f" (recorded; the plan will be updated: {outcome.get('error')})"
+    print(f"lane {lane_id}: {args.status}{new}{later}")
+    return 0
 
 
 def _cmd_launch(args) -> int:
     home = _home(args)
     try:
         launch_step(home, args.project, str(args.step), args.agent, args.dry_run,
-                    request_id=args.request)
+                    request_id=args.request, item=args.item or "")
     except launch_mod.LaunchError as error:
         print(f"tirith launch: {error}", file=sys.stderr)
         return 3
@@ -1465,7 +1579,8 @@ def _url_open(args, home: Path) -> int:
                                       home / "logs" / f"{lane_id}.review.log")
             print(f"reviewing {lane_id}")
             return 0
-        launch_step(home, link["project"], link["step"], link["agent"])
+        launch_step(home, link["project"], link["step"], link["agent"], item=link["item"] or None,
+                    auto_item=True)  # the step button names a step: Tirith takes its first open item
     except (launch_mod.LaunchError, inbox_mod.InboxError, review_mod.ReviewError,
             actions_mod.ActionError, filerefs_mod.FileRefError, projenv_mod.EnvError) as error:
         print(f"tirith url open: {error}", file=sys.stderr)
@@ -1949,6 +2064,13 @@ def _cmd_models(args) -> int:
     return 0
 
 
+def _item_args(parser) -> None:
+    parser.add_argument("--item", default=None,
+                        help="the exact text (or i-xxxxxxxx id) of the open plan item this agent works on; "
+                             "no agent starts without one (add it first: tirith plan add)")
+    parser.add_argument("--item-step", default=None, help=argparse.SUPPRESS)
+
+
 def build_parser() -> argparse.ArgumentParser:
     """The full ``tirith`` argument parser."""
     common = argparse.ArgumentParser(add_help=False)
@@ -1973,6 +2095,7 @@ def build_parser() -> argparse.ArgumentParser:
     start.add_argument("--brief", default=None)
     start.add_argument("--step", default=None, help="roadmap step this lane works on")
     start.add_argument("--request", default=None, help="inbox request id this lane answers")
+    _item_args(start)
     start.set_defaults(func=_cmd_lane_start)
     end = lane_sub.add_parser("end", parents=[common], help="finish a lane")
     end.add_argument("lane_id")
@@ -2006,6 +2129,8 @@ def build_parser() -> argparse.ArgumentParser:
     lane_run.add_argument("--brief", default=None)
     lane_run.add_argument("--step", default=None, help="roadmap step this lane works on")
     lane_run.add_argument("--request", default=None, help="inbox request id this lane answers")
+    _item_args(lane_run)
+    lane_run.add_argument("--retry-of", default=None, help=argparse.SUPPRESS)
     lane_run.add_argument("--interactive", action="store_true",
                           help="give the agent the terminal (no log capture); activity comes from hooks")
     lane_run.add_argument("--agent", default=None, help="agent alias from [agents.<alias>]")
@@ -2240,10 +2365,29 @@ def build_parser() -> argparse.ArgumentParser:
                             help="start a sub-agent to finish one open step of the plan")
     launch.add_argument("--project", required=True)
     launch.add_argument("--step", required=True, help="roadmap step number")
+    launch.add_argument("--item", default=None, help="the exact text (or i-xxxxxxxx id) of the open plan item; "
+                        "required: add it first with `tirith plan add`")
     launch.add_argument("--agent", default=None, help="agent alias (its [agents.<alias>] launch template)")
     launch.add_argument("--request", default=None, help="inbox request id this lane answers")
     launch.add_argument("--dry-run", action="store_true", help="print the brief and command, start nothing")
     launch.set_defaults(func=_cmd_launch)
+
+    plan = sub.add_parser("plan", parents=[common],
+                          help="the plan is the only way to start and finish an agent: add items, report outcomes")
+    plan_sub = plan.add_subparsers(dest="plan_command", required=True)
+    pl_add = plan_sub.add_parser("add", parents=[common], help="add an open item to a step of the plan (Tirith writes it)")
+    pl_add.add_argument("--project", required=True)
+    pl_add.add_argument("--step", required=True, help="step number")
+    pl_add.add_argument("--text", required=True, help="the new item")
+    pl_add.add_argument("--title", default=None, help="create the step with this title when it is not in the plan")
+    pl_add.set_defaults(func=_cmd_plan_add)
+    pl_rep = plan_sub.add_parser("report", parents=[common],
+                                 help="the outcome of a lane's item: done, partial or blocked")
+    pl_rep.add_argument("--lane", default=None, help="lane id (default: $TIRITH_LANE)")
+    pl_rep.add_argument("--status", required=True, choices=list(plangate_mod.STATUSES))
+    pl_rep.add_argument("--add", action="append", default=[], help="a new item for the same step (repeatable)")
+    pl_rep.add_argument("--reason", default=None, help="why (needed for blocked)")
+    pl_rep.set_defaults(func=_cmd_plan_report)
 
     inbox = sub.add_parser("inbox", parents=[common], help="the owner's requests on plan steps")
     inbox_sub = inbox.add_subparsers(dest="inbox_command", required=True)

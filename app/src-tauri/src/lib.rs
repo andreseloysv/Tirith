@@ -687,10 +687,11 @@ mod stop_tree_tests {
 
 // -- launch requests ----------------------------------------------------------------------------
 
-/// Runs `tirith launch --project P --step N` and returns what it printed.
+/// Runs `tirith launch --project P --step N --item "<open item>"` and returns what it printed. No agent
+/// starts without an open item of the plan (docs/CONTRACT-roadmap.md, "The plan gate"); Tirith checks it.
 #[tauri::command]
-fn launch_step(project: String, step: u32) -> Result<String, String> {
-    let out = tirith_command(&["launch", "--project", &project, "--step", &step.to_string()])
+fn launch_step(project: String, step: u32, item: String) -> Result<String, String> {
+    let out = tirith_command(&["launch", "--project", &project, "--step", &step.to_string(), "--item", &item])
         .stdin(Stdio::null())
         .output()
         .map_err(|e| format!("could not run tirith: {e}"))?;

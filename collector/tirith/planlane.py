@@ -19,8 +19,12 @@ PLANS_DIR = "docs/plans"
 REQUESTS_SHOWN = 30
 LANES_SHOWN = 40
 RULES = (
-    "Change only the plan files named below. The review of this lane runs the tests, commits and merges, "
+    "Change only the files named below. The review of this lane runs the tests, commits and merges, "
     "so do not commit yourself.",
+    "The plan is the only way to start and to finish: never edit the project's plan file (a gate blocks it; "
+    "only Tirith writes it). Missing work goes in with `tirith plan add --project <id> --step <N> --text "
+    "\"<item>\"`. Before you finish, report the outcome of your item: `tirith plan report --lane $TIRITH_LANE "
+    "--status done|partial|blocked [--add \"<new item>\"]... [--reason \"<why>\"]`.",
     "Name agents only by their alias (see `docs/CONTRACT-hooks.md` \"Agent aliases\"), never by product or "
     "model name.",
     "No servers and no open ports.",
@@ -72,18 +76,19 @@ def refresh_brief(project: str, plan_file: str, plan_text: str, merged: list[dic
            f"The owner pressed \"Update the plan\" on {project}. Review everything that is done and everything "
            f"that is missing, then bring `{plan_file}` up to date with the truth.", "",
            "## What to build",
-           f"- Edit only `{plan_file}`. Compare EVERY item of it, open and done, with the code in this "
-           "worktree, the merged lanes, the pipeline results and the inbox below.",
-           "- Tick (`- [x]`) what is really done and working; untick (`- [ ]`) what is not.",
-           "- Add the missing items, under the step they belong to (or a new `## <n>. <title>` step at the end), "
-           "for work that was requested in the inbox or in chat but is not in the plan.",
-           "- Leave the items that are right as they are, and keep the format (numbered `##` steps, "
-           "`- [ ]` / `- [x]` items).",
+           f"- Do NOT edit `{plan_file}` (only Tirith writes it). Compare EVERY item of it, open and done, with "
+           "the code in this worktree, the merged lanes, the pipeline results and the inbox below.",
+           "- Add the missing items, under the step they belong to, for work that was requested in the inbox "
+           "or in chat but is not in the plan: `tirith plan add --project " + project + " --step <N> --text "
+           "\"<item>\"` (once per item; `--title \"<title>\"` creates a step that is not there).",
+           "- Items that are really done and working are ticked by Tirith when their review passes; list the "
+           "ones that are wrong (ticked but not done, or open but already done) in your report.",
            "- Finish with a short summary as your final report, in three parts: **Done since last update**, "
-           "**Still missing**, **Needs the owner**. Short bullets, no repetition.",
+           "**Still missing**, **Needs the owner**. Short bullets, no repetition. Then run `tirith plan report "
+           "--lane $TIRITH_LANE --status done`.",
            *OWNER_GATE_RULES, *(
-               [f"- Limited to step {step}: compare and edit only the items of step {step}; leave every other "
-                "step exactly as it is."] if step else []), "",
+               [f"- Limited to step {step}: compare only the items of step {step}; add items only to "
+                "that step."] if step else []), "",
            "## Hard rules", *(f"- {rule}" for rule in RULES), "",
            "## Where to read",
            "- `git log --oneline -60` and the code itself: an item is done only if you can see it in the code.",
@@ -129,7 +134,8 @@ def new_plan_brief(project: str, plan: dict, slug: str, existing: list[str]) -> 
     out += [register,
             "- Finish with a short report: the steps you wrote and anything the owner must decide.", "",
             "## Hard rules", *(f"- {rule}" for rule in RULES),
-            "- Touch only the new plan file and `tirith.toml`.", "",
+            "- Touch only the new plan file and `tirith.toml`; write the plan file completely before you "
+            "register it (once registered, the plan file is Tirith's).", "",
             "## Where to read",
             "- `docs/TODO.md` (read only) as the model of the format; `docs/CONTRACT-roadmap.md`.", ""]
     return "\n".join(out)

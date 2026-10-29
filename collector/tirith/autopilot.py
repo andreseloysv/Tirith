@@ -26,6 +26,7 @@ from tirith import fallback as fallback_mod
 from tirith import flows as flows_mod
 from tirith import inbox as inbox_mod
 from tirith import launch as launch_mod
+from tirith import plangate as plangate_mod
 from tirith import roadmap as roadmap_mod
 from tirith.home import Config, now_iso, parse_iso
 
@@ -132,7 +133,9 @@ def _steps(projects: list[dict]) -> dict[str, dict]:
 
 
 def _agent_open(step: dict) -> list[str]:
-    return [i["text"] for i in step["items"] if not i["done"] and i.get("who") == "agent"]
+    """Clean texts (no status note) of the items an agent can take now: open or reopened, not in progress."""
+    return [roadmap_mod.split_status(i["text"])[0] for i in step["items"] if not i["done"]
+            and i.get("who") == "agent" and i.get("state", "open") in (roadmap_mod.STATE_OPEN, roadmap_mod.STATE_REOPENED)]
 
 
 def _agents_by_id(agents: list[dict]) -> dict[str, dict]:
@@ -329,8 +332,9 @@ def run(home: Path, config: Config, now: datetime, state: dict, *, agents: list[
         for step in project["roadmap"]["steps"]:
             if running >= config.autopilot_max_parallel:
                 return changed
-            if step["status"] != "ready" or _why_not(own, agents, project["id"], step, now):
-                continue
+            if step["status"] != "ready" or step["id"] == plangate_mod.OPS_STEP \
+                    or _why_not(own, agents, project["id"], step, now):
+                continue  # step 0 holds Tirith's own work (reviews, plan refresh, manager): never an autopilot lane
             launched = _launch(home, state, project, step, launcher, now)
             if launched is not None:
                 changed = True
@@ -357,7 +361,7 @@ def public(home: Path, config: Config, agents: list[dict] | None = None, project
     skipped, queued = [], 0
     for p in projects or []:
         for st in (p.get("roadmap") or {}).get("steps", []):
-            if st["status"] != "ready":
+            if st["status"] != "ready" or st["id"] == plangate_mod.OPS_STEP:
                 continue
             why = _why_not(own, agents or [], p["id"], st, now)
             if not why and diskdiet_mod.low(state):

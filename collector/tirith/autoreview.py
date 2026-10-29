@@ -23,6 +23,7 @@ from tirith import inbox as inbox_mod
 from tirith import launch as launch_mod
 from tirith import ownergate as ownergate_mod
 from tirith import planlane as planlane_mod
+from tirith import plangate as plangate_mod
 from tirith import projects as projects_mod
 from tirith import review as review_mod
 from tirith import roadmap as roadmap_mod
@@ -126,6 +127,30 @@ def match_items(items: list[str], report: str | None) -> tuple[list[str], list[s
     return ticked, candidates
 
 
+def _plan_line(home: Path, repo: Path, lane: dict) -> str:
+    """The review passed: the lane's plan item is ticked (``tirith.plangate``); older lanes without an item
+    keep the report-matching of :func:`update_plan`."""
+    if plangate_mod.lane_item(lane) is None:
+        return update_plan(home, repo, lane)
+    try:
+        return plangate_mod.review_passed(home, repo, lane)
+    except plangate_mod.PlanGateError as err:
+        asks_mod.queue_add(home, str(lane.get("project") or ""), str(lane["id"]),
+                           f"lane {lane['id']} merged but its plan item could not be ticked: {err}", kind="plan")
+        return ""
+
+
+def _plan_reopen(home: Path, repo: Path | None, lane: dict, why: str) -> None:
+    """The review failed: the lane's plan item is open again with the reason."""
+    if repo is None or plangate_mod.lane_item(lane) is None:
+        return
+    try:
+        plangate_mod.review_failed(home, repo, lane, why)
+    except plangate_mod.PlanGateError as err:
+        asks_mod.queue_add(home, str(lane.get("project") or ""), str(lane["id"]),
+                           f"review of {lane['id']} failed but its plan item could not be reopened: {err}", kind="plan")
+
+
 def update_plan(home: Path, repo: Path, lane: dict) -> str:
     """Tick what the report claims in the repo's roadmap and commit it; returns a line for the owner/manager."""
     step = str(lane.get("step") or "")
@@ -197,7 +222,7 @@ def settle(home: Path, config: Config, lane: dict, review: dict, rec: dict, now:
         passed = review.get("passed")
         text = (f"Merged {lane_id} into {review.get('branch') or 'the project branch'}: "
                 f"{review.get('files', 0)} files, tests {f'{passed} passed' if passed is not None else 'passed'}")
-        plan = update_plan(home, repo, lane) if repo is not None else ""
+        plan = _plan_line(home, repo, lane) if repo is not None else ""
         answer = text + (f". {plan}." if plan else ".")
         if step in planlane_mod.LANE_STEPS.values() and str(lane.get("report") or "").strip():
             # the auditor's summary / the planner's report; its "needs the owner" list passes the owner gate
@@ -225,6 +250,7 @@ def settle(home: Path, config: Config, lane: dict, review: dict, rec: dict, now:
         rows = [("Merge it", f"tirith lane review {lane_id}"), drop]
     else:
         why = "the tests failed" if status == review_mod.TESTS_FAILED else "the merge did not go through"
+        _plan_reopen(home, repo, lane, why + ": " + flows_mod.one_line(review.get("message") or "", 100))
         text = f"Review of **{feature}** ({lane_id}): {why}. " + flows_mod.one_line(review.get("message") or "", 240)
         rows = [("Retry the review", f"tirith lane review {lane_id}")]
         if step and project:
@@ -254,6 +280,7 @@ def _claims_failed(home: Path, config: Config, lane: dict, review: dict, rec: di
     if claimcheck_mod.MARK not in _brief_text(lane):
         alias = str(lane.get("agent") or "")
         if alias in config.agents:
+            _plan_reopen(home, repo_of(config, lane), lane, "the report does not match the change")
             try:
                 sent = relauncher(home, lane, alias, note)
             except (Exception, SystemExit) as error:  # the manager decides when it cannot be sent back
@@ -310,6 +337,10 @@ def run(home: Path, config: Config, now: datetime, state: dict, lanes: list[dict
         review = review_mod.public(lane, repo) or {}
         rec = book.get(lane_id)
         age = _age_s(lane.get("ended_at"), now)
+        if rec is None and (lane.get("outcome") or {}).get("status") == "blocked":
+            book[lane_id] = {"seen": now_iso(now), "settled": "blocked"}  # blocked: nothing to merge
+            changed = True
+            continue
         if rec is None:
             if review.get("status") not in (review_mod.PENDING, review_mod.READY, None) or not Path(str(lane["workspace"])).is_dir():
                 book[lane_id] = {"seen": now_iso(now), "settled": _result_key(review) or "gone"}  # nothing to start
@@ -322,6 +353,10 @@ def run(home: Path, config: Config, now: datetime, state: dict, lanes: list[dict
             if age <= AUTO_WINDOW_S:
                 item = asks_mod.queue_add(home, str(lane.get("project") or ""), lane_id,
                                           f"Review lane {lane_id} ({lane.get('feature') or ''}): tests, then merge")
+                try:  # the review is plan work too: a "Revisar: ..." sub-item under the reviewed item
+                    plangate_mod.review_started(home, repo, lane)
+                except plangate_mod.PlanGateError:
+                    pass
                 argv = [*launch_mod.tirith_argv(home), "lane", "review", lane_id]
                 spawn(argv, home, home / "logs" / f"{lane_id}.review.log")
                 book[lane_id] = {"started": now_iso(now), "queue": item["id"]}
