@@ -100,9 +100,30 @@ window was not opened, and the Windows and Linux bundles were not built.
 
 ## Signing: what the owner must provide
 
-Nothing is signed until these exist. Unsigned apps run, but macOS Gatekeeper and Windows SmartScreen warn.
+Unsigned apps run, but macOS Gatekeeper and Windows SmartScreen warn.
 
-macOS (Apple Developer Program, paid):
+macOS: `scripts/package.sh` signs with hardened runtime and `src-tauri/entitlements.plist` (JIT and
+unsigned executable memory for the web view, no library validation because the app starts `uv` and agent
+executables). The identity is `$APPLE_SIGNING_IDENTITY`; if unset, the script takes the first
+"Developer ID Application" identity in the keychain and prints which one it uses. The name is never
+stored in the repo. The `.dmg` is signed too. Check a build with:
+
+```sh
+codesign --verify --deep --strict --verbose=2 <path>/Tirith.app
+spctl --assess --type execute --verbose=2 <path>/Tirith.app   # rejected until notarized
+```
+
+Notarization is off until one full set of credentials is in the environment; then the script notarizes
+and staples the `.app` (Tauri does it) and the `.dmg` (the script does it):
+- App Store Connect API key: `APPLE_API_KEY_PATH` (the `.p8` file), `APPLE_API_KEY` (key id), `APPLE_API_ISSUER`
+- or Apple ID: `APPLE_ID`, `APPLE_PASSWORD` (app-specific password), `APPLE_TEAM_ID`
+
+CI (`app.yml`) signs the macOS job when the secret `APPLE_SIGNING_IDENTITY` exists and imports the
+certificate from `APPLE_CERTIFICATE` (base64 `.p12`) and `APPLE_CERTIFICATE_PASSWORD`. For notarization add
+`APPLE_API_KEY`, `APPLE_API_ISSUER` and `APPLE_API_KEY_CONTENT` (the `.p8` text), or `APPLE_ID`,
+`APPLE_PASSWORD`, `APPLE_TEAM_ID`.
+
+macOS checklist (Apple Developer Program, paid):
 - [ ] "Developer ID Application" certificate, exported as `.p12` with its password
 - [ ] `APPLE_SIGNING_IDENTITY` (name of that certificate, e.g. `Developer ID Application: Name (TEAMID)`)
 - [ ] Notarization credentials, either Apple ID: `APPLE_ID`, `APPLE_PASSWORD` (app-specific password),
