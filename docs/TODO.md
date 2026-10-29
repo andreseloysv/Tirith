@@ -70,9 +70,11 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Permisos estándar por agente (flags / perfiles), porque no pueden preguntar.
 - [x] `tirith doctor --agent <alias>`: comprueba ejecutable, `PATH` del wrapper y que saltarse los hooks falla.
 - [ ] Confirmar el formato JSON de Muse Code con una ejecución real (desde 2026-11-02: cuota de Muse).
-- [ ] Codex y Copilot probados con `lane run` (dueño: instalarlos y hacer login).
+- [x] Codex y Copilot instalados (dueño).
+- [ ] Codex y Copilot probados con `lane run` (presets por alias, salida JSON, permisos).
 - [x] Agentes en la nube y CI remoto desde GitHub (PRs y Actions).
-- [ ] Token de GitHub y `agent_logins` en `config.toml` (dueño).
+- [x] Token de GitHub disponible para el collector.
+- [ ] Usuarios de agentes en la nube en `agent_logins` (fuera de este plan: solo si se usan).
 
 ## 6. Pipelines con autodescubrimiento (`tirith.toml`)
 
