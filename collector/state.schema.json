@@ -226,7 +226,9 @@
       "items": {"type": "object", "additionalProperties": true,
                 "required": ["class", "seconds", "source", "min", "max"],
                 "properties": {"class": {"type": "string"}, "seconds": {"type": "number"},
-                               "source": {"enum": ["default", "learned", "agent", "owner", "config"]}}}
+                               "source": {"enum": ["default", "learned", "agent", "owner", "config"]},
+                               "idle": {"description": "The idle limit (no progress for this long stops the run), null for a class without one.",
+                                        "type": ["object", "null"]}}}
     },
     "models": {
       "description": "Model and effort of the manager and of the workers, with the lists the Settings page offers. See docs/CONTRACT-models.md.",
