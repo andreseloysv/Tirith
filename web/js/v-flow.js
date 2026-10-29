@@ -1,7 +1,7 @@
 /* Flow view: how information passes between you, the Steward, agents, rooms and pipelines. */
 (function () {
   var T = window.T, esc = T.esc, ui = T.ui;
-  var MAXEXT = 7;
+  var MAXEXT = 7, MAXDEC = 3;
   var STEWARD = T.CLS.steward.color;
 
   function kindOf(id) {
@@ -26,6 +26,12 @@
 
   function build(s) {
     var msgs = T.messages(s), nodes = {}, extCount = {};
+    /* blocked actions: a red edge from the agent to The Guard */
+    T.recentViolations(s).forEach(function (v) {
+      var a = v.lane && T.agentById(s, v.lane); if (!a) return;
+      msgs.push({ at: v.ts, fromId: 'agent:' + a.id, toId: 'guard', fromName: a.name, toName: 'The Guard', text: T.violationText(v), kind: 'violation', src: 'rule' });
+    });
+    msgs.sort(function (x, y) { return (T.ms(y.at) || 0) - (T.ms(x.at) || 0); });
     msgs.forEach(function (m) { [m.fromId, m.toId].forEach(function (id) { if (/^ext:/.test(id)) extCount[id] = (extCount[id] || 0) + 1; }); });
     var keep = Object.keys(extCount).sort(function (a, b) { return extCount[b] - extCount[a]; }).slice(0, MAXEXT), keepSet = {};
     keep.forEach(function (k) { keepSet[k] = 1; });
@@ -37,8 +43,9 @@
       [[a, m.fromName], [b, m.toName]].forEach(function (x) {
         if (!nodes[x[0]]) nodes[x[0]] = { id: x[0], name: x[0] === 'ext:*' ? nOthers + ' others' : x[0] === 'steward' ? 'The Steward' : x[1], col: kindOf(x[0]) };
       });
-      var k = [a, b].sort().join('>'), e = edges[k] || (edges[k] = { key: k, a: a, b: b, msgs: [] });
-      e.msgs.push(m);
+      var k = [a, b].sort().join('>'), e = edges[k] || (edges[k] = { key: k, a: a, b: b, msgs: [], dec: [], all: [] });
+      e.all.push(m);
+      if (m.kind === 'decision') e.dec.push(m); else e.msgs.push(m);
     });
     return { nodes: nodes, edges: Object.keys(edges).map(function (k) { return edges[k]; }) };
   }
@@ -82,7 +89,7 @@
       box[n.getAttribute('data-id')] = { x: n.offsetLeft, w: n.offsetWidth, cy: n.offsetTop + h.offsetHeight / 2 };
     });
     var paths = '', pills = '', maxc = 1;
-    g.edges.forEach(function (e) { maxc = Math.max(maxc, e.msgs.length); });
+    g.edges.forEach(function (e) { maxc = Math.max(maxc, e.all.length); });
     if (ui.edge === 'first' && g.edges.length) ui.edge = g.edges[0].key;
     g.edges.forEach(function (e) {
       var A = box[e.a], B = box[e.b]; if (!A || !B) return;
@@ -96,10 +103,23 @@
         d = 'M' + x1 + ',' + y1 + ' C' + (x1 + (x2 > x1 ? dx : -dx)) + ',' + y1 + ' ' + (x2 - (x2 > x1 ? dx : -dx)) + ',' + y2 + ' ' + x2 + ',' + y2;
         mx = (x1 + x2) / 2; my = (y1 + y2) / 2;
       }
-      var on = ui.edge === e.key, latest = e.msgs[0];
-      paths += '<path class="edge' + (on ? ' on' : '') + '" d="' + d + '" style="stroke-width:' + (1.2 + 1.6 * e.msgs.length / maxc).toFixed(2) + '"/>' +
+      var on = ui.edge === e.key, latest = e.msgs[0], bad = latest && latest.kind === 'violation';
+      paths += '<path class="edge' + (on ? ' on' : '') + (bad ? ' bad' : '') + '" d="' + d + '" style="stroke-width:' + (1.2 + 1.6 * e.all.length / maxc).toFixed(2) + '"/>' +
                '<circle class="port' + (on ? ' on' : '') + '" cx="' + x1 + '" cy="' + y1 + '" r="3.5"/><circle class="port' + (on ? ' on' : '') + '" cx="' + x2 + '" cy="' + y2 + '" r="3.5"/>';
-      pills += '<button class="epill' + (on ? ' on' : '') + '" data-act="edge" data-key="' + esc(e.key) + '" style="left:' + mx + 'px;top:' + my + 'px" title="' + esc(latest.text) + '"><b>' + e.msgs.length + '</b><span>' + esc(latest.text) + '</span></button>';
+      if (e.dec.length) {
+        /* labels sit above the line, at the agent's end, so labels of different agents never meet */
+        var aEnd = /^agent:/.test(e.a) ? [x1, y1, x2] : /^agent:/.test(e.b) ? [x2, y2, x1] : null;
+        var lx = aEnd ? aEnd[0] + (aEnd[2] < aEnd[0] ? -10 : 10) : mx, ly = aEnd ? aEnd[1] - 13 : my + (latest ? 17 : 0), side = aEnd ? (aEnd[2] < aEnd[0] ? ' l' : ' r') : '', up = aEnd ? -19 : 19;
+        var label = function (cls, act, key, tip, inner, i) {
+          return '<button class="dlabel' + cls + side + '" data-act="' + act + '" data-key="' + esc(key) + '" style="left:' + lx + 'px;top:' + (ly + i * up) + 'px" title="' + esc(tip) + '">' + inner + '</button>';
+        };
+        e.dec.slice(0, MAXDEC).forEach(function (m, i) {
+          pills += label(ui.decision === m.id ? ' on' : '', 'decision', m.id, m.text + ' (click for the reason)', '<i></i><span>' + esc(m.text) + '</span>', i);
+        });
+        if (e.dec.length > MAXDEC) pills += label(' more', 'edge', e.key, 'All decisions', '+' + (e.dec.length - MAXDEC) + ' decisions', MAXDEC);
+      }
+      if (!latest) return;
+      pills += '<button class="epill' + (on ? ' on' : '') + (bad ? ' bad' : '') + '" data-act="edge" data-key="' + esc(e.key) + '" style="left:' + mx + 'px;top:' + my + 'px" title="' + esc(latest.text) + '"><b>' + e.msgs.length + '</b><span>' + esc(latest.text) + '</span></button>';
     });
     var svg = gr.querySelector('.fsvg');
     svg.setAttribute('width', W); svg.setAttribute('height', H); svg.innerHTML = paths;   /* innerHTML on svg is fine in current browsers */
@@ -126,9 +146,16 @@
     var drawer = '';
     if (ui.drawer === 'edge') {
       var e = g.edges.filter(function (x) { return x.key === ui.edge; })[0];
-      if (e) drawer = T.drawer(g.nodes[e.a].name + ' ↔ ' + g.nodes[e.b].name, '<ul class="feed">' + e.msgs.map(function (m) {
+      if (e) drawer = T.drawer(g.nodes[e.a].name + ' ↔ ' + g.nodes[e.b].name, '<ul class="feed">' + e.all.map(function (m) {
         return '<li><span class="when">' + esc(T.clockTime(m.at)) + '</span><span class="who"><i class="dot" style="background:' + (T.KIND[m.kind] || '#9ca3af') + '" title="' + esc(m.kind) + '"></i>' + esc(m.fromName) + ' <span class="arr">→</span> ' + esc(m.toName) + '</span><span class="txt mdt">' + T.mdBox(m.text, 'e:' + m.fromId + m.at) + '</span></li>';
       }).join('') + '</ul>');
+    }
+    if (ui.drawer === 'decision') {
+      var dm = null;
+      g.edges.forEach(function (x) { x.dec.forEach(function (m) { if (m.id === ui.decision) dm = m; }); });
+      if (dm) drawer = T.drawer('Decision', '<div class="decision"><p class="dtext">' + T.mdInline(dm.text) + '</p>' +
+        '<h4>Why</h4><p class="dwhy">' + (dm.why ? T.mdInline(dm.why) : '<span class="quiet">No reason was recorded</span>') + '</p>' +
+        '<p class="mut dmeta">' + esc(dm.fromName) + ' <span class="arr">→</span> ' + esc(dm.toName) + ' · ' + esc(T.clockTime(dm.at)) + '</p></div>');
     }
     el.innerHTML = '<div class="fv">' + T.canvas(inner, bar) + drawer + '</div>';
     layoutEdges(el, g);

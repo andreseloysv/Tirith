@@ -59,7 +59,12 @@ child and removes it when the lane ends.
 ## In `state.json`
 
 `violations`: the last 50 (`ts, rule, agent, lane, project, message`). `waiting_on_you` gets one item
-(`source: "violation"`) per violation of the last hour.
+(`source: "violation"`) per violation of the last hour. Each row also carries `blocked` (what was
+blocked) and `instead` (the command), split from `message`.
+
+The web shows them in an Overview "Rules" section (last 24 h: time, agent, rule label, what was
+blocked, the command with a copy button), in red in the agent panel with a count on agent cards, and
+as a red edge from the agent to The Guard in Flow.
 
 ## Activate
 
