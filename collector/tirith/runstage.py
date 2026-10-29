@@ -126,7 +126,8 @@ def run_stage(home: Path, project: str, pipeline: str, stage: str, command: list
     session = projects_mod.current_session(home)
     if session:
         child_env["TIRITH_SESSION"] = session
-    append_jsonl(home / "events.jsonl", {"at": now_iso(), **base, "event": "start", "status": "running"})
+    started = {"pid": os.getpid(), **({"timeout": int(timeout)} if timeout else {})}
+    append_jsonl(home / "events.jsonl", {"at": now_iso(), **base, **started, "event": "start", "status": "running"})
     exit_code, kept = 1, b""
     timer, expired = None, threading.Event()
 

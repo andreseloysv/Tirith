@@ -2710,6 +2710,101 @@ window.TIRITH_STATE = {
       "lane": null,
       "worktree": null,
       "branch": null
+    },
+    {
+      "run": "ci#14",
+      "project": "tirith",
+      "pipeline": "ci",
+      "status": "failed",
+      "started_at": "2026-10-28T19:30:00Z",
+      "ended_at": "2026-10-28T19:31:20Z",
+      "stages": [
+        {
+          "name": "build",
+          "status": "passed",
+          "started_at": "2026-10-28T19:30:00Z",
+          "ended_at": "2026-10-28T19:30:09Z",
+          "duration_s": 9,
+          "log_tail": [
+            "Finished dev profile"
+          ]
+        },
+        {
+          "name": "clippy",
+          "status": "passed",
+          "started_at": "2026-10-28T19:30:09Z",
+          "ended_at": "2026-10-28T19:30:40Z",
+          "duration_s": 31,
+          "log_tail": [
+            "no warnings"
+          ]
+        },
+        {
+          "name": "rust-test",
+          "status": "failed",
+          "started_at": "2026-10-28T19:30:40Z",
+          "ended_at": "2026-10-28T19:31:20Z",
+          "duration_s": 40,
+          "log_tail": [
+            "running 41 tests",
+            "test world::tests::tile_edges ... FAILED",
+            "assertion failed: left == right",
+            "test result: FAILED. 40 passed; 1 failed"
+          ]
+        },
+        {
+          "name": "package",
+          "status": "skipped",
+          "started_at": null,
+          "ended_at": null,
+          "duration_s": null,
+          "log_tail": []
+        }
+      ],
+      "session": null,
+      "lane": "t-collector",
+      "worktree": "/Users/owner/DEVELOP/Tirith-lanes/t-collector",
+      "branch": "lane/t-collector"
+    },
+    {
+      "run": "release#21",
+      "project": "tirith",
+      "pipeline": "release",
+      "status": "passed",
+      "started_at": "2026-10-28T19:10:00Z",
+      "ended_at": "2026-10-28T19:13:30Z",
+      "stages": [
+        {
+          "name": "lint",
+          "status": "passed",
+          "started_at": "2026-10-28T19:10:00Z",
+          "ended_at": "2026-10-28T19:10:40Z",
+          "duration_s": 40,
+          "log_tail": []
+        },
+        {
+          "name": "test",
+          "status": "passed",
+          "started_at": "2026-10-28T19:10:40Z",
+          "ended_at": "2026-10-28T19:12:30Z",
+          "duration_s": 110,
+          "log_tail": []
+        },
+        {
+          "name": "publish",
+          "status": "passed",
+          "started_at": "2026-10-28T19:12:30Z",
+          "ended_at": "2026-10-28T19:13:30Z",
+          "duration_s": 60,
+          "log_tail": []
+        }
+      ],
+      "session": null,
+      "lane": null,
+      "worktree": null,
+      "branch": "main",
+      "source": "github",
+      "html_url": "https://github.com/owner/tirith/actions/runs/21"
     }
   ],
   "rooms": [
