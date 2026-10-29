@@ -215,6 +215,15 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Regla en código, sin excepciones: ningún agente arranca sin estar ligado a un elemento abierto del plan (revisiones y revisiones del plan incluidas: Tirith añade su elemento).
 - [ ] Regla en código: ningún agente termina sin informar a Tirith del resultado de su elemento (hecho / en parte + nuevos elementos / bloqueado + motivo); Tirith es el único que escribe el plan y marca «hecho» solo cuando la revisión pasa.
 
+## 15. Collector y CLI en Rust
+
+- [ ] Base: crate Rust compartido (workspace con la app), arnés de paridad que corre el collector de Python y el de Rust sobre las mismas carpetas de prueba y compara `state.json`.
+- [ ] El estado (`state.json`/`state.js`) lo construye Rust con paridad total contra Python.
+- [ ] Dispatcher, piloto automático, manager de guardia y revisiones en Rust, con paridad.
+- [ ] La CLI `tirith` en Rust (mismos comandos y salidas), un solo binario para los agentes.
+- [ ] La app incluye el collector (sin `uv` ni Python) y sigue firmada y notarizada.
+- [ ] Cambio: Rust pasa a ser el collector en vivo; Python se retira cuando la paridad y los tests pasan.
+
 ## Orden
 
 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9, y 10 en cuanto se pidió.
