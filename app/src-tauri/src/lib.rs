@@ -217,12 +217,8 @@ fn inbox_row(kind: &str, project: &str, step: &str, text: &str, now: SystemTime,
     }))
 }
 
-/// Appends one request to `<home>/inbox.jsonl` (no shell) and returns its id.
-#[tauri::command]
-fn inbox_add(kind: String, project: String, step: String, text: Option<String>) -> Result<String, String> {
-    static COUNTER: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-    let salt = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let row = inbox_row(&kind, &project, &step, text.as_deref().unwrap_or(""), SystemTime::now(), salt)?;
+/// Appends one row to `<home>/inbox.jsonl` in a single write call, so a concurrent writer cannot split the line.
+fn inbox_append(row: &Value) -> Result<(), String> {
     let home = tirith_home();
     std::fs::create_dir_all(&home).map_err(|e| format!("could not create {}: {e}", home.display()))?;
     let path = home.join("inbox.jsonl");
@@ -231,8 +227,52 @@ fn inbox_add(kind: String, project: String, step: String, text: Option<String>) 
         .append(true)
         .open(&path)
         .map_err(|e| format!("could not open {}: {e}", path.display()))?;
-    // one write call, so a concurrent writer cannot split the line
-    file.write_all(format!("{row}\n").as_bytes()).map_err(|e| e.to_string())?;
+    file.write_all(format!("{row}\n").as_bytes()).map_err(|e| e.to_string())
+}
+
+fn inbox_salt() -> u32 {
+    static COUNTER: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+    COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Appends one request to `<home>/inbox.jsonl` (no shell) and returns its id.
+#[tauri::command]
+fn inbox_add(kind: String, project: String, step: String, text: Option<String>) -> Result<String, String> {
+    let row = inbox_row(&kind, &project, &step, text.as_deref().unwrap_or(""), SystemTime::now(), inbox_salt())?;
+    inbox_append(&row)?;
+    Ok(row["id"].as_str().unwrap_or_default().to_string())
+}
+
+/// Builds the inbox row for the owner's answer to an ask: `{id, at, kind: "reply", wait, project, value, text, from, status}`.
+/// `value` is the option chosen and `text` the free words; one of them is required.
+fn reply_row(wait: &str, project: &str, value: &str, text: &str, now: SystemTime, salt: u32) -> Result<Value, String> {
+    let (wait, project, value, text) = (wait.trim(), project.trim(), clip(value.trim(), 200), clip(text.trim(), INBOX_TEXT_MAX));
+    if wait.is_empty() {
+        return Err("a reply needs the id of the ask".into());
+    }
+    if value.is_empty() && text.is_empty() {
+        return Err("a reply needs a value or a text".into());
+    }
+    let d = now.duration_since(UNIX_EPOCH).unwrap_or_default();
+    let id = format!("in-{:08x}", (d.as_nanos() as u32) ^ salt.rotate_left(16) ^ std::process::id());
+    Ok(json!({
+        "id": id, "at": iso_utc(d.as_secs()), "kind": "reply", "wait": wait, "project": project,
+        "value": value, "text": text, "from": "owner", "status": "open",
+    }))
+}
+
+/// Appends the owner's answer to an ask to `<home>/inbox.jsonl` (the steward watches it) and returns its id.
+#[tauri::command]
+fn inbox_reply(wait: String, project: Option<String>, value: Option<String>, text: Option<String>) -> Result<String, String> {
+    let row = reply_row(
+        &wait,
+        project.as_deref().unwrap_or(""),
+        value.as_deref().unwrap_or(""),
+        text.as_deref().unwrap_or(""),
+        SystemTime::now(),
+        inbox_salt(),
+    )?;
+    inbox_append(&row)?;
     Ok(row["id"].as_str().unwrap_or_default().to_string())
 }
 
@@ -267,6 +307,38 @@ mod inbox_tests {
         let long = "é".repeat(3000);
         let row = inbox_row("ask", "demo", "1", &long, UNIX_EPOCH, 0).unwrap();
         assert!(row["text"].as_str().unwrap().len() <= INBOX_TEXT_MAX);
+    }
+
+    #[test]
+    fn reply_row_has_the_documented_fields() {
+        let row = reply_row(" w-7 ", " demo ", " ship ", " but later ", UNIX_EPOCH + Duration::from_secs(1_782_734_400), 2).unwrap();
+        assert_eq!(row["kind"], "reply");
+        assert_eq!(row["wait"], "w-7");
+        assert_eq!(row["project"], "demo");
+        assert_eq!(row["value"], "ship");
+        assert_eq!(row["text"], "but later");
+        assert_eq!(row["from"], "owner");
+        assert_eq!(row["status"], "open");
+        assert_eq!(row["at"], "2026-06-29T12:00:00Z");
+        assert!(row["id"].as_str().unwrap().starts_with("in-"));
+    }
+
+    #[test]
+    fn reply_needs_an_ask_and_something_to_say() {
+        assert!(reply_row("", "demo", "x", "", UNIX_EPOCH, 0).is_err());
+        assert!(reply_row("w-1", "demo", " ", " ", UNIX_EPOCH, 0).is_err());
+        assert!(reply_row("w-1", "", "", "free words", UNIX_EPOCH, 0).is_ok());
+        assert!(reply_row("w-1", "", "go", "", UNIX_EPOCH, 0).is_ok());
+    }
+
+    #[test]
+    fn reply_text_is_clipped_on_a_character_boundary() {
+        let long = "é".repeat(3000);
+        let row = reply_row("w-1", "demo", "", &long, UNIX_EPOCH, 0).unwrap();
+        assert!(row["text"].as_str().unwrap().len() <= INBOX_TEXT_MAX);
+        let value = "ñ".repeat(300);
+        let row = reply_row("w-1", "demo", &value, "", UNIX_EPOCH, 0).unwrap();
+        assert!(row["value"].as_str().unwrap().len() <= 200);
     }
 }
 
@@ -431,6 +503,7 @@ pub fn run() {
             current_state,
             launch_step,
             inbox_add,
+            inbox_reply,
             chat_enabled,
             chat_agents,
             chat_start,

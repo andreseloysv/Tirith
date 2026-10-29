@@ -117,7 +117,7 @@ def test_broken_lines_and_orphan_answers_are_ignored(home: Path) -> None:
 def test_url_roundtrip() -> None:
     url = inbox_mod.build_url("ask", "my proj", "3", "what & why?", "t0k")
     assert inbox_mod.parse_url(url) == {"kind": "ask", "project": "my proj", "step": "3",
-                                        "text": "what & why?", "token": "t0k"}
+                                        "text": "what & why?", "token": "t0k", "wait": "", "value": ""}
     with pytest.raises(inbox_mod.InboxError):
         inbox_mod.parse_url("tirith://launch?project=a&step=1")
 

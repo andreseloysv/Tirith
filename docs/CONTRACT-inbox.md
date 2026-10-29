@@ -144,3 +144,73 @@ A `steward_pending` request unanswered for 10 minutes: once per request, a macOS
 item "The steward has not answered: <text>" with options `Wait`, `Start an agent`
 (`tirith launch --project P --step N`) and `Answer it with the brain` (`tirith inbox brain <id>`). The item
 closes itself once the steward answers.
+# Asks: "Your turn" (addition)
+
+What the steward needs from the owner is an **ask**: a question with a clear call to action. Every card
+on the Overview has one-click options and a box to write a free reply. Only what truly needs the owner
+gets there; the steward resolves the rest first.
+
+```
+steward: tirith wait add --project P --text "<markdown>" [--option "Label|value" ...] [--command "<shell>"]
+                         [--link URL] [--kind decision|action|approval|info]      -> waits.jsonl
+owner:   button or text -> Tauri inbox_reply | tirith://inbox?kind=reply&... | `tirith inbox reply ...`
+                                                                                   -> inbox.jsonl (kind "reply")
+steward: tirith inbox watch prints the reply at once -> acts -> tirith inbox done <reply id>
+collector: the ask is marked answered (kept, not deleted)  -> state.answered_waits
+```
+
+## `<home>/waits.jsonl` (additive fields)
+
+`options` (up to 6 of `{"label", "value"}`; the CLI takes `"Label|value"`, the value defaults to the
+label), `command` (a shell line the owner can copy), `kind` (`decision`, `action`, `approval` or
+`info`; default: `decision` with options, `action` with a command, else `info`). A plain `tirith wait add
+"text"` still writes the old row. `text` may also be given as `--text`.
+
+## Reply rows in `inbox.jsonl`
+
+`{"id": "in-xxxxxxxx", "at", "kind": "reply", "wait": "<ask id>", "project", "value", "text", "from":
+"owner", "status": "open"}`. `value` is the option chosen (empty for a free reply), `text` the owner's
+words (at most 4096 bytes); one of them is required. `tirith inbox watch` prints every open reply as one
+JSON line (`kind: "reply"`, with `wait`, `value`, `text`), also those written before it started;
+`tirith inbox done <reply id>` closes one. Replies never appear in `state.inbox`.
+
+| Command | Does |
+|---|---|
+| `tirith inbox reply --wait ID [--project P] [--value V] [--text T]` | appends a reply, prints its id (the project defaults to the ask's) |
+
+The `tirith://inbox` link takes `kind=reply&wait=..&value=..&text=..&project=..&token=..`, with the same
+token check as before. The app has `inbox_reply(wait, project, value, text)` next to `inbox_add`.
+
+## State
+
+- `state.waiting_on_you[]` keeps its fields and gains `kind`, `options`, `command` and `status` (`open`).
+- `state.answered_waits[]` (the last 10): the same shape with `status: "answered"` and `answer`
+  `{at, value, label, text}`; the first reply to an ask is its answer.
+- `state.steward_queue[]`: open items addressed to the steward, `{id, at, kind: "review", project, lane,
+  text, to: "steward", status}`, from `<home>/steward_queue.jsonl`.
+- A manual ask that only says to install the commit guard disappears once the project's guard is intact.
+  Brain-detected asks exist only for working agents.
+
+## Lane endings
+
+- A lane that ends `done` with an "open / needs the owner / left for you" section in its report creates
+  **no** ask for the owner. It adds one `kind: "review"` item to the steward queue (`tirith lane end` and
+  `tirith lane run` both do it). The steward triages it (`tirith queue list`, `tirith queue done <id>`)
+  and re-asks the owner with `tirith wait add ... --option ...` only when needed.
+- A lane that fails under `tirith lane run`, or ends without an answer, adds one owner ask `lane-<id>`
+  (`kind: decision`, options `Retry|retry`, `Show the log|log`, `Drop it|drop`, and a `tail` command for
+  the log). `tirith lane end --result failed` run by the steward adds none.
+
+## Web (`web/js/v-needs.js`)
+
+- Overview section "Your turn" (above the Plan): one card per ask, newest first. Title is the question
+  as markdown (2 lines, full on click), project chip, age.
+- Options are buttons (the first is primary); `command` has a **Copy** button, `link` an **Open** button;
+  an `action` ask has **Done**; an `approval` without options gets Approve / Decline; an `info` ask without
+  options gets "Got it". A text box "Or write what you need…" sends a free reply on Enter. A typed draft
+  goes along with the next option click.
+- Sending: `window.__TAURI__` -> `inbox_reply`; else, with the link handler installed, the
+  `tirith://inbox?kind=reply` link; else the `tirith inbox reply ...` line is shown to copy.
+- After sending, the card moves to the "Answered" fold with "Sent to the steward" (kept in
+  `localStorage` until the collector shows the answer). Items older than 48 h with no options, command or
+  link fold into "Older". Empty: "Nothing needs you. The steward will ask here."

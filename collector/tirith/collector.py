@@ -19,6 +19,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from tirith import activity as activity_mod
+from tirith import asks as asks_mod
 from tirith import brain as brain_mod
 from tirith.guardwrap import default_words, verify_guard
 from tirith.home import Config, ProjectConfig, ensure_home, load_config, now_iso, parse_iso
@@ -43,6 +44,7 @@ from tirith.store import (
 )
 
 STALLED_AFTER_S = 600
+ANSWERED_KEPT = 10
 DROP_ENDED_AFTER = timedelta(hours=24)
 MAX_PIPELINE_RUNS = 20
 GIT_HOOK_FLOWS_FIRST = 20
@@ -648,25 +650,48 @@ class Collector:
         data = read_json(self.home / "guard-state.json", {})
         return data if isinstance(data, dict) else {}
 
-    def _manual_waits(self) -> list[dict]:
+    def _manual_waits(self, guard_ok: dict[str, bool] | None = None) -> tuple[list[dict], list[dict]]:
+        """``(open, answered)`` asks from ``waits.jsonl``; an owner reply in the inbox answers one.
+
+        A reminder to install the commit guard disappears once the project's guard is intact."""
         by_id: dict[str, dict] = {}
         for row in read_jsonl(self.home / "waits.jsonl"):
             wait_id = str(row.get("id") or "")
             if wait_id:
                 by_id[wait_id] = row
-        waits = []
+        replied: dict[str, dict] = {}
+        for reply in inbox_mod.replies(self.home):
+            replied.setdefault(reply["wait"], reply)  # the first reply is the answer
+        waits, answered = [], []
         for row in by_id.values():
-            if row.get("done_at"):
-                continue
-            waits.append({
+            options = asks_mod.clean_options(row.get("options"))
+            command = row.get("command") or None
+            text = str(row.get("text") or "")
+            wait = {
                 "id": str(row["id"]), "project": row.get("project"),
-                "text": str(row.get("text") or ""), "since": row.get("at"),
+                "text": text, "since": row.get("at"),
                 "link": row.get("link"), "source": "manual",
                 **({"options": row["options"]} if row.get("options") else {}),
                 "session": row.get("session") or None,
-            })
+                "kind": row.get("kind") if row.get("kind") in asks_mod.ASK_KINDS
+                else asks_mod.default_kind(options, command),
+                "options": options, "command": command, "status": "open",
+            }
+            reply = replied.get(wait["id"])
+            if reply is not None:
+                label = next((o["label"] for o in options if o["value"] == reply["value"]), reply["value"])
+                answered.append({**wait, "status": "answered", "answer": {
+                    "at": reply["at"], "value": reply["value"], "label": label, "text": reply["text"]}})
+            elif row.get("done_at"):
+                continue
+            elif (guard_ok or {}).get(str(row.get("project") or "")) and not options \
+                    and re.search(r"commit guard", text, re.IGNORECASE):
+                continue
+            else:
+                waits.append(wait)
         waits.sort(key=lambda w: str(w["since"] or ""))
-        return waits
+        answered.sort(key=lambda w: str(w["answer"]["at"] or ""), reverse=True)
+        return waits, answered[:ANSWERED_KEPT]
 
     @staticmethod
     def _violation(row: dict) -> dict:
@@ -870,9 +895,11 @@ class Collector:
             config, agent_rows, self.worker, self.cache, now)
         violations = [self._violation(row) for row in
                       hooks_mod.read_violation_rows(self.home / "events.jsonl")][-hooks_mod.VIOLATIONS_KEPT:]
-        waiting = (self._manual_waits() + brain_waits + room_waits + guard_waits
+        manual_waits, answered_waits = self._manual_waits(
+            {p["id"]: p["guard"]["ok"] for p in projects if p.get("guard")})
+        waiting = (manual_waits + brain_waits + room_waits + guard_waits
                    + self._violation_waits(violations, now))
-        for wait in waiting:
+        for wait in waiting + answered_waits:
             wait.setdefault("session", None)
             if wait.get("project"):
                 wait["project"] = resolve(wait["project"], None)
@@ -908,6 +935,8 @@ class Collector:
                 "since": orchestrator.get("since"), "notes": notes,
             },
             "waiting_on_you": waiting,
+            "answered_waits": answered_waits,
+            "steward_queue": asks_mod.queue_items(self.home, only_open=True)[-asks_mod.QUEUE_STATE_ROWS:],
             "projects": projects,
             "agents": agent_rows,
             "pipelines": events_pipelines,
