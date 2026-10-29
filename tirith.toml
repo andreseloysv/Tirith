@@ -1,0 +1,10 @@
+# Tirith's own pipelines. Format: docs/CONTRACT-manifest.md
+deploy = "none"
+
+[[pipelines]]
+id = "ci"
+name = "CI"
+
+[[pipelines.stages]]
+name = "test"
+run = "cd collector && uv run -q pytest -q"
