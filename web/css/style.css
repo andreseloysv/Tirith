@@ -786,4 +786,12 @@ button.pc22.sel { box-shadow: 0 0 0 2px #fff, 0 0 0 4px rgba(47,111,237,.55); }
 .mtab select, .mtab input { height: 26px; padding: 0 6px; font: inherit; font-size: 12.5px; color: var(--fg); background: rgba(255,255,255,.9); border: 1px solid rgba(120,135,160,.35); border-radius: 8px; min-width: 0; max-width: 100%; }
 .mtab .mstep { width: 120px; margin-left: 6px; }
 .msettings .spend { margin-top: 4px; }
+.sfallback { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 12px; }
+.fbrow, .astat { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.astat { display: flex; margin-top: 10px; }
+.fbchip, .achip { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px; font-size: 12px; background: rgba(255,255,255,.7); border: 1px solid rgba(120,135,160,.3); border-radius: 11px; }
+.fbchip b { color: var(--mut); font-weight: 500; } .fbchip .alink { padding: 0 2px; }
+.achip.out { color: #b42318; border-color: rgba(180,35,24,.35); background: rgba(180,35,24,.06); }
+.sfallback select { height: 24px; font-size: 12px; border-radius: 8px; border: 1px solid rgba(120,135,160,.35); background: rgba(255,255,255,.9); }
+.sf .alink { margin-top: 2px; font-size: 11.5px; }
 .aran { display: block; margin-top: 4px; font-size: 11.5px; color: var(--mut); font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -6,6 +6,8 @@
   ui.modPend = ui.modPend || {};    /* summary -> ms of a send the collector has not shown yet */
   ui.modCli = ui.modCli || null;    /* command to copy (no way to send from here) */
   ui.modErr = ui.modErr || null;
+  ui.modOther = ui.modOther || {};  /* "scope|field" -> true while the "Other…" text field replaces the list */
+  var OTHER = '__other__';
   var lastState = null, PEND_WAIT = 30000;
   var BOLT = '<svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true"><path d="M7 1.2L2.6 6.8h2.7L4.8 10.8 9.4 5H6.6z" fill="currentColor"/></svg>';
 
@@ -14,19 +16,27 @@
     var v = ui.modDraft[scope + '|' + f];
     return v !== undefined ? v : (base == null ? '' : base);
   }
-  function opts(list, cur, blank) {
+  function opts(list, cur, blank, other) {
     var all = list.slice();
     if (cur && all.indexOf(cur) < 0) all.unshift(cur);
     return (blank != null ? '<option value="">' + esc(blank) + '</option>' : '') + all.map(function (o) {
       return '<option value="' + esc(o) + '"' + (o === cur ? ' selected' : '') + '>' + esc(o) + '</option>';
-    }).join('');
+    }).join('') + (other ? '<option value="' + OTHER + '">Other…</option>' : '');
+  }
+  /* the models offered for the agent chosen in the same scope (every model when it declares no prefix) */
+  function modelsFor(scope, M) {
+    var agent = scope === 'new' ? draft('workers', 'agent', M.workers.agent) : draft(scope, 'agent', (M[scope] || {}).agent);
+    return (M.choices_by_agent && M.choices_by_agent[agent]) || M.choices;
   }
   function input(scope, f, label, cur, M, blank) {
     var key = 'data-act="mod-f" data-key="' + esc(scope + '|' + f) + '" aria-label="' + esc(label) + '"';
     if (f === 'agent') return '<select ' + key + '>' + opts(M.agents, cur, blank) + '</select>';
-    if (f === 'effort') return '<select ' + key + '>' + opts(M.efforts, cur, blank) + '</select>';
-    if (M.choices.length) return '<select ' + key + '>' + opts(M.choices, cur, blank) + '</select>';
-    return '<input type="text" ' + key + ' value="' + esc(cur) + '" placeholder="' + esc(blank) + '" spellcheck="false">';
+    var list = f === 'effort' ? M.efforts : modelsFor(scope, M);
+    if (ui.modOther[scope + '|' + f] || !list.length) {
+      return '<input type="text" ' + key + ' value="' + esc(cur) + '" placeholder="' + esc(blank || label) + '" spellcheck="false">' +
+        (list.length ? '<button class="alink" data-act="mod-list" data-key="' + esc(scope + '|' + f) + '">List</button>' : '');
+    }
+    return '<select ' + key + '>' + opts(list, cur, blank, true) + '</select>';
   }
   function labeled(scope, f, label, base, M, blank) {
     return '<label class="sf"><span>' + esc(label) + '</span>' + input(scope, f, label, draft(scope, f, base), M, blank) + '</label>';
@@ -45,6 +55,7 @@
 
   function managerCard(M) {
     var m = M.manager, held = m.settings, note;
+    if (!m.model && held && held.model) m = Object.assign({}, m, { model: held.model });  /* default: what the agent already uses */
     if (!m.agent || !m.model) note = '<span class="mut sm">Choose the agent and the model, save, then apply.</span>';
     else if (!held) note = '<span class="mut sm">The settings file of ' + esc(m.agent) + ' is not readable yet; applying creates it.</span>';
     else if (m.in_sync) note = '<span class="dot green"></span><span class="sm">The settings file already holds <b>' + esc(m.model) + '</b></span>';
@@ -70,6 +81,27 @@
     }).join('');
   }
 
+  function wfallback(M) {
+    var cur = draft('workers', 'fallback', M.workers.fallback || []), main = draft('workers', 'agent', M.workers.agent);
+    var left = M.agents.filter(function (a) { return cur.indexOf(a) < 0 && a !== main; });
+    var chips = cur.map(function (a, i) {
+      return '<span class="fbchip"><b>' + (i + 1) + '</b> ' + esc(a) +
+        (i ? '<button class="alink" data-act="mod-fb-up" data-key="' + esc(a) + '" aria-label="Move ' + esc(a) + ' earlier">↑</button>' : '') +
+        '<button class="alink" data-act="mod-fb-rm" data-key="' + esc(a) + '" aria-label="Remove ' + esc(a) + '">✕</button></span>';
+    }).join('');
+    return '<div class="sfallback"><span class="slabel">Fallback</span><span class="mut sm">Used in this order when an agent is out of credits</span>' +
+      '<div class="fbrow">' + (chips || '<span class="mut sm">None</span>') +
+      (left.length ? '<select data-act="mod-fb-add" aria-label="Add a fallback agent">' + opts(left, '', 'Add…') + '</select>' : '') + '</div></div>';
+  }
+  function statusChips(M) {
+    var st = M.agent_status || {};
+    return '<div class="astat">' + M.agents.map(function (a) {
+      var s = st[a] || { state: 'ok' }, out = s.state === 'out';
+      return '<span class="achip ' + (out ? 'out' : 'ok') + '"><span class="dot ' + (out ? 'red' : 'green') + '"></span>' + esc(a) + ' · ' +
+        (out ? 'out of credits' + (s.since ? ' since ' + esc(T.clockTime(s.since)) : '') : 'ok') + '</span>';
+    }).join('') + '</div>';
+  }
+
   function workersCard(M, state) {
     var w = M.workers, projects = (state.projects || []).map(function (p) { return p.id; });
     var rows = scopeRows(M);
@@ -80,6 +112,7 @@
     return '<div class="card scard"><div class="phead"><b>Workers</b><span class="mut sm">Agents the manager, dispatcher or Plan button starts</span></div>' +
       '<div class="sfields mfields">' + labeled('workers', 'agent', 'Agent', w.agent, M, '(default)') +
       labeled('workers', 'model', 'Model', w.model, M, '(from the agent)') + labeled('workers', 'effort', 'Effort', w.effort, M, '(from the agent)') + '</div>' +
+      wfallback(M) + statusChips(M) +
       '<div class="sfoot"><button class="isend" data-act="mod-save" data-key="workers">Save defaults</button></div>' +
       '<div class="mover"><div class="slabel">Overrides</div><table class="mtab"><thead><tr><th>Where</th><th>Model</th><th>Effort</th><th></th></tr></thead><tbody>' +
       (rows || '<tr><td colspan="4" class="mut sm">None: every project and step uses the defaults above.</td></tr>') + add + '</tbody></table></div></div>';
@@ -124,22 +157,27 @@
     T.render();
   }
   function flags(o) {
-    return ['agent', 'model', 'effort'].filter(function (k) { return o[k]; }).map(function (k) { return ' --' + k + ' ' + shq(o[k]); }).join('');
+    return ['agent', 'model', 'effort'].filter(function (k) { return o[k]; }).map(function (k) { return ' --' + k + ' ' + shq(o[k]); }).join('') +
+      (o.fallback ? ' --fallback ' + shq(o.fallback.join(',')) : '');
   }
   function summary(req) {
     return 'models ' + req.role + (req.project ? ' ' + req.project + (req.step ? '/' + req.step : '') : '') +
-      ['agent', 'model', 'effort'].filter(function (k) { return req[k]; }).map(function (k) { return ' ' + k + '=' + req[k]; }).join('');
+      ['agent', 'model', 'effort'].filter(function (k) { return req[k]; }).map(function (k) { return ' ' + k + '=' + req[k]; }).join('') +
+      (req.fallback ? ' fallback=' + (req.fallback.join(',') || 'none') : '');
   }
   function set(req) {
     var cli = 'tirith models set ' + req.role + flags(req) + (req.project ? ' --project ' + shq(req.project) : '') + (req.step ? ' --step ' + shq(req.step) : '') + (req.clear ? ' --clear' : '');
     send(Object.assign({ action: 'models-set' }, req), summary(req) + (req.clear ? ' (remove)' : ''), cli);
   }
   function save(scope) {
-    var M = lastState.models, base = M[scope], req = { role: scope };
-    ['agent', 'model', 'effort'].forEach(function (f) { var v = String(draft(scope, f, base[f])).trim(); if (v) req[f] = v; });
+    var M = lastState.models, base = M[scope], req = { role: scope }, held = scope === 'manager' && base.settings;
+    ['agent', 'model', 'effort'].forEach(function (f) {
+      var v = String(draft(scope, f, f === 'model' && held && !base.model ? held.model : base[f])).trim(); if (v) req[f] = v;
+    });
+    if (scope === 'workers' && ui.modDraft['workers|fallback']) req.fallback = ui.modDraft['workers|fallback'].slice();
     if (scope === 'manager' && (!req.agent || !req.model)) { ui.modErr = 'The manager needs an agent and a model.'; T.render(); return; }
-    if (!req.model && !req.effort && !req.agent) { ui.modErr = 'Nothing to save: choose a model, an effort or an agent.'; T.render(); return; }
-    ['agent', 'model', 'effort'].forEach(function (f) { delete ui.modDraft[scope + '|' + f]; });
+    if (!req.model && !req.effort && !req.agent && !req.fallback) { ui.modErr = 'Nothing to save: choose a model, an effort or an agent.'; T.render(); return; }
+    ['agent', 'model', 'effort', 'fallback'].forEach(function (f) { delete ui.modDraft[scope + '|' + f]; delete ui.modOther[scope + '|' + f]; });
     set(req);
   }
   function add() {
@@ -148,7 +186,7 @@
     req.project = p; if (st) req.step = st;
     ['model', 'effort'].forEach(function (f) { var v = String(draft('new', f, '')).trim(); if (v) req[f] = v; });
     if (!req.model && !req.effort) { ui.modErr = 'An override needs a model or an effort.'; T.render(); return; }
-    ['project', 'step', 'model', 'effort'].forEach(function (f) { delete ui.modDraft['new|' + f]; });
+    ['project', 'step', 'model', 'effort'].forEach(function (f) { delete ui.modDraft['new|' + f]; delete ui.modOther['new|' + f]; });
     set(req);
   }
   function clear(key) {
@@ -164,12 +202,34 @@
     if (act === 'mod-save') save(key);
     else if (act === 'mod-add') add();
     else if (act === 'mod-clear') clear(key);
+    else if (act === 'mod-list') { delete ui.modOther[key]; delete ui.modDraft[key]; T.render(); }
+    else if (act === 'mod-fb-rm' || act === 'mod-fb-up') {
+      var l = fbList(), i = l.indexOf(key);
+      if (i >= 0 && act === 'mod-fb-rm') l.splice(i, 1);
+      else if (i > 0) { l[i] = l[i - 1]; l[i - 1] = key; }
+      ui.modDraft['workers|fallback'] = l; T.render();
+    }
     else if (act === 'mod-apply') send({ action: 'apply-manager' }, 'apply-manager', 'tirith models apply-manager');
   });
+  function fbList() {
+    return draft('workers', 'fallback', lastState.models.workers.fallback || []).slice();
+  }
   function typed(e) {
-    var t = e.target;
-    if (!t.getAttribute || t.getAttribute('data-act') !== 'mod-f') return;
-    ui.modDraft[t.getAttribute('data-key')] = t.value;
+    var t = e.target, act = t.getAttribute && t.getAttribute('data-act'), key;
+    if (act === 'mod-fb-add') {
+      if (e.type === 'change' && t.value) { ui.modErr = null; ui.modDraft['workers|fallback'] = fbList().concat(t.value); T.render(); }
+      return;
+    }
+    if (act !== 'mod-f') return;
+    key = t.getAttribute('data-key');
+    if (ui.modErr) { ui.modErr = null; var er = view.querySelector('.ierr'); if (er) er.remove(); }  /* a new choice makes the old error stale */
+    if (t.tagName === 'SELECT' && t.value === OTHER) {
+      ui.modOther[key] = true; ui.modDraft[key] = ''; T.render();
+      var box = view.querySelector('input[data-key="' + key + '"]'); if (box) box.focus();
+      return;
+    }
+    ui.modDraft[key] = t.value;
+    if (t.tagName === 'SELECT' && key.slice(-6) === '|agent') T.render();  /* the model list depends on the agent */
   }
   view.addEventListener('input', typed);
   view.addEventListener('change', typed);

@@ -34,6 +34,7 @@ from tirith import dispatch as dispatch_mod
 from tirith import actions as actions_mod
 from tirith import inbox as inbox_mod
 from tirith import launch as launch_mod
+from tirith import fallback as fallback_mod
 from tirith import models as models_mod
 from tirith import review as review_mod
 from tirith.logview import entries_from_events, log_entries
@@ -912,6 +913,8 @@ class Collector:
                 "report": _bounded_report(lane.get("report")),
                 "usage": usage,
                 "ran": models_mod.ran_with(lane, usage),
+                "agent": lane.get("agent") or None,
+                "fallback_from": lane.get("fallback_from") or None,
                 "diff": self._diff(lane),
                 "request": lane.get("request") if isinstance(lane.get("request"), dict) else None,
                 "parent": "manager" if lane.get("parent") in (None, "", "steward") else str(lane["parent"]),
@@ -1090,7 +1093,8 @@ class Collector:
                        "available": launch_mod.handler_installed()},
             "models": models_mod.state(self.config, [
                 inbox_mod.setup_summary(r["setup"]) for r in setup_requests
-                if r["project"] == "settings" and r["status"] == "open" and r.get("setup")]),
+                if r["project"] == "settings" and r["status"] == "open" and r.get("setup")],
+                fallback_mod.status(self.config, read_lanes(self.home), now)),
         }
 
     def _inbox(self, projects: list[dict], agents: list[dict], flows: list[dict],
