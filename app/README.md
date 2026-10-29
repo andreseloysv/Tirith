@@ -27,15 +27,24 @@ talk through Tauri IPC only. The web UI is not copied; `frontendDist` points at 
   ```toml
   [agents.<alias>]
   command = "<executable>"
-  chat_args = ["<args that select the streaming JSON input/output mode and the stdio permission prompt>"]
+  chat_args = ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--permission-prompt-tool", "stdio"]
   ```
+
+  The example is the `anthropic` alias (print mode, streaming JSON both ways, permission questions on
+  stdio). Each message the app sends is one line:
+  `{"type":"user","message":{"role":"user","content":[{"type":"text","text":"..."}]}}`.
+  Source: the headless and Agent SDK pages listed in `docs/PLATFORMS.md` (`SDKUserMessage`,
+  `PermissionResult`). `tools/chat_check.py` runs this exchange once against the
+  real agent (manual, spends a few tokens).
 
   Only aliases with `chat_args` are offered.
 - **Permission questions**: when the agent writes a `control_request` line with subtype
   `can_use_tool` (tool name and input), the panel shows a card with Allow / Deny. The command
   `chat_answer(id, requestId, allow, input)` writes the matching `control_response` line to the agent's
   stdin (allow echoes the input back as `updatedInput`; deny carries a message). The agent only asks
-  when `chat_args` turns that mode on; the exact flag depends on the alias and is unverified here.
+  when `chat_args` turns that mode on; checked against the real `anthropic` agent: the request carries `request_id` and
+  `request.{subtype,tool_name,input}`, and this reply shape is accepted (a deny reaches the agent as an
+  error tool result).
 
 ## Run
 
@@ -52,8 +61,8 @@ cd src-tauri && cargo test     # permission reply and line classification
 ## Agents per platform
 
 Aliases the code knows (`agentrun.PRESET_DEFAULTS`): `anthropic`, `muse`. Which of them has a build
-for Windows or Linux, and whether its streaming JSON mode accepts the permission prompt, is **not
-confirmed**: check with `tirith doctor --agent <alias>` on each platform. Nothing in the app assumes one.
+for Windows or Linux is listed in `docs/PLATFORMS.md` (`muse` is not checked). Check with
+`tirith doctor --agent <alias>` on each platform. Nothing in the app assumes one.
 
 ## Windows
 

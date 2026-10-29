@@ -780,12 +780,17 @@ fn line_kind(line: &str) -> &'static str {
     if line.trim_start().starts_with('{') { "out" } else { "sys" }
 }
 
+/// One user turn in the agent's streaming JSON input mode: `type: user`, content as text blocks.
+fn user_message(text: &str) -> Value {
+    json!({ "type": "user", "message": { "role": "user", "content": [{ "type": "text", "text": text }] } })
+}
+
 /// Sends one user message as a line of streaming JSON input.
 #[tauri::command]
 fn chat_send(state: State<'_, App>, id: String, text: String) -> Result<(), String> {
     let mut chats = state.chats.lock().unwrap();
     let s = chats.get_mut(&id).ok_or("this chat has ended")?;
-    let msg = json!({ "type": "user", "message": { "role": "user", "content": text } });
+    let msg = user_message(&text);
     writeln!(s.stdin, "{msg}").and_then(|_| s.stdin.flush()).map_err(|e| e.to_string())
 }
 
@@ -893,6 +898,15 @@ mod tests {
         let r = permission_reply("r2", false, json!({}));
         assert_eq!(r["response"]["response"]["behavior"], "deny");
         assert!(r["response"]["response"]["message"].as_str().unwrap().len() > 3);
+    }
+
+    #[test]
+    fn user_message_is_a_text_block_turn() {
+        let m = user_message("reply with ok");
+        assert_eq!(m["type"], "user");
+        assert_eq!(m["message"]["role"], "user");
+        assert_eq!(m["message"]["content"][0]["type"], "text");
+        assert_eq!(m["message"]["content"][0]["text"], "reply with ok");
     }
 
     #[test]
