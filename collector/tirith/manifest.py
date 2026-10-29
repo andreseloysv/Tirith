@@ -17,6 +17,9 @@ KINDS = ("build", "test", "deploy")
 HOOK_EVENTS = ("pre-commit", "commit-msg", "pre-push", "post-commit", "post-merge")
 GIT_EVENTS = ("pre-commit", "commit-msg", "pre-push")  # the hooks the guard installs and records
 GIT_HOOKS_PIPELINE = "git-hooks"
+RULE_ACTIONS = ("block", "warn")
+BUILT_IN_RULES = ("subagent-tool", "agent-cli", "no-verify", "hooks-path", "git-hooks", "raw-stage",
+                  "lane-brief", "project-check", "commit-guard")
 _KIND_RE = re.compile(r"build|compile|test|check|lint|deploy|release|publish|ship")
 _KIND_ALIASES = {"compile": "build", "check": "test", "lint": "test",
                  "release": "deploy", "publish": "deploy", "ship": "deploy"}
@@ -57,11 +60,24 @@ class Hook:
 
 
 @dataclass
+class Rule:
+    """A custom rule of ``[[rules]]``: exactly one of ``match`` (command glob), ``regex``, ``paths``."""
+    id: str
+    action: str
+    message: str
+    instead: str
+    match: str | None = None
+    regex: str | None = None
+    paths: list[str] = field(default_factory=list)
+
+
+@dataclass
 class Manifest:
     path: Path
     exists: bool = False
     pipelines: list[Pipeline] = field(default_factory=list)
     hooks: list[Hook] = field(default_factory=list)
+    rules: list[Rule] = field(default_factory=list)
     deploy_none: bool = False
     roadmap: str | None = None
     deadline: str | None = None
@@ -184,7 +200,70 @@ def parse_text(text: str, path: Path) -> Manifest:
                      f'add run = "make lint" to the {event} hook')
         else:
             manifest.hooks.append(Hook(event, run))
+    rule_rows = data.get("rules") if isinstance(data.get("rules"), list) else []
+    rule_lines = lines.get("rules", [])
+    rule_ids: set[str] = set()
+    for index, row in enumerate(rule_rows):
+        line = rule_lines[index] if index < len(rule_lines) else 1
+        rule, bad = rule_problems(row, rule_ids)
+        for name, message, fix in bad:
+            _problem(manifest, line, name, message, fix)
+        if rule:
+            rule_ids.add(rule.id)
+            manifest.rules.append(rule)
+    if data.get("rules") is not None and not isinstance(data.get("rules"), list):
+        _problem(manifest, 1, "rule-shape", "rules must be written as [[rules]] tables",
+                 "use [[rules]] (double brackets) once per rule")
     return manifest
+
+
+def rule_problems(row, ids: set[str]) -> tuple[Rule | None, list[tuple[str, str, str]]]:
+    """Validate one ``[[rules]]`` row: ``(rule or None, [(rule-name, message, fix)])``."""
+    if not isinstance(row, dict):
+        return None, [("rule-shape", "a [[rules]] entry is not a table", 'write key = "value" lines under [[rules]]')]
+    rid = str(row.get("id") or "").strip()
+    bad: list[tuple[str, str, str]] = []
+    if not rid:
+        bad.append(("rule-id", "rule has no id", 'add id = "no-force-push" under [[rules]]'))
+    elif rid in BUILT_IN_RULES:
+        bad.append(("rule-id", f"rule id '{rid}' is a built-in rule", "pick another id for your rule"))
+    elif rid in ids:
+        bad.append(("rule-duplicate", f"rule id '{rid}' is used twice", "give each [[rules]] a unique id"))
+    label = f"rule '{rid}'" if rid else "rule"
+    how = [k for k in ("match", "regex", "paths") if row.get(k) not in (None, "", [])]
+    match, regex, paths = row.get("match"), row.get("regex"), row.get("paths")
+    if len(how) != 1:
+        bad.append(("rule-match", f"{label} needs exactly one of match, regex, paths (found {len(how)})",
+                    'set match = "git push --force*" (command glob), or regex = "...", '
+                    'or paths = ["harness/**"] for edits'))
+    elif match is not None and not isinstance(match, str):
+        bad.append(("rule-match", f"{label}: match must be a string", 'write match = "git push --force*"'))
+    elif regex is not None:
+        try:
+            if not isinstance(regex, str):
+                raise re.error("not a string")
+            re.compile(regex)
+        except re.error as exc:
+            bad.append(("rule-regex", f"{label}: regex does not compile ({exc})",
+                        "fix the regular expression (Python syntax)"))
+    elif paths is not None and not (isinstance(paths, list) and all(isinstance(x, str) and x for x in paths)):
+        bad.append(("rule-paths", f"{label}: paths must be a list of globs",
+                    'write paths = ["harness/**"]'))
+    action = row.get("action")
+    if action not in RULE_ACTIONS:
+        bad.append(("rule-action", f"{label} has action {action!r}, expected block or warn",
+                    'set action = "block" (or "warn")'))
+    message, instead = str(row.get("message") or "").strip(), str(row.get("instead") or "").strip()
+    if not message:
+        bad.append(("rule-message", f"{label} has no message", 'add message = "what is wrong with this action"'))
+    if not instead:
+        bad.append(("rule-instead", f"{label} has no instead",
+                    'add instead = "the command or step the agent should use"'))
+    if bad:
+        return None, bad
+    return Rule(rid, action, message, instead, match if isinstance(match, str) else None,
+                regex if isinstance(regex, str) else None,
+                list(paths) if isinstance(paths, list) else []), []
 
 
 def load(folder: str | Path) -> Manifest:

@@ -169,7 +169,7 @@
   }
   function openCount(ps, state) {
     var ids = {}; ps.forEach(function (p) { ids[p.id] = 1; });
-    return (state.inbox || []).filter(function (r) { return r.status === 'open' && ids[r.project]; }).length;
+    return (state.inbox || []).filter(function (r) { return r.status === 'open' && r.kind !== 'setup' && ids[r.project]; }).length;
   }
 
   /* Record a request: the app writes the inbox itself, a browser opens the tirith:// link, else the CLI line is shown. */

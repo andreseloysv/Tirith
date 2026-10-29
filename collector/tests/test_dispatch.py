@@ -151,7 +151,8 @@ def test_ask_is_answered_by_the_brain_at_once_and_stays_pending_for_the_steward(
     client = Client()
     collector = Collector(home, client=client)
     rid = inbox_mod.add_request(home, "ask", "demo", "1", "What is left?", at=_at(2))["id"]
-    setup = inbox_mod.add_request(home, "setup", "demo", "1", "Set it up", at=_at(2))["id"]
+    setup = inbox_mod.add_request(home, "setup", "demo", "1",
+                                  '{"action": "run-stage", "name": "test"}', at=_at(2))["id"]
     collector.build_state(NOW)
     collector.worker.drain(5)
     for _ in range(2):
