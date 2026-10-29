@@ -210,6 +210,110 @@ fn clip(text: &str, max: usize) -> &str {
     &text[..end]
 }
 
+const ATTACH_MAX: usize = 6;
+const ATTACH_MAX_BYTES: usize = 10 * 1024 * 1024;
+
+/// Decodes standard base64 (padding optional, whitespace ignored).
+fn b64_decode(input: &str) -> Result<Vec<u8>, String> {
+    let (mut out, mut acc, mut bits) = (Vec::with_capacity(input.len() / 4 * 3), 0u32, 0u32);
+    for c in input.bytes().filter(|c| !c.is_ascii_whitespace() && *c != b'=') {
+        let v = match c {
+            b'A'..=b'Z' => c - b'A',
+            b'a'..=b'z' => c - b'a' + 26,
+            b'0'..=b'9' => c - b'0' + 52,
+            b'+' => 62,
+            b'/' => 63,
+            _ => return Err("the image is not valid base64".into()),
+        };
+        acc = (acc << 6) | v as u32;
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            out.push((acc >> bits) as u8);
+            acc &= (1 << bits) - 1;
+        }
+    }
+    Ok(out)
+}
+
+/// `(mime type, extension)` of a PNG, JPEG, GIF or WebP from its first bytes.
+fn sniff_image(data: &[u8]) -> Option<(&'static str, &'static str)> {
+    if data.starts_with(b"\x89PNG\r\n\x1a\n") {
+        Some(("image/png", "png"))
+    } else if data.starts_with(&[0xff, 0xd8, 0xff]) {
+        Some(("image/jpeg", "jpg"))
+    } else if data.starts_with(b"GIF87a") || data.starts_with(b"GIF89a") {
+        Some(("image/gif", "gif"))
+    } else if data.len() >= 12 && &data[..4] == b"RIFF" && &data[8..12] == b"WEBP" {
+        Some(("image/webp", "webp"))
+    } else {
+        None
+    }
+}
+
+/// A message id is `in-` and 8 lowercase hex digits: the only shape allowed to name a folder.
+fn valid_message_id(id: &str) -> bool {
+    id.len() == 11 && id.starts_with("in-") && id[3..].bytes().all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
+}
+
+/// Writes one image to `<root>/<message_id>/<n>.<ext>`; the type comes from the bytes (never the name),
+/// the folder from the validated id, so nothing is written outside `root`.
+/// Returns `{path, type, size}` (the page adds width and height).
+fn attachment_write(root: &std::path::Path, message_id: &str, name: &str, data: &[u8]) -> Result<Value, String> {
+    if !valid_message_id(message_id) {
+        return Err(format!("bad message id {message_id:?}"));
+    }
+    if data.is_empty() || data.len() > ATTACH_MAX_BYTES {
+        return Err(format!("{name}: an image must be between 1 byte and 10 MB"));
+    }
+    let (mime, ext) = sniff_image(data).ok_or_else(|| format!("{name}: only PNG, JPEG, GIF and WebP images are accepted"))?;
+    let dir = root.join(message_id);
+    std::fs::create_dir_all(&dir).map_err(|e| format!("could not create {}: {e}", dir.display()))?;
+    let taken = std::fs::read_dir(&dir).map(|d| d.count()).unwrap_or(0);
+    if taken >= ATTACH_MAX {
+        return Err(format!("at most {ATTACH_MAX} images per message"));
+    }
+    let path = dir.join(format!("{}.{ext}", taken + 1));
+    std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&path)
+        .and_then(|mut f| f.write_all(data))
+        .map_err(|e| format!("could not write {}: {e}", path.display()))?;
+    Ok(json!({"path": path.to_string_lossy(), "type": mime, "size": data.len()}))
+}
+
+/// Saves an image the owner attached to a chat message under `~/.tirith/attachments/<message_id>/`
+/// and returns `{path, type, size}`; call it before `inbox_add` with the same id.
+#[tauri::command]
+fn attachment_save(message_id: String, name: String, bytes_base64: String) -> Result<Value, String> {
+    if bytes_base64.len() > ATTACH_MAX_BYTES / 3 * 4 + 8 {
+        return Err(format!("{name}: an image must be at most 10 MB"));
+    }
+    attachment_write(&tirith_home().join("attachments"), &message_id, &name, &b64_decode(&bytes_base64)?)
+}
+
+/// The attachments of a request as stored: at most 6, each `{path, type, size, width, height}` with the path
+/// inside `root` and no `..`; anything else is refused.
+fn clean_attachments(raw: &[Value], root: &std::path::Path) -> Result<Vec<Value>, String> {
+    if raw.len() > ATTACH_MAX {
+        return Err(format!("at most {ATTACH_MAX} images per message"));
+    }
+    raw.iter()
+        .map(|a| {
+            let path = a["path"].as_str().unwrap_or("");
+            let p = std::path::Path::new(path);
+            let inside = p.starts_with(root) && !p.components().any(|c| matches!(c, std::path::Component::ParentDir));
+            let mime = a["type"].as_str().unwrap_or("");
+            if !inside || !["image/png", "image/jpeg", "image/gif", "image/webp"].contains(&mime) {
+                return Err(format!("bad attachment {path:?}"));
+            }
+            let num = |k: &str| a[k].as_u64().unwrap_or(0);
+            Ok(json!({"path": path, "type": mime, "size": num("size"), "width": num("width"), "height": num("height")}))
+        })
+        .collect()
+}
+
 /// Builds the inbox row for a request: `{id, at, kind, project, step, text, from, status}`.
 fn inbox_row(kind: &str, project: &str, step: &str, text: &str, now: SystemTime, salt: u32) -> Result<Value, String> {
     let plan = kind == "plan-refresh" || kind == "plan-new";
@@ -268,8 +372,32 @@ fn inbox_salt() -> u32 {
 
 /// Appends one request to `<home>/inbox.jsonl` (no shell) and returns its id.
 #[tauri::command]
-fn inbox_add(kind: String, project: String, step: String, text: Option<String>) -> Result<String, String> {
-    let row = inbox_row(&kind, &project, &step, text.as_deref().unwrap_or(""), SystemTime::now(), inbox_salt())?;
+fn inbox_add(
+    kind: String,
+    project: String,
+    step: String,
+    text: Option<String>,
+    id: Option<String>,
+    attachments: Option<Vec<Value>>,
+) -> Result<String, String> {
+    let attachments = clean_attachments(&attachments.unwrap_or_default(), &tirith_home().join("attachments"))?;
+    let text = text.unwrap_or_default();
+    if !attachments.is_empty() && kind != "chat" {
+        return Err("only a chat message takes images".into());
+    }
+    // a chat message may be only images: the row builder wants text, the stored row keeps it empty
+    let probe = if attachments.is_empty() || !text.trim().is_empty() { text.as_str() } else { "(image)" };
+    let mut row = inbox_row(&kind, &project, &step, probe, SystemTime::now(), inbox_salt())?;
+    row["text"] = json!(clip(text.trim(), INBOX_TEXT_MAX));
+    if let Some(id) = id {
+        if !valid_message_id(&id) {
+            return Err(format!("bad message id {id:?}"));
+        }
+        row["id"] = json!(id);
+    }
+    if !attachments.is_empty() {
+        row["attachments"] = json!(attachments);
+    }
     inbox_append(&row)?;
     Ok(row["id"].as_str().unwrap_or_default().to_string())
 }
@@ -343,6 +471,67 @@ mod inbox_tests {
         let long = "é".repeat(3000);
         let row = inbox_row("ask", "demo", "1", &long, UNIX_EPOCH, 0).unwrap();
         assert!(row["text"].as_str().unwrap().len() <= INBOX_TEXT_MAX);
+    }
+
+    const PNG: &[u8] = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR";
+
+    fn scratch(tag: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("tirith-att-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        d
+    }
+
+    #[test]
+    fn base64_decodes_with_and_without_padding() {
+        assert_eq!(b64_decode("aGk=").unwrap(), b"hi");
+        assert_eq!(b64_decode("aGk").unwrap(), b"hi");
+        assert_eq!(b64_decode("aGVs\nbG8=").unwrap(), b"hello");
+        assert!(b64_decode("a*b").is_err());
+    }
+
+    #[test]
+    fn attachment_is_saved_by_its_bytes_under_the_message_folder() {
+        let root = scratch("ok");
+        let a = attachment_write(&root, "in-0a1b2c3d", "../../evil.sh", PNG).unwrap();
+        assert_eq!(a["type"], "image/png");
+        assert_eq!(a["size"], PNG.len());
+        let path = PathBuf::from(a["path"].as_str().unwrap());
+        assert_eq!(path, root.join("in-0a1b2c3d").join("1.png"));
+        assert_eq!(std::fs::read(&path).unwrap(), PNG);
+        let b = attachment_write(&root, "in-0a1b2c3d", "x.png", &[0xff, 0xd8, 0xff, 0xe0]).unwrap();
+        assert!(b["path"].as_str().unwrap().ends_with("/2.jpg"));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn attachment_validation_refuses_bad_ids_types_and_sizes() {
+        let root = scratch("bad");
+        for id in ["", "../x", "in-../..", "in-ABCDEF01", "in-0a1b2c3", "x/in-0a1b2c3d", "in-0a1b2c3d/.."] {
+            assert!(attachment_write(&root, id, "a.png", PNG).is_err(), "{id}");
+        }
+        assert!(attachment_write(&root, "in-0a1b2c3d", "a.png", b"<svg/>").is_err());
+        assert!(attachment_write(&root, "in-0a1b2c3d", "a.png", b"").is_err());
+        let big = [PNG, &vec![0u8; ATTACH_MAX_BYTES][..]].concat();
+        assert!(attachment_write(&root, "in-0a1b2c3d", "a.png", &big).is_err());
+        assert!(!root.exists());
+        for _ in 0..ATTACH_MAX {
+            attachment_write(&root, "in-0a1b2c3d", "a.png", PNG).unwrap();
+        }
+        assert!(attachment_write(&root, "in-0a1b2c3d", "a.png", PNG).is_err());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn stored_attachments_must_live_inside_the_attachments_folder() {
+        let root = PathBuf::from("/h/attachments");
+        let ok = json!({"path": "/h/attachments/in-0a1b2c3d/1.png", "type": "image/png", "size": 9, "width": 4, "height": 3});
+        assert_eq!(clean_attachments(&[ok.clone()], &root).unwrap()[0]["width"], 4);
+        for path in ["/etc/passwd", "/h/attachments/../secret.png", "/h/attachmentsX/1.png", "rel.png"] {
+            let bad = json!({"path": path, "type": "image/png"});
+            assert!(clean_attachments(&[bad], &root).is_err(), "{path}");
+        }
+        assert!(clean_attachments(&[json!({"path": "/h/attachments/a/1.svg", "type": "image/svg+xml"})], &root).is_err());
+        assert!(clean_attachments(&vec![ok; 7], &root).is_err());
     }
 
     #[test]
@@ -867,6 +1056,7 @@ pub fn run() {
             current_state,
             launch_step,
             inbox_add,
+            attachment_save,
             inbox_reply,
             run_action,
             lane_stop,

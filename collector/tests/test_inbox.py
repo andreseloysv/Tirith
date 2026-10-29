@@ -322,3 +322,94 @@ def test_chat_link_adds_a_chat_message(home: Path) -> None:
     inbox_mod.add_request(home, fields["kind"], fields["project"], fields["step"], fields["text"])
     (req,) = inbox_mod.requests(home)
     assert req["kind"] == "chat" and req["text"] == "hello **manager**"
+
+
+# -- photos in the chat ------------------------------------------------------------------------
+
+PNG_3x2 = (b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR" + (3).to_bytes(4, "big") + (2).to_bytes(4, "big")
+           + b"\x08\x06\x00\x00\x00")
+
+
+def _png(folder: Path, name: str = "shot.png") -> Path:
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / name
+    path.write_bytes(PNG_3x2)
+    return path
+
+
+def test_sniff_reads_type_and_size() -> None:
+    assert inbox_mod.sniff_image(PNG_3x2) == ("image/png", 3, 2)
+    assert inbox_mod.sniff_image(b"GIF89a" + (5).to_bytes(2, "little") + (4).to_bytes(2, "little")) == ("image/gif", 5, 4)
+    jpeg = (b"\xff\xd8\xff\xe0\x00\x04\x00\x00" + b"\xff\xc0\x00\x0b\x08" + (7).to_bytes(2, "big")
+            + (9).to_bytes(2, "big") + b"\x00" * 6)
+    assert inbox_mod.sniff_image(jpeg) == ("image/jpeg", 9, 7)
+    assert inbox_mod.sniff_image(b"<svg xmlns='x'/>") is None
+
+
+def test_chat_row_keeps_its_attachments(home: Path, tmp_path: Path, capsys) -> None:
+    img = _png(tmp_path / "pics")
+    rid = _add(capsys, "--kind", "chat", "--text", "look", "--attach", str(img))
+    (row,) = read_jsonl(home / "inbox.jsonl")
+    assert row["attachments"] == [{"path": str(img.resolve()), "type": "image/png", "size": len(PNG_3x2),
+                                   "width": 3, "height": 2}]
+    (req,) = inbox_mod.requests(home)
+    assert req["id"] == rid and req["attachments"] == row["attachments"]
+    assert inbox_mod.state_rows(home)[0]["attachments"][0]["width"] == 3
+
+
+def test_chat_may_be_only_images_but_not_empty(home: Path, tmp_path: Path) -> None:
+    att = [inbox_mod.describe_attachment(_png(tmp_path))]
+    assert inbox_mod.add_request(home, "chat", text="", attachments=att)["text"] == ""
+    with pytest.raises(inbox_mod.InboxError, match="text or an image"):
+        inbox_mod.add_request(home, "chat", text="")
+
+
+def test_attach_refuses_non_images_big_files_and_too_many(home: Path, tmp_path: Path, capsys) -> None:
+    text = tmp_path / "notes.png"
+    text.write_text("not an image")
+    assert main(["inbox", "add", "--kind", "chat", "--text", "x", "--attach", str(text)]) == 3
+    assert "not a PNG, JPEG, GIF or WebP" in capsys.readouterr().err
+    assert main(["inbox", "add", "--kind", "chat", "--text", "x", "--attach", str(tmp_path / "missing.png")]) == 3
+    big = tmp_path / "big.png"
+    big.write_bytes(PNG_3x2 + b"\0" * inbox_mod.ATTACH_MAX_BYTES)
+    assert main(["inbox", "add", "--kind", "chat", "--text", "x", "--attach", str(big)]) == 3
+    assert "over 10 MB" in capsys.readouterr().err
+    img = _png(tmp_path)
+    assert main(["inbox", "add", "--kind", "chat", "--text", "x"] + ["--attach", str(img)] * 7) == 3
+    assert not (home / "inbox.jsonl").exists()
+
+
+def test_malformed_attachments_in_a_row_are_dropped(home: Path) -> None:
+    from tirith.store import append_jsonl
+    row = {"id": "in-aaaaaaaa", "at": "2026-01-01T00:00:00Z", "kind": "chat", "project": "", "step": "",
+           "text": "hi", "from": "owner",
+           "attachments": [{"path": "rel.png", "type": "image/png"},
+                           {"path": "/x/1.svg", "type": "image/svg+xml"},
+                           {"path": "/x/1.png", "type": "image/png", "size": 4}]}
+    append_jsonl(home / "inbox.jsonl", row)
+    (req,) = inbox_mod.requests(home)
+    assert req["attachments"] == [{"path": "/x/1.png", "type": "image/png", "size": 4, "width": 0, "height": 0}]
+
+
+def test_watch_line_lists_the_absolute_paths(home: Path, tmp_path: Path) -> None:
+    img = _png(tmp_path)
+    inbox_mod.add_request(home, "chat", text="see", attachments=[inbox_mod.describe_attachment(img)])
+    seen: list[dict] = []
+    inbox_mod.watch(home, seen.append, should_stop=lambda: True, sleep=lambda _s: None)
+    line = json.loads(inbox_mod.watch_line(seen[0]))
+    assert [a["path"] for a in line["attachments"]] == [str(img.resolve())]
+    assert Path(line["attachments"][0]["path"]).is_absolute()
+    inbox_mod.add_request(home, "chat", text="plain")
+    assert "attachments" not in json.loads(inbox_mod.watch_line(inbox_mod.requests(home)[1]))
+
+
+def test_answer_with_images_and_manager_context(home: Path, tmp_path: Path) -> None:
+    from tirith import dispatch as dispatch_mod
+    img = _png(tmp_path)
+    rid = inbox_mod.add_request(home, "chat", text="what is this?",
+                                attachments=[inbox_mod.describe_attachment(img)])["id"]
+    ctx = dispatch_mod.manager_context(home, datetime.now(timezone.utc) + timedelta(seconds=5))
+    assert str(img.resolve()) in ctx and "image/png" in ctx
+    assert main(["inbox", "answer", rid, "It is a button.", "--attach", str(img)]) == 0
+    (req,) = inbox_mod.requests(home)
+    assert req["answers"][0]["attachments"][0]["path"] == str(img.resolve())
