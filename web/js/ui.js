@@ -223,29 +223,11 @@
   };
 
   /* ---------- Overview ---------- */
-  var RECENT_MS = 30 * 60 * 1000;
-  function runCard(p) {
-    var st = p.stages || [], cur = T.curStage(p);
-    return '<button class="card rcard" data-act="gorun" data-key="' + esc(p.run) + '"><span class="rhead"><b>' + esc(T.runName(p)) + ' <span class="mut">' + esc(T.runNum(p)) + '</span></b><span class="mut">' + esc(T.proj(p.project)) + '</span><span class="rtime">' + T.span(p.started_at, null) + '</span></span>' +
-      '<span class="mini">' + st.map(function (x, i) { return (i ? '<i class="ml ' + (st[i - 1].status === 'passed' ? 'on' : '') + '"></i>' : '') + '<i class="mn ' + esc(x.status) + '" title="' + esc(x.name + ' · ' + x.status) + '"></i>'; }).join('') + '</span>' +
-      '<span class="mcur">' + esc((p.lane && p.lane !== 'steward' ? p.lane + ' · ' : 'manager · ') + (cur ? cur.name : 'running')) + '</span></button>';
-  }
-  function doneRow(p) {
-    var ok = p.status === 'passed', mark = ok ? '✓' : '✗';
-    return '<button class="prow" data-act="gorun" data-key="' + esc(p.run) + '"><i class="pm ' + (ok ? 'ok' : 'bad') + '" title="' + esc(p.status) + '">' + mark + '</i>' +
-      '<b>' + esc(T.runName(p)) + ' <span class="mut">' + esc(T.runNum(p)) + '</span></b><span class="mut sm">' + esc(T.proj(p.project)) + '</span>' +
-      '<span class="pwho">' + esc(p.lane && p.lane !== 'steward' ? p.lane : 'manager') + '</span><span class="rtime">' + esc(T.dur(T.elapsed(p.started_at, p.ended_at))) + '</span></button>';
-  }
+  /* the same compact rows as the Pipelines view; a click opens that run there */
   function pipelinesSection(s, running) {
-    var now = T.now(), recent = (s.pipelines || []).filter(function (p) {
-      var e = T.ms(p.ended_at);
-      return (p.status === 'passed' || p.status === 'failed') && e != null && now - e <= RECENT_MS;
-    }).sort(function (a, b) { return T.ms(b.ended_at) - T.ms(a.ended_at); });
-    var h = '<section><h2>Pipelines <span class="n">' + (running.length + recent.length) + '</span></h2>';
-    if (!running.length && !recent.length) return h + T.empty('No pipelines running or finished in the last 30 minutes') + '</section>';
-    if (running.length) h += '<div class="grid2">' + running.map(runCard).join('') + '</div>';
-    if (recent.length) h += '<div class="plist">' + recent.map(doneRow).join('') + '</div>';
-    return h + '</section>';
+    var h = '<section><h2>Pipelines running <span class="n">' + running.length + '</span></h2>';
+    if (!running.length) return h + T.empty('Nothing is running') + '</section>';
+    return h + '<div class="ptable">' + running.map(function (p) { return T.pipeRow(p, false); }).join('') + '</div></section>';
   }
   function overview(s, el) {
     var runs = (s.pipelines || []).filter(function (p) { return p.status === 'running'; });

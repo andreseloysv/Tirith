@@ -53,8 +53,14 @@ the run in `state.json` `pipelines[]`, with:
 | `worktree` | absolute path of the worktree, or `null` |
 | `branch` | the checked-out branch there (`lane/<id>`), or `null` |
 
-The Overview lists these runs under "Pipelines": the running ones first, then those that ended in the
-last 30 minutes (result, duration, the lane or "manager"); each row opens the Pipelines view on the run.
+Status is truthful. The `start` event records the stage `pid` (and `timeout` when given). A run is `running` only
+while a stage has a start, no end, a live pid and is younger than its timeout (default 3600 s); otherwise that
+stage is `failed` with `reason: "interrupted"`. In a finished run (no running stage) the stages that never started
+are `skipped`, and the run is `passed`/`failed` by the stages that ran.
+
+The Overview lists only the running runs, as the same compact rows as the Pipelines view (one row per run:
+status, name, who, the stage chips in order with their names, the failing stage in red, duration, time ago);
+a row opens in place in the Pipelines view (stages, commands, the last 20 log lines, Full log, Run again).
 Raw build and test commands are blocked by the `raw-stage` gate (`docs/CONTRACT-gates.md`).
 
 ## `tirith check [--project ID | <folder>]`
