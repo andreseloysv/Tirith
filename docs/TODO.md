@@ -132,7 +132,6 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Windows: shims propios (`.cmd`).
 - [x] Windows: versión propia del wrapper de git y de la guarda (`safe-git`).
 - [ ] Confirmar qué agentes existen en cada plataforma.
-- [ ] Móvil (para luego, fuera de este plan).
 - [x] Empaquetado por plataforma (configuración y scripts de build).
 - [x] Firmar la app de macOS con el Developer ID del dueño.
 - [x] Notarizar la app de macOS (`scripts/notarize-macos.sh`, perfil `tirith-notary`; aceptada por Apple el 2026-10-29).
