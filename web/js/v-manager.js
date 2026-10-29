@@ -14,6 +14,7 @@
   ui.chatPics = ui.chatPics || [];   /* images waiting in the composer: {name, type, size, url, w, h, b64} */
   ui.chatPicUrl = ui.chatPicUrl || {}; /* saved path -> data URL, for thumbnails the page cannot open by path */
   ui.chatReplyTo = ui.chatReplyTo || null; /* id of the owner item the composer answers */
+  ui.chatLast = ui.chatLast || '';   /* the last message sent from here (Up arrow brings it back) */
   ui.chatJump = ui.chatJump || 0;    /* index of the last item "Jump to next" went to */
   ui.chatStick = true;               /* scroll to the newest message after the next render */
   var lastState = null, SEND_WAIT = 30000, PENDING_MAX = 6 * 3600 * 1000, KINDS = { chat: 1, ask: 1, finish: 1 };
@@ -64,12 +65,20 @@
   }
 
   /* [{side, text, at, ctx, actions, req}] oldest first, with the local sends not yet in the state */
+  function sessionBusy(state) {
+    var p = state.manager && state.manager.presence;
+    return !!(p && p.session && p.session.busy);
+  }
+  function inTurn(state, id) {
+    return ((state.manager && state.manager.turns) || []).some(function (t) { return (t.turn_requests || []).indexOf(id) >= 0; });
+  }
   function messages(state) {
-    var out = [], rows = state.inbox || [];
+    var out = [], rows = state.inbox || [], busy = sessionBusy(state);
     rows.forEach(function (r) {
       if (!KINDS[r.kind]) return;
       var ctx = ctxOf(r);
-      out.push({ side: 'me', text: r.kind === 'finish' ? 'Finish this step' : r.text, at: r.at, ctx: ctx, req: r.id, project: r.project, pics: r.attachments });
+      out.push({ side: 'me', text: r.kind === 'finish' ? 'Finish this step' : r.text, at: r.at, ctx: ctx, req: r.id, project: r.project, pics: r.attachments,
+        queued: busy && r.kind === 'chat' && pending(r) && !inTurn(state, r.id) });
       var run = T.liveForRequest ? T.liveForRequest(state, r.id) : null;   /* what the manager does for it, like the CLI */
       if (run) out.push({ side: 'live', row: run, at: new Date((T.ms(r.at) || 0) + 1).toISOString(), req: r.id });
       (r.answers || []).forEach(function (a) {
@@ -121,9 +130,10 @@
   }
   function msg(m, state) {
     if (m.item) return turnMsg(m, state);
-    if (m.side === 'live') return T.liveBlock(m.row);
+    if (m.side === 'live') return T.liveBlock(m.row, state);
     var body = m.side === 'me' ? esc(m.text).replace(/\n/g, '<br>') : T.md(m.text, T.fileOpts(state, m.project));
     var meta = (m.ctx ? esc(m.ctx) + ' · ' : '') + esc(T.clockTime(m.at));
+    if (m.queued) meta = '<span class="mc-wait" title="The manager is working on an earlier message; this one goes into the same session when that turn ends">Queued</span> · ' + meta;
     if (m.local === 'sending') meta = 'Sending… · ' + meta;
     else if (m.local === 'sent') meta = '<span class="mc-wait" title="Written to the inbox; waiting for the manager to pick it up">Delivered ✓</span> · ' + meta;
     else if (m.local === 'failed') meta = '<b class="mc-bad">' + (m.unconfirmed ? 'Not confirmed' : 'Not sent') + '</b> · <button type="button" class="mc-lnk" data-act="mc-retry" data-cid="' + esc(m.cid) + '">Retry</button> · ' +
@@ -217,8 +227,9 @@
   function presence(state) {
     var p = state.manager && state.manager.presence;
     if (!p) return '';
-    var txt = p.working ? 'Manager is working on your message…' : p.mode === 'live' ? 'Manager: live session' : 'Manager: on call (starts when you write)';
-    return '<span class="mc-presence ' + (p.working ? 'work' : p.mode) + '" role="status">' + esc(txt) + '</span>';
+    var txt = p.working ? 'Manager is working on your message…' : p.mode === 'live' ? 'Manager: live session' : p.session ? 'Manager: one session, always on' : 'Manager: on call (starts when you write)';
+    return '<span class="mc-presence ' + (p.working ? 'work' : p.mode) + '" role="status">' + esc(txt) + '</span>' +
+      (p.session && p.session.busy ? '<button class="mc-stop" type="button" data-act="mc-interrupt" title="Stop the current turn (Esc)">Stop</button>' : '');
   }
 
   function plainHead(t) {
@@ -339,6 +350,21 @@
     }, function (err) { fail(o, 'Could not send: ' + (err && err.message || err)); });
     T.render();
   }
+  /* Stop: interrupt the running turn (the session lives on); the app does it, else the CLI line is shown */
+  function interrupt() {
+    if (hasTauri()) {
+      window.__TAURI__.core.invoke('manager_control', { op: 'interrupt' }).then(null, function (err) { ui.chatErr = String(err); T.render(); });
+      return;
+    }
+    ui.chatErr = null; ui.chatCli = 'tirith manager interrupt';
+    T.render();
+  }
+  function lastSent() {
+    if (ui.chatLast) return ui.chatLast;
+    var mine = ((lastState && lastState.inbox) || []).filter(function (r) { return r.kind === 'chat' && r.text; });
+    mine.sort(function (a, b) { return (T.ms(a.at) || 0) - (T.ms(b.at) || 0); });
+    return mine.length ? mine[mine.length - 1].text : '';
+  }
   function canLink() { var L = lastState && lastState.launch; return !hasTauri() && !!(L && L.token && L.available); }
   function send() {
     var text = ui.chatDraft.trim(), pics = ui.chatPics.slice();
@@ -353,6 +379,7 @@
       ui.chatDraft = text;
     }
     var o = { cid: newCid(), id: newId(), text: text, project: project, pics: pics };
+    ui.chatLast = text;
     ui.chatDraft = ''; ui.chatPics = []; saveDraft();
     if (hasTauri() || canLink()) { dispatch(o, !hasTauri()); return; }
     ui.chatCli = 'tirith inbox add --kind chat' + (project ? ' --project ' + shq(project) : '') + ' --cid ' + o.cid + ' --text ' + shq(text);
@@ -429,6 +456,7 @@
     var b = e.target.closest('[data-act^="mc-"]'); if (!b) return;
     var act = b.getAttribute('data-act');
     if (act === 'mc-send') send();
+    else if (act === 'mc-interrupt') interrupt();
     else if (act === 'mc-retry') retry(b.getAttribute('data-cid'));
     else if (act === 'mc-copy') copyText(b.getAttribute('data-cid'));
     else if (act === 'mc-close') { ui.chatOpen = false; T.render(); }
@@ -481,6 +509,8 @@
   view.addEventListener('keydown', function (e) {
     var t = e.target; if (!t.getAttribute || t.getAttribute('data-act') !== 'mc-text') return;
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); ui.chatDraft = t.value; send(); }
+    else if (e.key === 'Escape' && T.managerTurn && T.managerTurn(lastState)) { e.preventDefault(); e.stopPropagation(); interrupt(); }
+    else if (e.key === 'ArrowUp' && !t.value && !ui.chatPics.length && lastSent()) { e.preventDefault(); t.value = ui.chatDraft = lastSent(); saveDraft(); fit(t); }
     else if (e.key === 'Escape' && inDrawer()) { e.preventDefault(); e.stopPropagation(); ui.chatOpen = false; T.render(); }
   });
 })();

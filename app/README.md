@@ -32,36 +32,13 @@ web fix is visible without rebuilding the app.
 - **Launch**: command `launch_step(project, step)` runs `tirith launch --project P --step N`
   (the CLI command comes from another lane) and returns its output.
   From the page: `window.__TAURI__.core.invoke('launch_step', { project: 'tirith', step: 9 })`.
-- **Chat** (off by default): enable with `TIRITH_CHAT=1` or `[app] chat = true`. A "Chat" button opens
-  a panel: pick a project and an agent alias, type a message. Each conversation is a lane: the app
-  runs `tirith lane run --interactive --project P --class chat --id chat-<ms> --brief
-  ~/.tirith/chats/<id>.md -- <command> <chat_args>` with piped stdin/stdout (the agent inherits them),
-  so `lane run` registers the lane, forwards signals and ends it however the agent exits. The app
-  writes one streaming JSON line per message to stdin and shows the text streamed back. Lines that are
-  not JSON (the `lane run` summary) are not shown. Stop = SIGTERM to `lane run` (Windows: kill).
-  The command and arguments are never hardcoded; they come from `config.toml`:
-
-  ```toml
-  [agents.<alias>]
-  command = "<executable>"
-  chat_args = ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--permission-prompt-tool", "stdio"]
-  ```
-
-  The example is the `anthropic` alias (print mode, streaming JSON both ways, permission questions on
-  stdio). Each message the app sends is one line:
-  `{"type":"user","message":{"role":"user","content":[{"type":"text","text":"..."}]}}`.
-  Source: the headless and Agent SDK pages listed in `docs/PLATFORMS.md` (`SDKUserMessage`,
-  `PermissionResult`). `tools/chat_check.py` runs this exchange once against the
-  real agent (manual, spends a few tokens).
-
-  Only aliases with `chat_args` are offered.
-- **Permission questions**: when the agent writes a `control_request` line with subtype
-  `can_use_tool` (tool name and input), the panel shows a card with Allow / Deny. The command
-  `chat_answer(id, requestId, allow, input)` writes the matching `control_response` line to the agent's
-  stdin (allow echoes the input back as `updatedInput`; deny carries a message). The agent only asks
-  when `chat_args` turns that mode on; checked against the real `anthropic` agent: the request carries `request_id` and
-  `request.{subtype,tool_name,input}`, and this reply shape is accepted (a deny reaches the agent as an
-  error tool result).
+- **Manager session**: the one manager is a session the collector owns (`tirith manager ...`,
+  `docs/CONTRACT-inbox.md`, "One manager"); the chat in the page shows it as it works. The app only sends
+  controls: command `manager_control(op)` with `interrupt` (Stop the running turn), `stop` or `restart`
+  runs `tirith manager <op>`. The old app-only agent chat (`chat_start` and friends, `web/js/v-chat.js`)
+  is gone: it ran a second, separate session; its permission questions are now Allow / Deny items in the
+  manager chat. The streaming arguments still come from `[agents.<alias>] chat_args`
+  (`docs/CONTRACT-agents.md`); `tools/chat_check.py` runs that exchange once by hand.
 
 ## Run
 
@@ -158,7 +135,6 @@ Linux: signing is optional; nothing needed.
 
 ## Not done
 
-- Resuming chats, tool-call display.
 - Loading `tirithweb://` in a real window was not tried (no GUI session); the handler is covered by
   unit tests only. Opening the window in dev mode and looking at it was not done in this session;
   `cargo check` and `cargo test` pass.
