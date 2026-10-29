@@ -98,6 +98,23 @@ def lane_tags(home: Path, folder: str | Path | None) -> dict:
     return {k: v for k, v in {"lane": lane, **info}.items() if v}
 
 
+def cargo_target_dir(home: Path, project: str, folder: str | Path) -> Path | None:
+    """The one ``CARGO_TARGET_DIR`` every cargo stage of ``project`` shares, across its lane worktrees:
+    the project's ``cargo_target_dir`` from ``config.toml``, else ``<repo>-lanes/.cargo-target``."""
+    from tirith.home import load_config
+    proj = load_config(home).project(project)
+    if proj and proj.cargo_target_dir:
+        return proj.cargo_target_dir
+    repo = projects_mod.real(proj.repo) if proj and proj.repo else None
+    if repo is None:
+        common = _git(Path(folder), "rev-parse", "--path-format=absolute", "--git-common-dir") \
+            if Path(folder).is_dir() else None
+        if not common or Path(common).name != ".git":
+            return None
+        repo = projects_mod.real(Path(common).parent)
+    return repo.parent / f"{repo.name}-lanes" / ".cargo-target"
+
+
 def _tail(text: str) -> str:
     text = text.strip()
     return text if len(text) <= OUTPUT_MAX else "…" + text[-OUTPUT_MAX:]
@@ -126,6 +143,10 @@ def run_stage(home: Path, project: str, pipeline: str, stage: str, command: list
     session = projects_mod.current_session(home)
     if session:
         child_env["TIRITH_SESSION"] = session
+    if "CARGO_TARGET_DIR" not in child_env:  # worktrees share compiled dependencies instead of 2 GB each
+        shared = cargo_target_dir(home, project, work)
+        if shared:
+            child_env["CARGO_TARGET_DIR"] = str(shared)
     started = {"pid": os.getpid(), **({"timeout": int(timeout)} if timeout else {})}
     append_jsonl(home / "events.jsonl", {"at": now_iso(), **base, **started, "event": "start", "status": "running"})
     exit_code, kept = 1, b""
