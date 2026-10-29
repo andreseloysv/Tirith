@@ -206,25 +206,14 @@ def _log_tail(log: Path | None, lines: int = 12) -> str:
 
 
 def add_lane_ask(home: Path, lane: dict, what: str, log_tail: str = "") -> str:
-    """The one owner item of a lane that failed or said nothing: Retry / Show the log / Drop it.
-    A lane Tirith started itself (manager, autopilot, dispatcher) never reaches the owner: its failure
-    is one item in the manager queue (``sq-lane-<id>``) with the log tail."""
-    if lane.get("by_tirith") or str(lane.get("id") or "").startswith(managerd_mod.LANE_PREFIX):
-        text = f"Lane **{lane.get('feature') or lane['id']}** ({lane['id']}) {what}."
-        if log_tail:
-            text += f"\nLog tail:\n```\n{log_tail}\n```"
-        asks_mod.queue_add(home, str(lane.get("project") or ""), str(lane["id"]), text,
-                           kind="lane-failed", item_id=f"sq-lane-{lane['id']}")
-        return f"sq-lane-{lane['id']}"
-    wait_id = f"lane-{lane['id']}"
-    if any(str(r.get("id")) == wait_id for r in read_jsonl(home / "waits.jsonl")):
-        return wait_id
-    log = lane.get("log")
-    return add_wait(home, str(lane.get("project") or ""),
-                    f"Lane **{lane.get('feature') or lane['id']}** ({lane['id']}) {what}. What now?",
-                    wait_id=wait_id, options=list(asks_mod.LANE_OPTIONS), kind="decision",
-                    why_owner="owner-decision", why_detail="choice: retry, show the log or drop it",
-                    command=f"tail -n 80 {shlex.quote(str(log))}" if log else None)
+    """A lane that failed or said nothing is one item in the manager queue (``sq-lane-<id>``) with the log
+    tail: retrying or dropping it is never a question for the owner."""
+    text = f"Lane **{lane.get('feature') or lane['id']}** ({lane['id']}) {what}."
+    if log_tail:
+        text += f"\nLog tail:\n```\n{log_tail}\n```"
+    asks_mod.queue_add(home, str(lane.get("project") or ""), str(lane["id"]), text,
+                       kind="lane-failed", item_id=f"sq-lane-{lane['id']}")
+    return f"sq-lane-{lane['id']}"
 
 
 def _cmd_lane_start(args) -> int:
@@ -412,6 +401,15 @@ def _detached_argv(args, home: Path, lane_id: str, workspace: Path, command: lis
     return [*argv, "--", *command]
 
 
+def _duplicate_lane(home: Path, args) -> dict | None:
+    """The working lane of the same project and step that ``lane run --step`` would duplicate, else None.
+    A lane that continues another (``--fallback-from``: fallback, relaunch, claim re-send) is no duplicate."""
+    if not args.step or args.fallback_from:
+        return None
+    others = [l for l in read_lanes(home) if l.get("id") != args.id]
+    return launch_mod.working_lane(others, args.project, str(args.step), lane_status)
+
+
 def _cmd_lane_run(args) -> int:
     home = _home(args)
     command = list(args.command or [])
@@ -431,6 +429,10 @@ def _cmd_lane_run(args) -> int:
     refusal = _lane_run_refusal(args, config, proj, Path(workspace))
     if refusal:
         print(refusal, file=sys.stderr)
+        return 3
+    busy = _duplicate_lane(home, args)
+    if busy:
+        print(f"{busy['id']} is already working on step {args.step}", file=sys.stderr)
         return 3
     interactive = bool(getattr(args, "interactive", False))
     manager_lane = bool(args.id and args.id.startswith(managerd_mod.LANE_PREFIX)
@@ -721,7 +723,8 @@ def add_wait(home: Path, project: str, text: str, link: str | None = None,
     if kind not in asks_mod.ASK_KINDS:
         raise SystemExit(f"wait add: --kind must be one of {', '.join(asks_mod.ASK_KINDS)}")
     wait_id = wait_id or _next_wait_id(home)
-    verdict = ownergate_mod.admit(home, wait_id, project, text, why_owner, via="wait-add", howto=howto)
+    verdict = ownergate_mod.admit(home, wait_id, project, text, why_owner, via="wait-add", howto=howto,
+                                  why_detail=why_detail)
     if verdict != ownergate_mod.OWNER:
         return ""
     why = asks_mod.why_key(why_owner)
