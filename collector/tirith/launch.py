@@ -49,6 +49,9 @@ PLAN_RULES = (
     "Before you finish, report the outcome of your item: `tirith plan report --lane $TIRITH_LANE --status "
     "done|partial|blocked [--add \"<new item>\"]... [--reason \"<why>\"]`. `partial` needs the rest as `--add` "
     "items, `blocked` needs `--reason`. Without a report your work is not merged.",
+    "Never merge into or push to the main checkout (a gate blocks it). Finish with the report above: Tirith's "
+    "single merge queue brings main in, runs the full suite, merges and pushes one lane at a time, and a "
+    "conflict or a red suite comes back to you.",
 )
 
 HARD_RULES = (
@@ -59,6 +62,7 @@ HARD_RULES = (
     "(`<id>` is the project id of this lane); never call the test runner directly.",
     "Do not touch git hooks, `.git/`, or anything outside this worktree.",
     "Do not start sub-agents except with `tirith lane run`.",
+    "A Tirith block is not a stop: use the alternative it gives and continue; never wait for the owner.",
     "Finish with a short report: what changed (files), the test result, and anything left open.",
     *PLAN_RULES,
 )

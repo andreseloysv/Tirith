@@ -1,4 +1,4 @@
-"""The autopilot: ready steps get a lane by themselves, within limits; owner items; the on/off switch."""
+"""The autopilot: open plan items nobody works on become proposals to the manager; owner items; the switch."""
 
 from __future__ import annotations
 
@@ -76,7 +76,7 @@ class Pilot:
         road = roadmap_mod.build(self.repo, "demo", self.agents, TODAY)
         return [{"id": "demo", "name": "Demo", "folder": str(self.repo), "roadmap": road}]
 
-    def cycle(self, seconds: float = 30) -> None:
+    def cycle(self, seconds: float = 31) -> None:
         self.now += timedelta(seconds=seconds)
         dispatch_mod.run(self.home, load_config(self.home), self.now, agents=self.agents, lanes=[],
                          status_of=lambda lane, now: "working", launcher=self.launcher,
@@ -104,120 +104,250 @@ def _waits(home: Path) -> dict:
     return {r["id"]: r for r in read_jsonl(home / "waits.jsonl")}
 
 
-# -- launching ----------------------------------------------------------------------------------
+# -- proposals instead of launches --------------------------------------------------------------
 
 
-def test_launches_one_lane_per_ready_step_oldest_first(home, repo) -> None:
+def _proposals(home: Path) -> list[dict]:
+    return [r for r in inbox_mod.requests(home) if r["kind"] == "autopilot-proposal"]
+
+
+def test_it_never_launches_it_proposes_once_per_item(home, repo) -> None:
+    pilot = Pilot(home, repo)
+    pilot.cycle()   # first sight: the debounce starts
+    assert _proposals(home) == []
+    pilot.cycle()
+    got = _proposals(home)
+    assert pilot.launched == []   # the launcher is never called
+    assert sorted((r["project"], r["step"]) for r in got) == [("demo", "1"), ("demo", "2"), ("demo", "3")]
+    assert all(r["from"] == "tirith" and r["manager_pending"] for r in got)
+    first = next(r for r in got if r["step"] == "1")
+    assert first["text"].startswith("Autopilot: demo step 1 — Build the first thing.")
+    assert "Why now: it is open and nobody works on it." in first["text"] and "docs/TODO.md" in first["text"]
+    for _ in range(3):
+        pilot.cycle()
+    assert len(_proposals(home)) == 3   # deduplicated: one per item
+
+
+def test_a_proposal_is_flowed_and_counted(home, repo) -> None:
     pilot = Pilot(home, repo)
     pilot.cycle()
-    assert pilot.launched == [("demo", "1"), ("demo", "2"), ("demo", "3")]  # not 4 (owner) nor 5 (date)
     pilot.cycle()
-    assert len(pilot.launched) == 3  # a step with a working lane is never started twice
+    flows = [f for f in read_jsonl(home / "flows.jsonl") if f["text"].startswith("Autopilot proposes")]
+    assert len(flows) == 3 and flows[0]["from"] == "tirith" and flows[0]["to"] == "manager"
+    got = autopilot_mod.public(home, load_config(home), pilot.agents, pilot.projects(), pilot.now)
+    assert got["proposed"] == 3 and got["queued"] == 0 and got["started"] == []
+    assert got["open_items"] == 3 and got["enabled"] is True
 
 
-def test_max_parallel_limits_running_lanes(home, repo) -> None:
-    pilot = Pilot(home, repo, "[autopilot]\nmax_parallel = 2")
+def test_the_debounce_ignores_a_normal_handoff(home, repo) -> None:
+    pilot = Pilot(home, repo)
+    pilot.cycle(0)
+    for step in ("1", "2", "3"):
+        pilot.agents.append({"id": f"lane-{step}", "project": "demo", "step": step, "status": "working"})
+    pilot.cycle(10)
+    for agent in pilot.agents:   # the lanes end and their reviews start at once
+        agent["status"], agent["review"] = "done", {"status": "running"}
+    pilot.cycle(10)
+    pilot.cycle(10)
+    assert _proposals(home) == []   # nobody sat unattended for 30 s
+
+
+def test_a_changed_item_gets_a_new_proposal_and_the_old_one_is_closed(home, repo) -> None:
+    pilot = Pilot(home, repo)
     pilot.cycle()
-    assert pilot.launched == [("demo", "1"), ("demo", "2")]
-    pilot.end("lane-1", {"status": "merged"})
+    pilot.cycle()
+    old = next(r for r in _proposals(home) if r["step"] == "1")
+    path = repo / "docs" / "TODO.md"
+    path.write_text(path.read_text().replace("Build the first thing.", "Build the first thing. (reabierto: it broke)"))
+    pilot.cycle()
+    pilot.cycle()
+    step1 = [r for r in _proposals(home) if r["step"] == "1"]
+    assert len(step1) == 2 and step1[0]["id"] == old["id"] and step1[0]["status"] == "done"
+    assert step1[0]["answers"][0]["by"] == "tirith" and "changed" in step1[0]["answers"][0]["text"]
+    assert step1[1]["status"] == "open" and "reopened" in step1[1]["text"]
+
+
+def test_a_ticked_item_closes_its_unanswered_proposal(home, repo) -> None:
+    pilot = Pilot(home, repo)
+    pilot.cycle()
+    pilot.cycle()
     pilot.tick("Build the first thing.")
     pilot.cycle()
-    assert pilot.launched[2:] == [("demo", "3")]  # a slot freed up: the next oldest ready step
+    step1 = next(r for r in _proposals(home) if r["step"] == "1")
+    assert step1["status"] == "done" and not step1["manager_pending"]
+    assert "done or gone" in step1["answers"][0]["text"]
+    assert len(pilot.state()["proposals"]) == 2
 
 
-def test_every_launch_is_a_flow_and_in_the_state(home, repo) -> None:
+def test_the_managers_decision_answers_the_proposal_and_it_is_not_asked_again(home, repo) -> None:
     pilot = Pilot(home, repo)
     pilot.cycle()
-    flows = [f for f in read_jsonl(home / "flows.jsonl") if f["kind"] == "brief"]
-    assert [(f["from"], f["to"], f["text"]) for f in flows][0] == (
-        "tirith", "agent:lane-1", "Autopilot started demo step 1")
-    public = autopilot_mod.public(home, load_config(home))
-    assert public["enabled"] is True and public["max_parallel"] == 4
-    assert [(s["lane"], s["step"]) for s in public["started"]] == [("lane-1", "1"), ("lane-2", "2"), ("lane-3", "3")]
-
-
-def test_disabled_in_config_launches_nothing(home, repo) -> None:
-    pilot = Pilot(home, repo, "[autopilot]\nenabled = false")
     pilot.cycle()
-    assert pilot.launched == []
+    req = next(r for r in _proposals(home) if r["step"] == "1")
+    inbox_mod.add_answer(home, req["id"], "Autopilot: step 1 item Build the first thing. → started lane lane-9")
+    inbox_mod.mark_done(home, req["id"])
+    done = next(r for r in _proposals(home) if r["step"] == "1")
+    assert done["status"] == "done" and not done["manager_pending"] and done["answers"][0]["by"] == "manager"
+    for _ in range(3):
+        pilot.cycle()
+    assert len([r for r in _proposals(home) if r["step"] == "1"]) == 1   # "wait" or "launched": not again
+
+
+def test_the_facts_of_earlier_lanes_are_in_the_proposal(home, repo) -> None:
+    pilot = Pilot(home, repo)
+    path = repo / "docs" / "TODO.md"
+    path.write_text(path.read_text().replace("Build the first thing.", "Build the first thing. (en revisión: lane-old)"))
+    pilot.agents.append({"id": "lane-old", "project": "demo", "step": "1", "status": "done", "outcome": "done",
+                         "ended_at": "2026-10-29T10:00:00Z", "report": "I built it and merged.\n\nMore.",
+                         "review": {"status": "merged", "claims": {"ok": True}}})
+    pilot.cycle()
+    pilot.cycle()
+    text = next(r for r in _proposals(home) if r["step"] == "1")["text"]
+    assert "marked in review but no check is running" in text
+    assert "lane lane-old" in text and "branch merged" in text and "I built it and merged." in text
+    assert "claims:" in text and "More." not in text
+
+
+def test_every_kind_of_note_is_reported_once_nobody_is_on_it(home, repo) -> None:
+    path = repo / "docs" / "TODO.md"
+    text = path.read_text()
+    for word, note in (("first", "(en curso: lane-q)"), ("second", "(reabierto: it broke)"), ("third", "(bloqueado: waiting)")):
+        text = text.replace(f"- [ ] Build the {word} thing.", f"- [ ] Build the {word} thing. {note}")
+    path.write_text(text)
+    pilot = Pilot(home, repo)
+    pilot.cycle()
+    pilot.cycle()
+    why = {r["step"]: r["text"] for r in _proposals(home)}
+    assert "marked in progress" in why["1"] and "reopened" in why["2"] and "marked blocked" in why["3"]
+
+
+def test_an_item_with_a_lane_working_or_a_review_running_is_not_reported(home, repo) -> None:
+    pilot = Pilot(home, repo)
+    pilot.agents.append({"id": "w", "project": "demo", "step": "1", "status": "working"})
+    pilot.agents.append({"id": "r", "project": "demo", "step": "2", "status": "done", "review": {"status": "running"}})
+    pilot.agents.append({"id": "i", "project": "demo", "step": "3", "status": "done",
+                         "review": {"status": "merge-failed", "message": "the review was interrupted; run it again"}})
+    for _ in range(3):
+        pilot.cycle()
+    assert _proposals(home) == []
+    pilot.agents[1]["review"] = {"status": "merged"}   # merged, the item still open: now it sits
+    pilot.cycle()
+    pilot.cycle()
+    assert [r["step"] for r in _proposals(home)] == ["2"]
+
+
+def test_step_zero_and_owner_items_get_no_proposal(home, repo) -> None:
+    path = repo / "docs" / "TODO.md"
+    path.write_text("# TODO\n\n## 0. Tirith own work\n\n- [ ] Review something.\n\n## 1. Owner\n\n"
+                    "- [ ] Decide (dueño: owner-decision).\n")
+    pilot = Pilot(home, repo)
+    for _ in range(3):
+        pilot.cycle()
+    assert _proposals(home) == []
+
+
+# -- the switch ---------------------------------------------------------------------------------
+
+
+def test_disabled_in_config_proposes_nothing(home, repo) -> None:
+    pilot = Pilot(home, repo, "[autopilot]\nenabled = false")
+    for _ in range(3):
+        pilot.cycle()
+    assert _proposals(home) == []
     assert autopilot_mod.public(home, load_config(home))["enabled"] is False
 
 
 def test_owner_switch_off_and_on(home, repo) -> None:
     pilot = Pilot(home, repo)
     off = inbox_mod.add_request(home, "autopilot", "all", "autopilot", "off", at="2026-10-29T11:59:00Z")
-    pilot.cycle()
-    assert pilot.launched == []
+    for _ in range(3):
+        pilot.cycle()
+    assert _proposals(home) == []
     assert autopilot_mod.public(home, load_config(home))["enabled"] is False
     assert {r["id"]: r for r in inbox_mod.requests(home)}[off["id"]]["status"] == "done"
     assert not inbox_mod.requests(home)[0]["manager_pending"]
     inbox_mod.add_request(home, "autopilot", "all", "autopilot", "on")
     pilot.cycle()
-    assert len(pilot.launched) == 3
+    pilot.cycle()
+    assert len(_proposals(home)) == 3
     with pytest.raises(inbox_mod.InboxError):
         inbox_mod.add_request(home, "autopilot", "all", "autopilot", "maybe")
 
 
-def test_refused_launch_is_one_manager_item_and_retried_later(home, repo) -> None:
+def test_the_switch_sticks_across_restarts_and_a_lost_state(home, repo) -> None:
     pilot = Pilot(home, repo)
-
-    def refuse(home, project, step, request_id=None):
-        raise dispatch_mod.launch_mod.LaunchError("tirith check fails for 'demo'")
-    pilot.launcher = refuse
+    inbox_mod.add_request(home, "autopilot", "all", "autopilot", "off")
     pilot.cycle()
+    assert read_json(home / "autopilot.json", {})["on"] is False
+    (home / "dispatch.json").unlink()   # the state file is lost
+    for _ in range(3):
+        pilot.cycle()
+    assert _proposals(home) == []
+    assert autopilot_mod.public(home, load_config(home))["enabled"] is False
+    stale = dispatch_mod.load_state(home)
+    stale["autopilot"]["on"] = True   # a stale writer saved the old switch
+    dispatch_mod.save_state(home, stale)
     pilot.cycle()
-    assert not [i for i in _waits(home) if i.startswith("autopilot-demo-")]  # never the owner's
-    items = {q["id"]: q for q in asks_mod.queue_items(home, only_open=True) if q["kind"] == "launch-refused"}
-    assert sorted(items) == ["sq-autopilot-demo-1", "sq-autopilot-demo-2", "sq-autopilot-demo-3"]
-    assert "Fix it: tirith check --project demo" in items["sq-autopilot-demo-1"]["text"]
-
-
-# -- not converging -----------------------------------------------------------------------------
-
-
-def test_one_lane_without_progress_pauses_the_step(home, repo) -> None:
-    pilot = Pilot(home, repo, "[autopilot]\nmax_parallel = 1")
-    pilot.cycle()
-    pilot.end("lane-1", report="I tried two ways and neither compiled.\n\nDetails follow.")
-    pilot.cycle()
-    assert pilot.launched == [("demo", "1"), ("demo", "2")]  # step 1 is paused at once, the autopilot moves on
-    queue = asks_mod.queue_items(home, only_open=True)
-    assert [q["id"] for q in queue] == ["sq-autopilot-demo-1"]
-    assert "step 1" in queue[0]["text"].lower() and "neither compiled" in queue[0]["text"]
-    assert "Details follow" not in queue[0]["text"]
-    assert pilot.state()["paused"]["demo|1"]["items"] == ["Build the first thing."]
-    pilot.cycle()
-    assert pilot.launched.count(("demo", "1")) == 1  # not relaunched while the text is the same
+    assert autopilot_mod.public(home, load_config(home))["enabled"] is False
 
 
-def test_progress_does_not_pause(home, repo) -> None:
-    pilot = Pilot(home, repo, "[autopilot]\nmax_parallel = 1")
-    pilot.cycle()
-    pilot.tick("Build the first thing.")
-    pilot.end("lane-1", {"status": "merged"})
-    pilot.cycle()
-    assert "demo|1" not in pilot.state()["paused"]
+def test_an_old_switch_in_the_state_is_written_to_the_file(home) -> None:
+    assert autopilot_mod._sync_switch(home, {"autopilot": {"on": False}}) is False
+    assert read_json(home / "autopilot.json", {})["on"] is False
 
 
-def test_lane_waiting_for_its_review_is_not_counted(home, repo) -> None:
-    pilot = Pilot(home, repo, "[autopilot]\nmax_parallel = 1")
-    pilot.cycle()
-    pilot.end("lane-1", {"status": "pending"})
-    pilot.cycle()
-    assert pilot.state()["paused"] == {} and pilot.launched.count(("demo", "1")) == 1  # review pending: not again
+# -- selfcheck ----------------------------------------------------------------------------------
 
 
-def test_paused_step_resumes_when_its_items_change(home, repo) -> None:
-    pilot = Pilot(home, repo, "[autopilot]\nmax_parallel = 1")
+def test_items_sitting_unreported_are_listed(home, repo) -> None:
+    pilot = Pilot(home, repo)
+    pilot.cycle(0)
+    state = dispatch_mod.load_state(home)
+    assert len(autopilot_mod.sitting(home, state, pilot.projects(), pilot.agents, pilot.now)) == 3
+    pilot.agents.append({"id": "w", "project": "demo", "step": "1", "status": "working"})
+    assert len(autopilot_mod.sitting(home, state, pilot.projects(), pilot.agents, pilot.now)) == 2
+
+
+def test_a_proposal_unanswered_for_ten_minutes_is_a_manager_health_problem(home, repo) -> None:
+    from tirith import selfcheck as selfcheck_mod
+    pilot = Pilot(home, repo)
     pilot.cycle()
-    pilot.end("lane-1")
     pilot.cycle()
-    assert "demo|1" in pilot.state()["paused"]
-    path = repo / "docs" / "TODO.md"
-    path.write_text(path.read_text().replace("Build the first thing.", "Build the first thing, smaller."))
+    state = dispatch_mod.load_state(home)
+    config = load_config(home)
+    book = {"queued": {}, "tries": {}, "notices": {}}
+
+    def check(at):
+        return selfcheck_mod._autopilot(config, at, state, book, home, pilot.agents, pilot.projects(), set())
+    assert check(pilot.now)["level"] == "ok"
+    later = pilot.now + timedelta(seconds=selfcheck_mod.PROPOSAL_STUCK_S + 5)
+    got = check(later)
+    assert got["level"] == "healing" and "3 proposals" in got["text"]
+    assert {r["kind"] for r in selfcheck_mod._chat_waiting(home, later)} == {"autopilot-proposal"}
+    assert selfcheck_mod._chat_waiting(home, pilot.now) == []   # not yet overdue
+    inbox_mod.add_answer(home, _proposals(home)[0]["id"], "Autopilot: waiting")
+    assert len(selfcheck_mod._chat_waiting(home, later)) == 2
+
+
+def test_an_item_nobody_reported_makes_the_autopilot_check_amber_and_queues_the_manager(home, repo) -> None:
+    from tirith import selfcheck as selfcheck_mod
+    pilot = Pilot(home, repo)
+    pilot.cycle(0)
+    state = dispatch_mod.load_state(home)
+    config = load_config(home)
+    book = {"queued": {}, "tries": {}, "notices": {}}
+    state["autopilot"]["seen"] = {k: {**v, "at": "2026-10-29T11:50:00Z"} for k, v in state["autopilot"]["seen"].items()}
+    got = selfcheck_mod._autopilot(config, pilot.now, state, book, home, pilot.agents, pilot.projects(), set())
+    assert got["level"] == "healing"
+    assert [q["kind"] for q in asks_mod.queue_items(home, only_open=True)] == ["selfcheck"]
+
+
+def test_a_proposal_is_never_escalated_to_the_owner(home, repo) -> None:
+    pilot = Pilot(home, repo)
     pilot.cycle()
-    assert "demo|1" not in pilot.state()["paused"]
-    assert [q for q in asks_mod.queue_items(home, only_open=True) if q["kind"] != "launch-refused"] == []
+    pilot.cycle()
+    pilot.cycle(seconds=dispatch_mod.ESCALATE_AFTER_S + 60)
+    assert dispatch_mod.load_state(home)["escalated"] == {}
 
 
 # -- owner items --------------------------------------------------------------------------------
@@ -255,35 +385,6 @@ def test_owner_items_are_deduplicated_and_closed_when_ticked(home, repo) -> None
     assert len(pilot.state()["owner_items"]) == 2
 
 
-def test_state_json_carries_the_autopilot_and_item_ids(home, repo) -> None:
-    from tirith.collector import Collector
-    path = home / "config.toml"
-    path.write_text(path.read_text() + "\n[autopilot]\nenabled = false\n")  # the test must not start lanes
-    state = Collector(home, client=None).build_state(NOW)
-    assert state["autopilot"]["enabled"] is False
-    road = state["projects"][0]["roadmap"]
-    assert [s["status"] for s in road["steps"]] == ["ready", "ready", "ready", "blocked-owner", "blocked-date"]
-    owner = [i for i in road["steps"][3]["items"] if i["who"] == "owner"]
-    assert len(owner) == 2 and all(i["owner_item"] in _waits(home) for i in owner)
-    assert len(read_json(home / "dispatch.json", {})["autopilot"]["owner_items"]) == 3
-
-
-def test_a_fallback_relaunch_is_the_same_steps_lane(home, repo) -> None:
-    pilot = Pilot(home, repo, "[autopilot]\nmax_parallel = 2")
-    pilot.cycle()
-    pilot.end("lane-1")  # ran out of credits; the fallback continued it as lane-1b
-    pilot.agents.append({"id": "lane-1b", "project": "demo", "step": "1", "status": "working"})
-    state = dispatch_mod.load_state(home)
-    state["fallbacks"] = {"lane-1": "lane-1b"}
-    dispatch_mod.save_state(home, state)
-    pilot.cycle()
-    assert pilot.launched == [("demo", "1"), ("demo", "2")]  # no second lane on step 1
-    assert pilot.state()["paused"] == {} and pilot.state()["lanes"]["lane-1b"]["settled"] is False
-    pilot.end("lane-1b", {"status": "merged"})
-    pilot.cycle()
-    assert pilot.state()["lanes"]["lane-1b"]["settled"] is True
-
-
 # -- what the lane's report says (real reports of ~/.tirith/lanes, shortened) ---------------------------
 
 ALREADY_BUILT = [
@@ -308,34 +409,11 @@ NOT_FINISHED = [
 ]
 
 
-@pytest.mark.parametrize("report", ALREADY_BUILT)
-def test_report_saying_already_built_asks_the_plan_updater_to_tick(home, repo, report) -> None:
-    pilot = Pilot(home, repo, "[autopilot]\nmax_parallel = 1")
-    pilot.cycle()
-    pilot.end("lane-1", report=report)
-    pilot.cycle()
-    assert autopilot_mod.report_kind(report) == "done"
-    refresh = [r for r in inbox_mod.requests(home) if r["kind"] == "plan-refresh"]
-    assert [(r["project"], r["step"]) for r in refresh] == [("demo", "1")]  # limited to that step
-    assert pilot.state()["paused"]["demo|1"]["why"] == "done"
-    assert pilot.launched.count(("demo", "1")) == 1
-    pilot.cycle()
-    assert len([r for r in inbox_mod.requests(home) if r["kind"] == "plan-refresh"]) == 1  # asked once
-    assert [q for q in asks_mod.queue_items(home, only_open=True) if q["kind"] != "launch-refused"] == []
-
-
-@pytest.mark.parametrize("report", CANNOT_DO)
-def test_report_saying_it_cannot_proposes_owner_only(home, repo, report) -> None:
-    pilot = Pilot(home, repo, "[autopilot]\nmax_parallel = 1")
-    pilot.cycle()
-    pilot.end("lane-1", report=report)
-    pilot.cycle()
-    assert autopilot_mod.report_kind(report) == "cannot"
-    queue = asks_mod.queue_items(home, only_open=True)
-    assert [q["id"] for q in queue] == ["sq-autopilot-demo-1"] and "owner-only" in queue[0]["text"]
-    assert pilot.state()["paused"]["demo|1"]["why"] == "cannot"
-    assert [r for r in inbox_mod.requests(home) if r["kind"] == "plan-refresh"] == []
-    assert pilot.launched.count(("demo", "1")) == 1
+def test_report_kinds() -> None:
+    for report in ALREADY_BUILT:
+        assert autopilot_mod.report_kind(report) == "done"
+    for report in CANNOT_DO:
+        assert autopilot_mod.report_kind(report) == "cannot"
 
 
 def test_other_reports_are_stuck_with_their_summary() -> None:
@@ -351,85 +429,53 @@ def test_refresh_brief_is_limited_to_the_step() -> None:
     assert "Limited to step" not in refresh_brief("demo", "docs/TODO.md", "# TODO", [], [], Path("."))
 
 
-# -- the header counts ------------------------------------------------------------------------------
+# -- the header counts and why an item is not reported ----------------------------------------------
 
 
-def test_header_counts_only_live_lanes_and_unpaused_ready_steps(home, repo) -> None:
-    pilot = Pilot(home, repo, "[autopilot]\nmax_parallel = 1")
-    pilot.cycle()
-    count = lambda: autopilot_mod.public(home, load_config(home), pilot.agents, pilot.projects(), pilot.now)
-    assert (count()["working"], count()["queued"]) == (1, 2)  # step 1 working, steps 2 and 3 queued
-    for lane in ("lane-1", "lane-2", "lane-3"):
-        pilot.end(lane, report="I couldn't do it.")
-        pilot.cycle()
-    got = count()
-    assert (got["working"], got["queued"]) == (0, 0)  # three ended lanes in the started log: none counted
-    assert len(got["started"]) == 3
+def _public(pilot) -> dict:
+    return autopilot_mod.public(pilot.home, load_config(pilot.home), pilot.agents, pilot.projects(), pilot.now)
 
 
-def test_header_working_never_exceeds_the_agents_list(home, repo) -> None:
-    pilot = Pilot(home, repo, "[autopilot]\nmax_parallel = 1")
-    pilot.cycle()
-    got = autopilot_mod.public(home, load_config(home), [], pilot.projects(), pilot.now)
-    assert got["working"] == 0  # a lane inside the grace period with no agent row is not "working" on screen
-    assert len(got["started"]) == 1
-
-
-# -- why a ready step is not started ------------------------------------------------------------
-
-
-def _skipped(pilot) -> dict:
-    got = autopilot_mod.public(pilot.home, load_config(pilot.home), pilot.agents, pilot.projects(), pilot.now)
-    return {s["step"]: s["why"] for s in got["skipped"]}
-
-
-def test_a_step_with_a_lane_not_yet_seen_is_skipped_and_not_queued(home, repo) -> None:
-    pilot = Pilot(home, repo, "[autopilot]\nmax_parallel = 1")
-    pilot.cycle()
-    pilot.agents.clear()  # inside the grace period the lane has no agent row yet: the step still reads ready
-    got = autopilot_mod.public(home, load_config(home), pilot.agents, pilot.projects(), pilot.now)
-    assert _skipped(pilot)["1"] == "an agent is already on it"
-    assert got["queued"] == 2  # steps 2 and 3 wait for a free slot: they are queued, not skipped
-
-
-def test_lanes_that_ended_unseen_do_not_hold_their_step(home, repo) -> None:
-    """The real state: unsettled lanes whose agent is gone from the list, long past the grace period."""
+def test_header_says_what_is_true(home, repo) -> None:
     pilot = Pilot(home, repo)
+    pilot.agents.append({"id": "w", "project": "demo", "step": "1", "status": "working"})
+    pilot.agents.append({"id": "r", "project": "demo", "step": "2", "status": "done", "review": {"status": "running"}})
     pilot.cycle()
-    pilot.agents.clear()  # the Agents list no longer shows the three lanes
-    pilot.cycle(seconds=autopilot_mod.GRACE_S + 60)
-    assert pilot.launched == [("demo", "1"), ("demo", "2"), ("demo", "3")]
-    assert set(_skipped(pilot)) == {"1", "2", "3"}  # each ended without progress: paused, with the reason
-    assert "could not finish" in _skipped(pilot)["1"]
-    got = autopilot_mod.public(pilot.home, load_config(pilot.home), pilot.agents, pilot.projects(), pilot.now)
-    assert got["queued"] == 0
+    pilot.cycle()
+    got = _public(pilot)
+    assert (got["working"], got["steps_working"], got["steps_in_review"]) == (1, 1, 1)
+    assert got["proposed"] == 1 and got["open_items"] == 3   # only step 3 had nobody on it
+    why = {s["step"]: s["why"] for s in got["skipped"]}
+    assert why == {"1": "an agent is already on it",
+                   "2": "the work of an earlier agent on it is being checked by Tirith"}
 
 
-def test_review_busy_steps_say_so(home, repo) -> None:
+def test_a_review_never_waits_for_the_owner(home, repo) -> None:
     pilot = Pilot(home, repo)
-    pilot.agents.append({"id": "old", "project": "demo", "step": "1", "status": "done",
-                         "review": {"status": "tests-failed"}})
-    pilot.agents.append({"id": "old2", "project": "demo", "step": "2", "status": "done",
-                         "review": {"status": "pending"}})
-    pilot.cycle()
-    why = _skipped(pilot)
-    assert "waiting for you to review" in why["1"] and "being checked" in why["2"]
-    assert pilot.launched == [("demo", "3")]
-
-
-def test_a_refused_start_is_explained_calmly(home, repo) -> None:
-    from tirith import launch as launch_mod
-    pilot = Pilot(home, repo)
-
-    def refuse(home, project, step, request_id=None):
-        raise launch_mod.LaunchError("no agent command: add [launch] command")
-    pilot.launcher = refuse
-    pilot.cycle()
-    why = _skipped(pilot)
-    assert set(why) == {"1", "2", "3"}
-    assert all(w.startswith("the last start failed") and "trying again" in w for w in why.values())
+    for status in ("pending", "running", "ready", "merge-failed"):
+        pilot.agents[:] = [{"id": "old", "project": "demo", "step": "1", "status": "done", "review": {"status": status}}]
+        why = {s["step"]: s["why"] for s in _public(pilot)["skipped"]}.get("1", "")
+        assert "you" not in why, (status, why)
+    pilot.agents[:] = [{"id": "old", "project": "demo", "step": "1", "status": "done",
+                        "review": {"status": "merge-failed", "message": "the review was interrupted; run it again"}}]
+    assert "being checked" in {s["step"]: s["why"] for s in _public(pilot)["skipped"]}["1"]
+    pilot.agents[:] = [{"id": "old", "project": "demo", "step": "1", "status": "done", "review": {"status": "tests-failed"}}]
+    assert _public(pilot)["skipped"] == []   # a failed review is the manager's: it is reported as a proposal
 
 
 def test_a_step_with_only_owner_items_left_is_skipped() -> None:
     step = {"id": "9", "status": "ready", "items": [{"text": "Decide", "done": False, "who": "owner"}]}
     assert autopilot_mod._why_not(autopilot_mod._own({}), [], "demo", step, NOW) == "only the owner's items are left"
+
+
+def test_state_json_carries_the_autopilot_and_item_ids(home, repo) -> None:
+    from tirith.collector import Collector
+    path = home / "config.toml"
+    path.write_text(path.read_text() + "\n[autopilot]\nenabled = false\n")  # the test must not post proposals
+    state = Collector(home, client=None).build_state(NOW)
+    assert state["autopilot"]["enabled"] is False and state["autopilot"]["started"] == []
+    road = state["projects"][0]["roadmap"]
+    assert [s["status"] for s in road["steps"]] == ["ready", "ready", "ready", "blocked-owner", "blocked-date"]
+    owner = [i for i in road["steps"][3]["items"] if i["who"] == "owner"]
+    assert len(owner) == 2 and all(i["owner_item"] in _waits(home) for i in owner)
+    assert len(read_json(home / "dispatch.json", {})["autopilot"]["owner_items"]) == 3

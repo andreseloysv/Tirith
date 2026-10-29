@@ -80,8 +80,18 @@ RULES = (
     "lane's report comes back as a queue item, then close the request.",
     "Answer every pending message below with `tirith inbox answer <id> \"<markdown>\"`, then "
     "`tirith inbox done <id>` when it is settled. Answer the question that was asked, briefly.",
+    "A pending message of kind `autopilot-proposal` is Tirith's autopilot telling you a plan item is open and "
+    "nobody works on it (it starts nothing itself). Treat it like an owner message: decide, then answer it with "
+    "`tirith inbox answer <id> \"Autopilot: step N item … → <what you did>\"` (one short line, the chat shows "
+    "it) and `tirith inbox done <id>`. Launch it with a written brief and the plan link (`tirith launch ... "
+    "--step N --item \"<exact item text>\"`), combine it with a lane that already works on the same files, wait "
+    "(say why in the answer; Tirith asks again only when the item changes), or drop it with a plan edit through "
+    "Tirith (`tirith inbox add --kind plan-edit ...`). If its work is already on main, tick it with `tirith plan "
+    "done --project P --step N --item \"<exact text>\" --commit <sha>`. Never launch the same item twice.",
     "Put something on the owner's list (`tirith wait add ... --option ...`) only for what you must refuse or "
     "cannot do yourself. No operating-system notifications.",
+    "A Tirith block is not a stop: use the alternative it gives and continue. Repeated blocks of a lane reach "
+    "you as a queue item with the exact commands; they never go to the owner.",
     *howto_mod.RULES,
     "Queue items: handle each (look at the lane, unblock it, review it) and close it with "
     "`tirith queue done <id>`.",
