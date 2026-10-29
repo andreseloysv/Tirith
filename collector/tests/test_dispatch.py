@@ -1,4 +1,4 @@
-"""The dispatcher and the steward's hooks: finish/ask handled by code, the steward held to the inbox."""
+"""The dispatcher and the manager's hooks: finish/ask handled by code, the manager held to the inbox."""
 
 from __future__ import annotations
 
@@ -83,7 +83,7 @@ def test_finish_launches_a_lane_once(project, home: Path, launches) -> None:
         collector.build_state(NOW)
     assert launches == [("demo", "1")]
     req = _by_id(home)[rid]
-    assert req["status"] == "answered" and req["steward_pending"] is False
+    assert req["status"] == "answered" and req["manager_pending"] is False
     assert req["answers"][0]["by"] == "tirith" and req["answers"][0]["auto"] is True
     assert "lane-1" in req["answers"][0]["text"]
     assert _flows(home) == [("owner", "tirith", "request"), ("tirith", "agent:lane-1", "brief")]
@@ -130,11 +130,11 @@ def test_refusal_fixes() -> None:
     assert dispatch_mod.refusal_fix("p", "2", "git worktree add failed") == "tirith launch --project p --step 2"
 
 
-def test_auto_launch_off_leaves_finish_to_the_steward(project, home: Path, launches) -> None:
+def test_auto_launch_off_leaves_finish_to_the_manager(project, home: Path, launches) -> None:
     _append_config(home, "[dispatch]\nauto_launch = false")
     rid = inbox_mod.add_request(home, "finish", "demo", "1", at=_at(5))["id"]
     Collector(home, client=None).build_state(NOW)
-    assert launches == [] and _by_id(home)[rid]["steward_pending"] is True
+    assert launches == [] and _by_id(home)[rid]["manager_pending"] is True
 
 
 def test_dispatch_off_does_nothing(project, home: Path, launches) -> None:
@@ -147,7 +147,7 @@ def test_dispatch_off_does_nothing(project, home: Path, launches) -> None:
 # -- ask / setup ----------------------------------------------------------------------------------
 
 
-def test_ask_is_answered_by_the_brain_at_once_and_stays_pending_for_the_steward(project, home: Path) -> None:
+def test_ask_is_answered_by_the_brain_at_once_and_stays_pending_for_the_manager(project, home: Path) -> None:
     client = Client()
     collector = Collector(home, client=client)
     rid = inbox_mod.add_request(home, "ask", "demo", "1", "What is left?", at=_at(2))["id"]
@@ -161,13 +161,13 @@ def test_ask_is_answered_by_the_brain_at_once_and_stays_pending_for_the_steward(
     assert len(client.prompts) == 1
     assert rows[rid]["answers"][0]["by"] == "brain" and rows[rid]["answers"][0]["auto"] is True
     assert len(rows[rid]["answers"]) == 1
-    assert rows[rid]["steward_pending"] is True and rows[setup]["steward_pending"] is True
+    assert rows[rid]["manager_pending"] is True and rows[setup]["manager_pending"] is True
     assert rows[setup]["answers"] == []
     flows = _flows(home)
     assert ("owner", "tirith", "request") in flows and ("tirith", "brain", "request") in flows
     assert ("brain", "owner", "answer") in flows
     inbox_mod.add_answer(home, rid, "Followed up.")
-    assert _by_id(home)[rid]["steward_pending"] is False
+    assert _by_id(home)[rid]["manager_pending"] is False
 
 
 def test_watch_still_emits_a_brain_answered_ask(home: Path) -> None:
@@ -178,9 +178,9 @@ def test_watch_still_emits_a_brain_answered_ask(home: Path) -> None:
     assert [r["id"] for r in seen] == [rid]
 
 
-# -- steward hooks --------------------------------------------------------------------------------
+# -- manager hooks --------------------------------------------------------------------------------
 
-STEWARD = {"TIRITH_ROLE": "steward"}
+MANAGER = {"TIRITH_ROLE": "manager"}
 
 
 def _hook(home: Path, event: str, payload: dict, environ: dict, capsys, agent: str = "anthropic"):
@@ -203,9 +203,9 @@ def _pending(home: Path, kind: str = "ask", seconds_ago: float = 300) -> str:
 
 
 @pytest.mark.parametrize("event", ["UserPromptSubmit", "SessionStart"])
-def test_steward_context_lists_pending_requests(home: Path, capsys, event: str) -> None:
+def test_manager_context_lists_pending_requests(home: Path, capsys, event: str) -> None:
     rid = _pending(home)
-    code, out, err = _hook(home, event, {"cwd": str(home)}, STEWARD, capsys)
+    code, out, err = _hook(home, event, {"cwd": str(home)}, MANAGER, capsys)
     assert code == 0 and err == ""
     data = json.loads(out)["hookSpecificOutput"]
     assert data["hookEventName"] == event
@@ -214,24 +214,24 @@ def test_steward_context_lists_pending_requests(home: Path, capsys, event: str) 
     assert [r for r in read_jsonl(home / "events.jsonl") if r["kind"] == "inbox-injection"]
 
 
-def test_steward_context_is_empty_when_nothing_is_pending(home: Path, capsys) -> None:
+def test_manager_context_is_empty_when_nothing_is_pending(home: Path, capsys) -> None:
     rid = _pending(home)
     inbox_mod.add_answer(home, rid, "done")
-    assert _hook(home, "UserPromptSubmit", {"cwd": str(home)}, STEWARD, capsys)[1] == ""
+    assert _hook(home, "UserPromptSubmit", {"cwd": str(home)}, MANAGER, capsys)[1] == ""
 
 
 def test_other_sessions_are_never_touched(home: Path, capsys) -> None:
     _pending(home)
     assert _hook(home, "Stop", {"cwd": str(home)}, {}, capsys)[0] == 0
-    lane = {"TIRITH_ROLE": "steward", "TIRITH_LANE": "w1"}
+    lane = {"TIRITH_ROLE": "manager", "TIRITH_LANE": "w1"}
     assert _hook(home, "Stop", {"cwd": str(home)}, lane, capsys) == (0, "", "")
     assert _hook(home, "UserPromptSubmit", {"cwd": str(home)}, {}, capsys)[1] == ""
-    assert _hook(home, "Stop", {"cwd": str(home)}, STEWARD, capsys, agent="muse")[0] == 0
+    assert _hook(home, "Stop", {"cwd": str(home)}, MANAGER, capsys, agent="muse")[0] == 0
 
 
-def test_session_cwd_identifies_the_steward(home: Path, tmp_path: Path, capsys) -> None:
-    folder = tmp_path / "steward"
-    (home / "config.toml").write_text(f'[steward]\nsession_cwd = "{folder}"\n')
+def test_session_cwd_identifies_the_manager(home: Path, tmp_path: Path, capsys) -> None:
+    folder = tmp_path / "manager"
+    (home / "config.toml").write_text(f'[manager]\nsession_cwd = "{folder}"\n')
     _pending(home)
     assert _hook(home, "Stop", {"cwd": str(folder / "sub")}, {}, capsys)[0] == 2
     assert _hook(home, "Stop", {"cwd": str(tmp_path / "other")}, {}, capsys)[0] == 0
@@ -240,33 +240,33 @@ def test_session_cwd_identifies_the_steward(home: Path, tmp_path: Path, capsys) 
 def test_stop_blocks_three_times_then_records_a_violation(home: Path, capsys) -> None:
     rid = _pending(home)
     for n in (1, 2, 3):
-        code, _out, err = _hook(home, "Stop", {"cwd": str(home)}, STEWARD, capsys)
+        code, _out, err = _hook(home, "Stop", {"cwd": str(home)}, MANAGER, capsys)
         assert code == 2 and rid in err and f"block {n} of 3" in err
     for _ in range(2):  # then it may stop, with one violation only
-        assert _hook(home, "Stop", {"cwd": str(home)}, STEWARD, capsys)[0] == 0
+        assert _hook(home, "Stop", {"cwd": str(home)}, MANAGER, capsys)[0] == 0
     events = read_jsonl(home / "events.jsonl")
     assert [e["rule"] for e in events if e["kind"] == "violation"] == ["inbox-ignored"]
     assert len([e for e in events if e["kind"] == "inbox-block"]) == 3
     _pending(home)  # a new set of requests starts counting again
-    assert _hook(home, "Stop", {"cwd": str(home)}, STEWARD, capsys)[0] == 2
+    assert _hook(home, "Stop", {"cwd": str(home)}, MANAGER, capsys)[0] == 2
 
 
 def test_stop_ignores_young_answered_and_done_requests(home: Path, capsys) -> None:
     _pending(home, seconds_ago=20)
     answered = _pending(home)
-    inbox_mod.add_answer(home, answered, "steward here")
+    inbox_mod.add_answer(home, answered, "manager here")
     inbox_mod.mark_done(home, _pending(home))
-    assert _hook(home, "Stop", {"cwd": str(home)}, STEWARD, capsys)[0] == 0
+    assert _hook(home, "Stop", {"cwd": str(home)}, MANAGER, capsys)[0] == 0
 
 
-def test_a_brain_answer_does_not_release_the_steward(home: Path, capsys) -> None:
+def test_a_brain_answer_does_not_release_the_manager(home: Path, capsys) -> None:
     rid = _pending(home)
     inbox_mod.add_answer(home, rid, "auto", by="brain", auto=True)
-    assert _hook(home, "Stop", {"cwd": str(home)}, STEWARD, capsys)[0] == 2
+    assert _hook(home, "Stop", {"cwd": str(home)}, MANAGER, capsys)[0] == 2
 
 
 def test_run_hook_end_to_end_exit_code(home: Path, capsys, monkeypatch) -> None:
-    monkeypatch.setenv("TIRITH_ROLE", "steward")
+    monkeypatch.setenv("TIRITH_ROLE", "manager")
     _pending(home)
     payload = json.dumps({"hook_event_name": "Stop", "cwd": str(home), "session_id": "s"})
     assert hooks_mod.run_hook(home, "anthropic", "Stop", io.StringIO(payload)) == 2
@@ -278,15 +278,15 @@ def test_run_hook_end_to_end_exit_code(home: Path, capsys, monkeypatch) -> None:
 
 def test_install_with_role_writes_the_env_in_the_command(tmp_path: Path, home: Path) -> None:
     settings = tmp_path / "settings.json"
-    assert main(["hook", "install", "--agent", "anthropic", "--role", "steward", "--settings", str(settings)]) == 0
+    assert main(["hook", "install", "--agent", "anthropic", "--role", "manager", "--settings", str(settings)]) == 0
     hooks = json.loads(settings.read_text())["hooks"]
     commands = [h["command"] for g in hooks["Stop"] for h in g["hooks"]]
-    assert len(commands) == 1 and commands[0].startswith("TIRITH_ROLE=steward ")
+    assert len(commands) == 1 and commands[0].startswith("TIRITH_ROLE=manager ")
     plain = ["hook", "install", "--agent", "anthropic", "--settings", str(settings)]
     assert main(plain) == 0  # the same entry is refreshed, not doubled
     hooks = json.loads(settings.read_text())["hooks"]
     assert [h["command"] for g in hooks["Stop"] for h in g["hooks"]] == [
-        commands[0].removeprefix("TIRITH_ROLE=steward ")]
+        commands[0].removeprefix("TIRITH_ROLE=manager ")]
     assert main(["hook", "uninstall", "--agent", "anthropic", "--settings", str(settings)]) == 0
     assert "hooks" not in json.loads(settings.read_text())
 
@@ -302,19 +302,19 @@ def test_escalation_after_ten_minutes_once(project, home: Path) -> None:
     for _ in range(3):
         dispatch_mod.run(home, config, NOW, agents=[], lanes=[], status_of=lambda lane, now: "working",
                          notify=lambda title, message: sent.append((title, message)))
-    assert sent == [("Tirith", "The steward has not answered: Are you there?")]
+    assert sent == [("Tirith", "The manager has not answered: Are you there?")]
     collector = Collector(home, client=None)
     collector.build_state(NOW)
     state = collector.build_state(NOW)
-    (item,) = [w for w in state["waiting_on_you"] if w["id"] == f"steward-silent-{rid}"]
-    assert item["text"] == "The steward has not answered: Are you there?"
+    (item,) = [w for w in state["waiting_on_you"] if w["id"] == f"manager-silent-{rid}"]
+    assert item["text"] == "The manager has not answered: Are you there?"
     assert [o["label"] for o in item["options"]] == ["Wait", "Start an agent", "Answer it with the brain"]
     assert ("tirith", "owner", "alert") in _flows(home)
     assert not [w for w in state["waiting_on_you"] if young in w["id"]]
-    inbox_mod.add_answer(home, rid, "Here now.")  # the steward caught up: the item goes away
+    inbox_mod.add_answer(home, rid, "Here now.")  # the manager caught up: the item goes away
     collector.build_state(NOW)
     state = collector.build_state(NOW)
-    assert not [w for w in state["waiting_on_you"] if w["id"] == f"steward-silent-{rid}"]
+    assert not [w for w in state["waiting_on_you"] if w["id"] == f"manager-silent-{rid}"]
 
 
 def test_notify_is_a_noop_off_macos(monkeypatch) -> None:

@@ -3,7 +3,7 @@
 Every collector cycle ``dispatch.run`` calls :func:`run`. A launched lane that ended ``done`` gets one
 detached ``tirith lane review <lane>`` (``--tests-only`` when ``[review] auto_merge = false``), once per lane,
 state in ``dispatch.json`` (``reviews``). When the review has a result the dispatcher settles it: a merge
-answers the owner's request, closes the steward queue item and ticks the plan; a failure opens an owner
+answers the owner's request, closes the manager queue item and ticks the plan; a failure opens an owner
 item with Run actions and keeps the queue item open. A lane that ended 30 minutes ago with unmerged work
 and no review result is a ``review-overdue`` violation. See ``docs/CONTRACT-launch.md``.
 """
@@ -125,7 +125,7 @@ def match_items(items: list[str], report: str | None) -> tuple[list[str], list[s
 
 
 def update_plan(home: Path, repo: Path, lane: dict) -> str:
-    """Tick what the report claims in the repo's roadmap and commit it; returns a line for the owner/steward."""
+    """Tick what the report claims in the repo's roadmap and commit it; returns a line for the owner/manager."""
     step = str(lane.get("step") or "")
     items = brief_items(lane.get("brief"))
     if not step or not items:
@@ -225,8 +225,24 @@ def settle(home: Path, config: Config, lane: dict, review: dict, rec: dict, now:
         if step and project:
             rows.append(("Start an agent to fix it", f"tirith launch --project {project} --step {step}"))
         rows += [("Show the log", f"tail -n 80 {_log_hint(home, review, lane_id)}"), drop]
-        flows_mod.append_flow(home, "tirith", "owner", "alert", text, session=None, project=project, at=at)
-    _owner_item(home, rec, key, project, text, rows, at)
+        # employees report to the manager: a failed review is the manager's job, never the owner's
+        _manager_item(home, rec, project, lane_id, text, rows)
+        flows_mod.append_flow(home, "tirith", "manager", "alert", text, session=None, project=project, at=at)
+        return
+    _owner_item(home, rec, key, project, text, rows, at)  # auto_merge off: the owner chose to decide
+
+
+def _manager_item(home: Path, rec: dict, project: str | None, lane_id: str, text: str,
+                  rows: list[tuple[str, str]]) -> None:
+    """One open item in the manager's queue with the commands it can run (once per review result)."""
+    commands = "\n".join(f"- {label}: {command}" for label, command in rows)
+    if rec.get("queue"):  # the review's own queue item is replaced by this one, which says what failed
+        try:
+            asks_mod.queue_done(home, rec["queue"])
+        except asks_mod.AskError:
+            pass
+    item = asks_mod.queue_add(home, project or "", lane_id, f"{text}\n{commands}")
+    rec["queue"] = item["id"]
 
 
 def _result_key(review: dict) -> str:
@@ -291,8 +307,7 @@ def flag_overdue(home: Path, lane: dict, age: float, now: datetime, notify: Call
     gates.record_violation(
         home, gates.Violation("review-overdue", text, f"tirith lane review {lane_id}"),
         ts=at, agent="anthropic", lane=lane_id, session=None, project=project, tool=None, cwd=None)
-    (notify or dispatch.macos_notify)("Tirith", text)
-    _owner_item(home, {}, f"review-overdue-{lane_id}", project, text + ". Review it now or drop it.",
-                [("Review it now", f"tirith lane review {lane_id}"), ("Drop the lane", f"tirith lane drop {lane_id}")],
-                at)
-    flows_mod.append_flow(home, "tirith", "owner", "alert", text, session=None, project=project, at=at)
+    (notify or dispatch.macos_notify)("Tirith", text)  # a no-op: no OS notifications
+    _manager_item(home, {}, project, lane_id, text + ". Review it now or drop it.",
+                  [("Review it now", f"tirith lane review {lane_id}"), ("Drop the lane", f"tirith lane drop {lane_id}")])
+    flows_mod.append_flow(home, "tirith", "manager", "alert", text, session=None, project=project, at=at)

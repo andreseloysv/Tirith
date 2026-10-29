@@ -49,12 +49,12 @@ the run in `state.json` `pipelines[]`, with:
 
 | Field | Meaning |
 |---|---|
-| `lane` | id of the lane whose `workspace` is that worktree (else `$TIRITH_LANE`), or `null` for runs by the steward |
+| `lane` | id of the lane whose `workspace` is that worktree (else `$TIRITH_LANE`), or `null` for runs by the manager |
 | `worktree` | absolute path of the worktree, or `null` |
 | `branch` | the checked-out branch there (`lane/<id>`), or `null` |
 
 The Overview lists these runs under "Pipelines": the running ones first, then those that ended in the
-last 30 minutes (result, duration, the lane or "steward"); each row opens the Pipelines view on the run.
+last 30 minutes (result, duration, the lane or "manager"); each row opens the Pipelines view on the run.
 Raw build and test commands are blocked by the `raw-stage` gate (`docs/CONTRACT-gates.md`).
 
 ## `tirith check [--project ID | <folder>]`

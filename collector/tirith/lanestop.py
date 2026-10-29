@@ -3,7 +3,7 @@
 ``lane run`` starts its (non-interactive) child as the leader of its own process group and stores the
 group in the lane file (``pgid``). Stopping writes a ``stop`` marker into the lane file, sends SIGTERM to
 that group, waits up to ``TERM_WAIT_S`` and then sends SIGKILL. ``lane run`` sees the marker when its child
-is gone and ends the lane as ``failed`` with the report ``Stopped by <owner|steward>: <reason>``; if
+is gone and ends the lane as ``failed`` with the report ``Stopped by <owner|manager>: <reason>``; if
 ``lane run`` itself is gone, the stop ends the lane. The worktree is kept. See ``docs/CONTRACT-gates.md``.
 """
 
@@ -17,7 +17,7 @@ from pathlib import Path
 from tirith.home import now_iso
 from tirith.store import lane_path, read_json, write_lane
 
-STOPPERS = ("owner", "steward")
+STOPPERS = ("owner", "manager", "steward")  # "steward" is the old name of "manager"
 TERM_WAIT_S = 10.0
 END_WAIT_S = 5.0
 REASON_MAX = 300
@@ -41,6 +41,7 @@ def alive(pid) -> bool:
 
 def report_for(by: str, reason: str | None) -> str:
     reason = " ".join(str(reason or "").split())[:REASON_MAX]
+    by = "manager" if by == "steward" else by
     return f"Stopped by {by}: {reason}" if reason else f"Stopped by {by}."
 
 
@@ -88,7 +89,7 @@ def _reaped(lane: dict) -> bool:
     return state.startswith("Z") or not state
 
 
-def stop_lane(home: Path, lane_id: str, by: str = "steward", reason: str | None = None,
+def stop_lane(home: Path, lane_id: str, by: str = "manager", reason: str | None = None,
               term_wait: float = TERM_WAIT_S, end_wait: float = END_WAIT_S,
               sleep=time.sleep) -> dict:
     """Stop a running lane; returns the stored lane. Raises ``StopError`` for an unknown or ended lane."""
@@ -96,6 +97,7 @@ def stop_lane(home: Path, lane_id: str, by: str = "steward", reason: str | None 
 
     if by not in STOPPERS:
         raise StopError(f"--by must be one of {', '.join(STOPPERS)}")
+    by = "manager" if by == "steward" else by
     path = lane_path(home, lane_id)
     lane = read_json(path, None)
     if not isinstance(lane, dict):

@@ -1,9 +1,9 @@
-"""Asks: what the steward needs from the owner, each with a clear call to action.
+"""Asks: what the manager needs from the owner, each with a clear call to action.
 
 An ask is a row of ``<home>/waits.jsonl`` with ``options`` (one-click answers), an optional
 ``command`` to copy and a ``kind``. The owner's answer is a ``reply`` row in ``inbox.jsonl``
-(see ``inbox.add_reply``); the collector marks the ask answered. What only the steward must
-see (a lane report with an "open" section) goes to ``<home>/steward_queue.jsonl`` instead.
+(see ``inbox.add_reply``); the collector marks the ask answered. What only the manager must
+see (a lane report with an "open" section) goes to ``<home>/manager_queue.jsonl`` instead.
 See ``docs/CONTRACT-inbox.md``.
 """
 
@@ -19,13 +19,14 @@ from tirith.store import append_jsonl, read_jsonl
 ASK_KINDS = ("decision", "action", "approval", "info")
 MAX_OPTIONS = 6
 LABEL_MAX = 60
-QUEUE_FILE = "steward_queue.jsonl"
+QUEUE_FILE = "manager_queue.jsonl"
+OLD_QUEUE_FILE = "steward_queue.jsonl"  # before the rename; read while the new file does not exist
 QUEUE_TEXT_MAX = 1500
 QUEUE_STATE_ROWS = 50
 
 NO_CTA_KIND = "no-call-to-action"
 # options of the owner items Tirith itself generates (violations, brain-detected waits, room waits)
-GOT_IT_OPTIONS = [{"label": "Let the steward handle it", "value": "steward"},
+GOT_IT_OPTIONS = [{"label": "Let the manager handle it", "value": "manager"},
                   {"label": "Got it", "value": "ack"}]
 
 LANE_OPTIONS = [{"label": "Retry", "value": "retry"}, {"label": "Show the log", "value": "log"},
@@ -98,29 +99,30 @@ def open_section(report: str | None) -> str:
     return ""
 
 
-# -- the steward's own queue ------------------------------------------------------------------
+# -- the manager's own queue ------------------------------------------------------------------
 
 
 def queue_path(home: Path) -> Path:
-    return Path(home) / QUEUE_FILE
+    new, old = Path(home) / QUEUE_FILE, Path(home) / OLD_QUEUE_FILE
+    return old if old.exists() and not new.exists() else new
 
 
 def queue_add(home: Path, project: str, lane: str, text: str, kind: str = "review",
               item_id: str | None = None) -> dict:
-    """Add a steward queue item; with ``item_id`` an id that is already queued is not added twice."""
+    """Add a manager queue item; with ``item_id`` an id that is already queued is not added twice."""
     if item_id:
         for row in queue_items(home):
             if row["id"] == item_id:
                 return row
     row = {"id": item_id or "sq-" + secrets.token_hex(4), "at": now_iso(), "kind": kind, "project": project,
-           "lane": lane, "text": text, "to": "steward", "status": "open"}
+           "lane": lane, "text": text, "to": "manager", "status": "open"}
     append_jsonl(queue_path(home), row)
     return row
 
 
 def queue_done(home: Path, item_id: str, result: str | None = None) -> None:
     if not any(r["id"] == item_id for r in queue_items(home)):
-        raise AskError(f"no steward queue item {item_id}")
+        raise AskError(f"no manager queue item {item_id}")
     row = {"id": item_id, "at": now_iso(), "done": True}
     if result:
         row["result"] = str(result)[:QUEUE_TEXT_MAX]
@@ -141,6 +143,6 @@ def queue_items(home: Path, only_open: bool = False) -> list[dict]:
         elif rid not in out:
             out[rid] = {"id": rid, "at": row.get("at"), "kind": row.get("kind") or "review",
                         "project": row.get("project"), "lane": row.get("lane"),
-                        "text": str(row.get("text") or ""), "to": "steward", "status": "open"}
+                        "text": str(row.get("text") or ""), "to": "manager", "status": "open"}
     rows = list(out.values())
     return [r for r in rows if r["status"] == "open"] if only_open else rows

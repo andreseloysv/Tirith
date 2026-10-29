@@ -100,16 +100,16 @@ that is not executable. `install` also locks (`uchg`) a guard that is exactly as
 `[[projects]] guard = false` in `config.toml` (written by the "Never for this project" button) switches
 the check off for one project.
 
-## Stop a running lane: `tirith lane stop <lane-id> [--reason ..] [--by owner|steward]`
+## Stop a running lane: `tirith lane stop <lane-id> [--reason ..] [--by owner|manager]`
 
 `lane run` starts a non-interactive child as the leader of its own process group and stores `pgid` in
 the lane file. `lane stop` writes `stop: {by, reason, at}` into the lane file, sends **SIGTERM** to that
 group, waits up to **10 s** and then sends **SIGKILL**. The lane ends `failed` with the report
-`Stopped by <owner|steward>: <reason>` (`Stopped by <who>.` without a reason); `lane run` ends it when its
+`Stopped by <owner|manager>: <reason>` (`Stopped by <who>.` without a reason); `lane run` ends it when its
 child is gone, and `lane stop` ends it itself if `lane run` is gone. A stopped lane adds no
 Retry/Show the log/Drop it item. The worktree is kept. An interactive lane (own terminal) is signalled by
-pid only. Unknown or already ended lanes exit 3. `--by` defaults to `steward` for agents and scripts and
-`owner` at a terminal; the dispatcher and the steward call `tirith lane stop` (or
+pid only. Unknown or already ended lanes exit 3. `--by` defaults to `manager` for agents and scripts and
+`owner` at a terminal; the dispatcher and the manager call `tirith lane stop` (or
 `lanestop.stop_lane`) the same way.
 
 From the page: a **Stop** button on working or stalled agents (card top right, drawer / list row, next to

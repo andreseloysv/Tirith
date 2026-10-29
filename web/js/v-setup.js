@@ -1,5 +1,5 @@
 /* Setup card(s) in the Overview, under the Plan: pipelines, hooks, rules and `tirith check` of each project.
-   Changes (a new stage or rule, running a stage) are sent to the steward through the inbox, kind "setup". */
+   Changes (a new stage or rule, running a stage) are sent to the manager through the inbox, kind "setup". */
 (function () {
   var T = window.T, esc = T.esc, ui = T.ui;
   ui.setupForm = ui.setupForm || {};   /* project id -> 'stage' | 'rule' while its form is open */
@@ -36,7 +36,7 @@
     return '<li class="schip ' + (s.last ? esc(s.last.status) : 'none') + '" title="' + esc((KIND_NAME[s.kind] || 'Stage') + ' · ' + (s.run || 'no command')) + '">' +
       '<span class="sk">' + (KIND[s.kind] || KIND.none) + '</span><span class="sname">' + esc(s.name) + '</span>' + cmd + lastText(s.last) +
       (s.run ? '<button class="srun' + (busy ? ' busy' : '') + '" data-act="srun" data-key="' + esc(key) + '"' + (busy ? ' disabled' : '') +
-        ' title="Ask the steward to run this stage" aria-label="Run ' + esc(s.name) + '">' + PLAY + '<span>' + (busy ? 'Asked' : 'Run') + '</span></button>' : '') + '</li>';
+        ' title="Ask the manager to run this stage" aria-label="Run ' + esc(s.name) + '">' + PLAY + '<span>' + (busy ? 'Asked' : 'Run') + '</span></button>' : '') + '</li>';
   }
 
   function pipelinesRow(p, su, multi) {
@@ -86,7 +86,7 @@
 
   function pending(p, su) {
     var h = (su.pending || []).map(function (x) {
-      return '<span class="ichip" title="The steward applies it from its inbox">Waiting for the steward · ' + esc(x.summary) + '</span>';
+      return '<span class="ichip" title="The manager applies it from its inbox">Waiting for the manager · ' + esc(x.summary) + '</span>';
     });
     Object.keys(ui.setupPend).forEach(function (k) {
       var parts = k.split('|'), t = ui.setupPend[k];
@@ -127,8 +127,8 @@
     }).join('');
     var list = which === 'stage' ? '<datalist id="spipes-' + esc(p.id) + '">' + pipes.map(function (x) { return '<option value="' + esc(x) + '">'; }).join('') + '</datalist>' : '';
     return '<div class="sform"><div class="sfhead"><b>' + (which === 'stage' ? 'New stage' : 'New rule') + '</b>' +
-      '<span class="mut sm">' + (which === 'stage' ? 'Added to tirith.toml by the steward' : 'Set exactly one of command glob, edited paths, regex') + '</span></div>' +
-      '<div class="sfields">' + fields + list + '</div><div class="sfoot"><button class="isend" data-act="ssend" data-key="' + esc(p.id) + '">Ask the steward</button>' +
+      '<span class="mut sm">' + (which === 'stage' ? 'Added to tirith.toml by the manager' : 'Set exactly one of command glob, edited paths, regex') + '</span></div>' +
+      '<div class="sfields">' + fields + list + '</div><div class="sfoot"><button class="isend" data-act="ssend" data-key="' + esc(p.id) + '">Ask the manager</button>' +
       '<button class="scancel" data-act="sclose" data-key="' + esc(p.id) + '">Cancel</button></div></div>';
   }
 

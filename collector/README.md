@@ -58,9 +58,9 @@ model = "muse-spark-1.3"         # any Spark model id your key can use
 # base_url = "https://api.meta.ai/v1"
 # enabled = true
 
-[steward]
+[manager]
 name = "Aldric of the Tower"
-title = "The Steward"
+title = "The Manager"
 # guard_words = [...]            # global fallback for projects without their own
 ```
 
@@ -84,7 +84,7 @@ tirith run --project chromasol --pipeline android-release --stage build --new-ru
 tirith run --project chromasol --pipeline android-release --stage test -- make test
 
 # Orchestrator + owner queue
-tirith steward "Reviewing the data lane"
+tirith manager "Reviewing the data lane"
 tirith note "Merged the data lane" --project chromasol
 tirith wait add "Tick the store declaration" --project chromasol
 tirith wait done w-1
@@ -96,7 +96,7 @@ tirith guard verify --all
 ```
 
 Classes come from `../docs/LORE.md`: `stonewright`, `loremaster`, `warden`,
-`swiftrider`, `herald`, `glasswright`, `archivist` (plus `steward`).
+`swiftrider`, `herald`, `glasswright`, `archivist` (plus `steward`, shown as Manager).
 Hero names are generated from Tirith's own syllable tables and stay stable
 per lane id; renown is +100 for a finished lane, +20 per passed stage run
 with `--agent <lane-id>`, −30 for a failed lane (ranks at 0/100/300/700/1500).

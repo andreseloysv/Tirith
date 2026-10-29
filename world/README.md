@@ -3,7 +3,7 @@
 A Godot 4.7 (Forward+) scene that turns `state.json` into a living citadel:
 projects are ring districts whose buildings are the code architecture, agents
 are heroes at workbenches, pipelines are caravans on the outer road, and a
-beacon on the Steward's tower burns while something is waiting for you.
+beacon on the Manager's tower burns while something is waiting for you.
 The data contract is `../docs/CONTRACT.md`; classes and ranks are in
 `../docs/LORE.md`. The world only reads files — it never writes outside
 `user://`, opens no ports and needs no collector.
@@ -39,7 +39,7 @@ the last good world standing and shows the problem in the HUD.
 
 ## What you are looking at
 
-- **Tower**: the Steward on the balcony with a speech bubble (current
+- **Tower**: the Manager on the balcony with a speech bubble (current
   activity), the seven-pointed star, the beacon and "Waiting for you" scroll
   (lit and pulsing while `waiting_on_you` is not empty), and the notice board
   with recent notes at the tower foot.
@@ -94,7 +94,7 @@ caravan):
 - `scripts/hero.gd` — one agent as a hero: procedural build per class/rank,
   GLB loading, status animation, nameplate, workbench.
 - `scripts/world_builder.gd` — the citadel itself: static hill/tower/roads,
-  diffed districts/heroes/caravans, beacon, steward, ambient animation.
+  diffed districts/heroes/caravans, beacon, manager, ambient animation.
 - `scripts/ui.gd` — HUD counters and the parchment detail panel.
 - `scripts/main.gd` — environment/light/post, orbit camera, polling,
   picking, capture mode.

@@ -19,7 +19,7 @@ again to clear. The selected view lives in the hash (`#view=`).
   total time is only in the floating bar.
 - **Agents**: Kanban (Working, Stalled, Done, Failed; count in each header) or List (`#mode=list`). Card click
   opens summary, files changed and log in a drawer. Finished agents older than 24 h sit behind "Show N earlier".
-- **Flow**: how information passes: nodes for You, the Steward, agents, pipelines, rooms and room speakers;
+- **Flow**: how information passes: nodes for You, the Manager, agents, pipelines, rooms and room speakers;
   one edge per pair with its message count (hover or select it to see the latest message). Click an edge to
   list all its messages in a drawer. Respects the session, project and search filters.
 - The project name is left off rows and cards when every visible item shares one project; it then appears once

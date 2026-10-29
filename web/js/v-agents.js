@@ -76,13 +76,13 @@
     el.innerHTML = tb + '<div class="board" >' + board + '</div>' + (more ? '<div class="moreline">' + more + '</div>' : '') + drawerFor();
   }
 
-  /* Org chart: the steward on top, each agent under the agent that spawned it. An agent whose
-     parent is not shown (filtered out, dropped, unknown) hangs from the steward. */
+  /* Org chart: the manager on top, each agent under the agent that spawned it. An agent whose
+     parent is not shown (filtered out, dropped, unknown) hangs from the manager. */
   function tree(list) {
     var ids = {}, kids = {};
     list.forEach(function (a) { ids[a.id] = true; });
     list.forEach(function (a) {
-      var p = a.parent && a.parent !== a.id && ids[a.parent] ? a.parent : 'steward';
+      var p = a.parent && a.parent !== a.id && ids[a.parent] ? a.parent : 'manager';
       (kids[p] = kids[p] || []).push(a);
     });
     var seen = {};
@@ -92,9 +92,9 @@
       var sub = (kids[a.id] || []).slice().sort(byStartAsc).map(branch).join('');
       return '<li>' + T.agentCard(a, ui.drawer === 'agent' && ui.openAgent === a.id) + (sub ? '<ul>' + sub + '</ul>' : '') + '</li>';
     }
-    var roots = (kids.steward || []).slice().sort(byStartAsc).map(branch).join('');
+    var roots = (kids.manager || []).slice().sort(byStartAsc).map(branch).join('');
     list.forEach(function (a) { if (!seen[a.id]) roots += branch(a); });  /* parent cycles */
-    return '<ul class="orgtree"><li><span class="orgroot">Steward</span><ul>' + roots + '</ul></li></ul>';
+    return '<ul class="orgtree"><li><span class="orgroot">Manager</span><ul>' + roots + '</ul></li></ul>';
   }
   function byStartAsc(a, b) { return byStart(b, a); }
   T.views.agents = view;
