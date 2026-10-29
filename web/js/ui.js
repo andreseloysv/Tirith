@@ -198,7 +198,6 @@
 
   /* ---------- merged messages (flows + room messages) ---------- */
   function mgr(e) { return e === 'steward' ? 'manager' : e; }  /* old flow rows */
-  function norm(x) { return String(x || '').toLowerCase().replace(/\s+/g, ' ').trim(); }
   T.messages = function (s) {
     var out = [], seen = {}, roomTitle = {};
     (s.rooms || []).forEach(function (r) {
@@ -260,25 +259,8 @@
     if (T.rulesSection) h += T.rulesSection(s);
     h += pipelinesSection(s, runs);
     h += '<section><h2>Working agents <span class="n">' + ags.length + '</span></h2>' + (ags.length ? '<div class="grid2">' + ags.map(function (a) { return T.agentCard(a, false).replace('data-act="agent"', 'data-act="goagent"'); }).join('') + '</div>' : T.empty('No agents working')) + '</section>';
-    h += '</div><aside class="ovside" data-scroll="ovside">' + activity(s) + '</aside></div>';
+    h += '</div><aside class="ovside">' + T.managerChat(s) + '</aside></div>';
     el.innerHTML = h;
-  }
-  function activity(s) {
-    var items = T.messages(s);
-    var waits = (s.waiting_on_you || []).map(function (w) { return norm(w.text); });
-    var feats = (s.agents || []).map(function (a) { return norm(a.feature); }).filter(Boolean);
-    items = items.filter(function (m) {
-      if (/^pipeline:/.test(m.fromId) || /^pipeline:/.test(m.toId)) return false;
-      var t = norm(m.text);
-      if ((m.kind === 'request' || m.kind === 'alert') && waits.some(function (w) { return w.indexOf(t.slice(0, 30)) === 0 || t.indexOf(w.slice(0, 30)) === 0; })) return false;
-      if ((m.kind === 'brief' || m.kind === 'report') && feats.some(function (x) { return t.indexOf(x) >= 0; })) return false;
-      return true;
-    });
-    var total = items.length; items = items.slice(0, 80);
-    return '<section><h2>Activity <span class="n">' + total + '</span></h2>' + (items.length ? '<ul class="feed">' + items.map(function (x) {
-      return '<li><span class="when">' + esc(T.clockTime(x.at)) + '</span><span class="who"><i class="dot" style="background:' + (T.KIND[x.kind] || '#9ca3af') + '" title="' + esc(x.kind) + '"></i>' +
-        esc(x.fromName) + ' <span class="arr">→</span> ' + esc(x.toName) + '</span><span class="txt mdt">' + T.mdBox(x.text, 'm:' + x.fromId + x.at) + '</span></li>';
-    }).join('') + '</ul>' : T.empty('No activity in this session')) + '</section>';
   }
   T.views.overview = overview;
 

@@ -61,6 +61,8 @@ def _short(text: str, limit: int = TEXT_SHOWN) -> str:
 
 
 def _step_name(req: dict) -> str:
+    if req["kind"] == "chat":
+        return "the chat"
     return f"{req['project']} step {req['step']}"
 
 
@@ -166,10 +168,11 @@ def escalate(home: Path, req: dict, notify: Callable[[str, str], None], at: str)
     notify("Tirith", text)
     _flow(home, "tirith", "owner", "alert", text, req, at)
     project, step = req["project"], req["step"]
-    add_owner_item(home, f"manager-silent-{req['id']}", project or None, text,
-                   [{"label": "Wait", "command": None},
-                    {"label": "Start an agent", "command": f"tirith launch --project {project} --step {step}"},
-                    {"label": "Answer it with the brain", "command": f"tirith inbox brain {req['id']}"}], at)
+    options = [{"label": "Wait", "command": None}]
+    if req["kind"] != "chat":  # a chat message is not about a step
+        options.append({"label": "Start an agent", "command": f"tirith launch --project {project} --step {step}"})
+    options.append({"label": "Answer it with the brain", "command": f"tirith inbox brain {req['id']}"})
+    add_owner_item(home, f"manager-silent-{req['id']}", project or None, text, options, at)
 
 
 def run(home: Path, config: Config, now: datetime, *, agents: list[dict], lanes: list[dict],
@@ -191,7 +194,7 @@ def run(home: Path, config: Config, now: datetime, *, agents: list[dict], lanes:
                 done = _finish(home, req, config, agents, lanes, status_of, launcher, now)
             else:
                 done = "manager" if req["kind"] != "finish" else "answered"
-                if req["kind"] != "finish":
+                if req["kind"] not in ("finish", "chat"):  # a chat message lives in the chat thread, not the flows
                     _flow(home, "owner", "tirith", "request",
                           f"{req['kind'].capitalize()} on {_step_name(req)}: {_short(req['text'])}", req, now_iso(now))
             if done:
