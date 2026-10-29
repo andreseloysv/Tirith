@@ -197,10 +197,12 @@ def tirith_argv() -> list[str]:
 
 
 def lane_run_argv(project: str, step_id: str, hero_class: str, title: str, brief: Path,
-                  workspace: Path, lane_id: str, command: list[str]) -> list[str]:
+                  workspace: Path, lane_id: str, command: list[str],
+                  request_id: str | None = None) -> list[str]:
+    extra = ["--request", request_id] if request_id else []
     return [*tirith_argv(), "lane", "run", "--id", lane_id, "--step", str(step_id), "--project", project,
             "--class", hero_class, "--feature", title, "--brief", str(brief),
-            "--workspace", str(workspace), "--", *command]
+            "--workspace", str(workspace), *extra, "--", *command]
 
 
 def spawn_detached(argv: list[str], home: Path, log: Path) -> int:
