@@ -168,3 +168,10 @@ and `LSUIElement`, registers it with `lsregister`; `tirith url verify --apps-dir
 `tirith url uninstall` unregisters and removes it. Not done by the lane: the real install in `~/Applications`
 and a real click-to-launch (they change the owner's Launch Services and start an agent). The owner runs
 `tirith url install` once, then clicks "Start an agent now" in the Plan.
+
+### Link-to-command check (automated)
+
+`test_handler_command_runs_url_open_end_to_end` takes the shell command from the handler's AppleScript, appends the
+quoted link (with its `&` separators) and runs it through `/bin/sh` with `TIRITH_HOME`, as `do shell script` does. A
+wrong-token link exits 3 and records the `launch-token` violation; nothing is launched. What stays manual: after
+`tirith url install`, open the Plan in the browser, click "Start an agent now" and confirm `lane <id>` appears in the step.
