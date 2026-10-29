@@ -33,6 +33,17 @@ Lane registration (`tirith lane start --project chromasol --class stonewright --
 ```
 `tirith lane end <id> --result done|failed` sets `ended_at` and `result`.
 
+`tirith lane run --project P --class C --feature F --brief <file> [--interactive] -- <agent>` registers
+the lane (pid, parent, session, start commit, token, step, request), runs the agent with `TIRITH_LANE`
+and the token in its environment, then ends the lane (`done` on exit 0, `failed` otherwise) and prints
+`lane <id>: <result>, <n> files +<a> -<d>, <time>`. Same refusals either way (brief, `tirith check`,
+guard: exit 3). Default: output goes to a log (`log`), the answer is extracted from it.
+`--interactive`: the child inherits stdin/stdout/stderr (the owner chats with it), `log` is `null`;
+activity comes from `tirith hook` events tagged with the lane. SIGINT/SIGTERM/SIGHUP received by
+`tirith` are forwarded to the child, which is always waited for, so the lane always ends (a child killed
+by a signal exits `128+signal` and the lane is `failed`). The final answer is the summary of the lane's
+last `Stop` hook event, if any (else the lane ends without an answer and a wait is added).
+
 Pipeline events (`tirith run --project chromasol --pipeline android-release --stage build -- make android-build`):
 ```json
 {"at": "...", "run": "android-release#7", "project": "chromasol", "pipeline": "android-release",
