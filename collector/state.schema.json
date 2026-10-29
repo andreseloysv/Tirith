@@ -21,6 +21,18 @@
     "generated_at": {
       "type": "string"
     },
+    "collector": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "warming": {
+          "type": "boolean"
+        },
+        "pending": {
+          "type": "integer"
+        }
+      }
+    },
     "brain": {
       "type": "object",
       "additionalProperties": true,
