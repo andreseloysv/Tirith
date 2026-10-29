@@ -1,0 +1,3643 @@
+window.TIRITH_STATE = {
+  "version": 1,
+  "generated_at": "2026-10-28T19:40:00Z",
+  "brain": {
+    "enabled": true,
+    "model": "muse-spark",
+    "last_error": null
+  },
+  "steward": {
+    "name": "Aldric of the Tower",
+    "title": "The Steward",
+    "activity": "Reviewing Ivren's performance report before merging",
+    "since": "2026-10-28T19:31:00Z",
+    "notes": [
+      {
+        "at": "2026-10-28T19:05:00Z",
+        "project": "chromasol",
+        "text": "Merged Halvard's Room database lane into integration",
+        "session": "2026-10-28-chromasol-release"
+      },
+      {
+        "at": "2026-10-28T19:20:00Z",
+        "project": "chromasol",
+        "text": "Launched Ivren on performance; owner's phone assigned to her",
+        "session": "2026-10-28-chromasol-release"
+      },
+      {
+        "at": "2026-10-28T19:31:00Z",
+        "project": "tirith",
+        "text": "Contract v1 fixed; two lanes can start in parallel",
+        "session": "2026-10-28-tirith-web"
+      }
+    ]
+  },
+  "waiting_on_you": [
+    {
+      "id": "w-3",
+      "project": "tirith",
+      "text": "The lane **inbox-reply** finished, but the report says the token is shared with the launch link. Rotate it now or keep it for this release?",
+      "since": "2026-10-28T19:36:00Z",
+      "link": null,
+      "source": "manual",
+      "session": "2026-10-28-tirith-web",
+      "kind": "decision",
+      "options": [
+        {
+          "label": "Rotate now",
+          "value": "rotate"
+        },
+        {
+          "label": "Keep for this release",
+          "value": "keep"
+        },
+        {
+          "label": "Ask me again Monday",
+          "value": "later"
+        }
+      ],
+      "command": null,
+      "status": "open"
+    },
+    {
+      "id": "w-2",
+      "project": "chromasol",
+      "text": "Tick the AI asset declaration on the store listing and press Save. The form is behind your sign-in, so only you can do it.",
+      "since": "2026-10-28T19:20:00Z",
+      "link": "https://play.google.com/console",
+      "source": "manual",
+      "session": "2026-10-28-chromasol-release",
+      "kind": "action",
+      "options": [],
+      "command": "open https://play.google.com/console",
+      "status": "open",
+      "actions": [
+        {
+          "id": "ac-5e1a0004",
+          "label": "Install the commit guard",
+          "command": "tirith guard install tirith",
+          "cwd": null,
+          "created_by": "steward",
+          "at": "2026-10-28T19:41:00Z",
+          "last_run": null
+        }
+      ]
+    },
+    {
+      "id": "w-4",
+      "project": "chromasol",
+      "text": "Release candidate 1.4.2 passed every stage. Publish it to the **production** track?",
+      "since": "2026-10-28T18:50:00Z",
+      "link": null,
+      "source": "manual",
+      "session": "2026-10-28-chromasol-release",
+      "kind": "approval",
+      "options": [
+        {
+          "label": "Publish",
+          "value": "publish"
+        },
+        {
+          "label": "Not yet",
+          "value": "hold"
+        }
+      ],
+      "command": null,
+      "status": "open"
+    },
+    {
+      "id": "w-1",
+      "project": "chromasol",
+      "text": "Tick the AI asset declaration on the store listing and press Save",
+      "since": "2026-10-28T18:50:00Z",
+      "link": null,
+      "session": "2026-10-28-chromasol-release"
+    }
+  ],
+  "projects": [
+    {
+      "id": "chromasol",
+      "name": "ChromaSol",
+      "color": "#2f7d5b",
+      "architecture": {
+        "nodes": [
+          {
+            "id": "photos",
+            "label": "Photos",
+            "kind": "input",
+            "files": 2
+          },
+          {
+            "id": "subject",
+            "label": "Person cutout",
+            "kind": "service",
+            "files": 11
+          },
+          {
+            "id": "engine",
+            "label": "Colour engine (C)",
+            "kind": "core",
+            "files": 14
+          },
+          {
+            "id": "dictionary",
+            "label": "Wada dictionary",
+            "kind": "data",
+            "files": 3
+          },
+          {
+            "id": "database",
+            "label": "Room database",
+            "kind": "data",
+            "files": 6
+          },
+          {
+            "id": "ui",
+            "label": "Screens",
+            "kind": "ui",
+            "files": 31
+          }
+        ],
+        "edges": [
+          {
+            "from": "photos",
+            "to": "subject",
+            "label": "bitmap"
+          },
+          {
+            "from": "subject",
+            "to": "engine",
+            "label": "masks"
+          },
+          {
+            "from": "dictionary",
+            "to": "engine",
+            "label": "348 combos"
+          },
+          {
+            "from": "engine",
+            "to": "database",
+            "label": "scans"
+          },
+          {
+            "from": "database",
+            "to": "ui",
+            "label": "feed"
+          }
+        ],
+        "generated_at": "2026-10-28T19:00:00Z",
+        "source": "muse"
+      },
+      "folder": "/Users/you/DEVELOP/ChromaSol",
+      "auto": false,
+      "counts": {
+        "agents_working": 1,
+        "agents_total": 3,
+        "pipelines_running": 1,
+        "flows_24h": 7
+      },
+      "roadmap": {
+        "file": "/Users/me/DEVELOP/Chromasol/docs/TODO.md",
+        "deadline": null,
+        "done": 3,
+        "total": 7,
+        "steps": [
+          {
+            "id": "1",
+            "title": "Datos y migraci\u00f3n",
+            "status": "done",
+            "done": 2,
+            "total": 2,
+            "items": [
+              {
+                "text": "Room database",
+                "done": true
+              },
+              {
+                "text": "Importar partidas antiguas",
+                "done": true
+              }
+            ],
+            "agents": []
+          },
+          {
+            "id": "2",
+            "title": "Rendimiento",
+            "status": "active",
+            "done": 1,
+            "total": 3,
+            "items": [
+              {
+                "text": "Arranque en fr\u00edo bajo 2 s",
+                "done": true
+              },
+              {
+                "text": "Perfilar la pantalla de lienzo",
+                "done": false
+              },
+              {
+                "text": "Reducir memoria en tel\u00e9fonos de gama baja",
+                "done": false
+              }
+            ],
+            "agents": [
+              "w6-perf"
+            ]
+          },
+          {
+            "id": "3",
+            "title": "Ficha de la tienda",
+            "status": "todo",
+            "done": 0,
+            "total": 2,
+            "items": [
+              {
+                "text": "Declaraci\u00f3n de recursos de IA",
+                "done": false
+              },
+              {
+                "text": "Capturas y descripci\u00f3n",
+                "done": false
+              }
+            ],
+            "agents": []
+          }
+        ]
+      },
+      "setup": {
+        "manifest": "/Users/owner/DEVELOP/Chromasol/tirith.toml",
+        "check": {
+          "ok": true,
+          "problems": []
+        },
+        "pipelines": [
+          {
+            "id": "android-release",
+            "name": "Android release",
+            "stages": [
+              {
+                "name": "build",
+                "kind": "build",
+                "run": "./gradlew assembleRelease",
+                "last": {
+                  "status": "passed",
+                  "at": "2026-10-28T19:30:34Z",
+                  "duration_s": 34,
+                  "run": "android-release#7"
+                }
+              },
+              {
+                "name": "tests",
+                "kind": "test",
+                "run": "./gradlew test",
+                "last": {
+                  "status": "passed",
+                  "at": "2026-10-28T19:31:20Z",
+                  "duration_s": 46,
+                  "run": "android-release#7"
+                }
+              },
+              {
+                "name": "sign",
+                "kind": null,
+                "run": "./scripts/sign.sh",
+                "last": {
+                  "status": "running",
+                  "at": "2026-10-28T19:31:47Z",
+                  "duration_s": null,
+                  "run": "android-release#7"
+                }
+              },
+              {
+                "name": "store",
+                "kind": "deploy",
+                "run": "./scripts/upload.sh",
+                "last": null
+              },
+              {
+                "name": "lint",
+                "kind": null,
+                "run": "./gradlew lintRelease",
+                "last": null
+              },
+              {
+                "name": "16kb",
+                "kind": null,
+                "run": "./scripts/check-16kb.sh",
+                "last": null
+              },
+              {
+                "name": "device",
+                "kind": null,
+                "run": "./scripts/device-test.sh",
+                "last": null
+              },
+              {
+                "name": "review",
+                "kind": null,
+                "run": "./scripts/wait-review.sh",
+                "last": null
+              }
+            ]
+          }
+        ],
+        "hooks": [
+          {
+            "event": "pre-commit",
+            "run": "./gradlew lintRelease",
+            "last": {
+              "status": "passed",
+              "at": "2026-10-28T18:50:00Z",
+              "duration_s": 12,
+              "run": "git-hooks#9"
+            }
+          }
+        ],
+        "rules": [
+          {
+            "id": "subagent-tool",
+            "label": "Sub-agent tool",
+            "source": "built-in",
+            "enforced_by": [
+              "hook"
+            ],
+            "active": false,
+            "description": "Blocks the agent's internal sub-agent tool; sub-agents start with tirith lane run."
+          },
+          {
+            "id": "agent-cli",
+            "label": "Agent without lane run",
+            "source": "built-in",
+            "enforced_by": [
+              "hook",
+              "shim"
+            ],
+            "active": false,
+            "description": "Blocks starting an agent CLI outside tirith lane run."
+          },
+          {
+            "id": "no-verify",
+            "label": "Skipped git hooks",
+            "source": "built-in",
+            "enforced_by": [
+              "hook"
+            ],
+            "active": false,
+            "description": "Blocks git commit -n and --no-verify."
+          },
+          {
+            "id": "hooks-path",
+            "label": "Changed hooks path",
+            "source": "built-in",
+            "enforced_by": [
+              "hook"
+            ],
+            "active": false,
+            "description": "Blocks changing core.hooksPath."
+          },
+          {
+            "id": "git-hooks",
+            "label": "Edited git hooks",
+            "source": "built-in",
+            "enforced_by": [
+              "hook",
+              "git"
+            ],
+            "active": true,
+            "description": "Blocks editing or removing files under .git/hooks."
+          },
+          {
+            "id": "raw-stage",
+            "label": "Raw pipeline stage",
+            "source": "built-in",
+            "enforced_by": [
+              "hook"
+            ],
+            "active": false,
+            "description": "Blocks running a tirith.toml stage by hand; use tirith run --stage."
+          },
+          {
+            "id": "lane-brief",
+            "label": "Lane without brief",
+            "source": "built-in",
+            "enforced_by": [
+              "lane run"
+            ],
+            "active": true,
+            "description": "tirith lane run needs a non-empty --brief file."
+          },
+          {
+            "id": "project-check",
+            "label": "Project check failing",
+            "source": "built-in",
+            "enforced_by": [
+              "lane run"
+            ],
+            "active": true,
+            "description": "tirith lane run refuses while tirith check fails for the project."
+          },
+          {
+            "id": "commit-guard",
+            "label": "Commit guard",
+            "source": "built-in",
+            "enforced_by": [
+              "git"
+            ],
+            "active": true,
+            "description": "The git hooks that run the project's stages and block bad commits."
+          }
+        ],
+        "gates_active": false,
+        "gates_problems": [
+          "anthropic: tirith hooks are not in its user settings file",
+          "muse: tirith hooks are not in ~/.config/muse/settings.json"
+        ],
+        "gates_fix": [
+          "tirith hook install --agent anthropic",
+          "tirith hook install --agent muse",
+          "tirith shim install --dir ~/.local/bin"
+        ],
+        "pending": []
+      }
+    },
+    {
+      "id": "tirith",
+      "name": "Tirith",
+      "color": "#c9a227",
+      "architecture": {
+        "nodes": [
+          {
+            "id": "cli",
+            "label": "tirith CLI",
+            "kind": "input",
+            "files": 3
+          },
+          {
+            "id": "collector",
+            "label": "Collector",
+            "kind": "service",
+            "files": 5
+          },
+          {
+            "id": "brain",
+            "label": "Muse brain",
+            "kind": "core",
+            "files": 2
+          },
+          {
+            "id": "state",
+            "label": "state.json",
+            "kind": "data",
+            "files": 1
+          },
+          {
+            "id": "world",
+            "label": "3D citadel",
+            "kind": "ui",
+            "files": 20
+          }
+        ],
+        "edges": [
+          {
+            "from": "cli",
+            "to": "collector",
+            "label": "events"
+          },
+          {
+            "from": "collector",
+            "to": "brain",
+            "label": "log tails"
+          },
+          {
+            "from": "brain",
+            "to": "state",
+            "label": "summaries"
+          },
+          {
+            "from": "collector",
+            "to": "state",
+            "label": "every 2 s"
+          },
+          {
+            "from": "state",
+            "to": "world",
+            "label": "poll"
+          }
+        ],
+        "generated_at": "2026-10-28T19:35:00Z",
+        "source": "manual"
+      },
+      "folder": "/Users/you/DEVELOP/Tirith",
+      "auto": false,
+      "counts": {
+        "agents_working": 1,
+        "agents_total": 2,
+        "pipelines_running": 0,
+        "flows_24h": 2
+      },
+      "roadmap": {
+        "file": "/Users/me/DEVELOP/Tirith/docs/TODO.md",
+        "deadline": "2026-11-04T21:00:00-05:00",
+        "done": 13,
+        "total": 26,
+        "steps": [
+          {
+            "id": "0",
+            "title": "Guarda de commits compatible",
+            "status": "done",
+            "done": 2,
+            "total": 2,
+            "items": [
+              {
+                "text": "Alias de agentes en el c\u00f3digo; nombres reales en `config.toml`.",
+                "done": true
+              },
+              {
+                "text": "Guarda de Tirith intacta e inmutable.",
+                "done": true
+              }
+            ],
+            "agents": []
+          },
+          {
+            "id": "1",
+            "title": "`lane run` devuelve la respuesta final",
+            "status": "done",
+            "done": 3,
+            "total": 3,
+            "items": [
+              {
+                "text": "Al terminar imprime un resumen y la respuesta final.",
+                "done": true
+              },
+              {
+                "text": "Se guarda como informe del lane y se ve en la web.",
+                "done": true
+              },
+              {
+                "text": "Lane sin respuesta o con error \u2192 \u00abesperando por ti\u00bb.",
+                "done": true
+              }
+            ],
+            "agents": []
+          },
+          {
+            "id": "2",
+            "title": "\u00c1rbol de delegaci\u00f3n",
+            "status": "done",
+            "done": 3,
+            "total": 3,
+            "items": [
+              {
+                "text": "`lane run` pasa `TIRITH_LANE` a sus hijos.",
+                "done": true
+              },
+              {
+                "text": "`register_lane` guarda `parent` autom\u00e1ticamente.",
+                "done": true
+              },
+              {
+                "text": "Vista Tree en Agents.",
+                "done": true
+              }
+            ],
+            "agents": []
+          },
+          {
+            "id": "3",
+            "title": "Hooks de agentes \u2192 `tirith hook`",
+            "status": "active",
+            "done": 3,
+            "total": 6,
+            "items": [
+              {
+                "text": "`tirith hook --agent <alias>` escribe un evento est\u00e1ndar.",
+                "done": true
+              },
+              {
+                "text": "Adaptador `anthropic`.",
+                "done": true
+              },
+              {
+                "text": "`tirith hook install|uninstall`.",
+                "done": true
+              },
+              {
+                "text": "Instalar los hooks en los ajustes de cada agente.",
+                "done": false
+              },
+              {
+                "text": "Protegerlos para que un agente no pueda quit\u00e1rselos.",
+                "done": false
+              },
+              {
+                "text": "Verificar el payload real de Muse Code.",
+                "done": false
+              }
+            ],
+            "agents": [
+              "t-world"
+            ]
+          },
+          {
+            "id": "4",
+            "title": "`lane run --interactive`",
+            "status": "todo",
+            "done": 0,
+            "total": 2,
+            "items": [
+              {
+                "text": "La terminal queda conectada al agente.",
+                "done": false
+              },
+              {
+                "text": "Capturar Ctrl+C para cerrar el lane bien.",
+                "done": false
+              }
+            ],
+            "agents": []
+          },
+          {
+            "id": "7",
+            "title": "Reglas de c\u00f3digo",
+            "status": "active",
+            "done": 1,
+            "total": 3,
+            "items": [
+              {
+                "text": "`tirith check`: manifiesto, build / test / deploy.",
+                "done": true
+              },
+              {
+                "text": "`PreToolUse` bloquea sub-agentes fuera de `lane run`.",
+                "done": false
+              },
+              {
+                "text": "Git `pre-commit` / `pre-push` con `tirith check`.",
+                "done": false
+              }
+            ],
+            "agents": []
+          },
+          {
+            "id": "8",
+            "title": "M\u00e1s visibilidad por agente",
+            "status": "active",
+            "done": 1,
+            "total": 3,
+            "items": [
+              {
+                "text": "Objetivo, estado, archivos cambiados y tests por agente.",
+                "done": true
+              },
+              {
+                "text": "Logs legibles, m\u00e1s nuevos arriba.",
+                "done": false
+              },
+              {
+                "text": "Guardar el diff real por lane.",
+                "done": false
+              }
+            ],
+            "agents": []
+          },
+          {
+            "id": "10",
+            "title": "Plan visible en el Overview",
+            "status": "todo",
+            "done": 0,
+            "total": 4,
+            "items": [
+              {
+                "text": "El collector lee este archivo.",
+                "done": false
+              },
+              {
+                "text": "`tirith lane run --step <n>`.",
+                "done": false
+              },
+              {
+                "text": "Tarjeta \u00abPlan\u00bb en el Overview.",
+                "done": false
+              },
+              {
+                "text": "Fecha l\u00edmite con cuenta atr\u00e1s.",
+                "done": false
+              }
+            ],
+            "agents": []
+          }
+        ]
+      },
+      "setup": {
+        "manifest": "/Users/owner/DEVELOP/Tirith/tirith.toml",
+        "check": {
+          "ok": true,
+          "problems": []
+        },
+        "pipelines": [
+          {
+            "id": "ci",
+            "name": "CI",
+            "stages": [
+              {
+                "name": "build",
+                "kind": "build",
+                "run": "make build",
+                "last": {
+                  "status": "passed",
+                  "at": "2026-10-28T19:38:00Z",
+                  "duration_s": 21,
+                  "run": "ci#12"
+                }
+              },
+              {
+                "name": "test",
+                "kind": "test",
+                "run": "cd collector && uv run -q pytest -q",
+                "last": {
+                  "status": "passed",
+                  "at": "2026-10-28T19:38:40Z",
+                  "duration_s": 40,
+                  "run": "ci#12"
+                }
+              },
+              {
+                "name": "ship",
+                "kind": "deploy",
+                "run": "make ship",
+                "last": null
+              }
+            ]
+          }
+        ],
+        "hooks": [
+          {
+            "event": "pre-commit",
+            "run": "make lint",
+            "last": {
+              "status": "passed",
+              "at": "2026-10-28T19:21:00Z",
+              "duration_s": 3,
+              "run": "git-hooks#4"
+            }
+          },
+          {
+            "event": "pre-push",
+            "run": "make test",
+            "last": {
+              "status": "failed",
+              "at": "2026-10-28T17:02:00Z",
+              "duration_s": 44,
+              "run": "git-hooks#3"
+            }
+          }
+        ],
+        "rules": [
+          {
+            "id": "subagent-tool",
+            "label": "Sub-agent tool",
+            "source": "built-in",
+            "enforced_by": [
+              "hook"
+            ],
+            "active": false,
+            "description": "Blocks the agent's internal sub-agent tool; sub-agents start with tirith lane run."
+          },
+          {
+            "id": "agent-cli",
+            "label": "Agent without lane run",
+            "source": "built-in",
+            "enforced_by": [
+              "hook",
+              "shim"
+            ],
+            "active": false,
+            "description": "Blocks starting an agent CLI outside tirith lane run."
+          },
+          {
+            "id": "no-verify",
+            "label": "Skipped git hooks",
+            "source": "built-in",
+            "enforced_by": [
+              "hook"
+            ],
+            "active": false,
+            "description": "Blocks git commit -n and --no-verify."
+          },
+          {
+            "id": "hooks-path",
+            "label": "Changed hooks path",
+            "source": "built-in",
+            "enforced_by": [
+              "hook"
+            ],
+            "active": false,
+            "description": "Blocks changing core.hooksPath."
+          },
+          {
+            "id": "git-hooks",
+            "label": "Edited git hooks",
+            "source": "built-in",
+            "enforced_by": [
+              "hook",
+              "git"
+            ],
+            "active": true,
+            "description": "Blocks editing or removing files under .git/hooks."
+          },
+          {
+            "id": "raw-stage",
+            "label": "Raw pipeline stage",
+            "source": "built-in",
+            "enforced_by": [
+              "hook"
+            ],
+            "active": false,
+            "description": "Blocks running a tirith.toml stage by hand; use tirith run --stage."
+          },
+          {
+            "id": "lane-brief",
+            "label": "Lane without brief",
+            "source": "built-in",
+            "enforced_by": [
+              "lane run"
+            ],
+            "active": true,
+            "description": "tirith lane run needs a non-empty --brief file."
+          },
+          {
+            "id": "project-check",
+            "label": "Project check failing",
+            "source": "built-in",
+            "enforced_by": [
+              "lane run"
+            ],
+            "active": true,
+            "description": "tirith lane run refuses while tirith check fails for the project."
+          },
+          {
+            "id": "commit-guard",
+            "label": "Commit guard",
+            "source": "built-in",
+            "enforced_by": [
+              "git"
+            ],
+            "active": true,
+            "description": "The git hooks that run the project's stages and block bad commits."
+          },
+          {
+            "id": "no-force-push",
+            "label": "no-force-push",
+            "source": "tirith.toml",
+            "enforced_by": [
+              "hook"
+            ],
+            "active": false,
+            "action": "block",
+            "description": "Blocks command git push --force*: force pushes rewrite history. Instead: git push (without --force); ask the owner if history must change"
+          }
+        ],
+        "gates_active": false,
+        "gates_problems": [
+          "anthropic: tirith hooks are not in its user settings file",
+          "muse: tirith hooks are not in ~/.config/muse/settings.json"
+        ],
+        "gates_fix": [
+          "tirith hook install --agent anthropic",
+          "tirith hook install --agent muse",
+          "tirith shim install --dir ~/.local/bin"
+        ],
+        "pending": [
+          {
+            "id": "in-5a41c9e2",
+            "at": "2026-10-28T19:39:00Z",
+            "action": "add-stage",
+            "summary": "add-stage ci/lint: make lint"
+          }
+        ]
+      }
+    },
+    {
+      "id": "relagame",
+      "name": "RelaGame",
+      "color": "#d9772b",
+      "architecture": {
+        "nodes": [],
+        "edges": [],
+        "generated_at": null,
+        "source": "none"
+      },
+      "folder": "/Users/you/DEVELOP/RelaGame",
+      "auto": false,
+      "counts": {
+        "agents_working": 0,
+        "agents_total": 0,
+        "pipelines_running": 0,
+        "flows_24h": 0
+      },
+      "roadmap": null,
+      "setup": {
+        "manifest": "/Users/owner/DEVELOP/RelaGame/tirith.toml",
+        "check": {
+          "ok": false,
+          "problems": [
+            {
+              "rule": "pipeline-coverage",
+              "message": "no single pipeline declares test stage",
+              "line": 1,
+              "fix": "add to one pipeline: [[pipelines.stages]] name = \"test\" run = \"<command>\""
+            }
+          ]
+        },
+        "pipelines": [
+          {
+            "id": "ios-testflight",
+            "name": "iOS TestFlight",
+            "stages": [
+              {
+                "name": "export",
+                "kind": null,
+                "run": "make export",
+                "last": {
+                  "status": "passed",
+                  "at": "2026-10-28T09:04:00Z",
+                  "duration_s": 240,
+                  "run": "ios-testflight#3"
+                }
+              },
+              {
+                "name": "archive",
+                "kind": "build",
+                "run": "make archive",
+                "last": {
+                  "status": "failed",
+                  "at": "2026-10-28T09:12:00Z",
+                  "duration_s": 480,
+                  "run": "ios-testflight#3"
+                }
+              },
+              {
+                "name": "upload",
+                "kind": "deploy",
+                "run": "make upload",
+                "last": null
+              }
+            ]
+          },
+          {
+            "id": "ios-internal",
+            "name": "iOS internal",
+            "stages": [
+              {
+                "name": "build",
+                "kind": "build",
+                "run": "make build",
+                "last": null
+              },
+              {
+                "name": "test",
+                "kind": "test",
+                "run": "make test",
+                "last": null
+              },
+              {
+                "name": "upload",
+                "kind": "deploy",
+                "run": "make upload-internal",
+                "last": null
+              }
+            ]
+          }
+        ],
+        "hooks": [],
+        "rules": [
+          {
+            "id": "subagent-tool",
+            "label": "Sub-agent tool",
+            "source": "built-in",
+            "enforced_by": [
+              "hook"
+            ],
+            "active": false,
+            "description": "Blocks the agent's internal sub-agent tool; sub-agents start with tirith lane run."
+          },
+          {
+            "id": "agent-cli",
+            "label": "Agent without lane run",
+            "source": "built-in",
+            "enforced_by": [
+              "hook",
+              "shim"
+            ],
+            "active": false,
+            "description": "Blocks starting an agent CLI outside tirith lane run."
+          },
+          {
+            "id": "no-verify",
+            "label": "Skipped git hooks",
+            "source": "built-in",
+            "enforced_by": [
+              "hook"
+            ],
+            "active": false,
+            "description": "Blocks git commit -n and --no-verify."
+          },
+          {
+            "id": "hooks-path",
+            "label": "Changed hooks path",
+            "source": "built-in",
+            "enforced_by": [
+              "hook"
+            ],
+            "active": false,
+            "description": "Blocks changing core.hooksPath."
+          },
+          {
+            "id": "git-hooks",
+            "label": "Edited git hooks",
+            "source": "built-in",
+            "enforced_by": [
+              "hook",
+              "git"
+            ],
+            "active": true,
+            "description": "Blocks editing or removing files under .git/hooks."
+          },
+          {
+            "id": "raw-stage",
+            "label": "Raw pipeline stage",
+            "source": "built-in",
+            "enforced_by": [
+              "hook"
+            ],
+            "active": false,
+            "description": "Blocks running a tirith.toml stage by hand; use tirith run --stage."
+          },
+          {
+            "id": "lane-brief",
+            "label": "Lane without brief",
+            "source": "built-in",
+            "enforced_by": [
+              "lane run"
+            ],
+            "active": true,
+            "description": "tirith lane run needs a non-empty --brief file."
+          },
+          {
+            "id": "project-check",
+            "label": "Project check failing",
+            "source": "built-in",
+            "enforced_by": [
+              "lane run"
+            ],
+            "active": true,
+            "description": "tirith lane run refuses while tirith check fails for the project."
+          },
+          {
+            "id": "commit-guard",
+            "label": "Commit guard",
+            "source": "built-in",
+            "enforced_by": [
+              "git"
+            ],
+            "active": true,
+            "description": "The git hooks that run the project's stages and block bad commits."
+          }
+        ],
+        "gates_active": false,
+        "gates_problems": [
+          "anthropic: tirith hooks are not in its user settings file",
+          "muse: tirith hooks are not in ~/.config/muse/settings.json"
+        ],
+        "gates_fix": [
+          "tirith hook install --agent anthropic",
+          "tirith hook install --agent muse",
+          "tirith shim install --dir ~/.local/bin"
+        ],
+        "pending": []
+      }
+    },
+    {
+      "id": "sketchbook",
+      "name": "sketchbook",
+      "color": "#8a5fb0",
+      "folder": "/Users/you/DEVELOP/sketchbook",
+      "auto": true,
+      "architecture": {
+        "nodes": [],
+        "edges": [],
+        "generated_at": null,
+        "source": "none"
+      },
+      "guard": {
+        "ok": false,
+        "problems": [
+          "auto-discovered folder: no commit guard configured"
+        ]
+      },
+      "counts": {
+        "agents_working": 0,
+        "agents_total": 0,
+        "pipelines_running": 0,
+        "flows_24h": 0
+      },
+      "roadmap": null
+    }
+  ],
+  "agents": [
+    {
+      "id": "w6-perf",
+      "parent": "steward",
+      "project": "chromasol",
+      "name": "Ivren",
+      "epithet": "of the Seventh Gate",
+      "class": "swiftrider",
+      "rank": "captain",
+      "renown": 760,
+      "feature": "Performance and size on the owner's phone",
+      "status": "working",
+      "started_at": "2026-10-28T17:40:00Z",
+      "ended_at": null,
+      "elapsed_s": 7200,
+      "summary": "Ratio is stable at 0.70 across three runs, so the pool reuse is what made the difference.",
+      "log_tail": [
+        "scan 200: persons 5.32 s/photo, none 0.70 s/photo",
+        "A/B ratio median 0.70"
+      ],
+      "files_changed": 7,
+      "insertions": 412,
+      "deletions": 96,
+      "report": null,
+      "session": "2026-10-28-chromasol-release",
+      "goal": "Make the 200-photo scan fast enough on the owner's phone: reuse the pose task between photos and keep the APK under the size budget.",
+      "active": true,
+      "last_activity_at": "2026-10-28T19:39:48Z",
+      "files": [
+        {
+          "path": "app/src/main/java/scan/PoseRunner.kt",
+          "change": "modified",
+          "insertions": 96,
+          "deletions": 31
+        },
+        {
+          "path": "app/src/test/java/scan/PoseRunnerTest.kt",
+          "change": "added",
+          "insertions": 74,
+          "deletions": 0
+        },
+        {
+          "path": "app/src/main/java/scan/ScanQueue.kt",
+          "change": "modified",
+          "insertions": 38,
+          "deletions": 12
+        },
+        {
+          "path": "bench/scan200.sh",
+          "change": "untracked",
+          "insertions": 21,
+          "deletions": 0
+        },
+        {
+          "path": "app/build.gradle.kts",
+          "change": "modified",
+          "insertions": 6,
+          "deletions": 2
+        },
+        {
+          "path": "app/src/main/assets/pose_lite.tflite",
+          "change": "renamed",
+          "insertions": 0,
+          "deletions": 0
+        }
+      ],
+      "tools": [
+        {
+          "name": "Bash",
+          "count": 41
+        },
+        {
+          "name": "Edit",
+          "count": 23
+        },
+        {
+          "name": "Read",
+          "count": 18
+        },
+        {
+          "name": "Grep",
+          "count": 9
+        },
+        {
+          "name": "Write",
+          "count": 3
+        }
+      ],
+      "tests": [
+        {
+          "at": "2026-10-28T19:09:00Z",
+          "command": "./gradlew testDebugUnitTest",
+          "result": "failed",
+          "failed": 2
+        },
+        {
+          "at": "2026-10-28T19:26:00Z",
+          "command": "./gradlew testDebugUnitTest",
+          "result": "passed",
+          "passed": 19
+        },
+        {
+          "at": "2026-10-28T19:39:20Z",
+          "command": "./gradlew testDebugUnitTest --tests PoseRunnerTest",
+          "result": "running"
+        }
+      ],
+      "events": [
+        {
+          "ts": "2026-10-28T19:09:00Z",
+          "agent": "w6-perf",
+          "event": "tool",
+          "lane": "w6",
+          "tool": "Bash",
+          "summary": "Bash: ./gradlew testDebugUnitTest",
+          "source": "hook"
+        },
+        {
+          "ts": "2026-10-28T19:18:00Z",
+          "agent": "w6-perf",
+          "event": "tool",
+          "lane": "w6",
+          "tool": "Edit",
+          "summary": "Edit app/src/main/java/scan/PoseRunner.kt",
+          "source": "hook"
+        },
+        {
+          "ts": "2026-10-28T19:23:40Z",
+          "agent": "w6-perf",
+          "event": "tool",
+          "lane": "w6",
+          "tool": "Edit",
+          "summary": "Edit app/src/test/java/scan/PoseRunnerTest.kt",
+          "source": "hook"
+        },
+        {
+          "ts": "2026-10-28T19:26:00Z",
+          "agent": "w6-perf",
+          "event": "tool",
+          "lane": "w6",
+          "tool": "Bash",
+          "summary": "Bash: ./gradlew testDebugUnitTest",
+          "source": "hook"
+        },
+        {
+          "ts": "2026-10-28T19:36:55Z",
+          "agent": "w6-perf",
+          "event": "tool",
+          "lane": "w6",
+          "tool": "Read",
+          "summary": "Read app/src/main/java/scan/ScanQueue.kt",
+          "source": "log"
+        },
+        {
+          "ts": "2026-10-28T19:38:30Z",
+          "agent": "w6-perf",
+          "event": "tool",
+          "lane": "w6",
+          "tool": "Edit",
+          "summary": "Edit app/src/main/java/scan/ScanQueue.kt",
+          "source": "hook"
+        },
+        {
+          "ts": "2026-10-28T19:39:20Z",
+          "agent": "w6-perf",
+          "event": "tool",
+          "lane": "w6",
+          "tool": "Bash",
+          "summary": "Bash: ./gradlew testDebugUnitTest --tests PoseRunnerTest",
+          "source": "hook"
+        },
+        {
+          "ts": "2026-10-28T19:39:48Z",
+          "agent": "w6-perf",
+          "event": "tool",
+          "lane": "w6",
+          "tool": "Bash",
+          "summary": "Bash: bench/scan200.sh --photos 200",
+          "source": "hook"
+        }
+      ],
+      "log_entries": [
+        {
+          "ts": "2026-10-28T19:39:56Z",
+          "kind": "say",
+          "text": "Ratio is stable at 0.70 across three runs, so the pool reuse is what made the difference.",
+          "detail": "",
+          "fields": null,
+          "path": null
+        },
+        {
+          "ts": "2026-10-28T19:39:51Z",
+          "kind": "output",
+          "text": "scan 200: persons 5.32 s/photo, none 0.70 s/photo\nA/B ratio median 0.70\nruns: 3\nwarm cache: yes\nGPU delegate: off\nmemory peak: 412 MB",
+          "detail": "threads: 4\nbatch: 8\nmodel: detect-small\nreport: build/perf/scan-200.json",
+          "fields": null,
+          "path": null
+        },
+        {
+          "ts": "2026-10-28T19:39:50Z",
+          "kind": "command",
+          "text": "adb shell am instrument -w app.perf/.ScanBenchmark",
+          "detail": "",
+          "fields": null,
+          "path": null
+        },
+        {
+          "ts": "2026-10-28T19:39:38Z",
+          "kind": "test",
+          "text": "uv run pytest -q",
+          "detail": "passed",
+          "fields": {
+            "passed": 101,
+            "failed": 0
+          },
+          "path": null
+        },
+        {
+          "ts": "2026-10-28T19:39:20Z",
+          "kind": "system",
+          "text": "12.4k tokens, 38 s",
+          "detail": "{\n  \"input_tokens\": 11800,\n  \"output_tokens\": 600,\n  \"duration_ms\": 38000\n}",
+          "fields": {
+            "input_tokens": 11800,
+            "output_tokens": 600,
+            "duration_ms": 38000
+          },
+          "path": null
+        },
+        {
+          "ts": "2026-10-28T19:39:19Z",
+          "kind": "say",
+          "text": "",
+          "detail": "{\n  \"scan_id\": \"scan-200\",\n  \"device\": \"pixel-7\",\n  \"photos\": 200,\n  \"median_ratio\": 0.7,\n  \"finished_at\": \"2026-10-28T19:39:20Z\",\n  \"cached\": true,\n  \"stages\": [\n    {\n      \"name\": \"detect\"\n    },\n    {\n      \"name\": \"match\"\n    },\n    {\n      \"name\": \"rank\"\n    }\n  ],\n  \"notes\": {\n    \"warm\": true,\n    \"threads\": 4\n  }\n}",
+          "fields": {
+            "scan_id": "scan-200",
+            "device": "pixel-7",
+            "photos": 200,
+            "median_ratio": 0.7,
+            "finished_at": "2026-10-28T19:39:20Z",
+            "cached": true,
+            "stages": [
+              {
+                "name": "detect"
+              },
+              {
+                "name": "match"
+              },
+              {
+                "name": "rank"
+              }
+            ],
+            "notes": {
+              "warm": true,
+              "threads": 4
+            }
+          },
+          "path": null
+        },
+        {
+          "ts": "2026-10-28T19:39:02Z",
+          "kind": "edit",
+          "text": "app/src/main/java/scan/PersonPool.kt",
+          "detail": "+12 \u22123",
+          "fields": null,
+          "path": "/Users/owner/DEVELOP/Chromasol/app/src/main/java/scan/PersonPool.kt"
+        },
+        {
+          "ts": "2026-10-28T19:38:45Z",
+          "kind": "read",
+          "text": "Grep ModelPool in app/src",
+          "detail": "",
+          "fields": null,
+          "path": null
+        },
+        {
+          "ts": "2026-10-28T19:38:30Z",
+          "kind": "error",
+          "text": "FileNotFoundException: build/perf/baseline.json",
+          "detail": "Traceback (most recent call last):\n  File \"tools/perf.py\", line 41, in compare\n    base = json.load(open(path))\nFileNotFoundError: build/perf/baseline.json",
+          "fields": null,
+          "path": null
+        },
+        {
+          "ts": "2026-10-28T19:38:24Z",
+          "kind": "command",
+          "text": "python tools/perf.py compare build/perf/baseline.json build/perf/scan-200.json",
+          "detail": "",
+          "fields": null,
+          "path": null
+        },
+        {
+          "ts": "2026-10-28T19:38:00Z",
+          "kind": "spawn",
+          "text": "Profile the detector on the phone",
+          "detail": "reviewer",
+          "fields": null,
+          "path": null
+        },
+        {
+          "ts": "2026-10-28T19:37:30Z",
+          "kind": "edit",
+          "text": "app/src/main/java/scan/ScanViewModel.kt",
+          "detail": "+4 \u22121",
+          "fields": null,
+          "path": "/Users/owner/DEVELOP/Chromasol/app/src/main/java/scan/ScanViewModel.kt"
+        },
+        {
+          "ts": "2026-10-28T19:37:10Z",
+          "kind": "edit",
+          "text": "app/src/main/java/scan/Detector.kt",
+          "detail": "created",
+          "fields": null,
+          "path": "/Users/owner/DEVELOP/Chromasol/app/src/main/java/scan/Detector.kt"
+        },
+        {
+          "ts": "2026-10-28T19:37:00Z",
+          "kind": "system",
+          "text": "System: init",
+          "detail": "{\n  \"type\": \"system\",\n  \"subtype\": \"init\"\n}",
+          "fields": {
+            "type": "system",
+            "subtype": "init"
+          },
+          "path": null
+        },
+        {
+          "ts": "2026-10-28T19:36:59Z",
+          "kind": "system",
+          "text": "System: rate_limit_event",
+          "detail": "{\n  \"type\": \"rate_limit_event\",\n  \"status\": \"ok\"\n}",
+          "fields": {
+            "type": "rate_limit_event",
+            "status": "ok"
+          },
+          "path": null
+        },
+        {
+          "ts": "2026-10-28T19:36:55Z",
+          "kind": "say",
+          "text": "Reusing the person detector between photos should cut the per-photo cost. Starting there.",
+          "detail": "",
+          "fields": null,
+          "path": null
+        }
+      ],
+      "step": "2",
+      "request_id": null
+    },
+    {
+      "id": "w1-data",
+      "parent": "w6-perf",
+      "project": "chromasol",
+      "name": "Halvard",
+      "epithet": "Stonehand",
+      "class": "stonewright",
+      "rank": "sergeant",
+      "renown": 340,
+      "feature": "Room database with the iOS migrations",
+      "status": "done",
+      "started_at": "2026-10-28T13:30:00Z",
+      "ended_at": "2026-10-28T15:10:00Z",
+      "elapsed_s": 6000,
+      "summary": "Room database with the same schema and v1-v4 migrations as iOS; 19 new device tests.",
+      "log_tail": [
+        "Finished 20 tests",
+        "strings OK"
+      ],
+      "files_changed": 31,
+      "insertions": 2210,
+      "deletions": 140,
+      "report": "Room database with the same schema and v1-v4 migrations as iOS; 19 new device tests.",
+      "session": "2026-10-28-chromasol-release",
+      "goal": "Port the iOS database to Room with the same schema, v1 to v4 migrations, curated names and the strings check.",
+      "active": false,
+      "last_activity_at": "2026-10-28T17:15:00Z",
+      "files": [
+        {
+          "path": "app/src/main/java/data/Migrations.kt",
+          "change": "added",
+          "insertions": 412,
+          "deletions": 0
+        },
+        {
+          "path": "app/src/main/java/data/AppDatabase.kt",
+          "change": "modified",
+          "insertions": 120,
+          "deletions": 40
+        },
+        {
+          "path": "app/src/test/java/data/MigrationTest.kt",
+          "change": "added",
+          "insertions": 280,
+          "deletions": 0
+        },
+        {
+          "path": "app/src/main/res/values/strings.xml",
+          "change": "modified",
+          "insertions": 64,
+          "deletions": 8
+        },
+        {
+          "path": "app/schemas/4.json",
+          "change": "added",
+          "insertions": 190,
+          "deletions": 0
+        },
+        {
+          "path": "tools/check_strings.py",
+          "change": "untracked",
+          "insertions": 55,
+          "deletions": 0
+        }
+      ],
+      "tools": [
+        {
+          "name": "Edit",
+          "count": 88
+        },
+        {
+          "name": "Bash",
+          "count": 64
+        },
+        {
+          "name": "Read",
+          "count": 52
+        },
+        {
+          "name": "Write",
+          "count": 14
+        },
+        {
+          "name": "Grep",
+          "count": 11
+        }
+      ],
+      "tests": [
+        {
+          "at": "2026-10-28T17:00:00Z",
+          "command": "./gradlew testDebugUnitTest",
+          "result": "failed",
+          "failed": 2
+        },
+        {
+          "at": "2026-10-28T17:08:00Z",
+          "command": "./gradlew testDebugUnitTest",
+          "result": "passed",
+          "passed": 19
+        },
+        {
+          "at": "2026-10-28T17:14:00Z",
+          "command": "python3 tools/check_strings.py && ./gradlew test",
+          "result": "passed",
+          "passed": 19
+        }
+      ],
+      "events": [
+        {
+          "ts": "2026-10-28T17:14:30Z",
+          "agent": "w1-data",
+          "event": "tool",
+          "lane": "w1",
+          "tool": "Bash",
+          "summary": "Bash: python3 tools/check_strings.py && ./gradlew test",
+          "source": "hook"
+        },
+        {
+          "ts": "2026-10-28T17:15:00Z",
+          "agent": "w1-data",
+          "event": "done",
+          "lane": "w1",
+          "tool": "done",
+          "summary": "Finished: 20 tests, strings OK",
+          "source": "log"
+        }
+      ],
+      "log_entries": [
+        {
+          "ts": "2026-10-28T18:40:00Z",
+          "kind": "done",
+          "text": "Room v1 to v4 migrations, curated names and the strings check, all green.",
+          "detail": "Migrations are covered by 20 instrumented tests.\nThe strings check found no missing translations.",
+          "fields": {
+            "usage": "31.2k tokens, 4 min"
+          },
+          "path": null
+        },
+        {
+          "ts": "2026-10-28T18:39:30Z",
+          "kind": "test",
+          "text": "./gradlew testDebugUnitTest",
+          "detail": "passed",
+          "fields": {
+            "passed": 20,
+            "failed": 0
+          },
+          "path": null
+        },
+        {
+          "ts": "2026-10-28T18:38:20Z",
+          "kind": "edit",
+          "text": "app/src/main/java/db/Migrations.kt",
+          "detail": "+58 \u22122",
+          "fields": null,
+          "path": "/Users/owner/DEVELOP/Chromasol/app/src/main/java/db/Migrations.kt"
+        },
+        {
+          "ts": "2026-10-28T18:37:20Z",
+          "kind": "read",
+          "text": "Read app/schemas/4.json",
+          "detail": "",
+          "fields": null,
+          "path": "/Users/owner/DEVELOP/Chromasol/app/schemas/4.json"
+        },
+        {
+          "ts": "2026-10-28T18:36:40Z",
+          "kind": "say",
+          "text": "Migration 3 to 4 adds the curated name column.",
+          "detail": "",
+          "fields": null,
+          "path": null
+        }
+      ],
+      "step": null,
+      "request_id": null
+    },
+    {
+      "id": "icon-2",
+      "parent": "w6-perf",
+      "project": "chromasol",
+      "name": "Sefa",
+      "epithet": "Prismhand",
+      "class": "glasswright",
+      "rank": "sentinel",
+      "renown": 120,
+      "feature": "Crystal C icon in Blender",
+      "status": "failed",
+      "started_at": "2026-10-28T16:00:00Z",
+      "ended_at": "2026-10-28T16:50:00Z",
+      "elapsed_s": 3000,
+      "summary": "Silhouette matches; inner contour still differs from the target.",
+      "log_tail": [
+        "IoU 0.9271",
+        "SSIM 0.7953"
+      ],
+      "files_changed": 4,
+      "insertions": 600,
+      "deletions": 0,
+      "report": "Silhouette matches; inner contour still differs from the target.",
+      "session": "2026-10-28-chromasol-release",
+      "goal": "Model the Crystal C icon in Blender so its silhouette and inner contour match the target outline.",
+      "active": false,
+      "last_activity_at": "2026-10-28T16:50:00Z",
+      "files": [
+        {
+          "path": "icon/crystal_c.blend",
+          "change": "added",
+          "insertions": 0,
+          "deletions": 0
+        },
+        {
+          "path": "icon/render.py",
+          "change": "added",
+          "insertions": 210,
+          "deletions": 0
+        },
+        {
+          "path": "icon/compare.py",
+          "change": "added",
+          "insertions": 95,
+          "deletions": 0
+        },
+        {
+          "path": "icon/out/render_v3.png",
+          "change": "untracked",
+          "insertions": 0,
+          "deletions": 0
+        }
+      ],
+      "tools": [
+        {
+          "name": "Bash",
+          "count": 37
+        },
+        {
+          "name": "Write",
+          "count": 9
+        },
+        {
+          "name": "Read",
+          "count": 8
+        }
+      ],
+      "tests": [],
+      "events": [
+        {
+          "ts": "2026-10-28T16:49:00Z",
+          "agent": "icon-2",
+          "event": "tool",
+          "lane": "icon",
+          "tool": "Bash",
+          "summary": "Bash: blender -b icon/crystal_c.blend -P icon/render.py",
+          "source": "hook"
+        },
+        {
+          "ts": "2026-10-28T16:50:00Z",
+          "agent": "icon-2",
+          "event": "tool",
+          "lane": "icon",
+          "tool": "Bash",
+          "summary": "Bash: python3 icon/compare.py out/render_v3.png (IoU 0.9271, SSIM 0.7953)",
+          "source": "hook"
+        }
+      ],
+      "log_entries": [
+        {
+          "ts": "2026-10-28T17:40:00Z",
+          "kind": "error",
+          "text": "Error: the owner preferred the generated image",
+          "detail": "",
+          "fields": null,
+          "path": null
+        },
+        {
+          "ts": "2026-10-28T17:39:00Z",
+          "kind": "output",
+          "text": "IoU 0.9271\nSSIM 0.7953",
+          "detail": "",
+          "fields": null,
+          "path": null
+        },
+        {
+          "ts": "2026-10-28T17:38:40Z",
+          "kind": "command",
+          "text": "blender -b icon.blend -P render_compare.py",
+          "detail": "",
+          "fields": null,
+          "path": null
+        },
+        {
+          "ts": "2026-10-28T17:36:40Z",
+          "kind": "edit",
+          "text": "icons/crystal_c.blend",
+          "detail": "edited",
+          "fields": null,
+          "path": "/Users/owner/DEVELOP/Chromasol/icons/crystal_c.blend"
+        }
+      ],
+      "step": null,
+      "request_id": null
+    },
+    {
+      "id": "t-world",
+      "parent": "steward",
+      "project": "tirith",
+      "name": "Marrow",
+      "epithet": "Quickstep",
+      "class": "stonewright",
+      "rank": "recruit",
+      "renown": 0,
+      "feature": "The 3D citadel",
+      "status": "working",
+      "started_at": "2026-10-28T19:40:00Z",
+      "ended_at": null,
+      "elapsed_s": 60,
+      "summary": "Laying out the hill, the rings and the districts.",
+      "log_tail": [],
+      "files_changed": 0,
+      "insertions": 0,
+      "deletions": 0,
+      "report": null,
+      "session": "2026-10-28-tirith-web",
+      "goal": "Build the 3D citadel for the web view: the hill, the rings and one district per project.",
+      "active": true,
+      "last_activity_at": "2026-10-28T19:39:55Z",
+      "files": [
+        {
+          "path": "world/hill.js",
+          "change": "added",
+          "insertions": 140,
+          "deletions": 0
+        },
+        {
+          "path": "world/rings.js",
+          "change": "added",
+          "insertions": 96,
+          "deletions": 0
+        },
+        {
+          "path": "world/index.html",
+          "change": "modified",
+          "insertions": 12,
+          "deletions": 3
+        },
+        {
+          "path": "world/districts.js",
+          "change": "untracked",
+          "insertions": 22,
+          "deletions": 0
+        }
+      ],
+      "tools": [
+        {
+          "name": "Edit",
+          "count": 6
+        },
+        {
+          "name": "Read",
+          "count": 4
+        },
+        {
+          "name": "Write",
+          "count": 3
+        }
+      ],
+      "tests": [],
+      "events": [
+        {
+          "ts": "2026-10-28T19:39:00Z",
+          "agent": "t-world",
+          "event": "tool",
+          "lane": "t-world",
+          "tool": "Read",
+          "summary": "Read world/index.html",
+          "source": "log"
+        },
+        {
+          "ts": "2026-10-28T19:39:10Z",
+          "agent": "t-world",
+          "event": "tool",
+          "lane": "t-world",
+          "tool": "Edit",
+          "summary": "Edit world/rings.js",
+          "source": "hook"
+        },
+        {
+          "ts": "2026-10-28T19:39:55Z",
+          "agent": "t-world",
+          "event": "tool",
+          "lane": "t-world",
+          "tool": "Write",
+          "summary": "Write world/districts.js",
+          "source": "hook"
+        }
+      ],
+      "log_entries": [
+        {
+          "ts": "2026-10-28T19:39:30Z",
+          "kind": "say",
+          "text": "Laying out the hill, the rings and the districts.",
+          "detail": "",
+          "fields": null,
+          "path": null
+        }
+      ],
+      "step": "3",
+      "request_id": "in-c20d85a4"
+    },
+    {
+      "id": "t-collector",
+      "parent": "t-world",
+      "project": "tirith",
+      "name": "Odile",
+      "epithet": "Inkwell",
+      "class": "loremaster",
+      "rank": "recruit",
+      "renown": 0,
+      "feature": "Collector, CLI and the brain",
+      "status": "stalled",
+      "started_at": "2026-10-28T19:10:00Z",
+      "ended_at": null,
+      "elapsed_s": 1800,
+      "summary": "Waiting: no log output for 12 minutes.",
+      "log_tail": [
+        "retrying model turn in 2000ms"
+      ],
+      "files_changed": 3,
+      "insertions": 150,
+      "deletions": 0,
+      "report": null,
+      "session": "2026-10-28-tirith-web",
+      "goal": "Collect lane state into one JSON file for the web view: the CLI, the collector and the brain that tells the steward what needs the owner.",
+      "active": false,
+      "last_activity_at": "2026-10-28T19:28:00Z",
+      "files": [
+        {
+          "path": "collector/lanes.py",
+          "change": "modified",
+          "insertions": 88,
+          "deletions": 14
+        },
+        {
+          "path": "collector/brain.py",
+          "change": "added",
+          "insertions": 62,
+          "deletions": 0
+        },
+        {
+          "path": "tests/test_lanes.py",
+          "change": "untracked",
+          "insertions": 40,
+          "deletions": 0
+        }
+      ],
+      "tools": [
+        {
+          "name": "Bash",
+          "count": 12
+        },
+        {
+          "name": "Read",
+          "count": 10
+        },
+        {
+          "name": "Edit",
+          "count": 7
+        }
+      ],
+      "tests": [
+        {
+          "at": "2026-10-28T19:26:00Z",
+          "command": "uv run pytest -q",
+          "result": "failed",
+          "failed": 2
+        }
+      ],
+      "events": [
+        {
+          "ts": "2026-10-28T19:27:00Z",
+          "agent": "t-collector",
+          "event": "tool",
+          "lane": "t-collector",
+          "tool": "Edit",
+          "summary": "Edit collector/lanes.py",
+          "source": "hook"
+        },
+        {
+          "ts": "2026-10-28T19:28:00Z",
+          "agent": "t-collector",
+          "event": "tool",
+          "lane": "t-collector",
+          "tool": "Bash",
+          "summary": "Bash: uv run pytest -q",
+          "source": "hook"
+        }
+      ],
+      "log_entries": [
+        {
+          "ts": "2026-10-28T19:28:00Z",
+          "kind": "error",
+          "text": "retrying model turn in 2000ms",
+          "detail": "",
+          "fields": null,
+          "path": null
+        },
+        {
+          "ts": "2026-10-28T19:25:00Z",
+          "kind": "command",
+          "text": "uv run tirith collect --once",
+          "detail": "",
+          "fields": null,
+          "path": null
+        }
+      ],
+      "step": null,
+      "request_id": null
+    },
+    {
+      "id": "w7-a11y",
+      "parent": "steward",
+      "project": "chromasol",
+      "name": "Tamsin",
+      "epithet": "of the Watch",
+      "class": "warden",
+      "rank": "sergeant",
+      "renown": 310,
+      "feature": "Screen reader labels on every screen",
+      "status": "working",
+      "started_at": "2026-10-28T18:20:00Z",
+      "ended_at": null,
+      "elapsed_s": 4800,
+      "summary": "Labelling the scan results list; the photo grid already reads out correctly.",
+      "log_tail": [],
+      "files_changed": 11,
+      "insertions": 168,
+      "deletions": 34,
+      "report": null,
+      "session": "2026-10-28-chromasol-release",
+      "goal": "Every button, photo and score in the app is announced by the screen reader, so the owner can ship the accessibility fixes with the release.",
+      "active": true,
+      "last_activity_at": "2026-10-28T19:39:30Z",
+      "files": [],
+      "tools": [
+        {
+          "name": "Read",
+          "count": 6
+        }
+      ],
+      "tests": [
+        {
+          "at": "2026-10-28T19:36:00Z",
+          "command": "./gradlew connectedAndroidTest",
+          "result": "passed",
+          "passed": 24
+        }
+      ],
+      "events": [],
+      "log_entries": [
+        {
+          "ts": "2026-10-28T19:39:30Z",
+          "kind": "say",
+          "text": "Labelling the scan results list; the photo grid already reads out correctly.",
+          "detail": "",
+          "fields": null,
+          "path": null
+        }
+      ],
+      "step": "2",
+      "request_id": null
+    },
+    {
+      "id": "w8-shots",
+      "parent": "steward",
+      "project": "chromasol",
+      "name": "Corvin",
+      "epithet": "Lensgrinder",
+      "class": "glasswright",
+      "rank": "recruit",
+      "renown": 20,
+      "feature": "Store screenshots in six languages",
+      "status": "working",
+      "started_at": "2026-10-28T19:05:00Z",
+      "ended_at": null,
+      "elapsed_s": 2100,
+      "summary": "Framing the second screenshot; the Spanish captions are the longest, so I check those first.",
+      "log_tail": [],
+      "files_changed": 0,
+      "insertions": 0,
+      "deletions": 0,
+      "report": null,
+      "session": "2026-10-28-chromasol-release",
+      "goal": "Capture the five store screenshots in every supported language from the same build.",
+      "active": true,
+      "last_activity_at": "2026-10-28T19:39:30Z",
+      "files": [],
+      "tools": [
+        {
+          "name": "Read",
+          "count": 6
+        }
+      ],
+      "tests": [],
+      "events": [],
+      "log_entries": [
+        {
+          "ts": "2026-10-28T19:39:30Z",
+          "kind": "say",
+          "text": "Framing the second screenshot; the Spanish captions are the longest, so I check those first.",
+          "detail": "",
+          "fields": null,
+          "path": null
+        }
+      ],
+      "step": "3",
+      "request_id": null
+    }
+  ],
+  "pipelines": [
+    {
+      "run": "android-release#7",
+      "project": "chromasol",
+      "pipeline": "android-release",
+      "status": "running",
+      "started_at": "2026-10-28T19:30:00Z",
+      "ended_at": null,
+      "stages": [
+        {
+          "name": "build",
+          "status": "passed",
+          "started_at": "2026-10-28T19:30:00Z",
+          "ended_at": "2026-10-28T19:30:34Z",
+          "duration_s": 34,
+          "log_tail": [
+            "BUILD SUCCESSFUL in 34s"
+          ]
+        },
+        {
+          "name": "tests",
+          "status": "passed",
+          "started_at": "2026-10-28T19:30:34Z",
+          "ended_at": "2026-10-28T19:31:20Z",
+          "duration_s": 46,
+          "log_tail": [
+            "tests 82 failures 0"
+          ]
+        },
+        {
+          "name": "lint",
+          "status": "passed",
+          "started_at": "2026-10-28T19:31:20Z",
+          "ended_at": "2026-10-28T19:31:45Z",
+          "duration_s": 25,
+          "log_tail": [
+            "no network: OK"
+          ]
+        },
+        {
+          "name": "16kb",
+          "status": "passed",
+          "started_at": "2026-10-28T19:31:45Z",
+          "ended_at": "2026-10-28T19:31:47Z",
+          "duration_s": 2,
+          "log_tail": [
+            "16 KB: OK"
+          ]
+        },
+        {
+          "name": "sign",
+          "status": "running",
+          "started_at": "2026-10-28T19:31:47Z",
+          "ended_at": null,
+          "duration_s": null,
+          "log_tail": [
+            "signReleaseBundle"
+          ]
+        },
+        {
+          "name": "device",
+          "status": "pending",
+          "started_at": null,
+          "ended_at": null,
+          "duration_s": null,
+          "log_tail": []
+        },
+        {
+          "name": "store",
+          "status": "pending",
+          "started_at": null,
+          "ended_at": null,
+          "duration_s": null,
+          "log_tail": []
+        },
+        {
+          "name": "review",
+          "status": "pending",
+          "started_at": null,
+          "ended_at": null,
+          "duration_s": null,
+          "log_tail": []
+        }
+      ],
+      "session": "2026-10-28-chromasol-release",
+      "lane": "w6-perf",
+      "worktree": null,
+      "branch": "lane/perf",
+      "source": null
+    },
+    {
+      "run": "ci#15",
+      "project": "tirith",
+      "pipeline": "ci",
+      "status": "running",
+      "started_at": "2026-10-28T19:37:00Z",
+      "ended_at": null,
+      "stages": [
+        {
+          "name": "build",
+          "status": "passed",
+          "started_at": "2026-10-28T19:37:00Z",
+          "ended_at": "2026-10-28T19:37:21Z",
+          "duration_s": 21,
+          "log_tail": [
+            "BUILD SUCCESSFUL in 21s"
+          ]
+        },
+        {
+          "name": "test",
+          "status": "running",
+          "started_at": "2026-10-28T19:37:21Z",
+          "ended_at": null,
+          "duration_s": null,
+          "log_tail": [
+            "170 passed in %ds"
+          ]
+        },
+        {
+          "name": "ship",
+          "status": "pending",
+          "started_at": null,
+          "ended_at": null,
+          "duration_s": null,
+          "log_tail": []
+        }
+      ],
+      "session": null,
+      "lane": "t-collector",
+      "worktree": null,
+      "branch": "lane/gitlab",
+      "source": null
+    },
+    {
+      "run": "git-hooks#31",
+      "project": "tirith",
+      "pipeline": "git-hooks",
+      "status": "passed",
+      "started_at": "2026-10-28T19:18:00Z",
+      "ended_at": "2026-10-28T19:18:47Z",
+      "stages": [
+        {
+          "name": "pre-commit",
+          "status": "passed",
+          "started_at": "2026-10-28T19:18:00Z",
+          "ended_at": "2026-10-28T19:18:03Z",
+          "duration_s": 3,
+          "log_tail": [
+            "lint clean"
+          ]
+        },
+        {
+          "name": "pre-push",
+          "status": "passed",
+          "started_at": "2026-10-28T19:18:03Z",
+          "ended_at": "2026-10-28T19:18:47Z",
+          "duration_s": 44,
+          "log_tail": [
+            "tests green"
+          ]
+        }
+      ],
+      "session": null,
+      "lane": null,
+      "worktree": null,
+      "branch": "main",
+      "source": null
+    },
+    {
+      "run": "ci#14",
+      "project": "tirith",
+      "pipeline": "ci",
+      "status": "failed",
+      "started_at": "2026-10-28T18:59:00Z",
+      "ended_at": "2026-10-28T19:00:03Z",
+      "stages": [
+        {
+          "name": "build",
+          "status": "passed",
+          "started_at": "2026-10-28T18:59:00Z",
+          "ended_at": "2026-10-28T18:59:22Z",
+          "duration_s": 22,
+          "log_tail": [
+            "BUILD SUCCESSFUL in 22s"
+          ]
+        },
+        {
+          "name": "test",
+          "status": "failed",
+          "started_at": "2026-10-28T18:59:22Z",
+          "ended_at": "2026-10-28T19:00:03Z",
+          "duration_s": 41,
+          "log_tail": [
+            "collector/tests/test_gates.py::test_raw_stage FAILED",
+            "E   AssertionError: expected exit 2, got 0",
+            "1 failed, 169 passed in 41s"
+          ]
+        },
+        {
+          "name": "ship",
+          "status": "skipped",
+          "started_at": null,
+          "ended_at": null,
+          "duration_s": null,
+          "log_tail": []
+        }
+      ],
+      "session": null,
+      "lane": "t-world",
+      "worktree": null,
+      "branch": "lane/world",
+      "source": null
+    },
+    {
+      "run": "android-release#6",
+      "project": "chromasol",
+      "pipeline": "android-release",
+      "status": "passed",
+      "started_at": "2026-10-28T18:05:00Z",
+      "ended_at": "2026-10-28T19:11:53Z",
+      "stages": [
+        {
+          "name": "build",
+          "status": "passed",
+          "started_at": "2026-10-28T18:05:00Z",
+          "ended_at": "2026-10-28T18:05:33Z",
+          "duration_s": 33,
+          "log_tail": [
+            "BUILD SUCCESSFUL in 33s"
+          ]
+        },
+        {
+          "name": "tests",
+          "status": "passed",
+          "started_at": "2026-10-28T18:05:33Z",
+          "ended_at": "2026-10-28T18:06:24Z",
+          "duration_s": 51,
+          "log_tail": [
+            "tests 82 failures 0"
+          ]
+        },
+        {
+          "name": "lint",
+          "status": "passed",
+          "started_at": "2026-10-28T18:06:24Z",
+          "ended_at": "2026-10-28T18:06:48Z",
+          "duration_s": 24,
+          "log_tail": [
+            "no network: OK"
+          ]
+        },
+        {
+          "name": "16kb",
+          "status": "passed",
+          "started_at": "2026-10-28T18:06:48Z",
+          "ended_at": "2026-10-28T18:06:50Z",
+          "duration_s": 2,
+          "log_tail": [
+            "16 KB: OK"
+          ]
+        },
+        {
+          "name": "sign",
+          "status": "passed",
+          "started_at": "2026-10-28T18:06:50Z",
+          "ended_at": "2026-10-28T18:07:08Z",
+          "duration_s": 18,
+          "log_tail": [
+            "signReleaseBundle"
+          ]
+        },
+        {
+          "name": "device",
+          "status": "passed",
+          "started_at": "2026-10-28T18:07:08Z",
+          "ended_at": "2026-10-28T18:10:18Z",
+          "duration_s": 190,
+          "log_tail": [
+            "5 of 5 devices green"
+          ]
+        },
+        {
+          "name": "store",
+          "status": "passed",
+          "started_at": "2026-10-28T18:10:18Z",
+          "ended_at": "2026-10-28T18:11:53Z",
+          "duration_s": 95,
+          "log_tail": [
+            "uploaded to the track"
+          ]
+        },
+        {
+          "name": "review",
+          "status": "passed",
+          "started_at": "2026-10-28T18:11:53Z",
+          "ended_at": "2026-10-28T19:11:53Z",
+          "duration_s": 3600,
+          "log_tail": [
+            "waiting for the store"
+          ]
+        }
+      ],
+      "session": null,
+      "lane": "owner",
+      "worktree": null,
+      "branch": "release/1.4",
+      "source": null
+    },
+    {
+      "run": "ios-testflight#3",
+      "project": "relagame",
+      "pipeline": "ios-testflight",
+      "status": "failed",
+      "started_at": "2026-10-28T17:10:00Z",
+      "ended_at": "2026-10-28T17:22:00Z",
+      "stages": [
+        {
+          "name": "export",
+          "status": "passed",
+          "started_at": "2026-10-28T17:10:00Z",
+          "ended_at": "2026-10-28T17:14:00Z",
+          "duration_s": 240,
+          "log_tail": [
+            "export succeeded"
+          ]
+        },
+        {
+          "name": "archive",
+          "status": "failed",
+          "started_at": "2026-10-28T17:14:00Z",
+          "ended_at": "2026-10-28T17:22:00Z",
+          "duration_s": 480,
+          "log_tail": [
+            "xcodebuild: archiving",
+            "error: No signing certificate \"iOS Distribution\" found",
+            "** ARCHIVE FAILED **"
+          ]
+        },
+        {
+          "name": "upload",
+          "status": "skipped",
+          "started_at": null,
+          "ended_at": null,
+          "duration_s": null,
+          "log_tail": []
+        }
+      ],
+      "session": null,
+      "lane": "steward",
+      "worktree": null,
+      "branch": "main",
+      "source": null
+    },
+    {
+      "run": "ci#13",
+      "project": "tirith",
+      "pipeline": "ci",
+      "status": "passed",
+      "started_at": "2026-10-28T16:45:00Z",
+      "ended_at": "2026-10-28T16:46:13Z",
+      "stages": [
+        {
+          "name": "build",
+          "status": "passed",
+          "started_at": "2026-10-28T16:45:00Z",
+          "ended_at": "2026-10-28T16:45:21Z",
+          "duration_s": 21,
+          "log_tail": [
+            "BUILD SUCCESSFUL in 21s"
+          ]
+        },
+        {
+          "name": "test",
+          "status": "warning",
+          "started_at": "2026-10-28T16:45:21Z",
+          "ended_at": "2026-10-28T16:46:01Z",
+          "duration_s": 40,
+          "log_tail": [
+            "170 passed in 40s"
+          ]
+        },
+        {
+          "name": "ship",
+          "status": "passed",
+          "started_at": "2026-10-28T16:46:01Z",
+          "ended_at": "2026-10-28T16:46:13Z",
+          "duration_s": 12,
+          "log_tail": [
+            "shipped"
+          ]
+        }
+      ],
+      "session": null,
+      "lane": "t-collector",
+      "worktree": null,
+      "branch": "lane/collector",
+      "source": "github"
+    },
+    {
+      "run": "android-release#5",
+      "project": "chromasol",
+      "pipeline": "android-release",
+      "status": "failed",
+      "started_at": "2026-10-28T15:40:00Z",
+      "ended_at": "2026-10-28T15:41:50Z",
+      "stages": [
+        {
+          "name": "build",
+          "status": "passed",
+          "started_at": "2026-10-28T15:40:00Z",
+          "ended_at": "2026-10-28T15:40:36Z",
+          "duration_s": 36,
+          "log_tail": [
+            "BUILD SUCCESSFUL in 36s"
+          ]
+        },
+        {
+          "name": "tests",
+          "status": "failed",
+          "started_at": "2026-10-28T15:40:36Z",
+          "ended_at": "2026-10-28T15:41:50Z",
+          "duration_s": 74,
+          "log_tail": [
+            "CanvasViewModelTest > lowMemory FAILED",
+            "    java.lang.OutOfMemoryError: Java heap space",
+            "tests 82 failures 1"
+          ]
+        },
+        {
+          "name": "lint",
+          "status": "skipped",
+          "started_at": null,
+          "ended_at": null,
+          "duration_s": null,
+          "log_tail": []
+        },
+        {
+          "name": "16kb",
+          "status": "skipped",
+          "started_at": null,
+          "ended_at": null,
+          "duration_s": null,
+          "log_tail": []
+        },
+        {
+          "name": "sign",
+          "status": "skipped",
+          "started_at": null,
+          "ended_at": null,
+          "duration_s": null,
+          "log_tail": []
+        },
+        {
+          "name": "device",
+          "status": "skipped",
+          "started_at": null,
+          "ended_at": null,
+          "duration_s": null,
+          "log_tail": []
+        },
+        {
+          "name": "store",
+          "status": "skipped",
+          "started_at": null,
+          "ended_at": null,
+          "duration_s": null,
+          "log_tail": []
+        },
+        {
+          "name": "review",
+          "status": "skipped",
+          "started_at": null,
+          "ended_at": null,
+          "duration_s": null,
+          "log_tail": []
+        }
+      ],
+      "session": null,
+      "lane": "w1-data",
+      "worktree": null,
+      "branch": "lane/data",
+      "source": null
+    },
+    {
+      "run": "git-hooks#30",
+      "project": "tirith",
+      "pipeline": "git-hooks",
+      "status": "failed",
+      "started_at": "2026-10-28T15:18:00Z",
+      "ended_at": "2026-10-28T15:18:48Z",
+      "stages": [
+        {
+          "name": "pre-commit",
+          "status": "passed",
+          "started_at": "2026-10-28T15:18:00Z",
+          "ended_at": "2026-10-28T15:18:04Z",
+          "duration_s": 4,
+          "log_tail": [
+            "lint clean"
+          ]
+        },
+        {
+          "name": "pre-push",
+          "status": "failed",
+          "started_at": "2026-10-28T15:18:04Z",
+          "ended_at": "2026-10-28T15:18:48Z",
+          "duration_s": 44,
+          "log_tail": [
+            "make test",
+            "FAILED collector/tests/test_cli.py::test_run",
+            "error: pre-push hook failed (exit 2)"
+          ]
+        }
+      ],
+      "session": null,
+      "lane": null,
+      "worktree": null,
+      "branch": "lane/hooks",
+      "source": null
+    },
+    {
+      "run": "ci#12",
+      "project": "tirith",
+      "pipeline": "ci",
+      "status": "passed",
+      "started_at": "2026-10-28T14:10:00Z",
+      "ended_at": "2026-10-28T14:11:09Z",
+      "stages": [
+        {
+          "name": "build",
+          "status": "passed",
+          "started_at": "2026-10-28T14:10:00Z",
+          "ended_at": "2026-10-28T14:10:20Z",
+          "duration_s": 20,
+          "log_tail": [
+            "BUILD SUCCESSFUL in 20s"
+          ]
+        },
+        {
+          "name": "test",
+          "status": "passed",
+          "started_at": "2026-10-28T14:10:20Z",
+          "ended_at": "2026-10-28T14:10:58Z",
+          "duration_s": 38,
+          "log_tail": [
+            "170 passed in 38s"
+          ]
+        },
+        {
+          "name": "ship",
+          "status": "passed",
+          "started_at": "2026-10-28T14:10:58Z",
+          "ended_at": "2026-10-28T14:11:09Z",
+          "duration_s": 11,
+          "log_tail": [
+            "shipped"
+          ]
+        }
+      ],
+      "session": null,
+      "lane": "t-world",
+      "worktree": null,
+      "branch": "lane/world",
+      "source": null
+    },
+    {
+      "run": "ios-testflight#2",
+      "project": "relagame",
+      "pipeline": "ios-testflight",
+      "status": "passed",
+      "started_at": "2026-10-28T08:00:00Z",
+      "ended_at": "2026-10-28T08:12:21Z",
+      "stages": [
+        {
+          "name": "export",
+          "status": "passed",
+          "started_at": "2026-10-28T08:00:00Z",
+          "ended_at": "2026-10-28T08:03:56Z",
+          "duration_s": 236,
+          "log_tail": [
+            "export succeeded"
+          ]
+        },
+        {
+          "name": "archive",
+          "status": "passed",
+          "started_at": "2026-10-28T08:03:56Z",
+          "ended_at": "2026-10-28T08:10:46Z",
+          "duration_s": 410,
+          "log_tail": [
+            "archive succeeded"
+          ]
+        },
+        {
+          "name": "upload",
+          "status": "passed",
+          "started_at": "2026-10-28T08:10:46Z",
+          "ended_at": "2026-10-28T08:12:21Z",
+          "duration_s": 95,
+          "log_tail": [
+            "upload accepted"
+          ]
+        }
+      ],
+      "session": null,
+      "lane": "owner",
+      "worktree": null,
+      "branch": "main",
+      "source": null
+    },
+    {
+      "run": "android-release#4",
+      "project": "chromasol",
+      "pipeline": "android-release",
+      "status": "failed",
+      "started_at": "2026-10-28T04:40:00Z",
+      "ended_at": "2026-10-28T04:41:25Z",
+      "stages": [
+        {
+          "name": "build",
+          "status": "passed",
+          "started_at": "2026-10-28T04:40:00Z",
+          "ended_at": "2026-10-28T04:40:35Z",
+          "duration_s": 35,
+          "log_tail": [
+            "BUILD SUCCESSFUL in 35s"
+          ]
+        },
+        {
+          "name": "tests",
+          "status": "passed",
+          "started_at": "2026-10-28T04:40:35Z",
+          "ended_at": "2026-10-28T04:41:22Z",
+          "duration_s": 47,
+          "log_tail": [
+            "tests 82 failures 0"
+          ]
+        },
+        {
+          "name": "lint",
+          "status": "failed",
+          "started_at": "2026-10-28T04:41:22Z",
+          "ended_at": "2026-10-28T04:41:25Z",
+          "duration_s": 3,
+          "log_tail": [
+            "app/src/main/res/layout/canvas.xml:14: error: Missing contentDescription",
+            "1 error, 0 warnings",
+            "lint: FAILED"
+          ]
+        },
+        {
+          "name": "16kb",
+          "status": "skipped",
+          "started_at": null,
+          "ended_at": null,
+          "duration_s": null,
+          "log_tail": []
+        },
+        {
+          "name": "sign",
+          "status": "skipped",
+          "started_at": null,
+          "ended_at": null,
+          "duration_s": null,
+          "log_tail": []
+        },
+        {
+          "name": "device",
+          "status": "skipped",
+          "started_at": null,
+          "ended_at": null,
+          "duration_s": null,
+          "log_tail": []
+        },
+        {
+          "name": "store",
+          "status": "skipped",
+          "started_at": null,
+          "ended_at": null,
+          "duration_s": null,
+          "log_tail": []
+        },
+        {
+          "name": "review",
+          "status": "skipped",
+          "started_at": null,
+          "ended_at": null,
+          "duration_s": null,
+          "log_tail": []
+        }
+      ],
+      "session": null,
+      "lane": "w7-a11y",
+      "worktree": null,
+      "branch": "lane/a11y",
+      "source": null
+    },
+    {
+      "run": "ci#11",
+      "project": "tirith",
+      "pipeline": "ci",
+      "status": "passed",
+      "started_at": "2026-10-27T17:40:00Z",
+      "ended_at": "2026-10-27T17:41:12Z",
+      "stages": [
+        {
+          "name": "build",
+          "status": "passed",
+          "started_at": "2026-10-27T17:40:00Z",
+          "ended_at": "2026-10-27T17:40:21Z",
+          "duration_s": 21,
+          "log_tail": [
+            "BUILD SUCCESSFUL in 21s"
+          ]
+        },
+        {
+          "name": "test",
+          "status": "passed",
+          "started_at": "2026-10-27T17:40:21Z",
+          "ended_at": "2026-10-27T17:41:00Z",
+          "duration_s": 39,
+          "log_tail": [
+            "170 passed in 39s"
+          ]
+        },
+        {
+          "name": "ship",
+          "status": "passed",
+          "started_at": "2026-10-27T17:41:00Z",
+          "ended_at": "2026-10-27T17:41:12Z",
+          "duration_s": 12,
+          "log_tail": [
+            "shipped"
+          ]
+        }
+      ],
+      "session": null,
+      "lane": "t-collector",
+      "worktree": null,
+      "branch": "main",
+      "source": null
+    },
+    {
+      "run": "android-release#3",
+      "project": "chromasol",
+      "pipeline": "android-release",
+      "status": "passed",
+      "started_at": "2026-10-27T15:20:00Z",
+      "ended_at": "2026-10-27T16:16:31Z",
+      "stages": [
+        {
+          "name": "build",
+          "status": "passed",
+          "started_at": "2026-10-27T15:20:00Z",
+          "ended_at": "2026-10-27T15:20:34Z",
+          "duration_s": 34,
+          "log_tail": [
+            "BUILD SUCCESSFUL in 34s"
+          ]
+        },
+        {
+          "name": "tests",
+          "status": "passed",
+          "started_at": "2026-10-27T15:20:34Z",
+          "ended_at": "2026-10-27T15:21:19Z",
+          "duration_s": 45,
+          "log_tail": [
+            "tests 82 failures 0"
+          ]
+        },
+        {
+          "name": "lint",
+          "status": "passed",
+          "started_at": "2026-10-27T15:21:19Z",
+          "ended_at": "2026-10-27T15:21:44Z",
+          "duration_s": 25,
+          "log_tail": [
+            "no network: OK"
+          ]
+        },
+        {
+          "name": "16kb",
+          "status": "passed",
+          "started_at": "2026-10-27T15:21:44Z",
+          "ended_at": "2026-10-27T15:21:46Z",
+          "duration_s": 2,
+          "log_tail": [
+            "16 KB: OK"
+          ]
+        },
+        {
+          "name": "sign",
+          "status": "passed",
+          "started_at": "2026-10-27T15:21:46Z",
+          "ended_at": "2026-10-27T15:22:03Z",
+          "duration_s": 17,
+          "log_tail": [
+            "signReleaseBundle"
+          ]
+        },
+        {
+          "name": "device",
+          "status": "passed",
+          "started_at": "2026-10-27T15:22:03Z",
+          "ended_at": "2026-10-27T15:25:03Z",
+          "duration_s": 180,
+          "log_tail": [
+            "5 of 5 devices green"
+          ]
+        },
+        {
+          "name": "store",
+          "status": "passed",
+          "started_at": "2026-10-27T15:25:03Z",
+          "ended_at": "2026-10-27T15:26:31Z",
+          "duration_s": 88,
+          "log_tail": [
+            "uploaded to the track"
+          ]
+        },
+        {
+          "name": "review",
+          "status": "passed",
+          "started_at": "2026-10-27T15:26:31Z",
+          "ended_at": "2026-10-27T16:16:31Z",
+          "duration_s": 3000,
+          "log_tail": [
+            "waiting for the store"
+          ]
+        }
+      ],
+      "session": null,
+      "lane": "steward",
+      "worktree": null,
+      "branch": "release/1.3",
+      "source": null
+    },
+    {
+      "run": "git-hooks#29",
+      "project": "tirith",
+      "pipeline": "git-hooks",
+      "status": "passed",
+      "started_at": "2026-10-27T12:00:00Z",
+      "ended_at": "2026-10-27T12:00:44Z",
+      "stages": [
+        {
+          "name": "pre-commit",
+          "status": "passed",
+          "started_at": "2026-10-27T12:00:00Z",
+          "ended_at": "2026-10-27T12:00:03Z",
+          "duration_s": 3,
+          "log_tail": [
+            "lint clean"
+          ]
+        },
+        {
+          "name": "pre-push",
+          "status": "passed",
+          "started_at": "2026-10-27T12:00:03Z",
+          "ended_at": "2026-10-27T12:00:44Z",
+          "duration_s": 41,
+          "log_tail": [
+            "tests green"
+          ]
+        }
+      ],
+      "session": null,
+      "lane": null,
+      "worktree": null,
+      "branch": "main",
+      "source": null
+    },
+    {
+      "run": "ios-internal#0",
+      "project": "relagame",
+      "pipeline": "ios-internal",
+      "status": "pending",
+      "started_at": null,
+      "ended_at": null,
+      "session": null,
+      "lane": null,
+      "worktree": null,
+      "branch": null,
+      "source": null,
+      "stages": [
+        {
+          "name": "build",
+          "status": "pending",
+          "started_at": null,
+          "ended_at": null,
+          "duration_s": null,
+          "log_tail": []
+        },
+        {
+          "name": "test",
+          "status": "pending",
+          "started_at": null,
+          "ended_at": null,
+          "duration_s": null,
+          "log_tail": []
+        },
+        {
+          "name": "upload",
+          "status": "pending",
+          "started_at": null,
+          "ended_at": null,
+          "duration_s": null,
+          "log_tail": []
+        }
+      ]
+    }
+  ],
+  "rooms": [
+    {
+      "id": "chromasol-war-room",
+      "url": "https://agentsmessenger.com/r/chromasol-war-room",
+      "title": "Chromasol War Room",
+      "project": "chromasol",
+      "summary": "The ChromaSol lanes are coordinating the 1.0.0 release while it is in store review, with the icon export still failing.",
+      "summary_source": "muse",
+      "needs_owner": [],
+      "message_count": 7,
+      "last_message_at": "2026-10-28T19:19:05.000Z",
+      "activity_per_hour": 3,
+      "messages_last_day": 7,
+      "polled_at": "2026-10-28T19:39:50Z",
+      "error": null,
+      "participants": [
+        {
+          "name": "Ivren",
+          "kind": "tirith-agent",
+          "hero_id": "w6-perf",
+          "hero_name": "Ivren",
+          "last_seen": "2026-10-28T19:10:44.000Z",
+          "messages": 2,
+          "present": true
+        },
+        {
+          "name": "Halvard",
+          "kind": "tirith-agent",
+          "hero_id": "w1-data",
+          "hero_name": "Halvard",
+          "last_seen": "2026-10-28T19:19:05.000Z",
+          "messages": 2,
+          "present": true
+        },
+        {
+          "name": "Sefa",
+          "kind": "tirith-agent",
+          "hero_id": "icon-2",
+          "hero_name": "Sefa",
+          "last_seen": "2026-10-28T19:01:09.000Z",
+          "messages": 1,
+          "present": false
+        },
+        {
+          "name": "andres",
+          "kind": "owner",
+          "hero_id": null,
+          "hero_name": null,
+          "last_seen": "2026-10-28T19:18:20.000Z",
+          "messages": 1,
+          "present": true
+        },
+        {
+          "name": "play-console-bot",
+          "kind": "external",
+          "hero_id": null,
+          "hero_name": null,
+          "last_seen": "2026-10-28T18:52:11.000Z",
+          "messages": 1,
+          "present": false
+        }
+      ],
+      "reply_edges": [
+        {
+          "from": "Halvard",
+          "to": "Ivren",
+          "count": 1
+        },
+        {
+          "from": "Sefa",
+          "to": "Ivren",
+          "count": 1
+        },
+        {
+          "from": "Ivren",
+          "to": "Sefa",
+          "count": 1
+        },
+        {
+          "from": "andres",
+          "to": "Halvard",
+          "count": 1
+        },
+        {
+          "from": "andres",
+          "to": "Ivren",
+          "count": 1
+        },
+        {
+          "from": "Halvard",
+          "to": "andres",
+          "count": 1
+        }
+      ],
+      "messages": [
+        {
+          "n": 1,
+          "at": "2026-10-28T18:40:00.000Z",
+          "from": "Ivren",
+          "text": "Release build 1.0.0 (2) is on the device farm. Cold start is 410 ms.",
+          "re": [],
+          "agreed": [],
+          "signed": "self",
+          "kind": "message",
+          "truncated": false
+        },
+        {
+          "n": 2,
+          "at": "2026-10-28T18:44:30.000Z",
+          "from": "Halvard",
+          "text": "The Room migration v3 to v4 is merged. Tests are green on all three devices.",
+          "re": [
+            1
+          ],
+          "agreed": [
+            "Ivren"
+          ],
+          "signed": "self",
+          "kind": "message",
+          "truncated": false
+        },
+        {
+          "n": 3,
+          "at": "2026-10-28T18:52:11.000Z",
+          "from": "play-console-bot",
+          "text": "Review status changed: In review. Typical wait is 1 to 3 days.",
+          "re": [],
+          "agreed": [],
+          "signed": "platform",
+          "kind": "message",
+          "truncated": false
+        },
+        {
+          "n": 4,
+          "at": "2026-10-28T19:01:09.000Z",
+          "from": "Sefa",
+          "text": "The adaptive icon export failed on the foreground layer; retrying with a 432 px canvas.",
+          "re": [
+            1
+          ],
+          "agreed": [],
+          "signed": "platform",
+          "kind": "message",
+          "truncated": false
+        },
+        {
+          "n": 5,
+          "at": "2026-10-28T19:10:44.000Z",
+          "from": "Ivren",
+          "text": "Sefa, the store listing wants the 512 px icon too. andres, the AI asset declaration still needs your tick.",
+          "re": [
+            4
+          ],
+          "agreed": [],
+          "signed": "self",
+          "kind": "message",
+          "truncated": false
+        },
+        {
+          "n": 6,
+          "at": "2026-10-28T19:18:20.000Z",
+          "from": "andres",
+          "text": "On it. Halvard, please freeze the migration until the review lands.",
+          "re": [
+            2,
+            5
+          ],
+          "agreed": [
+            "Halvard"
+          ],
+          "signed": "self",
+          "kind": "message",
+          "truncated": false
+        },
+        {
+          "n": 7,
+          "at": "2026-10-28T19:19:05.000Z",
+          "from": "Halvard",
+          "text": "Frozen. Standing by.",
+          "re": [
+            6
+          ],
+          "agreed": [
+            "andres"
+          ],
+          "signed": "self",
+          "kind": "message",
+          "truncated": false
+        }
+      ]
+    }
+  ],
+  "flows": [
+    {
+      "id": "f-1",
+      "at": "2026-10-28T18:30:00Z",
+      "from": "steward",
+      "to": "agent:w6-perf",
+      "from_name": "The Steward",
+      "to_name": "Ivren of the Seventh Gate",
+      "kind": "brief",
+      "text": "Brief: Performance and size on the owner's phone",
+      "ref": "briefs/w6.md",
+      "project": "chromasol",
+      "session": "2026-10-28-chromasol-release"
+    },
+    {
+      "id": "f-3",
+      "at": "2026-10-28T18:50:00Z",
+      "from": "steward",
+      "to": "owner",
+      "from_name": "The Steward",
+      "to_name": "You",
+      "kind": "request",
+      "text": "Tick the AI asset declaration on the store listing",
+      "ref": null,
+      "project": "chromasol",
+      "session": "2026-10-28-chromasol-release"
+    },
+    {
+      "id": "f-12",
+      "at": "2026-10-28T18:58:00Z",
+      "from": "agent:w1-data",
+      "to": "steward",
+      "from_name": "Halvard",
+      "to_name": "The Steward",
+      "kind": "decision",
+      "text": "Keep the Room schema flat, no nested tables",
+      "why": "One migration file per version is enough, and the 16 KB device check reads it without extra work",
+      "ref": null,
+      "project": "chromasol",
+      "session": "2026-10-28-chromasol-release"
+    },
+    {
+      "id": "f-4",
+      "at": "2026-10-28T19:02:00Z",
+      "from": "agent:icon-2",
+      "to": "steward",
+      "from_name": "Sefa Prismhand",
+      "to_name": "The Steward",
+      "kind": "report",
+      "text": "failed: adaptive icon export broke",
+      "ref": null,
+      "project": "chromasol",
+      "session": "2026-10-28-chromasol-release"
+    },
+    {
+      "id": "f-5",
+      "at": "2026-10-28T19:05:00Z",
+      "from": "agent:w1-data",
+      "to": "steward",
+      "from_name": "Halvard Stonehand",
+      "to_name": "The Steward",
+      "kind": "report",
+      "text": "done: migrations green",
+      "ref": null,
+      "project": "chromasol",
+      "session": "2026-10-28-chromasol-release"
+    },
+    {
+      "id": "f-6",
+      "at": "2026-10-28T19:10:00Z",
+      "from": "steward",
+      "to": "agent:t-world",
+      "from_name": "The Steward",
+      "to_name": "Marrow Quickstep",
+      "kind": "message",
+      "text": "Owner wants a much smaller compact world",
+      "ref": null,
+      "project": "tirith",
+      "session": "2026-10-28-tirith-web"
+    },
+    {
+      "id": "f-13",
+      "at": "2026-10-28T19:15:00Z",
+      "from": "agent:t-world",
+      "to": "steward",
+      "from_name": "Marrow",
+      "to_name": "The Steward",
+      "kind": "decision",
+      "text": "Draw edges from measured boxes, not a layout library",
+      "why": "Expanded nodes push their neighbours, so the edges must follow the real positions",
+      "ref": null,
+      "project": "tirith",
+      "session": "2026-10-28-tirith-web"
+    },
+    {
+      "id": "f-8",
+      "at": "2026-10-28T19:20:00Z",
+      "from": "pipeline:android-release#7",
+      "to": "steward",
+      "from_name": "android-release#7",
+      "to_name": "The Steward",
+      "kind": "report",
+      "text": "android-release failed: lint failed",
+      "ref": null,
+      "project": "chromasol",
+      "session": "2026-10-28-chromasol-release"
+    },
+    {
+      "id": "f-9",
+      "at": "2026-10-28T19:25:00Z",
+      "from": "guard",
+      "to": "owner",
+      "from_name": "The Guard",
+      "to_name": "You",
+      "kind": "alert",
+      "text": "Commit guard needs attention in Tirith",
+      "ref": null,
+      "project": "chromasol",
+      "session": "2026-10-28-chromasol-release"
+    },
+    {
+      "id": "f-10",
+      "at": "2026-10-28T19:36:00Z",
+      "from": "owner",
+      "to": "steward",
+      "from_name": "You",
+      "to_name": "The Steward",
+      "kind": "answer",
+      "text": "Done: declaration ticked",
+      "ref": null,
+      "project": "chromasol",
+      "session": "2026-10-28-chromasol-release"
+    },
+    {
+      "id": "f-11",
+      "at": "2026-10-28T19:38:00Z",
+      "from": "steward",
+      "to": "agent:t-collector",
+      "from_name": "The Steward",
+      "to_name": "Odile Inkwell",
+      "kind": "decision",
+      "text": "Merge the rooms poller after tests",
+      "ref": null,
+      "project": "tirith",
+      "session": "2026-10-28-tirith-web"
+    }
+  ],
+  "sessions": [
+    {
+      "id": "2026-10-28-tirith-web",
+      "title": "Tirith web and collector",
+      "started_at": "2026-10-28T19:00:00Z",
+      "ended_at": null,
+      "projects": [
+        "tirith"
+      ],
+      "counts": {
+        "agents": 2,
+        "pipelines": 0,
+        "flows": 2,
+        "notes": 1
+      }
+    },
+    {
+      "id": "2026-10-28-relagame-ios",
+      "title": "RelaGame TestFlight",
+      "started_at": "2026-10-28T08:30:00Z",
+      "ended_at": "2026-10-28T10:00:00Z",
+      "projects": [
+        "relagame"
+      ],
+      "counts": {
+        "agents": 0,
+        "pipelines": 1,
+        "flows": 0,
+        "notes": 0
+      }
+    },
+    {
+      "id": "2026-10-28-chromasol-release",
+      "title": "ChromaSol release train",
+      "started_at": "2026-10-28T08:00:00Z",
+      "ended_at": null,
+      "projects": [
+        "chromasol"
+      ],
+      "counts": {
+        "agents": 3,
+        "pipelines": 1,
+        "flows": 7,
+        "notes": 2
+      }
+    }
+  ],
+  "violations": [
+    {
+      "ts": "2026-10-28T18:44:00Z",
+      "rule": "subagent-tool",
+      "agent": "anthropic",
+      "lane": "icon-2",
+      "project": "chromasol",
+      "message": "tirith: subagent-tool: the agent's internal sub-agent tool (Task) is not allowed. Do this instead: tirith lane run --project chromasol --class glasswright --feature \"<description>\" --brief <file> -- <agent cmd> \u2026",
+      "blocked": "the agent's internal sub-agent tool (Task) is not allowed",
+      "instead": "tirith lane run --project chromasol --class glasswright --feature \"<description>\" --brief <file> -- <agent cmd> \u2026"
+    },
+    {
+      "ts": "2026-10-28T19:12:00Z",
+      "rule": "raw-stage",
+      "agent": "muse",
+      "lane": "t-world",
+      "project": "tirith",
+      "message": "tirith: raw-stage: running the stage \"build\" raw is not allowed. Do this instead: tirith run --project tirith --stage build",
+      "blocked": "running the stage \"build\" raw is not allowed",
+      "instead": "tirith run --project tirith --stage build"
+    },
+    {
+      "ts": "2026-10-28T19:31:00Z",
+      "rule": "raw-stage",
+      "agent": "muse",
+      "lane": "t-world",
+      "project": "tirith",
+      "message": "tirith: raw-stage: running the stage \"tests\" raw is not allowed. Do this instead: tirith run --project tirith --stage tests",
+      "blocked": "running the stage \"tests\" raw is not allowed",
+      "instead": "tirith run --project tirith --stage tests"
+    }
+  ],
+  "launch": {
+    "token": "demo-launch-token-0123456789",
+    "available": true
+  },
+  "inbox": [
+    {
+      "id": "in-3f9a21c0",
+      "at": "2026-10-28T19:31:00Z",
+      "kind": "ask",
+      "project": "tirith",
+      "step": "4",
+      "text": "Is this step blocked on anything I have to decide?",
+      "status": "answered",
+      "answers": [
+        {
+          "at": "2026-10-28T19:33:10Z",
+          "by": "steward",
+          "auto": false,
+          "text": "Not blocked. It waits for step 3 to merge, then **one agent** starts on it.\n\n- Nothing needed from you\n- Expected: this evening",
+          "lane": null
+        }
+      ],
+      "lanes": []
+    },
+    {
+      "id": "in-7be410d2",
+      "at": "2026-10-28T19:36:00Z",
+      "kind": "ask",
+      "project": "tirith",
+      "step": "2",
+      "text": "What is going on with this step?",
+      "status": "answered",
+      "answers": [
+        {
+          "at": "2026-10-28T19:38:05Z",
+          "by": "brain",
+          "auto": true,
+          "text": "Two of the three items are done. The remaining one, the link handler tests, has no agent on it yet.\n\nNo agent is working on this step right now.",
+          "lane": null
+        }
+      ],
+      "lanes": []
+    },
+    {
+      "id": "in-c20d85a4",
+      "at": "2026-10-28T19:39:00Z",
+      "kind": "finish",
+      "project": "tirith",
+      "step": "3",
+      "text": "",
+      "status": "answered",
+      "answers": [
+        {
+          "at": "2026-10-28T19:39:25Z",
+          "by": "steward",
+          "auto": false,
+          "lane": "t-world",
+          "text": "Marrow already has this step. **No new agent needed.**\n\n- Working on: hooks in the agent settings\n- Next: protect the hooks from removal"
+        }
+      ],
+      "lanes": [
+        "t-world"
+      ]
+    },
+    {
+      "id": "in-9d04e6b1",
+      "at": "2026-10-28T19:39:20Z",
+      "kind": "finish",
+      "project": "tirith",
+      "step": "7",
+      "text": "",
+      "status": "open",
+      "answers": [],
+      "lanes": []
+    },
+    {
+      "id": "in-a1b2c3d4",
+      "at": "2026-10-28T19:40:00Z",
+      "kind": "ask",
+      "project": "tirith",
+      "step": "2",
+      "text": "What do I have to do for this step myself?",
+      "status": "answered",
+      "answers": [
+        {
+          "at": "2026-10-28T19:40:40Z",
+          "by": "steward",
+          "auto": false,
+          "lane": null,
+          "text": "Three things need your Mac, because they install or change something outside the repository. Press **Run** on each; I check the result.",
+          "actions": [
+            {
+              "id": "ac-5e1a0001",
+              "label": "Install the link handler",
+              "command": "uv run tirith url install",
+              "cwd": "~/DEVELOP/Tirith/collector",
+              "created_by": "steward",
+              "at": "2026-10-28T19:41:00Z"
+            },
+            {
+              "id": "ac-5e1a0002",
+              "label": "Run the collector tests",
+              "command": "uv run -q pytest -q",
+              "cwd": "~/DEVELOP/Tirith/collector",
+              "created_by": "steward",
+              "at": "2026-10-28T19:41:00Z",
+              "last_run": {
+                "status": "passed",
+                "exit_code": 0,
+                "at": "2026-10-28T19:44:12Z",
+                "log_tail": [
+                  "........................................",
+                  "318 passed in 41.20s"
+                ]
+              }
+            },
+            {
+              "id": "ac-5e1a0003",
+              "label": "Install the commit guard",
+              "command": "tirith guard install tirith",
+              "cwd": null,
+              "created_by": "steward",
+              "at": "2026-10-28T19:41:00Z",
+              "last_run": {
+                "status": "failed",
+                "exit_code": 2,
+                "at": "2026-10-28T19:45:30Z",
+                "log_tail": [
+                  "tirith guard: the hooks folder of the repository is read-only",
+                  "Do this instead: make it writable, then run it again"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "lanes": []
+    },
+    {
+      "id": "in-5a41c9e2",
+      "at": "2026-10-28T19:39:00Z",
+      "kind": "setup",
+      "project": "tirith",
+      "step": "setup",
+      "from": "owner",
+      "status": "open",
+      "answers": [],
+      "text": "{\"action\": \"add-stage\", \"pipeline\": \"ci\", \"name\": \"lint\", \"run\": \"make lint\"}",
+      "setup": {
+        "action": "add-stage",
+        "pipeline": "ci",
+        "name": "lint",
+        "run": "make lint"
+      }
+    }
+  ],
+  "answered_waits": [
+    {
+      "id": "w-1",
+      "project": "tirith",
+      "text": "Install the commit guard in the Tirith repository?",
+      "since": "2026-10-28T17:05:00Z",
+      "link": null,
+      "source": "manual",
+      "session": "2026-10-28-tirith-web",
+      "kind": "decision",
+      "options": [
+        {
+          "label": "Install it",
+          "value": "install"
+        },
+        {
+          "label": "Skip",
+          "value": "skip"
+        }
+      ],
+      "command": null,
+      "status": "answered",
+      "answer": {
+        "at": "2026-10-28T17:12:00Z",
+        "value": "install",
+        "label": "Install it",
+        "text": ""
+      }
+    }
+  ],
+  "steward_queue": [
+    {
+      "id": "sq-1c04a7b2",
+      "at": "2026-10-28T19:30:00Z",
+      "kind": "review",
+      "project": "tirith",
+      "lane": "inbox-reply",
+      "to": "steward",
+      "status": "open",
+      "text": "- Decide whether the token is rotated before the release."
+    }
+  ]
+};
