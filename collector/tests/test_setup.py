@@ -55,6 +55,7 @@ match = "git push --force*"
 action = "block"
 message = "force pushes rewrite history"
 instead = "git push (without --force); ask the owner if history must change"
+description = "Nobody may rewrite the shared history by force-pushing."
 """
 
 
@@ -90,6 +91,7 @@ paths = ["harness/**", "*.lock"]
 action = "warn"
 message = "the harness is owner territory"
 instead = "ask the owner"
+description = "Agents may not edit the harness."
 
 [[rules]]
 id = "no-curl-bash"
@@ -97,6 +99,7 @@ regex = "curl .*\\\\| *(ba)?sh"
 action = "block"
 message = "piping downloads into a shell"
 instead = "download, read, then run"
+description = "Piping downloads into a shell is risky."
 ''', tmp_path / "tirith.toml")
     assert not m.problems
     assert [r.id for r in m.rules] == ["no-force-push", "no-harness-edits", "no-curl-bash"]
@@ -148,6 +151,7 @@ paths = ["harness/**"]
 action = "block"
 message = "the harness is owner territory"
 instead = "ask the owner to change it"
+description = "Agents may not edit the harness folder."
 
 [[rules]]
 id = "mind-curl"
@@ -155,6 +159,7 @@ regex = "curl .*\\\\| *sh"
 action = "warn"
 message = "piping a download into sh"
 instead = "download it first and read it"
+description = "Running a downloaded script without reading it is risky."
 ''', encoding="utf-8")
     return proj
 
@@ -237,7 +242,7 @@ def test_setup_block_lists_pipelines_rules_and_check(ruled: Path, home: Path) ->
     ids = {r["id"]: r for r in s["rules"]}
     assert ids["raw-stage"]["source"] == "built-in" and ids["raw-stage"]["enforced_by"] == ["hook"]
     assert ids["no-force-push"]["source"] == "tirith.toml" and ids["no-force-push"]["action"] == "block"
-    assert "force pushes rewrite history" in ids["no-force-push"]["description"]
+    assert ids["no-force-push"]["description"] == "Nobody may rewrite the shared history by force-pushing."
     assert ids["lane-brief"]["active"] is True
     assert s["check"]["ok"] is False  # the commit guard is not installed in this temp repo
     assert s["check"]["problems"] and {"rule", "message", "fix"} <= set(s["check"]["problems"][0])
@@ -385,10 +390,11 @@ def test_remove_stage_ambiguous_needs_pipeline(proj: Path) -> None:
 
 def test_add_and_remove_rule(proj: Path) -> None:
     rule = setup_mod.build_rule("no-force-push", "block", "force pushes rewrite history",
-                                "git push without --force", match="git push --force*")
+                                "git push without --force", match="git push --force*",
+                                description="Nobody may force-push.")
     setup_mod.add_rule(proj, rule)
     setup_mod.add_rule(proj, setup_mod.build_rule("no-vendor", "warn", "vendor is generated", "edit src",
-                                                  paths=["vendor/**", "*.lock"]))
+                                                  paths=["vendor/**", "*.lock"], description="Vendor files are generated."))
     text = (proj / "tirith.toml").read_text(encoding="utf-8")
     assert text.startswith(BASE.rstrip("\n")) and text.endswith("\n")
     m = _manifest(proj)
@@ -431,7 +437,7 @@ def test_cli_add_stage_and_rule_then_check(proj: Path, home: Path, capsys) -> No
     assert "added stage 'lint'" in out and "tirith check" in out
     assert main(["setup", "add-rule", "--project", "demo", "--id", "no-force-push", "--match",
                  "git push --force*", "--action", "block", "--message", "force pushes rewrite history",
-                 "--instead", "git push without --force"]) == 0
+                 "--instead", "git push without --force", "--description", "Nobody may force-push."]) == 0
     assert main(["setup", "show", "--project", "demo"]) == 0
     shown = capsys.readouterr().out
     assert "lint [test] make lint" in shown and "rule no-force-push (block)" in shown
@@ -445,7 +451,7 @@ def test_cli_errors_exit_3_and_changes_introducing_problems_exit_1(proj: Path, h
                  "--run", "x"]) == 3
     assert "already exists" in capsys.readouterr().err
     assert main(["setup", "add-rule", "--project", "demo", "--id", "r", "--action", "block",
-                 "--message", "m", "--instead", "i"]) == 3
+                 "--message", "m", "--instead", "i", "--description", "d"]) == 3
     capsys.readouterr()
     # removing the only test stage leaves the pipelines without tests: check now reports it, exit 1
     assert main(["setup", "remove-stage", "--project", "demo", "--name", "test", "--pipeline", "ci"]) == 1
@@ -502,7 +508,8 @@ def test_apply_edits_answers_and_closes(proj: Path, home: Path, capsys) -> None:
     req = inbox_mod.find_request(home, row["id"])
     assert req["status"] == "done" and "Added stage" in req["answers"][0]["text"]
     rule = _ask(home, action="add-rule", id="no-force-push", match="git push --force*", effect="warn",
-                message="force pushes rewrite history", instead="git push without --force")
+                message="force pushes rewrite history", instead="git push without --force",
+                description="Nobody may force-push.")
     assert main(["setup", "apply", rule["id"]]) == 0
     assert _manifest(proj).rules[0].action == "warn"
     bad = _ask(home, action="remove-stage", name="ghost")
@@ -518,3 +525,68 @@ def test_apply_run_stage_runs_it_through_tirith_run(proj: Path, home: Path) -> N
     ends = [e for e in read_jsonl(home / "events.jsonl") if e.get("event") == "end"]
     assert ends and ends[-1]["stage"] == "test" and ends[-1]["status"] == "passed"
     assert inbox_mod.find_request(home, row["id"])["status"] == "done"
+
+
+# -- every rule describes itself -------------------------------------------------------------
+
+
+def test_every_built_in_rule_has_a_description() -> None:
+    for rid in mf.BUILT_IN_RULES:
+        text = gates.DESCRIPTIONS.get(rid, "")
+        assert text.strip() and text.endswith("."), f"built-in rule {rid} needs a plain description"
+    assert set(gates.DESCRIPTIONS) == set(mf.BUILT_IN_RULES)
+    assert {rid for rid, _, _ in setup_mod.BUILT_IN} == set(mf.BUILT_IN_RULES)
+
+
+def test_check_fails_for_a_custom_rule_without_description(proj: Path, home: Path, capsys) -> None:
+    (proj / "tirith.toml").write_text(BASE + '\n[[rules]]\nid = "r"\nmatch = "x"\naction = "block"\n'
+                                      'message = "m"\ninstead = "i"\n', encoding="utf-8")
+    assert main(["check", str(proj), "--ci"]) == 1
+    assert "rule-description" in capsys.readouterr().out
+
+
+def test_add_rule_requires_a_description(proj: Path, home: Path, capsys) -> None:
+    argv = ["setup", "add-rule", "--project", "demo", "--id", "r", "--match", "x", "--message", "m", "--instead", "i"]
+    with pytest.raises(SystemExit):
+        main(argv)
+    assert "--description" in capsys.readouterr().err
+    with pytest.raises(setup_mod.SetupError, match="description"):
+        setup_mod.build_rule("r", "block", "m", "i", match="x")
+    assert main(argv + ["--description", "Stops x."]) == 0
+    text = (proj / "tirith.toml").read_text(encoding="utf-8")
+    assert 'description = "Stops x."' in text and "described = " in text
+    assert not _manifest(proj).problems
+
+
+def test_changed_match_without_new_description_is_flagged(proj: Path, home: Path, capsys) -> None:
+    assert main(["setup", "add-rule", "--project", "demo", "--id", "r", "--match", "git push --force*",
+                 "--message", "m", "--instead", "i", "--description", "Stops force pushes."]) == 0
+    path = proj / "tirith.toml"
+    path.write_text(path.read_text(encoding="utf-8").replace("git push --force*", "git push *"), encoding="utf-8")
+    problems = _manifest(proj).problems
+    assert [p.rule for p in problems] == ["rule-stale"] and "description may be stale" in problems[0].message
+    capsys.readouterr()
+    assert main(["check", str(proj), "--ci"]) == 1 and "rule-stale" in capsys.readouterr().out
+    assert main(["setup", "describe-rule", "--project", "demo", "--id", "r",
+                 "--description", "Stops every push."]) == 0
+    assert not _manifest(proj).problems
+    assert _manifest(proj).rules[0].description == "Stops every push."
+
+
+def test_state_rules_counts_the_last_24_hours(ruled: Path, home: Path) -> None:
+    from datetime import datetime, timedelta, timezone
+    now = datetime.now(timezone.utc)
+    rows = [("lane-brief", now - timedelta(hours=2), "w1"), ("lane-brief", now - timedelta(minutes=5), "w2"),
+            ("lane-brief", now - timedelta(hours=30), "w3"), ("project-check", now - timedelta(hours=1), "w1")]
+    with (home / "events.jsonl").open("a", encoding="utf-8") as fh:
+        for rule, ts, lane in rows:
+            fh.write(json.dumps({"kind": "violation", "ts": ts.strftime("%Y-%m-%dT%H:%M:%SZ"), "rule": rule,
+                                 "agent": "anthropic", "lane": lane, "project": "demo",
+                                 "message": "tirith: " + rule + ": x. Do this instead: y"}) + "\n")
+    rules = {r["id"]: r for r in _state(home)["rules"]}
+    assert rules["lane-brief"]["count_24h"] == 2 and rules["lane-brief"]["last_agent"] == "w2"
+    assert rules["lane-brief"]["description"] == gates.DESCRIPTIONS["lane-brief"]
+    assert rules["lane-brief"]["source"] == "built-in"
+    assert rules["project-check"]["count_24h"] == 1
+    assert "no-force-push" not in rules  # hooks are not installed here, so the custom rule is not active
+    assert all(r["description"].strip() for r in rules.values())

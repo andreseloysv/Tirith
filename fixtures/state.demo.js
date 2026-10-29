@@ -338,7 +338,7 @@ window.TIRITH_STATE = {
               "hook"
             ],
             "active": false,
-            "description": "Blocks the agent's internal sub-agent tool; sub-agents start with tirith lane run."
+            "description": "Agents may not start helpers on their own; every helper starts through Tirith so you can see it."
           },
           {
             "id": "agent-cli",
@@ -349,7 +349,7 @@ window.TIRITH_STATE = {
               "shim"
             ],
             "active": false,
-            "description": "Blocks starting an agent CLI outside tirith lane run."
+            "description": "Agents may only be started through Tirith, so each one shows up as a lane you can follow."
           },
           {
             "id": "no-verify",
@@ -359,7 +359,7 @@ window.TIRITH_STATE = {
               "hook"
             ],
             "active": false,
-            "description": "Blocks git commit -n and --no-verify."
+            "description": "Nobody may skip the safety checks that run before a commit."
           },
           {
             "id": "hooks-path",
@@ -369,7 +369,7 @@ window.TIRITH_STATE = {
               "hook"
             ],
             "active": false,
-            "description": "Blocks changing core.hooksPath."
+            "description": "Nobody may switch off the commit checks by pointing git at other hooks."
           },
           {
             "id": "git-hooks",
@@ -380,7 +380,7 @@ window.TIRITH_STATE = {
               "git"
             ],
             "active": true,
-            "description": "Blocks editing or removing files under .git/hooks."
+            "description": "Agents may not edit or delete the commit checks that guard the project."
           },
           {
             "id": "raw-stage",
@@ -390,7 +390,7 @@ window.TIRITH_STATE = {
               "hook"
             ],
             "active": false,
-            "description": "Blocks running a tirith.toml stage by hand; use tirith run --stage."
+            "description": "Tests and builds must run through Tirith, so you can see them in Pipelines."
           },
           {
             "id": "lane-brief",
@@ -400,7 +400,7 @@ window.TIRITH_STATE = {
               "lane run"
             ],
             "active": true,
-            "description": "tirith lane run needs a non-empty --brief file."
+            "description": "Every lane starts with a written task, so the agent knows what to do."
           },
           {
             "id": "project-check",
@@ -410,7 +410,7 @@ window.TIRITH_STATE = {
               "lane run"
             ],
             "active": true,
-            "description": "tirith lane run refuses while tirith check fails for the project."
+            "description": "No new lane starts while the project's setup has problems."
           },
           {
             "id": "commit-guard",
@@ -420,7 +420,7 @@ window.TIRITH_STATE = {
               "git"
             ],
             "active": true,
-            "description": "The git hooks that run the project's stages and block bad commits."
+            "description": "Commits are checked for banned words and failing tests before they are accepted."
           }
         ],
         "gates_active": false,
@@ -778,7 +778,7 @@ window.TIRITH_STATE = {
               "hook"
             ],
             "active": false,
-            "description": "Blocks the agent's internal sub-agent tool; sub-agents start with tirith lane run."
+            "description": "Agents may not start helpers on their own; every helper starts through Tirith so you can see it."
           },
           {
             "id": "agent-cli",
@@ -789,7 +789,7 @@ window.TIRITH_STATE = {
               "shim"
             ],
             "active": false,
-            "description": "Blocks starting an agent CLI outside tirith lane run."
+            "description": "Agents may only be started through Tirith, so each one shows up as a lane you can follow."
           },
           {
             "id": "no-verify",
@@ -799,7 +799,7 @@ window.TIRITH_STATE = {
               "hook"
             ],
             "active": false,
-            "description": "Blocks git commit -n and --no-verify."
+            "description": "Nobody may skip the safety checks that run before a commit."
           },
           {
             "id": "hooks-path",
@@ -809,7 +809,7 @@ window.TIRITH_STATE = {
               "hook"
             ],
             "active": false,
-            "description": "Blocks changing core.hooksPath."
+            "description": "Nobody may switch off the commit checks by pointing git at other hooks."
           },
           {
             "id": "git-hooks",
@@ -820,7 +820,7 @@ window.TIRITH_STATE = {
               "git"
             ],
             "active": true,
-            "description": "Blocks editing or removing files under .git/hooks."
+            "description": "Agents may not edit or delete the commit checks that guard the project."
           },
           {
             "id": "raw-stage",
@@ -830,7 +830,7 @@ window.TIRITH_STATE = {
               "hook"
             ],
             "active": false,
-            "description": "Blocks running a tirith.toml stage by hand; use tirith run --stage."
+            "description": "Tests and builds must run through Tirith, so you can see them in Pipelines."
           },
           {
             "id": "lane-brief",
@@ -840,7 +840,7 @@ window.TIRITH_STATE = {
               "lane run"
             ],
             "active": true,
-            "description": "tirith lane run needs a non-empty --brief file."
+            "description": "Every lane starts with a written task, so the agent knows what to do."
           },
           {
             "id": "project-check",
@@ -850,7 +850,7 @@ window.TIRITH_STATE = {
               "lane run"
             ],
             "active": true,
-            "description": "tirith lane run refuses while tirith check fails for the project."
+            "description": "No new lane starts while the project's setup has problems."
           },
           {
             "id": "commit-guard",
@@ -860,7 +860,7 @@ window.TIRITH_STATE = {
               "git"
             ],
             "active": true,
-            "description": "The git hooks that run the project's stages and block bad commits."
+            "description": "Commits are checked for banned words and failing tests before they are accepted."
           },
           {
             "id": "no-force-push",
@@ -871,7 +871,7 @@ window.TIRITH_STATE = {
             ],
             "active": false,
             "action": "block",
-            "description": "Blocks command git push --force*: force pushes rewrite history. Instead: git push (without --force); ask the owner if history must change"
+            "description": "Nobody may rewrite the shared history by force-pushing."
           }
         ],
         "gates_active": false,
@@ -972,7 +972,7 @@ window.TIRITH_STATE = {
               "hook"
             ],
             "active": false,
-            "description": "Blocks the agent's internal sub-agent tool; sub-agents start with tirith lane run."
+            "description": "Agents may not start helpers on their own; every helper starts through Tirith so you can see it."
           },
           {
             "id": "agent-cli",
@@ -983,7 +983,7 @@ window.TIRITH_STATE = {
               "shim"
             ],
             "active": false,
-            "description": "Blocks starting an agent CLI outside tirith lane run."
+            "description": "Agents may only be started through Tirith, so each one shows up as a lane you can follow."
           },
           {
             "id": "no-verify",
@@ -993,7 +993,7 @@ window.TIRITH_STATE = {
               "hook"
             ],
             "active": false,
-            "description": "Blocks git commit -n and --no-verify."
+            "description": "Nobody may skip the safety checks that run before a commit."
           },
           {
             "id": "hooks-path",
@@ -1003,7 +1003,7 @@ window.TIRITH_STATE = {
               "hook"
             ],
             "active": false,
-            "description": "Blocks changing core.hooksPath."
+            "description": "Nobody may switch off the commit checks by pointing git at other hooks."
           },
           {
             "id": "git-hooks",
@@ -1014,7 +1014,7 @@ window.TIRITH_STATE = {
               "git"
             ],
             "active": true,
-            "description": "Blocks editing or removing files under .git/hooks."
+            "description": "Agents may not edit or delete the commit checks that guard the project."
           },
           {
             "id": "raw-stage",
@@ -1024,7 +1024,7 @@ window.TIRITH_STATE = {
               "hook"
             ],
             "active": false,
-            "description": "Blocks running a tirith.toml stage by hand; use tirith run --stage."
+            "description": "Tests and builds must run through Tirith, so you can see them in Pipelines."
           },
           {
             "id": "lane-brief",
@@ -1034,7 +1034,7 @@ window.TIRITH_STATE = {
               "lane run"
             ],
             "active": true,
-            "description": "tirith lane run needs a non-empty --brief file."
+            "description": "Every lane starts with a written task, so the agent knows what to do."
           },
           {
             "id": "project-check",
@@ -1044,7 +1044,7 @@ window.TIRITH_STATE = {
               "lane run"
             ],
             "active": true,
-            "description": "tirith lane run refuses while tirith check fails for the project."
+            "description": "No new lane starts while the project's setup has problems."
           },
           {
             "id": "commit-guard",
@@ -1054,7 +1054,7 @@ window.TIRITH_STATE = {
               "git"
             ],
             "active": true,
-            "description": "The git hooks that run the project's stages and block bad commits."
+            "description": "Commits are checked for banned words and failing tests before they are accepted."
           }
         ],
         "gates_active": false,
@@ -2682,6 +2682,36 @@ window.TIRITH_STATE = {
   ],
   "violations": [
     {
+      "ts": "2026-10-28T17:02:00Z",
+      "rule": "raw-stage",
+      "agent": "muse",
+      "lane": "t-world",
+      "project": "tirith",
+      "message": "tirith: raw-stage: running the stage \"tests\" raw is not allowed. Do this instead: tirith run --project tirith --stage tests",
+      "blocked": "running the stage \"tests\" raw is not allowed",
+      "instead": "tirith run --project tirith --stage tests"
+    },
+    {
+      "ts": "2026-10-28T17:40:00Z",
+      "rule": "raw-stage",
+      "agent": "muse",
+      "lane": "t-world",
+      "project": "tirith",
+      "message": "tirith: raw-stage: running pytest raw is not allowed. Do this instead: tirith run --project tirith --stage test",
+      "blocked": "running pytest raw is not allowed",
+      "instead": "tirith run --project tirith --stage test"
+    },
+    {
+      "ts": "2026-10-28T18:20:00Z",
+      "rule": "no-verify",
+      "agent": "anthropic",
+      "lane": "icon-2",
+      "project": "chromasol",
+      "message": "tirith: no-verify: git commit --no-verify skips the commit checks. Do this instead: run the git command without --no-verify; fix what the hook reports",
+      "blocked": "git commit --no-verify skips the commit checks",
+      "instead": "run the git command without --no-verify; fix what the hook reports"
+    },
+    {
       "ts": "2026-10-28T18:44:00Z",
       "rule": "subagent-tool",
       "agent": "anthropic",
@@ -3024,5 +3054,88 @@ window.TIRITH_STATE = {
       "muse"
     ],
     "pending": []
-  }
+  },
+  "rules": [
+    {
+      "id": "subagent-tool",
+      "description": "Agents may not start helpers on their own; every helper starts through Tirith so you can see it.",
+      "source": "built-in",
+      "project": null,
+      "count_24h": 1,
+      "last_at": "2026-10-28T18:44:00Z",
+      "last_agent": "icon-2"
+    },
+    {
+      "id": "agent-cli",
+      "description": "Agents may only be started through Tirith, so each one shows up as a lane you can follow.",
+      "source": "built-in",
+      "project": null,
+      "count_24h": 0,
+      "last_at": null,
+      "last_agent": null
+    },
+    {
+      "id": "no-verify",
+      "description": "Nobody may skip the safety checks that run before a commit.",
+      "source": "built-in",
+      "project": null,
+      "count_24h": 1,
+      "last_at": "2026-10-28T18:20:00Z",
+      "last_agent": "icon-2"
+    },
+    {
+      "id": "hooks-path",
+      "description": "Nobody may switch off the commit checks by pointing git at other hooks.",
+      "source": "built-in",
+      "project": null,
+      "count_24h": 0,
+      "last_at": null,
+      "last_agent": null
+    },
+    {
+      "id": "git-hooks",
+      "description": "Agents may not edit or delete the commit checks that guard the project.",
+      "source": "built-in",
+      "project": null,
+      "count_24h": 0,
+      "last_at": null,
+      "last_agent": null
+    },
+    {
+      "id": "raw-stage",
+      "description": "Tests and builds must run through Tirith, so you can see them in Pipelines.",
+      "source": "built-in",
+      "project": null,
+      "count_24h": 4,
+      "last_at": "2026-10-28T19:31:00Z",
+      "last_agent": "t-world"
+    },
+    {
+      "id": "lane-brief",
+      "description": "Every lane starts with a written task, so the agent knows what to do.",
+      "source": "built-in",
+      "project": null,
+      "count_24h": 0,
+      "last_at": null,
+      "last_agent": null
+    },
+    {
+      "id": "project-check",
+      "description": "No new lane starts while the project's setup has problems.",
+      "source": "built-in",
+      "project": null,
+      "count_24h": 0,
+      "last_at": null,
+      "last_agent": null
+    },
+    {
+      "id": "commit-guard",
+      "description": "Commits are checked for banned words and failing tests before they are accepted.",
+      "source": "built-in",
+      "project": null,
+      "count_24h": 0,
+      "last_at": null,
+      "last_agent": null
+    }
+  ]
 };

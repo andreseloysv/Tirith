@@ -4,6 +4,12 @@ No rule lives in a markdown file. Every rule below is code that blocks, with a m
 agent what to do instead. Agents are named by alias (`anthropic`, `muse`); the real executable of each
 alias is `[agents.<alias>] command` in the owner's `~/.tirith/config.toml`.
 
+Every rule describes itself in one plain sentence for someone who does not code (for example raw-stage:
+"Tests and builds must run through Tirith, so you can see them in Pipelines."). Built-in rules: the table
+`gates.DESCRIPTIONS`; a test fails when a rule of `manifest.BUILT_IN_RULES` has none. Custom rules: the
+required `description` field (`CONTRACT-setup.md`). The description is what the web page shows; the
+message below is for the agent only.
+
 Message format, one block per violation:
 `tirith: <rule-id>: <what was blocked>. Do this instead: <exact command>`
 
@@ -73,9 +79,16 @@ child and removes it when the lane ends.
 (`source: "violation"`) per violation of the last hour. Each row also carries `blocked` (what was
 blocked) and `instead` (the command), split from `message`.
 
-The web shows them in an Overview "Rules" section (last 24 h: time, agent, rule label, what was
-blocked, the command with a copy button), in red in the agent panel with a count on agent cards, and
-as a red edge from the agent to The Guard in Flow.
+`rules`: every active rule once (custom rules once per project):
+`{id, description, source: "built-in"|"tirith.toml", project, count_24h, last_at, last_agent}`.
+`count_24h` counts the violations of the last 24 hours (all of `events.jsonl`, not only the 50 kept in
+`violations`); `last_agent` is the lane id (else the agent alias) of the newest one, null when none.
+
+The web shows an Overview "Rules" section with one row per rule that fired in the last 24 hours: the
+description, "11 times today · last 09:04 by <avatar> Zeludile", and a fold-out list of the blocked
+commands (time, agent, what was blocked). The "Do this instead" command is not shown there (the agent
+already got it). The agent panel still lists a lane's violations in red with a count on agent cards, and
+Flow draws a red edge from the agent to The Guard.
 
 ## Activate
 

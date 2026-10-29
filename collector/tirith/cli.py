@@ -1314,7 +1314,9 @@ def _cmd_setup(args) -> int:
         elif action == "add-rule":
             done = setup_mod.add_rule(folder, setup_mod.build_rule(
                 args.id, args.action, args.message, args.instead, args.match, args.regex,
-                [x.strip() for x in (args.paths or "").split(",") if x.strip()]))
+                [x.strip() for x in (args.paths or "").split(",") if x.strip()], args.description))
+        elif action == "describe-rule":
+            done = setup_mod.describe_rule(folder, args.id, args.description)
         else:
             done = setup_mod.remove_rule(folder, args.id)
     except setup_mod.SetupError as error:
@@ -1338,7 +1340,7 @@ def _setup_show(loaded, folder: Path) -> None:
     for hook in loaded.hooks:
         print(f"hook {hook.event}: {hook.run}")
     for rule in loaded.rules:
-        print(f"rule {rule.id} ({rule.action}): {rule.message}")
+        print(f"rule {rule.id} ({rule.action}): {rule.description}")
 
 
 def _setup_apply(home: Path, request_id: str) -> int:
@@ -1727,14 +1729,20 @@ def build_parser() -> argparse.ArgumentParser:
     se_rule.add_argument("--action", choices=manifest_mod.RULE_ACTIONS, default="block")
     se_rule.add_argument("--message", required=True)
     se_rule.add_argument("--instead", required=True)
+    se_rule.add_argument("--description", required=True,
+                         help="one plain sentence saying what the rule does, for someone who does not code")
+    se_dr = setup_sub.add_parser("describe-rule", parents=[common],
+                                 help="set a custom rule's description and mark it as up to date")
+    se_dr.add_argument("--id", required=True)
+    se_dr.add_argument("--description", required=True)
     se_rr = setup_sub.add_parser("remove-rule", parents=[common], help="remove a custom rule")
     se_rr.add_argument("--id", required=True)
     se_apply = setup_sub.add_parser("apply", parents=[common],
                                     help="apply a setup request of the inbox, answer it and close it")
     se_apply.add_argument("id")
-    for se_cmd in (se_show, se_add, se_rm, se_rule, se_rr):
+    for se_cmd in (se_show, se_add, se_rm, se_rule, se_dr, se_rr):
         se_cmd.add_argument("--project", default=None, help="project id (default: the one of the cwd)")
-    for se_cmd in (se_show, se_add, se_rm, se_rule, se_rr, se_apply):
+    for se_cmd in (se_show, se_add, se_rm, se_rule, se_dr, se_rr, se_apply):
         se_cmd.set_defaults(func=_cmd_setup)
 
     models = sub.add_parser("models", parents=[common],
