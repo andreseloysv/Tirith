@@ -92,6 +92,18 @@
         }
       }
     },
+    "health": {
+      "type": ["object", "null"],
+      "description": "Tirith's own checks in plain words (docs/CONTRACT-selfcheck.md); null before the first pass.",
+      "properties": {
+        "level": {"enum": ["green", "amber", "red"]},
+        "at": {"type": "string"},
+        "checks": {"type": "array", "items": {
+          "type": "object", "required": ["id", "label", "level", "text"],
+          "properties": {"id": {"type": "string"}, "label": {"type": "string"},
+                         "level": {"enum": ["ok", "healing", "failed"]}, "text": {"type": "string"}}}}
+      }
+    },
     "waiting_on_you": {
       "type": "array",
       "items": {
@@ -779,9 +791,15 @@
           "description": "Review and merge of a lane started by `tirith launch`; null for other lanes.",
           "required": ["status"],
           "properties": {
-            "status": {"enum": ["pending", "running", "tests-failed", "ready", "merge-failed", "merged"]},
+            "status": {"enum": ["pending", "running", "tests-failed", "claims-failed", "ready", "merge-failed", "merged"]},
             "at": {"type": "string"},
-            "message": {"type": "string"}
+            "message": {"type": "string"},
+            "claims": {
+              "type": "object",
+              "description": "Claim check of the lane's report: ok, claims checked, the ones that do not hold.",
+              "properties": {"ok": {"type": "boolean"}, "checked": {"type": "integer"},
+                             "mismatches": {"type": "array", "items": {"type": "string"}}}
+            }
           }
         },
         "step": {

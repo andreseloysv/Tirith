@@ -380,7 +380,7 @@
   /* The ONE current state of an unfinished step, or ''. */
   function stateLine(s, p, state) {
     var rl = reviewLane(s, p, state), r = rl && rl.review, auto = state.autopilot, on = auto ? autoOn(state) : true, a, owner, h, skip;
-    if (r && (r.status === 'tests-failed' || r.status === 'merge-failed' || r.status === 'failed')) {
+    if (r && (r.status === 'tests-failed' || r.status === 'merge-failed' || r.status === 'claims-failed' || r.status === 'failed')) {
       return '<div class="pstate wait">The manager is resolving a merge</div>';
     }
     if (r && r.status === 'running') {

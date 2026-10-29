@@ -165,12 +165,37 @@ The agent leaves its work uncommitted in the worktree; review finishes the job:
 
 The result is stored on the lane file as `review` `{status, at, pid, message?, commit?}`. `state.agents[].review`
 is `{status, at?, message?}` with `status` one of `pending` (launched lane, done, not reviewed), `running`,
-`tests-failed`, `ready`, `merge-failed`, `merged`; `null` for lanes not started by `tirith launch`. A `running`
+`tests-failed`, `claims-failed`, `ready`, `merge-failed`, `merged`; `null` for lanes not started by `tirith launch`. A `running`
 review whose process died shows as `merge-failed` ("interrupted").
 
 `tirith lane drop <lane-id>` removes the worktree and the branch of an unmerged launched lane (`review.status = "dropped"`).
 `state.agents[].review` also carries `run` (the pipeline run of the tests, known while they run), and after a
 merge or passing tests `files`, `branch` and `passed` (the count the test runner printed, if any).
+
+### Claim check (`tirith/claimcheck.py`)
+
+After the tests pass and before any merge, the lane's final report (`lane.report`) is checked against facts, by
+regexes and line structure only (no model). Each claim that does not hold is one sentence in
+`review.claims.mismatches`; `review.claims` is `{ok, checked, mismatches}` (also on `ready`/`merged`).
+- files said changed/added/created/updated: must be in `git diff <start_commit>` (commits and uncommitted)
+  or untracked; lines with a negation ("did not change") are skipped;
+- "added N tests" / `test_x in <file>`: the diff must add that many test functions (python `def test_`,
+  rust `#[test] fn`, js `test(`/`it(`), the named ones, in the named file;
+- "tests pass" / "N passed": a passing test-stage run of the lane's worktree must be recorded in
+  `events.jsonl` after the last changed file, and N must be a count printed by such a run's log;
+- "committed as <sha>": the commit must exist; "merged": the lane's HEAD must be in the repo's branch;
+  "pushed": the lane's HEAD must be on a remote branch ("merged main into ..." and future tense are skipped);
+- "looked at the screenshot <path>": the file must exist and be newer than the lane's start;
+- the brief's "Fix"/"Do" bullet items against a diff that is empty or only docs (`*.md`, `*.rst`, `docs/`,
+  README), unless the item itself is about docs/wording.
+A lane sent back (`fallback_lane`) is judged against the first lane's `start_commit` and start time.
+
+Any mismatch: `review.status = "claims-failed"`, `review.message` is the list, nothing is merged (exit 1).
+The dispatcher settles it without bothering the owner: the lane is sent back once to its agent
+(`cli.relaunch_lane(..., note=...)`: the old work is committed on its branch, the new worktree starts from it,
+the brief gets the list appended under `## Claim check failed`); if the brief already has that heading, or the
+agent is unknown, the manager's queue gets one item with "Retry the review" / "Drop the lane". The Agents detail
+shows "Claims verified ✓" or the mismatches.
 
 ### Automatic review (`tirith/autoreview.py`, called by every dispatcher pass)
 

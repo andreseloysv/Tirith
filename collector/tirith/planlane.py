@@ -11,6 +11,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from tirith import howto as howto_mod
+
 LANE_STEPS = {"plan-refresh": "plan-refresh", "plan-new": "plan-new"}  # request kind -> the lane's step
 HERO_CLASS = "loremaster"
 PLANS_DIR = "docs/plans"
@@ -40,6 +42,7 @@ OWNER_GATE_RULES = (
     "- A check an agent can do (open a `tirith://` link with `open`, take a screenshot with playwright, read "
     "state or a file) is NEVER an owner check: put it under **Still missing** instead.",
     "- Never list anything about an item marked `(fuera de este plan ...)`; it is dropped and logged.",
+    *(f"- {rule}" for rule in howto_mod.RULES),
 )
 
 

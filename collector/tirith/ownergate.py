@@ -15,11 +15,13 @@ import re
 from pathlib import Path
 
 from tirith import asks as asks_mod
+from tirith import howto as howto_mod
 from tirith.home import now_iso
 from tirith.store import append_jsonl, read_jsonl
 
 OWNER, MANAGER, DROPPED = "owner", "manager", "dropped"
 DROPPED_FILE = "owner_dropped.jsonl"
+CONCRETE_KIND = "make-concrete"  # a manager queue item: an owner how-to with placeholders
 MOVED_REASON = "moved to the manager queue"
 OUT_OVERLAP = 0.6
 
@@ -58,11 +60,21 @@ def agent_can_do(home: Path, project: str | None, text: str) -> dict:
                               kind=asks_mod.AGENT_CAN_DO_KIND, item_id=f"sq-acd-{key}")
 
 
+def send_back(home: Path, project: str | None, text: str, problem: str, item_id: str) -> dict:
+    """Queue an owner item with a non-concrete how-to for the manager: ``make it concrete: look up ...``."""
+    clean = " ".join(str(text or "").split())
+    key = hashlib.sha1(f"{project or ''}\n{item_id}\n{problem}".encode("utf-8")).hexdigest()[:10]
+    return asks_mod.queue_add(home, str(project or ""), "", f"{problem} (item: {clean})"[:asks_mod.QUEUE_TEXT_MAX],
+                              kind=CONCRETE_KIND, item_id="sq-mc-" + key)
+
+
 def admit(home: Path, item_id: str, project: str | None, text: str, why_owner, *, via: str = "",
-          at: str | None = None, out_items: list[str] | tuple[str, ...] = (), out: bool = False) -> str:
+          at: str | None = None, out_items: list[str] | tuple[str, ...] = (), out: bool = False,
+          howto=None) -> str:
     """``"owner"`` when the item may reach the owner; otherwise it is routed (queued for the manager or
     dropped and logged) and ``"manager"`` / ``"dropped"`` comes back. Callers write the owner item only on
-    ``"owner"``."""
+    ``"owner"``. A ``howto`` (dict or JSON) with a placeholder, or a command that cannot run as it is, sends the
+    item back to the manager queue (``kind: "make-concrete"``)."""
     at = at or now_iso()
     if out or is_out_of_plan(text, out_items):
         _log_dropped(home, item_id, project, text, via, at)
@@ -70,6 +82,15 @@ def admit(home: Path, item_id: str, project: str | None, text: str, why_owner, *
     if asks_mod.why_key(why_owner) is None:
         agent_can_do(home, project, text)
         return MANAGER
+    if howto:
+        try:
+            parsed = howto_mod.parse(howto)
+            holder = howto_mod.has_placeholder(text) if parsed and parsed["steps"] else None
+            if holder:
+                raise howto_mod.HowtoError(f"{howto_mod.MAKE_CONCRETE}the real value of {holder} in the text")
+        except howto_mod.HowtoError as error:
+            send_back(home, project, text, str(error), item_id)
+            return MANAGER
     return OWNER
 
 

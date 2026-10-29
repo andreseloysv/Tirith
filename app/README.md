@@ -135,6 +135,13 @@ and staples the `.app` (Tauri does it) and the `.dmg` (the script does it):
 - App Store Connect API key: `APPLE_API_KEY_PATH` (the `.p8` file), `APPLE_API_KEY` (key id), `APPLE_API_ISSUER`
 - or Apple ID: `APPLE_ID`, `APPLE_PASSWORD` (app-specific password), `APPLE_TEAM_ID`
 
+One command builds, signs, notarizes and staples both the `.app` and the `.dmg` using a `notarytool`
+keychain profile (default `tirith-notary`, override with `TIRITH_NOTARY_PROFILE`):
+
+```sh
+scripts/notarize-macos.sh
+```
+
 CI (`app.yml`) signs the macOS job when the secret `APPLE_SIGNING_IDENTITY` exists and imports the
 certificate from `APPLE_CERTIFICATE` (base64 `.p12`) and `APPLE_CERTIFICATE_PASSWORD`. For notarization add
 `APPLE_API_KEY`, `APPLE_API_ISSUER` and `APPLE_API_KEY_CONTENT` (the `.p8` text), or `APPLE_ID`,
