@@ -23,6 +23,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 
 - [x] Alias de agentes en el código; nombres reales en `config.toml` (`[agents.<alias>]`).
 - [x] Guarda de Tirith intacta e inmutable con las palabras del dueño.
+- [ ] Muse protocol probe 1: read muse serve help
 
 ## 1. `lane run` devuelve la respuesta final
 
