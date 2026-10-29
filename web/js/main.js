@@ -68,6 +68,9 @@
       if (pj && (f.project || projOfEndpoint(s, f.from) || projOfEndpoint(s, f.to)) !== pj) return false;
       return !q || hay([f.text, f.from_name, f.to_name, f.kind], q);
     });
+    out.violations = (s.violations || []).filter(function (v) {
+      return okP(v.project) && (!q || hay([v.rule, v.blocked, v.message, v.lane, v.agent], q));
+    });
     out.rooms = (s.rooms || []).filter(function (r) { return okP(r.project) && (!ss || r.session === ss); }).map(function (r) {
       if (!q) return r;
       var msgs = (r.messages || []).filter(function (m) { return hay([m.text, m.from, r.title], q); });

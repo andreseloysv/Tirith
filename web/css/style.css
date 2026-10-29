@@ -396,3 +396,33 @@ button.fhead { border-radius: 12px; }
 .asec .sum .md, .asec .agoal .md { color: #1f2937; }
 .trows .tcnt { font-size: 11px; white-space: nowrap; }
 .lsay .mdc, .ldt .mdc { min-width: 0; }
+
+/* rules broken and decisions */
+.n.bad { background: #fde8e8; color: #b4252b; font-weight: 600; font-size: 11.5px; border-radius: 9px; padding: 0 7px; line-height: 18px; }
+.vlist { list-style: none; margin: 0; padding: 4px 16px; }
+.vlist li { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid rgba(120,135,160,.14); min-width: 0; } .vlist li:first-child { border-top: 0; }
+.vt { color: var(--mut); font: 11.5px ui-monospace, Menlo, monospace; flex: none; }
+.vwho { display: inline-flex; align-items: center; gap: 7px; flex: none; min-width: 0; max-width: 150px; } .vwho b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+button.vwho:hover b { text-decoration: underline; }
+.vbody { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.vrule { color: #b4252b; font-weight: 600; font-size: 12px; }
+.vblocked { color: #374151; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vdo { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 46%; flex: none; font-size: 11.5px; }
+.vdo > .mut { flex: none; } .vdo code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.vcopy { flex: none; font-size: 11px; font-weight: 600; color: var(--blue); background: rgba(47,111,237,.1); border-radius: 8px; padding: 0 8px; line-height: 19px; } .vcopy:hover { background: rgba(47,111,237,.18); }
+.vrows, .drows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.rules { padding: 8px 10px; border-radius: 10px; background: rgba(229,72,77,.07); border: 1px solid rgba(229,72,77,.22); }
+.rules h4 { color: #b4252b; }
+.vrows li { display: flex; flex-direction: column; gap: 2px; padding-top: 8px; border-top: 1px solid rgba(229,72,77,.16); min-width: 0; } .vrows li:first-child { border-top: 0; padding-top: 0; }
+.vrows .vblocked { white-space: normal; } .vrows .vdo { max-width: 100%; margin-top: 2px; }
+.vline { display: flex; justify-content: space-between; gap: 8px; }
+.rbadge { align-self: flex-start; font-size: 11px; font-weight: 600; color: #b4252b; background: #fde8e8; border-radius: 10px; padding: 0 8px; line-height: 19px; }
+.drows li { display: flex; flex-direction: column; gap: 1px; } .dtext { font-weight: 600; color: #1f2937; } .dwhy { color: var(--mut); }
+.edge.bad { stroke: var(--red); stroke-opacity: .75; }
+.epill.bad { border-color: rgba(229,72,77,.5); } .epill.bad b { background: #fde8e8; color: #b4252b; }
+.dlabel { position: absolute; transform: translate(-50%, -50%); display: inline-flex; align-items: center; gap: 5px; max-width: 200px; z-index: 2; font-size: 11px; line-height: 17px; padding: 0 8px 0 6px; border-radius: 9px; color: #5b3fb8; background: rgba(238,232,255,.92); border: 1px solid rgba(167,139,250,.5); }
+.dlabel i { width: 6px; height: 6px; border-radius: 50%; background: #a78bfa; flex: none; }
+.dlabel span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .dlabel:hover, .dlabel.on { border-color: #7c5ce0; z-index: 9; } .dlabel.more { padding: 0 8px; }
+.decision .dtext { margin: 0 0 12px; font-size: 14px; } .decision h4 { margin: 0 0 4px; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--mut); }
+.decision .dwhy { margin: 0 0 14px; color: #374151; } .dmeta { margin: 0; font-size: 12px; }
+.dlabel.l { transform: translate(-100%, -50%); } .dlabel.r { transform: translate(0, -50%); }
