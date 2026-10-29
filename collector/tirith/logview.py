@@ -39,6 +39,7 @@ _NOISE_TYPES = {"rate_limit_event", "ping", "keep_alive", "keepalive", "heartbea
                 "content_block_start", "content_block_stop", "message_start", "message_stop",
                 "message_delta", "thread.started", "turn.started"}
 
+CACHE_MAX = 2048  # more than the lanes a home keeps, so a cycle never re-parses every log
 _cache: dict[str, tuple[tuple, list[dict]]] = {}
 
 
@@ -475,7 +476,7 @@ def log_entries(path, workspace=None) -> list[dict]:
     if info.st_size > TAIL_BYTES and lines:
         lines = lines[1:]  # the first line is probably cut
     entries = finish(parse_lines(lines, workspace))
-    if len(_cache) > 64:
+    if len(_cache) > CACHE_MAX:
         _cache.clear()
     _cache[str(path)] = (stamp, entries)
     return entries

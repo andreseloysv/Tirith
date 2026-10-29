@@ -141,7 +141,7 @@ the lane file. `lane stop` writes `stop: {by, reason, at}` into the lane file, s
 group, waits up to **10 s** and then sends **SIGKILL**. The lane ends `failed` with the report
 `Stopped by <owner|manager>: <reason>` (`Stopped by <who>.` without a reason); `lane run` ends it when its
 child is gone, and `lane stop` ends it itself if `lane run` is gone. A stopped lane adds no
-Retry/Show the log/Drop it item. The worktree is kept. An interactive lane (own terminal) is signalled by
+manager queue item. The worktree is kept. An interactive lane (own terminal) is signalled by
 pid only. Unknown or already ended lanes exit 3. `--by` defaults to `manager` for agents and scripts and
 `owner` at a terminal; the dispatcher and the manager call `tirith lane stop` (or
 `lanestop.stop_lane`) the same way.

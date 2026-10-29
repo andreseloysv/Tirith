@@ -243,7 +243,7 @@ def test_tirith_lane_failure_goes_to_the_manager_queue_not_the_owner(home: Path,
     add_lane_ask(home, {"id": "manager-bbbb", "project": "demo"}, "failed")  # the id alone says enough
     assert not _owner_waits(home).strip()
     add_lane_ask(home, {"id": "worker", "project": "demo", "feature": "F"}, "failed")
-    assert "What now?" in _owner_waits(home)  # a lane the owner started still asks
+    assert not _owner_waits(home).strip()  # a lane the owner started never asks either: the manager retries
 
 
 def test_two_failed_manager_lanes_pause_it_with_one_queue_item(home: Path, project: Path, spawned) -> None:

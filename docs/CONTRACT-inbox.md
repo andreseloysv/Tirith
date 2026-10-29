@@ -346,9 +346,9 @@ token check as before. The app has `inbox_reply(wait, project, value, text)` nex
   **no** ask for the owner. It adds one `kind: "review"` item to the manager queue (`tirith lane end` and
   `tirith lane run` both do it). The manager triages it (`tirith queue list`, `tirith queue done <id>`)
   and re-asks the owner with `tirith wait add ... --option ...` only when needed.
-- A lane that fails under `tirith lane run`, or ends without an answer, adds one owner ask `lane-<id>`
-  (`kind: decision`, options `Retry|retry`, `Show the log|log`, `Drop it|drop`, and a `tail` command for
-  the log). `tirith lane end --result failed` run by the manager adds none.
+- A lane that fails under `tirith lane run`, or ends without an answer, adds one manager queue item
+  `sq-lane-<id>` (`kind: lane-failed`, with the log tail), never an owner ask: retrying or dropping is the
+  manager's call. `tirith lane end --result failed` run by the manager adds none.
 
 ## Web (`web/js/v-needs.js`, `web/js/v-manager.js`)
 
@@ -374,8 +374,7 @@ copy, a link or a text box is not enough.
   agent-style message (`tirith: call-to-action: ... Do this instead: add --option "Label|value" or --run
   ...`). What only the manager must see goes to its own queue (`tirith queue`), not to the owner.
 - `dispatch.add_owner_item` raises on an empty option list.
-- Items the collector generates carry options or actions: lane failures (`Retry`, `Show the log`,
-  `Drop it`), dispatcher items (`Wait` / `Start an agent` when the manager is silent), guard checks (below), and violations,
+- Items the collector generates carry options or actions: dispatcher items (`Wait` / `Start an agent` when the manager is silent), guard checks (below), and violations,
   brain-detected waits and room waits (`Got it|ack`).
 - The collector enforces it again on the final list (`_enforce_cta`, through `asks.is_owner_item`): an item
   without one (an old row of `waits.jsonl`, a future generator) is **not** shown. It becomes one manager
@@ -393,8 +392,11 @@ Nothing reaches the owner unless only the owner can do it, enforced by one funct
 path that raises an owner item or an owner-directed message calls it: `dispatch.add_owner_item`,
 `tirith wait add` / `tirith chat say` with options (`cli.add_wait`), a roadmap `(dueño: …)` tag
 (`autopilot`), the "Needs the owner" list of a plan-refresh report (`ownergate.filter_report`, called by the
-automatic review before the report is posted), the autoreview "merge it?" item and the manager-silent escalation.
+automatic review before the report is posted), and the manager-silent escalation. The autoreview no longer asks the owner anything: it merges.
 
+- `owner-decision` is never for a merge / drop / review / relaunch question: `admit` rejects it (to the manager
+  queue as `kind: "not-owner"`, "not for the owner: ...") by `kind` (`merge`, `drop`, `review`, `relaunch`) and
+  by those words in the text or `why_detail`.
 - The item must name `why_owner`, one of `asks.WHY_OWNER`: `credentials` (passwords, keys, store/developer
   accounts), `payment`, `personal-account` (a login only the owner can do), `physical-device`, `owner-decision`
   (a product choice with options). `tirith wait add --why-owner KEY [--why-detail "Apple account"]`; in a
