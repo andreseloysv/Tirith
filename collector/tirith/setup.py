@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import re
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from tirith import hooks as hooks_mod
@@ -30,6 +30,8 @@ BUILT_IN: tuple[tuple[str, str, list[str], str], ...] = (
     ("no-verify", "Skipped git hooks", ["hook"], "Blocks git commit -n and --no-verify."),
     ("hooks-path", "Changed hooks path", ["hook"], "Blocks changing core.hooksPath."),
     ("git-hooks", "Edited git hooks", ["hook", "git"], "Blocks editing or removing files under .git/hooks."),
+    ("settings-edit", "Edited agent settings", ["hook"],
+     "Blocks editing an agent's settings file or ~/.tirith/config.toml, so the hooks cannot be removed."),
     ("raw-stage", "Raw pipeline stage", ["hook"],
      "Blocks running a tirith.toml stage by hand; use tirith run --stage."),
     ("lane-brief", "Lane without brief", ["lane run"], "tirith lane run needs a non-empty --brief file."),
@@ -50,27 +52,14 @@ class Machine:
     shims_ok: bool
     problems: list[str]
     fix: list[str]
+    protection: list[dict] = field(default_factory=list)  # hooks.protect rows (public fields only)
 
 
-def _settings_has_hooks(path: Path, agent: str) -> bool:
-    try:
-        data = json.loads(path.read_text(encoding="utf-8") or "{}")
-    except (OSError, ValueError):
-        return False
-    hooks = data.get("hooks") if isinstance(data, dict) else None
-    if not isinstance(hooks, dict):
-        return False
-    for event in hooks_mod.INSTALL_EVENTS:
-        groups = hooks.get(event)
-        if not isinstance(groups, list) or not any(
-                isinstance(g, dict) and any(isinstance(h, dict) and hooks_mod._ours(h.get("command"), agent)
-                                            for h in g.get("hooks") or [])
-                for g in groups):
-            return False
-    return True
+_settings_has_hooks = hooks_mod.has_hooks
 
 
-def machine_state(config: Config, shim_dir: Path | None = None) -> Machine:
+def machine_state(config: Config, shim_dir: Path | None = None,
+                  protection: list[dict] | None = None) -> Machine:
     """Hooks installed in every configured agent's settings and the shims intact (read only)."""
     from tirith import gates
 
@@ -98,7 +87,8 @@ def machine_state(config: Config, shim_dir: Path | None = None) -> Machine:
         problems.append("[gates] enabled = false in config.toml")
     shims_ok = not shim_problems
     active = hooks_ok and shims_ok and config.gates_enabled
-    return Machine(active, hooks_ok, shims_ok, problems, fix)
+    rows = [{k: r.get(k) for k in ("agent", "ok", "checked_at", "healed_at")} for r in protection or []]
+    return Machine(active, hooks_ok, shims_ok, problems, fix, rows)
 
 
 def _last(runs: list[dict], project: str, pipeline: str, stage: str) -> dict | None:
@@ -163,6 +153,7 @@ def build(folder: Path | None, project: str, machine: Machine, runs: list[dict],
         "gates_active": machine.active,
         "gates_problems": machine.problems,
         "gates_fix": machine.fix,
+        "protection": machine.protection,
         "pending": _pending(requests, project),
     }
 

@@ -1245,6 +1245,24 @@ def _cmd_room_say(args) -> int:
 
 
 def _cmd_hook(args) -> int:
+    if args.action == "verify":
+        config = load_config(_home(args))
+        try:
+            path = hooks_mod.default_settings(args.agent, config.agents)
+        except ValueError as err:
+            raise SystemExit(f"tirith hook verify: {err}")
+        if not hooks_mod.has_hooks(path, args.agent):
+            print(f"Hooks missing for {args.agent} in {path}. Run: tirith hook install --agent {args.agent}")
+            return 1
+        saved = hooks_mod.protect_state(_home(args)).get(args.agent) or {}
+        try:
+            secs = max(0, int((datetime.now(timezone.utc) - datetime.fromisoformat(
+                str(saved["checked_at"]).replace("Z", "+00:00"))).total_seconds()))
+            ago = f" · last check {secs} s ago" if secs < 120 else f" · last check {secs // 60} min ago"
+        except (KeyError, ValueError):
+            ago = " · the collector has not checked yet"
+        print(f"Hooks protected{ago}")
+        return 0
     if args.action in ("install", "uninstall"):
         try:
             fn = hooks_mod.install if args.action == "install" else hooks_mod.uninstall
@@ -1615,7 +1633,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     hook = sub.add_parser("hook", parents=[common],
                           help="record an agent hook call (stdin JSON) / install hooks")
-    hook.add_argument("action", nargs="?", choices=["install", "uninstall"], default=None)
+    hook.add_argument("action", nargs="?", choices=["install", "uninstall", "verify"], default=None)
     hook.add_argument("--agent", required=True, help="agent alias: anthropic, muse, or any other name")
     hook.add_argument("--event", default=None, help="event name if the payload has none")
     hook.add_argument("--settings", default=None, help="agent settings file (install/uninstall)")

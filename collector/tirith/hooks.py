@@ -221,7 +221,7 @@ def decide(agent: str, event: dict, payload, home: Path | None = None) -> int:
     fields = adapt(agent, data)
     tool_input = _pick(data, "tool_input", "input", "arguments", "args")
     found = gates.check_call(config, event.get("tool"), tool_input, event.get("cwd"),
-                             event.get("project"))
+                             event.get("project"), home)
     for violation in found:
         gates.record_violation(
             home, violation, ts=event.get("ts") or now_iso(), agent=agent, lane=event.get("lane"),
@@ -323,6 +323,93 @@ def uninstall(agent: str, settings: Path | None = None, agents: dict | None = No
             del data["hooks"]
     write_json_atomic(path, data)
     return path
+
+
+# -- protection: the hooks stay in the settings file ----------------------------------------------
+
+PROTECT_FILE = "protect.json"
+HOOKS_REMOVED = "hooks-removed"
+
+
+def has_hooks(path: Path, agent: str) -> bool:
+    """Every ``INSTALL_EVENTS`` entry of ``agent`` is in the settings file (read only)."""
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8") or "{}")
+    except (OSError, ValueError):
+        return False
+    hooks = data.get("hooks") if isinstance(data, dict) else None
+    if not isinstance(hooks, dict):
+        return False
+    for event in INSTALL_EVENTS:
+        groups = hooks.get(event)
+        if not isinstance(groups, list) or not any(
+                isinstance(g, dict) and any(isinstance(h, dict) and _ours(h.get("command"), agent)
+                                            for h in g.get("hooks") or [])
+                for g in groups):
+            return False
+    return True
+
+
+def _installed_form(path: Path, agent: str) -> tuple[str, str | None]:
+    """The executable and role of the installed ``PreToolUse`` entry (so a heal writes the same)."""
+    try:
+        groups = json.loads(Path(path).read_text(encoding="utf-8"))["hooks"]["PreToolUse"]
+        for group in groups:
+            for handler in group.get("hooks", []):
+                command = handler.get("command")
+                if _ours(command, agent):
+                    tokens = shlex.split(command)
+                    role = next((t.split("=", 1)[1] for t in tokens
+                                 if t.startswith(dispatch.ROLE_ENV + "=")), None)
+                    return tokens[tokens.index("hook") - 1], role
+    except Exception:
+        pass
+    return "tirith", None
+
+
+def protect_state(home: Path) -> dict:
+    data = read_json(home / PROTECT_FILE, {})
+    return data if isinstance(data, dict) else {}
+
+
+def protect(home: Path, config, now: datetime | None = None) -> list[dict]:
+    """Check the hooks of every configured agent; reinstall them when they were removed.
+
+    Reinstalling merges (``install`` keeps every other key) and records a ``hooks-removed`` violation.
+    Only an agent whose hooks were seen intact before is healed; one never installed is reported, not
+    touched. Returns ``[{agent, ok, checked_at, healed_at, settings}]`` and keeps it in ``protect.json``."""
+    stamp = now_iso(now)
+    saved = protect_state(home)
+    out: dict[str, dict] = {}
+    for alias in config.agents:
+        try:
+            path = default_settings(alias, config.agents)
+        except ValueError:
+            continue
+        prev = saved.get(alias) if isinstance(saved.get(alias), dict) else {}
+        row = {"agent": alias, "settings": str(path), "checked_at": stamp,
+               "healed_at": prev.get("healed_at"), "ok": has_hooks(path, alias),
+               "tirith": prev.get("tirith") or "tirith", "role": prev.get("role"),
+               "seen_ok": bool(prev.get("seen_ok"))}
+        if row["ok"]:
+            row["seen_ok"] = True
+            row["tirith"], row["role"] = _installed_form(path, alias)
+        elif row["seen_ok"] and config.gates_enabled:
+            try:
+                install(alias, path, row["tirith"], config.agents, row["role"])
+                row["ok"] = has_hooks(path, alias)
+            except (OSError, ValueError):
+                pass
+            if row["ok"]:
+                row["healed_at"] = stamp
+                gates.record_violation(
+                    home, gates.Violation(
+                        HOOKS_REMOVED, f"the tirith hooks of {alias} were removed from {path}; "
+                        "Tirith put them back", gates.SETTINGS_HINT),
+                    ts=stamp, agent=alias, lane=None, session=None, project=None, tool=None, cwd=None)
+        out[alias] = row
+    write_json_atomic(home / PROTECT_FILE, out)
+    return list(out.values())
 
 
 # -- collector side ---------------------------------------------------------------------------

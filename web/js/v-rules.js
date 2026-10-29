@@ -4,6 +4,7 @@
   var RULE = {
     'subagent-tool': 'Sub-agent tool', 'agent-cli': 'Agent without lane run', 'no-verify': 'Skipped git hooks',
     'hooks-path': 'Changed hooks path', 'git-hooks': 'Edited git hooks', 'raw-stage': 'Raw pipeline stage',
+    'settings-edit': 'Edited agent settings', 'hooks-removed': 'Hooks removed',
     'lane-brief': 'Lane without brief', 'project-check': 'Project check failing'
   };
   T.ruleLabel = function (id) { return RULE[id] || T.cap(String(id || 'rule').replace(/[-_]+/g, ' ')); };
