@@ -212,8 +212,11 @@ def tirith_argv() -> list[str]:
 def lane_run_argv(project: str, step_id: str, hero_class: str, title: str, brief: Path,
                   workspace: Path, lane_id: str, command: list[str],
                   request_id: str | None = None, alias: str | None = None,
-                  fallback_from: str | None = None, tried: list[str] | None = None) -> list[str]:
+                  fallback_from: str | None = None, tried: list[str] | None = None,
+                  by_tirith: bool = False) -> list[str]:
     extra = ["--request", request_id] if request_id else []
+    if by_tirith:
+        extra += ["--by-tirith"]
     if alias:
         extra += ["--as-agent", alias]
     if fallback_from:
