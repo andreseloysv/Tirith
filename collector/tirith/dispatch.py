@@ -35,6 +35,7 @@ from tirith import planlane as planlane_mod
 from tirith import verifylane as verifylane_mod
 from tirith import projects as projects_mod
 from tirith import roadmap as roadmap_mod
+from tirith import selfcheck as selfcheck_mod
 from tirith.home import Config, now_iso, parse_iso
 from tirith.store import append_jsonl, read_json, read_jsonl, write_json_atomic
 
@@ -398,6 +399,10 @@ def run(home: Path, config: Config, now: datetime, *, agents: list[dict], lanes:
     if autoreview_mod.run(home, config, now, state, lanes, spawn=spawn, notify=notify):
         changed = True
     diskdiet_mod.cleanup(home, config, now)
+    # before the on-call manager, so a restart it asks for happens in this pass
+    if selfcheck_mod.run(home, config, now, state, lanes=lanes, agents=agents, projects=projects or [],
+                         spawn=spawn, kill=manager_kill):
+        changed = True
     if config.dispatch_auto_launch and managerd_mod.run(home, config, now, state, lanes, spawn=manager_spawn,
                                                           kill=manager_kill):
         changed = True  # nobody attached and something pending: the on-call manager
