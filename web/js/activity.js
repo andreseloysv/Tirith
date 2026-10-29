@@ -64,6 +64,7 @@
     var o = opts || {}, h = '';
     if (o.goal !== false && a.goal) h += sec('Goal', '<p class="agoal">' + esc(a.goal) + '</p>');
     h += sec('Status', status(a, o));
+    if (o.log !== false) h += sec('Log', T.logView(a));
     h += sec('Tests', tests(a), (a.tests || []).length || null);
     h += sec('Tools', tools(a));
     h += sec('Files', files(a), (a.files || []).length || null);

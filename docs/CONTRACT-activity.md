@@ -56,3 +56,36 @@ rows (one count per `PreToolUse`, tests with unknown result).
 
 The git diff pair runs once per working lane per cycle (ended lanes: once). The log is parsed
 incrementally per lane (cache keyed by size and mtime); the brief is cached by mtime.
+
+## Log entries
+
+`state.agents[].log_entries` is the lane log as structured entries, **newest first**, built each cycle
+by `collector/tirith/logview.py` from the last 256 KB of the log (cached by size and mtime; an agent
+without a log file gets entries from its hook events). The old `log_tail` stays for compatibility.
+The web only renders them (`web/js/logview.js`, shared by the Agents drawer and the Flow node).
+
+Each entry: `{ts, kind, text, detail, fields, path}`.
+
+| `kind` | `text` | `detail` | `fields` |
+|---|---|---|---|
+| `say` | the agent's own words | rest of a long text | set for an unknown JSON object (key → value card) |
+| `command` | shell command | "" | |
+| `output` | first 6 lines | rest (≤ 4 KB) | |
+| `edit` | path relative to the workspace | `+12 −3`, `created`, `deleted` or `edited` | |
+| `read` | `Read path`, `Grep pattern in dir` | | |
+| `error` | first lines of the traceback / failed output / error message | rest | |
+| `test` | test command | `running`, `passed` or `failed` | `{passed, failed}` when counts are known |
+| `spawn` | what the sub-agent was asked | its type | |
+| `done` | the final answer (first 6 lines) | rest | `{usage: "12.4k tokens, 38 s"}` |
+| `system` | bookkeeping (init, rate limit, usage ping) | the original JSON | hidden by default, counted |
+
+`ts` is the record's own timestamp, or null for plain-text lines. `path` is the full path of an edit/read
+(the page shows it on hover; `text` is shortened). Only 60 visible and 30 `system` entries are kept.
+
+JSON is never passed through as text. A line, a command's output or an event payload that is JSON becomes:
+a `test` (`{passed, failed}`), an `error` (`{error: …}`), a `system` usage line (`input_tokens`,
+`duration_ms` → `12.4k tokens, 38 s`), a `done` (`Finished: <first sentence>`, from `{result: …}`), or
+else a `say` with `fields` (bounded: strings ≤ 300 chars, ≤ 24 keys, depth 3) and the original
+pretty-printed in `detail`. The page humanizes keys (`exit_code` → "Exit code"), shows ISO times as
+relative, booleans as ✓/✗, and collapses nested values ("3 items ▸"). A traceback in plain text is one
+`error` entry.
