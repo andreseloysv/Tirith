@@ -15,6 +15,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -439,6 +440,11 @@ def _stage_alive(stage: dict, now: datetime) -> bool:
         except OSError:
             pass
     return True
+
+
+def backoff_s(failures: int) -> float:
+    """Extra wait after ``failures`` cycles in a row failed: 0, 2, 4, ... up to 30 seconds."""
+    return min(30.0, 2.0 ** failures) if failures else 0.0
 
 
 class Collector:
@@ -1485,10 +1491,23 @@ class Collector:
                 self.worker.drain(90.0)
                 state = self.cycle()
             return state
-        state = self.cycle()
         if once:
-            return state
-        while True:
-            time.sleep(max(0.2, interval))
+            return self.cycle()
+        state: dict = {}
+        failures = 0
+        try:
             state = self.cycle()
+        except Exception as exc:
+            failures = 1
+            print(f"tirith collect: cycle failed ({type(exc).__name__}: {exc}); "
+                  f"retrying (failure {failures})", file=sys.stderr, flush=True)
+        while True:
+            time.sleep(max(0.2, interval) + backoff_s(failures))
+            try:
+                state = self.cycle()
+                failures = 0
+            except Exception as exc:  # one bad cycle (disk full, bad file) must not end the collector
+                failures += 1
+                print(f"tirith collect: cycle failed ({type(exc).__name__}: {exc}); "
+                      f"retrying (failure {failures})", file=sys.stderr, flush=True)
         return state  # pragma: no cover
