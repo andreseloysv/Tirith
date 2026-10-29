@@ -29,7 +29,7 @@
   }
 }
 * { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
+html { scroll-behavior: smooth; scroll-padding-top: 70px; }
 body {
   margin: 0;
   color: var(--ink);
@@ -52,7 +52,8 @@ pre code { background: none; padding: 0; overflow-wrap: normal; }
 .skip { position: absolute; left: -999px; }
 .skip:focus { left: 8px; top: 8px; background: var(--bg); padding: 8px 12px; z-index: 10; }
 
-header.top { padding: 18px 0; }
+header.top { padding: 18px 0; position: sticky; top: 0; z-index: 5; transition: background-color 0.3s, box-shadow 0.3s; }
+header.top.scrolled { background: color-mix(in srgb, var(--bg) 72%, transparent); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); box-shadow: 0 1px 0 var(--line); }
 header.top .wrap { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .brand { font-weight: 700; font-size: 1.15rem; letter-spacing: 0.01em; color: var(--ink); text-decoration: none; display: flex; align-items: center; gap: 8px; }
 .brand svg { width: 22px; height: 22px; }
@@ -116,3 +117,16 @@ p { margin: 0 0 12px; }
 
 footer { border-top: 1px solid var(--line); padding: 26px 0 40px; color: var(--muted); font-size: 0.92rem; }
 footer .wrap { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; }
+
+/* On-scroll reveals (scroll.js). Hidden only with JS and when motion is allowed; transform/opacity only. */
+@media (prefers-reduced-motion: no-preference) {
+  html.js .rv { opacity: 0; transform: translate3d(0, 20px, 0); will-change: opacity, transform; }
+  html.js .rv.in { opacity: 1; transform: none; will-change: auto; transition: opacity 600ms ease-out var(--d, 0ms), transform 600ms ease-out var(--d, 0ms); }
+  html.js .hero .shot.rv { transform: translate3d(0, 24px, 0) scale(0.97); }
+  html.js .hero .shot.rv.in { transform: none; transition-duration: 700ms; }
+  html.js .hero .shot img { transform: scale(1.05); will-change: transform; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  header.top { transition: none; }
+}
