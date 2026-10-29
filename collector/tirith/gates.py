@@ -46,6 +46,7 @@ DESCRIPTIONS: dict[str, str] = {
     "no-verify": "Nobody may skip the safety checks that run before a commit.",
     "hooks-path": "Nobody may switch off the commit checks by pointing git at other hooks.",
     "git-hooks": "Agents may not edit or delete the commit checks that guard the project.",
+    "agent-hooks": "Agents may not remove the hooks that let you see what every agent does.",
     "raw-stage": "Tests and builds must run through Tirith, so you can see them in Pipelines.",
     "lane-brief": "Every lane starts with a written task, so the agent knows what to do.",
     "project-check": "No new lane starts while the project's setup has problems.",
@@ -201,6 +202,48 @@ def _clip(text: str, limit: int = 100) -> str:
 
 def _hooks_target(tokens: list[str]) -> bool:
     return any(".git/hooks" in token for token in tokens)
+
+
+def protected_settings(config: Config) -> list[str]:
+    """User-level settings files that hold our hook entries: ``[agents.<alias>] settings`` + Muse's default."""
+    paths = [str(Path(str(t["settings"])).expanduser()) for t in config.agents.values() if t.get("settings")]
+    paths.append(str(Path.home() / ".config" / "muse" / "settings.json"))
+    return list(dict.fromkeys(paths))
+
+
+def _is_settings(path: str, protected: list[str]) -> bool:
+    """``path`` (``~``/``$HOME`` allowed, ``..`` resolved) names one of the ``protected`` files."""
+    text = str(path).strip().strip("\"'")
+    home = str(Path.home())
+    for prefix in ("~", "$HOME", "${HOME}"):
+        if text == prefix or text.startswith(prefix + "/"):
+            text = home + text[len(prefix):]
+    if not text:
+        return False
+    try:
+        resolved = os.path.realpath(os.path.expanduser(text))
+    except (OSError, ValueError):
+        resolved = text
+    return resolved in protected or os.path.normpath(text) in protected or any(
+        text.endswith("/" + p[len(home) + 1:]) for p in protected if p.startswith(home + "/"))
+
+
+def _hook_removal(line: str, segments: list[list[str]], protected: list[str]) -> Violation | None:
+    """A shell command that edits a protected settings file or runs ``tirith hook uninstall``."""
+    hit = bool(re.search(r"\btirith\b.*\bhook\s+uninstall\b", line))
+    for tokens in segments:
+        name, _ = _program(tokens)
+        if any(_is_settings(t.lstrip("<>"), protected) for t in tokens) and (
+                name in _MUTATORS or any(t.startswith((">", ">>")) for t in tokens)):
+            hit = True
+    if not hit and re.search(r"(>|\btee\b|\bsed\s+-i)\s*\S*settings", line):
+        hit = any(_is_settings(t, protected) for t in re.split(r"[\s;|&<>]+", line))
+    if not hit:
+        return None
+    return Violation(
+        "agent-hooks", f"removing or editing the agent hooks is not allowed: {_clip(line)}",
+        "leave the agents' settings.json alone; the owner manages the hooks with "
+        "`tirith hook install|uninstall`")
 
 
 def _commit_no_verify(args: list[str]) -> bool:
@@ -386,12 +429,19 @@ def check_call(config: Config, tool: str | None, tool_input, cwd, project: str |
             return [Violation("git-hooks", f"editing files under .git/hooks is not allowed: {path}",
                               "leave .git/hooks alone; the owner manages it with "
                               "`tirith guard install <project>`")]
+        if _is_settings(path, protected_settings(config)):
+            return [Violation("agent-hooks", f"editing the agent settings that hold the hooks is not allowed: {path}",
+                              "leave the agents' settings.json alone; the owner manages the hooks with "
+                              "`tirith hook install|uninstall`")]
         return _custom_rules(find_manifest_folder(cwd), tool, data, "", [], cwd)
     if tool != "Bash":
         return []
     line = strip_heredocs(str(data.get("command") or data.get("cmd") or ""))
     segments = split_commands(line)
     out = _git_rules(line, segments)
+    removal = _hook_removal(line, segments, protected_settings(config))
+    if removal:
+        out.append(removal)
     commands = agent_commands(config)
     seen: set[str] = set()
     for tokens in segments:

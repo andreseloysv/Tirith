@@ -30,6 +30,7 @@ BUILT_IN: tuple[tuple[str, str, list[str]], ...] = (
     ("no-verify", "Skipped git hooks", ["hook"]),
     ("hooks-path", "Changed hooks path", ["hook"]),
     ("git-hooks", "Edited git hooks", ["hook", "git"]),
+    ("agent-hooks", "Removed agent hooks", ["hook"]),
     ("raw-stage", "Raw pipeline stage", ["hook"]),
     ("lane-brief", "Lane without brief", ["lane run"]),
     ("project-check", "Project check failing", ["lane run"]),
