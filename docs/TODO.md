@@ -117,11 +117,12 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 
 - [x] App Tauri 2 que carga la web actual (`web/`) sin reescribirla; Mac, Windows y Linux.
 - [x] Comunicación web ↔ app por IPC de Tauri (sin puertos).
-- [ ] Vista de chat: cada conversación es un lane (`lane run --interactive` por debajo).
+- [x] Vista de chat: cada conversación es un lane (`lane run --interactive` por debajo).
 - [ ] Agentes por stdin/stdout (modo stream-json del CLI `anthropic`, `muse serve`).
-- [ ] Preguntas de permiso del agente en la UI.
+- [x] Preguntas de permiso del agente en la UI.
 - [x] La app arranca el collector si no hay uno (con uv; Python aún no va empaquetado).
 - [ ] Abrir la app en modo dev y comprobar que se ve y se actualiza.
+- [x] Windows: shims propios (`.cmd`).
 - [ ] Windows: versión propia del wrapper de git y de la guarda.
 - [ ] Confirmar qué agentes existen en cada plataforma.
 - [ ] Móvil: para luego.
@@ -140,7 +141,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Enlaces `tirith://` con un manejador local (sin servidores) y token para que ninguna otra web lance agentes.
 - [x] Botón «Terminar con un agente» en cada paso no terminado del Plan.
 - [ ] Registrar el manejador `tirith://` en macOS y probar un lanzamiento real.
-- [ ] Al terminar un lane lanzado así: botón «Revisar y unir» (tests + merge).
+- [x] Al terminar un lane lanzado así: botón «Revisar y unir» (tests + merge).
 - [x] Buzón del dueño: «Termínalo» y «¿Qué pasa?» en cada paso; el aviso llega al steward.
 - [x] Respuestas bajo cada paso (steward, o Muse Spark automático si el steward no responde en 2 min).
 - [x] El steward vigila el buzón desde su sesión y actúa al instante.
@@ -148,14 +149,16 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 
 ## 12. «Tu turno»: llamadas a la acción claras
 
-- [ ] Cada aviso trae opciones de un clic y una caja para escribir; la respuesta llega al steward por el buzón.
-- [ ] El steward revisa cada informe de lane y resuelve lo que puede; al dueño solo llega lo que necesita su mano.
-- [ ] Lanes fallidos: «Reintentar» / «Ver el log» / «Descartar».
-- [ ] Despachador en el collector: «Termínalo» lanza el agente (o responde por qué no); «¿Qué pasa?» lo responde Muse Spark al momento.
-- [ ] Hooks del steward: le inyectan las peticiones abiertas y le impiden terminar el turno sin responderlas.
-- [ ] Escalado: petición sin respuesta en 10 min → notificación de macOS y opciones para el dueño.
-- [ ] Comandos para el dueño como acciones con botón «Run» (confirmación, salida y resultado en la UI).
-- [ ] Regla en código: una respuesta con un comando de terminal en el texto se rechaza; hay que usar `--run`.
+- [x] Cada aviso trae opciones de un clic y una caja para escribir; la respuesta llega al steward por el buzón.
+- [x] El steward revisa cada informe de lane y resuelve lo que puede; al dueño solo llega lo que necesita su mano.
+- [x] Lanes fallidos: «Reintentar» / «Ver el log» / «Descartar».
+- [x] Despachador en el collector: «Termínalo» lanza el agente (o responde por qué no); «¿Qué pasa?» lo responde Muse Spark al momento.
+- [x] Hooks del steward: le inyectan las peticiones abiertas y le impiden terminar el turno sin responderlas.
+- [x] Escalado: petición sin respuesta en 10 min → notificación de macOS y opciones para el dueño.
+- [x] Comandos para el dueño como acciones con botón «Run» (confirmación, salida y resultado en la UI).
+- [x] Regla en código: una respuesta con un comando de terminal en el texto se rechaza; hay que usar `--run`.
+- [ ] Todo build y test pasa por `tirith run` (bloqueo en código) y el Overview muestra también los pipelines recién terminados.
+- [ ] Cada lane terminado se revisa por código: tests como pipeline visible, merge automático si pasan, hook que impide al steward terminar con revisiones pendientes, violación a los 30 min.
 
 ## 13. Configuración del proyecto visible y editable
 
