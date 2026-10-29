@@ -84,6 +84,9 @@ def rig(home: Path, tmp_path: Path, monkeypatch):
     write_lane_manifest(repo)
     (repo / "docs").mkdir()
     (repo / "docs" / "TODO.md").write_text("# TODO\n\n## 1. First\n\n- [ ] Open thing.\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo), "add", "."], check=True)  # the plan gate edits TODO.md: it must be clean
+    subprocess.run(["git", "-C", str(repo), "-c", "user.email=t@example.invalid", "-c", "user.name=T",
+                    "commit", "-q", "-m", "plan"], check=True)
     write_config(home, [{"id": "demo", "name": "Demo", "repo": str(repo)}], AGENTS)
     r = Rig(home, repo, monkeypatch)
     yield r
@@ -293,6 +296,11 @@ def test_end_to_end_through_lane_run_interactive(home: Path, tmp_path: Path, mon
     """The real wrapper: `tirith lane run --interactive` registers the lane, the fake agent talks on its pipes."""
     repo = make_repo(tmp_path / "e2e")
     write_lane_manifest(repo)
+    (repo / "docs").mkdir()
+    (repo / "docs" / "TODO.md").write_text("# TODO\n\n## 1. First\n\n- [ ] Open thing.\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
+    subprocess.run(["git", "-C", str(repo), "-c", "user.email=t@example.invalid", "-c", "user.name=T",
+                    "commit", "-q", "-m", "plan"], check=True)
     wrapper = tmp_path / "agent-bin"
     wrapper.write_text("#!/bin/sh\nexec " + sys.executable + " " + FAKE + ' "$@"\n')
     wrapper.chmod(0o755)
