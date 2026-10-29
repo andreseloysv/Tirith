@@ -55,6 +55,76 @@ def agent_items(step: dict, today: date) -> list[str]:
     return [i["text"] for i in step["items"] if not i["done"] and who_on(i, today) == "agent"]
 
 
+OWNER_REASON_WORDS = (  # keyword -> reason, for a tag that does not name its reason
+    ("legal", r"legal|licen[cs]e|contract|contrato|terms|t[eé]rminos"),
+    ("payment", r"pay|payment|pago|pagar|billing|invoice|subscription|suscripci"),
+    ("credentials", r"credential|credencial|password|contrase|token|api key|secret|login|log in|sign in"),
+    ("device", r"device|phone|tel[eé]fono|plug|usb|physical|f[ií]sico|hardware"),
+    ("account", r"account|cuenta|dns|domain|dominio|console|dashboard|settings|app store|certificate|certificado"),
+)
+_URL_RE = re.compile(r"https?://[^\s)>\]`]+")
+_REASON_KEY_RE = re.compile(r"^(security|credentials|account|device|payment|legal)\b\s*[:,-]?\s*", re.IGNORECASE)
+_RUN_WORD_RE = re.compile(r"^(?:run|ejecutar|ejecuta)\s*:?\s+", re.IGNORECASE)
+
+
+def _tag_span(text: str) -> tuple[int, int] | None:
+    """``(start, end)`` of the ``(dueño ...)`` tag; a ``)`` inside a code span does not close it."""
+    found = _OWNER_RE.search(text)
+    if not found:
+        return None
+    index, depth, in_code = found.start(), 0, False
+    while index < len(text):
+        char = text[index]
+        if char == "`":
+            in_code = not in_code
+        elif not in_code and char == "(":
+            depth += 1
+        elif not in_code and char == ")":
+            depth -= 1
+            if depth == 0:
+                return found.start(), index + 1
+        index += 1
+    return found.start(), len(text)
+
+
+def owner_parts(text: str) -> dict:
+    """What the owner item of an owner roadmap item is made of (``docs/CONTRACT-roadmap.md``).
+
+    ``{sentence, command, url, reason, label}``: the sentence has no tag and no step title; the command comes
+    from backticks inside the tag (else from the rest of the text), the URL likewise; ``label`` names the Run
+    action; ``reason`` is a key of ``asks.OWNER_REASONS``."""
+    from tirith import actions as actions_mod  # late: actions does not import roadmap
+    span = _tag_span(text)
+    inner = rest = text
+    if span:
+        inner = text[span[0]:span[1]].strip("()")
+        inner = re.sub(r"^(?:dueño|owner)\b", "", inner, flags=re.IGNORECASE).strip().lstrip(":").strip()
+        rest = (text[:span[0]] + " " + text[span[1]:])
+    else:
+        inner = ""
+    reason_key = _REASON_KEY_RE.match(inner)
+    reason = reason_key.group(1).lower() if reason_key else None
+    command = None
+    for place in (inner, rest):
+        command = actions_mod.find_owner_command(place)
+        if command:
+            if place is rest:
+                rest = rest.replace("`" + command + "`", " ")
+            break
+    if command:
+        command = _RUN_WORD_RE.sub("", command).strip()
+    url = next((m.group(0).rstrip(".,;") for place in (inner, rest) if (m := _URL_RE.search(place))), None)
+    sentence = re.sub(r"\s+", " ", rest).strip()
+    sentence = re.sub(r"\s+([.,;:])", r"\1", sentence)
+    sentence = sentence.strip(" :;,-") or "Do this one by hand"
+    if not reason:
+        blob = (inner + " " + sentence).lower()
+        reason = next((key for key, words in OWNER_REASON_WORDS if re.search(words, blob)), "security")
+    label = sentence.rstrip(".").strip()
+    return {"sentence": sentence if sentence.endswith((".", "!", "?")) else sentence + ".",
+            "command": command, "url": url, "reason": reason, "label": label[:60]}
+
+
 def owner_item_id(project: str, step_id: str, text: str) -> str:
     """The stable id of the owner item raised for an owner-only roadmap item."""
     return f"owner-{project}-{step_id}-" + hashlib.sha1(" ".join(text.split()).encode()).hexdigest()[:8]
