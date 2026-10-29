@@ -243,3 +243,18 @@ def test_handler_command_runs_url_open_end_to_end(project, home: Path) -> None:
     assert done.returncode == 3 and "token" in done.stderr
     rows = [r for r in read_jsonl(home / "events.jsonl") if r.get("kind") == "violation"]
     assert rows and rows[-1]["rule"] == "launch-token" and started == []
+
+
+def test_handler_command_with_right_token_reaches_launch(project, home: Path) -> None:
+    """A right-token link through the shell gets past the token check and into `tirith launch`.
+
+    Step 1 is done, so launch refuses it (nothing starts), but the refusal is about the step, not the token.
+    """
+    import os
+    import subprocess
+    _, started = project
+    url = launch_mod.build_url("demo", "1", launch_mod.launch_token(home))
+    env = dict(os.environ, TIRITH_HOME=str(home))
+    done = subprocess.run(["/bin/sh", "-c", _handler_command(home, url)], capture_output=True, text=True, env=env)
+    assert done.returncode == 3 and "token" not in done.stderr and "done" in done.stderr
+    assert not [r for r in read_jsonl(home / "events.jsonl") if r.get("rule") == "launch-token"] and started == []
