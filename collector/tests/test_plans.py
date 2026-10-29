@@ -9,7 +9,7 @@ from pathlib import Path
 import jsonschema
 import pytest
 
-from conftest import make_hooks_mutable, make_repo, write_config, write_lane_manifest
+from conftest import make_hooks_mutable, make_repo, write_config, write_lane_manifest, write_plan
 from tirith import autoreview as autoreview_mod
 from tirith import asks as asks_mod
 from tirith import dispatch as dispatch_mod
@@ -41,8 +41,7 @@ def _plan_text(title: str, items: str, extra: str = "") -> str:
 def project(home: Path, tmp_path: Path):
     repo = make_repo(tmp_path / "demo")
     write_lane_manifest(repo)
-    (repo / "docs").mkdir()
-    (repo / "docs" / "TODO.md").write_text(TODO, encoding="utf-8")
+    write_plan(repo, TODO)
     write_config(home, [{"id": "demo", "name": "Demo", "repo": str(repo)}],
                  extra=f'[launch]\ncommand = "{LAUNCH}"\n')
     return repo
@@ -233,8 +232,7 @@ def test_auto_launch_off_leaves_plan_requests_to_the_manager(project, home: Path
 def real_project(home: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     repo = make_repo(tmp_path / "demo")
     write_lane_manifest(repo)
-    (repo / "docs").mkdir()
-    (repo / "docs" / "TODO.md").write_text(TODO, encoding="utf-8")
+    write_plan(repo, TODO)
     write_config(home, [{"id": "demo", "name": "Demo", "repo": str(repo)}],
                  extra=f'[launch]\ncommand = "{LAUNCH}"\n')
     assert main(["guard", "install", "demo"]) == 0
@@ -257,7 +255,7 @@ def test_launch_plan_refresh_writes_a_brief_with_the_plan_lanes_and_inbox(real_p
     brief = (home / "briefs" / f"{lane_id}.md").read_text(encoding="utf-8")
     assert "- [ ] Open." in brief and "`old-lane` (step 1): Old work: Built the thing" in brief
     assert "ask [open] step 1: why is it slow?" in brief and ask  # the inbox
-    assert "Edit only `docs/TODO.md`" in brief and "Done since last update" in brief and "Needs the owner" in brief
+    assert "Do NOT edit `docs/TODO.md`" in brief and "Done since last update" in brief and "Needs the owner" in brief
     (argv,) = started
     assert argv[argv.index("--step") + 1] == "plan-refresh" and argv[argv.index("--request") + 1] == rid
     assert (repo.parent / "demo-lanes" / lane_id).is_dir()

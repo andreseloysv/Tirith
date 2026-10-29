@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import make_hooks_mutable, make_repo, write_config, write_lane_manifest
+from conftest import make_hooks_mutable, make_repo, write_config, write_lane_manifest, write_plan
 from tirith import launch as launch_mod
 from tirith.cli import launch_step, main, register_lane
 from tirith.store import read_jsonl
@@ -37,8 +37,7 @@ Another paragraph that is not the intro.
 def project(home: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     repo = make_repo(tmp_path / "demo")
     write_lane_manifest(repo)
-    (repo / "docs").mkdir()
-    (repo / "docs" / "TODO.md").write_text(PLAN, encoding="utf-8")
+    write_plan(repo, PLAN)
     write_config(home, [{"id": "demo", "name": "Demo", "repo": str(repo)}],
                  extra='[launch]\ncommand = "agentcmd --brief {brief} --cwd {workspace}"\n')
     assert main(["guard", "install", "demo"]) == 0
@@ -72,7 +71,7 @@ def test_class_by_step_title() -> None:
 
 def test_dry_run_starts_nothing(project, home: Path, capsys) -> None:
     repo, started = project
-    assert main(["launch", "--project", "demo", "--step", "2", "--dry-run"]) == 0
+    assert main(["launch", "--project", "demo", "--step", "2", "--item", "Add the button.", "--dry-run"]) == 0
     out = capsys.readouterr().out
     assert "# Lane: Web panel" in out and "Add the button." in out and "Already built." not in out
     assert "agentcmd --brief" in out and "demo-lanes" in out
@@ -81,7 +80,7 @@ def test_dry_run_starts_nothing(project, home: Path, capsys) -> None:
 
 def test_launch_creates_worktree_brief_and_runs_lane(project, home: Path, capsys) -> None:
     repo, started = project
-    assert main(["launch", "--project", "demo", "--step", "2"]) == 0
+    assert main(["launch", "--project", "demo", "--step", "2", "--item", "Add the button."]) == 0
     lane_id = capsys.readouterr().out.strip().removeprefix("lane ")
     worktree = repo.parent / "demo-lanes" / lane_id
     assert (worktree / "README.md").is_file()
@@ -103,7 +102,7 @@ def test_launch_creates_worktree_brief_and_runs_lane(project, home: Path, capsys
 
 def test_launch_passes_request_to_the_lane(project, home: Path, capsys) -> None:
     _, started = project
-    assert main(["launch", "--project", "demo", "--step", "2", "--request", "in-abc12345"]) == 0
+    assert main(["launch", "--project", "demo", "--step", "2", "--item", "Add the button.", "--request", "in-abc12345"]) == 0
     assert started[0][started[0].index("--request") + 1] == "in-abc12345"
 
 
@@ -130,7 +129,7 @@ def test_refuses_when_check_fails(project, capsys) -> None:
 
 def test_refuses_without_agent_command(project, home: Path, capsys) -> None:
     write_config(home, [{"id": "demo", "name": "Demo", "repo": str(project[0])}])
-    assert main(["launch", "--project", "demo", "--step", "2", "--dry-run"]) == 3
+    assert main(["launch", "--project", "demo", "--step", "2", "--item", "Add the button.", "--dry-run"]) == 3
     assert "[launch] command" in capsys.readouterr().err
 
 
@@ -138,15 +137,15 @@ def test_agent_alias_uses_its_launch_template(project, home: Path, capsys) -> No
     repo, _ = project
     write_config(home, [{"id": "demo", "name": "Demo", "repo": str(repo)}],
                  extra='[agents.muse]\ncommand = "musecli"\nlaunch = "musecli run {brief}"\n')
-    launch_step(home, "demo", "2", agent="muse", dry_run=True)
+    launch_step(home, "demo", "2", agent="muse", dry_run=True, item="Add the button.")
     assert "musecli run" in capsys.readouterr().out
     with pytest.raises(launch_mod.LaunchError):
-        launch_step(home, "demo", "2", agent="ghost", dry_run=True)
+        launch_step(home, "demo", "2", agent="ghost", dry_run=True, item="Add the button.")
 
 
 def test_parse_url() -> None:
     link = launch_mod.parse_url("tirith://launch?project=demo&step=2&token=abc%2Fd")
-    assert link == {"action": "launch", "project": "demo", "step": "2", "token": "abc/d", "agent": None,
+    assert link == {"action": "launch", "project": "demo", "step": "2", "token": "abc/d", "agent": None, "item": "",
                     "lane": ""}
     assert launch_mod.parse_url("TIRITH://launch?project=a&step=1&agent=muse")["agent"] == "muse"
     with pytest.raises(launch_mod.LaunchError):

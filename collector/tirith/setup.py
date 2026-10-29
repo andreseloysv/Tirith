@@ -31,6 +31,7 @@ BUILT_IN: tuple[tuple[str, str, list[str]], ...] = (
     ("hooks-path", "Changed hooks path", ["hook"]),
     ("git-hooks", "Edited git hooks", ["hook", "git"]),
     ("settings-edit", "Edited agent settings", ["hook"]),
+    ("roadmap-edit", "Edited the plan", ["hook"]),
     ("raw-stage", "Raw pipeline stage", ["hook"]),
     ("lane-brief", "Lane without brief", ["lane run"]),
     ("project-check", "Project check failing", ["lane run"]),
