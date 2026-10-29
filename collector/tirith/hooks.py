@@ -18,6 +18,7 @@ import shlex
 import sys
 from pathlib import Path
 
+from tirith import gates
 from tirith import projects as projects_mod
 from tirith.home import load_config, now_iso
 from tirith.store import append_jsonl, read_json, write_json_atomic
@@ -175,20 +176,40 @@ def record(home: Path, agent: str, payload, event: str | None = None) -> dict:
     return row
 
 
-def decide(agent: str, event: dict, payload) -> int:
-    """Extension point (TODO step 7): return 2 to block a PreToolUse call. Never blocks yet."""
-    return 0
+def decide(agent: str, event: dict, payload, home: Path | None = None) -> int:
+    """Block a ``PreToolUse`` call that breaks a rule (``tirith.gates``): exit 2, message on stderr.
+
+    Each violation is also recorded as a ``kind: "violation"`` event. Only ``[gates] enabled = false``
+    in config.toml switches this off; no environment variable does.
+    """
+    if event.get("event") != "PreToolUse" or home is None:
+        return 0
+    config = load_config(home)
+    if not config.gates_enabled:
+        return 0
+    data = payload if isinstance(payload, dict) else {}
+    fields = adapt(agent, data)
+    tool_input = _pick(data, "tool_input", "input", "arguments", "args")
+    found = gates.check_call(config, event.get("tool"), tool_input, event.get("cwd"),
+                             event.get("project"))
+    for violation in found:
+        gates.record_violation(
+            home, violation, ts=event.get("ts") or now_iso(), agent=agent, lane=event.get("lane"),
+            session=event.get("session"), project=event.get("project"), tool=event.get("tool"),
+            cwd=fields.get("cwd") or event.get("cwd"))
+        print(violation.message(), file=sys.stderr)
+    return 2 if found else 0
 
 
 def run_hook(home: Path, agent: str, event: str | None, stdin) -> int:
-    """Entry for ``tirith hook``: record, never raise, exit 0 (blocking comes in step 7)."""
+    """Entry for ``tirith hook``: record, never raise; exit 2 only when a rule blocks the call."""
     try:
         try:
             payload = json.loads(stdin.read() or "{}")
         except Exception:
             payload = {}
         row = record(home, agent, payload, event)
-        return decide(agent, row, payload)
+        return decide(agent, row, payload, home)
     except Exception:
         return 0
 
@@ -297,8 +318,8 @@ def attach(rows: list[dict], lane_ids) -> tuple[dict[str, list[dict]], list[dict
     return ({k: v[-EVENTS_PER_AGENT:] for k, v in by_lane.items()}, loose[-LOOSE_EVENTS:])
 
 
-def read_hook_rows(path: Path, max_bytes: int = 1_000_000) -> list[dict]:
-    """Hook rows from the last ``max_bytes`` of ``events.jsonl`` (bounded read)."""
+def read_hook_rows(path: Path, max_bytes: int = 1_000_000, kind: str = "hook") -> list[dict]:
+    """Rows of ``kind`` (hook rows by default) from the last ``max_bytes`` of ``events.jsonl`` (bounded read)."""
     try:
         with path.open("rb") as handle:
             handle.seek(0, os.SEEK_END)
@@ -316,6 +337,14 @@ def read_hook_rows(path: Path, max_bytes: int = 1_000_000) -> list[dict]:
             row = json.loads(line)
         except ValueError:
             continue
-        if isinstance(row, dict) and row.get("kind") == "hook":
+        if isinstance(row, dict) and row.get("kind") == kind:
             hooks.append(row)
     return hooks
+
+
+VIOLATIONS_KEPT = 50
+
+
+def read_violation_rows(path: Path, max_bytes: int = 1_000_000) -> list[dict]:
+    """``kind: "violation"`` rows from the last ``max_bytes`` of ``events.jsonl`` (newest last)."""
+    return read_hook_rows(path, max_bytes, kind="violation")

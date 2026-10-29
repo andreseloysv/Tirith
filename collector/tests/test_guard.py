@@ -6,7 +6,7 @@ import os
 import sys
 from pathlib import Path
 
-from conftest import make_hooks_mutable, make_repo, write_config
+from conftest import make_hooks_mutable, make_repo, write_config, write_lane_manifest
 from tirith.cli import main
 from tirith.collector import Collector
 from tirith.guardwrap import default_words, verify_guard
@@ -55,11 +55,13 @@ def test_guard_default_words_and_tamper_detection(home: Path, tmp_path: Path) ->
 
 def test_lane_run_refuses_without_guard_then_runs(home: Path, tmp_path: Path, capsys) -> None:
     repo = make_repo(tmp_path / "repo")
+    write_lane_manifest(repo)
+    brief = str(repo / "brief.md")
     try:
         write_config(home, [{"id": "demo", "name": "Demo", "repo": str(repo),
                              "color": "#123456"}])
         code = main(["lane", "run", "--project", "demo", "--class", "warden",
-                     "--feature", "Guarded work", "--id", "g-1", "--",
+                     "--feature", "Guarded work", "--id", "g-1", "--brief", brief, "--",
                      sys.executable, "-c", "print('should not run')"])
         assert code == 3
         assert "refusing to start" in capsys.readouterr().err
@@ -71,7 +73,7 @@ def test_lane_run_refuses_without_guard_then_runs(home: Path, tmp_path: Path, ca
         if verify_guard(repo, default_words()):
             return
         code = main(["lane", "run", "--project", "demo", "--class", "warden",
-                     "--feature", "Guarded work", "--id", "g-1", "--",
+                     "--feature", "Guarded work", "--id", "g-1", "--brief", brief, "--",
                      sys.executable, "-c", "import os; print(os.environ['PATH'].split(':')[0])"])
         assert code == 0
         log_text = (home / "logs" / "g-1.log").read_text(encoding="utf-8")

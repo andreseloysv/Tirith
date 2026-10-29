@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import os
 import re
+import secrets
 import subprocess
 import sys
 import time
@@ -20,6 +21,7 @@ from tirith.collector import (
 )
 from tirith.guardwrap import default_words, install_guard, verify_guard
 from tirith import flows as flows_mod
+from tirith import gates as gates_mod
 from tirith import manifest as manifest_mod
 from tirith import hooks as hooks_mod
 from tirith import projects as projects_mod
@@ -82,6 +84,7 @@ def end_lane(home: Path, lane_id: str, result: str, report: str | None = None) -
         raise SystemExit(f"unknown lane: {lane_id}")
     lane["ended_at"] = now_iso()
     lane["result"] = result
+    lane.pop("token", None)  # the shims accept the token of a running lane only
     if report is not None:
         lane["report"] = report
     write_lane(home, lane)
@@ -113,11 +116,14 @@ def _cmd_lane_end(args) -> int:
     return 0
 
 
-def _wrapper_path_env(home: Path | None = None, lane_id: str | None = None) -> dict:
+def _wrapper_path_env(home: Path | None = None, lane_id: str | None = None,
+                      token: str | None = None) -> dict:
     """Environment with the owner's git wrapper folder first in PATH (and the lane, if any)."""
     env = dict(os.environ)
     if lane_id:
         env["TIRITH_LANE"] = lane_id
+    if token:
+        env[gates_mod.TOKEN_ENV] = token
     session = projects_mod.current_session(home or tirith_home())
     if session:
         env["TIRITH_SESSION"] = session
@@ -140,6 +146,28 @@ def _project_or_exit(home: Path, project_id: str):
     return config, proj
 
 
+def _lane_run_refusal(args, config, proj, workspace: Path) -> str | None:
+    """Why ``lane run`` must not start (agent-style text, exit 3), else None."""
+    brief = Path(args.brief).expanduser() if args.brief else None
+    if brief is None or not brief.is_file() or not brief.read_text(
+            encoding="utf-8", errors="replace").strip():
+        shown = f" ({brief})" if brief else ""
+        return (f"tirith: lane-brief: lane run needs a brief: the file is missing or empty{shown}. "
+                "Do this instead: write the task (goal, files, rules, how to report) into a file "
+                "and pass it with --brief <file>")
+    problems = verify_guard(workspace, config.words_for(proj, default_words()))
+    if problems:
+        return "refusing to start: commit guard is not intact:\n" + \
+            "\n".join(f"  {problem}" for problem in problems)
+    failed = [p for p in manifest_mod.check(workspace, config.words_for(proj, default_words()))
+              if p.rule != "commit-guard"]  # the guard was verified just above
+    if failed:
+        return ("tirith: project-check: tirith check fails for '" + proj.id + "', so no lane may "
+                "start. Do this instead: fix these, then run `tirith check --project "
+                + proj.id + "`:\n" + "\n".join(f"  {p}" for p in failed))
+    return None
+
+
 def _cmd_lane_run(args) -> int:
     home = _home(args)
     command = list(args.command or [])
@@ -151,11 +179,9 @@ def _cmd_lane_run(args) -> int:
     workspace = Path(args.workspace).expanduser().resolve() if args.workspace else proj.repo
     if workspace is None:
         raise SystemExit(f"project '{args.project}' has no repo; pass --workspace")
-    problems = verify_guard(Path(workspace), config.words_for(proj, default_words()))
-    if problems:
-        print("refusing to start: commit guard is not intact:", file=sys.stderr)
-        for problem in problems:
-            print(f"  {problem}", file=sys.stderr)
+    refusal = _lane_run_refusal(args, config, proj, Path(workspace))
+    if refusal:
+        print(refusal, file=sys.stderr)
         return 3
     lane_id = args.id or _unique_lane_id(home, _slug(args.feature))
     log_path = Path(args.log).expanduser().resolve() if args.log \
@@ -165,10 +191,12 @@ def _cmd_lane_run(args) -> int:
         home, lane_id=lane_id, project=args.project, hero_class=args.hero_class,
         feature=args.feature, workspace=str(workspace), log=str(log_path),
         pid=None, brief=args.brief, step=args.step)
+    lane["token"] = secrets.token_urlsafe(24)
+    write_lane(home, lane)
     began = time.monotonic()
     with log_path.open("ab") as log_handle:
         proc = subprocess.Popen(
-            command, cwd=str(workspace), env=_wrapper_path_env(home, lane_id),
+            command, cwd=str(workspace), env=_wrapper_path_env(home, lane_id, lane["token"]),
             stdout=log_handle, stderr=subprocess.STDOUT)
         lane["pid"] = proc.pid
         write_lane(home, lane)
@@ -744,6 +772,26 @@ def _cmd_hook(args) -> int:
         return 0
 
 
+def _cmd_shim(args) -> int:
+    config = load_config(_home(args))
+    shim_dir = Path(args.dir).expanduser() if args.dir else Path.home() / ".local" / "bin"
+    if not any(str(t.get("command") or "").strip() for t in config.agents.values()):
+        raise SystemExit("tirith shim: no [agents.<alias>] command in config.toml; add "
+                         "[agents.<alias>] command = \"<executable name>\"")
+    if args.action == "verify":
+        problems = gates_mod.verify_shims(config, shim_dir)
+        for problem in problems:
+            print(problem)
+        if not problems:
+            print(f"shims in {shim_dir}: all intact")
+        return 1 if problems else 0
+    rows = (gates_mod.install_shims if args.action == "install"
+            else lambda c, d: gates_mod.uninstall_shims(c, d))(config, shim_dir)
+    for alias, status, detail in rows:
+        print(f"{alias}: {status} {detail}")
+    return 1 if any(status == "skipped" for _, status, _ in rows) else 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     """The full ``tirith`` argument parser."""
     common = argparse.ArgumentParser(add_help=False)
@@ -914,6 +962,12 @@ def build_parser() -> argparse.ArgumentParser:
                        help="project id or repo path")
     guard.add_argument("--all", action="store_true")
     guard.set_defaults(func=_cmd_guard)
+
+    shim = sub.add_parser("shim", parents=[common],
+                          help="agent CLI shims: start only through tirith lane run")
+    shim.add_argument("action", choices=["install", "uninstall", "verify"])
+    shim.add_argument("--dir", default=None, help="shim folder (default: ~/.local/bin)")
+    shim.set_defaults(func=_cmd_shim)
 
     check = sub.add_parser("check", parents=[common],
                            help="check a project is set up (tirith.toml, pipelines, hooks, guard)")

@@ -530,6 +530,26 @@ class Collector:
         waits.sort(key=lambda w: str(w["since"] or ""))
         return waits
 
+    @staticmethod
+    def _violation(row: dict) -> dict:
+        return {"ts": row.get("ts"), "rule": str(row.get("rule") or ""), "agent": row.get("agent"),
+                "lane": row.get("lane"), "project": row.get("project"),
+                "message": str(row.get("message") or "")}
+
+    @staticmethod
+    def _violation_waits(violations: list[dict], now: datetime) -> list[dict]:
+        """One item per violation of the last hour, so the owner sees what slipped."""
+        waits = []
+        for index, row in enumerate(violations):
+            when = parse_iso(row.get("ts"))
+            if when is None or now - when > timedelta(hours=1):
+                continue
+            who = row.get("lane") or row.get("agent") or "an agent"
+            waits.append({"id": f"violation-{row['ts']}-{index}", "project": row.get("project"),
+                          "text": f"Rule {row['rule']} blocked {who}: {row['message']}",
+                          "since": row["ts"], "link": None, "source": "violation"})
+        return waits
+
     # -- main cycle ------------------------------------------------------------
 
     def build_state(self, now: datetime | None = None) -> dict:
@@ -538,7 +558,7 @@ class Collector:
         if self._fixed_config is None:
             self.config = load_config(self.home)
         lanes = read_lanes(self.home)
-        events = [e for e in read_jsonl(self.home / "events.jsonl") if e.get("kind") != "hook"]
+        events = [e for e in read_jsonl(self.home / "events.jsonl") if e.get("kind") not in ("hook", "violation")]
         hook_rows = hooks_mod.read_hook_rows(self.home / "events.jsonl")
         _, loose_events = hooks_mod.attach(hook_rows, [str(l["id"]) for l in lanes])
         rows_by_lane: dict[str, list[dict]] = {}
@@ -684,7 +704,10 @@ class Collector:
         self.rooms.ensure_polling(config, background=not self._one_shot)
         rooms_state, room_waits = self.rooms.build(
             config, agent_rows, self.worker, self.cache, now)
-        waiting = self._manual_waits() + brain_waits + room_waits + guard_waits
+        violations = [self._violation(row) for row in
+                      hooks_mod.read_violation_rows(self.home / "events.jsonl")][-hooks_mod.VIOLATIONS_KEPT:]
+        waiting = (self._manual_waits() + brain_waits + room_waits + guard_waits
+                   + self._violation_waits(violations, now))
         for wait in waiting:
             wait.setdefault("session", None)
             if wait.get("project"):
@@ -721,6 +744,7 @@ class Collector:
             "flows": all_flows[-flows_mod.STATE_FLOWS:],
             "sessions": sessions,
             "loose_events": loose_events,
+            "violations": violations,
         }
 
     @staticmethod
