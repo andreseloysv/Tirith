@@ -173,6 +173,7 @@
     if (T.agentRules) h += T.agentRules(a);
     if (o.goal !== false && a.goal) h += sec('Goal', '<div class="agoal">' + T.mdBox(a.goal, a.id + ':goal') + '</div>');
     h += sec('Status', status(a, o));
+    if (T.liveBlock && a.live) h += sec('Live', T.liveBlock(a));
     if (T.agentDecisions) h += T.agentDecisions(a);
     if (o.log !== false) h += sec('Log', T.logView(a));
     h += sec('Tests', tests(a), (a.tests || []).length || null);
