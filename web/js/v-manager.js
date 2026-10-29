@@ -79,9 +79,49 @@
       (m.actions && m.actions.length ? '<div class="mc-acts">' + T.actions(m.actions, state, m.project) + '</div>' : '') +
       '<div class="mc-meta">' + (m.ctx ? esc(m.ctx) + ' · ' : '') + esc(T.clockTime(m.at)) + '</div></div>';
   }
+  /* What is really happening to the oldest pending request: the manager is writing, or nobody is. */
+  var LIVE_FRESH = 5 * 60 * 1000, LATE = 30 * 60 * 1000;
+  function writing(r, state) {
+    var live = state.manager && state.manager.live, beat = live ? T.ms(live.heartbeat) : null, at = T.ms(r.at);
+    if (beat != null && at != null && beat > at && T.now() - beat < LIVE_FRESH) return true;   /* a live session saw it */
+    return (state.agents || []).some(function (a) { return a.request_id === r.id && a.status === 'working'; });   /* a headless lane has it */
+  }
+  /* the result line when an action the manager gave was run after its last answer: "✗ Install the agent shims failed" */
+  function reopened(r) {
+    var runs = r.action_runs || [], last = null, lastAns = '';
+    (r.answers || []).forEach(function (a) { if (a.by === 'manager' && String(a.at || '') > lastAns) lastAns = String(a.at); });
+    runs.forEach(function (x) { if (String(x.at || '') > lastAns && (!last || String(x.at) > String(last.at))) last = x; });
+    if (!last) return null;
+    var label = last.action_id;
+    (r.answers || []).forEach(function (a) { (a.actions || []).forEach(function (x) { if (x.id === last.action_id && x.label) label = x.label; }); });
+    return { at: last.at, ok: last.status === 'passed', text: (last.status === 'passed' ? '✓ ' : '✗ ') + label + (last.status === 'passed' ? ' passed' : ' failed') };
+  }
+  T.waitAge = function (sec) { return sec < 60 ? Math.max(0, sec) + ' s' : sec < 3600 ? Math.floor(sec / 60) + ' min' : Math.floor(sec / 3600) + ' h ' + Math.floor((sec % 3600) / 60) + ' min'; };
+  /* "Waiting for the manager · 12 min", then "The manager has not answered yet" (amber class "late") after 30 min */
+  T.waitLine = function (startIso) {
+    var ms = T.now() - (T.ms(startIso) || T.now()), late = ms >= LATE;
+    return { late: late, text: late ? 'The manager has not answered yet · ' + T.waitAge(Math.floor(ms / 1000)) : 'Waiting for the manager · ' + T.waitAge(Math.floor(ms / 1000)) };
+  };
+  function waitingLine(since) {
+    var w = T.waitLine(since);
+    return '<div class="mc-wait' + (w.late ? ' late' : '') + '" role="status" data-wait="' + esc(since) + '">' + esc(w.text) + '</div>';
+  }
   function typing(since) {
     return '<div class="mc-m mgr"><div class="mc-b mc-typing" role="status" aria-label="Manager is typing"><i></i><i></i><i></i></div>' +
       '<div class="mc-meta">Manager is typing… · <span class="tick" data-start="' + esc(since) + '">' + esc(T.dur(T.elapsed(since))) + '</span></div></div>';
+  }
+  /* the line under the newest message; never "typing" unless something is writing */
+  function status(state) {
+    var rows = (state.inbox || []).filter(pending), i, r, re;
+    for (i = 0; i < rows.length; i++) if (writing(rows[i], state)) return typing(rows[i].at);
+    r = rows[0];
+    if (r) {
+      re = reopened(r);
+      if (re) return '<div class="mc-reason' + (re.ok ? '' : ' bad') + '">' + esc(re.text) + '</div>' + waitingLine(re.at);
+      return waitingLine(r.at);
+    }
+    var since = waitingSince(state);   /* only a message not yet in the state */
+    return since ? waitingLine(since) : '';
   }
   function projectChip(state) {
     var cur = ui.chatProj != null ? ui.chatProj : (T.filter.project || ''), prj = state.projects || [];
@@ -113,7 +153,7 @@
       (drawer ? '<button class="mc-x" data-act="mc-close" type="button" aria-label="Close the chat">&times;</button>' : '') + '</div>' +
       '<div class="mc-log" id="mc-log">';
     h += list.length ? list.map(function (m) { return msg(m, state); }).join('') : T.empty('Write to the manager here. Its answers, and the answers to your Plan questions, show in this thread.');
-    if (since) h += typing(since);
+    if (since) h += status(state);
     return h + '</div>' + composer(state) + '</section>';
   };
 

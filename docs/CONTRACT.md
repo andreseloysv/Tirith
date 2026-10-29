@@ -27,6 +27,7 @@ Meta Model API for the brain (see below); everything works without it.
 | `notes.jsonl` | `tirith note` | `{"at","project","text"}` orchestrator decisions |
 | `waits.jsonl` | `tirith wait add/done` | `{"id","at","project","text","link","done_at"}` |
 | `orchestrator.json` | `tirith manager "<activity>"` | `{"activity","since"}` what the Manager is doing now |
+| `manager.json` | the live manager session | `{"heartbeat"}` ISO UTC time of its last sign of life; optional. `state.manager.live` is `{heartbeat}` or null; the chat shows "typing" only if it moved after the message |
 | `agents.json` | collector | persistent hero identity per agent id: name, epithet, class, renown |
 | `brain/` | collector | cached Muse outputs (summaries, architecture) keyed by input hash |
 

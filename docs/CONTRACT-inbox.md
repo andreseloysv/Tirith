@@ -130,7 +130,12 @@ answers an `ask` in the first cycle, not after 120 s.
 - One thread built only from `state.inbox`, oldest first with the newest at the bottom: the owner's chat
   messages (right, blue), the questions and "Finish this step" requests of the Plan, and every answer to them
   (left, rendered markdown, who answered and when, Run `actions` under the answer through `T.actions`).
-- While a chat, ask or finish request is `manager_pending`: "Manager is typing…" with the seconds waited.
+- While a chat, ask or finish request is `manager_pending`, the thread ends with what is really happening:
+  "Manager is typing…" (animated dots, age) only if a live manager session's heartbeat (`state.manager.live`,
+  from `manager.json`, at most 5 min old) moved after the message, or a lane of that request is working.
+  Otherwise a plain line without dots: "Waiting for the manager · 12 min", and after 30 min "The manager has
+  not answered yet" in amber. A request reopened by an action result shows that result ("✗ Install the agent
+  shims failed") as the reason instead. Timestamps without a zone are read as UTC.
 - Composer: Enter sends, Shift+Enter is a new line, an optional project chip (default: the sidebar's project
   filter). Sending: `window.__TAURI__` -> `inbox_add` (kind `chat`); else, with the link handler installed, the
   `tirith://inbox?kind=chat&project=..&step=&text=..&token=..` link; else the `tirith inbox add --kind chat ...`

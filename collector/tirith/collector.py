@@ -1128,6 +1128,7 @@ class Collector:
             "name": self.config.manager_name, "title": self.config.manager_title,
             "activity": orchestrator.get("activity"),
             "since": orchestrator.get("since"), "notes": notes,
+            "live": self._manager_live(),
         }
         manager_queue = asks_mod.queue_items(self.home, only_open=True)[-asks_mod.QUEUE_STATE_ROWS:]
         return {
@@ -1160,6 +1161,18 @@ class Collector:
                 if r["project"] == "settings" and r["status"] == "open" and r.get("setup")],
                 fallback_mod.status(self.config, read_lanes(self.home), now)),
         }
+
+    def _manager_live(self) -> dict | None:
+        """``{heartbeat}`` from ``manager.json`` (the live manager session's last sign of life), or None
+        when the file is missing or has no readable time. The chat shows "typing" only if it moved."""
+        data = read_json(self.home / "manager.json", None)
+        if not isinstance(data, dict):
+            return None
+        for key in ("heartbeat", "at", "updated_at"):
+            beat = parse_iso(data[key]) if isinstance(data.get(key), str) else None
+            if beat is not None:
+                return {"heartbeat": now_iso(beat)}
+        return None
 
     def _inbox(self, projects: list[dict], agents: list[dict], flows: list[dict],
                now: datetime, lanes: list[dict] | None = None) -> list[dict]:

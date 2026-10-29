@@ -12,7 +12,13 @@
   /* Clock: real time, or (for stale demo data) generated_at + time since the page saw it. */
   T.clock = { offset: 0, demo: false };
   T.now = function () { return Date.now() + T.clock.offset; };
-  T.ms = function (iso) { var t = Date.parse(iso || ''); return isNaN(t) ? null : t; };
+  /* Times are UTC: a date-time with no zone ("2026-10-29T09:28:57") would be read as local time by Date.parse. */
+  T.ms = function (iso) {
+    var s = String(iso || '').trim();
+    if (/^\d{4}-\d\d-\d\d[T ]\d\d:\d\d(:\d\d(\.\d+)?)?$/.test(s)) s = s.replace(' ', 'T') + 'Z';
+    var t = Date.parse(s);
+    return isNaN(t) ? null : t;
+  };
 
   T.dur = function (sec) {
     if (sec == null || isNaN(sec)) return '';
