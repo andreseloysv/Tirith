@@ -144,7 +144,7 @@
         "properties": {
           "id": {"type": "string"},
           "at": {"type": ["string", "null"]},
-          "kind": {"enum": ["finish", "ask"]},
+          "kind": {"enum": ["finish", "ask", "setup"]},
           "project": {"type": "string"},
           "step": {"type": "string"},
           "text": {"type": "string"},
@@ -177,6 +177,70 @@
     }
   },
   "$defs": {
+    "setup": {
+      "description": "Build, test, deploy, hooks and rules of a project. See docs/CONTRACT-setup.md.",
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["manifest", "check", "pipelines", "hooks", "rules", "gates_active"],
+      "properties": {
+        "manifest": {"type": ["string", "null"]},
+        "check": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["ok", "problems"],
+          "properties": {
+            "ok": {"type": "boolean"},
+            "problems": {"type": "array", "items": {
+              "type": "object", "additionalProperties": true,
+              "required": ["rule", "message", "fix"],
+              "properties": {"rule": {"type": "string"}, "message": {"type": "string"},
+                             "fix": {"type": "string"}, "line": {"type": "integer"}}}}
+          }
+        },
+        "pipelines": {"type": "array", "items": {
+          "type": "object", "additionalProperties": true, "required": ["id", "name", "stages"],
+          "properties": {
+            "id": {"type": "string"}, "name": {"type": "string"},
+            "stages": {"type": "array", "items": {
+              "type": "object", "additionalProperties": true, "required": ["name", "kind", "run", "last"],
+              "properties": {
+                "name": {"type": "string"},
+                "kind": {"enum": ["build", "test", "deploy", null]},
+                "run": {"type": ["string", "null"]},
+                "last": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/setup_last"}]}}}}}}},
+        "hooks": {"type": "array", "items": {
+          "type": "object", "additionalProperties": true, "required": ["event", "run", "last"],
+          "properties": {"event": {"type": "string"}, "run": {"type": "string"},
+                         "last": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/setup_last"}]}}}},
+        "rules": {"type": "array", "items": {
+          "type": "object", "additionalProperties": true,
+          "required": ["id", "label", "source", "enforced_by", "active", "description"],
+          "properties": {
+            "id": {"type": "string"}, "label": {"type": "string"},
+            "source": {"enum": ["built-in", "tirith.toml"]},
+            "enforced_by": {"type": "array", "items": {"enum": ["hook", "shim", "git", "lane run", "CI"]}},
+            "active": {"type": "boolean"}, "description": {"type": "string"},
+            "action": {"enum": ["block", "warn"]}}}},
+        "gates_active": {"type": "boolean"},
+        "gates_problems": {"type": "array", "items": {"type": "string"}},
+        "gates_fix": {"type": "array", "items": {"type": "string"}},
+        "pending": {"type": "array", "items": {
+          "type": "object", "additionalProperties": true, "required": ["id", "at", "action", "summary"],
+          "properties": {"id": {"type": "string"}, "at": {"type": ["string", "null"]},
+                         "action": {"type": "string"}, "summary": {"type": "string"}}}}
+      }
+    },
+    "setup_last": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["status", "at", "duration_s", "run"],
+      "properties": {
+        "status": {"enum": ["passed", "failed", "running"]},
+        "at": {"type": ["string", "null"]},
+        "duration_s": {"type": ["integer", "null"]},
+        "run": {"type": ["string", "null"]}
+      }
+    },
     "violation": {
       "type": "object",
       "additionalProperties": true,
@@ -456,6 +520,7 @@
           "type": "boolean"
         },
         "usage": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/usage"}]},
+        "setup": {"$ref": "#/$defs/setup"},
         "roadmap": {
           "description": "The project's plan read from its markdown checklist; null when there is none. See docs/CONTRACT-roadmap.md.",
           "oneOf": [{"type": "null"}, {"$ref": "#/$defs/roadmap"}]

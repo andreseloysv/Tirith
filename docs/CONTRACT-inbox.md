@@ -18,7 +18,7 @@ collector: state.inbox -> the Plan shows the chip and the answers under the step
 
 | Row | Fields |
 |---|---|
-| request | `id`, `at`, `kind` (`finish` or `ask`), `project`, `step`, `text`, `from` (`"owner"`), `status` (`"open"`) |
+| request | `id`, `at`, `kind` (`finish`, `ask` or `setup`), `project`, `step`, `text`, `from` (`"owner"`), `status` (`"open"`) |
 | answer | `id` (of the request), `at`, `kind: "answer"`, `by` (`steward` or `brain`), `text` (markdown), `auto` (bool) |
 | done | `id`, `at`, `kind: "done"` |
 
@@ -27,11 +27,19 @@ collector: state.inbox -> the Plan shows the chip and the answers under the step
   no text; an `ask` must.
 - Answer and done rows for an unknown id, and lines that are not JSON, are ignored.
 
+### Kind `setup`
+
+Asks the steward to change or run a project's setup (`CONTRACT-setup.md`). `step` is `"setup"` (it may be
+left out), `text` is a JSON object `{"action": "add-stage" | "remove-stage" | "add-rule" | "remove-rule" |
+"run-stage", ...fields}` (anything else is rejected). `state.inbox[]` rows of this kind carry the parsed
+object as `setup`. The steward handles one with `tirith setup apply <id>`: it edits `tirith.toml` (or runs
+the stage), answers and closes the request.
+
 ## CLI
 
 | Command | Does |
 |---|---|
-| `tirith inbox add --kind finish\|ask --project P --step N [--text T]` | appends a request, prints its id |
+| `tirith inbox add --kind finish\|ask\|setup --project P [--step N] [--text T]` | appends a request, prints its id (`--step` is for plan steps; a `setup` request takes its JSON as `--text`) |
 | `tirith inbox list [--open] [--json]` | lists requests (`--open`: only those with no answer and not done) |
 | `tirith inbox answer <id> "<markdown>" [--by steward\|brain]` | appends an answer (default `steward`, `auto: false`) |
 | `tirith inbox done <id>` | closes the request |

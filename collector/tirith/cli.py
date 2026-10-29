@@ -29,6 +29,7 @@ from tirith import gates as gates_mod
 from tirith import manifest as manifest_mod
 from tirith import hooks as hooks_mod
 from tirith import inbox as inbox_mod
+from tirith import setup as setup_mod
 from tirith import launch as launch_mod
 from tirith import projects as projects_mod
 from tirith import rooms as rooms_mod
@@ -908,14 +909,15 @@ def _cmd_inbox(args) -> int:
     try:
         if action == "add":
             text = args.text if args.text is not None else ""
-            print(inbox_mod.add_request(home, args.kind, args.project, str(args.step), text)["id"])
+            print(inbox_mod.add_request(home, args.kind, args.project, str(args.step or ""), text)["id"])
         elif action == "list":
             for req in inbox_mod.requests(home):
                 if args.open and req["status"] != "open":
                     continue
                 print(json.dumps(req) if args.json else
                       f"{req['id']}  {req['status']:<8} {req['kind']:<6} {req['project']}#{req['step']}  "
-                      + " ".join(req["text"].split())[:80])
+                      + (inbox_mod.setup_summary(req["setup"]) if req.get("setup")
+                         else " ".join(req["text"].split())[:80]))
         elif action == "answer":
             inbox_mod.add_answer(home, args.id, args.text, by=args.by)
         elif action == "done":
@@ -1102,6 +1104,86 @@ def _cmd_shim(args) -> int:
     for alias, status, detail in rows:
         print(f"{alias}: {status} {detail}")
     return 1 if any(status == "skipped" for _, status, _ in rows) else 0
+
+
+def _cmd_setup(args) -> int:
+    home = _home(args)
+    action = args.setup_command
+    if action == "apply":
+        return _setup_apply(home, args.id)
+    pid, folder = _project_folder_of(home, args.project)
+    if folder is None:
+        raise SystemExit(f"tirith setup: unknown project '{pid}'" if args.project
+                         else "tirith setup: cwd is in no known project; pass --project")
+    if action == "show":
+        _setup_show(manifest_mod.load(folder), folder)
+        return 0
+    before = {(p.rule, p.message) for p in manifest_mod.check(folder, [], ci=True)}
+    try:
+        if action == "add-stage":
+            done = setup_mod.add_stage(folder, args.pipeline, args.name, args.run, args.kind, args.after)
+        elif action == "remove-stage":
+            done = setup_mod.remove_stage(folder, args.name, args.pipeline)
+        elif action == "add-rule":
+            done = setup_mod.add_rule(folder, setup_mod.build_rule(
+                args.id, args.action, args.message, args.instead, args.match, args.regex,
+                [x.strip() for x in (args.paths or "").split(",") if x.strip()]))
+        else:
+            done = setup_mod.remove_rule(folder, args.id)
+    except setup_mod.SetupError as error:
+        print(f"tirith setup {action}: {error}", file=sys.stderr)
+        return 3
+    print(f"{done} ({folder / manifest_mod.FILENAME})")
+    problems = manifest_mod.check(folder, [], ci=True)
+    for problem in problems:
+        print(problem)
+    print("tirith check: ready" if not problems else f"tirith check: {len(problems)} problem(s)")
+    return 1 if {(p.rule, p.message) for p in problems} - before else 0
+
+
+def _setup_show(loaded, folder: Path) -> None:
+    if not loaded.exists:
+        print(f"{folder}: no {manifest_mod.FILENAME}")
+        return
+    for pipe in loaded.pipelines:
+        print(f"pipeline {pipe.id}: " + ", ".join(
+            f"{s.name} [{manifest_mod.stage_kind(s) or '-'}] {s.run}" for s in pipe.stages))
+    for hook in loaded.hooks:
+        print(f"hook {hook.event}: {hook.run}")
+    for rule in loaded.rules:
+        print(f"rule {rule.id} ({rule.action}): {rule.message}")
+
+
+def _setup_apply(home: Path, request_id: str) -> int:
+    """Apply a ``setup`` inbox request (edit or run), answer it and close it."""
+    req = inbox_mod.find_request(home, request_id)
+    if req is None or req["kind"] != "setup" or not req.get("setup"):
+        print(f"tirith setup apply: no setup request {request_id}", file=sys.stderr)
+        return 3
+    pid, folder = _project_folder_of(home, req["project"])
+    if folder is None:
+        print(f"tirith setup apply: unknown project '{pid}'", file=sys.stderr)
+        return 3
+    setup = req["setup"]
+    try:
+        if setup["action"] == "run-stage":
+            argv = [sys.executable, "-m", "tirith", "--home", str(home), "run", "--project", pid,
+                    "--stage", str(setup.get("name") or "")]
+            if setup.get("pipeline"):
+                argv += ["--pipeline", str(setup["pipeline"])]
+            code = subprocess.run(argv, cwd=folder).returncode
+            note = f"ran stage `{setup.get('name')}`: " + ("passed" if code == 0 else f"failed (exit {code})")
+        else:
+            note, code = setup_mod.apply_request(folder, setup), 0
+    except setup_mod.SetupError as error:
+        inbox_mod.add_answer(home, request_id, f"Could not apply: {error}")
+        inbox_mod.mark_done(home, request_id)
+        print(f"tirith setup apply: {error}", file=sys.stderr)
+        return 3
+    inbox_mod.add_answer(home, request_id, note[0].upper() + note[1:] + ".")
+    inbox_mod.mark_done(home, request_id)
+    print(note)
+    return 0 if code == 0 else 1
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1320,8 +1402,9 @@ def build_parser() -> argparse.ArgumentParser:
     i_add = inbox_sub.add_parser("add", parents=[common], help="add a request (prints its id)")
     i_add.add_argument("--kind", required=True, choices=inbox_mod.KINDS)
     i_add.add_argument("--project", required=True)
-    i_add.add_argument("--step", required=True, help="roadmap step number")
-    i_add.add_argument("--text", default=None, help="the question (required for ask)")
+    i_add.add_argument("--step", default=None, help="roadmap step number (not for setup)")
+    i_add.add_argument("--text", default=None,
+                       help="the question (required for ask); for setup the request as JSON, see CONTRACT-setup")
     i_ls = inbox_sub.add_parser("list", parents=[common], help="list requests")
     i_ls.add_argument("--open", action="store_true", help="only open requests")
     i_ls.add_argument("--json", action="store_true", help="one JSON object per line")
@@ -1337,6 +1420,36 @@ def build_parser() -> argparse.ArgumentParser:
     i_watch.add_argument("--interval", type=float, default=1.0, help="seconds between reads")
     for i_cmd in (i_add, i_ls, i_ans, i_done, i_watch):
         i_cmd.set_defaults(func=_cmd_inbox)
+
+    setup = sub.add_parser("setup", parents=[common], help="see and change a project's tirith.toml setup")
+    setup_sub = setup.add_subparsers(dest="setup_command", required=True)
+    se_show = setup_sub.add_parser("show", parents=[common], help="pipelines, hooks and rules of a project")
+    se_add = setup_sub.add_parser("add-stage", parents=[common], help="add a stage to a pipeline")
+    se_add.add_argument("--pipeline", required=True)
+    se_add.add_argument("--name", required=True)
+    se_add.add_argument("--run", required=True, help="the shell command of the stage")
+    se_add.add_argument("--kind", choices=manifest_mod.KINDS, default=None)
+    se_add.add_argument("--after", default=None, help="insert after this stage (default: last)")
+    se_rm = setup_sub.add_parser("remove-stage", parents=[common], help="remove a stage")
+    se_rm.add_argument("--name", required=True)
+    se_rm.add_argument("--pipeline", default=None)
+    se_rule = setup_sub.add_parser("add-rule", parents=[common], help="add a custom rule ([[rules]])")
+    se_rule.add_argument("--id", required=True)
+    se_rule.add_argument("--match", default=None, help="command glob, e.g. 'git push --force*'")
+    se_rule.add_argument("--regex", default=None, help="regular expression on the command line")
+    se_rule.add_argument("--paths", default=None, help="comma-separated globs of files an agent may not edit")
+    se_rule.add_argument("--action", choices=manifest_mod.RULE_ACTIONS, default="block")
+    se_rule.add_argument("--message", required=True)
+    se_rule.add_argument("--instead", required=True)
+    se_rr = setup_sub.add_parser("remove-rule", parents=[common], help="remove a custom rule")
+    se_rr.add_argument("--id", required=True)
+    se_apply = setup_sub.add_parser("apply", parents=[common],
+                                    help="apply a setup request of the inbox, answer it and close it")
+    se_apply.add_argument("id")
+    for se_cmd in (se_show, se_add, se_rm, se_rule, se_rr):
+        se_cmd.add_argument("--project", default=None, help="project id (default: the one of the cwd)")
+    for se_cmd in (se_show, se_add, se_rm, se_rule, se_rr, se_apply):
+        se_cmd.set_defaults(func=_cmd_setup)
 
     url = sub.add_parser("url", parents=[common], help="the tirith:// link handler (macOS)")
     url_sub = url.add_subparsers(dest="url_command", required=True)
