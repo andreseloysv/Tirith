@@ -64,6 +64,7 @@ class ProjectConfig:
     color: str = "#888888"
     guard_words: list[str] | None = None
     architecture: dict | None = None
+    guard: bool = True  # config `guard = false`: the owner opted this project out of the commit guard
 
 
 @dataclass
@@ -135,6 +136,7 @@ def _project_from(table: dict, fallback_id: str | None = None) -> ProjectConfig 
         color=str(table.get("color") or "#888888"),
         guard_words=[str(w) for w in words] if words else None,
         architecture=table.get("architecture") if isinstance(table.get("architecture"), dict) else None,
+        guard=table.get("guard", True) is not False,
     )
 
 

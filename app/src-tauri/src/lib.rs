@@ -398,9 +398,18 @@ fn find_action(home: &std::path::Path, action_id: &str) -> Option<(Value, String
             waits.insert(id.to_string(), row);
         }
     }
-    waits.values().find_map(|row| {
+    if let Some(found) = waits.values().find_map(|row| {
         has(row).map(|a| (a, row["project"].as_str().unwrap_or("").to_string()))
-    })
+    }) {
+        return Some(found);
+    }
+    // actions the collector itself makes (guard checks): `generated-actions.json`, id -> action + project
+    let generated: Value = std::fs::read_to_string(home.join("generated-actions.json"))
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())?;
+    let action = generated.get(action_id)?.clone();
+    let project = action["project"].as_str().unwrap_or("").to_string();
+    Some((action, project))
 }
 
 /// Unix seconds of `YYYY-MM-DDTHH:MM:SSZ`.
@@ -488,6 +497,58 @@ fn run_shell(command: &str, cwd: &std::path::Path, log: &std::path::Path) -> i32
 
 /// Runs a declared action: `running` row now, `passed` or `failed` when the command ends.
 /// Returns at once; the page follows the rows through the state.
+/// True when `state` lists `lane_id` as an agent that is still running (working or stalled) and is a
+/// local lane (remote work has no process of ours to stop).
+fn lane_is_running(state: &Value, lane_id: &str) -> bool {
+    state["agents"].as_array().map_or(false, |agents| {
+        agents.iter().any(|a| {
+            a["id"] == lane_id
+                && (a["status"] == "working" || a["status"] == "stalled")
+                && a["source"] != "github"
+        })
+    })
+}
+
+/// Stops a running lane for the owner: `tirith lane stop <id> --by owner`, in the background (it waits up
+/// to 10 s for the agent to exit). The id is checked against the lanes in `state.json`, never run as typed.
+#[tauri::command]
+fn lane_stop(lane_id: String) -> Result<(), String> {
+    let lane_id = lane_id.trim().to_string();
+    let state = read_state().ok_or("no state yet")?;
+    if !lane_is_running(&state, &lane_id) {
+        return Err(format!("{lane_id} is not a running lane"));
+    }
+    let child = tirith_command(&["lane", "stop", &lane_id, "--by", "owner"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|e| format!("could not run tirith: {e}"))?;
+    std::thread::spawn(move || {
+        let mut child = child;
+        let _ = child.wait();
+    });
+    Ok(())
+}
+
+#[cfg(test)]
+mod lane_stop_tests {
+    use super::*;
+
+    #[test]
+    fn only_running_local_lanes_can_be_stopped() {
+        let state = json!({"agents": [
+            {"id": "a", "status": "working"}, {"id": "b", "status": "stalled"},
+            {"id": "c", "status": "done"}, {"id": "d", "status": "working", "source": "github"}]});
+        assert!(lane_is_running(&state, "a"));
+        assert!(lane_is_running(&state, "b"));
+        assert!(!lane_is_running(&state, "c"));
+        assert!(!lane_is_running(&state, "d"));
+        assert!(!lane_is_running(&state, "x; rm -rf ~"));
+        assert!(!lane_is_running(&json!({}), "a"));
+    }
+}
+
 #[tauri::command]
 fn run_action(app: AppHandle, action_id: String) -> Result<(), String> {
     let home = tirith_home();
@@ -786,6 +847,7 @@ pub fn run() {
             inbox_add,
             inbox_reply,
             run_action,
+            lane_stop,
             chat_enabled,
             chat_agents,
             chat_start,

@@ -68,6 +68,8 @@ def _step_name(req: dict) -> str:
 def add_owner_item(home: Path, item_id: str, project: str | None, text: str, options: list[dict],
                    at: str) -> None:
     """One item on the owner's waiting list with ``options`` (``[{label, command}]``); once per id."""
+    if not options:
+        raise ValueError(f"owner item {item_id} has no option: every item for the owner needs a call to action")
     if any(r.get("id") == item_id for r in read_jsonl(Path(home) / "waits.jsonl")):
         return
     append_jsonl(Path(home) / "waits.jsonl", {

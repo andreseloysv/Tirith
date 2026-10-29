@@ -75,7 +75,7 @@
     });
     if (w.command) h += '<button class="nbtn" data-act="copy" data-key="' + esc(w.command) + '" title="Copy the command">Copy</button><code class="ncmd" title="' + esc(w.command) + '">' + esc(w.command) + '</code>';
     if (w.link) h += '<a class="nbtn" href="' + esc(w.link) + '" target="_blank" rel="noopener">Open</a>';
-    h += '</div><div class="nwrite"><input class="iin" type="text" data-act="ntext" data-key="' + esc(w.id) + '" maxlength="1000" placeholder="Or write what you need…" aria-label="Your reply" value="' + esc(ui.needsDraft[w.id] || '') + '"></div>';
+    h += '</div>' + (w.actions && w.actions.length ? T.actions(w.actions, lastState, w.project) : '') + '<div class="nwrite"><input class="iin" type="text" data-act="ntext" data-key="' + esc(w.id) + '" maxlength="1000" placeholder="Or write what you need…" aria-label="Your reply" value="' + esc(ui.needsDraft[w.id] || '') + '"></div>';
     if (ui.needsErr[w.id]) h += '<div class="ierr">' + esc(ui.needsErr[w.id]) + '</div>';
     if (ui.needsCli[w.id]) h += '<div class="icli">Tirith cannot send from this page. Run in a terminal:<code>' + esc(ui.needsCli[w.id]) + '</code></div>';
     return h + '</li>';

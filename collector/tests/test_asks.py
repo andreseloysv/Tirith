@@ -40,10 +40,13 @@ def test_wait_add_stores_options_command_kind(home: Path, capsys) -> None:
     assert wait["link"] == "https://example.com"
 
 
-def test_plain_wait_keeps_its_old_shape(home: Path, capsys) -> None:
-    assert main(["wait", "add", "Tick the box", "--project", "demo"]) == 0
+def test_wait_without_option_or_action_is_refused(home: Path, capsys) -> None:
+    with pytest.raises(SystemExit) as refused:
+        main(["wait", "add", "Tick the box", "--project", "demo"])
+    assert "call-to-action" in str(refused.value)
+    assert main(["wait", "add", "Tick the box", "--project", "demo", "--option", "Done|done"]) == 0
     (row,) = read_jsonl(home / "waits.jsonl")
-    assert "options" not in row and "kind" not in row
+    assert row["options"] == [{"label": "Done", "value": "done"}]
 
 
 def test_wait_add_rejects_bad_input(home: Path) -> None:
@@ -182,8 +185,9 @@ def test_failed_lane_end_by_the_steward_adds_no_owner_item(home: Path) -> None:
 def test_commit_guard_reminder_goes_away_when_the_guard_is_intact(
         home: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     write_config(home, [{"id": "demo", "name": "Demo", "repo": str(tmp_path)}])
-    main(["wait", "add", "Install the commit guard in the repo", "--project", "demo"])
-    main(["wait", "add", "Pick a colour", "--project", "demo"])
+    main(["wait", "add", "Install the commit guard in the repo", "--project", "demo",
+          "--run", "tirith guard install demo", "--label", "Install the guard"])
+    main(["wait", "add", "Pick a colour", "--project", "demo", "--option", "Blue|blue"])
     main(["wait", "add", "Reinstall the commit guard?", "--project", "demo", "--option", "Yes|yes"])
     monkeypatch.setattr("tirith.collector.verify_guard", lambda *_a, **_k: [])
     texts = [w["text"] for w in _state(home)["waiting_on_you"] if w["source"] == "manual"]
