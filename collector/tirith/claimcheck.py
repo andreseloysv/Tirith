@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
+from tirith import timeouts as timeouts_mod
 from tirith.home import parse_iso
 from tirith.store import lane_path, read_json, read_jsonl
 
@@ -70,12 +71,12 @@ class Result:
 
 
 def _git(folder: Path, *args: str) -> str:
-    done = subprocess.run(["git", "-C", str(folder), *args], capture_output=True, text=True)
+    done = timeouts_mod.run(["git", "-C", str(folder), *args], "git", text=True)
     return done.stdout if done.returncode == 0 else ""
 
 
 def _ok(folder: Path, *args: str) -> bool:
-    return subprocess.run(["git", "-C", str(folder), *args], capture_output=True).returncode == 0
+    return timeouts_mod.run(["git", "-C", str(folder), *args], "git").returncode == 0
 
 
 # -- the facts ---------------------------------------------------------------------------------

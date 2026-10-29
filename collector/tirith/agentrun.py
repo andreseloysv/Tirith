@@ -15,6 +15,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from tirith import timeouts as timeouts_mod
 from tirith import models as models_mod
 from tirith.home import Config
 
@@ -291,7 +292,7 @@ def diff_path(home: Path, lane_id: str) -> Path:
 
 
 def _git(workspace: str, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", "-C", workspace, *args], capture_output=True, timeout=30)
+    return timeouts_mod.run(["git", "-C", workspace, *args], "git")
 
 
 def _is_binary(data: bytes) -> bool:
@@ -382,13 +383,13 @@ def doctor_agent(config: Config, alias: str, env_path: str, wrapper_dir: Path) -
         env = {**os.environ, "PATH": env_path}
         steps = [[git, "init", "-q", str(repo)]]
         for step in steps:
-            subprocess.run(step, capture_output=True, env=env, check=False)
+            timeouts_mod.run(step, "git", env=env)
         (repo / "f.txt").write_text("x\n", encoding="utf-8")
-        subprocess.run([git, "-C", str(repo), "add", "."], capture_output=True, env=env)
-        done = subprocess.run(
+        timeouts_mod.run([git, "-C", str(repo), "add", "."], "git", env=env)
+        done = timeouts_mod.run(
             ["git", "-C", str(repo), "-c", "user.email=d@example.invalid", "-c", "user.name=doctor",
              "commit", "-q", "--no-verify", "-m", "doctor"],
-            capture_output=True, text=True, env=env, timeout=30)
+            "git-commit", text=True, env=env)
     refused = done.returncode != 0
     checks.append(("hooks-skip", refused,
                    "commit with --no-verify is refused" if refused

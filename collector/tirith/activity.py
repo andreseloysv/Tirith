@@ -19,6 +19,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 
+from tirith import timeouts as timeouts_mod
 from tirith import hooks as hooks_mod
 from tirith.home import now_iso, parse_iso
 
@@ -460,8 +461,7 @@ _CHANGES = {"A": "added", "M": "modified", "D": "deleted", "R": "renamed", "T": 
 
 def _git(workspace: str, *args: str) -> str | None:
     try:
-        out = subprocess.run(["git", "-C", workspace, *args], capture_output=True,
-                             timeout=GIT_TIMEOUT_S)
+        out = timeouts_mod.run(["git", "-C", workspace, *args], "git", timeout=GIT_TIMEOUT_S)
     except (OSError, subprocess.SubprocessError):
         return None
     return out.stdout.decode("utf-8", errors="replace") if out.returncode == 0 else None

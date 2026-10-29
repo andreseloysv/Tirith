@@ -18,6 +18,7 @@ import urllib.request
 from pathlib import Path
 from typing import Callable, Protocol
 
+from tirith import timeouts as timeouts_mod
 from tirith.home import Config, parse_iso
 
 API = "https://api.github.com"
@@ -65,8 +66,7 @@ def remote_slug(folder: Path | str | None) -> str | None:
     if not folder or not Path(folder).is_dir():
         return None
     try:
-        out = subprocess.run(["git", "-C", str(folder), "remote", "get-url", "origin"],
-                             capture_output=True, text=True, timeout=10)
+        out = timeouts_mod.run(["git", "-C", str(folder), "remote", "get-url", "origin"], "git", text=True)
     except (OSError, subprocess.SubprocessError):
         return None
     return parse_remote(out.stdout) if out.returncode == 0 else None
