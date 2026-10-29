@@ -214,8 +214,15 @@
   T.views.overview = overview;
 
   /* ---------- render ---------- */
-  function scrolls() { var o = {}; [].forEach.call(document.querySelectorAll('[data-scroll]'), function (e) { o[e.getAttribute('data-scroll')] = e.scrollTop; }); return o; }
-  function restore(o) { [].forEach.call(document.querySelectorAll('[data-scroll]'), function (e) { var k = e.getAttribute('data-scroll'); if (o[k]) e.scrollTop = o[k]; }); }
+  function scrolls() { var o = {}; [].forEach.call(document.querySelectorAll('[data-scroll]'), function (e) { var k = e.getAttribute('data-scroll'); o[k] = e.scrollTop; o['h:' + k] = e.scrollHeight; }); return o; }
+  /* a list with data-anchor grows at the top (newest first): keep what the reader sees where it is */
+  function restore(o) {
+    [].forEach.call(document.querySelectorAll('[data-scroll]'), function (e) {
+      var k = e.getAttribute('data-scroll');
+      if (!o[k]) return;
+      e.scrollTop = e.hasAttribute('data-anchor') && o['h:' + k] ? o[k] + e.scrollHeight - o['h:' + k] : o[k];
+    });
+  }
   T.render = function (fstate, rawState) {
     if (rawState) raw = rawState;
     if (fstate) state = fstate;
@@ -258,6 +265,9 @@
       else if (act === 'edge') { ui.edge = key; ui.drawer = 'edge'; }
       else if (act === 'close') { ui.drawer = null; if (T.filter.mode !== 'list') ui.openAgent = null; ui.edge = null; }
       else if (act === 'earlier') ui.showEarlier = !ui.showEarlier;
+      else if (act === 'logf') ui.logFilter = key;
+      else if (act === 'logsys') ui.logSys[key] = !ui.logSys[key];
+      else if (act === 'logopen') ui.logOpen[key] = !ui.logOpen[key];
       else if (act === 'mode') { T.setFilter('mode', b.getAttribute('data-v')); return; }
       else if (act === 'zoom-in') { ui.fit = false; ui.zoom = Math.min(2, Math.round((ui.zoom + .1) * 10) / 10); }
       else if (act === 'zoom-out') { ui.fit = false; ui.zoom = Math.max(.3, Math.round((ui.zoom - .1) * 10) / 10); }
