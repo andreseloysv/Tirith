@@ -15,6 +15,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from tirith import timeouts as timeouts_mod
 from tirith import models as models_mod
 from tirith.home import Config
 
@@ -46,8 +47,9 @@ PRESET_DEFAULTS: dict[str, dict] = {
         "permissions": [],
         "permissions_flag": None,
         "model_flag": "--model",
-        "effort_flag": None,
+        "effort_flag": "--reasoning-effort",  # none|minimal|low|medium|high|xhigh|max|ultra
         "add_dir_flag": None,
+        "prompt_file_flag": "--prompt-file",  # a long prompt goes through a file, not argv
     },
     # Flags checked against each CLI's real help (read through a lane); a full run is still
     # unconfirmed (docs/CONTRACT-agents.md).
@@ -76,7 +78,7 @@ PRESET_DEFAULTS: dict[str, dict] = {
 }
 
 _OVERRIDABLE = ("command", "args", "permissions", "model", "effort", "add_dirs", "prompt_flag",
-                "print_flag", "stdin", "unset_env")
+                "print_flag", "stdin", "prompt_file_flag", "unset_env")
 STDIN_MIN = 2000  # a prompt this long (a brief) goes through stdin when the alias reads it
 
 
@@ -159,11 +161,21 @@ def build_command(config: Config, alias: str, project: str | None, prompt: str, 
             cmd += [str(s["add_dir_flag"]), d]
     if s.get("print_flag"):
         pass
+    elif s.get("prompt_file_flag") and (len(prompt) >= STDIN_MIN or prompt.startswith("-")):
+        cmd += [str(s["prompt_file_flag"]), _prompt_file(prompt)]
     elif s.get("prompt_flag"):
         cmd += [str(s["prompt_flag"]), prompt]
     else:
         cmd += ["--", prompt] if prompt.startswith("-") else [prompt]
     return cmd
+
+
+def _prompt_file(prompt: str) -> str:
+    """A private temp file holding ``prompt`` (for agents that read it from ``--prompt-file``)."""
+    fd, name = tempfile.mkstemp(prefix="tirith-prompt-", suffix=".md")
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle.write(prompt)
+    return name
 
 
 # -- usage -------------------------------------------------------------------------------------
@@ -178,7 +190,7 @@ def _tokens(usage: dict) -> tuple[int, int, int]:
     out = _num(usage.get("output_tokens", usage.get("outputTokens")))
     cache = sum(_num(usage.get(k)) for k in (
         "cache_creation_input_tokens", "cache_read_input_tokens", "cache_tokens",
-        "cacheCreationInputTokens", "cacheReadInputTokens", "cached_input_tokens"))
+        "cacheCreationInputTokens", "cacheReadInputTokens", "cached_input_tokens", "cached_tokens"))
     return int(inp), int(out), int(cache)
 
 
@@ -237,6 +249,12 @@ def parse_usage(path: str | Path | None) -> dict | None:
             body = rec.get("payload") if isinstance(rec.get("payload"), dict) else rec
             usage = body.get("usage") if isinstance(body.get("usage"), dict) else body
             i, o, c = _tokens(usage)
+            rows = [m for m in body.get("models") or [] if isinstance(m, dict)]  # Muse Code: per model
+            for row in rows:
+                ri, ro, rc = _tokens(row)
+                i, o, c = i + ri, o + ro, c + rc
+            if rows and not body.get("model"):
+                best_model = str(rows[0].get("model") or "") or best_model
             total = _num(usage.get("total_tokens"))
             if not (i or o) and total:
                 i = int(total)
@@ -291,7 +309,7 @@ def diff_path(home: Path, lane_id: str) -> Path:
 
 
 def _git(workspace: str, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", "-C", workspace, *args], capture_output=True, timeout=30)
+    return timeouts_mod.run(["git", "-C", workspace, *args], "git")
 
 
 def _is_binary(data: bytes) -> bool:
@@ -382,13 +400,13 @@ def doctor_agent(config: Config, alias: str, env_path: str, wrapper_dir: Path) -
         env = {**os.environ, "PATH": env_path}
         steps = [[git, "init", "-q", str(repo)]]
         for step in steps:
-            subprocess.run(step, capture_output=True, env=env, check=False)
+            timeouts_mod.run(step, "git", env=env)
         (repo / "f.txt").write_text("x\n", encoding="utf-8")
-        subprocess.run([git, "-C", str(repo), "add", "."], capture_output=True, env=env)
-        done = subprocess.run(
+        timeouts_mod.run([git, "-C", str(repo), "add", "."], "git", env=env)
+        done = timeouts_mod.run(
             ["git", "-C", str(repo), "-c", "user.email=d@example.invalid", "-c", "user.name=doctor",
              "commit", "-q", "--no-verify", "-m", "doctor"],
-            capture_output=True, text=True, env=env, timeout=30)
+            "git-commit", text=True, env=env)
     refused = done.returncode != 0
     checks.append(("hooks-skip", refused,
                    "commit with --no-verify is refused" if refused

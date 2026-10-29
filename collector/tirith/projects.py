@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+from tirith import timeouts as timeouts_mod
 from tirith.home import Config, load_config, now_iso
 from tirith.store import read_json, write_json_atomic, write_text_atomic
 
@@ -51,8 +52,7 @@ def git_toplevel(folder: Path) -> Path | None:
     if not folder.is_dir():
         return None
     try:
-        out = subprocess.run(["git", "-C", str(folder), "rev-parse", "--show-toplevel"],
-                             capture_output=True, text=True, timeout=10)
+        out = timeouts_mod.run(["git", "-C", str(folder), "rev-parse", "--show-toplevel"], "git", text=True)
     except (OSError, subprocess.SubprocessError):
         return None
     top = out.stdout.strip()
@@ -67,8 +67,8 @@ def _in_main_worktree(path: str) -> str:
     if top is None:
         return path
     try:
-        out = subprocess.run(["git", "-C", str(top), "rev-parse", "--path-format=absolute",
-                              "--git-common-dir"], capture_output=True, text=True, timeout=10)
+        out = timeouts_mod.run(["git", "-C", str(top), "rev-parse", "--path-format=absolute",
+                                "--git-common-dir"], "git", text=True)
     except (OSError, subprocess.SubprocessError):
         return path
     common = real(out.stdout.strip()) if out.returncode == 0 and out.stdout.strip() else None

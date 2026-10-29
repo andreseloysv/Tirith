@@ -25,6 +25,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
+from tirith import timeouts as timeouts_mod
 from tirith import asks as asks_mod
 from tirith import autopilot as autopilot_mod
 from tirith import diskdiet as diskdiet_mod
@@ -32,6 +33,7 @@ from tirith import inbox as inbox_mod
 from tirith import launch as launch_mod
 from tirith import managerd as managerd_mod
 from tirith import review as review_mod
+from tirith import timeouts as timeouts_mod
 from tirith.home import Config, now_iso, parse_iso
 from tirith.store import read_lane
 
@@ -39,6 +41,8 @@ MANAGER_STUCK_S = 120.0      # an owner message without an answer, nobody workin
 LINGER_S = 60.0              # a manager process alive this long after its result
 AUTOPILOT_IDLE_S = 900.0     # ready steps, nothing working, no reason given
 REVIEW_STUCK_S = 1200.0      # a review in "running"
+TIMEOUTS_WINDOW_S = 3600.0   # timeouts of one class are counted over this long
+TIMEOUTS_REPEATED = 3        # this many in the window is not chance
 COLLECTOR_GAP_S = 150.0      # no pass for this long: the collector was down
 GAP_SHOWN_S = 600.0          # how long the gap stays in the result
 GRACE_S = 90.0               # a remedy gets this long to work before the next try
@@ -48,10 +52,10 @@ SAVE_EVERY_S = 30.0
 QUEUE_KIND = "selfcheck"
 LEVELS = ("ok", "healing", "failed")
 LABELS = {"collector": "Tirith itself", "manager": "The manager", "autopilot": "The autopilot",
-          "disk": "Disk space", "reviews": "Reviews"}
+          "disk": "Disk space", "reviews": "Reviews", "timeouts": "Command timeouts"}
 OK_TEXT = {"collector": "Tirith is collecting normally.", "manager": "The manager is answering normally.",
            "autopilot": "The autopilot is on track.", "disk": "There is enough free disk space.",
-           "reviews": "Reviews are moving."}
+           "reviews": "Reviews are moving.", "timeouts": "No command keeps running out of time."}
 _TEST_FILE = re.compile(r"[\w./-]*(?:test_\w+\.py|[\w-]+\.test\.mjs)")
 
 
@@ -160,7 +164,8 @@ def _manager(home: Path, config: Config, now: datetime, state: dict, book: dict,
                    f"min after its answer and could not be closed. pid {lane.get('pid')}, pgid {lane.get('pgid')}.")
             return _check("failed", "A manager process stayed open and could not be closed.")
     waiting = _chat_waiting(home)
-    if not waiting or managerd_mod.attached(home, now) or managerd_mod.running(mbook, lanes, now):
+    if not waiting or managerd_mod.attached(home, now) or managerd_mod.running(mbook, lanes, now) \
+            or managerd_mod.session_busy(home):
         return _check("ok", OK_TEXT["manager"])
     oldest = min(waiting, key=lambda r: str(r["at"] or ""))
     age = _age_s(oldest["at"], now)
@@ -228,8 +233,25 @@ def _disk(state: dict, now: datetime, active: set[str]) -> dict:
     return _check("failed", f"The disk is almost full ({gb:.1f} GB free); no new work starts until space is freed.")
 
 
+def _timeouts(home: Path, now: datetime, book: dict, active: set[str]) -> dict:
+    """A command class that timed out ``TIMEOUTS_REPEATED`` times within the hour: one manager queue item."""
+    worst = _check("ok", OK_TEXT["timeouts"])
+    for cls, rows in sorted(timeouts_mod.recent_timeouts(home, TIMEOUTS_WINDOW_S, now).items()):
+        if len(rows) < TIMEOUTS_REPEATED:
+            continue
+        key = f"timeouts:{cls}"
+        active.add(key)
+        seen = "; ".join(f"{r.get('at')}: {r.get('command') or '?'} (limit {r.get('seconds')} s)" for r in rows[-4:])
+        _queue(home, book, key, "tirith", str(rows[-1].get("lane") or ""),
+               f"Self-check: commands of class '{cls}' ran out of time {len(rows)} times in the last hour. "
+               f"Find out why they hang (a lock, a prompt, a slow test?) or set a fitting limit with "
+               f"`tirith timeout set --class {timeouts_mod.base_class(cls)} --seconds N --reason \"…\"`.\n{seen}")
+        worst = _check("failed", f"Commands of class '{cls}' keep running out of time ({len(rows)} times in an hour).")
+    return worst
+
+
 def diff_files(repo: Path, lane_id: str) -> list[str]:
-    done = subprocess.run(["git", "-C", str(repo), "diff", "--name-only", f"HEAD...lane/{lane_id}"],
+    done = timeouts_mod.run(["git", "-C", str(repo), "diff", "--name-only", f"HEAD...lane/{lane_id}"], "git",
                           capture_output=True, text=True)
     return done.stdout.split() if done.returncode == 0 else []
 
@@ -338,6 +360,7 @@ def run(home: Path, config: Config, now: datetime, state: dict, *, lanes: list[d
     checks["autopilot"] = _autopilot(config, now, state, book, home, agents or [], projects or [], active)
     checks["disk"] = _disk(state, now, active)
     checks["reviews"] = _reviews(home, config, now, book, lanes, spawn, kill, diff or diff_files, active)
+    checks["timeouts"] = _timeouts(home, now, book, active)
     changed = _announce(home, book, now)
     active |= set(book["notices"])  # an episode lasts until the owner has been told how it ended
     for key in list(book["tries"]):  # an episode that is over starts the next one from zero

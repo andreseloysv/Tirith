@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
+from tirith import timeouts as timeouts_mod
 from tirith import asks as asks_mod
 from tirith import autopilot as autopilot_mod
 from tirith import autoreview as autoreview_mod
@@ -203,7 +204,7 @@ def _plan(home: Path, req: dict, config: Config, lanes: list[dict], status_of: C
 
 
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True)
+    return timeouts_mod.run(["git", "-C", str(repo), *args], "git", text=True)
 
 
 def _plan_file(repo: Path, plan: str) -> Path | None:
@@ -363,6 +364,7 @@ def run(home: Path, config: Config, now: datetime, *, agents: list[dict], lanes:
         plan_launcher: Callable | None = None, projects: list[dict] | None = None,
         verify_launcher: Callable | None = None,
         relauncher: Callable | None = None, manager_spawn: Callable | None = None, manager_kill: Callable | None = None,
+        manager_popen: Callable | None = None,
         free: Callable | None = None) -> list[dict]:
     """One dispatcher pass; returns the requests re-read afterwards. Safe to call every cycle."""
     home = Path(home)
@@ -422,7 +424,7 @@ def run(home: Path, config: Config, now: datetime, *, agents: list[dict], lanes:
                          spawn=spawn, kill=manager_kill):
         changed = True
     if config.dispatch_auto_launch and managerd_mod.run(home, config, now, state, lanes, spawn=manager_spawn,
-                                                          kill=manager_kill):
+                                                          kill=manager_kill, popen=manager_popen):
         changed = True  # nobody attached and something pending: the on-call manager
     for rid in list(state["escalated"]):  # the manager caught up: take the item off the owner's list
         req = next((r for r in inbox_mod.requests(home) if r["id"] == rid), None)

@@ -22,7 +22,7 @@ from tirith.home import load_config
 from tirith.store import read_json, write_lane
 
 NOW = datetime(2026, 10, 29, 12, 0, tzinfo=timezone.utc)
-AGENTS = '[agents.anthropic]\ncommand = "agent-bin"\n'
+AGENTS = '[agents.anthropic]\ncommand = "agent-bin"\n\n[manager]\nsession = false\n'
 
 
 @pytest.fixture

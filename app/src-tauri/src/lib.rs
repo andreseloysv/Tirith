@@ -3,9 +3,9 @@
 //! No servers and no open ports: everything between the page and Rust is Tauri IPC.
 
 use std::collections::{HashMap, HashSet};
-use std::io::{BufRead, BufReader, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::{Child, ChildStdin, Command, Stdio};
+use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -16,19 +16,11 @@ mod liveweb;
 
 const STATE_EVENT: &str = "tirith://state";
 const ALIVE_EVENT: &str = "tirith://alive";
-const CHAT_EVENT: &str = "tirith://chat";
-
-/// A chat session: the headless agent process and the lane that stands for it.
-struct ChatSession {
-    child: Child,
-    stdin: ChildStdin,
-}
 
 #[derive(Default)]
 struct App {
     /// The collector this app started (None when one was already running).
     collector: Mutex<Option<Child>>,
-    chats: Mutex<HashMap<String, ChatSession>>,
     /// Action ids with a run in progress (one run at a time per action).
     running: Mutex<HashSet<String>>,
     /// The paths of the last files dropped on the window: the only ones `attachment_dropped` reads.
@@ -2093,190 +2085,30 @@ mod action_tests {
     }
 }
 
-// -- chat (behind a flag) -----------------------------------------------------------------------
+// -- the manager session ------------------------------------------------------------------------
 //
-// TODO: resuming a conversation and showing tool calls. Text and permission questions only.
+// The one manager is a session the collector owns (`tirith manager ...`, docs/CONTRACT-inbox.md). The chat
+// only sends it controls; text, tool calls and permission questions all come through the state.
 
-/// Chat is off unless `TIRITH_CHAT=1` or `[app] chat = true` in `config.toml`.
-#[tauri::command]
-fn chat_enabled() -> bool {
-    if std::env::var("TIRITH_CHAT").map(|v| v == "1").unwrap_or(false) {
-        return true;
+/// The `tirith manager` words the chat may send: stop the running turn, end the session, start it again.
+fn manager_control_args(op: &str) -> Result<[&'static str; 2], String> {
+    match op {
+        "interrupt" => Ok(["manager", "interrupt"]),
+        "stop" => Ok(["manager", "stop"]),
+        "restart" => Ok(["manager", "restart"]),
+        other => Err(format!("unknown manager control: {other}")),
     }
-    config().get("app").and_then(|a| a.get("chat")).and_then(|v| v.as_bool()).unwrap_or(false)
 }
 
-/// Aliases from `[agents.<alias>]` that define `chat_args` (the streaming JSON mode arguments).
+/// Interrupts the manager's current turn, or stops / restarts its session.
 #[tauri::command]
-fn chat_agents() -> Vec<String> {
-    let cfg = config();
-    let mut v: Vec<String> = cfg
-        .get("agents")
-        .and_then(|a| a.as_table())
-        .map(|t| {
-            t.iter()
-                .filter(|(_, a)| a.get("command").is_some() && a.get("chat_args").is_some())
-                .map(|(k, _)| k.clone())
-                .collect()
-        })
-        .unwrap_or_default();
-    v.sort();
-    v
-}
-
-fn emit_chat(app: &AppHandle, id: &str, kind: &str, line: &str) {
-    let _ = app.emit(CHAT_EVENT, json!({ "id": id, "kind": kind, "line": line }));
-}
-
-/// Starts a headless agent session in the project's repo as a lane (`lane run --interactive`).
-/// Returns the session id (also the lane id).
-#[tauri::command]
-fn chat_start(
-    app: AppHandle,
-    state: State<'_, App>,
-    project: String,
-    alias: String,
-) -> Result<String, String> {
-    if !chat_enabled() {
-        return Err("chat is off (set TIRITH_CHAT=1 or [app] chat = true in config.toml)".into());
-    }
-    let cfg = config();
-    let agent = cfg
-        .get("agents")
-        .and_then(|a| a.get(alias.as_str()))
-        .ok_or_else(|| format!("no [agents.{alias}] in config.toml"))?;
-    let command = agent
-        .get("command")
-        .and_then(|c| c.as_str())
-        .ok_or_else(|| format!("[agents.{alias}] has no command"))?;
-    let args: Vec<String> = agent
-        .get("chat_args")
-        .and_then(|a| a.as_array())
-        .ok_or_else(|| format!("[agents.{alias}] has no chat_args (its streaming JSON mode arguments)"))?
-        .iter()
-        .filter_map(|a| a.as_str().map(str::to_string))
-        .collect();
-
-    // The conversation is a lane: `lane run --interactive` registers it, runs the agent on our pipes
-    // (it inherits stdin/stdout), forwards signals and ends the lane however the agent exits.
-    let ms = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
-    let id = format!("chat-{ms}");
-    let brief = tirith_home().join("chats").join(format!("{id}.md"));
-    std::fs::create_dir_all(brief.parent().unwrap()).map_err(|e| e.to_string())?;
-    std::fs::write(&brief, format!("Chat with {alias}: the owner talks to the agent from the app.\n"))
-        .map_err(|e| e.to_string())?;
-    // Even the owner's chat is plan work: Tirith adds its item to the plan first, the lane is linked to it.
-    let item = format!("Chat con el dueño: {id}");
-    let added = tirith_command(&[
-        "plan", "add", "--project", &project, "--step", "0", "--title", "Trabajo automático de Tirith",
-        "--text", &item,
-    ])
-    .stdin(Stdio::null())
-    .output()
-    .map_err(|e| format!("could not run tirith: {e}"))?;
-    if !added.status.success() {
-        return Err(String::from_utf8_lossy(&added.stderr).trim().to_string());
-    }
-    let mut cmd = tirith_command(&[
-        "lane", "run", "--interactive", "--project", &project, "--class", "chat", "--id", &id,
-        "--feature", &format!("Chat with {alias}"), "--brief", &brief.to_string_lossy(),
-        "--step", "0", "--item", &item, "--",
-    ]);
-    cmd.arg(command).args(&args).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
-    let mut child = cmd.spawn().map_err(|e| format!("could not start {alias}: {e}"))?;
-    let stdin = child.stdin.take().ok_or("no stdin")?;
-    let stdout = child.stdout.take().ok_or("no stdout")?;
-    let stderr = child.stderr.take().ok_or("no stderr")?;
-    state.chats.lock().unwrap().insert(id.clone(), ChatSession { child, stdin });
-
-    let (a, i) = (app.clone(), id.clone());
-    std::thread::spawn(move || {
-        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
-            emit_chat(&a, &i, line_kind(&line), &line);
-        }
-        // stdout closed: `lane run` is done and has ended the lane. Reap it.
-        let code = a
-            .state::<App>()
-            .chats
-            .lock()
-            .unwrap()
-            .remove(&i)
-            .and_then(|mut s| s.child.wait().ok())
-            .and_then(|s| s.code());
-        emit_chat(&a, &i, "exit", if code == Some(0) || code.is_none() { "done" } else { "failed" });
-    });
-    let (a, i) = (app.clone(), id.clone());
-    std::thread::spawn(move || {
-        for line in BufReader::new(stderr).lines().map_while(Result::ok) {
-            emit_chat(&a, &i, "err", &line);
-        }
-    });
-    Ok(id)
-}
-
-/// Agent output is one JSON object per line; anything else is `lane run`'s own text (its summary).
-fn line_kind(line: &str) -> &'static str {
-    if line.trim_start().starts_with('{') { "out" } else { "sys" }
-}
-
-/// One user turn in the agent's streaming JSON input mode: `type: user`, content as text blocks.
-fn user_message(text: &str) -> Value {
-    json!({ "type": "user", "message": { "role": "user", "content": [{ "type": "text", "text": text }] } })
-}
-
-/// Sends one user message as a line of streaming JSON input.
-#[tauri::command]
-fn chat_send(state: State<'_, App>, id: String, text: String) -> Result<(), String> {
-    let mut chats = state.chats.lock().unwrap();
-    let s = chats.get_mut(&id).ok_or("this chat has ended")?;
-    let msg = user_message(&text);
-    writeln!(s.stdin, "{msg}").and_then(|_| s.stdin.flush()).map_err(|e| e.to_string())
-}
-
-/// The reply to an agent's permission question (a `control_request` line with subtype
-/// `can_use_tool`). `input` is the tool input the agent asked about, sent back unchanged on allow.
-fn permission_reply(request_id: &str, allow: bool, input: Value) -> Value {
-    let response = if allow {
-        json!({ "behavior": "allow", "updatedInput": input })
+fn manager_control(op: String) -> Result<(), String> {
+    let args = manager_control_args(&op)?;
+    let out = tirith_command(&args).output().map_err(|e| format!("could not run tirith: {e}"))?;
+    if out.status.success() {
+        Ok(())
     } else {
-        json!({ "behavior": "deny", "message": "The owner denied this in the Tirith app." })
-    };
-    json!({ "type": "control_response",
-            "response": { "subtype": "success", "request_id": request_id, "response": response } })
-}
-
-/// Answers a permission question the agent asked on its stdout.
-#[tauri::command]
-fn chat_answer(
-    state: State<'_, App>,
-    id: String,
-    request_id: String,
-    allow: bool,
-    input: Option<Value>,
-) -> Result<(), String> {
-    let mut chats = state.chats.lock().unwrap();
-    let s = chats.get_mut(&id).ok_or("this chat has ended")?;
-    let msg = permission_reply(&request_id, allow, input.unwrap_or_else(|| json!({})));
-    writeln!(s.stdin, "{msg}").and_then(|_| s.stdin.flush()).map_err(|e| e.to_string())
-}
-
-/// Asks `lane run` to stop: it forwards the signal to the agent and ends the lane itself.
-fn terminate(child: &mut Child) {
-    #[cfg(unix)]
-    {
-        let ok = Command::new("kill").args(["-TERM", &child.id().to_string()]).status();
-        if ok.map(|s| s.success()).unwrap_or(false) {
-            return;
-        }
-    }
-    let _ = child.kill();
-}
-
-/// Ends a chat; the reader thread reports the exit.
-#[tauri::command]
-fn chat_stop(state: State<'_, App>, id: String) {
-    if let Some(s) = state.chats.lock().unwrap().get_mut(&id) {
-        terminate(&mut s.child);
+        Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
     }
 }
 
@@ -2323,12 +2155,7 @@ pub fn run() {
             run_action,
             open_in_terminal,
             lane_stop,
-            chat_enabled,
-            chat_agents,
-            chat_start,
-            chat_send,
-            chat_answer,
-            chat_stop
+            manager_control
         ])
         .setup(move |app| {
             let url = match &live {
@@ -2359,10 +2186,6 @@ pub fn run() {
         if let RunEvent::Exit = event {
             let state = handle.state::<App>();
             state.quitting.store(true, std::sync::atomic::Ordering::SeqCst);
-            for (_, mut s) in state.chats.lock().unwrap().drain() {
-                terminate(&mut s.child);
-                let _ = s.child.wait();
-            }
             stop_collector(&state);
         }
     });
@@ -2386,33 +2209,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn permission_reply_allow_echoes_the_input() {
-        let r = permission_reply("r1", true, json!({ "command": "ls" }));
-        assert_eq!(r["type"], "control_response");
-        assert_eq!(r["response"]["request_id"], "r1");
-        assert_eq!(r["response"]["response"]["behavior"], "allow");
-        assert_eq!(r["response"]["response"]["updatedInput"]["command"], "ls");
-    }
-
-    #[test]
-    fn permission_reply_deny_carries_a_message() {
-        let r = permission_reply("r2", false, json!({}));
-        assert_eq!(r["response"]["response"]["behavior"], "deny");
-        assert!(r["response"]["response"]["message"].as_str().unwrap().len() > 3);
-    }
-
-    #[test]
-    fn user_message_is_a_text_block_turn() {
-        let m = user_message("reply with ok");
-        assert_eq!(m["type"], "user");
-        assert_eq!(m["message"]["role"], "user");
-        assert_eq!(m["message"]["content"][0]["type"], "text");
-        assert_eq!(m["message"]["content"][0]["text"], "reply with ok");
-    }
-
-    #[test]
-    fn lane_text_is_not_agent_output() {
-        assert_eq!(line_kind("{\"type\":\"assistant\"}"), "out");
-        assert_eq!(line_kind("lane chat-1: done, 0 files +0 -0, 3s"), "sys");
+    fn manager_controls_are_only_the_three_words() {
+        assert_eq!(manager_control_args("interrupt").unwrap(), ["manager", "interrupt"]);
+        assert_eq!(manager_control_args("restart").unwrap(), ["manager", "restart"]);
+        assert_eq!(manager_control_args("stop").unwrap(), ["manager", "stop"]);
+        assert!(manager_control_args("say; rm -rf /").is_err());
     }
 }

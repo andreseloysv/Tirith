@@ -19,7 +19,7 @@ from tirith.home import load_config
 from tirith.store import write_lane
 
 NOW = datetime(2026, 10, 29, 12, 0, tzinfo=timezone.utc)
-AGENTS = '[agents.anthropic]\ncommand = "agent-bin"\n'
+AGENTS = '[agents.anthropic]\ncommand = "agent-bin"\n\n[manager]\nsession = false\n'
 Z = "%Y-%m-%dT%H:%M:%SZ"
 DEAD_PID = 2 ** 22 + 7
 
@@ -80,7 +80,7 @@ def test_a_quiet_home_is_green(home: Path, project: Path) -> None:
     assert state["health"]["level"] == "green"
     public = selfcheck_mod.public(state["health"])
     assert public["level"] == "green"
-    assert [c["id"] for c in public["checks"]] == ["collector", "manager", "autopilot", "disk", "reviews"]
+    assert [c["id"] for c in public["checks"]] == ["collector", "manager", "autopilot", "disk", "reviews", "timeouts"]
     assert all(c["level"] == "ok" and c["text"] for c in public["checks"])
 
 
