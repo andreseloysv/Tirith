@@ -324,15 +324,29 @@
     return '<li class="pediting"><span class="pi">' + OPEN + '</span><input class="iin pedin" type="text" data-act="pe-in" data-key="' + esc(key) + '" maxlength="500" aria-label="' + (e.text === null ? 'New item' : 'Edit item') +
       '" placeholder="' + (e.text === null ? 'What needs doing?' : '') + '" value="' + esc(e.draft) + '"><span class="ihint">Enter saves · Esc cancels</span></li>';
   }
+  /* the state Tirith keeps on an item (docs/CONTRACT-roadmap.md "Item states"): the note at the end of its text, as a chip */
+  var NOTE = /\s*\((en curso|en revisi\u00f3n|bloqueado|reabierto)(?::\s*([^()]*?))?\s*\)\s*$/i;
+  function stateChip(i) {
+    var st = i.state || 'open', by = i.detail || '', ag, who;
+    if (i.done || st === 'open') return '';
+    if (st === 'progress') {
+      ag = ((typeof lastState !== 'undefined' && lastState.agents) || []).filter(function (a) { return a.id === by; })[0];
+      who = ag && ag.name ? ag.name : by;
+      return '<span class="pstate progress" title="An agent is working on this item">In progress' + (who ? ' \u00b7 ' + esc(who) : '') + '</span>';
+    }
+    if (st === 'review') return '<span class="pstate review" title="Its agent reported it done; it is ticked when the review passes">In review</span>';
+    if (st === 'blocked') return '<span class="pstate blocked" title="' + esc(by) + '">Blocked' + (by ? ': ' + esc(by) : '') + '</span>';
+    return '<span class="pstate reopened" title="' + esc(by) + '">Reopened' + (by ? ': ' + esc(by) : '') + '</span>';
+  }
   function itemRow(i, c, pend, quiet) {
-    var key = c.pid + '|' + c.plan + '|' + c.sid, e = same(ui.pedit, c) && ui.pedit.text === i.text ? ui.pedit : null, p = null, txt = i.text, h, extra;
+    var key = c.pid + '|' + c.plan + '|' + c.sid, e = same(ui.pedit, c) && ui.pedit.text === i.text ? ui.pedit : null, p = null, txt = i.done ? i.text : i.text.replace(NOTE, ''), h, extra;
     if (e) return editInput(c, e, key);
     pend.forEach(function (r) { if (r.kind !== 'add' && r.text === i.text) p = r; });
     if (p && p.kind === 'edit') txt = p.to;
     extra = p ? '<span class="pwhen saving">' + (p.err ? 'Not saved' : 'Saving…') + '</span>' :
       i.who === 'owner' && i.owner_item && quiet ? '<button class="pitbtn" data-act="goowner" data-key="' + esc(i.owner_item) + '" title="Open what Tirith needs from you">Open</button>' :
       i.who === 'date' && i.until && quiet ? '<span class="pwhen">from ' + esc(shortDate(i.until)) + '</span>' : '';
-    h = '<li class="' + (p ? 'psav' + (p.kind === 'delete' ? ' gone' : '') : '') + (i.done ? ' ok' : '') + '"><span class="pi">' + (i.done ? OK : OPEN) + '</span><span class="pit">' + rich(quiet && i.who === 'date' ? dateless(txt) : txt) + '</span>' + extra;
+    h = '<li class="' + (p ? 'psav' + (p.kind === 'delete' ? ' gone' : '') : '') + (i.done ? ' ok' : '') + '"><span class="pi">' + (i.done ? OK : OPEN) + '</span><span class="pit">' + rich(quiet && i.who === 'date' ? dateless(txt) : txt) + '</span>' + stateChip(i) + extra;
     if (!i.done && !p && c.edit) h += '<span class="pedtools">' + tool('pe-edit', '', PEN, 'Edit', c, i.text) + tool('pe-del', 'del', TRASH, 'Delete', c, i.text) + '</span>';
     if (same(ui.pdel, c) && ui.pdel.text === i.text) {
       h += '<span class="pdelpop" role="alertdialog" aria-label="Delete this item from the plan?"><span>Delete this item from the plan?</span>' +

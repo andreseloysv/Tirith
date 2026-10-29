@@ -46,6 +46,8 @@ DESCRIPTIONS: dict[str, str] = {
     "no-verify": "Nobody may skip the safety checks that run before a commit.",
     "hooks-path": "Nobody may switch off the commit checks by pointing git at other hooks.",
     "git-hooks": "Agents may not edit or delete the commit checks that guard the project.",
+    "roadmap-edit": "Agents may not edit the project's plan; only Tirith writes it, so every change is tracked and "
+                    "an agent starts and finishes only through a plan item.",
     "settings-edit": "Agents may not edit the settings that hold their hooks, nor Tirith's own config.",
     "raw-stage": "Tests and builds must run through Tirith, so you can see them in Pipelines.",
     "lane-brief": "Every lane starts with a written task, so the agent knows what to do.",
@@ -431,6 +433,50 @@ def _settings_bash(line: str, segments: list[list[str]], protected: list[Path], 
     return None
 
 
+ROADMAP_HINT = ('ask Tirith: `tirith plan add --project <id> --step <N> --text "<item>"` adds an item, '
+                '`tirith plan report --lane $TIRITH_LANE --status done|partial|blocked` reports your outcome')
+_GIT_READERS = {"diff", "show", "log", "status", "blame", "grep", "ls-files", "cat-file"}
+
+
+def roadmap_files(folder: Path | None, config: Config) -> list[Path]:
+    """Every plan file of the project that ``folder`` belongs to, in this folder and in the project's main
+    checkout (absolute, unresolved)."""
+    if folder is None:
+        return []
+    from tirith import roadmap as roadmap_mod
+    manifest = manifest_mod.load(folder)
+    names = [manifest.roadmap, *manifest.plans] if (manifest.roadmap or manifest.plans) else list(roadmap_mod.DEFAULT_FILES)
+    out: list[Path] = []
+    roots = [folder, *(Path(p.repo) for p in config.projects if p.repo and _lane_of(folder, Path(p.repo)))]
+    for root in roots:
+        for name in names:
+            path = Path(os.path.expanduser(name))
+            out.append(Path(os.path.abspath(path if path.is_absolute() else root / path)))
+    return out
+
+
+def _lane_of(folder: Path, repo: Path) -> bool:
+    """True when ``folder`` is the project folder ``repo`` or one of its lane worktrees (``<repo>-lanes/<id>``)."""
+    folder, repo = Path(os.path.abspath(folder)), Path(os.path.abspath(repo))
+    return folder == repo or folder.parent == repo.parent / f"{repo.name}-lanes"
+
+
+def _roadmap_bash(segments: list[list[str]], line: str, files: list[Path], cwd) -> Violation | None:
+    """A shell command that writes to a plan file (readers, and git's read-only commands, are fine)."""
+    for tokens in segments:
+        name, args = _program(tokens)
+        hit = next((f for f in files if any(_same(t.lstrip("<>").split("=", 1)[-1], f, cwd) for t in tokens)), None)
+        if hit is None:
+            continue
+        if name in _READ_ONLY and not any(">" in t for t in tokens):
+            continue
+        if name == "git" and next((a for a in args if not a.startswith("-")), "") in _GIT_READERS:
+            continue
+        return Violation("roadmap-edit", f"{hit.name} is the project's plan, only Tirith writes it: {_clip(line)}",
+                         ROADMAP_HINT)
+    return None
+
+
 def check_call(config: Config, tool: str | None, tool_input, cwd, project: str | None = None,
                home: Path | None = None) -> list[Violation]:
     """Every rule that blocks one ``PreToolUse`` call (``[]`` = allowed)."""
@@ -447,6 +493,10 @@ def check_call(config: Config, tool: str | None, tool_input, cwd, project: str |
         hit = next((p for p in protected_paths(config, home) if _same(path, p, cwd)), None)
         if hit:
             return [Violation("settings-edit", f"{hit} is protected: {path}", SETTINGS_HINT)]
+        plan = next((f for f in roadmap_files(find_manifest_folder(cwd), config) if _same(path, f, cwd)), None)
+        if plan:
+            return [Violation("roadmap-edit", f"{plan.name} is the project's plan, only Tirith writes it: {path}",
+                              ROADMAP_HINT)]
         return _custom_rules(find_manifest_folder(cwd), tool, data, "", [], cwd)
     if tool != "Bash":
         return []
@@ -456,6 +506,9 @@ def check_call(config: Config, tool: str | None, tool_input, cwd, project: str |
     protect = _settings_bash(line, segments, protected_paths(config, home), cwd)
     if protect:
         out.append(protect)
+    plan = _roadmap_bash(segments, line, roadmap_files(find_manifest_folder(cwd), config), cwd)
+    if plan:
+        out.append(plan)
     commands = agent_commands(config)
     seen: set[str] = set()
     for tokens in segments:

@@ -126,6 +126,35 @@ def _no_autopilot(request, monkeypatch):
     monkeypatch.setattr(autopilot, "run", lambda *args, **kwargs: False)
 
 
+DEFAULT_PLAN = """# TODO
+
+## 1. Work
+
+- [ ] Do the thing.
+- [ ] Do the other thing.
+"""
+
+
+def write_plan(repo: Path, text: str = DEFAULT_PLAN, name: str = "docs/TODO.md") -> Path:
+    """The project's plan file, committed (Tirith only writes a plan whose file is clean)."""
+    path = repo / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    subprocess.run([GIT, "-C", str(repo), "add", "--", name], check=True)
+    subprocess.run([GIT, "-C", str(repo), "-c", "user.email=t@example.invalid", "-c", "user.name=Tirith Test",
+                    "commit", "-q", "-m", "plan", "--", name], check=True)
+    subprocess.run([GIT, "-C", str(repo), "config", "user.email", "t@example.invalid"], check=True)
+    subprocess.run([GIT, "-C", str(repo), "config", "user.name", "Tirith Test"], check=True)
+    return path
+
+
+REPORT_DONE = ("import sys; sys.path.insert(0, %r); from tirith.cli import main; "
+               "main(['plan', 'report', '--status', 'done']); " % str(Path(__file__).resolve().parent.parent))
+# python code for a lane's child process that reports the outcome of its item, as an agent must
+
+PLAN_ARGS = ["--step", "1", "--item", "Do the thing."]  # the open item of ``DEFAULT_PLAN``
+
+
 def write_lane_manifest(repo: Path) -> None:
     """A tirith.toml that passes ``tirith check`` and a brief file, as ``lane run`` requires."""
     (repo / "tirith.toml").write_text(

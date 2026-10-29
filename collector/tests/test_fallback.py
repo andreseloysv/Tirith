@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import make_hooks_mutable, make_repo, write_lane_manifest
+from conftest import make_hooks_mutable, make_repo, write_lane_manifest, write_plan
 from tirith import dispatch as dispatch_mod
 from tirith import fallback, inbox as inbox_mod, launch as launch_mod, models
 from tirith.cli import main, relaunch_lane
@@ -52,6 +52,7 @@ def _at(seconds_ago: float) -> str:
 def cfg_home(home: Path, tmp_path: Path) -> Path:
     repo = make_repo(tmp_path / "demo")
     write_lane_manifest(repo)
+    write_plan(repo)
     (home / "config.toml").write_text(CONFIG.format(repo=repo), encoding="utf-8")
     return home
 
@@ -282,7 +283,7 @@ def test_lane_run_records_agent_and_fallback_from(cfg_home: Path, tmp_path: Path
     _lane(cfg_home, "first", "", agent="muse")
     code = main(["--home", str(cfg_home), "lane", "run", "--id", "second", "--project", "demo",
                  "--class", "stonewright", "--feature", "Thing", "--brief", str(brief), "--workspace", str(repo),
-                 "--as-agent", "anthropic", "--fallback-from", "first", "--tried", "muse", "--",
+                 "--as-agent", "anthropic", "--fallback-from", "first", "--tried", "muse", "--step", "1", "--item", "Do the thing.", "--",
                  sys.executable, "-c", "print('ok')"])
     make_hooks_mutable(repo)
     assert code == 0

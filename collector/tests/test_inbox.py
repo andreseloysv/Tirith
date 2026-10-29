@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import make_repo, write_config, write_lane_manifest
+from conftest import make_repo, write_config, write_lane_manifest, write_plan
 from tirith import inbox as inbox_mod
 from tirith import launch as launch_mod
 from tirith.cli import main, register_lane
@@ -158,8 +158,7 @@ class AnswerClient:
 def project(home: Path, tmp_path: Path):
     repo = make_repo(tmp_path / "demo")
     write_lane_manifest(repo)
-    (repo / "docs").mkdir()
-    (repo / "docs" / "TODO.md").write_text(PLAN, encoding="utf-8")
+    write_plan(repo, PLAN)
     write_config(home, [{"id": "demo", "name": "Demo", "repo": str(repo)}])
     return repo
 
