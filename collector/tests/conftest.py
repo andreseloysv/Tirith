@@ -77,3 +77,17 @@ def write_config(home: Path, projects: list[dict], extra: str = "") -> Path:
     target = home / "config.toml"
     target.write_text("\n".join(lines), encoding="utf-8")
     return target
+
+
+@pytest.fixture(autouse=True)
+def _unlock_guard_hooks(tmp_path):
+    """Guard hooks installed by a test are immutable; clear the flag so pytest can delete tmp_path."""
+    yield
+    if not hasattr(os, "chflags"):
+        return
+    for path in tmp_path.rglob("*"):
+        try:
+            if not path.is_symlink() and path.stat().st_flags & stat.UF_IMMUTABLE:
+                os.chflags(path, path.stat().st_flags & ~stat.UF_IMMUTABLE)
+        except OSError:
+            pass
