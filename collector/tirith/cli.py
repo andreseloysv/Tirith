@@ -23,7 +23,9 @@ from pathlib import Path
 from tirith.collector import (
     Collector, collect_tree, git_head, git_shortstat, heuristic_architecture, lane_status,
 )
-from tirith.guardwrap import default_words, guard_upgrade_steps, install_guard, verify_guard
+from tirith.guardwrap import (
+    default_words, guard_upgrade_steps, install_guard, reinstall_guard, verify_guard,
+)
 from tirith import actions as actions_mod
 from tirith import agentrun as agentrun_mod
 from tirith import asks as asks_mod
@@ -857,8 +859,12 @@ def _cmd_guard(args) -> int:
         return 1
     exit_code = 0
     for label, repo, words in targets:
-        problems = install_guard(repo, words, chain=args.chain) if args.action == "install" \
-            else verify_guard(repo, words)
+        if args.action == "install":
+            problems = install_guard(repo, words, chain=args.chain)
+        elif args.action == "reinstall":  # owner only: the guard-reinstall gate blocks agents
+            problems = reinstall_guard(repo, words, chain=args.chain)
+        else:
+            problems = verify_guard(repo, words)
         if problems:
             exit_code = 1
             print(f"{label}: guard NOT OK")
@@ -1556,7 +1562,7 @@ def build_parser() -> argparse.ArgumentParser:
     hook.set_defaults(func=_cmd_hook)
 
     guard = sub.add_parser("guard", parents=[common], help="commit guard")
-    guard.add_argument("action", choices=["install", "verify"])
+    guard.add_argument("action", choices=["install", "reinstall", "verify"])
     guard.add_argument("project", nargs="?", default=None,
                        help="project id or repo path")
     guard.add_argument("--all", action="store_true")

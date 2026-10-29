@@ -207,6 +207,11 @@ def _commit_no_verify(args: list[str]) -> bool:
 
 def _git_rules(line: str, segments: list[list[str]]) -> list[Violation]:
     out: list[Violation] = []
+    if re.search(r"\btirith\b.*\bguard\s+reinstall\b", line):
+        out.append(Violation(
+            "guard-reinstall", f"only the owner reinstalls the commit guard: {_clip(line)}",
+            "ask the owner: tirith wait add --project <id> \"Reinstall the guard\" --run "
+            "\"uv run tirith guard reinstall <project>\" (they click Run)"))
     if any(_program(tokens)[0] == "git" and any("core.hookspath" in t.lower() for t in tokens)
            for tokens in segments):
         out.append(Violation(

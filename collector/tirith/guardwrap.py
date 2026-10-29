@@ -65,6 +65,26 @@ def install_guard(repo: Path, words: list[str], chain: bool = False) -> list[str
         return [f"guard install failed: {exc}"]
 
 
+def reinstall_guard(repo: Path, words: list[str], chain: bool = False) -> list[str]:
+    """Owner only (agents are blocked by the ``guard-reinstall`` gate): replace the installed guard
+    hooks with the current rendering. Only hooks carrying the guard marker are removed; a repo's own
+    hooks are never touched. Returns problems left."""
+    import os
+    import stat
+    try:
+        mod = guard_module()
+        folder = mod.hooks_dir(Path(repo))
+        for name in mod.render(list(words)):
+            hook = folder / name
+            if hook.is_file() and mod.MARKER in hook.read_text(errors="replace"):
+                if hasattr(os, "chflags"):
+                    os.chflags(hook, hook.stat().st_flags & ~stat.UF_IMMUTABLE)
+                hook.unlink()
+    except Exception as exc:
+        return [f"guard reinstall failed: {exc}"]
+    return install_guard(repo, words, chain=chain)
+
+
 def guard_upgrade_steps(repo: Path, words: list[str]) -> list[str]:
     """Owner steps when the guard is intact but older than the current rendering ([] otherwise)."""
     try:
