@@ -32,6 +32,7 @@ _SECRET_SHAPE = re.compile(r"\b(?:sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20
                            r"\.[A-Za-z0-9_-]{5,})\b")
 _BEARER = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]{12,}")
 
+CACHE_MAX = 2048  # more than the lanes a home keeps, so a cycle never re-parses every log
 _cache: dict[str, tuple[tuple, list[dict], dict]] = {}
 _stamps: dict[str, list] = {}  # log path -> the time each step was first seen
 
@@ -171,7 +172,7 @@ def steps_for(log, workspace=None, fallback_at: str | None = None, now: datetime
         step["at"] = at
     summary["steps"] = len(steps)
     kept = steps[-STEPS_KEPT:]
-    if len(_cache) > 64:
+    if len(_cache) > CACHE_MAX:
         _cache.clear()
         _stamps.clear()
     _cache[str(log)] = (stamp, kept, summary)

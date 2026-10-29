@@ -14,6 +14,7 @@ See ``docs/CONTRACT-inbox.md``.
 from __future__ import annotations
 
 import io
+import time
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -342,6 +343,18 @@ def escalate(home: Path, req: dict, notify: Callable[[str, str], None], at: str)
                    why_owner="owner-decision", why_detail="choice: wait, start an agent or use the brain")
 
 
+CLEANUP_EVERY_S = 60  # merged-worktree cleanup runs git per finished lane: not every 2 s cycle
+_cleanup_at: dict[str, float] = {}
+
+
+def _cleanup_due(home: Path) -> bool:
+    key, at = str(home), time.monotonic()
+    if key in _cleanup_at and at - _cleanup_at[key] < CLEANUP_EVERY_S:
+        return False
+    _cleanup_at[key] = at
+    return True
+
+
 def run(home: Path, config: Config, now: datetime, *, agents: list[dict], lanes: list[dict],
         status_of: Callable, launcher: Callable | None = None,
         notify: Callable[[str, str], None] = macos_notify, spawn: Callable | None = None,
@@ -397,7 +410,8 @@ def run(home: Path, config: Config, now: datetime, *, agents: list[dict], lanes:
             changed = True
     if autoreview_mod.run(home, config, now, state, lanes, spawn=spawn, notify=notify):
         changed = True
-    diskdiet_mod.cleanup(home, config, now)
+    if _cleanup_due(home):
+        diskdiet_mod.cleanup(home, config, now)
     if config.dispatch_auto_launch and managerd_mod.run(home, config, now, state, lanes, spawn=manager_spawn,
                                                           kill=manager_kill):
         changed = True  # nobody attached and something pending: the on-call manager
