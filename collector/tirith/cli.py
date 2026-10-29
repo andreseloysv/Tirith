@@ -1221,7 +1221,7 @@ def _cmd_collect(args) -> int:
                 except selfreload_mod.ReloadRequested:
                     reload_now = True  # re-exec only after the lock is released
         if reload_now:
-            selfreload_mod.reexec()
+            selfreload_mod.reexec(quiesce=collector.quiesce)
     except collectlock_mod.CollectorRunning as running:
         print(running)
         return 0

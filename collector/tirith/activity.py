@@ -590,6 +590,7 @@ class ActivityTracker:
         self._ended_files: dict[str, tuple[list[dict], tuple[int, int, int]]] = {}
         self._live_files: dict[str, tuple[float, tuple[list[dict], tuple[int, int, int]]]] = {}
         self._refreshing: set[str] = set()
+        self._refresh_threads: list[threading.Thread] = []
 
     def _log(self, lane: dict) -> _LaneLog | None:
         """Bring the lane's log state up to date (read only what is new)."""
@@ -680,8 +681,17 @@ class ActivityTracker:
                 finally:
                     self._refreshing.discard(lane_id)
 
-            threading.Thread(target=refresh, daemon=True).start()
+            thread = threading.Thread(target=refresh, daemon=True)
+            self._refresh_threads = [t for t in self._refresh_threads if t.is_alive()] + [thread]
+            thread.start()
         return cached[1]
+
+    def wait_idle(self, timeout_s: float) -> bool:
+        """Wait (bounded) for the background git refreshes; True when none is left running."""
+        deadline = time.monotonic() + timeout_s
+        for thread in list(self._refresh_threads):
+            thread.join(max(0.0, deadline - time.monotonic()))
+        return not any(t.is_alive() for t in self._refresh_threads)
 
     def lane(self, lane: dict, status: str, hook_rows: list[dict], now: datetime) -> dict:
         """The activity fields of one agent row (see ``docs/CONTRACT-activity.md``)."""

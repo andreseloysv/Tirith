@@ -518,7 +518,29 @@ fn supervisor_backoff(prev: std::time::Duration) -> std::time::Duration {
     (prev * 2).clamp(std::time::Duration::from_secs(5), std::time::Duration::from_secs(60))
 }
 
+/// How stale `state.json` may get before a live collector counts as hung: 60 s, or 6 recent cycles if slower.
+fn hung_after(cycle: std::time::Duration) -> std::time::Duration {
+    (cycle * 6).max(std::time::Duration::from_secs(60))
+}
+
+/// Whether a collector process that is alive has stopped producing output. `state_age` is the age of
+/// `generated_at`, `cycle` the recent time between state writes, `running_for` how long this process has run (a
+/// fresh start still shows the previous collector's old state, so it gets the same allowance before it is judged).
+fn collector_hung(state_age: Option<std::time::Duration>, cycle: std::time::Duration, running_for: std::time::Duration) -> bool {
+    let limit = hung_after(cycle);
+    running_for > limit && state_age.is_some_and(|age| age > limit)
+}
+
+/// Seconds since `generated_at` of the current `state.json`; `None` when unreadable or from the future.
+fn state_age() -> Option<std::time::Duration> {
+    let at = parse_iso_utc(read_state()?["generated_at"].as_str()?)?;
+    let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).ok()?.as_secs();
+    now.checked_sub(at).map(std::time::Duration::from_secs)
+}
+
 /// Every 5 s: if the collector this app started has exited, or nothing holds the collector lock, start it again.
+/// A collector that is alive but whose `state.json` stopped updating (hung) is killed with its process group and
+/// started again under the same backoff.
 fn spawn_collector_supervisor(handle: AppHandle) {
     use std::sync::atomic::Ordering;
     use std::time::{Duration, Instant};
@@ -526,10 +548,30 @@ fn spawn_collector_supervisor(handle: AppHandle) {
         let base = Duration::from_secs(5);
         let mut backoff = base;
         let mut last_attempt = Instant::now() - Duration::from_secs(60);
+        let mut started_at = Instant::now();
+        let mut seen: Option<(String, Instant)> = None;
+        let mut cycle = Duration::from_secs(2);
         loop {
             std::thread::sleep(base);
             let app = handle.state::<App>();
             let quitting = app.quitting.load(Ordering::SeqCst);
+            // the observed time between state writes (sampled every 5 s, so a coarse upper bound)
+            if let Some(generated) = read_state().and_then(|s| s["generated_at"].as_str().map(String::from)) {
+                match &seen {
+                    Some((prev, _)) if *prev == generated => {}
+                    Some((_, at)) => {
+                        cycle = (cycle * 3 + at.elapsed()) / 4;
+                        seen = Some((generated, Instant::now()));
+                    }
+                    None => seen = Some((generated, Instant::now())),
+                }
+            }
+            if !quitting && app.collector.lock().unwrap().is_some() && collector_hung(state_age(), cycle, started_at.elapsed()) {
+                log_line("app.log", &format!(
+                    "collector is alive but state.json is stale (limit {}s); killing it to restart", hung_after(cycle).as_secs()));
+                stop_collector(&app); // SIGTERM to the group, SIGKILL after the grace
+                last_attempt = Instant::now() - backoff; // the restart below still honours the backoff of earlier ones
+            }
             let child_exited = {
                 let mut slot = app.collector.lock().unwrap();
                 let exited = slot.as_mut().map(|c| !matches!(c.try_wait(), Ok(None)));
@@ -549,6 +591,7 @@ fn spawn_collector_supervisor(handle: AppHandle) {
             backoff = supervisor_backoff(backoff);
             log_line("app.log", &format!("collector is not running, restarting (next wait {}s)", backoff.as_secs()));
             start_collector(&app);
+            started_at = Instant::now();
         }
     });
 }
@@ -638,6 +681,26 @@ mod supervisor_tests {
     fn never_restarts_while_quitting_or_inside_the_backoff() {
         assert!(!supervisor_should_start(true, Some(true), false, s(99), s(5)));
         assert!(!supervisor_should_start(false, Some(true), false, s(3), s(5)));
+    }
+
+    #[test]
+    fn hung_after_is_60s_or_six_cycles() {
+        assert_eq!(hung_after(s(2)), s(60));
+        assert_eq!(hung_after(s(12)), s(72));
+    }
+
+    #[test]
+    fn a_live_collector_with_a_stale_state_is_hung() {
+        assert!(collector_hung(Some(s(61)), s(2), s(300)));
+        assert!(!collector_hung(Some(s(59)), s(2), s(300)), "fresh enough");
+        assert!(!collector_hung(Some(s(70)), s(12), s(300)), "slow cycles widen the limit");
+        assert!(collector_hung(Some(s(73)), s(12), s(300)));
+        assert!(!collector_hung(None, s(2), s(300)), "unreadable state is not judged");
+    }
+
+    #[test]
+    fn a_fresh_start_gets_time_before_it_is_judged() {
+        assert!(!collector_hung(Some(s(900)), s(2), s(20)), "old state is the previous collector's");
     }
 
     #[test]
