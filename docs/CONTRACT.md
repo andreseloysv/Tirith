@@ -30,6 +30,14 @@ Meta Model API for the brain (see below); everything works without it.
 | `manager.json` | the live manager session | `{"heartbeat"}` ISO UTC time of its last sign of life; optional. `state.manager.live` is `{heartbeat}` or null; the chat shows "typing" only if it moved after the message |
 | `agents.json` | collector | persistent hero identity per agent id: name, epithet, class, renown |
 | `brain/` | collector | cached Muse outputs (summaries, architecture) keyed by input hash |
+| `collector.lock` | `tirith collect` | exclusive advisory `flock`, held for the life of a continuous collector, containing its pid |
+
+**Collector lock.** Whether a collector runs is answered by `collector.lock`, never by searching process
+names. `tirith collect` takes the lock without waiting, writes its pid, and holds it until it exits (the OS
+frees it on a crash). If it is taken, `tirith collect` prints `a collector is already running, pid N` and
+exits 0. The desktop app and `./run` check by trying to take the lock themselves (held = running) and
+release it at once. `tirith collect --once` does not take the lock. Windows has no lock check: the app
+always starts its own collector.
 
 Lane registration (`tirith lane start --project chromasol --class stonewright --feature "Room database"
 --workspace <dir> --log <file> --pid <pid> --brief <file>`):

@@ -35,6 +35,7 @@ from tirith import gates as gates_mod
 from tirith import manifest as manifest_mod
 from tirith import hooks as hooks_mod
 from tirith import brain as brain_mod
+from tirith import collectlock as collectlock_mod
 from tirith import inbox as inbox_mod
 from tirith import setup as setup_mod
 from tirith import lanestop as lanestop_mod
@@ -876,7 +877,14 @@ def _cmd_collect(args) -> int:
     home = _home(args)
     collector = Collector(home)
     try:
-        collector.run(interval=args.interval, once=args.once)
+        if args.once:  # a single cycle may overlap a running collector
+            collector.run(interval=args.interval, once=True)
+        else:
+            with collectlock_mod.hold_collector_lock(home):
+                collector.run(interval=args.interval, once=False)
+    except collectlock_mod.CollectorRunning as running:
+        print(running)
+        return 0
     except KeyboardInterrupt:
         return 130
     if args.once:
