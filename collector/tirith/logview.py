@@ -15,7 +15,7 @@ import os
 import re
 from pathlib import Path
 
-from tirith.activity import is_test_command
+from tirith.activity import is_test_command, muse_tool
 from tirith.home import now_iso, parse_iso
 
 KINDS = ("say", "command", "output", "edit", "read", "error", "test", "spawn", "done", "system")
@@ -364,14 +364,40 @@ def _item(b: _Builder, record: dict, ts) -> None:
         b.add(_entry(ts, "error", _clip("Error: " + str(item.get("message") or "")), ""))
 
 
+_MUSE_QUIET = ("task.", "session.", "turn.", "run.model.", "run.lifecycle.", "run.output.")
+_MUSE_EDIT = re.compile(r"write|edit|patch|create|replace", re.I)
+_MUSE_READ = re.compile(r"read|grep|glob|search|list|find|fetch", re.I)
+
+
 def _muse(b: _Builder, record: dict, ts) -> None:
     ptype = str(record.get("payload_type") or "")
     payload = record.get("payload") if isinstance(record.get("payload"), dict) else {}
     if ptype.startswith("run.terminal"):
-        head, rest = _split(str(payload.get("text") or ptype))
-        b.add(_entry(ts, "done", head, rest))
+        failed = not ptype.endswith("completed")
+        text = str(payload.get("text") or payload.get("reason") or ptype.rsplit(".", 1)[-1])
+        head, rest = _split(text)
+        b.add(_entry(ts, "error" if failed else "done", head, rest))
+    elif ptype == "run.usage":
+        usage = _usage_line(_muse_usage(payload))
+        b.add(_entry(ts, "system", usage or "System: run.usage", _pretty(payload), _bound(payload) or None))
+    elif ptype == "tool.result":
+        name, path, failed = muse_tool(payload)
+        call_id = payload.get("call_id")
+        if path and _MUSE_EDIT.search(name):
+            b.tool(ts, "Write" if "write" in name or "create" in name else "Edit", {"path": path}, call_id)
+        elif path and _MUSE_READ.search(name):
+            b.tool(ts, "Read", {"path": path}, call_id)
+        else:
+            b.tool(ts, name, {}, call_id)
+        b.result(ts, call_id, str(payload.get("text") or ""), failed)
+    elif ptype.startswith("task.lifecycle.") and ptype.rsplit(".", 1)[-1] in ("failed", "cancelled"):
+        event = payload.get("event") if isinstance(payload.get("event"), dict) else {}
+        b.add(_entry(ts, "error", _clip("Task " + ptype.rsplit(".", 1)[-1] + ": "
+                                          + str(event.get("message") or event.get("reason") or "")), ""))
     elif ptype.startswith("runtime."):
         b.add(_entry(ts, "system", "System: " + ptype, _pretty(record), _bound(payload) or None))
+    elif ptype.startswith(_MUSE_QUIET):
+        return  # bookkeeping of the event stream: nothing a person wants to read
     elif ptype.startswith("tool.") or re.search(r"(^|\.)(command|file)(\.|_|$)", ptype):
         name = str(payload.get("tool") or payload.get("tool_name") or payload.get("name") or "tool")
         call_id = payload.get("tool_call_id") or payload.get("call_id") or payload.get("id")
@@ -389,6 +415,13 @@ def _muse(b: _Builder, record: dict, ts) -> None:
             b.result(ts, call_id, str(payload.get("output") or ""), False, payload.get("exit_code"))
     else:
         b.add(entry_from_json(ts, payload or record, b.workspace))
+
+
+def _muse_usage(payload: dict) -> dict:
+    """Token totals of a ``run.usage`` payload in the shape ``_usage_line`` reads."""
+    rows = [m for m in payload.get("models") or [] if isinstance(m, dict)]
+    return {"input_tokens": sum(m.get("input_tokens") or 0 for m in rows),
+            "output_tokens": sum(m.get("output_tokens") or 0 for m in rows)}
 
 
 # -- plain text lines -----------------------------------------------------------------------
