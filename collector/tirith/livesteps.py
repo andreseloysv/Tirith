@@ -15,6 +15,7 @@ import os
 import re
 from datetime import datetime, timezone
 
+from tirith.activity import muse_tool
 from tirith.home import now_iso
 from tirith.logview import short_path
 
@@ -161,6 +162,10 @@ class StepParser:
             return
         if not isinstance(rec, dict):
             return
+        if "payload_type" in rec:
+            _muse_record(rec, self.rows, self.summary, self.workspace)
+            self.summary["steps"] = len(self.rows)
+            return
         kind = rec.get("type")
         if kind == "stream_event":
             ev = rec.get("event") if isinstance(rec.get("event"), dict) else {}
@@ -228,6 +233,27 @@ def parse(lines: list[str], workspace=None) -> tuple[list[dict], dict]:
     steps = parser.steps()
     parser.summary["steps"] = len(steps)
     return steps, parser.summary
+
+
+def _muse_record(rec: dict, steps: list[dict], summary: dict, workspace) -> None:
+    """One Muse Code event (``payload_type`` envelope): finished tool calls and the final answer."""
+    ptype = str(rec.get("payload_type") or "")
+    payload = rec.get("payload") if isinstance(rec.get("payload"), dict) else {}
+    if ptype == "tool.result":
+        name, path, failed = muse_tool(payload)
+        steps.append({"kind": "tool", "name": name, "at": None,
+                      "summary": mask(_clip(tool_summary(name, {"path": path}, workspace)))})
+        text = str(payload.get("text") or "")
+        if text.strip() or failed:
+            steps.append({"kind": "result", "name": name, "at": None, "error": failed,
+                          "summary": mask(_lines(text, RESULT_LINES)) or "(no output)"})
+    elif ptype.startswith("run.terminal"):
+        summary["done"] = True
+        summary["error"] = not ptype.endswith("completed")
+        text = str(payload.get("text") or payload.get("reason") or "")
+        if text.strip():
+            steps.append({"kind": "text", "name": "", "at": None,
+                          "summary": mask(_lines(text, TEXT_LINES))})
 
 
 def steps_for(log, workspace=None, fallback_at: str | None = None, now: datetime | None = None):
