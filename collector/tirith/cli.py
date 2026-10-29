@@ -567,7 +567,7 @@ def _cmd_lane_run(args) -> int:
         pass
     elif result == "failed":
         add_lane_ask(home, lane, "failed", log_tail=_log_tail(log_path))
-    elif not answer:
+    elif not answer and not (interactive and manager_lane):  # the manager session has no final answer
         add_lane_ask(home, lane, "ended without an answer")
     files, plus, minus = git_shortstat(str(workspace), lane.get("start_commit"))
     print(f"lane {lane_id}: {result}, {files} files +{plus} -{minus}, "
@@ -1086,10 +1086,38 @@ def _cmd_session_list(args) -> int:
     return 0
 
 
+MANAGER_VERBS = ("say", "interrupt", "stop", "restart", "status")
+
+
+def _cmd_manager_session(args, words: list[str]) -> int:
+    """``tirith manager say <text> | interrupt | stop | restart [--fresh] | status`` (the persistent session)."""
+    from tirith import msession as msession_mod
+    home = _home(args)
+    verb, rest = words[0], words[1:]
+    if verb == "say":
+        text = " ".join(rest).strip()
+        if not text:
+            raise SystemExit("manager say needs the message")
+        print(inbox_mod.add_request(home, "chat", text=text)["id"])  # queued into the same session
+        return 0
+    if verb == "status":
+        from tirith import dispatch as dispatch_mod
+        book = (dispatch_mod.load_state(home).get("manager") or {}).get("session") or {}
+        print(json.dumps({k: book.get(k) for k in ("lane", "session_id", "turns_total", "stopped", "error")}))
+        return 0
+    fresh = verb == "restart" and "--fresh" in rest
+    msession_mod.send_control(home, verb, "fresh" if fresh else "")
+    print(f"manager {verb}: sent")
+    return 0
+
+
 def _cmd_manager(args) -> int:
     home = _home(args)
+    words = list(args.activity)
+    if words[0] in MANAGER_VERBS and (words[0] == "say" or len(words) == 1 or words[1:] == ["--fresh"]):
+        return _cmd_manager_session(args, words)
     write_json_atomic(home / "orchestrator.json",
-                      {"activity": args.activity, "since": now_iso()})
+                      {"activity": " ".join(words), "since": now_iso()})
     print("manager updated")
     return 0
 
@@ -2280,8 +2308,9 @@ def build_parser() -> argparse.ArgumentParser:
     s_ls = session_sub.add_parser("list", parents=[common], help="all sessions")
     s_ls.set_defaults(func=_cmd_session_list)
 
-    manager = sub.add_parser("manager", parents=[common], help="set manager activity")
-    manager.add_argument("activity")
+    manager = sub.add_parser("manager", parents=[common], help="set manager activity, or control the "
+                             "persistent session: say <text> | interrupt | stop | restart [--fresh] | status")
+    manager.add_argument("activity", nargs="+")
     manager.set_defaults(func=_cmd_manager)
 
     manager_note = sub.add_parser("manager-note", parents=[common],

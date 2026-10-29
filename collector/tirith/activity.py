@@ -403,6 +403,12 @@ class _LaneLog:
         if kind.startswith("run.terminal"):
             self._event("muse", lane, "done", None, hooks_mod._clip(payload.get("text") or kind), ts)
             return
+        if kind == "tool.result":  # the real stream: one record per finished tool call
+            tool, path, _ = muse_tool(payload)
+            call_id = payload.get("call_id")
+            if not call_id or str(call_id) not in self.seen_ids:
+                self._tool("muse", lane, tool, f"{tool} {path}" if path else tool, ts, call_id)
+            return
         toolish = kind.startswith("tool.") or (
             not kind.startswith("runtime.") and re.search(r"(^|\.)(command|file)(\.|_|$)", kind))
         if not toolish:
@@ -423,6 +429,15 @@ class _LaneLog:
         self._tool("muse", lane, tool, summary, ts, call_id, command)
         if code is not None:
             self._finish(call_id, code != 0, _muse_output(payload))
+
+
+def muse_tool(payload: dict) -> tuple[str, str | None, bool]:
+    """``(tool name, path, failed)`` of a Muse Code ``tool.result`` record."""
+    edit = payload.get("edit_facts") if isinstance(payload.get("edit_facts"), dict) else {}
+    facts = payload.get("correlation_facts") if isinstance(payload.get("correlation_facts"), dict) else {}
+    name = str(facts.get("tool_name") or edit.get("tool_name") or "tool")
+    outcome = str(facts.get("outcome") or "success")
+    return name, edit.get("path"), outcome not in ("success", "ok")
 
 
 def _muse_output(payload: dict) -> str:
