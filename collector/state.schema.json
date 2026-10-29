@@ -282,6 +282,8 @@
           "type": "object", "additionalProperties": true, "required": ["agent", "ok", "checked_at"],
           "properties": {"agent": {"type": "string"}, "ok": {"type": "boolean"},
                          "checked_at": {"type": "string"}, "healed_at": {"type": ["string", "null"]}}}},
+        "gates_summary": {"type": "string"},
+        "gates_actions": {"type": "array", "items": {"$ref": "#/$defs/action"}},
         "pending": {"type": "array", "items": {
           "type": "object", "additionalProperties": true, "required": ["id", "at", "action", "summary"],
           "properties": {"id": {"type": "string"}, "at": {"type": ["string", "null"]},
