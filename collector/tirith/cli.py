@@ -30,6 +30,7 @@ from tirith import manifest as manifest_mod
 from tirith import hooks as hooks_mod
 from tirith import inbox as inbox_mod
 from tirith import launch as launch_mod
+from tirith import review as review_mod
 from tirith import projects as projects_mod
 from tirith import rooms as rooms_mod
 from tirith.home import ensure_home, load_config, now_iso, parse_iso, tirith_home
@@ -158,6 +159,26 @@ def _cmd_lane_start(args) -> int:
         pid=args.pid, brief=args.brief, step=args.step)
     print(lane["id"])
     return 0
+
+
+def _lane_repo(home: Path, lane_id: str) -> Path | None:
+    lane = read_json(lane_path(home, lane_id), None)
+    if not isinstance(lane, dict):
+        return None
+    _, proj = _project_or_exit(home, str(lane.get("project") or ""))
+    return projects_mod.real(proj.repo) if proj.repo else None
+
+
+def _cmd_lane_review(args) -> int:
+    home = _home(args)
+    try:
+        review = review_mod.review_lane(home, args.lane_id, _lane_repo(home, args.lane_id),
+                                        merge=not args.tests_only)
+    except review_mod.ReviewError as error:
+        print(f"tirith lane review: {error}", file=sys.stderr)
+        return 3
+    print(f"lane {args.lane_id}: {review['status']}" + (f"\n{review['message']}" if review.get("message") else ""))
+    return 0 if review["status"] in (review_mod.READY, review_mod.MERGED) else 1
 
 
 def _cmd_lane_end(args) -> int:
@@ -880,7 +901,7 @@ def _cmd_url_open(args) -> int:
     home = _home(args)
     try:
         link = launch_mod.parse_url(args.url)
-        if link["action"] not in ("launch", "inbox"):
+        if link["action"] not in ("launch", "inbox", "review"):
             raise launch_mod.LaunchError(f"unknown action '{link['action']}' in {args.url!r}")
         if not launch_mod.token_ok(home, link["token"]):
             gates_mod.record_violation(
@@ -895,8 +916,15 @@ def _cmd_url_open(args) -> int:
             fields = inbox_mod.parse_url(args.url)
             inbox_mod.add_request(home, fields["kind"], fields["project"], fields["step"], fields["text"])
             return 0
+        if link["action"] == "review":
+            lane_id = link["lane"]
+            review_mod.check_ready(home, lane_id, _lane_repo(home, lane_id))
+            launch_mod.spawn_detached([*launch_mod.tirith_argv(), "lane", "review", lane_id], home,
+                                      home / "logs" / f"{lane_id}.review.log")
+            print(f"reviewing {lane_id}")
+            return 0
         launch_step(home, link["project"], link["step"], link["agent"])
-    except (launch_mod.LaunchError, inbox_mod.InboxError) as error:
+    except (launch_mod.LaunchError, inbox_mod.InboxError, review_mod.ReviewError) as error:
         print(f"tirith url open: {error}", file=sys.stderr)
         return 3
     return 0
@@ -1134,6 +1162,11 @@ def build_parser() -> argparse.ArgumentParser:
     end.add_argument("--report", default=None)
     end.add_argument("--report-file", default=None)
     end.set_defaults(func=_cmd_lane_end)
+    review = lane_sub.add_parser("review", parents=[common],
+                                 help="run the tests of a launched lane, then merge it")
+    review.add_argument("lane_id")
+    review.add_argument("--tests-only", action="store_true", help="run the tests, do not merge")
+    review.set_defaults(func=_cmd_lane_review)
     lane_run = lane_sub.add_parser("run", parents=[common],
                                    help="start an agent command as a lane")
     lane_run.add_argument("--project", required=True)
