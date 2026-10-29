@@ -24,7 +24,7 @@
     if (o.clock) h += '<span class="mut">' + (a.status === 'working' ? 'running ' : 'took ') + T.agentClock(a) + '</span>';
     if (a.last_activity_at && st !== 'done' && st !== 'failed') h += '<span class="mut">last activity ' + agoLong(a.last_activity_at) + '</span>';
     /* the report is the full answer; the one-line summary only shows when it says something else */
-    var text = a.report || (T.sameText(a.summary, a.report) ? '' : a.summary);
+    var text = o.sum === false ? '' : a.report || (T.sameText(a.summary, a.report) ? '' : a.summary);
     return h + '</div>' + (text ? '<div class="sum">' + T.mdBox(text, a.id + ':status') + '</div>' : '');
   }
   /* true when one text starts like (or sits inside) the other, ignoring markdown marks and spacing */
@@ -77,6 +77,7 @@
   }
 
   /* opts.goal: show the Goal section (off when the card beside it already shows the same text);
+     opts.sum: show the one-line summary (off when the card beside it shows it);
      opts.clock: show the running time (off when the card beside it already shows it) */
   T.activity = function (a, opts) {
     var o = opts || {}, h = '';

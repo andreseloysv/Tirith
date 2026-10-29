@@ -15,13 +15,21 @@
       '<span class="chv"></span>' + T.dot(cls, a.status) +
       '<span class="name" title="' + esc((a.name || '') + (a.epithet ? ' ' + a.epithet : '')) + '">' + esc(a.name) + ' <span class="mut sm">' + esc(meta) + '</span></span>' +
       '<span class="feat">' + esc(a.feature) + '</span><span class="mut proj">' + esc(T.proj(a.project)) + '</span><span class="time">' + T.agentClock(a) + '</span></button>';
-    if (open) h += '<div class="detail">' + detail(a) + '</div>';
+    if (open) h += '<div class="detail">' + detail(a, false) + '</div>';
     return h + '</li>';
   }
-  /* the card beside the drawer already shows the feature and the clock; the file list replaces the totals line */
-  function detail(a) {
-    var ch = a.files && a.files.length ? '' : T.agentFiles(a);
-    return T.activity(a, { goal: !!a.goal && a.goal !== a.feature, clock: false }) + (ch ? '<p class="mut files">' + ch + '</p>' : '') ;
+  /* The card beside the drawer already shows what it shows: a working card has the feature, a
+     2-3 line goal, the "now doing" line, the clock and the totals; the other cards only the feature
+     and the clock. The drawer adds the rest and never repeats those. */
+  function detail(a, onCard) {
+    var working = onCard && a.status === 'working';
+    var ch = working || (a.files && a.files.length) ? '' : T.agentFiles(a);
+    var goal = working ? T.cardGoal(a).clamped : !!a.goal && a.goal !== a.feature;
+    return T.activity(a, { goal: goal, clock: false, sum: !working }) + (ch ? '<p class="mut files">' + ch + '</p>' : '');
+  }
+  /* the drawer's header says the same thing as the card's title: the feature, under the agent */
+  function drawerHead(a) {
+    return '<span class="dhead">' + T.avatar(a, 28) + '<span class="dtit"><b>' + esc(a.feature) + '</b><span class="mut">' + esc(a.name + (a.epithet ? ' ' + a.epithet : '')) + '</span></span></span>';
   }
 
   function view(s, el) {
@@ -42,7 +50,7 @@
     }
     var drawerFor = function () {
       var sel = ui.drawer === 'agent' && all.filter(function (a) { return a.id === ui.openAgent; })[0];
-      return sel ? T.drawer(sel.name + (sel.epithet ? ' ' + sel.epithet : ''), detail(sel)) : '';
+      return sel ? T.drawer(sel.feature || sel.name, detail(sel, mode !== 'list'), drawerHead(sel)) : '';
     };
     if (mode === 'tree') {
       el.innerHTML = tb + '<div class="listwrap treewrap" data-scroll="atree">' + tree(vis) + '</div>' + (more ? '<div class="moreline">' + more + '</div>' : '') + drawerFor();

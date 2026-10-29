@@ -19,7 +19,7 @@
     if (/^pipeline:/.test(id)) return { bg: 'linear-gradient(135deg,#7c83ff,#4f5bd5)', svg: T.fillIcon(T.ICON.pipe, 19), ov: 'Pipeline' };
     if (/^agent:/.test(id)) {
       var a = T.agentById(s, id.slice(6)), c = T.clsOf(a && a['class']);
-      return { bg: T.grad(c.color), svg: T.fillIcon(c.glyph, 20), ov: a ? T.cap(a['class']) : 'Agent' };
+      return { bg: T.grad(a ? T.agentColor(a) : c.color), svg: T.fillIcon(c.glyph, 20), ov: a ? T.cap(a['class']) : 'Agent' };
     }
     return { bg: 'linear-gradient(135deg,#c3c9d4,#9aa3b2)', svg: '<b class="init">' + esc((name || '?').charAt(0).toUpperCase()) + '</b>', ov: 'External' };
   }
