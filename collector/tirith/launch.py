@@ -226,12 +226,16 @@ def lane_run_argv(project: str, step_id: str, hero_class: str, title: str, brief
 
 
 def spawn_detached(argv: list[str], home: Path, log: Path) -> int:
-    """Start ``argv`` in its own session so it survives the handler exiting."""
+    """Start ``argv`` detached (own session / process group, stdin from /dev/null) so it survives the handler,
+    the terminal and the app that started it."""
     log.parent.mkdir(parents=True, exist_ok=True)
     env = dict(os.environ, TIRITH_HOME=str(home), PYTHONPATH=str(Path(__file__).resolve().parent.parent))
+    extra = ({"creationflags": getattr(subprocess, "DETACHED_PROCESS", 0)
+              | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)} if os.name == "nt"
+             else {"start_new_session": True})
     with log.open("ab") as handle:
         proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=handle, stderr=subprocess.STDOUT,
-                                env=env, start_new_session=True)
+                                env=env, **extra)
     return proc.pid
 
 

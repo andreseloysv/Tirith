@@ -361,3 +361,36 @@ Options on both: `Not now|snooze` (hides the item for 7 days from the reply, sta
 after) and `Never for this project|never` (the collector writes `guard = false` in the project's
 `[[projects]]` block of `config.toml`; the check stops reporting, `projects[].guard` is
 `{ok: true, problems: [], disabled: true}` and `lane run` skips the guard check).
+
+## The manager inside Tirith (`collector/tirith/managerd.py`)
+
+The owner can close the terminal: chat messages are still answered. No server, no port.
+
+- **Presence.** The interactive manager session (the hooks with `TIRITH_ROLE=manager`) writes
+  `<home>/manager.json` `{pid, session, at}` on every `SessionStart`, `UserPromptSubmit`, `PostToolUse` and
+  `Stop`. *Attached* = `at` younger than 120 s and `pid` alive. Lanes, headless or not, never write it.
+- **On call.** Each dispatcher cycle, when nobody is attached and something is pending for the manager (a
+  `manager_pending` request of any kind, a failed action of the owner, an open manager-queue item; not the
+  "agent looks to be waiting" guesses, and a lane review only after 5 min) and no headless manager is running,
+  Tirith starts ONE: `tirith lane run --class steward --feature "Manager" --agent <alias>`, the alias and
+  model from `[models.manager]` (default alias `anthropic`), the command built like the workers' presets
+  (`tirith.agentrun.build_command`: headless print mode, stream JSON). It runs in the folder of the first
+  pending request's project (else the first project) and exits when done; the next pending item starts
+  another. `[dispatch] auto_launch = false` or `enabled = false` switches it off. A set of pending ids that
+  survives two headless runs is not started again (the usual escalation to the owner applies); a refusal to
+  start is kept in `dispatch.json` `manager.error`.
+- **Brief** (`<home>/briefs/manager-<hex>.md`, generated): the manager's rules (delegate everything with
+  `tirith lane run` / `tirith launch`, never edit code, answer with `tirith inbox answer` then `inbox done`,
+  owner items only for what it must refuse, no OS notifications), the pending messages with their attachment
+  paths (`attachments[].path` on the request, when present), failed actions, the manager queue, a plan
+  summary per project, the recent flows and its own notes.
+- **Notes.** `tirith manager-note "<text>"` appends a timestamped line to `<home>/manager-notes.md` (last
+  20 KB kept); the last 4 KB go into the next brief, so the next run knows what was decided and launched.
+- **Detached lanes.** Lanes started by `tirith launch`, the autopilot, the dispatcher, the auto review and the
+  headless manager go through `launch.spawn_detached`: new session (process group on Windows), stdin from
+  `/dev/null`, output to `<home>/logs/<lane>.launch.log`. Closing a terminal or the app never kills them.
+  `tirith lane run` typed in a terminal stays attached.
+- **State.** `state.manager.presence = {mode: "live" | "on_call", working, lane}`. The chat header shows
+  "Manager: live session", "Manager: on call (starts when you write)" or, while the headless manager runs,
+  "Manager is working on your message…".
+

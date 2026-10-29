@@ -79,6 +79,16 @@
           "items": {
             "$ref": "#/$defs/note"
           }
+        },
+        "presence": {
+          "type": "object",
+          "description": "Who answers the chat: a live terminal session, or the on-call manager Tirith starts when you write. See docs/CONTRACT-inbox.md.",
+          "required": ["mode", "working"],
+          "properties": {
+            "mode": {"enum": ["live", "on_call"]},
+            "working": {"type": "boolean", "description": "The on-call manager is running now."},
+            "lane": {"type": ["string", "null"]}
+          }
         }
       }
     },
