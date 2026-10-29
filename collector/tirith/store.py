@@ -7,6 +7,7 @@ file formats here means the CLI and collector cannot drift apart.
 
 from __future__ import annotations
 
+import copy
 import json
 import os
 import tempfile
@@ -111,13 +112,39 @@ def lane_path(home: Path, lane_id: str) -> Path:
     return home / "lanes" / f"{lane_id}.json"
 
 
+_LANE_CACHE_MAX = 4096
+_lane_cache: dict[str, tuple[tuple, object]] = {}
+
+
+def _read_lane_file(path: Path):
+    """A lane file's JSON, re-read only when the file changed (the collector reads every lane several times a cycle)."""
+    try:
+        info = path.stat()
+    except OSError:
+        return None
+    stamp = (info.st_mtime_ns, info.st_size)
+    cached = _lane_cache.get(str(path))
+    if cached and cached[0] == stamp:
+        return copy.deepcopy(cached[1])  # callers edit the rows they get
+    lane = read_json(path, None)
+    if len(_lane_cache) > _LANE_CACHE_MAX:
+        _lane_cache.clear()
+    _lane_cache[str(path)] = (stamp, copy.deepcopy(lane))
+    return lane
+
+
+def read_lane(home: Path, lane_id: str):
+    """One lane registration (``None`` when missing or broken)."""
+    return _read_lane_file(lane_path(home, lane_id))
+
+
 def read_lanes(home: Path) -> list[dict]:
     """All lane registrations, sorted by start time then id."""
     lanes: list[dict] = []
     folder = home / "lanes"
     if folder.is_dir():
         for path in sorted(folder.glob("*.json")):
-            lane = read_json(path, None)
+            lane = _read_lane_file(path)
             if isinstance(lane, dict) and lane.get("id"):
                 lanes.append(lane)
     lanes.sort(key=lambda row: (str(row.get("started_at") or ""), str(row.get("id"))))

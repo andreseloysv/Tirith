@@ -44,6 +44,7 @@ from tirith import lanestop as lanestop_mod
 from tirith import managerd as managerd_mod
 from tirith import launch as launch_mod
 from tirith import models as models_mod
+from tirith import howto as howto_mod
 from tirith import ownergate as ownergate_mod
 from tirith import planlane as planlane_mod
 from tirith import verifylane as verifylane_mod
@@ -699,11 +700,13 @@ def _next_wait_id(home: Path) -> str:
 def add_wait(home: Path, project: str, text: str, link: str | None = None,
              wait_id: str | None = None, options=None, command: str | None = None,
              kind: str | None = None, actions: list[dict] | None = None,
-             why_owner: str | None = None, why_detail: str | None = None) -> str:
+             why_owner: str | None = None, why_detail: str | None = None, howto=None) -> str:
     """Add an ask to the owner's list; returns its id (``""`` when the gate kept it from the owner).
 
     ``why_owner`` (a key of ``asks.WHY_OWNER``) is required by the owner gate: without it the text is
     queued for the manager as "agent can do" and nothing reaches the owner (``tirith.ownergate``).
+
+    ``howto`` is the concrete how-to (``tirith.howto``); one with a placeholder goes back to the manager.
 
     ``options`` are one-click answers (``{"label", "value"}`` or ``"Label|value"``), ``command`` is a
     shell line the owner can copy, ``kind`` is decision|action|approval|info, ``actions`` are commands
@@ -718,7 +721,7 @@ def add_wait(home: Path, project: str, text: str, link: str | None = None,
     if kind not in asks_mod.ASK_KINDS:
         raise SystemExit(f"wait add: --kind must be one of {', '.join(asks_mod.ASK_KINDS)}")
     wait_id = wait_id or _next_wait_id(home)
-    verdict = ownergate_mod.admit(home, wait_id, project, text, why_owner, via="wait-add")
+    verdict = ownergate_mod.admit(home, wait_id, project, text, why_owner, via="wait-add", howto=howto)
     if verdict != ownergate_mod.OWNER:
         return ""
     why = asks_mod.why_key(why_owner)
@@ -727,6 +730,8 @@ def add_wait(home: Path, project: str, text: str, link: str | None = None,
            "session": projects_mod.current_session(home),
            "why_owner": why, **({"why_detail": why_detail} if why_detail else {}),
            "reason_tag": asks_mod.reason_tag(why, why_detail)}
+    if howto_mod.parse(howto):
+        row["howto"] = howto_mod.parse(howto)
     if options or command or kind != "info":
         row.update({"kind": kind, "options": options, "command": command or None})
     if actions:
@@ -743,6 +748,9 @@ OWNER_GATE_NOTE = (
 
 
 def _add_why_args(parser) -> None:
+    parser.add_argument("--howto", default=None, metavar="JSON|FILE",
+                        help='concrete how-to: {"steps":[{"text","url"?,"terminal"?}],"done_check":"<command>",'
+                        '"already_done":["fact"]}; no placeholders, every command runnable as it is')
     parser.add_argument("--why-owner", default=None, metavar="KEY",
                         help="why only the owner can do it: " + ", ".join(asks_mod.WHY_OWNER)
                         + " (without it the item goes to the manager queue, not to the owner)")
@@ -767,7 +775,7 @@ def _cmd_wait_add(args) -> int:
         return 2
     wait_id = add_wait(_home(args), args.project, text, args.link, args.id, options=options,
                        command=args.command, kind=args.kind, actions=actions,
-                       why_owner=args.why_owner, why_detail=args.why_detail)
+                       why_owner=args.why_owner, why_detail=args.why_detail, howto=args.howto)
     return _print_wait(wait_id)
 
 
@@ -1295,9 +1303,11 @@ def _worker_alias(config, project_id: str, step_id: str) -> str | None:
     return alias if alias in config.agents else None
 
 
-def relaunch_lane(home: Path, lane: dict, alias: str, by_tirith: bool = False) -> str:
+def relaunch_lane(home: Path, lane: dict, alias: str, by_tirith: bool = False, note: str | None = None) -> str:
     """Start the brief of a failed ``lane`` again with agent ``alias``; returns the new lane id. The
-    worktree is kept when it has no uncommitted changes, else a new one is made from the repo."""
+    worktree is kept when it has no uncommitted changes, else a new one is made from the repo. With a
+    ``note`` (a failed claim check) the brief gets the note appended and the new lane continues the old
+    lane's work: it is committed on the old branch and the new worktree starts from it."""
     config, proj = _project_or_exit(home, str(lane.get("project") or ""))
     repo = projects_mod.real(proj.repo) if proj.repo else None
     brief = Path(str(lane.get("brief") or ""))
@@ -1306,11 +1316,19 @@ def relaunch_lane(home: Path, lane: dict, alias: str, by_tirith: bool = False) -
     title = str(lane.get("feature") or lane["id"])
     lane_id = launch_mod.lane_id_for(title, {str(l["id"]) for l in read_lanes(home)}, repo)
     old = Path(str(lane.get("workspace") or ""))
-    dirty = subprocess.run(["git", "-C", str(old), "status", "--porcelain"], capture_output=True, text=True)
-    if old.is_dir() and dirty.returncode == 0 and not dirty.stdout.strip():
-        workspace = old
+    if note:
+        subprocess.run(["git", "-C", str(old), "add", "-A"], capture_output=True)
+        subprocess.run(["git", "-C", str(old), "commit", "-q", "-m", f"Lane {lane['id']}: work before the claim check"],
+                       capture_output=True)
+        workspace = launch_mod.create_worktree(repo, lane_id, base=f"lane/{lane['id']}")
+        brief = brief.with_name(f"{brief.stem}-{lane_id}.md")
+        brief.write_text(Path(str(lane["brief"])).read_text(encoding="utf-8") + "\n\n" + note, encoding="utf-8")
     else:
-        workspace = launch_mod.create_worktree(repo, lane_id)
+        dirty = subprocess.run(["git", "-C", str(old), "status", "--porcelain"], capture_output=True, text=True)
+        if old.is_dir() and dirty.returncode == 0 and not dirty.stdout.strip():
+            workspace = old
+        else:
+            workspace = launch_mod.create_worktree(repo, lane_id)
     step = lane.get("step")
     command = launch_mod.agent_command(config, alias, brief, workspace, str(lane.get("project") or ""), step)
     argv = launch_mod.lane_run_argv(

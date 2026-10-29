@@ -31,11 +31,13 @@ from tirith import inbox as inbox_mod
 from tirith import launch as launch_mod
 from tirith import managerd as managerd_mod
 from tirith import manifest as manifest_mod
+from tirith import howto as howto_mod
 from tirith import ownergate as ownergate_mod
 from tirith import planlane as planlane_mod
 from tirith import verifylane as verifylane_mod
 from tirith import projects as projects_mod
 from tirith import roadmap as roadmap_mod
+from tirith import selfcheck as selfcheck_mod
 from tirith.home import Config, now_iso, parse_iso
 from tirith.store import append_jsonl, read_json, read_jsonl, write_json_atomic
 
@@ -85,15 +87,16 @@ def _step_name(req: dict) -> str:
 
 def add_owner_item(home: Path, item_id: str, project: str | None, text: str, options: list[dict],
                    at: str, actions: list[dict] | None = None, link: str | None = None,
-                   why_owner: str | None = None, why_detail: str | None = None) -> str:
+                   why_owner: str | None = None, why_detail: str | None = None, howto=None) -> str:
     """One item on the owner's waiting list with ``options`` (``[{label, command}]``), Run ``actions`` and
     an optional ``link`` to open; once per id. It passes ``ownergate.admit``: ``why_owner`` is a key of
     ``asks.WHY_OWNER`` (why only the owner can do it), else the text goes to the manager queue as "agent can
     do" (or is dropped when it is about something out of plan). Returns ``owner``, ``manager`` or ``dropped``.
-    A text that promises a button the item does not have is rewritten without it."""
+    ``howto`` (``tirith.howto``: steps, done_check, already_done) must be concrete or the item goes back to the
+    manager. A text that promises a button the item does not have is rewritten without it."""
     if not options and not actions:
         raise ValueError(f"owner item {item_id} has no option: every item for the owner needs a call to action")
-    verdict = ownergate_mod.admit(home, item_id, project, text, why_owner, via="owner-item", at=at)
+    verdict = ownergate_mod.admit(home, item_id, project, text, why_owner, via="owner-item", at=at, howto=howto)
     if verdict != ownergate_mod.OWNER:
         return verdict
     why = asks_mod.why_key(why_owner)
@@ -105,6 +108,7 @@ def add_owner_item(home: Path, item_id: str, project: str | None, text: str, opt
         "id": item_id, "at": at, "project": project, "text": text, "link": link, "done_at": None,
         "session": None, "options": options, **({"actions": actions} if actions else {}),
         "why_owner": why, **({"why_detail": why_detail} if why_detail else {}),
+        **({"howto": parsed} if (parsed := howto_mod.parse(howto)) else {}),
         "reason_tag": asks_mod.reason_tag(why, why_detail)})
     flows_mod.append_flow(home, "tirith", "owner", "request", text, project=project, session=None, at=at)
     return ownergate_mod.OWNER
@@ -412,6 +416,10 @@ def run(home: Path, config: Config, now: datetime, *, agents: list[dict], lanes:
         changed = True
     if _cleanup_due(home):
         diskdiet_mod.cleanup(home, config, now)
+    # before the on-call manager, so a restart it asks for happens in this pass
+    if selfcheck_mod.run(home, config, now, state, lanes=lanes, agents=agents, projects=projects or [],
+                         spawn=spawn, kill=manager_kill):
+        changed = True
     if config.dispatch_auto_launch and managerd_mod.run(home, config, now, state, lanes, spawn=manager_spawn,
                                                           kill=manager_kill):
         changed = True  # nobody attached and something pending: the on-call manager
