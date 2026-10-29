@@ -64,7 +64,9 @@ def busy_home(home: Path, tmp_path: Path) -> Path:
 
 def test_a_cycle_on_a_busy_home_stays_within_the_budget(busy_home: Path) -> None:
     collector = Collector(busy_home, client=None)
-    collector.cycle()  # cold: every log parsed once, every lane's files read once
+    collector.cycle()  # cold: every log parsed once
+    while collector.cycle()["collector"]["warming"]:  # every lane's files read once, over a few cycles
+        pass
     spent = []
     for _ in range(3):
         started = time.monotonic()
@@ -76,7 +78,8 @@ def test_a_cycle_on_a_busy_home_stays_within_the_budget(busy_home: Path) -> None
 def test_a_warm_cycle_runs_no_git_for_lanes_it_already_read(busy_home: Path, monkeypatch) -> None:
     monkeypatch.setattr(activity_mod, "FILES_TTL_S", 3600)
     collector = Collector(busy_home, client=None)
-    collector.cycle()
+    while collector.cycle()["collector"]["warming"]:
+        pass
     calls: list[list[str]] = []
     real = subprocess.run
 
