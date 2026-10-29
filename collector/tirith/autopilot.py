@@ -1,15 +1,16 @@
-"""The autopilot: Tirith drives every plan to the end by itself, by code.
+"""The autopilot: Tirith watches every plan and tells the manager what is ready; it never starts an agent.
 
-Every collector cycle ``dispatch.run`` calls :func:`run`. For each project with a roadmap it starts one lane
-(like ``tirith launch``, the brief lists only the step's agent items) on every ``ready`` step, oldest step
-first, never two on the same step and at most ``[autopilot] max_parallel`` autopilot lanes running. A step
-whose autopilot lane ended without ticking anything or merging changes is paused until its plan text changes:
-a report saying the work was already done asks the plan updater to tick the step, a report saying the lane
-could not do an item becomes a manager queue item proposing to tag it owner-only, any other report becomes a
-manager queue item with the report's summary.
+Every collector cycle ``dispatch.run`` calls :func:`run`. For each open agent item of a plan that nobody works
+on (no agent working on its step and no review running or waiting to be merged), once it has sat for
+``DEBOUNCE_S``, it posts ONE ``autopilot-proposal`` request to the manager (from ``tirith``): the project,
+step, item, why it is open, the linked lane, its report, whether its branch is merged, the claims result and
+the last attempts. The manager decides like it does for an owner message: launch with a written brief, combine
+with a lane, wait, or drop the item through a plan edit, and answers on the proposal. A new proposal follows
+only when the item's text or state changes. Nothing here calls the launcher, so one brain decides.
 It also keeps one owner item for every open owner-only roadmap item (closed when the item is ticked) and
-handles the owner's ``autopilot`` on/off requests. State lives in ``dispatch.json`` under ``autopilot``.
-See ``docs/CONTRACT-roadmap.md`` and ``docs/CONTRACT-inbox.md``.
+handles the owner's ``autopilot`` on/off requests (kept in ``<home>/autopilot.json``, so they survive any
+restart). State lives in ``dispatch.json`` under ``autopilot``. See ``docs/CONTRACT-roadmap.md`` and
+``docs/CONTRACT-inbox.md``.
 """
 
 from __future__ import annotations
@@ -21,14 +22,12 @@ from pathlib import Path
 from typing import Callable
 
 from tirith import actions as actions_mod
-from tirith import asks as asks_mod
-from tirith import fallback as fallback_mod
 from tirith import flows as flows_mod
 from tirith import inbox as inbox_mod
-from tirith import launch as launch_mod
 from tirith import plangate as plangate_mod
 from tirith import roadmap as roadmap_mod
 from tirith.home import Config, now_iso, parse_iso
+from tirith.store import read_json, write_json_atomic
 
 SUMMARY_MAX = 400
 # a report saying the work is already in the code; checked before CANNOT (a done report may say "can't")
@@ -36,17 +35,18 @@ ALREADY = re.compile(r"already (?:built|done|exists?|implemented|merged|in the (
                      r"|nothing (?:is )?left|changed no files|no files (?:were )?changed", re.I)
 # a report saying the lane could not do an item
 CANNOT = re.compile(r"\bcan(?:'|’)?t\b|\bcannot\b|couldn(?:'|’)?t|could not|needs? the owner|\bblocked\b", re.I)
-GRACE_S = 180.0          # a lane that has not shown up as an agent yet still counts as running
-RETRY_REFUSED_S = 600.0
-KEPT_LANES = 200
-STARTED_SHOWN = 50
-REVIEW_BUSY = ("pending", "running", "ready", "tests-failed", "claims-failed", "merge-failed")
+DEBOUNCE_S = 30.0        # an open item nobody works on is reported after this long (a normal handoff is not)
+SWITCH_FILE = "autopilot.json"
+ATTEMPTS_SHOWN = 3
 REVIEW_OPEN = ("pending", "running")
+REVIEW_FAILED = ("tests-failed", "claims-failed", "merge-failed")
+REVIEW_BUSY = (*REVIEW_OPEN, "ready", *REVIEW_FAILED)
+INTERRUPTED = "interrupted"  # in the message of a review whose process died (``review.public``)
 
 
 def _own(state: dict) -> dict:
     own = state.setdefault("autopilot", {})
-    for key in ("lanes", "paused", "owner_items", "refused"):
+    for key in ("owner_items", "proposals", "seen"):
         if not isinstance(own.get(key), dict):
             own[key] = {}
     return own
@@ -62,11 +62,21 @@ def _key(project: str, step: str) -> str:
     return f"{project}|{step}"
 
 
-def _step_name(project: str, step: str) -> str:
-    return f"{project} step {step}"
-
-
 # -- the owner's switch -----------------------------------------------------------------------
+
+
+def _sync_switch(home: Path, state: dict) -> bool:
+    """The switch file is the truth: it survives a lost or stale ``dispatch.json``. An older ``on`` in the state
+    (before the file existed) is written out once."""
+    own, row = _own(state), read_json(Path(home) / SWITCH_FILE, {})
+    saved = row.get("on") if isinstance(row, dict) else None
+    if isinstance(saved, bool):
+        if own.get("on") != saved:
+            own["on"] = saved
+            return True
+    elif isinstance(own.get("on"), bool):
+        write_json_atomic(Path(home) / SWITCH_FILE, {"on": own["on"], "at": now_iso()})
+    return False
 
 
 def _switch(home: Path, state: dict, now: datetime) -> bool:
@@ -76,6 +86,7 @@ def _switch(home: Path, state: dict, now: datetime) -> bool:
             continue
         on = req["text"].strip().lower() == "on"
         own["on"] = on
+        write_json_atomic(Path(home) / SWITCH_FILE, {"on": on, "at": now_iso(now)})
         flows_mod.append_flow(home, "owner", "tirith", "request", f"Autopilot {'on' if on else 'off'}",
                               ref=req["id"], session=None, project=None, at=now_iso(now))
         inbox_mod.mark_done(home, req["id"], now_iso(now))
@@ -125,7 +136,8 @@ def _owner_items(home: Path, state: dict, projects: list[dict], at: str) -> bool
     return changed
 
 
-# -- lanes ------------------------------------------------------------------------------------
+
+# -- proposals --------------------------------------------------------------------------------
 
 
 def _steps(projects: list[dict]) -> dict[str, dict]:
@@ -138,44 +150,205 @@ def _agent_open(step: dict) -> list[str]:
             and i.get("who") == "agent" and i.get("state", "open") in (roadmap_mod.STATE_OPEN, roadmap_mod.STATE_REOPENED)]
 
 
+def _open_agent(step: dict) -> list[dict]:
+    """The open items of the agents (whatever their note says: open, in progress, in review, blocked, reopened)."""
+    return [i for i in step["items"] if not i["done"] and i.get("who") == "agent"]
+
+
 def _agents_by_id(agents: list[dict]) -> dict[str, dict]:
     return {str(a["id"]): a for a in agents}
 
 
-def _running(rec: dict, agent: dict | None, now: datetime) -> bool:
-    if agent is not None:
-        return agent.get("status") == "working"
-    started = parse_iso(rec.get("at"))
-    return started is not None and (now - started).total_seconds() < GRACE_S
+def _review_status(agent: dict) -> str | None:
+    """The review status of a lane; a review whose process died counts as running (the self-check runs it again)."""
+    review = agent.get("review") or {}
+    status = review.get("status")
+    if status == "merge-failed" and INTERRUPTED in str(review.get("message") or ""):
+        return "running"
+    return status
 
 
-def _settle(home: Path, state: dict, projects: list[dict], agents: list[dict], now: datetime) -> bool:
-    """Count each ended autopilot lane once: progress resets the step's counter, none adds to it."""
-    own, steps, by_id, changed = _own(state), _steps(projects), _agents_by_id(agents), False
-    for lane_id, rec in list(own["lanes"].items()):
-        if rec.get("settled"):
+def _on_step(agents: list[dict], project: str, step: str) -> list[dict]:
+    return [a for a in agents if a.get("project") == project and str(a.get("step") or "") == step]
+
+
+def _busy(agents: list[dict], project: str, step: str) -> str | None:
+    """Plain words for why nobody needs to be told about this step now: an agent works on it, or Tirith is
+    checking or merging the work of an earlier one. None when nobody is on it."""
+    mine = _on_step(agents, project, step)
+    if any(a.get("status") == "working" for a in mine):
+        return "an agent is already on it"
+    states = {_review_status(a) for a in mine}
+    if states & set(REVIEW_OPEN):
+        return "the work of an earlier agent on it is being checked by Tirith"
+    if "ready" in states:
+        return "the work of an earlier agent on it is checked and Tirith is merging it"
+    return None
+
+
+def _why_not(own: dict, agents: list[dict], project: str, step: dict, now: datetime) -> str | None:
+    """Plain words for why the manager is not told about this step now; None when it can be."""
+    if not _open_agent(step):
+        return "only the owner's items are left"
+    return _busy(agents, project, step["id"])
+
+
+def _fingerprint(step: str, raw: str) -> str:
+    return hashlib.sha1(f"{step}|{raw}".encode()).hexdigest()[:12]
+
+
+def _why_open(clean: str, state: str, detail: str | None) -> str:
+    if state == roadmap_mod.STATE_REVIEW:
+        return "it is marked in review but no check is running and nobody works on it" \
+               + (f" (linked: {detail})" if detail else "")
+    if state == roadmap_mod.STATE_PROGRESS:
+        return "it is marked in progress but its lane is not working any more" + (f" ({detail})" if detail else "")
+    if state == roadmap_mod.STATE_BLOCKED:
+        return "it is marked blocked" + (f" ({detail})" if detail else "") + " and nobody works on it"
+    if state == roadmap_mod.STATE_REOPENED:
+        return "it was reopened" + (f" ({detail})" if detail else "") + " and nobody works on it"
+    return "it is open and nobody works on it"
+
+
+def candidates(projects: list[dict], agents: list[dict]) -> tuple[dict[str, dict], set[str]]:
+    """``(open, present)``: ``open`` maps item key -> the open agent items nobody works on (the ones to tell the
+    manager about); ``present`` is the keys of every open agent item (working or not)."""
+    found: dict[str, dict] = {}
+    present: set[str] = set()
+    for project in projects:
+        road = project.get("roadmap") or {}
+        for step in road.get("steps", []):
+            if step["id"] == plangate_mod.OPS_STEP:
+                continue  # step 0 holds Tirith's own work (reviews, plan refresh, manager)
+            busy = _busy(agents, project["id"], step["id"])
+            for item in _open_agent(step):
+                clean, state, detail = roadmap_mod.split_status(item["text"])
+                key = f"{project['id']}|{step['id']}|{roadmap_mod.item_id(item['text'])}"
+                present.add(key)
+                if busy is None:
+                    found[key] = {"key": key, "project": project["id"], "step": step["id"], "title": step.get("title") or "",
+                                  "item": clean, "state": state, "detail": detail, "raw": item["text"],
+                                  "fp": _fingerprint(step["id"], item["text"]), "plan": road.get("file")}
+    return found, present
+
+
+def _lane_line(agent: dict) -> str:
+    review = agent.get("review") or {}
+    bits = [str(agent.get("status") or "?")]
+    if agent.get("outcome"):
+        bits.append(f"outcome {agent['outcome']}")
+    if review.get("status") == "merged":
+        bits.append("branch merged")
+    elif review.get("status"):
+        bits.append(f"review {review['status']}")
+        if review.get("message"):
+            bits.append(flows_mod.one_line(str(review["message"]), 120))
+    else:
+        bits.append("no review")
+    if review.get("claims"):
+        bits.append("claims: " + flows_mod.one_line(str(review["claims"]), 120))
+    return f"- lane {agent['id']} ({', '.join(bits)}): {flows_mod.one_line(report_summary(agent.get('report')), 220)}"
+
+
+def _facts(cand: dict, agents: list[dict]) -> list[str]:
+    """Lines about the lanes that worked on the item's step: the lane linked in its note, then the last attempts."""
+    mine = [a for a in _on_step(agents, cand["project"], cand["step"]) if a.get("status") != "working"]
+    same = [a for a in mine if a.get("item") and roadmap_mod.norm(a["item"]) == cand["item"]]
+    mine = sorted(same or mine, key=lambda a: str(a.get("ended_at") or a.get("started_at") or ""))[-ATTEMPTS_SHOWN:]
+    linked = next((a for a in agents if cand["detail"] and str(a.get("id")) == cand["detail"].split()[-1]), None)
+    if linked and linked not in mine:
+        mine.append(linked)
+    return [_lane_line(a) for a in mine] or ["- no earlier lane worked on it"]
+
+
+def proposal_text(cand: dict, agents: list[dict]) -> str:
+    return "\n".join([
+        f"Autopilot: {cand['project']} step {cand['step']} — {cand['item']}",
+        f"Why now: {_why_open(cand['item'], cand['state'], cand['detail'])}.",
+        f"Plan: {cand['plan'] or 'docs/TODO.md'}, step {cand['step']} ({cand['title']}).",
+        "Last attempts:", *_facts(cand, agents),
+        "Decide: launch (with a written brief and the plan link), combine with an existing lane, wait (say why), "
+        "or drop (plan edit through Tirith; `tirith plan done` when the work is already on main). "
+        "Answer here, then close it.",
+    ])
+
+
+def proposal_line(text: str) -> str:
+    """The first line of a proposal: what the chat shows."""
+    return text.split("\n", 1)[0]
+
+
+def _open_request(req: dict | None) -> bool:
+    return req is not None and req["status"] != "done"
+
+
+def _propose(home: Path, state: dict, projects: list[dict], agents: list[dict], now: datetime) -> bool:
+    """Post one proposal per open item nobody works on (after ``DEBOUNCE_S``), at most one per item state."""
+    own, at, changed = _own(state), now_iso(now), False
+    found, present = candidates(projects, agents)
+    reqs = {r["id"]: r for r in inbox_mod.requests(home)}
+    for key, rec in list(own["proposals"].items()):
+        cand = found.get(key)
+        if key in present and (cand is None or cand["fp"] == rec["fp"]):
+            continue  # the item is still there in the same state (or somebody works on it): the manager decides
+        req = reqs.get(rec["id"])
+        if _open_request(req) and not any(a["by"] == "manager" for a in req["answers"]):
+            reason = "the item changed" if key in present else "the item is done or gone from the plan"
+            inbox_mod.add_answer(home, rec["id"], f"No longer needed: {reason}.", by="tirith", at=at)
+            inbox_mod.mark_done(home, rec["id"], at)
+        if key not in present:
+            del own["proposals"][key]
+            changed = True
+    for key in list(own["seen"]):
+        if key not in found:
+            del own["seen"][key]
+            changed = True
+    for key, cand in found.items():
+        rec = own["proposals"].get(key)
+        if rec and rec["fp"] == cand["fp"]:
             continue
-        agent = by_id.get(lane_id)
-        taken = fallback_mod.continued_by(state, lane_id)
-        if taken and not _running(rec, agent, now):  # out of credits, continued by another agent: same step's lane
-            rec["settled"] = True
-            own["lanes"].setdefault(taken, {**rec, "at": now_iso(now), "settled": False})
+        seen = own["seen"].get(key)
+        if not seen or seen["fp"] != cand["fp"]:
+            own["seen"][key] = {"fp": cand["fp"], "at": at}
             changed = True
             continue
-        if _running(rec, agent, now):
+        first = parse_iso(seen["at"])
+        if first is None or (now - first).total_seconds() < DEBOUNCE_S:
             continue
-        review = (agent or {}).get("review") or {}
-        if review.get("status") in REVIEW_OPEN:
-            continue  # its work is not merged yet; the plan is ticked on the merge
-        key = _key(rec["project"], rec["step"])
-        step = steps.get(key)
-        open_now = set(_agent_open(step)) if step else set()
-        progressed = review.get("status") in ("ready", "merged") or any(t not in open_now for t in rec["items"])
-        rec["settled"] = True
+        row = inbox_mod.add_request(home, inbox_mod.PROPOSAL, cand["project"], cand["step"],
+                                    proposal_text(cand, agents), at=at, sender="tirith")
+        own["proposals"][key] = {"id": row["id"], "fp": cand["fp"], "at": at}
+        flows_mod.append_flow(home, "tirith", "manager", "request",
+                              f"Autopilot proposes {cand['project']} step {cand['step']}: {flows_mod.one_line(cand['item'], 100)}",
+                              ref=row["id"], session=None, project=cand["project"], at=at)
         changed = True
-        if not progressed and key not in own["paused"]:
-            _pause(home, own, key, lane_id, rec, sorted(open_now), (agent or {}).get("report"), now)
     return changed
+
+
+def sitting(home: Path, state: dict, projects: list[dict], agents: list[dict], now: datetime) -> list[dict]:
+    """Open items nobody works on that the manager was not told about yet, each with ``idle_s`` (how long)."""
+    own = _own(state)
+    found, _ = candidates([p for p in projects if p.get("roadmap")], agents)
+    out = []
+    for key, cand in found.items():
+        rec = own["proposals"].get(key)
+        seen = parse_iso((own["seen"].get(key) or {}).get("at"))
+        if not (rec and rec["fp"] == cand["fp"]):
+            out.append({**cand, "idle_s": (now - seen).total_seconds() if seen else 0.0})
+    return out
+
+
+def unanswered(home: Path, state: dict, now: datetime) -> list[dict]:
+    """Proposals the manager has not answered yet, each with ``age_s``."""
+    out = []
+    for req in inbox_mod.requests(home):
+        if req["kind"] == inbox_mod.PROPOSAL and req["manager_pending"]:
+            asked = parse_iso(req["at"])
+            out.append({**req, "age_s": (now - asked).total_seconds() if asked else 0.0})
+    return out
+
+
+# -- what a lane report says (the manager's brief and the plan updater use these) -------------------
 
 
 def report_kind(report: str | None) -> str:
@@ -193,185 +366,64 @@ def report_summary(report: str | None) -> str:
     return text if len(text) <= SUMMARY_MAX else text[:SUMMARY_MAX - 1].rsplit(" ", 1)[0] + "…"
 
 
-def _pause(home: Path, own: dict, key: str, lane_id: str, rec: dict, open_now: list[str], report: str | None,
-           now: datetime) -> None:
-    """Pause the step until its plan text changes, and say why (see the module doc for the three cases)."""
-    at, kind = now_iso(now), report_kind(report)
-    project, step = rec["project"], rec["step"]
-    own["paused"][key] = {"at": at, "items": open_now, "why": kind}
-    name, summary = _step_name(project, step), report_summary(report)
-    if kind == "done":
-        inbox_mod.add_request(home, "plan-refresh", project, step,
-                              f"Autopilot: lane {lane_id} found step {step} already built. Tick what is done "
-                              f"in step {step} only. Its report: {summary}", at=at)
-        flows_mod.append_flow(home, "tirith", "owner", "request",
-                              f"{name} looks already built; asked for a plan update", session=None,
-                              project=project, at=at)
-        return
-    if kind == "cannot":
-        text = (f"Autopilot paused {name}: lane {lane_id} could not do an item. {summary} "
-                "Proposal: re-tag that item as owner-only (add `(dueño)` to it in the plan), so the autopilot "
-                "moves on and it becomes an owner item.")
-    else:
-        text = (f"Autopilot paused {name}: lane {lane_id} ended without ticking anything or merging changes. "
-                f"Why it could not finish: {summary} Read it with `tirith lane review {lane_id}`, then fix the "
-                "brief or the items; the autopilot resumes by itself when the step's plan text changes.")
-    asks_mod.queue_add(home, project, lane_id, text, kind="autopilot", item_id=f"sq-autopilot-{project}-{step}")
-    flows_mod.append_flow(home, "tirith", "owner", "alert", f"{name} paused: a lane ended without progress",
-                          session=None, project=project, at=at)
-
-
-def _unpause(home: Path, state: dict, steps: dict[str, dict]) -> bool:
-    """A paused step resumes when its open agent items are not the ones it stopped on."""
-    own, changed = _own(state), False
-    for key, row in list(own["paused"].items()):
-        step = steps.get(key)
-        if step is None or sorted(_agent_open(step)) != row["items"]:
-            del own["paused"][key]
-            project, _, step_id = key.partition("|")
-            try:
-                asks_mod.queue_done(home, f"sq-autopilot-{project}-{step_id}", "the open items changed")
-            except asks_mod.AskError:
-                pass
-            changed = True
-    return changed
-
-
-def _blocked_by_review(agents: list[dict], project: str, step: str) -> bool:
-    return any(a.get("project") == project and str(a.get("step") or "") == step
-               and (a.get("review") or {}).get("status") in REVIEW_BUSY for a in agents)
-
-
-def _why_not(own: dict, agents: list[dict], project: str, step: dict, now: datetime) -> str | None:
-    """Plain words for why the autopilot does not start an agent on this ready step now; None when it can."""
-    from tirith.dispatch import _short
-    key = _key(project, step["id"])
-    if not _agent_open(step):
-        return "only the owner's items are left"
-    if key in own["paused"]:
-        if own["paused"][key].get("why") == "done":
-            return "it looks already built; waiting for the plan update"
-        return "the last agent could not finish it; it resumes when the step's plan text changes"
-    by_id = _agents_by_id(agents)
-    if any(r["project"] == project and r["step"] == step["id"] and not r.get("settled")
-           and _running(r, by_id.get(lane_id), now) for lane_id, r in own["lanes"].items()):
-        return "an agent is already on it"
-    busy = next((a for a in agents if a.get("project") == project and str(a.get("step") or "") == step["id"]
-                 and (a.get("review") or {}).get("status") in REVIEW_BUSY), None)
-    if busy:
-        waiting = "being checked" if busy["review"]["status"] in REVIEW_OPEN else "waiting for you to review"
-        return f"the work of an earlier agent on it is {waiting}"
-    refused = own["refused"].get(key)
-    asked = parse_iso(refused["at"]) if refused else None
-    if asked and (now - asked).total_seconds() < RETRY_REFUSED_S:
-        return f"the last start failed ({_short(refused['reason'])}); trying again in a few minutes"
-    return None
-
-
-def _launch(home: Path, state: dict, project: dict, step: dict, launcher: Callable, now: datetime) -> bool | None:
-    """True: a lane started. False: refused (recorded). None: refused recently, nothing was tried."""
-    from tirith.dispatch import close_owner_item, refused as refuse_launch, refusal_fix, _short
-    own, at = _own(state), now_iso(now)
-    pid, sid = project["id"], step["id"]
-    key, name = _key(pid, sid), _step_name(pid, sid)
-    refused = own["refused"].get(key)
-    if refused:
-        asked = parse_iso(refused["at"])
-        if asked and (now - asked).total_seconds() < RETRY_REFUSED_S:
-            return None
-    try:
-        lane_id = launcher(home, pid, sid, None)
-    except launch_mod.LaunchError as err:
-        reason = str(err)
-    except Exception as err:  # never let one step stop the cycle
-        reason = f"{type(err).__name__}: {err}"
-    else:
-        if own["refused"].pop(key, None):
-            close_owner_item(home, f"autopilot-{pid}-{sid}", at)
-        own["lanes"][lane_id] = {"project": pid, "step": sid, "at": at, "items": _agent_open(step), "settled": False}
-        for old in list(own["lanes"])[:-KEPT_LANES]:
-            del own["lanes"][old]
-        flows_mod.append_flow(home, "tirith", f"agent:{lane_id}", "brief", f"Autopilot started {name}",
-                              session=None, project=pid, at=at)
-        return True
-    first = not refused or refused["reason"] != reason
-    own["refused"][key] = {"at": at, "reason": reason}
-    if first:
-        fix = refusal_fix(pid, sid, reason)
-        flows_mod.append_flow(home, "tirith", "manager", "alert", f"Autopilot could not start {name}: {_short(reason)}",
-                              session=None, project=pid, at=at)
-        refuse_launch(home, f"autopilot-{pid}-{sid}", pid,
-                      f"Autopilot could not start an agent on {name}: {_short(reason)}\nFix it: {fix}\n"
-                      f"Try again: tirith launch --project {pid} --step {sid}")
-    return False
-
-
 # -- the cycle --------------------------------------------------------------------------------
 
 
-def _live(own: dict, agents: list[dict], now: datetime) -> set[str]:
-    """Ids of the autopilot lanes whose process is alive and not ended."""
-    by_id = _agents_by_id(agents)
-    return {lane_id for lane_id, rec in own["lanes"].items()
-            if not rec.get("settled") and _running(rec, by_id.get(lane_id), now)}
-
-
 def run(home: Path, config: Config, now: datetime, state: dict, *, agents: list[dict], projects: list[dict],
-        launcher: Callable, launch: bool = True) -> bool:
-    """One autopilot pass; True when ``state`` changed. ``launch`` False (disk almost full): no new lane."""
-    own = _own(state)
-    changed = _switch(home, state, now)
+        launcher: Callable | None = None, launch: bool = True) -> bool:
+    """One autopilot pass; True when ``state`` changed. It never starts an agent (``launcher`` is ignored).
+    ``launch`` False (disk almost full): no new proposal, the manager could not start anything anyway."""
+    changed = _sync_switch(home, state)
+    changed |= _switch(home, state, now)
     planned = [p for p in projects if p.get("roadmap")]
     changed |= _owner_items(home, state, planned, now_iso(now))
-    changed |= _settle(home, state, planned, agents, now)
-    changed |= _unpause(home, state, _steps(planned))
-    if not launch or not effective(config, state):
-        return changed
-    running = len(_live(own, agents, now))
-    for project in planned:
-        for step in project["roadmap"]["steps"]:
-            if running >= config.autopilot_max_parallel:
-                return changed
-            if step["status"] != "ready" or step["id"] == plangate_mod.OPS_STEP \
-                    or _why_not(own, agents, project["id"], step, now):
-                continue  # step 0 holds Tirith's own work (reviews, plan refresh, manager): never an autopilot lane
-            launched = _launch(home, state, project, step, launcher, now)
-            if launched is not None:
-                changed = True
-            if launched:
-                running += 1
+    if launch and effective(config, state):
+        changed |= _propose(home, state, planned, agents, now)
     return changed
+
+
+def _counts(own: dict, requests: list[dict], projects: list[dict], agents: list[dict]) -> dict:
+    found, present = candidates(projects, agents)
+    live = {rec["id"] for rec in own["proposals"].values()
+            if any(r["id"] == rec["id"] and r["status"] != "done" for r in requests)}
+    proposed = sum(1 for key, rec in own["proposals"].items() if rec["id"] in live and key in present)
+    working = reviewing = 0
+    skipped = []
+    for p in projects:
+        for st in (p.get("roadmap") or {}).get("steps", []):
+            if st["id"] == plangate_mod.OPS_STEP or not _open_agent(st):
+                continue
+            why = _busy(agents, p["id"], st["id"])
+            if why:
+                skipped.append({"project": p["id"], "step": st["id"], "why": why})
+                if why == "an agent is already on it":
+                    working += 1
+                else:
+                    reviewing += 1
+    return {"proposed": proposed, "queued": sum(1 for key in found if key not in own["proposals"]
+                                               or own["proposals"][key]["fp"] != found[key]["fp"]),
+            "steps_working": working, "steps_in_review": reviewing, "skipped": skipped,
+            "open_items": len(present)}
 
 
 def public(home: Path, config: Config, agents: list[dict] | None = None, projects: list[dict] | None = None,
            now: datetime | None = None) -> dict:
-    """``state.autopilot``: the switch, the limit, the lanes the autopilot started (newest last) and, given the
-    agents and projects, the header counts: ``working`` (autopilot lanes alive, not ended and listed in ``state.agents``, so it never exceeds the
-    Agents list) and ``queued``
-    (ready steps it can start) and ``skipped`` (ready steps it cannot, each with the reason in plain words)."""
+    """``state.autopilot``: the switch and, given the agents and projects, the header counts in plain terms:
+    ``working`` (agents working on a plan step), ``steps_working`` / ``steps_in_review`` (steps with an agent or
+    with its work being checked), ``proposed`` (open items the manager has been told about), ``queued`` (open
+    items nobody works on that are about to be), ``open_items``, and ``skipped`` (steps with open items it does
+    not report because somebody is on them, each with the reason in plain words)."""
     from tirith.dispatch import load_state
     state = load_state(home)
+    _sync_switch(home, state)
     own = _own(state)
-    now = now or parse_iso(now_iso()) or datetime.now()
-    started = [{"lane": lane_id, "project": rec["project"], "step": rec["step"], "at": rec["at"]}
-               for lane_id, rec in own["lanes"].items()]
-    listed = {a["id"] for a in agents or []}  # the header counts only what the Agents list shows
-    live = {lane_id for lane_id in _live(own, agents or [], now) if lane_id in listed}
+    agents, planned = agents or [], [p for p in projects or [] if p.get("roadmap")]
+    counts = _counts(own, inbox_mod.requests(home), planned, agents)
     from tirith import diskdiet as diskdiet_mod
-    skipped, queued = [], 0
-    for p in projects or []:
-        for st in (p.get("roadmap") or {}).get("steps", []):
-            if st["status"] != "ready" or st["id"] == plangate_mod.OPS_STEP:
-                continue
-            why = _why_not(own, agents or [], p["id"], st, now)
-            if not why and diskdiet_mod.low(state):
-                why = "it waits for free disk space"
-            if why:
-                skipped.append({"project": p["id"], "step": st["id"], "why": why})
-            else:
-                queued += 1
+    if diskdiet_mod.low(state):
+        counts["skipped"] += [{"project": p, "step": s, "why": "it waits for free disk space"}
+                              for p, s in {tuple(k.split("|")[:2]) for k in candidates(planned, agents)[0]}]
+    steps = {(p["id"], st["id"]) for p in planned for st in p["roadmap"]["steps"]}
+    working = sum(1 for a in agents if a.get("status") == "working" and (a.get("project"), str(a.get("step") or "")) in steps)
     return {"enabled": effective(config, state), "max_parallel": config.autopilot_max_parallel,
-            "working": len(live), "queued": queued,
-            "started": started[-STARTED_SHOWN:], "skipped": skipped,
-            "paused_steps": [{"project": k.partition("|")[0], "step": k.partition("|")[2], "at": v["at"]}
-                             for k, v in own["paused"].items()]}
+            "working": working, "started": [], "paused_steps": [], **counts}

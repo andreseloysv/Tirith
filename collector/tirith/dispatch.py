@@ -405,13 +405,16 @@ def run(home: Path, config: Config, now: datetime, *, agents: list[dict], lanes:
             else:
                 own = req["kind"] in ("finish", "plan-edit") or req["kind"] in inbox_mod.PLAN_KINDS
                 done = "answered" if own else "manager"
-                if not own and req["kind"] != "chat":  # a chat message lives in the chat thread, not the flows
+                if req["kind"] == inbox_mod.PROPOSAL:  # Tirith's own request: the autopilot recorded its flow
+                    pass
+                elif not own and req["kind"] != "chat":  # a chat message lives in the chat thread, not the flows
                     _flow(home, "owner", "tirith", "request",
                           f"{req['kind'].capitalize()} on {_step_name(req)}: {_short(req['text'])}", req, now_iso(now))
             if done:
                 state["handled"][rid] = done
                 changed = True
-        if req["manager_pending"] and _age_s(req, now) >= ESCALATE_AFTER_S and rid not in state["escalated"]:
+        if req["manager_pending"] and req["kind"] != inbox_mod.PROPOSAL \
+                and _age_s(req, now) >= ESCALATE_AFTER_S and rid not in state["escalated"]:  # a proposal is the self-check's
             escalate(home, req, notify, now_iso(now))
             state["escalated"][rid] = now_iso(now)
             changed = True

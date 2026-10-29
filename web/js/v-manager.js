@@ -18,7 +18,7 @@
   ui.chatLast = ui.chatLast || '';   /* the last message sent from here (Up arrow brings it back) */
   ui.chatJump = ui.chatJump || 0;    /* index of the last item "Jump to next" went to */
   ui.chatStick = true;               /* scroll to the newest message after the next render */
-  var lastState = null, SEND_WAIT = 30000, PENDING_MAX = 6 * 3600 * 1000, KINDS = { chat: 1, ask: 1, finish: 1 };
+  var lastState = null, SEND_WAIT = 30000, PENDING_MAX = 6 * 3600 * 1000, KINDS = { chat: 1, ask: 1, finish: 1, 'autopilot-proposal': 1 };
 
   /* drafts and unconfirmed sends survive a refresh: localStorage, keyed by project, never trusted to work */
   var DRAFT_KEY = 'tirith.chat.draft.', UNSENT_KEY = 'tirith.chat.unsent';
@@ -81,8 +81,12 @@
     rows.forEach(function (r) {
       if (!KINDS[r.kind]) return;
       var ctx = ctxOf(r);
-      out.push({ side: 'me', text: r.kind === 'finish' ? 'Finish this step' : r.text, at: r.at, ctx: ctx, req: r.id, project: r.project, pics: r.attachments,
-        queued: busy && r.kind === 'chat' && pending(r) && !inTurn(state, r.id) });
+      if (r.kind === 'autopilot-proposal') {   /* Tirith's own request to the manager: one short line, not an owner message */
+        out.push({ side: 'mgr', text: String(r.text || '').split('\n')[0], at: r.at, ctx: 'Autopilot' + (r.project ? ' · ' + T.proj(r.project) : ''), req: r.id, project: r.project });
+      } else {
+        out.push({ side: 'me', text: r.kind === 'finish' ? 'Finish this step' : r.text, at: r.at, ctx: ctx, req: r.id, project: r.project, pics: r.attachments,
+          queued: busy && r.kind === 'chat' && pending(r) && !inTurn(state, r.id) });
+      }
       var run = T.liveForRequest ? T.liveForRequest(state, r.id) : null;   /* what the manager does for it, like the CLI */
       if (run) out.push({ side: 'live', row: run, at: new Date((T.ms(r.at) || 0) + 1).toISOString(), req: r.id });
       (r.answers || []).forEach(function (a) {
