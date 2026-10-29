@@ -56,6 +56,7 @@
     if (T.filter.project || (common && common === pid)) return '';
     return T.projectName(state, pid);
   };
+  T.rawState = function () { return raw; };
   T.dot = function (cls, title) { return '<i class="dot ' + cls + '" title="' + esc(title || cls) + '"></i>'; };
   T.logBox = function (lines) {
     var t = (lines || []).map(T.stripAnsi).join('\n').replace(/\s+$/, '');
@@ -183,7 +184,7 @@
     if (T.plan) h += T.plan(s);
     if (w.length) h += '<section><h2>Needs you</h2><ul class="needs card">' + w.map(function (x) {
       var pn = T.proj(x.project);
-      return '<li>' + T.dot('amber', 'waiting for you') + '<span class="t">' + (x.link ? '<a href="' + esc(x.link) + '" target="_blank" rel="noopener">' + esc(x.text) + '</a>' : esc(x.text)) + '</span><span class="m">' + esc(pn) + '</span><span class="r">' + T.agoSpan(x.since) + '</span></li>';
+      return '<li>' + T.dot('amber', 'waiting for you') + '<span class="t">' + (x.link ? '<a href="' + esc(x.link) + '" target="_blank" rel="noopener">' + esc(x.text) + '</a>' : T.mdInline(x.text)) + '</span><span class="m">' + esc(pn) + '</span><span class="r">' + T.agoSpan(x.since) + '</span></li>';
     }).join('') + '</ul></section>';
     h += '<section><h2>Running pipelines <span class="n">' + runs.length + '</span></h2>' + (runs.length ? '<div class="grid2">' + runs.map(function (p) {
       var st = p.stages || [], cur = T.curStage(p);
@@ -209,7 +210,7 @@
     var total = items.length; items = items.slice(0, 80);
     return '<section><h2>Activity <span class="n">' + total + '</span></h2>' + (items.length ? '<ul class="feed">' + items.map(function (x) {
       return '<li><span class="when">' + esc(T.clockTime(x.at)) + '</span><span class="who"><i class="dot" style="background:' + (T.KIND[x.kind] || '#9ca3af') + '" title="' + esc(x.kind) + '"></i>' +
-        esc(x.fromName) + ' <span class="arr">→</span> ' + esc(x.toName) + '</span><span class="txt">' + esc(x.text) + '</span></li>';
+        esc(x.fromName) + ' <span class="arr">→</span> ' + esc(x.toName) + '</span><span class="txt mdt">' + T.mdBox(x.text, 'm:' + x.fromId + x.at) + '</span></li>';
     }).join('') + '</ul>' : T.empty('No activity in this session')) + '</section>';
   }
   T.views.overview = overview;
@@ -235,6 +236,7 @@
     var el = document.getElementById('view'); el.className = 'view v-' + T.filter.view;
     (T.views[T.filter.view] || overview)(state, el);
     restore(sc);
+    T.mdFit(el);
     if (document.querySelector('.canvas')) applyZoom();
     if (ui.reveal) {
       var rn = [].filter.call(document.querySelectorAll('.fnode'), function (x) { return x.getAttribute('data-id') === ui.reveal; })[0];
@@ -269,6 +271,7 @@
       else if (act === 'logf') ui.logFilter = key;
       else if (act === 'logsys') ui.logSys[key] = !ui.logSys[key];
       else if (act === 'logopen') ui.logOpen[key] = !ui.logOpen[key];
+      else if (act === 'mdopen') T.mdToggle(key);
       else if (act === 'mode') { T.setFilter('mode', b.getAttribute('data-v')); return; }
       else if (act === 'zoom-in') { ui.fit = false; ui.zoom = Math.min(2, Math.round((ui.zoom + .1) * 10) / 10); }
       else if (act === 'zoom-out') { ui.fit = false; ui.zoom = Math.max(.3, Math.round((ui.zoom - .1) * 10) / 10); }

@@ -1,0 +1,151 @@
+/* Tirith web UI - small, safe markdown renderer for agent-written text. No libraries.
+   All HTML in the source is escaped first; the only tags that come out are the ones built here, and
+   links keep only http, https and file URLs. T.md(text) -> block HTML, T.mdInline(text) -> inline HTML,
+   T.mdBox(text, key) -> block HTML clamped to ~8 lines with a fade and "Show all" (see main.js T.mdFit). */
+(function () {
+  var T = (typeof window !== 'undefined' ? (window.T = window.T || {}) : {});
+  var CLAMP_LINES = 8;
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  /* ---------- inline ---------- */
+  function inline(src) {
+    var hold = [];
+    function keep(html) { hold.push(html); return '\u0001' + (hold.length - 1) + '\u0002'; }
+    var s = esc(String(src == null ? '' : src).replace(/[\u0001\u0002]/g, ''));
+    s = s.replace(/(`+)([^`]|[^`][\s\S]*?[^`])\1(?!`)/g, function (m, t, code) { return keep('<code>' + code.trim() + '</code>'); });
+    s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, function (m, label, url) {
+      return /^(https?:|file:)/i.test(url) ? keep('<a href="' + url + '" target="_blank" rel="noopener">' + label + '</a>') : m;
+    });
+    s = s.replace(/(^|[\s(])((?:https?|file):\/\/[^\s<]*[^\s<.,;:!?)\]'"&])/gi, function (m, pre, url) {
+      return pre + keep('<a href="' + url + '" target="_blank" rel="noopener">' + url + '</a>');
+    });
+    s = s.replace(/\*\*(?=\S)([\s\S]*?\S)\*\*/g, '<strong>$1</strong>')
+      .replace(/(^|[^\w])__(?=\S)([\s\S]*?\S)__(?!\w)/g, '$1<strong>$2</strong>')
+      .replace(/~~(?=\S)([\s\S]*?\S)~~/g, '<del>$1</del>')
+      .replace(/(^|[^*\w])\*(?=[^\s*])([^*]*?[^\s*])\*(?![*\w])/g, '$1<em>$2</em>')
+      .replace(/(^|[^_\w])_(?=[^\s_])([^_]*?[^\s_])_(?![_\w])/g, '$1<em>$2</em>');
+    /* a placeholder can sit inside another one's label (a code span in a link), so unwrap until none is left */
+    for (var i = 0; i < 4 && /\u0001\d+\u0002/.test(s); i++) {
+      s = s.replace(/\u0001(\d+)\u0002/g, function (m, n) { return hold[+n] != null ? hold[+n] : ''; });
+    }
+    return s;
+  }
+
+  /* ---------- blocks ---------- */
+  var RE = {
+    fence: /^\s*(```+|~~~+)\s*([\w+-]*)\s*$/,
+    heading: /^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$/,
+    hr: /^\s{0,3}([-*_])(?:\s*\1){2,}\s*$/,
+    quote: /^\s{0,3}>\s?(.*)$/,
+    item: /^(\s*)([-*+]|\d+[.)])\s+(.*)$/,
+    tableSep: /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/
+  };
+  function cells(line) {
+    var t = line.trim().replace(/^\|/, '').replace(/\|$/, '');
+    return t.split(/(?<!\\)\|/).map(function (c) { return c.trim().replace(/\\\|/g, '|'); });
+  }
+  function startsBlock(line, next) {
+    return RE.fence.test(line) || RE.heading.test(line) || RE.hr.test(line) || RE.quote.test(line) || RE.item.test(line) ||
+      (line.indexOf('|') >= 0 && next != null && line.trim() !== '' && RE.tableSep.test(next) && next.indexOf('-') >= 0 && next.indexOf('|') >= 0);
+  }
+
+  function list(lines, i) {
+    /* items carry their indent; deeper indent nests, a shallower one closes levels */
+    var stack = [], html = '', first = true;
+    function open(ordered, indent) { stack.push({ indent: indent, tag: ordered ? 'ol' : 'ul', open: false }); html += '<' + (ordered ? 'ol' : 'ul') + '>'; }
+    function closeItem() { var top = stack[stack.length - 1]; if (top && top.open) { html += '</li>'; top.open = false; } }
+    function closeList() { closeItem(); html += '</' + stack.pop().tag + '>'; }
+    for (; i < lines.length; i++) {
+      var m = RE.item.exec(lines[i]);
+      if (!m) {
+        /* an indented continuation line belongs to the open item */
+        if (stack.length && lines[i].trim() !== '' && /^\s{2,}\S/.test(lines[i]) && !startsBlock(lines[i].trim(), null)) { html += '<br>' + inline(lines[i].trim()); continue; }
+        break;
+      }
+      var indent = m[1].replace(/\t/g, '    ').length, ordered = /\d/.test(m[2]);
+      while (stack.length && indent < stack[stack.length - 1].indent - 1) closeList();
+      var top = stack[stack.length - 1];
+      if (!top || indent > top.indent + 1) open(ordered, indent);
+      else closeItem();
+      top = stack[stack.length - 1];
+      var text = m[3], task = /^\[([ xX])\]\s+(.*)$/.exec(text), box = '';
+      if (task) { box = '<span class="mdchk' + (task[1] === ' ' ? '' : ' on') + '" aria-hidden="true"></span>'; text = task[2]; }
+      html += '<li' + (task ? ' class="mdtask' + (task[1] === ' ' ? '' : ' done') + '"' : '') + '>' + box + inline(text);
+      top.open = true;
+    }
+    while (stack.length) closeList();
+    return { html: html, next: i };
+  }
+
+  function blocks(src) {
+    var lines = String(src == null ? '' : src).replace(/\r\n?/g, '\n').split('\n'), out = '', i = 0;
+    while (i < lines.length) {
+      var line = lines[i], m;
+      if (line.trim() === '') { i++; continue; }
+      if ((m = RE.fence.exec(line))) {
+        var buf = [], fence = m[1].charAt(0), n = m[1].length;
+        for (i++; i < lines.length && !(new RegExp('^\\s*' + (fence === '`' ? '`' : '~') + '{' + n + ',}\\s*$').test(lines[i])); i++) buf.push(lines[i]);
+        i++;
+        out += '<pre class="mdpre"><code>' + esc(buf.join('\n')) + '</code></pre>';
+        continue;
+      }
+      if ((m = RE.heading.exec(line))) {
+        var lv = Math.min(m[1].length, 4);
+        out += '<div class="mdh mdh' + lv + '" role="heading" aria-level="' + (lv + 2) + '">' + inline(m[2]) + '</div>';
+        i++; continue;
+      }
+      if (RE.hr.test(line)) { out += '<hr>'; i++; continue; }
+      if (RE.quote.test(line)) {
+        var q = [];
+        while (i < lines.length && RE.quote.test(lines[i])) { q.push(RE.quote.exec(lines[i])[1]); i++; }
+        out += '<blockquote>' + blocks(q.join('\n')) + '</blockquote>';
+        continue;
+      }
+      if (line.indexOf('|') >= 0 && i + 1 < lines.length && lines[i + 1].indexOf('|') >= 0 && lines[i + 1].indexOf('-') >= 0 && RE.tableSep.test(lines[i + 1])) {
+        var head = cells(line), al = cells(lines[i + 1]).map(function (c) { return /^:-*:$/.test(c) ? 'center' : /-:$/.test(c) ? 'right' : ''; });
+        var th = head.map(function (c, k) { return '<th' + (al[k] ? ' style="text-align:' + al[k] + '"' : '') + '>' + inline(c) + '</th>'; }).join('');
+        var rows = '';
+        for (i += 2; i < lines.length && lines[i].trim() !== '' && lines[i].indexOf('|') >= 0; i++) {
+          rows += '<tr>' + cells(lines[i]).slice(0, head.length).map(function (c, k) { return '<td' + (al[k] ? ' style="text-align:' + al[k] + '"' : '') + '>' + inline(c) + '</td>'; }).join('') + '</tr>';
+        }
+        out += '<div class="mdtbl"><table><thead><tr>' + th + '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+        continue;
+      }
+      if (RE.item.test(line)) { var l = list(lines, i); out += l.html; i = l.next; continue; }
+      var para = [];
+      while (i < lines.length && lines[i].trim() !== '' && (para.length === 0 || !startsBlock(lines[i], lines[i + 1]))) { para.push(lines[i].trim()); i++; }
+      out += '<p>' + para.map(inline).join('<br>') + '</p>';
+    }
+    return out;
+  }
+
+  var md = function (text) { var h = blocks(text); return h ? '<div class="md">' + h + '</div>' : ''; };
+  var mdInline = function (text) { return '<span class="md mdi">' + inline(String(text == null ? '' : text).replace(/\s*\n\s*/g, ' ')) + '</span>'; };
+
+  /* Rendered first, clamped with CSS after: nothing is cut inside a markdown construct. The "Show all"
+     button stays hidden until T.mdFit finds the content taller than the clamp. */
+  var open = {};
+  var mdBox = function (text, key) {
+    var html = md(text);
+    if (!html) return '';
+    var k = String(key || ''), on = !!open[k];
+    return '<div class="mdc' + (on ? ' open' : '') + '" data-mdk="' + esc(k) + '" style="--mdl:' + CLAMP_LINES + '">' + html +
+      '<button class="link mdmore" data-act="mdopen" data-key="' + esc(k) + '" aria-expanded="' + on + '">' + (on ? 'Show less' : 'Show all') + '</button></div>';
+  };
+  /* mark the boxes whose content is taller than the clamp so their button shows */
+  var mdFit = function (root) {
+    [].forEach.call((root || document).querySelectorAll('.mdc'), function (b) {
+      var body = b.firstElementChild;
+      b.classList.toggle('over', !b.classList.contains('open') ? body.scrollHeight > body.clientHeight + 2 : true);
+    });
+  };
+  var mdToggle = function (key) { open[key] = !open[key]; };
+
+  T.md = md; T.mdInline = mdInline; T.mdBox = mdBox; T.mdFit = mdFit; T.mdToggle = mdToggle;
+  if (typeof module !== 'undefined' && module.exports) module.exports = { md: md, mdInline: mdInline, mdBox: mdBox };
+})();

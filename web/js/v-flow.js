@@ -60,7 +60,7 @@
       var st = T.agentState(a);
       ov = '<i class="dot ' + (st === 'active' ? 'green pulse' : 'grey') + '" title="' + st + '"></i>' + ov;
       if (open) body = T.activity(a, { clock: true });
-      else if (a.goal) sub = '<span class="gl" title="' + esc(a.goal) + '">' + esc(a.goal) + '</span>';
+      else if (a.goal) sub = '<span class="gl" title="' + esc(a.goal) + '">' + T.mdInline(a.goal) + '</span>';
     } else if (/^pipeline:/.test(id)) {
       p = (s.pipelines || []).filter(function (x) { return x.run === id.slice(9); })[0];
       if (p && open) body = pipelinePanel(p);
@@ -127,7 +127,7 @@
     if (ui.drawer === 'edge') {
       var e = g.edges.filter(function (x) { return x.key === ui.edge; })[0];
       if (e) drawer = T.drawer(g.nodes[e.a].name + ' ↔ ' + g.nodes[e.b].name, '<ul class="feed">' + e.msgs.map(function (m) {
-        return '<li><span class="when">' + esc(T.clockTime(m.at)) + '</span><span class="who"><i class="dot" style="background:' + (T.KIND[m.kind] || '#9ca3af') + '" title="' + esc(m.kind) + '"></i>' + esc(m.fromName) + ' <span class="arr">→</span> ' + esc(m.toName) + '</span><span class="txt">' + esc(m.text) + '</span></li>';
+        return '<li><span class="when">' + esc(T.clockTime(m.at)) + '</span><span class="who"><i class="dot" style="background:' + (T.KIND[m.kind] || '#9ca3af') + '" title="' + esc(m.kind) + '"></i>' + esc(m.fromName) + ' <span class="arr">→</span> ' + esc(m.toName) + '</span><span class="txt mdt">' + T.mdBox(m.text, 'e:' + m.fromId + m.at) + '</span></li>';
       }).join('') + '</ul>');
     }
     el.innerHTML = '<div class="fv">' + T.canvas(inner, bar) + drawer + '</div>';
