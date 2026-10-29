@@ -249,7 +249,8 @@ def decide(agent: str, event: dict, payload, home: Path | None = None) -> int:
             home, violation, ts=event.get("ts") or now_iso(), agent=agent, lane=event.get("lane"),
             session=event.get("session"), project=event.get("project"), tool=event.get("tool"),
             cwd=fields.get("cwd") or event.get("cwd"))
-        print(violation.message(), file=sys.stderr)
+        print(gates.taught(violation) if violation.action == "block" else violation.message(), file=sys.stderr)
+        gates.note_deny(home, violation, event.get("lane"), event.get("project"))
     if any(v.action == "block" for v in found):
         return 2
     if agent == "anthropic" and event.get("lane") and event.get("tool") == "Bash":
