@@ -419,6 +419,32 @@ automatic review before the report is posted), the autoreview "merge it?" item a
 - On the first cycle of the collector every open row of `waits.jsonl` is re-checked (`ownergate.migrate`):
   one with an old reason key stays and gets its `why_owner`; the others are closed
   (`done_reason: "moved to the manager queue"`) and queued as `agent-can-do` (or dropped when out of plan).
+### Concrete how-to (`tirith/howto.py`)
+
+An owner item may carry a `howto` (`tirith wait add ... --howto '<json>|<file>'`, `add_owner_item(howto=...)`),
+stored on the `waits.jsonl` row and shown in `state.waiting_on_you[].howto`:
+
+```json
+{"steps": [{"text": "…", "url": "https://…", "terminal": "xcrun notarytool store-credentials …"}],
+ "done_check": "xcrun notarytool history --keychain-profile tirith-notary",
+ "already_done": ["Developer ID certificate exists (Team AB12CD34EF)"]}
+```
+
+- **Validation (in `ownergate.admit`).** No placeholder (`<TEAMID>`, `YOUR_…`, `xxx`, `{{…}}`, `[your …]`, `TODO`,
+  `...`) in a step, in the item text of an item with steps, or in a command; every `terminal` and the `done_check`
+  must parse as a shell line as they are; `url` is a full `http(s)://` or `tirith://` address. A how-to that fails
+  does not reach the owner: a manager queue item `kind: "make-concrete"`, text `make it concrete: look up …`.
+- **UI.** A step with `url` is an "Open page" link; a step with `terminal` is an "Open in Terminal" button (Tauri
+  command `open_in_terminal(wait_id, step)`: the app reads the command from `waits.jsonl`, never from the page,
+  and runs `osascript` → `tell application "Terminal" to do script …`, so a password is typed only into the
+  Terminal prompt). Without the app the button is "Copy command". `already_done` shows as ✓ facts.
+- **Done check.** Each collector cycle runs `howto.check_open`: for every open item with a `done_check` not run in
+  the last 3 minutes, it runs the command (30 s limit); exit 0 closes the item (`done_reason: "howto-done"`, shown
+  in "Answered" as "✓ Done: the check passed") and adds an `alert` flow `tirith → manager`. Last run per item in
+  `<home>/howto-checks.json`.
+- **Prompts.** `howto.RULES` is in the manager rules, the plan-refresh brief and the verification brief: look up
+  every fact the machine can tell, skip steps already done, pre-fill commands, never ask for a secret in chat.
+
 - The plan-refresh brief and the verification brief tell the lane this list, that a check an agent can do
   is never an owner check, and that out-of-plan items are never listed.
 - `asks.is_owner_item` (the collector's last gate) also requires a valid `why_owner`; the guard reminder is an

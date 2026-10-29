@@ -22,6 +22,7 @@ from pathlib import Path
 
 from tirith import activity as activity_mod
 from tirith import asks as asks_mod
+from tirith import howto as howto_mod
 from tirith import ownergate as ownergate_mod
 from tirith import brain as brain_mod
 from tirith.guardwrap import default_words, verify_guard
@@ -873,6 +874,7 @@ class Collector:
                 **({"why_owner": row["why_owner"], "why_detail": row.get("why_detail"),
                     "reason_tag": row.get("reason_tag") or asks_mod.reason_tag(row["why_owner"], row.get("why_detail"))}
                    if asks_mod.why_key(row.get("why_owner")) else {}),
+                **({"howto": row["howto"]} if isinstance(row.get("howto"), dict) else {}),
             }
             reply = replied.get(wait["id"])
             actions_mod.attach_last_runs(self.home, [wait])
@@ -883,6 +885,10 @@ class Collector:
             elif row.get("done_at"):
                 if row.get("done_reason") == actions_mod.PASSED_REASON:
                     answered.append(self._passed_wait(wait, str(row["done_at"])))
+                elif row.get("done_reason") == howto_mod.DONE_REASON:
+                    answered.append({**wait, "status": "answered", "answer": {
+                        "at": row["done_at"], "value": howto_mod.DONE_REASON, "label": "✓ Done: the check passed",
+                        "text": ""}})
                 continue
             elif actions_mod.all_passed(wait["actions"]):
                 # every Run action passed: the item closes by itself (a rule in code, not a habit)
@@ -1051,6 +1057,7 @@ class Collector:
         if not self._owner_items_checked:  # once at startup: every open owner item passes the gate again
             self._owner_items_checked = True
             ownergate_mod.migrate(self.home, now_iso(now))
+        howto_mod.check_open(self.home, now)  # an owner item whose done_check passes closes by itself
         lanes = read_lanes(self.home)
         close_dead_lanes(self.home, lanes, now)
         events = [e for e in read_jsonl(self.home / "events.jsonl") if e.get("kind") not in ("hook", "violation", "git-hook")]
