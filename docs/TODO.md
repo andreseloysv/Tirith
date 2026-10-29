@@ -184,6 +184,18 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Crear etapas y reglas pidiéndolo (chat o formulario «+ Etapa» / «+ Regla»); la UI se actualiza sola.
 - [x] Aviso con un clic cuando las reglas no están activas en la máquina.
 
+## 14. Manager de guardia, chat y piloto automático
+
+- [x] Manager que vive dentro de Tirith (`managerd`): arranca de guardia, y sus fallos van a la cola del manager.
+- [x] Los avisos de «Tu turno» llegan al chat como mensajes del manager; solo se muestra lo que el manager se niega a hacer.
+- [x] Un mensaje del chat nunca se pierde; el indicador de escritura dice la verdad; fotos en el chat del manager.
+- [x] Piloto automático con cuentas verdaderas (agentes trabajando / en cola); pausa los pasos que no convergen.
+- [x] Añadir un proyecto desde la app con selector de carpeta.
+- [x] Editar, borrar o añadir elementos del Plan con un botón; el plan se vuelve a comprobar después.
+- [x] `state.json` pequeño y rápido (detalle del agente bajo demanda); `tirith` se encuentra fuera de una terminal.
+- [x] La app de escritorio muestra la web actual sin recompilar y arranca el collector aun abierta desde Finder.
+- [ ] Comprobar en pantalla que el piloto automático y la lista «Agents» coinciden (el dueño vio «5 agents working» sin agentes).
+
 ## Orden
 
 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9, y 10 en cuanto se pidió.
