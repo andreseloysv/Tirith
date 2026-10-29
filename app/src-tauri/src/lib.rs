@@ -1369,7 +1369,7 @@ pub fn run() {
             chat_answer,
             chat_stop
         ])
-        .setup(|app| {
+        .setup(move |app| {
             let url = match &live {
                 Some(root) => {
                     spawn_web_watch(app.handle().clone(), root.clone());
