@@ -1228,6 +1228,17 @@ fn attachment_dropped(state: State<'_, App>, paths: Vec<String>) -> Vec<Value> {
     paths.iter().take(ATTACH_MAX).map(|p| dropped_file(p, &dropped)).collect()
 }
 
+/// The paperclip in the app: the native file picker (a web view's own `<input type=file>` is not reliable in
+/// every platform's web view), then the chosen files read for the composer like a drop. The paths come from
+/// the picker in Rust, never from the page. An empty list is a cancelled picker.
+#[tauri::command]
+async fn attachment_pick(app: AppHandle) -> Vec<Value> {
+    use tauri_plugin_dialog::DialogExt;
+    let picked = app.dialog().file().set_title("Attach files").blocking_pick_files();
+    let paths: Vec<PathBuf> = picked.unwrap_or_default().into_iter().filter_map(|f| f.into_path().ok()).collect();
+    paths.iter().take(ATTACH_MAX).map(|p| dropped_file(&p.to_string_lossy(), &paths)).collect()
+}
+
 /// The attachments of a request as stored: at most 6, each `{path, type, size, width, height}` (and `name`)
 /// with the path inside `root` and no `..` and a well-formed type; anything else is refused. Only the four
 /// picture types keep a width and height.
@@ -2121,9 +2132,8 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(App::default())
         .on_window_event(|window, event| {
-            // with the native drag-drop handler on, the webview gets the drop as `tauri://drag-drop` (paths and
-            // position); remember what was dropped. The main window turns it off below, so there the page gets
-            // the HTML5 drop with the files instead and this never fires.
+            // the native drag-drop handler is on, so the webview gets the drop as `tauri://drag-drop` (paths and
+            // position); remember what was dropped, the only paths `attachment_dropped` will read.
             if let WindowEvent::DragDrop(DragDropEvent::Drop { paths, .. }) = event {
                 *window.state::<App>().dropped.lock().unwrap() = paths.clone();
             }
@@ -2151,6 +2161,7 @@ pub fn run() {
             inbox_add,
             attachment_save,
             attachment_dropped,
+            attachment_pick,
             inbox_reply,
             run_action,
             open_in_terminal,
@@ -2168,8 +2179,6 @@ pub fn run() {
             WebviewWindowBuilder::new(app, "main", url)
                 .title("Tirith")
                 .inner_size(1440.0, 900.0)
-                // The native drag-drop handler swallows file drops; off, the page gets HTML5 `drop` with files.
-                .disable_drag_drop_handler()
                 .build()?;
             start_collector(&app.state::<App>());
             spawn_collector_supervisor(app.handle().clone());
