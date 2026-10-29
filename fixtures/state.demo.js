@@ -199,6 +199,177 @@ window.TIRITH_STATE = {
             "agents": []
           }
         ]
+      },
+      "setup": {
+        "manifest": "/Users/owner/DEVELOP/Chromasol/tirith.toml",
+        "check": {
+          "ok": true,
+          "problems": []
+        },
+        "pipelines": [
+          {
+            "id": "android-release",
+            "name": "Android release",
+            "stages": [
+              {
+                "name": "build",
+                "kind": "build",
+                "run": "./gradlew assembleRelease",
+                "last": {
+                  "status": "passed",
+                  "at": "2026-10-28T19:30:34Z",
+                  "duration_s": 34,
+                  "run": "android-release#7"
+                }
+              },
+              {
+                "name": "tests",
+                "kind": "test",
+                "run": "./gradlew test",
+                "last": {
+                  "status": "passed",
+                  "at": "2026-10-28T19:31:20Z",
+                  "duration_s": 46,
+                  "run": "android-release#7"
+                }
+              },
+              {
+                "name": "sign",
+                "kind": null,
+                "run": "./scripts/sign.sh",
+                "last": {
+                  "status": "running",
+                  "at": "2026-10-28T19:31:47Z",
+                  "duration_s": null,
+                  "run": "android-release#7"
+                }
+              },
+              {
+                "name": "store",
+                "kind": "deploy",
+                "run": "./scripts/upload.sh",
+                "last": null
+              }
+            ]
+          }
+        ],
+        "hooks": [
+          {
+            "event": "pre-commit",
+            "run": "./gradlew lintRelease",
+            "last": {
+              "status": "passed",
+              "at": "2026-10-28T18:50:00Z",
+              "duration_s": 12,
+              "run": "git-hooks#9"
+            }
+          }
+        ],
+        "rules": [
+          {
+            "id": "subagent-tool",
+            "label": "Sub-agent tool",
+            "source": "built-in",
+            "enforced_by": [
+              "hook"
+            ],
+            "active": false,
+            "description": "Blocks the agent's internal sub-agent tool; sub-agents start with tirith lane run."
+          },
+          {
+            "id": "agent-cli",
+            "label": "Agent without lane run",
+            "source": "built-in",
+            "enforced_by": [
+              "hook",
+              "shim"
+            ],
+            "active": false,
+            "description": "Blocks starting an agent CLI outside tirith lane run."
+          },
+          {
+            "id": "no-verify",
+            "label": "Skipped git hooks",
+            "source": "built-in",
+            "enforced_by": [
+              "hook"
+            ],
+            "active": false,
+            "description": "Blocks git commit -n and --no-verify."
+          },
+          {
+            "id": "hooks-path",
+            "label": "Changed hooks path",
+            "source": "built-in",
+            "enforced_by": [
+              "hook"
+            ],
+            "active": false,
+            "description": "Blocks changing core.hooksPath."
+          },
+          {
+            "id": "git-hooks",
+            "label": "Edited git hooks",
+            "source": "built-in",
+            "enforced_by": [
+              "hook",
+              "git"
+            ],
+            "active": true,
+            "description": "Blocks editing or removing files under .git/hooks."
+          },
+          {
+            "id": "raw-stage",
+            "label": "Raw pipeline stage",
+            "source": "built-in",
+            "enforced_by": [
+              "hook"
+            ],
+            "active": false,
+            "description": "Blocks running a tirith.toml stage by hand; use tirith run --stage."
+          },
+          {
+            "id": "lane-brief",
+            "label": "Lane without brief",
+            "source": "built-in",
+            "enforced_by": [
+              "lane run"
+            ],
+            "active": true,
+            "description": "tirith lane run needs a non-empty --brief file."
+          },
+          {
+            "id": "project-check",
+            "label": "Project check failing",
+            "source": "built-in",
+            "enforced_by": [
+              "lane run"
+            ],
+            "active": true,
+            "description": "tirith lane run refuses while tirith check fails for the project."
+          },
+          {
+            "id": "commit-guard",
+            "label": "Commit guard",
+            "source": "built-in",
+            "enforced_by": [
+              "git"
+            ],
+            "active": true,
+            "description": "The git hooks that run the project's stages and block bad commits."
+          }
+        ],
+        "gates_active": false,
+        "gates_problems": [
+          "anthropic: tirith hooks are not in its user settings file",
+          "muse: tirith hooks are not in ~/.config/muse/settings.json"
+        ],
+        "gates_fix": [
+          "tirith hook install --agent anthropic",
+          "tirith hook install --agent muse",
+          "tirith shim install --dir ~/.local/bin"
+        ],
+        "pending": []
       }
     },
     {
@@ -469,6 +640,194 @@ window.TIRITH_STATE = {
             "agents": []
           }
         ]
+      },
+      "setup": {
+        "manifest": "/Users/owner/DEVELOP/Tirith/tirith.toml",
+        "check": {
+          "ok": true,
+          "problems": []
+        },
+        "pipelines": [
+          {
+            "id": "ci",
+            "name": "CI",
+            "stages": [
+              {
+                "name": "build",
+                "kind": "build",
+                "run": "make build",
+                "last": {
+                  "status": "passed",
+                  "at": "2026-10-28T19:38:00Z",
+                  "duration_s": 21,
+                  "run": "ci#12"
+                }
+              },
+              {
+                "name": "test",
+                "kind": "test",
+                "run": "cd collector && uv run -q pytest -q",
+                "last": {
+                  "status": "passed",
+                  "at": "2026-10-28T19:38:40Z",
+                  "duration_s": 40,
+                  "run": "ci#12"
+                }
+              },
+              {
+                "name": "ship",
+                "kind": "deploy",
+                "run": "make ship",
+                "last": null
+              }
+            ]
+          }
+        ],
+        "hooks": [
+          {
+            "event": "pre-commit",
+            "run": "make lint",
+            "last": {
+              "status": "passed",
+              "at": "2026-10-28T19:21:00Z",
+              "duration_s": 3,
+              "run": "git-hooks#4"
+            }
+          },
+          {
+            "event": "pre-push",
+            "run": "make test",
+            "last": {
+              "status": "failed",
+              "at": "2026-10-28T17:02:00Z",
+              "duration_s": 44,
+              "run": "git-hooks#3"
+            }
+          }
+        ],
+        "rules": [
+          {
+            "id": "subagent-tool",
+            "label": "Sub-agent tool",
+            "source": "built-in",
+            "enforced_by": [
+              "hook"
+            ],
+            "active": false,
+            "description": "Blocks the agent's internal sub-agent tool; sub-agents start with tirith lane run."
+          },
+          {
+            "id": "agent-cli",
+            "label": "Agent without lane run",
+            "source": "built-in",
+            "enforced_by": [
+              "hook",
+              "shim"
+            ],
+            "active": false,
+            "description": "Blocks starting an agent CLI outside tirith lane run."
+          },
+          {
+            "id": "no-verify",
+            "label": "Skipped git hooks",
+            "source": "built-in",
+            "enforced_by": [
+              "hook"
+            ],
+            "active": false,
+            "description": "Blocks git commit -n and --no-verify."
+          },
+          {
+            "id": "hooks-path",
+            "label": "Changed hooks path",
+            "source": "built-in",
+            "enforced_by": [
+              "hook"
+            ],
+            "active": false,
+            "description": "Blocks changing core.hooksPath."
+          },
+          {
+            "id": "git-hooks",
+            "label": "Edited git hooks",
+            "source": "built-in",
+            "enforced_by": [
+              "hook",
+              "git"
+            ],
+            "active": true,
+            "description": "Blocks editing or removing files under .git/hooks."
+          },
+          {
+            "id": "raw-stage",
+            "label": "Raw pipeline stage",
+            "source": "built-in",
+            "enforced_by": [
+              "hook"
+            ],
+            "active": false,
+            "description": "Blocks running a tirith.toml stage by hand; use tirith run --stage."
+          },
+          {
+            "id": "lane-brief",
+            "label": "Lane without brief",
+            "source": "built-in",
+            "enforced_by": [
+              "lane run"
+            ],
+            "active": true,
+            "description": "tirith lane run needs a non-empty --brief file."
+          },
+          {
+            "id": "project-check",
+            "label": "Project check failing",
+            "source": "built-in",
+            "enforced_by": [
+              "lane run"
+            ],
+            "active": true,
+            "description": "tirith lane run refuses while tirith check fails for the project."
+          },
+          {
+            "id": "commit-guard",
+            "label": "Commit guard",
+            "source": "built-in",
+            "enforced_by": [
+              "git"
+            ],
+            "active": true,
+            "description": "The git hooks that run the project's stages and block bad commits."
+          },
+          {
+            "id": "no-force-push",
+            "label": "no-force-push",
+            "source": "tirith.toml",
+            "enforced_by": [
+              "hook"
+            ],
+            "active": false,
+            "action": "block",
+            "description": "Blocks command git push --force*: force pushes rewrite history. Instead: git push (without --force); ask the owner if history must change"
+          }
+        ],
+        "gates_active": false,
+        "gates_problems": [
+          "anthropic: tirith hooks are not in its user settings file",
+          "muse: tirith hooks are not in ~/.config/muse/settings.json"
+        ],
+        "gates_fix": [
+          "tirith hook install --agent anthropic",
+          "tirith hook install --agent muse",
+          "tirith shim install --dir ~/.local/bin"
+        ],
+        "pending": [
+          {
+            "id": "in-5a41c9e2",
+            "at": "2026-10-28T19:39:00Z",
+            "action": "add-stage",
+            "summary": "add-stage ci/lint: make lint"
+          }
+        ]
       }
     },
     {
@@ -489,7 +848,163 @@ window.TIRITH_STATE = {
         "pipelines_running": 0,
         "flows_24h": 0
       },
-      "roadmap": null
+      "roadmap": null,
+      "setup": {
+        "manifest": "/Users/owner/DEVELOP/RelaGame/tirith.toml",
+        "check": {
+          "ok": false,
+          "problems": [
+            {
+              "rule": "pipeline-coverage",
+              "message": "no single pipeline declares test stage",
+              "line": 1,
+              "fix": "add to one pipeline: [[pipelines.stages]] name = \"test\" run = \"<command>\""
+            }
+          ]
+        },
+        "pipelines": [
+          {
+            "id": "ios-testflight",
+            "name": "iOS TestFlight",
+            "stages": [
+              {
+                "name": "export",
+                "kind": null,
+                "run": "make export",
+                "last": {
+                  "status": "passed",
+                  "at": "2026-10-28T09:04:00Z",
+                  "duration_s": 240,
+                  "run": "ios-testflight#3"
+                }
+              },
+              {
+                "name": "archive",
+                "kind": "build",
+                "run": "make archive",
+                "last": {
+                  "status": "failed",
+                  "at": "2026-10-28T09:12:00Z",
+                  "duration_s": 480,
+                  "run": "ios-testflight#3"
+                }
+              },
+              {
+                "name": "upload",
+                "kind": "deploy",
+                "run": "make upload",
+                "last": null
+              }
+            ]
+          }
+        ],
+        "hooks": [],
+        "rules": [
+          {
+            "id": "subagent-tool",
+            "label": "Sub-agent tool",
+            "source": "built-in",
+            "enforced_by": [
+              "hook"
+            ],
+            "active": false,
+            "description": "Blocks the agent's internal sub-agent tool; sub-agents start with tirith lane run."
+          },
+          {
+            "id": "agent-cli",
+            "label": "Agent without lane run",
+            "source": "built-in",
+            "enforced_by": [
+              "hook",
+              "shim"
+            ],
+            "active": false,
+            "description": "Blocks starting an agent CLI outside tirith lane run."
+          },
+          {
+            "id": "no-verify",
+            "label": "Skipped git hooks",
+            "source": "built-in",
+            "enforced_by": [
+              "hook"
+            ],
+            "active": false,
+            "description": "Blocks git commit -n and --no-verify."
+          },
+          {
+            "id": "hooks-path",
+            "label": "Changed hooks path",
+            "source": "built-in",
+            "enforced_by": [
+              "hook"
+            ],
+            "active": false,
+            "description": "Blocks changing core.hooksPath."
+          },
+          {
+            "id": "git-hooks",
+            "label": "Edited git hooks",
+            "source": "built-in",
+            "enforced_by": [
+              "hook",
+              "git"
+            ],
+            "active": true,
+            "description": "Blocks editing or removing files under .git/hooks."
+          },
+          {
+            "id": "raw-stage",
+            "label": "Raw pipeline stage",
+            "source": "built-in",
+            "enforced_by": [
+              "hook"
+            ],
+            "active": false,
+            "description": "Blocks running a tirith.toml stage by hand; use tirith run --stage."
+          },
+          {
+            "id": "lane-brief",
+            "label": "Lane without brief",
+            "source": "built-in",
+            "enforced_by": [
+              "lane run"
+            ],
+            "active": true,
+            "description": "tirith lane run needs a non-empty --brief file."
+          },
+          {
+            "id": "project-check",
+            "label": "Project check failing",
+            "source": "built-in",
+            "enforced_by": [
+              "lane run"
+            ],
+            "active": true,
+            "description": "tirith lane run refuses while tirith check fails for the project."
+          },
+          {
+            "id": "commit-guard",
+            "label": "Commit guard",
+            "source": "built-in",
+            "enforced_by": [
+              "git"
+            ],
+            "active": true,
+            "description": "The git hooks that run the project's stages and block bad commits."
+          }
+        ],
+        "gates_active": false,
+        "gates_problems": [
+          "anthropic: tirith hooks are not in its user settings file",
+          "muse: tirith hooks are not in ~/.config/muse/settings.json"
+        ],
+        "gates_fix": [
+          "tirith hook install --agent anthropic",
+          "tirith hook install --agent muse",
+          "tirith shim install --dir ~/.local/bin"
+        ],
+        "pending": []
+      }
     },
     {
       "id": "sketchbook",
@@ -2068,6 +2583,23 @@ window.TIRITH_STATE = {
       "text": "",
       "status": "open",
       "answers": []
+    },
+    {
+      "id": "in-5a41c9e2",
+      "at": "2026-10-28T19:39:00Z",
+      "kind": "setup",
+      "project": "tirith",
+      "step": "setup",
+      "from": "owner",
+      "status": "open",
+      "answers": [],
+      "text": "{\"action\": \"add-stage\", \"pipeline\": \"ci\", \"name\": \"lint\", \"run\": \"make lint\"}",
+      "setup": {
+        "action": "add-stage",
+        "pipeline": "ci",
+        "name": "lint",
+        "run": "make lint"
+      }
     }
   ]
 };

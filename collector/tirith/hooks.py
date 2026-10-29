@@ -198,7 +198,7 @@ def decide(agent: str, event: dict, payload, home: Path | None = None) -> int:
             session=event.get("session"), project=event.get("project"), tool=event.get("tool"),
             cwd=fields.get("cwd") or event.get("cwd"))
         print(violation.message(), file=sys.stderr)
-    return 2 if found else 0
+    return 2 if any(v.action == "block" for v in found) else 0
 
 
 def run_hook(home: Path, agent: str, event: str | None, stdin) -> int:

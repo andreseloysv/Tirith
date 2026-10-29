@@ -21,6 +21,9 @@ Message format, one block per violation:
 | `project-check` | `lane run` while `tirith check` fails for the project (exit 3) | `lane run` | fix the listed problems, run `tirith check --project <id>` |
 | (guard) | `lane run` while the commit guard is not intact (exit 3) | `lane run` | `tirith guard install <project>` |
 
+Custom rules: every `[[rules]]` entry of the project's `tirith.toml` is enforced by the same
+`gates.check_call`, with the same message format and `violation` events (`CONTRACT-setup.md`).
+
 `tirith run --stage …`, `tirith lane run … -- <agent>` and commands that merely mention an agent name
 (`echo`, `cat`, file names) are never blocked.
 

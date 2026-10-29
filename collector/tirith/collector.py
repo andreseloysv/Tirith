@@ -26,6 +26,7 @@ from tirith import agentrun as agentrun_mod
 from tirith import flows as flows_mod
 from tirith import github as github_mod
 from tirith import manifest as manifest_mod
+from tirith import setup as setup_mod
 from tirith import roadmap as roadmap_mod
 from tirith import hooks as hooks_mod
 from tirith import inbox as inbox_mod
@@ -851,6 +852,13 @@ class Collector:
                 })
         if guard_dirty:
             write_json_atomic(self.home / "guard-state.json", guard_since)
+        machine = setup_mod.machine_state(self.config)
+        setup_requests = [r for r in inbox_mod.requests(self.home) if r["kind"] == "setup"]
+        for proj_row in projects:
+            guard = proj_row.get("guard") or {}
+            proj_row["setup"] = setup_mod.build(
+                Path(proj_row["folder"]) if proj_row.get("folder") else None, proj_row["id"], machine, runs,
+                setup_requests, bool(guard.get("ok")), list(guard.get("problems") or []), [])
 
         orchestrator = read_json(self.home / "orchestrator.json", {})
         if not isinstance(orchestrator, dict):

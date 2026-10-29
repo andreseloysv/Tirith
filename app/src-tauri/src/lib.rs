@@ -199,15 +199,19 @@ fn clip(text: &str, max: usize) -> &str {
 
 /// Builds the inbox row for a request: `{id, at, kind, project, step, text, from, status}`.
 fn inbox_row(kind: &str, project: &str, step: &str, text: &str, now: SystemTime, salt: u32) -> Result<Value, String> {
-    if kind != "finish" && kind != "ask" {
-        return Err(format!("kind must be finish or ask, not {kind:?}"));
+    if kind != "finish" && kind != "ask" && kind != "setup" {
+        return Err(format!("kind must be finish, ask or setup, not {kind:?}"));
     }
-    let (project, step, text) = (project.trim(), step.trim(), clip(text.trim(), INBOX_TEXT_MAX));
+    let (project, text) = (project.trim(), clip(text.trim(), INBOX_TEXT_MAX));
+    let step = if kind == "setup" && step.trim().is_empty() { "setup" } else { step.trim() };
     if project.is_empty() || step.is_empty() {
         return Err("a request needs a project and a step".into());
     }
     if kind == "ask" && text.is_empty() {
         return Err("a question needs text".into());
+    }
+    if kind == "setup" && !text.starts_with('{') {
+        return Err("a setup request needs its JSON as text".into());
     }
     let d = now.duration_since(UNIX_EPOCH).unwrap_or_default();
     let id = format!("in-{:08x}", (d.as_nanos() as u32) ^ salt.rotate_left(16) ^ std::process::id());
@@ -264,6 +268,8 @@ mod inbox_tests {
         assert!(inbox_row("nope", "demo", "1", "x", UNIX_EPOCH, 0).is_err());
         assert!(inbox_row("finish", "", "1", "", UNIX_EPOCH, 0).is_err());
         assert!(inbox_row("finish", "demo", "1", "", UNIX_EPOCH, 0).is_ok());
+        assert!(inbox_row("setup", "demo", "", "{\"action\":\"add-stage\"}", UNIX_EPOCH, 0).is_ok());
+        assert!(inbox_row("setup", "demo", "", "add a stage", UNIX_EPOCH, 0).is_err());
         let long = "é".repeat(3000);
         let row = inbox_row("ask", "demo", "1", &long, UNIX_EPOCH, 0).unwrap();
         assert!(row["text"].as_str().unwrap().len() <= INBOX_TEXT_MAX);

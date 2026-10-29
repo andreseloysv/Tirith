@@ -47,4 +47,5 @@ Exit 0 when all rules pass, 1 otherwise. One line per problem, written for agent
 | `pipeline-id`, `pipeline-duplicate`, `pipeline-stages`, `stage-name`, `stage-duplicate`, `stage-kind` | shape of pipelines and stages |
 | `pipeline-coverage` | one pipeline declares build, test and deploy (deploy waived by `deploy = "none"`) |
 | `hook-event`, `hook-run` | every `[[hooks]]` entry is valid |
+| `rule-id`, `rule-duplicate`, `rule-match`, `rule-regex`, `rule-paths`, `rule-action`, `rule-message`, `rule-instead`, `rule-shape` | every `[[rules]]` entry is valid (see `CONTRACT-setup.md`) |
 | `commit-guard` | the commit guard is intact (`verify_guard`) |
