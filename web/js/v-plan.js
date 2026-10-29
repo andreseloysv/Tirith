@@ -17,6 +17,7 @@
   ui.planFormErr = ui.planFormErr || {};
   ui.planRefreshAt = ui.planRefreshAt || {}; /* project id -> ms of the "Update the plan" click, until the request shows up */
   ui.inboxEarlier = ui.inboxEarlier || {}; /* "project|step" -> true while its older messages are unfolded */
+  ui.planHist = ui.planHist || {};     /* "project|step" -> true while the step's History is unfolded */
   ui.autoWant = ui.autoWant || null;   /* { on, at }: the switch the owner just sent, until the collector shows it */
   var lastState = null, LAUNCH_WAIT = 90000, PEND_WAIT = 10000, ESCALATE = 120, INSTALL = 'tirith url install';
 
@@ -202,7 +203,7 @@
       h += '<div class="iask"><input class="iin" type="text" data-act="itext" data-key="' + esc(key) + '" maxlength="1000" placeholder="Ask about this step…" aria-label="Question about this step" value="' + esc(ui.inboxDraft[key] || '') + '">' +
         '<button class="isend" data-act="isend" data-key="' + esc(key) + '">Send</button><span class="ihint">Enter sends · Esc closes</span></div>';
     }
-    return h + entries(s, p, state, key, reqs);
+    return h;
   }
   /* "Autopilot started <agent>" with the agent's live status */
   function autoStarted(rec, state) {
@@ -214,7 +215,7 @@
         (a.status === 'working' && a.summary ? '<div class="inow">' + T.mdInline(a.summary) + '</div>' : '') : '') + '</div></li></ol></div>';
   }
   /* The thread under a step: the latest entry stays open, older ones fold into "N earlier messages". */
-  function entries(s, p, state, key, reqs) {
+  function entries(s, p, state, key, reqs, all) {
     var list = reqs.map(function (r) {
       var last = (r.answers || []).length ? r.answers[r.answers.length - 1].at : r.at;
       return { at: T.ms(last) || 0, r: r };
@@ -225,6 +226,7 @@
     list.sort(function (a, b) { return b.at - a.at; });
     if (!list.length) return '';
     function html(e, older) { return e.r ? thread(e.r, state, older) : autoStarted(e.rec, state); }
+    if (all) return list.map(function (e) { return html(e, false); }).join('');
     var h = html(list[0], false), rest = list.slice(1, 9), n = 0, body = '', open = !!ui.inboxEarlier[key];
     rest.forEach(function (e) {
       var t = html(e, true); n += t.split('<li class="ie">').length - 1;
@@ -288,36 +290,100 @@
     var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
     return m ? MONTHS[+m[2] - 1] + ' ' + (+m[3]) : String(iso || '');
   }
-  /* Why a step is not moving: waiting for the owner (click: the owner item), for a date, or for the autopilot. */
-  function statusChip(s, p, state) {
-    var auto = state.autopilot, on = auto ? autoOn(state) : true, item;
-    if (s.status === 'blocked-owner') {
-      item = (s.items.filter(function (i) { return i.who === 'owner' && !i.done && i.owner_item; })[0] || {}).owner_item;
-      return '<button class="pstat owner" data-act="goowner" data-key="' + esc(item || '') + '" title="Open what Tirith needs from you"' + (item ? '' : ' disabled') + '>Waiting for you</button>';
+  /* ---------- the quiet step: open items and one state line; the rest is behind "History" ---------- */
+  function dateless(t) { return t.replace(/\s*\((?:desde|from)\s+\d{4}-\d{2}-\d{2}[^)]*\)?/i, ''); }
+  function openItems(s) {
+    var l = s.items.filter(function (i) { return !i.done && i.who !== 'out'; });
+    if (!l.length) return '';
+    return '<ul class="pitems pquiet">' + l.map(function (i) {
+      var extra = i.who === 'owner' && i.owner_item ?
+          '<button class="pitbtn" data-act="goowner" data-key="' + esc(i.owner_item) + '" title="Open what Tirith needs from you">Open</button>' :
+        i.who === 'date' && i.until ? '<span class="pwhen">from ' + esc(shortDate(i.until)) + '</span>' : '';
+      return '<li><span class="pi">' + OPEN + '</span><span class="pit">' + rich(i.who === 'date' ? dateless(i.text) : i.text) + '</span>' + extra + '</li>';
+    }).join('') + '</ul>';
+  }
+  function reviewReason(r) {
+    var m = String(r.message || '').split('\n').filter(function (x) { return x.trim(); })[0] || '';
+    m = m.trim() || (r.status === 'tests-failed' ? 'tests failed' : 'merge failed');
+    return m.length > 120 ? m.slice(0, 117) + '…' : m;
+  }
+  /* The ONE current state of an unfinished step, or ''. */
+  function stateLine(s, p, state) {
+    var rl = reviewLane(s, p, state), r = rl && rl.review, auto = state.autopilot, on = auto ? autoOn(state) : true, a, owner, h;
+    if (r && (r.status === 'tests-failed' || r.status === 'merge-failed' || r.status === 'failed')) {
+      return '<div class="pstate bad">Review failed: ' + plain(reviewReason(r)) + ' <span class="mut">(the manager has it)</span>' +
+        (r.run ? ' <button class="link" data-act="gorun" data-key="' + esc(r.run) + '" title="Open the test run">see the run</button>' : '') + '</div>';
     }
-    if (s.status === 'blocked-date') return '<span class="pstat date" title="An item of this step starts on this day">From ' + esc(shortDate(s.until)) + '</span>';
-    if (s.status === 'ready') return '<span class="pstat ready" title="' + (on ? 'The autopilot starts an agent on this step' : 'The autopilot is paused') + '">' + (on ? 'Queued for the autopilot' : 'Waiting for the autopilot') + '</span>';
+    if (r && r.status === 'running') {
+      return '<div class="pstate live"><i class="pulse"></i><button class="link" data-act="gorun" data-key="' + esc(r.run || '') + '"' + (r.run ? '' : ' disabled') +
+        ' title="Open the test run">Testing <b>' + esc(rl.name) + '</b>…</button></div>';
+    }
+    if (s.agents && s.agents.length) {
+      a = T.agentById(state, s.agents[0]);
+      if (a) {
+        return '<div class="pstate live">Working: <button class="iag" data-act="goagent" data-key="' + esc(a.id) + '" title="Open this agent">' + T.avatar(a, 18) + '<b>' + esc(a.name) + '</b></button>' +
+          (s.agents.length > 1 ? ' <span class="mut">+' + (s.agents.length - 1) + '</span>' : '') +
+          ' <span class="mut">·</span> ' + (a.summary ? T.mdInline(a.summary) : '<span class="mut">' + plain(a.feature || 'starting') + '</span>') + '</div>';
+      }
+    }
+    if (s.status === 'blocked-owner') {
+      owner = (s.items.filter(function (i) { return i.who === 'owner' && !i.done && i.owner_item; })[0] || {}).owner_item;
+      return '<div class="pstate wait">Waiting for you: <button class="pitbtn" data-act="goowner" data-key="' + esc(owner || '') + '"' + (owner ? '' : ' disabled') + ' title="Open what Tirith needs from you">See what</button></div>';
+    }
+    if (s.status === 'blocked-date') return '<div class="pstate">From ' + esc(shortDate(s.until)) + '</div>';
+    if (s.status === 'ready') return '<div class="pstate ready">' + (on ? 'Queued for the autopilot' : 'Waiting for the autopilot <span class="mut">(paused)</span>') + '</div>';
     return '';
+  }
+  /* Requests that still need something stay visible: no manager answer yet, or an action that has not passed. */
+  function needsLines(s, p, state, reqs) {
+    var h = '';
+    reqs.forEach(function (r) {
+      var answers = r.answers || [], todo = [];
+      if (!answers.length && !(r.lanes || []).length && r.status === 'open') {
+        h += '<div class="pstate wait">Waiting for the manager · <span class="tick" data-start="' + esc(r.at) + '">' + esc(T.dur(T.elapsed(r.at))) + '</span>' +
+          (T.elapsed(r.at) >= ESCALATE ? ' <span class="mut">No answer yet. Tirith will escalate this.</span>' : '') + '</div>';
+      }
+      answers.forEach(function (a) {
+        (a.actions || []).forEach(function (x) { if (!x.last_run || x.last_run.status !== 'passed') todo.push(x); });
+      });
+      if (todo.length) h += '<div class="pneed">' + T.actions(todo, state, r.project) + '</div>';
+    });
+    return h;
+  }
+  function historyBlock(s, p, state, key, reqs) {
+    var rl = reviewLane(s, p, state), r = rl && rl.review, open = !!ui.planHist[key], body = entries(s, p, state, key, reqs, true), n = (body.match(/<li class="ie">/g) || []).length, done, past;
+    past = r && (r.status === 'merged' || r.status === 'dropped') ? reviewLine(s, p, state) : '';
+    if (past) n++;
+    if (!n) return '';
+    done = '<div class="phist"><button class="iahead" data-act="phist" data-key="' + esc(key) + '" aria-expanded="' + open + '">' + CHEV + '<span>History (' + n + ')</span></button></div>';
+    return done + (open ? '<div class="phistbody">' + past + body + '</div>' : '');
   }
 
   function step(s, p, state, ro) {
-    var key = (ro ? ro + '|' : '') + p.id + '|' + s.id, open = !!ui.planOpen[key], live = s.agents && s.agents.length;
-    var ava = (s.agents || []).map(function (id) {
+    var key = (ro ? ro + '|' : '') + p.id + '|' + s.id, open = !!ui.planOpen[key], live = s.agents && s.agents.length, fin = s.status === 'done';
+    var ava = fin ? '' : (s.agents || []).map(function (id) {
       var a = T.agentById(state, id); if (!a) return '';
       return '<button class="pava" data-act="goagent" data-key="' + esc(id) + '" title="' + esc(a.name + ' · ' + (a.feature || '')) + '">' + T.avatar(a, 22) + '</button>' + (T.stopBtn ? T.stopBtn(a, 'ava') : '');
     }).join('');
+    var reqs = ro ? [] : reqsFor(state, p.id, s.id);
     var h = '<li class="pstep ' + esc(s.status) + (open ? ' open' : '') + '"><div class="prow">' +
       '<button class="ptog" data-act="plan" data-key="' + esc(key) + '" aria-expanded="' + open + '">' +
       '<span class="pico' + (live ? ' pulse' : '') + '">' + (IC[s.status] || IC.todo) + '</span>' +
       '<span class="ptit"><span class="pn">' + esc(s.id) + '.</span> ' + plain(s.title) + '</span>' +
-      (s.total ? bar(s.done, s.total, 'pbar') + '<span class="pcnt">' + s.done + '/' + s.total + '</span>' : '<span class="pbar"></span><span class="pcnt">–</span>') +
-      '</button>' + statusChip(s, p, state) + '<span class="pavas">' + ava + '</span>' + (ro ? '' : inboxBtns(key)) + '</div>' + (ro ? '' : reviewLine(s, p, state) + inboxBelow(s, p, state, key));
+      (fin ? '' : s.total ? bar(s.done, s.total, 'pbar') : '<span class="pbar"></span>') +
+      (s.total ? '<span class="pcnt">' + s.done + '/' + s.total + '</span>' : '<span class="pcnt">–</span>') +
+      '</button><span class="pavas">' + ava + '</span>' + (ro || fin ? '' : inboxBtns(key)) + '</div>';
+    if (!ro) {
+      h += inboxBelow(s, p, state, key, reqs);
+      if (!fin) h += (open ? '' : openItems(s)) + stateLine(s, p, state) + needsLines(s, p, state, reqs);
+    }
     if (open) {
       h += '<ul class="pitems">' + (s.items.length ? s.items.map(function (i) {
         return '<li class="' + (i.done ? 'ok' : '') + '"><span class="pi">' + (i.done ? OK : OPEN) + '</span><span>' + rich(i.text) + '</span></li>';
       }).join('') : '<li class="none">No items yet</li>') + '</ul>';
-      if (!ro) h += reviewBtn(s, p, state) || launchBtn(s, p, state, true).replace('class="plw"', 'class="plw pbody"');
+      if (!ro && !fin) h += reviewBtn(s, p, state) || launchBtn(s, p, state, true).replace('class="plw"', 'class="plw pbody"');
     }
+    if (!ro) h += historyBlock(s, p, state, key, reqs);
     return h + '</li>';
   }
 
@@ -470,6 +536,8 @@
       ui.inboxOpen[ik] = !(ik in ui.inboxOpen ? ui.inboxOpen[ik] : !(cur && cur.status === 'done'));
       T.render(); return;
     }
+    var hb = e.target.closest('[data-act="phist"]');
+    if (hb) { ui.planHist[hb.getAttribute('data-key')] = !ui.planHist[hb.getAttribute('data-key')]; T.render(); return; }
     var pb = e.target.closest('[data-act^="p"]'), pact = pb && pb.getAttribute('data-act'), pk = pb && pb.getAttribute('data-key');
     if (pact === 'prefresh') { ui.planRefreshAt[pk.split('|')[0]] = T.now(); sendInbox('plan-refresh', pk, ''); return; }
     if (pact === 'pnew') { ui.planForm[pk] = !ui.planForm[pk]; ui.planFormErr[pk] = null; T.render(); if (ui.planForm[pk]) focusForm(pk); return; }
