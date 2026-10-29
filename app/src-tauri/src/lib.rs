@@ -213,8 +213,8 @@ fn clip(text: &str, max: usize) -> &str {
 /// Builds the inbox row for a request: `{id, at, kind, project, step, text, from, status}`.
 fn inbox_row(kind: &str, project: &str, step: &str, text: &str, now: SystemTime, salt: u32) -> Result<Value, String> {
     let plan = kind == "plan-refresh" || kind == "plan-new";
-    if kind != "finish" && kind != "ask" && kind != "setup" && kind != "chat" && !plan {
-        return Err(format!("kind must be finish, ask, setup, chat, plan-refresh or plan-new, not {kind:?}"));
+    if kind != "finish" && kind != "ask" && kind != "setup" && kind != "chat" && kind != "autopilot" && !plan {
+        return Err(format!("kind must be finish, ask, setup, chat, autopilot, plan-refresh or plan-new, not {kind:?}"));
     }
     let (project, text) = (project.trim(), clip(text.trim(), INBOX_TEXT_MAX));
     let step = if step.trim().is_empty() && kind == "setup" {
@@ -233,6 +233,9 @@ fn inbox_row(kind: &str, project: &str, step: &str, text: &str, now: SystemTime,
     }
     if kind == "ask" && text.is_empty() {
         return Err("a question needs text".into());
+    }
+    if kind == "autopilot" && text != "on" && text != "off" {
+        return Err("an autopilot request needs text on or off".into());
     }
     if (kind == "setup" || kind == "plan-new") && !text.starts_with('{') {
         return Err(format!("a {kind} request needs its JSON as text"));

@@ -6,7 +6,9 @@ Parsing never raises: a missing or unreadable file gives ``None``.
 
 from __future__ import annotations
 
+import hashlib
 import re
+from datetime import date
 from pathlib import Path
 
 from tirith import manifest as manifest_mod
@@ -18,8 +20,44 @@ _HEADING_RE = re.compile(r"^#{1,6}\s")
 _ITEM_RE = re.compile(r"^\s*[-*+]\s+\[([ xX])\]\s*(.*)$")
 _BULLET_RE = re.compile(r"^\s*[-*+]\s")
 _DEADLINE_RE = re.compile(r"^\s*deadline\s*:\s*(\S+)\s*$", re.IGNORECASE)
+_OUT_RE = re.compile(r"\((?:fuera de este plan|out of this plan)", re.IGNORECASE)
+_OWNER_RE = re.compile(r"\((?:dueño|owner)", re.IGNORECASE)
+_FROM_RE = re.compile(r"\((?:desde|from)\s+(\d{4}-\d{2}-\d{2})", re.IGNORECASE)
 
 _cache: dict[str, tuple[int, int, list[dict]]] = {}
+
+
+def tag(text: str) -> tuple[str, str | None]:
+    """``(who, date)`` from the tags in an item's text: ``out`` (not in this plan), ``owner``, ``date``
+    (blocked until ``YYYY-MM-DD``) or ``agent``."""
+    if _OUT_RE.search(text):
+        return "out", None
+    if _OWNER_RE.search(text):
+        return "owner", None
+    found = _FROM_RE.search(text)
+    if found:
+        try:
+            date.fromisoformat(found.group(1))
+            return "date", found.group(1)
+        except ValueError:
+            pass
+    return "agent", None
+
+
+def who_on(item: dict, today: date) -> str:
+    """``agent|owner|date|out`` for an item today: a ``date`` item whose day has come is an agent's."""
+    who, until = tag(item["text"])
+    return "agent" if who == "date" and until and date.fromisoformat(until) <= today else who
+
+
+def agent_items(step: dict, today: date) -> list[str]:
+    """The texts of the open items of a parsed step that an agent can do today."""
+    return [i["text"] for i in step["items"] if not i["done"] and who_on(i, today) == "agent"]
+
+
+def owner_item_id(project: str, step_id: str, text: str) -> str:
+    """The stable id of the owner item raised for an owner-only roadmap item."""
+    return f"owner-{project}-{step_id}-" + hashlib.sha1(" ".join(text.split()).encode()).hexdigest()[:8]
 
 
 def parse(text: str) -> list[dict]:
@@ -72,12 +110,20 @@ def read_intro(path: Path) -> str:
         return ""
 
 
-def step_status(done: int, total: int, has_agent: bool) -> str:
+def step_status(done: int, total: int, working: bool, agent_open: int = 0, owner_open: int = 0,
+                date_open: int = 0) -> str:
+    """``empty|done|active|ready|blocked-owner|blocked-date|todo`` (see ``docs/CONTRACT-roadmap.md``)."""
     if not total:
         return "empty"
     if done == total:
         return "done"
-    return "active" if done or has_agent else "todo"
+    if working:
+        return "active"
+    if agent_open:
+        return "ready"
+    if owner_open:
+        return "blocked-owner"
+    return "blocked-date" if date_open else "todo"
 
 
 def find_file(folder: Path, configured: str | None) -> Path | None:
@@ -179,8 +225,9 @@ def _working(agents: list[dict], project: str) -> dict[str, list[str]]:
     return working
 
 
-def build(folder: str | Path | None, project: str, agents: list[dict]) -> dict | None:
+def build(folder: str | Path | None, project: str, agents: list[dict], today: date | None = None) -> dict | None:
     """``state.projects[].roadmap`` for a project folder; None when it has no roadmap file."""
+    today = today or date.today()
     if not folder:
         return None
     folder = Path(folder)
@@ -192,13 +239,26 @@ def build(folder: str | Path | None, project: str, agents: list[dict]) -> dict |
     working = _working(agents, project)
     rows = []
     for step in steps:
-        items = step["items"]
-        done = sum(1 for i in items if i["done"])
+        items = []
+        for raw in step["items"]:
+            who = who_on(raw, today)
+            item = {"text": raw["text"], "done": raw["done"], "who": who}
+            if who == "date":
+                item["until"] = tag(raw["text"])[1]
+            elif who == "owner" and not raw["done"]:
+                item["owner_item"] = owner_item_id(project, step["id"], raw["text"])
+            items.append(item)
+        counted = [i for i in items if i["who"] != "out"]
+        done = sum(1 for i in counted if i["done"])
         mine = working.get(step["id"], [])
-        rows.append({"id": step["id"], "title": step["title"],
-                     "status": step_status(done, len(items), bool(mine)),
-                     "done": done, "total": len(items),
-                     "items": [dict(i) for i in items], "agents": mine})
+        open_by = {w: [i for i in counted if not i["done"] and i["who"] == w] for w in ("agent", "owner", "date")}
+        row = {"id": step["id"], "title": step["title"],
+               "status": step_status(done, len(counted), bool(mine), len(open_by["agent"]),
+                                     len(open_by["owner"]), len(open_by["date"])),
+               "done": done, "total": len(counted), "items": items, "agents": mine}
+        if row["status"] == "blocked-date":
+            row["until"] = min(i["until"] for i in open_by["date"])
+        rows.append(row)
     return {"file": str(path), "deadline": manifest.deadline,
             "done": sum(r["done"] for r in rows), "total": sum(r["total"] for r in rows),
             "steps": rows}

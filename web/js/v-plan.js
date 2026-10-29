@@ -16,13 +16,18 @@
   ui.planDraft = ui.planDraft || {};   /* project id -> {title, goal, deadline, steps} typed so far */
   ui.planFormErr = ui.planFormErr || {};
   ui.planRefreshAt = ui.planRefreshAt || {}; /* project id -> ms of the "Update the plan" click, until the request shows up */
+  ui.inboxEarlier = ui.inboxEarlier || {}; /* "project|step" -> true while its older messages are unfolded */
+  ui.autoWant = ui.autoWant || null;   /* { on, at }: the switch the owner just sent, until the collector shows it */
   var lastState = null, LAUNCH_WAIT = 90000, PEND_WAIT = 10000, ESCALATE = 120, INSTALL = 'tirith url install';
 
   var IC = {
     done: '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="#2ea44f"/><path d="M4.8 8.2l2.2 2.2 4.2-4.6" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     active: '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle cx="8" cy="8" r="6.2" fill="#fff" stroke="#2f6fed" stroke-width="1.6"/><path d="M8 3.4a4.6 4.6 0 010 9.2z" fill="#2f6fed"/></svg>',
     todo: '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle cx="8" cy="8" r="6.2" fill="none" stroke="#b4bac4" stroke-width="1.6"/></svg>',
-    empty: '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle cx="8" cy="8" r="6.2" fill="none" stroke="#d3d7de" stroke-width="1.6" stroke-dasharray="2 2.4"/></svg>'
+    empty: '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle cx="8" cy="8" r="6.2" fill="none" stroke="#d3d7de" stroke-width="1.6" stroke-dasharray="2 2.4"/></svg>',
+    ready: '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle cx="8" cy="8" r="6.2" fill="none" stroke="#2f6fed" stroke-width="1.6" stroke-dasharray="2 2.4"/><path d="M6.6 5.2l4 2.8-4 2.8z" fill="#2f6fed"/></svg>',
+    'blocked-owner': '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="#f0b429"/><circle cx="8" cy="6.2" r="2" fill="#fff"/><path d="M4.2 12c.3-2 1.9-3 3.8-3s3.5 1 3.8 3z" fill="#fff"/></svg>',
+    'blocked-date': '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><rect x="2.4" y="3.4" width="11.2" height="10.2" rx="2" fill="none" stroke="#8a93a3" stroke-width="1.5"/><path d="M2.4 6.8h11.2M5.6 2v2.6M10.4 2v2.6" stroke="#8a93a3" stroke-width="1.5" stroke-linecap="round"/></svg>'
   };
   var OK = '<svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="M2.6 6.3l2.3 2.3 4.5-4.9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   var OPEN = '<svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><circle cx="6" cy="6" r="3.6" fill="none" stroke="#b4bac4" stroke-width="1.3"/></svg>';
@@ -156,8 +161,8 @@
     return a.by === 'brain' ? (a.auto ? 'Muse Spark answered automatically' : 'Muse Spark answered') : a.by === 'tirith' ? 'Tirith answered' : 'Manager answered';
   }
   /* One request as a timeline: asked -> answered -> handled by an agent -> done. Only from state.inbox. */
-  function thread(r, state) {
-    var open = r.id in ui.inboxOpen ? ui.inboxOpen[r.id] : r.status !== 'done', answers = r.answers || [], lanes = r.lanes || [], h;
+  function thread(r, state, older) {
+    var open = r.id in ui.inboxOpen ? ui.inboxOpen[r.id] : r.status !== 'done' && !older, answers = r.answers || [], lanes = r.lanes || [], h;
     /* a "finish" click needs no row of its own (the answers below say what happened); a question keeps its text */
     h = '<div class="ithread" data-req="' + esc(r.id) + '"><ol class="itl">' + (r.kind === 'ask' ?
       '<li class="ie"><i class="ido me"></i><div class="ib"><b>You asked: ' + plain(r.text) + '</b> <span class="iwhen">· ' + esc(T.clockTime(r.at)) + '</span></div></li>' :
@@ -197,12 +202,41 @@
       h += '<div class="iask"><input class="iin" type="text" data-act="itext" data-key="' + esc(key) + '" maxlength="1000" placeholder="Ask about this step…" aria-label="Question about this step" value="' + esc(ui.inboxDraft[key] || '') + '">' +
         '<button class="isend" data-act="isend" data-key="' + esc(key) + '">Send</button><span class="ihint">Enter sends · Esc closes</span></div>';
     }
-    reqs.slice().sort(function (a, b) { return (T.ms(b.at) || 0) - (T.ms(a.at) || 0); }).slice(0, 3).forEach(function (r) { h += thread(r, state); });
-    return h;
+    return h + entries(s, p, state, key, reqs);
+  }
+  /* "Autopilot started <agent>" with the agent's live status */
+  function autoStarted(rec, state) {
+    var a = T.agentById(state, rec.lane);
+    return '<div class="ithread"><ol class="itl"><li class="ie"><i class="ido ' + (a ? (a.status === 'working' ? 'live' : a.status === 'failed' ? 'bad' : 'ok') : 'ok') + '"></i><div class="ib"><b>Autopilot started</b> ' +
+      (a ? '<button class="iag" data-act="goagent" data-key="' + esc(a.id) + '" title="Open this agent">' + T.avatar(a, 18) + '<b>' + esc(a.name) + '</b></button>' : '<b>' + esc(rec.lane) + '</b>') +
+      ' <span class="iwhen">· ' + esc(T.clockTime(rec.at)) + '</span>' +
+      (a ? ' <span class="ist">' + T.dot(AST[a.status] || 'amber', a.status) + esc(a.status) + '</span>' + tbadge(a) +
+        (a.status === 'working' && a.summary ? '<div class="inow">' + T.mdInline(a.summary) + '</div>' : '') : '') + '</div></li></ol></div>';
+  }
+  /* The thread under a step: the latest entry stays open, older ones fold into "N earlier messages". */
+  function entries(s, p, state, key, reqs) {
+    var list = reqs.map(function (r) {
+      var last = (r.answers || []).length ? r.answers[r.answers.length - 1].at : r.at;
+      return { at: T.ms(last) || 0, r: r };
+    });
+    ((state.autopilot && state.autopilot.started) || []).forEach(function (rec) {
+      if (rec.project === p.id && String(rec.step) === String(s.id)) list.push({ at: T.ms(rec.at) || 0, rec: rec });
+    });
+    list.sort(function (a, b) { return b.at - a.at; });
+    if (!list.length) return '';
+    function html(e, older) { return e.r ? thread(e.r, state, older) : autoStarted(e.rec, state); }
+    var h = html(list[0], false), rest = list.slice(1, 9), n = 0, body = '', open = !!ui.inboxEarlier[key];
+    rest.forEach(function (e) {
+      var t = html(e, true); n += t.split('<li class="ie">').length - 1;
+      if (open) body += t;
+    });
+    if (!rest.length) return h;
+    return h + '<div class="iearlier"><button class="iahead" data-act="iearlier" data-key="' + esc(key) + '" aria-expanded="' + open + '">' + CHEV +
+      '<span>' + n + ' earlier message' + (n === 1 ? '' : 's') + '</span></button></div>' + (open ? '<div class="iearlier-body">' + body + '</div>' : '');
   }
   function openCount(ps, state) {
     var ids = {}; ps.forEach(function (p) { ids[p.id] = 1; });
-    return (state.inbox || []).filter(function (r) { return r.status === 'open' && r.kind !== 'setup' && ids[r.project]; }).length;
+    return (state.inbox || []).filter(function (r) { return r.status === 'open' && r.kind !== 'setup' && r.kind !== 'autopilot' && ids[r.project]; }).length;
   }
 
   /* Record a request: the app writes the inbox itself, a browser opens the tirith:// link, else the CLI line is shown. */
@@ -249,6 +283,23 @@
     sendInbox('plan-new', pid + '|plan', JSON.stringify({ title: title, goal: (d.goal || '').trim(), deadline: (d.deadline || '').trim(), steps: (d.steps || '').trim() }));
   }
 
+  var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  function shortDate(iso) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+    return m ? MONTHS[+m[2] - 1] + ' ' + (+m[3]) : String(iso || '');
+  }
+  /* Why a step is not moving: waiting for the owner (click: the owner item), for a date, or for the autopilot. */
+  function statusChip(s, p, state) {
+    var auto = state.autopilot, on = auto ? autoOn(state) : true, item;
+    if (s.status === 'blocked-owner') {
+      item = (s.items.filter(function (i) { return i.who === 'owner' && !i.done && i.owner_item; })[0] || {}).owner_item;
+      return '<button class="pstat owner" data-act="goowner" data-key="' + esc(item || '') + '" title="Open what Tirith needs from you"' + (item ? '' : ' disabled') + '>Waiting for you</button>';
+    }
+    if (s.status === 'blocked-date') return '<span class="pstat date" title="An item of this step starts on this day">From ' + esc(shortDate(s.until)) + '</span>';
+    if (s.status === 'ready') return '<span class="pstat ready" title="' + (on ? 'The autopilot starts an agent on this step' : 'The autopilot is paused') + '">' + (on ? 'Queued for the autopilot' : 'Waiting for the autopilot') + '</span>';
+    return '';
+  }
+
   function step(s, p, state, ro) {
     var key = (ro ? ro + '|' : '') + p.id + '|' + s.id, open = !!ui.planOpen[key], live = s.agents && s.agents.length;
     var ava = (s.agents || []).map(function (id) {
@@ -260,7 +311,7 @@
       '<span class="pico' + (live ? ' pulse' : '') + '">' + (IC[s.status] || IC.todo) + '</span>' +
       '<span class="ptit"><span class="pn">' + esc(s.id) + '.</span> ' + plain(s.title) + '</span>' +
       (s.total ? bar(s.done, s.total, 'pbar') + '<span class="pcnt">' + s.done + '/' + s.total + '</span>' : '<span class="pbar"></span><span class="pcnt">–</span>') +
-      '</button><span class="pavas">' + ava + '</span>' + (ro ? '' : inboxBtns(key)) + '</div>' + (ro ? '' : reviewLine(s, p, state) + inboxBelow(s, p, state, key));
+      '</button>' + statusChip(s, p, state) + '<span class="pavas">' + ava + '</span>' + (ro ? '' : inboxBtns(key)) + '</div>' + (ro ? '' : reviewLine(s, p, state) + inboxBelow(s, p, state, key));
     if (open) {
       h += '<ul class="pitems">' + (s.items.length ? s.items.map(function (i) {
         return '<li class="' + (i.done ? 'ok' : '') + '"><span class="pi">' + (i.done ? OK : OPEN) + '</span><span>' + rich(i.text) + '</span></li>';
@@ -268,6 +319,32 @@
       if (!ro) h += reviewBtn(s, p, state) || launchBtn(s, p, state, true).replace('class="plw"', 'class="plw pbody"');
     }
     return h + '</li>';
+  }
+
+  function autoOn(state) {
+    var w = ui.autoWant, on = !!(state.autopilot && state.autopilot.enabled);
+    if (w && w.on === on) { ui.autoWant = null; return on; }
+    return w && T.now() - w.at < PEND_WAIT ? w.on : on;
+  }
+  /* "Autopilot on · 2 agents working · 3 queued" with the pause / resume switch. */
+  function autoBar(ps, state) {
+    if (!state.autopilot) return '';
+    var on = autoOn(state), working = {}, queued = 0, n, bits = [];
+    ps.forEach(function (p) {
+      p.roadmap.steps.forEach(function (s) {
+        (s.agents || []).forEach(function (id) { working[id] = 1; });
+        if (s.status === 'ready') queued++;
+      });
+    });
+    n = Object.keys(working).length;
+    bits.push('<b>Autopilot ' + (on ? 'on' : 'paused') + '</b>');
+    if (n) bits.push(n + (n === 1 ? ' agent' : ' agents') + ' working');
+    if (queued) bits.push(queued + ' queued');
+    if (!n && !queued) bits.push('nothing to start');
+    return '<div class="pauto' + (on ? ' on' : '') + '"><i class="pdot3"></i><span>' + bits.join(' <span class="mut">·</span> ') + '</span>' +
+      '<button class="ibtn" data-act="iauto" data-key="' + (on ? 'off' : 'on') + '" title="' + (on ? 'Stop starting agents by itself; running ones finish' : 'Start agents by itself on every step that is ready') + '">' +
+      (on ? '<svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true"><path d="M3.5 2.5v7M8.5 2.5v7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>' : '<svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true"><path d="M3.5 2.2l6 3.8-6 3.8z" fill="currentColor"/></svg>') +
+      '<span>' + (on ? 'Pause' : 'Resume') + '</span></button>' + (ui.inboxErr['all|autopilot'] ? '<span class="ierr">' + esc(ui.inboxErr['all|autopilot']) + '</span>' : '') + '</div>';
   }
 
   /* ---------- the plans of a project: switcher, "Update the plan", "Start a new plan" ---------- */
@@ -343,7 +420,7 @@
     });
     if (!ps.length) return '';
     var n = openCount(ps, state);
-    return '<section class="plan"><h2>Plan' + (n ? ' <span class="icount" title="Requests the manager has not answered yet">' + n + ' open</span>' : '') + '</h2>' + ps.map(function (p) { return card(p, state, ps.length > 1); }).join('') + '</section>';
+    return '<section class="plan"><h2>Plan' + (n ? ' <span class="icount" title="Requests the manager has not answered yet">' + n + ' open</span>' : '') + '</h2>' + autoBar(ps, state) + ps.map(function (p) { return card(p, state, ps.length > 1); }).join('') + '</section>';
   };
 
   function openLink(url) {
@@ -374,8 +451,18 @@
       setTimeout(T.render, LAUNCH_WAIT + 500);
       return;
     }
+    var go = e.target.closest('[data-act="goowner"]');
+    if (go) {
+      var wid = go.getAttribute('data-key');
+      ui.needsOpen = ui.needsOpen || {}; ui.needsOpen[wid] = true; T.render();
+      var card = document.querySelector('[data-wait="' + wid.replace(/"/g, '') + '"]');
+      if (card) { card.scrollIntoView({ block: 'center' }); card.classList.add('flash'); }
+      return;
+    }
     var ib = e.target.closest('[data-act^="i"]'), act = ib && ib.getAttribute('data-act'), ik = ib && ib.getAttribute('data-key');
     if (act === 'ifinish') { sendInbox('finish', ik, ''); return; }
+    if (act === 'iauto') { ui.autoWant = { on: ik === 'on', at: T.now() }; sendInbox('autopilot', 'all|autopilot', ik); return; }
+    if (act === 'iearlier') { ui.inboxEarlier[ik] = !ui.inboxEarlier[ik]; T.render(); return; }
     if (act === 'iask') { ui.inboxAsk[ik] = !ui.inboxAsk[ik]; T.render(); if (ui.inboxAsk[ik]) focusAsk(ik); return; }
     if (act === 'isend') { submitAsk(ik); return; }
     if (act === 'iatog') {

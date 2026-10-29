@@ -100,6 +100,16 @@ def _no_outer_lane(monkeypatch):
     monkeypatch.delenv("TIRITH_SESSION", raising=False)
 
 
+@pytest.fixture(autouse=True)
+def _no_autopilot(request, monkeypatch):
+    """The autopilot is on by default and would start lanes and raise owner items in every collector test;
+    only ``test_autopilot`` runs it."""
+    if request.module.__name__.rpartition(".")[2] == "test_autopilot":
+        return
+    from tirith import autopilot
+    monkeypatch.setattr(autopilot, "run", lambda *args, **kwargs: False)
+
+
 def write_lane_manifest(repo: Path) -> None:
     """A tirith.toml that passes ``tirith check`` and a brief file, as ``lane run`` requires."""
     (repo / "tirith.toml").write_text(

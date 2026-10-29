@@ -18,7 +18,7 @@ collector: state.inbox -> the Plan shows the chip and the answers under the step
 
 | Row | Fields |
 |---|---|
-| request | `id`, `at`, `kind` (`finish`, `ask`, `setup`, `plan-refresh` or `plan-new`), `project`, `step`, `text`, `from` (`"owner"`), `status` (`"open"`) |
+| request | `id`, `at`, `kind` (`finish`, `ask`, `setup`, `chat`, `autopilot`, `plan-refresh` or `plan-new`), `project`, `step`, `text`, `from` (`"owner"`), `status` (`"open"`) |
 | answer | `id` (of the request), `at`, `kind: "answer"`, `by` (`manager`, `brain` or `tirith`), `text` (markdown), `auto` (bool), optional `lane` (id of the lane that took the request) |
 | done | `id`, `at`, `kind: "done"` |
 
@@ -55,6 +55,15 @@ not clear it), and again after the owner runs one of the manager's Run `actions`
 result, like every other kind. The dispatcher adds no flow for it (the thread is the chat) and, when the
 manager stays silent, its escalation offers no "Start an agent". Answers are the usual answer rows (`by:
 "manager"`, markdown, optional `actions`); `tirith inbox answer <id> ...` is unchanged.
+
+### Kind `autopilot`
+
+The owner's switch for the autopilot (`CONTRACT-roadmap.md`): `text` is `on` or `off` (anything else is
+rejected), `project` is `all` and `step` is `autopilot` (both may be left out). It is never
+`manager_pending`: the dispatcher applies it in its next cycle (the last request wins over
+`[autopilot] enabled`), records the flow `owner` -> `tirith` ("Autopilot off") and closes it. Running lanes
+are not stopped; no new lane is started while it is off. Sent by the Plan header's Pause / Resume button
+(`tirith inbox add --kind autopilot --text off`).
 
 ## CLI
 
@@ -150,8 +159,11 @@ answers an `ask` in the first cycle, not after 120 s.
 - A step with an open request (or one sent in the last 30 s that the collector has not shown yet) shows the
   chip "Sent · waiting for the manager".
 - Answers show under the step as rendered markdown, newest last, with "Manager" or "Muse Spark, automatic";
-  each request is collapsible (closed by default once done). The last 3 requests per step are shown.
-- The Plan header shows the number of open requests.
+  each request is collapsible (closed by default once done). The last 9 entries per step are shown.
+- The Plan header shows the number of open requests. Below it: "Autopilot on · 2 agents working · 3 queued"
+  (or "paused") with a Pause / Resume button that sends the `autopilot` request.
+- Under a step the latest entry (a request thread, or "Autopilot started <agent>" from `state.autopilot.started`)
+  stays open; every older entry folds into one "N earlier messages" line (click to unfold, answers inside closed).
 - The "Finish with an agent" launch button is only in the expanded step, labelled "Start an agent now"
   (the direct path).
 
@@ -172,6 +184,7 @@ handles everything by hand), `auto_launch = false` leaves `finish` to the manage
 | `plan-refresh`, one already running for the project | answers naming that lane (one refresh at a time per project) |
 | `plan-new` | starts the planner lane (`step: "plan-new"`) and answers with the lane id; several may run |
 | `plan-refresh` / `plan-new`, launch refused | answers with the reason and adds an owner item (`Try again` with the `tirith inbox add` command for a refresh) |
+| `autopilot` | sets the autopilot on or off, closes the request |
 | `setup` and other kinds | left to the manager (`manager_pending`) |
 
 **The plan lanes.** The auditor's brief is generated: the current plan file, the project's merged lanes with
