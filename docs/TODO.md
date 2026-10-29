@@ -99,7 +99,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 
 - [x] Objetivo, estado activo, archivos cambiados (git en vivo), herramientas y tests por agente.
 - [x] Vista Flow: cada agente se expande con toda su información.
-- [ ] Logs legibles: más nuevos arriba, colores por tipo, JSON convertido en información clara.
+- [x] Logs legibles: más nuevos arriba, colores por tipo, JSON convertido en información clara.
 - [ ] Detección de tests sin falsos positivos.
 - [ ] Guardar el diff real por lane.
 - [ ] Totales de coste y tiempo por sesión.
@@ -120,10 +120,10 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 
 ## 10. Plan visible en el Overview
 
-- [ ] El collector lee este archivo (casillas por sección) y calcula el progreso de cada paso.
-- [ ] `tirith lane run --step <n>`: cada lane dice en qué paso trabaja.
-- [ ] Tarjeta «Plan» en el Overview: pasos, progreso, estado y agentes trabajando en cada uno.
-- [ ] Fecha límite opcional con cuenta atrás.
+- [x] El collector lee este archivo (casillas por sección) y calcula el progreso de cada paso.
+- [x] `tirith lane run --step <n>`: cada lane dice en qué paso trabaja.
+- [x] Tarjeta «Plan» en el Overview: pasos, progreso, estado y agentes trabajando en cada uno.
+- [x] Fecha límite opcional con cuenta atrás.
 
 ## Orden
 
