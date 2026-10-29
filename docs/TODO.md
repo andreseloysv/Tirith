@@ -52,7 +52,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Eventos por lane en el panel del agente.
 - [ ] Instalar los hooks en los ajustes de usuario de cada agente.
 - [ ] Protegerlos para que un agente no pueda quitárselos.
-- [ ] Enlazar cada lane con la petición original del usuario.
+- [x] Enlazar cada lane con la petición original del usuario.
 - [ ] Verificar el payload real de Muse Code y ajustar su adaptador.
 
 ## 4. `lane run --interactive` (seguir chateando)
@@ -69,7 +69,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Permisos estándar por agente (flags / perfiles), porque no pueden preguntar.
 - [ ] Verificar dentro del sandbox de cada agente que el wrapper de git está en `PATH`.
 - [ ] Confirmar el formato JSON de Muse Code con una ejecución real.
-- [ ] Codex y Copilot probados con `lane run`.
+- [ ] Codex y Copilot probados con `lane run` (el dueño los instala y hace login; hoy no están).
 - [ ] Agentes en la nube (Copilot coding agent, etc.): actividad desde GitHub (PRs, Actions).
 
 ## 6. Pipelines con autodescubrimiento (`tirith.toml`)
@@ -103,7 +103,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Objetivo, estado activo, archivos cambiados (git en vivo), herramientas y tests por agente.
 - [x] Vista Flow: cada agente se expande con toda su información.
 - [x] Logs legibles: más nuevos arriba, colores por tipo, JSON convertido en información clara.
-- [ ] Detección de tests sin falsos positivos.
+- [x] Detección de tests sin falsos positivos.
 - [ ] Guardar el diff real por lane.
 - [ ] Totales de coste y tiempo por sesión.
 - [ ] Registro de decisiones ("por qué") visible en la vista Flow.
@@ -127,6 +127,13 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] `tirith lane run --step <n>`: cada lane dice en qué paso trabaja.
 - [x] Tarjeta «Plan» en el Overview: pasos, progreso, estado y agentes trabajando en cada uno.
 - [x] Fecha límite opcional con cuenta atrás.
+
+## 11. Lanzar un sub-agente desde el Plan
+
+- [ ] `tirith launch --project <id> --step <n>`: worktree, brief generado de las tareas abiertas, lane en segundo plano.
+- [ ] Enlaces `tirith://` con un manejador local (sin servidores) y token para que ninguna otra web lance agentes.
+- [ ] Botón «Terminar con un agente» en cada paso no terminado del Plan.
+- [x] Markdown en todo el texto de los agentes (respuestas, objetivos, mensajes).
 
 ## Orden
 
