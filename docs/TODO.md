@@ -299,7 +299,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] La landing page tiene animaciones al hacer scroll (aparición suave de secciones, capturas y tarjetas) respetando «reducir movimiento». (check: `node web/js/landing.test.mjs`) (en revisión)
 - [ ] Logo de Tirith en 3D renderizado con Blender y renders 3D en la landing page. (check: `test -f site/img/logo-3d.png`) (en revisión)
 - [ ] Registrar en la revisión de una lane la causa cuando se interrumpe (señal o código de salida del proceso), con un test que mata el proceso de la revisión y comprueba la causa registrada. (check: `cd collector && uv run pytest -q -k review_interrupted_records_cause`)
-- [ ] Volver a grabar el vídeo de demo con la interfaz actual (sin Flow, logo 3D) y cada subtítulo sobre la escena que describe. (check: `test -f docs/demo/out/tirith-demo.mp4`) (en curso: u-video2)
+- [ ] Volver a grabar el vídeo de demo con la interfaz actual (sin Flow, logo 3D) y cada subtítulo sobre la escena que describe. (check: `test -f docs/demo/out/tirith-demo.mp4`) (en revisión)
 - [ ] El límite de tamaño de una lane cuenta solo su propio cambio (contra la base con main), no lo que trajo al fusionar main. (check: `cd collector && uv run -q pytest -q tests -k budget`) (en curso: u-budgetfix)
 - [ ] Hacer robusto el test test_second_message_reaches_the_same_process_and_waits_for_the_turn_to_end de test_msession.py, que falla bajo carga como el de compacts (espera de reloj real) (check: `cd collector && uv run pytest tests/test_msession.py -q -k second_message_reaches_the_same_process`)
 
