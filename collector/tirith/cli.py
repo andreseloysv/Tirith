@@ -8,6 +8,7 @@ the hooks folder of the repo the owner named). No command opens a port.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import secrets
@@ -27,6 +28,7 @@ from tirith import flows as flows_mod
 from tirith import gates as gates_mod
 from tirith import manifest as manifest_mod
 from tirith import hooks as hooks_mod
+from tirith import inbox as inbox_mod
 from tirith import launch as launch_mod
 from tirith import projects as projects_mod
 from tirith import rooms as rooms_mod
@@ -876,7 +878,7 @@ def _cmd_url_open(args) -> int:
     home = _home(args)
     try:
         link = launch_mod.parse_url(args.url)
-        if link["action"] != "launch":
+        if link["action"] not in ("launch", "inbox"):
             raise launch_mod.LaunchError(f"unknown action '{link['action']}' in {args.url!r}")
         if not launch_mod.token_ok(home, link["token"]):
             gates_mod.record_violation(
@@ -887,9 +889,44 @@ def _cmd_url_open(args) -> int:
                 ts=now_iso(), agent=None, lane=None, session=None,
                 project=link["project"] or None, tool=None, cwd=None)
             raise launch_mod.LaunchError("refusing: wrong or missing token")
+        if link["action"] == "inbox":
+            fields = inbox_mod.parse_url(args.url)
+            inbox_mod.add_request(home, fields["kind"], fields["project"], fields["step"], fields["text"])
+            return 0
         launch_step(home, link["project"], link["step"], link["agent"])
-    except launch_mod.LaunchError as error:
+    except (launch_mod.LaunchError, inbox_mod.InboxError) as error:
         print(f"tirith url open: {error}", file=sys.stderr)
+        return 3
+    return 0
+
+
+def _cmd_inbox(args) -> int:
+    home = _home(args)
+    action = args.inbox_command
+    try:
+        if action == "add":
+            text = args.text if args.text is not None else ""
+            print(inbox_mod.add_request(home, args.kind, args.project, str(args.step), text)["id"])
+        elif action == "list":
+            for req in inbox_mod.requests(home):
+                if args.open and req["status"] != "open":
+                    continue
+                print(json.dumps(req) if args.json else
+                      f"{req['id']}  {req['status']:<8} {req['kind']:<6} {req['project']}#{req['step']}  "
+                      + " ".join(req["text"].split())[:80])
+        elif action == "answer":
+            inbox_mod.add_answer(home, args.id, args.text, by=args.by)
+        elif action == "done":
+            inbox_mod.mark_done(home, args.id)
+        elif action == "watch":
+            def emit(req: dict) -> None:
+                print(inbox_mod.watch_line(req), flush=True)
+            try:
+                inbox_mod.watch(home, emit, poll_s=args.interval, include_existing=not args.new_only)
+            except KeyboardInterrupt:
+                pass
+    except inbox_mod.InboxError as error:
+        print(f"tirith inbox {action}: {error}", file=sys.stderr)
         return 3
     return 0
 
@@ -1275,6 +1312,29 @@ def build_parser() -> argparse.ArgumentParser:
     launch.add_argument("--agent", default=None, help="agent alias (its [agents.<alias>] launch template)")
     launch.add_argument("--dry-run", action="store_true", help="print the brief and command, start nothing")
     launch.set_defaults(func=_cmd_launch)
+
+    inbox = sub.add_parser("inbox", parents=[common], help="the owner's requests on plan steps")
+    inbox_sub = inbox.add_subparsers(dest="inbox_command", required=True)
+    i_add = inbox_sub.add_parser("add", parents=[common], help="add a request (prints its id)")
+    i_add.add_argument("--kind", required=True, choices=inbox_mod.KINDS)
+    i_add.add_argument("--project", required=True)
+    i_add.add_argument("--step", required=True, help="roadmap step number")
+    i_add.add_argument("--text", default=None, help="the question (required for ask)")
+    i_ls = inbox_sub.add_parser("list", parents=[common], help="list requests")
+    i_ls.add_argument("--open", action="store_true", help="only open requests")
+    i_ls.add_argument("--json", action="store_true", help="one JSON object per line")
+    i_ans = inbox_sub.add_parser("answer", parents=[common], help="answer a request (markdown)")
+    i_ans.add_argument("id")
+    i_ans.add_argument("text")
+    i_ans.add_argument("--by", choices=inbox_mod.ANSWERERS, default="steward")
+    i_done = inbox_sub.add_parser("done", parents=[common], help="close a request")
+    i_done.add_argument("id")
+    i_watch = inbox_sub.add_parser("watch", parents=[common],
+                                   help="block; print each open request as one JSON line, then each new one")
+    i_watch.add_argument("--new-only", action="store_true", help="skip the requests already in the file")
+    i_watch.add_argument("--interval", type=float, default=1.0, help="seconds between reads")
+    for i_cmd in (i_add, i_ls, i_ans, i_done, i_watch):
+        i_cmd.set_defaults(func=_cmd_inbox)
 
     url = sub.add_parser("url", parents=[common], help="the tirith:// link handler (macOS)")
     url_sub = url.add_subparsers(dest="url_command", required=True)

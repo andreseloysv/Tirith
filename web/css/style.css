@@ -478,3 +478,31 @@ button.vwho:hover b { text-decoration: underline; }
 .pltip code { display: block; margin: 5px 0; padding: 3px 7px; border-radius: 6px; background: rgba(120,135,160,.14); user-select: all; }
 .pbody .pltip { right: auto; left: 0; }
 .plslot { display: inline-flex; flex: none; width: 118px; justify-content: flex-end; }
+/* ---------- the owner's inbox on plan steps (v-plan.js) ---------- */
+.iacts { display: inline-flex; flex: none; gap: 2px; opacity: 0; transition: opacity .12s; }
+.pstep:hover .iacts, .pstep:focus-within .iacts, .iacts:focus-within { opacity: 1; }
+@media (hover: none) { .iacts { opacity: 1; } }
+.ibtn { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 24px; border-radius: 8px; color: var(--mut); }
+.ibtn:hover, .ibtn.on { color: var(--blue); background: rgba(255,255,255,.8); }
+.icount { margin-left: 8px; padding: 0 8px; font-size: 11.5px; font-weight: 500; line-height: 18px; vertical-align: 2px; color: var(--blue); background: rgba(47,111,237,.1); border-radius: 9px; }
+.ichip-row { margin: 0 0 6px 30px; }
+.ichip { display: inline-block; padding: 0 9px; font-size: 11.5px; line-height: 20px; color: #8a5a00; background: #fff4d6; border: 1px solid #f1dc9c; border-radius: 10px; }
+.iask { display: flex; align-items: center; gap: 8px; margin: 0 0 8px 30px; }
+.iin { flex: 1; min-width: 0; height: 28px; padding: 0 10px; font: inherit; font-size: 12.5px; color: var(--fg); background: rgba(255,255,255,.85); border: 1px solid rgba(120,135,160,.35); border-radius: 8px; }
+.iin:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(47,111,237,.14); }
+.isend { height: 28px; padding: 0 12px; font-size: 12px; color: #fff; background: var(--blue); border-radius: 8px; }
+.ihint { font-size: 11px; color: var(--mut); white-space: nowrap; }
+@media (max-width: 640px) { .ihint { display: none; } }
+.icli, .ierr { margin: 0 0 8px 30px; padding: 7px 10px; font-size: 12px; line-height: 1.45; border-radius: 8px; background: rgba(255,255,255,.7); border: 1px solid rgba(120,135,160,.3); }
+.ierr { color: var(--red); background: #fdecec; border-color: #f8d0d2; }
+.icli code { display: block; margin-top: 4px; padding: 3px 7px; border-radius: 6px; background: rgba(120,135,160,.14); user-select: all; overflow-wrap: anywhere; }
+.ians { margin: 0 0 8px 30px; padding-left: 12px; border-left: 2px solid rgba(47,111,237,.3); }
+.iahead { display: flex; align-items: center; gap: 6px; width: 100%; padding: 2px 0; text-align: left; font-size: 12px; color: var(--mut); }
+.iahead svg { flex: none; transition: transform .12s; transform: rotate(-90deg); } .ians.open .iahead svg { transform: none; }
+.iahead:hover { color: var(--blue); }
+.iq { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.iwhen { flex: none; font-size: 11px; }
+.ia { padding: 4px 0 2px; }
+.iby { margin-bottom: 2px; font-size: 11px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; color: var(--mut); }
+.iby span { font-weight: 400; text-transform: none; letter-spacing: 0; }
+@media (max-width: 640px) { .ptog { grid-template-columns: 18px minmax(0, 1fr) 38px; gap: 8px; } .ptog .pbar { display: none; } .ptit { white-space: normal; } }

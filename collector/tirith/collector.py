@@ -28,6 +28,7 @@ from tirith import github as github_mod
 from tirith import manifest as manifest_mod
 from tirith import roadmap as roadmap_mod
 from tirith import hooks as hooks_mod
+from tirith import inbox as inbox_mod
 from tirith import launch as launch_mod
 from tirith.logview import entries_from_events, log_entries
 from tirith import projects as projects_mod
@@ -294,6 +295,7 @@ class Collector:
         self.activity = activity_mod.ActivityTracker()
         self.github = github_mod.GithubReader(github_transport)
         self._usage_cache: dict = {}
+        self._inbox_tried: dict[str, float] = {}  # request id -> monotonic time of the last brain try
 
     # -- identities / renown -------------------------------------------------
 
@@ -883,6 +885,7 @@ class Collector:
             self.home, {a["id"]: f"{a['name']} {a['epithet']}".strip() for a in agent_rows},
             projects=endpoint_projects, limit=None)
         self._fill_counts(projects, agent_rows, runs, all_flows, now)
+        inbox_rows = self._inbox(projects, agent_rows, all_flows, now)
         sessions = self._sessions(lanes, events, all_flows, raw_notes, waiting, resolve)
         for sess in sessions:
             sess["usage"] = agentrun_mod.sum_usage(
@@ -910,9 +913,40 @@ class Collector:
             "sessions": sessions,
             "loose_events": loose_events,
             "violations": violations,
+            "inbox": inbox_rows,
             "launch": {"token": launch_mod.launch_token(self.home),
                        "available": launch_mod.handler_installed()},
         }
+
+    def _inbox(self, projects: list[dict], agents: list[dict], flows: list[dict],
+               now: datetime) -> list[dict]:
+        """``state.inbox``; an unanswered question gets one brain answer after ``AUTO_ANSWER_AFTER_S``."""
+        rows = inbox_mod.requests(self.home)
+        if self.worker.enabled:
+            by_project = {p["id"]: p for p in projects}
+            retry_after = 300.0
+            for req in rows:
+                if req["kind"] != "ask" or req["status"] != "open":
+                    continue
+                asked = parse_iso(req["at"])
+                if asked is None or (now - asked).total_seconds() < inbox_mod.AUTO_ANSWER_AFTER_S:
+                    continue
+                cached = self.cache.get("inbox-answer", req["id"])
+                if cached is not None:
+                    if cached.get("text"):
+                        row = inbox_mod.add_answer(self.home, req["id"], cached["text"], by="brain",
+                                                   auto=True, at=now_iso(now))
+                        req["answers"].append({"at": row["at"], "by": "brain", "text": row["text"], "auto": True})
+                        req["status"] = "answered"
+                    continue
+                last = self._inbox_tried.get(req["id"])
+                if last is not None and time.monotonic() - last < retry_after:
+                    continue
+                context = inbox_mod.answer_prompt(req, by_project.get(req["project"]), agents, flows)
+                if self.worker.submit("inbox-answer", req["id"],
+                                      lambda c, t=context: {"text": brain_mod.job_inbox_answer(c, t)}):
+                    self._inbox_tried[req["id"]] = time.monotonic()
+        return rows[-inbox_mod.STATE_ROWS:]
 
     @staticmethod
     def _fill_counts(projects: list[dict], agents: list[dict], runs: list[dict],
