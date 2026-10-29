@@ -255,7 +255,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Lo que dice un agente en su informe se verifica contra su cambio real antes de fusionar.
 - [x] El collector vuelve a tardar menos de 3 s por ciclo (hoy ~20 s) y un test lo vigila. (hecho: abdf921)
 - [x] Fusionar nunca es una pregunta para el dueño: si los tests y la verificación pasan, Tirith fusiona solo; un duplicado o conflicto va a la cola del manager. Nunca dos agentes en el mismo elemento. (hecho: cd1b9c1)
-- [ ] Regla en código, sin excepciones: ningún agente arranca sin estar ligado a un elemento abierto del plan (revisiones y revisiones del plan incluidas: Tirith añade su elemento).
+- [x] Regla en código, sin excepciones: ningún agente arranca sin estar ligado a un elemento abierto del plan (revisiones y revisiones del plan incluidas: Tirith añade su elemento). (hecho: 222849b)
 - [ ] Regla en código: ningún agente termina sin informar a Tirith del resultado de su elemento (hecho / en parte + nuevos elementos / bloqueado + motivo); Tirith es el único que escribe el plan y marca «hecho» solo cuando la revisión pasa.
 - [ ] Llevar a main el commit 0a71483 de la rama lane/chat-wrap-long-reply-buttons-dra-2 (botones de respuesta largos que se ajustan, adjuntar o arrastrar cualquier archivo al chat): resolver los conflictos con main y pasar los tests
 - [ ] El collector se reinicia solo cuando cambia su código en main (así ningún cambio fusionado queda sin cargar). (en revisión)
