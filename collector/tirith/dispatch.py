@@ -14,6 +14,7 @@ See ``docs/CONTRACT-inbox.md``.
 from __future__ import annotations
 
 import io
+import time
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -87,7 +88,8 @@ def _step_name(req: dict) -> str:
 
 def add_owner_item(home: Path, item_id: str, project: str | None, text: str, options: list[dict],
                    at: str, actions: list[dict] | None = None, link: str | None = None,
-                   why_owner: str | None = None, why_detail: str | None = None, howto=None) -> str:
+                   why_owner: str | None = None, why_detail: str | None = None, howto=None,
+                   kind: str | None = None) -> str:
     """One item on the owner's waiting list with ``options`` (``[{label, command}]``), Run ``actions`` and
     an optional ``link`` to open; once per id. It passes ``ownergate.admit``: ``why_owner`` is a key of
     ``asks.WHY_OWNER`` (why only the owner can do it), else the text goes to the manager queue as "agent can
@@ -96,7 +98,8 @@ def add_owner_item(home: Path, item_id: str, project: str | None, text: str, opt
     manager. A text that promises a button the item does not have is rewritten without it."""
     if not options and not actions:
         raise ValueError(f"owner item {item_id} has no option: every item for the owner needs a call to action")
-    verdict = ownergate_mod.admit(home, item_id, project, text, why_owner, via="owner-item", at=at, howto=howto)
+    verdict = ownergate_mod.admit(home, item_id, project, text, why_owner, via="owner-item", at=at, howto=howto,
+                                  why_detail=why_detail, kind=kind)
     if verdict != ownergate_mod.OWNER:
         return verdict
     why = asks_mod.why_key(why_owner)
@@ -342,6 +345,18 @@ def escalate(home: Path, req: dict, notify: Callable[[str, str], None], at: str)
                    why_owner="owner-decision", why_detail="choice: wait, start an agent or use the brain")
 
 
+CLEANUP_EVERY_S = 60  # merged-worktree cleanup runs git per finished lane: not every 2 s cycle
+_cleanup_at: dict[str, float] = {}
+
+
+def _cleanup_due(home: Path) -> bool:
+    key, at = str(home), time.monotonic()
+    if key in _cleanup_at and at - _cleanup_at[key] < CLEANUP_EVERY_S:
+        return False
+    _cleanup_at[key] = at
+    return True
+
+
 def run(home: Path, config: Config, now: datetime, *, agents: list[dict], lanes: list[dict],
         status_of: Callable, launcher: Callable | None = None,
         notify: Callable[[str, str], None] = macos_notify, spawn: Callable | None = None,
@@ -400,7 +415,8 @@ def run(home: Path, config: Config, now: datetime, *, agents: list[dict], lanes:
             changed = True
     if autoreview_mod.run(home, config, now, state, lanes, spawn=spawn, notify=notify):
         changed = True
-    diskdiet_mod.cleanup(home, config, now)
+    if _cleanup_due(home):
+        diskdiet_mod.cleanup(home, config, now)
     # before the on-call manager, so a restart it asks for happens in this pass
     if selfcheck_mod.run(home, config, now, state, lanes=lanes, agents=agents, projects=projects or [],
                          spawn=spawn, kill=manager_kill):

@@ -101,10 +101,19 @@ def _temp_projects_allowed(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def _no_outer_lane(monkeypatch):
-    """Tests run the same inside a lane (TIRITH_LANE / TIRITH_SESSION set by lane run) as outside."""
-    monkeypatch.delenv("TIRITH_LANE", raising=False)
-    monkeypatch.delenv("TIRITH_SESSION", raising=False)
+def _clean_env(monkeypatch):
+    """Tests run the same inside a lane or agent session as outside: drop every TIRITH_* variable
+    (TIRITH_LANE, TIRITH_SESSION, TIRITH_AGENT_SESSION, TIRITH_HOME, ...); tests set what they need explicitly."""
+    for name in list(os.environ):
+        if name.startswith("TIRITH_"):
+            monkeypatch.delenv(name, raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _plenty_of_disk(monkeypatch):
+    """The dispatcher and autopilot start no lane when the host disk is nearly full; tests must not depend on it."""
+    from tirith import diskdiet
+    monkeypatch.setattr(diskdiet, "free_bytes", lambda folder: 1000 * 1024 ** 3)
 
 
 @pytest.fixture(autouse=True)
