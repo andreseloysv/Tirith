@@ -65,7 +65,7 @@ The anthropic CLI's official docs cover these topics:
 | Agent shims (`tirith shim install`) | `sh` wrapper | `sh` wrapper | `.cmd` wrapper (written, untested on a real machine) |
 | Commit guard (`sh` git hooks) | yes | yes | via Git for Windows' own `sh` (untested) |
 | `tirith://` link handler (`launch.py`, `osacompile`, `Info.plist`) | yes | no | no |
-| Desktop app (Tauri) and chat | yes | builds on Linux per Tauri; not run here | builds on Windows per Tauri; not run here; `collector_running()` is Unix-only so the app starts its own collector |
+| Desktop app (Tauri) and chat | yes | builds on Linux per Tauri; not run here | builds on Windows per Tauri; not run here; `collector_running()` asks PowerShell (`Get-CimInstance`, untested) and starts its own collector if that fails |
 | Stop a lane (SIGTERM, then SIGKILL) | yes | yes | app falls back to kill; CLI signals not checked |
 
 Sources for the tools Tirith builds on:
