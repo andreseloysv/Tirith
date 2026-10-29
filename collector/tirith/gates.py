@@ -643,3 +643,20 @@ def verify_shims(config: Config, shim_dir: Path, path_env: str | None = None) ->
             problems.append(f"{alias}: {shim_dir} is not first for '{os.path.basename(command)}' "
                             f"in PATH. Fix: put {shim_dir} before the real binary's folder in PATH")
     return problems
+
+
+REPO_BIN = str(Path(__file__).resolve().parents[2] / "bin")  # `tirith` for agents lives in the repo
+
+
+def lane_path(home: Path, base: str | None = None) -> str:
+    """The PATH a lane gets: agent shims first, then the git wrapper, then the repo ``bin``."""
+    wrapper_dir = str(Path.home() / ".local" / "bin")
+    return os.pathsep.join([str(Path(home) / "shims"), wrapper_dir, REPO_BIN,
+                            os.environ.get("PATH", "") if base is None else base])
+
+
+def verify_home_shims(config: Config, home: Path, shim_dir: Path | None = None) -> list[str]:
+    """``tirith shim verify``: the shims of ``<home>/shims`` against the lane PATH (a custom folder
+    is checked against the plain PATH). The one check behind the command and the Setup banner."""
+    folder = Path(shim_dir) if shim_dir else Path(home) / "shims"
+    return verify_shims(config, folder, lane_path(home) if not shim_dir else None)
