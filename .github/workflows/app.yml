@@ -1,6 +1,7 @@
 name: app
 
-# Unsigned desktop bundles on version tags. Signing needs the owner's certificates (app/README.md).
+# Desktop bundles on version tags. macOS is signed (and notarized) when the secrets in app/README.md
+# exist; otherwise everything is unsigned.
 on:
   push:
     tags:
@@ -18,6 +19,8 @@ jobs:
       matrix:
         os: [macos-latest, windows-latest, ubuntu-22.04]
     runs-on: ${{ matrix.os }}
+    env:
+      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -35,9 +38,44 @@ jobs:
       - name: Install
         working-directory: app
         run: npm ci
+      - name: Import macOS certificate
+        if: runner.os == 'macOS' && env.APPLE_CERTIFICATE != ''
+        env:
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          keychain="$RUNNER_TEMP/build.keychain-db"
+          pass=$(uuidgen)
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$pass" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$pass" "$keychain"
+          security import "$RUNNER_TEMP/cert.p12" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$pass" "$keychain"
+          security list-keychains -d user -s "$keychain" login.keychain-db
+          rm "$RUNNER_TEMP/cert.p12"
       - name: Build
         working-directory: app
-        run: npm run tauri build
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY_CONTENT }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = macOS ] && [ -n "$APPLE_SIGNING_IDENTITY" ]; then
+            if [ -n "$APPLE_API_KEY_CONTENT" ]; then
+              umask 077
+              printf '%s' "$APPLE_API_KEY_CONTENT" > "$RUNNER_TEMP/api_key.p8"
+              export APPLE_API_KEY_PATH="$RUNNER_TEMP/api_key.p8"
+            fi
+            ../scripts/package.sh
+          else
+            npm run tauri build
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: tirith-${{ runner.os }}
