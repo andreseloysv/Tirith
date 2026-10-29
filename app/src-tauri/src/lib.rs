@@ -530,7 +530,10 @@ fn inbox_row(kind: &str, project: &str, step: &str, text: &str, now: SystemTime,
 
 /// Appends one row to `<home>/inbox.jsonl` in a single write call, so a concurrent writer cannot split the line.
 fn inbox_append(row: &Value) -> Result<(), String> {
-    let home = tirith_home();
+    inbox_append_in(&tirith_home(), row)
+}
+
+fn inbox_append_in(home: &std::path::Path, row: &Value) -> Result<(), String> {
     std::fs::create_dir_all(&home).map_err(|e| format!("could not create {}: {e}", home.display()))?;
     let path = home.join("inbox.jsonl");
     let mut file = std::fs::OpenOptions::new()
@@ -541,12 +544,39 @@ fn inbox_append(row: &Value) -> Result<(), String> {
     file.write_all(format!("{row}\n").as_bytes()).map_err(|e| e.to_string())
 }
 
+/// A client id as the page makes it: 1 to 64 characters of `[A-Za-z0-9_-]`.
+fn valid_cid(cid: &str) -> bool {
+    !cid.is_empty() && cid.len() <= 64 && cid.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'_' || c == b'-')
+}
+
+/// The id of the request row of `inbox.jsonl` that already carries this client id, if any.
+fn id_of_cid(home: &std::path::Path, cid: &str) -> Option<String> {
+    let text = std::fs::read_to_string(home.join("inbox.jsonl")).ok()?;
+    text.lines()
+        .filter_map(|l| serde_json::from_str::<Value>(l).ok())
+        .find(|r| r["cid"] == cid && r["id"].is_string() && r["kind"] != "answer")
+        .and_then(|r| r["id"].as_str().map(String::from))
+}
+
+/// Appends `<time> <line>` to `<home>/logs/chat-send.log`; a log that cannot be written never fails a send.
+fn chat_send_log(home: &std::path::Path, line: &str) {
+    let dir = home.join("logs");
+    if std::fs::create_dir_all(&dir).is_err() {
+        return;
+    }
+    if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(dir.join("chat-send.log")) {
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
+        let _ = file.write_all(format!("{} {line}\n", iso_utc(now)).as_bytes());
+    }
+}
+
 fn inbox_salt() -> u32 {
     static COUNTER: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
     COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
-/// Appends one request to `<home>/inbox.jsonl` (no shell) and returns its id.
+/// Appends one request to `<home>/inbox.jsonl` (no shell) and returns its id. A `cid` already on a row is a
+/// retry: nothing is written and that row's id comes back. Every attempt and its result go to `logs/chat-send.log`.
 #[tauri::command]
 fn inbox_add(
     kind: String,
@@ -555,15 +585,64 @@ fn inbox_add(
     text: Option<String>,
     id: Option<String>,
     attachments: Option<Vec<Value>>,
+    cid: Option<String>,
 ) -> Result<String, String> {
-    let attachments = clean_attachments(&attachments.unwrap_or_default(), &tirith_home().join("attachments"))?;
+    inbox_add_in(&tirith_home(), kind, project, step, text, id, attachments, cid)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn inbox_add_in(
+    home: &std::path::Path,
+    kind: String,
+    project: String,
+    step: String,
+    text: Option<String>,
+    id: Option<String>,
+    attachments: Option<Vec<Value>>,
+    cid: Option<String>,
+) -> Result<String, String> {
+    let head = format!(
+        "send kind={kind} project={project:?} cid={} chars={} images={}",
+        cid.as_deref().unwrap_or("-"),
+        text.as_deref().map_or(0, |t| t.chars().count()),
+        attachments.as_ref().map_or(0, |a| a.len())
+    );
+    let result = inbox_add_row(home, &kind, &project, &step, text, id, attachments, cid);
+    match &result {
+        Ok(id) => chat_send_log(home, &format!("{head} -> ok id={id}")),
+        Err(e) => chat_send_log(home, &format!("{head} -> error: {e}")),
+    }
+    result
+}
+
+#[allow(clippy::too_many_arguments)]
+fn inbox_add_row(
+    home: &std::path::Path,
+    kind: &str,
+    project: &str,
+    step: &str,
+    text: Option<String>,
+    id: Option<String>,
+    attachments: Option<Vec<Value>>,
+    cid: Option<String>,
+) -> Result<String, String> {
+    let cid = cid.filter(|c| !c.is_empty());
+    if let Some(c) = &cid {
+        if !valid_cid(c) {
+            return Err(format!("bad client id {c:?}"));
+        }
+        if let Some(seen) = id_of_cid(home, c) {
+            return Ok(seen);
+        }
+    }
+    let attachments = clean_attachments(&attachments.unwrap_or_default(), &home.join("attachments"))?;
     let text = text.unwrap_or_default();
     if !attachments.is_empty() && kind != "chat" {
         return Err("only a chat message takes images".into());
     }
     // a chat message may be only images: the row builder wants text, the stored row keeps it empty
     let probe = if attachments.is_empty() || !text.trim().is_empty() { text.as_str() } else { "(image)" };
-    let mut row = inbox_row(&kind, &project, &step, probe, SystemTime::now(), inbox_salt())?;
+    let mut row = inbox_row(kind, project, step, probe, SystemTime::now(), inbox_salt())?;
     row["text"] = json!(clip(text.trim(), INBOX_TEXT_MAX));
     if let Some(id) = id {
         if !valid_message_id(&id) {
@@ -571,10 +650,13 @@ fn inbox_add(
         }
         row["id"] = json!(id);
     }
+    if let Some(c) = cid {
+        row["cid"] = json!(c);
+    }
     if !attachments.is_empty() {
         row["attachments"] = json!(attachments);
     }
-    inbox_append(&row)?;
+    inbox_append_in(home, &row)?;
     Ok(row["id"].as_str().unwrap_or_default().to_string())
 }
 
@@ -708,6 +790,34 @@ mod inbox_tests {
         }
         assert!(clean_attachments(&[json!({"path": "/h/attachments/a/1.svg", "type": "image/svg+xml"})], &root).is_err());
         assert!(clean_attachments(&vec![ok; 7], &root).is_err());
+    }
+
+    #[test]
+    fn a_retry_with_the_same_cid_writes_one_row_and_every_attempt_is_logged() {
+        let home = scratch("cid");
+        let add = |cid: &str| inbox_add_in(&home, "chat".into(), "demo".into(), "".into(), Some("hello".into()), None, None, Some(cid.into()));
+        let first = add("c-1").unwrap();
+        assert_eq!(add("c-1").unwrap(), first);
+        assert_ne!(add("c-2").unwrap(), first);
+        let rows = std::fs::read_to_string(home.join("inbox.jsonl")).unwrap();
+        assert_eq!(rows.lines().count(), 2);
+        assert!(rows.lines().next().unwrap().contains("\"cid\":\"c-1\""));
+        let log = std::fs::read_to_string(home.join("logs/chat-send.log")).unwrap();
+        assert_eq!(log.lines().count(), 3);
+        assert!(log.contains("cid=c-1") && log.contains("-> ok id="));
+        assert!(!log.contains("hello"), "the log never holds the message text");
+    }
+
+    #[test]
+    fn a_failed_send_writes_no_row_and_logs_the_error() {
+        let home = scratch("fail");
+        let bad = inbox_add_in(&home, "chat".into(), "demo".into(), "".into(), Some("  ".into()), None, None, Some("c-9".into()));
+        assert!(bad.is_err());
+        let bad_cid = inbox_add_in(&home, "chat".into(), "".into(), "".into(), Some("x".into()), None, None, Some("bad cid!".into()));
+        assert!(bad_cid.is_err());
+        assert!(!home.join("inbox.jsonl").exists());
+        let log = std::fs::read_to_string(home.join("logs/chat-send.log")).unwrap();
+        assert_eq!(log.matches("-> error:").count(), 2);
     }
 
     #[test]
