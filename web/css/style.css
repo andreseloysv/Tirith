@@ -947,4 +947,3 @@ button.vwho:hover b { text-decoration: underline; }
 .livesteps .ls-sum { font: inherit; color: inherit; display: block; width: 100%; } .livesteps .ls-sum:hover .ls-show { text-decoration: underline; }
 .livesteps .ls-show { color: var(--blue); } .livesteps.open .ls-list { margin-top: 6px; }
 :root[data-theme="dark"] .livesteps { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.12); }
->>>>>>> main
