@@ -26,8 +26,15 @@
     if (filt.q) parts.push('q=' + encodeURIComponent(filt.q));
     if (filt.view !== 'overview') parts.push('view=' + filt.view);
     if (filt.mode !== 'kanban') parts.push('mode=' + filt.mode);
+    if (filt.view === 'pipelines' && T.ui.pOpen) parts.push('open=' + encodeURIComponent(T.ui.pOpen + pStageSuffix()));
     var h = parts.length ? '#' + parts.join('&') : '';
     if (h !== location.hash) { try { history.replaceState(null, '', location.pathname + location.search + h); } catch (e) {} }
+  }
+  /* the open run's selected stage, as "::name", so a link can open the same log */
+  function pStageSuffix() {
+    var r = T.rawState && T.rawState(), run = r && (r.pipelines || []).filter(function (p) { return p.run === T.ui.pOpen; })[0];
+    var st = run && T.ui.stageSel[run.run] != null ? run.stages[T.ui.stageSel[run.run]] : null;
+    return st ? '::' + st.name : '';
   }
   function applyHash(initial) {
     var o = parseHash();
@@ -38,6 +45,7 @@
       T.ui.selRun = o.open; T.ui.openAgent = o.open; T.ui.edge = o.open === 'edge' ? 'first' : null;
       T.ui.drawer = filt.view === 'pipelines' ? 'stage' : filt.view === 'agents' ? 'agent' : filt.view === 'flow' ? (o.open === 'edge' ? 'edge' : null) : null;
     }
+    if (filt.view === 'pipelines' && o.open) { var po = o.open.split('::'); T.ui.pOpen = po[0]; T.ui.pOpenStage = po[1] || null; }
     var sp = o.state || '';
     defaultMode = !sp && !tauri; statePath = tauri ? 'tauri' : sp || '../fixtures/state.demo.js';
     if (!initial && tauri) { if (raw) renderAll(); }
