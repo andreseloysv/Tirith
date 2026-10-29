@@ -92,6 +92,27 @@
     return out;
   }
 
+  /* The project the Overview shows: the sidebar's, else the one with the most recent activity (never "all"). */
+  T.effProject = function (s) {
+    if (filt.project) return filt.project;
+    var r = raw || s || {}, best = '', at = -1;
+    function see(pid, iso) { var m = T.ms(iso); if (pid && m != null && m > at) { at = m; best = pid; } }
+    (r.agents || []).forEach(function (a) { see(a.project, a.last_activity_at || a.ended_at || a.started_at); });
+    (r.pipelines || []).forEach(function (p) { see(p.project, p.ended_at || p.started_at); });
+    (r.violations || []).forEach(function (v) { see(v.project, v.ts); });
+    (r.waiting_on_you || []).forEach(function (w) { see(w.project, w.since); });
+    return best || ((r.projects || [])[0] || {}).id || '';
+  };
+  /* s limited to one project's rows (Setup, Rules, Plan, Your turn and Pipelines read it) */
+  T.scopeProject = function (s, pid) {
+    if (!pid) return s;
+    var out = {}, k, on = function (x) { return x.project === pid; };
+    for (k in s) out[k] = s[k];
+    ['agents', 'pipelines', 'waiting_on_you', 'answered_waits', 'violations', 'rooms'].forEach(function (n) { if (s[n]) out[n] = s[n].filter(on); });
+    out.projects = (s.projects || []).filter(function (p) { return p.id === pid; });
+    return out;
+  };
+
   /* ---------- render ---------- */
   function renderAll() {
     T.render(applyFilters(raw), raw);
