@@ -68,6 +68,10 @@ RULES = (
     "TODO, e.g. a review): `tirith plan add --project P --step N --text \"<item>\"`. Nobody edits `docs/TODO.md` "
     "by hand, not even you; Tirith writes it. An agent that ends without `tirith plan report` has its work "
     "thrown away.",
+    "Split every request into plan items of about 30 minutes, one deliverable each, before you launch anything: "
+    "`tirith plan add ... --text \"<item>\" --check \"<command that passes when it is done>\"`. Tirith refuses "
+    "items that are too big (\"split it\"); an item with a check is done only when the check passes "
+    "(`tirith plan check`).",
     "`tirith lane run` from here starts the lane detached, in its own worktree, and prints the lane id at "
     "once. Never run it as a background task of your own shell and do not wait for it: your turn ends when "
     "you have answered.",
