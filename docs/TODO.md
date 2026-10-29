@@ -141,6 +141,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Notarizar la app de macOS (`scripts/notarize-macos.sh`, perfil `tirith-notary`; aceptada por Apple el 2026-10-29).
 - [ ] Muse protocol probe: read muse serve help and schema
 - [ ] Chat de la app: adjuntar archivos con el clip y arrastrando funciona de verdad en la app de escritorio, y sin scroll horizontal. (en curso: app-de-escritorio-tauri-con-chat-7)
+- [ ] Los mensajes del chat nunca se cortan ni se salen por la derecha: texto, rutas y código largos se parten o tienen su propio scroll dentro del bloque.
 
 ## 10. Plan visible en el Overview
 
