@@ -18,7 +18,9 @@
       <div id="crumb" class="crumb"></div>
       <label class="cmd"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="f-q" type="search" placeholder="Search" aria-label="Search" autocomplete="off"><kbd>&#8984;K</kbd></label>
       <button id="mc-btn" class="mc-btn" type="button" hidden aria-label="Chat with the manager" title="Chat with the manager"><svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3h10a1 1 0 011 1v6a1 1 0 01-1 1H7.5L4.6 13.6V11H3a1 1 0 01-1-1V4a1 1 0 011-1z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg><span>Chat</span><i class="mc-dot"></i></button>
+      <button id="health-btn" class="health-btn green" type="button" hidden aria-label="Health" aria-controls="health-panel"><i class="dot"></i></button>
     </header>
+    <div id="health-panel" class="health-panel" role="status" hidden></div>
     <div id="stale" class="stale" role="status" hidden>Tirith is not updating — restarting…</div>
     <div id="view" class="view"></div>
   </div>
@@ -41,6 +43,7 @@
 <script src="js/v-env.js"></script>
 <script src="js/actions.js"></script>
 <script src="js/v-manager.js"></script>
+<script src="js/v-health.js"></script>
 <script src="js/v-addproject.js"></script>
 <script src="js/stop.js"></script>
 <script src="js/main.js"></script>
