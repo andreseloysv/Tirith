@@ -184,7 +184,7 @@
         "properties": {
           "id": {"type": "string"},
           "at": {"type": ["string", "null"]},
-          "kind": {"enum": ["finish", "ask", "setup", "chat", "autopilot", "plan-refresh", "plan-new", "plan-edit"]},
+          "kind": {"enum": ["finish", "ask", "setup", "chat", "autopilot", "autopilot-proposal", "plan-refresh", "plan-new", "plan-edit"]},
           "cid": {"type": "string", "description": "Client id of the page that sent it; the page matches its Sending… message by it."},
           "manager_pending": {"type": "boolean"},
           "steward_pending": {"type": "boolean", "description": "Old key for manager_pending, same value."},
@@ -238,7 +238,9 @@
       "items": {"type": "object", "additionalProperties": true,
                 "required": ["class", "seconds", "source", "min", "max"],
                 "properties": {"class": {"type": "string"}, "seconds": {"type": "number"},
-                               "source": {"enum": ["default", "learned", "agent", "owner", "config"]}}}
+                               "source": {"enum": ["default", "learned", "agent", "owner", "config"]},
+                               "idle": {"description": "The idle limit (no progress for this long stops the run), null for a class without one.",
+                                        "type": ["object", "null"]}}}
     },
     "models": {
       "description": "Model and effort of the manager and of the workers, with the lists the Settings page offers. See docs/CONTRACT-models.md.",
@@ -263,13 +265,18 @@
       }
     },
     "autopilot": {
-      "description": "The autopilot: Tirith starts a lane on every ready plan step. See docs/CONTRACT-roadmap.md.",
+      "description": "The autopilot: Tirith proposes every open plan item nobody works on to the manager; it starts no lane. See docs/CONTRACT-roadmap.md.",
       "type": "object",
       "additionalProperties": true,
       "required": ["enabled", "max_parallel", "started"],
       "properties": {
         "enabled": {"type": "boolean"},
         "max_parallel": {"type": "integer", "minimum": 0},
+        "working": {"type": "integer"}, "steps_working": {"type": "integer"}, "steps_in_review": {"type": "integer"},
+        "proposed": {"type": "integer"}, "queued": {"type": "integer"}, "open_items": {"type": "integer"},
+        "limit": {"type": "integer"}, "limit_why": {"type": ["string", "null"]},
+        "skipped": {"type": "array", "items": {"type": "object", "properties": {
+          "project": {"type": "string"}, "step": {"type": "string"}, "why": {"type": "string"}}}},
         "started": {"type": "array", "items": {
           "type": "object", "required": ["lane", "project", "step", "at"],
           "properties": {"lane": {"type": "string"}, "project": {"type": "string"},
@@ -695,6 +702,11 @@
         "roadmap": {
           "description": "The project's plan read from its markdown checklist; null when there is none. See docs/CONTRACT-roadmap.md.",
           "oneOf": [{"type": "null"}, {"$ref": "#/$defs/roadmap"}]
+        },
+        "merge_queue": {
+          "description": "The single merge queue of the project: items waiting or running (position from 1), the last result and the recent ones. See docs/CONTRACT-mergeq.md.",
+          "type": "object",
+          "additionalProperties": true
         },
         "plans": {
           "description": "Every plan of the project (the current one first, the same as roadmap), each shaped like roadmap plus id, title, current and finished.",

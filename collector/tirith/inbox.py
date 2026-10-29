@@ -21,7 +21,8 @@ from tirith.home import now_iso
 from tirith.store import append_jsonl, read_jsonl
 
 INBOX_FILE = "inbox.jsonl"
-KINDS = ("finish", "ask", "setup", "chat", "autopilot", "plan-refresh", "plan-new", "plan-edit")
+PROPOSAL = "autopilot-proposal"  # Tirith's own request to the manager: a plan item nobody works on
+KINDS = ("finish", "ask", "setup", "chat", "autopilot", PROPOSAL, "plan-refresh", "plan-new", "plan-edit")
 PLAN_KINDS = ("plan-refresh", "plan-new")
 PLAN_STEP = "plan"  # the step of a request about the whole plan, not one step
 MODELS_ACTIONS = ("models-set", "apply-manager")  # the Settings page; the request's project is "settings"
@@ -165,9 +166,9 @@ def attachment_lines(req: dict) -> str:
 
 def add_request(home: Path, kind: str, project: str = "", step: str = "", text: str = "",
                 at: str | None = None, attachments: list[dict] | None = None, rid: str | None = None,
-                cid: str | None = None) -> dict:
+                cid: str | None = None, sender: str = "owner") -> dict:
     """Append an open request and return its row. A ``cid`` (the page's client id) already on a row makes
-    this a retry: nothing is written and that row is returned."""
+    this a retry: nothing is written and that row is returned. ``sender`` is ``tirith`` for its own proposals."""
     if kind not in KINDS:
         raise InboxError(f"kind must be one of {', '.join(KINDS)}, not {kind!r}")
     project, step, text = str(project or "").strip(), str(step if step is not None else "").strip(), clip(text.strip())
@@ -198,7 +199,7 @@ def add_request(home: Path, kind: str, project: str = "", step: str = "", text: 
         if seen is not None:
             return seen
     row = {"id": rid or new_id(), "at": at or now_iso(), "kind": kind, "project": project, "step": step,
-           "text": text, "from": "owner", "status": "open"}
+           "text": text, "from": sender, "status": "open"}
     if cid:
         row["cid"] = cid
     if attachments:

@@ -39,7 +39,7 @@ const line = (id, re) => { const h = stepHtml(id); assert.match(h, re, 'step ' +
 let h = line('3', /Working: .*Marrow.*Writing the guard/);
 assert.ok(!h.includes('Instalar hooks'), 'done items are not listed');
 assert.ok(h.includes('Proteger los hooks') && h.includes('Probar en un proyecto'), 'open items are listed');
-line('4', /Queued for the autopilot/);
+line('4', /Open: the manager decides/);
 line('5', /Testing <b>Quilitara<\/b>/);
 h = line('6', /The manager is resolving a merge/);
 assert.ok(!h.includes('test_rules_load'), 'a failed review shows no detail in the Plan');
@@ -60,9 +60,20 @@ state.autopilot.enabled = true;
 state.autopilot.skipped = [{ project: 'tirith', step: '4', why: 'an agent is already on it' }];
 const skippedHtml = T.plan(state).split('<li class="pstep ').filter(x => x.includes('<span class="pn">4.')).join('');
 assert.match(skippedHtml, /Not started: <span class="mut">an agent is already on it/);
-assert.ok(!skippedHtml.includes('Queued for the autopilot'), 'a skipped step is not queued');
-assert.match(T.plan(state), /1 not started/, 'the autopilot line counts the steps it did not start');
+assert.ok(!skippedHtml.includes('Open: the manager decides'), 'a step with an agent on it is not open');
 state.autopilot.skipped = [];
+
+/* the autopilot line says what is true in plain words, never "nothing to start" while items are open */
+const bar = (patch) => { Object.assign(state.autopilot, { steps_working: 0, steps_in_review: 0, proposed: 0, queued: 0, open_items: 0 }, patch); return T.plan(state); };
+assert.match(bar({ steps_working: 2, steps_in_review: 1, open_items: 3 }), /2 steps in progress.*1 waiting for a review/);
+assert.match(bar({ proposed: 1, open_items: 1 }), /1 proposed to the manager/);
+assert.match(bar({ open_items: 2 }), /2 open items for the owner or a later date/);
+assert.ok(!bar({ open_items: 2 }).includes('nothing to start'), 'never "nothing to start"');
+state.autopilot.enabled = false;
+assert.match(bar({ steps_working: 2 }), /<b>Paused<\/b>/);
+assert.ok(!T.plan(state).includes('steps in progress'), 'paused says only that');
+state.autopilot.enabled = true;
+bar({});
 
 /* History opens the full thread */
 T.ui.planHist['tirith|1'] = true;

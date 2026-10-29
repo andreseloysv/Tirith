@@ -11,6 +11,7 @@ import pytest
 
 from conftest import make_repo, write_config, write_lane_manifest, write_plan
 from tirith import asks as asks_mod
+from tirith import autopilot as autopilot_mod
 from tirith import dispatch as dispatch_mod
 from tirith import inbox as inbox_mod
 from tirith import managerd as managerd_mod
@@ -230,40 +231,46 @@ def test_a_process_that_survives_every_kill_is_a_queue_item(home: Path, project:
 
 def plan(status: str = "ready") -> list[dict]:
     return [{"id": "demo", "roadmap": {"steps": [
-        {"id": "1", "status": status, "items": [{"text": "Do it", "done": False, "who": "agent"}]}]}}]
+        {"id": "1", "status": status, "title": "One", "items": [{"text": "Do it", "done": False, "who": "agent"}]}]}}]
 
 
-def test_ready_steps_nothing_working_and_no_reason_for_15_min_is_a_queue_item(home: Path, project: Path) -> None:
-    state, fake = {}, Fake()
-    check(home, state, NOW, fake, projects=plan())
-    check(home, state, at(600), fake, projects=plan())
+def seen(at: datetime) -> dict:
+    """The autopilot state of an item first seen open at ``at`` (what ``autopilot.run`` records)."""
+    from tirith import roadmap as roadmap_mod
+    key = f"demo|1|{roadmap_mod.item_id('Do it')}"
+    return {"seen": {key: {"fp": autopilot_mod._fingerprint("1", "Do it"), "at": at.strftime(Z)}}}
+
+
+def test_an_open_item_nobody_reported_for_2_min_is_a_queue_item(home: Path, project: Path) -> None:
+    state, fake = {"autopilot": seen(NOW)}, Fake()
+    check(home, state, at(60), fake, projects=plan())
     assert queue_ids(home) == [] and level(state, "autopilot") == "ok"
-    check(home, state, at(960), fake, projects=plan())
+    check(home, state, at(130), fake, projects=plan())
     assert len(queue_ids(home)) == 1 and level(state, "autopilot") == "healing"
     item = asks_mod.queue_items(home, only_open=True)[0]
-    assert "demo step 1" in item["text"] and "16 min" in item["text"]
-    check(home, state, at(1000), fake, projects=plan())
+    assert "demo step 1: Do it" in item["text"] and "2 min" in item["text"]
+    check(home, state, at(200), fake, projects=plan())
     assert len(queue_ids(home)) == 1
-    check(home, state, at(1100), fake, projects=plan("blocked"))
+    check(home, state, at(300), fake, projects=[{"id": "demo", "roadmap": {"steps": [
+        {"id": "1", "status": "done", "title": "One", "items": [{"text": "Do it", "done": True, "who": "agent"}]}]}}])
     assert queue_ids(home) == [] and level(state, "autopilot") == "ok"
 
 
-def test_a_step_with_a_reason_is_not_a_problem(home: Path, project: Path) -> None:
-    state = {"autopilot": {"paused": {"demo|1": {"at": NOW.strftime(Z), "items": ["Do it"], "why": "stuck"}}}}
-    check(home, state, NOW, Fake(), projects=plan())
+def test_an_item_with_a_proposal_is_not_a_problem(home: Path, project: Path) -> None:
+    from tirith import roadmap as roadmap_mod
+    key = f"demo|1|{roadmap_mod.item_id('Do it')}"
+    state = {"autopilot": {**seen(NOW), "proposals": {key: {"id": "in-x", "fp": autopilot_mod._fingerprint("1", "Do it"),
+                                                            "at": NOW.strftime(Z)}}}}
     check(home, state, at(2000), Fake(), projects=plan())
     assert queue_ids(home) == [] and level(state, "autopilot") == "ok"
 
 
 def test_a_working_agent_or_autopilot_off_is_not_idle(home: Path, project: Path) -> None:
-    working = [{"id": "lane-1", "status": "working"}]
-    state = {"autopilot": {"lanes": {"lane-1": {"project": "demo", "step": "2", "at": NOW.strftime(Z),
-                                                "items": [], "settled": False}}}}
-    check(home, state, NOW, Fake(), projects=plan(), agents=working)
+    working = [{"id": "lane-1", "project": "demo", "step": "1", "status": "working"}]
+    state = {"autopilot": seen(NOW)}
     check(home, state, at(2000), Fake(), projects=plan(), agents=working)
     assert queue_ids(home) == []
-    state = {"autopilot": {"on": False}}
-    check(home, state, NOW, Fake(), projects=plan())
+    state = {"autopilot": {"on": False, **seen(NOW)}}
     check(home, state, at(2000), Fake(), projects=plan())
     assert queue_ids(home) == [] and "off" in state["health"]["checks"]["autopilot"]["text"]
 

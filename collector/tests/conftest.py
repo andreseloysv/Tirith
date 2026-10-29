@@ -177,3 +177,11 @@ def write_lane_manifest(repo: Path) -> None:
         'run = "make build"\n[[pipelines.stages]]\nname = "test"\nrun = "make test"\n',
         encoding="utf-8")
     (repo / "brief.md").write_text("Do the thing.\n", encoding="utf-8")
+
+
+@pytest.fixture(autouse=True)
+def _calm_machine(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The adaptive lane limit must not depend on the load or the free disk of the machine running the tests."""
+    from tirith import diskdiet, loadlimit
+    monkeypatch.setattr(loadlimit, "load_average", lambda: 0.0)
+    monkeypatch.setattr(diskdiet, "free_bytes", lambda folder: 500 * 1024 ** 3)
