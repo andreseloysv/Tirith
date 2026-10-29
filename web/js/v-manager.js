@@ -223,7 +223,8 @@
     return ui.chatPics.length ? '<div class="mc-strip">' + ui.chatPics.map(function (p, i) {
       var x = '<button type="button" data-act="mc-unpic" data-i="' + i + '" aria-label="Remove ' + esc(p.name) + '" title="Remove">&times;</button>';
       if (!p.url) return fileChip(p.name, p.size, p.name, x);
-      return '<span class="mc-th"><img src="' + esc(p.url) + '" alt="' + esc(p.name) + '" title="' + esc(p.name) + '">' + x + '</span>';
+      return '<span class="mc-th" title="' + esc(p.name) + '"><span class="mc-thi"><img src="' + esc(p.url) + '" alt="' + esc(p.name) + '">' + x + '</span>' +
+        '<span class="mc-thn">' + esc(p.name) + '</span><span class="mc-ths">' + esc(size(p.size || 0)) + '</span></span>';
     }).join('') + '</div>' : '';
   }
   T.chatStrip = picStrip;
@@ -579,17 +580,42 @@
     var r = window.devicePixelRatio || 1, el = pos ? document.elementFromPoint(pos.x / r, pos.y / r) : null;
     return el && el.closest ? el.closest('.mchat') : null;
   }
-  if (appDrop) {
-    var over = function (e) { dragMark(chatAt(e.payload && e.payload.position)); };
-    ev.listen('tauri://drag-enter', over);
-    ev.listen('tauri://drag-over', over);
-    ev.listen('tauri://drag-leave', function () { dragMark(null); });
-    ev.listen('tauri://drag-drop', function (e) {
-      var p = e.payload || {}, c = chatAt(p.position);
-      dragMark(null);
-      if (c) addDropped(p.paths); else T.render();
-    });
+  /* desktop only: a line in the app's log, so a drop that does nothing leaves a trace */
+  function applog(line) {
+    if (hasTauri()) window.__TAURI__.core.invoke('app_log', { line: 'drag: ' + line }).then(null, function () {});
   }
+  var lastDrop = 0;
+  /* one handler for the app's two ways in: its own events and the push from Rust (`files` = already read there).
+     A drop that arrives twice within a moment is taken once. */
+  function appDragEvent(d, via) {
+    var pos = d && d.position ? d.position : (d && d.x != null ? { x: d.x, y: d.y } : null), c = chatAt(pos);
+    if (d.phase === 'enter' || d.phase === 'drop') applog(via + ' ' + d.phase + ' ' + ((d.paths || d.files || []).length) + ' file(s), over chat: ' + !!c);
+    if (d.phase === 'enter' || d.phase === 'over') dragMark(c);
+    else if (d.phase === 'leave') dragMark(null);
+    else if (d.phase === 'drop') {
+      dragMark(null);
+      if (!c) { T.render(); return; }
+      var now = Date.now();
+      if (now - lastDrop < 800) return;
+      lastDrop = now;
+      if (d.files) { ui.chatErr = null; var ok = admit(d.files); take(ok.files.map(picOf), ok.bad); }
+      else addDropped(d.paths);
+    }
+  }
+  T.chatAppDrag = appDragEvent;
+  window.__tirithDrag = function (d) { appDragEvent(d, 'rust'); };
+  if (appDrop) {
+    ['enter', 'over', 'drop', 'leave'].forEach(function (phase) {
+      ev.listen('tauri://drag-' + phase, function (e) {
+        var p = e.payload || {};
+        appDragEvent({ phase: phase, position: p.position, paths: p.paths }, 'event');
+      }).then(null, function (err) { applog('cannot listen to drag-' + phase + ': ' + (err && err.message || err)); });
+    });
+    applog('listening for the window\'s file-drop events');
+  }
+  ['dragenter', 'drop'].forEach(function (t) {
+    document.addEventListener(t, function (e) { if (hasFiles(e)) applog('page ' + t + ' (' + (e.dataTransfer.files ? e.dataTransfer.files.length : 0) + ' file(s))'); }, true);
+  });
   view.addEventListener('input', function (e) {
     var t = e.target, act = t.getAttribute && t.getAttribute('data-act');
     if (act === 'mc-text') { ui.chatDraft = t.value; saveDraft(); fit(t); }
