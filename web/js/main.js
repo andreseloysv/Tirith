@@ -66,6 +66,7 @@
       return okS(p) && okP(p.project) && (!q || hay([p.run, p.pipeline].concat((p.stages || []).map(function (x) { return x.name; })), q));
     });
     out.waiting_on_you = (s.waiting_on_you || []).filter(function (w) { return okS(w) && okP(w.project) && (!q || hay([w.text], q)); });
+    out.answered_waits = (s.answered_waits || []).filter(function (w) { return okS(w) && okP(w.project) && (!q || hay([w.text], q)); });
     out.flows = (s.flows || []).filter(function (f) {
       if (!okS(f)) return false;
       if (pj && (f.project || projOfEndpoint(s, f.from) || projOfEndpoint(s, f.to)) !== pj) return false;

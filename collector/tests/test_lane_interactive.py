@@ -52,7 +52,7 @@ def test_interactive_failure_ends_lane(home: Path, tmp_path: Path, capsys,
         make_hooks_mutable(repo)
     assert code == 4
     assert read_json(home / "lanes" / "bad.json", {})["result"] == "failed"
-    assert [w["text"] for w in read_jsonl(home / "waits.jsonl")] == ["lane bad failed"]
+    assert [w["id"] for w in read_jsonl(home / "waits.jsonl")] == ["lane-bad"]
 
 
 @pytest.mark.parametrize("name,exit_code", [("SIGINT", 0), ("SIGTERM", 0), ("SIGHUP", 7)])

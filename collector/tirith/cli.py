@@ -12,6 +12,7 @@ import json
 import os
 import re
 import secrets
+import shlex
 import signal
 import subprocess
 import sys
@@ -24,6 +25,7 @@ from tirith.collector import (
 )
 from tirith.guardwrap import default_words, guard_upgrade_steps, install_guard, verify_guard
 from tirith import agentrun as agentrun_mod
+from tirith import asks as asks_mod
 from tirith import flows as flows_mod
 from tirith import gates as gates_mod
 from tirith import manifest as manifest_mod
@@ -150,7 +152,28 @@ def end_lane(home: Path, lane_id: str, result: str, report: str | None = None) -
         f"{result}: " + (flows_mod.first_line(report) or str(lane.get("feature") or "")),
         session=lane.get("session") or projects_mod.current_session(home),
         project=str(lane.get("project") or "") or None)
+    _lane_follow_up(home, lane, result, report)
     return lane
+
+
+def _lane_follow_up(home: Path, lane: dict, result: str, report: str | None) -> None:
+    """A finished lane whose report has an "open / needs the owner" section: one review item for the
+    steward, never raw items for the owner. The steward re-asks with ``tirith wait add --option``."""
+    section = asks_mod.open_section(report) if result == "done" else ""
+    if section:
+        asks_mod.queue_add(home, str(lane.get("project") or ""), str(lane["id"]), section)
+
+
+def add_lane_ask(home: Path, lane: dict, what: str) -> str:
+    """The one owner item of a lane that failed or said nothing: Retry / Show the log / Drop it."""
+    wait_id = f"lane-{lane['id']}"
+    if any(str(r.get("id")) == wait_id for r in read_jsonl(home / "waits.jsonl")):
+        return wait_id
+    log = lane.get("log")
+    return add_wait(home, str(lane.get("project") or ""),
+                    f"Lane **{lane.get('feature') or lane['id']}** ({lane['id']}) {what}. What now?",
+                    wait_id=wait_id, options=list(asks_mod.LANE_OPTIONS), kind="decision",
+                    command=f"tail -n 80 {shlex.quote(str(log))}" if log else None)
 
 
 def _cmd_lane_start(args) -> int:
@@ -305,9 +328,9 @@ def _cmd_lane_run(args) -> int:
     result = "done" if exit_code == 0 else "failed"
     end_lane(home, lane_id, result, answer or None)
     if result == "failed":
-        add_wait(home, args.project, f"lane {lane_id} failed")
+        add_lane_ask(home, lane, "failed")
     elif not answer:
-        add_wait(home, args.project, f"lane {lane_id} ended without an answer")
+        add_lane_ask(home, lane, "ended without an answer")
     files, plus, minus = git_shortstat(str(workspace), lane.get("start_commit"))
     print(f"lane {lane_id}: {result}, {files} files +{plus} -{minus}, "
           f"{_duration(time.monotonic() - began)}")
@@ -536,19 +559,37 @@ def _next_wait_id(home: Path) -> str:
 
 
 def add_wait(home: Path, project: str, text: str, link: str | None = None,
-             wait_id: str | None = None) -> str:
-    """Add an item to the owner's waiting list; returns its id."""
+             wait_id: str | None = None, options=None, command: str | None = None,
+             kind: str | None = None) -> str:
+    """Add an ask to the owner's list; returns its id.
+
+    ``options`` are one-click answers (``{"label", "value"}`` or ``"Label|value"``), ``command`` is a
+    shell line the owner can copy, ``kind`` is decision|action|approval|info."""
+    options = asks_mod.clean_options(options)
+    kind = kind or asks_mod.default_kind(options, command)
+    if kind not in asks_mod.ASK_KINDS:
+        raise SystemExit(f"wait add: --kind must be one of {', '.join(asks_mod.ASK_KINDS)}")
     wait_id = wait_id or _next_wait_id(home)
-    append_jsonl(home / "waits.jsonl", {
-        "id": wait_id, "at": now_iso(), "project": project,
-        "text": text, "link": link, "done_at": None,
-        "session": projects_mod.current_session(home)})
+    row = {"id": wait_id, "at": now_iso(), "project": project,
+           "text": text, "link": link, "done_at": None,
+           "session": projects_mod.current_session(home)}
+    if options or command or kind != "info":
+        row.update({"kind": kind, "options": options, "command": command or None})
+    append_jsonl(home / "waits.jsonl", row)
     flows_mod.append_flow(home, "steward", "owner", "request", text, link, project=project)
     return wait_id
 
 
 def _cmd_wait_add(args) -> int:
-    print(add_wait(_home(args), args.project, args.text, args.link, args.id))
+    text = args.text or args.text_opt
+    if not text:
+        raise SystemExit("wait add needs the question (positional or --text)")
+    try:
+        options = [asks_mod.parse_option(o) for o in args.option or []]
+    except asks_mod.AskError as error:
+        raise SystemExit(f"wait add: {error}")
+    print(add_wait(_home(args), args.project, text, args.link, args.id, options=options,
+                   command=args.command, kind=args.kind))
     return 0
 
 
@@ -899,6 +940,9 @@ def _cmd_url_open(args) -> int:
             raise launch_mod.LaunchError("refusing: wrong or missing token")
         if link["action"] == "inbox":
             fields = inbox_mod.parse_url(args.url)
+            if fields["kind"] == "reply":
+                inbox_mod.add_reply(home, fields["wait"], fields["project"], fields["value"], fields["text"])
+                return 0
             inbox_mod.add_request(home, fields["kind"], fields["project"], fields["step"], fields["text"])
             return 0
         launch_step(home, link["project"], link["step"], link["agent"])
@@ -922,6 +966,10 @@ def _cmd_inbox(args) -> int:
                 print(json.dumps(req) if args.json else
                       f"{req['id']}  {req['status']:<8} {req['kind']:<6} {req['project']}#{req['step']}  "
                       + " ".join(req["text"].split())[:80])
+        elif action == "reply":
+            project = args.project or next((str(r.get("project") or "") for r in reversed(
+                read_jsonl(home / "waits.jsonl")) if str(r.get("id")) == args.wait), "")
+            print(inbox_mod.add_reply(home, args.wait, project, args.value, args.text)["id"])
         elif action == "answer":
             inbox_mod.add_answer(home, args.id, args.text, by=args.by, lane=args.lane)
         elif action == "done":
@@ -946,6 +994,22 @@ def _cmd_inbox(args) -> int:
     except inbox_mod.InboxError as error:
         print(f"tirith inbox {action}: {error}", file=sys.stderr)
         return 3
+    return 0
+
+
+def _cmd_queue(args) -> int:
+    home = _home(args)
+    if args.queue_command == "done":
+        try:
+            asks_mod.queue_done(home, args.id)
+        except asks_mod.AskError as error:
+            print(f"tirith queue done: {error}", file=sys.stderr)
+            return 3
+        return 0
+    for item in asks_mod.queue_items(home, only_open=not args.all):
+        print(json.dumps(item) if args.json else
+              f"{item['id']}  {item['status']:<5} {item['project']}  {item['lane']}  "
+              + " ".join(item["text"].split())[:80])
     return 0
 
 
@@ -1199,7 +1263,12 @@ def build_parser() -> argparse.ArgumentParser:
     wait = sub.add_parser("wait", parents=[common], help="things waiting on you")
     wait_sub = wait.add_subparsers(dest="wait_command", required=True)
     wait_add = wait_sub.add_parser("add", parents=[common])
-    wait_add.add_argument("text")
+    wait_add.add_argument("text", nargs="?", default=None, help="the question (markdown)")
+    wait_add.add_argument("--text", dest="text_opt", default=None, help="the question, as an option")
+    wait_add.add_argument("--option", action="append", metavar="LABEL|VALUE",
+                          help="a one-click answer; repeat for more (max 6)")
+    wait_add.add_argument("--command", default=None, help="a shell command the owner can copy")
+    wait_add.add_argument("--kind", default=None, choices=asks_mod.ASK_KINDS)
     wait_add.add_argument("--project", default=None)
     wait_add.add_argument("--link", default=None)
     wait_add.add_argument("--id", default=None)
@@ -1351,7 +1420,12 @@ def build_parser() -> argparse.ArgumentParser:
     i_ans.add_argument("text")
     i_ans.add_argument("--by", choices=inbox_mod.ANSWERERS, default="steward")
     i_ans.add_argument("--lane", default=None, help="id of the lane (agent) that took the request")
-    i_done = inbox_sub.add_parser("done", parents=[common], help="close a request")
+    i_reply = inbox_sub.add_parser("reply", parents=[common], help="the owner's answer to an ask")
+    i_reply.add_argument("--wait", required=True, help="id of the ask (tirith wait add)")
+    i_reply.add_argument("--project", default=None)
+    i_reply.add_argument("--value", default="", help="the option chosen")
+    i_reply.add_argument("--text", default="", help="free text")
+    i_done = inbox_sub.add_parser("done", parents=[common], help="close a request or a reply")
     i_done.add_argument("id")
     i_brain = inbox_sub.add_parser("brain", parents=[common], help="answer a request with the brain now")
     i_brain.add_argument("id")
@@ -1359,8 +1433,18 @@ def build_parser() -> argparse.ArgumentParser:
                                    help="block; print each open request as one JSON line, then each new one")
     i_watch.add_argument("--new-only", action="store_true", help="skip the requests already in the file")
     i_watch.add_argument("--interval", type=float, default=1.0, help="seconds between reads")
-    for i_cmd in (i_add, i_ls, i_ans, i_done, i_brain, i_watch):
+    for i_cmd in (i_add, i_ls, i_ans, i_reply, i_done, i_brain, i_watch):
         i_cmd.set_defaults(func=_cmd_inbox)
+
+    queue = sub.add_parser("queue", parents=[common], help="the steward's own review queue")
+    queue_sub = queue.add_subparsers(dest="queue_command", required=True)
+    q_ls = queue_sub.add_parser("list", parents=[common], help="open review items")
+    q_ls.add_argument("--all", action="store_true", help="include closed items")
+    q_ls.add_argument("--json", action="store_true", help="one JSON object per line")
+    q_done = queue_sub.add_parser("done", parents=[common], help="close a review item")
+    q_done.add_argument("id")
+    for q_cmd in (q_ls, q_done):
+        q_cmd.set_defaults(func=_cmd_queue)
 
     url = sub.add_parser("url", parents=[common], help="the tirith:// link handler (macOS)")
     url_sub = url.add_subparsers(dest="url_command", required=True)
