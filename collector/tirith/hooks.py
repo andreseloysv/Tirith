@@ -243,7 +243,7 @@ def decide(agent: str, event: dict, payload, home: Path | None = None) -> int:
     fields = adapt(agent, data)
     tool_input = _pick(data, "tool_input", "input", "arguments", "args", "toolArgs")
     found = gates.check_call(config, event.get("tool"), tool_input, event.get("cwd"),
-                             event.get("project"), home)
+                             event.get("project"), home, lane=event.get("lane"))
     for violation in found:
         gates.record_violation(
             home, violation, ts=event.get("ts") or now_iso(), agent=agent, lane=event.get("lane"),

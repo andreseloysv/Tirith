@@ -418,11 +418,21 @@ fn collector_lock_held(home: &Path) -> bool {
     unsafe { flock(file.as_raw_fd(), LOCK_EX | LOCK_NB) != 0 }
 }
 
-/// No lock check on Windows: the app always starts its own (the collector itself refuses to double-run
-/// only where it can take the lock).
+/// Windows has no lock to probe: ask PowerShell for a process whose command line has `tirith collect`.
+/// A failure to ask counts as "not running", so the app starts its own.
 #[cfg(not(unix))]
 fn collector_lock_held(_home: &Path) -> bool {
-    false
+    Command::new("powershell")
+        .args([
+            "-NoProfile",
+            "-Command",
+            "if (Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*tirith collect*' -and $_.ProcessId -ne $PID }) { exit 0 } else { exit 1 }",
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
 }
 
 fn collector_running() -> bool {
@@ -1226,6 +1236,17 @@ fn dropped_file(path: &str, dropped: &[PathBuf]) -> Value {
 fn attachment_dropped(state: State<'_, App>, paths: Vec<String>) -> Vec<Value> {
     let dropped = state.dropped.lock().unwrap().clone();
     paths.iter().take(ATTACH_MAX).map(|p| dropped_file(p, &dropped)).collect()
+}
+
+/// The paperclip in the app: the native file picker (a web view's own `<input type=file>` is not reliable in
+/// every platform's web view), then the chosen files read for the composer like a drop. The paths come from
+/// the picker in Rust, never from the page. An empty list is a cancelled picker.
+#[tauri::command]
+async fn attachment_pick(app: AppHandle) -> Vec<Value> {
+    use tauri_plugin_dialog::DialogExt;
+    let picked = app.dialog().file().set_title("Attach files").blocking_pick_files();
+    let paths: Vec<PathBuf> = picked.unwrap_or_default().into_iter().filter_map(|f| f.into_path().ok()).collect();
+    paths.iter().take(ATTACH_MAX).map(|p| dropped_file(&p.to_string_lossy(), &paths)).collect()
 }
 
 /// The attachments of a request as stored: at most 6, each `{path, type, size, width, height}` (and `name`)
@@ -2121,9 +2142,8 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(App::default())
         .on_window_event(|window, event| {
-            // with the native drag-drop handler on, the webview gets the drop as `tauri://drag-drop` (paths and
-            // position); remember what was dropped. The main window turns it off below, so there the page gets
-            // the HTML5 drop with the files instead and this never fires.
+            // the native drag-drop handler is on, so the webview gets the drop as `tauri://drag-drop` (paths and
+            // position); remember what was dropped, the only paths `attachment_dropped` will read.
             if let WindowEvent::DragDrop(DragDropEvent::Drop { paths, .. }) = event {
                 *window.state::<App>().dropped.lock().unwrap() = paths.clone();
             }
@@ -2151,6 +2171,7 @@ pub fn run() {
             inbox_add,
             attachment_save,
             attachment_dropped,
+            attachment_pick,
             inbox_reply,
             run_action,
             open_in_terminal,
@@ -2168,8 +2189,6 @@ pub fn run() {
             WebviewWindowBuilder::new(app, "main", url)
                 .title("Tirith")
                 .inner_size(1440.0, 900.0)
-                // The native drag-drop handler swallows file drops; off, the page gets HTML5 `drop` with files.
-                .disable_drag_drop_handler()
                 .build()?;
             start_collector(&app.state::<App>());
             spawn_collector_supervisor(app.handle().clone());

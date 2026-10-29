@@ -29,6 +29,7 @@ from tirith import brain as brain_mod
 from tirith.guardwrap import default_words, verify_guard
 from tirith.home import Config, ProjectConfig, ensure_home, load_config, now_iso, parse_iso
 from tirith import agentrun as agentrun_mod
+from tirith import keepgoing as keepgoing_mod
 from tirith import flows as flows_mod
 from tirith import github as github_mod
 from tirith import manifest as manifest_mod
@@ -1150,6 +1151,7 @@ class Collector:
                 "ran": models_mod.ran_with(lane, usage),
                 "agent": lane.get("agent") or None,
                 "fallback_from": lane.get("fallback_from") or None,
+                "keep_going": keepgoing_mod.round_label(lane),
                 "diff": self._diff(lane),
                 "request": lane.get("request") if isinstance(lane.get("request"), dict) else None,
                 "parent": "manager" if lane.get("parent") in (None, "", "steward") else str(lane["parent"]),

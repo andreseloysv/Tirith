@@ -18,7 +18,7 @@ The lane record's `request` is the brief it was given.
 [agents.anthropic]
 command = "<executable name>"      # always from config, never from code
 args = ["-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "acceptEdits"]
-permissions = ["Read", "Edit", "Bash(git status:*)"]   # allowed tool patterns
+permissions = ["Bash", "Read", "Edit", "Write"]   # allowed tool patterns (the preset allows every tool)
 model = "<model id>"
 effort = "<level>"
 add_dirs = ["~/extra"]
@@ -26,6 +26,8 @@ add_dirs = ["~/extra"]
 [agents.anthropic.projects.tirith]  # per-project override: any key above replaces the global one
 permissions = ["Read", "Edit"]
 ```
+
+Agents never ask for permission: the presets allow every tool (anthropic: `Bash` unrestricted, Read, Edit, Write, Glob, Grep, WebFetch, WebSearch, NotebookEdit; copilot: `write` and `shell`) and only the Tirith hooks decide (`CONTRACT-gates.md`: `workspace-write`, `no-secrets`, `no-servers`, `own-processes`, plus every earlier rule). For the manager's own launch command and `[launch] command`, use the same flags: `--allowedTools Bash,Read,Edit,Write,Glob,Grep,WebFetch,WebSearch,NotebookEdit` (anthropic) or `--allow-tool write --allow-tool shell` (copilot).
 
 Defaults in code (`agentrun.PRESET_DEFAULTS`, flags only): `anthropic` = print mode, stream JSON with
 verbose, accept-edits, allowed-tools list (comma separated), `--model`, `--effort`, `--add-dir`;
