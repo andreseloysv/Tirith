@@ -182,7 +182,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Integrar en main el arreglo de adjuntos (clip y arrastrar) de la lane app-de-escritorio-tauri-con-chat-8, hoy sin commit. (hecho: bd92d3b)
 - [x] Arrastrar archivos al chat funciona de verdad en la app de escritorio, y la miniatura adjunta se ve bien (✕ pequeño dentro de la esquina, nombre y tamaño). (hecho: 931214a)
 - [ ] La app de macOS funciona sola en un Mac limpio: incluye el collector y la web, y en el primer arranque instala lo que falte (uv) con un botón. (check: `bash scripts/check-standalone-app.sh`) (en revisión)
-- [ ] Integrar en main la rama lane/standalone (bf1c2de, app sola en un Mac limpio) con bash scripts/check-standalone-app.sh en verde. (check: `git cat-file -e main:scripts/check-standalone-app.sh && git cat-file -e main:app/src-tauri/src/standalone.rs`)
+- [ ] Integrar en main la rama lane/standalone (bf1c2de, app sola en un Mac limpio) con bash scripts/check-standalone-app.sh en verde. (check: `git cat-file -e main:scripts/check-standalone-app.sh && git cat-file -e main:app/src-tauri/src/standalone.rs`) (en curso: app-de-escritorio-tauri-con-chat-9)
 
 ## 10. Plan visible en el Overview
 
