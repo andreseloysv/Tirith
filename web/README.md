@@ -11,7 +11,7 @@ items; recent Sessions; data status at the bottom) and a top bar (breadcrumb, se
 box; `/` or Cmd/Ctrl+K focuses it, Esc clears it). Clicking a project or session sets that filter, click
 again to clear. The selected view lives in the hash (`#view=`).
 
-- **Overview**: Needs you, running pipelines as small graphs, working agents as cards, and Activity on the
+- **Overview**: Your turn (asks with one-click answers), running pipelines as small graphs, working agents as cards, and Activity on the
   right. Only what is live or actionable.
 - **Pipelines**: runs grouped Running / Failed / Passed as cards (progress bar, current stage, or the error
   line); the selected run is a stage graph on a zoomable dotted canvas (gradient icon per stage type, ring
@@ -24,7 +24,7 @@ again to clear. The selected view lives in the hash (`#view=`).
   list all its messages in a drawer. Respects the session, project and search filters.
 - The project name is left off rows and cards when every visible item shares one project; it then appears once
   in the breadcrumb (or is the selected filter).
-- Activity leaves out pipeline results, requests and alerts already in Needs you, and briefs or reports that
+- Activity leaves out pipeline results, requests and alerts already in Your turn, and briefs or reports that
   only restate an agent's feature. The Flow view keeps every message.
 
 ## Data
