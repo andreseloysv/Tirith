@@ -49,7 +49,8 @@ class Rig:
 
     def cycle(self) -> None:
         dispatch_mod.run(self.home, load_config(self.home), self.clock.now, agents=[], lanes=[],
-                         status_of=lambda lane, n: "working", manager_popen=self.popen)
+                         status_of=lambda lane, n: "working", manager_popen=self.popen,
+                         manager_spawn=lambda argv, h, log: 1)  # a one-shot turn never really starts here
 
     def until(self, cond, timeout: float = 25.0, step: float = 0.0):
         end = time.time() + timeout
@@ -328,7 +329,7 @@ def test_end_to_end_through_lane_run_interactive(home: Path, tmp_path: Path, mon
         make_hooks_mutable(repo)
 
 
-def test_a_session_that_keeps_dying_hands_over_to_the_one_shot_manager(rig: Rig) -> None:
+def test_a_session_that_keeps_dying_hands_over_to_the_one_shot_manager(rig: Rig, capsys) -> None:
     def dying(argv, **kwargs):
         return subprocess.Popen([sys.executable, "-c", "import sys; sys.exit(2)"], **kwargs)
 
@@ -346,4 +347,25 @@ def test_a_session_that_keeps_dying_hands_over_to_the_one_shot_manager(rig: Rig)
         rig.clock.tick(60)
     assert spawned, rig.book()
     assert "--brief" in spawned[0]  # the one-shot manager answers
-    assert "exited at once" in rig.book()["error"]
+    assert "exited at once" in capsys.readouterr().err
+
+
+def test_a_session_refused_at_start_records_why_and_the_one_shot_starts_in_the_same_pass(rig: Rig, capsys) -> None:
+    def refused(argv, **kwargs):  # `tirith lane run` printing its refusal, as the real one does
+        log = rig.home / "logs" / f"{argv[argv.index('--id') + 1]}.launch.log"
+        log.parent.mkdir(parents=True, exist_ok=True)
+        log.write_text("tirith: plan-item: no agent starts without a plan item: that item is already in progress "
+                       "by lane manager-old\n")
+        return subprocess.Popen([sys.executable, "-c", "import sys; sys.exit(3)"], **kwargs)
+
+    spawned: list = []
+    rig.chat("hello")
+    started = time.time()
+    while time.time() - started < 20 and not spawned:
+        dispatch_mod.run(rig.home, load_config(rig.home), rig.clock.now, agents=[], lanes=[],
+                         status_of=lambda lane, n: "working", manager_popen=refused,
+                         manager_spawn=lambda argv, h, log: spawned.append(argv) or 1)
+        time.sleep(0.05)
+    assert spawned and "--brief" in spawned[0]  # the first death hands over at once, no waiting
+    assert "already in progress by lane manager-old" in rig.book()["error"]
+    assert "already in progress by lane manager-old" in capsys.readouterr().err  # the collector log says it too

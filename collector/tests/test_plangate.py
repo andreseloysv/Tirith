@@ -440,6 +440,32 @@ def test_standing_lanes_give_their_item_back(proj, home: Path) -> None:
     assert "- [x] Chat con el dueño: chat-1" in _plan(repo)
 
 
+def test_a_manager_lane_takes_over_the_standing_item_from_a_running_old_one(proj, home: Path) -> None:
+    repo, _ = proj
+    plangate.ops_item(home, repo, "demo", plangate.MANAGER_ITEM, "manager-old")
+    register_lane(home, lane_id="manager-old", project="demo", hero_class="steward", feature="Manager",
+                  workspace=str(repo), log=None, pid=None, brief=None, step=None, item=plangate.MANAGER_ITEM,
+                  item_step="0")
+    plangate.begin(home, repo, "demo", "0", plangate.MANAGER_ITEM, "manager-old")  # the old one holds it, still running
+    assert f"{plangate.MANAGER_ITEM} (en curso: manager-old)" in _plan(repo)
+    with pytest.raises(plangate.PlanGateError, match="already in progress"):  # any other lane is still refused
+        plangate.check_start(home, repo, "demo", "0", plangate.MANAGER_ITEM, "worker-1", "warden")
+    # the session (class steward) and a one-shot turn (manager- id) both pass the gate
+    assert plangate.check_start(home, repo, "demo", "0", plangate.MANAGER_ITEM, "manager-new", "steward") == plangate.MANAGER_ITEM
+    assert plangate.check_start(home, repo, "demo", "0", plangate.MANAGER_ITEM, "manager-turn", None) == plangate.MANAGER_ITEM
+    code = main(["lane", "run", "--id", "manager-new", "--project", "demo", "--class", "steward", "--feature", "Manager",
+                 "--brief", str(repo / "brief.md"), "--workspace", str(repo), "--item", plangate.MANAGER_ITEM,
+                 "--item-step", "0", "--", sys.executable, "-c", "pass"])
+    assert code == 0  # (it ran and gave the standing item back when it ended)
+    plangate.begin(home, repo, "demo", "0", plangate.MANAGER_ITEM, "manager-old")
+    plangate.begin(home, repo, "demo", "0", plangate.MANAGER_ITEM, "manager-new")
+    assert f"{plangate.MANAGER_ITEM} (en curso: manager-new)" in _plan(repo)  # the old holder is released
+    old =read_json(home / "lanes" / "manager-old.json", {})  # it ending later does not give the new one's item back
+    old["result"] = "done"
+    plangate.lane_ended(home, old)
+    assert f"{plangate.MANAGER_ITEM} (en curso: manager-new)" in _plan(repo)
+
+
 # -- the reviews ------------------------------------------------------------------------------------
 
 
