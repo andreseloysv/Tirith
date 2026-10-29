@@ -3,7 +3,8 @@
 Every collector cycle ``run`` walks the open requests once (idempotent, state in
 ``<home>/dispatch.json``): a ``finish`` is answered by Tirith (the lane that already has the step, or a new
 one started in-process like ``tirith launch``); a ``plan-refresh`` / ``plan-new`` starts the auditor / planner
-lane of ``tirith.planlane`` (one refresh at a time per project); an ``ask`` is answered by the brain (see
+lane of ``tirith.planlane`` (one refresh at a time per project); a ``plan-edit`` changes the plan file by code, commits it and queues one
+``plan-refresh`` per project; an ``ask`` is answered by the brain (see
 ``Collector._inbox``) and stays pending for the manager; anything else is left to the manager. A request the
 manager leaves unanswered for ``ESCALATE_AFTER_S`` is escalated to the owner. The manager session itself is
 held to the inbox by hooks (``manager_context`` / ``manager_stop`` here, called from ``tirith.hooks``).
@@ -27,7 +28,10 @@ from tirith import flows as flows_mod
 from tirith import inbox as inbox_mod
 from tirith import launch as launch_mod
 from tirith import managerd as managerd_mod
+from tirith import manifest as manifest_mod
 from tirith import planlane as planlane_mod
+from tirith import projects as projects_mod
+from tirith import roadmap as roadmap_mod
 from tirith.home import Config, now_iso, parse_iso
 from tirith.store import append_jsonl, read_json, read_jsonl, write_json_atomic
 
@@ -170,6 +174,77 @@ def _plan(home: Path, req: dict, config: Config, lanes: list[dict], status_of: C
     return "refused"
 
 
+def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True)
+
+
+def _plan_file(repo: Path, plan: str) -> Path | None:
+    """The plan file with id ``plan`` (file name without ``.md``); empty ``plan``: the current plan."""
+    paths = roadmap_mod.plan_paths(repo, manifest_mod.load(repo))
+    return next((p for p in paths if p.stem == plan), None) if plan else (paths[0] if paths else None)
+
+
+def _apply_edit(repo: Path, req: dict) -> str:
+    """Change the plan file as ``req['edit']`` says and commit only that file; returns the commit message.
+
+    Raises ``roadmap_mod.EditError`` with the reason when it must not (or cannot) be done."""
+    edit, step = req["edit"], req["step"]
+    path = _plan_file(repo, edit["plan"])
+    if path is None:
+        raise roadmap_mod.EditError(f"the plan {edit['plan'] or 'file'} of {req['project']} was not found")
+    if not path.is_relative_to(repo):
+        raise roadmap_mod.EditError("the plan file is outside the project folder")
+    rel = str(path.relative_to(repo))
+    if _git(repo, "status", "--porcelain", "--", rel).stdout.strip():
+        raise roadmap_mod.EditError(f"{rel} has uncommitted changes, so it was left as it is")
+    text = path.read_text(encoding="utf-8")
+    new = roadmap_mod.edit(text, step, edit.get("item_text", ""), edit.get("new_text"),
+                           bool(edit.get("delete")), edit.get("add"))
+    message = f"Roadmap: {inbox_mod.edit_verb(edit)} in step {step} (owner)"
+    path.write_text(new, encoding="utf-8")
+    _git(repo, "add", "--", rel)
+    made = _git(repo, "commit", "-q", "-m", message, "--", rel)
+    if made.returncode != 0:  # the guard (or git) refused: leave the plan as it was
+        _git(repo, "reset", "-q", "--", rel)
+        _git(repo, "checkout", "--", rel)
+        raise roadmap_mod.EditError(f"committing the plan failed: {_short(made.stderr or made.stdout, 200)}")
+    return message
+
+
+def _refresh_queued(home: Path, project: str) -> bool:
+    return any(r["kind"] == "plan-refresh" and r["project"] == project and r["status"] == "open"
+               and not r["answers"] for r in inbox_mod.requests(home))
+
+
+def _plan_edit(home: Path, req: dict, config: Config, now: datetime) -> str:
+    """Handle one ``plan-edit`` by code: change the project's plan file, commit that file, and queue one
+    ``plan-refresh`` so the plan is checked again. Returns what was done."""
+    at, project = now_iso(now), req["project"]
+    verb = inbox_mod.edit_verb(req["edit"])
+    _flow(home, "owner", "tirith", "request", f"Plan {verb} on {_step_name(req)}", req, at)
+    proj = config.project(project)
+    repo = projects_mod.real(proj.repo) if proj and proj.repo else None
+    if repo is None:
+        auto = next((p for p in projects_mod.load_auto(home)["projects"] if str(p["id"]) == project), None)
+        repo = projects_mod.real(auto["folder"]) if auto else None
+    try:
+        if repo is None:
+            raise roadmap_mod.EditError(f"project '{project}' has no repo folder")
+        message = _apply_edit(repo, req)
+    except roadmap_mod.EditError as err:
+        inbox_mod.add_answer(home, req["id"], f"Could not {verb} the plan: {err}", by="tirith", auto=True, at=at)
+        _flow(home, "tirith", "owner", "alert", f"Plan {verb} refused on {_step_name(req)}: {_short(str(err))}",
+              req, at)
+        return "refused"
+    if _refresh_queued(home, project):
+        follow = "A check of the plan is already queued."
+    else:
+        inbox_mod.add_request(home, "plan-refresh", project, "", at=at)
+        follow = "The plan will be checked again."
+    inbox_mod.add_answer(home, req["id"], f"Done: {message}. {follow}", by="tirith", auto=True, at=at)
+    return "applied"
+
+
 def _default_relauncher(home: Path, lane: dict, alias: str) -> str:
     from tirith.cli import relaunch_lane  # late, like _default_launcher
     try:
@@ -275,8 +350,10 @@ def run(home: Path, config: Config, now: datetime, *, agents: list[dict], lanes:
                 done = _finish(home, req, config, agents, lanes, status_of, launcher, now)
             elif req["kind"] in inbox_mod.PLAN_KINDS and not req["answers"]:
                 done = _plan(home, req, config, lanes, status_of, plan_launcher, now)
+            elif req["kind"] == "plan-edit" and not req["answers"]:
+                done = _plan_edit(home, req, config, now)
             else:
-                own = req["kind"] == "finish" or req["kind"] in inbox_mod.PLAN_KINDS
+                own = req["kind"] in ("finish", "plan-edit") or req["kind"] in inbox_mod.PLAN_KINDS
                 done = "answered" if own else "manager"
                 if not own and req["kind"] != "chat":  # a chat message lives in the chat thread, not the flows
                     _flow(home, "owner", "tirith", "request",

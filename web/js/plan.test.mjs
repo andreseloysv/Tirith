@@ -46,7 +46,7 @@ assert.ok(!h.includes('test_rules_load'), 'a failed review shows no detail in th
 h = line('7', /Waiting for you: <button/);
 assert.ok(h.includes('data-act="goowner"') && h.includes('owner-tirith-7-1a2b3c4d'), 'owner item has its button');
 h = line('8', /From Nov 2/);
-assert.ok(h.includes('from Nov 2') && !h.includes('desde 2026'), 'dated item shows "from Nov 2" and not the raw tag');
+assert.ok(h.includes('from Nov 2') && !h.replace(/<[^>]*>/g, '').includes('desde 2026'), 'dated item shows "from Nov 2" and not the raw tag');
 h = line('9', /Waiting for the manager/);
 h = stepHtml('10');
 assert.ok(h.includes('Migrate the config file'), 'a failed action stays visible');

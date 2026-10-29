@@ -18,7 +18,7 @@ collector: state.inbox -> the Plan shows the chip and the answers under the step
 
 | Row | Fields |
 |---|---|
-| request | `id`, `at`, `kind` (`finish`, `ask`, `setup`, `chat`, `autopilot`, `plan-refresh` or `plan-new`), `project`, `step`, `text`, `from` (`"owner"`), `status` (`"open"`) |
+| request | `id`, `at`, `kind` (`finish`, `ask`, `setup`, `chat`, `autopilot`, `plan-refresh`, `plan-new` or `plan-edit`), `project`, `step`, `text`, `from` (`"owner"`), `status` (`"open"`) |
 | answer | `id` (of the request), `at`, `kind: "answer"`, `by` (`manager`, `brain` or `tirith`), `text` (markdown), `auto` (bool), optional `lane` (id of the lane that took the request) |
 | done | `id`, `at`, `kind: "done"` |
 
@@ -37,6 +37,22 @@ Two requests about a project's whole plan, sent by the buttons in the Plan card 
   only `title` is required, `deadline` is free text (the form sends `YYYY-MM-DD`), `steps` is free text.
   Anything else is rejected, so a bad request is never stored. `state.inbox[]` rows of this kind carry the
   parsed object as `plan`.
+
+### Kind `plan-edit`
+
+The owner edits, deletes or adds one item of a plan with the buttons on the Plan card. `project` is the
+project, `step` the roadmap step id (required), `text` a JSON object with exactly one change:
+
+| Change | `text` |
+|---|---|
+| edit | `{"plan": "", "item_text": "<exact original>", "new_text": "<new>"}` |
+| delete | `{"plan": "", "item_text": "<exact original>", "delete": true}` |
+| add | `{"plan": "", "add": "<text>"}` |
+
+`plan` is the plan id (file name without `.md`, see `CONTRACT-roadmap.md`); empty means the current plan.
+`item_text` is the item's `text` as in `state.projects[].roadmap` (whitespace-normalised, tag included). Anything
+else is rejected, so a bad request is never stored. `state.inbox[]` rows of this kind carry the parsed object
+as `edit` and are never `manager_pending`: Tirith applies them (see the dispatcher below).
 
 ### Kind `setup`
 
@@ -72,7 +88,7 @@ are not stopped; no new lane is started while it is off. Sent by the Plan header
 | `tirith inbox add --kind finish\|ask\|setup --project P --step N [--text T]` | appends a request, prints its id |
 | `tirith inbox add --kind finish\|ask\|setup --project P [--step N] [--text T]` | appends a request, prints its id (`--step` is for plan steps; a `setup` request takes its JSON as `--text`) |
 | `tirith inbox add --kind chat [--project P] --text T` | appends a chat message (`--project` and `--step` optional) |
-| `tirith inbox add --kind finish\|ask\|setup\|plan-refresh\|plan-new --project P [--step N] [--text T]` | appends a request, prints its id (`--step` is for plan steps; a `setup` or `plan-new` request takes its JSON as `--text`) |
+| `tirith inbox add --kind finish\|ask\|setup\|plan-refresh\|plan-new\|plan-edit --project P [--step N] [--text T]` | appends a request, prints its id (`--step` is for plan steps; a `setup`, `plan-new` or `plan-edit` request takes its JSON as `--text`) |
 | `tirith inbox list [--open] [--json]` | lists requests (`--open`: only those with no answer and not done) |
 | `tirith inbox answer <id> "<markdown>" [--by manager\|brain] [--lane L]` | appends an answer (default `manager`, `auto: false`); `--lane` names the agent that has the request |
 | `tirith inbox done <id>` | closes the request |
@@ -180,6 +196,12 @@ The app writes every `inbox_add` attempt and its result (`ok id=...` or `error: 
   They use the same send paths as the step buttons, with the key `<project>|plan`. Under the header the
   card shows the "sent" chip, errors and the CLI fallback, and the last 2 plan requests as timelines like the
   step ones (asked, answered by Tirith with the summary, handled by the lane).
+- On hover, an open item of the current plan shows two icon buttons: **Edit** (inline field, Enter saves, Esc
+  cancels) and **Delete** (popover "Delete this item from the plan?"); a step shows **Add item** at the end of
+  its open items and a `+` on its title row. Each sends a `plan-edit` with the key `<project>|<step>` over the
+  same send paths. The item shows the new text (or struck through) with "Saving…" until the plan file in
+  `state` has the change; a refused change shows its reason with Dismiss. The "sent" chip is not used for it.
+  Other plans (read only) have no buttons. In History the request reads "You edited / deleted / added".
 - Under the step, one timeline per request (newest first, built only from `state.inbox`): asked, answered
   (manager, Tirith started an agent, or Muse Spark automatically), handled by the agent in `lanes` with its
   live status, done. Unanswered: "Waiting for the manager · N s"; after 2 min a note that Tirith will
@@ -218,6 +240,9 @@ handles everything by hand), `auto_launch = false` leaves `finish` to the manage
 | `plan-refresh`, one already running for the project | answers naming that lane (one refresh at a time per project) |
 | `plan-new` | starts the planner lane (`step: "plan-new"`) and answers with the lane id; several may run |
 | `plan-refresh` / `plan-new`, launch refused | answers with the reason and adds an owner item (`Try again` with the `tirith inbox add` command for a refresh) |
+| `plan-edit` | applies the change to the project's plan file by code: the step's open item whose text is exactly `item_text` (a wrapped item counts as one) is replaced, removed, or the new item is appended after the step's last open item; commits **only that file** with `Roadmap: <edit\|delete\|add> in step N (owner)` through the normal git hooks (the commit guard); answers `by: tirith` and queues one `plan-refresh` |
+| `plan-edit`, item text changed meanwhile (or ticked), step or plan gone, plan file has uncommitted changes, commit refused | changes nothing, answers `Could not <verb> the plan: <reason>` and adds an alert flow |
+| `plan-edit` after another edit with a `plan-refresh` of that project still unanswered | no second refresh: the answer says one is already queued (at most one queued refresh per project) |
 | `autopilot` | sets the autopilot on or off, closes the request |
 | `setup` and other kinds | left to the manager (`manager_pending`) |
 
