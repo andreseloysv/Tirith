@@ -419,10 +419,11 @@ def test_relaunch_keeps_the_item_and_adds_the_note(proj, home: Path) -> None:
     brief.parent.mkdir(parents=True, exist_ok=True)
     brief.write_text("# Lane: old\n", encoding="utf-8")
     lane = _lane(home, repo, "old", brief=str(brief), feature="Work")
+    subprocess.run([GIT, "-C", str(repo), "branch", "lane/old", "HEAD"], check=True)
     new_id = relaunch_lane(home, lane, None, by_tirith=True, note="NOTE: report your outcome")
     argv = started[-1]
     assert argv[argv.index("--item") + 1] == "Build the button." and argv[argv.index("--retry-of") + 1] == "old"
-    assert "NOTE: report your outcome" in (home / "briefs" / f"{new_id}.md").read_text(encoding="utf-8")
+    assert "NOTE: report your outcome" in Path(argv[argv.index("--brief") + 1]).read_text(encoding="utf-8")
 
 
 def test_standing_lanes_give_their_item_back(proj, home: Path) -> None:
