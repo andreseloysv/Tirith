@@ -12,7 +12,10 @@ import os
 import re
 import shlex
 import subprocess
+import threading
+import time
 from collections import Counter, deque
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -28,6 +31,8 @@ TESTS_MAX = 20
 FILES_MAX = 100
 UNTRACKED_COUNT_BYTES = 256 * 1024
 GIT_TIMEOUT_S = 10
+PREFETCH_WORKERS = 8
+FILES_TTL_S = 15  # a live lane's git file list is re-read at most this often (in the background)
 
 # -- goal -------------------------------------------------------------------------------------
 
@@ -568,6 +573,8 @@ class ActivityTracker:
         self._logs: dict[str, _LaneLog] = {}
         self._goals: dict[str, tuple[float, str | None]] = {}
         self._ended_files: dict[str, tuple[list[dict], tuple[int, int, int]]] = {}
+        self._live_files: dict[str, tuple[float, tuple[list[dict], tuple[int, int, int]]]] = {}
+        self._refreshing: set[str] = set()
 
     def _log(self, lane: dict) -> _LaneLog | None:
         """Bring the lane's log state up to date (read only what is new)."""
@@ -618,17 +625,48 @@ class ActivityTracker:
                 goal = None
         return goal or str(lane.get("feature") or "") or None
 
+    def prefetch(self, lanes: list[dict]) -> None:
+        """Read the git files of every lane not seen yet at once (a cold start would run 3 git calls per lane in turn)."""
+        todo = [l for l in lanes if str(l["id"]) not in (self._ended_files if l.get("ended_at") else self._live_files)]
+        if len(todo) < 2:
+            return
+        with ThreadPoolExecutor(max_workers=PREFETCH_WORKERS) as pool:
+            results = list(pool.map(lambda l: git_files(l.get("workspace"), l.get("start_commit")), todo))
+        at = time.monotonic()
+        for lane, result in zip(todo, results):
+            if lane.get("ended_at"):
+                self._ended_files[str(lane["id"])] = result
+            else:
+                self._live_files[str(lane["id"])] = (at, result)
+
     def files(self, lane: dict, ended: bool) -> tuple[list[dict], tuple[int, int, int]]:
         """Live git files; an ended lane keeps the list computed once."""
         lane_id = str(lane["id"])
         if ended and lane_id in self._ended_files:
             return self._ended_files[lane_id]
-        result = git_files(lane.get("workspace"), lane.get("start_commit"))
         if ended:
+            result = git_files(lane.get("workspace"), lane.get("start_commit"))
             self._ended_files[lane_id] = result
-        else:
-            self._ended_files.pop(lane_id, None)
-        return result
+            self._live_files.pop(lane_id, None)
+            return result
+        self._ended_files.pop(lane_id, None)
+        cached = self._live_files.get(lane_id)
+        if cached is None:  # first sight: the caller waits for it
+            result = git_files(lane.get("workspace"), lane.get("start_commit"))
+            self._live_files[lane_id] = (time.monotonic(), result)
+            return result
+        if time.monotonic() - cached[0] >= FILES_TTL_S and lane_id not in self._refreshing:
+            self._refreshing.add(lane_id)
+            workspace, start = lane.get("workspace"), lane.get("start_commit")
+
+            def refresh() -> None:
+                try:
+                    self._live_files[lane_id] = (time.monotonic(), git_files(workspace, start))
+                finally:
+                    self._refreshing.discard(lane_id)
+
+            threading.Thread(target=refresh, daemon=True).start()
+        return cached[1]
 
     def lane(self, lane: dict, status: str, hook_rows: list[dict], now: datetime) -> dict:
         """The activity fields of one agent row (see ``docs/CONTRACT-activity.md``)."""

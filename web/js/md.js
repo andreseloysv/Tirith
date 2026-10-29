@@ -3,7 +3,9 @@
    links keep only http, https and file URLs. T.md(text) -> block HTML, T.mdInline(text) -> inline HTML,
    T.mdBox(text, key) -> block HTML clamped to ~8 lines with a fade and "Show all" (see main.js T.mdFit).
    With opts {file(path) -> bool, project}, paths the caller confirms (code spans, plain text, link targets,
-   with :line[:col]) become file links (data-act="fopen", files.js opens them; docs/CONTRACT-files.md). */
+   with :line[:col]) become file links (data-act="fopen", files.js opens them; docs/CONTRACT-files.md).
+   With opts {lane(id) -> bool}, lane ids the caller knows become lane links (data-act="golane", lanes.js opens
+   the lane): always in code spans, as lane/<id> or after "lane", bold, and bare when the id has a -, _ or digit. */
 (function () {
   var T = (typeof window !== 'undefined' ? (window.T = window.T || {}) : {});
   var CLAMP_LINES = 8;
@@ -32,10 +34,24 @@
   function normRef(p) { while (p.indexOf('./') === 0) p = p.slice(2); return p.replace(/\/+$/, '') || p; }
   /* the link for a confirmed path, or null */
   function fileLink(ref, inner) {
-    if (!refs || !ref || !refs.file(normRef(ref.path))) return null;
+    if (!refs || !refs.file || !ref || !refs.file(normRef(ref.path))) return null;
     var at = ref.path + (ref.line ? ':' + ref.line + (ref.col ? ':' + ref.col : '') : '');
     return '<a class="fref" href="#" data-act="fopen" data-project="' + esc(refs.project || '') + '" data-path="' + esc(ref.path) + '"' +
       (ref.line ? ' data-line="' + ref.line + '"' : '') + (ref.col ? ' data-col="' + ref.col + '"' : '') + ' title="Open ' + esc(at) + '">' + inner + '</a>';
+  }
+
+  /* ---------- lane references ---------- */
+  var LANE = /(^|[\s(\[*;])(lane\/)?([A-Za-z0-9][\w.-]*?)(?=[.,:;!?]*(?:$|[\s)\]*&]))/g;
+  /* the link for a lane id the caller knows, or null (ids are slugs, so the escaped text is the id itself) */
+  function laneLink(id, inner) {
+    if (!refs || !refs.lane || !/^[\w.-]+$/.test(id || '') || !refs.lane(id)) return null;
+    return '<a class="lref" href="#" data-act="golane" data-key="' + esc(id) + '" title="Open lane ' + esc(id) + '">' + inner + '</a>';
+  }
+  /* a bare word is a lane only when it cannot be an ordinary word: an id with - _ or a digit, lane/<id>,
+     "lane <id>" or **<id>** */
+  function laneWord(s, at, m, pre, slash, id) {
+    return /[-_\d]/.test(id) || !!slash || /\blanes?\s$/i.test(s.slice(0, at + pre.length)) ||
+      (pre === '*' && s.charAt(at + m.length) === '*');
   }
 
   /* ---------- inline ---------- */
@@ -45,19 +61,23 @@
     var s = esc(String(src == null ? '' : src).replace(/[\u0001\u0002]/g, ''));
     s = s.replace(/(`+)([^`]|[^`][\s\S]*?[^`])\1(?!`)/g, function (m, t, code) {
       var c = '<code>' + code.trim() + '</code>', ref = refs && !/\s/.test(code.trim()) ? splitRef(code.trim()) : null;
-      return keep((ref && !ref.rest && fileLink(ref, c)) || c);
+      return keep((ref && !ref.rest && fileLink(ref, c)) || laneLink(code.trim(), c) || c);
     });
     s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, function (m, label, url) {
       if (/^(https?:|file:)/i.test(url)) return keep('<a href="' + url + '" target="_blank" rel="noopener">' + label + '</a>');
-      var ref = refs ? splitRef(url) : null, h = ref && !ref.rest && fileLink(ref, label);
+      var ref = refs ? splitRef(url) : null, h = (ref && !ref.rest && fileLink(ref, label)) || laneLink(url.replace(/^lane[:\/]/, ''), label);
       return h ? keep(h) : m;
     });
     s = s.replace(/(^|[\s(])((?:https?|file):\/\/[^\s<]*[^\s<.,;:!?)\]'"&])/gi, function (m, pre, url) {
       return pre + keep('<a href="' + url + '" target="_blank" rel="noopener">' + url + '</a>');
     });
-    if (refs) s = s.replace(PLAIN, function (m, pre, tok) {
+    if (refs && refs.file) s = s.replace(PLAIN, function (m, pre, tok) {
       var ref = splitRef(tok), h = ref && fileLink(ref, tok.slice(0, tok.length - ref.rest.length));
       return h ? pre + keep(h) + ref.rest : m;
+    });
+    if (refs && refs.lane) s = s.replace(LANE, function (m, pre, slash, id, at, all) {
+      var h = laneWord(all, at, m, pre, slash, id) && laneLink(id, (slash || '') + id);
+      return h ? pre + keep(h) : m;
     });
     s = s.replace(/\*\*(?=\S)([\s\S]*?\S)\*\*/g, '<strong>$1</strong>')
       .replace(/(^|[^\w])__(?=\S)([\s\S]*?\S)__(?!\w)/g, '$1<strong>$2</strong>')
@@ -160,7 +180,7 @@
   }
 
   function withRefs(opts, fn) {
-    var was = refs; refs = opts && typeof opts.file === 'function' ? opts : null;
+    var was = refs; refs = opts && (typeof opts.file === 'function' || typeof opts.lane === 'function') ? opts : null;
     try { return fn(); } finally { refs = was; }
   }
   var md = function (text, opts) { var h = withRefs(opts, function () { return blocks(text); }); return h ? '<div class="md">' + h + '</div>' : ''; };

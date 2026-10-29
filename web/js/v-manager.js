@@ -11,7 +11,8 @@
   ui.chatOut = ui.chatOut || [];     /* sent from here, not yet in the state: {cid, id, text, project, at, state: "sending"|"sent"|"failed", err, pics} */
   ui.chatCli = ui.chatCli || null;   /* CLI line to copy (no way to send from here) */
   ui.chatErr = ui.chatErr || null;   /* why the send failed */
-  ui.chatPics = ui.chatPics || [];   /* images waiting in the composer: {name, type, size, url, w, h, b64} */
+  ui.chatPics = ui.chatPics || [];   /* files waiting in the composer: {name, type, size, url, w, h, b64}; url only for a picture */
+  ui.chatDrag = false;               /* files are being dragged over the chat */
   ui.chatPicUrl = ui.chatPicUrl || {}; /* saved path -> data URL, for thumbnails the page cannot open by path */
   ui.chatReplyTo = ui.chatReplyTo || null; /* id of the owner item the composer answers */
   ui.chatLast = ui.chatLast || '';   /* the last message sent from here (Up arrow brings it back) */
@@ -46,7 +47,10 @@
   var SEND = '<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M8 13V3.2M3.8 7.2L8 3l4.2 4.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   var BUBBLE = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3 3h10a1 1 0 011 1v6a1 1 0 01-1 1H7.5L4.6 13.6V11H3a1 1 0 01-1-1V4a1 1 0 011-1z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>';
 
+  /* any file can go with a message; these four types show as pictures, the rest as a chip with the name */
   var PIC_MAX = 6, PIC_BYTES = 10 * 1024 * 1024, PIC_TYPES = { 'image/png': 1, 'image/jpeg': 1, 'image/gif': 1, 'image/webp': 1 };
+  var NO_SAVE = 'Attach files in the desktop app. A page opened as a file cannot save them for the manager.';
+  var DOC = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4 1.8h5l3 3v9.4H4z M9 1.8v3h3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>';
   var CLIP = '<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M13.2 7.6L8 12.8a3 3 0 01-4.2-4.2l5.5-5.5a2 2 0 012.9 2.9L6.7 11.4a1 1 0 01-1.4-1.4l4.8-4.8" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
   function shq(t) { return "'" + String(t).replace(/'/g, "'\\''") + "'"; }
@@ -122,16 +126,26 @@
   T.chatPending = function (state) { return !!waitingSince(state || lastState || {}); };
 
   function picSrc(a) { return ui.chatPicUrl[a.path] || ('file://' + encodeURI(a.path).replace(/#/g, '%23').replace(/\?/g, '%3F')); }
+  function size(n) { return n < 1024 ? n + ' B' : n < 1024 * 1024 ? Math.round(n / 1024) + ' KB' : (n / 1048576).toFixed(1) + ' MB'; }
+  /* a file that is not a picture: its name and size; `x` adds the remove button of the composer */
+  function fileChip(name, bytes, title, x) {
+    return '<span class="mc-file" title="' + esc(title) + '">' + DOC + '<span class="mc-fname">' + esc(name) + '</span><span class="mc-fsize">' + esc(size(bytes || 0)) + '</span>' + (x || '') + '</span>';
+  }
   function thumbs(pics) {
-    return pics && pics.length ? '<div class="mc-pics">' + pics.map(function (a, i) {
+    if (!pics || !pics.length) return '';
+    var shots = pics.filter(function (a) { return PIC_TYPES[a.type]; }), files = pics.filter(function (a) { return !PIC_TYPES[a.type]; });
+    return '<div class="mc-pics">' + shots.map(function (a, i) {
       var src = picSrc(a), alt = 'Image ' + (i + 1) + (a.width ? ', ' + a.width + '×' + a.height : '');
       return '<button class="mc-pic" type="button" data-act="mc-zoom" data-src="' + esc(src) + '" title="Open full size" aria-label="' + esc(alt) + '"><img src="' + esc(src) + '" alt="' + esc(alt) + '" loading="lazy"></button>';
-    }).join('') + '</div>' : '';
+    }).join('') + files.map(function (a) {
+      return fileChip(a.name || String(a.path).split('/').pop(), a.size, a.path);
+    }).join('') + '</div>';
   }
+  T.chatThumbs = thumbs;
   function msg(m, state) {
     if (m.item) return turnMsg(m, state);
     if (m.side === 'live') return T.liveBlock(m.row, state);
-    var body = m.side === 'me' ? esc(m.text).replace(/\n/g, '<br>') : T.md(m.text, T.fileOpts(state, m.project));
+    var body = m.side === 'me' ? esc(m.text).replace(/\n/g, '<br>') : T.md(m.text, T.chatOpts(state, m.project));
     var meta = (m.ctx ? esc(m.ctx) + ' · ' : '') + esc(T.clockTime(m.at));
     if (m.queued) meta = '<span class="mc-wait" title="The manager is working on an earlier message; this one goes into the same session when that turn ends">Queued</span> · ' + meta;
     if (m.local === 'sending') meta = 'Sending… · ' + meta;
@@ -146,7 +160,7 @@
   /* a message that needs the owner (open) or needed it (answered): the text, then options and Run actions */
   function turnMsg(m, state) {
     var w = m.item.w, replying = ui.chatReplyTo === w.id;
-    return '<div class="mc-m mgr turn' + (m.open ? ' wait' : '') + (replying ? ' replying' : '') + '" data-wait="' + esc(w.id) + '"><div class="mc-b md">' + T.md(m.text, T.fileOpts(state, m.project)) + '</div>' +
+    return '<div class="mc-m mgr turn' + (m.open ? ' wait' : '') + (replying ? ' replying' : '') + '" data-wait="' + esc(w.id) + '"><div class="mc-b md">' + T.md(m.text, T.chatOpts(state, m.project)) + '</div>' +
       (w.reason_tag ? '<div class="nacts"><span class="nchip nreason">' + esc(w.reason_tag) + '</span></div>' : '') +
       T.turnBlock(m.item, state) +
       '<div class="mc-meta">' + (m.open ? '<b class="mc-await">Waits for you</b> · ' : '') + esc(m.ctx) + ' · ' + esc(T.clockTime(m.at)) + '</div></div>';
@@ -207,9 +221,12 @@
   }
   function picStrip() {
     return ui.chatPics.length ? '<div class="mc-strip">' + ui.chatPics.map(function (p, i) {
-      return '<span class="mc-th"><img src="' + esc(p.url) + '" alt="' + esc(p.name) + '"><button type="button" data-act="mc-unpic" data-i="' + i + '" aria-label="Remove ' + esc(p.name) + '" title="Remove">&times;</button></span>';
+      var x = '<button type="button" data-act="mc-unpic" data-i="' + i + '" aria-label="Remove ' + esc(p.name) + '" title="Remove">&times;</button>';
+      if (!p.url) return fileChip(p.name, p.size, p.name, x);
+      return '<span class="mc-th"><img src="' + esc(p.url) + '" alt="' + esc(p.name) + '" title="' + esc(p.name) + '">' + x + '</span>';
     }).join('') + '</div>' : '';
   }
+  T.chatStrip = picStrip;
   function composer(state) {
     var rows = Math.max(1, Math.min(6, ui.chatDraft.split('\n').length));
     var target = ui.chatReplyTo && T.turnFind ? T.turnFind(ui.chatReplyTo) : null;
@@ -218,8 +235,8 @@
       '<button data-act="mc-unreply" type="button" aria-label="Reply to nothing in particular" title="Stop replying to it">&times;</button></div>' : '') + (ui.chatErr ? '<div class="ierr mc-note">' + esc(ui.chatErr) + '</div>' : '') +
       (ui.chatCli ? '<div class="icli mc-note">Tirith cannot send from this page. Run in a terminal:<code>' + esc(ui.chatCli) + '</code></div>' : '') +
       '<div class="mc-box">' + picStrip() + '<textarea data-act="mc-text" data-keep="mc-text" rows="' + rows + '" maxlength="4000" placeholder="' + (target ? 'Your answer…' : 'Message the manager…') + '" aria-label="Message to the manager">' + esc(ui.chatDraft) + '</textarea>' +
-      '<div class="mc-row"><button class="mc-clip" type="button" data-act="mc-attach" aria-label="Attach images" title="Attach images (or paste, or drop them here)">' + CLIP + '</button>' +
-      '<input type="file" data-act="mc-file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden>' + projectChip(state) + '<span class="mc-hint">Enter sends · Shift+Enter new line</span>' +
+      '<div class="mc-row"><button class="mc-clip" type="button" data-act="mc-attach" aria-label="Attach files" title="Attach images or files (or paste, or drop them here)">' + CLIP + '</button>' +
+      '<input type="file" data-act="mc-file" multiple hidden>' + projectChip(state) + '<span class="mc-hint">Enter sends · Shift+Enter new line</span>' +
       '<button class="mc-send" data-act="mc-send" type="button" aria-label="Send" title="Send to the manager">' + SEND + '</button></div></div></div>';
   }
 
@@ -243,7 +260,7 @@
     syncDraftProject();
     var list = messages(state), since = waitingSince(state), h;
     var open = T.turnOpen ? T.turnOpen(state) : 0;
-    h = '<section class="mchat' + (drawer ? ' in-drawer' : '') + '"><div class="mc-head"><h2>Manager' +
+    h = '<section class="mchat' + (drawer ? ' in-drawer' : '') + (ui.chatDrag ? ' drop' : '') + '"><div class="mc-head"><h2>Manager' +
       (open ? ' <span class="icount" title="Messages that wait for you">' + open + '</span>' : '') + '</h2>' + presence(state) +
       (open ? '<button class="mc-jump" data-act="mc-jump" type="button">' + (open > 1 ? 'Jump to next' : 'Jump to it') + '</button>' : '') +
       (drawer ? '<button class="mc-x" data-act="mc-close" type="button" aria-label="Close the chat">&times;</button>' : '') + '</div>' +
@@ -259,38 +276,67 @@
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
   }
   function hasTauri() { var t = window.__TAURI__; return !!(t && t.core && t.core.invoke); }
+  /* {name, type, size, b64} -> a composer entry; a picture also gets its data URL and size (a broken one is a file) */
+  function picOf(f) {
+    var p = { name: f.name || 'file', type: f.type || '', size: f.size, url: null, w: 0, h: 0, b64: f.b64 };
+    if (!PIC_TYPES[p.type]) return Promise.resolve(p);
+    return new Promise(function (resolve) {
+      var url = 'data:' + p.type + ';base64,' + p.b64, im = new Image();
+      im.onload = function () { p.url = url; p.w = im.naturalWidth; p.h = im.naturalHeight; resolve(p); };
+      im.onerror = function () { resolve(p); };
+      im.src = url;
+    });
+  }
   function readPic(file) {
     return new Promise(function (resolve) {
       var r = new FileReader();
       r.onload = function () {
-        var url = String(r.result), im = new Image();
-        im.onload = function () { resolve({ name: file.name || 'image', type: file.type, size: file.size, url: url, w: im.naturalWidth, h: im.naturalHeight, b64: url.slice(url.indexOf(',') + 1) }); };
-        im.onerror = function () { resolve(null); };
-        im.src = url;
+        var url = String(r.result);
+        resolve(picOf({ name: file.name, type: file.type, size: file.size, b64: url.slice(url.indexOf(',') + 1) }));
       };
       r.onerror = function () { resolve(null); };
       r.readAsDataURL(file);
     });
   }
-  /* add files to the composer; a page opened as a file cannot write the attachments folder, so it says so */
-  function addPics(files) {
-    files = Array.prototype.filter.call(files || [], function (f) { return /^image\//.test(f.type); });
-    if (!files.length) return;
-    ui.chatErr = null;
-    if (!hasTauri()) { ui.chatErr = 'Attach images in the desktop app. A page opened as a file cannot save them for the manager.'; T.render(); return; }
+  /* the files that fit: at most 6 per message, 10 MB each, none empty; `bad` says why one was left out */
+  function admit(files) {
     var bad = null;
     files = files.filter(function (f) {
-      if (!PIC_TYPES[f.type]) { bad = f.name + ' is not a PNG, JPEG, GIF or WebP image.'; return false; }
+      if (f.error) { bad = f.error + '.'; return false; }
+      if (!f.size) { bad = (f.name || 'The file') + ' is empty (a folder cannot be attached).'; return false; }
       if (f.size > PIC_BYTES) { bad = f.name + ' is over 10 MB.'; return false; }
       return true;
     });
-    if (ui.chatPics.length + files.length > PIC_MAX) { bad = 'At most ' + PIC_MAX + ' images per message.'; files = files.slice(0, PIC_MAX - ui.chatPics.length); }
-    if (bad) ui.chatErr = bad;
-    Promise.all(files.map(readPic)).then(function (got) {
-      got.forEach(function (p) { if (p && ui.chatPics.length < PIC_MAX) ui.chatPics.push(p); });
+    if (ui.chatPics.length + files.length > PIC_MAX) { bad = 'At most ' + PIC_MAX + ' files per message.'; files = files.slice(0, Math.max(0, PIC_MAX - ui.chatPics.length)); }
+    return { files: files, bad: bad };
+  }
+  T.chatAdmit = admit;
+  function take(pending, bad) {
+    ui.chatErr = bad;
+    Promise.all(pending).then(function (got) {
+      got.forEach(function (p) { if (p && ui.chatPics.length < PIC_MAX) ui.chatPics.push(p); else if (!p) ui.chatErr = 'A file could not be read.'; });
       T.render();
     });
     if (bad) T.render();
+  }
+  /* add files (picked, pasted or dropped on the page) to the composer; a page opened as a file cannot write the
+     attachments folder, so it says so */
+  function addPics(files) {
+    files = Array.prototype.slice.call(files || []);
+    if (!files.length) return;
+    ui.chatErr = null;
+    if (!hasTauri()) { ui.chatErr = NO_SAVE; T.render(); return; }
+    var ok = admit(files);
+    take(ok.files.map(readPic), ok.bad);
+  }
+  /* files dropped on the app window: the app reads them (only those of that drop) and hands over the bytes */
+  function addDropped(paths) {
+    if (!paths || !paths.length) return;
+    ui.chatErr = null;
+    window.__TAURI__.core.invoke('attachment_dropped', { paths: paths }).then(function (got) {
+      var ok = admit(got || []);
+      take(ok.files.map(picOf), ok.bad);
+    }, function (err) { ui.chatErr = 'Could not attach: ' + (err && err.message || err); T.render(); });
   }
   function newId() {
     var b = new Uint8Array(4);
@@ -317,15 +363,15 @@
     saveUnsent();
     T.render();
   }
-  /* the app saves each image under attachments/<id>/ first, then adds the chat row that lists them */
+  /* the app saves each file under attachments/<id>/ first, then adds the chat row that lists them */
   function transmit(o) {
     var inv = window.__TAURI__.core.invoke;
     return (o.pics || []).reduce(function (chain, p) {
       return chain.then(function () {
         if (p.saved) return;
-        return inv('attachment_save', { messageId: o.id, name: p.name, bytesBase64: p.b64 }).then(function (r) {
-          ui.chatPicUrl[r.path] = p.url;
-          p.saved = { path: r.path, type: r.type, size: r.size, width: p.w, height: p.h };
+        return inv('attachment_save', { messageId: o.id, name: p.name, mime: p.type, bytesBase64: p.b64 }).then(function (r) {
+          if (p.url) ui.chatPicUrl[r.path] = p.url;
+          p.saved = { path: r.path, type: r.type, size: r.size, width: p.w, height: p.h, name: r.name || p.name };
         });
       });
     }, Promise.resolve()).then(function () {
@@ -460,7 +506,7 @@
     else if (act === 'mc-retry') retry(b.getAttribute('data-cid'));
     else if (act === 'mc-copy') copyText(b.getAttribute('data-cid'));
     else if (act === 'mc-close') { ui.chatOpen = false; T.render(); }
-    else if (act === 'mc-attach' && !hasTauri()) { ui.chatErr = 'Attach images in the desktop app. A page opened as a file cannot save them for the manager.'; T.render(); }
+    else if (act === 'mc-attach' && !hasTauri()) { ui.chatErr = NO_SAVE; T.render(); }
     else if (act === 'mc-attach') { var f =view.querySelector('[data-act="mc-file"]'); if (f) f.click(); }
     else if (act === 'mc-unpic') { ui.chatPics.splice(+b.getAttribute('data-i'), 1); T.render(); }
     else if (act === 'mc-zoom') lightbox(b.getAttribute('data-src'));
@@ -484,19 +530,55 @@
   }
   view.addEventListener('paste', function (e) {
     var t = e.target; if (!t.closest || !t.closest('.mc-comp')) return;
-    var files = Array.prototype.filter.call((e.clipboardData && e.clipboardData.files) || [], function (f) { return /^image\//.test(f.type); });
+    var files = (e.clipboardData && e.clipboardData.files) || [];
     if (files.length) { e.preventDefault(); addPics(files); }
   });
-  view.addEventListener('dragover', function (e) {
+
+  /* ---------- drag and drop onto the chat: the page's own events (a browser, and the app, which turns its native
+     drop handler off so the page gets the files), plus the app's file-drop events for a window that keeps that
+     handler on (the window takes the drop there, so the page never sees the files) ---------- */
+  function dragMark(c) {
+    Array.prototype.forEach.call(document.querySelectorAll('.mchat.drop'), function (x) { if (x !== c) x.classList.remove('drop'); });
+    if (c) c.classList.add('drop');
+    ui.chatDrag = !!c;   /* a render while dragging keeps the drop target */
+  }
+  function hasFiles(e) { return !!(e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') >= 0); }
+  var ev = window.__TAURI__ && window.__TAURI__.event, appDrop = hasTauri() && !!(ev && ev.listen), dragOff = 0;
+  /* a file dropped beside the chat does nothing: without this the browser would leave Tirith to show the file */
+  document.addEventListener('dragover', function (e) {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    clearTimeout(dragOff);
+    var c = e.target.closest ? e.target.closest('.mchat') : null;
+    if (e.dataTransfer) e.dataTransfer.dropEffect = c ? 'copy' : 'none';
+    dragMark(c);
+  });
+  /* leaving one element for another also fires dragleave (and Safari never says for which): the next dragover keeps it */
+  document.addEventListener('dragleave', function () { clearTimeout(dragOff); dragOff = setTimeout(function () { dragMark(null); }, 100); });
+  document.addEventListener('drop', function (e) {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
     var c = e.target.closest && e.target.closest('.mchat');
-    if (c && e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') >= 0) { e.preventDefault(); c.classList.add('drop'); }
+    dragMark(null);
+    if (c && e.dataTransfer.files && e.dataTransfer.files.length) addPics(e.dataTransfer.files);
+    else T.render();
   });
-  view.addEventListener('dragleave', function (e) { var c = e.target.closest && e.target.closest('.mchat'); if (c && !c.contains(e.relatedTarget)) c.classList.remove('drop'); });
-  view.addEventListener('drop', function (e) {
-    var c = e.target.closest && e.target.closest('.mchat'); if (!c) return;
-    c.classList.remove('drop');
-    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) { e.preventDefault(); addPics(e.dataTransfer.files); }
-  });
+  /* the app's events carry the pointer in physical pixels of the webview */
+  function chatAt(pos) {
+    var r = window.devicePixelRatio || 1, el = pos ? document.elementFromPoint(pos.x / r, pos.y / r) : null;
+    return el && el.closest ? el.closest('.mchat') : null;
+  }
+  if (appDrop) {
+    var over = function (e) { dragMark(chatAt(e.payload && e.payload.position)); };
+    ev.listen('tauri://drag-enter', over);
+    ev.listen('tauri://drag-over', over);
+    ev.listen('tauri://drag-leave', function () { dragMark(null); });
+    ev.listen('tauri://drag-drop', function (e) {
+      var p = e.payload || {}, c = chatAt(p.position);
+      dragMark(null);
+      if (c) addDropped(p.paths); else T.render();
+    });
+  }
   view.addEventListener('input', function (e) {
     var t = e.target, act = t.getAttribute && t.getAttribute('data-act');
     if (act === 'mc-text') { ui.chatDraft = t.value; saveDraft(); fit(t); }

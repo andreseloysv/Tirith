@@ -1,10 +1,10 @@
 """No finished lane is left unreviewed: the dispatcher reviews it, by code.
 
 Every collector cycle ``dispatch.run`` calls :func:`run`. A launched lane that ended ``done`` gets one
-detached ``tirith lane review <lane>`` (``--tests-only`` when ``[review] auto_merge = false``), once per lane,
+detached ``tirith lane review <lane>`` (it merges when the tests pass), once per lane,
 state in ``dispatch.json`` (``reviews``). When the review has a result the dispatcher settles it: a merge
-answers the owner's request, closes the manager queue item and ticks the plan; a failure opens an owner
-item with Run actions and keeps the queue item open. A lane that ended 30 minutes ago with unmerged work
+answers the owner's request, closes the manager queue item and ticks the plan; anything that stops it is one manager queue
+item with the reason (never an owner item). A lane that ended 30 minutes ago with unmerged work
 and no review result is a ``review-overdue`` violation. See ``docs/CONTRACT-launch.md``.
 """
 
@@ -16,11 +16,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
-from tirith import actions as actions_mod
 from tirith import asks as asks_mod
 from tirith import claimcheck as claimcheck_mod
 from tirith import flows as flows_mod
-from tirith import tirithcmd
 from tirith import inbox as inbox_mod
 from tirith import launch as launch_mod
 from tirith import ownergate as ownergate_mod
@@ -29,7 +27,7 @@ from tirith import projects as projects_mod
 from tirith import review as review_mod
 from tirith import roadmap as roadmap_mod
 from tirith.home import Config, now_iso, parse_iso
-from tirith.store import lane_path, read_json
+from tirith.store import read_lane
 
 OVERDUE_AFTER_S = 1800.0
 AUTO_WINDOW_S = 86400.0  # older finished lanes are not merged behind the owner's back; they are overdue
@@ -177,11 +175,6 @@ def _log_hint(home: Path, review: dict, lane_id: str) -> str:
     return str(found[-1] if found else home / "logs" / f"{lane_id}.review.log")
 
 
-def _actions(rows: list[tuple[str, str]], at: str) -> list[dict]:
-    return actions_mod.make_actions([tirithcmd.rewrite(c) for _, c in rows], [label for label, _ in rows],
-                                    created_by="tirith", at=at)
-
-
 def _out_items(repo: Path | None) -> list[str]:
     """The texts of the plan items marked out of this plan (what a report must not ask the owner about)."""
     if repo is None:
@@ -192,19 +185,9 @@ def _out_items(repo: Path | None) -> list[str]:
     return [i["text"] for step in steps for i in step["items"] if i.get("who") == "out"]
 
 
-def _owner_item(home: Path, rec: dict, item_id: str, project: str | None, text: str,
-                rows: list[tuple[str, str]], at: str) -> None:
-    from tirith import dispatch
-    if rec.get("owner_item") and rec["owner_item"] != item_id:
-        dispatch.close_owner_item(home, rec["owner_item"], at)
-    dispatch.add_owner_item(home, item_id, project, text, [], at, actions=_actions(rows, at),
-                            why_owner="owner-decision", why_detail="choice: merge it or drop it")
-    rec["owner_item"] = item_id
-
-
 def settle(home: Path, config: Config, lane: dict, review: dict, rec: dict, now: datetime,
            repo: Path | None) -> None:
-    """Act on a finished review once (per review result): answer, close, or ask the owner."""
+    """Act on a finished review once (per review result): answer, close, or queue it for the manager (never the owner)."""
     from tirith import dispatch
     at, lane_id = now_iso(now), str(lane["id"])
     project = str(lane.get("project") or "") or None
@@ -236,11 +219,10 @@ def settle(home: Path, config: Config, lane: dict, review: dict, rec: dict, now:
     if status == review_mod.CLAIMS_FAILED:
         _claims_failed(home, config, lane, review, rec, project, at)
         return
-    key = f"review-{lane_id}-{re.sub(r'[^0-9]', '', str(review.get('at') or ''))}"
     drop = ("Drop the lane", f"tirith lane drop {lane_id}")
-    if status == review_mod.READY:  # auto_merge is off: the owner decides
-        text = f"Tests passed for **{feature}** ({lane_id}). Merge it into the project branch?"
-        rows = [("Merge", f"tirith lane review {lane_id}"), ("Drop", drop[1])]
+    if status == review_mod.READY:  # tests passed but nothing merged (a manual --tests-only run): the manager merges
+        text = f"Tests passed for **{feature}** ({lane_id}) but it is not merged."
+        rows = [("Merge it", f"tirith lane review {lane_id}"), drop]
     else:
         why = "the tests failed" if status == review_mod.TESTS_FAILED else "the merge did not go through"
         text = f"Review of **{feature}** ({lane_id}): {why}. " + flows_mod.one_line(review.get("message") or "", 240)
@@ -248,11 +230,9 @@ def settle(home: Path, config: Config, lane: dict, review: dict, rec: dict, now:
         if step and project:
             rows.append(("Start an agent to fix it", f"tirith launch --project {project} --step {step}"))
         rows += [("Show the log", f"tail -n 80 {_log_hint(home, review, lane_id)}"), drop]
-        # employees report to the manager: a failed review is the manager's job, never the owner's
-        _manager_item(home, rec, project, lane_id, text, rows)
-        flows_mod.append_flow(home, "tirith", "manager", "alert", text, session=None, project=project, at=at)
-        return
-    _owner_item(home, rec, key, project, text, rows, at)  # auto_merge off: the owner chose to decide
+    # merging is never the owner's question: whatever stops a merge is one manager queue item with the reason
+    _manager_item(home, rec, project, lane_id, text, rows)
+    flows_mod.append_flow(home, "tirith", "manager", "alert", text, session=None, project=project, at=at)
 
 
 def _brief_text(lane: dict) -> str:
@@ -321,7 +301,7 @@ def run(home: Path, config: Config, now: datetime, state: dict, lanes: list[dict
     overdue = state.setdefault("overdue", {})
     for seen in lanes:
         lane_id = str(seen.get("id") or "")
-        lane = read_json(lane_path(home, lane_id), None) if lane_id else None
+        lane = read_lane(home, lane_id) if lane_id else None
         if not isinstance(lane, dict) or not lane.get("ended_at") or lane.get("result") != "done":
             continue
         repo = repo_of(config, lane)
@@ -331,7 +311,7 @@ def run(home: Path, config: Config, now: datetime, state: dict, lanes: list[dict
         rec = book.get(lane_id)
         age = _age_s(lane.get("ended_at"), now)
         if rec is None:
-            if review.get("status") not in (review_mod.PENDING, None) or not Path(str(lane["workspace"])).is_dir():
+            if review.get("status") not in (review_mod.PENDING, review_mod.READY, None) or not Path(str(lane["workspace"])).is_dir():
                 book[lane_id] = {"seen": now_iso(now), "settled": _result_key(review) or "gone"}  # nothing to start
                 changed = True
                 continue
@@ -343,8 +323,6 @@ def run(home: Path, config: Config, now: datetime, state: dict, lanes: list[dict
                 item = asks_mod.queue_add(home, str(lane.get("project") or ""), lane_id,
                                           f"Review lane {lane_id} ({lane.get('feature') or ''}): tests, then merge")
                 argv = [*launch_mod.tirith_argv(home), "lane", "review", lane_id]
-                if not config.review_auto_merge:
-                    argv.append("--tests-only")
                 spawn(argv, home, home / "logs" / f"{lane_id}.review.log")
                 book[lane_id] = {"started": now_iso(now), "queue": item["id"]}
                 changed = True

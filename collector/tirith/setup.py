@@ -57,6 +57,16 @@ class Machine:
 _settings_has_hooks = hooks_mod.has_hooks
 
 
+def _names(items: list[str]) -> str:
+    return items[0] if len(items) == 1 else ", ".join(items[:-1]) + " and " + items[-1]
+
+
+def _on_path(alias: str, config: Config, home: Path) -> bool:
+    """Whether the CLI of ``alias`` (its ``command``, else the alias itself) is on the lane PATH."""
+    command = str((config.agents.get(alias) or {}).get("command") or "").strip() or alias
+    return gates_mod.resolve_real(command, home / "shims", gates_mod.lane_path(home)) is not None
+
+
 def machine_state(config: Config, shim_dir: Path | None = None, home: Path | None = None,
                   protection: list[dict] | None = None) -> Machine:
     """Hooks installed in every configured agent's settings and the shims intact (read only).
@@ -65,10 +75,12 @@ def machine_state(config: Config, shim_dir: Path | None = None, home: Path | Non
     ``shim_dir`` against the plain PATH)."""
     from tirith.home import tirith_home
 
+    home = Path(home or tirith_home())
     problems: list[str] = []
     fix: list[str] = []
     steps: list[tuple[str, str]] = []
     missing: list[str] = []
+    unknown: list[str] = []  # no settings path in config.toml: their hooks cannot be installed or checked
     aliases = [a for a in config.agents]
     if not aliases:
         problems.append("no [agents.<alias>] in config.toml: no agent is guarded")
@@ -77,6 +89,9 @@ def machine_state(config: Config, shim_dir: Path | None = None, home: Path | Non
             settings = hooks_mod.default_settings(alias, config.agents)
         except ValueError as exc:
             problems.append(str(exc))
+            fix.append(f'add settings = "<path to its settings.json>" under [agents.{alias}] in '
+                       f"{home / 'config.toml'}, or remove [agents.{alias}] if {alias} is not used here")
+            unknown.append(alias)
             continue
         if not _settings_has_hooks(settings, alias):
             problems.append(f"{alias}: tirith hooks are not in {settings}")
@@ -84,7 +99,7 @@ def machine_state(config: Config, shim_dir: Path | None = None, home: Path | Non
             steps.append((f"Install the hooks for {alias}", fix[-1]))
             missing.append(alias)
     hooks_ok = bool(aliases) and not problems
-    shim_problems = gates_mod.verify_home_shims(config, home or tirith_home(), shim_dir) if aliases else []
+    shim_problems = gates_mod.verify_home_shims(config, home, shim_dir) if aliases else []
     if shim_problems:
         problems += shim_problems
         fix.append(f"tirith shim install --dir {shim_dir}" if shim_dir else "tirith shim install")
@@ -101,6 +116,20 @@ def machine_state(config: Config, shim_dir: Path | None = None, home: Path | Non
     if missing:
         parts.append(f"Tirith cannot see what agents do ({', '.join(missing)}), because their hooks are not "
                      "installed.")
+    if unknown:
+        their = "its" if len(unknown) == 1 else "their"
+        parts.append(f"Tirith cannot guard {_names(unknown)}, because config.toml does not say where {their} "
+                     "settings are.")
+        runnable = [a for a in unknown if _on_path(a, config, home)]
+        absent = [a for a in unknown if a not in runnable]
+        if runnable:
+            parts.append(f"{_names(runnable)} can run on this machine without the rules.")
+        if absent:
+            parts.append(f"{_names(absent)} {'is' if len(absent) == 1 else 'are'} not installed here, so "
+                         f"{'it cannot' if len(absent) == 1 else 'they cannot'} run unguarded yet.")
+        parts.append(f'To fix it, add settings = "<path to the agent\'s settings.json>" under '
+                     f"{_names([f'[agents.{a}]' for a in unknown])} in config.toml, or remove the section of "
+                     "an agent you do not use.")
     if shim_problems:
         parts.append("Agents could start other agents without Tirith seeing them, because the agent "
                      "shims are not installed.")
