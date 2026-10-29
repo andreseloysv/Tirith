@@ -8,6 +8,8 @@ The collector folds the rows into ``state.inbox``. See ``docs/CONTRACT-inbox.md`
 from __future__ import annotations
 
 import json
+import mimetypes
+import re
 import secrets
 import time
 from pathlib import Path
@@ -32,7 +34,9 @@ STATE_ROWS = 100
 ATTACH_DIR = "attachments"  # <home>/attachments/<message-id>/<n>.<ext>
 ATTACH_MAX = 6
 ATTACH_MAX_BYTES = 10 * 1024 * 1024
-ATTACH_TYPES = {"image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp"}
+ATTACH_TYPES = {"image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp"}  # shown as pictures
+FILE_TYPE = "application/octet-stream"  # any other file: shown as a chip with its name
+_MIME = re.compile(r"^[a-z0-9][a-z0-9.+-]{0,63}/[a-z0-9][a-z0-9.+-]{0,127}$")
 AUTO_ANSWER_AFTER_S = 120
 SCHEME = "tirith"
 
@@ -101,45 +105,58 @@ def sniff_image(data: bytes) -> tuple[str, int, int] | None:
 
 
 def describe_attachment(path: Path | str) -> dict:
-    """``{path, type, size, width, height}`` for an image file (absolute path); InboxError if it is not an
-    allowed image or is over 10 MB."""
+    """``{path, type, size, width, height, name}`` for a file of at most 10 MB (absolute path). The type of
+    a PNG, JPEG, GIF or WebP comes from its bytes, of anything else from its name; InboxError otherwise."""
     path = Path(path).expanduser().resolve()
     try:
         size = path.stat().st_size
+        if not path.is_file():
+            raise InboxError(f"attachment {path.name} is not a file")
         data = path.read_bytes()
     except OSError as error:
         raise InboxError(f"cannot read attachment {path}: {error.strerror or error}") from None
     if size > ATTACH_MAX_BYTES:
         raise InboxError(f"attachment {path.name} is over {ATTACH_MAX_BYTES // (1024 * 1024)} MB")
+    if not size:
+        raise InboxError(f"attachment {path.name} is empty")
     found = sniff_image(data)
     if found is None:
-        raise InboxError(f"attachment {path.name} is not a PNG, JPEG, GIF or WebP image")
-    return {"path": str(path), "type": found[0], "size": size, "width": found[1], "height": found[2]}
+        guessed = (mimetypes.guess_type(path.name)[0] or "").lower()
+        kind = guessed if _MIME.match(guessed) and guessed not in ATTACH_TYPES else FILE_TYPE
+        found = (kind, 0, 0)
+    return {"path": str(path), "type": found[0], "size": size, "width": found[1], "height": found[2], "name": path.name}
 
 
 def clean_attachments(raw) -> list[dict]:
-    """The ``attachments`` of a row as stored: at most 6 well-formed ``{path, type, size, width, height}``."""
+    """The ``attachments`` of a row as stored: at most 6 well-formed ``{path, type, size, width, height}``
+    (and ``name`` when the row has one). A type outside ``ATTACH_TYPES`` is a plain file."""
     out = []
     for item in raw if isinstance(raw, list) else []:
         if isinstance(item, dict) and str(item.get("path") or "").startswith("/") \
-                and item.get("type") in ATTACH_TYPES:
+                and _MIME.match(str(item.get("type") or "")):
             num = lambda k: int(item[k]) if isinstance(item.get(k), (int, float)) and item[k] >= 0 else 0
-            out.append({"path": str(item["path"]), "type": item["type"], "size": num("size"),
-                        "width": num("width"), "height": num("height")})
+            picture = item["type"] in ATTACH_TYPES
+            clean = {"path": str(item["path"]), "type": item["type"], "size": num("size"),
+                     "width": num("width") if picture else 0, "height": num("height") if picture else 0}
+            name = "".join(c for c in str(item.get("name") or "") if c.isprintable())[:120].strip()
+            if name:
+                clean["name"] = name
+            out.append(clean)
     return out[:ATTACH_MAX]
 
 
 def attachment_list(paths: list[str] | None) -> list[dict]:
-    """Describe the image files named with ``--attach`` (at most 6)."""
+    """Describe the files named with ``--attach`` (at most 6)."""
     paths = list(paths or [])
     if len(paths) > ATTACH_MAX:
-        raise InboxError(f"at most {ATTACH_MAX} images per message")
+        raise InboxError(f"at most {ATTACH_MAX} files per message")
     return [describe_attachment(p) for p in paths]
 
 
 def attachment_lines(req: dict) -> str:
     """The attachment paths of a request or answer as text for the manager ('' if none)."""
-    return "\n".join(f"    image: {a['path']} ({a['type']}, {a['width']}x{a['height']})"
+    return "\n".join(f"    image: {a['path']} ({a['type']}, {a['width']}x{a['height']})" if a["type"] in ATTACH_TYPES
+                     else f"    file: {a['path']} ({a.get('name') or Path(a['path']).name}, {a['type']}, {a['size']} bytes)"
                      for a in req.get("attachments") or [])
 
 
@@ -170,7 +187,7 @@ def add_request(home: Path, kind: str, project: str = "", step: str = "", text: 
     attachments = clean_attachments(attachments)
     if kind == "chat":
         if not text and not attachments:
-            raise InboxError("a chat message needs text or an image")
+            raise InboxError("a chat message needs text or an attachment")
     elif not project or not step:
         raise InboxError("a request needs a project and a step")
     if kind == "ask" and not text:

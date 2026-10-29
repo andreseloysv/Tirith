@@ -489,40 +489,58 @@ after) and `Never for this project|never` (the collector writes `guard = false` 
 `[[projects]]` block of `config.toml`; the check stops reporting, `projects[].guard` is
 `{ok: true, problems: [], disabled: true}` and `lane run` skips the guard check).
 
-## Photos in the chat (attachments)
+## Photos and files in the chat (attachments)
 
-The owner can attach images to a chat message (Overview "Manager" column, and its drawer): Cmd+V in the
-composer, drag and drop onto the chat, or the paperclip. Thumbnails show above the text box and can be
-removed before sending. Up to 6 images per message, PNG, JPEG, GIF or WebP, at most 10 MB each; the type is
-read from the bytes, never from the file name.
+The owner can attach images and any other file to a chat message (Overview "Manager" column, and its drawer):
+Cmd+V in the composer, drag and drop onto the chat, or the paperclip. While files are dragged over the chat it
+shows "Drop files to attach them"; a drop anywhere else does nothing (the page never navigates to the file).
+Above the text box a picture shows as a thumbnail and any other file as a chip with its name and size; each
+can be removed before sending. Up to 6 files per message, at most 10 MB each, none empty. A PNG, JPEG, GIF or
+WebP is a picture only when its bytes say so, never because of its name.
 
 ```
-app:     attachment_save(message_id, name, bytes_base64) -> <home>/attachments/<message-id>/<n>.<ext>
+app:     drop on the window -> HTML5 drop with the files (the main window turns the native drop handler off)
+         (native handler on) -> tauri://drag-drop {paths, position} -> attachment_dropped(paths)
+                                                         -> [{name, type, size, b64} | {name, error}]
+         attachment_save(message_id, name, mime, bytes_base64) -> <home>/attachments/<message-id>/<n>.<ext> | <n>-<name>
          inbox_add(kind: "chat", ..., id, attachments)   -> inbox.jsonl row with `attachments`
-browser: cannot write files -> the page says "Attach images in the desktop app" (nothing is sent)
-CLI:     tirith inbox add --kind chat --text T --attach IMAGE ...   (the file stays where it is)
-manager: tirith inbox watch line / hook context list the absolute paths -> open the images
-         tirith inbox answer <id> "<markdown>" --attach IMAGE ...   -> the answer shows thumbnails too
+browser: drop target as in the app, but it cannot write files -> "Attach files in the desktop app" (nothing is sent)
+CLI:     tirith inbox add --kind chat --text T --attach FILE ...    (the file stays where it is)
+manager: tirith inbox watch line / hook context list the absolute paths -> open the files
+         tirith inbox answer <id> "<markdown>" --attach FILE ...    -> the answer shows them too
 ```
 
-- `<message-id>` is the request id (`in-` and 8 hex digits). The page picks it, saves every image with
-  `attachment_save`, then calls `inbox_add` with the same `id`. `attachment_save` refuses anything that is not
-  a valid id, an allowed image type or at most 10 MB, picks the file name itself (`<n>.png|jpg|gif|webp`, `n`
-  counts from 1, at most 6 per message) and cannot write outside `<home>/attachments/`. It returns
-  `{path, type, size}`; the page adds `width` and `height`.
+- The main window is built with `disable_drag_drop_handler()`, so the page gets the HTML5 `dragover`/`drop`
+  events with the files, as in a browser, and reads them itself. A window that keeps Tauri's native handler
+  takes the drop instead (the page gets no HTML5 drop with the files): Tauri's
+  `tauri://drag-enter|over|leave|drop` events carry the pointer in physical pixels, the page divides by
+  `devicePixelRatio` and marks the chat under it. `attachment_dropped` reads only paths of the last native drop
+  (the app remembers them from `WindowEvent::DragDrop`), refuses folders, empty files and files over 10 MB with a
+  reason per file, and types a picture by its bytes, anything else by its extension.
+- `<message-id>` is the request id (`in-` and 8 hex digits). The page picks it, saves every file with
+  `attachment_save`, then calls `inbox_add` with the same `id`. `attachment_save` refuses a bad id, an empty file
+  or one over 10 MB, picks the file name itself (`<n>.png|jpg|gif|webp` for a picture, `<n>-<name>` with the name
+  reduced to `[A-Za-z0-9._-]` for any other file; `n` counts from 1, at most 6 per message) and cannot write outside
+  `<home>/attachments/`. A file that is not a picture keeps the `mime` the page gave when well formed and not one of
+  the four picture types, else `application/octet-stream`. It returns `{path, type, size, name}`; the page adds
+  `width` and `height` of a picture.
 - `inbox_add` takes optional `id` and `attachments` (chat only): each path must be inside
-  `<home>/attachments/` without `..`, otherwise the request is refused. A chat message needs text **or** an image.
-- Rows: a request or an answer may carry `attachments: [{path, type, size, width, height}]` (absolute `path`,
-  `type` one of the four image types). Malformed entries are dropped when the rows are read (at most 6 kept);
-  `state.inbox[]` and `state.inbox[].answers[]` pass the list on unchanged.
-- `tirith inbox add|answer --attach IMAGE` (repeatable) describes an existing image file (checks type and
-  size, reads the dimensions) and stores its absolute path; exit 3 with the reason otherwise.
-- `tirith inbox watch` lines of a request with images gain `attachments` (the objects above, so the absolute
+  `<home>/attachments/` without `..` and each type a well-formed `type/subtype`, otherwise the request is refused.
+  A chat message needs text **or** an attachment.
+- Rows: a request or an answer may carry `attachments: [{path, type, size, width, height, name?}]` (absolute
+  `path`; `width`/`height` are 0 unless `type` is one of the four picture types; `name` is the original file
+  name). Malformed entries are dropped when the rows are read (at most 6 kept); `state.inbox[]` and
+  `state.inbox[].answers[]` pass the list on unchanged.
+- `tirith inbox add|answer --attach FILE` (repeatable) describes an existing file (checks size, reads a
+  picture's type and dimensions from its bytes, guesses any other type from the name) and stores its absolute
+  path; exit 3 with the reason otherwise.
+- `tirith inbox watch` lines of a request with attachments gain `attachments` (the objects above, so the absolute
   `path`s). The manager hook context (`SessionStart`, `UserPromptSubmit`) lists each one under the request as
-  `image: <path> (<type>, <w>x<h>)`.
-- Web: thumbnails sit above the bubble, in the owner's messages and in the manager's answers; a click opens
-  the image full size in a lightbox (click or Esc closes). In the app the thumbnail of a message sent from
-  this window comes from the picked file; others load `file://<path>`.
+  `image: <path> (<type>, <w>x<h>)` or `file: <path> (<name>, <type>, <size> bytes)`.
+- Web: thumbnails and file chips sit above the bubble, in the owner's messages and in the manager's answers; a
+  click on a thumbnail opens the image full size in a lightbox (click or Esc closes); a file chip shows its path on
+  hover. In the app the thumbnail of a message sent from this window comes from the picked file; others load
+  `file://<path>`.
 
 ## The manager inside Tirith (`collector/tirith/managerd.py`)
 
