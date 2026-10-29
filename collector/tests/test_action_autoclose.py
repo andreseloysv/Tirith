@@ -18,7 +18,7 @@ NOW = datetime(2026, 10, 29, 12, 0, tzinfo=timezone.utc)
 
 def _wait(home: Path, *commands: str) -> tuple[str, list[str]]:
     actions = actions_mod.make_actions(list(commands), [f"Step {i}" for i in range(len(commands))])
-    wait_id = add_wait(home, "demo", "Please run it", actions=actions)
+    wait_id = add_wait(home, "demo", "Please run it", actions=actions, why_owner="owner-decision")
     return wait_id, [a["id"] for a in actions]
 
 

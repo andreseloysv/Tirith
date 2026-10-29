@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Callable
 
 from tirith import agentrun as agentrun_mod
+from tirith import howto as howto_mod
 from tirith import asks as asks_mod
 from tirith import flows as flows_mod
 from tirith import inbox as inbox_mod
@@ -68,6 +69,7 @@ RULES = (
     "`tirith inbox done <id>` when it is settled. Answer the question that was asked, briefly.",
     "Put something on the owner's list (`tirith wait add ... --option ...`) only for what you must refuse or "
     "cannot do yourself. No operating-system notifications.",
+    *howto_mod.RULES,
     "Queue items: handle each (look at the lane, unblock it, review it) and close it with "
     "`tirith queue done <id>`.",
     "Do not commit. Name agents only by their alias.",
@@ -239,6 +241,8 @@ def pending_sections(items: dict, now: datetime) -> list[str]:
         for q in items["queue"]:
             out.append(f"- {q['id']} ({q.get('kind')}, {q.get('project') or '-'}, lane {q.get('lane') or '-'}): "
                        f"{flows_mod.one_line(str(q.get('text') or ''), 300)}")
+    if items.get("evidence"):
+        out += ["", "## Self-check", str(items["evidence"])]
     return out
 
 
@@ -449,6 +453,7 @@ def run_oneshot(home: Path, config: Config, now: datetime, state: dict, lanes: l
             book.pop("key"), book.pop("tries", None)
             changed = True
         return changed
+    items["evidence"] = book.get("evidence")  # from tirith.selfcheck: why this turn was started again
     key = pending_key(items)
     fresh = book.get("key") != key
     if fresh:
@@ -473,9 +478,16 @@ def run_oneshot(home: Path, config: Config, now: datetime, state: dict, lanes: l
     for old in list(turns)[:-TURNS_KEPT]:
         turns.pop(old)
     book.pop("error", None)
+    book.pop("evidence", None)
     flows_mod.append_flow(home, "tirith", f"agent:{lane_id}", "brief",
                           "On-call manager started for the owner's pending messages", session=None, at=now_iso(now))
     return True
+
+
+def session_busy(home: Path) -> bool:
+    """True while the persistent session is in a turn."""
+    sess = msession_mod.current(home)
+    return bool(sess is not None and sess.alive and sess.busy)
 
 
 def public(home: Path, state: dict, lanes: list[dict], now: datetime) -> dict:
@@ -532,7 +544,7 @@ def _parts(items: dict) -> dict[str, dict]:
 
 def _subset(items: dict, keys: list[str]) -> dict:
     parts = _parts(items)
-    out: dict = {"requests": [], "results": [], "queue": []}
+    out: dict = {"requests": [], "results": [], "queue": [], "evidence": items.get("evidence")}
     for key in keys:
         for name, rows in parts.get(key, {}).items():
             out[name] += rows
@@ -757,6 +769,7 @@ def run_session(home: Path, config: Config, now: datetime, state: dict, lanes: l
         changed = True
     if _pause_check(home, book.setdefault("pause", {}), lanes, now):
         return True
+    items["evidence"] = state.get("manager", {}).get("evidence")  # from tirith.selfcheck: why it is asked again
     sent, tries = book.setdefault("sent", {}), book.setdefault("tries", {})
     parts = _parts(items)
     for key in [k for k in tries if k not in parts]:  # settled: forgotten
@@ -780,6 +793,7 @@ def run_session(home: Path, config: Config, now: datetime, state: dict, lanes: l
                      [r["id"] for r in sub["requests"]], now):
         return changed
     book["primed"] = True
+    state["manager"].pop("evidence", None)
     for key in fresh:
         sent[key] = now_iso(now)
         tries[key] = tries.get(key, 0) + 1

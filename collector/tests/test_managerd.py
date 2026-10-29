@@ -16,6 +16,7 @@ from tirith import hooks as hooks_mod
 from tirith import inbox as inbox_mod
 from tirith import launch as launch_mod
 from tirith import managerd as managerd_mod
+from tirith import selfcheck as selfcheck_mod
 from tirith.cli import main
 from tirith.collector import Collector
 from tirith.home import load_config
@@ -137,7 +138,12 @@ def test_the_same_open_items_do_not_start_a_manager_forever(project, home: Path,
     chat(home)
     for n in range(6):
         cycle(home, spawned, NOW + timedelta(seconds=300 * n))
-    assert len(spawned) == managerd_mod.MAX_TRIES
+    # the manager gives up after MAX_TRIES; the self-check restarts it a limited number of times more
+    assert managerd_mod.MAX_TRIES <= len(spawned) <= managerd_mod.MAX_TRIES * (1 + selfcheck_mod.MAX_TRIES)
+    total = len(spawned)
+    for n in range(6, 12):
+        cycle(home, spawned, NOW + timedelta(seconds=300 * n))
+    assert len(spawned) == total  # then it stays down: one queue item, nothing more
 
 
 def test_queue_items_wake_the_manager_but_waiting_guesses_do_not(project, home: Path, spawned: list) -> None:
