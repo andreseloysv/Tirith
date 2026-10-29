@@ -164,6 +164,7 @@ class Turn:
         self.parser = livesteps_mod.StepParser(workspace)
         self.stamped = 0
         self.error = False
+        self.reason = ""  # why it failed, when the session ended under it
         self.answer = ""
         self.interrupted = False
 
@@ -182,7 +183,7 @@ class Turn:
             row["at"] = row["at"] or self.started_at
         return {"id": self.id, "requests": list(self.requests), "started_at": self.started_at,
                 "ended_at": self.ended_at, "summary": summary, "steps": steps, "error": self.error,
-                "answer": self.answer, "interrupted": self.interrupted}
+                "reason": self.reason, "answer": self.answer, "interrupted": self.interrupted}
 
 
 class Session:
@@ -311,9 +312,19 @@ class Session:
                 self.exit_code = code if code is not None else -1
                 if self.turn is not None:
                     self.turn.error = True
+                    self.turn.reason = self._exit_reason()
                     self._finish_turn(datetime.now(timezone.utc))
                 if self._out is not None:
                     self._out.close()
+
+    def _exit_reason(self) -> str:
+        """Why the process is gone: the last lines of its launch log (``tirith lane run`` says why it refused), else its code."""
+        try:
+            log = (self.home / "logs" / f"{self.lane_id}.launch.log").read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            log = ""
+        tail = " / ".join(log.strip().splitlines()[-3:])[-300:]
+        return f"the session exited ({tail or f'code {self.exit_code}'})"
 
     def _event(self, line: str) -> None:
         rec = json.loads(line)
