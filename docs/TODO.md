@@ -223,7 +223,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Tests fiables: sin fallos al azar dentro de las lanes; las revisiones atascadas se vuelven a lanzar.
 - [x] Al dueño solo le llega lo que solo él puede hacer, con el motivo (credenciales, pago, cuenta, aparato o decisión).
 - [x] Instrucciones al dueño concretas y prerrellenadas, con botón «Open in Terminal»; se cierran solas al comprobarse.
-- [ ] Un solo manager con sesión persistente que vive en Tirith (misma memoria con la app abierta o cerrada). (reabierto: the merge did not go through: merging lane/manager-de-guardia-chat-y-piloto-2 failed conflicts? : error: Your local changes to th)
+- [ ] Un solo manager con sesión persistente que vive en Tirith (misma memoria con la app abierta o cerrada). (reabierto: the merge did not go through: the review was interrupted; run it again)
   - [x] Revisar: Un solo manager con sesión persistente que vive en Tirith (misma memoria con la app abierta o cerrada). — falló: the merge did not go through: merging lane/manager-de-guardia-chat-y-piloto-2 failed conflicts? : error: Your local changes to th
 - [x] El chat muestra el trabajo del manager en vivo: texto, herramientas y resultados de cada paso (secretos tapados).
 - [ ] El chat del manager como el CLI: texto palabra a palabra, diffs en color, lista de tareas; Esc interrumpe y ↑ recupera.
