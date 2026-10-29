@@ -91,7 +91,8 @@ def test_launch_creates_worktree_brief_and_runs_lane(project, home: Path, capsys
     brief = (home / "briefs" / f"{lane_id}.md").read_text(encoding="utf-8")
     assert brief.startswith("# Lane: Web panel")
     argv = started[0]
-    assert argv[:3] == [sys.executable, "-m", "tirith"] and argv[3:5] == ["lane", "run"]
+    n = len(launch_mod.tirith_argv())
+    assert argv[:n] == launch_mod.tirith_argv() and argv[n:n + 2] == ["lane", "run"]
     assert argv[argv.index("--step") + 1] == "2"
     assert argv[argv.index("--class") + 1] == "glasswright"
     assert argv[argv.index("--workspace") + 1] == str(worktree)
@@ -221,7 +222,7 @@ def _handler_command(home: Path, url: str) -> str:
     """The shell command the handler app runs for ``url`` (what AppleScript's `do shell script` receives)."""
     import re
     import shlex
-    script = launch_mod.applescript(str(home))
+    script = launch_mod.applescript(str(home), f"{shlex.quote(sys.executable)} -m tirith")
     prefix = re.search(r'do shell script "(.*)" & quoted form', script).group(1)
     prefix = prefix.replace('\\"', '"').replace("\\\\", "\\")
     return prefix + shlex.quote(url)

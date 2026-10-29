@@ -19,6 +19,7 @@ from typing import Callable
 from tirith import actions as actions_mod
 from tirith import asks as asks_mod
 from tirith import flows as flows_mod
+from tirith import tirithcmd
 from tirith import inbox as inbox_mod
 from tirith import launch as launch_mod
 from tirith import planlane as planlane_mod
@@ -175,7 +176,7 @@ def _log_hint(home: Path, review: dict, lane_id: str) -> str:
 
 
 def _actions(rows: list[tuple[str, str]], at: str) -> list[dict]:
-    return actions_mod.make_actions([c for _, c in rows], [label for label, _ in rows],
+    return actions_mod.make_actions([tirithcmd.rewrite(c) for _, c in rows], [label for label, _ in rows],
                                     created_by="tirith", at=at)
 
 
@@ -284,7 +285,7 @@ def run(home: Path, config: Config, now: datetime, state: dict, lanes: list[dict
             if age <= AUTO_WINDOW_S:
                 item = asks_mod.queue_add(home, str(lane.get("project") or ""), lane_id,
                                           f"Review lane {lane_id} ({lane.get('feature') or ''}): tests, then merge")
-                argv = [*launch_mod.tirith_argv(), "lane", "review", lane_id]
+                argv = [*launch_mod.tirith_argv(home), "lane", "review", lane_id]
                 if not config.review_auto_merge:
                     argv.append("--tests-only")
                 spawn(argv, home, home / "logs" / f"{lane_id}.review.log")

@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlsplit
 
+from tirith import tirithcmd
 from tirith.home import now_iso, parse_iso
 from tirith.store import append_jsonl, read_json, read_jsonl, tail_lines, write_json_atomic
 
@@ -156,7 +157,7 @@ def register_generated(home: Path, project: str, action_id: str, label: str, com
     """Store (idempotently) a collector-made action under a stable id; returns it for the item.
 
     The command text only ever comes from this file, never from the page."""
-    action = {"id": action_id, "label": label[:LABEL_MAX], "command": command, "cwd": cwd,
+    action = {"id": action_id, "label": label[:LABEL_MAX], "command": tirithcmd.rewrite(command, home), "cwd": cwd,
               "created_by": "tirith", "at": now_iso(), "project": project}
     known = generated(home)
     old = known.get(action_id)
@@ -282,7 +283,7 @@ def run_action(home: Path, action_id: str, project_folder: Path | None = None,
                          "exit_code": None, "at": now_iso()})
     try:
         with log.open("wb") as out:
-            code = subprocess.run(["/bin/sh", "-c", action["command"]], cwd=cwd, stdin=subprocess.DEVNULL,
+            code = subprocess.run(["/bin/sh", "-c", tirithcmd.rewrite(action["command"], home)], cwd=cwd, stdin=subprocess.DEVNULL,
                                   stdout=out, stderr=subprocess.STDOUT, timeout=timeout).returncode
     except (OSError, subprocess.TimeoutExpired) as error:
         with log.open("ab") as out:
