@@ -463,6 +463,7 @@ def _manifest_stage(args, home: Path, command: list[str]) -> list[str]:
         return command
     if not stage.run:
         raise SystemExit(f"stage '{args.stage}' has no run command in {loaded.path}")
+    args.stage_cwd = str(Path(loaded.path).parent)  # manifest commands run from the project root
     return ["/bin/sh", "-c", stage.run]
 
 
@@ -478,7 +479,8 @@ def _cmd_run(args) -> int:
         else home / "logs" / f"{safe_run}-{args.stage}.log"
     log_path.parent.mkdir(parents=True, exist_ok=True)
     base = {"run": run_id, "project": args.project, "pipeline": args.pipeline,
-            "stage": args.stage, "log": str(log_path), "cwd": str(Path.cwd().resolve()),
+            "stage": args.stage, "log": str(log_path),
+            "cwd": getattr(args, "stage_cwd", None) or str(Path.cwd().resolve()),
             "session": projects_mod.current_session(home)}
     if args.agent:
         base["agent"] = args.agent
@@ -487,7 +489,7 @@ def _cmd_run(args) -> int:
     exit_code = 1
     try:
         with log_path.open("ab") as log_handle:
-            proc = subprocess.Popen(command, stdout=subprocess.PIPE,
+            proc = subprocess.Popen(command, stdout=subprocess.PIPE, cwd=getattr(args, "stage_cwd", None),
                                     stderr=subprocess.STDOUT, env=_wrapper_env_session(home))
             assert proc.stdout is not None
             for chunk in proc.stdout:
