@@ -100,12 +100,30 @@ class Entry:
     auto: bool
 
 
+ALLOW_TEMP = False  # tests keep their projects in pytest temp folders and switch this on
+_TEMP_ROOTS = ("/tmp", "/private/tmp", "/var/folders", "/private/var/folders", "/var/tmp", "/private/var/tmp")
+
+
+def is_temp_folder(folder: str | Path) -> bool:
+    """A folder that lives in a temporary directory (pytest, ``mktemp``, ``/tmp``): never a project."""
+    import tempfile
+
+    roots = {*_TEMP_ROOTS, tempfile.gettempdir(), str(real(tempfile.gettempdir()))}
+    for path in (str(folder), str(real(folder))):
+        for root in roots:
+            root = root.rstrip("/")
+            if root and (path == root or path.startswith(root + "/")):
+                return True
+    return False
+
+
 def load_auto(home: Path) -> dict:
     data = read_json(Path(home) / AUTO_FILE, {})
     if not isinstance(data, dict):
         data = {}
     projects = [p for p in data.get("projects") or []
-                if isinstance(p, dict) and p.get("id") and p.get("folder")]
+                if isinstance(p, dict) and p.get("id") and p.get("folder")
+                and (ALLOW_TEMP or not is_temp_folder(p["folder"]))]
     ignored = [str(f) for f in data.get("ignored") or []]
     return {"projects": projects, "ignored": ignored}
 
@@ -161,6 +179,8 @@ def discover(home: Path, config: Config, folders: list[str | Path]) -> list[Entr
         if not folder or not real(folder).exists() or match(folder, items) is not None:
             continue
         root = project_root(folder)
+        if not ALLOW_TEMP and (is_temp_folder(folder) or is_temp_folder(root)):
+            continue
         if str(root) in auto["ignored"] or match(root, items) is not None:
             continue
         pid = unique_id(slug(root.name), {e.id for e in items})

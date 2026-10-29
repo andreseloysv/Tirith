@@ -121,7 +121,10 @@ A "Setup" card per project in the Overview, under the Plan (project filter appli
 - Git hooks: event → command and its last result;
 - Rules: every rule as its description (custom first, with `BLOCK`/`WARN` tag, then built-in) and its
   on/off state;
-- **+ Stage** and **+ Rule** open a small form; send puts a `setup` request in the inbox: Tauri
-  `inbox_add`, else the `tirith://inbox` link, else the equivalent `tirith setup …` / `tirith run …`
-  command to copy. Until the collector shows the request closed, the card lists it as "Waiting for the
-  manager".
+- The web has no add-stage / add-rule forms: the owner asks the manager in the chat (the CLI
+  `tirith setup add-stage|add-rule …` stays). **Run** sends a `run-stage` request: Tauri `inbox_add`, else
+  the `tirith://inbox` link, else the `tirith run …` command to copy. Until the collector shows a request
+  closed, the card lists it as "Waiting for the manager".
+- The Overview (Your turn, Plan, Setup, Rules, Pipelines) shows one project: the sidebar's, else the one
+  with the most recent activity (`T.effProject`); the filter stays in the URL hash.
+- Auto projects never come from temporary folders (`projects.is_temp_folder`).
