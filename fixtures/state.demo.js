@@ -465,8 +465,18 @@ window.TIRITH_STATE = {
         ],
         "gates_summary": "Tirith cannot see what agents do (anthropic, muse), because their hooks are not installed.",
         "gates_actions": [
-          {"id": "ac-demo-hook-anthropic", "label": "Install the hooks for anthropic", "command": "tirith hook install --agent anthropic", "cwd": null},
-          {"id": "ac-demo-hook-muse", "label": "Install the hooks for muse", "command": "tirith hook install --agent muse", "cwd": null}
+          {
+            "id": "ac-demo-hook-anthropic",
+            "label": "Install the hooks for anthropic",
+            "command": "tirith hook install --agent anthropic",
+            "cwd": null
+          },
+          {
+            "id": "ac-demo-hook-muse",
+            "label": "Install the hooks for muse",
+            "command": "tirith hook install --agent muse",
+            "cwd": null
+          }
         ],
         "pending": []
       },
@@ -1025,8 +1035,18 @@ window.TIRITH_STATE = {
         ],
         "gates_summary": "Tirith cannot see what agents do (anthropic, muse), because their hooks are not installed.",
         "gates_actions": [
-          {"id": "ac-demo-hook-anthropic", "label": "Install the hooks for anthropic", "command": "tirith hook install --agent anthropic", "cwd": null},
-          {"id": "ac-demo-hook-muse", "label": "Install the hooks for muse", "command": "tirith hook install --agent muse", "cwd": null}
+          {
+            "id": "ac-demo-hook-anthropic",
+            "label": "Install the hooks for anthropic",
+            "command": "tirith hook install --agent anthropic",
+            "cwd": null
+          },
+          {
+            "id": "ac-demo-hook-muse",
+            "label": "Install the hooks for muse",
+            "command": "tirith hook install --agent muse",
+            "cwd": null
+          }
         ],
         "pending": [
           {
@@ -1495,8 +1515,18 @@ window.TIRITH_STATE = {
         ],
         "gates_summary": "Tirith cannot see what agents do (anthropic, muse), because their hooks are not installed.",
         "gates_actions": [
-          {"id": "ac-demo-hook-anthropic", "label": "Install the hooks for anthropic", "command": "tirith hook install --agent anthropic", "cwd": null},
-          {"id": "ac-demo-hook-muse", "label": "Install the hooks for muse", "command": "tirith hook install --agent muse", "cwd": null}
+          {
+            "id": "ac-demo-hook-anthropic",
+            "label": "Install the hooks for anthropic",
+            "command": "tirith hook install --agent anthropic",
+            "cwd": null
+          },
+          {
+            "id": "ac-demo-hook-muse",
+            "label": "Install the hooks for muse",
+            "command": "tirith hook install --agent muse",
+            "cwd": null
+          }
         ],
         "pending": []
       },
@@ -3533,6 +3563,15 @@ window.TIRITH_STATE = {
       "action_runs": [],
       "answers": [],
       "lanes": []
+    }
+  ],
+  "says": [
+    {
+      "id": "in-5a1d0c11",
+      "at": "2026-10-28T19:38:00Z",
+      "project": "tirith",
+      "text": "The commit guard is intact in all three projects. Nothing else needs you right now.",
+      "from": "manager"
     }
   ],
   "answered_waits": [

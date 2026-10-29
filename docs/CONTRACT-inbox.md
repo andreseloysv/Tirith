@@ -83,6 +83,15 @@ are not stopped; no new lane is started while it is off. Sent by the Plan header
 `--new-only` skips them. Requests the manager already answered, or that are done, are not printed. Use it with a monitor:
 every printed line is something the owner is waiting on. Unknown id or bad input: exit 3, reason on stderr.
 
+### `tirith chat say`: the manager writes first
+
+`tirith chat say "<markdown>" [--project P] [--run CMD --label L] [--option "Label|value"]` writes to the owner
+without a request. With options or Run actions it is an owner item, exactly `tirith wait add` (same rules: no
+shell commands in the text, `waits.jsonl`, replies as `kind: "reply"`). Without them it is a plain message: one
+row `{id, at, kind: "say", project, text, from: "manager"}` in `inbox.jsonl`, listed in `state.says` (last 100,
+oldest first). A `say` row is not a request: it is not in `state.inbox`, not `manager_pending`, `inbox watch`
+does not print it and nothing answers it.
+
 ## `tirith://inbox` link (browser fallback)
 
 `tirith://inbox?kind=ask&project=P&step=N&text=..&token=T` goes through the same handler as launch
@@ -130,6 +139,16 @@ answers an `ask` in the first cycle, not after 120 s.
 - One thread built only from `state.inbox`, oldest first with the newest at the bottom: the owner's chat
   messages (right, blue), the questions and "Finish this step" requests of the Plan, and every answer to them
   (left, rendered markdown, who answered and when, Run `actions` under the answer through `T.actions`).
+- **Your turn is in the thread.** Every owner item (`state.waiting_on_you`, see "Asks" above) is a manager
+  message at its `since` time: the text as markdown, its one-click options, command/link and Run actions under
+  it, a small **Reply** link and the mark "Waits for you". **Reply** puts "Replying to <item>" over the composer;
+  the next message sent is the free reply to that item (`inbox_reply`, same paths as an option click), not a chat
+  message. A typed draft aimed at an item goes along with its next option click. Answered items (`answered_waits`,
+  and those sent from this page that the collector has not shown yet) stay in the thread, followed by the
+  owner's choice as a message ("You: Done"). `state.says` messages are plain manager messages. There is no
+  separate "Your turn" section in the Overview.
+- The chat header shows a badge with the number of items that still wait for the owner and **Jump to next**
+  (scrolls to the next one, round and round). The header **Chat** button of other views gets its dot too.
 - While a chat, ask or finish request is `manager_pending`: "Manager is typing…" with the seconds waited.
 - Composer: Enter sends, Shift+Enter is a new line, an optional project chip (default: the sidebar's project
   filter). Sending: `window.__TAURI__` -> `inbox_add` (kind `chat`); else, with the link handler installed, the
@@ -291,19 +310,20 @@ token check as before. The app has `inbox_reply(wait, project, value, text)` nex
   (`kind: decision`, options `Retry|retry`, `Show the log|log`, `Drop it|drop`, and a `tail` command for
   the log). `tirith lane end --result failed` run by the manager adds none.
 
-## Web (`web/js/v-needs.js`)
+## Web (`web/js/v-needs.js`, `web/js/v-manager.js`)
 
-- Overview section "Your turn" (above the Plan): one card per ask, newest first. Title is the question
-  as markdown (2 lines, full on click), project chip, age.
-- Options are buttons (the first is primary); `command` has a **Copy** button, `link` an **Open** button;
-  an `action` ask has **Done**; an `approval` without options gets Approve / Decline; an `info` ask without
-  options gets "Got it". A text box "Or write what you need…" sends a free reply on Enter. A typed draft
-  goes along with the next option click.
+- There is no "Your turn" section: each ask is a manager message in the chat thread of the Overview, at its
+  `since` time (`docs/CONTRACT-inbox.md`, "Web: chat with the manager"). The message is the question as
+  markdown; the owner's answer follows it as a message ("You: Done").
+- Options are buttons under the message (the first is primary); `command` has a **Copy** button, `link` an
+  **Open** button; an `action` ask has **Done**; an `approval` without options gets Approve / Decline; an
+  `info` ask without options gets "Got it". **Reply** aims the chat composer at the ask: Enter sends a free
+  reply. A typed draft goes along with the next option click.
+- The manager can also write a plain message with `tirith chat say` (see the inbox contract).
 - Sending: `window.__TAURI__` -> `inbox_reply`; else, with the link handler installed, the
   `tirith://inbox?kind=reply` link; else the `tirith inbox reply ...` line is shown to copy.
-- After sending, the card moves to the "Answered" fold with "Sent to the manager" (kept in
-  `localStorage` until the collector shows the answer). Items older than 48 h with no options, command or
-  link fold into "Older". Empty: "Nothing needs you. The manager will ask here."
+- After sending, the item shows as answered at once (kept in `localStorage` until the collector shows the
+  answer).
 
 ## Every item has a call to action (rule in code)
 
@@ -322,7 +342,7 @@ copy, a link or a text box is not enough.
   queue item (`kind: "no-call-to-action"`, id `sq-cta-<wait id>`, added once).
 - A reply to a generated item (`room-*`) answers it: it moves to
   `answered_waits`. The value `manager` also adds a manager queue item (`kind: "owner-handoff"`).
-- The web card shows the item's Run actions (`web/js/actions.js`) between its option buttons and the text box.
+- The web message shows the item's Run actions (`web/js/actions.js`) between its option buttons and the text box.
 
 ### Only owner items reach the owner
 
