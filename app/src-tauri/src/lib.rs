@@ -177,13 +177,60 @@ fn rewrite_tirith(command: &str, cmd: &str) -> String {
     out
 }
 
+/// PATH for children: the folder of `[app] uv`, then the usual tool folders, then the inherited PATH
+/// (apps opened from Finder only get `/usr/bin:/bin:/usr/sbin:/sbin`). Duplicates are dropped.
+fn child_path(uv: Option<&str>, home: &std::path::Path, inherited: Option<&std::ffi::OsStr>) -> std::ffi::OsString {
+    let mut dirs: Vec<PathBuf> = Vec::new();
+    if let Some(u) = uv {
+        if let Some(dir) = expand(u).parent().filter(|d| !d.as_os_str().is_empty()) {
+            dirs.push(dir.to_path_buf());
+        }
+    }
+    dirs.push("/opt/homebrew/bin".into());
+    dirs.push("/usr/local/bin".into());
+    dirs.push(home.join(".local/bin"));
+    dirs.push(home.join(".cargo/bin"));
+    if let Some(p) = inherited {
+        dirs.extend(std::env::split_paths(p));
+    }
+    let mut seen = std::collections::HashSet::new();
+    dirs.retain(|d| seen.insert(d.clone()));
+    std::env::join_paths(dirs).unwrap_or_default()
+}
+
+/// Gives `c` the PATH from `child_path`.
+fn with_child_path(c: &mut Command) {
+    let uv = app_setting(&config(), "uv");
+    c.env("PATH", child_path(uv.as_deref(), &user_home(), std::env::var_os("PATH").as_deref()));
+}
+
 /// `tirith <args>` by the resolved command, ready to spawn.
 fn tirith_command(args: &[&str]) -> Command {
     let argv = tirith_cmd_argv(&config());
     let mut c = Command::new(&argv[0]);
     c.args(&argv[1..]).args(args);
     c.env("TIRITH_HOME", tirith_home());
+    with_child_path(&mut c);
     c
+}
+
+/// Appends a line to `~/.tirith/logs/<name>`; best effort.
+fn log_line(name: &str, line: &str) {
+    use std::io::Write;
+    let dir = user_home().join(".tirith/logs");
+    let _ = std::fs::create_dir_all(&dir);
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(dir.join(name)) {
+        let _ = writeln!(f, "{line}");
+    }
+}
+
+/// `~/.tirith/logs/collector.log`, opened for append, as stdout and stderr of the collector.
+fn collector_log() -> Option<(Stdio, Stdio)> {
+    let dir = user_home().join(".tirith/logs");
+    std::fs::create_dir_all(&dir).ok()?;
+    let f = std::fs::OpenOptions::new().create(true).append(true).open(dir.join("collector.log")).ok()?;
+    let g = f.try_clone().ok()?;
+    Some((Stdio::from(f), Stdio::from(g)))
 }
 
 // -- state -> page ------------------------------------------------------------------------------
@@ -378,14 +425,13 @@ fn start_collector(app: &App) {
     if collector_running() {
         return;
     }
-    match tirith_command(&["collect", "--interval", "2"])
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-    {
+    let (out, err) = collector_log().unwrap_or_else(|| (Stdio::null(), Stdio::null()));
+    match tirith_command(&["collect", "--interval", "2"]).stdin(Stdio::null()).stdout(out).stderr(err).spawn() {
         Ok(child) => *app.collector.lock().unwrap() = Some(child),
-        Err(e) => eprintln!("tirith: could not start the collector: {e}"),
+        Err(e) => {
+            eprintln!("tirith: could not start the collector: {e}");
+            log_line("app.log", &format!("could not start the collector: {e}"));
+        }
     }
 }
 
@@ -1180,14 +1226,9 @@ fn action_cwd(action: &Value, project: &str, home: &std::path::Path) -> PathBuf 
 fn run_shell(command: &str, cwd: &std::path::Path, log: &std::path::Path) -> i32 {
     let started = std::fs::File::create(log).and_then(|out| {
         let err = out.try_clone()?;
-        Command::new("/bin/sh")
-            .arg("-c")
-            .arg(command)
-            .current_dir(cwd)
-            .stdin(Stdio::null())
-            .stdout(out)
-            .stderr(err)
-            .status()
+        let mut c = Command::new("/bin/sh");
+        with_child_path(&mut c);
+        c.arg("-c").arg(command).current_dir(cwd).stdin(Stdio::null()).stdout(out).stderr(err).status()
     });
     match started {
         Ok(status) => status.code().unwrap_or(1),
@@ -1632,6 +1673,19 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn child_path_prepends_tool_folders_once() {
+        let home = std::path::Path::new("/home/u");
+        let p = super::child_path(Some("/opt/x/bin/uv"), home, Some(std::ffi::OsStr::new("/usr/bin:/bin:/usr/local/bin")));
+        let got: Vec<String> = std::env::split_paths(&p).map(|d| d.to_string_lossy().into_owned()).collect();
+        assert_eq!(
+            got,
+            ["/opt/x/bin", "/opt/homebrew/bin", "/usr/local/bin", "/home/u/.local/bin", "/home/u/.cargo/bin", "/usr/bin", "/bin"]
+        );
+        let bare = super::child_path(Some("uv"), home, None);
+        assert_eq!(std::env::split_paths(&bare).next().unwrap().to_string_lossy(), "/opt/homebrew/bin");
+    }
+
     use super::*;
 
     #[test]
