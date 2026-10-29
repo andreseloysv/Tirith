@@ -562,11 +562,24 @@
     return h ? '<div class="pbelow">' + h + '</div>' : '';
   }
 
+  /* the single merge queue: who waits, who is merging, the last result (docs/CONTRACT-mergeq.md) */
+  function mergeQueue(p) {
+    var q = p.merge_queue;
+    if (!q || (!(q.items || []).length && !q.last)) return '';
+    var rows = (q.items || []).map(function (i) {
+      return '<li><span class="mqpos">' + i.position + '</span> <code>' + esc(i.lane) + '</code> ' +
+        (i.status === 'running' ? 'merging now' : 'waiting') + (i.message ? ' <i>' + plain(i.message.split('\n')[0]) + '</i>' : '') + '</li>';
+    }).join('');
+    var last = q.last ? '<div class="mqlast">Last: <code>' + esc(q.last.lane) + '</code> ' + esc(q.last.result) +
+      (q.last.message && q.last.result !== 'merged' ? ' &mdash; ' + plain(String(q.last.message).split('\n')[0].slice(0, 140)) : '') + '</div>' : '';
+    return '<div class="mqueue" data-mergeq="' + esc(p.id) + '"><b>Merge queue</b>' + (rows ? '<ol>' + rows + '</ol>' : '') + last + '</div>';
+  }
+
   function card(p, state, multi) {
     var cur = shown(p), ro = cur.current ? '' : cur.id;
     return '<div class="card pcard' + (multi ? ' compact' : '') + '"><div class="phead"><b>' + esc(p.name) + '</b>' +
       bar(cur.done, cur.total, 'ptotal') + '<span class="pcnt big">' + cur.done + ' / ' + cur.total + '</span>' + countdown(cur.deadline) + planBtns(p, state) + '</div>' +
-      switcher(p, cur) + planBelow(p, state) +
+      switcher(p, cur) + mergeQueue(p) + planBelow(p, state) +
       '<ul class="psteps">' + cur.steps.map(function (s) { return step(s, p, state, ro); }).join('') + '</ul></div>';
   }
 

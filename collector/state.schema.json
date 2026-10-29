@@ -691,6 +691,11 @@
           "description": "The project's plan read from its markdown checklist; null when there is none. See docs/CONTRACT-roadmap.md.",
           "oneOf": [{"type": "null"}, {"$ref": "#/$defs/roadmap"}]
         },
+        "merge_queue": {
+          "description": "The single merge queue of the project: items waiting or running (position from 1), the last result and the recent ones. See docs/CONTRACT-mergeq.md.",
+          "type": "object",
+          "additionalProperties": true
+        },
         "plans": {
           "description": "Every plan of the project (the current one first, the same as roadmap), each shaped like roadmap plus id, title, current and finished.",
           "type": "array",

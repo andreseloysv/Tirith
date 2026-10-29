@@ -301,6 +301,89 @@ def _git_rules(line: str, segments: list[list[str]]) -> list[Violation]:
     return out
 
 
+MERGE_HINT = ("do not merge or push into main yourself: finish with `tirith plan report --lane $TIRITH_LANE "
+              "--status done` (or run `tirith merge request`); Tirith's merge queue brings main in, runs the "
+              "full suite, merges and pushes one lane at a time, and sends a conflict back to you")
+_GIT_VALUE_GLOBAL = {"-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--config-env"}
+
+
+def main_checkout(cwd) -> Path | None:
+    """The main checkout when ``cwd`` is inside a linked git worktree (a lane), else None."""
+    here = Path(str(cwd or ".")).expanduser()
+    for folder in (here, *here.parents):
+        marker = folder / ".git"
+        if marker.is_file():
+            try:
+                target = marker.read_text(encoding="utf-8").split("gitdir:", 1)[1].strip()
+            except (OSError, IndexError):
+                return None
+            target = Path(target) if os.path.isabs(target) else folder / target
+            for parent in target.parents:  # <main>/.git/worktrees/<name>
+                if parent.name == ".git":
+                    return parent.parent.resolve()
+            return None
+        if marker.exists():
+            return None
+    return None
+
+
+def _main_branches(main: Path) -> set[str]:
+    names = {"main", "master"}
+    try:
+        head = (main / ".git" / "HEAD").read_text(encoding="utf-8").strip()
+    except OSError:
+        return names
+    if head.startswith("ref: refs/heads/"):
+        names.add(head[len("ref: refs/heads/"):])
+    return names
+
+
+def _resolve(path: str, base) -> Path:
+    return (Path(base) / Path(_expand_home(path))).resolve()
+
+
+def _git_sub(args: list[str]) -> tuple[str | None, list[str], str | None]:
+    """``(subcommand, its arguments, -C folder)`` of the arguments of one ``git`` call."""
+    folder, i = None, 0
+    while i < len(args):
+        word = args[i]
+        if word == "-C" and i + 1 < len(args):
+            folder, i = args[i + 1], i + 2
+        elif word in _GIT_VALUE_GLOBAL:
+            i += 2
+        elif word.startswith("-"):
+            i += 1
+        else:
+            return word, args[i + 1:], folder
+    return None, [], folder
+
+
+def _main_merge(segments: list[list[str]], line: str, cwd) -> Violation | None:
+    """``main-merge``: a lane's agent never merges into, nor pushes to, the main checkout (the merge queue does)."""
+    main = main_checkout(cwd)
+    if main is None:
+        return None
+    here = Path(str(cwd or ".")).expanduser()
+    branches = _main_branches(main)
+    for tokens in segments:
+        name, args = _program(tokens)
+        if name == "cd" and args:
+            here = _resolve(args[-1], here) if not args[-1].startswith("-") else here
+            continue
+        if name != "git":
+            continue
+        sub, rest, folder = _git_sub(args)
+        target = _resolve(folder, here) if folder else here
+        if sub == "merge" and target == main:
+            return Violation("main-merge", f"agents do not merge into the main checkout: {_clip(line)}", MERGE_HINT)
+        if sub == "push":
+            refs = [t for t in rest if not t.startswith("-")][1:]  # the first word is the remote
+            to_main = any(r.lstrip("+").split(":")[-1].removeprefix("refs/heads/") in branches for r in refs)
+            if target == main or to_main:
+                return Violation("main-merge", f"agents do not push to main: {_clip(line)}", MERGE_HINT)
+    return None
+
+
 def _raw_stage(segments: list[list[str]], folder: Path | None, project: str | None) -> Violation | None:
     if folder is None:
         return None
@@ -565,6 +648,9 @@ def _base_rules(config: Config, tool: str | None, tool_input, cwd, project: str 
     line = strip_heredocs(str(data.get("command") or data.get("cmd") or ""))
     segments = split_commands(line)
     out = _git_rules(line, segments)
+    merge = _main_merge(segments, line, cwd)
+    if merge:
+        out.append(merge)
     protect = _settings_bash(line, segments, protected_paths(config, home), cwd)
     if protect:
         out.append(protect)
