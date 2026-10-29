@@ -40,7 +40,9 @@ web fix is visible without rebuilding the app.
   manager chat. The streaming arguments still come from `[agents.<alias>] chat_args`
   (`docs/CONTRACT-agents.md`); `tools/chat_check.py` runs that exchange once by hand.
 - **Attachments**: the paperclip calls `attachment_pick` (native file picker, Rust reads the files); dropping files
-  on the chat uses Tauri's native drop events (`attachment_dropped`). Details in `docs/CONTRACT-inbox.md`.
+  on the chat uses the window's native drop handler: Rust logs every drag event to `~/.tirith/logs/app.log`, reads the
+  dropped files and pushes them into the page (`window.__tirithDrag`); the page also listens to `tauri://drag-*`
+  (`attachment_dropped`). Details in `docs/CONTRACT-inbox.md`.
 
 ## Run
 

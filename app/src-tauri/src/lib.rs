@@ -1238,6 +1238,58 @@ fn attachment_dropped(state: State<'_, App>, paths: Vec<String>) -> Vec<Value> {
     paths.iter().take(ATTACH_MAX).map(|p| dropped_file(p, &dropped)).collect()
 }
 
+/// The files of a drop, read like the paperclip does (at most 6); `dropped` is what the window was handed.
+fn files_of_drop(paths: &[PathBuf]) -> Vec<Value> {
+    paths.iter().take(ATTACH_MAX).map(|p| dropped_file(&p.to_string_lossy(), paths)).collect()
+}
+
+/// A drag over the window: log it, and tell the page (`window.__tirithDrag`) where the pointer is and, on a drop,
+/// which files (already read).
+fn handle_drag(window: &tauri::Window, e: &DragDropEvent) {
+    let names = |paths: &[PathBuf]| paths.iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join(", ");
+    let (phase, pos, files) = match e {
+        DragDropEvent::Enter { paths, position } => {
+            log_line("app.log", &format!("drag: window enter {} path(s) at {},{}: {}", paths.len(), position.x, position.y, names(paths)));
+            ("enter", Some(position), None)
+        }
+        DragDropEvent::Over { position } => ("over", Some(position), None),
+        DragDropEvent::Drop { paths, position } => {
+            log_line("app.log", &format!("drag: window drop {} path(s) at {},{}: {}", paths.len(), position.x, position.y, names(paths)));
+            *window.state::<App>().dropped.lock().unwrap() = paths.clone();
+            ("drop", Some(position), Some(files_of_drop(paths)))
+        }
+        DragDropEvent::Leave => {
+            log_line("app.log", "drag: window leave");
+            ("leave", None, None)
+        }
+        _ => return,
+    };
+    let mut msg = json!({"phase": phase});
+    if let Some(p) = pos {
+        msg["x"] = json!(p.x);
+        msg["y"] = json!(p.y);
+    }
+    if let Some(f) = files {
+        let errs = f.iter().filter(|v| v["error"].is_string()).count();
+        log_line("app.log", &format!("drag: read {} file(s), {errs} refused", f.len()));
+        msg["files"] = json!(f);
+    }
+    match window.get_webview_window(window.label()) {
+        Some(w) => {
+            if let Err(err) = w.eval(format!("window.__tirithDrag&&window.__tirithDrag({msg})")) {
+                log_line("app.log", &format!("drag: could not reach the page: {err}"));
+            }
+        }
+        None => log_line("app.log", "drag: no web view to tell"),
+    }
+}
+
+/// A line from the page for `~/.tirith/logs/app.log` (the page's drag events), capped.
+#[tauri::command]
+fn app_log(line: String) {
+    log_line("app.log", &line.chars().take(300).collect::<String>());
+}
+
 /// The paperclip in the app: the native file picker (a web view's own `<input type=file>` is not reliable in
 /// every platform's web view), then the chosen files read for the composer like a drop. The paths come from
 /// the picker in Rust, never from the page. An empty list is a cancelled picker.
@@ -1246,7 +1298,7 @@ async fn attachment_pick(app: AppHandle) -> Vec<Value> {
     use tauri_plugin_dialog::DialogExt;
     let picked = app.dialog().file().set_title("Attach files").blocking_pick_files();
     let paths: Vec<PathBuf> = picked.unwrap_or_default().into_iter().filter_map(|f| f.into_path().ok()).collect();
-    paths.iter().take(ATTACH_MAX).map(|p| dropped_file(&p.to_string_lossy(), &paths)).collect()
+    files_of_drop(&paths)
 }
 
 /// The attachments of a request as stored: at most 6, each `{path, type, size, width, height}` (and `name`)
@@ -2142,10 +2194,11 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(App::default())
         .on_window_event(|window, event| {
-            // the native drag-drop handler is on, so the webview gets the drop as `tauri://drag-drop` (paths and
-            // position); remember what was dropped, the only paths `attachment_dropped` will read.
-            if let WindowEvent::DragDrop(DragDropEvent::Drop { paths, .. }) = event {
-                *window.state::<App>().dropped.lock().unwrap() = paths.clone();
+            // the native drag-drop handler is on, so the webview gets no HTML5 drag events: log each event, remember
+            // what was dropped (the only paths `attachment_dropped` reads), and push it into the page, which does not
+            // depend on the page being allowed to listen to Tauri events.
+            if let WindowEvent::DragDrop(e) = event {
+                handle_drag(window, e);
             }
         })
         .register_uri_scheme_protocol(liveweb::SCHEME, move |_ctx, req| {
@@ -2172,6 +2225,7 @@ pub fn run() {
             attachment_save,
             attachment_dropped,
             attachment_pick,
+            app_log,
             inbox_reply,
             run_action,
             open_in_terminal,
@@ -2226,6 +2280,35 @@ mod tests {
     }
 
     use super::*;
+
+    #[test]
+    fn dropped_paths_become_attachments() {
+        let dir = std::env::temp_dir().join(format!("tirith-drop-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let png = dir.join("shot.png");
+        std::fs::write(&png, b"\x89PNG\r\n\x1a\n0000").unwrap();
+        let txt = dir.join("notes.txt");
+        std::fs::write(&txt, "hello").unwrap();
+        let empty = dir.join("empty.txt");
+        std::fs::write(&empty, "").unwrap();
+        let paths = vec![png.clone(), txt.clone(), empty.clone(), dir.clone(), dir.join("gone.txt")];
+        let got = files_of_drop(&paths);
+        assert_eq!(got.len(), 5);
+        assert_eq!(got[0]["name"], "shot.png");
+        assert_eq!(got[0]["type"], "image/png");
+        assert_eq!(got[1]["name"], "notes.txt");
+        assert_eq!(got[1]["size"], 5);
+        assert_eq!(got[1]["b64"], "aGVsbG8=");
+        for bad in &got[2..] {
+            assert!(bad["error"].is_string(), "{bad}");
+        }
+        // a path that was not part of the drop is refused
+        assert!(dropped_file(&txt.to_string_lossy(), &[png]).get("error").is_some());
+        // at most 6 per drop
+        let many = vec![txt; 9];
+        assert_eq!(files_of_drop(&many).len(), ATTACH_MAX);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn manager_controls_are_only_the_three_words() {
