@@ -1,0 +1,111 @@
+"""A project's plan, read from its markdown checklist (``docs/CONTRACT-roadmap.md``).
+
+Each ``## <n>. <title>`` heading is a step; ``- [ ]`` / ``- [x]`` lines are its items.
+Parsing never raises: a missing or unreadable file gives ``None``.
+"""
+
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+from tirith import manifest as manifest_mod
+
+MAX_BYTES = 256 * 1024
+DEFAULT_FILES = ("docs/TODO.md", "TODO.md")
+_STEP_RE = re.compile(r"^##\s+(\d+)\.\s*(.+?)\s*#*\s*$")
+_HEADING_RE = re.compile(r"^#{1,6}\s")
+_ITEM_RE = re.compile(r"^\s*[-*+]\s+\[([ xX])\]\s*(.*)$")
+_BULLET_RE = re.compile(r"^\s*[-*+]\s")
+
+_cache: dict[str, tuple[int, int, list[dict]]] = {}
+
+
+def parse(text: str) -> list[dict]:
+    """Steps in file order: ``{id, title, items: [{text, done}]}``."""
+    steps: list[dict] = []
+    step: dict | None = None
+    item: dict | None = None
+    for line in text.splitlines():
+        found = _STEP_RE.match(line)
+        if found:
+            step = {"id": found.group(1), "title": found.group(2), "items": []}
+            steps.append(step)
+            item = None
+            continue
+        if _HEADING_RE.match(line):
+            step = item = None
+            continue
+        if step is None:
+            continue
+        found = _ITEM_RE.match(line)
+        if found:
+            item = {"text": found.group(2).strip(), "done": found.group(1) != " "}
+            step["items"].append(item)
+        elif not line.strip() or _BULLET_RE.match(line):
+            item = None
+        elif item is not None:
+            item["text"] = f"{item['text']} {line.strip()}"
+    return steps
+
+
+def step_status(done: int, total: int, has_agent: bool) -> str:
+    if not total:
+        return "empty"
+    if done == total:
+        return "done"
+    return "active" if done or has_agent else "todo"
+
+
+def find_file(folder: Path, configured: str | None) -> Path | None:
+    """The roadmap file: the configured path, else ``docs/TODO.md``, else ``TODO.md``."""
+    for name in ([configured] if configured else list(DEFAULT_FILES)):
+        path = Path(name).expanduser()
+        path = path if path.is_absolute() else folder / path
+        if path.is_file():
+            return path
+    return None
+
+
+def _parsed(path: Path) -> list[dict] | None:
+    try:
+        stat = path.stat()
+        if stat.st_size > MAX_BYTES:
+            return None
+        key = (stat.st_mtime_ns, stat.st_size)
+        hit = _cache.get(str(path))
+        if hit and hit[:2] == key:
+            return hit[2]
+        steps = parse(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError):
+        return None
+    _cache[str(path)] = (*key, steps)
+    return steps
+
+
+def build(folder: str | Path | None, project: str, agents: list[dict]) -> dict | None:
+    """``state.projects[].roadmap`` for a project folder; None when it has no roadmap file."""
+    if not folder:
+        return None
+    folder = Path(folder)
+    manifest = manifest_mod.load(folder)
+    path = find_file(folder, manifest.roadmap)
+    steps = _parsed(path) if path else None
+    if steps is None:
+        return None
+    working: dict[str, list[str]] = {}
+    for agent in agents:
+        if agent.get("project") == project and agent.get("status") == "working" and agent.get("step"):
+            working.setdefault(str(agent["step"]), []).append(str(agent["id"]))
+    rows = []
+    for step in steps:
+        items = step["items"]
+        done = sum(1 for i in items if i["done"])
+        mine = working.get(step["id"], [])
+        rows.append({"id": step["id"], "title": step["title"],
+                     "status": step_status(done, len(items), bool(mine)),
+                     "done": done, "total": len(items),
+                     "items": [dict(i) for i in items], "agents": mine})
+    return {"file": str(path), "deadline": manifest.deadline,
+            "done": sum(r["done"] for r in rows), "total": sum(r["total"] for r in rows),
+            "steps": rows}

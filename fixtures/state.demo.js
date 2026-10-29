@@ -131,6 +131,74 @@ window.TIRITH_STATE = {
         "agents_total": 3,
         "pipelines_running": 1,
         "flows_24h": 7
+      },
+      "roadmap": {
+        "file": "/Users/me/DEVELOP/Chromasol/docs/TODO.md",
+        "deadline": null,
+        "done": 3,
+        "total": 7,
+        "steps": [
+          {
+            "id": "1",
+            "title": "Datos y migración",
+            "status": "done",
+            "done": 2,
+            "total": 2,
+            "items": [
+              {
+                "text": "Room database",
+                "done": true
+              },
+              {
+                "text": "Importar partidas antiguas",
+                "done": true
+              }
+            ],
+            "agents": []
+          },
+          {
+            "id": "2",
+            "title": "Rendimiento",
+            "status": "active",
+            "done": 1,
+            "total": 3,
+            "items": [
+              {
+                "text": "Arranque en frío bajo 2 s",
+                "done": true
+              },
+              {
+                "text": "Perfilar la pantalla de lienzo",
+                "done": false
+              },
+              {
+                "text": "Reducir memoria en teléfonos de gama baja",
+                "done": false
+              }
+            ],
+            "agents": [
+              "w6-perf"
+            ]
+          },
+          {
+            "id": "3",
+            "title": "Ficha de la tienda",
+            "status": "todo",
+            "done": 0,
+            "total": 2,
+            "items": [
+              {
+                "text": "Declaración de recursos de IA",
+                "done": false
+              },
+              {
+                "text": "Capturas y descripción",
+                "done": false
+              }
+            ],
+            "agents": []
+          }
+        ]
       }
     },
     {
@@ -207,6 +275,200 @@ window.TIRITH_STATE = {
         "agents_total": 2,
         "pipelines_running": 0,
         "flows_24h": 2
+      },
+      "roadmap": {
+        "file": "/Users/me/DEVELOP/Tirith/docs/TODO.md",
+        "deadline": "2026-11-04T21:00:00-05:00",
+        "done": 13,
+        "total": 26,
+        "steps": [
+          {
+            "id": "0",
+            "title": "Guarda de commits compatible",
+            "status": "done",
+            "done": 2,
+            "total": 2,
+            "items": [
+              {
+                "text": "Alias de agentes en el código; nombres reales en `config.toml`.",
+                "done": true
+              },
+              {
+                "text": "Guarda de Tirith intacta e inmutable.",
+                "done": true
+              }
+            ],
+            "agents": []
+          },
+          {
+            "id": "1",
+            "title": "`lane run` devuelve la respuesta final",
+            "status": "done",
+            "done": 3,
+            "total": 3,
+            "items": [
+              {
+                "text": "Al terminar imprime un resumen y la respuesta final.",
+                "done": true
+              },
+              {
+                "text": "Se guarda como informe del lane y se ve en la web.",
+                "done": true
+              },
+              {
+                "text": "Lane sin respuesta o con error → «esperando por ti».",
+                "done": true
+              }
+            ],
+            "agents": []
+          },
+          {
+            "id": "2",
+            "title": "Árbol de delegación",
+            "status": "done",
+            "done": 3,
+            "total": 3,
+            "items": [
+              {
+                "text": "`lane run` pasa `TIRITH_LANE` a sus hijos.",
+                "done": true
+              },
+              {
+                "text": "`register_lane` guarda `parent` automáticamente.",
+                "done": true
+              },
+              {
+                "text": "Vista Tree en Agents.",
+                "done": true
+              }
+            ],
+            "agents": []
+          },
+          {
+            "id": "3",
+            "title": "Hooks de agentes → `tirith hook`",
+            "status": "active",
+            "done": 3,
+            "total": 6,
+            "items": [
+              {
+                "text": "`tirith hook --agent <alias>` escribe un evento estándar.",
+                "done": true
+              },
+              {
+                "text": "Adaptador `anthropic`.",
+                "done": true
+              },
+              {
+                "text": "`tirith hook install|uninstall`.",
+                "done": true
+              },
+              {
+                "text": "Instalar los hooks en los ajustes de cada agente.",
+                "done": false
+              },
+              {
+                "text": "Protegerlos para que un agente no pueda quitárselos.",
+                "done": false
+              },
+              {
+                "text": "Verificar el payload real de Muse Code.",
+                "done": false
+              }
+            ],
+            "agents": [
+              "t-world"
+            ]
+          },
+          {
+            "id": "4",
+            "title": "`lane run --interactive`",
+            "status": "todo",
+            "done": 0,
+            "total": 2,
+            "items": [
+              {
+                "text": "La terminal queda conectada al agente.",
+                "done": false
+              },
+              {
+                "text": "Capturar Ctrl+C para cerrar el lane bien.",
+                "done": false
+              }
+            ],
+            "agents": []
+          },
+          {
+            "id": "7",
+            "title": "Reglas de código",
+            "status": "active",
+            "done": 1,
+            "total": 3,
+            "items": [
+              {
+                "text": "`tirith check`: manifiesto, build / test / deploy.",
+                "done": true
+              },
+              {
+                "text": "`PreToolUse` bloquea sub-agentes fuera de `lane run`.",
+                "done": false
+              },
+              {
+                "text": "Git `pre-commit` / `pre-push` con `tirith check`.",
+                "done": false
+              }
+            ],
+            "agents": []
+          },
+          {
+            "id": "8",
+            "title": "Más visibilidad por agente",
+            "status": "active",
+            "done": 1,
+            "total": 3,
+            "items": [
+              {
+                "text": "Objetivo, estado, archivos cambiados y tests por agente.",
+                "done": true
+              },
+              {
+                "text": "Logs legibles, más nuevos arriba.",
+                "done": false
+              },
+              {
+                "text": "Guardar el diff real por lane.",
+                "done": false
+              }
+            ],
+            "agents": []
+          },
+          {
+            "id": "10",
+            "title": "Plan visible en el Overview",
+            "status": "todo",
+            "done": 0,
+            "total": 4,
+            "items": [
+              {
+                "text": "El collector lee este archivo.",
+                "done": false
+              },
+              {
+                "text": "`tirith lane run --step <n>`.",
+                "done": false
+              },
+              {
+                "text": "Tarjeta «Plan» en el Overview.",
+                "done": false
+              },
+              {
+                "text": "Fecha límite con cuenta atrás.",
+                "done": false
+              }
+            ],
+            "agents": []
+          }
+        ]
       }
     },
     {
@@ -226,7 +488,8 @@ window.TIRITH_STATE = {
         "agents_total": 0,
         "pipelines_running": 0,
         "flows_24h": 0
-      }
+      },
+      "roadmap": null
     },
     {
       "id": "sketchbook",
@@ -251,7 +514,8 @@ window.TIRITH_STATE = {
         "agents_total": 0,
         "pipelines_running": 0,
         "flows_24h": 0
-      }
+      },
+      "roadmap": null
     }
   ],
   "agents": [
@@ -515,7 +779,7 @@ window.TIRITH_STATE = {
           "ts": "2026-10-28T19:39:02Z",
           "kind": "edit",
           "text": "app/src/main/java/scan/PersonPool.kt",
-          "detail": "+12 \u22123",
+          "detail": "+12 −3",
           "fields": null,
           "path": "/Users/owner/DEVELOP/Chromasol/app/src/main/java/scan/PersonPool.kt"
         },
@@ -555,7 +819,7 @@ window.TIRITH_STATE = {
           "ts": "2026-10-28T19:37:30Z",
           "kind": "edit",
           "text": "app/src/main/java/scan/ScanViewModel.kt",
-          "detail": "+4 \u22121",
+          "detail": "+4 −1",
           "fields": null,
           "path": "/Users/owner/DEVELOP/Chromasol/app/src/main/java/scan/ScanViewModel.kt"
         },
@@ -597,7 +861,8 @@ window.TIRITH_STATE = {
           "fields": null,
           "path": null
         }
-      ]
+      ],
+      "step": "2"
     },
     {
       "id": "w1-data",
@@ -749,7 +1014,7 @@ window.TIRITH_STATE = {
           "ts": "2026-10-28T18:38:20Z",
           "kind": "edit",
           "text": "app/src/main/java/db/Migrations.kt",
-          "detail": "+58 \u22122",
+          "detail": "+58 −2",
           "fields": null,
           "path": "/Users/owner/DEVELOP/Chromasol/app/src/main/java/db/Migrations.kt"
         },
@@ -769,7 +1034,8 @@ window.TIRITH_STATE = {
           "fields": null,
           "path": null
         }
-      ]
+      ],
+      "step": null
     },
     {
       "id": "icon-2",
@@ -892,7 +1158,8 @@ window.TIRITH_STATE = {
           "fields": null,
           "path": "/Users/owner/DEVELOP/Chromasol/icons/crystal_c.blend"
         }
-      ]
+      ],
+      "step": null
     },
     {
       "id": "t-world",
@@ -997,7 +1264,8 @@ window.TIRITH_STATE = {
           "fields": null,
           "path": null
         }
-      ]
+      ],
+      "step": "3"
     },
     {
       "id": "t-collector",
@@ -1103,7 +1371,8 @@ window.TIRITH_STATE = {
           "fields": null,
           "path": null
         }
-      ]
+      ],
+      "step": null
     }
   ],
   "pipelines": [
