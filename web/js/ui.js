@@ -1,7 +1,7 @@
 /* App shell: sidebar, breadcrumb, shared components, Overview. Views live in v-*.js */
 (function () {
   var T = window.T, esc = T.esc;
-  var ui = T.ui = { selRun: null, stageSel: {}, drawer: null, openAgent: null, edge: null, showEarlier: false, fit: true, zoom: 1, fopen: {}, fids: [] };
+  var ui = T.ui = { selRun: null, stageSel: {}, drawer: null, openAgent: null, edge: null, showEarlier: false, fit: true, zoom: 1, fopen: {}, fids: [], decision: null };
   var state = null, raw = null, common = null;
   T.views = {};
 
@@ -77,11 +77,15 @@
     return a.files_changed + (a.files_changed === 1 ? ' file' : ' files') + ' changed' +
       (a.insertions || a.deletions ? ' <span class="plus">+' + (a.insertions || 0) + '</span> <span class="minus">−' + (a.deletions || 0) + '</span>' : '');
   };
+  function ruleBadge(a) {
+    var n = T.rawState && T.rawState() ? T.violationsOf(T.rawState(), a.id).length : 0;
+    return n ? '<span class="rbadge" title="' + n + (n === 1 ? ' rule broken' : ' rules broken') + '">' + n + (n === 1 ? ' rule broken' : ' rules broken') + '</span>' : '';
+  }
   T.agentCard = function (a, selected) {
     return '<button class="card acard' + (selected ? ' sel' : '') + '" data-act="agent" data-key="' + esc(a.id) + '">' +
       '<span class="ahead">' + T.avatar(a, 36) + '<span class="aname"><b title="' + esc((a.name || '') + (a.epithet ? ' ' + a.epithet : '')) + '">' + esc(a.name) + '</b>' +
       '<span class="pill">' + esc([T.cap(a.rank), T.cap(a['class'])].filter(Boolean).join(' · ')) + '</span></span></span>' +
-      '<span class="afeat">' + esc(a.feature) + '</span>' +
+      '<span class="afeat">' + esc(a.feature) + '</span>' + ruleBadge(a) +
       '<span class="afoot"><span class="aproj">' + esc(T.proj(a.project)) + '</span><span class="aclock">' + T.lineIcon(T.ICON.clock, 13, 'currentColor', 1.7) + '<span>' + T.agentClock(a) + '</span></span></span></button>';
   };
   T.drawer = function (title, body, kind) {
@@ -169,7 +173,7 @@
       var ep = [f.from, f.to].filter(function (e) { return /^room:/.test(e); })[0];
       if (ep && seen[ep.slice(5) + '|' + String(f.text).slice(0, 60)]) return;
       var nm = function (e, side) { return /^room:/.test(e) ? (roomTitle[e.slice(5)] || T.endpointName(s, e, f, side)) : T.endpointName(s, e, f, side); };
-      out.push({ at: f.at, fromId: f.from, toId: f.to, fromName: nm(f.from, 'from'), toName: nm(f.to, 'to'), text: f.text, kind: f.kind, src: 'flow' });
+      out.push({ at: f.at, fromId: f.from, toId: f.to, fromName: nm(f.from, 'from'), toName: nm(f.to, 'to'), text: f.text, kind: f.kind, src: 'flow', id: f.id, why: f.why });
     });
     out.sort(function (a, b) { return (T.ms(b.at) || 0) - (T.ms(a.at) || 0); });
     return out;
@@ -186,6 +190,7 @@
       var pn = T.proj(x.project);
       return '<li>' + T.dot('amber', 'waiting for you') + '<span class="t">' + (x.link ? '<a href="' + esc(x.link) + '" target="_blank" rel="noopener">' + esc(x.text) + '</a>' : T.mdInline(x.text)) + '</span><span class="m">' + esc(pn) + '</span><span class="r">' + T.agoSpan(x.since) + '</span></li>';
     }).join('') + '</ul></section>';
+    if (T.rulesSection) h += T.rulesSection(s);
     h += '<section><h2>Running pipelines <span class="n">' + runs.length + '</span></h2>' + (runs.length ? '<div class="grid2">' + runs.map(function (p) {
       var st = p.stages || [], cur = T.curStage(p);
       return '<button class="card rcard" data-act="gorun" data-key="' + esc(p.run) + '"><span class="rhead"><b>' + esc(T.runName(p)) + ' <span class="mut">' + esc(T.runNum(p)) + '</span></b><span class="mut">' + esc(T.proj(p.project)) + '</span><span class="rtime">' + T.span(p.started_at, null) + '</span></span>' +
@@ -266,7 +271,9 @@
       else if (act === 'fnode') { ui.fopen[key] = !ui.fopen[key]; if (ui.fopen[key]) { ui.fit = false; ui.zoom = Math.max(ui.zoom, .85); ui.reveal = key; } }
       else if (act === 'fall') { var all = (ui.fids || []).every(function (i) { return ui.fopen[i]; }); ui.fopen = {}; if (!all) (ui.fids || []).forEach(function (i) { ui.fopen[i] = true; }); }
       else if (act === 'edge') { ui.edge = key; ui.drawer = 'edge'; }
-      else if (act === 'close') { ui.drawer = null; if (T.filter.mode !== 'list') ui.openAgent = null; ui.edge = null; }
+      else if (act === 'decision') { ui.decision = key; ui.drawer = 'decision'; }
+      else if (act === 'copy') { T.copyText(key, b); return; }
+      else if (act === 'close') { ui.drawer = null; ui.decision = null; if (T.filter.mode !== 'list') ui.openAgent = null; ui.edge = null; }
       else if (act === 'earlier') ui.showEarlier = !ui.showEarlier;
       else if (act === 'logf') ui.logFilter = key;
       else if (act === 'logsys') ui.logSys[key] = !ui.logSys[key];
@@ -283,7 +290,7 @@
     });
     window.addEventListener('resize', function () { if (document.querySelector('.canvas')) applyZoom(); });
     document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape' && ui.drawer && !/^(INPUT|SELECT)$/.test(document.activeElement.tagName)) { ui.drawer = null; ui.edge = null; if (T.filter.mode !== 'list') ui.openAgent = null; T.render(); }
+      if (e.key === 'Escape' && ui.drawer && !/^(INPUT|SELECT)$/.test(document.activeElement.tagName)) { ui.drawer = null; ui.decision = null; ui.edge = null; if (T.filter.mode !== 'list') ui.openAgent = null; T.render(); }
     });
   };
 })();

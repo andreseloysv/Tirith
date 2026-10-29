@@ -81,8 +81,10 @@
   T.activity = function (a, opts) {
     var o = opts || {}, h = '';
     h += asked(a);
+    if (T.agentRules) h += T.agentRules(a);
     if (o.goal !== false && a.goal) h += sec('Goal', '<div class="agoal">' + T.mdBox(a.goal, a.id + ':goal') + '</div>');
     h += sec('Status', status(a, o));
+    if (T.agentDecisions) h += T.agentDecisions(a);
     if (o.log !== false) h += sec('Log', T.logView(a));
     h += sec('Tests', tests(a), (a.tests || []).length || null);
     h += sec('Tools', tools(a));

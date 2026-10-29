@@ -140,7 +140,7 @@ window.TIRITH_STATE = {
         "steps": [
           {
             "id": "1",
-            "title": "Datos y migración",
+            "title": "Datos y migraci\u00f3n",
             "status": "done",
             "done": 2,
             "total": 2,
@@ -164,7 +164,7 @@ window.TIRITH_STATE = {
             "total": 3,
             "items": [
               {
-                "text": "Arranque en frío bajo 2 s",
+                "text": "Arranque en fr\u00edo bajo 2 s",
                 "done": true
               },
               {
@@ -172,7 +172,7 @@ window.TIRITH_STATE = {
                 "done": false
               },
               {
-                "text": "Reducir memoria en teléfonos de gama baja",
+                "text": "Reducir memoria en tel\u00e9fonos de gama baja",
                 "done": false
               }
             ],
@@ -188,11 +188,11 @@ window.TIRITH_STATE = {
             "total": 2,
             "items": [
               {
-                "text": "Declaración de recursos de IA",
+                "text": "Declaraci\u00f3n de recursos de IA",
                 "done": false
               },
               {
-                "text": "Capturas y descripción",
+                "text": "Capturas y descripci\u00f3n",
                 "done": false
               }
             ],
@@ -290,7 +290,7 @@ window.TIRITH_STATE = {
             "total": 2,
             "items": [
               {
-                "text": "Alias de agentes en el código; nombres reales en `config.toml`.",
+                "text": "Alias de agentes en el c\u00f3digo; nombres reales en `config.toml`.",
                 "done": true
               },
               {
@@ -316,7 +316,7 @@ window.TIRITH_STATE = {
                 "done": true
               },
               {
-                "text": "Lane sin respuesta o con error → «esperando por ti».",
+                "text": "Lane sin respuesta o con error \u2192 \u00abesperando por ti\u00bb.",
                 "done": true
               }
             ],
@@ -324,7 +324,7 @@ window.TIRITH_STATE = {
           },
           {
             "id": "2",
-            "title": "Árbol de delegación",
+            "title": "\u00c1rbol de delegaci\u00f3n",
             "status": "done",
             "done": 3,
             "total": 3,
@@ -334,7 +334,7 @@ window.TIRITH_STATE = {
                 "done": true
               },
               {
-                "text": "`register_lane` guarda `parent` automáticamente.",
+                "text": "`register_lane` guarda `parent` autom\u00e1ticamente.",
                 "done": true
               },
               {
@@ -346,13 +346,13 @@ window.TIRITH_STATE = {
           },
           {
             "id": "3",
-            "title": "Hooks de agentes → `tirith hook`",
+            "title": "Hooks de agentes \u2192 `tirith hook`",
             "status": "active",
             "done": 3,
             "total": 6,
             "items": [
               {
-                "text": "`tirith hook --agent <alias>` escribe un evento estándar.",
+                "text": "`tirith hook --agent <alias>` escribe un evento est\u00e1ndar.",
                 "done": true
               },
               {
@@ -368,7 +368,7 @@ window.TIRITH_STATE = {
                 "done": false
               },
               {
-                "text": "Protegerlos para que un agente no pueda quitárselos.",
+                "text": "Protegerlos para que un agente no pueda quit\u00e1rselos.",
                 "done": false
               },
               {
@@ -400,7 +400,7 @@ window.TIRITH_STATE = {
           },
           {
             "id": "7",
-            "title": "Reglas de código",
+            "title": "Reglas de c\u00f3digo",
             "status": "active",
             "done": 1,
             "total": 3,
@@ -422,7 +422,7 @@ window.TIRITH_STATE = {
           },
           {
             "id": "8",
-            "title": "Más visibilidad por agente",
+            "title": "M\u00e1s visibilidad por agente",
             "status": "active",
             "done": 1,
             "total": 3,
@@ -432,7 +432,7 @@ window.TIRITH_STATE = {
                 "done": true
               },
               {
-                "text": "Logs legibles, más nuevos arriba.",
+                "text": "Logs legibles, m\u00e1s nuevos arriba.",
                 "done": false
               },
               {
@@ -458,11 +458,11 @@ window.TIRITH_STATE = {
                 "done": false
               },
               {
-                "text": "Tarjeta «Plan» en el Overview.",
+                "text": "Tarjeta \u00abPlan\u00bb en el Overview.",
                 "done": false
               },
               {
-                "text": "Fecha límite con cuenta atrás.",
+                "text": "Fecha l\u00edmite con cuenta atr\u00e1s.",
                 "done": false
               }
             ],
@@ -779,7 +779,7 @@ window.TIRITH_STATE = {
           "ts": "2026-10-28T19:39:02Z",
           "kind": "edit",
           "text": "app/src/main/java/scan/PersonPool.kt",
-          "detail": "+12 −3",
+          "detail": "+12 \u22123",
           "fields": null,
           "path": "/Users/owner/DEVELOP/Chromasol/app/src/main/java/scan/PersonPool.kt"
         },
@@ -819,7 +819,7 @@ window.TIRITH_STATE = {
           "ts": "2026-10-28T19:37:30Z",
           "kind": "edit",
           "text": "app/src/main/java/scan/ScanViewModel.kt",
-          "detail": "+4 −1",
+          "detail": "+4 \u22121",
           "fields": null,
           "path": "/Users/owner/DEVELOP/Chromasol/app/src/main/java/scan/ScanViewModel.kt"
         },
@@ -1014,7 +1014,7 @@ window.TIRITH_STATE = {
           "ts": "2026-10-28T18:38:20Z",
           "kind": "edit",
           "text": "app/src/main/java/db/Migrations.kt",
-          "detail": "+58 −2",
+          "detail": "+58 \u22122",
           "fields": null,
           "path": "/Users/owner/DEVELOP/Chromasol/app/src/main/java/db/Migrations.kt"
         },
@@ -1719,6 +1719,20 @@ window.TIRITH_STATE = {
       "session": "2026-10-28-chromasol-release"
     },
     {
+      "id": "f-12",
+      "at": "2026-10-28T18:58:00Z",
+      "from": "agent:w1-data",
+      "to": "steward",
+      "from_name": "Halvard",
+      "to_name": "The Steward",
+      "kind": "decision",
+      "text": "Keep the Room schema flat, no nested tables",
+      "why": "One migration file per version is enough, and the 16 KB device check reads it without extra work",
+      "ref": null,
+      "project": "chromasol",
+      "session": "2026-10-28-chromasol-release"
+    },
+    {
       "id": "f-4",
       "at": "2026-10-28T19:02:00Z",
       "from": "agent:icon-2",
@@ -1753,6 +1767,20 @@ window.TIRITH_STATE = {
       "to_name": "Marrow Quickstep",
       "kind": "message",
       "text": "Owner wants a much smaller compact world",
+      "ref": null,
+      "project": "tirith",
+      "session": "2026-10-28-tirith-web"
+    },
+    {
+      "id": "f-13",
+      "at": "2026-10-28T19:15:00Z",
+      "from": "agent:t-world",
+      "to": "steward",
+      "from_name": "Marrow",
+      "to_name": "The Steward",
+      "kind": "decision",
+      "text": "Draw edges from measured boxes, not a layout library",
+      "why": "Expanded nodes push their neighbours, so the edges must follow the real positions",
       "ref": null,
       "project": "tirith",
       "session": "2026-10-28-tirith-web"
@@ -1855,6 +1883,38 @@ window.TIRITH_STATE = {
         "flows": 7,
         "notes": 2
       }
+    }
+  ],
+  "violations": [
+    {
+      "ts": "2026-10-28T18:44:00Z",
+      "rule": "subagent-tool",
+      "agent": "anthropic",
+      "lane": "icon-2",
+      "project": "chromasol",
+      "message": "tirith: subagent-tool: the agent's internal sub-agent tool (Task) is not allowed. Do this instead: tirith lane run --project chromasol --class glasswright --feature \"<description>\" --brief <file> -- <agent cmd> \u2026",
+      "blocked": "the agent's internal sub-agent tool (Task) is not allowed",
+      "instead": "tirith lane run --project chromasol --class glasswright --feature \"<description>\" --brief <file> -- <agent cmd> \u2026"
+    },
+    {
+      "ts": "2026-10-28T19:12:00Z",
+      "rule": "raw-stage",
+      "agent": "muse",
+      "lane": "t-world",
+      "project": "tirith",
+      "message": "tirith: raw-stage: running the stage \"build\" raw is not allowed. Do this instead: tirith run --project tirith --stage build",
+      "blocked": "running the stage \"build\" raw is not allowed",
+      "instead": "tirith run --project tirith --stage build"
+    },
+    {
+      "ts": "2026-10-28T19:31:00Z",
+      "rule": "raw-stage",
+      "agent": "muse",
+      "lane": "t-world",
+      "project": "tirith",
+      "message": "tirith: raw-stage: running the stage \"tests\" raw is not allowed. Do this instead: tirith run --project tirith --stage tests",
+      "blocked": "running the stage \"tests\" raw is not allowed",
+      "instead": "tirith run --project tirith --stage tests"
     }
   ]
 };

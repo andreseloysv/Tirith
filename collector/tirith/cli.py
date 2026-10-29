@@ -467,6 +467,27 @@ def _cmd_flow(args) -> int:
     return 0
 
 
+def _cmd_decide(args) -> int:
+    """Record a decision and its reason: agent -> steward, or steward -> owner without a lane."""
+    home = _home(args)
+    if not args.decision.strip():
+        raise SystemExit("the decision is empty")
+    if not args.why.strip():
+        raise SystemExit("--why is empty")
+    lane_id = args.lane or os.environ.get("TIRITH_LANE")
+    lane = read_json(lane_path(home, lane_id), None) if lane_id else None
+    if args.lane and not isinstance(lane, dict):
+        raise SystemExit(f"unknown lane: {args.lane}")
+    lane = lane if isinstance(lane, dict) else {}
+    src, dst = (f"agent:{lane_id}", "steward") if lane else ("steward", "owner")
+    row = flows_mod.append_flow(
+        home, src, dst, "decision", args.decision, why=args.why,
+        session=lane.get("session") or projects_mod.current_session(home),
+        project=str(lane.get("project") or "") or None)
+    print(row["id"])
+    return 0
+
+
 def _cmd_project_add(args) -> int:
     home = _home(args)
     words = [w.strip() for w in (args.guard_words or "").split(",") if w.strip()] or None
@@ -924,6 +945,13 @@ def build_parser() -> argparse.ArgumentParser:
     flow.add_argument("--text", required=True)
     flow.add_argument("--ref", default=None)
     flow.set_defaults(func=_cmd_flow)
+
+    decide = sub.add_parser("decide", parents=[common],
+                            help="record a decision and why (shown in the Flow view)")
+    decide.add_argument("decision")
+    decide.add_argument("--why", required=True)
+    decide.add_argument("--lane", default=None, help="lane id (default: $TIRITH_LANE)")
+    decide.set_defaults(func=_cmd_decide)
 
     project = sub.add_parser("project", parents=[common], help="projects are folders")
     project_sub = project.add_subparsers(dest="project_command", required=True)

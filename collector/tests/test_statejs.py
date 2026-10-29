@@ -46,7 +46,7 @@ def test_demo_fixture_validates() -> None:
     schema = json.loads((ROOT / "collector" / "state.schema.json").read_text(encoding="utf-8"))
     demo = json.loads((ROOT / "fixtures" / "state.demo.json").read_text(encoding="utf-8"))
     jsonschema.validate(demo, schema)
-    assert len(demo["rooms"]) == 1 and 6 <= len(demo["flows"]) <= 10
+    assert len(demo["rooms"]) == 1 and 6 <= len(demo["flows"]) <= 14
 
 
 def test_tail_lines_reads_jsonl_transcripts_as_text(tmp_path):

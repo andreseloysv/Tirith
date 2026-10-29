@@ -10,6 +10,7 @@ for later cycles, so a cycle never waits on the network.
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 import os
 import re
 import subprocess
@@ -526,6 +527,27 @@ class Collector:
         if fresh:
             flows_mod.remember(self.home, "pipeline_runs", seen | fresh)
 
+    def _flow_decisions(self, lanes: list[dict]) -> None:
+        """One ``decision`` flow per ``Decision:`` line of a lane report, the first time it is seen."""
+        seen = flows_mod.seen_set(self.home, "decisions")
+        fresh: set[str] = set()
+        known = {(f.get("from"), f.get("text")) for f in read_jsonl(self.home / "flows.jsonl")
+                 if f.get("kind") == "decision"}
+        for lane in lanes:
+            for text, why in flows_mod.extract_decisions(lane.get("report")):
+                key = f"{lane['id']}:{hashlib.sha1(text.encode('utf-8')).hexdigest()[:12]}"
+                if key in seen or key in fresh:
+                    continue
+                fresh.add(key)
+                if (f"agent:{lane['id']}", text) in known:  # already recorded with `tirith decide`
+                    continue
+                flows_mod.append_flow(
+                    self.home, f"agent:{lane['id']}", "steward", "decision", text, why=why,
+                    at=lane.get("ended_at"), session=lane.get("session") or None,
+                    project=str(lane.get("project") or "") or None)
+        if fresh:
+            flows_mod.remember(self.home, "decisions", seen | fresh)
+
     # -- guard + waits ---------------------------------------------------------
 
     def _guard_state(self) -> dict:
@@ -553,9 +575,13 @@ class Collector:
 
     @staticmethod
     def _violation(row: dict) -> dict:
+        message = str(row.get("message") or "")
+        blocked, _, instead = message.partition(". Do this instead: ")
+        prefix = f"tirith: {row.get('rule') or ''}: "
         return {"ts": row.get("ts"), "rule": str(row.get("rule") or ""), "agent": row.get("agent"),
-                "lane": row.get("lane"), "project": row.get("project"),
-                "message": str(row.get("message") or "")}
+                "lane": row.get("lane"), "project": row.get("project"), "message": message,
+                "blocked": blocked[len(prefix):] if blocked.startswith(prefix) else blocked,
+                "instead": instead}
 
     @staticmethod
     def _violation_waits(violations: list[dict], now: datetime) -> list[dict]:
@@ -731,6 +757,7 @@ class Collector:
                      for n in read_jsonl(self.home / "notes.jsonl")]
         notes = raw_notes[-20:]
         self._flow_pipeline_ends(events_pipelines := runs)
+        self._flow_decisions(lanes)
         self.rooms.ensure_polling(config, background=not self._one_shot)
         rooms_state, room_waits = self.rooms.build(
             config, agent_rows, self.worker, self.cache, now)

@@ -1719,6 +1719,20 @@
       "session": "2026-10-28-chromasol-release"
     },
     {
+      "id": "f-12",
+      "at": "2026-10-28T18:58:00Z",
+      "from": "agent:w1-data",
+      "to": "steward",
+      "from_name": "Halvard",
+      "to_name": "The Steward",
+      "kind": "decision",
+      "text": "Keep the Room schema flat, no nested tables",
+      "why": "One migration file per version is enough, and the 16 KB device check reads it without extra work",
+      "ref": null,
+      "project": "chromasol",
+      "session": "2026-10-28-chromasol-release"
+    },
+    {
       "id": "f-4",
       "at": "2026-10-28T19:02:00Z",
       "from": "agent:icon-2",
@@ -1753,6 +1767,20 @@
       "to_name": "Marrow Quickstep",
       "kind": "message",
       "text": "Owner wants a much smaller compact world",
+      "ref": null,
+      "project": "tirith",
+      "session": "2026-10-28-tirith-web"
+    },
+    {
+      "id": "f-13",
+      "at": "2026-10-28T19:15:00Z",
+      "from": "agent:t-world",
+      "to": "steward",
+      "from_name": "Marrow",
+      "to_name": "The Steward",
+      "kind": "decision",
+      "text": "Draw edges from measured boxes, not a layout library",
+      "why": "Expanded nodes push their neighbours, so the edges must follow the real positions",
       "ref": null,
       "project": "tirith",
       "session": "2026-10-28-tirith-web"
@@ -1855,6 +1883,38 @@
         "flows": 7,
         "notes": 2
       }
+    }
+  ],
+  "violations": [
+    {
+      "ts": "2026-10-28T18:44:00Z",
+      "rule": "subagent-tool",
+      "agent": "anthropic",
+      "lane": "icon-2",
+      "project": "chromasol",
+      "message": "tirith: subagent-tool: the agent's internal sub-agent tool (Task) is not allowed. Do this instead: tirith lane run --project chromasol --class glasswright --feature \"<description>\" --brief <file> -- <agent cmd> …",
+      "blocked": "the agent's internal sub-agent tool (Task) is not allowed",
+      "instead": "tirith lane run --project chromasol --class glasswright --feature \"<description>\" --brief <file> -- <agent cmd> …"
+    },
+    {
+      "ts": "2026-10-28T19:12:00Z",
+      "rule": "raw-stage",
+      "agent": "muse",
+      "lane": "t-world",
+      "project": "tirith",
+      "message": "tirith: raw-stage: running the stage \"build\" raw is not allowed. Do this instead: tirith run --project tirith --stage build",
+      "blocked": "running the stage \"build\" raw is not allowed",
+      "instead": "tirith run --project tirith --stage build"
+    },
+    {
+      "ts": "2026-10-28T19:31:00Z",
+      "rule": "raw-stage",
+      "agent": "muse",
+      "lane": "t-world",
+      "project": "tirith",
+      "message": "tirith: raw-stage: running the stage \"tests\" raw is not allowed. Do this instead: tirith run --project tirith --stage tests",
+      "blocked": "running the stage \"tests\" raw is not allowed",
+      "instead": "tirith run --project tirith --stage tests"
     }
   ]
 }
