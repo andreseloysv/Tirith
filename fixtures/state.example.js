@@ -118,6 +118,74 @@ window.TIRITH_STATE = {
         ],
         "generated_at": "2026-10-28T19:00:00Z",
         "source": "muse"
+      },
+      "roadmap": {
+        "file": "/Users/me/DEVELOP/Chromasol/docs/TODO.md",
+        "deadline": null,
+        "done": 3,
+        "total": 7,
+        "steps": [
+          {
+            "id": "1",
+            "title": "Datos y migraci\u00f3n",
+            "status": "done",
+            "done": 2,
+            "total": 2,
+            "items": [
+              {
+                "text": "Room database",
+                "done": true
+              },
+              {
+                "text": "Importar partidas antiguas",
+                "done": true
+              }
+            ],
+            "agents": []
+          },
+          {
+            "id": "2",
+            "title": "Rendimiento",
+            "status": "active",
+            "done": 1,
+            "total": 3,
+            "items": [
+              {
+                "text": "Arranque en fr\u00edo bajo 2 s",
+                "done": true
+              },
+              {
+                "text": "Perfilar la pantalla de lienzo",
+                "done": false
+              },
+              {
+                "text": "Reducir memoria en tel\u00e9fonos de gama baja",
+                "done": false
+              }
+            ],
+            "agents": [
+              "w6-perf"
+            ]
+          },
+          {
+            "id": "3",
+            "title": "Ficha de la tienda",
+            "status": "todo",
+            "done": 0,
+            "total": 2,
+            "items": [
+              {
+                "text": "Declaraci\u00f3n de recursos de IA",
+                "done": false
+              },
+              {
+                "text": "Capturas y descripci\u00f3n",
+                "done": false
+              }
+            ],
+            "agents": []
+          }
+        ]
       }
     },
     {
@@ -186,6 +254,200 @@ window.TIRITH_STATE = {
         ],
         "generated_at": "2026-10-28T19:35:00Z",
         "source": "manual"
+      },
+      "roadmap": {
+        "file": "/Users/me/DEVELOP/Tirith/docs/TODO.md",
+        "deadline": "2026-11-04T21:00:00-05:00",
+        "done": 13,
+        "total": 26,
+        "steps": [
+          {
+            "id": "0",
+            "title": "Guarda de commits compatible",
+            "status": "done",
+            "done": 2,
+            "total": 2,
+            "items": [
+              {
+                "text": "Alias de agentes en el c\u00f3digo; nombres reales en `config.toml`.",
+                "done": true
+              },
+              {
+                "text": "Guarda de Tirith intacta e inmutable.",
+                "done": true
+              }
+            ],
+            "agents": []
+          },
+          {
+            "id": "1",
+            "title": "`lane run` devuelve la respuesta final",
+            "status": "done",
+            "done": 3,
+            "total": 3,
+            "items": [
+              {
+                "text": "Al terminar imprime un resumen y la respuesta final.",
+                "done": true
+              },
+              {
+                "text": "Se guarda como informe del lane y se ve en la web.",
+                "done": true
+              },
+              {
+                "text": "Lane sin respuesta o con error \u2192 \u00abesperando por ti\u00bb.",
+                "done": true
+              }
+            ],
+            "agents": []
+          },
+          {
+            "id": "2",
+            "title": "\u00c1rbol de delegaci\u00f3n",
+            "status": "done",
+            "done": 3,
+            "total": 3,
+            "items": [
+              {
+                "text": "`lane run` pasa `TIRITH_LANE` a sus hijos.",
+                "done": true
+              },
+              {
+                "text": "`register_lane` guarda `parent` autom\u00e1ticamente.",
+                "done": true
+              },
+              {
+                "text": "Vista Tree en Agents.",
+                "done": true
+              }
+            ],
+            "agents": []
+          },
+          {
+            "id": "3",
+            "title": "Hooks de agentes \u2192 `tirith hook`",
+            "status": "active",
+            "done": 3,
+            "total": 6,
+            "items": [
+              {
+                "text": "`tirith hook --agent <alias>` escribe un evento est\u00e1ndar.",
+                "done": true
+              },
+              {
+                "text": "Adaptador `anthropic`.",
+                "done": true
+              },
+              {
+                "text": "`tirith hook install|uninstall`.",
+                "done": true
+              },
+              {
+                "text": "Instalar los hooks en los ajustes de cada agente.",
+                "done": false
+              },
+              {
+                "text": "Protegerlos para que un agente no pueda quit\u00e1rselos.",
+                "done": false
+              },
+              {
+                "text": "Verificar el payload real de Muse Code.",
+                "done": false
+              }
+            ],
+            "agents": [
+              "t-world"
+            ]
+          },
+          {
+            "id": "4",
+            "title": "`lane run --interactive`",
+            "status": "todo",
+            "done": 0,
+            "total": 2,
+            "items": [
+              {
+                "text": "La terminal queda conectada al agente.",
+                "done": false
+              },
+              {
+                "text": "Capturar Ctrl+C para cerrar el lane bien.",
+                "done": false
+              }
+            ],
+            "agents": []
+          },
+          {
+            "id": "7",
+            "title": "Reglas de c\u00f3digo",
+            "status": "active",
+            "done": 1,
+            "total": 3,
+            "items": [
+              {
+                "text": "`tirith check`: manifiesto, build / test / deploy.",
+                "done": true
+              },
+              {
+                "text": "`PreToolUse` bloquea sub-agentes fuera de `lane run`.",
+                "done": false
+              },
+              {
+                "text": "Git `pre-commit` / `pre-push` con `tirith check`.",
+                "done": false
+              }
+            ],
+            "agents": []
+          },
+          {
+            "id": "8",
+            "title": "M\u00e1s visibilidad por agente",
+            "status": "active",
+            "done": 1,
+            "total": 3,
+            "items": [
+              {
+                "text": "Objetivo, estado, archivos cambiados y tests por agente.",
+                "done": true
+              },
+              {
+                "text": "Logs legibles, m\u00e1s nuevos arriba.",
+                "done": false
+              },
+              {
+                "text": "Guardar el diff real por lane.",
+                "done": false
+              }
+            ],
+            "agents": []
+          },
+          {
+            "id": "10",
+            "title": "Plan visible en el Overview",
+            "status": "todo",
+            "done": 0,
+            "total": 4,
+            "items": [
+              {
+                "text": "El collector lee este archivo.",
+                "done": false
+              },
+              {
+                "text": "`tirith lane run --step <n>`.",
+                "done": false
+              },
+              {
+                "text": "Tarjeta \u00abPlan\u00bb en el Overview.",
+                "done": false
+              },
+              {
+                "text": "Fecha l\u00edmite con cuenta atr\u00e1s.",
+                "done": false
+              }
+            ],
+            "agents": []
+          }
+        ]
       }
     },
     {
@@ -197,7 +459,8 @@ window.TIRITH_STATE = {
         "edges": [],
         "generated_at": null,
         "source": "none"
-      }
+      },
+      "roadmap": null
     }
   ],
   "agents": [
@@ -223,7 +486,8 @@ window.TIRITH_STATE = {
       "files_changed": 7,
       "insertions": 412,
       "deletions": 96,
-      "report": null
+      "report": null,
+      "step": "2"
     },
     {
       "id": "w1-data",
@@ -247,7 +511,8 @@ window.TIRITH_STATE = {
       "files_changed": 31,
       "insertions": 2210,
       "deletions": 140,
-      "report": "Room database with the same schema and v1-v4 migrations as iOS; 19 new device tests."
+      "report": "Room database with the same schema and v1-v4 migrations as iOS; 19 new device tests.",
+      "step": null
     },
     {
       "id": "icon-2",
@@ -271,7 +536,8 @@ window.TIRITH_STATE = {
       "files_changed": 4,
       "insertions": 600,
       "deletions": 0,
-      "report": "Silhouette matches; inner contour still differs from the target."
+      "report": "Silhouette matches; inner contour still differs from the target.",
+      "step": null
     },
     {
       "id": "t-world",
@@ -292,7 +558,8 @@ window.TIRITH_STATE = {
       "files_changed": 0,
       "insertions": 0,
       "deletions": 0,
-      "report": null
+      "report": null,
+      "step": "3"
     },
     {
       "id": "t-collector",
@@ -315,7 +582,8 @@ window.TIRITH_STATE = {
       "files_changed": 3,
       "insertions": 150,
       "deletions": 0,
-      "report": null
+      "report": null,
+      "step": null
     }
   ],
   "pipelines": [

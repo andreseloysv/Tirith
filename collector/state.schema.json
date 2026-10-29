@@ -379,6 +379,10 @@
         "auto": {
           "type": "boolean"
         },
+        "roadmap": {
+          "description": "The project's plan read from its markdown checklist; null when there is none. See docs/CONTRACT-roadmap.md.",
+          "oneOf": [{"type": "null"}, {"$ref": "#/$defs/roadmap"}]
+        },
         "counts": {
           "type": "object",
           "additionalProperties": true,
@@ -404,6 +408,41 @@
             "flows_24h": {
               "type": "integer",
               "minimum": 0
+            }
+          }
+        }
+      }
+    },
+    "roadmap": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["file", "deadline", "done", "total", "steps"],
+      "properties": {
+        "file": {"type": "string"},
+        "deadline": {"type": ["string", "null"]},
+        "done": {"type": "integer", "minimum": 0},
+        "total": {"type": "integer", "minimum": 0},
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["id", "title", "status", "done", "total", "items", "agents"],
+            "properties": {
+              "id": {"type": "string"},
+              "title": {"type": "string"},
+              "status": {"enum": ["done", "active", "todo", "empty"]},
+              "done": {"type": "integer", "minimum": 0},
+              "total": {"type": "integer", "minimum": 0},
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["text", "done"],
+                  "properties": {"text": {"type": "string"}, "done": {"type": "boolean"}}
+                }
+              },
+              "agents": {"type": "array", "items": {"type": "string"}}
             }
           }
         }
@@ -439,6 +478,10 @@
         "parent": {
           "type": "string",
           "description": "Lane id of the agent that spawned this one, or 'steward'."
+        },
+        "step": {
+          "type": ["string", "null"],
+          "description": "Roadmap step id this lane works on (tirith lane run --step)."
         },
         "project": {
           "type": "string"

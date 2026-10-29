@@ -23,6 +23,7 @@ from tirith.guardwrap import default_words, verify_guard
 from tirith.home import Config, ProjectConfig, ensure_home, load_config, now_iso, parse_iso
 from tirith import flows as flows_mod
 from tirith import manifest as manifest_mod
+from tirith import roadmap as roadmap_mod
 from tirith import hooks as hooks_mod
 from tirith import projects as projects_mod
 from tirith.rooms import RoomsService
@@ -599,6 +600,7 @@ class Collector:
                 "files_changed": files, "insertions": insertions, "deletions": deletions,
                 "report": lane.get("report"),
                 "parent": str(lane.get("parent") or "steward"),
+                "step": str(lane["step"]) if lane.get("step") else None,
                 **act,
             })
             for wait in self._brain_waits({**lane, "project": lane_project}):
@@ -639,6 +641,7 @@ class Collector:
                 "folder": str(folder) if folder else None, "auto": False,
                 "architecture": self.architecture_for(proj),
                 "guard": {"ok": guard_ok, "problems": problems},
+                "roadmap": roadmap_mod.build(folder, proj.id, agent_rows),
             })
         for entry in entries:
             if entry.id in known_ids:
@@ -649,6 +652,7 @@ class Collector:
                 "folder": str(entry.folder) if entry.folder else None, "auto": True,
                 "architecture": self.architecture_for(ProjectConfig(id=entry.id, name=entry.name)),
                 "guard": {"ok": False, "problems": ["auto-discovered folder: no commit guard configured"]},
+                "roadmap": roadmap_mod.build(entry.folder, entry.id, agent_rows),
             })
         runs = self._pipelines(events, resolve, entries)
         for pid in [row["project"] for row in agent_rows] + [r["project"] for r in runs]:
@@ -659,6 +663,7 @@ class Collector:
                     "id": pid, "name": pid, "color": "#888888", "folder": None, "auto": False,
                     "architecture": self.architecture_for(stub),
                     "guard": {"ok": False, "problems": ["project not defined in config.toml"]},
+                    "roadmap": None,
                 })
         if guard_dirty:
             write_json_atomic(self.home / "guard-state.json", guard_since)

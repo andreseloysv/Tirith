@@ -1,5 +1,7 @@
 # Tirith's own pipelines. Format: docs/CONTRACT-manifest.md
 deploy = "none"
+roadmap = "docs/TODO.md"
+deadline = "2026-11-04T21:00:00-05:00"
 
 [[pipelines]]
 id = "ci"

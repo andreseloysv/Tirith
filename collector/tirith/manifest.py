@@ -61,6 +61,8 @@ class Manifest:
     pipelines: list[Pipeline] = field(default_factory=list)
     hooks: list[Hook] = field(default_factory=list)
     deploy_none: bool = False
+    roadmap: str | None = None
+    deadline: str | None = None
     problems: list[Problem] = field(default_factory=list)
 
     def stage_names(self, pipeline_id: str) -> list[str]:
@@ -140,6 +142,8 @@ def parse_text(text: str, path: Path) -> Manifest:
         return manifest
     lines = _header_lines(text)
     manifest.deploy_none = str(data.get("deploy") or "").lower() == "none"
+    manifest.roadmap = str(data.get("roadmap") or "").strip() or None
+    manifest.deadline = str(data.get("deadline") or "").strip() or None
     pipes = data.get("pipelines")
     pipe_lines = lines.get("pipelines", [])
     stage_lines = lines.get("pipelines.stages", [])
