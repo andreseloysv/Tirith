@@ -32,6 +32,7 @@ from tirith import managerd as managerd_mod
 from tirith import manifest as manifest_mod
 from tirith import ownergate as ownergate_mod
 from tirith import planlane as planlane_mod
+from tirith import plangate as plangate_mod
 from tirith import verifylane as verifylane_mod
 from tirith import projects as projects_mod
 from tirith import roadmap as roadmap_mod
@@ -204,7 +205,7 @@ def _plan_file(repo: Path, plan: str) -> Path | None:
     return next((p for p in paths if p.stem == plan), None) if plan else (paths[0] if paths else None)
 
 
-def _apply_edit(repo: Path, req: dict) -> str:
+def _apply_edit(home: Path, repo: Path, req: dict) -> str:
     """Change the plan file as ``req['edit']`` says and commit only that file; returns the commit message.
 
     Raises ``roadmap_mod.EditError`` with the reason when it must not (or cannot) be done."""
@@ -214,20 +215,15 @@ def _apply_edit(repo: Path, req: dict) -> str:
         raise roadmap_mod.EditError(f"the plan {edit['plan'] or 'file'} of {req['project']} was not found")
     if not path.is_relative_to(repo):
         raise roadmap_mod.EditError("the plan file is outside the project folder")
-    rel = str(path.relative_to(repo))
-    if _git(repo, "status", "--porcelain", "--", rel).stdout.strip():
-        raise roadmap_mod.EditError(f"{rel} has uncommitted changes, so it was left as it is")
-    text = path.read_text(encoding="utf-8")
-    new = roadmap_mod.edit(text, step, edit.get("item_text", ""), edit.get("new_text"),
-                           bool(edit.get("delete")), edit.get("add"))
     message = f"Roadmap: {inbox_mod.edit_verb(edit)} in step {step} (owner)"
-    path.write_text(new, encoding="utf-8")
-    _git(repo, "add", "--", rel)
-    made = _git(repo, "commit", "-q", "-m", message, "--", rel)
-    if made.returncode != 0:  # the guard (or git) refused: leave the plan as it was
-        _git(repo, "reset", "-q", "--", rel)
-        _git(repo, "checkout", "--", rel)
-        raise roadmap_mod.EditError(f"committing the plan failed: {_short(made.stderr or made.stdout, 200)}")
+    try:  # the single writer of the plan (``tirith.plangate``): locked, one commit
+        plangate_mod.commit_change(
+            home, repo, req["project"],
+            lambda text: roadmap_mod.edit(text, step, edit.get("item_text", ""), edit.get("new_text"),
+                                          bool(edit.get("delete")), edit.get("add")),
+            message, path)
+    except plangate_mod.PlanGateError as err:
+        raise roadmap_mod.EditError(str(err))
     return message
 
 
@@ -250,7 +246,7 @@ def _plan_edit(home: Path, req: dict, config: Config, now: datetime) -> str:
     try:
         if repo is None:
             raise roadmap_mod.EditError(f"project '{project}' has no repo folder")
-        message = _apply_edit(repo, req)
+        message = _apply_edit(home, repo, req)
     except roadmap_mod.EditError as err:
         inbox_mod.add_answer(home, req["id"], f"Could not {verb} the plan: {err}", by="tirith", auto=True, at=at)
         _flow(home, "tirith", "owner", "alert", f"Plan {verb} refused on {_step_name(req)}: {_short(str(err))}",
@@ -265,10 +261,10 @@ def _plan_edit(home: Path, req: dict, config: Config, now: datetime) -> str:
     return "applied"
 
 
-def _default_relauncher(home: Path, lane: dict, alias: str) -> str:
+def _default_relauncher(home: Path, lane: dict, alias: str, note: str | None = None) -> str:
     from tirith.cli import relaunch_lane  # late, like _default_launcher
     try:
-        return relaunch_lane(home, lane, alias, by_tirith=True)
+        return relaunch_lane(home, lane, alias, by_tirith=True, note=note)
     except SystemExit as err:
         raise launch_mod.LaunchError(str(err.code or "relaunch failed"))
 
@@ -361,6 +357,9 @@ def run(home: Path, config: Config, now: datetime, *, agents: list[dict], lanes:
     if fallback_mod.run(home, config, now, state, lanes, relauncher or _default_relauncher):
         changed = True
     if diskdiet_mod.check(home, config, state, now, free):
+        changed = True
+    # outcomes the plan could not take yet; a lane that ended without a plan report is started once more
+    if plangate_mod.sync(home, config, lanes, relauncher or _default_relauncher):
         changed = True
     room = not diskdiet_mod.low(state)  # disk almost full: no new lane (the manager queue says why)
     if autopilot_mod.run(home, config, now, state, agents=agents, projects=projects or [], launcher=launcher,

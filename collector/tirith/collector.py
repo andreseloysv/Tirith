@@ -1134,6 +1134,8 @@ class Collector:
                 "request": lane.get("request") if isinstance(lane.get("request"), dict) else None,
                 "parent": "manager" if lane.get("parent") in (None, "", "steward") else str(lane["parent"]),
                 "step": str(lane["step"]) if lane.get("step") else None,
+                "item": str(lane["item"]) if lane.get("item") else None,
+                "outcome": (lane.get("outcome") or {}).get("status") or None,
                 "request_id": str(lane["request_id"]) if lane.get("request_id") else None,
                 "turn_requests": list(manager_turns.get(str(lane["id"])) or []),
                 "live": {**live_sum, "elapsed_s": elapsed} if live_steps else None,

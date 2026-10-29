@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import make_repo, write_config, write_lane_manifest
+from conftest import make_repo, write_config, write_lane_manifest, write_plan
 from tirith import dispatch as dispatch_mod
 from tirith import hooks as hooks_mod
 from tirith import inbox as inbox_mod
@@ -29,8 +29,7 @@ AGENTS = '[agents.anthropic]\ncommand = "agent-bin"\n'
 def project(home: Path, tmp_path: Path) -> Path:
     repo = make_repo(tmp_path / "demo")
     write_lane_manifest(repo)
-    (repo / "docs").mkdir()
-    (repo / "docs" / "TODO.md").write_text("# TODO\n\n## 1. First\n\n- [ ] Open thing.\n", encoding="utf-8")
+    write_plan(repo, "# TODO\n\n## 1. First\n\n- [ ] Open thing.\n")
     write_config(home, [{"id": "demo", "name": "Demo", "repo": str(repo)}], AGENTS)
     return repo
 

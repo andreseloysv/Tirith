@@ -15,7 +15,7 @@ from types import SimpleNamespace
 import pytest
 
 import tirith_guard
-from conftest import GIT, make_hooks_mutable, make_repo, write_config, write_lane_manifest
+from conftest import GIT, make_hooks_mutable, make_repo, write_config, write_lane_manifest, write_plan
 from tirith import tirithcmd
 from tirith import actions as actions_mod
 from tirith import asks as asks_mod
@@ -269,6 +269,7 @@ STUBBORN = ("import signal, time\nsignal.signal(signal.SIGTERM, signal.SIG_IGN)\
 def _start_lane(home: Path, tmp_path: Path, lane_id: str, code: str):
     repo = make_repo(tmp_path / "repo")
     write_lane_manifest(repo)
+    write_plan(repo)
     write_config(home, [{"id": "demo", "name": "Demo", "repo": str(repo), "color": "#123456",
                          "guard": "false"}])
     config = (home / "config.toml").read_text().replace('guard = "false"', "guard = false")
@@ -276,7 +277,8 @@ def _start_lane(home: Path, tmp_path: Path, lane_id: str, code: str):
     env = dict(os.environ, TIRITH_HOME=str(home), PYTHONPATH=str(Path(__file__).resolve().parent.parent))
     runner = subprocess.Popen(
         [sys.executable, "-m", "tirith", "lane", "run", "--project", "demo", "--class", "warden",
-         "--feature", "Long job", "--id", lane_id, "--brief", str(repo / "brief.md"), "--",
+         "--feature", "Long job", "--id", lane_id, "--brief", str(repo / "brief.md"),
+         "--step", "1", "--item", "Do the thing.", "--",
          sys.executable, "-c", code], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     deadline = time.monotonic() + 20
     while time.monotonic() < deadline:

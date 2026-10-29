@@ -664,10 +664,11 @@ mod stop_tree_tests {
 
 // -- launch requests ----------------------------------------------------------------------------
 
-/// Runs `tirith launch --project P --step N` and returns what it printed.
+/// Runs `tirith launch --project P --step N --item "<open item>"` and returns what it printed. No agent
+/// starts without an open item of the plan (docs/CONTRACT-roadmap.md, "The plan gate"); Tirith checks it.
 #[tauri::command]
-fn launch_step(project: String, step: u32) -> Result<String, String> {
-    let out = tirith_command(&["launch", "--project", &project, "--step", &step.to_string()])
+fn launch_step(project: String, step: u32, item: String) -> Result<String, String> {
+    let out = tirith_command(&["launch", "--project", &project, "--step", &step.to_string(), "--item", &item])
         .stdin(Stdio::null())
         .output()
         .map_err(|e| format!("could not run tirith: {e}"))?;
@@ -1866,9 +1867,22 @@ fn chat_start(
     std::fs::create_dir_all(brief.parent().unwrap()).map_err(|e| e.to_string())?;
     std::fs::write(&brief, format!("Chat with {alias}: the owner talks to the agent from the app.\n"))
         .map_err(|e| e.to_string())?;
+    // Even the owner's chat is plan work: Tirith adds its item to the plan first, the lane is linked to it.
+    let item = format!("Chat con el dueño: {id}");
+    let added = tirith_command(&[
+        "plan", "add", "--project", &project, "--step", "0", "--title", "Trabajo automático de Tirith",
+        "--text", &item,
+    ])
+    .stdin(Stdio::null())
+    .output()
+    .map_err(|e| format!("could not run tirith: {e}"))?;
+    if !added.status.success() {
+        return Err(String::from_utf8_lossy(&added.stderr).trim().to_string());
+    }
     let mut cmd = tirith_command(&[
         "lane", "run", "--interactive", "--project", &project, "--class", "chat", "--id", &id,
-        "--feature", &format!("Chat with {alias}"), "--brief", &brief.to_string_lossy(), "--",
+        "--feature", &format!("Chat with {alias}"), "--brief", &brief.to_string_lossy(),
+        "--step", "0", "--item", &item, "--",
     ]);
     cmd.arg(command).args(&args).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
     let mut child = cmd.spawn().map_err(|e| format!("could not start {alias}: {e}"))?;

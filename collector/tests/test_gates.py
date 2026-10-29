@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import make_hooks_mutable, make_repo, write_config, write_lane_manifest
+from conftest import make_hooks_mutable, make_repo, write_config, write_lane_manifest, write_plan
 from tirith import gates
 from tirith.cli import main
 from tirith.collector import Collector
@@ -290,11 +290,12 @@ def _lane_repo(home: Path, tmp_path: Path, monkeypatch) -> Path:
     write_config(home, [{"id": "demo", "name": "Demo", "repo": str(repo)}], AGENTS)
     monkeypatch.setattr("tirith.cli.verify_guard", lambda *a, **k: [])
     write_lane_manifest(repo)
+    write_plan(repo)
     return repo
 
 
 def _lane(brief, *tail) -> list[str]:
-    args = ["lane", "run", "--project", "demo", "--class", "warden", "--feature", "F", "--id", "g1"]
+    args = ["lane", "run", "--project", "demo", "--class", "warden", "--feature", "F", "--id", "g1", "--step", "1", "--item", "Do the thing."]
     return args + (["--brief", str(brief)] if brief else []) + ["--", *tail]
 
 

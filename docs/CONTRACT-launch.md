@@ -5,17 +5,71 @@ file:// page (no servers, no open ports), so a click cannot run commands: it ope
 that a small local handler turns into `tirith launch`.
 
 ```
-button click -> tirith://launch?project=<id>&step=<n>&token=<t>
+button click -> tirith://launch?project=<id>&step=<n>[&item=<text>]&token=<t>
              -> Tirith Launcher.app (macOS) -> tirith url open "<url>"
-             -> token check -> tirith launch --project <id> --step <n>
+             -> token check -> tirith launch --project <id> --step <n> --item "<open item>"
              -> git worktree + brief + `tirith lane run` (detached)
 ```
 
-## `tirith launch --project <id> --step <n> [--agent <alias>] [--dry-run]`
+## The plan is the only way to start an agent
+
+No agent starts without an open item of the plan, with no exceptions (`docs/CONTRACT-roadmap.md`, "The plan
+gate"). Every start (`tirith lane run`, `tirith launch`, the dispatcher, the autopilot, the manager lanes, a start
+again after running out of credits or without a plan outcome, plan refresh and new plan, verification lanes, the
+desktop app's chat and launch commands) passes `--step <n> --item "<exact text of the open item>"` (or the item's id
+`i-xxxxxxxx`), and code checks it against the project's plan before anything is created. Otherwise the start is
+refused (exit 3):
+
+```
+tirith: plan-item: no agent starts without a plan item: that item is not an open item of step 2.
+Add it to the plan first: tirith plan add --project demo --step 2 --text "<what you will do>"
+```
+
+It is also refused when the plan has no such step, the item is already done, in review, blocked, or in progress
+by a lane that is still running, or the project has no plan file. What Tirith starts by itself gets its item from
+Tirith before it starts (`tirith.plangate.ops_item`, in step `0` "Trabajo automático de Tirith", already marked
+"(en curso: <lane>)" so the autopilot never takes it): plan refresh `Revisar el plan (<date>)`, new plan
+`Plan nuevo: <title>`, verification `Verificar: <check>`, the manager lane `Manager de guardia: atender el chat`
+(one standing item), the owner's chat `Chat con el dueño: <chat id>` (ticked when the chat ends), a review
+`Revisar: <item>` (a sub-item under the reviewed item). The autopilot, a click on a step and the owner's "Finish
+this step" request name no item: Tirith takes the first open item an agent can do in that step. `tirith lane
+start` only records an agent that already runs; it is linked to an item only when `--item` is given.
+
+When the lane starts, the item is marked `(en curso: <lane>)`. The lane stores `item` (and `item_step` when it
+is not the lane's `step`, e.g. step `0` for plan refresh, whose `step` stays `plan-refresh`).
+
+## A lane finishes with an outcome
+
+`tirith plan report --lane <id> --status done|partial|blocked [--add "<new item>"]... [--reason "<why>"]`
+(the lane is `$TIRITH_LANE` by default) records the outcome of the lane's item in `lane.outcome` and Tirith
+writes it into the plan:
+
+| Status | Plan |
+|---|---|
+| `done` | the item becomes `(en revisión)`; each `--add` is a new open item of the same step |
+| `partial` | like `done`, and needs at least one `--add` for what is left |
+| `blocked` | needs `--reason`; the item becomes `(bloqueado: <reason>)`, or `(dueño: <reason>)` when the reason starts with an owner reason key (`credentials`, `payment`, `personal-account`, `physical-device`, `owner-decision`; the owner gate rules apply); a blocked lane is not reviewed or merged |
+
+A lane that ends `done` without a report ends as `no-outcome`: its work is not reviewed or merged, its item is
+reopened (`(reabierto: <lane> terminó sin informe)`) and the dispatcher starts it once more with a note in the brief
+(`retry_of` names the first lane); when that one also ends without a report, one manager queue item
+`sq-no-outcome-<lane>` is opened. The owner's interactive conversations, the chat lane and the manager lane are
+exempt from the report: their item is ticked (chat) or given back (manager) when they end.
+
+An outcome the plan could not take at once (the plan file has uncommitted changes) is kept in the lane and written
+by the next dispatcher pass.
+
+**Done only when verified.** `done` never ticks anything. When the automatic review starts, a sub-item `Revisar:
+<item>` is added under the item. A merge (tests passed) ticks the item and the sub-item, after the claim check
+that the lane's work is on the project's branch; a failed review closes the sub-item with the reason and reopens the
+item as `(reabierto: <reason>)`. Lanes without an item keep the older report matching (below, point 3).
+
+## `tirith launch --project <id> --step <n> --item "<open item>" [--agent <alias>] [--dry-run]`
 
 1. Reads the step (title, open items) and the roadmap intro paragraph (the first paragraph after the
    title, before the first `##`) from the project's roadmap (`docs/CONTRACT-roadmap.md`).
-2. Refuses (exit 3, reason on stderr) when: the step is unknown, done or has no items; a working lane of
+2. Refuses (exit 3, reason on stderr) when: the step is unknown, done or has no items; `--item` is missing or is
+   not an open item of the step (see above); a working lane of
    the same project already has that step (the message names it); `tirith check` fails for the project;
    no agent command is configured.
 3. Creates a git worktree `<repo>-lanes/<lane-id>` next to the repo on a new branch `lane/<lane-id>`
@@ -27,13 +81,14 @@ button click -> tirith://launch?project=<id>&step=<n>&token=<t>
    |---|---|
    | `# Lane: <step title>` | |
    | `## Why` | the step number and title, then the roadmap intro paragraph |
-   | `## What to build` | the open items of the step |
-   | `## Hard rules` | do not commit, alias-only agent names, no servers, tests must pass, report what changed, no sub-agents outside `lane run`, nothing outside the worktree |
-   | `## Where to read` | `docs/TODO.md` (read only) and `docs/CONTRACT*.md` |
+   | `## Your item` | the item the lane works on and a reminder to report it |
+   | `## What to build` | the item |
+   | `## Hard rules` | do not commit, alias-only agent names, no servers, tests must pass, report what changed, no sub-agents outside `lane run`, nothing outside the worktree, never edit `docs/TODO.md`, and the two commands `tirith plan add` and `tirith plan report` |
+   | `## Where to read` | `docs/TODO.md` (read only, only Tirith writes it) and `docs/CONTRACT*.md` |
 
 5. Starts, detached (own session, survives the handler exiting; output in
    `<home>/logs/<lane-id>.launch.log`):
-   `tirith lane run --id <lane-id> --step <n> --project <id> --class <class> --feature "<title>"
+   `tirith lane run --id <lane-id> --step <n> --item "<item>" --project <id> --class <class> --feature "<title>"
    --brief <file> --workspace <worktree> -- <agent command>`.
    The class comes from keywords of the step title (`warden`, `loremaster`, `glasswright`,
    `swiftrider`), else `stonewright`.
@@ -132,7 +187,7 @@ No finished lane is left unreviewed, by code. State in `<home>/dispatch.json` un
      "Retry the review", "Start an agent to fix it", "Show the log", "Drop the lane"; the queue item stays open.
    - `ready` (auto_merge off): owner item with Run actions "Merge" and "Drop"; the queue item stays open.
    A later result of the same lane (a retry) is settled again and closes the earlier owner item.
-3. Plan update on merge: the brief lists the step's open items under "What to build"; items whose words
+3. Plan update on merge (lanes without a plan item only; a lane with an item is ticked by the plan gate above): the brief lists the step's open items under "What to build"; items whose words
    (at least 70 %) appear in the report's "What changed" lines are ticked in the repo's roadmap file and
    committed as "Roadmap: step N progress from <lane>" (through the git hooks; a refused commit or an edited
    plan file leaves the plan untouched). Unsure items (30 to 70 %, or no "What changed" section) stay
