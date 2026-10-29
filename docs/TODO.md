@@ -157,15 +157,19 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Escalado: petición sin respuesta en 10 min → notificación de macOS y opciones para el dueño.
 - [x] Comandos para el dueño como acciones con botón «Run» (confirmación, salida y resultado en la UI).
 - [x] Regla en código: una respuesta con un comando de terminal en el texto se rechaza; hay que usar `--run`.
-- [ ] Todo build y test pasa por `tirith run` (bloqueo en código) y el Overview muestra también los pipelines recién terminados.
+- [x] Todo build y test pasa por `tirith run` (bloqueo en código) y el Overview muestra también los pipelines recién terminados.
 - [ ] Cada lane terminado se revisa por código: tests como pipeline visible, merge automático si pasan, hook que impide al steward terminar con revisiones pendientes, violación a los 30 min.
+- [ ] Todo aviso al dueño tiene al menos una opción o acción (regla en código); los avisos automáticos (guarda, checks) traen su botón.
+- [ ] Botón «Stop» para parar un lane desde la UI.
+- [ ] Vista Pipelines al estilo GitLab: cada ejecución en una fila con sus etapas como círculos, tooltip por etapa y quién la lanzó.
+- [ ] Guarda compatible con hooks existentes (encadenar el `pre-commit` de ChromaSol).
 
 ## 13. Configuración del proyecto visible y editable
 
-- [ ] Tarjeta «Setup» por proyecto: etapas (build / test / deploy) con su último resultado, hooks, reglas y `tirith check`.
-- [ ] Reglas propias en `tirith.toml` (`[[rules]]`), aplicadas por las puertas y validadas por `tirith check`.
-- [ ] Crear etapas y reglas pidiéndolo (chat o formulario «+ Etapa» / «+ Regla»); la UI se actualiza sola.
-- [ ] Aviso con un clic cuando las reglas no están activas en la máquina.
+- [x] Tarjeta «Setup» por proyecto: etapas (build / test / deploy) con su último resultado, hooks, reglas y `tirith check`.
+- [x] Reglas propias en `tirith.toml` (`[[rules]]`), aplicadas por las puertas y validadas por `tirith check`.
+- [x] Crear etapas y reglas pidiéndolo (chat o formulario «+ Etapa» / «+ Regla»); la UI se actualiza sola.
+- [x] Aviso con un clic cuando las reglas no están activas en la máquina.
 
 ## Orden
 
