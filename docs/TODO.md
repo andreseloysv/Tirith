@@ -292,6 +292,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Hacer robusto el test test_context_over_the_limit_compacts_then_restarts_with_a_handoff de test_msession.py, que falla bajo carga porque Rig.until espera 25 s de reloj real (check: `cd collector && uv run pytest tests/test_msession.py -q -k compacts_then_restarts`)
 - [ ] La landing page tiene animaciones al hacer scroll (aparición suave de secciones, capturas y tarjetas) respetando «reducir movimiento». (check: `node web/js/landing.test.mjs`) (en curso: u-scrollfx)
 - [ ] Logo de Tirith en 3D renderizado con Blender y renders 3D en la landing page. (check: `test -f site/img/logo-3d.png`) (en curso: u-render3d)
+- [ ] Registrar en la revisión de una lane la causa cuando se interrumpe (señal o código de salida del proceso), con un test que mata el proceso de la revisión y comprueba la causa registrada. (check: `cd collector && uv run pytest -q -k review_interrupted_records_cause`)
 
 ## 15. Collector y CLI en Rust
 
