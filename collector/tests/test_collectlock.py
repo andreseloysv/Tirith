@@ -73,3 +73,26 @@ def test_sigterm_ends_collector_and_frees_lock(home: Path) -> None:
         if proc.poll() is None:
             proc.kill()
             proc.communicate()
+
+
+def test_second_sigterm_is_silent(home: Path) -> None:
+    import signal
+
+    proc = _collect(home)
+    try:
+        lock = home / "collector.lock"
+        deadline = time.time() + 20
+        while time.time() < deadline and not (lock.exists() and lock.read_text().strip()):
+            time.sleep(0.1)
+        assert lock.read_text().strip() == str(proc.pid)
+        proc.send_signal(signal.SIGTERM)
+        proc.send_signal(signal.SIGTERM)  # uv forwards a second one during shutdown
+        _, err = proc.communicate(timeout=30)
+        assert proc.returncode == 0
+        assert "Exception ignored" not in err and "Traceback" not in err
+        with hold_collector_lock(home):
+            pass
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.communicate()
