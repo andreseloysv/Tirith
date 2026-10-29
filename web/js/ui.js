@@ -223,29 +223,11 @@
   };
 
   /* ---------- Overview ---------- */
-  var RECENT_MS = 30 * 60 * 1000;
-  function runCard(p) {
-    var st = p.stages || [], cur = T.curStage(p);
-    return '<button class="card rcard" data-act="gorun" data-key="' + esc(p.run) + '"><span class="rhead"><b>' + esc(T.runName(p)) + ' <span class="mut">' + esc(T.runNum(p)) + '</span></b><span class="mut">' + esc(T.proj(p.project)) + '</span><span class="rtime">' + T.span(p.started_at, null) + '</span></span>' +
-      '<span class="mini">' + st.map(function (x, i) { return (i ? '<i class="ml ' + (st[i - 1].status === 'passed' ? 'on' : '') + '"></i>' : '') + '<i class="mn ' + esc(x.status) + '" title="' + esc(x.name + ' · ' + x.status) + '"></i>'; }).join('') + '</span>' +
-      '<span class="mcur">' + esc((p.lane && p.lane !== 'steward' ? p.lane + ' · ' : 'manager · ') + (cur ? cur.name : 'running')) + '</span></button>';
-  }
-  function doneRow(p) {
-    var ok = p.status === 'passed', mark = ok ? '✓' : '✗';
-    return '<button class="prow" data-act="gorun" data-key="' + esc(p.run) + '"><i class="pm ' + (ok ? 'ok' : 'bad') + '" title="' + esc(p.status) + '">' + mark + '</i>' +
-      '<b>' + esc(T.runName(p)) + ' <span class="mut">' + esc(T.runNum(p)) + '</span></b><span class="mut sm">' + esc(T.proj(p.project)) + '</span>' +
-      '<span class="pwho">' + esc(p.lane && p.lane !== 'steward' ? p.lane : 'manager') + '</span><span class="rtime">' + esc(T.dur(T.elapsed(p.started_at, p.ended_at))) + '</span></button>';
-  }
+  /* the same compact rows as the Pipelines view; a click opens that run there */
   function pipelinesSection(s, running) {
-    var now = T.now(), recent = (s.pipelines || []).filter(function (p) {
-      var e = T.ms(p.ended_at);
-      return (p.status === 'passed' || p.status === 'failed') && e != null && now - e <= RECENT_MS;
-    }).sort(function (a, b) { return T.ms(b.ended_at) - T.ms(a.ended_at); });
-    var h = '<section><h2>Pipelines <span class="n">' + (running.length + recent.length) + '</span></h2>';
-    if (!running.length && !recent.length) return h + T.empty('No pipelines running or finished in the last 30 minutes') + '</section>';
-    if (running.length) h += '<div class="grid2">' + running.map(runCard).join('') + '</div>';
-    if (recent.length) h += '<div class="plist">' + recent.map(doneRow).join('') + '</div>';
-    return h + '</section>';
+    var h = '<section><h2>Pipelines running <span class="n">' + running.length + '</span></h2>';
+    if (!running.length) return h + T.empty('Nothing is running') + '</section>';
+    return h + '<div class="ptable">' + running.map(function (p) { return T.pipeRow(p, false); }).join('') + '</div></section>';
   }
   function overview(s, el) {
     var runs = (s.pipelines || []).filter(function (p) { return p.status === 'running'; });
@@ -274,12 +256,52 @@
       e.scrollTop = e.hasAttribute('data-anchor') && o['h:' + k] ? o[k] + e.scrollHeight - o['h:' + k] : o[k];
     });
   }
+  /* ---------- typing is never interrupted ----------
+     Every input/textarea/select with a stable key (data-keep, else data-act + data-key + data-field) keeps its focus,
+     caret/selection and scroll across a re-render. A render caused by new state (T.polling) also keeps unsent text
+     that the view did not put there itself. */
+  function keyOf(el) {
+    var k = el.getAttribute('data-keep');
+    if (k) return k;
+    var act = el.getAttribute('data-act');
+    return act ? [act, el.getAttribute('data-key'), el.getAttribute('data-field')].join('|') : el.id || null;
+  }
+  function fields() { return [].slice.call(document.querySelectorAll('#view input, #view textarea, #view select')); }
+  T.keepCapture = function () {
+    var snap = { f: {} }, at = document.activeElement;
+    fields().forEach(function (el) {
+      var k = keyOf(el); if (!k || snap.f[k]) return;
+      var o = { value: el.value, def: el.defaultValue, top: el.scrollTop, focus: el === at };
+      try { o.ss = el.selectionStart; o.se = el.selectionEnd; o.dir = el.selectionDirection; } catch (e) {}
+      snap.f[k] = o;
+    });
+    return snap;
+  };
+  T.keepRestore = function (snap) {
+    if (!snap) return;
+    var focused = null;
+    fields().forEach(function (el) {
+      var k = keyOf(el), o = k && snap.f[k]; if (!o) return;
+      if (T.polling && el.tagName !== 'SELECT' && o.value !== o.def && el.value !== o.value && el.defaultValue === o.def) el.value = o.value;
+      if (o.top && el.scrollTop !== o.top) el.scrollTop = o.top;
+      if (o.focus && !focused) focused = [el, o];
+    });
+    if (!focused) return;
+    var el = focused[0], o = focused[1];
+    if (document.activeElement !== el) { try { el.focus({ preventScroll: true }); } catch (e) { el.focus(); } }
+    if (o.ss != null) { try { el.setSelectionRange(Math.min(o.ss, el.value.length), Math.min(o.se, el.value.length), o.dir || 'none'); } catch (e) {} }
+  };
+  /* a keyed field of the view has the cursor: state-driven renders wait */
+  T.typing = function () {
+    var a = document.activeElement;
+    return !!(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.closest && a.closest('#view') && keyOf(a));
+  };
+
   T.render = function (fstate, rawState) {
     if (rawState) raw = rawState;
     if (fstate) state = fstate;
     if (!state) return;
-    var a = document.activeElement, fk = a && a.getAttribute && [a.getAttribute('data-act'), a.getAttribute('data-key'), a.getAttribute('data-i')];
-    var sc = scrolls();
+    var kept = T.keepCapture(), sc = scrolls();
     common = computeCommon(state);
     renderNav(); renderCrumb();
     var el = document.getElementById('view'); el.className = 'view v-' + T.filter.view;
@@ -292,10 +314,7 @@
       if (rn) rn.scrollIntoView({ block: 'nearest', inline: 'nearest' });
       ui.reveal = null;
     }
-    if (fk && fk[0]) {
-      var q = '[data-act="' + fk[0] + '"]' + (fk[1] ? '[data-key="' + (window.CSS && CSS.escape ? CSS.escape(fk[1]) : fk[1]) + '"]' : '') + (fk[2] != null ? '[data-i="' + fk[2] + '"]' : '');
-      var n = document.querySelector(q); if (n) n.focus();
-    }
+    T.keepRestore(kept);
   };
   T.renderNavOnly = function (r) { raw = r; };
 

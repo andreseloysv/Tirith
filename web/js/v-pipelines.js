@@ -1,5 +1,6 @@
-/* Pipelines view: a run table like GitLab's pipeline list. One row per run, stages as a row of status circles,
-   a tooltip per stage, the stage log one click away. "Retry" and "Run" go through the Setup view's inbox path (data-act="srun"). */
+/* Pipelines view: a compact GitLab-like run list. One ~36 px row per run (Running first, then by day), the stage
+   chips in order with their names, the failing stage named in red. A click opens the run in place (accordion):
+   stages, commands and the last log lines. "Run again" and "Run" go through the Setup view's inbox path (data-act="srun"). */
 (function () {
   var T = window.T, esc = T.esc, ui = T.ui;
   ui.pOpen = ui.pOpen || null;      /* run id whose detail is open below its row */
@@ -45,55 +46,59 @@
     var d = SVG[status];
     return d ? '<svg viewBox="0 0 12 12" width="' + size + '" height="' + size + '" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>' : '';
   }
-  function circle(p, st, i, sel) {
-    return (i ? '<i class="pln ' + (p.stages[i - 1].status === 'passed' ? 'on' : '') + '"></i>' : '') +
-      '<button class="pc22 s-' + esc(st.status) + (sel ? ' sel' : '') + '" data-act="pstage" data-key="' + esc(p.run) + '" data-i="' + i + '" aria-label="' + esc(st.name + ': ' + (LABEL[st.status] || st.status)) + '">' + glyph(st.status, 12) + '</button>';
+  /* the stage mark: ✓ ✗ » ○ and a pulsing dot */
+  function mark(status) {
+    return status === 'running' ? '<i class="pdot"></i>' : status === 'pending' ? '<i class="pring"></i>' : glyph(status, 11);
   }
-
-  function badge(p) {
-    var s = p.status, d = s === 'pending' ? '' : s === 'running' ? T.span(p.started_at, null) : esc(T.dur(T.elapsed(p.started_at, p.ended_at)));
-    return '<span class="pbadge s-' + esc(s) + '">' + glyph(s, 11) + '<span>' + esc(LABEL[s] || T.cap(s)) + '</span>' + (d ? '<span class="pdur">' + d + '</span>' : '') + '</span>';
+  function chip(p, st, i, sel) {
+    return '<button class="pchp s-' + esc(st.status) + (sel ? ' sel' : '') + '" data-act="pstage" data-key="' + esc(p.run) + '" data-i="' + i + '" title="' + esc(st.name + ': ' + (LABEL[st.status] || st.status)) + '">' + mark(st.status) + '<span>' + esc(st.name) + '</span></button>';
   }
-
-  function chip(pid) {
+  function failing(p) {
+    var f = (p.stages || []).filter(function (x) { return x.status === 'failed'; })[0];
+    return f ? '<span class="pfail" title="' + esc(T.errLine(p)) + '">' + (f.reason === 'interrupted' ? 'interrupted at ' : 'failed at ') + '<b>' + esc(f.name) + '</b></span>' : '';
+  }
+  function projChip(pid) {
     var n = T.proj(pid), pr = projectOf(pid);
     return n ? '<span class="pchip"><i style="background:' + esc((pr && pr.color) || '#9aa1ac') + '"></i>' + esc(n) + '</span>' : '';
   }
-
-  function retry(p) {
-    var f = T.curStage(p);
-    if (p.status !== 'failed' || !f || f.status !== 'failed' || p.pipeline === 'git-hooks') return '';
-    var key = p.project + '|' + p.pipeline + '|' + f.name, at = ui.setupPend && ui.setupPend[key + '|run'];
-    var busy = at && T.now() - at < 30000;
-    return '<button class="srun pact' + (busy ? ' busy' : '') + '" data-act="srun" data-key="' + esc(key) + '"' + (busy ? ' disabled' : '') +
-      ' title="Ask the manager to run ' + esc(f.name) + ' again" aria-label="Retry ' + esc(f.name) + '">' + PLAY + '<span>' + (busy ? 'Asked' : 'Retry') + '</span></button>';
-  }
+  function selIndex(p) { return ui.stageSel[p.run] != null ? ui.stageSel[p.run] : T.defaultStage(p); }
 
   function runRow(p, open) {
-    var st = p.stages || [];
+    var st = p.stages || [], si = open ? selIndex(p) : -1, dur = p.status === 'running' ? T.span(p.started_at, null) : esc(T.dur(T.elapsed(p.started_at, p.ended_at)));
     return '<div class="prow2 s-' + esc(p.status) + (open ? ' open' : '') + '" data-run="' + esc(p.run) + '">' +
-      '<span class="pc">' + badge(p) + '</span>' +
-      '<span class="pc pid"><button class="plink" data-act="prun" data-key="' + esc(p.run) + '" aria-expanded="' + !!open + '">' + T.ghMark(p) + esc(T.runName(p)) + ' <span class="mut">' + esc(T.runNum(p)) + '</span></button>' + chip(p.project) + '</span>' +
+      '<span class="pst s-' + esc(p.status) + '" title="' + esc(LABEL[p.status] || p.status) + '">' + (p.status === 'pending' ? '<i class="pring"></i>' : glyph(p.status, 12)) + '</span>' +
+      '<span class="pc pid"><button class="plink" data-act="prun" data-key="' + esc(p.run) + '" aria-expanded="' + !!open + '">' + T.ghMark(p) + esc(T.runName(p)) + ' <span class="mut">' + esc(T.runNum(p)) + '</span></button>' + projChip(p.project) + '</span>' +
       '<span class="pc ptr">' + trigger(p) + '</span>' +
-      '<span class="pc pmini">' + st.map(function (x, i) { return circle(p, x, i, open && (ui.stageSel[p.run] != null ? ui.stageSel[p.run] : T.defaultStage(p)) === i); }).join('') + '</span>' +
-      '<span class="pc pwhen" title="' + esc(T.clockTime(p.started_at)) + '">' + T.agoSpan(p.started_at) + (T.ago(p.started_at) === 'now' ? '' : '<span class="mut"> ago</span>') + '</span>' +
-      '<span class="pc pacts">' + retry(p) + '<button class="pact ghost" data-act="plogs" data-key="' + esc(p.run) + '">Logs</button></span></div>';
+      '<span class="pc pmini">' + st.map(function (x, i) { return chip(p, x, i, i === si); }).join('') + failing(p) + '</span>' +
+      '<span class="pc pdur">' + (p.status === 'pending' ? '' : dur) + '</span>' +
+      '<span class="pc pwhen" title="' + esc(T.clockTime(p.started_at)) + '">' + T.agoSpan(p.started_at) + (T.ago(p.started_at) === 'now' ? '' : '<span class="mut"> ago</span>') + '</span></div>';
+  }
+  T.pipeRow = runRow;
+
+  function runAgain(p, cur) {
+    if (!cur || p.source === 'github' || p.pipeline === 'git-hooks' || !stageCmd(p, cur)) return '';
+    var key = p.project + '|' + p.pipeline + '|' + cur.name, at = ui.setupPend && ui.setupPend[key + '|run'];
+    var busy = at && T.now() - at < 30000;
+    return '<button class="srun pact' + (busy ? ' busy' : '') + '" data-act="srun" data-key="' + esc(key) + '"' + (busy ? ' disabled' : '') +
+      ' title="Ask the manager to run ' + esc(cur.name) + ' again">' + PLAY + '<span>' + (busy ? 'Asked' : 'Run again') + '</span></button>';
   }
 
+  /* the accordion body: the stages (name, command, time, status) and the last log lines of the selected one */
   function detail(p) {
-    var st = p.stages || [], si = ui.stageSel[p.run] != null ? ui.stageSel[p.run] : T.defaultStage(p), cur = st[si] || st[0];
-    if (!cur) return '';
+    var st = p.stages || [], si = selIndex(p), cur = st[si] || st[0];
+    if (!cur) return '<div class="pdet"><p class="quiet">No stages</p></div>';
     var list = st.map(function (x, i) {
-      return '<button class="psl s-' + esc(x.status) + (i === si ? ' on' : '') + '" data-act="pstage" data-key="' + esc(p.run) + '" data-i="' + i + '"><span class="pc22 s-' + esc(x.status) + '">' + glyph(x.status, 12) + '</span>' +
-        '<span class="psn">' + esc(x.name) + '</span><span class="mut sm">' + (T.stageDur(x) || '') + '</span></button>';
+      var cmd = stageCmd(p, x);
+      return '<button class="psl s-' + esc(x.status) + (i === si ? ' on' : '') + '" data-act="pstage" data-key="' + esc(p.run) + '" data-i="' + i + '">' + mark(x.status) +
+        '<span class="psn">' + esc(x.name) + '</span><code class="psc">' + esc(cmd) + '</code><span class="mut sm psd">' + (T.stageDur(x) || '') + '</span>' +
+        '<span class="pstt s-' + esc(x.status) + '">' + esc(x.reason === 'interrupted' ? 'Interrupted' : LABEL[x.status] || x.status) + '</span></button>';
     }).join('');
-    var cmd = stageCmd(p, cur), ran = cur.status !== 'pending' && cur.status !== 'skipped';
-    var desc = T.stageDesc(cur);
-    return '<div class="pdet"><div class="psls">' + list + '</div><div class="pdr"><header><b>' + esc(cur.name) + '</b><span class="pbadge s-' + esc(cur.status) + '">' + glyph(cur.status, 11) + '<span>' + esc(LABEL[cur.status] || cur.status) + '</span></span>' +
-      (T.stageDur(cur) ? '<span class="mut sm">' + T.stageDur(cur) + '</span>' : '') + T.ghLink({ source: p.source, html_url: cur.html_url }) +
-      '<button class="x" data-act="pclose" aria-label="Close">' + T.lineIcon(T.ICON.close, 13, 'currentColor', 2) + '</button></header>' +
-      (cmd ? '<code class="pcmd">' + esc(cmd) + '</code>' : desc ? '<span class="mut sm">' + esc(desc) + '</span>' : '') +
-      (ran ? T.logBox(cur.log_tail) : '<p class="quiet">' + (cur.status === 'skipped' ? 'Skipped, an earlier stage failed' : 'Not run yet') + '</p>') + '</div></div>';
+    var ran = cur.status !== 'pending' && cur.status !== 'skipped';
+    var lines = (cur.log_tail || []).slice(-20);
+    return '<div class="pdet"><div class="psls">' + list + '</div><div class="pdr"><header><b>' + esc(cur.name) + '</b>' +
+      (ran ? '<span class="mut sm">last ' + lines.length + ' log lines</span>' : '') + T.ghLink({ source: p.source, html_url: cur.html_url }) +
+      '<span class="pdacts">' + (ran ? '<button class="pact ghost" data-act="pfull" data-key="' + esc(p.run) + '">Full log</button>' : '') + runAgain(p, cur) + '</span></header>' +
+      (ran ? T.logBox(lines) : '<p class="quiet">' + (cur.status === 'skipped' ? 'Skipped, nothing ran after an earlier stage ended the run' : 'Not run yet') + '</p>') + '</div></div>';
   }
 
   function dayKey(p) { var d = new Date(startMs(p)); return d.getFullYear() * 400 + d.getMonth() * 32 + d.getDate(); }
@@ -105,21 +110,6 @@
       ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getMonth()] + ' ' + d.getDate();
   }
 
-  function summary(runs) {
-    var today = new Date(T.now()).toDateString(), done = runs.filter(function (p) { return p.status === 'passed' || p.status === 'failed'; });
-    var ok = done.filter(function (p) { return p.status === 'passed'; }).length;
-    var secs = done.map(function (p) { return T.elapsed(p.started_at, p.ended_at); }).filter(function (x) { return x != null; }).sort(function (a, b) { return a - b; });
-    var med = secs.length ? (secs.length % 2 ? secs[(secs.length - 1) / 2] : Math.round((secs[secs.length / 2 - 1] + secs[secs.length / 2]) / 2)) : null;
-    var run = runs.filter(function (p) { return p.status === 'running'; }).length;
-    var failed = done.length - ok;
-    function stat(v, l, cls) { return '<div class="pstat ' + (cls || '') + '"><b>' + v + '</b><span>' + l + '</span></div>'; }
-    return '<div class="psum card">' +
-      stat(runs.filter(function (p) { return new Date(startMs(p)).toDateString() === today; }).length, 'runs today') +
-      stat(done.length ? Math.round(100 * ok / done.length) + '%' : '-', 'pass rate' + (failed ? ' · ' + failed + ' failed' : ''), failed ? 'bad' : 'good') +
-      stat(med == null ? '-' : esc(T.dur(med)), 'median duration') +
-      stat(run, 'running now', run ? 'live' : '') + '</div>';
-  }
-
   /* declared in tirith.toml, never run: a Run button per stage (the Setup view's inbox path) */
   function never(list) {
     if (!list.length) return '';
@@ -129,7 +119,7 @@
         return '<li class="schip none"><span class="sname">' + esc(s.name) + '</span>' + (cmd ? '<code title="' + esc(cmd) + '">' + esc(cmd) + '</code>' : '') +
           (cmd ? '<button class="srun' + (busy ? ' busy' : '') + '" data-act="srun" data-key="' + esc(key) + '"' + (busy ? ' disabled' : '') + ' aria-label="Run ' + esc(s.name) + '">' + PLAY + '<span>' + (busy ? 'Asked' : 'Run') + '</span></button>' : '') + '</li>';
       }).join('');
-      return '<div class="pnrow"><span class="pnname"><b>' + esc(T.runName(p)) + '</b>' + chip(p.project) + '</span><ul class="schips">' + chips + '</ul></div>';
+      return '<div class="pnrow"><span class="pnname"><b>' + esc(T.runName(p)) + '</b>' + projChip(p.project) + '</span><ul class="schips">' + chips + '</ul></div>';
     }).join('') + '</section>';
   }
 
@@ -147,6 +137,12 @@
     return out;
   }
 
+  function group(title, rows) {
+    return '<h3 class="pday">' + esc(title) + ' <span class="n">' + rows.length + '</span></h3>' + rows.map(function (p) {
+      return runRow(p, ui.pOpen === p.run) + (ui.pOpen === p.run ? detail(p) : '');
+    }).join('');
+  }
+
   function view(s, el) {
     var all = (s.pipelines || []).slice().sort(function (a, b) { return startMs(b) - startMs(a); });
     if (!all.length) { el.innerHTML = '<div class="pad">' + T.empty('No pipelines in this session') + '</div>'; return; }
@@ -156,60 +152,39 @@
       if (op) (op.stages || []).forEach(function (x, i) { if (x.name === ui.pOpenStage) ui.stageSel[op.run] = i; });
       ui.pOpenStage = null;
     }
-    var h = '', last = null;
-    runs.forEach(function (p) {
+    var live = runs.filter(function (p) { return p.status === 'running'; }), h = '', last = null, bucket = [];
+    function flush() { if (bucket.length) h += group(dayLabel(bucket[0]), bucket); bucket = []; }
+    if (live.length) h += group('Running', live);
+    runs.filter(function (p) { return p.status !== 'running'; }).forEach(function (p) {
       var k = dayKey(p);
-      if (k !== last) {
-        last = k;
-        h += '<h3 class="pday">' + esc(dayLabel(p)) + ' <span class="n">' + runs.filter(function (x) { return dayKey(x) === k; }).length + '</span></h3>';
-      }
-      var open = ui.pOpen === p.run;
-      h += runRow(p, open) + (open ? detail(p) : '');
+      if (k !== last) { flush(); last = k; }
+      bucket.push(p);
     });
-    el.innerHTML = '<div class="pgl" data-scroll="pgl">' + summary(runs) + notices(all) +
-      (runs.length ? '<div class="ptable"><div class="phead"><span>Status</span><span>Run</span><span>Triggered by</span><span>Stages</span><span>Started</span><span></span></div>' + h + '</div>'
-        : '<div class="pad">' + T.empty('No runs yet') + '</div>') + never(pend) + '</div>';
+    flush();
+    el.innerHTML = '<div class="pgl" data-scroll="pgl">' + notices(all) +
+      (runs.length ? '<div class="ptable">' + h + '</div>' : '<div class="pad">' + T.empty('No runs yet') + '</div>') + never(pend) + '</div>';
+    var full = ui.drawer === 'pfull' && ui.pFull && all.filter(function (p) { return p.run === ui.pFull; })[0];
+    if (full) {
+      var cur = (full.stages || [])[selIndex(full)];
+      if (cur) el.insertAdjacentHTML('beforeend', T.drawer(T.runName(full) + ' ' + T.runNum(full) + ' · ' + cur.name, T.logBox(cur.log_tail)));
+    }
   }
   T.views.pipelines = view;
 
-  /* ---------- tooltip: one floating box, placed by script so no scroll area clips it ---------- */
-  var tip = null;
-  function showTip(b) {
-    var run = b.getAttribute('data-key'), i = +b.getAttribute('data-i');
-    var p = (raw().pipelines || []).filter(function (x) { return x.run === run; })[0], st = p && p.stages[i];
-    if (!st) return;
-    var cmd = stageCmd(p, st), d = T.stageSecs(st), lines = st.status === 'failed' ? (st.log_tail || []).map(T.stripAnsi).filter(function (x) { return String(x).trim(); }).slice(-3) : [];
-    if (!tip) { tip = document.createElement('div'); tip.className = 'ptip'; tip.setAttribute('role', 'tooltip'); document.body.appendChild(tip); }
-    tip.innerHTML = '<div class="pth">Stage: ' + esc(st.name) + '</div>' + (cmd ? '<code class="ptc">' + esc(cmd) + '</code>' : '') +
-      '<div class="ptl"><span class="pc22 s-' + esc(st.status) + '">' + glyph(st.status, 12) + '</span>' + esc(st.name) + ': ' + esc((LABEL[st.status] || st.status).toLowerCase()) + (d != null && st.status !== 'pending' && st.status !== 'skipped' ? ' · ' + esc(T.dur(d)) : '') + '</div>' +
-      (lines.length ? '<pre class="ptlog">' + esc(lines.join('\n')) + '</pre>' : '');
-    tip.style.display = 'block';
-    var r = b.getBoundingClientRect(), w = tip.offsetWidth, ht = tip.offsetHeight;
-    var x = Math.max(8, Math.min(window.innerWidth - w - 8, r.left + r.width / 2 - w / 2));
-    var y = r.bottom + 8 + ht > window.innerHeight - 8 ? r.top - ht - 8 : r.bottom + 8;
-    tip.style.left = x + 'px'; tip.style.top = Math.max(8, y) + 'px';
-  }
-  function hideTip() { if (tip) tip.style.display = 'none'; }
+  /* ---------- clicks: a row (opens in place, one at a time), a stage, Full log, close ---------- */
   var v = document.getElementById('view');
-  v.addEventListener('mouseover', function (e) { var b = e.target.closest && e.target.closest('.pmini [data-act="pstage"]'); if (b) showTip(b); });
-  v.addEventListener('mouseout', function (e) { if (e.target.closest && e.target.closest('.pmini [data-act="pstage"]')) hideTip(); });
-  v.addEventListener('focusin', function (e) { var b = e.target.closest && e.target.closest('.pmini [data-act="pstage"]'); if (b) showTip(b); });
-  v.addEventListener('focusout', hideTip);
-
-  /* ---------- clicks: a row, a circle, Logs, close ---------- */
-  function go() { hideTip(); T.setFilter('view', 'pipelines'); }
+  function go() { T.setFilter('view', 'pipelines'); }
   v.addEventListener('click', function (e) {
     var b = e.target.closest('[data-act]'), row = e.target.closest('.prow2'), act = b && b.getAttribute('data-act'), key = b && b.getAttribute('data-key');
-    if (!row && act !== 'pclose' && act !== 'pstage' && act !== 'pdismiss') return;
+    if (!row && act !== 'pstage' && act !== 'pdismiss' && act !== 'pfull') return;
     if (act === 'pstage') { ui.pOpen = key; ui.stageSel[key] = +b.getAttribute('data-i'); ui.drawer = null; }
-    else if (act === 'plogs') { ui.pOpen = key; delete ui.stageSel[key]; }
-    else if (act === 'pclose') ui.pOpen = null;
+    else if (act === 'pfull') { ui.pFull = key; ui.drawer = 'pfull'; }
     else if (act === 'pdismiss') { ui.setupCli[key] = null; ui.setupErr[key] = null; }
-    else if (act === 'prun' || (!b && row && !e.target.closest('a'))) { var rk = row.getAttribute('data-run'); ui.pOpen = ui.pOpen === rk ? null : rk; }
+    else if (act === 'prun' || (!b && row && !e.target.closest('a'))) { var rk = row.getAttribute('data-run'); ui.pOpen = ui.pOpen === rk ? null : rk; ui.drawer = null; }
     else return;
     go();
   });
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && ui.pOpen && T.filter.view === 'pipelines' && !/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName)) { ui.pOpen = null; go(); }
+    if (e.key === 'Escape' && ui.pOpen && !ui.drawer && T.filter.view === 'pipelines' && !/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName)) { ui.pOpen = null; go(); }
   });
 })();

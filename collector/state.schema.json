@@ -920,6 +920,7 @@
         "log_tail"
       ],
       "properties": {
+        "reason": {"type": ["string", "null"]},
         "name": {
           "type": "string"
         },
