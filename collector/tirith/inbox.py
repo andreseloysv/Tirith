@@ -18,7 +18,7 @@ from tirith.home import now_iso
 from tirith.store import append_jsonl, read_jsonl
 
 INBOX_FILE = "inbox.jsonl"
-KINDS = ("finish", "ask", "setup")
+KINDS = ("finish", "ask", "setup", "chat")
 MODELS_ACTIONS = ("models-set", "apply-manager")  # the Settings page; the request's project is "settings"
 SETUP_ACTIONS = ("add-stage", "add-rule", "remove-stage", "remove-rule", "run-stage") + MODELS_ACTIONS
 SETUP_STEP = "setup"
@@ -49,7 +49,7 @@ def new_id() -> str:
 # -- writing ----------------------------------------------------------------------------------
 
 
-def add_request(home: Path, kind: str, project: str, step: str, text: str = "",
+def add_request(home: Path, kind: str, project: str = "", step: str = "", text: str = "",
                 at: str | None = None) -> dict:
     """Append an open request and return its row."""
     if kind not in KINDS:
@@ -58,7 +58,10 @@ def add_request(home: Path, kind: str, project: str, step: str, text: str = "",
     if kind == "setup":
         step = step or SETUP_STEP
         text = json.dumps(parse_setup(text), ensure_ascii=False, separators=(",", ":"))
-    if not project or not step:
+    if kind == "chat":
+        if not text:
+            raise InboxError("a chat message needs text")
+    elif not project or not step:
         raise InboxError("a request needs a project and a step")
     if kind == "ask" and not text:
         raise InboxError("a question needs text")

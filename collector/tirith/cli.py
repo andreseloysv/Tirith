@@ -1661,7 +1661,7 @@ def build_parser() -> argparse.ArgumentParser:
     inbox_sub = inbox.add_subparsers(dest="inbox_command", required=True)
     i_add = inbox_sub.add_parser("add", parents=[common], help="add a request (prints its id)")
     i_add.add_argument("--kind", required=True, choices=inbox_mod.KINDS)
-    i_add.add_argument("--project", required=True)
+    i_add.add_argument("--project", default="", help="required, except for a chat message")
     i_add.add_argument("--step", default=None, help="roadmap step number (not for setup)")
     i_add.add_argument("--text", default=None,
                        help="the question (required for ask); for setup the request as JSON, see CONTRACT-setup")

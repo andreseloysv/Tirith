@@ -35,12 +35,23 @@ left out), `text` is a JSON object `{"action": "add-stage" | "remove-stage" | "a
 object as `setup`. The manager handles one with `tirith setup apply <id>`: it edits `tirith.toml` (or runs
 the stage), answers and closes the request.
 
+### Kind `chat`
+
+The owner's conversation with the manager (the Overview's chat panel). `{id, at, kind: "chat", project, step: "",
+text (markdown), from: "owner", status}`: `project` is optional (empty = about nothing in particular), there is
+no step, `text` is required. It is `manager_pending` until the manager answers (a brain or Tirith answer does
+not clear it), and again after the owner runs one of the manager's Run `actions` until the manager answers the
+result, like every other kind. The dispatcher adds no flow for it (the thread is the chat) and, when the
+manager stays silent, its escalation offers no "Start an agent". Answers are the usual answer rows (`by:
+"manager"`, markdown, optional `actions`); `tirith inbox answer <id> ...` is unchanged.
+
 ## CLI
 
 | Command | Does |
 |---|---|
 | `tirith inbox add --kind finish\|ask\|setup --project P --step N [--text T]` | appends a request, prints its id |
 | `tirith inbox add --kind finish\|ask\|setup --project P [--step N] [--text T]` | appends a request, prints its id (`--step` is for plan steps; a `setup` request takes its JSON as `--text`) |
+| `tirith inbox add --kind chat [--project P] --text T` | appends a chat message (`--project` and `--step` optional) |
 | `tirith inbox list [--open] [--json]` | lists requests (`--open`: only those with no answer and not done) |
 | `tirith inbox answer <id> "<markdown>" [--by manager\|brain] [--lane L]` | appends an answer (default `manager`, `auto: false`); `--lane` names the agent that has the request |
 | `tirith inbox done <id>` | closes the request |
@@ -90,6 +101,20 @@ the agents on that step (goal, what they are doing now, last tests, files), the 
 project, and the question. A manager answer within the 120 s means the brain never runs. Failed calls are
 retried at most every 5 minutes. Brain disabled: nothing happens. With the dispatcher on (the default) the brain
 answers an `ask` in the first cycle, not after 120 s.
+
+## Web (`web/js/v-manager.js`): chat with the manager
+
+- The Overview's right column is the chat "Manager" (it replaces Activity, whose flows stay in the Flow view).
+  From every other view a **Chat** button in the header opens the same panel as a drawer.
+- One thread built only from `state.inbox`, oldest first with the newest at the bottom: the owner's chat
+  messages (right, blue), the questions and "Finish this step" requests of the Plan, and every answer to them
+  (left, rendered markdown, who answered and when, Run `actions` under the answer through `T.actions`).
+- While a chat, ask or finish request is `manager_pending`: "Manager is typing…" with the seconds waited.
+- Composer: Enter sends, Shift+Enter is a new line, an optional project chip (default: the sidebar's project
+  filter). Sending: `window.__TAURI__` -> `inbox_add` (kind `chat`); else, with the link handler installed, the
+  `tirith://inbox?kind=chat&project=..&step=&text=..&token=..` link; else the `tirith inbox add --kind chat ...`
+  line is shown to copy. A sent message shows (dimmed) until the collector lists it, at most 30 s.
+- The old feature-flagged agent chat (`web/js/v-chat.js`, Tauri only) stays behind its flag, labelled "Agent chat".
 
 ## Web (`web/js/v-plan.js`)
 
