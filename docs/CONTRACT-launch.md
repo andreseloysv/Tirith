@@ -56,6 +56,8 @@ launch = "muse run {brief}"                              # used with --agent mus
 
 `{brief}` and `{workspace}` are replaced by the brief file and the worktree. `--agent <alias>` uses that
 alias's `launch` template and falls back to `[launch] command`. Agents are named by alias only.
+When `[models.workers]` sets a model or effort (`docs/CONTRACT-models.md`), the model and effort flags of
+the command are replaced by the configured ones.
 
 ## The link handler (macOS)
 

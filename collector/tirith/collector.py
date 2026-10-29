@@ -34,6 +34,7 @@ from tirith import dispatch as dispatch_mod
 from tirith import actions as actions_mod
 from tirith import inbox as inbox_mod
 from tirith import launch as launch_mod
+from tirith import models as models_mod
 from tirith import review as review_mod
 from tirith.logview import entries_from_events, log_entries
 from tirith import projects as projects_mod
@@ -856,6 +857,7 @@ class Collector:
             log_view = log_entries(lane.get("log"), lane.get("workspace")) \
                 or entries_from_events(act["events"], lane.get("workspace"))
             renown = int(identity.get("renown") or 0)
+            usage = self._usage(lane, ended is not None)
             # Summary first: it may upgrade the epithet on the identity.
             spoken = say_summary(log_view, None if status in ("working", "stalled") else lane.get("report"))
             summary = spoken or self._summary_for(lane, status, log_tail, now, identity)
@@ -874,7 +876,8 @@ class Collector:
                 "log_entries": log_view,
                 "files_changed": files, "insertions": insertions, "deletions": deletions,
                 "report": _bounded_report(lane.get("report")),
-                "usage": self._usage(lane, ended is not None),
+                "usage": usage,
+                "ran": models_mod.ran_with(lane, usage),
                 "diff": self._diff(lane),
                 "request": lane.get("request") if isinstance(lane.get("request"), dict) else None,
                 "parent": str(lane.get("parent") or "steward"),
@@ -1045,6 +1048,9 @@ class Collector:
             "inbox": inbox_rows,
             "launch": {"token": launch_mod.launch_token(self.home),
                        "available": launch_mod.handler_installed()},
+            "models": models_mod.state(self.config, [
+                inbox_mod.setup_summary(r["setup"]) for r in setup_requests
+                if r["project"] == "settings" and r["status"] == "open" and r.get("setup")]),
         }
 
     def _inbox(self, projects: list[dict], agents: list[dict], flows: list[dict],
