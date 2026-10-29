@@ -215,3 +215,31 @@ def test_url_commands_use_apps_dir(tmp_path: Path, capsys) -> None:
     assert main(["url", "verify", "--apps-dir", str(apps)]) == 1
     assert main(["url", "uninstall", "--apps-dir", str(apps)]) == 0
     assert "was not installed" in capsys.readouterr().out
+
+
+def _handler_command(home: Path, url: str) -> str:
+    """The shell command the handler app runs for ``url`` (what AppleScript's `do shell script` receives)."""
+    import re
+    import shlex
+    script = launch_mod.applescript(str(home))
+    prefix = re.search(r'do shell script "(.*)" & quoted form', script).group(1)
+    prefix = prefix.replace('\\"', '"').replace("\\\\", "\\")
+    return prefix + shlex.quote(url)
+
+
+def test_handler_command_runs_url_open_end_to_end(project, home: Path) -> None:
+    """The link goes through the shell as the handler app sends it (`&` in the URL, quoting, TIRITH_HOME).
+
+    A wrong token keeps it harmless: nothing is launched, the refusal is recorded.
+    """
+    import os
+    import subprocess
+    _, started = project
+    launch_mod.launch_token(home)
+    url = launch_mod.build_url("demo", "2", "wrong-token")
+    assert "&" in url
+    env = dict(os.environ, TIRITH_HOME=str(home))
+    done = subprocess.run(["/bin/sh", "-c", _handler_command(home, url)], capture_output=True, text=True, env=env)
+    assert done.returncode == 3 and "token" in done.stderr
+    rows = [r for r in read_jsonl(home / "events.jsonl") if r.get("kind") == "violation"]
+    assert rows and rows[-1]["rule"] == "launch-token" and started == []
