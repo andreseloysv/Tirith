@@ -1477,6 +1477,21 @@ def _cmd_plan_add(args) -> int:
     return 0
 
 
+def _cmd_plan_done(args) -> int:
+    home = _home(args)
+    repo = plangate_mod.repo_of(home, args.project)
+    if repo is None:
+        print(f"tirith plan done: unknown project '{args.project}'", file=sys.stderr)
+        return 3
+    try:
+        sha = plangate_mod.mark_done(home, repo, args.project, str(args.step), args.item, args.commit)
+    except plangate_mod.PlanGateError as error:
+        print(f"tirith plan done: {error}", file=sys.stderr)
+        return 3
+    print(f"step {args.step}: ticked (hecho: {sha})")
+    return 0
+
+
 def _cmd_plan_report(args) -> int:
     home = _home(args)
     lane_id = args.lane or os.environ.get("TIRITH_LANE")
@@ -2398,6 +2413,13 @@ def build_parser() -> argparse.ArgumentParser:
     pl_rep.add_argument("--add", action="append", default=[], help="a new item for the same step (repeatable)")
     pl_rep.add_argument("--reason", default=None, help="why (needed for blocked)")
     pl_rep.set_defaults(func=_cmd_plan_report)
+    pl_done = plan_sub.add_parser("done", parents=[common],
+                                  help="tick an item whose work is already on main (the manager names the commit)")
+    pl_done.add_argument("--project", required=True)
+    pl_done.add_argument("--step", required=True, help="step number")
+    pl_done.add_argument("--item", required=True, help="the exact text of the item")
+    pl_done.add_argument("--commit", required=True, help="the commit on main that did the work")
+    pl_done.set_defaults(func=_cmd_plan_done)
 
     inbox = sub.add_parser("inbox", parents=[common], help="the owner's requests on plan steps")
     inbox_sub = inbox.add_subparsers(dest="inbox_command", required=True)
