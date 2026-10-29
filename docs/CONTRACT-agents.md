@@ -28,8 +28,21 @@ verbose, accept-edits, allowed-tools list (comma separated), `--model`, `--effor
 `muse` = its `exec --json` subcommand and `--model` only; `codex` = `exec --json --sandbox
 workspace-write`, `--model`, `--add-dir`; `copilot` = `--output-format json --no-ask-user`, an
 `--allow-tool` list (one flag, many values), `--model`, `--add-dir`, prompt via `-p`. The `codex` and
-`copilot` flags come from each CLI's help and are not yet confirmed by a real `lane run` (owner: run one
-per alias and check the JSON log, usage and permissions). An unsupported option (for example `--effort`
+`copilot` flags were checked against each CLI's real help, read through `tirith lane run -- codex exec
+--help` / `-- copilot --help` (`copilot` also takes `--reasoning-effort`; `codex` has no effort flag, it
+only accepts `-c model_reasoning_effort=...`). Both CLIs must be logged in for the user running the lane
+(a `401` from `codex` or "No authentication information found" from `copilot` is a login problem, not a
+preset problem). `copilot --allow-all-tools` is documented as required for non-interactive mode; the
+preset uses the `--allow-tool` list instead and that is unconfirmed (owner: run one tiny task per alias
+and check the JSON log, usage and permissions). Config needed for each:
+
+```toml
+[agents.codex]
+command = "codex"
+
+[agents.copilot]
+command = "copilot"
+``` An unsupported option (for example `--effort`
 for `muse`) exits with an error. Order: executable, args, model, effort, permissions, extra dirs,
 prompt (last).
 
