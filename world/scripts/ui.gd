@@ -335,7 +335,7 @@ func _show_beacon(payload: Dictionary, state: TirithState) -> void:
 
 
 func _show_board(steward: Dictionary, _state: TirithState) -> void:
-	_title.text = "%s, %s" % [str(steward.get("name", "The Steward")), str(steward.get("title", ""))]
+	_title.text = "%s, %s" % [str(steward.get("name", "The Manager")), str(steward.get("title", ""))]
 	_subtitle.text = "On the tower balcony"
 	var body: String = "[b]Right now[/b]\n%s\n(since %s)\n\n[b]Recent notes[/b]\n" % [
 		esc(str(steward.get("activity", ""))), str(steward.get("since", "?"))]

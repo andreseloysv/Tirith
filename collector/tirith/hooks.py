@@ -177,8 +177,8 @@ def record(home: Path, agent: str, payload, event: str | None = None) -> dict:
     return row
 
 
-def _steward_inbox(agent: str, event: dict, home: Path, environ=None) -> int:
-    """Hold the steward session to the inbox (``tirith.dispatch``); other sessions are never touched.
+def _manager_inbox(agent: str, event: dict, home: Path, environ=None) -> int:
+    """Hold the manager session to the inbox (``tirith.dispatch``); other sessions are never touched.
 
     ``SessionStart`` / ``UserPromptSubmit``: the pending requests as ``additionalContext``. ``Stop``: exit 2
     with the list on stderr while a request older than 60 s is unanswered (3 blocks at most per set)."""
@@ -187,17 +187,17 @@ def _steward_inbox(agent: str, event: dict, home: Path, environ=None) -> int:
         return 0
     env = os.environ if environ is None else environ
     config = load_config(home)
-    if not config.dispatch_enabled or not dispatch.is_steward(config, env, event.get("cwd")):
+    if not config.dispatch_enabled or not dispatch.is_manager(config, env, event.get("cwd")):
         return 0
     now = datetime.now(timezone.utc)
     if name == "Stop":
-        reason = dispatch.steward_stop(home, now)
+        reason = dispatch.manager_stop(home, now)
         if reason is None:
             return 0
         dispatch.record_event(home, name, reason, event.get("ts") or now_iso())
         print(reason, file=sys.stderr)
         return 2
-    text = dispatch.steward_context(home, now)
+    text = dispatch.manager_context(home, now)
     if text:
         dispatch.record_event(home, name, text, event.get("ts") or now_iso())
         print(json.dumps({"hookSpecificOutput": {"hookEventName": name, "additionalContext": text}}))
@@ -211,7 +211,7 @@ def decide(agent: str, event: dict, payload, home: Path | None = None) -> int:
     in config.toml switches this off; no environment variable does.
     """
     if home is not None and event.get("event") != "PreToolUse":
-        return _steward_inbox(agent, event, home)
+        return _manager_inbox(agent, event, home)
     if event.get("event") != "PreToolUse" or home is None:
         return 0
     config = load_config(home)
@@ -259,6 +259,7 @@ def default_settings(agent: str, agents: dict | None = None) -> Path:
 
 
 def hook_command(agent: str, event: str, tirith: str = "tirith", role: str | None = None) -> str:
+    role = "manager" if role == "steward" else role
     prefix = f"{dispatch.ROLE_ENV}={shlex.quote(role)} " if role else ""
     return f"{prefix}{shlex.quote(tirith)} hook --agent {shlex.quote(agent)} --event {shlex.quote(event)}"
 
@@ -280,7 +281,7 @@ def install(agent: str, settings: Path | None = None, tirith: str = "tirith",
             agents: dict | None = None, role: str | None = None) -> Path:
     """Add our hook entries to the user settings, keeping everything else; idempotent.
 
-    ``role="steward"`` writes ``TIRITH_ROLE=steward`` into each command (the steward's own settings)."""
+    ``role="manager"`` writes ``TIRITH_ROLE=manager`` into each command (the manager's own settings)."""
     path = Path(settings) if settings else default_settings(agent, agents)
     data = _load_settings(path, agent)
     hooks = data.setdefault("hooks", {})

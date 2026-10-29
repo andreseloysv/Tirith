@@ -171,7 +171,7 @@ def map_pr(slug: str, project: str, pr: dict, checks: list[dict], files: list[di
         "summary": summary, "log_tail": [], "log_entries": [],
         "files_changed": len(rows), "insertions": sum(r["insertions"] for r in rows),
         "deletions": sum(r["deletions"] for r in rows), "report": None, "request": None,
-        "parent": "steward", "step": None, "goal": None, "active": status == "working",
+        "parent": "manager", "step": None, "goal": None, "active": status == "working",
         "last_activity_at": pr.get("updated_at"), "files": rows, "tools": [], "tests": [],
         "events": [], "source": "github", "html_url": pr.get("html_url"),
     }

@@ -1,6 +1,6 @@
 """Information flows: who passed what to whom (``flows.jsonl`` -> ``flows`` in state.json).
 
-Endpoints: ``steward``, ``owner``, ``guard``, ``agent:<lane-id>``, ``room:<room-id>``,
+Endpoints: ``manager`` (``steward`` in old rows), ``owner``, ``guard``, ``agent:<lane-id>``, ``room:<room-id>``,
 ``pipeline:<run>``. See ``docs/CONTRACT-flows.md``.
 """
 
@@ -16,7 +16,13 @@ KINDS = ("brief", "message", "report", "request", "answer", "decision", "merge",
 STATE_FLOWS = 100
 MAX_TEXT = 300
 MAX_WHY = 600
-_ENDPOINT_RE = re.compile(r"^(steward|owner|guard|tirith|brain|(agent|room|pipeline):.+)$")
+_ENDPOINT_RE = re.compile(r"^(manager|steward|owner|guard|tirith|brain|(agent|room|pipeline):.+)$")
+
+
+def _endpoint(value) -> str:
+    """An endpoint id as stored; the old ``steward`` reads as ``manager``."""
+    value = str(value or "")
+    return "manager" if value == "steward" else value
 
 
 def valid_endpoint(value: str) -> bool:
@@ -67,9 +73,9 @@ def first_line(text: str | None) -> str:
 
 
 def endpoint_name(endpoint: str, agents: dict[str, str]) -> str:
-    """Display name: hero name, The Steward, You, a room id or a run id."""
-    if endpoint == "steward":
-        return "The Steward"
+    """Display name: hero name, The Manager, You, a room id or a run id."""
+    if endpoint in ("manager", "steward"):
+        return "The Manager"
     if endpoint == "owner":
         return "You"
     if endpoint == "guard":
@@ -84,7 +90,7 @@ def endpoint_name(endpoint: str, agents: dict[str, str]) -> str:
     return ident
 
 
-def flows_state(home: Path, agents: dict[str, str], steward_name: str | None = None,
+def flows_state(home: Path, agents: dict[str, str], manager_name: str | None = None,
                 projects: dict[str, str] | None = None, limit: int | None = STATE_FLOWS) -> list[dict]:
     """The last flows with resolved names (malformed rows are skipped).
 
@@ -93,7 +99,7 @@ def flows_state(home: Path, agents: dict[str, str], steward_name: str | None = N
     projects = projects or {}
     out: list[dict] = []
     for row in read_jsonl(Path(home) / "flows.jsonl"):
-        src, dst = str(row.get("from") or ""), str(row.get("to") or "")
+        src, dst = _endpoint(row.get("from")), _endpoint(row.get("to"))
         if not (valid_endpoint(src) and valid_endpoint(dst)) or not row.get("id"):
             continue
         kind = str(row.get("kind") or "message")

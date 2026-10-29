@@ -117,21 +117,18 @@ def test_the_review_is_a_visible_pipeline_run_tagged_with_the_lane(env, home: Pa
     assert review_mod.public(lane, env)["run"] == lane["review"]["run"]
 
 
-def test_failing_tests_do_not_merge_and_ask_the_owner(env, home: Path) -> None:
+def test_failing_tests_do_not_merge_and_go_to_the_manager(env, home: Path) -> None:
     repo = env
     _lane(home, repo, ok=False)
     spawn = Spawner(home, repo)
     cycle(home, spawn)
     cycle(home, spawn)
     assert not (repo / "feature.txt").exists() and launch_mod.worktree_path(repo, "web-panel").is_dir()
-    (item,) = [i for i in owner_items(home) if i["id"].startswith("review-web-panel")]
-    labels = [a["label"] for a in item["actions"]]
-    assert labels == ["Retry the review", "Start an agent to fix it", "Show the log", "Drop the lane"]
-    assert item["actions"][0]["command"] == "tirith lane review web-panel"
-    assert item["actions"][3]["command"] == "tirith lane drop web-panel"
+    assert not [i for i in owner_items(home) if i["id"].startswith("review-web-panel")]  # not the owner's job
     assert len(spawn.calls) == 1
     (queued,) = asks_mod.queue_items(home, only_open=True)
-    assert queued["lane"] == "web-panel"  # stays open for the steward
+    assert queued["lane"] == "web-panel"
+    assert "tirith lane review web-panel" in queued["text"] and "tirith lane drop web-panel" in queued["text"]
 
 
 def test_a_retry_that_passes_is_settled_too(env, home: Path) -> None:
@@ -144,8 +141,7 @@ def test_a_retry_that_passes_is_settled_too(env, home: Path) -> None:
     assert main(["lane", "review", "web-panel"]) == 0  # the owner's "Retry the review"
     cycle(home, spawn)
     assert asks_mod.queue_items(home, only_open=True) == []
-    rows = [r for r in owner_items(home) if r["id"].startswith("review-web-panel")]
-    assert rows[-1]["done_at"]
+    assert not [r for r in owner_items(home) if r["id"].startswith("review-web-panel")]
 
 
 def test_auto_merge_off_only_tests_and_offers_merge_or_drop(env, home: Path) -> None:
@@ -251,20 +247,20 @@ def test_stop_is_blocked_by_an_old_review_item_three_times_then_a_violation(home
     now = datetime(2026, 10, 29, 12, 0, tzinfo=timezone.utc)
     item = _queue(home, now - timedelta(seconds=90))
     for block in (1, 2, 3):
-        reason = dispatch_mod.steward_stop(home, now)
+        reason = dispatch_mod.manager_stop(home, now)
         assert f"block {block} of 3" in reason
         assert "tirith lane review web-panel" in reason and f"tirith queue done {item['id']}" in reason
-    assert dispatch_mod.steward_stop(home, now) is None
+    assert dispatch_mod.manager_stop(home, now) is None
     assert [e["rule"] for e in read_jsonl(home / "events.jsonl") if e.get("kind") == "violation"] == ["inbox-ignored"]
 
 
 def test_a_young_or_closed_review_item_does_not_block(home: Path) -> None:
     now = datetime(2026, 10, 29, 12, 0, tzinfo=timezone.utc)
     item = _queue(home, now - timedelta(seconds=20))
-    assert dispatch_mod.steward_stop(home, now) is None
+    assert dispatch_mod.manager_stop(home, now) is None
     later = now + timedelta(seconds=120)
     asks_mod.queue_done(home, item["id"], "merged")
-    assert dispatch_mod.steward_stop(home, later) is None
+    assert dispatch_mod.manager_stop(home, later) is None
 
 
 # -- 4. the deadline ---------------------------------------------------------------------------
@@ -283,8 +279,8 @@ def test_a_lane_unreviewed_for_half_an_hour_is_a_violation_once(env, home: Path)
     events = [e for e in read_jsonl(home / "events.jsonl") if e.get("rule") == "review-overdue"]
     assert len(events) == 1 and events[0]["lane"] == "web-panel"
     assert len(notified) == 1 and "web-panel" in notified[0]
-    (item,) = [i for i in owner_items(home) if i["id"] == "review-overdue-web-panel"]
-    assert [a["label"] for a in item["actions"]] == ["Review it now", "Drop the lane"]
+    assert not [i for i in owner_items(home) if i["id"] == "review-overdue-web-panel"]  # the manager's job
+    assert [i for i in asks_mod.queue_items(home, only_open=True) if "unmerged work" in i["text"]]
 
 
 def test_a_merged_lane_is_never_overdue(env, home: Path) -> None:

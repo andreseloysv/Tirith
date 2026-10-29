@@ -23,12 +23,12 @@ refuse an unknown one. Nothing runs without the owner's click.
 
 ```json
 {"id": "ac-5e1a0001", "label": "Install the link handler", "command": "uv run tirith url install",
- "cwd": "~/DEVELOP/Tirith/collector", "created_by": "steward", "at": "2026-10-28T19:41:00Z"}
+ "cwd": "~/DEVELOP/Tirith/collector", "created_by": "manager", "at": "2026-10-28T19:41:00Z"}
 ```
 
 `id` is `ac-` plus 8 hex digits; `label` (at most 120 characters) defaults to the command's first line;
 `command` is at most 2000 characters; `cwd` is optional (default: the project's folder, else the user's
-home); `created_by` is the answerer (`steward`, `brain`).
+home); `created_by` is the answerer (`manager`, `brain`).
 
 ## Run rows
 

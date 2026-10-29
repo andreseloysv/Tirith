@@ -59,10 +59,10 @@ def _register(home: Path, lane_id: str) -> dict:
                          feature=lane_id, workspace=None, log=None, pid=None, brief=None)
 
 
-def test_parent_defaults_to_steward(home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_parent_defaults_to_manager(home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("TIRITH_LANE", raising=False)
-    assert _register(home, "top")["parent"] == "steward"
-    assert read_json(home / "lanes" / "top.json", {})["parent"] == "steward"
+    assert _register(home, "top")["parent"] == "manager"
+    assert read_json(home / "lanes" / "top.json", {})["parent"] == "manager"
 
 
 def test_nested_lanes_get_correct_parent(home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -73,7 +73,7 @@ def test_nested_lanes_get_correct_parent(home: Path, monkeypatch: pytest.MonkeyP
     monkeypatch.setenv("TIRITH_LANE", "l2")
     _register(home, "l3")
     parents = {i: read_json(home / "lanes" / f"{i}.json", {})["parent"] for i in ("l1", "l2", "l3")}
-    assert parents == {"l1": "steward", "l2": "l1", "l3": "l2"}
+    assert parents == {"l1": "manager", "l2": "l1", "l3": "l2"}
     flows = read_jsonl(home / "flows.jsonl")
     assert any(f.get("from") == "agent:l2" and f.get("to") == "agent:l3" for f in flows)
 

@@ -50,7 +50,7 @@ def test_answer_done_and_list(home: Path, capsys) -> None:
     by_id = {r["id"]: r for r in inbox_mod.requests(home)}
     assert by_id[first]["status"] == "done"
     assert by_id[second]["status"] == "answered"
-    assert by_id[second]["answers"][0]["by"] == "steward" and by_id[second]["answers"][0]["auto"] is False
+    assert by_id[second]["answers"][0]["by"] == "manager" and by_id[second]["answers"][0]["auto"] is False
     assert main(["inbox", "list", "--open"]) == 0
     assert capsys.readouterr().out.strip() == ""
     assert main(["inbox", "list", "--json"]) == 0
@@ -172,11 +172,11 @@ def test_state_inbox_folds_rows_and_keeps_the_last_100(home: Path) -> None:
     for n in range(105):
         inbox_mod.add_request(home, "finish", "demo", str(n))
     answered = inbox_mod.add_request(home, "ask", "demo", "1", "q")
-    inbox_mod.add_answer(home, answered["id"], "a", by="steward")
+    inbox_mod.add_answer(home, answered["id"], "a", by="manager")
     state = Collector(home, client=None).build_state(NOW)
     assert len(state["inbox"]) == 100
     assert state["inbox"][-1]["status"] == "answered"
-    assert state["inbox"][-1]["answers"] == [{"at": state["inbox"][-1]["answers"][0]["at"], "by": "steward",
+    assert state["inbox"][-1]["answers"] == [{"at": state["inbox"][-1]["answers"][0]["at"], "by": "manager",
                                               "text": "a", "auto": False, "lane": None}]
     assert state["inbox"][-1]["lanes"] == []
 
@@ -214,11 +214,11 @@ def test_brain_answers_an_unanswered_question_after_120_s(project, home: Path) -
     assert len([r for r in read_jsonl(home / "inbox.jsonl") if r["kind"] == "answer"]) == 1
 
 
-def test_a_steward_answer_stops_the_brain(project, home: Path) -> None:
+def test_a_manager_answer_stops_the_brain(project, home: Path) -> None:
     client = AnswerClient()
     collector = Collector(home, client=client)
     rid = inbox_mod.add_request(home, "ask", "demo", "1", "What is left?", at=_at(300))["id"]
-    inbox_mod.add_answer(home, rid, "Handled by the steward.")
+    inbox_mod.add_answer(home, rid, "Handled by the manager.")
     collector.build_state(NOW)
     collector.worker.drain(5)
     assert client.prompts == []

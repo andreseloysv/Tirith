@@ -267,7 +267,7 @@ def test_collect_once_polls_rooms_synchronously(home: Path) -> None:
 
 
 def test_cli_add_list_remove_roundtrip(home: Path, capsys: pytest.CaptureFixture) -> None:
-    write_config(home, [{"id": "demo", "name": "Demo"}], extra='[steward]\nname = "Me"\n')
+    write_config(home, [{"id": "demo", "name": "Demo"}], extra='[manager]\nname = "Me"\n')
     assert cli.main(["room", "add", "talk", "--project", "demo", "--alias", "muse=w6-perf"]) == 0
     assert cli.main(["room", "add", "second-room"]) == 0
     assert cli.main(["room", "add", "talk"]) == 0
@@ -275,7 +275,7 @@ def test_cli_add_list_remove_roundtrip(home: Path, capsys: pytest.CaptureFixture
     config = load_config(home)
     assert [r.id for r in config.rooms] == ["talk", "second-room"]
     assert config.rooms[0].project == "demo" and config.rooms[0].aliases == {"muse": "w6-perf"}
-    assert config.steward_name == "Me" and config.projects[0].id == "demo"
+    assert config.manager_name == "Me" and config.projects[0].id == "demo"
     assert cli.main(["room", "list"]) == 0
     assert "talk" in capsys.readouterr().out
     assert cli.main(["room", "remove", "talk"]) == 0

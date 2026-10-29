@@ -1,4 +1,4 @@
-"""CLI behaviour: lanes, stage runs, notes, waits, steward, status."""
+"""CLI behaviour: lanes, stage runs, notes, waits, manager, status."""
 
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ def test_lane_start_auto_id(home: Path, capsys) -> None:
     assert lane_id and (home / "lanes" / f"{lane_id}.json").exists()
 
 
-def test_note_wait_steward(home: Path, capsys) -> None:
+def test_note_wait_manager(home: Path, capsys) -> None:
     assert main(["note", "Merged the data lane", "--project", "demo"]) == 0
     notes = read_jsonl(home / "notes.jsonl")
     assert notes[0]["project"] == "demo" and "Merged" in notes[0]["text"]
@@ -43,9 +43,9 @@ def test_note_wait_steward(home: Path, capsys) -> None:
     assert main(["wait", "done", wait_id]) == 0
     rows = read_jsonl(home / "waits.jsonl")
     assert rows[-1]["done_at"] and rows[-1]["text"] == "Tick the declaration"
-    assert main(["steward", "Reviewing the data lane"]) == 0
-    steward = read_json(home / "orchestrator.json", {})
-    assert steward["activity"] == "Reviewing the data lane" and steward["since"]
+    assert main(["manager", "Reviewing the data lane"]) == 0
+    manager = read_json(home / "orchestrator.json", {})
+    assert manager["activity"] == "Reviewing the data lane" and manager["since"]
 
 
 def test_pipeline_declare_and_run_events(home: Path, capsys) -> None:

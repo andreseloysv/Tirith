@@ -6,9 +6,9 @@
     "model": "muse-spark",
     "last_error": null
   },
-  "steward": {
+  "manager": {
     "name": "Aldric of the Tower",
-    "title": "The Steward",
+    "title": "The Manager",
     "activity": "Reviewing Ivren's performance report before merging",
     "since": "2026-10-28T19:31:00Z",
     "notes": [
@@ -211,7 +211,7 @@
   "agents": [
     {
       "id": "w6-perf",
-      "parent": "steward",
+      "parent": "manager",
       "project": "chromasol",
       "name": "Ivren",
       "epithet": "of the Seventh Gate",
@@ -283,7 +283,7 @@
     },
     {
       "id": "t-world",
-      "parent": "steward",
+      "parent": "manager",
       "project": "tirith",
       "name": "Marrow",
       "epithet": "Quickstep",
@@ -857,9 +857,9 @@
     {
       "id": "f-1",
       "at": "2026-10-28T18:30:00Z",
-      "from": "steward",
+      "from": "manager",
       "to": "agent:w6-perf",
-      "from_name": "The Steward",
+      "from_name": "The Manager",
       "to_name": "Ivren of the Seventh Gate",
       "kind": "brief",
       "text": "Brief: Performance and size on the owner's phone",
@@ -868,9 +868,9 @@
     {
       "id": "f-2",
       "at": "2026-10-28T18:31:00Z",
-      "from": "steward",
+      "from": "manager",
       "to": "agent:w1-data",
-      "from_name": "The Steward",
+      "from_name": "The Manager",
       "to_name": "Halvard Stonehand",
       "kind": "brief",
       "text": "Brief: Room database",
@@ -879,9 +879,9 @@
     {
       "id": "f-3",
       "at": "2026-10-28T18:50:00Z",
-      "from": "steward",
+      "from": "manager",
       "to": "owner",
-      "from_name": "The Steward",
+      "from_name": "The Manager",
       "to_name": "You",
       "kind": "request",
       "text": "Tick the AI asset declaration on the store listing",
@@ -891,9 +891,9 @@
       "id": "f-4",
       "at": "2026-10-28T19:02:00Z",
       "from": "agent:icon-2",
-      "to": "steward",
+      "to": "manager",
       "from_name": "Sefa Prismhand",
-      "to_name": "The Steward",
+      "to_name": "The Manager",
       "kind": "report",
       "text": "failed: adaptive icon export broke",
       "ref": null
@@ -902,9 +902,9 @@
       "id": "f-5",
       "at": "2026-10-28T19:05:00Z",
       "from": "agent:w1-data",
-      "to": "steward",
+      "to": "manager",
       "from_name": "Halvard Stonehand",
-      "to_name": "The Steward",
+      "to_name": "The Manager",
       "kind": "report",
       "text": "done: migrations green",
       "ref": null
@@ -912,9 +912,9 @@
     {
       "id": "f-6",
       "at": "2026-10-28T19:10:00Z",
-      "from": "steward",
+      "from": "manager",
       "to": "agent:t-world",
-      "from_name": "The Steward",
+      "from_name": "The Manager",
       "to_name": "Marrow Quickstep",
       "kind": "message",
       "text": "Owner wants a much smaller compact world",
@@ -924,9 +924,9 @@
       "id": "f-7",
       "at": "2026-10-28T19:12:00Z",
       "from": "room:meta-hackathon-ideas",
-      "to": "steward",
+      "to": "manager",
       "from_name": "meta-hackathon-ideas",
-      "to_name": "The Steward",
+      "to_name": "The Manager",
       "kind": "message",
       "text": "Judge scored the scrap-saver 7/10",
       "ref": null
@@ -935,9 +935,9 @@
       "id": "f-8",
       "at": "2026-10-28T19:20:00Z",
       "from": "pipeline:android-release#7",
-      "to": "steward",
+      "to": "manager",
       "from_name": "android-release#7",
-      "to_name": "The Steward",
+      "to_name": "The Manager",
       "kind": "report",
       "text": "android-release failed: lint failed",
       "ref": null
@@ -957,9 +957,9 @@
       "id": "f-10",
       "at": "2026-10-28T19:36:00Z",
       "from": "owner",
-      "to": "steward",
+      "to": "manager",
       "from_name": "You",
-      "to_name": "The Steward",
+      "to_name": "The Manager",
       "kind": "answer",
       "text": "Done: declaration ticked",
       "ref": null
@@ -967,9 +967,9 @@
     {
       "id": "f-11",
       "at": "2026-10-28T19:38:00Z",
-      "from": "steward",
+      "from": "manager",
       "to": "agent:t-collector",
-      "from_name": "The Steward",
+      "from_name": "The Manager",
       "to_name": "Odile Inkwell",
       "kind": "decision",
       "text": "Merge the rooms poller after tests",

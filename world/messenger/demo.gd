@@ -116,7 +116,7 @@ func _locate(endpoint: String) -> Variant:
 			return (heroes[id] as Node3D).global_position + Vector3(0, 2.2, 0)
 	elif endpoint == "owner":
 		return owner_beacon.global_position + Vector3(0, 6.6, 0)
-	elif endpoint == "steward":
+	elif endpoint == "manager" or endpoint == "steward":
 		return Vector3(-4.0, 17.0, -14.0)
 	elif endpoint.begins_with("pipeline:"):
 		return cart.global_position + Vector3(0, 2.0, 0)

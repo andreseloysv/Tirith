@@ -20,7 +20,7 @@ def _parse(text: str) -> dict:
 
 
 def test_collect_once_writes_both_files_identically(home: Path) -> None:
-    cli.main(["steward", "Watching </script> tags"])
+    cli.main(["manager", "Watching </script> tags"])
     assert cli.main(["collect", "--once"]) == 0
     state = json.loads((home / "state.json").read_text(encoding="utf-8"))
     script = (home / "state.js").read_text(encoding="utf-8")
