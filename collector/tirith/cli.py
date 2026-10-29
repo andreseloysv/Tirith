@@ -233,7 +233,8 @@ def _wrapper_path_env(home: Path | None = None, lane_id: str | None = None,
     if session:
         env["TIRITH_SESSION"] = session
     wrapper_dir = str(Path.home() / ".local" / "bin")
-    env["PATH"] = wrapper_dir + os.pathsep + env.get("PATH", "")
+    shim_dir = str((home or tirith_home()) / "shims")  # agent shims first, then the git wrapper
+    env["PATH"] = shim_dir + os.pathsep + wrapper_dir + os.pathsep + env.get("PATH", "")
     return env
 
 
@@ -1208,7 +1209,8 @@ def _cmd_hook(args) -> int:
 
 def _cmd_shim(args) -> int:
     config = load_config(_home(args))
-    shim_dir = Path(args.dir).expanduser() if args.dir else Path.home() / ".local" / "bin"
+    # their own folder: the agents' real executables often live in ~/.local/bin themselves
+    shim_dir = Path(args.dir).expanduser() if args.dir else _home(args) / "shims"
     if not any(str(t.get("command") or "").strip() for t in config.agents.values()):
         raise SystemExit("tirith shim: no [agents.<alias>] command in config.toml; add "
                          "[agents.<alias>] command = \"<executable name>\"")
@@ -1520,7 +1522,7 @@ def build_parser() -> argparse.ArgumentParser:
     shim = sub.add_parser("shim", parents=[common],
                           help="agent CLI shims: start only through tirith lane run")
     shim.add_argument("action", choices=["install", "uninstall", "verify"])
-    shim.add_argument("--dir", default=None, help="shim folder (default: ~/.local/bin)")
+    shim.add_argument("--dir", default=None, help="shim folder (default: ~/.tirith/shims, first in every lane's PATH)")
     shim.set_defaults(func=_cmd_shim)
 
     check = sub.add_parser("check", parents=[common],

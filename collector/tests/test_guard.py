@@ -74,10 +74,11 @@ def test_lane_run_refuses_without_guard_then_runs(home: Path, tmp_path: Path, ca
             return
         code = main(["lane", "run", "--project", "demo", "--class", "warden",
                      "--feature", "Guarded work", "--id", "g-1", "--brief", brief, "--",
-                     sys.executable, "-c", "import os; print(os.environ['PATH'].split(':')[0])"])
+                     sys.executable, "-c", "import os; print(' '.join(os.environ['PATH'].split(':')[:2]))"])
         assert code == 0
         log_text = (home / "logs" / "g-1.log").read_text(encoding="utf-8")
-        assert log_text.strip().endswith(os.path.join(".local", "bin"))
+        shims, wrapper = log_text.strip().split(" ")[-2:]  # agent shims first, then the git wrapper
+        assert shims.endswith("shims") and wrapper.endswith(os.path.join(".local", "bin"))
         state = Collector(home, client=None).cycle()
         assert state["agents"][0]["status"] == "done"
     finally:

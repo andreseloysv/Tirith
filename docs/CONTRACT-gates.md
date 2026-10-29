@@ -52,7 +52,7 @@ enabled = false
 
 ## Shims
 
-`tirith shim install|uninstall|verify [--dir <folder>]` (default `~/.local/bin`). For every
+`tirith shim install|uninstall|verify [--dir <folder>]` (default `~/.tirith/shims`, which `lane run` puts first in every lane's PATH, before the git wrapper in `~/.local/bin`). For every
 `[agents.<alias>] command` it writes an executable `sh` wrapper named like that command. The wrapper
 `exec`s the real binary (resolved at install from `PATH` without the shim folder) when stdin and stdout
 are terminals, or when `TIRITH_LANE_TOKEN` equals the `token` in `lanes/$TIRITH_LANE.json`; otherwise
@@ -81,6 +81,6 @@ as a red edge from the agent to The Guard in Flow.
 
 ```sh
 tirith hook install --agent anthropic      # and: --agent muse
-tirith shim install                        # then put ~/.local/bin first in PATH
+tirith shim install                        # shims in ~/.tirith/shims, first in every lane's PATH
 tirith shim verify
 ```
