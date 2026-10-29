@@ -15,6 +15,7 @@ use tauri::{AppHandle, Emitter, Manager, RunEvent, State, WebviewUrl, WebviewWin
 mod liveweb;
 
 const STATE_EVENT: &str = "tirith://state";
+const ALIVE_EVENT: &str = "tirith://alive";
 const CHAT_EVENT: &str = "tirith://chat";
 
 /// A chat session: the headless agent process and the lane that stands for it.
@@ -138,13 +139,161 @@ fn current_state() -> Option<Value> {
     read_state()
 }
 
-fn spawn_state_pump(app: AppHandle) {
-    std::thread::spawn(move || loop {
-        if let Some(s) = read_state() {
-            let _ = app.emit(STATE_EVENT, s);
+/// File name of an agent's detail script: the id with every character outside `[A-Za-z0-9_.-]` (and a
+/// leading dot) replaced by `_`, plus `.js`. Mirrors `agent_file_name` in the collector.
+fn agent_file_name(id: &str) -> String {
+    let mut safe: String = id
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.' { c } else { '_' })
+        .collect();
+    if safe.is_empty() {
+        safe.push('_');
+    } else if safe.starts_with('.') {
+        safe.replace_range(..1, "_");
+    }
+    format!("{safe}.js")
+}
+
+/// The detail of `id` from `<home>/agents/<id>.js` (`window.TIRITH_AGENT = {...};`) as JSON.
+fn agent_detail_in(home: &std::path::Path, id: &str) -> Result<Value, String> {
+    let path = home.join("agents").join(agent_file_name(id));
+    let text = std::fs::read_to_string(&path).map_err(|e| format!("no detail for {id}: {e}"))?;
+    let body = text
+        .trim()
+        .strip_prefix("window.TIRITH_AGENT")
+        .map(|t| t.trim_start().trim_start_matches('=').trim().trim_end_matches(';'))
+        .ok_or_else(|| format!("{} is not an agent detail file", path.display()))?;
+    serde_json::from_str(body).map_err(|e| format!("bad detail file for {id}: {e}"))
+}
+
+/// The full log, events, files, tests and report of one agent, for the drawer.
+#[tauri::command]
+fn agent_detail(id: String) -> Result<Value, String> {
+    agent_detail_in(&tirith_home(), &id)
+}
+
+/// What the pump sends for a freshly read state: the whole state only when `generated_at` moved AND the
+/// content (everything but `generated_at`) changed; a small "alive" tick when only the clock moved.
+#[derive(Debug, PartialEq)]
+enum Push {
+    State,
+    Alive(String),
+    Nothing,
+}
+
+#[derive(Default)]
+struct Pump {
+    generated_at: Option<String>,
+    hash: Option<u64>,
+}
+
+impl Pump {
+    fn decide(&mut self, state: &Value) -> Push {
+        use std::hash::{Hash, Hasher};
+        let generated = state["generated_at"].as_str().unwrap_or("").to_string();
+        if self.generated_at.as_deref() == Some(generated.as_str()) {
+            return Push::Nothing;
         }
-        std::thread::sleep(Duration::from_secs(2));
+        let mut rest = state.clone();
+        if let Some(o) = rest.as_object_mut() {
+            o.remove("generated_at");
+        }
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        rest.to_string().hash(&mut hasher);
+        let hash = hasher.finish();
+        self.generated_at = Some(generated.clone());
+        if self.hash == Some(hash) {
+            return Push::Alive(generated);
+        }
+        self.hash = Some(hash);
+        Push::State
+    }
+}
+
+/// Reads the state every 2 s and pushes it to the page only when it changed (see `Pump`).
+fn spawn_state_pump(app: AppHandle) {
+    std::thread::spawn(move || {
+        let mut pump = Pump::default();
+        loop {
+            if let Some(s) = read_state() {
+                match pump.decide(&s) {
+                    Push::State => {
+                        let _ = app.emit(STATE_EVENT, s);
+                    }
+                    Push::Alive(at) => {
+                        let _ = app.emit(ALIVE_EVENT, at);
+                    }
+                    Push::Nothing => {}
+                }
+            }
+            std::thread::sleep(Duration::from_secs(2));
+        }
     });
+}
+
+#[cfg(test)]
+mod state_tests {
+    use super::*;
+
+    fn scratch(tag: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("tirith-detail-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(d.join("agents")).unwrap();
+        d
+    }
+
+    #[test]
+    fn agent_detail_reads_the_script_as_json() {
+        let home = scratch("ok");
+        std::fs::write(
+            home.join("agents").join("a-1.js"),
+            "window.TIRITH_AGENT = {\"id\":\"a-1\",\"report\":\"full <\\/p>\",\"log_entries\":[{\"kind\":\"say\"}]};\n",
+        )
+        .unwrap();
+        let d = agent_detail_in(&home, "a-1").unwrap();
+        assert_eq!(d["id"], "a-1");
+        assert_eq!(d["report"], "full </p>");
+        assert_eq!(d["log_entries"][0]["kind"], "say");
+        assert!(agent_detail_in(&home, "a-2").is_err());
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn agent_detail_cannot_leave_the_agents_folder() {
+        let home = scratch("escape");
+        std::fs::write(home.join("secret.js"), "window.TIRITH_AGENT = {\"id\":\"x\"};").unwrap();
+        for id in ["../secret", "..", "/etc/passwd", "a/b", ""] {
+            assert!(!agent_file_name(id).contains('/'), "{id}");
+            assert!(agent_detail_in(&home, id).is_err(), "{id}");
+        }
+        assert_eq!(agent_file_name("a-1"), "a-1.js");
+        assert_eq!(agent_file_name(".hidden"), "_hidden.js");
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn broken_detail_file_is_an_error() {
+        let home = scratch("bad");
+        std::fs::write(home.join("agents").join("a-1.js"), "alert(1)").unwrap();
+        assert!(agent_detail_in(&home, "a-1").is_err());
+        std::fs::write(home.join("agents").join("a-2.js"), "window.TIRITH_AGENT = {oops};").unwrap();
+        assert!(agent_detail_in(&home, "a-2").is_err());
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn pump_pushes_only_when_the_time_and_the_content_changed() {
+        let mut pump = Pump::default();
+        let a = json!({"generated_at": "2026-10-29T10:00:00Z", "agents": [1]});
+        assert_eq!(pump.decide(&a), Push::State);
+        assert_eq!(pump.decide(&a), Push::Nothing, "same file read again");
+        let tick = json!({"generated_at": "2026-10-29T10:00:02Z", "agents": [1]});
+        assert_eq!(pump.decide(&tick), Push::Alive("2026-10-29T10:00:02Z".into()), "only the clock moved");
+        let changed = json!({"generated_at": "2026-10-29T10:00:04Z", "agents": [1, 2]});
+        assert_eq!(pump.decide(&changed), Push::State);
+        let same_time_other_content = json!({"generated_at": "2026-10-29T10:00:04Z", "agents": [9]});
+        assert_eq!(pump.decide(&same_time_other_content), Push::Nothing);
+    }
 }
 
 // -- collector ----------------------------------------------------------------------------------
@@ -1355,6 +1504,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             current_state,
+            agent_detail,
             launch_step,
             project_add,
             inbox_add,
