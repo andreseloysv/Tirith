@@ -37,7 +37,7 @@ prompt (last).
 
 `agents[].usage` (null when the log has no usage record) =
 `{input_tokens, output_tokens, cache_tokens, cost_usd (null if unknown), model, turns, duration_s}`,
-parsed from the lane's JSONL log: `result` records (`usage`, `total_cost_usd`, `num_turns`,
+parsed from the lane's JSONL log (`codex`: its `turn.completed` records count like `run.usage`, with `cached_input_tokens` as cache; cost stays null): `result` records (`usage`, `total_cost_usd`, `num_turns`,
 `duration_ms`, `modelUsage`) win; else `run.usage` records (payload token counts, optional cost).
 `cache_tokens` = cache creation + cache read. `sessions[].usage` and `projects[].usage` are the sums
 over their agents (null when none has usage). The agent drawer shows one line under Status; the

@@ -143,7 +143,7 @@ def _tokens(usage: dict) -> tuple[int, int, int]:
     out = _num(usage.get("output_tokens", usage.get("outputTokens")))
     cache = sum(_num(usage.get(k)) for k in (
         "cache_creation_input_tokens", "cache_read_input_tokens", "cache_tokens",
-        "cacheCreationInputTokens", "cacheReadInputTokens"))
+        "cacheCreationInputTokens", "cacheReadInputTokens", "cached_input_tokens"))
     return int(inp), int(out), int(cache)
 
 
@@ -170,6 +170,8 @@ def parse_usage(path: str | Path | None) -> dict | None:
             continue
         if rec.get("type") == "result" and isinstance(rec.get("usage"), dict):
             results.append(rec)
+        elif rec.get("type") == "turn.completed" and isinstance(rec.get("usage"), dict):
+            runs.append(rec)  # codex: one record per turn, tokens only
         elif rec.get("payload_type") == "run.usage" or rec.get("type") == "run.usage":
             runs.append(rec)
     out = {"input_tokens": 0, "output_tokens": 0, "cache_tokens": 0, "cost_usd": None,
