@@ -202,15 +202,16 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] El piloto automático dice por qué no arranca un paso.
 - [x] Las lanes no llenan el disco (build de Rust compartido, carpetas fusionadas borradas, freno con poco espacio).
 - [x] Variables de entorno por proyecto en Settings.
-- [ ] Todas las reglas activas: codex y copilot protegidos de verdad (no solo explicado).
-- [ ] Tests fiables: sin fallos al azar dentro de las lanes; las revisiones atascadas se vuelven a lanzar.
-- [ ] Al dueño solo le llega lo que solo él puede hacer, con el motivo (credenciales, pago, cuenta, aparato o decisión).
-- [ ] Instrucciones al dueño concretas y prerrellenadas, con botón «Open in Terminal»; se cierran solas al comprobarse.
+- [x] Todas las reglas activas: codex y copilot protegidos de verdad (no solo explicado).
+- [x] Tests fiables: sin fallos al azar dentro de las lanes; las revisiones atascadas se vuelven a lanzar.
+- [x] Al dueño solo le llega lo que solo él puede hacer, con el motivo (credenciales, pago, cuenta, aparato o decisión).
+- [x] Instrucciones al dueño concretas y prerrellenadas, con botón «Open in Terminal»; se cierran solas al comprobarse.
 - [ ] Un solo manager con sesión persistente que vive en Tirith (misma memoria con la app abierta o cerrada).
-- [ ] El chat muestra el trabajo del manager como el CLI: texto palabra a palabra, herramientas y resultados, diffs en color, lista de tareas; Esc interrumpe y ↑ recupera.
+- [x] El chat muestra el trabajo del manager en vivo: texto, herramientas y resultados de cada paso (secretos tapados).
+- [ ] El chat del manager como el CLI: texto palabra a palabra, diffs en color, lista de tareas; Esc interrumpe y ↑ recupera.
 - [ ] Sub-agentes anidados en la conversación; permisos seguros aprobados por código y el resto como botones Allow/Deny.
-- [ ] Autorrevisión cada minuto (collector, manager, piloto, disco, revisiones) con arreglo automático y una línea en el chat.
-- [ ] Lo que dice un agente en su informe se verifica contra su cambio real antes de fusionar.
+- [x] Autorrevisión cada minuto (collector, manager, piloto, disco, revisiones) con arreglo automático y una línea en el chat.
+- [x] Lo que dice un agente en su informe se verifica contra su cambio real antes de fusionar.
 - [ ] El collector vuelve a tardar menos de 3 s por ciclo (hoy ~20 s) y un test lo vigila.
 - [ ] Fusionar nunca es una pregunta para el dueño: si los tests y la verificación pasan, Tirith fusiona solo; un duplicado o conflicto va a la cola del manager. Nunca dos agentes en el mismo elemento.
 - [ ] Regla en código, sin excepciones: ningún agente arranca sin estar ligado a un elemento abierto del plan (revisiones y revisiones del plan incluidas: Tirith añade su elemento).
