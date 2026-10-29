@@ -1592,8 +1592,11 @@ class Collector:
             self._phase_total = {}
         return state
 
-    def run(self, interval: float = 2.0, once: bool = False) -> dict:
-        """Loop forever (or once) writing state every ``interval`` seconds."""
+    def run(self, interval: float = 2.0, once: bool = False, reload_check=None) -> dict:
+        """Loop forever (or once) writing state every ``interval`` seconds.
+
+        ``reload_check`` (the continuous mode of ``tirith collect``) is asked between cycles; when it says the
+        code changed the loop ends with ``ReloadRequested`` so the caller can re-execute."""
         self._one_shot = once
         if once and self.config.rooms:
             # One-shot mode has no background poller to wait for: read the rooms now,
@@ -1616,6 +1619,9 @@ class Collector:
                   f"retrying (failure {failures})", file=sys.stderr, flush=True)
         while True:
             time.sleep(max(0.2, interval) + backoff_s(failures))
+            if reload_check is not None and reload_check():
+                from tirith.selfreload import ReloadRequested
+                raise ReloadRequested()
             try:
                 state = self.cycle()
                 failures = 0
