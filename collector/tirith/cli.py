@@ -17,7 +17,7 @@ import signal
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 from tirith.collector import (
@@ -42,6 +42,7 @@ from tirith import models as models_mod
 from tirith import planlane as planlane_mod
 from tirith import roadmap as roadmap_mod
 from tirith import review as review_mod
+from tirith import roadmap as roadmap_mod
 from tirith import runstage as runstage_mod
 from tirith import projects as projects_mod
 from tirith import rooms as rooms_mod
@@ -929,8 +930,11 @@ def launch_step(home: Path, project_id: str, step_id: str, agent: str | None = N
         raise launch_mod.LaunchError(f"project '{project_id}' has no repo folder")
     step, intro = launch_mod.find_step(repo, step_id)
     title = step["title"]
-    open_items = [i["text"] for i in step["items"] if not i["done"]]
+    open_items = roadmap_mod.agent_items(step, date.today())
     if not open_items:
+        if any(not i["done"] for i in step["items"]):
+            raise launch_mod.LaunchError(f"step {step['id']} ({title}) has no items an agent can do now "
+                                         "(they wait for the owner or for a date)")
         raise launch_mod.LaunchError(f"step {step['id']} ({title}) is already done" if step["items"]
                                      else f"step {step['id']} ({title}) has no items to finish")
     busy = launch_mod.working_lane(read_lanes(home), project_id, step["id"], lane_status)

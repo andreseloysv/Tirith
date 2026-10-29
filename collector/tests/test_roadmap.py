@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import date
 from pathlib import Path
 
 import jsonschema
@@ -73,15 +74,18 @@ def test_unnumbered_heading_is_not_a_step() -> None:
 def test_step_status_rules() -> None:
     assert rm.step_status(0, 0, True) == "empty"
     assert rm.step_status(2, 2, False) == "done"
-    assert rm.step_status(1, 3, False) == "active"
-    assert rm.step_status(0, 3, True) == "active"
+    assert rm.step_status(1, 3, True) == "active"
+    assert rm.step_status(1, 3, False, agent_open=1) == "ready"
+    assert rm.step_status(1, 3, False, agent_open=1, owner_open=1) == "ready"
+    assert rm.step_status(1, 3, False, owner_open=1, date_open=1) == "blocked-owner"
+    assert rm.step_status(1, 3, False, date_open=1) == "blocked-date"
     assert rm.step_status(0, 3, False) == "todo"
 
 
 def test_build_counts_and_status(tmp_path: Path) -> None:
     _write_project(tmp_path)
     road = rm.build(tmp_path, "p", [])
-    assert [s["status"] for s in road["steps"]] == ["done", "active", "todo", "empty"]
+    assert [s["status"] for s in road["steps"]] == ["done", "ready", "ready", "empty"]
     assert (road["done"], road["total"]) == (4, 7)
     assert road["deadline"] is None
     assert road["file"].endswith("docs/TODO.md")
@@ -154,3 +158,65 @@ def test_lane_without_step_is_null(home: Path) -> None:
     main(["lane", "start", "--project", "demo", "--class", "herald", "--feature", "x", "--id", "h-2"])
     lane = json.loads((home / "lanes" / "h-2.json").read_text(encoding="utf-8"))
     assert lane["step"] is None
+
+
+TAGGED = """## 1. Mixed
+- [x] Done thing (dueño: ya lo hizo).
+- [ ] Agent work.
+- [ ] Install it (dueño: botón Run) `tirith url install`.
+
+## 2. Owner only
+- [ ] Needs the owner (owner: log in).
+
+## 3. Waiting for a date
+- [ ] Check the quota (desde 2026-11-02: cuota de Muse).
+- [ ] Later (from 2026-12-01).
+
+## 4. Out
+- [ ] Another plan (fuera de este plan).
+- [x] Done.
+
+## 5. Only out
+- [ ] Not ours (out of this plan: separate project).
+"""
+
+
+def test_tags_decide_who() -> None:
+    assert rm.tag("Plain.") == ("agent", None)
+    assert rm.tag("x (dueño: y)") == ("owner", None)
+    assert rm.tag("x (Owner: y)") == ("owner", None)
+    assert rm.tag("x (desde 2026-11-02: y)") == ("date", "2026-11-02")
+    assert rm.tag("x (from 2026-11-02)") == ("date", "2026-11-02")
+    assert rm.tag("x (desde 2026-13-45)") == ("agent", None)
+    assert rm.tag("x (fuera de este plan) (dueño)") == ("out", None)
+    assert rm.tag("x (out of this plan)") == ("out", None)
+
+
+def test_step_statuses_from_tags(tmp_path: Path) -> None:
+    _write_project(tmp_path, text=TAGGED)
+    before = rm.build(tmp_path, "p", [], date(2026, 10, 29))
+    assert [s["status"] for s in before["steps"]] == ["ready", "blocked-owner", "blocked-date", "done", "empty"]
+    assert before["steps"][2]["until"] == "2026-11-02"
+    assert [i["who"] for i in before["steps"][0]["items"]] == ["owner", "agent", "owner"]
+    assert before["steps"][0]["items"][2]["owner_item"].startswith("owner-p-1-")
+    assert "owner_item" not in before["steps"][0]["items"][0]  # done
+    assert [i["who"] for i in before["steps"][3]["items"]] == ["out", "agent"]
+    assert (before["done"], before["total"]) == (2, 7)  # "out" items are not counted
+    after = rm.build(tmp_path, "p", [], date(2026, 11, 2))  # the day has come: the first dated item is an agent's
+    assert after["steps"][2]["status"] == "ready"
+    assert [i["who"] for i in after["steps"][2]["items"]] == ["agent", "date"]
+
+
+def test_working_agent_beats_ready_and_blocked(tmp_path: Path) -> None:
+    _write_project(tmp_path, text=TAGGED)
+    agents = [{"id": "a", "project": "p", "status": "working", "step": "1"},
+              {"id": "b", "project": "p", "status": "working", "step": "2"}]
+    steps = rm.build(tmp_path, "p", agents, date(2026, 10, 29))["steps"]
+    assert (steps[0]["status"], steps[1]["status"]) == ("active", "active")
+
+
+def test_agent_items_skip_tagged() -> None:
+    steps = rm.parse(TAGGED)
+    assert rm.agent_items(steps[0], date(2026, 10, 29)) == ["Agent work."]
+    assert rm.agent_items(steps[2], date(2026, 10, 29)) == []
+    assert rm.agent_items(steps[2], date(2026, 11, 3)) == ["Check the quota (desde 2026-11-02: cuota de Muse)."]
