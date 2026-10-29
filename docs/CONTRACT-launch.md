@@ -111,6 +111,41 @@ is `{status, at?, message?}` with `status` one of `pending` (launched lane, done
 `tests-failed`, `ready`, `merge-failed`, `merged`; `null` for lanes not started by `tirith launch`. A `running`
 review whose process died shows as `merge-failed` ("interrupted").
 
+`tirith lane drop <lane-id>` removes the worktree and the branch of an unmerged launched lane (`review.status = "dropped"`).
+`state.agents[].review` also carries `run` (the pipeline run of the tests, known while they run), and after a
+merge or passing tests `files`, `branch` and `passed` (the count the test runner printed, if any).
+
+### Automatic review (`tirith/autoreview.py`, called by every dispatcher pass)
+
+No finished lane is left unreviewed, by code. State in `<home>/dispatch.json` under `reviews` (per lane) and
+`overdue`.
+
+1. A launched lane that ended `done` (within the last 24 h) gets, once, a steward queue item
+   (`kind: "review"`) and a detached `tirith lane review <lane>` (`--tests-only` when `[review] auto_merge =
+   false` in `config.toml`; default `true`). The tests are an ordinary pipeline run tagged with the lane.
+2. When the review has a result, the dispatcher settles it once per result:
+   - `merged`: the lane's `request_id` gets an answer `by: "tirith"` "Merged <lane> into <branch>: <n> files,
+     tests <n> passed"; the review item is closed with that result; the plan is updated (below).
+   - `tests-failed` / `merge-failed`: nothing is merged; one owner item `review-<lane>-<time>` with Run actions
+     "Retry the review", "Start an agent to fix it", "Show the log", "Drop the lane"; the queue item stays open.
+   - `ready` (auto_merge off): owner item with Run actions "Merge" and "Drop"; the queue item stays open.
+   A later result of the same lane (a retry) is settled again and closes the earlier owner item.
+3. Plan update on merge: the brief lists the step's open items under "What to build"; items whose words
+   (at least 70 %) appear in the report's "What changed" lines are ticked in the repo's roadmap file and
+   committed as "Roadmap: step N progress from <lane>" (through the git hooks; a refused commit or an edited
+   plan file leaves the plan untouched). Unsure items (30 to 70 %, or no "What changed" section) stay
+   unticked and one `kind: "plan"` queue item "update the plan for step N" lists them.
+4. Deadline: a lane that ended more than 30 minutes ago with unmerged work in its worktree and no review result
+   (never started, or the process died) is a `review-overdue` violation in `events.jsonl`, one macOS
+   notification, and an owner item `review-overdue-<lane>` with Run actions "Review it now" / "Drop the lane".
+5. The steward `Stop` hook also blocks while review queue items older than 60 s are open (a review that is
+   running right now does not count), listing `tirith lane review <lane>` and `tirith queue done <id>`; same
+   limit of 3 blocks per set, then an `inbox-ignored` violation.
+
+Web: under a Plan step whose lane has a review: "Testing <agent>…" linked to the pipeline run, "Merged <agent> ·
+<time>" with files and tests, or the failure with the output tail (the owner options are in "Your turn", where
+Run actions of an ask are shown). The agent drawer shows the review result.
+
 Link: `tirith://review?lane=<lane-id>&token=<t>` (same token check as launch). `tirith url open` validates
 the lane, starts `tirith lane review <lane-id>` detached (log `<home>/logs/<lane-id>.review.log`) and exits.
 

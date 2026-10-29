@@ -131,3 +131,42 @@ def build(folder: str | Path | None, project: str, agents: list[dict]) -> dict |
     return {"file": str(path), "deadline": manifest.deadline,
             "done": sum(r["done"] for r in rows), "total": sum(r["total"] for r in rows),
             "steps": rows}
+
+
+def tick(text: str, step_id: str, wanted: set[str]) -> tuple[str, list[str]]:
+    """``text`` with the open items of step ``step_id`` whose text is in ``wanted`` ticked; and which ones.
+
+    Only the ``[ ]`` of the item's first line changes, so a wrapped item stays as it was written."""
+    lines = text.splitlines(keepends=True)
+    ticked: list[str] = []
+    in_step = False
+    item_at: int | None = None
+    parts: list[str] = []
+
+    def flush() -> None:
+        joined = " ".join(parts).strip()
+        if item_at is not None and joined in wanted:
+            lines[item_at] = lines[item_at].replace("[ ]", "[x]", 1)
+            ticked.append(joined)
+
+    for index, raw in enumerate(lines):
+        line = raw.rstrip("\r\n")
+        found = _STEP_RE.match(line)
+        if found or _HEADING_RE.match(line):
+            flush()
+            item_at, parts = None, []
+            in_step = bool(found) and found.group(1) == str(step_id)
+            continue
+        if not in_step:
+            continue
+        item = _ITEM_RE.match(line)
+        if item:
+            flush()
+            item_at, parts = (index, [item.group(2)]) if item.group(1) == " " else (None, [])
+        elif not line.strip() or _BULLET_RE.match(line):
+            flush()
+            item_at, parts = None, []
+        elif item_at is not None:
+            parts.append(line.strip())
+    flush()
+    return "".join(lines), ticked
