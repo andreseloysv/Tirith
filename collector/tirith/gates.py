@@ -14,6 +14,7 @@ import re
 import shlex
 import shutil
 import stat
+from datetime import datetime, timezone
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -69,6 +70,53 @@ class Violation:
 
     def message(self) -> str:
         return f"tirith: {self.rule}: {self.what}. Do this instead: {self.instead}"
+
+
+# A block is a lesson, not a stop: the agent reads this after the block message and carries on.
+NOT_A_STOP = "A Tirith block is not a stop: use the alternative it gives and continue."
+NO_ALTERNATIVE = "no alternative"  # ``instead`` of a rule that has none must say so, starting with this
+DENY_LIMIT = 3  # denies of one rule in one lane within DENY_WINDOW_S go to the manager queue
+DENY_WINDOW_S = 600.0
+DENY_FILE = "denies.json"
+
+
+def taught(violation: "Violation") -> str:
+    """The line that tells the agent to follow the alternative and go on, then the block message (which ends
+    with the exact command, so a test or a reader finds it last)."""
+    return f"{NOT_A_STOP}\n{violation.message()}"
+
+
+def note_deny(home: Path, violation: "Violation", lane: str | None, project: str | None,
+              now: datetime | None = None) -> dict | None:
+    """Count one deny of ``violation.rule`` in ``lane``; the ``DENY_LIMIT``-th within ``DENY_WINDOW_S`` queues one
+    manager item with the commands (never an owner item) and returns it. Allowed-with-warning calls do not count."""
+    if violation.action != "block" or not lane:
+        return None
+    from tirith import asks as asks_mod
+    from tirith.home import now_iso
+    from tirith.store import read_json, write_json_atomic
+    now = now or datetime.now(timezone.utc)
+    path = home / DENY_FILE
+    book = read_json(path, {})
+    book = book if isinstance(book, dict) else {}
+    key = f"{lane}|{violation.rule}"
+    stamps = [t for t in book.get(key, []) if isinstance(t, (int, float)) and 0 <= now.timestamp() - t < DENY_WINDOW_S]
+    stamps.append(now.timestamp())
+    item = None
+    if len(stamps) >= DENY_LIMIT:
+        slug = re.sub(r"[^a-z0-9]+", "-", f"{lane}-{violation.rule}".lower()).strip("-")
+        item = asks_mod.queue_add(
+            home, project or "", lane,
+            f"Lane {lane} was blocked {len(stamps)} times in {int(DENY_WINDOW_S // 60)} minutes by rule "
+            f"'{violation.rule}' ({violation.what}). Tell it the allowed way: {violation.instead}",
+            kind="deny-repeat", item_id=f"sq-deny-{slug}-{int(stamps[0])}")
+        stamps = []
+    book[key] = stamps
+    write_json_atomic(path, book)
+    if item:
+        append_jsonl(home / EVENTS_FILE, {"kind": "deny-repeat", "ts": now_iso(now), "lane": lane,
+                                          "rule": violation.rule, "queue": item["id"]})
+    return item
 
 
 # -- command line parsing ---------------------------------------------------------------------
