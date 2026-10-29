@@ -1922,6 +1922,8 @@ pub fn run() {
             WebviewWindowBuilder::new(app, "main", url)
                 .title("Tirith")
                 .inner_size(1440.0, 900.0)
+                // The native drag-drop handler swallows file drops; off, the page gets HTML5 `drop` with files.
+                .disable_drag_drop_handler()
                 .build()?;
             start_collector(&app.state::<App>());
             spawn_state_pump(app.handle().clone());
