@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import make_repo, write_config, write_lane_manifest
+from conftest import make_repo, write_config, write_lane_manifest, write_plan
 from tirith import asks as asks_mod
 from tirith import dispatch as dispatch_mod
 from tirith import inbox as inbox_mod
@@ -32,6 +32,7 @@ def at(seconds: float = 0) -> datetime:
 def project(home: Path, tmp_path: Path) -> Path:
     repo = make_repo(tmp_path / "demo")
     write_lane_manifest(repo)
+    write_plan(repo)
     write_config(home, [{"id": "demo", "name": "Demo", "repo": str(repo)}], AGENTS)
     return repo
 

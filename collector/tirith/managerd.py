@@ -32,6 +32,7 @@ from tirith import inbox as inbox_mod
 from tirith import launch as launch_mod
 from tirith import models as models_mod
 from tirith import msession as msession_mod
+from tirith import plangate as plangate_mod
 from tirith.home import Config, now_iso, parse_iso
 from tirith.store import lane_path, read_json, write_json_atomic, write_lane
 
@@ -59,6 +60,12 @@ RULES = (
     "you only through the Tirith chat.",
     "Delegate everything to sub-agents (`tirith lane run`, `tirith launch --project P --step N`). Never edit "
     "code or files of a project yourself.",
+    "The plan is the only way to start an agent, no exceptions: every start needs an open item of the plan, "
+    "`tirith lane run ... --step N --item \"<exact item text>\"` or `tirith launch --project P --step N --item "
+    "\"<exact item text>\"`. An item that is not in the plan yet is added first (you are the one who updates the "
+    "TODO, e.g. a review): `tirith plan add --project P --step N --text \"<item>\"`. Nobody edits `docs/TODO.md` "
+    "by hand, not even you; Tirith writes it. An agent that ends without `tirith plan report` has its work "
+    "thrown away.",
     "`tirith lane run` from here starts the lane detached, in its own worktree, and prints the lane id at "
     "once. Never run it as a background task of your own shell and do not wait for it: your turn ends when "
     "you have answered.",
@@ -298,9 +305,13 @@ def launch(home: Path, config: Config, items: dict, now: datetime, spawn: Callab
         agentrun_mod.build_command(config, alias, proj.id, "x", model=model, effort=effort)
     except SystemExit as err:
         raise launch_mod.LaunchError(str(err.code))
+    try:  # the manager's own standing item, in the plan before it starts (``tirith.plangate``)
+        item = plangate_mod.ops_item(home, repo, proj.id, plangate_mod.MANAGER_ITEM, lane_id)[1]
+    except plangate_mod.PlanGateError as err:
+        raise launch_mod.LaunchError(f"the manager's plan item could not be added: {err}")
     argv = [*launch_mod.tirith_argv(), "lane", "run", "--id", lane_id, "--project", proj.id,
             "--class", HERO_CLASS, "--feature", FEATURE, "--brief", str(brief), "--workspace", str(repo),
-            "--agent", alias, "--by-tirith"]
+            "--agent", alias, "--by-tirith", "--item", item, "--item-step", plangate_mod.OPS_STEP]
     if model:
         argv += ["--model", str(model)]
     if effort:
@@ -611,9 +622,13 @@ def _start_session(home: Path, config: Config, items: dict, now: datetime, book:
     brief.parent.mkdir(parents=True, exist_ok=True)
     brief.write_text("The owner's manager: one persistent session run by Tirith; the chat feeds it.\n",
                      encoding="utf-8")
+    try:  # the manager's own standing item, in the plan before it starts (``tirith.plangate``)
+        item = plangate_mod.ops_item(home, repo, proj.id, plangate_mod.MANAGER_ITEM, lane_id)[1]
+    except plangate_mod.PlanGateError as err:
+        raise launch_mod.LaunchError(f"the manager's plan item could not be added: {err}")
     argv = [*launch_mod.tirith_argv(), "lane", "run", "--interactive", "--id", lane_id, "--project", proj.id,
             "--class", HERO_CLASS, "--feature", FEATURE, "--brief", str(brief), "--workspace", str(repo),
-            "--as-agent", alias, "--by-tirith", "--", *command]
+            "--as-agent", alias, "--by-tirith", "--item", item, "--item-step", plangate_mod.OPS_STEP, "--", *command]
     try:
         proc = msession_mod.spawn(argv, home, Path(home) / "logs" / f"{lane_id}.launch.log", popen)
     except OSError as err:

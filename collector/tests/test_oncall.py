@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import GIT, make_hooks_mutable, make_repo, write_config, write_lane_manifest
+from conftest import GIT, make_hooks_mutable, make_repo, write_config, write_lane_manifest, write_plan, PLAN_ARGS
 from tirith import dispatch as dispatch_mod
 from tirith import inbox as inbox_mod
 from tirith import launch as launch_mod
@@ -29,6 +29,7 @@ AGENTS = '[agents.anthropic]\ncommand = "agent-bin"\n\n[manager]\nsession = fals
 def project(home: Path, tmp_path: Path) -> Path:
     repo = make_repo(tmp_path / "demo")
     write_lane_manifest(repo)
+    write_plan(repo)
     write_config(home, [{"id": "demo", "name": "Demo", "repo": str(repo)}], AGENTS)
     return repo
 
@@ -154,6 +155,7 @@ def _setup(home: Path, tmp_path: Path, monkeypatch) -> Path:
     monkeypatch.delenv("TIRITH_ROLE", raising=False)
     monkeypatch.setattr("tirith.cli.verify_guard", lambda *a, **k: [])
     write_lane_manifest(repo)
+    write_plan(repo)
     return repo
 
 
@@ -171,7 +173,7 @@ def test_lane_run_in_a_manager_session_detaches_in_a_worktree(home, tmp_path, mo
     monkeypatch.setattr(launch_mod, "spawn_detached", lambda argv, h, log: started.append(argv) or 1)
     try:
         code = main(["lane", "run", "--project", "demo", "--class", "stonewright", "--feature", "Fix it",
-                     "--brief", str(repo / "brief.md"), "--", "agent-bin", "go"])
+                     "--brief", str(repo / "brief.md"), *PLAN_ARGS, "--", "agent-bin", "go"])
     finally:
         make_hooks_mutable(repo)
     assert code == 0
@@ -195,7 +197,7 @@ def test_lane_run_by_tirith_or_no_detach_runs_in_the_foreground(home, tmp_path, 
     child = "import json;print(json.dumps({'type':'result','result':'ok'}))"
     try:
         code = main(["lane", "run", "--project", "demo", "--class", "stonewright", "--feature", "Fg",
-                     "--brief", str(repo / "brief.md"), "--id", "fg", "--by-tirith", "--", sys.executable, "-c", child])
+                     "--brief", str(repo / "brief.md"), "--id", "fg", "--by-tirith", *PLAN_ARGS, "--", sys.executable, "-c", child])
     finally:
         make_hooks_mutable(repo)
     assert code == 0 and started == []
@@ -208,7 +210,7 @@ def test_lane_run_outside_the_manager_blocks_unless_detach_is_asked(home, tmp_pa
     monkeypatch.setattr(launch_mod, "spawn_detached", lambda argv, h, log: started.append(argv) or 1)
     try:
         code = main(["lane", "run", "--project", "demo", "--class", "stonewright", "--feature", "Later",
-                     "--brief", str(repo / "brief.md"), "--detach", "--", "agent-bin"])
+                     "--brief", str(repo / "brief.md"), "--detach", *PLAN_ARGS, "--", "agent-bin"])
     finally:
         make_hooks_mutable(repo)
     assert code == 0 and len(started) == 1
@@ -220,7 +222,7 @@ def test_lane_without_workspace_never_runs_in_the_main_checkout(home, tmp_path, 
     child = "import os,json;print(json.dumps({'type':'result','result':os.getcwd()}))"
     try:
         code = main(["lane", "run", "--project", "demo", "--class", "warden", "--feature", "Echo",
-                     "--brief", str(repo / "brief.md"), "--id", "echo", "--", sys.executable, "-c", child])
+                     "--brief", str(repo / "brief.md"), "--id", "echo", *PLAN_ARGS, "--", sys.executable, "-c", child])
     finally:
         make_hooks_mutable(repo)
     assert code == 0
@@ -235,7 +237,7 @@ def test_the_manager_lane_itself_runs_in_the_main_checkout(home, tmp_path, monke
     repo = _setup(home, tmp_path, monkeypatch)
     try:
         code = main(["lane", "run", "--project", "demo", "--class", "steward", "--feature", "Manager",
-                     "--brief", str(repo / "brief.md"), "--id", "manager-1", "--by-tirith", "--",
+                     "--brief", str(repo / "brief.md"), "--id", "manager-1", "--by-tirith", *PLAN_ARGS, "--",
                      sys.executable, "-c", "pass"])
     finally:
         make_hooks_mutable(repo)
@@ -254,7 +256,7 @@ def test_a_lane_stores_its_own_brief_as_its_request(home, tmp_path, monkeypatch)
     brief.write_text("# Lane: Clickable refs\n\nMake paths clickable.\n", encoding="utf-8")
     try:
         main(["lane", "run", "--project", "demo", "--class", "warden", "--feature", "Refs", "--brief", str(brief),
-              "--id", "refs", "--", sys.executable, "-c", "pass"])
+              "--id", "refs", *PLAN_ARGS, "--", sys.executable, "-c", "pass"])
     finally:
         make_hooks_mutable(repo)
     request = read_json(home / "lanes" / "refs.json", {})["request"]

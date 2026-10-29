@@ -42,6 +42,14 @@ CLASS_BY_KEYWORD = (
 )
 DEFAULT_CLASS = "stonewright"
 
+PLAN_RULES = (
+    "The plan is the only way to start and to finish: never edit `docs/TODO.md` (a gate blocks it). "
+    "Missing work goes in with `tirith plan add --project <id> --step <N> --text \"<item>\"`.",
+    "Before you finish, report the outcome of your item: `tirith plan report --lane $TIRITH_LANE --status "
+    "done|partial|blocked [--add \"<new item>\"]... [--reason \"<why>\"]`. `partial` needs the rest as `--add` "
+    "items, `blocked` needs `--reason`. Without a report your work is not merged.",
+)
+
 HARD_RULES = (
     "Do NOT commit; leave the changes in the working tree for the owner to review.",
     "Name agents only by their alias (see `docs/CONTRACT-hooks.md` \"Agent aliases\"), never by product or model name.",
@@ -51,6 +59,7 @@ HARD_RULES = (
     "Do not touch git hooks, `.git/`, or anything outside this worktree.",
     "Do not start sub-agents except with `tirith lane run`.",
     "Finish with a short report: what changed (files), the test result, and anything left open.",
+    *PLAN_RULES,
 )
 
 
@@ -96,7 +105,7 @@ def parse_url(url: str) -> dict:
     query = {k: v[-1] for k, v in parse_qs(parts.query).items()}
     return {"action": action, "project": query.get("project", ""), "step": query.get("step", ""),
             "token": query.get("token", ""), "agent": query.get("agent") or None,
-            "lane": query.get("lane", "")}
+            "lane": query.get("lane", ""), "item": query.get("item", "")}
 
 
 def build_review_url(lane: str, token: str) -> str:
@@ -139,15 +148,18 @@ def working_lane(lanes: list[dict], project: str, step_id: str, status_of) -> di
     return None
 
 
-def build_brief(title: str, intro: str, open_items: list[str], step_id: str) -> str:
+def build_brief(title: str, intro: str, open_items: list[str], step_id: str, item: str | None = None) -> str:
     out = [f"# Lane: {title}", "", "## Why",
            f"Step {step_id} of the project plan: {title}.", ""]
     if intro:
         out += [intro, ""]
-    out += ["## What to build", *(f"- {text}" for text in open_items), "",
+    if item:
+        out += ["## Your item", f"- {item}", "",
+                "Report this item when you finish (see the hard rules); the rest of the step is not yours.", ""]
+    out += ["## What to build", *(f"- {text}" for text in (open_items if not item else [item])), "",
             "## Hard rules", *(f"- {rule}" for rule in HARD_RULES), "",
             "## Where to read",
-            "- `docs/TODO.md` (read only): the plan; do not edit it.",
+            "- `docs/TODO.md` (read only): the plan; do not edit it. Only Tirith writes it.",
             "- `docs/CONTRACT*.md`: the contracts of the parts you touch; update the one you change.",
             ""]
     return "\n".join(out)
@@ -216,8 +228,15 @@ def lane_run_argv(project: str, step_id: str, hero_class: str, title: str, brief
                   workspace: Path, lane_id: str, command: list[str],
                   request_id: str | None = None, alias: str | None = None,
                   fallback_from: str | None = None, tried: list[str] | None = None,
-                  by_tirith: bool = False) -> list[str]:
+                  by_tirith: bool = False, item: str | None = None, item_step: str | None = None,
+                  retry_of: str | None = None) -> list[str]:
     extra = ["--request", request_id] if request_id else []
+    if item:
+        extra += ["--item", item]
+    if item_step and str(item_step) != str(step_id):
+        extra += ["--item-step", str(item_step)]
+    if retry_of:
+        extra += ["--retry-of", retry_of]
     if by_tirith:
         extra += ["--by-tirith"]
     if alias:

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import GIT, make_hooks_mutable, make_repo, write_config, write_lane_manifest
+from conftest import GIT, make_hooks_mutable, make_repo, write_config, write_lane_manifest, write_plan
 from tirith import agentrun
 from tirith.cli import end_lane, main, register_lane
 from tirith.collector import Collector
@@ -144,9 +144,10 @@ def test_lane_run_with_agent(home: Path, tmp_path: Path, capsys,
     monkeypatch.delenv("TIRITH_LANE", raising=False)
     monkeypatch.setattr("tirith.cli.verify_guard", lambda *a, **k: [])
     write_lane_manifest(repo)
+    write_plan(repo)
     try:
         code = main(["lane", "run", "--project", "demo", "--class", "warden", "--feature", "f",
-                     "--id", "l1", "--brief", str(repo / "brief.md"),
+                     "--id", "l1", "--brief", str(repo / "brief.md"), "--step", "1", "--item", "Do the thing.",
                      "--agent", "anthropic", "--prompt", "hello"])
     finally:
         make_hooks_mutable(repo)

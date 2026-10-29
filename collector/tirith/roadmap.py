@@ -25,6 +25,14 @@ _OUT_RE = re.compile(r"\((?:fuera de este plan|out of this plan)", re.IGNORECASE
 _OWNER_RE = re.compile(r"\((?:dueño|owner)", re.IGNORECASE)
 _FROM_RE = re.compile(r"\((?:desde|from)\s+(\d{4}-\d{2}-\d{2})", re.IGNORECASE)
 
+OPS_STEP = "0"  # Tirith's own work (reviews, plan refresh, manager): never started by the autopilot
+# Status notes Tirith keeps at the end of an item's text (``docs/CONTRACT-roadmap.md``, "Item states").
+STATE_OPEN, STATE_PROGRESS, STATE_REVIEW = "open", "progress", "review"
+STATE_BLOCKED, STATE_REOPENED, STATE_DONE = "blocked", "reopened", "done"
+_NOTE_WORDS = {"en curso": STATE_PROGRESS, "en revisión": STATE_REVIEW, "bloqueado": STATE_BLOCKED,
+               "reabierto": STATE_REOPENED}
+_NOTE_RE = re.compile(r"\s*\((en curso|en revisión|bloqueado|reabierto)(?::\s*([^()]*?))?\s*\)\s*$", re.IGNORECASE)
+
 _cache: dict[str, tuple[int, int, list[dict]]] = {}
 
 
@@ -45,6 +53,40 @@ def tag(text: str) -> tuple[str, str | None]:
     return "agent", None
 
 
+def norm(text: str) -> str:
+    return " ".join(str(text).split())
+
+
+def split_status(text: str) -> tuple[str, str, str | None]:
+    """``(clean text, state, detail)``: the item without the note Tirith keeps at its end, and what the note
+    says (``open`` without one). ``detail`` is the lane for ``progress`` and the reason for ``blocked`` /
+    ``reopened``."""
+    found = _NOTE_RE.search(text)
+    if not found:
+        return norm(text), STATE_OPEN, None
+    return norm(text[:found.start()]), _NOTE_WORDS[found.group(1).lower()], (found.group(2) or "").strip() or None
+
+
+def with_status(clean: str, state: str = STATE_OPEN, detail: str | None = None) -> str:
+    """``clean`` followed by the note for ``state`` (nothing for ``open``). Parentheses in ``detail`` are dropped."""
+    word = next((w for w, s in _NOTE_WORDS.items() if s == state), None)
+    if word is None:
+        return norm(clean)
+    detail = norm(re.sub(r"[()]", " ", detail or ""))
+    return f"{norm(clean)} ({word}" + (f": {detail}" if detail else "") + ")"
+
+
+def item_id(text: str) -> str:
+    """The stable id of an item: ``i-`` and 8 hex digits of its clean text."""
+    return "i-" + hashlib.sha1(split_status(text)[0].encode()).hexdigest()[:8]
+
+
+def item_state(item: dict) -> tuple[str, str | None]:
+    """``(state, detail)`` of a parsed item: ``done`` when ticked, else the note's state."""
+    _, state, detail = split_status(item["text"])
+    return (STATE_DONE, None) if item["done"] else (state, detail)
+
+
 def who_on(item: dict, today: date) -> str:
     """``agent|owner|date|out`` for an item today: a ``date`` item whose day has come is an agent's."""
     who, until = tag(item["text"])
@@ -53,7 +95,8 @@ def who_on(item: dict, today: date) -> str:
 
 def agent_items(step: dict, today: date) -> list[str]:
     """The texts of the open items of a parsed step that an agent can do today."""
-    return [i["text"] for i in step["items"] if not i["done"] and who_on(i, today) == "agent"]
+    return [i["text"] for i in step["items"] if not i["done"] and who_on(i, today) == "agent"
+            and item_state(i)[0] in (STATE_OPEN, STATE_REOPENED)]
 
 
 _URL_RE = re.compile(r"https?://[^\s)>\]`]+")
@@ -310,7 +353,10 @@ def build(folder: str | Path | None, project: str, agents: list[dict], today: da
         items = []
         for raw in step["items"]:
             who = who_on(raw, today)
-            item = {"text": raw["text"], "done": raw["done"], "who": who}
+            state, detail = item_state(raw)
+            item = {"text": raw["text"], "done": raw["done"], "who": who, "state": state}
+            if detail:
+                item["detail"] = detail
             if who == "date":
                 item["until"] = tag(raw["text"])[1]
             elif who == "owner" and not raw["done"]:
@@ -320,10 +366,13 @@ def build(folder: str | Path | None, project: str, agents: list[dict], today: da
         done = sum(1 for i in counted if i["done"])
         mine = working.get(step["id"], [])
         open_by = {w: [i for i in counted if not i["done"] and i["who"] == w] for w in ("agent", "owner", "date")}
+        open_by["agent"] = [i for i in open_by["agent"] if i["state"] in (STATE_OPEN, STATE_REOPENED)]
         row = {"id": step["id"], "title": step["title"],
                "status": step_status(done, len(counted), bool(mine), len(open_by["agent"]),
                                      len(open_by["owner"]), len(open_by["date"])),
                "done": done, "total": len(counted), "items": items, "agents": mine}
+        if step["id"] == OPS_STEP and row["status"] == "ready":
+            row["status"] = "todo"
         if row["status"] == "blocked-date":
             row["until"] = min(i["until"] for i in open_by["date"])
         rows.append(row)
@@ -444,3 +493,68 @@ def edit(text: str, step_id: str, item_text: str = "", new_text: str | None = No
     head = _ITEM_RE.match(lines[first].rstrip("\r\n"))
     lines[first:last] = [lines[first][:head.start(2)] + new_text + eol]
     return "".join(lines)
+
+
+def find_item(steps: list[dict], step_id: str, wanted: str) -> dict | None:
+    """The open item of step ``step_id`` whose clean text (or ``i-xxxxxxxx`` id) is ``wanted``."""
+    step = next((s for s in steps if s["id"] == str(step_id)), None)
+    clean = split_status(wanted)[0]
+    for item in (step["items"] if step else []):
+        if not item["done"] and (split_status(item["text"])[0] == clean or item_id(item["text"]) == clean):
+            return item
+    return None
+
+
+def _open_block(lines: list[str], step_id: str, wanted: str, what: str):
+    span = _step_span(lines, step_id)
+    if span is None:
+        raise EditError(f"step {step_id} is not in the plan any more")
+    clean = split_status(wanted)[0]
+    hit = next((b for b in _item_blocks(lines, *span) if not b[3]
+                and (split_status(b[2])[0] == clean or item_id(b[2]) == clean)), None)
+    if hit is None:
+        raise EditError(f"{what} changed in the plan meanwhile (or was ticked)")
+    return span, hit
+
+
+def set_item(text: str, step_id: str, wanted: str, new_text: str | None = None, tick: bool = False) -> str:
+    """``text`` with the open item whose clean text (or id) is ``wanted`` rewritten to ``new_text`` (one line)
+    and/or ticked. Raises ``EditError`` when the step or the item is not there."""
+    lines = text.splitlines(keepends=True)
+    _, (first, last, _, _) = _open_block(lines, step_id, wanted, "that item")
+    eol = "\r\n" if text.count("\r\n") > text.count("\n") / 2 else "\n"
+    if new_text is not None:
+        body = norm(new_text)
+        if not body:
+            raise EditError("the new text is empty")
+        head = _ITEM_RE.match(lines[first].rstrip("\r\n"))
+        lines[first:last] = [lines[first][:head.start(2)] + body + eol]
+        last = first + 1
+    if tick:
+        lines[first] = lines[first].replace("[ ]", "[x]", 1)
+    return "".join(lines)
+
+
+def add_sub(text: str, step_id: str, parent: str, new: str) -> str:
+    """``text`` with ``- [ ] <new>`` right after the open item ``parent``, one level deeper."""
+    lines = text.splitlines(keepends=True)
+    (_, end), (first, last, _, _) = _open_block(lines, step_id, parent, "the item to attach to")
+    new = norm(new)
+    if not new:
+        raise EditError("the new item is empty")
+    eol = "\r\n" if text.count("\r\n") > text.count("\n") / 2 else "\n"
+    depth = len(re.match(r"\s*", lines[first]).group(0))
+    at = last
+    while at < end and (_ITEM_RE.match(lines[at].rstrip("\r\n")) and len(re.match(r"\s*", lines[at]).group(0)) > depth):
+        at += 1  # after the sub-items it already has
+    if not lines[at - 1].endswith(("\n", "\r")):
+        lines[at - 1] += eol
+    lines.insert(at, " " * (depth + 2) + f"- [ ] {new}{eol}")
+    return "".join(lines)
+
+
+def add_step(text: str, step_id: str, title: str) -> str:
+    """``text`` with an empty step ``## <id>. <title>`` at the end, unless the step is already there."""
+    if _step_span(text.splitlines(keepends=True), step_id) is not None:
+        return text
+    return text.rstrip("\n") + f"\n\n## {step_id}. {title}\n\n"
