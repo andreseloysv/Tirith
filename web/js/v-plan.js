@@ -138,7 +138,7 @@
     answers.forEach(function (a) {
       h += '<li class="ie"><i class="ido ok"></i><div class="ib ians' + (open ? ' open' : '') + '"><button class="iahead" data-act="iatog" data-key="' + esc(r.id) + '" aria-expanded="' + open + '">' + CHEV +
         '<b>' + esc(answerLabel(a)) + '</b> <span class="iwhen">· ' + esc(T.clockTime(a.at)) + '</span></button>' +
-        (open ? '<div class="ia md">' + T.md(a.text) + '</div>' : '') + '</div></li>';
+        (open ? '<div class="ia md">' + T.md(a.text) + '</div>' + T.actions(a.actions, state, r.project) : '') + '</div></li>';
     });
     lanes.forEach(function (id) {
       var ag = T.agentById(state, id), named = answers.some(function (a) { return a.lane === id; });

@@ -14,3 +14,8 @@ run = "cd collector && uv run -q python -m compileall -q tirith && for f in ../w
 [[pipelines.stages]]
 name = "test"
 run = "cd collector && uv run -q pytest -q"
+
+[[pipelines.stages]]
+name = "rust-test"
+kind = "test"
+run = "cd app/src-tauri && cargo test -q"
