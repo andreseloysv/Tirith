@@ -22,6 +22,7 @@ from tirith.guardwrap import default_words, verify_guard
 from tirith.home import Config, ProjectConfig, ensure_home, load_config, now_iso, parse_iso
 from tirith import flows as flows_mod
 from tirith import manifest as manifest_mod
+from tirith import hooks as hooks_mod
 from tirith import projects as projects_mod
 from tirith.rooms import RoomsService
 from tirith.names import (
@@ -532,7 +533,9 @@ class Collector:
         if self._fixed_config is None:
             self.config = load_config(self.home)
         lanes = read_lanes(self.home)
-        events = read_jsonl(self.home / "events.jsonl")
+        events = [e for e in read_jsonl(self.home / "events.jsonl") if e.get("kind") != "hook"]
+        hook_events, loose_events = hooks_mod.attach(
+            hooks_mod.read_hook_rows(self.home / "events.jsonl"), [str(l["id"]) for l in lanes])
         # Projects are folders: derive auto projects for folders no project covers yet.
         room_folders = [r.project for r in self.config.rooms if _looks_like_path(r.project)]
         folders = ([lane.get("workspace") for lane in lanes]
@@ -591,6 +594,7 @@ class Collector:
                 "files_changed": files, "insertions": insertions, "deletions": deletions,
                 "report": lane.get("report"),
                 "parent": str(lane.get("parent") or "steward"),
+                "events": hook_events.get(str(lane["id"]), []),
             })
             for wait in self._brain_waits({**lane, "project": lane_project}):
                 brain_waits.append({**wait, "session": lane.get("session") or None})
@@ -701,6 +705,7 @@ class Collector:
             "rooms": rooms_state,
             "flows": all_flows[-flows_mod.STATE_FLOWS:],
             "sessions": sessions,
+            "loose_events": loose_events,
         }
 
     @staticmethod

@@ -237,3 +237,10 @@ body { background: #eaf1f5; }
 @media (max-width: 800px) { #shell { margin: 0; height: 100%; border-radius: 0; } }
 .zbar, .drawer, .fnode { position: absolute; } .fnode::before { display: none; }
 .fnode.sel::before { display: block; }
+
+/* hook activity (agent panel) */
+.act { margin: 0 0 12px; padding: 8px 10px; border-radius: 10px; background: rgba(255,255,255,.55); border: 1px solid var(--glass-line); box-shadow: inset 0 1px 0 #fff; }
+.act ul { list-style: none; margin: 4px 0 0; padding: 0; max-height: 220px; overflow: auto; }
+.act li { display: flex; gap: 8px; align-items: baseline; padding: 2px 0; font-size: 12px; }
+.act .t { font: 11px ui-monospace, Menlo, monospace; flex: none; } .act .tool { font-weight: 600; flex: none; min-width: 48px; }
+.act .what { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

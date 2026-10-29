@@ -9,6 +9,7 @@ the current one in the ``session`` file (or env ``TIRITH_SESSION``).
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
 import os
@@ -56,6 +57,29 @@ def git_toplevel(folder: Path) -> Path | None:
         return None
     top = out.stdout.strip()
     return real(top) if out.returncode == 0 and top else None
+
+
+@functools.lru_cache(maxsize=512)
+def _in_main_worktree(path: str) -> str:
+    """``path`` moved into the repository's main worktree when it lies in a linked git worktree."""
+    folder = Path(path)
+    top = git_toplevel(folder if folder.is_dir() else folder.parent)
+    if top is None:
+        return path
+    try:
+        out = subprocess.run(["git", "-C", str(top), "rev-parse", "--path-format=absolute",
+                              "--git-common-dir"], capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return path
+    common = real(out.stdout.strip()) if out.returncode == 0 and out.stdout.strip() else None
+    if common is None or common.name != ".git" or common.parent == top:
+        return path
+    return str(common.parent / folder.relative_to(top))
+
+
+def canonical(folder: str | Path) -> Path:
+    """Absolute path, with linked git worktrees (agent lanes) mapped onto their main repository."""
+    return Path(_in_main_worktree(str(real(folder))))
 
 
 def project_root(folder: str | Path) -> Path:
@@ -109,7 +133,7 @@ def match(folder: str | Path | None, items: list[Entry]) -> Entry | None:
     """The project whose folder is the longest prefix of ``folder``."""
     if not folder:
         return None
-    target = real(folder)
+    target = canonical(folder)
     best: Entry | None = None
     for item in items:
         if item.folder is None:
@@ -134,7 +158,7 @@ def discover(home: Path, config: Config, folders: list[str | Path]) -> list[Entr
     items = entries(config, auto)
     changed = False
     for folder in folders:
-        if not folder or match(folder, items) is not None:
+        if not folder or not real(folder).exists() or match(folder, items) is not None:
             continue
         root = project_root(folder)
         if str(root) in auto["ignored"] or match(root, items) is not None:

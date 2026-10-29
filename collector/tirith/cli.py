@@ -21,6 +21,7 @@ from tirith.collector import (
 from tirith.guardwrap import default_words, install_guard, verify_guard
 from tirith import flows as flows_mod
 from tirith import manifest as manifest_mod
+from tirith import hooks as hooks_mod
 from tirith import projects as projects_mod
 from tirith import rooms as rooms_mod
 from tirith.home import ensure_home, load_config, now_iso, tirith_home
@@ -723,6 +724,25 @@ def _cmd_room_say(args) -> int:
     return 0
 
 
+def _cmd_hook(args) -> int:
+    if args.action in ("install", "uninstall"):
+        try:
+            fn = hooks_mod.install if args.action == "install" else hooks_mod.uninstall
+            kwargs = {"tirith": args.tirith} if args.action == "install" else {}
+            kwargs["agents"] = load_config(_home(args)).agents
+            path = fn(args.agent, Path(args.settings).expanduser() if args.settings else None,
+                      **kwargs)
+        except (OSError, ValueError) as err:
+            raise SystemExit(f"tirith hook {args.action}: {err}")
+        print(f"{args.action}ed tirith hooks for {args.agent}: {path}")
+        return 0
+    try:  # a hook call must never break the agent
+        home = tirith_home(getattr(args, "home", None))
+        return hooks_mod.run_hook(home, args.agent, args.event, sys.stdin)
+    except BaseException:
+        return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     """The full ``tirith`` argument parser."""
     common = argparse.ArgumentParser(add_help=False)
@@ -875,6 +895,15 @@ def build_parser() -> argparse.ArgumentParser:
     room_say.add_argument("--re", type=int, action="append", metavar="N")
     room_say.add_argument("text")
     room_say.set_defaults(func=_cmd_room_say)
+
+    hook = sub.add_parser("hook", parents=[common],
+                          help="record an agent hook call (stdin JSON) / install hooks")
+    hook.add_argument("action", nargs="?", choices=["install", "uninstall"], default=None)
+    hook.add_argument("--agent", required=True, help="agent alias: anthropic, muse, or any other name")
+    hook.add_argument("--event", default=None, help="event name if the payload has none")
+    hook.add_argument("--settings", default=None, help="agent settings file (install/uninstall)")
+    hook.add_argument("--tirith", default="tirith", help="tirith executable to write on install")
+    hook.set_defaults(func=_cmd_hook)
 
     guard = sub.add_parser("guard", parents=[common], help="commit guard")
     guard.add_argument("action", choices=["install", "verify"])

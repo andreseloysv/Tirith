@@ -92,6 +92,7 @@ class Config:
     rooms: list[RoomConfig] = field(default_factory=list)
     owner_names: list[str] = field(default_factory=list)
     rooms_interval_s: float = 15.0
+    agents: dict[str, dict] = field(default_factory=dict)  # alias -> {command, settings}
 
     def room(self, room_id: str) -> RoomConfig | None:
         for room in self.rooms:
@@ -171,6 +172,9 @@ def load_config(home: Path) -> Config:
         cfg.steward_name = str(steward["name"])
     if steward.get("title"):
         cfg.steward_title = str(steward["title"])
+    agents_raw = raw.get("agents") if isinstance(raw.get("agents"), dict) else {}
+    cfg.agents = {str(alias): dict(table) for alias, table in agents_raw.items()
+                  if isinstance(table, dict)}
     rooms_raw = raw.get("rooms")
     if isinstance(rooms_raw, list):
         for item in rooms_raw:
