@@ -238,7 +238,7 @@ def test_brain_summary_and_owner_detection_are_cached(home: Path) -> None:
     assert [n["n"] for n in room["needs_owner"]] == [4]       # unknown #99 dropped
     assert room["needs_owner"][0]["source"] == "brain"
     wait = next(w for w in state["waiting_on_you"] if w["id"] == "room-talk-4")
-    assert wait["source"] == "brain"
+    assert wait["source"] == "room"
     calls = len(brain.calls)
     collector.build_state(NOW)
     collector.worker.drain(10)

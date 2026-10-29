@@ -101,12 +101,13 @@ def test_every_generator_produces_items_with_a_call_to_action(home: Path, tmp_pa
                                                                "created_at": "2026-10-29T00:00:00Z"})
         brain = collector._brain_waits({"id": "l-1", "project": "demo", "log": None,
                                         "report": "waiting", "started_at": "2026-10-29T00:00:00Z"})
-        assert brain and all(_has_cta(w) for w in brain)                                # brain-detected
+        assert brain and not any(asks_mod.is_owner_item(w) for w in brain)              # brain-detected
         collector.worker, collector.cache = real_worker, real_cache
         state = collector.build_state()
         sources = {w["source"] for w in state["waiting_on_you"]}
         assert {"manual", "guard"} <= sources and "violation" not in sources  # violations: Rules only
-        assert state["waiting_on_you"] and all(_has_cta(w) for w in state["waiting_on_you"])
+        assert state["waiting_on_you"] and all(asks_mod.is_owner_item(w) for w in state["waiting_on_you"])
+        assert sources <= set(asks_mod.OWNER_SOURCES)
         assert not [r for r in asks_mod.queue_items(home) if r["kind"] == asks_mod.NO_CTA_KIND]
     finally:
         make_hooks_mutable(repo)

@@ -59,8 +59,9 @@ def test_collector_uses_brain_cache_and_epithet(home: Path, tmp_path: Path) -> N
     collector.worker.drain(timeout_s=10)
     second = collector.cycle()  # cached brain summary + waiting item appear
     assert second["agents"][0]["summary"] == "Writing the migration test."
-    assert any(w.get("source") == "brain" and "Approve" in w["text"]
-               for w in second["waiting_on_you"])
+    assert not any(w.get("source") == "brain" for w in second["waiting_on_you"])  # never the owner's turn
+    assert any(q["kind"] == "agent-waiting" and "Approve" in q["text"] and q["lane"] == "a-1"
+               for q in second["manager_queue"])
     collector.worker.drain(timeout_s=10)
     third = collector.cycle()  # epithet from the first brain summary lands
     assert third["agents"][0]["epithet"] == "Ledgerhand"
