@@ -1,0 +1,4 @@
+banner line
+{"payload_type":"run.usage","payload":{"input_tokens":1000,"output_tokens":200,"model":"beta-2","duration_ms":4000}}
+{"payload_type":"run.usage","payload":{"usage":{"input_tokens":500,"output_tokens":100,"cache_read_input_tokens":50}}}
+{"payload_type":"run.terminal.completed","payload":{"text":"ok"}}

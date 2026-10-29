@@ -21,6 +21,7 @@ from tirith import activity as activity_mod
 from tirith import brain as brain_mod
 from tirith.guardwrap import default_words, verify_guard
 from tirith.home import Config, ProjectConfig, ensure_home, load_config, now_iso, parse_iso
+from tirith import agentrun as agentrun_mod
 from tirith import flows as flows_mod
 from tirith import github as github_mod
 from tirith import manifest as manifest_mod
@@ -290,8 +291,34 @@ class Collector:
         self._one_shot = False
         self.activity = activity_mod.ActivityTracker()
         self.github = github_mod.GithubReader(github_transport)
+        self._usage_cache: dict = {}
 
     # -- identities / renown -------------------------------------------------
+
+    def _usage(self, lane: dict, ended: bool) -> dict | None:
+        """Tokens and cost from the lane's log; re-parsed only when the log changed."""
+        log = lane.get("log")
+        try:
+            st = Path(log).stat() if log else None
+        except OSError:
+            st = None
+        if st is None:
+            return None
+        key = (st.st_mtime_ns, st.st_size)
+        cached = self._usage_cache.get(str(log))
+        if cached and cached[0] == key:
+            return cached[1]
+        usage = agentrun_mod.parse_usage(log)
+        self._usage_cache[str(log)] = (key, usage)
+        return usage
+
+    def _diff(self, lane: dict) -> dict | None:
+        diff = lane.get("diff")
+        if not isinstance(diff, dict) or not diff.get("path"):
+            return None
+        path = Path(str(diff["path"]))
+        return {"path": str(path), "size": int(diff.get("size") or 0),
+                "script": f"diffs/{path.stem}.js"}
 
     def _load_agents(self) -> dict:
         data = read_json(self.home / "agents.json", {})
@@ -709,6 +736,8 @@ class Collector:
                 "log_entries": log_view,
                 "files_changed": files, "insertions": insertions, "deletions": deletions,
                 "report": _bounded_report(lane.get("report")),
+                "usage": self._usage(lane, ended is not None),
+                "diff": self._diff(lane),
                 "request": lane.get("request") if isinstance(lane.get("request"), dict) else None,
                 "parent": str(lane.get("parent") or "steward"),
                 "step": str(lane["step"]) if lane.get("step") else None,
@@ -827,6 +856,12 @@ class Collector:
             projects=endpoint_projects, limit=None)
         self._fill_counts(projects, agent_rows, runs, all_flows, now)
         sessions = self._sessions(lanes, events, all_flows, raw_notes, waiting, resolve)
+        for sess in sessions:
+            sess["usage"] = agentrun_mod.sum_usage(
+                [a.get("usage") for a in agent_rows if a.get("session") == sess["id"]])
+        for proj in projects:
+            proj["usage"] = agentrun_mod.sum_usage(
+                [a.get("usage") for a in agent_rows if a.get("project") == proj["id"]])
         return {
             "version": 1,
             "generated_at": now_iso(now),
