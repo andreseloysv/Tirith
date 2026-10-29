@@ -1591,6 +1591,14 @@ class Collector:
             self._phase_total = {}
         return state
 
+    def quiesce(self, timeout_s: float = 5.0) -> bool:
+        """Stop every background thread (bounded) so the process can re-execute itself without a thread
+        mid-flight holding a lock or a half-written file. True when all of them ended in time."""
+        deadline = time.monotonic() + timeout_s
+        left = lambda: max(0.1, deadline - time.monotonic())  # noqa: E731
+        ended = [self.rooms.stop(left()), self.worker.stop(left()), self.activity.wait_idle(left())]
+        return all(ended)
+
     def run(self, interval: float = 2.0, once: bool = False, reload_check=None) -> dict:
         """Loop forever (or once) writing state every ``interval`` seconds.
 

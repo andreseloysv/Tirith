@@ -342,6 +342,7 @@ class BrainWorker:
         self._inflight: set[str] = set()
         self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
+        self._stopping = False
 
     @property
     def enabled(self) -> bool:
@@ -380,9 +381,23 @@ class BrainWorker:
             while self._queue.unfinished_tasks and time.monotonic() < deadline:
                 time.sleep(0.05)
 
+    def stop(self, timeout_s: float = 5.0) -> bool:
+        """End the worker thread (bounded wait); True when it is gone. Queued jobs are dropped."""
+        thread = self._thread
+        if thread is None:
+            return True
+        self._stopping = True
+        self._queue.put(None)
+        thread.join(timeout_s)
+        return not thread.is_alive()
+
     def _run(self) -> None:
         while True:
-            kind, text, key, runner = self._queue.get()
+            job = self._queue.get()
+            if job is None or self._stopping:
+                self._queue.task_done()
+                return
+            kind, text, key, runner = job
             try:
                 result = runner(self.client)  # type: ignore[arg-type]
                 if isinstance(result, dict):
