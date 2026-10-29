@@ -57,10 +57,11 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 
 ## 4. `lane run --interactive` (seguir chateando)
 
-- [ ] `tirith lane run --interactive -- <agente>`: la terminal queda conectada al agente.
-- [ ] Registrar igual: lane, pid, parent, sesión, cambios de git inicio→fin, resultado al salir.
-- [ ] Actividad durante el chat vía los hooks de la sección 3.
-- [ ] Capturar Ctrl+C para cerrar el lane bien.
+- [x] `tirith lane run --interactive -- <agente>`: la terminal queda conectada al agente.
+- [x] Registrar igual: lane, pid, parent, sesión, cambios de git inicio→fin, resultado al salir.
+- [x] Actividad durante el chat vía los hooks de la sección 3.
+- [x] Capturar Ctrl+C para cerrar el lane bien.
+- [ ] Probarlo con un agente real en una terminal real.
 
 ## 5. Agentes soportados (modo no interactivo, salida JSON)
 
@@ -111,12 +112,13 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 
 ## 9. App de escritorio (Tauri) con chat
 
-- [ ] App Tauri 2 que carga la web actual (`web/`) sin reescribirla; Mac, Windows y Linux.
-- [ ] Comunicación web ↔ app por IPC de Tauri (sin puertos).
+- [x] App Tauri 2 que carga la web actual (`web/`) sin reescribirla; Mac, Windows y Linux.
+- [x] Comunicación web ↔ app por IPC de Tauri (sin puertos).
 - [ ] Vista de chat: cada conversación es un lane (`lane run --interactive` por debajo).
 - [ ] Agentes por stdin/stdout (modo stream-json del CLI `anthropic`, `muse serve`).
 - [ ] Preguntas de permiso del agente en la UI.
-- [ ] Collector dentro de la app (Python con uv como sidecar).
+- [x] La app arranca el collector si no hay uno (con uv; Python aún no va empaquetado).
+- [ ] Abrir la app en modo dev y comprobar que se ve y se actualiza.
 - [ ] Windows: versión propia del wrapper de git y de la guarda.
 - [ ] Confirmar qué agentes existen en cada plataforma.
 - [ ] Móvil: para luego.
