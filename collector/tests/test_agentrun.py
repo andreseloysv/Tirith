@@ -128,8 +128,8 @@ def test_codex_turn_completed_usage(tmp_path: Path) -> None:
 def test_muse_preset_and_missing_support() -> None:
     cfg = _config(muse={"command": "agent-m"})
     assert agentrun.build_command(cfg, "muse", None, "hi") == ["agent-m", "exec", "--json", "hi"]
-    with pytest.raises(SystemExit):
-        agentrun.build_command(cfg, "muse", None, "hi", effort="high")
+    cmd = agentrun.build_command(cfg, "muse", None, "hi", effort="high")
+    assert cmd[cmd.index("--reasoning-effort") + 1] == "high"
 
 
 def test_unknown_alias_and_missing_command() -> None:
