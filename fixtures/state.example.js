@@ -203,6 +203,7 @@ window.TIRITH_STATE = {
   "agents": [
     {
       "id": "w6-perf",
+      "parent": "steward",
       "project": "chromasol",
       "name": "Ivren",
       "epithet": "of the Seventh Gate",
@@ -226,6 +227,7 @@ window.TIRITH_STATE = {
     },
     {
       "id": "w1-data",
+      "parent": "w6-perf",
       "project": "chromasol",
       "name": "Halvard",
       "epithet": "Stonehand",
@@ -249,6 +251,7 @@ window.TIRITH_STATE = {
     },
     {
       "id": "icon-2",
+      "parent": "w6-perf",
       "project": "chromasol",
       "name": "Sefa",
       "epithet": "Prismhand",
@@ -272,6 +275,7 @@ window.TIRITH_STATE = {
     },
     {
       "id": "t-world",
+      "parent": "steward",
       "project": "tirith",
       "name": "Marrow",
       "epithet": "Quickstep",
@@ -292,6 +296,7 @@ window.TIRITH_STATE = {
     },
     {
       "id": "t-collector",
+      "parent": "t-world",
       "project": "tirith",
       "name": "Odile",
       "epithet": "Inkwell",

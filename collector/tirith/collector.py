@@ -577,6 +577,7 @@ class Collector:
                 "log_tail": log_tail,
                 "files_changed": files, "insertions": insertions, "deletions": deletions,
                 "report": lane.get("report"),
+                "parent": str(lane.get("parent") or "steward"),
             })
             for wait in self._brain_waits({**lane, "project": lane_project}):
                 brain_waits.append({**wait, "session": lane.get("session") or None})

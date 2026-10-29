@@ -23,7 +23,7 @@
     if (filt.project) parts.push('project=' + encodeURIComponent(filt.project));
     if (filt.q) parts.push('q=' + encodeURIComponent(filt.q));
     if (filt.view !== 'overview') parts.push('view=' + filt.view);
-    if (filt.mode === 'list') parts.push('mode=list');
+    if (filt.mode !== 'kanban') parts.push('mode=' + filt.mode);
     var h = parts.length ? '#' + parts.join('&') : '';
     if (h !== location.hash) { try { history.replaceState(null, '', location.pathname + location.search + h); } catch (e) {} }
   }
@@ -31,7 +31,7 @@
     var o = parseHash();
     filt.session = o.session || ''; filt.project = o.project || ''; filt.q = o.q || '';
     filt.view = /^(overview|pipelines|agents|flow)$/.test(o.view) ? o.view : 'overview';
-    filt.mode = o.mode === 'list' ? 'list' : 'kanban';
+    filt.mode = o.mode === 'list' || o.mode === 'tree' ? o.mode : 'kanban';
     if (o.open) {
       T.ui.selRun = o.open; T.ui.openAgent = o.open; T.ui.edge = o.open === 'edge' ? 'first' : null;
       T.ui.drawer = filt.view === 'pipelines' ? 'stage' : filt.view === 'agents' ? 'agent' : filt.view === 'flow' ? (o.open === 'edge' ? 'edge' : null) : null;
@@ -169,7 +169,7 @@
     });
     window.addEventListener('hashchange', function () {
       var o = parseHash();
-      if ((o.session || '') === filt.session && (o.project || '') === filt.project && (o.q || '') === filt.q && (o.view || 'overview') === filt.view && (o.mode === 'list' ? 'list' : 'kanban') === filt.mode && (o.state || '') === (defaultMode ? '' : statePath)) return;
+      if ((o.session || '') === filt.session && (o.project || '') === filt.project && (o.q || '') === filt.q && (o.view || 'overview') === filt.view && (o.mode === 'list' || o.mode === 'tree' ? o.mode : 'kanban') === filt.mode && (o.state || '') === (defaultMode ? '' : statePath)) return;
       applyHash(false); qi.value = filt.q;
     });
     srcLine();

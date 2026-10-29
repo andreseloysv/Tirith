@@ -12,16 +12,19 @@ import os
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 
-from tirith.collector import Collector, collect_tree, git_head, heuristic_architecture
+from tirith.collector import (
+    Collector, collect_tree, git_head, git_shortstat, heuristic_architecture,
+)
 from tirith.guardwrap import default_words, install_guard, verify_guard
 from tirith import flows as flows_mod
 from tirith import projects as projects_mod
 from tirith import rooms as rooms_mod
 from tirith.home import ensure_home, load_config, now_iso, tirith_home
 from tirith.store import (
-    append_jsonl, lane_path, read_json, read_jsonl, write_json_atomic, write_lane,
+    append_jsonl, final_answer, lane_path, read_json, read_jsonl, write_json_atomic, write_lane,
 )
 
 
@@ -51,8 +54,9 @@ def register_lane(home: Path, *, lane_id: str | None, project: str, hero_class: 
     elif lane_path(home, lane_id).exists():
         raise SystemExit(f"lane already exists: {lane_id}")
     workspace_abs = str(Path(workspace).expanduser().resolve()) if workspace else None
+    parent = os.environ.get("TIRITH_LANE") or "steward"
     lane = {
-        "id": lane_id, "project": project, "class": hero_class, "feature": feature,
+        "id": lane_id, "parent": parent, "project": project, "class": hero_class, "feature": feature,
         "workspace": workspace_abs,
         "log": str(Path(log).expanduser().resolve()) if log else None,
         "pid": pid,
@@ -62,7 +66,8 @@ def register_lane(home: Path, *, lane_id: str | None, project: str, hero_class: 
         "session": projects_mod.current_session(home),
     }
     write_lane(home, lane)
-    flows_mod.append_flow(home, "steward", f"agent:{lane_id}", "brief",
+    source = "steward" if parent == "steward" else f"agent:{parent}"
+    flows_mod.append_flow(home, source, f"agent:{lane_id}", "brief",
                           f"Brief: {feature}", lane["brief"], project=project)
     return lane
 
@@ -105,9 +110,11 @@ def _cmd_lane_end(args) -> int:
     return 0
 
 
-def _wrapper_path_env(home: Path | None = None) -> dict:
-    """Environment with the owner's git wrapper folder first in PATH."""
+def _wrapper_path_env(home: Path | None = None, lane_id: str | None = None) -> dict:
+    """Environment with the owner's git wrapper folder first in PATH (and the lane, if any)."""
     env = dict(os.environ)
+    if lane_id:
+        env["TIRITH_LANE"] = lane_id
     session = projects_mod.current_session(home or tirith_home())
     if session:
         env["TIRITH_SESSION"] = session
@@ -155,16 +162,38 @@ def _cmd_lane_run(args) -> int:
         home, lane_id=lane_id, project=args.project, hero_class=args.hero_class,
         feature=args.feature, workspace=str(workspace), log=str(log_path),
         pid=None, brief=args.brief)
+    began = time.monotonic()
     with log_path.open("ab") as log_handle:
         proc = subprocess.Popen(
-            command, cwd=str(workspace), env=_wrapper_path_env(home),
+            command, cwd=str(workspace), env=_wrapper_path_env(home, lane_id),
             stdout=log_handle, stderr=subprocess.STDOUT)
         lane["pid"] = proc.pid
         write_lane(home, lane)
         exit_code = proc.wait()
-    end_lane(home, lane_id, "done" if exit_code == 0 else "failed")
-    print(lane_id)
+    result = "done" if exit_code == 0 else "failed"
+    answer, _ = final_answer(log_path)
+    end_lane(home, lane_id, result, answer or None)
+    if result == "failed":
+        add_wait(home, args.project, f"lane {lane_id} failed")
+    elif not answer:
+        add_wait(home, args.project, f"lane {lane_id} ended without an answer")
+    files, plus, minus = git_shortstat(str(workspace), lane.get("start_commit"))
+    print(f"lane {lane_id}: {result}, {files} files +{plus} -{minus}, "
+          f"{_duration(time.monotonic() - began)}")
+    if answer:
+        print()
+        print(answer)
     return exit_code
+
+
+def _duration(seconds: float) -> str:
+    total = int(seconds)
+    if total < 60:
+        return f"{total}s"
+    minutes, secs = divmod(total, 60)
+    if minutes < 60:
+        return f"{minutes}m{secs:02d}s"
+    return f"{minutes // 60}h{minutes % 60:02d}m"
 
 
 def _pipeline_book(home: Path) -> dict:
@@ -277,16 +306,20 @@ def _next_wait_id(home: Path) -> str:
     return f"w-{highest + 1}"
 
 
-def _cmd_wait_add(args) -> int:
-    home = _home(args)
-    wait_id = args.id or _next_wait_id(home)
+def add_wait(home: Path, project: str, text: str, link: str | None = None,
+             wait_id: str | None = None) -> str:
+    """Add an item to the owner's waiting list; returns its id."""
+    wait_id = wait_id or _next_wait_id(home)
     append_jsonl(home / "waits.jsonl", {
-        "id": wait_id, "at": now_iso(), "project": args.project,
-        "text": args.text, "link": args.link, "done_at": None,
+        "id": wait_id, "at": now_iso(), "project": project,
+        "text": text, "link": link, "done_at": None,
         "session": projects_mod.current_session(home)})
-    flows_mod.append_flow(home, "steward", "owner", "request", args.text, args.link,
-                          project=args.project)
-    print(wait_id)
+    flows_mod.append_flow(home, "steward", "owner", "request", text, link, project=project)
+    return wait_id
+
+
+def _cmd_wait_add(args) -> int:
+    print(add_wait(_home(args), args.project, args.text, args.link, args.id))
     return 0
 
 

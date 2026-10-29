@@ -61,7 +61,7 @@ Pipeline events (`tirith run --project chromasol --pipeline android-release --st
       "generated_at": "...", "source": "muse|manual|none"}
   }],
   "agents": [{
-    "id": "w1-data", "project": "chromasol",
+    "id": "w1-data", "project": "chromasol", "parent": "steward|<lane id of the spawning agent>",
     "name": "Halvard", "epithet": "Stonehand", "class": "stonewright", "rank": "sergeant", "renown": 340,
     "feature": "Room database", "status": "working|done|failed|stalled",
     "started_at": "...", "ended_at": null, "elapsed_s": 1840,
