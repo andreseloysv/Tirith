@@ -2224,8 +2224,8 @@ def build_parser() -> argparse.ArgumentParser:
     i_add.add_argument("--step", default=None, help="roadmap step number (not for setup)")
     i_add.add_argument("--text", default=None,
                        help="the question (required for ask); for setup the request as JSON, see CONTRACT-setup")
-    i_add.add_argument("--attach", action="append", default=[], metavar="IMAGE",
-                       help="an image file to attach (PNG, JPEG, GIF, WebP; up to 6, 10 MB each); repeatable")
+    i_add.add_argument("--attach", action="append", default=[], metavar="FILE",
+                       help="a file to attach (an image or any other file; up to 6, 10 MB each); repeatable")
     i_add.add_argument("--cid", default=None, help="client id; a second add with the same cid is ignored (safe retry)")
     i_ls = inbox_sub.add_parser("list", parents=[common], help="list requests")
     i_ls.add_argument("--open", action="store_true", help="only open requests")
@@ -2235,8 +2235,8 @@ def build_parser() -> argparse.ArgumentParser:
     i_ans.add_argument("text")
     i_ans.add_argument("--by", choices=inbox_mod.ANSWERERS, default="manager")
     i_ans.add_argument("--lane", default=None, help="id of the lane (agent) that took the request")
-    i_ans.add_argument("--attach", action="append", default=[], metavar="IMAGE",
-                       help="an image file the answer refers to (up to 6); repeatable")
+    i_ans.add_argument("--attach", action="append", default=[], metavar="FILE",
+                       help="an image or other file the answer refers to (up to 6); repeatable")
     i_reply = inbox_sub.add_parser("reply", parents=[common], help="the owner's answer to an ask")
     i_reply.add_argument("--wait", required=True, help="id of the ask (tirith wait add)")
     i_reply.add_argument("--project", default=None)
