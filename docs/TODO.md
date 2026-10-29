@@ -119,7 +119,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Activar las puertas en la máquina del dueño (hooks de usuario + shims).
 - [x] `tirith.toml` en ChromaSol y RelaGame.
 - [x] ChromaSol: unir su hook `pre-commit` de rutas protegidas con la guarda de palabras (dueño); hasta entonces `lane run` no arranca allí.
-- [ ] Tirith no se bloquea solo: duplicados por elemento (no por paso) y recupera un bloqueo de git abandonado en el checkout principal. (en revisión)
+- [x] Tirith no se bloquea solo: duplicados por elemento (no por paso) y recupera un bloqueo de git abandonado en el checkout principal. (hecho: b8f1ea3)
   - [ ] Revisar: Tirith no se bloquea solo: duplicados por elemento (no por paso) y recupera un bloqueo de git abandonado en el checkout principal. (en curso: revisión de reglas-de-c-digo-errores-de-comp)
 - [ ] Todo comando tiene timeout por código (collector, etapas y comandos de los agentes): Tirith lo aprende del historial, los agentes pueden subirlo o bajarlo dentro de límites con motivo, y al vencer se detiene el proceso con sus hijos y se limpian sus bloqueos. (en revisión)
 - [ ] Un elemento se marca hecho en cuanto su trabajo está en main y verificado, aunque la lane se haya fusionado sola; lo ya fusionado hoy se marca con su commit. (en revisión)
