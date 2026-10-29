@@ -278,6 +278,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Integrar en main las lanes terminadas teach, mergeq, fasttests, pilotask, idletimeout y diskauto (resolviendo conflictos). (en curso: u-land6)
 - [ ] Landing page pública de Tirith (GitHub Pages): qué es, qué hace, cómo usa los modelos de Meta, capturas reales y cómo probarlo. (en curso: u-landing)
 - [ ] Vídeo de demo de 3 min del Tirith actual (manager en el chat, plan, reglas en código, agentes trabajando) grabado por script, más un GIF corto para el README.
+- [ ] Repo preparado para conseguir estrellas: README con GIF y estrella arriba, badges, inicio en una línea, imagen social, CONTRIBUTING y plantillas de issues.
 
 ## 15. Collector y CLI en Rust
 
