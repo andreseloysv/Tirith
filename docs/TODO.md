@@ -141,10 +141,23 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Botón «Terminar con un agente» en cada paso no terminado del Plan.
 - [ ] Registrar el manejador `tirith://` en macOS y probar un lanzamiento real.
 - [ ] Al terminar un lane lanzado así: botón «Revisar y unir» (tests + merge).
-- [ ] Buzón del dueño: «Termínalo» y «¿Qué pasa?» en cada paso; el aviso llega al steward.
-- [ ] Respuestas bajo cada paso (steward, o Muse Spark automático si el steward no responde en 2 min).
-- [ ] El steward vigila el buzón desde su sesión y actúa al instante.
+- [x] Buzón del dueño: «Termínalo» y «¿Qué pasa?» en cada paso; el aviso llega al steward.
+- [x] Respuestas bajo cada paso (steward, o Muse Spark automático si el steward no responde en 2 min).
+- [x] El steward vigila el buzón desde su sesión y actúa al instante.
 - [x] Markdown en todo el texto de los agentes (respuestas, objetivos, mensajes).
+
+## 12. «Tu turno»: llamadas a la acción claras
+
+- [ ] Cada aviso trae opciones de un clic y una caja para escribir; la respuesta llega al steward por el buzón.
+- [ ] El steward revisa cada informe de lane y resuelve lo que puede; al dueño solo llega lo que necesita su mano.
+- [ ] Lanes fallidos: «Reintentar» / «Ver el log» / «Descartar».
+
+## 13. Configuración del proyecto visible y editable
+
+- [ ] Tarjeta «Setup» por proyecto: etapas (build / test / deploy) con su último resultado, hooks, reglas y `tirith check`.
+- [ ] Reglas propias en `tirith.toml` (`[[rules]]`), aplicadas por las puertas y validadas por `tirith check`.
+- [ ] Crear etapas y reglas pidiéndolo (chat o formulario «+ Etapa» / «+ Regla»); la UI se actualiza sola.
+- [ ] Aviso con un clic cuando las reglas no están activas en la máquina.
 
 ## Orden
 
