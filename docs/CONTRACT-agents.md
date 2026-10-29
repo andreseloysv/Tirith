@@ -53,3 +53,17 @@ added-file patches (text bounded at 1 MB, a file over 256 KB is cut, binary file
 `executable` (the configured command is found in the lane PATH), `path-order` (`~/.local/bin` is
 first in the lane PATH), `hooks-skip` (a commit that skips hooks is refused, simulated in a temp repo
 with the wrapper on PATH; reported as FAIL "cannot test" when there is no `~/.local/bin/git`).
+
+## Chat arguments: `chat_args`
+
+The desktop chat (`app/README.md`) starts `<command> <chat_args>` under `tirith lane run --interactive`.
+For `anthropic`: `["-p", "--input-format", "stream-json", "--output-format", "stream-json",
+"--verbose", "--permission-prompt-tool", "stdio"]`. stdin takes one JSON object per line:
+`{"type":"user","message":{"role":"user","content":[{"type":"text","text":"..."}]}}`. stdout streams
+`system`, `assistant`, `user` (tool results) and `control_request` lines, and finally `result`. A
+permission question is
+`{"type":"control_request","request_id":R,"request":{"subtype":"can_use_tool","tool_name":T,"input":{...}}}`;
+the answer is
+`{"type":"control_response","response":{"subtype":"success","request_id":R,"response":{"behavior":"allow","updatedInput":{...}}}}`
+or a `behavior` of `deny` with a `message`. Sources: `docs/PLATFORMS.md`. `tools/chat_check.py`
+exercises it by hand.
