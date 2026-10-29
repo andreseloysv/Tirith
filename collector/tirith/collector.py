@@ -20,6 +20,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from tirith import timeouts as timeouts_mod
 from tirith import activity as activity_mod
 from tirith import asks as asks_mod
 from tirith import howto as howto_mod
@@ -28,6 +29,7 @@ from tirith import brain as brain_mod
 from tirith.guardwrap import default_words, verify_guard
 from tirith.home import Config, ProjectConfig, ensure_home, load_config, now_iso, parse_iso
 from tirith import agentrun as agentrun_mod
+from tirith import keepgoing as keepgoing_mod
 from tirith import flows as flows_mod
 from tirith import github as github_mod
 from tirith import manifest as manifest_mod
@@ -138,10 +140,7 @@ def git_head(workspace: str | Path | None) -> str | None:
     if not workspace:
         return None
     try:
-        out = subprocess.run(
-            ["git", "-C", str(workspace), "rev-parse", "HEAD"],
-            capture_output=True, text=True, timeout=10,
-        )
+        out = timeouts_mod.run(["git", "-C", str(workspace), "rev-parse", "HEAD"], "git", text=True)
     except (OSError, subprocess.SubprocessError):
         return None
     return out.stdout.strip() or None if out.returncode == 0 else None
@@ -165,10 +164,8 @@ def git_shortstat(workspace: str | Path | None, start_commit: str | None) -> tup
     if not workspace or not start_commit:
         return (0, 0, 0)
     try:
-        out = subprocess.run(
-            ["git", "-C", str(workspace), "diff", "--shortstat", str(start_commit)],
-            capture_output=True, text=True, timeout=15,
-        )
+        out = timeouts_mod.run(["git", "-C", str(workspace), "diff", "--shortstat", str(start_commit)],
+                               "git", text=True)
     except (OSError, subprocess.SubprocessError):
         return (0, 0, 0)
     if out.returncode != 0:
@@ -1154,6 +1151,7 @@ class Collector:
                 "ran": models_mod.ran_with(lane, usage),
                 "agent": lane.get("agent") or None,
                 "fallback_from": lane.get("fallback_from") or None,
+                "keep_going": keepgoing_mod.round_label(lane),
                 "diff": self._diff(lane),
                 "request": lane.get("request") if isinstance(lane.get("request"), dict) else None,
                 "parent": "manager" if lane.get("parent") in (None, "", "steward") else str(lane["parent"]),
@@ -1351,6 +1349,7 @@ class Collector:
                 filerefs_mod.chat_texts(inbox_rows, says, waiting + answered_waits), projects),
             "disk": dispatch_mod.load_state(self.home).get("disk"),
             "health": selfcheck_mod.public(dispatch_mod.load_state(self.home).get("health")),
+            "timeouts": timeouts_mod.table(self.home, self.config),
             "autopilot": autopilot_mod.public(self.home, self.config, agent_rows, projects, now),
             "launch": {"token": launch_mod.launch_token(self.home),
                        "available": launch_mod.handler_installed()},
@@ -1592,8 +1591,11 @@ class Collector:
             self._phase_total = {}
         return state
 
-    def run(self, interval: float = 2.0, once: bool = False) -> dict:
-        """Loop forever (or once) writing state every ``interval`` seconds."""
+    def run(self, interval: float = 2.0, once: bool = False, reload_check=None) -> dict:
+        """Loop forever (or once) writing state every ``interval`` seconds.
+
+        ``reload_check`` (the continuous mode of ``tirith collect``) is asked between cycles; when it says the
+        code changed the loop ends with ``ReloadRequested`` so the caller can re-execute."""
         self._one_shot = once
         if once and self.config.rooms:
             # One-shot mode has no background poller to wait for: read the rooms now,
@@ -1616,6 +1618,9 @@ class Collector:
                   f"retrying (failure {failures})", file=sys.stderr, flush=True)
         while True:
             time.sleep(max(0.2, interval) + backoff_s(failures))
+            if reload_check is not None and reload_check():
+                from tirith.selfreload import ReloadRequested
+                raise ReloadRequested()
             try:
                 state = self.cycle()
                 failures = 0

@@ -81,9 +81,9 @@ def _reaped(lane: dict) -> bool:
         return True
     pid = lane.get("pid")
     try:
-        import subprocess
-        state = subprocess.run(["ps", "-o", "stat=", "-p", str(int(pid))], capture_output=True,
-                               text=True).stdout.strip()
+        from tirith import timeouts as timeouts_mod
+        state = timeouts_mod.run(["ps", "-o", "stat=", "-p", str(int(pid))], "generic", text=True,
+                                 timeout=5).stdout.strip()
     except (OSError, TypeError, ValueError):
         return False
     return state.startswith("Z") or not state
