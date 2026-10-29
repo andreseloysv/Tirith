@@ -65,6 +65,7 @@ class ProjectConfig:
     guard_words: list[str] | None = None
     architecture: dict | None = None
     guard: bool = True  # config `guard = false`: the owner opted this project out of the commit guard
+    cargo_target_dir: Path | None = None  # shared CARGO_TARGET_DIR of its cargo stages (default <repo>-lanes/.cargo-target)
 
 
 @dataclass
@@ -105,6 +106,7 @@ class Config:
     autopilot_enabled: bool = True  # [autopilot] enabled: Tirith starts a lane on every ready plan step
     autopilot_max_parallel: int = 4  # [autopilot] max_parallel: autopilot lanes running at once
     review_auto_merge: bool = True  # [review] auto_merge: a passing lane is merged; false = tests only
+    disk_min_free_gb: float = 5.0  # [disk] min_free_gb: below this free space no new lane is started
     manager_session_cwd: str | None = None  # [manager] session_cwd: the folder the manager runs in
     models: dict = field(default_factory=dict)  # [models]: manager, workers (+ overrides), choices
 
@@ -143,6 +145,7 @@ def _project_from(table: dict, fallback_id: str | None = None) -> ProjectConfig 
         guard_words=[str(w) for w in words] if words else None,
         architecture=table.get("architecture") if isinstance(table.get("architecture"), dict) else None,
         guard=table.get("guard", True) is not False,
+        cargo_target_dir=Path(str(table["cargo_target_dir"])).expanduser() if table.get("cargo_target_dir") else None,
     )
 
 
@@ -199,6 +202,10 @@ def load_config(home: Path) -> Config:
     cfg.autopilot_max_parallel = max_parallel if isinstance(max_parallel, int) and not isinstance(max_parallel, bool) and max_parallel >= 0 else 4
     review = raw.get("review") if isinstance(raw.get("review"), dict) else {}
     cfg.review_auto_merge = review.get("auto_merge", True) is not False
+    disk = raw.get("disk") if isinstance(raw.get("disk"), dict) else {}
+    min_free = disk.get("min_free_gb", 5.0)
+    cfg.disk_min_free_gb = float(min_free) if isinstance(min_free, (int, float)) and not isinstance(min_free, bool) \
+        and min_free >= 0 else 5.0
     agents_raw = raw.get("agents") if isinstance(raw.get("agents"), dict) else {}
     cfg.agents = {str(alias): dict(table) for alias, table in agents_raw.items()
                   if isinstance(table, dict)}
