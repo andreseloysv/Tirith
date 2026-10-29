@@ -174,7 +174,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] `tirith lane run --step <n>`: cada lane dice en qué paso trabaja.
 - [x] Tarjeta «Plan» en el Overview: pasos, progreso, estado y agentes trabajando en cada uno.
 - [x] Fecha límite opcional con cuenta atrás.
-- [ ] Cabecera de un paso del Plan con varios agentes: avatares apilados (+N) y un solo botón, sin tapar el título ni la barra de progreso. (en curso: u-stepheader)
+- [ ] Cabecera de un paso del Plan con varios agentes: avatares apilados (+N) y un solo botón, sin tapar el título ni la barra de progreso. (en curso: u-stepheader2)
 
 ## 11. Lanzar un sub-agente desde el Plan
 
@@ -271,7 +271,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Elementos pequeños con su comprobación: el manager parte cada pedido en elementos de ~30 min con un comando de «hecho»; Tirith rechaza elementos enormes. (en revisión)
 - [ ] Integrar en main todo el trabajo terminado y sin fusionar de las lanes (lista del 2026-10-29) y descartar con motivo lo reemplazado. (en curso: u-landall2)
 - [ ] README y docs/SUBMISSION.md al día para el jurado del hackathon: qué hace Tirith hoy (autonomía con reglas en código, plan, manager en el chat, app notarizada), cómo usa los modelos de Meta, cómo probarlo y capturas reales. (en revisión)
-- [ ] Quitar todo el GDScript: la carpeta world/ (ciudadela 3D de Godot), ./run --3d y toda referencia a Godot en el código, la web y los docs. (en curso: u-nogodot)
+- [ ] Quitar todo el GDScript: la carpeta world/ (ciudadela 3D de Godot), ./run --3d y toda referencia a Godot en el código, la web y los docs. (en curso: u-nogodot2)
 - [ ] Integrar en main lane/smallitems (elementos pequeños con comprobación; ya commiteado, cortado por el límite de 1 h antes de fusionar). (en curso: u-smallland)
 
 ## 15. Collector y CLI en Rust
