@@ -181,6 +181,8 @@
     var runs = (s.pipelines || []).filter(function (p) { return p.status === 'running'; });
     var ags = (s.agents || []).filter(function (a) { return a.status === 'working' || a.status === 'stalled'; });
     var h = '<div class="ovg"><div class="ovmain" data-scroll="ovmain">';
+    var spent = T.sumUsage && T.sumUsage(s.agents || []);
+    if (spent) h += '<p class="mut sm usage ovusage" title="All agents in this view">Spent ' + esc(T.usageLine(spent)) + '</p>';
     if (T.plan) h += T.plan(s);
     if (w.length) h += '<section><h2>Needs you</h2><ul class="needs card">' + w.map(function (x) {
       var pn = T.proj(x.project);

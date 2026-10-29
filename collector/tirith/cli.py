@@ -21,6 +21,7 @@ from tirith.collector import (
     Collector, collect_tree, git_head, git_shortstat, heuristic_architecture,
 )
 from tirith.guardwrap import default_words, install_guard, verify_guard
+from tirith import agentrun as agentrun_mod
 from tirith import flows as flows_mod
 from tirith import gates as gates_mod
 from tirith import manifest as manifest_mod
@@ -130,6 +131,9 @@ def end_lane(home: Path, lane_id: str, result: str, report: str | None = None) -
     lane["ended_at"] = now_iso()
     lane["result"] = result
     lane.pop("token", None)  # the shims accept the token of a running lane only
+    stored = agentrun_mod.store_diff(home, lane)
+    if stored:
+        lane["diff"] = stored
     if report is not None:
         lane["report"] = bound_text(report, REPORT_MAX)
     write_lane(home, lane)
@@ -213,14 +217,47 @@ def _lane_run_refusal(args, config, proj, workspace: Path) -> str | None:
     return None
 
 
+def _agent_command(config, args) -> list[str]:
+    if args.prompt and args.prompt_file:
+        raise SystemExit("lane run: pass --prompt or --prompt-file, not both")
+    if args.prompt_file:
+        prompt = Path(args.prompt_file).expanduser().read_text(encoding="utf-8")
+    elif args.prompt:
+        prompt = args.prompt
+    elif args.brief and Path(args.brief).expanduser().is_file():
+        prompt = Path(args.brief).expanduser().read_text(encoding="utf-8")  # the brief is the task
+    else:
+        raise SystemExit("lane run --agent needs --prompt or --prompt-file")
+    if not prompt.strip():
+        raise SystemExit("lane run: the prompt is empty")
+    return agentrun_mod.build_command(config, args.agent, args.project, prompt,
+                                      model=args.model, effort=args.effort)
+
+
+def _cmd_doctor(args) -> int:
+    home = _home(args)
+    config = load_config(home)
+    env = _wrapper_path_env(home)
+    wrapper_dir = Path.home() / ".local" / "bin"
+    failed = 0
+    for name, ok, detail in agentrun_mod.doctor_agent(config, args.agent, env["PATH"], wrapper_dir):
+        print(("ok   " if ok else "FAIL ") + f"{name}: {detail}")
+        failed += 0 if ok else 1
+    return 1 if failed else 0
+
+
 def _cmd_lane_run(args) -> int:
     home = _home(args)
     command = list(args.command or [])
     if command and command[0] == "--":
         command = command[1:]
-    if not command:
-        raise SystemExit("lane run needs a command after --")
     config, proj = _project_or_exit(home, args.project)
+    if args.agent:
+        if command:
+            raise SystemExit("lane run: use either --agent or -- <command>, not both")
+        command = _agent_command(config, args)
+    elif not command:
+        raise SystemExit("lane run needs a command after -- (or --agent <alias>)")
     workspace = Path(args.workspace).expanduser().resolve() if args.workspace else proj.repo
     if workspace is None:
         raise SystemExit(f"project '{args.project}' has no repo; pass --workspace")
@@ -877,6 +914,11 @@ def build_parser() -> argparse.ArgumentParser:
     lane_run.add_argument("--log", default=None)
     lane_run.add_argument("--brief", default=None)
     lane_run.add_argument("--step", default=None, help="roadmap step this lane works on")
+    lane_run.add_argument("--agent", default=None, help="agent alias from [agents.<alias>]")
+    lane_run.add_argument("--model", default=None)
+    lane_run.add_argument("--effort", default=None)
+    lane_run.add_argument("--prompt", default=None)
+    lane_run.add_argument("--prompt-file", default=None)
     lane_run.add_argument("command", nargs=argparse.REMAINDER)
     lane_run.set_defaults(func=_cmd_lane_run)
 
@@ -991,6 +1033,10 @@ def build_parser() -> argparse.ArgumentParser:
     room_say.add_argument("--re", type=int, action="append", metavar="N")
     room_say.add_argument("text")
     room_say.set_defaults(func=_cmd_room_say)
+
+    doctor = sub.add_parser("doctor", parents=[common], help="check that an agent can run in a lane")
+    doctor.add_argument("--agent", required=True, help="agent alias from [agents.<alias>]")
+    doctor.set_defaults(func=_cmd_doctor)
 
     hook = sub.add_parser("hook", parents=[common],
                           help="record an agent hook call (stdin JSON) / install hooks")
