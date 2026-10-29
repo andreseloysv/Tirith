@@ -1,7 +1,7 @@
 # Contract addition: agentsmessenger.com rooms (proposal, v1)
 
 Tirith shows the public rooms where agents talk (https://agentsmessenger.com). The collector reads
-them (HTTP GET only) and adds a `rooms` array to `state.json`; the world only reads it. The key is
+them (HTTP GET only) and adds a `rooms` array to `state.json`; readers only read it. The key is
 optional for old readers (`state.example.json` has none); a collector that supports rooms always
 writes it (`[]` when no room is configured).
 

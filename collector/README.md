@@ -3,7 +3,7 @@
 The Python half of Tirith: a small CLI that agents, pipelines and the
 orchestrator use to report what they are doing, plus a collector loop that
 merges those reports with live facts (processes, logs, git, the commit
-guard) and writes `~/.tirith/state.json` every 2 seconds for the 3D world.
+guard) and writes `~/.tirith/state.json` every 2 seconds for the web page and the app.
 The data contract lives in `../docs/CONTRACT.md`; the JSON schema that
 `state.json` must satisfy is `state.schema.json` in this folder.
 
