@@ -459,9 +459,14 @@ def _duplicate_lane(home: Path, args, item: str | None) -> dict | None:
     return launch_mod.working_lane(others, args.project, str(args.step), lane_status, item)
 
 
+_IDLE: dict[str, bool] = {}  # lane id -> its last agent run was stopped for silence
+
+
 def _run_child(home: Path, lane: dict, lane_id: str, command: list[str], workspace: Path, env: dict,
                log_path: Path, stdin_text: str | None) -> tuple[int, str]:
-    """One run of the lane's agent process: ``(exit code, final answer)``."""
+    """One run of the lane's agent process: ``(exit code, final answer)``. The deadline is inactivity (no log
+    output, worktree change or CPU for the idle limit) with the hard cap as the safety net; ``_IDLE`` keeps
+    whether the run was stopped for silence, for the continue loop."""
     with log_path.open("ab") as log_handle:
         proc = subprocess.Popen(
             command, cwd=str(workspace), env=env,
@@ -479,10 +484,14 @@ def _run_child(home: Path, lane: dict, lane_id: str, command: list[str], workspa
                 proc.stdin.close()
             except OSError:  # the agent exited before reading it; its exit code tells
                 pass
-        watch = timeouts_mod.supervise(proc, "agent-turn", home=home, what=f"lane {lane_id}")
+        watch = timeouts_mod.supervise(
+            proc, "agent-turn", home=home, what=f"lane {lane_id}",
+            idle=timeouts_mod.effective_idle(home, None, "agent-turn"),
+            probe=timeouts_mod.Probe(log=log_path, workspace=workspace, pgid=proc.pid))
         exit_code = proc.wait()
         ended = watch()
     answer, _ = final_answer(log_path)
+    _IDLE[lane_id] = bool(ended.get("idle"))
     if ended["timed_out"]:
         exit_code, answer = timeouts_mod.EXIT_TIMED_OUT, ended["message"]
     return exit_code, answer
@@ -580,11 +589,24 @@ def _cmd_lane_run(args) -> int:
         answer = _last_stop_message(home, lane_id, lane.get("started_at"))
     else:
         stdin_text = getattr(args, "stdin_text", None)
-        rounds, missing = 0, []
+        rounds, idle_rounds, missing = 0, 0, []
         while True:
             exit_code, answer = _run_child(home, lane, lane_id, command, workspace, env, log_path, stdin_text)
             stopped = lanestop_mod.marker(read_json(lane_path(home, lane_id), None) or {})
-            if stopped or exit_code != 0 or not (args.agent or getattr(args, "as_agent", None)):
+            agent_lane = bool(args.agent or getattr(args, "as_agent", None))
+            if (not stopped and agent_lane and exit_code == timeouts_mod.EXIT_TIMED_OUT
+                    and _IDLE.pop(lane_id, False) and idle_rounds < keepgoing_mod.MAX_ROUNDS
+                    and keepgoing_mod.has_work(workspace, lane.get("start_commit"))):
+                # silent for the idle limit but with work in its worktree: the same session is asked to go on
+                idle_rounds += 1
+                minutes = max(1, round((timeouts_mod.effective_idle(home, config, "agent-turn") or 0) / 60))
+                keepgoing_mod.note_idle(home, lane_id, idle_rounds, minutes)
+                resumed = _resume_child(home, config, args, lane, command, log_path, answer,
+                                        keepgoing_mod.idle_message(minutes, idle_rounds))
+                if resumed is not None:
+                    command, stdin_text = resumed
+                    continue
+            if stopped or exit_code != 0 or not agent_lane:
                 break
             missing = keepgoing_mod.gaps(home, lane, proj.repo, answer)
             if not missing or rounds >= keepgoing_mod.MAX_ROUNDS:
@@ -966,17 +988,29 @@ def _cmd_timeout(args) -> int:
         classes = [args.cls] if args.cls else list(timeouts_mod.POLICY)
         for cls in classes:
             row = timeouts_mod.describe(home, config, cls)
-            print(f"{cls}: {row['seconds']:g} s ({row['source']}; allowed {row['min']:g} to {row['max']:g} s)")
+            idle = timeouts_mod.describe_idle(home, config, cls)
+            print(f"{cls}: {'cap ' if idle else ''}{row['seconds']:g} s ({row['source']}; allowed "
+                  f"{row['min']:g} to {row['max']:g} s)")
+            if idle:
+                print(f"{cls}: idle {idle['seconds']:g} s ({idle['source']}; allowed "
+                      f"{idle['min']:g} to {idle['max']:g} s)")
         return 0
     lane = _lane_of_caller(home)
-    try:
-        row = timeouts_mod.set_timeout(home, config, args.cls, args.seconds, args.reason or "", lane=lane)
-    except timeouts_mod.TimeoutRefused as error:
-        raise SystemExit(f"tirith timeout: {error}")
-    flows_mod.append_flow(
-        home, f"agent:{lane}" if lane else "owner", "guard", "decision",
-        f"timeout of '{args.cls}' set to {args.seconds:g} s", why=row["reason"] or None)
-    print(f"{args.cls}: {args.seconds:g} s" + (" until the lane ends" if lane else ""))
+    cap = args.cap if args.cap is not None else args.seconds
+    wanted = [(label, value, idle) for label, value, idle in (("cap", cap, False), ("idle", args.idle, True))
+              if value is not None]
+    if not wanted:
+        raise SystemExit("tirith timeout: give --cap (or --seconds) and/or --idle")
+    for label, value, idle in wanted:
+        try:
+            row = timeouts_mod.set_timeout(home, config, args.cls, value, args.reason or "", lane=lane, idle=idle)
+        except timeouts_mod.TimeoutRefused as error:
+            raise SystemExit(f"tirith timeout: {error}")
+        what = f"idle limit of '{args.cls}'" if idle else f"timeout of '{args.cls}'"
+        flows_mod.append_flow(
+            home, f"agent:{lane}" if lane else "owner", "guard", "decision",
+            f"{what} set to {value:g} s", why=row["reason"] or None)
+        print(f"{args.cls}: {label} {value:g} s" + (" until the lane ends" if lane else ""))
     return 0
 
 
@@ -2337,7 +2371,10 @@ def build_parser() -> argparse.ArgumentParser:
     t_get.set_defaults(func=_cmd_timeout)
     t_set = tmo_sub.add_parser("set", parents=[common], help="raise or lower it within its limits, with a reason")
     t_set.add_argument("--class", dest="cls", required=True)
-    t_set.add_argument("--seconds", type=float, required=True)
+    t_set.add_argument("--seconds", type=float, default=None, help="the hard cap (same as --cap)")
+    t_set.add_argument("--cap", type=float, default=None, help="the hard cap: the longest a run may take")
+    t_set.add_argument("--idle", type=float, default=None,
+                       help="how long a run may go without progress (agent-turn and stage)")
     t_set.add_argument("--reason", default=None)
     t_set.set_defaults(func=_cmd_timeout)
 
