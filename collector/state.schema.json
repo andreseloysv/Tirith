@@ -122,9 +122,36 @@
       "items": {
         "$ref": "#/$defs/session"
       }
+    },
+    "loose_events": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/hook_event"
+      }
     }
   },
   "$defs": {
+    "hook_event": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "ts",
+        "agent",
+        "event",
+        "summary"
+      ],
+      "properties": {
+        "ts": {"type": "string"},
+        "agent": {"type": "string"},
+        "event": {"type": "string"},
+        "lane": {"type": ["string", "null"]},
+        "session": {"type": ["string", "null"]},
+        "project": {"type": ["string", "null"]},
+        "tool": {"type": ["string", "null"]},
+        "summary": {"type": "string"},
+        "agent_session_id": {"type": ["string", "null"]}
+      }
+    },
     "note": {
       "type": "object",
       "additionalProperties": true,
@@ -461,6 +488,12 @@
           "type": "array",
           "items": {
             "type": "string"
+          }
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/hook_event"
           }
         },
         "files_changed": {
