@@ -371,6 +371,8 @@ def run(home: Path, config: Config, lanes: list[dict], *, spawn: Callable) -> bo
                 data = load(home)
                 data["spawned"] = stamp
                 write_json_atomic(_path(home), data)
+            if spawn is None:  # a pass without a spawner (tests, dry runs) only enqueues
+                return changed
             spawn([*launch_mod.tirith_argv(home), "merge", "run"], home, home / "logs" / "mergeq.log")
             changed = True
     return changed
