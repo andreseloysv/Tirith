@@ -28,6 +28,9 @@ def _lane(home: Path, tmp_path: Path) -> Path:
     return log
 
 
+WHY = {"why_owner": "owner-decision"}
+
+
 def _settle(collector: Collector) -> dict:
     collector.cycle()
     collector.worker.drain(timeout_s=10)
@@ -36,11 +39,13 @@ def _settle(collector: Collector) -> dict:
 
 def test_is_owner_item_needs_a_call_to_action_and_an_allowed_source() -> None:
     option = [{"label": "Yes", "value": "yes"}]
-    assert asks_mod.is_owner_item({"source": "manual", "options": option})
-    assert asks_mod.is_owner_item({"source": "guard", "actions": [{"command": "x"}]})
-    assert not asks_mod.is_owner_item({"source": "manual", "options": []})
-    assert not asks_mod.is_owner_item({"source": "brain", "options": option})
-    assert not asks_mod.is_owner_item({"options": option})
+    assert asks_mod.is_owner_item({"source": "manual", "options": option, **WHY})
+    assert asks_mod.is_owner_item({"source": "guard", "actions": [{"command": "x"}], **WHY})
+    assert not asks_mod.is_owner_item({"source": "manual", "options": [], **WHY})
+    assert not asks_mod.is_owner_item({"source": "manual", "options": option})  # no why_owner
+    assert not asks_mod.is_owner_item({"source": "manual", "options": option, "why_owner": "because"})
+    assert not asks_mod.is_owner_item({"source": "brain", "options": option, **WHY})
+    assert not asks_mod.is_owner_item({"options": option, **WHY})
 
 
 def test_brain_wait_is_queued_once_for_the_manager_and_shown_in_its_context(home: Path, tmp_path: Path) -> None:
@@ -95,12 +100,13 @@ def test_a_manager_closed_item_stays_closed_while_the_text_is_there(home: Path) 
 def test_every_item_in_the_owner_list_passes_is_owner_item(home: Path, tmp_path: Path) -> None:
     """A generator that slips in a non-allow-listed source is caught and queued for the manager."""
     append_jsonl(home / "waits.jsonl", {"id": "w-1", "at": "2026-10-29T00:00:00Z", "project": "demo",
-                                         "text": "Ship it?", "options": [{"label": "Ship", "value": "ship"}]})
+                                         "text": "Ship it?", "options": [{"label": "Ship", "value": "ship"}],
+                                         "why_owner": "owner-decision"})
     collector = Collector(home, client=None)
     shown = collector._enforce_cta([
         {"id": "x-1", "project": "demo", "text": "Guess", "source": "brain",
          "options": [{"label": "Got it", "value": "ack"}]},
-        {"id": "x-2", "project": "demo", "text": "Real", "source": "manual",
+        {"id": "x-2", "project": "demo", "text": "Real", "source": "manual", **WHY,
          "options": [{"label": "Yes", "value": "yes"}]}])
     assert [w["id"] for w in shown] == ["x-2"]
     (queued,) = [q for q in asks_mod.queue_items(home) if q["kind"] == asks_mod.NOT_OWNER_KIND]

@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from conftest import make_repo, write_config, write_lane_manifest
+from tirith import asks as asks_mod
 from tirith import dispatch as dispatch_mod
 from tirith import hooks as hooks_mod
 from tirith import inbox as inbox_mod
@@ -101,20 +102,20 @@ def test_finish_on_a_step_with_a_working_lane_answers_with_the_lane(project, hom
     assert ("tirith", "agent:first", "message") in _flows(home)
 
 
-def test_finish_refused_answers_with_the_fix_and_asks_the_owner(project, home: Path, monkeypatch) -> None:
+def test_finish_refused_answers_with_the_fix_and_queues_it_for_the_manager(project, home: Path, monkeypatch) -> None:
     def refuse(home, project, step, request_id=None):
         raise launch_mod.LaunchError("tirith check fails for 'demo', so no lane may start.")
     monkeypatch.setattr(dispatch_mod, "_default_launcher", refuse)
     rid = inbox_mod.add_request(home, "finish", "demo", "1", at=_at(5))["id"]
     collector = Collector(home, client=None)
     collector.build_state(NOW)
-    state = collector.build_state(NOW)  # the owner item is on the list from the next cycle
+    state = collector.build_state(NOW)
     (answer,) = _by_id(home)[rid]["answers"]
     assert "tirith check --project demo" in answer["text"] and "no lane may start" in answer["text"]
-    (item,) = [w for w in state["waiting_on_you"] if w["id"] == f"dispatch-{rid}"]
-    assert [o["label"] for o in item["options"]] == ["Fix it", "Try again"]
-    assert item["options"][0]["command"] == "tirith check --project demo"
-    assert len(read_jsonl(home / "waits.jsonl")) == 1
+    assert not [w for w in state["waiting_on_you"] if w["id"].startswith("dispatch-")]  # a refusal is the manager's
+    assert not (home / "waits.jsonl").exists()
+    (item,) = [q for q in asks_mod.queue_items(home, only_open=True) if q["id"] == f"sq-dispatch-{rid}"]
+    assert item["kind"] == "launch-refused" and "Fix it: tirith check --project demo" in item["text"]
 
 
 def test_a_real_refusal_is_explained_with_a_fix(project, home: Path) -> None:

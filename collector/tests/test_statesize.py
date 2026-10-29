@@ -56,7 +56,7 @@ def test_state_json_stays_under_budget_with_120_agents(home: Path, tmp_path: Pat
     assert len(state["agents"]) == STATE_AGENTS_MAX
     # a second cycle with nothing new rewrites no detail file
     before = {p.name: p.stat().st_mtime_ns for p in (home / "agents").glob("*.js")}
-    assert len(before) == 120
+    assert len([n for n in before if not n.endswith(".steps.js")]) == 120
     collector.cycle()
     assert {p.name: p.stat().st_mtime_ns for p in (home / "agents").glob("*.js")} == before
 

@@ -11,6 +11,7 @@ import re
 from datetime import date
 from pathlib import Path
 
+from tirith import asks as asks_mod
 from tirith import manifest as manifest_mod
 
 MAX_BYTES = 256 * 1024
@@ -55,15 +56,10 @@ def agent_items(step: dict, today: date) -> list[str]:
     return [i["text"] for i in step["items"] if not i["done"] and who_on(i, today) == "agent"]
 
 
-OWNER_REASON_WORDS = (  # keyword -> reason, for a tag that does not name its reason
-    ("legal", r"legal|licen[cs]e|contract|contrato|terms|t[eé]rminos"),
-    ("payment", r"pay|payment|pago|pagar|billing|invoice|subscription|suscripci"),
-    ("credentials", r"credential|credencial|password|contrase|token|api key|secret|login|log in|sign in"),
-    ("device", r"device|phone|tel[eé]fono|plug|usb|physical|f[ií]sico|hardware"),
-    ("account", r"account|cuenta|dns|domain|dominio|console|dashboard|settings|app store|certificate|certificado"),
-)
 _URL_RE = re.compile(r"https?://[^\s)>\]`]+")
-_REASON_KEY_RE = re.compile(r"^(security|credentials|account|device|payment|legal)\b\s*[:,-]?\s*", re.IGNORECASE)
+_REASON_KEY_RE = re.compile(
+    r"^(credentials|payment|personal-account|physical-device|owner-decision|account|device|legal)\b"
+    r"(?:\s*\(([^)]*)\))?\s*[:,-]?\s*", re.IGNORECASE)
 _RUN_WORD_RE = re.compile(r"^(?:run|ejecutar|ejecuta)\s*:?\s+", re.IGNORECASE)
 
 
@@ -90,20 +86,24 @@ def _tag_span(text: str) -> tuple[int, int] | None:
 def owner_parts(text: str) -> dict:
     """What the owner item of an owner roadmap item is made of (``docs/CONTRACT-roadmap.md``).
 
-    ``{sentence, command, url, reason, label}``: the sentence has no tag and no step title; the command comes
-    from backticks inside the tag (else from the rest of the text), the URL likewise; ``label`` names the Run
-    action; ``reason`` is a key of ``asks.OWNER_REASONS``."""
+    ``{sentence, command, url, why_owner, why_detail, label}``: the sentence has no tag and no step title; the
+    command comes from backticks inside the tag (else from the rest of the text), the URL likewise; ``label``
+    names the Run action; ``why_owner`` is a key of ``asks.WHY_OWNER`` named first in the tag, e.g.
+    ``(dueño: personal-account (Apple ID) ...)``, else ``None`` (not an owner item, see ``ownergate``)."""
     from tirith import actions as actions_mod  # late: actions does not import roadmap
     span = _tag_span(text)
     inner = rest = text
     if span:
-        inner = text[span[0]:span[1]].strip("()")
+        inner = text[span[0] + 1:span[1] - 1 if text[span[1] - 1] == ")" else span[1]]
         inner = re.sub(r"^(?:dueño|owner)\b", "", inner, flags=re.IGNORECASE).strip().lstrip(":").strip()
         rest = (text[:span[0]] + " " + text[span[1]:])
     else:
         inner = ""
     reason_key = _REASON_KEY_RE.match(inner)
-    reason = reason_key.group(1).lower() if reason_key else None
+    why_owner = asks_mod.why_key(reason_key.group(1)) if reason_key else None
+    why_detail = (reason_key.group(2) or "").strip() or None if reason_key else None
+    if reason_key:
+        inner = inner[reason_key.end():]
     command = None
     for place in (inner, rest):
         command = actions_mod.find_owner_command(place)
@@ -117,12 +117,10 @@ def owner_parts(text: str) -> dict:
     sentence = re.sub(r"\s+", " ", rest).strip()
     sentence = re.sub(r"\s+([.,;:])", r"\1", sentence)
     sentence = sentence.strip(" :;,-") or "Do this one by hand"
-    if not reason:
-        blob = (inner + " " + sentence).lower()
-        reason = next((key for key, words in OWNER_REASON_WORDS if re.search(words, blob)), "security")
     label = sentence.rstrip(".").strip()
     return {"sentence": sentence if sentence.endswith((".", "!", "?")) else sentence + ".",
-            "command": command, "url": url, "reason": reason, "label": label[:60]}
+            "command": command, "url": url, "why_owner": why_owner, "why_detail": why_detail,
+            "label": label[:60]}
 
 
 def owner_item_id(project: str, step_id: str, text: str) -> str:
