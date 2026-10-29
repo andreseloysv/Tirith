@@ -62,3 +62,11 @@ def install_guard(repo: Path, words: list[str]) -> list[str]:
         return list(guard_module().install(Path(repo), list(words)))
     except Exception as exc:
         return [f"guard install failed: {exc}"]
+
+
+def guard_upgrade_steps(repo: Path, words: list[str]) -> list[str]:
+    """Owner steps when the guard is intact but older than the current rendering ([] otherwise)."""
+    try:
+        return list(guard_module().outdated(Path(repo), list(words)))
+    except Exception:
+        return []

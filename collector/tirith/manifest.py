@@ -15,6 +15,8 @@ from tirith.guardwrap import verify_guard
 FILENAME = "tirith.toml"
 KINDS = ("build", "test", "deploy")
 HOOK_EVENTS = ("pre-commit", "commit-msg", "pre-push", "post-commit", "post-merge")
+GIT_EVENTS = ("pre-commit", "commit-msg", "pre-push")  # the hooks the guard installs and records
+GIT_HOOKS_PIPELINE = "git-hooks"
 _KIND_RE = re.compile(r"build|compile|test|check|lint|deploy|release|publish|ship")
 _KIND_ALIASES = {"compile": "build", "check": "test", "lint": "test",
                  "release": "deploy", "publish": "deploy", "ship": "deploy"}
