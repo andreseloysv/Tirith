@@ -23,6 +23,7 @@ from tirith import flows as flows_mod
 from tirith import tirithcmd
 from tirith import inbox as inbox_mod
 from tirith import launch as launch_mod
+from tirith import ownergate as ownergate_mod
 from tirith import planlane as planlane_mod
 from tirith import projects as projects_mod
 from tirith import review as review_mod
@@ -181,12 +182,23 @@ def _actions(rows: list[tuple[str, str]], at: str) -> list[dict]:
                                     created_by="tirith", at=at)
 
 
+def _out_items(repo: Path | None) -> list[str]:
+    """The texts of the plan items marked out of this plan (what a report must not ask the owner about)."""
+    if repo is None:
+        return []
+    from tirith import manifest as manifest_mod
+    path = roadmap_mod.find_file(repo, manifest_mod.load(repo).roadmap)
+    steps = roadmap_mod.parse(path.read_text(encoding="utf-8")) if path else []
+    return [i["text"] for step in steps for i in step["items"] if i.get("who") == "out"]
+
+
 def _owner_item(home: Path, rec: dict, item_id: str, project: str | None, text: str,
                 rows: list[tuple[str, str]], at: str) -> None:
     from tirith import dispatch
     if rec.get("owner_item") and rec["owner_item"] != item_id:
         dispatch.close_owner_item(home, rec["owner_item"], at)
-    dispatch.add_owner_item(home, item_id, project, text, [], at, actions=_actions(rows, at))
+    dispatch.add_owner_item(home, item_id, project, text, [], at, actions=_actions(rows, at),
+                            why_owner="owner-decision", why_detail="choice: merge it or drop it")
     rec["owner_item"] = item_id
 
 
@@ -205,7 +217,9 @@ def settle(home: Path, config: Config, lane: dict, review: dict, rec: dict, now:
         plan = update_plan(home, repo, lane) if repo is not None else ""
         answer = text + (f". {plan}." if plan else ".")
         if step in planlane_mod.LANE_STEPS.values() and str(lane.get("report") or "").strip():
-            answer += "\n\n" + str(lane["report"]).strip()  # the auditor's summary / the planner's report
+            # the auditor's summary / the planner's report; its "needs the owner" list passes the owner gate
+            answer += "\n\n" + ownergate_mod.filter_report(
+                home, project, lane_id, str(lane["report"]).strip(), out_items=_out_items(repo), at=at)
         if lane.get("request_id") and inbox_mod.find_request(home, str(lane["request_id"])):
             inbox_mod.add_answer(home, str(lane["request_id"]), answer,
                                  by="tirith", auto=True, at=at, lane=lane_id)

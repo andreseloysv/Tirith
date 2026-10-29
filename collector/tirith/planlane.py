@@ -27,6 +27,18 @@ RULES = (
 )
 
 
+OWNER_GATE_RULES = (
+    "- **Needs the owner** lists ONLY what no agent can do: " + ", ".join(
+        f"`{key}`" for key in ("credentials", "payment", "personal-account", "physical-device", "owner-decision"))
+    + ". Start every bullet with its reason in brackets, e.g. `- [personal-account: Apple ID] Sign in to ...`. "
+    "A bullet without a valid reason is not shown to the owner: code moves it to the manager queue as "
+    "\"agent can do\" and a verification lane does it.",
+    "- A check an agent can do (open a `tirith://` link with `open`, take a screenshot with playwright, read "
+    "state or a file) is NEVER an owner check: put it under **Still missing** instead.",
+    "- Never list anything about an item marked `(fuera de este plan ...)`; it is dropped and logged.",
+)
+
+
 def slug_for(title: str, taken: set[str]) -> str:
     """A plan file name (without ``.md``) for ``title`` that is not in ``taken``."""
     base = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:40].strip("-") or "plan"
@@ -65,7 +77,8 @@ def refresh_brief(project: str, plan_file: str, plan_text: str, merged: list[dic
            "- Leave the items that are right as they are, and keep the format (numbered `##` steps, "
            "`- [ ]` / `- [x]` items).",
            "- Finish with a short summary as your final report, in three parts: **Done since last update**, "
-           "**Still missing**, **Needs the owner**. Short bullets, no repetition.", *(
+           "**Still missing**, **Needs the owner**. Short bullets, no repetition.",
+           *OWNER_GATE_RULES, *(
                [f"- Limited to step {step}: compare and edit only the items of step {step}; leave every other "
                 "step exactly as it is."] if step else []), "",
            "## Hard rules", *(f"- {rule}" for rule in RULES), "",

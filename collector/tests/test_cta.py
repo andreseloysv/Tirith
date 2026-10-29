@@ -44,7 +44,7 @@ def _has_cta(item: dict) -> bool:
 
 def test_add_wait_refuses_an_item_without_option_or_action(home: Path) -> None:
     with pytest.raises(SystemExit) as refused:
-        add_wait(home, "demo", "Please look at this")
+        add_wait(home, "demo", "Please look at this", why_owner="owner-decision")
     assert "call-to-action" in str(refused.value) and "--option" in str(refused.value)
     with pytest.raises(SystemExit):
         add_wait(home, "demo", "Copy this", command="ls")  # a command to copy is not a call to action
@@ -52,28 +52,29 @@ def test_add_wait_refuses_an_item_without_option_or_action(home: Path) -> None:
 
 
 def test_add_wait_accepts_an_option_or_a_run_action(home: Path) -> None:
-    add_wait(home, "demo", "Ship it?", options=["Ship|ship"])
+    add_wait(home, "demo", "Ship it?", options=["Ship|ship"], why_owner="owner-decision")
     run = actions_mod.make_actions(["make build"], ["Build"])
-    add_wait(home, "demo", "Build it", actions=run)
+    add_wait(home, "demo", "Build it", actions=run, why_owner="owner-decision")
     assert len(read_jsonl(home / "waits.jsonl")) == 2
 
 
 def test_wait_add_command_line_refuses_a_bare_question(home: Path) -> None:
     with pytest.raises(SystemExit):
-        main(["wait", "add", "--project", "demo", "Is this fine?"])
-    assert main(["wait", "add", "--project", "demo", "--option", "Yes|yes", "Is this fine?"]) == 0
+        main(["wait", "add", "--why-owner", "owner-decision", "--project", "demo", "Is this fine?"])
+    assert main(["wait", "add", "--why-owner", "owner-decision", "--project", "demo", "--option", "Yes|yes", "Is this fine?"]) == 0
 
 
 def test_dispatcher_items_need_an_option(home: Path) -> None:
     with pytest.raises(ValueError):
         dispatch_mod.add_owner_item(home, "d-1", "demo", "x", [], "2026-10-29T00:00:00Z")
     dispatch_mod.add_owner_item(home, "d-1", "demo", "x", [{"label": "Wait", "command": None}],
-                                "2026-10-29T00:00:00Z")
+                                "2026-10-29T00:00:00Z", why_owner="owner-decision")
 
 
 def test_collector_sends_an_item_without_call_to_action_to_the_manager(home: Path) -> None:
     append_jsonl(home / "waits.jsonl", {"id": "w-old", "at": "2026-10-29T00:00:00Z", "project": "demo",
-                                         "text": "Old row with no way to answer", "link": None, "done_at": None})
+                                         "text": "Old row with no way to answer", "link": None, "done_at": None,
+                                         "why_owner": "owner-decision"})
     for _ in range(2):  # twice: queued once
         state = _state(home)
         assert all(w["id"] != "w-old" for w in state["waiting_on_you"])
@@ -90,7 +91,8 @@ def test_every_generator_produces_items_with_a_call_to_action(home: Path, tmp_pa
         lane = {"id": "l-1", "project": "demo", "feature": "Feat", "log": None}
         add_lane_ask(home, lane, "failed")                                              # lane failure
         dispatch_mod.add_owner_item(home, "d-1", "demo", "Dispatcher item",
-                                    [{"label": "Wait", "command": None}], "2026-10-29T00:00:00Z")
+                                    [{"label": "Wait", "command": None}], "2026-10-29T00:00:00Z",
+                                    why_owner="owner-decision")
         with (home / "events.jsonl").open("a", encoding="utf-8") as handle:             # violation
             handle.write(json.dumps({"kind": "violation", "ts": datetime.now(timezone.utc).strftime(
                 "%Y-%m-%dT%H:%M:%SZ"), "rule": "no-verify", "message": "tirith: no-verify: x. Do this instead: y",
