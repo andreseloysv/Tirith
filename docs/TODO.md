@@ -71,7 +71,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] `tirith doctor --agent <alias>`: comprueba ejecutable, `PATH` del wrapper y que saltarse los hooks falla.
 - [ ] Confirmar el formato JSON de Muse Code con una ejecución real (desde 2026-11-02: cuota de Muse).
 - [x] Codex y Copilot instalados (dueño).
-- [ ] Codex y Copilot probados con `lane run` (presets por alias, salida JSON, permisos).
+- [ ] Codex y Copilot probados con `lane run` (presets por alias, salida JSON, permisos). (en curso: u-copilotreal)
 - [x] Agentes en la nube y CI remoto desde GitHub (PRs y Actions).
 - [x] Token de GitHub disponible para el collector.
 - [ ] Usuarios de agentes en la nube en `agent_logins` (fuera de este plan: solo si se usan).
