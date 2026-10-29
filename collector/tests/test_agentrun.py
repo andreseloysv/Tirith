@@ -62,6 +62,8 @@ def test_codex_and_copilot_presets() -> None:
     assert "shell(git status)" in cmd and cmd[-2:] == ["-p", "hi"]
     with pytest.raises(SystemExit):
         agentrun.build_command(cfg, "codex", None, "hi", effort="high")
+    cmd = agentrun.build_command(cfg, "copilot", None, "hi", effort="high")
+    assert cmd[cmd.index("--reasoning-effort") + 1] == "high"
 
 
 def test_codex_turn_completed_usage(tmp_path: Path) -> None:
