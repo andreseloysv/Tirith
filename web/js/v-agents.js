@@ -25,7 +25,7 @@
     var working = onCard && a.status === 'working';
     var ch = working || (a.files && a.files.length) ? '' : T.agentFiles(a);
     var goal = working ? T.cardGoal(a).clamped : !!a.goal && a.goal !== a.feature;
-    return T.activity(a, { goal: goal, clock: false, sum: !working }) + (ch ? '<p class="mut files">' + ch + '</p>' : '');
+    return T.ghLink(a) + T.activity(a, { goal: goal, clock: false, sum: !working }) + (ch ? '<p class="mut files">' + ch + '</p>' : '');
   }
   /* the drawer's header says the same thing as the card's title: the feature, under the agent */
   function drawerHead(a) {

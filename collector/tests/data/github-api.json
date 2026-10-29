@@ -1,0 +1,47 @@
+{
+  "/repos/octo/demo/actions/runs?per_page=5": {"total_count": 2, "workflow_runs": [
+    {"id": 9001, "name": "tirith", "display_title": "Add github reader", "run_number": 12,
+     "status": "completed", "conclusion": "failure", "run_started_at": "2026-10-28T10:00:00Z",
+     "created_at": "2026-10-28T10:00:00Z", "updated_at": "2026-10-28T10:03:00Z",
+     "html_url": "https://github.com/octo/demo/actions/runs/9001"},
+    {"id": 9002, "name": "tirith", "display_title": "Wire web", "run_number": 13,
+     "status": "in_progress", "conclusion": null, "run_started_at": "2026-10-28T11:00:00Z",
+     "created_at": "2026-10-28T11:00:00Z", "updated_at": "2026-10-28T11:01:00Z",
+     "html_url": "https://github.com/octo/demo/actions/runs/9002"}]},
+  "/repos/octo/demo/actions/runs/9001/jobs?per_page=30": {"total_count": 2, "jobs": [
+    {"id": 1, "name": "collector", "status": "completed", "conclusion": "failure",
+     "started_at": "2026-10-28T10:00:10Z", "completed_at": "2026-10-28T10:02:10Z",
+     "html_url": "https://github.com/octo/demo/actions/runs/9001/job/1",
+     "steps": [{"name": "Set up job", "status": "completed", "conclusion": "success", "number": 1},
+               {"name": "Collector tests", "status": "completed", "conclusion": "failure", "number": 2},
+               {"name": "Tirith check", "status": "completed", "conclusion": "skipped", "number": 3}]},
+    {"id": 2, "name": "web", "status": "completed", "conclusion": "success",
+     "started_at": "2026-10-28T10:00:10Z", "completed_at": "2026-10-28T10:00:40Z",
+     "html_url": "https://github.com/octo/demo/actions/runs/9001/job/2",
+     "steps": [{"name": "Syntax check", "status": "completed", "conclusion": "success", "number": 1}]}]},
+  "/repos/octo/demo/actions/runs/9002/jobs?per_page=30": {"total_count": 2, "jobs": [
+    {"id": 3, "name": "collector", "status": "in_progress", "conclusion": null,
+     "started_at": "2026-10-28T11:00:10Z", "completed_at": null,
+     "html_url": "https://github.com/octo/demo/actions/runs/9002/job/3",
+     "steps": [{"name": "Set up job", "status": "completed", "conclusion": "success", "number": 1},
+               {"name": "Collector tests", "status": "in_progress", "conclusion": null, "number": 2}]},
+    {"id": 4, "name": "web", "status": "queued", "conclusion": null, "started_at": null,
+     "completed_at": null, "html_url": "https://github.com/octo/demo/actions/runs/9002/job/4",
+     "steps": []}]},
+  "/repos/octo/demo/pulls?state=open&per_page=30": [
+    {"number": 7, "title": "Fix the parser", "state": "open", "draft": false,
+     "user": {"login": "cloudbot[bot]"}, "created_at": "2026-10-28T09:00:00Z",
+     "updated_at": "2026-10-28T09:30:00Z", "html_url": "https://github.com/octo/demo/pull/7",
+     "head": {"sha": "abc123"}},
+    {"number": 8, "title": "Human change", "state": "open", "draft": false,
+     "user": {"login": "someone"}, "created_at": "2026-10-28T09:00:00Z",
+     "updated_at": "2026-10-28T09:30:00Z", "html_url": "https://github.com/octo/demo/pull/8",
+     "head": {"sha": "def456"}}],
+  "/repos/octo/demo/commits/abc123/check-runs?per_page=50": {"total_count": 2, "check_runs": [
+    {"name": "collector", "status": "completed", "conclusion": "success"},
+    {"name": "web", "status": "completed", "conclusion": "success"}]},
+  "/repos/octo/demo/pulls/7/files?per_page=100": [
+    {"filename": "collector/tirith/parser.py", "status": "modified", "additions": 10, "deletions": 2},
+    {"filename": "collector/tests/test_parser.py", "status": "added", "additions": 30, "deletions": 0},
+    {"filename": "old.txt", "status": "removed", "additions": 0, "deletions": 5}]
+}

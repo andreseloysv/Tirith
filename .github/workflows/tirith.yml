@@ -1,0 +1,38 @@
+name: tirith
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  collector:
+    name: collector
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+      - name: Collector tests
+        working-directory: collector
+        run: uv run -q pytest -q
+      - name: Tirith check
+        working-directory: collector
+        run: uv run -q tirith check --ci ..
+
+  web:
+    name: web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Syntax check
+        run: for f in web/js/*.js; do node --check "$f" || exit 1; done
+      - name: Markdown tests
+        run: node web/js/md.test.mjs

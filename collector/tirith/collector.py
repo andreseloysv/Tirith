@@ -22,6 +22,7 @@ from tirith import brain as brain_mod
 from tirith.guardwrap import default_words, verify_guard
 from tirith.home import Config, ProjectConfig, ensure_home, load_config, now_iso, parse_iso
 from tirith import flows as flows_mod
+from tirith import github as github_mod
 from tirith import manifest as manifest_mod
 from tirith import roadmap as roadmap_mod
 from tirith import hooks as hooks_mod
@@ -276,7 +277,7 @@ class Collector:
     """Owns one home directory and builds ``state.json`` cycle by cycle."""
 
     def __init__(self, home: Path, client=_AUTO_CLIENT, config: Config | None = None,
-                 rooms_transport=None):
+                 rooms_transport=None, github_transport=None):
         self.home = ensure_home(Path(home))
         self._fixed_config = config
         self.config = config or load_config(self.home)
@@ -287,6 +288,7 @@ class Collector:
         self.rooms = RoomsService(self.home, rooms_transport)
         self._one_shot = False
         self.activity = activity_mod.ActivityTracker()
+        self.github = github_mod.GithubReader(github_transport)
 
     # -- identities / renown -------------------------------------------------
 
@@ -731,7 +733,11 @@ class Collector:
                 "guard": {"ok": False, "problems": ["auto-discovered folder: no commit guard configured"]},
                 "roadmap": roadmap_mod.build(entry.folder, entry.id, agent_rows),
             })
-        runs = self._pipelines(events, resolve, entries)
+        local_runs = self._pipelines(events, resolve, entries)
+        remote_runs, remote_agents = self.github.poll(self.config, entries)
+        runs = sorted(local_runs + remote_runs, key=lambda r: str(r["started_at"] or ""),
+                      reverse=True)
+        agent_rows += remote_agents
         for pid in [row["project"] for row in agent_rows] + [r["project"] for r in runs]:
             if pid and pid not in known_ids:
                 known_ids.add(pid)
@@ -752,7 +758,8 @@ class Collector:
                       "text": str(n.get("text") or ""), "session": n.get("session") or None}
                      for n in read_jsonl(self.home / "notes.jsonl")]
         notes = raw_notes[-20:]
-        self._flow_pipeline_ends(events_pipelines := runs)
+        self._flow_pipeline_ends(local_runs)
+        events_pipelines = runs
         self.rooms.ensure_polling(config, background=not self._one_shot)
         rooms_state, room_waits = self.rooms.build(
             config, agent_rows, self.worker, self.cache, now)
