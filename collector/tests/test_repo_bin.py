@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import os
+import subprocess
 from pathlib import Path
+
+import pytest
 
 from tirith import cli, launch
 
@@ -16,6 +19,15 @@ def test_bin_tirith_runs_the_collector_cli_in_place() -> None:
     assert os.access(script, os.X_OK) and text.startswith("#!")
     assert 'uv run -q --project "$ROOT/collector" tirith "$@"' in text
     assert "cd " not in text.split("exec ")[0].replace('ROOT=$(cd "$(dirname', "")  # the current folder is kept
+
+
+def test_bin_tirith_finds_uv_without_a_login_path(tmp_path: Path) -> None:
+    if not any((Path(d) / "uv").exists() for d in ("/opt/homebrew/bin", "/usr/local/bin")):
+        pytest.skip("no uv in the fallback folders")
+    env = dict(HOME=str(tmp_path), PATH="/usr/bin:/bin", TIRITH_HOME=str(tmp_path / "th"))
+    done = subprocess.run([str(ROOT / "bin" / "tirith"), "--help"], env=env, capture_output=True, text=True, timeout=120)
+    assert done.returncode == 0, done.stderr
+    assert "usage" in done.stdout.lower()
 
 
 def test_lane_path_has_the_repo_bin_next_to_the_shims(home: Path) -> None:
