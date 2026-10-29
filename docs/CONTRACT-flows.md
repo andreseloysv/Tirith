@@ -36,3 +36,16 @@ Kinds: `brief`, `message`, `report`, `request`, `answer`, `decision`, `merge`, `
 The last 100 flows, oldest first, same shape plus resolved display names:
 `{"id","at","from","to","from_name","to_name","kind","text","ref"}` where names are the hero name for
 agents ("Halvard Stonehand"), "The Steward", "You" (owner), the room id, or the run id.
+
+## Decisions (`kind: decision`)
+
+`tirith decide "<decision>" --why "<reason>" [--lane <id>]` writes a `decision` flow with an extra
+`why` field: `agent:<lane>` → `steward` (lane from `--lane` or `$TIRITH_LANE`), or `steward` → `owner`
+without a lane. The collector also extracts decisions from lane reports, once per decision: only lines
+that start with `Decision:` or `Decided:` (bullets and bold allowed). The reason is the inline
+`because …` / `(why: …)` part or a `Why:` line right after. Lines under a heading such as "Left open",
+"Next steps" or "Questions" are never decisions. A decision already recorded with `tirith decide` is
+not duplicated.
+
+`state.json` flows carry `why` when there is one. The web shows decisions as small labels on the
+agent ↔ steward edge in Flow (click: the reason) and as a "Decisions" list in the agent panel.

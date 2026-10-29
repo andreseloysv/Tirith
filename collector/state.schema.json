@@ -147,7 +147,9 @@
         "agent": {"type": ["string", "null"]},
         "lane": {"type": ["string", "null"]},
         "project": {"type": ["string", "null"]},
-        "message": {"type": "string"}
+        "message": {"type": "string"},
+        "blocked": {"type": "string"},
+        "instead": {"type": "string"}
       }
     },
     "hook_event": {
@@ -1096,6 +1098,9 @@
             "string",
             "null"
           ]
+        },
+        "why": {
+          "type": "string"
         }
       }
     },
