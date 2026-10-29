@@ -94,6 +94,8 @@ class Config:
     rooms_interval_s: float = 15.0
     agents: dict[str, dict] = field(default_factory=dict)  # alias -> {command, settings}
     gates_enabled: bool = True  # [gates] enabled = false is the only off switch
+    github_token_env: str | None = None  # [github] token_env: extra env var holding a token
+    github_agent_logins: list[str] = field(default_factory=list)  # [github] agent_logins
 
     def room(self, room_id: str) -> RoomConfig | None:
         for room in self.rooms:
@@ -178,6 +180,11 @@ def load_config(home: Path) -> Config:
                   if isinstance(table, dict)}
     gates = raw.get("gates") if isinstance(raw.get("gates"), dict) else {}
     cfg.gates_enabled = gates.get("enabled", True) is not False
+    github = raw.get("github") if isinstance(raw.get("github"), dict) else {}
+    if github.get("token_env"):
+        cfg.github_token_env = str(github["token_env"])
+    if isinstance(github.get("agent_logins"), list):
+        cfg.github_agent_logins = [str(l) for l in github["agent_logins"] if str(l).strip()]
     rooms_raw = raw.get("rooms")
     if isinstance(rooms_raw, list):
         for item in rooms_raw:

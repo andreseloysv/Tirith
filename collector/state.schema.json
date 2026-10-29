@@ -602,6 +602,8 @@
         "active": {"type": "boolean"},
         "last_activity_at": {"type": ["string", "null"]},
         "files": {"type": "array", "maxItems": 100, "items": {"$ref": "#/$defs/agent_file"}},
+        "source": {"type": "string", "enum": ["github"]},
+        "html_url": {"type": ["string", "null"]},
         "tools": {
           "type": "array",
           "items": {
@@ -703,7 +705,8 @@
           "items": {
             "type": "string"
           }
-        }
+        },
+        "html_url": {"type": ["string", "null"]}
       }
     },
     "pipeline": {
@@ -760,7 +763,9 @@
             "string",
             "null"
           ]
-        }
+        },
+        "source": {"type": "string", "enum": ["github"]},
+        "html_url": {"type": ["string", "null"]}
       }
     },
     "room_message": {

@@ -21,7 +21,7 @@
   /* the card beside the drawer already shows the feature and the clock; the file list replaces the totals line */
   function detail(a) {
     var ch = a.files && a.files.length ? '' : T.agentFiles(a);
-    return T.activity(a, { goal: !!a.goal && a.goal !== a.feature, clock: false }) + (ch ? '<p class="mut files">' + ch + '</p>' : '') ;
+    return T.ghLink(a) + T.activity(a, { goal: !!a.goal && a.goal !== a.feature, clock: false }) + (ch ? '<p class="mut files">' + ch + '</p>' : '') ;
   }
 
   function view(s, el) {

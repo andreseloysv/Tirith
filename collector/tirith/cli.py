@@ -670,8 +670,8 @@ def _cmd_guard(args) -> int:
 def _cmd_check(args) -> int:
     home = _home(args)
     config = load_config(home)
-    if args.folder:
-        folder = projects_mod.real(args.folder)
+    if args.folder or (getattr(args, "ci", False) and not args.project):
+        folder = projects_mod.real(args.folder or ".")
         proj = next((p for p in config.projects if p.repo and projects_mod.real(p.repo) == folder), None)
     else:
         pid, found = _project_folder_of(home, args.project)
@@ -680,7 +680,7 @@ def _cmd_check(args) -> int:
                              else "tirith check: cwd is in no known project; pass a folder or --project")
         folder, proj = found, config.project(pid)
     words = config.words_for(proj, default_words())
-    problems = manifest_mod.check(folder, words)
+    problems = manifest_mod.check(folder, words, ci=bool(getattr(args, "ci", False)))
     for problem in problems:
         print(problem)
     if not problems:
@@ -1018,6 +1018,8 @@ def build_parser() -> argparse.ArgumentParser:
                            help="check a project is set up (tirith.toml, pipelines, hooks, guard)")
     check.add_argument("folder", nargs="?", default=None)
     check.add_argument("--project", default=None, help="project id")
+    check.add_argument("--ci", action="store_true",
+                       help="running in CI, not a local clone with hooks: skip the commit-guard rule")
     check.set_defaults(func=_cmd_check)
     return parser
 
