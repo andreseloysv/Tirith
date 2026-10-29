@@ -55,7 +55,7 @@ def test_collector_uses_brain_cache_and_epithet(home: Path, tmp_path: Path) -> N
     collector = Collector(home, client=fake)
     first = collector.cycle()  # enqueues jobs, summary falls back this cycle
     assert first["brain"]["enabled"] is True
-    assert first["agents"][0]["summary"] == "needs a decision soon"
+    assert first["agents"][0]["summary"] == "Working on Database."
     collector.worker.drain(timeout_s=10)
     second = collector.cycle()  # cached brain summary + waiting item appear
     assert second["agents"][0]["summary"] == "Writing the migration test."
@@ -119,4 +119,4 @@ def test_brain_error_is_reported_not_raised(home: Path, tmp_path: Path) -> None:
     state = collector.cycle()
     assert state["brain"]["enabled"] is True
     assert "HTTP 500" in (state["brain"]["last_error"] or "")
-    assert state["agents"][0]["summary"] == "some work"  # fallback still works
+    assert state["agents"][0]["summary"] == "Working on Checks."  # fallback still works

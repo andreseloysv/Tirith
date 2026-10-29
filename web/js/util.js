@@ -89,6 +89,23 @@
     steward:     { label: 'Steward',     color: '#2f5fc4', glyph: 'M12 2l2.6 6.4 6.9.6-5.2 4.6 1.6 6.8L12 16.7 6.1 20.4l1.6-6.8L2.5 9l6.9-.6z' }
   };
   T.clsOf = function (c) { return T.CLS[c] || { label: T.cap(c || 'hero'), color: '#7b8494', glyph: 'M12 3a5 5 0 100 10 5 5 0 000-10z M4 21c0-5 3.5-7 8-7s8 2 8 7z' }; };
+  /* One color per agent, not per class (the class shows through the glyph). Ordered so that
+     neighbours are far apart in hue: the agents working at the same time take the first colors in
+     start order, every other agent takes a color from a hash of its id. */
+  T.PALETTE = ['#2f6fed', '#e0661f', '#2e9f4f', '#c2358f', '#b08400', '#7c4dd6', '#138f8f', '#d63a3a', '#8a5a3c', '#5b6b86'];
+  var colorKey = null, colorMap = {};
+  function idHash(id) { var h = 5381, i; for (i = 0; i < id.length; i++) h = ((h * 33) ^ id.charCodeAt(i)) >>> 0; return h; }
+  T.agentColors = function (list) {
+    var all = list || [], key = all.map(function (a) { return a.id + (a.status === 'working' ? '*' + a.started_at : ''); }).join('|');
+    if (key === colorKey) return colorMap;
+    var map = {}, n = T.PALETTE.length;
+    all.filter(function (a) { return a.status === 'working'; }).sort(function (a, b) {
+      return (T.ms(a.started_at) || 0) - (T.ms(b.started_at) || 0) || (a.id < b.id ? -1 : 1);
+    }).forEach(function (a, i) { map[a.id] = T.PALETTE[i % n]; });
+    all.forEach(function (a) { if (!map[a.id]) map[a.id] = T.PALETTE[idHash(String(a.id)) % n]; });
+    colorKey = key; colorMap = map;
+    return map;
+  };
   T.grad = function (c) { return 'linear-gradient(135deg, color-mix(in srgb, ' + c + ' 62%, #fff), ' + c + ')'; };
   T.KIND = { brief: '#a78bfa', message: '#9ca3af', report: '#34a853', request: '#e8a317', alert: '#e5484d', answer: '#9ca3af', decision: '#a78bfa', merge: '#34a853' };
   T.fillIcon = function (path, size, color) {

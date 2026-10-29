@@ -9,7 +9,7 @@ New fields on each `state.agents[]` item:
 
 | Field | Type | Meaning |
 |---|---|---|
-| `goal` | string or null | The lane brief's first paragraph under a "Why"/"Goal" heading, else under the first heading, else its first paragraph (markdown stripped, at most 3 sentences and 400 chars); else the feature. |
+| `goal` | string or null | The lane brief's first paragraph under a "Why"/"Goal"/"Por qué"/"Objetivo" heading (markdown kept, at most 400 chars; a paragraph that starts with set-up words such as `Workspace:`, `Repo:`, `Tests:`, `Read …` never counts), else the brief's `#` title without a "Lane:" prefix, else the feature. |
 | `active` | bool | `true` while status is `working` and the newest activity is at most 5 minutes old. |
 | `last_activity_at` | ISO string or null | Newest of: last event (hook or log) and the log's last write. |
 | `files` | list of `{path, change, insertions, deletions}` | Changed since the lane's `start_commit`: `git diff --numstat/--name-status -z -M` plus `git ls-files --others --exclude-standard`. `change` is `added`, `modified`, `deleted`, `renamed` or `untracked` (untracked: `insertions` = line count of text files up to 256 KB, else 0). Max 100, paths relative to the workspace. Ended lanes keep the list computed once. |
@@ -47,8 +47,7 @@ readable `command` differs from what ran, `full` (the whole line, up to 400 char
   session in env `TIRITH_AGENT_SESSION`, else the newest request of the last 6 hours. Children inherit
   the nearest ancestor's request in the state; the page shows "Asked by you" on the root lane only.
 - `agents[].report`: the lane's final answer in markdown, whole (stored and exposed up to 16 KB, cut at a
-  line boundary), never shortened for the UI. `summary` is one line (cut at a word); the page shows the
-  report instead of the summary when there is one.
+  line boundary), never shortened for the UI. `summary` is the "now doing" line (cut at a word, at most 300 chars): the newest timed `say` entry of `log_entries` (the agent's own words, markdown, never tool output) while the lane runs, the first paragraph of the report once it ended; only without those the brain's or a plain status sentence. The page shows the report instead of the summary when there is one.
 - The page renders every agent-written text (`report`, `summary`, `goal`, `request`, `say`/`done` log
   entries, room messages, waits) as markdown with `web/js/md.js` (HTML escaped first, links only
   http/https/file) and clamps long text to about 8 lines with "Show all".

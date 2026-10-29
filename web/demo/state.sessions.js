@@ -246,7 +246,7 @@ window.TIRITH_STATE = {
    "started_at": "2026-10-28T13:30:00Z",
    "ended_at": "2026-10-28T15:10:00Z",
    "elapsed_s": 6000,
-   "summary": "Finished: Room v1 to v4 migrations, curated names and the strings check, all green.",
+   "summary": "Room database with the same schema and v1-v4 migrations as iOS; 19 new device tests.",
    "log_tail": [
     "Finished 20 tests",
     "strings OK"
@@ -270,7 +270,7 @@ window.TIRITH_STATE = {
    "started_at": "2026-10-28T16:00:00Z",
    "ended_at": "2026-10-28T16:50:00Z",
    "elapsed_s": 3000,
-   "summary": "The render matches the outline but the owner preferred the generated image.",
+   "summary": "Silhouette matches; inner contour still differs from the target.",
    "log_tail": [
     "IoU 0.9271",
     "SSIM 0.7953"
@@ -324,6 +324,103 @@ window.TIRITH_STATE = {
    "deletions": 0,
    "report": null,
    "session": "2026-10-28-tirith-web"
+  },
+  {
+   "id": "w7-a11y",
+   "project": "chromasol",
+   "name": "Tamsin",
+   "epithet": "of the Watch",
+   "class": "warden",
+   "rank": "sergeant",
+   "renown": 310,
+   "feature": "Screen reader labels on every screen",
+   "status": "working",
+   "started_at": "2026-10-28T18:20:00Z",
+   "ended_at": null,
+   "elapsed_s": 4800,
+   "summary": "Labelling the scan results list; the photo grid already reads out correctly.",
+   "log_tail": [],
+   "files_changed": 11,
+   "insertions": 168,
+   "deletions": 34,
+   "report": null,
+   "session": "2026-10-28-chromasol",
+   "goal": "Every button, photo and score in the app is announced by the screen reader, so the owner can ship the accessibility fixes with the release.",
+   "step": "2",
+   "tests": [
+    {
+     "at": "2026-10-28T19:36:00Z",
+     "command": "./gradlew connectedAndroidTest",
+     "result": "passed",
+     "passed": 24
+    }
+   ],
+   "parent": "steward",
+   "active": true,
+   "last_activity_at": "2026-10-28T19:39:30Z",
+   "files": [],
+   "tools": [
+    {
+     "name": "Read",
+     "count": 6
+    }
+   ],
+   "events": [],
+   "log_entries": [
+    {
+     "ts": "2026-10-28T19:39:30Z",
+     "kind": "say",
+     "text": "Labelling the scan results list; the photo grid already reads out correctly.",
+     "detail": "",
+     "fields": null,
+     "path": null
+    }
+   ]
+  },
+  {
+   "id": "w8-shots",
+   "project": "chromasol",
+   "name": "Corvin",
+   "epithet": "Lensgrinder",
+   "class": "glasswright",
+   "rank": "recruit",
+   "renown": 20,
+   "feature": "Store screenshots in six languages",
+   "status": "working",
+   "started_at": "2026-10-28T19:05:00Z",
+   "ended_at": null,
+   "elapsed_s": 2100,
+   "summary": "Framing the second screenshot; the Spanish captions are the longest, so I check those first.",
+   "log_tail": [],
+   "files_changed": 0,
+   "insertions": 0,
+   "deletions": 0,
+   "report": null,
+   "session": "2026-10-28-chromasol",
+   "goal": "Capture the five store screenshots in every supported language from the same build.",
+   "step": "3",
+   "tests": [],
+   "parent": "steward",
+   "active": true,
+   "last_activity_at": "2026-10-28T19:39:30Z",
+   "files": [],
+   "tools": [
+    {
+     "name": "Read",
+     "count": 6
+    }
+   ],
+   "events": [],
+   "log_entries": [
+    {
+     "ts": "2026-10-28T19:39:30Z",
+     "kind": "say",
+     "text": "Framing the second screenshot; the Spanish captions are the longest, so I check those first.",
+     "detail": "",
+     "fields": null,
+     "path": null
+    }
+   ]
   }
  ],
  "pipelines": [

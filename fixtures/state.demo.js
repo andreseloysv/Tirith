@@ -140,7 +140,7 @@ window.TIRITH_STATE = {
         "steps": [
           {
             "id": "1",
-            "title": "Datos y migración",
+            "title": "Datos y migraci\u00f3n",
             "status": "done",
             "done": 2,
             "total": 2,
@@ -164,7 +164,7 @@ window.TIRITH_STATE = {
             "total": 3,
             "items": [
               {
-                "text": "Arranque en frío bajo 2 s",
+                "text": "Arranque en fr\u00edo bajo 2 s",
                 "done": true
               },
               {
@@ -172,7 +172,7 @@ window.TIRITH_STATE = {
                 "done": false
               },
               {
-                "text": "Reducir memoria en teléfonos de gama baja",
+                "text": "Reducir memoria en tel\u00e9fonos de gama baja",
                 "done": false
               }
             ],
@@ -188,11 +188,11 @@ window.TIRITH_STATE = {
             "total": 2,
             "items": [
               {
-                "text": "Declaración de recursos de IA",
+                "text": "Declaraci\u00f3n de recursos de IA",
                 "done": false
               },
               {
-                "text": "Capturas y descripción",
+                "text": "Capturas y descripci\u00f3n",
                 "done": false
               }
             ],
@@ -290,7 +290,7 @@ window.TIRITH_STATE = {
             "total": 2,
             "items": [
               {
-                "text": "Alias de agentes en el código; nombres reales en `config.toml`.",
+                "text": "Alias de agentes en el c\u00f3digo; nombres reales en `config.toml`.",
                 "done": true
               },
               {
@@ -316,7 +316,7 @@ window.TIRITH_STATE = {
                 "done": true
               },
               {
-                "text": "Lane sin respuesta o con error → «esperando por ti».",
+                "text": "Lane sin respuesta o con error \u2192 \u00abesperando por ti\u00bb.",
                 "done": true
               }
             ],
@@ -324,7 +324,7 @@ window.TIRITH_STATE = {
           },
           {
             "id": "2",
-            "title": "Árbol de delegación",
+            "title": "\u00c1rbol de delegaci\u00f3n",
             "status": "done",
             "done": 3,
             "total": 3,
@@ -334,7 +334,7 @@ window.TIRITH_STATE = {
                 "done": true
               },
               {
-                "text": "`register_lane` guarda `parent` automáticamente.",
+                "text": "`register_lane` guarda `parent` autom\u00e1ticamente.",
                 "done": true
               },
               {
@@ -346,13 +346,13 @@ window.TIRITH_STATE = {
           },
           {
             "id": "3",
-            "title": "Hooks de agentes → `tirith hook`",
+            "title": "Hooks de agentes \u2192 `tirith hook`",
             "status": "active",
             "done": 3,
             "total": 6,
             "items": [
               {
-                "text": "`tirith hook --agent <alias>` escribe un evento estándar.",
+                "text": "`tirith hook --agent <alias>` escribe un evento est\u00e1ndar.",
                 "done": true
               },
               {
@@ -368,7 +368,7 @@ window.TIRITH_STATE = {
                 "done": false
               },
               {
-                "text": "Protegerlos para que un agente no pueda quitárselos.",
+                "text": "Protegerlos para que un agente no pueda quit\u00e1rselos.",
                 "done": false
               },
               {
@@ -400,7 +400,7 @@ window.TIRITH_STATE = {
           },
           {
             "id": "7",
-            "title": "Reglas de código",
+            "title": "Reglas de c\u00f3digo",
             "status": "active",
             "done": 1,
             "total": 3,
@@ -422,7 +422,7 @@ window.TIRITH_STATE = {
           },
           {
             "id": "8",
-            "title": "Más visibilidad por agente",
+            "title": "M\u00e1s visibilidad por agente",
             "status": "active",
             "done": 1,
             "total": 3,
@@ -432,7 +432,7 @@ window.TIRITH_STATE = {
                 "done": true
               },
               {
-                "text": "Logs legibles, más nuevos arriba.",
+                "text": "Logs legibles, m\u00e1s nuevos arriba.",
                 "done": false
               },
               {
@@ -458,11 +458,11 @@ window.TIRITH_STATE = {
                 "done": false
               },
               {
-                "text": "Tarjeta «Plan» en el Overview.",
+                "text": "Tarjeta \u00abPlan\u00bb en el Overview.",
                 "done": false
               },
               {
-                "text": "Fecha límite con cuenta atrás.",
+                "text": "Fecha l\u00edmite con cuenta atr\u00e1s.",
                 "done": false
               }
             ],
@@ -533,7 +533,7 @@ window.TIRITH_STATE = {
       "started_at": "2026-10-28T17:40:00Z",
       "ended_at": null,
       "elapsed_s": 7200,
-      "summary": "Measuring the 200-photo scan on the phone: 1.39 s per photo after reusing the pose task.",
+      "summary": "Ratio is stable at 0.70 across three runs, so the pool reuse is what made the difference.",
       "log_tail": [
         "scan 200: persons 5.32 s/photo, none 0.70 s/photo",
         "A/B ratio median 0.70"
@@ -610,12 +610,14 @@ window.TIRITH_STATE = {
         {
           "at": "2026-10-28T19:09:00Z",
           "command": "./gradlew testDebugUnitTest",
-          "result": "failed"
+          "result": "failed",
+          "failed": 2
         },
         {
           "at": "2026-10-28T19:26:00Z",
           "command": "./gradlew testDebugUnitTest",
-          "result": "passed"
+          "result": "passed",
+          "passed": 19
         },
         {
           "at": "2026-10-28T19:39:20Z",
@@ -779,7 +781,7 @@ window.TIRITH_STATE = {
           "ts": "2026-10-28T19:39:02Z",
           "kind": "edit",
           "text": "app/src/main/java/scan/PersonPool.kt",
-          "detail": "+12 −3",
+          "detail": "+12 \u22123",
           "fields": null,
           "path": "/Users/owner/DEVELOP/Chromasol/app/src/main/java/scan/PersonPool.kt"
         },
@@ -819,7 +821,7 @@ window.TIRITH_STATE = {
           "ts": "2026-10-28T19:37:30Z",
           "kind": "edit",
           "text": "app/src/main/java/scan/ScanViewModel.kt",
-          "detail": "+4 −1",
+          "detail": "+4 \u22121",
           "fields": null,
           "path": "/Users/owner/DEVELOP/Chromasol/app/src/main/java/scan/ScanViewModel.kt"
         },
@@ -878,7 +880,7 @@ window.TIRITH_STATE = {
       "started_at": "2026-10-28T13:30:00Z",
       "ended_at": "2026-10-28T15:10:00Z",
       "elapsed_s": 6000,
-      "summary": "Finished: Room v1 to v4 migrations, curated names and the strings check, all green.",
+      "summary": "Room database with the same schema and v1-v4 migrations as iOS; 19 new device tests.",
       "log_tail": [
         "Finished 20 tests",
         "strings OK"
@@ -955,17 +957,20 @@ window.TIRITH_STATE = {
         {
           "at": "2026-10-28T17:00:00Z",
           "command": "./gradlew testDebugUnitTest",
-          "result": "failed"
+          "result": "failed",
+          "failed": 2
         },
         {
           "at": "2026-10-28T17:08:00Z",
           "command": "./gradlew testDebugUnitTest",
-          "result": "passed"
+          "result": "passed",
+          "passed": 19
         },
         {
           "at": "2026-10-28T17:14:00Z",
           "command": "python3 tools/check_strings.py && ./gradlew test",
-          "result": "passed"
+          "result": "passed",
+          "passed": 19
         }
       ],
       "events": [
@@ -1014,7 +1019,7 @@ window.TIRITH_STATE = {
           "ts": "2026-10-28T18:38:20Z",
           "kind": "edit",
           "text": "app/src/main/java/db/Migrations.kt",
-          "detail": "+58 −2",
+          "detail": "+58 \u22122",
           "fields": null,
           "path": "/Users/owner/DEVELOP/Chromasol/app/src/main/java/db/Migrations.kt"
         },
@@ -1051,7 +1056,7 @@ window.TIRITH_STATE = {
       "started_at": "2026-10-28T16:00:00Z",
       "ended_at": "2026-10-28T16:50:00Z",
       "elapsed_s": 3000,
-      "summary": "The render matches the outline but the owner preferred the generated image.",
+      "summary": "Silhouette matches; inner contour still differs from the target.",
       "log_tail": [
         "IoU 0.9271",
         "SSIM 0.7953"
@@ -1331,7 +1336,8 @@ window.TIRITH_STATE = {
         {
           "at": "2026-10-28T19:26:00Z",
           "command": "uv run pytest -q",
-          "result": "failed"
+          "result": "failed",
+          "failed": 2
         }
       ],
       "events": [
@@ -1373,6 +1379,103 @@ window.TIRITH_STATE = {
         }
       ],
       "step": null
+    },
+    {
+      "id": "w7-a11y",
+      "parent": "steward",
+      "project": "chromasol",
+      "name": "Tamsin",
+      "epithet": "of the Watch",
+      "class": "warden",
+      "rank": "sergeant",
+      "renown": 310,
+      "feature": "Screen reader labels on every screen",
+      "status": "working",
+      "started_at": "2026-10-28T18:20:00Z",
+      "ended_at": null,
+      "elapsed_s": 4800,
+      "summary": "Labelling the scan results list; the photo grid already reads out correctly.",
+      "log_tail": [],
+      "files_changed": 11,
+      "insertions": 168,
+      "deletions": 34,
+      "report": null,
+      "session": "2026-10-28-chromasol-release",
+      "goal": "Every button, photo and score in the app is announced by the screen reader, so the owner can ship the accessibility fixes with the release.",
+      "active": true,
+      "last_activity_at": "2026-10-28T19:39:30Z",
+      "files": [],
+      "tools": [
+        {
+          "name": "Read",
+          "count": 6
+        }
+      ],
+      "tests": [
+        {
+          "at": "2026-10-28T19:36:00Z",
+          "command": "./gradlew connectedAndroidTest",
+          "result": "passed",
+          "passed": 24
+        }
+      ],
+      "events": [],
+      "log_entries": [
+        {
+          "ts": "2026-10-28T19:39:30Z",
+          "kind": "say",
+          "text": "Labelling the scan results list; the photo grid already reads out correctly.",
+          "detail": "",
+          "fields": null,
+          "path": null
+        }
+      ],
+      "step": "2"
+    },
+    {
+      "id": "w8-shots",
+      "parent": "steward",
+      "project": "chromasol",
+      "name": "Corvin",
+      "epithet": "Lensgrinder",
+      "class": "glasswright",
+      "rank": "recruit",
+      "renown": 20,
+      "feature": "Store screenshots in six languages",
+      "status": "working",
+      "started_at": "2026-10-28T19:05:00Z",
+      "ended_at": null,
+      "elapsed_s": 2100,
+      "summary": "Framing the second screenshot; the Spanish captions are the longest, so I check those first.",
+      "log_tail": [],
+      "files_changed": 0,
+      "insertions": 0,
+      "deletions": 0,
+      "report": null,
+      "session": "2026-10-28-chromasol-release",
+      "goal": "Capture the five store screenshots in every supported language from the same build.",
+      "active": true,
+      "last_activity_at": "2026-10-28T19:39:30Z",
+      "files": [],
+      "tools": [
+        {
+          "name": "Read",
+          "count": 6
+        }
+      ],
+      "tests": [],
+      "events": [],
+      "log_entries": [
+        {
+          "ts": "2026-10-28T19:39:30Z",
+          "kind": "say",
+          "text": "Framing the second screenshot; the Spanish captions are the longest, so I check those first.",
+          "detail": "",
+          "fields": null,
+          "path": null
+        }
+      ],
+      "step": "3"
     }
   ],
   "pipelines": [

@@ -55,17 +55,20 @@ def _info(lane: dict, tracker: ActivityTracker | None = None, rows=(), status="w
 # -- goal ---------------------------------------------------------------------------------------
 
 
-def test_goal_prefers_why_heading_and_strips_markdown() -> None:
-    text = ("# Lane: thing\n\nWorkspace: here\n\n## Why\nThe **owner** wants to see `goals`, "
-            "see [docs](http://x.invalid/a).\nSecond line. Third one. Fourth gone.\n\n## What\nx\n")
-    assert goal_from_text(text) == "The owner wants to see goals, see docs. Second line. Third one."
+def test_goal_prefers_why_heading_and_keeps_markdown() -> None:
+    text = ("# Lane: thing\n\nWorkspace: here\n\n## Why\nThe **owner** wants to see `goals`.\n"
+            "Second line.\n\nMore.\n\n## What\nx\n")
+    assert goal_from_text(text) == "The **owner** wants to see `goals`.\nSecond line."
+    assert goal_from_text("## Por qu\u00e9\nQuiero verlo.\n") == "Quiero verlo."
+    assert goal_from_text("## Objetivo\nVer todo.\n") == "Ver todo."
 
 
-def test_goal_falls_back_to_first_heading_then_first_paragraph() -> None:
-    assert goal_from_text("# Title\n\nFirst para here.\n\n## Other\nNo.") == "First para here."
-    assert goal_from_text("Just text\nacross lines.\n\nMore.") == "Just text across lines."
-    assert goal_from_text("# Only a title\n") is None
-    assert goal_from_text("```\ncode\n```\n\nReal text.") == "Real text."
+def test_goal_falls_back_to_title_never_setup_text() -> None:
+    assert goal_from_text("# Lane: Fast kanban\n\nWorkspace: here.\n\nRead the brief.") == "Fast kanban"
+    assert goal_from_text("# Title\n\nFirst para here.\n\n## Other\nNo.") == "Title"
+    assert goal_from_text("## Why\nRead the file first.\n\n# T\n") == "T"
+    assert goal_from_text("Just text\nacross lines.\n\nMore.") is None
+    assert goal_from_text("```\ncode\n```\n\nReal text.") is None
 
 
 def test_goal_is_clipped_and_lane_falls_back_to_feature(tmp_path: Path) -> None:
