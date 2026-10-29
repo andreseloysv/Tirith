@@ -126,7 +126,7 @@ Step `status` (checked in this order; `out` items are ignored everywhere):
 | `empty` | no items |
 | `done` | every item checked |
 | `active` | a working lane is tagged with this step (an agent is on it) |
-| `ready` | has open `agent` items and nobody on it: the autopilot starts a lane |
+| `ready` | has open `agent` items and nobody on it: the autopilot tells the manager (it starts nothing) |
 | `blocked-owner` | only open `owner` items (maybe also dated ones) are left; `owner_item` on each is the id of its owner item |
 | `blocked-date` | only open `date` items are left; the step has `until` (the earliest date) |
 | `todo` | anything else (not reachable with a well-formed plan) |
@@ -136,49 +136,65 @@ step id.
 
 ## The autopilot
 
-`collector/tirith/autopilot.py`, called by the dispatcher every cycle. On by default:
+`collector/tirith/autopilot.py`, called by the dispatcher every cycle. **The autopilot never starts an agent**:
+three actors starting agents collided (duplicates, generic briefs replacing detailed ones), so one brain decides:
+the manager. On by default:
 
 ```toml
 [autopilot]
-enabled = true       # false: no lane is started by itself (the owner's on/off request wins over the file)
-max_parallel = 4     # autopilot lanes running at once
+enabled = true       # false: no proposals (the owner's on/off request wins over the file)
+max_parallel = 4     # kept for old configs; nothing is launched by the autopilot any more
 ```
 
-- For every project with a roadmap, one lane per `ready` step, lowest step first (file order), never two on
-  the same step, at most `max_parallel` autopilot lanes running. The launch is the same code as
-  `tirith launch`, and the brief lists only the step's `agent` items (`tirith launch` does the same by
-  hand; a step with no agent item is refused with "has no items an agent can do now").
-- A step is not started again while a lane of that step waits for its review or has a failed review.
-- Every launch is a flow `tirith -> agent:<lane>` ("Autopilot started <project> step <n>") and a row in
-  `state.autopilot.started`; the Plan shows it under the step as "Autopilot started <agent>".
-- **Not converging:** each ended autopilot lane (and its review settled) is counted once. When it ticked none
-  of the items it was started for, the step's counter goes up, otherwise it resets. At 2 the step is paused:
-  a manager queue item `sq-autopilot-<project>-<step>` (kind `autopilot`, "step N is not converging") and an
-  alert flow. The step resumes by itself when its open agent items change (the queue item is closed then).
-- **A refused launch** (check fails, no agent command, …) is one manager queue item `sq-autopilot-<project>-<step>`
-  (`kind: "launch-refused"`, with the fix and retry commands), never an owner item; retried every 10 minutes.
+- **Proposals.** Every open `agent` item (not ticked, not owner-only, not `out`, not in step 0) that nobody works
+  on is reported to the manager: no lane `working` on its step and no review `pending`, `running` (a review whose
+  process died counts as running: the self-check runs it again) or `ready` (being merged). Whatever the item's
+  note says (open, `en curso`, `en revisión`, `reabierto`, `bloqueado`, or a `desde` date that has passed) it is
+  reported after a ~30 s debounce (`DEBOUNCE_S`), so a normal handoff ("lane ended -> review starting") is not.
+- A proposal is an inbox request of kind `autopilot-proposal` from `tirith` (project, step, text): the item,
+  why it is open, the plan file and step, and the linked lane, the last 3 attempts of that step with outcome,
+  review status (merged or not), claims result and the first paragraph of the report. **One per item and
+  state**: a new proposal follows only when the item's text or note changes (the old unanswered one is answered
+  `by: tirith` "No longer needed" and closed). When the item is ticked or removed an unanswered proposal is closed
+  the same way. A flow `tirith -> manager` ("Autopilot proposes <project> step <n>: …") records each.
+- **The manager decides** like for an owner message: launch (with a written brief and the plan link), combine with
+  a lane, wait (say why), or drop (a `plan-edit` through Tirith; `tirith plan done` when the work is on main). It
+  answers on the proposal with one short line ("Autopilot: step 9 item … -> started lane X") and closes it; the
+  chat shows the proposal as an "Autopilot" line and the answer as a manager line. A proposal is never escalated
+  to the owner. A proposal unanswered for more than 10 min is a manager-health problem (`CONTRACT-selfcheck.md`).
+- **The switch** is the Plan's Pause / Resume (inbox request `autopilot`). Off means no proposals; opening
+  proposals stay with the manager. The value is kept in `<home>/autopilot.json` (`{"on": bool}`), which wins
+  over a lost or stale `dispatch.json`, so it survives any restart or reload.
+- **Skipped reasons** (plain words, never "waiting for you to review": reviews are Tirith's own job): "an agent is
+  already on it", "the work of an earlier agent on it is being checked by Tirith", "… is checked and Tirith is
+  merging it", "only the owner's items are left". A failed review is not skipped: it is proposed, with its facts.
 - **Owner items:** for every open `owner` item one owner item with the id of `owner_item`
   (`owner-<project>-<step>-<hash of the text>`), once. The text is the item's clean sentence and
   `why_owner` / `reason_tag` say why it is the owner's (see "The owner tag"; passed through the owner gate). A command (in the tag, else in the
   text) becomes a Run action; a URL becomes the item's `link` with the option `Done`; otherwise the options
   are `Done` / `Not now`. When the item is ticked (or removed) the owner item is
   closed (`done_at`).
-- State is in `<home>/dispatch.json` under `autopilot` (`on`, `lanes`, `stuck`, `paused`, `owner_items`, `refused`).
+- State is in `<home>/dispatch.json` under `autopilot` (`on`, `owner_items`, `proposals`: item key -> request id and
+  fingerprint, `seen`: when an item was first seen unattended).
 
 `state.autopilot`:
 
 ```json
-{"enabled": true, "max_parallel": 4,
- "started": [{"lane": "t-world", "project": "tirith", "step": "3", "at": "2026-10-28T19:21:00Z"}],
- "paused_steps": [{"project": "tirith", "step": "5", "at": "…"}]}
+{"enabled": true, "max_parallel": 4, "working": 2, "steps_working": 2, "steps_in_review": 1,
+ "proposed": 1, "queued": 0, "open_items": 6, "started": [], "paused_steps": [],
+ "skipped": [{"project": "tirith", "step": "9", "why": "the work of an earlier agent on it is being checked by Tirith"}]}
 ```
+
+`started` and `paused_steps` are always empty (kept for old readers). `proposed`: open items whose proposal is
+still open; `queued`: items about to be proposed (inside the debounce).
 
 ## Web
 
-The Plan shows per step: `done` ✓, `active` the agent avatar(s), `ready` "Queued for the autopilot",
+The Plan shows per step: `done` ✓, `active` the agent avatar(s), `ready` "Open: the manager decides",
 `blocked-owner` a person icon and "Waiting for you" (click: the owner item in Your turn),
-`blocked-date` a calendar icon and "From Nov 2". The header reads "Autopilot on · 2 agents working · 3 queued"
-with a Pause / Resume button (inbox request `autopilot`, see `CONTRACT-inbox.md`). Under a step only the
+`blocked-date` a calendar icon and "From Nov 2". The header says what is true: "Paused", or "Autopilot on · 2 steps in progress · 1 waiting for a review · 1 proposed
+to the manager"; never "nothing to start" while open items exist (then "N open items for the owner or a later date",
+or "all done"). It has a Pause / Resume button (inbox request `autopilot`, see `CONTRACT-inbox.md`). Under a step only the
 latest thread entry is open; older ones fold into "N earlier messages".
 
 ## Lanes

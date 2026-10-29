@@ -18,6 +18,7 @@ from typing import Callable
 
 from tirith import timeouts as timeouts_mod
 from tirith import asks as asks_mod
+from tirith import mergeq as mergeq_mod
 from tirith import claimcheck as claimcheck_mod
 from tirith import flows as flows_mod
 from tirith import inbox as inbox_mod
@@ -337,6 +338,14 @@ def run(home: Path, config: Config, now: datetime, state: dict, lanes: list[dict
             continue
         review = review_mod.public(lane, repo) or {}
         rec = book.get(lane_id)
+        if mergeq_mod.queued(home, lane_id):  # the single merge queue has it: no second review
+            continue
+        if rec is None and review.get("status") == review_mod.MERGED and (lane.get("review") or {}).get("by") == "mergeq":
+            rec = book[lane_id] = {"started": now_iso(now)}  # merged by the queue: answer and close like a review
+            settle(home, config, lane, review, rec, now, repo)
+            rec["settled"] = _result_key(review)
+            changed = True
+            continue
         age = _age_s(lane.get("ended_at"), now)
         if rec is None and (lane.get("outcome") or {}).get("status") == "blocked":
             book[lane_id] = {"seen": now_iso(now), "settled": "blocked"}  # blocked: nothing to merge

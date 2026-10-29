@@ -4,6 +4,9 @@
 * the value in force for a class (:func:`effective`): the owner's ``[timeouts]`` in ``config.toml``, else a
   value the owner set, else one an agent set for its lane (bounded, with a reason), else the one learned from
   the recorded durations (p95 x :data:`FACTOR`, clamped), else the default;
+* for the classes that stream output (an agent's run, a stage) an idle limit next to the hard cap
+  (:data:`IDLE_POLICY`): the process is stopped after that long WITHOUT progress (output, a file changed in the
+  worktree, child CPU), and the cap is only the safety net;
 * the runner (:func:`run`) used by every subprocess Tirith starts: own process group, SIGTERM then SIGKILL on
   the whole group at the deadline, the class's cleanup (a stale ``index.lock``), the duration and outcome
   recorded in ``timeouts.json``, and a clear error naming the class and how to raise it.
@@ -42,12 +45,22 @@ POLICY: dict[str, tuple[float, float, float, str]] = {
     "git-commit": (180, 30, 900, "a git commit, with the commit checks that run before it"),
     "stage": (1800, 60, 7200, "a build or test stage"),
     "agent-bash": (120, 10, 600, "a shell command an agent runs"),
-    "agent-turn": (3600, 300, 21600, "one run of an agent in a lane"),
+    "agent-turn": (28800, 300, 86400, "one run of an agent in a lane (the hard cap; see its idle limit)"),
     "muse": (600, 60, 3600, "a request to the model"),
     "cargo": (1800, 60, 7200, "a cargo build or test"),
     "npm": (900, 60, 3600, "an npm install or script"),
     "generic": (120, 5, 1800, "any other command"),
 }
+# class -> (default idle s, min s, max s): how long a run may go without any progress
+IDLE_POLICY: dict[str, tuple[float, float, float]] = {
+    "agent-turn": (1200, 60, 7200),
+    "stage": (900, 60, 3600),
+}
+SILENCE_KEEP = 60       # longest silences kept per class, to learn the idle limit from
+POLL_S = 5.0            # how often the idle watcher looks for progress
+CPU_ACTIVE_S = 1.0      # child CPU time gained between two looks that counts as progress
+SCAN_LIMIT = 20000      # entries of the worktree looked at per scan
+SCAN_SKIP = frozenset({".git", "node_modules", "target", ".venv", "__pycache__", ".mypy_cache"})
 LABELS = {"git": "Git (reading)", "git-commit": "Git commit", "stage": "Build and test stages",
           "agent-bash": "Agent shell commands", "agent-turn": "Agent runs", "muse": "Model requests",
           "cargo": "Cargo", "npm": "npm", "generic": "Other commands"}
@@ -147,6 +160,41 @@ def learned(home: Path, cls: str) -> float | None:
     return clamp(cls, p95(rows) * FACTOR)
 
 
+def idle_bounds(cls: str) -> tuple[float, float, float] | None:
+    """``(default, min, max)`` of the idle limit of ``cls``, None when its class has none (it only has a deadline)."""
+    return IDLE_POLICY.get(base_class(cls))
+
+
+def idle_key(cls: str) -> str:
+    return base_class(cls) + "-idle"
+
+
+def record_silence(home: Path, cls: str, seconds: float) -> None:
+    """Keep the longest stretch without progress of a run that finished: it teaches the idle limit."""
+    try:
+        with _locked(home):
+            book = _book(home)
+            rows = book.setdefault("silences", {})
+            rows = rows if isinstance(rows, dict) else {}
+            book["silences"] = rows
+            rows.setdefault(idle_key(cls), []).append(round(float(seconds), 1))
+            del rows[idle_key(cls)][:-SILENCE_KEEP]
+            write_json_atomic(_path(home), book)
+    except OSError:
+        pass
+
+
+def learned_idle(home: Path, cls: str) -> float | None:
+    """p95 of the recorded silences x FACTOR, never below the default and clamped; None before enough samples."""
+    bounds_ = idle_bounds(cls)
+    silences = _book(home).get("silences")
+    rows = [float(x) for x in ((silences or {}).get(idle_key(cls)) or []) if isinstance(x, (int, float))]
+    if bounds_ is None or len(rows) < MIN_SAMPLES:
+        return None
+    default, low, high = bounds_
+    return max(low, min(high, max(default, p95(rows) * FACTOR)))
+
+
 # -- agent / owner overrides ------------------------------------------------------------------
 
 
@@ -162,24 +210,32 @@ def _lane_live(home: Path, lane_id: str | None) -> bool:
 
 
 def set_timeout(home: Path, config: Config, cls: str, seconds: float, reason: str, *,
-                lane: str | None = None) -> dict:
+                lane: str | None = None, idle: bool = False) -> dict:
     """Store a timeout for ``cls``. An agent (``lane``) stays within min/max, must give a reason and loses
     the value when its lane ends; the owner (no lane) is bounded the same way but never expires.
+    ``idle`` sets the idle limit (``<class>-idle``) instead of the hard cap.
     A class fixed in ``config.toml`` ``[timeouts]`` cannot be changed here."""
     if str(cls or "").split(":", 1)[0] not in POLICY:
         raise TimeoutRefused(f"unknown class '{cls}'; known: {', '.join(POLICY)}")
-    default, low, high = bounds(cls)
-    if cls in config.timeouts:
-        raise TimeoutRefused(f"the owner fixed '{cls}' at {config.timeouts[cls]:g} s in config.toml [timeouts]")
+    if idle:
+        if idle_bounds(cls) is None:
+            raise TimeoutRefused(f"'{cls}' has no idle limit; only {', '.join(IDLE_POLICY)} do")
+        default, low, high = idle_bounds(cls)
+        slot = idle_key(cls)
+    else:
+        default, low, high = bounds(cls)
+        slot = cls
+    if slot in config.timeouts:
+        raise TimeoutRefused(f"the owner fixed '{slot}' at {config.timeouts[slot]:g} s in config.toml [timeouts]")
     if lane and not str(reason or "").strip():
         raise TimeoutRefused("give the reason with --reason")
     if not low <= float(seconds) <= high:
-        raise TimeoutRefused(f"'{cls}' takes {low:g} to {high:g} seconds, not {float(seconds):g}")
+        raise TimeoutRefused(f"'{slot}' takes {low:g} to {high:g} seconds, not {float(seconds):g}")
     row = {"seconds": float(seconds), "reason": str(reason or "").strip()[:300], "at": now_iso(),
            **({"lane": lane} if lane else {})}
     with _locked(home):
         book = _book(home)
-        book["set"][cls] = row
+        book["set"][slot] = row
         write_json_atomic(_path(home), book)
     return row
 
@@ -211,6 +267,31 @@ def describe(home: Path, config: Config, cls: str) -> dict:
     return {"class": cls, "seconds": default, "source": "default", "default": default, "min": low, "max": high}
 
 
+def describe_idle(home: Path, config: Config, cls: str) -> dict | None:
+    """The idle limit in force for ``cls`` and where it comes from; None for a class without one."""
+    limits = idle_bounds(cls)
+    if limits is None:
+        return None
+    default, low, high = limits
+    slot = idle_key(cls)
+    out = {"class": slot, "min": low, "max": high, "default": default}
+    if slot in config.timeouts:
+        return {**out, "seconds": max(low, min(high, float(config.timeouts[slot]))), "source": "config"}
+    row = _stored(home, slot)
+    if row is not None:
+        return {**out, "seconds": max(low, min(high, float(row["seconds"]))), "reason": row.get("reason"),
+                "lane": row.get("lane"), "source": "agent" if row.get("lane") else "owner"}
+    value = learned_idle(home, cls)
+    if value is not None:
+        return {**out, "seconds": value, "source": "learned"}
+    return {**out, "seconds": default, "source": "default"}
+
+
+def effective_idle(home: Path, config: Config | None, cls: str) -> float | None:
+    row = describe_idle(home, config if config is not None else load_config(Path(home)), cls)
+    return row["seconds"] if row else None
+
+
 def effective(home: Path, config: Config | None, cls: str) -> float:
     return describe(home, config if config is not None else load_config(Path(home)), cls)["seconds"]
 
@@ -225,6 +306,7 @@ def table(home: Path, config: Config, now=None) -> list[dict]:
         row["words"] = POLICY[cls][3]
         samples = [d for key, vals in book["durations"].items() if base_class(key) == cls for d in vals]
         row["samples"] = len(samples)
+        row["idle"] = describe_idle(home, config, cls)
         row["last"] = max((t for key, vals in book["timeouts"].items() if base_class(key) == cls
                            for t in vals if isinstance(t, dict)), key=lambda t: str(t.get("at")), default=None)
         rows.append(row)
@@ -394,39 +476,164 @@ def run(argv, cls: str = "generic", cwd=None, env=None, *, home: Path | None = N
     return result
 
 
+def _cpu_seconds(text: str) -> float:
+    """``[dd-][hh:]mm:ss[.cc]`` as ps prints CPU time."""
+    days, _, rest = text.partition("-") if "-" in text else ("0", "", text)
+    total = 0.0
+    for part in rest.split(":"):
+        total = total * 60 + float(part)
+    return total + float(days) * 86400
+
+
+def group_cpu(pgid: int) -> float | None:
+    """CPU seconds used so far by the live processes of one process group; None when ps cannot say."""
+    try:
+        done = subprocess.run(["ps", "-axo", "pgid=,time="], capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    total = 0.0
+    for line in done.stdout.splitlines():
+        fields = line.split()
+        if len(fields) == 2 and fields[0] == str(pgid):
+            try:
+                total += _cpu_seconds(fields[1])
+            except ValueError:
+                pass
+    return total
+
+
+def newest_change(folder: Path, limit: int = SCAN_LIMIT) -> float:
+    """The newest modification time of a file or folder under ``folder`` (build output and .git are skipped)."""
+    newest, seen = 0.0, 0
+    for root, dirs, files in os.walk(folder):
+        dirs[:] = [d for d in dirs if d not in SCAN_SKIP]
+        for name in (*files, "."):
+            seen += 1
+            try:
+                newest = max(newest, os.stat(os.path.join(root, name)).st_mtime)
+            except OSError:
+                pass
+        if seen >= limit:
+            break
+    return newest
+
+
+class Probe:
+    """Where a run shows progress: its log grows, a file of the worktree changes, its processes use CPU.
+    Call it: it returns the wall-clock time of the latest progress seen (None when nothing is known)."""
+
+    def __init__(self, *, log: str | Path | None = None, workspace: str | Path | None = None,
+                 pgid: int | None = None) -> None:
+        self.log, self.workspace, self.pgid = log, workspace, pgid
+        self.cpu: float | None = None
+        self.latest: float | None = None
+
+    def __call__(self) -> float | None:
+        seen = []
+        if self.log:
+            with contextlib.suppress(OSError):
+                seen.append(Path(self.log).stat().st_mtime)
+        if self.workspace and Path(self.workspace).is_dir():
+            seen.append(newest_change(Path(self.workspace)))
+        if self.pgid:
+            cpu = group_cpu(self.pgid)
+            if cpu is not None:
+                if self.cpu is not None and cpu - self.cpu >= CPU_ACTIVE_S:
+                    seen.append(time.time())
+                self.cpu = cpu if self.cpu is None or cpu - self.cpu >= CPU_ACTIVE_S else self.cpu
+        seen = [t for t in seen if t > 0]
+        if seen:
+            self.latest = max(seen + ([self.latest] if self.latest else []))
+        return self.latest
+
+
+def idle_message(cls: str, seconds: float, what: str = "") -> str:
+    return (f"timed out: no progress for {seconds:g} s (class {cls}{'; ' + what if what else ''}; no output, "
+            f"file change or CPU); raise it with: tirith timeout set --class {base_class(cls)} --idle N --reason \"…\"")
+
+
 def supervise(proc: subprocess.Popen, cls: str, *, home: Path | None = None, config: Config | None = None,
-              timeout: float | None = None, argv=None, cwd=None, what: str = "") -> Callable[[], dict]:
+              timeout: float | None = None, argv=None, cwd=None, what: str = "", idle: float | None = None,
+              probe: Callable[[], float | None] | None = None, poll: float = POLL_S) -> Callable[[], dict]:
     """Put an already started process (own process group) under the deadline of ``cls``; for the callers that
     stream its output (stages, agent runs). Returns ``done()``: call it after the process was waited for; it
-    stops the timer, records the duration or timeout and returns ``{"timed_out", "seconds", "limit", "message"}``."""
+    stops the timer, records the duration or timeout and returns
+    ``{"timed_out", "idle", "seconds", "limit", "message"}``. ``done.touch()`` marks progress.
+
+    With ``idle`` (seconds) the deadline is the hard cap and the process is also stopped after ``idle`` seconds
+    without progress: a ``done.touch()``, or a later time from ``probe()`` than the last one seen."""
     home = Path(home) if home else tirith_home()
     limit = float(timeout) if timeout else effective(home, config, cls)
     began, started_wall = time.monotonic(), time.time()
+    poll = max(0.02, min(poll, limit / 4, (idle or limit) / 4))
     fired = threading.Event()
+    stopped = threading.Event()
+    went_idle = threading.Event()
+    last = {"at": time.monotonic(), "silence": 0.0}  # the monotonic time of the latest progress
     lane = os.environ.get("TIRITH_LANE") or None
     label = what or (" ".join(map(str, argv))[:200] if isinstance(argv, (list, tuple)) else str(argv or cls))
 
-    def expire() -> None:
+    def expire(by_idle: bool = False) -> None:
+        if by_idle:
+            went_idle.set()
         fired.set()
         kill_group(proc)
 
-    timer = threading.Timer(limit, expire)
-    timer.daemon = True
-    timer.start()
+    def touch() -> None:
+        last["at"] = time.monotonic()
+
+    def watch() -> None:
+        wall_seen = started_wall
+        while not stopped.wait(poll):
+            now = time.monotonic()
+            if now - began >= limit:
+                return expire()
+            if probe is not None:
+                try:
+                    stamp = probe()
+                except Exception:  # a failing look at the worktree is no progress, and no reason to stop
+                    stamp = None
+                if stamp is not None and stamp > wall_seen:
+                    wall_seen = stamp
+                    last["at"] = max(last["at"], now - max(0.0, time.time() - stamp))
+            last["silence"] = max(last["silence"], now - last["at"])
+            if idle and now - last["at"] >= idle:
+                return expire(True)
+
+    if idle:
+        timer = threading.Thread(target=watch, daemon=True)
+        timer.start()
+        timer.cancel = stopped.set  # type: ignore[attr-defined]
+    else:
+        timer = threading.Timer(limit, expire)
+        timer.daemon = True
+        timer.start()
 
     def done() -> dict:
         timer.cancel()
+        stopped.set()
         seconds = time.monotonic() - began
-        info = {"timed_out": fired.is_set(), "seconds": seconds, "limit": limit, "message": ""}
+        info = {"timed_out": fired.is_set(), "idle": went_idle.is_set(), "seconds": seconds, "limit": limit,
+                "message": ""}
+        if idle:
+            info["idle_limit"] = idle
         if fired.is_set():
             hook = CLEANUP.get(base_class(cls))
-            cleaned = hook(list(argv) if isinstance(argv, (list, tuple)) else [], cwd, started_wall) if hook else []
-            info["message"] = timeout_message(cls, limit, what)
-            record(home, cls, seconds, "timeout", command=label, timeout=limit, lane=lane)
+            if hook:
+                hook(list(argv) if isinstance(argv, (list, tuple)) else [], cwd, started_wall)
+            if went_idle.is_set():
+                info["message"] = idle_message(cls, idle or 0, what)
+                record(home, cls, seconds, "timeout", command=label, timeout=idle or 0, lane=lane)
+            else:
+                info["message"] = timeout_message(cls, limit, what)
+                record(home, cls, seconds, "timeout", command=label, timeout=limit, lane=lane)
         else:
             record(home, cls, seconds, "ok" if proc.returncode == 0 else "failed")
+            if idle:
+                record_silence(home, cls, max(last["silence"], time.monotonic() - last["at"]))
         return info
 
+    done.touch = touch  # type: ignore[attr-defined]
     return done
 
 

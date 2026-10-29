@@ -42,6 +42,12 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Manager de guardia: atender el chat
 - [x] Manager de guardia: atender el chat
 - [x] Manager de guardia: atender el chat
+- [x] Manager de guardia: atender el chat
+- [x] Manager de guardia: atender el chat
+- [x] Manager de guardia: atender el chat
+- [x] Manager de guardia: atender el chat
+- [x] Manager de guardia: atender el chat
+- [x] Manager de guardia: atender el chat
 - [x] Muse chat real check: one tiny session
 
 ## 1. `lane run` devuelve la respuesta final
@@ -163,15 +169,15 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Firmar la app de macOS con el Developer ID del dueño.
 - [x] Notarizar la app de macOS (`scripts/notarize-macos.sh`, perfil `tirith-notary`; aceptada por Apple el 2026-10-29).
 - [ ] Muse protocol probe: read muse serve help and schema
-- [ ] Chat de la app: adjuntar archivos con el clip y arrastrando funciona de verdad en la app de escritorio, y sin scroll horizontal. (reabierto: the merge did not go through: merging lane/app-de-escritorio-tauri-con-chat-7 failed conflicts? : Auto-merging app/README.md CONF)
+- [x] Chat de la app: adjuntar archivos con el clip y arrastrando funciona de verdad en la app de escritorio, y sin scroll horizontal. (hecho: bd92d3b)
   - [x] Revisar: Chat de la app: adjuntar archivos con el clip y arrastrando funciona de verdad en la app de escritorio, y sin scroll horizontal. — falló: the merge did not go through: merging lane/app-de-escritorio-tauri-con-chat-7 failed conflicts? : Auto-merging app/README.md CONF
 - [ ] Los mensajes del chat nunca se cortan ni se salen por la derecha: texto, rutas y código largos se parten o tienen su propio scroll dentro del bloque. (en revisión)
 - [ ] Probar a mano en la app Tauri real (npm run tauri dev): clip, arrastrar y sin scroll horizontal; no hubo sesión gráfica
 - [ ] Integrar en main la rama lane/chatoverflow (mensajes del chat sin cortes). (en revisión)
-- [ ] Llevar a main el cambio de la lane app-de-escritorio-tauri-con-chat-7 (clip, arrastrar, sin scroll horizontal; tests ya verdes): reaplicar a mano /Users/andreseloyasanchezva/.tirith/diffs/app-de-escritorio-tauri-con-chat-7.patch sobre main, sin rediseñar, y resolver el conflicto en app/README.md conservando lo de main. (reabierto: the merge did not go through: the review was interrupted; run it again)
+- [x] Llevar a main el cambio de la lane app-de-escritorio-tauri-con-chat-7 (clip, arrastrar, sin scroll horizontal; tests ya verdes): reaplicar a mano /Users/andreseloyasanchezva/.tirith/diffs/app-de-escritorio-tauri-con-chat-7.patch sobre main, sin rediseñar, y resolver el conflicto en app/README.md conservando lo de main. (hecho: bd92d3b)
   - [x] Revisar: Llevar a main el cambio de la lane app-de-escritorio-tauri-con-chat-7 (clip, arrastrar, sin scroll horizontal; tests ya verdes): reaplicar a mano /Users/andreseloyasanchezva/.tirith/diffs/app-de-escritorio-tauri-con-chat-7.patch sobre main, sin rediseñar, y resolver el conflicto en app/README.md conservando lo de main. — falló: the tests failed: …tauri-con-chat-8/collector/.venv/lib/python3.12/site-packages/_pytest/pathlib.py:123: PytestWarning
 - [ ] La app de escritorio se recompila y se reinicia sola cuando cambia su código Rust en main (firmada), sin que el dueño tenga que hacer nada.
-- [ ] Integrar en main el arreglo de adjuntos (clip y arrastrar) de la lane app-de-escritorio-tauri-con-chat-8, hoy sin commit. (en revisión)
+- [x] Integrar en main el arreglo de adjuntos (clip y arrastrar) de la lane app-de-escritorio-tauri-con-chat-8, hoy sin commit. (hecho: bd92d3b)
 - [ ] Arrastrar archivos al chat funciona de verdad en la app de escritorio, y la miniatura adjunta se ve bien (✕ pequeño dentro de la esquina, nombre y tamaño). (en revisión)
 - [ ] La app de macOS funciona sola en un Mac limpio: incluye el collector y la web, y en el primer arranque instala lo que falte (uv) con un botón. (check: `bash scripts/check-standalone-app.sh`) (en revisión)
 
@@ -182,7 +188,9 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Tarjeta «Plan» en el Overview: pasos, progreso, estado y agentes trabajando en cada uno.
 - [x] Fecha límite opcional con cuenta atrás.
 - [ ] Cabecera de un paso del Plan con varios agentes: avatares apilados (+N) y un solo botón, sin tapar el título ni la barra de progreso. (en revisión)
-- [ ] Quitar la vista Flow del menú y su código (el dueño la considera inútil). (en revisión)
+- [ ] Llevar a main la cabecera de paso con varios agentes de la lane stepheader (commits 8e7cc53 y cb7e35b, hoy atascada en la cola de merge). (check: `git merge-base --is-ancestor 8e7cc53 main`) (en curso: stepheader-land)
+- [ ] Reaplicar sobre main solo el cambio de cabecera de paso de lane/stepheader (4 archivos: git diff --binary 876bf81 cb7e35b | git apply en un worktree nuevo desde main), commit y test web (check: `git cat-file -e main:web/js/planagents.test.mjs && git show main:web/css/style.css | grep -q pavas`) (en curso: plan-visible-en-el-overview)
+- [x] Quitar la vista Flow del menú y su código (el dueño la considera inútil). (hecho: 360eded)
 
 ## 11. Lanzar un sub-agente desde el Plan
 
@@ -224,7 +232,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Crear etapas y reglas pidiéndolo (chat o formulario «+ Etapa» / «+ Regla»); la UI se actualiza sola.
 - [x] Aviso con un clic cuando las reglas no están activas en la máquina.
 - [x] Setup explica por qué una regla no está activa (agente sin `settings`, si puede ejecutarse sin reglas y cómo arreglarlo).
-- [ ] Settings (y todas las vistas) con el mismo margen interior que la cabecera: el texto de introducción y las tarjetas no pegados al borde izquierdo. (en revisión)
+- [x] Settings (y todas las vistas) con el mismo margen interior que la cabecera: el texto de introducción y las tarjetas no pegados al borde izquierdo. (hecho: 610281d)
 
 ## 14. Manager de guardia, chat y piloto automático
 
@@ -273,7 +281,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] El manager persistente arranca siempre: comparte el elemento fijo del manager con los turnos sueltos (sin bloquearse por «ya en curso») y, si falla, el modo de respaldo responde en menos de 1 minuto. (en revisión)
 - [ ] Los permisos de comandos seguros (solo lectura, comandos de Tirith) se aprueban por código; al dueño nunca le llega una pregunta de permiso que no sea suya.
 - [ ] La autorrevisión no escribe en el chat lo que arregló sola: queda en el punto de salud (al hacer clic); el chat solo muestra lo que necesita al dueño.
-- [ ] Llevar a main el trabajo de la lane manager-de-guardia-chat-y-piloto-2: aplicar a mano ~/.tirith/diffs/manager-de-guardia-chat-y-piloto-2.patch sobre main y resolver los conflictos en collector/tirith/agentrun.py y collector/tirith/managerd.py conservando lo que ya hay en main (los tests de la lane pasaban: 1113). (reabierto: the merge did not go through: the review was interrupted; run it again)
+- [ ] Llevar a main el trabajo de la lane manager-de-guardia-chat-y-piloto-2: aplicar a mano ~/.tirith/diffs/manager-de-guardia-chat-y-piloto-2.patch sobre main y resolver los conflictos en collector/tirith/agentrun.py y collector/tirith/managerd.py conservando lo que ya hay en main (los tests de la lane pasaban: 1113). (en revisión)
   - [x] Revisar: Llevar a main el trabajo de la lane manager-de-guardia-chat-y-piloto-2: aplicar a mano ~/.tirith/diffs/manager-de-guardia-chat-y-piloto-2.patch sobre main y resolver los conflictos en collector/tirith/agentrun.py y collector/tirith/managerd.py conservando lo que ya hay en main (los tests de la lane pasaban: 1113). — falló: the merge did not go through: the review was interrupted; run it again
 - [ ] Bucle «sigue hasta terminar» por código: si al acabar falta informe, verificación, tests o rama lista, Tirith reanuda la misma sesión con la lista de lo que falta (hasta 3 veces) y solo después avisa al manager. (en revisión)
 - [ ] Cola única de fusión: los agentes no tocan main; Tirith fusiona de uno en uno (trae main, suite completa, fusiona, empuja) y un conflicto vuelve al mismo agente. (en revisión)
@@ -282,7 +290,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] README y docs/SUBMISSION.md al día para el jurado del hackathon: qué hace Tirith hoy (autonomía con reglas en código, plan, manager en el chat, app notarizada), cómo usa los modelos de Meta, cómo probarlo y capturas reales. (en revisión)
 - [ ] Quitar todo el GDScript: la carpeta world/ (ciudadela 3D de Godot), ./run --3d y toda referencia a Godot en el código, la web y los docs. (en revisión)
 - [ ] Integrar en main lane/smallitems (elementos pequeños con comprobación; ya commiteado, cortado por el límite de 1 h antes de fusionar). (en revisión)
-- [ ] Integrar en main las lanes terminadas teach, mergeq, fasttests, pilotask, idletimeout y diskauto (resolviendo conflictos). (en curso: u-land6)
+- [ ] Integrar en main las lanes terminadas teach, mergeq, fasttests, pilotask, idletimeout y diskauto (resolviendo conflictos). (en revisión)
 - [ ] Landing page pública de Tirith (GitHub Pages): qué es, qué hace, cómo usa los modelos de Meta, capturas reales y cómo probarlo. (en revisión)
 - [ ] Vídeo de demo de 3 min del Tirith actual (manager en el chat, plan, reglas en código, agentes trabajando) grabado por script, más un GIF corto para el README. (en revisión)
 - [ ] Repo preparado para conseguir estrellas: README con GIF y estrella arriba, badges, inicio en una línea, imagen social, CONTRIBUTING y plantillas de issues. (en revisión)
@@ -295,8 +303,10 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] La landing page tiene animaciones al hacer scroll (aparición suave de secciones, capturas y tarjetas) respetando «reducir movimiento». (check: `node web/js/landing.test.mjs`) (en revisión)
 - [ ] Logo de Tirith en 3D renderizado con Blender y renders 3D en la landing page. (check: `test -f site/img/logo-3d.png`) (en revisión)
 - [ ] Registrar en la revisión de una lane la causa cuando se interrumpe (señal o código de salida del proceso), con un test que mata el proceso de la revisión y comprueba la causa registrada. (check: `cd collector && uv run pytest -q -k review_interrupted_records_cause`)
-- [ ] Volver a grabar el vídeo de demo con la interfaz actual (sin Flow, logo 3D) y cada subtítulo sobre la escena que describe. (check: `test -f docs/demo/out/tirith-demo.mp4`) (en curso: u-video2)
+- [ ] Volver a grabar el vídeo de demo con la interfaz actual (sin Flow, logo 3D) y cada subtítulo sobre la escena que describe. (check: `test -f docs/demo/out/tirith-demo.mp4`) (en revisión)
 - [ ] El límite de tamaño de una lane cuenta solo su propio cambio (contra la base con main), no lo que trajo al fusionar main. (check: `cd collector && uv run -q pytest -q tests -k budget`) (en curso: u-budgetfix)
+- [ ] Hacer robusto el test test_second_message_reaches_the_same_process_and_waits_for_the_turn_to_end de test_msession.py, que falla bajo carga como el de compacts (espera de reloj real) (check: `cd collector && uv run pytest tests/test_msession.py -q -k second_message_reaches_the_same_process`)
+- [ ] Rehacer sobre main el commit 8b4bf7c de lane/manager-de-guardia-chat-y-piloto-3 (una conversación del manager entre turnos headless, 5 archivos) en un worktree nuevo, con test por etapa e informe con el número exacto de tests (check: `git show main:collector/tests/test_managerd.py | grep -q test_headless_turns_share_one_session && git show main:collector/tirith/managerd.py | grep -q 'def adopt_session'`) (en curso: manager-de-guardia-chat-y-piloto-4)
 
 ## 15. Collector y CLI en Rust
 

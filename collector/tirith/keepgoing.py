@@ -89,6 +89,35 @@ def gaps(home: Path, lane: dict, repo: Path | None, report: str) -> list[str]:
     return out
 
 
+def has_work(workspace: Path, start_commit: str | None) -> bool:
+    """True when the lane's worktree holds work: uncommitted changes, or commits since the lane started."""
+    if not Path(workspace).is_dir():
+        return False
+    dirty = _git(workspace, "status", "--porcelain")
+    if dirty.returncode == 0 and dirty.stdout.strip():
+        return True
+    if start_commit:
+        ahead = _git(workspace, "rev-list", "--count", f"{start_commit}..HEAD")
+        return ahead.returncode == 0 and ahead.stdout.strip() not in ("", "0")
+    return False
+
+
+def idle_message(minutes: int, round_no: int) -> str:
+    """Sent to a lane's agent that produced no progress for ``minutes``."""
+    return (f"You were idle for {minutes} min (no output, file change or command activity; attempt {round_no} of "
+            f"{MAX_ROUNDS}). Your work in the worktree is kept. Continue where you stopped, or report if you are "
+            "finished or blocked.")
+
+
+def note_idle(home: Path, lane_id: str, round_no: int, minutes: int) -> None:
+    """Keep on the lane that it was resumed after being idle."""
+    lane = read_json(lane_path(home, lane_id), None)
+    if isinstance(lane, dict):
+        lane["idle_resumes"] = round_no
+        lane["idle_minutes"] = minutes
+        write_lane(home, lane)
+
+
 def message(missing: list[str], round_no: int) -> str:
     """The short message sent to the agent: what is missing and what to do."""
     listed = "\n".join(f"{n}. {m}" for n, m in enumerate(missing, 1))
