@@ -384,14 +384,7 @@
   /* "Autopilot on · 2 agents working · 3 queued" with the pause / resume switch. */
   function autoBar(ps, state) {
     if (!state.autopilot) return '';
-    var on = autoOn(state), working = {}, queued = 0, n, bits = [];
-    ps.forEach(function (p) {
-      p.roadmap.steps.forEach(function (s) {
-        (s.agents || []).forEach(function (id) { working[id] = 1; });
-        if (s.status === 'ready') queued++;
-      });
-    });
-    n = Object.keys(working).length;
+    var on = autoOn(state), n = state.autopilot.working || 0, queued = state.autopilot.queued || 0, bits = [];
     bits.push('<b>Autopilot ' + (on ? 'on' : 'paused') + '</b>');
     if (n) bits.push(n + (n === 1 ? ' agent' : ' agents') + ' working');
     if (queued) bits.push(queued + ' queued');

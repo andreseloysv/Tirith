@@ -1156,7 +1156,7 @@ class Collector:
             "rules": rules_state,
             "inbox": inbox_rows,
             "says": inbox_mod.says(self.home),
-            "autopilot": autopilot_mod.public(self.home, self.config),
+            "autopilot": autopilot_mod.public(self.home, self.config, agent_rows, projects, now),
             "launch": {"token": launch_mod.launch_token(self.home),
                        "available": launch_mod.handler_installed()},
             "models": models_mod.state(self.config, [

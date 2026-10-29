@@ -81,9 +81,11 @@ class Pilot:
                          status_of=lambda lane, now: "working", launcher=self.launcher,
                          projects=self.projects())
 
-    def end(self, lane: str, review: dict | None = None) -> None:
+    def end(self, lane: str, review: dict | None = None, report: str | None = None) -> None:
         row = next(a for a in self.agents if a["id"] == lane)
         row["status"] = "done"
+        if report:
+            row["report"] = report
         if review:
             row["review"] = review
 
@@ -171,31 +173,28 @@ def test_refused_launch_is_one_owner_item_and_retried_later(home, repo) -> None:
 # -- not converging -----------------------------------------------------------------------------
 
 
-def test_two_lanes_without_progress_pause_the_step(home, repo) -> None:
+def test_one_lane_without_progress_pauses_the_step(home, repo) -> None:
     pilot = Pilot(home, repo, "[autopilot]\nmax_parallel = 1")
     pilot.cycle()
-    pilot.end("lane-1")  # ended, nothing ticked
+    pilot.end("lane-1", report="I tried two ways and neither compiled.\n\nDetails follow.")
     pilot.cycle()
-    assert pilot.launched == [("demo", "1"), ("demo", "1")]
-    pilot.end("lane-2")
-    pilot.cycle()
-    assert pilot.launched[2:] == [("demo", "2")]  # step 1 is paused, the autopilot moves on
+    assert pilot.launched == [("demo", "1"), ("demo", "2")]  # step 1 is paused at once, the autopilot moves on
     queue = asks_mod.queue_items(home, only_open=True)
     assert [q["id"] for q in queue] == ["sq-autopilot-demo-1"]
-    assert "step 1 is not converging" in queue[0]["text"].lower()
+    assert "step 1" in queue[0]["text"].lower() and "neither compiled" in queue[0]["text"]
+    assert "Details follow" not in queue[0]["text"]
     assert pilot.state()["paused"]["demo|1"]["items"] == ["Build the first thing."]
+    pilot.cycle()
+    assert pilot.launched.count(("demo", "1")) == 1  # not relaunched while the text is the same
 
 
-def test_progress_resets_the_counter(home, repo) -> None:
+def test_progress_does_not_pause(home, repo) -> None:
     pilot = Pilot(home, repo, "[autopilot]\nmax_parallel = 1")
     pilot.cycle()
-    pilot.end("lane-1")
-    pilot.cycle()
-    assert pilot.state()["stuck"] == {"demo|1": 1}
     pilot.tick("Build the first thing.")
-    pilot.end("lane-2", {"status": "merged"})
+    pilot.end("lane-1", {"status": "merged"})
     pilot.cycle()
-    assert "demo|1" not in pilot.state()["stuck"] and "demo|1" not in pilot.state()["paused"]
+    assert "demo|1" not in pilot.state()["paused"]
 
 
 def test_lane_waiting_for_its_review_is_not_counted(home, repo) -> None:
@@ -203,14 +202,13 @@ def test_lane_waiting_for_its_review_is_not_counted(home, repo) -> None:
     pilot.cycle()
     pilot.end("lane-1", {"status": "pending"})
     pilot.cycle()
-    assert pilot.state()["stuck"] == {} and pilot.launched.count(("demo", "1")) == 1  # review pending: not again
+    assert pilot.state()["paused"] == {} and pilot.launched.count(("demo", "1")) == 1  # review pending: not again
 
 
 def test_paused_step_resumes_when_its_items_change(home, repo) -> None:
     pilot = Pilot(home, repo, "[autopilot]\nmax_parallel = 1")
-    for lane in ("lane-1", "lane-2"):
-        pilot.cycle()
-        pilot.end(lane)
+    pilot.cycle()
+    pilot.end("lane-1")
     pilot.cycle()
     assert "demo|1" in pilot.state()["paused"]
     path = repo / "docs" / "TODO.md"
@@ -278,7 +276,90 @@ def test_a_fallback_relaunch_is_the_same_steps_lane(home, repo) -> None:
     dispatch_mod.save_state(home, state)
     pilot.cycle()
     assert pilot.launched == [("demo", "1"), ("demo", "2")]  # no second lane on step 1
-    assert pilot.state()["stuck"] == {} and pilot.state()["lanes"]["lane-1b"]["settled"] is False
+    assert pilot.state()["paused"] == {} and pilot.state()["lanes"]["lane-1b"]["settled"] is False
     pilot.end("lane-1b", {"status": "merged"})
     pilot.cycle()
     assert pilot.state()["lanes"]["lane-1b"]["settled"] is True
+
+
+# -- what the lane's report says (real reports of ~/.tirith/lanes, shortened) ---------------------------
+
+ALREADY_BUILT = [
+    "I changed no files, because the brief's one item, protecting the hooks so an agent can't remove them, "
+    "was already built and merged by the earlier `protect` lane.\n\nThe tests pass: `tirith run --project "
+    "tirith --stage test` gave 678 passed.",
+    "I changed no files. The protection this brief asks for is already in the committed code, so there was "
+    "nothing left to build.\n\n- **Settings are guarded.** `PreToolUse` blocks edits to an agent's settings file.",
+]
+CANNOT_DO = [
+    "The brief's one task was \"test a real launch from the browser with the `tirith://` link\". I couldn't do "
+    "that, so I added an automated test of the same path. The tests pass: 680 passed.\n\n**Not done: the real "
+    "browser click.** The owner still has to run `tirith url install`.",
+    "The brief's only item, a real launch from the browser with the `tirith://` link, is not done. The lane "
+    "can't do it, so the owner has to. The tests pass: 727 passed.",
+    "I can't read the help for either CLI, because both commands need approval that I don't have. I'll stop "
+    "here and won't edit the contract or the presets on a guess.\n\n**What I did**\n- Made no file changes.",
+]
+NOT_FINISHED = [
+    "I added `codex` and `copilot` presets to `lane run`, but I haven't run either agent, so the lane isn't "
+    "done. The unit tests pass.\n\n**What changed**\n- `collector/tirith/agentrun.py`: new entries.",
+]
+
+
+@pytest.mark.parametrize("report", ALREADY_BUILT)
+def test_report_saying_already_built_asks_the_plan_updater_to_tick(home, repo, report) -> None:
+    pilot = Pilot(home, repo, "[autopilot]\nmax_parallel = 1")
+    pilot.cycle()
+    pilot.end("lane-1", report=report)
+    pilot.cycle()
+    assert autopilot_mod.report_kind(report) == "done"
+    refresh = [r for r in inbox_mod.requests(home) if r["kind"] == "plan-refresh"]
+    assert [(r["project"], r["step"]) for r in refresh] == [("demo", "1")]  # limited to that step
+    assert pilot.state()["paused"]["demo|1"]["why"] == "done"
+    assert pilot.launched.count(("demo", "1")) == 1
+    pilot.cycle()
+    assert len([r for r in inbox_mod.requests(home) if r["kind"] == "plan-refresh"]) == 1  # asked once
+    assert asks_mod.queue_items(home, only_open=True) == []
+
+
+@pytest.mark.parametrize("report", CANNOT_DO)
+def test_report_saying_it_cannot_proposes_owner_only(home, repo, report) -> None:
+    pilot = Pilot(home, repo, "[autopilot]\nmax_parallel = 1")
+    pilot.cycle()
+    pilot.end("lane-1", report=report)
+    pilot.cycle()
+    assert autopilot_mod.report_kind(report) == "cannot"
+    queue = asks_mod.queue_items(home, only_open=True)
+    assert [q["id"] for q in queue] == ["sq-autopilot-demo-1"] and "owner-only" in queue[0]["text"]
+    assert pilot.state()["paused"]["demo|1"]["why"] == "cannot"
+    assert [r for r in inbox_mod.requests(home) if r["kind"] == "plan-refresh"] == []
+    assert pilot.launched.count(("demo", "1")) == 1
+
+
+def test_other_reports_are_stuck_with_their_summary() -> None:
+    for report in NOT_FINISHED:
+        assert autopilot_mod.report_kind(report) == "stuck"
+        assert autopilot_mod.report_summary(report).startswith("I added `codex`")
+    assert autopilot_mod.report_summary(None) == "The lane ended without a report."
+
+
+def test_refresh_brief_is_limited_to_the_step() -> None:
+    from tirith.planlane import refresh_brief
+    assert "Limited to step 3" in refresh_brief("demo", "docs/TODO.md", "# TODO", [], [], Path("."), step="3")
+    assert "Limited to step" not in refresh_brief("demo", "docs/TODO.md", "# TODO", [], [], Path("."))
+
+
+# -- the header counts ------------------------------------------------------------------------------
+
+
+def test_header_counts_only_live_lanes_and_unpaused_ready_steps(home, repo) -> None:
+    pilot = Pilot(home, repo, "[autopilot]\nmax_parallel = 1")
+    pilot.cycle()
+    count = lambda: autopilot_mod.public(home, load_config(home), pilot.agents, pilot.projects(), pilot.now)
+    assert (count()["working"], count()["queued"]) == (1, 2)  # step 1 working, steps 2 and 3 queued
+    for lane in ("lane-1", "lane-2", "lane-3"):
+        pilot.end(lane, report="I couldn't do it.")
+        pilot.cycle()
+    got = count()
+    assert (got["working"], got["queued"]) == (0, 0)  # three ended lanes in the started log: none counted
+    assert len(got["started"]) == 3

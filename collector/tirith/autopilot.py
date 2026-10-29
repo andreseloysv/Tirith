@@ -3,7 +3,10 @@
 Every collector cycle ``dispatch.run`` calls :func:`run`. For each project with a roadmap it starts one lane
 (like ``tirith launch``, the brief lists only the step's agent items) on every ``ready`` step, oldest step
 first, never two on the same step and at most ``[autopilot] max_parallel`` autopilot lanes running. A step
-whose last two autopilot lanes ended without ticking anything is paused and becomes a manager queue item.
+whose autopilot lane ended without ticking anything or merging changes is paused until its plan text changes:
+a report saying the work was already done asks the plan updater to tick the step, a report saying the lane
+could not do an item becomes a manager queue item proposing to tag it owner-only, any other report becomes a
+manager queue item with the report's summary.
 It also keeps one owner item for every open owner-only roadmap item (closed when the item is ticked) and
 handles the owner's ``autopilot`` on/off requests. State lives in ``dispatch.json`` under ``autopilot``.
 See ``docs/CONTRACT-roadmap.md`` and ``docs/CONTRACT-inbox.md``.
@@ -26,7 +29,12 @@ from tirith import launch as launch_mod
 from tirith import roadmap as roadmap_mod
 from tirith.home import Config, now_iso, parse_iso
 
-STUCK_AFTER = 2          # lanes in a row that ended without ticking anything
+SUMMARY_MAX = 400
+# a report saying the work is already in the code; checked before CANNOT (a done report may say "can't")
+ALREADY = re.compile(r"already (?:built|done|exists?|implemented|merged|in the (?:committed )?code|ticked)"
+                     r"|nothing (?:is )?left|changed no files|no files (?:were )?changed", re.I)
+# a report saying the lane could not do an item
+CANNOT = re.compile(r"\bcan(?:'|’)?t\b|\bcannot\b|couldn(?:'|’)?t|could not|needs? the owner|\bblocked\b", re.I)
 GRACE_S = 180.0          # a lane that has not shown up as an agent yet still counts as running
 RETRY_REFUSED_S = 600.0
 KEPT_LANES = 200
@@ -37,7 +45,7 @@ REVIEW_OPEN = ("pending", "running")
 
 def _own(state: dict) -> dict:
     own = state.setdefault("autopilot", {})
-    for key in ("lanes", "stuck", "paused", "owner_items", "refused"):
+    for key in ("lanes", "paused", "owner_items", "refused"):
         if not isinstance(own.get(key), dict):
             own[key] = {}
     return own
@@ -162,26 +170,52 @@ def _settle(home: Path, state: dict, projects: list[dict], agents: list[dict], n
         progressed = review.get("status") in ("ready", "merged") or any(t not in open_now for t in rec["items"])
         rec["settled"] = True
         changed = True
-        if progressed:
-            own["stuck"].pop(key, None)
-            continue
-        own["stuck"][key] = own["stuck"].get(key, 0) + 1
-        if own["stuck"][key] >= STUCK_AFTER and key not in own["paused"]:
-            _pause(home, own, key, lane_id, rec, sorted(open_now), now)
+        if not progressed and key not in own["paused"]:
+            _pause(home, own, key, lane_id, rec, sorted(open_now), (agent or {}).get("report"), now)
     return changed
 
 
-def _pause(home: Path, own: dict, key: str, lane_id: str, rec: dict, open_now: list[str], now: datetime) -> None:
-    at = now_iso(now)
-    own["paused"][key] = {"at": at, "items": open_now}
-    name = _step_name(rec["project"], rec["step"])
-    text = (f"Autopilot paused: {name} is not converging. The last {STUCK_AFTER} lanes ended without "
-            "ticking anything. Read their reports (`tirith lane review <lane>`), then fix the brief or the "
-            "items; the autopilot resumes by itself when the open items change.")
-    asks_mod.queue_add(home, rec["project"], lane_id, text, kind="autopilot",
-                       item_id=f"sq-autopilot-{rec['project']}-{rec['step']}")
-    flows_mod.append_flow(home, "tirith", "owner", "alert", f"{name} is not converging; autopilot paused there",
-                          session=None, project=rec["project"], at=at)
+def report_kind(report: str | None) -> str:
+    """``done`` (already built), ``cannot`` (the lane could not do it) or ``stuck`` (anything else)."""
+    text = str(report or "")
+    if ALREADY.search(text):
+        return "done"
+    return "cannot" if CANNOT.search(text) else "stuck"
+
+
+def report_summary(report: str | None) -> str:
+    """The first paragraph of a lane report on one line, for a queue item."""
+    paragraphs = [" ".join(p.split()) for p in str(report or "").split("\n\n") if p.strip()]
+    text = paragraphs[0] if paragraphs else "The lane ended without a report."
+    return text if len(text) <= SUMMARY_MAX else text[:SUMMARY_MAX - 1].rsplit(" ", 1)[0] + "…"
+
+
+def _pause(home: Path, own: dict, key: str, lane_id: str, rec: dict, open_now: list[str], report: str | None,
+           now: datetime) -> None:
+    """Pause the step until its plan text changes, and say why (see the module doc for the three cases)."""
+    at, kind = now_iso(now), report_kind(report)
+    project, step = rec["project"], rec["step"]
+    own["paused"][key] = {"at": at, "items": open_now, "why": kind}
+    name, summary = _step_name(project, step), report_summary(report)
+    if kind == "done":
+        inbox_mod.add_request(home, "plan-refresh", project, step,
+                              f"Autopilot: lane {lane_id} found step {step} already built. Tick what is done "
+                              f"in step {step} only. Its report: {summary}", at=at)
+        flows_mod.append_flow(home, "tirith", "owner", "request",
+                              f"{name} looks already built; asked for a plan update", session=None,
+                              project=project, at=at)
+        return
+    if kind == "cannot":
+        text = (f"Autopilot paused {name}: lane {lane_id} could not do an item. {summary} "
+                "Proposal: re-tag that item as owner-only (add `(dueño)` to it in the plan), so the autopilot "
+                "moves on and it becomes an owner item.")
+    else:
+        text = (f"Autopilot paused {name}: lane {lane_id} ended without ticking anything or merging changes. "
+                f"Why it could not finish: {summary} Read it with `tirith lane review {lane_id}`, then fix the "
+                "brief or the items; the autopilot resumes by itself when the step's plan text changes.")
+    asks_mod.queue_add(home, project, lane_id, text, kind="autopilot", item_id=f"sq-autopilot-{project}-{step}")
+    flows_mod.append_flow(home, "tirith", "owner", "alert", f"{name} paused: a lane ended without progress",
+                          session=None, project=project, at=at)
 
 
 def _unpause(home: Path, state: dict, steps: dict[str, dict]) -> bool:
@@ -191,7 +225,6 @@ def _unpause(home: Path, state: dict, steps: dict[str, dict]) -> bool:
         step = steps.get(key)
         if step is None or sorted(_agent_open(step)) != row["items"]:
             del own["paused"][key]
-            own["stuck"].pop(key, None)
             project, _, step_id = key.partition("|")
             try:
                 asks_mod.queue_done(home, f"sq-autopilot-{project}-{step_id}", "the open items changed")
@@ -247,6 +280,13 @@ def _launch(home: Path, state: dict, project: dict, step: dict, launcher: Callab
 # -- the cycle --------------------------------------------------------------------------------
 
 
+def _live(own: dict, agents: list[dict], now: datetime) -> set[str]:
+    """Ids of the autopilot lanes whose process is alive and not ended."""
+    by_id = _agents_by_id(agents)
+    return {lane_id for lane_id, rec in own["lanes"].items()
+            if not rec.get("settled") and _running(rec, by_id.get(lane_id), now)}
+
+
 def run(home: Path, config: Config, now: datetime, state: dict, *, agents: list[dict], projects: list[dict],
         launcher: Callable) -> bool:
     """One autopilot pass; True when ``state`` changed."""
@@ -259,8 +299,7 @@ def run(home: Path, config: Config, now: datetime, state: dict, *, agents: list[
     if not effective(config, state):
         return changed
     by_id = _agents_by_id(agents)
-    running = sum(1 for lane_id, rec in own["lanes"].items()
-                  if not rec.get("settled") and _running(rec, by_id.get(lane_id), now))
+    running = len(_live(own, agents, now))
     for project in planned:
         for step in project["roadmap"]["steps"]:
             if running >= config.autopilot_max_parallel:
@@ -279,14 +318,22 @@ def run(home: Path, config: Config, now: datetime, state: dict, *, agents: list[
     return changed
 
 
-def public(home: Path, config: Config) -> dict:
-    """``state.autopilot``: the switch, the limit and the lanes the autopilot started (newest last)."""
+def public(home: Path, config: Config, agents: list[dict] | None = None, projects: list[dict] | None = None,
+           now: datetime | None = None) -> dict:
+    """``state.autopilot``: the switch, the limit, the lanes the autopilot started (newest last) and, given the
+    agents and projects, the header counts: ``working`` (autopilot lanes alive and not ended) and ``queued``
+    (ready steps not started, not paused)."""
     from tirith.dispatch import load_state
     state = load_state(home)
     own = _own(state)
+    now = now or parse_iso(now_iso()) or datetime.now()
     started = [{"lane": lane_id, "project": rec["project"], "step": rec["step"], "at": rec["at"]}
                for lane_id, rec in own["lanes"].items()]
+    live = _live(own, agents or [], now)
+    queued = sum(1 for p in projects or [] for s in (p.get("roadmap") or {}).get("steps", [])
+                 if s["status"] == "ready" and _key(p["id"], s["id"]) not in own["paused"])
     return {"enabled": effective(config, state), "max_parallel": config.autopilot_max_parallel,
+            "working": len(live), "queued": queued,
             "started": started[-STARTED_SHOWN:],
             "paused_steps": [{"project": k.partition("|")[0], "step": k.partition("|")[2], "at": v["at"]}
                              for k, v in own["paused"].items()]}
