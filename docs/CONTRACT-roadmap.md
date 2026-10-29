@@ -173,3 +173,21 @@ folded under "N done"; other plans are read only (no step buttons).
 The Plan card header has **Update the plan** and **Start a new plan**; they send the inbox requests
 `plan-refresh` and `plan-new` (`docs/CONTRACT-inbox.md`), which Tirith turns into an auditor lane and a
 planner lane.
+
+## Editing the plan from the Plan card
+
+Each open item of the current plan has **Edit** and **Delete** on hover, and each step has **Add item**. They
+send a `plan-edit` request (`CONTRACT-inbox.md`) and the dispatcher changes the file by code
+(`roadmap.edit(text, step_id, item_text, new_text | delete | add)`):
+
+- The item is found by exact text inside the step (whitespace-normalised, a wrapped item is one item) and
+  must be open. No match raises `roadmap.EditError` ("that item changed in the plan meanwhile") and the file is
+  left as it is.
+- An edit keeps the bullet, indent and `[ ]`; the new text is written on one line (a wrapped item becomes one
+  line). A delete removes the item with its wrapped lines. An add appends `- [ ] <text>` after the step's last
+  open item (or after its last item, or at the top of an empty step).
+- The dispatcher refuses when the plan file has uncommitted changes, otherwise it writes the file and commits
+  only that file with `Roadmap: <edit|delete|add> in step N (owner)` through the normal hooks; if the commit
+  is refused the file is restored.
+- After a change it queues one `plan-refresh` (Update the plan) for the project, unless one is already
+  queued, so the auditor checks the plan again.

@@ -702,8 +702,8 @@ fn clean_attachments(raw: &[Value], root: &std::path::Path) -> Result<Vec<Value>
 /// Builds the inbox row for a request: `{id, at, kind, project, step, text, from, status}`.
 fn inbox_row(kind: &str, project: &str, step: &str, text: &str, now: SystemTime, salt: u32) -> Result<Value, String> {
     let plan = kind == "plan-refresh" || kind == "plan-new";
-    if kind != "finish" && kind != "ask" && kind != "setup" && kind != "chat" && kind != "autopilot" && !plan {
-        return Err(format!("kind must be finish, ask, setup, chat, autopilot, plan-refresh or plan-new, not {kind:?}"));
+    if kind != "finish" && kind != "ask" && kind != "setup" && kind != "chat" && kind != "autopilot" && kind != "plan-edit" && !plan {
+        return Err(format!("kind must be finish, ask, setup, chat, autopilot, plan-refresh, plan-new or plan-edit, not {kind:?}"));
     }
     let (project, text) = (project.trim(), clip(text.trim(), INBOX_TEXT_MAX));
     let step = if step.trim().is_empty() && kind == "setup" {
@@ -726,7 +726,7 @@ fn inbox_row(kind: &str, project: &str, step: &str, text: &str, now: SystemTime,
     if kind == "autopilot" && text != "on" && text != "off" {
         return Err("an autopilot request needs text on or off".into());
     }
-    if (kind == "setup" || kind == "plan-new") && !text.starts_with('{') {
+    if (kind == "setup" || kind == "plan-new" || kind == "plan-edit") && !text.starts_with('{') {
         return Err(format!("a {kind} request needs its JSON as text"));
     }
     let d = now.duration_since(UNIX_EPOCH).unwrap_or_default();
@@ -935,6 +935,8 @@ mod inbox_tests {
         assert_eq!(inbox_row("plan-refresh", "demo", "", "", UNIX_EPOCH, 0).unwrap()["step"], "plan");
         assert!(inbox_row("plan-new", "demo", "", "{\"title\":\"x\"}", UNIX_EPOCH, 0).is_ok());
         assert!(inbox_row("plan-new", "demo", "", "a title", UNIX_EPOCH, 0).is_err());
+        assert!(inbox_row("plan-edit", "demo", "2", "{\"add\":\"x\"}", UNIX_EPOCH, 0).is_ok());
+        assert!(inbox_row("plan-edit", "demo", "2", "x", UNIX_EPOCH, 0).is_err());
         let long = "é".repeat(3000);
         let row = inbox_row("ask", "demo", "1", &long, UNIX_EPOCH, 0).unwrap();
         assert!(row["text"].as_str().unwrap().len() <= INBOX_TEXT_MAX);

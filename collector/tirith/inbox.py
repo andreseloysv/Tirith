@@ -19,7 +19,7 @@ from tirith.home import now_iso
 from tirith.store import append_jsonl, read_jsonl
 
 INBOX_FILE = "inbox.jsonl"
-KINDS = ("finish", "ask", "setup", "chat", "autopilot", "plan-refresh", "plan-new")
+KINDS = ("finish", "ask", "setup", "chat", "autopilot", "plan-refresh", "plan-new", "plan-edit")
 PLAN_KINDS = ("plan-refresh", "plan-new")
 PLAN_STEP = "plan"  # the step of a request about the whole plan, not one step
 MODELS_ACTIONS = ("models-set", "apply-manager")  # the Settings page; the request's project is "settings"
@@ -165,6 +165,8 @@ def add_request(home: Path, kind: str, project: str = "", step: str = "", text: 
         step = step or PLAN_STEP
         if kind == "plan-new":
             text = json.dumps(parse_plan_new(text), ensure_ascii=False, separators=(",", ":"))
+    if kind == "plan-edit":
+        text = json.dumps(parse_plan_edit(text), ensure_ascii=False, separators=(",", ":"))
     attachments = clean_attachments(attachments)
     if kind == "chat":
         if not text and not attachments:
@@ -210,6 +212,36 @@ def parse_plan_new(text: str) -> dict:
         raise InboxError('a plan-new request needs text like {"title": "...", "goal": "...", '
                          '"deadline": "", "steps": ""} with a title')
     return {key: str(data.get(key) or "").strip() for key in ("title", "goal", "deadline", "steps")}
+
+
+def parse_plan_edit(text: str) -> dict:
+    """The JSON of a ``plan-edit`` request: ``{plan, item_text, new_text | delete: true | add}``.
+
+    Exactly one change: ``new_text`` (needs ``item_text``), ``delete`` (needs ``item_text``) or ``add``."""
+    try:
+        data = json.loads(text)
+    except (TypeError, ValueError):
+        data = None
+    msg = ('a plan-edit request needs text like {"plan": "", "item_text": "...", "new_text": "..."}, '
+           '{"item_text": "...", "delete": true} or {"add": "..."}')
+    if not isinstance(data, dict):
+        raise InboxError(msg)
+    out = {"plan": str(data.get("plan") or "").strip(), "item_text": str(data.get("item_text") or "").strip()}
+    given = [k for k in ("new_text", "delete", "add") if k in data]
+    if given == ["delete"] and data["delete"] is True and out["item_text"]:
+        out["delete"] = True
+    elif given == ["new_text"] and isinstance(data["new_text"], str) and data["new_text"].strip() and out["item_text"]:
+        out["new_text"] = data["new_text"].strip()
+    elif given == ["add"] and isinstance(data["add"], str) and data["add"].strip() and not out["item_text"]:
+        out["add"] = data["add"].strip()
+    else:
+        raise InboxError(msg)
+    return out
+
+
+def edit_verb(edit: dict) -> str:
+    """``edit`` / ``delete`` / ``add``: the verb of the commit message."""
+    return "delete" if edit.get("delete") else "add" if "add" in edit else "edit"
 
 
 def setup_summary(setup: dict) -> str:
@@ -335,6 +367,11 @@ def requests(home: Path) -> list[dict]:
                     out[rid]["plan"] = parse_plan_new(out[rid]["text"])
                 except InboxError:
                     del out[rid]
+            elif kind == "plan-edit":
+                try:
+                    out[rid]["edit"] = parse_plan_edit(out[rid]["text"])
+                except InboxError:
+                    del out[rid]
         elif rid in out and kind == "answer":
             answer = {"at": row.get("at"), "by": "manager" if row.get("by") in (None, "", "steward") else row["by"],
                       "text": str(row.get("text") or ""), "auto": bool(row.get("auto")),
@@ -417,7 +454,7 @@ def manager_pending(req: dict) -> bool:
         last_manager = max((str(a["at"] or "") for a in req["answers"] if a["by"] == "manager"), default="")
         if max(str(r["at"] or "") for r in runs) > last_manager:
             return True  # the owner ran an action the manager gave: the manager must answer the result
-    if req["kind"] == "finish" or req["kind"] in PLAN_KINDS:
+    if req["kind"] in ("finish", "plan-edit") or req["kind"] in PLAN_KINDS:
         return not req["answers"]
     return not any(a["by"] == "manager" for a in req["answers"])
 
