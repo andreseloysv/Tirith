@@ -50,6 +50,24 @@ class Violation:
 # -- command line parsing ---------------------------------------------------------------------
 
 
+_HEREDOC = re.compile(r"<<(-?)\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\2")
+
+
+def strip_heredocs(line: str) -> str:
+    """The shell line without here-document bodies: they are data written to a file, not commands."""
+    out: list[str] = []
+    ends: list[tuple[str, bool]] = []
+    for row in str(line or "").split("\n"):
+        if ends:
+            delim, dash = ends[0]
+            if (row.lstrip("\t") if dash else row) == delim:
+                ends.pop(0)
+            continue
+        out.append(row)
+        ends.extend((m.group(3), m.group(1) == "-") for m in _HEREDOC.finditer(row))
+    return "\n".join(out)
+
+
 def split_commands(line: str) -> list[list[str]]:
     """Simple commands of a shell line as token lists (split on ``; & | ( )`` and newlines)."""
     out: list[list[str]] = []
@@ -186,7 +204,8 @@ def _commit_no_verify(args: list[str]) -> bool:
 
 def _git_rules(line: str, segments: list[list[str]]) -> list[Violation]:
     out: list[Violation] = []
-    if "core.hookspath" in line.lower():
+    if any(_program(tokens)[0] == "git" and any("core.hookspath" in t.lower() for t in tokens)
+           for tokens in segments):
         out.append(Violation(
             "hooks-path", f"changing core.hooksPath bypasses the git hooks: {_clip(line)}",
             "leave core.hooksPath alone; to change what a hook runs, edit the [[hooks]] entries "
@@ -267,7 +286,7 @@ def check_call(config: Config, tool: str | None, tool_input, cwd, project: str |
         return []
     if tool != "Bash":
         return []
-    line = str(data.get("command") or data.get("cmd") or "")
+    line = strip_heredocs(str(data.get("command") or data.get("cmd") or ""))
     segments = split_commands(line)
     out = _git_rules(line, segments)
     commands = agent_commands(config)
