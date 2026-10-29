@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from conftest import make_hooks_mutable, make_repo, write_config, write_lane_manifest, write_plan, REPORT_DONE
+from tirith import asks as asks_mod
 from tirith.cli import main, register_lane
 from tirith.store import final_answer, read_json, read_jsonl
 
@@ -117,11 +118,9 @@ def test_lane_run_failure_adds_wait(home: Path, tmp_path: Path, capsys,
         make_hooks_mutable(repo)
     assert code == 3
     assert "lane boom: failed" in capsys.readouterr().out
-    waits = read_jsonl(home / "waits.jsonl")
-    assert [w["id"] for w in waits] == ["lane-boom"]
-    assert waits[0]["kind"] == "decision"
-    assert [o["label"] for o in waits[0]["options"]] == ["Retry", "Show the log", "Drop it"]
-    assert "boom" in waits[0]["text"] and waits[0]["command"].startswith("tail -n 80 ")
+    assert not read_jsonl(home / "waits.jsonl")  # retrying is the manager's, not the owner's
+    (item,) = asks_mod.queue_items(home, only_open=True)
+    assert item["id"] == "sq-lane-boom" and "boom" in item["text"]
 
 
 def test_lane_run_without_answer_adds_wait(home: Path, tmp_path: Path, capsys,
@@ -134,7 +133,42 @@ def test_lane_run_without_answer_adds_wait(home: Path, tmp_path: Path, capsys,
         make_hooks_mutable(repo)
     assert code == 0
     assert "lane mute: done" in capsys.readouterr().out
-    waits = read_jsonl(home / "waits.jsonl")
-    assert [w["id"] for w in waits] == ["lane-mute"]
-    assert "ended without an answer" in waits[0]["text"]
-    assert [o["value"] for o in waits[0]["options"]] == ["retry", "log", "drop"]
+    assert not read_jsonl(home / "waits.jsonl")
+    (item,) = asks_mod.queue_items(home, only_open=True)
+    assert item["id"] == "sq-lane-mute" and "ended without an answer" in item["text"]
+
+
+def _step_lane(home: Path, lane_id: str, step: str, ended: bool = False) -> None:
+    register_lane(home, lane_id=lane_id, project="demo", hero_class="warden", feature=lane_id,
+                  workspace=None, log=None, pid=None, brief=None, step=step)
+    if ended:
+        from tirith.cli import end_lane
+        end_lane(home, lane_id, "done", "ok")
+
+
+def _run_step(repo: Path, lane_id: str, step: str, *extra: str) -> int:
+    try:
+        return main(["lane", "run", "--project", "demo", "--class", "warden", "--feature", lane_id,
+                     "--brief", str(repo / "brief.md"), "--id", lane_id, "--step", step, *extra,
+                     "--", sys.executable, "-c", "print('x')"])
+    finally:
+        make_hooks_mutable(repo)
+
+
+def test_lane_run_refuses_a_step_another_lane_is_working_on(home: Path, tmp_path: Path, capsys,
+                                                            monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = _lane_run_setup(home, tmp_path, monkeypatch)
+    _step_lane(home, "u-rustbase", "15")
+    assert _run_step(repo, "collector-y-cli", "15") == 3
+    assert "u-rustbase is already working on step 15" in capsys.readouterr().err
+    assert not (home / "lanes" / "collector-y-cli.json").exists()
+
+
+def test_lane_run_allows_another_step_a_finished_lane_and_a_continuation(
+        home: Path, tmp_path: Path, capsys, monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = _lane_run_setup(home, tmp_path, monkeypatch)
+    _step_lane(home, "other", "14")
+    _step_lane(home, "finished", "15", ended=True)
+    assert _run_step(repo, "mine", "15") == 0
+    _step_lane(home, "busy", "16")
+    assert _run_step(repo, "retry", "16", "--fallback-from", "busy") == 0

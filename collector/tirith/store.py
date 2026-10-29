@@ -7,6 +7,7 @@ file formats here means the CLI and collector cannot drift apart.
 
 from __future__ import annotations
 
+import copy
 import json
 import os
 import tempfile
@@ -111,13 +112,39 @@ def lane_path(home: Path, lane_id: str) -> Path:
     return home / "lanes" / f"{lane_id}.json"
 
 
+_LANE_CACHE_MAX = 4096
+_lane_cache: dict[str, tuple[tuple, object]] = {}
+
+
+def _read_lane_file(path: Path):
+    """A lane file's JSON, re-read only when the file changed (the collector reads every lane several times a cycle)."""
+    try:
+        info = path.stat()
+    except OSError:
+        return None
+    stamp = (info.st_mtime_ns, info.st_size)
+    cached = _lane_cache.get(str(path))
+    if cached and cached[0] == stamp:
+        return copy.deepcopy(cached[1])  # callers edit the rows they get
+    lane = read_json(path, None)
+    if len(_lane_cache) > _LANE_CACHE_MAX:
+        _lane_cache.clear()
+    _lane_cache[str(path)] = (stamp, copy.deepcopy(lane))
+    return lane
+
+
+def read_lane(home: Path, lane_id: str):
+    """One lane registration (``None`` when missing or broken)."""
+    return _read_lane_file(lane_path(home, lane_id))
+
+
 def read_lanes(home: Path) -> list[dict]:
     """All lane registrations, sorted by start time then id."""
     lanes: list[dict] = []
     folder = home / "lanes"
     if folder.is_dir():
         for path in sorted(folder.glob("*.json")):
-            lane = read_json(path, None)
+            lane = _read_lane_file(path)
             if isinstance(lane, dict) and lane.get("id"):
                 lanes.append(lane)
     lanes.sort(key=lambda row: (str(row.get("started_at") or ""), str(row.get("id"))))
@@ -140,6 +167,11 @@ def tail_lines(path: str | Path | None, count: int = 20) -> list[str]:
     if not path:
         return []
     try:
+        info = os.stat(path)
+        stamp = (info.st_size, info.st_mtime_ns)
+        cached = _tail_cache.get((str(path), count))
+        if cached and cached[0] == stamp:
+            return list(cached[1])
         with open(path, "rb") as fh:
             fh.seek(0, 2)
             size = fh.tell()
@@ -157,10 +189,16 @@ def tail_lines(path: str | Path | None, count: int = 20) -> list[str]:
             out.append(readable)
             if len(out) >= count:
                 break
-    return list(reversed(out))
+    out.reverse()
+    if len(_tail_cache) > _TAIL_CACHE_MAX:
+        _tail_cache.clear()
+    _tail_cache[(str(path), count)] = (stamp, out)
+    return list(out)
 
 
 _TAIL_BYTES = 256 * 1024
+_TAIL_CACHE_MAX = 4096
+_tail_cache: dict[tuple[str, int], tuple[tuple, list[str]]] = {}
 _ANSWER_BYTES = 4 * 1024 * 1024
 _ANSWER_FALLBACK_LINES = 40
 

@@ -64,9 +64,7 @@ fn user_home() -> PathBuf {
 
 /// `$TIRITH_HOME`, else `~/.tirith`.
 fn tirith_home() -> PathBuf {
-    std::env::var_os("TIRITH_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| user_home().join(".tirith"))
+    tirith_core::home::tirith_home(None)
 }
 
 fn config() -> toml::Table {
@@ -442,9 +440,24 @@ mod collector_lock_tests {
     use super::*;
     use std::os::unix::io::AsRawFd;
 
+    /// Polls `cond` for up to 10s (generous so a loaded machine does not flake).
+    fn wait_until(cond: impl Fn() -> bool) -> bool {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while std::time::Instant::now() < deadline {
+            if cond() {
+                return true;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        cond()
+    }
+
     #[test]
     fn lock_check_follows_the_collector_lock() {
-        let home = std::env::temp_dir().join(format!("tirith-clock-{}", std::process::id()));
+        static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let home = std::env::temp_dir().join(format!("tirith-clock-{}-{n}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
         std::fs::create_dir_all(&home).unwrap();
         assert!(!collector_lock_held(&home), "no lock file yet");
 
@@ -456,7 +469,7 @@ mod collector_lock_tests {
         assert!(collector_lock_held(&home), "checking must not release or steal it");
 
         drop(file);
-        assert!(!collector_lock_held(&home), "released when the holder exits");
+        assert!(wait_until(|| !collector_lock_held(&home)), "released when the holder exits");
         let _ = std::fs::remove_dir_all(&home);
     }
 }
@@ -634,6 +647,18 @@ mod stop_tree_tests {
         unsafe { kill(-pgid, 0) == 0 }
     }
 
+    /// Polls `cond` for up to 10s: killed processes linger as zombies until init reaps them.
+    fn wait_until(cond: impl Fn() -> bool) -> bool {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while std::time::Instant::now() < deadline {
+            if cond() {
+                return true;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        cond()
+    }
+
     fn spawn_tree(script: &str) -> Child {
         let mut c = Command::new("/bin/sh");
         c.args(["-c", script]).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
@@ -646,19 +671,18 @@ mod stop_tree_tests {
         // shell -> subshell -> sleep, like bin/tirith -> uv -> python
         let mut child = spawn_tree("(sleep 60; true) & sleep 60; true");
         let pgid = child.id() as i32;
-        std::thread::sleep(std::time::Duration::from_millis(300));
         assert!(group_alive(pgid));
         stop_tree(&mut child, std::time::Duration::from_secs(3));
-        assert!(!group_alive(pgid), "something in the group survived");
+        assert!(wait_until(|| !group_alive(pgid)), "something in the group survived");
     }
 
     #[test]
     fn stop_kills_what_ignores_sigterm() {
         let mut child = spawn_tree("trap '' TERM; (trap '' TERM; while :; do sleep 1; done) & while :; do sleep 1; done");
         let pgid = child.id() as i32;
-        std::thread::sleep(std::time::Duration::from_millis(300));
+        std::thread::sleep(std::time::Duration::from_millis(300)); // let the traps install
         stop_tree(&mut child, std::time::Duration::from_millis(500));
-        assert!(!group_alive(pgid), "a SIGTERM-proof process survived");
+        assert!(wait_until(|| !group_alive(pgid)), "a SIGTERM-proof process survived");
     }
 }
 

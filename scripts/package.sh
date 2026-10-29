@@ -33,7 +33,7 @@ fi
 [ -d node_modules ] || npm install
 npm run tauri build -- "$@"
 
-target="${CARGO_TARGET_DIR:-$root/app/src-tauri/target}"
+target="${CARGO_TARGET_DIR:-$root/target}"
 bundle="$target/release/bundle"
 [ -d "$bundle" ] || { echo "no bundle directory at $bundle" >&2; exit 1; }
 

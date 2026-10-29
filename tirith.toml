@@ -9,7 +9,7 @@ name = "CI"
 
 [[pipelines.stages]]
 name = "build"
-run = "cd collector && uv run -q python -m compileall -q tirith && for f in ../web/js/*.js; do node --check \"$f\" || exit 1; done"
+run = "cd collector && uv run -q python -m compileall -q tirith && for f in ../web/js/*.js; do node --check \"$f\" || exit 1; done && cd .. && cargo build -q -p tirith-core -p tirith-cli"
 
 [[pipelines.stages]]
 name = "test"
@@ -18,4 +18,9 @@ run = "cd collector && uv run -q pytest -q"
 [[pipelines.stages]]
 name = "rust-test"
 kind = "test"
-run = "cd app/src-tauri && cargo test -q"
+run = "cargo test -q --workspace"
+
+[[pipelines.stages]]
+name = "parity"
+kind = "test"
+run = "cargo build -q -p tirith-cli && cd collector && uv run -q python ../scripts/parity/run.py"
