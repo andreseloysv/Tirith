@@ -80,3 +80,25 @@ def test_collect_once_and_status(home: Path, capsys) -> None:
     capsys.readouterr()
     assert main(["status"]) == 0
     assert "Map the code" in capsys.readouterr().out
+
+
+def test_lane_request_links_to_owner_prompt(tmp_path: Path) -> None:
+    from datetime import datetime, timedelta, timezone
+    from tirith.cli import bound_text, owner_request
+    from tirith.home import now_iso
+
+    def put(name: str, prompt: str, age_h: float) -> None:
+        at = now_iso(datetime.now(timezone.utc) - timedelta(hours=age_h))
+        (tmp_path / "requests").mkdir(exist_ok=True)
+        (tmp_path / "requests" / f"{name}.json").write_text(
+            json.dumps({"agent_session_id": name, "prompt": prompt, "at": at}), encoding="utf-8")
+
+    assert owner_request(tmp_path, {}) is None
+    put("old", "stale", 9)
+    assert owner_request(tmp_path, {}) is None
+    put("s1", "first", 2)
+    put("s2", "x" * 5000, 1)
+    got = owner_request(tmp_path, {})
+    assert got["agent_session_id"] == "s2" and len(got["text"]) <= 2048
+    assert owner_request(tmp_path, {"TIRITH_AGENT_SESSION": "s1"})["text"] == "first"
+    assert bound_text("a\nb\n" * 10000, 100).endswith("…") and len(bound_text("a\nb", 100)) == 3

@@ -94,17 +94,17 @@
         return ICON.branch + '<span class="lspawn"><span class="mut">Started sub-agent</span> <b>' + esc(e.text) + '</b></span>' + (e.detail ? '<span class="chip">' + esc(e.detail) + '</span>' : '');
       case 'done':
         return '<div class="ldone"><div class="ldh">' + ICON.flag + 'Final answer' + (e.fields && e.fields.usage ? '<span class="mut lusage">' + esc(e.fields.usage) + '</span>' : '') + '</div>' +
-          '<div class="ldt">' + esc(open ? full : e.text) + '</div>' + more(e, key) + '</div>';
+          '<div class="ldt">' + T.mdBox(e.detail ? e.text + '\n' + e.detail : e.text, 'log:' + key) + '</div></div>';
       case 'system':
         return '<span class="lsys" title="' + esc(e.detail || '') + '">' + esc(e.text) + '</span>';
       default:   /* say */
         if (e.fields) {
           var raw = !!ui.logOpen[key + '#raw'];
-          return '<div class="lsay">' + (e.text ? '<p>' + esc(e.text) + '</p>' : '') + card(e.fields, key, 0) +
+          return '<div class="lsay">' + (e.text ? T.mdBox(e.text, 'log:' + key) : '') + card(e.fields, key, 0) +
             (e.detail ? '<button class="link lraw" data-act="logopen" data-key="' + esc(key + '#raw') + '" aria-expanded="' + raw + '">raw</button>' : '') +
             (raw ? '<pre class="lout open">' + esc(e.detail) + '</pre>' : '') + '</div>';
         }
-        return '<div class="lsay"><p>' + esc(open ? full : e.text) + '</p>' + more(e, key) + '</div>';
+        return '<div class="lsay">' + T.mdBox(e.detail ? e.text + '\n' + e.detail : e.text, 'log:' + key) + '</div>';
     }
   }
   function keyOf(a, e, n) {
@@ -120,6 +120,7 @@
     var f = ui.logFilter, sysOn = !!ui.logSys[a.id], seen = {};
     var hidden = all.filter(function (e) { return e.kind === 'system'; }).length;
     var shown = all.filter(function (e) {
+      if ((e.kind === 'done' || e.kind === 'say') && a.report && T.sameText(e.text, a.report)) return false;   /* the Status section shows it */
       if (e.kind === 'system') return sysOn && f === 'all';
       return f === 'all' || (KINDS[f] || []).indexOf(e.kind) >= 0;
     });

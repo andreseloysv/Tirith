@@ -12,7 +12,7 @@ import pytest
 
 from tests.conftest import GIT, make_repo, write_config
 from tirith import activity, hooks
-from tirith.activity import ActivityTracker, git_files, goal_from_text, is_test_command
+from tirith.activity import ActivityTracker, git_files, goal_from_text, is_test_command, readable_command, run_outcome
 from tirith.collector import Collector, git_head
 from tirith.store import write_lane
 
@@ -94,11 +94,41 @@ def test_test_commands_detected(command: str) -> None:
 
 
 @pytest.mark.parametrize("command", [
+    "cd /Users/x/DEVELOP/Tirith/hooks && ls", "sed -i 's/a/b/' tests/test_x.py",
+    "cd tests && ls", "FOO=1 python tests/helper.py", "python scripts/make_tests.py",
+    "echo pytest && true", "git commit -m 'fix pytest run'", "open tests/",
     "grep -n pytest README.md", "cat tests/test_x.py", "git log --grep test", "ls tests",
     "npm install", "make build", "echo go test", "uv run python script.py", "", None,
 ])
 def test_non_test_commands_ignored(command) -> None:
     assert not is_test_command(command)
+
+
+def test_test_commands_extra_shapes() -> None:
+    assert is_test_command("FOO=1 uv run --project c -q pytest -q 2>&1 | tail -1")
+    assert is_test_command("cd a && echo hi; python3 -m pytest x")
+    assert is_test_command("npm run test:unit")
+    assert not is_test_command("tail -f tests/log | grep go")
+
+
+def test_outcome_prefers_output_over_flag() -> None:
+    assert run_outcome("166 passed in 3.1s", True) == ("passed", 166, None)
+    assert run_outcome("1 failed, 4 passed in 1s") == ("failed", 4, 1)
+    assert run_outcome("Tests:  1 failed, 4 passed, 5 total") == ("failed", 4, 1)
+    assert run_outcome("BUILD SUCCESSFUL in 4s")[0] == "passed"
+    assert run_outcome("BUILD FAILED in 4s")[0] == "failed"
+    assert run_outcome("ok  \tpkg\t0.1s")[0] == "passed"
+    assert run_outcome("FAIL\tpkg\t0.1s")[0] == "failed"
+    assert run_outcome("boom", True)[0] == "failed" and run_outcome("")[0] == "passed"
+
+
+def test_readable_command_and_counts(tmp_path: Path) -> None:
+    assert readable_command("cd /w/c && uv run pytest -q /w/c/t.py", "/w") == "uv run pytest -q c/t.py"
+    log = _write(tmp_path / "l.log", _bash("b1", "cd /w/c && uv run -q pytest -q 2>&1 | tail -1"),
+                 _result("b1", "101 passed in 2s", error=True))
+    row = _info(_lane(tmp_path, log, workspace="/w"))["tests"][0]
+    assert row["command"].startswith("uv run -q pytest") and row["full"].startswith("cd /w/c")
+    assert (row["result"], row["passed"]) == ("passed", 101)
 
 
 # -- log events ---------------------------------------------------------------------------------

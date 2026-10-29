@@ -130,6 +130,27 @@ def lane_status(lane: dict, now: datetime) -> str:
     return "working"
 
 
+REPORT_MAX = 16 * 1024
+
+
+def _word_cut(text: str, limit: int) -> str:
+    """``text`` cut at a word boundary with an ellipsis, never mid-word."""
+    if len(text) <= limit:
+        return text
+    cut = text[:limit - 1]
+    return (cut.rsplit(" ", 1)[0] if " " in cut else cut).rstrip() + "…"
+
+
+def _bounded_report(report):
+    """The full lane report for the page to render, at most 16 KB, cut at a line boundary."""
+    if not report:
+        return report
+    text = str(report)
+    if len(text) <= REPORT_MAX:
+        return text
+    return text[:REPORT_MAX].rsplit("\n", 1)[0].rstrip() + "\n\n…"
+
+
 def fallback_summary(status: str, log_tail: list[str], feature: str, now: datetime,
                      lane: dict) -> str:
     """No-brain summary: last non-empty log line (documented fallback)."""
@@ -139,7 +160,7 @@ def fallback_summary(status: str, log_tail: list[str], feature: str, now: dateti
         return f"Waiting: no log output for {max(1, silent_s // 60)} minutes."
     for line in reversed(log_tail):
         if line.strip():
-            return line.strip()[:300]
+            return _word_cut(line.strip(), 300)
     if status == "done":
         return f"Finished: {feature}." if feature else "Finished."
     if status == "failed":
@@ -603,13 +624,22 @@ class Collector:
                 "log_tail": log_tail,
                 "log_entries": log_view,
                 "files_changed": files, "insertions": insertions, "deletions": deletions,
-                "report": lane.get("report"),
+                "report": _bounded_report(lane.get("report")),
+                "request": lane.get("request") if isinstance(lane.get("request"), dict) else None,
                 "parent": str(lane.get("parent") or "steward"),
                 "step": str(lane["step"]) if lane.get("step") else None,
                 **act,
             })
             for wait in self._brain_waits({**lane, "project": lane_project}):
                 brain_waits.append({**wait, "session": lane.get("session") or None})
+        by_id = {row["id"]: row for row in agent_rows}
+        for row in agent_rows:  # children inherit the request of the nearest ancestor that has one
+            parent, seen = row, set()
+            while parent and not parent.get("request") and parent["id"] not in seen:
+                seen.add(parent["id"])
+                parent = by_id.get(parent.get("parent"))
+            if parent and parent is not row:
+                row["request"] = parent["request"]
         if scored or self._agents_dirty:
             self._save_agents(agents)
 
