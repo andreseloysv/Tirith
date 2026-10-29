@@ -418,11 +418,21 @@ fn collector_lock_held(home: &Path) -> bool {
     unsafe { flock(file.as_raw_fd(), LOCK_EX | LOCK_NB) != 0 }
 }
 
-/// No lock check on Windows: the app always starts its own (the collector itself refuses to double-run
-/// only where it can take the lock).
+/// Windows has no lock to probe: ask PowerShell for a process whose command line has `tirith collect`.
+/// A failure to ask counts as "not running", so the app starts its own.
 #[cfg(not(unix))]
 fn collector_lock_held(_home: &Path) -> bool {
-    false
+    Command::new("powershell")
+        .args([
+            "-NoProfile",
+            "-Command",
+            "if (Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*tirith collect*' -and $_.ProcessId -ne $PID }) { exit 0 } else { exit 1 }",
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
 }
 
 fn collector_running() -> bool {
