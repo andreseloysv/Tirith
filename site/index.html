@@ -8,14 +8,16 @@
 <meta name="color-scheme" content="light dark">
 <meta property="og:title" content="Tirith: an autonomous manager for your coding agents">
 <meta property="og:description" content="They finish the plan; you see everything and decide only what only you can.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2l8 9-8 11L4 11z' fill='%232563eb'/%3E%3C/svg%3E">
+<link rel="icon" href="img/logo-3d-64.png" type="image/png">
+<meta property="og:image" content="https://andreseloysv.github.io/Tirith/img/social-preview-3d.png">
 <link rel="stylesheet" href="style.css">
+<script src="scroll.js"></script>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
 <header class="top">
   <div class="wrap">
-    <a class="brand" href="#top"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l8 9-8 11L4 11z" fill="#2563eb"/></svg>Tirith</a>
+    <a class="brand" href="#top"><img src="img/logo-3d-64.png" width="32" height="32" alt="">Tirith</a>
     <nav aria-label="Sections">
       <a class="opt" href="#features">What it does</a>
       <a class="opt" href="#meta">Meta models</a>
@@ -27,6 +29,10 @@
 
 <main id="main">
 <div class="hero wrap" id="top">
+  <div class="logo3d">
+    <img class="still" src="img/logo-3d.webp" width="220" height="220" alt="The Tirith mark in 3D: a watchtower with a glowing window.">
+    <video class="spin" autoplay muted loop playsinline preload="metadata" poster="img/logo-3d.webp" width="220" height="220" aria-hidden="true"><source src="img/logo-3d.mp4" type="video/mp4"></video>
+  </div>
   <span class="eyebrow">Meta Global AI Developer Hackathon · Build for Your World</span>
   <h1>Your coding agents finish the plan. You decide only what only you can.</h1>
   <p class="lede">Tirith is an autonomous manager for the coding agents you already run. It keeps a plan, starts agents only from plan items, checks what they report, merges what passes, and answers your questions in a chat.</p>
@@ -49,6 +55,7 @@
     <div class="card"><span class="num">2</span><h3>Rules enforced in code</h3><p>A hook blocks the agent's tool call and names the exact command to use instead. Not text the agent may ignore.</p></div>
     <div class="card"><span class="num">3</span><h3>Everything visible</h3><p>Chat, plan, agents and pipelines in one app. You are asked only for a password, a payment or a choice that is yours.</p></div>
   </div>
+  <figure class="render"><picture><source type="image/webp" srcset="img/render-agents.webp"><img loading="lazy" src="img/render-agents.png" width="1000" height="625" alt="A 3D tower with a glowing window watching over floating cubes, each joined to it by a line of light: agents working under one manager."></picture></figure>
 </section>
 
 <div id="features"></div>
@@ -63,6 +70,7 @@
         <li><strong>Tirith is the only plan writer.</strong> Agents ask with <code>tirith plan add</code>.</li>
         <li><strong>No duplicate agents</strong> on the same item.</li>
       </ul>
+      <figure class="render"><picture><source type="image/webp" srcset="img/render-board.webp"><img loading="lazy" src="img/render-board.png" width="1000" height="625" alt="A glass plan board in 3D: five rows, the first three lit blue as done."></picture></figure>
       <p class="cites">Contracts: CONTRACT-roadmap, CONTRACT-launch</p>
     </div>
     <figure class="shot"><img loading="lazy" src="img/overview-plan.webp" width="1400" height="875" alt="Overview with the plan of three projects: a progress bar per step, ticked items, and an activity feed on the right."></figure>
@@ -80,6 +88,7 @@
         <li>Agents cannot edit the plan, their settings or Tirith's config.</li>
         <li><strong>Claim check:</strong> before a merge, the report is compared with the real change. A false claim blocks the merge. Regexes and git, no model.</li>
       </ul>
+      <figure class="render"><picture><source type="image/webp" srcset="img/render-gate.webp"><img loading="lazy" src="img/render-gate.png" width="1000" height="625" alt="A 3D gate of two pillars with glowing blue bars between them, and a small cube waiting in front: rules that stop an agent."></picture></figure>
       <p class="cites">Contracts: CONTRACT-gates, CONTRACT-launch</p>
     </div>
     <figure class="shot"><img loading="lazy" src="img/rules.webp" width="842" height="341" alt="A list of rules that blocked agents today, in plain words, such as 'Tests and builds must run through Tirith', with the agent and the time of each refusal."></figure>

@@ -1,4 +1,4 @@
-// Narration audio. Usage: node narrate.mjs [outDir]   (default: ../../../Tirith-video/work)
+// Narration audio. Usage: node narrate.mjs [outDir]   (default: docs/demo/out/work)
 // Reads narration.json, writes <outDir>/audio/<id>.wav and <outDir>/timings.json (seconds per clip).
 // Uses Google Cloud Text-to-Speech when TEXT_TO_SPEACH_GOOGLE_API_KEY is set (the key is never printed),
 // otherwise the macOS `say` voice named in TIRITH_VOICE (default Samantha).
@@ -8,7 +8,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const out = resolve(process.argv[2] || join(here, '../../../Tirith-video/work'));
+const out = resolve(process.argv[2] || join(here, 'out/work'));
 const audio = join(out, 'audio');
 mkdirSync(audio, { recursive: true });
 const key = process.env.TEXT_TO_SPEACH_GOOGLE_API_KEY;
