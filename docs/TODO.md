@@ -151,6 +151,9 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Cada aviso trae opciones de un clic y una caja para escribir; la respuesta llega al steward por el buzón.
 - [ ] El steward revisa cada informe de lane y resuelve lo que puede; al dueño solo llega lo que necesita su mano.
 - [ ] Lanes fallidos: «Reintentar» / «Ver el log» / «Descartar».
+- [ ] Despachador en el collector: «Termínalo» lanza el agente (o responde por qué no); «¿Qué pasa?» lo responde Muse Spark al momento.
+- [ ] Hooks del steward: le inyectan las peticiones abiertas y le impiden terminar el turno sin responderlas.
+- [ ] Escalado: petición sin respuesta en 10 min → notificación de macOS y opciones para el dueño.
 
 ## 13. Configuración del proyecto visible y editable
 
