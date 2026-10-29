@@ -262,6 +262,7 @@
         "max_parallel": {"type": "integer", "minimum": 0},
         "working": {"type": "integer"}, "steps_working": {"type": "integer"}, "steps_in_review": {"type": "integer"},
         "proposed": {"type": "integer"}, "queued": {"type": "integer"}, "open_items": {"type": "integer"},
+        "limit": {"type": "integer"}, "limit_why": {"type": ["string", "null"]},
         "skipped": {"type": "array", "items": {"type": "object", "properties": {
           "project": {"type": "string"}, "step": {"type": "string"}, "why": {"type": "string"}}}},
         "started": {"type": "array", "items": {
