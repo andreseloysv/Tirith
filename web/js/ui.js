@@ -12,7 +12,7 @@
     store: 'Upload the build to the store.', upload: 'Upload the build to the store.',
     review: "The store's review of the release.", export: 'Export the project.', archive: 'Build the signed archive.'
   };
-  var VIEWS = [['overview', 'Overview'], ['pipelines', 'Pipelines'], ['agents', 'Agents'], ['flow', 'Flow']];
+  var VIEWS = [['overview', 'Overview'], ['pipelines', 'Pipelines'], ['agents', 'Agents'], ['flow', 'Flow'], ['settings', 'Settings']];
   var CHEV = '<svg class="chev" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2.5l3.5 3.5L4 9.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
   /* ---------- shared helpers (used by views) ---------- */
@@ -112,6 +112,10 @@
     var n = T.rawState && T.rawState() ? T.violationsOf(T.rawState(), a.id).length : 0;
     return n ? '<span class="rbadge" title="' + n + (n === 1 ? ' rule broken' : ' rules broken') + '">' + n + (n === 1 ? ' rule broken' : ' rules broken') + '</span>' : '';
   }
+  function ranChip(a) {
+    var t = T.ranText && T.ranText(a).replace(/ effort$/, '');
+    return t ? '<span class="aran" title="Model and effort this agent ran with">' + esc(t) + '</span>' : '';
+  }
   T.agentCard = function (a, selected) {
     var head = '<span class="ahead">' + T.avatar(a, 36) + '<span class="aname"><b title="' + esc((a.name || '') + (a.epithet ? ' ' + a.epithet : '')) + '">' + esc(a.name) + '</b>' +
       '<span class="pill">' + (a.source === 'github' ? T.ghMark(a) + ' ' + esc(a.epithet) : esc([T.cap(a.rank), T.cap(a['class'])].filter(Boolean).join(' · '))) + '</span></span></span>';
@@ -121,10 +125,10 @@
         '<span class="afeat">' + esc(a.feature) + '</span>' +
         (g ? '<span class="agoalc">' + T.mdInline(g) + '</span>' : '') +
         (a.summary ? '<span class="anow' + (a.active ? ' live' : '') + '"><i class="pdot2"></i>' + T.mdInline(a.summary) + '</span>' : '') +
-        ruleBadge(a) + workingFoot(a) + (T.stopBtn ? T.stopBtn(a, 'card') : '') + '</button>';
+        ruleBadge(a) + ranChip(a) + workingFoot(a) + (T.stopBtn ? T.stopBtn(a, 'card') : '') + '</button>';
     }
     return '<button class="card acard' + (selected ? ' sel' : '') + '" data-act="agent" data-key="' + esc(a.id) + '">' + head +
-      '<span class="afeat">' + esc(a.feature) + '</span>' + ruleBadge(a) +
+      '<span class="afeat">' + esc(a.feature) + '</span>' + ruleBadge(a) + ranChip(a) +
       '<span class="afoot"><span class="aproj">' + esc(T.proj(a.project)) + '</span><span class="aclock">' + T.lineIcon(T.ICON.clock, 13, 'currentColor', 1.7) + '<span>' + T.agentClock(a) + '</span></span></span></button>';
   };
   T.drawer = function (title, body, head) {

@@ -102,6 +102,7 @@ class Config:
     dispatch_auto_launch: bool = True  # [dispatch] auto_launch: a "finish" request starts a lane
     review_auto_merge: bool = True  # [review] auto_merge: a passing lane is merged; false = tests only
     manager_session_cwd: str | None = None  # [manager] session_cwd: the folder the manager runs in
+    models: dict = field(default_factory=dict)  # [models]: manager, workers (+ overrides), choices
 
     def room(self, room_id: str) -> RoomConfig | None:
         for room in self.rooms:
@@ -203,6 +204,8 @@ def load_config(home: Path) -> Config:
     launch = raw.get("launch") if isinstance(raw.get("launch"), dict) else {}
     if isinstance(launch.get("command"), (str, list)) and launch["command"]:
         cfg.launch_command = launch["command"]
+    if isinstance(raw.get("models"), dict):
+        cfg.models = raw["models"]
     rooms_raw = raw.get("rooms")
     if isinstance(rooms_raw, list):
         for item in rooms_raw:
