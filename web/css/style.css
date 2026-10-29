@@ -59,6 +59,7 @@ h2 { font-size: 13px; font-weight: 600; margin: 0 0 10px; } h3 { font-size: 12px
 /* manager chat (js/v-manager.js): Overview column and drawer */
 .mchat { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
 .mc-head { display: flex; align-items: center; justify-content: space-between; } .mc-head h2 { margin: 0; }
+.mc-presence { margin: 0 auto 0 10px; font-size: 12px; opacity: .75; } .mc-presence.work { opacity: 1; color: var(--accent, #2f5fc4); } .mc-presence.live::before, .mc-presence.work::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; background: currentColor; vertical-align: 1px; }
 .mc-x { font-size: 20px; line-height: 1; color: var(--mut); padding: 2px 8px; border-radius: 8px; } .mc-x:hover { background: var(--soft); }
 .mc-log { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 4px 4px 8px 0; overflow-anchor: none; }
 .mc-log > .quiet { margin: auto 0; text-align: center; padding: 0 12px; }

@@ -32,6 +32,7 @@ from tirith import roadmap as roadmap_mod
 from tirith import hooks as hooks_mod
 from tirith import autopilot as autopilot_mod
 from tirith import dispatch as dispatch_mod
+from tirith import managerd as managerd_mod
 from tirith import actions as actions_mod
 from tirith import inbox as inbox_mod
 from tirith import launch as launch_mod
@@ -1129,6 +1130,7 @@ class Collector:
             "name": self.config.manager_name, "title": self.config.manager_title,
             "activity": orchestrator.get("activity"),
             "since": orchestrator.get("since"), "notes": notes,
+            "presence": managerd_mod.public(self.home, dispatch_mod.load_state(self.home), lanes, now),
         }
         manager_queue = asks_mod.queue_items(self.home, only_open=True)[-asks_mod.QUEUE_STATE_ROWS:]
         return {

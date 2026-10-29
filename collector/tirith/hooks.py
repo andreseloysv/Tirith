@@ -19,7 +19,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from tirith import dispatch, gates
+from tirith import dispatch, gates, managerd
 from tirith import projects as projects_mod
 from tirith.home import load_config, now_iso
 from tirith.store import append_jsonl, read_json, write_json_atomic
@@ -183,13 +183,16 @@ def _manager_inbox(agent: str, event: dict, home: Path, environ=None) -> int:
     ``SessionStart`` / ``UserPromptSubmit``: the pending requests as ``additionalContext``. ``Stop``: exit 2
     with the list on stderr while a request older than 60 s is unanswered (3 blocks at most per set)."""
     name = event.get("event")
-    if agent != "anthropic" or name not in ("SessionStart", "UserPromptSubmit", "Stop"):
+    if agent != "anthropic" or name not in ("SessionStart", "UserPromptSubmit", "PostToolUse", "Stop"):
         return 0
     env = os.environ if environ is None else environ
     config = load_config(home)
     if not config.dispatch_enabled or not dispatch.is_manager(config, env, event.get("cwd")):
         return 0
     now = datetime.now(timezone.utc)
+    managerd.heartbeat(home, event.get("agent_session_id"), now)  # the live session is attached while this keeps coming
+    if name == "PostToolUse":
+        return 0
     if name == "Stop":
         reason = dispatch.manager_stop(home, now)
         if reason is None:

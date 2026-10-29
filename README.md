@@ -27,6 +27,15 @@ Built for the Meta Global AI Developer Hackathon (track: Build for Your World).
 The page is a local file (no server, no ports). Requirements: [uv](https://docs.astral.sh/uv/); Godot 4.7
 only for `--3d`. Set `META_SI_API_KEY` (or `META_API_KEY`) to switch the Muse brain on.
 
+## Run Tirith without a terminal
+
+Open the desktop app and close the terminal. The app keeps the collector running while it is open (it starts
+one when none is), and the collector keeps lanes alive: they are started detached, so closing a terminal or
+the app never kills them. Write to the manager in the app's chat: when no interactive manager session is
+attached (no heartbeat in `~/.tirith/manager.json` for 2 minutes), Tirith starts an on-call manager by itself
+that answers, delegates to sub-agents and exits; its notes are in `~/.tirith/manager-notes.md`. The chat
+header says which one you are talking to. No servers, no ports. Details: `docs/CONTRACT-inbox.md`.
+
 ## Layout
 
 - `collector/` — the `tirith` CLI and collector (Python, uv): lanes, pipelines, notes, the brain.

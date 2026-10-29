@@ -781,6 +781,14 @@ def _cmd_manager(args) -> int:
     return 0
 
 
+def _cmd_manager_note(args) -> int:
+    from tirith import managerd as managerd_mod
+    home = _home(args)
+    managerd_mod.add_note(home, args.text, datetime.now(timezone.utc))
+    print(f"noted in {home / managerd_mod.NOTES_FILE}")
+    return 0
+
+
 def _cmd_map(args) -> int:
     home = _home(args)
     config, proj = _project_or_exit(home, args.project)
@@ -1713,6 +1721,11 @@ def build_parser() -> argparse.ArgumentParser:
     manager = sub.add_parser("manager", parents=[common], help="set manager activity")
     manager.add_argument("activity")
     manager.set_defaults(func=_cmd_manager)
+
+    manager_note = sub.add_parser("manager-note", parents=[common],
+                                  help="append a line to the on-call manager's rolling notes")
+    manager_note.add_argument("text")
+    manager_note.set_defaults(func=_cmd_manager_note)
 
     map_cmd = sub.add_parser("map", parents=[common], help="map project architecture")
     map_cmd.add_argument("project")
