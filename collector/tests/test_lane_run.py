@@ -169,7 +169,7 @@ def test_lane_run_refuses_a_step_another_lane_is_working_on(home: Path, tmp_path
     repo = _lane_run_setup(home, tmp_path, monkeypatch)
     _step_lane(home, "u-rustbase", "15")
     assert _run_step(repo, "collector-y-cli", "15") == 3
-    assert "u-rustbase is already working on step 15" in capsys.readouterr().err
+    assert "u-rustbase is already working on item \"Do the thing.\" of step 15" in capsys.readouterr().err
     assert not (home / "lanes" / "collector-y-cli.json").exists()
 
 
@@ -181,3 +181,17 @@ def test_lane_run_allows_another_step_a_finished_lane_and_a_continuation(
     assert _run_step(repo, "mine", "15") == 0
     _step_lane(home, "busy", "16")
     assert _run_step(repo, "retry", "16", "--fallback-from", "busy") == 0
+
+
+def test_lane_run_allows_another_item_of_a_step_a_lane_is_working_on(
+        home: Path, tmp_path: Path, capsys, monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = _lane_run_setup(home, tmp_path, monkeypatch)
+    write_plan(repo, "## 15. Step 15\n\n- [ ] Do the thing.\n- [ ] Do the other thing.\n\n")
+    register_lane(home, lane_id="first", project="demo", hero_class="warden", feature="first", workspace=None,
+                  log=None, pid=None, brief=None, step="15", item="Do the other thing.")
+    assert _run_step(repo, "second", "15") == 0  # a different item of the same step
+    capsys.readouterr()
+    assert main(["lane", "run", "--project", "demo", "--class", "warden", "--feature", "third",
+                 "--brief", str(repo / "brief.md"), "--id", "third", "--step", "15", "--item", "Do the other thing.",
+                 "--", sys.executable, "-c", "print('x')"]) == 3
+    assert "first is already working" in capsys.readouterr().err

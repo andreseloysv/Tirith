@@ -19,6 +19,7 @@ import json
 import os
 import signal
 import subprocess
+import sys
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -758,8 +759,13 @@ def run_session(home: Path, config: Config, now: datetime, state: dict, lanes: l
             log = Path(home) / "logs" / f"{sess.lane_id}.launch.log"
             tail = log.read_text(encoding="utf-8", errors="replace").strip().splitlines()[-3:] if log.is_file() else []
             book["error"] = "the session exited at once: " + (" / ".join(tail)[-300:] or f"code {sess.exit_code}")
+            print(f"tirith: manager session {sess.lane_id}: {book['error']}; the one-shot manager answers meanwhile",
+                  file=sys.stderr, flush=True)
+        died_at_once = not sess.got_event
         _end_session(home, book, now)
         sess, changed = None, True
+        if died_at_once and not attached(home, now):  # the owner's message waits for no restart delay
+            changed = run_oneshot(home, config, now, state, lanes, spawn, kill) or changed
     if sess is not None:
         if sess.session_id and book.get("session_id") != sess.session_id:
             book["session_id"] = sess.session_id

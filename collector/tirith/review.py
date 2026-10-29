@@ -15,6 +15,7 @@ from pathlib import Path
 from tirith import timeouts as timeouts_mod
 from tirith import claimcheck as claimcheck_mod
 from tirith import manifest as manifest_mod
+from tirith import plangate as plangate_mod
 from tirith import runstage as runstage_mod
 from tirith.home import now_iso
 from tirith.launch import worktree_path
@@ -154,6 +155,7 @@ def merge_lane(repo: Path, workspace: Path, lane_id: str, feature: str) -> str:
         done = _git(workspace, "commit", "-q", "-m", f"Lane {lane_id}: {feature}")
         if done.returncode != 0:
             raise ReviewError(f"committing the lane failed: {_tail(done.stderr or done.stdout)}")
+    plangate_mod.recover_git_lock(repo)
     done = _git(repo, "merge", "--no-ff", "-q", "-m", f"Merge {branch}: {feature}", branch)
     if done.returncode != 0:
         _git(repo, "merge", "--abort")
