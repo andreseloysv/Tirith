@@ -166,8 +166,7 @@ fn launch_step(project: String, step: u32) -> Result<String, String> {
 
 // -- chat (behind a flag) -----------------------------------------------------------------------
 //
-// TODO: permission questions from the agent in the UI, resuming a conversation, and showing tool
-// calls. This first version streams text only.
+// TODO: resuming a conversation and showing tool calls. Text and permission questions only.
 
 /// Chat is off unless `TIRITH_CHAT=1` or `[app] chat = true` in `config.toml`.
 #[tauri::command]
@@ -196,21 +195,11 @@ fn chat_agents() -> Vec<String> {
     v
 }
 
-fn project_repo(cfg: &toml::Table, project: &str) -> Option<PathBuf> {
-    cfg.get("projects")?
-        .as_array()?
-        .iter()
-        .find(|p| p.get("id").and_then(|i| i.as_str()) == Some(project))?
-        .get("repo")?
-        .as_str()
-        .map(expand)
-}
-
 fn emit_chat(app: &AppHandle, id: &str, kind: &str, line: &str) {
     let _ = app.emit(CHAT_EVENT, json!({ "id": id, "kind": kind, "line": line }));
 }
 
-/// Starts a headless agent session in the project's repo and registers it as a lane.
+/// Starts a headless agent session in the project's repo as a lane (`lane run --interactive`).
 /// Returns the session id (also the lane id).
 #[tauri::command]
 fn chat_start(
@@ -239,41 +228,31 @@ fn chat_start(
         .filter_map(|a| a.as_str().map(str::to_string))
         .collect();
 
-    let mut cmd = Command::new(command);
-    cmd.args(&args)
-        .env("TIRITH_HOME", tirith_home())
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    if let Some(repo) = project_repo(&cfg, &project) {
-        cmd.current_dir(repo);
-    }
+    // The conversation is a lane: `lane run --interactive` registers it, runs the agent on our pipes
+    // (it inherits stdin/stdout), forwards signals and ends the lane however the agent exits.
+    let ms = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
+    let id = format!("chat-{ms}");
+    let brief = tirith_home().join("chats").join(format!("{id}.md"));
+    std::fs::create_dir_all(brief.parent().unwrap()).map_err(|e| e.to_string())?;
+    std::fs::write(&brief, format!("Chat with {alias}: the owner talks to the agent from the app.\n"))
+        .map_err(|e| e.to_string())?;
+    let mut cmd = tirith_command(&[
+        "lane", "run", "--interactive", "--project", &project, "--class", "chat", "--id", &id,
+        "--feature", &format!("Chat with {alias}"), "--brief", &brief.to_string_lossy(), "--",
+    ]);
+    cmd.arg(command).args(&args).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
     let mut child = cmd.spawn().map_err(|e| format!("could not start {alias}: {e}"))?;
     let stdin = child.stdin.take().ok_or("no stdin")?;
     let stdout = child.stdout.take().ok_or("no stdout")?;
     let stderr = child.stderr.take().ok_or("no stderr")?;
-
-    let ms = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
-    let id = format!("chat-{ms}");
-    let pid = child.id().to_string();
-    // The session is a Tirith lane for as long as the process lives.
-    let _ = tirith_command(&[
-        "lane", "start", "--project", &project, "--class", "chat", "--id", &id, "--pid", &pid,
-        "--feature", &format!("Chat with {alias}"),
-    ])
-    .stdin(Stdio::null())
-    .stdout(Stdio::null())
-    .stderr(Stdio::null())
-    .status();
-
     state.chats.lock().unwrap().insert(id.clone(), ChatSession { child, stdin });
 
     let (a, i) = (app.clone(), id.clone());
     std::thread::spawn(move || {
         for line in BufReader::new(stdout).lines().map_while(Result::ok) {
-            emit_chat(&a, &i, "out", &line);
+            emit_chat(&a, &i, line_kind(&line), &line);
         }
-        // stdout closed: the process is done (or closing). Reap it and end the lane.
+        // stdout closed: `lane run` is done and has ended the lane. Reap it.
         let code = a
             .state::<App>()
             .chats
@@ -282,13 +261,7 @@ fn chat_start(
             .remove(&i)
             .and_then(|mut s| s.child.wait().ok())
             .and_then(|s| s.code());
-        let result = if code == Some(0) || code.is_none() { "done" } else { "failed" };
-        let _ = tirith_command(&["lane", "end", &i, "--result", result])
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
-        emit_chat(&a, &i, "exit", result);
+        emit_chat(&a, &i, "exit", if code == Some(0) || code.is_none() { "done" } else { "failed" });
     });
     let (a, i) = (app.clone(), id.clone());
     std::thread::spawn(move || {
@@ -297,6 +270,11 @@ fn chat_start(
         }
     });
     Ok(id)
+}
+
+/// Agent output is one JSON object per line; anything else is `lane run`'s own text (its summary).
+fn line_kind(line: &str) -> &'static str {
+    if line.trim_start().starts_with('{') { "out" } else { "sys" }
 }
 
 /// Sends one user message as a line of streaming JSON input.
@@ -308,11 +286,50 @@ fn chat_send(state: State<'_, App>, id: String, text: String) -> Result<(), Stri
     writeln!(s.stdin, "{msg}").and_then(|_| s.stdin.flush()).map_err(|e| e.to_string())
 }
 
-/// Ends a chat: the process is killed and the reader thread closes the lane.
+/// The reply to an agent's permission question (a `control_request` line with subtype
+/// `can_use_tool`). `input` is the tool input the agent asked about, sent back unchanged on allow.
+fn permission_reply(request_id: &str, allow: bool, input: Value) -> Value {
+    let response = if allow {
+        json!({ "behavior": "allow", "updatedInput": input })
+    } else {
+        json!({ "behavior": "deny", "message": "The owner denied this in the Tirith app." })
+    };
+    json!({ "type": "control_response",
+            "response": { "subtype": "success", "request_id": request_id, "response": response } })
+}
+
+/// Answers a permission question the agent asked on its stdout.
+#[tauri::command]
+fn chat_answer(
+    state: State<'_, App>,
+    id: String,
+    request_id: String,
+    allow: bool,
+    input: Option<Value>,
+) -> Result<(), String> {
+    let mut chats = state.chats.lock().unwrap();
+    let s = chats.get_mut(&id).ok_or("this chat has ended")?;
+    let msg = permission_reply(&request_id, allow, input.unwrap_or_else(|| json!({})));
+    writeln!(s.stdin, "{msg}").and_then(|_| s.stdin.flush()).map_err(|e| e.to_string())
+}
+
+/// Asks `lane run` to stop: it forwards the signal to the agent and ends the lane itself.
+fn terminate(child: &mut Child) {
+    #[cfg(unix)]
+    {
+        let ok = Command::new("kill").args(["-TERM", &child.id().to_string()]).status();
+        if ok.map(|s| s.success()).unwrap_or(false) {
+            return;
+        }
+    }
+    let _ = child.kill();
+}
+
+/// Ends a chat; the reader thread reports the exit.
 #[tauri::command]
 fn chat_stop(state: State<'_, App>, id: String) {
     if let Some(s) = state.chats.lock().unwrap().get_mut(&id) {
-        let _ = s.child.kill();
+        terminate(&mut s.child);
     }
 }
 
@@ -328,6 +345,7 @@ pub fn run() {
             chat_agents,
             chat_start,
             chat_send,
+            chat_answer,
             chat_stop
         ])
         .setup(|app| {
@@ -342,9 +360,37 @@ pub fn run() {
         if let RunEvent::Exit = event {
             let state = handle.state::<App>();
             for (_, mut s) in state.chats.lock().unwrap().drain() {
-                let _ = s.child.kill();
+                terminate(&mut s.child);
+                let _ = s.child.wait();
             }
             stop_collector(&state);
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn permission_reply_allow_echoes_the_input() {
+        let r = permission_reply("r1", true, json!({ "command": "ls" }));
+        assert_eq!(r["type"], "control_response");
+        assert_eq!(r["response"]["request_id"], "r1");
+        assert_eq!(r["response"]["response"]["behavior"], "allow");
+        assert_eq!(r["response"]["response"]["updatedInput"]["command"], "ls");
+    }
+
+    #[test]
+    fn permission_reply_deny_carries_a_message() {
+        let r = permission_reply("r2", false, json!({}));
+        assert_eq!(r["response"]["response"]["behavior"], "deny");
+        assert!(r["response"]["response"]["message"].as_str().unwrap().len() > 3);
+    }
+
+    #[test]
+    fn lane_text_is_not_agent_output() {
+        assert_eq!(line_kind("{\"type\":\"assistant\"}"), "out");
+        assert_eq!(line_kind("lane chat-1: done, 0 files +0 -0, 3s"), "sys");
+    }
 }
