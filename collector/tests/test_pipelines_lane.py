@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from conftest import make_repo, write_config
+from tirith import gates as gates_mod
 from tirith import launch as launch_mod
 from tirith import runstage
 from tirith.cli import end_lane, main, register_lane
@@ -53,7 +54,7 @@ def events(home: Path) -> list[dict]:
 def test_run_in_a_worktree_uses_the_worktree_and_tags_the_lane(lane, home, monkeypatch) -> None:
     repo, worktree = lane
     monkeypatch.chdir(worktree)
-    assert main(["run", "--project", "demo", "--stage", "test"]) == 0
+    assert main(["run", "--project", "demo", "--stage", "test", "--full"]) == 0  # a lane's plain test run is changed-only
     assert os.path.realpath((worktree / "where.txt").read_text().strip()) == os.path.realpath(worktree)
     assert not (repo / "where.txt").exists()
     start, end = events(home)
@@ -157,7 +158,7 @@ def bash(monkeypatch, cwd: Path, command: str) -> int:
 ])
 def test_raw_runners_are_blocked_with_the_matching_stage(proj, monkeypatch, capsys, command, stage) -> None:
     assert bash(monkeypatch, proj, command) == 2
-    err = capsys.readouterr().err.strip()
+    err = capsys.readouterr().err.strip().removeprefix(gates_mod.NOT_A_STOP).strip()
     assert err.startswith("tirith: raw-stage: ") and "must run as a pipeline stage so the owner sees it" in err
     assert err.endswith(f"Do this instead: tirith run --project demo --stage {stage} [-- <cmd>]")
 

@@ -159,9 +159,12 @@ def run_stage(home: Path, project: str, pipeline: str, stage: str, command: list
                                     stderr=subprocess.STDOUT, cwd=work, env=child_env,
                                     start_new_session=os.name == "posix")  # its own group: a timeout ends all of it
             stop = timeouts_mod.supervise(proc, f"stage:{stage}", home=home, timeout=limit,
-                                          what=f"{pipeline}/{stage}")
+                                          what=f"{pipeline}/{stage}",
+                                          idle=timeouts_mod.effective_idle(home, None, f"stage:{stage}"),
+                                          probe=timeouts_mod.Probe(workspace=work, pgid=proc.pid))
             assert proc.stdout is not None
             for chunk in proc.stdout:
+                stop.touch()
                 log_handle.write(chunk)
                 log_handle.flush()
                 kept = (kept + chunk)[-OUTPUT_MAX * 4:]
