@@ -128,11 +128,47 @@
     }).join('') + '</ul>';
   }
 
+  /* The state carries a trimmed agent (see docs/CONTRACT-agents.md); its full log, events, files, tests and
+     report sit in agents/<id>.js, loaded when the drawer opens: a <script> tag (file:// works) or, in the
+     desktop app, the agent_detail command. Returns the agent with the detail merged in once it is there. */
+  var detailCache = {};
+  function loadDetail(a, c) {
+    var want = a.detail.hash;
+    c.loading = true;
+    var done = function (data) {
+      c.loading = false;
+      if (data && data.id === a.id) c.data = data;
+      c.hash = want;   /* a missing file is not retried until the hash changes */
+      T.render();
+    };
+    if (T.tauri) {
+      T.tauri.core.invoke('agent_detail', { id: a.id }).then(done, function () { done(null); });
+      return;
+    }
+    var sc = document.createElement('script');
+    sc.src = 'file://' + a.detail.path + '?h=' + encodeURIComponent(want);
+    sc.onload = function () { var d = window.TIRITH_AGENT; delete window.TIRITH_AGENT; sc.remove(); done(d); };
+    sc.onerror = function () { sc.remove(); done(null); };
+    document.head.appendChild(sc);
+  }
+  T.agentFull = function (a) {
+    if (!a || !a.detail || !a.detail_more) return a;
+    var c = detailCache[a.id] || (detailCache[a.id] = {});
+    if (c.hash !== a.detail.hash && !c.loading) loadDetail(a, c);
+    if (!c.data) return a;
+    var out = {}, k;
+    for (k in a) out[k] = a[k];
+    for (k in c.data) if (k !== 'id') out[k] = c.data[k];
+    out.report_clipped = false;
+    return out;
+  };
+
   /* opts.goal: show the Goal section (off when the card beside it already shows the same text);
      opts.sum: show the one-line summary (off when the card beside it shows it);
      opts.clock: show the running time (off when the card beside it already shows it) */
   T.activity = function (a, opts) {
     var o = opts || {}, h = '';
+    a = T.agentFull(a);
     h += asked(a);
     if (T.agentRules) h += T.agentRules(a);
     if (o.goal !== false && a.goal) h += sec('Goal', '<div class="agoal">' + T.mdBox(a.goal, a.id + ':goal') + '</div>');

@@ -23,13 +23,13 @@ def read_json(path: Path, default):
         return default
 
 
-def write_json_atomic(path: Path, payload) -> None:
-    """Write JSON via a temp file in the same directory, then rename."""
+def write_json_atomic(path: Path, payload, compact: bool = False) -> None:
+    """Write JSON via a temp file in the same directory, then rename (``compact``: no indentation)."""
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=path.name + ".", suffix=".tmp")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            json.dump(payload, handle, indent=2, sort_keys=False)
+            json.dump(payload, handle, separators=(",", ":")) if compact else json.dump(payload, handle, indent=2)
             handle.write("\n")
         os.replace(tmp, path)
     except BaseException:
@@ -56,10 +56,26 @@ def write_text_atomic(path: Path, text: str) -> None:
         raise
 
 
-def state_js(payload) -> str:
+def state_js(payload, compact: bool = False) -> str:
     """The ``state.js`` text: the same JSON as ``window.TIRITH_STATE`` for file:// pages."""
-    body = json.dumps(payload, indent=2).replace("</", "<\\/")  # never closes a <script> tag
+    body = _script_json(payload, compact)
     return "window.TIRITH_STATE = " + body + ";\n"
+
+
+def _script_json(payload, compact: bool = False) -> str:
+    body = json.dumps(payload, separators=(",", ":")) if compact else json.dumps(payload, indent=2)
+    return body.replace("</", "<\\/")  # never closes a <script> tag
+
+
+def agent_file_name(agent_id: str) -> str:
+    """``<id>.js`` with every character outside ``[A-Za-z0-9_-]`` (and a leading dot) replaced by ``_``."""
+    safe = "".join(c if c.isalnum() and c.isascii() or c in "_-." else "_" for c in str(agent_id))
+    return (("_" + safe[1:]) if safe.startswith(".") else safe or "_") + ".js"
+
+
+def agent_detail_js(detail: dict) -> str:
+    """``agents/<id>.js``: ``window.TIRITH_AGENT = {...}`` with one agent's full detail."""
+    return "window.TIRITH_AGENT = " + _script_json(detail, True) + ";\n"
 
 
 def append_jsonl(path: Path, record: dict) -> None:
