@@ -159,9 +159,15 @@
                 "at": {"type": ["string", "null"]},
                 "by": {"enum": ["steward", "brain"]},
                 "text": {"type": "string"},
-                "auto": {"type": "boolean"}
+                "auto": {"type": "boolean"},
+                "lane": {"type": ["string", "null"], "description": "Lane id of the agent that took the request."}
               }
             }
+          },
+          "lanes": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Lane ids handling the request: from answers[].lane and agents whose request_id matches."
           }
         }
       }
@@ -559,6 +565,10 @@
         "step": {
           "type": ["string", "null"],
           "description": "Roadmap step id this lane works on (tirith lane run --step)."
+        },
+        "request_id": {
+          "type": ["string", "null"],
+          "description": "Inbox request this lane was started for (tirith lane run --request)."
         },
         "project": {
           "type": "string"

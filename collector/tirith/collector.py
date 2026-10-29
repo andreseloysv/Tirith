@@ -770,6 +770,7 @@ class Collector:
                 "request": lane.get("request") if isinstance(lane.get("request"), dict) else None,
                 "parent": str(lane.get("parent") or "steward"),
                 "step": str(lane["step"]) if lane.get("step") else None,
+                "request_id": str(lane["request_id"]) if lane.get("request_id") else None,
                 **act,
             })
             for wait in self._brain_waits({**lane, "project": lane_project}):
@@ -936,7 +937,8 @@ class Collector:
                     if cached.get("text"):
                         row = inbox_mod.add_answer(self.home, req["id"], cached["text"], by="brain",
                                                    auto=True, at=now_iso(now))
-                        req["answers"].append({"at": row["at"], "by": "brain", "text": row["text"], "auto": True})
+                        req["answers"].append({"at": row["at"], "by": "brain", "text": row["text"], "auto": True,
+                                               "lane": None})
                         req["status"] = "answered"
                     continue
                 last = self._inbox_tried.get(req["id"])
@@ -946,6 +948,7 @@ class Collector:
                 if self.worker.submit("inbox-answer", req["id"],
                                       lambda c, t=context: {"text": brain_mod.job_inbox_answer(c, t)}):
                     self._inbox_tried[req["id"]] = time.monotonic()
+        inbox_mod.link_lanes(rows, agents)
         return rows[-inbox_mod.STATE_ROWS:]
 
     @staticmethod

@@ -101,7 +101,8 @@ def owner_request(home: Path, environ=None) -> dict | None:
 
 def register_lane(home: Path, *, lane_id: str | None, project: str, hero_class: str,
                   feature: str, workspace: str | None, log: str | None,
-                  pid: int | None, brief: str | None, step: str | None = None) -> dict:
+                  pid: int | None, brief: str | None, step: str | None = None,
+                  request_id: str | None = None) -> dict:
     """Write a new lane registration; returns the stored dict."""
     if not lane_id:
         lane_id = _unique_lane_id(home, _slug(feature))
@@ -119,6 +120,7 @@ def register_lane(home: Path, *, lane_id: str | None, project: str, hero_class: 
         "start_commit": git_head(workspace_abs), "report": None,
         "session": projects_mod.current_session(home),
         "step": str(step) if step else None,
+        "request_id": str(request_id) if request_id else None,
         "request": owner_request(home),
     }
     write_lane(home, lane)
@@ -155,7 +157,8 @@ def _cmd_lane_start(args) -> int:
     lane = register_lane(
         home, lane_id=args.id, project=args.project, hero_class=args.hero_class,
         feature=args.feature, workspace=args.workspace, log=args.log,
-        pid=args.pid, brief=args.brief, step=args.step)
+        pid=args.pid, brief=args.brief, step=args.step,
+        request_id=getattr(args, "request", None))
     print(lane["id"])
     return 0
 
@@ -280,7 +283,8 @@ def _cmd_lane_run(args) -> int:
         home, lane_id=lane_id, project=args.project, hero_class=args.hero_class,
         feature=args.feature, workspace=str(workspace),
         log=str(log_path) if log_path else None,
-        pid=None, brief=args.brief, step=args.step)
+        pid=None, brief=args.brief, step=args.step,
+        request_id=getattr(args, "request", None))
     lane["token"] = secrets.token_urlsafe(24)
     write_lane(home, lane)
     began = time.monotonic()
@@ -823,7 +827,7 @@ def _cmd_check(args) -> int:
 
 
 def launch_step(home: Path, project_id: str, step_id: str, agent: str | None = None,
-                dry_run: bool = False, out=None) -> str:
+                dry_run: bool = False, out=None, request_id: str | None = None) -> str:
     """Start a sub-agent lane for one open roadmap step; returns the lane id.
 
     Raises ``launch_mod.LaunchError`` with the reason when it must not start.
@@ -853,7 +857,7 @@ def launch_step(home: Path, project_id: str, step_id: str, agent: str | None = N
     workspace = launch_mod.worktree_path(repo, lane_id)
     command = launch_mod.agent_command(config, agent, brief_path, workspace)
     argv = launch_mod.lane_run_argv(project_id, step["id"], launch_mod.pick_class(title), title,
-                                    brief_path, workspace, lane_id, command)
+                                    brief_path, workspace, lane_id, command, request_id)
     if dry_run:
         print(f"lane {lane_id} (dry run)\nworktree: {workspace} (branch lane/{lane_id})\n"
               f"brief: {brief_path}\ncommand: {' '.join(argv)}\n\n{brief}", file=out)
@@ -869,7 +873,8 @@ def launch_step(home: Path, project_id: str, step_id: str, agent: str | None = N
 def _cmd_launch(args) -> int:
     home = _home(args)
     try:
-        launch_step(home, args.project, str(args.step), args.agent, args.dry_run)
+        launch_step(home, args.project, str(args.step), args.agent, args.dry_run,
+                    request_id=args.request)
     except launch_mod.LaunchError as error:
         print(f"tirith launch: {error}", file=sys.stderr)
         return 3
@@ -917,7 +922,7 @@ def _cmd_inbox(args) -> int:
                       f"{req['id']}  {req['status']:<8} {req['kind']:<6} {req['project']}#{req['step']}  "
                       + " ".join(req["text"].split())[:80])
         elif action == "answer":
-            inbox_mod.add_answer(home, args.id, args.text, by=args.by)
+            inbox_mod.add_answer(home, args.id, args.text, by=args.by, lane=args.lane)
         elif action == "done":
             inbox_mod.mark_done(home, args.id)
         elif action == "watch":
@@ -1127,6 +1132,7 @@ def build_parser() -> argparse.ArgumentParser:
     start.add_argument("--pid", type=int, default=None)
     start.add_argument("--brief", default=None)
     start.add_argument("--step", default=None, help="roadmap step this lane works on")
+    start.add_argument("--request", default=None, help="inbox request id this lane answers")
     start.set_defaults(func=_cmd_lane_start)
     end = lane_sub.add_parser("end", parents=[common], help="finish a lane")
     end.add_argument("lane_id")
@@ -1144,6 +1150,7 @@ def build_parser() -> argparse.ArgumentParser:
     lane_run.add_argument("--log", default=None)
     lane_run.add_argument("--brief", default=None)
     lane_run.add_argument("--step", default=None, help="roadmap step this lane works on")
+    lane_run.add_argument("--request", default=None, help="inbox request id this lane answers")
     lane_run.add_argument("--interactive", action="store_true",
                           help="give the agent the terminal (no log capture); activity comes from hooks")
     lane_run.add_argument("--agent", default=None, help="agent alias from [agents.<alias>]")
@@ -1312,6 +1319,7 @@ def build_parser() -> argparse.ArgumentParser:
     launch.add_argument("--project", required=True)
     launch.add_argument("--step", required=True, help="roadmap step number")
     launch.add_argument("--agent", default=None, help="agent alias (its [agents.<alias>] launch template)")
+    launch.add_argument("--request", default=None, help="inbox request id this lane answers")
     launch.add_argument("--dry-run", action="store_true", help="print the brief and command, start nothing")
     launch.set_defaults(func=_cmd_launch)
 
@@ -1329,6 +1337,7 @@ def build_parser() -> argparse.ArgumentParser:
     i_ans.add_argument("id")
     i_ans.add_argument("text")
     i_ans.add_argument("--by", choices=inbox_mod.ANSWERERS, default="steward")
+    i_ans.add_argument("--lane", default=None, help="id of the lane (agent) that took the request")
     i_done = inbox_sub.add_parser("done", parents=[common], help="close a request")
     i_done.add_argument("id")
     i_watch = inbox_sub.add_parser("watch", parents=[common],
