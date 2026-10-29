@@ -10,6 +10,12 @@
   ui.inboxCli = ui.inboxCli || {};     /* "project|step" -> CLI command to copy (no way to send from here) */
   ui.inboxErr = ui.inboxErr || {};     /* "project|step" -> why the send failed */
   ui.inboxOpen = ui.inboxOpen || {};   /* request id -> true/false: answers shown (default: not for done requests) */
+  ui.planView = ui.planView || {};     /* project id -> id of the plan shown (default: the current one) */
+  ui.planDoneOpen = ui.planDoneOpen || {}; /* project id -> true while the finished plans are unfolded */
+  ui.planForm = ui.planForm || {};     /* project id -> true while the "Start a new plan" form is open */
+  ui.planDraft = ui.planDraft || {};   /* project id -> {title, goal, deadline, steps} typed so far */
+  ui.planFormErr = ui.planFormErr || {};
+  ui.planRefreshAt = ui.planRefreshAt || {}; /* project id -> ms of the "Update the plan" click, until the request shows up */
   var lastState = null, LAUNCH_WAIT = 90000, PEND_WAIT = 10000, ESCALATE = 120, INSTALL = 'tirith url install';
 
   var IC = {
@@ -25,6 +31,8 @@
 
   var FLAG = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4 14V2.6M4 3.2c2.3-1.3 3.8 1.3 6.3 0 .9-.5 1.6-.6 2-.5v5.3c-.4-.1-1.1 0-2 .5-2.5 1.3-4-1.3-6.3 0" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   var BUBBLE = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3 3h10a1 1 0 011 1v6a1 1 0 01-1 1H7.5L4.6 13.6V11H3a1 1 0 01-1-1V4a1 1 0 011-1z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>';
+  var REFRESH = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M13.2 8a5.2 5.2 0 11-1.6-3.7M13.4 2.4v3.1h-3.1" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  var PLUS = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 3.2v9.6M3.2 8h9.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
   var CHEV = '<svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M3 4.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
   function plain(t) { return esc(String(t).replace(/`/g, '')); }
@@ -145,14 +153,16 @@
       (a.status === 'working' && a.summary ? '<div class="inow">' + T.mdInline(a.summary) + '</div>' : '') + '</div></li>';
   }
   function answerLabel(a) {
-    return a.by === 'brain' ? (a.auto ? 'Muse Spark answered automatically' : 'Muse Spark answered') : 'Manager answered';
+    return a.by === 'brain' ? (a.auto ? 'Muse Spark answered automatically' : 'Muse Spark answered') : a.by === 'tirith' ? 'Tirith answered' : 'Manager answered';
   }
   /* One request as a timeline: asked -> answered -> handled by an agent -> done. Only from state.inbox. */
   function thread(r, state) {
     var open = r.id in ui.inboxOpen ? ui.inboxOpen[r.id] : r.status !== 'done', answers = r.answers || [], lanes = r.lanes || [], h;
     /* a "finish" click needs no row of its own (the answers below say what happened); a question keeps its text */
     h = '<div class="ithread" data-req="' + esc(r.id) + '"><ol class="itl">' + (r.kind === 'ask' ?
-      '<li class="ie"><i class="ido me"></i><div class="ib"><b>You asked: ' + plain(r.text) + '</b> <span class="iwhen">· ' + esc(T.clockTime(r.at)) + '</span></div></li>' : '');
+      '<li class="ie"><i class="ido me"></i><div class="ib"><b>You asked: ' + plain(r.text) + '</b> <span class="iwhen">· ' + esc(T.clockTime(r.at)) + '</span></div></li>' :
+      r.kind === 'plan-refresh' ? '<li class="ie"><i class="ido me"></i><div class="ib"><b>You asked to update the plan</b> <span class="iwhen">· ' + esc(T.clockTime(r.at)) + '</span></div></li>' :
+      r.kind === 'plan-new' ? '<li class="ie"><i class="ido me"></i><div class="ib"><b>You started a new plan' + (r.plan && r.plan.title ? ': ' + plain(r.plan.title) : '') + '</b> <span class="iwhen">· ' + esc(T.clockTime(r.at)) + '</span></div></li>' : '');
     answers.forEach(function (a) {
       h += '<li class="ie"><i class="ido ok"></i><div class="ib ians' + (open ? ' open' : '') + '"><button class="iahead" data-act="iatog" data-key="' + esc(r.id) + '" aria-expanded="' + open + '">' + CHEV +
         '<b>' + esc(answerLabel(a)) + '</b> <span class="iwhen">· ' + esc(T.clockTime(a.at)) + '</span></button>' +
@@ -170,14 +180,19 @@
     if (r.status === 'done') h += '<li class="ie"><i class="ido ok"></i><div class="ib"><b>Done</b></div></li>';
     return h + '</ol></div>';
   }
-  function inboxBelow(s, p, state, key) {
-    var reqs = reqsFor(state, p.id, s.id), pend = ui.inboxPend[key], h = '';
+  /* The "sent" chip, the send error and the CLI fallback of a key ("project|step"). */
+  function notes(key, reqs) {
+    var pend = ui.inboxPend[key], h = '';
     if (pend && reqs.some(function (r) { return (T.ms(r.at) || 0) >= pend - 2000; })) { delete ui.inboxPend[key]; pend = null; }
     if (pend && T.now() - pend < PEND_WAIT) h += '<div class="ichip-row"><span class="ichip" title="Sent; it shows here as soon as the collector has it">Sent · waiting for the manager</span></div>';
     if (ui.inboxErr[key]) h += '<div class="ierr">' + esc(ui.inboxErr[key]) + '</div>';
     if (ui.inboxCli[key]) {
       h += '<div class="icli">Tirith cannot send from this page. Run in a terminal:<code>' + esc(ui.inboxCli[key]) + '</code></div>';
     }
+    return h;
+  }
+  function inboxBelow(s, p, state, key) {
+    var reqs = reqsFor(state, p.id, s.id), h = notes(key, reqs);
     if (ui.inboxAsk[key]) {
       h += '<div class="iask"><input class="iin" type="text" data-act="itext" data-key="' + esc(key) + '" maxlength="1000" placeholder="Ask about this step…" aria-label="Question about this step" value="' + esc(ui.inboxDraft[key] || '') + '">' +
         '<button class="isend" data-act="isend" data-key="' + esc(key) + '">Send</button><span class="ihint">Enter sends · Esc closes</span></div>';
@@ -223,8 +238,19 @@
     sendInbox('ask', key, text);
   }
 
-  function step(s, p, state) {
-    var key = p.id + '|' + s.id, open = !!ui.planOpen[key], live = s.agents && s.agents.length;
+  function focusForm(pid) {
+    var els = document.querySelectorAll('[data-act="pnf"][data-field="title"]'), i;
+    for (i = 0; i < els.length; i++) if (els[i].getAttribute('data-key') === pid) els[i].focus();
+  }
+  function submitPlan(pid) {
+    var d = ui.planDraft[pid] || {}, title = (d.title || '').trim();
+    if (!title) { ui.planFormErr[pid] = 'Give the plan a title first.'; T.render(); focusForm(pid); return; }
+    ui.planDraft[pid] = {}; ui.planForm[pid] = false; ui.planFormErr[pid] = null;
+    sendInbox('plan-new', pid + '|plan', JSON.stringify({ title: title, goal: (d.goal || '').trim(), deadline: (d.deadline || '').trim(), steps: (d.steps || '').trim() }));
+  }
+
+  function step(s, p, state, ro) {
+    var key = (ro ? ro + '|' : '') + p.id + '|' + s.id, open = !!ui.planOpen[key], live = s.agents && s.agents.length;
     var ava = (s.agents || []).map(function (id) {
       var a = T.agentById(state, id); if (!a) return '';
       return '<button class="pava" data-act="goagent" data-key="' + esc(id) + '" title="' + esc(a.name + ' · ' + (a.feature || '')) + '">' + T.avatar(a, 22) + '</button>' + (T.stopBtn ? T.stopBtn(a, 'ava') : '');
@@ -234,21 +260,79 @@
       '<span class="pico' + (live ? ' pulse' : '') + '">' + (IC[s.status] || IC.todo) + '</span>' +
       '<span class="ptit"><span class="pn">' + esc(s.id) + '.</span> ' + plain(s.title) + '</span>' +
       (s.total ? bar(s.done, s.total, 'pbar') + '<span class="pcnt">' + s.done + '/' + s.total + '</span>' : '<span class="pbar"></span><span class="pcnt">–</span>') +
-      '</button><span class="pavas">' + ava + '</span>' + inboxBtns(key) + '</div>' + reviewLine(s, p, state) + inboxBelow(s, p, state, key);
+      '</button><span class="pavas">' + ava + '</span>' + (ro ? '' : inboxBtns(key)) + '</div>' + (ro ? '' : reviewLine(s, p, state) + inboxBelow(s, p, state, key));
     if (open) {
       h += '<ul class="pitems">' + (s.items.length ? s.items.map(function (i) {
         return '<li class="' + (i.done ? 'ok' : '') + '"><span class="pi">' + (i.done ? OK : OPEN) + '</span><span>' + rich(i.text) + '</span></li>';
       }).join('') : '<li class="none">No items yet</li>') + '</ul>';
-      h += reviewBtn(s, p, state) || launchBtn(s, p, state, true).replace('class="plw"', 'class="plw pbody"');
+      if (!ro) h += reviewBtn(s, p, state) || launchBtn(s, p, state, true).replace('class="plw"', 'class="plw pbody"');
     }
     return h + '</li>';
   }
 
-  function card(p, state, multi) {
+  /* ---------- the plans of a project: switcher, "Update the plan", "Start a new plan" ---------- */
+  function plansOf(p) {
     var r = p.roadmap;
+    return p.plans && p.plans.length ? p.plans : [{ id: '', title: '', current: true, finished: false, file: r.file, deadline: r.deadline, done: r.done, total: r.total, steps: r.steps }];
+  }
+  function shown(p) {
+    var all = plansOf(p), want = ui.planView[p.id];
+    return all.filter(function (x) { return x.id === want; })[0] || all[0];
+  }
+  function planReqs(state, pid) {
+    return reqsFor(state, pid, 'plan').filter(function (r) { return r.kind === 'plan-refresh' || r.kind === 'plan-new'; });
+  }
+  function refreshing(state, pid) {
+    var t = ui.planRefreshAt[pid];
+    if (t && planReqs(state, pid).some(function (r) { return r.kind === 'plan-refresh' && (T.ms(r.at) || 0) >= t - 2000; })) { delete ui.planRefreshAt[pid]; t = 0; }
+    return !!(t && T.now() - t < PEND_WAIT) || planReqs(state, pid).some(function (r) {
+      return r.kind === 'plan-refresh' && r.status !== 'done' && (r.lanes || []).some(function (id) { var a = T.agentById(state, id); return a && a.status === 'working'; });
+    });
+  }
+  function planBtns(p, state) {
+    var key = p.id + '|plan', busy = refreshing(state, p.id), open = !!ui.planForm[p.id];
+    return '<span class="iacts pacts">' +
+      '<button class="ibtn' + (busy ? ' busy' : '') + '" data-act="prefresh" data-key="' + esc(key) + '"' + (busy ? ' disabled' : '') + ' title="An agent compares every item of the plan with the code, the merged work and your requests, ticks what is done and adds what is missing" aria-label="Update the plan">' + REFRESH + '<span>' + (busy ? 'Updating the plan…' : 'Update the plan') + '</span></button>' +
+      '<button class="ibtn' + (open ? ' on' : '') + '" data-act="pnew" data-key="' + esc(p.id) + '" title="Describe a new goal; an agent writes the plan and it joins the plan switcher" aria-label="Start a new plan">' + PLUS + '<span>Start a new plan</span></button></span>';
+  }
+  function switcher(p, cur) {
+    var all = plansOf(p), live = all.filter(function (x) { return !x.finished || x === cur; }), fin = all.filter(function (x) { return x.finished && x !== cur; });
+    if (all.length < 2) return '';
+    function chip(x) {
+      return '<button class="pchip' + (x === cur ? ' on' : '') + (x.finished ? ' fin' : '') + '" data-act="pview" data-key="' + esc(p.id) + '" data-plan="' + esc(x.id) + '" aria-pressed="' + (x === cur) + '">' +
+        plain(x.title || x.id) + (x.current ? ' <em>current</em>' : '') + ' <span class="pcnt">' + x.done + '/' + x.total + '</span></button>';
+    }
+    var h = '<div class="pswitch" role="group" aria-label="Plans of ' + esc(p.name) + '">' + live.map(chip).join('');
+    if (fin.length) {
+      h += '<button class="pchip fold" data-act="pdonetog" data-key="' + esc(p.id) + '" aria-expanded="' + !!ui.planDoneOpen[p.id] + '">' + CHEV + ' ' + fin.length + ' done</button>';
+      if (ui.planDoneOpen[p.id]) h += fin.map(chip).join('');
+    }
+    return h + '</div>';
+  }
+  function newPlanForm(p) {
+    var d = ui.planDraft[p.id] || {}, id = esc(p.id);
+    function f(label, ctl) { return '<label class="pfl"><span>' + label + '</span>' + ctl + '</label>'; }
+    return '<div class="pform" data-pform="' + id + '">' +
+      f('Title', '<input class="iin" type="text" data-act="pnf" data-key="' + id + '" data-field="title" maxlength="120" placeholder="What is this plan called?" value="' + esc(d.title || '') + '">') +
+      f('Goal', '<textarea class="iin" rows="3" data-act="pnf" data-key="' + id + '" data-field="goal" maxlength="1500" placeholder="One paragraph: what must be true when this plan is done?">' + esc(d.goal || '') + '</textarea>') +
+      f('Deadline <i>optional</i>', '<input class="iin" type="date" data-act="pnf" data-key="' + id + '" data-field="deadline" value="' + esc(d.deadline || '') + '">') +
+      f('First steps <i>optional</i>', '<textarea class="iin" rows="3" data-act="pnf" data-key="' + id + '" data-field="steps" maxlength="1500" placeholder="Free text, one idea per line. The agent turns it into steps.">' + esc(d.steps || '') + '</textarea>') +
+      (ui.planFormErr[p.id] ? '<div class="ierr pferr">' + esc(ui.planFormErr[p.id]) + '</div>' : '') +
+      '<div class="pfa"><button class="isend" data-act="pnsend" data-key="' + id + '">Start the plan</button><button class="ibtn" data-act="pncancel" data-key="' + id + '">Cancel</button></div></div>';
+  }
+  function planBelow(p, state) {
+    var key = p.id + '|plan', reqs = planReqs(state, p.id), h = notes(key, reqs);
+    if (ui.planForm[p.id]) h += newPlanForm(p);
+    reqs.slice().sort(function (a, b) { return (T.ms(b.at) || 0) - (T.ms(a.at) || 0); }).slice(0, 2).forEach(function (r) { h += thread(r, state); });
+    return h ? '<div class="pbelow">' + h + '</div>' : '';
+  }
+
+  function card(p, state, multi) {
+    var cur = shown(p), ro = cur.current ? '' : cur.id;
     return '<div class="card pcard' + (multi ? ' compact' : '') + '"><div class="phead"><b>' + esc(p.name) + '</b>' +
-      bar(r.done, r.total, 'ptotal') + '<span class="pcnt big">' + r.done + ' / ' + r.total + '</span>' + countdown(r.deadline) + '</div>' +
-      '<ul class="psteps">' + r.steps.map(function (s) { return step(s, p, state); }).join('') + '</ul></div>';
+      bar(cur.done, cur.total, 'ptotal') + '<span class="pcnt big">' + cur.done + ' / ' + cur.total + '</span>' + countdown(cur.deadline) + planBtns(p, state) + '</div>' +
+      switcher(p, cur) + planBelow(p, state) +
+      '<ul class="psteps">' + cur.steps.map(function (s) { return step(s, p, state, ro); }).join('') + '</ul></div>';
   }
 
   /* HTML for the Plan section, or '' when no visible project has a roadmap. */
@@ -299,13 +383,25 @@
       ui.inboxOpen[ik] = !(ik in ui.inboxOpen ? ui.inboxOpen[ik] : !(cur && cur.status === 'done'));
       T.render(); return;
     }
+    var pb = e.target.closest('[data-act^="p"]'), pact = pb && pb.getAttribute('data-act'), pk = pb && pb.getAttribute('data-key');
+    if (pact === 'prefresh') { ui.planRefreshAt[pk.split('|')[0]] = T.now(); sendInbox('plan-refresh', pk, ''); return; }
+    if (pact === 'pnew') { ui.planForm[pk] = !ui.planForm[pk]; ui.planFormErr[pk] = null; T.render(); if (ui.planForm[pk]) focusForm(pk); return; }
+    if (pact === 'pncancel') { ui.planForm[pk] = false; ui.planFormErr[pk] = null; T.render(); return; }
+    if (pact === 'pnsend') { submitPlan(pk); return; }
+    if (pact === 'pview') { ui.planView[pk] = pb.getAttribute('data-plan'); T.render(); return; }
+    if (pact === 'pdonetog') { ui.planDoneOpen[pk] = !ui.planDoneOpen[pk]; T.render(); return; }
     var b = e.target.closest('[data-act="plan"]'); if (!b) return;
     var k = b.getAttribute('data-key');
     ui.planOpen[k] = !ui.planOpen[k];
     T.render();
   });
   document.getElementById('view').addEventListener('input', function (e) {
-    var t = e.target; if (t.getAttribute && t.getAttribute('data-act') === 'itext') ui.inboxDraft[t.getAttribute('data-key')] = t.value;
+    var t = e.target, a = t.getAttribute && t.getAttribute('data-act');
+    if (a === 'itext') ui.inboxDraft[t.getAttribute('data-key')] = t.value;
+    if (a === 'pnf') {
+      var pid = t.getAttribute('data-key'), d = ui.planDraft[pid] = ui.planDraft[pid] || {};
+      d[t.getAttribute('data-field')] = t.value; ui.planFormErr[pid] = null;
+    }
   });
   document.getElementById('view').addEventListener('keydown', function (e) {
     var t = e.target; if (!t.getAttribute || t.getAttribute('data-act') !== 'itext') return;

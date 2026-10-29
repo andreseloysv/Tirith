@@ -18,7 +18,7 @@ collector: state.inbox -> the Plan shows the chip and the answers under the step
 
 | Row | Fields |
 |---|---|
-| request | `id`, `at`, `kind` (`finish`, `ask` or `setup`), `project`, `step`, `text`, `from` (`"owner"`), `status` (`"open"`) |
+| request | `id`, `at`, `kind` (`finish`, `ask`, `setup`, `plan-refresh` or `plan-new`), `project`, `step`, `text`, `from` (`"owner"`), `status` (`"open"`) |
 | answer | `id` (of the request), `at`, `kind: "answer"`, `by` (`manager`, `brain` or `tirith`), `text` (markdown), `auto` (bool), optional `lane` (id of the lane that took the request) |
 | done | `id`, `at`, `kind: "done"` |
 
@@ -26,6 +26,17 @@ collector: state.inbox -> the Plan shows the chip and the answers under the step
 - `text` is the question (markdown), at most 4096 bytes (cut on a character boundary). A `finish` may have
   no text; an `ask` must.
 - Answer and done rows for an unknown id, and lines that are not JSON, are ignored.
+
+### Kinds `plan-refresh` and `plan-new`
+
+Two requests about a project's whole plan, sent by the buttons in the Plan card header. `step` is `"plan"`
+(it may be left out). Tirith handles both by code (see the dispatcher below); the manager is not involved.
+
+- `plan-refresh` ("Update the plan"): no text.
+- `plan-new` ("Start a new plan"): `text` is a JSON object `{"title", "goal", "deadline", "steps"}` of strings;
+  only `title` is required, `deadline` is free text (the form sends `YYYY-MM-DD`), `steps` is free text.
+  Anything else is rejected, so a bad request is never stored. `state.inbox[]` rows of this kind carry the
+  parsed object as `plan`.
 
 ### Kind `setup`
 
@@ -52,6 +63,7 @@ manager stays silent, its escalation offers no "Start an agent". Answers are the
 | `tirith inbox add --kind finish\|ask\|setup --project P --step N [--text T]` | appends a request, prints its id |
 | `tirith inbox add --kind finish\|ask\|setup --project P [--step N] [--text T]` | appends a request, prints its id (`--step` is for plan steps; a `setup` request takes its JSON as `--text`) |
 | `tirith inbox add --kind chat [--project P] --text T` | appends a chat message (`--project` and `--step` optional) |
+| `tirith inbox add --kind finish\|ask\|setup\|plan-refresh\|plan-new --project P [--step N] [--text T]` | appends a request, prints its id (`--step` is for plan steps; a `setup` or `plan-new` request takes its JSON as `--text`) |
 | `tirith inbox list [--open] [--json]` | lists requests (`--open`: only those with no answer and not done) |
 | `tirith inbox answer <id> "<markdown>" [--by manager\|brain] [--lane L]` | appends an answer (default `manager`, `auto: false`); `--lane` names the agent that has the request |
 | `tirith inbox done <id>` | closes the request |
@@ -119,6 +131,12 @@ answers an `ask` in the first cycle, not after 120 s.
 ## Web (`web/js/v-plan.js`)
 
 - Buttons are pills with words: **Finish this step** and **Ask**, with a tooltip saying what happens.
+- The Plan card header has two more pills, always visible: **Update the plan** (sends `plan-refresh`; shows
+  "Updating the plan…" while the request is in flight or its lane is working) and **Start a new plan** (opens
+  a form: title, goal, deadline, first steps; "Start the plan" sends `plan-new`, a title is required).
+  They use the same send paths as the step buttons, with the key `<project>|plan`. Under the header the
+  card shows the "sent" chip, errors and the CLI fallback, and the last 2 plan requests as timelines like the
+  step ones (asked, answered by Tirith with the summary, handled by the lane).
 - Under the step, one timeline per request (newest first, built only from `state.inbox`): asked, answered
   (manager, Tirith started an agent, or Muse Spark automatically), handled by the agent in `lanes` with its
   live status, done. Unanswered: "Waiting for the manager · N s"; after 2 min a note that Tirith will
@@ -150,7 +168,24 @@ handles everything by hand), `auto_launch = false` leaves `finish` to the manage
 | `finish`, no such lane | runs the `tirith launch` code in-process (detached, like the CLI) and answers with the new lane id |
 | `finish`, launch refused (step done, `tirith check` fails, no agent command, ...) | answers with the reason and the exact fix command, and adds an owner item with options `Fix it` / `Try again` (`waits.jsonl` row with `options: [{label, command}]`, also in `state.waiting_on_you[].options`) |
 | `ask` | the brain answers at once (`by: brain`, `auto: true`); the request stays `manager_pending` |
+| `plan-refresh`, no working lane of that project with `step: "plan-refresh"` | starts the auditor lane (`tirith.planlane`, same path as `tirith launch`: worktree `<repo>-lanes/<id>`, branch `lane/<id>`, generated brief in `<home>/briefs/`), `step: "plan-refresh"`, and answers with the lane id |
+| `plan-refresh`, one already running for the project | answers naming that lane (one refresh at a time per project) |
+| `plan-new` | starts the planner lane (`step: "plan-new"`) and answers with the lane id; several may run |
+| `plan-refresh` / `plan-new`, launch refused | answers with the reason and adds an owner item (`Try again` with the `tirith inbox add` command for a refresh) |
 | `setup` and other kinds | left to the manager (`manager_pending`) |
+
+**The plan lanes.** The auditor's brief is generated: the current plan file, the project's merged lanes with
+the first line of their reports, the recent inbox requests, the paths of `events.jsonl` (pipeline results)
+and `inbox.jsonl`, and the job: compare every open and done item with the code, tick what is really done,
+untick what is not, add items for work asked in the inbox or in chat that the plan lacks, change only the
+plan file, and finish with a summary report in three parts (**Done since last update**, **Still missing**,
+**Needs the owner**). The planner's brief carries the title, goal, deadline and first steps of the request
+and asks for `docs/plans/<slug>.md` (same format as `docs/TODO.md`; `<slug>` comes from the title and is
+unique) and its registration in `tirith.toml` (`plans`, and `roadmap` set to it). The lane leaves the files
+in its worktree; the automatic review (`docs/CONTRACT-launch.md`) runs the tests, commits and merges them,
+and answers the request with the merge line followed by the lane's report: that report is the summary the
+owner reads under the Plan header. These lanes never tick steps from their report (`update_plan` skips them).
+A refusal is the usual one (`tirith check` fails, no agent command, no repo, no plan file).
 
 Every action is a flow (`flows.jsonl`): `owner` -> `tirith` (the request), then `tirith` -> `agent:<lane>`
 (`brief` when started, `message` when already running), `tirith` -> `brain` and `brain` -> `owner` for an

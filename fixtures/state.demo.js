@@ -434,7 +434,81 @@ window.TIRITH_STATE = {
           "tirith shim install --dir ~/.local/bin"
         ],
         "pending": []
-      }
+      },
+      "plans": [
+        {
+          "file": "/Users/me/DEVELOP/Chromasol/docs/TODO.md",
+          "deadline": null,
+          "done": 3,
+          "total": 7,
+          "steps": [
+            {
+              "id": "1",
+              "title": "Datos y migraci\u00f3n",
+              "status": "done",
+              "done": 2,
+              "total": 2,
+              "items": [
+                {
+                  "text": "Room database",
+                  "done": true
+                },
+                {
+                  "text": "Importar partidas antiguas",
+                  "done": true
+                }
+              ],
+              "agents": []
+            },
+            {
+              "id": "2",
+              "title": "Rendimiento",
+              "status": "active",
+              "done": 1,
+              "total": 3,
+              "items": [
+                {
+                  "text": "Arranque en fr\u00edo bajo 2 s",
+                  "done": true
+                },
+                {
+                  "text": "Perfilar la pantalla de lienzo",
+                  "done": false
+                },
+                {
+                  "text": "Reducir memoria en tel\u00e9fonos de gama baja",
+                  "done": false
+                }
+              ],
+              "agents": [
+                "w6-perf"
+              ]
+            },
+            {
+              "id": "3",
+              "title": "Ficha de la tienda",
+              "status": "todo",
+              "done": 0,
+              "total": 2,
+              "items": [
+                {
+                  "text": "Declaraci\u00f3n de recursos de IA",
+                  "done": false
+                },
+                {
+                  "text": "Capturas y descripci\u00f3n",
+                  "done": false
+                }
+              ],
+              "agents": []
+            }
+          ],
+          "id": "TODO",
+          "title": "ChromaSol",
+          "current": true,
+          "finished": false
+        }
+      ]
     },
     {
       "id": "tirith",
@@ -892,7 +966,289 @@ window.TIRITH_STATE = {
             "summary": "add-stage ci/lint: make lint"
           }
         ]
-      }
+      },
+      "plans": [
+        {
+          "file": "/Users/me/DEVELOP/Tirith/docs/TODO.md",
+          "deadline": "2026-11-04T21:00:00-05:00",
+          "done": 13,
+          "total": 26,
+          "steps": [
+            {
+              "id": "0",
+              "title": "Guarda de commits compatible",
+              "status": "done",
+              "done": 2,
+              "total": 2,
+              "items": [
+                {
+                  "text": "Alias de agentes en el c\u00f3digo; nombres reales en `config.toml`.",
+                  "done": true
+                },
+                {
+                  "text": "Guarda de Tirith intacta e inmutable.",
+                  "done": true
+                }
+              ],
+              "agents": []
+            },
+            {
+              "id": "1",
+              "title": "`lane run` devuelve la respuesta final",
+              "status": "done",
+              "done": 3,
+              "total": 3,
+              "items": [
+                {
+                  "text": "Al terminar imprime un resumen y la respuesta final.",
+                  "done": true
+                },
+                {
+                  "text": "Se guarda como informe del lane y se ve en la web.",
+                  "done": true
+                },
+                {
+                  "text": "Lane sin respuesta o con error \u2192 \u00abesperando por ti\u00bb.",
+                  "done": true
+                }
+              ],
+              "agents": []
+            },
+            {
+              "id": "2",
+              "title": "\u00c1rbol de delegaci\u00f3n",
+              "status": "done",
+              "done": 3,
+              "total": 3,
+              "items": [
+                {
+                  "text": "`lane run` pasa `TIRITH_LANE` a sus hijos.",
+                  "done": true
+                },
+                {
+                  "text": "`register_lane` guarda `parent` autom\u00e1ticamente.",
+                  "done": true
+                },
+                {
+                  "text": "Vista Tree en Agents.",
+                  "done": true
+                }
+              ],
+              "agents": []
+            },
+            {
+              "id": "3",
+              "title": "Hooks de agentes \u2192 `tirith hook`",
+              "status": "active",
+              "done": 3,
+              "total": 6,
+              "items": [
+                {
+                  "text": "`tirith hook --agent <alias>` escribe un evento est\u00e1ndar.",
+                  "done": true
+                },
+                {
+                  "text": "Adaptador `anthropic`.",
+                  "done": true
+                },
+                {
+                  "text": "`tirith hook install|uninstall`.",
+                  "done": true
+                },
+                {
+                  "text": "Instalar los hooks en los ajustes de cada agente.",
+                  "done": false
+                },
+                {
+                  "text": "Protegerlos para que un agente no pueda quit\u00e1rselos.",
+                  "done": false
+                },
+                {
+                  "text": "Verificar el payload real de Muse Code.",
+                  "done": false
+                }
+              ],
+              "agents": [
+                "t-world"
+              ]
+            },
+            {
+              "id": "4",
+              "title": "`lane run --interactive`",
+              "status": "todo",
+              "done": 0,
+              "total": 2,
+              "items": [
+                {
+                  "text": "La terminal queda conectada al agente.",
+                  "done": false
+                },
+                {
+                  "text": "Capturar Ctrl+C para cerrar el lane bien.",
+                  "done": false
+                }
+              ],
+              "agents": []
+            },
+            {
+              "id": "7",
+              "title": "Reglas de c\u00f3digo",
+              "status": "active",
+              "done": 1,
+              "total": 3,
+              "items": [
+                {
+                  "text": "`tirith check`: manifiesto, build / test / deploy.",
+                  "done": true
+                },
+                {
+                  "text": "`PreToolUse` bloquea sub-agentes fuera de `lane run`.",
+                  "done": false
+                },
+                {
+                  "text": "Git `pre-commit` / `pre-push` con `tirith check`.",
+                  "done": false
+                }
+              ],
+              "agents": []
+            },
+            {
+              "id": "8",
+              "title": "M\u00e1s visibilidad por agente",
+              "status": "active",
+              "done": 1,
+              "total": 3,
+              "items": [
+                {
+                  "text": "Objetivo, estado, archivos cambiados y tests por agente.",
+                  "done": true
+                },
+                {
+                  "text": "Logs legibles, m\u00e1s nuevos arriba.",
+                  "done": false
+                },
+                {
+                  "text": "Guardar el diff real por lane.",
+                  "done": false
+                }
+              ],
+              "agents": []
+            },
+            {
+              "id": "10",
+              "title": "Plan visible en el Overview",
+              "status": "todo",
+              "done": 0,
+              "total": 4,
+              "items": [
+                {
+                  "text": "El collector lee este archivo.",
+                  "done": false
+                },
+                {
+                  "text": "`tirith lane run --step <n>`.",
+                  "done": false
+                },
+                {
+                  "text": "Tarjeta \u00abPlan\u00bb en el Overview.",
+                  "done": false
+                },
+                {
+                  "text": "Fecha l\u00edmite con cuenta atr\u00e1s.",
+                  "done": false
+                }
+              ],
+              "agents": []
+            }
+          ],
+          "id": "TODO",
+          "title": "Tirith v1",
+          "current": true,
+          "finished": false
+        },
+        {
+          "id": "beta-launch",
+          "title": "Beta launch",
+          "current": false,
+          "finished": false,
+          "file": "/Users/me/DEVELOP/Tirith/docs/plans/beta-launch.md",
+          "deadline": "2026-12-01",
+          "done": 1,
+          "total": 5,
+          "steps": [
+            {
+              "id": "1",
+              "title": "Onboarding for ten testers",
+              "status": "active",
+              "done": 1,
+              "total": 3,
+              "items": [
+                {
+                  "text": "Install guide",
+                  "done": true
+                },
+                {
+                  "text": "First-run checklist",
+                  "done": false
+                },
+                {
+                  "text": "Feedback form",
+                  "done": false
+                }
+              ],
+              "agents": []
+            },
+            {
+              "id": "2",
+              "title": "Crash reports",
+              "status": "todo",
+              "done": 0,
+              "total": 2,
+              "items": [
+                {
+                  "text": "Collect the last log on failure",
+                  "done": false
+                },
+                {
+                  "text": "Send it to the manager",
+                  "done": false
+                }
+              ],
+              "agents": []
+            }
+          ]
+        },
+        {
+          "id": "guard-hardening",
+          "title": "Guard hardening",
+          "current": false,
+          "finished": true,
+          "file": "/Users/me/DEVELOP/Tirith/docs/plans/guard-hardening.md",
+          "deadline": null,
+          "done": 2,
+          "total": 2,
+          "steps": [
+            {
+              "id": "1",
+              "title": "Reinstall and verify",
+              "status": "done",
+              "done": 2,
+              "total": 2,
+              "items": [
+                {
+                  "text": "`tirith guard install` is idempotent",
+                  "done": true
+                },
+                {
+                  "text": "Verify reports tampering",
+                  "done": true
+                }
+              ],
+              "agents": []
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "relagame",
@@ -1068,7 +1424,8 @@ window.TIRITH_STATE = {
           "tirith shim install --dir ~/.local/bin"
         ],
         "pending": []
-      }
+      },
+      "plans": []
     },
     {
       "id": "sketchbook",
@@ -1094,7 +1451,8 @@ window.TIRITH_STATE = {
         "pipelines_running": 0,
         "flows_24h": 0
       },
-      "roadmap": null
+      "roadmap": null,
+      "plans": []
     }
   ],
   "agents": [
@@ -2961,6 +3319,50 @@ window.TIRITH_STATE = {
         "name": "lint",
         "run": "make lint"
       }
+    },
+    {
+      "id": "in-8c3d51e7",
+      "at": "2026-10-28T19:20:00Z",
+      "kind": "plan-refresh",
+      "project": "tirith",
+      "step": "plan",
+      "text": "",
+      "from": "owner",
+      "status": "answered",
+      "manager_pending": false,
+      "steward_pending": false,
+      "action_runs": [],
+      "answers": [
+        {
+          "at": "2026-10-28T19:38:00Z",
+          "by": "tirith",
+          "auto": true,
+          "lane": null,
+          "text": "Merged plan-update into main: 1 files, tests 482 passed.\n\n**Done since last update**\n- Hooks of agents (step 3): 3 more items\n\n**Still missing**\n- `lane run --interactive` (step 4)\n- Visibility per agent (step 8)\n\n**Needs the owner**\n- Pick a date for the beta (step 10)"
+        }
+      ],
+      "lanes": []
+    },
+    {
+      "id": "in-2e6f90ab",
+      "at": "2026-10-28T19:39:30Z",
+      "kind": "plan-new",
+      "project": "tirith",
+      "step": "plan",
+      "text": "{\"title\": \"Beta launch\", \"goal\": \"Ten testers use Tirith for a week.\", \"deadline\": \"2026-12-01\", \"steps\": \"\"}",
+      "plan": {
+        "title": "Beta launch",
+        "goal": "Ten testers use Tirith for a week.",
+        "deadline": "2026-12-01",
+        "steps": ""
+      },
+      "from": "owner",
+      "status": "open",
+      "manager_pending": true,
+      "steward_pending": true,
+      "action_runs": [],
+      "answers": [],
+      "lanes": []
     }
   ],
   "answered_waits": [

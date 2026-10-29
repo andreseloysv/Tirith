@@ -212,11 +212,18 @@ fn clip(text: &str, max: usize) -> &str {
 
 /// Builds the inbox row for a request: `{id, at, kind, project, step, text, from, status}`.
 fn inbox_row(kind: &str, project: &str, step: &str, text: &str, now: SystemTime, salt: u32) -> Result<Value, String> {
-    if kind != "finish" && kind != "ask" && kind != "setup" && kind != "chat" {
-        return Err(format!("kind must be finish, ask, setup or chat, not {kind:?}"));
+    let plan = kind == "plan-refresh" || kind == "plan-new";
+    if kind != "finish" && kind != "ask" && kind != "setup" && kind != "chat" && !plan {
+        return Err(format!("kind must be finish, ask, setup, chat, plan-refresh or plan-new, not {kind:?}"));
     }
     let (project, text) = (project.trim(), clip(text.trim(), INBOX_TEXT_MAX));
-    let step = if kind == "setup" && step.trim().is_empty() { "setup" } else { step.trim() };
+    let step = if step.trim().is_empty() && kind == "setup" {
+        "setup"
+    } else if step.trim().is_empty() && plan {
+        "plan"
+    } else {
+        step.trim()
+    };
     if kind == "chat" {
         if text.is_empty() {
             return Err("a chat message needs text".into());
@@ -227,8 +234,8 @@ fn inbox_row(kind: &str, project: &str, step: &str, text: &str, now: SystemTime,
     if kind == "ask" && text.is_empty() {
         return Err("a question needs text".into());
     }
-    if kind == "setup" && !text.starts_with('{') {
-        return Err("a setup request needs its JSON as text".into());
+    if (kind == "setup" || kind == "plan-new") && !text.starts_with('{') {
+        return Err(format!("a {kind} request needs its JSON as text"));
     }
     let d = now.duration_since(UNIX_EPOCH).unwrap_or_default();
     let id = format!("in-{:08x}", (d.as_nanos() as u32) ^ salt.rotate_left(16) ^ std::process::id());
@@ -327,6 +334,9 @@ mod inbox_tests {
         assert!(inbox_row("finish", "demo", "1", "", UNIX_EPOCH, 0).is_ok());
         assert!(inbox_row("setup", "demo", "", "{\"action\":\"add-stage\"}", UNIX_EPOCH, 0).is_ok());
         assert!(inbox_row("setup", "demo", "", "add a stage", UNIX_EPOCH, 0).is_err());
+        assert_eq!(inbox_row("plan-refresh", "demo", "", "", UNIX_EPOCH, 0).unwrap()["step"], "plan");
+        assert!(inbox_row("plan-new", "demo", "", "{\"title\":\"x\"}", UNIX_EPOCH, 0).is_ok());
+        assert!(inbox_row("plan-new", "demo", "", "a title", UNIX_EPOCH, 0).is_err());
         let long = "é".repeat(3000);
         let row = inbox_row("ask", "demo", "1", &long, UNIX_EPOCH, 0).unwrap();
         assert!(row["text"].as_str().unwrap().len() <= INBOX_TEXT_MAX);

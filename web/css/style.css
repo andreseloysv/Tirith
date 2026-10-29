@@ -787,3 +787,23 @@ button.pc22.sel { box-shadow: 0 0 0 2px #fff, 0 0 0 4px rgba(47,111,237,.55); }
 .mtab .mstep { width: 120px; margin-left: 6px; }
 .msettings .spend { margin-top: 4px; }
 .aran { display: block; margin-top: 4px; font-size: 11.5px; color: var(--mut); font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------- plan buttons, plan switcher and the new-plan form (v-plan.js) ---------- */
+.pacts { opacity: 1; margin-left: auto; }
+.pacts .ibtn.busy { opacity: .7; cursor: default; }
+.pswitch { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 0 8px; }
+.pchip { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; font-size: 12px; border-radius: 12px; color: var(--fg); background: rgba(255,255,255,.55); border: 1px solid rgba(120,135,160,.28); }
+.pchip:hover { border-color: rgba(47,111,237,.4); }
+.pchip.on { color: var(--blue); background: rgba(255,255,255,.95); border-color: rgba(47,111,237,.5); font-weight: 500; }
+.pchip.fin:not(.on) { color: var(--mut); }
+.pchip em { font-style: normal; font-size: 11px; color: var(--mut); }
+.pchip.fold { color: var(--mut); border-style: dashed; } .pchip.fold[aria-expanded="true"] svg { transform: rotate(180deg); }
+.pbelow { padding: 0 0 6px; } .pbelow .ichip-row, .pbelow .icli, .pbelow .ierr, .pbelow .ithread { margin-left: 0; }
+.pform { display: flex; flex-direction: column; gap: 8px; margin: 0 0 10px; padding: 12px 14px; max-width: 640px; border-radius: 12px; background: rgba(255,255,255,.6); border: 1px solid rgba(120,135,160,.28); }
+.pfl { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--mut); } .pfl i { font-style: normal; opacity: .75; }
+.pform textarea.iin { height: auto; padding: 6px 10px; resize: vertical; line-height: 1.4; }
+.pform input.iin { height: 30px; } .pform input[type="date"].iin { width: 180px; }
+.pfa { display: flex; gap: 8px; align-items: center; } .pfa .isend { height: 28px; }
+.pferr { margin: 0; }
+@media (max-width: 640px) { .pacts { margin-left: 0; } }
+.pcard > .phead { display: flex; padding: 10px 0 8px; font-size: inherit; font-weight: inherit; color: inherit; text-transform: none; letter-spacing: 0; }

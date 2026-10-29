@@ -21,6 +21,7 @@ from tirith import asks as asks_mod
 from tirith import flows as flows_mod
 from tirith import inbox as inbox_mod
 from tirith import launch as launch_mod
+from tirith import planlane as planlane_mod
 from tirith import projects as projects_mod
 from tirith import review as review_mod
 from tirith import roadmap as roadmap_mod
@@ -128,7 +129,7 @@ def update_plan(home: Path, repo: Path, lane: dict) -> str:
     """Tick what the report claims in the repo's roadmap and commit it; returns a line for the owner/manager."""
     step = str(lane.get("step") or "")
     items = brief_items(lane.get("brief"))
-    if not step or not items:
+    if not step or not items or step in planlane_mod.LANE_STEPS.values():
         return ""
     folder = repo
     from tirith import manifest as manifest_mod
@@ -200,8 +201,11 @@ def settle(home: Path, config: Config, lane: dict, review: dict, rec: dict, now:
         text = (f"Merged {lane_id} into {review.get('branch') or 'the project branch'}: "
                 f"{review.get('files', 0)} files, tests {f'{passed} passed' if passed is not None else 'passed'}")
         plan = update_plan(home, repo, lane) if repo is not None else ""
+        answer = text + (f". {plan}." if plan else ".")
+        if step in planlane_mod.LANE_STEPS.values() and str(lane.get("report") or "").strip():
+            answer += "\n\n" + str(lane["report"]).strip()  # the auditor's summary / the planner's report
         if lane.get("request_id") and inbox_mod.find_request(home, str(lane["request_id"])):
-            inbox_mod.add_answer(home, str(lane["request_id"]), text + (f". {plan}." if plan else "."),
+            inbox_mod.add_answer(home, str(lane["request_id"]), answer,
                                  by="tirith", auto=True, at=at, lane=lane_id)
         close_queue(home, rec, text)
         if rec.get("owner_item"):
