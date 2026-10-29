@@ -188,7 +188,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Fecha límite opcional con cuenta atrás.
 - [ ] Cabecera de un paso del Plan con varios agentes: avatares apilados (+N) y un solo botón, sin tapar el título ni la barra de progreso. (en revisión)
 - [ ] Llevar a main la cabecera de paso con varios agentes de la lane stepheader (commits 8e7cc53 y cb7e35b, hoy atascada en la cola de merge). (check: `git merge-base --is-ancestor 8e7cc53 main`) (en curso: stepheader-land)
-- [ ] Reaplicar sobre main solo el cambio de cabecera de paso de lane/stepheader (4 archivos: git diff --binary 876bf81 cb7e35b | git apply en un worktree nuevo desde main), commit y test web (check: `git cat-file -e main:web/js/planagents.test.mjs && git show main:web/css/style.css | grep -q pavas`)
+- [ ] Reaplicar sobre main solo el cambio de cabecera de paso de lane/stepheader (4 archivos: git diff --binary 876bf81 cb7e35b | git apply en un worktree nuevo desde main), commit y test web (check: `git cat-file -e main:web/js/planagents.test.mjs && git show main:web/css/style.css | grep -q pavas`) (en curso: plan-visible-en-el-overview)
 - [x] Quitar la vista Flow del menú y su código (el dueño la considera inútil). (hecho: 360eded)
 
 ## 11. Lanzar un sub-agente desde el Plan
