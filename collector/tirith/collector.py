@@ -236,6 +236,7 @@ STATE_FILES = 10
 STATE_TESTS = 5
 STATE_REPORT_MAX = 4 * 1024
 SLIM_REPORT_MAX = 300
+TIMING_EVERY = 60  # cycles between per-phase timing lines in the collector log
 EVENT_STATE_KEYS = ("ts", "agent", "event", "tool", "summary", "source")   # what the drawer reads of a live event
 DETAIL_KEYS = ("log_entries", "log_tail", "events", "files", "tests", "report")
 
@@ -472,7 +473,20 @@ class Collector:
         self._usage_cache: dict = {}
         self._detail_hashes: dict[str, str] = {}
         self._live_steps: dict[str, list] = {}  # lane id -> live transcript steps of this cycle
+        self._cycles = 0
+        self._tick_at = time.monotonic()
+        self._phase_s: dict[str, float] = {}
+        self._phase_total: dict[str, float] = {}
         self._inbox_tried: dict[str, float] = {}  # request id -> monotonic time of the last brain try
+
+    def _tick(self, name: str | None) -> None:
+        """Charge the time since the last tick to phase ``name`` (``None`` only restarts the clock)."""
+        at = time.monotonic()
+        if name is None:
+            self._phase_s = {}
+        else:
+            self._phase_s[name] = self._phase_s.get(name, 0.0) + at - self._tick_at
+        self._tick_at = at
 
     # -- identities / renown -------------------------------------------------
 
@@ -1057,6 +1071,7 @@ class Collector:
         if not self._owner_items_checked:  # once at startup: every open owner item passes the gate again
             self._owner_items_checked = True
             ownergate_mod.migrate(self.home, now_iso(now))
+        self._tick(None)
         howto_mod.check_open(self.home, now)  # an owner item whose done_check passes closes by itself
         lanes = read_lanes(self.home)
         close_dead_lanes(self.home, lanes, now)
@@ -1096,6 +1111,7 @@ class Collector:
         brain_waits: list[dict] = []
         manager_turns = (dispatch_mod.load_state(self.home).get("manager") or {}).get("turns") or {}
         self._live_steps = {}
+        self.activity.prefetch([l for l in lanes if not (parse_iso(l.get("ended_at")) or now) < cutoff])
         for lane in lanes:
             ended = parse_iso(lane.get("ended_at"))
             if ended and ended < cutoff:
@@ -1212,6 +1228,7 @@ class Collector:
                 "roadmap": roadmap_mod.build(entry.folder, entry.id, agent_rows, now.astimezone().date()),
                 "plans": roadmap_mod.build_plans(entry.folder, entry.id, agent_rows),
             })
+        self._tick("lanes")
         git_runs = self._git_hook_events(resolve)
         local_runs = self._pipelines(sorted(events + git_runs, key=lambda e: str(e.get("at") or ""))
                                      if git_runs else events, resolve, entries)
@@ -1220,6 +1237,7 @@ class Collector:
         runs = sorted(local_runs + remote_runs, key=lambda r: str(r["started_at"] or ""),
                       reverse=True)
         agent_rows += remote_agents
+        self._tick("pipelines")
         for pid in [row["project"] for row in agent_rows] + [r["project"] for r in runs]:
             if pid and pid not in known_ids:
                 known_ids.add(pid)
@@ -1284,7 +1302,9 @@ class Collector:
             self.home, {a["id"]: f"{a['name']} {a['epithet']}".strip() for a in agent_rows},
             projects=endpoint_projects, limit=None)
         self._fill_counts(projects, agent_rows, runs, all_flows, now)
+        self._tick("flows")
         inbox_rows = self._inbox(projects, agent_rows, all_flows, now, lanes)
+        self._tick("inbox")
         sessions = self._sessions(lanes, events, all_flows, raw_notes, waiting, resolve)
         for sess in sessions:
             sess["usage"] = agentrun_mod.sum_usage(
@@ -1519,10 +1539,24 @@ class Collector:
     def cycle(self, now: datetime | None = None) -> dict:
         """One collector cycle: build state and write it atomically."""
         now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
-        state = self.slim_state(self.build_state(now), now)
+        started = time.monotonic()
+        self._tick(None)
+        built = self.build_state(now)
+        self._tick("sessions")  # what is left of build_state after the inbox
+        state = self.slim_state(built, now)
+        self._tick("slim")
         write_json_atomic(self.home / "state.json", state, compact=True)
         # The same JSON as a script, so a page opened from file:// can load it without CORS.
         write_text_atomic(self.home / "state.js", state_js(state, compact=True))
+        self._tick("write")
+        self._cycles += 1
+        for name, spent in self._phase_s.items():
+            self._phase_total[name] = self._phase_total.get(name, 0.0) + spent
+        self._phase_total["cycle"] = self._phase_total.get("cycle", 0.0) + time.monotonic() - started
+        if self._cycles % TIMING_EVERY == 0:
+            line = " ".join(f"{k}={v / TIMING_EVERY:.2f}s" for k, v in self._phase_total.items())
+            print(f"tirith collect: {TIMING_EVERY} cycles, mean per cycle: {line}", file=sys.stderr, flush=True)
+            self._phase_total = {}
         return state
 
     def run(self, interval: float = 2.0, once: bool = False) -> dict:

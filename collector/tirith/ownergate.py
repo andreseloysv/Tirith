@@ -5,6 +5,8 @@ Every path that raises an owner item (``dispatch.add_owner_item``, ``tirith wait
 ``why_owner`` from ``asks.WHY_OWNER``. Without one the text is something an agent can do: it becomes a
 manager queue item ``agent-can-do`` that the dispatcher turns into a verification lane (``verifylane``).
 An item about something marked out of plan is dropped and logged to ``owner_dropped.jsonl``.
+``owner-decision`` is never for merge / drop / review / relaunch questions (by ``kind`` or by the words of the
+text): those go to the manager queue, because merging is never a question for the owner.
 See ``docs/CONTRACT-inbox.md`` ("The owner gate").
 """
 
@@ -24,9 +26,13 @@ DROPPED_FILE = "owner_dropped.jsonl"
 CONCRETE_KIND = "make-concrete"  # a manager queue item: an owner how-to with placeholders
 MOVED_REASON = "moved to the manager queue"
 OUT_OVERLAP = 0.6
+NOT_OWNER_KINDS = ("merge", "drop", "review", "relaunch")  # kinds an owner item may never have
+NOT_OWNER_KIND = "not-owner"  # the manager queue kind of an item the gate refused for being such a question
 
 _OUT_RE = re.compile(r"\((?:fuera de este plan|out of this plan)", re.IGNORECASE)
 _OUT_TAIL = re.compile(r"\((?:fuera de este plan|out of this plan).*$", re.IGNORECASE)
+_PROCESS_RE = re.compile(r"\b(merge[sd]?|merging|drop(?:ping)?|relaunch(?:ed|ing)?|re-launch|retry|review(?:ing)?)\b",
+                         re.IGNORECASE)
 _WORD_RE = re.compile(r"[a-z0-9áéíóúñü]{4,}")
 _WHY_TAG_RE = re.compile(
     r"^\s*(?:\[\s*(?:why[_-]owner\s*[:=]\s*)?([a-z_ -]+?(?::[^\]]*)?)\s*\]"
@@ -68,9 +74,16 @@ def send_back(home: Path, project: str | None, text: str, problem: str, item_id:
                               kind=CONCRETE_KIND, item_id="sq-mc-" + key)
 
 
+def is_process_question(text: str, why_detail: str | None = None, kind: str | None = None) -> bool:
+    """A merge / drop / review / relaunch question: by ``kind``, or by those words in the text or its detail."""
+    if str(kind or "").lower() in NOT_OWNER_KINDS:
+        return True
+    return bool(_PROCESS_RE.search(f"{text or ''} {why_detail or ''}"))
+
+
 def admit(home: Path, item_id: str, project: str | None, text: str, why_owner, *, via: str = "",
           at: str | None = None, out_items: list[str] | tuple[str, ...] = (), out: bool = False,
-          howto=None) -> str:
+          howto=None, why_detail: str | None = None, kind: str | None = None) -> str:
     """``"owner"`` when the item may reach the owner; otherwise it is routed (queued for the manager or
     dropped and logged) and ``"manager"`` / ``"dropped"`` comes back. Callers write the owner item only on
     ``"owner"``. A ``howto`` (dict or JSON) with a placeholder, or a command that cannot run as it is, sends the
@@ -81,6 +94,12 @@ def admit(home: Path, item_id: str, project: str | None, text: str, why_owner, *
         return DROPPED
     if asks_mod.why_key(why_owner) is None:
         agent_can_do(home, project, text)
+        return MANAGER
+    if asks_mod.why_key(why_owner) == "owner-decision" and is_process_question(text, why_detail, kind):
+        clean = " ".join(str(text or "").split())
+        key = hashlib.sha1(f"{project or ''}\n{clean.lower()}".encode("utf-8")).hexdigest()[:10]
+        asks_mod.queue_add(home, str(project or ""), "", f"not for the owner (merge/drop/review/relaunch is yours): "
+                           f"{clean}"[:asks_mod.QUEUE_TEXT_MAX], kind=NOT_OWNER_KIND, item_id=f"sq-no-{key}")
         return MANAGER
     if howto:
         try:
