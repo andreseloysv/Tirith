@@ -132,8 +132,20 @@
     if (!M) { el.innerHTML = '<section>' + T.empty('No settings in this state yet: run the collector again') + '</section>'; return; }
     el.innerHTML = '<section class="msettings">' +
       '<p class="mut sm mlead">Model and effort come from <code>~/.tirith/config.toml</code> under <code>[models]</code>; the manager keeps its own in the agent\'s settings file.</p>' +
-      managerCard(M) + workersCard(M, state) + pending(M) + cliBlock() + '</section>';
+      managerCard(M) + workersCard(M, state) + agentsCard() + pending(M) + cliBlock() + '</section>';
   };
+
+  /* Agent CLIs per platform (docs/PLATFORMS.md; read 2026-10-29). "?" = not checked. */
+  var PLATFORMS = [
+    ['anthropic', 'yes', 'yes', 'yes', 'yes'], ['codex', 'yes', 'yes', 'yes', 'no'],
+    ['copilot', 'yes', 'yes', 'yes', 'no'], ['muse', 'yes', '?', '?', 'no']
+  ];
+  function agentsCard() {
+    return '<div class="mover"><div class="slabel">Agents</div><table class="mtab"><thead><tr><th>Agent</th><th>macOS</th><th>Windows</th><th>Linux</th><th>Chat</th></tr></thead><tbody>' +
+      PLATFORMS.map(function (r) {
+        return '<tr>' + r.map(function (c, i) { return i ? '<td>' + c + '</td>' : '<td><code>' + esc(c) + '</code></td>'; }).join('') + '</tr>';
+      }).join('') + '</tbody></table><p class="mut sm">Hooks and shims work for all four. Details: docs/PLATFORMS.md.</p></div>';
+  }
 
   /* ---------- sending: the app writes the inbox, a browser opens the tirith:// link, else the CLI line is shown ---------- */
   function send(req, summary, cli) {

@@ -25,6 +25,7 @@
     toast.textContent = text; toast.classList.toggle('bad', !!bad); toast.hidden = false;
     clearTimeout(toastTimer); toastTimer = setTimeout(function () { toast.hidden = true; }, 4000);
   }
+  T.note = note;
   function open(a) {
     var tauri = window.__TAURI__, st = T.rawState && T.rawState(), L = st && st.launch;
     var project = a.getAttribute('data-project') || '', path = a.getAttribute('data-path') || '';

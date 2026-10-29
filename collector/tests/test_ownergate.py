@@ -260,3 +260,22 @@ def test_the_plan_prompt_explains_the_gate() -> None:
     for key in asks_mod.WHY_OWNER:
         assert f"`{key}`" in text
     assert "fuera de este plan" in text and "agent can do" in text
+
+
+@pytest.mark.parametrize("text, detail, kind", [
+    ("Tests passed for web-panel. Merge it into the project branch?", "choice: merge it or drop it", None),
+    ("What now?", "choice: retry, show the log or drop it", None),
+    ("Lane web-panel is done.", None, "review"),
+    ("Start it again?", None, "relaunch")])
+def test_a_merge_drop_review_or_relaunch_question_never_reaches_the_owner(
+        home: Path, text: str, detail: str | None, kind: str | None) -> None:
+    verdict = dispatch_mod.add_owner_item(home, "i-m", "demo", text, OPTION, AT, why_owner="owner-decision",
+                                          why_detail=detail, kind=kind)
+    assert verdict == "manager" and _waits(home) == []
+    (queued,) = asks_mod.queue_items(home, only_open=True)
+    assert queued["kind"] == ownergate.NOT_OWNER_KIND and "not for the owner" in queued["text"]
+
+
+def test_a_real_decision_still_reaches_the_owner(home: Path) -> None:
+    assert dispatch_mod.add_owner_item(home, "i-d", "demo", "Which name should the app have?", OPTION, AT,
+                                       why_owner="owner-decision", why_detail="choice: the name") == "owner"

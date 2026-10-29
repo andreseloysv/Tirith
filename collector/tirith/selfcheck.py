@@ -33,7 +33,7 @@ from tirith import launch as launch_mod
 from tirith import managerd as managerd_mod
 from tirith import review as review_mod
 from tirith.home import Config, now_iso, parse_iso
-from tirith.store import lane_path, read_json
+from tirith.store import read_lane
 
 MANAGER_STUCK_S = 120.0      # an owner message without an answer, nobody working on it
 LINGER_S = 60.0              # a manager process alive this long after its result
@@ -254,8 +254,6 @@ def unrelated(message: str, files: list[str]) -> bool:
 
 def _rerun(home: Path, config: Config, lane_id: str, spawn: Callable) -> None:
     argv = [*launch_mod.tirith_argv(home), "lane", "review", lane_id]
-    if not config.review_auto_merge:
-        argv.append("--tests-only")
     spawn(argv, home, home / "logs" / f"{lane_id}.review.log")
 
 
@@ -264,7 +262,7 @@ def _reviews(home: Path, config: Config, now: datetime, book: dict, lanes: list[
     worst = _check("ok", OK_TEXT["reviews"])
     for seen in lanes:
         lane_id = str(seen.get("id") or "")
-        lane = read_json(lane_path(home, lane_id), None) if lane_id else None
+        lane = read_lane(home, lane_id) if lane_id else None
         review = lane.get("review") if isinstance(lane, dict) else None
         if not isinstance(review, dict):
             continue

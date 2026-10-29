@@ -287,6 +287,89 @@ def test_gates_disabled_in_config_is_inactive(proj: Path, home: Path, tmp_path: 
     assert not machine.active and any("enabled = false" in p for p in machine.problems)
 
 
+@pytest.fixture
+def owner_path(tmp_path: Path, monkeypatch) -> Path:
+    """An owner HOME and a PATH with only the system folders and ``<tmp>/real`` for agent CLIs."""
+    real = tmp_path / "real"
+    real.mkdir()
+    monkeypatch.setenv("HOME", str(tmp_path / "owner"))
+    monkeypatch.setenv("PATH", f"{real}:/usr/bin:/bin")
+    return real
+
+
+def _agents(home: Path, proj: Path, tmp_path: Path, *aliases: str) -> None:
+    """``anthropic`` with a settings path (hooks installed), plus ``aliases`` with no settings path."""
+    _hooks_file(tmp_path / "settings.json")
+    extra = "".join(f"\n[agents.{a}]\n" for a in aliases)
+    write_config(home, [{"id": "demo", "name": "Demo", "repo": str(proj)}],
+                 '[agents.anthropic]\nsettings = "%s"\n%s' % (tmp_path / "settings.json", extra))
+
+
+def test_agent_without_settings_path_is_explained(proj: Path, home: Path, tmp_path: Path, owner_path: Path) -> None:
+    _agents(home, proj, tmp_path, "quill", "wren")
+    machine = setup_mod.machine_state(load_config(home), home=home)
+    assert not machine.active and not machine.hooks_ok
+    assert machine.summary == (
+        "Tirith cannot guard quill and wren, because config.toml does not say where their settings are. "
+        "quill and wren are not installed here, so they cannot run unguarded yet. "
+        'To fix it, add settings = "<path to the agent\'s settings.json>" under [agents.quill] and '
+        "[agents.wren] in config.toml, or remove the section of an agent you do not use.")
+    assert [f for f in machine.fix if "[agents.quill]" in f] == [
+        f'add settings = "<path to its settings.json>" under [agents.quill] in {home / "config.toml"}, '
+        "or remove [agents.quill] if quill is not used here"]
+    assert machine.steps == ()  # no tirith command writes config.toml: the sentence says what to change
+    assert not (tmp_path / "owner").exists()  # reading never creates or edits agent settings
+    rows = {r["id"]: r["active"] for r in setup_mod._rules(_manifest(proj), machine, False)}
+    assert not rows["raw-stage"] and not rows["settings-edit"] and not rows["agent-cli"]  # every agent or none
+
+
+def test_unguarded_agent_on_path_is_named_as_able_to_run(proj: Path, home: Path, tmp_path: Path,
+                                                         owner_path: Path) -> None:
+    exe = owner_path / "quill"
+    exe.write_text("#!/bin/sh\n", encoding="utf-8")
+    exe.chmod(0o755)
+    _agents(home, proj, tmp_path, "quill", "wren")
+    summary = setup_mod.machine_state(load_config(home), home=home).summary
+    assert "quill can run on this machine without the rules." in summary
+    assert "wren is not installed here, so it cannot run unguarded yet." in summary
+    assert summary.endswith("or remove the section of an agent you do not use.")
+
+
+def test_one_agent_without_settings_switches_the_hook_rules_off(proj: Path, home: Path, tmp_path: Path,
+                                                               owner_path: Path) -> None:
+    write_config(home, [{"id": "demo", "name": "Demo", "repo": str(proj)}], "[agents.quill]\n")
+    machine = setup_mod.machine_state(load_config(home), home=home)
+    assert not machine.active
+    assert machine.summary.startswith("Tirith cannot guard quill, because config.toml does not say where its "
+                                      "settings are.")
+    rows = {r["id"]: r["active"] for r in setup_mod._rules(_manifest(proj), machine, False)}
+    assert not rows["raw-stage"] and rows["lane-brief"]
+
+
+def test_missing_hooks_for_one_agent_switch_the_hook_rules_off(proj: Path, home: Path, tmp_path: Path,
+                                                               owner_path: Path) -> None:
+    _hooks_file(tmp_path / "settings.json")
+    write_config(home, [{"id": "demo", "name": "Demo", "repo": str(proj)}],
+                 '[agents.anthropic]\nsettings = "%s"\n\n[agents.muse]\nsettings = "%s"\n'
+                 % (tmp_path / "settings.json", tmp_path / "muse.json"))
+    machine = setup_mod.machine_state(load_config(home), home=home)
+    assert machine.steps == (("Install the hooks for muse", "tirith hook install --agent muse"),)
+    assert machine.summary == "Tirith cannot see what agents do (muse), because their hooks are not installed."
+    assert not {r["id"]: r["active"] for r in setup_mod._rules(_manifest(proj), machine, False)}["raw-stage"]
+
+
+def test_state_shows_why_the_hook_rules_are_off(ruled: Path, home: Path, tmp_path: Path,
+                                                owner_path: Path) -> None:
+    _agents(home, ruled, tmp_path, "quill", "wren")
+    s = _project(_state(home))["setup"]
+    jsonschema.validate(s, {**SCHEMA["$defs"]["setup"], "$defs": SCHEMA["$defs"]})
+    assert s["gates_active"] is False
+    assert s["gates_summary"].startswith("Tirith cannot guard quill and wren")
+    assert any("[agents.wren]" in f for f in s["gates_fix"])
+    rules = {r["id"]: r["active"] for r in s["rules"]}
+    assert not rules["raw-stage"] and not rules["no-force-push"]
+
+
 def test_last_results_come_from_runs(proj: Path, home: Path) -> None:
     (proj / "tirith.toml").write_text(BASE + '\n[[hooks]]\nevent = "pre-commit"\nrun = "make lint"\n',
                                       encoding="utf-8")

@@ -59,7 +59,16 @@ def test_wait_add_rejects_bad_input(home: Path) -> None:
 def test_options_are_capped_and_labels_cut() -> None:
     opts = asks_mod.clean_options([f"L{i}|v{i}" for i in range(9)] + [{"label": "x" * 200, "value": "v"}])
     assert len(opts) == asks_mod.MAX_OPTIONS
-    assert len(asks_mod.clean_options([{"label": "y" * 200}])[0]["label"]) == asks_mod.LABEL_MAX
+    assert len(asks_mod.clean_options([{"label": "y" * 300}])[0]["label"]) == asks_mod.LABEL_MAX
+
+
+def test_a_long_option_label_is_kept_whole_or_cut_at_a_word() -> None:
+    long = "I'll allow git for agents in the Tirith config, then relaunch the merge"
+    assert asks_mod.parse_option(long) == {"label": long, "value": long}
+    assert asks_mod.clean_options([{"label": long, "value": "allow"}])[0]["label"] == long
+    words = " ".join(["relaunch"] * 40)
+    cut = asks_mod.clean_options([words])[0]["label"]
+    assert len(cut) <= asks_mod.LABEL_MAX and cut.endswith("relaunch…")
 
 
 def test_reply_marks_the_ask_answered_and_reaches_the_inbox(home: Path, capsys) -> None:

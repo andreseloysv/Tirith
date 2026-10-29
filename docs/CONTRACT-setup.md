@@ -102,11 +102,14 @@ is given.
   intact and hooks installed, `git` = the commit guard is intact, `lane run` and `CI` always.
 - `gates_active` = hooks installed for every `[agents.<alias>]` (settings file read, never written) and
   `verify_shims` clean and `[gates] enabled` not false. `gates_problems` says why not, `gates_fix` is the
-  list of install commands (`tirith hook install --agent <alias>`, `tirith shim install`).
+  list of fix steps (`tirith hook install --agent <alias>`, `tirith shim install`, or, for an alias with
+  no `settings` path, the line to add to config.toml or the section to remove).
   The shims are checked by `gates.verify_home_shims`, the same function as `tirith shim verify`:
   `<home>/shims` against the lane PATH. `gates_summary` is one plain sentence on what is missing and why
-  it matters ("" when all is active); `gates_actions` are Run actions (generated, stable ids) for the
-  install steps. Nothing is installed by collecting.
+  it matters ("" when all is active); an alias with no `settings` path is named, with whether its CLI is
+  on the lane PATH (it can run unguarded) or not (not installed here). `gates_actions` are Run actions
+  (generated, stable ids) for the install steps; config.toml edits have no Run action, the sentence says
+  what to change. Nothing is installed by collecting.
 - `pending`: open `setup` requests of the project that the manager has not closed.
 
 ## Web (`web/js/v-setup.js`)
