@@ -70,9 +70,9 @@ item as `(reabierto: <reason>)`. Lanes without an item keep the older report mat
    title, before the first `##`) from the project's roadmap (`docs/CONTRACT-roadmap.md`).
 2. Refuses (exit 3, reason on stderr) when: the step is unknown, done or has no items; `--item` is missing or is
    not an open item of the step (see above); a working lane of
-   the same project already has that step (the message names it); `tirith check` fails for the project;
+   the same project already has that item (the message names it; other items of the step are free); `tirith check` fails for the project;
    no agent command is configured. `tirith lane run --step N` (what every start ends in: autopilot,
-   dispatcher, manager lanes) refuses the same way (exit 3, "<lane> is already working on step N") unless it
+   dispatcher, manager lanes) refuses the same way (exit 3, "<lane> is already working on item "<item>" of step N") unless it
    continues that lane (`--fallback-from`: fallback, relaunch, claims re-send).
 3. Creates a git worktree `<repo>-lanes/<lane-id>` next to the repo on a new branch `lane/<lane-id>`
    from the current branch. `<lane-id>` is the slug of the step title, made unique against lanes,
