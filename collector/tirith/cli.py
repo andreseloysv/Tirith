@@ -1008,7 +1008,9 @@ def launch_plan(home: Path, project_id: str, kind: str, request_id: str | None =
         merged.sort(key=lambda l: str(l.get("started_at") or ""))
         rows = [r for r in inbox_mod.requests(home) if r["project"] == project_id and r["kind"] != "setup"]
         rel = str(path.relative_to(repo)) if path.is_relative_to(repo) else str(path)
-        brief = planlane_mod.refresh_brief(project_id, rel, path.read_text(encoding="utf-8"), merged, rows, home)
+        only = str((request or {}).get("step") or "")
+        brief = planlane_mod.refresh_brief(project_id, rel, path.read_text(encoding="utf-8"), merged, rows, home,
+                                           step=only if only and only != inbox_mod.PLAN_STEP else None)
     title = planlane_mod.lane_title(kind, plan)
     lane_id = launch_mod.lane_id_for(title, {str(l["id"]) for l in lanes}, repo)
     brief_path = home / "briefs" / f"{lane_id}.md"

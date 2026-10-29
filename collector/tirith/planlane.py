@@ -50,8 +50,9 @@ def _short(text: object, limit: int) -> str:
 
 
 def refresh_brief(project: str, plan_file: str, plan_text: str, merged: list[dict],
-                  requests: list[dict], home: Path) -> str:
-    """The auditor's brief: the plan, the merged lanes and the inbox, ready to compare with the code."""
+                  requests: list[dict], home: Path, step: str | None = None) -> str:
+    """The auditor's brief: the plan, the merged lanes and the inbox, ready to compare with the code.
+    With ``step`` it audits only that step's items."""
     out = [f"# Lane: Update the plan of {project}", "", "## Why",
            f"The owner pressed \"Update the plan\" on {project}. Review everything that is done and everything "
            f"that is missing, then bring `{plan_file}` up to date with the truth.", "",
@@ -64,7 +65,9 @@ def refresh_brief(project: str, plan_file: str, plan_text: str, merged: list[dic
            "- Leave the items that are right as they are, and keep the format (numbered `##` steps, "
            "`- [ ]` / `- [x]` items).",
            "- Finish with a short summary as your final report, in three parts: **Done since last update**, "
-           "**Still missing**, **Needs the owner**. Short bullets, no repetition.", "",
+           "**Still missing**, **Needs the owner**. Short bullets, no repetition.", *(
+               [f"- Limited to step {step}: compare and edit only the items of step {step}; leave every other "
+                "step exactly as it is."] if step else []), "",
            "## Hard rules", *(f"- {rule}" for rule in RULES), "",
            "## Where to read",
            "- `git log --oneline -60` and the code itself: an item is done only if you can see it in the code.",
