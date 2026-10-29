@@ -876,6 +876,11 @@ def _cmd_map(args) -> int:
 def _cmd_collect(args) -> int:
     home = _home(args)
     collector = Collector(home)
+    if not args.once and hasattr(signal, "SIGTERM"):
+        # the desktop app stops the collector with SIGTERM: unwind so the lock file handle closes cleanly
+        def _terminate(signum, frame):
+            raise SystemExit(0)
+        signal.signal(signal.SIGTERM, _terminate)
     try:
         if args.once:  # a single cycle may overlap a running collector
             collector.run(interval=args.interval, once=True)

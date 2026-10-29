@@ -464,7 +464,9 @@ fn start_collector(app: &App) {
         return;
     }
     let (out, err) = collector_log().unwrap_or_else(|| (Stdio::null(), Stdio::null()));
-    match tirith_command(&["collect", "--interval", "2"]).stdin(Stdio::null()).stdout(out).stderr(err).spawn() {
+    let mut cmd = tirith_command(&["collect", "--interval", "2"]);
+    own_process_group(&mut cmd);
+    match cmd.stdin(Stdio::null()).stdout(out).stderr(err).spawn() {
         Ok(child) => *app.collector.lock().unwrap() = Some(child),
         Err(e) => {
             eprintln!("tirith: could not start the collector: {e}");
@@ -473,10 +475,94 @@ fn start_collector(app: &App) {
     }
 }
 
+/// Puts the child in a process group of its own (pgid = its pid) so the whole tree can be stopped at once.
+#[cfg(unix)]
+fn own_process_group(c: &mut Command) {
+    use std::os::unix::process::CommandExt;
+    c.process_group(0);
+}
+
+#[cfg(not(unix))]
+fn own_process_group(_c: &mut Command) {}
+
+#[cfg(unix)]
+extern "C" {
+    fn kill(pid: i32, sig: std::os::raw::c_int) -> std::os::raw::c_int;
+}
+
+/// Stops `child` and everything it started: SIGTERM to its process group, up to `grace` for it to go, then
+/// SIGKILL to the group. The child must have been spawned with `own_process_group`.
+#[cfg(unix)]
+fn stop_tree(child: &mut Child, grace: std::time::Duration) {
+    const SIGTERM: std::os::raw::c_int = 15;
+    const SIGKILL: std::os::raw::c_int = 9;
+    let pgid = child.id() as i32;
+    // SAFETY: plain signal delivery to the group we created; a gone group just returns an error.
+    unsafe { kill(-pgid, SIGTERM) };
+    let deadline = std::time::Instant::now() + grace;
+    // the direct child may exit first and leave grandchildren, so the group is probed (signal 0), not the child
+    let mut reaped = false;
+    loop {
+        if !reaped && matches!(child.try_wait(), Ok(Some(_))) {
+            reaped = true;
+        }
+        if reaped && unsafe { kill(-pgid, 0) } != 0 {
+            return;
+        }
+        if std::time::Instant::now() >= deadline {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(25));
+    }
+    unsafe { kill(-pgid, SIGKILL) };
+    let _ = child.wait();
+}
+
+#[cfg(not(unix))]
+fn stop_tree(child: &mut Child, _grace: std::time::Duration) {
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
 fn stop_collector(app: &App) {
     if let Some(mut child) = app.collector.lock().unwrap().take() {
-        let _ = child.kill();
-        let _ = child.wait();
+        stop_tree(&mut child, std::time::Duration::from_secs(3));
+    }
+}
+
+#[cfg(all(test, unix))]
+mod stop_tree_tests {
+    use super::*;
+
+    fn group_alive(pgid: i32) -> bool {
+        unsafe { kill(-pgid, 0) == 0 }
+    }
+
+    fn spawn_tree(script: &str) -> Child {
+        let mut c = Command::new("/bin/sh");
+        c.args(["-c", script]).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+        own_process_group(&mut c);
+        c.spawn().unwrap()
+    }
+
+    #[test]
+    fn stop_leaves_no_survivor_in_the_tree() {
+        // shell -> subshell -> sleep, like bin/tirith -> uv -> python
+        let mut child = spawn_tree("(sleep 60; true) & sleep 60; true");
+        let pgid = child.id() as i32;
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        assert!(group_alive(pgid));
+        stop_tree(&mut child, std::time::Duration::from_secs(3));
+        assert!(!group_alive(pgid), "something in the group survived");
+    }
+
+    #[test]
+    fn stop_kills_what_ignores_sigterm() {
+        let mut child = spawn_tree("trap '' TERM; (trap '' TERM; while :; do sleep 1; done) & while :; do sleep 1; done");
+        let pgid = child.id() as i32;
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        stop_tree(&mut child, std::time::Duration::from_millis(500));
+        assert!(!group_alive(pgid), "a SIGTERM-proof process survived");
     }
 }
 
