@@ -139,8 +139,15 @@ def requests(home: Path) -> list[dict]:
 
     Answer and done rows for an unknown id are ignored; malformed rows are skipped."""
     out: dict[str, dict] = {}
+    action_owner: dict[str, str] = {}  # action id -> request id, from the answers that declared it
     for row in read_jsonl(inbox_path(home)):
         rid, kind = str(row.get("id") or ""), row.get("kind")
+        if kind == "action-run" and row.get("status") in ("passed", "failed"):
+            owner = action_owner.get(str(row.get("action_id") or ""))
+            if owner in out:  # the owner ran one of the steward's actions: the steward owes an answer
+                out[owner]["action_runs"].append({"action_id": row.get("action_id"), "status": row["status"],
+                                                  "exit_code": row.get("exit_code"), "at": row.get("at")})
+            continue
         if not rid:
             continue
         if kind in KINDS:
@@ -149,7 +156,7 @@ def requests(home: Path) -> list[dict]:
             out[rid] = {"id": rid, "at": row.get("at"), "kind": kind, "project": str(row.get("project") or ""),
                         "step": str(row.get("step") if row.get("step") is not None else ""),
                         "text": str(row.get("text") or ""), "from": row.get("from") or "owner",
-                        "status": "open", "answers": [], "steward_pending": True}
+                        "status": "open", "answers": [], "steward_pending": True, "action_runs": []}
             if kind == "setup":
                 try:
                     out[rid]["setup"] = parse_setup(out[rid]["text"])
@@ -161,6 +168,9 @@ def requests(home: Path) -> list[dict]:
                       "lane": str(row["lane"]) if row.get("lane") else None}
             if row.get("actions"):
                 answer["actions"] = [dict(a) for a in row["actions"] if isinstance(a, dict)]
+                for act in answer["actions"]:
+                    if act.get("id"):
+                        action_owner[str(act["id"])] = rid
             out[rid]["answers"].append(answer)
             if out[rid]["status"] == "open":
                 out[rid]["status"] = "answered"
@@ -178,6 +188,11 @@ def steward_pending(req: dict) -> bool:
     other kind stays pending until the steward itself answers, whatever the brain said."""
     if req["status"] == "done":
         return False
+    runs = req.get("action_runs") or []
+    if runs:
+        last_steward = max((str(a["at"] or "") for a in req["answers"] if a["by"] == "steward"), default="")
+        if max(str(r["at"] or "") for r in runs) > last_steward:
+            return True  # the owner ran an action the steward gave: the steward must answer the result
     if req["kind"] == "finish":
         return not req["answers"]
     return not any(a["by"] == "steward" for a in req["answers"])
@@ -236,9 +251,11 @@ def watch(home: Path, emit: Callable[[dict], None], *, poll_s: float = 1.0, incl
             if not (first and not include_existing) and rep["status"] == "open":
                 emit(rep)
         for req in requests(home):
-            if req["id"] in seen:
+            runs = req.get("action_runs") or []
+            key = f'{req["id"]}|{runs[-1]["at"] if runs else ""}'  # a new action result makes it new again
+            if key in seen:
                 continue
-            seen.add(req["id"])
+            seen.add(key)
             if (first and not include_existing) or not req["steward_pending"]:
                 continue
             emit(req)
@@ -251,7 +268,10 @@ def watch(home: Path, emit: Callable[[dict], None], *, poll_s: float = 1.0, incl
 def watch_line(req: dict) -> str:
     keys = ("id", "at", "kind", "project", "wait", "value", "text", "from", "status") if req["kind"] == "reply" \
         else ("id", "at", "kind", "project", "step", "text", "from", "status")
-    return json.dumps({k: req[k] for k in keys})
+    row = {k: req[k] for k in keys}
+    if req.get("action_runs"):
+        row["action_run"] = req["action_runs"][-1]  # what the owner just ran, and how it went
+    return json.dumps(row)
 
 
 # -- tirith://inbox links ---------------------------------------------------------------------
