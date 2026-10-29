@@ -479,6 +479,7 @@
     bits.push('<b>Autopilot ' + (on ? 'on' : 'paused') + '</b>');
     if (n) bits.push(n + (n === 1 ? ' agent' : ' agents') + ' working');
     if (queued) bits.push(queued + ' queued');
+    if (state.autopilot.limit != null) bits.push('limit ' + state.autopilot.limit + (state.autopilot.limit_why ? ' (' + esc(state.autopilot.limit_why) + ')' : ''));
     var skipped = state.autopilot.skipped || [];
     if (skipped.length) bits.push(skipped.length + ' not started');
     if (!n && !queued) bits.push('nothing to start');

@@ -56,6 +56,8 @@ from tirith import roadmap as roadmap_mod
 from tirith import review as review_mod
 from tirith import roadmap as roadmap_mod
 from tirith import runstage as runstage_mod
+from tirith import fasttests as fasttests_mod
+from tirith import loadlimit as loadlimit_mod
 from tirith import projects as projects_mod
 from tirith import projenv as projenv_mod
 from tirith import rooms as rooms_mod
@@ -788,7 +790,22 @@ def _manifest_stage(args, home: Path, command: list[str]) -> list[str]:
     if not stage.run:
         raise SystemExit(f"stage '{args.stage}' has no run command in {loaded.path}")
     args.stage_cwd = str(Path(loaded.path).parent)  # manifest commands run from the project root
-    return ["/bin/sh", "-c", stage.run]
+    fast = _fast_command(args, home, info, Path(args.stage_cwd))
+    return ["/bin/sh", "-c", fast or stage.run]
+
+
+def _fast_command(args, home: Path, info: dict | None, folder: Path) -> str | None:
+    """``--stage test|rust-test`` in a lane's worktree runs only what the change touches (``--full`` and the
+    merge queue, which runs outside a lane, run everything); the selection is recorded in ``selections.jsonl``."""
+    if args.stage not in ("test", "rust-test") or getattr(args, "full", False):
+        return None
+    if not (getattr(args, "changed", False) or info):
+        return None
+    sel = fasttests_mod.select(folder, args.stage)
+    append_jsonl(home / "selections.jsonl", {"at": now_iso(), "project": args.project, "worktree": str(folder),
+                                              **sel.record()})
+    print(f"tirith: {args.stage}: {sel.summary()}", flush=True)
+    return fasttests_mod.command(sel)
 
 
 def _cmd_run(args) -> int:
@@ -799,11 +816,14 @@ def _cmd_run(args) -> int:
     command = _manifest_stage(args, home, command)
     cwd = getattr(args, "stage_cwd", None) or str(Path.cwd().resolve())
     tags = runstage_mod.lane_tags(home, cwd)
-    code, _ = runstage_mod.run_stage(
-        home, args.project, args.pipeline, args.stage, command, cwd,
-        lane=tags.get("lane") or (os.environ.get("TIRITH_LANE") or None), run_id=args.run,
-        worktree=tags.get("worktree"), branch=tags.get("branch"), agent=args.agent,
-        log=args.log, new_run=args.new_run)
+    config = load_config(home)
+    allowed, _ = loadlimit_mod.current(config, home)
+    with loadlimit_mod.slot(home, allowed):  # concurrent stage runs adapt to load and free disk
+        code, _ = runstage_mod.run_stage(
+            home, args.project, args.pipeline, args.stage, command, cwd,
+            lane=tags.get("lane") or (os.environ.get("TIRITH_LANE") or None), run_id=args.run,
+            worktree=tags.get("worktree"), branch=tags.get("branch"), agent=args.agent,
+            log=args.log, new_run=args.new_run)
     return code
 
 
@@ -2308,6 +2328,9 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--new-run", action="store_true", help="start a new run number")
     run.add_argument("--log", default=None)
     run.add_argument("--agent", default=None, help="lane id to credit renown to")
+    run.add_argument("--changed", action="store_true",
+                     help="test stages: only the tests related to the changed files (the default in a lane)")
+    run.add_argument("--full", action="store_true", help="test stages: the full suite (what the merge queue runs)")
     run.add_argument("command", nargs=argparse.REMAINDER)
     run.set_defaults(func=_cmd_run)
 
