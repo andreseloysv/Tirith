@@ -131,7 +131,6 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Abrir la app en modo dev y comprobar que se ve y se actualiza.
 - [x] Windows: shims propios (`.cmd`).
 - [x] Windows: versión propia del wrapper de git y de la guarda (`safe-git`).
-- [ ] Probar en Windows real los shims, el wrapper y la guarda (fuera de este plan: no hay equipo con Windows).
 - [ ] Confirmar qué agentes existen en cada plataforma.
 - [ ] Móvil (para luego, fuera de este plan).
 - [x] Empaquetado por plataforma (configuración y scripts de build).
