@@ -73,7 +73,7 @@
   function projectChip(state) {
     var cur = ui.chatProj != null ? ui.chatProj : (T.filter.project || ''), prj = state.projects || [];
     return '<label class="mc-chip" title="Tell the manager which project this is about">' + BUBBLE +
-      '<select data-act="mc-proj" aria-label="Project of this message"><option value="">No project</option>' + prj.map(function (p) {
+      '<select data-act="mc-proj" data-keep="mc-proj" aria-label="Project of this message"><option value="">No project</option>' + prj.map(function (p) {
         return '<option value="' + esc(p.id) + '"' + (p.id === cur ? ' selected' : '') + '>' + esc(p.name || p.id) + '</option>';
       }).join('') + '</select></label>';
   }
@@ -81,7 +81,7 @@
     var rows = Math.max(1, Math.min(6, ui.chatDraft.split('\n').length));
     return '<div class="mc-comp">' + (ui.chatErr ? '<div class="ierr mc-note">' + esc(ui.chatErr) + '</div>' : '') +
       (ui.chatCli ? '<div class="icli mc-note">Tirith cannot send from this page. Run in a terminal:<code>' + esc(ui.chatCli) + '</code></div>' : '') +
-      '<div class="mc-box"><textarea data-act="mc-text" rows="' + rows + '" maxlength="4000" placeholder="Message the manager…" aria-label="Message to the manager">' + esc(ui.chatDraft) + '</textarea>' +
+      '<div class="mc-box"><textarea data-act="mc-text" data-keep="mc-text" rows="' + rows + '" maxlength="4000" placeholder="Message the manager…" aria-label="Message to the manager">' + esc(ui.chatDraft) + '</textarea>' +
       '<div class="mc-row">' + projectChip(state) + '<span class="mc-hint">Enter sends · Shift+Enter new line</span>' +
       '<button class="mc-send" data-act="mc-send" type="button" aria-label="Send" title="Send to the manager">' + SEND + '</button></div></div></div>';
   }
@@ -136,18 +136,14 @@
     if (fstate) lastState = fstate;  /* the filtered state; later calls without arguments reuse it */
     var log = document.getElementById('mc-log'), a = document.activeElement;
     var keep = log ? { top: log.scrollTop, bottom: log.scrollHeight - log.scrollTop - log.clientHeight < 48 } : null;
-    var typingNow = a && a.getAttribute && a.getAttribute('data-act') === 'mc-text';
-    var sel = typingNow ? [a.selectionStart, a.selectionEnd] : null;
+    var kept = T.keepCapture();
     base.apply(this, arguments);
     if (!lastState) return;
     if (inDrawer() && ui.chatOpen) view.insertAdjacentHTML('beforeend', '<aside class="drawer mdrawer" aria-label="Chat with the manager">' + T.managerChat(lastState, true) + '</aside>');
     var nl = document.getElementById('mc-log');
     if (nl) nl.scrollTop = !keep || keep.bottom || ui.chatStick ? nl.scrollHeight : keep.top;
     ui.chatStick = false;
-    if (sel) {
-      var ta = document.querySelector('[data-act="mc-text"]');
-      if (ta) { ta.focus(); try { ta.setSelectionRange(sel[0], sel[1]); } catch (e) {} }
-    }
+    T.keepRestore(kept);
     if (btn) {
       btn.hidden = !inDrawer();
       btn.classList.toggle('on', ui.chatOpen);

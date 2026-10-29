@@ -91,7 +91,7 @@
     }).join('');
     return '<div class="sfallback"><span class="slabel">Fallback</span><span class="mut sm">Used in this order when an agent is out of credits</span>' +
       '<div class="fbrow">' + (chips || '<span class="mut sm">None</span>') +
-      (left.length ? '<select data-act="mod-fb-add" aria-label="Add a fallback agent">' + opts(left, '', 'Add…') + '</select>' : '') + '</div></div>';
+      (left.length ? '<select data-act="mod-fb-add" data-keep="mod-fb-add" aria-label="Add a fallback agent">' + opts(left, '', 'Add…') + '</select>' : '') + '</div></div>';
   }
   function statusChips(M) {
     var st = M.agent_status || {};
