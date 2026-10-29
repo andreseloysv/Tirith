@@ -66,6 +66,8 @@ def tool_summary(name: str, data, workspace=None) -> str:
         return "Bash: " + first.strip()
     if name in ("Read", "Edit", "MultiEdit", "Write", "NotebookEdit", "NotebookRead"):
         return f"{name} {rel}".strip()
+    if name == "TodoWrite":
+        return "Task list"
     if name == "Grep":
         where = f" in {rel}" if rel else ""
         return f'Grep "{data.get("pattern") or ""}"{where}'
@@ -89,54 +91,143 @@ def _text_of(content) -> str:
     return ""
 
 
-def parse(lines: list[str], workspace=None) -> tuple[list[dict], dict]:
-    """``(steps oldest first, summary)`` for stream-json log lines; lines that are not events are skipped."""
-    steps: list[dict] = []
-    names: dict[str, str] = {}
-    summary = {"steps": 0, "done": False, "error": False, "cost_usd": None, "duration_s": None}
-    for line in lines:
+DIFF_LINES_KEPT = 400
+PARTIAL_MAX = 4000
+
+
+def _diff_rows(old, new) -> list[list[str]]:
+    rows = [["-", mask(_clip(l, 400))] for l in str(old or "").splitlines()]
+    return rows + [["+", mask(_clip(l, 400))] for l in str(new or "").splitlines()]
+
+
+def diff_for(name: str, data) -> dict | None:
+    """``{path, rows: [["-"|"+", text]], more}`` for an Edit / MultiEdit / Write call (what the CLI shows as a
+    unified diff: red removed lines, green added lines), else None."""
+    data = data if isinstance(data, dict) else {}
+    path = str(data.get("file_path") or data.get("notebook_path") or "")
+    rows: list[list[str]] = []
+    if name == "Edit":
+        rows = _diff_rows(data.get("old_string"), data.get("new_string"))
+    elif name == "MultiEdit":
+        for edit in data.get("edits") or []:
+            if isinstance(edit, dict):
+                rows += _diff_rows(edit.get("old_string"), edit.get("new_string"))
+    elif name == "Write":
+        rows = _diff_rows("", data.get("content"))
+    else:
+        return None
+    return {"path": path, "rows": rows[:DIFF_LINES_KEPT], "more": max(0, len(rows) - DIFF_LINES_KEPT)}
+
+
+def todos_for(data) -> list[dict]:
+    """The task list of a TodoWrite call: ``[{content, status}]``."""
+    out = []
+    for item in (data.get("todos") if isinstance(data, dict) else None) or []:
+        if isinstance(item, dict) and str(item.get("content") or "").strip():
+            status = str(item.get("status") or "pending")
+            out.append({"content": mask(_clip(item["content"], 160)),
+                        "status": status if status in ("pending", "in_progress", "completed") else "pending"})
+    return out
+
+
+class StepParser:
+    """Feeds on stream-json lines one at a time (``feed``); ``steps()`` / ``summary`` are the transcript so far.
+
+    With ``--include-partial-messages`` the text of the message being written arrives as ``stream_event``
+    deltas: it shows as the last step (``partial: true``) until the whole message replaces it. A TodoWrite
+    call is one ``todo`` step that the next TodoWrite updates in place."""
+
+    def __init__(self, workspace=None):
+        self.workspace = workspace
+        self.rows: list[dict] = []
+        self.names: dict[str, str] = {}
+        self.todo: dict | None = None
+        self.partial = ""
+        self.summary = {"steps": 0, "done": False, "error": False, "cost_usd": None, "duration_s": None}
+
+    def steps(self) -> list[dict]:
+        if not self.partial.strip():
+            return list(self.rows)
+        return self.rows + [{"kind": "text", "name": "", "at": None, "partial": True,
+                             "summary": mask(_lines(self.partial[-PARTIAL_MAX:], TEXT_LINES * 3))}]
+
+    def feed(self, line: str) -> None:
         line = line.strip()
         if not line.startswith("{"):
-            continue
+            return
         try:
             rec = json.loads(line)
         except ValueError:
-            continue
+            return
         if not isinstance(rec, dict):
-            continue
+            return
         kind = rec.get("type")
+        if kind == "stream_event":
+            ev = rec.get("event") if isinstance(rec.get("event"), dict) else {}
+            delta = ev.get("delta") if isinstance(ev.get("delta"), dict) else {}
+            if ev.get("type") == "content_block_delta" and delta.get("type") == "text_delta":
+                self.partial += str(delta.get("text") or "")
+            elif ev.get("type") == "message_start":
+                self.partial = ""
+            return
         content = rec.get("message", {}).get("content") if isinstance(rec.get("message"), dict) else None
         content = [{"type": "text", "text": content}] if isinstance(content, str) else content
         blocks = [b for b in content if isinstance(b, dict)] if isinstance(content, list) else []
+        rows = self.rows
         if kind == "assistant":
+            self.partial = ""
             for b in blocks:
                 if b.get("type") == "text" and str(b.get("text") or "").strip():
-                    steps.append({"kind": "text", "name": "", "summary": mask(_lines(b["text"], TEXT_LINES)),
-                                  "at": None})
+                    rows.append({"kind": "text", "name": "", "summary": mask(_lines(b["text"], TEXT_LINES)),
+                                 "at": None})
                 elif b.get("type") == "tool_use":
                     name = str(b.get("name") or "tool")
-                    names[str(b.get("id"))] = name
-                    steps.append({"kind": "tool", "name": name, "at": None,
-                                  "summary": mask(_clip(tool_summary(name, b.get("input"), workspace)))})
+                    self.names[str(b.get("id"))] = name
+                    if name == "TodoWrite":
+                        todos = todos_for(b.get("input"))
+                        if self.todo is None:
+                            self.todo = {"kind": "todo", "name": name, "at": None, "summary": "Task list",
+                                         "todos": todos}
+                            rows.append(self.todo)
+                        else:
+                            self.todo["todos"] = todos
+                        continue
+                    row = {"kind": "tool", "name": name, "at": None,
+                           "summary": mask(_clip(tool_summary(name, b.get("input"), self.workspace)))}
+                    diff = diff_for(name, b.get("input"))
+                    if diff and diff["rows"]:
+                        row["diff"] = diff
+                    rows.append(row)
         elif kind == "user":
             for b in blocks:
-                if b.get("type") != "tool_result":
+                if b.get("type") != "tool_result" or self.names.get(str(b.get("tool_use_id"))) == "TodoWrite":
                     continue
                 text = _text_of(b.get("content"))
                 bad = bool(b.get("is_error"))
                 if not text.strip() and not bad:
                     continue
-                steps.append({"kind": "result", "name": names.get(str(b.get("tool_use_id")), ""), "at": None,
-                              "summary": mask(_lines(text, RESULT_LINES)) or "(no output)", "error": bad})
+                rows.append({"kind": "result", "name": self.names.get(str(b.get("tool_use_id")), ""), "at": None,
+                             "summary": mask(_lines(text, RESULT_LINES)) or "(no output)", "error": bad})
         elif kind == "result":
+            self.partial = ""
+            summary = self.summary
             summary["done"] = True
             summary["error"] = bool(rec.get("is_error")) or str(rec.get("subtype") or "").startswith("error")
             cost = rec.get("total_cost_usd", rec.get("cost_usd"))
             summary["cost_usd"] = round(float(cost), 4) if isinstance(cost, (int, float)) else None
             ms = rec.get("duration_ms")
             summary["duration_s"] = round(ms / 1000) if isinstance(ms, (int, float)) else None
-    summary["steps"] = len(steps)
-    return steps, summary
+        self.summary["steps"] = len(rows)
+
+
+def parse(lines: list[str], workspace=None) -> tuple[list[dict], dict]:
+    """``(steps oldest first, summary)`` for stream-json log lines; lines that are not events are skipped."""
+    parser = StepParser(workspace)
+    for line in lines:
+        parser.feed(line)
+    steps = parser.steps()
+    parser.summary["steps"] = len(steps)
+    return steps, parser.summary
 
 
 def steps_for(log, workspace=None, fallback_at: str | None = None, now: datetime | None = None):
