@@ -220,6 +220,14 @@
         }
       }
     },
+    "timeouts": {
+      "description": "The timeout of each command class: the value in force, where it comes from, the last timeouts. See docs/CONTRACT-timeouts.md.",
+      "type": "array",
+      "items": {"type": "object", "additionalProperties": true,
+                "required": ["class", "seconds", "source", "min", "max"],
+                "properties": {"class": {"type": "string"}, "seconds": {"type": "number"},
+                               "source": {"enum": ["default", "learned", "agent", "owner", "config"]}}}
+    },
     "models": {
       "description": "Model and effort of the manager and of the workers, with the lists the Settings page offers. See docs/CONTRACT-models.md.",
       "type": "object",
@@ -939,6 +947,7 @@
         },
         "agent": {"type": ["string", "null"], "description": "Agent alias that ran the lane (docs/CONTRACT-models.md)."},
         "fallback_from": {"type": ["string", "null"], "description": "Agent alias that ran out of credits before this lane continued its brief."},
+        "keep_going": {"type": ["string", "null"], "description": "\"round N/3\" while Tirith sends the lane back with what is missing (tirith.keepgoing); null when never sent back."},
         "diff": {
           "description": "Full patch of the lane, stored at lane end (docs/CONTRACT-agents.md).",
           "oneOf": [{"type": "null"}, {"$ref": "#/$defs/diff"}]

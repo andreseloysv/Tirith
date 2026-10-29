@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlsplit
 
+from tirith import timeouts as timeouts_mod
 from tirith import projenv as projenv_mod
 from tirith import tirithcmd
 from tirith.home import now_iso, parse_iso
@@ -284,10 +285,13 @@ def run_action(home: Path, action_id: str, project_folder: Path | None = None,
                          "exit_code": None, "at": now_iso()})
     try:
         with log.open("wb") as out:
-            code = subprocess.run(["/bin/sh", "-c", tirithcmd.rewrite(action["command"], home)], cwd=cwd, stdin=subprocess.DEVNULL,
-                                  env=projenv_mod.apply(home, str(action.get("project") or "")),
-                                  stdout=out, stderr=subprocess.STDOUT, timeout=timeout).returncode
-    except (OSError, subprocess.TimeoutExpired) as error:
+            done = timeouts_mod.run(["/bin/sh", "-c", tirithcmd.rewrite(action["command"], home)], "generic", cwd=cwd,
+                                    stdin=subprocess.DEVNULL, env=projenv_mod.apply(home, str(action.get("project") or "")),
+                                    stdout=out, stderr=subprocess.STDOUT, timeout=timeout, home=home)
+            code = done.returncode
+            if done.timed_out:
+                out.write(("tirith: " + done.error + "\n").encode())
+    except OSError as error:
         with log.open("ab") as out:
             out.write(("tirith: " + str(error) + "\n").encode())
         code = 127

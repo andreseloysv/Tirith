@@ -27,6 +27,7 @@ try:
 except ImportError:  # Windows: the lock is a no-op there (one dispatcher, one writer)
     fcntl = None  # type: ignore[assignment]
 
+from tirith import timeouts as timeouts_mod
 from tirith import asks as asks_mod
 from tirith import manifest as manifest_mod
 from tirith import projects as projects_mod
@@ -106,7 +107,38 @@ def writer_lock(home: Path, project: str):
 
 
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True)
+    return timeouts_mod.run(["git", "-C", str(repo), *args], "git", text=True)
+
+
+LOCK_STALE_SECONDS = 60  # a git index lock older than this was left by a crash (git holds it for milliseconds)
+
+
+def _held(path: Path) -> bool:
+    """True when a process has ``path`` open (``lsof``); a missing or failing ``lsof`` says nobody does."""
+    try:
+        return subprocess.run(["lsof", "-t", "--", str(path)], capture_output=True, text=True,
+                              timeout=10).stdout.strip() != ""
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def recover_git_lock(repo: Path) -> bool:
+    """Remove an abandoned ``index.lock`` of ``repo`` (the main checkout); True when one was removed.
+
+    Only a lock older than ``LOCK_STALE_SECONDS`` is abandoned; a live git command holds its lock for moments."""
+    found = _git(repo, "rev-parse", "--git-path", "index.lock")
+    if found.returncode != 0:
+        return False
+    lock = Path(found.stdout.strip())
+    if not lock.is_absolute():
+        lock = repo / lock
+    try:
+        if time.time() - lock.stat().st_mtime < LOCK_STALE_SECONDS or _held(lock):
+            return False
+        lock.unlink()
+    except OSError:
+        return False
+    return True
 
 
 def commit_change(home: Path, repo: Path, project: str, mutate: Callable[[str], str], message: str,
@@ -132,8 +164,15 @@ def commit_change(home: Path, repo: Path, project: str, mutate: Callable[[str], 
         if new == text:
             return False
         path.write_text(new, encoding="utf-8")
-        _git(repo, "add", "--", rel)
+        recover_git_lock(repo)
+        added = _git(repo, "add", "--", rel)
+        if "index.lock" in added.stderr and recover_git_lock(repo):
+            _git(repo, "add", "--", rel)
         made = _git(repo, "commit", "-q", "-m", message, "--", rel)
+        if "index.lock" in made.stderr and recover_git_lock(repo):
+            made = _git(repo, "commit", "-q", "-m", message, "--", rel)
+        if made.returncode != 0 and "nothing to commit" in (made.stdout + made.stderr).lower():
+            return False  # the plan already was in the target state: success
         if made.returncode != 0:  # the guard (or git) refused: leave the plan as it was
             _git(repo, "reset", "-q", "--", rel)
             _git(repo, "checkout", "--", rel)
@@ -148,12 +187,18 @@ def _message(what: str, step: str, who: str) -> str:
 # -- start ------------------------------------------------------------------------------------
 
 
+def manager_lane(lane_id: str | None, hero_class: str | None = None) -> bool:
+    """A manager lane (the session or a one-shot turn): they share the standing manager item."""
+    return str(hero_class or "") in STANDING_CLASSES or str(lane_id or "").startswith("manager")
+
+
 def check_start(home: Path, repo: Path, project: str, step: str | None, item: str | None,
-                lane_id: str | None = None) -> str:
+                lane_id: str | None = None, hero_class: str | None = None) -> str:
     """The clean text of the open plan item an agent may start on; raises ``PlanGateError`` otherwise.
 
     The item is found by its exact text (any status note is ignored) or by its id (``i-xxxxxxxx``) in step
-    ``step``. An item another lane is working on, in review or blocked is not startable."""
+    ``step``. An item another lane is working on, in review or blocked is not startable, except the standing
+    manager item for a manager lane: that lane takes it over (:func:`begin` moves the note to it)."""
     step = str(step or "").strip()
     if not step or not str(item or "").strip():
         raise PlanGateError("an agent starts on a plan item: pass --step <N> --item \"<exact text of the open item>\". "
@@ -172,7 +217,8 @@ def check_start(home: Path, repo: Path, project: str, step: str | None, item: st
         raise PlanGateError("that item is in review; it is done when the review passes")
     if state == roadmap_mod.STATE_BLOCKED:
         raise PlanGateError(f"that item is blocked ({detail or 'no reason given'}); unblock it in the plan first")
-    if state == roadmap_mod.STATE_PROGRESS and detail and detail != lane_id:
+    if state == roadmap_mod.STATE_PROGRESS and detail and detail != lane_id \
+            and not (clean == MANAGER_ITEM and manager_lane(lane_id, hero_class)):
         other = read_json(lane_path(home, detail), None)
         if isinstance(other, dict) and not other.get("ended_at"):
             raise PlanGateError(f"that item is already in progress by lane {detail}")
@@ -186,6 +232,17 @@ def begin(home: Path, repo: Path, project: str, step: str, item: str, lane_id: s
         home, repo, project,
         lambda text: roadmap_mod.set_item(text, step, clean, roadmap_mod.with_status(clean, roadmap_mod.STATE_PROGRESS, lane_id)),
         _message("start", step, lane_id))
+
+
+def holds(repo: Path, step: str, item: str, lane_id: str) -> bool:
+    """True unless the plan shows the item held ("en curso") by another lane."""
+    path = plan_file(repo)
+    steps = roadmap_mod.parse(path.read_text(encoding="utf-8")) if path else None
+    found = roadmap_mod.find_item(steps, step, item) if steps else None
+    if found is None:
+        return True
+    _, state, detail = roadmap_mod.split_status(found["text"])
+    return not (state == roadmap_mod.STATE_PROGRESS and detail and detail != lane_id)
 
 
 def release(home: Path, repo: Path, project: str, step: str, item: str, lane_id: str) -> bool:
@@ -326,7 +383,7 @@ def lane_ended(home: Path, lane: dict) -> str:
                     commit_change(home, repo, str(lane["project"]),
                                   lambda text: roadmap_mod.set_item(text, linked[0], clean, clean, tick=True),
                                   _message("done", linked[0], str(lane["id"])))
-                else:
+                elif holds(repo, linked[0], linked[1], str(lane["id"])):  # a later manager may have taken it over
                     release(home, repo, str(lane["project"]), linked[0], linked[1], str(lane["id"]))
             except PlanGateError:
                 pass
@@ -375,6 +432,8 @@ def review_passed(home: Path, repo: Path, lane: dict) -> str:
         steps = roadmap_mod.parse(text)
         if roadmap_mod.find_item(steps, step, sub) is not None:
             text = roadmap_mod.set_item(text, step, sub, roadmap_mod.norm(sub), tick=True)
+        if roadmap_mod.find_item(roadmap_mod.parse(text), step, clean) is None:
+            return text  # already ticked (:func:`tick_merged`)
         return roadmap_mod.set_item(text, step, clean, clean, tick=True)
 
     commit_change(home, repo, project, mutate, _message("done", step, str(lane["id"])))
@@ -401,13 +460,139 @@ def review_failed(home: Path, repo: Path, lane: dict, reason: str) -> str:
     return f"reopened the item of step {step}: {reason}"
 
 
+# -- items whose work is on main --------------------------------------------------------------
+
+DOC_SUFFIXES = (".md", ".txt", ".rst")
+
+
+def done_note(clean: str, sha: str) -> str:
+    return f"{clean} (hecho: {sha})"
+
+
+def merged_commit(repo: Path, lane: dict) -> str | None:
+    """Short sha of the lane's merge commit (or branch tip) when its work is an ancestor of main, else None."""
+    branch = f"refs/heads/lane/{lane['id']}"
+    if _git(repo, "rev-parse", "--verify", "-q", branch).returncode == 0:
+        if _git(repo, "merge-base", "--is-ancestor", branch, "HEAD").returncode != 0:
+            return None
+        merge = _git(repo, "log", "--merges", "--ancestry-path", "--format=%h", f"{branch}..HEAD").stdout.split()
+        if merge:
+            return merge[-1]  # the oldest merge after the branch tip is the one that brought it in
+        return _git(repo, "rev-parse", "--short", branch).stdout.strip() or None
+    found = _git(repo, "log", "--merges", "-1", "--format=%h", "--grep", f"lane/{lane['id']}", "-F").stdout.strip()
+    return found or None
+
+
+def tick_merged(home: Path, config: Config, lanes: list[dict]) -> bool:
+    """Lanes that reported ``done`` and merged themselves never get a review, so their item would stay
+    "(en revisión)": tick it "(hecho: <sha>)" once the lane's work is on main (the claim check, :func:`on_main`)."""
+    changed, plans = False, {}
+    for seen in lanes:
+        outcome = seen.get("outcome") or {}
+        if outcome.get("status") != "done" or not outcome.get("applied") or "item" not in seen:
+            continue
+        lane = read_json(lane_path(home, str(seen.get("id") or "")), None)
+        linked = lane_item(lane) if isinstance(lane, dict) else None
+        if linked is None or standing(lane):
+            continue
+        project = str(lane.get("project") or "")
+        repo = repo_of(home, project, config)
+        if repo is None:
+            continue
+        if project not in plans:
+            try:
+                plans[project] = _read(repo)[1]
+            except PlanGateError:
+                plans[project] = []
+        step, clean = linked[0], roadmap_mod.split_status(linked[1])[0]
+        found = roadmap_mod.find_item(plans[project], step, clean)
+        if found is None or roadmap_mod.split_status(found["text"])[1] != roadmap_mod.STATE_REVIEW:
+            continue
+        sha = merged_commit(repo, lane)
+        if sha is None:
+            continue
+        try:
+            changed |= commit_change(
+                home, repo, project,
+                lambda text: roadmap_mod.set_item(text, step, clean, done_note(clean, sha), tick=True),
+                _message("done", step, str(lane["id"])))
+        except PlanGateError:
+            continue
+        plans.pop(project, None)
+    return changed
+
+
+def mark_done(home: Path, repo: Path, project: str, step: str, item: str, commit: str) -> str:
+    """``tirith plan done``: tick ``item`` because ``commit`` (on main, with code beyond docs) did its work.
+    Returns the short sha; raises ``PlanGateError`` when it does not hold."""
+    sha = _git(repo, "rev-parse", "--verify", "-q", f"{commit}^{{commit}}").stdout.strip()
+    if not sha:
+        raise PlanGateError(f"{commit} is not a commit of {project}")
+    if _git(repo, "merge-base", "--is-ancestor", sha, "HEAD").returncode != 0:
+        raise PlanGateError(f"{commit} is not on main yet")
+    files = _git(repo, "diff", "--name-only", f"{sha}^1", sha).stdout.split() if _git(
+        repo, "rev-parse", "-q", "--verify", f"{sha}^1").returncode == 0 else _git(
+        repo, "show", "--name-only", "--format=", sha).stdout.split()
+    code = [f for f in files if not f.startswith("docs/") and not f.lower().endswith(DOC_SUFFIXES)]
+    if not code:
+        raise PlanGateError(f"{commit} changes nothing outside the docs, so it is not the work of that item")
+    short = _git(repo, "rev-parse", "--short", sha).stdout.strip()
+    _, steps = _read(repo)
+    if not any(s["id"] == step for s in steps):
+        raise PlanGateError(f"step {step} is not in the plan")
+    clean = roadmap_mod.split_status(item)[0]
+    if roadmap_mod.find_item(steps, step, clean) is None:
+        raise PlanGateError(f"that item is not an open item of step {step}")
+    commit_change(home, repo, project,
+                  lambda text: roadmap_mod.set_item(text, step, clean, done_note(clean, short), tick=True),
+                  _message("done", step, "manager"))
+    return short
+
+
+# One-time backfill: work merged before ticking existed. (project, step, start of the item, merge commit)
+BACKFILL = (
+    ("tirith", "14", "El collector vuelve a tardar menos de 3 s por ciclo", "abdf921"),
+    ("tirith", "14", "Fusionar nunca es una pregunta para el dueño", "cd1b9c1"),
+    ("tirith", "14", "Regla en código", "222849b"),
+    ("tirith", "14", "El collector se reinicia solo cuando cambia su código en main", "1df0b8d"),
+)
+BACKFILL_MARK = "plan-backfill-ticks.done"
+
+
+def backfill(home: Path, config: Config) -> bool:
+    """Once, through the writer: tick the listed items with their merge commits (each open item that starts
+    with the listed text). Items that cannot be verified now are tried again next pass."""
+    mark = Path(home) / BACKFILL_MARK
+    if mark.exists():
+        return False
+    changed, pending = False, False
+    for project, step, start, commit in BACKFILL:
+        repo = repo_of(home, project, config)
+        if repo is None:
+            continue
+        try:
+            steps = _read(repo)[1]
+            targets = [roadmap_mod.split_status(i["text"])[0] for s in steps if s["id"] == step
+                       for i in s["items"] if not i["done"] and roadmap_mod.split_status(i["text"])[0].startswith(start)]
+            for target in targets:
+                mark_done(home, repo, project, step, target, commit)
+                changed = True
+        except PlanGateError:
+            pending = True
+    if not pending:
+        mark.parent.mkdir(parents=True, exist_ok=True)
+        mark.write_text(now_iso(), encoding="utf-8")
+    return changed
+
+
 # -- the dispatcher's pass --------------------------------------------------------------------
 
 
 def sync(home: Path, config: Config, lanes: list[dict], relauncher: Callable | None = None) -> bool:
     """One pass over ended lanes: write outcomes the plan could not take yet, and deal with ``no-outcome``
     lanes (one more run with a note, then the manager queue). Returns True when something changed."""
-    changed = False
+    changed = backfill(home, config)
+    changed |= tick_merged(home, config, lanes)
     for seen in lanes:
         waiting = (seen.get("outcome") and not seen["outcome"].get("applied")) or (
             seen.get("result") == NO_OUTCOME and not seen.get("no_outcome_handled"))
