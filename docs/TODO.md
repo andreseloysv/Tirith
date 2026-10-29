@@ -61,7 +61,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Registrar igual: lane, pid, parent, sesión, cambios de git inicio→fin, resultado al salir.
 - [x] Actividad durante el chat vía los hooks de la sección 3.
 - [x] Capturar Ctrl+C para cerrar el lane bien.
-- [ ] Probarlo con un agente real en una terminal real.
+- [x] Probarlo con un agente real en una terminal real.
 
 ## 5. Agentes soportados (modo no interactivo, salida JSON)
 
