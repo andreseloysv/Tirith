@@ -84,7 +84,7 @@ def test_bash_commands_are_blocked(proj, home, monkeypatch, capsys, command, rul
 
 @pytest.mark.parametrize("command", [
     "ls -la", "git commit -m 'fix n'", "git commit -mfixn", "git status && git diff --stat",
-    "echo alpha-cli", "cat notes-about-beta-cli.txt", "uv run pytest tests/test_x.py",
+    "echo alpha-cli", "cat notes-about-beta-cli.txt", "uv run which pytest",
     "tirith run --stage test", "tirith run --stage build -- make build",
     "tirith lane run --project demo --class warden --feature x --brief b.md -- alpha-cli -p x",
     "cat .git/hooks/pre-commit", "make buildall", "git config user.name x",

@@ -867,7 +867,10 @@
           ]
         },
         "source": {"type": "string", "enum": ["github"]},
-        "html_url": {"type": ["string", "null"]}
+        "html_url": {"type": ["string", "null"]},
+        "lane": {"type": ["string", "null"]},
+        "worktree": {"type": ["string", "null"]},
+        "branch": {"type": ["string", "null"]}
       }
     },
     "room_message": {
