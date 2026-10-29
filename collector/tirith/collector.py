@@ -54,6 +54,7 @@ GUARD_SNOOZE = timedelta(days=7)
 GUARD_MARKER = "FORBIDDEN_WORDS_GUARD"
 DROP_ENDED_AFTER = timedelta(hours=24)
 MAX_PIPELINE_RUNS = 20
+STAGE_TIMEOUT_S = 3600  # a started stage with no end event is "interrupted" after this long (or when its pid is gone)
 GIT_HOOK_FLOWS_FIRST = 20
 LOG_TAIL_LINES = 20
 SUMMARY_LOG_LINES = 200
@@ -286,6 +287,23 @@ def _looks_like_path(value: str | None) -> bool:
 
 
 _AUTO_CLIENT = object()
+
+
+def _stage_alive(stage: dict, now: datetime) -> bool:
+    """A started stage without an end event still runs: its process exists and the stage timeout has not passed."""
+    started = parse_iso(stage.get("started_at"))
+    limit = stage.get("_timeout") or STAGE_TIMEOUT_S
+    if started and (now - started).total_seconds() > limit:
+        return False
+    pid = stage.get("_pid")
+    if pid:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except OSError:
+            pass
+    return True
 
 
 class Collector:
@@ -529,6 +547,8 @@ class Collector:
             if event.get("event") == "start":
                 stage["status"] = "running"
                 stage["started_at"] = event.get("at")
+                stage["_pid"] = event.get("pid") if isinstance(event.get("pid"), int) else None
+                stage["_timeout"] = event.get("timeout") if isinstance(event.get("timeout"), (int, float)) else None
             elif event.get("event") == "end":
                 stage["status"] = str(event.get("status") or "failed")
                 stage["ended_at"] = event.get("at")
@@ -559,18 +579,29 @@ class Collector:
                 elif stage["status"] == "failed":
                     failed_seen = True
                 stages.append(stage)
+            now = datetime.now(timezone.utc)
             for stage in stages:
+                if stage["status"] == "running" and not _stage_alive(stage, now):
+                    stage["status"], stage["reason"] = "failed", "interrupted"
                 stage["log_tail"] = tail_lines(stage.pop("_log"), LOG_TAIL_LINES)
+                stage.pop("_pid", None)
+                stage.pop("_timeout", None)
+            if run["pipeline"] != manifest_mod.GIT_HOOKS_PIPELINE and any(s["started_at"] for s in stages) \
+                    and not any(s["status"] == "running" for s in stages):
+                for stage in stages:  # a finished run: what never started was skipped, not pending
+                    if stage["status"] == "pending":
+                        stage["status"] = "skipped"
             starts = [s["started_at"] for s in stages if s["started_at"]]
             ends = [s["ended_at"] for s in stages if s["ended_at"]]
+            ran = [s for s in stages if s["status"] not in ("pending", "skipped")]
             if any(s["status"] == "failed" for s in stages):
                 status = "failed"
-            elif stages and all(s["status"] == "passed" for s in stages):
-                status = "passed"
-            elif not starts:
-                status = "pending"
-            else:
+            elif any(s["status"] == "running" for s in stages):
                 status = "running"
+            elif ran and all(s["status"] == "passed" for s in ran):
+                status = "passed"
+            else:
+                status = "pending"
             project = resolve(run["project"], run["_cwd"]) if resolve else run["project"]
             output.append({
                 "run": run["run"], "project": project, "pipeline": run["pipeline"],
