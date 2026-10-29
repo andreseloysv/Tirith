@@ -16,7 +16,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlsplit
 
 from tirith.home import now_iso, parse_iso
-from tirith.store import append_jsonl, read_jsonl, tail_lines
+from tirith.store import append_jsonl, read_json, read_jsonl, tail_lines, write_json_atomic
 
 ACTIONS_DIR = "actions"
 RUN_KIND = "action-run"
@@ -140,6 +140,33 @@ def make_actions(runs: list[str] | None, labels: list[str] | None = None, cwds: 
 # -- looking up -------------------------------------------------------------------------------
 
 
+GENERATED_FILE = "generated-actions.json"
+
+
+def generated(home: Path) -> dict[str, dict]:
+    """Actions of items the collector itself raises (guard checks), by id; see ``register_generated``."""
+    data = read_json(Path(home) / GENERATED_FILE, {})
+    return {str(k): v for k, v in data.items() if isinstance(v, dict) and v.get("command")} \
+        if isinstance(data, dict) else {}
+
+
+def register_generated(home: Path, project: str, action_id: str, label: str, command: str,
+                       cwd: str | None) -> dict:
+    """Store (idempotently) a collector-made action under a stable id; returns it for the item.
+
+    The command text only ever comes from this file, never from the page."""
+    action = {"id": action_id, "label": label[:LABEL_MAX], "command": command, "cwd": cwd,
+              "created_by": "tirith", "at": now_iso(), "project": project}
+    known = generated(home)
+    old = known.get(action_id)
+    if old is None or any(old.get(k) != action[k] for k in ("label", "command", "cwd", "project")):
+        known[action_id] = action
+        write_json_atomic(Path(home) / GENERATED_FILE, known)
+    else:
+        action = old
+    return {k: v for k, v in action.items() if k != "project"}
+
+
 def _rows(home: Path):
     """``(action, project, source)`` for every action in inbox.jsonl answers and waits.jsonl."""
     inbox = read_jsonl(Path(home) / "inbox.jsonl")
@@ -152,6 +179,8 @@ def _rows(home: Path):
             for action in row.get("actions") or []:
                 if isinstance(action, dict) and action.get("id"):
                     yield action, projects.get(str(row.get("id")), ""), "inbox:" + str(row.get("id"))
+    for action_id, action in generated(home).items():
+        yield {**action, "id": action_id}, str(action.get("project") or ""), "generated:" + action_id
     latest: dict[str, dict] = {}
     for row in read_jsonl(Path(home) / "waits.jsonl"):
         if row.get("id"):

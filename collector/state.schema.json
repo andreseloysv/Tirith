@@ -418,7 +418,8 @@
             "manual",
             "brain",
             "guard",
-            "room"
+            "room",
+            "violation"
           ]
         },
         "session": {

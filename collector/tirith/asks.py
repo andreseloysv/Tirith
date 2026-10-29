@@ -23,6 +23,11 @@ QUEUE_FILE = "steward_queue.jsonl"
 QUEUE_TEXT_MAX = 1500
 QUEUE_STATE_ROWS = 50
 
+NO_CTA_KIND = "no-call-to-action"
+# options of the owner items Tirith itself generates (violations, brain-detected waits, room waits)
+GOT_IT_OPTIONS = [{"label": "Let the steward handle it", "value": "steward"},
+                  {"label": "Got it", "value": "ack"}]
+
 LANE_OPTIONS = [{"label": "Retry", "value": "retry"}, {"label": "Show the log", "value": "log"},
                 {"label": "Drop it", "value": "drop"}]
 
@@ -60,6 +65,12 @@ def clean_options(options) -> list[dict]:
     return out[:MAX_OPTIONS]
 
 
+def has_call_to_action(item: dict) -> bool:
+    """The rule: an item for the owner carries at least one one-click option or one Run action."""
+    return bool(clean_options(item.get("options"))) or any(
+        isinstance(a, dict) and a.get("command") for a in item.get("actions") or [])
+
+
 def default_kind(options, command) -> str:
     return "decision" if options else "action" if command else "info"
 
@@ -94,8 +105,14 @@ def queue_path(home: Path) -> Path:
     return Path(home) / QUEUE_FILE
 
 
-def queue_add(home: Path, project: str, lane: str, text: str, kind: str = "review") -> dict:
-    row = {"id": "sq-" + secrets.token_hex(4), "at": now_iso(), "kind": kind, "project": project,
+def queue_add(home: Path, project: str, lane: str, text: str, kind: str = "review",
+              item_id: str | None = None) -> dict:
+    """Add a steward queue item; with ``item_id`` an id that is already queued is not added twice."""
+    if item_id:
+        for row in queue_items(home):
+            if row["id"] == item_id:
+                return row
+    row = {"id": item_id or "sq-" + secrets.token_hex(4), "at": now_iso(), "kind": kind, "project": project,
            "lane": lane, "text": text, "to": "steward", "status": "open"}
     append_jsonl(queue_path(home), row)
     return row

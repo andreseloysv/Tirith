@@ -34,6 +34,7 @@ from tirith import hooks as hooks_mod
 from tirith import brain as brain_mod
 from tirith import inbox as inbox_mod
 from tirith import setup as setup_mod
+from tirith import lanestop as lanestop_mod
 from tirith import launch as launch_mod
 from tirith import review as review_mod
 from tirith import runstage as runstage_mod
@@ -211,6 +212,18 @@ def _cmd_lane_review(args) -> int:
     return 0 if review["status"] in (review_mod.READY, review_mod.MERGED) else 1
 
 
+def _cmd_lane_stop(args) -> int:
+    home = _home(args)
+    by = args.by or ("steward" if os.environ.get("TIRITH_LANE") or not sys.stdin.isatty() else "owner")
+    try:
+        lane = lanestop_mod.stop_lane(home, args.lane_id, by, args.reason)
+    except lanestop_mod.StopError as error:
+        print(f"tirith lane stop: {error}", file=sys.stderr)
+        return 3
+    print(f"lane {args.lane_id}: {lane.get('result')} ({lane.get('report')})")
+    return 0
+
+
 def _cmd_lane_end(args) -> int:
     home = _home(args)
     report = args.report
@@ -260,7 +273,7 @@ def _lane_run_refusal(args, config, proj, workspace: Path) -> str | None:
         return (f"tirith: lane-brief: lane run needs a brief: the file is missing or empty{shown}. "
                 "Do this instead: write the task (goal, files, rules, how to report) into a file "
                 "and pass it with --brief <file>")
-    problems = verify_guard(workspace, config.words_for(proj, default_words()))
+    problems = verify_guard(workspace, config.words_for(proj, default_words())) if proj.guard else []
     if problems:
         return "refusing to start: commit guard is not intact:\n" + \
             "\n".join(f"  {problem}" for problem in problems)
@@ -344,14 +357,22 @@ def _cmd_lane_run(args) -> int:
         with log_path.open("ab") as log_handle:
             proc = subprocess.Popen(
                 command, cwd=str(workspace), env=env,
-                stdout=log_handle, stderr=subprocess.STDOUT)
+                stdout=log_handle, stderr=subprocess.STDOUT,
+                start_new_session=os.name == "posix")  # its own process group: `lane stop` ends all of it
             lane["pid"] = proc.pid
+            if os.name == "posix":
+                lane["pgid"] = proc.pid
             write_lane(home, lane)
             exit_code = proc.wait()
         answer, _ = final_answer(log_path)
+    stopped = lanestop_mod.marker(read_json(lane_path(home, lane_id), None) or {})
+    if stopped:  # `tirith lane stop`: failed, with who stopped it and why
+        exit_code, answer = exit_code or 1, lanestop_mod.report_for(stopped["by"], stopped.get("reason"))
     result = "done" if exit_code == 0 else "failed"
     end_lane(home, lane_id, result, answer or None)
-    if result == "failed":
+    if stopped:
+        pass
+    elif result == "failed":
         add_lane_ask(home, lane, "failed")
     elif not answer:
         add_lane_ask(home, lane, "ended without an answer")
@@ -554,6 +575,11 @@ def add_wait(home: Path, project: str, text: str, link: str | None = None,
     shell line the owner can copy, ``kind`` is decision|action|approval|info, ``actions`` are commands
     the owner runs with a button (see ``tirith.actions``)."""
     options = asks_mod.clean_options(options)
+    if not options and not any(isinstance(a, dict) and a.get("command") for a in actions or []):
+        raise SystemExit(
+            "tirith: call-to-action: an item for the owner needs at least one one-click answer or Run action. "
+            'Do this instead: add --option "Label|value" (repeatable) or --run "<command>" --label "<what it does>"; '
+            "what only you must see goes to your own queue, not to the owner")
     kind = kind or asks_mod.default_kind(options, command)
     if kind not in asks_mod.ASK_KINDS:
         raise SystemExit(f"wait add: --kind must be one of {', '.join(asks_mod.ASK_KINDS)}")
@@ -830,7 +856,7 @@ def _cmd_guard(args) -> int:
         return 1
     exit_code = 0
     for label, repo, words in targets:
-        problems = install_guard(repo, words) if args.action == "install" \
+        problems = install_guard(repo, words, chain=args.chain) if args.action == "install" \
             else verify_guard(repo, words)
         if problems:
             exit_code = 1
@@ -924,7 +950,7 @@ def _cmd_url_open(args) -> int:
     home = _home(args)
     try:
         link = launch_mod.parse_url(args.url)
-        if link["action"] not in ("launch", "inbox", "review", "run"):
+        if link["action"] not in ("launch", "inbox", "review", "run", "stop"):
             raise launch_mod.LaunchError(f"unknown action '{link['action']}' in {args.url!r}")
         if not launch_mod.token_ok(home, link["token"]):
             gates_mod.record_violation(
@@ -943,6 +969,14 @@ def _cmd_url_open(args) -> int:
                 inbox_mod.add_reply(home, fields["wait"], fields["project"], fields["value"], fields["text"])
                 return 0
             inbox_mod.add_request(home, fields["kind"], fields["project"], fields["step"], fields["text"])
+            return 0
+        if link["action"] == "stop":
+            lane = read_json(lane_path(home, link["lane"]), None)
+            if not isinstance(lane, dict) or lane.get("ended_at"):
+                raise launch_mod.LaunchError(f"{link['lane'] or 'that lane'} is not a running lane")
+            launch_mod.spawn_detached([*launch_mod.tirith_argv(), "lane", "stop", link["lane"], "--by", "owner"],
+                                      home, home / "logs" / f"{link['lane']}.stop.log")
+            print(f"stopping {link['lane']}")
             return 0
         if link["action"] == "review":
             lane_id = link["lane"]
@@ -1344,6 +1378,13 @@ def build_parser() -> argparse.ArgumentParser:
     end.add_argument("--report", default=None)
     end.add_argument("--report-file", default=None)
     end.set_defaults(func=_cmd_lane_end)
+    stop = lane_sub.add_parser("stop", parents=[common],
+                               help="stop a running lane (SIGTERM, then SIGKILL after 10 s); it ends as failed")
+    stop.add_argument("lane_id")
+    stop.add_argument("--reason", default=None)
+    stop.add_argument("--by", choices=list(lanestop_mod.STOPPERS), default=None,
+                      help="who stops it (default: steward from a script or an agent, owner at a terminal)")
+    stop.set_defaults(func=_cmd_lane_stop)
     review = lane_sub.add_parser("review", parents=[common],
                                  help="run the tests of a launched lane, then merge it")
     review.add_argument("lane_id")
@@ -1515,6 +1556,8 @@ def build_parser() -> argparse.ArgumentParser:
     guard.add_argument("project", nargs="?", default=None,
                        help="project id or repo path")
     guard.add_argument("--all", action="store_true")
+    guard.add_argument("--chain", action="store_true",
+                       help="install: keep the repository's own hooks as <hook>.local and run them after the guard")
     guard.set_defaults(func=_cmd_guard)
 
     shim = sub.add_parser("shim", parents=[common],
