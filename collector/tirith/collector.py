@@ -1316,6 +1316,7 @@ class Collector:
             "since": orchestrator.get("since"), "notes": notes,
             "presence": managerd_mod.public(self.home, dispatch_mod.load_state(self.home), lanes, now),
             "live": self._manager_live(),
+            "turns": self._manager_turns(agent_rows, lanes, now),
         }
         manager_queue = asks_mod.queue_items(self.home, only_open=True)[-asks_mod.QUEUE_STATE_ROWS:]
         says = inbox_mod.says(self.home)
@@ -1355,6 +1356,36 @@ class Collector:
                 if r["project"] == "settings" and r["status"] == "open" and r.get("setup")],
                 fallback_mod.status(self.config, read_lanes(self.home), now)),
         }
+
+    def _manager_turns(self, agent_rows: list[dict], lanes: list[dict], now: datetime) -> list[dict]:
+        """``state.manager.turns``: one row per turn of the persistent manager session, shaped like an agent row
+        so the chat draws the same live block (``turn_requests``, ``live``), plus ``lanes``: the sub-agent
+        lanes the manager started during the turn."""
+        dstate = dispatch_mod.load_state(self.home)
+        session = (dstate.get("manager") or {}).get("session") or {}
+        mine = session.get("lane")
+        rows = []
+        for view in managerd_mod.turn_views(self.home, dstate)[-managerd_mod.TURNS_KEPT:]:
+            ended = view.get("ended_at")
+            start = parse_iso(view["started_at"])
+            end = parse_iso(ended) if ended else now
+            kids = [a["id"] for a in agent_rows
+                    if a.get("parent") not in (None, "", "manager") and a["parent"].startswith(managerd_mod.LANE_PREFIX)
+                    and (start is None or (parse_iso(a["started_at"]) or now) >= start)
+                    and (parse_iso(a["started_at"]) or now) <= end]
+            elapsed = max(0, int((end - start).total_seconds())) if start else 0
+            summary = view.get("summary") or {}
+            row = {"id": view["id"], "name": "Manager", "project": session.get("project"),
+                   "status": "working" if not ended else ("failed" if view.get("error") else "done"),
+                   "started_at": view["started_at"], "ended_at": ended, "elapsed_s": elapsed,
+                   "turn_requests": view.get("requests") or [], "lanes": kids, "parent": "manager",
+                   "interrupted": bool(view.get("interrupted"))}
+            self._live_steps[view["id"]] = view.get("steps") or []
+            ref = self._write_steps(row)
+            row["live"] = {**{k: summary.get(k) for k in ("steps", "done", "error", "cost_usd", "duration_s")},
+                           "elapsed_s": elapsed, "detail": ref}
+            rows.append(row)
+        return rows
 
     def _manager_live(self) -> dict | None:
         """``{heartbeat}`` from ``manager.json`` (the live manager session's last sign of life), or None
