@@ -1,0 +1,12 @@
+[package]
+name = "tirith-cli"
+version = "0.1.0"
+description = "Tirith command line (tirith-rs while the Python tirith is live)"
+edition = "2021"
+
+[[bin]]
+name = "tirith-rs"
+path = "src/main.rs"
+
+[dependencies]
+tirith-core = { path = "../tirith-core" }
