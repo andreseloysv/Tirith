@@ -185,7 +185,7 @@ The app writes every `inbox_add` attempt and its result (`ok id=...` or `error: 
   filter). Sending: `window.__TAURI__` -> `inbox_add` (kind `chat`); else, with the link handler installed, the
   `tirith://inbox?kind=chat&project=..&step=&text=..&token=..` link; else the `tirith inbox add --kind chat ...`
   line is shown to copy. A sent message shows (dimmed) until the collector lists it, at most 30 s.
-- The old feature-flagged agent chat (`web/js/v-chat.js`, Tauri only) stays behind its flag, labelled "Agent chat".
+- The old feature-flagged agent chat (`web/js/v-chat.js`, Tauri only) is removed: the manager chat is the only chat.
 
 ## Web (`web/js/v-plan.js`)
 
@@ -590,6 +590,68 @@ The owner can close the terminal: chat messages are still answered. No server, n
 - **State.** `state.manager.presence = {mode: "live" | "on_call", working, lane}`. The chat header shows
   "Manager: live session", "Manager: on call (starts when you write)" or, while the headless manager runs,
   "Manager is working on your message…".
+
+### One manager: a persistent session owned by Tirith (`collector/tirith/msession.py`)
+
+`[manager] session = true` (default). The one-shot path above runs only with `session = false`, or for a cycle
+in which the session could not start (`dispatch.json` `manager.session.error` says why).
+
+- **The process.** The collector starts ONE agent process per Tirith home, the first time something is pending
+  for the manager: `tirith lane run --interactive --id manager-<hex> --class steward --feature Manager
+  --as-agent <alias> --by-tirith -- <command> <chat_args>` with piped stdin/stdout, in its own process group,
+  in the first pending request's project folder. The alias and model/effort come from `[models.manager]`
+  (default `anthropic`). `chat_args` is `[agents.<alias>] chat_args`, default for `anthropic`: `-p
+  --input-format stream-json --output-format stream-json --verbose --permission-prompt-tool stdio`; Tirith adds
+  `--include-partial-messages` (text arrives token by token) and `--resume <session-id>` when restarting.
+  `lane run` registers the lane and ends it however the agent exits. The session lives in the collector
+  process: a collector restart ends it, the next start resumes the conversation.
+- **Messages.** Pending chat messages, failed actions and queue items are written to stdin as ONE user
+  message per turn, only while the session is idle; what arrives during a turn waits (the chat shows it as
+  "Queued") and goes into the same session when the turn ends. The first message of a conversation carries the
+  whole brief (rules, plan summary, the notes in `manager-notes.md`); later ones only what is new. A turn ends
+  with the agent's `result` event. A request still open when its turn ends gets the turn's text as the inbox
+  answer (`by: manager`, not closed); the manager normally answers with `tirith inbox answer` itself. A
+  request is offered at most twice (`MAX_TRIES`); an interrupted turn is never offered again.
+- **Dying and restarting.** If the process dies it is started again (after 15 s, times the number of fast
+  deaths in a row) with `--resume <session-id>`. A resumed session that dies within 20 s is started fresh the
+  next time: the first message then repeats the brief and the notes (the handoff). Failed manager lanes pause
+  the manager as before (two in a row, one `sq-manager-paused-…` queue item); lanes ended on purpose
+  (`stop` marker) do not count and raise no queue item. A session that cannot start falls back to the one-shot
+  manager.
+- **Transcript.** Every stdout line goes to `<home>/manager/transcript.jsonl`, rotated at 16 MB (3 files
+  kept). Each turn is also kept as CLI-style steps: `<home>/manager/turns/<turn-id>.json` (last 30) with
+  `{id, requests, started_at, ended_at, summary, steps, answer, error, interrupted}`; steps are the
+  `livesteps` kinds `text` (`partial: true` while it is typed), `tool`, `result`, plus `todo` (the TodoWrite
+  list, one step per turn, updated in place) and, on Edit / MultiEdit / Write tool steps, `diff: {path, rows:
+  [["-"|"+", line]], more}`. Secrets are masked in steps; the transcript is raw and private to the home.
+- **State.** `state.manager.turns[]`: one row per turn, shaped like an agent row (`id manager-turn-<hex>`,
+  `status`, `started_at`, `ended_at`, `turn_requests`, `live` with the steps file `agents/<id>.steps.js`) plus
+  `lanes` (the sub-agent lanes whose parent is the session lane and that started during the turn) and
+  `interrupted`. `state.manager.presence.session = {lane, busy, turns, context_tokens, asks}` while the session
+  runs; `working` is true while a turn runs.
+- **Control.** `tirith manager say <text>` (a chat message, queued into the session), `interrupt` (ends the
+  running turn; the session lives on), `stop` (ends the session; a chat message written after the stop starts
+  it again), `restart [--fresh]` (resume, or with `--fresh` a new conversation with the handoff), `status`.
+  They reach the collector through `<home>/manager/control.jsonl` (picked up on the next cycle, ~2 s). The app
+  has the Tauri command `manager_control(op)`; the page's Stop button and Esc call it (in a page opened from
+  a file the CLI line is shown instead).
+- **Permissions.** A `can_use_tool` question from the stream is decided by code first
+  (`msession.decide`): denied when a gate says so (`gates.check_call`: no `--no-verify`, protected files, no
+  agent CLI outside a lane, ...) or when it edits a file outside the Tirith home (the manager delegates edits);
+  allowed for read-only tools and for the allow rules of `[agents.<alias>] permissions` (`Tool`,
+  `Tool(prefix:*)`, `Tool(exact)`; a Bash line only when every command in it matches, never with `$(`, a
+  backtick or a redirect). Everything else is an owner decision: a `waits.jsonl` item `perm-<request-id>` (kind
+  `approval`, options Allow / Deny, source manual, so it passes the owner gate) that the chat shows as buttons.
+  The reply is written back as a `control_response` and the item is closed; a question left when the turn ends
+  is closed too.
+- **Context.** `[manager] context_tokens` (150000) and `max_turns` (40): when an idle session's last context
+  size is above the first, or the conversation is longer than the second, `/compact` is sent once as its own
+  turn; if the context is still large (or it gets long again) the session is ended and the next one starts
+  fresh with the handoff.
+- **Chat.** Under each owner message the page draws the turn that answers it (spinner, the newest steps, the
+  task list, coloured diffs, the lanes it started as nested blocks), collapsing to "N steps · 48s · $0.21 · show"
+  when the turn ends. Esc stops the running turn; Up on an empty box brings back the last message. The app-only
+  agent chat (`v-chat.js`, `chat_start` ...) is gone.
 
 ### Sending never loses a message
 

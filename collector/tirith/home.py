@@ -108,6 +108,9 @@ class Config:
     review_auto_merge: bool = True  # [review] auto_merge: ignored; a passing lane is always merged
     disk_min_free_gb: float = 5.0  # [disk] min_free_gb: below this free space no new lane is started
     manager_session_cwd: str | None = None  # [manager] session_cwd: the folder the manager runs in
+    manager_session: bool = True  # [manager] session: one persistent session (false: one print-mode turn per batch)
+    manager_max_turns: int = 40  # [manager] max_turns: compact, then restart with a handoff after this many turns
+    manager_context_tokens: int = 150000  # [manager] context_tokens: compact when the context is this large
     models: dict = field(default_factory=dict)  # [models]: manager, workers (+ overrides), choices
 
     def room(self, room_id: str) -> RoomConfig | None:
@@ -191,6 +194,10 @@ def load_config(home: Path) -> Config:
         cfg.manager_name = str(manager["name"])
     if manager.get("title"):
         cfg.manager_title = str(manager["title"])
+    cfg.manager_session = manager.get("session", True) is not False
+    for key, attr in (("max_turns", "manager_max_turns"), ("context_tokens", "manager_context_tokens")):
+        if isinstance(manager.get(key), int) and not isinstance(manager.get(key), bool) and manager[key] > 0:
+            setattr(cfg, attr, manager[key])
     if manager.get("session_cwd"):
         cfg.manager_session_cwd = str(Path(str(manager["session_cwd"])).expanduser())
     dispatch = raw.get("dispatch") if isinstance(raw.get("dispatch"), dict) else {}

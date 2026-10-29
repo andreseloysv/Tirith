@@ -19,7 +19,7 @@ from tirith.home import load_config
 from tirith.store import write_lane
 
 NOW = datetime(2026, 10, 29, 12, 0, tzinfo=timezone.utc)
-AGENTS = '[agents.anthropic]\ncommand = "agent-bin"\n'
+AGENTS = '[agents.anthropic]\ncommand = "agent-bin"\n\n[manager]\nsession = false\n'
 Z = "%Y-%m-%dT%H:%M:%SZ"
 DEAD_PID = 2 ** 22 + 7
 
