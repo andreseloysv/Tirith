@@ -8,7 +8,7 @@ const noop = () => {};
 const view = { addEventListener: noop };
 const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const T = {
-  esc, ui: {}, md: esc, proj: esc, ms: s => Date.parse(s) || 0, now: () => Date.parse('2026-10-29T12:00:00Z'), render: noop,
+  esc, ui: {}, md: esc, fileOpts: () => null, proj: esc, ms: s => Date.parse(s) || 0, now: () => Date.parse('2026-10-29T12:00:00Z'), render: noop,
   empty: t => '<p>' + t + '</p>', copyText: noop, clockTime: () => '12:00', filter: {}, keepCapture: noop, keepRestore: noop,
   dur: () => '1s', elapsed: () => 1
 };

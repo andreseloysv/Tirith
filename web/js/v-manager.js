@@ -119,7 +119,7 @@
   }
   function msg(m, state) {
     if (m.item) return turnMsg(m, state);
-    var body = m.side === 'me' ? esc(m.text).replace(/\n/g, '<br>') : T.md(m.text);
+    var body = m.side === 'me' ? esc(m.text).replace(/\n/g, '<br>') : T.md(m.text, T.fileOpts(state, m.project));
     var meta = (m.ctx ? esc(m.ctx) + ' · ' : '') + esc(T.clockTime(m.at));
     if (m.local === 'sending') meta = 'Sending… · ' + meta;
     else if (m.local === 'failed') meta = '<b class="mc-bad">Not sent</b> · <button type="button" class="mc-lnk" data-act="mc-retry" data-cid="' + esc(m.cid) + '">Retry</button> · ' +
@@ -132,7 +132,7 @@
   /* a message that needs the owner (open) or needed it (answered): the text, then options and Run actions */
   function turnMsg(m, state) {
     var w = m.item.w, replying = ui.chatReplyTo === w.id;
-    return '<div class="mc-m mgr turn' + (m.open ? ' wait' : '') + (replying ? ' replying' : '') + '" data-wait="' + esc(w.id) + '"><div class="mc-b md">' + T.md(m.text) + '</div>' +
+    return '<div class="mc-m mgr turn' + (m.open ? ' wait' : '') + (replying ? ' replying' : '') + '" data-wait="' + esc(w.id) + '"><div class="mc-b md">' + T.md(m.text, T.fileOpts(state, m.project)) + '</div>' +
       (w.reason_tag ? '<div class="nacts"><span class="nchip nreason">' + esc(w.reason_tag) + '</span></div>' : '') +
       T.turnBlock(m.item, state) +
       '<div class="mc-meta">' + (m.open ? '<b class="mc-await">Waits for you</b> · ' : '') + esc(m.ctx) + ' · ' + esc(T.clockTime(m.at)) + '</div></div>';
