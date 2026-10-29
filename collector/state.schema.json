@@ -144,7 +144,8 @@
         "properties": {
           "id": {"type": "string"},
           "at": {"type": ["string", "null"]},
-          "kind": {"enum": ["finish", "ask"]},
+          "kind": {"enum": ["finish", "ask", "setup"]},
+          "steward_pending": {"type": "boolean"},
           "project": {"type": "string"},
           "step": {"type": "string"},
           "text": {"type": "string"},
@@ -157,7 +158,7 @@
               "required": ["at", "by", "text", "auto"],
               "properties": {
                 "at": {"type": ["string", "null"]},
-                "by": {"enum": ["steward", "brain"]},
+                "by": {"enum": ["steward", "brain", "tirith"]},
                 "text": {"type": "string"},
                 "auto": {"type": "boolean"},
                 "lane": {"type": ["string", "null"], "description": "Lane id of the agent that took the request."}
@@ -313,6 +314,14 @@
             "string",
             "null"
           ]
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["label"],
+            "properties": {"label": {"type": "string"}, "command": {"type": ["string", "null"]}}
+          }
         },
         "source": {
           "type": "string",
