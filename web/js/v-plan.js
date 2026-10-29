@@ -232,7 +232,7 @@
   }
   function openCount(ps, state) {
     var ids = {}; ps.forEach(function (p) { ids[p.id] = 1; });
-    return (state.inbox || []).filter(function (r) { return r.status === 'open' && r.kind !== 'setup' && r.kind !== 'autopilot' && ids[r.project]; }).length;
+    return (state.inbox || []).filter(function (r) { return r.status === 'open' && r.kind !== 'setup' && r.kind !== 'autopilot' && r.kind !== 'autopilot-proposal' && ids[r.project]; }).length;
   }
 
   /* Record a request: the app writes the inbox itself, a browser opens the tirith:// link, else the CLI line is shown. */
@@ -401,7 +401,7 @@
     }
     if (s.status === 'blocked-date') return '<div class="pstate">From ' + esc(shortDate(s.until)) + '</div>';
     if (s.status === 'ready' && on && (skip = skipOf(state, p, s))) return '<div class="pstate">Not started: <span class="mut">' + esc(skip.why) + '</span></div>';
-    if (s.status === 'ready') return '<div class="pstate ready">' + (on ? 'Queued for the autopilot' : 'Waiting for the autopilot <span class="mut">(paused)</span>') + '</div>';
+    if (s.status === 'ready') return '<div class="pstate ready">' + (on ? 'Open: the manager decides' : 'Waiting for the autopilot <span class="mut">(paused)</span>') + '</div>';
     return '';
   }
   /* A request is pending until the manager answered it and every action it proposed has passed. */
@@ -471,18 +471,25 @@
   function skipOf(state, p, s) {
     return (((state.autopilot || {}).skipped) || []).filter(function (k) { return k.project === p.id && String(k.step) === String(s.id); })[0];
   }
-  /* "Autopilot on · 2 agents working · 3 queued" with the pause / resume switch. */
+  /* What the autopilot is doing, in plain words: "Paused", or "2 steps in progress · 1 waiting for a review",
+     "1 proposed to the manager"; never "nothing to start" while open items exist. */
+  function autoBits(state, on) {
+    var a = state.autopilot, bits = [], n = a.steps_working || 0, rv = a.steps_in_review || 0, pr = a.proposed || 0, q = a.queued || 0, open = a.open_items || 0;
+    if (!on) return ['Paused'];
+    if (n) bits.push(n + (n === 1 ? ' step' : ' steps') + ' in progress');
+    if (rv) bits.push(rv + ' waiting for a review');
+    if (pr) bits.push(pr + ' proposed to the manager');
+    if (q) bits.push(q + ' about to be proposed');
+    if (!bits.length) bits.push(open ? open + ' open ' + (open === 1 ? 'item' : 'items') + ' for the owner or a later date' : 'all done');
+    return bits;
+  }
+  /* "Autopilot on · 2 steps in progress · 1 proposed" with the pause / resume switch. */
   function autoBar(ps, state) {
     if (!state.autopilot) return '';
-    var on = autoOn(state), n = state.autopilot.working || 0, queued = state.autopilot.queued || 0, bits = [];
-    bits.push('<b>Autopilot ' + (on ? 'on' : 'paused') + '</b>');
-    if (n) bits.push(n + (n === 1 ? ' agent' : ' agents') + ' working');
-    if (queued) bits.push(queued + ' queued');
-    var skipped = state.autopilot.skipped || [];
-    if (skipped.length) bits.push(skipped.length + ' not started');
-    if (!n && !queued) bits.push('nothing to start');
+    var on = autoOn(state), bits = autoBits(state, on);
+    if (on) bits.unshift('<b>Autopilot on</b>'); else bits[0] = '<b>Paused</b>';
     return '<div class="pauto' + (on ? ' on' : '') + '"><i class="pdot3"></i><span>' + bits.join(' <span class="mut">·</span> ') + '</span>' +
-      '<button class="ibtn" data-act="iauto" data-key="' + (on ? 'off' : 'on') + '" title="' + (on ? 'Stop starting agents by itself; running ones finish' : 'Start agents by itself on every step that is ready') + '">' +
+      '<button class="ibtn" data-act="iauto" data-key="' + (on ? 'off' : 'on') + '" title="' + (on ? 'Stop telling the manager about open items; running agents finish' : 'Tell the manager about every open item nobody works on') + '">' +
       (on ? '<svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true"><path d="M3.5 2.5v7M8.5 2.5v7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>' : '<svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true"><path d="M3.5 2.2l6 3.8-6 3.8z" fill="currentColor"/></svg>') +
       '<span>' + (on ? 'Pause' : 'Resume') + '</span></button>' + (ui.inboxErr['all|autopilot'] ? '<span class="ierr">' + esc(ui.inboxErr['all|autopilot']) + '</span>' : '') + '</div>';
   }

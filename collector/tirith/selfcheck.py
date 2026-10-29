@@ -6,7 +6,8 @@ one). Five checks, results in ``dispatch.json`` under ``health`` and, in plain w
 * ``collector``: the gap since the last pass (the app supervisor restarts the collector; here the gap is kept);
 * ``manager``: the oldest chat message without an answer while no manager turn is working on it, or a manager
   process still alive after its ``result``;
-* ``autopilot``: ready steps with agent items, nothing working and no reason given, for too long;
+* ``autopilot``: open plan items nobody works on and nobody was told about, or proposals the manager leaves
+  unanswered for 10 min;
 * ``disk``: below the disk-guard limit;
 * ``reviews``: a review stuck in ``running``, or ``tests-failed`` on tests the lane's diff does not touch.
 
@@ -39,7 +40,8 @@ from tirith.store import read_lane
 
 MANAGER_STUCK_S = 120.0      # an owner message without an answer, nobody working on it
 LINGER_S = 60.0              # a manager process alive this long after its result
-AUTOPILOT_IDLE_S = 900.0     # ready steps, nothing working, no reason given
+AUTOPILOT_IDLE_S = 120.0     # an open item nobody works on and no proposal for it
+PROPOSAL_STUCK_S = 600.0     # a proposal the manager has not answered
 REVIEW_STUCK_S = 1200.0      # a review in "running"
 TIMEOUTS_WINDOW_S = 3600.0   # timeouts of one class are counted over this long
 TIMEOUTS_REPEATED = 3        # this many in the window is not chance
@@ -138,8 +140,10 @@ def _collector(book: dict, now: datetime) -> dict:
     return _check("ok", OK_TEXT["collector"])
 
 
-def _chat_waiting(home: Path) -> list[dict]:
-    return [r for r in inbox_mod.requests(home) if r["kind"] == "chat" and r["manager_pending"]]
+def _chat_waiting(home: Path, now: datetime) -> list[dict]:
+    """Chat messages the manager owes an answer, and autopilot proposals unanswered for ``PROPOSAL_STUCK_S``."""
+    return [r for r in inbox_mod.requests(home) if r["manager_pending"] and (
+        r["kind"] == "chat" or (r["kind"] == inbox_mod.PROPOSAL and _age_s(r["at"], now) > PROPOSAL_STUCK_S))]
 
 
 def _manager(home: Path, config: Config, now: datetime, state: dict, book: dict, lanes: list[dict],
@@ -163,17 +167,18 @@ def _manager(home: Path, config: Config, now: datetime, state: dict, book: dict,
                    f"The manager process of lane {lane['id']} is still alive {_minutes((now - done).total_seconds())} "
                    f"min after its answer and could not be closed. pid {lane.get('pid')}, pgid {lane.get('pgid')}.")
             return _check("failed", "A manager process stayed open and could not be closed.")
-    waiting = _chat_waiting(home)
+    waiting = _chat_waiting(home, now)
     if not waiting or managerd_mod.attached(home, now) or managerd_mod.running(mbook, lanes, now) \
             or managerd_mod.session_busy(home):
         return _check("ok", OK_TEXT["manager"])
     oldest = min(waiting, key=lambda r: str(r["at"] or ""))
     age = _age_s(oldest["at"], now)
-    if age <= MANAGER_STUCK_S:
+    if age <= MANAGER_STUCK_S and oldest["kind"] == "chat":
         return _check("ok", OK_TEXT["manager"])
     key = f"manager-stuck:{oldest['id']}"
     active.add(key)
-    evidence = (f"Self-check: the owner's chat message {oldest['id']} has waited {int(age)} s with no manager "
+    what = "the owner's chat message" if oldest["kind"] == "chat" else "the autopilot proposal"
+    evidence = (f"Self-check: {what} {oldest['id']} has waited {int(age)} s with no manager "
                 f"turn working on it ({len(waiting)} message(s) waiting; manager state: tries "
                 f"{mbook.get('tries')}, last error {mbook.get('error') or 'none'}). Answer them first.")
 
@@ -199,29 +204,31 @@ def _manager(home: Path, config: Config, now: datetime, state: dict, book: dict,
 
 def _autopilot(config: Config, now: datetime, state: dict, book: dict, home: Path, agents: list[dict],
                projects: list[dict], active: set[str]) -> dict:
-    own = autopilot_mod._own(state)
-    if not autopilot_mod.effective(config, state) or diskdiet_mod.low(state):
+    if not autopilot_mod.effective(config, state):
         book.pop("idle", None)
-        return _check("ok", "The autopilot is off." if not autopilot_mod.effective(config, state)
-                      else OK_TEXT["autopilot"])
-    ready = [(p["id"], st["id"]) for p in projects for st in (p.get("roadmap") or {}).get("steps", [])
-             if st["status"] == "ready" and autopilot_mod._agent_open(st)
-             and autopilot_mod._why_not(own, agents, p["id"], st, now) is None]
-    if not ready or autopilot_mod._live(own, agents, now):
+        return _check("ok", "The autopilot is off.")
+    if diskdiet_mod.low(state):
         book.pop("idle", None)
         return _check("ok", OK_TEXT["autopilot"])
+    open_items = autopilot_mod.sitting(home, state, projects, agents, now)
+    late = [c for c in open_items if c["idle_s"] >= AUTOPILOT_IDLE_S]
+    waiting = [r for r in autopilot_mod.unanswered(home, state, now) if r["age_s"] >= PROPOSAL_STUCK_S]
+    if not late and not waiting:
+        book.pop("idle", None)
+        return _check("ok", OK_TEXT["autopilot"])
+    if waiting and not late:
+        n = len(waiting)
+        return _check("healing", f"{n} proposal{'s' if n != 1 else ''} of the autopilot "
+                                 f"wait{'s' if n == 1 else ''} for the manager.")
     book.setdefault("idle", now_iso(now))
-    idle = _age_s(book["idle"], now)
-    if idle < AUTOPILOT_IDLE_S:
-        return _check("ok", OK_TEXT["autopilot"])
     key = "autopilot-idle"
     active.add(key)
-    steps = ", ".join(f"{p} step {s}" for p, s in ready[:5])
-    _queue(home, book, key, ready[0][0], "",
-           f"Self-check: the autopilot started nothing for {_minutes(idle)} min although these steps are ready "
-           f"with agent items and no agent is working: {steps}. No reason is recorded "
-           f"(max_parallel {config.autopilot_max_parallel}). Find out why and start them or say why not.")
-    return _check("healing", "The autopilot has started nothing for a while; the manager is looking into it.")
+    items = "; ".join(f"{c['project']} step {c['step']}: {c['item'][:80]}" for c in late[:5])
+    _queue(home, book, key, late[0]["project"], "",
+           f"Self-check: {len(late)} open plan item(s) have sat with nobody on them and no proposal for "
+           f"{_minutes(max(c['idle_s'] for c in late))} min: {items}. Decide for each: launch it with a written "
+           "brief, combine it with a lane, wait (say why) or drop it.")
+    return _check("healing", "Some plan items have nobody on them; the manager is looking into it.")
 
 
 def _disk(state: dict, now: datetime, active: set[str]) -> dict:

@@ -172,7 +172,7 @@
         "properties": {
           "id": {"type": "string"},
           "at": {"type": ["string", "null"]},
-          "kind": {"enum": ["finish", "ask", "setup", "chat", "autopilot", "plan-refresh", "plan-new", "plan-edit"]},
+          "kind": {"enum": ["finish", "ask", "setup", "chat", "autopilot", "autopilot-proposal", "plan-refresh", "plan-new", "plan-edit"]},
           "cid": {"type": "string", "description": "Client id of the page that sent it; the page matches its Sending… message by it."},
           "manager_pending": {"type": "boolean"},
           "steward_pending": {"type": "boolean", "description": "Old key for manager_pending, same value."},
@@ -251,13 +251,17 @@
       }
     },
     "autopilot": {
-      "description": "The autopilot: Tirith starts a lane on every ready plan step. See docs/CONTRACT-roadmap.md.",
+      "description": "The autopilot: Tirith proposes every open plan item nobody works on to the manager; it starts no lane. See docs/CONTRACT-roadmap.md.",
       "type": "object",
       "additionalProperties": true,
       "required": ["enabled", "max_parallel", "started"],
       "properties": {
         "enabled": {"type": "boolean"},
         "max_parallel": {"type": "integer", "minimum": 0},
+        "working": {"type": "integer"}, "steps_working": {"type": "integer"}, "steps_in_review": {"type": "integer"},
+        "proposed": {"type": "integer"}, "queued": {"type": "integer"}, "open_items": {"type": "integer"},
+        "skipped": {"type": "array", "items": {"type": "object", "properties": {
+          "project": {"type": "string"}, "step": {"type": "string"}, "why": {"type": "string"}}}},
         "started": {"type": "array", "items": {
           "type": "object", "required": ["lane", "project", "step", "at"],
           "properties": {"lane": {"type": "string"}, "project": {"type": "string"},
