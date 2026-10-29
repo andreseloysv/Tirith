@@ -21,6 +21,7 @@ from typing import Callable
 
 from tirith import autopilot as autopilot_mod
 from tirith import autoreview as autoreview_mod
+from tirith import fallback as fallback_mod
 from tirith import flows as flows_mod
 from tirith import inbox as inbox_mod
 from tirith import launch as launch_mod
@@ -160,6 +161,14 @@ def _plan(home: Path, req: dict, config: Config, lanes: list[dict], status_of: C
     return "refused"
 
 
+def _default_relauncher(home: Path, lane: dict, alias: str) -> str:
+    from tirith.cli import relaunch_lane  # late, like _default_launcher
+    try:
+        return relaunch_lane(home, lane, alias)
+    except SystemExit as err:
+        raise launch_mod.LaunchError(str(err.code or "relaunch failed"))
+
+
 def refusal_fix(project: str, step: str, reason: str) -> str:
     """The exact command that fixes (or starts over after) a refused launch."""
     if "tirith check fails" in reason:
@@ -233,7 +242,8 @@ def escalate(home: Path, req: dict, notify: Callable[[str, str], None], at: str)
 def run(home: Path, config: Config, now: datetime, *, agents: list[dict], lanes: list[dict],
         status_of: Callable, launcher: Callable | None = None,
         notify: Callable[[str, str], None] = macos_notify, spawn: Callable | None = None,
-        plan_launcher: Callable | None = None, projects: list[dict] | None = None) -> list[dict]:
+        plan_launcher: Callable | None = None, projects: list[dict] | None = None,
+        relauncher: Callable | None = None) -> list[dict]:
     """One dispatcher pass; returns the requests re-read afterwards. Safe to call every cycle."""
     home = Path(home)
     if not config.dispatch_enabled:
@@ -242,6 +252,9 @@ def run(home: Path, config: Config, now: datetime, *, agents: list[dict], lanes:
     launcher = launcher or _default_launcher
     plan_launcher = plan_launcher or _default_plan_launcher
     changed = False
+    # before the autopilot, so a relaunched lane is known as the step's lane
+    if fallback_mod.run(home, config, now, state, lanes, relauncher or _default_relauncher):
+        changed = True
     if autopilot_mod.run(home, config, now, state, agents=agents, projects=projects or [], launcher=launcher):
         changed = True
     for req in inbox_mod.requests(home):

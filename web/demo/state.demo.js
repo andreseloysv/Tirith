@@ -3016,7 +3016,10 @@ window.TIRITH_STATE = {
     "workers": {
       "agent": "anthropic",
       "model": "model-small",
-      "effort": "medium"
+      "effort": "medium",
+      "fallback": [
+        "muse"
+      ]
     },
     "projects": {
       "chromasol": {
@@ -3044,10 +3047,29 @@ window.TIRITH_STATE = {
       "xhigh",
       "max"
     ],
+    "choices_by_agent": {
+      "anthropic": [
+        "model-large",
+        "model-small"
+      ],
+      "muse": [
+        "model-mini"
+      ]
+    },
     "agents": [
       "anthropic",
       "muse"
     ],
+    "agent_status": {
+      "anthropic": {
+        "state": "out",
+        "since": "2026-10-28T19:10:00Z"
+      },
+      "muse": {
+        "state": "ok",
+        "since": null
+      }
+    },
     "pending": []
   },
   "rules": [

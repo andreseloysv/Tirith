@@ -19,6 +19,7 @@ from typing import Callable
 
 from tirith import actions as actions_mod
 from tirith import asks as asks_mod
+from tirith import fallback as fallback_mod
 from tirith import flows as flows_mod
 from tirith import inbox as inbox_mod
 from tirith import launch as launch_mod
@@ -142,10 +143,16 @@ def _running(rec: dict, agent: dict | None, now: datetime) -> bool:
 def _settle(home: Path, state: dict, projects: list[dict], agents: list[dict], now: datetime) -> bool:
     """Count each ended autopilot lane once: progress resets the step's counter, none adds to it."""
     own, steps, by_id, changed = _own(state), _steps(projects), _agents_by_id(agents), False
-    for lane_id, rec in own["lanes"].items():
+    for lane_id, rec in list(own["lanes"].items()):
         if rec.get("settled"):
             continue
         agent = by_id.get(lane_id)
+        taken = fallback_mod.continued_by(state, lane_id)
+        if taken and not _running(rec, agent, now):  # out of credits, continued by another agent: same step's lane
+            rec["settled"] = True
+            own["lanes"].setdefault(taken, {**rec, "at": now_iso(now), "settled": False})
+            changed = True
+            continue
         if _running(rec, agent, now):
             continue
         review = (agent or {}).get("review") or {}
