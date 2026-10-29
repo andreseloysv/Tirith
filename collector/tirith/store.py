@@ -145,6 +145,56 @@ def tail_lines(path: str | Path | None, count: int = 20) -> list[str]:
 
 
 _TAIL_BYTES = 256 * 1024
+_ANSWER_BYTES = 4 * 1024 * 1024
+_ANSWER_FALLBACK_LINES = 40
+
+
+def event_answer(event: dict) -> str | None:
+    """The final-answer text of one JSONL event, or None when it is not an answer event."""
+    if event.get("type") == "result" and isinstance(event.get("result"), str):
+        return event["result"]
+    item = event.get("item")
+    if (event.get("type") == "item.completed" and isinstance(item, dict)
+            and item.get("type") == "agent_message" and isinstance(item.get("text"), str)):
+        return item["text"]
+    payload = event.get("payload")
+    if (event.get("payload_type") == "run.terminal.completed" and isinstance(payload, dict)
+            and isinstance(payload.get("text"), str)):
+        return payload["text"]
+    return None
+
+
+def final_answer(path: str | Path | None) -> tuple[str, bool]:
+    """The agent's final answer from its log, as ``(text, structured)``.
+
+    The last answer event in the JSONL wins; without one the readable tail of the log is
+    returned with ``structured`` False. Missing or empty logs give ``("", False)``.
+    """
+    if not path:
+        return "", False
+    try:
+        with open(path, "rb") as fh:
+            fh.seek(0, 2)
+            size = fh.tell()
+            fh.seek(max(0, size - _ANSWER_BYTES))
+            text = fh.read().decode("utf-8", errors="replace")
+    except OSError:
+        return "", False
+    answer = None
+    for line in text.splitlines():
+        line = line.strip()
+        if not line.startswith("{"):
+            continue
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        found = event_answer(event) if isinstance(event, dict) else None
+        if found is not None and found.strip():
+            answer = found.strip()
+    if answer is not None:
+        return answer, True
+    return "\n".join(tail_lines(path, _ANSWER_FALLBACK_LINES)).strip(), False
 
 
 def readable_line(line: str) -> str:

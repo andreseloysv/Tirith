@@ -396,6 +396,10 @@
         "id": {
           "type": "string"
         },
+        "parent": {
+          "type": "string",
+          "description": "Lane id of the agent that spawned this one, or 'steward'."
+        },
         "project": {
           "type": "string"
         },
