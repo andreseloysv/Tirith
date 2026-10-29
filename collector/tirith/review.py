@@ -8,6 +8,7 @@ branch into the branch checked out in the repo and removes the worktree. See ``d
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -26,6 +27,7 @@ TESTS_FAILED = "tests-failed"
 READY = "ready"              # tests passed, not merged (--tests-only)
 MERGE_FAILED = "merge-failed"
 MERGED = "merged"
+DROPPED = "dropped"
 
 
 class ReviewError(Exception):
@@ -55,7 +57,8 @@ def public(lane: dict, repo: Path | None) -> dict | None:
     """The ``review`` object for state.json: None unless the lane is a finished launched lane."""
     review = lane.get("review")
     if isinstance(review, dict) and review.get("status"):
-        out = {k: review[k] for k in ("status", "at", "message") if review.get(k)}
+        out = {k: review[k] for k in ("status", "at", "message", "run", "files", "branch", "passed")
+               if review.get(k) is not None and review.get(k) != ""}
         if out["status"] == RUNNING and not _alive(review.get("pid")):
             out["status"], out["message"] = MERGE_FAILED, "the review was interrupted; run it again"
         return out
@@ -117,15 +120,21 @@ def _set(home: Path, lane: dict, status: str, message: str | None = None, **extr
     return lane["review"]
 
 
+def tests_passed(output: str) -> int | None:
+    """The number of passed tests a runner printed ("494 passed", "Tests: 12 passed"), else None."""
+    found = re.findall(r"(\d+)\s+passed", output or "")
+    return int(found[-1]) if found else None
+
+
 def run_tests(home: Path, project: str, pipeline: str, stage: str, workspace: Path, command: str,
-              lane_id: str | None = None) -> tuple[bool, str]:
+              lane_id: str | None = None, run_id: str | None = None) -> tuple[bool, str]:
     """Run the test stage as a recorded pipeline run (same path as ``tirith run``), tagged with the lane."""
     env = {k: v for k, v in os.environ.items() if k != "TIRITH_LANE"}
     tags = runstage_mod.lane_tags(home, workspace)
     code, output = runstage_mod.run_stage(
         home, project, pipeline, stage, command, workspace, lane=lane_id or tags.get("lane"),
         worktree=tags.get("worktree") or str(workspace), branch=tags.get("branch"),
-        echo=False, env=env, timeout=TEST_TIMEOUT_S, new_run=True)
+        echo=False, env=env, timeout=TEST_TIMEOUT_S, new_run=True, run_id=run_id)
     if output.startswith("the stage did not finish"):
         return False, f"tests did not finish in {TEST_TIMEOUT_S} s"
     return code == 0, output
@@ -162,15 +171,35 @@ def review_lane(home: Path, lane_id: str, repo: Path | None, merge: bool = True)
         raise ReviewError("the manifest has no test stage with a run command. "
                           "Fix: add a [[pipelines.stages]] with kind = \"test\" and run = \"...\" to tirith.toml")
     pipeline, stage = found
-    _set(home, lane, RUNNING)
-    ok, output = run_tests(home, str(lane.get("project") or ""), pipeline, stage.name, workspace,
-                           stage.run, lane_id)
+    project = str(lane.get("project") or "")
+    run_id = runstage_mod.resolve_run(home, project, pipeline, None, True)  # known while the tests run
+    _set(home, lane, RUNNING, run=run_id)
+    ok, output = run_tests(home, project, pipeline, stage.name, workspace, stage.run, lane_id, run_id)
     if not ok:
-        return _set(home, lane, TESTS_FAILED, output or "tests failed")
+        return _set(home, lane, TESTS_FAILED, output or "tests failed", run=run_id)
+    passed = tests_passed(output)
     if not merge:
-        return _set(home, lane, READY, "tests passed")
+        return _set(home, lane, READY, "tests passed", run=run_id, passed=passed)
     try:
         head = merge_lane(repo, workspace, lane_id, str(lane.get("feature") or lane_id))
     except ReviewError as error:
-        return _set(home, lane, MERGE_FAILED, str(error))
-    return _set(home, lane, MERGED, "tests passed; merged", commit=head)
+        return _set(home, lane, MERGE_FAILED, str(error), run=run_id, passed=passed)
+    files = _git(repo, "diff", "--name-only", f"{head}^1", head).stdout.split()
+    return _set(home, lane, MERGED, "tests passed; merged", commit=head, run=run_id, passed=passed,
+                files=len(files), branch=_git(repo, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip())
+
+
+def drop_lane(home: Path, lane_id: str, repo: Path | None) -> dict:
+    """Throw the lane's worktree and branch away (``tirith lane drop``); the lane stays as a record."""
+    lane = read_json(lane_path(home, lane_id), None)
+    if not isinstance(lane, dict):
+        raise ReviewError(f"unknown lane: {lane_id}")
+    if repo is None or not launched(lane, repo):
+        raise ReviewError(f"lane {lane_id} was not started by `tirith launch`, so there is no worktree to drop")
+    if (lane.get("review") or {}).get("status") == MERGED:
+        raise ReviewError(f"lane {lane_id} is already merged")
+    if not lane.get("ended_at"):
+        raise ReviewError(f"lane {lane_id} is still running; drop it when it ends")
+    _git(repo, "worktree", "remove", "--force", str(lane["workspace"]))
+    _git(repo, "branch", "-D", f"lane/{lane_id}")
+    return _set(home, lane, DROPPED, "dropped by the owner")

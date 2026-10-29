@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
+from tirith import autoreview as autoreview_mod
 from tirith import flows as flows_mod
 from tirith import inbox as inbox_mod
 from tirith import launch as launch_mod
@@ -39,7 +40,7 @@ STEWARD_ROLE = "steward"
 def load_state(home: Path) -> dict:
     data = read_json(Path(home) / STATE_FILE, {})
     data = data if isinstance(data, dict) else {}
-    for key in ("handled", "escalated", "stop"):
+    for key in ("handled", "escalated", "stop", "reviews", "overdue"):
         if not isinstance(data.get(key), dict):
             data[key] = {}
     return data
@@ -66,13 +67,14 @@ def _step_name(req: dict) -> str:
 
 
 def add_owner_item(home: Path, item_id: str, project: str | None, text: str, options: list[dict],
-                   at: str) -> None:
-    """One item on the owner's waiting list with ``options`` (``[{label, command}]``); once per id."""
+                   at: str, actions: list[dict] | None = None) -> None:
+    """One item on the owner's waiting list with ``options`` (``[{label, command}]``) and Run ``actions``;
+    once per id."""
     if any(r.get("id") == item_id for r in read_jsonl(Path(home) / "waits.jsonl")):
         return
     append_jsonl(Path(home) / "waits.jsonl", {
         "id": item_id, "at": at, "project": project, "text": text, "link": None, "done_at": None,
-        "session": None, "options": options})
+        "session": None, "options": options, **({"actions": actions} if actions else {})})
     flows_mod.append_flow(home, "tirith", "owner", "request", text, project=project, session=None, at=at)
 
 
@@ -176,7 +178,7 @@ def escalate(home: Path, req: dict, notify: Callable[[str, str], None], at: str)
 
 def run(home: Path, config: Config, now: datetime, *, agents: list[dict], lanes: list[dict],
         status_of: Callable, launcher: Callable | None = None,
-        notify: Callable[[str, str], None] = macos_notify) -> list[dict]:
+        notify: Callable[[str, str], None] = macos_notify, spawn: Callable | None = None) -> list[dict]:
     """One dispatcher pass; returns the requests re-read afterwards. Safe to call every cycle."""
     home = Path(home)
     if not config.dispatch_enabled:
@@ -203,6 +205,8 @@ def run(home: Path, config: Config, now: datetime, *, agents: list[dict], lanes:
             escalate(home, req, notify, now_iso(now))
             state["escalated"][rid] = now_iso(now)
             changed = True
+    if autoreview_mod.run(home, config, now, state, lanes, spawn=spawn, notify=notify):
+        changed = True
     for rid in list(state["escalated"]):  # the steward caught up: take the item off the owner's list
         req = next((r for r in inbox_mod.requests(home) if r["id"] == rid), None)
         if req is not None and not req["steward_pending"]:
@@ -269,6 +273,24 @@ def steward_context(home: Path, now: datetime) -> str:
             "before anything else, with the commands shown.\n" + pending_text(rows, now))
 
 
+def _old_reviews(home: Path, now: datetime) -> list[dict]:
+    """Open ``review`` items of the steward queue older than ``STOP_AFTER_S``."""
+    from tirith import asks as asks_mod
+    out = []
+    for item in asks_mod.queue_items(home, only_open=True):
+        at = parse_iso(item.get("at") or "")
+        if item["kind"] == "review" and at and (now - at).total_seconds() >= STOP_AFTER_S:
+            out.append(item)
+    return out
+
+
+def _reviews_text(items: list[dict], now: datetime) -> str:
+    return "\n".join(
+        f"- {i['id']} (review, {i['project']}, {_age_text((now - parse_iso(i['at'])).total_seconds())} ago): "
+        f"{_short(i['text'], 300)}\n    tirith lane review {i['lane']}   then   tirith queue done {i['id']}"
+        for i in items)
+
+
 def steward_stop(home: Path, now: datetime) -> str | None:
     """The reason to block a ``Stop`` (None = let it stop).
 
@@ -276,22 +298,23 @@ def steward_stop(home: Path, now: datetime) -> str | None:
     ``STOP_BLOCKS_MAX`` times in a row for the same set; then it records an ``inbox-ignored`` violation
     once and lets the session stop."""
     rows = pending(home, now, STOP_AFTER_S)
+    reviews = _old_reviews(home, now)
     state = load_state(home)
-    if not rows:
+    if not rows and not reviews:
         if state["stop"]:
             state["stop"] = {}
             save_state(home, state)
         return None
-    key = ",".join(sorted(r["id"] for r in rows))
+    key = ",".join(sorted(r["id"] for r in rows + reviews))
     stop = state["stop"] if state["stop"].get("key") == key else {"key": key, "count": 0}
     if stop["count"] >= STOP_BLOCKS_MAX:
         if not stop.get("violation"):
             from tirith import gates
             gates.record_violation(
                 home, gates.Violation("inbox-ignored",
-                                      f"the steward stopped with {len(rows)} unanswered inbox request(s): {key}",
+                                      f"the steward stopped with {len(rows) + len(reviews)} unanswered inbox request(s) / review item(s): {key}",
                                       "tirith inbox answer <id> \"<markdown>\" for each, then tirith inbox done <id>"),
-                ts=now_iso(now), agent="anthropic", lane=None, session=None, project=rows[0]["project"] or None,
+                ts=now_iso(now), agent="anthropic", lane=None, session=None, project=(rows or reviews)[0]["project"] or None,
                 tool=None, cwd=None)
             stop["violation"] = True
             state["stop"] = stop
@@ -301,7 +324,8 @@ def steward_stop(home: Path, now: datetime) -> str | None:
     state["stop"] = stop
     save_state(home, state)
     return ("Tirith inbox: you cannot stop yet, the owner is waiting (block "
-            f"{stop['count']} of {STOP_BLOCKS_MAX}).\n" + pending_text(rows, now))
+            f"{stop['count']} of {STOP_BLOCKS_MAX}).\n"
+            + "\n".join(t for t in (pending_text(rows, now), _reviews_text(reviews, now)) if t))
 
 
 def record_event(home: Path, event: str, text: str, ts: str) -> None:
