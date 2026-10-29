@@ -182,6 +182,8 @@
       cls = age > 60 ? 'red' : (age > 10 || srcErr) ? 'amber' : 'green';
       txt = (srcErr ? 'state unreadable, ' : '') + 'updated ' + age + ' s ago';
     }
+    var st = document.getElementById('stale');
+    if (st) st.hidden = demo || !raw || !(Date.now() - T.ms(raw.generated_at) > 30000);
     if (el._t !== txt || el._c !== cls) {
       el._t = txt; el._c = cls; el.className = 'src ' + cls;
       el.innerHTML = (demo ? '' : '<i class="dot"></i>') + '<span>' + esc(txt) + '</span>';
