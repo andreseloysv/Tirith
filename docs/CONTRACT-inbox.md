@@ -148,8 +148,8 @@ Each injection (`kind: "inbox-injection"`) and block (`kind: "inbox-block"`) is 
 
 ### Escalation
 
-A `steward_pending` request unanswered for 10 minutes: once per request, a macOS notification
-(`osascript display notification`; nothing on other systems), a `tirith` -> `owner` alert flow, and the owner
+A `steward_pending` request unanswered for 10 minutes: once per request (never an operating-system
+notification: the owner forbids them), a `tirith` -> `owner` alert flow, and the owner
 item "The steward has not answered: <text>" with options `Wait`, `Start an agent`
 (`tirith launch --project P --step N`) and `Answer it with the brain` (`tirith inbox brain <id>`). The item
 closes itself once the steward answers.

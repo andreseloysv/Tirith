@@ -156,15 +156,8 @@ def _finish(home: Path, req: dict, config: Config, agents: list[dict], lanes: li
 
 
 def macos_notify(title: str, message: str) -> None:
-    """A macOS notification; no-op elsewhere. Quotes are stripped so the AppleScript stays one literal."""
-    if sys.platform != "darwin":
-        return
-    clean = lambda t: str(t).replace('"', "'").replace("\\", " ")  # noqa: E731
-    try:
-        subprocess.run(["osascript", "-e", f'display notification "{clean(message)}" with title "{clean(title)}"'],
-                       capture_output=True, timeout=10)
-    except (OSError, subprocess.SubprocessError):
-        pass
+    """No operating-system notifications, ever (the owner's rule): escalations appear in Tirith only."""
+    return None
 
 
 def escalate(home: Path, req: dict, notify: Callable[[str, str], None], at: str) -> None:
