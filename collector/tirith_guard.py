@@ -14,7 +14,7 @@ Installed hooks are made immutable (chflags uchg on macOS). This module never ed
 existing guard: if the installed hooks differ from the expected ones it reports it, and only the owner
 changes them.
 
-usage: python3 tirith_guard.py install|verify <repo> [--words w1,w2,...]
+usage: python3 tirith_guard.py install|verify <repo> [--words w1,w2,...] [--chain]
 """
 from __future__ import annotations
 
@@ -154,6 +154,16 @@ if command -v tirith >/dev/null 2>&1; then
 fi
 '''
 
+# The repository's own hook, moved to <hook>.local by `install --chain`, runs after the guard's checks.
+_CHAIN = r'''
+# --- Tirith: the repository's own hook, kept as @HOOK@.local ---
+tirith_local="$(cd "$(dirname "$0")" && pwd)/@HOOK@.local"
+if [ -x "$tirith_local" ]; then
+    TIRITH_REASON="the repository's own @HOOK@ hook failed"
+    "$tirith_local" "$@" || exit 1
+fi
+'''
+
 _ALLOWED = r'''
 trap - EXIT
 tirith_record "$TIRITH_HOOK" allowed ok
@@ -172,20 +182,23 @@ def render_v1(words: list[str]) -> dict[str, str]:
     return {"pre-commit": PRE_COMMIT.format(**args), "commit-msg": COMMIT_MSG.format(**args)}
 
 
-def render(words: list[str]) -> dict[str, str]:
+def render(words: list[str], chained: frozenset[str] | set[str] = frozenset()) -> dict[str, str]:
     """Hook file name -> content for this word list (regex alternatives, in order).
 
     pre-commit and commit-msg are the owner's text split once at ``set -euo pipefail``: the header
     before it and the guard body after it stay byte for byte; the recording prologue sits in
-    between, the ``[[hooks]]`` runs and the "allowed" record follow the body."""
+    between, the ``[[hooks]]`` runs and the "allowed" record follow the body. A hook in ``chained``
+    also runs the repository's own ``<hook>.local`` (see ``install(chain=True)``) after its checks."""
     reasons = {"pre-commit": "forbidden words in the staged changes",
                "commit-msg": "forbidden words in the commit message"}
     out = {}
     for name, text in render_v1(words).items():
         head, sep, body = text.partition(_BODY_START)
-        out[name] = head + sep + _record_part(name, reasons[name]) + "\n" + body + _RUN_HOOKS + _ALLOWED
+        out[name] = (head + sep + _record_part(name, reasons[name]) + "\n" + body + _RUN_HOOKS
+                     + (_CHAIN.replace("@HOOK@", name) if name in chained else "") + _ALLOWED)
     out["pre-push"] = (PRE_PUSH.format(words=",".join(words)) + _record_part("pre-push", "tirith check failed")
-                       + _RUN_CHECK + _RUN_HOOKS + _ALLOWED)
+                       + _RUN_CHECK + _RUN_HOOKS
+                       + (_CHAIN.replace("@HOOK@", "pre-push") if "pre-push" in chained else "") + _ALLOWED)
     return out
 
 
@@ -205,7 +218,8 @@ def verify(repo: Path, words: list[str]) -> list[str]:
     d = hooks_dir(repo)
     old = _is_v1(d, words)
     v1 = render_v1(words)
-    for name, want in render(words).items():
+    chained = {n for n in HOOKS if (d / f"{n}.local").exists()}
+    for name, want in render(words, chained).items():
         p = d / name
         if not p.exists():
             if not (old and name == "pre-push"):
@@ -221,6 +235,9 @@ def verify(repo: Path, words: list[str]) -> list[str]:
             problems.append(f"{name}: not executable")
         if hasattr(st, "st_flags") and not st.st_flags & stat.UF_IMMUTABLE:
             problems.append(f"{name}: not immutable (uchg)")
+    for name in sorted(chained):
+        if not os.access(d / f"{name}.local", os.X_OK):
+            problems.append(f"{name}.local: not executable (the chained {name} hook would be skipped)")
     return problems
 
 
@@ -246,19 +263,41 @@ def outdated(repo: Path, words: list[str]) -> list[str]:
             f"  3. tirith guard install {repo}"]
 
 
-def install(repo: Path, words: list[str]) -> list[str]:
-    """Installs missing hooks; never touches an existing one. Returns remaining problems."""
+def _is_locked(p: Path) -> bool:
+    return not hasattr(os, "chflags") or bool(p.stat().st_flags & stat.UF_IMMUTABLE)
+
+
+def _lock(p: Path) -> None:
+    if hasattr(os, "chflags"):
+        os.chflags(p, p.stat().st_flags | stat.UF_IMMUTABLE)
+
+
+def install(repo: Path, words: list[str], chain: bool = False) -> list[str]:
+    """Installs missing hooks; never edits an existing guard. Returns remaining problems.
+
+    With ``chain``, a hook the repository already has that is not the guard (no marker) is moved to
+    ``<hook>.local`` and the guard installed in its place; the guard runs the ``.local`` hook after its own
+    checks and fails when it fails. A ``.local`` file that already exists is never overwritten."""
     d = hooks_dir(repo)
     d.mkdir(parents=True, exist_ok=True)
     old = _is_v1(d, words)
-    for name, want in render(words).items():
+    if chain:
+        for name in HOOKS:
+            p, local = d / name, d / f"{name}.local"
+            if p.exists() and MARKER not in p.read_text(errors="replace") and not local.exists():
+                if hasattr(os, "chflags"):
+                    os.chflags(p, p.stat().st_flags & ~stat.UF_IMMUTABLE)
+                p.rename(local)
+    chained = {n for n in HOOKS if (d / f"{n}.local").exists()}
+    for name, want in render(words, chained).items():
         p = d / name
         if p.exists() or (old and name == "pre-push"):  # a version 1 guard is replaced as a whole
+            if p.exists() and p.read_text(errors="replace") == want and not _is_locked(p):
+                _lock(p)  # the guard as expected that lost its lock: locking it edits nothing
             continue
         p.write_text(want)
         p.chmod(0o755)
-        if hasattr(os, "chflags"):
-            os.chflags(p, p.stat().st_flags | stat.UF_IMMUTABLE)
+        _lock(p)
     return verify(repo, words)
 
 
@@ -267,9 +306,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("action", choices=["install", "verify"])
     ap.add_argument("repo", type=Path)
     ap.add_argument("--words", default=",".join(DEFAULT_WORDS))
+    ap.add_argument("--chain", action="store_true",
+                    help="install: keep the repository's own hooks as <hook>.local and run them after the guard")
     a = ap.parse_args(argv)
     words = [w.strip() for w in a.words.split(",") if w.strip()]
-    problems = (install if a.action == "install" else verify)(a.repo.expanduser().resolve(), words)
+    repo = a.repo.expanduser().resolve()
+    problems = install(repo, words, a.chain) if a.action == "install" else verify(repo, words)
     if problems:
         print("guard: NOT OK\n  " + "\n  ".join(problems))
         return 1

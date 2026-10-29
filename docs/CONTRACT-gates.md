@@ -84,3 +84,37 @@ tirith hook install --agent anthropic      # and: --agent muse
 tirith shim install                        # then put ~/.local/bin first in PATH
 tirith shim verify
 ```
+
+## Guard chaining: `tirith guard install <project> --chain`
+
+For a repository that already has its own hooks (for example a protected-paths `pre-commit`). Plain
+`install` never touches a hook without the marker and reports `present but without the
+FORBIDDEN_WORDS_GUARD marker`. With `--chain`, every such hook among `pre-commit`, `commit-msg` and
+`pre-push` is moved to `<hook>.local` in the repository's hooks folder (never over an existing `.local`
+file, which is left for the owner), and the guard is installed in its place. The rendered guard runs
+`<hook>.local` after its own checks with the hook's arguments and **fails when it fails** (the block is
+recorded as `the repository's own <hook> hook failed`). `verify` accepts the chained install: it renders
+the expected text with the chain block for every hook that has a `.local` file, and reports a `.local` file
+that is not executable. `install` also locks (`uchg`) a guard that is exactly as expected but lost its flag.
+
+`[[projects]] guard = false` in `config.toml` (written by the "Never for this project" button) switches
+the check off for one project.
+
+## Stop a running lane: `tirith lane stop <lane-id> [--reason ..] [--by owner|steward]`
+
+`lane run` starts a non-interactive child as the leader of its own process group and stores `pgid` in
+the lane file. `lane stop` writes `stop: {by, reason, at}` into the lane file, sends **SIGTERM** to that
+group, waits up to **10 s** and then sends **SIGKILL**. The lane ends `failed` with the report
+`Stopped by <owner|steward>: <reason>` (`Stopped by <who>.` without a reason); `lane run` ends it when its
+child is gone, and `lane stop` ends it itself if `lane run` is gone. A stopped lane adds no
+Retry/Show the log/Drop it item. The worktree is kept. An interactive lane (own terminal) is signalled by
+pid only. Unknown or already ended lanes exit 3. `--by` defaults to `steward` for agents and scripts and
+`owner` at a terminal; the dispatcher and the steward call `tirith lane stop` (or
+`lanestop.stop_lane`) the same way.
+
+From the page: a **Stop** button on working or stalled agents (card top right, drawer / list row, next to
+the avatar in the Plan step), each with a confirm popover first ("Stop <name>? It ends as failed and its
+worktree is kept."). It sends only the lane id: the Tauri command `lane_stop(lane_id)` (checks the id
+against the running local lanes in `state.json`, then runs `tirith lane stop <id> --by owner` in the
+background), or the `tirith://stop?lane=<id>&token=<launch token>` link (`tirith url open` checks the
+token and that the lane is running), or the line `tirith lane stop <id> --by owner` to copy.

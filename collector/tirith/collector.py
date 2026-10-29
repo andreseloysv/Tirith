@@ -48,6 +48,8 @@ from tirith.store import (
 
 STALLED_AFTER_S = 600
 ANSWERED_KEPT = 10
+GUARD_SNOOZE = timedelta(days=7)
+GUARD_MARKER = "FORBIDDEN_WORDS_GUARD"
 DROP_ENDED_AFTER = timedelta(hours=24)
 MAX_PIPELINE_RUNS = 20
 GIT_HOOK_FLOWS_FIRST = 20
@@ -441,6 +443,7 @@ class Collector:
                 "id": f"brain-{brain_mod.cache_key('waiting', log_text)[:8]}-{index}",
                 "project": str(lane.get("project") or ""),
                 "text": str(item), "since": since, "link": None, "source": "brain",
+                "options": [dict(o) for o in asks_mod.GOT_IT_OPTIONS],
             })
         return waits
 
@@ -702,6 +705,75 @@ class Collector:
         answered.sort(key=lambda w: str(w["answer"]["at"] or ""), reverse=True)
         return waits, answered[:ANSWERED_KEPT]
 
+    def _guard_replies(self, now: datetime) -> dict[str, tuple[str, datetime | None]]:
+        """Project -> (``snooze`` | ``never``, snoozed until) from the owner's latest reply to its guard item."""
+        out: dict[str, tuple[str, datetime | None]] = {}
+        for reply in inbox_mod.replies(self.home):
+            if not reply["wait"].startswith("guard-") or reply["value"] not in ("snooze", "never"):
+                continue
+            at = parse_iso(reply["at"])
+            out[reply["wait"][len("guard-"):]] = (
+                reply["value"], at + GUARD_SNOOZE if at is not None else None)
+        return out
+
+    def _guard_wait(self, proj: ProjectConfig, problems: list[str], since: str) -> dict:
+        """The owner item for a guard that is not intact: what is wrong and the buttons that fix it.
+
+        A repo that has its own hook gets "add the guard and keep the hook" (``install --chain``); anything
+        else gets ``tirith guard install``. Both can wait 7 days or be switched off for the project."""
+        chain = any(f"without the {GUARD_MARKER} marker" in p for p in problems)
+        cwd = str(proj.repo) if proj.repo else None
+        if chain:
+            label = f"Add the word guard and keep {proj.name}'s hook"
+            action = actions_mod.register_generated(
+                self.home, proj.id, f"ac-guard-chain-{proj.id}", label,
+                f"tirith guard install {proj.id} --chain", cwd)
+        else:
+            action = actions_mod.register_generated(
+                self.home, proj.id, f"ac-guard-install-{proj.id}", f"Install the word guard in {proj.name}",
+                f"tirith guard install {proj.id}", cwd)
+        return {
+            "id": f"guard-{proj.id}", "project": proj.id,
+            "text": f"Commit guard needs attention in {proj.name}: {problems[0]}",
+            "since": since, "link": None, "source": "guard", "kind": "action",
+            "options": [{"label": "Not now", "value": "snooze"},
+                        {"label": "Never for this project", "value": "never"}],
+            "actions": [action],
+        }
+
+    def _settle_generated(self, waits: list[dict]) -> tuple[list[dict], list[dict]]:
+        """``(open, answered)`` for the items Tirith raises itself: an owner reply answers one; "let the
+        steward handle it" also puts it in the steward's queue."""
+        replied: dict[str, dict] = {}
+        for reply in inbox_mod.replies(self.home):
+            replied.setdefault(reply["wait"], reply)
+        open_items, answered = [], []
+        for wait in waits:
+            reply = replied.get(wait["id"])
+            if reply is None:
+                open_items.append(wait)
+                continue
+            if reply["value"] == "steward":
+                asks_mod.queue_add(self.home, str(wait.get("project") or ""), "", wait["text"],
+                                   kind="owner-handoff", item_id="sq-" + reply["id"])
+            label = next((o["label"] for o in wait.get("options") or [] if o["value"] == reply["value"]),
+                         reply["value"])
+            answered.append({**wait, "status": "answered", "answer": {
+                "at": reply["at"], "value": reply["value"], "label": label, "text": reply["text"]}})
+        return open_items, answered
+
+    def _enforce_cta(self, waiting: list[dict]) -> list[dict]:
+        """The rule: nothing reaches the owner without a one-click option or a Run action. An item without
+        one goes to the steward's queue (once) instead of the list."""
+        shown = []
+        for wait in waiting:
+            if asks_mod.has_call_to_action(wait):
+                shown.append(wait)
+            else:
+                asks_mod.queue_add(self.home, str(wait.get("project") or ""), "", wait["text"],
+                                   kind=asks_mod.NO_CTA_KIND, item_id="sq-cta-" + re.sub(r"[^\w.-]", "-", wait["id"]))
+        return shown
+
     @staticmethod
     def _violation(row: dict) -> dict:
         message = str(row.get("message") or "")
@@ -723,7 +795,8 @@ class Collector:
             who = row.get("lane") or row.get("agent") or "an agent"
             waits.append({"id": f"violation-{row['ts']}-{index}", "project": row.get("project"),
                           "text": f"Rule {row['rule']} blocked {who}: {row['message']}",
-                          "since": row["ts"], "link": None, "source": "violation"})
+                          "since": row["ts"], "link": None, "source": "violation",
+                          "options": [dict(o) for o in asks_mod.GOT_IT_OPTIONS]})
         return waits
 
     # -- main cycle ------------------------------------------------------------
@@ -829,9 +902,14 @@ class Collector:
         projects: list[dict] = []
         guard_waits: list[dict] = []
         known_ids = set()
+        guard_replies = self._guard_replies(now)
         for proj in self.config.projects:
             known_ids.add(proj.id)
-            problems = verify_guard(proj.repo, self.config.words_for(proj, words_default)) \
+            if guard_replies.get(proj.id, ("", None))[0] == "never" and proj.guard:
+                projects_mod.set_project_guard(self.home, proj.id, False)
+                proj = dataclasses.replace(proj, guard=False)
+            problems = [] if not proj.guard else verify_guard(
+                proj.repo, self.config.words_for(proj, words_default)) \
                 if proj.repo is not None else ["no repo path configured"]
             guard_ok = not problems
             if guard_ok:
@@ -845,17 +923,15 @@ class Collector:
                         self.home, "guard", "owner", "alert",
                         f"Commit guard needs attention in {proj.name}: {problems[0]}",
                         session=None, project=proj.id)
-                guard_waits.append({
-                    "id": f"guard-{proj.id}", "project": proj.id,
-                    "text": f"Commit guard needs attention in {proj.name}: {problems[0]}",
-                    "since": guard_since[proj.id], "link": None, "source": "guard",
-                })
+                snoozed = guard_replies.get(proj.id)
+                if not (snoozed and snoozed[0] == "snooze" and snoozed[1] and now < snoozed[1]):
+                    guard_waits.append(self._guard_wait(proj, problems, guard_since[proj.id]))
             folder = entry_by_id[proj.id].folder if proj.id in entry_by_id else None
             projects.append({
                 "id": proj.id, "name": proj.name, "color": proj.color,
                 "folder": str(folder) if folder else None, "auto": False,
                 "architecture": self.architecture_for(proj),
-                "guard": {"ok": guard_ok, "problems": problems},
+                "guard": {"ok": guard_ok, "problems": problems, **({"disabled": True} if not proj.guard else {})},
                 "roadmap": roadmap_mod.build(folder, proj.id, agent_rows),
             })
         for entry in entries:
@@ -914,8 +990,11 @@ class Collector:
                       hooks_mod.read_violation_rows(self.home / "events.jsonl")][-hooks_mod.VIOLATIONS_KEPT:]
         manual_waits, answered_waits = self._manual_waits(
             {p["id"]: p["guard"]["ok"] for p in projects if p.get("guard")})
-        waiting = (manual_waits + brain_waits + room_waits + guard_waits
-                   + self._violation_waits(violations, now))
+        generated, generated_answered = self._settle_generated(
+            brain_waits + room_waits + self._violation_waits(violations, now))
+        answered_waits = sorted(answered_waits + generated_answered,
+                                key=lambda w: str(w["answer"]["at"] or ""), reverse=True)[:ANSWERED_KEPT]
+        waiting = self._enforce_cta(manual_waits + generated + guard_waits)
         for wait in waiting + answered_waits:
             wait.setdefault("session", None)
             if wait.get("project"):

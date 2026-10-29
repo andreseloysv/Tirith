@@ -629,3 +629,22 @@ button.vwho:hover b { text-decoration: underline; }
 .sfoot { display: flex; gap: 8px; margin-top: 10px; } .scancel { height: 28px; padding: 0 12px; font-size: 12px; color: var(--mut); border-radius: 8px; } .scancel:hover { background: var(--soft); }
 .scard .icli, .scard .ierr { margin: 8px 0 0; }
 @media (max-width: 640px) { .srow { grid-template-columns: 1fr; gap: 2px; } .sf.wide { grid-column: auto; } .srules { grid-template-columns: 1fr; } }
+
+/* stop a running agent: button, confirm popover (docs/CONTRACT-gates.md) */
+.stopb { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px; font-size: 11.5px; font-weight: 500; color: var(--red); background: rgba(255,255,255,.75); border: 1px solid rgba(214,69,69,.3); border-radius: 11px; cursor: pointer; white-space: nowrap; }
+.stopb:hover { background: #fff; border-color: var(--red); }
+.stopb.stopping { color: var(--mut); border-color: rgba(120,135,160,.3); cursor: default; }
+.stopb.card { position: absolute; top: 12px; right: 12px; }
+.stopb.ava { margin-left: 6px; align-self: center; }
+.stoprow { margin: 0 0 8px; position: relative; }
+.pavas { position: relative; align-items: center; }
+.acard.work { position: relative; }
+.stoppop { display: block; z-index: 6; width: 232px; padding: 9px 11px; font-size: 12.5px; line-height: 1.45; text-align: left; font-weight: 400; color: var(--fg); border-radius: 10px; background: rgba(255,255,255,.96); border: 1px solid rgba(120,135,160,.3); box-shadow: 0 6px 18px rgba(16,24,40,.12); }
+.stoppop.card { position: absolute; top: 40px; right: 12px; }
+.stoppop.ava { position: absolute; top: 28px; right: 0; }
+.stoppop.row { margin-top: 6px; }
+.stoppop .spb { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+.stopgo { display: inline-flex; align-items: center; height: 24px; padding: 0 11px; font-size: 12px; font-weight: 500; color: #fff; background: var(--red); border-radius: 12px; cursor: pointer; }
+.stopgo:hover { filter: brightness(1.08); }
+.stoppop .alink { cursor: pointer; }
+.stoperr { display: block; margin-top: 6px; }

@@ -210,7 +210,7 @@
     var key = p.id + '|' + s.id, open = !!ui.planOpen[key], live = s.agents && s.agents.length;
     var ava = (s.agents || []).map(function (id) {
       var a = T.agentById(state, id); if (!a) return '';
-      return '<button class="pava" data-act="goagent" data-key="' + esc(id) + '" title="' + esc(a.name + ' · ' + (a.feature || '')) + '">' + T.avatar(a, 22) + '</button>';
+      return '<button class="pava" data-act="goagent" data-key="' + esc(id) + '" title="' + esc(a.name + ' · ' + (a.feature || '')) + '">' + T.avatar(a, 22) + '</button>' + (T.stopBtn ? T.stopBtn(a, 'ava') : '');
     }).join('');
     var h = '<li class="pstep ' + esc(s.status) + (open ? ' open' : '') + '"><div class="prow">' +
       '<button class="ptog" data-act="plan" data-key="' + esc(key) + '" aria-expanded="' + open + '">' +

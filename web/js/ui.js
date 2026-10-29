@@ -121,7 +121,7 @@
         '<span class="afeat">' + esc(a.feature) + '</span>' +
         (g ? '<span class="agoalc">' + T.mdInline(g) + '</span>' : '') +
         (a.summary ? '<span class="anow' + (a.active ? ' live' : '') + '"><i class="pdot2"></i>' + T.mdInline(a.summary) + '</span>' : '') +
-        ruleBadge(a) + workingFoot(a) + '</button>';
+        ruleBadge(a) + workingFoot(a) + (T.stopBtn ? T.stopBtn(a, 'card') : '') + '</button>';
     }
     return '<button class="card acard' + (selected ? ' sel' : '') + '" data-act="agent" data-key="' + esc(a.id) + '">' + head +
       '<span class="afeat">' + esc(a.feature) + '</span>' + ruleBadge(a) +

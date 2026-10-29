@@ -24,7 +24,7 @@ def test_fixture_validates() -> None:
 def test_collected_state_validates(home: Path) -> None:
     main(["lane", "start", "--project", "demo", "--class", "herald",
           "--feature", "Ship it", "--id", "h-1", "--pid", str(os.getpid())])
-    main(["wait", "add", "Press the release button", "--project", "demo"])
+    main(["wait", "add", "Press the release button", "--project", "demo", "--option", "Pressed|done"])
     main(["note", "Release train left", "--project", "demo"])
     main(["steward", "Watching the release"])
     main(["collect", "--once"])
