@@ -157,7 +157,7 @@ def merge_lane(repo: Path, workspace: Path, lane_id: str, feature: str) -> str:
         raise ReviewError(f"merging {branch} failed (conflicts?): {_tail(done.stderr or done.stdout)}. "
                           f"Fix: merge {branch} by hand")
     head = _git(repo, "rev-parse", "HEAD").stdout.strip()
-    _git(repo, "worktree", "remove", "--force", str(workspace))
+    _git(repo, "worktree", "remove", str(workspace))
     _git(repo, "branch", "-d", branch)
     return head
 

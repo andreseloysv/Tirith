@@ -23,6 +23,7 @@ from typing import Callable
 from tirith import asks as asks_mod
 from tirith import autopilot as autopilot_mod
 from tirith import autoreview as autoreview_mod
+from tirith import diskdiet as diskdiet_mod
 from tirith import fallback as fallback_mod
 from tirith import flows as flows_mod
 from tirith import inbox as inbox_mod
@@ -327,7 +328,8 @@ def run(home: Path, config: Config, now: datetime, *, agents: list[dict], lanes:
         status_of: Callable, launcher: Callable | None = None,
         notify: Callable[[str, str], None] = macos_notify, spawn: Callable | None = None,
         plan_launcher: Callable | None = None, projects: list[dict] | None = None,
-        relauncher: Callable | None = None, manager_spawn: Callable | None = None, manager_kill: Callable | None = None) -> list[dict]:
+        relauncher: Callable | None = None, manager_spawn: Callable | None = None, manager_kill: Callable | None = None,
+        free: Callable | None = None) -> list[dict]:
     """One dispatcher pass; returns the requests re-read afterwards. Safe to call every cycle."""
     home = Path(home)
     if not config.dispatch_enabled:
@@ -339,14 +341,20 @@ def run(home: Path, config: Config, now: datetime, *, agents: list[dict], lanes:
     # before the autopilot, so a relaunched lane is known as the step's lane
     if fallback_mod.run(home, config, now, state, lanes, relauncher or _default_relauncher):
         changed = True
-    if autopilot_mod.run(home, config, now, state, agents=agents, projects=projects or [], launcher=launcher):
+    if diskdiet_mod.check(home, config, state, now, free):
+        changed = True
+    room = not diskdiet_mod.low(state)  # disk almost full: no new lane (the manager queue says why)
+    if autopilot_mod.run(home, config, now, state, agents=agents, projects=projects or [], launcher=launcher,
+                         launch=room):
         changed = True
     for req in inbox_mod.requests(home):
         rid = req["id"]
         if req["status"] == "done" or req["kind"] == "autopilot":
             continue
         if rid not in state["handled"]:
-            if req["kind"] == "finish" and not req["answers"]:
+            if not room and not req["answers"] and (req["kind"] == "finish" or req["kind"] in inbox_mod.PLAN_KINDS):
+                done = None  # stays open, tried again when there is room
+            elif req["kind"] == "finish" and not req["answers"]:
                 done = _finish(home, req, config, agents, lanes, status_of, launcher, now)
             elif req["kind"] in inbox_mod.PLAN_KINDS and not req["answers"]:
                 done = _plan(home, req, config, lanes, status_of, plan_launcher, now)
@@ -367,6 +375,7 @@ def run(home: Path, config: Config, now: datetime, *, agents: list[dict], lanes:
             changed = True
     if autoreview_mod.run(home, config, now, state, lanes, spawn=spawn, notify=notify):
         changed = True
+    diskdiet_mod.cleanup(home, config, now)
     if config.dispatch_auto_launch and managerd_mod.run(home, config, now, state, lanes, spawn=manager_spawn,
                                                           kill=manager_kill):
         changed = True  # nobody attached and something pending: the on-call manager
