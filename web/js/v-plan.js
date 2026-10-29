@@ -148,6 +148,7 @@
       '<button class="iag" data-act="goagent" data-key="' + esc(a.id) + '" title="Open this agent">' + T.avatar(a, 18) + '<b>' + esc(a.name) + '</b></button>' +
       (a.feature ? ' <span class="mut">· ' + plain(a.feature) + '</span>' : '') +
       (a.fallback_from ? ' <span class="mut">· continued from ' + esc(a.fallback_from) + '</span>' : '') +
+      (a.keep_going ? ' <span class="mut">· sent back, ' + esc(a.keep_going) + '</span>' : '') +
       ' <span class="ist">' + T.dot(AST[a.status] || 'amber', a.status) + esc(a.status) + '</span>' + tbadge(a) +
       (a.status === 'working' && a.summary ? '<div class="inow">' + T.mdInline(a.summary) + '</div>' : '') + '</div></li>';
   }
