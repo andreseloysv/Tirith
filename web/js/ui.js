@@ -101,9 +101,16 @@
     return '<span class="afoot">' + files + testBadge(a) + step + '<span class="aproj">' + esc(proj) + '</span>' +
       '<span class="aclock">' + T.lineIcon(T.ICON.clock, 13, 'currentColor', 1.7) + '<span>' + T.agentClock(a) + '</span></span></span>';
   }
+  /* remote work (source "github"): a small mark and an "Open on GitHub" link */
+  T.ghMark = function (x) {
+    return x && x.source === 'github' ? '<svg class="ghmark" viewBox="0 0 16 16" width="13" height="13" role="img" aria-label="GitHub" fill="currentColor"><title>GitHub</title><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.05-.49.05-.49.8.06 1.23.83 1.23.83.72 1.22 1.88.87 2.33.66.07-.52.28-.87.5-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.83-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>' : '';
+  };
+  T.ghLink = function (x) {
+    return x && x.source === 'github' && /^https:\/\//.test(x.html_url || '') ? '<a class="ghlink" href="' + esc(x.html_url) + '" target="_blank" rel="noopener">' + T.ghMark(x) + 'Open on GitHub</a>' : '';
+  };
   T.agentCard = function (a, selected) {
     var head = '<span class="ahead">' + T.avatar(a, 36) + '<span class="aname"><b title="' + esc((a.name || '') + (a.epithet ? ' ' + a.epithet : '')) + '">' + esc(a.name) + '</b>' +
-      '<span class="pill">' + esc([T.cap(a.rank), T.cap(a['class'])].filter(Boolean).join(' · ')) + '</span></span></span>';
+      '<span class="pill">' + (a.source === 'github' ? T.ghMark(a) + ' ' + esc(a.epithet) : esc([T.cap(a.rank), T.cap(a['class'])].filter(Boolean).join(' · '))) + '</span></span></span>';
     if (a.status === 'working') {
       var g = T.cardGoal(a).text;
       return '<button class="card acard work' + (selected ? ' sel' : '') + '" data-act="agent" data-key="' + esc(a.id) + '">' + head +
