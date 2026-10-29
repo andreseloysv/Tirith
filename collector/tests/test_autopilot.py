@@ -364,3 +364,11 @@ def test_header_counts_only_live_lanes_and_unpaused_ready_steps(home, repo) -> N
     got = count()
     assert (got["working"], got["queued"]) == (0, 0)  # three ended lanes in the started log: none counted
     assert len(got["started"]) == 3
+
+
+def test_header_working_never_exceeds_the_agents_list(home, repo) -> None:
+    pilot = Pilot(home, repo, "[autopilot]\nmax_parallel = 1")
+    pilot.cycle()
+    got = autopilot_mod.public(home, load_config(home), [], pilot.projects(), pilot.now)
+    assert got["working"] == 0  # a lane inside the grace period with no agent row is not "working" on screen
+    assert len(got["started"]) == 1

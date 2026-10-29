@@ -1,7 +1,7 @@
 /* Run with: node web/js/md.test.mjs  (no framework) */
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-const { md, mdInline, mdBox } = createRequire(import.meta.url)('./md.js');
+const { md, mdInline, mdBox, splitRef } = createRequire(import.meta.url)('./md.js');
 
 let n = 0;
 const t = (name, fn) => { fn(); n++; };
@@ -71,5 +71,45 @@ t('box: renders then clamps with css, button carries the key', () => {
   has(h, 'class="mdc', 'data-mdk="k&quot;1"', 'data-act="mdopen"', 'Show all');
   assert.equal((h.match(/<li>/g) || []).length, 30);
   assert.equal(mdBox('', 'k'), '');
+});
+/* file references: only paths the caller confirms become links (docs/CONTRACT-files.md) */
+const known = ['web/js/v-plan.js', 'app/src-tauri/icons', 'docs/TODO.md', 'collector/tirith/cli.py', 'README.md', 'my_file_name.py', '/abs/x.md'];
+const refs = { project: 'tirith', file: p => known.includes(p) };
+const links = h => (h.match(/data-act="fopen"/g) || []).length;
+t('file refs: code spans, plain text and link targets', () => {
+  const h = md('Changed `web/js/v-plan.js`, **docs/TODO.md** and [the cli](collector/tirith/cli.py:42).', refs);
+  has(h, '<a class="fref" href="#" data-act="fopen" data-project="tirith" data-path="web/js/v-plan.js" title="Open web/js/v-plan.js"><code>web/js/v-plan.js</code></a>',
+    'data-path="docs/TODO.md"', '<strong><a class="fref"', 'data-path="collector/tirith/cli.py" data-line="42"', '>the cli</a>');
+  assert.equal(links(h), 3);
+  has(md('see app/src-tauri/icons/ and ./README.md', refs), 'data-path="app/src-tauri/icons/"', 'data-path="./README.md"');
+  has(md('"docs/TODO.md" and (README.md)', refs), 'data-path="docs/TODO.md"', 'data-path="README.md"');
+  has(md('- `/abs/x.md`\n\n| a |\n|---|\n| web/js/v-plan.js |', refs), 'data-path="/abs/x.md"', '<td><a class="fref"');
+});
+t('file refs: path:line and path:line:col, trailing punctuation stays text', () => {
+  const h = md('See collector/tirith/cli.py:42. Then `collector/tirith/cli.py:42:7`, and README.md:3:', refs);
+  has(h, 'data-line="42" title="Open collector/tirith/cli.py:42">collector/tirith/cli.py:42</a>.',
+    'data-line="42" data-col="7"', 'data-path="README.md" data-line="3" title="Open README.md:3">README.md:3</a>:');
+});
+t('file refs: no links for URLs, commands, words or unconfirmed paths', () => {
+  const h = md('https://example.com/web/js/v-plan.js and [x](https://a.b/docs/TODO.md) and `uv run pytest docs/TODO.md` ' +
+    'and `tirith` and docs and --project and 12:30 and web/js/missing.js and `web/js/missing.js` and [y](javascript:alert(1))', refs);
+  assert.equal(links(h), 0, h);
+  has(h, 'href="https://example.com/web/js/v-plan.js"', '<code>uv run pytest docs/TODO.md</code>');
+  lacks(h, 'href="javascript');
+  assert.equal(links(md('`web/js/v-plan.js` docs/TODO.md')), 0);   /* no opts: nothing is linked */
+  assert.equal(links(md('```\nweb/js/v-plan.js\n```', refs)), 0);   /* fenced code stays code */
+});
+t('file refs: emphasis does not break a path, attributes stay escaped', () => {
+  has(md('edit my_file_name.py now', refs), 'data-path="my_file_name.py"', '>my_file_name.py</a>');
+  const evil = { project: 'a"b<c', file: () => true };
+  const h = md('`docs/x.md`', evil);
+  has(h, 'data-project="a&quot;b&lt;c"'); lacks(h, 'a"b<c');
+  has(mdInline('`README.md`', refs), 'data-path="README.md"');
+});
+t('splitRef: the shared path rules', () => {
+  assert.deepEqual(splitRef('collector/tirith/cli.py:42:7.'), { path: 'collector/tirith/cli.py', line: 42, col: 7, rest: '.' });
+  assert.deepEqual(splitRef('.github/workflows/ci.yml'), { path: '.github/workflows/ci.yml', line: null, col: null, rest: '' });
+  ['https://a.b/c.js', 'file:///tmp/x.md', 'tirith', 'docs', '--project', '12:30', 'v1.2', '1/2', 'a:b', '$HOME/x', '']
+    .forEach(w => assert.equal(splitRef(w), null, w));
 });
 console.log(n + ' md groups passed');
