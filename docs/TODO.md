@@ -218,8 +218,12 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 
 ## 15. Collector y CLI en Rust
 
-- [ ] Base: crate Rust compartido (workspace con la app), arnés de paridad que corre el collector de Python y el de Rust sobre las mismas carpetas de prueba y compara `state.json`.
+- [x] Base: crate Rust compartido (workspace con la app), arnés de paridad que corre el collector de Python y el de Rust sobre las mismas carpetas de prueba y compara `state.json`.
 - [ ] El estado (`state.json`/`state.js`) lo construye Rust con paridad total contra Python.
+  - [ ] Rust: agentes y lanes (`agents`, `usage`, presencia del manager).
+  - [ ] Rust: inbox y avisos (`waiting_on_you`, `manager_queue`, `inbox`, `says`, `file_refs`).
+  - [ ] Rust: pipelines, guarda y reglas (`pipelines`, `violations`, `rules`, `guard`, `setup`, `env`).
+  - [ ] Rust: salas, flujos y manager (`rooms`, `flows`, `sessions`, `autopilot`, `models`, `disk`, `health`).
 - [ ] Dispatcher, piloto automático, manager de guardia y revisiones en Rust, con paridad.
 - [ ] La CLI `tirith` en Rust (mismos comandos y salidas), un solo binario para los agentes.
 - [ ] La app incluye el collector (sin `uv` ni Python) y sigue firmada y notarizada.
