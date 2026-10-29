@@ -53,6 +53,7 @@ from tirith import plangate as plangate_mod
 from tirith import verifylane as verifylane_mod
 from tirith import roadmap as roadmap_mod
 from tirith import review as review_mod
+from tirith import mergeq as mergeq_mod
 from tirith import roadmap as roadmap_mod
 from tirith import runstage as runstage_mod
 from tirith import projects as projects_mod
@@ -1544,6 +1545,41 @@ def _cmd_plan_report(args) -> int:
     return 0
 
 
+def _cmd_merge_request(args) -> int:
+    home = _home(args)
+    lane_id = args.lane or os.environ.get("TIRITH_LANE")
+    if not lane_id:
+        print("tirith merge request: pass --lane <id> (or run it inside a lane)", file=sys.stderr)
+        return 3
+    try:
+        position = mergeq_mod.enqueue(home, lane_id)
+    except review_mod.ReviewError as error:
+        print(f"tirith merge request: {error}", file=sys.stderr)
+        return 3
+    print(f"lane {lane_id}: queued for merge (position {position}); Tirith merges one lane at a time")
+    return 0
+
+
+def _cmd_merge_run(args) -> int:
+    home = _home(args)
+    rows = mergeq_mod.drain(home, load_config(home), push=not args.no_push)
+    for row in rows:
+        print(f"lane {row['lane']}: {row['result']}" + (f" ({row['message'].splitlines()[0]})" if row.get("message") else ""))
+    return 0 if all(r["result"] in (mergeq_mod.MERGED, mergeq_mod.PUSH_FAILED) for r in rows) else 1
+
+
+def _cmd_merge_status(args) -> int:
+    home = _home(args)
+    shown = mergeq_mod.view(home, args.project)
+    for item in shown["items"]:
+        print(f"{item['position']}. {item['lane']} [{item['status']}]")
+    if shown["last"]:
+        print(f"last: {shown['last']['lane']} {shown['last']['result']} at {shown['last']['at']}")
+    elif not shown["items"]:
+        print("the merge queue is empty")
+    return 0
+
+
 def _cmd_launch(args) -> int:
     home = _home(args)
     try:
@@ -2465,6 +2501,18 @@ def build_parser() -> argparse.ArgumentParser:
     pl_done.add_argument("--item", required=True, help="the exact text of the item")
     pl_done.add_argument("--commit", required=True, help="the commit on main that did the work")
     pl_done.set_defaults(func=_cmd_plan_done)
+
+    merge = sub.add_parser("merge", parents=[common], help="the single merge queue (agents never merge into main)")
+    merge_sub = merge.add_subparsers(dest="merge_command", required=True)
+    m_req = merge_sub.add_parser("request", parents=[common], help="queue a finished lane for Tirith to merge")
+    m_req.add_argument("--lane", default=None, help="lane id (default: $TIRITH_LANE)")
+    m_req.set_defaults(func=_cmd_merge_request)
+    m_run = merge_sub.add_parser("run", parents=[common], help="merge the waiting lanes, one at a time")
+    m_run.add_argument("--no-push", action="store_true", help="do not push main")
+    m_run.set_defaults(func=_cmd_merge_run)
+    m_st = merge_sub.add_parser("status", parents=[common], help="show the queue and the last result")
+    m_st.add_argument("--project", default=None)
+    m_st.set_defaults(func=_cmd_merge_status)
 
     inbox = sub.add_parser("inbox", parents=[common], help="the owner's requests on plan steps")
     inbox_sub = inbox.add_subparsers(dest="inbox_command", required=True)

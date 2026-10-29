@@ -25,6 +25,7 @@ from tirith import timeouts as timeouts_mod
 from tirith import asks as asks_mod
 from tirith import autopilot as autopilot_mod
 from tirith import autoreview as autoreview_mod
+from tirith import mergeq as mergeq_mod
 from tirith import diskdiet as diskdiet_mod
 from tirith import fallback as fallback_mod
 from tirith import flows as flows_mod
@@ -415,6 +416,8 @@ def run(home: Path, config: Config, now: datetime, *, agents: list[dict], lanes:
             escalate(home, req, notify, now_iso(now))
             state["escalated"][rid] = now_iso(now)
             changed = True
+    if mergeq_mod.run(home, config, lanes, spawn=spawn):
+        changed = True
     if autoreview_mod.run(home, config, now, state, lanes, spawn=spawn, notify=notify):
         changed = True
     if _cleanup_due(home):
