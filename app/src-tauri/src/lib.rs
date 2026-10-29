@@ -164,6 +164,112 @@ fn launch_step(project: String, step: u32) -> Result<String, String> {
     }
 }
 
+// -- inbox requests ----------------------------------------------------------------------------
+
+const INBOX_TEXT_MAX: usize = 4096;
+
+/// UTC `YYYY-MM-DDTHH:MM:SSZ` for a Unix time (days-from-civil, no date crate).
+fn iso_utc(secs: u64) -> String {
+    let (days, rem) = ((secs / 86400) as i64, secs % 86400);
+    let z = days + 719468;
+    let era = z.div_euclid(146097);
+    let doe = z.rem_euclid(146097);
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 };
+    let year = yoe + era * 400 + if month <= 2 { 1 } else { 0 };
+    format!(
+        "{year:04}-{month:02}-{day:02}T{:02}:{:02}:{:02}Z",
+        rem / 3600,
+        rem % 3600 / 60,
+        rem % 60
+    )
+}
+
+/// `text` cut to at most `max` bytes, never inside a character.
+fn clip(text: &str, max: usize) -> &str {
+    let mut end = text.len().min(max);
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    &text[..end]
+}
+
+/// Builds the inbox row for a request: `{id, at, kind, project, step, text, from, status}`.
+fn inbox_row(kind: &str, project: &str, step: &str, text: &str, now: SystemTime, salt: u32) -> Result<Value, String> {
+    if kind != "finish" && kind != "ask" {
+        return Err(format!("kind must be finish or ask, not {kind:?}"));
+    }
+    let (project, step, text) = (project.trim(), step.trim(), clip(text.trim(), INBOX_TEXT_MAX));
+    if project.is_empty() || step.is_empty() {
+        return Err("a request needs a project and a step".into());
+    }
+    if kind == "ask" && text.is_empty() {
+        return Err("a question needs text".into());
+    }
+    let d = now.duration_since(UNIX_EPOCH).unwrap_or_default();
+    let id = format!("in-{:08x}", (d.as_nanos() as u32) ^ salt.rotate_left(16) ^ std::process::id());
+    Ok(json!({
+        "id": id, "at": iso_utc(d.as_secs()), "kind": kind, "project": project, "step": step,
+        "text": text, "from": "owner", "status": "open",
+    }))
+}
+
+/// Appends one request to `<home>/inbox.jsonl` (no shell) and returns its id.
+#[tauri::command]
+fn inbox_add(kind: String, project: String, step: String, text: Option<String>) -> Result<String, String> {
+    static COUNTER: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+    let salt = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let row = inbox_row(&kind, &project, &step, text.as_deref().unwrap_or(""), SystemTime::now(), salt)?;
+    let home = tirith_home();
+    std::fs::create_dir_all(&home).map_err(|e| format!("could not create {}: {e}", home.display()))?;
+    let path = home.join("inbox.jsonl");
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+        .map_err(|e| format!("could not open {}: {e}", path.display()))?;
+    // one write call, so a concurrent writer cannot split the line
+    file.write_all(format!("{row}\n").as_bytes()).map_err(|e| e.to_string())?;
+    Ok(row["id"].as_str().unwrap_or_default().to_string())
+}
+
+#[cfg(test)]
+mod inbox_tests {
+    use super::*;
+
+    #[test]
+    fn iso_utc_known_dates() {
+        assert_eq!(iso_utc(0), "1970-01-01T00:00:00Z");
+        assert_eq!(iso_utc(1_782_734_400), "2026-06-29T12:00:00Z");
+        assert_eq!(iso_utc(1_709_164_800), "2024-02-29T00:00:00Z");
+    }
+
+    #[test]
+    fn row_has_the_documented_fields() {
+        let row = inbox_row("ask", " demo ", "2", " why? ", UNIX_EPOCH + Duration::from_secs(1_782_734_400), 1).unwrap();
+        assert_eq!(row["kind"], "ask");
+        assert_eq!(row["project"], "demo");
+        assert_eq!(row["text"], "why?");
+        assert_eq!(row["from"], "owner");
+        assert_eq!(row["status"], "open");
+        assert!(row["id"].as_str().unwrap().starts_with("in-"));
+    }
+
+    #[test]
+    fn rejects_bad_requests_and_clips_text() {
+        assert!(inbox_row("ask", "demo", "1", "", UNIX_EPOCH, 0).is_err());
+        assert!(inbox_row("nope", "demo", "1", "x", UNIX_EPOCH, 0).is_err());
+        assert!(inbox_row("finish", "", "1", "", UNIX_EPOCH, 0).is_err());
+        assert!(inbox_row("finish", "demo", "1", "", UNIX_EPOCH, 0).is_ok());
+        let long = "é".repeat(3000);
+        let row = inbox_row("ask", "demo", "1", &long, UNIX_EPOCH, 0).unwrap();
+        assert!(row["text"].as_str().unwrap().len() <= INBOX_TEXT_MAX);
+    }
+}
+
 // -- chat (behind a flag) -----------------------------------------------------------------------
 //
 // TODO: permission questions from the agent in the UI, resuming a conversation, and showing tool
@@ -324,6 +430,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             current_state,
             launch_step,
+            inbox_add,
             chat_enabled,
             chat_agents,
             chat_start,

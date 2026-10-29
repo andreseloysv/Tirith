@@ -254,6 +254,19 @@ def job_room_owner(client: ChatClient, transcript: str, owner_names: list[str]) 
     return items[:5]
 
 
+def job_inbox_answer(client: ChatClient, context: str) -> str:
+    """Job 7: the owner's question about a plan step + what is known of it -> a short markdown answer."""
+    text = client.chat([
+        {"role": "system", "content": _SYSTEM},
+        {"role": "user", "content": (
+            "The owner of a project asks about one step of its plan. Answer in at most 8 lines of "
+            "markdown, using only the facts below; say plainly what is not known. No preamble.\n\n"
+            + context[-12000:]
+        )},
+    ])
+    return text.strip()[:4000]
+
+
 def _parse_string_list(text: str) -> list[str]:
     data = _try_json(text)
     if isinstance(data, list):
