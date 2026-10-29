@@ -22,6 +22,7 @@ from pathlib import Path
 from tirith import timeouts as timeouts_mod
 from tirith import hooks as hooks_mod
 from tirith.home import now_iso, parse_iso
+from tirith.store import read_json, write_json_atomic
 
 LOG_BYTES = 512 * 1024
 BRIEF_BYTES = 32 * 1024
@@ -33,6 +34,9 @@ FILES_MAX = 100
 UNTRACKED_COUNT_BYTES = 256 * 1024
 GIT_TIMEOUT_S = 10
 PREFETCH_WORKERS = 8
+WARM_BUDGET_S = 8.0  # git time spent per cycle on lanes deferred by a warming start
+FILES_CACHE = "lane-files.json"  # ended lanes' git file lists, kept between runs (in the Tirith home)
+FILES_CACHE_MAX = 2000
 FILES_TTL_S = 15  # a live lane's git file list is re-read at most this often (in the background)
 
 # -- goal -------------------------------------------------------------------------------------
@@ -584,12 +588,21 @@ def _iso(ts: float) -> str:
 class ActivityTracker:
     """Keeps per-lane caches (log parse, brief goal, ended-lane files) across cycles."""
 
-    def __init__(self) -> None:
+    def __init__(self, home: Path | None = None, warm: bool = False) -> None:
+        self._home = home
+        self._warm = warm  # a start: lanes without a cached git file list are filled over later cycles
+        self._deferred: dict[str, dict] = {}  # lane id -> lane, waiting for its git files
+        self._persisted: dict[str, dict] = {}
+        self._persist_dirty = False
+        if home is not None:
+            data = read_json(Path(home) / FILES_CACHE, {})
+            self._persisted = data if isinstance(data, dict) else {}
         self._logs: dict[str, _LaneLog] = {}
         self._goals: dict[str, tuple[float, str | None]] = {}
         self._ended_files: dict[str, tuple[list[dict], tuple[int, int, int]]] = {}
         self._live_files: dict[str, tuple[float, tuple[list[dict], tuple[int, int, int]]]] = {}
         self._refreshing: set[str] = set()
+        self._warmed_once = False
 
     def _log(self, lane: dict) -> _LaneLog | None:
         """Bring the lane's log state up to date (read only what is new)."""
@@ -640,32 +653,106 @@ class ActivityTracker:
                 goal = None
         return goal or str(lane.get("feature") or "") or None
 
+    @property
+    def warming(self) -> bool:
+        return self._warm
+
+    def _persisted_files(self, lane: dict):
+        """The file list kept from an earlier run for an ended lane (same end time and start commit)."""
+        entry = self._persisted.get(str(lane["id"]))
+        if entry and entry.get("key") == [lane.get("ended_at"), lane.get("start_commit")]:
+            return entry["files"], tuple(entry["totals"])
+        return None
+
+    def _store_ended(self, lane: dict, result) -> None:
+        self._ended_files[str(lane["id"])] = result
+        if self._home is not None:
+            self._persisted[str(lane["id"])] = {
+                "key": [lane.get("ended_at"), lane.get("start_commit")],
+                "files": result[0], "totals": list(result[1])}
+            self._persist_dirty = True
+
+    def _save_persisted(self) -> None:
+        if not self._persist_dirty or self._home is None:
+            return
+        self._persist_dirty = False
+        rows = self._persisted
+        if len(rows) > FILES_CACHE_MAX:
+            rows = dict(list(rows.items())[-FILES_CACHE_MAX:])
+            self._persisted = rows
+        write_json_atomic(Path(self._home) / FILES_CACHE, rows, compact=True)
+
     def prefetch(self, lanes: list[dict]) -> None:
-        """Read the git files of every lane not seen yet at once (a cold start would run 3 git calls per lane in turn)."""
-        todo = [l for l in lanes if str(l["id"]) not in (self._ended_files if l.get("ended_at") else self._live_files)]
-        if len(todo) < 2:
+        """Read the git files of every lane not seen yet at once (a cold start would run 3 git calls per lane in turn).
+
+        A warming start answers from the kept file lists and defers the rest: working lanes first, a budget
+        of git time per cycle, so the first state is written at once and later cycles fill the gaps."""
+        todo = []
+        for lane in lanes:
+            lane_id = str(lane["id"])
+            if lane_id in (self._ended_files if lane.get("ended_at") else self._live_files):
+                continue
+            kept = self._persisted_files(lane) if lane.get("ended_at") else None
+            if kept is not None:
+                self._ended_files[lane_id] = kept
+                continue
+            todo.append(lane)
+        if self._warm:
+            self._deferred = {str(l["id"]): l for l in todo}
+            todo = sorted(todo, key=lambda l: bool(l.get("ended_at")))
+            deadline = time.monotonic() + WARM_BUDGET_S
+            first = not self._warmed_once
+            self._warmed_once = True
+            if first:
+                todo = [l for l in todo if not l.get("ended_at")][:PREFETCH_WORKERS]  # a few working lanes now
+            else:
+                todo = self._within(todo, deadline)
+        elif len(todo) < 2:
+            return
+        if not todo:
+            self._finish_warm()
             return
         with ThreadPoolExecutor(max_workers=PREFETCH_WORKERS) as pool:
             results = list(pool.map(lambda l: git_files(l.get("workspace"), l.get("start_commit")), todo))
         at = time.monotonic()
         for lane, result in zip(todo, results):
+            self._deferred.pop(str(lane["id"]), None)
             if lane.get("ended_at"):
-                self._ended_files[str(lane["id"])] = result
+                self._store_ended(lane, result)
             else:
                 self._live_files[str(lane["id"])] = (at, result)
+        self._save_persisted()
+        if self._warm:
+            self._finish_warm()
+
+    def _within(self, todo: list[dict], deadline: float) -> list[dict]:
+        """As many lanes as one budget of git time covers (about 0.3 s a lane per worker)."""
+        room = max(PREFETCH_WORKERS, int(max(0.0, deadline - time.monotonic()) * PREFETCH_WORKERS / 0.3))
+        return todo[:room]
+
+    def _finish_warm(self) -> None:
+        if not self._deferred:
+            self._warm = False
+
+    def pending(self) -> int:
+        return len(self._deferred)
 
     def files(self, lane: dict, ended: bool) -> tuple[list[dict], tuple[int, int, int]]:
         """Live git files; an ended lane keeps the list computed once."""
         lane_id = str(lane["id"])
         if ended and lane_id in self._ended_files:
             return self._ended_files[lane_id]
+        if lane_id in self._deferred:
+            return [], (0, 0, 0)
         if ended:
             result = git_files(lane.get("workspace"), lane.get("start_commit"))
-            self._ended_files[lane_id] = result
+            self._store_ended(lane, result)
             self._live_files.pop(lane_id, None)
             return result
         self._ended_files.pop(lane_id, None)
         cached = self._live_files.get(lane_id)
+        if cached is None and self._warm:
+            return [], (0, 0, 0)
         if cached is None:  # first sight: the caller waits for it
             result = git_files(lane.get("workspace"), lane.get("start_commit"))
             self._live_files[lane_id] = (time.monotonic(), result)

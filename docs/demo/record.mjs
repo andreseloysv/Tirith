@@ -1,54 +1,50 @@
-// Records the Tirith demo against the LIVE page (Edge, 1920x1080) while real pipelines run.
+// Records the Tirith demo (Edge, 1920x1080, playwright video) on the demo story in story.mjs.
 //
-//   node narrate.mjs            # first: narration audio + <out>/timings.json
-//   node record.mjs [outDir]    # then: <out>/raw/*.webm and <out>/scenes.json
-//   ./assemble.sh [outDir]      # finally: the mp4
+//   node narrate.mjs [outDir]   # first: narration audio + <out>/timings.json
+//   node record.mjs  [outDir]   # then:  <out>/raw/*.webm and <out>/scenes.json
+//   ./assemble.sh    [outDir]   # finally: docs/demo/out/tirith-demo.mp4 and tirith-demo.gif
 //
-// Requirements: a running collector (./run), Microsoft Edge, playwright-core (PLAYWRIGHT_CORE can point at a
-// node_modules folder that has it; otherwise it is resolved normally), uv, the Android SDK for the ChromaSol stages.
-// The recorder starts a session "Hackathon demo" and real pipelines through activity.sh, and ends the session.
+// Needs Microsoft Edge and playwright-core (PLAYWRIGHT_CORE can point at a node_modules folder that has it). No
+// collector, no server, no port, no network: the page is a local file that follows <out>/state/state.js, which this
+// script rewrites as the story goes on (a request in the chat, the manager's steps, two agents, a rule, a merge...).
+// Nothing is written to ~/.tirith.
 import { createRequire } from 'node:module';
-import { readFileSync, writeFileSync, mkdirSync, readdirSync, appendFileSync, existsSync, rmSync } from 'node:fs';
-import { spawn, execFileSync } from 'node:child_process';
+import { readFileSync, writeFileSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
-import { homedir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { Story, MANAGER, WREN, IVREN, REQUEST } from './story.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '../..');
-const out = resolve(process.argv[2] || join(root, '../Tirith-video/work'));
-const require = createRequire(process.env.PLAYWRIGHT_CORE ? join(resolve(process.env.PLAYWRIGHT_CORE), 'x.js') : import.meta.url);
+const out = resolve(process.argv[2] || join(here, 'out/work'));
+const require = createRequire(join(resolve(process.env.PLAYWRIGHT_CORE || '/Users/andreseloyasanchezva/DEVELOP/propuestavenezuela/node_modules'), 'x.js'));
 const { chromium } = require('playwright-core');
 
-const HOME = process.env.TIRITH_HOME || join(homedir(), '.tirith');
-const STATE_JS = join(HOME, 'state.js');
-const BASE = pathToFileURL(join(root, 'web/index.html')).href + '#state=' + pathToFileURL(STATE_JS).href;
+const stateDir = join(out, 'state');
+const BASE = pathToFileURL(join(root, 'web/index.html')).href + '#state=' + pathToFileURL(join(stateDir, 'state.js')).href + '&project=chromasol';
 const CARDS = pathToFileURL(join(here, 'cards.html')).href;
-const SESSION = 'hackathon-demo';
-const SESSION_NAME = 'Hackathon demo';
-const OLD_SESSION_FILE = join(HOME, 'session');
-const oldSession = existsSync(OLD_SESSION_FILE) ? readFileSync(OLD_SESSION_FILE, 'utf8') : null;
-
 const T = JSON.parse(readFileSync(join(out, 'timings.json'), 'utf8'));
-const agentLog = join(out, 'agent.log');
 mkdirSync(join(out, 'raw'), { recursive: true });
 for (const f of readdirSync(join(out, 'raw'))) rmSync(join(out, 'raw', f));
 
 // scene length = narration + a breath, but never shorter than the on-screen action needs
 const LEN = {
-  problem: Math.max(T.problem + 0.7, 14.4), run: Math.max(T.run + 1.1, 8.7), overview: Math.max(T.overview + 1.6, 12.5),
-  pipelines: 40, agents: Math.max(T.agents + 4, 14.5), flow: Math.max(T.flow + 6, 19),
-  brain: Math.max(T.brain + 1.0, 19.5), filters: Math.max(T.filters + 4.2, 12), built: Math.max(T.built + 0.6, 16.6),
+  problem: Math.max(T.problem + 0.9, 12), ask: Math.max(T.ask + 1, 24), plan: Math.max(T.plan + 1.5, 12),
+  rule: Math.max(T.rule + 1.5, 30), merge: Math.max(T.merge + 1.5, 18), health: Math.max(T.health + 1.5, 12),
+  decision: Math.max(T.decision + 1.5, 13), brain: Math.max(T.brain + 1.5, 15), close: T.close + 2.4,
 };
-// where each narration clip starts, in seconds after its scene starts
-const NARR = { problem: ['problem', 0.4], run: ['run', 0.9], overview: ['overview', 0.4], pipelines: ['pipelines', 0.4],
-  pipelines2: ['pipelines', 14.2], pipelines3: ['pipelines', 35.5], agents: ['agents', 0.4], flow: ['flow', 0.4],
-  brain: ['brain', 0.4], filters: ['filters', 0.4], built: ['built', 0.4] };
+const CAPTION = {
+  ask: 'One request, written in the chat', plan: 'The plan grows; every agent starts from a plan item',
+  rule: 'A rule in code blocks the agent, and tells it what to run instead', merge: 'Claim check, then auto-merge. The plan ticks itself',
+  health: 'The health dot: Tirith heals itself', decision: 'Only a real decision reaches the owner',
+};
 
+const story = new Story(stateDir);
+story.write();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const act = (step) => spawn(join(here, 'activity.sh'), [step], { env: { ...process.env, DEMO_WORK: out }, stdio: 'ignore', detached: true }).unref();
-const actWait = (step) => execFileSync(join(here, 'activity.sh'), [step], { env: { ...process.env, DEMO_WORK: out }, stdio: 'ignore' });
-const say = (line) => appendFileSync(agentLog, line + '\n');
+const beat = (o) => { story.set(o).write(); };
+const heartbeat = setInterval(() => story.write(), 2000);   // generated_at stays fresh, like a live collector
 
 const browser = await chromium.launch({ channel: 'msedge', headless: true });
 const ctx = await browser.newContext({
@@ -56,16 +52,22 @@ const ctx = await browser.newContext({
   recordVideo: { dir: join(out, 'raw'), size: { width: 1920, height: 1080 } },
 });
 await ctx.addInitScript(() => {
-  // a visible cursor and click ripple (headless video has none)
+  // a tirith:// link is the page's way to send a reply; headless has no handler, so swallow it
+  const click = HTMLAnchorElement.prototype.click;
+  HTMLAnchorElement.prototype.click = function () { if (/^tirith:/.test(this.href)) return; return click.call(this); };
   const mk = () => {
-    if (document.getElementById('__cur')) return;
+    if (!document.documentElement || document.getElementById('__cur')) return;
+    // a visible cursor and click ripple (headless video has none), and the caption bar
     const c = document.createElement('div'); c.id = '__cur';
     c.innerHTML = '<svg width="34" height="34" viewBox="0 0 24 24"><path d="M5 3l14 8-6 2-3 6z" fill="#111" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg>';
     c.style.cssText = 'position:fixed;left:-50px;top:-50px;z-index:2147483647;pointer-events:none;transition:none;filter:drop-shadow(0 2px 3px rgba(0,0,0,.3))';
     document.documentElement.appendChild(c);
     const st = document.createElement('style');
-    st.textContent = '@keyframes __rip{from{transform:scale(.3);opacity:.6}to{transform:scale(1.6);opacity:0}}';
+    st.textContent = '@keyframes __rip{from{transform:scale(.3);opacity:.6}to{transform:scale(1.6);opacity:0}}' +
+      '#__cap{position:fixed;left:50%;bottom:30px;transform:translateX(-50%);z-index:2147483645;pointer-events:none;background:rgba(17,24,39,.88);color:#fff;font:600 28px/1.3 -apple-system,"SF Pro Text",Inter,system-ui,sans-serif;padding:12px 30px;border-radius:99px;opacity:0;transition:opacity .5s;white-space:nowrap;box-shadow:0 8px 30px rgba(0,0,0,.25)}#__cap.on{opacity:1}';
     document.documentElement.appendChild(st);
+    const cap = document.createElement('div'); cap.id = '__cap'; document.documentElement.appendChild(cap);
+    window.__caption = (t) => { if (t) { cap.textContent = t; cap.classList.add('on'); } else cap.classList.remove('on'); };
     addEventListener('mousemove', (e) => { c.style.left = e.clientX - 5 + 'px'; c.style.top = e.clientY - 3 + 'px'; }, true);
     addEventListener('mousedown', (e) => {
       const r = document.createElement('div');
@@ -75,23 +77,20 @@ await ctx.addInitScript(() => {
   };
   addEventListener('DOMContentLoaded', mk); mk();
 });
+const pageAt = Date.now();
 const page = await ctx.newPage();
-const wall0 = Date.now();
+const errors = []; page.on('pageerror', (e) => errors.push(String(e)));
 
 let mx = 960, my = 540;
 const ease = (t) => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
 async function glide(x, y, ms = 900) {
   const n = Math.max(6, Math.round(ms / 16)), x0 = mx, y0 = my;
-  for (let i = 1; i <= n; i++) {
-    const k = ease(i / n);
-    await page.mouse.move(x0 + (x - x0) * k, y0 + (y - y0) * k);
-    await sleep(ms / n);
-  }
+  for (let i = 1; i <= n; i++) { const k = ease(i / n); await page.mouse.move(x0 + (x - x0) * k, y0 + (y - y0) * k); await sleep(ms / n); }
   mx = x; my = y;
 }
 async function center(loc, fx = 0.5, fy = 0.5) {
   let b = null;
-  for (let i = 0; i < 12 && !b; i++) { b = await loc.first().boundingBox().catch(() => null); if (!b) await sleep(250); }   // the page re-renders every 2 s
+  for (let i = 0; i < 16 && !b; i++) { b = await loc.first().boundingBox().catch(() => null); if (!b) await sleep(250); }   // the page re-renders every 2 s
   if (!b) throw new Error('no box for ' + loc);
   return [b.x + b.width * fx, b.y + b.height * fy];
 }
@@ -102,172 +101,148 @@ async function click(loc, ms = 900, fx = 0.5, fy = 0.5) {
 }
 const closeBtn = () => page.locator('[data-act="close"]');
 async function closeDrawer(ms = 800) { if (await closeBtn().count()) await click(closeBtn(), ms); }
-async function openStage(loc, ms = 800) {   // a click opens the drawer; if the stage was already selected, click once more
-  await click(loc, ms);
-  if (!(await closeBtn().count())) await click(loc, 300);
-}
 async function waitFor(loc, timeout = 25000) { await loc.first().waitFor({ state: 'visible', timeout }); }
+const nav = (v) => page.locator('[data-nav="view"][data-v="' + v + '"]');
+// click a view in the sidebar; the page re-renders every 2 s and can swallow a click, so check and click again
+async function goView(v, ms = 900) {
+  for (let i = 0; i < 3; i++) {
+    await click(nav(v), i ? 300 : ms);
+    if (await nav(v).first().evaluate((e) => e.classList.contains('on')).catch(() => false)) return;
+  }
+}
 
 const marks = {};
 let sceneStart = 0;
-function scene(name) {
+const wall0 = Date.now();
+async function scene(name, caption) {
   marks[name] = Date.now(); sceneStart = Date.now();
   console.log(((Date.now() - wall0) / 1000).toFixed(1) + 's scene ' + name);
-  say('[recorder] Scene: ' + name);
+  await page.evaluate((c) => window.__caption && window.__caption(c), caption || '').catch(() => {});
 }
 async function until(sec) { const ms = sceneStart + sec * 1000 - Date.now(); if (ms > 0) await sleep(ms); }
-const nav = (v) => page.locator('[data-nav="view"][data-v="' + v + '"]');
-const proj = (id) => page.locator('[data-nav="project"][data-v="' + id + '"]');
-async function setSession(id, ms = 800) {   // id = session to select, or null to clear
-  const on = async (x) => (await sess(x).count()) && (await sess(x).first().evaluate((e) => e.classList.contains('on')));
-  if (id) { if (!(await on(id))) await click(sess(id), ms); }
-  else for (const x of [SESSION, '2026-10-28-tirith']) if (await on(x)) await click(sess(x), ms);
-}
-const sess = (id) => page.locator('[data-nav="session"][data-v="' + id + '"]');
+// reveal the steps of a list one by one: [count, at second] pairs, each applied when its time comes
+async function timeline(plan) { for (const [at, o] of plan) { await until(at); beat(typeof o === 'function' ? o() : o); } }
 
 try {
-  // ---- 1. problem: the whole fleet, unfiltered Flow ------------------------------------------------------------
-  await page.goto(BASE + '&view=flow'); await page.reload(); await sleep(1500);
-  scene('problem');
-  await page.mouse.move(mx, my);
-  const nodes = page.locator('.fnode');
-  await waitFor(nodes);
-  const nn = await nodes.count();
-  const pick = [Math.min(2, nn - 1), Math.min(5, nn - 1), Math.min(7, nn - 1), Math.min(9, nn - 1), 1];
-  for (const [i, k] of pick.entries()) { await hover(nodes.nth(k), 1500); await until(1.5 + (i + 1) * 2.2); }
-  await until(LEN.problem);
+  // ---- 1. problem (card) ---------------------------------------------------------------------------------------------
+  await page.goto(CARDS + '#problem'); await page.reload();
+  await scene('problem'); await until(LEN.problem);
 
-  // ---- 2. one command ------------------------------------------------------------------------------------------
-  act('session');
-  await page.goto(CARDS + '#terminal'); scene('run'); await until(LEN.run);
+  // ---- 2. one request in the chat; the manager works live ------------------------------------------------------------
+  await page.goto(BASE + '&view=overview'); marks.cut_ask = Date.now(); await page.reload(); await sleep(1200);
+  await scene('ask', CAPTION.ask);
+  const box = page.locator('textarea[data-act="mc-text"]').first();
+  await waitFor(box, 10000);
+  await click(box, 1100);
+  await page.keyboard.type(REQUEST, { delay: 42 });
+  await sleep(900);
+  await box.fill(''); await box.evaluate((e) => e.blur());
+  // the send: the request is in the inbox, the manager starts its turn
+  beat({ asked: true, mgr: 1 });
+  await glide(1560, 330, 900);
+  const sent = Date.now();
+  for (let n = 2; n <= MANAGER.length; n++) {      // one more step every 0.9 s; the plan items and the lanes appear with their results
+    await sleep(sent + (n - 1) * 900 - Date.now());
+    beat({ mgr: n, plan: n >= 8 ? 1 : 0, lanes: n >= 12, wren: n >= 12 ? 1 : 0, ivren: n >= 12 ? 1 : 0 });
+  }
+  await until(LEN.ask);
 
-  // ---- 3. overview, live -----------------------------------------------------------------------------------------
-  await page.goto(BASE + '&view=overview&session=' + SESSION); await page.reload(); scene('overview');
-  await sleep(500);
-  setTimeout(() => act('events'), 1500);
-  setTimeout(() => act('pipelines'), 11500);
-  await glide(700, 300, 1400);
-  await until(5);
-  await waitFor(page.locator('.needs li'), 15000).catch(() => {});
-  await hover(page.locator('.needs li'), 1200, 0.3, 0.5).catch(() => {});
-  await until(8.5);
-  await glide(1600, 260, 1400);
-  await until(11);
-  await glide(780, 480, 1400);
-  await until(LEN.overview);
+  // ---- 3. the plan: progress and the agents per item ---------------------------------------------------------------------
+  await scene('plan', CAPTION.plan);
+  await glide(520, 380, 1000);
+  beat({ wren: 2, ivren: 2 });
+  await until(3);
+  await hover(page.locator('.pstep').filter({ hasText: 'Dark mode' }).first(), 1200, 0.35, 0.2);
+  await until(6);
+  await hover(page.locator('.pstep').filter({ hasText: 'Faster scan' }).first(), 1200, 0.35, 0.2);
+  await until(9);
+  await glide(930, 330, 900);
+  await until(LEN.plan);
 
-  // ---- 4. pipelines, step by step ---------------------------------------------------------------------------------
-  await click(nav('pipelines'), 1000); scene('pipelines');
-  const runCard = (name) => page.locator('[data-act="run"]').filter({ hasText: name });
-  await waitFor(runCard('tirith-checks'), 20000);
-  await click(runCard('tirith-checks'), 900); await until(4);
-  const stages = page.locator('[data-act="stage"]');
-  await waitFor(stages, 10000);
-  await hover(stages.first(), 1200); await until(6);
-  await openStage(stages.first(), 600); await until(10.5);        // log drawer of the first stage
-  await closeDrawer(800); await until(12.5);
-  await waitFor(runCard('android-release'), 30000);
-  await click(runCard('android-release'), 1000); await until(16);
-  await waitFor(stages, 10000);
-  await hover(stages.nth(1), 1200); await until(18.5);
-  await openStage(stages.first(), 800); await until(25);      // the real build, running
-  await closeDrawer(800); await until(26.5);
-  await hover(stages.nth(1), 1000); await until(28);
-  await openStage(stages.nth(1), 800); await until(33);       // the tests
-  await closeDrawer(800); await until(34.5);
-  await hover(stages.nth(2), 1200);
-  await until(LEN.pipelines);
+  // ---- 4. a rule in code blocks an agent; it uses the alternative -------------------------------------------------------------
+  await scene('rule', CAPTION.rule);
+  beat({ wren: 3 }); await until(1.8);
+  beat({ wren: 4, violation: true });               // the raw test run, blocked with the command to use
+  await glide(1500, 720, 1000);
+  await until(7.5);
+  await goView('agents', 1000); await until(9.5);
+  const wren = page.locator('[data-act="agent"]').filter({ hasText: 'Wren' });
+  await waitFor(wren, 15000);
+  await click(wren, 1000); await until(17);         // the drawer: "Rules broken" and the command to run instead
+  beat({ wren: 7 }); await closeDrawer(900); await until(19);   // it ran the tests through Tirith
+  await goView('pipelines', 1000); await until(21);
+  const run = page.locator('[data-act="prun"]');
+  await waitFor(run, 15000);
+  await click(run.first(), 900); await until(24.5);
+  await click(page.locator('[data-act="pstage"]').nth(1), 900);
+  await until(LEN.rule);
 
-  // ---- 5. agents -------------------------------------------------------------------------------------------------
-  await click(nav('agents'), 900); scene('agents');
-  const acards = page.locator('[data-act="agent"]');
-  await waitFor(acards, 15000);
-  await sleep(600);
-  await click(acards.first(), 900); await until(6.5);
-  await glide(1100, 700, 1200); await until(8);
-  await closeDrawer(700); await until(9);
-  // the earlier heroes: other session, narrowed by a search
-  await click(page.locator('#f-q'), 800); await page.keyboard.type('glass', { delay: 150 }); await sleep(500);
-  await setSession('2026-10-28-tirith', 900); await sleep(900);
-  await until(LEN.agents - 3.5);
-  const hero = page.locator('[data-act="agent"]').filter({ hasText: 'Neluvika' });
-  if (await hero.count()) await hover(hero, 1200); else await glide(700, 400, 1200);
-  await until(LEN.agents);
-  await setSession(null, 700);
-  await page.locator('#f-q').fill(''); await page.locator('#f-q').press('Escape');
+  // ---- 5. claim check, auto-merge --------------------------------------------------------------------------------------
+  await goView('overview', 900); await scene('merge', CAPTION.merge);
+  beat({ wren: 8 }); await until(2);
+  beat({ wren: WREN.length, ivren: 3, merged: true });             // reported, claims checked, merged: step 4 ticks
+  await hover(page.locator('.pstep').filter({ hasText: 'Dark mode' }).first(), 1200, 0.35, 0.2);
+  await until(7);
+  await goView('agents', 1000); await until(8.5);
+  await click(wren, 1000); await until(16);        // Review · Merged · Claims verified
+  await closeDrawer(800);
+  await until(LEN.merge);
 
-  // ---- 6. flow ---------------------------------------------------------------------------------------------------
-  await click(nav('flow'), 900); scene('flow');
-  await setSession(SESSION, 800); await sleep(900);
-  await until(3.5);
-  const pills = page.locator('[data-act="edge"]');
-  await waitFor(pills, 10000);
-  await hover(pills.first(), 1000); await until(5.5);
-  await openStage(pills.first(), 400); await until(9.5);     // all messages of one edge
-  await closeDrawer(700); await until(10.5);
-  await setSession(null, 800); await sleep(1000);            // clear: the whole graph, rooms included
-  await until(12.3);
-  // a room edge: the pills on the right-hand side of the graph
-  const info = await pills.evaluateAll((els) => els.map((e) => [e.getBoundingClientRect().left, e.getAttribute('title') || '', +(e.querySelector('b') || {}).textContent || 0]));
-  let ri = -1, best = -1;
-  info.forEach(([l, t, n], i) => { if (l > 1150 && !/spam/i.test(t) && n > best) { best = n; ri = i; } });
-  await openStage(pills.nth(ri >= 0 ? ri : 0), 1200);
-  await until(LEN.flow);
-  await closeDrawer(600);
+  // ---- 6. the health dot heals itself ----------------------------------------------------------------------------------
+  await goView('overview', 900); await scene('health', CAPTION.health);
+  beat({ health: 'amber' }); await sleep(2600);
+  await click(page.locator('#health-btn'), 1100); await until(6.5);
+  beat({ health: 'green' }); await until(10);
+  await page.keyboard.press('Escape');
+  await until(LEN.health);
 
-  // ---- 7. the brain: what Muse Spark wrote into the state --------------------------------------------------------
-  const st = JSON.parse(readFileSync(STATE_JS, 'utf8').replace(/^[^{]*/, '').replace(/;\s*$/, ''));
-  const agents = st.agents || [];
-  const mine = agents.find((a) => a.id.startsWith('demo-rec'));
-  const logged = new Set(readFileSync(agentLog, 'utf8').split('\n'));
-  const live = mine && mine.summary ? mine : null;
-  const bh = agents.find((a) => a.id === 's-sessions') || agents.find((a) => a.status === 'done' && a.summary);
-  const room = (st.rooms || []).find((r) => r.id === 'meta-hackathon-ideas') || (st.rooms || [])[0];
-  console.log('brain live:', live && live.summary, '| bh:', bh && bh.summary, '| room:', room && room.summary, '| log-echo:', live && logged.has(live.summary));
-  await page.goto(CARDS + '#brain'); scene('brain');
+  // ---- 7. only a real decision reaches the owner ---------------------------------------------------------------------------
+  await scene('decision', CAPTION.decision);
+  beat({ decision: 'open' }); await sleep(2600);
+  const ship = page.locator('.mc-opt, [data-act="nopt"]').filter({ hasText: 'Ship in v1.2' });
+  await waitFor(ship, 10000);
+  await hover(ship, 1100); await until(5);
+  await click(ship, 300);
+  beat({ decision: 'answered', closed: true });
+  await glide(1500, 700, 900);
+  await until(LEN.decision);
+
+  // ---- 8. the brain: what Muse Spark writes into the state --------------------------------------------------------------------
+  const st = story.state(), ivren = st.agents.find((a) => a.id === 'ivren'), wr = st.agents.find((a) => a.id === 'wren');
+  await page.goto(CARDS + '#brain'); await scene('brain');
   await page.evaluate((o) => window.setBrain(o), {
-    k1: 'agents[' + (live ? live.name : '') + '].summary · the agent recording this demo, read from its log',
-    agent: '“' + (live ? live.summary : '') + '”',
-    k3: 'agents[' + (bh ? bh.name : '') + '].summary · a hero that built Tirith',
-    hero: '“' + (bh ? bh.summary : '') + '”',
-    k2: 'rooms[' + (room ? room.id : '') + '].summary · ' + (room ? room.message_count : '') + ' messages in one line',
-    room: '“' + (room ? room.summary : '') + '”',
+    k1: 'agents[' + ivren.name + '].summary · one sentence from the log, so nobody has to ask',
+    agent: '“' + ivren.summary + '”',
+    k3: 'agents[' + wr.name + '].epithet · a lasting name for each agent',
+    hero: '“' + wr.name + ' ' + wr.epithet + '”',
+    k2: 'owner check · why this one reached the owner and nothing else did',
+    room: '“Choosing which release ships a finished feature is the owner’s call.”',
   });
   await page.evaluate(() => { for (const id of ['b-agent', 'b-hero', 'b-room']) { const e = document.getElementById(id).closest('.row'); e.style.transition = 'opacity .8s'; e.style.opacity = 0; } });
   const reveal = (id) => page.evaluate((i) => { document.getElementById(i).closest('.row').style.opacity = 1; }, id);
-  await until(8.6); await reveal('b-agent');
-  await until(11.4); await reveal('b-hero');
-  await until(16); await reveal('b-room');
+  await until(3.4); await reveal('b-agent');
+  await until(6.2); await reveal('b-hero');
+  await until(9); await reveal('b-room');
   await until(LEN.brain);
 
-  // ---- 8. search and filters --------------------------------------------------------------------------------------
-  await page.goto(BASE + '&view=pipelines'); await page.reload(); scene('filters'); await sleep(1500);
-  await click(proj('chromasol'), 1100); await until(4);
-  await click(proj('chromasol'), 500); await sleep(500);
-  await setSession(SESSION, 800); await until(7);
-  await click(page.locator('#f-q'), 900); await page.keyboard.type('android', { delay: 170 }); await until(10.5);
-  await page.keyboard.press('Escape'); await setSession(null, 600);
-  await until(LEN.filters);
-
-  // ---- 9. built during the hackathon ------------------------------------------------------------------------------
-  act('finish');
-  await page.goto(CARDS + '#built'); scene('built'); await until(LEN.built); marks.end = Date.now();
+  // ---- 9. closing card -----------------------------------------------------------------------------------------------------
+  await page.goto(CARDS + '#close'); await page.reload(); await scene('close'); await until(LEN.close); marks.end = Date.now();
 } catch (e) {
   console.log('FAILED:', e.message); await page.screenshot({ path: join(out, 'fail.png') }).catch(() => {});
+  process.exitCode = 1;
 } finally {
+  clearInterval(heartbeat);
   const tEnd = Date.now();
   await page.close(); await ctx.close(); await browser.close();
-  if (!marks.built) { try { actWait('finish'); } catch (e) { console.log('finish failed', e.message); } }
   const vids = readdirSync(join(out, 'raw')).filter((f) => f.endsWith('.webm'));
   const vid = join(out, 'raw', vids[0]);
   const dur = +execFileSync('/opt/homebrew/bin/ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', vid]).toString();
-  const start0 = tEnd - dur * 1000;   // wall time of the first video frame (the video ends when the page closes)
+  // Scene marks are wall seconds since the page was created. The webm does not follow the wall clock exactly (it
+  // drops time while a page loads), so assemble.mjs finds the two hard cuts in the video (card -> app, app -> card)
+  // and maps these marks onto the video's own clock.
   const scenes = {}, narration = {};
-  for (const [k, v] of Object.entries(marks)) scenes[k] = +((v - start0) / 1000).toFixed(2);
-  for (const [clip, [sc, off]] of Object.entries(NARR)) if (scenes[sc] !== undefined) narration[clip] = +(scenes[sc] + off).toFixed(2);
+  for (const [k, v] of Object.entries(marks)) scenes[k] = +((v - pageAt) / 1000).toFixed(2);
+  for (const k of Object.keys(LEN)) if (scenes[k] !== undefined) narration[k] = +(scenes[k] + (k === 'close' ? 0.6 : 0.4)).toFixed(2);
   writeFileSync(join(out, 'scenes.json'), JSON.stringify({ video: vid, duration: dur, scenes, narration }, null, 2));
-  console.log('video', vid, dur.toFixed(1) + 's', scenes);
-  // let the finish step end the session, then put back the session file the owner had
-  await sleep(9000);
-  if (oldSession !== null && (!existsSync(OLD_SESSION_FILE) || readFileSync(OLD_SESSION_FILE, 'utf8') !== oldSession)) writeFileSync(OLD_SESSION_FILE, oldSession);
+  console.log('video', vid, dur.toFixed(1) + 's', scenes, 'page errors:', errors);
 }

@@ -466,7 +466,7 @@ class Collector:
         self._owner_items_checked = False
         self.rooms =RoomsService(self.home, rooms_transport)
         self._one_shot = False
-        self.activity = activity_mod.ActivityTracker()
+        self.activity = activity_mod.ActivityTracker(self.home, warm=True)
         self.github = github_mod.GithubReader(github_transport)
         self._usage_cache: dict = {}
         self._detail_hashes: dict[str, str] = {}
@@ -1327,6 +1327,7 @@ class Collector:
         return {
             "version": 1,
             "generated_at": now_iso(now),
+            "collector": {"warming": self.activity.warming, "pending": self.activity.pending()},
             "brain": {"enabled": self.worker.enabled,
                       "model": self.config.brain_model,
                       "last_error": self.worker.last_error},
