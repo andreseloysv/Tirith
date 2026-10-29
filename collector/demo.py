@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fill a throwaway TIRITH_HOME with live demo data for the 3D world.
+"""Fill a throwaway TIRITH_HOME with live demo data for the web page.
 
 Usage:  python3 demo.py [home-dir] [repo-dir]
 
@@ -63,7 +63,7 @@ def main() -> int:
 
     run_cli(env, "guard", "install", "demo", check=False)
     run_cli(env, "manager", "Watching the demo lanes from the tower")
-    run_cli(env, "note", "Demo seeded for the citadel world", "--project", "demo")
+    run_cli(env, "note", "Demo seeded for the citadel", "--project", "demo")
     run_cli(env, "wait", "add", "Look at the demo citadel and press on", "--project", "demo")
     run_cli(env, "map", "demo", check=False)
     run_cli(env, "pipeline", "declare", "demo-release", "--project", "demo",

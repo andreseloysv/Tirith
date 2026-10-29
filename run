@@ -3,11 +3,10 @@
 #
 #   ./run            live data from ~/.tirith (or $TIRITH_HOME); Ctrl+C stops the collector
 #   ./run --demo     the web page on the demo state (no collector)
-#   ./run --3d       the optional Godot 3D citadel instead of the web page
 #
 # The page is a local file: no server and no open ports. If a collector is already running it is
 # reused and left running; a collector started here stops on Ctrl+C. Environment: TIRITH_HOME, the Meta
-# Model API key (META_API_KEY or META_SI_API_KEY) for the brain, GODOT for --3d.
+# Model API key (META_API_KEY or META_SI_API_KEY) for the brain.
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")" && pwd)
@@ -33,10 +32,6 @@ case "${1:-}" in
     --demo)
         open_page "$ROOT/fixtures/state.demo.js"
         exit 0 ;;
-    --3d)
-        GODOT=${GODOT:-/Applications/Godot.app/Contents/MacOS/Godot}
-        [ -x "$GODOT" ] || { echo "Godot not found at $GODOT (set GODOT=/path/to/Godot)"; exit 1; }
-        exec "$GODOT" --path "$ROOT/world" -- --state "$HOME_DIR/state.json" ;;
 esac
 
 command -v uv >/dev/null || { echo "uv not found: https://docs.astral.sh/uv/"; exit 1; }
