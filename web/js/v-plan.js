@@ -88,7 +88,7 @@
   /* The "Review and merge" button: the newest lane `tirith launch` started for this step that is done and not merged. */
   function reviewLane(s, p, state) {
     var rows = (state.agents || []).filter(function (a) {
-      return a.project === p.id && String(a.step) === String(s.id) && a.review && a.status === 'done';
+      return a.project === p.id && String(a.step) === String(s.id) && a.review && a.review.status !== 'dropped' && a.status === 'done';
     });
     return rows.length ? rows[rows.length - 1] : null;
   }
@@ -108,25 +108,12 @@
     }
     return h + '</span>';
   }
-  /* What the automatic review of the step's lane is doing; always visible under the step row. */
+  /* A merged lane, for the step's History. Failures and dropped lanes never show in the Plan. */
   function reviewLine(s, p, state) {
     var a = reviewLane(s, p, state), r = a && a.review;
-    if (!r || r.status === 'pending' || r.status === 'ready') return '';
-    var who = '<b>' + esc(a.name) + '</b>', tone = r.status === 'merged' || r.status === 'dropped' ? 'ok' : r.status === 'running' ? 'live' : 'bad';
-    var h = '<div class="prv ' + tone + '">';
-    if (r.status === 'running') {
-      h += '<i class="pulse"></i><button class="link" data-act="gorun" data-key="' + esc(r.run || '') + '"' + (r.run ? '' : ' disabled') + ' title="Open the test run">Testing ' + who + '…</button>';
-    } else if (r.status === 'merged') {
-      h += 'Merged ' + who + ' · ' + esc(T.clockTime(r.at)) + (r.files != null ? ' <span class="mut">· ' + esc(r.files) + ' files' + (r.passed != null ? ', ' + esc(r.passed) + ' tests passed' : '') + '</span>' : '');
-    } else if (r.status === 'dropped') {
-      h += 'Dropped ' + who + ' · ' + esc(T.clockTime(r.at));
-    } else {
-      h += (r.status === 'tests-failed' ? 'Tests failed for ' : 'Merge failed for ') + who +
-        (r.run ? ' · <button class="link" data-act="gorun" data-key="' + esc(r.run) + '" title="Open the test run">see the run</button>' : '') +
-        ' <span class="mut">· retry, fix or drop it under Your turn</span>';
-      if (r.message) h += '<pre class="rvout">' + esc(r.message) + '</pre>';
-    }
-    return h + '</div>';
+    if (!r || r.status !== 'merged') return '';
+    return '<div class="prv ok">Merged <b>' + esc(a.name) + '</b> · ' + esc(T.clockTime(r.at)) +
+      (r.files != null ? ' <span class="mut">· ' + esc(r.files) + ' files' + (r.passed != null ? ', ' + esc(r.passed) + ' tests passed' : '') + '</span>' : '') + '</div>';
   }
 
   /* ---------- the owner's inbox: "Finish it", "Ask", the chip and the answers ---------- */
@@ -303,17 +290,11 @@
       return '<li><span class="pi">' + OPEN + '</span><span class="pit">' + rich(i.who === 'date' ? dateless(i.text) : i.text) + '</span>' + extra + '</li>';
     }).join('') + '</ul>';
   }
-  function reviewReason(r) {
-    var m = String(r.message || '').split('\n').filter(function (x) { return x.trim(); })[0] || '';
-    m = m.trim() || (r.status === 'tests-failed' ? 'tests failed' : 'merge failed');
-    return m.length > 120 ? m.slice(0, 117) + '…' : m;
-  }
   /* The ONE current state of an unfinished step, or ''. */
   function stateLine(s, p, state) {
     var rl = reviewLane(s, p, state), r = rl && rl.review, auto = state.autopilot, on = auto ? autoOn(state) : true, a, owner, h;
     if (r && (r.status === 'tests-failed' || r.status === 'merge-failed' || r.status === 'failed')) {
-      return '<div class="pstate bad">Review failed: ' + plain(reviewReason(r)) + ' <span class="mut">(the manager has it)</span>' +
-        (r.run ? ' <button class="link" data-act="gorun" data-key="' + esc(r.run) + '" title="Open the test run">see the run</button>' : '') + '</div>';
+      return '<div class="pstate wait">The manager is resolving a merge</div>';
     }
     if (r && r.status === 'running') {
       return '<div class="pstate live"><i class="pulse"></i><button class="link" data-act="gorun" data-key="' + esc(r.run || '') + '"' + (r.run ? '' : ' disabled') +
@@ -335,24 +316,31 @@
     if (s.status === 'ready') return '<div class="pstate ready">' + (on ? 'Queued for the autopilot' : 'Waiting for the autopilot <span class="mut">(paused)</span>') + '</div>';
     return '';
   }
-  /* Requests that still need something stay visible: no manager answer yet, or an action that has not passed. */
+  /* A request is pending until the manager answered it and every action it proposed has passed. */
+  function unpassed(r) {
+    var todo = [];
+    (r.answers || []).forEach(function (a) {
+      (a.actions || []).forEach(function (x) { if (!x.last_run || x.last_run.status !== 'passed') todo.push(x); });
+    });
+    return todo;
+  }
+  function unanswered(r) { return !(r.answers || []).length && !(r.lanes || []).length && r.status === 'open'; }
+  function isPending(r) { return unanswered(r) || unpassed(r).length > 0; }
+  /* Only pending requests are visible, one line each; answered and closed threads live in History. */
   function needsLines(s, p, state, reqs) {
     var h = '';
     reqs.forEach(function (r) {
-      var answers = r.answers || [], todo = [];
-      if (!answers.length && !(r.lanes || []).length && r.status === 'open') {
+      var todo = unpassed(r);
+      if (unanswered(r)) {
         h += '<div class="pstate wait">Waiting for the manager · <span class="tick" data-start="' + esc(r.at) + '">' + esc(T.dur(T.elapsed(r.at))) + '</span>' +
           (T.elapsed(r.at) >= ESCALATE ? ' <span class="mut">No answer yet. Tirith will escalate this.</span>' : '') + '</div>';
       }
-      answers.forEach(function (a) {
-        (a.actions || []).forEach(function (x) { if (!x.last_run || x.last_run.status !== 'passed') todo.push(x); });
-      });
       if (todo.length) h += '<div class="pneed">' + T.actions(todo, state, r.project) + '</div>';
     });
     return h;
   }
   function historyBlock(s, p, state, key, reqs) {
-    var rl = reviewLane(s, p, state), r = rl && rl.review, open = !!ui.planHist[key], body = entries(s, p, state, key, reqs, true), n = (body.match(/<li class="ie">/g) || []).length, done, past;
+    var rl = reviewLane(s, p, state), r = rl && rl.review, open = !!ui.planHist[key], body = entries(s, p, state, key, reqs.filter(function (r) { return !isPending(r); }), true), n = (body.match(/<li class="ie">/g) || []).length, done, past;
     past = r && (r.status === 'merged' || r.status === 'dropped') ? reviewLine(s, p, state) : '';
     if (past) n++;
     if (!n) return '';
@@ -384,7 +372,7 @@
       }).join('') : '<li class="none">No items yet</li>') + '</ul>';
       if (!ro && !fin) h += reviewBtn(s, p, state) || launchBtn(s, p, state, true).replace('class="plw"', 'class="plw pbody"');
     }
-    if (!ro) h += historyBlock(s, p, state, key, reqs);
+    if (!ro && !fin) h += historyBlock(s, p, state, key, reqs);
     return h + '</li>';
   }
 
@@ -464,10 +452,19 @@
       (ui.planFormErr[p.id] ? '<div class="ierr pferr">' + esc(ui.planFormErr[p.id]) + '</div>' : '') +
       '<div class="pfa"><button class="isend" data-act="pnsend" data-key="' + id + '">Start the plan</button><button class="ibtn" data-act="pncancel" data-key="' + id + '">Cancel</button></div></div>';
   }
+  function planHistory(key, reqs, state) {
+    var open = !!ui.planHist[key], body = reqs.filter(function (r) { return !isPending(r); })
+      .sort(function (a, b) { return (T.ms(b.at) || 0) - (T.ms(a.at) || 0); }).map(function (r) { return thread(r, state, true); }).join(''),
+      n = (body.match(/<li class="ie">/g) || []).length;
+    if (!n) return '';
+    return '<div class="phist"><button class="iahead" data-act="phist" data-key="' + esc(key) + '" aria-expanded="' + open + '">' + CHEV + '<span>History (' + n + ')</span></button></div>' +
+      (open ? '<div class="phistbody">' + body + '</div>' : '');
+  }
   function planBelow(p, state) {
     var key = p.id + '|plan', reqs = planReqs(state, p.id), h = notes(key, reqs);
     if (ui.planForm[p.id]) h += newPlanForm(p);
-    reqs.slice().sort(function (a, b) { return (T.ms(b.at) || 0) - (T.ms(a.at) || 0); }).slice(0, 2).forEach(function (r) { h += thread(r, state); });
+    h += needsLines(null, p, state, reqs);
+    h += planHistory(key, reqs, state);
     return h ? '<div class="pbelow">' + h + '</div>' : '';
   }
 
