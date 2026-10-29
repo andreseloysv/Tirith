@@ -63,10 +63,10 @@
     return t ? '<pre class="log" tabindex="0">' + esc(t) + '</pre>' : '<p class="quiet">No log output yet</p>';
   };
   T.empty = function (t) { return '<p class="quiet">' + esc(t) + '</p>'; };
-  T.agentColor = function (a) { return T.clsOf(a['class']).color; };
+  T.agentColor = function (a) { return T.agentColors(raw && raw.agents)[a.id] || T.PALETTE[0]; };
   T.avatar = function (a, size) {
     var c = T.clsOf(a['class']);
-    return '<span class="avatar" style="width:' + size + 'px;height:' + size + 'px;background:' + T.grad(c.color) + '">' + T.fillIcon(c.glyph, Math.round(size * .56)) + '</span>';
+    return '<span class="avatar" style="width:' + size + 'px;height:' + size + 'px;background:' + T.grad(T.agentColor(a)) + '">' + T.fillIcon(c.glyph, Math.round(size * .56)) + '</span>';
   };
   T.agentClock = function (a) {
     if (a.status === 'working') return T.span(a.started_at, null);
@@ -77,15 +77,47 @@
     return a.files_changed + (a.files_changed === 1 ? ' file' : ' files') + ' changed' +
       (a.insertions || a.deletions ? ' <span class="plus">+' + (a.insertions || 0) + '</span> <span class="minus">−' + (a.deletions || 0) + '</span>' : '');
   };
+  /* the goal as the card shows it: one flat markdown line cut at CARD_GOAL chars; `clamped` tells the
+     drawer to show the full text (a goal equal to the feature is never shown twice) */
+  var CARD_GOAL = 200;
+  T.cardGoal = function (a) {
+    var g = String(a.goal || '').trim();
+    if (!g || g === String(a.feature || '').trim()) return { text: '', clamped: false };
+    var flat = g.replace(/\s*\n\s*/g, ' '), cut = flat.length > CARD_GOAL;
+    if (cut) { flat = flat.slice(0, CARD_GOAL); flat = (flat.indexOf(' ') > 0 ? flat.slice(0, flat.lastIndexOf(' ')) : flat).replace(/[\s,;:]+$/, '') + '…'; }
+    return { text: flat, clamped: cut || g.indexOf('\n') >= 0 };
+  };
+  function testBadge(a) {
+    var l = a.tests || [], t = l[l.length - 1];
+    if (!t || !t.result) return '';
+    var txt = t.result === 'running' ? 'running' : t.result === 'failed' ? (t.failed != null ? t.failed + ' failed' : 'failed') : (t.passed != null ? t.passed + ' passed' : 'passed');
+    if (t.result === 'passed' && t.failed) txt += ', ' + t.failed + ' failed';
+    return '<span class="rb ' + esc(t.result) + '" title="Last test run: ' + esc(t.command || '') + '">' + esc(txt) + '</span>';
+  }
+  function workingFoot(a) {
+    var files = a.files_changed || a.insertions || a.deletions ? '<span class="afiles">' + T.agentFiles(a).replace(/ changed/, '') + '</span>' : '',
+        step = a.step ? '<span class="chip astep" title="Plan step">Step ' + esc(a.step) + '</span>' : '',
+        proj = T.proj(a.project);
+    return '<span class="afoot">' + files + testBadge(a) + step + '<span class="aproj">' + esc(proj) + '</span>' +
+      '<span class="aclock">' + T.lineIcon(T.ICON.clock, 13, 'currentColor', 1.7) + '<span>' + T.agentClock(a) + '</span></span></span>';
+  }
   T.agentCard = function (a, selected) {
-    return '<button class="card acard' + (selected ? ' sel' : '') + '" data-act="agent" data-key="' + esc(a.id) + '">' +
-      '<span class="ahead">' + T.avatar(a, 36) + '<span class="aname"><b title="' + esc((a.name || '') + (a.epithet ? ' ' + a.epithet : '')) + '">' + esc(a.name) + '</b>' +
-      '<span class="pill">' + esc([T.cap(a.rank), T.cap(a['class'])].filter(Boolean).join(' · ')) + '</span></span></span>' +
+    var head = '<span class="ahead">' + T.avatar(a, 36) + '<span class="aname"><b title="' + esc((a.name || '') + (a.epithet ? ' ' + a.epithet : '')) + '">' + esc(a.name) + '</b>' +
+      '<span class="pill">' + esc([T.cap(a.rank), T.cap(a['class'])].filter(Boolean).join(' · ')) + '</span></span></span>';
+    if (a.status === 'working') {
+      var g = T.cardGoal(a).text;
+      return '<button class="card acard work' + (selected ? ' sel' : '') + '" data-act="agent" data-key="' + esc(a.id) + '">' + head +
+        '<span class="afeat">' + esc(a.feature) + '</span>' +
+        (g ? '<span class="agoalc">' + T.mdInline(g) + '</span>' : '') +
+        (a.summary ? '<span class="anow' + (a.active ? ' live' : '') + '"><i class="pdot2"></i>' + T.mdInline(a.summary) + '</span>' : '') +
+        workingFoot(a) + '</button>';
+    }
+    return '<button class="card acard' + (selected ? ' sel' : '') + '" data-act="agent" data-key="' + esc(a.id) + '">' + head +
       '<span class="afeat">' + esc(a.feature) + '</span>' +
       '<span class="afoot"><span class="aproj">' + esc(T.proj(a.project)) + '</span><span class="aclock">' + T.lineIcon(T.ICON.clock, 13, 'currentColor', 1.7) + '<span>' + T.agentClock(a) + '</span></span></span></button>';
   };
-  T.drawer = function (title, body, kind) {
-    return '<aside class="drawer" role="dialog" aria-label="' + esc(title) + '"><header><span>' + esc(title) + '</span><button class="x" data-act="close" aria-label="Close">' + T.lineIcon(T.ICON.close, 14, 'currentColor', 2) + '</button></header><div class="dbody" data-scroll="drawer">' + body + '</div></aside>';
+  T.drawer = function (title, body, head) {
+    return '<aside class="drawer" role="dialog" aria-label="' + esc(title) + '"><header>' + (head || '<span>' + esc(title) + '</span>') + '<button class="x" data-act="close" aria-label="Close">' + T.lineIcon(T.ICON.close, 14, 'currentColor', 2) + '</button></header><div class="dbody" data-scroll="drawer">' + body + '</div></aside>';
   };
   /* zoomable dotted canvas; inner is unscaled html with fixed content size */
   T.canvas = function (inner, extraBar) {

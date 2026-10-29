@@ -396,3 +396,23 @@ button.fhead { border-radius: 12px; }
 .asec .sum .md, .asec .agoal .md { color: #1f2937; }
 .trows .tcnt { font-size: 11px; white-space: nowrap; }
 .lsay .mdc, .ldt .mdc { min-width: 0; }
+
+/* Agents board: Working is the wide column and its cards say what the agent is doing */
+.board { grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr)); }
+@media (max-width: 1000px) {
+  .board { grid-template-columns: minmax(0, 1fr); grid-auto-rows: max-content; overflow-y: auto; align-content: start; }
+  .col { min-height: auto; } .cbody { overflow: visible; flex: none; }
+}
+.acard.work { gap: 8px; }
+.acard.work .afeat { min-height: 0; font-weight: 600; font-size: 14px; color: var(--fg); -webkit-line-clamp: 2; }
+.agoalc { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; color: #4b5563; font-size: 12.5px; line-height: 1.45; }
+.anow { display: flex; gap: 8px; align-items: flex-start; padding: 7px 10px; border-radius: 9px; background: rgba(47,111,237,.07); border: 1px solid rgba(47,111,237,.14); color: #1f2937; font-size: 12.5px; line-height: 1.4; }
+.anow .md { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; min-width: 0; }
+.anow .pdot2 { flex: none; margin-top: 5px; animation: none; background: #9aa3b2; } .anow.live .pdot2 { animation: pulse 1.4s ease-in-out infinite; background: var(--green); }
+.acard.work .afoot { flex-wrap: wrap; gap: 6px 10px; }
+.acard.work .afoot .aproj { flex: 1 1 0; }
+.afiles { font-variant-numeric: tabular-nums; } .astep { font-size: 11.5px; line-height: 18px; padding: 0 8px; }
+.drawer header .dhead { display: flex; align-items: center; gap: 10px; overflow: visible; white-space: normal; }
+.drawer header .dtit { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; flex: 1; }
+.drawer header .dtit b { font-weight: 600; } .drawer header .dtit .mut { font-weight: 400; font-size: 12px; flex: none; }
+.drawer header .dhead .avatar { flex: none; }

@@ -32,8 +32,7 @@ GIT_TIMEOUT_S = 10
 # -- goal -------------------------------------------------------------------------------------
 
 _HEADING = re.compile(r"^\s{0,3}#{1,6}\s+(.*?)\s*#*\s*$")
-_GOAL_HEADING = re.compile(r"^(why|goal|goals|objective|purpose)\b", re.I)
-_SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
+_GOAL_HEADING = re.compile(r"^(why|goal|goals|objective|purpose|por qu[eé]|objetivo)\b", re.I)
 
 
 def strip_markdown(text: str) -> str:
@@ -53,7 +52,7 @@ def _paragraphs(lines: list[str]) -> list[tuple[str | None, str]]:
 
     def flush() -> None:
         if block:
-            out.append((heading, " ".join(block)))
+            out.append((heading, "\n".join(block)))
             block.clear()
 
     for line in lines:
@@ -73,18 +72,36 @@ def _paragraphs(lines: list[str]) -> list[tuple[str | None, str]]:
     return out
 
 
+_SETUP_START = re.compile(
+    r"^\W*(?:(?:workspace|repo|repository|tests?|branch|worktree|folder|collector)\W*:|read\b)", re.I)
+_LANE_PREFIX = re.compile(r"^\s*lane\s*[:\-\u2013\u2014]\s*", re.I)
+
+
+def _is_setup(paragraph: str) -> bool:
+    """True for a paragraph that is set-up instructions (``Workspace: ...``, ``Read the ...``)."""
+    return bool(_SETUP_START.match(paragraph))
+
+
+def _clip_goal(text: str) -> str:
+    text = text.strip()
+    return text if len(text) <= GOAL_MAX else text[:GOAL_MAX - 1].rstrip() + "\u2026"
+
+
 def goal_from_text(text: str) -> str | None:
-    """First paragraph under a Why/Goal heading, else under the first heading, else the first."""
-    paras = [(h, strip_markdown(p)) for h, p in _paragraphs(text.splitlines())]
-    paras = [(h, p) for h, p in paras if p]
-    if not paras:
-        return None
-    pick = next((p for h, p in paras if h and _GOAL_HEADING.match(strip_markdown(h))), None)
-    if pick is None:
-        pick = next((p for h, p in paras if h), paras[0][1])
-    sentences = _SENTENCE_END.split(pick)
-    pick = " ".join(sentences[:3])
-    return pick if len(pick) <= GOAL_MAX else pick[:GOAL_MAX - 1].rstrip() + "…"
+    """First paragraph under a Why/Goal heading (markdown kept, at most 400 chars), else the
+    ``#`` title without a "Lane:" prefix. Set-up paragraphs never count."""
+    lines = text.splitlines()
+    paras = [(h, p) for h, p in _paragraphs(lines) if p.strip()]
+    for heading, para in paras:
+        if heading and _GOAL_HEADING.match(strip_markdown(heading)) and not _is_setup(para):
+            return _clip_goal(para)
+    for line in lines:
+        match = re.match(r"^#\s+(.*?)\s*#*\s*$", line)
+        if match:
+            title = _LANE_PREFIX.sub("", match.group(1)).strip()
+            if title:
+                return _clip_goal(title)
+    return None
 
 
 # -- test detection ---------------------------------------------------------------------------
