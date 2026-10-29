@@ -16,6 +16,28 @@
     }
     return '';
   }
+  /* A permission question from the agent (a control_request line), or null. */
+  function askOf(line) {
+    var o; try { o = JSON.parse(line); } catch (e) { return null; }
+    if (!o || o.type !== 'control_request' || !o.request || o.request.subtype !== 'can_use_tool') return null;
+    return { id: o.request_id, tool: o.request.tool_name || 'a tool', input: o.request.input || {} };
+  }
+  function ask(chatId, q) {
+    var d = add('ask', 'Allow ' + q.tool + '?\n' + JSON.stringify(q.input, null, 1).slice(0, 600));
+    var row = document.createElement('div');
+    [['Allow', true], ['Deny', false]].forEach(function (b) {
+      var btn = document.createElement('button');
+      btn.type = 'button'; btn.textContent = b[0];
+      btn.onclick = function () {
+        core.invoke('chat_answer', { id: chatId, requestId: q.id, allow: b[1], input: q.input }).then(function () {
+          d.className = 'chat-msg sys'; d.textContent = (b[1] ? 'Allowed ' : 'Denied ') + q.tool;
+        }).catch(function (err) { add('err', String(err)); });
+      };
+      row.appendChild(btn);
+    });
+    d.appendChild(row);
+    log.scrollTop = log.scrollHeight;
+  }
   function add(cls, text) {
     var d = document.createElement('div');
     d.className = 'chat-msg ' + cls; d.textContent = text;
@@ -52,6 +74,9 @@
       if (p.id !== sid) return;
       if (p.kind === 'exit') { add('sys', 'Chat ended (' + p.line + ')'); sid = null; cur = null; return; }
       if (p.kind === 'err') { add('err', p.line); return; }
+      if (p.kind === 'sys') return;
+      var q = askOf(p.line);
+      if (q) { cur = null; ask(p.id, q); return; }
       var t = textOf(p.line);
       if (!t) return;
       if (!cur) cur = add('agent', '');
