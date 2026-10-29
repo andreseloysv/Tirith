@@ -1,9 +1,7 @@
 /* Setup card(s) in the Overview, under the Plan: pipelines, hooks, rules and `tirith check` of each project.
-   Changes (a new stage or rule, running a stage) are sent to the manager through the inbox, kind "setup". */
+   Running a stage is sent to the manager through the inbox, kind "setup". */
 (function () {
   var T = window.T, esc = T.esc, ui = T.ui;
-  ui.setupForm = ui.setupForm || {};   /* project id -> 'stage' | 'rule' while its form is open */
-  ui.setupDraft = ui.setupDraft || {}; /* "project|form" -> {field: value} typed so far */
   ui.setupPend = ui.setupPend || {};   /* "project|summary" -> ms of a send the collector has not shown yet */
   ui.setupCli = ui.setupCli || {};     /* project id -> command to copy (no way to send from here) */
   ui.setupErr = ui.setupErr || {};     /* project id -> why the send failed */
@@ -104,42 +102,6 @@
     return h.length ? '<div class="spend">' + h.join('') + '</div>' : '';
   }
 
-  /* ---------- the "+ Stage" and "+ Rule" forms ---------- */
-  var FIELDS = {
-    stage: [
-      { f: 'pipeline', label: 'Pipeline', ph: 'ci', req: 1 }, { f: 'name', label: 'Name', ph: 'lint', req: 1 },
-      { f: 'run', label: 'Command', ph: 'make lint', req: 1, wide: 1 },
-      { f: 'kind', label: 'Kind', sel: ['', 'build', 'test', 'deploy'] }, { f: 'after', label: 'After', ph: '(last)' }
-    ],
-    rule: [
-      { f: 'id', label: 'Id', ph: 'no-force-push', req: 1 },
-      { f: 'effect', label: 'Action', sel: ['block', 'warn'] },
-      { f: 'match', label: 'Command glob', ph: 'git push --force*', wide: 1 },
-      { f: 'paths', label: 'or edited paths', ph: 'harness/**, *.lock' },
-      { f: 'regex', label: 'or regex', ph: 'curl .*\\| *sh' },
-      { f: 'message', label: 'Message', ph: 'force pushes rewrite history', req: 1, wide: 1 },
-      { f: 'instead', label: 'Instead', ph: 'git push (without --force); ask the owner', req: 1, wide: 1 },
-      { f: 'description', label: 'In plain words', ph: 'Nobody may rewrite the shared history.', req: 1, wide: 1 }
-    ]
-  };
-  function form(p, su) {
-    var which = ui.setupForm[p.id]; if (!which) return '';
-    var d = ui.setupDraft[p.id + '|' + which] || {}, pipes = su.pipelines.map(function (x) { return x.id; });
-    var fields = FIELDS[which].map(function (x) {
-      var key = p.id + '|' + which + '|' + x.f, v = d[x.f] != null ? d[x.f] : (x.f === 'pipeline' && pipes.length === 1 ? pipes[0] : '');
-      var input = x.sel ? '<select data-act="sfield" data-key="' + esc(key) + '" aria-label="' + esc(x.label) + '">' + x.sel.map(function (o) {
-        return '<option value="' + esc(o) + '"' + (v === o ? ' selected' : '') + '>' + esc(o || '(auto)') + '</option>';
-      }).join('') + '</select>' :
-        '<input type="text" data-act="sfield" data-key="' + esc(key) + '" placeholder="' + esc(x.ph || '') + '" value="' + esc(v) + '" aria-label="' + esc(x.label) + '"' + (x.f === 'pipeline' ? ' list="spipes-' + esc(p.id) + '"' : '') + '>';
-      return '<label class="sf' + (x.wide ? ' wide' : '') + '"><span>' + esc(x.label) + (x.req ? ' *' : '') + '</span>' + input + '</label>';
-    }).join('');
-    var list = which === 'stage' ? '<datalist id="spipes-' + esc(p.id) + '">' + pipes.map(function (x) { return '<option value="' + esc(x) + '">'; }).join('') + '</datalist>' : '';
-    return '<div class="sform"><div class="sfhead"><b>' + (which === 'stage' ? 'New stage' : 'New rule') + '</b>' +
-      '<span class="mut sm">' + (which === 'stage' ? 'Added to tirith.toml by the manager' : 'Set exactly one of command glob, edited paths, regex') + '</span></div>' +
-      '<div class="sfields">' + fields + list + '</div><div class="sfoot"><button class="isend" data-act="ssend" data-key="' + esc(p.id) + '">Ask the manager</button>' +
-      '<button class="scancel" data-act="sclose" data-key="' + esc(p.id) + '">Cancel</button></div></div>';
-  }
-
   function cliBlock(p) {
     var h = '';
     if (ui.setupErr[p.id]) h += '<div class="ierr">' + esc(ui.setupErr[p.id]) + '</div>';
@@ -153,17 +115,15 @@
   function card(p, state, first) {
     var su = p.setup;
     return '<div class="card scard"><div class="phead"><b>' + esc(p.name) + '</b><span class="mut sm">Setup' +
-      (su.manifest ? '' : ' · no tirith.toml') + '</span><span class="sbtns">' +
-      '<button class="sadd" data-act="sopen" data-key="' + esc(p.id + '|stage') + '">+ Stage</button>' +
-      '<button class="sadd" data-act="sopen" data-key="' + esc(p.id + '|rule') + '">+ Rule</button></span></div>' +
+      (su.manifest ? '' : ' · no tirith.toml') + '</span></div>' +
       (!su.gates_active && first ? banner(p, su, state) : '') + checkRow(su) + (first ? protectRow(su) : '') +
-      pipelinesRow(p, su) + hooksRow(su) + rulesRow(su) + pending(p, su) + form(p, su) + cliBlock(p) + '</div>';
+      pipelinesRow(p, su) + hooksRow(su) + rulesRow(su) + pending(p, su) + cliBlock(p) + '</div>';
   }
 
   /* HTML for the Setup section, or '' when no visible project has setup data. */
   T.setup = function (state) {
     lastState = state;
-    var f = T.filter.project, ps = (state.projects || []).filter(function (p) { return p.setup && (!f || p.id === f); });
+    var ps = (state.projects || []).filter(function (p) { return p.setup; });
     if (!ps.length) return '';
     return '<section class="setup"><h2>Setup</h2>' + ps.map(function (p, i) { return card(p, state, i === 0); }).join('') + '</section>';
   };
@@ -197,62 +157,10 @@
     send(pid, { action: 'run-stage', pipeline: pipe, name: name }, 'run ' + pipe + '/' + name, cli);
   }
 
-  function sendForm(pid) {
-    var which = ui.setupForm[pid], d = ui.setupDraft[pid + '|' + which] || {}, su = (lastState.projects.filter(function (x) { return x.id === pid; })[0] || {}).setup || {};
-    var pipes = (su.pipelines || []).map(function (x) { return x.id; });
-    if (which === 'stage') {
-      d = { pipeline: d.pipeline != null ? d.pipeline : (pipes.length === 1 ? pipes[0] : ''), name: d.name, run: d.run, kind: d.kind, after: d.after };
-      if (!(d.pipeline || '').trim() || !(d.name || '').trim() || !(d.run || '').trim()) { ui.setupErr[pid] = 'A stage needs a pipeline, a name and a command.'; T.render(); return; }
-      var req = { action: 'add-stage', pipeline: d.pipeline.trim(), name: d.name.trim(), run: d.run.trim() };
-      if (d.kind) req.kind = d.kind;
-      if ((d.after || '').trim()) req.after = d.after.trim();
-      var cli = 'tirith setup add-stage --project ' + shq(pid) + ' --pipeline ' + shq(req.pipeline) + ' --name ' + shq(req.name) + ' --run ' + shq(req.run) +
-        (req.kind ? ' --kind ' + req.kind : '') + (req.after ? ' --after ' + shq(req.after) : '');
-      done(pid, which); send(pid, req, 'add-stage ' + req.pipeline + '/' + req.name + ': ' + req.run, cli);
-      return;
-    }
-    var n = ['match', 'paths', 'regex'].filter(function (k) { return (d[k] || '').trim(); });
-    if (!(d.id || '').trim() || !(d.description || '').trim() || !(d.message || '').trim() || !(d.instead || '').trim() || n.length !== 1) {
-      ui.setupErr[pid] = 'A rule needs an id, a description, a message, an instead, and exactly one of command glob, edited paths or regex.'; T.render(); return;
-    }
-    var rule = { action: 'add-rule', id: d.id.trim(), effect: d.effect || 'block', message: d.message.trim(), instead: d.instead.trim(), description: d.description.trim() };
-    rule[n[0]] = d[n[0]].trim();
-    var flag = n[0] === 'match' ? '--match' : n[0] === 'regex' ? '--regex' : '--paths';
-    var rcli = 'tirith setup add-rule --project ' + shq(pid) + ' --id ' + shq(rule.id) + ' ' + flag + ' ' + shq(rule[n[0]]) + ' --action ' + rule.effect +
-      ' --message ' + shq(rule.message) + ' --instead ' + shq(rule.instead) + ' --description ' + shq(rule.description);
-    done(pid, which); send(pid, rule, 'add-rule ' + rule.id + ': ' + (rule.match || rule.regex || rule.paths), rcli);
-  }
-  function done(pid, which) { ui.setupForm[pid] = null; ui.setupDraft[pid + '|' + which] = {}; ui.setupErr[pid] = null; }
-
   var view = document.getElementById('view');
   view.addEventListener('click', function (e) {
     var b = e.target.closest('[data-act^="s"]'); if (!b) return;
     var act = b.getAttribute('data-act'), key = b.getAttribute('data-key');
-    if (act === 'srun') { sendRun(key); return; }
-    if (act === 'sopen') {
-      var parts = key.split('|'); ui.setupErr[parts[0]] = null; ui.setupCli[parts[0]] = null;
-      ui.setupForm[parts[0]] = ui.setupForm[parts[0]] === parts[1] ? null : parts[1]; T.render();
-      var first = document.querySelector('.sform input'); if (first) first.focus();
-      return;
-    }
-    if (act === 'sclose') { ui.setupForm[key] = null; ui.setupErr[key] = null; T.render(); return; }
-    if (act === 'ssend') sendForm(key);
-  });
-  function field(t) {
-    if (!t.getAttribute || t.getAttribute('data-act') !== 'sfield') return null;
-    var p = t.getAttribute('data-key').split('|'); return { pid: p[0], form: p[1], f: p[2] };
-  }
-  view.addEventListener('input', function (e) {
-    var x = field(e.target); if (!x) return;
-    var k = x.pid + '|' + x.form; (ui.setupDraft[k] = ui.setupDraft[k] || {})[x.f] = e.target.value;
-  });
-  view.addEventListener('change', function (e) {
-    var x = field(e.target); if (!x) return;
-    var k = x.pid + '|' + x.form; (ui.setupDraft[k] = ui.setupDraft[k] || {})[x.f] = e.target.value;
-  });
-  view.addEventListener('keydown', function (e) {
-    var x = field(e.target); if (!x) return;
-    if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); sendForm(x.pid); }
-    else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); ui.setupForm[x.pid] = null; T.render(); }
+    if (act === 'srun') sendRun(key);
   });
 })();

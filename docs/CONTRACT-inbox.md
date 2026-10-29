@@ -316,12 +316,18 @@ copy, a link or a text box is not enough.
 - `dispatch.add_owner_item` raises on an empty option list.
 - Items the collector generates carry options or actions: lane failures (`Retry`, `Show the log`,
   `Drop it`), dispatcher items (`Fix it`/`Try again`, `Wait`/...), guard checks (below), and violations,
-  and room waits (`Let the manager handle it|manager`, `Got it|ack`).
+  brain-detected waits and room waits (`Got it|ack`).
 - The collector enforces it again on the final list (`_enforce_cta`, through `asks.is_owner_item`): an item
   without one (an old row of `waits.jsonl`, a future generator) is **not** shown. It becomes one manager
   queue item (`kind: "no-call-to-action"`, id `sq-cta-<wait id>`, added once).
-- A reply to a generated item (`room-*`) answers it: it moves to
-  `answered_waits`. The value `manager` also adds a manager queue item (`kind: "owner-handoff"`).
+- A reply to a generated item (`room-*`) answers it: it moves to `answered_waits`.
+- **Your turn is only for what the manager refuses or cannot do.** There is no "Let the manager handle it" (or
+  any hand-back) option anywhere: the manager's work is the default. An owner item raised for a roadmap item
+  states why in `reason` (a key of `asks.OWNER_REASONS`: `security`, `credentials`, `account`, `device`,
+  `payment`, `legal`) and `reason_tag` ("Needs you: installs on your Mac"), both passed through on the wait and
+  shown as a chip on the card. `dispatch.add_owner_item(..., reason=)` refuses an unknown key.
+- **Text matches buttons.** `add_owner_item` rewrites a text that promises a button the item lacks ("botón
+  Run", "click Run", "Run button", same for Open / Done; `asks.missing_buttons` / `drop_button_claims`).
 - The web card shows the item's Run actions (`web/js/actions.js`) between its option buttons and the text box.
 
 ### Only owner items reach the owner
@@ -361,3 +367,38 @@ Options on both: `Not now|snooze` (hides the item for 7 days from the reply, sta
 after) and `Never for this project|never` (the collector writes `guard = false` in the project's
 `[[projects]]` block of `config.toml`; the check stops reporting, `projects[].guard` is
 `{ok: true, problems: [], disabled: true}` and `lane run` skips the guard check).
+
+## Photos in the chat (attachments)
+
+The owner can attach images to a chat message (Overview "Manager" column, and its drawer): Cmd+V in the
+composer, drag and drop onto the chat, or the paperclip. Thumbnails show above the text box and can be
+removed before sending. Up to 6 images per message, PNG, JPEG, GIF or WebP, at most 10 MB each; the type is
+read from the bytes, never from the file name.
+
+```
+app:     attachment_save(message_id, name, bytes_base64) -> <home>/attachments/<message-id>/<n>.<ext>
+         inbox_add(kind: "chat", ..., id, attachments)   -> inbox.jsonl row with `attachments`
+browser: cannot write files -> the page says "Attach images in the desktop app" (nothing is sent)
+CLI:     tirith inbox add --kind chat --text T --attach IMAGE ...   (the file stays where it is)
+manager: tirith inbox watch line / hook context list the absolute paths -> open the images
+         tirith inbox answer <id> "<markdown>" --attach IMAGE ...   -> the answer shows thumbnails too
+```
+
+- `<message-id>` is the request id (`in-` and 8 hex digits). The page picks it, saves every image with
+  `attachment_save`, then calls `inbox_add` with the same `id`. `attachment_save` refuses anything that is not
+  a valid id, an allowed image type or at most 10 MB, picks the file name itself (`<n>.png|jpg|gif|webp`, `n`
+  counts from 1, at most 6 per message) and cannot write outside `<home>/attachments/`. It returns
+  `{path, type, size}`; the page adds `width` and `height`.
+- `inbox_add` takes optional `id` and `attachments` (chat only): each path must be inside
+  `<home>/attachments/` without `..`, otherwise the request is refused. A chat message needs text **or** an image.
+- Rows: a request or an answer may carry `attachments: [{path, type, size, width, height}]` (absolute `path`,
+  `type` one of the four image types). Malformed entries are dropped when the rows are read (at most 6 kept);
+  `state.inbox[]` and `state.inbox[].answers[]` pass the list on unchanged.
+- `tirith inbox add|answer --attach IMAGE` (repeatable) describes an existing image file (checks type and
+  size, reads the dimensions) and stores its absolute path; exit 3 with the reason otherwise.
+- `tirith inbox watch` lines of a request with images gain `attachments` (the objects above, so the absolute
+  `path`s). The manager hook context (`SessionStart`, `UserPromptSubmit`) lists each one under the request as
+  `image: <path> (<type>, <w>x<h>)`.
+- Web: thumbnails sit above the bubble, in the owner's messages and in the manager's answers; a click opens
+  the image full size in a lightbox (click or Esc closes). In the app the thumbnail of a message sent from
+  this window comes from the picked file; others load `file://<path>`.

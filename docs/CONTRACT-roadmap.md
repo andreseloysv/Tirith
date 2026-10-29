@@ -46,6 +46,22 @@ An item whose text contains one of these tags (case-insensitive) is not for an a
 | `(fuera de este plan` / `(out of this plan` | not part of this plan: excluded from `done` / `total` and from the step status | `out` |
 | none | an agent can do it | `agent` |
 
+### The owner tag
+
+`(dueño: <reason?> <what>)`, with an optional reason key first (`security`, `credentials`, `account`, `device`,
+`payment`, `legal`; else guessed from the words, default `security`). What the tag may carry:
+
+| In the tag | Owner item |
+|---|---|
+| a command in backticks, e.g. `(dueño: run `uv run tirith guard reinstall relagame`)` | a **Run** action with that command, cwd = the project folder (for Tirith, `collector/`), label = the sentence |
+| a URL | the item's **Open** link, option `Done` |
+| nothing | options `Done` / `Not now` |
+
+The owner item's text is the item's sentence only: no step title, no project/step prefix, no tag
+(`Reinstalar la guarda nueva en RelaGame.`). A command or URL outside the tag still works (older plans).
+`roadmap.owner_parts(text)` returns `{sentence, command, url, reason, label}`. Never write "botón Run" in the
+item: the generator drops a promise of a button the item does not have.
+
 `out` wins over `owner`, `owner` over `date`. A malformed date is not a tag. Done items keep their `who`
 but never raise owner items.
 
@@ -99,9 +115,10 @@ max_parallel = 4     # autopilot lanes running at once
 - **A refused launch** (check fails, no agent command, …) is one owner item `autopilot-<project>-<step>` with
   `Fix it` / `Try again`, retried every 10 minutes.
 - **Owner items:** for every open `owner` item one owner item with the id of `owner_item`
-  (`owner-<project>-<step>-<hash of the text>`), once. The text names the project, step and item. A command
-  in the text (code span or fence) becomes a Run action; a URL becomes the item's `link` with the option
-  `Done`; otherwise the options are `Done` / `Not now`. When the item is ticked (or removed) the owner item is
+  (`owner-<project>-<step>-<hash of the text>`), once. The text is the item's clean sentence and
+  `reason` / `reason_tag` say why it is the owner's (see "The owner tag"). A command (in the tag, else in the
+  text) becomes a Run action; a URL becomes the item's `link` with the option `Done`; otherwise the options
+  are `Done` / `Not now`. When the item is ticked (or removed) the owner item is
   closed (`done_at`).
 - State is in `<home>/dispatch.json` under `autopilot` (`on`, `lanes`, `stuck`, `paused`, `owner_items`, `refused`).
 

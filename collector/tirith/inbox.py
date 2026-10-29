@@ -29,6 +29,10 @@ AUTOPILOT_STEP = "autopilot"  # the step of an ``autopilot`` request (text ``on`
 ANSWERERS = ("manager", "steward", "brain", "tirith")  # "steward" is the old name of "manager"
 TEXT_MAX_BYTES = 4096
 STATE_ROWS = 100
+ATTACH_DIR = "attachments"  # <home>/attachments/<message-id>/<n>.<ext>
+ATTACH_MAX = 6
+ATTACH_MAX_BYTES = 10 * 1024 * 1024
+ATTACH_TYPES = {"image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp"}
 AUTO_ANSWER_AFTER_S = 120
 SCHEME = "tirith"
 
@@ -50,11 +54,94 @@ def new_id() -> str:
     return "in-" + secrets.token_hex(4)
 
 
+# -- attachments ------------------------------------------------------------------------------
+
+
+def sniff_image(data: bytes) -> tuple[str, int, int] | None:
+    """``(mime type, width, height)`` of a PNG, JPEG, GIF or WebP from its bytes (0, 0 if the size is
+    not found), else None."""
+    import struct
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return ("image/png", *struct.unpack(">II", data[16:24])) if len(data) >= 24 else ("image/png", 0, 0)
+    if data[:6] in (b"GIF87a", b"GIF89a"):
+        return ("image/gif", *struct.unpack("<HH", data[6:10])) if len(data) >= 10 else ("image/gif", 0, 0)
+    if data[:3] == b"\xff\xd8\xff":
+        i = 2
+        while i + 9 < len(data):
+            if data[i] != 0xFF:
+                i += 1
+                continue
+            marker = data[i + 1]
+            if marker in (0xD8, 0x01) or 0xD0 <= marker <= 0xD7:
+                i += 2
+                continue
+            if 0xC0 <= marker <= 0xCF and marker not in (0xC4, 0xC8, 0xCC):
+                h, w = struct.unpack(">HH", data[i + 5:i + 9])
+                return ("image/jpeg", w, h)
+            i += 2 + struct.unpack(">H", data[i + 2:i + 4])[0]
+        return ("image/jpeg", 0, 0)
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        chunk = data[12:16]
+        if chunk == b"VP8X" and len(data) >= 30:
+            return ("image/webp", 1 + int.from_bytes(data[24:27], "little"), 1 + int.from_bytes(data[27:30], "little"))
+        if chunk == b"VP8 " and len(data) >= 30:
+            w, h = struct.unpack("<HH", data[26:30])
+            return ("image/webp", w & 0x3FFF, h & 0x3FFF)
+        if chunk == b"VP8L" and len(data) >= 25:
+            bits = int.from_bytes(data[21:25], "little")
+            return ("image/webp", (bits & 0x3FFF) + 1, ((bits >> 14) & 0x3FFF) + 1)
+        return ("image/webp", 0, 0)
+    return None
+
+
+def describe_attachment(path: Path | str) -> dict:
+    """``{path, type, size, width, height}`` for an image file (absolute path); InboxError if it is not an
+    allowed image or is over 10 MB."""
+    path = Path(path).expanduser().resolve()
+    try:
+        size = path.stat().st_size
+        data = path.read_bytes()
+    except OSError as error:
+        raise InboxError(f"cannot read attachment {path}: {error.strerror or error}") from None
+    if size > ATTACH_MAX_BYTES:
+        raise InboxError(f"attachment {path.name} is over {ATTACH_MAX_BYTES // (1024 * 1024)} MB")
+    found = sniff_image(data)
+    if found is None:
+        raise InboxError(f"attachment {path.name} is not a PNG, JPEG, GIF or WebP image")
+    return {"path": str(path), "type": found[0], "size": size, "width": found[1], "height": found[2]}
+
+
+def clean_attachments(raw) -> list[dict]:
+    """The ``attachments`` of a row as stored: at most 6 well-formed ``{path, type, size, width, height}``."""
+    out = []
+    for item in raw if isinstance(raw, list) else []:
+        if isinstance(item, dict) and str(item.get("path") or "").startswith("/") \
+                and item.get("type") in ATTACH_TYPES:
+            num = lambda k: int(item[k]) if isinstance(item.get(k), (int, float)) and item[k] >= 0 else 0
+            out.append({"path": str(item["path"]), "type": item["type"], "size": num("size"),
+                        "width": num("width"), "height": num("height")})
+    return out[:ATTACH_MAX]
+
+
+def attachment_list(paths: list[str] | None) -> list[dict]:
+    """Describe the image files named with ``--attach`` (at most 6)."""
+    paths = list(paths or [])
+    if len(paths) > ATTACH_MAX:
+        raise InboxError(f"at most {ATTACH_MAX} images per message")
+    return [describe_attachment(p) for p in paths]
+
+
+def attachment_lines(req: dict) -> str:
+    """The attachment paths of a request or answer as text for the manager ('' if none)."""
+    return "\n".join(f"    image: {a['path']} ({a['type']}, {a['width']}x{a['height']})"
+                     for a in req.get("attachments") or [])
+
+
 # -- writing ----------------------------------------------------------------------------------
 
 
 def add_request(home: Path, kind: str, project: str = "", step: str = "", text: str = "",
-                at: str | None = None) -> dict:
+                at: str | None = None, attachments: list[dict] | None = None, rid: str | None = None) -> dict:
     """Append an open request and return its row."""
     if kind not in KINDS:
         raise InboxError(f"kind must be one of {', '.join(KINDS)}, not {kind!r}")
@@ -70,15 +157,18 @@ def add_request(home: Path, kind: str, project: str = "", step: str = "", text: 
         step = step or PLAN_STEP
         if kind == "plan-new":
             text = json.dumps(parse_plan_new(text), ensure_ascii=False, separators=(",", ":"))
+    attachments = clean_attachments(attachments)
     if kind == "chat":
-        if not text:
-            raise InboxError("a chat message needs text")
+        if not text and not attachments:
+            raise InboxError("a chat message needs text or an image")
     elif not project or not step:
         raise InboxError("a request needs a project and a step")
     if kind == "ask" and not text:
         raise InboxError("a question needs text")
-    row = {"id": new_id(), "at": at or now_iso(), "kind": kind, "project": project, "step": step,
+    row = {"id": rid or new_id(), "at": at or now_iso(), "kind": kind, "project": project, "step": step,
            "text": text, "from": "owner", "status": "open"}
+    if attachments:
+        row["attachments"] = attachments
     append_jsonl(inbox_path(home), row)
     return row
 
@@ -125,18 +215,22 @@ def find_request(home: Path, request_id: str) -> dict | None:
 
 
 def add_answer(home: Path, request_id: str, text: str, by: str = "manager", auto: bool = False,
-               at: str | None = None, lane: str | None = None, actions: list[dict] | None = None) -> dict:
+               at: str | None = None, lane: str | None = None, actions: list[dict] | None = None,
+               attachments: list[dict] | None = None) -> dict:
     if by not in ANSWERERS:
         raise InboxError(f"--by must be one of {', '.join(ANSWERERS)}")
     by = "manager" if by == "steward" else by
     if find_request(home, request_id) is None:
         raise InboxError(f"no request {request_id}")
     text = clip(text.strip())
+    attachments = clean_attachments(attachments)
     if not text:
         raise InboxError("an answer needs text")
     row = {"id": request_id, "at": at or now_iso(), "kind": "answer", "by": by, "text": text, "auto": bool(auto)}
     if lane:
         row["lane"] = str(lane)  # the agent (lane id) that took the request
+    if attachments:
+        row["attachments"] = attachments
     if actions:
         row["actions"] = actions  # commands for the owner's "Run" buttons (tirith.actions)
     append_jsonl(inbox_path(home), row)
@@ -193,6 +287,8 @@ def requests(home: Path) -> list[dict]:
                         "step": str(row.get("step") if row.get("step") is not None else ""),
                         "text": str(row.get("text") or ""), "from": row.get("from") or "owner",
                         "status": "open", "answers": [], "manager_pending": True, "action_runs": []}
+            if clean_attachments(row.get("attachments")):
+                out[rid]["attachments"] = clean_attachments(row["attachments"])
             if kind == "setup":
                 try:
                     out[rid]["setup"] = parse_setup(out[rid]["text"])
@@ -207,6 +303,8 @@ def requests(home: Path) -> list[dict]:
             answer = {"at": row.get("at"), "by": "manager" if row.get("by") in (None, "", "steward") else row["by"],
                       "text": str(row.get("text") or ""), "auto": bool(row.get("auto")),
                       "lane": str(row["lane"]) if row.get("lane") else None}
+            if clean_attachments(row.get("attachments")):
+                answer["attachments"] = clean_attachments(row["attachments"])
             if row.get("actions"):
                 answer["actions"] = [dict(a) for a in row["actions"] if isinstance(a, dict)]
                 for act in answer["actions"]:
@@ -370,6 +468,8 @@ def watch_line(req: dict) -> str:
     keys = ("id", "at", "kind", "project", "wait", "value", "text", "from", "status") if req["kind"] == "reply" \
         else ("id", "at", "kind", "project", "step", "text", "from", "status")
     row = {k: req[k] for k in keys}
+    if req.get("attachments"):
+        row["attachments"] = req["attachments"]  # absolute paths of the images the owner attached
     if req.get("action_runs"):
         row["action_run"] = req["action_runs"][-1]  # what the owner just ran, and how it went
     return json.dumps(row)
