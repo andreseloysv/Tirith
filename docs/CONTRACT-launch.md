@@ -293,13 +293,3 @@ quoted link (with its `&` separators) and runs it through `/bin/sh` with `TIRITH
 wrong-token link exits 3 and records the `launch-token` violation; nothing is launched. A right-token link for a done step
 (`test_handler_command_with_right_token_reaches_launch`) gets past the token check into `tirith launch`, which refuses the step. What stays manual: after
 `tirith url install`, open the Plan in the browser, click "Start an agent now" and confirm `lane <id>` appears in the step.
-
-### Real browser launch: manual checklist
-
-`tirith url verify` reports `handler OK` on the owner's Mac (the app is installed in `~/Applications`). The real click is
-not done by a lane (it would start an agent outside `lane run`). The owner checks it once:
-
-1. Open the Overview in the browser and expand a Plan step that is not done and has no working agent.
-2. Click "Start an agent now"; the browser asks to open "Tirith Launcher" (accept, and tick "always allow").
-3. Within 90 s the step shows the new agent and `<home>/logs/<lane-id>.launch.log` exists; `tirith lane list` shows `lane <id>`.
-4. If nothing happens: `tirith url verify`, then `tirith url open "<link>"` by hand to see the refusal reason (exit 3 = token).
