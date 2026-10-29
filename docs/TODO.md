@@ -218,12 +218,16 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 
 ## 15. Collector y CLI en Rust
 
-- [ ] Base: crate Rust compartido (workspace con la app), arnés de paridad que corre el collector de Python y el de Rust sobre las mismas carpetas de prueba y compara `state.json`.
-- [ ] El estado (`state.json`/`state.js`) lo construye Rust con paridad total contra Python.
-- [ ] Dispatcher, piloto automático, manager de guardia y revisiones en Rust, con paridad.
-- [ ] La CLI `tirith` en Rust (mismos comandos y salidas), un solo binario para los agentes.
-- [ ] La app incluye el collector (sin `uv` ni Python) y sigue firmada y notarizada.
-- [ ] Cambio: Rust pasa a ser el collector en vivo; Python se retira cuando la paridad y los tests pasan.
+- [x] Base: crate Rust compartido (workspace con la app), arnés de paridad que corre el collector de Python y el de Rust sobre las mismas carpetas de prueba y compara `state.json`.
+- [ ] El estado (`state.json`/`state.js`) lo construye Rust con paridad total contra Python (fuera de este plan: port a Rust pausado por el dueño el 2026-10-29).
+  - [ ] Rust: agentes y lanes (`agents`, `usage`, presencia del manager) (fuera de este plan: port a Rust pausado por el dueño el 2026-10-29).
+  - [ ] Rust: inbox y avisos (`waiting_on_you`, `manager_queue`, `inbox`, `says`, `file_refs`) (fuera de este plan: port a Rust pausado por el dueño el 2026-10-29).
+  - [ ] Rust: pipelines, guarda y reglas (`pipelines`, `violations`, `rules`, `guard`, `setup`, `env`) (fuera de este plan: port a Rust pausado por el dueño el 2026-10-29).
+  - [ ] Rust: salas, flujos y manager (`rooms`, `flows`, `sessions`, `autopilot`, `models`, `disk`, `health`) (fuera de este plan: port a Rust pausado por el dueño el 2026-10-29).
+- [ ] Dispatcher, piloto automático, manager de guardia y revisiones en Rust, con paridad (fuera de este plan: port a Rust pausado por el dueño el 2026-10-29).
+- [ ] La CLI `tirith` en Rust (mismos comandos y salidas), un solo binario para los agentes (fuera de este plan: port a Rust pausado por el dueño el 2026-10-29).
+- [ ] La app incluye el collector (sin `uv` ni Python) y sigue firmada y notarizada (fuera de este plan: port a Rust pausado por el dueño el 2026-10-29).
+- [ ] Cambio: Rust pasa a ser el collector en vivo; Python se retira cuando la paridad y los tests pasan (fuera de este plan: port a Rust pausado por el dueño el 2026-10-29).
 
 ## Orden
 
