@@ -220,17 +220,13 @@
 
   /* ---------- Overview ---------- */
   function overview(s, el) {
-    var w = s.waiting_on_you || [];
     var runs = (s.pipelines || []).filter(function (p) { return p.status === 'running'; });
     var ags = (s.agents || []).filter(function (a) { return a.status === 'working' || a.status === 'stalled'; });
     var h = '<div class="ovg"><div class="ovmain" data-scroll="ovmain">';
     var spent = T.sumUsage && T.sumUsage(s.agents || []);
     if (spent) h += '<p class="mut sm usage ovusage" title="All agents in this view">Spent ' + esc(T.usageLine(spent)) + '</p>';
+    if (T.needs) h += T.needs(s);
     if (T.plan) h += T.plan(s);
-    if (w.length) h += '<section><h2>Needs you</h2><ul class="needs card">' + w.map(function (x) {
-      var pn = T.proj(x.project);
-      return '<li>' + T.dot('amber', 'waiting for you') + '<span class="t">' + (x.link ? '<a href="' + esc(x.link) + '" target="_blank" rel="noopener">' + esc(x.text) + '</a>' : T.mdInline(x.text)) + '</span><span class="m">' + esc(pn) + '</span><span class="r">' + T.agoSpan(x.since) + '</span></li>';
-    }).join('') + '</ul></section>';
     if (T.rulesSection) h += T.rulesSection(s);
     h += '<section><h2>Running pipelines <span class="n">' + runs.length + '</span></h2>' + (runs.length ? '<div class="grid2">' + runs.map(function (p) {
       var st = p.stages || [], cur = T.curStage(p);

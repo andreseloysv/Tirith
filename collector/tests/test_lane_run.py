@@ -117,7 +117,10 @@ def test_lane_run_failure_adds_wait(home: Path, tmp_path: Path, capsys,
     assert code == 3
     assert "lane boom: failed" in capsys.readouterr().out
     waits = read_jsonl(home / "waits.jsonl")
-    assert [w["text"] for w in waits] == ["lane boom failed"]
+    assert [w["id"] for w in waits] == ["lane-boom"]
+    assert waits[0]["kind"] == "decision"
+    assert [o["label"] for o in waits[0]["options"]] == ["Retry", "Show the log", "Drop it"]
+    assert "boom" in waits[0]["text"] and waits[0]["command"].startswith("tail -n 80 ")
 
 
 def test_lane_run_without_answer_adds_wait(home: Path, tmp_path: Path, capsys,
@@ -131,4 +134,6 @@ def test_lane_run_without_answer_adds_wait(home: Path, tmp_path: Path, capsys,
     assert code == 0
     assert "lane mute: done" in capsys.readouterr().out
     waits = read_jsonl(home / "waits.jsonl")
-    assert [w["text"] for w in waits] == ["lane mute ended without an answer"]
+    assert [w["id"] for w in waits] == ["lane-mute"]
+    assert "ended without an answer" in waits[0]["text"]
+    assert [o["value"] for o in waits[0]["options"]] == ["retry", "log", "drop"]

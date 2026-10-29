@@ -34,20 +34,65 @@ window.TIRITH_STATE = {
   },
   "waiting_on_you": [
     {
-      "id": "w-1",
-      "project": "chromasol",
-      "text": "Tick the AI asset declaration on the store listing and press Save",
-      "since": "2026-10-28T18:50:00Z",
+      "id": "w-3",
+      "project": "tirith",
+      "text": "The lane **inbox-reply** finished, but the report says the token is shared with the launch link. Rotate it now or keep it for this release?",
+      "since": "2026-10-28T19:36:00Z",
       "link": null,
-      "session": "2026-10-28-chromasol-release"
+      "source": "manual",
+      "session": "2026-10-28-tirith-web",
+      "kind": "decision",
+      "options": [
+        {
+          "label": "Rotate now",
+          "value": "rotate"
+        },
+        {
+          "label": "Keep for this release",
+          "value": "keep"
+        },
+        {
+          "label": "Ask me again Monday",
+          "value": "later"
+        }
+      ],
+      "command": null,
+      "status": "open"
     },
     {
       "id": "w-2",
-      "project": "tirith",
-      "text": "Install the commit guard in the Tirith repository",
-      "since": "2026-10-28T19:38:00Z",
+      "project": "chromasol",
+      "text": "Tick the AI asset declaration on the store listing and press Save. The form is behind your sign-in, so only you can do it.",
+      "since": "2026-10-28T19:20:00Z",
+      "link": "https://play.google.com/console",
+      "source": "manual",
+      "session": "2026-10-28-chromasol-release",
+      "kind": "action",
+      "options": [],
+      "command": "open https://play.google.com/console",
+      "status": "open"
+    },
+    {
+      "id": "w-4",
+      "project": "chromasol",
+      "text": "Release candidate 1.4.2 passed every stage. Publish it to the **production** track?",
+      "since": "2026-10-28T18:50:00Z",
       "link": null,
-      "session": "2026-10-28-tirith-web"
+      "source": "manual",
+      "session": "2026-10-28-chromasol-release",
+      "kind": "approval",
+      "options": [
+        {
+          "label": "Publish",
+          "value": "publish"
+        },
+        {
+          "label": "Not yet",
+          "value": "hold"
+        }
+      ],
+      "command": null,
+      "status": "open"
     }
   ],
   "projects": [
@@ -2068,6 +2113,48 @@ window.TIRITH_STATE = {
       "text": "",
       "status": "open",
       "answers": []
+    }
+  ],
+  "answered_waits": [
+    {
+      "id": "w-1",
+      "project": "tirith",
+      "text": "Install the commit guard in the Tirith repository?",
+      "since": "2026-10-28T17:05:00Z",
+      "link": null,
+      "source": "manual",
+      "session": "2026-10-28-tirith-web",
+      "kind": "decision",
+      "options": [
+        {
+          "label": "Install it",
+          "value": "install"
+        },
+        {
+          "label": "Skip",
+          "value": "skip"
+        }
+      ],
+      "command": null,
+      "status": "answered",
+      "answer": {
+        "at": "2026-10-28T17:12:00Z",
+        "value": "install",
+        "label": "Install it",
+        "text": ""
+      }
+    }
+  ],
+  "steward_queue": [
+    {
+      "id": "sq-1c04a7b2",
+      "at": "2026-10-28T19:30:00Z",
+      "kind": "review",
+      "project": "tirith",
+      "lane": "inbox-reply",
+      "to": "steward",
+      "status": "open",
+      "text": "- Decide whether the token is rotated before the release."
     }
   ]
 };

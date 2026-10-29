@@ -1,4 +1,4 @@
-"""The owner's inbox: "Finish it" and "What's going on?" requests on plan steps.
+"""The owner's inbox: "Finish it" and "What's going on?" requests on plan steps, and replies to asks.
 
 The web page cannot run commands, so a request is one line appended to ``<home>/inbox.jsonl``;
 the steward watches the file (``tirith inbox watch``) and answers with ``tirith inbox answer``.
@@ -80,8 +80,23 @@ def add_answer(home: Path, request_id: str, text: str, by: str = "steward", auto
     return row
 
 
+def add_reply(home: Path, wait: str, project: str = "", value: str = "", text: str = "",
+              at: str | None = None) -> dict:
+    """Append the owner's answer to an ask (``waits.jsonl``): one option ``value`` and/or free ``text``."""
+    wait, project, value, text = str(wait or "").strip(), str(project or "").strip(), \
+        str(value or "").strip()[:200], clip(str(text or "").strip())
+    if not wait:
+        raise InboxError("a reply needs the id of the ask (--wait)")
+    if not value and not text:
+        raise InboxError("a reply needs a value or a text")
+    row = {"id": new_id(), "at": at or now_iso(), "kind": "reply", "wait": wait, "project": project,
+           "value": value, "text": text, "from": "owner", "status": "open"}
+    append_jsonl(inbox_path(home), row)
+    return row
+
+
 def mark_done(home: Path, request_id: str, at: str | None = None) -> dict:
-    if find_request(home, request_id) is None:
+    if find_request(home, request_id) is None and find_reply(home, request_id) is None:
         raise InboxError(f"no request {request_id}")
     row = {"id": request_id, "at": at or now_iso(), "kind": "done"}
     append_jsonl(inbox_path(home), row)
@@ -121,6 +136,26 @@ def state_rows(home: Path) -> list[dict]:
     return requests(home)[-STATE_ROWS:]
 
 
+def replies(home: Path) -> list[dict]:
+    """The owner's replies to asks in file order; ``status`` is ``done`` once the steward closed one."""
+    out: dict[str, dict] = {}
+    for row in read_jsonl(inbox_path(home)):
+        rid, kind = str(row.get("id") or ""), row.get("kind")
+        if not rid:
+            continue
+        if kind == "reply" and row.get("wait") and rid not in out:
+            out[rid] = {"id": rid, "at": row.get("at"), "kind": "reply", "wait": str(row["wait"]),
+                        "project": str(row.get("project") or ""), "value": str(row.get("value") or ""),
+                        "text": str(row.get("text") or ""), "from": row.get("from") or "owner", "status": "open"}
+        elif kind == "done" and rid in out:
+            out[rid]["status"] = "done"
+    return list(out.values())
+
+
+def find_reply(home: Path, reply_id: str) -> dict | None:
+    return next((r for r in replies(home) if r["id"] == reply_id), None)
+
+
 # -- the watcher ------------------------------------------------------------------------------
 
 
@@ -128,10 +163,17 @@ def watch(home: Path, emit: Callable[[dict], None], *, poll_s: float = 1.0, incl
           should_stop: Callable[[], bool] = lambda: False, sleep: Callable[[float], None] = time.sleep) -> None:
     """Call ``emit`` once for each open request, then for each new one; blocks until ``should_stop``.
 
-    A request already answered or done when first seen is not emitted."""
+    A request already answered or done when first seen is not emitted. The owner's replies to asks
+    (``kind: "reply"``) are emitted the same way until the steward closes them with ``inbox done``."""
     seen: set[str] = set()
     first = True
     while True:
+        for rep in replies(home):
+            if rep["id"] in seen:
+                continue
+            seen.add(rep["id"])
+            if not (first and not include_existing) and rep["status"] == "open":
+                emit(rep)
         for req in requests(home):
             if req["id"] in seen:
                 continue
@@ -146,7 +188,9 @@ def watch(home: Path, emit: Callable[[dict], None], *, poll_s: float = 1.0, incl
 
 
 def watch_line(req: dict) -> str:
-    return json.dumps({k: req[k] for k in ("id", "at", "kind", "project", "step", "text", "from", "status")})
+    keys = ("id", "at", "kind", "project", "wait", "value", "text", "from", "status") if req["kind"] == "reply" \
+        else ("id", "at", "kind", "project", "step", "text", "from", "status")
+    return json.dumps({k: req[k] for k in keys})
 
 
 # -- tirith://inbox links ---------------------------------------------------------------------
@@ -158,13 +202,19 @@ def parse_url(url: str) -> dict:
     if parts.scheme.lower() != SCHEME or (parts.netloc or parts.path.strip("/")).lower() != "inbox":
         raise InboxError(f"not a {SCHEME}://inbox link: {url!r}")
     query = {k: v[-1] for k, v in parse_qs(parts.query).items()}
-    return {key: query.get(key, "") for key in ("kind", "project", "step", "text", "token")}
+    return {key: query.get(key, "") for key in ("kind", "project", "step", "text", "token", "wait", "value")}
 
 
 def build_url(kind: str, project: str, step: str, text: str, token: str) -> str:
     from urllib.parse import urlencode
     return f"{SCHEME}://inbox?" + urlencode({"kind": kind, "project": project, "step": step,
                                               "text": text, "token": token})
+
+
+def build_reply_url(wait: str, project: str, value: str, text: str, token: str) -> str:
+    from urllib.parse import urlencode
+    return f"{SCHEME}://inbox?" + urlencode({"kind": "reply", "wait": wait, "project": project,
+                                              "value": value, "text": text, "token": token})
 
 
 # -- the brain's automatic answer -------------------------------------------------------------
