@@ -20,6 +20,7 @@ from tirith.collector import (
 )
 from tirith.guardwrap import default_words, install_guard, verify_guard
 from tirith import flows as flows_mod
+from tirith import manifest as manifest_mod
 from tirith import projects as projects_mod
 from tirith import rooms as rooms_mod
 from tirith.home import ensure_home, load_config, now_iso, tirith_home
@@ -245,13 +246,50 @@ def _wrapper_env_session(home: Path) -> dict:
     return env
 
 
+def _project_folder_of(home: Path, project: str | None) -> tuple[str, Path | None]:
+    """``(project id, folder)`` for an id, or for the project containing the cwd."""
+    config = load_config(home)
+    items = projects_mod.entries(config, projects_mod.load_auto(home))
+    if project:
+        found = next((e for e in items if e.id == project), None)
+    else:
+        found = projects_mod.match(Path.cwd(), items)
+    return (found.id if found else project or ""), (found.folder if found else None)
+
+
+def _manifest_stage(args, home: Path, command: list[str]) -> list[str]:
+    """Fill project, pipeline and command from ``tirith.toml`` when ``run`` leaves them out."""
+    args.project, folder = _project_folder_of(home, args.project)
+    if not args.project:
+        raise SystemExit("tirith run needs --project (cwd is in no known project)")
+    if args.pipeline and command:
+        return command
+    loaded = manifest_mod.load(folder) if folder else None
+    if loaded is None or not loaded.exists:
+        raise SystemExit("tirith run needs --pipeline and a command after --, "
+                         f"or a {manifest_mod.FILENAME} in the project folder")
+    matches = [(p, s) for p in loaded.pipelines for s in p.stages
+               if s.name == args.stage and (not args.pipeline or p.id == args.pipeline)]
+    if not matches:
+        raise SystemExit(f"stage '{args.stage}' is not in {loaded.path}")
+    if len(matches) > 1:
+        ids = ", ".join(p.id for p, _ in matches)
+        raise SystemExit(f"stage '{args.stage}' is in several pipelines ({ids}): add --pipeline <id>")
+    pipe, stage = matches[0]
+    args.pipeline = pipe.id
+    if command:
+        return command
+    if not stage.run:
+        raise SystemExit(f"stage '{args.stage}' has no run command in {loaded.path}")
+    return ["/bin/sh", "-c", stage.run]
+
+
 def _cmd_run(args) -> int:
     home = _home(args)
     command = list(args.command or [])
     if command and command[0] == "--":
         command = command[1:]
-    if not command:
-        raise SystemExit("tirith run needs a command after --")
+    command = _manifest_stage(args, home, command)
     run_id = _resolve_run(home, args.project, args.pipeline, args.run, args.new_run)
     safe_run = run_id.replace("#", "-").replace("/", "-")
     log_path = Path(args.log).expanduser().resolve() if args.log \
@@ -554,6 +592,27 @@ def _cmd_guard(args) -> int:
     return exit_code
 
 
+def _cmd_check(args) -> int:
+    home = _home(args)
+    config = load_config(home)
+    if args.folder:
+        folder = projects_mod.real(args.folder)
+        proj = next((p for p in config.projects if p.repo and projects_mod.real(p.repo) == folder), None)
+    else:
+        pid, found = _project_folder_of(home, args.project)
+        if found is None:
+            raise SystemExit(f"unknown project '{pid}'" if args.project
+                             else "tirith check: cwd is in no known project; pass a folder or --project")
+        folder, proj = found, config.project(pid)
+    words = config.words_for(proj, default_words())
+    problems = manifest_mod.check(folder, words)
+    for problem in problems:
+        print(problem)
+    if not problems:
+        print(f"{folder}: all checks passed")
+    return 1 if problems else 0
+
+
 def _transport(args):
     """The room transport; tests replace this to avoid the network."""
     return rooms_mod.HttpTransport()
@@ -706,8 +765,8 @@ def build_parser() -> argparse.ArgumentParser:
     lane_run.set_defaults(func=_cmd_lane_run)
 
     run = sub.add_parser("run", parents=[common], help="run one pipeline stage")
-    run.add_argument("--project", required=True)
-    run.add_argument("--pipeline", required=True)
+    run.add_argument("--project", default=None, help="default: the project containing the cwd")
+    run.add_argument("--pipeline", default=None, help="default: from tirith.toml by stage name")
     run.add_argument("--stage", required=True)
     run.add_argument("--run", dest="run", default=None, help="explicit run id")
     run.add_argument("--new-run", action="store_true", help="start a new run number")
@@ -823,6 +882,12 @@ def build_parser() -> argparse.ArgumentParser:
                        help="project id or repo path")
     guard.add_argument("--all", action="store_true")
     guard.set_defaults(func=_cmd_guard)
+
+    check = sub.add_parser("check", parents=[common],
+                           help="check a project is set up (tirith.toml, pipelines, hooks, guard)")
+    check.add_argument("folder", nargs="?", default=None)
+    check.add_argument("--project", default=None, help="project id")
+    check.set_defaults(func=_cmd_check)
     return parser
 
 
