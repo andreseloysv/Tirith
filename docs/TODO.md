@@ -184,7 +184,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Tarjeta «Plan» en el Overview: pasos, progreso, estado y agentes trabajando en cada uno.
 - [x] Fecha límite opcional con cuenta atrás.
 - [ ] Cabecera de un paso del Plan con varios agentes: avatares apilados (+N) y un solo botón, sin tapar el título ni la barra de progreso. (en revisión)
-- [ ] Quitar la vista Flow del menú y su código (el dueño la considera inútil). (en revisión)
+- [x] Quitar la vista Flow del menú y su código (el dueño la considera inútil). (hecho: 360eded)
 
 ## 11. Lanzar un sub-agente desde el Plan
 
