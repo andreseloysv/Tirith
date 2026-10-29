@@ -50,7 +50,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] `tirith hook install|uninstall` (fusiona, idempotente).
 - [x] `UserPromptSubmit` guarda la petición original del usuario.
 - [x] Eventos por lane en el panel del agente.
-- [ ] Instalar los hooks en los ajustes de usuario de cada agente.
+- [x] Instalar los hooks en los ajustes de usuario de cada agente.
 - [ ] Protegerlos para que un agente no pueda quitárselos.
 - [x] Enlazar cada lane con la petición original del usuario.
 - [ ] Verificar el payload real de Muse Code y ajustar su adaptador.
