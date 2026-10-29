@@ -14,6 +14,7 @@ import re
 import shlex
 import shutil
 import stat
+from datetime import datetime, timezone
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -69,6 +70,53 @@ class Violation:
 
     def message(self) -> str:
         return f"tirith: {self.rule}: {self.what}. Do this instead: {self.instead}"
+
+
+# A block is a lesson, not a stop: the agent reads this after the block message and carries on.
+NOT_A_STOP = "A Tirith block is not a stop: use the alternative it gives and continue."
+NO_ALTERNATIVE = "no alternative"  # ``instead`` of a rule that has none must say so, starting with this
+DENY_LIMIT = 3  # denies of one rule in one lane within DENY_WINDOW_S go to the manager queue
+DENY_WINDOW_S = 600.0
+DENY_FILE = "denies.json"
+
+
+def taught(violation: "Violation") -> str:
+    """The line that tells the agent to follow the alternative and go on, then the block message (which ends
+    with the exact command, so a test or a reader finds it last)."""
+    return f"{NOT_A_STOP}\n{violation.message()}"
+
+
+def note_deny(home: Path, violation: "Violation", lane: str | None, project: str | None,
+              now: datetime | None = None) -> dict | None:
+    """Count one deny of ``violation.rule`` in ``lane``; the ``DENY_LIMIT``-th within ``DENY_WINDOW_S`` queues one
+    manager item with the commands (never an owner item) and returns it. Allowed-with-warning calls do not count."""
+    if violation.action != "block" or not lane:
+        return None
+    from tirith import asks as asks_mod
+    from tirith.home import now_iso
+    from tirith.store import read_json, write_json_atomic
+    now = now or datetime.now(timezone.utc)
+    path = home / DENY_FILE
+    book = read_json(path, {})
+    book = book if isinstance(book, dict) else {}
+    key = f"{lane}|{violation.rule}"
+    stamps = [t for t in book.get(key, []) if isinstance(t, (int, float)) and 0 <= now.timestamp() - t < DENY_WINDOW_S]
+    stamps.append(now.timestamp())
+    item = None
+    if len(stamps) >= DENY_LIMIT:
+        slug = re.sub(r"[^a-z0-9]+", "-", f"{lane}-{violation.rule}".lower()).strip("-")
+        item = asks_mod.queue_add(
+            home, project or "", lane,
+            f"Lane {lane} was blocked {len(stamps)} times in {int(DENY_WINDOW_S // 60)} minutes by rule "
+            f"'{violation.rule}' ({violation.what}). Tell it the allowed way: {violation.instead}",
+            kind="deny-repeat", item_id=f"sq-deny-{slug}-{int(stamps[0])}")
+        stamps = []
+    book[key] = stamps
+    write_json_atomic(path, book)
+    if item:
+        append_jsonl(home / EVENTS_FILE, {"kind": "deny-repeat", "ts": now_iso(now), "lane": lane,
+                                          "rule": violation.rule, "queue": item["id"]})
+    return item
 
 
 # -- command line parsing ---------------------------------------------------------------------
@@ -251,6 +299,89 @@ def _git_rules(line: str, segments: list[list[str]]) -> list[Violation]:
                 "git-hooks", f"editing or removing files under .git/hooks is not allowed: {_clip(line)}",
                 "leave .git/hooks alone; the owner manages it with `tirith guard install <project>`"))
     return out
+
+
+MERGE_HINT = ("do not merge or push into main yourself: finish with `tirith plan report --lane $TIRITH_LANE "
+              "--status done` (or run `tirith merge request`); Tirith's merge queue brings main in, runs the "
+              "full suite, merges and pushes one lane at a time, and sends a conflict back to you")
+_GIT_VALUE_GLOBAL = {"-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--config-env"}
+
+
+def main_checkout(cwd) -> Path | None:
+    """The main checkout when ``cwd`` is inside a linked git worktree (a lane), else None."""
+    here = Path(str(cwd or ".")).expanduser()
+    for folder in (here, *here.parents):
+        marker = folder / ".git"
+        if marker.is_file():
+            try:
+                target = marker.read_text(encoding="utf-8").split("gitdir:", 1)[1].strip()
+            except (OSError, IndexError):
+                return None
+            target = Path(target) if os.path.isabs(target) else folder / target
+            for parent in target.parents:  # <main>/.git/worktrees/<name>
+                if parent.name == ".git":
+                    return parent.parent.resolve()
+            return None
+        if marker.exists():
+            return None
+    return None
+
+
+def _main_branches(main: Path) -> set[str]:
+    names = {"main", "master"}
+    try:
+        head = (main / ".git" / "HEAD").read_text(encoding="utf-8").strip()
+    except OSError:
+        return names
+    if head.startswith("ref: refs/heads/"):
+        names.add(head[len("ref: refs/heads/"):])
+    return names
+
+
+def _resolve(path: str, base) -> Path:
+    return (Path(base) / Path(_expand_home(path))).resolve()
+
+
+def _git_sub(args: list[str]) -> tuple[str | None, list[str], str | None]:
+    """``(subcommand, its arguments, -C folder)`` of the arguments of one ``git`` call."""
+    folder, i = None, 0
+    while i < len(args):
+        word = args[i]
+        if word == "-C" and i + 1 < len(args):
+            folder, i = args[i + 1], i + 2
+        elif word in _GIT_VALUE_GLOBAL:
+            i += 2
+        elif word.startswith("-"):
+            i += 1
+        else:
+            return word, args[i + 1:], folder
+    return None, [], folder
+
+
+def _main_merge(segments: list[list[str]], line: str, cwd) -> Violation | None:
+    """``main-merge``: a lane's agent never merges into, nor pushes to, the main checkout (the merge queue does)."""
+    main = main_checkout(cwd)
+    if main is None:
+        return None
+    here = Path(str(cwd or ".")).expanduser()
+    branches = _main_branches(main)
+    for tokens in segments:
+        name, args = _program(tokens)
+        if name == "cd" and args:
+            here = _resolve(args[-1], here) if not args[-1].startswith("-") else here
+            continue
+        if name != "git":
+            continue
+        sub, rest, folder = _git_sub(args)
+        target = _resolve(folder, here) if folder else here
+        if sub == "merge" and target == main:
+            return Violation("main-merge", f"agents do not merge into the main checkout: {_clip(line)}", MERGE_HINT)
+        if sub == "push":
+            refs = [t for t in rest if not t.startswith("-")][1:]  # the first word is the remote
+            to_main = any(r.lstrip("+").split(":")[-1].removeprefix("refs/heads/") in branches for r in refs)
+            if target == main or to_main:
+                return Violation("main-merge", f"agents do not push to main: {_clip(line)}", MERGE_HINT)
+    return None
 
 
 def _raw_stage(segments: list[list[str]], folder: Path | None, project: str | None) -> Violation | None:
@@ -517,6 +648,9 @@ def _base_rules(config: Config, tool: str | None, tool_input, cwd, project: str 
     line = strip_heredocs(str(data.get("command") or data.get("cmd") or ""))
     segments = split_commands(line)
     out = _git_rules(line, segments)
+    merge = _main_merge(segments, line, cwd)
+    if merge:
+        out.append(merge)
     protect = _settings_bash(line, segments, protected_paths(config, home), cwd)
     if protect:
         out.append(protect)
