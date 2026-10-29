@@ -39,6 +39,8 @@ from tirith import setup as setup_mod
 from tirith import lanestop as lanestop_mod
 from tirith import launch as launch_mod
 from tirith import models as models_mod
+from tirith import planlane as planlane_mod
+from tirith import roadmap as roadmap_mod
 from tirith import review as review_mod
 from tirith import runstage as runstage_mod
 from tirith import projects as projects_mod
@@ -950,6 +952,59 @@ def launch_step(home: Path, project_id: str, step_id: str, agent: str | None = N
         print(f"lane {lane_id} (dry run)\nworktree: {workspace} (branch lane/{lane_id})\n"
               f"brief: {brief_path}\ncommand: {' '.join(argv)}\n\n{brief}", file=out)
         return lane_id
+    launch_mod.create_worktree(repo, lane_id)
+    brief_path.parent.mkdir(parents=True, exist_ok=True)
+    brief_path.write_text(brief, encoding="utf-8")
+    launch_mod.spawn_detached(argv, home, home / "logs" / f"{lane_id}.launch.log")
+    print(f"lane {lane_id}", file=out)
+    return lane_id
+
+
+def launch_plan(home: Path, project_id: str, kind: str, request_id: str | None = None,
+                out=None) -> str:
+    """Start the auditor (``plan-refresh``) or planner (``plan-new``) lane for a project; returns the lane id.
+
+    Raises ``launch_mod.LaunchError`` with the reason when it must not start."""
+    out = out or sys.stdout
+    config, proj = _project_or_exit(home, project_id)
+    repo = projects_mod.real(proj.repo) if proj.repo else None
+    if repo is None:
+        raise launch_mod.LaunchError(f"project '{project_id}' has no repo folder")
+    step = planlane_mod.LANE_STEPS[kind]
+    lanes = read_lanes(home)
+    busy = launch_mod.working_lane(lanes, project_id, step, lane_status) if kind == "plan-refresh" else None
+    if busy:
+        raise launch_mod.LaunchError(f"{project_id} already has a plan update running: lane {busy['id']}")
+    failed = manifest_mod.check(repo, config.words_for(proj, default_words()))
+    if failed:
+        raise launch_mod.LaunchError(
+            f"tirith check fails for '{project_id}', so no lane may start. Fix these, then run "
+            f"`tirith check --project {project_id}`:\n" + "\n".join(f"  {p}" for p in failed))
+    request = inbox_mod.find_request(home, request_id) if request_id else None
+    manifest = manifest_mod.load(repo)
+    if kind == "plan-new":
+        plan = (request or {}).get("plan")
+        if not plan:
+            raise launch_mod.LaunchError("a new plan needs its request (title, goal, deadline, first steps)")
+        slug = planlane_mod.slug_for(plan["title"], planlane_mod.taken_slugs(repo))
+        brief = planlane_mod.new_plan_brief(project_id, plan, slug, manifest.plans)
+    else:
+        plan, path = None, roadmap_mod.find_file(repo, manifest.roadmap)
+        if path is None:
+            raise launch_mod.LaunchError(f"{project_id} has no plan file to update (docs/TODO.md)")
+        merged = [l for l in lanes if l.get("project") == project_id
+                  and (l.get("review") or {}).get("status") == "merged"]
+        merged.sort(key=lambda l: str(l.get("started_at") or ""))
+        rows = [r for r in inbox_mod.requests(home) if r["project"] == project_id and r["kind"] != "setup"]
+        rel = str(path.relative_to(repo)) if path.is_relative_to(repo) else str(path)
+        brief = planlane_mod.refresh_brief(project_id, rel, path.read_text(encoding="utf-8"), merged, rows, home)
+    title = planlane_mod.lane_title(kind, plan)
+    lane_id = launch_mod.lane_id_for(title, {str(l["id"]) for l in lanes}, repo)
+    brief_path = home / "briefs" / f"{lane_id}.md"
+    workspace = launch_mod.worktree_path(repo, lane_id)
+    command = launch_mod.agent_command(config, None, brief_path, workspace, project_id, step)
+    argv = launch_mod.lane_run_argv(project_id, step, planlane_mod.HERO_CLASS, title, brief_path, workspace,
+                                    lane_id, command, request_id)
     launch_mod.create_worktree(repo, lane_id)
     brief_path.parent.mkdir(parents=True, exist_ok=True)
     brief_path.write_text(brief, encoding="utf-8")

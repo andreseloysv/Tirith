@@ -150,7 +150,7 @@
         "properties": {
           "id": {"type": "string"},
           "at": {"type": ["string", "null"]},
-          "kind": {"enum": ["finish", "ask", "setup", "chat"]},
+          "kind": {"enum": ["finish", "ask", "setup", "chat", "plan-refresh", "plan-new"]},
           "manager_pending": {"type": "boolean"},
           "steward_pending": {"type": "boolean", "description": "Old key for manager_pending, same value."},
           "project": {"type": "string"},
@@ -601,6 +601,11 @@
         "roadmap": {
           "description": "The project's plan read from its markdown checklist; null when there is none. See docs/CONTRACT-roadmap.md.",
           "oneOf": [{"type": "null"}, {"$ref": "#/$defs/roadmap"}]
+        },
+        "plans": {
+          "description": "Every plan of the project (the current one first, the same as roadmap), each shaped like roadmap plus id, title, current and finished.",
+          "type": "array",
+          "items": {"$ref": "#/$defs/roadmap"}
         },
         "counts": {
           "type": "object",

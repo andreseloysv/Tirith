@@ -91,6 +91,7 @@ class Manifest:
     deploy_none: bool = False
     roadmap: str | None = None
     deadline: str | None = None
+    plans: list[str] = field(default_factory=list)
     problems: list[Problem] = field(default_factory=list)
 
     def stage_names(self, pipeline_id: str) -> list[str]:
@@ -172,6 +173,8 @@ def parse_text(text: str, path: Path) -> Manifest:
     manifest.deploy_none = str(data.get("deploy") or "").lower() == "none"
     manifest.roadmap = str(data.get("roadmap") or "").strip() or None
     manifest.deadline = str(data.get("deadline") or "").strip() or None
+    plans = data.get("plans")
+    manifest.plans = [str(p).strip() for p in plans if str(p).strip()] if isinstance(plans, list) else []
     pipes = data.get("pipelines")
     pipe_lines = lines.get("pipelines", [])
     stage_lines = lines.get("pipelines.stages", [])

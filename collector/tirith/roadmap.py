@@ -17,6 +17,7 @@ _STEP_RE = re.compile(r"^##\s+(\d+)\.\s*(.+?)\s*#*\s*$")
 _HEADING_RE = re.compile(r"^#{1,6}\s")
 _ITEM_RE = re.compile(r"^\s*[-*+]\s+\[([ xX])\]\s*(.*)$")
 _BULLET_RE = re.compile(r"^\s*[-*+]\s")
+_DEADLINE_RE = re.compile(r"^\s*deadline\s*:\s*(\S+)\s*$", re.IGNORECASE)
 
 _cache: dict[str, tuple[int, int, list[dict]]] = {}
 
@@ -105,20 +106,90 @@ def _parsed(path: Path) -> list[dict] | None:
     return steps
 
 
+def title_of(text: str) -> str:
+    """The first ``# `` heading (a leading ``TODO:`` / ``Plan:`` label is dropped); may be empty."""
+    for line in text.splitlines():
+        if line.startswith("# "):
+            return re.sub(r"^(?:todo|plan)\s*:\s*", "", line[2:].strip(), flags=re.IGNORECASE)
+    return ""
+
+
+def deadline_of(text: str) -> str | None:
+    """The value of a ``Deadline: <iso>`` line before the first step (may be None)."""
+    for line in text.splitlines():
+        if line.startswith("##"):
+            break
+        found = _DEADLINE_RE.match(line)
+        if found:
+            return found.group(1)
+    return None
+
+
+def plan_paths(folder: Path, manifest: manifest_mod.Manifest) -> list[Path]:
+    """The current plan first (``roadmap``), then the files of ``plans`` (each once, existing only)."""
+    out: list[Path] = []
+    for path in [find_file(folder, manifest.roadmap)] + [find_file(folder, name) for name in manifest.plans]:
+        if path is not None and path.resolve() not in {p.resolve() for p in out}:
+            out.append(path)
+    return out
+
+
+def _plan_row(path: Path, steps: list[dict], manifest: manifest_mod.Manifest, current: bool,
+              working: dict[str, list[str]]) -> dict:
+    rows = []
+    for step in steps:
+        items = step["items"]
+        done = sum(1 for i in items if i["done"])
+        mine = working.get(step["id"], []) if current else []
+        rows.append({"id": step["id"], "title": step["title"],
+                     "status": step_status(done, len(items), bool(mine)),
+                     "done": done, "total": len(items),
+                     "items": [dict(i) for i in items], "agents": mine})
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        text = ""
+    done, total = sum(r["done"] for r in rows), sum(r["total"] for r in rows)
+    deadline = deadline_of(text) or (manifest.deadline if current else None)
+    return {"id": path.stem, "title": title_of(text) or path.stem, "current": current, "file": str(path),
+            "deadline": deadline, "done": done, "total": total, "finished": bool(total and done == total),
+            "steps": rows}
+
+
+def build_plans(folder: str | Path | None, project: str, agents: list[dict]) -> list[dict]:
+    """``state.projects[].plans``: every plan of the project, the current one (``roadmap``) first."""
+    if not folder:
+        return []
+    folder = Path(folder)
+    manifest = manifest_mod.load(folder)
+    working = _working(agents, project)
+    out = []
+    for path in plan_paths(folder, manifest):
+        steps = _parsed(path)
+        if steps is not None:
+            out.append(_plan_row(path, steps, manifest, not out, working))
+    return out
+
+
+def _working(agents: list[dict], project: str) -> dict[str, list[str]]:
+    working: dict[str, list[str]] = {}
+    for agent in agents:
+        if agent.get("project") == project and agent.get("status") == "working" and agent.get("step"):
+            working.setdefault(str(agent["step"]), []).append(str(agent["id"]))
+    return working
+
+
 def build(folder: str | Path | None, project: str, agents: list[dict]) -> dict | None:
     """``state.projects[].roadmap`` for a project folder; None when it has no roadmap file."""
     if not folder:
         return None
     folder = Path(folder)
     manifest = manifest_mod.load(folder)
-    path = find_file(folder, manifest.roadmap)
+    path = next(iter(plan_paths(folder, manifest)), None)  # the current plan
     steps = _parsed(path) if path else None
     if steps is None:
         return None
-    working: dict[str, list[str]] = {}
-    for agent in agents:
-        if agent.get("project") == project and agent.get("status") == "working" and agent.get("step"):
-            working.setdefault(str(agent["step"]), []).append(str(agent["id"]))
+    working = _working(agents, project)
     rows = []
     for step in steps:
         items = step["items"]
