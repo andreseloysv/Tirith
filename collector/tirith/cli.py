@@ -1683,12 +1683,42 @@ def _cmd_hook(args) -> int:
         except (OSError, ValueError) as err:
             raise SystemExit(f"tirith hook {args.action}: {err}")
         print(f"{args.action}ed tirith hooks for {args.agent}: {path}")
+        if args.action == "install" and not args.settings:
+            _record_agent_settings(_home(args), args.agent)
         return 0
     try:  # a hook call must never break the agent
         home = tirith_home(getattr(args, "home", None))
         return hooks_mod.run_hook(home, args.agent, args.event, sys.stdin)
     except BaseException:
         return 0
+
+
+def _record_agent_settings(home: Path, only: str | None = None) -> None:
+    try:
+        for alias, value in hooks_mod.record_settings(home, load_config(home).agents, only):
+            print(f"config.toml: [agents.{alias}] settings = {value}")
+    except OSError as err:
+        print(f"tirith: could not record settings in config.toml ({err})", file=sys.stderr)
+
+
+def _cmd_agents(args) -> int:
+    """``tirith agents set-settings`` / ``install``: guard every configured agent for real."""
+    home = _home(args)
+    config = load_config(home)
+    if args.action == "set-settings":
+        _record_agent_settings(home)
+        return 0
+    status = 0
+    for alias in config.agents:
+        try:
+            path = hooks_mod.install(alias, None, args.tirith, config.agents)
+        except (OSError, ValueError) as err:
+            print(f"{alias}: {err}")
+            status = 1
+            continue
+        print(f"{alias}: hooks installed in {path}")
+    _record_agent_settings(home)
+    return status
 
 
 def _cmd_shim(args) -> int:
@@ -2109,7 +2139,7 @@ def build_parser() -> argparse.ArgumentParser:
     hook = sub.add_parser("hook", parents=[common],
                           help="record an agent hook call (stdin JSON) / install hooks")
     hook.add_argument("action", nargs="?", choices=["install", "uninstall", "verify"], default=None)
-    hook.add_argument("--agent", required=True, help="agent alias: anthropic, muse, or any other name")
+    hook.add_argument("--agent", required=True, help="agent alias: anthropic, muse, codex, copilot, or any other name")
     hook.add_argument("--event", default=None, help="event name if the payload has none")
     hook.add_argument("--settings", default=None, help="agent settings file (install/uninstall)")
     hook.add_argument("--tirith", default="tirith", help="tirith executable to write on install")
@@ -2117,6 +2147,14 @@ def build_parser() -> argparse.ArgumentParser:
                       help="install: mark the hooks as the manager's (TIRITH_ROLE=manager in the command; "
                            "steward is the old spelling)")
     hook.set_defaults(func=_cmd_hook)
+
+    agents = sub.add_parser("agents", parents=[common],
+                            help="guard every [agents.<alias>] in config.toml (hooks + settings paths)")
+    agents.add_argument("action", choices=["set-settings", "install"],
+                        help="set-settings: record each agent's hook file in config.toml; "
+                             "install: install the hooks of every agent, then record the paths")
+    agents.add_argument("--tirith", default="tirith", help="tirith executable to write on install")
+    agents.set_defaults(func=_cmd_agents)
 
     guard = sub.add_parser("guard", parents=[common], help="commit guard")
     guard.add_argument("action", choices=["install", "reinstall", "verify"])
