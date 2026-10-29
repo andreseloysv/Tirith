@@ -24,7 +24,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Alias de agentes en el código; nombres reales en `config.toml` (`[agents.<alias>]`).
 - [x] Guarda de Tirith intacta e inmutable con las palabras del dueño.
 - [x] Muse protocol probe 1: read muse serve help
-- [ ] Muse protocol probe 2: export the MSP schema (en curso: export-msp-schema)
+- [x] Muse protocol probe 2: export the MSP schema
 
 ## 1. `lane run` devuelve la respuesta final
 
