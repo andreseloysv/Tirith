@@ -299,6 +299,7 @@ def _wrapper_path_env(home: Path | None = None, lane_id: str | None = None,
     env = projenv_mod.apply(home or tirith_home(), project)
     if lane_id:
         env["TIRITH_LANE"] = lane_id
+        env["TIRITH_HOME"] = str(home or tirith_home())  # the shims look the lane file up here
     if token:
         env[gates_mod.TOKEN_ENV] = token
     session = projects_mod.current_session(home or tirith_home())
