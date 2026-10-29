@@ -133,8 +133,10 @@ def adapt_generic(payload: dict, event: str | None = None) -> dict:
 # Agents are named by alias in code ("anthropic" for Anthropic's coding CLI, "muse" for Muse Code);
 # the real executable and settings path of each alias live in the owner's config.toml
 # ([agents.<alias>] command = "...", settings = "..."), written at setup, never in this repo.
-# Muse Code lists the same event names as the anthropic CLI, but its docs (dev.meta.ai
-# /docs/muse-code/extending) give no stdin payload fields: the generic reader covers it.
+# Muse Code supports hooks (``hooks`` in its settings.json; plugin hooks name the same events, e.g.
+# ``PreToolUse``). Neither its help nor the docs shipped with it document the stdin payload (checked
+# for the exec help, the plugin contract and the bundled skills): the generic reader covers it until a
+# real payload is captured.
 # Codex and Copilot CLI send the same snake_case payload as the anthropic CLI to PascalCase hooks.
 ADAPTERS = {"anthropic": adapt_anthropic, "muse": adapt_generic, "codex": adapt_generic,
             "copilot": adapt_generic}
