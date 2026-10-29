@@ -136,6 +136,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Firmar la app de macOS con el Developer ID del dueño.
 - [x] Notarizar la app de macOS (`scripts/notarize-macos.sh`, perfil `tirith-notary`; aceptada por Apple el 2026-10-29).
 - [ ] Firmar la app de Windows (fuera de este plan: requiere certificado de firma de código).
+- [ ] Muse protocol probe: read muse serve help and schema
 
 ## 10. Plan visible en el Overview
 
