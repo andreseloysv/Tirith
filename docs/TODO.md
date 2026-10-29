@@ -51,7 +51,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] `UserPromptSubmit` guarda la petición original del usuario.
 - [x] Eventos por lane en el panel del agente.
 - [x] Instalar los hooks en los ajustes de usuario de cada agente.
-- [ ] Protegerlos para que un agente no pueda quitárselos.
+- [x] Protegerlos para que un agente no pueda quitárselos (se reparan solos).
 - [x] Enlazar cada lane con la petición original del usuario.
 - [ ] Verificar el payload real de Muse Code y ajustar su adaptador (desde 2026-11-02: cuota de Muse).
 
@@ -122,15 +122,17 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] App Tauri 2 que carga la web actual (`web/`) sin reescribirla; Mac, Windows y Linux.
 - [x] Comunicación web ↔ app por IPC de Tauri (sin puertos).
 - [x] Vista de chat: cada conversación es un lane (`lane run --interactive` por debajo).
-- [ ] Agentes por stdin/stdout (modo stream-json del CLI `anthropic`, `muse serve`).
+- [x] Agentes por stdin/stdout: modo stream-json del agente `anthropic` (`chat_args`).
+- [ ] Chat con `muse serve` (desde 2026-11-02: cuota de Muse).
 - [x] Preguntas de permiso del agente en la UI.
 - [x] La app arranca el collector si no hay uno (con uv; Python aún no va empaquetado).
 - [x] Abrir la app en modo dev y comprobar que se ve y se actualiza.
 - [x] Windows: shims propios (`.cmd`).
-- [ ] Windows: versión propia del wrapper de git y de la guarda.
+- [x] Windows: versión propia del wrapper de git y de la guarda (`safe-git`).
+- [ ] Probar en Windows real los shims, el wrapper y la guarda (fuera de este plan: no hay equipo con Windows).
 - [ ] Confirmar qué agentes existen en cada plataforma.
 - [ ] Móvil (para luego, fuera de este plan).
-- [ ] Empaquetado por plataforma (configuración y scripts de build).
+- [x] Empaquetado por plataforma (configuración y scripts de build).
 - [x] Firmar la app de macOS con el Developer ID del dueño.
 - [ ] Notarizar la app de macOS (dueño: credenciales de App Store Connect).
 - [ ] Firmar la app de Windows (fuera de este plan: requiere certificado de firma de código).
@@ -148,7 +150,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Enlaces `tirith://` con un manejador local (sin servidores) y token para que ninguna otra web lance agentes.
 - [x] Botón «Terminar con un agente» en cada paso no terminado del Plan.
 - [x] Registrar el manejador `tirith://` en macOS.
-- [ ] Probar un lanzamiento real desde el navegador con el enlace `tirith://`.
+- [ ] Probar un lanzamiento real desde el navegador con el enlace `tirith://` (dueño: pulsa «Finish this step» en un paso desde el navegador).
 - [x] Al terminar un lane lanzado así: botón «Revisar y unir» (tests + merge).
 - [x] Buzón del dueño: «Termínalo» y «¿Qué pasa?» en cada paso; el aviso llega al steward.
 - [x] Respuestas bajo cada paso (steward, o Muse Spark automático si el steward no responde en 2 min).
