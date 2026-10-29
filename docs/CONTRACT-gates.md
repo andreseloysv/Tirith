@@ -64,6 +64,25 @@ On Windows the shim is `<name>.cmd` (second line `REM tirith-shim v1`, CRLF): it
 terminal, so it runs the real binary only when the token matches (`findstr` on the lane file);
 otherwise it prints the same message and exits 2. `verify` reads its `set "REAL=..."` line.
 
+### Windows: commit guard and safe-git shim
+
+**Guard.** On Windows (`sys.platform` starts with `win`) `tirith_guard` renders the same hooks for Git for
+Windows' bundled `sh`: always LF (written as bytes, never translated), `git` from PATH instead of
+`/usr/bin/git`, `sh -c` instead of `/bin/sh -c`, and the `tirith.toml` reader drops a trailing `\r`. The lock
+is the read-only attribute instead of `chflags uchg`. `verify` accepts it (no execute bit is checked; a writable
+hook is "not read-only"; a hook with CRLF is reported as such), `guard reinstall` clears the attribute first and
+the upgrade steps use `attrib -r` / `del`. Elsewhere the rendering is unchanged.
+
+**Safe-git shim.** `tirith safegit install|uninstall|verify [--dir <folder>]` (default `~/.tirith/shims`, first in
+every lane's PATH) writes `git.cmd` (CRLF, `REM tirith-safegit v1` on line 2, real git path resolved at install
+from PATH without the shim folder) and `tirith_safegit.py` (a copy of `tirith/safegit.py`, standard library
+only). The core refuses, with the usual `tirith: <rule>: … Do this instead: …` message and exit **2**: `--no-verify`
+(and its abbreviations, also inside an alias), `git commit -n` / `-an`, any `core.hooksPath` (`-c`,
+`--config-env`, `git config`, `GIT_CONFIG_KEY_n`, `GIT_CONFIG_PARAMETERS`) and `commit-tree`; the value of
+`-m`/`-F`/`-C` is data. Everything else runs the real git. A `git.cmd` without the marker is never overwritten
+or removed; the macOS wrapper in `~/.local/bin` is never touched. `verify` exits 1 when the shim is missing,
+foreign, differs from this Tirith's core, points at a missing git or Python, or is not first for `git` in PATH.
+
 `lane run` generates the token, stores it in the lane file, passes it as `TIRITH_LANE_TOKEN` to the
 child and removes it when the lane ends.
 

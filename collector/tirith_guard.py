@@ -10,7 +10,8 @@ Repositories carrying the FORBIDDEN_WORDS_GUARD marker are also protected by the
 (~/.local/bin/git), which refuses --no-verify, commit -n, hooksPath overrides and commit-tree; Tirith
 launches agents with that wrapper first in PATH.
 
-Installed hooks are made immutable (chflags uchg on macOS). This module never edits or removes an
+Installed hooks are made immutable (chflags uchg on macOS; the read-only attribute on Windows, where the
+hooks run under Git for Windows' bundled sh and are always written with LF line endings). This module never edits or removes an
 existing guard: if the installed hooks differ from the expected ones it reports it, and only the owner
 changes them.
 
@@ -77,6 +78,14 @@ perl -ne '
     }}
 ' "$1"
 '''
+
+
+def _windows() -> bool:
+    return sys.platform.startswith("win")
+
+
+def _git() -> str:
+    return "git" if _windows() else "/usr/bin/git"
 
 
 GUARD_VERSION = 2
@@ -170,6 +179,14 @@ tirith_record "$TIRITH_HOOK" allowed ok
 '''
 
 
+def _for_windows(text: str) -> str:
+    """The hook text for Git for Windows' sh: a CRLF `tirith.toml` must not leak a carriage return into
+    the commands, and `sh` is found through PATH."""
+    text = text.replace("        /^[ \\t]*\\[/ { flush();",
+                        "        { sub(/\\r$/, \"\") }\n        /^[ \\t]*\\[/ { flush();")
+    return text.replace("-- /bin/sh -c", "-- sh -c")
+
+
 def _record_part(hook: str, reason: str) -> str:
     return _RECORD.replace("@HOOK@", hook).replace("@REASON@", reason)
 
@@ -182,13 +199,15 @@ def render_v1(words: list[str]) -> dict[str, str]:
     return {"pre-commit": PRE_COMMIT.format(**args), "commit-msg": COMMIT_MSG.format(**args)}
 
 
-def render(words: list[str], chained: frozenset[str] | set[str] = frozenset()) -> dict[str, str]:
+def render(words: list[str], chained: frozenset[str] | set[str] = frozenset(),
+           windows: bool | None = None) -> dict[str, str]:
     """Hook file name -> content for this word list (regex alternatives, in order).
 
     pre-commit and commit-msg are the owner's text split once at ``set -euo pipefail``: the header
     before it and the guard body after it stay byte for byte; the recording prologue sits in
     between, the ``[[hooks]]`` runs and the "allowed" record follow the body. A hook in ``chained``
-    also runs the repository's own ``<hook>.local`` (see ``install(chain=True)``) after its checks."""
+    also runs the repository's own ``<hook>.local`` (see ``install(chain=True)``) after its checks.
+    ``windows`` (default: this machine) adjusts the added parts for Git for Windows' sh; the text is LF only."""
     reasons = {"pre-commit": "forbidden words in the staged changes",
                "commit-msg": "forbidden words in the commit message"}
     out = {}
@@ -199,13 +218,20 @@ def render(words: list[str], chained: frozenset[str] | set[str] = frozenset()) -
     out["pre-push"] = (PRE_PUSH.format(words=",".join(words)) + _record_part("pre-push", "tirith check failed")
                        + _RUN_CHECK + _RUN_HOOKS
                        + (_CHAIN.replace("@HOOK@", "pre-push") if "pre-push" in chained else "") + _ALLOWED)
+    if _windows() if windows is None else windows:
+        out = {name: _for_windows(text) for name, text in out.items()}
     return out
 
 
 def hooks_dir(repo: Path) -> Path:
-    out = subprocess.run(["/usr/bin/git", "-C", str(repo), "rev-parse", "--path-format=absolute",
+    out = subprocess.run([_git(), "-C", str(repo), "rev-parse", "--path-format=absolute",
                           "--git-common-dir"], capture_output=True, text=True, check=True).stdout.strip()
     return Path(out) / "hooks"
+
+
+def _read(p: Path) -> str:
+    """File text without newline translation (a CRLF hook must show as CRLF)."""
+    return p.read_bytes().decode("utf-8", errors="replace")
 
 
 def digest(text: str) -> str:
@@ -225,18 +251,24 @@ def verify(repo: Path, words: list[str]) -> list[str]:
             if not (old and name == "pre-push"):
                 problems.append(f"{name}: missing")
             continue
-        have = p.read_text()
+        have = _read(p)
         if MARKER not in have:
             problems.append(f"{name}: present but without the {MARKER} marker")
+        elif "\r" in have:
+            problems.append(f"{name}: has CRLF line endings (sh would not run it); reinstall it with LF")
         elif digest(have) != digest(want) and not (old and digest(have) == digest(v1.get(name, ""))):
             problems.append(f"{name}: differs from the expected guard for words {','.join(words)}")
         st = p.stat()
+        if _windows():  # no execute bit there (Git for Windows' sh runs it); the lock is the read-only attribute
+            if st.st_mode & stat.S_IWRITE:
+                problems.append(f"{name}: not read-only")
+            continue
         if not st.st_mode & stat.S_IXUSR:
             problems.append(f"{name}: not executable")
         if hasattr(st, "st_flags") and not st.st_flags & stat.UF_IMMUTABLE:
             problems.append(f"{name}: not immutable (uchg)")
     for name in sorted(chained):
-        if not os.access(d / f"{name}.local", os.X_OK):
+        if not _windows() and not os.access(d / f"{name}.local", os.X_OK):
             problems.append(f"{name}.local: not executable (the chained {name} hook would be skipped)")
     return problems
 
@@ -244,7 +276,7 @@ def verify(repo: Path, words: list[str]) -> list[str]:
 def _is_v1(d: Path, words: list[str]) -> bool:
     """True when pre-commit and commit-msg are the version 1 guard (and pre-push is not there)."""
     try:
-        return all((d / n).read_text() == t for n, t in render_v1(words).items()) \
+        return all(_read(d / n) == t for n, t in render_v1(words).items()) \
             and not (d / "pre-push").exists()
     except OSError:
         return False
@@ -256,6 +288,10 @@ def outdated(repo: Path, words: list[str]) -> list[str]:
     if verify(repo, words) or not _is_v1(d, words):
         return []
     files = " ".join(str(d / n) for n in ("pre-commit", "commit-msg"))
+    if _windows():
+        return ["guard intact but older version (version %d also records each hook run, runs the [[hooks]] of "
+                "tirith.toml and adds pre-push): reinstall as the owner:" % GUARD_VERSION,
+                f"  1. attrib -r {files}", f"  2. del {files}", f"  3. tirith guard install {repo}"]
     return [f"guard intact but older version (version {GUARD_VERSION} also records each hook run, runs "
             "the [[hooks]] of tirith.toml and adds pre-push): reinstall as the owner:",
             f"  1. chflags nouchg {files}",
@@ -264,12 +300,24 @@ def outdated(repo: Path, words: list[str]) -> list[str]:
 
 
 def _is_locked(p: Path) -> bool:
+    if _windows():
+        return not p.stat().st_mode & stat.S_IWRITE
     return not hasattr(os, "chflags") or bool(p.stat().st_flags & stat.UF_IMMUTABLE)
 
 
 def _lock(p: Path) -> None:
-    if hasattr(os, "chflags"):
+    if _windows():
+        os.chmod(p, stat.S_IREAD)  # the read-only attribute
+    elif hasattr(os, "chflags"):
         os.chflags(p, p.stat().st_flags | stat.UF_IMMUTABLE)
+
+
+def _unlock(p: Path) -> None:
+    """Undo `_lock` (owner steps only: reinstall, chaining)."""
+    if _windows():
+        os.chmod(p, stat.S_IREAD | stat.S_IWRITE)
+    elif hasattr(os, "chflags"):
+        os.chflags(p, p.stat().st_flags & ~stat.UF_IMMUTABLE)
 
 
 def install(repo: Path, words: list[str], chain: bool = False) -> list[str]:
@@ -284,18 +332,17 @@ def install(repo: Path, words: list[str], chain: bool = False) -> list[str]:
     if chain:
         for name in HOOKS:
             p, local = d / name, d / f"{name}.local"
-            if p.exists() and MARKER not in p.read_text(errors="replace") and not local.exists():
-                if hasattr(os, "chflags"):
-                    os.chflags(p, p.stat().st_flags & ~stat.UF_IMMUTABLE)
+            if p.exists() and MARKER not in _read(p) and not local.exists():
+                _unlock(p)
                 p.rename(local)
     chained = {n for n in HOOKS if (d / f"{n}.local").exists()}
     for name, want in render(words, chained).items():
         p = d / name
         if p.exists() or (old and name == "pre-push"):  # a version 1 guard is replaced as a whole
-            if p.exists() and p.read_text(errors="replace") == want and not _is_locked(p):
+            if p.exists() and _read(p) == want and not _is_locked(p):
                 _lock(p)  # the guard as expected that lost its lock: locking it edits nothing
             continue
-        p.write_text(want)
+        p.write_bytes(want.encode("utf-8"))  # LF on every platform
         p.chmod(0o755)
         _lock(p)
     return verify(repo, words)
