@@ -9,7 +9,7 @@ if (-not (Test-Path "node_modules")) { npm install; if ($LASTEXITCODE) { exit $L
 npm run tauri build -- @args
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
-$bundle = Join-Path $root "app\src-tauri\target\release\bundle"
+$bundle = Join-Path $root "target\release\bundle"
 if (-not (Test-Path $bundle)) { Write-Error "no bundle directory at $bundle"; exit 1 }
 Write-Output "bundles:"
 Get-ChildItem -Path (Join-Path $bundle "msi"), (Join-Path $bundle "nsis") -Include *.msi, *.exe -ErrorAction SilentlyContinue |

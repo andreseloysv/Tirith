@@ -84,13 +84,40 @@
     return true;
   };
 
+  /* The concrete how-to of an owner item (tirith/howto.py): what is already done, then the steps, each with its
+     link or its "Open in Terminal" button. The page sends the item id and step number, never the command. */
+  function howto(w) {
+    var h = w.howto, tauri = window.__TAURI__, canTerm = !!(tauri && tauri.core && tauri.core.invoke);
+    if (!h || !((h.steps || []).length || (h.already_done || []).length)) return '';
+    var out = '<div class="nhow">';
+    if ((h.already_done || []).length) {
+      out += '<ul class="nhdone">' + h.already_done.map(function (f) { return '<li>✓ ' + esc(f) + '</li>'; }).join('') + '</ul>';
+    }
+    if ((h.steps || []).length) {
+      out += '<ol class="nhsteps">' + h.steps.map(function (s, i) {
+        var li = '<li><span>' + esc(s.text) + '</span>';
+        if (s.url) li += ' <a class="nbtn" href="' + esc(s.url) + '" target="_blank" rel="noopener">Open page</a>';
+        if (s.terminal) {
+          li += canTerm
+            ? ' <button class="nbtn primary" data-act="ht-term" data-key="' + esc(w.id) + '" data-i="' + i + '" type="button" title="Opens Terminal with the command typed in; type any password there">Open in Terminal</button>'
+            : ' <button class="nbtn" data-act="copy" data-key="' + esc(s.terminal) + '" type="button" title="Copy the command to run it in a terminal">Copy command</button>';
+          li += '<code class="ncmd" title="' + esc(s.terminal) + '">' + esc(s.terminal) + '</code>';
+        }
+        return li + '</li>';
+      }).join('') + '</ol>';
+    }
+    if (h.done_check) out += '<div class="nhauto">Tirith checks this by itself and closes the item when it is done.</div>';
+    return out + '</div>';
+  }
+  T.howtoBlock = howto;
+
   /* The part under the message of an open item: options, command, link, Run actions, errors. Nothing for an answered one
      (its Run actions stay, as they show what ran). */
   T.turnBlock = function (it, state) {
     var w = it.w, h = '';
     if (state) lastState = state;
     if (it.done) return w.actions && w.actions.length ? '<div class="mc-acts">' + T.actions(w.actions, lastState, w.project, true) + '</div>' : '';
-    h += '<div class="nacts">';
+    h += howto(w) + '<div class="nacts">';
     opts(w).forEach(function (o, i) {
       h += '<button class="nbtn' + (i === 0 ? ' primary' : '') + '" data-act="nopt" data-key="' + esc(w.id) + '" data-i="' + i + '">' + esc(o.label) + '</button>';
     });
@@ -105,6 +132,14 @@
   };
 
   document.getElementById('view').addEventListener('click', function (e) {
+    var t = e.target.closest('[data-act="ht-term"]');
+    if (t) {
+      var id = t.getAttribute('data-key');
+      ui.needsErr[id] = null;
+      window.__TAURI__.core.invoke('open_in_terminal', { waitId: id, step: +t.getAttribute('data-i') })
+        .then(null, function (err) { ui.needsErr[id] = 'Could not open Terminal: ' + err; T.render(); });
+      return;
+    }
     var b = e.target.closest('[data-act="nopt"]'); if (!b) return;
     var key = b.getAttribute('data-key'), w = find(key); if (!w) return;
     var o = opts(w)[+b.getAttribute('data-i')]; if (!o) return;

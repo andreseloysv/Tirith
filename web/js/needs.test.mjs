@@ -13,7 +13,7 @@ const T = {
   dur: () => '1s', elapsed: () => 1
 };
 const el = { addEventListener: noop, insertAdjacentHTML: noop, classList: { toggle: noop } };
-const sandbox = { window: { T }, document: { getElementById: id => (id === 'view' ? view : el), querySelector: () => null }, localStorage: { getItem: () => null, setItem: noop } };
+const sandbox = { window: { T, addEventListener: noop }, document: { getElementById: id => (id === 'view' ? view : el), querySelector: () => null }, localStorage: { getItem: () => null, setItem: noop } };
 vm.createContext(sandbox);
 for (const f of ['./actions.js', './v-needs.js', './v-manager.js']) vm.runInContext(fs.readFileSync(new URL(f, import.meta.url), 'utf8'), sandbox);
 
@@ -65,4 +65,15 @@ assert.equal(plain.includes('nbtn'), false);
 assert.ok(chat.indexOf('Install the guard?') < chat.indexOf('Replace the old guard.') && chat.indexOf('Replace the old guard.') < chat.indexOf('Merged the release.'));
 /* nothing to answer: no badge */
 assert.equal(T.managerChat({ projects: [], inbox: [], waiting_on_you: [], answered_waits: [] }).includes('mc-jump'), false);
+/* a concrete how-to: already done, steps with a page link and an "Open in Terminal" button, the automatic check */
+const how = { steps: [{ text: 'Open the Apple page', url: 'https://appleid.apple.com/' }, { text: 'Type the password in the prompt', terminal: 'xcrun notarytool store-credentials tirith-notary' }], done_check: 'xcrun notarytool history --keychain-profile tirith-notary', already_done: ['Certificate exists'] };
+html = blocks({ waiting_on_you: [row('h1', [], { howto: how })] });
+assert.ok(html.includes('✓ Certificate exists') && html.includes('href="https://appleid.apple.com/"'), 'facts and link');
+assert.ok(html.includes('Copy command') && !html.includes('data-act="ht-term"'), 'no Tauri: copy instead');
+assert.ok(html.includes('closes the item when it is done'));
+sandbox.window.__TAURI__ = { core: { invoke: noop } };
+html = blocks({ waiting_on_you: [row('h1', [], { howto: how })] });
+assert.ok(html.includes('data-act="ht-term"') && html.includes('data-key="h1"') && html.includes('data-i="1"') && html.includes('Open in Terminal'), 'terminal button');
+assert.equal((html.match(/data-act="ht-term"/g) || []).length, 1, 'only the step with a command');
+delete sandbox.window.__TAURI__;
 console.log('needs: ok');
