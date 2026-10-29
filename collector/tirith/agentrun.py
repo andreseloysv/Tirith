@@ -44,7 +44,8 @@ PRESET_DEFAULTS: dict[str, dict] = {
         "effort_flag": None,
         "add_dir_flag": None,
     },
-    # Flags taken from each CLI's help; not yet confirmed by a real run (docs/CONTRACT-agents.md).
+    # Flags checked against each CLI's real help (read through a lane); a full run is still
+    # unconfirmed (docs/CONTRACT-agents.md).
     "codex": {
         "args": ["exec", "--json", "--sandbox", "workspace-write"],
         "permissions": [],  # the sandbox is the permission model; exec mode cannot ask
@@ -60,7 +61,7 @@ PRESET_DEFAULTS: dict[str, dict] = {
                         "shell(tirith)"],
         "permissions_flag": "--allow-tool",
         "model_flag": "--model",
-        "effort_flag": None,
+        "effort_flag": "--reasoning-effort",
         "add_dir_flag": "--add-dir",
         "prompt_flag": "-p",
     },
