@@ -717,6 +717,69 @@ fn project_add(folder: String, name: String, color: String) -> Result<Value, Str
     }))
 }
 
+fn env_key_ok(key: &str) -> bool {
+    let mut chars = key.chars();
+    matches!(chars.next(), Some(c) if c.is_ascii_alphabetic() || c == '_')
+        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+fn env_project_ok(project: &str) -> bool {
+    let mut chars = project.chars();
+    matches!(chars.next(), Some(c) if c.is_ascii_alphanumeric())
+        && chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
+}
+
+/// The variables of a project from `~/.tirith/env/<project>.toml` (`projenv.py` writes it); empty when
+/// the file is missing or broken. Keys that are not valid names are skipped.
+fn project_env_load(home: &std::path::Path, project: &str) -> Vec<(String, String)> {
+    if !env_project_ok(project) {
+        return Vec::new();
+    }
+    let table = std::fs::read_to_string(home.join("env").join(format!("{project}.toml")))
+        .ok()
+        .and_then(|t| t.parse::<toml::Table>().ok())
+        .unwrap_or_default();
+    table
+        .into_iter()
+        .filter(|(k, _)| env_key_ok(k))
+        .filter_map(|(k, v)| v.as_str().map(|s| (k, s.to_string())))
+        .collect()
+}
+
+/// The JSON handed to `tirith project env set --replace-stdin`; refuses what the CLI would refuse.
+fn project_env_payload(project: &str, env: &std::collections::BTreeMap<String, String>) -> Result<String, String> {
+    if !env_project_ok(project) {
+        return Err(format!("bad project id {project:?}"));
+    }
+    if let Some(key) = env.keys().find(|k| !env_key_ok(k)) {
+        return Err(format!("bad variable name {key:?}: use [A-Za-z_][A-Za-z0-9_]*"));
+    }
+    serde_json::to_string(env).map_err(|e| e.to_string())
+}
+
+/// Saves the whole set of environment variables of a project with `tirith project env set`; the values
+/// go over stdin, never on the command line.
+#[tauri::command]
+fn project_env_set(project: String, env: std::collections::BTreeMap<String, String>) -> Result<String, String> {
+    let payload = project_env_payload(&project, &env)?;
+    let mut child = tirith_command(&["project", "env", "set", "--project", &project, "--replace-stdin"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("could not run tirith: {e}"))?;
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin.write_all(payload.as_bytes()).map_err(|e| e.to_string())?;
+    }
+    let out = child.wait_with_output().map_err(|e| e.to_string())?;
+    let text = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if out.status.success() {
+        return Ok(text);
+    }
+    let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
+    Err(if err.is_empty() { text } else { err })
+}
+
 #[cfg(test)]
 mod project_add_tests {
     use super::*;
@@ -1392,11 +1455,12 @@ fn action_cwd(action: &Value, project: &str, home: &std::path::Path) -> PathBuf 
 
 /// Runs `command` with `/bin/sh -c` in `cwd`, output (both streams) into `log`. Returns the exit code
 /// (127 when it could not start).
-fn run_shell(command: &str, cwd: &std::path::Path, log: &std::path::Path) -> i32 {
+fn run_shell(command: &str, cwd: &std::path::Path, log: &std::path::Path, env: &[(String, String)]) -> i32 {
     let started = std::fs::File::create(log).and_then(|out| {
         let err = out.try_clone()?;
         let mut c = Command::new("/bin/sh");
         with_child_path(&mut c);
+        c.envs(env.iter().map(|(k, v)| (k, v)));
         c.arg("-c").arg(command).current_dir(cwd).stdin(Stdio::null()).stdout(out).stderr(err).status()
     });
     match started {
@@ -1492,8 +1556,9 @@ fn run_action(app: AppHandle, action_id: String) -> Result<(), String> {
             return Err(e);
         }
     };
+    let env = project_env_load(&home, &project);
     std::thread::spawn(move || {
-        let code = run_shell(&rewrite_tirith(&command, &tirith_cmd()), &cwd, &dir.join(format!("{action_id}.log")));
+        let code = run_shell(&rewrite_tirith(&command, &tirith_cmd()), &cwd, &dir.join(format!("{action_id}.log")), &env);
         let _ = append_run_row(&home, &action_id, if code == 0 { "passed" } else { "failed" }, Some(code));
         app.state::<App>().running.lock().unwrap().remove(&action_id);
     });
@@ -1581,11 +1646,46 @@ mod action_tests {
     fn shell_runs_in_the_folder_and_logs_both_streams() {
         let home = temp_home("shell");
         let log = home.join("a.log");
-        assert_eq!(run_shell("pwd; echo out; echo err >&2", &home, &log), 0);
+        assert_eq!(run_shell("pwd; echo out; echo err >&2", &home, &log, &[]), 0);
         let text = std::fs::read_to_string(&log).unwrap();
         assert!(text.contains("out") && text.contains("err") && text.contains("tirith-actions-shell"));
-        assert_eq!(run_shell("exit 3", &home, &log), 3);
-        assert_eq!(run_shell("true", &home.join("missing"), &log), 127);
+        assert_eq!(run_shell("exit 3", &home, &log, &[]), 3);
+        assert_eq!(run_shell("true", &home.join("missing"), &log, &[]), 127);
+    }
+
+    #[test]
+    fn shell_gets_the_project_variables() {
+        let home = temp_home("shellenv");
+        let log = home.join("e.log");
+        let env = vec![("ACT_VAR".to_string(), "from-settings".to_string())];
+        assert_eq!(run_shell("echo $ACT_VAR", &home, &log, &env), 0);
+        assert!(std::fs::read_to_string(&log).unwrap().contains("from-settings"));
+    }
+
+    #[test]
+    fn project_env_file_is_read_and_bad_input_is_ignored() {
+        let home = temp_home("projenv");
+        std::fs::create_dir_all(home.join("env")).unwrap();
+        std::fs::write(home.join("env/demo.toml"), "A = \"1\"\nB = \"say \\\"hi\\\"\"\nbad-key = \"x\"\n").unwrap();
+        let mut got = project_env_load(&home, "demo");
+        got.sort();
+        assert_eq!(got, vec![("A".to_string(), "1".to_string()), ("B".to_string(), "say \"hi\"".to_string())]);
+        assert!(project_env_load(&home, "missing").is_empty());
+        assert!(project_env_load(&home, "../demo").is_empty());
+        std::fs::write(home.join("env/broken.toml"), "not [ toml").unwrap();
+        assert!(project_env_load(&home, "broken").is_empty());
+    }
+
+    #[test]
+    fn project_env_payload_is_validated() {
+        let ok = serde_json::from_value(json!({"A_1": "x y", "_b": ""})).unwrap();
+        assert!(project_env_payload("demo", &ok).is_ok());
+        for key in ["", "1A", "A-B", "A B", "A=B"] {
+            let bad = serde_json::from_value(json!({ key: "x" })).unwrap();
+            assert!(project_env_payload("demo", &bad).is_err(), "{key:?}");
+        }
+        assert!(project_env_payload("../x", &ok).is_err());
+        assert!(project_env_payload("", &ok).is_err());
     }
 
     #[test]
@@ -1798,6 +1898,7 @@ pub fn run() {
             launch_step,
             open_file,
             project_add,
+            project_env_set,
             inbox_add,
             attachment_save,
             inbox_reply,

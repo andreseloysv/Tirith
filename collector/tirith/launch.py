@@ -280,7 +280,7 @@ def log_handler(home: Path, text: str) -> None:
 
 
 def redact_url(url: str) -> str:
-    return re.sub(r"(token=)[^&\s]*", r"\1***", str(url))
+    return re.sub(r"(token=|env=)[^&\s]*", r"\1***", str(url))  # env= holds a project's variable values
 
 
 def applescript(home_env: str | None = None, tirith: str | None = None) -> str:
