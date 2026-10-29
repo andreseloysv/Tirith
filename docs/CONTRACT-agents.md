@@ -25,7 +25,11 @@ permissions = ["Read", "Edit"]
 
 Defaults in code (`agentrun.PRESET_DEFAULTS`, flags only): `anthropic` = print mode, stream JSON with
 verbose, accept-edits, allowed-tools list (comma separated), `--model`, `--effort`, `--add-dir`;
-`muse` = its `exec --json` subcommand and `--model` only. An unsupported option (for example `--effort`
+`muse` = its `exec --json` subcommand and `--model` only; `codex` = `exec --json --sandbox
+workspace-write`, `--model`, `--add-dir`; `copilot` = `--output-format json --no-ask-user`, an
+`--allow-tool` list (one flag, many values), `--model`, `--add-dir`, prompt via `-p`. The `codex` and
+`copilot` flags come from each CLI's help and are not yet confirmed by a real `lane run` (owner: run one
+per alias and check the JSON log, usage and permissions). An unsupported option (for example `--effort`
 for `muse`) exits with an error. Order: executable, args, model, effort, permissions, extra dirs,
 prompt (last).
 

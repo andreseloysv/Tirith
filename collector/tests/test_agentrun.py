@@ -52,6 +52,18 @@ def test_config_and_project_override_win() -> None:
     assert other[other.index("--allowedTools") + 1] == "Read"
 
 
+def test_codex_and_copilot_presets() -> None:
+    cfg = _config(codex={"command": "agent-c"}, copilot={"command": "agent-p", "model": "m1"})
+    assert agentrun.build_command(cfg, "codex", None, "hi") == [
+        "agent-c", "exec", "--json", "--sandbox", "workspace-write", "hi"]
+    cmd = agentrun.build_command(cfg, "copilot", None, "hi")
+    assert cmd[:4] == ["agent-p", "--output-format", "json", "--no-ask-user"]
+    assert cmd[cmd.index("--model") + 1] == "m1"
+    assert "shell(git status)" in cmd and cmd[-2:] == ["-p", "hi"]
+    with pytest.raises(SystemExit):
+        agentrun.build_command(cfg, "codex", None, "hi", effort="high")
+
+
 def test_muse_preset_and_missing_support() -> None:
     cfg = _config(muse={"command": "agent-m"})
     assert agentrun.build_command(cfg, "muse", None, "hi") == ["agent-m", "exec", "--json", "hi"]
