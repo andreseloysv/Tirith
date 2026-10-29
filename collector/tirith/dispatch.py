@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
+from tirith import asks as asks_mod
 from tirith import autopilot as autopilot_mod
 from tirith import autoreview as autoreview_mod
 from tirith import fallback as fallback_mod
@@ -74,16 +75,23 @@ def _step_name(req: dict) -> str:
 
 
 def add_owner_item(home: Path, item_id: str, project: str | None, text: str, options: list[dict],
-                   at: str, actions: list[dict] | None = None, link: str | None = None) -> None:
+                   at: str, actions: list[dict] | None = None, link: str | None = None,
+                   reason: str | None = None) -> None:
     """One item on the owner's waiting list with ``options`` (``[{label, command}]``), Run ``actions`` and
-    an optional ``link`` to open; once per id."""
+    an optional ``link`` to open; once per id. ``reason`` is a key of ``asks.OWNER_REASONS`` (why only the
+    owner can do it). A text that promises a button the item does not have is rewritten without it."""
     if not options and not actions:
         raise ValueError(f"owner item {item_id} has no option: every item for the owner needs a call to action")
+    if reason is not None and reason not in asks_mod.OWNER_REASONS:
+        raise ValueError(f"owner item {item_id}: unknown reason {reason!r} (one of {', '.join(asks_mod.OWNER_REASONS)})")
+    if asks_mod.missing_buttons(text, options, actions, link):
+        text = asks_mod.drop_button_claims(text)
     if any(r.get("id") == item_id for r in read_jsonl(Path(home) / "waits.jsonl")):
         return
     append_jsonl(Path(home) / "waits.jsonl", {
         "id": item_id, "at": at, "project": project, "text": text, "link": link, "done_at": None,
-        "session": None, "options": options, **({"actions": actions} if actions else {})})
+        "session": None, "options": options, **({"actions": actions} if actions else {}),
+        **({"reason": reason, "reason_tag": asks_mod.reason_tag(reason)} if reason else {})})
     flows_mod.append_flow(home, "tirith", "owner", "request", text, project=project, session=None, at=at)
 
 

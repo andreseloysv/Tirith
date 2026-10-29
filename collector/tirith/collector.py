@@ -724,6 +724,8 @@ class Collector:
                 "options": options, "command": command, "status": "open",
                 "actions": actions_mod.dedupe_actions(
                     [dict(a) for a in row.get("actions") or [] if isinstance(a, dict)]),
+                **({"reason": row["reason"], "reason_tag": row.get("reason_tag")}
+                   if row.get("reason") in asks_mod.OWNER_REASONS else {}),
             }
             reply = replied.get(wait["id"])
             actions_mod.attach_last_runs(self.home, [wait])
@@ -803,7 +805,7 @@ class Collector:
 
     def _settle_generated(self, waits: list[dict]) -> tuple[list[dict], list[dict]]:
         """``(open, answered)`` for the items Tirith raises itself: an owner reply answers one; "let the
-        manager handle it" also puts it in the manager's queue."""
+        manager handle it" does not exist."""
         replied: dict[str, dict] = {}
         for reply in inbox_mod.replies(self.home):
             replied.setdefault(reply["wait"], reply)
@@ -813,9 +815,6 @@ class Collector:
             if reply is None:
                 open_items.append(wait)
                 continue
-            if reply["value"] in ("manager", "steward"):
-                asks_mod.queue_add(self.home, str(wait.get("project") or ""), "", wait["text"],
-                                   kind="owner-handoff", item_id="sq-" + reply["id"])
             label = next((o["label"] for o in wait.get("options") or [] if o["value"] == reply["value"]),
                          reply["value"])
             answered.append({**wait, "status": "answered", "answer": {
