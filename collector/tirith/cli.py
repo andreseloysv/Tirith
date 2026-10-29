@@ -38,6 +38,7 @@ from tirith import inbox as inbox_mod
 from tirith import setup as setup_mod
 from tirith import lanestop as lanestop_mod
 from tirith import launch as launch_mod
+from tirith import models as models_mod
 from tirith import review as review_mod
 from tirith import runstage as runstage_mod
 from tirith import projects as projects_mod
@@ -314,7 +315,7 @@ def _agent_command(config, args) -> list[str]:
     if not prompt.strip():
         raise SystemExit("lane run: the prompt is empty")
     return agentrun_mod.build_command(config, args.agent, args.project, prompt,
-                                      model=args.model, effort=args.effort)
+                                      model=args.model, effort=args.effort, step=args.step)
 
 
 def _cmd_doctor(args) -> int:
@@ -361,6 +362,7 @@ def _cmd_lane_run(args) -> int:
         pid=None, brief=args.brief, step=args.step,
         request_id=getattr(args, "request", None))
     lane["token"] = secrets.token_urlsafe(24)
+    lane["ran"] = models_mod.command_choice(command)  # the model and effort this lane was started with
     write_lane(home, lane)
     began = time.monotonic()
     env = _wrapper_path_env(home, lane_id, lane["token"])
@@ -938,7 +940,7 @@ def launch_step(home: Path, project_id: str, step_id: str, agent: str | None = N
     brief_path = home / "briefs" / f"{lane_id}.md"
     brief = launch_mod.build_brief(title, intro, open_items, step["id"])
     workspace = launch_mod.worktree_path(repo, lane_id)
-    command = launch_mod.agent_command(config, agent, brief_path, workspace)
+    command = launch_mod.agent_command(config, agent, brief_path, workspace, project_id, step["id"])
     argv = launch_mod.lane_run_argv(project_id, step["id"], launch_mod.pick_class(title), title,
                                     brief_path, workspace, lane_id, command, request_id)
     if dry_run:
@@ -1342,6 +1344,8 @@ def _setup_apply(home: Path, request_id: str) -> int:
     if req is None or req["kind"] != "setup" or not req.get("setup"):
         print(f"tirith setup apply: no setup request {request_id}", file=sys.stderr)
         return 3
+    if req["setup"].get("action") in inbox_mod.MODELS_ACTIONS:
+        return _models_apply(home, request_id, req["setup"])
     pid, folder = _project_folder_of(home, req["project"])
     if folder is None:
         print(f"tirith setup apply: unknown project '{pid}'", file=sys.stderr)
@@ -1366,6 +1370,48 @@ def _setup_apply(home: Path, request_id: str) -> int:
     inbox_mod.mark_done(home, request_id)
     print(note)
     return 0 if code == 0 else 1
+
+
+def _models_apply(home: Path, request_id: str, setup: dict) -> int:
+    """Apply a ``models-set`` or ``apply-manager`` request of the Settings page, answer it, close it."""
+    try:
+        if setup["action"] == "apply-manager":
+            note = "; ".join(models_mod.apply_manager(load_config(home)))
+        else:
+            note = models_mod.set_models(
+                home, str(setup.get("role") or ""), model=setup.get("model") or None,
+                effort=setup.get("effort") or None, agent=setup.get("agent") or None,
+                project=setup.get("project") or None, step=setup.get("step") or None,
+                clear=bool(setup.get("clear")))
+    except models_mod.ModelsError as error:
+        inbox_mod.add_answer(home, request_id, f"Could not apply: {error}")
+        inbox_mod.mark_done(home, request_id)
+        print(f"tirith setup apply: {error}", file=sys.stderr)
+        return 3
+    inbox_mod.add_answer(home, request_id, note[0].upper() + note[1:] + ".")
+    inbox_mod.mark_done(home, request_id)
+    print(note)
+    return 0
+
+
+def _cmd_models(args) -> int:
+    home = _home(args)
+    config = load_config(home)
+    try:
+        if args.models_command == "show":
+            for line in models_mod.show_lines(config):
+                print(line)
+        elif args.models_command == "apply-manager":
+            for line in models_mod.apply_manager(config):
+                print(line)
+        else:
+            print(models_mod.set_models(home, args.role, model=args.model, effort=args.effort,
+                                        agent=args.agent, project=args.project, step=args.step,
+                                        clear=args.clear))
+    except models_mod.ModelsError as error:
+        print(f"tirith models {args.models_command}: {error}", file=sys.stderr)
+        return 3
+    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1687,6 +1733,23 @@ def build_parser() -> argparse.ArgumentParser:
         se_cmd.add_argument("--project", default=None, help="project id (default: the one of the cwd)")
     for se_cmd in (se_show, se_add, se_rm, se_rule, se_rr, se_apply):
         se_cmd.set_defaults(func=_cmd_setup)
+
+    models = sub.add_parser("models", parents=[common],
+                            help="the model and effort of the manager and of the agents it starts")
+    models_sub = models.add_subparsers(dest="models_command", required=True)
+    mo_show = models_sub.add_parser("show", parents=[common], help="the configured models")
+    mo_set = models_sub.add_parser("set", parents=[common], help="edit [models] in config.toml")
+    mo_set.add_argument("role", choices=models_mod.ROLES)
+    mo_set.add_argument("--model", default=None)
+    mo_set.add_argument("--effort", default=None)
+    mo_set.add_argument("--agent", default=None, help="agent alias")
+    mo_set.add_argument("--project", default=None, help="workers: override for this project")
+    mo_set.add_argument("--step", default=None, help="workers: override for this step (with --project)")
+    mo_set.add_argument("--clear", action="store_true", help="remove the project or step override")
+    mo_apply = models_sub.add_parser("apply-manager", parents=[common],
+                                     help="write the manager model into the manager agent's user settings")
+    for mo_cmd in (mo_show, mo_set, mo_apply):
+        mo_cmd.set_defaults(func=_cmd_models)
 
     url = sub.add_parser("url", parents=[common], help="the tirith:// link handler (macOS)")
     url_sub = url.add_subparsers(dest="url_command", required=True)

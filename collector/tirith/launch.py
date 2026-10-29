@@ -21,6 +21,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlsplit
 
 from tirith import manifest as manifest_mod
+from tirith import models as models_mod
 from tirith import roadmap as roadmap_mod
 from tirith.home import Config, now_iso
 from tirith.store import read_json, write_json_atomic
@@ -181,20 +182,26 @@ def create_worktree(repo: Path, lane_id: str) -> Path:
     return path
 
 
-def agent_command(config: Config, agent: str | None, brief: Path, workspace: Path) -> list[str]:
-    """The agent command: the agent's ``launch`` template, else ``[launch] command``."""
+def agent_command(config: Config, agent: str | None, brief: Path, workspace: Path,
+                  project: str | None = None, step: str | None = None) -> list[str]:
+    """The agent command: the agent's ``launch`` template, else ``[launch] command``. The model and
+    effort flags in it are replaced by ``[models.workers]`` (with its overrides for ``project`` and
+    ``step``) when those are configured."""
     template = None
-    if agent:
-        table = config.agents.get(agent)
+    chosen = models_mod.resolve_workers(config, project, step)
+    alias = agent or (chosen.agent if chosen.agent in config.agents else None)
+    if alias:
+        table = config.agents.get(alias)
         if table is None:
-            raise LaunchError(f"unknown agent '{agent}' (no [agents.{agent}] in config.toml)")
+            raise LaunchError(f"unknown agent '{alias}' (no [agents.{alias}] in config.toml)")
         template = table.get("launch")
     template = template or config.launch_command
     if not template:
         raise LaunchError('no agent command: add [launch] command = "<agent> ... {brief}" '
                           "(placeholders {brief} and {workspace}) to config.toml")
     words = shlex.split(template) if isinstance(template, str) else [str(w) for w in template]
-    return [w.replace("{brief}", str(brief)).replace("{workspace}", str(workspace)) for w in words]
+    words = [w.replace("{brief}", str(brief)).replace("{workspace}", str(workspace)) for w in words]
+    return models_mod.apply_to_command(words, chosen, alias)
 
 
 def tirith_argv() -> list[str]:
