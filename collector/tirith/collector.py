@@ -24,6 +24,7 @@ from tirith.home import Config, ProjectConfig, ensure_home, load_config, now_iso
 from tirith import flows as flows_mod
 from tirith import manifest as manifest_mod
 from tirith import hooks as hooks_mod
+from tirith.logview import entries_from_events, log_entries
 from tirith import projects as projects_mod
 from tirith.rooms import RoomsService
 from tirith.names import (
@@ -581,6 +582,8 @@ class Collector:
             elapsed = max(0, int((end_ref - started).total_seconds())) if started else 0
             act = self.activity.lane(lane, status, rows_by_lane.get(str(lane["id"]), []), now)
             files, insertions, deletions = act.pop("totals")
+            log_view = log_entries(lane.get("log"), lane.get("workspace")) \
+                or entries_from_events(act["events"], lane.get("workspace"))
             renown = int(identity.get("renown") or 0)
             # Summary first: it may upgrade the epithet on the identity.
             summary = self._summary_for(lane, status, log_tail, now, identity)
@@ -596,6 +599,7 @@ class Collector:
                 "elapsed_s": elapsed,
                 "summary": summary,
                 "log_tail": log_tail,
+                "log_entries": log_view,
                 "files_changed": files, "insertions": insertions, "deletions": deletions,
                 "report": lane.get("report"),
                 "parent": str(lane.get("parent") or "steward"),

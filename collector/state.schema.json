@@ -153,6 +153,21 @@
         "source": {"type": "string", "enum": ["hook", "log"]}
       }
     },
+    "log_entry": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["ts", "kind", "text", "detail"],
+      "properties": {
+        "ts": {"type": ["string", "null"]},
+        "kind": {"type": "string",
+                 "enum": ["say", "command", "output", "edit", "read", "error", "test", "spawn",
+                          "done", "system"]},
+        "text": {"type": "string"},
+        "detail": {"type": "string", "maxLength": 4096},
+        "fields": {"type": ["object", "null"]},
+        "path": {"type": ["string", "null"]}
+      }
+    },
     "agent_file": {
       "type": "object",
       "additionalProperties": true,
@@ -502,6 +517,10 @@
           "items": {
             "type": "string"
           }
+        },
+        "log_entries": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/log_entry"}
         },
         "events": {
           "type": "array",

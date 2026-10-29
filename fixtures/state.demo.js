@@ -432,6 +432,171 @@ window.TIRITH_STATE = {
           "summary": "Bash: bench/scan200.sh --photos 200",
           "source": "hook"
         }
+      ],
+      "log_entries": [
+        {
+          "ts": "2026-10-28T19:39:56Z",
+          "kind": "say",
+          "text": "Ratio is stable at 0.70 across three runs, so the pool reuse is what made the difference.",
+          "detail": "",
+          "fields": null,
+          "path": null
+        },
+        {
+          "ts": "2026-10-28T19:39:51Z",
+          "kind": "output",
+          "text": "scan 200: persons 5.32 s/photo, none 0.70 s/photo\nA/B ratio median 0.70\nruns: 3\nwarm cache: yes\nGPU delegate: off\nmemory peak: 412 MB",
+          "detail": "threads: 4\nbatch: 8\nmodel: detect-small\nreport: build/perf/scan-200.json",
+          "fields": null,
+          "path": null
+        },
+        {
+          "ts": "2026-10-28T19:39:50Z",
+          "kind": "command",
+          "text": "adb shell am instrument -w app.perf/.ScanBenchmark",
+          "detail": "",
+          "fields": null,
+          "path": null
+        },
+        {
+          "ts": "2026-10-28T19:39:38Z",
+          "kind": "test",
+          "text": "uv run pytest -q",
+          "detail": "passed",
+          "fields": {
+            "passed": 101,
+            "failed": 0
+          },
+          "path": null
+        },
+        {
+          "ts": "2026-10-28T19:39:20Z",
+          "kind": "system",
+          "text": "12.4k tokens, 38 s",
+          "detail": "{\n  \"input_tokens\": 11800,\n  \"output_tokens\": 600,\n  \"duration_ms\": 38000\n}",
+          "fields": {
+            "input_tokens": 11800,
+            "output_tokens": 600,
+            "duration_ms": 38000
+          },
+          "path": null
+        },
+        {
+          "ts": "2026-10-28T19:39:19Z",
+          "kind": "say",
+          "text": "",
+          "detail": "{\n  \"scan_id\": \"scan-200\",\n  \"device\": \"pixel-7\",\n  \"photos\": 200,\n  \"median_ratio\": 0.7,\n  \"finished_at\": \"2026-10-28T19:39:20Z\",\n  \"cached\": true,\n  \"stages\": [\n    {\n      \"name\": \"detect\"\n    },\n    {\n      \"name\": \"match\"\n    },\n    {\n      \"name\": \"rank\"\n    }\n  ],\n  \"notes\": {\n    \"warm\": true,\n    \"threads\": 4\n  }\n}",
+          "fields": {
+            "scan_id": "scan-200",
+            "device": "pixel-7",
+            "photos": 200,
+            "median_ratio": 0.7,
+            "finished_at": "2026-10-28T19:39:20Z",
+            "cached": true,
+            "stages": [
+              {
+                "name": "detect"
+              },
+              {
+                "name": "match"
+              },
+              {
+                "name": "rank"
+              }
+            ],
+            "notes": {
+              "warm": true,
+              "threads": 4
+            }
+          },
+          "path": null
+        },
+        {
+          "ts": "2026-10-28T19:39:02Z",
+          "kind": "edit",
+          "text": "app/src/main/java/scan/PersonPool.kt",
+          "detail": "+12 \u22123",
+          "fields": null,
+          "path": "/Users/owner/DEVELOP/Chromasol/app/src/main/java/scan/PersonPool.kt"
+        },
+        {
+          "ts": "2026-10-28T19:38:45Z",
+          "kind": "read",
+          "text": "Grep ModelPool in app/src",
+          "detail": "",
+          "fields": null,
+          "path": null
+        },
+        {
+          "ts": "2026-10-28T19:38:30Z",
+          "kind": "error",
+          "text": "FileNotFoundException: build/perf/baseline.json",
+          "detail": "Traceback (most recent call last):\n  File \"tools/perf.py\", line 41, in compare\n    base = json.load(open(path))\nFileNotFoundError: build/perf/baseline.json",
+          "fields": null,
+          "path": null
+        },
+        {
+          "ts": "2026-10-28T19:38:24Z",
+          "kind": "command",
+          "text": "python tools/perf.py compare build/perf/baseline.json build/perf/scan-200.json",
+          "detail": "",
+          "fields": null,
+          "path": null
+        },
+        {
+          "ts": "2026-10-28T19:38:00Z",
+          "kind": "spawn",
+          "text": "Profile the detector on the phone",
+          "detail": "reviewer",
+          "fields": null,
+          "path": null
+        },
+        {
+          "ts": "2026-10-28T19:37:30Z",
+          "kind": "edit",
+          "text": "app/src/main/java/scan/ScanViewModel.kt",
+          "detail": "+4 \u22121",
+          "fields": null,
+          "path": "/Users/owner/DEVELOP/Chromasol/app/src/main/java/scan/ScanViewModel.kt"
+        },
+        {
+          "ts": "2026-10-28T19:37:10Z",
+          "kind": "edit",
+          "text": "app/src/main/java/scan/Detector.kt",
+          "detail": "created",
+          "fields": null,
+          "path": "/Users/owner/DEVELOP/Chromasol/app/src/main/java/scan/Detector.kt"
+        },
+        {
+          "ts": "2026-10-28T19:37:00Z",
+          "kind": "system",
+          "text": "System: init",
+          "detail": "{\n  \"type\": \"system\",\n  \"subtype\": \"init\"\n}",
+          "fields": {
+            "type": "system",
+            "subtype": "init"
+          },
+          "path": null
+        },
+        {
+          "ts": "2026-10-28T19:36:59Z",
+          "kind": "system",
+          "text": "System: rate_limit_event",
+          "detail": "{\n  \"type\": \"rate_limit_event\",\n  \"status\": \"ok\"\n}",
+          "fields": {
+            "type": "rate_limit_event",
+            "status": "ok"
+          },
+          "path": null
+        },
+        {
+          "ts": "2026-10-28T19:36:55Z",
+          "kind": "say",
+          "text": "Reusing the person detector between photos should cut the per-photo cost. Starting there.",
+          "detail": "",
+          "fields": null,
+          "path": null
+        }
       ]
     },
     {
@@ -557,6 +722,53 @@ window.TIRITH_STATE = {
           "summary": "Finished: 20 tests, strings OK",
           "source": "log"
         }
+      ],
+      "log_entries": [
+        {
+          "ts": "2026-10-28T18:40:00Z",
+          "kind": "done",
+          "text": "Room v1 to v4 migrations, curated names and the strings check, all green.",
+          "detail": "Migrations are covered by 20 instrumented tests.\nThe strings check found no missing translations.",
+          "fields": {
+            "usage": "31.2k tokens, 4 min"
+          },
+          "path": null
+        },
+        {
+          "ts": "2026-10-28T18:39:30Z",
+          "kind": "test",
+          "text": "./gradlew testDebugUnitTest",
+          "detail": "passed",
+          "fields": {
+            "passed": 20,
+            "failed": 0
+          },
+          "path": null
+        },
+        {
+          "ts": "2026-10-28T18:38:20Z",
+          "kind": "edit",
+          "text": "app/src/main/java/db/Migrations.kt",
+          "detail": "+58 \u22122",
+          "fields": null,
+          "path": "/Users/owner/DEVELOP/Chromasol/app/src/main/java/db/Migrations.kt"
+        },
+        {
+          "ts": "2026-10-28T18:37:20Z",
+          "kind": "read",
+          "text": "Read app/schemas/4.json",
+          "detail": "",
+          "fields": null,
+          "path": "/Users/owner/DEVELOP/Chromasol/app/schemas/4.json"
+        },
+        {
+          "ts": "2026-10-28T18:36:40Z",
+          "kind": "say",
+          "text": "Migration 3 to 4 adds the curated name column.",
+          "detail": "",
+          "fields": null,
+          "path": null
+        }
       ]
     },
     {
@@ -645,6 +857,40 @@ window.TIRITH_STATE = {
           "tool": "Bash",
           "summary": "Bash: python3 icon/compare.py out/render_v3.png (IoU 0.9271, SSIM 0.7953)",
           "source": "hook"
+        }
+      ],
+      "log_entries": [
+        {
+          "ts": "2026-10-28T17:40:00Z",
+          "kind": "error",
+          "text": "Error: the owner preferred the generated image",
+          "detail": "",
+          "fields": null,
+          "path": null
+        },
+        {
+          "ts": "2026-10-28T17:39:00Z",
+          "kind": "output",
+          "text": "IoU 0.9271\nSSIM 0.7953",
+          "detail": "",
+          "fields": null,
+          "path": null
+        },
+        {
+          "ts": "2026-10-28T17:38:40Z",
+          "kind": "command",
+          "text": "blender -b icon.blend -P render_compare.py",
+          "detail": "",
+          "fields": null,
+          "path": null
+        },
+        {
+          "ts": "2026-10-28T17:36:40Z",
+          "kind": "edit",
+          "text": "icons/crystal_c.blend",
+          "detail": "edited",
+          "fields": null,
+          "path": "/Users/owner/DEVELOP/Chromasol/icons/crystal_c.blend"
         }
       ]
     },
@@ -741,6 +987,16 @@ window.TIRITH_STATE = {
           "summary": "Write world/districts.js",
           "source": "hook"
         }
+      ],
+      "log_entries": [
+        {
+          "ts": "2026-10-28T19:39:30Z",
+          "kind": "say",
+          "text": "Laying out the hill, the rings and the districts.",
+          "detail": "",
+          "fields": null,
+          "path": null
+        }
       ]
     },
     {
@@ -828,6 +1084,24 @@ window.TIRITH_STATE = {
           "tool": "Bash",
           "summary": "Bash: uv run pytest -q",
           "source": "hook"
+        }
+      ],
+      "log_entries": [
+        {
+          "ts": "2026-10-28T19:28:00Z",
+          "kind": "error",
+          "text": "retrying model turn in 2000ms",
+          "detail": "",
+          "fields": null,
+          "path": null
+        },
+        {
+          "ts": "2026-10-28T19:25:00Z",
+          "kind": "command",
+          "text": "uv run tirith collect --once",
+          "detail": "",
+          "fields": null,
+          "path": null
         }
       ]
     }
