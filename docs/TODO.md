@@ -23,6 +23,12 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 
 - [x] Alias de agentes en el código; nombres reales en `config.toml` (`[agents.<alias>]`).
 - [x] Guarda de Tirith intacta e inmutable con las palabras del dueño.
+- [x] Muse protocol probe 1: read muse serve help
+- [x] Muse protocol probe 2: export the MSP schema
+- [x] Muse protocol probe 3: generate the MSP JSON schema
+- [ ] Manager de guardia: atender el chat
+- [ ] Revisar el plan (2026-10-29) (en revisión)
+- [ ] Muse chat real check: one tiny session (en curso: muse-chat-real-check)
 
 ## 1. `lane run` devuelve la respuesta final
 
@@ -53,7 +59,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Instalar los hooks en los ajustes de usuario de cada agente.
 - [x] Protegerlos para que un agente no pueda quitárselos (se reparan solos).
 - [x] Enlazar cada lane con la petición original del usuario.
-- [ ] Verificar el payload real de Muse Code y ajustar su adaptador
+- [ ] Verificar el payload real de Muse Code y ajustar su adaptador (reabierto: u-museformat terminó sin informe)
 
 ## 4. `lane run --interactive` (seguir chateando)
 
@@ -71,10 +77,9 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] `tirith doctor --agent <alias>`: comprueba ejecutable, `PATH` del wrapper y que saltarse los hooks falla.
 - [ ] Confirmar el formato JSON de Muse Code con una ejecución real (desde 2026-11-02: cuota de Muse).
 - [x] Codex y Copilot instalados (dueño).
-- [ ] Codex y Copilot probados con `lane run` (presets por alias, salida JSON, permisos).
+- [ ] Codex y Copilot probados con `lane run` (presets por alias, salida JSON, permisos). (en curso: u-copilotreal)
 - [x] Agentes en la nube y CI remoto desde GitHub (PRs y Actions).
 - [x] Token de GitHub disponible para el collector.
-- [ ] Usuarios de agentes en la nube en `agent_logins` (fuera de este plan: solo si se usan).
 
 ## 6. Pipelines con autodescubrimiento (`tirith.toml`)
 
@@ -98,7 +103,6 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Git `pre-commit` / `pre-push` con `tirith check` (nueva versión de la guarda).
 - [x] Reinstalar la guarda nueva en Tirith.
 - [x] Reinstalar la guarda nueva en ChromaSol.
-- [ ] Reinstalar la guarda nueva en RelaGame (dueño: run `uv run tirith guard reinstall relagame`).
 - [x] Workflow de CI con tests y `tirith check --ci`.
 - [x] Hacer obligatorio el CI con protección de rama en GitHub (dueño: https://github.com/andreseloysv/Tirith/settings/branches).
 - [x] El collector registra cada violación bloqueada (`state.violations`) y la pone en "esperando por ti".
@@ -123,19 +127,17 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Comunicación web ↔ app por IPC de Tauri (sin puertos).
 - [x] Vista de chat: cada conversación es un lane (`lane run --interactive` por debajo).
 - [x] Agentes por stdin/stdout: modo stream-json del agente `anthropic` (`chat_args`).
-- [ ] Chat con `muse serve`
+- [ ] Chat con `muse serve` (en curso: u-musechat)
 - [x] Preguntas de permiso del agente en la UI.
 - [x] La app arranca el collector si no hay uno (con uv; Python aún no va empaquetado).
 - [x] Abrir la app en modo dev y comprobar que se ve y se actualiza.
 - [x] Windows: shims propios (`.cmd`).
 - [x] Windows: versión propia del wrapper de git y de la guarda (`safe-git`).
-- [ ] Probar en Windows real los shims, el wrapper y la guarda (fuera de este plan: no hay equipo con Windows).
 - [ ] Confirmar qué agentes existen en cada plataforma.
-- [ ] Móvil (para luego, fuera de este plan).
 - [x] Empaquetado por plataforma (configuración y scripts de build).
 - [x] Firmar la app de macOS con el Developer ID del dueño.
 - [x] Notarizar la app de macOS (`scripts/notarize-macos.sh`, perfil `tirith-notary`; aceptada por Apple el 2026-10-29).
-- [ ] Firmar la app de Windows (fuera de este plan: requiere certificado de firma de código).
+- [ ] Muse protocol probe: read muse serve help and schema
 
 ## 10. Plan visible en el Overview
 
@@ -224,19 +226,12 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Fusionar nunca es una pregunta para el dueño: si los tests y la verificación pasan, Tirith fusiona solo; un duplicado o conflicto va a la cola del manager. Nunca dos agentes en el mismo elemento.
 - [ ] Regla en código, sin excepciones: ningún agente arranca sin estar ligado a un elemento abierto del plan (revisiones y revisiones del plan incluidas: Tirith añade su elemento).
 - [ ] Regla en código: ningún agente termina sin informar a Tirith del resultado de su elemento (hecho / en parte + nuevos elementos / bloqueado + motivo); Tirith es el único que escribe el plan y marca «hecho» solo cuando la revisión pasa.
+- [ ] Llevar a main el commit 0a71483 de la rama lane/chat-wrap-long-reply-buttons-dra-2 (botones de respuesta largos que se ajustan, adjuntar o arrastrar cualquier archivo al chat): resolver los conflictos con main y pasar los tests
+- [ ] El collector se reinicia solo cuando cambia su código en main (así ningún cambio fusionado queda sin cargar).
 
 ## 15. Collector y CLI en Rust
 
 - [x] Base: crate Rust compartido (workspace con la app), arnés de paridad que corre el collector de Python y el de Rust sobre las mismas carpetas de prueba y compara `state.json`.
-- [ ] El estado (`state.json`/`state.js`) lo construye Rust con paridad total contra Python (fuera de este plan: port a Rust pausado por el dueño el 2026-10-29).
-  - [ ] Rust: agentes y lanes (`agents`, `usage`, presencia del manager) (fuera de este plan: port a Rust pausado por el dueño el 2026-10-29).
-  - [ ] Rust: inbox y avisos (`waiting_on_you`, `manager_queue`, `inbox`, `says`, `file_refs`) (fuera de este plan: port a Rust pausado por el dueño el 2026-10-29).
-  - [ ] Rust: pipelines, guarda y reglas (`pipelines`, `violations`, `rules`, `guard`, `setup`, `env`) (fuera de este plan: port a Rust pausado por el dueño el 2026-10-29).
-  - [ ] Rust: salas, flujos y manager (`rooms`, `flows`, `sessions`, `autopilot`, `models`, `disk`, `health`) (fuera de este plan: port a Rust pausado por el dueño el 2026-10-29).
-- [ ] Dispatcher, piloto automático, manager de guardia y revisiones en Rust, con paridad (fuera de este plan: port a Rust pausado por el dueño el 2026-10-29).
-- [ ] La CLI `tirith` en Rust (mismos comandos y salidas), un solo binario para los agentes (fuera de este plan: port a Rust pausado por el dueño el 2026-10-29).
-- [ ] La app incluye el collector (sin `uv` ni Python) y sigue firmada y notarizada (fuera de este plan: port a Rust pausado por el dueño el 2026-10-29).
-- [ ] Cambio: Rust pasa a ser el collector en vivo; Python se retira cuando la paridad y los tests pasan (fuera de este plan: port a Rust pausado por el dueño el 2026-10-29).
 
 ## Orden
 
