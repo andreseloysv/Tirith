@@ -16,7 +16,7 @@ KINDS = ("brief", "message", "report", "request", "answer", "decision", "merge",
 STATE_FLOWS = 100
 MAX_TEXT = 300
 MAX_WHY = 600
-_ENDPOINT_RE = re.compile(r"^(steward|owner|guard|(agent|room|pipeline):.+)$")
+_ENDPOINT_RE = re.compile(r"^(steward|owner|guard|tirith|brain|(agent|room|pipeline):.+)$")
 
 
 def valid_endpoint(value: str) -> bool:
@@ -74,6 +74,10 @@ def endpoint_name(endpoint: str, agents: dict[str, str]) -> str:
         return "You"
     if endpoint == "guard":
         return "The Guard"
+    if endpoint == "tirith":
+        return "Tirith"
+    if endpoint == "brain":
+        return "The Brain"
     kind, _, ident = endpoint.partition(":")
     if kind == "agent":
         return agents.get(ident, ident)

@@ -23,7 +23,7 @@ Git hook runs also form a `git-hooks` pipeline per project (stages `pre-commit`,
 `{kind:"git-hook", hook, repo, result, reason, at, lane}` and run `tirith.toml` `[[hooks]]` through
 `tirith run --stage <event> -- <run>`; `pre-push` runs `tirith check`.
 
-Endpoints: `steward`, `owner`, `guard`, `agent:<lane-id>`, `room:<room-id>`, `pipeline:<run>`.
+Endpoints: `steward`, `owner`, `guard`, `tirith`, `brain`, `agent:<lane-id>`, `room:<room-id>`, `pipeline:<run>`.
 Kinds: `brief`, `message`, `report`, `request`, `answer`, `decision`, `merge`, `alert`.
 
 ```json

@@ -97,6 +97,9 @@ class Config:
     github_token_env: str | None = None  # [github] token_env: extra env var holding a token
     github_agent_logins: list[str] = field(default_factory=list)  # [github] agent_logins
     launch_command: str | list[str] | None = None  # [launch] command template: {brief}, {workspace}
+    dispatch_enabled: bool = True  # [dispatch] enabled: Tirith itself handles the owner's requests
+    dispatch_auto_launch: bool = True  # [dispatch] auto_launch: a "finish" request starts a lane
+    steward_session_cwd: str | None = None  # [steward] session_cwd: the folder the steward runs in
 
     def room(self, room_id: str) -> RoomConfig | None:
         for room in self.rooms:
@@ -176,6 +179,11 @@ def load_config(home: Path) -> Config:
         cfg.steward_name = str(steward["name"])
     if steward.get("title"):
         cfg.steward_title = str(steward["title"])
+    if steward.get("session_cwd"):
+        cfg.steward_session_cwd = str(Path(str(steward["session_cwd"])).expanduser())
+    dispatch = raw.get("dispatch") if isinstance(raw.get("dispatch"), dict) else {}
+    cfg.dispatch_enabled = dispatch.get("enabled", True) is not False
+    cfg.dispatch_auto_launch = dispatch.get("auto_launch", True) is not False
     agents_raw = raw.get("agents") if isinstance(raw.get("agents"), dict) else {}
     cfg.agents = {str(alias): dict(table) for alias, table in agents_raw.items()
                   if isinstance(table, dict)}
