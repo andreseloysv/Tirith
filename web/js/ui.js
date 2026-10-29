@@ -12,7 +12,7 @@
     store: 'Upload the build to the store.', upload: 'Upload the build to the store.',
     review: "The store's review of the release.", export: 'Export the project.', archive: 'Build the signed archive.'
   };
-  var VIEWS = [['overview', 'Overview'], ['pipelines', 'Pipelines'], ['agents', 'Agents'], ['flow', 'Flow'], ['settings', 'Settings']];
+  var VIEWS = [['overview', 'Overview'], ['pipelines', 'Pipelines'], ['agents', 'Agents'], ['settings', 'Settings']];
   var CHEV = '<svg class="chev" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2.5l3.5 3.5L4 9.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
   /* ---------- shared helpers (used by views) ---------- */
@@ -311,11 +311,6 @@
     restore(sc);
     T.mdFit(el);
     if (document.querySelector('.canvas')) applyZoom();
-    if (ui.reveal) {
-      var rn = [].filter.call(document.querySelectorAll('.fnode'), function (x) { return x.getAttribute('data-id') === ui.reveal; })[0];
-      if (rn) rn.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-      ui.reveal = null;
-    }
     T.keepRestore(kept);
   };
   T.renderNavOnly = function (r) { raw = r; };
@@ -333,9 +328,6 @@
       if (act === 'run') { ui.selRun = key; ui.drawer = null; ui.fit = true; }
       else if (act === 'stage') { ui.selRun = key; ui.stageSel[key] = +b.getAttribute('data-i'); ui.drawer = 'stage'; }
       else if (act === 'agent') { ui.openAgent = ui.openAgent === key && T.filter.mode === 'list' ? null : key; ui.drawer = 'agent'; }
-      else if (act === 'fnode') { ui.fopen[key] = !ui.fopen[key]; if (ui.fopen[key]) { ui.fit = false; ui.zoom = Math.max(ui.zoom, .85); ui.reveal = key; } }
-      else if (act === 'fall') { var all = (ui.fids || []).every(function (i) { return ui.fopen[i]; }); ui.fopen = {}; if (!all) (ui.fids || []).forEach(function (i) { ui.fopen[i] = true; }); }
-      else if (act === 'edge') { ui.edge = key; ui.drawer = 'edge'; }
       else if (act === 'decision') { ui.decision = key; ui.drawer = 'decision'; }
       else if (act === 'copy') { T.copyText(key, b); return; }
       else if (act === 'close') { ui.drawer = null; ui.decision = null; if (T.filter.mode !== 'list') ui.openAgent = null; ui.edge = null; }

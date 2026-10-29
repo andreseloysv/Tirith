@@ -1,4 +1,4 @@
-/* What an agent is doing: goal, status, tests, tools, files, live events. Shared by Flow and the Agents drawer. */
+/* What an agent is doing: goal, status, tests, tools, files, live events. Shared by the Agents drawer. */
 (function () {
   var T = window.T, esc = T.esc, MAXFILES = 12, MAXEVENTS = 12;
   var CH = { added: 'A', modified: 'M', deleted: 'D', renamed: 'R', untracked: 'U' };

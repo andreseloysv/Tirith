@@ -15,7 +15,7 @@ const page_url = pathToFileURL(path.join(root, 'web', 'index.html')).href;
 const state_url = pathToFileURL(path.join(root, 'fixtures', 'state.demo.js')).href;
 const shots = process.argv[2];
 
-const views = ['overview', 'pipelines', 'agents', 'flow', 'settings'];
+const views = ['overview', 'pipelines', 'agents', 'settings'];
 const widths = [1440, 1100, 760];
 const SELECTOR = 'h1, h2, h3, p, .card, .col, .ptable, table, .quiet, .mlead, #view > *, #view > * > *';
 

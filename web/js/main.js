@@ -39,11 +39,11 @@
   function applyHash(initial) {
     var o = parseHash();
     filt.session = o.session || ''; filt.project = o.project || ''; filt.q = o.q || '';
-    filt.view = /^(overview|pipelines|agents|flow|settings)$/.test(o.view) ? o.view : 'overview';
+    filt.view = /^(overview|pipelines|agents|settings)$/.test(o.view) ? o.view : 'overview';
     filt.mode = o.mode === 'list' || o.mode === 'tree' ? o.mode : 'kanban';
     if (o.open) {
-      T.ui.selRun = o.open; T.ui.openAgent = o.open; T.ui.edge = o.open === 'edge' ? 'first' : null;
-      T.ui.drawer = filt.view === 'pipelines' ? 'stage' : filt.view === 'agents' ? 'agent' : filt.view === 'flow' ? (o.open === 'edge' ? 'edge' : null) : null;
+      T.ui.selRun = o.open; T.ui.openAgent = o.open;
+      T.ui.drawer = filt.view === 'pipelines' ? 'stage' : filt.view === 'agents' ? 'agent' : null;
     }
     if (filt.view === 'pipelines' && o.open) { var po = o.open.split('::'); T.ui.pOpen = po[0]; T.ui.pOpenStage = po[1] || null; }
     var sp = o.state || '';
