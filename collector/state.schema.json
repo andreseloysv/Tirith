@@ -413,6 +413,7 @@
         "auto": {
           "type": "boolean"
         },
+        "usage": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/usage"}]},
         "roadmap": {
           "description": "The project's plan read from its markdown checklist; null when there is none. See docs/CONTRACT-roadmap.md.",
           "oneOf": [{"type": "null"}, {"$ref": "#/$defs/roadmap"}]
@@ -629,6 +630,11 @@
                          "enum": ["passed", "failed", "running", null]}
             }
           }
+        },
+        "usage": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/usage"}]},
+        "diff": {
+          "description": "Full patch of the lane, stored at lane end (docs/CONTRACT-agents.md).",
+          "oneOf": [{"type": "null"}, {"$ref": "#/$defs/diff"}]
         },
         "files_changed": {
           "type": "integer",
@@ -1093,6 +1099,31 @@
         }
       }
     },
+    "usage": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["input_tokens", "output_tokens", "cache_tokens", "cost_usd", "model", "turns",
+                   "duration_s"],
+      "properties": {
+        "input_tokens": {"type": "integer", "minimum": 0},
+        "output_tokens": {"type": "integer", "minimum": 0},
+        "cache_tokens": {"type": "integer", "minimum": 0},
+        "cost_usd": {"type": ["number", "null"], "minimum": 0},
+        "model": {"type": ["string", "null"]},
+        "turns": {"type": "integer", "minimum": 0},
+        "duration_s": {"type": "integer", "minimum": 0}
+      }
+    },
+    "diff": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["path", "size"],
+      "properties": {
+        "path": {"type": "string"},
+        "size": {"type": "integer", "minimum": 0},
+        "script": {"type": "string", "description": "Script next to state.js that defines the patch text for a file:// page."}
+      }
+    },
     "session": {
       "type": "object",
       "additionalProperties": true,
@@ -1105,6 +1136,7 @@
         "counts"
       ],
       "properties": {
+        "usage": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/usage"}]},
         "id": {
           "type": "string"
         },
