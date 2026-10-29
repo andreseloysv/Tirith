@@ -66,8 +66,8 @@
       (pn ? '<span class="nchip">' + esc(pn) + '</span>' : '') + '<span class="nage">' + T.agoSpan(w.since) + '</span></div>';
     if (done) {
       var a = w.answer || {};
-      return h + '<div class="nsent"><svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="M2.6 6.3l2.3 2.3 4.5-4.9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Sent to the manager' +
-        (a.label || a.text ? ' · <b>' + esc(a.label || '') + '</b>' + (a.label && a.text ? ' · ' : '') + esc(a.text || '') : '') + '</div></li>';
+      return h + '<div class="nsent"><svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="M2.6 6.3l2.3 2.3 4.5-4.9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>' + (a.value === 'action-passed' ? esc((a.label || '').replace(/^✓\s*/, '')) : 'Sent to the manager' +
+        (a.label || a.text ? ' · <b>' + esc(a.label || '') + '</b>' + (a.label && a.text ? ' · ' : '') + esc(a.text || '') : '')) + '</div></li>';
     }
     h += '<div class="nacts">';
     opts(w).forEach(function (o, i) {
