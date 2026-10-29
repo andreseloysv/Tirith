@@ -113,7 +113,7 @@ def _flow(home: Path, src: str, dst: str, kind: str, text: str, req: dict, at: s
 def _default_launcher(home: Path, project: str, step: str, request_id: str | None = None) -> str:
     from tirith.cli import launch_step  # late: cli imports the collector, which imports this module
     try:
-        return launch_step(home, project, step, out=io.StringIO(), request_id=request_id)
+        return launch_step(home, project, step, out=io.StringIO(), request_id=request_id, by_tirith=True)
     except SystemExit as err:  # a helper of the CLI gave up with a message
         raise launch_mod.LaunchError(str(err.code or "launch failed"))
 
@@ -121,7 +121,7 @@ def _default_launcher(home: Path, project: str, step: str, request_id: str | Non
 def _default_plan_launcher(home: Path, project: str, kind: str, request_id: str | None = None) -> str:
     from tirith.cli import launch_plan
     try:
-        return launch_plan(home, project, kind, request_id, out=io.StringIO())
+        return launch_plan(home, project, kind, request_id, out=io.StringIO(), by_tirith=True)
     except SystemExit as err:
         raise launch_mod.LaunchError(str(err.code or "launch failed"))
 
@@ -173,7 +173,7 @@ def _plan(home: Path, req: dict, config: Config, lanes: list[dict], status_of: C
 def _default_relauncher(home: Path, lane: dict, alias: str) -> str:
     from tirith.cli import relaunch_lane  # late, like _default_launcher
     try:
-        return relaunch_lane(home, lane, alias)
+        return relaunch_lane(home, lane, alias, by_tirith=True)
     except SystemExit as err:
         raise launch_mod.LaunchError(str(err.code or "relaunch failed"))
 

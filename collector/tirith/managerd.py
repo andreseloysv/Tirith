@@ -33,6 +33,8 @@ ATTACHED_S = 120.0
 SPAWN_GRACE_S = 180.0  # a spawned lane that has not registered yet still counts as running
 RETRY_AFTER_S = 60.0
 REVIEW_GRACE_S = 300.0
+PAUSE_AFTER = 2  # manager lanes that failed in a row pause the on-call manager
+PAUSE_ITEM = "sq-manager-paused"
 MAX_TRIES = 2  # per set of pending ids: a manager that leaves the same items open twice is not started again
 NOTES_SHOWN = 4000
 NOTES_KEPT = 20000
@@ -272,7 +274,7 @@ def launch(home: Path, config: Config, items: dict, now: datetime, spawn: Callab
         raise launch_mod.LaunchError(str(err.code))
     argv = [*launch_mod.tirith_argv(), "lane", "run", "--id", lane_id, "--project", proj.id,
             "--class", HERO_CLASS, "--feature", FEATURE, "--brief", str(brief), "--workspace", str(repo),
-            "--agent", alias]
+            "--agent", alias, "--by-tirith"]
     if model:
         argv += ["--model", str(model)]
     if effort:
@@ -297,6 +299,52 @@ def pid_alive_or_unset(lane: dict) -> bool:
     return lane.get("pid") is None or pid_alive(lane.get("pid"))
 
 
+def _failed_in_a_row(lanes: list[dict], since: str | None) -> list[dict]:
+    """The newest ended manager lanes (after ``since``) while they all failed, newest first."""
+    ended = [l for l in lanes if str(l.get("id") or "").startswith(LANE_PREFIX) and l.get("ended_at")
+             and not (since and str(l["ended_at"]) <= since)]
+    ended.sort(key=lambda l: str(l.get("ended_at")), reverse=True)
+    out = []
+    for lane in ended:
+        if lane.get("result") != "failed":
+            break
+        out.append(lane)
+    return out
+
+
+def _log_tail(lane: dict, lines: int = 12) -> str:
+    try:
+        text = Path(str(lane.get("log"))).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return "(no log)"
+    return "\n".join(text.strip().splitlines()[-lines:])[-1500:] or "(empty log)"
+
+
+def _pause_check(home: Path, book: dict, lanes: list[dict], now: datetime) -> bool:
+    """Pause the on-call manager after ``PAUSE_AFTER`` failed manager lanes in a row, with one clear
+    manager-queue item (the log tail). The pause ends when that item is closed. True while paused."""
+    if book.get("paused"):
+        open_ids = {q["id"] for q in asks_mod.queue_items(home, only_open=True)}
+        if book["paused"] in open_ids:
+            return True
+        book.pop("paused")
+        book["since"] = now_iso(now)  # failures from before the pause no longer count
+        book["tries"] = 0
+        return False
+    fails = _failed_in_a_row(lanes, book.get("since"))
+    if len(fails) < PAUSE_AFTER:
+        return False
+    item_id = f"{PAUSE_ITEM}-{fails[0]['id']}"
+    text = (f"The on-call manager is paused: its last {len(fails)} lanes failed "
+            f"({', '.join(l['id'] for l in fails)}). Fix the cause, then close this item with "
+            f"`tirith queue done {item_id}` to start it again.\nLog tail of {fails[0]['id']}:\n"
+            f"```\n{_log_tail(fails[0])}\n```")
+    asks_mod.queue_add(home, str(fails[0].get("project") or ""), str(fails[0]["id"]), text,
+                       kind="manager-paused", item_id=item_id)
+    book["paused"] = item_id
+    return True
+
+
 def run(home: Path, config: Config, now: datetime, state: dict, lanes: list[dict],
         spawn: Callable | None = None) -> bool:
     """One pass: start the headless manager when something is pending and nobody is attached.
@@ -311,6 +359,10 @@ def run(home: Path, config: Config, now: datetime, state: dict, lanes: list[dict
         changed = True
     if attached(home, now):
         return changed
+    was = book.get("paused")
+    if _pause_check(home, book, lanes, now):
+        return True
+    changed = changed or was != book.get("paused")
     items = pending_items(home, now)
     if not has_work(items):
         if book.get("key"):

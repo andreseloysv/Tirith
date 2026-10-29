@@ -208,3 +208,61 @@ def test_spawn_detached_child_leads_its_own_session(home: Path) -> None:
     pid = launch_mod.spawn_detached([sys.executable, "-c", code, str(out)], home, home / "l.log")
     os.waitpid(pid, 0)
     assert out.read_text() == "True"
+
+
+# -- failures stay away from the owner ---------------------------------------------------------
+
+
+def _failed_lane(home: Path, lane_id: str, ended: datetime, log: Path | None = None) -> dict:
+    from tirith.cli import add_lane_ask
+    lane = {"id": lane_id, "project": "demo", "feature": "Manager", "result": "failed",
+            "ended_at": ended.strftime("%Y-%m-%dT%H:%M:%SZ"), "log": str(log) if log else None,
+            "by_tirith": True}
+    add_lane_ask(home, lane, "failed", log_tail="Error: boom")
+    return lane
+
+
+def _owner_waits(home: Path) -> str:
+    path = home / "waits.jsonl"
+    return path.read_text(encoding="utf-8") if path.exists() else ""
+
+
+def test_tirith_lane_failure_goes_to_the_manager_queue_not_the_owner(home: Path, project: Path) -> None:
+    from tirith import asks as asks_mod
+    from tirith.cli import add_lane_ask
+    _failed_lane(home, "manager-aaaa", NOW)
+    assert not _owner_waits(home).strip()
+    item = asks_mod.queue_items(home, only_open=True)[0]
+    assert item["id"] == "sq-lane-manager-aaaa" and "Error: boom" in item["text"]
+    add_lane_ask(home, {"id": "manager-bbbb", "project": "demo"}, "failed")  # the id alone says enough
+    assert not _owner_waits(home).strip()
+    add_lane_ask(home, {"id": "worker", "project": "demo", "feature": "F"}, "failed")
+    assert "What now?" in _owner_waits(home)  # a lane the owner started still asks
+
+
+def test_two_failed_manager_lanes_pause_it_with_one_queue_item(home: Path, project: Path, spawned) -> None:
+    from tirith import asks as asks_mod
+    log = home / "logs" / "manager-b.log"
+    log.parent.mkdir(parents=True, exist_ok=True)
+    log.write_text("start\nError: Input must be provided\n", encoding="utf-8")
+    lanes = [_failed_lane(home, "manager-a", NOW - timedelta(minutes=9)),
+             _failed_lane(home, "manager-b", NOW - timedelta(minutes=5), log)]
+    chat(home, "reply with ok", NOW - timedelta(minutes=8))
+    cycle(home, spawned, lanes=lanes)
+    cycle(home, spawned, now=NOW + timedelta(minutes=10), lanes=lanes)
+    assert spawned == []  # paused: nothing started
+    paused = [q for q in asks_mod.queue_items(home, only_open=True) if q["kind"] == "manager-paused"]
+    assert len(paused) == 1 and "Error: Input must be provided" in paused[0]["text"]
+    asks_mod.queue_done(home, paused[0]["id"], "fixed")
+    cycle(home, spawned, now=NOW + timedelta(minutes=12), lanes=lanes)
+    assert len(spawned) == 1  # the item was closed: the old failures no longer count
+    assert "--by-tirith" in spawned[0]
+
+
+def test_a_manager_lane_that_worked_resets_the_count(home: Path, project: Path, spawned) -> None:
+    lanes = [_failed_lane(home, "manager-a", NOW - timedelta(minutes=9)),
+             {"id": "manager-b", "result": "done", "ended_at": "2026-10-29T11:55:00Z"},
+             _failed_lane(home, "manager-c", NOW - timedelta(minutes=2))]
+    chat(home, "hi", NOW - timedelta(minutes=8))
+    cycle(home, spawned, lanes=lanes)
+    assert len(spawned) == 1

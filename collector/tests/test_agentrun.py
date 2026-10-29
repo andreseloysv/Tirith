@@ -31,8 +31,8 @@ def _exe(path: Path) -> Path:
 
 def test_anthropic_preset_defaults() -> None:
     cmd = agentrun.build_command(_config(anthropic={"command": "agent-x"}), "anthropic", "p", "do it")
-    assert cmd[0] == "agent-x" and cmd[-1] == "do it"
-    assert cmd[1:7] == ["-p", "--output-format", "stream-json", "--verbose",
+    assert cmd[:3] == ["agent-x", "-p", "do it"]
+    assert cmd[3:8] == ["--output-format", "stream-json", "--verbose",
                         "--permission-mode", "acceptEdits"]
     allowed = cmd[cmd.index("--allowedTools") + 1]
     assert "Edit" in allowed.split(",") and "Bash(git status:*)" in allowed
@@ -64,6 +64,45 @@ def test_codex_and_copilot_presets() -> None:
         agentrun.build_command(cfg, "codex", None, "hi", effort="high")
     cmd = agentrun.build_command(cfg, "copilot", None, "hi", effort="high")
     assert cmd[cmd.index("--reasoning-effort") + 1] == "high"
+
+
+VARIADIC = {"--allowedTools", "--allow-tool", "--add-dir"}
+
+
+@pytest.mark.parametrize("alias", ["anthropic", "muse", "codex", "copilot"])
+def test_prompt_is_never_swallowed_by_a_variadic_option(alias: str) -> None:
+    cfg = _config(**{alias: {"command": "agent-x", "model": "m1", "add_dirs": ["/x/y"]}})
+    cmd = agentrun_mod_build(cfg, alias, "PROMPT-TEXT")
+    at = cmd.index("PROMPT-TEXT")
+    assert cmd.count("PROMPT-TEXT") == 1
+    assert cmd[at - 1] not in VARIADIC  # not the value slot of a list option
+    after = cmd[at + 1:]
+    assert not any(c in VARIADIC for c in cmd[at - 1:at])
+    if alias == "anthropic":
+        assert cmd[at - 1] == "-p"  # right behind the print flag
+        assert after[0].startswith("--")
+    if alias == "copilot":
+        assert cmd[at - 1] == "-p" and after == []
+    if alias in ("muse", "codex"):
+        assert after == []
+    if alias != "anthropic":  # list options sit before the prompt flag, never after the prompt
+        flag = at - 1 if cmd[at - 1] == "-p" else at
+        assert all(cmd.index(v) < flag for v in VARIADIC if v in cmd)
+
+
+def agentrun_mod_build(cfg, alias, prompt, **kw):
+    return agentrun.build_command(cfg, alias, "p", prompt, **kw)
+
+
+def test_dash_prompt_and_stdin_for_long_prompts() -> None:
+    cfg = _config(anthropic={"command": "agent-x"}, muse={"command": "agent-m"})
+    long = "# Lane\n" + "x" * agentrun.STDIN_MIN
+    assert agentrun.wants_stdin(cfg, "anthropic", "p", long)
+    assert agentrun.wants_stdin(cfg, "anthropic", "p", "-oops")
+    assert not agentrun.wants_stdin(cfg, "anthropic", "p", "short")
+    assert not agentrun.wants_stdin(cfg, "muse", "p", long)  # that alias has no stdin mode
+    cmd = agentrun.build_command(cfg, "anthropic", "p", long, via_stdin=True)
+    assert cmd[:2] == ["agent-x", "-p"] and long not in cmd and cmd[2] == "--output-format"
 
 
 def test_codex_turn_completed_usage(tmp_path: Path) -> None:
@@ -112,7 +151,7 @@ def test_lane_run_with_agent(home: Path, tmp_path: Path, capsys,
     finally:
         make_hooks_mutable(repo)
     assert code == 0
-    assert "args: -p --model m1 --allowedTools Read hello" in capsys.readouterr().out
+    assert "args: -p hello --model m1 --allowedTools Read" in capsys.readouterr().out
 
 
 # -- usage -------------------------------------------------------------------------------------

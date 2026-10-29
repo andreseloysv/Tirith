@@ -20,12 +20,17 @@ from tirith.home import Config
 
 # -- presets -----------------------------------------------------------------------------------
 
-# alias -> flag names used to assemble a headless command. ``args`` always come first, then the
-# model / effort / permission / extra-dir flags, then the prompt as the last positional argument.
+# alias -> flag names used to assemble a headless command. ``args`` come first, then the model /
+# effort / permission / extra-dir flags. The prompt is never placed after a variadic option (it
+# would be swallowed): ``print_flag`` presets take it right after that flag, ``prompt_flag``
+# presets put it last behind its own flag, the others take it as the last positional argument.
+# ``stdin`` presets can read a long prompt from stdin instead (see ``wants_stdin``).
 PRESET_DEFAULTS: dict[str, dict] = {
     "anthropic": {
-        "args": ["-p", "--output-format", "stream-json", "--verbose",
+        "args": ["--output-format", "stream-json", "--verbose",
                  "--permission-mode", "acceptEdits"],
+        "print_flag": "-p",
+        "stdin": True,
         "permissions": ["Read", "Edit", "Write", "Glob", "Grep", "NotebookEdit",
                         "Bash(git status:*)", "Bash(git diff:*)", "Bash(git log:*)",
                         "Bash(ls:*)", "Bash(uv run:*)", "Bash(python3:*)", "Bash(node:*)",
@@ -67,7 +72,9 @@ PRESET_DEFAULTS: dict[str, dict] = {
     },
 }
 
-_OVERRIDABLE = ("command", "args", "permissions", "model", "effort", "add_dirs", "prompt_flag")
+_OVERRIDABLE = ("command", "args", "permissions", "model", "effort", "add_dirs", "prompt_flag",
+                "print_flag", "stdin")
+STDIN_MIN = 2000  # a prompt this long (a brief) goes through stdin when the alias reads it
 
 
 def agent_settings(config: Config, alias: str, project: str | None = None) -> dict:
@@ -88,10 +95,19 @@ def agent_settings(config: Config, alias: str, project: str | None = None) -> di
     return merged
 
 
+def wants_stdin(config: Config, alias: str, project: str | None, prompt: str) -> bool:
+    """True when ``prompt`` should reach ``alias`` on stdin (``build_command(..., via_stdin=True)``):
+    the alias reads it there and the prompt is long or starts with a dash."""
+    s = agent_settings(config, alias, project)
+    return bool(s.get("stdin") and s.get("print_flag")
+                and (len(prompt) >= STDIN_MIN or prompt.lstrip().startswith("-")))
+
+
 def build_command(config: Config, alias: str, project: str | None, prompt: str, *,
                   model: str | None = None, effort: str | None = None,
-                  step: str | None = None) -> list[str]:
+                  step: str | None = None, via_stdin: bool = False) -> list[str]:
     """The full headless command for ``alias``; raises SystemExit when it cannot be built.
+    With ``via_stdin`` the prompt is left out: the caller writes it to the process' stdin.
 
     Model and effort: the explicit arguments, then ``[models.workers]`` (with its project and step
     overrides; an effort the alias has no flag for is only recorded), then ``[agents.<alias>]``."""
@@ -99,7 +115,12 @@ def build_command(config: Config, alias: str, project: str | None, prompt: str, 
     exe = s.get("command")
     if not exe:
         raise SystemExit(f"[agents.{alias}] has no command in config.toml")
-    cmd = [str(exe)] + [str(a) for a in (s.get("args") or [])]
+    cmd = [str(exe)]
+    if s.get("print_flag"):  # the prompt follows the print flag directly, before any other option
+        cmd.append(str(s["print_flag"]))
+        if not via_stdin:
+            cmd.append(prompt if not prompt.startswith("-") else " " + prompt)
+    cmd += [str(a) for a in (s.get("args") or []) if str(a) != str(s.get("print_flag"))]
     chosen = models_mod.resolve_workers(config, project, step)
     if not models_mod.applies_to(chosen, alias):
         chosen = models_mod.Choice()
@@ -125,7 +146,9 @@ def build_command(config: Config, alias: str, project: str | None, prompt: str, 
     if dirs and s.get("add_dir_flag"):
         for d in dirs:
             cmd += [str(s["add_dir_flag"]), d]
-    if s.get("prompt_flag"):
+    if s.get("print_flag"):
+        pass
+    elif s.get("prompt_flag"):
         cmd += [str(s["prompt_flag"]), prompt]
     else:
         cmd += ["--", prompt] if prompt.startswith("-") else [prompt]

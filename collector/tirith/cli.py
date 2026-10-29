@@ -38,6 +38,7 @@ from tirith import brain as brain_mod
 from tirith import inbox as inbox_mod
 from tirith import setup as setup_mod
 from tirith import lanestop as lanestop_mod
+from tirith import managerd as managerd_mod
 from tirith import launch as launch_mod
 from tirith import models as models_mod
 from tirith import planlane as planlane_mod
@@ -177,8 +178,25 @@ def _lane_follow_up(home: Path, lane: dict, result: str, report: str | None) -> 
         asks_mod.queue_add(home, str(lane.get("project") or ""), str(lane["id"]), section)
 
 
-def add_lane_ask(home: Path, lane: dict, what: str) -> str:
-    """The one owner item of a lane that failed or said nothing: Retry / Show the log / Drop it."""
+def _log_tail(log: Path | None, lines: int = 12) -> str:
+    try:
+        text = log.read_text(encoding="utf-8", errors="replace") if log else ""
+    except OSError:
+        return ""
+    return "\n".join(text.strip().splitlines()[-lines:])[-1500:]
+
+
+def add_lane_ask(home: Path, lane: dict, what: str, log_tail: str = "") -> str:
+    """The one owner item of a lane that failed or said nothing: Retry / Show the log / Drop it.
+    A lane Tirith started itself (manager, autopilot, dispatcher) never reaches the owner: its failure
+    is one item in the manager queue (``sq-lane-<id>``) with the log tail."""
+    if lane.get("by_tirith") or str(lane.get("id") or "").startswith(managerd_mod.LANE_PREFIX):
+        text = f"Lane **{lane.get('feature') or lane['id']}** ({lane['id']}) {what}."
+        if log_tail:
+            text += f"\nLog tail:\n```\n{log_tail}\n```"
+        asks_mod.queue_add(home, str(lane.get("project") or ""), str(lane["id"]), text,
+                           kind="lane-failed", item_id=f"sq-lane-{lane['id']}")
+        return f"sq-lane-{lane['id']}"
     wait_id = f"lane-{lane['id']}"
     if any(str(r.get("id")) == wait_id for r in read_jsonl(home / "waits.jsonl")):
         return wait_id
@@ -317,8 +335,11 @@ def _agent_command(config, args) -> list[str]:
         raise SystemExit("lane run --agent needs --prompt or --prompt-file")
     if not prompt.strip():
         raise SystemExit("lane run: the prompt is empty")
+    stdin = agentrun_mod.wants_stdin(config, args.agent, args.project, prompt)
+    args.stdin_text = prompt if stdin else None  # written to the agent's stdin by _cmd_lane_run
     return agentrun_mod.build_command(config, args.agent, args.project, prompt,
-                                      model=args.model, effort=args.effort, step=args.step)
+                                      model=args.model, effort=args.effort, step=args.step,
+                                      via_stdin=stdin)
 
 
 def _cmd_doctor(args) -> int:
@@ -367,6 +388,8 @@ def _cmd_lane_run(args) -> int:
     lane["token"] = secrets.token_urlsafe(24)
     lane["ran"] = models_mod.command_choice(command)  # the model and effort this lane was started with
     lane["agent"] = args.agent or getattr(args, "as_agent", None) or None  # the alias that runs it
+    if getattr(args, "by_tirith", False) or lane_id.startswith(managerd_mod.LANE_PREFIX):
+        lane["by_tirith"] = True  # started by Tirith itself: a failure goes to the manager queue
     if getattr(args, "fallback_from", None):
         before = read_json(lane_path(home, args.fallback_from), None) or {}
         lane["fallback_from"] = before.get("agent")
@@ -380,14 +403,22 @@ def _cmd_lane_run(args) -> int:
         answer = _last_stop_message(home, lane_id, lane.get("started_at"))
     else:
         with log_path.open("ab") as log_handle:
+            stdin_text = getattr(args, "stdin_text", None)
             proc = subprocess.Popen(
                 command, cwd=str(workspace), env=env,
+                stdin=subprocess.PIPE if stdin_text else subprocess.DEVNULL,
                 stdout=log_handle, stderr=subprocess.STDOUT,
                 start_new_session=os.name == "posix")  # its own process group: `lane stop` ends all of it
             lane["pid"] = proc.pid
             if os.name == "posix":
                 lane["pgid"] = proc.pid
             write_lane(home, lane)
+            if stdin_text:  # a long prompt (the brief) is read from stdin, not from argv
+                try:
+                    proc.stdin.write(stdin_text.encode("utf-8"))
+                    proc.stdin.close()
+                except OSError:  # the agent exited before reading it; its exit code tells
+                    pass
             exit_code = proc.wait()
         answer, _ = final_answer(log_path)
     stopped = lanestop_mod.marker(read_json(lane_path(home, lane_id), None) or {})
@@ -398,7 +429,7 @@ def _cmd_lane_run(args) -> int:
     if stopped:
         pass
     elif result == "failed":
-        add_lane_ask(home, lane, "failed")
+        add_lane_ask(home, lane, "failed", log_tail=_log_tail(log_path))
     elif not answer:
         add_lane_ask(home, lane, "ended without an answer")
     files, plus, minus = git_shortstat(str(workspace), lane.get("start_commit"))
@@ -956,7 +987,8 @@ def _cmd_check(args) -> int:
 
 
 def launch_step(home: Path, project_id: str, step_id: str, agent: str | None = None,
-                dry_run: bool = False, out=None, request_id: str | None = None) -> str:
+                dry_run: bool = False, out=None, request_id: str | None = None,
+                by_tirith: bool = False) -> str:
     """Start a sub-agent lane for one open roadmap step; returns the lane id.
 
     Raises ``launch_mod.LaunchError`` with the reason when it must not start.
@@ -992,7 +1024,8 @@ def launch_step(home: Path, project_id: str, step_id: str, agent: str | None = N
     command = launch_mod.agent_command(config, agent, brief_path, workspace, project_id, step["id"])
     argv = launch_mod.lane_run_argv(project_id, step["id"], launch_mod.pick_class(title), title,
                                     brief_path, workspace, lane_id, command, request_id,
-                                    alias=agent or _worker_alias(config, project_id, step["id"]))
+                                    alias=agent or _worker_alias(config, project_id, step["id"]),
+                                    by_tirith=by_tirith)
     if dry_run:
         print(f"lane {lane_id} (dry run)\nworktree: {workspace} (branch lane/{lane_id})\n"
               f"brief: {brief_path}\ncommand: {' '.join(argv)}\n\n{brief}", file=out)
@@ -1006,7 +1039,7 @@ def launch_step(home: Path, project_id: str, step_id: str, agent: str | None = N
 
 
 def launch_plan(home: Path, project_id: str, kind: str, request_id: str | None = None,
-                out=None) -> str:
+                out=None, by_tirith: bool = False) -> str:
     """Start the auditor (``plan-refresh``) or planner (``plan-new``) lane for a project; returns the lane id.
 
     Raises ``launch_mod.LaunchError`` with the reason when it must not start."""
@@ -1051,7 +1084,7 @@ def launch_plan(home: Path, project_id: str, kind: str, request_id: str | None =
     workspace = launch_mod.worktree_path(repo, lane_id)
     command = launch_mod.agent_command(config, None, brief_path, workspace, project_id, step)
     argv = launch_mod.lane_run_argv(project_id, step, planlane_mod.HERO_CLASS, title, brief_path, workspace,
-                                    lane_id, command, request_id)
+                                    lane_id, command, request_id, by_tirith=by_tirith)
     launch_mod.create_worktree(repo, lane_id)
     brief_path.parent.mkdir(parents=True, exist_ok=True)
     brief_path.write_text(brief, encoding="utf-8")
@@ -1065,7 +1098,7 @@ def _worker_alias(config, project_id: str, step_id: str) -> str | None:
     return alias if alias in config.agents else None
 
 
-def relaunch_lane(home: Path, lane: dict, alias: str) -> str:
+def relaunch_lane(home: Path, lane: dict, alias: str, by_tirith: bool = False) -> str:
     """Start the brief of a failed ``lane`` again with agent ``alias``; returns the new lane id. The
     worktree is kept when it has no uncommitted changes, else a new one is made from the repo."""
     config, proj = _project_or_exit(home, str(lane.get("project") or ""))
@@ -1086,7 +1119,7 @@ def relaunch_lane(home: Path, lane: dict, alias: str) -> str:
     argv = launch_mod.lane_run_argv(
         str(lane.get("project") or ""), str(step or ""), str(lane.get("class") or launch_mod.DEFAULT_CLASS),
         title, brief, workspace, lane_id, command, lane.get("request_id"), alias=alias,
-        fallback_from=str(lane["id"]), tried=fallback_mod.tried_of(lane))
+        fallback_from=str(lane["id"]), tried=fallback_mod.tried_of(lane), by_tirith=by_tirith)
     launch_mod.spawn_detached(argv, home, home / "logs" / f"{lane_id}.launch.log")
     return lane_id
 
@@ -1665,6 +1698,7 @@ def build_parser() -> argparse.ArgumentParser:
     lane_run.add_argument("--agent", default=None, help="agent alias from [agents.<alias>]")
     lane_run.add_argument("--as-agent", default=None, help="alias this command runs (recorded on the lane)")
     lane_run.add_argument("--fallback-from", default=None, help="lane id this one continues (out of credits)")
+    lane_run.add_argument("--by-tirith", action="store_true", help=argparse.SUPPRESS)
     lane_run.add_argument("--tried", default="", help="comma list of aliases already used for this brief")
     lane_run.add_argument("--model", default=None)
     lane_run.add_argument("--effort", default=None)
