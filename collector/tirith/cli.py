@@ -1068,6 +1068,13 @@ def _cmd_launch(args) -> int:
 
 def _cmd_url_open(args) -> int:
     home = _home(args)
+    launch_mod.log_handler(home, "received " + launch_mod.redact_url(args.url))
+    code = _url_open(args, home)
+    launch_mod.log_handler(home, f"result exit {code}")
+    return code
+
+
+def _url_open(args, home: Path) -> int:
     try:
         link = launch_mod.parse_url(args.url)
         if link["action"] not in ("launch", "inbox", "review", "run", "stop"):
@@ -1094,14 +1101,14 @@ def _cmd_url_open(args) -> int:
             lane = read_json(lane_path(home, link["lane"]), None)
             if not isinstance(lane, dict) or lane.get("ended_at"):
                 raise launch_mod.LaunchError(f"{link['lane'] or 'that lane'} is not a running lane")
-            launch_mod.spawn_detached([*launch_mod.tirith_argv(), "lane", "stop", link["lane"], "--by", "owner"],
+            launch_mod.spawn_detached([*launch_mod.tirith_argv(home), "lane", "stop", link["lane"], "--by", "owner"],
                                       home, home / "logs" / f"{link['lane']}.stop.log")
             print(f"stopping {link['lane']}")
             return 0
         if link["action"] == "review":
             lane_id = link["lane"]
             review_mod.check_ready(home, lane_id, _lane_repo(home, lane_id))
-            launch_mod.spawn_detached([*launch_mod.tirith_argv(), "lane", "review", lane_id], home,
+            launch_mod.spawn_detached([*launch_mod.tirith_argv(home), "lane", "review", lane_id], home,
                                       home / "logs" / f"{lane_id}.review.log")
             print(f"reviewing {lane_id}")
             return 0

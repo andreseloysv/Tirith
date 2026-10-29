@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from conftest import write_config
+from tirith import tirithcmd
 from tirith import asks as asks_mod
 from tirith import autopilot as autopilot_mod
 from tirith import dispatch as dispatch_mod
@@ -231,7 +232,7 @@ def test_owner_items_with_command_link_and_plain(home, repo) -> None:
     assert len(owner) == 3
     by_text = {v["text"]: v for v in owner.values()}
     command = next(v for t, v in by_text.items() if "Install it" in t)
-    assert command["actions"][0]["command"] == "tirith url install" and command["actions"][0]["cwd"] == str(repo)
+    assert command["actions"][0]["command"] == tirithcmd.resolved(home) + " url install" and command["actions"][0]["cwd"] == str(repo)
     link = next(v for t, v in by_text.items() if "Log in" in t)
     assert link["link"] == "https://portal.example.invalid/login" and link["options"][0]["label"] == "Done"
     plain = next(v for t, v in by_text.items() if "colour" in t)

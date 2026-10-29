@@ -23,6 +23,7 @@ from urllib.parse import parse_qs, urlencode, urlsplit
 from tirith import manifest as manifest_mod
 from tirith import models as models_mod
 from tirith import roadmap as roadmap_mod
+from tirith import tirithcmd
 from tirith.home import Config, now_iso
 from tirith.store import read_json, write_json_atomic
 
@@ -205,8 +206,9 @@ def agent_command(config: Config, agent: str | None, brief: Path, workspace: Pat
     return models_mod.apply_to_command(words, chosen, alias)
 
 
-def tirith_argv() -> list[str]:
-    return [sys.executable, "-m", "tirith"]
+def tirith_argv(home: Path | None = None) -> list[str]:
+    """The argv that runs ``tirith`` from anywhere (``tirithcmd.tirith_command``), not the bare name."""
+    return shlex.split(tirithcmd.resolved(home))
 
 
 def lane_run_argv(project: str, step_id: str, hero_class: str, title: str, brief: Path,
@@ -250,19 +252,48 @@ def handler_installed(base: Path | None = None) -> bool:
     return (app_path(base) / "Contents" / "Info.plist").is_file()
 
 
-def applescript(home_env: str | None = None) -> str:
-    """The ``on open location`` script; it runs ``tirith url open`` detached."""
-    prefix = f"PYTHONPATH={shlex.quote(str(Path(__file__).resolve().parent.parent))} "
+HANDLER_PATH = "/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$HOME/.cargo/bin"  # where uv lives
+HANDLER_LOG = "url-handler.log"
+
+
+def handler_log(home_env: str | None = None) -> Path:
+    return (Path(home_env).expanduser() if home_env else Path.home() / ".tirith") / "logs" / HANDLER_LOG
+
+
+def log_handler(home: Path, text: str) -> None:
+    """One timestamped line in ``<home>/logs/url-handler.log`` (a log that cannot be written is ignored)."""
+    try:
+        log = Path(home) / "logs" / HANDLER_LOG
+        log.parent.mkdir(parents=True, exist_ok=True)
+        with log.open("a", encoding="utf-8") as handle:
+            handle.write(f"{now_iso()} {text}\n")
+    except OSError:
+        pass
+
+
+def redact_url(url: str) -> str:
+    return re.sub(r"(token=)[^&\s]*", r"\1***", str(url))
+
+
+def applescript(home_env: str | None = None, tirith: str | None = None) -> str:
+    """The ``on open location`` script; it runs ``tirith url open`` detached, by the absolute command.
+
+    ``tirith`` is the shell-ready command (default ``tirithcmd.resolved``). Its output goes to the
+    handler log, where ``tirith url open`` also writes each link it received and the result."""
+    tirith = tirith or tirithcmd.resolved(Path(home_env) if home_env else None)
+    prefix = f"PATH={HANDLER_PATH}:$PATH PYTHONPATH={shlex.quote(str(Path(__file__).resolve().parent.parent))} "
     if home_env:
         prefix += f"TIRITH_HOME={shlex.quote(home_env)} "
-    base = prefix + " ".join(shlex.quote(a) for a in tirith_argv()) + " url open "
+    base = prefix + tirith + " url open "
     escaped = base.replace("\\", "\\\\").replace('"', '\\"')
+    log = shlex.quote(str(handler_log(home_env))).replace("\\", "\\\\").replace('"', '\\"')
     return ("on open location theURL\n"
-            f'\tdo shell script "{escaped}" & quoted form of theURL & " >/dev/null 2>&1 &"\n'
+            f'\tdo shell script "{escaped}" & quoted form of theURL & " >>{log} 2>&1 &"\n'
             "end open location\n")
 
 
-def install_handler(base: Path | None = None, home_env: str | None = None, register: bool = True) -> Path:
+def install_handler(base: Path | None = None, home_env: str | None = None, register: bool = True,
+                    tirith: str | None = None) -> Path:
     if sys.platform != "darwin" or not shutil.which("osacompile"):
         raise LaunchError("the url handler is macOS only for now (needs osacompile)")
     app = app_path(base)
@@ -270,7 +301,8 @@ def install_handler(base: Path | None = None, home_env: str | None = None, regis
         shutil.rmtree(app)
     app.parent.mkdir(parents=True, exist_ok=True)
     source = app.parent / f".{APP_NAME}.applescript"
-    source.write_text(applescript(home_env), encoding="utf-8")
+    tirith = tirith or tirithcmd.resolved(Path(home_env) if home_env else None)
+    source.write_text(applescript(home_env, tirith), encoding="utf-8")
     try:
         done = subprocess.run(["osacompile", "-o", str(app), str(source)], capture_output=True, text=True)
     finally:
@@ -279,7 +311,7 @@ def install_handler(base: Path | None = None, home_env: str | None = None, regis
         raise LaunchError(f"osacompile failed: {done.stderr.strip()}")
     plist_path = app / "Contents" / "Info.plist"
     info = plistlib.loads(plist_path.read_bytes())
-    info.update({"CFBundleIdentifier": BUNDLE_ID, "CFBundleName": "Tirith Launcher", "LSUIElement": True,
+    info.update({"CFBundleIdentifier": BUNDLE_ID, "CFBundleName": "Tirith Launcher", "LSUIElement": True, "TirithCommand": tirith,
                  "CFBundleURLTypes": [{"CFBundleURLName": "Tirith link", "CFBundleURLSchemes": [SCHEME]}]})
     plist_path.write_bytes(plistlib.dumps(info))
     if register:
@@ -317,4 +349,15 @@ def verify_handler(base: Path | None = None) -> list[str]:
     schemes = [s for t in info.get("CFBundleURLTypes", []) for s in t.get("CFBundleURLSchemes", [])]
     if SCHEME not in schemes:
         return [f"{app} does not handle {SCHEME}://. Fix: {INSTALL_COMMAND}"]
-    return []
+    return command_problems(str(info.get("TirithCommand") or ""))
+
+
+def command_problems(command: str) -> list[str]:
+    """Problems with the command the handler runs: it must exist (empty = fine)."""
+    words = shlex.split(command) if command.strip() else []
+    if not words:
+        return [f"the handler does not name the tirith command it runs. Fix: {INSTALL_COMMAND}"]
+    exe = words[0]
+    found = Path(exe).is_file() and os.access(exe, os.X_OK) if "/" in exe else \
+        shutil.which(exe, path=os.environ.get("PATH", "") + ":" + os.path.expandvars(HANDLER_PATH)) is not None
+    return [] if found else [f"the handler runs {exe}, which does not exist. Fix: {INSTALL_COMMAND}"]

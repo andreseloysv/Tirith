@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from conftest import write_config
+from tirith import tirithcmd
 from tirith import actions as actions_mod
 from tirith import gates
 from tirith.cli import main
@@ -55,8 +56,8 @@ def test_nothing_installed_says_what_is_missing_with_run_actions(machine: Path, 
     assert s["gates_active"] is False
     assert "hooks are not installed" in s["gates_summary"]
     assert "Agents could start other agents without Tirith seeing them" in s["gates_summary"]
-    assert [a["command"] for a in s["gates_actions"]] == ["tirith hook install --agent anthropic",
-                                                          "tirith shim install"]
+    assert [a["command"] for a in s["gates_actions"]] == [tirithcmd.resolved(home) + " hook install --agent anthropic",
+                                                          tirithcmd.resolved(home) + " shim install"]
     assert all(a["cwd"] == str(machine) for a in s["gates_actions"])
     for action in s["gates_actions"]:  # the Run path finds the stored command by id
         assert actions_mod.find_action(home, action["id"])["command"] == action["command"]
@@ -68,7 +69,7 @@ def test_missing_shims_only(machine: Path, home: Path, tmp_path: Path) -> None:
     assert s["gates_active"] is False
     assert s["gates_summary"] == ("Agents could start other agents without Tirith seeing them, because the "
                                   "agent shims are not installed.")
-    assert [a["command"] for a in s["gates_actions"]] == ["tirith shim install"]
+    assert [a["command"] for a in s["gates_actions"]] == [tirithcmd.resolved(home) + " shim install"]
 
 
 def test_everything_installed_is_active_and_matches_shim_verify(machine: Path, home: Path, tmp_path: Path,

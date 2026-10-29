@@ -97,6 +97,7 @@ class Config:
     gates_enabled: bool = True  # [gates] enabled = false is the only off switch
     github_token_env: str | None = None  # [github] token_env: extra env var holding a token
     github_agent_logins: list[str] = field(default_factory=list)  # [github] agent_logins
+    app_tirith: str | None = None  # [app] tirith: absolute path of the tirith script (else the repo's bin/tirith)
     launch_command: str | list[str] | None = None  # [launch] command template: {brief}, {workspace}
     dispatch_enabled: bool = True  # [dispatch] enabled: Tirith itself handles the owner's requests
     dispatch_auto_launch: bool = True  # [dispatch] auto_launch: a "finish" request starts a lane
@@ -207,6 +208,9 @@ def load_config(home: Path) -> Config:
         cfg.github_token_env = str(github["token_env"])
     if isinstance(github.get("agent_logins"), list):
         cfg.github_agent_logins = [str(l) for l in github["agent_logins"] if str(l).strip()]
+    app = raw.get("app") if isinstance(raw.get("app"), dict) else {}
+    if isinstance(app.get("tirith"), str) and app["tirith"].strip():
+        cfg.app_tirith = app["tirith"].strip()
     launch = raw.get("launch") if isinstance(raw.get("launch"), dict) else {}
     if isinstance(launch.get("command"), (str, list)) and launch["command"]:
         cfg.launch_command = launch["command"]
