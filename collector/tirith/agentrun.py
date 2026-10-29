@@ -44,6 +44,26 @@ PRESET_DEFAULTS: dict[str, dict] = {
         "effort_flag": None,
         "add_dir_flag": None,
     },
+    # Flags taken from each CLI's help; not yet confirmed by a real run (docs/CONTRACT-agents.md).
+    "codex": {
+        "args": ["exec", "--json", "--sandbox", "workspace-write"],
+        "permissions": [],  # the sandbox is the permission model; exec mode cannot ask
+        "permissions_flag": None,
+        "model_flag": "--model",
+        "effort_flag": None,
+        "add_dir_flag": "--add-dir",
+    },
+    "copilot": {
+        "args": ["--output-format", "json", "--no-ask-user"],
+        "permissions": ["write", "shell(git status)", "shell(git diff)", "shell(git log)",
+                        "shell(ls)", "shell(uv run)", "shell(python3)", "shell(node)",
+                        "shell(tirith)"],
+        "permissions_flag": "--allow-tool",
+        "model_flag": "--model",
+        "effort_flag": None,
+        "add_dir_flag": "--add-dir",
+        "prompt_flag": "-p",
+    },
 }
 
 _OVERRIDABLE = ("command", "args", "permissions", "model", "effort", "add_dirs", "prompt_flag")
