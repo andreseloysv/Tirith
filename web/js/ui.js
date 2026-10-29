@@ -251,6 +251,7 @@
     if (spent) h += '<p class="mut sm usage ovusage" title="All agents in this view">Spent ' + esc(T.usageLine(spent)) + '</p>';
     if (T.needs) h += T.needs(s);
     if (T.plan) h += T.plan(s);
+    if (T.setup) h += T.setup(s);
     if (T.rulesSection) h += T.rulesSection(s);
     h += pipelinesSection(s, runs);
     h += '<section><h2>Working agents <span class="n">' + ags.length + '</span></h2>' + (ags.length ? '<div class="grid2">' + ags.map(function (a) { return T.agentCard(a, false).replace('data-act="agent"', 'data-act="goagent"'); }).join('') + '</div>' : T.empty('No agents working')) + '</section>';

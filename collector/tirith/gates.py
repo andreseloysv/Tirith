@@ -8,6 +8,7 @@ Agents are named by alias; the real executable of each alias comes from the owne
 
 from __future__ import annotations
 
+import fnmatch
 import os
 import re
 import shlex
@@ -43,6 +44,7 @@ class Violation:
     rule: str
     what: str
     instead: str
+    action: str = "block"  # "warn" is recorded and shown but does not stop the call
 
     def message(self) -> str:
         return f"tirith: {self.rule}: {self.what}. Do this instead: {self.instead}"
@@ -286,6 +288,62 @@ def _contains(haystack: list[list[str]], needle: list[list[str]]) -> bool:
     return False
 
 
+def _command_forms(segments: list[list[str]]) -> list[str]:
+    """Each simple command as typed and as ``program args`` (env assignments and wrappers dropped)."""
+    out: list[str] = []
+    for tokens in segments:
+        name, args = _program(tokens)
+        for form in (" ".join(tokens), " ".join([name, *args]).strip()):
+            if form and form not in out:
+                out.append(form)
+    return out
+
+
+def _path_forms(path: str, folder: Path, cwd) -> list[str]:
+    """The edited path as given, relative to the manifest folder, and relative to ``cwd``."""
+    forms = [path]
+    candidate = Path(path)
+    if not candidate.is_absolute() and cwd:
+        candidate = Path(str(cwd)) / candidate
+    for base in (folder, Path(str(cwd))) if cwd else (folder,):
+        try:
+            forms.append(candidate.resolve().relative_to(base.resolve()).as_posix())
+        except (ValueError, OSError):
+            pass
+    return forms
+
+
+def _glob(pattern: str, text: str) -> bool:
+    return fnmatch.fnmatchcase(text, pattern)
+
+
+def _custom_rules(folder: Path | None, tool: str, data: dict, line: str, segments: list[list[str]],
+                  cwd) -> list[Violation]:
+    """Violations of the project's ``[[rules]]`` (``tirith.toml``) for one call."""
+    if folder is None:
+        return []
+    rules = manifest_mod.load(folder).rules
+    out: list[Violation] = []
+    forms = _command_forms(segments) if tool == "Bash" else []
+    path = str(data.get("file_path") or data.get("path") or data.get("notebook_path") or "")
+    for rule in rules:
+        if tool == "Bash":
+            if rule.match:
+                hit = any(_glob(rule.match, form) for form in forms) or _glob(rule.match, " ".join(line.split()))
+            elif rule.regex:
+                hit = bool(re.search(rule.regex, line))
+            else:
+                hit = False
+            what = _clip(line)
+        else:
+            hit = bool(rule.paths and path and any(
+                _glob(pattern, form) for pattern in rule.paths for form in _path_forms(path, folder, cwd)))
+            what = path
+        if hit:
+            out.append(Violation(rule.id, f"{rule.message}: {what}", rule.instead, rule.action))
+    return out
+
+
 def find_manifest_folder(cwd) -> Path | None:
     """Nearest folder at or above ``cwd`` that has a ``tirith.toml``."""
     if not cwd:
@@ -309,7 +367,7 @@ def check_call(config: Config, tool: str | None, tool_input, cwd, project: str |
             return [Violation("git-hooks", f"editing files under .git/hooks is not allowed: {path}",
                               "leave .git/hooks alone; the owner manages it with "
                               "`tirith guard install <project>`")]
-        return []
+        return _custom_rules(find_manifest_folder(cwd), tool, data, "", [], cwd)
     if tool != "Bash":
         return []
     line = strip_heredocs(str(data.get("command") or data.get("cmd") or ""))
@@ -326,6 +384,7 @@ def check_call(config: Config, tool: str | None, tool_input, cwd, project: str |
     stage = _raw_stage(segments, folder, project) or _raw_runner(line, folder, project)
     if stage:
         out.append(stage)
+    out += _custom_rules(find_manifest_folder(cwd), tool, data, line, segments, cwd)
     return out
 
 
@@ -336,6 +395,8 @@ def record_violation(home: Path, violation: Violation, *, ts: str, agent: str | 
     row = {"kind": "violation", "ts": ts, "rule": violation.rule, "agent": agent, "lane": lane,
            "session": session, "project": project, "tool": tool,
            "message": violation.message(), "cwd": cwd}
+    if violation.action != "block":
+        row["action"] = violation.action
     append_jsonl(home / EVENTS_FILE, row)
     return row
 

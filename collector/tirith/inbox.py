@@ -19,6 +19,8 @@ from tirith.store import append_jsonl, read_jsonl
 
 INBOX_FILE = "inbox.jsonl"
 KINDS = ("finish", "ask", "setup")
+SETUP_ACTIONS = ("add-stage", "add-rule", "remove-stage", "remove-rule", "run-stage")
+SETUP_STEP = "setup"
 ANSWERERS = ("steward", "brain", "tirith")
 TEXT_MAX_BYTES = 4096
 STATE_ROWS = 100
@@ -52,6 +54,9 @@ def add_request(home: Path, kind: str, project: str, step: str, text: str = "",
     if kind not in KINDS:
         raise InboxError(f"kind must be one of {', '.join(KINDS)}, not {kind!r}")
     project, step, text = str(project or "").strip(), str(step if step is not None else "").strip(), clip(text.strip())
+    if kind == "setup":
+        step = step or SETUP_STEP
+        text = json.dumps(parse_setup(text), ensure_ascii=False, separators=(",", ":"))
     if not project or not step:
         raise InboxError("a request needs a project and a step")
     if kind == "ask" and not text:
@@ -60,6 +65,25 @@ def add_request(home: Path, kind: str, project: str, step: str, text: str = "",
            "text": text, "from": "owner", "status": "open"}
     append_jsonl(inbox_path(home), row)
     return row
+
+
+def parse_setup(text: str) -> dict:
+    """The JSON of a ``setup`` request: ``{"action": "add-stage", ...}`` with a known action."""
+    try:
+        data = json.loads(text)
+    except (TypeError, ValueError):
+        data = None
+    if not isinstance(data, dict) or data.get("action") not in SETUP_ACTIONS:
+        raise InboxError("a setup request needs text like {\"action\": \"add-stage\", ...} with action one of "
+                         + ", ".join(SETUP_ACTIONS))
+    return {str(k): v for k, v in data.items() if isinstance(v, (str, int, float, bool, list)) or v is None}
+
+
+def setup_summary(setup: dict) -> str:
+    """One line for a setup request: ``add-stage ci/lint: make lint``."""
+    where = "/".join(str(setup[k]) for k in ("pipeline", "name", "id") if setup.get(k))
+    detail = setup.get("run") or setup.get("match") or setup.get("regex") or setup.get("message") or ""
+    return " ".join(f"{setup.get('action')} {where}: {detail}".split()).rstrip(": ")
 
 
 def find_request(home: Path, request_id: str) -> dict | None:
@@ -126,6 +150,11 @@ def requests(home: Path) -> list[dict]:
                         "step": str(row.get("step") if row.get("step") is not None else ""),
                         "text": str(row.get("text") or ""), "from": row.get("from") or "owner",
                         "status": "open", "answers": [], "steward_pending": True}
+            if kind == "setup":
+                try:
+                    out[rid]["setup"] = parse_setup(out[rid]["text"])
+                except InboxError:
+                    del out[rid]
         elif rid in out and kind == "answer":
             answer = {"at": row.get("at"), "by": row.get("by") or "steward",
                       "text": str(row.get("text") or ""), "auto": bool(row.get("auto")),
