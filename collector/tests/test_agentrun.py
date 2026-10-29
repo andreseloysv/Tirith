@@ -66,6 +66,14 @@ def test_codex_and_copilot_presets() -> None:
     assert cmd[cmd.index("--reasoning-effort") + 1] == "high"
 
 
+def test_copilot_loses_the_token_variables_others_keep_them() -> None:
+    cfg = _config(copilot={"command": "agent-p"}, codex={"command": "agent-c"})
+    env = {"PATH": "/bin", "GITHUB_TOKEN": "x", "GH_TOKEN": "y"}
+    assert agentrun.child_env(cfg, "copilot", None, env) == {"PATH": "/bin"}
+    assert agentrun.child_env(cfg, "codex", None, env) == env
+    assert agentrun.child_env(cfg, None, None, env) == env
+
+
 VARIADIC = {"--allowedTools", "--allow-tool", "--add-dir"}
 
 
