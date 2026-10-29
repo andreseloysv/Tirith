@@ -94,7 +94,8 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] `PreToolUse` bloquea etapas crudas (o las reescribe a `tirith run`).
 - [x] `lane run` exige brief y se niega a arrancar si `tirith check` falla.
 - [x] Git `pre-commit` / `pre-push` con `tirith check` (nueva versión de la guarda).
-- [ ] Reinstalar la guarda nueva en cada repo (dueño).
+- [x] Reinstalar la guarda nueva en Tirith.
+- [ ] Reinstalar la guarda nueva en ChromaSol y RelaGame.
 - [x] Workflow de CI con tests y `tirith check --ci`.
 - [ ] Hacerlo obligatorio con protección de rama (dueño; en repos privados requiere GitHub Pro).
 - [x] El collector registra cada violación bloqueada (`state.violations`) y la pone en "esperando por ti".
