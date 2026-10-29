@@ -173,5 +173,6 @@ and a real click-to-launch (they change the owner's Launch Services and start an
 
 `test_handler_command_runs_url_open_end_to_end` takes the shell command from the handler's AppleScript, appends the
 quoted link (with its `&` separators) and runs it through `/bin/sh` with `TIRITH_HOME`, as `do shell script` does. A
-wrong-token link exits 3 and records the `launch-token` violation; nothing is launched. What stays manual: after
+wrong-token link exits 3 and records the `launch-token` violation; nothing is launched. A right-token link for a done step
+(`test_handler_command_with_right_token_reaches_launch`) gets past the token check into `tirith launch`, which refuses the step. What stays manual: after
 `tirith url install`, open the Plan in the browser, click "Start an agent now" and confirm `lane <id>` appears in the step.
