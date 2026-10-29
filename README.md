@@ -1,6 +1,29 @@
+<div align="center">
+
 # Tirith
 
 **An autonomous manager for your coding agents. They finish the plan; you see everything and decide only what only you can.**
+
+[![CI](https://github.com/andreseloysv/Tirith/actions/workflows/tirith.yml/badge.svg)](https://github.com/andreseloysv/Tirith/actions/workflows/tirith.yml)
+![Platform: macOS](https://img.shields.io/badge/platform-macOS-lightgrey?logo=apple)
+![Built for the Meta Global AI Developer Hackathon](https://img.shields.io/badge/built%20for-Meta%20AI%20Hackathon-0467DF?logo=meta&logoColor=white)
+[![GitHub stars](https://img.shields.io/github/stars/andreseloysv/Tirith?style=social)](https://github.com/andreseloysv/Tirith)
+
+[**Landing page**](https://andreseloysv.github.io/Tirith/) · [Submission](docs/SUBMISSION.md) · [Contributing](CONTRIBUTING.md)
+
+![The manager works live in the chat, in CLI style](web/screenshots/one-manager.png)
+
+⭐ **If Tirith helps you, please star the repo.** It is the best way to say it is useful.
+
+</div>
+
+## Quick start
+
+```bash
+git clone https://github.com/andreseloysv/Tirith && cd Tirith && ./run --demo
+```
+
+No agents or keys needed: it opens the page on demo data. Requires [uv](https://docs.astral.sh/uv/) and a browser.
 
 - **Problem.** You run several coding agents at once. You ask "what is everyone doing?" all day, you
   re-explain the rules, and the agents ask you things they could settle themselves.
@@ -8,8 +31,6 @@
   passes and answers questions in a chat. Rules are code that blocks, not text the agent may ignore.
 - **Result.** You open the app, see what runs and what is done, and are asked only what needs you: a password,
   a payment, a choice that is yours.
-
-![The manager works live in the chat, in CLI style](web/screenshots/one-manager.png)
 
 Built for the Meta Global AI Developer Hackathon (track: Build for Your World).
 **Everything in this repository was created during the hackathon, starting 2026-10-28.**
