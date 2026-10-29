@@ -2019,5 +2019,9 @@
       "blocked": "running the stage \"tests\" raw is not allowed",
       "instead": "tirith run --project tirith --stage tests"
     }
-  ]
+  ],
+  "launch": {
+    "token": "demo-launch-token-0123456789",
+    "available": true
+  }
 }

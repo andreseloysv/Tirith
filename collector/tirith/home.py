@@ -96,6 +96,7 @@ class Config:
     gates_enabled: bool = True  # [gates] enabled = false is the only off switch
     github_token_env: str | None = None  # [github] token_env: extra env var holding a token
     github_agent_logins: list[str] = field(default_factory=list)  # [github] agent_logins
+    launch_command: str | list[str] | None = None  # [launch] command template: {brief}, {workspace}
 
     def room(self, room_id: str) -> RoomConfig | None:
         for room in self.rooms:
@@ -185,6 +186,9 @@ def load_config(home: Path) -> Config:
         cfg.github_token_env = str(github["token_env"])
     if isinstance(github.get("agent_logins"), list):
         cfg.github_agent_logins = [str(l) for l in github["agent_logins"] if str(l).strip()]
+    launch = raw.get("launch") if isinstance(raw.get("launch"), dict) else {}
+    if isinstance(launch.get("command"), (str, list)) and launch["command"]:
+        cfg.launch_command = launch["command"]
     rooms_raw = raw.get("rooms")
     if isinstance(rooms_raw, list):
         for item in rooms_raw:

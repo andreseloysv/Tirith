@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from tirith.collector import (
-    Collector, collect_tree, git_head, git_shortstat, heuristic_architecture,
+    Collector, collect_tree, git_head, git_shortstat, heuristic_architecture, lane_status,
 )
 from tirith.guardwrap import default_words, guard_upgrade_steps, install_guard, verify_guard
 from tirith import agentrun as agentrun_mod
@@ -27,11 +27,13 @@ from tirith import flows as flows_mod
 from tirith import gates as gates_mod
 from tirith import manifest as manifest_mod
 from tirith import hooks as hooks_mod
+from tirith import launch as launch_mod
 from tirith import projects as projects_mod
 from tirith import rooms as rooms_mod
 from tirith.home import ensure_home, load_config, now_iso, parse_iso, tirith_home
 from tirith.store import (
-    append_jsonl, final_answer, lane_path, read_json, read_jsonl, write_json_atomic, write_lane,
+    append_jsonl, final_answer, lane_path, read_json, read_jsonl, read_lanes, write_json_atomic,
+    write_lane,
 )
 
 
@@ -816,6 +818,104 @@ def _cmd_check(args) -> int:
     return 1 if problems else 0
 
 
+def launch_step(home: Path, project_id: str, step_id: str, agent: str | None = None,
+                dry_run: bool = False, out=None) -> str:
+    """Start a sub-agent lane for one open roadmap step; returns the lane id.
+
+    Raises ``launch_mod.LaunchError`` with the reason when it must not start.
+    """
+    out = out or sys.stdout
+    config, proj = _project_or_exit(home, project_id)
+    repo = projects_mod.real(proj.repo) if proj.repo else None
+    if repo is None:
+        raise launch_mod.LaunchError(f"project '{project_id}' has no repo folder")
+    step, intro = launch_mod.find_step(repo, step_id)
+    title = step["title"]
+    open_items = [i["text"] for i in step["items"] if not i["done"]]
+    if not open_items:
+        raise launch_mod.LaunchError(f"step {step['id']} ({title}) is already done" if step["items"]
+                                     else f"step {step['id']} ({title}) has no items to finish")
+    busy = launch_mod.working_lane(read_lanes(home), project_id, step["id"], lane_status)
+    if busy:
+        raise launch_mod.LaunchError(f"step {step['id']} already has a working lane: {busy['id']}")
+    failed = manifest_mod.check(repo, config.words_for(proj, default_words()))
+    if failed:
+        raise launch_mod.LaunchError(
+            f"tirith check fails for '{project_id}', so no lane may start. Fix these, then run "
+            f"`tirith check --project {project_id}`:\n" + "\n".join(f"  {p}" for p in failed))
+    lane_id = launch_mod.lane_id_for(title, {str(l["id"]) for l in read_lanes(home)}, repo)
+    brief_path = home / "briefs" / f"{lane_id}.md"
+    brief = launch_mod.build_brief(title, intro, open_items, step["id"])
+    workspace = launch_mod.worktree_path(repo, lane_id)
+    command = launch_mod.agent_command(config, agent, brief_path, workspace)
+    argv = launch_mod.lane_run_argv(project_id, step["id"], launch_mod.pick_class(title), title,
+                                    brief_path, workspace, lane_id, command)
+    if dry_run:
+        print(f"lane {lane_id} (dry run)\nworktree: {workspace} (branch lane/{lane_id})\n"
+              f"brief: {brief_path}\ncommand: {' '.join(argv)}\n\n{brief}", file=out)
+        return lane_id
+    launch_mod.create_worktree(repo, lane_id)
+    brief_path.parent.mkdir(parents=True, exist_ok=True)
+    brief_path.write_text(brief, encoding="utf-8")
+    launch_mod.spawn_detached(argv, home, home / "logs" / f"{lane_id}.launch.log")
+    print(f"lane {lane_id}", file=out)
+    return lane_id
+
+
+def _cmd_launch(args) -> int:
+    home = _home(args)
+    try:
+        launch_step(home, args.project, str(args.step), args.agent, args.dry_run)
+    except launch_mod.LaunchError as error:
+        print(f"tirith launch: {error}", file=sys.stderr)
+        return 3
+    return 0
+
+
+def _cmd_url_open(args) -> int:
+    home = _home(args)
+    try:
+        link = launch_mod.parse_url(args.url)
+        if link["action"] != "launch":
+            raise launch_mod.LaunchError(f"unknown action '{link['action']}' in {args.url!r}")
+        if not launch_mod.token_ok(home, link["token"]):
+            gates_mod.record_violation(
+                home, gates_mod.Violation(
+                    "launch-token", "a tirith:// launch link had a wrong or missing token",
+                    "open the link from your own Tirith page; it carries the token of "
+                    + str(home / launch_mod.LAUNCH_FILE)),
+                ts=now_iso(), agent=None, lane=None, session=None,
+                project=link["project"] or None, tool=None, cwd=None)
+            raise launch_mod.LaunchError("refusing: wrong or missing token")
+        launch_step(home, link["project"], link["step"], link["agent"])
+    except launch_mod.LaunchError as error:
+        print(f"tirith url open: {error}", file=sys.stderr)
+        return 3
+    return 0
+
+
+def _cmd_url(args) -> int:
+    action = args.url_command
+    base = Path(args.apps_dir).expanduser() if args.apps_dir else None
+    try:
+        if action == "install":
+            app = launch_mod.install_handler(base, home_env=os.environ.get("TIRITH_HOME"))
+            print(f"installed {app}")
+        elif action == "uninstall":
+            print("removed" if launch_mod.uninstall_handler(base) else "was not installed")
+        else:
+            problems = launch_mod.verify_handler(base)
+            for problem in problems:
+                print(problem)
+            if not problems:
+                print(f"{launch_mod.app_path(base)}: handler OK")
+            return 1 if problems else 0
+    except launch_mod.LaunchError as error:
+        print(f"tirith url {action}: {error}", file=sys.stderr)
+        return 3
+    return 0
+
+
 def _transport(args):
     """The room transport; tests replace this to avoid the network."""
     return rooms_mod.HttpTransport()
@@ -1167,6 +1267,26 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument("--ci", action="store_true",
                        help="running in CI, not a local clone with hooks: skip the commit-guard rule")
     check.set_defaults(func=_cmd_check)
+
+    launch = sub.add_parser("launch", parents=[common],
+                            help="start a sub-agent to finish one open step of the plan")
+    launch.add_argument("--project", required=True)
+    launch.add_argument("--step", required=True, help="roadmap step number")
+    launch.add_argument("--agent", default=None, help="agent alias (its [agents.<alias>] launch template)")
+    launch.add_argument("--dry-run", action="store_true", help="print the brief and command, start nothing")
+    launch.set_defaults(func=_cmd_launch)
+
+    url = sub.add_parser("url", parents=[common], help="the tirith:// link handler (macOS)")
+    url_sub = url.add_subparsers(dest="url_command", required=True)
+    for name, text in (("install", "build and register the handler app"),
+                       ("uninstall", "remove the handler app"),
+                       ("verify", "check the handler app")):
+        url_cmd = url_sub.add_parser(name, parents=[common], help=text)
+        url_cmd.add_argument("--apps-dir", default=None, help="folder for the app (default ~/Applications)")
+        url_cmd.set_defaults(func=_cmd_url)
+    url_open = url_sub.add_parser("open", parents=[common], help="handle one tirith:// link")
+    url_open.add_argument("url")
+    url_open.set_defaults(func=_cmd_url_open)
     return parser
 
 
