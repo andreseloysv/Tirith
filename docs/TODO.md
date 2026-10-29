@@ -258,6 +258,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Bucle «sigue hasta terminar» por código: si al acabar falta informe, verificación, tests o rama lista, Tirith reanuda la misma sesión con la lista de lo que falta (hasta 3 veces) y solo después avisa al manager.
 - [ ] Cola única de fusión: los agentes no tocan main; Tirith fusiona de uno en uno (trae main, suite completa, fusiona, empuja) y un conflicto vuelve al mismo agente.
 - [ ] Elementos pequeños con su comprobación: el manager parte cada pedido en elementos de ~30 min con un comando de «hecho»; Tirith rechaza elementos enormes.
+- [ ] Integrar en main todo el trabajo terminado y sin fusionar de las lanes (lista del 2026-10-29) y descartar con motivo lo reemplazado.
 
 ## 15. Collector y CLI en Rust
 
