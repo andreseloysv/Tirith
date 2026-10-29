@@ -25,6 +25,7 @@ from tirith import flows as flows_mod
 from tirith import manifest as manifest_mod
 from tirith import roadmap as roadmap_mod
 from tirith import hooks as hooks_mod
+from tirith import launch as launch_mod
 from tirith.logview import entries_from_events, log_entries
 from tirith import projects as projects_mod
 from tirith.rooms import RoomsService
@@ -775,6 +776,8 @@ class Collector:
             "sessions": sessions,
             "loose_events": loose_events,
             "violations": violations,
+            "launch": {"token": launch_mod.launch_token(self.home),
+                       "available": launch_mod.handler_installed()},
         }
 
     @staticmethod
