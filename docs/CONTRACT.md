@@ -1,12 +1,10 @@
 # Tirith data contract (v1)
 
-Tirith has two halves that only meet through files in `~/.tirith/` (overridable with `TIRITH_HOME`):
+Tirith's collector and its readers (the web page, the app) only meet through files in `~/.tirith/` (overridable with `TIRITH_HOME`):
 
 - **`tirith` CLI + collector** (`collector/`, Python 3.12 via uv): the orchestrator, agents and
   pipelines write small events; the collector merges them with live facts (processes, logs, git) and
   the Muse "brain", and writes `state.json` atomically (write temp + rename) every 2 s.
-- **The world** (`world/`, Godot 4.7): reads `state.json` (polling its mtime every second), never
-  writes. It must run against `fixtures/state.example.json` with no collector at all.
 
 Naming: the orchestrator is the **manager**. "steward" is its old name and is still accepted in data
 and flags (`--by steward`, `--role steward`, `TIRITH_ROLE=steward`, `tirith steward ...`, `[steward]` in
