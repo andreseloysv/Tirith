@@ -21,12 +21,22 @@
   /* The card beside the drawer already shows what it shows: a working card has the feature, a
      2-3 line goal, the "now doing" line, the clock and the totals; the other cards only the feature
      and the clock. The drawer adds the rest and never repeats those. */
+  var RV = { running: 'Testing…', merged: 'Merged', 'tests-failed': 'Tests failed', 'merge-failed': 'Merge failed', ready: 'Tests passed, not merged', dropped: 'Dropped' };
+  /* the review result of a finished launched lane (pending = not started yet, nothing to show) */
+  function reviewNote(a) {
+    var r = a.review; if (!r || !RV[r.status]) return '';
+    return '<p class="rvnote ' + (r.status === 'merged' ? 'ok' : r.status === 'running' || r.status === 'ready' ? '' : 'bad') + '"><b>Review</b> · ' + esc(RV[r.status]) +
+      (r.at && r.status !== 'running' ? ' · ' + esc(T.clockTime(r.at)) : '') +
+      (r.files != null ? ' <span class="mut">· ' + esc(r.files) + ' files' + (r.passed != null ? ', ' + esc(r.passed) + ' tests passed' : '') + '</span>' : '') +
+      (r.run ? ' · <button class="link" data-act="gorun" data-key="' + esc(r.run) + '">test run</button>' : '') +
+      (r.message && (r.status === 'tests-failed' || r.status === 'merge-failed') ? '<pre class="rvout">' + esc(r.message) + '</pre>' : '') + '</p>';
+  }
   function detail(a, onCard) {
     var working = onCard && a.status === 'working';
     var ch = working || (a.files && a.files.length) ? '' : T.agentFiles(a);
     var goal = working ? T.cardGoal(a).clamped : !!a.goal && a.goal !== a.feature;
     var stop = T.stopBtn ? T.stopBtn(a, 'row') : '';
-    return (stop ? '<div class="stoprow">' + stop + '</div>' : '') + T.ghLink(a) + T.activity(a, { goal: goal, clock: false, sum: !working }) + (ch ? '<p class="mut files">' + ch + '</p>' : '');
+    return (stop ? '<div class="stoprow">' + stop + '</div>' : '') + reviewNote(a) + T.ghLink(a) + T.activity(a, { goal: goal, clock: false, sum: !working }) + (ch ? '<p class="mut files">' + ch + '</p>' : '');
   }
   /* the drawer's header says the same thing as the card's title: the feature, under the agent */
   function drawerHead(a) {

@@ -712,3 +712,12 @@ button.pc22.sel { box-shadow: 0 0 0 2px #fff, 0 0 0 4px rgba(47,111,237,.55); }
 .stopgo:hover { filter: brightness(1.08); }
 .stoppop .alink { cursor: pointer; }
 .stoperr { display: block; margin-top: 6px; }
+/* automatic review of a step's lane: one line under the step row */
+.prv { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 8px 30px; font-size: 12.5px; color: var(--fg); }
+.prv.ok b { color: #1f7a3c; } .prv.bad { color: #b42318; } .prv.live { color: var(--blue); }
+.prv .pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--blue); }
+.prv .link { padding: 0; font: inherit; color: inherit; background: none; border: 0; cursor: pointer; text-decoration: underline dotted; }
+.prv .link:disabled { cursor: default; text-decoration: none; }
+.prv .rvout { flex-basis: 100%; }
+.rvnote { margin: 0 0 8px; font-size: 12.5px; } .rvnote.ok b { color: #1f7a3c; } .rvnote.bad { color: #b42318; }
+.rvnote .link { padding: 0; font: inherit; color: var(--blue); background: none; border: 0; cursor: pointer; text-decoration: underline dotted; }

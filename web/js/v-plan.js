@@ -82,20 +82,37 @@
     var L = state.launch, a = reviewLane(s, p, state);
     if (!L || !L.token || !a) return '';
     var r = a.review, key = 'review|' + a.id, t = ui.launching[key];
-    var busy = r.status === 'running' || (t && T.now() - t < LAUNCH_WAIT && r.status === 'pending');
+    if (r.status !== 'pending' && r.status !== 'ready') return '<span class="plw pbody"></span>';
+    var busy = t && T.now() - t < LAUNCH_WAIT && r.status === 'pending';
     if (t && r.status !== 'pending') delete ui.launching[key];
     var h = '<span class="plw pbody">';
-    if (r.status === 'merged') return h + '<span class="rvchip ok">Merged</span></span>';
     h += '<button class="plaunch long' + (busy ? ' busy' : '') + '" data-act="review" data-key="' + esc(a.id) + '"' + (busy ? ' disabled' : '') +
       ' title="Run the tests, then merge the work of ' + esc(a.name) + ' into the project branch">' + ROCKET +
-      '<span>' + (busy ? 'Testing…' : r.status === 'pending' ? 'Review and merge' : 'Review and merge again') + '</span></button>';
+      '<span>' + (busy ? 'Testing…' : r.status === 'pending' ? 'Review and merge' : 'Merge') + '</span></button>';
     if (ui.launchHint === key && !L.available) {
       h += '<span class="pltip" role="tooltip">Tirith needs its link handler once. Run in a terminal:<code>' + INSTALL + '</code>then click again.</span>';
     }
-    if (!busy && r.status === 'tests-failed') h += '<span class="rvchip bad">Tests failed</span>';
-    if (!busy && r.status === 'merge-failed') h += '<span class="rvchip bad">Merge failed</span>';
-    if (!busy && r.message && (r.status === 'tests-failed' || r.status === 'merge-failed')) h += '<pre class="rvout">' + esc(r.message) + '</pre>';
     return h + '</span>';
+  }
+  /* What the automatic review of the step's lane is doing; always visible under the step row. */
+  function reviewLine(s, p, state) {
+    var a = reviewLane(s, p, state), r = a && a.review;
+    if (!r || r.status === 'pending' || r.status === 'ready') return '';
+    var who = '<b>' + esc(a.name) + '</b>', tone = r.status === 'merged' || r.status === 'dropped' ? 'ok' : r.status === 'running' ? 'live' : 'bad';
+    var h = '<div class="prv ' + tone + '">';
+    if (r.status === 'running') {
+      h += '<i class="pulse"></i><button class="link" data-act="gorun" data-key="' + esc(r.run || '') + '"' + (r.run ? '' : ' disabled') + ' title="Open the test run">Testing ' + who + '…</button>';
+    } else if (r.status === 'merged') {
+      h += 'Merged ' + who + ' · ' + esc(T.clockTime(r.at)) + (r.files != null ? ' <span class="mut">· ' + esc(r.files) + ' files' + (r.passed != null ? ', ' + esc(r.passed) + ' tests passed' : '') + '</span>' : '');
+    } else if (r.status === 'dropped') {
+      h += 'Dropped ' + who + ' · ' + esc(T.clockTime(r.at));
+    } else {
+      h += (r.status === 'tests-failed' ? 'Tests failed for ' : 'Merge failed for ') + who +
+        (r.run ? ' · <button class="link" data-act="gorun" data-key="' + esc(r.run) + '" title="Open the test run">see the run</button>' : '') +
+        ' <span class="mut">· retry, fix or drop it under Your turn</span>';
+      if (r.message) h += '<pre class="rvout">' + esc(r.message) + '</pre>';
+    }
+    return h + '</div>';
   }
 
   /* ---------- the owner's inbox: "Finish it", "Ask", the chip and the answers ---------- */
@@ -217,7 +234,7 @@
       '<span class="pico' + (live ? ' pulse' : '') + '">' + (IC[s.status] || IC.todo) + '</span>' +
       '<span class="ptit"><span class="pn">' + esc(s.id) + '.</span> ' + plain(s.title) + '</span>' +
       (s.total ? bar(s.done, s.total, 'pbar') + '<span class="pcnt">' + s.done + '/' + s.total + '</span>' : '<span class="pbar"></span><span class="pcnt">–</span>') +
-      '</button><span class="pavas">' + ava + '</span>' + inboxBtns(key) + '</div>' + inboxBelow(s, p, state, key);
+      '</button><span class="pavas">' + ava + '</span>' + inboxBtns(key) + '</div>' + reviewLine(s, p, state) + inboxBelow(s, p, state, key);
     if (open) {
       h += '<ul class="pitems">' + (s.items.length ? s.items.map(function (i) {
         return '<li class="' + (i.done ? 'ok' : '') + '"><span class="pi">' + (i.done ? OK : OPEN) + '</span><span>' + rich(i.text) + '</span></li>';
