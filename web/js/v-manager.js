@@ -380,6 +380,18 @@
     el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
   }
 
+  /* the box grows with its text up to half the window, then scrolls inside; the message list keeps its bottom in view */
+  function fit(t) {
+    var log = document.getElementById('mc-log');
+    var atEnd = log && log.scrollHeight - log.scrollTop - log.clientHeight < 48;
+    t.style.height = 'auto';
+    var cap = Math.floor(window.innerHeight * 0.5), h = Math.min(t.scrollHeight, cap);
+    t.style.height = h + 'px';
+    t.style.overflowY = t.scrollHeight > cap ? 'auto' : 'hidden';
+    if (log && atEnd) log.scrollTop = log.scrollHeight;
+  }
+  window.addEventListener('resize', function () { var t = document.querySelector('textarea[data-act="mc-text"]'); if (t) fit(t); });
+
   /* ---------- the drawer and the header button ---------- */
   var view = document.getElementById('view'), btn = document.getElementById('mc-btn'), base = T.render;
   function inDrawer() { return T.filter.view !== 'overview'; }
@@ -395,6 +407,8 @@
     if (nl) nl.scrollTop = !keep || keep.bottom || ui.chatStick ? nl.scrollHeight : keep.top;
     ui.chatStick = false;
     T.keepRestore(kept);
+    var ta = document.querySelector('textarea[data-act="mc-text"]');
+    if (ta) { fit(ta); if (nl && (!keep || keep.bottom || ui.chatStick)) nl.scrollTop = nl.scrollHeight; }
     if (btn) {
       btn.hidden = !inDrawer();
       btn.classList.toggle('on', ui.chatOpen);
@@ -451,7 +465,7 @@
   });
   view.addEventListener('input', function (e) {
     var t = e.target, act = t.getAttribute && t.getAttribute('data-act');
-    if (act === 'mc-text') { ui.chatDraft = t.value; saveDraft(); t.rows = Math.max(1, Math.min(6, t.value.split('\n').length)); }
+    if (act === 'mc-text') { ui.chatDraft = t.value; saveDraft(); fit(t); }
   });
   view.addEventListener('change', function (e) {
     var t = e.target, act = t.getAttribute && t.getAttribute('data-act');
