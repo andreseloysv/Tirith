@@ -28,13 +28,19 @@
     t.turns = 0;  /* turns do not add up across agents in a way worth showing */
     return t;
   };
-  T.usageLine = function (u) {
+  /* "model · effort" an agent ran with: the usage record's model, else the one in its command */
+  T.ranText = function (a) {
+    var r = a && a.ran, m = (a && a.usage && a.usage.model) || (r && r.model), e = r && r.effort;
+    return [m, e ? e + ' effort' : ''].filter(Boolean).join(' · ');
+  };
+  T.usageLine = function (u, a) {
     if (!u) return '';
-    var p = [];
+    var p = [], ran = a && a.ran && a.ran.effort ? a.ran.effort + ' effort' : '';
     if (u.cost_usd != null) p.push('$' + u.cost_usd.toFixed(2));
     p.push(k(u.input_tokens) + ' in', k(u.output_tokens) + ' out');
     if (u.cache_tokens) p.push(k(u.cache_tokens) + ' cached');
-    if (u.model) p.push(u.model);
+    if (u.model) p.push(u.model + (ran ? ' · ' + ran : ''));
+    else if (ran) p.push(ran);
     if (u.turns) p.push(u.turns + (u.turns === 1 ? ' turn' : ' turns'));
     return p.join(' · ');
   };
@@ -51,7 +57,8 @@
     /* the report is the full answer; the one-line summary only shows when it says something else */
     var text = o.sum === false ? '' : a.report || (T.sameText(a.summary, a.report) ? '' : a.summary);
     h += '</div>';
-    if (a.usage) h += '<p class="mut sm usage" title="Tokens and cost from the lane log">' + esc(T.usageLine(a.usage)) + '</p>';
+    if (a.usage) h += '<p class="mut sm usage" title="Tokens and cost from the lane log; model and effort it ran with">' + esc(T.usageLine(a.usage, a)) + '</p>';
+    else if (T.ranText(a)) h += '<p class="mut sm usage" title="Model and effort it was started with">' + esc(T.ranText(a)) + '</p>';
     return h + (text ? '<div class="sum">' + T.mdBox(text, a.id + ':status') + '</div>' : '');
   }
   /* true when one text starts like (or sits inside) the other, ignoring markdown marks and spacing */

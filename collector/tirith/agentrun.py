@@ -15,6 +15,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from tirith import models as models_mod
 from tirith.home import Config
 
 # -- presets -----------------------------------------------------------------------------------
@@ -67,23 +68,31 @@ def agent_settings(config: Config, alias: str, project: str | None = None) -> di
 
 
 def build_command(config: Config, alias: str, project: str | None, prompt: str, *,
-                  model: str | None = None, effort: str | None = None) -> list[str]:
-    """The full headless command for ``alias``; raises SystemExit when it cannot be built."""
+                  model: str | None = None, effort: str | None = None,
+                  step: str | None = None) -> list[str]:
+    """The full headless command for ``alias``; raises SystemExit when it cannot be built.
+
+    Model and effort: the explicit arguments, then ``[models.workers]`` (with its project and step
+    overrides; an effort the alias has no flag for is only recorded), then ``[agents.<alias>]``."""
     s = agent_settings(config, alias, project)
     exe = s.get("command")
     if not exe:
         raise SystemExit(f"[agents.{alias}] has no command in config.toml")
     cmd = [str(exe)] + [str(a) for a in (s.get("args") or [])]
-    model = model or s.get("model")
+    chosen = models_mod.resolve_workers(config, project, step)
+    if not models_mod.applies_to(chosen, alias):
+        chosen = models_mod.Choice()
+    model = model or chosen.model or s.get("model")
     if model:
         if not s.get("model_flag"):
             raise SystemExit(f"agent '{alias}' has no model flag configured")
         cmd += [str(s["model_flag"]), str(model)]
-    effort = effort or s.get("effort")
-    if effort:
+    if effort or (not chosen.effort and s.get("effort")):  # asked for by hand or by the agent's table
         if not s.get("effort_flag"):
             raise SystemExit(f"agent '{alias}' has no effort flag configured")
-        cmd += [str(s["effort_flag"]), str(effort)]
+        cmd += [str(s["effort_flag"]), str(effort or s["effort"])]
+    elif chosen.effort and models_mod.effort_flag(alias, s):  # no flag: the effort is only recorded
+        cmd += [str(models_mod.effort_flag(alias, s)), str(chosen.effort)]
     perms = [str(p) for p in (s.get("permissions") or [])]
     if perms and s.get("permissions_flag"):
         sep = s.get("permissions_join")

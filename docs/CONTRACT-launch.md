@@ -56,6 +56,8 @@ launch = "muse run {brief}"                              # used with --agent mus
 
 `{brief}` and `{workspace}` are replaced by the brief file and the worktree. `--agent <alias>` uses that
 alias's `launch` template and falls back to `[launch] command`. Agents are named by alias only.
+When `[models.workers]` sets a model or effort (`docs/CONTRACT-models.md`), the model and effort flags of
+the command are replaced by the configured ones.
 
 ## The link handler (macOS)
 
@@ -120,7 +122,7 @@ merge or passing tests `files`, `branch` and `passed` (the count the test runner
 No finished lane is left unreviewed, by code. State in `<home>/dispatch.json` under `reviews` (per lane) and
 `overdue`.
 
-1. A launched lane that ended `done` (within the last 24 h) gets, once, a steward queue item
+1. A launched lane that ended `done` (within the last 24 h) gets, once, a manager queue item
    (`kind: "review"`) and a detached `tirith lane review <lane>` (`--tests-only` when `[review] auto_merge =
    false` in `config.toml`; default `true`). The tests are an ordinary pipeline run tagged with the lane.
 2. When the review has a result, the dispatcher settles it once per result:
@@ -138,7 +140,7 @@ No finished lane is left unreviewed, by code. State in `<home>/dispatch.json` un
 4. Deadline: a lane that ended more than 30 minutes ago with unmerged work in its worktree and no review result
    (never started, or the process died) is a `review-overdue` violation in `events.jsonl`, one macOS
    notification, and an owner item `review-overdue-<lane>` with Run actions "Review it now" / "Drop the lane".
-5. The steward `Stop` hook also blocks while review queue items older than 60 s are open (a review that is
+5. The manager `Stop` hook also blocks while review queue items older than 60 s are open (a review that is
    running right now does not count), listing `tirith lane review <lane>` and `tirith queue done <id>`; same
    limit of 3 blocks per set, then an `inbox-ignored` violation.
 
