@@ -349,7 +349,20 @@ def manager_context(home: Path, now: datetime) -> str:
     if results:
         text += ("\n" if text else "") + (f"Tirith inbox: {len(results)} action(s) the owner ran failed.\n"
                                           + inbox_mod.pending_results_text(results))
+    waiting = _agent_waiting(home)
+    if waiting:
+        text += ("\n" if text else "") + (
+            f"Tirith queue: {len(waiting)} working agent(s) look to be waiting on something (a guess from "
+            "their logs; the owner is not told). Check each, unblock the agent or ask the owner with "
+            "`tirith wait add ... --option ...` only if it needs their hand.\n"
+            + "\n".join(f"- {i['id']} ({i['project']}, lane {i['lane']}): {_short(i['text'], 300)}\n"
+                        f"    tirith queue done {i['id']}" for i in waiting))
     return text
+
+
+def _agent_waiting(home: Path) -> list[dict]:
+    from tirith import asks as asks_mod
+    return [i for i in asks_mod.queue_items(home, only_open=True) if i["kind"] == asks_mod.AGENT_WAITING_KIND]
 
 
 def _old_reviews(home: Path, now: datetime) -> list[dict]:

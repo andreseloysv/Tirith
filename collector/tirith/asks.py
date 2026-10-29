@@ -9,6 +9,7 @@ See ``docs/CONTRACT-inbox.md``.
 
 from __future__ import annotations
 
+import hashlib
 import re
 import secrets
 from pathlib import Path
@@ -25,6 +26,9 @@ QUEUE_TEXT_MAX = 1500
 QUEUE_STATE_ROWS = 50
 
 NO_CTA_KIND = "no-call-to-action"
+NOT_OWNER_KIND = "not-owner-item"  # an item with a call to action but a source the owner is not shown
+AGENT_WAITING_KIND = "agent-waiting"  # what the brain guesses a working agent waits on
+AUTO_CLOSED = "no longer waiting"
 # options of the owner items Tirith itself generates (violations, brain-detected waits, room waits)
 GOT_IT_OPTIONS = [{"label": "Let the manager handle it", "value": "manager"},
                   {"label": "Got it", "value": "ack"}]
@@ -70,6 +74,16 @@ def has_call_to_action(item: dict) -> bool:
     """The rule: an item for the owner carries at least one one-click option or one Run action."""
     return bool(clean_options(item.get("options"))) or any(
         isinstance(a, dict) and a.get("command") for a in item.get("actions") or [])
+
+
+# Sources the owner may be shown. Anything else a generator raises (a brain guess about a working
+# agent, a future source) goes to the manager's queue.
+OWNER_SOURCES = ("manual", "guard", "setup", "plan", "lane", "room")
+
+
+def is_owner_item(item: dict) -> bool:
+    """The one gate for owner items: a one-click option or Run action AND an allow-listed source."""
+    return has_call_to_action(item) and str(item.get("source") or "") in OWNER_SOURCES
 
 
 def default_kind(options, command) -> str:
@@ -118,6 +132,31 @@ def queue_add(home: Path, project: str, lane: str, text: str, kind: str = "revie
            "lane": lane, "text": text, "to": "manager", "status": "open"}
     append_jsonl(queue_path(home), row)
     return row
+
+
+def sync_agent_waiting(home: Path, found: list[dict], keep_lanes: set[str]) -> None:
+    """Manager queue items ``agent-waiting`` for what the brain thinks working agents wait on.
+
+    ``found``: ``{project, lane, text}`` rows. One open item per lane + text (the id is a hash of both).
+    An open item whose text is no longer in ``found`` is closed (``result: AUTO_CLOSED``), unless its lane
+    is in ``keep_lanes`` (the brain has not answered for it yet). A text the brain says again after it
+    was closed automatically opens a new item; one the manager closed stays closed."""
+    current = set()
+    for row in found:
+        text = " ".join(str(row["text"]).split())
+        base = "sq-aw-" + hashlib.sha1(f"{row['lane']}\n{text.lower()}".encode("utf-8")).hexdigest()[:10]
+        current.add(base)
+        same = [r for r in queue_items(home) if r["id"] == base or r["id"].startswith(base + "-")]
+        if any(r["status"] == "open" for r in same):
+            continue
+        if same and not all(r.get("result") == AUTO_CLOSED for r in same):
+            continue
+        queue_add(home, str(row["project"] or ""), str(row["lane"]), text, kind=AGENT_WAITING_KIND,
+                  item_id=base if not same else f"{base}-{len(same) + 1}")
+    for item in queue_items(home, only_open=True):
+        if item["kind"] == AGENT_WAITING_KIND and item["lane"] not in keep_lanes \
+                and not any(item["id"] == c or item["id"].startswith(c + "-") for c in current):
+            queue_done(home, item["id"], AUTO_CLOSED)
 
 
 def queue_done(home: Path, item_id: str, result: str | None = None) -> None:
