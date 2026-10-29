@@ -373,3 +373,63 @@ def test_header_working_never_exceeds_the_agents_list(home, repo) -> None:
     got = autopilot_mod.public(home, load_config(home), [], pilot.projects(), pilot.now)
     assert got["working"] == 0  # a lane inside the grace period with no agent row is not "working" on screen
     assert len(got["started"]) == 1
+
+
+# -- why a ready step is not started ------------------------------------------------------------
+
+
+def _skipped(pilot) -> dict:
+    got = autopilot_mod.public(pilot.home, load_config(pilot.home), pilot.agents, pilot.projects(), pilot.now)
+    return {s["step"]: s["why"] for s in got["skipped"]}
+
+
+def test_a_step_with_a_lane_not_yet_seen_is_skipped_and_not_queued(home, repo) -> None:
+    pilot = Pilot(home, repo, "[autopilot]\nmax_parallel = 1")
+    pilot.cycle()
+    pilot.agents.clear()  # inside the grace period the lane has no agent row yet: the step still reads ready
+    got = autopilot_mod.public(home, load_config(home), pilot.agents, pilot.projects(), pilot.now)
+    assert _skipped(pilot)["1"] == "an agent is already on it"
+    assert got["queued"] == 2  # steps 2 and 3 wait for a free slot: they are queued, not skipped
+
+
+def test_lanes_that_ended_unseen_do_not_hold_their_step(home, repo) -> None:
+    """The real state: unsettled lanes whose agent is gone from the list, long past the grace period."""
+    pilot = Pilot(home, repo)
+    pilot.cycle()
+    pilot.agents.clear()  # the Agents list no longer shows the three lanes
+    pilot.cycle(seconds=autopilot_mod.GRACE_S + 60)
+    assert pilot.launched == [("demo", "1"), ("demo", "2"), ("demo", "3")]
+    assert set(_skipped(pilot)) == {"1", "2", "3"}  # each ended without progress: paused, with the reason
+    assert "could not finish" in _skipped(pilot)["1"]
+    got = autopilot_mod.public(pilot.home, load_config(pilot.home), pilot.agents, pilot.projects(), pilot.now)
+    assert got["queued"] == 0
+
+
+def test_review_busy_steps_say_so(home, repo) -> None:
+    pilot = Pilot(home, repo)
+    pilot.agents.append({"id": "old", "project": "demo", "step": "1", "status": "done",
+                         "review": {"status": "tests-failed"}})
+    pilot.agents.append({"id": "old2", "project": "demo", "step": "2", "status": "done",
+                         "review": {"status": "pending"}})
+    pilot.cycle()
+    why = _skipped(pilot)
+    assert "waiting for you to review" in why["1"] and "being checked" in why["2"]
+    assert pilot.launched == [("demo", "3")]
+
+
+def test_a_refused_start_is_explained_calmly(home, repo) -> None:
+    from tirith import launch as launch_mod
+    pilot = Pilot(home, repo)
+
+    def refuse(home, project, step, request_id=None):
+        raise launch_mod.LaunchError("no agent command: add [launch] command")
+    pilot.launcher = refuse
+    pilot.cycle()
+    why = _skipped(pilot)
+    assert set(why) == {"1", "2", "3"}
+    assert all(w.startswith("the last start failed") and "trying again" in w for w in why.values())
+
+
+def test_a_step_with_only_owner_items_left_is_skipped() -> None:
+    step = {"id": "9", "status": "ready", "items": [{"text": "Decide", "done": False, "who": "owner"}]}
+    assert autopilot_mod._why_not(autopilot_mod._own({}), [], "demo", step, NOW) == "only the owner's items are left"
