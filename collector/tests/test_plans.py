@@ -11,6 +11,7 @@ import pytest
 
 from conftest import make_hooks_mutable, make_repo, write_config, write_lane_manifest
 from tirith import autoreview as autoreview_mod
+from tirith import asks as asks_mod
 from tirith import dispatch as dispatch_mod
 from tirith import inbox as inbox_mod
 from tirith import launch as launch_mod
@@ -211,9 +212,10 @@ def test_refused_plan_request_tells_the_owner(project, home: Path, monkeypatch) 
     state = collector.build_state(NOW)
     rows = _by_id(home)
     assert "tirith check fails" in rows[refresh]["answers"][0]["text"]
-    items = {w["id"]: w for w in state["waiting_on_you"]}
-    assert items[f"dispatch-{refresh}"]["options"][0]["command"] == "tirith inbox add --kind plan-refresh --project demo"
-    assert items[f"dispatch-{new}"]["options"][0].get("command") is None
+    assert not [w for w in state["waiting_on_you"] if w["id"].startswith("dispatch-")]  # the manager's to fix
+    queued = {q["id"]: q for q in asks_mod.queue_items(home, only_open=True)}
+    assert "Try again: tirith inbox add --kind plan-refresh --project demo" in queued[f"sq-dispatch-{refresh}"]["text"]
+    assert f"sq-dispatch-{new}" in queued
 
 
 def test_auto_launch_off_leaves_plan_requests_to_the_manager(project, home: Path, plan_launches) -> None:

@@ -34,8 +34,8 @@ def test_plain_message_is_a_say_row_in_the_state(home: Path, capsys) -> None:
 
 def test_message_with_options_or_actions_is_an_owner_item(home: Path, capsys) -> None:
     write_config(home, [{"id": "demo", "name": "Demo"}])
-    assert main(["chat", "say", "Ship it?", "--project", "demo", "--option", "Ship|ship"]) == 0
-    assert main(["chat", "say", "Run the check.", "--project", "demo", "--run", "make check", "--label", "Check"]) == 0
+    assert main(["chat", "say", "--why-owner", "owner-decision", "Ship it?", "--project", "demo", "--option", "Ship|ship"]) == 0
+    assert main(["chat", "say", "--why-owner", "owner-decision", "Run the check.", "--project", "demo", "--run", "make check", "--label", "Check"]) == 0
     waits = _manual(Collector(home, client=None).build_state(NOW))
     assert sorted(w["text"] for w in waits) == ["Run the check.", "Ship it?"]
     assert next(w for w in waits if w["text"] == "Ship it?")["options"] == [{"label": "Ship", "value": "ship"}]
@@ -45,7 +45,7 @@ def test_message_with_options_or_actions_is_an_owner_item(home: Path, capsys) ->
 
 def test_same_rules_as_wait_add(home: Path) -> None:
     write_config(home, [{"id": "demo", "name": "Demo"}])
-    assert main(["chat", "say", "Please run `rm -rf build` now", "--option", "Ok|ok"]) == 2
+    assert main(["chat", "say", "--why-owner", "owner-decision", "Please run `rm -rf build` now", "--option", "Ok|ok"]) == 2
     assert not (home / "waits.jsonl").exists() or read_jsonl(home / "waits.jsonl") == []
     with pytest.raises(SystemExit):
         main(["chat", "say", "   "])

@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from conftest import write_config
+from tirith import asks as asks_mod
 from tirith import cli
 from tirith import rooms as rooms_mod
 from tirith.collector import Collector
@@ -180,8 +181,10 @@ def test_state_links_participants_and_replies(home: Path) -> None:
     assert room["summary_source"] == "fallback" and "visitor-bot" in room["summary"]
     # No brain: the message naming the owner (and not answered by them) becomes a wait.
     assert [n["n"] for n in room["needs_owner"]] == [4]
-    wait = next(w for w in state["waiting_on_you"] if w["id"] == "room-talk-4")
-    assert wait["source"] == "room" and wait["link"] == room["url"] and wait["project"] == "demo"
+    # A guess that a message names the owner is not "only the owner can do it": it goes to the manager.
+    assert not [w for w in state["waiting_on_you"] if w["id"] == "room-talk-4"]
+    (queued,) = [q for q in asks_mod.queue_items(home, only_open=True) if q["id"] == "sq-cta-room-talk-4"]
+    assert queued["kind"] == asks_mod.NOT_OWNER_KIND and queued["project"] == "demo"
 
 
 def test_alias_to_a_lane_that_is_not_running(home: Path) -> None:
@@ -237,8 +240,8 @@ def test_brain_summary_and_owner_detection_are_cached(home: Path) -> None:
     assert room["summary_source"] == "muse" and "release build" in room["summary"]
     assert [n["n"] for n in room["needs_owner"]] == [4]       # unknown #99 dropped
     assert room["needs_owner"][0]["source"] == "brain"
-    wait = next(w for w in state["waiting_on_you"] if w["id"] == "room-talk-4")
-    assert wait["source"] == "room"
+    assert not [w for w in state["waiting_on_you"] if w["id"] == "room-talk-4"]
+    assert [q["id"] for q in asks_mod.queue_items(home, only_open=True)] == ["sq-cta-room-talk-4"]
     calls = len(brain.calls)
     collector.build_state(NOW)
     collector.worker.drain(10)
