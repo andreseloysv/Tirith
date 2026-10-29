@@ -64,9 +64,7 @@ fn user_home() -> PathBuf {
 
 /// `$TIRITH_HOME`, else `~/.tirith`.
 fn tirith_home() -> PathBuf {
-    std::env::var_os("TIRITH_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| user_home().join(".tirith"))
+    tirith_core::home::tirith_home(None)
 }
 
 fn config() -> toml::Table {
