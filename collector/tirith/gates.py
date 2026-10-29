@@ -53,6 +53,10 @@ DESCRIPTIONS: dict[str, str] = {
     "lane-brief": "Every lane starts with a written task, so the agent knows what to do.",
     "project-check": "No new lane starts while the project's setup has problems.",
     "commit-guard": "Commits are checked for banned words and failing tests before they are accepted.",
+    "workspace-write": "Agents may only write inside their own copy of the project and in temporary folders.",
+    "no-secrets": "Agents may never read passwords, keys or login files from your computer.",
+    "no-servers": "Agents may not start servers or open ports on your computer.",
+    "own-processes": "Agents may only stop the processes they started themselves.",
 }
 
 
@@ -478,8 +482,18 @@ def _roadmap_bash(segments: list[list[str]], line: str, files: list[Path], cwd) 
 
 
 def check_call(config: Config, tool: str | None, tool_input, cwd, project: str | None = None,
-               home: Path | None = None) -> list[Violation]:
-    """Every rule that blocks one ``PreToolUse`` call (``[]`` = allowed)."""
+               home: Path | None = None, lane: str | None = None, env=None) -> list[Violation]:
+    """Every rule that blocks one ``PreToolUse`` call (``[]`` = allowed). A call made by a ``lane`` is also
+    held to the lane rules of ``tirith.lanegates`` (write only in its copy, no secrets, no servers, own
+    processes only)."""
+    from tirith import lanegates
+    found = _base_rules(config, tool, tool_input, cwd, project, home)
+    data = tool_input if isinstance(tool_input, dict) else {}
+    return found + lanegates.check(config, tool or "", data, cwd, lane=lane, home=home, env=env)
+
+
+def _base_rules(config: Config, tool: str | None, tool_input, cwd, project: str | None = None,
+                home: Path | None = None) -> list[Violation]:
     data = tool_input if isinstance(tool_input, dict) else {}
     tool = tool or ""
     if tool in SUBAGENT_TOOLS:

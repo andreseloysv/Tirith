@@ -338,6 +338,17 @@
       take(ok.files.map(picOf), ok.bad);
     }, function (err) { ui.chatErr = 'Could not attach: ' + (err && err.message || err); T.render(); });
   }
+  /* the paperclip: the app's own file picker (Rust reads what was chosen); the page's file input is the fallback */
+  function pickFiles() {
+    ui.chatErr = null;
+    window.__TAURI__.core.invoke('attachment_pick').then(function (got) {
+      if (!got || !got.length) return;   /* cancelled */
+      var ok = admit(got);
+      take(ok.files.map(picOf), ok.bad);
+    }, function () {
+      var f = view.querySelector('[data-act="mc-file"]'); if (f) f.click();
+    });
+  }
   function newId() {
     var b = new Uint8Array(4);
     if (window.crypto && crypto.getRandomValues) crypto.getRandomValues(b); else for (var i = 0; i < 4; i++) b[i] = Math.random() * 256;
@@ -507,7 +518,7 @@
     else if (act === 'mc-copy') copyText(b.getAttribute('data-cid'));
     else if (act === 'mc-close') { ui.chatOpen = false; T.render(); }
     else if (act === 'mc-attach' && !hasTauri()) { ui.chatErr = NO_SAVE; T.render(); }
-    else if (act === 'mc-attach') { var f =view.querySelector('[data-act="mc-file"]'); if (f) f.click(); }
+    else if (act === 'mc-attach') pickFiles();
     else if (act === 'mc-unpic') { ui.chatPics.splice(+b.getAttribute('data-i'), 1); T.render(); }
     else if (act === 'mc-zoom') lightbox(b.getAttribute('data-src'));
     else if (act === 'mc-reply') {

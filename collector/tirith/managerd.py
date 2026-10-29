@@ -19,6 +19,7 @@ import json
 import os
 import signal
 import subprocess
+import sys
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -67,6 +68,10 @@ RULES = (
     "TODO, e.g. a review): `tirith plan add --project P --step N --text \"<item>\"`. Nobody edits `docs/TODO.md` "
     "by hand, not even you; Tirith writes it. An agent that ends without `tirith plan report` has its work "
     "thrown away.",
+    "Split every request into plan items of about 30 minutes, one deliverable each, before you launch anything: "
+    "`tirith plan add ... --text \"<item>\" --check \"<command that passes when it is done>\"`. Tirith refuses "
+    "items that are too big (\"split it\"); an item with a check is done only when the check passes "
+    "(`tirith plan check`).",
     "`tirith lane run` from here starts the lane detached, in its own worktree, and prints the lane id at "
     "once. Never run it as a background task of your own shell and do not wait for it: your turn ends when "
     "you have answered.",
@@ -758,8 +763,13 @@ def run_session(home: Path, config: Config, now: datetime, state: dict, lanes: l
             log = Path(home) / "logs" / f"{sess.lane_id}.launch.log"
             tail = log.read_text(encoding="utf-8", errors="replace").strip().splitlines()[-3:] if log.is_file() else []
             book["error"] = "the session exited at once: " + (" / ".join(tail)[-300:] or f"code {sess.exit_code}")
+            print(f"tirith: manager session {sess.lane_id}: {book['error']}; the one-shot manager answers meanwhile",
+                  file=sys.stderr, flush=True)
+        died_at_once = not sess.got_event
         _end_session(home, book, now)
         sess, changed = None, True
+        if died_at_once and not attached(home, now):  # the owner's message waits for no restart delay
+            changed = run_oneshot(home, config, now, state, lanes, spawn, kill) or changed
     if sess is not None:
         if sess.session_id and book.get("session_id") != sess.session_id:
             book["session_id"] = sess.session_id
