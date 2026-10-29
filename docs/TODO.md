@@ -131,7 +131,9 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Confirmar qué agentes existen en cada plataforma.
 - [ ] Móvil (para luego, fuera de este plan).
 - [ ] Empaquetado por plataforma (configuración y scripts de build).
-- [ ] Firmar la app con certificados de Apple y Windows (dueño: certificados de desarrollador).
+- [ ] Firmar la app de macOS con el Developer ID del dueño.
+- [ ] Notarizar la app de macOS (dueño: credenciales de App Store Connect).
+- [ ] Firmar la app de Windows (fuera de este plan: requiere certificado de firma de código).
 
 ## 10. Plan visible en el Overview
 
