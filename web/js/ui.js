@@ -158,8 +158,9 @@
       return '<button class="nav' + (f.view === v[0] ? ' on' : '') + '" data-nav="view" data-v="' + v[0] + '">' + T.lineIcon(T.ICON[v[0]], 16, 'currentColor', 1.7) + '<span>' + v[1] + '</span></button>';
     }).join('');
     var prj = r.projects || [];
+    h += '<div class="grp grp-add"><span>Projects</span><button type="button" class="grp-plus" data-addp="1" aria-label="Add project" title="Add project">+</button></div>';
     if (prj.length) {
-      h += '<div class="grp">Projects</div>' + prj.map(function (p) {
+      h += prj.map(function (p) {
         var n = (r.pipelines || []).filter(function (x) { return x.project === p.id && x.status === 'running'; }).length +
                 (r.agents || []).filter(function (x) { return x.project === p.id && x.status === 'working'; }).length;
         return '<button class="nav' + ((f.project || (f.view === 'overview' ? T.effProject(r) : '')) === p.id ? ' on' : '') + '" data-nav="project" data-v="' + esc(p.id) + '"><i class="pdot" style="background:' + esc(p.color || '#9ca3af') + '"></i><span>' + esc(p.name) + '</span>' + (n ? '<em>' + n + '</em>' : '') + '</button>';
