@@ -161,6 +161,7 @@
           "id": {"type": "string"},
           "at": {"type": ["string", "null"]},
           "kind": {"enum": ["finish", "ask", "setup", "chat", "autopilot", "plan-refresh", "plan-new"]},
+          "cid": {"type": "string", "description": "Client id of the page that sent it; the page matches its Sending… message by it."},
           "manager_pending": {"type": "boolean"},
           "steward_pending": {"type": "boolean", "description": "Old key for manager_pending, same value."},
           "project": {"type": "string"},

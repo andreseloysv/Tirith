@@ -8,7 +8,7 @@
   ui.chatOpen = !!ui.chatOpen;       /* the drawer (other views) */
   ui.chatDraft = ui.chatDraft || ''; /* text typed so far */
   ui.chatProj = ui.chatProj == null ? null : ui.chatProj; /* project chip: null follows the sidebar filter */
-  ui.chatOut = ui.chatOut || [];     /* sent from here, not yet in the state: {text, project, at} */
+  ui.chatOut = ui.chatOut || [];     /* sent from here, not yet in the state: {cid, id, text, project, at, state: "sending"|"failed", err, pics} */
   ui.chatCli = ui.chatCli || null;   /* CLI line to copy (no way to send from here) */
   ui.chatErr = ui.chatErr || null;   /* why the send failed */
   ui.chatPics = ui.chatPics || [];   /* images waiting in the composer: {name, type, size, url, w, h, b64} */
@@ -16,7 +16,31 @@
   ui.chatReplyTo = ui.chatReplyTo || null; /* id of the owner item the composer answers */
   ui.chatJump = ui.chatJump || 0;    /* index of the last item "Jump to next" went to */
   ui.chatStick = true;               /* scroll to the newest message after the next render */
-  var lastState = null, OUT_MAX = 30000, PENDING_MAX = 6 * 3600 * 1000, KINDS = { chat: 1, ask: 1, finish: 1 };
+  var lastState = null, SEND_WAIT = 10000, PENDING_MAX = 6 * 3600 * 1000, KINDS = { chat: 1, ask: 1, finish: 1 };
+
+  /* drafts and unconfirmed sends survive a refresh: localStorage, keyed by project, never trusted to work */
+  var DRAFT_KEY = 'tirith.chat.draft.', UNSENT_KEY = 'tirith.chat.unsent';
+  function store(op, key, val) {
+    try {
+      var ls = window.localStorage;
+      if (op === 'get') return ls.getItem(key);
+      if (val === '' || val == null) ls.removeItem(key); else ls.setItem(key, val);
+    } catch (e) { /* private window or blocked storage: the draft just does not survive */ }
+    return null;
+  }
+  function curProject() { return ui.chatProj != null ? ui.chatProj : (T.filter.project || ''); }
+  function saveDraft() { store('set', DRAFT_KEY + ui.chatDraftProj, ui.chatDraft); }
+  function saveUnsent() {
+    store('set', UNSENT_KEY, ui.chatOut.length ? JSON.stringify(ui.chatOut.map(function (o) { return { cid: o.cid, id: o.id, text: o.text, project: o.project, at: o.at }; })) : '');
+  }
+  /* the project of the composer changed (chip or sidebar): park its draft and bring the other one */
+  function syncDraftProject() {
+    var p = curProject();
+    if (ui.chatDraftProj === p) return;
+    if (ui.chatDraftProj != null) saveDraft();
+    ui.chatDraftProj = p;
+    ui.chatDraft = store('get', DRAFT_KEY + p) || '';
+  }
 
   var SEND = '<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M8 13V3.2M3.8 7.2L8 3l4.2 4.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   var BUBBLE = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3 3h10a1 1 0 011 1v6a1 1 0 01-1 1H7.5L4.6 13.6V11H3a1 1 0 01-1-1V4a1 1 0 011-1z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>';
@@ -59,12 +83,19 @@
       out.push({ side: 'mgr', text: w.text, at: w.since, ctx: ctx, project: w.project, item: it, open: !it.done });
       if (it.done) out.push({ side: 'me', text: T.turnAnswer(it.answer), at: it.answer.at || w.since, ctx: 'You', project: w.project, req: w.id });
     });
-    var now = T.now();
+    var before = ui.chatOut.length;
     ui.chatOut = ui.chatOut.filter(function (o) {
-      return now - o.at < OUT_MAX && !rows.some(function (r) { return r.kind === 'chat' && r.text === o.text && (r.attachments || []).length === (o.pics || []).length && (T.ms(r.at) || 0) >= o.at - 2000; });
+      var seen = rows.some(function (r) { return r.cid === o.cid; });
+      if (seen) {
+        clearTimeout(o.timer);
+        if (o.restored && ui.chatDraft === o.text) { ui.chatDraft = ''; saveDraft(); }  /* it arrived after all */
+      }
+      return !seen;
     });
+    if (ui.chatOut.length !== before) saveUnsent();
     ui.chatOut.forEach(function (o) {
-      out.push({ side: 'me', text: o.text, at: new Date(o.at).toISOString(), ctx: o.project ? T.proj(o.project) : '', local: true, pics: o.pics });
+      var saved = (o.pics || []).map(function (p) { return p.saved; }).filter(Boolean);
+      out.push({ side: 'me', text: o.text, at: new Date(o.at).toISOString(), ctx: o.project ? T.proj(o.project) : '', local: o.state, cid: o.cid, err: o.err, pics: saved });
     });
     out.sort(function (a, b) { return (T.ms(a.at) || 0) - (T.ms(b.at) || 0); });
     var rest = out.filter(function (m) { return !m.open; }).slice(-80);   /* an item that waits for the owner is never cut off */
@@ -73,7 +104,7 @@
   /* ISO time of the oldest message the manager still owes an answer to, or null */
   function waitingSince(state) {
     var ats = (state.inbox || []).filter(pending).map(function (r) { return r.at; });
-    ui.chatOut.forEach(function (o) { ats.push(new Date(o.at).toISOString()); });
+    ui.chatOut.forEach(function (o) { if (o.state === 'sending') ats.push(new Date(o.at).toISOString()); });
     ats.sort(function (a, b) { return (T.ms(a) || 0) - (T.ms(b) || 0); });
     return ats[0] || null;
   }
@@ -89,10 +120,14 @@
   function msg(m, state) {
     if (m.item) return turnMsg(m, state);
     var body = m.side === 'me' ? esc(m.text).replace(/\n/g, '<br>') : T.md(m.text);
-    return '<div class="mc-m ' + m.side + (m.local ? ' local' : '') + '">' + thumbs(m.pics) + (m.text ? '<div class="mc-b' + (m.side === 'me' ? '' : ' md') + '">' +
+    var meta = (m.ctx ? esc(m.ctx) + ' · ' : '') + esc(T.clockTime(m.at));
+    if (m.local === 'sending') meta = 'Sending… · ' + meta;
+    else if (m.local === 'failed') meta = '<b class="mc-bad">Not sent</b> · <button type="button" class="mc-lnk" data-act="mc-retry" data-cid="' + esc(m.cid) + '">Retry</button> · ' +
+      '<button type="button" class="mc-lnk" data-act="mc-copy" data-cid="' + esc(m.cid) + '">Copy text</button>' + (m.err ? '<br><span class="mc-why">' + esc(m.err) + '</span>' : '');
+    return '<div class="mc-m ' + m.side + (m.local ? ' local ' + m.local : '') + '"' + (m.cid ? ' data-cid="' + esc(m.cid) + '"' : '') + '>' + thumbs(m.pics) + (m.text ? '<div class="mc-b' + (m.side === 'me' ? '' : ' md') + '">' +
       body + '</div>' : '') +
       (m.actions && m.actions.length ? '<div class="mc-acts">' + T.actions(m.actions, state, m.project) + '</div>' : '') +
-      '<div class="mc-meta">' + (m.ctx ? esc(m.ctx) + ' · ' : '') + esc(T.clockTime(m.at)) + '</div></div>';
+      '<div class="mc-meta">' + meta + '</div></div>';
   }
   /* a message that needs the owner (open) or needed it (answered): the text, then options and Run actions */
   function turnMsg(m, state) {
@@ -107,7 +142,7 @@
       '<div class="mc-meta">Manager is typing… · <span class="tick" data-start="' + esc(since) + '">' + esc(T.dur(T.elapsed(since))) + '</span></div></div>';
   }
   function projectChip(state) {
-    var cur = ui.chatProj != null ? ui.chatProj : (T.filter.project || ''), prj = state.projects || [];
+    var cur = curProject(), prj = state.projects || [];
     return '<label class="mc-chip" title="Tell the manager which project this is about">' + BUBBLE +
       '<select data-act="mc-proj" data-keep="mc-proj" aria-label="Project of this message"><option value="">No project</option>' + prj.map(function (p) {
         return '<option value="' + esc(p.id) + '"' + (p.id === cur ? ' selected' : '') + '>' + esc(p.name || p.id) + '</option>';
@@ -147,6 +182,7 @@
   /* the chat as HTML; `drawer` adds a close button */
   T.managerChat = function (state, drawer) {
     lastState = state;
+    syncDraftProject();
     var list = messages(state), since = waitingSince(state), h;
     var open = T.turnOpen ? T.turnOpen(state) : 0;
     h = '<section class="mchat' + (drawer ? ' in-drawer' : '') + '"><div class="mc-head"><h2>Manager' +
@@ -203,61 +239,92 @@
     if (window.crypto && crypto.getRandomValues) crypto.getRandomValues(b); else for (var i = 0; i < 4; i++) b[i] = Math.random() * 256;
     return 'in-' + Array.prototype.map.call(b, function (x) { return ('0' + x.toString(16)).slice(-2); }).join('');
   }
+  function newCid() { return 'c-' + newId().slice(3) + Date.now().toString(36); }
+  function findOut(cid) { return ui.chatOut.filter(function (o) { return o.cid === cid; })[0]; }
+  /* nothing in the state after SEND_WAIT: the message was not sent, give the owner the text back */
+  function arm(o) {
+    clearTimeout(o.timer);
+    o.timer = setTimeout(function () { fail(o, 'It did not reach the inbox within ' + SEND_WAIT / 1000 + ' s.'); }, SEND_WAIT);
+  }
+  function fail(o, why) {
+    if (o.state !== 'sending' || !findOut(o.cid)) return;
+    clearTimeout(o.timer);
+    o.state = 'failed'; o.err = why; ui.chatErr = null; ui.chatStick = true;
+    if (!o.restored) {
+      o.restored = true;
+      ui.chatDraft = ui.chatDraft.trim() && ui.chatDraft !== o.text ? o.text + '\n' + ui.chatDraft : o.text;
+      if (o.pics && o.pics.length && !ui.chatPics.length) ui.chatPics = o.pics.filter(function (p) { return p.b64; });
+      saveDraft();
+    }
+    saveUnsent();
+    T.render();
+  }
   /* the app saves each image under attachments/<id>/ first, then adds the chat row that lists them */
-  function sendWithPics(text, project, pics) {
-    var inv = window.__TAURI__.core.invoke, id = newId();
-    ui.chatErr = null; ui.chatCli = null;
-    return pics.reduce(function (chain, p) {
-      return chain.then(function (acc) {
-        return inv('attachment_save', { messageId: id, name: p.name, bytesBase64: p.b64 }).then(function (r) {
+  function transmit(o) {
+    var inv = window.__TAURI__.core.invoke;
+    return (o.pics || []).reduce(function (chain, p) {
+      return chain.then(function () {
+        if (p.saved) return;
+        return inv('attachment_save', { messageId: o.id, name: p.name, bytesBase64: p.b64 }).then(function (r) {
           ui.chatPicUrl[r.path] = p.url;
-          acc.push({ path: r.path, type: r.type, size: r.size, width: p.w, height: p.h });
-          return acc;
+          p.saved = { path: r.path, type: r.type, size: r.size, width: p.w, height: p.h };
         });
       });
-    }, Promise.resolve([])).then(function (atts) {
-      return inv('inbox_add', { kind: 'chat', project: project, step: '', text: text, id: id, attachments: atts }).then(function () { return atts; });
-    }).then(function (atts) {
-      ui.chatDraft = ''; ui.chatPics = []; ui.chatStick = true;
-      ui.chatOut.push({ text: text, project: project, at: T.now(), pics: atts });
-      T.render(); setTimeout(T.render, OUT_MAX + 500);
-    }, function (err) { ui.chatErr = 'Could not send: ' + err; T.render(); });
+    }, Promise.resolve()).then(function () {
+      var atts = (o.pics || []).map(function (p) { return p.saved; });
+      return inv('inbox_add', { kind: 'chat', project: o.project, step: '', text: o.text, id: o.id, cid: o.cid, attachments: atts });
+    });
   }
+  function linkOf(o) {
+    var L = lastState && lastState.launch;
+    return 'tirith://inbox?kind=chat&project=' + encodeURIComponent(o.project) + '&step=&text=' + encodeURIComponent(o.text) + '&cid=' + encodeURIComponent(o.cid) + '&token=' + encodeURIComponent(L.token);
+  }
+  /* send (or resend) one message: it stays "Sending…" until the state has it */
+  function dispatch(o, viaLink) {
+    o.state = 'sending'; o.err = null; o.at = T.now(); ui.chatStick = true;
+    if (!findOut(o.cid)) ui.chatOut.push(o);
+    saveUnsent(); arm(o);
+    if (viaLink) openLink(linkOf(o));
+    else transmit(o).catch(function (err) { fail(o, 'Could not send: ' + (err && err.message || err)); });
+    T.render();
+  }
+  function canLink() { var L = lastState && lastState.launch; return !hasTauri() && !!(L && L.token && L.available); }
   function send() {
-    var text = ui.chatDraft.trim(), st = lastState, L = st && st.launch, tauri = window.__TAURI__;
-    if (ui.chatPics.length) {
-      if (hasTauri()) sendWithPics(text, ui.chatProj != null ? ui.chatProj : (T.filter.project || ''), ui.chatPics.slice());
-      return;
-    }
-    if (!text) return;
-    var project = ui.chatProj != null ? ui.chatProj : (T.filter.project || '');
+    var text = ui.chatDraft.trim(), pics = ui.chatPics.slice();
+    if (pics.length && !hasTauri()) return;
+    if (!text && !pics.length) return;
+    var project = curProject();
     ui.chatErr = null; ui.chatCli = null;
-    if (ui.chatReplyTo) {   /* the answer to an item that waits for the owner: a reply, not a new chat message */
+    if (ui.chatReplyTo && text && !pics.length) {   /* the answer to an item that waits for the owner: a reply, not a new chat message */
       var to = ui.chatReplyTo;
-      ui.chatReplyTo = null; ui.chatDraft = ''; ui.chatStick = true;
+      ui.chatReplyTo = null; ui.chatDraft = ''; ui.chatStick = true; saveDraft();
       if (T.turnReply(to, text)) return;
       ui.chatDraft = text;
     }
-    function sent() {
-      ui.chatDraft = ''; ui.chatStick = true;
-      ui.chatOut.push({ text: text, project: project, at: T.now() });
-      T.render(); setTimeout(T.render, OUT_MAX + 500);
-    }
-    if (tauri && tauri.core && tauri.core.invoke) {
-      tauri.core.invoke('inbox_add', { kind: 'chat', project: project, step: '', text: text }).then(sent, function (err) {
-        ui.chatErr = 'Could not send: ' + err; T.render();
-      });
-      return;
-    }
-    if (L && L.token && L.available) {
-      openLink('tirith://inbox?kind=chat&project=' + encodeURIComponent(project) + '&step=&text=' + encodeURIComponent(text) + '&token=' + encodeURIComponent(L.token));
-      sent();
-      return;
-    }
-    ui.chatCli = 'tirith inbox add --kind chat' + (project ? ' --project ' + shq(project) : '') + ' --text ' + shq(text);
-    ui.chatDraft = ''; ui.chatStick = true;
+    var o = { cid: newCid(), id: newId(), text: text, project: project, pics: pics };
+    ui.chatDraft = ''; ui.chatPics = []; saveDraft();
+    if (hasTauri() || canLink()) { dispatch(o, !hasTauri()); return; }
+    ui.chatCli = 'tirith inbox add --kind chat' + (project ? ' --project ' + shq(project) : '') + ' --cid ' + o.cid + ' --text ' + shq(text);
+    ui.chatStick = true;
     T.render();
   }
+  function retry(cid) {
+    var o = findOut(cid); if (!o || o.state === 'sending') return;
+    if (o.restored && ui.chatDraft === o.text) { ui.chatDraft = ''; saveDraft(); }
+    o.restored = false;
+    dispatch(o, canLink());
+  }
+  function copyText(cid) {
+    var o = findOut(cid); if (!o) return;
+    try { navigator.clipboard.writeText(o.text).catch(function () {}); } catch (e) { /* the text is also back in the composer */ }
+  }
+
+  try {
+    JSON.parse(store('get', UNSENT_KEY) || '[]').forEach(function (o) {
+      /* the page closed while sending: the retry is safe, the collector ignores a client id it already has */
+      if (o && o.cid && o.text && !findOut(o.cid)) { o.at = T.now(); o.state = 'sending'; ui.chatOut.push(o); arm(o); }
+    });
+  } catch (e) { /* unreadable list: nothing to bring back */ }
 
   /* scroll to the next message that waits for the owner, round and round */
   function jump() {
@@ -297,6 +364,8 @@
     var b = e.target.closest('[data-act^="mc-"]'); if (!b) return;
     var act = b.getAttribute('data-act');
     if (act === 'mc-send') send();
+    else if (act === 'mc-retry') retry(b.getAttribute('data-cid'));
+    else if (act === 'mc-copy') copyText(b.getAttribute('data-cid'));
     else if (act === 'mc-close') { ui.chatOpen = false; T.render(); }
     else if (act === 'mc-attach' && !hasTauri()) { ui.chatErr = 'Attach images in the desktop app. A page opened as a file cannot save them for the manager.'; T.render(); }
     else if (act === 'mc-attach') { var f =view.querySelector('[data-act="mc-file"]'); if (f) f.click(); }
@@ -337,11 +406,11 @@
   });
   view.addEventListener('input', function (e) {
     var t = e.target, act = t.getAttribute && t.getAttribute('data-act');
-    if (act === 'mc-text') { ui.chatDraft = t.value; t.rows = Math.max(1, Math.min(6, t.value.split('\n').length)); }
+    if (act === 'mc-text') { ui.chatDraft = t.value; saveDraft(); t.rows = Math.max(1, Math.min(6, t.value.split('\n').length)); }
   });
   view.addEventListener('change', function (e) {
     var t = e.target, act = t.getAttribute && t.getAttribute('data-act');
-    if (act === 'mc-proj') ui.chatProj = t.value;
+    if (act === 'mc-proj') { saveDraft(); ui.chatProj = t.value; syncDraftProject(); T.render(); }
     else if (act === 'mc-file') { addPics(t.files); t.value = ''; }
   });
   view.addEventListener('keydown', function (e) {

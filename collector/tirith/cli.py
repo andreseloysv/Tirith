@@ -1122,7 +1122,8 @@ def _cmd_url_open(args) -> int:
             if fields["kind"] == "reply":
                 inbox_mod.add_reply(home, fields["wait"], fields["project"], fields["value"], fields["text"])
                 return 0
-            inbox_mod.add_request(home, fields["kind"], fields["project"], fields["step"], fields["text"])
+            inbox_mod.add_request(home, fields["kind"], fields["project"], fields["step"], fields["text"],
+                                  cid=fields["cid"])
             return 0
         if link["action"] == "stop":
             lane = read_json(lane_path(home, link["lane"]), None)
@@ -1182,7 +1183,8 @@ def _cmd_inbox(args) -> int:
         if action == "add":
             text = args.text if args.text is not None else ""
             print(inbox_mod.add_request(home, args.kind, args.project, str(args.step or ""), text,
-                                        attachments=inbox_mod.attachment_list(args.attach))["id"])
+                                        attachments=inbox_mod.attachment_list(args.attach),
+                                        cid=args.cid)["id"])
         elif action == "list":
             for req in inbox_mod.requests(home):
                 if args.open and req["status"] != "open":
@@ -1867,6 +1869,7 @@ def build_parser() -> argparse.ArgumentParser:
                        help="the question (required for ask); for setup the request as JSON, see CONTRACT-setup")
     i_add.add_argument("--attach", action="append", default=[], metavar="IMAGE",
                        help="an image file to attach (PNG, JPEG, GIF, WebP; up to 6, 10 MB each); repeatable")
+    i_add.add_argument("--cid", default=None, help="client id; a second add with the same cid is ignored (safe retry)")
     i_ls = inbox_sub.add_parser("list", parents=[common], help="list requests")
     i_ls.add_argument("--open", action="store_true", help="only open requests")
     i_ls.add_argument("--json", action="store_true", help="one JSON object per line")
