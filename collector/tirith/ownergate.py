@@ -33,6 +33,10 @@ _OUT_RE = re.compile(r"\((?:fuera de este plan|out of this plan)", re.IGNORECASE
 _OUT_TAIL = re.compile(r"\((?:fuera de este plan|out of this plan).*$", re.IGNORECASE)
 _PROCESS_RE = re.compile(r"\b(merge[sd]?|merging|drop(?:ping)?|relaunch(?:ed|ing)?|re-launch|retry|review(?:ing)?)\b",
                          re.IGNORECASE)
+_DISK_RE = re.compile(r"\b(disk|storage|drive)\b.{0,40}\b(space|full|low|free|clean|clear)\w*"
+                      r"|\b(free(?:ing)?(?:\s+up)?|clear(?:ing)?|clean(?:ing)?)\b.{0,30}\b(disk|space|worktrees?|cache)\b"
+                      r"|\b(no|low|out of)\s+(disk\s+)?space\b", re.IGNORECASE)
+DISK_KIND = "disk-space"  # the manager queue kind of an owner item about disk space (Tirith frees it itself)
 _WORD_RE = re.compile(r"[a-z0-9áéíóúñü]{4,}")
 _WHY_TAG_RE = re.compile(
     r"^\s*(?:\[\s*(?:why[_-]owner\s*[:=]\s*)?([a-z_ -]+?(?::[^\]]*)?)\s*\]"
@@ -92,6 +96,12 @@ def admit(home: Path, item_id: str, project: str | None, text: str, why_owner, *
     if out or is_out_of_plan(text, out_items):
         _log_dropped(home, item_id, project, text, via, at)
         return DROPPED
+    if _DISK_RE.search(str(text or "")):
+        clean = " ".join(str(text or "").split())
+        key = hashlib.sha1(f"{project or ''}\n{clean.lower()}".encode("utf-8")).hexdigest()[:10]
+        asks_mod.queue_add(home, str(project or ""), "", f"disk space is Tirith's to free, not the owner's: "
+                           f"{clean}"[:asks_mod.QUEUE_TEXT_MAX], kind=DISK_KIND, item_id=f"sq-ds-{key}")
+        return MANAGER
     if asks_mod.why_key(why_owner) is None:
         agent_can_do(home, project, text)
         return MANAGER

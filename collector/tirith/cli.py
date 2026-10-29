@@ -613,6 +613,9 @@ def _cmd_lane_run(args) -> int:
     files, plus, minus = git_shortstat(str(workspace), lane.get("start_commit"))
     print(f"lane {lane_id}: {result}, {files} files +{plus} -{minus}, "
           f"{_duration(time.monotonic() - began)}")
+    over = plangate_mod.budget_note(files, plus, minus)
+    if over:
+        print(f"tirith: {over}")
     if answer:
         print()
         print(answer)
@@ -1543,12 +1546,28 @@ def _cmd_plan_add(args) -> int:
         return 3
     who = os.environ.get("TIRITH_LANE") or ("manager" if in_manager_session() else "owner")
     try:
-        text = plangate_mod.add_item(home, repo, args.project, str(args.step), args.text, who, args.title)
+        text = plangate_mod.add_item(home, repo, args.project, str(args.step), args.text, who, args.title,
+                                      getattr(args, "check", None))
     except plangate_mod.PlanGateError as error:
         print(f"tirith plan add: {error}", file=sys.stderr)
         return 3
     print(f"added to step {args.step}: {text}")
     return 0
+
+
+def _cmd_plan_check(args) -> int:
+    home = _home(args)
+    repo = plangate_mod.repo_of(home, args.project)
+    if repo is None:
+        print(f"tirith plan check: unknown project '{args.project}'", file=sys.stderr)
+        return 3
+    try:
+        passed, output = plangate_mod.check_item(repo, str(args.step), args.item)
+    except plangate_mod.PlanGateError as error:
+        print(f"tirith plan check: {error}", file=sys.stderr)
+        return 3
+    print(("check passed" if passed else "check failed") + (f"\n{output}" if output.strip() else ""))
+    return 0 if passed else 1
 
 
 def _cmd_plan_done(args) -> int:
@@ -2525,7 +2544,13 @@ def build_parser() -> argparse.ArgumentParser:
     pl_add.add_argument("--step", required=True, help="step number")
     pl_add.add_argument("--text", required=True, help="the new item")
     pl_add.add_argument("--title", default=None, help="create the step with this title when it is not in the plan")
+    pl_add.add_argument("--check", default=None, help="a command that passes when the item is done")
     pl_add.set_defaults(func=_cmd_plan_add)
+    pl_check = plan_sub.add_parser("check", parents=[common], help="run an item's done check (exit 0 = done)")
+    pl_check.add_argument("--project", required=True)
+    pl_check.add_argument("--step", required=True, help="step number")
+    pl_check.add_argument("--item", required=True, help="the exact text of the item")
+    pl_check.set_defaults(func=_cmd_plan_check)
     pl_rep = plan_sub.add_parser("report", parents=[common],
                                  help="the outcome of a lane's item: done, partial or blocked")
     pl_rep.add_argument("--lane", default=None, help="lane id (default: $TIRITH_LANE)")

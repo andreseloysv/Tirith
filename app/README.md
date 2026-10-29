@@ -39,6 +39,8 @@ web fix is visible without rebuilding the app.
   is gone: it ran a second, separate session; its permission questions are now Allow / Deny items in the
   manager chat. The streaming arguments still come from `[agents.<alias>] chat_args`
   (`docs/CONTRACT-agents.md`); `tools/chat_check.py` runs that exchange once by hand.
+- **Attachments**: the paperclip calls `attachment_pick` (native file picker, Rust reads the files); dropping files
+  on the chat uses Tauri's native drop events (`attachment_dropped`). Details in `docs/CONTRACT-inbox.md`.
 
 ## Run
 
@@ -67,7 +69,8 @@ for Windows or Linux is listed in `docs/PLATFORMS.md` (`muse` is not checked). C
 - Commit guard: `tirith_guard` renders the hooks for Git for Windows' own `sh` (LF, read-only attribute),
   and `tirith safegit install` writes `git.cmd` plus a Python core that refuses the flags that skip
   hooks (`docs/CONTRACT-gates.md`, "Windows"). Both are simulated in tests, not run on Windows.
-- `collector_running()` is still Unix-only: Windows always starts its own collector.
+- `collector_running()` asks PowerShell (`Get-CimInstance Win32_Process`) for a `tirith collect` command
+  line; if that fails the app starts its own collector. Not tried on Windows.
 
 ## Packaging
 

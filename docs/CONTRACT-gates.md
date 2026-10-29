@@ -31,6 +31,12 @@ Message format, one block per violation:
 | `lane-brief` | `lane run` with no `--brief`, or a missing/empty brief file (exit 3) | `lane run` | write the task into a file, pass `--brief <file>` |
 | `project-check` | `lane run` while `tirith check` fails for the project (exit 3) | `lane run` | fix the listed problems, run `tirith check --project <id>` |
 | (guard) | `lane run` while the commit guard is not intact (exit 3) | `lane run` | `tirith guard install <project>` |
+| `workspace-write` | in a lane (`TIRITH_LANE`): Edit/Write/NotebookEdit, or a shell write (`>`, `>>`, `tee`, `rm`, `mv`, `cp` target, `mkdir`, `touch`, `chmod`, `ln`, `sed -i`, `dd of=`, `git -C <dir>` that changes a folder), whose real path (symlinks followed) is outside the lane's worktree, `$TMPDIR`, `/tmp`, `/private/tmp`, `/private/var/folders` and the project's `<repo>-lanes` folder. `git -C <main checkout> merge\|push\|pull` is the lane's closing step and is allowed | `PreToolUse` hook | write in the lane copy or a temp folder; ask the owner (`tirith wait add`) for anything else |
+| `no-secrets` | in a lane: Read/Grep/Glob/Edit tools or any shell word that names `~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.config/gh`, `~/.netrc`, `~/Library/Keychains`, `~/.codex/auth*`, `~/.copilot` credentials, the credentials folder of each agent CLI, `*.pem`, or a `.env` file outside the worktree (`.env.example` is fine) | `PreToolUse` hook | ask the owner for what is needed |
+| `no-servers` | in a lane: `python -m http.server`, `serve`, `uvicorn`, `gunicorn`, `flask run`, `vite`/`next`/`nuxt` dev, `npm\|pnpm\|yarn run dev\|start\|serve`, `nc -l`, `php -S`, any `--port` flag | `PreToolUse` hook | test through `tirith run --stage …` |
+| `own-processes` | in a lane: `pkill`/`killall`, `xargs kill`, `kill` of a pid outside the lane's process group or from a command substitution (`kill $!`, `%1` and own-group pids are fine) | `PreToolUse` hook | stop only what the lane started |
+
+The four lane rules live in `tirith.lanegates`; compound commands (`&&`, `;`, `|`, `$(…)`, `bash -c`) are checked segment by segment, a write to an unresolvable `$VAR` path is denied, and every deny is a `violation` event with the rule and the command. Lane agents are never asked for permission (`agentrun` presets allow every tool): these rules and the ones above decide.
 
 Custom rules: every `[[rules]]` entry of the project's `tirith.toml` is enforced by the same
 `gates.check_call`, with the same message format and `violation` events (`CONTRACT-setup.md`).
