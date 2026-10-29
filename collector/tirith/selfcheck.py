@@ -171,7 +171,8 @@ def _manager(home: Path, config: Config, now: datetime, state: dict, book: dict,
     active.add(key)
     evidence = (f"Self-check: the owner's chat message {oldest['id']} has waited {int(age)} s with no manager "
                 f"turn working on it ({len(waiting)} message(s) waiting; manager state: tries "
-                f"{mbook.get('tries')}, last error {mbook.get('error') or 'none'}). Answer them first.")
+                f"{mbook.get('tries')}, last error {mbook.get('error') or 'none'}; "
+                f"session: {(mbook.get('session') or {}).get('error') or 'none'}). Answer them first.")
 
     def restart() -> None:
         for field in ("key", "at", "error"):
