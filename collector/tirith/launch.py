@@ -59,6 +59,7 @@ HARD_RULES = (
     "(`<id>` is the project id of this lane); never call the test runner directly.",
     "Do not touch git hooks, `.git/`, or anything outside this worktree.",
     "Do not start sub-agents except with `tirith lane run`.",
+    "A Tirith block is not a stop: use the alternative it gives and continue; never wait for the owner.",
     "Finish with a short report: what changed (files), the test result, and anything left open.",
     *PLAN_RULES,
 )
