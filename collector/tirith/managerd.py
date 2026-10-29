@@ -46,6 +46,7 @@ FEATURE = "Manager"
 DEFAULT_ALIAS = "anthropic"
 LINGER_S = 30.0  # a manager process still alive this long after its ``result`` event is terminated
 TAIL_BYTES = 65536
+TURNS_KEPT = 30
 
 RULES = (
     "You are the owner's manager, started by Tirith because the owner is not at a terminal. The owner talks to "
@@ -234,6 +235,8 @@ def build_brief(home: Path, config: Config, items: dict, now: datetime) -> str:
         for q in items["queue"]:
             out.append(f"- {q['id']} ({q.get('kind')}, {q.get('project') or '-'}, lane {q.get('lane') or '-'}): "
                        f"{flows_mod.one_line(str(q.get('text') or ''), 300)}")
+    if items.get("evidence"):
+        out += ["", "## Self-check", str(items["evidence"])]
     out += ["", "## Plan", _plan_summary(config, home)]
     recent = flows_mod.flows_state(home, {}, limit=12)
     if recent:
@@ -437,6 +440,7 @@ def run(home: Path, config: Config, now: datetime, state: dict, lanes: list[dict
             book.pop("key"), book.pop("tries", None)
             changed = True
         return changed
+    items["evidence"] = book.get("evidence")  # from tirith.selfcheck: why this turn was started again
     key = pending_key(items)
     fresh = book.get("key") != key
     if fresh:
@@ -456,7 +460,12 @@ def run(home: Path, config: Config, now: datetime, state: dict, lanes: list[dict
         book["tries"] += 1
         return True
     book.update(lane=lane_id, at=now_iso(now), tries=book["tries"] + 1)
+    turns = book.setdefault("turns", {})  # lane id -> the request ids this turn answers (the chat's live block)
+    turns[lane_id] = [r["id"] for r in items["requests"]]
+    for old in list(turns)[:-TURNS_KEPT]:
+        turns.pop(old)
     book.pop("error", None)
+    book.pop("evidence", None)
     flows_mod.append_flow(home, "tirith", f"agent:{lane_id}", "brief",
                           "On-call manager started for the owner's pending messages", session=None, at=now_iso(now))
     return True

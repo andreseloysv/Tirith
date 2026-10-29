@@ -18,10 +18,12 @@ from typing import Callable
 
 from tirith import actions as actions_mod
 from tirith import asks as asks_mod
+from tirith import claimcheck as claimcheck_mod
 from tirith import flows as flows_mod
 from tirith import tirithcmd
 from tirith import inbox as inbox_mod
 from tirith import launch as launch_mod
+from tirith import ownergate as ownergate_mod
 from tirith import planlane as planlane_mod
 from tirith import projects as projects_mod
 from tirith import review as review_mod
@@ -33,7 +35,7 @@ OVERDUE_AFTER_S = 1800.0
 AUTO_WINDOW_S = 86400.0  # older finished lanes are not merged behind the owner's back; they are overdue
 TICK_AT = 0.7            # share of an item's words found in the report's "What changed" lines
 CANDIDATE_AT = 0.3
-TERMINAL = (review_mod.MERGED, review_mod.TESTS_FAILED, review_mod.MERGE_FAILED, review_mod.READY,
+TERMINAL = (review_mod.MERGED, review_mod.TESTS_FAILED, review_mod.CLAIMS_FAILED, review_mod.MERGE_FAILED, review_mod.READY,
             review_mod.DROPPED)
 _WORD = re.compile(r"[a-z0-9]{4,}")
 _CHANGED = re.compile(r"^\s*(?:#{1,6}\s*|\*\*|__)?\s*what\s+changed\b[^\n]*$", re.IGNORECASE)
@@ -180,12 +182,23 @@ def _actions(rows: list[tuple[str, str]], at: str) -> list[dict]:
                                     created_by="tirith", at=at)
 
 
+def _out_items(repo: Path | None) -> list[str]:
+    """The texts of the plan items marked out of this plan (what a report must not ask the owner about)."""
+    if repo is None:
+        return []
+    from tirith import manifest as manifest_mod
+    path = roadmap_mod.find_file(repo, manifest_mod.load(repo).roadmap)
+    steps = roadmap_mod.parse(path.read_text(encoding="utf-8")) if path else []
+    return [i["text"] for step in steps for i in step["items"] if i.get("who") == "out"]
+
+
 def _owner_item(home: Path, rec: dict, item_id: str, project: str | None, text: str,
                 rows: list[tuple[str, str]], at: str) -> None:
     from tirith import dispatch
     if rec.get("owner_item") and rec["owner_item"] != item_id:
         dispatch.close_owner_item(home, rec["owner_item"], at)
-    dispatch.add_owner_item(home, item_id, project, text, [], at, actions=_actions(rows, at))
+    dispatch.add_owner_item(home, item_id, project, text, [], at, actions=_actions(rows, at),
+                            why_owner="owner-decision", why_detail="choice: merge it or drop it")
     rec["owner_item"] = item_id
 
 
@@ -204,7 +217,9 @@ def settle(home: Path, config: Config, lane: dict, review: dict, rec: dict, now:
         plan = update_plan(home, repo, lane) if repo is not None else ""
         answer = text + (f". {plan}." if plan else ".")
         if step in planlane_mod.LANE_STEPS.values() and str(lane.get("report") or "").strip():
-            answer += "\n\n" + str(lane["report"]).strip()  # the auditor's summary / the planner's report
+            # the auditor's summary / the planner's report; its "needs the owner" list passes the owner gate
+            answer += "\n\n" + ownergate_mod.filter_report(
+                home, project, lane_id, str(lane["report"]).strip(), out_items=_out_items(repo), at=at)
         if lane.get("request_id") and inbox_mod.find_request(home, str(lane["request_id"])):
             inbox_mod.add_answer(home, str(lane["request_id"]), answer,
                                  by="tirith", auto=True, at=at, lane=lane_id)
@@ -217,6 +232,9 @@ def settle(home: Path, config: Config, lane: dict, review: dict, rec: dict, now:
         close_queue(home, rec, f"lane {lane_id} dropped")
         if rec.get("owner_item"):
             dispatch.close_owner_item(home, rec["owner_item"], at)
+        return
+    if status == review_mod.CLAIMS_FAILED:
+        _claims_failed(home, config, lane, review, rec, project, at)
         return
     key = f"review-{lane_id}-{re.sub(r'[^0-9]', '', str(review.get('at') or ''))}"
     drop = ("Drop the lane", f"tirith lane drop {lane_id}")
@@ -235,6 +253,45 @@ def settle(home: Path, config: Config, lane: dict, review: dict, rec: dict, now:
         flows_mod.append_flow(home, "tirith", "manager", "alert", text, session=None, project=project, at=at)
         return
     _owner_item(home, rec, key, project, text, rows, at)  # auto_merge off: the owner chose to decide
+
+
+def _brief_text(lane: dict) -> str:
+    try:
+        return Path(str(lane.get("brief") or "")).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+
+
+def _claims_failed(home: Path, config: Config, lane: dict, review: dict, rec: dict, project: str | None,
+                   at: str) -> None:
+    """The report said things the diff does not show: the lane goes back to its agent once with the list
+    (never to the owner); a lane that was already sent back goes to the manager's queue."""
+    lane_id = str(lane["id"])
+    note = str(review.get("message") or "")
+    text = (f"Review of {lane.get('feature') or lane_id} ({lane_id}): the report does not match the change. "
+            + flows_mod.one_line(note.replace(claimcheck_mod.MARK, ""), 400))
+    sent = None
+    if claimcheck_mod.MARK not in _brief_text(lane):
+        alias = str(lane.get("agent") or "")
+        if alias in config.agents:
+            try:
+                sent = relauncher(home, lane, alias, note)
+            except (Exception, SystemExit) as error:  # the manager decides when it cannot be sent back
+                text += f" (sending it back failed: {flows_mod.one_line(str(error), 120)})"
+    if sent:
+        rec["claims_sent"] = sent
+        close_queue(home, rec, f"claims did not match; sent back to the agent as {sent}")
+        flows_mod.append_flow(home, "tirith", f"agent:{sent}", "brief", f"Sent back: {text}", session=None,
+                              project=project, at=at)
+        return
+    rows = [("Retry the review", f"tirith lane review {lane_id}"), ("Drop the lane", f"tirith lane drop {lane_id}")]
+    _manager_item(home, rec, project, lane_id, text, rows)
+    flows_mod.append_flow(home, "tirith", "manager", "alert", text, session=None, project=project, at=at)
+
+
+def relauncher(home: Path, lane: dict, alias: str, note: str) -> str:
+    from tirith.cli import relaunch_lane  # late: cli imports this module
+    return relaunch_lane(home, lane, alias, by_tirith=True, note=note)
 
 
 def _manager_item(home: Path, rec: dict, project: str | None, lane_id: str, text: str,

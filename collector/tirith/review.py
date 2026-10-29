@@ -12,6 +12,7 @@ import re
 import subprocess
 from pathlib import Path
 
+from tirith import claimcheck as claimcheck_mod
 from tirith import manifest as manifest_mod
 from tirith import runstage as runstage_mod
 from tirith.home import now_iso
@@ -24,6 +25,7 @@ TEST_TIMEOUT_S = 1800
 PENDING = "pending"          # launched lane, done, not reviewed yet
 RUNNING = "running"
 TESTS_FAILED = "tests-failed"
+CLAIMS_FAILED = "claims-failed"  # tests passed, the report says things the diff does not show
 READY = "ready"              # tests passed, not merged (--tests-only)
 MERGE_FAILED = "merge-failed"
 MERGED = "merged"
@@ -57,7 +59,7 @@ def public(lane: dict, repo: Path | None) -> dict | None:
     """The ``review`` object for state.json: None unless the lane is a finished launched lane."""
     review = lane.get("review")
     if isinstance(review, dict) and review.get("status"):
-        out = {k: review[k] for k in ("status", "at", "message", "run", "files", "branch", "passed")
+        out = {k: review[k] for k in ("status", "at", "message", "run", "files", "branch", "passed", "claims")
                if review.get(k) is not None and review.get(k) != ""}
         if out["status"] == RUNNING and not _alive(review.get("pid")):
             out["status"], out["message"] = MERGE_FAILED, "the review was interrupted; run it again"
@@ -178,15 +180,19 @@ def review_lane(home: Path, lane_id: str, repo: Path | None, merge: bool = True)
     if not ok:
         return _set(home, lane, TESTS_FAILED, output or "tests failed", run=run_id)
     passed = tests_passed(output)
+    claims = claimcheck_mod.verify(home, lane, repo)
+    if not claims.ok:
+        return _set(home, lane, CLAIMS_FAILED, claimcheck_mod.feedback(claims), run=run_id, passed=passed,
+                    claims=claims.public())
     if not merge:
-        return _set(home, lane, READY, "tests passed", run=run_id, passed=passed)
+        return _set(home, lane, READY, "tests passed", run=run_id, passed=passed, claims=claims.public())
     try:
         head = merge_lane(repo, workspace, lane_id, str(lane.get("feature") or lane_id))
     except ReviewError as error:
-        return _set(home, lane, MERGE_FAILED, str(error), run=run_id, passed=passed)
+        return _set(home, lane, MERGE_FAILED, str(error), run=run_id, passed=passed, claims=claims.public())
     files = _git(repo, "diff", "--name-only", f"{head}^1", head).stdout.split()
     return _set(home, lane, MERGED, "tests passed; merged", commit=head, run=run_id, passed=passed,
-                files=len(files), branch=_git(repo, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip())
+                claims=claims.public(), files=len(files), branch=_git(repo, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip())
 
 
 def drop_lane(home: Path, lane_id: str, repo: Path | None) -> dict:

@@ -134,7 +134,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Móvil (para luego, fuera de este plan).
 - [x] Empaquetado por plataforma (configuración y scripts de build).
 - [x] Firmar la app de macOS con el Developer ID del dueño.
-- [ ] Notarizar la app de macOS (dueño: credenciales de App Store Connect).
+- [x] Notarizar la app de macOS (`scripts/notarize-macos.sh`, perfil `tirith-notary`; aceptada por Apple el 2026-10-29).
 - [ ] Firmar la app de Windows (fuera de este plan: requiere certificado de firma de código).
 
 ## 10. Plan visible en el Overview
@@ -195,6 +195,34 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] `state.json` pequeño y rápido (detalle del agente bajo demanda); `tirith` se encuentra fuera de una terminal.
 - [x] La app de escritorio muestra la web actual sin recompilar y arranca el collector aun abierta desde Finder.
 - [x] Comprobar en pantalla que el piloto automático y la lista «Agents» coinciden (comprobado con captura el 2026-10-29).
+- [x] El turno del manager termina al responder; sus sub-agentes arrancan desacoplados y cada lane tiene su propia carpeta.
+- [x] El chat marca «Delivered» lo que la app aceptó (nunca «Not sent»); rutas de archivo clicables; la caja crece con el texto.
+- [x] Las imágenes arrastradas a la app llegan al chat.
+- [x] El collector no muere por un ciclo fallido, la app lo reinicia si muere y la web avisa si los datos están viejos.
+- [x] El piloto automático dice por qué no arranca un paso.
+- [x] Las lanes no llenan el disco (build de Rust compartido, carpetas fusionadas borradas, freno con poco espacio).
+- [x] Variables de entorno por proyecto en Settings.
+- [ ] Todas las reglas activas: codex y copilot protegidos de verdad (no solo explicado).
+- [ ] Tests fiables: sin fallos al azar dentro de las lanes; las revisiones atascadas se vuelven a lanzar.
+- [ ] Al dueño solo le llega lo que solo él puede hacer, con el motivo (credenciales, pago, cuenta, aparato o decisión).
+- [ ] Instrucciones al dueño concretas y prerrellenadas, con botón «Open in Terminal»; se cierran solas al comprobarse.
+- [ ] Un solo manager con sesión persistente que vive en Tirith (misma memoria con la app abierta o cerrada).
+- [ ] El chat muestra el trabajo del manager como el CLI: texto palabra a palabra, herramientas y resultados, diffs en color, lista de tareas; Esc interrumpe y ↑ recupera.
+- [ ] Sub-agentes anidados en la conversación; permisos seguros aprobados por código y el resto como botones Allow/Deny.
+- [ ] Autorrevisión cada minuto (collector, manager, piloto, disco, revisiones) con arreglo automático y una línea en el chat.
+- [ ] Lo que dice un agente en su informe se verifica contra su cambio real antes de fusionar.
+- [ ] El collector vuelve a tardar menos de 3 s por ciclo (hoy ~20 s) y un test lo vigila.
+- [ ] Regla en código, sin excepciones: ningún agente arranca sin estar ligado a un elemento abierto del plan (revisiones y revisiones del plan incluidas: Tirith añade su elemento).
+- [ ] Regla en código: ningún agente termina sin informar a Tirith del resultado de su elemento (hecho / en parte + nuevos elementos / bloqueado + motivo); Tirith es el único que escribe el plan y marca «hecho» solo cuando la revisión pasa.
+
+## 15. Collector y CLI en Rust
+
+- [ ] Base: crate Rust compartido (workspace con la app), arnés de paridad que corre el collector de Python y el de Rust sobre las mismas carpetas de prueba y compara `state.json`.
+- [ ] El estado (`state.json`/`state.js`) lo construye Rust con paridad total contra Python.
+- [ ] Dispatcher, piloto automático, manager de guardia y revisiones en Rust, con paridad.
+- [ ] La CLI `tirith` en Rust (mismos comandos y salidas), un solo binario para los agentes.
+- [ ] La app incluye el collector (sin `uv` ni Python) y sigue firmada y notarizada.
+- [ ] Cambio: Rust pasa a ser el collector en vivo; Python se retira cuando la paridad y los tests pasan.
 
 ## Orden
 

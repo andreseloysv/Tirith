@@ -7,7 +7,6 @@ import signal
 import sys
 import threading
 import time
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -15,8 +14,7 @@ import pytest
 from conftest import make_hooks_mutable
 from test_lane_run import _lane_run_setup
 from tirith.cli import main
-from tirith.home import now_iso
-from tirith.store import append_jsonl, read_json, read_jsonl
+from tirith.store import read_json, read_jsonl
 
 
 def _interactive(repo: Path, lane_id: str, code: str) -> int:
@@ -30,11 +28,13 @@ def test_interactive_inherits_env_and_uses_stop_event(home: Path, tmp_path: Path
     repo = _lane_run_setup(home, tmp_path, monkeypatch)
     mark = tmp_path / "mark"
     monkeypatch.setenv("MARK", str(mark))
-    child = "import os;open(os.environ['MARK'],'w').write(os.environ['TIRITH_LANE'])"
-    # stamped ahead: the lane's start (second resolution) may land after "now" and would hide the event
-    later = now_iso(datetime.now(timezone.utc) + timedelta(minutes=5))
-    append_jsonl(home / "events.jsonl", {"kind": "hook", "ts": later, "event": "Stop",
-                                         "lane": "chat", "summary": "All wrapped up"})
+    monkeypatch.setenv("EVENTS", str(home / "events.jsonl"))
+    # The child writes the Stop event itself, as the agent's Stop hook would: after the lane started.
+    # Written before the lane, its whole-second ts could fall before started_at and be ignored.
+    child = ("import json,os,time;open(os.environ['MARK'],'w').write(os.environ['TIRITH_LANE']);"
+             "open(os.environ['EVENTS'],'a').write(json.dumps({'kind':'hook','event':'Stop',"
+             "'ts':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),"
+             "'lane':os.environ['TIRITH_LANE'],'summary':'All wrapped up'})+'\\n')")
     try:
         code = _interactive(repo, "chat", child)
     finally:
