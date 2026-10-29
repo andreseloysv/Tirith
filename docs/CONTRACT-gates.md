@@ -53,6 +53,10 @@ it prints the `agent-cli` message and exits 2. A file without the marker line (`
 never overwritten or removed. `verify` exits 1 when a shim is missing, foreign, not executable, points
 at a missing binary, or is not first in `PATH`.
 
+On Windows the shim is `<name>.cmd` (second line `REM tirith-shim v1`, CRLF): it cannot detect a
+terminal, so it runs the real binary only when the token matches (`findstr` on the lane file);
+otherwise it prints the same message and exits 2. `verify` reads its `set "REAL=..."` line.
+
 `lane run` generates the token, stores it in the lane file, passes it as `TIRITH_LANE_TOKEN` to the
 child and removes it when the lane ends.
 

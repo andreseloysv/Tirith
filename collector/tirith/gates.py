@@ -24,6 +24,7 @@ EVENTS_FILE = "events.jsonl"
 SUBAGENT_TOOLS = ("Task", "Agent")
 EDIT_TOOLS = ("Edit", "Write", "MultiEdit", "NotebookEdit")
 SHIM_MARKER = "# tirith-shim v1"
+CMD_SHIM_MARKER = "REM tirith-shim v1"  # Windows .cmd shims
 TOKEN_ENV = "TIRITH_LANE_TOKEN"
 LANE_RUN_HINT = ('tirith lane run --project {project} --class {cls} --feature "{feature}" '
                  '--brief {brief} -- {agent} …')
@@ -337,13 +338,47 @@ exit 2
 """
 
 
+def cmd_shim_script(alias: str, name: str, real: str) -> str:
+    """The Windows (.cmd) wrapper for one agent. A batch file cannot tell a terminal from a pipe, so
+    it only runs the real binary with a lane token; the owner chats through `lane run --interactive`."""
+    rule = Violation(
+        "agent-cli", f"agent '{alias}' ({name}) must not start outside tirith lane run",
+        lane_run_hint(None, name)).message()
+    rule = re.sub(r'(["^&|<>])', r"^\1", rule.replace("%", "%%"))
+    text = f"""@echo off\r
+{CMD_SHIM_MARKER} alias={alias}\r
+REM Written by `tirith shim install`; do not edit. Runs the real binary only for a lane started by\r
+REM `tirith lane run` (its token matches the lane file).\r
+set "REAL={real}"\r
+if "%{TOKEN_ENV}%"=="" goto refuse\r
+if "%TIRITH_LANE%"=="" goto refuse\r
+set "HOME_DIR=%TIRITH_HOME%"\r
+if "%HOME_DIR%"=="" set "HOME_DIR=%USERPROFILE%\\.tirith"\r
+findstr /C:"\"token\": \"%{TOKEN_ENV}%\"" "%HOME_DIR%\\lanes\\%TIRITH_LANE%.json" >nul 2>&1 || goto refuse\r
+"%REAL%" %*\r
+exit /b %ERRORLEVEL%\r
+:refuse\r
+echo {rule} 1>&2\r
+exit /b 2\r
+"""
+    return text
+
+
 def is_shim(path: Path) -> bool:
     try:
         with path.open("r", encoding="utf-8", errors="replace") as handle:
-            handle.readline()
-            return handle.readline().startswith(SHIM_MARKER)
+            lines = [handle.readline(), handle.readline()]
+            return lines[1].startswith(SHIM_MARKER) or lines[1].startswith(CMD_SHIM_MARKER)
     except OSError:
         return False
+
+
+def shim_target(shim_dir: Path, command: str, windows: bool | None = None) -> Path:
+    """Where the shim for ``command`` lives: ``<name>`` (sh) or ``<stem>.cmd`` on Windows."""
+    name = os.path.basename(command)
+    if os.name == "nt" if windows is None else windows:
+        return shim_dir / (Path(name).stem + ".cmd")
+    return shim_dir / name
 
 
 def _path_without(shim_dir: Path, path_env: str | None) -> str:
@@ -372,7 +407,7 @@ def install_shims(config: Config, shim_dir: Path, path_env: str | None = None) -
         if not command:
             continue
         name = os.path.basename(command)
-        target = shim_dir / name
+        target = shim_target(shim_dir, command)
         real = resolve_real(command, shim_dir, path_env)
         if real is None:
             rows.append((alias, "skipped", f"'{command}' is not on PATH (outside {shim_dir})"))
@@ -380,7 +415,10 @@ def install_shims(config: Config, shim_dir: Path, path_env: str | None = None) -
             rows.append((alias, "skipped", f"{target} exists and is not a Tirith shim"))
         else:
             shim_dir.mkdir(parents=True, exist_ok=True)
-            target.write_text(shim_script(alias, name, real), encoding="utf-8")
+            if target.suffix == ".cmd":
+                target.write_bytes(cmd_shim_script(alias, name, real).encode("utf-8"))
+            else:
+                target.write_text(shim_script(alias, name, real), encoding="utf-8")
             target.chmod(target.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
             rows.append((alias, "installed", str(target)))
     return rows
@@ -392,7 +430,7 @@ def uninstall_shims(config: Config, shim_dir: Path) -> list[tuple[str, str, str]
         command = str(table.get("command") or "").strip()
         if not command:
             continue
-        target = shim_dir / os.path.basename(command)
+        target = shim_target(shim_dir, command)
         if target.exists() and is_shim(target):
             target.unlink()
             rows.append((alias, "removed", str(target)))
@@ -410,7 +448,7 @@ def verify_shims(config: Config, shim_dir: Path, path_env: str | None = None) ->
         command = str(table.get("command") or "").strip()
         if not command:
             continue
-        target = shim_dir / os.path.basename(command)
+        target = shim_target(shim_dir, command)
         fix = f"Fix: tirith shim install --dir {shim_dir}"
         if not target.exists():
             problems.append(f"{alias}: no shim at {target}. {fix}")
@@ -420,8 +458,13 @@ def verify_shims(config: Config, shim_dir: Path, path_env: str | None = None) ->
             continue
         if not os.access(target, os.X_OK):
             problems.append(f"{alias}: {target} is not executable. {fix}")
-        match = re.search(r"^REAL=(.*)$", target.read_text(encoding="utf-8"), re.M)
-        real = shlex.split(match.group(1))[0] if match else ""
+        text = target.read_text(encoding="utf-8")
+        if target.suffix == ".cmd":
+            match = re.search(r'^set "REAL=(.*)"\r?$', text, re.M)
+            real = match.group(1) if match else ""
+        else:
+            match = re.search(r"^REAL=(.*)$", text, re.M)
+            real = shlex.split(match.group(1))[0] if match else ""
         if not real or not os.access(real, os.X_OK):
             problems.append(f"{alias}: the real binary '{real}' is gone. {fix}")
         first = shutil.which(os.path.basename(command),

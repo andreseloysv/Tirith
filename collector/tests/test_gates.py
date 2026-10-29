@@ -305,3 +305,19 @@ def test_lane_run_gives_the_child_a_token_and_clears_it(home, tmp_path, monkeypa
 
 def test_config_gates_flag_defaults_on(home) -> None:
     assert load_config(home).gates_enabled is True
+
+
+# -- Windows .cmd shims ---------------------------------------------------------------------------
+
+
+def test_cmd_shim_text_and_target(tmp_path) -> None:
+    text = gates.cmd_shim_script("alpha", "alpha-cli", r"C:\bin\alpha-cli.exe")
+    lines = text.split("\r\n")
+    assert lines[0] == "@echo off" and lines[1].startswith(gates.CMD_SHIM_MARKER)
+    assert 'set "REAL=C:\\bin\\alpha-cli.exe"' in lines
+    assert "findstr" in text and "exit /b 2" in text and "agent-cli" in text
+    assert gates.shim_target(tmp_path, "alpha-cli.exe", windows=True) == tmp_path / "alpha-cli.cmd"
+    assert gates.shim_target(tmp_path, "alpha-cli", windows=False) == tmp_path / "alpha-cli"
+    target = tmp_path / "alpha-cli.cmd"
+    target.write_bytes(text.encode())
+    assert gates.is_shim(target)
