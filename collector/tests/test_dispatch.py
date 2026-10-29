@@ -53,7 +53,7 @@ def project(home: Path, tmp_path: Path):
 def launches(monkeypatch):
     calls: list[tuple] = []
 
-    def fake(home, project, step):
+    def fake(home, project, step, request_id=None):
         calls.append((project, step))
         return f"lane-{len(calls)}"
     monkeypatch.setattr(dispatch_mod, "_default_launcher", fake)
@@ -102,7 +102,7 @@ def test_finish_on_a_step_with_a_working_lane_answers_with_the_lane(project, hom
 
 
 def test_finish_refused_answers_with_the_fix_and_asks_the_owner(project, home: Path, monkeypatch) -> None:
-    def refuse(home, project, step):
+    def refuse(home, project, step, request_id=None):
         raise launch_mod.LaunchError("tirith check fails for 'demo', so no lane may start.")
     monkeypatch.setattr(dispatch_mod, "_default_launcher", refuse)
     rid = inbox_mod.add_request(home, "finish", "demo", "1", at=_at(5))["id"]
