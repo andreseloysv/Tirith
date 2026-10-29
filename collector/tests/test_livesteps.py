@@ -122,3 +122,58 @@ def test_manager_turn_is_linked_to_the_requests_it_answers(home: Path, tmp_path:
     save_state(home, dstate)
     row = _collector(home).cycle()["agents"][0]
     assert row["turn_requests"] == ["in-aa", "in-bb"]
+
+
+# -- the persistent manager session: partial text, diffs, the task list ------------------------
+
+
+def _delta(text: str) -> str:
+    return json.dumps({"type": "stream_event", "event": {
+        "type": "content_block_delta", "delta": {"type": "text_delta", "text": text}}})
+
+
+def test_partial_text_shows_until_the_whole_message_replaces_it() -> None:
+    parser = livesteps.StepParser()
+    parser.feed(_delta("Looking "))
+    parser.feed(_delta("into it"))
+    live = parser.steps()
+    assert [(s["kind"], s["summary"], s.get("partial")) for s in live] == [("text", "Looking into it", True)]
+    parser.feed(json.dumps({"type": "assistant", "message": {"content": [{"type": "text", "text": "Looking into it."}]}}))
+    done = parser.steps()
+    assert [(s["summary"], s.get("partial")) for s in done] == [("Looking into it.", None)]
+
+
+def test_edit_multiedit_and_write_have_a_diff() -> None:
+    def call(name, data):
+        parser = livesteps.StepParser()
+        parser.feed(json.dumps({"type": "assistant", "message": {"content": [
+            {"type": "tool_use", "id": "t", "name": name, "input": data}]}}))
+        return parser.steps()[0]
+
+    edit = call("Edit", {"file_path": "/w/a.py", "old_string": "x = 1\ny = 2", "new_string": "x = 2"})
+    assert edit["diff"] == {"path": "/w/a.py", "rows": [["-", "x = 1"], ["-", "y = 2"], ["+", "x = 2"]], "more": 0}
+    multi = call("MultiEdit", {"file_path": "/w/a.py", "edits": [
+        {"old_string": "a", "new_string": "b"}, {"old_string": "c", "new_string": "d"}]})
+    assert [r[0] for r in multi["diff"]["rows"]] == ["-", "+", "-", "+"]
+    write = call("Write", {"file_path": "/w/n.txt", "content": "\n".join(f"l{i}" for i in range(500))})
+    assert len(write["diff"]["rows"]) == livesteps.DIFF_LINES_KEPT and write["diff"]["more"] == 100
+    assert "diff" not in call("Read", {"file_path": "/w/a.py"})
+    secret = call("Write", {"file_path": "/w/.env", "content": "api_key=abc123def456ghi789"})
+    assert "abc123" not in json.dumps(secret)
+
+
+def test_todowrite_is_one_checklist_updated_in_place_without_its_result() -> None:
+    parser = livesteps.StepParser()
+
+    def todo(items, tid):
+        parser.feed(json.dumps({"type": "assistant", "message": {"content": [
+            {"type": "tool_use", "id": tid, "name": "TodoWrite", "input": {"todos": items}}]}}))
+        parser.feed(json.dumps({"type": "user", "message": {"content": [
+            {"type": "tool_result", "tool_use_id": tid, "content": "Todos have been modified successfully"}]}}))
+
+    todo([{"content": "Read", "status": "in_progress"}, {"content": "Answer", "status": "pending"}], "a")
+    parser.feed(json.dumps(READ))
+    todo([{"content": "Read", "status": "completed"}, {"content": "Answer", "status": "in_progress"}], "b")
+    steps = parser.steps()
+    assert [s["kind"] for s in steps] == ["todo", "tool"]  # no result steps for the task list
+    assert [(t["content"], t["status"]) for t in steps[0]["todos"]] == [("Read", "completed"), ("Answer", "in_progress")]
