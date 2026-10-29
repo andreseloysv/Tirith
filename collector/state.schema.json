@@ -128,9 +128,28 @@
       "items": {
         "$ref": "#/$defs/hook_event"
       }
+    },
+    "violations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/violation"
+      }
     }
   },
   "$defs": {
+    "violation": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["ts", "rule", "agent", "lane", "project", "message"],
+      "properties": {
+        "ts": {"type": ["string", "null"]},
+        "rule": {"type": "string"},
+        "agent": {"type": ["string", "null"]},
+        "lane": {"type": ["string", "null"]},
+        "project": {"type": ["string", "null"]},
+        "message": {"type": "string"}
+      }
+    },
     "hook_event": {
       "type": "object",
       "additionalProperties": true,

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import make_hooks_mutable, make_repo, write_config
+from conftest import make_hooks_mutable, make_repo, write_config, write_lane_manifest
 from tirith.cli import main, register_lane
 from tirith.store import final_answer, read_json, read_jsonl
 
@@ -83,6 +83,7 @@ def _lane_run_setup(home: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     write_config(home, [{"id": "demo", "name": "Demo", "repo": str(repo), "color": "#123456"}])
     monkeypatch.delenv("TIRITH_LANE", raising=False)
     monkeypatch.setattr("tirith.cli.verify_guard", lambda *a, **k: [])
+    write_lane_manifest(repo)
     return repo
 
 
@@ -92,7 +93,7 @@ def test_lane_run_prints_summary_and_answer(home: Path, tmp_path: Path, capsys,
     child = ("import json,os;"
              "print(json.dumps({'type':'result','result':'Answer: '+os.environ['TIRITH_LANE']}))")
     try:
-        code = main(["lane", "run", "--project", "demo", "--class", "warden", "--feature", "Echo",
+        code = main(["lane", "run", "--project", "demo", "--class", "warden", "--feature", "Echo", "--brief", str(repo / "brief.md"),
                      "--id", "echo", "--", sys.executable, "-c", child])
     finally:
         make_hooks_mutable(repo)
@@ -109,7 +110,7 @@ def test_lane_run_failure_adds_wait(home: Path, tmp_path: Path, capsys,
                                     monkeypatch: pytest.MonkeyPatch) -> None:
     repo = _lane_run_setup(home, tmp_path, monkeypatch)
     try:
-        code = main(["lane", "run", "--project", "demo", "--class", "warden", "--feature", "Boom",
+        code = main(["lane", "run", "--project", "demo", "--class", "warden", "--feature", "Boom", "--brief", str(repo / "brief.md"),
                      "--id", "boom", "--", sys.executable, "-c", "import sys;sys.exit(3)"])
     finally:
         make_hooks_mutable(repo)
@@ -123,7 +124,7 @@ def test_lane_run_without_answer_adds_wait(home: Path, tmp_path: Path, capsys,
                                            monkeypatch: pytest.MonkeyPatch) -> None:
     repo = _lane_run_setup(home, tmp_path, monkeypatch)
     try:
-        code = main(["lane", "run", "--project", "demo", "--class", "warden", "--feature", "Mute",
+        code = main(["lane", "run", "--project", "demo", "--class", "warden", "--feature", "Mute", "--brief", str(repo / "brief.md"),
                      "--id", "mute", "--", sys.executable, "-c", "pass"])
     finally:
         make_hooks_mutable(repo)

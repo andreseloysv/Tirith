@@ -3,7 +3,7 @@
 Agent CLIs run a command on lifecycle events with a JSON payload on stdin. One command,
 `tirith hook --agent <name> [--event <name>]`, turns each call into a line of
 `~/.tirith/events.jsonl` (`TIRITH_HOME` wins). It is fast and never breaks the agent: append only, no
-network, every exception caught, exit 0. (Blocking is reserved for TODO step 7: `hooks.decide`.)
+network, every exception caught, exit 0. `PreToolUse` can block (exit 2): see `docs/CONTRACT-gates.md`.
 
 ```json
 {"kind": "hook", "ts": "2026-10-28T10:00:00Z", "agent": "anthropic", "event": "PreToolUse",

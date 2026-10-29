@@ -98,3 +98,12 @@ def _no_outer_lane(monkeypatch):
     """Tests run the same inside a lane (TIRITH_LANE / TIRITH_SESSION set by lane run) as outside."""
     monkeypatch.delenv("TIRITH_LANE", raising=False)
     monkeypatch.delenv("TIRITH_SESSION", raising=False)
+
+
+def write_lane_manifest(repo: Path) -> None:
+    """A tirith.toml that passes ``tirith check`` and a brief file, as ``lane run`` requires."""
+    (repo / "tirith.toml").write_text(
+        'deploy = "none"\n[[pipelines]]\nid = "ci"\n[[pipelines.stages]]\nname = "build"\n'
+        'run = "make build"\n[[pipelines.stages]]\nname = "test"\nrun = "make test"\n',
+        encoding="utf-8")
+    (repo / "brief.md").write_text("Do the thing.\n", encoding="utf-8")
