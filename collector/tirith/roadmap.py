@@ -49,6 +49,28 @@ def parse(text: str) -> list[dict]:
     return steps
 
 
+def intro(text: str) -> str:
+    """The first paragraph after the title, before the first ``##`` heading (may be empty)."""
+    lines: list[str] = []
+    for line in text.splitlines():
+        if line.startswith("##"):
+            break
+        if line.startswith("#") or (not line.strip() and lines):
+            if lines:
+                break
+            continue
+        if line.strip():
+            lines.append(line.strip())
+    return " ".join(lines)
+
+
+def read_intro(path: Path) -> str:
+    try:
+        return intro(path.read_text(encoding="utf-8")) if path.stat().st_size <= MAX_BYTES else ""
+    except (OSError, UnicodeDecodeError):
+        return ""
+
+
 def step_status(done: int, total: int, has_agent: bool) -> str:
     if not total:
         return "empty"

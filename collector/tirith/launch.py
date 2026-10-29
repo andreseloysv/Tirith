@@ -1,0 +1,298 @@
+"""``tirith launch``: finish one roadmap step with a sub-agent, started from a ``tirith://`` link.
+
+The web page is a file:// page and cannot run commands, so its button opens
+``tirith://launch?project=..&step=..&token=..``. A tiny local handler (``tirith url install``)
+turns that into ``tirith url open``, which checks the token and calls ``tirith launch``.
+See ``docs/CONTRACT-launch.md``.
+"""
+
+from __future__ import annotations
+
+import os
+import plistlib
+import re
+import secrets
+import shlex
+import shutil
+import subprocess
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+from urllib.parse import parse_qs, urlencode, urlsplit
+
+from tirith import manifest as manifest_mod
+from tirith import roadmap as roadmap_mod
+from tirith.home import Config, now_iso
+from tirith.store import read_json, write_json_atomic
+
+LAUNCH_FILE = "launch.json"
+SCHEME = "tirith"
+APP_NAME = "Tirith Launcher.app"
+BUNDLE_ID = "dev.tirith.launcher"
+INSTALL_COMMAND = "tirith url install"
+
+# keywords of a step title -> hero class; first match wins, else stonewright
+CLASS_BY_KEYWORD = (
+    (("test", "prueba", "verific", "regla", "check", "seguridad", "guarda"), "warden"),
+    (("doc", "lore", "registro", "decision"), "loremaster"),
+    (("web", "visib", "vista", "panel", "plan", "ui", "logs", "app"), "glasswright"),
+    (("pipeline", "hook", "ci", "deploy", "release"), "swiftrider"),
+)
+DEFAULT_CLASS = "stonewright"
+
+HARD_RULES = (
+    "Do NOT commit; leave the changes in the working tree for the owner to review.",
+    "Name agents only by their alias (see `docs/CONTRACT-hooks.md` \"Agent aliases\"), never by product or model name.",
+    "No servers and no open ports.",
+    "The tests must pass before you finish.",
+    "Do not touch git hooks, `.git/`, or anything outside this worktree.",
+    "Do not start sub-agents except with `tirith lane run`.",
+    "Finish with a short report: what changed (files), the test result, and anything left open.",
+)
+
+
+class LaunchError(Exception):
+    """A launch that must not start; the message says why and what to do instead."""
+
+
+# -- token ------------------------------------------------------------------------------------
+
+
+def launch_token(home: Path, create: bool = True) -> str | None:
+    """The owner's launch token from ``<home>/launch.json`` (created on first use)."""
+    path = home / LAUNCH_FILE
+    data = read_json(path, {})
+    token = data.get("launch_token") if isinstance(data, dict) else None
+    if isinstance(token, str) and len(token) >= 16:
+        return token
+    if not create:
+        return None
+    token = secrets.token_urlsafe(24)
+    write_json_atomic(path, {"launch_token": token, "created_at": now_iso()})
+    try:
+        path.chmod(0o600)
+    except OSError:
+        pass
+    return token
+
+
+def token_ok(home: Path, given: str | None) -> bool:
+    expected = launch_token(home, create=False)
+    return bool(expected and given and secrets.compare_digest(expected, given))
+
+
+# -- url --------------------------------------------------------------------------------------
+
+
+def parse_url(url: str) -> dict:
+    """``tirith://launch?project=a&step=3&token=t`` -> ``{action, project, step, token, agent}``."""
+    parts = urlsplit(str(url).strip())
+    if parts.scheme.lower() != SCHEME:
+        raise LaunchError(f"not a {SCHEME}:// link: {url!r}")
+    action = (parts.netloc or parts.path.strip("/")).lower()
+    query = {k: v[-1] for k, v in parse_qs(parts.query).items()}
+    return {"action": action, "project": query.get("project", ""), "step": query.get("step", ""),
+            "token": query.get("token", ""), "agent": query.get("agent") or None}
+
+
+def build_url(project: str, step: str, token: str) -> str:
+    return f"{SCHEME}://launch?" + urlencode({"project": project, "step": step, "token": token})
+
+
+# -- the plan ---------------------------------------------------------------------------------
+
+
+def find_step(folder: Path, step_id: str) -> tuple[dict, str]:
+    """``(step, roadmap intro)`` for a project folder."""
+    path = roadmap_mod.find_file(folder, manifest_mod.load(folder).roadmap)
+    steps = roadmap_mod._parsed(path) if path else None
+    if steps is None:
+        raise LaunchError(f"no roadmap found in {folder}")
+    step = next((s for s in steps if s["id"] == str(step_id)), None)
+    if step is None:
+        raise LaunchError(f"step {step_id} is not in {path}")
+    return step, roadmap_mod.read_intro(path)
+
+
+def pick_class(title: str) -> str:
+    low = title.lower()
+    for words, hero_class in CLASS_BY_KEYWORD:
+        if any(re.search(r"\b" + re.escape(w), low) for w in words):
+            return hero_class
+    return DEFAULT_CLASS
+
+
+def working_lane(lanes: list[dict], project: str, step_id: str, status_of) -> dict | None:
+    now = datetime.now(timezone.utc)
+    for lane in lanes:
+        if (lane.get("project") == project and str(lane.get("step") or "") == str(step_id)
+                and status_of(lane, now) == "working"):
+            return lane
+    return None
+
+
+def build_brief(title: str, intro: str, open_items: list[str], step_id: str) -> str:
+    out = [f"# Lane: {title}", "", "## Why",
+           f"Step {step_id} of the project plan: {title}.", ""]
+    if intro:
+        out += [intro, ""]
+    out += ["## What to build", *(f"- {text}" for text in open_items), "",
+            "## Hard rules", *(f"- {rule}" for rule in HARD_RULES), "",
+            "## Where to read",
+            "- `docs/TODO.md` (read only): the plan; do not edit it.",
+            "- `docs/CONTRACT*.md`: the contracts of the parts you touch; update the one you change.",
+            ""]
+    return "\n".join(out)
+
+
+# -- worktree and command ---------------------------------------------------------------------
+
+
+def worktree_path(repo: Path, lane_id: str) -> Path:
+    return repo.parent / f"{repo.name}-lanes" / lane_id
+
+
+def branch_exists(repo: Path, branch: str) -> bool:
+    return subprocess.run(["git", "-C", str(repo), "rev-parse", "--verify", "-q", f"refs/heads/{branch}"],
+                          capture_output=True).returncode == 0
+
+
+def lane_id_for(title: str, taken: set[str], repo: Path) -> str:
+    base = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:32].strip("-") or "lane"
+    candidate, n = base, 2
+    while (candidate in taken or worktree_path(repo, candidate).exists()
+           or branch_exists(repo, f"lane/{candidate}")):
+        candidate, n = f"{base}-{n}", n + 1
+    return candidate
+
+
+def create_worktree(repo: Path, lane_id: str) -> Path:
+    path = worktree_path(repo, lane_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    done = subprocess.run(["git", "-C", str(repo), "worktree", "add", "-q", "-b", f"lane/{lane_id}", str(path)],
+                          capture_output=True, text=True)
+    if done.returncode != 0:
+        raise LaunchError(f"git worktree add failed: {(done.stderr or done.stdout).strip()}")
+    return path
+
+
+def agent_command(config: Config, agent: str | None, brief: Path, workspace: Path) -> list[str]:
+    """The agent command: the agent's ``launch`` template, else ``[launch] command``."""
+    template = None
+    if agent:
+        table = config.agents.get(agent)
+        if table is None:
+            raise LaunchError(f"unknown agent '{agent}' (no [agents.{agent}] in config.toml)")
+        template = table.get("launch")
+    template = template or config.launch_command
+    if not template:
+        raise LaunchError('no agent command: add [launch] command = "<agent> ... {brief}" '
+                          "(placeholders {brief} and {workspace}) to config.toml")
+    words = shlex.split(template) if isinstance(template, str) else [str(w) for w in template]
+    return [w.replace("{brief}", str(brief)).replace("{workspace}", str(workspace)) for w in words]
+
+
+def tirith_argv() -> list[str]:
+    return [sys.executable, "-m", "tirith"]
+
+
+def lane_run_argv(project: str, step_id: str, hero_class: str, title: str, brief: Path,
+                  workspace: Path, lane_id: str, command: list[str]) -> list[str]:
+    return [*tirith_argv(), "lane", "run", "--id", lane_id, "--step", str(step_id), "--project", project,
+            "--class", hero_class, "--feature", title, "--brief", str(brief),
+            "--workspace", str(workspace), "--", *command]
+
+
+def spawn_detached(argv: list[str], home: Path, log: Path) -> int:
+    """Start ``argv`` in its own session so it survives the handler exiting."""
+    log.parent.mkdir(parents=True, exist_ok=True)
+    env = dict(os.environ, TIRITH_HOME=str(home), PYTHONPATH=str(Path(__file__).resolve().parent.parent))
+    with log.open("ab") as handle:
+        proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=handle, stderr=subprocess.STDOUT,
+                                env=env, start_new_session=True)
+    return proc.pid
+
+
+# -- the macOS url handler --------------------------------------------------------------------
+
+
+def apps_dir() -> Path:
+    return Path.home() / "Applications"
+
+
+def app_path(base: Path | None = None) -> Path:
+    return (base or apps_dir()) / APP_NAME
+
+
+def handler_installed(base: Path | None = None) -> bool:
+    return (app_path(base) / "Contents" / "Info.plist").is_file()
+
+
+def applescript(home_env: str | None = None) -> str:
+    """The ``on open location`` script; it runs ``tirith url open`` detached."""
+    prefix = f"PYTHONPATH={shlex.quote(str(Path(__file__).resolve().parent.parent))} "
+    if home_env:
+        prefix += f"TIRITH_HOME={shlex.quote(home_env)} "
+    base = prefix + " ".join(shlex.quote(a) for a in tirith_argv()) + " url open "
+    escaped = base.replace("\\", "\\\\").replace('"', '\\"')
+    return ("on open location theURL\n"
+            f'\tdo shell script "{escaped}" & quoted form of theURL & " >/dev/null 2>&1 &"\n'
+            "end open location\n")
+
+
+def install_handler(base: Path | None = None, home_env: str | None = None, register: bool = True) -> Path:
+    if sys.platform != "darwin" or not shutil.which("osacompile"):
+        raise LaunchError("the url handler is macOS only for now (needs osacompile)")
+    app = app_path(base)
+    if app.exists():
+        shutil.rmtree(app)
+    app.parent.mkdir(parents=True, exist_ok=True)
+    source = app.parent / f".{APP_NAME}.applescript"
+    source.write_text(applescript(home_env), encoding="utf-8")
+    try:
+        done = subprocess.run(["osacompile", "-o", str(app), str(source)], capture_output=True, text=True)
+    finally:
+        source.unlink(missing_ok=True)
+    if done.returncode != 0:
+        raise LaunchError(f"osacompile failed: {done.stderr.strip()}")
+    plist_path = app / "Contents" / "Info.plist"
+    info = plistlib.loads(plist_path.read_bytes())
+    info.update({"CFBundleIdentifier": BUNDLE_ID, "CFBundleName": "Tirith Launcher", "LSUIElement": True,
+                 "CFBundleURLTypes": [{"CFBundleURLName": "Tirith link", "CFBundleURLSchemes": [SCHEME]}]})
+    plist_path.write_bytes(plistlib.dumps(info))
+    if register:
+        register_app(app)
+    return app
+
+
+def register_app(app: Path, unregister: bool = False) -> None:
+    lsregister = ("/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework"
+                  "/Support/lsregister")
+    if Path(lsregister).is_file():
+        subprocess.run([lsregister, "-u" if unregister else "-f", str(app)], capture_output=True)
+
+
+def uninstall_handler(base: Path | None = None, register: bool = True) -> bool:
+    app = app_path(base)
+    if not app.exists():
+        return False
+    if register:
+        register_app(app, unregister=True)
+    shutil.rmtree(app)
+    return True
+
+
+def verify_handler(base: Path | None = None) -> list[str]:
+    """Problems with the installed handler (empty = fine)."""
+    app = app_path(base)
+    plist_path = app / "Contents" / "Info.plist"
+    if not plist_path.is_file():
+        return [f"{app} is not installed. Fix: {INSTALL_COMMAND}"]
+    try:
+        info = plistlib.loads(plist_path.read_bytes())
+    except Exception:
+        return [f"{plist_path} is unreadable. Fix: {INSTALL_COMMAND}"]
+    schemes = [s for t in info.get("CFBundleURLTypes", []) for s in t.get("CFBundleURLSchemes", [])]
+    if SCHEME not in schemes:
+        return [f"{app} does not handle {SCHEME}://. Fix: {INSTALL_COMMAND}"]
+    return []

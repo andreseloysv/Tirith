@@ -134,6 +134,15 @@
       "items": {
         "$ref": "#/$defs/violation"
       }
+    },
+    "launch": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["token", "available"],
+      "properties": {
+        "token": {"type": ["string", "null"]},
+        "available": {"type": "boolean"}
+      }
     }
   },
   "$defs": {

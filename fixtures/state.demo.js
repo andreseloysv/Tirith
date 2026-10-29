@@ -140,7 +140,7 @@ window.TIRITH_STATE = {
         "steps": [
           {
             "id": "1",
-            "title": "Datos y migraci\u00f3n",
+            "title": "Datos y migración",
             "status": "done",
             "done": 2,
             "total": 2,
@@ -164,7 +164,7 @@ window.TIRITH_STATE = {
             "total": 3,
             "items": [
               {
-                "text": "Arranque en fr\u00edo bajo 2 s",
+                "text": "Arranque en frío bajo 2 s",
                 "done": true
               },
               {
@@ -172,7 +172,7 @@ window.TIRITH_STATE = {
                 "done": false
               },
               {
-                "text": "Reducir memoria en tel\u00e9fonos de gama baja",
+                "text": "Reducir memoria en teléfonos de gama baja",
                 "done": false
               }
             ],
@@ -188,11 +188,11 @@ window.TIRITH_STATE = {
             "total": 2,
             "items": [
               {
-                "text": "Declaraci\u00f3n de recursos de IA",
+                "text": "Declaración de recursos de IA",
                 "done": false
               },
               {
-                "text": "Capturas y descripci\u00f3n",
+                "text": "Capturas y descripción",
                 "done": false
               }
             ],
@@ -290,7 +290,7 @@ window.TIRITH_STATE = {
             "total": 2,
             "items": [
               {
-                "text": "Alias de agentes en el c\u00f3digo; nombres reales en `config.toml`.",
+                "text": "Alias de agentes en el código; nombres reales en `config.toml`.",
                 "done": true
               },
               {
@@ -316,7 +316,7 @@ window.TIRITH_STATE = {
                 "done": true
               },
               {
-                "text": "Lane sin respuesta o con error \u2192 \u00abesperando por ti\u00bb.",
+                "text": "Lane sin respuesta o con error → «esperando por ti».",
                 "done": true
               }
             ],
@@ -324,7 +324,7 @@ window.TIRITH_STATE = {
           },
           {
             "id": "2",
-            "title": "\u00c1rbol de delegaci\u00f3n",
+            "title": "Árbol de delegación",
             "status": "done",
             "done": 3,
             "total": 3,
@@ -334,7 +334,7 @@ window.TIRITH_STATE = {
                 "done": true
               },
               {
-                "text": "`register_lane` guarda `parent` autom\u00e1ticamente.",
+                "text": "`register_lane` guarda `parent` automáticamente.",
                 "done": true
               },
               {
@@ -346,13 +346,13 @@ window.TIRITH_STATE = {
           },
           {
             "id": "3",
-            "title": "Hooks de agentes \u2192 `tirith hook`",
+            "title": "Hooks de agentes → `tirith hook`",
             "status": "active",
             "done": 3,
             "total": 6,
             "items": [
               {
-                "text": "`tirith hook --agent <alias>` escribe un evento est\u00e1ndar.",
+                "text": "`tirith hook --agent <alias>` escribe un evento estándar.",
                 "done": true
               },
               {
@@ -368,7 +368,7 @@ window.TIRITH_STATE = {
                 "done": false
               },
               {
-                "text": "Protegerlos para que un agente no pueda quit\u00e1rselos.",
+                "text": "Protegerlos para que un agente no pueda quitárselos.",
                 "done": false
               },
               {
@@ -400,7 +400,7 @@ window.TIRITH_STATE = {
           },
           {
             "id": "7",
-            "title": "Reglas de c\u00f3digo",
+            "title": "Reglas de código",
             "status": "active",
             "done": 1,
             "total": 3,
@@ -422,7 +422,7 @@ window.TIRITH_STATE = {
           },
           {
             "id": "8",
-            "title": "M\u00e1s visibilidad por agente",
+            "title": "Más visibilidad por agente",
             "status": "active",
             "done": 1,
             "total": 3,
@@ -432,7 +432,7 @@ window.TIRITH_STATE = {
                 "done": true
               },
               {
-                "text": "Logs legibles, m\u00e1s nuevos arriba.",
+                "text": "Logs legibles, más nuevos arriba.",
                 "done": false
               },
               {
@@ -458,11 +458,11 @@ window.TIRITH_STATE = {
                 "done": false
               },
               {
-                "text": "Tarjeta \u00abPlan\u00bb en el Overview.",
+                "text": "Tarjeta «Plan» en el Overview.",
                 "done": false
               },
               {
-                "text": "Fecha l\u00edmite con cuenta atr\u00e1s.",
+                "text": "Fecha límite con cuenta atrás.",
                 "done": false
               }
             ],
@@ -781,7 +781,7 @@ window.TIRITH_STATE = {
           "ts": "2026-10-28T19:39:02Z",
           "kind": "edit",
           "text": "app/src/main/java/scan/PersonPool.kt",
-          "detail": "+12 \u22123",
+          "detail": "+12 −3",
           "fields": null,
           "path": "/Users/owner/DEVELOP/Chromasol/app/src/main/java/scan/PersonPool.kt"
         },
@@ -821,7 +821,7 @@ window.TIRITH_STATE = {
           "ts": "2026-10-28T19:37:30Z",
           "kind": "edit",
           "text": "app/src/main/java/scan/ScanViewModel.kt",
-          "detail": "+4 \u22121",
+          "detail": "+4 −1",
           "fields": null,
           "path": "/Users/owner/DEVELOP/Chromasol/app/src/main/java/scan/ScanViewModel.kt"
         },
@@ -1019,7 +1019,7 @@ window.TIRITH_STATE = {
           "ts": "2026-10-28T18:38:20Z",
           "kind": "edit",
           "text": "app/src/main/java/db/Migrations.kt",
-          "detail": "+58 \u22122",
+          "detail": "+58 −2",
           "fields": null,
           "path": "/Users/owner/DEVELOP/Chromasol/app/src/main/java/db/Migrations.kt"
         },
@@ -1995,9 +1995,9 @@ window.TIRITH_STATE = {
       "agent": "anthropic",
       "lane": "icon-2",
       "project": "chromasol",
-      "message": "tirith: subagent-tool: the agent's internal sub-agent tool (Task) is not allowed. Do this instead: tirith lane run --project chromasol --class glasswright --feature \"<description>\" --brief <file> -- <agent cmd> \u2026",
+      "message": "tirith: subagent-tool: the agent's internal sub-agent tool (Task) is not allowed. Do this instead: tirith lane run --project chromasol --class glasswright --feature \"<description>\" --brief <file> -- <agent cmd> …",
       "blocked": "the agent's internal sub-agent tool (Task) is not allowed",
-      "instead": "tirith lane run --project chromasol --class glasswright --feature \"<description>\" --brief <file> -- <agent cmd> \u2026"
+      "instead": "tirith lane run --project chromasol --class glasswright --feature \"<description>\" --brief <file> -- <agent cmd> …"
     },
     {
       "ts": "2026-10-28T19:12:00Z",
@@ -2019,5 +2019,9 @@ window.TIRITH_STATE = {
       "blocked": "running the stage \"tests\" raw is not allowed",
       "instead": "tirith run --project tirith --stage tests"
     }
-  ]
+  ],
+  "launch": {
+    "token": "demo-launch-token-0123456789",
+    "available": true
+  }
 };
