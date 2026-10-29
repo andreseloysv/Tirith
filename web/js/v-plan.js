@@ -372,7 +372,7 @@
       }).join('') : '<li class="none">No items yet</li>') + '</ul>';
       if (!ro && !fin) h += reviewBtn(s, p, state) || launchBtn(s, p, state, true).replace('class="plw"', 'class="plw pbody"');
     }
-    if (!ro && !fin) h += historyBlock(s, p, state, key, reqs);
+    if (!ro) h += historyBlock(s, p, state, key, reqs);
     return h + '</li>';
   }
 
