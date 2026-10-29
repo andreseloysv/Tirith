@@ -141,6 +141,28 @@ try {
   assert.equal(await page.locator('.mc-strip').count(), 0, 'the composer is empty again');
   assert.match(await page.locator('.mc-m.sent .mc-file').first().innerText(), /notes\.txt/);
   ok('a removed chip is not sent; the file is saved with its type, then the chat row lists it');
+  /* 6. the app pushes a drop straight into the page (files already read in Rust); it is logged; the thumbnail is small and tidy */
+  await page.waitForTimeout(900);   /* a second drop within a moment is taken as the same one */
+  const chat2 = await at('.mc-box');
+  const push = d => page.evaluate(d => window.__tirithDrag(d), d);
+  await push({ phase: 'enter', x: chat2.x, y: chat2.y });
+  assert.equal(await page.locator('.mchat.drop').count(), 1, 'pushed enter marks the chat');
+  await push({ phase: 'drop', x: chat2.x, y: chat2.y, files: [
+    { name: 'a-rather-long-screenshot-name.png', type: 'image/png', size: 68, b64: PNG },
+    { name: 'build-notes.txt', type: 'text/plain', size: 2048, b64: 'aGVsbG8=' }] });
+  await page.locator('.mc-strip .mc-th img').first().waitFor({ timeout: 3000 });
+  assert.equal(await page.locator('.mc-strip .mc-file').count(), 1);
+  assert.equal(await page.locator('.mchat.drop').count(), 0);
+  assert.match(await page.locator('.mc-strip .mc-th').first().innerText(), /a-rather-long.*\n?.*68 B/s);
+  const geo = await page.evaluate(() => {
+    const th = document.querySelector('.mc-strip .mc-th img').getBoundingClientRect(), x = document.querySelector('.mc-strip .mc-th button').getBoundingClientRect();
+    return { inside: x.left >= th.left && x.right <= th.right && x.top >= th.top && x.bottom <= th.bottom, w: x.width };
+  });
+  assert.equal(geo.inside, true, 'the x sits inside the thumbnail');
+  assert.ok(geo.w <= 20, 'the x is small');
+  assert.ok(await page.evaluate(() => window.__calls.some(c => c.cmd === 'app_log' && /drop 2 file/.test(c.args.line))), 'the drop is logged');
+  await page.screenshot({ path: path.join(here, '..', 'screenshots', 'chat-attach-thumb.png'), clip: await page.locator('.mc-comp').first().boundingBox() });
+  ok('a drop pushed by the app adds the thumbnail and chip, the small x is inside the corner, and it is logged');
   assert.deepEqual(errors, [], 'no page errors');
   await ctx.close();
 
