@@ -90,10 +90,10 @@ def _flow(home: Path, src: str, dst: str, kind: str, text: str, req: dict, at: s
 # -- the cycle --------------------------------------------------------------------------------
 
 
-def _default_launcher(home: Path, project: str, step: str) -> str:
+def _default_launcher(home: Path, project: str, step: str, request_id: str | None = None) -> str:
     from tirith.cli import launch_step  # late: cli imports the collector, which imports this module
     try:
-        return launch_step(home, project, step, out=io.StringIO())
+        return launch_step(home, project, step, out=io.StringIO(), request_id=request_id)
     except SystemExit as err:  # a helper of the CLI gave up with a message
         raise launch_mod.LaunchError(str(err.code or "launch failed"))
 
@@ -121,21 +121,22 @@ def _finish(home: Path, req: dict, config: Config, agents: list[dict], lanes: li
         name = row.get("name") or busy["id"]
         doing = _short(row.get("summary") or "") or "no activity line yet"
         inbox_mod.add_answer(home, req["id"], f"{name} (lane `{busy['id']}`) is already working on "
-                             f"{_step_name(req)}. Now: {doing}", by="tirith", auto=True, at=at)
+                             f"{_step_name(req)}. Now: {doing}", by="tirith", auto=True, at=at,
+                             lane=busy["id"])
         _flow(home, "tirith", f"agent:{busy['id']}", "message",
               f"{_step_name(req)} is already yours; the owner asked for it again", req, at)
         return f"running:{busy['id']}"
     if not config.dispatch_auto_launch:
         return "steward"
     try:
-        lane_id = launcher(home, req["project"], req["step"])
+        lane_id = launcher(home, req["project"], req["step"], req["id"])
     except launch_mod.LaunchError as err:
         reason = str(err)
     except Exception as err:  # never let one request stop the cycle
         reason = f"{type(err).__name__}: {err}"
     else:
         inbox_mod.add_answer(home, req["id"], f"Started lane `{lane_id}` on {_step_name(req)}.",
-                             by="tirith", auto=True, at=at)
+                             by="tirith", auto=True, at=at, lane=lane_id)
         _flow(home, "tirith", f"agent:{lane_id}", "brief", f"Finish {_step_name(req)}", req, at)
         return f"launched:{lane_id}"
     fix = refusal_fix(req["project"], req["step"], reason)
