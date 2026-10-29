@@ -53,6 +53,8 @@ def _lane(home: Path, repo: Path, ok: bool = True, request_id: str | None = None
                   workspace=str(worktree), log=None, pid=None, brief=str(brief), step="2", request_id=request_id)
     if ok:
         (worktree / "feature.txt").write_text("built\n", encoding="utf-8")
+    else:  # some work, but not what the tests look for
+        (worktree / "other.txt").write_text("wip\n", encoding="utf-8")
     return end_lane(home, "web-panel", "done", REPORT)
 
 
@@ -289,3 +291,20 @@ def test_a_merged_lane_is_never_overdue(env, home: Path) -> None:
     notified: list[str] = []
     cycle(home, Spawner(home, env), now=datetime.now(timezone.utc) + timedelta(hours=2), notified=notified)
     assert notified == [] and not [e for e in read_jsonl(home / "events.jsonl") if e.get("rule") == "review-overdue"]
+
+
+def test_a_lane_already_merged_by_hand_is_settled_not_reviewed(env, home: Path) -> None:
+    repo = env
+    worktree = launch_mod.create_worktree(repo, "web-panel")
+    register_lane(home, lane_id="web-panel", project="demo", hero_class="glasswright", feature="Web panel",
+                  workspace=str(worktree), log=None, pid=None, brief=None, step="2")
+    (worktree / "feature.txt").write_text("built\n", encoding="utf-8")
+    git(worktree, "add", ".")
+    git(worktree, "commit", "-q", "-m", "feature")
+    git(repo, "merge", "-q", "--ff-only", "lane/web-panel")  # the owner merged it by hand
+    end_lane(home, "web-panel", "done", REPORT)
+    spawn = Spawner(home, repo)
+    for _ in range(3):
+        cycle(home, spawn)
+    assert spawn.calls == [] and asks_mod.queue_items(home) == []
+    assert read_json(home / "dispatch.json", {})["reviews"]["web-panel"]["settled"] == "merged"
