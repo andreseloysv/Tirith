@@ -18,7 +18,9 @@ from tirith.home import now_iso
 from tirith.store import append_jsonl, read_jsonl
 
 INBOX_FILE = "inbox.jsonl"
-KINDS = ("finish", "ask", "setup")
+KINDS = ("finish", "ask", "setup", "plan-refresh", "plan-new")
+PLAN_KINDS = ("plan-refresh", "plan-new")
+PLAN_STEP = "plan"  # the step of a request about the whole plan, not one step
 MODELS_ACTIONS = ("models-set", "apply-manager")  # the Settings page; the request's project is "settings"
 SETUP_ACTIONS = ("add-stage", "add-rule", "remove-stage", "remove-rule", "run-stage") + MODELS_ACTIONS
 SETUP_STEP = "setup"
@@ -58,6 +60,10 @@ def add_request(home: Path, kind: str, project: str, step: str, text: str = "",
     if kind == "setup":
         step = step or SETUP_STEP
         text = json.dumps(parse_setup(text), ensure_ascii=False, separators=(",", ":"))
+    if kind in PLAN_KINDS:
+        step = step or PLAN_STEP
+        if kind == "plan-new":
+            text = json.dumps(parse_plan_new(text), ensure_ascii=False, separators=(",", ":"))
     if not project or not step:
         raise InboxError("a request needs a project and a step")
     if kind == "ask" and not text:
@@ -78,6 +84,18 @@ def parse_setup(text: str) -> dict:
         raise InboxError("a setup request needs text like {\"action\": \"add-stage\", ...} with action one of "
                          + ", ".join(SETUP_ACTIONS))
     return {str(k): v for k, v in data.items() if isinstance(v, (str, int, float, bool, list)) or v is None}
+
+
+def parse_plan_new(text: str) -> dict:
+    """The JSON of a ``plan-new`` request: ``{title, goal, deadline, steps}``; only the title is required."""
+    try:
+        data = json.loads(text)
+    except (TypeError, ValueError):
+        data = None
+    if not isinstance(data, dict) or not str(data.get("title") or "").strip():
+        raise InboxError('a plan-new request needs text like {"title": "...", "goal": "...", '
+                         '"deadline": "", "steps": ""} with a title')
+    return {key: str(data.get(key) or "").strip() for key in ("title", "goal", "deadline", "steps")}
 
 
 def setup_summary(setup: dict) -> str:
@@ -168,6 +186,11 @@ def requests(home: Path) -> list[dict]:
                     out[rid]["setup"] = parse_setup(out[rid]["text"])
                 except InboxError:
                     del out[rid]
+            elif kind == "plan-new":
+                try:
+                    out[rid]["plan"] = parse_plan_new(out[rid]["text"])
+                except InboxError:
+                    del out[rid]
         elif rid in out and kind == "answer":
             answer = {"at": row.get("at"), "by": "manager" if row.get("by") in (None, "", "steward") else row["by"],
                       "text": str(row.get("text") or ""), "auto": bool(row.get("auto")),
@@ -191,8 +214,8 @@ def requests(home: Path) -> list[dict]:
 def manager_pending(req: dict) -> bool:
     """True while the manager owes this request something.
 
-    A ``finish`` is Tirith's own job (the dispatcher answers it), so any answer settles it; every
-    other kind stays pending until the manager itself answers, whatever the brain said."""
+    A ``finish`` or a plan request is Tirith's own job (the dispatcher answers it), so any answer
+    settles it; every other kind stays pending until the manager itself answers, whatever the brain said."""
     if req["status"] == "done":
         return False
     runs = req.get("action_runs") or []
@@ -200,7 +223,7 @@ def manager_pending(req: dict) -> bool:
         last_manager = max((str(a["at"] or "") for a in req["answers"] if a["by"] == "manager"), default="")
         if max(str(r["at"] or "") for r in runs) > last_manager:
             return True  # the owner ran an action the manager gave: the manager must answer the result
-    if req["kind"] == "finish":
+    if req["kind"] == "finish" or req["kind"] in PLAN_KINDS:
         return not req["answers"]
     return not any(a["by"] == "manager" for a in req["answers"])
 
