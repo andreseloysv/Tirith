@@ -340,7 +340,7 @@
       else if (act === 'zoom-in') { ui.fit = false; ui.zoom = Math.min(2, Math.round((ui.zoom + .1) * 10) / 10); }
       else if (act === 'zoom-out') { ui.fit = false; ui.zoom = Math.max(.3, Math.round((ui.zoom - .1) * 10) / 10); }
       else if (act === 'fit') ui.fit = true;
-      else if (act === 'gorun') { ui.selRun = key; ui.fit = true; T.setFilter('view', 'pipelines'); return; }
+      else if (act === 'gorun') { ui.selRun = key; ui.pOpen = key; ui.fit = true; T.setFilter('view', 'pipelines'); return; }
       else if (act === 'goagent') { ui.openAgent = key; ui.drawer = 'agent'; T.setFilter('view', 'agents'); return; }
       else return;
       T.render();
