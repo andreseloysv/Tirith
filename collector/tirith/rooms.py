@@ -576,7 +576,7 @@ class RoomsService:
                 "id": f"room-{room_cfg.id}-{item['n']}",
                 "project": room_cfg.project,
                 "text": f"{room_title(room_cfg.id)}: {item['from']} (#{item['n']}) {item['reason']}",
-                "since": item["at"], "link": url, "source": needs_source,
+                "since": item["at"], "link": url, "source": "room",
                 "options": [dict(o) for o in asks_mod.GOT_IT_OPTIONS],
             })
         room = {

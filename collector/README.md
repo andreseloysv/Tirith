@@ -110,8 +110,8 @@ https://dev.meta.ai/docs/) for four jobs, cached by input hash in `brain/`
 so unchanged logs cost nothing:
 
 1. **Summary** — last ~200 log lines → one sentence of current activity.
-2. **Waiting detector** — log tail/report → items that need the owner
-   (`waiting_on_you` entries with `source: "brain"`).
+2. **Waiting detector** — log tail/report → what a working agent seems to wait on
+   (manager queue items `kind: "agent-waiting"`, never `waiting_on_you`).
 3. **Architecture** — file tree + key files → map nodes/edges (`tirith map`,
    refreshed automatically when no stored map exists).
 4. **Hero epithet** — an agent's first brain summary → its lasting epithet.
