@@ -50,6 +50,12 @@ def clip(text: str, limit: int = TEXT_MAX_BYTES) -> str:
     return str(text or "").encode("utf-8")[:limit].decode("utf-8", errors="ignore")
 
 
+def clean_cid(cid) -> str:
+    """A client id as stored: at most 64 characters of ``[A-Za-z0-9_-]``, else ''."""
+    cid = str(cid or "").strip()
+    return cid if 0 < len(cid) <= 64 and all(c.isalnum() and c.isascii() or c in "_-" for c in cid) else ""
+
+
 def new_id() -> str:
     return "in-" + secrets.token_hex(4)
 
@@ -141,8 +147,10 @@ def attachment_lines(req: dict) -> str:
 
 
 def add_request(home: Path, kind: str, project: str = "", step: str = "", text: str = "",
-                at: str | None = None, attachments: list[dict] | None = None, rid: str | None = None) -> dict:
-    """Append an open request and return its row."""
+                at: str | None = None, attachments: list[dict] | None = None, rid: str | None = None,
+                cid: str | None = None) -> dict:
+    """Append an open request and return its row. A ``cid`` (the page's client id) already on a row makes
+    this a retry: nothing is written and that row is returned."""
     if kind not in KINDS:
         raise InboxError(f"kind must be one of {', '.join(KINDS)}, not {kind!r}")
     project, step, text = str(project or "").strip(), str(step if step is not None else "").strip(), clip(text.strip())
@@ -165,8 +173,15 @@ def add_request(home: Path, kind: str, project: str = "", step: str = "", text: 
         raise InboxError("a request needs a project and a step")
     if kind == "ask" and not text:
         raise InboxError("a question needs text")
+    cid = clean_cid(cid)
+    if cid:
+        seen = next((r for r in read_jsonl(inbox_path(home)) if r.get("cid") == cid and r.get("kind") in KINDS), None)
+        if seen is not None:
+            return seen
     row = {"id": rid or new_id(), "at": at or now_iso(), "kind": kind, "project": project, "step": step,
            "text": text, "from": "owner", "status": "open"}
+    if cid:
+        row["cid"] = cid
     if attachments:
         row["attachments"] = attachments
     append_jsonl(inbox_path(home), row)
@@ -287,6 +302,8 @@ def requests(home: Path) -> list[dict]:
                         "step": str(row.get("step") if row.get("step") is not None else ""),
                         "text": str(row.get("text") or ""), "from": row.get("from") or "owner",
                         "status": "open", "answers": [], "manager_pending": True, "action_runs": []}
+            if clean_cid(row.get("cid")):
+                out[rid]["cid"] = clean_cid(row["cid"])
             if clean_attachments(row.get("attachments")):
                 out[rid]["attachments"] = clean_attachments(row["attachments"])
             if kind == "setup":
@@ -484,13 +501,15 @@ def parse_url(url: str) -> dict:
     if parts.scheme.lower() != SCHEME or (parts.netloc or parts.path.strip("/")).lower() != "inbox":
         raise InboxError(f"not a {SCHEME}://inbox link: {url!r}")
     query = {k: v[-1] for k, v in parse_qs(parts.query).items()}
-    return {key: query.get(key, "") for key in ("kind", "project", "step", "text", "token", "wait", "value")}
+    return {key: query.get(key, "") for key in ("kind", "project", "step", "text", "token", "wait", "value", "cid")}
 
 
-def build_url(kind: str, project: str, step: str, text: str, token: str) -> str:
+def build_url(kind: str, project: str, step: str, text: str, token: str, cid: str = "") -> str:
     from urllib.parse import urlencode
-    return f"{SCHEME}://inbox?" + urlencode({"kind": kind, "project": project, "step": step,
-                                              "text": text, "token": token})
+    query = {"kind": kind, "project": project, "step": step, "text": text, "token": token}
+    if cid:
+        query["cid"] = cid
+    return f"{SCHEME}://inbox?" + urlencode(query)
 
 
 def build_reply_url(wait: str, project: str, value: str, text: str, token: str) -> str:

@@ -117,7 +117,7 @@ def test_broken_lines_and_orphan_answers_are_ignored(home: Path) -> None:
 def test_url_roundtrip() -> None:
     url = inbox_mod.build_url("ask", "my proj", "3", "what & why?", "t0k")
     assert inbox_mod.parse_url(url) == {"kind": "ask", "project": "my proj", "step": "3",
-                                        "text": "what & why?", "token": "t0k", "wait": "", "value": ""}
+                                        "text": "what & why?", "token": "t0k", "wait": "", "value": "", "cid": ""}
     with pytest.raises(inbox_mod.InboxError):
         inbox_mod.parse_url("tirith://launch?project=a&step=1")
 
@@ -413,3 +413,30 @@ def test_answer_with_images_and_manager_context(home: Path, tmp_path: Path) -> N
     assert main(["inbox", "answer", rid, "It is a button.", "--attach", str(img)]) == 0
     (req,) = inbox_mod.requests(home)
     assert req["answers"][0]["attachments"][0]["path"] == str(img.resolve())
+
+
+def test_a_cid_makes_a_retry_safe(home: Path, capsys) -> None:
+    first = _add(capsys, "--kind", "chat", "--text", "hello", "--cid", "c-abc123")
+    again = _add(capsys, "--kind", "chat", "--text", "hello", "--cid", "c-abc123")
+    assert again == first
+    (row,) = read_jsonl(home / "inbox.jsonl")
+    assert row["cid"] == "c-abc123"
+    other = _add(capsys, "--kind", "chat", "--text", "hello", "--cid", "c-other")
+    assert other != first and len(read_jsonl(home / "inbox.jsonl")) == 2
+    (req,) = [r for r in inbox_mod.requests(home) if r["id"] == first]
+    assert req["cid"] == "c-abc123"
+
+
+def test_a_bad_cid_is_dropped_and_rows_without_one_never_collide(home: Path) -> None:
+    a = inbox_mod.add_request(home, "chat", text="one", cid="no spaces!")
+    b = inbox_mod.add_request(home, "chat", text="two")
+    assert "cid" not in a and "cid" not in b and a["id"] != b["id"]
+
+
+def test_the_link_carries_the_cid_and_the_url_open_ignores_a_duplicate(home: Path) -> None:
+    url = inbox_mod.build_url("chat", "", "", "hi there", "tok", cid="c-link1")
+    assert inbox_mod.parse_url(url)["cid"] == "c-link1"
+    assert inbox_mod.parse_url(inbox_mod.build_url("chat", "", "", "hi", "tok"))["cid"] == ""
+    inbox_mod.add_request(home, "chat", text="hi there", cid="c-link1")
+    inbox_mod.add_request(home, "chat", text="hi there", cid="c-link1")
+    assert len(read_jsonl(home / "inbox.jsonl")) == 1
