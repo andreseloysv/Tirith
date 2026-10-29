@@ -211,6 +211,10 @@ def event_answer(event: dict) -> str | None:
     if (event.get("type") == "item.completed" and isinstance(item, dict)
             and item.get("type") == "agent_message" and isinstance(item.get("text"), str)):
         return item["text"]
+    data = event.get("data")
+    if (event.get("type") == "assistant.message" and isinstance(data, dict)  # copilot
+            and data.get("phase") == "final_answer" and isinstance(data.get("content"), str)):
+        return data["content"]
     payload = event.get("payload")
     if (event.get("payload_type") == "run.terminal.completed" and isinstance(payload, dict)
             and isinstance(payload.get("text"), str)):
