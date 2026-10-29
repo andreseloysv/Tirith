@@ -7,6 +7,8 @@ the worktree and the branch. See ``docs/CONTRACT-manifest.md`` ("Runs").
 
 from __future__ import annotations
 
+import contextlib
+import fcntl
 import os
 import subprocess
 import sys
@@ -25,22 +27,35 @@ def pipeline_book(home: Path) -> dict:
     return data if isinstance(data, dict) else {}
 
 
+@contextlib.contextmanager
+def pipelines_lock(home: Path):
+    """Exclusive lock on ``pipelines.json`` (a lock file next to it) for a read-modify-write."""
+    home.mkdir(parents=True, exist_ok=True)
+    with (home / "pipelines.json.lock").open("a") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle, fcntl.LOCK_UN)
+
+
 def resolve_run(home: Path, project: str, pipeline: str, explicit: str | None, new_run: bool) -> str:
     """The run id of ``project/pipeline``: ``explicit``, the current run, or the next one."""
     if explicit:
         return explicit
-    book = pipeline_book(home)
     key = f"{project}/{pipeline}"
-    entry = book.get(key) if isinstance(book.get(key), dict) else None
-    if entry is None:
-        entry = book.get(f"*/{pipeline}") if isinstance(book.get(f"*/{pipeline}"), dict) else {}
-    counter = int(entry.get("counter") or 0)
-    if new_run or counter == 0:
-        counter += 1
-        entry = {**entry, "counter": counter, "current_run": f"{pipeline}#{counter}"}
-        book[key] = entry
-        write_json_atomic(home / "pipelines.json", book)
-    return str(entry.get("current_run") or f"{pipeline}#{counter}")
+    with pipelines_lock(home):  # read, increment and write as one step: parallel runs get distinct numbers
+        book = pipeline_book(home)
+        entry = book.get(key) if isinstance(book.get(key), dict) else None
+        if entry is None:
+            entry = book.get(f"*/{pipeline}") if isinstance(book.get(f"*/{pipeline}"), dict) else {}
+        counter = int(entry.get("counter") or 0)
+        if new_run or counter == 0:
+            counter += 1
+            entry = {**entry, "counter": counter, "current_run": f"{pipeline}#{counter}"}
+            book[key] = entry
+            write_json_atomic(home / "pipelines.json", book)
+        return str(entry.get("current_run") or f"{pipeline}#{counter}")
 
 
 def _git(folder: Path, *args: str) -> str | None:

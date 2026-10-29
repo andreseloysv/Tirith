@@ -74,7 +74,6 @@
       h += '<button class="nbtn' + (i === 0 ? ' primary' : '') + '" data-act="nopt" data-key="' + esc(w.id) + '" data-i="' + i + '">' + esc(o.label) + '</button>';
     });
     if (w.command) h += '<button class="nbtn" data-act="copy" data-key="' + esc(w.command) + '" title="Copy the command">Copy</button><code class="ncmd" title="' + esc(w.command) + '">' + esc(w.command) + '</code>';
-    if (w.actions && w.actions.length) h += T.actions(w.actions, lastState, w.project);
     if (w.link) h += '<a class="nbtn" href="' + esc(w.link) + '" target="_blank" rel="noopener">Open</a>';
     h += '</div>' + (w.actions && w.actions.length ? T.actions(w.actions, lastState, w.project) : '') + '<div class="nwrite"><input class="iin" type="text" data-act="ntext" data-key="' + esc(w.id) + '" maxlength="1000" placeholder="Or write what you need…" aria-label="Your reply" value="' + esc(ui.needsDraft[w.id] || '') + '"></div>';
     if (ui.needsErr[w.id]) h += '<div class="ierr">' + esc(ui.needsErr[w.id]) + '</div>';
