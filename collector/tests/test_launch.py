@@ -100,6 +100,12 @@ def test_launch_creates_worktree_brief_and_runs_lane(project, home: Path, capsys
     assert tail == ["agentcmd", "--brief", str(home / "briefs" / f"{lane_id}.md"), "--cwd", str(worktree)]
 
 
+def test_launch_passes_request_to_the_lane(project, home: Path, capsys) -> None:
+    _, started = project
+    assert main(["launch", "--project", "demo", "--step", "2", "--request", "in-abc12345"]) == 0
+    assert started[0][started[0].index("--request") + 1] == "in-abc12345"
+
+
 def test_refuses_done_empty_and_unknown_steps(project, capsys) -> None:
     for step, text in (("1", "already done"), ("3", "no items"), ("9", "not in")):
         assert main(["launch", "--project", "demo", "--step", step]) == 3

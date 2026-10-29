@@ -10,7 +10,7 @@
   ui.inboxCli = ui.inboxCli || {};     /* "project|step" -> CLI command to copy (no way to send from here) */
   ui.inboxErr = ui.inboxErr || {};     /* "project|step" -> why the send failed */
   ui.inboxOpen = ui.inboxOpen || {};   /* request id -> true/false: answers shown (default: not for done requests) */
-  var lastState = null, LAUNCH_WAIT = 90000, PEND_WAIT = 30000, INSTALL = 'tirith url install';
+  var lastState = null, LAUNCH_WAIT = 90000, PEND_WAIT = 10000, ESCALATE = 120, INSTALL = 'tirith url install';
 
   var IC = {
     done: '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="#2ea44f"/><path d="M4.8 8.2l2.2 2.2 4.2-4.6" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -80,14 +80,55 @@
     return 'tirith inbox add --kind ' + kind + ' --project ' + shq(pid) + ' --step ' + shq(sid) + (text ? ' --text ' + shq(text) : '');
   }
   function inboxBtns(key) {
-    return '<span class="iacts"><button class="ibtn" data-act="ifinish" data-key="' + esc(key) + '" title="Ask the steward to finish this step" aria-label="Finish it">' + FLAG + '</button>' +
-      '<button class="ibtn' + (ui.inboxAsk[key] ? ' on' : '') + '" data-act="iask" data-key="' + esc(key) + '" title="Ask the steward what is going on with this step" aria-label="Ask">' + BUBBLE + '</button></span>';
+    return '<span class="iacts"><button class="ibtn" data-act="ifinish" data-key="' + esc(key) + '" title="Tirith starts an agent on the open tasks of this step, or tells you who already has it" aria-label="Finish this step">' + FLAG + '<span>Finish this step</span></button>' +
+      '<button class="ibtn' + (ui.inboxAsk[key] ? ' on' : '') + '" data-act="iask" data-key="' + esc(key) + '" title="Ask what is going on with this step; the answer shows here" aria-label="Ask">' + BUBBLE + '<span>Ask</span></button></span>';
   }
-  function who(a) { return a.by === 'brain' ? (a.auto ? 'Muse Spark, automatic' : 'Muse Spark') : 'Steward'; }
+  var AST = { working: 'blue pulse', done: 'green', failed: 'red', stalled: 'amber' };
+  function tbadge(a) {
+    var l = a.tests || [], t = l[l.length - 1], txt;
+    if (!t || !t.result) return '';
+    txt = t.result === 'running' ? 'running' : t.result === 'failed' ? (t.failed != null ? t.failed + ' failed' : 'failed') : (t.passed != null ? t.passed + ' passed' : 'passed');
+    return ' <span class="rb ' + esc(t.result) + '" title="Last test run: ' + esc(t.command || '') + '">' + esc(txt) + '</span>';
+  }
+  /* "Handled by [avatar] name · feature" with the agent's live status */
+  function handled(id, state) {
+    var a = T.agentById(state, id);
+    if (!a) return '<li class="ie"><i class="ido"></i><div class="ib">Handled by <b>' + esc(id) + '</b></div></li>';
+    return '<li class="ie"><i class="ido ' + (a.status === 'working' ? 'live' : a.status === 'failed' ? 'bad' : 'ok') + '"></i><div class="ib">Handled by ' +
+      '<button class="iag" data-act="goagent" data-key="' + esc(a.id) + '" title="Open this agent">' + T.avatar(a, 18) + '<b>' + esc(a.name) + '</b></button>' +
+      (a.feature ? ' <span class="mut">· ' + plain(a.feature) + '</span>' : '') +
+      ' <span class="ist">' + T.dot(AST[a.status] || 'amber', a.status) + esc(a.status) + '</span>' + tbadge(a) +
+      (a.status === 'working' && a.summary ? '<div class="inow">' + T.mdInline(a.summary) + '</div>' : '') + '</div></li>';
+  }
+  function answerLabel(a) {
+    return a.by === 'brain' ? (a.auto ? 'Muse Spark answered automatically' : 'Muse Spark answered') : 'Steward answered';
+  }
+  /* One request as a timeline: asked -> answered -> handled by an agent -> done. Only from state.inbox. */
+  function thread(r, state) {
+    var open = r.id in ui.inboxOpen ? ui.inboxOpen[r.id] : r.status !== 'done', answers = r.answers || [], lanes = r.lanes || [], h;
+    h = '<div class="ithread" data-req="' + esc(r.id) + '"><ol class="itl"><li class="ie"><i class="ido me"></i><div class="ib"><b>' +
+      (r.kind === 'ask' ? 'You asked: ' + plain(r.text) : 'You asked to finish this step') + '</b> <span class="iwhen">· ' + esc(T.clockTime(r.at)) + '</span></div></li>';
+    answers.forEach(function (a) {
+      h += '<li class="ie"><i class="ido ok"></i><div class="ib ians' + (open ? ' open' : '') + '"><button class="iahead" data-act="iatog" data-key="' + esc(r.id) + '" aria-expanded="' + open + '">' + CHEV +
+        '<b>' + esc(answerLabel(a)) + '</b> <span class="iwhen">· ' + esc(T.clockTime(a.at)) + '</span></button>' +
+        (open ? '<div class="ia md">' + T.md(a.text) + '</div>' : '') + '</div></li>';
+    });
+    lanes.forEach(function (id) {
+      var ag = T.agentById(state, id), named = answers.some(function (a) { return a.lane === id; });
+      if (!named && ag && ag.started_at) h += '<li class="ie"><i class="ido ok"></i><div class="ib"><b>Tirith started an agent</b> <span class="iwhen">· ' + esc(T.clockTime(ag.started_at)) + '</span></div></li>';
+      h += handled(id, state);
+    });
+    if (!answers.length && !lanes.length && r.status === 'open') {
+      h += '<li class="ie"><i class="ido wait"></i><div class="ib iwait">Waiting for the steward · <span class="tick" data-start="' + esc(r.at) + '">' + esc(T.dur(T.elapsed(r.at))) + '</span>' +
+        (T.elapsed(r.at) >= ESCALATE ? '<div class="inow">No answer yet. Tirith will escalate this.</div>' : '') + '</div></li>';
+    }
+    if (r.status === 'done') h += '<li class="ie"><i class="ido ok"></i><div class="ib"><b>Done</b></div></li>';
+    return h + '</ol></div>';
+  }
   function inboxBelow(s, p, state, key) {
-    var reqs = reqsFor(state, p.id, s.id), pend = ui.inboxPend[key], h = '', waiting;
-    waiting = reqs.some(function (r) { return r.status === 'open'; }) || (pend && T.now() - pend < PEND_WAIT);
-    if (waiting) h += '<div class="ichip-row"><span class="ichip" title="The steward sees it in its inbox">Sent · waiting for the steward</span></div>';
+    var reqs = reqsFor(state, p.id, s.id), pend = ui.inboxPend[key], h = '';
+    if (pend && reqs.some(function (r) { return (T.ms(r.at) || 0) >= pend - 2000; })) { delete ui.inboxPend[key]; pend = null; }
+    if (pend && T.now() - pend < PEND_WAIT) h += '<div class="ichip-row"><span class="ichip" title="Sent; it shows here as soon as the collector has it">Sent · waiting for the steward</span></div>';
     if (ui.inboxErr[key]) h += '<div class="ierr">' + esc(ui.inboxErr[key]) + '</div>';
     if (ui.inboxCli[key]) {
       h += '<div class="icli">Tirith cannot send from this page. Run in a terminal:<code>' + esc(ui.inboxCli[key]) + '</code></div>';
@@ -96,17 +137,7 @@
       h += '<div class="iask"><input class="iin" type="text" data-act="itext" data-key="' + esc(key) + '" maxlength="1000" placeholder="Ask about this step…" aria-label="Question about this step" value="' + esc(ui.inboxDraft[key] || '') + '">' +
         '<button class="isend" data-act="isend" data-key="' + esc(key) + '">Send</button><span class="ihint">Enter sends · Esc closes</span></div>';
     }
-    reqs.filter(function (r) { return r.answers && r.answers.length; }).slice(-3).forEach(function (r) {
-      var open = r.id in ui.inboxOpen ? ui.inboxOpen[r.id] : r.status !== 'done';
-      h += '<div class="ians' + (open ? ' open' : '') + '"><button class="iahead" data-act="iatog" data-key="' + esc(r.id) + '" aria-expanded="' + open + '">' + CHEV +
-        '<span class="iq">' + (r.kind === 'ask' ? plain(r.text) : 'Finish it') + '</span><span class="iwhen">' + esc(T.ago(r.at)) + '</span></button>';
-      if (open) {
-        h += r.answers.map(function (a) {
-          return '<div class="ia"><div class="iby">' + esc(who(a)) + ' <span>' + esc(T.ago(a.at)) + '</span></div><div class="md">' + T.md(a.text) + '</div></div>';
-        }).join('');
-      }
-      h += '</div>';
-    });
+    reqs.slice().sort(function (a, b) { return (T.ms(b.at) || 0) - (T.ms(a.at) || 0); }).slice(0, 3).forEach(function (r) { h += thread(r, state); });
     return h;
   }
   function openCount(ps, state) {
