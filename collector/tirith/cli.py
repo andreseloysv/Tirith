@@ -20,7 +20,7 @@ from pathlib import Path
 from tirith.collector import (
     Collector, collect_tree, git_head, git_shortstat, heuristic_architecture,
 )
-from tirith.guardwrap import default_words, install_guard, verify_guard
+from tirith.guardwrap import default_words, guard_upgrade_steps, install_guard, verify_guard
 from tirith import flows as flows_mod
 from tirith import gates as gates_mod
 from tirith import manifest as manifest_mod
@@ -335,6 +335,10 @@ def _project_folder_of(home: Path, project: str | None) -> tuple[str, Path | Non
 def _manifest_stage(args, home: Path, command: list[str]) -> list[str]:
     """Fill project, pipeline and command from ``tirith.toml`` when ``run`` leaves them out."""
     args.project, folder = _project_folder_of(home, args.project)
+    if args.stage in manifest_mod.GIT_EVENTS and command and not args.pipeline:
+        # a git hook's `[[hooks]]` entry: one "git-hooks" pipeline per project
+        args.pipeline = manifest_mod.GIT_HOOKS_PIPELINE
+        args.project = args.project or Path.cwd().name
     if not args.project:
         raise SystemExit("tirith run needs --project (cwd is in no known project)")
     if args.pipeline and command:
@@ -664,6 +668,8 @@ def _cmd_guard(args) -> int:
                 print(f"  {problem}")
         else:
             print(f"{label}: guard OK")
+            for line in guard_upgrade_steps(repo, words):
+                print(f"  {line}")
     return exit_code
 
 

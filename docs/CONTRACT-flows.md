@@ -16,6 +16,12 @@ and automatically by other commands:
 | `tirith wait done` | `owner` → `steward` | `answer` |
 | guard problem appears | `guard` → `owner` | `alert` |
 | pipeline run ends | `pipeline:<run>` → `steward` | `report` |
+| git hook run (`events.jsonl` `kind: "git-hook"`) | `guard` → `pipeline:git-hooks#<n>` | `message` (allowed) / `alert` (blocked) |
+
+Git hook runs also form a `git-hooks` pipeline per project (stages `pre-commit`, `commit-msg`,
+`pre-push`; the latest result of each, blocked = failed). Installed hooks (guard version 2) write
+`{kind:"git-hook", hook, repo, result, reason, at, lane}` and run `tirith.toml` `[[hooks]]` through
+`tirith run --stage <event> -- <run>`; `pre-push` runs `tirith check`.
 
 Endpoints: `steward`, `owner`, `guard`, `agent:<lane-id>`, `room:<room-id>`, `pipeline:<run>`.
 Kinds: `brief`, `message`, `report`, `request`, `answer`, `decision`, `merge`, `alert`.

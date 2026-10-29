@@ -79,12 +79,114 @@ perl -ne '
 '''
 
 
-def render(words: list[str]) -> dict[str, str]:
-    """Hook file name -> content for this word list (regex alternatives, in order)."""
+GUARD_VERSION = 2
+HOOKS = ("pre-commit", "commit-msg", "pre-push")
+_BODY_START = "set -euo pipefail\n"
+
+PRE_PUSH = r'''#!/bin/bash
+# FORBIDDEN_WORDS_GUARD
+# Records every push attempt and blocks it when `tirith check` fails.
+# Installed by Tirith; words: {words}
+set -euo pipefail
+'''
+
+# Recording prologue, POSIX sh syntax. @HOOK@ and @REASON@ are filled per hook.
+_RECORD = r'''
+# --- Tirith: record every run of this hook (TIRITH_GUARD_VERSION=2) ---
+TIRITH_HOOK=@HOOK@
+TIRITH_REASON="@REASON@"
+tirith_json() { printf '%s' "$1" | tr '\000-\037' ' ' | sed 's/\\/\\\\/g; s/"/\\"/g'; }
+tirith_record() {
+    _t_home=${TIRITH_HOME:-${HOME:-.}/.tirith}
+    _t_repo=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+    _t_lane=null
+    if [ -n "${TIRITH_LANE:-}" ]; then _t_lane="\"$(tirith_json "$TIRITH_LANE")\""; fi
+    mkdir -p "$_t_home" 2>/dev/null || return 0
+    printf '{"kind":"git-hook","hook":"%s","repo":"%s","result":"%s","reason":"%s","at":"%s","lane":%s}\n' \
+        "$(tirith_json "$1")" "$(tirith_json "$_t_repo")" "$2" "$(tirith_json "$3")" \
+        "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$_t_lane" >> "$_t_home/events.jsonl" 2>/dev/null || true
+}
+tirith_exit() {
+    _t_code=$?
+    trap - EXIT
+    if [ "$_t_code" -ne 0 ]; then tirith_record "$TIRITH_HOOK" blocked "$TIRITH_REASON"; fi
+    exit "$_t_code"
+}
+trap tirith_exit EXIT
+tirith_root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+'''
+
+_RUN_HOOKS = r'''
+# --- Tirith: [[hooks]] of tirith.toml for this event, through `tirith run` ---
+tirith_hook_runs() {
+    [ -f "$1" ] || return 0
+    awk -v ev="$2" '
+        function flush() { if (e == ev && r != "") print r; e = ""; r = "" }
+        function val(line) {
+            sub(/^[^=]*=[ \t]*/, "", line); sub(/[ \t]*$/, "", line)
+            if (line ~ /^"/) { sub(/^"/, "", line); sub(/"$/, "", line); gsub(/\\"/, "\"", line); gsub(/\\\\/, "\\", line) }
+            return line
+        }
+        /^[ \t]*\[/ { flush(); inh = ($0 ~ /^[ \t]*\[\[[ \t]*hooks[ \t]*\]\]/); next }
+        inh && /^[ \t]*event[ \t]*=/ { e = val($0) }
+        inh && /^[ \t]*run[ \t]*=/ { r = val($0) }
+        END { flush() }
+    ' "$1"
+}
+if command -v tirith >/dev/null 2>&1; then
+    tirith_runs=$(tirith_hook_runs "$tirith_root/tirith.toml" "$TIRITH_HOOK")
+    if [ -n "$tirith_runs" ]; then
+        while IFS= read -r tirith_cmd; do
+            [ -n "$tirith_cmd" ] || continue
+            TIRITH_REASON="tirith run --stage $TIRITH_HOOK failed: $tirith_cmd"
+            (cd "$tirith_root" && tirith run --stage "$TIRITH_HOOK" -- /bin/sh -c "$tirith_cmd") </dev/null || exit 1
+        done <<TIRITH_EOF
+$tirith_runs
+TIRITH_EOF
+    fi
+fi
+'''
+
+_RUN_CHECK = r'''
+# --- Tirith: `tirith check` before a push ---
+if command -v tirith >/dev/null 2>&1; then
+    (cd "$tirith_root" && tirith check "$tirith_root") </dev/null || exit 1
+fi
+'''
+
+_ALLOWED = r'''
+trap - EXIT
+tirith_record "$TIRITH_HOOK" allowed ok
+'''
+
+
+def _record_part(hook: str, reason: str) -> str:
+    return _RECORD.replace("@HOOK@", hook).replace("@REASON@", reason)
+
+
+def render_v1(words: list[str]) -> dict[str, str]:
+    """The original two hooks (no recording): the owner's guard text only."""
     attribution = codecs.decode('pbnhgube/pb-nhguberq', "rot13")
     listed = ", ".join(attribution if w.startswith("co-") else w for w in words)
     args = {"listed": listed, "words": ",".join(words), "regex": "|".join(words)}
     return {"pre-commit": PRE_COMMIT.format(**args), "commit-msg": COMMIT_MSG.format(**args)}
+
+
+def render(words: list[str]) -> dict[str, str]:
+    """Hook file name -> content for this word list (regex alternatives, in order).
+
+    pre-commit and commit-msg are the owner's text split once at ``set -euo pipefail``: the header
+    before it and the guard body after it stay byte for byte; the recording prologue sits in
+    between, the ``[[hooks]]`` runs and the "allowed" record follow the body."""
+    reasons = {"pre-commit": "forbidden words in the staged changes",
+               "commit-msg": "forbidden words in the commit message"}
+    out = {}
+    for name, text in render_v1(words).items():
+        head, sep, body = text.partition(_BODY_START)
+        out[name] = head + sep + _record_part(name, reasons[name]) + "\n" + body + _RUN_HOOKS + _ALLOWED
+    out["pre-push"] = (PRE_PUSH.format(words=",".join(words)) + _record_part("pre-push", "tirith check failed")
+                       + _RUN_CHECK + _RUN_HOOKS + _ALLOWED)
+    return out
 
 
 def hooks_dir(repo: Path) -> Path:
@@ -101,15 +203,18 @@ def verify(repo: Path, words: list[str]) -> list[str]:
     """Problems with the guard of `repo` (empty list = intact and as configured)."""
     problems = []
     d = hooks_dir(repo)
+    old = _is_v1(d, words)
+    v1 = render_v1(words)
     for name, want in render(words).items():
         p = d / name
         if not p.exists():
-            problems.append(f"{name}: missing")
+            if not (old and name == "pre-push"):
+                problems.append(f"{name}: missing")
             continue
         have = p.read_text()
         if MARKER not in have:
             problems.append(f"{name}: present but without the {MARKER} marker")
-        elif digest(have) != digest(want):
+        elif digest(have) != digest(want) and not (old and digest(have) == digest(v1.get(name, ""))):
             problems.append(f"{name}: differs from the expected guard for words {','.join(words)}")
         st = p.stat()
         if not st.st_mode & stat.S_IXUSR:
@@ -119,13 +224,36 @@ def verify(repo: Path, words: list[str]) -> list[str]:
     return problems
 
 
+def _is_v1(d: Path, words: list[str]) -> bool:
+    """True when pre-commit and commit-msg are the version 1 guard (and pre-push is not there)."""
+    try:
+        return all((d / n).read_text() == t for n, t in render_v1(words).items()) \
+            and not (d / "pre-push").exists()
+    except OSError:
+        return False
+
+
+def outdated(repo: Path, words: list[str]) -> list[str]:
+    """Owner steps to move an intact version 1 guard to the current one ([] = already current)."""
+    d = hooks_dir(repo)
+    if verify(repo, words) or not _is_v1(d, words):
+        return []
+    files = " ".join(str(d / n) for n in ("pre-commit", "commit-msg"))
+    return [f"guard intact but older version (version {GUARD_VERSION} also records each hook run, runs "
+            "the [[hooks]] of tirith.toml and adds pre-push): reinstall as the owner:",
+            f"  1. chflags nouchg {files}",
+            f"  2. rm {files}",
+            f"  3. tirith guard install {repo}"]
+
+
 def install(repo: Path, words: list[str]) -> list[str]:
     """Installs missing hooks; never touches an existing one. Returns remaining problems."""
     d = hooks_dir(repo)
     d.mkdir(parents=True, exist_ok=True)
+    old = _is_v1(d, words)
     for name, want in render(words).items():
         p = d / name
-        if p.exists():
+        if p.exists() or (old and name == "pre-push"):  # a version 1 guard is replaced as a whole
             continue
         p.write_text(want)
         p.chmod(0o755)
@@ -146,6 +274,8 @@ def main(argv: list[str] | None = None) -> int:
         print("guard: NOT OK\n  " + "\n  ".join(problems))
         return 1
     print(f"guard: OK ({', '.join(words)})")
+    for line in outdated(a.repo.expanduser().resolve(), words):
+        print(line)
     return 0
 
 

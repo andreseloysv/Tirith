@@ -39,6 +39,7 @@ from tirith.store import (
 STALLED_AFTER_S = 600
 DROP_ENDED_AFTER = timedelta(hours=24)
 MAX_PIPELINE_RUNS = 20
+GIT_HOOK_FLOWS_FIRST = 20
 LOG_TAIL_LINES = 20
 SUMMARY_LOG_LINES = 200
 
@@ -475,14 +476,16 @@ class Collector:
         output: list[dict] = []
         for run in runs.values():
             order = declared.get((run["project"], run["pipeline"])) \
-                or declared.get(("*", run["pipeline"])) or []
+                or declared.get(("*", run["pipeline"])) \
+                or (list(manifest_mod.GIT_EVENTS) if run["pipeline"] == manifest_mod.GIT_HOOKS_PIPELINE else [])
             names = list(order) + [n for n in run["_order"] if n not in order]
             stages: list[dict] = []
             failed_seen = False
+            independent = run["pipeline"] == manifest_mod.GIT_HOOKS_PIPELINE  # hooks do not follow each other
             for name in names:
                 stage = run["_stages"].get(name)
                 if stage is None:
-                    stage = {"name": name, "status": "skipped" if failed_seen else "pending",
+                    stage = {"name": name, "status": "skipped" if failed_seen and not independent else "pending",
                              "started_at": None, "ended_at": None, "duration_s": None,
                              "log_tail": [], "_log": None}
                 elif stage["status"] == "failed":
@@ -510,6 +513,43 @@ class Collector:
             })
         output.sort(key=lambda r: str(r["started_at"] or ""), reverse=True)
         return output[:MAX_PIPELINE_RUNS]
+
+    def _git_hook_events(self, resolve) -> list[dict]:
+        """Git hook runs (``kind: "git-hook"``) as pipeline events of the project's ``git-hooks`` run."""
+        book = read_json(self.home / "pipelines.json", {})
+        book = book if isinstance(book, dict) else {}
+        out: list[dict] = []
+        for row in hooks_mod.read_hook_rows(self.home / "events.jsonl", kind="git-hook"):
+            hook, repo = str(row.get("hook") or ""), str(row.get("repo") or "")
+            if hook not in manifest_mod.GIT_EVENTS or not row.get("at"):
+                continue
+            project = resolve(None, repo) or Path(repo).name
+            entry = book.get(f"{project}/{manifest_mod.GIT_HOOKS_PIPELINE}")
+            run = str(entry["current_run"]) if isinstance(entry, dict) and entry.get("current_run") \
+                else f"{manifest_mod.GIT_HOOKS_PIPELINE}#1"
+            base = {"at": row["at"], "run": run, "project": project, "cwd": repo, "stage": hook,
+                    "pipeline": manifest_mod.GIT_HOOKS_PIPELINE, "reason": str(row.get("reason") or "")}
+            status = "failed" if row.get("result") == "blocked" else "passed"
+            out.append({**base, "event": "start", "status": "running"})
+            out.append({**base, "event": "end", "status": status})
+        return out
+
+    def _flow_git_hooks(self, git_events: list[dict]) -> None:
+        """One flow guard -> pipeline run per git hook run, the first time it is seen."""
+        keyed = [(f"{e['at']}|{e['stage']}|{e['cwd']}", e) for e in git_events if e["event"] == "end"]
+        seen = flows_mod.seen_set(self.home, "git_hooks")
+        fresh = [(k, e) for k, e in keyed if k not in seen]
+        if not seen:  # first sight of an old history: only the latest runs become flows
+            fresh = fresh[-GIT_HOOK_FLOWS_FIRST:]
+        for _, event in fresh:
+            blocked = event["status"] == "failed"
+            text = f"{event['stage']} {'blocked' if blocked else 'allowed'}" \
+                + (f": {event['reason']}" if blocked and event["reason"] else "")
+            flows_mod.append_flow(
+                self.home, "guard", f"pipeline:{event['run']}", "alert" if blocked else "message",
+                text, session=None, project=event["project"])
+        if keyed and (fresh or not seen):
+            flows_mod.remember(self.home, "git_hooks", seen | {k for k, _ in keyed})
 
     def _flow_pipeline_ends(self, pipelines: list[dict]) -> None:
         """One ``report`` flow per pipeline run the first time it is seen finished."""
@@ -579,7 +619,7 @@ class Collector:
         if self._fixed_config is None:
             self.config = load_config(self.home)
         lanes = read_lanes(self.home)
-        events = [e for e in read_jsonl(self.home / "events.jsonl") if e.get("kind") not in ("hook", "violation")]
+        events = [e for e in read_jsonl(self.home / "events.jsonl") if e.get("kind") not in ("hook", "violation", "git-hook")]
         hook_rows = hooks_mod.read_hook_rows(self.home / "events.jsonl")
         _, loose_events = hooks_mod.attach(hook_rows, [str(l["id"]) for l in lanes])
         rows_by_lane: dict[str, list[dict]] = {}
@@ -709,7 +749,10 @@ class Collector:
                 "guard": {"ok": False, "problems": ["auto-discovered folder: no commit guard configured"]},
                 "roadmap": roadmap_mod.build(entry.folder, entry.id, agent_rows),
             })
-        runs = self._pipelines(events, resolve, entries)
+        git_runs = self._git_hook_events(resolve)
+        runs = self._pipelines(sorted(events + git_runs, key=lambda e: str(e.get("at") or "")) if git_runs
+                               else events, resolve, entries)
+        self._flow_git_hooks(git_runs)
         for pid in [row["project"] for row in agent_rows] + [r["project"] for r in runs]:
             if pid and pid not in known_ids:
                 known_ids.add(pid)
