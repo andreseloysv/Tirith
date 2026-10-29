@@ -7,6 +7,7 @@ import json
 import subprocess
 import sys
 import threading
+import time
 from datetime import date, datetime, timezone
 from pathlib import Path
 
@@ -612,3 +613,118 @@ def test_the_autopilot_skips_tirith_own_step(proj, home: Path) -> None:
     assert ops["status"] == "todo"
     assert autopilot._agent_open(next(s for s in built["steps"] if s["id"] == "1")) == [
         "Build the button.", "Write the docs."]
+
+
+def test_an_abandoned_git_lock_in_the_main_checkout_is_recovered(proj, home: Path) -> None:
+    import os
+    repo, _ = proj
+    lock = repo / ".git" / "index.lock"
+    lock.write_text("", encoding="utf-8")
+    assert plangate.recover_git_lock(repo) is False and lock.exists()  # fresh: a git command may hold it
+    old = time.time() - 3600
+    os.utime(lock, (old, old))
+    assert plangate.commit_change(home, repo, "demo", lambda t: t + "\n- [ ] More.\n", "Roadmap: test") is True
+    assert not lock.exists()
+
+# -- items whose work is on main ----------------------------------------------------------------
+
+
+def _git_do(repo: Path, *args: str) -> str:
+    return subprocess.run([GIT, "-C", str(repo), "-c", "user.email=t@example.invalid", "-c", "user.name=T", *args],
+                          capture_output=True, text=True, check=True).stdout.strip()
+
+
+def _merged_branch(repo: Path, name: str, filename: str = "feature.py") -> str:
+    """A branch ``lane/<name>`` with one code commit, merged into main with a merge commit; returns its short sha."""
+    _git_do(repo, "checkout", "-q", "-b", f"lane/{name}")
+    (repo / filename).write_text("x = 1\n", encoding="utf-8")
+    _git_do(repo, "add", filename)
+    _git_do(repo, "commit", "-q", "-m", f"work {name}")
+    _git_do(repo, "checkout", "-q", "-")
+    _git_do(repo, "merge", "--no-ff", "-q", "-m", f"Merge branch 'lane/{name}'", f"lane/{name}")
+    return _git_do(repo, "rev-parse", "--short", "HEAD")
+
+
+def test_a_self_merged_lane_is_ticked_with_its_commit(proj, home: Path) -> None:
+    repo, _ = proj
+    lane = _lane(home, repo, "self1", ended_at="2026-01-01T00:00:00Z", result="done")
+    plangate.report(home, "self1", "done")
+    assert "(en revisión)" in _plan(repo)
+    cfg = load_config(home)
+    assert not plangate.tick_merged(home, cfg, [{"id": "self1", "item": lane["item"], "outcome": {"status": "done", "applied": True}}])
+    sha = _merged_branch(repo, "self1")
+    assert plangate.tick_merged(home, cfg, [read_json(home / "lanes" / "self1.json", {})])
+    assert f"- [x] Build the button. (hecho: {sha})" in _plan(repo)
+    assert not plangate.tick_merged(home, cfg, [read_json(home / "lanes" / "self1.json", {})])
+
+
+def test_a_lane_not_on_main_stays_in_review(proj, home: Path) -> None:
+    repo, _ = proj
+    _lane(home, repo, "open1", ended_at="2026-01-01T00:00:00Z", result="done")
+    plangate.report(home, "open1", "done")
+    _git_do(repo, "branch", "lane/open1", "HEAD")
+    _git_do(repo, "checkout", "-q", "lane/open1")
+    (repo / "unmerged.py").write_text("y = 2\n", encoding="utf-8")
+    _git_do(repo, "add", "unmerged.py")
+    _git_do(repo, "commit", "-q", "-m", "wip")
+    _git_do(repo, "checkout", "-q", "-")
+    assert not plangate.tick_merged(home, load_config(home), [read_json(home / "lanes" / "open1.json", {})])
+    assert "(en revisión)" in _plan(repo)
+
+
+def test_a_removed_branch_is_found_by_its_merge_commit(proj, home: Path) -> None:
+    repo, _ = proj
+    _lane(home, repo, "gone1", ended_at="2026-01-01T00:00:00Z", result="done")
+    plangate.report(home, "gone1", "done")
+    sha = _merged_branch(repo, "gone1")
+    _git_do(repo, "branch", "-D", "lane/gone1")
+    assert plangate.tick_merged(home, load_config(home), [read_json(home / "lanes" / "gone1.json", {})])
+    assert f"(hecho: {sha})" in _plan(repo)
+
+
+def test_plan_done_checks_the_commit(proj, home: Path, capsys) -> None:
+    repo, _ = proj
+    sha = _merged_branch(repo, "mgr1")
+    args = ["plan", "done", "--project", "demo", "--step", "1", "--item", "Build the button."]
+    assert main([*args, "--commit", "deadbeef"]) == 3
+    assert "not a commit" in capsys.readouterr().err
+    (repo / "notes.md").write_text("doc\n", encoding="utf-8")
+    _git_do(repo, "add", "notes.md")
+    _git_do(repo, "commit", "-q", "-m", "docs only")
+    assert main([*args, "--commit", "HEAD"]) == 3
+    assert "outside the docs" in capsys.readouterr().err
+    _git_do(repo, "checkout", "-q", "-b", "side")
+    (repo / "side.py").write_text("z = 3\n", encoding="utf-8")
+    _git_do(repo, "add", "side.py")
+    _git_do(repo, "commit", "-q", "-m", "side")
+    side = _git_do(repo, "rev-parse", "HEAD")
+    _git_do(repo, "checkout", "-q", "-")
+    assert main([*args, "--commit", side]) == 3
+    assert "not on main" in capsys.readouterr().err
+    assert "- [ ] Build the button." in _plan(repo)
+    assert main([*args, "--commit", sha]) == 0
+    assert f"- [x] Build the button. (hecho: {sha})" in _plan(repo)
+    assert main([*args, "--commit", sha]) == 3  # no longer open
+
+
+def test_nothing_to_commit_counts_as_success(proj, home: Path, monkeypatch) -> None:
+    repo, _ = proj
+    real = plangate._git
+
+    def fake(repo_, *a):
+        if a[:1] == ("commit",):
+            return subprocess.CompletedProcess(a, 1, "On branch main\nnothing to commit, working tree clean\n", "")
+        return real(repo_, *a)
+
+    monkeypatch.setattr(plangate, "_git", fake)
+    assert plangate.commit_change(home, repo, "demo", lambda t: t.replace("Write the docs.", "Write the docs. "), "m") is False
+
+
+def test_backfill_ticks_the_listed_items_once(proj, home: Path, monkeypatch) -> None:
+    repo, _ = proj
+    sha = _merged_branch(repo, "old1")
+    monkeypatch.setattr(plangate, "BACKFILL", (("demo", "1", "Write the", sha), ("demo", "1", "Nothing like it", sha)))
+    cfg = load_config(home)
+    assert plangate.backfill(home, cfg)
+    assert f"- [x] Write the docs. (hecho: {sha})" in _plan(repo)
+    assert not plangate.backfill(home, cfg)

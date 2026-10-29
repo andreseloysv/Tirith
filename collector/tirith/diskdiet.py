@@ -15,6 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
+from tirith import timeouts as timeouts_mod
 from tirith import asks as asks_mod
 from tirith import projects as projects_mod
 from tirith import review as review_mod
@@ -26,7 +27,7 @@ DISK_ITEM = "disk"
 
 
 def _git(folder: Path, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", "-C", str(folder), *args], capture_output=True, text=True)
+    return timeouts_mod.run(["git", "-C", str(folder), *args], "git", text=True)
 
 
 def _repo(config: Config, lane: dict) -> Path | None:

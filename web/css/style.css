@@ -991,3 +991,27 @@ button.vwho:hover b { text-decoration: underline; }
 .nhdone, .nhsteps { margin: 0; padding-left: 20px; } .nhdone { list-style: none; padding-left: 0; color: var(--mut); margin-bottom: 6px; }
 .nhsteps li { margin: 6px 0; } .nhsteps .ncmd { display: block; margin-top: 4px; }
 .nhauto { margin-top: 6px; color: var(--mut); font-size: 12px; }
+
+/* chat messages never clip or run past the right edge: flex children shrink, prose and code wrap, `pre` scrolls inside its bubble */
+.mc-m, .mc-b, .mc-acts, .mc-m .nacts, .mc-m .acts, .mc-m .act, .mc-meta { min-width: 0; max-width: 100%; }
+.mc-log > .mc-m { max-width: 92%; } .mc-log > .mc-m.turn { max-width: 96%; }
+.mc-b { overflow-wrap: anywhere; }
+.mc-b .md, .mc-b.md { min-width: 0; max-width: 100%; }
+.md p, .md li, .md blockquote, .md .mdh { overflow-wrap: anywhere; }
+.md code { white-space: normal; overflow-wrap: anywhere; word-break: break-all; }
+.md .mdpre { max-width: 100%; }
+.md .mdpre code { white-space: pre; word-break: normal; overflow-wrap: normal; }
+.md .mdtbl { max-width: 100%; }
+.md img { max-width: 100%; height: auto; }
+.mc-m .nacts { min-width: 0; } .mc-m .nchip { flex: 0 1 auto; min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; height: auto; }
+.mc-m .nbtn, .mc-m .nreply { max-width: 100%; white-space: normal; overflow-wrap: anywhere; text-align: left; height: auto; min-height: 28px; }
+.mc-acts .arow { flex-wrap: wrap; min-width: 0; }
+.mc-acts .alab { flex: 1 1 auto; min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+.mc-acts .acmd { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; word-break: break-all; }
+.mc-acts .abtn { height: auto; min-height: 24px; max-width: 100%; white-space: normal; overflow-wrap: anywhere; text-align: left; }
+.mc-acts .astat { flex: 0 1 auto; min-width: 0; }
+.livesteps { overflow-wrap: anywhere; }
+.livesteps .ls-list, .livesteps li, .livesteps .ls-diff, .livesteps .ls-nest { min-width: 0; max-width: 100%; }
+.livesteps .ls-line { flex-wrap: wrap; min-width: 0; }
+.livesteps .ls-dh { overflow-wrap: anywhere; }
+.mc-pics, .mc-strip { max-width: 100%; }

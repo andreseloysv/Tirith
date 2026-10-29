@@ -220,6 +220,14 @@
         }
       }
     },
+    "timeouts": {
+      "description": "The timeout of each command class: the value in force, where it comes from, the last timeouts. See docs/CONTRACT-timeouts.md.",
+      "type": "array",
+      "items": {"type": "object", "additionalProperties": true,
+                "required": ["class", "seconds", "source", "min", "max"],
+                "properties": {"class": {"type": "string"}, "seconds": {"type": "number"},
+                               "source": {"enum": ["default", "learned", "agent", "owner", "config"]}}}
+    },
     "models": {
       "description": "Model and effort of the manager and of the workers, with the lists the Settings page offers. See docs/CONTRACT-models.md.",
       "type": "object",
