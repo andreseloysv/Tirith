@@ -274,12 +274,52 @@
       e.scrollTop = e.hasAttribute('data-anchor') && o['h:' + k] ? o[k] + e.scrollHeight - o['h:' + k] : o[k];
     });
   }
+  /* ---------- typing is never interrupted ----------
+     Every input/textarea/select with a stable key (data-keep, else data-act + data-key + data-field) keeps its focus,
+     caret/selection and scroll across a re-render. A render caused by new state (T.polling) also keeps unsent text
+     that the view did not put there itself. */
+  function keyOf(el) {
+    var k = el.getAttribute('data-keep');
+    if (k) return k;
+    var act = el.getAttribute('data-act');
+    return act ? [act, el.getAttribute('data-key'), el.getAttribute('data-field')].join('|') : el.id || null;
+  }
+  function fields() { return [].slice.call(document.querySelectorAll('#view input, #view textarea, #view select')); }
+  T.keepCapture = function () {
+    var snap = { f: {} }, at = document.activeElement;
+    fields().forEach(function (el) {
+      var k = keyOf(el); if (!k || snap.f[k]) return;
+      var o = { value: el.value, def: el.defaultValue, top: el.scrollTop, focus: el === at };
+      try { o.ss = el.selectionStart; o.se = el.selectionEnd; o.dir = el.selectionDirection; } catch (e) {}
+      snap.f[k] = o;
+    });
+    return snap;
+  };
+  T.keepRestore = function (snap) {
+    if (!snap) return;
+    var focused = null;
+    fields().forEach(function (el) {
+      var k = keyOf(el), o = k && snap.f[k]; if (!o) return;
+      if (T.polling && el.tagName !== 'SELECT' && o.value !== o.def && el.value !== o.value && el.defaultValue === o.def) el.value = o.value;
+      if (o.top && el.scrollTop !== o.top) el.scrollTop = o.top;
+      if (o.focus && !focused) focused = [el, o];
+    });
+    if (!focused) return;
+    var el = focused[0], o = focused[1];
+    if (document.activeElement !== el) { try { el.focus({ preventScroll: true }); } catch (e) { el.focus(); } }
+    if (o.ss != null) { try { el.setSelectionRange(Math.min(o.ss, el.value.length), Math.min(o.se, el.value.length), o.dir || 'none'); } catch (e) {} }
+  };
+  /* a keyed field of the view has the cursor: state-driven renders wait */
+  T.typing = function () {
+    var a = document.activeElement;
+    return !!(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.closest && a.closest('#view') && keyOf(a));
+  };
+
   T.render = function (fstate, rawState) {
     if (rawState) raw = rawState;
     if (fstate) state = fstate;
     if (!state) return;
-    var a = document.activeElement, fk = a && a.getAttribute && [a.getAttribute('data-act'), a.getAttribute('data-key'), a.getAttribute('data-i')];
-    var sc = scrolls();
+    var kept = T.keepCapture(), sc = scrolls();
     common = computeCommon(state);
     renderNav(); renderCrumb();
     var el = document.getElementById('view'); el.className = 'view v-' + T.filter.view;
@@ -292,10 +332,7 @@
       if (rn) rn.scrollIntoView({ block: 'nearest', inline: 'nearest' });
       ui.reveal = null;
     }
-    if (fk && fk[0]) {
-      var q = '[data-act="' + fk[0] + '"]' + (fk[1] ? '[data-key="' + (window.CSS && CSS.escape ? CSS.escape(fk[1]) : fk[1]) + '"]' : '') + (fk[2] != null ? '[data-i="' + fk[2] + '"]' : '');
-      var n = document.querySelector(q); if (n) n.focus();
-    }
+    T.keepRestore(kept);
   };
   T.renderNavOnly = function (r) { raw = r; };
 
