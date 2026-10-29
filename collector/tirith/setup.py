@@ -13,6 +13,7 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
+from tirith import gates as gates_mod
 from tirith import hooks as hooks_mod
 from tirith import inbox as inbox_mod
 from tirith import manifest as manifest_mod
@@ -21,21 +22,18 @@ from tirith.home import Config
 KIND_ORDER = ("build", "test", "deploy")
 _ANY_HEADER = re.compile(r"^\s*\[")
 
-# id -> (label, enforced_by, description); the labels match the Rules list of the web page
-BUILT_IN: tuple[tuple[str, str, list[str], str], ...] = (
-    ("subagent-tool", "Sub-agent tool", ["hook"],
-     "Blocks the agent's internal sub-agent tool; sub-agents start with tirith lane run."),
-    ("agent-cli", "Agent without lane run", ["hook", "shim"],
-     "Blocks starting an agent CLI outside tirith lane run."),
-    ("no-verify", "Skipped git hooks", ["hook"], "Blocks git commit -n and --no-verify."),
-    ("hooks-path", "Changed hooks path", ["hook"], "Blocks changing core.hooksPath."),
-    ("git-hooks", "Edited git hooks", ["hook", "git"], "Blocks editing or removing files under .git/hooks."),
-    ("raw-stage", "Raw pipeline stage", ["hook"],
-     "Blocks running a tirith.toml stage by hand; use tirith run --stage."),
-    ("lane-brief", "Lane without brief", ["lane run"], "tirith lane run needs a non-empty --brief file."),
-    ("project-check", "Project check failing", ["lane run"],
-     "tirith lane run refuses while tirith check fails for the project."),
-    ("commit-guard", "Commit guard", ["git"], "The git hooks that run the project's stages and block bad commits."),
+# (id, label, enforced_by); the labels match the Rules list of the web page, the descriptions
+# come from ``gates.DESCRIPTIONS``
+BUILT_IN: tuple[tuple[str, str, list[str]], ...] = (
+    ("subagent-tool", "Sub-agent tool", ["hook"]),
+    ("agent-cli", "Agent without lane run", ["hook", "shim"]),
+    ("no-verify", "Skipped git hooks", ["hook"]),
+    ("hooks-path", "Changed hooks path", ["hook"]),
+    ("git-hooks", "Edited git hooks", ["hook", "git"]),
+    ("raw-stage", "Raw pipeline stage", ["hook"]),
+    ("lane-brief", "Lane without brief", ["lane run"]),
+    ("project-check", "Project check failing", ["lane run"]),
+    ("commit-guard", "Commit guard", ["git"]),
 )
 
 
@@ -117,14 +115,12 @@ def _rules(loaded: manifest_mod.Manifest, machine: Machine, guard_ok: bool) -> l
     ok = {"hook": machine.hooks_ok, "shim": machine.shims_ok and machine.hooks_ok, "git": guard_ok,
           "lane run": True, "CI": True}
     rows = [{"id": rid, "label": label, "source": "built-in", "enforced_by": list(by),
-             "active": any(ok.get(x, False) for x in by), "description": text}
-            for rid, label, by, text in BUILT_IN]
+             "active": any(ok.get(x, False) for x in by),
+             "description": gates_mod.DESCRIPTIONS[rid]}
+            for rid, label, by in BUILT_IN]
     for rule in loaded.rules:
-        how = f"command {rule.match}" if rule.match else f"regex {rule.regex}" if rule.regex \
-            else "edits to " + ", ".join(rule.paths)
         rows.append({"id": rule.id, "label": rule.id, "source": "tirith.toml", "enforced_by": ["hook"],
-                     "active": ok["hook"], "action": rule.action,
-                     "description": f"{rule.action.capitalize()}s {how}: {rule.message}. Instead: {rule.instead}"})
+                     "active": ok["hook"], "action": rule.action, "description": rule.description})
     return rows
 
 
@@ -320,10 +316,11 @@ def remove_stage(folder: Path, name: str, pipeline: str | None = None) -> str:
 
 
 def build_rule(rule_id: str, action: str, message: str, instead: str, match: str | None = None,
-               regex: str | None = None, paths: list[str] | None = None) -> manifest_mod.Rule:
+               regex: str | None = None, paths: list[str] | None = None,
+               description: str = "") -> manifest_mod.Rule:
     """Validate the fields of a custom rule like ``tirith check`` does; raises ``SetupError``."""
     row = {"id": rule_id, "action": action, "message": message, "instead": instead,
-           "match": match, "regex": regex, "paths": list(paths or [])}
+           "match": match, "regex": regex, "paths": list(paths or []), "description": description}
     rule, bad = manifest_mod.rule_problems({k: v for k, v in row.items() if v not in (None, [])}, set())
     if rule is None:
         raise SetupError("; ".join(f"{message} (Fix: {fix})" for _, message, fix in bad))
@@ -342,7 +339,9 @@ def add_rule(folder: Path, rule: manifest_mod.Rule) -> str:
         block.append(f"regex = {_q(rule.regex)}")
     if rule.paths:
         block.append("paths = [" + ", ".join(_q(p) for p in rule.paths) + "]")
-    block += [f"action = {_q(rule.action)}", f"message = {_q(rule.message)}", f"instead = {_q(rule.instead)}"]
+    block += [f"action = {_q(rule.action)}", f"message = {_q(rule.message)}", f"instead = {_q(rule.instead)}",
+              f"description = {_q(rule.description)}",
+              f"described = {_q(manifest_mod.match_hash(rule.action, rule.match, rule.regex, rule.paths))}"]
     base = _trim_end(lines)
     _write(folder, _insert(base, len(base), block))
     return f"added {rule.action} rule '{rule.id}'"
@@ -361,6 +360,32 @@ def remove_rule(folder: Path, rule_id: str) -> str:
     raise SetupError(f"rule '{rule_id}' is not in {manifest_mod.FILENAME}. Fix: tirith setup show")
 
 
+def describe_rule(folder: Path, rule_id: str, description: str) -> str:
+    """Set the description of a custom rule and store the hash of its match fields as ``described``."""
+    description = description.strip()
+    if not description:
+        raise SetupError("a rule needs a description. Fix: pass --description with one plain sentence")
+    _, lines, data = _read(folder)
+    rows = data.get("rules") or []
+    heads = [i for i, line in enumerate(lines) if manifest_mod._HEADER_RE.match(line)
+             and manifest_mod._HEADER_RE.match(line).group(1) == "rules"]
+    for n, row in enumerate(rows):
+        if isinstance(row, dict) and row.get("id") == rule_id and n < len(heads):
+            start, end = _block_bounds(lines, heads[n], _headers(lines))
+            paths = row.get("paths") if isinstance(row.get("paths"), list) else []
+            stamp = manifest_mod.match_hash(str(row.get("action") or ""), row.get("match") or None,
+                                            row.get("regex") or None, paths)
+            keep = [x for x in lines[start:end] if not re.match(r"\s*(description|described)\s*=", x)]
+            tail = 0
+            while keep and not keep[-1].strip():
+                keep.pop()
+                tail += 1
+            keep += [f"description = {_q(description)}", f"described = {_q(stamp)}"] + [""] * tail
+            _write(folder, lines[:start] + keep + lines[end:])
+            return f"described rule '{rule_id}'"
+    raise SetupError(f"rule '{rule_id}' is not in {manifest_mod.FILENAME}. Fix: tirith setup show")
+
+
 def apply_request(folder: Path, setup: dict) -> str:
     """Apply the edit a ``setup`` inbox request asks for (not ``run-stage``)."""
     action = setup.get("action")
@@ -375,7 +400,8 @@ def apply_request(folder: Path, setup: dict) -> str:
             paths = [p.strip() for p in paths.split(",") if p.strip()]
         rule = build_rule(str(setup.get("id") or ""), str(setup.get("effect") or "block"),
                           str(setup.get("message") or ""), str(setup.get("instead") or ""),
-                          setup.get("match") or None, setup.get("regex") or None, list(paths))
+                          setup.get("match") or None, setup.get("regex") or None, list(paths),
+                          str(setup.get("description") or ""))
         return add_rule(folder, rule)
     if action == "remove-rule":
         return remove_rule(folder, str(setup.get("id") or ""))

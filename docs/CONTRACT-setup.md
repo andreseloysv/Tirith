@@ -19,6 +19,8 @@ match = "git push --force*"        # command glob, or regex = "...", or paths = 
 action = "block"                    # or "warn"
 message = "force pushes rewrite history"
 instead = "git push (without --force); ask the owner if history must change"
+description = "Nobody may rewrite the shared history by force-pushing."
+described = "3fa9c01b27"          # written by tirith setup, see below
 ```
 
 | Field | Meaning |
@@ -28,13 +30,15 @@ instead = "git push (without --force); ask the owner if history must change"
 | `regex` | Python regular expression searched in the whole Bash command line |
 | `paths` | globs for files an agent may not edit (`Edit`, `Write`, `MultiEdit`, `NotebookEdit`), tried on the path as given, relative to the folder of `tirith.toml` and relative to the cwd |
 | `action` | `block`: the `PreToolUse` hook exits 2. `warn`: the message is printed and the violation recorded, the call goes through |
+| `description` | **required**: one plain sentence saying what the rule does, for someone who does not code. Shown by the web page; never read by the agent |
+| `described` | hash of `action` + the match fields when the description was written, kept by `tirith setup add-rule` / `describe-rule`. When the match fields no longer hash to it, `tirith check` reports `rule-stale` ("description may be stale"); reread the description and run `tirith setup describe-rule` |
 | `message`, `instead` | what the agent reads: `tirith: <id>: <message>: <what was matched>. Do this instead: <instead>` |
 
 Exactly one of `match`, `regex`, `paths`. `gates.check_call` enforces them next to the built-in rules;
 each hit is a `kind: "violation"` event (a `warn` one also has `"action": "warn"`), so it shows in
 `state.violations`. `tirith check` reports bad entries as `<file>:<line>: <rule>: <what>. Fix: <how>` with
 the rules `rule-id`, `rule-duplicate`, `rule-match`, `rule-regex`, `rule-paths`, `rule-action`,
-`rule-message`, `rule-instead`, `rule-shape`.
+`rule-message`, `rule-instead`, `rule-description` (missing), `rule-stale`, `rule-shape`.
 
 ## `tirith setup`
 
@@ -43,7 +47,8 @@ the rules `rule-id`, `rule-duplicate`, `rule-match`, `rule-regex`, `rule-paths`,
 | `tirith setup show [--project P]` | pipelines, hooks and rules of the project |
 | `tirith setup add-stage --pipeline ci --name lint --run "make lint" [--kind build\|test\|deploy] [--after build]` | adds `[[pipelines.stages]]` (after the given stage, else last); a new pipeline id creates `[[pipelines]]` at the end |
 | `tirith setup remove-stage --name lint [--pipeline ci]` | cuts that stage block (and the comments right above it) |
-| `tirith setup add-rule --id … (--match G \| --regex R \| --paths a,b) [--action block\|warn] --message … --instead …` | appends a `[[rules]]` block |
+| `tirith setup add-rule --id … (--match G \| --regex R \| --paths a,b) [--action block\|warn] --message … --instead … --description …` | appends a `[[rules]]` block; `--description` is required |
+| `tirith setup describe-rule --id … --description …` | rewrites the description and refreshes `described` |
 | `tirith setup remove-rule --id …` | cuts that block |
 | `tirith setup apply <request-id>` | applies a `setup` inbox request, answers it and closes it (`run-stage` runs `tirith run`) |
 
@@ -60,12 +65,12 @@ See `CONTRACT-inbox.md`. `text` is JSON, one of:
 ```json
 {"action": "add-stage", "pipeline": "ci", "name": "lint", "run": "make lint", "kind": "test", "after": "build"}
 {"action": "remove-stage", "pipeline": "ci", "name": "lint"}
-{"action": "add-rule", "id": "no-force-push", "match": "git push --force*", "effect": "block", "message": "…", "instead": "…"}
+{"action": "add-rule", "id": "no-force-push", "match": "git push --force*", "effect": "block", "message": "…", "instead": "…", "description": "…"}
 {"action": "remove-rule", "id": "no-force-push"}
 {"action": "run-stage", "pipeline": "ci", "name": "build"}
 ```
 
-For `add-rule`, `effect` is `block` or `warn` and one of `match`, `regex`, `paths` (list or comma text)
+For `add-rule`, `description` is required, `effect` is `block` or `warn` and one of `match`, `regex`, `paths` (list or comma text)
 is given.
 
 ## `state.projects[].setup`
@@ -110,7 +115,8 @@ A "Setup" card per project in the Overview, under the Plan (project filter appli
 - Pipelines: each stage as a chip `build · make build ✓ 2 min ago` (kind icon, last result, `never run`),
   with a **Run** button that sends a `run-stage` request;
 - Git hooks: event → command and its last result;
-- Rules: custom first (with `BLOCK`/`WARN` tag), then built-in; active/inactive and where enforced;
+- Rules: every rule as its description (custom first, with `BLOCK`/`WARN` tag, then built-in) and its
+  on/off state;
 - **+ Stage** and **+ Rule** open a small form; send puts a `setup` request in the inbox: Tauri
   `inbox_add`, else the `tirith://inbox` link, else the equivalent `tirith setup …` / `tirith run …`
   command to copy. Until the collector shows the request closed, the card lists it as "Waiting for the

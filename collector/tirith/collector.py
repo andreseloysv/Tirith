@@ -786,6 +786,31 @@ class Collector:
                 "instead": instead}
 
     @staticmethod
+    def _rules_state(projects: list[dict], machine, rows: list[dict], now: datetime) -> list[dict]:
+        """Every active rule once (custom rules once per project) with what it blocked in 24 hours."""
+        found: dict[tuple[str, str | None], dict] = {}
+        base = setup_mod._rules(manifest_mod.Manifest(path=Path(manifest_mod.FILENAME)), machine, False)
+        for rule in base:
+            found[(rule["id"], None)] = dict(rule)
+        for proj in projects:
+            for rule in (proj.get("setup") or {}).get("rules") or []:
+                if rule["source"] == "built-in":
+                    found[(rule["id"], None)]["active"] = found[(rule["id"], None)]["active"] or rule["active"]
+                else:
+                    found[(rule["id"], proj["id"])] = dict(rule, project=proj["id"])
+        out = []
+        for (rid, pid), rule in found.items():
+            if not rule["active"]:
+                continue
+            hits = [r for r in rows if r.get("rule") == rid and (pid is None or r.get("project") == pid)
+                    and (parse_iso(r.get("ts")) or now - timedelta(days=9)) >= now - timedelta(hours=24)]
+            last = max(hits, key=lambda r: str(r.get("ts")), default=None)
+            out.append({"id": rid, "description": rule["description"], "source": rule["source"],
+                        "project": pid, "count_24h": len(hits), "last_at": last.get("ts") if last else None,
+                        "last_agent": (last.get("lane") or last.get("agent")) if last else None})
+        return out
+
+    @staticmethod
     def _violation_waits(violations: list[dict], now: datetime) -> list[dict]:
         """One item per violation of the last hour, so the owner sees what slipped."""
         waits = []
@@ -989,8 +1014,9 @@ class Collector:
         self.rooms.ensure_polling(config, background=not self._one_shot)
         rooms_state, room_waits = self.rooms.build(
             config, agent_rows, self.worker, self.cache, now)
-        violations = [self._violation(row) for row in
-                      hooks_mod.read_violation_rows(self.home / "events.jsonl")][-hooks_mod.VIOLATIONS_KEPT:]
+        violation_rows = hooks_mod.read_violation_rows(self.home / "events.jsonl")
+        violations = [self._violation(row) for row in violation_rows][-hooks_mod.VIOLATIONS_KEPT:]
+        rules_state = self._rules_state(projects, machine, violation_rows, now)
         manual_waits, answered_waits = self._manual_waits(
             {p["id"]: p["guard"]["ok"] for p in projects if p.get("guard")})
         # violations are not the owner's turn (the blocked agent was already told what to do instead);
@@ -1049,6 +1075,7 @@ class Collector:
             "sessions": sessions,
             "loose_events": loose_events,
             "violations": violations,
+            "rules": rules_state,
             "inbox": inbox_rows,
             "launch": {"token": launch_mod.launch_token(self.home),
                        "available": launch_mod.handler_installed()},

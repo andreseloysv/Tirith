@@ -136,6 +136,11 @@
         "$ref": "#/$defs/violation"
       }
     },
+    "rules": {
+      "description": "Every active rule once, with what it blocked in the last 24 hours. See docs/CONTRACT-gates.md.",
+      "type": "array",
+      "items": {"$ref": "#/$defs/rule_summary"}
+    },
     "inbox": {
       "type": "array",
       "items": {
@@ -279,6 +284,20 @@
         "message": {"type": "string"},
         "blocked": {"type": "string"},
         "instead": {"type": "string"}
+      }
+    },
+    "rule_summary": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["id", "description", "source", "count_24h", "last_at", "last_agent"],
+      "properties": {
+        "id": {"type": "string"},
+        "description": {"type": "string", "minLength": 1},
+        "source": {"enum": ["built-in", "tirith.toml"]},
+        "project": {"type": ["string", "null"]},
+        "count_24h": {"type": "integer", "minimum": 0},
+        "last_at": {"type": ["string", "null"]},
+        "last_agent": {"type": ["string", "null"]}
       }
     },
     "hook_event": {

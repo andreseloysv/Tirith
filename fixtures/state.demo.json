@@ -204,7 +204,7 @@
         "steps": [
           {
             "id": "1",
-            "title": "Datos y migración",
+            "title": "Datos y migraci\u00f3n",
             "status": "done",
             "done": 2,
             "total": 2,
@@ -228,7 +228,7 @@
             "total": 3,
             "items": [
               {
-                "text": "Arranque en frío bajo 2 s",
+                "text": "Arranque en fr\u00edo bajo 2 s",
                 "done": true
               },
               {
@@ -236,7 +236,7 @@
                 "done": false
               },
               {
-                "text": "Reducir memoria en teléfonos de gama baja",
+                "text": "Reducir memoria en tel\u00e9fonos de gama baja",
                 "done": false
               }
             ],
@@ -252,11 +252,11 @@
             "total": 2,
             "items": [
               {
-                "text": "Declaración de recursos de IA",
+                "text": "Declaraci\u00f3n de recursos de IA",
                 "done": false
               },
               {
-                "text": "Capturas y descripción",
+                "text": "Capturas y descripci\u00f3n",
                 "done": false
               }
             ],
@@ -338,7 +338,7 @@
               "hook"
             ],
             "active": false,
-            "description": "Blocks the agent's internal sub-agent tool; sub-agents start with tirith lane run."
+            "description": "Agents may not start helpers on their own; every helper starts through Tirith so you can see it."
           },
           {
             "id": "agent-cli",
@@ -349,7 +349,7 @@
               "shim"
             ],
             "active": false,
-            "description": "Blocks starting an agent CLI outside tirith lane run."
+            "description": "Agents may only be started through Tirith, so each one shows up as a lane you can follow."
           },
           {
             "id": "no-verify",
@@ -359,7 +359,7 @@
               "hook"
             ],
             "active": false,
-            "description": "Blocks git commit -n and --no-verify."
+            "description": "Nobody may skip the safety checks that run before a commit."
           },
           {
             "id": "hooks-path",
@@ -369,7 +369,7 @@
               "hook"
             ],
             "active": false,
-            "description": "Blocks changing core.hooksPath."
+            "description": "Nobody may switch off the commit checks by pointing git at other hooks."
           },
           {
             "id": "git-hooks",
@@ -380,7 +380,7 @@
               "git"
             ],
             "active": true,
-            "description": "Blocks editing or removing files under .git/hooks."
+            "description": "Agents may not edit or delete the commit checks that guard the project."
           },
           {
             "id": "raw-stage",
@@ -390,7 +390,7 @@
               "hook"
             ],
             "active": false,
-            "description": "Blocks running a tirith.toml stage by hand; use tirith run --stage."
+            "description": "Tests and builds must run through Tirith, so you can see them in Pipelines."
           },
           {
             "id": "lane-brief",
@@ -400,7 +400,7 @@
               "lane run"
             ],
             "active": true,
-            "description": "tirith lane run needs a non-empty --brief file."
+            "description": "Every lane starts with a written task, so the agent knows what to do."
           },
           {
             "id": "project-check",
@@ -410,7 +410,7 @@
               "lane run"
             ],
             "active": true,
-            "description": "tirith lane run refuses while tirith check fails for the project."
+            "description": "No new lane starts while the project's setup has problems."
           },
           {
             "id": "commit-guard",
@@ -420,7 +420,7 @@
               "git"
             ],
             "active": true,
-            "description": "The git hooks that run the project's stages and block bad commits."
+            "description": "Commits are checked for banned words and failing tests before they are accepted."
           }
         ],
         "gates_active": false,
@@ -525,7 +525,7 @@
             "total": 2,
             "items": [
               {
-                "text": "Alias de agentes en el código; nombres reales en `config.toml`.",
+                "text": "Alias de agentes en el c\u00f3digo; nombres reales en `config.toml`.",
                 "done": true
               },
               {
@@ -551,7 +551,7 @@
                 "done": true
               },
               {
-                "text": "Lane sin respuesta o con error → «esperando por ti».",
+                "text": "Lane sin respuesta o con error \u2192 \u00abesperando por ti\u00bb.",
                 "done": true
               }
             ],
@@ -559,7 +559,7 @@
           },
           {
             "id": "2",
-            "title": "Árbol de delegación",
+            "title": "\u00c1rbol de delegaci\u00f3n",
             "status": "done",
             "done": 3,
             "total": 3,
@@ -569,7 +569,7 @@
                 "done": true
               },
               {
-                "text": "`register_lane` guarda `parent` automáticamente.",
+                "text": "`register_lane` guarda `parent` autom\u00e1ticamente.",
                 "done": true
               },
               {
@@ -581,13 +581,13 @@
           },
           {
             "id": "3",
-            "title": "Hooks de agentes → `tirith hook`",
+            "title": "Hooks de agentes \u2192 `tirith hook`",
             "status": "active",
             "done": 3,
             "total": 6,
             "items": [
               {
-                "text": "`tirith hook --agent <alias>` escribe un evento estándar.",
+                "text": "`tirith hook --agent <alias>` escribe un evento est\u00e1ndar.",
                 "done": true
               },
               {
@@ -603,7 +603,7 @@
                 "done": false
               },
               {
-                "text": "Protegerlos para que un agente no pueda quitárselos.",
+                "text": "Protegerlos para que un agente no pueda quit\u00e1rselos.",
                 "done": false
               },
               {
@@ -635,7 +635,7 @@
           },
           {
             "id": "7",
-            "title": "Reglas de código",
+            "title": "Reglas de c\u00f3digo",
             "status": "active",
             "done": 1,
             "total": 3,
@@ -657,7 +657,7 @@
           },
           {
             "id": "8",
-            "title": "Más visibilidad por agente",
+            "title": "M\u00e1s visibilidad por agente",
             "status": "active",
             "done": 1,
             "total": 3,
@@ -667,7 +667,7 @@
                 "done": true
               },
               {
-                "text": "Logs legibles, más nuevos arriba.",
+                "text": "Logs legibles, m\u00e1s nuevos arriba.",
                 "done": false
               },
               {
@@ -693,11 +693,11 @@
                 "done": false
               },
               {
-                "text": "Tarjeta «Plan» en el Overview.",
+                "text": "Tarjeta \u00abPlan\u00bb en el Overview.",
                 "done": false
               },
               {
-                "text": "Fecha límite con cuenta atrás.",
+                "text": "Fecha l\u00edmite con cuenta atr\u00e1s.",
                 "done": false
               }
             ],
@@ -778,7 +778,7 @@
               "hook"
             ],
             "active": false,
-            "description": "Blocks the agent's internal sub-agent tool; sub-agents start with tirith lane run."
+            "description": "Agents may not start helpers on their own; every helper starts through Tirith so you can see it."
           },
           {
             "id": "agent-cli",
@@ -789,7 +789,7 @@
               "shim"
             ],
             "active": false,
-            "description": "Blocks starting an agent CLI outside tirith lane run."
+            "description": "Agents may only be started through Tirith, so each one shows up as a lane you can follow."
           },
           {
             "id": "no-verify",
@@ -799,7 +799,7 @@
               "hook"
             ],
             "active": false,
-            "description": "Blocks git commit -n and --no-verify."
+            "description": "Nobody may skip the safety checks that run before a commit."
           },
           {
             "id": "hooks-path",
@@ -809,7 +809,7 @@
               "hook"
             ],
             "active": false,
-            "description": "Blocks changing core.hooksPath."
+            "description": "Nobody may switch off the commit checks by pointing git at other hooks."
           },
           {
             "id": "git-hooks",
@@ -820,7 +820,7 @@
               "git"
             ],
             "active": true,
-            "description": "Blocks editing or removing files under .git/hooks."
+            "description": "Agents may not edit or delete the commit checks that guard the project."
           },
           {
             "id": "raw-stage",
@@ -830,7 +830,7 @@
               "hook"
             ],
             "active": false,
-            "description": "Blocks running a tirith.toml stage by hand; use tirith run --stage."
+            "description": "Tests and builds must run through Tirith, so you can see them in Pipelines."
           },
           {
             "id": "lane-brief",
@@ -840,7 +840,7 @@
               "lane run"
             ],
             "active": true,
-            "description": "tirith lane run needs a non-empty --brief file."
+            "description": "Every lane starts with a written task, so the agent knows what to do."
           },
           {
             "id": "project-check",
@@ -850,7 +850,7 @@
               "lane run"
             ],
             "active": true,
-            "description": "tirith lane run refuses while tirith check fails for the project."
+            "description": "No new lane starts while the project's setup has problems."
           },
           {
             "id": "commit-guard",
@@ -860,7 +860,7 @@
               "git"
             ],
             "active": true,
-            "description": "The git hooks that run the project's stages and block bad commits."
+            "description": "Commits are checked for banned words and failing tests before they are accepted."
           },
           {
             "id": "no-force-push",
@@ -871,7 +871,7 @@
             ],
             "active": false,
             "action": "block",
-            "description": "Blocks command git push --force*: force pushes rewrite history. Instead: git push (without --force); ask the owner if history must change"
+            "description": "Nobody may rewrite the shared history by force-pushing."
           }
         ],
         "gates_active": false,
@@ -972,7 +972,7 @@
               "hook"
             ],
             "active": false,
-            "description": "Blocks the agent's internal sub-agent tool; sub-agents start with tirith lane run."
+            "description": "Agents may not start helpers on their own; every helper starts through Tirith so you can see it."
           },
           {
             "id": "agent-cli",
@@ -983,7 +983,7 @@
               "shim"
             ],
             "active": false,
-            "description": "Blocks starting an agent CLI outside tirith lane run."
+            "description": "Agents may only be started through Tirith, so each one shows up as a lane you can follow."
           },
           {
             "id": "no-verify",
@@ -993,7 +993,7 @@
               "hook"
             ],
             "active": false,
-            "description": "Blocks git commit -n and --no-verify."
+            "description": "Nobody may skip the safety checks that run before a commit."
           },
           {
             "id": "hooks-path",
@@ -1003,7 +1003,7 @@
               "hook"
             ],
             "active": false,
-            "description": "Blocks changing core.hooksPath."
+            "description": "Nobody may switch off the commit checks by pointing git at other hooks."
           },
           {
             "id": "git-hooks",
@@ -1014,7 +1014,7 @@
               "git"
             ],
             "active": true,
-            "description": "Blocks editing or removing files under .git/hooks."
+            "description": "Agents may not edit or delete the commit checks that guard the project."
           },
           {
             "id": "raw-stage",
@@ -1024,7 +1024,7 @@
               "hook"
             ],
             "active": false,
-            "description": "Blocks running a tirith.toml stage by hand; use tirith run --stage."
+            "description": "Tests and builds must run through Tirith, so you can see them in Pipelines."
           },
           {
             "id": "lane-brief",
@@ -1034,7 +1034,7 @@
               "lane run"
             ],
             "active": true,
-            "description": "tirith lane run needs a non-empty --brief file."
+            "description": "Every lane starts with a written task, so the agent knows what to do."
           },
           {
             "id": "project-check",
@@ -1044,7 +1044,7 @@
               "lane run"
             ],
             "active": true,
-            "description": "tirith lane run refuses while tirith check fails for the project."
+            "description": "No new lane starts while the project's setup has problems."
           },
           {
             "id": "commit-guard",
@@ -1054,7 +1054,7 @@
               "git"
             ],
             "active": true,
-            "description": "The git hooks that run the project's stages and block bad commits."
+            "description": "Commits are checked for banned words and failing tests before they are accepted."
           }
         ],
         "gates_active": false,
@@ -1360,7 +1360,7 @@
           "ts": "2026-10-28T19:39:02Z",
           "kind": "edit",
           "text": "app/src/main/java/scan/PersonPool.kt",
-          "detail": "+12 −3",
+          "detail": "+12 \u22123",
           "fields": null,
           "path": "/Users/owner/DEVELOP/Chromasol/app/src/main/java/scan/PersonPool.kt"
         },
@@ -1400,7 +1400,7 @@
           "ts": "2026-10-28T19:37:30Z",
           "kind": "edit",
           "text": "app/src/main/java/scan/ScanViewModel.kt",
-          "detail": "+4 −1",
+          "detail": "+4 \u22121",
           "fields": null,
           "path": "/Users/owner/DEVELOP/Chromasol/app/src/main/java/scan/ScanViewModel.kt"
         },
@@ -1603,7 +1603,7 @@
           "ts": "2026-10-28T18:38:20Z",
           "kind": "edit",
           "text": "app/src/main/java/db/Migrations.kt",
-          "detail": "+58 −2",
+          "detail": "+58 \u22122",
           "fields": null,
           "path": "/Users/owner/DEVELOP/Chromasol/app/src/main/java/db/Migrations.kt"
         },
@@ -2682,14 +2682,44 @@
   ],
   "violations": [
     {
+      "ts": "2026-10-28T17:02:00Z",
+      "rule": "raw-stage",
+      "agent": "muse",
+      "lane": "t-world",
+      "project": "tirith",
+      "message": "tirith: raw-stage: running the stage \"tests\" raw is not allowed. Do this instead: tirith run --project tirith --stage tests",
+      "blocked": "running the stage \"tests\" raw is not allowed",
+      "instead": "tirith run --project tirith --stage tests"
+    },
+    {
+      "ts": "2026-10-28T17:40:00Z",
+      "rule": "raw-stage",
+      "agent": "muse",
+      "lane": "t-world",
+      "project": "tirith",
+      "message": "tirith: raw-stage: running pytest raw is not allowed. Do this instead: tirith run --project tirith --stage test",
+      "blocked": "running pytest raw is not allowed",
+      "instead": "tirith run --project tirith --stage test"
+    },
+    {
+      "ts": "2026-10-28T18:20:00Z",
+      "rule": "no-verify",
+      "agent": "anthropic",
+      "lane": "icon-2",
+      "project": "chromasol",
+      "message": "tirith: no-verify: git commit --no-verify skips the commit checks. Do this instead: run the git command without --no-verify; fix what the hook reports",
+      "blocked": "git commit --no-verify skips the commit checks",
+      "instead": "run the git command without --no-verify; fix what the hook reports"
+    },
+    {
       "ts": "2026-10-28T18:44:00Z",
       "rule": "subagent-tool",
       "agent": "anthropic",
       "lane": "icon-2",
       "project": "chromasol",
-      "message": "tirith: subagent-tool: the agent's internal sub-agent tool (Task) is not allowed. Do this instead: tirith lane run --project chromasol --class glasswright --feature \"<description>\" --brief <file> -- <agent cmd> …",
+      "message": "tirith: subagent-tool: the agent's internal sub-agent tool (Task) is not allowed. Do this instead: tirith lane run --project chromasol --class glasswright --feature \"<description>\" --brief <file> -- <agent cmd> \u2026",
       "blocked": "the agent's internal sub-agent tool (Task) is not allowed",
-      "instead": "tirith lane run --project chromasol --class glasswright --feature \"<description>\" --brief <file> -- <agent cmd> …"
+      "instead": "tirith lane run --project chromasol --class glasswright --feature \"<description>\" --brief <file> -- <agent cmd> \u2026"
     },
     {
       "ts": "2026-10-28T19:12:00Z",
@@ -2959,5 +2989,88 @@
       "muse"
     ],
     "pending": []
-  }
+  },
+  "rules": [
+    {
+      "id": "subagent-tool",
+      "description": "Agents may not start helpers on their own; every helper starts through Tirith so you can see it.",
+      "source": "built-in",
+      "project": null,
+      "count_24h": 1,
+      "last_at": "2026-10-28T18:44:00Z",
+      "last_agent": "icon-2"
+    },
+    {
+      "id": "agent-cli",
+      "description": "Agents may only be started through Tirith, so each one shows up as a lane you can follow.",
+      "source": "built-in",
+      "project": null,
+      "count_24h": 0,
+      "last_at": null,
+      "last_agent": null
+    },
+    {
+      "id": "no-verify",
+      "description": "Nobody may skip the safety checks that run before a commit.",
+      "source": "built-in",
+      "project": null,
+      "count_24h": 1,
+      "last_at": "2026-10-28T18:20:00Z",
+      "last_agent": "icon-2"
+    },
+    {
+      "id": "hooks-path",
+      "description": "Nobody may switch off the commit checks by pointing git at other hooks.",
+      "source": "built-in",
+      "project": null,
+      "count_24h": 0,
+      "last_at": null,
+      "last_agent": null
+    },
+    {
+      "id": "git-hooks",
+      "description": "Agents may not edit or delete the commit checks that guard the project.",
+      "source": "built-in",
+      "project": null,
+      "count_24h": 0,
+      "last_at": null,
+      "last_agent": null
+    },
+    {
+      "id": "raw-stage",
+      "description": "Tests and builds must run through Tirith, so you can see them in Pipelines.",
+      "source": "built-in",
+      "project": null,
+      "count_24h": 4,
+      "last_at": "2026-10-28T19:31:00Z",
+      "last_agent": "t-world"
+    },
+    {
+      "id": "lane-brief",
+      "description": "Every lane starts with a written task, so the agent knows what to do.",
+      "source": "built-in",
+      "project": null,
+      "count_24h": 0,
+      "last_at": null,
+      "last_agent": null
+    },
+    {
+      "id": "project-check",
+      "description": "No new lane starts while the project's setup has problems.",
+      "source": "built-in",
+      "project": null,
+      "count_24h": 0,
+      "last_at": null,
+      "last_agent": null
+    },
+    {
+      "id": "commit-guard",
+      "description": "Commits are checked for banned words and failing tests before they are accepted.",
+      "source": "built-in",
+      "project": null,
+      "count_24h": 0,
+      "last_at": null,
+      "last_agent": null
+    }
+  ]
 }
