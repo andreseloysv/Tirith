@@ -36,6 +36,10 @@ BUILT_IN: tuple[tuple[str, str, list[str]], ...] = (
     ("lane-brief", "Lane without brief", ["lane run"]),
     ("project-check", "Project check failing", ["lane run"]),
     ("commit-guard", "Commit guard", ["git"]),
+    ("workspace-write", "Write outside the lane copy", ["hook"]),
+    ("no-secrets", "Read credentials", ["hook"]),
+    ("no-servers", "Start a server", ["hook"]),
+    ("own-processes", "Stop another process", ["hook"]),
 )
 
 
