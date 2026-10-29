@@ -446,13 +446,13 @@ def _detached_argv(args, home: Path, lane_id: str, workspace: Path, command: lis
     return [*argv, "--", *command]
 
 
-def _duplicate_lane(home: Path, args) -> dict | None:
-    """The working lane of the same project and step that ``lane run --step`` would duplicate, else None.
+def _duplicate_lane(home: Path, args, item: str | None) -> dict | None:
+    """The working lane of the same project and plan item that ``lane run --step`` would duplicate, else None.
     A lane that continues another (``--fallback-from``: fallback, relaunch, claim re-send) is no duplicate."""
     if not args.step or args.fallback_from:
         return None
     others = [l for l in read_lanes(home) if l.get("id") != args.id]
-    return launch_mod.working_lane(others, args.project, str(args.step), lane_status)
+    return launch_mod.working_lane(others, args.project, str(args.step), lane_status, item)
 
 
 def _cmd_lane_run(args) -> int:
@@ -475,13 +475,13 @@ def _cmd_lane_run(args) -> int:
     if refusal:
         print(refusal, file=sys.stderr)
         return 3
-    busy = _duplicate_lane(home, args)
-    if busy:
-        print(f"{busy['id']} is already working on step {args.step}", file=sys.stderr)
-        return 3
     item, refusal = _plan_start(home, args, args.id)
     if item is None:
         print(refusal, file=sys.stderr)
+        return 3
+    busy = _duplicate_lane(home, args, item)
+    if busy:
+        print(f"{busy['id']} is already working on item \"{item}\" of step {args.step}", file=sys.stderr)
         return 3
     args.item = item
     interactive = bool(getattr(args, "interactive", False))
@@ -1245,9 +1245,6 @@ def launch_step(home: Path, project_id: str, step_id: str, agent: str | None = N
                                          "(they wait for the owner or for a date)")
         raise launch_mod.LaunchError(f"step {step['id']} ({title}) is already done" if step["items"]
                                      else f"step {step['id']} ({title}) has no items to finish")
-    busy = launch_mod.working_lane(read_lanes(home), project_id, step["id"], lane_status)
-    if busy:
-        raise launch_mod.LaunchError(f"step {step['id']} already has a working lane: {busy['id']}")
     failed = manifest_mod.check(repo, config.words_for(proj, default_words()))
     if failed:
         raise launch_mod.LaunchError(
@@ -1259,6 +1256,9 @@ def launch_step(home: Path, project_id: str, step_id: str, agent: str | None = N
         item = plangate_mod.check_start(home, repo, project_id, step["id"], item)
     except plangate_mod.PlanGateError as error:
         raise launch_mod.LaunchError(f"no agent starts without a plan item: {error}")
+    busy = launch_mod.working_lane(read_lanes(home), project_id, step["id"], lane_status, item)
+    if busy:
+        raise launch_mod.LaunchError(f"that item of step {step['id']} already has a working lane: {busy['id']}")
     lane_id = launch_mod.lane_id_for(title, {str(l["id"]) for l in read_lanes(home)}, repo)
     brief_path = home / "briefs" / f"{lane_id}.md"
     brief = launch_mod.build_brief(title, intro, open_items, step["id"], item)

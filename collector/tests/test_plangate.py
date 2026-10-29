@@ -7,6 +7,7 @@ import json
 import subprocess
 import sys
 import threading
+import time
 from datetime import date, datetime, timezone
 from pathlib import Path
 
@@ -586,3 +587,15 @@ def test_the_autopilot_skips_tirith_own_step(proj, home: Path) -> None:
     assert ops["status"] == "todo"
     assert autopilot._agent_open(next(s for s in built["steps"] if s["id"] == "1")) == [
         "Build the button.", "Write the docs."]
+
+
+def test_an_abandoned_git_lock_in_the_main_checkout_is_recovered(proj, home: Path) -> None:
+    import os
+    repo, _ = proj
+    lock = repo / ".git" / "index.lock"
+    lock.write_text("", encoding="utf-8")
+    assert plangate.recover_git_lock(repo) is False and lock.exists()  # fresh: a git command may hold it
+    old = time.time() - 3600
+    os.utime(lock, (old, old))
+    assert plangate.commit_change(home, repo, "demo", lambda t: t + "\n- [ ] More.\n", "Roadmap: test") is True
+    assert not lock.exists()

@@ -116,7 +116,7 @@ def test_refuses_when_a_working_lane_has_the_step(project, home: Path, capsys) -
     import os
     register_lane(home, lane_id="busy", project="demo", hero_class="warden", feature="x",
                   workspace=None, log=None, pid=os.getpid(), brief=None, step="2")
-    assert main(["launch", "--project", "demo", "--step", "2"]) == 3
+    assert main(["launch", "--project", "demo", "--step", "2", "--item", "Add the button."]) == 3
     assert "busy" in capsys.readouterr().err
 
 
