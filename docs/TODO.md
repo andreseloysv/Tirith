@@ -141,6 +141,9 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Botón «Terminar con un agente» en cada paso no terminado del Plan.
 - [ ] Registrar el manejador `tirith://` en macOS y probar un lanzamiento real.
 - [ ] Al terminar un lane lanzado así: botón «Revisar y unir» (tests + merge).
+- [ ] Buzón del dueño: «Termínalo» y «¿Qué pasa?» en cada paso; el aviso llega al steward.
+- [ ] Respuestas bajo cada paso (steward, o Muse Spark automático si el steward no responde en 2 min).
+- [ ] El steward vigila el buzón desde su sesión y actúa al instante.
 - [x] Markdown en todo el texto de los agentes (respuestas, objetivos, mensajes).
 
 ## Orden
