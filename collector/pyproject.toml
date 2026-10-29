@@ -27,3 +27,4 @@ package = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+tmp_path_retention_policy = "failed"  # passing tests leave no temp folders behind

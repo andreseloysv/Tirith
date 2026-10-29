@@ -79,18 +79,33 @@ def write_config(home: Path, projects: list[dict], extra: str = "") -> Path:
     return target
 
 
-@pytest.fixture(autouse=True)
-def _unlock_guard_hooks(tmp_path):
-    """Guard hooks installed by a test are immutable; clear the flag so pytest can delete tmp_path."""
-    yield
-    if not hasattr(os, "chflags"):
-        return
-    for path in tmp_path.rglob("*"):
+def _unlock_tree(root: Path) -> None:
+    """Clear the protection flag Tirith's guard set on files below ``root`` (a pytest temp dir only)."""
+    import tirith_guard
+    for path in [root, *root.rglob("*")]:
         try:
-            if not path.is_symlink() and path.stat().st_flags & stat.UF_IMMUTABLE:
-                os.chflags(path, path.stat().st_flags & ~stat.UF_IMMUTABLE)
+            if not path.is_symlink() and tirith_guard._is_locked(path):
+                tirith_guard._unlock(path)
         except OSError:
             pass
+
+
+@pytest.fixture(autouse=True)
+def _unlock_guard_hooks(tmp_path):
+    """Guard hooks a test installs are protected; clear the flag so pytest can delete its tmp_path."""
+    yield
+    _unlock_tree(tmp_path)
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _unlock_basetemp(tmp_path_factory):
+    """Same for every other dir under pytest's temp root (this run's basetemp, kept dirs of failed runs and the
+    ``garbage-*`` folders earlier runs left), so pytest's own cleanup at the end of the session can remove them."""
+    base = tmp_path_factory.getbasetemp()
+    root = base.parent if base.parent.name.startswith("pytest-of-") else base
+    _unlock_tree(root)
+    yield
+    _unlock_tree(root)
 
 
 @pytest.fixture(autouse=True)
