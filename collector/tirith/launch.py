@@ -85,14 +85,19 @@ def token_ok(home: Path, given: str | None) -> bool:
 
 
 def parse_url(url: str) -> dict:
-    """``tirith://launch?project=a&step=3&token=t`` -> ``{action, project, step, token, agent}``."""
+    """``tirith://launch?project=a&step=3&token=t`` -> ``{action, project, step, token, agent, lane}``."""
     parts = urlsplit(str(url).strip())
     if parts.scheme.lower() != SCHEME:
         raise LaunchError(f"not a {SCHEME}:// link: {url!r}")
     action = (parts.netloc or parts.path.strip("/")).lower()
     query = {k: v[-1] for k, v in parse_qs(parts.query).items()}
     return {"action": action, "project": query.get("project", ""), "step": query.get("step", ""),
-            "token": query.get("token", ""), "agent": query.get("agent") or None}
+            "token": query.get("token", ""), "agent": query.get("agent") or None,
+            "lane": query.get("lane", "")}
+
+
+def build_review_url(lane: str, token: str) -> str:
+    return f"{SCHEME}://review?" + urlencode({"lane": lane, "token": token})
 
 
 def build_url(project: str, step: str, token: str) -> str:

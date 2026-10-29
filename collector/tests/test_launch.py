@@ -145,7 +145,8 @@ def test_agent_alias_uses_its_launch_template(project, home: Path, capsys) -> No
 
 def test_parse_url() -> None:
     link = launch_mod.parse_url("tirith://launch?project=demo&step=2&token=abc%2Fd")
-    assert link == {"action": "launch", "project": "demo", "step": "2", "token": "abc/d", "agent": None}
+    assert link == {"action": "launch", "project": "demo", "step": "2", "token": "abc/d", "agent": None,
+                    "lane": ""}
     assert launch_mod.parse_url("TIRITH://launch?project=a&step=1&agent=muse")["agent"] == "muse"
     with pytest.raises(launch_mod.LaunchError):
         launch_mod.parse_url("https://example.com/launch?project=a")

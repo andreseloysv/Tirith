@@ -71,6 +71,33 @@
     return h + '</span>';
   }
 
+  /* The "Review and merge" button: the newest lane `tirith launch` started for this step that is done and not merged. */
+  function reviewLane(s, p, state) {
+    var rows = (state.agents || []).filter(function (a) {
+      return a.project === p.id && String(a.step) === String(s.id) && a.review && a.status === 'done';
+    });
+    return rows.length ? rows[rows.length - 1] : null;
+  }
+  function reviewBtn(s, p, state) {
+    var L = state.launch, a = reviewLane(s, p, state);
+    if (!L || !L.token || !a) return '';
+    var r = a.review, key = 'review|' + a.id, t = ui.launching[key];
+    var busy = r.status === 'running' || (t && T.now() - t < LAUNCH_WAIT && r.status === 'pending');
+    if (t && r.status !== 'pending') delete ui.launching[key];
+    var h = '<span class="plw pbody">';
+    if (r.status === 'merged') return h + '<span class="rvchip ok">Merged</span></span>';
+    h += '<button class="plaunch long' + (busy ? ' busy' : '') + '" data-act="review" data-key="' + esc(a.id) + '"' + (busy ? ' disabled' : '') +
+      ' title="Run the tests, then merge the work of ' + esc(a.name) + ' into the project branch">' + ROCKET +
+      '<span>' + (busy ? 'Testing…' : r.status === 'pending' ? 'Review and merge' : 'Review and merge again') + '</span></button>';
+    if (ui.launchHint === key && !L.available) {
+      h += '<span class="pltip" role="tooltip">Tirith needs its link handler once. Run in a terminal:<code>' + INSTALL + '</code>then click again.</span>';
+    }
+    if (!busy && r.status === 'tests-failed') h += '<span class="rvchip bad">Tests failed</span>';
+    if (!busy && r.status === 'merge-failed') h += '<span class="rvchip bad">Merge failed</span>';
+    if (!busy && r.message && (r.status === 'tests-failed' || r.status === 'merge-failed')) h += '<pre class="rvout">' + esc(r.message) + '</pre>';
+    return h + '</span>';
+  }
+
   /* ---------- the owner's inbox: "Finish it", "Ask", the chip and the answers ---------- */
   function reqsFor(state, pid, sid) {
     return (state.inbox || []).filter(function (r) { return r.project === pid && String(r.step) === String(sid); });
@@ -194,7 +221,7 @@
       h += '<ul class="pitems">' + (s.items.length ? s.items.map(function (i) {
         return '<li class="' + (i.done ? 'ok' : '') + '"><span class="pi">' + (i.done ? OK : OPEN) + '</span><span>' + rich(i.text) + '</span></li>';
       }).join('') : '<li class="none">No items yet</li>') + '</ul>';
-      h += launchBtn(s, p, state, true).replace('class="plw"', 'class="plw pbody"');
+      h += reviewBtn(s, p, state) || launchBtn(s, p, state, true).replace('class="plw"', 'class="plw pbody"');
     }
     return h + '</li>';
   }
@@ -223,6 +250,17 @@
   }
 
   document.getElementById('view').addEventListener('click', function (e) {
+    var rv = e.target.closest('[data-act="review"]');
+    if (rv) {
+      var lid = rv.getAttribute('data-key'), rk = 'review|' + lid, rs = lastState, RL = rs && rs.launch;
+      if (!RL) return;
+      if (!RL.available) { ui.launchHint = ui.launchHint === rk ? null : rk; T.render(); return; }
+      ui.launchHint = null; ui.launching[rk] = T.now();
+      openLink('tirith://review?lane=' + encodeURIComponent(lid) + '&token=' + encodeURIComponent(RL.token));
+      T.render();
+      setTimeout(T.render, LAUNCH_WAIT + 500);
+      return;
+    }
     var l = e.target.closest('[data-act="launch"]');
     if (l) {
       var lk = l.getAttribute('data-key'), parts = lk.split('|'), st = lastState;
