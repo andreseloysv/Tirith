@@ -15,6 +15,7 @@ import os
 import re
 from datetime import datetime, timezone
 
+from tirith.activity import muse_tool
 from tirith.home import now_iso
 from tirith.logview import short_path
 
@@ -104,6 +105,9 @@ def parse(lines: list[str], workspace=None) -> tuple[list[dict], dict]:
             continue
         if not isinstance(rec, dict):
             continue
+        if "payload_type" in rec:
+            _muse_record(rec, steps, summary, workspace)
+            continue
         kind = rec.get("type")
         content = rec.get("message", {}).get("content") if isinstance(rec.get("message"), dict) else None
         content = [{"type": "text", "text": content}] if isinstance(content, str) else content
@@ -137,6 +141,27 @@ def parse(lines: list[str], workspace=None) -> tuple[list[dict], dict]:
             summary["duration_s"] = round(ms / 1000) if isinstance(ms, (int, float)) else None
     summary["steps"] = len(steps)
     return steps, summary
+
+
+def _muse_record(rec: dict, steps: list[dict], summary: dict, workspace) -> None:
+    """One Muse Code event (``payload_type`` envelope): finished tool calls and the final answer."""
+    ptype = str(rec.get("payload_type") or "")
+    payload = rec.get("payload") if isinstance(rec.get("payload"), dict) else {}
+    if ptype == "tool.result":
+        name, path, failed = muse_tool(payload)
+        steps.append({"kind": "tool", "name": name, "at": None,
+                      "summary": mask(_clip(tool_summary(name, {"path": path}, workspace)))})
+        text = str(payload.get("text") or "")
+        if text.strip() or failed:
+            steps.append({"kind": "result", "name": name, "at": None, "error": failed,
+                          "summary": mask(_lines(text, RESULT_LINES)) or "(no output)"})
+    elif ptype.startswith("run.terminal"):
+        summary["done"] = True
+        summary["error"] = not ptype.endswith("completed")
+        text = str(payload.get("text") or payload.get("reason") or "")
+        if text.strip():
+            steps.append({"kind": "text", "name": "", "at": None,
+                          "summary": mask(_lines(text, TEXT_LINES))})
 
 
 def steps_for(log, workspace=None, fallback_at: str | None = None, now: datetime | None = None):
