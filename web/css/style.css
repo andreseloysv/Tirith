@@ -77,6 +77,9 @@ h2 { font-size: 13px; font-weight: 600; margin: 0 0 10px; } h3 { font-size: 12px
 .mc-typing i:nth-child(2) { animation-delay: .15s; } .mc-typing i:nth-child(3) { animation-delay: .3s; }
 @keyframes mcdot { 0%, 60%, 100% { opacity: .35; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }
 @media (prefers-reduced-motion: reduce) { .mc-typing i { animation: none; } }
+.mc-wait, .mc-reason { font-size: 11.5px; color: var(--mut); padding: 2px 4px; font-variant-numeric: tabular-nums; }
+.mc-wait.late { color: var(--amber); }
+.mc-reason { font-size: 12.5px; color: var(--ink, inherit); } .mc-reason.bad { color: var(--red); }
 .mc-comp { flex: none; display: flex; flex-direction: column; gap: 6px; }
 .mc-note { margin: 0 !important; }
 .mc-box { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border-radius: 14px; background: rgba(255,255,255,.7); border: 1px solid rgba(255,255,255,.9); box-shadow: inset 0 1px 0 #fff, 0 4px 16px rgba(70,95,130,.08); }
