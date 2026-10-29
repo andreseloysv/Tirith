@@ -338,6 +338,14 @@ def test_lane_run_gives_the_child_a_token_and_clears_it(home, tmp_path, monkeypa
     assert "token" not in read_json(home / "lanes" / "g1.json", {})
 
 
+def test_lane_env_points_the_shims_at_the_given_home(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("TIRITH_HOME", str(tmp_path / "other"))
+    from tirith.cli import _wrapper_path_env
+    env = _wrapper_path_env(tmp_path / "given", "l1", "tok")
+    assert env["TIRITH_HOME"] == str(tmp_path / "given")
+    assert env["TIRITH_LANE"] == "l1" and env["TIRITH_LANE_TOKEN"] == "tok"
+
+
 def test_config_gates_flag_defaults_on(home) -> None:
     assert load_config(home).gates_enabled is True
 

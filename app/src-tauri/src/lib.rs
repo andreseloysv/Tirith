@@ -10,7 +10,7 @@ use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde_json::{json, Value};
-use tauri::{AppHandle, Emitter, Manager, RunEvent, State, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, DragDropEvent, Emitter, Manager, RunEvent, State, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 
 mod liveweb;
 
@@ -31,6 +31,8 @@ struct App {
     chats: Mutex<HashMap<String, ChatSession>>,
     /// Action ids with a run in progress (one run at a time per action).
     running: Mutex<HashSet<String>>,
+    /// The paths of the last files dropped on the window: the only ones `attachment_dropped` reads.
+    dropped: Mutex<Vec<PathBuf>>,
     /// Set once the app is on its way out: the supervisor must not bring the collector back.
     quitting: std::sync::atomic::AtomicBool,
 }
@@ -590,6 +592,11 @@ fn stop_tree(child: &mut Child, grace: std::time::Duration) {
     }
     unsafe { kill(-pgid, SIGKILL) };
     let _ = child.wait();
+    // orphaned grandchildren are reaped by launchd, not by us; wait (briefly) until the group is really gone
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    while unsafe { kill(-pgid, 0) } == 0 && std::time::Instant::now() < deadline {
+        std::thread::sleep(std::time::Duration::from_millis(25));
+    }
 }
 
 #[cfg(not(unix))]
@@ -747,6 +754,56 @@ mod open_file_tests {
                    ["open", "--project=demo", "--path=docs/a.md", "--line=42", "--col=7"]);
         assert_eq!(open_file_args("", "--help", None, Some(3)), ["open", "--project=", "--path=--help"]);
         assert_eq!(open_file_args("p", "a b.md", Some(0), None), ["open", "--project=p", "--path=a b.md"]);
+    }
+}
+
+// -- web links in the chat ----------------------------------------------------------------------
+
+/// The program and arguments that hand a web link to the system browser, or why the link is refused.
+/// Only `http(s)://` with no spaces or control characters: the URL is one argument and can never be a flag.
+fn open_url_command(url: &str) -> Result<(&'static str, Vec<String>), String> {
+    let lower = url.to_ascii_lowercase();
+    let web = lower.starts_with("http://") || lower.starts_with("https://");
+    if !web || url.len() > 8192 || url.chars().any(|c| c.is_whitespace() || c.is_control()) {
+        return Err(format!("not a web link: {}", url.chars().take(80).collect::<String>()));
+    }
+    let u = url.to_string();
+    if cfg!(target_os = "macos") {
+        Ok(("/usr/bin/open", vec![u]))
+    } else if cfg!(windows) {
+        Ok(("rundll32", vec!["url.dll,FileProtocolHandler".into(), u]))
+    } else {
+        Ok(("xdg-open", vec![u]))
+    }
+}
+
+/// Opens a web link from the page in the default browser (the webview ignores `target="_blank"`).
+#[tauri::command]
+fn open_url(url: String) -> Result<(), String> {
+    let (prog, args) = open_url_command(&url)?;
+    let status = Command::new(prog)
+        .args(&args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map_err(|e| format!("could not run {prog}: {e}"))?;
+    if status.success() { Ok(()) } else { Err(format!("{prog} failed ({status})")) }
+}
+
+#[cfg(test)]
+mod open_url_tests {
+    use super::*;
+
+    #[test]
+    fn only_web_links_go_to_the_browser() {
+        let (_, args) = open_url_command("https://account.apple.com/").unwrap();
+        assert_eq!(args.last().unwrap(), "https://account.apple.com/");
+        assert!(open_url_command("HTTP://example.com/a?b=1&c=2").is_ok());
+        for bad in ["file:///etc/passwd", "tirith://open?path=x", "javascript:alert(1)", "-a Calculator",
+                    "https://x.com/ -a Calculator", "https://x.com/\nb", ""] {
+            assert!(open_url_command(bad).is_err(), "{bad:?} was accepted");
+        }
     }
 }
 
@@ -1040,48 +1097,151 @@ fn valid_message_id(id: &str) -> bool {
     id.len() == 11 && id.starts_with("in-") && id[3..].bytes().all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
 }
 
-/// Writes one image to `<root>/<message_id>/<n>.<ext>`; the type comes from the bytes (never the name),
-/// the folder from the validated id, so nothing is written outside `root`.
-/// Returns `{path, type, size}` (the page adds width and height).
-fn attachment_write(root: &std::path::Path, message_id: &str, name: &str, data: &[u8]) -> Result<Value, String> {
+/// The four image types the page shows as pictures; any other type is a file shown by its name.
+const PICTURE_TYPES: [&str; 4] = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+const FILE_TYPE: &str = "application/octet-stream";
+
+/// `type/subtype` in lowercase letters, digits and `.+-`, as the collector accepts it.
+fn valid_mime(mime: &str) -> bool {
+    let part = |s: &str, max: usize| {
+        !s.is_empty() && s.len() <= max && s.as_bytes()[0].is_ascii_alphanumeric()
+            && s.bytes().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || b".+-".contains(&c))
+    };
+    matches!(mime.split_once('/'), Some((a, b)) if part(a, 64) && part(b, 128))
+}
+
+/// The type of a file that is not a picture, from its extension (a dropped file has no other hint).
+fn mime_of_name(name: &str) -> &'static str {
+    let ext = name.rsplit_once('.').map(|(_, e)| e.to_ascii_lowercase()).unwrap_or_default();
+    match ext.as_str() {
+        "txt" | "log" => "text/plain",
+        "md" => "text/markdown",
+        "csv" => "text/csv",
+        "html" | "htm" => "text/html",
+        "json" => "application/json",
+        "pdf" => "application/pdf",
+        "zip" => "application/zip",
+        "svg" => "image/svg+xml",
+        "toml" => "application/toml",
+        "yaml" | "yml" => "application/yaml",
+        "xml" => "application/xml",
+        _ => FILE_TYPE,
+    }
+}
+
+/// A file name safe to write: the last path part, `[A-Za-z0-9._-]` only, no leading dot, at most 80 bytes.
+fn safe_file_name(name: &str) -> String {
+    let base = name.rsplit(['/', '\\']).next().unwrap_or("");
+    let clean: String = base
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_' { c } else { '_' })
+        .collect();
+    let clean = clean.trim_start_matches('.');
+    if clean.is_empty() { "file".into() } else { clip(clean, 80).to_string() }
+}
+
+/// The name of an attachment as shown: printable characters only, at most 120 bytes.
+fn shown_name(name: &str) -> String {
+    let printable: String = name.chars().filter(|c| !c.is_control()).collect();
+    clip(printable.trim(), 120).to_string()
+}
+
+/// Writes one attachment to `<root>/<message_id>/`: a PNG, JPEG, GIF or WebP (known from its bytes, never
+/// the name) as `<n>.<ext>`, any other file as `<n>-<safe name>` with the type the page gave (or
+/// `application/octet-stream`, and never a picture type). The folder comes from the validated id, so nothing is
+/// written outside `root`. Returns `{path, type, size, name}` (the page adds width and height of a picture).
+fn attachment_write(root: &std::path::Path, message_id: &str, name: &str, mime: &str, data: &[u8]) -> Result<Value, String> {
     if !valid_message_id(message_id) {
         return Err(format!("bad message id {message_id:?}"));
     }
     if data.is_empty() || data.len() > ATTACH_MAX_BYTES {
-        return Err(format!("{name}: an image must be between 1 byte and 10 MB"));
+        return Err(format!("{name}: a file must be between 1 byte and 10 MB"));
     }
-    let (mime, ext) = sniff_image(data).ok_or_else(|| format!("{name}: only PNG, JPEG, GIF and WebP images are accepted"))?;
     let dir = root.join(message_id);
     std::fs::create_dir_all(&dir).map_err(|e| format!("could not create {}: {e}", dir.display()))?;
     let taken = std::fs::read_dir(&dir).map(|d| d.count()).unwrap_or(0);
     if taken >= ATTACH_MAX {
-        return Err(format!("at most {ATTACH_MAX} images per message"));
+        return Err(format!("at most {ATTACH_MAX} files per message"));
     }
-    let path = dir.join(format!("{}.{ext}", taken + 1));
+    let (mime, file) = match sniff_image(data) {
+        Some((picture, ext)) => (picture, format!("{}.{ext}", taken + 1)),
+        None => {
+            let declared = if valid_mime(mime) && !PICTURE_TYPES.contains(&mime) { mime } else { FILE_TYPE };
+            (declared, format!("{}-{}", taken + 1, safe_file_name(name)))
+        }
+    };
+    let path = dir.join(file);
     std::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(&path)
         .and_then(|mut f| f.write_all(data))
         .map_err(|e| format!("could not write {}: {e}", path.display()))?;
-    Ok(json!({"path": path.to_string_lossy(), "type": mime, "size": data.len()}))
+    Ok(json!({"path": path.to_string_lossy(), "type": mime, "size": data.len(), "name": shown_name(name)}))
 }
 
-/// Saves an image the owner attached to a chat message under `~/.tirith/attachments/<message_id>/`
-/// and returns `{path, type, size}`; call it before `inbox_add` with the same id.
+/// Saves a file the owner attached to a chat message under `~/.tirith/attachments/<message_id>/`
+/// and returns `{path, type, size, name}`; call it before `inbox_add` with the same id.
 #[tauri::command]
-fn attachment_save(message_id: String, name: String, bytes_base64: String) -> Result<Value, String> {
+fn attachment_save(message_id: String, name: String, mime: Option<String>, bytes_base64: String) -> Result<Value, String> {
     if bytes_base64.len() > ATTACH_MAX_BYTES / 3 * 4 + 8 {
-        return Err(format!("{name}: an image must be at most 10 MB"));
+        return Err(format!("{name}: a file must be at most 10 MB"));
     }
-    attachment_write(&tirith_home().join("attachments"), &message_id, &name, &b64_decode(&bytes_base64)?)
+    let data = b64_decode(&bytes_base64)?;
+    attachment_write(&tirith_home().join("attachments"), &message_id, &name, mime.as_deref().unwrap_or(""), &data)
 }
 
-/// The attachments of a request as stored: at most 6, each `{path, type, size, width, height}` with the path
-/// inside `root` and no `..`; anything else is refused.
+/// Encodes standard base64 with padding.
+fn b64_encode(data: &[u8]) -> String {
+    const ABC: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity(data.len().div_ceil(3) * 4);
+    for chunk in data.chunks(3) {
+        let n = (chunk[0] as u32) << 16 | (*chunk.get(1).unwrap_or(&0) as u32) << 8 | *chunk.get(2).unwrap_or(&0) as u32;
+        for i in 0..4 {
+            out.push(if i <= chunk.len() { ABC[(n >> (18 - 6 * i) & 63) as usize] as char } else { '=' });
+        }
+    }
+    out
+}
+
+/// One file the owner dropped on the window, for the composer: `{name, type, size, b64}`, or `{name, error}`.
+/// Only a path of the last native drop is read (`dropped`), so the page cannot read any other file.
+fn dropped_file(path: &str, dropped: &[PathBuf]) -> Value {
+    let p = Path::new(path);
+    let name = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| path.to_string());
+    let fail = |error: String| json!({"name": name, "error": error});
+    if !dropped.iter().any(|d| d == p) {
+        return fail(format!("{name} was not dropped on Tirith"));
+    }
+    match std::fs::metadata(p) {
+        Ok(m) if !m.is_file() => return fail(format!("{name} is a folder, not a file")),
+        Ok(m) if m.len() == 0 => return fail(format!("{name} is empty")),
+        Ok(m) if m.len() > ATTACH_MAX_BYTES as u64 => return fail(format!("{name} is over 10 MB")),
+        Ok(_) => {}
+        Err(e) => return fail(format!("cannot read {name}: {e}")),
+    }
+    match std::fs::read(p) {
+        Ok(data) => {
+            let mime = sniff_image(&data).map(|(m, _)| m).unwrap_or_else(|| mime_of_name(&name));
+            json!({"name": name, "type": mime, "size": data.len(), "b64": b64_encode(&data)})
+        }
+        Err(e) => fail(format!("cannot read {name}: {e}")),
+    }
+}
+
+/// The files of the last drop on the window, read for the chat composer (at most 6).
+#[tauri::command]
+fn attachment_dropped(state: State<'_, App>, paths: Vec<String>) -> Vec<Value> {
+    let dropped = state.dropped.lock().unwrap().clone();
+    paths.iter().take(ATTACH_MAX).map(|p| dropped_file(p, &dropped)).collect()
+}
+
+/// The attachments of a request as stored: at most 6, each `{path, type, size, width, height}` (and `name`)
+/// with the path inside `root` and no `..` and a well-formed type; anything else is refused. Only the four
+/// picture types keep a width and height.
 fn clean_attachments(raw: &[Value], root: &std::path::Path) -> Result<Vec<Value>, String> {
     if raw.len() > ATTACH_MAX {
-        return Err(format!("at most {ATTACH_MAX} images per message"));
+        return Err(format!("at most {ATTACH_MAX} files per message"));
     }
     raw.iter()
         .map(|a| {
@@ -1089,11 +1249,17 @@ fn clean_attachments(raw: &[Value], root: &std::path::Path) -> Result<Vec<Value>
             let p = std::path::Path::new(path);
             let inside = p.starts_with(root) && !p.components().any(|c| matches!(c, std::path::Component::ParentDir));
             let mime = a["type"].as_str().unwrap_or("");
-            if !inside || !["image/png", "image/jpeg", "image/gif", "image/webp"].contains(&mime) {
+            if !inside || !valid_mime(mime) {
                 return Err(format!("bad attachment {path:?}"));
             }
-            let num = |k: &str| a[k].as_u64().unwrap_or(0);
-            Ok(json!({"path": path, "type": mime, "size": num("size"), "width": num("width"), "height": num("height")}))
+            let picture = PICTURE_TYPES.contains(&mime);
+            let num = |k: &str| if picture || k == "size" { a[k].as_u64().unwrap_or(0) } else { 0 };
+            let mut out = json!({"path": path, "type": mime, "size": num("size"), "width": num("width"), "height": num("height")});
+            let name = shown_name(a["name"].as_str().unwrap_or(""));
+            if !name.is_empty() {
+                out["name"] = json!(name);
+            }
+            Ok(out)
         })
         .collect()
 }
@@ -1246,10 +1412,10 @@ fn inbox_add_row(
     let attachments = clean_attachments(&attachments.unwrap_or_default(), &home.join("attachments"))?;
     let text = text.unwrap_or_default();
     if !attachments.is_empty() && kind != "chat" {
-        return Err("only a chat message takes images".into());
+        return Err("only a chat message takes attachments".into());
     }
-    // a chat message may be only images: the row builder wants text, the stored row keeps it empty
-    let probe = if attachments.is_empty() || !text.trim().is_empty() { text.as_str() } else { "(image)" };
+    // a chat message may be only attachments: the row builder wants text, the stored row keeps it empty
+    let probe = if attachments.is_empty() || !text.trim().is_empty() { text.as_str() } else { "(attachment)" };
     let mut row = inbox_row(kind, project, step, probe, SystemTime::now(), inbox_salt())?;
     row["text"] = json!(clip(text.trim(), INBOX_TEXT_MAX));
     if let Some(id) = id {
@@ -1358,34 +1524,83 @@ mod inbox_tests {
     }
 
     #[test]
+    fn base64_round_trips() {
+        for data in [&b""[..], b"h", b"hi", b"hel", b"hello", PNG] {
+            assert_eq!(b64_decode(&b64_encode(data)).unwrap(), data);
+        }
+        assert_eq!(b64_encode(b"hi"), "aGk=");
+        assert_eq!(b64_encode(b"hello"), "aGVsbG8=");
+    }
+
+    #[test]
     fn attachment_is_saved_by_its_bytes_under_the_message_folder() {
         let root = scratch("ok");
-        let a = attachment_write(&root, "in-0a1b2c3d", "../../evil.sh", PNG).unwrap();
+        let a = attachment_write(&root, "in-0a1b2c3d", "../../evil.sh", "text/x-sh", PNG).unwrap();
         assert_eq!(a["type"], "image/png");
         assert_eq!(a["size"], PNG.len());
         let path = PathBuf::from(a["path"].as_str().unwrap());
         assert_eq!(path, root.join("in-0a1b2c3d").join("1.png"));
         assert_eq!(std::fs::read(&path).unwrap(), PNG);
-        let b = attachment_write(&root, "in-0a1b2c3d", "x.png", &[0xff, 0xd8, 0xff, 0xe0]).unwrap();
+        let b = attachment_write(&root, "in-0a1b2c3d", "x.png", "", &[0xff, 0xd8, 0xff, 0xe0]).unwrap();
         assert!(b["path"].as_str().unwrap().ends_with("/2.jpg"));
         let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]
-    fn attachment_validation_refuses_bad_ids_types_and_sizes() {
+    fn any_other_file_keeps_a_safe_name_and_is_never_a_picture() {
+        let root = scratch("file");
+        let a = attachment_write(&root, "in-0a1b2c3d", "../../notes v2.txt", "text/plain", b"hello").unwrap();
+        assert_eq!(a["path"].as_str().unwrap(), root.join("in-0a1b2c3d").join("1-notes_v2.txt").to_str().unwrap());
+        assert_eq!((a["type"].as_str(), a["name"].as_str()), (Some("text/plain"), Some("../../notes v2.txt")));
+        // bytes that are not an image never get a picture type, whatever the page says
+        let b = attachment_write(&root, "in-0a1b2c3d", "fake.png", "image/png", b"<svg/>").unwrap();
+        assert_eq!(b["type"], FILE_TYPE);
+        assert!(b["path"].as_str().unwrap().ends_with("/2-fake.png"));
+        let c = attachment_write(&root, "in-0a1b2c3d", ".hidden", "Text/<b>", b"x").unwrap();
+        assert_eq!(c["type"], FILE_TYPE);
+        assert!(c["path"].as_str().unwrap().ends_with("/3-hidden"));
+        assert_eq!(safe_file_name("..."), "file");
+        assert_eq!(safe_file_name("C:\\x\\café.md"), "caf_.md");
+        assert!(safe_file_name(&"a".repeat(300)).len() == 80);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn attachment_validation_refuses_bad_ids_and_sizes() {
         let root = scratch("bad");
         for id in ["", "../x", "in-../..", "in-ABCDEF01", "in-0a1b2c3", "x/in-0a1b2c3d", "in-0a1b2c3d/.."] {
-            assert!(attachment_write(&root, id, "a.png", PNG).is_err(), "{id}");
+            assert!(attachment_write(&root, id, "a.png", "", PNG).is_err(), "{id}");
         }
-        assert!(attachment_write(&root, "in-0a1b2c3d", "a.png", b"<svg/>").is_err());
-        assert!(attachment_write(&root, "in-0a1b2c3d", "a.png", b"").is_err());
+        assert!(attachment_write(&root, "in-0a1b2c3d", "a.png", "", b"").is_err());
         let big = [PNG, &vec![0u8; ATTACH_MAX_BYTES][..]].concat();
-        assert!(attachment_write(&root, "in-0a1b2c3d", "a.png", &big).is_err());
+        assert!(attachment_write(&root, "in-0a1b2c3d", "a.png", "", &big).is_err());
         assert!(!root.exists());
         for _ in 0..ATTACH_MAX {
-            attachment_write(&root, "in-0a1b2c3d", "a.png", PNG).unwrap();
+            attachment_write(&root, "in-0a1b2c3d", "a.png", "", PNG).unwrap();
         }
-        assert!(attachment_write(&root, "in-0a1b2c3d", "a.png", PNG).is_err());
+        assert!(attachment_write(&root, "in-0a1b2c3d", "a.txt", "text/plain", b"x").is_err());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn only_a_file_of_the_last_drop_is_read() {
+        let root = scratch("drop");
+        std::fs::create_dir_all(&root).unwrap();
+        let (txt, pic, other, empty) = (root.join("a.txt"), root.join("shot"), root.join("b.txt"), root.join("e.txt"));
+        std::fs::write(&txt, "hi").unwrap();
+        std::fs::write(&pic, PNG).unwrap();
+        std::fs::write(&other, "secret").unwrap();
+        std::fs::write(&empty, "").unwrap();
+        let dropped = vec![txt.clone(), pic.clone(), root.clone(), empty.clone()];
+        let s = |p: &PathBuf| p.to_str().unwrap().to_string();
+        let a = dropped_file(&s(&txt), &dropped);
+        assert_eq!((a["name"].as_str(), a["type"].as_str(), a["size"].as_u64(), a["b64"].as_str()),
+                   (Some("a.txt"), Some("text/plain"), Some(2), Some("aGk=")));
+        assert_eq!(dropped_file(&s(&pic), &dropped)["type"], "image/png");
+        assert!(dropped_file(&s(&other), &dropped)["error"].as_str().unwrap().contains("not dropped"));
+        assert!(dropped_file(&s(&root), &dropped)["error"].as_str().unwrap().contains("folder"));
+        assert!(dropped_file(&s(&empty), &dropped)["error"].as_str().unwrap().contains("empty"));
+        assert!(dropped_file(&s(&txt), &[])["b64"].is_null());
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -1398,7 +1613,10 @@ mod inbox_tests {
             let bad = json!({"path": path, "type": "image/png"});
             assert!(clean_attachments(&[bad], &root).is_err(), "{path}");
         }
-        assert!(clean_attachments(&[json!({"path": "/h/attachments/a/1.svg", "type": "image/svg+xml"})], &root).is_err());
+        assert!(clean_attachments(&[json!({"path": "/h/attachments/a/1-x", "type": "<script>"})], &root).is_err());
+        let svg = json!({"path": "/h/attachments/a/1-x.svg", "type": "image/svg+xml", "size": 5, "width": 9, "name": "x\u{7}.svg"});
+        let got = &clean_attachments(&[svg], &root).unwrap()[0];
+        assert_eq!((got["width"].as_u64(), got["size"].as_u64(), got["name"].as_str()), (Some(0), Some(5), Some("x.svg")));
         assert!(clean_attachments(&vec![ok; 7], &root).is_err());
     }
 
@@ -2070,6 +2288,14 @@ pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(App::default())
+        .on_window_event(|window, event| {
+            // with the native drag-drop handler on, the webview gets the drop as `tauri://drag-drop` (paths and
+            // position); remember what was dropped. The main window turns it off below, so there the page gets
+            // the HTML5 drop with the files instead and this never fires.
+            if let WindowEvent::DragDrop(DragDropEvent::Drop { paths, .. }) = event {
+                *window.state::<App>().dropped.lock().unwrap() = paths.clone();
+            }
+        })
         .register_uri_scheme_protocol(liveweb::SCHEME, move |_ctx, req| {
             let (code, ty, body) = match &serve {
                 Some(root) => liveweb::respond(root, req.uri().path()),
@@ -2087,10 +2313,12 @@ pub fn run() {
             agent_detail,
             launch_step,
             open_file,
+            open_url,
             project_add,
             project_env_set,
             inbox_add,
             attachment_save,
+            attachment_dropped,
             inbox_reply,
             run_action,
             open_in_terminal,

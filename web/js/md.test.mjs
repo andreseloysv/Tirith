@@ -112,4 +112,31 @@ t('splitRef: the shared path rules', () => {
   ['https://a.b/c.js', 'file:///tmp/x.md', 'tirith', 'docs', '--project', '12:30', 'v1.2', '1/2', 'a:b', '$HOME/x', '']
     .forEach(w => assert.equal(splitRef(w), null, w));
 });
+/* lane references: only ids the caller knows (the agents of the state) become lane links */
+const lanesKnown = ['chat-wrap-long-reply-buttons-dra', 'u-typing', 'w6-perf', 'diskdiet', 'docs'];
+const lanes = { lane: id => lanesKnown.includes(id) };
+const lanesOf = h => (h.match(/data-act="golane" data-key="([^"]+)"/g) || []).map(x => x.split('data-key="')[1].slice(0, -1));
+t('lane refs: bare ids in plain text, code spans, bold and lane/<id>', () => {
+  const h = md('I started lane chat-wrap-long-reply-buttons-dra to make long options wrap. Also `u-typing`, **w6-perf** and lane/diskdiet.', lanes);
+  assert.deepEqual(lanesOf(h), ['chat-wrap-long-reply-buttons-dra', 'u-typing', 'w6-perf', 'diskdiet']);
+  has(h, '<a class="lref" href="#" data-act="golane" data-key="chat-wrap-long-reply-buttons-dra" title="Open lane chat-wrap-long-reply-buttons-dra">chat-wrap-long-reply-buttons-dra</a> to',
+    '<a class="lref" href="#" data-act="golane" data-key="u-typing" title="Open lane u-typing"><code>u-typing</code></a>',
+    '<strong><a class="lref"', '>lane/diskdiet</a>.');
+  assert.deepEqual(lanesOf(md('(u-typing), u-typing: done; "w6-perf" and [the lane](lane:diskdiet)', lanes)), ['u-typing', 'u-typing', 'w6-perf', 'diskdiet']);
+  assert.deepEqual(lanesOf(md('**diskdiet** and the lane diskdiet, `docs`', lanes)), ['diskdiet', 'diskdiet', 'docs']);
+});
+t('lane refs: no links for ordinary words, unknown ids, parts of words, paths and URLs', () => {
+  const h = md('the docs and diskdiet, u-typing-2, x-u-typing, web/u-typing/x, https://a.b/u-typing and `run u-typing` and w6-perfect', lanes);
+  assert.deepEqual(lanesOf(h), [], h);
+  assert.deepEqual(lanesOf(md('u-typing')), []);   /* no opts: nothing is linked */
+  assert.deepEqual(lanesOf(md('```\nu-typing\n```', lanes)), []);   /* fenced code stays code */
+  assert.deepEqual(lanesOf(md('[x](lane:nope)', lanes)), []);
+});
+t('lane and file refs together, only slug ids', () => {
+  const h = md('lane u-typing changed web/js/v-plan.js', { ...refs, ...lanes });
+  assert.equal(links(h), 1); assert.deepEqual(lanesOf(h), ['u-typing']);
+  const evil = md('`a"b<c` and [x](lane:a"b)', { lane: () => true });
+  assert.deepEqual(lanesOf(evil), []); lacks(evil, 'a"b<c');
+  has(mdInline('lane `w6-perf`', lanes), 'data-key="w6-perf"');
+});
 console.log(n + ' md groups passed');
