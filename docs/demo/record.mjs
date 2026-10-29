@@ -31,12 +31,12 @@ for (const f of readdirSync(join(out, 'raw'))) rmSync(join(out, 'raw', f));
 // scene length = narration + a breath, but never shorter than the on-screen action needs
 const LEN = {
   problem: Math.max(T.problem + 0.9, 12), ask: Math.max(T.ask + 1, 24), plan: Math.max(T.plan + 1.5, 12),
-  rule: Math.max(T.rule + 1.5, 30), merge: Math.max(T.merge + 1.5, 18), health: Math.max(T.health + 1.5, 12),
+  rule: Math.max(T.rule + 1.5, 36), merge: Math.max(T.merge + 1.5, 18), health: Math.max(T.health + 1.5, 12),
   decision: Math.max(T.decision + 1.5, 13), brain: Math.max(T.brain + 1.5, 15), close: T.close + 2.4,
 };
 const CAPTION = {
   ask: 'One request, written in the chat', plan: 'The plan grows; every agent starts from a plan item',
-  rule: 'A rule in code blocks the agent, and tells it what to run instead', merge: 'Claim check, then auto-merge. The plan ticks itself',
+  ruleIntro: 'Wren is working on dark mode', ruleBlock: 'The hook blocks the raw test run, before it runs', ruleInstead: 'It tells Wren the exact command to use instead', rulePipe: 'The run Wren made shows up in Pipelines', merge: 'Claim check, then auto-merge. The plan ticks itself',
   health: 'The health dot: Tirith heals itself', decision: 'Only a real decision reaches the owner',
 };
 
@@ -119,6 +119,7 @@ async function scene(name, caption) {
   console.log(((Date.now() - wall0) / 1000).toFixed(1) + 's scene ' + name);
   await page.evaluate((c) => window.__caption && window.__caption(c), caption || '').catch(() => {});
 }
+async function caption(t) { await page.evaluate((c) => window.__caption && window.__caption(c), t).catch(() => {}); }
 async function until(sec) { const ms = sceneStart + sec * 1000 - Date.now(); if (ms > 0) await sleep(ms); }
 // reveal the steps of a list one by one: [count, at second] pairs, each applied when its time comes
 async function timeline(plan) { for (const [at, o] of plan) { await until(at); beat(typeof o === 'function' ? o() : o); } }
@@ -160,20 +161,24 @@ try {
   await until(LEN.plan);
 
   // ---- 4. a rule in code blocks an agent; it uses the alternative -------------------------------------------------------------
-  await scene('rule', CAPTION.rule);
-  beat({ wren: 3 }); await until(1.8);
-  beat({ wren: 4, violation: true });               // the raw test run, blocked with the command to use
-  await glide(1500, 720, 1000);
-  await until(7.5);
-  await goView('agents', 1000); await until(9.5);
+  // each caption sits on the screen that shows it: the agent's live steps (blocked command, then the alternative), then Pipelines
+  await scene('rule', CAPTION.ruleIntro);
+  await goView('agents', 900);
   const wren = page.locator('[data-act="agent"]').filter({ hasText: 'Wren' });
+  beat({ wren: 3 }); await until(2.5);
   await waitFor(wren, 15000);
-  await click(wren, 1000); await until(17);         // the drawer: "Rules broken" and the command to run instead
-  beat({ wren: 7 }); await closeDrawer(900); await until(19);   // it ran the tests through Tirith
-  await goView('pipelines', 1000); await until(21);
+  await click(wren, 1000);                           // the drawer follows Wren's live steps
+  beat({ wren: 4, violation: true });               // the raw test run, blocked with the command to use
+  await caption(CAPTION.ruleBlock); await until(12);
+  beat({ wren: 5 }); await until(15);
+  beat({ wren: 6 }); await caption(CAPTION.ruleInstead); await until(19);
+  await page.mouse.wheel(0, 300); await until(22);   // "Rules broken" and the command to run instead
+  beat({ wren: 7 }); await until(25);                // it ran the tests through Tirith
+  await closeDrawer(900); await caption(CAPTION.rulePipe);
+  await goView('pipelines', 1000); await until(28);
   const run = page.locator('[data-act="prun"]');
   await waitFor(run, 15000);
-  await click(run.first(), 900); await until(24.5);
+  await click(run.first(), 900); await until(32);
   await click(page.locator('[data-act="pstage"]').nth(1), 900);
   await until(LEN.rule);
 

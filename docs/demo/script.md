@@ -2,7 +2,7 @@
 
 For the hackathon judges. Video: `out/tirith-demo.mp4` (1920x1080, H.264/AAC), loop for the README: `out/tirith-demo.gif`.
 Everything on screen is the real page (`web/index.html`) on the demo story in `story.mjs`; the recorder drives it
-(`record.mjs`). The voice is `narration.json`, spoken by the macOS `say` voice (works offline, no key); each scene also
+(`record.mjs`). The voice is `narration.json`, spoken with Google Cloud Text-to-Speech when `TEXT_TO_SPEACH_GOOGLE_API_KEY` is set, else the macOS `say` voice (offline); each scene also
 carries an on-screen caption, so the video reads with the sound off. Words used: "coding agents" only.
 
 | Time | Scene | On screen |
@@ -10,7 +10,7 @@ carries an on-screen caption, so the video reads with the sound off. Words used:
 | 0:00 | 1. Problem (card) | The questions asked all day, then "an autonomous manager for your coding agents" |
 | 0:12 | 2. One request | Overview of ChromaSol. The owner types one request in the chat; the manager works live in CLI style: reads the plan, adds plan items, writes a brief, starts two agents |
 | 0:37 | 3. The plan | Two new steps with progress bars and the agent working on each item |
-| 0:50 | 4. A rule in code | Wren runs the tests raw; a hook blocks it and says what to run instead (red line in the chat, "Rules broken" in the agent). It uses `tirith run`; the run shows in Pipelines |
+| 0:50 | 4. A rule in code | Wren's drawer in Agents follows its live steps: the raw test run is blocked, the hook says what to run instead ("Rules broken"), Wren uses `tirith run`; then the run shows in Pipelines. Each caption sits on the screen that shows it |
 | 1:23 | 5. Claim check, auto-merge | The report is checked against the real change; "Merged ... Claims verified"; step 4 ticks itself |
 | 1:43 | 6. Health dot | Amber (the collector reloads), the panel lists the checks, then green again |
 | 1:55 | 7. A real decision | Only "ship in v1.2 or hold for 2.0?" reaches the owner: one click on a button |
