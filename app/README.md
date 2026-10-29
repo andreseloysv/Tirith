@@ -26,7 +26,7 @@ web fix is visible without rebuilding the app.
   `tirith://state` event. The page detects `window.__TAURI__` and uses the event instead of polling
   `state.js`. In a normal browser nothing changes.
 - **Collector**: on start the app runs `uv run --project <collector> tirith collect --interval 2`
-  unless a `tirith collect` process already exists, and stops it on exit only if it started it.
+  unless a collector holds `<TIRITH_HOME>/collector.lock`, and stops it on exit only if it started it.
   Collector folder: `$TIRITH_COLLECTOR_DIR`, else `[app] collector_dir` in `~/.tirith/config.toml`,
   else this repo's `collector/`. `[app] uv = "<path>"` overrides the `uv` executable.
 - **Launch**: command `launch_step(project, step)` runs `tirith launch --project P --step N`

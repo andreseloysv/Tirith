@@ -43,7 +43,19 @@ command -v uv >/dev/null || { echo "uv not found: https://docs.astral.sh/uv/"; e
 mkdir -p "$HOME_DIR/logs"
 
 started=""
-if pgrep -f "tirith collect" >/dev/null; then
+if python3 - "$HOME_DIR/collector.lock" <<'PY'
+import fcntl, sys
+try:
+    handle = open(sys.argv[1])
+except OSError:
+    sys.exit(1)
+try:
+    fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+except OSError:
+    sys.exit(0)  # held: a collector is running
+sys.exit(1)
+PY
+then
     echo "Collector already running: reusing it."
 else
     (cd "$ROOT/collector" && PATH="$ROOT/bin:$PATH" exec uv run -q tirith collect --interval 2) \

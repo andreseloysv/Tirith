@@ -4,7 +4,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::io::{BufRead, BufReader, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -406,19 +406,57 @@ mod state_tests {
 // -- collector ----------------------------------------------------------------------------------
 
 #[cfg(unix)]
-fn collector_running() -> bool {
-    Command::new("pgrep")
-        .args(["-f", "tirith collect"])
-        .stdout(Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
+extern "C" {
+    fn flock(fd: std::os::raw::c_int, operation: std::os::raw::c_int) -> std::os::raw::c_int;
 }
 
-/// No cheap process search without extra dependencies: Windows always starts its own.
+/// True when something holds the advisory lock `tirith collect` keeps on `<home>/collector.lock`.
+/// We try to take it without waiting and let go again at once; a missing file means no collector.
+#[cfg(unix)]
+fn collector_lock_held(home: &Path) -> bool {
+    use std::os::unix::io::AsRawFd;
+    const LOCK_EX: std::os::raw::c_int = 2;
+    const LOCK_NB: std::os::raw::c_int = 4;
+    let Ok(file) = std::fs::File::open(home.join("collector.lock")) else {
+        return false;
+    };
+    // SAFETY: `file` owns a valid descriptor for the whole call; closing it on drop releases our lock.
+    unsafe { flock(file.as_raw_fd(), LOCK_EX | LOCK_NB) != 0 }
+}
+
+/// No lock check on Windows: the app always starts its own (the collector itself refuses to double-run
+/// only where it can take the lock).
 #[cfg(not(unix))]
-fn collector_running() -> bool {
+fn collector_lock_held(_home: &Path) -> bool {
     false
+}
+
+fn collector_running() -> bool {
+    collector_lock_held(&tirith_home())
+}
+
+#[cfg(all(test, unix))]
+mod collector_lock_tests {
+    use super::*;
+    use std::os::unix::io::AsRawFd;
+
+    #[test]
+    fn lock_check_follows_the_collector_lock() {
+        let home = std::env::temp_dir().join(format!("tirith-clock-{}", std::process::id()));
+        std::fs::create_dir_all(&home).unwrap();
+        assert!(!collector_lock_held(&home), "no lock file yet");
+
+        let file = std::fs::File::create(home.join("collector.lock")).unwrap();
+        assert!(!collector_lock_held(&home), "file exists but nobody holds it");
+
+        assert_eq!(unsafe { flock(file.as_raw_fd(), 2 | 4) }, 0);
+        assert!(collector_lock_held(&home), "held by a collector");
+        assert!(collector_lock_held(&home), "checking must not release or steal it");
+
+        drop(file);
+        assert!(!collector_lock_held(&home), "released when the holder exits");
+        let _ = std::fs::remove_dir_all(&home);
+    }
 }
 
 fn start_collector(app: &App) {
