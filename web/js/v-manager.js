@@ -105,11 +105,19 @@
       '<button class="mc-send" data-act="mc-send" type="button" aria-label="Send" title="Send to the manager">' + SEND + '</button></div></div></div>';
   }
 
+  /* who answers: a live terminal session, or the on-call manager Tirith starts when the owner writes */
+  function presence(state) {
+    var p = state.manager && state.manager.presence;
+    if (!p) return '';
+    var txt = p.working ? 'Manager is working on your message…' : p.mode === 'live' ? 'Manager: live session' : 'Manager: on call (starts when you write)';
+    return '<span class="mc-presence ' + (p.working ? 'work' : p.mode) + '" role="status">' + esc(txt) + '</span>';
+  }
+
   /* the chat as HTML; `drawer` adds a close button */
   T.managerChat = function (state, drawer) {
     lastState = state;
     var list = messages(state), since = waitingSince(state), h;
-    h = '<section class="mchat' + (drawer ? ' in-drawer' : '') + '"><div class="mc-head"><h2>Manager</h2>' +
+    h = '<section class="mchat' + (drawer ? ' in-drawer' : '') + '"><div class="mc-head"><h2>Manager</h2>' + presence(state) +
       (drawer ? '<button class="mc-x" data-act="mc-close" type="button" aria-label="Close the chat">&times;</button>' : '') + '</div>' +
       '<div class="mc-log" id="mc-log">';
     h += list.length ? list.map(function (m) { return msg(m, state); }).join('') : T.empty('Write to the manager here. Its answers, and the answers to your Plan questions, show in this thread.');
