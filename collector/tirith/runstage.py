@@ -12,9 +12,9 @@ import fcntl
 import os
 import subprocess
 import sys
-import threading
 from pathlib import Path
 
+from tirith import timeouts as timeouts_mod
 from tirith import projects as projects_mod
 from tirith import projenv as projenv_mod
 from tirith.home import now_iso
@@ -61,7 +61,7 @@ def resolve_run(home: Path, project: str, pipeline: str, explicit: str | None, n
 
 def _git(folder: Path, *args: str) -> str | None:
     try:
-        done = subprocess.run(["git", "-C", str(folder), *args], capture_output=True, text=True, timeout=10)
+        done = timeouts_mod.run(["git", "-C", str(folder), *args], "git", text=True)
     except (OSError, subprocess.SubprocessError):
         return None
     return done.stdout.strip() if done.returncode == 0 else None
@@ -148,22 +148,18 @@ def run_stage(home: Path, project: str, pipeline: str, stage: str, command: list
         shared = cargo_target_dir(home, project, work)
         if shared:
             child_env["CARGO_TARGET_DIR"] = str(shared)
-    started = {"pid": os.getpid(), **({"timeout": int(timeout)} if timeout else {})}
+    limit = timeout or timeouts_mod.effective(home, None, f"stage:{stage}")
+    started = {"pid": os.getpid(), "timeout": int(limit)}
     append_jsonl(home / "events.jsonl", {"at": now_iso(), **base, **started, "event": "start", "status": "running"})
     exit_code, kept = 1, b""
-    timer, expired = None, threading.Event()
-
-    def _expire(victim) -> None:
-        expired.set()
-        victim.kill()
-
+    stop = None
     try:
         with log_path.open("ab") as log_handle:
             proc = subprocess.Popen(command, shell=isinstance(command, str), stdout=subprocess.PIPE,
-                                    stderr=subprocess.STDOUT, cwd=work, env=child_env)
-            if timeout:
-                timer = threading.Timer(timeout, _expire, (proc,))
-                timer.start()
+                                    stderr=subprocess.STDOUT, cwd=work, env=child_env,
+                                    start_new_session=os.name == "posix")  # its own group: a timeout ends all of it
+            stop = timeouts_mod.supervise(proc, f"stage:{stage}", home=home, timeout=limit,
+                                          what=f"{pipeline}/{stage}")
             assert proc.stdout is not None
             for chunk in proc.stdout:
                 log_handle.write(chunk)
@@ -179,11 +175,12 @@ def run_stage(home: Path, project: str, pipeline: str, stage: str, command: list
                         sys.stdout.flush()
             exit_code = proc.wait()
     finally:
-        if timer:
-            timer.cancel()
+        ended = stop() if stop else {"timed_out": False}
         append_jsonl(home / "events.jsonl", {
-            "at": now_iso(), **base, "event": "end", "status": "passed" if exit_code == 0 else "failed"})
+            "at": now_iso(), **base, "event": "end", "status": "passed" if exit_code == 0 and not ended["timed_out"] else "failed",
+            **({"timed_out": True} if ended["timed_out"] else {})})
     output = _tail(kept.decode(errors="replace"))
-    if expired.is_set():
-        output = f"the stage did not finish in {int(timeout)} s\n{output}".strip()
+    if ended["timed_out"]:
+        output = f"{ended['message']}\n{output}".strip()
+        exit_code = timeouts_mod.EXIT_TIMED_OUT
     return exit_code, output
