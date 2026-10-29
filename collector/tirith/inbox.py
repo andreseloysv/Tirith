@@ -87,6 +87,8 @@ def setup_summary(setup: dict) -> str:
     """One line for a setup request: ``add-stage ci/lint: make lint``."""
     if setup.get("action") == "models-set":
         what = " ".join(f"{k}={setup[k]}" for k in ("agent", "model", "effort") if setup.get(k))
+        if isinstance(setup.get("fallback"), list):
+            what += " fallback=" + (",".join(map(str, setup["fallback"])) or "none")
         where = "/".join(str(setup[k]) for k in ("project", "step") if setup.get(k))
         return " ".join(f"models {setup.get('role')} {where} {what}".split())
     where = "/".join(str(setup[k]) for k in ("pipeline", "name", "id") if setup.get(k))
