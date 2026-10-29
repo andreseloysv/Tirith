@@ -13,8 +13,8 @@ from tirith import roadmap as roadmap_mod
 from tirith.store import read_jsonl
 
 AT = "2026-10-29T12:00:00Z"
-STEP7 = "Reinstalar la guarda nueva en RelaGame (dueño: botón Run)."
-REINSTALL = "Reinstalar la guarda nueva en RelaGame (dueño: run `uv run tirith guard reinstall relagame`)."
+STEP7 = "Reinstalar la guarda nueva en RelaGame (dueño: physical-device botón Run)."
+REINSTALL = "Reinstalar la guarda nueva en RelaGame (dueño: physical-device run `uv run tirith guard reinstall relagame`)."
 
 
 def _raise(home: Path, text: str, folder: Path | None = None) -> dict:
@@ -33,14 +33,19 @@ def test_nothing_offers_to_hand_the_item_back() -> None:
 
 
 def test_reasons_are_an_explicit_list() -> None:
-    assert set(asks_mod.OWNER_REASONS) == {"security", "credentials", "account", "device", "payment", "legal"}
-    assert asks_mod.reason_tag("security") == "Needs you: installs on your Mac"
+    assert set(asks_mod.WHY_OWNER) == {"credentials", "payment", "personal-account", "physical-device",
+                                       "owner-decision"}
+    assert asks_mod.reason_tag("credentials") == "Needs your credentials"
+    assert asks_mod.reason_tag("personal-account", "your Apple account") == "Needs your Apple account"
+    assert asks_mod.reason_tag("owner-decision", "pick a date") == "Needs your decision: pick a date"
+    assert [asks_mod.why_key(k) for k in ("account", "device", "legal", "security", None)] == [
+        "personal-account", "physical-device", "owner-decision", None, None]
 
 
-def test_an_owner_item_without_a_known_reason_is_refused(home: Path) -> None:
-    with pytest.raises(ValueError, match="reason"):
-        dispatch_mod.add_owner_item(home, "x", "tirith", "Do it.", [{"label": "Done", "value": "done"}], AT,
-                                    reason="because")
+def test_an_owner_item_without_a_known_reason_goes_to_the_manager(home: Path) -> None:
+    assert dispatch_mod.add_owner_item(home, "x", "tirith", "Do it.", [{"label": "Done", "value": "done"}], AT,
+                                       why_owner="because") == "manager"
+    assert not (home / "waits.jsonl").exists()
 
 
 def test_command_in_the_tag_becomes_a_run_action_in_the_collector_folder(home: Path, tmp_path: Path) -> None:
@@ -50,21 +55,22 @@ def test_command_in_the_tag_becomes_a_run_action_in_the_collector_folder(home: P
     (action,) = wait["actions"]
     assert action["command"] == "uv run tirith guard reinstall relagame" and action["cwd"] == str(tmp_path)
     assert action["label"] == "Reinstalar la guarda nueva en RelaGame"
-    assert wait["options"] == [] and wait["reason"] == "security"
-    assert wait["reason_tag"] == "Needs you: installs on your Mac"
+    assert wait["options"] == [] and wait["why_owner"] == "physical-device"
+    assert wait["reason_tag"] == "Needs your physical device"
     assert asks_mod.has_call_to_action(wait)
 
 
 def test_url_in_the_tag_is_an_open_link(home: Path) -> None:
-    wait = _raise(home, "Sign in to the portal (dueño: https://portal.example.invalid/login).")
+    wait = _raise(home, "Sign in to the portal (dueño: credentials https://portal.example.invalid/login).")
     assert wait["link"] == "https://portal.example.invalid/login" and not wait.get("actions")
     assert [o["label"] for o in wait["options"]] == ["Done"]
-    assert wait["text"] == "Sign in to the portal." and wait["reason"] == "credentials"
+    assert wait["text"] == "Sign in to the portal." and wait["why_owner"] == "credentials"
 
 
 def test_without_command_or_url_it_is_done_or_not_now(home: Path) -> None:
-    wait = _raise(home, "Decide the colour (dueño: payment).")
-    assert [o["label"] for o in wait["options"]] == ["Done", "Not now"] and wait["reason"] == "payment"
+    wait = _raise(home, "Decide the colour (dueño: owner-decision (the palette)).")
+    assert [o["label"] for o in wait["options"]] == ["Done", "Not now"] and wait["why_owner"] == "owner-decision"
+    assert wait["reason_tag"] == "Needs your decision: the palette"
     assert wait["text"] == "Decide the colour."
 
 
@@ -84,6 +90,6 @@ def test_button_claims_are_detected(text: str) -> None:
 
 def test_the_generator_never_stores_a_text_with_a_missing_button(home: Path) -> None:
     dispatch_mod.add_owner_item(home, "w1", "tirith", "Reinstall it (click Run).",
-                                [{"label": "Done", "value": "done"}], AT)
+                                [{"label": "Done", "value": "done"}], AT, why_owner="physical-device")
     (row,) = read_jsonl(home / "waits.jsonl")
     assert not asks_mod.button_claims(row["text"]) and row["text"].startswith("Reinstall it")

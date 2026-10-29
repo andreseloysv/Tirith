@@ -22,6 +22,7 @@ from pathlib import Path
 
 from tirith import activity as activity_mod
 from tirith import asks as asks_mod
+from tirith import ownergate as ownergate_mod
 from tirith import brain as brain_mod
 from tirith.guardwrap import default_words, verify_guard
 from tirith.home import Config, ProjectConfig, ensure_home, load_config, now_iso, parse_iso
@@ -35,6 +36,7 @@ from tirith import hooks as hooks_mod
 from tirith import autopilot as autopilot_mod
 from tirith import dispatch as dispatch_mod
 from tirith import selfcheck as selfcheck_mod
+from tirith import livesteps as livesteps_mod
 from tirith import managerd as managerd_mod
 from tirith import actions as actions_mod
 from tirith import inbox as inbox_mod
@@ -461,12 +463,14 @@ class Collector:
         self.worker = brain_mod.BrainWorker(resolved, self.cache)
         self._agents_dirty = False
         self._brain_pending: set[str] = set()  # lanes whose brain answer has not landed yet
+        self._owner_items_checked = False
         self.rooms =RoomsService(self.home, rooms_transport)
         self._one_shot = False
         self.activity = activity_mod.ActivityTracker()
         self.github = github_mod.GithubReader(github_transport)
         self._usage_cache: dict = {}
         self._detail_hashes: dict[str, str] = {}
+        self._live_steps: dict[str, list] = {}  # lane id -> live transcript steps of this cycle
         self._inbox_tried: dict[str, float] = {}  # request id -> monotonic time of the last brain try
 
     # -- identities / renown -------------------------------------------------
@@ -866,8 +870,9 @@ class Collector:
                 "options": options, "command": command, "status": "open",
                 "actions": actions_mod.dedupe_actions(
                     [dict(a) for a in row.get("actions") or [] if isinstance(a, dict)]),
-                **({"reason": row["reason"], "reason_tag": row.get("reason_tag")}
-                   if row.get("reason") in asks_mod.OWNER_REASONS else {}),
+                **({"why_owner": row["why_owner"], "why_detail": row.get("why_detail"),
+                    "reason_tag": row.get("reason_tag") or asks_mod.reason_tag(row["why_owner"], row.get("why_detail"))}
+                   if asks_mod.why_key(row.get("why_owner")) else {}),
             }
             reply = replied.get(wait["id"])
             actions_mod.attach_last_runs(self.home, [wait])
@@ -940,6 +945,8 @@ class Collector:
             "id": f"guard-{proj.id}", "project": proj.id,
             "text": f"Commit guard needs attention in {proj.name}: {problems[0]}",
             "since": since, "link": None, "source": "guard", "kind": "action",
+            "why_owner": "owner-decision", "why_detail": "choice: install the guard, not now or never",
+            "reason_tag": asks_mod.reason_tag("owner-decision", "install the guard, not now or never"),
             "options": [{"label": "Not now", "value": "snooze"},
                         {"label": "Never for this project", "value": "never"}],
             "actions": [action],
@@ -1041,6 +1048,9 @@ class Collector:
         now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
         if self._fixed_config is None:
             self.config = load_config(self.home)
+        if not self._owner_items_checked:  # once at startup: every open owner item passes the gate again
+            self._owner_items_checked = True
+            ownergate_mod.migrate(self.home, now_iso(now))
         lanes = read_lanes(self.home)
         close_dead_lanes(self.home, lanes, now)
         events = [e for e in read_jsonl(self.home / "events.jsonl") if e.get("kind") not in ("hook", "violation", "git-hook")]
@@ -1077,6 +1087,8 @@ class Collector:
         cutoff = now - DROP_ENDED_AFTER
         agent_rows: list[dict] = []
         brain_waits: list[dict] = []
+        manager_turns = (dispatch_mod.load_state(self.home).get("manager") or {}).get("turns") or {}
+        self._live_steps = {}
         for lane in lanes:
             ended = parse_iso(lane.get("ended_at"))
             if ended and ended < cutoff:
@@ -1094,6 +1106,9 @@ class Collector:
                 or entries_from_events(act["events"], lane.get("workspace"))
             renown = int(identity.get("renown") or 0)
             usage = self._usage(lane, ended is not None)
+            live_steps, live_sum = livesteps_mod.steps_for(
+                lane.get("log"), lane.get("workspace"), lane.get("ended_at") or lane.get("started_at"), now)
+            self._live_steps[str(lane["id"])] = live_steps
             # Summary first: it may upgrade the epithet on the identity.
             spoken = say_summary(log_view, None if status in ("working", "stalled") else lane.get("report"))
             summary = spoken or self._summary_for(lane, status, log_tail, now, identity)
@@ -1121,6 +1136,8 @@ class Collector:
                 "parent": "manager" if lane.get("parent") in (None, "", "steward") else str(lane["parent"]),
                 "step": str(lane["step"]) if lane.get("step") else None,
                 "request_id": str(lane["request_id"]) if lane.get("request_id") else None,
+                "turn_requests": list(manager_turns.get(str(lane["id"])) or []),
+                "live": {**live_sum, "elapsed_s": elapsed} if live_steps else None,
                 "review": review_mod.public(lane, (entry_by_id[lane_project].folder if lane_project in entry_by_id else None)),
                 **act,
             })
@@ -1443,6 +1460,19 @@ class Collector:
             self._detail_hashes[row["id"]] = digest
         return {"path": str(path), "hash": digest}
 
+    def _write_steps(self, row: dict) -> dict | None:
+        """Write ``agents/<id>.steps.js`` (the live transcript) when it changed; ``{path, hash}`` or None."""
+        steps = self._live_steps.get(row["id"])
+        if not steps:
+            return None
+        sid = f"{row['id']}.steps"
+        digest = _detail_hash({"id": sid, "steps": steps})
+        path = self.home / "agents" / agent_file_name(sid)
+        if self._detail_hashes.get(sid) != digest or not path.exists():
+            write_text_atomic(path, agent_detail_js({"id": sid, "steps": steps}))
+            self._detail_hashes[sid] = digest
+        return {"path": str(path), "hash": digest}
+
     def slim_state(self, state: dict, now: datetime) -> dict:
         """``state`` as written to ``state.json``: the agents trimmed to full detail for working and
         recently ended ones, the summary fields for the rest, at most ``STATE_AGENTS_MAX`` of them.
@@ -1459,16 +1489,22 @@ class Collector:
             -(parse_iso(rows[i].get("ended_at")) or now).timestamp(), i))
         keep = sorted(order[:STATE_AGENTS_MAX])
         slim: dict[int, dict] = {}
+        steps_ref_of: dict[int, dict | None] = {}
         for i, row in enumerate(rows):  # every agent gets its detail file, listed or not
             ref = self._write_detail(row)
+            steps_ref = steps_ref_of[i] = self._write_steps(row) if full(row) else None   # old ended agents: no transcript file
             if i in keep:
                 slim[i] = {**_slim_row(row, full(row)), "detail": ref}
+                if steps_ref and slim[i].get("live"):
+                    slim[i]["live"] = {**slim[i]["live"], "detail": steps_ref}
         sizes = {i: len(json.dumps(r, separators=(",", ":"))) for i, r in slim.items()}
         for i in order[::-1]:  # past the byte budget the oldest full ended agents become summaries
             if sum(sizes.values()) <= STATE_AGENTS_BYTES:
                 break
             if i in slim and rows[i].get("ended_at") and full(rows[i]):
                 slim[i] = {**_slim_row(rows[i], False), "detail": slim[i]["detail"]}
+                if slim[i].get("live"):
+                    slim[i]["live"] = {**slim[i]["live"], "detail": steps_ref_of.get(i)}
                 sizes[i] = len(json.dumps(slim[i], separators=(",", ":")))
         out = [slim[i] for i in keep]
         return {**state, "agents": out}

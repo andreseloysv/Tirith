@@ -928,3 +928,23 @@ button.vwho:hover b { text-decoration: underline; }
 .health-panel .hc { display: flex; gap: 8px; align-items: flex-start; padding: 4px 0; } .health-panel .hc .dot { margin-top: 5px; }
 :root[data-theme="dark"] .health-btn { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.14); box-shadow: none; }
 :root[data-theme="dark"] .health-panel { background: #1b1f27; border-color: rgba(255,255,255,.14); }
+
+/* live transcript of a headless agent (livesteps.js): CLI look, dim, glass */
+.livesteps { align-self: flex-start; max-width: 92%; min-width: 0; font: 11.5px/1.45 ui-monospace, "SF Mono", Menlo, Consolas, monospace; color: var(--mut);
+  background: rgba(255,255,255,.55); border: 1px solid rgba(120,135,160,.22); border-radius: 12px; padding: 7px 10px; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.livesteps .ls-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.livesteps li { display: flex; gap: 7px; min-width: 0; }
+.livesteps .ls-t { white-space: pre-wrap; overflow-wrap: anywhere; min-width: 0; }
+.livesteps .ls-dot { flex: none; width: 10px; opacity: .7; }
+.livesteps .ls-tool { color: var(--fg); opacity: .8; }
+.livesteps .ls-res { padding-left: 2px; opacity: .8; } .livesteps .ls-res.bad { color: var(--red); opacity: 1; }
+.livesteps .ls-say .ls-t { font-style: italic; }
+.livesteps .ls-line { margin-top: 5px; display: flex; align-items: center; gap: 7px; color: var(--blue); font-variant-numeric: tabular-nums; }
+.livesteps .ls-spin { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid currentColor; border-right-color: transparent; animation: lsspin .8s linear infinite; }
+@keyframes lsspin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .livesteps .ls-spin { animation: none; } }
+.livesteps.done { padding: 4px 10px; } .livesteps.done.bad .ls-sum { color: var(--red); }
+.livesteps .ls-sum { font: inherit; color: inherit; display: block; width: 100%; } .livesteps .ls-sum:hover .ls-show { text-decoration: underline; }
+.livesteps .ls-show { color: var(--blue); } .livesteps.open .ls-list { margin-top: 6px; }
+:root[data-theme="dark"] .livesteps { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.12); }
+>>>>>>> main

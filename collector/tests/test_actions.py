@@ -69,7 +69,7 @@ def test_inbox_answer_refuses_with_exit_2_and_writes_nothing(home: Path, capsys)
 
 
 def test_wait_add_refuses_commands(home: Path, capsys) -> None:
-    assert main(["wait", "add", "Install it with `uv run tirith url install`", "--project", "demo"]) == 2
+    assert main(["wait", "add", "--why-owner", "owner-decision", "Install it with `uv run tirith url install`", "--project", "demo"]) == 2
     assert "owner-command" in capsys.readouterr().err
     assert not (home / "waits.jsonl").exists()
 
@@ -105,7 +105,7 @@ def test_answer_with_actions_is_stored_and_folded(home: Path, capsys) -> None:
 
 
 def test_wait_add_with_actions(home: Path, capsys) -> None:
-    assert main(["wait", "add", "Install the handler", "--project", "demo", "--run", "echo hi",
+    assert main(["wait", "add", "--why-owner", "owner-decision", "Install the handler", "--project", "demo", "--run", "echo hi",
                  "--label", "Say hi"]) == 0
     (row,) = read_jsonl(home / "waits.jsonl")
     assert row["actions"][0]["label"] == "Say hi" and row["actions"][0]["command"] == "echo hi"
@@ -199,7 +199,7 @@ def test_run_link_never_takes_command_text(home: Path, tmp_path: Path) -> None:
 
 def test_state_carries_last_run(home: Path, tmp_path: Path, capsys) -> None:
     aid = _declare(home, "echo hi", str(tmp_path))
-    assert main(["wait", "add", "Please", "--project", "demo", "--run", "false", "--cwd", str(tmp_path)]) == 0
+    assert main(["wait", "add", "--why-owner", "owner-decision", "Please", "--project", "demo", "--run", "false", "--cwd", str(tmp_path)]) == 0
     wait_action = actions_mod.list_actions(home)[-1]["id"]
     assert main(["action", "run", aid]) == 0
     assert main(["action", "run", wait_action]) == 1
