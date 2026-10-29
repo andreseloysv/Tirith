@@ -153,19 +153,40 @@ def _bounded_report(report):
 
 def fallback_summary(status: str, log_tail: list[str], feature: str, now: datetime,
                      lane: dict) -> str:
-    """No-brain summary: last non-empty log line (documented fallback)."""
+    """No-brain summary: a plain sentence about the status, never raw log output."""
     if status == "stalled":
         mtime = log_mtime(lane.get("log"))
         silent_s = int(now.timestamp() - mtime) if mtime else STALLED_AFTER_S
         return f"Waiting: no log output for {max(1, silent_s // 60)} minutes."
-    for line in reversed(log_tail):
-        if line.strip():
-            return _word_cut(line.strip(), 300)
     if status == "done":
         return f"Finished: {feature}." if feature else "Finished."
     if status == "failed":
         return f"Failed: {feature}." if feature else "Failed."
     return f"Working on {feature}." if feature else "Working."
+
+
+def _first_paragraph(text: str) -> str:
+    for block in re.split(r"\n\s*\n", str(text or "").strip()):
+        if block.strip():
+            return block.strip()
+    return ""
+
+
+def say_summary(log_view: list[dict], report) -> str | None:
+    """The "now doing" line: the agent's newest own words (a timed ``say`` entry, never tool output or a bare log line);
+    for an ended lane the first paragraph of its report."""
+    if report:
+        para = _first_paragraph(report)
+        if para:
+            return _word_cut(para, 300)
+    for entry in log_view:  # newest first
+        if entry.get("kind") != "say" or not entry.get("ts") or \
+                str(entry.get("text") or "").startswith("Used "):
+            continue
+        text = "\n".join(p for p in (entry.get("text"), entry.get("detail")) if p).strip()
+        if text:
+            return _word_cut(text, 300)
+    return None
 
 
 def collect_tree(repo: Path | None, limit: int = 400) -> tuple[str, int]:
@@ -629,7 +650,8 @@ class Collector:
                 or entries_from_events(act["events"], lane.get("workspace"))
             renown = int(identity.get("renown") or 0)
             # Summary first: it may upgrade the epithet on the identity.
-            summary = self._summary_for(lane, status, log_tail, now, identity)
+            spoken = say_summary(log_view, None if status in ("working", "stalled") else lane.get("report"))
+            summary = spoken or self._summary_for(lane, status, log_tail, now, identity)
             agent_rows.append({
                 "id": str(lane["id"]), "project": lane_project,
                 "session": lane.get("session") or None,

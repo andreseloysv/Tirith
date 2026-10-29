@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import time
@@ -29,18 +30,49 @@ def _lane(home: Path, lane_id: str, log: Path, **overrides) -> dict:
     return lane
 
 
-def test_working_agent_uses_last_log_line(home: Path, tmp_path: Path) -> None:
+def test_working_agent_without_structured_log_uses_fallback(home: Path, tmp_path: Path) -> None:
     log = tmp_path / "a.log"
     log.write_text("starting\n\nwriting migration tests\n", encoding="utf-8")
     _lane(home, "a-1", log)
     state = _collector(home).cycle()
     agent = state["agents"][0]
     assert agent["status"] == "working"
-    assert agent["summary"] == "writing migration tests"
+    assert agent["summary"] == "Working on Feature work."
     assert agent["log_tail"][-1] == "writing migration tests"
     assert agent["name"] and agent["epithet"] and agent["rank"] == "recruit"
     assert state["brain"] == {"enabled": False, "model": state["brain"]["model"],
                                "last_error": None}
+
+
+def test_summary_is_the_agents_words_not_tool_output(home: Path, tmp_path: Path) -> None:
+    log = tmp_path / "a.log"
+    said = {"type": "assistant", "timestamp": "2026-10-29T11:00:00Z", "message": {"content": [{"type": "text", "text": "Now wiring the kanban."}]}}
+    call = {"type": "assistant", "message": {"content": [
+        {"type": "tool_use", "id": "b1", "name": "Bash", "input": {"command": "grep -n x f.py"}}]}}
+    out = {"type": "user", "message": {"content": [
+        {"type": "tool_result", "tool_use_id": "b1", "content": "593: agent_rows = []"}]}}
+    log.write_text("\n".join(json.dumps(r) for r in (said, call, out)) + "\n", encoding="utf-8")
+    _lane(home, "a-1", log)
+    assert _collector(home).cycle()["agents"][0]["summary"] == "Now wiring the kanban."
+
+
+def test_summary_without_say_is_not_raw_output(home: Path, tmp_path: Path) -> None:
+    log = tmp_path / "a.log"
+    call = {"type": "assistant", "message": {"content": [
+        {"type": "tool_use", "id": "b1", "name": "Bash", "input": {"command": "grep -n x f.py"}}]}}
+    out = {"type": "user", "message": {"content": [
+        {"type": "tool_result", "tool_use_id": "b1", "content": "593: agent_rows = []"}]}}
+    log.write_text("\n".join(json.dumps(r) for r in (call, out)) + "\n", encoding="utf-8")
+    _lane(home, "a-1", log)
+    assert _collector(home).cycle()["agents"][0]["summary"] == "Working on Feature work."
+
+
+def test_ended_lane_summary_is_first_report_paragraph(home: Path, tmp_path: Path) -> None:
+    log = tmp_path / "a.log"
+    log.write_text("noise\n", encoding="utf-8")
+    _lane(home, "a-1", log, ended_at="2026-10-29T11:30:00Z", result="done",
+          report="Shipped the **kanban**.\n\nDetails follow.")
+    assert _collector(home).cycle()["agents"][0]["summary"] == "Shipped the **kanban**."
 
 
 def test_stalled_after_ten_minutes_of_silence(home: Path, tmp_path: Path) -> None:

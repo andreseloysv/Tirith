@@ -94,5 +94,5 @@ and never blocks the 2 s loop (background worker):
    demand with `tirith map <project>` and when the tree changes a lot).
 4. **Hero epithet**: the first summary of a new agent → a fitting epithet.
 API key from env `META_API_KEY` (never written to disk or logs). With no key, the brain is
-`enabled: false` and the collector falls back to: last non-empty log line as summary, no new waits,
+`enabled: false` and the collector falls back to: a plain status sentence as summary (never raw log lines), no new waits,
 architecture from `config.toml` if given.
