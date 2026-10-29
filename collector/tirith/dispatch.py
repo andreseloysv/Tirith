@@ -86,7 +86,8 @@ def _step_name(req: dict) -> str:
 
 def add_owner_item(home: Path, item_id: str, project: str | None, text: str, options: list[dict],
                    at: str, actions: list[dict] | None = None, link: str | None = None,
-                   why_owner: str | None = None, why_detail: str | None = None, howto=None) -> str:
+                   why_owner: str | None = None, why_detail: str | None = None, howto=None,
+                   kind: str | None = None) -> str:
     """One item on the owner's waiting list with ``options`` (``[{label, command}]``), Run ``actions`` and
     an optional ``link`` to open; once per id. It passes ``ownergate.admit``: ``why_owner`` is a key of
     ``asks.WHY_OWNER`` (why only the owner can do it), else the text goes to the manager queue as "agent can
@@ -95,7 +96,8 @@ def add_owner_item(home: Path, item_id: str, project: str | None, text: str, opt
     manager. A text that promises a button the item does not have is rewritten without it."""
     if not options and not actions:
         raise ValueError(f"owner item {item_id} has no option: every item for the owner needs a call to action")
-    verdict = ownergate_mod.admit(home, item_id, project, text, why_owner, via="owner-item", at=at, howto=howto)
+    verdict = ownergate_mod.admit(home, item_id, project, text, why_owner, via="owner-item", at=at, howto=howto,
+                                  why_detail=why_detail, kind=kind)
     if verdict != ownergate_mod.OWNER:
         return verdict
     why = asks_mod.why_key(why_owner)
