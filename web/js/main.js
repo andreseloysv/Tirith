@@ -4,6 +4,8 @@
   var raw = null, sig = '', genSeen = null, srcErr = '';
   var filt = T.filter = { session: '', project: '', q: '', view: 'overview', mode: 'kanban' };
   var statePath = '', defaultMode = false;
+  var tauri = window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.event ? window.__TAURI__ : null;
+  T.tauri = tauri;
 
   /* ---------- hash ---------- */
   function parseHash() {
@@ -18,7 +20,7 @@
   }
   function writeHash() {
     var parts = [];
-    if (!defaultMode) parts.push('state=' + statePath);
+    if (!defaultMode && !tauri) parts.push('state=' + statePath);
     if (filt.session) parts.push('session=' + encodeURIComponent(filt.session));
     if (filt.project) parts.push('project=' + encodeURIComponent(filt.project));
     if (filt.q) parts.push('q=' + encodeURIComponent(filt.q));
@@ -37,8 +39,9 @@
       T.ui.drawer = filt.view === 'pipelines' ? 'stage' : filt.view === 'agents' ? 'agent' : filt.view === 'flow' ? (o.open === 'edge' ? 'edge' : null) : null;
     }
     var sp = o.state || '';
-    defaultMode = !sp; statePath = sp || '../fixtures/state.demo.js';
-    if (!initial) { sig = ''; raw = null; srcErr = ''; load(); }
+    defaultMode = !sp && !tauri; statePath = tauri ? 'tauri' : sp || '../fixtures/state.demo.js';
+    if (!initial && tauri) { if (raw) renderAll(); }
+    else if (!initial) { sig = ''; raw = null; srcErr = ''; load(); }
   }
 
   /* ---------- filtering ---------- */
@@ -171,12 +174,18 @@
     });
     window.addEventListener('hashchange', function () {
       var o = parseHash();
-      if ((o.session || '') === filt.session && (o.project || '') === filt.project && (o.q || '') === filt.q && (o.view || 'overview') === filt.view && (o.mode === 'list' || o.mode === 'tree' ? o.mode : 'kanban') === filt.mode && (o.state || '') === (defaultMode ? '' : statePath)) return;
+      if ((o.session || '') === filt.session && (o.project || '') === filt.project && (o.q || '') === filt.q && (o.view || 'overview') === filt.view && (o.mode === 'list' || o.mode === 'tree' ? o.mode : 'kanban') === filt.mode && (o.state || '') === (defaultMode || tauri ? '' : statePath)) return;
       applyHash(false); qi.value = filt.q;
     });
     srcLine();
-    load();
-    setInterval(load, 2000);
+    if (tauri) {
+      /* desktop app: Rust reads ~/.tirith/state.json and pushes it by event; no polling, no files */
+      tauri.core.invoke('current_state').then(function (s) { if (s) gotState(s); });
+      tauri.event.listen('tirith://state', function (e) { gotState(e.payload); });
+    } else {
+      load();
+      setInterval(load, 2000);
+    }
     setInterval(tick, 1000);
   }
   init();
