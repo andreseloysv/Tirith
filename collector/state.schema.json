@@ -150,7 +150,7 @@
         "properties": {
           "id": {"type": "string"},
           "at": {"type": ["string", "null"]},
-          "kind": {"enum": ["finish", "ask", "setup", "chat", "autopilot", "plan-refresh", "plan-new"]},
+          "kind": {"enum": ["finish", "ask", "setup", "chat", "autopilot", "plan-refresh", "plan-new", "plan-edit"]},
           "manager_pending": {"type": "boolean"},
           "steward_pending": {"type": "boolean", "description": "Old key for manager_pending, same value."},
           "project": {"type": "string"},

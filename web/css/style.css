@@ -857,3 +857,26 @@ button.vwho:hover b { text-decoration: underline; }
 .ap-act { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 .ap-b { padding: 6px 14px; border-radius: 9px; border: 1px solid var(--line); background: rgba(255,255,255,.8); font-size: 13px; }
 .ap-b:hover { background: #fff; } .ap-b.pri { background: var(--blue); border-color: var(--blue); color: #fff; } .ap-b.pri:hover { filter: brightness(1.08); } .ap-b:disabled { opacity: .6; }
+/* ---------- edit, delete and add on the plan's open items (v-plan.js) ---------- */
+.pitems li { position: relative; }
+.pedtools { display: inline-flex; flex: none; gap: 2px; opacity: 0; transition: opacity .12s; }
+.pitems li:hover .pedtools, .pitems li:focus-within .pedtools, .prow:hover .pedtools.pstit, .pedtools.pstit:focus-within { opacity: 1; }
+@media (hover: none) { .pedtools { opacity: 1; } }
+.pedbtn { display: inline-grid; place-items: center; width: 22px; height: 22px; padding: 0; color: var(--mut); background: none; border: 0; border-radius: 6px; cursor: pointer; }
+.pedbtn:hover, .pedbtn:focus-visible { color: var(--fg); background: rgba(120,135,160,.18); outline: none; }
+.pedbtn.del:hover { color: var(--red); background: #fdecec; }
+.pedtools.pstit { align-self: center; margin-left: 2px; }
+.pediting { align-items: center !important; flex-wrap: wrap; }
+.pediting .pedin { flex: 1 1 260px; height: 26px; }
+.pediting .ihint { flex: none; font-size: 11px; color: var(--mut); }
+.pitems li.padd { padding: 1px 0; opacity: 0; transition: opacity .12s; }
+.pitems:hover li.padd, .pitems li.padd:focus-within { opacity: 1; }
+@media (hover: none) { .pitems li.padd { opacity: 1; } }
+.pedadd { display: inline-flex; align-items: center; gap: 5px; padding: 0 4px; height: 22px; font: inherit; font-size: 12px; color: var(--mut); background: none; border: 0; border-radius: 6px; cursor: pointer; }
+.pedadd:hover, .pedadd:focus-visible { color: var(--blue); outline: none; }
+.pitems li.psav { color: var(--mut); } .pitems li.psav.gone .pit { text-decoration: line-through; }
+.pwhen.saving { font-style: italic; }
+.pdelpop { position: absolute; right: 0; top: calc(100% - 2px); z-index: 20; display: flex; align-items: center; gap: 8px; padding: 7px 10px; font-size: 12px; white-space: nowrap;
+  background: rgba(255,255,255,.96); border: 1px solid rgba(120,135,160,.35); border-radius: 10px; box-shadow: 0 8px 24px rgba(40,55,90,.18); }
+.isend.danger { background: var(--red); border-color: var(--red); color: #fff; }
+.pitems li.perr { display: block; } .pitems li.perr .ierr { margin: 2px 0; }

@@ -18,6 +18,9 @@
   ui.planRefreshAt = ui.planRefreshAt || {}; /* project id -> ms of the "Update the plan" click, until the request shows up */
   ui.inboxEarlier = ui.inboxEarlier || {}; /* "project|step" -> true while its older messages are unfolded */
   ui.planHist = ui.planHist || {};     /* "project|step" -> true while the step's History is unfolded */
+  ui.pedit = ui.pedit || null;         /* {pid, plan, sid, text (null: a new item), draft}: the item being edited or added */
+  ui.pdel = ui.pdel || null;           /* {pid, plan, sid, text}: the item whose "Delete?" popover is open */
+  ui.ppend = ui.ppend || [];           /* plan changes sent, until the plan file shows them: {pid, plan, sid, kind, text, to, at, err} */
   ui.autoWant = ui.autoWant || null;   /* { on, at }: the switch the owner just sent, until the collector shows it */
   var lastState = null, LAUNCH_WAIT = 90000, PEND_WAIT = 10000, ESCALATE = 120, INSTALL = 'tirith url install';
 
@@ -39,6 +42,8 @@
   var BUBBLE = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3 3h10a1 1 0 011 1v6a1 1 0 01-1 1H7.5L4.6 13.6V11H3a1 1 0 01-1-1V4a1 1 0 011-1z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>';
   var REFRESH = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M13.2 8a5.2 5.2 0 11-1.6-3.7M13.4 2.4v3.1h-3.1" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   var PLUS = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 3.2v9.6M3.2 8h9.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
+  var PEN = '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M10.6 2.8l2.6 2.6-7.4 7.4-3.1.5.5-3.1z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>';
+  var TRASH = '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M3 4.4h10M6.4 4.4V3h3.2v1.4M4.2 4.4l.6 8.4h6.4l.6-8.4M6.7 7v3.8M9.3 7v3.8" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   var CHEV = '<svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M3 4.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
   function plain(t) { return esc(String(t).replace(/`/g, '')); }
@@ -156,6 +161,7 @@
     h = '<div class="ithread" data-req="' + esc(r.id) + '"><ol class="itl">' + (r.kind === 'ask' ?
       '<li class="ie"><i class="ido me"></i><div class="ib"><b>You asked: ' + plain(r.text) + '</b> <span class="iwhen">· ' + esc(T.clockTime(r.at)) + '</span></div></li>' :
       r.kind === 'plan-refresh' ? '<li class="ie"><i class="ido me"></i><div class="ib"><b>You asked to update the plan</b> <span class="iwhen">· ' + esc(T.clockTime(r.at)) + '</span></div></li>' :
+      r.kind === 'plan-edit' ? '<li class="ie"><i class="ido me"></i><div class="ib"><b>' + editWords(r) + '</b> <span class="iwhen">· ' + esc(T.clockTime(r.at)) + '</span></div></li>' :
       r.kind === 'plan-new' ? '<li class="ie"><i class="ido me"></i><div class="ib"><b>You started a new plan' + (r.plan && r.plan.title ? ': ' + plain(r.plan.title) : '') + '</b> <span class="iwhen">· ' + esc(T.clockTime(r.at)) + '</span></div></li>' : '');
     answers.forEach(function (a) {
       h += '<li class="ie"><i class="ido ok"></i><div class="ib ians' + (open ? ' open' : '') + '"><button class="iahead" data-act="iatog" data-key="' + esc(r.id) + '" aria-expanded="' + open + '">' + CHEV +
@@ -230,13 +236,14 @@
   }
 
   /* Record a request: the app writes the inbox itself, a browser opens the tirith:// link, else the CLI line is shown. */
-  function sendInbox(kind, key, text) {
+  function sendInbox(kind, key, text, opt) {
+    opt = opt || {};
     var parts = key.split('|'), pid = parts[0], sid = parts[1], st = lastState, L = st && st.launch, tauri = window.__TAURI__;
     ui.inboxErr[key] = null; ui.inboxCli[key] = null;
-    function sent() { ui.inboxPend[key] = T.now(); T.render(); setTimeout(T.render, PEND_WAIT + 500); }
+    function sent() { if (!opt.quiet) ui.inboxPend[key] = T.now(); T.render(); setTimeout(T.render, PEND_WAIT + 500); }
     if (tauri && tauri.core && tauri.core.invoke) {
       tauri.core.invoke('inbox_add', { kind: kind, project: pid, step: sid, text: text || '' }).then(sent, function (err) {
-        ui.inboxErr[key] = 'Could not send: ' + err; T.render();
+        ui.inboxErr[key] = 'Could not send: ' + err; if (opt.fail) opt.fail(); T.render();
       });
       return;
     }
@@ -247,6 +254,7 @@
       return;
     }
     ui.inboxCli[key] = cliCmd(kind, pid, sid, text);
+    if (opt.fail) opt.fail();
     T.render();
   }
   function focusAsk(key) {
@@ -280,15 +288,80 @@
   }
   /* ---------- the quiet step: open items and one state line; the rest is behind "History" ---------- */
   function dateless(t) { return t.replace(/\s*\((?:desde|from)\s+\d{4}-\d{2}-\d{2}[^)]*\)?/i, ''); }
-  function openItems(s) {
-    var l = s.items.filter(function (i) { return !i.done && i.who !== 'out'; });
-    if (!l.length) return '';
-    return '<ul class="pitems pquiet">' + l.map(function (i) {
-      var extra = i.who === 'owner' && i.owner_item ?
-          '<button class="pitbtn" data-act="goowner" data-key="' + esc(i.owner_item) + '" title="Open what Tirith needs from you">Open</button>' :
-        i.who === 'date' && i.until ? '<span class="pwhen">from ' + esc(shortDate(i.until)) + '</span>' : '';
-      return '<li><span class="pi">' + OPEN + '</span><span class="pit">' + rich(i.who === 'date' ? dateless(i.text) : i.text) + '</span>' + extra + '</li>';
-    }).join('') + '</ul>';
+  /* ---------- editing the plan: Edit / Delete on an open item, Add item; Tirith applies it and re-checks the plan ---------- */
+  function clip(t, n) { t = String(t || ''); return t.length > n ? t.slice(0, n - 1) + '…' : t; }
+  function editWords(r) {
+    var e = r.edit || {};
+    return e.delete ? 'You deleted: ' + plain(clip(e.item_text, 90)) : e.add ? 'You added: ' + plain(clip(e.add, 90)) :
+      'You edited: ' + plain(clip(e.item_text, 60)) + ' → ' + plain(clip(e.new_text, 60));
+  }
+  function same(a, c) { return !!a && a.pid === c.pid && a.plan === c.plan && String(a.sid) === String(c.sid); }
+  function ctxAttrs(c, text) {
+    return ' data-pid="' + esc(c.pid) + '" data-plan="' + esc(c.plan) + '" data-sid="' + esc(c.sid) + '"' + (text != null ? ' data-text="' + esc(text) + '"' : '');
+  }
+  function ctxOf(el) { return { pid: el.getAttribute('data-pid'), plan: el.getAttribute('data-plan'), sid: el.getAttribute('data-sid'), text: el.getAttribute('data-text') }; }
+  function tool(act, cls, ic, label, c, text) {
+    return '<button class="pedbtn ' + cls + '" data-act="' + act + '"' + ctxAttrs(c, text) + ' title="' + label + '" aria-label="' + label + '">' + ic + '</button>';
+  }
+  /* Changes sent and not yet in the plan file; one that landed (or was refused) is settled here. */
+  function pending(c, s, state) {
+    var items = s.items.map(function (i) { return i.text; });
+    ui.ppend = ui.ppend.filter(function (r) {
+      if (!same(r, c)) return true;
+      if (r.kind === 'add' ? items.indexOf(r.to) >= 0 : items.indexOf(r.text) < 0) return false;
+      if (!r.err) {
+        (state.inbox || []).forEach(function (q) {
+          var e = q.edit || {}, a = (q.answers || [])[0];
+          if (q.kind === 'plan-edit' && !r.err && q.project === r.pid && String(q.step) === String(r.sid) && (T.ms(q.at) || 0) >= r.at - 2000 &&
+              (e.item_text || '') === (r.text || '') && (e.add || e.new_text || '') === (r.to || '') && a && /^Could not/.test(a.text)) r.err = a.text;
+        });
+      }
+      return !!r.err || T.now() - r.at < 120000;
+    });
+    return ui.ppend.filter(function (r) { return same(r, c); });
+  }
+  function editInput(c, e, key) {
+    return '<li class="pediting"><span class="pi">' + OPEN + '</span><input class="iin pedin" type="text" data-act="pe-in" data-key="' + esc(key) + '" maxlength="500" aria-label="' + (e.text === null ? 'New item' : 'Edit item') +
+      '" placeholder="' + (e.text === null ? 'What needs doing?' : '') + '" value="' + esc(e.draft) + '"><span class="ihint">Enter saves · Esc cancels</span></li>';
+  }
+  function itemRow(i, c, pend, quiet) {
+    var key = c.pid + '|' + c.plan + '|' + c.sid, e = same(ui.pedit, c) && ui.pedit.text === i.text ? ui.pedit : null, p = null, txt = i.text, h, extra;
+    if (e) return editInput(c, e, key);
+    pend.forEach(function (r) { if (r.kind !== 'add' && r.text === i.text) p = r; });
+    if (p && p.kind === 'edit') txt = p.to;
+    extra = p ? '<span class="pwhen saving">' + (p.err ? 'Not saved' : 'Saving…') + '</span>' :
+      i.who === 'owner' && i.owner_item && quiet ? '<button class="pitbtn" data-act="goowner" data-key="' + esc(i.owner_item) + '" title="Open what Tirith needs from you">Open</button>' :
+      i.who === 'date' && i.until && quiet ? '<span class="pwhen">from ' + esc(shortDate(i.until)) + '</span>' : '';
+    h = '<li class="' + (p ? 'psav' + (p.kind === 'delete' ? ' gone' : '') : '') + (i.done ? ' ok' : '') + '"><span class="pi">' + (i.done ? OK : OPEN) + '</span><span class="pit">' + rich(quiet && i.who === 'date' ? dateless(txt) : txt) + '</span>' + extra;
+    if (!i.done && !p && c.edit) h += '<span class="pedtools">' + tool('pe-edit', '', PEN, 'Edit', c, i.text) + tool('pe-del', 'del', TRASH, 'Delete', c, i.text) + '</span>';
+    if (same(ui.pdel, c) && ui.pdel.text === i.text) {
+      h += '<span class="pdelpop" role="alertdialog" aria-label="Delete this item from the plan?"><span>Delete this item from the plan?</span>' +
+        '<button class="isend danger" data-act="pe-yes"' + ctxAttrs(c, i.text) + '>Delete</button><button class="ibtn" data-act="pe-no">Cancel</button></span>';
+    }
+    return h + '</li>';
+  }
+  /* The rows after the open items: items being added, the add box, the "Add item" link, a refused change. */
+  function itemTail(c, pend) {
+    var key = c.pid + '|' + c.plan + '|' + c.sid, h = '';
+    pend.forEach(function (r) {
+      if (r.kind === 'add') h += '<li class="psav"><span class="pi">' + OPEN + '</span><span class="pit">' + rich(r.to) + '</span><span class="pwhen saving">' + (r.err ? 'Not saved' : 'Saving…') + '</span></li>';
+    });
+    if (same(ui.pedit, c) && ui.pedit.text === null) h += editInput(c, ui.pedit, key);
+    else h += '<li class="padd"><button class="pedadd" data-act="pe-add"' + ctxAttrs(c) + ' title="Add an item to this step">' + PLUS + '<span>Add item</span></button></li>';
+    pend.forEach(function (r) {
+      if (r.err) h += '<li class="perr"><div class="ierr">' + esc(r.err) + ' <button class="link" data-act="pe-dismiss"' + ctxAttrs(c, r.text) + '>Dismiss</button></div></li>';
+    });
+    return h;
+  }
+  function openItems(s, c, state) {
+    var l = s.items.filter(function (i) { return !i.done && i.who !== 'out'; }), pend = c.edit ? pending(c, s, state) : [];
+    if (!l.length && !(same(ui.pedit, c) && ui.pedit.text === null) && !pend.length) return '';
+    return '<ul class="pitems pquiet">' + l.map(function (i) { return itemRow(i, c, pend, true); }).join('') + (c.edit ? itemTail(c, pend) : '') + '</ul>';
+  }
+  function allItems(s, c, state) {
+    var pend = c.edit ? pending(c, s, state) : [];
+    return '<ul class="pitems">' + (s.items.length ? s.items.map(function (i) { return itemRow(i, c, pend, false); }).join('') : '<li class="none">No items yet</li>') +
+      (c.edit ? itemTail(c, pend) : '') + '</ul>';
   }
   /* The ONE current state of an unfinished step, or ''. */
   function stateLine(s, p, state) {
@@ -331,7 +404,7 @@
     var h = '';
     reqs.forEach(function (r) {
       var todo = unpassed(r);
-      if (unanswered(r)) {
+      if (unanswered(r) && r.kind !== 'plan-edit') {   /* Tirith applies a plan change itself: the item shows "Saving…" */
         h += '<div class="pstate wait">Waiting for the manager · <span class="tick" data-start="' + esc(r.at) + '">' + esc(T.dur(T.elapsed(r.at))) + '</span>' +
           (T.elapsed(r.at) >= ESCALATE ? ' <span class="mut">No answer yet. Tirith will escalate this.</span>' : '') + '</div>';
       }
@@ -354,22 +427,20 @@
       var a = T.agentById(state, id); if (!a) return '';
       return '<button class="pava" data-act="goagent" data-key="' + esc(id) + '" title="' + esc(a.name + ' · ' + (a.feature || '')) + '">' + T.avatar(a, 22) + '</button>' + (T.stopBtn ? T.stopBtn(a, 'ava') : '');
     }).join('');
-    var reqs = ro ? [] : reqsFor(state, p.id, s.id);
+    var reqs = ro ? [] : reqsFor(state, p.id, s.id), c = { pid: p.id, plan: (plansOf(p)[0] || {}).id || '', sid: s.id, edit: !ro && !fin };
     var h = '<li class="pstep ' + esc(s.status) + (open ? ' open' : '') + '"><div class="prow">' +
       '<button class="ptog" data-act="plan" data-key="' + esc(key) + '" aria-expanded="' + open + '">' +
       '<span class="pico' + (live ? ' pulse' : '') + '">' + (IC[s.status] || IC.todo) + '</span>' +
       '<span class="ptit"><span class="pn">' + esc(s.id) + '.</span> ' + plain(s.title) + '</span>' +
       (fin ? '' : s.total ? bar(s.done, s.total, 'pbar') : '<span class="pbar"></span>') +
       (s.total ? '<span class="pcnt">' + s.done + '/' + s.total + '</span>' : '<span class="pcnt">–</span>') +
-      '</button><span class="pavas">' + ava + '</span>' + (ro || fin ? '' : inboxBtns(key)) + '</div>';
+      '</button><span class="pavas">' + ava + '</span>' + (c.edit ? '<span class="pedtools pstit">' + tool('pe-add', '', PLUS, 'Add item', c) + '</span>' : '') + (ro || fin ? '' : inboxBtns(key)) + '</div>';
     if (!ro) {
       h += inboxBelow(s, p, state, key, reqs);
-      if (!fin) h += (open ? '' : openItems(s)) + stateLine(s, p, state) + needsLines(s, p, state, reqs);
+      if (!fin) h += (open ? '' : openItems(s, c, state)) + stateLine(s, p, state) + needsLines(s, p, state, reqs);
     }
     if (open) {
-      h += '<ul class="pitems">' + (s.items.length ? s.items.map(function (i) {
-        return '<li class="' + (i.done ? 'ok' : '') + '"><span class="pi">' + (i.done ? OK : OPEN) + '</span><span>' + rich(i.text) + '</span></li>';
-      }).join('') : '<li class="none">No items yet</li>') + '</ul>';
+      h += allItems(s, c, state);
       if (!ro && !fin) h += reviewBtn(s, p, state) || launchBtn(s, p, state, true).replace('class="plw"', 'class="plw pbody"');
     }
     if (!ro) h += historyBlock(s, p, state, key, reqs);
@@ -492,7 +563,38 @@
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
   }
 
+  function focusPe() {
+    var n = document.querySelector('[data-act="pe-in"]');
+    if (n) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); }
+  }
+  function submitPe() {
+    var e = ui.pedit, v = e && (e.draft || '').replace(/\s+/g, ' ').trim();
+    if (!e || !v) return;
+    if (e.text !== null && v === e.text) { ui.pedit = null; T.render(); return; }
+    queuePe(e, e.text === null ? { kind: 'add', to: v } : { kind: 'edit', text: e.text, to: v },
+      e.text === null ? { plan: e.plan, add: v } : { plan: e.plan, item_text: e.text, new_text: v });
+  }
+  /* Send one change; the Plan shows it as "Saving…" until the plan file has it. */
+  function queuePe(c, rec, payload) {
+    rec.pid = c.pid; rec.plan = c.plan; rec.sid = c.sid; rec.text = rec.text || ''; rec.at = T.now();
+    ui.ppend.push(rec); ui.pedit = null; ui.pdel = null;
+    sendInbox('plan-edit', c.pid + '|' + c.sid, JSON.stringify(payload), { quiet: true, fail: function () { ui.ppend = ui.ppend.filter(function (r) { return r !== rec; }); } });
+    T.render();
+  }
+  function planEditClick(e) {
+    var b = e.target.closest('[data-act^="pe-"]'), act = b && b.getAttribute('data-act'), c;
+    if (!b) return false;
+    c = ctxOf(b);
+    if (act === 'pe-edit') { ui.pdel = null; ui.pedit = { pid: c.pid, plan: c.plan, sid: c.sid, text: c.text, draft: c.text }; T.render(); focusPe(); }
+    else if (act === 'pe-add') { ui.pdel = null; ui.pedit = { pid: c.pid, plan: c.plan, sid: c.sid, text: null, draft: '' }; T.render(); focusPe(); }
+    else if (act === 'pe-del') { ui.pedit = null; ui.pdel = { pid: c.pid, plan: c.plan, sid: c.sid, text: c.text }; T.render(); }
+    else if (act === 'pe-no') { ui.pdel = null; T.render(); }
+    else if (act === 'pe-yes') queuePe(c, { kind: 'delete', text: c.text }, { plan: c.plan, item_text: c.text, delete: true });
+    else if (act === 'pe-dismiss') { ui.ppend = ui.ppend.filter(function (r) { return !(same(r, c) && r.err); }); T.render(); }
+    return true;
+  }
   document.getElementById('view').addEventListener('click', function (e) {
+    if (planEditClick(e)) return;
     var rv = e.target.closest('[data-act="review"]');
     if (rv) {
       var lid = rv.getAttribute('data-key'), rk = 'review|' + lid, rs = lastState, RL = rs && rs.launch;
@@ -551,13 +653,21 @@
   document.getElementById('view').addEventListener('input', function (e) {
     var t = e.target, a = t.getAttribute && t.getAttribute('data-act');
     if (a === 'itext') ui.inboxDraft[t.getAttribute('data-key')] = t.value;
+    if (a === 'pe-in' && ui.pedit) ui.pedit.draft = t.value;
     if (a === 'pnf') {
       var pid = t.getAttribute('data-key'), d = ui.planDraft[pid] = ui.planDraft[pid] || {};
       d[t.getAttribute('data-field')] = t.value; ui.planFormErr[pid] = null;
     }
   });
   document.getElementById('view').addEventListener('keydown', function (e) {
-    var t = e.target; if (!t.getAttribute || t.getAttribute('data-act') !== 'itext') return;
+    var t = e.target; if (!t.getAttribute) return;
+    if (t.getAttribute('data-act') === 'pe-in') {
+      if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); ui.pedit.draft = t.value; submitPe(); }
+      else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); ui.pedit = null; T.render(); }
+      return;
+    }
+    if (e.key === 'Escape' && ui.pdel) { ui.pdel = null; T.render(); return; }
+    if (t.getAttribute('data-act') !== 'itext') return;
     var key = t.getAttribute('data-key');
     if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); ui.inboxDraft[key] = t.value; submitAsk(key); }
     else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); ui.inboxAsk[key] = false; T.render(); }
