@@ -266,10 +266,15 @@ def pending_text(rows: list[dict], now: datetime) -> str:
 def manager_context(home: Path, now: datetime) -> str:
     """Text for ``additionalContext`` at ``SessionStart`` / ``UserPromptSubmit`` ('' = nothing to add)."""
     rows = pending(home, now)
-    if not rows:
-        return ""
-    return (f"Tirith inbox: the owner is waiting on {len(rows)} request(s) addressed to you. Answer each "
-            "before anything else, with the commands shown.\n" + pending_text(rows, now))
+    results = inbox_mod.pending_action_results(home)
+    text = ""
+    if rows:
+        text = (f"Tirith inbox: the owner is waiting on {len(rows)} request(s) addressed to you. Answer each "
+                "before anything else, with the commands shown.\n" + pending_text(rows, now))
+    if results:
+        text += ("\n" if text else "") + (f"Tirith inbox: {len(results)} action(s) the owner ran failed.\n"
+                                          + inbox_mod.pending_results_text(results))
+    return text
 
 
 def _old_reviews(home: Path, now: datetime) -> list[dict]:

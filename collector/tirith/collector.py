@@ -44,7 +44,7 @@ from tirith.names import (
     apply_renown, hero_epithet, hero_name, rank_for,
 )
 from tirith.store import (
-    read_json, read_jsonl, read_lanes, state_js, tail_lines, write_json_atomic, write_text_atomic,
+    append_jsonl, read_json, read_jsonl, read_lanes, state_js, tail_lines, write_json_atomic, write_text_atomic,
 )
 
 STALLED_AFTER_S = 600
@@ -691,21 +691,36 @@ class Collector:
                     [dict(a) for a in row.get("actions") or [] if isinstance(a, dict)]),
             }
             reply = replied.get(wait["id"])
+            actions_mod.attach_last_runs(self.home, [wait])
             if reply is not None:
                 label = next((o["label"] for o in options if o["value"] == reply["value"]), reply["value"])
                 answered.append({**wait, "status": "answered", "answer": {
                     "at": reply["at"], "value": reply["value"], "label": label, "text": reply["text"]}})
             elif row.get("done_at"):
+                if row.get("done_reason") == actions_mod.PASSED_REASON:
+                    answered.append(self._passed_wait(wait, str(row["done_at"])))
                 continue
+            elif actions_mod.all_passed(wait["actions"]):
+                # every Run action passed: the item closes by itself (a rule in code, not a habit)
+                done_at = max(str(a["last_run"]["at"] or "") for a in wait["actions"])
+                append_jsonl(self.home / "waits.jsonl", {
+                    **row, "done_at": done_at, "done_reason": actions_mod.PASSED_REASON})
+                answered.append(self._passed_wait(wait, done_at))
             elif (guard_ok or {}).get(str(row.get("project") or "")) and not options \
                     and re.search(r"commit guard", text, re.IGNORECASE):
                 continue
             else:
                 waits.append(wait)
-        actions_mod.attach_last_runs(self.home, waits)
         waits.sort(key=lambda w: str(w["since"] or ""))
         answered.sort(key=lambda w: str(w["answer"]["at"] or ""), reverse=True)
         return waits, answered[:ANSWERED_KEPT]
+
+    @staticmethod
+    def _passed_wait(wait: dict, at: str) -> dict:
+        """An item closed because its actions passed: shown in "Answered" as ``✓ <label>``."""
+        label = ", ".join(a["label"] for a in wait["actions"])
+        return {**wait, "status": "answered", "answer": {
+            "at": at, "value": actions_mod.PASSED_REASON, "label": "✓ " + label, "text": ""}}
 
     def _guard_replies(self, now: datetime) -> dict[str, tuple[str, datetime | None]]:
         """Project -> (``snooze`` | ``never``, snoozed until) from the owner's latest reply to its guard item."""

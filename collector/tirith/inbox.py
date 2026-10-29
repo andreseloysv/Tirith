@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Callable
 from urllib.parse import parse_qs, urlsplit
 
+from tirith import actions as actions_mod
 from tirith.home import now_iso
 from tirith.store import append_jsonl, read_jsonl
 
@@ -133,7 +134,8 @@ def add_reply(home: Path, wait: str, project: str = "", value: str = "", text: s
 
 
 def mark_done(home: Path, request_id: str, at: str | None = None) -> dict:
-    if find_request(home, request_id) is None and find_reply(home, request_id) is None:
+    if find_request(home, request_id) is None and find_reply(home, request_id) is None \
+            and not any(r.get("wait") == request_id for r in action_results(home)):
         raise InboxError(f"no request {request_id}")
     row = {"id": request_id, "at": at or now_iso(), "kind": "done"}
     append_jsonl(inbox_path(home), row)
@@ -189,6 +191,54 @@ def requests(home: Path) -> list[dict]:
         req["manager_pending"] = manager_pending(req)
         req["steward_pending"] = req["manager_pending"]  # old key, same value
     return list(out.values())
+
+
+def action_results(home: Path) -> list[dict]:
+    """Every finished run (``passed`` or ``failed``) of an action on a wait or a request answer, oldest first:
+    ``{kind: "action-result", wait|request, project, action_id, label, status, exit_code, at}``."""
+    owners = {}
+    for action in actions_mod.list_actions(home):
+        kind, _, owner = str(action.get("source") or "").partition(":")
+        if kind in ("wait", "inbox") and owner:
+            owners[action["id"]] = ("wait" if kind == "wait" else "request", owner, action)
+    out = []
+    for row in actions_mod.run_rows(home):
+        found = owners.get(str(row.get("action_id") or ""))
+        if found is None or row.get("status") not in ("passed", "failed"):
+            continue
+        field, owner, action = found
+        out.append({"kind": "action-result", field: owner, "project": action.get("project") or "",
+                    "action_id": action["id"], "label": action.get("label") or "", "status": row["status"],
+                    "exit_code": row.get("exit_code"), "at": row.get("at")})
+    return out
+
+
+def pending_action_results(home: Path) -> list[dict]:
+    """Failed runs on waits the manager still owes a look: the action's latest run failed, the wait is
+    still open, and no ``inbox done <wait>`` came after it. Passed runs are informational, never pending."""
+    closed: dict[str, str] = {}  # wait id -> when the manager closed its results
+    for row in read_jsonl(inbox_path(home)):
+        if row.get("kind") == "done" and row.get("id"):
+            closed[str(row["id"])] = str(row.get("at") or "")
+    waits: dict[str, dict] = {}
+    for row in read_jsonl(Path(home) / "waits.jsonl"):
+        if row.get("id"):
+            waits[str(row["id"])] = row
+    latest: dict[str, dict] = {}
+    for res in action_results(home):
+        latest[res["action_id"]] = res
+    return [r for r in latest.values()
+            if r["status"] == "failed" and r.get("wait") in waits and not waits[r["wait"]].get("done_at")
+            and closed.get(r["wait"], "") < str(r["at"] or "")]
+
+
+def pending_results_text(results: list[dict]) -> str:
+    lines = []
+    for r in results:
+        lines.append("- %s (%s): the owner ran \"%s\" and it failed (exit %s)\n"
+                     "    tirith inbox done %s   (or tirith wait done %s) once you have dealt with it"
+                     % (r["wait"], r["project"], r["label"], r["exit_code"], r["wait"], r["wait"]))
+    return "\n".join(lines)
 
 
 def manager_pending(req: dict) -> bool:
@@ -269,6 +319,15 @@ def watch(home: Path, emit: Callable[[dict], None], *, poll_s: float = 1.0, incl
             if (first and not include_existing) or not req["manager_pending"]:
                 continue
             emit(req)
+        owed = pending_action_results(home)
+        for res in action_results(home):
+            key = "result|%s|%s" % (res["action_id"], res["at"])
+            if key in seen:
+                continue
+            seen.add(key)
+            if first and (not include_existing or res not in owed):
+                continue  # history: on start only a failure the manager still owes comes up
+            emit(res)
         first = False
         if should_stop():
             return
@@ -276,6 +335,8 @@ def watch(home: Path, emit: Callable[[dict], None], *, poll_s: float = 1.0, incl
 
 
 def watch_line(req: dict) -> str:
+    if req["kind"] == "action-result":
+        return json.dumps({k: v for k, v in req.items() if v is not None or k == "exit_code"})
     keys = ("id", "at", "kind", "project", "wait", "value", "text", "from", "status") if req["kind"] == "reply" \
         else ("id", "at", "kind", "project", "step", "text", "from", "status")
     row = {k: req[k] for k in keys}

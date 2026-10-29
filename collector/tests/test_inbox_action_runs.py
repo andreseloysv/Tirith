@@ -45,5 +45,5 @@ def test_watch_emits_the_request_again_after_an_action_result(tmp_path):
         return n >= 1
 
     inbox_mod.watch(tmp_path, emitted.append, poll_s=0, should_stop=stop, sleep=lambda s: None)
-    assert [r["id"] for r in emitted] == [rid]
-    assert '"action_run"' in inbox_mod.watch_line(emitted[0])
+    assert [r["id"] for r in emitted if r["kind"] != "action-result"] == [rid]
+    assert '"action_run"' in inbox_mod.watch_line(next(r for r in emitted if r['kind'] != 'action-result'))

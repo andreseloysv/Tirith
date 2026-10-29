@@ -29,8 +29,10 @@
     return lines && lines.length ? '<pre class="alog">' + esc(lines.join('\n')) + '</pre>' : '';
   }
 
-  function row(a, pid) {
+  function row(a, pid, fold) {
     var r = a.last_run, busy = running(a), can = canRun(), h;
+    /* a passed action of a plan answer is done: one line, nothing to run again */
+    if (fold && !busy && r && r.status === 'passed') return '<li class="act acdone" data-aid="' + esc(a.id) + '"><span class="aok" title="Finished at ' + esc(T.clockTime(r.at)) + '">' + OKI + ' ' + esc(a.label) + '</span></li>';
     h = '<li class="act" data-aid="' + esc(a.id) + '"><div class="arow"><span class="alab">' + esc(a.label) + '</span>' +
       '<code class="acmd" title="' + esc(a.command) + '">' + esc(a.command) + '</code><span class="astat">';
     if (busy) {
@@ -56,7 +58,7 @@
   }
 
   /* The rows of a list of actions; pid names the project for the default folder. */
-  T.actions = function (list, state, pid) {
+  T.actions = function (list, state, pid, fold) {
     if (state) lastState = state;
     if (!list || !list.length) return '';
     var ids = {}, shapes = {};
@@ -65,7 +67,7 @@
       if (ids[a.id] || shapes[shape]) return false;
       ids[a.id] = shapes[shape] = true; return true;
     });
-    return '<ul class="acts">' + list.map(function (a) { return row(a, pid); }).join('') + '</ul>';
+    return '<ul class="acts">' + list.map(function (a) { return row(a, pid, fold); }).join('') + '</ul>';
   };
 
   function openLink(url) {

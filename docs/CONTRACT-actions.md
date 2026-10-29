@@ -103,3 +103,31 @@ the command in a monospace chip (the whole command on hover) and a primary **Run
   **Run again**.
 - No app and no link handler (`state.launch.available`): the button is **Copy** and a note says the page
   cannot run it.
+
+## Auto-close and the manager hears the result
+
+**The owner sees as little as possible.** An item of `waits.jsonl` whose actions have all a `passed`
+`last_run` closes by itself on the next collector cycle: a row is appended with `done_at` (the time of the
+last passing run) and `"done_reason": "action-passed"`. It leaves `waiting_on_you` and shows in
+`answered_waits` (the folded "Answered" list) with `answer: {value: "action-passed", label: "✓ <label>"}`;
+several actions give `✓ <label>, <label>`. An item with a failed (or still running) action stays open and
+shows the failure. A re-run that passes closes it. Items Tirith raises itself (guard) are not affected.
+
+A passed action of a plan answer (`state.inbox[].answers[].actions[]`) collapses in the page to one line
+`✓ <label>`.
+
+**The manager is told about every finished run on a wait** (requests keep the behaviour of
+`docs/CONTRACT-inbox.md`: the request is pending again). `tirith inbox watch` emits, once per run:
+
+```json
+{"kind": "action-result", "wait": "w-2", "project": "tirith", "action_id": "ac-5e1a0001",
+ "label": "Install the link handler", "status": "failed", "exit_code": 2, "at": "..."}
+```
+
+(`request` instead of `wait` for an action of an inbox answer.) On start, only failures still owed are
+emitted; later runs are emitted as they finish. Passed results are information only: they are never
+pending and never block.
+
+A **failed** result on a wait is pending for the manager (its hook context, `SessionStart` /
+`UserPromptSubmit`, lists it) until the action's latest run passes, or `tirith inbox done <wait>` /
+`tirith wait done <wait>` closes it. It does not block `Stop`.

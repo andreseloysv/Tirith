@@ -24,6 +24,7 @@ COMMAND_MAX = 2000
 LABEL_MAX = 120
 LOG_TAIL = 20
 STALE_S = 3600
+PASSED_REASON = "action-passed"  # ``done_reason`` of an owner item closed because its actions passed
 SHELL_LANGS = {"sh", "bash", "zsh", "shell", "console", "shell-session", "shellsession", "terminal", "fish"}
 COMMAND_WORDS = {
     "cd", "uv", "uvx", "npm", "npx", "pnpm", "yarn", "git", "cargo", "pip", "pip3", "python", "python3",
@@ -244,6 +245,11 @@ def attach_last_runs(home: Path, containers: list[dict]) -> None:
     for container in containers:
         for action in container.get("actions") or []:
             action["last_run"] = last_run(home, action["id"], rows)
+
+
+def all_passed(actions: list[dict]) -> bool:
+    """True when there is at least one action and each one's last run (``attach_last_runs``) passed."""
+    return bool(actions) and all((a.get("last_run") or {}).get("status") == "passed" for a in actions)
 
 
 # -- running ----------------------------------------------------------------------------------
