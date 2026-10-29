@@ -28,7 +28,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Muse protocol probe 3: generate the MSP JSON schema
 - [x] Manager de guardia: atender el chat
 - [ ] Revisar el plan (2026-10-29) (en revisión)
-- [ ] Manager de guardia: atender el chat (en curso: manager-a89536d3)
+- [x] Manager de guardia: atender el chat
 - [x] Muse chat real check: one tiny session
 
 ## 1. `lane run` devuelve la respuesta final
