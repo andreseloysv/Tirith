@@ -53,7 +53,7 @@ def events(home: Path) -> list[dict]:
 def test_run_in_a_worktree_uses_the_worktree_and_tags_the_lane(lane, home, monkeypatch) -> None:
     repo, worktree = lane
     monkeypatch.chdir(worktree)
-    assert main(["run", "--project", "demo", "--stage", "test"]) == 0
+    assert main(["run", "--project", "demo", "--stage", "test", "--full"]) == 0  # a lane's plain test run is changed-only
     assert os.path.realpath((worktree / "where.txt").read_text().strip()) == os.path.realpath(worktree)
     assert not (repo / "where.txt").exists()
     start, end = events(home)
