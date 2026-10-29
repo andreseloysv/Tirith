@@ -2,7 +2,8 @@
 
 Every collector cycle ``run`` walks the open requests once (idempotent, state in
 ``<home>/dispatch.json``): a ``finish`` is answered by Tirith (the lane that already has the step, or a new
-one started in-process like ``tirith launch``); an ``ask`` is answered by the brain (see
+one started in-process like ``tirith launch``); a ``plan-refresh`` / ``plan-new`` starts the auditor / planner
+lane of ``tirith.planlane`` (one refresh at a time per project); an ``ask`` is answered by the brain (see
 ``Collector._inbox``) and stays pending for the manager; anything else is left to the manager. A request the
 manager leaves unanswered for ``ESCALATE_AFTER_S`` is escalated to the owner. The manager session itself is
 held to the inbox by hooks (``manager_context`` / ``manager_stop`` here, called from ``tirith.hooks``).
@@ -22,6 +23,7 @@ from tirith import autoreview as autoreview_mod
 from tirith import flows as flows_mod
 from tirith import inbox as inbox_mod
 from tirith import launch as launch_mod
+from tirith import planlane as planlane_mod
 from tirith.home import Config, now_iso, parse_iso
 from tirith.store import append_jsonl, read_json, read_jsonl, write_json_atomic
 
@@ -103,6 +105,58 @@ def _default_launcher(home: Path, project: str, step: str, request_id: str | Non
         raise launch_mod.LaunchError(str(err.code or "launch failed"))
 
 
+def _default_plan_launcher(home: Path, project: str, kind: str, request_id: str | None = None) -> str:
+    from tirith.cli import launch_plan
+    try:
+        return launch_plan(home, project, kind, request_id, out=io.StringIO())
+    except SystemExit as err:
+        raise launch_mod.LaunchError(str(err.code or "launch failed"))
+
+
+PLAN_WHAT = {"plan-refresh": "Update the plan", "plan-new": "Start a new plan"}
+
+
+def _plan(home: Path, req: dict, config: Config, lanes: list[dict], status_of: Callable,
+          plan_launcher: Callable, now: datetime) -> str | None:
+    """Handle one ``plan-refresh`` / ``plan-new``; returns what was done (``manager``: left to the manager)."""
+    at, kind, project = now_iso(now), req["kind"], req["project"]
+    what = PLAN_WHAT[kind]
+    _flow(home, "owner", "tirith", "request", f"{what} on {project}"
+          + (f": {_short(req['plan']['title'])}" if kind == "plan-new" else ""), req, at)
+    busy = launch_mod.working_lane(lanes, project, planlane_mod.LANE_STEPS[kind], status_of) \
+        if kind == "plan-refresh" else None
+    if busy:
+        inbox_mod.add_answer(home, req["id"], f"The plan of {project} is already being updated by lane "
+                             f"`{busy['id']}`. Its summary will show here when it lands.", by="tirith",
+                             auto=True, at=at, lane=busy["id"])
+        return f"running:{busy['id']}"
+    if not config.dispatch_auto_launch:
+        return "manager"
+    try:
+        lane_id = plan_launcher(home, project, kind, req["id"])
+    except launch_mod.LaunchError as err:
+        reason = str(err)
+    except Exception as err:  # never let one request stop the cycle
+        reason = f"{type(err).__name__}: {err}"
+    else:
+        inbox_mod.add_answer(home, req["id"], f"Started lane `{lane_id}`: " + (
+            "it compares every item of the plan with the code, the merged lanes and your requests, and will "
+            "show its summary here when it lands." if kind == "plan-refresh" else
+            "it writes the new plan and registers it; it will show here when it lands."),
+            by="tirith", auto=True, at=at, lane=lane_id)
+        _flow(home, "tirith", f"agent:{lane_id}", "brief", f"{what} on {project}", req, at)
+        return f"launched:{lane_id}"
+    retry = f"tirith inbox add --kind {kind} --project {project}"
+    inbox_mod.add_answer(home, req["id"], f"Could not start an agent for \"{what}\" on {project}: {reason}",
+                         by="tirith", auto=True, at=at)
+    _flow(home, "tirith", "owner", "alert", f"Could not start \"{what}\" on {project}: {_short(reason)}", req, at)
+    add_owner_item(home, f"dispatch-{req['id']}", project or None,
+                   f"Tirith could not start an agent for \"{what}\" on {project}: {_short(reason)}",
+                   [{"label": "Try again", "command": retry} if kind == "plan-refresh" else
+                    {"label": "Start it again from the Plan card", "command": None}], at)
+    return "refused"
+
+
 def refusal_fix(project: str, step: str, reason: str) -> str:
     """The exact command that fixes (or starts over after) a refused launch."""
     if "tirith check fails" in reason:
@@ -174,13 +228,15 @@ def escalate(home: Path, req: dict, notify: Callable[[str, str], None], at: str)
 
 def run(home: Path, config: Config, now: datetime, *, agents: list[dict], lanes: list[dict],
         status_of: Callable, launcher: Callable | None = None,
-        notify: Callable[[str, str], None] = macos_notify, spawn: Callable | None = None) -> list[dict]:
+        notify: Callable[[str, str], None] = macos_notify, spawn: Callable | None = None,
+        plan_launcher: Callable | None = None) -> list[dict]:
     """One dispatcher pass; returns the requests re-read afterwards. Safe to call every cycle."""
     home = Path(home)
     if not config.dispatch_enabled:
         return inbox_mod.requests(home)
     state = load_state(home)
     launcher = launcher or _default_launcher
+    plan_launcher = plan_launcher or _default_plan_launcher
     changed = False
     for req in inbox_mod.requests(home):
         rid = req["id"]
@@ -189,9 +245,12 @@ def run(home: Path, config: Config, now: datetime, *, agents: list[dict], lanes:
         if rid not in state["handled"]:
             if req["kind"] == "finish" and not req["answers"]:
                 done = _finish(home, req, config, agents, lanes, status_of, launcher, now)
+            elif req["kind"] in inbox_mod.PLAN_KINDS and not req["answers"]:
+                done = _plan(home, req, config, lanes, status_of, plan_launcher, now)
             else:
-                done = "manager" if req["kind"] != "finish" else "answered"
-                if req["kind"] != "finish":
+                own = req["kind"] == "finish" or req["kind"] in inbox_mod.PLAN_KINDS
+                done = "answered" if own else "manager"
+                if not own:
                     _flow(home, "owner", "tirith", "request",
                           f"{req['kind'].capitalize()} on {_step_name(req)}: {_short(req['text'])}", req, now_iso(now))
             if done:

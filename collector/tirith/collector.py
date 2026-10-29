@@ -936,6 +936,7 @@ class Collector:
                 "architecture": self.architecture_for(proj),
                 "guard": {"ok": guard_ok, "problems": problems, **({"disabled": True} if not proj.guard else {})},
                 "roadmap": roadmap_mod.build(folder, proj.id, agent_rows),
+                "plans": roadmap_mod.build_plans(folder, proj.id, agent_rows),
             })
         for entry in entries:
             if entry.id in known_ids:
@@ -947,6 +948,7 @@ class Collector:
                 "architecture": self.architecture_for(ProjectConfig(id=entry.id, name=entry.name)),
                 "guard": {"ok": False, "problems": ["auto-discovered folder: no commit guard configured"]},
                 "roadmap": roadmap_mod.build(entry.folder, entry.id, agent_rows),
+                "plans": roadmap_mod.build_plans(entry.folder, entry.id, agent_rows),
             })
         git_runs = self._git_hook_events(resolve)
         local_runs = self._pipelines(sorted(events + git_runs, key=lambda e: str(e.get("at") or ""))
@@ -964,7 +966,7 @@ class Collector:
                     "id": pid, "name": pid, "color": "#888888", "folder": None, "auto": False,
                     "architecture": self.architecture_for(stub),
                     "guard": {"ok": False, "problems": ["project not defined in config.toml"]},
-                    "roadmap": None,
+                    "roadmap": None, "plans": [],
                 })
         if guard_dirty:
             write_json_atomic(self.home / "guard-state.json", guard_since)
