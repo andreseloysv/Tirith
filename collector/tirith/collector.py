@@ -338,7 +338,8 @@ class Collector:
             lambda c, s=summary, h=hero_class: {"epithet": brain_mod.job_epithet(c, s, h)})
 
     def _brain_waits(self, lane: dict) -> list[dict]:
-        if not self.worker.enabled:
+        """What a working agent is waiting on; ended lanes report through their own waits."""
+        if not self.worker.enabled or lane.get("ended_at"):
             return []
         bits = tail_lines(lane.get("log"), SUMMARY_LOG_LINES)
         if lane.get("report"):
