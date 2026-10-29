@@ -53,7 +53,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Instalar los hooks en los ajustes de usuario de cada agente.
 - [x] Protegerlos para que un agente no pueda quitárselos (se reparan solos).
 - [x] Enlazar cada lane con la petición original del usuario.
-- [ ] Verificar el payload real de Muse Code y ajustar su adaptador (desde 2026-11-02: cuota de Muse).
+- [ ] Verificar el payload real de Muse Code y ajustar su adaptador
 
 ## 4. `lane run --interactive` (seguir chateando)
 

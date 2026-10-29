@@ -63,6 +63,10 @@ status, name, who, the stage chips in order with their names, the failing stage 
 a row opens in place in the Pipelines view (stages, commands, the last 20 log lines, Full log, Run again).
 Raw build and test commands are blocked by the `raw-stage` gate (`docs/CONTRACT-gates.md`).
 
+Every stage also gets one shared `CARGO_TARGET_DIR` per project (unless already set): `cargo_target_dir` of the
+project in `config.toml`, else `<repo>-lanes/.cargo-target`, so lane worktrees do not each compile their own copy
+(see "Disk diet" in `CONTRACT-launch.md`).
+
 ## `tirith check [--project ID | <folder>]`
 
 Exit 0 when all rules pass, 1 otherwise. One line per problem, written for agents:
