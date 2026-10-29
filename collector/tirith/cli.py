@@ -284,7 +284,13 @@ def _run_interactive(home: Path, lane: dict, command: list[str], workspace: Path
     lane["pid"] = proc.pid
     write_lane(home, lane)
 
+    # Ctrl+C on a terminal already reaches the child (same foreground process group): forwarding
+    # SIGINT too would interrupt it twice, so it is only forwarded when there is no terminal.
+    on_terminal = sys.stdin.isatty()
+
     def forward(signum, _frame):
+        if on_terminal and signum == getattr(signal, "SIGINT", None):
+            return
         try:
             proc.send_signal(signum)
         except (OSError, ProcessLookupError):
