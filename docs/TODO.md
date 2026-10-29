@@ -167,7 +167,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Guarda compatible con hooks existentes (encadenar el `pre-commit` de ChromaSol).
 - [x] Un resultado de acción del dueño reabre la petición para el manager (aviso al instante y respuesta obligatoria).
 - [x] Renombrar «steward» a «manager» en toda la UI, la CLI y la documentación.
-- [ ] Settings: modelo y esfuerzo del manager y de los agentes que crea (por defecto, por proyecto y por paso).
+- [x] Settings: modelo y esfuerzo del manager y de los agentes que crea (por defecto, por proyecto y por paso).
 
 ## 13. Configuración del proyecto visible y editable
 
