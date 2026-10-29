@@ -64,6 +64,18 @@ def test_codex_and_copilot_presets() -> None:
         agentrun.build_command(cfg, "codex", None, "hi", effort="high")
 
 
+def test_codex_turn_completed_usage(tmp_path: Path) -> None:
+    log = tmp_path / "l.jsonl"
+    log.write_text(
+        '{"type":"thread.started","thread_id":"t"}\n'
+        '{"type":"turn.completed","usage":{"input_tokens":100,"cached_input_tokens":40,"output_tokens":7}}\n'
+        '{"type":"turn.completed","usage":{"input_tokens":50,"cached_input_tokens":0,"output_tokens":3}}\n',
+        encoding="utf-8")
+    usage = agentrun.parse_usage(log)
+    assert usage["input_tokens"] == 150 and usage["output_tokens"] == 10
+    assert usage["cache_tokens"] == 40 and usage["turns"] == 2 and usage["cost_usd"] is None
+
+
 def test_muse_preset_and_missing_support() -> None:
     cfg = _config(muse={"command": "agent-m"})
     assert agentrun.build_command(cfg, "muse", None, "hi") == ["agent-m", "exec", "--json", "hi"]
