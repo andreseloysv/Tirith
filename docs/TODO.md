@@ -53,7 +53,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Instalar los hooks en los ajustes de usuario de cada agente.
 - [ ] Protegerlos para que un agente no pueda quitárselos.
 - [x] Enlazar cada lane con la petición original del usuario.
-- [ ] Verificar el payload real de Muse Code y ajustar su adaptador.
+- [ ] Verificar el payload real de Muse Code y ajustar su adaptador (desde 2026-11-02: cuota de Muse).
 
 ## 4. `lane run --interactive` (seguir chateando)
 
@@ -69,8 +69,8 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Tokens y coste por lane.
 - [x] Permisos estándar por agente (flags / perfiles), porque no pueden preguntar.
 - [x] `tirith doctor --agent <alias>`: comprueba ejecutable, `PATH` del wrapper y que saltarse los hooks falla.
-- [ ] Confirmar el formato JSON de Muse Code con una ejecución real.
-- [ ] Codex y Copilot probados con `lane run` (el dueño los instala y hace login; hoy no están).
+- [ ] Confirmar el formato JSON de Muse Code con una ejecución real (desde 2026-11-02: cuota de Muse).
+- [ ] Codex y Copilot probados con `lane run` (dueño: instalarlos y hacer login).
 - [x] Agentes en la nube y CI remoto desde GitHub (PRs y Actions).
 - [ ] Token de GitHub y `agent_logins` en `config.toml` (dueño).
 
@@ -96,9 +96,9 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Git `pre-commit` / `pre-push` con `tirith check` (nueva versión de la guarda).
 - [x] Reinstalar la guarda nueva en Tirith.
 - [x] Reinstalar la guarda nueva en ChromaSol.
-- [ ] Reinstalar la guarda nueva en RelaGame.
+- [ ] Reinstalar la guarda nueva en RelaGame (dueño: botón Run).
 - [x] Workflow de CI con tests y `tirith check --ci`.
-- [ ] Hacerlo obligatorio con protección de rama (dueño; en repos privados requiere GitHub Pro).
+- [ ] Hacerlo obligatorio con protección de rama (dueño: ajuste en GitHub).
 - [x] El collector registra cada violación bloqueada (`state.violations`) y la pone en "esperando por ti".
 - [x] Violaciones visibles en la web, con el agente responsable.
 - [x] Activar las puertas en la máquina del dueño (hooks de usuario + shims).
@@ -127,8 +127,9 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Windows: shims propios (`.cmd`).
 - [ ] Windows: versión propia del wrapper de git y de la guarda.
 - [ ] Confirmar qué agentes existen en cada plataforma.
-- [ ] Móvil: para luego.
-- [ ] Firma y empaquetado por plataforma.
+- [ ] Móvil (para luego, fuera de este plan).
+- [ ] Empaquetado por plataforma (configuración y scripts de build).
+- [ ] Firma con certificados (dueño: certificados de Apple y Windows).
 
 ## 10. Plan visible en el Overview
 
