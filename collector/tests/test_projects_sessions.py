@@ -213,7 +213,7 @@ def test_events_record_session_and_state_exposes_it(home: Path, tmp_path: Path, 
     main(["run", "--project", "demo", "--pipeline", "rel", "--stage", "build", "--",
           sys.executable, "-c", "pass"])
     main(["note", "during", "--project", "demo"])
-    main(["wait", "add", "Press go", "--project", "demo", "--option", "Go|go"])
+    main(["wait", "add", "--why-owner", "owner-decision", "Press go", "--project", "demo", "--option", "Go|go"])
     wait_id = capsys.readouterr().out.strip().splitlines()[-1]
     main(["flow", "--from", "manager", "--to", "owner", "--text", "hello"])
     main(["lane", "end", "h1", "--result", "done", "--report", "ok"])
@@ -247,7 +247,7 @@ def test_events_record_session_and_state_exposes_it(home: Path, tmp_path: Path, 
 
 def test_open_wait_exposes_session(home: Path, capsys) -> None:
     main(["session", "start", "Waits", "--id", "w"])
-    main(["wait", "add", "Decide", "--project", "demo", "--option", "Yes|yes"])
+    main(["wait", "add", "--why-owner", "owner-decision", "Decide", "--project", "demo", "--option", "Yes|yes"])
     state = collect(home)
     assert state["waiting_on_you"][0]["session"] == "w"
     assert state["sessions"][0]["id"] == "w"

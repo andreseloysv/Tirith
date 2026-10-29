@@ -48,8 +48,11 @@ An item whose text contains one of these tags (case-insensitive) is not for an a
 
 ### The owner tag
 
-`(dueño: <reason?> <what>)`, with an optional reason key first (`security`, `credentials`, `account`, `device`,
-`payment`, `legal`; else guessed from the words, default `security`). What the tag may carry:
+`(dueño: <reason> <what>)`, with the reason key first: `credentials`, `payment`, `personal-account`,
+`physical-device` or `owner-decision`, optionally followed by plain words in parentheses (`personal-account
+(Apple account)` → "Needs your Apple account"). Without a valid reason the item is not an owner item: the owner
+gate queues it for the manager as "agent can do" and a verification lane does it (see
+`docs/CONTRACT-inbox.md`, "The owner gate"). What the tag may carry:
 
 | In the tag | Owner item |
 |---|---|
@@ -59,7 +62,7 @@ An item whose text contains one of these tags (case-insensitive) is not for an a
 
 The owner item's text is the item's sentence only: no step title, no project/step prefix, no tag
 (`Reinstalar la guarda nueva en RelaGame.`). A command or URL outside the tag still works (older plans).
-`roadmap.owner_parts(text)` returns `{sentence, command, url, reason, label}`. Never write "botón Run" in the
+`roadmap.owner_parts(text)` returns `{sentence, command, url, why_owner, why_detail, label}`. Never write "botón Run" in the
 item: the generator drops a promise of a button the item does not have.
 
 `out` wins over `owner`, `owner` over `date`. A malformed date is not a tag. Done items keep their `who`
@@ -112,11 +115,11 @@ max_parallel = 4     # autopilot lanes running at once
   of the items it was started for, the step's counter goes up, otherwise it resets. At 2 the step is paused:
   a manager queue item `sq-autopilot-<project>-<step>` (kind `autopilot`, "step N is not converging") and an
   alert flow. The step resumes by itself when its open agent items change (the queue item is closed then).
-- **A refused launch** (check fails, no agent command, …) is one owner item `autopilot-<project>-<step>` with
-  `Fix it` / `Try again`, retried every 10 minutes.
+- **A refused launch** (check fails, no agent command, …) is one manager queue item `sq-autopilot-<project>-<step>`
+  (`kind: "launch-refused"`, with the fix and retry commands), never an owner item; retried every 10 minutes.
 - **Owner items:** for every open `owner` item one owner item with the id of `owner_item`
   (`owner-<project>-<step>-<hash of the text>`), once. The text is the item's clean sentence and
-  `reason` / `reason_tag` say why it is the owner's (see "The owner tag"). A command (in the tag, else in the
+  `why_owner` / `reason_tag` say why it is the owner's (see "The owner tag"; passed through the owner gate). A command (in the tag, else in the
   text) becomes a Run action; a URL becomes the item's `link` with the option `Done`; otherwise the options
   are `Done` / `Not now`. When the item is ticked (or removed) the owner item is
   closed (`done_at`).

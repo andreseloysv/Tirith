@@ -99,7 +99,7 @@ def _owner_item(home: Path, project: dict, step: dict, item: dict, at: str) -> N
     else:
         options = [{"label": "Done", "value": "done"}, {"label": "Not now", "value": "later"}]
     add_owner_item(home, item["owner_item"], project["id"], parts["sentence"], options, at, actions, link=link,
-                   reason=parts["reason"])
+                   why_owner=parts["why_owner"], why_detail=parts["why_detail"])
 
 
 def _owner_items(home: Path, state: dict, projects: list[dict], at: str) -> bool:
@@ -267,7 +267,7 @@ def _why_not(own: dict, agents: list[dict], project: str, step: dict, now: datet
 
 def _launch(home: Path, state: dict, project: dict, step: dict, launcher: Callable, now: datetime) -> bool | None:
     """True: a lane started. False: refused (recorded). None: refused recently, nothing was tried."""
-    from tirith.dispatch import close_owner_item, add_owner_item, refusal_fix, _short
+    from tirith.dispatch import close_owner_item, refused as refuse_launch, refusal_fix, _short
     own, at = _own(state), now_iso(now)
     pid, sid = project["id"], step["id"]
     key, name = _key(pid, sid), _step_name(pid, sid)
@@ -295,11 +295,11 @@ def _launch(home: Path, state: dict, project: dict, step: dict, launcher: Callab
     own["refused"][key] = {"at": at, "reason": reason}
     if first:
         fix = refusal_fix(pid, sid, reason)
-        flows_mod.append_flow(home, "tirith", "owner", "alert", f"Autopilot could not start {name}: {_short(reason)}",
+        flows_mod.append_flow(home, "tirith", "manager", "alert", f"Autopilot could not start {name}: {_short(reason)}",
                               session=None, project=pid, at=at)
-        add_owner_item(home, f"autopilot-{pid}-{sid}", pid, f"Autopilot could not start an agent on {name}: {_short(reason)}",
-                       [{"label": "Fix it", "command": fix},
-                        {"label": "Try again", "command": f"tirith launch --project {pid} --step {sid}"}], at)
+        refuse_launch(home, f"autopilot-{pid}-{sid}", pid,
+                      f"Autopilot could not start an agent on {name}: {_short(reason)}\nFix it: {fix}\n"
+                      f"Try again: tirith launch --project {pid} --step {sid}")
     return False
 
 
