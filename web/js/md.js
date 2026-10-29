@@ -1,7 +1,9 @@
 /* Tirith web UI - small, safe markdown renderer for agent-written text. No libraries.
    All HTML in the source is escaped first; the only tags that come out are the ones built here, and
    links keep only http, https and file URLs. T.md(text) -> block HTML, T.mdInline(text) -> inline HTML,
-   T.mdBox(text, key) -> block HTML clamped to ~8 lines with a fade and "Show all" (see main.js T.mdFit). */
+   T.mdBox(text, key) -> block HTML clamped to ~8 lines with a fade and "Show all" (see main.js T.mdFit).
+   With opts {file(path) -> bool, project}, paths the caller confirms (code spans, plain text, link targets,
+   with :line[:col]) become file links (data-act="fopen", files.js opens them; docs/CONTRACT-files.md). */
 (function () {
   var T = (typeof window !== 'undefined' ? (window.T = window.T || {}) : {});
   var CLAMP_LINES = 8;
@@ -12,17 +14,50 @@
     });
   }
 
+  /* ---------- file references (same rules as collector/tirith/filerefs.py) ---------- */
+  var SHAPE = /^(?:~\/|\.{1,2}\/|\/)?[\w.@+-]+(?:\/[\w.@+-]+)*\/?$/;
+  var NAME_EXT = /^(?:[\w@+-]*[A-Za-z][\w@+-]*(?:\.[\w-]+)*\.[A-Za-z][A-Za-z0-9]{0,9}|\.[A-Za-z][\w.-]*)$/;
+  var PLAIN = /(^|[\s(\[*;])((?:~\/|\.{1,2}\/|\/)?[\w.@+-]+(?:\/[\w.@+-]+)*\/?(?::\d+){0,2}[.,:;!?]*)(?=$|[\s)\]*&])/g;
+  var refs = null;   /* the opts of the md() call being rendered */
+  function looksLikePath(p) {
+    if (!p || p.indexOf('://') >= 0 || p.charAt(0) === '-' || !SHAPE.test(p) || !/[A-Za-z]/.test(p)) return false;
+    return p.replace(/^\/+|\/+$/g, '').indexOf('/') >= 0 || /\/$/.test(p) || /^(~\/|\.\.?\/|\/)/.test(p) || NAME_EXT.test(p);
+  }
+  /* "cli.py:42:7." -> {path: "cli.py", line: 42, col: 7, rest: "."}; null when it is not a path */
+  function splitRef(text) {
+    var t = String(text).replace(/[.,:;!?]+$/, ''), m = /^(.+?)(?::(\d+)(?::(\d+))?)?$/.exec(t);
+    if (!m || !looksLikePath(m[1])) return null;
+    return { path: m[1], line: m[2] ? +m[2] : null, col: m[3] ? +m[3] : null, rest: String(text).slice(t.length) };
+  }
+  function normRef(p) { while (p.indexOf('./') === 0) p = p.slice(2); return p.replace(/\/+$/, '') || p; }
+  /* the link for a confirmed path, or null */
+  function fileLink(ref, inner) {
+    if (!refs || !ref || !refs.file(normRef(ref.path))) return null;
+    var at = ref.path + (ref.line ? ':' + ref.line + (ref.col ? ':' + ref.col : '') : '');
+    return '<a class="fref" href="#" data-act="fopen" data-project="' + esc(refs.project || '') + '" data-path="' + esc(ref.path) + '"' +
+      (ref.line ? ' data-line="' + ref.line + '"' : '') + (ref.col ? ' data-col="' + ref.col + '"' : '') + ' title="Open ' + esc(at) + '">' + inner + '</a>';
+  }
+
   /* ---------- inline ---------- */
   function inline(src) {
     var hold = [];
     function keep(html) { hold.push(html); return '\u0001' + (hold.length - 1) + '\u0002'; }
     var s = esc(String(src == null ? '' : src).replace(/[\u0001\u0002]/g, ''));
-    s = s.replace(/(`+)([^`]|[^`][\s\S]*?[^`])\1(?!`)/g, function (m, t, code) { return keep('<code>' + code.trim() + '</code>'); });
+    s = s.replace(/(`+)([^`]|[^`][\s\S]*?[^`])\1(?!`)/g, function (m, t, code) {
+      var c = '<code>' + code.trim() + '</code>', ref = refs && !/\s/.test(code.trim()) ? splitRef(code.trim()) : null;
+      return keep((ref && !ref.rest && fileLink(ref, c)) || c);
+    });
     s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, function (m, label, url) {
-      return /^(https?:|file:)/i.test(url) ? keep('<a href="' + url + '" target="_blank" rel="noopener">' + label + '</a>') : m;
+      if (/^(https?:|file:)/i.test(url)) return keep('<a href="' + url + '" target="_blank" rel="noopener">' + label + '</a>');
+      var ref = refs ? splitRef(url) : null, h = ref && !ref.rest && fileLink(ref, label);
+      return h ? keep(h) : m;
     });
     s = s.replace(/(^|[\s(])((?:https?|file):\/\/[^\s<]*[^\s<.,;:!?)\]'"&])/gi, function (m, pre, url) {
       return pre + keep('<a href="' + url + '" target="_blank" rel="noopener">' + url + '</a>');
+    });
+    if (refs) s = s.replace(PLAIN, function (m, pre, tok) {
+      var ref = splitRef(tok), h = ref && fileLink(ref, tok.slice(0, tok.length - ref.rest.length));
+      return h ? pre + keep(h) + ref.rest : m;
     });
     s = s.replace(/\*\*(?=\S)([\s\S]*?\S)\*\*/g, '<strong>$1</strong>')
       .replace(/(^|[^\w])__(?=\S)([\s\S]*?\S)__(?!\w)/g, '$1<strong>$2</strong>')
@@ -124,14 +159,20 @@
     return out;
   }
 
-  var md = function (text) { var h = blocks(text); return h ? '<div class="md">' + h + '</div>' : ''; };
-  var mdInline = function (text) { return '<span class="md mdi">' + inline(String(text == null ? '' : text).replace(/\s*\n\s*/g, ' ')) + '</span>'; };
+  function withRefs(opts, fn) {
+    var was = refs; refs = opts && typeof opts.file === 'function' ? opts : null;
+    try { return fn(); } finally { refs = was; }
+  }
+  var md = function (text, opts) { var h = withRefs(opts, function () { return blocks(text); }); return h ? '<div class="md">' + h + '</div>' : ''; };
+  var mdInline = function (text, opts) {
+    return '<span class="md mdi">' + withRefs(opts, function () { return inline(String(text == null ? '' : text).replace(/\s*\n\s*/g, ' ')); }) + '</span>';
+  };
 
   /* Rendered first, clamped with CSS after: nothing is cut inside a markdown construct. The "Show all"
      button stays hidden until T.mdFit finds the content taller than the clamp. */
   var open = {};
-  var mdBox = function (text, key) {
-    var html = md(text);
+  var mdBox = function (text, key, opts) {
+    var html = md(text, opts);
     if (!html) return '';
     var k = String(key || ''), on = !!open[k];
     return '<div class="mdc' + (on ? ' open' : '') + '" data-mdk="' + esc(k) + '" style="--mdl:' + CLAMP_LINES + '">' + html +
@@ -147,5 +188,5 @@
   var mdToggle = function (key) { open[key] = !open[key]; };
 
   T.md = md; T.mdInline = mdInline; T.mdBox = mdBox; T.mdFit = mdFit; T.mdToggle = mdToggle;
-  if (typeof module !== 'undefined' && module.exports) module.exports = { md: md, mdInline: mdInline, mdBox: mdBox };
+  if (typeof module !== 'undefined' && module.exports) module.exports = { md: md, mdInline: mdInline, mdBox: mdBox, splitRef: splitRef };
 })();

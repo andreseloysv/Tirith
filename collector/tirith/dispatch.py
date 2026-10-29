@@ -327,7 +327,7 @@ def run(home: Path, config: Config, now: datetime, *, agents: list[dict], lanes:
         status_of: Callable, launcher: Callable | None = None,
         notify: Callable[[str, str], None] = macos_notify, spawn: Callable | None = None,
         plan_launcher: Callable | None = None, projects: list[dict] | None = None,
-        relauncher: Callable | None = None, manager_spawn: Callable | None = None) -> list[dict]:
+        relauncher: Callable | None = None, manager_spawn: Callable | None = None, manager_kill: Callable | None = None) -> list[dict]:
     """One dispatcher pass; returns the requests re-read afterwards. Safe to call every cycle."""
     home = Path(home)
     if not config.dispatch_enabled:
@@ -367,7 +367,8 @@ def run(home: Path, config: Config, now: datetime, *, agents: list[dict], lanes:
             changed = True
     if autoreview_mod.run(home, config, now, state, lanes, spawn=spawn, notify=notify):
         changed = True
-    if config.dispatch_auto_launch and managerd_mod.run(home, config, now, state, lanes, spawn=manager_spawn):
+    if config.dispatch_auto_launch and managerd_mod.run(home, config, now, state, lanes, spawn=manager_spawn,
+                                                          kill=manager_kill):
         changed = True  # nobody attached and something pending: the on-call manager
     for rid in list(state["escalated"]):  # the manager caught up: take the item off the owner's list
         req = next((r for r in inbox_mod.requests(home) if r["id"] == rid), None)

@@ -321,7 +321,8 @@ def run(home: Path, config: Config, now: datetime, state: dict, *, agents: list[
 def public(home: Path, config: Config, agents: list[dict] | None = None, projects: list[dict] | None = None,
            now: datetime | None = None) -> dict:
     """``state.autopilot``: the switch, the limit, the lanes the autopilot started (newest last) and, given the
-    agents and projects, the header counts: ``working`` (autopilot lanes alive and not ended) and ``queued``
+    agents and projects, the header counts: ``working`` (autopilot lanes alive, not ended and listed in ``state.agents``, so it never exceeds the
+    Agents list) and ``queued``
     (ready steps not started, not paused)."""
     from tirith.dispatch import load_state
     state = load_state(home)
@@ -329,7 +330,8 @@ def public(home: Path, config: Config, agents: list[dict] | None = None, project
     now = now or parse_iso(now_iso()) or datetime.now()
     started = [{"lane": lane_id, "project": rec["project"], "step": rec["step"], "at": rec["at"]}
                for lane_id, rec in own["lanes"].items()]
-    live = _live(own, agents or [], now)
+    listed = {a["id"] for a in agents or []}  # the header counts only what the Agents list shows
+    live = {lane_id for lane_id in _live(own, agents or [], now) if lane_id in listed}
     queued = sum(1 for p in projects or [] for s in (p.get("roadmap") or {}).get("steps", [])
                  if s["status"] == "ready" and _key(p["id"], s["id"]) not in own["paused"])
     return {"enabled": effective(config, state), "max_parallel": config.autopilot_max_parallel,

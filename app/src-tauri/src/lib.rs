@@ -584,6 +584,51 @@ fn launch_step(project: String, step: u32) -> Result<String, String> {
     }
 }
 
+// -- files named in the chat --------------------------------------------------------------------
+
+/// The `tirith open` arguments for a click on a file in the chat (docs/CONTRACT-files.md).
+fn open_file_args(project: &str, path: &str, line: Option<u32>, col: Option<u32>) -> Vec<String> {
+    let mut args = vec!["open".to_string(), format!("--project={project}"), format!("--path={path}")];
+    if let Some(n) = line.filter(|n| *n > 0) {
+        args.push(format!("--line={n}"));
+        if let Some(c) = col.filter(|c| *c > 0) {
+            args.push(format!("--col={c}"));
+        }
+    }
+    args
+}
+
+/// Opens a file named in a chat message with the `[app] editor` or the OS default app. `tirith open`
+/// resolves the path again and refuses anything outside the registered project folders.
+#[tauri::command]
+fn open_file(project: String, path: String, line: Option<u32>, col: Option<u32>) -> Result<String, String> {
+    let args = open_file_args(&project, &path, line, col);
+    let out = tirith_command(&args.iter().map(String::as_str).collect::<Vec<_>>())
+        .stdin(Stdio::null())
+        .output()
+        .map_err(|e| format!("could not run tirith: {e}"))?;
+    let text = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if out.status.success() {
+        Ok(text)
+    } else {
+        let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        Err(if err.is_empty() { text } else { err.trim_start_matches("tirith open: ").to_string() })
+    }
+}
+
+#[cfg(test)]
+mod open_file_tests {
+    use super::*;
+
+    #[test]
+    fn a_path_is_one_argument_never_a_flag() {
+        assert_eq!(open_file_args("demo", "docs/a.md", Some(42), Some(7)),
+                   ["open", "--project=demo", "--path=docs/a.md", "--line=42", "--col=7"]);
+        assert_eq!(open_file_args("", "--help", None, Some(3)), ["open", "--project=", "--path=--help"]);
+        assert_eq!(open_file_args("p", "a b.md", Some(0), None), ["open", "--project=p", "--path=a b.md"]);
+    }
+}
+
 // -- add a project -----------------------------------------------------------------------------
 
 /// Folders under a temp directory are scratch space, never a project.
@@ -1751,6 +1796,7 @@ pub fn run() {
             current_state,
             agent_detail,
             launch_step,
+            open_file,
             project_add,
             inbox_add,
             attachment_save,
