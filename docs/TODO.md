@@ -134,7 +134,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Móvil (para luego, fuera de este plan).
 - [x] Empaquetado por plataforma (configuración y scripts de build).
 - [x] Firmar la app de macOS con el Developer ID del dueño.
-- [ ] Notarizar la app de macOS (credenciales guardadas por el dueño en el Llavero como `tirith-notary`; lo hace un agente).
+- [x] Notarizar la app de macOS (`scripts/notarize-macos.sh`, perfil `tirith-notary`; aceptada por Apple el 2026-10-29).
 - [ ] Firmar la app de Windows (fuera de este plan: requiere certificado de firma de código).
 
 ## 10. Plan visible en el Overview
@@ -211,7 +211,18 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Sub-agentes anidados en la conversación; permisos seguros aprobados por código y el resto como botones Allow/Deny.
 - [ ] Autorrevisión cada minuto (collector, manager, piloto, disco, revisiones) con arreglo automático y una línea en el chat.
 - [ ] Lo que dice un agente en su informe se verifica contra su cambio real antes de fusionar.
-- [ ] Regla en código: ningún agente arranca sin estar ligado a un elemento abierto del plan (paso + texto exacto).
+- [ ] El collector vuelve a tardar menos de 3 s por ciclo (hoy ~20 s) y un test lo vigila.
+- [ ] Regla en código, sin excepciones: ningún agente arranca sin estar ligado a un elemento abierto del plan (revisiones y revisiones del plan incluidas: Tirith añade su elemento).
+- [ ] Regla en código: ningún agente termina sin informar a Tirith del resultado de su elemento (hecho / en parte + nuevos elementos / bloqueado + motivo); Tirith es el único que escribe el plan y marca «hecho» solo cuando la revisión pasa.
+
+## 15. Collector y CLI en Rust
+
+- [ ] Base: crate Rust compartido (workspace con la app), arnés de paridad que corre el collector de Python y el de Rust sobre las mismas carpetas de prueba y compara `state.json`.
+- [ ] El estado (`state.json`/`state.js`) lo construye Rust con paridad total contra Python.
+- [ ] Dispatcher, piloto automático, manager de guardia y revisiones en Rust, con paridad.
+- [ ] La CLI `tirith` en Rust (mismos comandos y salidas), un solo binario para los agentes.
+- [ ] La app incluye el collector (sin `uv` ni Python) y sigue firmada y notarizada.
+- [ ] Cambio: Rust pasa a ser el collector en vivo; Python se retira cuando la paridad y los tests pasan.
 
 ## Orden
 

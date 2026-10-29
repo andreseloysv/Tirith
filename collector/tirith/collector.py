@@ -36,6 +36,7 @@ from tirith import roadmap as roadmap_mod
 from tirith import hooks as hooks_mod
 from tirith import autopilot as autopilot_mod
 from tirith import dispatch as dispatch_mod
+from tirith import selfcheck as selfcheck_mod
 from tirith import livesteps as livesteps_mod
 from tirith import managerd as managerd_mod
 from tirith import actions as actions_mod
@@ -1326,6 +1327,7 @@ class Collector:
             "file_refs": filerefs_mod.build(
                 filerefs_mod.chat_texts(inbox_rows, says, waiting + answered_waits), projects),
             "disk": dispatch_mod.load_state(self.home).get("disk"),
+            "health": selfcheck_mod.public(dispatch_mod.load_state(self.home).get("health")),
             "autopilot": autopilot_mod.public(self.home, self.config, agent_rows, projects, now),
             "launch": {"token": launch_mod.launch_token(self.home),
                        "available": launch_mod.handler_installed()},
