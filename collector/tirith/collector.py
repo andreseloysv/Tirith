@@ -37,6 +37,7 @@ from tirith import managerd as managerd_mod
 from tirith import actions as actions_mod
 from tirith import inbox as inbox_mod
 from tirith import launch as launch_mod
+from tirith import projenv as projenv_mod
 from tirith import fallback as fallback_mod
 from tirith import filerefs as filerefs_mod
 from tirith import models as models_mod
@@ -1204,6 +1205,7 @@ class Collector:
                                           home=self.home)
         setup_requests = [r for r in inbox_mod.requests(self.home) if r["kind"] == "setup"]
         for proj_row in projects:
+            proj_row["env"] = projenv_mod.load(self.home, proj_row["id"])  # shown in full on Settings
             guard = proj_row.get("guard") or {}
             proj_row["setup"] = setup_mod.build(
                 Path(proj_row["folder"]) if proj_row.get("folder") else None, proj_row["id"], machine, runs,

@@ -790,6 +790,9 @@ button.vwho:hover b { text-decoration: underline; }
 .mtab td.mx { text-align: right; padding-right: 0; white-space: nowrap; }
 .mtab select, .mtab input { height: 26px; padding: 0 6px; font: inherit; font-size: 12.5px; color: var(--fg); background: rgba(255,255,255,.9); border: 1px solid rgba(120,135,160,.35); border-radius: 8px; min-width: 0; max-width: 100%; }
 .mtab .mstep { width: 120px; margin-left: 6px; }
+.envcard { margin-bottom: 12px; } .envtab { table-layout: fixed; } .envtab th:first-child { width: 32%; } .envtab th:last-child { width: 70px; }
+.envtab input { width: 100%; box-sizing: border-box; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.envcard .sfoot { margin-top: 10px; } .envcard .isend:disabled { opacity: .5; cursor: default; }
 .msettings .spend { margin-top: 4px; }
 .sfallback { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 12px; }
 .fbrow, .astat { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }

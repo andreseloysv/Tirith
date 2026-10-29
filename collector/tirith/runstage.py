@@ -16,6 +16,7 @@ import threading
 from pathlib import Path
 
 from tirith import projects as projects_mod
+from tirith import projenv as projenv_mod
 from tirith.home import now_iso
 from tirith.store import append_jsonl, read_json, read_lanes, write_json_atomic
 
@@ -122,7 +123,7 @@ def run_stage(home: Path, project: str, pipeline: str, stage: str, command: list
     for key, value in (("agent", agent), ("lane", lane), ("worktree", worktree), ("branch", branch)):
         if value:
             base[key] = value
-    child_env = dict(os.environ if env is None else env)
+    child_env = projenv_mod.apply(home, project, env)
     session = projects_mod.current_session(home)
     if session:
         child_env["TIRITH_SESSION"] = session
