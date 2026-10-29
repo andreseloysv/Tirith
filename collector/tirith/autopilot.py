@@ -239,6 +239,32 @@ def _blocked_by_review(agents: list[dict], project: str, step: str) -> bool:
                and (a.get("review") or {}).get("status") in REVIEW_BUSY for a in agents)
 
 
+def _why_not(own: dict, agents: list[dict], project: str, step: dict, now: datetime) -> str | None:
+    """Plain words for why the autopilot does not start an agent on this ready step now; None when it can."""
+    from tirith.dispatch import _short
+    key = _key(project, step["id"])
+    if not _agent_open(step):
+        return "only the owner's items are left"
+    if key in own["paused"]:
+        if own["paused"][key].get("why") == "done":
+            return "it looks already built; waiting for the plan update"
+        return "the last agent could not finish it; it resumes when the step's plan text changes"
+    by_id = _agents_by_id(agents)
+    if any(r["project"] == project and r["step"] == step["id"] and not r.get("settled")
+           and _running(r, by_id.get(lane_id), now) for lane_id, r in own["lanes"].items()):
+        return "an agent is already on it"
+    busy = next((a for a in agents if a.get("project") == project and str(a.get("step") or "") == step["id"]
+                 and (a.get("review") or {}).get("status") in REVIEW_BUSY), None)
+    if busy:
+        waiting = "being checked" if busy["review"]["status"] in REVIEW_OPEN else "waiting for you to review"
+        return f"the work of an earlier agent on it is {waiting}"
+    refused = own["refused"].get(key)
+    asked = parse_iso(refused["at"]) if refused else None
+    if asked and (now - asked).total_seconds() < RETRY_REFUSED_S:
+        return f"the last start failed ({_short(refused['reason'])}); trying again in a few minutes"
+    return None
+
+
 def _launch(home: Path, state: dict, project: dict, step: dict, launcher: Callable, now: datetime) -> bool | None:
     """True: a lane started. False: refused (recorded). None: refused recently, nothing was tried."""
     from tirith.dispatch import close_owner_item, refused as refuse_launch, refusal_fix, _short
@@ -298,17 +324,12 @@ def run(home: Path, config: Config, now: datetime, state: dict, *, agents: list[
     changed |= _unpause(home, state, _steps(planned))
     if not launch or not effective(config, state):
         return changed
-    by_id = _agents_by_id(agents)
     running = len(_live(own, agents, now))
     for project in planned:
         for step in project["roadmap"]["steps"]:
             if running >= config.autopilot_max_parallel:
                 return changed
-            key = _key(project["id"], step["id"])
-            if step["status"] != "ready" or key in own["paused"] or _blocked_by_review(agents, project["id"], step["id"]):
-                continue
-            if any(r["project"] == project["id"] and r["step"] == step["id"] and not r.get("settled")
-                   and _running(r, by_id.get(lane_id), now) for lane_id, r in own["lanes"].items()):
+            if step["status"] != "ready" or _why_not(own, agents, project["id"], step, now):
                 continue
             launched = _launch(home, state, project, step, launcher, now)
             if launched is not None:
@@ -323,7 +344,7 @@ def public(home: Path, config: Config, agents: list[dict] | None = None, project
     """``state.autopilot``: the switch, the limit, the lanes the autopilot started (newest last) and, given the
     agents and projects, the header counts: ``working`` (autopilot lanes alive, not ended and listed in ``state.agents``, so it never exceeds the
     Agents list) and ``queued``
-    (ready steps not started, not paused)."""
+    (ready steps it can start) and ``skipped`` (ready steps it cannot, each with the reason in plain words)."""
     from tirith.dispatch import load_state
     state = load_state(home)
     own = _own(state)
@@ -332,10 +353,21 @@ def public(home: Path, config: Config, agents: list[dict] | None = None, project
                for lane_id, rec in own["lanes"].items()]
     listed = {a["id"] for a in agents or []}  # the header counts only what the Agents list shows
     live = {lane_id for lane_id in _live(own, agents or [], now) if lane_id in listed}
-    queued = sum(1 for p in projects or [] for s in (p.get("roadmap") or {}).get("steps", [])
-                 if s["status"] == "ready" and _key(p["id"], s["id"]) not in own["paused"])
+    from tirith import diskdiet as diskdiet_mod
+    skipped, queued = [], 0
+    for p in projects or []:
+        for st in (p.get("roadmap") or {}).get("steps", []):
+            if st["status"] != "ready":
+                continue
+            why = _why_not(own, agents or [], p["id"], st, now)
+            if not why and diskdiet_mod.low(state):
+                why = "it waits for free disk space"
+            if why:
+                skipped.append({"project": p["id"], "step": st["id"], "why": why})
+            else:
+                queued += 1
     return {"enabled": effective(config, state), "max_parallel": config.autopilot_max_parallel,
             "working": len(live), "queued": queued,
-            "started": started[-STARTED_SHOWN:],
+            "started": started[-STARTED_SHOWN:], "skipped": skipped,
             "paused_steps": [{"project": k.partition("|")[0], "step": k.partition("|")[2], "at": v["at"]}
                              for k, v in own["paused"].items()]}

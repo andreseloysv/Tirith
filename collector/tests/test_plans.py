@@ -282,8 +282,10 @@ def test_launch_plan_refuses_without_a_request_or_a_second_refresh(real_project,
         launch_plan(home, "demo", "plan-new", None, out=open("/dev/null", "w"))
     (home / "lanes").mkdir(exist_ok=True)
     import os
+    # launch_plan judges "working" against the real clock, not NOW, so the busy lane must start just now.
+    just_now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     (home / "lanes" / "busy.json").write_text(json.dumps({
-        "id": "busy", "project": "demo", "step": "plan-refresh", "pid": os.getpid(), "started_at": _at(5),
+        "id": "busy", "project": "demo", "step": "plan-refresh", "pid": os.getpid(), "started_at": just_now,
         "ended_at": None, "result": None}), encoding="utf-8")
     with pytest.raises(launch_mod.LaunchError, match="already has a plan update running"):
         launch_plan(home, "demo", "plan-refresh", None, out=open("/dev/null", "w"))

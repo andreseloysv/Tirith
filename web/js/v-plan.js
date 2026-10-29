@@ -365,7 +365,7 @@
   }
   /* The ONE current state of an unfinished step, or ''. */
   function stateLine(s, p, state) {
-    var rl = reviewLane(s, p, state), r = rl && rl.review, auto = state.autopilot, on = auto ? autoOn(state) : true, a, owner, h;
+    var rl = reviewLane(s, p, state), r = rl && rl.review, auto = state.autopilot, on = auto ? autoOn(state) : true, a, owner, h, skip;
     if (r && (r.status === 'tests-failed' || r.status === 'merge-failed' || r.status === 'failed')) {
       return '<div class="pstate wait">The manager is resolving a merge</div>';
     }
@@ -386,6 +386,7 @@
       return '<div class="pstate wait">Waiting for you: <button class="pitbtn" data-act="goowner" data-key="' + esc(owner || '') + '"' + (owner ? '' : ' disabled') + ' title="Open what Tirith needs from you">See what</button></div>';
     }
     if (s.status === 'blocked-date') return '<div class="pstate">From ' + esc(shortDate(s.until)) + '</div>';
+    if (s.status === 'ready' && on && (skip = skipOf(state, p, s))) return '<div class="pstate">Not started: <span class="mut">' + esc(skip.why) + '</span></div>';
     if (s.status === 'ready') return '<div class="pstate ready">' + (on ? 'Queued for the autopilot' : 'Waiting for the autopilot <span class="mut">(paused)</span>') + '</div>';
     return '';
   }
@@ -452,6 +453,10 @@
     if (w && w.on === on) { ui.autoWant = null; return on; }
     return w && T.now() - w.at < PEND_WAIT ? w.on : on;
   }
+  /* the autopilot's reason for not starting a ready step ({project, step, why}), or undefined */
+  function skipOf(state, p, s) {
+    return (((state.autopilot || {}).skipped) || []).filter(function (k) { return k.project === p.id && String(k.step) === String(s.id); })[0];
+  }
   /* "Autopilot on · 2 agents working · 3 queued" with the pause / resume switch. */
   function autoBar(ps, state) {
     if (!state.autopilot) return '';
@@ -459,6 +464,8 @@
     bits.push('<b>Autopilot ' + (on ? 'on' : 'paused') + '</b>');
     if (n) bits.push(n + (n === 1 ? ' agent' : ' agents') + ' working');
     if (queued) bits.push(queued + ' queued');
+    var skipped = state.autopilot.skipped || [];
+    if (skipped.length) bits.push(skipped.length + ' not started');
     if (!n && !queued) bits.push('nothing to start');
     return '<div class="pauto' + (on ? ' on' : '') + '"><i class="pdot3"></i><span>' + bits.join(' <span class="mut">·</span> ') + '</span>' +
       '<button class="ibtn" data-act="iauto" data-key="' + (on ? 'off' : 'on') + '" title="' + (on ? 'Stop starting agents by itself; running ones finish' : 'Start agents by itself on every step that is ready') + '">' +

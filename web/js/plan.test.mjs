@@ -56,6 +56,14 @@ state.autopilot.enabled = false;
 assert.match(stepHtml.call(null, '4') && T.plan(state).split('<li class="pstep ').filter(x => x.includes('<span class="pn">4.')).join(''), /Waiting for the autopilot/);
 state.autopilot.enabled = true;
 
+/* a ready step the autopilot cannot start says why, calmly, and is not "queued" */
+state.autopilot.skipped = [{ project: 'tirith', step: '4', why: 'an agent is already on it' }];
+const skippedHtml = T.plan(state).split('<li class="pstep ').filter(x => x.includes('<span class="pn">4.')).join('');
+assert.match(skippedHtml, /Not started: <span class="mut">an agent is already on it/);
+assert.ok(!skippedHtml.includes('Queued for the autopilot'), 'a skipped step is not queued');
+assert.match(T.plan(state), /1 not started/, 'the autopilot line counts the steps it did not start');
+state.autopilot.skipped = [];
+
 /* History opens the full thread */
 T.ui.planHist['tirith|1'] = true;
 const open = T.plan(state);
