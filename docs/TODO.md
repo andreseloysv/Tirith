@@ -87,13 +87,16 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 
 - [x] `tirith check`: manifiesto, build / test / deploy, hooks válidos, guarda intacta.
 - [x] Mensajes `archivo:línea: regla: problema. Fix: …`.
-- [ ] `PreToolUse` bloquea la herramienta interna de sub-agentes y los comandos de agente sin `lane run`.
-- [ ] Shims en `~/.local/bin` por alias: en modo no interactivo no arrancan sin el token de `lane run`.
-- [ ] `PreToolUse` bloquea etapas crudas (o las reescribe a `tirith run`).
-- [ ] `lane run` exige brief y se niega a arrancar si `tirith check` falla.
+- [x] `PreToolUse` bloquea la herramienta interna de sub-agentes y los comandos de agente sin `lane run`.
+- [x] Shims en `~/.local/bin` por alias: en modo no interactivo no arrancan sin el token de `lane run`.
+- [x] `PreToolUse` bloquea etapas crudas (o las reescribe a `tirith run`).
+- [x] `lane run` exige brief y se niega a arrancar si `tirith check` falla.
 - [ ] Git `pre-commit` / `pre-push` con `tirith check`.
 - [ ] Check obligatorio en CI + protección de rama (en repos privados requiere GitHub Pro).
-- [ ] El collector marca como violación todo lo que se cuele, con el agente responsable.
+- [x] El collector registra cada violación bloqueada (`state.violations`) y la pone en "esperando por ti".
+- [ ] Violaciones visibles en la web, con el agente responsable.
+- [ ] Activar las puertas en la máquina del dueño (hooks de usuario + shims).
+- [ ] `tirith.toml` en ChromaSol y RelaGame (sin él, `lane run` no arranca allí).
 
 ## 8. Más visibilidad por agente
 
