@@ -18,6 +18,9 @@ is enqueued (`tirith merge request`, or by the dispatcher). Tirith merges one la
    with the conflict / failure appended (marker `[merge queue]`; after 3 returns the manager's queue decides).
    Never the owner. A git command cut off at its time limit (exit 124, e.g. the merge) is not a conflict: the
    attempt is retried (up to 3 times), then the lane waits in the queue as `waiting` ("timed out"); never sent back.
+   On the return the lane's plan item is reopened with the reason (`(reabierto: <result>: ...)`),
+   and the queue checks that the relaunched agent started (its new lane registers within `START_WAIT`, 20 s):
+   the lane's `review` records `sent_to` and `started`; when it did not start, the manager's queue is told.
 
 `state.projects[].merge_queue`: `{items: [{lane, position, status: queued|running, since, feature}], last, recent}`;
 the Plan card shows it. Commands: `tirith merge request|run|status`.
