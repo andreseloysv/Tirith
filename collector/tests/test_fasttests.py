@@ -40,7 +40,12 @@ def test_module_maps_to_its_tests_and_importers(tmp_path):
     assert sel.tests == ["tests/test_alpha.py", "tests/test_beta_more.py"]  # beta imports alpha
     only = fasttests.select(root, "test", ["collector/tirith/gamma.py"])
     assert only.tests == ["tests/test_gamma.py"]
-    assert "pytest -q tests/test_gamma.py" in fasttests.command(only)
+    assert "tests/test_gamma.py" in fasttests.command(only)
+
+
+def test_changed_tests_run_in_parallel(tmp_path):
+    only = fasttests.select(_tree(tmp_path), "test", ["collector/tirith/gamma.py"])
+    assert "pytest -q -n auto --maxprocesses 4 tests/test_gamma.py" in fasttests.command(only)
 
 
 def test_changed_test_file_runs_itself(tmp_path):
