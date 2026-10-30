@@ -294,9 +294,7 @@ def _propose(home: Path, state: dict, projects: list[dict], agents: list[dict], 
             continue  # the item is still there in the same state (or somebody works on it): the manager decides
         req = reqs.get(rec["id"])
         if _open_request(req) and not any(a["by"] == "manager" for a in req["answers"]):
-            reason = "the item changed" if key in present else "the item is done or gone from the plan"
-            inbox_mod.add_answer(home, rec["id"], f"No longer needed: {reason}.", by="tirith", at=at)
-            inbox_mod.mark_done(home, rec["id"], at)
+            inbox_mod.mark_done(home, rec["id"], at)  # Tirith's own proposal closes quietly
         if key not in present:
             del own["proposals"][key]
             changed = True
