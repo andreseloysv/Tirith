@@ -170,7 +170,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
   - [x] Revisar: Ninguna petición de permiso del manager llega al dueño: el código la permite o la bloquea según las reglas. (check: `cd collector && uv run -q pytest -q tests -k msession`) — falló: the merge did not go through: the review was interrupted; run it again
 - [x] Cada hora un lane de prueba recorre todo el camino en un repo de prueba, del plan al push, y la salud se pone roja si no llega. (check: `cd collector && uv run -q pytest -q tests -k canary`) (hecho: b69b549)
 - [ ] La suite de tests de Python termina en menos de 4 minutos. (check: `bash scripts/check-test-time.sh`) (en revisión)
-- [ ] Ningún test de Python falla al azar: los tests inestables se arreglan. (check: `bash scripts/check-flaky.sh`) (en revisión)
+- [x] Ningún test de Python falla al azar: los tests inestables se arreglan. (check: `bash scripts/check-flaky.sh`) (hecho: 3945182)
 - [ ] Las etapas que bloquean merges ya no compilan ni prueban el port a Rust parado. (check: `! grep -qE 'tirith-core|tirith-cli|--workspace' tirith.toml`) (en revisión)
 - [ ] Llevar a main el trabajo de lane/u-keepalive (un lane no termina mientras su etapa de tests corre): hoy marcado hecho con ec74885, que es un commit del plan, y main no tiene el test. (check: `git ls-tree -r main --name-only | grep -q test_keepalive`)
 - [ ] Commit lane/manager-permission-questions-nev, merge main, retest, tirith merge request (owner said not to commit)
