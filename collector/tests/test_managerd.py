@@ -271,3 +271,45 @@ def test_a_manager_lane_that_worked_resets_the_count(home: Path, project: Path, 
     chat(home, "hi", NOW - timedelta(minutes=8))
     cycle(home, spawned, lanes=lanes)
     assert len(spawned) == 1
+
+
+# -- one conversation -------------------------------------------------------------------------
+
+
+def _flag(argv: list[str], name: str) -> str | None:
+    return argv[argv.index(name) + 1] if name in argv else None
+
+
+def test_headless_turns_share_one_session(project, home: Path, spawned: list) -> None:
+    chat(home, "first")
+    cycle(home, spawned)
+    sid = _flag(spawned[0], "--session-new")
+    assert sid and _flag(spawned[0], "--session-resume") is None
+    lane = _flag(spawned[0], "--id")
+    done = [{"id": lane, "result": "done", "ended_at": "2026-10-29T12:01:00Z"}]
+    chat(home, "second", NOW + timedelta(minutes=2))
+    cycle(home, spawned, now=NOW + timedelta(minutes=2), lanes=done)
+    assert _flag(spawned[1], "--session-resume") == sid and _flag(spawned[1], "--session-new") is None
+
+
+def test_a_failed_first_turn_starts_a_new_conversation(project, home: Path, spawned: list) -> None:
+    chat(home, "first")
+    cycle(home, spawned)
+    lane = _flag(spawned[0], "--id")
+    failed = [{"id": lane, "result": "failed", "ended_at": "2026-10-29T12:01:00Z"}]
+    chat(home, "second", NOW + timedelta(minutes=2))
+    cycle(home, spawned, now=NOW + timedelta(minutes=2), lanes=failed)
+    assert _flag(spawned[1], "--session-new") not in (None, _flag(spawned[0], "--session-new"))
+
+
+def test_the_live_session_becomes_the_conversation(project, home: Path, spawned: list) -> None:
+    managerd_mod.heartbeat(home, "live-1", NOW, pid=os.getpid())
+    assert managerd_mod.session_plan(home, load_config(home), "anthropic") == ("resume", "live-1")
+    chat(home, "hi")
+    cycle(home, spawned, now=NOW + timedelta(minutes=10))  # the live session went away
+    assert _flag(spawned[0], "--session-resume") == "live-1"
+
+
+def test_an_alias_without_session_flags_keeps_only_notes(project, home: Path) -> None:
+    write_config(home, [dict(id="demo", name="Demo", repo=str(project))], '[agents.muse]\ncommand = "muse-bin"\n')
+    assert managerd_mod.session_plan(home, load_config(home), "muse") is None

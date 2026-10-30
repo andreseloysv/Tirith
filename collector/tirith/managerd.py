@@ -10,7 +10,9 @@ Two halves. **Presence**: the interactive manager session writes a heartbeat (``
 ask, setup request, failed action, manager-queue item) and no manager is attached, the dispatcher starts ONE
 headless manager lane (``tirith lane run --class steward --feature Manager``) with a generated brief; it
 answers everything pending and exits, and the next pending item starts another. Its rolling memory is
-``<home>/manager-notes.md`` (``tirith manager-note``). See ``docs/CONTRACT-inbox.md``.
+``<home>/manager-notes.md`` (``tirith manager-note``). There is ONE manager conversation: its agent session id
+lives in ``<home>/manager-session.json`` and every headless turn resumes it (a live session's id replaces it), so
+the manager remembers the same thread with the app open or closed. See ``docs/CONTRACT-inbox.md``.
 """
 
 from __future__ import annotations
@@ -40,6 +42,7 @@ from tirith.store import lane_path, read_json, write_json_atomic, write_lane
 
 PRESENCE_FILE = "manager.json"
 NOTES_FILE = "manager-notes.md"
+SESSION_FILE = "manager-session.json"
 ATTACHED_S = 120.0
 SPAWN_GRACE_S = 180.0  # a spawned lane that has not registered yet still counts as running
 RETRY_AFTER_S = 60.0
@@ -136,7 +139,10 @@ def session_pid() -> int:
 
 
 def heartbeat(home: Path, session: str | None, now: datetime, pid: int | None = None) -> None:
-    """Record that the interactive manager session is alive (called from its hooks)."""
+    """Record that the interactive manager session is alive (called from its hooks); its session id becomes
+    the manager's one conversation."""
+    if session:
+        adopt_session(home, DEFAULT_ALIAS, str(session))
     write_json_atomic(presence_path(home), {
         "pid": pid if pid is not None else session_pid(), "session": session or None, "at": now_iso(now)})
 
@@ -148,6 +154,50 @@ def attached(home: Path, now: datetime) -> bool:
         return False
     at = parse_iso(beat.get("at"))
     return bool(at and 0 <= (now - at).total_seconds() < ATTACHED_S and pid_alive(beat.get("pid")))
+
+
+# -- the one conversation ---------------------------------------------------------------------
+
+
+def session_path(home: Path) -> Path:
+    return Path(home) / SESSION_FILE
+
+
+def current_session(home: Path, alias: str) -> dict:
+    """``{alias, id, started}`` of the manager's conversation when it belongs to ``alias``, else ``{}``."""
+    data = read_json(session_path(home), {})
+    if isinstance(data, dict) and data.get("id") and data.get("alias") == alias:
+        return data
+    return {}
+
+
+def adopt_session(home: Path, alias: str, session_id: str, started: bool = True) -> None:
+    """Make ``session_id`` the manager's conversation (``started``: the agent already has it on record)."""
+    data = read_json(session_path(home), {})
+    if isinstance(data, dict) and data.get("id") == session_id and data.get("alias") == alias:
+        if started and not data.get("started"):
+            write_json_atomic(session_path(home), {**data, "started": True})
+        return
+    write_json_atomic(session_path(home), {"alias": alias, "id": session_id, "started": started})
+
+
+def forget_session(home: Path) -> None:
+    try:
+        session_path(home).unlink()
+    except OSError:
+        pass
+
+
+def session_plan(home: Path, config: Config, alias: str) -> tuple[str, str] | None:
+    """``("resume", id)`` while the conversation exists, else ``("new", fresh id)``; None when the alias cannot
+    keep a session (no ``session_flag`` / ``resume_flag``): the notes are then its only memory."""
+    s = agentrun_mod.agent_settings(config, alias)
+    if not (s.get("session_flag") and s.get("resume_flag")):
+        return None
+    cur = current_session(home, alias)
+    if cur.get("started"):
+        return ("resume", str(cur["id"]))
+    return ("new", str(cur.get("id") or uuid.uuid4()))
 
 
 # -- notes ------------------------------------------------------------------------------------
@@ -324,6 +374,9 @@ def launch(home: Path, config: Config, items: dict, now: datetime, spawn: Callab
         item = plangate_mod.ops_item(home, repo, proj.id, plangate_mod.MANAGER_ITEM, lane_id)[1]
     except plangate_mod.PlanGateError as err:
         raise launch_mod.LaunchError(f"the manager's plan item could not be added: {err}")
+    plan = session_plan(home, config, alias)
+    if plan:  # kept before the start: ``_settle_session`` marks it started, or drops it when the lane failed
+        adopt_session(home, alias, plan[1], started=plan[0] == "resume")
     argv = [*launch_mod.tirith_argv(), "lane", "run", "--id", lane_id, "--project", proj.id,
             "--class", HERO_CLASS, "--feature", FEATURE, "--brief", str(brief), "--workspace", str(repo),
             "--agent", alias, "--by-tirith", "--item", item, "--item-step", plangate_mod.OPS_STEP]
@@ -331,6 +384,8 @@ def launch(home: Path, config: Config, items: dict, now: datetime, spawn: Callab
         argv += ["--model", str(model)]
     if effort:
         argv += ["--effort", str(effort)]
+    if plan:
+        argv += ["--session-resume" if plan[0] == "resume" else "--session-new", plan[1]]
     (spawn or launch_mod.spawn_detached)(argv, home, Path(home) / "logs" / f"{lane_id}.launch.log")
     return lane_id
 
@@ -454,6 +509,24 @@ def _pause_check(home: Path, book: dict, lanes: list[dict], now: datetime) -> bo
     return True
 
 
+def _settle_session(home: Path, book: dict, lanes: list[dict]) -> bool:
+    """After the lane that carried the conversation ended: a good end marks the session as started (the next turn
+    resumes it); a failed one drops it, so the next turn starts a new conversation (with the notes). True on change."""
+    mine = book.get("session_lane")
+    lane = next((l for l in lanes if l.get("id") == mine), None) if mine else None
+    if lane is None or not lane.get("ended_at"):
+        return False
+    book.pop("session_lane")
+    cur = read_json(session_path(home), {})
+    if not isinstance(cur, dict) or not cur.get("id"):
+        return True
+    if lane.get("result") == "failed":
+        forget_session(home)
+    else:
+        adopt_session(home, str(cur.get("alias") or DEFAULT_ALIAS), str(cur["id"]))
+    return True
+
+
 def run_oneshot(home: Path, config: Config, now: datetime, state: dict, lanes: list[dict],
                 spawn: Callable | None = None, kill: Callable | None = None) -> bool:
     """One pass: start the headless manager when something is pending and nobody is attached.
@@ -467,6 +540,7 @@ def run_oneshot(home: Path, config: Config, now: datetime, state: dict, lanes: l
     if book.get("lane"):  # it ended
         book["ended"] = book.pop("lane")
         changed = True
+    changed = _settle_session(home, book, lanes) or changed
     if attached(home, now):
         return changed
     was = book.get("paused")
@@ -499,6 +573,7 @@ def run_oneshot(home: Path, config: Config, now: datetime, state: dict, lanes: l
         book["tries"] += 1
         return True
     book.update(lane=lane_id, at=now_iso(now), tries=book["tries"] + 1)
+    book["session_lane"] = lane_id
     turns = book.setdefault("turns", {})  # lane id -> the request ids this turn answers (the chat's live block)
     turns[lane_id] = [r["id"] for r in items["requests"]]
     for old in list(turns)[:-TURNS_KEPT]:
