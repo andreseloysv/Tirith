@@ -54,6 +54,22 @@ A headless agent lane stopped for silence that has work in its worktree (uncommi
 started) is resumed in the same session with "You were idle for N min; continue or report", up to 3 attempts
 (`idle_resumes` on the lane); after them, or without work, the lane fails and reaches the manager as before.
 
+## A lane does not end while its stage runs
+
+When the agent of a lane ends its turn while a stage it started (`tirith run … --stage …`; any run recorded for
+the lane id or for its worktree after the turn began) is still running, `lane run` waits for that stage to
+finish under the stage timeout policy above (it gives up 120 s after the stage's own limit, which kills the stage
+and records its end). It then resumes the SAME session with one short message: the stage, its result, the
+failing tests and the log path. This is not a keep-going round: rounds are counted only when the agent ends
+again with gaps (`tirith/keepgoing.py`: plan report, claims, quick tests, commit, clean merge). At most 20 such
+resumes per lane.
+
+Keep-going (this and the idle resume) applies to lanes started with `--as-agent <alias>` / `--agent`, and also to
+a lane whose command is the executable of a configured agent (`[agents.<alias>] command`), treated as that
+alias, so such a lane resumes its session instead of being relaunched as a new lane. A relaunch from scratch is the last resort (no session id
+or no resume flag): its prompt carries the brief, the previous report and what the previous run left in the
+worktree (commits since the lane started, uncommitted files).
+
 ## History file
 
 `<home>/timeouts.json`: `durations` (class -> last 60 seconds of commands that finished), `timeouts` (class ->

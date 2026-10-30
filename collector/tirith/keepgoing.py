@@ -3,7 +3,8 @@
 When the agent of a ``lane run --as-agent <alias>`` ends, ``gaps`` checks what the owner's rules ask of a
 finished lane: a plan report (``tirith plan report``), a report whose claims hold (``claimcheck``), the
 quick tests recorded green after the last change, the work committed on the lane's branch and a branch
-that merges cleanly with main. Anything missing is sent back to the SAME agent session (``resume_command``:
+that merges cleanly with main. A lane whose agent ends while a stage it started is still running is not
+finished either: ``wait_for_stages`` waits for the stage and ``stage_message`` tells the same session its result. Anything missing is sent back to the SAME agent session (``resume_command``:
 the alias's resume flag with the session id read from the stream log; an alias without one starts again
 with the brief and its previous report) with a short message that lists exactly what is missing. Up to
 ``MAX_ROUNDS`` rounds; after them one manager-queue item holds the gaps (``queue_gaps``). The checks only
@@ -12,7 +13,9 @@ read; no gate, claim check or plan rule is relaxed by this.
 
 from __future__ import annotations
 
+import os
 import re
+import time
 from pathlib import Path
 
 from tirith import agentrun as agentrun_mod
@@ -20,13 +23,17 @@ from tirith import asks as asks_mod
 from tirith import claimcheck as claimcheck_mod
 from tirith import plangate as plangate_mod
 from tirith import timeouts as timeouts_mod
-from tirith.home import Config
-from tirith.store import lane_path, read_json, write_lane
+from tirith.home import Config, parse_iso
+from tirith.store import lane_path, read_json, read_jsonl, write_lane
 
 MAX_ROUNDS = 3
 QUEUE_KIND = "lane-incomplete"
 RESUME_FLAGS = {"anthropic": "--resume"}  # alias preset -> flag that continues a session by id
 _DOC = re.compile(r"(^docs/|\.(md|txt|rst)$)", re.IGNORECASE)
+MAX_STAGE_WAITS = 20  # stage-result resumes per lane; each one is progress, this only stops a runaway
+STAGE_GRACE_S = 120  # past the stage's own timeout (which kills it) before the wait gives up
+POLL_S = 2.0
+_FAILED_TEST = re.compile(r"^(?:FAILED|ERROR)\s+(\S+)", re.MULTILINE)
 _SESSION = re.compile(r'"session_id"\s*:\s*"([^"]+)"')
 
 
@@ -134,7 +141,7 @@ def prompt_flag_index(command: list[str], flag: str) -> int | None:
 
 
 def resume_command(config: Config, alias: str, project: str | None, command: list[str], sid: str | None,
-                   text: str, previous_report: str, brief: str) -> tuple[list[str], str | None] | None:
+                   text: str, previous_report: str, brief: str, left: str = "") -> tuple[list[str], str | None] | None:
     """``(argv, stdin text)`` that sends ``text`` to the session ``sid`` of ``alias``; without a resume flag
     (or an id) a fresh run of the alias with the brief, its previous report and ``text``. None: not buildable."""
     try:
@@ -150,7 +157,7 @@ def resume_command(config: Config, alias: str, project: str | None, command: lis
         tail = rest[1:] if inline else rest
         return [*head, str(flag), sid, *tail], (None if inline else text)
     prompt = (f"{brief}\n\n--- Your previous run on this brief ended with this report ---\n{previous_report}\n\n"
-              f"--- Tirith ---\n{text}")
+              + (f"--- Worktree ---\n{left}\n\n" if left else "") + f"--- Tirith ---\n{text}")
     try:
         stdin = agentrun_mod.wants_stdin(config, alias, project, prompt)
         built = agentrun_mod.build_command(config, alias, project, prompt, via_stdin=stdin)
@@ -183,3 +190,123 @@ def note_round(home: Path, lane_id: str, round_no: int, missing: list[str]) -> d
     lane["keep_going"] = {"round": round_no, "max": MAX_ROUNDS, "missing": missing}
     write_lane(home, lane)
     return lane
+
+
+def infer_alias(config: Config, command: list[str]) -> str | None:
+    """The alias whose ``[agents.<alias>] command`` is the executable of ``command``, else None."""
+    if not command:
+        return None
+    exe = Path(str(command[0])).name
+    for alias, table in config.agents.items():
+        if isinstance(table, dict) and table.get("command") and Path(str(table["command"])).name == exe:
+            return str(alias)
+    return None
+
+
+def _alive(pid) -> bool:
+    try:
+        os.kill(int(pid), 0)
+    except (OSError, TypeError, ValueError):
+        return False
+    return True
+
+
+def _in_lane(event: dict, lane_id: str, workspace: Path) -> bool:
+    if lane_id and event.get("lane") == lane_id:
+        return True
+    for key in ("worktree", "cwd"):
+        where = event.get(key)
+        if where:
+            try:
+                if Path(str(where)).resolve().is_relative_to(workspace.resolve()):
+                    return True
+            except (OSError, ValueError):
+                pass
+    return False
+
+
+def stage_runs(home: Path, lane_id: str, workspace: Path, since: float = 0.0,
+               skip: set | None = None) -> list[dict]:
+    """Stage runs recorded for the lane or its worktree after ``since``: the start event, plus ``end``
+    (the end event or None) and ``alive`` (its process still exists)."""
+    open_runs: dict[tuple, dict] = {}
+    for event in read_jsonl(home / "events.jsonl"):
+        if event.get("event") not in ("start", "end") or not event.get("stage"):
+            continue
+        if (skip and event.get("log") in skip) or not _in_lane(event, lane_id, workspace):
+            continue
+        key = (event.get("run"), event.get("stage"), event.get("log"))
+        if event["event"] == "start":
+            at = parse_iso(event.get("at"))
+            if at and at.timestamp() >= since:
+                open_runs[key] = {**event, "end": None, "alive": _alive(event.get("pid"))}
+        elif key in open_runs:
+            open_runs[key]["end"] = event
+    return list(open_runs.values())
+
+
+def running_stages(runs: list[dict]) -> list[dict]:
+    return [r for r in runs if r["end"] is None and r["alive"]]
+
+
+def wait_for_stages(home: Path, lane_id: str, workspace: Path, since: float = 0.0,
+                    skip: set | None = None) -> list[dict]:
+    """Block while a stage of the lane is running; the stage runs of the lane when none is left.
+
+    The stage's own timeout policy ends it (and records its end); this only gives up ``STAGE_GRACE_S``
+    after that limit. Empty: the agent started no stage."""
+    runs = stage_runs(home, lane_id, workspace, since, skip)
+    while (live := running_stages(runs)):
+        now = time.time()
+        started = min((parse_iso(r.get("at")) for r in live if parse_iso(r.get("at"))), default=None)
+        limit = max(float(r.get("timeout") or 0) for r in live) + STAGE_GRACE_S
+        if started and now - started.timestamp() > limit:
+            break
+        time.sleep(POLL_S)
+        runs = stage_runs(home, lane_id, workspace, since, skip)
+    return runs
+
+
+def _failing_tests(log) -> list[str]:
+    try:
+        text = Path(str(log)).read_text(encoding="utf-8", errors="replace")[-200_000:]
+    except OSError:
+        return []
+    return list(dict.fromkeys(_FAILED_TEST.findall(text)))[:10]
+
+
+def stage_message(runs: list[dict]) -> str:
+    """What the agent is told when it ended while its stage ran: stage, result, failing tests, log path."""
+    lines = []
+    for run in runs:
+        end = run["end"]
+        if end is None:
+            result = "did not finish (no end recorded)"
+        elif end.get("timed_out"):
+            result = "timed out"
+        else:
+            result = str(end.get("status") or "unknown")
+        failing = _failing_tests(run.get("log")) if result != "passed" else []
+        line = f"- stage `{run.get('stage')}` of {run.get('project') or 'the project'}: {result}; log: {run.get('log')}"
+        if failing:
+            line += "; failing tests: " + ", ".join(failing)
+        lines.append(line)
+    return ("You ended your turn while a stage you started was still running. Tirith waited for it. Result:\n"
+            + "\n".join(lines) + "\n\nContinue from this result and finish with your final report.")
+
+
+def previous_run_note(workspace: Path, start_commit: str | None) -> str:
+    """For a relaunch from scratch: what the previous run left in the worktree."""
+    if not Path(workspace).is_dir():
+        return ""
+    parts = []
+    if start_commit:
+        log = _git(workspace, "log", "--oneline", f"{start_commit}..HEAD")
+        if log.returncode == 0 and log.stdout.strip():
+            parts.append("commits on the branch:\n" + log.stdout.strip())
+    status = _git(workspace, "status", "--porcelain")
+    if status.returncode == 0 and status.stdout.strip():
+        parts.append("uncommitted changes:\n" + status.stdout.strip())
+    if not parts:
+        return "The previous run left nothing in the worktree."
+    return "The previous run left this in the worktree (keep it, do not redo it):\n" + "\n".join(parts)

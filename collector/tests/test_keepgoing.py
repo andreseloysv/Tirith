@@ -26,6 +26,22 @@ calls = sum(1 for _ in open(os.path.join(here, "calls.jsonl")))
 mode = open(os.path.join(here, "mode")).read().strip()
 resumed = "--resume" in sys.argv
 open("work" + str(calls) + ".txt", "w").write("x")
+if mode.startswith("stage") and not resumed:
+    import datetime
+    events = os.path.join(os.environ["TIRITH_HOME"], "events.jsonl")
+    now = lambda: datetime.datetime.now(datetime.timezone.utc).isoformat()
+    base = {"run": "r1", "stage": "test", "project": "demo", "lane": "loop", "log": os.path.join(here, "test.log")}
+    open(base["log"], "w").write("FAILED tests/test_a.py::test_x - boom\\n")
+    with open(events, "a") as f:
+        f.write(json.dumps({**base, "at": now(), "event": "start", "status": "running", "pid": os.getppid(),
+                            "timeout": 60}) + "\\n")
+    ender = ("import json,time,datetime; time.sleep(1.5); open(%r,'a').write(json.dumps({**%r, 'at': "
+             "datetime.datetime.now(datetime.timezone.utc).isoformat(), 'event': 'end', 'status': 'failed'}) + chr(10))"
+             % (events, base))
+    subprocess.Popen([sys.executable, "-c", ender], start_new_session=True)
+    print(json.dumps({"type": "system", "session_id": "sess-1"}))
+    print(json.dumps({"type": "result", "result": "Waiting for the test stage.", "session_id": "sess-1"}))
+    sys.exit(0)
 if mode == "never" or (mode == "fix-on-resume" and not resumed):
     pass  # leaves the file uncommitted and gives no plan report
 else:
@@ -40,7 +56,8 @@ print(json.dumps({"type": "result", "result": "Finished.", "session_id": "sess-1
 '''.replace("@ROOT@", repr(str(Path(__file__).resolve().parent.parent)))
 
 
-def _run(home: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mode: str, tests_green: bool = True):
+def _run(home: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mode: str, tests_green: bool = True,
+         command: str | None = None):
     repo = _lane_run_setup(home, tmp_path, monkeypatch)
     agent = tmp_path / "agent"
     agent.mkdir()
@@ -48,11 +65,20 @@ def _run(home: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mode: str,
     (agent / "mode").write_text(mode, encoding="utf-8")
     monkeypatch.setattr(keepgoing_mod.claimcheck_mod, "test_runs",
                         lambda *a: [{"at": 9e12, "counts": [], "run": "r"}] if tests_green else [])
+    monkeypatch.setattr(keepgoing_mod, "POLL_S", 0.1)
+    monkeypatch.setenv("TIRITH_HOME", str(home))
+    as_agent = [] if command == "inferred" else ["--as-agent", "anthropic"]
+    exe = agent / "agentcli" if command == "inferred" else None
+    if exe:
+        with (home / "config.toml").open("a", encoding="utf-8") as cfg:
+            cfg.write(f'\n[agents.anthropic]\ncommand = "{exe}"\n')
+        exe.write_text(f"#!/bin/sh\nexec {sys.executable} {agent / 'fake.py'} \"$@\"\n", encoding="utf-8")
+        exe.chmod(0o755)
     try:
         code = main(["lane", "run", "--project", "demo", "--class", "warden", "--feature", "Loop",
                      "--brief", str(repo / "brief.md"), "--step", "1", "--item", "Do the thing.",
-                     "--id", "loop", "--workspace", str(repo), "--as-agent", "anthropic", "--",
-                     sys.executable, str(agent / "fake.py"), "-p", "the brief", "--output-format",
+                     "--id", "loop", "--workspace", str(repo), *as_agent, "--",
+                     *([str(exe)] if exe else [sys.executable, str(agent / "fake.py")]), "-p", "the brief", "--output-format",
                      "stream-json"])
     finally:
         make_hooks_mutable(repo)
@@ -80,6 +106,33 @@ def test_three_rounds_then_one_manager_queue_item(home, tmp_path, monkeypatch) -
     (item,) = [i for i in asks_mod.queue_items(home, only_open=True) if i["kind"] == keepgoing_mod.QUEUE_KIND]
     assert item["id"] == "sq-incomplete-loop" and "no plan report" in item["text"]
     assert keepgoing_mod.round_label(lane) == "round 3/3"
+
+
+def test_keepalive_waits_for_the_running_stage_then_resumes_with_its_result(home, tmp_path, monkeypatch) -> None:
+    code, calls, lane = _run(home, tmp_path, monkeypatch, "stage")
+    assert code == 0 and len(calls) == 2
+    second = calls[1]
+    assert second[second.index("--resume") + 1] == "sess-1"
+    assert "stage `test`" in second[1] and "failed" in second[1] and "test_x" in second[1] and "test.log" in second[1]
+    assert "Missing:" not in second[1]
+    assert not lane.get("keep_going")  # a stage wait is not a keep-going round
+    assert lane["outcome"]["status"] == "done"
+
+
+def test_keepalive_infers_the_alias_of_a_known_agent_cli(home, tmp_path, monkeypatch) -> None:
+    _, calls, _ = _run(home, tmp_path, monkeypatch, "fix-on-resume", command="inferred")
+    assert len(calls) == 2 and "--resume" in calls[1]
+    config = load_config(home)
+    assert keepgoing_mod.infer_alias(config, [str(tmp_path / "agent" / "agentcli"), "-p"]) == "anthropic"
+    assert keepgoing_mod.infer_alias(config, [sys.executable]) is None
+
+
+def test_keepalive_relaunch_without_session_says_what_was_left(home, tmp_path) -> None:
+    write_config(home, [], extra='[agents.plain]\ncommand = "plainagent"\n')
+    built = keepgoing_mod.resume_command(load_config(home), "plain", None, ["plainagent", "b"], None,
+                                         "Missing: x", "I did y", "BRIEF", "The previous run left a.py")
+    argv, stdin = built
+    assert "The previous run left a.py" in (stdin or argv[-1])
 
 
 def test_failing_tests_are_listed(home, tmp_path, monkeypatch) -> None:
