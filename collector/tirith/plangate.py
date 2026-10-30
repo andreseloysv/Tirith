@@ -42,7 +42,7 @@ CHAT_ITEM = "Chat con el dueño"  # followed by ": <chat id>"; ticked when the c
 STANDING_CLASSES = ("steward", "chat")  # lanes that run for as long as the owner wants, on a standing item
 STATUSES = ("done", "partial", "blocked")
 NO_OUTCOME = "no-outcome"
-LOCK_WAIT_S = 30.0
+LOCK_WAIT_S = 600.0  # each writer holds the lock through a git commit (up to 180 s); a queue of them must not time out
 OWNER_REASON_RE = re.compile(r"^(credentials|payment|personal-account|physical-device|owner-decision)\b", re.I)
 
 
