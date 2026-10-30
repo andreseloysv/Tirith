@@ -35,3 +35,4 @@ pythonpath = ["."]
 # They stay in the default run: with `-n auto --maxprocesses 8` the whole suite is under the 240 s target.
 # Skip them for a quick local pass: `pytest -m "not slow"`.
 markers = ["slow: costs more than ~10 s even alone; included in the default run"]
+tmp_path_retention_policy = "failed"  # passing tests leave no temp folders behind
