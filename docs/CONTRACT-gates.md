@@ -76,6 +76,10 @@ it prints the `agent-cli` message and exits 2. A file without the marker line (`
 never overwritten or removed. `verify` exits 1 when a shim is missing, foreign, not executable, points
 at a missing binary, or is not first in `PATH`.
 
+Keep-going rounds: between two rounds of a lane's agent (stage wait, idle resume, missing-report resume) the lane
+belongs to the `lane run` process (its pid is recorded, its token kept), so the collector's dead-lane closer cannot
+close it and drop the token; the shim therefore accepts the follow-up round, and a lane with a `done` report ends `done`.
+
 On Windows the shim is `<name>.cmd` (second line `REM tirith-shim v1`, CRLF): it cannot detect a
 terminal, so it runs the real binary only when the token matches (`findstr` on the lane file);
 otherwise it prints the same message and exits 2. `verify` reads its `set "REAL=..."` line.
