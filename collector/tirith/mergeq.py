@@ -24,6 +24,7 @@ except ImportError:  # Windows: one dispatcher, one queue consumer
     fcntl = None  # type: ignore[assignment]
 
 from tirith import asks as asks_mod
+from tirith import flows as flows_mod
 from tirith import manifest as manifest_mod
 from tirith import plangate as plangate_mod
 from tirith import review as review_mod
@@ -34,8 +35,8 @@ from tirith.store import lane_path, read_json, write_json_atomic, write_lane
 
 FILE = "mergeq.json"
 QUEUED, RUNNING = "queued", "running"
-MERGED, CONFLICT, RED, PUSH_FAILED, WAITING, SENT_BACK = (
-    "merged", "conflict", "red-suite", "push-failed", "waiting", "sent-back")
+MERGED, CONFLICT, RED, PUSH_FAILED, WAITING, SENT_BACK, CLOSED = (
+    "merged", "conflict", "red-suite", "push-failed", "waiting", "sent-back", "closed")
 SENT_BACK_STATUS = "sent-back"  # the lane's ``review.status`` once the queue returned it to its agent
 MARK = "[merge queue]"
 MAX_SENT_BACK = 3  # after this many returns the manager (never the owner) decides
@@ -180,14 +181,17 @@ def branch_exists(repo: Path, branch: str) -> bool:
     return _git(repo, "rev-parse", "--verify", "-q", f"refs/heads/{branch}").returncode == 0
 
 
-def lane_branch(lane: dict) -> str:
-    """The branch the lane really works on: its workspace's current branch, else the recorded one, else ``lane/<id>``."""
-    workspace = Path(str(lane.get("workspace") or ""))
+def branch_of(lane: dict, workspace: Path) -> str:
+    """The branch the lane works on: the one recorded on it, else the one checked out in its workspace (a
+    continuation lane uses the original lane's worktree), else ``lane/<id>``."""
+    recorded = str(lane.get("branch") or "")
+    if recorded:
+        return recorded
     if workspace.is_dir():
-        name = _git(workspace, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
-        if name and name != "HEAD":
-            return name
-    return str(lane.get("branch") or "") or f"lane/{lane['id']}"
+        current = _git(workspace, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
+        if current.startswith("lane/"):
+            return current
+    return f"lane/{lane['id']}"
 
 
 def _commit_workspace(workspace: Path, lane_id: str, feature: str) -> str | None:
@@ -234,8 +238,9 @@ def _with_plan_moves(repo: Path, tmp: Path, base: str, head: str, tested: str, b
 def _try(home: Path, repo: Path, lane: dict, entry: dict) -> tuple[str, str, dict]:
     """One attempt: ``(result, message, extra)``; ``waiting`` / ``retry`` mean try again later / at once."""
     lane_id, project = str(lane["id"]), str(lane.get("project") or "")
-    feature, branch = str(lane.get("feature") or lane_id), lane_branch(lane)
+    feature = str(lane.get("feature") or lane_id)
     workspace = Path(str(lane["workspace"]))
+    branch = branch_of(lane, workspace)
     failed = _commit_workspace(workspace, lane_id, feature)
     if failed:
         return RED, f"committing the lane failed: {failed}", {}
@@ -345,6 +350,29 @@ def send_back(home: Path, config: Config, lane: dict, result: str, message: str,
     return ""
 
 
+def _close_gone(home: Path, entry: dict, lane: dict | None, repo: Path | None) -> dict:
+    """An entry whose lane, worktree or project is gone leaves the queue with its reason (flow + history), so
+    the lanes behind it go on."""
+    lane_id = entry["lane"]
+    if lane is None:
+        why = "its lane is gone"
+    elif repo is None:
+        why = "its project is gone"
+    else:
+        branch = branch_of(lane, Path(str(lane.get("workspace") or "")))
+        merged = _git(repo, "merge-base", "--is-ancestor", branch, "HEAD").returncode == 0
+        why = ("already merged into main" if merged else "its worktree is gone")
+        if merged:
+            fresh = dict(lane)
+            fresh["review"] = {"status": review_mod.MERGED, "at": now_iso(), "by": "mergeq",
+                               "message": "already merged into main"}
+            write_lane(home, fresh)
+    message = f"left the queue: {why}"
+    flows_mod.append_flow(home, "tirith", "manager", "alert", f"{MARK} {lane_id}: {message}.", session=None,
+                          project=entry.get("project") or None)
+    return _finish(home, entry, CLOSED, message)
+
+
 def process_next(home: Path, config: Config, *, relaunch: Callable | None = None, push: bool = True,
                  skip: frozenset[str] = frozenset()) -> dict | None:
     """Merge the oldest waiting lane; the result row, or None when the queue is empty or busy."""
@@ -354,9 +382,8 @@ def process_next(home: Path, config: Config, *, relaunch: Callable | None = None
     lane_id = entry["lane"]
     lane = read_json(lane_path(home, lane_id), None)
     repo = plangate_mod.repo_of(home, entry["project"], config) if entry["project"] else None
-    if not isinstance(lane, dict) or repo is None or not (
-            Path(str(lane.get("workspace") or "")).is_dir() or branch_exists(repo, lane_branch(lane))):
-        return _finish(home, entry, WAITING, "the lane, its worktree or its project is gone")
+    if not isinstance(lane, dict) or repo is None or not Path(str(lane.get("workspace") or "")).is_dir():
+        return _close_gone(home, entry, lane if isinstance(lane, dict) else None, repo)
     result, message, extra = "retry", "", {}
     for _ in range(MAX_TRIES):
         result, message, extra = _try(home, repo, lane, entry)
@@ -410,9 +437,12 @@ def drain(home: Path, config: Config, **kwargs) -> list[dict]:
 # -- the dispatcher ----------------------------------------------------------------------------
 
 
-def run(home: Path, config: Config, lanes: list[dict], *, spawn: Callable) -> bool:
-    """One dispatcher pass: enqueue complete lanes, start a detached ``tirith merge run`` when work waits."""
+def run(home: Path, config: Config, lanes: list[dict], *, spawn: Callable | None = None,
+        dry_run: bool = False) -> bool:
+    """One dispatcher pass: enqueue complete lanes, start a detached ``tirith merge run`` when work waits
+    (``spawn`` defaults to ``launch.spawn_detached``; only ``dry_run`` skips starting it)."""
     from tirith import autoreview as autoreview_mod, launch as launch_mod
+    spawn = spawn or launch_mod.spawn_detached
     from tirith.store import read_lane
     changed = False
     for seen in lanes:
@@ -425,12 +455,12 @@ def run(home: Path, config: Config, lanes: list[dict], *, spawn: Callable) -> bo
     if not busy and any(e["status"] in (QUEUED, RUNNING) for e in data["queue"]):
         stamp = datetime.now(timezone.utc).timestamp()
         if stamp - float(data.get("spawned") or 0) > 30:  # a runner that just started has not claimed yet
+            if dry_run:  # tests, dry runs: only enqueue
+                return changed
             with _locked(home):
                 data = load(home)
                 data["spawned"] = stamp
                 write_json_atomic(_path(home), data)
-            if spawn is None:  # a pass without a spawner (tests, dry runs) only enqueues
-                return changed
             spawn([*launch_mod.tirith_argv(home), "merge", "run"], home, home / "logs" / "mergeq.log")
             changed = True
     return changed

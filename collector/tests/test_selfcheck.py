@@ -81,7 +81,7 @@ def test_a_quiet_home_is_green(home: Path, project: Path) -> None:
     assert state["health"]["level"] == "green"
     public = selfcheck_mod.public(state["health"])
     assert public["level"] == "green"
-    assert [c["id"] for c in public["checks"]] == ["collector", "manager", "autopilot", "disk", "reviews", "timeouts"]
+    assert [c["id"] for c in public["checks"]] == ["collector", "manager", "autopilot", "disk", "reviews", "mergeq", "timeouts"]
     assert all(c["level"] == "ok" and c["text"] for c in public["checks"])
 
 
@@ -387,3 +387,30 @@ def test_dispatch_runs_it_and_the_state_has_plain_words(home: Path, project: Pat
     health = Collector(home, load_config(home)).build_state(NOW)["health"]
     assert health["level"] in ("green", "red")  # the real disk of the machine running the test decides
     assert [c["id"] for c in health["checks"]][0] == "collector" and health["checks"][0]["label"] == "Tirith itself"
+
+
+def test_a_merge_queue_nobody_runs_is_amber_with_a_queue_item(home: Path, project: Path) -> None:
+    from tirith import mergeq as mergeq_mod
+    from tirith.store import write_json_atomic
+    state: dict = {}
+    old = (NOW - timedelta(minutes=11)).strftime(Z)
+    write_json_atomic(home / mergeq_mod.FILE, {"queue": [{"lane": "u-late", "project": "demo", "at": old,
+                                                          "status": "queued", "feature": "Late"}]})
+    assert check(home, state, NOW, Fake()) is True
+    assert level(state, "mergeq") == "healing" and state["health"]["level"] == "amber"
+    assert "u-late" in state["health"]["checks"]["mergeq"]["text"]
+    assert len(queue_ids(home)) == 1
+    write_json_atomic(home / mergeq_mod.FILE, {"queue": []})
+    check(home, state, at(60), Fake())
+    assert level(state, "mergeq") == "ok"
+
+
+def test_a_spawned_stamp_without_a_runner_log_is_amber(home: Path, project: Path) -> None:
+    from tirith import mergeq as mergeq_mod
+    from tirith.store import write_json_atomic
+    state: dict = {}
+    recent = (NOW - timedelta(minutes=1)).strftime(Z)
+    write_json_atomic(home / mergeq_mod.FILE, {"spawned": (NOW - timedelta(minutes=5)).timestamp(), "queue": [
+        {"lane": "u-new", "project": "demo", "at": recent, "status": "queued", "feature": "New"}]})
+    check(home, state, NOW, Fake())
+    assert level(state, "mergeq") == "healing" and "does not exist" in state["health"]["checks"]["mergeq"]["text"]
