@@ -13,7 +13,7 @@ background commands; a test stage ran far longer than usual and nobody noticed.
 | class | default | min | max | what |
 |---|---|---|---|---|
 | `git` | 30 s | 5 s | 300 s | git commands Tirith runs to read a repository |
-| `git-commit` | 180 s | 30 s | 900 s | a commit, with the checks that run before it |
+| `git-commit` | 180 s | 30 s | 900 s | a commit, with the checks that run before it; also the merge queue's push to `origin` |
 | `git-worktree-remove` | 300 s | 30 s | 1800 s | removing a lane worktree (diskdiet, review, merge queue); own class so it never meets the short `git` limit |
 | `stage` | 1800 s | 60 s | 7200 s | a build or test stage (`stage:<name>` keeps its own history) |
 | `agent-bash` | 120 s | 10 s | 600 s | a shell command an agent runs |
