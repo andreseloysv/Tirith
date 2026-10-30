@@ -149,6 +149,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] La cola de merge arranca sola desde el collector: ningún lane terminado espera en la cola sin un proceso de merge. (check: `cd collector && uv run -q pytest -q tests -k mergeq`) (en curso: u-mqspawn)
 - [ ] La cola de merge usa la rama real de cada lane, la de su worktree. (check: `cd collector && uv run -q pytest -q tests -k mergeq`)
 - [ ] Cada fallo de la cola de merge vuelve con su motivo al lane o al manager. (check: `cd collector && uv run -q pytest -q tests -k mergeq`)
+- [ ] La comparación con Rust no bloquea merges mientras el port a Rust está parado. (check: `! grep -A3 'name = "parity"' tirith.toml | grep -q 'kind = "test"'`)
 
 ## 8. Más visibilidad por agente
 
