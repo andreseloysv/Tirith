@@ -7,6 +7,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import time
 import types
 from pathlib import Path
 
@@ -87,15 +88,28 @@ def write_config(home: Path, projects: list[dict], extra: str = "") -> Path:
     return target
 
 
-def _unlock_tree(root: Path) -> None:
-    """Clear the protection flag Tirith's guard set on files below ``root`` (a pytest temp dir only)."""
+def _unlock_tree(root: Path, budget_s: float | None = None) -> None:
+    """Clear the protection flag Tirith's guard set on files below ``root`` (a pytest temp dir only).
+    ``budget_s`` stops the walk after that long: the temp root can hold thousands of old folders."""
     import tirith_guard
-    for path in [root, *root.rglob("*")]:
+    deadline = None if budget_s is None else time.monotonic() + budget_s
+    for path in _walk(root):
+        if deadline is not None and time.monotonic() > deadline:
+            return
         try:
             if not path.is_symlink() and tirith_guard._is_locked(path):
                 tirith_guard._unlock(path)
         except OSError:
             pass
+
+
+def _walk(root: Path):
+    yield root
+    try:
+        for path in root.rglob("*"):
+            yield path
+    except OSError:
+        return
 
 
 @pytest.fixture(autouse=True)
@@ -107,13 +121,16 @@ def _unlock_guard_hooks(tmp_path):
 
 @pytest.fixture(autouse=True, scope="session")
 def _unlock_basetemp(tmp_path_factory):
-    """Same for every other dir under pytest's temp root (this run's basetemp, kept dirs of failed runs and the
-    ``garbage-*`` folders earlier runs left), so pytest's own cleanup at the end of the session can remove them."""
+    """Same for this run's basetemp, and (within a time budget, so one test never waits for the walk) for the
+    other dirs under pytest's temp root: kept dirs of failed runs and the ``garbage-*`` folders earlier runs
+    left, so pytest's own cleanup at the end of the session can remove them."""
     base = tmp_path_factory.getbasetemp()
     root = base.parent if base.parent.name.startswith("pytest-of-") else base
-    _unlock_tree(root)
+    _unlock_tree(base)
     yield
-    _unlock_tree(root)
+    _unlock_tree(base)
+    if root != base:
+        _unlock_tree(root, budget_s=5.0)
 
 
 @pytest.fixture(autouse=True)
