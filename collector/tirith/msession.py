@@ -236,6 +236,7 @@ class Session:
         self.finished: deque = deque(maxlen=TURNS_KEPT)  # turn views, oldest first
         self.asks: dict[str, dict] = {}  # request id -> {tool, input, summary, at, wait}
         self.context_tokens = 0
+        self._request_seen = False  # an assistant request of this turn reported its own usage
         self.turns_done = 0
         self.last_event = datetime.now(timezone.utc)
         self.exit_code: int | None = None
@@ -381,11 +382,15 @@ class Session:
             if kind == "assistant":
                 usage = (rec.get("message") or {}).get("usage") if isinstance(rec.get("message"), dict) else None
                 self._usage(usage)
+                self._request_seen = self._request_seen or isinstance(usage, dict)
             if self.turn is None:
                 return  # a system line between turns
             self.turn.feed(line, now)
             if kind == "result":
-                self._usage(rec.get("usage"))
+                # the result's usage adds up every request of the turn; the last request is the context size
+                if not self._request_seen:
+                    self._usage(rec.get("usage"))
+                self._request_seen = False
                 self.turn.answer = str(rec.get("result") or "")[:4000]
                 self._finish_turn(now)
 
