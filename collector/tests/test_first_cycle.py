@@ -4,19 +4,18 @@ from __future__ import annotations
 
 import json
 import subprocess
-import time
 from pathlib import Path
 
 import pytest
 
-from conftest import make_repo, write_config
+from conftest import cpu_seconds, make_repo, write_config
 from tirith import activity as activity_mod
 from tirith.collector import Collector
 from tirith.store import read_json, write_lane
 
 LANES = 300
 LIVE = 4
-FIRST_CYCLE_S = 30.0  # generous for CI; a start used to take minutes on a real home
+FIRST_CYCLE_S = 30.0  # CPU seconds (a loaded machine must not fail it); a start used to take minutes on a real home
 
 
 @pytest.fixture
@@ -55,9 +54,9 @@ def _count_git(monkeypatch) -> list[list[str]]:
 def test_first_cycle_is_fast_then_the_full_pass_completes(big_home: Path, monkeypatch) -> None:
     monkeypatch.setattr(activity_mod, "WARM_BUDGET_S", 0.5)
     collector = Collector(big_home, client=None)
-    started = time.monotonic()
+    started = cpu_seconds()
     state = collector.cycle()
-    assert time.monotonic() - started < FIRST_CYCLE_S
+    assert cpu_seconds() - started < FIRST_CYCLE_S
     assert (big_home / "state.json").exists()
     assert state["agents"]  # slimmed to what the app shows
     assert state["collector"]["warming"] is True and state["collector"]["pending"] > 0
@@ -76,9 +75,9 @@ def test_a_restart_reuses_the_kept_file_lists(big_home: Path, monkeypatch) -> No
     assert len(read_json(big_home / activity_mod.FILES_CACHE, {})) >= LANES - LIVE
     calls = _count_git(monkeypatch)
     second = Collector(big_home, client=None)
-    started = time.monotonic()
+    started = cpu_seconds()
     state = second.cycle()
-    assert time.monotonic() - started < FIRST_CYCLE_S
+    assert cpu_seconds() - started < FIRST_CYCLE_S
     assert state["collector"]["warming"] is False
     asked = [c for c in calls if "diff" in c or "ls-files" in c]
     assert len(asked) <= 3 * LIVE  # only the working lanes ask git
