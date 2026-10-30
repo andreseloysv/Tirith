@@ -209,3 +209,11 @@ def _no_hourly_canary_in_dispatch(monkeypatch):
     spawner only expect the commands they ask for. test_canary drives ``canary.tick`` directly."""
     from tirith import dispatch
     monkeypatch.setattr(dispatch, "canary_mod", types.SimpleNamespace(tick=lambda home, now, spawn: False))
+
+
+@pytest.fixture(autouse=True)
+def _tick_merged_every_call(monkeypatch):
+    """``tick_merged`` looks at a lane once a minute in the collector; a test calls it again at once."""
+    from tirith import plangate
+    monkeypatch.setattr(plangate, "TICK_EVERY_S", 0.0)
+    plangate._ticked_at.clear()

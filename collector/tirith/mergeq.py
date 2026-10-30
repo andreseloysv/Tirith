@@ -28,6 +28,7 @@ from tirith import flows as flows_mod
 from tirith import manifest as manifest_mod
 from tirith import plangate as plangate_mod
 from tirith import review as review_mod
+from tirith import selfreload as selfreload_mod
 from tirith import timeouts as timeouts_mod
 from tirith.home import Config, now_iso
 from tirith.launch import worktree_path
@@ -106,6 +107,16 @@ def ready_to_enqueue(home: Path, lane: dict, repo: Path | None) -> bool:
     status = (lane.get("review") or {}).get("status")
     return status in (None, review_mod.PENDING, review_mod.READY) and Path(str(lane["workspace"])).is_dir() \
         and not queued(home, str(lane["id"]))
+
+
+def _may_enqueue(seen: dict) -> bool:
+    """False for a lane row that cannot be enqueued, so its file is not read again every cycle."""
+    if "ended_at" in seen and not seen["ended_at"]:
+        return False
+    if "result" in seen and seen["result"] != "done":
+        return False
+    status = (seen.get("review") or {}).get("status")
+    return status in (None, review_mod.PENDING, review_mod.READY)
 
 
 def view(home: Path, project: str | None = None) -> dict:
@@ -431,10 +442,14 @@ def process_next(home: Path, config: Config, *, relaunch: Callable | None = None
     return row
 
 
-def drain(home: Path, config: Config, **kwargs) -> list[dict]:
-    """Merge every waiting lane, one after the other."""
+def drain(home: Path, config: Config, *, watch: selfreload_mod.CodeWatch | None = None, **kwargs) -> list[dict]:
+    """Merge every waiting lane, one after the other; stops after an entry once the code on disk changed (the
+    dispatcher starts a fresh runner), so a long queue never merges with code that main has already replaced."""
     out, tried = [], set()
+    watch = watch or selfreload_mod.CodeWatch(stable_s=0.0)
     while True:
+        if out and watch.changed():
+            return out
         row = process_next(home, config, skip=frozenset(tried), **kwargs)
         if row is None:
             return out
@@ -459,6 +474,8 @@ def run(home: Path, config: Config, lanes: list[dict], *, spawn: Callable | None
     from tirith.store import read_lane
     changed = False
     for seen in lanes:
+        if not _may_enqueue(seen):
+            continue
         lane = read_lane(home, str(seen.get("id") or ""))
         if isinstance(lane, dict) and ready_to_enqueue(home, lane, autoreview_mod.repo_of(config, lane)):
             enqueue(home, str(lane["id"]))
