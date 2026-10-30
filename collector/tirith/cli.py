@@ -59,6 +59,7 @@ from tirith import mergeq as mergeq_mod
 from tirith import roadmap as roadmap_mod
 from tirith import runstage as runstage_mod
 from tirith import canary as canary_mod
+from tirith import stable as stable_mod
 from tirith import fasttests as fasttests_mod
 from tirith import loadlimit as loadlimit_mod
 from tirith import projects as projects_mod
@@ -1704,6 +1705,25 @@ def _cmd_canary_run(args) -> int:
     return 0 if row["state"] == "ok" else 1
 
 
+def _cmd_stable(args) -> int:
+    home = _home(args)
+    if args.action == "status":
+        print(json.dumps(stable_mod.status(home), indent=2))
+        return 0
+    if args.action == "rollback":
+        result = stable_mod.rollback(home, "rolled back by hand")
+        print(("stable: back on " + result["release"]) if result["rolled_back"] else f"stable: {result['reason']}")
+        return 0 if result["rolled_back"] else 1
+    source = Path(args.source).resolve() if args.source else Path(__file__).resolve().parent.parent
+
+    def test(release: Path) -> bool:
+        return subprocess.run(args.test, shell=True, cwd=release).returncode == 0
+
+    result = stable_mod.promote(home, source, test)
+    print(f"stable: {'now on ' + result['release'] if result['promoted'] else 'kept the current copy'}: {result['reason']}")
+    return 0 if result["promoted"] else 1
+
+
 def _cmd_merge_request(args) -> int:
     home = _home(args)
     lane_id = args.lane or os.environ.get("TIRITH_LANE")
@@ -2679,6 +2699,14 @@ def build_parser() -> argparse.ArgumentParser:
     canary_sub = canary.add_subparsers(dest="canary_command", required=True)
     c_run = canary_sub.add_parser("run", parents=[common], help="one run: plan, lane, merge queue, push, plan tick")
     c_run.set_defaults(func=_cmd_canary_run)
+
+    stable = sub.add_parser("stable", parents=[common],
+                            help="the stable copy Tirith runs from: advances only on a passing full test")
+    stable.add_argument("action", choices=["promote", "rollback", "status"])
+    stable.add_argument("--source", default=None, help="the collector folder to promote (default: this one)")
+    stable.add_argument("--test", default="uv run -q pytest -q tests",
+                        help="the full test, run inside the new copy (exit 0 = pass)")
+    stable.set_defaults(func=_cmd_stable)
 
     merge = sub.add_parser("merge", parents=[common], help="the single merge queue (agents never merge into main)")
     merge_sub = merge.add_subparsers(dest="merge_command", required=True)
