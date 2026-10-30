@@ -169,7 +169,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] La cola de merge arranca sola desde el collector: ningún lane terminado espera en la cola sin un proceso de merge. (check: `cd collector && uv run -q pytest -q tests -k mergeq`) (hecho: fbb405e)
 - [x] La cola de merge usa la rama real de cada lane, la de su worktree. (check: `cd collector && uv run -q pytest -q tests -k mergeq`) (hecho: 9fea4fd)
 - [ ] Cada fallo de la cola de merge vuelve con su motivo al lane o al manager. (check: `cd collector && uv run -q pytest -q tests -k mergeq`)
-- [ ] La comparación con Rust no bloquea merges mientras el port a Rust está parado. (check: `! grep -A3 'name = "parity"' tirith.toml | grep -q 'kind = "test"'`) (en revisión)
+- [x] i-3a1bd406 (hecho: e95c9f2)
 - [ ] Tirith guarda una copia del brief de cada lane en su carpeta, así un lane cortado se puede retomar tras un reinicio. (check: `cd collector && uv run -q pytest -q tests -k brief`)
 - [x] Ninguna petición de permiso del manager llega al dueño: el código la permite o la bloquea según las reglas. (check: `cd collector && uv run -q pytest -q tests -k msession`)
   - [x] Revisar: Ninguna petición de permiso del manager llega al dueño: el código la permite o la bloquea según las reglas. (check: `cd collector && uv run -q pytest -q tests -k msession`) — falló: the merge did not go through: the review was interrupted; run it again
