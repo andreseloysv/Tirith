@@ -38,6 +38,11 @@ _TIRITH_MARK = "tirith-home"  # the home folder the Tirith tests make inside the
 def _git(folder: Path, *args: str) -> subprocess.CompletedProcess:
     return timeouts_mod.run(["git", "-C", str(folder), *args], "git", text=True)
 
+def _remove_worktree(repo: Path, *args: str):
+    """``git worktree remove`` deletes every file of the lane, so it has its own (minutes-long) limit, not ``git``'s."""
+    return timeouts_mod.run(["git", "-C", str(repo), "worktree", "remove", *args], "git-worktree-remove", text=True)
+
+
 
 def _repo(config: Config, lane: dict) -> Path | None:
     for proj in config.projects:
@@ -83,7 +88,7 @@ def cleanup(home: Path, config: Config, now: datetime) -> bool:
         if _git(workspace, "status", "--porcelain").stdout.strip():
             changed |= _note(home, lane, "dirty", now, message="the worktree has uncommitted changes; left in place")
             continue
-        done = _git(repo, "worktree", "remove", str(workspace))
+        done = _remove_worktree(repo, str(workspace))
         if done.returncode != 0:
             changed |= _note(home, lane, "blocked", now, message=(done.stderr or done.stdout).strip()[:300])
             continue
@@ -170,7 +175,7 @@ def sweep(home: Path, config: Config, now: datetime, busy: Callable[[], list[Pat
             if any(_inside(p, folder) for p in busy_list):
                 continue
             size = _tree_size(folder)
-            if _git(repo, "worktree", "remove", str(folder)).returncode != 0:
+            if _remove_worktree(repo, str(folder)).returncode != 0:
                 continue
             _git(repo, "branch", "-d", branch)
             removed += 1

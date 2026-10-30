@@ -36,6 +36,30 @@ def start_lane(home: Path, lane_id: str = "w1", ended: bool = False) -> None:
 # -- the runner ---------------------------------------------------------------------------------
 
 
+def test_worktree_remove_uses_own_timeout_class(home: Path, monkeypatch) -> None:
+    from tirith import diskdiet as diskdiet_mod
+    from tirith import mergeq as mergeq_mod
+    from tirith import review as review_mod
+
+    default, low, high = timeouts_mod.bounds("git-worktree-remove")
+    assert default > timeouts_mod.bounds("git")[0] and high >= 600  # minutes, not git's seconds
+    for _ in range(timeouts_mod.MIN_SAMPLES):  # a fast git history must not shrink the removal limit
+        timeouts_mod.record(home, "git", 0.5, "ok")
+    assert timeouts_mod.effective(home, Config(), "git-worktree-remove") == default
+
+    seen: list[tuple[list[str], str]] = []
+
+    def fake_run(argv, cls, *args, **kwargs):
+        seen.append((list(argv), cls))
+        return timeouts_mod.Result(list(argv), 0)
+
+    for mod in (diskdiet_mod, review_mod, mergeq_mod):
+        seen.clear()
+        monkeypatch.setattr(mod.timeouts_mod, "run", fake_run)
+        mod._remove_worktree(Path("/repo"), "--force", "/w")
+        assert seen == [(["git", "-C", "/repo", "worktree", "remove", "--force", "/w"], "git-worktree-remove")]
+
+
 def test_run_returns_output_and_records_the_duration(home: Path) -> None:
     done = timeouts_mod.run(["echo", "hi"], "git", text=True)
     assert done.returncode == 0 and done.stdout.strip() == "hi" and not done.timed_out
