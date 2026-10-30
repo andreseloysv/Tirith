@@ -568,6 +568,51 @@ def _parts(items: dict) -> dict[str, dict]:
     return out
 
 
+BATCH_MAX = 5  # Tirith's own items per turn (the owner's requests are a turn of their own)
+YIELD_TEXT = "The manager is {doing}; your message is next."
+
+
+def _owner_keys(items: dict) -> set[str]:
+    """Keys of the parts that are the owner's own requests (chat, reply, ask, finish, plan-edit, ...)."""
+    return {key for key, part in _parts(items).items()
+            if any((r.get("from") or "owner") == "owner" for r in part.get("requests", []))}
+
+
+def _part_at(part: dict) -> str:
+    rows = [r for rows in part.values() for r in rows]
+    return min((str(r.get("at") or "") for r in rows), default="")
+
+
+def pick_turn(items: dict, fresh: list[str]) -> list[str]:
+    """What the next turn carries: every fresh owner request (nothing else), else Tirith's own work, oldest
+    first, ``BATCH_MAX`` at most."""
+    owner = _owner_keys(items)
+    mine = [k for k in fresh if k in owner]
+    if mine:
+        return mine
+    parts = _parts(items)
+    return sorted(fresh, key=lambda k: _part_at(parts[k]))[:BATCH_MAX]
+
+
+def _yield_to_owner(home: Path, book: dict, sess, items: dict, fresh: list[str], now: datetime) -> bool:
+    """The session is in a turn of Tirith's own work and an owner request is waiting: interrupt the turn (its
+    items go back to pending) so the owner's turn is next, and say so in the chat once."""
+    turn = sess.turn
+    if turn is None or not any(k in _owner_keys(items) for k in fresh):
+        return False
+    record = next((t for t in book.get("turns", []) if t["id"] == turn.id), {})
+    owner_ids = {r["id"] for r in items["requests"] if (r.get("from") or "owner") == "owner"}
+    if not record.get("keys") or owner_ids.intersection(turn.requests) or sess.open_asks():
+        return False  # /compact, the owner's own turn, or blocked on a question: nothing to interrupt
+    if book.get("yield") == turn.id:
+        return False
+    book["yield"] = turn.id
+    book["yield_said"] = True if sess.interrupt() else False
+    inbox_mod.add_say(home, YIELD_TEXT.format(doing="pausing one task" if book["yield_said"] else "finishing one task"),
+                      at=now_iso(now))
+    return True
+
+
 def _subset(items: dict, keys: list[str]) -> dict:
     parts = _parts(items)
     out: dict = {"requests": [], "results": [], "queue": [], "evidence": items.get("evidence")}
@@ -707,7 +752,10 @@ def _finish_turns(home: Path, sess, book: dict) -> bool:
         record = next((t for t in book.get("turns", []) if t["id"] == view["id"]), {})
         for key in record.get("keys", []):
             book.get("sent", {}).pop(key, None)
-            if view.get("interrupted"):
+            if view.get("interrupted") and book.get("yield") == view["id"]:
+                tries = book.setdefault("tries", {})  # Tirith yielded to the owner: offered again, no try used
+                tries[key] = max(0, tries.get(key, 1) - 1)
+            elif view.get("interrupted"):
                 book.setdefault("tries", {})[key] = MAX_TRIES  # the owner stopped it: not offered again
         text = view.get("answer") or ""
         for rid in view["requests"]:
@@ -786,8 +834,14 @@ def run_session(home: Path, config: Config, now: datetime, state: dict, lanes: l
             changed = True
         changed = _finish_turns(home, sess, book) or changed
     changed = _settle_asks(home, book, sess, now) or changed
-    if attached(home, now) or (sess is not None and sess.busy):
-        return changed  # a terminal manager answers / the session is in a turn
+    if attached(home, now):
+        return changed  # a terminal manager answers
+    if sess is not None and sess.busy:  # in a turn: the owner's messages do not wait behind Tirith's own work
+        items = pending_items(home, now)
+        parts = _parts(items)
+        sent, tries = book.setdefault("sent", {}), book.setdefault("tries", {})
+        fresh = [k for k in parts if k not in sent and tries.get(k, 0) < MAX_TRIES]
+        return _yield_to_owner(home, book, sess, items, fresh, now) or changed
     if sess is not None and _compact_or_restart(home, config, book, sess, now):
         return True
     ended = parse_iso(book.get("ended_at"))
@@ -813,6 +867,7 @@ def run_session(home: Path, config: Config, now: datetime, state: dict, lanes: l
     fresh = [k for k in parts if k not in sent and tries.get(k, 0) < MAX_TRIES]
     if not fresh:
         return changed
+    fresh = pick_turn(items, fresh)
     if sess is None:
         ended = parse_iso(book.get("ended_at"))
         if ended and (now - ended).total_seconds() < RESTART_AFTER_S * max(1, book.get("fast", 0)):
