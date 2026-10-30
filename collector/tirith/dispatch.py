@@ -25,6 +25,7 @@ from tirith import timeouts as timeouts_mod
 from tirith import asks as asks_mod
 from tirith import autopilot as autopilot_mod
 from tirith import autoreview as autoreview_mod
+from tirith import canary as canary_mod
 from tirith import mergeq as mergeq_mod
 from tirith import diskdiet as diskdiet_mod
 from tirith import fallback as fallback_mod
@@ -424,6 +425,8 @@ def run(home: Path, config: Config, now: datetime, *, agents: list[dict], lanes:
     if mergeq_mod.run(home, config, lanes, spawn=spawn):
         changed = True
     if autoreview_mod.run(home, config, now, state, lanes, spawn=spawn, notify=notify):
+        changed = True
+    if spawn is not None and canary_mod.tick(home, now, spawn):  # the hourly end-to-end test lane
         changed = True
     if _cleanup_due(home):
         diskdiet_mod.cleanup(home, config, now)
