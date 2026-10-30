@@ -298,3 +298,42 @@ def test_every_existing_gate_id_is_still_present_and_active(env, home: Path, tmp
     for rule, (tool, data) in cases.items():
         rules = {v.rule for v in gates.check_call(config, tool, data, folder, "demo", home)}
         assert rule in rules, rule
+
+
+def test_lane_on_its_own_workspace_branch_merges(env, home: Path) -> None:
+    repo, _ = env
+    worktree = launch_mod.create_worktree(repo, "foo")
+    register_lane(home, lane_id="u-foo", project="demo", hero_class="glasswright", feature="Foo",
+                  workspace=str(worktree), log=None, pid=None, brief=None, step="2")
+    (worktree / "foo.txt").write_text("f\n", encoding="utf-8")
+    end_lane(home, "u-foo", "done", "built it")
+    assert git(worktree, "rev-parse", "--abbrev-ref", "HEAD") == "lane/foo"
+    mergeq_mod.enqueue(home, "u-foo")
+    row = mergeq_mod.process_next(home, load_config(home), relaunch=Sender())
+    assert row["result"] == "merged" and (repo / "foo.txt").read_text() == "f\n"
+    assert "lane/foo" not in git(repo, "branch", "--list")
+
+
+def test_continuation_lane_sharing_the_original_worktree_merges(env, home: Path) -> None:
+    repo, _ = env
+    worktree = make_lane(home, repo, "orig", {"orig.txt": "o"})
+    register_lane(home, lane_id="orig-2", project="demo", hero_class="glasswright", feature="Orig2",
+                  workspace=str(worktree), log=None, pid=None, brief=None, step="2")
+    (worktree / "more.txt").write_text("m", encoding="utf-8")
+    end_lane(home, "orig-2", "done", "more")
+    mergeq_mod.enqueue(home, "orig-2")
+    row = mergeq_mod.process_next(home, load_config(home), relaunch=Sender())
+    assert row["result"] == "merged" and (repo / "more.txt").exists() and (repo / "orig.txt").exists()
+
+
+def test_missing_branch_is_reported_plainly(env, home: Path) -> None:
+    repo, _ = env
+    worktree = make_lane(home, repo, "lost", {"lost.txt": "l"})
+    git(worktree, "checkout", "-q", "--detach")
+    git(repo, "branch", "-D", "lane/lost")
+    lane = read_json(lane_path(home, "lost"), None)
+    lane["branch"] = "lane/lost"
+    write_lane(home, lane)
+    mergeq_mod.enqueue(home, "lost")
+    row = mergeq_mod.process_next(home, load_config(home), relaunch=Sender())
+    assert row["result"] != "conflict" and "branch not found: lane/lost" in row["message"]
