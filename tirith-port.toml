@@ -1,0 +1,20 @@
+# Pipelines kept out of tirith.toml, which gates merges. Format: docs/CONTRACT-manifest.md
+
+# The Rust port is paused: its crates leave the gate (build, rust-test) and return to it when the port resumes.
+[[pipelines]]
+id = "rust-port"
+name = "Rust port (on demand)"
+
+[[pipelines.stages]]
+name = "port-build"
+run = "cargo build -q -p tirith-core -p tirith-cli"
+
+[[pipelines.stages]]
+name = "port-test"
+kind = "test"
+run = "cargo test -q -p tirith-core -p tirith-cli"
+
+[[pipelines.stages]]
+name = "parity"
+kind = "test"
+run = "cargo build -q -p tirith-cli && cd collector && uv run -q python ../scripts/parity/run.py"

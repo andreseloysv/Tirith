@@ -53,6 +53,11 @@
             "string",
             "null"
           ]
+        },
+        "usage": {
+          "description": "Today's brain calls per kind, the daily budget and a health note once calls were refused (counts only, never contents).",
+          "type": "object",
+          "additionalProperties": true
         }
       }
     },
