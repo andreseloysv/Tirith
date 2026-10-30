@@ -1501,6 +1501,9 @@ def launch_step(home: Path, project_id: str, step_id: str, agent: str | None = N
     repo = projects_mod.real(proj.repo) if proj.repo else None
     if repo is None:
         raise launch_mod.LaunchError(f"project '{project_id}' has no repo folder")
+    blocked = mergeq_mod.wip_block(home)
+    if blocked:
+        raise launch_mod.LaunchError(blocked)
     step, intro = launch_mod.find_step(repo, step_id)
     title = step["title"]
     open_items = roadmap_mod.agent_items(step, date.today())
@@ -1573,6 +1576,9 @@ def launch_plan(home: Path, project_id: str, kind: str, request_id: str | None =
     repo = projects_mod.real(proj.repo) if proj.repo else None
     if repo is None:
         raise launch_mod.LaunchError(f"project '{project_id}' has no repo folder")
+    blocked = mergeq_mod.wip_block(home)
+    if blocked:
+        raise launch_mod.LaunchError(blocked)
     step = planlane_mod.LANE_STEPS[kind]
     lanes = read_lanes(home)
     busy = launch_mod.working_lane(lanes, project_id, step, lane_status) if kind == "plan-refresh" else None
@@ -1631,6 +1637,9 @@ def launch_verify(home: Path, project_id: str, text: str, out=None, by_tirith: b
     repo = projects_mod.real(proj.repo) if proj.repo else None
     if repo is None:
         raise launch_mod.LaunchError(f"project '{project_id}' has no repo folder")
+    blocked = mergeq_mod.wip_block(home)
+    if blocked:
+        raise launch_mod.LaunchError(blocked)
     failed = manifest_mod.check(repo, config.words_for(proj, default_words()))
     if failed:
         raise launch_mod.LaunchError(f"tirith check fails for '{project_id}', so no lane may start")

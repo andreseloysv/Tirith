@@ -57,6 +57,7 @@ HISTORY = 20
 DOC_ONLY = ("docs/", "site/", "ios/")  # a lane that changes only these (or *.md) has nothing for the test stages
 RUST_STAGE = "rust-test"
 FLAKY_FILE = "flaky.json"  # {project: {test id: {"count": n, "last": iso}}}: tests that failed in the suite and passed alone
+WIP_LIMIT = 3  # lanes waiting in the queue at which no new lane starts until it drains below this
 OUTPUT_MAX = 1500
 
 
@@ -130,6 +131,16 @@ def _may_enqueue(seen: dict) -> bool:
         return False
     status = (seen.get("review") or {}).get("status")
     return status in (None, review_mod.PENDING, review_mod.READY)
+
+
+def wip_block(home: Path) -> str:
+    """Why no new lane may start now (empty when it may): ``WIP_LIMIT`` or more lanes wait in the queue."""
+    waiting = len(load(home)["queue"])
+    if waiting < WIP_LIMIT:
+        return ""
+    return (f"{waiting} lanes are waiting in the merge queue (limit {WIP_LIMIT}): finish what was started before "
+            f"starting more. The item stays open: launch it again when the queue is below {WIP_LIMIT} "
+            "(`tirith merge status` shows it), or help it drain by fixing any lane the queue sent back.")
 
 
 def view(home: Path, project: str | None = None) -> dict:

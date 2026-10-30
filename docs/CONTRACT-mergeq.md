@@ -32,6 +32,12 @@ is enqueued (`tirith merge request`, or by the dispatcher). Tirith merges (`coll
    closes (`closed`, "nothing to merge"), the worktree and branch are removed and the queue ticks nothing (the claim
    check in `docs/CONTRACT-launch.md` decides the item). "Already merged" for a gone worktree comes from the same check.
 
+WIP limit (`mergeq.WIP_LIMIT` = 3, `mergeq.wip_block`): with 3 or more lanes waiting in the queue (any project,
+queued or running) no new lane starts, whoever asks (manager, autopilot, owner-less launch): `launch_step`,
+`launch_plan` and `launch_verify` refuse with a Tirith block that says how many wait and what to do; the plan
+item stays open and can be launched once the queue is below 3. Lanes already running and lanes the queue sends
+back (`relaunch_lane`) are not affected. Decision: a `running` entry counts as waiting (it is not merged yet).
+
 After a merge the lane records the merged `branch`. `state.projects[].merge_queue`: `{items: [{lane, position, status: queued|running, since, feature}], last, recent}`;
 the Plan card shows it. Commands: `tirith merge request|run|status`.
 
