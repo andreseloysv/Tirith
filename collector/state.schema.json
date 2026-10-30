@@ -189,8 +189,9 @@
         "properties": {
           "id": {"type": "string"},
           "at": {"type": ["string", "null"]},
-          "kind": {"enum": ["finish", "ask", "setup", "chat", "autopilot", "autopilot-proposal", "plan-refresh", "plan-new", "plan-edit"]},
+          "kind": {"enum": ["finish", "ask", "setup", "chat", "autopilot", "autopilot-proposal", "plan-refresh", "plan-new", "plan-edit", "room-new", "room-invite", "room-leave"]},
           "cid": {"type": "string", "description": "Client id of the page that sent it; the page matches its Sending… message by it."},
+          "via": {"type": "string", "description": "`room:<sealed-room>` when the request came through a private room."},
           "manager_pending": {"type": "boolean"},
           "steward_pending": {"type": "boolean", "description": "Old key for manager_pending, same value."},
           "project": {"type": "string"},

@@ -1437,11 +1437,15 @@ fn clean_attachments(raw: &[Value], root: &std::path::Path) -> Result<Vec<Value>
 /// Builds the inbox row for a request: `{id, at, kind, project, step, text, from, status}`.
 fn inbox_row(kind: &str, project: &str, step: &str, text: &str, now: SystemTime, salt: u32) -> Result<Value, String> {
     let plan = kind == "plan-refresh" || kind == "plan-new";
-    if kind != "finish" && kind != "ask" && kind != "setup" && kind != "chat" && kind != "autopilot" && kind != "plan-edit" && !plan {
-        return Err(format!("kind must be finish, ask, setup, chat, autopilot, plan-refresh, plan-new or plan-edit, not {kind:?}"));
+    let room = kind == "room-new" || kind == "room-invite" || kind == "room-leave";
+    if kind != "finish" && kind != "ask" && kind != "setup" && kind != "chat" && kind != "autopilot" && kind != "plan-edit" && !plan && !room {
+        return Err(format!("kind must be finish, ask, setup, chat, autopilot, plan-refresh, plan-new, plan-edit, room-new, room-invite or room-leave, not {kind:?}"));
     }
     let (project, text) = (project.trim(), clip(text.trim(), INBOX_TEXT_MAX));
-    let step = if step.trim().is_empty() && kind == "setup" {
+    let project = if room && project.is_empty() { "all" } else { project };
+    let step = if room && step.trim().is_empty() {
+        kind
+    } else if step.trim().is_empty() && kind == "setup" {
         "setup"
     } else if step.trim().is_empty() && plan {
         "plan"
@@ -1672,6 +1676,9 @@ mod inbox_tests {
         assert!(inbox_row("plan-new", "demo", "", "a title", UNIX_EPOCH, 0).is_err());
         assert!(inbox_row("plan-edit", "demo", "2", "{\"add\":\"x\"}", UNIX_EPOCH, 0).is_ok());
         assert!(inbox_row("plan-edit", "demo", "2", "x", UNIX_EPOCH, 0).is_err());
+        let room = inbox_row("room-new", "", "", "{\"title\":\"Phone\"}", UNIX_EPOCH, 0).unwrap();
+        assert_eq!((room["project"].as_str(), room["step"].as_str()), (Some("all"), Some("room-new")));
+        assert!(inbox_row("room-leave", "", "", "sealed-abc", UNIX_EPOCH, 0).is_ok());
         let long = "é".repeat(3000);
         let row = inbox_row("ask", "demo", "1", &long, UNIX_EPOCH, 0).unwrap();
         assert!(row["text"].as_str().unwrap().len() <= INBOX_TEXT_MAX);
