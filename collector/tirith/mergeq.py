@@ -176,6 +176,20 @@ def stages_of(folder: Path) -> list[tuple[str, manifest_mod.Stage]]:
             if stage.run and manifest_mod.stage_kind(stage) in ("build", "test")]
 
 
+def branch_exists(repo: Path, branch: str) -> bool:
+    return _git(repo, "rev-parse", "--verify", "-q", f"refs/heads/{branch}").returncode == 0
+
+
+def lane_branch(lane: dict) -> str:
+    """The branch the lane really works on: its workspace's current branch, else the recorded one, else ``lane/<id>``."""
+    workspace = Path(str(lane.get("workspace") or ""))
+    if workspace.is_dir():
+        name = _git(workspace, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
+        if name and name != "HEAD":
+            return name
+    return str(lane.get("branch") or "") or f"lane/{lane['id']}"
+
+
 def _commit_workspace(workspace: Path, lane_id: str, feature: str) -> str | None:
     """Commit what the agent left in its worktree; the error text when that fails."""
     _git(workspace, "add", "-A")
@@ -220,11 +234,13 @@ def _with_plan_moves(repo: Path, tmp: Path, base: str, head: str, tested: str, b
 def _try(home: Path, repo: Path, lane: dict, entry: dict) -> tuple[str, str, dict]:
     """One attempt: ``(result, message, extra)``; ``waiting`` / ``retry`` mean try again later / at once."""
     lane_id, project = str(lane["id"]), str(lane.get("project") or "")
-    feature, branch = str(lane.get("feature") or lane_id), f"lane/{lane['id']}"
+    feature, branch = str(lane.get("feature") or lane_id), lane_branch(lane)
     workspace = Path(str(lane["workspace"]))
     failed = _commit_workspace(workspace, lane_id, feature)
     if failed:
         return RED, f"committing the lane failed: {failed}", {}
+    if not branch_exists(repo, branch):
+        return WAITING, f"branch not found: {branch}", {}
     base = _git(repo, "rev-parse", "HEAD").stdout.strip()
     main_branch = _git(repo, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
     tmp = worktree_path(repo, f"_mergeq-{lane_id}")
@@ -267,7 +283,7 @@ def _try(home: Path, repo: Path, lane: dict, entry: dict) -> tuple[str, str, dic
                 moved = _git(repo, "merge", "--ff-only", "-q", tested)
             if moved.returncode != 0:
                 return WAITING, f"fast-forwarding {main_branch} failed: {_tail(moved.stderr or moved.stdout)}", {}
-        return MERGED, "tests passed; merged", {"commit": tested, "main": main_branch, "passed": passed}
+        return MERGED, "tests passed; merged", {"commit": tested, "main": main_branch, "passed": passed, "branch": branch}
     finally:
         _git(repo, "worktree", "remove", "--force", str(tmp))
         shutil.rmtree(tmp, ignore_errors=True)
@@ -338,7 +354,8 @@ def process_next(home: Path, config: Config, *, relaunch: Callable | None = None
     lane_id = entry["lane"]
     lane = read_json(lane_path(home, lane_id), None)
     repo = plangate_mod.repo_of(home, entry["project"], config) if entry["project"] else None
-    if not isinstance(lane, dict) or repo is None or not Path(str(lane.get("workspace") or "")).is_dir():
+    if not isinstance(lane, dict) or repo is None or not (
+            Path(str(lane.get("workspace") or "")).is_dir() or branch_exists(repo, lane_branch(lane))):
         return _finish(home, entry, WAITING, "the lane, its worktree or its project is gone")
     result, message, extra = "retry", "", {}
     for _ in range(MAX_TRIES):
@@ -362,7 +379,7 @@ def process_next(home: Path, config: Config, *, relaunch: Callable | None = None
         extra["plan_error"] = str(error)
     workspace = Path(str(lane["workspace"]))
     _git(repo, "worktree", "remove", "--force", str(workspace))
-    _git(repo, "branch", "-D", f"lane/{lane_id}")
+    _git(repo, "branch", "-D", str(extra["branch"]))
     fresh = read_json(lane_path(home, lane_id), lane)
     fresh["review"] = {"status": review_mod.MERGED, "at": now_iso(), "by": "mergeq", "pid": os.getpid(),
                        "message": message, "commit": extra["commit"], "branch": extra["main"],
