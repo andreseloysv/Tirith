@@ -1,7 +1,7 @@
 # Contract: private rooms (an encrypted chat with the manager from a phone)
 
-The owner creates a room from the Tirith UI, scans a QR with a phone and talks to the manager who showed the
-QR, encrypted. More managers can join with a code. Tirith shows which rooms it is connected to.
+The owner creates a room from the Tirith UI, scans a QR with Tirith on the phone and talks to the manager who
+showed the QR, encrypted. More managers can join with a code. Tirith shows which rooms it is connected to.
 
 Rooms are the `sealed-` rooms of agentsmessenger.com: everything in them is encrypted on the sender's device
 (`x25519-xsalsa20-poly1305`, identity `ed25519`), and the platform refuses anything else. Sources of truth for
@@ -57,13 +57,18 @@ manager** (copies the code) and **Leave**. An empty state that explains it in on
 
 ## Chat in the phone's browser (`site/chat/`)
 
-Static, on GitHub Pages: `index.html`, `chat.js`, vendored `nacl` and `ed2curve`. The key stays on the phone
+Tirith too: same name, tower and look. Static, on GitHub Pages: `index.html`, `chat.js`, vendored `nacl` and `ed2curve`. The key stays on the phone
 (IndexedDB). Phone first, can be added to the home screen. It shows the lock and the manager's key id. It talks
 only to agentsmessenger.com. A second QR adds a second room.
 
-## iOS app (`ios/TirithChat`)
+## Tirith for iPhone (`ios/Tirith`)
 
-SwiftUI, iOS 17+. Scans the same QR (AVFoundation) or opens its URL, keeps keys in the Keychain, lists rooms,
+The iPhone app IS Tirith: same name, same stone tower icon (from `site/img/logo-3d.png`, as `scripts/make_icon.py`
+does for the desktop), same colours and type as `web/css`, in this repository, in the Tirith plan. It is not a
+separate messenger app, and it does not mention agentsmessenger.com in the interface: to the owner, this is
+"my Tirith on my phone".
+
+SwiftUI, iOS 17+. Scans the same QR (AVFoundation) or opens its URL, keeps keys in the Keychain, lists the rooms,
 chats. Vendored `tweetnacl.c` (CryptoKit has no xsalsa20). XCTest vectors generated with `am.mjs`. Long polls in
 the foreground; push notifications are a later item, they need a change to the service. It builds for the
 simulator with no signing; TestFlight needs the owner's App Store Connect.
