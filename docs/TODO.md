@@ -458,4 +458,5 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [ ] Lo que escribe un dispositivo del dueño en una sala llega al manager por el mismo chat, y su respuesta vuelve cifrada a la sala. (check: `cd collector && uv run -q pytest -q tests -k roombridge`)
 - [ ] `tirith room new`, `invite` y `join` con QR de un solo uso, y state.json dice a qué salas estás conectado y quién hay en cada una. (check: `cd collector && uv run -q pytest -q tests -k private_rooms`)
 - [ ] Vista Salas en la app: crear una sala, ver su QR, ver a qué salas estás conectado y quién hay, invitar a otro manager y salir. (check: `node web/js/rooms.test.mjs`)
+- [ ] Chat cifrado en el navegador del móvil: la cámara del iPhone escanea el QR y abre la conversación con el manager sin instalar nada. (check: `test -f site/chat/index.html && node site/chat/chat.test.mjs`)
 
