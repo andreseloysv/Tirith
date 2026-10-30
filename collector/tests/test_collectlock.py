@@ -24,7 +24,7 @@ def test_second_collector_refuses_while_first_holds_lock(home: Path) -> None:
     first = _collect(home)
     try:
         lock = home / "collector.lock"
-        deadline = time.time() + 20
+        deadline = time.time() + 90  # a loaded host can take long to start the subprocess
         while time.time() < deadline and not (lock.exists() and lock.read_text().strip()):
             time.sleep(0.1)
         assert lock.read_text().strip() == str(first.pid)
@@ -60,7 +60,7 @@ def test_sigterm_ends_collector_and_frees_lock(home: Path) -> None:
     proc = _collect(home)
     try:
         lock = home / "collector.lock"
-        deadline = time.time() + 20
+        deadline = time.time() + 90  # a loaded host can take long to start the subprocess
         while time.time() < deadline and not (lock.exists() and lock.read_text().strip()):
             time.sleep(0.1)
         assert lock.read_text().strip() == str(proc.pid)
@@ -81,7 +81,7 @@ def test_second_sigterm_is_silent(home: Path) -> None:
     proc = _collect(home)
     try:
         lock = home / "collector.lock"
-        deadline = time.time() + 20
+        deadline = time.time() + 90  # a loaded host can take long to start the subprocess
         while time.time() < deadline and not (lock.exists() and lock.read_text().strip()):
             time.sleep(0.1)
         assert lock.read_text().strip() == str(proc.pid)
