@@ -5,8 +5,8 @@ agent's ``chat_args``: stream-json in and out, partial messages, permission ques
 process group. Pending chat messages are written to its stdin as user messages, one batch per turn; a turn
 ends with the agent's ``result`` event. A reader thread writes every stream line to
 ``<home>/manager/transcript.jsonl`` (rotated), feeds the CLI-style steps of the turn (``livesteps``), keeps the
-context size, and answers permission questions: allowed by code when a rule says so, denied when a gate says
-so, otherwise it becomes one owner decision (Allow / Deny) and the answer is written back to the session.
+context size, and answers permission questions by code: denied when a gate or the "manager delegates edits" rule says so,
+allowed otherwise; the owner is never asked.
 ``tirith manager say|interrupt|stop|restart`` reach the collector through ``<home>/manager/control.jsonl``.
 """
 
@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Callable
 
 from tirith import gates as gates_mod
+from tirith import lanegates as lanegates_mod
 from tirith.home import Config, now_iso
 from tirith.store import append_jsonl, read_json, read_jsonl, write_json_atomic
 
@@ -125,30 +126,67 @@ def allowed_by_rules(rules: list[str], tool: str, data: dict) -> bool:
     return bool(segments) and all(any(ok(tokens, p) for p in patterns) for tokens in segments)
 
 
+LANE_MESSAGE = ("The manager delegates edits: start a lane with `tirith lane run` instead of changing "
+                "project files yourself. Things only the owner can do go through `tirith wait add --why-owner ...`.")
+_GIT_WRITES = {"commit", "merge", "push", "reset", "checkout", "switch", "rebase", "cherry-pick", "revert", "add",
+               "rm", "mv", "restore", "clean", "stash", "pull", "apply", "am", "tag", "branch", "worktree"}
+
+
+def _bash_writes(home: Path, data: dict, cwd) -> str | None:
+    """The first write of a Bash line outside the Tirith home (a redirect to a file, ``tee``, ``sed -i``,
+    ``mv``/``cp``/``rm``, a changing ``git`` command), or None. Harmless redirects (``2>&1``, ``>/dev/null``) and
+    function definitions are not writes."""
+    line = gates_mod.strip_heredocs(str(data.get("command") or ""))
+    here, roots = str(cwd or os.getcwd()), [lanegates_mod._real(home)]
+    for tokens in lanegates_mod.expand_segments(line):
+        moved = lanegates_mod._cd_target(tokens)
+        if moved is not None:
+            here = lanegates_mod._resolve(moved, here, os.environ) or here
+            continue
+        for target in lanegates_mod.write_targets(tokens):
+            real = lanegates_mod._resolve(target, here, os.environ)
+            if real is None or not lanegates_mod._inside(real, roots):
+                return target
+        folder, sub = lanegates_mod._git_c(tokens)
+        name, args = gates_mod._program(tokens)
+        if name == "git":
+            if folder is None:
+                sub = next((a for a in args if not a.startswith("-")), "")
+            where = lanegates_mod._resolve(folder, here, os.environ) if folder is not None else here
+            if sub in _GIT_WRITES and (where is None or not lanegates_mod._inside(where, roots)):
+                return f"git {sub}"
+    return None
+
+
 def decide(config: Config, home: Path, alias: str, tool: str, data, cwd, project: str | None = None
            ) -> tuple[str, str]:
-    """``("allow"|"deny"|"ask", message)`` for a tool call the manager asks to make.
+    """``("allow"|"deny", message)`` for a tool call the manager asks to make; never a question for the owner.
 
-    Gates first (their deny rules), the manager never edits project files itself, then the allow rules of
-    ``[agents.<alias>] permissions`` (and read-only tools); everything else is the owner's decision."""
+    The gates first (their deny rules), then the manager delegates edits (a file edit or a Bash write outside the
+    Tirith home is denied with the lane message), everything else is allowed. A deny is logged as a flow."""
     data = data if isinstance(data, dict) else {}
+    verdict, message = _verdict(config, home, tool, data, cwd, project)
+    if verdict == "deny":
+        try:
+            from tirith import flows as flows_mod
+            flows_mod.append_flow(home, "tirith", "manager", "deny", f"{tool} denied: {message}",
+                                  session=None, project=project)
+        except OSError:
+            pass
+    return verdict, message
+
+
+def _verdict(config: Config, home: Path, tool: str, data: dict, cwd, project: str | None) -> tuple[str, str]:
     hits = [v for v in gates_mod.check_call(config, tool, data, cwd, project, home) if v.action == "block"]
     if hits:
         return "deny", hits[0].message()
     if tool in EDIT_TOOLS:
         path = str(data.get("file_path") or data.get("notebook_path") or "")
         inside = path and Path(path).expanduser().resolve().is_relative_to(Path(home).resolve())
-        if not inside:
-            return "deny", ("The manager delegates edits: start a lane with `tirith lane run` "
-                            "instead of editing project files yourself.")
-        return "allow", ""  # its own files in the Tirith home
-    if tool in SAFE_TOOLS:
-        return "allow", ""
-    from tirith import agentrun as agentrun_mod
-    rules = [str(r) for r in (agentrun_mod.agent_settings(config, alias, project).get("permissions") or [])]
-    if allowed_by_rules(rules, tool, data):
-        return "allow", ""
-    return "ask", ""
+        return ("allow", "") if inside else ("deny", LANE_MESSAGE)
+    if tool == "Bash" and _bash_writes(home, data, cwd):
+        return "deny", LANE_MESSAGE
+    return "allow", ""
 
 
 # -- one turn and the session -----------------------------------------------------------------
@@ -386,16 +424,12 @@ class Session:
         tool, data = str(request.get("tool_name") or ""), request.get("input")
         try:
             verdict, message = self.decide(tool, data)
-        except Exception as err:  # a rule that cannot be checked is the owner's decision
-            verdict, message = "ask", str(err)
+        except Exception as err:  # a rule that cannot be checked denies
+            verdict, message = "deny", f"The rule check failed ({err}); try a simpler command."
         if verdict == "allow":
             self.write(permission_reply(rid, True, data))
-        elif verdict == "deny":
-            self.write(permission_reply(rid, False, data, message))
         else:
-            from tirith import livesteps as livesteps_mod
-            self.asks[rid] = {"tool": tool, "input": data if isinstance(data, dict) else {}, "at": now_iso(),
-                              "summary": livesteps_mod.tool_summary(tool, data, self.workspace), "wait": None}
+            self.write(permission_reply(rid, False, data, message))
 
 
 def rotate(path: Path) -> None:

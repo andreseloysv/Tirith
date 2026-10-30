@@ -625,7 +625,17 @@ in which the session could not start (`dispatch.json` `manager.session.error` sa
   whole brief (rules, plan summary, the notes in `manager-notes.md`); later ones only what is new. A turn ends
   with the agent's `result` event. A request still open when its turn ends gets the turn's text as the inbox
   answer (`by: manager`, not closed); the manager normally answers with `tirith inbox answer` itself. A
-  request is offered at most twice (`MAX_TRIES`); an interrupted turn is never offered again.
+  request is offered at most twice (`MAX_TRIES`); a turn the owner interrupted is never offered again.
+- **The owner goes first.** A request `from: owner` (chat, reply, ask, finish, plan-edit, plan-refresh, setup) is a
+  turn of its own, and it is always chosen before Tirith's work. Tirith's own work (autopilot proposals, failed
+  action results, manager queue items) goes in separate turns of at most 5 items, oldest first, and only when no
+  owner request is fresh. An owner request that arrives while the session is in a turn of Tirith's own work (not
+  its own turn, not `/compact`, no open permission question) interrupts that turn at once; the interrupted items
+  go back to pending without using one of their tries, and the owner's turn is next. If the interrupt cannot be
+  written, the owner's turn is simply the next one. The chat gets one plain line either way ("The manager is
+  pausing one task; your message is next." / "... finishing one task; ..."). `selfcheck` "manager": an owner
+  chat message without a first answer after 60 s while nothing blocks it (a busy session with no open question
+  counts as not blocking when the turn is not the owner's) is a problem with evidence.
 - **Dying and restarting.** If the process dies it is started again (after 15 s, times the number of fast
   deaths in a row) with `--resume <session-id>`. A resumed session that dies within 20 s is started fresh the
   next time: the first message then repeats the brief and the notes (the handoff). Failed manager lanes pause

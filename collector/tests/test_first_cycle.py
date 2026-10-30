@@ -52,6 +52,7 @@ def _count_git(monkeypatch) -> list[list[str]]:
     return calls
 
 
+@pytest.mark.slow
 def test_first_cycle_is_fast_then_the_full_pass_completes(big_home: Path, monkeypatch) -> None:
     monkeypatch.setattr(activity_mod, "WARM_BUDGET_S", 0.5)
     collector = Collector(big_home, client=None)
@@ -68,6 +69,7 @@ def test_first_cycle_is_fast_then_the_full_pass_completes(big_home: Path, monkey
     assert state["collector"] == dict(warming=False, pending=0)
 
 
+@pytest.mark.slow
 def test_a_restart_reuses_the_kept_file_lists(big_home: Path, monkeypatch) -> None:
     first = Collector(big_home, client=None)
     for _ in range(300):
