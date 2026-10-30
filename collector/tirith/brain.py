@@ -18,10 +18,13 @@ import hashlib
 import json
 import os
 import queue
+import re
 import threading
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+from datetime import datetime
 from typing import Callable, Protocol
 
 from tirith.home import Config, now_iso
@@ -124,8 +127,34 @@ def make_client(config: Config, api_key: str | None = None) -> ChatClient | None
                            reasoning_effort=config.brain_reasoning_effort or None)
 
 
+# Parts of a log or transcript that change without changing what the brain has to judge.
+_NOISE = re.compile(
+    r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?"  # ISO timestamps
+    r"|\b\d{1,2}:\d{2}(?::\d{2})?(?:\s?[ap]m)?\b"                                   # clock times
+    r"|\b\d+(?:\.\d+)?\s?(?:ms|s|sec|secs|m|min|mins|h|hr|hrs|d)\s+ago\b"           # ages
+    r"|\b(?:elapsed|took|in|after|for)\s+\d+(?:\.\d+)?\s?(?:ms|s|sec|secs|m|min|mins|h|hr|hrs)\b"  # durations
+    r"|\b\d+(?:\.\d+)?\s?%"                                                         # percentages
+    r"|\b\d[\d,]*\s+(?:tokens?|bytes|KB|MB|GB)\b",                                  # usage counters
+    re.IGNORECASE)
+
+# Kinds whose input is a growing log or chat: only these are normalized.
+_NOISY_KINDS = frozenset({"summary", "waiting", "room_summary", "room_owner"})
+
+
+def stable_text(text: str) -> str:
+    """``text`` without timestamps, ages, durations and counters, blank lines dropped."""
+    lines = (" ".join(_NOISE.sub("", line).split()) for line in text.splitlines())
+    return "\n".join(line for line in lines if line)
+
+
 def cache_key(kind: str, text: str) -> str:
-    """Stable cache file stem for a brain job kind + input text."""
+    """Stable cache file stem for a brain job kind + input text.
+
+    Log-like kinds hash the text without time/counter noise, so an input that only
+    changed its times maps to the same cached answer instead of a new paid call.
+    """
+    if kind in _NOISY_KINDS:
+        text = stable_text(text)
     return hashlib.sha256(f"{kind}\n{text}".encode()).hexdigest()[:32]
 
 
@@ -325,6 +354,14 @@ def _clean_architecture(data: dict) -> tuple[list[dict], list[dict]]:
     return nodes[:24], edges[:48]
 
 
+# Minimum seconds between two calls of the same kind (0 or missing: no limit).
+MIN_INTERVAL_S: dict[str, float] = {
+    "waiting": 60.0, "summary": 60.0, "room_summary": 60.0, "room_owner": 60.0,
+}
+# Brain calls allowed per day, all kinds together.
+DAILY_CALL_BUDGET = 400
+
+
 class BrainWorker:
     """Background thread running brain jobs into the cache.
 
@@ -334,9 +371,16 @@ class BrainWorker:
     handled by the runner callbacks supplied by the collector/map command.
     """
 
-    def __init__(self, client: ChatClient | None, cache: BrainCache):
+    def __init__(self, client: ChatClient | None, cache: BrainCache, *,
+                 daily_budget: int = DAILY_CALL_BUDGET,
+                 min_interval_s: dict[str, float] | None = None,
+                 clock: Callable[[], float] = time.time):
         self.client = client
         self.cache = cache
+        self.daily_budget = daily_budget
+        self.min_interval_s = MIN_INTERVAL_S if min_interval_s is None else min_interval_s
+        self._clock = clock
+        self._usage_path = cache.dir / "usage.json"
         self.last_error: str | None = None
         self._queue: queue.Queue = queue.Queue()
         self._inflight: set[str] = set()
@@ -357,16 +401,58 @@ class BrainWorker:
         """Queue a job unless cached/in flight. Returns True if queued."""
         if self.client is None or not text.strip():
             return False
+        if kind in _NOISY_KINDS and not stable_text(text):
+            return False
         if self.cache.get(kind, text) is not None:
             return False
         key = f"{kind}:{cache_key(kind, text)}"
         with self._lock:
             if key in self._inflight:
                 return False
+            if not self._allow(kind):
+                return False
             self._inflight.add(key)
         self.start()
         self._queue.put((kind, text, key, runner))
         return True
+
+    # -- call accounting: counts per kind per day, never contents ---------------
+
+    def _today(self) -> str:
+        return datetime.fromtimestamp(self._clock()).strftime("%Y-%m-%d")
+
+    def _usage(self) -> dict:
+        data = read_json(self._usage_path, None)
+        if not isinstance(data, dict) or data.get("day") != self._today():
+            kept = data.get("last", {}) if isinstance(data, dict) else {}
+            data = {"day": self._today(), "calls": {}, "last": kept}
+        return data
+
+    def _allow(self, kind: str) -> bool:
+        """Apply the per-kind minimum interval and the daily budget; count the call when allowed."""
+        usage = self._usage()
+        now = self._clock()
+        if sum(usage["calls"].values()) >= self.daily_budget:
+            return False
+        last = usage["last"].get(kind)
+        if isinstance(last, (int, float)) and now - last < self.min_interval_s.get(kind, 0.0):
+            return False
+        usage["calls"][kind] = int(usage["calls"].get(kind, 0)) + 1
+        usage["last"][kind] = now
+        write_json_atomic(self._usage_path, usage)
+        return True
+
+    def stats(self) -> dict:
+        """Today's call counts per kind, the budget, and a health note once it is reached."""
+        usage = self._usage()
+        total = sum(usage["calls"].values())
+        reached = total >= self.daily_budget
+        return {
+            "day": usage["day"], "calls": dict(usage["calls"]), "total": total,
+            "daily_budget": self.daily_budget, "budget_reached": reached,
+            "health_note": (f"Daily brain budget of {self.daily_budget} calls reached; "
+                            "features use their non-brain fallbacks until tomorrow.") if reached else None,
+        }
 
     def drain(self, timeout_s: float = 10.0) -> None:
         """Wait (bounded) for queued jobs; used by tests and ``tirith map``."""
