@@ -470,6 +470,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [ ] Una lane cuyo commit ya está en otra rama de la cola o en main se para y sale de la cola sola, sin correr más tests. (check: `cd collector && uv run -q pytest -q tests -k absorbed_lane_stops`)
 - [ ] Tirith mide el trabajo tirado (suites repetidas, fusiones probadas descartadas, lanes absorbidas) y lo muestra en la salud: la meta del dueño es no hacer trabajo estúpido. (check: `cd collector && uv run -q pytest -q tests -k wasted_work`)
 - [ ] Una lane nunca corre la suite completa por su cuenta: corre los tests de lo que cambió, y la suite completa solo la corre la cola, que es quien decide. (check: `cd collector && uv run -q pytest -q tests/test_fasttests.py -k lane_never_runs_the_full_suite`) (en revisión)
+- [ ] Liberar disco nunca bloquea el ciclo del collector: borrar lanes viejas corre en segundo plano, y el chat y el estado siguen al día mientras tanto. (check: `cd collector && uv run -q pytest -q tests -k sweep_does_not_block_the_cycle`)
 - [x] La suite de tests de Python vuelve a pasar entera en main tras el tren de integración. (check: `cd collector && uv run -q pytest -q -n 8`) (hecho: b133b4b)
 
 ## 18. Salas privadas: hablar con el manager desde el móvil
