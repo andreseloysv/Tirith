@@ -247,9 +247,11 @@ def test_compact_that_does_not_help_restarts_once_an_hour_with_a_handoff(rig: Ri
     rig.until(lambda: starts(rig) == 2, timeout=10)
     assert [r for r in rig.fake_log() if "start" in r][1]["resume"] is None
     # the cap: this session is big again and compaction fails again, but there is no second restart within the hour
-    rig.until(lambda: compacts(rig) >= 3)
-    rig.until(lambda: rig.session() is not None and not rig.session().busy and rig.book().get("done_turns"))
-    assert len(rig.book()["restarts"]) == 1 and starts(rig) == 2
+    rig.until(lambda: compacts(rig) >= 2 and rig.session() is not None and not rig.session().busy)
+    for _ in range(20):  # compaction failed again but no second restart is allowed: it waits, no compaction loop
+        rig.cycle()
+        time.sleep(0.03)
+    assert compacts(rig) == 2 and len(rig.book()["restarts"]) == 1 and starts(rig) == 2
     # an hour later it is allowed again
     rig.clock.tick(3700)
     rig.chat("an hour later")
