@@ -2,6 +2,7 @@
 deploy = "none"
 roadmap = "docs/TODO.md"
 deadline = "2026-11-04T21:00:00-05:00"
+include = ["tirith-port.toml"]  # pipelines that do not block merges
 
 [[pipelines]]
 id = "ci"
@@ -19,22 +20,3 @@ run = "cd collector && uv run -q pytest -q -n auto --maxprocesses 8"
 name = "rust-test"
 kind = "test"
 run = "cargo test -q -p tirith-app"
-
-# The Rust port is paused: its crates leave the gate (build, rust-test) and return to it when the port resumes.
-[[pipelines]]
-id = "rust-port"
-name = "Rust port (on demand)"
-
-[[pipelines.stages]]
-name = "port-build"
-run = "cargo build -q -p tirith-core -p tirith-cli"
-
-[[pipelines.stages]]
-name = "port-test"
-kind = "test"
-run = "cargo test -q -p tirith-core -p tirith-cli"
-
-[[pipelines.stages]]
-name = "parity"
-kind = "test"
-run = "cargo build -q -p tirith-cli && cd collector && uv run -q python ../scripts/parity/run.py"

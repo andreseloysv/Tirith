@@ -54,6 +54,7 @@ class Pipeline:
     id: str
     name: str
     stages: list[Stage]
+    gating: bool = True  # False for a pipeline from an ``include`` file: it runs on demand, never for a merge
 
 
 @dataclass
@@ -93,6 +94,7 @@ class Manifest:
     roadmap: str | None = None
     deadline: str | None = None
     plans: list[str] = field(default_factory=list)
+    includes: list[str] = field(default_factory=list)
     problems: list[Problem] = field(default_factory=list)
 
     def stage_names(self, pipeline_id: str) -> list[str]:
@@ -176,6 +178,8 @@ def parse_text(text: str, path: Path) -> Manifest:
     manifest.deadline = str(data.get("deadline") or "").strip() or None
     plans = data.get("plans")
     manifest.plans = [str(p).strip() for p in plans if str(p).strip()] if isinstance(plans, list) else []
+    includes = data.get("include")
+    manifest.includes = [str(p).strip() for p in includes if str(p).strip()] if isinstance(includes, list) else []
     pipes = data.get("pipelines")
     pipe_lines = lines.get("pipelines", [])
     stage_lines = lines.get("pipelines.stages", [])
@@ -301,6 +305,31 @@ def load(folder: str | Path) -> Manifest:
         manifest = Manifest(path=path, exists=True)
         _problem(manifest, 1, "toml-syntax", f"cannot read {FILENAME} ({exc})",
                  f"make {FILENAME} readable UTF-8 text")
+        return manifest
+    manifest = parse_text(text, path)
+    taken = {pipe.id for pipe in manifest.pipelines}
+    for name in manifest.includes:
+        extra = _load_include(path.parent / name, name)
+        manifest.problems.extend(extra.problems)
+        for pipe in extra.pipelines:
+            if pipe.id in taken:
+                _problem(manifest, 1, "pipeline-duplicate", f"pipeline id '{pipe.id}' is used twice ({name})",
+                         "give each [[pipelines]] a unique id")
+                continue
+            taken.add(pipe.id)
+            pipe.gating = False
+            manifest.pipelines.append(pipe)
+    return manifest
+
+
+def _load_include(path: Path, name: str) -> Manifest:
+    """An ``include`` file: only its ``[[pipelines]]`` count; it is read like ``tirith.toml``."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        manifest = Manifest(path=path, exists=True)
+        _problem(manifest, 1, "toml-syntax", f"cannot read included {name} ({exc})",
+                 f"create {name} or remove it from include in {FILENAME}")
         return manifest
     return parse_text(text, path)
 

@@ -7,6 +7,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -200,3 +201,11 @@ def _calm_machine(monkeypatch: pytest.MonkeyPatch) -> None:
     from tirith import diskdiet, loadlimit
     monkeypatch.setattr(loadlimit, "load_average", lambda: 0.0)
     monkeypatch.setattr(diskdiet, "free_bytes", lambda folder: 500 * 1024 ** 3)
+
+
+@pytest.fixture(autouse=True)
+def _no_hourly_canary_in_dispatch(monkeypatch):
+    """``dispatch.run`` starts the hourly end-to-end canary through its spawner; tests with their own fake
+    spawner only expect the commands they ask for. test_canary drives ``canary.tick`` directly."""
+    from tirith import dispatch
+    monkeypatch.setattr(dispatch, "canary_mod", types.SimpleNamespace(tick=lambda home, now, spawn: False))

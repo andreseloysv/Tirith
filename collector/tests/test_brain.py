@@ -182,13 +182,13 @@ def test_brain_calls_daily_budget_respected_and_counted(tmp_path: Path) -> None:
     client = FakeClient()
     now = [1000.0]
     worker = _worker(tmp_path, client, lambda: now[0], daily_budget=2, min_interval_s={})
-    assert _job(worker, "waiting", "a")
-    assert _job(worker, "summary", "b")
+    assert _job(worker, "waiting", "zq-first-secret")
+    assert _job(worker, "summary", "zq-second-secret")
     assert not worker.stats()["health_note"]
-    assert not _job(worker, "waiting", "c")
+    assert not _job(worker, "waiting", "zq-third-secret")
     stats = worker.stats()
     assert stats["calls"] == {"waiting": 1, "summary": 1}
     assert stats["budget_reached"] and "budget" in stats["health_note"]
-    assert "a" not in json.dumps(stats) and len(client.calls) == 2
+    assert "zq-" not in json.dumps(stats) and len(client.calls) == 2
     now[0] += 86400 * 2  # a new day starts a fresh budget
-    assert _job(worker, "waiting", "c")
+    assert _job(worker, "waiting", "zq-third-secret")
