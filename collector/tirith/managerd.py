@@ -550,6 +550,9 @@ RESTART_AFTER_S = 15.0  # times the number of fast deaths in a row
 FALLBACK_AFTER = 2  # fast deaths in a row: the one-shot manager answers for FALLBACK_S, then the session is tried again
 FALLBACK_S = 600.0
 RESUME_FAIL_S = 20.0  # a resumed session that dies this fast is started fresh next time
+COMPACT_TARGET = 0.6  # a compaction that leaves the context above this share of the limit did not help
+RESTART_EVERY_S = 3600.0  # a fresh start because compaction did not help: once an hour at most
+RESTART_KEPT_S = 86400.0
 
 
 def _book(state: dict) -> dict:
@@ -577,9 +580,9 @@ def _subset(items: dict, keys: list[str]) -> dict:
     return out
 
 
-def build_message(home: Path, config: Config, items: dict, now: datetime, primed: bool) -> str:
+def build_message(home: Path, config: Config, items: dict, now: datetime, primed: bool, handoff: str = "") -> str:
     """The user message for one turn: the whole brief for a conversation the session is new to (rules, plan,
-    its notes), else only what is new."""
+    its notes, what the session before it was doing), else only what is new."""
     if not primed:
         out = ["# You are the owner's manager (a persistent session run by Tirith)", "",
                "The owner talks to you through the Tirith chat, whether the app is open or not. This conversation "
@@ -588,6 +591,8 @@ def build_message(home: Path, config: Config, items: dict, now: datetime, primed
         notes = notes_tail(home)
         if notes:
             out += ["", "## Your notes from earlier sessions", notes]
+        if handoff:
+            out += ["", "## What you were doing when the last conversation was replaced", handoff]
         return "\n".join(out) + "\n"
     return "\n".join(["New for you:", "", *pending_sections(items, now)]) + "\n"
 
@@ -597,6 +602,7 @@ def _end_session(home: Path, book: dict, now: datetime, intentional: str | None 
     msession_mod.register(home, None)
     book["ended_at"] = now_iso(now)
     book.pop("lane", None)
+    book.pop("compacting", None)
     if intentional:
         book["fast"] = 0
         return
@@ -740,23 +746,69 @@ def _control(home: Path, book: dict, now: datetime) -> bool:
     return changed
 
 
-def _compact_or_restart(home: Path, config: Config, book: dict, sess, now: datetime) -> bool:
-    """An idle session whose context is large or whose conversation is long gets ``/compact`` once; if that did
-    not help (or it gets long again) it is restarted fresh with a handoff. True when it did either."""
+def _handoff(home: Path, book: dict, lanes: list[dict], session_lane: str) -> str:
+    """What a fresh session needs to carry on: the requests still open, the lanes the old session started that
+    are still running, and (in the brief, as always) its notes."""
+    out = []
+    for r in inbox_mod.requests(home):
+        if r["manager_pending"] or r.get("status") == "open":
+            out.append(f"- request {r['id']} ({r['kind']}): {str(r.get('text') or '')[:160]}")
+    for lane in lanes:
+        if lane.get("parent") == session_lane and not lane.get("ended_at"):
+            out.append(f"- lane {lane.get('id')} (you started it, still running): {str(lane.get('feature') or '')[:80]}")
+    return "\n".join(out)
+
+
+def restarts_within(mbook: dict, now: datetime, seconds: float) -> list[str]:
+    """Times (ISO) the session was started fresh on purpose in the last ``seconds``: ``state.manager``."""
+    rows = (mbook.get("session") or {}).get("restarts", [])
+    return [t for t in rows if (p := parse_iso(t)) and (now - p).total_seconds() < seconds]
+
+
+def _restart_allowed(book: dict, now: datetime) -> bool:
+    """At most one fresh start by compaction trouble per ``RESTART_EVERY_S``."""
+    recent = [t for t in book.get("restarts", []) if (p := parse_iso(t)) and (now - p).total_seconds() < RESTART_KEPT_S]
+    book["restarts"] = recent
+    return not any((now - parse_iso(t)).total_seconds() < RESTART_EVERY_S for t in recent)
+
+
+def _compact_or_restart(home: Path, config: Config, book: dict, sess, now: datetime,
+                        lanes: list[dict] | None = None) -> bool:
+    """An idle session whose context is large or whose conversation is long gets ``/compact``, as often as it
+    needs. It is restarted fresh with a handoff only when a compaction left the context above
+    ``COMPACT_TARGET`` of the limit, and at most once an hour. True when it did something."""
     turns = book.get("turns_total", 0)
-    compacted = book.get("compact_turn")
-    big = sess.context_tokens >= config.manager_context_tokens
-    long = turns - (compacted or 0) >= config.manager_max_turns
-    if not (big or long):
-        return False
-    if compacted is None:
-        if not sess.send("/compact", [], now):
-            return False
-        book["compact_turn"] = turns + 1
-        book.setdefault("turns", []).append({"id": sess.turn.id, "keys": []})
+    limit = config.manager_context_tokens
+    changed = False
+    before = book.pop("compacting", None)
+    failed = False
+    if before is not None:  # the compaction that just ended: how much did it bring the context down?
+        after = sess.context_tokens
+        failed = after >= limit * COMPACT_TARGET
+        flows_mod.append_flow(home, "tirith", f"agent:{sess.lane_id}", "message",
+                              f"Manager compacted its conversation: {before} → {after} tokens"
+                              + (" (not enough)" if failed else ""), session=None, at=now_iso(now))
+        changed = True
+    big = sess.context_tokens >= limit
+    long = turns - (book.get("compact_turn") or 0) >= config.manager_max_turns
+    if failed and _restart_allowed(book, now):
+        handoff = _handoff(home, book, lanes or [], sess.lane_id)
+        flows_mod.append_flow(home, "tirith", f"agent:{sess.lane_id}", "message",
+                              f"Manager restarted fresh: compaction left {sess.context_tokens} of {limit} tokens",
+                              session=None, at=now_iso(now))
+        _stop_session(home, book, sess, now, "manager", "fresh start with a handoff: the conversation got long")
+        book.update(session_id=None, primed=False, compact_turn=None, turns_total=0, handoff=handoff)
+        book.setdefault("restarts", []).append(now_iso(now))
         return True
-    _stop_session(home, book, sess, now, "manager", "fresh start with a handoff: the conversation got long")
-    book.update(session_id=None, primed=False, compact_turn=None, turns_total=0)
+    if not (big or long):
+        return changed
+    if failed and not big:
+        return changed  # restart not allowed yet, and not over the limit: wait
+    if not sess.send("/compact", [], now):
+        return changed
+    book["compact_turn"] = turns + 1
+    book["compacting"] = sess.context_tokens
+    book.setdefault("turns", []).append({"id": sess.turn.id, "keys": []})
     return True
 
 
@@ -788,7 +840,7 @@ def run_session(home: Path, config: Config, now: datetime, state: dict, lanes: l
     changed = _settle_asks(home, book, sess, now) or changed
     if attached(home, now) or (sess is not None and sess.busy):
         return changed  # a terminal manager answers / the session is in a turn
-    if sess is not None and _compact_or_restart(home, config, book, sess, now):
+    if sess is not None and _compact_or_restart(home, config, book, sess, now, lanes):
         return True
     ended = parse_iso(book.get("ended_at"))
     if sess is None and book.get("fast", 0) >= FALLBACK_AFTER and ended and (now - ended).total_seconds() < FALLBACK_S:
@@ -825,10 +877,11 @@ def run_session(home: Path, config: Config, now: datetime, state: dict, lanes: l
         book.pop("error", None)
         sess, changed = msession_mod.current(home), True
     sub = _subset(items, fresh)
-    if not sess.send(build_message(home, config, sub, now, bool(book.get("primed"))),
+    if not sess.send(build_message(home, config, sub, now, bool(book.get("primed")), book.get("handoff") or ""),
                      [r["id"] for r in sub["requests"]], now):
         return changed
     book["primed"] = True
+    book.pop("handoff", None)
     state["manager"].pop("evidence", None)
     for key in fresh:
         sent[key] = now_iso(now)
