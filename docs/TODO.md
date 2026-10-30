@@ -472,7 +472,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [ ] Una lane nunca corre la suite completa por su cuenta: corre los tests de lo que cambió, y la suite completa solo la corre la cola, que es quien decide. (check: `cd collector && uv run -q pytest -q tests/test_fasttests.py -k lane_never_runs_the_full_suite`) (en revisión)
 - [ ] Liberar disco nunca bloquea el ciclo del collector: borrar lanes viejas corre en segundo plano, y el chat y el estado siguen al día mientras tanto. (check: `cd collector && uv run -q pytest -q tests -k sweep_does_not_block_the_cycle`)
 - [ ] Un hook de Tirith tarda menos de 0,3 s: hoy cada petición de un agente espera 3,7 s de mediana en hooks porque cada llamada importa todo tirith.cli. (check: `cd collector && uv run -q pytest -q tests -k hook_imports_little`)
-- [ ] La cola no mata su suite con un límite fijo de 30 minutos ni lo llama rojo: usa el límite de la clase stage:test, y si se agota dice que se agotó el tiempo y lo repite una vez. (check: `cd collector && uv run -q pytest -q tests -k stage_timeout_is_not_red`)
+- [ ] La cola no mata su suite con un límite fijo de 30 minutos ni lo llama rojo: usa el límite de la clase stage:test, y si se agota dice que se agotó el tiempo y lo repite una vez. (check: `cd collector && uv run -q pytest -q tests -k stage_timeout_is_not_red`) (en curso: u-stagetimeout)
 - [x] La suite de tests de Python vuelve a pasar entera en main tras el tren de integración. (check: `cd collector && uv run -q pytest -q -n 8`) (hecho: b133b4b)
 
 ## 18. Salas privadas: hablar con el manager desde el móvil
