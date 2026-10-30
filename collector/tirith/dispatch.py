@@ -383,6 +383,7 @@ def run(home: Path, config: Config, now: datetime, *, agents: list[dict], lanes:
         changed = True  # frees space by itself first, so the check below sees the result
     if diskdiet_mod.check(home, config, state, now, free):
         changed = True
+    diskdiet_mod.start_temp_cleanup(home, diskdiet_mod.smallest_free(home, config, free))
     # outcomes the plan could not take yet; a lane that ended without a plan report is started once more
     if plangate_mod.sync(home, config, lanes, relauncher or _default_relauncher):
         changed = True
@@ -395,7 +396,7 @@ def run(home: Path, config: Config, now: datetime, *, agents: list[dict], lanes:
         changed = True
     for req in inbox_mod.requests(home):
         rid = req["id"]
-        if req["status"] == "done" or req["kind"] == "autopilot":
+        if req["status"] == "done" or req["kind"] == "autopilot" or req["kind"] in inbox_mod.ROOM_KINDS:
             continue
         if rid not in state["handled"]:
             if not room and not req["answers"] and (req["kind"] == "finish" or req["kind"] in inbox_mod.PLAN_KINDS):

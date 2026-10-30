@@ -40,7 +40,7 @@ def test_module_maps_to_its_tests_and_importers(tmp_path):
     assert sel.tests == ["tests/test_alpha.py", "tests/test_beta_more.py"]  # beta imports alpha
     only = fasttests.select(root, "test", ["collector/tirith/gamma.py"])
     assert only.tests == ["tests/test_gamma.py"]
-    assert "pytest -q tests/test_gamma.py" in fasttests.command(only)
+    assert "tests/test_gamma.py" in fasttests.command(only)
 
 
 def test_changed_test_file_runs_itself(tmp_path):
@@ -49,16 +49,36 @@ def test_changed_test_file_runs_itself(tmp_path):
     assert sel.tests == ["tests/test_delta.py"]
 
 
-def test_fallbacks_to_the_full_suite(tmp_path):
+def test_lane_never_runs_the_full_suite_for_a_shared_file(tmp_path):
     root = _tree(tmp_path)
-    for files, why in ((["collector/tirith/home.py"], "shared"), (["collector/tirith/store.py"], "shared"),
-                       (["collector/tests/conftest.py"], "shared"), (["scripts/x.sh"], "unmapped"),
-                       ([], "no change")):
+    for files in (["collector/tirith/home.py"], ["collector/tests/conftest.py"], ["collector/tirith/store.py"]):
         sel = fasttests.select(root, "test", files)
-        assert sel.full and why in sel.reason, files
-        assert fasttests.command(sel) is None
+        assert not sel.full and sel.tests == [] and fasttests.command(sel) == "true", files
+        assert "merge queue runs the full suite" in sel.summary()
+
+
+def test_lane_never_runs_the_full_suite_for_an_unmapped_file(tmp_path):
+    root = _tree(tmp_path)
+    for files in (["collector/state.schema.json"], ["scripts/x.sh"], []):
+        sel = fasttests.select(root, "test", files)
+        assert not sel.full and fasttests.command(sel) == "true", files
+    # a mapped change next to an unmapped one still runs its tests
+    both = fasttests.select(root, "test", ["collector/state.schema.json", "collector/tirith/gamma.py"])
+    assert both.tests == ["tests/test_gamma.py"]
+
+
+def test_lane_never_runs_the_full_suite_for_a_wide_python_change(tmp_path):
+    root = _tree(tmp_path)
     wide = fasttests.select(root, "test", [f"collector/tirith/{m}.py" for m in ("alpha", "delta", "eps", "zeta", "eta")])
-    assert wide.full and "most of the suite" in wide.reason
+    assert not wide.full and "most of the suite" in wide.reason
+    assert wide.tests == ["tests/test_alpha.py", "tests/test_delta.py", "tests/test_eps.py",
+                          "tests/test_eta.py", "tests/test_zeta.py"]  # by name; the importers are left to the queue
+    assert fasttests.command(fasttests.select(root, "test", ["collector/tirith/fasttests.py"])) == "true"
+
+
+def test_changed_tests_run_in_parallel(tmp_path):
+    sel = fasttests.select(_tree(tmp_path), "test", ["collector/tirith/gamma.py"])
+    assert "pytest -q -n auto --maxprocesses 4 tests/test_gamma.py" in fasttests.command(sel)
 
 
 def test_rust_only_the_crate_touched(tmp_path):
@@ -67,7 +87,7 @@ def test_rust_only_the_crate_touched(tmp_path):
     assert cli.crates == ["tirith-cli"] and fasttests.command(cli) == "cargo test -q -p tirith-cli"
     core = fasttests.select(root, "rust-test", ["rust/tirith-core/src/lib.rs"])
     assert core.crates == ["tirith-cli", "tirith-core"]
-    assert fasttests.select(root, "rust-test", ["app/src-tauri/src/main.rs"]).full
+    assert not fasttests.select(root, "rust-test", ["app/src-tauri/src/main.rs"]).full
     # a Rust change leaves the python test stage with nothing to run
     assert fasttests.command(fasttests.select(root, "test", ["rust/tirith-cli/src/main.rs"])) == "true"
 

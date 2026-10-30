@@ -64,6 +64,7 @@ from tirith import fasttests as fasttests_mod
 from tirith import loadlimit as loadlimit_mod
 from tirith import projects as projects_mod
 from tirith import projenv as projenv_mod
+from tirith import roomcli as roomcli_mod
 from tirith import rooms as rooms_mod
 from tirith.home import ensure_home, load_config, now_iso, parse_iso, tirith_home
 from tirith.store import (
@@ -2617,6 +2618,8 @@ def build_parser() -> argparse.ArgumentParser:
     room_say.add_argument("--re", type=int, action="append", metavar="N")
     room_say.add_argument("text")
     room_say.set_defaults(func=_cmd_room_say)
+
+    roomcli_mod.add_parsers(room_sub, common)
 
     doctor = sub.add_parser("doctor", parents=[common], help="check that an agent can run in a lane")
     doctor.add_argument("--agent", required=True, help="agent alias from [agents.<alias>]")

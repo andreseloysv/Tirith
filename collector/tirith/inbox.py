@@ -22,7 +22,8 @@ from tirith.store import append_jsonl, read_jsonl
 
 INBOX_FILE = "inbox.jsonl"
 PROPOSAL = "autopilot-proposal"  # Tirith's own request to the manager: a plan item nobody works on
-KINDS = ("finish", "ask", "setup", "chat", "autopilot", PROPOSAL, "plan-refresh", "plan-new", "plan-edit")
+ROOM_KINDS = ("room-new", "room-invite", "room-leave")  # private rooms: Tirith's own jobs (text: the title, or the room)
+KINDS = ("finish", "ask", "setup", "chat", "autopilot", PROPOSAL, "plan-refresh", "plan-new", "plan-edit", *ROOM_KINDS)
 PLAN_KINDS = ("plan-refresh", "plan-new")
 PLAN_STEP = "plan"  # the step of a request about the whole plan, not one step
 MODELS_ACTIONS = ("models-set", "apply-manager")  # the Settings page; the request's project is "settings"
@@ -166,9 +167,10 @@ def attachment_lines(req: dict) -> str:
 
 def add_request(home: Path, kind: str, project: str = "", step: str = "", text: str = "",
                 at: str | None = None, attachments: list[dict] | None = None, rid: str | None = None,
-                cid: str | None = None, sender: str = "owner") -> dict:
+                cid: str | None = None, sender: str = "owner", via: str = "") -> dict:
     """Append an open request and return its row. A ``cid`` (the page's client id) already on a row makes
-    this a retry: nothing is written and that row is returned. ``sender`` is ``tirith`` for its own proposals."""
+    this a retry: nothing is written and that row is returned. ``sender`` is ``tirith`` for its own proposals.
+    ``via`` names the private room a message came through (``room:<sealed-room>``); empty for the desktop."""
     if kind not in KINDS:
         raise InboxError(f"kind must be one of {', '.join(KINDS)}, not {kind!r}")
     project, step, text = str(project or "").strip(), str(step if step is not None else "").strip(), clip(text.strip())
@@ -186,6 +188,9 @@ def add_request(home: Path, kind: str, project: str = "", step: str = "", text: 
     if kind == "plan-edit":
         text = json.dumps(parse_plan_edit(text), ensure_ascii=False, separators=(",", ":"))
     attachments = clean_attachments(attachments)
+    if kind in ROOM_KINDS:  # Tirith itself does it; text = the title (room-new) or the room id
+        step = step or kind
+        project = project or "all"
     if kind == "chat":
         if not text and not attachments:
             raise InboxError("a chat message needs text or an attachment")
@@ -202,6 +207,8 @@ def add_request(home: Path, kind: str, project: str = "", step: str = "", text: 
            "text": text, "from": sender, "status": "open"}
     if cid:
         row["cid"] = cid
+    if via:
+        row["via"] = str(via)[:200]
     if attachments:
         row["attachments"] = attachments
     append_jsonl(inbox_path(home), row)
@@ -373,6 +380,8 @@ def requests(home: Path) -> list[dict]:
                         "status": "open", "answers": [], "manager_pending": True, "action_runs": []}
             if clean_cid(row.get("cid")):
                 out[rid]["cid"] = clean_cid(row["cid"])
+            if row.get("via"):
+                out[rid]["via"] = str(row["via"])[:200]
             if clean_attachments(row.get("attachments")):
                 out[rid]["attachments"] = clean_attachments(row["attachments"])
             if kind == "setup":
@@ -465,7 +474,7 @@ def manager_pending(req: dict) -> bool:
 
     A ``finish`` or a plan request is Tirith's own job (the dispatcher answers it), so any answer
     settles it; every other kind stays pending until the manager itself answers, whatever the brain said."""
-    if req["status"] == "done" or req["kind"] == "autopilot":  # the dispatcher's own switch
+    if req["status"] == "done" or req["kind"] == "autopilot" or req["kind"] in ROOM_KINDS:  # Tirith's own jobs
         return False
     runs = req.get("action_runs") or []
     if runs:
