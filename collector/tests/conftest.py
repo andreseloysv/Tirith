@@ -15,6 +15,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+UNLOCK_ROOT_BUDGET_S = 1.0  # the walk of the shared temp root is slow where files are scanned; old dirs go a little each run
 GIT = "/usr/bin/git" if Path("/usr/bin/git").exists() else (shutil.which("git") or "git")
 
 
@@ -39,7 +40,7 @@ def cpu_seconds() -> float:
 def make_repo(path: Path) -> Path:
     """Create a throwaway git repo with one commit (tmp dirs only)."""
     path.mkdir(parents=True, exist_ok=True)
-    subprocess.run([GIT, "init", "-q", str(path)], check=True)
+    subprocess.run([GIT, "init", "-q", "--template=", str(path)], check=True)
     (path / "README.md").write_text("# demo repo\n", encoding="utf-8")
     subprocess.run([GIT, "-C", str(path), "add", "."], check=True)
     subprocess.run(
@@ -130,7 +131,7 @@ def _unlock_basetemp(tmp_path_factory):
     yield
     _unlock_tree(base)
     if root != base:
-        _unlock_tree(root, budget_s=5.0)
+        _unlock_tree(root, budget_s=UNLOCK_ROOT_BUDGET_S)
 
 
 @pytest.fixture(autouse=True)
