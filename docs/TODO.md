@@ -444,5 +444,6 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [ ] Antes de rechazar un merge, la cola repite los tests fallados de uno en uno: si pasan, entra y el test queda anotado como inestable. (check: `cd collector && uv run -q pytest -q tests -k rerun_failed`) (en curso: tirith-se-mejora-usando-tirith-11)
 - [x] Con 3 lanes o más esperando en la cola de merge no arranca ningún lane nuevo: primero se termina lo empezado. (check: `cd collector && uv run -q pytest -q tests -k wip_limit`) (hecho: 56448d5)
 - [ ] Deflake timing-sensitive tests that fail intermittently under load (test_idletimeout silent/chatty stage, test_mergeq code-move retry, test_plangate dirty plan)
+- [ ] El trabajo de devolver lanes (reabrir el elemento del plan y comprobar que el agente arrancó) entra en main: la rama lane/tirith-se-mejora-usando-tirith-2 choca con main en test_mergeq.py y CONTRACT-mergeq.md, y su elemento quedó marcado como hecho con un commit de otro lane. (check: `cd collector && uv run -q pytest -q tests -k send_back_reopens_the_plan_item`)
 - [x] La suite de tests de Python vuelve a pasar entera en main tras el tren de integración. (check: `cd collector && uv run -q pytest -q -n 8`) (hecho: b133b4b)
 
