@@ -530,6 +530,21 @@ def _lane_alias(args, command: list[str], config=None) -> str:
     return str(args.agent or getattr(args, "as_agent", None) or (keepgoing_mod.infer_alias(config, command) if config else None) or "")
 
 
+def _hold_lane(home: Path, lane_id: str, token: str) -> None:
+    """Between two rounds of an agent the lane belongs to this process: with the agent's pid gone the
+    collector would close the lane as stopped and drop its token, and the agent-cli shim would refuse the
+    next round. A lane closed that way (not by ``lane stop``) is reopened."""
+    lane = read_json(lane_path(home, lane_id), None)
+    if not isinstance(lane, dict) or lanestop_mod.marker(lane):
+        return
+    lane["pid"] = os.getpid()
+    lane.pop("pgid", None)
+    lane["token"] = token
+    if lane.get("result") == "stopped":
+        lane["ended_at"] = lane["result"] = None
+    write_lane(home, lane)
+
+
 def stopped_after_wait(home: Path, lane_id: str) -> bool:
     return bool(lanestop_mod.marker(read_json(lane_path(home, lane_id), None) or {}))
 
@@ -626,6 +641,7 @@ def _cmd_lane_run(args) -> int:
                     and keepgoing_mod.has_work(workspace, lane.get("start_commit"))):
                 # silent for the idle limit but with work in its worktree: the same session is asked to go on
                 idle_rounds += 1
+                _hold_lane(home, lane_id, lane["token"])
                 minutes = max(1, round((timeouts_mod.effective_idle(home, config, "agent-turn") or 0) / 60))
                 keepgoing_mod.note_idle(home, lane_id, idle_rounds, minutes)
                 resumed = _resume_child(home, config, args, lane, command, log_path, answer,
@@ -635,6 +651,7 @@ def _cmd_lane_run(args) -> int:
                     continue
             if stopped or exit_code != 0 or not agent_lane:
                 break
+            _hold_lane(home, lane_id, lane["token"])
             if stage_waits < keepgoing_mod.MAX_STAGE_WAITS:
                 # a stage the agent started may still run: wait for it, then the same session gets its result
                 runs = keepgoing_mod.stage_runs(home, lane_id, Path(workspace), began_at, reported)
