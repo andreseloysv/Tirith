@@ -246,6 +246,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Cabecera de un paso del Plan con varios agentes: avatares apilados (+N) y un solo botón, sin tapar el título ni la barra de progreso. (hecho: ce69997)
 - [x] Reaplicar sobre main solo el cambio de cabecera de paso de lane/stepheader (4 archivos: git diff --binary 876bf81 cb7e35b | git apply en un worktree nuevo desde main), commit y test web (check: `git cat-file -e main:web/js/planagents.test.mjs && git show main:web/css/style.css | grep -q pavas`) (hecho: 9b1b249)
 - [x] Quitar la vista Flow del menú y su código (el dueño la considera inútil). (hecho: 360eded)
+- [ ] El test web/js/planagents.test.mjs no reescribe la captura versionada web/screenshots/plan-many-agents.png al pasar: la escribe en un temporal, y solo la actualiza con una orden aparte. (check: `! grep -q "screenshots" web/js/planagents.test.mjs`)
 
 ## 11. Lanzar un sub-agente desde el Plan
 
