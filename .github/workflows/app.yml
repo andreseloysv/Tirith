@@ -76,6 +76,14 @@ jobs:
           else
             npm run tauri build
           fi
+      - name: Check the app works without the repository
+        if: runner.os == 'macOS'
+        env:
+          TIRITH_APP_DIR: target/release/bundle/macos
+        run: |
+          pip3 install --quiet uv 2>/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
+          export PATH="$HOME/.local/bin:$PATH"
+          TIRITH_APP=$(ls -d "$TIRITH_APP_DIR"/*.app | head -n 1) bash scripts/check-standalone-app.sh
       - uses: actions/upload-artifact@v4
         with:
           name: tirith-${{ runner.os }}
