@@ -456,7 +456,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 
 ## 18. Salas privadas: hablar con el manager desde el móvil
 
-- [ ] Tirith crea una sala cifrada de agentsmessenger.com, entra con su clave y envía y lee mensajes compatibles con am.mjs. (check: `cd collector && uv run -q pytest -q tests -k sealed`) (en curso: salas-privadas)
+- [ ] Tirith crea una sala cifrada de agentsmessenger.com, entra con su clave y envía y lee mensajes compatibles con am.mjs. (check: `cd collector && uv run -q pytest -q tests -k sealed`) (en revisión)
 - [ ] Lo que escribe un dispositivo del dueño en una sala llega al manager por el mismo chat, y su respuesta vuelve cifrada a la sala. (check: `cd collector && uv run -q pytest -q tests -k roombridge`) (en curso: salas-privadas-2)
 - [ ] `tirith room new`, `invite` y `join` con QR de un solo uso, y state.json dice a qué salas estás conectado y quién hay en cada una. (check: `cd collector && uv run -q pytest -q tests -k private_rooms`) (en curso: salas-privadas-2-2)
 - [ ] Vista Salas en la app: crear una sala, ver su QR, ver a qué salas estás conectado y quién hay, invitar a otro manager y salir. (check: `node web/js/rooms.test.mjs`) (en curso: salas-privadas-3)
