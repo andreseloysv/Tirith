@@ -16,6 +16,7 @@ from tirith import gates
 from tirith import launch as launch_mod
 from tirith import manifest as manifest_mod
 from tirith import mergeq as mergeq_mod
+from tirith import plangate
 from tirith.cli import end_lane, main, register_lane
 from tirith.home import load_config
 from tirith.store import lane_path, read_json, read_lanes, write_json_atomic, write_lane
@@ -265,6 +266,74 @@ def test_a_continuation_lane_uses_the_worktree_and_branch_of_the_original(env, h
     assert row["result"] == "merged"
     assert (repo / "more.txt").exists() and not worktree.exists()
     assert "lane/orig" not in git(repo, "branch", "--list", "lane/*")
+
+
+def _linked(home: Path, lane_id: str) -> None:
+    """The lane works on the plan's item and reported it done."""
+    lane = read_json(lane_path(home, lane_id), None)
+    lane.update(item="Add the feature file.", item_step="2")
+    write_lane(home, lane)
+    plangate.report(home, lane_id, "done")
+
+
+def _plan(repo: Path) -> str:
+    return (repo / "docs" / "TODO.md").read_text(encoding="utf-8")
+
+
+def test_false_tick_the_queue_merges_nothing_for_a_lane_that_changed_nothing(env, home: Path) -> None:
+    repo, _ = env
+    worktree = make_lane(home, repo, "empty", {})
+    _linked(home, "empty")
+    head = git(repo, "rev-parse", "HEAD")
+    mergeq_mod.enqueue(home, "empty")
+    row = mergeq_mod.process_next(home, load_config(home), relaunch=Sender())
+    assert row["result"] == mergeq_mod.CLOSED and "nothing to merge" in row["message"]
+    assert git(repo, "rev-parse", "HEAD") == head and not worktree.exists()
+    lane = read_json(lane_path(home, "empty"), None)
+    assert lane["review"]["status"] == plangate.WORK_NONE
+    assert plangate.lane_work(home, repo, lane) == (plangate.WORK_NONE, None)
+    assert not plangate.tick_merged(home, load_config(home), [lane])
+    assert "- [ ] Add the feature file. (en revisión)" in _plan(repo)
+    assert not mergeq_mod.ready_to_enqueue(home, lane, repo)
+
+
+def test_false_tick_the_queue_saves_unsaved_work_then_ticks_its_merge(env, home: Path) -> None:
+    repo, _ = env
+    make_lane(home, repo, "unsaved", {"u.txt": "1"})
+    _linked(home, "unsaved")
+    lane = read_json(lane_path(home, "unsaved"), None)
+    assert plangate.lane_work(home, repo, lane) == (plangate.WORK_UNSAVED, None)
+    mergeq_mod.enqueue(home, "unsaved")
+    assert mergeq_mod.process_next(home, load_config(home), relaunch=Sender())["result"] == "merged"
+    assert (repo / "u.txt").exists() and "- [x] Add the feature file.\n" in _plan(repo)
+    # the branch and the worktree are gone now: the merge commit is the proof when the review settles
+    state, sha = plangate.lane_work(home, repo, read_json(lane_path(home, "unsaved"), None))
+    assert state == plangate.WORK_MERGED and git(repo, "log", "-1", "--format=%s", sha).startswith("Merge lane/unsaved:")
+
+
+def test_false_tick_the_queue_proves_a_continuation_by_the_branch_it_merged(env, home: Path) -> None:
+    repo, _ = env
+    worktree = make_lane(home, repo, "orig", {"o.txt": "1"})
+    register_lane(home, lane_id="orig2", project="demo", hero_class="glasswright", feature="Orig2",
+                  workspace=str(worktree), log=None, pid=None, brief=None, step="2")
+    end_lane(home, "orig2", "done", "continued it")
+    _linked(home, "orig2")
+    mergeq_mod.enqueue(home, "orig2")
+    assert mergeq_mod.process_next(home, load_config(home), relaunch=Sender())["result"] == "merged"
+    assert "- [x] Add the feature file.\n" in _plan(repo)
+    lane = read_json(lane_path(home, "orig2"), None)
+    assert lane["branch"] == "lane/orig"
+    assert plangate.lane_work(home, repo, lane)[0] == plangate.WORK_MERGED
+
+
+def test_false_tick_a_gone_worktree_with_a_branch_at_its_start_is_not_already_merged(env, home: Path) -> None:
+    repo, _ = env
+    worktree = make_lane(home, repo, "lost", {})
+    mergeq_mod.enqueue(home, "lost")
+    git(repo, "worktree", "remove", "--force", str(worktree))
+    row = mergeq_mod.process_next(home, load_config(home), relaunch=Sender())
+    assert "worktree is gone" in row["message"]
+    assert (read_json(lane_path(home, "lost"), None).get("review") or {}).get("status") != "merged"
 
 
 def test_cli_request_run_and_status(env, home: Path, capsys, monkeypatch) -> None:
