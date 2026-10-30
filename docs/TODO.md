@@ -387,4 +387,5 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [ ] Los lanes que lanza Tirith desde la app ven las variables de entorno del dueño (claves como GITHUB_TOKEN o GEMINI_API_KEY de su shell), sin copiarlas a ningún archivo del repo. (check: `cd collector && uv run -q pytest -q tests -k owner_env`)
 - [ ] Los límites de tiempo de los comandos crecen con la carga de la máquina, así git lento con carga alta no pone la salud en rojo. (check: `cd collector && uv run -q pytest -q tests -k load_scaled`)
 - [ ] La cola de merge puede cancelar el merge en curso cuando otro lane lo hace innecesario. (check: `cd collector && uv run -q pytest -q tests -k merge_cancel`)
+- [ ] Un lane vivo que espera su etapa de tests no cuenta como parado: ni el estado ni el autopilot lo marcan stalled solo porque su log lleva 10 minutos sin cambiar. (check: `cd collector && uv run -q pytest -q tests -k stalled_while_tests_run`)
 
