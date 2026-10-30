@@ -152,7 +152,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Cada fallo de la cola de merge vuelve con su motivo al lane o al manager. (check: `cd collector && uv run -q pytest -q tests -k mergeq`)
 - [ ] La comparación con Rust no bloquea merges mientras el port a Rust está parado. (check: `! grep -A3 'name = "parity"' tirith.toml | grep -q 'kind = "test"'`) (en revisión)
 - [ ] Tirith guarda una copia del brief de cada lane en su carpeta, así un lane cortado se puede retomar tras un reinicio. (check: `cd collector && uv run -q pytest -q tests -k brief`)
-- [ ] Ninguna petición de permiso del manager llega al dueño: el código la permite o la bloquea según las reglas. (check: `cd collector && uv run -q pytest -q tests -k msession`) (reabierto: u-permask terminó sin informe)
+- [ ] Ninguna petición de permiso del manager llega al dueño: el código la permite o la bloquea según las reglas. (check: `cd collector && uv run -q pytest -q tests -k msession`) (en curso: manager-permission-questions-nev)
 - [ ] Cada hora un lane de prueba recorre todo el camino en un repo de prueba, del plan al push, y la salud se pone roja si no llega. (check: `cd collector && uv run -q pytest -q tests -k canary`) (en curso: u-canary)
 
 ## 8. Más visibilidad por agente
