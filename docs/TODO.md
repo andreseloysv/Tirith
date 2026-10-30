@@ -327,6 +327,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Rehacer sobre main el commit 8b4bf7c de lane/manager-de-guardia-chat-y-piloto-3 (una conversación del manager entre turnos headless, 5 archivos) en un worktree nuevo, con test por etapa e informe con el número exacto de tests (check: `git show main:collector/tests/test_managerd.py | grep -q test_headless_turns_share_one_session && git show main:collector/tirith/managerd.py | grep -q 'def adopt_session'`)
 - [ ] El piloto automático manda como mucho una propuesta abierta por paso. (check: `cd collector && uv run -q pytest -q tests -k autopilot`) (en curso: u-pilotflood)
 - [ ] Los mensajes del dueño pasan delante: el manager atiende cada mensaje del chat antes que las propuestas del piloto. (check: `cd collector && uv run -q pytest -q tests -k managerd`) (en revisión)
+- [ ] web/js/landing.test.mjs carga playwright-core del propio repo (o se salta con aviso si no está), nunca de node_modules de otro proyecto como propuestavenezuela (check: `node web/js/landing.test.mjs`)
 
 ## 15. Collector y CLI en Rust
 
