@@ -29,6 +29,7 @@ except ImportError:  # Windows: the lock is a no-op there (one dispatcher, one w
 
 from tirith import timeouts as timeouts_mod
 from tirith import asks as asks_mod
+from tirith import claimcheck as claimcheck_mod
 from tirith import manifest as manifest_mod
 from tirith import projects as projects_mod
 from tirith import roadmap as roadmap_mod
@@ -466,12 +467,76 @@ def review_started(home: Path, repo: Path, lane: dict) -> None:
                 f"revisión de {lane['id']}", parent=roadmap_mod.split_status(item)[0])
 
 
-def on_main(repo: Path, lane: dict) -> bool:
-    """The claim check: the lane's work is on the project's branch (its branch, if still there, is merged)."""
-    branch = f"refs/heads/lane/{lane['id']}"
-    if _git(repo, "rev-parse", "--verify", "-q", branch).returncode != 0:
-        return True  # merged and removed by the review
-    return _git(repo, "merge-base", "--is-ancestor", branch, "HEAD").returncode == 0
+WORK_MERGED, WORK_NOT_MERGED, WORK_UNSAVED, WORK_NONE = "merged", "not-merged", "unsaved", "no-work"
+WORK_REASONS = {WORK_NOT_MERGED: "the lane's work is not on main", WORK_UNSAVED: "the lane has uncommitted work",
+                WORK_NONE: "the lane changed nothing"}
+
+
+def _ahead(repo: Path, base: str, tip: str) -> bool:
+    """True when ``tip`` has commits ``base`` lacks."""
+    done = _git(repo, "rev-list", "--count", f"{base}..{tip}")
+    return done.returncode == 0 and done.stdout.strip() not in ("", "0")
+
+
+def _unsaved(workspace: Path, branch: str) -> bool:
+    """True when the worktree that has ``branch`` checked out holds uncommitted changes (a git failure counts)."""
+    if not workspace.is_dir() or _git(workspace, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip() != branch:
+        return False
+    done = _git(workspace, "status", "--porcelain")
+    return done.returncode != 0 or bool(done.stdout.strip())
+
+
+def _merge_of(repo: Path, tip: str) -> str | None:
+    """Short sha of the oldest merge on main whose first parent lacks ``tip``: the one that brought it in."""
+    merges = _git(repo, "log", "--merges", "--topo-order", "--ancestry-path", "--format=%h", f"{tip}..HEAD").stdout.split()
+    return next((m for m in reversed(merges) if _git(repo, "merge-base", "--is-ancestor", tip, f"{m}^1").returncode != 0), None)
+
+
+def _named_merge(repo: Path, branches: list[str], start: str) -> str | None:
+    """The proof for a removed branch: the oldest merge on main named exactly after it (``Merge <branch>: ...`` from
+    Tirith, ``Merge branch '<branch>'`` from git) whose second parent has commits past the lane's start and that
+    changes more than the plan files (a merge that only brought main's plan commits has none of the lane's work)."""
+    from tirith import mergeq as mergeq_mod  # late import: mergeq imports this module
+    plans = mergeq_mod._plan_paths(repo)
+    for branch in branches:
+        named = re.compile(rf"Merge (?:{re.escape(branch)}:|branch '{re.escape(branch)}'(?: into |$))")
+        rows = _git(repo, "log", "--merges", "--topo-order", "--format=%h %s", "-F", "--grep", branch,
+                    f"{start}..HEAD").stdout.splitlines()
+        for sha, _, subject in (row.partition(" ") for row in reversed(rows)):
+            if named.match(subject) and _git(repo, "merge-base", "--is-ancestor", start, f"{sha}^2").returncode == 0 \
+                    and _ahead(repo, start, f"{sha}^2") \
+                    and set(_git(repo, "diff", "--name-only", f"{sha}^1", sha).stdout.splitlines()) - plans:
+                return sha
+    return None
+
+
+def lane_work(home: Path, repo: Path, lane: dict) -> tuple[str, str | None]:
+    """The claim check, the only proof that a lane's work is on main: ``(WORK_*, short sha of the merge that brought
+    it in, only when merged)``. Merged needs the lane's own commits: the branch (:func:`tirith.mergeq.branch_of`, a
+    continuation lane works on the original's) has commits past the first lane's ``start_commit``, a merge brought
+    them into main and its worktree has nothing unsaved. A branch at its start is ``WORK_UNSAVED`` when the worktree
+    is dirty and ``WORK_NONE`` when it is clean. A removed branch is merged only by :func:`_named_merge`, else
+    ``WORK_NONE`` when the queue recorded that it had nothing to merge."""
+    from tirith import mergeq as mergeq_mod  # late import: mergeq imports this module
+    links = claimcheck_mod.chain(home, lane)
+    start = str(links[-1].get("start_commit") or lane.get("start_commit") or "")
+    branches = list(dict.fromkeys(
+        mergeq_mod.branch_of(link, Path(str(link["workspace"]))) if link.get("workspace") else f"lane/{link['id']}"
+        for link in links))
+    if not start:
+        return WORK_NOT_MERGED, None
+    branch = branches[0]
+    if not mergeq_mod.branch_exists(repo, branch):
+        sha = _named_merge(repo, branches, start)
+        if sha:
+            return WORK_MERGED, sha
+        return (WORK_NONE if (lane.get("review") or {}).get("status") == WORK_NONE else WORK_NOT_MERGED), None
+    if lane.get("workspace") and _unsaved(Path(str(lane["workspace"])), branch):
+        return WORK_UNSAVED, None
+    if not _ahead(repo, start, branch):
+        return WORK_NONE, None
+    sha = _merge_of(repo, branch) if _git(repo, "merge-base", "--is-ancestor", branch, "HEAD").returncode == 0 else None
+    return (WORK_MERGED, sha) if sha else (WORK_NOT_MERGED, None)
 
 
 def review_passed(home: Path, repo: Path, lane: dict) -> str:
@@ -481,8 +546,9 @@ def review_passed(home: Path, repo: Path, lane: dict) -> str:
         return ""
     step, item = linked
     clean, project = roadmap_mod.split_status(item)[0], str(lane["project"])
-    if not on_main(repo, lane):
-        return review_failed(home, repo, lane, "the lane's work is not on main")
+    state = lane_work(home, repo, lane)[0]
+    if state != WORK_MERGED:
+        return review_failed(home, repo, lane, WORK_REASONS[state])
     sub = review_text(clean)
 
     def mutate(text: str) -> str:
@@ -520,24 +586,11 @@ def review_failed(home: Path, repo: Path, lane: dict, reason: str) -> str:
 # -- items whose work is on main --------------------------------------------------------------
 
 DOC_SUFFIXES = (".md", ".txt", ".rst")
+NO_CHANGES = "sin cambios"  # the note of Tirith's own work that ended without changing anything
 
 
 def done_note(clean: str, sha: str) -> str:
     return f"{clean} (hecho: {sha})"
-
-
-def merged_commit(repo: Path, lane: dict) -> str | None:
-    """Short sha of the lane's merge commit (or branch tip) when its work is an ancestor of main, else None."""
-    branch = f"refs/heads/lane/{lane['id']}"
-    if _git(repo, "rev-parse", "--verify", "-q", branch).returncode == 0:
-        if _git(repo, "merge-base", "--is-ancestor", branch, "HEAD").returncode != 0:
-            return None
-        merge = _git(repo, "log", "--merges", "--ancestry-path", "--format=%h", f"{branch}..HEAD").stdout.split()
-        if merge:
-            return merge[-1]  # the oldest merge after the branch tip is the one that brought it in
-        return _git(repo, "rev-parse", "--short", branch).stdout.strip() or None
-    found = _git(repo, "log", "--merges", "-1", "--format=%h", "--grep", f"lane/{lane['id']}", "-F").stdout.strip()
-    return found or None
 
 
 TICK_EVERY_S = 60.0  # a lane whose item is not "en revisión" or not on main yet is looked at again after this
@@ -546,7 +599,9 @@ _ticked_at: dict[tuple[str, str], float] = {}
 
 def tick_merged(home: Path, config: Config, lanes: list[dict]) -> bool:
     """Lanes that reported ``done`` and merged themselves never get a review, so their item would stay
-    "(en revisión)": tick it "(hecho: <sha>)" once the lane's work is on main (the claim check, :func:`on_main`)."""
+    "(en revisión)": tick it "(hecho: <sha>)" once the lane's work is on main (the claim check, :func:`lane_work`).
+    Tirith's own work (the "Trabajo automático" step: a verification, a plan refresh) may rightly change nothing: once
+    it ended it is ticked "(hecho: sin cambios)". Any other lane without commits stays in review for the manager."""
     changed, plans = False, {}
     for seen in lanes:
         outcome = seen.get("outcome") or {}
@@ -573,8 +628,10 @@ def tick_merged(home: Path, config: Config, lanes: list[dict]) -> bool:
         found = roadmap_mod.find_item(plans[project], step, clean)
         if found is None or roadmap_mod.split_status(found["text"])[1] != roadmap_mod.STATE_REVIEW:
             continue
-        sha = merged_commit(repo, lane)
-        if sha is None:
+        state, sha = lane_work(home, repo, lane)
+        if state == WORK_NONE and step == OPS_STEP and lane.get("ended_at"):
+            sha = NO_CHANGES
+        elif state != WORK_MERGED:
             continue
         try:
             changed |= commit_change(

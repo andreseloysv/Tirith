@@ -412,6 +412,8 @@ def _try(home: Path, repo: Path, lane: dict, entry: dict) -> tuple[str, str, dic
         return RED, f"committing the lane failed: {failed}", {}
     if not branch_exists(repo, branch):
         return WAITING, f"branch not found: {branch}", {}
+    if _git(repo, "merge-base", "--is-ancestor", branch, "HEAD").returncode == 0:
+        return plangate_mod.WORK_NONE, f"nothing to merge: {branch} has no commits main lacks", {"branch": branch}
     base = _git(repo, "rev-parse", "HEAD").stdout.strip()
     main_branch = _git(repo, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
     tmp, error = _make_tmp(repo, f"_mergeq-{lane_id}", base)
@@ -465,6 +467,9 @@ def _try_train(home: Path, repo: Path, members: list[tuple[dict, dict]]) -> tupl
                          f"committing the lane {failed}" if timed else f"committing the lane failed: {failed}", {}))
         elif not branch_exists(repo, branch):
             left.append((entry, lane, WAITING, f"branch not found: {branch}", {}))
+        elif _git(repo, "merge-base", "--is-ancestor", branch, "HEAD").returncode == 0:  # main has all of it
+            left.append((entry, lane, plangate_mod.WORK_NONE,
+                         f"nothing to merge: {branch} has no commits main lacks", {"branch": branch}))
         else:
             joined.append((entry, lane))
     if not joined:
@@ -617,7 +622,7 @@ def _close_gone(home: Path, entry: dict, lane: dict | None, repo: Path | None) -
         why = "its project is gone"
     else:
         branch = branch_of(lane, Path(str(lane.get("workspace") or "")))
-        merged = _git(repo, "merge-base", "--is-ancestor", branch, "HEAD").returncode == 0
+        merged = plangate_mod.lane_work(home, repo, lane)[0] == plangate_mod.WORK_MERGED
         why = ("already merged into main" if merged else "its worktree is gone")
         if merged:
             fresh = dict(lane)
@@ -643,6 +648,7 @@ def _close_merged(home: Path, repo: Path, lane: dict, entry: dict, extra: dict, 
     if files is None:
         files = len(_git(repo, "diff", "--name-only", f"{extra['commit']}^1", extra["commit"]).stdout.split())
     fresh = read_json(lane_path(home, lane_id), lane)
+    fresh["branch"] = extra["branch"]  # the branch is gone: :func:`branch_of` can no longer ask the worktree
     fresh["review"] = {"status": review_mod.MERGED, "at": now_iso(), "by": "mergeq", "pid": os.getpid(),
                        "message": message, "commit": extra["commit"], "branch": extra["main"],
                        "passed": extra.get("passed"), "files": files}
@@ -678,6 +684,13 @@ def _settle(home: Path, config: Config, entry: dict, lane: dict, repo: Path, res
         return _finish(home, entry, WAITING, message, keep=True, retried=True)
     if result == WAITING:
         return _finish(home, entry, WAITING, message, keep=True)
+    if result == plangate_mod.WORK_NONE:  # committed what was left and main already has it all: no merge, no tick here
+        _remove_worktree(repo, "--force", str(lane["workspace"]))
+        _git(repo, "branch", "-D", str(extra["branch"]))
+        fresh = read_json(lane_path(home, entry["lane"]), lane)
+        fresh["review"] = {"status": plangate_mod.WORK_NONE, "at": now_iso(), "by": "mergeq", "message": message}
+        write_lane(home, fresh)
+        return _finish(home, entry, CLOSED, message)
     if result in (CONFLICT, RED):
         sent = send_back(home, config, lane, result, message, str(extra.get("main") or "main"), relaunch)
         return _finish(home, entry, result, message, sent_to=sent or None)
