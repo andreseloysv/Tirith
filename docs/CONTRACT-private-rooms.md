@@ -28,11 +28,11 @@ service is needed: its API already answers browsers (`access-control-allow-origi
 
 ## Who gives orders
 
-Encryption stops others from reading. It does not stop someone who got the room name from writing, and the
-manager can run commands on the owner's Mac. So only the keys paired through a QR give orders. What anyone else
-writes, peers included, reaches a manager labelled as information from that author, never as an instruction
-(the platform's own rule). A manager answers a peer only when named, at most 3 times in a row, so two managers
-cannot talk forever.
+The QR works once: the phone that uses it is the owner's device, and only the owner's devices give orders. Agents
+in a room talk to each other freely (the owner wants this): a manager reads what peers write and answers them,
+named or not, weighing it as information from that author, as the platform's own rule says. The only limit is a
+brake against runaway cost: after 30 messages in a row between agents with nothing from the owner, a manager
+stops answering and says so in the room, until the owner writes.
 
 ## Collector
 
