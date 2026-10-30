@@ -120,7 +120,7 @@ def view(home: Path, project: str | None = None) -> dict:
 # -- taking work -------------------------------------------------------------------------------
 
 
-def _claim(home: Path) -> dict | None:
+def _claim(home: Path, skip: frozenset[str] = frozenset()) -> dict | None:
     with _locked(home):
         data = load(home)
         for entry in data["queue"]:
@@ -128,7 +128,7 @@ def _claim(home: Path) -> dict | None:
                 return None  # one at a time
             if entry["status"] == RUNNING:
                 entry["status"] = QUEUED  # the merger died: take it again
-        waiting = [e for e in data["queue"] if e["status"] == QUEUED]
+        waiting = [e for e in data["queue"] if e["status"] == QUEUED and e["lane"] not in skip]
         if not waiting:
             write_json_atomic(_path(home), data)
             return None
@@ -186,6 +186,37 @@ def _commit_workspace(workspace: Path, lane_id: str, feature: str) -> str | None
     return None
 
 
+def _plan_paths(repo: Path) -> set[str]:
+    """Repo-relative paths of the project's plan files (the roadmap and the manifest ``plans``)."""
+    found = [plangate_mod.plan_file(repo), *(repo / p for p in manifest_mod.load(repo).plans)]
+    out = set()
+    for path in found:
+        try:
+            out.add(path.resolve().relative_to(repo.resolve()).as_posix()) if path else None
+        except ValueError:
+            pass
+    return out
+
+
+def _with_plan_moves(repo: Path, tmp: Path, base: str, head: str, tested: str, branch: str, feature: str) -> str | None:
+    """Main moved while the suite ran: when only plan files changed, merge them into the tested
+    result without a second suite run and return the new commit; None means retry from the new main."""
+    plans = _plan_paths(repo)
+    if not plans or _git(repo, "merge-base", "--is-ancestor", base, head).returncode != 0:
+        return None
+    moved = _git(repo, "diff", "--name-only", base, head).stdout.split()
+    if any(name not in plans for name in moved):
+        return None
+    if _git(tmp, "merge", "--no-ff", "-q", "-m", f"Merge {branch}: {feature}", head).returncode != 0:
+        _git(tmp, "merge", "--abort")
+        return None
+    landed = _git(tmp, "rev-parse", "HEAD").stdout.strip()
+    differs = _git(tmp, "diff", "--name-only", tested, landed).stdout.split()
+    if any(name not in plans for name in differs):
+        return None
+    return landed
+
+
 def _try(home: Path, repo: Path, lane: dict, entry: dict) -> tuple[str, str, dict]:
     """One attempt: ``(result, message, extra)``; ``waiting`` / ``retry`` mean try again later / at once."""
     lane_id, project = str(lane["id"]), str(lane.get("project") or "")
@@ -225,8 +256,11 @@ def _try(home: Path, repo: Path, lane: dict, entry: dict) -> tuple[str, str, dic
         with plangate_mod.writer_lock(home, project):
             if _git(repo, "status", "--porcelain", "--untracked-files=no").stdout.strip():
                 return WAITING, f"{repo} has uncommitted changes; the queue waits for it to be clean", {}
-            if _git(repo, "rev-parse", "HEAD").stdout.strip() != base:
-                return "retry", "main moved while the suite ran", {}
+            head = _git(repo, "rev-parse", "HEAD").stdout.strip()
+            if head != base:
+                tested = _with_plan_moves(repo, tmp, base, head, tested, branch, feature)
+                if tested is None:
+                    return "retry", "main moved while the suite ran", {}
             plangate_mod.recover_git_lock(repo)
             moved = _git(repo, "merge", "--ff-only", "-q", tested)
             if moved.returncode != 0 and "index.lock" in moved.stderr and plangate_mod.recover_git_lock(repo):
@@ -295,9 +329,10 @@ def send_back(home: Path, config: Config, lane: dict, result: str, message: str,
     return ""
 
 
-def process_next(home: Path, config: Config, *, relaunch: Callable | None = None, push: bool = True) -> dict | None:
+def process_next(home: Path, config: Config, *, relaunch: Callable | None = None, push: bool = True,
+                 skip: frozenset[str] = frozenset()) -> dict | None:
     """Merge the oldest waiting lane; the result row, or None when the queue is empty or busy."""
-    entry = _claim(home)
+    entry = _claim(home, skip)
     if entry is None:
         return None
     lane_id = entry["lane"]
@@ -311,7 +346,7 @@ def process_next(home: Path, config: Config, *, relaunch: Callable | None = None
         if result != "retry":
             break
     if result == "retry":
-        return _finish(home, entry, WAITING, message, keep=True)
+        return _finish(home, entry, WAITING, message, keep=True, retried=True)
     if result == WAITING:
         return _finish(home, entry, WAITING, message, keep=True)
     if result in (CONFLICT, RED):
@@ -341,11 +376,17 @@ def process_next(home: Path, config: Config, *, relaunch: Callable | None = None
 
 def drain(home: Path, config: Config, **kwargs) -> list[dict]:
     """Merge every waiting lane, one after the other."""
-    out = []
+    out, tried = [], set()
     while True:
-        row = process_next(home, config, **kwargs)
-        if row is None or row["result"] == WAITING:
-            return out + ([row] if row else [])
+        row = process_next(home, config, skip=frozenset(tried), **kwargs)
+        if row is None:
+            return out
+        if row["result"] == WAITING and row.get("retried"):  # main moved in code: back in the queue, next entry
+            tried.add(row["lane"])
+            out.append(row)
+            continue
+        if row["result"] == WAITING:
+            return out + [row]
         out.append(row)
 
 
