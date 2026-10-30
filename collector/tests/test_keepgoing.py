@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -125,6 +126,49 @@ def test_keepalive_infers_the_alias_of_a_known_agent_cli(home, tmp_path, monkeyp
     config = load_config(home)
     assert keepgoing_mod.infer_alias(config, [str(tmp_path / "agent" / "agentcli"), "-p"]) == "anthropic"
     assert keepgoing_mod.infer_alias(config, [sys.executable]) is None
+
+
+def test_keepgoing_resume_not_blocked(home, tmp_path, monkeypatch) -> None:
+    """The collector closes a lane whose pid is gone; the follow-up round still starts through the agent shim."""
+    from datetime import datetime, timedelta, timezone
+
+    from tirith import collector as collector_mod
+    from tirith.store import read_lanes
+
+    monkeypatch.setattr(keepgoing_mod, "POLL_S", 0.1)
+    repo = _lane_run_setup(home, tmp_path, monkeypatch)
+    agent = tmp_path / "agent"
+    agent.mkdir()
+    (agent / "fake.py").write_text(FAKE, encoding="utf-8")
+    (agent / "mode").write_text("fix-on-resume", encoding="utf-8")
+    exe = agent / "agentcli"
+    exe.write_text(f"#!/bin/sh\nexec {sys.executable} {agent / 'fake.py'} \"$@\"\n", encoding="utf-8")
+    exe.chmod(0o755)
+    with (home / "config.toml").open("a", encoding="utf-8") as cfg:
+        cfg.write('\n[agents.anthropic]\ncommand = "agentcli"\n')
+    monkeypatch.setenv("PATH", f"{agent}{os.pathsep}{os.environ['PATH']}")
+    assert [r[1] for r in gates.install_shims(load_config(home), home / "shims")] == ["installed"]
+    monkeypatch.setattr(keepgoing_mod.claimcheck_mod, "test_runs", lambda *a: [{"at": 9e12, "counts": [], "run": "r"}])
+    real_gaps = keepgoing_mod.gaps
+
+    def gaps_after_collector_tick(home_, lane, repo_, report):
+        later = datetime.now(timezone.utc) + timedelta(hours=1)
+        collector_mod.close_dead_lanes(home_, read_lanes(home_), later)
+        return real_gaps(home_, lane, repo_, report)
+
+    monkeypatch.setattr(keepgoing_mod, "gaps", gaps_after_collector_tick)
+    monkeypatch.setenv("TIRITH_HOME", str(home))
+    try:
+        code = main(["lane", "run", "--project", "demo", "--class", "warden", "--feature", "Loop",
+                     "--brief", str(repo / "brief.md"), "--step", "1", "--item", "Do the thing.",
+                     "--id", "loop", "--workspace", str(repo), "--as-agent", "anthropic", "--",
+                     "agentcli", "-p", "the brief", "--output-format", "stream-json"])
+    finally:
+        make_hooks_mutable(repo)
+    calls = [json.loads(l) for l in (agent / "calls.jsonl").read_text().splitlines()]
+    lane = read_json(home / "lanes" / "loop.json", {})
+    assert code == 0 and len(calls) == 2 and "--resume" in calls[1]
+    assert lane["outcome"]["status"] == "done" and lane["result"] == "done"
 
 
 def test_keepalive_relaunch_without_session_says_what_was_left(home, tmp_path) -> None:
