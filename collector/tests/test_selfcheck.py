@@ -120,8 +120,8 @@ def test_a_chat_message_nobody_works_on_restarts_the_manager_and_is_told(home: P
     fake, state = Fake(), {}
     first, second = chat(home, NOW), chat(home, at(10))
     state["manager"] = {"tries": 2, "key": "old", "at": NOW.strftime(Z), "error": "no command"}
-    check(home, state, at(100), fake)
-    assert level(state, "manager") == "ok"  # under 120 s
+    check(home, state, at(50), fake)
+    assert level(state, "manager") == "ok"  # under 60 s
     check(home, state, at(200), fake)
     assert level(state, "manager") == "healing" and state["health"]["level"] == "amber"
     assert state["manager"]["tries"] == 0 and "key" not in state["manager"] and "error" not in state["manager"]
