@@ -38,6 +38,7 @@ from tirith import roadmap as roadmap_mod
 from tirith import mergeq as mergeq_mod
 from tirith import hooks as hooks_mod
 from tirith import autopilot as autopilot_mod
+from tirith import canary as canary_mod
 from tirith import dispatch as dispatch_mod
 from tirith import selfcheck as selfcheck_mod
 from tirith import livesteps as livesteps_mod
@@ -1186,6 +1187,8 @@ class Collector:
         known_ids = set()
         guard_replies = self._guard_replies(now)
         for proj in self.config.projects:
+            if canary_mod.hidden(proj.id):
+                continue  # the test project is shown under Health, not on the owner's list
             known_ids.add(proj.id)
             if guard_replies.get(proj.id, ("", None))[0] == "never" and proj.guard:
                 projects_mod.set_project_guard(self.home, proj.id, False)

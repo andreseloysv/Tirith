@@ -1,7 +1,7 @@
 """Tirith checks itself, and fixes what it can before the owner notices.
 
 Every dispatcher pass ``dispatch.run`` calls :func:`run` (cheap: no process is started unless a remedy needs
-one). Five checks, results in ``dispatch.json`` under ``health`` and, in plain words, ``state.health``:
+one). Seven checks, results in ``dispatch.json`` under ``health`` and, in plain words, ``state.health``:
 
 * ``collector``: the gap since the last pass (the app supervisor restarts the collector; here the gap is kept);
 * ``manager``: the oldest chat message without an answer while no manager turn is working on it, or a manager
@@ -9,7 +9,8 @@ one). Five checks, results in ``dispatch.json`` under ``health`` and, in plain w
 * ``autopilot``: open plan items nobody works on and nobody was told about, or proposals the manager leaves
   unanswered for 10 min;
 * ``disk``: below the disk-guard limit;
-* ``reviews``: a review stuck in ``running``, or ``tests-failed`` on tests the lane's diff does not touch.
+* ``reviews``: a review stuck in ``running``, or ``tests-failed`` on tests the lane's diff does not touch;
+* ``canary``: the hourly end-to-end test lane did not reach the push and the plan tick (``tirith.canary``).
 
 A failing check gets a remedy by code where that is safe (restart the manager turn, end a lingering manager
 process, run a review again), at most ``MAX_TRIES`` times per episode and never twice within ``GRACE_S``;
@@ -29,6 +30,7 @@ from typing import Callable
 from tirith import timeouts as timeouts_mod
 from tirith import asks as asks_mod
 from tirith import autopilot as autopilot_mod
+from tirith import canary as canary_mod
 from tirith import diskdiet as diskdiet_mod
 from tirith import inbox as inbox_mod
 from tirith import launch as launch_mod
@@ -57,10 +59,12 @@ SAVE_EVERY_S = 30.0
 QUEUE_KIND = "selfcheck"
 LEVELS = ("ok", "healing", "failed")
 LABELS = {"collector": "Tirith itself", "manager": "The manager", "autopilot": "The autopilot",
-          "disk": "Disk space", "reviews": "Reviews", "mergeq": "The merge queue", "timeouts": "Command timeouts"}
+          "disk": "Disk space", "reviews": "Reviews", "mergeq": "The merge queue", "timeouts": "Command timeouts",
+          "canary": "The end-to-end test"}
 OK_TEXT = {"collector": "Tirith is collecting normally.", "manager": "The manager is answering normally.",
            "autopilot": "The autopilot is on track.", "disk": "There is enough free disk space.",
-           "reviews": "Reviews are moving.", "mergeq": "The merge queue is moving.", "timeouts": "No command keeps running out of time."}
+           "reviews": "Reviews are moving.", "mergeq": "The merge queue is moving.", "timeouts": "No command keeps running out of time.",
+           "canary": "The hourly end-to-end test run reaches the push."}
 _TEST_FILE = re.compile(r"[\w./-]*(?:test_\w+\.py|[\w-]+\.test\.mjs)")
 
 
@@ -287,6 +291,16 @@ def _mergeq(home: Path, now: datetime, book: dict, active: set[str]) -> dict:
     return _check("healing", f"The merge queue is stuck: {what}.")
 
 
+def _canary(home: Path, now: datetime, book: dict, active: set[str]) -> dict:
+    """The hourly test lane: red (a manager queue item, never the owner's) with the step it stopped at."""
+    level, text, row = canary_mod.verdict(home, now)
+    if level == "ok":
+        return _check("ok", text)
+    active.add("canary")
+    _queue(home, book, "canary", canary_mod.PROJECT, str((row or {}).get("lane") or ""), text)
+    return _check("failed", text)
+
+
 def _timeouts(home: Path, now: datetime, book: dict, active: set[str]) -> dict:
     """A command class that timed out ``TIMEOUTS_REPEATED`` times within the hour: one manager queue item."""
     worst = _check("ok", OK_TEXT["timeouts"])
@@ -416,6 +430,7 @@ def run(home: Path, config: Config, now: datetime, state: dict, *, lanes: list[d
     checks["reviews"] = _reviews(home, config, now, book, lanes, spawn, kill, diff or diff_files, active)
     checks["mergeq"] = _mergeq(home, now, book, active)
     checks["timeouts"] = _timeouts(home, now, book, active)
+    checks["canary"] = _canary(home, now, book, active)
     changed = _announce(home, book, now)
     active |= set(book["notices"])  # an episode lasts until the owner has been told how it ended
     for key in list(book["tries"]):  # an episode that is over starts the next one from zero
