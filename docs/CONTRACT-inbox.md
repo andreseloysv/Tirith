@@ -659,9 +659,15 @@ in which the session could not start (`dispatch.json` `manager.session.error` sa
   The reply is written back as a `control_response` and the item is closed; a question left when the turn ends
   is closed too.
 - **Context.** `[manager] context_tokens` (150000) and `max_turns` (40): when an idle session's last context
-  size is above the first, or the conversation is longer than the second, `/compact` is sent once as its own
-  turn; if the context is still large (or it gets long again) the session is ended and the next one starts
-  fresh with the handoff.
+  size is above the first, or the conversation is longer than the second, `/compact` is sent as its own turn,
+  as many times as needed. Each compaction is a flow ("Manager compacted its conversation: before → after
+  tokens"). Only when a compaction left the context at 60% of the limit or more is the session ended and the
+  next one started fresh, at most once per hour (`session.restarts` keeps the times; a session that died is
+  started again as always); the flow says "Manager restarted fresh". The first message of that fresh
+  conversation carries, besides the rules, plan and notes, "What you were doing when the last conversation was
+  replaced": the requests still open and the lanes the old session started that still run. The self-check
+  `manager` raises a queue item (`manager-restarts`, with the times) when the session was restarted fresh more
+  than twice in an hour.
 - **Chat.** Under each owner message the page draws the turn that answers it (spinner, the newest steps, the
   task list, coloured diffs, the lanes it started as nested blocks), collapsing to "N steps · 48s · $0.21 · show"
   when the turn ends. Esc stops the running turn; Up on an empty box brings back the last message. The app-only
