@@ -334,6 +334,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] El icono de la app de macOS se genera a partir del logo 3D. (check: `grep -q logo-3d scripts/make_icon.py`)
 - [ ] El logo 3D se lee como una torre: almenas de torre en lugar de cubos sueltos y sin la esfera flotante. (check: `test -f site/img/logo-3d.png`)
 - [ ] La captura principal de la landing muestra la app actual con datos de demo limpios: sin avisos, sin reglas inactivas y sin Flow. (check: `node web/js/landing.test.mjs`)
+- [ ] Los renders 3D de la landing tienen más contraste con el fondo y no salen cortados por los bordes. (check: `node web/js/landing.test.mjs`)
 
 ## 15. Collector y CLI en Rust
 
