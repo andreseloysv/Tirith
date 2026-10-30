@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import json
 import subprocess
-import time
 from pathlib import Path
 
 import pytest
 
-from conftest import make_repo, write_config
+from conftest import cpu_seconds, make_repo, write_config
 from tirith import activity as activity_mod
 from tirith import collector as collector_mod
 from tirith import diskdiet as diskdiet_mod
@@ -19,7 +18,7 @@ from tirith.store import append_jsonl, write_lane
 LANES = 150
 LIVE = 6
 WORKTREES = 8
-BUDGET_S = 4.0  # the real aim is under 3 s on the owner's machine; this bound only has to catch a regression
+BUDGET_S = 4.0  # CPU seconds, so load does not fail it; the aim is under 3 s on the owner's machine; this only has to catch a regression
 
 
 def _log(path: Path, turns: int = 120) -> None:
@@ -70,9 +69,9 @@ def test_a_cycle_on_a_busy_home_stays_within_the_budget(busy_home: Path) -> None
         pass
     spent = []
     for _ in range(3):
-        started = time.monotonic()
+        started = cpu_seconds()
         collector.cycle()
-        spent.append(time.monotonic() - started)
+        spent.append(cpu_seconds() - started)
     assert max(spent) < BUDGET_S, f"cycles took {spent}"
 
 
