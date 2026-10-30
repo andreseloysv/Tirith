@@ -326,7 +326,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Hacer robusto el test test_second_message_reaches_the_same_process_and_waits_for_the_turn_to_end de test_msession.py, que falla bajo carga como el de compacts (espera de reloj real) (check: `cd collector && uv run pytest tests/test_msession.py -q -k second_message_reaches_the_same_process`)
 - [ ] Rehacer sobre main el commit 8b4bf7c de lane/manager-de-guardia-chat-y-piloto-3 (una conversación del manager entre turnos headless, 5 archivos) en un worktree nuevo, con test por etapa e informe con el número exacto de tests (check: `git show main:collector/tests/test_managerd.py | grep -q test_headless_turns_share_one_session && git show main:collector/tirith/managerd.py | grep -q 'def adopt_session'`)
 - [ ] El piloto automático manda como mucho una propuesta abierta por paso. (check: `cd collector && uv run -q pytest -q tests -k autopilot`) (en curso: u-pilotflood)
-- [ ] Los mensajes del dueño pasan delante: el manager atiende cada mensaje del chat antes que las propuestas del piloto. (check: `cd collector && uv run -q pytest -q tests -k managerd`) (en curso: u-ownerfirst)
+- [ ] Los mensajes del dueño pasan delante: el manager atiende cada mensaje del chat antes que las propuestas del piloto. (check: `cd collector && uv run -q pytest -q tests -k managerd`) (en revisión)
 
 ## 15. Collector y CLI en Rust
 
