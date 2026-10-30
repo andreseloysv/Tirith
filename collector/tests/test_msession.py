@@ -205,25 +205,55 @@ def test_control_stop_and_restart(rig: Rig) -> None:
     assert rig.book().get("stopped") is None
 
 
-def test_context_over_the_limit_compacts_then_restarts_with_a_handoff(rig: Rig, monkeypatch) -> None:
-    monkeypatch.setenv("FAKE_CTX", "9000")  # over [manager] context_tokens
+def starts(rig: Rig) -> int:
+    return len([r for r in rig.fake_log() if "start" in r])
+
+
+def compacts(rig: Rig) -> int:
+    return len([r for r in rig.fake_log() if r.get("message") == "/compact"])
+
+
+def test_compact_repeats_while_it_helps_and_never_restarts(rig: Rig, monkeypatch) -> None:
+    monkeypatch.setenv("FAKE_CTX", "9000")  # over [manager] context_tokens; /compact brings it to 1000
+    for i in range(3):
+        rig.chat(f"message {i}")
+        rig.until(lambda n=i: compacts(rig) >= n + 1 and not rig.session().busy)
+    assert compacts(rig) >= 3 and starts(rig) == 1
+    assert not rig.book().get("restarts") and rig.book()["primed"] is True
+
+
+def test_compact_that_does_not_help_restarts_once_an_hour_with_a_handoff(rig: Rig, monkeypatch) -> None:
+    monkeypatch.setenv("FAKE_CTX", "9000")
+    monkeypatch.setenv("FAKE_COMPACT_CTX", "8000")  # still far above 60% of the limit
     rig.chat("hello")
-    rig.until(lambda: rig.book().get("done_turns"))
-    rig.until(lambda: any(r.get("message") == "/compact" for r in rig.fake_log()))  # asked to compact first
-    # the fake reports a small context for /compact, so the conversation goes on in the same process
-    rig.until(lambda: rig.book().get("compact_turn") and len(rig.book()["done_turns"]) >= 2)
-    assert len([r for r in rig.fake_log() if "start" in r]) == 1
-    # the next real turn is big again: compacting did not help twice, so it restarts fresh
-    rig.chat("more")
-    rig.until(lambda: len(rig.book()["done_turns"]) >= 3)
-    rig.until(lambda: rig.session() is None)
-    assert rig.book()["turns_total"] == 0 and rig.book()["primed"] is False
-    rig.chat("after the fresh start")
+    rig.until(lambda: len(rig.book().get("restarts", [])) == 1)  # compacted, did not help: fresh start
+    assert rig.session() is None or not rig.session().alive
+    assert rig.book()["turns_total"] == 0 and rig.book()["primed"] is False and rig.book()["handoff"] is not None
+    pending = rig.chat("after the fresh start")
     rig.clock.tick(60)
-    rig.until(lambda: len([r for r in rig.fake_log() if "start" in r]) == 2, timeout=10)
+    rig.until(lambda: starts(rig) == 2, timeout=10)
     assert [r for r in rig.fake_log() if "start" in r][1]["resume"] is None
-    # the fresh session got the whole handoff (it may be asked to compact right after: the fake context stays big)
-    rig.until(lambda: len([r for r in rig.fake_log() if "## Rules" in r.get("message", "")]) >= 2)
+    # the cap: this session is big again and compaction fails again, but there is no second restart within the hour
+    rig.until(lambda: compacts(rig) >= 2 and rig.session() is not None and not rig.session().busy)
+    for _ in range(20):  # compaction failed again but no second restart is allowed: it waits, no compaction loop
+        rig.cycle()
+        time.sleep(0.03)
+    assert compacts(rig) == 2 and len(rig.book()["restarts"]) == 1 and starts(rig) == 2
+    # an hour later it is allowed again
+    rig.clock.tick(3700)
+    rig.chat("an hour later")
+    rig.until(lambda: len(rig.book().get("restarts", [])) == 2)
+    assert pending
+
+
+def test_compact_handoff_carries_open_requests_lanes_and_notes(home: Path) -> None:
+    config = load_config(home)
+    now = datetime.now(timezone.utc)
+    text = managerd_mod.build_message(home, config, {"requests": [], "results": [], "queue": []}, now, False,
+                                      "- request r1 (chat): still open\n- lane l9 (you started it, still running): Feature")
+    assert "## What you were doing" in text and "request r1" in text and "lane l9" in text
+    assert "What you were doing" not in managerd_mod.build_message(
+        home, config, {"requests": [], "results": [], "queue": []}, now, True, "x")
 
 
 def test_long_conversation_compacts_after_max_turns(rig: Rig) -> None:

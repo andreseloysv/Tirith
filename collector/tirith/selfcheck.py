@@ -55,6 +55,8 @@ COLLECTOR_GAP_S = 150.0      # no pass for this long: the collector was down
 GAP_SHOWN_S = 600.0          # how long the gap stays in the result
 GRACE_S = 90.0               # a remedy gets this long to work before the next try
 MAX_TRIES = 3
+RESTARTS_WINDOW_S = 3600.0   # fresh starts of the manager session are counted over this long
+MAX_RESTARTS_PER_HOUR = 2    # more than this is a problem
 NOTICE_KEPT_S = 1800.0       # a notice whose messages were never answered is dropped after this
 SAVE_EVERY_S = 30.0
 QUEUE_KIND = "selfcheck"
@@ -172,6 +174,16 @@ def _manager(home: Path, config: Config, now: datetime, state: dict, book: dict,
     if not config.dispatch_auto_launch:
         return _check("ok", OK_TEXT["manager"])
     mbook = state.setdefault("manager", {})
+    churn = managerd_mod.restarts_within(mbook, now, RESTARTS_WINDOW_S)
+    if len(churn) > MAX_RESTARTS_PER_HOUR:
+        key = "manager-restarts"
+        active.add(key)
+        _queue(home, book, key, str((mbook.get("session") or {}).get("project") or ""), "",
+               f"The manager session was restarted fresh {len(churn)} times in the last hour (at "
+               f"{', '.join(t[11:19] for t in churn)} UTC); compacting its conversation is not bringing the context "
+               f"down. Last stop: {(mbook.get('session') or {}).get('ended_at')}. Look at the manager's flows "
+               "(\"Manager compacted\" rows show the sizes before and after).")
+        return _check("failed", f"The manager session was restarted {len(churn)} times in an hour.")
     mine = {mbook.get("lane"), mbook.get("ended")} - {None, ""}
     lane = next((l for l in lanes if l.get("id") in mine), None)
     if lane and not lane.get("ended_at") and managerd_mod.pid_alive(lane.get("pid")):
