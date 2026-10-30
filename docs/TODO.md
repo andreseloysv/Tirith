@@ -338,3 +338,8 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 
 Hasta el 4 de noviembre (entrega del hackathon): activar y proteger los hooks (3), el bloqueo de
 sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overview (10).
+
+## 16. Velocidad y autonomía: de un objetivo grande a resultados sin el dueño
+
+- [ ] `tirith do "<objetivo>"` convierte un objetivo grande en elementos pequeños del plan, cada uno con su comprobación, y los lanza. (check: `cd collector && uv run -q pytest -q tests -k tirith_do`)
+
