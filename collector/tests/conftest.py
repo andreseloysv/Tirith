@@ -234,3 +234,10 @@ def _tick_merged_every_call(monkeypatch):
     from tirith import plangate
     monkeypatch.setattr(plangate, "TICK_EVERY_S", 0.0)
     plangate._ticked_at.clear()
+
+
+@pytest.fixture(autouse=True)
+def _no_wait_for_returned_agents(monkeypatch):
+    """The merge queue waits for a returned lane's agent to register; tests with a fake relauncher must not."""
+    from tirith import mergeq
+    monkeypatch.setattr(mergeq, "START_WAIT", 0.0)
