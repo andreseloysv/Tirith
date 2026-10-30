@@ -32,7 +32,6 @@ EVENTS_MAX = 50
 TESTS_MAX = 20
 FILES_MAX = 100
 UNTRACKED_COUNT_BYTES = 256 * 1024
-GIT_TIMEOUT_S = 10
 PREFETCH_WORKERS = 8
 WARM_BUDGET_S = 8.0  # git time spent per cycle on lanes deferred by a warming start
 FILES_CACHE = "lane-files.json"  # ended lanes' git file lists, kept between runs (in the Tirith home)
@@ -480,7 +479,7 @@ _CHANGES = {"A": "added", "M": "modified", "D": "deleted", "R": "renamed", "T": 
 
 def _git(workspace: str, *args: str) -> str | None:
     try:
-        out = timeouts_mod.run(["git", "-C", workspace, *args], "git", timeout=GIT_TIMEOUT_S)
+        out = timeouts_mod.run(["git", "-C", workspace, *args], "git")
     except (OSError, subprocess.SubprocessError):
         return None
     return out.stdout.decode("utf-8", errors="replace") if out.returncode == 0 else None

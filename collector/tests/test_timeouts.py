@@ -72,9 +72,10 @@ def test_a_missing_program_is_an_error_result_not_an_exception(home: Path) -> No
     assert done.returncode == 127 and done.error
 
 
-def test_a_timed_out_git_commit_removes_the_lock_it_left(home: Path, tmp_path: Path) -> None:
+def test_a_timed_out_git_commit_removes_the_lock_it_left(home: Path, tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setitem(timeouts_mod.POLICY, "git-commit", (1, 1, 900, "a git commit"))
     repo = make_repo(tmp_path / "repo")
-    done = timeouts_mod.run(["/bin/sh", "-c", "touch .git/index.lock; sleep 60"], "git-commit", cwd=repo, timeout=1)
+    done = timeouts_mod.run(["/bin/sh", "-c", "touch .git/index.lock; sleep 60"], "git-commit", cwd=repo)
     assert done.timed_out and done.cleaned == (str(repo / ".git" / "index.lock"),)
     assert not (repo / ".git" / "index.lock").exists()
     assert "removed" in done.error
@@ -283,3 +284,43 @@ def test_the_state_lists_every_class_for_settings(home: Path) -> None:
     rows = timeouts_mod.table(home, Config())
     assert [r["class"] for r in rows] == list(timeouts_mod.POLICY)
     assert all(r["label"] and r["words"] and r["seconds"] > 0 for r in rows)
+
+
+# -- git calls follow the policy ----------------------------------------------------------------
+
+
+def test_no_fixed_git_timeout() -> None:
+    import re
+    source = Path(timeouts_mod.__file__).parent
+    found = []
+    for path in sorted(source.glob("*.py")):
+        text = path.read_text(encoding="utf-8")
+        for match in re.finditer(r"(?:timeouts_mod\.run|subprocess\.(?:run|check_output))\(\s*\[\s*(?:\"git\"|git\b)", text):
+            depth, end = 0, match.start()
+            for end, char in enumerate(text[match.start():], match.start()):
+                depth += char == "("
+                depth -= char == ")"
+                if depth == 0 and char == ")":
+                    break
+            if re.search(r"\btimeout\s*=", text[match.start():end]):
+                found.append(f"{path.name}:{text.count(chr(10), 0, match.start()) + 1}")
+        if re.search(r"^GIT_\w*(TIMEOUT|SECONDS|_S)\s*=", text, re.M):
+            found.append(f"{path.name}: fixed git limit constant")
+    assert not found, f"git calls must use the timeouts policy, not their own limit: {found}"
+
+
+def test_git_deadline_follows_policy_and_hints_only_raise(home: Path) -> None:
+    config = load_config(home)
+    policy = timeouts_mod.effective(home, config, "git")
+    quiet = dict(load=0.0, cpus=4)
+    assert timeouts_mod.deadline(home, config, "git", 1, **quiet) == policy
+    assert timeouts_mod.deadline(home, config, "git", policy + 50, **quiet) == policy + 50
+    assert timeouts_mod.deadline(home, config, "generic", 7, **quiet) == 7
+
+
+def test_git_deadline_scales_with_load_within_the_class_maximum(home: Path) -> None:
+    config = load_config(home)
+    policy = timeouts_mod.effective(home, config, "git")
+    assert timeouts_mod.deadline(home, config, "git", load=4.0, cpus=4) == policy
+    assert timeouts_mod.deadline(home, config, "git", load=8.0, cpus=4) == pytest.approx(policy * 2)
+    assert timeouts_mod.deadline(home, config, "git", load=4000.0, cpus=4) == timeouts_mod.bounds("git")[2]
