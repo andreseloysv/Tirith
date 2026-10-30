@@ -13,6 +13,7 @@ use serde_json::{json, Value};
 use tauri::{AppHandle, DragDropEvent, Emitter, Manager, RunEvent, State, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 
 mod liveweb;
+mod standalone;
 
 const STATE_EVENT: &str = "tirith://state";
 const ALIVE_EVENT: &str = "tirith://alive";
@@ -73,15 +74,43 @@ fn app_setting(cfg: &toml::Table, key: &str) -> Option<String> {
     cfg.get("app")?.get(key)?.as_str().map(str::to_string)
 }
 
-/// The collector folder: `$TIRITH_COLLECTOR_DIR`, `[app] collector_dir`, else the repo's `collector/`.
+/// The writable copy of the bundled collector, set at start-up when the app carries one.
+static BUNDLED_COLLECTOR: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+/// The collector folder: `$TIRITH_COLLECTOR_DIR`, `[app] collector_dir`, the copy of the bundled collector
+/// in Application Support, else the repo's `collector/` (cargo runs).
 fn collector_dir(cfg: &toml::Table) -> PathBuf {
-    if let Some(d) = std::env::var_os("TIRITH_COLLECTOR_DIR") {
-        return PathBuf::from(d);
+    standalone::pick_collector(
+        std::env::var_os("TIRITH_COLLECTOR_DIR").map(PathBuf::from),
+        app_setting(cfg, "collector_dir").map(|d| expand(&d)),
+        BUNDLED_COLLECTOR.get().cloned(),
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../collector"),
+    )
+}
+
+/// `~/Library/Application Support/Tirith` (the app's own writable folder).
+fn support_dir() -> PathBuf {
+    if cfg!(target_os = "macos") {
+        user_home().join("Library/Application Support/Tirith")
+    } else {
+        user_home().join(".local/share/tirith")
     }
-    if let Some(d) = app_setting(cfg, "collector_dir") {
-        return expand(&d);
+}
+
+/// Copies the bundled collector (`<resources>/resources/collector`) to the support folder, once per version.
+fn prepare_bundled_collector(app: &AppHandle) {
+    let Ok(res) = app.path().resource_dir() else { return };
+    let bundled = res.join("resources/collector");
+    if !bundled.join("pyproject.toml").is_file() {
+        return;
     }
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../collector")
+    let dest = support_dir().join("collector");
+    match standalone::sync_collector(&bundled, &dest, env!("CARGO_PKG_VERSION")) {
+        Ok(_) => {
+            let _ = BUNDLED_COLLECTOR.set(dest);
+        }
+        Err(e) => log_line("app.log", &format!("could not copy the bundled collector: {e}")),
+    }
 }
 
 /// The folder the window serves the page from at runtime: `[app] web_dir`, else (debug builds only)
@@ -130,9 +159,22 @@ fn tirith_cmd_argv(cfg: &toml::Table) -> Vec<String> {
         let script = script.canonicalize().unwrap_or(script);
         return vec![script.to_string_lossy().into_owned()];
     }
-    let uv = app_setting(cfg, "uv").unwrap_or_else(|| "uv".into());
+    let uv = app_setting(cfg, "uv").unwrap_or_else(|| uv_path().map_or_else(|| "uv".into(), |p| p.to_string_lossy().into_owned()));
     let dir = collector_dir(cfg).to_string_lossy().into_owned();
     vec![uv, "run".into(), "--project".into(), dir, "tirith".into()]
+}
+
+/// The installed `uv`, if any (PATH and the usual tool folders).
+fn uv_path() -> Option<PathBuf> {
+    standalone::find_uv(std::env::var_os("PATH").as_deref(), &user_home())
+}
+
+/// Whether the collector can only run through `uv` and there is none yet.
+fn uv_missing(cfg: &toml::Table) -> bool {
+    let own = app_setting(cfg, "tirith").is_some_and(|t| !t.trim().is_empty());
+    let script = collector_dir(cfg).join("../bin/tirith").is_file();
+    let set = app_setting(cfg, "uv").is_some_and(|u| expand(&u).is_file());
+    !own && !script && !set && uv_path().is_none()
 }
 
 /// The same, as one shell-ready string (the resolved `tirith`).
@@ -479,8 +521,8 @@ mod collector_lock_tests {
 }
 
 fn start_collector(app: &App) {
-    if collector_running() {
-        return;
+    if collector_running() || uv_missing(&config()) {
+        return; // without uv the first-run screen asks for it; it starts the collector once uv is there
     }
     let (out, err) = collector_log().unwrap_or_else(|| (Stdio::null(), Stdio::null()));
     let mut cmd = tirith_command(&["collect", "--interval", "2"]);
@@ -2185,6 +2227,38 @@ fn manager_control(op: String) -> Result<(), String> {
     }
 }
 
+// -- first run ----------------------------------------------------------------------------------
+
+/// What the first-run screen needs: is `uv` there, how many projects are set up. Once `uv` shows up, the
+/// collector is started right away.
+#[tauri::command]
+fn first_run(app: State<App>) -> Value {
+    let cfg = config();
+    let uv = !uv_missing(&cfg);
+    if uv {
+        start_collector(&app);
+    }
+    let projects = cfg.get("projects").and_then(|p| p.as_array()).map_or(0, |p| p.len());
+    json!({"uv": uv, "projects": projects, "installPage": standalone::UV_INSTALL_PAGE})
+}
+
+/// Opens Terminal with the official uv installer typed in: visible, never silent.
+#[tauri::command]
+fn install_uv() -> Result<(), String> {
+    Command::new("osascript")
+        .arg("-e")
+        .arg(terminal_script(standalone::UV_INSTALL_COMMAND))
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .spawn()
+        .map(|mut child| {
+            std::thread::spawn(move || {
+                let _ = child.wait();
+            });
+        })
+        .map_err(|e| format!("could not run osascript: {e}"))
+}
+
 // -- entry --------------------------------------------------------------------------------------
 
 pub fn run() {
@@ -2230,7 +2304,9 @@ pub fn run() {
             run_action,
             open_in_terminal,
             lane_stop,
-            manager_control
+            manager_control,
+            first_run,
+            install_uv
         ])
         .setup(move |app| {
             let url = match &live {
@@ -2240,6 +2316,7 @@ pub fn run() {
                 }
                 None => WebviewUrl::App("index.html".into()),
             };
+            prepare_bundled_collector(app.handle());
             WebviewWindowBuilder::new(app, "main", url)
                 .title("Tirith")
                 .inner_size(1440.0, 900.0)
