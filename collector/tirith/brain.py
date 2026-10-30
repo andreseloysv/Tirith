@@ -401,8 +401,8 @@ class BrainWorker:
         """Queue a job unless cached/in flight. Returns True if queued."""
         if self.client is None or not text.strip():
             return False
-        if kind in _NOISY_KINDS and not stable_text(text):
-            return False
+        if kind in _NOISY_KINDS and not any(ch.isalnum() for ch in stable_text(text)):
+            return False  # nothing but times and punctuation left: nothing to judge
         if self.cache.get(kind, text) is not None:
             return False
         key = f"{kind}:{cache_key(kind, text)}"
@@ -425,7 +425,7 @@ class BrainWorker:
         data = read_json(self._usage_path, None)
         if not isinstance(data, dict) or data.get("day") != self._today():
             kept = data.get("last", {}) if isinstance(data, dict) else {}
-            data = {"day": self._today(), "calls": {}, "last": kept}
+            data = {"day": self._today(), "calls": {}, "last": kept, "refused": 0}
         return data
 
     def _allow(self, kind: str) -> bool:
@@ -433,6 +433,8 @@ class BrainWorker:
         usage = self._usage()
         now = self._clock()
         if sum(usage["calls"].values()) >= self.daily_budget:
+            usage["refused"] = int(usage.get("refused", 0)) + 1  # the note shows once a call was really turned away
+            write_json_atomic(self._usage_path, usage)
             return False
         last = usage["last"].get(kind)
         if isinstance(last, (int, float)) and now - last < self.min_interval_s.get(kind, 0.0):
@@ -451,7 +453,7 @@ class BrainWorker:
             "day": usage["day"], "calls": dict(usage["calls"]), "total": total,
             "daily_budget": self.daily_budget, "budget_reached": reached,
             "health_note": (f"Daily brain budget of {self.daily_budget} calls reached; "
-                            "features use their non-brain fallbacks until tomorrow.") if reached else None,
+                            "features use their non-brain fallbacks until tomorrow.") if reached and usage.get("refused") else None,
         }
 
     def drain(self, timeout_s: float = 10.0) -> None:
