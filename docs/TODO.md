@@ -29,7 +29,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Manager de guardia: atender el chat
 - [ ] Revisar el plan (2026-10-29) (en revisión)
 - [x] Verificar: Verify Commit lane/manager-permission-questions-nev, me (hecho: e921649)
-- [ ] Manager de guardia: atender el chat (en curso: manager-18e09666)
+- [x] Manager de guardia: atender el chat
 - [x] Manager de guardia: atender el chat
 - [x] Manager de guardia: atender el chat
 - [x] Manager de guardia: atender el chat
