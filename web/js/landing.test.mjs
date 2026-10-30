@@ -27,6 +27,14 @@ const html = fs.readFileSync(path.join(site, 'index.html'), 'utf8');
 for (const m of html.matchAll(/(?:src|href)="(img\/[^"]+|style\.css)"/g)) {
   assert.ok(fs.existsSync(path.join(site, m[1])), `missing file ${m[1]}`);
 }
+// the app screenshots show the current app: no removed view in the alt texts, and each stays small
+for (const m of html.matchAll(/<img\b[^>]*>/g)) {
+  const alt = (m[0].match(/alt="([^"]*)"/) || [])[1] || '';
+  assert.ok(!/\bFlow\b/.test(alt), `alt text mentions the removed Flow view: ${alt.slice(0, 40)}`);
+}
+for (const m of html.matchAll(/src="(img\/[^"]+\.webp)"/g)) {
+  assert.ok(fs.statSync(path.join(site, m[1])).size <= 300 * 1024, `${m[1]} is over 300 KB`);
+}
 const scripts = [...html.matchAll(/<script\b[^>]*>/gi)].map(m => m[0]);
 assert.ok(scripts.every(t => /src="scroll\.js"/.test(t)), 'the only script is the local scroll.js');
 assert.ok(fs.existsSync(path.join(site, 'scroll.js')), 'missing scroll.js');
@@ -52,6 +60,13 @@ try {
     const over = await p.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     assert.ok(over <= 0, `horizontal overflow of ${over}px at ${width}px`);
     assert.deepEqual(errors, [], `console errors at ${width}px`);
+    // the hero caption never sits over the screenshot, at the top and after scrolling a little
+    for (const y of [0, 200]) {
+      await p.evaluate((y) => window.scrollTo({ top: y, behavior: 'instant' }), y);
+      await p.waitForTimeout(150);
+      const clip = await p.evaluate(() => { const c = document.querySelector('.hero .shot .crop').getBoundingClientRect(), t = document.querySelector('.hero figcaption').getBoundingClientRect(); return c.bottom - t.top; });
+      assert.ok(clip <= 1, `hero caption overlaps the screenshot by ${clip}px at ${width}px, scroll ${y}`);
+    }
     await p.screenshot({ path: path.join(root, 'web', 'screenshots', `landing-${width}.png`), fullPage: true });
     await p.close();
   }
