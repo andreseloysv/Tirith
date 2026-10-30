@@ -99,6 +99,9 @@ class Pilot:
     def state(self) -> dict:
         return dispatch_mod.load_state(self.home)["autopilot"]
 
+    def state_all(self) -> dict:
+        return dispatch_mod.load_state(self.home)
+
 
 def _waits(home: Path) -> dict:
     return {r["id"]: r for r in read_jsonl(home / "waits.jsonl")}
@@ -121,8 +124,9 @@ def test_it_never_launches_it_proposes_once_per_item(home, repo) -> None:
     assert sorted((r["project"], r["step"]) for r in got) == [("demo", "1"), ("demo", "2"), ("demo", "3")]
     assert all(r["from"] == "tirith" and r["manager_pending"] for r in got)
     first = next(r for r in got if r["step"] == "1")
-    assert first["text"].startswith("Autopilot: demo step 1 — Build the first thing.")
-    assert "Why now: it is open and nobody works on it." in first["text"] and "docs/TODO.md" in first["text"]
+    assert first["text"].startswith("Autopilot: demo step 1 (First): 1 item needs a decision.")
+    assert "Build the first thing. [open, nobody on it]" in first["text"] and "TODO.md" in first["text"]
+    assert len(first["text"]) <= autopilot_mod.MAX_TEXT
     for _ in range(3):
         pilot.cycle()
     assert len(_proposals(home)) == 3   # deduplicated: one per item
@@ -165,6 +169,7 @@ def test_a_changed_item_gets_a_new_proposal_and_the_old_one_is_closed(home, repo
     assert len(step1) == 2 and step1[0]["id"] == old["id"] and step1[0]["status"] == "done"
     assert step1[0]["answers"] == []  # closed quietly: nothing lands in the chat
     assert step1[1]["status"] == "open" and "reopened" in step1[1]["text"]
+    assert "its facts changed" in next(f for f in read_jsonl(home / "flows.jsonl") if "closed its proposal" in f["text"])["text"]
 
 
 def test_a_ticked_item_closes_its_unanswered_proposal(home, repo) -> None:
@@ -176,7 +181,9 @@ def test_a_ticked_item_closes_its_unanswered_proposal(home, repo) -> None:
     step1 = next(r for r in _proposals(home) if r["step"] == "1")
     assert step1["status"] == "done" and not step1["manager_pending"]
     assert step1["answers"] == []
+    assert any("done or gone" in f["text"] for f in read_jsonl(home / "flows.jsonl"))
     assert len(pilot.state()["proposals"]) == 2
+    assert [r["step"] for r in _proposals(home) if r["status"] != "done"] == ["2", "3"]
 
 
 def test_the_managers_decision_answers_the_proposal_and_it_is_not_asked_again(home, repo) -> None:
@@ -203,7 +210,7 @@ def test_the_facts_of_earlier_lanes_are_in_the_proposal(home, repo) -> None:
     pilot.cycle()
     pilot.cycle()
     text = next(r for r in _proposals(home) if r["step"] == "1")["text"]
-    assert "marked in review but no check is running" in text
+    assert "marked in review, no check running" in text
     assert "lane lane-old" in text and "branch merged" in text and "I built it and merged." in text
     assert "claims:" in text and "More." not in text
 
@@ -479,3 +486,117 @@ def test_state_json_carries_the_autopilot_and_item_ids(home, repo) -> None:
     owner = [i for i in road["steps"][3]["items"] if i["who"] == "owner"]
     assert len(owner) == 2 and all(i["owner_item"] in _waits(home) for i in owner)
     assert len(read_json(home / "dispatch.json", {})["autopilot"]["owner_items"]) == 3
+
+
+# -- one open proposal per step -------------------------------------------------------------------
+
+
+def _open(home: Path) -> list[dict]:
+    return [r for r in _proposals(home) if r["status"] != "done"]
+
+
+def _two_items(repo: Path) -> None:
+    path = repo / "docs" / "TODO.md"
+    path.write_text(path.read_text().replace("- [ ] Build the first thing.",
+                                             "- [ ] Build the first thing.\n- [ ] Build the other thing."))
+
+
+def test_one_proposal_per_step_lists_every_item_in_under_800_characters(home, repo) -> None:
+    _two_items(repo)
+    pilot = Pilot(home, repo)
+    pilot.cycle()
+    pilot.cycle()
+    step1 = [r for r in _open(home) if r["step"] == "1"]
+    assert len(step1) == 1 and len(_open(home)) == 3
+    assert "2 items need a decision" in step1[0]["text"]
+    assert "Build the first thing." in step1[0]["text"] and "Build the other thing." in step1[0]["text"]
+    assert len(step1[0]["text"]) <= 800
+    for _ in range(3):
+        pilot.cycle()
+    assert len(_open(home)) == 3
+
+
+def test_a_long_step_stays_under_the_limit(home, repo) -> None:
+    path = repo / "docs" / "TODO.md"
+    items = "\n".join(f"- [ ] Item number {n} " + "very long words " * 12 for n in range(15))
+    path.write_text(f"# TODO\n\n## 1. First\n\n{items}\n")
+    pilot = Pilot(home, repo)
+    pilot.cycle()
+    pilot.cycle()
+    text = _open(home)[0]["text"]
+    assert len(text) <= 800 and "more" in text and text.rstrip().endswith("close it.")
+
+
+def test_changed_facts_replace_the_proposal_never_add_a_second_open_one(home, repo) -> None:
+    pilot = Pilot(home, repo)
+    pilot.cycle()
+    pilot.cycle()
+    old = next(r for r in _open(home) if r["step"] == "1")
+    pilot.agents.append({"id": "lane-x", "project": "demo", "step": "1", "status": "done", "outcome": "done",
+                         "report": "Tried it.", "review": {"status": "tests-failed", "message": "red"}})
+    pilot.cycle()
+    assert [r["id"] for r in _open(home) if r["step"] == "1"] == [old["id"]]   # debouncing: still the old one
+    pilot.cycle()
+    now = [r for r in _open(home) if r["step"] == "1"]
+    assert len(now) == 1 and now[0]["id"] != old["id"] and "lane lane-x" in now[0]["text"]
+
+
+def test_items_whose_lane_is_in_the_merge_queue_get_no_proposal(home, repo) -> None:
+    path = repo / "docs" / "TODO.md"
+    path.write_text(path.read_text().replace("Build the first thing.", "Build the first thing. (en revisión: lane-q)"))
+    pilot = Pilot(home, repo)
+    pilot.agents.append({"id": "lane-q", "project": "demo", "step": "1", "status": "done", "outcome": "done"})
+    (home / "mergeq.json").write_text('{"queue": [{"lane": "lane-q", "project": "demo", "status": "running"}]}')
+    for _ in range(3):
+        pilot.cycle()
+    assert sorted(r["step"] for r in _open(home)) == ["2", "3"]
+    assert autopilot_mod.sitting(home, pilot.state_all(), pilot.projects(), pilot.agents, pilot.now) == []
+
+
+def test_an_item_sent_back_by_the_queue_is_proposed_with_the_reason(home, repo) -> None:
+    path = repo / "docs" / "TODO.md"
+    path.write_text(path.read_text().replace("Build the first thing.", "Build the first thing. (en revisión: lane-q)"))
+    pilot = Pilot(home, repo)
+    pilot.agents.append({"id": "lane-q", "project": "demo", "step": "1", "status": "done", "outcome": "done",
+                         "review": {"status": "sent-back", "message": "conflict in app.py"}})
+    pilot.cycle()
+    pilot.cycle()
+    text = next(r for r in _open(home) if r["step"] == "1")["text"]
+    assert "sent back by the merge queue: conflict in app.py" in text
+
+
+def test_a_proposal_closes_quietly_when_the_queue_takes_the_item(home, repo) -> None:
+    path = repo / "docs" / "TODO.md"
+    path.write_text(path.read_text().replace("Build the first thing.", "Build the first thing. (en revisión: lane-q)"))
+    pilot = Pilot(home, repo)
+    pilot.agents.append({"id": "lane-q", "project": "demo", "step": "1", "status": "done", "outcome": "done"})
+    pilot.cycle()
+    pilot.cycle()
+    assert any(r["step"] == "1" for r in _open(home))
+    (home / "mergeq.json").write_text('{"queue": [{"lane": "lane-q", "project": "demo", "status": "queued"}]}')
+    pilot.cycle()
+    step1 = next(r for r in _proposals(home) if r["step"] == "1")
+    assert step1["status"] == "done" and step1["answers"] == []
+
+
+def test_old_per_item_proposals_are_collapsed_into_one_per_step(home, repo) -> None:
+    _two_items(repo)
+    for text in ("old one", "old two", "old three"):
+        inbox_mod.add_request(home, inbox_mod.PROPOSAL, "demo", "1", text, at="2026-10-29T10:00:00Z", sender="tirith")
+    inbox_mod.add_request(home, inbox_mod.PROPOSAL, "demo", "9", "gone step", at="2026-10-29T10:00:00Z", sender="tirith")
+    pilot = Pilot(home, repo)
+    pilot.cycle()
+    assert len([r for r in _open(home) if r["step"] == "1"]) == 1   # at once, not after the debounce
+    assert [r for r in _open(home) if r["step"] == "9"] == []
+    assert all(r["answers"] == [] for r in _proposals(home))
+    pilot.cycle()
+    assert len([r for r in _open(home) if r["step"] == "1"]) == 1
+    assert "2 items need a decision" in next(r for r in _open(home) if r["step"] == "1")["text"]
+    flows = [f for f in read_jsonl(home / "flows.jsonl") if "closed its proposal" in f["text"]]
+    assert len(flows) >= 4
+
+
+def test_the_selfcheck_counts_open_proposals_per_step(home, repo) -> None:
+    for text in ("a", "b"):
+        inbox_mod.add_request(home, inbox_mod.PROPOSAL, "demo", "1", text, at="2026-10-29T10:00:00Z", sender="tirith")
+    assert autopilot_mod.open_per_step(home) == {"demo|1": 2}
