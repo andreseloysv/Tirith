@@ -39,7 +39,7 @@ from tirith import timeouts as timeouts_mod
 from tirith.home import Config, now_iso, parse_iso
 from tirith.store import read_lane
 
-MANAGER_STUCK_S = 120.0      # an owner message without an answer, nobody working on it
+MANAGER_STUCK_S = 60.0       # an owner message without a first answer, nothing blocking it
 LINGER_S = 60.0              # a manager process alive this long after its result
 AUTOPILOT_IDLE_S = 120.0     # an open item nobody works on and no proposal for it
 PROPOSAL_STUCK_S = 600.0     # a proposal the manager has not answered
@@ -149,6 +149,18 @@ def _chat_waiting(home: Path, now: datetime) -> list[dict]:
         r["kind"] == "chat" or (r["kind"] == inbox_mod.PROPOSAL and _age_s(r["at"], now) > PROPOSAL_STUCK_S))]
 
 
+def _owner_unserved(home: Path, now: datetime, waiting: list[dict]) -> bool:
+    """The session is busy with Tirith's own work, nothing blocks it (no open question) and an owner message has
+    waited past ``MANAGER_STUCK_S``: the owner-first yield did not happen."""
+    from tirith import msession as msession_mod
+    sess = msession_mod.current(home)
+    if sess is None or sess.open_asks():
+        return False
+    turn_requests = set(sess.turn.requests) if sess.turn is not None else set()
+    return any(r["kind"] == "chat" and r["id"] not in turn_requests and _age_s(r["at"], now) > MANAGER_STUCK_S
+               for r in waiting)
+
+
 def _manager(home: Path, config: Config, now: datetime, state: dict, book: dict, lanes: list[dict],
              kill: Callable, active: set[str]) -> dict:
     if not config.dispatch_auto_launch:
@@ -172,7 +184,7 @@ def _manager(home: Path, config: Config, now: datetime, state: dict, book: dict,
             return _check("failed", "A manager process stayed open and could not be closed.")
     waiting = _chat_waiting(home, now)
     if not waiting or managerd_mod.attached(home, now) or managerd_mod.running(mbook, lanes, now) \
-            or managerd_mod.session_busy(home):
+            or (managerd_mod.session_busy(home) and not _owner_unserved(home, now, waiting)):
         return _check("ok", OK_TEXT["manager"])
     oldest = min(waiting, key=lambda r: str(r["at"] or ""))
     age = _age_s(oldest["at"], now)
