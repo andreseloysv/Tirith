@@ -464,4 +464,5 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [ ] App de iOS nativa: escanea el QR y abre un chat cifrado con el manager, compatible con am.mjs. (check: `bash scripts/check-ios.sh`) (en curso: salas-privadas-6) (fuera de este plan: descartado por el dueño el 2026-10-30, sin app de iOS)
 - [ ] La cola de merge no pasa los tests de Python a un lane que solo cambia site/, ios/ o docs/. (check: `cd collector && uv run -q pytest -q tests -k merge_paths`)
 - [ ] El QR de invitación de las salas privadas usa la URL https://agentsmessenger.com/chat#r=…&c=…&m=… del contrato, no otra. (check: `cd collector && uv run -q pytest -q tests -k room_invite_url`)
+- [ ] Los agentes de una sala privada se hablan entre sí libremente, como dice docs/CONTRACT-private-rooms.md. (check: `cd collector && uv run -q pytest -q tests -k room_agents_talk`)
 
