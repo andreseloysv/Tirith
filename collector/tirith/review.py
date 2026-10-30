@@ -22,7 +22,7 @@ from tirith.launch import worktree_path
 from tirith.store import lane_path, read_json, write_lane
 
 OUTPUT_MAX = 4000
-TEST_TIMEOUT_S = 1800
+DID_NOT_FINISH = "tests did not finish in"  # starts the output of a suite that was stopped at its time limit
 
 PENDING = "pending"          # launched lane, done, not reviewed yet
 RUNNING = "running"
@@ -141,13 +141,14 @@ def run_tests(home: Path, project: str, pipeline: str, stage: str, workspace: Pa
               lane_id: str | None = None, run_id: str | None = None) -> tuple[bool, str]:
     """Run the test stage as a recorded pipeline run (same path as ``tirith run``), tagged with the lane."""
     env = {k: v for k, v in os.environ.items() if k != "TIRITH_LANE"}
+    limit = timeouts_mod.effective(home, None, f"stage:{stage}")  # run_stage applies the same cap
     tags = runstage_mod.lane_tags(home, workspace)
     code, output = runstage_mod.run_stage(
         home, project, pipeline, stage, command, workspace, lane=lane_id or tags.get("lane"),
         worktree=tags.get("worktree") or str(workspace), branch=tags.get("branch"),
-        echo=False, env=env, timeout=TEST_TIMEOUT_S, new_run=True, run_id=run_id)
-    if output.startswith("the stage did not finish"):
-        return False, f"tests did not finish in {TEST_TIMEOUT_S} s"
+        echo=False, env=env, new_run=True, run_id=run_id)
+    if code == timeouts_mod.EXIT_TIMED_OUT:
+        return False, f"{DID_NOT_FINISH} {limit:g} s\n{output}".strip()
     return code == 0, output
 
 

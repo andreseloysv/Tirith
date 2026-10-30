@@ -42,6 +42,7 @@ MARK = "[merge queue]"
 MAX_SENT_BACK = 3  # after this many returns the manager (never the owner) decides
 MAX_TRIES = 3  # main moved under the merge: start again from the new main
 TIMED_OUT = "timed out"  # a git command stopped at its deadline: retried by the queue, never sent back
+OUT_OF_TIME = "out-of-time"  # a stage hit its time limit: the suite did not fail
 HISTORY = 20
 OUTPUT_MAX = 1500
 
@@ -150,7 +151,7 @@ def _finish(home: Path, entry: dict, result: str, message: str = "", *, keep: bo
         if keep:
             for e in data["queue"]:
                 if e["lane"] == entry["lane"]:
-                    e.update(status=QUEUED, message=message[:OUTPUT_MAX])
+                    e.update(status=QUEUED, message=message[:OUTPUT_MAX], **extra)
                     e.pop("pid", None)
         else:
             data["queue"] = [e for e in data["queue"] if e["lane"] != entry["lane"]]
@@ -280,6 +281,8 @@ def _try(home: Path, repo: Path, lane: dict, entry: dict) -> tuple[str, str, dic
         passed = None
         for pipeline, stage in stages:
             ok, output = review_mod.run_tests(home, project, pipeline, stage.name, tmp, stage.run, lane_id)
+            if not ok and output.startswith(review_mod.DID_NOT_FINISH):
+                return OUT_OF_TIME, f"stage {pipeline}/{stage.name} ran out of time on {branch}: {_tail(output)}", {}
             if not ok:
                 return RED, f"stage {pipeline}/{stage.name} failed on {branch} merged with {main_branch}:\n{_tail(output)}", \
                     {"main": main_branch}
@@ -406,6 +409,13 @@ def process_next(home: Path, config: Config, *, relaunch: Callable | None = None
         return _finish(home, entry, WAITING, message, keep=True, retried=True)
     if result == WAITING:
         return _finish(home, entry, WAITING, message, keep=True)
+    if result == OUT_OF_TIME:  # the suite ran out of time, it did not fail: never sent back
+        count = int(entry.get("timeouts") or 0) + 1
+        if count == 2:
+            asks_mod.queue_add(home, entry["project"], lane_id, f"Merge queue: {lane.get('feature') or lane_id} ({lane_id}) "
+                               f"{message.splitlines()[0][:200]}\n- It waits in the queue. Raise the limit with: "
+                               "tirith timeout set --class stage:test --reason \"…\"")
+        return _finish(home, entry, WAITING, message, keep=True, timeouts=count)
     if result in (CONFLICT, RED):
         sent = send_back(home, config, lane, result, message, str(extra.get("main") or "main"), relaunch)
         return _finish(home, entry, result, message, sent_to=sent or None)
