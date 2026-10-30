@@ -401,7 +401,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 
 ## 17. Tirith se mejora usando Tirith
 
-- [ ] Tirith se ejecuta desde una copia estable que solo avanza cuando la prueba completa pasa en la versión nueva, y vuelve atrás sola si la salud se pone roja. (check: `cd collector && uv run -q pytest -q tests -k stable`) (en curso: tirith-se-mejora-usando-tirith-5)
+- [ ] Tirith se ejecuta desde una copia estable que solo avanza cuando la prueba completa pasa en la versión nueva, y vuelve atrás sola si la salud se pone roja. (check: `cd collector && uv run -q pytest -q tests -k stable`) (en revisión)
 - [ ] Tirith registra cada vez que hizo falta una persona o algo esperó, y pone la fricción mayor arriba del plan. (check: `cd collector && uv run -q pytest -q tests -k friction`)
 - [ ] La cola de merge tiene prioridad: los arreglos de la propia cola y de sus etapas entran primero. (check: `cd collector && uv run -q pytest -q tests -k merge_priority`)
 - [x] Las instrucciones de los lanes dicen quién revisa de verdad: Tirith hace el commit y la cola de merge revisa, nunca «para que lo revise el dueño». (check: `! grep -rq 'for the owner to review' collector/tirith`) (hecho: 39e0c0b)
@@ -434,5 +434,6 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [ ] Al volver, el dueño ve un resumen de lo que pasó mientras no estaba: lo que entró, lo que falló y lo que sigue. (check: `cd collector && uv run -q pytest -q tests -k while_away`)
 - [ ] Un ciclo del collector tarda menos de 5 segundos con carga alta: hoy llegó a 66 s, 49 s de ellos en el despachador. (check: `cd collector && uv run -q pytest -q tests -k cycle_budget`)
 - [ ] El tamaño de contexto del manager se mide con la última petición, no con la suma de todas las del turno. (check: `cd collector && uv run -q pytest -q tests -k context_tokens`) (en curso: tirith-se-mejora-usando-tirith-6)
+- [ ] Launch the collector and the app from <home>/stable/current, and run 'tirith stable promote' automatically after each merge on main
 - [x] La suite de tests de Python vuelve a pasar entera en main tras el tren de integración. (check: `cd collector && uv run -q pytest -q -n 8`) (hecho: b133b4b)
 
