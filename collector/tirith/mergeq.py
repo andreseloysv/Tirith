@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -31,7 +32,7 @@ from tirith import review as review_mod
 from tirith import timeouts as timeouts_mod
 from tirith.home import Config, now_iso
 from tirith.launch import worktree_path
-from tirith.store import lane_path, read_json, write_json_atomic, write_lane
+from tirith.store import lane_path, read_json, read_lane, write_json_atomic, write_lane
 
 FILE = "mergeq.json"
 QUEUED, RUNNING = "queued", "running"
@@ -40,6 +41,7 @@ MERGED, CONFLICT, RED, PUSH_FAILED, WAITING, SENT_BACK, CLOSED = (
 SENT_BACK_STATUS = "sent-back"  # the lane's ``review.status`` once the queue returned it to its agent
 MARK = "[merge queue]"
 MAX_SENT_BACK = 3  # after this many returns the manager (never the owner) decides
+START_WAIT = 20.0  # seconds a returned lane's new agent has to register itself before the manager hears of it
 MAX_TRIES = 3  # main moved under the merge: start again from the new main
 TIMED_OUT = "timed out"  # a git command stopped at its deadline: retried by the queue, never sent back
 HISTORY = 20
@@ -334,6 +336,30 @@ def feedback_note(result: str, message: str, main: str) -> str:
             "Tirith's merge queue merges you.")
 
 
+def agent_started(home: Path, lane_id: str, wait: float | None = None) -> bool:
+    """The relaunched agent registered its lane (``tirith lane run`` writes it when the agent starts), waiting
+    up to ``wait`` seconds (default :data:`START_WAIT`)."""
+    deadline = time.monotonic() + (START_WAIT if wait is None else wait)
+    while True:
+        if read_lane(home, lane_id) is not None:
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(0.25)
+
+
+def _reopen_item(home: Path, config: Config, lane: dict, result: str, message: str) -> str:
+    """Reopen the lane's plan item with the reason it came back; the error text when that fails, else ""."""
+    repo = plangate_mod.repo_of(home, str(lane.get("project") or ""), config)
+    if repo is None:
+        return ""
+    try:
+        plangate_mod.review_failed(home, repo, lane, f"{result}: {message.splitlines()[0] if message else ''}")
+    except plangate_mod.PlanGateError as error:
+        return str(error)
+    return ""
+
+
 def send_back(home: Path, config: Config, lane: dict, result: str, message: str, main: str,
               relaunch: Callable | None = None) -> str:
     """Return the lane to its agent with the conflict or failure; the id of the new lane, else the manager item."""
@@ -352,15 +378,23 @@ def send_back(home: Path, config: Config, lane: dict, result: str, message: str,
             why = f" (sending it back failed: {error})"
     elif alias in config.agents:
         why = f" (sent back {MAX_SENT_BACK} times already)"
+    reopen_error = _reopen_item(home, config, lane, result, message)
+    if reopen_error:
+        why += f" (its plan item could not be reopened: {reopen_error})"
+    started = bool(sent) and agent_started(home, sent)
     fresh = read_json(lane_path(home, lane_id), lane)
     fresh["review"] = {"status": SENT_BACK_STATUS, "at": now_iso(), "by": "mergeq", "message": message[:OUTPUT_MAX]}
-    write_lane(home, fresh)
     if sent:
+        fresh["review"].update(sent_to=sent, started=started)
+    write_lane(home, fresh)
+    if sent and started:
         return sent
+    if sent:
+        why += f" (the agent did not start: lane {sent} never registered)"
     text = (f"Merge queue: {lane.get('feature') or lane_id} ({lane_id}) {result}: " + message.splitlines()[0][:200]
             + why + f"\n- Send it back: tirith merge request --lane {lane_id}\n- Drop the lane: tirith lane drop {lane_id}")
     asks_mod.queue_add(home, project, lane_id, text)
-    return ""
+    return sent or ""
 
 
 def _close_gone(home: Path, entry: dict, lane: dict | None, repo: Path | None) -> dict:

@@ -501,3 +501,48 @@ def test_merge_timeout_every_time_waits_in_the_queue_not_sent_back(env, home: Pa
     row = mergeq_mod.process_next(home, load_config(home), relaunch=sender)
     assert row["result"] == "waiting" and "timed out" in row["message"] and not sender.calls
     assert [i["lane"] for i in mergeq_mod.view(home, "demo")["items"]] == ["alpha"]
+
+
+class StartingSender(Sender):
+    """A relauncher whose agent starts: the new lane is registered, as ``tirith lane run`` does."""
+
+    def __init__(self, home: Path) -> None:
+        super().__init__()
+        self.home = home
+
+    def __call__(self, home, lane, alias, note) -> str:
+        new = super().__call__(home, lane, alias, note)
+        register_lane(self.home, lane_id=new, project="demo", hero_class="glasswright", feature="again",
+                      workspace=str(lane["workspace"]), log=None, pid=None, brief=None, step="2")
+        return new
+
+
+def _link_item(home: Path, lane_id: str) -> None:
+    lane = read_json(lane_path(home, lane_id), None)
+    lane["item"], lane["item_step"] = "Add the feature file.", "2"
+    write_lane(home, lane)
+
+
+def test_send_back_reopens_the_plan_item_and_confirms_the_agent_started(env, home: Path) -> None:
+    repo, _ = env
+    make_lane(home, repo, "bad", {"BAD": "x"})
+    _link_item(home, "bad")
+    mergeq_mod.enqueue(home, "bad")
+    row = mergeq_mod.process_next(home, load_config(home), relaunch=StartingSender(home))
+    assert row["result"] == "red-suite" and row["sent_to"] == "bad-2"
+    assert "(reabierto: red-suite" in (repo / "docs" / "TODO.md").read_text(encoding="utf-8")
+    review = read_json(lane_path(home, "bad"), None)["review"]
+    assert review["status"] == mergeq_mod.SENT_BACK_STATUS and review["sent_to"] == "bad-2" and review["started"] is True
+    assert not any("did not start" in str(i) for i in asks_mod.queue_items(home))
+
+
+def test_send_back_tells_the_manager_when_the_agent_did_not_start(env, home: Path) -> None:
+    repo, _ = env
+    make_lane(home, repo, "bad", {"BAD": "x"})
+    _link_item(home, "bad")
+    mergeq_mod.enqueue(home, "bad")
+    row = mergeq_mod.process_next(home, load_config(home), relaunch=Sender())  # never registers its lane
+    assert row["result"] == "red-suite"
+    assert "(reabierto: red-suite" in (repo / "docs" / "TODO.md").read_text(encoding="utf-8")
+    assert read_json(lane_path(home, "bad"), None)["review"]["started"] is False
+    assert any("did not start" in str(i) for i in asks_mod.queue_items(home))
