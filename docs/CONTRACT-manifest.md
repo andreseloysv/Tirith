@@ -5,6 +5,7 @@ without anyone running `tirith pipeline declare`, and `tirith check` tells an ag
 
 ```toml
 deploy = "none"            # optional: the project does not deploy
+include = ["extra.toml"]   # optional: files next to tirith.toml whose [[pipelines]] are added (nothing else is read)
 
 [[pipelines]]
 id = "ci"                  # required, unique
@@ -22,6 +23,9 @@ run = "make lint"
 
 Stage kind: the explicit `kind`, else recognised from the stage name (`build`/`compile` → build,
 `test`/`check`/`lint` → test, `deploy`/`release`/`publish`/`ship` → deploy).
+
+Pipelines from an `include` file do not gate merges: the merge queue and the lane review skip them.
+They still run on demand with `tirith run --stage <name>` and show up like any other pipeline.
 
 ## How the collector uses it
 

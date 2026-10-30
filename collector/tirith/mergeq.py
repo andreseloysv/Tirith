@@ -177,8 +177,8 @@ def _tail(text: str) -> str:
 
 
 def stages_of(folder: Path) -> list[tuple[str, manifest_mod.Stage]]:
-    """``(pipeline id, stage)`` of every build and test stage with a command, in manifest order."""
-    return [(pipe.id, stage) for pipe in manifest_mod.load(folder).pipelines for stage in pipe.stages
+    """``(pipeline id, stage)`` of every build and test stage with a command of the gating pipelines, in manifest order."""
+    return [(pipe.id, stage) for pipe in manifest_mod.load(folder).pipelines if pipe.gating for stage in pipe.stages
             if stage.run and manifest_mod.stage_kind(stage) in ("build", "test")]
 
 
