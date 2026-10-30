@@ -1,4 +1,4 @@
-/* Run with: node web/js/landing.test.mjs  (needs playwright-core and the msedge channel; no servers).
+/* Run with: node web/js/landing.test.mjs  (needs the repo's own playwright-core, else skips with a warning, and the msedge channel; no servers).
    site/index.html loads from file:// with no console errors, every image exists, and the page does not
    scroll sideways at 360px and 1440px. Writes web/screenshots/landing-1440.png and landing-360.png. */
 import assert from 'node:assert/strict';
@@ -7,11 +7,19 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const require = createRequire(process.env.PLAYWRIGHT_FROM || '/Users/andreseloyasanchezva/DEVELOP/propuestavenezuela/node_modules/x.js');
-const { chromium } = require('playwright-core');
-
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(here, '..', '..');
+
+// playwright-core must come from this repo (root or web/ node_modules), never from another project's node_modules.
+let chromium = null;
+for (const dir of [root, path.join(root, 'web')]) {
+  try { ({ chromium } = createRequire(path.join(dir, 'x.js'))('playwright-core')); break; } catch {}
+}
+if (!chromium) {
+  console.warn('SKIP landing.test.mjs: playwright-core is not installed in this repo (npm i --no-save playwright-core in the repo root to run it)');
+  process.exit(0);
+}
+
 const site = path.join(root, 'site');
 const url = pathToFileURL(path.join(site, 'index.html')).href;
 
