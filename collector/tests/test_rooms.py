@@ -232,6 +232,7 @@ def test_brain_summary_and_owner_detection_are_cached(home: Path) -> None:
     RoomPoller(home, fake).poll_room("talk")
     brain = ScriptedBrain()
     collector = Collector(home, client=brain, rooms_transport=fake)
+    collector.worker.min_interval_s = {}  # this test is about the cache, not the minimum gap between calls
     first = collector.build_state(NOW)
     assert first["rooms"][0]["summary_source"] == "fallback"  # job still queued
     collector.worker.drain(10)

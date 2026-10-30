@@ -41,7 +41,8 @@ def test_working_agent_without_structured_log_uses_fallback(home: Path, tmp_path
     assert agent["log_tail"][-1] == "writing migration tests"
     assert agent["name"] and agent["epithet"] and agent["rank"] == "recruit"
     assert state["brain"] == {"enabled": False, "model": state["brain"]["model"],
-                               "last_error": None}
+                               "last_error": None, "usage": state["brain"]["usage"]}
+    assert state["brain"]["usage"]["total"] == 0 and not state["brain"]["usage"]["budget_reached"]
 
 
 def test_summary_is_the_agents_words_not_tool_output(home: Path, tmp_path: Path) -> None:
