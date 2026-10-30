@@ -113,6 +113,7 @@ class Config:
     manager_context_tokens: int = 150000  # [manager] context_tokens: compact when the context is this large
     models: dict = field(default_factory=dict)  # [models]: manager, workers (+ overrides), choices
     timeouts: dict[str, float] = field(default_factory=dict)  # [timeouts] <class> = seconds: the owner's fixed values
+    mergeq_train: int = 5  # [mergeq] train: lanes the merge queue tests together in one pass (1 turns it off)
 
     def room(self, room_id: str) -> RoomConfig | None:
         for room in self.rooms:
@@ -237,6 +238,9 @@ def load_config(home: Path) -> Config:
     timeouts = raw.get("timeouts") if isinstance(raw.get("timeouts"), dict) else {}
     cfg.timeouts = {str(k): float(v) for k, v in timeouts.items()
                     if isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0}
+    mergeq = raw.get("mergeq") if isinstance(raw.get("mergeq"), dict) else {}
+    if isinstance(mergeq.get("train"), int) and not isinstance(mergeq["train"], bool) and mergeq["train"] > 0:
+        cfg.mergeq_train = mergeq["train"]
     rooms_raw = raw.get("rooms")
     if isinstance(rooms_raw, list):
         for item in rooms_raw:
