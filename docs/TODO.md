@@ -414,5 +414,6 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [ ] Un lane ya mezclado a mano sale de la cola y de las revisiones sin intervención. (check: `cd collector && uv run -q pytest -q tests -k already_merged`)
 - [ ] Las correcciones de lane/u-testfix y el traslado del pipeline rust-port entran juntos en main: cada una necesita la otra para pasar la cola de merge. (check: `git merge-base --is-ancestor lane/u-testfix main && ! grep -qE 'tirith-core|tirith-cli|--workspace' tirith.toml`)
 - [ ] Dos ejecuciones simultáneas de etapas en worktrees distintos no comparten número de ejecución ni fichero de log. (check: `cd collector && uv run -q pytest -q tests -k concurrent_runs_separate_logs`)
+- [ ] Un lane no deja su item marcado como hecho en el plan antes de que su trabajo entre en main. (check: `cd collector && uv run -q pytest -q tests -k item_stays_open_until_merged`)
 - [x] La suite de tests de Python vuelve a pasar entera en main tras el tren de integración. (check: `cd collector && uv run -q pytest -q -n 8`) (hecho: b133b4b)
 
