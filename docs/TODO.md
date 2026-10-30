@@ -30,6 +30,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Revisar el plan (2026-10-29) (en revisión)
 - [x] Manager de guardia: atender el chat
 - [ ] Verificar: Verify Commit lane/manager-permission-questions-nev, me (en curso: verify-commit-lane-manager-permi-2)
+- [ ] Manager de guardia: atender el chat (en curso: manager-579eb28e)
 - [x] Manager de guardia: atender el chat
 - [x] Manager de guardia: atender el chat
 - [x] Manager de guardia: atender el chat
@@ -360,7 +361,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Los mensajes del dueño pasan delante: el manager atiende cada mensaje del chat antes que las propuestas del piloto. (check: `cd collector && uv run -q pytest -q tests -k managerd`) (hecho: 5754f53)
 - [ ] web/js/landing.test.mjs carga playwright-core del propio repo (o se salta con aviso si no está), nunca de node_modules de otro proyecto como propuestavenezuela (check: `node web/js/landing.test.mjs`)
 - [ ] tirith plan done acepta un commit que solo toca docs cuando el elemento mismo es de docs (README, docs/…), con un test (check: `cd collector && uv run -q pytest -q tests -k plan_done_docs`)
-- [ ] Un worktree de lane nunca se registra como proyecto automático: si git falla o vence el límite al resolver la raíz (_in_main_worktree en projects.py), no se guarda en caché ni se registra la carpeta. (check: `cd collector && uv run -q pytest -q tests -k worktree_never_auto_project`) (en revisión)
+- [ ] Un worktree de lane nunca se registra como proyecto automático: si git falla o vence el límite al resolver la raíz (_in_main_worktree en projects.py), no se guarda en caché ni se registra la carpeta. (check: `cd collector && uv run -q pytest -q tests -k worktree_never_auto_project`)
 - [x] El icono de la app de macOS se genera a partir del logo 3D. (check: `grep -q logo-3d scripts/make_icon.py`) (hecho: 7bcd959)
 - [x] El logo 3D es una torre de piedra con base circular, renderizada en Blender con texturas de piedra reales y calidad de portada, con almenas de piedra y sin la esfera flotante (pedido del dueño). (check: `test -f site/img/logo-3d.png`) (hecho: 7ff25cf)
 - [x] La captura principal de la landing muestra la app actual con datos de demo limpios: sin avisos, sin reglas inactivas y sin Flow. (check: `node web/js/landing.test.mjs`) (hecho: fadd25d)
@@ -441,7 +442,9 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [ ] test_canary_run_reaches_the_bare_origin_and_ticks_the_plan no falla con carga alta: en ci#177 el canary acabó en el paso push con wait_s=60 (check: `cd collector && uv run -q pytest -q tests/test_canary.py -k canary_run_reaches`) (en revisión)
 - [x] Un cambio del plan no falla con carga alta por esperar el lock: LOCK_WAIT_S de 30 s en plangate.py hizo fallar test_the_writer_lock_serializes_changes en ci#177 con «another change to the plan is taking too long» (check: `cd collector && uv run -q pytest -q tests/test_plangate.py -k writer_lock`) (hecho: 8299cd0)
 - [ ] Antes de rechazar un merge, la cola repite los tests fallados de uno en uno: si pasan, entra y el test queda anotado como inestable. (check: `cd collector && uv run -q pytest -q tests -k rerun_failed`) (en curso: tirith-se-mejora-usando-tirith-11)
-- [ ] Con 3 lanes o más esperando en la cola de merge no arranca ningún lane nuevo: primero se termina lo empezado. (check: `cd collector && uv run -q pytest -q tests -k wip_limit`) (en curso: tirith-se-mejora-usando-tirith-12)
+- [x] Con 3 lanes o más esperando en la cola de merge no arranca ningún lane nuevo: primero se termina lo empezado. (check: `cd collector && uv run -q pytest -q tests -k wip_limit`) (hecho: 56448d5)
 - [ ] Deflake timing-sensitive tests that fail intermittently under load (test_idletimeout silent/chatty stage, test_mergeq code-move retry, test_plangate dirty plan)
+- [ ] El trabajo de devolver lanes (reabrir el elemento del plan y comprobar que el agente arrancó) entra en main: la rama lane/tirith-se-mejora-usando-tirith-2 choca con main en test_mergeq.py y CONTRACT-mergeq.md, y su elemento quedó marcado como hecho con un commit de otro lane. (check: `cd collector && uv run -q pytest -q tests -k send_back_reopens_the_plan_item`)
+- [ ] Un lane sin agente registrado también vuelve a su agente: la cola solo reenvía si lane.agent está en la configuración, y los lanes con agent null llegan al manager sin decir por qué. (check: `cd collector && uv run -q pytest -q tests -k send_back_without_agent`)
 - [x] La suite de tests de Python vuelve a pasar entera en main tras el tren de integración. (check: `cd collector && uv run -q pytest -q -n 8`) (hecho: b133b4b)
 
