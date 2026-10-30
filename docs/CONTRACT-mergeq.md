@@ -19,7 +19,12 @@ is enqueued (`tirith merge request`, or by the dispatcher). Tirith merges one la
    Never the owner. A git command cut off at its time limit (exit 124, e.g. the merge) is not a conflict: the
    attempt is retried (up to 3 times), then the lane waits in the queue as `waiting` ("timed out"); never sent back.
 
-`state.projects[].merge_queue`: `{items: [{lane, position, status: queued|running, since, feature}], last, recent}`;
+5. Before any of this it commits what the agent left in the worktree. If the branch then has no commits main lacks
+   there is nothing to merge: no suite and no merge commit, the lane's `review.status` becomes `no-work`, the entry
+   closes (`closed`, "nothing to merge"), the worktree and branch are removed and the queue ticks nothing (the claim
+   check in `docs/CONTRACT-launch.md` decides the item). "Already merged" for a gone worktree comes from the same check.
+
+After a merge the lane records the merged `branch`. `state.projects[].merge_queue`: `{items: [{lane, position, status: queued|running, since, feature}], last, recent}`;
 the Plan card shows it. Commands: `tirith merge request|run|status`.
 
 Gate `main-merge` (an addition; no other gate changed): from a lane's worktree, `git -C <main checkout> merge|push`
