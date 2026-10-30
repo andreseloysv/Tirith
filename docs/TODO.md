@@ -396,4 +396,5 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [ ] Todas las llamadas a git usan el límite de la política de timeouts, sin límites fijos en el código. (check: `cd collector && uv run -q pytest -q tests -k no_fixed_git_timeout`)
 - [ ] El manager se compacta cuantas veces haga falta y solo se reinicia si compactar no basta, como mucho una vez por hora. (check: `cd collector && uv run -q pytest -q tests -k compact`) (en revisión)
 - [ ] El brain solo se llama cuando cambia lo que tiene que juzgar, nunca para una lista vacía ni en cada ciclo del collector. (check: `cd collector && uv run -q pytest -q tests -k brain_calls`)
+- [ ] Tren de integración A: todos los lanes terminados del collector, la cola y las reglas, juntos en una rama probada una sola vez. (check: `git merge-base --is-ancestor lane/u-mqplanmoves main`)
 
