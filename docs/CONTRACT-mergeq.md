@@ -23,6 +23,9 @@ is enqueued (`tirith merge request`, or by the dispatcher). Tirith merges (`coll
    `<home>/flaky.json` (`{project: {test id: {count, last}}}`, shown as `merge_queue.flaky`; the merged history row
    carries `flaky`). If one fails again, or the failed tests cannot be told (`ERROR` lines, a timeout, no report),
    it is a real red. No test is skipped or deleted.
+   On the return the lane's plan item is reopened with the reason (`(reabierto: <result>: ...)`),
+   and the queue checks that the relaunched agent started (its new lane registers within `START_WAIT`, 20 s):
+   the lane's `review` records `sent_to` and `started`; when it did not start, the manager's queue is told.
 
 `state.projects[].merge_queue`: `{items: [{lane, position, status: queued|running, since, feature}], last, recent}`;
 the Plan card shows it. Commands: `tirith merge request|run|status`.
