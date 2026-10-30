@@ -164,6 +164,11 @@ def _finish(home: Path, entry: dict, result: str, message: str = "", *, keep: bo
 def _git(folder: Path, *args: str):
     return timeouts_mod.run(["git", "-C", str(folder), *args], "git", text=True)
 
+def _remove_worktree(repo: Path, *args: str):
+    """``git worktree remove`` deletes every file of the lane, so it has its own (minutes-long) limit, not ``git``'s."""
+    return timeouts_mod.run(["git", "-C", str(repo), "worktree", "remove", *args], "git-worktree-remove", text=True)
+
+
 
 def _tail(text: str) -> str:
     text = (text or "").strip()
@@ -198,7 +203,7 @@ def _try(home: Path, repo: Path, lane: dict, entry: dict) -> tuple[str, str, dic
     main_branch = _git(repo, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
     tmp = worktree_path(repo, f"_mergeq-{lane_id}")
     if tmp.exists():
-        _git(repo, "worktree", "remove", "--force", str(tmp))
+        _remove_worktree(repo, "--force", str(tmp))
         shutil.rmtree(tmp, ignore_errors=True)
     _git(repo, "worktree", "prune")
     made = _git(repo, "worktree", "add", "-q", "--detach", str(tmp), base)
@@ -235,7 +240,7 @@ def _try(home: Path, repo: Path, lane: dict, entry: dict) -> tuple[str, str, dic
                 return WAITING, f"fast-forwarding {main_branch} failed: {_tail(moved.stderr or moved.stdout)}", {}
         return MERGED, "tests passed; merged", {"commit": tested, "main": main_branch, "passed": passed}
     finally:
-        _git(repo, "worktree", "remove", "--force", str(tmp))
+        _remove_worktree(repo, "--force", str(tmp))
         shutil.rmtree(tmp, ignore_errors=True)
         _git(repo, "worktree", "prune")
 
@@ -326,7 +331,7 @@ def process_next(home: Path, config: Config, *, relaunch: Callable | None = None
     except plangate_mod.PlanGateError as error:
         extra["plan_error"] = str(error)
     workspace = Path(str(lane["workspace"]))
-    _git(repo, "worktree", "remove", "--force", str(workspace))
+    _remove_worktree(repo, "--force", str(workspace))
     _git(repo, "branch", "-D", f"lane/{lane_id}")
     fresh = read_json(lane_path(home, lane_id), lane)
     fresh["review"] = {"status": review_mod.MERGED, "at": now_iso(), "by": "mergeq", "pid": os.getpid(),
