@@ -151,6 +151,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] La cola de merge usa la rama real de cada lane, la de su worktree. (check: `cd collector && uv run -q pytest -q tests -k mergeq`) (en revisión)
 - [ ] Cada fallo de la cola de merge vuelve con su motivo al lane o al manager. (check: `cd collector && uv run -q pytest -q tests -k mergeq`)
 - [ ] La comparación con Rust no bloquea merges mientras el port a Rust está parado. (check: `! grep -A3 'name = "parity"' tirith.toml | grep -q 'kind = "test"'`) (en revisión)
+- [ ] Tirith guarda una copia del brief de cada lane en su carpeta, así un lane cortado se puede retomar tras un reinicio. (check: `cd collector && uv run -q pytest -q tests -k brief`)
 
 ## 8. Más visibilidad por agente
 
