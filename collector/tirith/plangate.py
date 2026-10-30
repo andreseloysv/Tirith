@@ -540,6 +540,10 @@ def merged_commit(repo: Path, lane: dict) -> str | None:
     return found or None
 
 
+TICK_EVERY_S = 60.0  # a lane whose item is not "en revisión" or not on main yet is looked at again after this
+_ticked_at: dict[tuple[str, str], float] = {}
+
+
 def tick_merged(home: Path, config: Config, lanes: list[dict]) -> bool:
     """Lanes that reported ``done`` and merged themselves never get a review, so their item would stay
     "(en revisión)": tick it "(hecho: <sha>)" once the lane's work is on main (the claim check, :func:`on_main`)."""
@@ -548,6 +552,10 @@ def tick_merged(home: Path, config: Config, lanes: list[dict]) -> bool:
         outcome = seen.get("outcome") or {}
         if outcome.get("status") != "done" or not outcome.get("applied") or "item" not in seen:
             continue
+        key, at = (str(home), str(seen.get("id") or "")), time.monotonic()
+        if key in _ticked_at and at - _ticked_at[key] < TICK_EVERY_S:
+            continue  # settled lanes do not change: no file read, no git, until the next minute
+        _ticked_at[key] = at
         lane = read_json(lane_path(home, str(seen.get("id") or "")), None)
         linked = lane_item(lane) if isinstance(lane, dict) else None
         if linked is None or standing(lane):
