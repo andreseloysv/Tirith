@@ -176,7 +176,7 @@ def test_cycle_budget_ended_lanes_cost_a_bounded_number_of_git_calls(ended_home,
 def test_cycle_budget_merge_runner_stops_after_an_entry_when_the_code_changed(home: Path, monkeypatch) -> None:
     from tirith import mergeq
     rows = [{"lane": f"l{n}", "result": mergeq.MERGED} for n in range(3)]
-    monkeypatch.setattr(mergeq, "process_next", lambda *a, **k: rows.pop(0) if rows else None)
+    monkeypatch.setattr(mergeq, "process", lambda *a, **k: [rows.pop(0)] if rows else [])
 
     class Code:
         def __init__(self, changed: bool) -> None:
@@ -187,5 +187,5 @@ def test_cycle_budget_merge_runner_stops_after_an_entry_when_the_code_changed(ho
 
     assert [r["lane"] for r in mergeq.drain(home, None, watch=Code(False))] == ["l0", "l1", "l2"]
     rows[:] = [{"lane": f"l{n}", "result": mergeq.MERGED} for n in range(3)]
-    assert [r["lane"] for r in mergeq.drain(home, None, watch=Code(True))] == ["l0"]  # one entry, then a fresh runner
+    assert [r["lane"] for r in mergeq.drain(home, None, watch=Code(True))] == ["l0"]  # one pass, then a fresh runner
     assert len(rows) == 2
