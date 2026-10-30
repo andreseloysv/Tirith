@@ -178,7 +178,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Ningún test de Python falla al azar: los tests inestables se arreglan. (check: `bash scripts/check-flaky.sh`) (hecho: 3945182)
 - [x] Las etapas que bloquean merges ya no compilan ni prueban el port a Rust parado. (check: `! grep -qE 'tirith-core|tirith-cli|--workspace' tirith.toml`) (hecho: 5d8c719)
 - [x] Llevar a main el trabajo de lane/u-keepalive (un lane no termina mientras su etapa de tests corre): hoy marcado hecho con ec74885, que es un commit del plan, y main no tiene el test. (check: `git merge-base --is-ancestor e5acf09 main`) (hecho: e5acf09)
-- [ ] Commit lane/manager-permission-questions-nev, merge main, retest, tirith merge request (owner said not to commit)
+- [x] i-3af30eb5 (hecho: 8e3a1a9)
 - [ ] El control de escrituras Bash del manager deja leer con git (branch --list, worktree list, stash list, tag -l) y escribir briefs en /tmp, y bloquea git -c x=y commit, merge y push. (check: `cd collector && uv run -q pytest -q tests/test_msession.py -k manager_bash_reads_and_git_options`)
 - [ ] La regla workspace-write no bloquea por error: resuelve variables de shell como $S/x hacia el temporal del lane, permite 2>/dev/null y no toma como destino de escritura los argumentos de grep tras una tubería. (check: `cd collector && uv run -q pytest -q tests -k workspace_write_false_positives`)
 - [ ] Los 11 tests de test_autoreview vuelven a pasar: el Spawner del test falla con 'review' is not in list porque el collector ahora arranca 'canary run'. (check: `cd collector && uv run -q pytest -q tests/test_autoreview.py`)
