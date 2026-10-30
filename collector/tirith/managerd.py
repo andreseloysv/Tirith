@@ -800,10 +800,11 @@ def _compact_or_restart(home: Path, config: Config, book: dict, sess, now: datet
         book.update(session_id=None, primed=False, compact_turn=None, turns_total=0, handoff=handoff)
         book.setdefault("restarts", []).append(now_iso(now))
         return True
+    compacted = book.get("compact_turn")
+    if compacted is not None and turns <= compacted:
+        big = False  # nothing was said since the last compaction: another one would only repeat it
     if not (big or long):
         return changed
-    if failed and not big:
-        return changed  # restart not allowed yet, and not over the limit: wait
     if not sess.send("/compact", [], now):
         return changed
     book["compact_turn"] = turns + 1
