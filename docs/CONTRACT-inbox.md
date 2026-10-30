@@ -584,6 +584,13 @@ The owner can close the terminal: chat messages are still answered. No server, n
   owner items only for what it must refuse, no OS notifications), the pending messages with their attachment
   paths (`attachments[].path` on the request, when present), failed actions, the manager queue, a plan
   summary per project, the recent flows and its own notes.
+- **One conversation.** The manager has a single agent session, kept in `<home>/manager-session.json`
+  (`alias`, `id`, `started`). The first headless turn starts it (`tirith lane run --session-new <id>`, the alias's
+  `session_flag`, `--session-id` for `anthropic`); every later turn continues it (`--session-resume <id>`,
+  `resume_flag`, `--resume`), so the manager keeps the same memory with the app open or closed. The id of a live
+  manager session (its hooks' heartbeat) replaces it, so the terminal and the chat share the thread. A turn that
+  fails drops the id and the next turn starts a new conversation, carried by the notes. An alias with no
+  `session_flag` / `resume_flag` has only the notes.
 - **Notes.** `tirith manager-note "<text>"` appends a timestamped line to `<home>/manager-notes.md` (last
   20 KB kept); the last 4 KB go into the next brief, so the next run knows what was decided and launched.
 - **Detached lanes.** Lanes started by `tirith launch`, the autopilot, the dispatcher, the auto review and the
