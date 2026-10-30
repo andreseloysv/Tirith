@@ -1,7 +1,7 @@
 """Tirith 3D logo. Usage: Blender -b -P logo.py -- OUT.png SIZE [turntable_dir FRAMES [FRAME]] [samples=N] [stone=PACK] [sky=PACK] [limit=PX]
 
-Final still: OUT.png 2048 samples=512. Spin: OUT.png 512 DIR 60 samples=48 limit=2048, then composite the
-frames over #f4f8fb (.logo3d background) at 20 fps. Scale the still with premultiplied alpha, or the edges go dark.
+Final still: OUT.png 2048 samples=512. Spin: OUT.png 512 DIR 60 samples=64 limit=2048, then composite the
+frames over the dark .logo3d background at 20 fps. Scale the still with premultiplied alpha, or the edges go dark.
 """
 import sys, math
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
@@ -15,15 +15,13 @@ turn_dir = args[2] if len(args) > 2 else None
 frames = int(args[3]) if len(args) > 3 else 0  # optional 5th arg: only this frame
 
 reset()
-sky(opts.get("sky", SKY), 0.55)
+sky(opts.get("sky", SKY), float(opts.get("fill", 0.14)), float(opts.get("rot", 0)), (0.62, 0.74, 1.0))
 pivot = bpy.data.objects.new("pivot", None)
 bpy.context.collection.objects.link(pivot)
 for o in stone_tower("t_", stone=opts.get("stone", STONE)):
     o.parent = pivot
-shadow_floor(-0.42)
 look((0, -14.5, 3.75), (0, 0, 1.45), 92)
-sun((-0.3, -0.62, 1.2), 3.0, 18)
-area((5, -4, 2), (0, 0, 1.4), 28, 6, (0.75, 0.85, 1))
+dusk_rig(key_energy=float(opts.get("key", 9)), rim_energy=float(opts.get("rimE", 18)))
 setup(size, size, int(opts.get("samples", 512)), True, out)
 if "limit" in opts:
     bpy.context.scene.cycles.texture_limit_render = opts["limit"]
