@@ -22,7 +22,7 @@ from tirith.store import append_jsonl, read_jsonl
 
 INBOX_FILE = "inbox.jsonl"
 PROPOSAL = "autopilot-proposal"  # Tirith's own request to the manager: a plan item nobody works on
-KINDS = ("finish", "ask", "setup", "chat", "autopilot", PROPOSAL, "plan-refresh", "plan-new", "plan-edit")
+KINDS = ("finish", "ask", "setup", "chat", "autopilot", PROPOSAL, "plan-refresh", "plan-new", "plan-edit", "room-new")
 PLAN_KINDS = ("plan-refresh", "plan-new")
 PLAN_STEP = "plan"  # the step of a request about the whole plan, not one step
 MODELS_ACTIONS = ("models-set", "apply-manager")  # the Settings page; the request's project is "settings"
@@ -186,6 +186,9 @@ def add_request(home: Path, kind: str, project: str = "", step: str = "", text: 
     if kind == "plan-edit":
         text = json.dumps(parse_plan_edit(text), ensure_ascii=False, separators=(",", ":"))
     attachments = clean_attachments(attachments)
+    if kind == "room-new":  # text = the room's title; Tirith itself creates it
+        step = step or "room-new"
+        project = project or "all"
     if kind == "chat":
         if not text and not attachments:
             raise InboxError("a chat message needs text or an attachment")
@@ -465,7 +468,7 @@ def manager_pending(req: dict) -> bool:
 
     A ``finish`` or a plan request is Tirith's own job (the dispatcher answers it), so any answer
     settles it; every other kind stays pending until the manager itself answers, whatever the brain said."""
-    if req["status"] == "done" or req["kind"] == "autopilot":  # the dispatcher's own switch
+    if req["status"] == "done" or req["kind"] in ("autopilot", "room-new"):  # Tirith's own jobs
         return False
     runs = req.get("action_runs") or []
     if runs:
