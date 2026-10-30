@@ -460,6 +460,6 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [ ] `tirith room new`, `invite` y `join` con QR de un solo uso, y state.json dice a qué salas estás conectado y quién hay en cada una. (check: `cd collector && uv run -q pytest -q tests -k private_rooms`) (en curso: salas-privadas-2-2)
 - [ ] Vista Salas en la app: crear una sala, ver su QR, ver a qué salas estás conectado y quién hay, invitar a otro manager y salir. (check: `node web/js/rooms.test.mjs`) (en curso: salas-privadas-3)
 - [ ] Chat cifrado en el navegador del móvil: la cámara del iPhone escanea el QR y abre la conversación con el manager sin instalar nada. (check: `test -f site/chat/index.html && node site/chat/chat.test.mjs`) (en curso: salas-privadas-3-2)
-- [ ] App de iOS nativa: escanea el QR y abre un chat cifrado con el manager, compatible con am.mjs. (check: `bash scripts/check-ios.sh`)
+- [ ] App de iOS nativa: escanea el QR y abre un chat cifrado con el manager, compatible con am.mjs. (check: `bash scripts/check-ios.sh`) (en curso: salas-privadas-4)
 - [ ] La cola de merge no pasa los tests de Python a un lane que solo cambia site/, ios/ o docs/. (check: `cd collector && uv run -q pytest -q tests -k merge_paths`)
 
