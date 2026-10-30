@@ -29,6 +29,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Manager de guardia: atender el chat
 - [ ] Revisar el plan (2026-10-29) (en revisión)
 - [ ] Manager de guardia: atender el chat (en curso: manager-dadb354b)
+- [ ] Revisar el plan (2026-10-30) (en curso: update-the-plan-6)
 - [x] Manager de guardia: atender el chat
 - [x] Revisar el plan (2026-10-30) (hecho: fb8048e)
 - [x] Manager de guardia: atender el chat
