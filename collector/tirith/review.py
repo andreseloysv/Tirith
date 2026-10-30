@@ -72,8 +72,10 @@ def public(lane: dict, repo: Path | None) -> dict | None:
 
 
 def test_stage(folder: Path):
-    """``(pipeline id, stage)`` of the first test stage with a ``run`` in the project's manifest."""
+    """``(pipeline id, stage)`` of the first test stage with a ``run`` in the project's gating pipelines."""
     for pipe in manifest_mod.load(folder).pipelines:
+        if not pipe.gating:
+            continue
         for stage in pipe.stages:
             if stage.run and manifest_mod.stage_kind(stage) == "test":
                 return pipe.id, stage
