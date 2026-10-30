@@ -353,4 +353,5 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 ## 17. Tirith se mejora usando Tirith
 
 - [ ] Tirith se ejecuta desde una copia estable que solo avanza cuando la prueba completa pasa en la versión nueva, y vuelve atrás sola si la salud se pone roja. (check: `cd collector && uv run -q pytest -q tests -k stable`)
+- [ ] Tirith registra cada vez que hizo falta una persona o algo esperó, y pone la fricción mayor arriba del plan. (check: `cd collector && uv run -q pytest -q tests -k friction`)
 
