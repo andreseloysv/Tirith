@@ -287,11 +287,29 @@ def test_rules_decide_by_code(home: Path, rig: Rig) -> None:
 
     assert verdict("Read", {"file_path": "x"}) == "allow"
     assert verdict("Bash", {"command": "tirith inbox answer a b && ls -la"}) == "allow"
-    assert verdict("Bash", {"command": "tirith inbox list; rm -rf x"}) == "ask"
-    assert verdict("Bash", {"command": "ls $(whoami)"}) == "ask"
+    wrapped = ("t(){ printf '%s: ' \"$2\"; tirith plan done --project tirith --step 14 --item \"$1\" "
+               "--commit \"$2\" 2>&1 | tail -1; }; t a b")
+    assert verdict("Bash", {"command": wrapped}) == "allow"
+    assert verdict("Bash", {"command": "tirith inbox list >/dev/null 2>/dev/null; ls $(whoami)"}) == "allow"
+    assert verdict("Bash", {"command": f"echo x > {home}/note.md"}) == "allow"
+    for line in ("echo x > a.py", "tee a.py", "sed -i s/a/b/ a.py", f"rm {rig.repo}/a.py",
+                 "git commit -m x", "git merge lane/x", "tirith inbox list; rm -rf x"):
+        assert msession_mod.decide(config, home, "anthropic", "Bash", {"command": line}, rig.repo, "demo") == (
+            "deny", msession_mod.LANE_MESSAGE), line
     assert verdict("Bash", {"command": "git commit --no-verify -m x"}) == "deny"  # a gate
     assert verdict("Write", {"file_path": str(rig.repo / "a.py"), "content": "x"}) == "deny"
     assert verdict("Write", {"file_path": str(home / "note.md"), "content": "x"}) == "allow"
+    assert any(f["kind"] == "deny" for f in read_jsonl(home / "flows.jsonl"))  # a deny is visible
+
+
+def test_no_permission_question_reaches_the_owner(home: Path, rig: Rig) -> None:
+    from tirith import managerd as managerd_mod
+    from tirith.cli import add_wait
+    add_wait(home, "demo", "The manager asks to run **ls**. Allow it?", wait_id="perm-old", kind="approval")
+    managerd_mod._settle_asks(home, {"asks": {"x": "perm-old"}}, rig.session(), datetime.now(timezone.utc))
+    rows = [r for r in read_jsonl(home / "waits.jsonl") if r.get("id") == "perm-old"]
+    assert rows[-1].get("done_at")
+    assert rig.session().open_asks() == {}
 
 
 def test_end_to_end_through_lane_run_interactive(home: Path, tmp_path: Path, monkeypatch) -> None:
