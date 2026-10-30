@@ -393,7 +393,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [ ] Los límites de tiempo de los comandos crecen con la carga de la máquina, así git lento con carga alta no pone la salud en rojo. (check: `cd collector && uv run -q pytest -q tests -k load_scaled`)
 - [ ] La cola de merge puede cancelar el merge en curso cuando otro lane lo hace innecesario. (check: `cd collector && uv run -q pytest -q tests -k merge_cancel`)
 - [ ] Un lane vivo que espera su etapa de tests no cuenta como parado: ni el estado ni el autopilot lo marcan stalled solo porque su log lleva 10 minutos sin cambiar. (check: `cd collector && uv run -q pytest -q tests -k stalled_while_tests_run`)
-- [ ] La cola de merge no descarta un merge ya probado cuando main solo cambió en el plan: incorpora esos commits y sigue. (check: `cd collector && uv run -q pytest -q tests -k plan_only`) (en revisión)
+- [x] La cola de merge no descarta un merge ya probado cuando main solo cambió en el plan: incorpora esos commits y sigue. (check: `cd collector && uv run -q pytest -q tests -k plan_only`) (hecho: b9f21d9)
 - [ ] Todas las llamadas a git usan el límite de la política de timeouts, sin límites fijos en el código. (check: `cd collector && uv run -q pytest -q tests -k no_fixed_git_timeout`) (en curso: u-gittimeouts)
 - [ ] El manager se compacta cuantas veces haga falta y solo se reinicia si compactar no basta, como mucho una vez por hora. (check: `cd collector && uv run -q pytest -q tests -k compact`) (en revisión)
 - [ ] El brain solo se llama cuando cambia lo que tiene que juzgar, nunca para una lista vacía ni en cada ciclo del collector. (check: `cd collector && uv run -q pytest -q tests -k brain_calls`) (en curso: u-braincalls)
