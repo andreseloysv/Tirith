@@ -17,6 +17,11 @@ is enqueued (`tirith merge request`, or by the dispatcher). Tirith merges one la
 4. A conflict or a red stage goes back to the same agent: a relaunch whose brief continues the lane's branch
    with the conflict / failure appended (marker `[merge queue]`; after 3 returns the manager's queue decides).
    Never the owner.
+   Before that, a red test stage is repeated test by test: each `FAILED` id of the report runs alone with `-n 0`
+   (recorded as stage `<name>-rerun`). If all pass, the merge goes on and each test is counted as flaky in
+   `<home>/flaky.json` (`{project: {test id: {count, last}}}`, shown as `merge_queue.flaky`; the merged history row
+   carries `flaky`). If one fails again, or the failed tests cannot be told (`ERROR` lines, a timeout, no report),
+   it is a real red. No test is skipped or deleted.
 
 `state.projects[].merge_queue`: `{items: [{lane, position, status: queued|running, since, feature}], last, recent}`;
 the Plan card shows it. Commands: `tirith merge request|run|status`.
