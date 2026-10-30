@@ -121,6 +121,7 @@ def test_message_goes_to_stdin_and_the_stream_becomes_transcript_steps_and_an_an
 def test_second_message_reaches_the_same_process_and_waits_for_the_turn_to_end(rig: Rig) -> None:
     rig.chat("[[SLOW]] first")
     rig.until(lambda: rig.session() is not None and rig.session().busy)
+    rig.until(lambda: any("message" in r for r in rig.fake_log()))  # busy is set a moment before the agent logs it
     second = rig.chat("second, typed while it works")
     for _ in range(5):  # busy: not written to the agent
         rig.cycle()
