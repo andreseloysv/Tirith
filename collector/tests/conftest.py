@@ -27,6 +27,13 @@ def home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return folder
 
 
+def cpu_seconds() -> float:
+    """CPU time spent by this process and the children it waited for. Budgets on it hold on a loaded machine,
+    where the wall clock also counts the time the process spent waiting for a core."""
+    t = os.times()
+    return t.user + t.system + t.children_user + t.children_system
+
+
 def make_repo(path: Path) -> Path:
     """Create a throwaway git repo with one commit (tmp dirs only)."""
     path.mkdir(parents=True, exist_ok=True)
