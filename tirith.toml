@@ -13,7 +13,7 @@ run = "cd collector && uv run -q python -m compileall -q tirith && for f in ../w
 
 [[pipelines.stages]]
 name = "test"
-run = "cd collector && uv run -q pytest -q"
+run = "cd collector && uv run -q pytest -q -n auto --maxprocesses 8"
 
 [[pipelines.stages]]
 name = "rust-test"
