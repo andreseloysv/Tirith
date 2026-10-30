@@ -12,7 +12,7 @@
     store: 'Upload the build to the store.', upload: 'Upload the build to the store.',
     review: "The store's review of the release.", export: 'Export the project.', archive: 'Build the signed archive.'
   };
-  var VIEWS = [['overview', 'Overview'], ['pipelines', 'Pipelines'], ['agents', 'Agents'], ['settings', 'Settings']];
+  var VIEWS = [['overview', 'Overview'], ['pipelines', 'Pipelines'], ['agents', 'Agents'], ['rooms', 'Rooms'], ['settings', 'Settings']];
   var CHEV = '<svg class="chev" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2.5l3.5 3.5L4 9.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
   /* ---------- shared helpers (used by views) ---------- */
