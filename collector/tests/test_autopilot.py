@@ -163,7 +163,7 @@ def test_a_changed_item_gets_a_new_proposal_and_the_old_one_is_closed(home, repo
     pilot.cycle()
     step1 = [r for r in _proposals(home) if r["step"] == "1"]
     assert len(step1) == 2 and step1[0]["id"] == old["id"] and step1[0]["status"] == "done"
-    assert step1[0]["answers"][0]["by"] == "tirith" and "changed" in step1[0]["answers"][0]["text"]
+    assert step1[0]["answers"] == []  # closed quietly: nothing lands in the chat
     assert step1[1]["status"] == "open" and "reopened" in step1[1]["text"]
 
 
@@ -175,7 +175,7 @@ def test_a_ticked_item_closes_its_unanswered_proposal(home, repo) -> None:
     pilot.cycle()
     step1 = next(r for r in _proposals(home) if r["step"] == "1")
     assert step1["status"] == "done" and not step1["manager_pending"]
-    assert "done or gone" in step1["answers"][0]["text"]
+    assert step1["answers"] == []
     assert len(pilot.state()["proposals"]) == 2
 
 
