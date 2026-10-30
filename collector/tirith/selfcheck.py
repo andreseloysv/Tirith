@@ -214,9 +214,13 @@ def _autopilot(config: Config, now: datetime, state: dict, book: dict, home: Pat
     open_items = autopilot_mod.sitting(home, state, projects, agents, now)
     late = [c for c in open_items if c["idle_s"] >= AUTOPILOT_IDLE_S]
     waiting = [r for r in autopilot_mod.unanswered(home, state, now) if r["age_s"] >= PROPOSAL_STUCK_S]
-    if not late and not waiting:
+    doubled = {k: n for k, n in autopilot_mod.open_per_step(home).items() if n > 1}
+    if not late and not waiting and not doubled:
         book.pop("idle", None)
         return _check("ok", OK_TEXT["autopilot"])
+    if doubled and not late and not waiting:  # the autopilot collapses them itself: not the manager's or the owner's
+        return _check("healing", f"{len(doubled)} step{'s' if len(doubled) != 1 else ''} of the plan "
+                                 "had more than one open autopilot proposal; the autopilot is collapsing them.")
     if waiting and not late:
         n = len(waiting)
         return _check("healing", f"{n} proposal{'s' if n != 1 else ''} of the autopilot "
