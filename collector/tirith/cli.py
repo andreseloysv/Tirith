@@ -45,6 +45,7 @@ from tirith import setup as setup_mod
 from tirith import keepgoing as keepgoing_mod
 from tirith import lanestop as lanestop_mod
 from tirith import managerd as managerd_mod
+from tirith import ownerenv as ownerenv_mod
 from tirith import launch as launch_mod
 from tirith import models as models_mod
 from tirith import howto as howto_mod
@@ -1295,6 +1296,7 @@ def _cmd_map(args) -> int:
 
 def _cmd_collect(args) -> int:
     home = _home(args)
+    ownerenv_mod.load(home)  # before the Collector: the brain reads its key from the environment
     collector = Collector(home)
     if not args.once and hasattr(signal, "SIGTERM"):
         # the desktop app stops the collector with SIGTERM: unwind so the lock file handle closes cleanly

@@ -139,6 +139,14 @@ def _plenty_of_disk(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _no_owner_shell(monkeypatch):
+    """``tirith collect`` reads the owner's login shell at start; tests must not run it (test_ownerenv does, with a fake)."""
+    import types
+    from tirith import cli, ownerenv
+    monkeypatch.setattr(cli, "ownerenv_mod", types.SimpleNamespace(load=lambda *a, **k: ownerenv.status()))
+
+
+@pytest.fixture(autouse=True)
 def _no_autopilot(request, monkeypatch):
     """The autopilot is on by default and would start lanes and raise owner items in every collector test;
     only ``test_autopilot`` runs it."""
