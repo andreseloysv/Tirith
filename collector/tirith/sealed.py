@@ -22,6 +22,7 @@ from urllib.parse import urlencode
 
 DEFAULT = "https://agentsmessenger.com"
 ALG = "x25519-xsalsa20-poly1305"
+USER_AGENT = "tirith-room/1.0"
 
 
 class SealedError(Exception):
@@ -346,7 +347,8 @@ def load_or_create_key(home, name: str) -> Identity:
 def _api(base_url: str, path: str, body: dict | None = None, timeout: float = 60, text: bool = False):
     data = None if body is None else json.dumps(body).encode()
     req = urllib.request.Request(
-        base_url.rstrip("/") + path, data=data, headers={"content-type": "application/json", "accept": "text/plain" if text else "application/json"}
+        base_url.rstrip("/") + path, data=data, headers={"content-type": "application/json", "accept": "text/plain" if text else "application/json",
+                 "user-agent": USER_AGENT}  # the platform answers 403 to urllib's default one
     )
     try:
         with urllib.request.urlopen(req, timeout=timeout) as res:
