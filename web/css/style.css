@@ -595,7 +595,7 @@ button.vwho:hover b { text-decoration: underline; }
 .nchip { flex: none; padding: 0 9px; font-size: 11.5px; line-height: 20px; color: var(--mut); background: rgba(120,135,160,.14); border-radius: 10px; }
 .nage { flex: none; font-size: 11.5px; line-height: 20px; color: var(--mut); white-space: nowrap; }
 .nacts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
-.nbtn { display: inline-flex; align-items: center; min-height: 28px; max-width: 100%; box-sizing: border-box; padding: 5px 13px; line-height: 1.35; overflow-wrap: anywhere; font-size: 12.5px; font-weight: 500; text-decoration: none; color: var(--fg); background: rgba(255,255,255,.85); border: 1px solid rgba(120,135,160,.35); border-radius: 8px; }
+.nbtn { display: inline-flex; align-items: center; min-height: 28px; max-width: 100%; box-sizing: border-box; padding: 5px 13px; line-height: 1.35; white-space: normal; overflow-wrap: anywhere; text-align: left; font-size: 12.5px; font-weight: 500; text-decoration: none; color: var(--fg); background: rgba(255,255,255,.85); border: 1px solid rgba(120,135,160,.35); border-radius: 8px; }
 .nbtn:hover { border-color: var(--blue); color: var(--blue); }
 .nbtn.primary { color: #fff; background: var(--blue); border-color: var(--blue); } .nbtn.primary:hover { color: #fff; filter: brightness(1.08); }
 .ncmd { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--mut); }
