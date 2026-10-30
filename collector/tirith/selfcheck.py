@@ -33,6 +33,7 @@ from tirith import diskdiet as diskdiet_mod
 from tirith import inbox as inbox_mod
 from tirith import launch as launch_mod
 from tirith import managerd as managerd_mod
+from tirith import mergeq as mergeq_mod
 from tirith import review as review_mod
 from tirith import timeouts as timeouts_mod
 from tirith.home import Config, now_iso, parse_iso
@@ -42,6 +43,8 @@ MANAGER_STUCK_S = 120.0      # an owner message without an answer, nobody workin
 LINGER_S = 60.0              # a manager process alive this long after its result
 AUTOPILOT_IDLE_S = 120.0     # an open item nobody works on and no proposal for it
 PROPOSAL_STUCK_S = 600.0     # a proposal the manager has not answered
+QUEUE_STUCK_S = 600.0        # a merge queue entry "queued" with no runner
+SPAWN_LOG_S = 120.0          # a runner stamped "spawned" this long ago must have a log
 REVIEW_STUCK_S = 1200.0      # a review in "running"
 TIMEOUTS_WINDOW_S = 3600.0   # timeouts of one class are counted over this long
 TIMEOUTS_REPEATED = 3        # this many in the window is not chance
@@ -54,10 +57,10 @@ SAVE_EVERY_S = 30.0
 QUEUE_KIND = "selfcheck"
 LEVELS = ("ok", "healing", "failed")
 LABELS = {"collector": "Tirith itself", "manager": "The manager", "autopilot": "The autopilot",
-          "disk": "Disk space", "reviews": "Reviews", "timeouts": "Command timeouts"}
+          "disk": "Disk space", "reviews": "Reviews", "mergeq": "The merge queue", "timeouts": "Command timeouts"}
 OK_TEXT = {"collector": "Tirith is collecting normally.", "manager": "The manager is answering normally.",
            "autopilot": "The autopilot is on track.", "disk": "There is enough free disk space.",
-           "reviews": "Reviews are moving.", "timeouts": "No command keeps running out of time."}
+           "reviews": "Reviews are moving.", "mergeq": "The merge queue is moving.", "timeouts": "No command keeps running out of time."}
 _TEST_FILE = re.compile(r"[\w./-]*(?:test_\w+\.py|[\w-]+\.test\.mjs)")
 
 
@@ -241,6 +244,33 @@ def _disk(state: dict, now: datetime, active: set[str]) -> dict:
     return _check("failed", f"The disk is almost full ({gb:.1f} GB free); no new work starts until space is freed.")
 
 
+def _mergeq(home: Path, now: datetime, book: dict, active: set[str]) -> dict:
+    """Finished lanes waiting in the merge queue with no runner (or a runner that never logged): one manager
+    queue item with the evidence."""
+    data = mergeq_mod.load(home)
+    waiting = [e for e in data["queue"] if e.get("status") in (mergeq_mod.QUEUED, mergeq_mod.RUNNING)]
+    if not waiting or any(e.get("status") == mergeq_mod.RUNNING and mergeq_mod._alive(e.get("pid"))
+                          for e in data["queue"]):
+        return _check("ok", OK_TEXT["mergeq"])
+    oldest = max(waiting, key=lambda e: _age_s(e.get("at"), now))
+    age = _age_s(oldest.get("at"), now)
+    spawned = float(data.get("spawned") or 0)
+    spawned_ago = now.timestamp() - spawned if spawned else 0.0
+    log = home / "logs" / "mergeq.log"
+    if spawned and spawned_ago >= SPAWN_LOG_S and not log.exists():
+        what = (f"the merge runner was stamped as started {int(spawned_ago)} s ago but {log} does not exist")
+    elif age >= QUEUE_STUCK_S:
+        what = f"{oldest['lane']} has been queued for {_minutes(age)} min with no merge runner alive"
+    else:
+        return _check("ok", OK_TEXT["mergeq"])
+    key = "mergeq-stuck"
+    active.add(key)
+    _queue(home, book, key, str(oldest.get("project") or ""), str(oldest["lane"]),
+           f"Self-check: {what} ({len(waiting)} lane(s) waiting: {', '.join(e['lane'] for e in waiting[:6])}). "
+           "Run `tirith merge run` and find out why the collector did not start it.")
+    return _check("healing", f"The merge queue is stuck: {what}.")
+
+
 def _timeouts(home: Path, now: datetime, book: dict, active: set[str]) -> dict:
     """A command class that timed out ``TIMEOUTS_REPEATED`` times within the hour: one manager queue item."""
     worst = _check("ok", OK_TEXT["timeouts"])
@@ -368,6 +398,7 @@ def run(home: Path, config: Config, now: datetime, state: dict, *, lanes: list[d
     checks["autopilot"] = _autopilot(config, now, state, book, home, agents or [], projects or [], active)
     checks["disk"] = _disk(state, now, active)
     checks["reviews"] = _reviews(home, config, now, book, lanes, spawn, kill, diff or diff_files, active)
+    checks["mergeq"] = _mergeq(home, now, book, active)
     checks["timeouts"] = _timeouts(home, now, book, active)
     changed = _announce(home, book, now)
     active |= set(book["notices"])  # an episode lasts until the owner has been told how it ended
