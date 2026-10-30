@@ -147,7 +147,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Tests rápidos en la lane (solo lo relacionado con el cambio) y suite completa en la cola de fusión; el paralelismo se ajusta a CPU y disco. (en revisión)
 - [ ] El tiempo límite de un agente mide inactividad (sin salida ni progreso durante N minutos), no el tiempo total; una lane que sigue trabajando nunca se corta por durar mucho. (en revisión)
 - [ ] Los tests limpian sus carpetas temporales, incluidos los hooks bloqueados que crean, para no llenar el disco. (check: `cd collector && uv run -q pytest -q tests -k cleanup`) (en revisión)
-- [ ] La cola de merge arranca sola desde el collector: ningún lane terminado espera en la cola sin un proceso de merge. (check: `cd collector && uv run -q pytest -q tests -k mergeq`) (en curso: u-mqspawn2)
+- [ ] La cola de merge arranca sola desde el collector: ningún lane terminado espera en la cola sin un proceso de merge. (check: `cd collector && uv run -q pytest -q tests -k mergeq`) (en revisión)
 - [ ] La cola de merge usa la rama real de cada lane, la de su worktree. (check: `cd collector && uv run -q pytest -q tests -k mergeq`) (en revisión)
 - [ ] Cada fallo de la cola de merge vuelve con su motivo al lane o al manager. (check: `cd collector && uv run -q pytest -q tests -k mergeq`)
 - [ ] La comparación con Rust no bloquea merges mientras el port a Rust está parado. (check: `! grep -A3 'name = "parity"' tirith.toml | grep -q 'kind = "test"'`) (en revisión)
