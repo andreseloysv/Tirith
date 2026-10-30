@@ -41,6 +41,7 @@ def make_repo(path: Path) -> Path:
     """Create a throwaway git repo with one commit (tmp dirs only)."""
     path.mkdir(parents=True, exist_ok=True)
     subprocess.run([GIT, "init", "-q", "--template=", str(path)], check=True)
+    (path / ".git" / "hooks").mkdir(exist_ok=True)  # a repo has the folder; no template means no sample files in it
     (path / "README.md").write_text("# demo repo\n", encoding="utf-8")
     subprocess.run([GIT, "-C", str(path), "add", "."], check=True)
     subprocess.run(
