@@ -57,6 +57,7 @@ from tirith import review as review_mod
 from tirith import mergeq as mergeq_mod
 from tirith import roadmap as roadmap_mod
 from tirith import runstage as runstage_mod
+from tirith import canary as canary_mod
 from tirith import fasttests as fasttests_mod
 from tirith import loadlimit as loadlimit_mod
 from tirith import projects as projects_mod
@@ -1089,6 +1090,8 @@ def _cmd_project_list(args) -> int:
         print("no projects; try: tirith project add <folder>")
         return 0
     for item in items:
+        if canary_mod.hidden(item.id):
+            continue
         print(f"{item.id}  {item.folder or '-'}  {item.name}  {item.color}"
               + ("  [auto]" if item.auto else ""))
     return 0
@@ -1655,6 +1658,12 @@ def _cmd_plan_report(args) -> int:
     later = "" if outcome.get("applied") else f" (recorded; the plan will be updated: {outcome.get('error')})"
     print(f"lane {lane_id}: {args.status}{new}{later}")
     return 0
+
+
+def _cmd_canary_run(args) -> int:
+    row = canary_mod.run(_home(args))
+    print(f"canary {row['id']}: {row['state']}" + ("" if row["state"] == "ok" else f" at {row['step']}: {row.get('reason')}"))
+    return 0 if row["state"] == "ok" else 1
 
 
 def _cmd_merge_request(args) -> int:
@@ -2625,6 +2634,11 @@ def build_parser() -> argparse.ArgumentParser:
     pl_done.add_argument("--item", required=True, help="the exact text of the item")
     pl_done.add_argument("--commit", required=True, help="the commit on main that did the work")
     pl_done.set_defaults(func=_cmd_plan_done)
+
+    canary = sub.add_parser("canary", parents=[common], help="the end-to-end test lane (runs every hour by itself)")
+    canary_sub = canary.add_subparsers(dest="canary_command", required=True)
+    c_run = canary_sub.add_parser("run", parents=[common], help="one run: plan, lane, merge queue, push, plan tick")
+    c_run.set_defaults(func=_cmd_canary_run)
 
     merge = sub.add_parser("merge", parents=[common], help="the single merge queue (agents never merge into main)")
     merge_sub = merge.add_subparsers(dest="merge_command", required=True)
