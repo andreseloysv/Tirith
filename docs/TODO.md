@@ -350,3 +350,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [ ] `tirith plan add` muestra el id corto del elemento y todos los comandos lo aceptan. (check: `cd collector && uv run -q pytest -q tests -k item_id`)
 - [ ] El dueño recibe un resumen visual de lo que llegó a main, con un botón de opinión que se convierte en elementos del plan. (check: `cd collector && uv run -q pytest -q tests -k digest`)
 
+## 17. Tirith se mejora usando Tirith
+
+- [ ] Tirith se ejecuta desde una copia estable que solo avanza cuando la prueba completa pasa en la versión nueva, y vuelve atrás sola si la salud se pone roja. (check: `cd collector && uv run -q pytest -q tests -k stable`)
+
