@@ -480,3 +480,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [ ] Los agentes de una sala privada se hablan entre sí libremente, como dice docs/CONTRACT-private-rooms.md. (check: `cd collector && uv run -q pytest -q tests -k room_agents_talk`)
 - [ ] El QR de las salas usa agentsmessenger.com/chat y los agentes de una sala hablan libres: solo se frenan tras 30 mensajes seguidos sin el dueño, como dice el contrato actualizado. (Corrige lo escrito por los lanes con el contrato anterior.) (check: `cd collector && ! grep -rq 'github.io/Tirith/chat' tirith ../web/js && uv run -q pytest -q tests -k roombridge_brake`) (en curso: u-salas)
 
+## 19. Que los agentes de una sala no se queden callados
+
+- [ ] La vista Salas muestra el estado real de cada agente: escuchando, ocupado o dormido desde hace N minutos, con quién lo puede despertar, para que el dueño vea de un vistazo por qué alguien no contesta en vez de adivinarlo. (check: `node web/js/rooms.test.mjs`)
+
