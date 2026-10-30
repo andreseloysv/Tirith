@@ -180,6 +180,6 @@ def command(sel: Selection) -> str | None:
         steps = [f"cargo test -q {' '.join('-p ' + c for c in sel.crates)}"] if sel.crates else []
     else:
         if sel.tests:
-            steps.append("cd collector && uv run -q pytest -q " + " ".join(shlex.quote(t) for t in sel.tests))
+            steps.append("cd collector && uv run -q pytest -q -n auto --maxprocesses 4 " + " ".join(shlex.quote(t) for t in sel.tests))
         steps.extend(f"node {shlex.quote(w)}" for w in sel.web)
     return " && ".join(steps) if steps else "true"
