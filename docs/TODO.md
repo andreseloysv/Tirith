@@ -389,4 +389,5 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [ ] La cola de merge puede cancelar el merge en curso cuando otro lane lo hace innecesario. (check: `cd collector && uv run -q pytest -q tests -k merge_cancel`)
 - [ ] Un lane vivo que espera su etapa de tests no cuenta como parado: ni el estado ni el autopilot lo marcan stalled solo porque su log lleva 10 minutos sin cambiar. (check: `cd collector && uv run -q pytest -q tests -k stalled_while_tests_run`)
 - [ ] La cola de merge no descarta un merge ya probado cuando main solo cambió en el plan: incorpora esos commits y sigue. (check: `cd collector && uv run -q pytest -q tests -k plan_only`)
+- [ ] Todas las llamadas a git usan el límite de la política de timeouts, sin límites fijos en el código. (check: `cd collector && uv run -q pytest -q tests -k no_fixed_git_timeout`)
 
