@@ -33,7 +33,6 @@ def no_real_scans(monkeypatch) -> None:
     monkeypatch.setattr(diskdiet_mod, "_biggest", lambda count=3: [])
     monkeypatch.setattr(diskdiet_mod, "busy_folders", lambda: [])
     monkeypatch.setattr(diskdiet_mod, "process_running", lambda *names: False)
-    monkeypatch.setattr(diskdiet_mod, "clear_pytest_leftovers", lambda *a, **k: 0)
 
 
 def now() -> datetime:
@@ -254,19 +253,6 @@ def test_nothing_to_clean_tells_the_owner_once_which_folders_are_biggest(home: P
     (text,) = say_texts(home)
     assert "nothing left to clean" in text and "Movies 40.0 GB" in text
     assert not (home / "waits.jsonl").exists()
-
-
-def test_pytest_leftovers_are_removed_only_when_old_and_tirith_made(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.undo()
-    import getpass
-    base = tmp_path / f"pytest-of-{getpass.getuser()}"
-    mine, other = base / "pytest-1", base / "pytest-2"
-    (mine / "t0" / "tirith-home").mkdir(parents=True)
-    (other / "t0").mkdir(parents=True)
-    later = mine.stat().st_mtime + 7200
-    assert diskdiet_mod.clear_pytest_leftovers(tmp_path, now_s=mine.stat().st_mtime + 10, running=lambda: False) == 0
-    diskdiet_mod.clear_pytest_leftovers(tmp_path, now_s=later, running=lambda: False)
-    assert not mine.exists() and other.is_dir()
 
 
 def test_the_owner_gate_sends_disk_space_items_to_the_manager(home: Path) -> None:
