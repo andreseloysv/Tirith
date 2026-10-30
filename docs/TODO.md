@@ -246,6 +246,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Cabecera de un paso del Plan con varios agentes: avatares apilados (+N) y un solo botón, sin tapar el título ni la barra de progreso. (hecho: ce69997)
 - [x] Reaplicar sobre main solo el cambio de cabecera de paso de lane/stepheader (4 archivos: git diff --binary 876bf81 cb7e35b | git apply en un worktree nuevo desde main), commit y test web (check: `git cat-file -e main:web/js/planagents.test.mjs && git show main:web/css/style.css | grep -q pavas`) (hecho: 9b1b249)
 - [x] Quitar la vista Flow del menú y su código (el dueño la considera inútil). (hecho: 360eded)
+- [ ] El test web/js/planagents.test.mjs no reescribe la captura versionada web/screenshots/plan-many-agents.png al pasar: la escribe en un temporal, y solo la actualiza con una orden aparte. (check: `! grep -q "screenshots" web/js/planagents.test.mjs`)
 
 ## 11. Lanzar un sub-agente desde el Plan
 
@@ -461,7 +462,10 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [ ] Se sabe qué quitó la protección de los hooks del guard de Tirith a las 18:58:19Z del 30 oct y ya no puede volver a pasar. (check: `cd collector && uv run -q pytest -q tests -k guard_flags_stay`)
 - [ ] Los tests de una lane corren en paralelo: hoy 41 tests de test_mergeq.py tardaron 17 minutos en serie porque el modo changed no pasa -n. (check: `cd collector && uv run -q pytest -q tests -k changed_tests_run_in_parallel`) (en curso: u-fastn)
 - [ ] La suite de Python tarda menos de 6 minutos con carga alta: hoy tarda de 12 a 16, casi todo esperando y no en CPU. (check: `cd collector && uv run -q pytest -q tests -k suite_budget`) (en curso: u-suitefast)
-- [ ] Tren C: las lanes que aceleran la cola (u-mqfast, -11, u-cyclefast, -14) juntas en una rama probada una sola vez, en vez de cuatro fusiones que chocan entre sí. (check: `cd collector && uv run -q pytest -q tests/test_mergeq.py -k 'train or flaky or rerun'`)
+- [ ] Tren C: las lanes que aceleran la cola (u-mqfast, -11, u-cyclefast, -14) juntas en una rama probada una sola vez, en vez de cuatro fusiones que chocan entre sí. (check: `cd collector && uv run -q pytest -q tests/test_mergeq.py -k 'train or flaky or rerun'`) (en curso: u-trainc)
+- [ ] La cola no tira una fusión ya probada porque la copia principal esté sucia: aterriza si los archivos sucios no chocan, o espera sin repetir los tests. (check: `cd collector && uv run -q pytest -q tests/test_mergeq.py -k dirty_checkout`)
+- [ ] Ningún test escribe en archivos versionados: web/js/planagents.test.mjs reescribe web/screenshots/plan-many-agents.png y ensució la copia principal. (check: `! grep -q 'plan-many-agents.png' web/js/planagents.test.mjs || grep -q 'UPDATE_SCREENSHOTS' web/js/planagents.test.mjs`)
+- [ ] La regla workspace-write no toma las expresiones de sed -i -e como rutas de escritura (hoy bloquea /^=======$/d como si fuera un archivo). (check: `cd collector && uv run -q pytest -q tests -k workspace_write_sed_expression`)
 - [x] La suite de tests de Python vuelve a pasar entera en main tras el tren de integración. (check: `cd collector && uv run -q pytest -q -n 8`) (hecho: b133b4b)
 
 ## 18. Salas privadas: hablar con el manager desde el móvil
