@@ -81,7 +81,7 @@ def test_a_quiet_home_is_green(home: Path, project: Path) -> None:
     assert state["health"]["level"] == "green"
     public = selfcheck_mod.public(state["health"])
     assert public["level"] == "green"
-    assert [c["id"] for c in public["checks"]] == ["collector", "manager", "autopilot", "disk", "reviews", "mergeq", "timeouts", "canary"]
+    assert [c["id"] for c in public["checks"]] == ["collector", "manager", "autopilot", "disk", "reviews", "mergeq", "timeouts", "canary", "ownerenv"]
     assert all(c["level"] == "ok" and c["text"] for c in public["checks"])
 
 

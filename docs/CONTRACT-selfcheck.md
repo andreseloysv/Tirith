@@ -13,6 +13,7 @@ so a restart it asks for happens in the same pass). State: `dispatch.json` under
 | `autopilot` | an open agent item (whatever its note) with no lane working and no review running, that the manager was not told about for 2 min; or an `autopilot-proposal` unanswered for 10 min (amber, the `manager` check restarts the turn); the check counts open proposals per step, and more than one for a step is amber until the autopilot collapses them | none that is safe | one queue item with the items |
 | `disk` | below `[disk] min_free_gb` | the disk guard (`diskdiet`) already removes merged worktrees | red until space is free |
 | `reviews` | a review `running` for 20 min; or `tests-failed` on tests the lane's diff does not touch | end the stuck process, run `tirith lane review <id>` again; run the unrelated failure again once | a queue item with the output |
+| `ownerenv` | the owner's login shell could not be read at collector start (failed, empty or over 10 s; `CONTRACT-agents.md`, "The owner's environment") | none: it is read again on the next collector start | red with the reason, no variable names or values |
 
 "Unrelated": the failing test files named in the review output (`test_x.py`, `x.test.mjs`) are neither in the
 lane's diff nor the test of a module it changed. A failure that names no test file is never called unrelated.
