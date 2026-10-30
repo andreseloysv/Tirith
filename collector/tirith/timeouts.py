@@ -43,6 +43,7 @@ EXIT_TIMED_OUT = 124    # the exit code of a command that was stopped at its dea
 POLICY: dict[str, tuple[float, float, float, str]] = {
     "git": (30, 5, 300, "git commands Tirith runs to read a repository"),
     "git-commit": (180, 30, 900, "a git commit, with the commit checks that run before it"),
+    "git-worktree-remove": (300, 30, 1800, "removing a lane worktree (git deletes every file in it; slow, unlike a git read)"),
     "stage": (1800, 60, 7200, "a build or test stage"),
     "agent-bash": (120, 10, 600, "a shell command an agent runs"),
     "agent-turn": (28800, 300, 86400, "one run of an agent in a lane (the hard cap; see its idle limit)"),
@@ -61,7 +62,7 @@ POLL_S = 5.0            # how often the idle watcher looks for progress
 CPU_ACTIVE_S = 1.0      # child CPU time gained between two looks that counts as progress
 SCAN_LIMIT = 20000      # entries of the worktree looked at per scan
 SCAN_SKIP = frozenset({".git", "node_modules", "target", ".venv", "__pycache__", ".mypy_cache"})
-LABELS = {"git": "Git (reading)", "git-commit": "Git commit", "stage": "Build and test stages",
+LABELS = {"git": "Git (reading)", "git-commit": "Git commit", "git-worktree-remove": "Git worktree removal", "stage": "Build and test stages",
           "agent-bash": "Agent shell commands", "agent-turn": "Agent runs", "muse": "Model requests",
           "cargo": "Cargo", "npm": "npm", "generic": "Other commands"}
 
