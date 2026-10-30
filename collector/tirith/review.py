@@ -110,6 +110,11 @@ def check_ready(home: Path, lane_id: str, repo: Path | None) -> dict:
 def _git(folder: Path, *args: str) -> subprocess.CompletedProcess:
     return timeouts_mod.run(["git", "-C", str(folder), *args], "git", text=True)
 
+def _remove_worktree(repo: Path, *args: str):
+    """``git worktree remove`` deletes every file of the lane, so it has its own (minutes-long) limit, not ``git``'s."""
+    return timeouts_mod.run(["git", "-C", str(repo), "worktree", "remove", *args], "git-worktree-remove", text=True)
+
+
 
 def _tail(text: str) -> str:
     text = text.strip()
@@ -162,7 +167,7 @@ def merge_lane(repo: Path, workspace: Path, lane_id: str, feature: str) -> str:
         raise ReviewError(f"merging {branch} failed (conflicts?): {_tail(done.stderr or done.stdout)}. "
                           f"Fix: merge {branch} by hand")
     head = _git(repo, "rev-parse", "HEAD").stdout.strip()
-    _git(repo, "worktree", "remove", str(workspace))
+    _remove_worktree(repo, str(workspace))
     _git(repo, "branch", "-d", branch)
     return head
 
@@ -209,6 +214,6 @@ def drop_lane(home: Path, lane_id: str, repo: Path | None) -> dict:
         raise ReviewError(f"lane {lane_id} is already merged")
     if not lane.get("ended_at"):
         raise ReviewError(f"lane {lane_id} is still running; drop it when it ends")
-    _git(repo, "worktree", "remove", "--force", str(lane["workspace"]))
+    _remove_worktree(repo, "--force", str(lane["workspace"]))
     _git(repo, "branch", "-D", f"lane/{lane_id}")
     return _set(home, lane, DROPPED, "dropped by the owner")
