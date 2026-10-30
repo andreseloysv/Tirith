@@ -53,7 +53,8 @@ def main():
             announced = True
         if "[[CRASH]]" in text:
             sys.exit(3)
-        ctx = 1000 if text.startswith("/compact") else int(os.environ.get("FAKE_CTX", "1000"))
+        ctx = (int(os.environ.get("FAKE_COMPACT_CTX", "1000")) if text.startswith("/compact")
+               else int(os.environ.get("FAKE_CTX", "1000")))
         for piece in ("Looking ", "into it"):
             out({"type": "stream_event", "session_id": sid, "event": {
                 "type": "content_block_delta", "delta": {"type": "text_delta", "text": piece}}})
