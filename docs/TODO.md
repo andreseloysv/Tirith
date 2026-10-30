@@ -30,7 +30,8 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Revisar el plan (2026-10-29) (en revisión)
 - [x] Manager de guardia: atender el chat
 - [ ] Verificar: Verify Commit lane/manager-permission-questions-nev, me (en curso: verify-commit-lane-manager-permi-2)
-- [ ] Manager de guardia: atender el chat (en curso: manager-579eb28e)
+- [ ] Manager de guardia: atender el chat (en curso: manager-238396cd)
+- [x] Manager de guardia: atender el chat
 - [x] Manager de guardia: atender el chat
 - [x] Manager de guardia: atender el chat
 - [x] Manager de guardia: atender el chat
@@ -447,7 +448,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [ ] El trabajo de devolver lanes (reabrir el elemento del plan y comprobar que el agente arrancó) entra en main: la rama lane/tirith-se-mejora-usando-tirith-2 choca con main en test_mergeq.py y CONTRACT-mergeq.md, y su elemento quedó marcado como hecho con un commit de otro lane. (check: `cd collector && uv run -q pytest -q tests -k send_back_reopens_the_plan_item`)
 - [ ] Un lane sin agente registrado también vuelve a su agente: la cola solo reenvía si lane.agent está en la configuración, y los lanes con agent null llegan al manager sin decir por qué. (check: `cd collector && uv run -q pytest -q tests -k send_back_without_agent`)
 - [ ] El piloto automático no trata una copia de merge (_mergeq-<lane>) como proyecto: mergeq-tirith-se-mejora-usando-tirith-5 generó cinco propuestas (pasos 3, 7, 9, 10 y 14) a partir de la copia de docs/TODO.md. (check: `cd collector && uv run -q pytest -q tests -k autopilot_ignores_merge_worktree`)
-- [ ] Un elemento solo se marca hecho si el lane tiene commits propios en main: una rama sin commits con trabajo sin guardar no cuenta como mezclada. (check: `cd collector && uv run -q pytest -q tests -k false_tick`)
+- [ ] Un elemento solo se marca hecho si el lane tiene commits propios en main: una rama sin commits con trabajo sin guardar no cuenta como mezclada. (check: `cd collector && uv run -q pytest -q tests -k false_tick`) (en curso: tirith-se-mejora-usando-tirith-13)
 - [ ] Llevar a main el arreglo de lanes devueltos de lane/tirith-se-mejora-usando-tirith-2 (06391d4): tuvo conflicto en la cola y su elemento se marcó hecho sin haber entrado. (check: `git merge-base --is-ancestor 06391d4 main`)
 - [x] La suite de tests de Python vuelve a pasar entera en main tras el tren de integración. (check: `cd collector && uv run -q pytest -q -n 8`) (hecho: b133b4b)
 
