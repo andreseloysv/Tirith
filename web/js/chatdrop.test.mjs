@@ -71,7 +71,7 @@ try {
   ok('a file dropped outside the chat does not replace the page');
 
   await fire(page, 'drop', '.mchat', 'txt');
-  await page.locator('.mc-strip .mc-fth').first().waitFor({ timeout: 3000 });
+  await page.locator('.mc-strip .mc-file').first().waitFor({ timeout: 3000 });
   assert.equal(await page.locator('.mc-strip img').count(), 0, 'a text file is no thumbnail');
   assert.equal((await page.locator('.mc-strip .mc-fname').textContent()), 'notes.txt');
   ok('a dropped non-image file becomes a chip with its name');

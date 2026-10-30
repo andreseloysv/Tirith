@@ -4,7 +4,7 @@
 (function () {
   var T = window.T, esc = T.esc, box = null, info = null, demo = false, note = '';
 
-  function tauri() { var t = window.__TAURI__; return t && t.core && t.core.invoke ? t : null; }
+  function tauri() { var t = window.__TAURI__; return t && t.core && t.core.invoke && t.event ? t : null; }
   function close() { if (box) { box.remove(); box = null; } }
 
   function body() {
@@ -50,6 +50,7 @@
 
   function poll() {
     tauri().core.invoke('first_run').then(function (r) {
+      if (!r || typeof r.uv !== 'boolean') return;
       info = r;
       if (r.uv && r.projects > 0) { demo = false; close(); }
       else if (!demo) draw();
