@@ -107,7 +107,8 @@ def writer_lock(home: Path, project: str):
 
 
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
-    return timeouts_mod.run(["git", "-C", str(repo), *args], "git", text=True)
+    # a commit runs the commit checks, so it gets the commit deadline (the read one times out under load)
+    return timeouts_mod.run(["git", "-C", str(repo), *args], "git-commit" if args[:1] == ("commit",) else "git", text=True)
 
 
 LOCK_STALE_SECONDS = 60  # a git index lock older than this was left by a crash (git holds it for milliseconds)
@@ -176,7 +177,8 @@ def commit_change(home: Path, repo: Path, project: str, mutate: Callable[[str], 
         if made.returncode != 0:  # the guard (or git) refused: leave the plan as it was
             _git(repo, "reset", "-q", "--", rel)
             _git(repo, "checkout", "--", rel)
-            raise PlanGateError(f"committing the plan failed: {(made.stderr or made.stdout).strip()[:200]}")
+            why = (made.stderr or made.stdout).strip() or getattr(made, "error", "") or f"git exited {made.returncode}"
+            raise PlanGateError(f"committing the plan failed: {why[:200]}")
     return True
 
 
