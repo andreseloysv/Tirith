@@ -435,3 +435,24 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [ ] El tamaño de contexto del manager se mide con la última petición, no con la suma de todas las del turno. (check: `cd collector && uv run -q pytest -q tests -k context_tokens`) (en curso: tirith-se-mejora-usando-tirith-6)
 - [x] La suite de tests de Python vuelve a pasar entera en main tras el tren de integración. (check: `cd collector && uv run -q pytest -q -n 8`) (hecho: b133b4b)
 
+
+## 18. agentsmessenger.com como mando a distancia (salas, sesiones y órdenes del dueño)
+
+Idea: escribir desde la app de agentsmessenger.com a los agentes que trabajan en el proyecto y recibir
+estado ahí. Mejora sobre la idea inicial: no se escribe «a los agentes» directamente. Una sala por
+proyecto cuyo único interlocutor es el manager de Tirith; tú hablas con él en lenguaje natural, el manager
+convierte la orden en un elemento del plan o en un mensaje a un lane, y publica el estado él solo. Así se
+mantienen las reglas (solo Tirith escribe el plan, ningún agente arranca sin item) y los mensajes de
+terceros nunca llegan a un agente como instrucciones. Base ya existente: `CONTRACT-rooms.md` (lectura y
+`tirith room say`).
+
+- [ ] Sondeo: averiguar con GET qué expone agentsmessenger.com para listar salas y quién escucha en cada una (presencia, oyentes) y dejarlo escrito en `CONTRACT-rooms.md`; si no hay listado, Tirith lista las salas que él conoce (config + enlaces pegados). (check: `cd collector && uv run -q pytest -q tests -k rooms_directory_probe`)
+- [ ] `tirith room join <enlace>` acepta una URL de sala (o solo el id), comprueba que el host es agentsmessenger.com, añade la sala al proyecto actual y empieza a escucharla; rechaza cualquier otro host. (check: `cd collector && uv run -q pytest -q tests -k room_join_link`)
+- [ ] La app tiene una pestaña «Salas» con todas las salas y sesiones que escuchan ahora (quién está presente, última actividad, a qué proyecto pertenecen), un campo para pegar un enlace y unirse, y un botón para dejar de escuchar. (check: `cd collector && uv run -q pytest -q tests -k rooms_directory_state`)
+- [ ] Cada sala tiene un modo: `read` (solo ve), `status` (Tirith publica estado) o `command` (además acepta órdenes del dueño). Por defecto `read`; subir de modo es una decisión del dueño en la app, no de un agente. (check: `cd collector && uv run -q pytest -q tests -k room_modes`)
+- [ ] En modo `command`, solo los mensajes con firma del dueño (`[owner] names` + `signed`) se convierten en órdenes: «estado», «pausa/continúa», «añade al plan: ...», «dile a <lane>: ...»; el resto de mensajes se muestran como datos y nunca se pasan a un agente. (check: `cd collector && uv run -q pytest -q tests -k room_owner_commands`)
+- [ ] Una orden del dueño en la sala queda ligada a un elemento del plan o a una respuesta (misma lista que «peticiones del dueño» de la sección 16) y Tirith contesta en la sala con el resultado. (check: `cd collector && uv run -q pytest -q tests -k room_command_traceable`)
+- [ ] En modo `status`, Tirith publica un mensaje corto cuando algo cambia (lane empieza, termina, queda bloqueado, entra en main, te necesita) y un resumen cada N minutos con trabajo activo; nunca más de un mensaje por minuto y nunca repite el mismo. (check: `cd collector && uv run -q pytest -q tests -k room_status_posts`)
+- [ ] Antes de cada POST a una sala, Tirith pasa el texto por la comprobación de secretos y canarios; si encuentra uno, no publica y lo registra. (check: `cd collector && uv run -q pytest -q tests -k room_post_secret_scan`)
+- [ ] «Tu turno» (sección 12) se publica también en la sala del proyecto con el enlace a la app, para poder contestar desde el móvil. (check: `cd collector && uv run -q pytest -q tests -k room_your_turn`)
+- [ ] `tirith room open <proyecto>` crea o reutiliza la sala del proyecto, imprime su enlace (y QR) para abrirla en la app de agentsmessenger y la deja en modo `status`. (check: `cd collector && uv run -q pytest -q tests -k room_open_project`)
