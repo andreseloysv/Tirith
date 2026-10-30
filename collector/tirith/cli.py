@@ -503,13 +503,24 @@ def _run_child(home: Path, lane: dict, lane_id: str, command: list[str], workspa
 def _resume_child(home: Path, config, args, lane: dict, command: list[str], log_path: Path, answer: str,
                   text: str) -> tuple[list[str], str | None] | None:
     """The command (and stdin text) that sends ``text`` to the lane's agent again, or None."""
-    alias = str(args.agent or getattr(args, "as_agent", None) or "")
+    alias = _lane_alias(args, command, config)
     try:
         brief = Path(str(lane.get("brief") or "")).read_text(encoding="utf-8", errors="replace")
     except OSError:
         brief = ""
     return keepgoing_mod.resume_command(config, alias, args.project, command,
-                                        keepgoing_mod.session_id(log_path), text, answer, brief)
+                                        keepgoing_mod.session_id(log_path), text, answer, brief,
+                                        keepgoing_mod.previous_run_note(Path(str(lane.get("workspace") or "")),
+                                                                        lane.get("start_commit")))
+
+
+def _lane_alias(args, command: list[str], config=None) -> str:
+    """The alias keep-going treats the lane as: --agent / --as-agent, else the one a known agent CLI implies."""
+    return str(args.agent or getattr(args, "as_agent", None) or (keepgoing_mod.infer_alias(config, command) if config else None) or "")
+
+
+def stopped_after_wait(home: Path, lane_id: str) -> bool:
+    return bool(lanestop_mod.marker(read_json(lane_path(home, lane_id), None) or {}))
 
 
 def _cmd_lane_run(args) -> int:
@@ -592,11 +603,13 @@ def _cmd_lane_run(args) -> int:
         answer = _last_stop_message(home, lane_id, lane.get("started_at"))
     else:
         stdin_text = getattr(args, "stdin_text", None)
-        rounds, idle_rounds, missing = 0, 0, []
+        rounds, idle_rounds, stage_waits, missing = 0, 0, 0, []
+        alias = _lane_alias(args, raw_command or command, config)
+        began_at, reported = time.time() - 2, set()
         while True:
             exit_code, answer = _run_child(home, lane, lane_id, command, workspace, env, log_path, stdin_text)
             stopped = lanestop_mod.marker(read_json(lane_path(home, lane_id), None) or {})
-            agent_lane = bool(args.agent or getattr(args, "as_agent", None))
+            agent_lane = bool(alias)
             if (not stopped and agent_lane and exit_code == timeouts_mod.EXIT_TIMED_OUT
                     and _IDLE.pop(lane_id, False) and idle_rounds < keepgoing_mod.MAX_ROUNDS
                     and keepgoing_mod.has_work(workspace, lane.get("start_commit"))):
@@ -611,6 +624,20 @@ def _cmd_lane_run(args) -> int:
                     continue
             if stopped or exit_code != 0 or not agent_lane:
                 break
+            if stage_waits < keepgoing_mod.MAX_STAGE_WAITS:
+                # a stage the agent started may still run: wait for it, then the same session gets its result
+                runs = keepgoing_mod.stage_runs(home, lane_id, Path(workspace), began_at, reported)
+                if keepgoing_mod.running_stages(runs):
+                    runs = keepgoing_mod.wait_for_stages(home, lane_id, Path(workspace), began_at, reported)
+                    if stopped_after_wait(home, lane_id):
+                        break
+                    stage_waits += 1
+                    reported |= {r.get("log") for r in runs}
+                    resumed = _resume_child(home, config, args, lane, command, log_path, answer,
+                                            keepgoing_mod.stage_message(runs))
+                    if resumed is not None:
+                        command, stdin_text = resumed
+                        continue
             missing = keepgoing_mod.gaps(home, lane, proj.repo, answer)
             if not missing or rounds >= keepgoing_mod.MAX_ROUNDS:
                 break
