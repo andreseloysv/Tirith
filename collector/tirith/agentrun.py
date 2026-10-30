@@ -40,6 +40,8 @@ PRESET_DEFAULTS: dict[str, dict] = {
         "model_flag": "--model",
         "effort_flag": "--effort",
         "add_dir_flag": "--add-dir",
+        "session_flag": "--session-id",
+        "resume_flag": "--resume",
     },
     "muse": {
         "args": ["exec", "--json"],
@@ -75,7 +77,7 @@ PRESET_DEFAULTS: dict[str, dict] = {
 }
 
 _OVERRIDABLE = ("command", "args", "permissions", "model", "effort", "add_dirs", "prompt_flag",
-                "print_flag", "stdin", "prompt_file_flag", "unset_env")
+                "print_flag", "stdin", "prompt_file_flag", "unset_env", "session_flag", "resume_flag")
 STDIN_MIN = 2000  # a prompt this long (a brief) goes through stdin when the alias reads it
 
 
@@ -115,9 +117,12 @@ def wants_stdin(config: Config, alias: str, project: str | None, prompt: str) ->
 
 def build_command(config: Config, alias: str, project: str | None, prompt: str, *,
                   model: str | None = None, effort: str | None = None,
-                  step: str | None = None, via_stdin: bool = False) -> list[str]:
+                  step: str | None = None, via_stdin: bool = False,
+                  session: tuple[str, str] | None = None) -> list[str]:
     """The full headless command for ``alias``; raises SystemExit when it cannot be built.
     With ``via_stdin`` the prompt is left out: the caller writes it to the process' stdin.
+    ``session`` is ``("new" | "resume", id)``: it starts the agent session with that id or continues it, when the
+    alias has a ``session_flag`` / ``resume_flag`` (otherwise it is ignored).
 
     Model and effort: the explicit arguments, then ``[models.workers]`` (with its project and step
     overrides; an effort the alias has no flag for is only recorded), then ``[agents.<alias>]``."""
@@ -145,6 +150,10 @@ def build_command(config: Config, alias: str, project: str | None, prompt: str, 
         cmd += [str(s["effort_flag"]), str(effort or s["effort"])]
     elif chosen.effort and models_mod.effort_flag(alias, s):  # no flag: the effort is only recorded
         cmd += [str(models_mod.effort_flag(alias, s)), str(chosen.effort)]
+    if session:
+        flag = s.get("resume_flag" if session[0] == "resume" else "session_flag")
+        if flag:
+            cmd += [str(flag), str(session[1])]
     perms = [str(p) for p in (s.get("permissions") or [])]
     if perms and s.get("permissions_flag"):
         sep = s.get("permissions_join")

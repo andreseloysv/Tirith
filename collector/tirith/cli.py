@@ -385,6 +385,14 @@ def _lane_run_refusal(args, config, proj, workspace: Path) -> str | None:
     return None
 
 
+def _session_arg(args) -> tuple[str, str] | None:
+    if getattr(args, "session_resume", None):
+        return ("resume", args.session_resume)
+    if getattr(args, "session_new", None):
+        return ("new", args.session_new)
+    return None
+
+
 def _agent_command(config, args) -> list[str]:
     if args.prompt and args.prompt_file:
         raise SystemExit("lane run: pass --prompt or --prompt-file, not both")
@@ -402,7 +410,7 @@ def _agent_command(config, args) -> list[str]:
     args.stdin_text = prompt if stdin else None  # written to the agent's stdin by _cmd_lane_run
     return agentrun_mod.build_command(config, args.agent, args.project, prompt,
                                       model=args.model, effort=args.effort, step=args.step,
-                                      via_stdin=stdin)
+                                      via_stdin=stdin, session=_session_arg(args))
 
 
 def _cmd_doctor(args) -> int:
@@ -446,7 +454,8 @@ def _detached_argv(args, home: Path, lane_id: str, workspace: Path, command: lis
                         ("--request", args.request), ("--agent", args.agent), ("--as-agent", args.as_agent),
                         ("--fallback-from", args.fallback_from), ("--tried", args.tried),
                         ("--model", args.model), ("--effort", args.effort), ("--prompt", args.prompt),
-                        ("--prompt-file", args.prompt_file)):
+                        ("--prompt-file", args.prompt_file), ("--session-new", args.session_new),
+                        ("--session-resume", args.session_resume)):
         if value:
             argv += [flag, str(value)]
     if args.by_tirith:
@@ -2387,6 +2396,8 @@ def build_parser() -> argparse.ArgumentParser:
     lane_run.add_argument("--tried", default="", help="comma list of aliases already used for this brief")
     lane_run.add_argument("--model", default=None)
     lane_run.add_argument("--effort", default=None)
+    lane_run.add_argument("--session-new", default=None, help=argparse.SUPPRESS)
+    lane_run.add_argument("--session-resume", default=None, help=argparse.SUPPRESS)
     lane_run.add_argument("--prompt", default=None)
     lane_run.add_argument("--prompt-file", default=None)
     lane_run.add_argument("command", nargs=argparse.REMAINDER)
