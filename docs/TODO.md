@@ -395,7 +395,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 
 ## 17. Tirith se mejora usando Tirith
 
-- [ ] Tirith se ejecuta desde una copia estable que solo avanza cuando la prueba completa pasa en la versión nueva, y vuelve atrás sola si la salud se pone roja. (check: `cd collector && uv run -q pytest -q tests -k stable`)
+- [ ] Tirith se ejecuta desde una copia estable que solo avanza cuando la prueba completa pasa en la versión nueva, y vuelve atrás sola si la salud se pone roja. (check: `cd collector && uv run -q pytest -q tests -k stable`) (en curso: tirith-se-mejora-usando-tirith-5)
 - [ ] Tirith registra cada vez que hizo falta una persona o algo esperó, y pone la fricción mayor arriba del plan. (check: `cd collector && uv run -q pytest -q tests -k friction`)
 - [ ] La cola de merge tiene prioridad: los arreglos de la propia cola y de sus etapas entran primero. (check: `cd collector && uv run -q pytest -q tests -k merge_priority`)
 - [x] Las instrucciones de los lanes dicen quién revisa de verdad: Tirith hace el commit y la cola de merge revisa, nunca «para que lo revise el dueño». (check: `! grep -rq 'for the owner to review' collector/tirith`) (hecho: 39e0c0b)
