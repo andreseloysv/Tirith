@@ -463,6 +463,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [ ] La suite de Python tarda menos de 6 minutos con carga alta: hoy tarda de 12 a 16, casi todo esperando y no en CPU. (check: `cd collector && uv run -q pytest -q tests -k suite_budget`) (en curso: u-suitefast)
 - [ ] Tren C: las lanes que aceleran la cola (u-mqfast, -11, u-cyclefast, -14) juntas en una rama probada una sola vez, en vez de cuatro fusiones que chocan entre sí. (check: `cd collector && uv run -q pytest -q tests/test_mergeq.py -k 'train or flaky or rerun'`) (en curso: u-trainc)
 - [ ] La cola no tira una fusión ya probada porque la copia principal esté sucia: aterriza si los archivos sucios no chocan, o espera sin repetir los tests. (check: `cd collector && uv run -q pytest -q tests/test_mergeq.py -k dirty_checkout`)
+- [ ] Ningún test escribe en archivos versionados: web/js/planagents.test.mjs reescribe web/screenshots/plan-many-agents.png y ensució la copia principal. (check: `! grep -q 'plan-many-agents.png' web/js/planagents.test.mjs || grep -q 'UPDATE_SCREENSHOTS' web/js/planagents.test.mjs`)
 - [x] La suite de tests de Python vuelve a pasar entera en main tras el tren de integración. (check: `cd collector && uv run -q pytest -q -n 8`) (hecho: b133b4b)
 
 ## 18. Salas privadas: hablar con el manager desde el móvil
