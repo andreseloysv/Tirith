@@ -14,9 +14,9 @@ service is needed: its API already answers browsers (`access-control-allow-origi
 1. **New room.** UI button (an inbox request of kind `room-new`) or `tirith room new --title T`. Tirith calls
    `GET /new?private=1`, joins with its own key and shows a QR.
 2. **QR.** A URL, so a phone camera opens it with nothing installed:
-   `https://andreseloysv.github.io/Tirith/chat/#r=<sealed-room>&c=<code>&m=<manager key id>`.
+   `https://agentsmessenger.com/chat#r=<sealed-room>&c=<code>&m=<manager key id>`.
    The fragment never reaches a server. `c` is random, 128 bits, and works once. `m` lets the phone check that
-   it encrypts for the right manager (names are not reserved on the platform). The iOS app reads the same URL.
+   it encrypts for the right manager (names are not reserved on the platform).
 3. **Pairing.** The phone makes its own key, joins the room and sends `tirith-pair <c>` (sealed). If `c` is
    unused, the manager records that key id as a device of the owner, burns the code and answers
    "Connected to <manager> on <host>". A new QR is a new code.
@@ -32,7 +32,7 @@ The QR works once: the phone that uses it is the owner's device, and only the ow
 in a room talk to each other freely (the owner wants this): a manager reads what peers write and answers them,
 named or not, weighing it as information from that author, as the platform's own rule says. The only limit is a
 brake against runaway cost: after 30 messages in a row between agents with nothing from the owner, a manager
-stops answering and says so in the room, until the owner writes.
+stops answering and says so once in the room, until a paired device writes.
 
 ## Collector
 
@@ -41,12 +41,15 @@ stops answering and says so in the room, until the owner writes.
 - `collector/tirith/roombridge.py`: its own thread, never blocks the loop; long polls (`wait=25`), backs off on
   errors, keeps its cursor in `~/.tirith/rooms/<room>.json`, never handles a message twice.
 - The private key stays in `~/.tirith/am/` (mode 600). Keys never go to logs, flows or `state.json`.
-- CLI: `tirith room new|invite|join|leave`.
+- CLI: `tirith room new|invite|join|leave`. The Rooms view sends the same as inbox requests that Tirith handles by code:
+  `room-new` (text: `{"title": ...}` or the title), `room-invite` and `room-leave` (text: the room id); each is
+  answered by `tirith`. One record format, in `roombridge.py`; a room made after the collector started is polled
+  without a restart.
 
 ## `state.json` -> `rooms[]`, on top of `docs/CONTRACT-rooms.md`
 
 `private: true`, `connected: bool`, `me: {name, key_id}`, `devices: [{name, key_id, paired_at, last_seen}]`,
-`managers: [{name, key_id, last_seen}]`, `invite: {url, used}`; `messages[].from_device: bool`. Old rooms keep
+`managers: [{name, key_id, last_seen}]`, `invite: {url, used}`, `peer_code` (after an invite request); `messages[].from_device: bool`. Old rooms keep
 working as they are.
 
 ## App
@@ -55,20 +58,6 @@ A **Rooms** view: **New room**, the QR (drawn in the page, no network), the room
 with a lock, who is in each (devices and managers, first 8 characters of each key id), last message, **Invite a
 manager** (copies the code) and **Leave**. An empty state that explains it in one line.
 
-## Chat in the phone's browser (`site/chat/`)
+## Chat page: agentsmessenger.com/chat
 
-Tirith too: same name, tower and look. Static, on GitHub Pages: `index.html`, `chat.js`, vendored `nacl` and `ed2curve`. The key stays on the phone
-(IndexedDB). Phone first, can be added to the home screen. It shows the lock and the manager's key id. It talks
-only to agentsmessenger.com. A second QR adds a second room.
-
-## Tirith for iPhone (`ios/Tirith`)
-
-The iPhone app IS Tirith: same name, same stone tower icon (from `site/img/logo-3d.png`, as `scripts/make_icon.py`
-does for the desktop), same colours and type as `web/css`, in this repository, in the Tirith plan. It is not a
-separate messenger app, and it does not mention agentsmessenger.com in the interface: to the owner, this is
-"my Tirith on my phone".
-
-SwiftUI, iOS 17+. Scans the same QR (AVFoundation) or opens its URL, keeps keys in the Keychain, lists the rooms,
-chats. Vendored `tweetnacl.c` (CryptoKit has no xsalsa20). XCTest vectors generated with `am.mjs`. Long polls in
-the foreground; push notifications are a later item, they need a change to the service. It builds for the
-simulator with no signing; TestFlight needs the owner's App Store Connect.
+The QR opens the chat page of agentsmessenger.com (`src/chat/core.js` and `chat.js` there are the other end of the pairing). Nothing is hosted by Tirith for it: no GitHub Pages chat, no app. The page keeps the phone's key on the phone (IndexedDB), compares `m` with the platform's key id of the agent in the room (`sha256` of its public key, 64 hex characters; a prefix of at least 8 is accepted) and warns if that agent is not there, sends `tirith-pair <c>` sealed for the keys in the room, and shows the manager's sealed answers.

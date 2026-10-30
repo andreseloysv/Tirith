@@ -5,12 +5,14 @@ A sealed room is encrypted on every device (``tirith.sealed``). This module owns
 paired through a QR (``tirith-pair <code>``, a 128-bit code that works once) give orders: their messages
 become ``chat`` requests in the same inbox (same manager session) with ``via: "room:<room>"``, and the
 manager's answers go back to the room sealed for that device. Everyone else (strangers, other managers)
-reaches the manager as a request *labelled as information* from that author, never as an instruction; a
-peer is answered only when named, at most ``PEER_STREAK_MAX`` times in a row. See
-``docs/CONTRACT-private-rooms.md``.
+reaches the manager as a request *labelled as information* from that author, never as an instruction, and is
+answered, named or not. The one limit is a brake against runaway cost: after ``AGENT_STREAK_MAX`` messages
+in a row from agents with nothing from a paired device, the manager stops answering and says so once in the
+room, until a paired device writes. See ``docs/CONTRACT-private-rooms.md``.
 
 Private keys and pairing codes never go to logs or ``state.json``; the code appears only in the invite URL.
-``tirith.sealed`` is imported late (inside functions) so this module loads without it.
+This module owns the record format, ``ROOM_RE`` and ``pairing_url``; ``tirith.privaterooms`` (CLI, the
+``room-*`` requests, ``state.json``) builds on them and keeps no copy.
 """
 
 from __future__ import annotations
@@ -26,27 +28,32 @@ from pathlib import Path
 from urllib.parse import quote
 
 from tirith import inbox as inbox_mod
+from tirith import sealed as sealed_mod
 from tirith.home import now_iso
 from tirith.store import read_json, write_json_atomic
 
 log = logging.getLogger("tirith.roombridge")
 
-CHAT_URL = "https://andreseloysv.github.io/Tirith/chat/"
+CHAT_URL = "https://agentsmessenger.com/chat"  # the page that pairs with this bridge (agentsmessenger src/chat)
 PAIR_PREFIX = "tirith-pair"
 WAIT_S = 25
 MIN_PAUSE_S = 2.0
 IDLE_S = 5.0
 MAX_BACKOFF_S = 300.0
-PEER_STREAK_MAX = 3
+AGENT_STREAK_MAX = 30
 HANDLED_KEPT = 500
 PENDING_KEPT = 50
 MESSAGES_KEPT = 40
 CODES_KEPT = 8
 ANSWER_MAX = 3500  # characters per sealed message; longer answers go in several
-ROOM_RE = re.compile(r"^sealed-[A-Za-z0-9._-]{1,120}$")
+ROOM_RE = re.compile(r"^sealed-[a-z0-9_-]{1,57}$")  # what sealed.py and the chat page accept
+KEY_ID_RE = re.compile(r"^[0-9a-f]{64}$")  # sha256 of the public key, as the platform's agent_id
+BRAKE_TEXT = ("I stopped answering: {n} messages in a row came from agents and none from the owner. "
+              "I answer again when the owner writes from a paired device.")
 CODE_RE = re.compile(r"^[0-9a-f]{32}$")
 
 _lock = threading.Lock()
+record_lock = threading.RLock()  # one writer of a record at a time in this process (load, change, save)
 _started: dict[str, threading.Thread] = {}
 
 
@@ -92,22 +99,37 @@ def new_record(room: str, me: dict, title: str = "", project: str = "") -> dict:
     return {"id": room, "private": True, "title": title or room, "project": project, "connected": True,
             "me": {"name": me["name"], "key_id": me["key_id"]}, "devices": [], "managers": [],
             "codes": [], "invite": {"url": "", "used": False}, "cursor": None, "handled": [],
-            "pending": [], "peer_streak": 0, "messages": [], "last_error": None}
+            "pending": [], "agent_streak": 0, "braked": False, "messages": [], "last_error": None,
+            "polled_at": None}
 
 
 # -- pairing --------------------------------------------------------------------------------------
 
 
-def new_pairing(home: Path, room: str) -> str:
-    """A random 128-bit one-time code for ``room``, stored until used. Older unused codes stay valid."""
-    record = load_room(home, room)
-    if record is None:
-        raise ValueError(f"no private room {room}")
+def add_code(record: dict) -> str:
+    """Put a fresh random 128-bit one-time code in ``record`` (not saved) and its URL in ``record["invite"]``.
+    Older unused codes stay valid."""
     code = secrets.token_hex(16)
     record["codes"] = (record.get("codes") or [])[-(CODES_KEPT - 1):] + [{"code": code, "at": now_iso()}]
     record["invite"] = {"url": pairing_url(record, code), "used": False}
-    save_room(home, record)
     return code
+
+
+def new_pairing(home: Path, room: str) -> str:
+    """A fresh one-time code for ``room``, stored until used."""
+    with record_lock:
+        record = load_room(home, room)
+        if record is None:
+            raise ValueError(f"no private room {room}")
+        code = add_code(record)
+        save_room(home, record)
+    return code
+
+
+def renew_invite(home: Path, room: str) -> str:
+    """A fresh one-use code; returns the QR URL (also kept in the record, which is mode 600)."""
+    new_pairing(home, room)
+    return load_room(home, room)["invite"]["url"]
 
 
 def pairing_url(record: dict, code: str) -> str:
@@ -192,7 +214,7 @@ def handle_message(home: Path, record: dict, msg, say) -> None:
     if text.strip().split(None, 1)[:1] == [PAIR_PREFIX]:
         if device is None and _burn_code(record, text):
             _upsert(devices, msg.key_id, msg.author, now, paired_at=now)
-            record["peer_streak"] = 0
+            record["agent_streak"], record["braked"] = 0, False
             say(f"Connected to {record['me']['name']} on {socket.gethostname()}", msg.key_id)
             log.info("room %s: paired device %s", room, _short(msg.key_id))
         else:
@@ -200,22 +222,27 @@ def handle_message(home: Path, record: dict, msg, say) -> None:
         return
     if device is not None:
         device["last_seen"] = now
-        record["peer_streak"] = 0
+        record["agent_streak"], record["braked"] = 0, False
         _remember(record, msg, text, True, now)
         if not text.strip():
             return
         req = inbox_mod.add_request(home, "chat", project=project, text=text, cid=_cid(room, msg.id), via=via)
-        record["pending"] = (record["pending"] + [{"id": req["id"], "to": msg.key_id, "sent": 0, "peer": False}])[-PENDING_KEPT:]
+        record["pending"] = (record["pending"] + [{"id": req["id"], "to": msg.key_id, "sent": 0}])[-PENDING_KEPT:]
         return
     _remember(record, msg, text, False, now)
     _upsert(record["managers"], msg.key_id, msg.author, now)
     if not text.strip():
         return
-    named = _mentions(text, record["me"]["name"])
+    record["agent_streak"] = record.get("agent_streak", 0) + 1
+    if record["agent_streak"] > AGENT_STREAK_MAX:  # the brake: read nothing more into the manager's chat, say so once
+        if not record.get("braked"):
+            record["braked"] = True
+            say(BRAKE_TEXT.format(n=AGENT_STREAK_MAX), None)
+            log.info("room %s: brake after %d agent messages in a row", room, AGENT_STREAK_MAX)
+        return
     req = inbox_mod.add_request(home, "chat", project=project, text=info_text(msg.author, msg.key_id, room, text),
                                 cid=_cid(room, msg.id), sender=f"room:{msg.author}"[:60], via=via)
-    if named and record.get("peer_streak", 0) < PEER_STREAK_MAX:
-        record["pending"] = (record["pending"] + [{"id": req["id"], "to": msg.key_id, "sent": 0, "peer": True}])[-PENDING_KEPT:]
+    record["pending"] = (record["pending"] + [{"id": req["id"], "to": msg.key_id, "sent": 0}])[-PENDING_KEPT:]
 
 
 def forward_answers(home: Path, record: dict, say) -> bool:
@@ -234,10 +261,6 @@ def forward_answers(home: Path, record: dict, say) -> bool:
             text = answers[item["sent"]]["text"]
             item["sent"] += 1
             changed = True
-            if item.get("peer"):
-                if record.get("peer_streak", 0) >= PEER_STREAK_MAX:
-                    continue
-                record["peer_streak"] = record.get("peer_streak", 0) + 1
             for i in range(0, len(text), ANSWER_MAX):
                 say(text[i:i + ANSWER_MAX], item["to"])
         if req["status"] != "done" or item["sent"] < len(answers):
@@ -253,8 +276,7 @@ def forward_answers(home: Path, record: dict, say) -> bool:
 
 def poll_room(home: Path, room: str, wait: int = 0, sealed=None) -> int:
     """One poll of ``room``: read, handle, answer, save. Returns the number of messages seen."""
-    if sealed is None:
-        from tirith import sealed  # late: a sibling lane's module
+    sealed = sealed or sealed_mod
     record = load_room(home, room)
     if record is None or not record.get("connected", True):
         return 0
@@ -269,17 +291,25 @@ def poll_room(home: Path, room: str, wait: int = 0, sealed=None) -> int:
         sealed.say(me, room, text, to=to)
 
     try:
-        messages, cursor = sealed.read(me, room, since=record.get("cursor"), wait=wait)
-        for msg in messages:
-            handle_message(home, record, msg, say)
-        record["cursor"] = cursor
-        forward_answers(home, record, say)
-        record["last_error"] = None
+        messages, cursor = sealed.read(me, room, since=record.get("cursor"), wait=wait)  # the slow part: no lock
+        with record_lock:  # what changed meanwhile (a new code, a leave) is kept: handle on a fresh copy
+            record = load_room(home, room)
+            if record is None:
+                return 0
+            for msg in messages:
+                handle_message(home, record, msg, say)
+            record["cursor"] = max(cursor, record.get("cursor") or 0)
+            forward_answers(home, record, say)
+            record["last_error"] = None
+            record["polled_at"] = now_iso()
+            save_room(home, record)
     except Exception as exc:  # the thread must survive anything the network or a hostile message does
-        record["last_error"] = type(exc).__name__ + ": " + str(exc)[:200]
-        save_room(home, record)
+        with record_lock:
+            record = load_room(home, room)  # not when the owner left the room meanwhile
+            if record is not None:
+                record["last_error"] = type(exc).__name__ + ": " + str(exc)[:200]
+                save_room(home, record)
         raise
-    save_room(home, record)
     return len(messages)
 
 

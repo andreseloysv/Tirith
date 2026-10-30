@@ -395,7 +395,7 @@ def run(home: Path, config: Config, now: datetime, *, agents: list[dict], lanes:
         changed = True
     for req in inbox_mod.requests(home):
         rid = req["id"]
-        if req["status"] == "done" or req["kind"] == "autopilot":
+        if req["status"] == "done" or req["kind"] == "autopilot" or req["kind"] in inbox_mod.ROOM_KINDS:
             continue
         if rid not in state["handled"]:
             if not room and not req["answers"] and (req["kind"] == "finish" or req["kind"] in inbox_mod.PLAN_KINDS):
