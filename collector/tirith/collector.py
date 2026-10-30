@@ -175,6 +175,47 @@ def git_shortstat(workspace: str | Path | None, start_commit: str | None) -> tup
     return parse_shortstat(out.stdout)
 
 
+GENERATED_SUFFIXES = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".svg", ".mp4", ".mov", ".webm", ".mp3",
+                      ".wav", ".ogg", ".pdf", ".woff", ".woff2", ".ttf", ".zip", ".lock", ".min.js", ".min.css")
+GENERATED_NAMES = ("package-lock.json", "yarn.lock", "pnpm-lock.yaml", "uv.lock", "Cargo.lock", "poetry.lock")
+
+
+def _generated(path: str) -> bool:
+    return path.endswith(GENERATED_SUFFIXES) or path.rsplit("/", 1)[-1] in GENERATED_NAMES
+
+
+def lane_shortstat(workspace: str | Path | None, start_commit: str | None,
+                   main: str = "main") -> tuple[int, int, int]:
+    """The lane's own change: ``git diff main...HEAD`` (what main brought in a merge is not counted),
+    without images, video, lock files and other binary assets. Falls back to the start commit."""
+    if not workspace:
+        return (0, 0, 0)
+
+    def git(*args: str):
+        try:
+            out = timeouts_mod.run(["git", "-C", str(workspace), *args], "git", text=True)
+        except (OSError, subprocess.SubprocessError):
+            return None
+        return out.stdout if out.returncode == 0 else None
+
+    base = git("merge-base", main, "HEAD")
+    base = base.strip() if base else start_commit
+    if not base:
+        return (0, 0, 0)
+    stat = git("diff", "--numstat", "-M", f"{base}..HEAD" if base != start_commit else str(base))
+    if stat is None:
+        return (0, 0, 0)
+    files = plus = minus = 0
+    for line in stat.splitlines():
+        added, removed, _, path = (line.split("\t", 2) + [""])[:3] + [""] if False else (line.split("\t", 2) + ["", ""])[:2] + [None, (line.split("\t", 2) + [""])[2]]
+        if added == "-" or _generated(path.rsplit(" => ", 1)[-1].strip("{}")):
+            continue  # binary or generated
+        files += 1
+        plus += int(added)
+        minus += int(removed)
+    return (files, plus, minus)
+
+
 def log_mtime(path: str | Path | None) -> float | None:
     if not path:
         return None

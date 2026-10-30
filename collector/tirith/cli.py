@@ -23,7 +23,7 @@ from pathlib import Path
 
 from tirith import timeouts as timeouts_mod
 from tirith.collector import (
-    Collector, collect_tree, git_head, git_shortstat, heuristic_architecture, lane_status,
+    Collector, collect_tree, git_head, heuristic_architecture, lane_shortstat, lane_status,
 )
 from tirith.guardwrap import (
     default_words, guard_upgrade_steps, install_guard, reinstall_guard, verify_guard,
@@ -662,7 +662,7 @@ def _cmd_lane_run(args) -> int:
         add_lane_ask(home, lane, "failed", log_tail=_log_tail(log_path))
     elif not answer and not (interactive and manager_lane):  # the manager session has no final answer
         add_lane_ask(home, lane, "ended without an answer")
-    files, plus, minus = git_shortstat(str(workspace), lane.get("start_commit"))
+    files, plus, minus = lane_shortstat(str(workspace), lane.get("start_commit"))
     print(f"lane {lane_id}: {result}, {files} files +{plus} -{minus}, "
           f"{_duration(time.monotonic() - began)}")
     over = plangate_mod.budget_note(files, plus, minus)
