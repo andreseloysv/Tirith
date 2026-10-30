@@ -328,6 +328,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] El piloto automático manda como mucho una propuesta abierta por paso. (check: `cd collector && uv run -q pytest -q tests -k autopilot`) (en curso: u-pilotflood)
 - [ ] Los mensajes del dueño pasan delante: el manager atiende cada mensaje del chat antes que las propuestas del piloto. (check: `cd collector && uv run -q pytest -q tests -k managerd`) (en revisión)
 - [ ] web/js/landing.test.mjs carga playwright-core del propio repo (o se salta con aviso si no está), nunca de node_modules de otro proyecto como propuestavenezuela (check: `node web/js/landing.test.mjs`) (en curso: manager-de-guardia-chat-y-piloto-5)
+- [ ] tirith plan done acepta un commit que solo toca docs cuando el elemento mismo es de docs (README, docs/…), con un test (check: `cd collector && uv run -q pytest -q tests -k plan_done_docs`)
 
 ## 15. Collector y CLI en Rust
 
