@@ -13,8 +13,8 @@ body{background:#f6f7f9;color:var(--fg);overflow:hidden;font:20px/1.45 -apple-sy
 .card{position:fixed;inset:14px;border-radius:30px;background:rgba(255,255,255,.62);border:1px solid rgba(255,255,255,.9);box-shadow:0 20px 60px rgba(16,24,40,.10);backdrop-filter:blur(30px);display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:60px 120px}
 .card.on{display:flex}
 .brand{display:flex;align-items:center;gap:22px;font-weight:650;font-size:112px;letter-spacing:-.03em}
-.brand svg{width:110px;height:110px}
-.sub{margin-top:26px;font-size:40px;color:#374151;font-weight:500;letter-spacing:-.01em}
+.brand .logo{width:240px;height:240px;margin:-40px 0 -40px -30px;object-fit:contain;-webkit-mask-image:radial-gradient(closest-side,#000 80%,transparent 100%);mask-image:radial-gradient(closest-side,#000 80%,transparent 100%)}
+.sub{margin-top:44px;font-size:40px;color:#374151;font-weight:500;letter-spacing:-.01em}
 .small{margin-top:60px;font-size:26px;color:var(--mut)}
 .url{margin-top:40px;font:500 40px ui-monospace,SFMono-Regular,Menlo,monospace;background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px 34px}
 h1{font-size:64px;letter-spacing:-.025em;margin:0 0 10px;font-weight:650}
@@ -42,13 +42,13 @@ h1{font-size:64px;letter-spacing:-.025em;margin:0 0 10px;font-weight:650}
 <div id="blobs"><i></i><i></i><i></i><i></i></div>
 
 <section class="card" id="title">
-  <div class="brand"><svg viewBox="0 0 24 24"><path d="M12 2l8 8-8 12L4 10z" fill="url(#lg)" fill-opacity=".85"/><path d="M12 2l8 8H4z" fill="#fff" fill-opacity=".45"/><path d="M12 2l8 8-8 12L4 10z" fill="none" stroke="#fff" stroke-opacity=".9"/></svg>Tirith</div>
+  <div class="brand"><img class="logo" src="../../site/img/logo-3d.webp" alt="">Tirith</div>
   <div class="sub">See your coding agents work</div>
   <div class="small">Meta Global AI Developer Hackathon · Build for Your World</div>
 </section>
 
 <section class="card" id="problem">
-  <div class="brand" style="font-size:64px"><svg viewBox="0 0 24 24" style="width:64px;height:64px"><path d="M12 2l8 8-8 12L4 10z" fill="url(#lg)" fill-opacity=".85"/><path d="M12 2l8 8H4z" fill="#fff" fill-opacity=".45"/><path d="M12 2l8 8-8 12L4 10z" fill="none" stroke="#fff" stroke-opacity=".9"/></svg>Tirith</div>
+  <div class="brand" style="font-size:64px"><img class="logo" src="../../site/img/logo-3d.webp" alt="" style="width:110px;height:110px;margin:-20px -10px -20px -20px">Tirith</div>
   <div class="qs">
     <div class="qq">What is everyone doing?</div>
     <div class="qq">Is something stuck?</div>
@@ -68,7 +68,7 @@ h1{font-size:64px;letter-spacing:-.025em;margin:0 0 10px;font-weight:650}
 </section>
 
 <section class="card" id="close">
-  <div class="brand"><svg viewBox="0 0 24 24"><path d="M12 2l8 8-8 12L4 10z" fill="url(#lg)" fill-opacity=".85"/><path d="M12 2l8 8H4z" fill="#fff" fill-opacity=".45"/><path d="M12 2l8 8-8 12L4 10z" fill="none" stroke="#fff" stroke-opacity=".9"/></svg>Tirith</div>
+  <div class="brand"><img class="logo" src="../../site/img/logo-3d.webp" alt="">Tirith</div>
   <div class="sub">They finish the plan. You decide only what only you can.</div>
   <div class="url">github.com/andreseloysv/Tirith</div>
   <div class="star">&#9733; If it saves you a question, star it</div>
