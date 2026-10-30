@@ -477,6 +477,7 @@ def test_review_started_adds_a_sub_item_and_a_pass_ticks_both(proj, home: Path) 
     plangate.review_started(home, repo, lane)
     text = _plan(repo)
     assert "- [ ] Build the button. (en revisión)\n  - [ ] Revisar: Build the button. (en curso: revisión de l1)" in text
+    _merged_branch(repo, "l1")
     assert plangate.review_passed(home, repo, lane).startswith("ticked")
     text = _plan(repo)
     assert "- [x] Build the button.\n" in text and "  - [x] Revisar: Build the button.\n" in text
@@ -508,7 +509,7 @@ def test_the_claim_check_needs_the_work_on_main(proj, home: Path) -> None:
     subprocess.run([GIT, "-C", str(repo), "branch", "-f", "lane/l1", "side"], check=True)
     subprocess.run([GIT, "-C", str(repo), "checkout", "-q", "-"], check=True)
     lane = _lane(home, repo)
-    assert not plangate.on_main(repo, lane)
+    assert plangate.lane_work(home, repo, lane) == (plangate.WORK_NOT_MERGED, None)
     assert "not on main" in plangate.review_passed(home, repo, lane)
     assert "- [ ] Build the button. (reabierto: the lane's work is not on main)" in _plan(repo)
 
@@ -521,6 +522,7 @@ def test_autoreview_ticks_on_merge_and_reopens_on_failure(proj, home: Path) -> N
     assert main(["plan", "report", "--lane", "l1", "--status", "done"]) == 0
     now = datetime.now(timezone.utc)
     rec: dict = {}
+    _merged_branch(repo, "l1")
     autoreview.settle(home, cfg, lane, {"status": review_mod.MERGED, "files": 1, "passed": 3, "at": "t1"}, rec, now,
                       repo)
     assert "- [x] Build the button.\n" in _plan(repo)
@@ -680,6 +682,193 @@ def test_a_removed_branch_is_found_by_its_merge_commit(proj, home: Path) -> None
     _git_do(repo, "branch", "-D", "lane/gone1")
     assert plangate.tick_merged(home, load_config(home), [read_json(home / "lanes" / "gone1.json", {})])
     assert f"(hecho: {sha})" in _plan(repo)
+
+
+# -- an item is ticked only for the lane's own commits on main (the 9a0d35c case) -----------------------
+
+
+def _in_worktree(home: Path, repo: Path, lane_id: str, report: bool = True, **extra) -> Path:
+    """A lane in its own worktree, reported done: its branch is at ``start_commit`` and main moved past it."""
+    worktree = launch_mod.create_worktree(repo, lane_id)
+    _lane(home, worktree, lane_id, ended_at="2026-01-01T00:00:00Z", result="done", **extra)
+    if report:
+        plangate.report(home, lane_id, "done")
+    return worktree
+
+
+def _commit_in(worktree: Path, name: str = "work.py") -> None:
+    (worktree / name).write_text("w = 1\n", encoding="utf-8")
+    _git_do(worktree, "add", name)
+    _git_do(worktree, "commit", "-q", "-m", f"work in {name}")
+
+
+def _merge_named(repo: Path, branch: str, subject: str) -> str:
+    _git_do(repo, "merge", "--no-ff", "-q", "-m", subject, branch)
+    return _git_do(repo, "rev-parse", "--short", "HEAD")
+
+
+def _ticks(home: Path, lane_id: str) -> bool:
+    return plangate.tick_merged(home, load_config(home), [read_json(home / "lanes" / f"{lane_id}.json", {})])
+
+
+def _state(home: Path, repo: Path, lane_id: str) -> tuple[str, str | None]:
+    return plangate.lane_work(home, repo, read_json(home / "lanes" / f"{lane_id}.json", {}))
+
+
+def test_false_tick_9a0d35c_a_dirty_branch_at_its_start_gets_no_later_merge(proj, home: Path) -> None:
+    repo, _ = proj
+    worktree = _in_worktree(home, repo, "dirty1")
+    (worktree / "unsaved.py").write_text("u = 1\n", encoding="utf-8")
+    unrelated = _merged_branch(repo, "other")
+    assert _state(home, repo, "dirty1") == (plangate.WORK_UNSAVED, None)
+    assert not _ticks(home, "dirty1")
+    assert "- [ ] Build the button. (en revisión)" in _plan(repo) and unrelated not in _plan(repo)
+
+
+def test_false_tick_a_lane_that_changed_nothing_is_told_apart_and_not_ticked(proj, home: Path) -> None:
+    repo, _ = proj
+    _in_worktree(home, repo, "empty1")
+    _merged_branch(repo, "other")
+    assert _state(home, repo, "empty1") == (plangate.WORK_NONE, None)
+    assert not _ticks(home, "empty1")
+    assert "- [ ] Build the button. (en revisión)" in _plan(repo)
+
+
+@pytest.mark.parametrize("dirty, reason", [(True, "the lane has uncommitted work"), (False, "the lane changed nothing")])
+def test_false_tick_a_review_pass_reopens_with_what_it_found(proj, home: Path, dirty: bool, reason: str) -> None:
+    repo, _ = proj
+    worktree = _in_worktree(home, repo, "rev1")
+    if dirty:
+        (worktree / "unsaved.py").write_text("u = 1\n", encoding="utf-8")
+    assert reason in plangate.review_passed(home, repo, read_json(home / "lanes" / "rev1.json", {}))
+    assert f"- [ ] Build the button. (reabierto: {reason})" in _plan(repo)
+
+
+def test_false_tick_own_commits_merged_with_a_dirty_worktree_wait_for_it(proj, home: Path) -> None:
+    repo, _ = proj
+    worktree = _in_worktree(home, repo, "part1")
+    _commit_in(worktree)
+    sha = _merge_named(repo, "lane/part1", "Merge lane/part1: Work")
+    (worktree / "more.py").write_text("m = 1\n", encoding="utf-8")
+    assert not _ticks(home, "part1")
+    (worktree / "more.py").unlink()
+    assert _ticks(home, "part1")
+    assert f"- [x] Build the button. (hecho: {sha})" in _plan(repo)
+
+
+def test_false_tick_a_merged_lane_gets_the_merge_that_brought_it_not_a_later_one(proj, home: Path) -> None:
+    repo, _ = proj
+    worktree = _in_worktree(home, repo, "own1")
+    _commit_in(worktree)
+    sha = _merge_named(repo, "lane/own1", "Merge lane/own1: Work")
+    _merged_branch(repo, "other")
+    assert _state(home, repo, "own1") == (plangate.WORK_MERGED, sha)
+    assert _ticks(home, "own1")
+    assert f"(hecho: {sha})" in _plan(repo)
+
+
+def test_false_tick_a_branch_on_main_without_a_merge_is_not_the_lanes_work(proj, home: Path) -> None:
+    repo, _ = proj
+    worktree = _in_worktree(home, repo, "sync1")
+    _merged_branch(repo, "other")
+    _git_do(worktree, "merge", "-q", "--ff-only", _git_do(repo, "rev-parse", "HEAD"))  # `git merge main`, nothing else
+    assert _state(home, repo, "sync1") == (plangate.WORK_NOT_MERGED, None)
+    assert not _ticks(home, "sync1")
+
+
+def test_false_tick_a_removed_branch_and_worktree_tick_by_their_merge_commit(proj, home: Path) -> None:
+    repo, _ = proj
+    worktree = _in_worktree(home, repo, "gone2")
+    _commit_in(worktree)
+    sha = _merge_named(repo, "lane/gone2", "Merge lane/gone2: Work")
+    _git_do(repo, "worktree", "remove", "--force", str(worktree))
+    _git_do(repo, "branch", "-D", "lane/gone2")
+    _merged_branch(repo, "other")
+    assert _ticks(home, "gone2")
+    assert f"- [x] Build the button. (hecho: {sha})" in _plan(repo)
+
+
+def test_false_tick_a_missing_branch_alone_is_not_proof(proj, home: Path) -> None:
+    repo, _ = proj
+    worktree = _in_worktree(home, repo, "lost1")
+    _commit_in(worktree)
+    _git_do(repo, "worktree", "remove", "--force", str(worktree))
+    _git_do(repo, "branch", "-D", "lane/lost1")
+    _merged_branch(repo, "other")
+    assert _state(home, repo, "lost1") == (plangate.WORK_NOT_MERGED, None)
+    assert not _ticks(home, "lost1")
+    assert "not on main" in plangate.review_passed(home, repo, read_json(home / "lanes" / "lost1.json", {}))
+
+
+def test_false_tick_a_merge_of_a_longer_branch_name_is_not_this_lane(proj, home: Path) -> None:
+    repo, _ = proj
+    worktree = _in_worktree(home, repo, "name-1")
+    _commit_in(worktree)
+    _git_do(repo, "worktree", "remove", "--force", str(worktree))
+    _git_do(repo, "branch", "-D", "lane/name-1")
+    _git_do(repo, "checkout", "-q", "-b", "lane/name-13")
+    _commit_in(repo, "longer.py")
+    _git_do(repo, "checkout", "-q", "-")
+    _merge_named(repo, "lane/name-13", "Merge lane/name-13: Work")
+    assert not _ticks(home, "name-1")
+
+
+def test_false_tick_a_merge_from_before_the_lane_started_is_not_this_lane(proj, home: Path) -> None:
+    repo, _ = proj
+    _merged_branch(repo, "again")
+    _git_do(repo, "branch", "-D", "lane/again")
+    worktree = _in_worktree(home, repo, "again")
+    _commit_in(worktree)
+    _git_do(repo, "worktree", "remove", "--force", str(worktree))
+    _git_do(repo, "branch", "-D", "lane/again")
+    assert not _ticks(home, "again")
+
+
+def test_false_tick_a_merge_that_only_brought_plan_commits_has_no_work_of_the_lane(proj, home: Path) -> None:
+    repo, _ = proj
+    worktree = _in_worktree(home, repo, "plan1")
+    start = _git_do(worktree, "rev-parse", "HEAD")
+    main_name = _git_do(repo, "rev-parse", "--abbrev-ref", "HEAD")
+    _git_do(repo, "worktree", "remove", "--force", str(worktree))
+    _git_do(repo, "branch", "-D", "lane/plan1")
+    _git_do(repo, "checkout", "-q", "--detach", start)
+    _git_do(repo, "merge", "--no-ff", "-q", "-m", "Merge lane/plan1: Work", main_name)  # the merge named after the lane
+    merged = _git_do(repo, "rev-parse", "HEAD")
+    _git_do(repo, "checkout", "-q", main_name)
+    _git_do(repo, "merge", "-q", "--ff-only", merged)
+    assert _state(home, repo, "plan1") == (plangate.WORK_NOT_MERGED, None)
+    assert not _ticks(home, "plan1")
+
+
+def test_false_tick_a_continuation_lane_is_judged_on_the_original_branch(proj, home: Path) -> None:
+    repo, _ = proj
+    worktree = _in_worktree(home, repo, "orig1", report=False)
+    _commit_in(worktree)  # the first lane's commit: the continuation starts on it and adds nothing
+    _lane(home, worktree, "cont1", fallback_lane="orig1", ended_at="2026-01-01T00:00:00Z", result="done")
+    plangate.report(home, "cont1", "done")
+    assert _state(home, repo, "cont1") == (plangate.WORK_NOT_MERGED, None)
+    assert not _ticks(home, "cont1")
+    sha = _merge_named(repo, "lane/orig1", "Merge lane/orig1: Work")
+    assert _state(home, repo, "cont1") == (plangate.WORK_MERGED, sha)
+    _git_do(repo, "worktree", "remove", "--force", str(worktree))
+    _git_do(repo, "branch", "-D", "lane/orig1")
+    assert _state(home, repo, "cont1") == (plangate.WORK_MERGED, sha)
+    assert _ticks(home, "cont1")
+    assert f"(hecho: {sha})" in _plan(repo)
+
+
+def test_false_tick_tirith_own_work_that_changed_nothing_ends_without_a_commit(proj, home: Path) -> None:
+    repo, _ = proj
+    item = plangate.ops_item(home, repo, "demo", "Verificar: algo", "ops1")[1]
+    worktree = launch_mod.create_worktree(repo, "ops1")
+    _lane(home, worktree, "ops1", item=item, item_step=plangate.OPS_STEP)
+    plangate.report(home, "ops1", "done")
+    _merged_branch(repo, "other")
+    assert not _ticks(home, "ops1")  # still running: it may commit yet
+    lane = read_json(home / "lanes" / "ops1.json", {})
+    write_json_atomic(home / "lanes" / "ops1.json", {**lane, "ended_at": "2026-01-01T00:00:00Z"})
+    assert _ticks(home, "ops1")
+    assert f"- [x] {item} (hecho: {plangate.NO_CHANGES})" in _plan(repo)
 
 
 def test_plan_done_checks_the_commit(proj, home: Path, capsys) -> None:
