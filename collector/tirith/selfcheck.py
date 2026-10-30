@@ -33,6 +33,7 @@ from tirith import diskdiet as diskdiet_mod
 from tirith import inbox as inbox_mod
 from tirith import launch as launch_mod
 from tirith import managerd as managerd_mod
+from tirith import ownerenv as ownerenv_mod
 from tirith import review as review_mod
 from tirith import timeouts as timeouts_mod
 from tirith.home import Config, now_iso, parse_iso
@@ -54,10 +55,11 @@ SAVE_EVERY_S = 30.0
 QUEUE_KIND = "selfcheck"
 LEVELS = ("ok", "healing", "failed")
 LABELS = {"collector": "Tirith itself", "manager": "The manager", "autopilot": "The autopilot",
-          "disk": "Disk space", "reviews": "Reviews", "timeouts": "Command timeouts"}
+          "disk": "Disk space", "reviews": "Reviews", "timeouts": "Command timeouts", "ownerenv": "Your shell environment"}
 OK_TEXT = {"collector": "Tirith is collecting normally.", "manager": "The manager is answering normally.",
            "autopilot": "The autopilot is on track.", "disk": "There is enough free disk space.",
-           "reviews": "Reviews are moving.", "timeouts": "No command keeps running out of time."}
+           "reviews": "Reviews are moving.", "timeouts": "No command keeps running out of time.",
+           "ownerenv": "Your shell variables (keys) are available to Tirith and its lanes."}
 _TEST_FILE = re.compile(r"[\w./-]*(?:test_\w+\.py|[\w-]+\.test\.mjs)")
 
 
@@ -241,6 +243,15 @@ def _disk(state: dict, now: datetime, active: set[str]) -> dict:
     return _check("failed", f"The disk is almost full ({gb:.1f} GB free); no new work starts until space is freed.")
 
 
+def _ownerenv() -> dict:
+    """Info from the start of the collector: the owner's shell variables were read, or why not (no names, no values)."""
+    got = ownerenv_mod.status()
+    if got["state"] == "failed":
+        return _check("failed", f"Tirith could not read your shell variables ({got['reason']}); "
+                                "keys exported only in your shell are missing.")
+    return _check("ok", OK_TEXT["ownerenv"])
+
+
 def _timeouts(home: Path, now: datetime, book: dict, active: set[str]) -> dict:
     """A command class that timed out ``TIMEOUTS_REPEATED`` times within the hour: one manager queue item."""
     worst = _check("ok", OK_TEXT["timeouts"])
@@ -369,6 +380,7 @@ def run(home: Path, config: Config, now: datetime, state: dict, *, lanes: list[d
     checks["disk"] = _disk(state, now, active)
     checks["reviews"] = _reviews(home, config, now, book, lanes, spawn, kill, diff or diff_files, active)
     checks["timeouts"] = _timeouts(home, now, book, active)
+    checks["ownerenv"] = _ownerenv()
     changed = _announce(home, book, now)
     active |= set(book["notices"])  # an episode lasts until the owner has been told how it ended
     for key in list(book["tries"]):  # an episode that is over starts the next one from zero
