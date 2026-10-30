@@ -93,7 +93,7 @@ def main():
         time.sleep(0.05)
         out({"type": "result", "subtype": "success", "is_error": False, "session_id": sid,
              "result": "Answer from the fake manager.", "total_cost_usd": 0.0123, "duration_ms": 1500,
-             "usage": usage(ctx)})
+             "usage": usage(ctx * int(os.environ.get("FAKE_RESULT_FACTOR", "1")))})
 
 
 main()

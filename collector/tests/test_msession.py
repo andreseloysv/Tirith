@@ -408,3 +408,11 @@ def test_a_session_refused_at_start_records_why_and_the_one_shot_starts_in_the_s
     assert spawned and "--brief" in spawned[0]  # the first death hands over at once, no waiting
     assert "already in progress by lane manager-old" in rig.book()["error"]
     assert "already in progress by lane manager-old" in capsys.readouterr().err  # the collector log says it too
+
+
+def test_context_tokens_come_from_the_last_request_not_the_sum_of_the_turn(rig: Rig, monkeypatch) -> None:
+    monkeypatch.setenv("FAKE_CTX", "2000")
+    monkeypatch.setenv("FAKE_RESULT_FACTOR", "2")  # the result adds up the two requests of the turn
+    rig.chat("hello")
+    rig.until(lambda: rig.book().get("done_turns"))
+    assert rig.session().context_tokens == 2000

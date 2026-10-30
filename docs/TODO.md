@@ -30,7 +30,9 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Revisar el plan (2026-10-29) (en revisión)
 - [x] Manager de guardia: atender el chat
 - [ ] Verificar: Verify Commit lane/manager-permission-questions-nev, me (en curso: verify-commit-lane-manager-permi-2)
-- [ ] Manager de guardia: atender el chat (en curso: manager-a6d071db)
+- [x] Manager de guardia: atender el chat
+- [x] Manager de guardia: atender el chat
+- [x] Manager de guardia: atender el chat
 - [x] Manager de guardia: atender el chat
 - [x] Manager de guardia: atender el chat
 - [x] Manager de guardia: atender el chat
@@ -360,7 +362,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Los mensajes del dueño pasan delante: el manager atiende cada mensaje del chat antes que las propuestas del piloto. (check: `cd collector && uv run -q pytest -q tests -k managerd`) (hecho: 5754f53)
 - [ ] web/js/landing.test.mjs carga playwright-core del propio repo (o se salta con aviso si no está), nunca de node_modules de otro proyecto como propuestavenezuela (check: `node web/js/landing.test.mjs`)
 - [ ] tirith plan done acepta un commit que solo toca docs cuando el elemento mismo es de docs (README, docs/…), con un test (check: `cd collector && uv run -q pytest -q tests -k plan_done_docs`)
-- [ ] Un worktree de lane nunca se registra como proyecto automático: si git falla o vence el límite al resolver la raíz (_in_main_worktree en projects.py), no se guarda en caché ni se registra la carpeta. (check: `cd collector && uv run -q pytest -q tests -k worktree_never_auto_project`) (en curso: manager-de-guardia-chat-y-piloto-8)
+- [ ] Un worktree de lane nunca se registra como proyecto automático: si git falla o vence el límite al resolver la raíz (_in_main_worktree en projects.py), no se guarda en caché ni se registra la carpeta. (check: `cd collector && uv run -q pytest -q tests -k worktree_never_auto_project`)
 - [x] El icono de la app de macOS se genera a partir del logo 3D. (check: `grep -q logo-3d scripts/make_icon.py`) (hecho: 7bcd959)
 - [x] El logo 3D es una torre de piedra con base circular, renderizada en Blender con texturas de piedra reales y calidad de portada, con almenas de piedra y sin la esfera flotante (pedido del dueño). (check: `test -f site/img/logo-3d.png`) (hecho: 7ff25cf)
 - [x] La captura principal de la landing muestra la app actual con datos de demo limpios: sin avisos, sin reglas inactivas y sin Flow. (check: `node web/js/landing.test.mjs`) (hecho: fadd25d)
@@ -402,7 +404,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 
 ## 17. Tirith se mejora usando Tirith
 
-- [ ] Tirith se ejecuta desde una copia estable que solo avanza cuando la prueba completa pasa en la versión nueva, y vuelve atrás sola si la salud se pone roja. (check: `cd collector && uv run -q pytest -q tests -k stable`) (en revisión)
+- [x] Tirith se ejecuta desde una copia estable que solo avanza cuando la prueba completa pasa en la versión nueva, y vuelve atrás sola si la salud se pone roja. (check: `cd collector && uv run -q pytest -q tests -k stable`)
 - [ ] Tirith registra cada vez que hizo falta una persona o algo esperó, y pone la fricción mayor arriba del plan. (check: `cd collector && uv run -q pytest -q tests -k friction`)
 - [ ] La cola de merge tiene prioridad: los arreglos de la propia cola y de sus etapas entran primero. (check: `cd collector && uv run -q pytest -q tests -k merge_priority`)
 - [x] Las instrucciones de los lanes dicen quién revisa de verdad: Tirith hace el commit y la cola de merge revisa, nunca «para que lo revise el dueño». (check: `! grep -rq 'for the owner to review' collector/tirith`) (hecho: 39e0c0b)
@@ -419,7 +421,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [x] Al devolver un lane, la cola de merge reabre su elemento del plan y comprueba que el agente arrancó. (check: `cd collector && uv run -q pytest -q tests -k send_back`) (hecho: 9a0d35c)
 - [x] La ronda de seguimiento de un lane (keep-going) arranca su agente sin que la regla agent-cli la bloquee, y un lane con informe done no termina como failed por ese bloqueo. (check: `cd collector && uv run -q pytest -q tests -k keepgoing_resume_not_blocked`) (hecho: 1abd541)
 - [ ] Tirith sube main a GitHub como mucho 5 minutos después de cada cambio del plan. (check: `cd collector && uv run -q pytest -q tests -k push_plan`)
-- [ ] La cola de merge distingue un git cortado por tiempo de un conflicto real, y reintenta el primero sin devolver el lane. (check: `cd collector && uv run -q pytest -q tests -k merge_timeout`) (en revisión)
+- [x] La cola de merge distingue un git cortado por tiempo de un conflicto real, y reintenta el primero sin devolver el lane. (check: `cd collector && uv run -q pytest -q tests -k merge_timeout`) (hecho: 1589d3d)
 - [ ] Un lane ya mezclado a mano sale de la cola y de las revisiones sin intervención. (check: `cd collector && uv run -q pytest -q tests -k already_merged`)
 - [x] i-aef081ed (hecho: fde18e0)
 - [ ] Dos ejecuciones simultáneas de etapas en worktrees distintos no comparten número de ejecución ni fichero de log. (check: `cd collector && uv run -q pytest -q tests -k concurrent_runs_separate_logs`)
@@ -427,8 +429,8 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [ ] tirith check: _coverage_problems in manifest.py counts pipelines from include files, so a project whose build or test stages exist only in an include passes the check while the merge queue finds no stage to run; count only gating pipelines
 - [ ] La cola de merge reintenta el commit de la lane cuando encuentra un index.lock abandonado en su worktree, en vez de marcarla red-suite y devolverla (check: `cd collector && uv run -q pytest -q tests -k commit_workspace_recovers_lock`)
 - [ ] Una lane de continuación que reutiliza el worktree de otra entra sola en la cola de merge al terminar con done (check: `cd collector && uv run -q pytest -q tests -k continuation_lane_auto_enqueued`)
-- [ ] Pasar un solo test tarda menos de 30 segundos también con carga alta: hoy test_code_move_is_retried tardó 8 minutos (pytest con -k, 1 passed in 493 s). (check: `cd collector && uv run -q pytest -q --durations=5 tests/test_mergeq.py -k test_code_move_is_retried`) (en curso: tirith-se-mejora-usando-tirith-7)
-- [ ] tests/test_mergeq.py::test_code_move_is_retried_and_the_next_entry_still_runs no falla con carga alta: se averigua por qué el lane two queda en waiting (1 failed en ~/.tirith/logs/ci-168-test.log) y se arregla el test si es frágil o la cola si es un error real (check: `cd collector && uv run -q pytest -q tests/test_mergeq.py -k test_code_move_is_retried`) (en revisión)
+- [x] Pasar un solo test tarda menos de 30 segundos también con carga alta: hoy test_code_move_is_retried tardó 8 minutos (pytest con -k, 1 passed in 493 s). (check: `cd collector && uv run -q pytest -q --durations=5 tests/test_mergeq.py -k test_code_move_is_retried`) (hecho: c906004)
+- [x] tests/test_mergeq.py::test_code_move_is_retried_and_the_next_entry_still_runs no falla con carga alta: se averigua por qué el lane two queda en waiting (1 failed en ~/.tirith/logs/ci-168-test.log) y se arregla el test si es frágil o la cola si es un error real (check: `cd collector && uv run -q pytest -q tests/test_mergeq.py -k test_code_move_is_retried`)
 - [ ] Devolver una lane de continuación que reutiliza el worktree de otra funciona: relaunch_lane usa la rama real de la lane (mergeq.branch_of), no lane/<id>, que hoy falla con invalid reference: lane/u-testfix-port (check: `cd collector && uv run -q pytest -q tests -k send_back_continuation`)
 - [ ] La app muestra arriba, sin preguntar, qué entró hoy en main, qué se está haciendo, qué está atascado y quién lo lleva. (check: `cd collector && uv run -q pytest -q tests -k now_bar`)
 - [ ] Cada petición del dueño en el chat queda ligada a un elemento del plan o a una respuesta, y la app lista sus peticiones con su estado. (check: `cd collector && uv run -q pytest -q tests -k owner_requests`)
@@ -437,10 +439,16 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [x] El tamaño de contexto del manager se mide con la última petición, no con la suma de todas las del turno. (check: `cd collector && uv run -q pytest -q tests -k context_tokens`) (hecho: ee2eb5a)
 - [ ] Launch the collector and the app from <home>/stable/current, and run 'tirith stable promote' automatically after each merge on main
 - [ ] test_code_move_is_retried_and_the_next_entry_still_runs: root cause of lane two ending in waiting under load not found (36 mergeq tests pass at 800 s under heavy load); next failing CI log now prints the rows with the waiting message, read it and fix
-- [ ] test_plan_done_checks_the_commit y test_the_writer_lock_serializes_changes no fallan con carga alta: en ci#175 git commit del plan salió con error y salida vacía, y solos pasan (check: `cd collector && uv run -q pytest -q tests -k plan_commit_failure_says_why`) (en curso: tirith-se-mejora-usando-tirith-10)
-- [ ] test_canary_run_reaches_the_bare_origin_and_ticks_the_plan no falla con carga alta: en ci#177 el canary acabó en el paso push con wait_s=60 (check: `cd collector && uv run -q pytest -q tests/test_canary.py -k canary_run_reaches`) (en curso: tirith-se-mejora-usando-tirith-9)
-- [ ] Un cambio del plan no falla con carga alta por esperar el lock: LOCK_WAIT_S de 30 s en plangate.py hizo fallar test_the_writer_lock_serializes_changes en ci#177 con «another change to the plan is taking too long» (check: `cd collector && uv run -q pytest -q tests/test_plangate.py -k writer_lock`) (en curso: tirith-se-mejora-usando-tirith-8)
-- [ ] Antes de rechazar un merge, la cola repite los tests fallados de uno en uno: si pasan, entra y el test queda anotado como inestable. (check: `cd collector && uv run -q pytest -q tests -k rerun_failed`)
-- [ ] Con 3 lanes o más esperando en la cola de merge no arranca ningún lane nuevo: primero se termina lo empezado. (check: `cd collector && uv run -q pytest -q tests -k wip_limit`)
+- [x] test_plan_done_checks_the_commit y test_the_writer_lock_serializes_changes no fallan con carga alta: en ci#175 git commit del plan salió con error y salida vacía, y solos pasan (check: `cd collector && uv run -q pytest -q tests -k plan_commit_failure_says_why`) (hecho: 48dd464)
+- [ ] test_canary_run_reaches_the_bare_origin_and_ticks_the_plan no falla con carga alta: en ci#177 el canary acabó en el paso push con wait_s=60 (check: `cd collector && uv run -q pytest -q tests/test_canary.py -k canary_run_reaches`) (en revisión)
+- [x] Un cambio del plan no falla con carga alta por esperar el lock: LOCK_WAIT_S de 30 s en plangate.py hizo fallar test_the_writer_lock_serializes_changes en ci#177 con «another change to the plan is taking too long» (check: `cd collector && uv run -q pytest -q tests/test_plangate.py -k writer_lock`) (hecho: 8299cd0)
+- [x] Antes de rechazar un merge, la cola repite los tests fallados de uno en uno: si pasan, entra y el test queda anotado como inestable. (check: `cd collector && uv run -q pytest -q tests -k rerun_failed`) (hecho: 56448d5)
+- [x] Con 3 lanes o más esperando en la cola de merge no arranca ningún lane nuevo: primero se termina lo empezado. (check: `cd collector && uv run -q pytest -q tests -k wip_limit`) (hecho: 56448d5)
+- [ ] Deflake timing-sensitive tests that fail intermittently under load (test_idletimeout silent/chatty stage, test_mergeq code-move retry, test_plangate dirty plan)
+- [ ] El trabajo de devolver lanes (reabrir el elemento del plan y comprobar que el agente arrancó) entra en main: la rama lane/tirith-se-mejora-usando-tirith-2 choca con main en test_mergeq.py y CONTRACT-mergeq.md, y su elemento quedó marcado como hecho con un commit de otro lane. (check: `cd collector && uv run -q pytest -q tests -k send_back_reopens_the_plan_item`)
+- [ ] Un lane sin agente registrado también vuelve a su agente: la cola solo reenvía si lane.agent está en la configuración, y los lanes con agent null llegan al manager sin decir por qué. (check: `cd collector && uv run -q pytest -q tests -k send_back_without_agent`)
+- [ ] El piloto automático no trata una copia de merge (_mergeq-<lane>) como proyecto: mergeq-tirith-se-mejora-usando-tirith-5 generó cinco propuestas (pasos 3, 7, 9, 10 y 14) a partir de la copia de docs/TODO.md. (check: `cd collector && uv run -q pytest -q tests -k autopilot_ignores_merge_worktree`)
+- [ ] Un elemento solo se marca hecho si el lane tiene commits propios en main: una rama sin commits con trabajo sin guardar no cuenta como mezclada. (check: `cd collector && uv run -q pytest -q tests -k false_tick`) (en curso: tirith-se-mejora-usando-tirith-13)
+- [ ] Llevar a main el arreglo de lanes devueltos de lane/tirith-se-mejora-usando-tirith-2 (06391d4): tuvo conflicto en la cola y su elemento se marcó hecho sin haber entrado. (check: `git merge-base --is-ancestor 06391d4 main`)
 - [x] La suite de tests de Python vuelve a pasar entera en main tras el tren de integración. (check: `cd collector && uv run -q pytest -q -n 8`) (hecho: b133b4b)
 

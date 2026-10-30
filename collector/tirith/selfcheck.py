@@ -38,6 +38,7 @@ from tirith import managerd as managerd_mod
 from tirith import mergeq as mergeq_mod
 from tirith import ownerenv as ownerenv_mod
 from tirith import review as review_mod
+from tirith import stable as stable_mod
 from tirith import timeouts as timeouts_mod
 from tirith.home import Config, now_iso, parse_iso
 from tirith.store import read_lane
@@ -473,6 +474,8 @@ def run(home: Path, config: Config, now: datetime, state: dict, *, lanes: list[d
             changed = True
     levels = [c["level"] for c in checks.values()]
     level = "red" if "failed" in levels else "amber" if "healing" in levels else "green"
+    if stable_mod.guard(home, level, now):  # red right after a new stable copy: the earlier copy comes back
+        changed = True
     if checks != book.get("checks") or level != book.get("level") or changed or not book.get("at") \
             or _age_s(book["at"], now) >= SAVE_EVERY_S:
         book.update(at=now_iso(now), checks=checks, level=level)
