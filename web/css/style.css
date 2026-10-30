@@ -1015,3 +1015,16 @@ button.vwho:hover b { text-decoration: underline; }
 .pwtime { flex: none; font-variant-numeric: tabular-nums; }
 .pwrow .stoppop.row { position: absolute; right: 0; top: 100%; z-index: 9; margin-top: 2px; }
 .pia { display: inline-flex; flex: none; align-self: center; border-radius: 50%; }
+
+/* ---------- Rooms view ---------- */
+.mrooms .rnew .sfoot { gap: 10px; } .rtitle { flex: 1; max-width: 320px; }
+.rcard .phead { flex-wrap: wrap; } .rlock { color: var(--green); flex: none; }
+.rconn { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--mut); }
+.rme { margin-left: auto; }
+.rgrid { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start; } .rgrid > div:first-child { flex: 1 1 260px; min-width: 0; }
+.rwho { list-style: none; margin: 0 0 8px; padding: 0; } .rwho li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 3px 0; }
+.rwho .rk { font-size: 11px; color: var(--mut); min-width: 70px; }
+.rlast { margin: 6px 0 0; overflow-wrap: anywhere; }
+.rqr { flex: none; width: 190px; } .rqr .qr { display: block; width: 190px; height: 190px; border: 1px solid var(--line); border-radius: 8px; background: #fff; } .rqr p { margin: 6px 0 0; }
+.rleave { color: var(--red); background: rgba(229,72,77,.06); border-color: rgba(229,72,77,.25); }
+.rempty { padding: 6px 2px; }
