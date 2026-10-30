@@ -17,6 +17,8 @@ tests), and up to ``[mergeq] train`` queued lanes of a project are merged togeth
 from __future__ import annotations
 
 import os
+import re
+import shlex
 import shutil
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -50,6 +52,7 @@ TIMED_OUT = "timed out"  # a git command stopped at its deadline: retried by the
 HISTORY = 20
 DOC_ONLY = ("docs/", "site/", "ios/")  # a lane that changes only these (or *.md) has nothing for the test stages
 RUST_STAGE = "rust-test"
+FLAKY_FILE = "flaky.json"  # {project: {test id: {"count": n, "last": iso}}}: tests that failed in the suite and passed alone
 OUTPUT_MAX = 1500
 
 
@@ -123,7 +126,9 @@ def view(home: Path, project: str | None = None) -> dict:
              for n, e in enumerate(data["queue"], 1) if project is None or e.get("project") == project]
     rows = [h for h in data["history"] if project is None or h.get("project") == project]
     last = data["last"].get(project) if project else (rows[-1] if rows else None)
-    return {"items": items, "last": last, "recent": rows[-5:]}
+    flaky = read_json(Path(home) / FLAKY_FILE, {})
+    flaky = flaky.get(project) if project and isinstance(flaky, dict) else flaky
+    return {"items": items, "last": last, "recent": rows[-5:], "flaky": flaky if isinstance(flaky, dict) else {}}
 
 
 # -- taking work -------------------------------------------------------------------------------
@@ -191,6 +196,39 @@ def _tail(text: str) -> str:
     return text if len(text) <= OUTPUT_MAX else "…" + text[-OUTPUT_MAX:]
 
 
+def failed_tests(output: str) -> list[str]:
+    """The pytest ids a red test stage reports as failed; empty when they cannot be told (an error, no report)."""
+    if re.search(r"^ERROR ", output or "", re.M):
+        return []
+    return list(dict.fromkeys(re.findall(r"^FAILED (.+?)(?: - |$)", output or "", re.M)))
+
+
+def note_flaky(home: Path, project: str, tests: list[str]) -> None:
+    """Count each test that failed in the suite and passed on its own repeat."""
+    with _locked(home):
+        data = read_json(Path(home) / FLAKY_FILE, None)
+        data = data if isinstance(data, dict) else {}
+        rows = data.setdefault(project, {})
+        for test in tests:
+            row = rows.setdefault(test, {"count": 0})
+            row.update(count=int(row.get("count", 0)) + 1, last=now_iso())
+        write_json_atomic(Path(home) / FLAKY_FILE, data)
+
+
+def rerun_failed(home: Path, project: str, pipeline: str, stage, tmp: Path, lane_id: str, output: str) -> list[str] | None:
+    """Repeat the failed tests one at a time with ``-n 0``; the flaky ids when all pass, None for a real red."""
+    tests = failed_tests(output)
+    if not tests:
+        return None
+    for test in tests:
+        ok, _ = review_mod.run_tests(home, project, pipeline, f"{stage.name}-rerun", tmp,
+                                     f"{stage.run} -n 0 {shlex.quote(test)}", lane_id)
+        if not ok:
+            return None
+    note_flaky(home, project, tests)
+    return tests
+
+
 def stages_of(folder: Path) -> list[tuple[str, manifest_mod.Stage]]:
     """``(pipeline id, stage)`` of every build and test stage with a command of the gating pipelines, in manifest order."""
     return [(pipe.id, stage) for pipe in manifest_mod.load(folder).pipelines if pipe.gating for stage in pipe.stages
@@ -225,6 +263,10 @@ def select_stages(stages: list[tuple[str, manifest_mod.Stage]], needs: list[tupl
         else:
             kept.append((pipeline, stage))
     return kept, skipped
+
+
+def flaky_note(flaky: list[str]) -> str:
+    return f" (flaky, passed on repeat: {', '.join(flaky)})" if flaky else ""
 
 
 def skip_note(skipped: list[str]) -> str:
@@ -326,15 +368,22 @@ def _drop_tmp(repo: Path, tmp: Path) -> None:
     _git(repo, "worktree", "prune")
 
 
-def _run_stages(home: Path, project: str, stages: list, tmp: Path, lane_id: str) -> tuple[str | None, str, str | None]:
-    """Run the stages: ``(failed "pipeline/stage" | None, output of the failure, passed summary)``."""
-    passed = None
+def _run_stages(home: Path, project: str, stages: list, tmp: Path, lane_id: str
+                ) -> tuple[str | None, str, str | None, list[str]]:
+    """Run the stages: ``(failed "pipeline/stage" | None, output of the failure, passed summary, flaky test ids)``.
+
+    A red stage first repeats its failed tests alone (:func:`rerun_failed`): when they all pass the stage goes on."""
+    passed, flaky = None, []
     for pipeline, stage in stages:
         ok, output = review_mod.run_tests(home, project, pipeline, stage.name, tmp, stage.run, lane_id)
         if not ok:
-            return f"{pipeline}/{stage.name}", output, passed
+            again = rerun_failed(home, project, pipeline, stage, tmp, lane_id, output)
+            if again is None:
+                return f"{pipeline}/{stage.name}", output, passed, flaky
+            flaky += again
+            continue
         passed = review_mod.tests_passed(output) or passed
-    return None, "", passed
+    return None, "", passed, flaky
 
 
 def _try(home: Path, repo: Path, lane: dict, entry: dict) -> tuple[str, str, dict]:
@@ -369,15 +418,16 @@ def _try(home: Path, repo: Path, lane: dict, entry: dict) -> tuple[str, str, dic
         if not stages:
             return WAITING, "the manifest has no build or test stage with a run command", {}
         stages, skipped = select_stages(stages, [needs_of(changed_paths(repo, base, branch))])
-        broke, output, passed = _run_stages(home, project, stages, tmp, lane_id)
+        broke, output, passed, flaky = _run_stages(home, project, stages, tmp, lane_id)
         if broke:
             return RED, f"stage {broke} failed on {branch} merged with {main_branch}:\n{_tail(output)}", {"main": main_branch}
         tested = _git(tmp, "rev-parse", "HEAD").stdout.strip()
         tested, refused = _land(home, repo, tmp, project, base, tested, main_branch, feature, branch)
         if refused:
             return refused[0], refused[1], {}
-        return MERGED, "tests passed; merged" + skip_note(skipped), \
-            {"commit": tested, "main": main_branch, "passed": passed, "branch": branch, "skipped": skipped}
+        return MERGED, "tests passed; merged" + skip_note(skipped) + flaky_note(flaky), \
+            {"commit": tested, "main": main_branch, "passed": passed, "branch": branch, "skipped": skipped,
+             **({"flaky": flaky} if flaky else {})}
     finally:
         _drop_tmp(repo, tmp)
 
@@ -440,7 +490,8 @@ def _try_train(home: Path, repo: Path, members: list[tuple[dict, dict]]) -> tupl
             return WAITING, "the manifest has no build or test stage with a run command", info
         stages, skipped = select_stages(stages, needs)
         ids = ", ".join(str(lane["id"]) for _, lane in joined)
-        broke, output, passed = _run_stages(home, str(joined[0][1].get("project") or ""), stages, tmp, str(joined[0][1]["id"]))
+        broke, output, passed, flaky = _run_stages(home, str(joined[0][1].get("project") or ""), stages, tmp,
+                                                   str(joined[0][1]["id"]))
         if broke:
             return RED, f"stage {broke} failed on the train ({ids}) merged with {main_branch}:\n{_tail(output)}", info
         tested = _git(tmp, "rev-parse", "HEAD").stdout.strip()
@@ -448,8 +499,8 @@ def _try_train(home: Path, repo: Path, members: list[tuple[dict, dict]]) -> tupl
                                 f"train of {len(joined)}: {ids}", "train")
         if refused:
             return refused[0], refused[1], info
-        info.update(commit=tested, passed=passed, skipped=skipped)
-        return MERGED, f"tests passed; merged in a train of {len(joined)}" + skip_note(skipped), info
+        info.update(commit=tested, passed=passed, skipped=skipped, flaky=flaky)
+        return MERGED, f"tests passed; merged in a train of {len(joined)}" + skip_note(skipped) + flaky_note(flaky), info
     finally:
         _drop_tmp(repo, tmp)
 
@@ -552,7 +603,7 @@ def _close_merged(home: Path, repo: Path, lane: dict, entry: dict, extra: dict, 
                        "passed": extra.get("passed"), "files": files}
     write_lane(home, fresh)
     status = PUSH_FAILED if extra.get("push_error") else MERGED
-    more = {k: extra[k] for k in ("skipped", "train") if extra.get(k)}
+    more = {k: extra[k] for k in ("skipped", "train", "flaky") if extra.get(k)}
     return _finish(home, entry, status, extra.get("push_error") or message, commit=extra["commit"], **more)
 
 
@@ -616,7 +667,7 @@ def _process_train(home: Path, config: Config, members: list[tuple[dict, dict]],
     for entry, lane in joined:
         branch, files = info["branches"][str(lane["id"])]
         extra = {"commit": info["commit"], "main": info["main"], "passed": info["passed"], "branch": branch,
-                 "skipped": info["skipped"], "train": ids, "push_error": info["push_error"] if push else None}
+                 "skipped": info["skipped"], "flaky": info["flaky"], "train": ids, "push_error": info["push_error"] if push else None}
         rows.append(_settle(home, config, entry, lane, repo, MERGED, message, extra, relaunch, False, files=files))
     return rows
 
