@@ -156,7 +156,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Cada hora un lane de prueba recorre todo el camino en un repo de prueba, del plan al push, y la salud se pone roja si no llega. (check: `cd collector && uv run -q pytest -q tests -k canary`) (en curso: u-canary)
 - [ ] La suite de tests de Python termina en menos de 4 minutos. (check: `bash scripts/check-test-time.sh`)
 - [ ] Ningún test de Python falla al azar: los tests inestables se arreglan. (check: `bash scripts/check-flaky.sh`)
-- [ ] Las etapas que bloquean merges ya no compilan ni prueban el port a Rust parado. (check: `! grep -qE 'tirith-core|tirith-cli|--workspace' tirith.toml`)
+- [ ] Las etapas que bloquean merges ya no compilan ni prueban el port a Rust parado. (check: `! grep -qE 'tirith-core|tirith-cli|--workspace' tirith.toml`) (en curso: u-rustgate)
 - [ ] Un lane no termina mientras su etapa de tests sigue corriendo: Tirith espera el resultado y se lo pasa al agente. (check: `cd collector && uv run -q pytest -q tests -k keepalive`)
 
 ## 8. Más visibilidad por agente
