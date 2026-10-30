@@ -1,26 +1,32 @@
-"""The tower watching floating agent cubes joined by light lines. Usage: -- OUT.png W H"""
-import sys, math, random
+"""The stone tower at dusk, its window joined by light to the agents, glowing crystals. Usage: -- OUT.png W H [samples=N]"""
+import sys
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
 from common import *
 
-out, W, H = sys.argv[-3], int(sys.argv[-2]), int(sys.argv[-1])
+argv = sys.argv[sys.argv.index("--") + 1:]
+opts = dict(a.split("=", 1) for a in argv if "=" in a)
+out, W, H = [a for a in argv if "=" not in a]
 reset()
-world((0.9, 0.94, 1), 0.7)
-random.seed(7)
-tower("t_", (0, 0, 0), 1.0)
-line = mat("line", LIGHT_BLUE, emit=2.5)
-glass = mat("glass", (0.8, 0.9, 1, 1), rough=0.05, trans=1.0, ior=1.3)
-cube_m = mat("cube", (0.7, 0.78, 0.9, 1), metallic=0.1, rough=0.25)
-pts = [(-3.2, -1.0, 1.6), (3.0, -1.4, 2.2), (-2.2, 2.2, 3.0), (2.8, 2.0, 1.2), (0.2, -3.0, 3.4), (-4.6, 0.6, 3.2), (4.8, 0.6, 3.0)]
-for i, p in enumerate(pts):
-    s = 0.55 + 0.15 * (i % 3)
-    c = box("agent%d" % i, p, (s, s, s), cube_m, 0.07, rot=(random.random(), random.random(), random.random()))
-    box("core%d" % i, p, (s * 0.4, s * 0.4, s * 0.4), mat("core%d" % i, BLUE if i % 2 else LIGHT_BLUE, emit=3), 0.03, rot=c.rotation_euler)
-    tube("beam%d" % i, (0, 0, 1.05), p, 0.012, line)
-    sphere("node%d" % i, p, 0.0, line) if False else None
-shadow_floor(0)
-look((0, -13, 4.5), (0, 0, 2.0), 50)
-area((-5, -6, 8), (0, 0, 1.5), 700, 6)
-area((6, -4, 4), (0, 0, 1.5), 300, 5, (0.7, 0.85, 1))
-setup(W, H, 128, True, out)
+sky(SKY, 0.16, float(opts.get("rot", 3.1)), (0.66, 0.76, 1.0), seen=0.36)
+_, rim = dusk_rig(key_energy=11, rim_energy=18)
+tower = stone_tower("t_", (0, 0, 0.42))
+ground = terrain("ground", opts.get("ground", "desert_rocks_01"))
+rocks = stone_materials("rock_", "desert_rocks_01")["stone"]
+boulders = []
+for i, (x, y, r) in enumerate(((-3.3, -3.0, 0.36), (-2.7, -3.7, 0.18), (3.4, -2.8, 0.42), (2.7, -3.7, 0.2), (-5.2, 1.4, 0.7), (5.4, 1.6, 0.55), (2.6, 2.6, 0.5))):
+    boulders.append(boulder("rock%d" % i, (x, y, r * 0.2), r, rocks, seed=i + 3))
+window = (-0.27, -1.03, 2.05)
+agents = [(-4.5, -1.3, 1.5, 0.92), (-3.05, -2.3, 3.5, 0.74), (-1.95, -3.7, 0.95, 0.66), (2.0, -3.6, 1.05, 0.7), (3.1, -1.9, 3.55, 0.82), (4.6, -1.0, 1.75, 0.96)]
+light = glow_mat("light", (0.03, 0.38, 1.0), 1.9)
+parts = []
+for i, (x, y, z, h) in enumerate(agents):
+    parts += crystal("agent%d" % i, (x, y, z), h, seed=i * 5 + 2)
+    beam("beam%d" % i, window, (x, y, z), light, lift=0.55)
+unlit_by(rim, [ground] + boulders)
+# the crystals pool on the ground; on the tower their blue would cancel the warm key
+for i in range(len(agents)):
+    unlit_by(bpy.data.objects["agent%d_lamp" % i], [o for o in tower if o.type == "MESH"])
+look((0, -10.6, 1.0), (0, 0, 2.0), 31)
+setup(int(W), int(H), int(opts.get("samples", 512)), False, out, bloom=0.3)  # more would veil the tower in the blue of six crystals
+in_frame(parts + tower + boulders)
 bpy.ops.render.render(write_still=True)

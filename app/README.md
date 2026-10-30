@@ -89,8 +89,8 @@ Linux needs `libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf`.
 CI: `.github/workflows/app.yml` builds the three platforms on `v*` tags (or by hand) and uploads the
 bundles as artifacts (`tirith-macOS`, `tirith-Windows`, `tirith-Linux`). They are **unsigned**.
 
-Icons: `src-tauri/icons/` is generated from `scripts/make_icon.py` (needs Pillow) with
-`npm run tauri icon <1024px.png>`; remove the `android/` and `ios/` folders it creates.
+Icons: `scripts/make_icon.py` (needs Pillow) generates all of `src-tauri/icons/` from the 3D logo,
+`site/img/logo-3d@2x.png`, with a tighter crop on the tower at 64 px and below.
 
 Python is not bundled as a sidecar, so every platform needs `uv` installed.
 
