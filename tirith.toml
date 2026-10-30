@@ -9,7 +9,7 @@ name = "CI"
 
 [[pipelines.stages]]
 name = "build"
-run = "cd collector && uv run -q python -m compileall -q tirith && for f in ../web/js/*.js; do node --check \"$f\" || exit 1; done && cd .. && cargo build -q -p tirith-core -p tirith-cli"
+run = "cd collector && uv run -q python -m compileall -q tirith && for f in ../web/js/*.js; do node --check \"$f\" || exit 1; done"
 
 [[pipelines.stages]]
 name = "test"
@@ -18,7 +18,21 @@ run = "cd collector && uv run -q pytest -q"
 [[pipelines.stages]]
 name = "rust-test"
 kind = "test"
-run = "cargo test -q --workspace"
+run = "cargo test -q -p tirith-app"
+
+# The Rust port is paused: its crates leave the gate (build, rust-test) and return to it when the port resumes.
+[[pipelines]]
+id = "rust-port"
+name = "Rust port (on demand)"
+
+[[pipelines.stages]]
+name = "port-build"
+run = "cargo build -q -p tirith-core -p tirith-cli"
+
+[[pipelines.stages]]
+name = "port-test"
+kind = "test"
+run = "cargo test -q -p tirith-core -p tirith-cli"
 
 [[pipelines.stages]]
 name = "parity"
