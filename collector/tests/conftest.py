@@ -150,6 +150,13 @@ def _clean_env(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _no_real_temp_cleanup(monkeypatch):
+    """A test never lets the collector's cleanup thread touch the real temp folder."""
+    from tirith import diskdiet
+    monkeypatch.setattr(diskdiet, "TEMP_CLEANUP_ENABLED", False)
+
+
+@pytest.fixture(autouse=True)
 def _plenty_of_disk(monkeypatch):
     """The dispatcher and autopilot start no lane when the host disk is nearly full; tests must not depend on it."""
     from tirith import diskdiet

@@ -15,6 +15,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -32,7 +33,7 @@ GB = 1024 ** 3
 DISK_ITEM = "disk"
 HEADROOM_GB = 3  # cache is cleared when free space is below the limit plus this
 PYTEST_MIN_AGE_S = 3600
-_TIRITH_MARK = "tirith-home"  # the home folder the Tirith tests make inside their pytest temp dir
+TEMP_CLEANUP_ENABLED = True  # the test suite turns it off: no pass touches the real temp folder
 
 
 def _git(folder: Path, *args: str) -> subprocess.CompletedProcess:
@@ -202,24 +203,141 @@ def clear_build_cache(home: Path, config: Config, running: Callable[[], bool] | 
     return freed
 
 
-def clear_pytest_leftovers(tmp_root: Path | None = None, now_s: float | None = None,
-                           running: Callable[[], bool] | None = None) -> int:
-    """Remove old ``pytest-N`` run folders that hold a Tirith test home, when no pytest runs."""
-    if (running or (lambda: process_running("pytest")))():
+def _guard():
+    from tirith import guardwrap
+    return guardwrap.guard_module()
+
+
+def _within(path: Path, root: Path) -> bool:
+    """True when ``path`` itself (a link is not followed) lies strictly below ``root``."""
+    try:
+        return path.parent.resolve() == root or root in path.parent.resolve().parents
+    except OSError:
+        return False
+
+
+def _remove_tree(folder: Path, root: Path, deadline: float) -> int:
+    """Delete ``folder`` (below the temp ``root`` only), clearing the guard's flag on what it finds there.
+
+    Links are removed, never followed. Stops at ``deadline`` (monotonic); the rest goes in a later pass.
+    Returns the bytes freed."""
+    if not _within(folder, root) or folder.is_symlink() or not folder.is_dir():
         return 0
-    base = Path(tmp_root or tempfile.gettempdir()) / f"pytest-of-{getpass.getuser()}"
-    now_s = time.time() if now_s is None else now_s
-    freed = 0
-    for run in base.glob("pytest-*") if base.is_dir() else []:
+    guard, freed, dirs = _guard(), 0, []
+
+    def clear(path: Path) -> None:
         try:
-            old = now_s - run.stat().st_mtime >= PYTEST_MIN_AGE_S
+            if not path.is_symlink() and guard._is_locked(path):
+                guard._unlock(path)
         except OSError:
-            continue
-        if run.is_symlink() or not old or not any(run.glob(f"*/{_TIRITH_MARK}")):
-            continue
-        freed += _tree_size(run)
-        shutil.rmtree(run, ignore_errors=True)
+            pass
+
+    for current, names, files in os.walk(folder, followlinks=False, onerror=lambda _e: None):
+        here = Path(current)
+        clear(here)
+        dirs.append(here)
+        for name in files + [n for n in names if (here / n).is_symlink()]:
+            if time.monotonic() > deadline:
+                return freed
+            path = here / name
+            clear(path)
+            try:
+                size = os.lstat(path).st_size
+                path.unlink()
+                freed += size
+            except OSError:
+                pass
+    for here in reversed(dirs):
+        if time.monotonic() > deadline:
+            return freed
+        try:
+            here.rmdir()
+        except OSError:
+            pass
     return freed
+
+
+def pytest_in_use(base: Path) -> set[Path]:
+    """``pytest-N`` folders under ``base`` that a running pytest uses as its basetemp (open files or ``--basetemp``;
+    with any pytest running, also the newest run, which ``pytest-current`` names)."""
+    pids = subprocess.run(["pgrep", "-f", "pytest"], capture_output=True, text=True).stdout.split()
+    if not pids:
+        return set()
+    text = subprocess.run(["lsof", "-p", ",".join(pids), "-Fn"], capture_output=True, text=True).stdout
+    text += subprocess.run(["ps", "-p", ",".join(pids), "-ww", "-o", "command="], capture_output=True, text=True).stdout
+    used = set()
+    for match in re.finditer(re.escape(str(base)) + r"/(pytest-\d+)", text):
+        used.add(base / match.group(1))
+    current = base / "pytest-current"
+    if current.is_symlink():
+        try:
+            used.add(current.resolve())
+        except OSError:
+            pass
+    return used
+
+
+def clear_temp_leftovers(tmp_root: Path | None = None, now_s: float | None = None,
+                         in_use: Callable[[Path], set[Path]] | None = None, budget_s: float = 60.0) -> int:
+    """Remove, under the temp root only, the old test folders that pile up: ``pytest-of-<user>/pytest-N`` not in
+    use and over an hour old, ``garbage-*`` and ``pytest-old-archive``. Returns the bytes freed; bounded by
+    ``budget_s`` (a big pile takes several passes)."""
+    root = Path(tmp_root or tempfile.gettempdir()).resolve()
+    now_s = time.time() if now_s is None else now_s
+    deadline = time.monotonic() + budget_s
+    base = root / f"pytest-of-{getpass.getuser()}"
+    freed = 0
+    candidates: list[Path] = [root / "pytest-old-archive", *sorted(root.glob("garbage-*"))]
+    if base.is_dir() and not base.is_symlink():
+        used = {p.resolve() for p in (in_use or pytest_in_use)(base)}
+        for run in sorted(base.glob("pytest-*")):
+            try:
+                old = now_s - run.lstat().st_mtime >= PYTEST_MIN_AGE_S
+            except OSError:
+                continue
+            if old and re.fullmatch(r"pytest-\d+", run.name) and run.resolve() not in used:
+                candidates.append(run)
+    for folder in candidates:
+        if time.monotonic() > deadline:
+            break
+        freed += _remove_tree(folder, root, deadline)
+    return freed
+
+
+_cleanup_lock = threading.Lock()
+_cleanup_state: dict = {"at": None, "thread": None}
+
+
+def start_temp_cleanup(home: Path, free: int | None = None, *, tmp_root: Path | None = None,
+                       every_s: float = 900.0, low_bytes: int = 20 * GB, budget_s: float = 60.0,
+                       in_use: Callable[[Path], set[Path]] | None = None, wait: bool = False) -> bool:
+    """Start :func:`clear_temp_leftovers` on its own thread, never blocking the cycle: at most once every
+    ``every_s`` seconds, at once when ``free`` bytes are under ``low_bytes``, never two at a time.
+    What it freed goes to ``diskdiet.jsonl``. True when a pass started (``wait`` joins it, for tests)."""
+    if not TEMP_CLEANUP_ENABLED:
+        return False
+    with _cleanup_lock:
+        thread, last = _cleanup_state["thread"], _cleanup_state["at"]
+        if thread is not None and thread.is_alive():
+            return False
+        short = free is not None and free < low_bytes
+        if last is not None and time.monotonic() - last < every_s and not short:
+            return False
+
+        def work() -> None:
+            try:
+                freed = clear_temp_leftovers(tmp_root, in_use=in_use, budget_s=budget_s)
+                if freed:
+                    append_log(home, f"Freed {freed / GB:.1f} GB: old test temp folders")
+            except Exception as exc:  # a background pass never takes the collector down
+                append_log(home, f"Temp cleanup failed: {exc}")
+
+        thread = threading.Thread(target=work, name="tirith-temp-cleanup", daemon=True)
+        _cleanup_state.update(at=time.monotonic(), thread=thread)
+        thread.start()
+    if wait:
+        thread.join()
+    return True
 
 
 def _biggest(count: int = 3) -> list[tuple[str, int]]:
@@ -237,10 +355,9 @@ def _biggest(count: int = 3) -> list[tuple[str, int]]:
 
 def free_space(home: Path, config: Config, state: dict, now: datetime, *,
                free: Callable[[Path], int] | None = None, busy: Callable[[], list[Path]] | None = None,
-               running: Callable[[], bool] | None = None, tmp_root: Path | None = None,
+               running: Callable[[], bool] | None = None,
                biggest: Callable[[], list[tuple[str, int]]] | None = None) -> bool:
-    """Below the limit plus ``HEADROOM_GB`` clean by itself: merged lane folders, then the build cache and
-    pytest leftovers; one calm chat line says what was freed. Nothing left to clean: one information line with
+    """Below the limit plus ``HEADROOM_GB`` clean by itself: merged lane folders, then the build cache; one calm chat line says what was freed. Nothing left to clean: one information line with
     the biggest folders outside Tirith (never a question). True when it said something."""
     free = free or free_bytes
     try:
@@ -254,15 +371,12 @@ def free_space(home: Path, config: Config, state: dict, now: datetime, *,
         return False  # no project, no lanes folder: nothing of Tirith's to clean or to report
     swept = sweep(home, config, now, busy)
     cache = clear_build_cache(home, config, running)
-    leftovers = clear_pytest_leftovers(tmp_root, running=running)
-    total = swept["bytes"] + cache + leftovers
+    total = swept["bytes"] + cache
     parts = []
     if swept["worktrees"]:
         parts.append(f"{swept['worktrees']} old lane folder{'s' if swept['worktrees'] != 1 else ''}")
     if cache:
         parts.append("build cache")
-    if leftovers:
-        parts.append("test leftovers")
     if parts:
         state.pop("disk_nothing_said", None)
         line = f"Freed {total / GB:.1f} GB: {', '.join(parts)}"
@@ -290,6 +404,14 @@ def append_log(home: Path, line: str) -> None:
 
 
 # -- the disk guard ---------------------------------------------------------------------------
+
+
+def smallest_free(home: Path, config: Config, free: Callable[[Path], int] | None = None) -> int | None:
+    """Free bytes of the emptiest volume holding lanes; None when it cannot be read."""
+    try:
+        return min((free or free_bytes)(folder) for folder in lanes_volumes(home, config))
+    except OSError:
+        return None
 
 
 def lanes_volumes(home: Path, config: Config) -> list[Path]:

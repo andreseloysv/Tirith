@@ -53,6 +53,7 @@ from tirith import models as models_mod
 from tirith import review as review_mod
 from tirith.logview import entries_from_events, log_entries
 from tirith import projects as projects_mod
+from tirith import privaterooms as privaterooms_mod
 from tirith.rooms import RoomsService
 from tirith.names import (
     RENOWN_LANE_DONE, RENOWN_LANE_FAILED, RENOWN_STAGE_PASSED,
@@ -1320,6 +1321,10 @@ class Collector:
         self.rooms.ensure_polling(config, background=not self._one_shot)
         rooms_state, room_waits = self.rooms.build(
             config, agent_rows, self.worker, self.cache, now)
+        if not self._one_shot:  # a thread outlives a one-shot run: private rooms are for the running collector
+            privaterooms_mod.handle_requests(self.home)
+            privaterooms_mod.ensure_bridge(self.home)
+        rooms_state = rooms_state + privaterooms_mod.state_rows(self.home)
         violation_rows = hooks_mod.read_violation_rows(self.home / "events.jsonl")
         violations = [self._violation(row) for row in violation_rows][-hooks_mod.VIOLATIONS_KEPT:]
         rules_state = self._rules_state(projects, machine, violation_rows, now)
