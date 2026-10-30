@@ -267,3 +267,31 @@ def test_session_env_reaches_child(home: Path, tmp_path: Path, capsys) -> None:
     main(["run", "--project", "demo", "--pipeline", "p", "--stage", "s", "--", sys.executable,
           "-c", "import os;print(os.environ.get('TIRITH_SESSION'))"])
     assert capsys.readouterr().out.strip() == "kid"
+
+
+def test_worktree_never_auto_project(home: Path, tmp_path: Path, monkeypatch) -> None:
+    """When git fails or times out while resolving the root, the folder is neither cached nor registered."""
+    from tirith import projects as projects_mod
+    from tirith import timeouts as timeouts_mod
+
+    repo = make_repo(tmp_path / "main-repo")
+    lane = tmp_path / "lane-wt"
+    import subprocess
+    subprocess.run(["git", "-C", str(repo), "worktree", "add", "-q", "-b", "lane/x", str(lane)], check=True)
+    projects_mod._resolve_main_worktree.cache_clear()
+    real_run = timeouts_mod.run
+
+    def failing(argv, *a, **kw):
+        if "--git-common-dir" in argv:
+            return timeouts_mod.Result(list(argv), 124, "", "", error="timed out", timed_out=True)
+        return real_run(argv, *a, **kw)
+
+    monkeypatch.setattr(timeouts_mod, "run", failing)
+    items = projects_mod.discover(home, load_config(home), [lane])
+    assert all(e.folder is None or e.folder.resolve() != lane.resolve() for e in items)
+    assert load_auto(home)["projects"] == []
+    assert projects_mod._resolve_main_worktree.cache_info().currsize == 0
+
+    monkeypatch.setattr(timeouts_mod, "run", real_run)
+    items = projects_mod.discover(home, load_config(home), [lane])
+    assert [e.folder.resolve() for e in items if e.auto] == [repo.resolve()]
