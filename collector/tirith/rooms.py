@@ -335,8 +335,15 @@ class RoomPoller:
         self._thread = threading.Thread(target=self._run, name="tirith-rooms", daemon=True)
         self._thread.start()
 
-    def stop(self) -> None:
+    def stop(self, timeout_s: float = 0.0) -> bool:
+        """Ask the poll thread to end; with ``timeout_s`` wait (bounded) for it. True when it is gone."""
         self._stop.set()
+        thread = self._thread
+        if thread is None:
+            return True
+        if timeout_s > 0:
+            thread.join(timeout_s)
+        return not thread.is_alive()
 
     def _run(self) -> None:
         while not self._stop.is_set():
@@ -470,6 +477,9 @@ class RoomsService:
         self.poller.set_rooms(ids, config.rooms_interval_s)
         if ids and background:
             self.poller.start()
+
+    def stop(self, timeout_s: float = 5.0) -> bool:
+        return self.poller.stop(timeout_s)
 
     def poll_now(self, config: Config) -> None:
         self.poller.interval_s = max(MIN_INTERVAL_S, config.rooms_interval_s)

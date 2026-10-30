@@ -61,7 +61,18 @@ def reexec_argv() -> list[str]:
     return list(orig) if orig else [sys.executable, *sys.argv]
 
 
-def reexec(execv: Callable[[str, list[str]], None] = os.execv) -> None:
+def reexec(execv: Callable[[str, list[str]], None] = os.execv,
+           quiesce: Callable[[], bool] | None = None) -> None:
+    """Re-execute in place. ``quiesce`` first stops the background threads (bounded); a thread that outlives it
+    is reported, and the exec goes ahead anyway: exec discards threads, a hung collector is the worse outcome."""
     print("tirith collect: code changed; reloading", file=sys.stderr, flush=True)
+    if quiesce is not None:
+        try:
+            clean = quiesce()
+        except Exception as exc:  # never let cleanup block the reload
+            clean = False
+            print(f"tirith collect: quiesce failed ({type(exc).__name__}: {exc})", file=sys.stderr, flush=True)
+        if not clean:
+            print("tirith collect: background work still running; reloading anyway", file=sys.stderr, flush=True)
     argv = reexec_argv()
     execv(argv[0] if os.path.isabs(argv[0]) else sys.executable, argv)
