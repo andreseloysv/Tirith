@@ -414,7 +414,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [ ] Tirith sube main a GitHub como mucho 5 minutos después de cada cambio del plan. (check: `cd collector && uv run -q pytest -q tests -k push_plan`)
 - [ ] La cola de merge distingue un git cortado por tiempo de un conflicto real, y reintenta el primero sin devolver el lane. (check: `cd collector && uv run -q pytest -q tests -k merge_timeout`)
 - [ ] Un lane ya mezclado a mano sale de la cola y de las revisiones sin intervención. (check: `cd collector && uv run -q pytest -q tests -k already_merged`)
-- [ ] Las correcciones de lane/u-testfix y el traslado del pipeline rust-port entran juntos en main: cada una necesita la otra para pasar la cola de merge. (check: `git merge-base --is-ancestor lane/u-testfix main && ! grep -qE 'tirith-core|tirith-cli|--workspace' tirith.toml`) (en revisión)
+- [x] i-aef081ed (hecho: fde18e0)
 - [ ] Dos ejecuciones simultáneas de etapas en worktrees distintos no comparten número de ejecución ni fichero de log. (check: `cd collector && uv run -q pytest -q tests -k concurrent_runs_separate_logs`)
 - [ ] Un lane no deja su item marcado como hecho en el plan antes de que su trabajo entre en main. (check: `cd collector && uv run -q pytest -q tests -k item_stays_open_until_merged`)
 - [ ] tirith check: _coverage_problems in manifest.py counts pipelines from include files, so a project whose build or test stages exist only in an include passes the check while the merge queue finds no stage to run; count only gating pipelines
