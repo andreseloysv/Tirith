@@ -70,7 +70,7 @@ def test_summary_without_say_is_not_raw_output(home: Path, tmp_path: Path) -> No
 def test_ended_lane_summary_is_first_report_paragraph(home: Path, tmp_path: Path) -> None:
     log = tmp_path / "a.log"
     log.write_text("noise\n", encoding="utf-8")
-    _lane(home, "a-1", log, ended_at="2026-10-29T11:30:00Z", result="done",
+    _lane(home, "a-1", log, ended_at=now_iso(datetime.now(timezone.utc) - timedelta(minutes=30)), result="done",
           report="Shipped the **kanban**.\n\nDetails follow.")
     assert _collector(home).cycle()["agents"][0]["summary"] == "Shipped the **kanban**."
 

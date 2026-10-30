@@ -15,7 +15,7 @@ from pathlib import Path
 
 from tirith import timeouts as timeouts_mod
 
-TIMEOUT_S = 10.0                  # a login shell that takes longer is skipped
+TIMEOUT_S = 60.0                  # a login shell that takes longer is skipped
 MARK = "\n<<tirith-owner-env>>\n"  # printed before ``env -0``: rc files may print anything before it
 SKIP = frozenset({"_", "PWD", "OLDPWD", "SHLVL", "TERM_SESSION_ID"})
 KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
