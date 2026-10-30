@@ -19,7 +19,9 @@ fn stage(src: &Path, dst: &Path, skip: &[&str]) {
 
 /// Stages the collector and the web page in `resources/` (git-ignored) so Tauri can bundle clean copies.
 fn stage_resources() {
-    let here = Path::new(env!("CARGO_MANIFEST_DIR"));
+    // read when it runs, not when it compiles: a target folder shared by worktrees reuses this script's binary
+    let here = std::env::var_os("CARGO_MANIFEST_DIR").expect("cargo sets CARGO_MANIFEST_DIR");
+    let here = Path::new(&here);
     let out = here.join("resources");
     let _ = std::fs::remove_dir_all(&out);
     let collector = here.join("../../collector");
