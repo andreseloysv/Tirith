@@ -16,7 +16,8 @@ is enqueued (`tirith merge request`, or by the dispatcher). Tirith merges one la
    item and removes both worktrees and the branch.
 4. A conflict or a red stage goes back to the same agent: a relaunch whose brief continues the lane's branch
    with the conflict / failure appended (marker `[merge queue]`; after 3 returns the manager's queue decides).
-   Never the owner.
+   Never the owner. A git command cut off at its time limit (exit 124, e.g. the merge) is not a conflict: the
+   attempt is retried (up to 3 times), then the lane waits in the queue as `waiting` ("timed out"); never sent back.
 
 `state.projects[].merge_queue`: `{items: [{lane, position, status: queued|running, since, feature}], last, recent}`;
 the Plan card shows it. Commands: `tirith merge request|run|status`.
