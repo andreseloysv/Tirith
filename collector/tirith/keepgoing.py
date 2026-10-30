@@ -81,7 +81,8 @@ def gaps(home: Path, lane: dict, repo: Path | None, report: str) -> list[str]:
         since = claimcheck_mod.last_change(workspace, paths)
         if not any(r["at"] + 1 >= since for r in runs):
             out.append("no passing test run recorded after your last change: run "
-                       "`tirith run --project <project> --stage test` (and `--stage build`) in your worktree")
+                       "`tirith run --project <project> --stage test` (and `--stage build`) in your worktree "
+                       "(it runs only the tests your change maps to; the merge queue runs the full suite)")
     dirty = _git(workspace, "status", "--porcelain")
     if dirty.returncode == 0 and dirty.stdout.strip():
         out.append("uncommitted changes in your worktree: commit them on your branch with a normal "
