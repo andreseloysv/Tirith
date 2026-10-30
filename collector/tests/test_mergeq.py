@@ -465,3 +465,36 @@ def test_missing_branch_is_reported_plainly(env, home: Path) -> None:
     mergeq_mod.enqueue(home, "lost")
     row = mergeq_mod.process_next(home, load_config(home), relaunch=Sender())
     assert row["result"] != "conflict" and "branch not found: lane/lost" in row["message"]
+
+
+def _flaky_env(env, home: Path, script: str) -> Path:
+    repo, _ = env
+    (repo / "check.sh").write_text(script, encoding="utf-8")  # the repeat appends "-n 0 <test id>" to the stage command
+    text = 'deploy = "none"\n[[pipelines]]\nid = "ci"\n[[pipelines.stages]]\nname = "test"\nrun = "sh check.sh"\n'
+    (repo / "tirith.toml").write_text(text, encoding="utf-8")
+    git(repo, "add", ".")
+    git(repo, "commit", "-qm", "flaky manifest")
+    make_lane(home, repo, "alpha", {"feature.txt": "a\n"})
+    mergeq_mod.enqueue(home, "alpha")
+    return repo
+
+
+def test_rerun_failed_passing_alone_merges_and_counts_flaky(env, home: Path) -> None:
+    repo = _flaky_env(env, home, 'case "$*" in *-n*) echo "1 passed";; *) echo "FAILED t.py::test_a - boom"; exit 1;; esac\n')
+    row = mergeq_mod.process_next(home, load_config(home), relaunch=Sender())
+    assert row["result"] == "merged" and row["flaky"] == ["t.py::test_a"]
+    assert (repo / "feature.txt").exists()
+    assert mergeq_mod.view(home, "demo")["flaky"]["t.py::test_a"]["count"] == 1
+
+
+def test_rerun_failed_failing_again_is_a_real_red(env, home: Path) -> None:
+    _flaky_env(env, home, 'echo "FAILED t.py::test_a - boom"\nexit 1\n')
+    row = mergeq_mod.process_next(home, load_config(home), relaunch=Sender())
+    assert row["result"] == "red-suite"
+    assert mergeq_mod.view(home, "demo")["flaky"] == {}
+
+
+def test_rerun_failed_without_a_report_is_a_real_red(env, home: Path) -> None:
+    _flaky_env(env, home, 'echo "ERROR t.py - collection"\nexit 1\n')
+    row = mergeq_mod.process_next(home, load_config(home), relaunch=Sender())
+    assert row["result"] == "red-suite"

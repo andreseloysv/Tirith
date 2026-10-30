@@ -12,6 +12,8 @@ the lane's branch), never to the owner. The queue lives in ``<home>/mergeq.json`
 from __future__ import annotations
 
 import os
+import re
+import shlex
 import shutil
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -42,6 +44,7 @@ MARK = "[merge queue]"
 MAX_SENT_BACK = 3  # after this many returns the manager (never the owner) decides
 MAX_TRIES = 3  # main moved under the merge: start again from the new main
 HISTORY = 20
+FLAKY_FILE = "flaky.json"  # {project: {test id: {"count": n, "last": iso}}}: tests that failed in the suite and passed alone
 OUTPUT_MAX = 1500
 
 
@@ -115,7 +118,9 @@ def view(home: Path, project: str | None = None) -> dict:
              for n, e in enumerate(data["queue"], 1) if project is None or e.get("project") == project]
     rows = [h for h in data["history"] if project is None or h.get("project") == project]
     last = data["last"].get(project) if project else (rows[-1] if rows else None)
-    return {"items": items, "last": last, "recent": rows[-5:]}
+    flaky = read_json(Path(home) / FLAKY_FILE, {})
+    flaky = flaky.get(project) if project and isinstance(flaky, dict) else flaky
+    return {"items": items, "last": last, "recent": rows[-5:], "flaky": flaky if isinstance(flaky, dict) else {}}
 
 
 # -- taking work -------------------------------------------------------------------------------
@@ -174,6 +179,39 @@ def _remove_worktree(repo: Path, *args: str):
 def _tail(text: str) -> str:
     text = (text or "").strip()
     return text if len(text) <= OUTPUT_MAX else "…" + text[-OUTPUT_MAX:]
+
+
+def failed_tests(output: str) -> list[str]:
+    """The pytest ids a red test stage reports as failed; empty when they cannot be told (an error, no report)."""
+    if re.search(r"^ERROR ", output or "", re.M):
+        return []
+    return list(dict.fromkeys(re.findall(r"^FAILED (.+?)(?: - |$)", output or "", re.M)))
+
+
+def note_flaky(home: Path, project: str, tests: list[str]) -> None:
+    """Count each test that failed in the suite and passed on its own repeat."""
+    with _locked(home):
+        data = read_json(Path(home) / FLAKY_FILE, None)
+        data = data if isinstance(data, dict) else {}
+        rows = data.setdefault(project, {})
+        for test in tests:
+            row = rows.setdefault(test, {"count": 0})
+            row.update(count=int(row.get("count", 0)) + 1, last=now_iso())
+        write_json_atomic(Path(home) / FLAKY_FILE, data)
+
+
+def rerun_failed(home: Path, project: str, pipeline: str, stage, tmp: Path, lane_id: str, output: str) -> list[str] | None:
+    """Repeat the failed tests one at a time with ``-n 0``; the flaky ids when all pass, None for a real red."""
+    tests = failed_tests(output)
+    if not tests:
+        return None
+    for test in tests:
+        ok, _ = review_mod.run_tests(home, project, pipeline, f"{stage.name}-rerun", tmp,
+                                     f"{stage.run} -n 0 {shlex.quote(test)}", lane_id)
+        if not ok:
+            return None
+    note_flaky(home, project, tests)
+    return tests
 
 
 def stages_of(folder: Path) -> list[tuple[str, manifest_mod.Stage]]:
@@ -271,10 +309,14 @@ def _try(home: Path, repo: Path, lane: dict, entry: dict) -> tuple[str, str, dic
         stages = stages_of(tmp)
         if not stages:
             return WAITING, "the manifest has no build or test stage with a run command", {}
-        passed = None
+        passed, flaky = None, []
         for pipeline, stage in stages:
             ok, output = review_mod.run_tests(home, project, pipeline, stage.name, tmp, stage.run, lane_id)
             if not ok:
+                again = rerun_failed(home, project, pipeline, stage, tmp, lane_id, output)
+                if again is not None:
+                    flaky += again
+                    continue
                 return RED, f"stage {pipeline}/{stage.name} failed on {branch} merged with {main_branch}:\n{_tail(output)}", \
                     {"main": main_branch}
             passed = review_mod.tests_passed(output) or passed
@@ -293,7 +335,8 @@ def _try(home: Path, repo: Path, lane: dict, entry: dict) -> tuple[str, str, dic
                 moved = _git(repo, "merge", "--ff-only", "-q", tested)
             if moved.returncode != 0:
                 return WAITING, f"fast-forwarding {main_branch} failed: {_tail(moved.stderr or moved.stdout)}", {}
-        return MERGED, "tests passed; merged", {"commit": tested, "main": main_branch, "passed": passed, "branch": branch}
+        return MERGED, "tests passed; merged" + (f" (flaky, passed on repeat: {', '.join(flaky)})" if flaky else ""), {"commit": tested, "main": main_branch, "passed": passed, "branch": branch,
+                                                  **({"flaky": flaky} if flaky else {})}
     finally:
         _remove_worktree(repo, "--force", str(tmp))
         shutil.rmtree(tmp, ignore_errors=True)
@@ -419,7 +462,8 @@ def process_next(home: Path, config: Config, *, relaunch: Callable | None = None
                        "files": len(_git(repo, "diff", "--name-only", f"{extra['commit']}^1", extra["commit"]).stdout.split())}
     write_lane(home, fresh)
     status = PUSH_FAILED if extra.get("push_error") else MERGED
-    row = _finish(home, entry, status, extra.get("push_error") or message, commit=extra["commit"])
+    row = _finish(home, entry, status, extra.get("push_error") or message, commit=extra["commit"],
+                   **({"flaky": extra["flaky"]} if extra.get("flaky") else {}))
     return row
 
 
