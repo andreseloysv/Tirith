@@ -182,7 +182,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Los 11 tests de test_autoreview vuelven a pasar: el Spawner del test falla con 'review' is not in list porque el collector ahora arranca 'canary run'. (check: `cd collector && uv run -q pytest -q tests/test_autoreview.py`)
 - [ ] Los 4 tests rojos de test_brain (brain_calls), test_rooms y test_collector vuelven a pasar sin debilitarlos. (check: `cd collector && uv run -q pytest -q tests/test_brain.py tests/test_rooms.py tests/test_collector.py`)
 - [ ] La regla roadmap-edit no bloquea comandos que solo leen el plan: un grep del plan en un comando que también usa sed -n o python -c open() de otros ficheros pasa. (check: `cd collector && uv run -q pytest -q tests -k roadmap_edit_read_only`)
-- [ ] tirith.toml no nombra el port a Rust (tirith-core, tirith-cli) en ninguna etapa que bloquea merges: mover el pipeline rust-port a un archivo aparte. (check: `! grep -qE 'tirith-core|tirith-cli|--workspace' tirith.toml`) (en curso: reglas-de-c-digo-errores-de-comp-3)
+- [ ] tirith.toml no nombra el port a Rust (tirith-core, tirith-cli) en ninguna etapa que bloquea merges: mover el pipeline rust-port a un archivo aparte. (check: `! grep -qE 'tirith-core|tirith-cli|--workspace' tirith.toml`) (en revisión)
 - [x] Un lane no termina mientras su etapa de tests sigue corriendo: Tirith espera el resultado y se lo pasa al agente. (check: `cd collector && uv run -q pytest -q tests -k keepalive`) (hecho: ec74885)
 
 ## 8. Más visibilidad por agente
