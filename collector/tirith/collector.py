@@ -1330,7 +1330,8 @@ class Collector:
             "collector": {"warming": self.activity.warming, "pending": self.activity.pending()},
             "brain": {"enabled": self.worker.enabled,
                       "model": self.config.brain_model,
-                      "last_error": self.worker.last_error},
+                      "last_error": self.worker.last_error,
+                      "usage": self.worker.stats()},
             "manager": manager,
             "steward": manager,  # old key, same value
             "waiting_on_you": waiting,

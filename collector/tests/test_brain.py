@@ -121,3 +121,74 @@ def test_brain_error_is_reported_not_raised(home: Path, tmp_path: Path) -> None:
     assert state["brain"]["enabled"] is True
     assert "HTTP 500" in (state["brain"]["last_error"] or "")
     assert state["agents"][0]["summary"] == "Working on Checks."  # fallback still works
+
+
+# --- brain_calls: the brain is only called when something changed ---
+
+def _worker(tmp_path: Path, client, clock, **kw) -> brain_mod.BrainWorker:
+    return brain_mod.BrainWorker(client, brain_mod.BrainCache(tmp_path), clock=clock, **kw)
+
+
+def _job(worker: brain_mod.BrainWorker, kind: str, text: str) -> bool:
+    queued = worker.submit(kind, text, lambda c, t=text: {"items": brain_mod.job_waiting(c, t)})
+    worker.drain()
+    return queued
+
+
+def test_brain_calls_same_input_twice_is_one_call(tmp_path: Path) -> None:
+    client = FakeClient()
+    worker = _worker(tmp_path, client, lambda: 1000.0)
+    assert _job(worker, "waiting", "agent asks for a decision")
+    assert not _job(worker, "waiting", "agent asks for a decision")
+    assert len(client.calls) == 1
+
+
+def test_brain_calls_only_times_changed_makes_no_new_call(tmp_path: Path) -> None:
+    client = FakeClient()
+    now = [1000.0]
+    worker = _worker(tmp_path, client, lambda: now[0], min_interval_s={})
+    assert _job(worker, "waiting", "2026-10-30T10:00:01Z [10:00:01] ran tests, took 12s (3m ago)\nwaiting on schema")
+    now[0] += 5000
+    assert not _job(worker, "waiting", "2026-10-30T10:05:09Z [10:05:09] ran tests, took 14s (8m ago)\nwaiting on schema")
+    assert len(client.calls) == 1
+    assert _job(worker, "waiting", "2026-10-30T10:06:00Z ran tests\nwaiting on credentials")
+    assert len(client.calls) == 2
+
+
+def test_brain_calls_empty_input_makes_no_call(tmp_path: Path) -> None:
+    client = FakeClient()
+    worker = _worker(tmp_path, client, lambda: 1000.0)
+    assert not _job(worker, "waiting", "")
+    assert not _job(worker, "waiting", "   \n ")
+    assert not _job(worker, "waiting", "2026-10-30T10:00:01Z\n[10:00:02]")
+    assert client.calls == []
+    assert worker.stats()["total"] == 0
+
+
+def test_brain_calls_min_interval_respected(tmp_path: Path) -> None:
+    client = FakeClient()
+    now = [1000.0]
+    worker = _worker(tmp_path, client, lambda: now[0])
+    assert _job(worker, "waiting", "first state")
+    now[0] += 30
+    assert not _job(worker, "waiting", "second state")
+    assert _job(worker, "summary", "second state")  # another kind has its own interval
+    now[0] += 31
+    assert _job(worker, "waiting", "second state")
+    assert len(client.calls) == 3
+
+
+def test_brain_calls_daily_budget_respected_and_counted(tmp_path: Path) -> None:
+    client = FakeClient()
+    now = [1000.0]
+    worker = _worker(tmp_path, client, lambda: now[0], daily_budget=2, min_interval_s={})
+    assert _job(worker, "waiting", "a")
+    assert _job(worker, "summary", "b")
+    assert not worker.stats()["health_note"]
+    assert not _job(worker, "waiting", "c")
+    stats = worker.stats()
+    assert stats["calls"] == {"waiting": 1, "summary": 1}
+    assert stats["budget_reached"] and "budget" in stats["health_note"]
+    assert "a" not in json.dumps(stats) and len(client.calls) == 2
+    now[0] += 86400 * 2  # a new day starts a fresh budget
+    assert _job(worker, "waiting", "c")
