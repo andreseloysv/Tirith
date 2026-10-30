@@ -32,9 +32,10 @@ Run from the worktree: `tirith run --project tirith --stage <name>`.
 
 | Stage | What it does |
 |---|---|
-| `build` | Python compile, `node --check` of the web scripts, `cargo build` of `tirith-core` and `tirith-cli` |
+| `build` | Python compile, `node --check` of the web scripts (the port crates no longer build here) |
 | `test` | the Python suite (`pytest`) |
-| `rust-test` | `cargo test --workspace` (core, cli, app) |
+| `rust-test` | `cargo test -p tirith-app` (the desktop app only; the port is paused) |
+| `rust-port` pipeline | on demand, not gating: `tirith run --project tirith --stage port-build` / `port-test` build and test `tirith-core` and `tirith-cli`; back in the gate when the port resumes |
 | `parity` | builds `tirith-rs`, then runs the parity harness |
 
 ## How parity works
