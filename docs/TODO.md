@@ -467,6 +467,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [ ] Ningún test escribe en archivos versionados: web/js/planagents.test.mjs reescribe web/screenshots/plan-many-agents.png y ensució la copia principal. (check: `! grep -q 'plan-many-agents.png' web/js/planagents.test.mjs || grep -q 'UPDATE_SCREENSHOTS' web/js/planagents.test.mjs`)
 - [ ] La regla workspace-write no toma las expresiones de sed -i -e como rutas de escritura (hoy bloquea /^=======$/d como si fuera un archivo). (check: `cd collector && uv run -q pytest -q tests -k workspace_write_sed_expression`)
 - [ ] Un árbol que ya pasó sus tests no se vuelve a probar: Tirith recuerda el árbol probado, y ni la lane, ni la claim check, ni la cola repiten esa etapa. (check: `cd collector && uv run -q pytest -q tests -k same_tree_is_not_tested_again`)
+- [ ] Una lane cuyo commit ya está en otra rama de la cola o en main se para y sale de la cola sola, sin correr más tests. (check: `cd collector && uv run -q pytest -q tests -k absorbed_lane_stops`)
 - [x] La suite de tests de Python vuelve a pasar entera en main tras el tren de integración. (check: `cd collector && uv run -q pytest -q -n 8`) (hecho: b133b4b)
 
 ## 18. Salas privadas: hablar con el manager desde el móvil
