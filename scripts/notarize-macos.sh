@@ -30,6 +30,13 @@ app=$(find "$bundle/macos" -maxdepth 1 -name '*.app' | head -n 1)
 dmg=$(find "$bundle/dmg" -maxdepth 1 -name '*.dmg' | head -n 1)
 [ -n "$app" ] && [ -n "$dmg" ] || { echo "app or dmg missing under $bundle" >&2; exit 1; }
 
+# The app carries the collector and the page as plain files; a native binary among them would fail notarization.
+res="$app/Contents/Resources/resources"
+[ -f "$res/collector/pyproject.toml" ] && [ -f "$res/web/index.html" ] || { echo "collector or web not bundled in $app" >&2; exit 1; }
+if find "$res" -type f -exec file {} + | grep -q 'Mach-O'; then
+  echo "a native binary is bundled under $res; it would need its own signature" >&2; exit 1
+fi
+
 codesign --verify --deep --strict --verbose=2 "$app"
 codesign -dv "$app" 2>&1 | grep -q 'flags=.*runtime' || { echo "hardened runtime is off on $app" >&2; exit 1; }
 codesign --force --timestamp --sign "$APPLE_SIGNING_IDENTITY" "$dmg"
