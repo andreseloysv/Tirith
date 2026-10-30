@@ -369,6 +369,11 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] La landing deja de mostrar render-board.png (pedido del dueño). (check: `! grep -q render-board site/index.html`) (hecho: 7ecbd87)
 - [ ] Imágenes de inspiración para los renders, generadas con un modelo de imagen de Google y guardadas fuera del repo (espera: una clave de Google que funcione, del dueño). (check: `test -n "$(ls ~/.cache/tirith-inspiration 2>/dev/null)"`)
 - [ ] El icono de la app de macOS (el mismo modelo de torre de piedra) se lee bien a 32 px: se genera una versión pequeña y se comprueba su contraste (pedido del dueño). (check: `test -f app/src-tauri/icons/32x32.png && grep -q stone_tower scripts/make_icon.py`)
+- [ ] En el móvil, el diagrama de la landing cabe entero sin desplazarse de lado. (check: `node web/js/landing.test.mjs`)
+- [ ] En el móvil, los bloques de código de la landing se leen enteros sin desplazarse de lado. (check: `node web/js/landing.test.mjs`)
+- [ ] El texto de estado de la landing dice la verdad de hoy: ya no pone en construcción lo que ya funciona. (check: `! grep -q 'under construction' site/index.html`)
+- [ ] El README abre con la torre de piedra y capturas actuales de la app. (check: `grep -q -E 'logo-3d|social-preview-3d' README.md`)
+- [ ] El video demo se regraba con el logo de piedra y la app actual. (check: `test site/img/logo-3d.png -ot docs/demo/out/tirith-demo.mp4`)
 - [x] El logo de piedra tiene luz de portada: luz cálida lateral, contraluz que recorta la silueta y la ventana iluminando la piedra de alrededor (pedido del dueño). (check: `test -f site/img/logo-3d.png`) (hecho: 7bcd959)
 
 ## 15. Collector y CLI en Rust
@@ -395,7 +400,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 
 ## 17. Tirith se mejora usando Tirith
 
-- [ ] Tirith se ejecuta desde una copia estable que solo avanza cuando la prueba completa pasa en la versión nueva, y vuelve atrás sola si la salud se pone roja. (check: `cd collector && uv run -q pytest -q tests -k stable`)
+- [ ] Tirith se ejecuta desde una copia estable que solo avanza cuando la prueba completa pasa en la versión nueva, y vuelve atrás sola si la salud se pone roja. (check: `cd collector && uv run -q pytest -q tests -k stable`) (en curso: tirith-se-mejora-usando-tirith-5)
 - [ ] Tirith registra cada vez que hizo falta una persona o algo esperó, y pone la fricción mayor arriba del plan. (check: `cd collector && uv run -q pytest -q tests -k friction`)
 - [ ] La cola de merge tiene prioridad: los arreglos de la propia cola y de sus etapas entran primero. (check: `cd collector && uv run -q pytest -q tests -k merge_priority`)
 - [x] Las instrucciones de los lanes dicen quién revisa de verdad: Tirith hace el commit y la cola de merge revisa, nunca «para que lo revise el dueño». (check: `! grep -rq 'for the owner to review' collector/tirith`) (hecho: 39e0c0b)
@@ -409,16 +414,24 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [ ] El brain solo se llama cuando cambia lo que tiene que juzgar, nunca para una lista vacía ni en cada ciclo del collector. (check: `cd collector && uv run -q pytest -q tests -k brain_calls`) (en curso: u-braincalls)
 - [x] Tren de integración A: todos los lanes terminados del collector, la cola y las reglas, juntos en una rama probada una sola vez. (check: `git merge-base --is-ancestor lane/u-mqplanmoves main`) (hecho: 8e3a1a9)
 - [ ] Tren de integración B: todos los lanes terminados de la app, la web y la landing, juntos en una rama probada una sola vez. (check: `git merge-base --is-ancestor lane/u-stonetower main`) (en curso: u-trainB)
-- [ ] Al devolver un lane, la cola de merge reabre su elemento del plan y comprueba que el agente arrancó. (check: `cd collector && uv run -q pytest -q tests -k send_back`)
+- [ ] Al devolver un lane, la cola de merge reabre su elemento del plan y comprueba que el agente arrancó. (check: `cd collector && uv run -q pytest -q tests -k send_back`) (en curso: tirith-se-mejora-usando-tirith-2)
 - [x] La ronda de seguimiento de un lane (keep-going) arranca su agente sin que la regla agent-cli la bloquee, y un lane con informe done no termina como failed por ese bloqueo. (check: `cd collector && uv run -q pytest -q tests -k keepgoing_resume_not_blocked`) (hecho: 1abd541)
 - [ ] Tirith sube main a GitHub como mucho 5 minutos después de cada cambio del plan. (check: `cd collector && uv run -q pytest -q tests -k push_plan`)
-- [ ] La cola de merge distingue un git cortado por tiempo de un conflicto real, y reintenta el primero sin devolver el lane. (check: `cd collector && uv run -q pytest -q tests -k merge_timeout`)
+- [ ] La cola de merge distingue un git cortado por tiempo de un conflicto real, y reintenta el primero sin devolver el lane. (check: `cd collector && uv run -q pytest -q tests -k merge_timeout`) (en curso: tirith-se-mejora-usando-tirith-3)
 - [ ] Un lane ya mezclado a mano sale de la cola y de las revisiones sin intervención. (check: `cd collector && uv run -q pytest -q tests -k already_merged`)
-- [ ] Las correcciones de lane/u-testfix y el traslado del pipeline rust-port entran juntos en main: cada una necesita la otra para pasar la cola de merge. (check: `git merge-base --is-ancestor lane/u-testfix main && ! grep -qE 'tirith-core|tirith-cli|--workspace' tirith.toml`) (en revisión)
+- [x] i-aef081ed (hecho: fde18e0)
 - [ ] Dos ejecuciones simultáneas de etapas en worktrees distintos no comparten número de ejecución ni fichero de log. (check: `cd collector && uv run -q pytest -q tests -k concurrent_runs_separate_logs`)
 - [ ] Un lane no deja su item marcado como hecho en el plan antes de que su trabajo entre en main. (check: `cd collector && uv run -q pytest -q tests -k item_stays_open_until_merged`)
 - [ ] tirith check: _coverage_problems in manifest.py counts pipelines from include files, so a project whose build or test stages exist only in an include passes the check while the merge queue finds no stage to run; count only gating pipelines
 - [ ] La cola de merge reintenta el commit de la lane cuando encuentra un index.lock abandonado en su worktree, en vez de marcarla red-suite y devolverla (check: `cd collector && uv run -q pytest -q tests -k commit_workspace_recovers_lock`)
 - [ ] Una lane de continuación que reutiliza el worktree de otra entra sola en la cola de merge al terminar con done (check: `cd collector && uv run -q pytest -q tests -k continuation_lane_auto_enqueued`)
+- [ ] Pasar un solo test tarda menos de 30 segundos también con carga alta: hoy test_code_move_is_retried tardó 8 minutos (pytest con -k, 1 passed in 493 s). (check: `cd collector && uv run -q pytest -q --durations=5 tests/test_mergeq.py -k test_code_move_is_retried`)
+- [ ] tests/test_mergeq.py::test_code_move_is_retried_and_the_next_entry_still_runs no falla con carga alta: se averigua por qué el lane two queda en waiting (1 failed en ~/.tirith/logs/ci-168-test.log) y se arregla el test si es frágil o la cola si es un error real (check: `cd collector && uv run -q pytest -q tests/test_mergeq.py -k test_code_move_is_retried`) (en curso: tirith-se-mejora-usando-tirith-4)
+- [ ] Devolver una lane de continuación que reutiliza el worktree de otra funciona: relaunch_lane usa la rama real de la lane (mergeq.branch_of), no lane/<id>, que hoy falla con invalid reference: lane/u-testfix-port (check: `cd collector && uv run -q pytest -q tests -k send_back_continuation`)
+- [ ] La app muestra arriba, sin preguntar, qué entró hoy en main, qué se está haciendo, qué está atascado y quién lo lleva. (check: `cd collector && uv run -q pytest -q tests -k now_bar`)
+- [ ] Cada petición del dueño en el chat queda ligada a un elemento del plan o a una respuesta, y la app lista sus peticiones con su estado. (check: `cd collector && uv run -q pytest -q tests -k owner_requests`)
+- [ ] Al volver, el dueño ve un resumen de lo que pasó mientras no estaba: lo que entró, lo que falló y lo que sigue. (check: `cd collector && uv run -q pytest -q tests -k while_away`)
+- [ ] Un ciclo del collector tarda menos de 5 segundos con carga alta: hoy llegó a 66 s, 49 s de ellos en el despachador. (check: `cd collector && uv run -q pytest -q tests -k cycle_budget`)
+- [ ] El tamaño de contexto del manager se mide con la última petición, no con la suma de todas las del turno. (check: `cd collector && uv run -q pytest -q tests -k context_tokens`)
 - [x] La suite de tests de Python vuelve a pasar entera en main tras el tren de integración. (check: `cd collector && uv run -q pytest -q -n 8`) (hecho: b133b4b)
 
