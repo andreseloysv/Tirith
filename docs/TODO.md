@@ -180,6 +180,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] La regla workspace-write no bloquea por error: resuelve variables de shell como $S/x hacia el temporal del lane, permite 2>/dev/null y no toma como destino de escritura los argumentos de grep tras una tubería. (check: `cd collector && uv run -q pytest -q tests -k workspace_write_false_positives`)
 - [ ] Los 11 tests de test_autoreview vuelven a pasar: el Spawner del test falla con 'review' is not in list porque el collector ahora arranca 'canary run'. (check: `cd collector && uv run -q pytest -q tests/test_autoreview.py`)
 - [ ] Los 4 tests rojos de test_brain (brain_calls), test_rooms y test_collector vuelven a pasar sin debilitarlos. (check: `cd collector && uv run -q pytest -q tests/test_brain.py tests/test_rooms.py tests/test_collector.py`)
+- [ ] La regla roadmap-edit no bloquea comandos que solo leen el plan: un grep del plan en un comando que también usa sed -n o python -c open() de otros ficheros pasa. (check: `cd collector && uv run -q pytest -q tests -k roadmap_edit_read_only`)
 - [x] Un lane no termina mientras su etapa de tests sigue corriendo: Tirith espera el resultado y se lo pasa al agente. (check: `cd collector && uv run -q pytest -q tests -k keepalive`) (hecho: ec74885)
 
 ## 8. Más visibilidad por agente
