@@ -465,3 +465,39 @@ def test_missing_branch_is_reported_plainly(env, home: Path) -> None:
     mergeq_mod.enqueue(home, "lost")
     row = mergeq_mod.process_next(home, load_config(home), relaunch=Sender())
     assert row["result"] != "conflict" and "branch not found: lane/lost" in row["message"]
+
+
+def _cut_git_merge(monkeypatch: pytest.MonkeyPatch, times: int) -> list[int]:
+    """The first ``times`` ``git merge --no-ff`` calls are stopped at their deadline (exit 124)."""
+    real, left, seen = mergeq_mod._git, [times], []
+
+    def cut(folder, *args):
+        if args[:2] == ("merge", "--no-ff") and left[0] > 0:
+            left[0] -= 1
+            seen.append(1)
+            return mergeq_mod.timeouts_mod.Result(["git", *args], 124, "", "", True, 1.0, "git timed out")
+        return real(folder, *args)
+
+    monkeypatch.setattr(mergeq_mod, "_git", cut)
+    return seen
+
+
+def test_merge_timeout_is_retried_and_the_lane_is_not_sent_back(env, home: Path, monkeypatch) -> None:
+    repo, _ = env
+    make_lane(home, repo, "alpha", {"feature.txt": "a\n"})
+    mergeq_mod.enqueue(home, "alpha")
+    seen = _cut_git_merge(monkeypatch, 1)
+    sender = Sender()
+    row = mergeq_mod.process_next(home, load_config(home), relaunch=sender)
+    assert row["result"] == "merged" and len(seen) == 1 and not sender.calls
+
+
+def test_merge_timeout_every_time_waits_in_the_queue_not_sent_back(env, home: Path, monkeypatch) -> None:
+    repo, _ = env
+    make_lane(home, repo, "alpha", {"feature.txt": "a\n"})
+    mergeq_mod.enqueue(home, "alpha")
+    _cut_git_merge(monkeypatch, 99)
+    sender = Sender()
+    row = mergeq_mod.process_next(home, load_config(home), relaunch=sender)
+    assert row["result"] == "waiting" and "timed out" in row["message"] and not sender.calls
+    assert [i["lane"] for i in mergeq_mod.view(home, "demo")["items"]] == ["alpha"]

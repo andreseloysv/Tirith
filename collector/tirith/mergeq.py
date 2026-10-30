@@ -41,6 +41,7 @@ SENT_BACK_STATUS = "sent-back"  # the lane's ``review.status`` once the queue re
 MARK = "[merge queue]"
 MAX_SENT_BACK = 3  # after this many returns the manager (never the owner) decides
 MAX_TRIES = 3  # main moved under the merge: start again from the new main
+TIMED_OUT = "timed out"  # a git command stopped at its deadline: retried by the queue, never sent back
 HISTORY = 20
 OUTPUT_MAX = 1500
 
@@ -205,7 +206,7 @@ def _commit_workspace(workspace: Path, lane_id: str, feature: str) -> str | None
     if _git(workspace, "diff", "--cached", "--quiet").returncode != 0:
         done = _git(workspace, "commit", "-q", "-m", f"Lane {lane_id}: {feature}")
         if done.returncode != 0:
-            return _tail(done.stderr or done.stdout)
+            return f"{TIMED_OUT}: {done.error}" if done.timed_out else _tail(done.stderr or done.stdout)
     return None
 
 
@@ -248,6 +249,8 @@ def _try(home: Path, repo: Path, lane: dict, entry: dict) -> tuple[str, str, dic
     branch = branch_of(lane, workspace)
     failed = _commit_workspace(workspace, lane_id, feature)
     if failed:
+        if failed.startswith(TIMED_OUT):  # git was cut off, the lane is not at fault
+            return WAITING, f"committing the lane {failed}", {}
         return RED, f"committing the lane failed: {failed}", {}
     if not branch_exists(repo, branch):
         return WAITING, f"branch not found: {branch}", {}
@@ -263,6 +266,9 @@ def _try(home: Path, repo: Path, lane: dict, entry: dict) -> tuple[str, str, dic
         return WAITING, f"could not make the temporary worktree: {_tail(made.stderr or made.stdout)}", {}
     try:
         merged = _git(tmp, "merge", "--no-ff", "-q", "-m", f"Merge {branch}: {feature}", branch)
+        if merged.timed_out:  # git was cut off by its time limit: not a conflict, try again, never the lane
+            _git(tmp, "merge", "--abort")
+            return "retry", f"merging {branch} into {main_branch} {TIMED_OUT}; trying again", {}
         if merged.returncode != 0:
             files = _git(tmp, "diff", "--name-only", "--diff-filter=U").stdout.split()
             _git(tmp, "merge", "--abort")
