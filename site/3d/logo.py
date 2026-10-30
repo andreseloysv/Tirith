@@ -1,35 +1,36 @@
-"""Tirith 3D logo. Usage: Blender -b -P logo.py -- OUT.png SIZE [turntable_dir FRAMES]"""
+"""Tirith 3D logo. Usage: Blender -b -P logo.py -- OUT.png SIZE [turntable_dir FRAMES [FRAME]] [samples=N] [stone=PACK] [sky=PACK] [limit=PX]
+
+Final still: OUT.png 2048 samples=512. Spin: OUT.png 512 DIR 60 samples=48 limit=2048, then composite the
+frames over #f4f8fb (.logo3d background) at 20 fps. Scale the still with premultiplied alpha, or the edges go dark.
+"""
 import sys, math
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
 from common import *
 
-args = sys.argv[sys.argv.index("--") + 1:]
+argv = sys.argv[sys.argv.index("--") + 1:]
+opts = dict(a.split("=", 1) for a in argv if "=" in a)
+args = [a for a in argv if "=" not in a]
 out, size = args[0], int(args[1])
 turn_dir = args[2] if len(args) > 2 else None
 frames = int(args[3]) if len(args) > 3 else 0  # optional 5th arg: only this frame
 
 reset()
-world((0.85, 0.9, 1), 0.25)
-# rounded dark plinth like the app icon, with a blue rim
-plinth = box("plinth", (0, 0, -0.18), (3.0, 3.0, 0.36), mat("plinth", INK, metallic=0.3, rough=0.25), 0.3)
-rim = box("rim", (0, 0, -0.02), (3.12, 3.12, 0.06), mat("rim", BLUE, metallic=0.8, rough=0.2), 0.03)
+sky(opts.get("sky", SKY), 0.55)
 pivot = bpy.data.objects.new("pivot", None)
 bpy.context.collection.objects.link(pivot)
-parts = tower("t_", (0, 0, 0), 0.95)
-for o in [plinth, rim] + parts:
+for o in stone_tower("t_", stone=opts.get("stone", STONE)):
     o.parent = pivot
-# floating glow orb above, a nod to the watching eye
-orb = sphere("orb", (0, 0, 2.95), 0.12, mat("orb", LIGHT_BLUE, emit=3))
-orb.parent = pivot
-shadow_floor(-0.36)
-look((4.6, -6.0, 3.6), (0, 0, 1.0), 62)
-area((-4, -5, 7), (0, 0, 1), 350, 5)
-area((6, -2, 3), (0, 0, 1), 160, 4, (0.7, 0.85, 1))
-area((0, 5, 4), (0, 0, 1), 120, 4, (0.8, 0.9, 1))
-setup(size, size, 128, True, out)
+shadow_floor(-0.42)
+look((0, -14.5, 3.75), (0, 0, 1.45), 92)
+sun((-0.3, -0.62, 1.2), 3.0, 18)
+area((5, -4, 2), (0, 0, 1.4), 28, 6, (0.75, 0.85, 1))
+setup(size, size, int(opts.get("samples", 512)), True, out)
+if "limit" in opts:
+    bpy.context.scene.cycles.texture_limit_render = opts["limit"]
 if turn_dir:
     s = bpy.context.scene
-    s.cycles.samples = 48
+    s.cycles.samples = int(opts.get("samples", 48))
+    s.render.use_persistent_data = True
     s.frame_start, s.frame_end = 1, frames
     pivot.rotation_euler = (0, 0, 0)
     pivot.keyframe_insert("rotation_euler", frame=1)
