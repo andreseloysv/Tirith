@@ -501,3 +501,54 @@ def test_merge_timeout_every_time_waits_in_the_queue_not_sent_back(env, home: Pa
     row = mergeq_mod.process_next(home, load_config(home), relaunch=sender)
     assert row["result"] == "waiting" and "timed out" in row["message"] and not sender.calls
     assert [i["lane"] for i in mergeq_mod.view(home, "demo")["items"]] == ["alpha"]
+
+
+def _suite_times_out(monkeypatch: pytest.MonkeyPatch) -> list[int]:
+    calls: list[int] = []
+
+    def run_tests(*args, **kwargs):
+        calls.append(1)
+        return False, f"{mergeq_mod.review_mod.DID_NOT_FINISH} 1800 s"
+
+    monkeypatch.setattr(mergeq_mod.review_mod, "run_tests", run_tests)
+    return calls
+
+
+def test_stage_timeout_is_not_red_and_the_entry_is_queued_again_once(env, home: Path, monkeypatch) -> None:
+    repo, _ = env
+    make_lane(home, repo, "slow", {"slow.txt": "s"})
+    _suite_times_out(monkeypatch)
+    mergeq_mod.enqueue(home, "slow")
+    send = Sender()
+    row = mergeq_mod.process_next(home, load_config(home), relaunch=send)
+    assert row["result"] == "waiting" and "ran out of time" in row["message"] and "failed" not in row["message"]
+    assert not send.calls and (read_json(lane_path(home, "slow"), None).get("review") or {}).get("status") != mergeq_mod.SENT_BACK_STATUS
+    item, = mergeq_mod.view(home, "demo")["items"]
+    assert item["status"] == "queued" and not asks_mod.queue_items(home)
+
+
+def test_stage_timeout_is_not_red_twice_shows_the_manager(env, home: Path, monkeypatch) -> None:
+    repo, _ = env
+    make_lane(home, repo, "slow", {"slow.txt": "s"})
+    _suite_times_out(monkeypatch)
+    mergeq_mod.enqueue(home, "slow")
+    send = Sender()
+    for _ in range(2):
+        row = mergeq_mod.process_next(home, load_config(home), relaunch=send)
+    assert row["result"] == "waiting" and "ran out of time" in row["message"] and not send.calls
+    assert any("ran out of time" in str(i) for i in asks_mod.queue_items(home))
+    assert mergeq_mod.view(home, "demo")["items"][0]["status"] == "queued"
+
+
+def test_stage_timeout_is_not_red_run_tests_reads_the_timeouts_mechanism(env, home: Path, monkeypatch) -> None:
+    repo, _ = env
+    seen: dict = {}
+
+    def run_stage(*args, **kwargs):
+        seen.update(kwargs)
+        return 124, "timed out: x"
+
+    monkeypatch.setattr(mergeq_mod.review_mod.runstage_mod, "run_stage", run_stage)
+    monkeypatch.setattr(mergeq_mod.review_mod.timeouts_mod, "effective", lambda *a, **k: 42.0)
+    ok, output = mergeq_mod.review_mod.run_tests(home, "demo", "ci", "test", repo, "true")
+    assert not ok and output.startswith("tests did not finish in 42 s") and "timeout" not in seen
