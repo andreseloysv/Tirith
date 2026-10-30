@@ -344,6 +344,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] En el móvil, el texto bajo la captura principal de la landing no se monta sobre la imagen. (check: `node web/js/landing.test.mjs`)
 - [ ] La imagen social (social-preview-3d.png) usa el mismo modelo de torre de piedra que el logo. (check: `grep -q stone_tower site/3d/social.py`)
 - [ ] Evidencia de la torre de piedra: capturas de la landing publicada en escritorio y móvil, antes y después, en docs/evidence/logo-torre/. (check: `cd docs/evidence/logo-torre && test -f antes-escritorio.png && test -f antes-movil.png && test -f despues-escritorio.png && test -f despues-movil.png`)
+- [ ] La landing deja de mostrar render-board.png (pedido del dueño). (check: `! grep -q render-board site/index.html`)
 
 ## 15. Collector y CLI en Rust
 
