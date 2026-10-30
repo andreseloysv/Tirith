@@ -341,6 +341,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] La captura principal de la landing muestra la app actual con datos de demo limpios: sin avisos, sin reglas inactivas y sin Flow. (check: `node web/js/landing.test.mjs`)
 - [ ] Los renders 3D de la landing usan la torre de piedra nueva, tienen más contraste con el fondo y no salen cortados por los bordes. (check: `node web/js/landing.test.mjs`)
 - [ ] En el móvil, el texto bajo la captura principal de la landing no se monta sobre la imagen. (check: `node web/js/landing.test.mjs`)
+- [ ] La imagen social (social-preview-3d.png) usa el mismo modelo de torre de piedra que el logo. (check: `grep -q stone_tower site/3d/social.py`)
 
 ## 15. Collector y CLI en Rust
 
