@@ -119,5 +119,9 @@ permission question is
 `{"type":"control_request","request_id":R,"request":{"subtype":"can_use_tool","tool_name":T,"input":{...}}}`;
 the answer is
 `{"type":"control_response","response":{"subtype":"success","request_id":R,"response":{"behavior":"allow","updatedInput":{...}}}}`
-or a `behavior` of `deny` with a `message`. Sources: `docs/PLATFORMS.md`. `tools/chat_check.py`
+or a `behavior` of `deny` with a `message`. The collector answers every question by code, never the
+owner: the gates first, then the manager delegates edits (a file edit, or a Bash line that writes outside the
+Tirith home — a redirect to a file, `tee`, `sed -i`, `mv`/`cp`/`rm`, a changing `git` command — is denied with
+"start a lane" and logged as a `deny` flow), everything else is allowed. Owner-only matters go through
+`tirith wait add --why-owner ...`. Sources: `docs/PLATFORMS.md`. `tools/chat_check.py`
 exercises it by hand.

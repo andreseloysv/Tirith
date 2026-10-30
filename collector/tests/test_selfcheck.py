@@ -81,7 +81,7 @@ def test_a_quiet_home_is_green(home: Path, project: Path) -> None:
     assert state["health"]["level"] == "green"
     public = selfcheck_mod.public(state["health"])
     assert public["level"] == "green"
-    assert [c["id"] for c in public["checks"]] == ["collector", "manager", "autopilot", "disk", "reviews", "timeouts"]
+    assert [c["id"] for c in public["checks"]] == ["collector", "manager", "autopilot", "disk", "reviews", "mergeq", "timeouts"]
     assert all(c["level"] == "ok" and c["text"] for c in public["checks"])
 
 
@@ -120,8 +120,8 @@ def test_a_chat_message_nobody_works_on_restarts_the_manager_and_is_told(home: P
     fake, state = Fake(), {}
     first, second = chat(home, NOW), chat(home, at(10))
     state["manager"] = {"tries": 2, "key": "old", "at": NOW.strftime(Z), "error": "no command"}
-    check(home, state, at(100), fake)
-    assert level(state, "manager") == "ok"  # under 120 s
+    check(home, state, at(50), fake)
+    assert level(state, "manager") == "ok"  # under 60 s
     check(home, state, at(200), fake)
     assert level(state, "manager") == "healing" and state["health"]["level"] == "amber"
     assert state["manager"]["tries"] == 0 and "key" not in state["manager"] and "error" not in state["manager"]
@@ -234,11 +234,15 @@ def plan(status: str = "ready") -> list[dict]:
         {"id": "1", "status": status, "title": "One", "items": [{"text": "Do it", "done": False, "who": "agent"}]}]}}]
 
 
+def step_fp() -> str:
+    """The fingerprint of the proposal of step 1 of ``plan()`` (one proposal per step)."""
+    found, _ = autopilot_mod.candidates(plan(), [], set())
+    return autopilot_mod._step_fp(autopilot_mod.proposal_text(list(found.values()), []))
+
+
 def seen(at: datetime) -> dict:
-    """The autopilot state of an item first seen open at ``at`` (what ``autopilot.run`` records)."""
-    from tirith import roadmap as roadmap_mod
-    key = f"demo|1|{roadmap_mod.item_id('Do it')}"
-    return {"seen": {key: {"fp": autopilot_mod._fingerprint("1", "Do it"), "at": at.strftime(Z)}}}
+    """The autopilot state of a step first seen with an open item at ``at`` (what ``autopilot.run`` records)."""
+    return {"seen": {"demo|1": {"fp": step_fp(), "at": at.strftime(Z)}}}
 
 
 def test_an_open_item_nobody_reported_for_2_min_is_a_queue_item(home: Path, project: Path) -> None:
@@ -257,10 +261,8 @@ def test_an_open_item_nobody_reported_for_2_min_is_a_queue_item(home: Path, proj
 
 
 def test_an_item_with_a_proposal_is_not_a_problem(home: Path, project: Path) -> None:
-    from tirith import roadmap as roadmap_mod
-    key = f"demo|1|{roadmap_mod.item_id('Do it')}"
-    state = {"autopilot": {**seen(NOW), "proposals": {key: {"id": "in-x", "fp": autopilot_mod._fingerprint("1", "Do it"),
-                                                            "at": NOW.strftime(Z)}}}}
+    state = {"autopilot": {**seen(NOW), "proposals": {"demo|1": {"id": "in-x", "fp": step_fp(),
+                                                                 "at": NOW.strftime(Z)}}}}
     check(home, state, at(2000), Fake(), projects=plan())
     assert queue_ids(home) == [] and level(state, "autopilot") == "ok"
 
@@ -387,3 +389,30 @@ def test_dispatch_runs_it_and_the_state_has_plain_words(home: Path, project: Pat
     health = Collector(home, load_config(home)).build_state(NOW)["health"]
     assert health["level"] in ("green", "red")  # the real disk of the machine running the test decides
     assert [c["id"] for c in health["checks"]][0] == "collector" and health["checks"][0]["label"] == "Tirith itself"
+
+
+def test_a_merge_queue_nobody_runs_is_amber_with_a_queue_item(home: Path, project: Path) -> None:
+    from tirith import mergeq as mergeq_mod
+    from tirith.store import write_json_atomic
+    state: dict = {}
+    old = (NOW - timedelta(minutes=11)).strftime(Z)
+    write_json_atomic(home / mergeq_mod.FILE, {"queue": [{"lane": "u-late", "project": "demo", "at": old,
+                                                          "status": "queued", "feature": "Late"}]})
+    assert check(home, state, NOW, Fake()) is True
+    assert level(state, "mergeq") == "healing" and state["health"]["level"] == "amber"
+    assert "u-late" in state["health"]["checks"]["mergeq"]["text"]
+    assert len(queue_ids(home)) == 1
+    write_json_atomic(home / mergeq_mod.FILE, {"queue": []})
+    check(home, state, at(60), Fake())
+    assert level(state, "mergeq") == "ok"
+
+
+def test_a_spawned_stamp_without_a_runner_log_is_amber(home: Path, project: Path) -> None:
+    from tirith import mergeq as mergeq_mod
+    from tirith.store import write_json_atomic
+    state: dict = {}
+    recent = (NOW - timedelta(minutes=1)).strftime(Z)
+    write_json_atomic(home / mergeq_mod.FILE, {"spawned": (NOW - timedelta(minutes=5)).timestamp(), "queue": [
+        {"lane": "u-new", "project": "demo", "at": recent, "status": "queued", "feature": "New"}]})
+    check(home, state, NOW, Fake())
+    assert level(state, "mergeq") == "healing" and "does not exist" in state["health"]["checks"]["mergeq"]["text"]

@@ -151,12 +151,21 @@ max_parallel = 4     # kept for old configs; nothing is launched by the autopilo
   process died counts as running: the self-check runs it again) or `ready` (being merged). Whatever the item's
   note says (open, `en curso`, `en revisión`, `reabierto`, `bloqueado`, or a `desde` date that has passed) it is
   reported after a ~30 s debounce (`DEBOUNCE_S`), so a normal handoff ("lane ended -> review starting") is not.
-- A proposal is an inbox request of kind `autopilot-proposal` from `tirith` (project, step, text): the item,
-  why it is open, the plan file and step, and the linked lane, the last 3 attempts of that step with outcome,
-  review status (merged or not), claims result and the first paragraph of the report. **One per item and
-  state**: a new proposal follows only when the item's text or note changes (the old unanswered one is answered
-  `by: tirith` "No longer needed" and closed). When the item is ticked or removed an unanswered proposal is closed
-  the same way. A flow `tirith -> manager` ("Autopilot proposes <project> step <n>: …") records each.
+- A proposal is an inbox request of kind `autopilot-proposal` from `tirith` (project, step, text). **At most one
+  open per (project, step)**: it lists that step's items that need a decision, each in short form (item, why it
+  is open, the facts of its lane: status, outcome, merged or not or sent back by the merge queue, claims, the
+  first words of its report), under 800 characters in all (the plan is linked, not pasted; more than 8 items
+  end in "… and N more"). When the facts change the proposal is closed and replaced by a new one (after the
+  same ~30 s debounce); there is never a second open one for the step. A flow `tirith -> manager`
+  ("Autopilot proposes <project> step <n>: …") records each.
+- **The merge queue owns its lanes.** An item whose lane (linked in its note, or the lane of that item) is
+  waiting, running or being merged in `mergeq.json`, or under a running review, gets no proposal; an open one
+  is closed. It comes back only when the queue sends the lane back (conflict, red suite, gone): the proposal
+  then says so ("sent back by the merge queue: <reason>").
+- **Closing is quiet.** Tirith closes its own proposal (replaced, item ticked or gone, taken by the queue or an
+  agent) with `done` and a flow `tirith -> manager` ("Autopilot closed its proposal on …: <why>"); it never
+  posts an answer or any line in the chat. The first pass after an upgrade collapses the old per-item
+  proposals into one per step the same way (the newest stays until its replacement is due).
 - **The manager decides** like for an owner message: launch (with a written brief and the plan link), combine with
   a lane, wait (say why), or drop (a `plan-edit` through Tirith; `tirith plan done` when the work is on main). It
   answers on the proposal with one short line ("Autopilot: step 9 item … -> started lane X") and closes it; the
@@ -174,8 +183,8 @@ max_parallel = 4     # kept for old configs; nothing is launched by the autopilo
   text) becomes a Run action; a URL becomes the item's `link` with the option `Done`; otherwise the options
   are `Done` / `Not now`. When the item is ticked (or removed) the owner item is
   closed (`done_at`).
-- State is in `<home>/dispatch.json` under `autopilot` (`on`, `owner_items`, `proposals`: item key -> request id and
-  fingerprint, `seen`: when an item was first seen unattended).
+- State is in `<home>/dispatch.json` under `autopilot` (`on`, `owner_items`, `proposals`: `project|step` -> request id and
+  fingerprint of its text, `seen`: when an item was first seen unattended).
 
 `state.autopilot`:
 
