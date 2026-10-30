@@ -169,6 +169,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Las etapas que bloquean merges ya no compilan ni prueban el port a Rust parado. (check: `! grep -qE 'tirith-core|tirith-cli|--workspace' tirith.toml`) (en revisión)
 - [ ] Llevar a main el trabajo de lane/u-keepalive (un lane no termina mientras su etapa de tests corre): hoy marcado hecho con ec74885, que es un commit del plan, y main no tiene el test. (check: `git ls-tree -r main --name-only | grep -q test_keepalive`)
 - [ ] Commit lane/manager-permission-questions-nev, merge main, retest, tirith merge request (owner said not to commit)
+- [ ] El control de escrituras Bash del manager deja leer con git (branch --list, worktree list, stash list, tag -l) y escribir briefs en /tmp, y bloquea git -c x=y commit, merge y push. (check: `cd collector && uv run -q pytest -q tests/test_msession.py -k manager_bash_reads_and_git_options`)
 - [x] Un lane no termina mientras su etapa de tests sigue corriendo: Tirith espera el resultado y se lo pasa al agente. (check: `cd collector && uv run -q pytest -q tests -k keepalive`) (hecho: ec74885)
 
 ## 8. Más visibilidad por agente
