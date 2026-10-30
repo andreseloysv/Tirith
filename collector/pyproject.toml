@@ -15,7 +15,11 @@ dependencies = []
 tirith = "tirith.cli:main"
 
 [dependency-groups]
-dev = ["pytest>=8", "jsonschema>=4.20"]
+dev = [
+    "pytest>=8",
+    "jsonschema>=4.20",
+    "pytest-xdist>=3.8.0",
+]
 
 [tool.setuptools]
 py-modules = ["tirith_guard"]
@@ -27,3 +31,7 @@ package = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+# `slow` marks the tests that cost more than ~10 s even alone (300-lane collector warm-ups, cycle budgets).
+# They stay in the default run: with `-n auto --maxprocesses 8` the whole suite is under the 240 s target.
+# Skip them for a quick local pass: `pytest -m "not slow"`.
+markers = ["slow: costs more than ~10 s even alone; included in the default run"]

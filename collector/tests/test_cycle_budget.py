@@ -62,6 +62,7 @@ def busy_home(home: Path, tmp_path: Path) -> Path:
     return home
 
 
+@pytest.mark.slow
 def test_a_cycle_on_a_busy_home_stays_within_the_budget(busy_home: Path) -> None:
     collector = Collector(busy_home, client=None)
     collector.cycle()  # cold: every log parsed once
@@ -75,6 +76,7 @@ def test_a_cycle_on_a_busy_home_stays_within_the_budget(busy_home: Path) -> None
     assert max(spent) < BUDGET_S, f"cycles took {spent}"
 
 
+@pytest.mark.slow
 def test_a_warm_cycle_runs_no_git_for_lanes_it_already_read(busy_home: Path, monkeypatch) -> None:
     monkeypatch.setattr(activity_mod, "FILES_TTL_S", 3600)
     collector = Collector(busy_home, client=None)
@@ -94,12 +96,14 @@ def test_a_warm_cycle_runs_no_git_for_lanes_it_already_read(busy_home: Path, mon
     assert [c for c in calls if "worktree" in c or "merge-base" in c] == []
 
 
+@pytest.mark.slow
 def test_the_log_caches_hold_every_lane(busy_home: Path) -> None:
     from tirith import livesteps, logview
     Collector(busy_home, client=None).cycle()
     assert len(logview._cache) >= LANES and len(livesteps._cache) >= LANES
 
 
+@pytest.mark.slow
 def test_the_collector_logs_a_phase_timing_line_every_period(busy_home: Path, monkeypatch, capsys) -> None:
     monkeypatch.setattr(collector_mod, "TIMING_EVERY", 3)
     collector = Collector(busy_home, client=None)
