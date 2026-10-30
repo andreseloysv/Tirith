@@ -298,3 +298,76 @@ def test_every_existing_gate_id_is_still_present_and_active(env, home: Path, tmp
     for rule, (tool, data) in cases.items():
         rules = {v.rule for v in gates.check_call(config, tool, data, folder, "demo", home)}
         assert rule in rules, rule
+
+
+def _move_main_during_suite(monkeypatch: pytest.MonkeyPatch, repo: Path, files: dict[str, str], times: int = 99) -> None:
+    real, left = mergeq_mod.review_mod.run_tests, [times]
+
+    def run_tests(*args, **kwargs):
+        result = real(*args, **kwargs)
+        if left[0] > 0:
+            left[0] -= 1
+            for name, text in files.items():
+                (repo / name).write_text(text, encoding="utf-8")
+            git(repo, "add", ".")
+            git(repo, "commit", "-q", "-m", "main moved")
+        return result
+
+    monkeypatch.setattr(mergeq_mod.review_mod, "run_tests", run_tests)
+
+
+def test_plan_only_move_is_merged_without_a_second_suite_run(env, home: Path, monkeypatch) -> None:
+    repo, origin = env
+    make_lane(home, repo, "alpha", {"feature.txt": "a\n"})
+    mergeq_mod.enqueue(home, "alpha")
+    calls = []
+    real = mergeq_mod.review_mod.run_tests
+    monkeypatch.setattr(mergeq_mod.review_mod, "run_tests", lambda *a, **k: calls.append(1) or real(*a, **k))
+    _move_main_during_suite(monkeypatch, repo, {"docs/TODO.md": PLAN + "- [ ] New item.\n"}, times=1)
+    tested_tree = {}
+    real_try = mergeq_mod._with_plan_moves
+
+    def spy(repo_, tmp, base, head, tested, *rest):
+        tested_tree["tested"] = tested
+        return real_try(repo_, tmp, base, head, tested, *rest)
+
+    monkeypatch.setattr(mergeq_mod, "_with_plan_moves", spy)
+    row = mergeq_mod.process_next(home, load_config(home), relaunch=Sender())
+    assert row["result"] == "merged" and len(calls) == 2  # one suite run: build and test
+    assert "New item" in (repo / "docs" / "TODO.md").read_text() and (repo / "feature.txt").exists()
+    assert git(repo, "rev-parse", "HEAD") == row["commit"] == git(origin, "rev-parse", "HEAD")
+    changed = git(repo, "diff", "--name-only", tested_tree["tested"], row["commit"]).splitlines()
+    assert changed == ["docs/TODO.md"]
+
+
+def test_code_move_is_retried_and_the_next_entry_still_runs(env, home: Path, monkeypatch) -> None:
+    repo, _ = env
+    make_lane(home, repo, "one", {"one.txt": "1"})
+    make_lane(home, repo, "two", {"two.txt": "2"})
+    mergeq_mod.enqueue(home, "one")
+    mergeq_mod.enqueue(home, "two")
+    real, state = mergeq_mod._try, {"n": 0}
+
+    def flaky(home_, repo_, lane, entry):
+        if lane["id"] == "one":
+            state["n"] += 1
+            (repo / f"code{state['n']}.txt").write_text("x")
+            git(repo, "add", ".")
+            git(repo, "commit", "-q", "-m", "code moved")
+            return "retry", "main moved while the suite ran", {}
+        return real(home_, repo_, lane, entry)
+
+    monkeypatch.setattr(mergeq_mod, "_try", flaky)
+    rows = mergeq_mod.drain(home, load_config(home), relaunch=Sender())
+    assert [(r["lane"], r["result"]) for r in rows] == [("one", "waiting"), ("two", "merged")]
+    assert rows[0]["message"] == "main moved while the suite ran"
+    assert [i["lane"] for i in mergeq_mod.view(home, "demo")["items"]] == ["one"]
+
+
+def test_code_and_plan_move_together_is_still_retried(env, home: Path, monkeypatch) -> None:
+    repo, _ = env
+    make_lane(home, repo, "alpha", {"feature.txt": "a\n"})
+    mergeq_mod.enqueue(home, "alpha")
+    _move_main_during_suite(monkeypatch, repo, {"docs/TODO.md": PLAN + "- [ ] X.\n", "other.txt": "o"}, times=1)
+    row = mergeq_mod.process_next(home, load_config(home), relaunch=Sender())
+    assert row["result"] == "merged" and (repo / "other.txt").exists()
