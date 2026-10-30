@@ -69,3 +69,31 @@ def test_run_stops_between_cycles_when_reload_requested(tmp_path, monkeypatch):
     with pytest.raises(ReloadRequested):
         collector.run(interval=0.2, reload_check=lambda: next(answers))
     assert len(cycles) == 2  # first run, then one more before the reload
+
+
+def test_reload_with_busy_background_pool_does_not_hang(tmp_path, monkeypatch):
+    import threading
+    import time
+
+    from tirith.activity import ActivityTracker
+
+    collector = Collector(tmp_path)
+    release = threading.Event()
+    monkeypatch.setattr("tirith.activity.git_files", lambda ws, start: release.wait(10) and ([], (0, 0, 0)))
+    lane = {"id": "l1", "workspace": str(tmp_path), "start_commit": None}
+    collector.activity._live_files["l1"] = (time.monotonic() - 3600, ([], (0, 0, 0)))
+    collector.activity.files(lane, ended=False)  # starts the busy background refresh
+    collector.worker.start()
+    collector.rooms.poller.start()
+    calls = []
+    started = time.monotonic()
+    selfreload.reexec(lambda path, argv: calls.append(argv), quiesce=lambda: collector.quiesce(0.5))
+    release.set()
+    assert calls and time.monotonic() - started < 3  # exec reached although the pool was busy
+    assert collector.worker._thread is not None and not collector.worker._thread.is_alive()
+    assert not collector.rooms.poller._thread.is_alive()
+
+
+def test_quiesce_reports_clean_when_idle(tmp_path):
+    collector = Collector(tmp_path)
+    assert collector.quiesce(0.5)
