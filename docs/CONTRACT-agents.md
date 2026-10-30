@@ -121,3 +121,22 @@ the answer is
 `{"type":"control_response","response":{"subtype":"success","request_id":R,"response":{"behavior":"allow","updatedInput":{...}}}}`
 or a `behavior` of `deny` with a `message`. Sources: `docs/PLATFORMS.md`. `tools/chat_check.py`
 exercises it by hand.
+
+
+## The owner's environment
+
+The desktop app starts from Finder, so the collector (and every lane it starts) has launchd's bare environment:
+keys the owner exports in their shell (`GITHUB_TOKEN`, `META_SI_API_KEY`, `GEMINI_API_KEY`, ...) would be missing,
+and the Meta brain would stay off. Code: `collector/tirith/ownerenv.py`, called first thing by `tirith collect`
+(however it was started: app, terminal, watchdog restart or self-reload re-exec).
+
+- It runs `$SHELL` (fallback `/bin/zsh`) as `-l -i -c 'printf <marker>; exec env -0'` through `timeouts.run`
+  (class `generic`, 10 s limit), reads the `env -0` dump after the marker (rc-file noise before it is ignored),
+  and adds every variable that is **missing** from `os.environ`. A variable already set is never replaced;
+  `_`, `PWD`, `OLDPWD`, `SHLVL` are skipped. Everything the collector starts afterwards inherits them.
+- Nothing is written: not to logs, state, flows or files, and the outcome kept in memory has no names or values.
+- It is read once per collector start, so a code reload (re-exec) or restart refreshes it; there is no polling.
+- A shell that fails, prints nothing usable or takes more than 10 s is skipped; the collector goes on and the
+  `ownerenv` health check (`CONTRACT-selfcheck.md`) turns red with the reason in plain words, no values.
+- The per-agent `unset_env` rule above (`GITHUB_TOKEN`, `GH_TOKEN` for `copilot`) still applies to the child.
+- Project variables (`CONTRACT-projenv.md`) still win over inherited ones.
