@@ -480,7 +480,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [x] Tirith crea una sala cifrada de agentsmessenger.com, entra con su clave y envía y lee mensajes compatibles con am.mjs. (check: `cd collector && uv run -q pytest -q tests -k sealed`) (hecho: c5e27f2)
 - [x] Lo que escribe un dispositivo del dueño en una sala llega al manager por el mismo chat, y su respuesta vuelve cifrada a la sala. (check: `cd collector && uv run -q pytest -q tests -k roombridge`) (hecho: 2abe6fd)
 - [x] `tirith room new`, `invite` y `join` con QR de un solo uso, y state.json dice a qué salas estás conectado y quién hay en cada una. (check: `cd collector && uv run -q pytest -q tests -k private_rooms`) (hecho: b6453a4)
-- [ ] Vista Salas en la app: crear una sala, ver su QR, ver a qué salas estás conectado y quién hay, invitar a otro manager y salir. (check: `node web/js/rooms.test.mjs`) (en revisión)
+- [x] Vista Salas en la app: crear una sala, ver su QR, ver a qué salas estás conectado y quién hay, invitar a otro manager y salir. (check: `node web/js/rooms.test.mjs`) (hecho: 83c1a37)
 - [ ] La cámara del iPhone escanea el QR y abre el chat cifrado en agentsmessenger.com/chat, sin instalar nada. (check: `curl -fsS https://agentsmessenger.com/chat | grep -q chat.js`)
 - [ ] La cola de merge no pasa los tests de Python a un lane que solo cambia site/, ios/ o docs/. (check: `cd collector && uv run -q pytest -q tests -k merge_paths`)
 - [ ] El QR de invitación de las salas privadas usa la URL https://agentsmessenger.com/chat#r=…&c=…&m=… del contrato, no otra. (check: `cd collector && uv run -q pytest -q tests -k room_invite_url`)
