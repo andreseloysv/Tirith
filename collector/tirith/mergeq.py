@@ -310,7 +310,9 @@ def _push(repo: Path, branch: str) -> str | None:
     """Push main when the repo has an ``origin``; the failure text, else None."""
     if _git(repo, "remote", "get-url", "origin").returncode != 0:
         return None
-    done = _git(repo, "push", "-q", "origin", branch)
+    # a push writes to the origin and may run hooks: it takes the commit's limit, not the read-only `git` one (30 s
+    # is too short for a loaded machine, and a timed-out push read as push-failed)
+    done = timeouts_mod.run(["git", "-C", str(repo), "push", "-q", "origin", branch], "git-commit", text=True)
     return None if done.returncode == 0 else _tail(done.stderr or done.stdout)
 
 
