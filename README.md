@@ -128,7 +128,11 @@ local files and Tauri IPC.
 
 ## Try it
 
-Easiest, no agents needed:
+On a Mac, download the app from the [latest release](https://github.com/andreseloysv/Tirith/releases/latest) and open it. It carries the
+collector and the page. If [uv](https://docs.astral.sh/uv/) is missing it says so and offers an **Install uv** button (the official
+installer, in a visible Terminal). Then click **Add a project**, or look at the labelled demo data first.
+
+From source, no agents needed:
 
 ```bash
 git clone https://github.com/andreseloysv/Tirith && cd Tirith
@@ -143,7 +147,8 @@ With your own agents:
 
 Requirements: [uv](https://docs.astral.sh/uv/) and a browser. Set `META_SI_API_KEY` to switch the Muse Spark
 brain on. The desktop app is built from `app/` (`npm run tauri dev`, see [`app/README.md`](app/README.md)); the
-notarized macOS build comes from `scripts/notarize-macos.sh`.
+notarized macOS build comes from `scripts/notarize-macos.sh`; `bash scripts/check-standalone-app.sh` proves the
+built app works without this repository.
 
 Tests: `cd collector && uv run pytest -q` (900+ test functions in `collector/tests/`).
 Inside a project that has a `tirith.toml`, tests run as `tirith run --project tirith --stage test`.

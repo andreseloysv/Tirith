@@ -2,6 +2,7 @@
 (function () {
   var T = window.T, esc = T.esc, ui = T.ui;
   ui.planOpen = ui.planOpen || {};
+  ui.pwho = ui.pwho || {};         /* step key -> true while its agents popover is open */
   ui.launching = ui.launching || {};   /* "project|step" -> ms of the click, until the agent shows up */
   ui.launchHint = ui.launchHint || null;
   ui.inboxAsk = ui.inboxAsk || {};     /* "project|step" -> true while its question box is open */
@@ -339,7 +340,11 @@
     if (st === 'blocked') return '<span class="pstate blocked" title="' + esc(by) + '">Blocked' + (by ? ': ' + esc(by) : '') + '</span>';
     return '<span class="pstate reopened" title="' + esc(by) + '">Reopened' + (by ? ': ' + esc(by) : '') + '</span>';
   }
-  function itemRow(i, c, pend, quiet) {
+  function itemAva(i, state) {
+    var a = i.done ? null : itemAgent(i, state);
+    return a ? '<button class="pia" data-act="goagent" data-key="' + esc(a.id) + '" title="' + esc(a.name) + ' is working on this">' + T.avatar(a, 16) + '</button>' : '';
+  }
+  function itemRow(i, c, pend, quiet, state) {
     var key = c.pid + '|' + c.plan + '|' + c.sid, e = same(ui.pedit, c) && ui.pedit.text === i.text ? ui.pedit : null, p = null, txt = i.done ? i.text : i.text.replace(NOTE, ''), h, extra;
     if (e) return editInput(c, e, key);
     pend.forEach(function (r) { if (r.kind !== 'add' && r.text === i.text) p = r; });
@@ -347,7 +352,7 @@
     extra = p ? '<span class="pwhen saving">' + (p.err ? 'Not saved' : 'Saving…') + '</span>' :
       i.who === 'owner' && i.owner_item && quiet ? '<button class="pitbtn" data-act="goowner" data-key="' + esc(i.owner_item) + '" title="Open what Tirith needs from you">Open</button>' :
       i.who === 'date' && i.until && quiet ? '<span class="pwhen">from ' + esc(shortDate(i.until)) + '</span>' : '';
-    h = '<li class="' + (p ? 'psav' + (p.kind === 'delete' ? ' gone' : '') : '') + (i.done ? ' ok' : '') + '"><span class="pi">' + (i.done ? OK : OPEN) + '</span><span class="pit">' + rich(quiet && i.who === 'date' ? dateless(txt) : txt) + '</span>' + stateChip(i) + extra;
+    h = '<li class="' + (p ? 'psav' + (p.kind === 'delete' ? ' gone' : '') : '') + (i.done ? ' ok' : '') + '"><span class="pi">' + (i.done ? OK : OPEN) + '</span><span class="pit">' + rich(quiet && i.who === 'date' ? dateless(txt) : txt) + '</span>' + itemAva(i, state) + stateChip(i) + extra;
     if (!i.done && !p && c.edit) h += '<span class="pedtools">' + tool('pe-edit', '', PEN, 'Edit', c, i.text) + tool('pe-del', 'del', TRASH, 'Delete', c, i.text) + '</span>';
     if (same(ui.pdel, c) && ui.pdel.text === i.text) {
       h += '<span class="pdelpop" role="alertdialog" aria-label="Delete this item from the plan?"><span>Delete this item from the plan?</span>' +
@@ -371,11 +376,11 @@
   function openItems(s, c, state) {
     var l = s.items.filter(function (i) { return !i.done && i.who !== 'out'; }), pend = c.edit ? pending(c, s, state) : [];
     if (!l.length && !(same(ui.pedit, c) && ui.pedit.text === null) && !pend.length) return '';
-    return '<ul class="pitems pquiet">' + l.map(function (i) { return itemRow(i, c, pend, true); }).join('') + (c.edit ? itemTail(c, pend) : '') + '</ul>';
+    return '<ul class="pitems pquiet">' + l.map(function (i) { return itemRow(i, c, pend, true, state); }).join('') + (c.edit ? itemTail(c, pend) : '') + '</ul>';
   }
   function allItems(s, c, state) {
     var pend = c.edit ? pending(c, s, state) : [];
-    return '<ul class="pitems">' + (s.items.length ? s.items.map(function (i) { return itemRow(i, c, pend, false); }).join('') : '<li class="none">No items yet</li>') +
+    return '<ul class="pitems">' + (s.items.length ? s.items.map(function (i) { return itemRow(i, c, pend, false, state); }).join('') : '<li class="none">No items yet</li>') +
       (c.edit ? itemTail(c, pend) : '') + '</ul>';
   }
   /* The ONE current state of an unfinished step, or ''. */
@@ -437,20 +442,42 @@
     return done + (open ? '<div class="phistbody">' + past + body + '</div>' : '');
   }
 
+  /* The agents on a step: up to 3 stacked avatars, a "+N" chip and ONE "N working" control that opens
+     a popover with each agent (name, item, elapsed) and its own Stop. */
+  var WHO_MAX = 3;
+  function whoBlock(s, state, key) {
+    var ags = (s.agents || []).map(function (id) { return T.agentById(state, id); }).filter(Boolean), open = !!ui.pwho[key], n = ags.length, h;
+    if (!n) return '';
+    h = '<span class="pavas">' + ags.slice(0, WHO_MAX).map(function (a) {
+      return '<button class="pava" data-act="goagent" data-key="' + esc(a.id) + '" title="' + esc(a.name + ' \u00b7 ' + (a.feature || '')) + '">' + T.avatar(a, 22) + '</button>';
+    }).join('') + (n > WHO_MAX ? '<span class="pmore" title="' + (n - WHO_MAX) + ' more agents">+' + (n - WHO_MAX) + '</span>' : '') + '</span>' +
+      '<button class="pwho' + (open ? ' on' : '') + '" data-act="pwho" data-key="' + esc(key) + '" aria-expanded="' + open + '" title="Who is working on this step">' + n + ' working</button>';
+    if (open) {
+      h += '<div class="pwhopop" role="dialog" aria-label="Agents on this step">' + ags.map(function (a) {
+        return '<div class="pwrow"><button class="iag" data-act="goagent" data-key="' + esc(a.id) + '" title="Open this agent">' + T.avatar(a, 20) + '<b>' + esc(a.name) + '</b></button>' +
+          '<span class="pwitem">' + (a.item ? plain(a.item) : '<span class="mut">' + plain(a.feature || 'starting') + '</span>') + '</span>' +
+          '<span class="mut pwtime">' + esc(T.dur(a.elapsed_s != null ? a.elapsed_s : T.elapsed(a.started_at))) + '</span>' + (T.stopBtn ? T.stopBtn(a, 'row') : '') + '</div>';
+      }).join('') + '</div>';
+    }
+    return h;
+  }
+  /* the avatar of the agent whose linked item (or "in progress" note) is this one */
+  function itemAgent(i, state) {
+    var l = (state && state.agents) || [], t = String(i.text || '').replace(NOTE, '').trim();
+    return l.filter(function (a) { return a.status === 'working' && (a.id === i.detail && i.state === 'progress' || (a.item && String(a.item).trim() === t)); })[0];
+  }
+
   function step(s, p, state, ro) {
     var key = (ro ? ro + '|' : '') + p.id + '|' + s.id, open = !!ui.planOpen[key], live = s.agents && s.agents.length, fin = s.status === 'done';
-    var ava = fin ? '' : (s.agents || []).map(function (id) {
-      var a = T.agentById(state, id); if (!a) return '';
-      return '<button class="pava" data-act="goagent" data-key="' + esc(id) + '" title="' + esc(a.name + ' · ' + (a.feature || '')) + '">' + T.avatar(a, 22) + '</button>' + (T.stopBtn ? T.stopBtn(a, 'ava') : '');
-    }).join('');
+    var ava = fin ? '' : whoBlock(s, state, key);
     var reqs = ro ? [] : reqsFor(state, p.id, s.id), c = { pid: p.id, plan: (plansOf(p)[0] || {}).id || '', sid: s.id, edit: !ro && !fin };
-    var h = '<li class="pstep ' + esc(s.status) + (open ? ' open' : '') + '"><div class="prow">' +
+    var h = '<li class="pstep ' + esc(s.status) + (open ? ' open' : '') + '"><div class="prow' + (ava ? ' pmany' : '') + '">' +
       '<button class="ptog" data-act="plan" data-key="' + esc(key) + '" aria-expanded="' + open + '">' +
       '<span class="pico' + (live ? ' pulse' : '') + '">' + (IC[s.status] || IC.todo) + '</span>' +
       '<span class="ptit"><span class="pn">' + esc(s.id) + '.</span> ' + plain(s.title) + '</span>' +
       (fin ? '' : s.total ? bar(s.done, s.total, 'pbar') : '<span class="pbar"></span>') +
       (s.total ? '<span class="pcnt">' + s.done + '/' + s.total + '</span>' : '<span class="pcnt">–</span>') +
-      '</button><span class="pavas">' + ava + '</span>' + (c.edit ? '<span class="pedtools pstit">' + tool('pe-add', '', PLUS, 'Add item', c) + '</span>' : '') + (ro || fin ? '' : inboxBtns(key)) + '</div>';
+      '</button>' + ava + (c.edit ? '<span class="pedtools pstit">' + tool('pe-add', '', PLUS, 'Add item', c) + '</span>' : '') + (ro || fin ? '' : inboxBtns(key)) + '</div>';
     if (!ro) {
       h += inboxBelow(s, p, state, key, reqs);
       if (!fin) h += (open ? '' : openItems(s, c, state)) + stateLine(s, p, state) + needsLines(s, p, state, reqs);
@@ -679,6 +706,7 @@
     if (pact === 'pnew') { ui.planForm[pk] = !ui.planForm[pk]; ui.planFormErr[pk] = null; T.render(); if (ui.planForm[pk]) focusForm(pk); return; }
     if (pact === 'pncancel') { ui.planForm[pk] = false; ui.planFormErr[pk] = null; T.render(); return; }
     if (pact === 'pnsend') { submitPlan(pk); return; }
+    if (pact === 'pwho') { ui.pwho[pk] = !ui.pwho[pk]; T.render(); return; }
     if (pact === 'pview') { ui.planView[pk] = pb.getAttribute('data-plan'); T.render(); return; }
     if (pact === 'pdonetog') { ui.planDoneOpen[pk] = !ui.planDoneOpen[pk]; T.render(); return; }
     var b = e.target.closest('[data-act="plan"]'); if (!b) return;

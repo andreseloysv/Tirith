@@ -1,6 +1,7 @@
 /* Run with: node web/js/chatdrop.test.mjs  (needs playwright-core and the msedge channel; no servers).
-   An image dropped on the chat, or pasted into the composer, becomes a thumbnail in the composer strip;
-   a non-image file does not. */
+   An image dropped on the chat, or pasted into the composer, becomes a thumbnail in the composer strip; any other
+   file becomes a chip with its name. A file dropped outside the chat does not open in the window. A long option
+   button wraps its whole text instead of clipping it. */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -18,7 +19,10 @@ const holder = { window: {} };
 vm.runInNewContext(fs.readFileSync(path.join(here, '..', '..', 'fixtures', 'state.demo.js'), 'utf8'), holder);
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tirith-chatdrop-'));
 const file = path.join(dir, 'state.js');
-fs.writeFileSync(file, 'window.TIRITH_STATE = ' + JSON.stringify(Object.assign({}, holder.window.TIRITH_STATE, { generated_at: new Date().toISOString() })) + ';');
+const LONG = "I'll allow git for agents in the Tirith config, then relaunch the lane and land it on main myself afterwards";
+const wait = { id: 'w-long', project: holder.window.TIRITH_STATE.projects[0].id, kind: 'decision', text: 'How do you want to land it?', since: new Date().toISOString(),
+  options: [{ label: LONG, value: 'allow' }, { label: "I'll merge it myself", value: 'merge' }, { label: 'Leave it for now', value: 'leave' }] };
+fs.writeFileSync(file, 'window.TIRITH_STATE = ' + JSON.stringify(Object.assign({}, holder.window.TIRITH_STATE, { generated_at: new Date().toISOString(), waiting_on_you: [wait], answered_waits: [] })) + ';');
 
 const fake = 'window.__TAURI__ = { core: { invoke: () => Promise.resolve(null) } };';
 /* a 1x1 png */
@@ -48,15 +52,35 @@ try {
   await page.goto(page_url + '#state=' + pathToFileURL(file).href);
   await page.locator('textarea[data-act="mc-text"]').first().waitFor({ timeout: 3000 });
 
+  const btn = page.locator('[data-wait="w-long"] [data-act="nopt"]').first();
+  assert.equal(await btn.textContent(), LONG);
+  const box = await btn.evaluate(b => ({ h: b.clientHeight, sh: b.scrollHeight, w: b.scrollWidth, cw: b.clientWidth, line: parseFloat(getComputedStyle(b).lineHeight) }));
+  assert.ok(box.h > 2 * box.line, 'the long option takes several lines: ' + JSON.stringify(box));
+  assert.ok(box.sh <= box.h && box.w <= box.cw, 'nothing of it is clipped: ' + JSON.stringify(box));
+  const short = await page.locator('[data-wait="w-long"] [data-act="nopt"]').nth(1).evaluate(b => b.getBoundingClientRect().height);
+  assert.equal(Math.round(short), 28, 'a short option keeps its height');
+  ok('a long option button wraps its whole text');
+
+  const outside = await page.evaluate(() => {
+    const dt = new DataTransfer(); dt.items.add(new File(['x'], 'x.txt', { type: 'text/plain' }));
+    const ev = new DragEvent('dragover', { dataTransfer: dt, bubbles: true, cancelable: true });
+    document.body.dispatchEvent(ev);
+    return ev.defaultPrevented;
+  });
+  assert.equal(outside, true, 'a file dragged outside the chat cannot open in the window');
+  ok('a file dropped outside the chat does not replace the page');
+
   await fire(page, 'drop', '.mchat', 'txt');
-  await page.waitForTimeout(300);
-  assert.equal(await page.locator('.mc-strip img').count(), 0, 'a text file adds nothing');
-  ok('a dropped non-image file adds no thumbnail');
+  await page.locator('.mc-strip .mc-file').first().waitFor({ timeout: 3000 });
+  assert.equal(await page.locator('.mc-strip img').count(), 0, 'a text file is no thumbnail');
+  assert.equal((await page.locator('.mc-strip .mc-fname').textContent()), 'notes.txt');
+  ok('a dropped non-image file becomes a chip with its name');
 
   await fire(page, 'drop', '.mchat', 'png');
   await page.locator('.mc-strip img').first().waitFor({ timeout: 3000 });
   assert.equal(await page.locator('.mc-strip img').count(), 1);
   ok('a dropped image adds a thumbnail');
+
 
   await fire(page, 'paste', 'textarea[data-act="mc-text"]', 'png');
   await page.waitForFunction(() => document.querySelectorAll('.mc-strip img').length === 2, null, { timeout: 3000 });

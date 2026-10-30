@@ -24,6 +24,7 @@
       "icons/icon.ico"
     ],
     "publisher": "Tirith",
+    "resources": ["resources/collector", "resources/web"],
     "category": "DeveloperTool",
     "shortDescription": "Tirith desktop app",
     "longDescription": "Tirith shows the state of your projects and agents in a native window.",
