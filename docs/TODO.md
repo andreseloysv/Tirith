@@ -344,4 +344,5 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [ ] `tirith do "<objetivo>"` convierte un objetivo grande en elementos pequeños del plan, cada uno con su comprobación, y los lanza. (check: `cd collector && uv run -q pytest -q tests -k tirith_do`)
 - [ ] El planificador no lanza a la vez dos lanes que tocan los mismos archivos. (check: `cd collector && uv run -q pytest -q tests -k conflicts`)
 - [ ] La cola de merge prueba varios lanes juntos en una sola pasada de tests y separa al culpable si falla. (check: `cd collector && uv run -q pytest -q tests -k mergetrain`)
+- [ ] Cada elemento terminado muestra su evidencia en la app: salida de tests y capturas si cambia la interfaz. (check: `cd collector && uv run -q pytest -q tests -k evidence`)
 
