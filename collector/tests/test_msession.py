@@ -149,7 +149,7 @@ def test_interrupt_ends_the_turn_and_the_message_is_not_offered_again(rig: Rig) 
     assert rig.session().alive
 
 
-def test_permissions_allowed_denied_by_code_or_left_to_the_owner(rig: Rig) -> None:
+def test_permissions_are_decided_by_code_and_never_reach_the_owner(rig: Rig) -> None:
     rig.chat('PERM:Bash:{"command": "tirith inbox list"}')
     rig.until(lambda: any(r.get("permission") for r in rig.fake_log()))
     assert [r["permission"] for r in rig.fake_log() if "permission" in r] == ["allow"]
@@ -157,25 +157,11 @@ def test_permissions_allowed_denied_by_code_or_left_to_the_owner(rig: Rig) -> No
     rig.chat('PERM:Edit:{"file_path": "/etc/hosts", "old_string": "a", "new_string": "b"}')
     rig.until(lambda: len([r for r in rig.fake_log() if "permission" in r]) == 2)
     assert [r["permission"] for r in rig.fake_log() if "permission" in r][-1] == "deny"  # never edits files itself
-    assert not read_jsonl(rig.home / "waits.jsonl")  # neither reached the owner
     rig.until(lambda: len(rig.book()["done_turns"]) == 2)
     rig.chat('PERM:Bash:{"command": "curl https://example.com"}')
-    waits = rig.until(lambda: read_jsonl(rig.home / "waits.jsonl"))
-    wait = waits[0]
-    assert wait["id"].startswith("perm-") and [o["value"] for o in wait["options"]] == ["allow", "deny"]
-    assert "curl https://example.com" in wait["text"]
-    inbox_mod.add_reply(rig.home, wait["id"], value="allow")
     rig.until(lambda: len([r for r in rig.fake_log() if "permission" in r]) == 3)
-    assert [r["permission"] for r in rig.fake_log() if "permission" in r][-1] == "allow"
-    rig.until(lambda: read_jsonl(rig.home / "waits.jsonl")[-1].get("done_at"))  # the item closes
-
-
-def test_denied_by_the_owner_is_written_back_as_deny(rig: Rig) -> None:
-    rig.chat('PERM:Bash:{"command": "rm -rf build"}')
-    wait = rig.until(lambda: read_jsonl(rig.home / "waits.jsonl"))[0]
-    inbox_mod.add_reply(rig.home, wait["id"], value="deny")
-    rig.until(lambda: any(r.get("permission") for r in rig.fake_log()))
-    assert [r["permission"] for r in rig.fake_log() if "permission" in r] == ["deny"]
+    assert [r["permission"] for r in rig.fake_log() if "permission" in r][-1] == "allow"  # no gate stops it
+    assert not read_jsonl(rig.home / "waits.jsonl")  # none of them reached the owner
 
 
 def test_a_dead_session_is_restarted_with_resume_and_a_fast_resume_failure_starts_fresh(rig: Rig) -> None:
@@ -288,11 +274,32 @@ def test_rules_decide_by_code(home: Path, rig: Rig) -> None:
 
     assert verdict("Read", {"file_path": "x"}) == "allow"
     assert verdict("Bash", {"command": "tirith inbox answer a b && ls -la"}) == "allow"
-    assert verdict("Bash", {"command": "tirith inbox list; rm -rf x"}) == "ask"
-    assert verdict("Bash", {"command": "ls $(whoami)"}) == "ask"
+    wrapped = ("t(){ printf '%s: ' \"$2\"; tirith plan done --project tirith --step 14 --item \"$1\" "
+               "--commit \"$2\" 2>&1 | tail -1; }; t a b")
+    assert verdict("Bash", {"command": wrapped}) == "allow"
+    assert verdict("Bash", {"command": "tirith inbox list >/dev/null 2>/dev/null; ls $(whoami)"}) == "allow"
+    assert verdict("Bash", {"command": f"echo x > {home}/note.md"}) == "allow"
+    for line in ("echo x > a.py", "tee a.py", "sed -i s/a/b/ a.py", f"rm {rig.repo}/a.py",
+                 "git commit -m x", "git merge lane/x", "tirith inbox list; rm -rf x"):
+        assert msession_mod.decide(config, home, "anthropic", "Bash", {"command": line}, rig.repo, "demo") == (
+            "deny", msession_mod.LANE_MESSAGE), line
     assert verdict("Bash", {"command": "git commit --no-verify -m x"}) == "deny"  # a gate
     assert verdict("Write", {"file_path": str(rig.repo / "a.py"), "content": "x"}) == "deny"
     assert verdict("Write", {"file_path": str(home / "note.md"), "content": "x"}) == "allow"
+    assert any(f["kind"] == "deny" for f in read_jsonl(home / "flows.jsonl"))  # a deny is visible
+
+
+def test_no_permission_question_reaches_the_owner(home: Path, rig: Rig) -> None:
+    from tirith.store import append_jsonl
+    append_jsonl(home / "waits.jsonl", {"id": "perm-old", "at": "2026-10-30T07:35:00Z", "project": "demo",
+                                         "text": "The manager asks to run **ls**. Allow it?", "done_at": None,
+                                         "options": [{"label": "Allow", "value": "allow"}]})
+    rig.chat("hello")
+    rig.until(lambda: rig.book().get("done_turns"))
+    managerd_mod._settle_asks(home, {"asks": {"x": "perm-old"}}, rig.session(), datetime.now(timezone.utc))
+    rows = [r for r in read_jsonl(home / "waits.jsonl") if r.get("id") == "perm-old"]
+    assert rows[-1].get("done_at")
+    assert rig.session().open_asks() == {}
 
 
 def test_end_to_end_through_lane_run_interactive(home: Path, tmp_path: Path, monkeypatch) -> None:

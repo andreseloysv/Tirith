@@ -154,8 +154,8 @@ max_parallel = 4     # kept for old configs; nothing is launched by the autopilo
 - A proposal is an inbox request of kind `autopilot-proposal` from `tirith` (project, step, text): the item,
   why it is open, the plan file and step, and the linked lane, the last 3 attempts of that step with outcome,
   review status (merged or not), claims result and the first paragraph of the report. **One per item and
-  state**: a new proposal follows only when the item's text or note changes (the old unanswered one is answered
-  `by: tirith` "No longer needed" and closed). When the item is ticked or removed an unanswered proposal is closed
+  state**: a new proposal follows only when the item's text or note changes (the old unanswered one is closed
+  quietly, with no answer in the chat). When the item is ticked or removed an unanswered proposal is closed
   the same way. A flow `tirith -> manager` ("Autopilot proposes <project> step <n>: …") records each.
 - **The manager decides** like for an owner message: launch (with a written brief and the plan link), combine with
   a lane, wait (say why), or drop (a `plan-edit` through Tirith; `tirith plan done` when the work is on main). It

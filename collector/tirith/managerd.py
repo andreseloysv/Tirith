@@ -36,7 +36,7 @@ from tirith import models as models_mod
 from tirith import msession as msession_mod
 from tirith import plangate as plangate_mod
 from tirith.home import Config, now_iso, parse_iso
-from tirith.store import lane_path, read_json, write_json_atomic, write_lane
+from tirith.store import lane_path, read_json, read_jsonl, write_json_atomic, write_lane
 
 PRESENCE_FILE = "manager.json"
 NOTES_FILE = "manager-notes.md"
@@ -667,28 +667,21 @@ def _close_wait(home: Path, wait_id: str, now: datetime) -> None:
 
 
 def _settle_asks(home: Path, book: dict, sess, now: datetime) -> bool:
-    """Permission questions the code did not settle: one Allow / Deny item each on the owner's list, and the
-    owner's answer written back to the session."""
-    from tirith.cli import add_wait
+    """Permission questions are decided by code (``msession.decide``), never put on the owner's list. Owner items
+    ``perm-*`` left by an earlier version are closed, and a session question still open is answered by the policy."""
     changed = False
-    waits = book.setdefault("asks", {})
-    open_asks = sess.open_asks() if sess is not None else {}
-    replies = {r["wait"]: r for r in inbox_mod.replies(home)}
-    for rid, ask in open_asks.items():
-        if rid not in waits:
-            waits[rid] = f"perm-{rid}"
-            add_wait(home, str(book.get("project") or ""), f"The manager asks to run **{ask['summary']}**. Allow it?",
-                     wait_id=waits[rid], kind="approval",
-                     why_owner="owner-decision", why_detail="permission",
-                     options=[{"label": "Allow", "value": "allow"}, {"label": "Deny", "value": "deny"}])
-            changed = True
-        reply = replies.get(waits[rid])
-        if reply is not None:
-            sess.answer_ask(rid, reply.get("value") == "allow")
-            _close_wait(home, waits.pop(rid), now)
-            changed = True
-    for rid in [r for r in waits if r not in open_asks]:  # the turn ended or the session died
-        _close_wait(home, waits.pop(rid), now)
+    for rid in list(book.get("asks", {})):
+        book["asks"].pop(rid)
+        changed = True
+    for wait in {r.get("id") for r in read_jsonl(Path(home) / "waits.jsonl")
+                 if str(r.get("id") or "").startswith("perm-")}:
+        _close_wait(home, wait, now)  # a no-op for one already closed
+    for rid, ask in (sess.open_asks() if sess is not None else {}).items():
+        try:
+            allow = sess.decide(ask["tool"], ask["input"])[0] == "allow"
+        except Exception:
+            allow = False
+        sess.answer_ask(rid, allow)
         changed = True
     return changed
 
