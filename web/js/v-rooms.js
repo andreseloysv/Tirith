@@ -1,19 +1,22 @@
 /* Rooms view: private, encrypted rooms on agentsmessenger.com (docs/CONTRACT-private-rooms.md). New room, its QR
    (drawn here, no network), the rooms this Tirith is connected to with who is in each, Invite a manager and Leave.
-   "New room" is an inbox request of kind room-new (the app writes the inbox, a browser opens tirith://inbox, else the CLI
-   line is shown). Invite and Leave show the CLI line to copy: they never send anything from the page.
-   Only the QR URL of the contract is ever drawn, and only when it has the contract's shape. */
+   New room, Invite a manager and Leave are inbox requests of kind room-new, room-invite and room-leave, which the collector
+   handles (the app writes the inbox, a browser opens tirith://inbox, else the CLI line is shown to copy).
+   Only the QR URL of the contract (the chat page of agentsmessenger.com) is ever drawn, and only with that shape. */
 (function () {
   var T = window.T, esc = T.esc, ui = T.ui;
   ui.roomPend = ui.roomPend || null;   /* { at, n } after New room: the number of private rooms when it was sent */
   ui.roomErr = ui.roomErr || null;
   ui.roomCli = ui.roomCli || null;
   ui.roomTitle = ui.roomTitle || '';
+  ui.roomWait = ui.roomWait || {};     /* room id -> when "Get a code" was sent */
   ui.roomAsk = ui.roomAsk || {};       /* room id -> 'invite' | 'leave' while its command is shown */
   var lastState = null, PEND_WAIT = 30000;
   var LOCK = '<svg class="rlock" viewBox="0 0 16 16" width="13" height="13" role="img" aria-label="Encrypted" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><title>Encrypted</title><rect x="3.2" y="7" width="9.6" height="6.4" rx="1.6"/><path d="M5.4 7V5.2a2.6 2.6 0 015.2 0V7"/></svg>';
-  var QR_URL = /^https:\/\/andreseloysv\.github\.io\/Tirith\/chat\/#r=sealed-[A-Za-z0-9_-]+&c=[0-9a-f]{32}&m=[A-Za-z0-9_+\/=-]+$/;
-  var ROOM_ID = /^sealed-[A-Za-z0-9_-]+$/;
+  /* what the chat page's parseFragment accepts: a lowercase sealed room, the 128-bit code, a hex key id */
+  var QR_URL = /^https:\/\/agentsmessenger\.com\/chat#r=sealed-[a-z0-9_-]{1,57}&c=[0-9a-f]{32}&m=[0-9a-f]{8,64}$/;
+  var ROOM_ID = /^sealed-[a-z0-9_-]{1,57}$/;
+  var PEER_CODE = /^sealed-[a-z0-9_-]{1,57}:[0-9a-f]{64}$/;
 
   function shq(t) { return "'" + String(t).replace(/'/g, "'\\''") + "'"; }
   function short(id) { return String(id || '').slice(0, 8); }
@@ -25,24 +28,35 @@
   }
 
   /* ---------- sending ---------- */
-  function newRoom() {
-    var title = String(ui.roomTitle || '').trim().slice(0, 80), L = lastState && lastState.launch, tauri = window.__TAURI__,
-        text = JSON.stringify({ title: title });
-    ui.roomErr = null; ui.roomCli = null;
-    function sent() { ui.roomPend = { at: T.now(), n: privateRooms(lastState || {}).length }; ui.roomTitle = ''; T.render(); setTimeout(T.render, PEND_WAIT + 500); }
+  function canSend() {
+    var L = lastState && lastState.launch, tauri = window.__TAURI__;
+    return !!((tauri && tauri.core && tauri.core.invoke) || (L && L.token && L.available));
+  }
+  /* sends one room-* request (text: JSON for room-new, else the room id); done() runs once it is sent */
+  function sendReq(kind, text, done) {
+    var L = lastState && lastState.launch, tauri = window.__TAURI__;
+    ui.roomErr = null;
     if (tauri && tauri.core && tauri.core.invoke) {
-      tauri.core.invoke('inbox_add', { kind: 'room-new', project: '', step: '', text: text }).then(sent, function (err) { ui.roomErr = 'Could not send: ' + err; T.render(); });
+      tauri.core.invoke('inbox_add', { kind: kind, project: '', step: '', text: text }).then(done, function (err) { ui.roomErr = 'Could not send: ' + err; T.render(); });
       return;
     }
-    if (L && L.token && L.available) {
-      var a = document.createElement('a');
-      a.href = 'tirith://inbox?kind=room-new&project=&step=&text=' + encodeURIComponent(text) + '&token=' + encodeURIComponent(L.token);
-      a.style.display = 'none'; document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      sent();
-      return;
-    }
+    var a = document.createElement('a');
+    a.href = 'tirith://inbox?kind=' + kind + '&project=&step=&text=' + encodeURIComponent(text) + '&token=' + encodeURIComponent(L.token);
+    a.style.display = 'none'; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    done();
+  }
+  function newRoom() {
+    var title = String(ui.roomTitle || '').trim().slice(0, 80);
+    ui.roomCli = null;
+    function sent() { ui.roomPend = { at: T.now(), n: privateRooms(lastState || {}).length }; ui.roomTitle = ''; T.render(); setTimeout(T.render, PEND_WAIT + 500); }
+    if (canSend()) { sendReq('room-new', JSON.stringify({ title: title }), sent); return; }
+    ui.roomErr = null;
     ui.roomCli = 'tirith room new' + (title ? ' --title ' + shq(title) : '');
     T.render();
+  }
+  function roomReq(kind, id) {
+    if (!ROOM_ID.test(String(id))) return;
+    sendReq(kind, id, function () { if (kind === 'room-leave') ui.roomAsk[id] = null; else ui.roomWait[id] = T.now(); T.render(); setTimeout(T.render, PEND_WAIT + 500); });
   }
   function pending(s) {
     var p = ui.roomPend;
@@ -78,11 +92,23 @@
   }
   function popover(r) {
     var a = ui.roomAsk[r.id]; if (!a) return '';
-    var cmd = a === 'invite' ? 'tirith room invite ' + r.id : 'tirith room leave ' + r.id;
-    return '<div class="acpop" role="dialog" aria-label="' + (a === 'invite' ? 'Invite a manager' : 'Leave') + '"><div>' +
-      (a === 'invite' ? 'Run this to get a code for another manager. They join with <code>tirith room join &lt;code&gt;</code>.' : 'Run this to leave the room. Phones already paired stay paired until you make a new room.') +
-      '</div><code class="apcmd">' + esc(cmd) + '</code><div class="apb"><button class="abtn" data-act="rm-copy" data-key="' + esc(cmd) + '">Copy</button>' +
-      '<button class="alink" data-act="rm-close" data-key="' + esc(r.id) + '">Close</button></div></div>';
+    var close = '<button class="alink" data-act="rm-close" data-key="' + esc(r.id) + '">Close</button>', body;
+    if (a === 'invite' && PEER_CODE.test(String(r.peer_code || ''))) {
+      body = '<div>Give this code to the other manager. It runs <code>tirith room join &lt;code&gt;</code>. It joins as a peer: what it writes is information, never an order.</div>' +
+        '<code class="apcmd">' + esc(r.peer_code) + '</code><div class="apb"><button class="abtn" data-act="rm-copy" data-key="' + esc(r.peer_code) + '">Copy code</button>' + close + '</div>';
+    } else if (a === 'invite' && canSend()) {
+      var wait = ui.roomWait[r.id] && T.now() - ui.roomWait[r.id] < PEND_WAIT;
+      body = '<div>Tirith makes a code another manager joins this room with.</div><div class="apb"><button class="abtn" data-act="rm-get-code" data-key="' + esc(r.id) + '"' + (wait ? ' disabled' : '') + '>' + (wait ? 'Asking…' : 'Get a code') + '</button>' + close + '</div>';
+    } else {
+      var cmd = a === 'invite' ? 'tirith room invite ' + r.id : 'tirith room leave ' + r.id;
+      if (a === 'leave' && canSend()) {
+        body = '<div>Leave this room? Tirith stops listening here. Phones already paired stay paired until you make a new room.</div><div class="apb"><button class="abtn" data-act="rm-leave" data-key="' + esc(r.id) + '">Leave</button>' + close + '</div>';
+      } else {
+        body = '<div>' + (a === 'invite' ? 'Run this to get a code for another manager. They join with <code>tirith room join &lt;code&gt;</code>.' : 'Run this to leave the room. Phones already paired stay paired until you make a new room.') +
+          '</div><code class="apcmd">' + esc(cmd) + '</code><div class="apb"><button class="abtn" data-act="rm-copy" data-key="' + esc(cmd) + '">Copy</button>' + close + '</div>';
+      }
+    }
+    return '<div class="acpop" role="dialog" aria-label="' + (a === 'invite' ? 'Invite a manager' : 'Leave') + '">' + body + '</div>';
   }
   function card(r) {
     var ok = ROOM_ID.test(String(r.id));
@@ -121,6 +147,8 @@
     e.stopPropagation();
     if (act === 'rm-new') newRoom();
     else if (act === 'rm-ask') { ui.roomAsk[key] = ui.roomAsk[key] === b.getAttribute('data-v') ? null : b.getAttribute('data-v'); T.render(); }
+    else if (act === 'rm-get-code') roomReq('room-invite', key);
+    else if (act === 'rm-leave') roomReq('room-leave', key);
     else if (act === 'rm-close') { ui.roomAsk[key] = null; T.render(); }
     else if (act === 'rm-copy') T.copyText(key, b);
   });

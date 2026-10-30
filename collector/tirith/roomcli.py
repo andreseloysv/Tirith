@@ -47,14 +47,14 @@ def _cmd_invite(args) -> int:
     """A code for another manager (a peer), and with --device a fresh QR for one more phone."""
     home = _home(args)
     try:
-        record = private_mod._record(home, args.room)
         if args.device:
-            url = private_mod._renew_invite(home, record)
+            url = private_mod.new_invite_url(home, args.room)
             _qr(url)
             print(f"scan with the phone camera (works once): {url}")
         else:
-            print(private_mod.invite_code(record))
-            print(f"the other Tirith runs: tirith room join {private_mod.invite_code(record)}")
+            code = private_mod.invite_manager(home, args.room)
+            print(code)
+            print(f"the other Tirith runs: tirith room join {code}")
     except private_mod.PrivateRoomError as exc:
         return _fail(exc)
     return 0

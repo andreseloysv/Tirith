@@ -1319,14 +1319,11 @@ class Collector:
         events_pipelines = runs
         self._flow_decisions(lanes)
         self.rooms.ensure_polling(config, background=not self._one_shot)
-        if not self._one_shot:
-            from tirith import roombridge  # private rooms: its own thread, started once there is a room
-            if roombridge.list_rooms(self.home):
-                roombridge.start(self.home)
         rooms_state, room_waits = self.rooms.build(
             config, agent_rows, self.worker, self.cache, now)
-        privaterooms_mod.handle_requests(self.home)
-        privaterooms_mod.ensure_bridge(self.home)
+        if not self._one_shot:  # a thread outlives a one-shot run: private rooms are for the running collector
+            privaterooms_mod.handle_requests(self.home)
+            privaterooms_mod.ensure_bridge(self.home)
         rooms_state = rooms_state + privaterooms_mod.state_rows(self.home)
         violation_rows = hooks_mod.read_violation_rows(self.home / "events.jsonl")
         violations = [self._violation(row) for row in violation_rows][-hooks_mod.VIOLATIONS_KEPT:]
