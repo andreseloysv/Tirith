@@ -7,6 +7,11 @@ build and test stages, then (under the plan writer lock, with stale ``index.lock
 main in the main checkout to exactly that tested commit, pushes, ticks the plan item and cleans up.
 A conflict or a red suite goes back to the same agent (:func:`send_back`: a relaunch whose brief continues
 the lane's branch), never to the owner. The queue lives in ``<home>/mergeq.json``.
+
+Two things make it fast without dropping a rule: only the stages a lane's own diff needs run
+(:func:`select_stages`: a docs-only lane runs the build alone, no ``src-tauri``/``Cargo.*`` change skips the Rust
+tests), and up to ``[mergeq] train`` queued lanes of a project are merged together and tested in ONE pass
+(:func:`_try_train`); a red train falls back to one lane at a time so only the culprit is rejected.
 """
 
 from __future__ import annotations
@@ -43,6 +48,8 @@ MAX_SENT_BACK = 3  # after this many returns the manager (never the owner) decid
 MAX_TRIES = 3  # main moved under the merge: start again from the new main
 TIMED_OUT = "timed out"  # a git command stopped at its deadline: retried by the queue, never sent back
 HISTORY = 20
+DOC_ONLY = ("docs/", "site/", "ios/")  # a lane that changes only these (or *.md) has nothing for the test stages
+RUST_STAGE = "rust-test"
 OUTPUT_MAX = 1500
 
 
@@ -122,23 +129,30 @@ def view(home: Path, project: str | None = None) -> dict:
 # -- taking work -------------------------------------------------------------------------------
 
 
-def _claim(home: Path, skip: frozenset[str] = frozenset()) -> dict | None:
+def _claim_many(home: Path, skip: frozenset[str] = frozenset(), limit: int = 1) -> list[dict]:
+    """Take the oldest waiting entry and up to ``limit - 1`` more of the same project, oldest first."""
     with _locked(home):
         data = load(home)
         for entry in data["queue"]:
             if entry["status"] == RUNNING and _alive(entry.get("pid")):
-                return None  # one at a time
+                return []  # one at a time
             if entry["status"] == RUNNING:
                 entry["status"] = QUEUED  # the merger died: take it again
         waiting = [e for e in data["queue"] if e["status"] == QUEUED and e["lane"] not in skip]
         if not waiting:
             write_json_atomic(_path(home), data)
-            return None
-        entry = waiting[0]
-        entry.update(status=RUNNING, pid=os.getpid(), started=now_iso())
-        entry.pop("message", None)
+            return []
+        taken = [e for e in waiting if e.get("project") == waiting[0].get("project")][:max(1, limit)]
+        for entry in taken:
+            entry.update(status=RUNNING, pid=os.getpid(), started=now_iso())
+            entry.pop("message", None)
         write_json_atomic(_path(home), data)
-        return dict(entry)
+        return [dict(e) for e in taken]
+
+
+def _claim(home: Path, skip: frozenset[str] = frozenset()) -> dict | None:
+    taken = _claim_many(home, skip, 1)
+    return taken[0] if taken else None
 
 
 def _finish(home: Path, entry: dict, result: str, message: str = "", *, keep: bool = False, **extra) -> dict:
@@ -181,6 +195,40 @@ def stages_of(folder: Path) -> list[tuple[str, manifest_mod.Stage]]:
     """``(pipeline id, stage)`` of every build and test stage with a command of the gating pipelines, in manifest order."""
     return [(pipe.id, stage) for pipe in manifest_mod.load(folder).pipelines if pipe.gating for stage in pipe.stages
             if stage.run and manifest_mod.stage_kind(stage) in ("build", "test")]
+
+
+def changed_paths(repo: Path, base: str, branch: str) -> list[str]:
+    """The files the lane's own commits changed: its diff against the merge base with main."""
+    mb = _git(repo, "merge-base", base, branch).stdout.strip()
+    return _git(repo, "diff", "--name-only", mb, branch).stdout.split() if mb else []
+
+
+def needs_of(paths: list[str]) -> tuple[bool, bool]:
+    """``(test stages, rust stage)`` a lane with these changed files needs; an unknown diff needs everything."""
+    if not paths:
+        return True, True
+    if all(p.startswith(DOC_ONLY) or p.endswith(".md") for p in paths):
+        return False, False
+    rust = any(p.startswith("app/src-tauri/") or p.rsplit("/", 1)[-1].startswith("Cargo.") for p in paths)
+    return True, rust
+
+
+def select_stages(stages: list[tuple[str, manifest_mod.Stage]], needs: list[tuple[bool, bool]]
+                  ) -> tuple[list[tuple[str, manifest_mod.Stage]], list[str]]:
+    """The stages to run for lanes with these ``needs`` (the union), and the names skipped. Builds always run."""
+    tests, rust = any(n[0] for n in needs), any(n[1] for n in needs)
+    kept, skipped = [], []
+    for pipeline, stage in stages:
+        is_test = manifest_mod.stage_kind(stage) == "test"
+        if is_test and not (rust if stage.name == RUST_STAGE else tests):
+            skipped.append(stage.name)
+        else:
+            kept.append((pipeline, stage))
+    return kept, skipped
+
+
+def skip_note(skipped: list[str]) -> str:
+    return f" (skipped {', '.join(skipped)}: nothing it tests changed)" if skipped else ""
 
 
 def branch_exists(repo: Path, branch: str) -> bool:
@@ -241,6 +289,54 @@ def _with_plan_moves(repo: Path, tmp: Path, base: str, head: str, tested: str, b
     return landed
 
 
+def _land(home: Path, repo: Path, tmp: Path, project: str, base: str, tested: str, main_branch: str,
+          subject: str, via: str) -> tuple[str, tuple[str, str] | None]:
+    """Fast-forward main to the tested commit under the plan writer lock: ``(commit, None)``, else ``("", (result, message))``."""
+    with plangate_mod.writer_lock(home, project):
+        if _git(repo, "status", "--porcelain", "--untracked-files=no").stdout.strip():
+            return "", (WAITING, f"{repo} has uncommitted changes; the queue waits for it to be clean")
+        head = _git(repo, "rev-parse", "HEAD").stdout.strip()
+        if head != base:
+            tested = _with_plan_moves(repo, tmp, base, head, tested, via, subject)
+            if tested is None:
+                return "", ("retry", "main moved while the suite ran")
+        plangate_mod.recover_git_lock(repo)
+        moved = _git(repo, "merge", "--ff-only", "-q", tested)
+        if moved.returncode != 0 and "index.lock" in moved.stderr and plangate_mod.recover_git_lock(repo):
+            moved = _git(repo, "merge", "--ff-only", "-q", tested)
+        if moved.returncode != 0:
+            return "", (WAITING, f"fast-forwarding {main_branch} failed: {_tail(moved.stderr or moved.stdout)}")
+    return tested, None
+
+
+def _make_tmp(repo: Path, name: str, base: str):
+    """A clean temporary worktree at ``base``: ``(path, error text or None)``."""
+    tmp = worktree_path(repo, name)
+    if tmp.exists():
+        _remove_worktree(repo, "--force", str(tmp))
+        shutil.rmtree(tmp, ignore_errors=True)
+    _git(repo, "worktree", "prune")
+    made = _git(repo, "worktree", "add", "-q", "--detach", str(tmp), base)
+    return tmp, (None if made.returncode == 0 else _tail(made.stderr or made.stdout))
+
+
+def _drop_tmp(repo: Path, tmp: Path) -> None:
+    _remove_worktree(repo, "--force", str(tmp))
+    shutil.rmtree(tmp, ignore_errors=True)
+    _git(repo, "worktree", "prune")
+
+
+def _run_stages(home: Path, project: str, stages: list, tmp: Path, lane_id: str) -> tuple[str | None, str, str | None]:
+    """Run the stages: ``(failed "pipeline/stage" | None, output of the failure, passed summary)``."""
+    passed = None
+    for pipeline, stage in stages:
+        ok, output = review_mod.run_tests(home, project, pipeline, stage.name, tmp, stage.run, lane_id)
+        if not ok:
+            return f"{pipeline}/{stage.name}", output, passed
+        passed = review_mod.tests_passed(output) or passed
+    return None, "", passed
+
+
 def _try(home: Path, repo: Path, lane: dict, entry: dict) -> tuple[str, str, dict]:
     """One attempt: ``(result, message, extra)``; ``waiting`` / ``retry`` mean try again later / at once."""
     lane_id, project = str(lane["id"]), str(lane.get("project") or "")
@@ -256,14 +352,9 @@ def _try(home: Path, repo: Path, lane: dict, entry: dict) -> tuple[str, str, dic
         return WAITING, f"branch not found: {branch}", {}
     base = _git(repo, "rev-parse", "HEAD").stdout.strip()
     main_branch = _git(repo, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
-    tmp = worktree_path(repo, f"_mergeq-{lane_id}")
-    if tmp.exists():
-        _remove_worktree(repo, "--force", str(tmp))
-        shutil.rmtree(tmp, ignore_errors=True)
-    _git(repo, "worktree", "prune")
-    made = _git(repo, "worktree", "add", "-q", "--detach", str(tmp), base)
-    if made.returncode != 0:
-        return WAITING, f"could not make the temporary worktree: {_tail(made.stderr or made.stdout)}", {}
+    tmp, error = _make_tmp(repo, f"_mergeq-{lane_id}", base)
+    if error:
+        return WAITING, f"could not make the temporary worktree: {error}", {}
     try:
         merged = _git(tmp, "merge", "--no-ff", "-q", "-m", f"Merge {branch}: {feature}", branch)
         if merged.timed_out:  # git was cut off by its time limit: not a conflict, try again, never the lane
@@ -277,33 +368,90 @@ def _try(home: Path, repo: Path, lane: dict, entry: dict) -> tuple[str, str, dic
         stages = stages_of(tmp)
         if not stages:
             return WAITING, "the manifest has no build or test stage with a run command", {}
-        passed = None
-        for pipeline, stage in stages:
-            ok, output = review_mod.run_tests(home, project, pipeline, stage.name, tmp, stage.run, lane_id)
-            if not ok:
-                return RED, f"stage {pipeline}/{stage.name} failed on {branch} merged with {main_branch}:\n{_tail(output)}", \
-                    {"main": main_branch}
-            passed = review_mod.tests_passed(output) or passed
+        stages, skipped = select_stages(stages, [needs_of(changed_paths(repo, base, branch))])
+        broke, output, passed = _run_stages(home, project, stages, tmp, lane_id)
+        if broke:
+            return RED, f"stage {broke} failed on {branch} merged with {main_branch}:\n{_tail(output)}", {"main": main_branch}
         tested = _git(tmp, "rev-parse", "HEAD").stdout.strip()
-        with plangate_mod.writer_lock(home, project):
-            if _git(repo, "status", "--porcelain", "--untracked-files=no").stdout.strip():
-                return WAITING, f"{repo} has uncommitted changes; the queue waits for it to be clean", {}
-            head = _git(repo, "rev-parse", "HEAD").stdout.strip()
-            if head != base:
-                tested = _with_plan_moves(repo, tmp, base, head, tested, branch, feature)
-                if tested is None:
-                    return "retry", "main moved while the suite ran", {}
-            plangate_mod.recover_git_lock(repo)
-            moved = _git(repo, "merge", "--ff-only", "-q", tested)
-            if moved.returncode != 0 and "index.lock" in moved.stderr and plangate_mod.recover_git_lock(repo):
-                moved = _git(repo, "merge", "--ff-only", "-q", tested)
-            if moved.returncode != 0:
-                return WAITING, f"fast-forwarding {main_branch} failed: {_tail(moved.stderr or moved.stdout)}", {}
-        return MERGED, "tests passed; merged", {"commit": tested, "main": main_branch, "passed": passed, "branch": branch}
+        tested, refused = _land(home, repo, tmp, project, base, tested, main_branch, feature, branch)
+        if refused:
+            return refused[0], refused[1], {}
+        return MERGED, "tests passed; merged" + skip_note(skipped), \
+            {"commit": tested, "main": main_branch, "passed": passed, "branch": branch, "skipped": skipped}
     finally:
-        _remove_worktree(repo, "--force", str(tmp))
-        shutil.rmtree(tmp, ignore_errors=True)
-        _git(repo, "worktree", "prune")
+        _drop_tmp(repo, tmp)
+
+
+def _try_train(home: Path, repo: Path, members: list[tuple[dict, dict]]) -> tuple[str, str, dict]:
+    """One attempt for several lanes at once: ``(result, message, info)``.
+
+    ``info["joined"]`` are the ``(entry, lane)`` pairs merged into the temp worktree, ``info["left"]`` the
+    ``(entry, lane, result, message, extra)`` of those that could not join (a real conflict, a failed commit).
+    The result is MERGED / RED (the joined lanes together are red) / WAITING / ``retry`` as for :func:`_try`."""
+    joined: list[tuple[dict, dict]] = []
+    left: list[tuple] = []
+    info: dict = {"joined": joined, "left": left}
+    for entry, lane in members:
+        lane_id = str(lane["id"])
+        workspace = Path(str(lane["workspace"]))
+        branch = branch_of(lane, workspace)
+        failed = _commit_workspace(workspace, lane_id, str(lane.get("feature") or lane_id))
+        if failed:
+            timed = failed.startswith(TIMED_OUT)
+            left.append((entry, lane, WAITING if timed else RED,
+                         f"committing the lane {failed}" if timed else f"committing the lane failed: {failed}", {}))
+        elif not branch_exists(repo, branch):
+            left.append((entry, lane, WAITING, f"branch not found: {branch}", {}))
+        else:
+            joined.append((entry, lane))
+    if not joined:
+        return WAITING, "no lane could join the train", info
+    base = _git(repo, "rev-parse", "HEAD").stdout.strip()
+    main_branch = _git(repo, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
+    tmp, error = _make_tmp(repo, f"_mergeq-train-{joined[0][0]['lane']}", base)
+    if error:
+        return WAITING, f"could not make the temporary worktree: {error}", info
+    try:
+        needs, branches = [], {}
+        for pair in list(joined):
+            entry, lane = pair
+            branch = branch_of(lane, Path(str(lane["workspace"])))
+            feature = str(lane.get("feature") or lane["id"])
+            merged = _git(tmp, "merge", "--no-ff", "-q", "-m", f"Merge {branch}: {feature}", branch)
+            if merged.timed_out:
+                _git(tmp, "merge", "--abort")
+                return "retry", f"merging {branch} into {main_branch} {TIMED_OUT}; trying again", info
+            if merged.returncode != 0:
+                files = _git(tmp, "diff", "--name-only", "--diff-filter=U").stdout.split()
+                _git(tmp, "merge", "--abort")
+                what = ("conflicts in " + ", ".join(files)) if files else _tail(merged.stderr or merged.stdout)
+                joined.remove(pair)
+                left.append((entry, lane, CONFLICT, f"merging {branch} into {main_branch} failed: {what}",
+                             {"main": main_branch, "files": files}))
+                continue
+            paths = changed_paths(repo, base, branch)
+            needs.append(needs_of(paths))
+            branches[str(lane["id"])] = (branch, len(paths))
+        info["branches"], info["main"] = branches, main_branch
+        if not joined:
+            return WAITING, "no lane could join the train", info
+        stages = stages_of(tmp)
+        if not stages:
+            return WAITING, "the manifest has no build or test stage with a run command", info
+        stages, skipped = select_stages(stages, needs)
+        ids = ", ".join(str(lane["id"]) for _, lane in joined)
+        broke, output, passed = _run_stages(home, str(joined[0][1].get("project") or ""), stages, tmp, str(joined[0][1]["id"]))
+        if broke:
+            return RED, f"stage {broke} failed on the train ({ids}) merged with {main_branch}:\n{_tail(output)}", info
+        tested = _git(tmp, "rev-parse", "HEAD").stdout.strip()
+        tested, refused = _land(home, repo, tmp, str(joined[0][1].get("project") or ""), base, tested, main_branch,
+                                f"train of {len(joined)}: {ids}", "train")
+        if refused:
+            return refused[0], refused[1], info
+        info.update(commit=tested, passed=passed, skipped=skipped)
+        return MERGED, f"tests passed; merged in a train of {len(joined)}" + skip_note(skipped), info
+    finally:
+        _drop_tmp(repo, tmp)
 
 
 def _push(repo: Path, branch: str) -> str | None:
@@ -386,22 +534,50 @@ def _close_gone(home: Path, entry: dict, lane: dict | None, repo: Path | None) -
     return _finish(home, entry, CLOSED, message)
 
 
-def process_next(home: Path, config: Config, *, relaunch: Callable | None = None, push: bool = True,
-                 skip: frozenset[str] = frozenset()) -> dict | None:
-    """Merge the oldest waiting lane; the result row, or None when the queue is empty or busy."""
-    entry = _claim(home, skip)
-    if entry is None:
-        return None
+def _close_merged(home: Path, repo: Path, lane: dict, entry: dict, extra: dict, message: str, files: int | None = None) -> dict:
+    """A merged lane: tick its plan item, remove its worktree and branch, record the review and the history row."""
     lane_id = entry["lane"]
-    lane = read_json(lane_path(home, lane_id), None)
+    try:
+        plangate_mod.review_passed(home, repo, read_json(lane_path(home, lane_id), lane))
+    except plangate_mod.PlanGateError as error:
+        extra["plan_error"] = str(error)
+    workspace = Path(str(lane["workspace"]))
+    _remove_worktree(repo, "--force", str(workspace))
+    _git(repo, "branch", "-D", str(extra["branch"]))
+    if files is None:
+        files = len(_git(repo, "diff", "--name-only", f"{extra['commit']}^1", extra["commit"]).stdout.split())
+    fresh = read_json(lane_path(home, lane_id), lane)
+    fresh["review"] = {"status": review_mod.MERGED, "at": now_iso(), "by": "mergeq", "pid": os.getpid(),
+                       "message": message, "commit": extra["commit"], "branch": extra["main"],
+                       "passed": extra.get("passed"), "files": files}
+    write_lane(home, fresh)
+    status = PUSH_FAILED if extra.get("push_error") else MERGED
+    more = {k: extra[k] for k in ("skipped", "train") if extra.get(k)}
+    return _finish(home, entry, status, extra.get("push_error") or message, commit=extra["commit"], **more)
+
+
+def _load_entry(home: Path, config: Config, entry: dict):
+    """``(lane, repo, closed row)``: an entry whose lane, worktree or project is gone is closed here."""
+    lane = read_json(lane_path(home, entry["lane"]), None)
     repo = plangate_mod.repo_of(home, entry["project"], config) if entry["project"] else None
     if not isinstance(lane, dict) or repo is None or not Path(str(lane.get("workspace") or "")).is_dir():
-        return _close_gone(home, entry, lane if isinstance(lane, dict) else None, repo)
+        return None, None, _close_gone(home, entry, lane if isinstance(lane, dict) else None, repo)
+    return lane, repo, None
+
+
+def _process_one(home: Path, config: Config, entry: dict, lane: dict, repo: Path, relaunch: Callable | None,
+                 push: bool) -> dict:
     result, message, extra = "retry", "", {}
     for _ in range(MAX_TRIES):
         result, message, extra = _try(home, repo, lane, entry)
         if result != "retry":
             break
+    return _settle(home, config, entry, lane, repo, result, message, extra, relaunch, push)
+
+
+def _settle(home: Path, config: Config, entry: dict, lane: dict, repo: Path, result: str, message: str, extra: dict,
+            relaunch: Callable | None, push: bool, *, files: int | None = None) -> dict:
+    """Act on the outcome for one lane: wait, send back, or close it as merged (pushing first when ``push``)."""
     if result == "retry":
         return _finish(home, entry, WAITING, message, keep=True, retried=True)
     if result == WAITING:
@@ -410,41 +586,79 @@ def process_next(home: Path, config: Config, *, relaunch: Callable | None = None
         sent = send_back(home, config, lane, result, message, str(extra.get("main") or "main"), relaunch)
         return _finish(home, entry, result, message, sent_to=sent or None)
     if push:  # merged: main moved already; the push can fail on its own (network, rejected)
-        failed = _push(repo, str(extra["main"]))
+        failed = extra.get("push_error") if "push_error" in extra else _push(repo, str(extra["main"]))
         if failed:
             extra["push_error"] = failed
-    try:
-        plangate_mod.review_passed(home, repo, read_json(lane_path(home, lane_id), lane))
-    except plangate_mod.PlanGateError as error:
-        extra["plan_error"] = str(error)
-    workspace = Path(str(lane["workspace"]))
-    _remove_worktree(repo, "--force", str(workspace))
-    _git(repo, "branch", "-D", str(extra["branch"]))
-    fresh = read_json(lane_path(home, lane_id), lane)
-    fresh["review"] = {"status": review_mod.MERGED, "at": now_iso(), "by": "mergeq", "pid": os.getpid(),
-                       "message": message, "commit": extra["commit"], "branch": extra["main"],
-                       "passed": extra.get("passed"),
-                       "files": len(_git(repo, "diff", "--name-only", f"{extra['commit']}^1", extra["commit"]).stdout.split())}
-    write_lane(home, fresh)
-    status = PUSH_FAILED if extra.get("push_error") else MERGED
-    row = _finish(home, entry, status, extra.get("push_error") or message, commit=extra["commit"])
-    return row
+    return _close_merged(home, repo, lane, entry, extra, message, files)
+
+
+def _process_train(home: Path, config: Config, members: list[tuple[dict, dict]], repo: Path,
+                   relaunch: Callable | None, push: bool) -> list[dict]:
+    """Test ``members`` (``(entry, lane)``, oldest first) together; a red train is redone one lane at a time."""
+    result, message, info = "retry", "", {}
+    for _ in range(MAX_TRIES):
+        result, message, info = _try_train(home, repo, members)
+        if result != "retry":
+            break
+    rows = []
+    for entry, lane, left_result, left_message, left_extra in info["left"]:  # real conflicts leave; the rest go on
+        rows.append(_settle(home, config, entry, lane, repo, left_result, left_message, left_extra, relaunch, push))
+    joined = info["joined"]
+    if result == RED and len(joined) > 1:  # who is the culprit? the same lanes, one at a time
+        return rows + [_process_one(home, config, entry, lane, repo, relaunch, push) for entry, lane in joined]
+    if result != MERGED:
+        return rows + [_settle(home, config, entry, lane, repo, result, message, info, relaunch, push)
+                       for entry, lane in joined]
+    if push:  # one push for the whole train
+        failed = _push(repo, str(info["main"]))
+        info["push_error"] = failed or None
+    ids = [str(lane["id"]) for _, lane in joined]
+    for entry, lane in joined:
+        branch, files = info["branches"][str(lane["id"])]
+        extra = {"commit": info["commit"], "main": info["main"], "passed": info["passed"], "branch": branch,
+                 "skipped": info["skipped"], "train": ids, "push_error": info["push_error"] if push else None}
+        rows.append(_settle(home, config, entry, lane, repo, MERGED, message, extra, relaunch, False, files=files))
+    return rows
+
+
+def process(home: Path, config: Config, *, relaunch: Callable | None = None, push: bool = True,
+            skip: frozenset[str] = frozenset()) -> list[dict]:
+    """Merge the oldest waiting lane together with up to ``[mergeq] train - 1`` more of its project; the result rows."""
+    entries = _claim_many(home, skip, config.mergeq_train)
+    members, rows, repo = [], [], None
+    for entry in entries:
+        lane, found, closed = _load_entry(home, config, entry)
+        if closed:
+            rows.append(closed)
+        else:
+            members.append((entry, lane))
+            repo = found
+    if len(members) == 1:
+        rows.append(_process_one(home, config, *members[0], repo, relaunch, push))
+    elif members:
+        rows += _process_train(home, config, members, repo, relaunch, push)
+    place = {e["lane"]: n for n, e in enumerate(entries)}
+    return sorted(rows, key=lambda r: place.get(r["lane"], len(place)))  # queue order, whoever left the train
+
+
+def process_next(home: Path, config: Config, *, relaunch: Callable | None = None, push: bool = True,
+                 skip: frozenset[str] = frozenset()) -> dict | None:
+    """:func:`process`, returning the row of the oldest lane (or None when the queue is empty or busy)."""
+    rows = process(home, config, relaunch=relaunch, push=push, skip=skip)
+    return rows[0] if rows else None
 
 
 def drain(home: Path, config: Config, **kwargs) -> list[dict]:
-    """Merge every waiting lane, one after the other."""
+    """Merge every waiting lane, one pass (a train) after the other."""
     out, tried = [], set()
     while True:
-        row = process_next(home, config, skip=frozenset(tried), **kwargs)
-        if row is None:
+        rows = process(home, config, skip=frozenset(tried), **kwargs)
+        if not rows:
             return out
-        if row["result"] == WAITING and row.get("retried"):  # main moved in code: back in the queue, next entry
-            tried.add(row["lane"])
-            out.append(row)
-            continue
-        if row["result"] == WAITING:
-            return out + [row]
-        out.append(row)
+        out += rows
+        if any(r["result"] == WAITING and not r.get("retried") for r in rows):
+            return out
+        tried.update(r["lane"] for r in rows if r["result"] == WAITING and r.get("retried"))  # main moved: next entry
 
 
 # -- the dispatcher ----------------------------------------------------------------------------
