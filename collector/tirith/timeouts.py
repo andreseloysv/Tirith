@@ -83,6 +83,30 @@ def clamp(cls: str, seconds: float) -> float:
     return max(low, min(high, float(seconds)))
 
 
+GIT_CLASSES = frozenset({"git", "git-commit"})
+
+
+def load_scaled(cls: str, seconds: float, *, load: float | None = None, cpus: int | None = None) -> float:
+    """``seconds`` raised by the load per core when the machine is overloaded (load above the core count),
+    never past the class maximum and never below ``seconds``."""
+    from tirith import loadlimit
+    cpus = max(cpus or loadlimit.cores(), 1)
+    load = loadlimit.load_average() if load is None else load
+    if load <= cpus:
+        return seconds
+    return max(seconds, min(bounds(cls)[2], seconds * load / cpus))
+
+
+def deadline(home: Path, config: Config | None, cls: str, hint: float | None = None, *,
+             load: float | None = None, cpus: int | None = None) -> float:
+    """The limit :func:`run` applies. A git command takes the class policy, raised under load; a ``hint`` may
+    only raise it, never lower it below the policy. Other classes take ``hint`` as given, else the policy."""
+    if base_class(cls) not in GIT_CLASSES:
+        return float(hint) if hint else effective(home, config, cls)
+    policy = effective(home, config, cls)
+    return load_scaled(cls, max(policy, float(hint or 0)), load=load, cpus=cpus)
+
+
 def classify_command(command: str) -> str:
     """The class of a shell line an agent runs (``agent-bash`` unless it is plainly cargo, npm or a commit)."""
     try:
@@ -432,7 +456,7 @@ def run(argv, cls: str = "generic", cwd=None, env=None, *, home: Path | None = N
     ``timed_out`` and ``error`` (the plain message). Starting failures (no such program) come back as
     ``returncode`` 127 with ``error`` instead of raising."""
     home = Path(home) if home else tirith_home()
-    limit = float(timeout) if timeout else effective(home, config, cls)
+    limit = deadline(home, config, cls, timeout)
     out_arg = stdout if stdout is not None else (subprocess.PIPE if capture_output else None)
     err_arg = stderr if stderr is not None else (subprocess.PIPE if capture_output else None)
     began, started_wall = time.monotonic(), time.time()
