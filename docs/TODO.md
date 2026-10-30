@@ -460,4 +460,5 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [ ] Vista Salas en la app: crear una sala, ver su QR, ver a qué salas estás conectado y quién hay, invitar a otro manager y salir. (check: `node web/js/rooms.test.mjs`)
 - [ ] Chat cifrado en el navegador del móvil: la cámara del iPhone escanea el QR y abre la conversación con el manager sin instalar nada. (check: `test -f site/chat/index.html && node site/chat/chat.test.mjs`)
 - [ ] App de iOS nativa: escanea el QR y abre un chat cifrado con el manager, compatible con am.mjs. (check: `bash scripts/check-ios.sh`)
+- [ ] La cola de merge no pasa los tests de Python a un lane que solo cambia site/, ios/ o docs/. (check: `cd collector && uv run -q pytest -q tests -k merge_paths`)
 
