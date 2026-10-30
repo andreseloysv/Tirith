@@ -414,7 +414,7 @@ def test_code_move_is_retried_and_the_next_entry_still_runs(env, home: Path, mon
 
     monkeypatch.setattr(mergeq_mod, "_try", flaky)
     rows = mergeq_mod.drain(home, load_config(home), relaunch=Sender())
-    assert [(r["lane"], r["result"]) for r in rows] == [("one", "waiting"), ("two", "merged")]
+    assert [(r["lane"], r["result"]) for r in rows] == [("one", "waiting"), ("two", "merged")], rows
     assert rows[0]["message"] == "main moved while the suite ran"
     assert [i["lane"] for i in mergeq_mod.view(home, "demo")["items"]] == ["one"]
 
