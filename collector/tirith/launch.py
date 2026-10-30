@@ -55,7 +55,8 @@ PLAN_RULES = (
 )
 
 HARD_RULES = (
-    "Do NOT commit; leave the changes in the working tree for the owner to review.",
+    "Do NOT commit; leave the changes in the working tree: Tirith commits them and the single merge queue reviews "
+    "them with the full suite and merges them.",
     "Name agents only by their alias (see `docs/CONTRACT-hooks.md` \"Agent aliases\"), never by product or model name.",
     "No servers and no open ports.",
     "The tests must pass before you finish. Run them only with `tirith run --project <id> --stage test` "
