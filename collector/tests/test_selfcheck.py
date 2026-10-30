@@ -234,11 +234,15 @@ def plan(status: str = "ready") -> list[dict]:
         {"id": "1", "status": status, "title": "One", "items": [{"text": "Do it", "done": False, "who": "agent"}]}]}}]
 
 
+def step_fp() -> str:
+    """The fingerprint of the proposal of step 1 of ``plan()`` (one proposal per step)."""
+    found, _ = autopilot_mod.candidates(plan(), [], set())
+    return autopilot_mod._step_fp(autopilot_mod.proposal_text(list(found.values()), []))
+
+
 def seen(at: datetime) -> dict:
-    """The autopilot state of an item first seen open at ``at`` (what ``autopilot.run`` records)."""
-    from tirith import roadmap as roadmap_mod
-    key = f"demo|1|{roadmap_mod.item_id('Do it')}"
-    return {"seen": {key: {"fp": autopilot_mod._fingerprint("1", "Do it"), "at": at.strftime(Z)}}}
+    """The autopilot state of a step first seen with an open item at ``at`` (what ``autopilot.run`` records)."""
+    return {"seen": {"demo|1": {"fp": step_fp(), "at": at.strftime(Z)}}}
 
 
 def test_an_open_item_nobody_reported_for_2_min_is_a_queue_item(home: Path, project: Path) -> None:
@@ -257,10 +261,8 @@ def test_an_open_item_nobody_reported_for_2_min_is_a_queue_item(home: Path, proj
 
 
 def test_an_item_with_a_proposal_is_not_a_problem(home: Path, project: Path) -> None:
-    from tirith import roadmap as roadmap_mod
-    key = f"demo|1|{roadmap_mod.item_id('Do it')}"
-    state = {"autopilot": {**seen(NOW), "proposals": {key: {"id": "in-x", "fp": autopilot_mod._fingerprint("1", "Do it"),
-                                                            "at": NOW.strftime(Z)}}}}
+    state = {"autopilot": {**seen(NOW), "proposals": {"demo|1": {"id": "in-x", "fp": step_fp(),
+                                                                 "at": NOW.strftime(Z)}}}}
     check(home, state, at(2000), Fake(), projects=plan())
     assert queue_ids(home) == [] and level(state, "autopilot") == "ok"
 
