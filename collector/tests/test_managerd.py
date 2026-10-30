@@ -271,3 +271,87 @@ def test_a_manager_lane_that_worked_resets_the_count(home: Path, project: Path, 
     chat(home, "hi", NOW - timedelta(minutes=8))
     cycle(home, spawned, lanes=lanes)
     assert len(spawned) == 1
+
+
+# -- the owner's messages go first --------------------------------------------------------------
+
+
+def _items(home: Path) -> dict:
+    return managerd_mod.pending_items(home, NOW + timedelta(seconds=30))
+
+
+def _proposal(home: Path, n: int) -> str:
+    return inbox_mod.add_request(home, inbox_mod.PROPOSAL, project="demo", step="1", text=f"Autopilot: item {n}",
+                                 at=(NOW + timedelta(seconds=n)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                                 sender="tirith")["id"]
+
+
+def test_managerd_owner_request_is_a_turn_of_its_own_and_goes_first(home: Path, project: Path) -> None:
+    for n in range(3):
+        _proposal(home, n)
+    mine = chat(home, "owner here", at=NOW + timedelta(seconds=20))
+    items = _items(home)
+    fresh = list(managerd_mod._parts(items))
+    picked = managerd_mod.pick_turn(items, fresh)
+    sub = managerd_mod._subset(items, picked)
+    assert [r["id"] for r in sub["requests"]] == [mine] and not sub["results"] and not sub["queue"]
+
+
+def test_managerd_tirith_work_goes_in_batches_of_five_oldest_first(home: Path, project: Path) -> None:
+    ids = [_proposal(home, n) for n in range(12)]
+    items = _items(home)
+    first = managerd_mod._subset(items, managerd_mod.pick_turn(items, list(managerd_mod._parts(items))))
+    assert [r["id"] for r in first["requests"]] == ids[:5]
+    assert managerd_mod.BATCH_MAX == 5
+
+
+class _Turn:
+    def __init__(self, tid: str, requests: list[str]) -> None:
+        self.id, self.requests = tid, requests
+
+
+class _Sess:
+    def __init__(self, turn: _Turn, can_interrupt: bool = True) -> None:
+        self.turn, self.can, self.interrupts, self.lane_id = turn, can_interrupt, 0, "manager-x"
+
+    def interrupt(self) -> bool:
+        self.interrupts += 1
+        return self.can
+
+    def open_asks(self) -> dict:
+        return {}
+
+
+def test_managerd_owner_message_interrupts_tirith_work_once_and_says_so(home: Path, project: Path) -> None:
+    prop = _proposal(home, 0)
+    mine = chat(home, "now please", at=NOW + timedelta(seconds=20))
+    items = _items(home)
+    sess = _Sess(_Turn("manager-turn-1", [prop]))
+    book = {"turns": [{"id": "manager-turn-1", "keys": [f"{prop}:0:0"]}], "sent": {f"{prop}:0:0": "x"}}
+    fresh = [k for k in managerd_mod._parts(items) if k not in book["sent"]]
+    assert managerd_mod._yield_to_owner(home, book, sess, items, fresh, NOW)
+    assert not managerd_mod._yield_to_owner(home, book, sess, items, fresh, NOW)  # once per turn
+    assert sess.interrupts == 1
+    assert [s["text"] for s in inbox_mod.says(home)] == ["The manager is pausing one task; your message is next."]
+    # the interrupted turn ends: Tirith's item goes back to pending (a try is given back, not spent)
+    book["tries"] = {f"{prop}:0:0": 1}
+    view = {"id": "manager-turn-1", "ended_at": "x", "interrupted": True, "requests": [prop], "answer": ""}
+    sess.views = lambda: [view]
+    sess.lane_id = "manager-x"
+    managerd_mod._finish_turns(home, sess, book)
+    assert f"{prop}:0:0" not in book["sent"] and book["tries"][f"{prop}:0:0"] == 0
+    assert mine
+
+
+def test_managerd_without_interrupt_support_the_owner_is_the_next_turn(home: Path, project: Path) -> None:
+    prop = _proposal(home, 0)
+    chat(home, "now please", at=NOW + timedelta(seconds=20))
+    items = _items(home)
+    sess = _Sess(_Turn("manager-turn-1", [prop]), can_interrupt=False)
+    book = {"turns": [{"id": "manager-turn-1", "keys": ["k"]}], "sent": {"k": "x"}}
+    assert managerd_mod._yield_to_owner(home, book, sess, items, list(managerd_mod._parts(items)), NOW)
+    assert [s["text"] for s in inbox_mod.says(home)] == ["The manager is finishing one task; your message is next."]
+    # the owner's own turn is never interrupted
+    own = _Sess(_Turn("manager-turn-2", [i["id"] for i in items["requests"] if i["kind"] == "chat"]))
+    assert not managerd_mod._yield_to_owner(home, {"turns": [{"id": "manager-turn-2", "keys": ["k"]}]}, own,
+                                            items, list(managerd_mod._parts(items)), NOW)
