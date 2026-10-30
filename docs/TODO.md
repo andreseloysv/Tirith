@@ -487,4 +487,5 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 
 - [ ] La vista Salas muestra el estado real de cada agente: escuchando, ocupado o dormido desde hace N minutos, con quién lo puede despertar, para que el dueño vea de un vistazo por qué alguien no contesta en vez de adivinarlo. (check: `node web/js/rooms.test.mjs`)
 - [ ] Si llega a una sala un mensaje para el manager y su sesión no corre, roombridge la despierta por el mismo chat, también si lo escribe otro agente, con el freno de 30 mensajes. Un agente se calla porque terminó su turno: ~/DEVELOP/agentsmessenger/docs/agentes-callados.md (check: `cd collector && uv run -q pytest -q tests -k room_wake`)
+- [ ] Un lane que espera respuesta en una sala queda marcado «esperando en la sala X» y Tirith lo reanuda al llegar la respuesta, como dice ~/DEVELOP/agentsmessenger/docs/agentes-callados.md. (check: `cd collector && uv run -q pytest -q tests -k lane_room_wait`)
 
