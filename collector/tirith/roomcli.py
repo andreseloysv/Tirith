@@ -1,4 +1,4 @@
-"""``tirith room new|invite|join|leave``: the private rooms of ``docs/CONTRACT-private-rooms.md``.
+"""``tirith room new|link|qr|invite|join|leave``: the private rooms of ``docs/CONTRACT-private-rooms.md``.
 
 Kept out of ``cli.py``; that file only calls ``add_parsers``. The QR is drawn in the terminal when the optional
 ``qrcode`` package is there; the URL is always printed (a phone can also open it from a pasted link).
@@ -38,6 +38,28 @@ def _cmd_new(args) -> int:
         return _fail(exc)
     url = record["invite"]["url"]
     print(f"room {record['id']} ({record['title']})")
+    _qr(url)
+    print(f"scan with the phone camera (works once): {url}")
+    return 0
+
+
+def _cmd_link(args) -> int:
+    """The permanent link (and its QR) of a phone already in the room. No code: it opens as often as needed."""
+    try:
+        url = private_mod.open_url(_home(args), args.room)
+    except private_mod.PrivateRoomError as exc:
+        return _fail(exc)
+    _qr(url)
+    print(f"open on a phone already in the room (works every time): {url}")
+    return 0
+
+
+def _cmd_qr(args) -> int:
+    """A new one-use QR to connect one more phone."""
+    try:
+        url = private_mod.new_invite_url(_home(args), args.room)
+    except private_mod.PrivateRoomError as exc:
+        return _fail(exc)
     _qr(url)
     print(f"scan with the phone camera (works once): {url}")
     return 0
@@ -83,6 +105,12 @@ def add_parsers(room_sub, common) -> None:
     new.add_argument("--title", default="")
     new.add_argument("--project", default="")
     new.set_defaults(func=_cmd_new)
+    link = room_sub.add_parser("link", parents=[common], help="print the permanent link (and QR) to open the room on a phone already in it")
+    link.add_argument("room")
+    link.set_defaults(func=_cmd_link)
+    qr = room_sub.add_parser("qr", parents=[common], help="print a new one-use QR to connect another phone")
+    qr.add_argument("room")
+    qr.set_defaults(func=_cmd_qr)
     invite = room_sub.add_parser("invite", parents=[common],
                                  help="print the code another manager joins with (--device: a QR for one more phone)")
     invite.add_argument("room")

@@ -14,12 +14,19 @@ service is needed: its API already answers browsers (`access-control-allow-origi
 1. **New room.** UI button (an inbox request of kind `room-new`) or `tirith room new --title T`. Tirith calls
    `GET /new?private=1`, joins with its own key and shows a QR.
 2. **QR.** A URL, so a phone camera opens it with nothing installed:
-   `https://agentsmessenger.com/chat#r=<sealed-room>&c=<code>&m=<manager key id>`.
+   `https://agentsmessenger.com/chat#r=<sealed-room>&c=<code>&m=<manager key id>&t=<title>`.
    The fragment never reaches a server. `c` is random, 128 bits, and works once. `m` lets the phone check that
-   it encrypts for the right manager (names are not reserved on the platform).
+   it encrypts for the right manager (names are not reserved on the platform). `t` is the room's title,
+   URL-encoded, only when the room has one; the page shows it instead of `sealed-…`.
 3. **Pairing.** The phone makes its own key, joins the room and sends `tirith-pair <c>` (sealed). If `c` is
    unused, the manager records that key id as a device of the owner, burns the code and answers
    "Connected to <manager> on <host>". A new QR is a new code.
+   Each room has two different things: **Open on my phone** is permanent, a link
+   `https://agentsmessenger.com/chat#r=<room>&m=<manager key id>&t=<title>` with no code, which works as many
+   times as wanted on a phone already in the room (the key is on that phone; a phone not in the room gets a
+   notice from the page and does not join). **Connect another phone** is one use: a new QR is a new code for the
+   same room, each code works once, and several phones can be paired. The URLs are built by one function
+   (`roombridge.chat_url`) next to `CHAT_URL`.
 4. **Talking.** What a device of the owner writes reaches the manager through the same chat as the desktop app
    (same inbox, same session, a `via` field naming the room). The answer goes back sealed to the room and also
    shows in the desktop chat. There is no second manager process.
@@ -41,20 +48,24 @@ stops answering and says so once in the room, until a paired device writes.
 - `collector/tirith/roombridge.py`: its own thread, never blocks the loop; long polls (`wait=25`), backs off on
   errors, keeps its cursor in `~/.tirith/rooms/<room>.json`, never handles a message twice.
 - The private key stays in `~/.tirith/am/` (mode 600). Keys never go to logs, flows or `state.json`.
-- CLI: `tirith room new|invite|join|leave`. The Rooms view sends the same as inbox requests that Tirith handles by code:
-  `room-new` (text: `{"title": ...}` or the title), `room-invite` and `room-leave` (text: the room id); each is
+- CLI: `tirith room new|link|qr|invite|join|leave`. `link <room>` prints the permanent link and its QR; `qr <room>`
+  prints a new one-use QR. The Rooms view sends the same as inbox requests that Tirith handles by code:
+  `room-new` (text: `{"title": ...}` or the title), `room-invite`, `room-qr` (a new one-use QR) and `room-leave` (text: the room id); each is
   answered by `tirith`. One record format, in `roombridge.py`; a room made after the collector started is polled
   without a restart.
 
 ## `state.json` -> `rooms[]`, on top of `docs/CONTRACT-rooms.md`
 
 `private: true`, `connected: bool`, `me: {name, key_id}`, `devices: [{name, key_id, paired_at, last_seen}]`,
-`managers: [{name, key_id, last_seen}]`, `invite: {url, used}`, `peer_code` (after an invite request); `messages[].from_device: bool`. Old rooms keep
+`managers: [{name, key_id, last_seen}]`, `open_url` (the permanent link), `invite: {url, used}` (the one-use QR), `peer_code` (after an invite request); `messages[].from_device: bool`. Old rooms keep
 working as they are.
 
 ## App
 
-A **Rooms** view: **New room**, the QR (drawn in the page, no network), the rooms this Tirith is connected to
+A **Rooms** view: **New room**; for each room two blocks, one line each: **Open on my phone** (permanent: link with
+**Copy** and its QR, always visible while the room is connected) and **Connect another phone** (one use: its QR, or
+"The last QR was used" and the **New QR** button, which sends `room-qr`). QRs are drawn in the page, no network, and
+only for a URL of the exact shape above. The rooms this Tirith is connected to
 with a lock, who is in each (devices and managers, first 8 characters of each key id), last message, **Invite a
 manager** (copies the code) and **Leave**. An empty state that explains it in one line.
 
