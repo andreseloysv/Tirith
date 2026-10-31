@@ -25,7 +25,7 @@ from tirith.collector import Collector
 
 START = rb.start
 NOW = datetime(2026, 10, 30, 12, 0, tzinfo=timezone.utc)
-PAGE_FRAGMENT = re.compile(r"^r=sealed-[a-z0-9_-]+&c=[0-9a-f]{32}&m=[0-9a-f]{8,64}$")  # chat core.js parseFragment
+PAGE_FRAGMENT = re.compile(r"^r=sealed-[a-z0-9_-]+&c=[0-9a-f]{32}&m=[0-9a-f]{8,64}(&t=[A-Za-z0-9._~%-]+)?$")  # chat core.js parseFragment
 
 
 class Platform:
@@ -259,3 +259,64 @@ def test_room_network_error_is_reported_not_raised_by_the_cli(home, monkeypatch,
     monkeypatch.setattr(sealed, "new_room", boom)
     assert cli.main(["room", "new"]) == 1
     assert "offline" in capsys.readouterr().err and rb.list_rooms(home) == []
+
+
+def test_room_open_link_has_no_code_and_carries_the_title(home, net, capsys):
+    record = new_room(home, capsys, "--title", "My phone")
+    room = record["id"]
+    url = private_mod.open_url(home, room)
+    frag = fragment(url)
+    assert "c" not in frag and frag["r"] == room and frag["m"] == record["me"]["key_id"] and frag["t"] == "My phone"
+    assert "c=" not in url and "My%20phone" in url
+    assert fragment(record["invite"]["url"])["t"] == "My phone", "the pairing URL carries the title too"
+    row = private_mod.state_row(rb.load_room(home, room))
+    assert row["open_url"] == url
+    assert cli.main(["room", "link", room]) == 0
+    assert url in capsys.readouterr().out
+    # opening the link as often as wanted burns nothing
+    assert len(rb.load_room(home, room)["codes"]) == 1
+    # a room without a title has no t
+    rec = rb.load_room(home, room)
+    rec["title"] = "Private room"
+    assert "t=" not in rb.chat_url(rec)
+
+
+def test_room_new_qr_burns_only_its_own_code_and_a_second_phone_pairs(home, tmp_path, net, capsys):
+    record = new_room(home, capsys)
+    room = record["id"]
+    first = fragment(record["invite"]["url"])["c"]
+    assert cli.main(["room", "qr", room]) == 0
+    out = capsys.readouterr().out
+    second = re.search(r"c=([0-9a-f]{32})", out).group(1)
+    assert second != first and len(rb.load_room(home, room)["codes"]) == 2
+    phone_a, phone_b, thief = key(tmp_path, "a"), key(tmp_path, "b"), key(tmp_path, "t")
+    for k in (phone_a, phone_b, thief):
+        net.join(k, room)
+    net.say(phone_a, room, f"tirith-pair {first}")
+    rb.poll_room(home, room)
+    rec = rb.load_room(home, room)
+    assert [d["key_id"] for d in rec["devices"]] == [phone_a.key_id]
+    assert [c["code"] for c in rec["codes"]] == [second], "only the used code is gone"
+    net.say(phone_b, room, f"tirith-pair {second}")
+    rb.poll_room(home, room)
+    assert {d["key_id"] for d in rb.load_room(home, room)["devices"]} == {phone_a.key_id, phone_b.key_id}
+    net.say(thief, room, f"tirith-pair {first}")  # a used code still fails
+    net.say(thief, room, f"tirith-pair {second}")
+    rb.poll_room(home, room)
+    assert len(rb.load_room(home, room)["devices"]) == 2
+    assert private_mod.state_row(rb.load_room(home, room))["invite"]["used"] is True
+
+
+def test_room_new_qr_request_from_the_app_is_handled(home, net, capsys):
+    record = new_room(home, capsys)
+    room = record["id"]
+    before = rb.load_room(home, room)["invite"]["url"]
+    req = inbox_mod.add_request(home, "room-qr", text=room)
+    private_mod.handle_requests(home)
+    deadline = time.time() + 5
+    while time.time() < deadline and any(r["status"] != "done" for r in inbox_mod.requests(home)):
+        time.sleep(0.05)
+    (done,) = [r for r in inbox_mod.requests(home) if r["kind"] == "room-qr"]
+    assert done["status"] == "done" and "new one-use QR" in done["answers"][0]["text"]
+    after = rb.load_room(home, room)
+    assert after["invite"]["url"] != before and len(after["codes"]) == 2

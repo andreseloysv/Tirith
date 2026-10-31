@@ -2,7 +2,7 @@
 
 See ``docs/CONTRACT-private-rooms.md``. The crypto and the network live in ``sealed.py``; the per-room record
 (``<home>/rooms/<room>.json``), the pairing and the thread that listens live in ``roombridge.py``. This module
-only glues them to the CLI, the inbox requests ``room-new|room-invite|room-leave`` and the state, and keeps no
+only glues them to the CLI, the inbox requests ``room-new|room-invite|room-qr|room-leave`` and the state, and keeps no
 copy of what the bridge owns (record format, ``ROOM_RE``, ``pairing_url``).
 
 Nothing secret leaves this module: ``state.json`` gets the key ids (public) and, for the one unused pairing
@@ -84,6 +84,11 @@ def new_invite_url(home: Path, room: str) -> str:
     return bridge.renew_invite(home, room)
 
 
+def open_url(home: Path, room: str) -> str:
+    """The permanent link for a phone already in the room: no code, so it works as often as needed."""
+    return bridge.chat_url(record_of(home, room))
+
+
 def invite_manager(home: Path, room: str) -> str:
     """The code another Tirith joins with; kept in the record so the app can show it."""
     with bridge.record_lock:
@@ -120,7 +125,7 @@ def leave_room(home: Path, room: str) -> None:
         bridge.room_path(home, room).unlink(missing_ok=True)
 
 
-# -- the inbox requests ``room-new``, ``room-invite`` and ``room-leave`` -------------------------------
+# -- the inbox requests ``room-new``, ``room-invite``, ``room-qr`` and ``room-leave`` -------------------------------
 
 
 def handle_requests(home: Path) -> None:
@@ -152,6 +157,9 @@ def _run_request(home: Path, req: dict) -> None:
         if req["kind"] == "room-new":
             record = new_room(home, _title(req["text"]), "" if req["project"] == "all" else req["project"])
             text = f"Room {record['id']} is ready: scan its QR with your phone."
+        elif req["kind"] == "room-qr":
+            new_invite_url(home, req["text"])
+            text = "A new one-use QR is ready for another phone."
         elif req["kind"] == "room-invite":
             text = f"Code for another manager (it runs `tirith room join <code>`): {invite_manager(home, req['text'])}"
         else:
@@ -190,14 +198,14 @@ def state_row(record: dict) -> dict:
                     for p in devices + managers]
     invite = record.get("invite") or {}
     row = {"id": record["id"], "url": f"https://agentsmessenger.com/r/{record['id']}",
-           "title": record.get("title") or "Private room", "project": record.get("project"),
+           "title": record.get("title") or bridge.DEFAULT_TITLE, "project": record.get("project"),
            "summary": None, "summary_source": "none", "needs_owner": [], "message_count": len(messages),
            "last_message_at": messages[-1]["at"] if messages else None, "activity_per_hour": 0,
            "messages_last_day": 0, "polled_at": record.get("polled_at"), "error": record.get("last_error"),
            "participants": participants, "reply_edges": [], "messages": messages[-STATE_MESSAGES:],
            "private": True, "connected": bool(record.get("connected")) and not record.get("last_error"),
            "me": {"name": me.get("name"), "key_id": me.get("key_id")},
-           "devices": devices, "managers": managers}
+           "devices": devices, "managers": managers, "open_url": bridge.chat_url(record) if me.get("key_id") else None}
     if invite.get("url") and not invite.get("used") and record.get("role") != "peer":
         row["invite"] = {"url": invite["url"], "used": False}
     else:
