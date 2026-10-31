@@ -64,6 +64,22 @@ by the next dispatcher pass.
 that the lane's work is on the project's branch; a failed review closes the sub-item with the reason and reopens the
 item as `(reabierto: <reason>)`. Lanes without an item keep the older report matching (below, point 3).
 
+**The claim check** (`plangate.lane_work`) is the only proof that a lane's work is on main; the review, the queue and
+`tick_merged` (a lane already on main ticks as `(hecho: <merge sha>)`) all use it. The branch is the one from
+`mergeq.branch_of` and the base is the `start_commit` of the first lane of a continuation chain:
+
+| What it finds | State | The item |
+|---|---|---|
+| commits past the base, a merge on main whose first parent lacks them, clean worktree | `merged` | ticked with that merge |
+| the branch is removed, and main has a merge named exactly after it (`Merge <branch>: ...` or `Merge branch '<branch>'`) whose second parent has commits past the base and that changes more than the plan files | `merged` | ticked with that merge |
+| uncommitted changes in the worktree that has the branch checked out, with or without commits | `unsaved` | stays `(en revisión)`; a review pass reopens it |
+| clean worktree, no commits past the base; or the queue recorded `no-work` and the branch is removed | `no-work` | stays `(en revisión)` for the manager (autopilot proposal); a review pass reopens it |
+| anything else: a missing branch without that merge, a branch not on main, a branch on main that no merge brought in (`git merge main` and nothing else, or a fast-forward) | `not-merged` | stays `(en revisión)`; a review pass reopens it |
+
+Only the items of Tirith's own work (the "Trabajo automático" step: a verification, a plan refresh) may end with no
+changes: once the lane ended and the state is `no-work` the item is ticked `(hecho: sin cambios)`. A fast-forwarded
+lane cannot be told from one that only synced with main, so the manager ticks it with `tirith plan done --commit`.
+
 ## `tirith launch --project <id> --step <n> --item "<open item>" [--agent <alias>] [--dry-run]`
 
 1. Reads the step (title, open items) and the roadmap intro paragraph (the first paragraph after the
