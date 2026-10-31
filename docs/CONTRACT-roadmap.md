@@ -103,7 +103,9 @@ is created on first use, and the autopilot never starts a lane on it.
 - **Start = a linked open item**, no exceptions: `--step N --item "…"` checked by code (`docs/CONTRACT-launch.md`).
 - **`tirith plan add --project P --step N --text "…" [--title "…"]`** adds an open item at the end of the step
   (`--title` creates the step when it is not in the plan). It is the manager's way to update the TODO, e.g. to add a
-  review; the owner's plan edits from the Plan card (below) use the same writer.
+  review; the owner's plan edits from the Plan card (below) use the same writer. With `--title`, a project without
+  `docs/TODO.md` gets the file created. `tirith launch` and `lane run` do not count `manifest-missing` as a failed
+  check, so a new project (no `tirith.toml`) can configure its pipelines in a lane.
 - **Finish = an outcome**: `tirith plan report --lane L --status done|partial|blocked [--add …]… [--reason …]`.
 - **Done only when verified**: the review ticks the item, or reopens it with the reason.
 

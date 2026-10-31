@@ -150,12 +150,14 @@ def recover_git_lock(repo: Path) -> bool:
 
 
 def commit_change(home: Path, repo: Path, project: str, mutate: Callable[[str], str], message: str,
-                  path: Path | None = None) -> bool:
+                  path: Path | None = None, create: bool = False) -> bool:
     """Apply ``mutate`` to the plan file and commit only that file; False when nothing changed.
 
     Raises ``PlanGateError`` when the file has uncommitted changes, the edit does not apply or the commit
-    is refused (the file is restored then)."""
+    is refused (the file is restored then). ``create`` starts ``docs/TODO.md`` when the project has no plan."""
     path = path or plan_file(repo)
+    if path is None and create:
+        path = repo / "docs" / "TODO.md"
     if path is None:
         raise PlanGateError(f"project '{project}' has no plan file (docs/TODO.md)")
     if not path.is_relative_to(repo):
@@ -164,13 +166,14 @@ def commit_change(home: Path, repo: Path, project: str, mutate: Callable[[str], 
     with writer_lock(home, project):
         if _git(repo, "status", "--porcelain", "--", rel).stdout.strip():
             raise PlanGateError(f"{rel} has uncommitted changes, so it was left as it is")
-        text = path.read_text(encoding="utf-8")
+        text = path.read_text(encoding="utf-8") if path.exists() else "# TODO\n"
         try:
             new = mutate(text)
         except roadmap_mod.EditError as err:
             raise PlanGateError(str(err))
         if new == text:
             return False
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(new, encoding="utf-8")
         recover_git_lock(repo)
         added = _git(repo, "add", "--", rel)
@@ -183,7 +186,10 @@ def commit_change(home: Path, repo: Path, project: str, mutate: Callable[[str], 
             return False  # the plan already was in the target state: success
         if made.returncode != 0:  # the guard (or git) refused: leave the plan as it was
             _git(repo, "reset", "-q", "--", rel)
-            _git(repo, "checkout", "--", rel)
+            if _git(repo, "ls-files", "--", rel).stdout.strip():
+                _git(repo, "checkout", "--", rel)
+            else:
+                path.unlink(missing_ok=True)
             raise PlanGateError(f"committing the plan failed: {timeouts_mod.why(made)}")
     return True
 
@@ -304,7 +310,7 @@ def ensure_item(home: Path, repo: Path, project: str, step: str, text: str, lane
             raise PlanGateError(str(error)) from error
         return new
 
-    commit_change(home, repo, project, mutate, _message("add", step, who))
+    commit_change(home, repo, project, mutate, _message("add", step, who), create=bool(title))
     return clean
 
 

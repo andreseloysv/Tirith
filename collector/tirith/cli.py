@@ -388,7 +388,7 @@ def _lane_run_refusal(args, config, proj, workspace: Path) -> str | None:
         return "refusing to start: commit guard is not intact:\n" + \
             "\n".join(f"  {problem}" for problem in problems)
     failed = [p for p in manifest_mod.check(workspace, config.words_for(proj, default_words()))
-              if p.rule != "commit-guard"]  # the guard was verified just above
+              if p.rule not in ("commit-guard", "manifest-missing")]  # guard verified above; a new project has no tirith.toml yet
     if failed:
         return ("tirith: project-check: tirith check fails for '" + proj.id + "', so no lane may "
                 "start. Do this instead: fix these, then run `tirith check --project "
@@ -1513,7 +1513,8 @@ def launch_step(home: Path, project_id: str, step_id: str, agent: str | None = N
                                          "(they wait for the owner or for a date)")
         raise launch_mod.LaunchError(f"step {step['id']} ({title}) is already done" if step["items"]
                                      else f"step {step['id']} ({title}) has no items to finish")
-    failed = manifest_mod.check(repo, config.words_for(proj, default_words()))
+    failed = [p for p in manifest_mod.check(repo, config.words_for(proj, default_words()))
+              if p.rule != "manifest-missing"]  # a new project configures its pipelines in a lane
     if failed:
         raise launch_mod.LaunchError(
             f"tirith check fails for '{project_id}', so no lane may start. Fix these, then run "
