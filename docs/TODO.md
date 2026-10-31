@@ -484,10 +484,12 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [x] Vista Salas en la app: crear una sala, ver su QR, ver a qué salas estás conectado y quién hay, invitar a otro manager y salir. (check: `node web/js/rooms.test.mjs`) (hecho: 83c1a37)
 - [ ] La cámara del iPhone escanea el QR y abre el chat cifrado en agentsmessenger.com/chat, sin instalar nada. (check: `curl -fsS https://agentsmessenger.com/chat | grep -q chat.js`)
 - [ ] La cola de merge no pasa los tests de Python a un lane que solo cambia site/, ios/ o docs/. (check: `cd collector && uv run -q pytest -q tests -k merge_paths`)
-- [ ] El QR de invitación de las salas privadas usa la URL https://agentsmessenger.com/chat#r=…&c=…&m=… del contrato, no otra. (check: `cd collector && uv run -q pytest -q tests -k room_invite_url`)
-- [ ] Los agentes de una sala privada se hablan entre sí libremente, como dice docs/CONTRACT-private-rooms.md. (check: `cd collector && uv run -q pytest -q tests -k room_agents_talk`)
+- [x] El QR de invitación de las salas privadas usa la URL https://agentsmessenger.com/chat#r=…&c=…&m=… del contrato, no otra. (check: `cd collector && uv run -q pytest -q tests -k room_invite_url`) (hecho: e4fb43f)
+- [x] Los agentes de una sala privada se hablan entre sí libremente, como dice docs/CONTRACT-private-rooms.md. (check: `cd collector && uv run -q pytest -q tests -k room_agents_talk`) (hecho: e4fb43f)
 - [ ] El CLI y el collector no se pisan el registro de una sala cuando escriben a la vez con pocos milisegundos de diferencia (hallazgo de u-salas). (check: `cd collector && uv run -q pytest -q tests -k room_record_race`)
 - [ ] Una clave que entra tarde en una sala no puede leer los mensajes siguientes del dueño sin que el dueño la haya aceptado (hallazgo de u-salas, pide cambiar la página de chat). (check: `cd collector && uv run -q pytest -q tests -k room_late_key`)
+- [ ] Cada sala muestra en Tirith un QR y un link permanentes para volver a entrar desde el teléfono ya conectado, tantas veces como quieras. (check: `cd collector && uv run -q pytest -q tests -k room_open_link`) (en curso: u-roomlink)
+- [ ] Una sala da un QR nuevo de un solo uso para conectar otro teléfono, sin tener que crear otra sala. (check: `cd collector && uv run -q pytest -q tests -k room_new_qr`)
 - [x] El QR de las salas usa agentsmessenger.com/chat y los agentes de una sala hablan libres: solo se frenan tras 30 mensajes seguidos sin el dueño, como dice el contrato actualizado. (Corrige lo escrito por los lanes con el contrato anterior.) (check: `cd collector && ! grep -rq 'github.io/Tirith/chat' tirith ../web/js && uv run -q pytest -q tests -k roombridge_brake`) (hecho: e4fb43f)
 
 ## 19. Que los agentes de una sala no se queden callados
