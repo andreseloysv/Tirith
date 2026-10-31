@@ -44,7 +44,7 @@ def env(home: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     git(repo, "add", ".")
     git(repo, "commit", "-q", "-m", "manifest and plan")
     origin = tmp_path / "origin.git"
-    subprocess.run(["git", "init", "-q", "--bare", str(origin)], check=True)
+    subprocess.run(["git", "init", "-q", "--template=", "--bare", str(origin)], check=True)
     git(repo, "remote", "add", "origin", str(origin))
     git(repo, "push", "-q", "origin", "HEAD")
     write_config(home, [{"id": "demo", "name": "Demo", "repo": str(repo)}], '[agents.anthropic]\ncommand = "alpha-cli"\n')

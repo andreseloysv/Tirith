@@ -120,7 +120,7 @@ def test_hooks_run_without_tirith_on_path(env: Path, home: Path, monkeypatch: py
 
 def push(repo: Path, remote: Path) -> subprocess.CompletedProcess:
     if not remote.exists():
-        subprocess.run([GIT, "init", "-q", "--bare", str(remote)], check=True)
+        subprocess.run([GIT, "init", "-q", "--template=", "--bare", str(remote)], check=True)
     return subprocess.run([GIT, "-C", str(repo), "push", "-q", str(remote), "HEAD:refs/heads/x"],
                           capture_output=True, text=True)
 
@@ -148,6 +148,7 @@ def test_version_one_guard_still_verifies_with_reinstall_steps(home: Path, tmp_p
     try:
         write_config(home, [{"id": "old", "name": "Old", "repo": str(repo),
                              "color": "#123456", "guard_words": [WORD]}])
+        (repo / ".git" / "hooks").mkdir(exist_ok=True)  # make_repo uses no template, so no hooks folder
         for name, text in tirith_guard.render_v1([WORD]).items():
             hook = repo / ".git" / "hooks" / name
             hook.write_text(text)
