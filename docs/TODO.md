@@ -479,6 +479,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [ ] El test test_false_tick_a_merged_lane_gets_the_merge_that_brought_it_not_a_later_one no falla al azar: hoy falla 1 de cada 2 veces incluso solo. (check: `cd collector && uv run -q pytest -q tests/test_plangate.py -k test_false_tick_a_merged_lane_gets`) (en curso: u-flaky2)
 - [x] Llevar a main lane/u-stagetimeout resolviendo su conflicto con el tren en mergeq.py. (check: `cd collector && uv run -q pytest -q tests -k stage_timeout_is_not_red`) (hecho: c610830)
 - [ ] La lista de proyectos no muestra carpetas temporales de lanes o de la cola, como _mergeq-tirith-se-mejora o amchat. (check: `cd collector && uv run -q pytest -q tests -k temp_worktrees_are_not_projects`) (en revisión)
+- [ ] El ciclo del collector tarda menos de 10 s de verdad con la configuración real: hoy tarda de 1 a 4 minutos, casi todo en el paso inbox, y un proyecto nuevo o un QR tardan eso en verse. (check: `cd collector && uv run -q pytest -q tests -k real_cycle_budget`)
 - [x] La suite de tests de Python vuelve a pasar entera en main tras el tren de integración. (check: `cd collector && uv run -q pytest -q -n 8`) (hecho: b133b4b)
 
 ## 18. Salas privadas: hablar con el manager desde el móvil
