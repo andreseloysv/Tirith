@@ -180,7 +180,7 @@ def update_plan(home: Path, repo: Path, lane: dict) -> str:
                 timeouts_mod.run(["git", "-C", str(repo), "reset", "-q", "--", rel], "git")
                 timeouts_mod.run(["git", "-C", str(repo), "checkout", "--", rel], "git")
                 candidates = [*done, *candidates]
-                note = f"committing the plan failed: {flows_mod.one_line(made.stderr or made.stdout, 200)}"
+                note = f"committing the plan failed: {flows_mod.one_line(timeouts_mod.why(made), 200)}"
         elif done:
             candidates = [*done, *candidates]  # the plan has uncommitted edits: do not touch them
             note = "the plan file has uncommitted changes"
