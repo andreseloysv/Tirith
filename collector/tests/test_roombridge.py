@@ -85,7 +85,7 @@ def test_roombridge_pairing_url_and_code(room):
     code = rb.new_pairing(room, ROOM)
     assert len(code) == 32 and int(code, 16) >= 0
     url = rb.pairing_url(rb.load_room(room, ROOM), code)
-    assert url == f"https://agentsmessenger.com/chat#r={ROOM}&c={code}&m={ME.key_id}"
+    assert url == f"https://agentsmessenger.com/chat#r={ROOM}&c={code}&m={ME.key_id}&t=Phone"
     assert rb.new_pairing(room, ROOM) != code
 
 

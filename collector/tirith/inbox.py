@@ -22,7 +22,7 @@ from tirith.store import append_jsonl, read_jsonl
 
 INBOX_FILE = "inbox.jsonl"
 PROPOSAL = "autopilot-proposal"  # Tirith's own request to the manager: a plan item nobody works on
-ROOM_KINDS = ("room-new", "room-invite", "room-leave")  # private rooms: Tirith's own jobs (text: the title, or the room)
+ROOM_KINDS = ("room-new", "room-invite", "room-qr", "room-leave")  # private rooms: Tirith's own jobs (text: the title, or the room)
 KINDS = ("finish", "ask", "setup", "chat", "autopilot", PROPOSAL, "plan-refresh", "plan-new", "plan-edit", *ROOM_KINDS)
 PLAN_KINDS = ("plan-refresh", "plan-new")
 PLAN_STEP = "plan"  # the step of a request about the whole plan, not one step

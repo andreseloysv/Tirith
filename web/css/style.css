@@ -1026,5 +1026,7 @@ button.vwho:hover b { text-decoration: underline; }
 .rwho .rk { font-size: 11px; color: var(--mut); min-width: 70px; }
 .rlast { margin: 6px 0 0; overflow-wrap: anywhere; }
 .rqr { flex: none; width: 190px; } .rqr .qr { display: block; width: 190px; height: 190px; border: 1px solid var(--line); border-radius: 8px; background: #fff; } .rqr p { margin: 6px 0 0; }
+.rblocks { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); } .rblock { flex: 1 1 240px; min-width: 0; } .rblock > p { margin: 2px 0 8px; }
+.rlink { margin-bottom: 8px; overflow-wrap: anywhere; } .rurl { font-size: 12px; color: var(--mut); }
 .rleave { color: var(--red); background: rgba(229,72,77,.06); border-color: rgba(229,72,77,.25); }
 .rempty { padding: 6px 2px; }

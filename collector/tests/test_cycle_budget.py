@@ -112,3 +112,80 @@ def test_the_collector_logs_a_phase_timing_line_every_period(busy_home: Path, mo
     line = next(l for l in err.splitlines() if "mean per cycle" in l)
     for phase in ("lanes=", "pipelines=", "inbox=", "slim=", "write=", "cycle="):
         assert phase in line
+
+
+ENDED = 400
+IN_REVIEW = 20
+
+
+@pytest.fixture
+def ended_home(home: Path, tmp_path: Path, monkeypatch) -> tuple[Path, list[dict]]:
+    """400 lanes that ended days ago; 20 of them still wait in the plan as "(en revisión)"."""
+    from conftest import write_plan
+    from tirith.cli import register_lane
+    from tirith.store import read_lanes
+    repo = make_repo(tmp_path / "demo")
+    items = [f"Item {n}. (en revisión)" if n < IN_REVIEW else f"Item {n}." for n in range(ENDED)]
+    write_plan(repo, "# TODO\n\n## 1. Work\n\n" + "".join(
+        f"- [{' ' if n < IN_REVIEW else 'x'}] {text}\n" for n, text in enumerate(items)))
+    write_config(home, [{"id": "demo", "name": "Demo", "repo": str(repo)}])
+    for n in range(ENDED):
+        lane = register_lane(home, lane_id=f"old-{n}", project="demo", hero_class="warden", feature="Work",
+                             workspace=str(repo), log=None, pid=None, brief=None, step="1", item=f"Item {n}.")
+        lane.update(ended_at="2026-01-01T00:00:00Z", result="done", outcome={"status": "done", "applied": True})
+        write_lane(home, lane)
+    return home, read_lanes(home)
+
+
+def _count_git(monkeypatch) -> list[list[str]]:
+    calls: list[list[str]] = []
+    real = subprocess.Popen
+
+    class Spy(real):
+        def __init__(self, argv, *args, **kwargs):
+            if isinstance(argv, (list, tuple)) and argv and Path(str(argv[0])).name == "git":
+                calls.append(list(argv))
+            super().__init__(argv, *args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "Popen", Spy)
+    return calls
+
+
+def test_cycle_budget_ended_lanes_cost_a_bounded_number_of_git_calls(ended_home, monkeypatch) -> None:
+    from datetime import datetime, timezone
+    from tirith import autoreview, mergeq, plangate
+    home, lanes = ended_home
+    config = collector_mod.load_config(home)
+    monkeypatch.setattr(plangate, "TICK_EVERY_S", 60.0)
+    plangate._ticked_at.clear()
+    nothing = lambda *a, **k: None  # noqa: E731
+    calls = _count_git(monkeypatch)
+
+    def one_cycle() -> int:
+        before = len(calls)
+        plangate.sync(home, config, lanes, nothing)
+        mergeq.run(home, config, lanes, spawn=nothing, dry_run=True)
+        autoreview.run(home, config, datetime.now(timezone.utc), {}, lanes, spawn=nothing, notify=nothing)
+        return len(calls) - before
+
+    first = one_cycle()
+    assert first <= 4 * IN_REVIEW  # only the lanes still in review ask git, never the 380 settled ones
+    assert one_cycle() <= 2  # the same lanes a minute later are not asked again
+
+
+def test_cycle_budget_merge_runner_stops_after_an_entry_when_the_code_changed(home: Path, monkeypatch) -> None:
+    from tirith import mergeq
+    rows = [{"lane": f"l{n}", "result": mergeq.MERGED} for n in range(3)]
+    monkeypatch.setattr(mergeq, "process", lambda *a, **k: [rows.pop(0)] if rows else [])
+
+    class Code:
+        def __init__(self, changed: bool) -> None:
+            self.answer = changed
+
+        def changed(self) -> bool:
+            return self.answer
+
+    assert [r["lane"] for r in mergeq.drain(home, None, watch=Code(False))] == ["l0", "l1", "l2"]
+    rows[:] = [{"lane": f"l{n}", "result": mergeq.MERGED} for n in range(3)]
+    assert [r["lane"] for r in mergeq.drain(home, None, watch=Code(True))] == ["l0"]  # one pass, then a fresh runner
+    assert len(rows) == 2
