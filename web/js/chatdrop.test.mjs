@@ -1,4 +1,4 @@
-/* Run with: node web/js/chatdrop.test.mjs  (needs playwright-core and the msedge channel; no servers).
+/* Run with: node web/js/chatdrop.test.mjs  (needs playwright-core and bundled headless Chromium; no servers).
    An image dropped on the chat, or pasted into the composer, becomes a thumbnail in the composer strip; any other
    file becomes a chip with its name. A file dropped outside the chat does not open in the window. A long option
    button wraps its whole text instead of clipping it. */
@@ -40,7 +40,7 @@ const fire = (page, type, sel, kind) => page.evaluate(([type, sel, kind, png]) =
   el.dispatchEvent(ev);
 }, [type, sel, kind, PNG]);
 
-const browser = await chromium.launch({ channel: 'msedge' });
+const browser = await chromium.launch({ headless: true });
 let passed = 0;
 const ok = name => { console.log('ok  ' + name); passed++; };
 try {

@@ -1,4 +1,4 @@
-/* Run with: node web/js/chatwait.test.mjs  (needs playwright-core and the msedge channel; no servers).
+/* Run with: node web/js/chatwait.test.mjs  (needs playwright-core and bundled headless Chromium; no servers).
    The chat says "Manager is typing…" only while something is really writing; otherwise a plain waiting line.
    Pass a .png path as the argument to also save a screenshot. */
 import assert from 'node:assert/strict';
@@ -61,7 +61,7 @@ const cases = [
 ];
 
 const shot = process.argv[2];   /* optional: save a screenshot of the reopened-by-action case */
-const browser = await chromium.launch({ channel: 'msedge' });
+const browser = await chromium.launch({ headless: true });
 let passed = 0;
 try {
   for (const c of cases) {

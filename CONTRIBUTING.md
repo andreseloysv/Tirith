@@ -21,7 +21,9 @@ tirith run --project tirith --stage test    # collector tests
 tirith run --project tirith --stage build
 ```
 
-Without Tirith installed: `cd collector && uv run pytest -q`. Web tests use `playwright-core` with Microsoft Edge.
+Without Tirith installed: `cd collector && uv run pytest -q`. Web tests use `playwright-core` with Playwright's bundled
+Chromium in headless mode. Install the matching browser with `npx playwright-core install chromium` from that
+package's installation.
 A change that alters behaviour needs a test that fails without it.
 
 ## Code rules

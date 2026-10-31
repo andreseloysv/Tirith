@@ -1,4 +1,4 @@
-/* Run with: node web/js/typing.test.mjs  (needs playwright-core and the msedge channel; no servers).
+/* Run with: node web/js/typing.test.mjs  (needs playwright-core and bundled headless Chromium; no servers).
    Types 40 characters at 100 ms per key into each kind of text box while the state file is rewritten every second.
    The text must come out intact, the caret at the end, nothing selected. */
 import assert from 'node:assert/strict';
@@ -43,7 +43,7 @@ const cases = [
   { name: 'Settings + Stage step', view: 'settings', sel: 'input[data-act="mod-f"][data-key="new|step"]' }
 ];
 
-const browser = await chromium.launch({ channel: 'msedge' });
+const browser = await chromium.launch({ headless: true });
 let passed = 0;
 try {
   for (const c of cases) {

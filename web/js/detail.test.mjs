@@ -1,4 +1,4 @@
-/* Run with: node web/js/detail.test.mjs  (needs playwright-core and the msedge channel; no servers).
+/* Run with: node web/js/detail.test.mjs  (needs playwright-core and bundled headless Chromium; no servers).
    The state carries a trimmed agent (no log entries, short report) and points at agents/<id>.js.
    Opening its drawer must load that file with a <script> tag (file://) and show the full log and report. */
 import assert from 'node:assert/strict';
@@ -43,7 +43,7 @@ s.agents = [trimmed];
 const stateFile = path.join(dir, 'state.js');
 fs.writeFileSync(stateFile, 'window.TIRITH_STATE = ' + JSON.stringify(s) + ';');
 
-const browser = await chromium.launch({ channel: 'msedge' });
+const browser = await chromium.launch({ headless: true });
 try {
   const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
   const errors = [];

@@ -1,4 +1,4 @@
-/* Run with: node web/js/padding.test.mjs [screenshot-dir]  (needs playwright-core and the msedge channel; no servers).
+/* Run with: node web/js/padding.test.mjs [screenshot-dir]  (needs playwright-core and bundled headless Chromium; no servers).
    Every view keeps its content inside the header's left margin: no heading, intro line or card is closer to the left
    edge than the page title, and no view overflows horizontally, at 1440, 1100 and 760 px. */
 import assert from 'node:assert/strict';
@@ -19,7 +19,7 @@ const views = ['overview', 'pipelines', 'agents', 'settings'];
 const widths = [1440, 1100, 760];
 const SELECTOR = 'h1, h2, h3, p, .card, .col, .ptable, table, .quiet, .mlead, #view > *, #view > * > *';
 
-const browser = await chromium.launch({ channel: 'msedge' });
+const browser = await chromium.launch({ headless: true });
 let passed = 0;
 try {
   for (const w of widths) {

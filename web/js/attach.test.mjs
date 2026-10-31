@@ -1,4 +1,4 @@
-/* Run with: node web/js/attach.test.mjs  (needs playwright-core and the msedge channel; no servers).
+/* Run with: node web/js/attach.test.mjs  (needs playwright-core and bundled headless Chromium; no servers).
    A long quick-reply option wraps onto as many lines as it needs, never clipped, next to the other buttons, wide
    and narrow. Files dropped on the chat are attached: in the app through its file-drop events (the drop target
    shows while dragging over the chat, only a drop on the chat reads the files), as removable chips (a picture as a
@@ -53,7 +53,7 @@ const fakeApp = `
     event: { listen: (name, fn) => { window.__ev[name] = fn; return Promise.resolve(() => {}); } }
   };`;
 
-const browser = await chromium.launch({ channel: 'msedge' });
+const browser = await chromium.launch({ headless: true });
 let passed = 0;
 const ok = name => { console.log('ok  ' + name); passed++; };
 const overlap = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;

@@ -1,4 +1,4 @@
-/* Run with: node web/js/chatoverflow.test.mjs  (needs playwright-core and the msedge channel; no servers).
+/* Run with: node web/js/chatoverflow.test.mjs  (needs playwright-core and bundled headless Chromium; no servers).
    Long paths, code lines, a checklist, long button labels and live steps in the chat at 360, 380 and 900px:
    nothing extends past its bubble, the chat and the page have no horizontal scroll, `pre` blocks scroll inside the bubble. */
 import assert from 'node:assert/strict';
@@ -33,7 +33,7 @@ const ACTS = [
   { id: 'a2', label: 'Run', command: 'cd ' + LONG + ' && cargo test' },
 ];
 
-const browser = await chromium.launch({ channel: 'msedge' });
+const browser = await chromium.launch({ headless: true });
 let n = 0;
 try {
   for (const W of [360, 380, 900]) {

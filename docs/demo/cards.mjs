@@ -8,7 +8,7 @@ const out = resolve(process.argv[2] || join(here, 'out/work'));
 const require = createRequire(join(resolve(process.env.PLAYWRIGHT_CORE || '/Users/andreseloyasanchezva/DEVELOP/propuestavenezuela/node_modules'), 'x.js'));
 const { chromium } = require('playwright-core');
 mkdirSync(out, { recursive: true });
-const b = await chromium.launch({ channel: 'msedge' });
+const b = await chromium.launch({ headless: true });
 const p = await b.newPage({ viewport: { width: 1920, height: 1080 } });
 for (const id of ['problem', 'close']) {
   await p.goto(pathToFileURL(join(here, 'cards.html')).href + '#' + id);

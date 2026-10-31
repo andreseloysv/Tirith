@@ -1,4 +1,4 @@
-/* Run with: node web/js/health.test.mjs  (needs playwright-core and the msedge channel; no servers).
+/* Run with: node web/js/health.test.mjs  (needs playwright-core and bundled headless Chromium; no servers).
    The header dot follows state.health: hidden without it, green / amber / red with it, a click lists the checks. */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -32,7 +32,7 @@ const dot = page => page.evaluate(() => {
   return { hidden: b.hidden || getComputedStyle(b).display === 'none', cls: b.className, panel: p.hidden ? null : p.textContent };
 });
 
-const browser = await chromium.launch({ channel: 'msedge' });
+const browser = await chromium.launch({ headless: true });
 try {
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
   const errors = [];

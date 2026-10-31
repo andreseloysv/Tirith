@@ -1,4 +1,4 @@
-/* Run with: node web/js/chatlive.test.mjs  (needs playwright-core and the msedge channel; no servers).
+/* Run with: node web/js/chatlive.test.mjs  (needs playwright-core and bundled headless Chromium; no servers).
    The chat shows the manager working like the CLI: a live block under the owner's message (newest steps, a
    spinner line), which collapses to "12 steps · 48s · $0.21 · show" when the turn ends and opens on a click. */
 import assert from 'node:assert/strict';
@@ -59,7 +59,7 @@ function writeState(phase) {
 
 writeSteps(STEPS);
 writeState('working');
-const browser = await chromium.launch({ channel: 'msedge' });
+const browser = await chromium.launch({ headless: true });
 try {
   const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
   const errors = [];

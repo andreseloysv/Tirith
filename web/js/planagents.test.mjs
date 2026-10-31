@@ -1,4 +1,4 @@
-/* Run with: node web/js/planagents.test.mjs  (needs playwright-core and the msedge channel; no servers).
+/* Run with: node web/js/planagents.test.mjs  (needs playwright-core and bundled headless Chromium; no servers).
    A Plan step with 1, 3 and 10 agents at widths 1440 and 900: the header never overlaps, title / bar / count stay
    visible, one control opens a popover that lists every agent. Writes web/screenshots/plan-many-agents.png. */
 import assert from 'node:assert/strict';
@@ -37,7 +37,7 @@ function stateWith(n) {
 const box = async l => l.first().boundingBox();
 const overlap = (a, b) => a.x < b.x + b.width - 0.5 && b.x < a.x + a.width - 0.5 && a.y < b.y + b.height - 0.5 && b.y < a.y + a.height - 0.5;
 
-const browser = await chromium.launch({ channel: 'msedge' });
+const browser = await chromium.launch({ headless: true });
 let n = 0;
 try {
   for (const width of [1440, 900]) {

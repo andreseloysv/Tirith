@@ -1,4 +1,4 @@
-/* Run with: node web/js/rooms.test.mjs  (needs playwright-core and the msedge channel; no servers).
+/* Run with: node web/js/rooms.test.mjs  (needs playwright-core and bundled headless Chromium; no servers).
    The Rooms view against fixtures/rooms.json: empty state, the rooms with lock and short key ids, the QR drawn in the page
    (no network, only the contract's URL shape), New room (tirith:// link, CLI line), Invite / Leave and untrusted text. */
 import assert from 'node:assert/strict';
@@ -44,7 +44,7 @@ assert.equal(W.T.qrMatrix('x'.repeat(700)), null, 'too long: no QR instead of a 
 assert.equal(JSON.stringify(W.T.qrMatrix(inviteUrl)), JSON.stringify(m), 'deterministic');
 console.log('ok  QR encoder: finders, version, capacity');
 
-const browser = await chromium.launch({ channel: 'msedge' });
+const browser = await chromium.launch({ headless: true });
 try {
   const page = await browser.newPage({ viewport: { width: 1400, height: 1000 } });
   const errors = [], requests = [];
