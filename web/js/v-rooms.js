@@ -1,8 +1,9 @@
 /* Rooms view: private, encrypted rooms on agentsmessenger.com (docs/CONTRACT-private-rooms.md). New room, its QR
    (drawn here, no network), the rooms this Tirith is connected to with who is in each, Invite a manager and Leave.
-   New room, Invite a manager and Leave are inbox requests of kind room-new, room-invite and room-leave, which the collector
+   New room, Invite a manager and Leave are inbox requests of kind room-new, room-invite, room-qr and room-leave, which the collector
    handles (the app writes the inbox, a browser opens tirith://inbox, else the CLI line is shown to copy).
-   Only the QR URL of the contract (the chat page of agentsmessenger.com) is ever drawn, and only with that shape. */
+   Each room shows two things: Open on my phone (permanent link and QR, no code) and Connect another phone (a one-use QR,
+   New QR sends a room-qr request). Only the QR URL of the contract (the chat page of agentsmessenger.com) is ever drawn, and only with that shape. */
 (function () {
   var T = window.T, esc = T.esc, ui = T.ui;
   ui.roomPend = ui.roomPend || null;   /* { at, n } after New room: the number of private rooms when it was sent */
@@ -13,8 +14,10 @@
   ui.roomAsk = ui.roomAsk || {};       /* room id -> 'invite' | 'leave' while its command is shown */
   var lastState = null, PEND_WAIT = 30000;
   var LOCK = '<svg class="rlock" viewBox="0 0 16 16" width="13" height="13" role="img" aria-label="Encrypted" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><title>Encrypted</title><rect x="3.2" y="7" width="9.6" height="6.4" rx="1.6"/><path d="M5.4 7V5.2a2.6 2.6 0 015.2 0V7"/></svg>';
-  /* what the chat page's parseFragment accepts: a lowercase sealed room, the 128-bit code, a hex key id */
-  var QR_URL = /^https:\/\/agentsmessenger\.com\/chat#r=sealed-[a-z0-9_-]{1,57}&c=[0-9a-f]{32}&m=[0-9a-f]{8,64}$/;
+  /* what the chat page's parseFragment accepts: a lowercase sealed room, the 128-bit code (only in a pairing URL), a hex key id,
+     and the room's title URL-encoded (optional). The permanent link has no code. */
+  var QR_URL = /^https:\/\/agentsmessenger\.com\/chat#r=sealed-[a-z0-9_-]{1,57}&(?:c=[0-9a-f]{32}&)?m=[0-9a-f]{8,64}(?:&t=[A-Za-z0-9._~%-]{1,400})?$/;
+  var PAIR_URL = /&c=[0-9a-f]{32}&/;
   var ROOM_ID = /^sealed-[a-z0-9_-]{1,57}$/;
   var PEER_CODE = /^sealed-[a-z0-9_-]{1,57}:[0-9a-f]{64}$/;
 
@@ -56,7 +59,7 @@
   }
   function roomReq(kind, id) {
     if (!ROOM_ID.test(String(id))) return;
-    sendReq(kind, id, function () { if (kind === 'room-leave') ui.roomAsk[id] = null; else ui.roomWait[id] = T.now(); T.render(); setTimeout(T.render, PEND_WAIT + 500); });
+    sendReq(kind, id, function () { if (kind === 'room-leave') ui.roomAsk[id] = null; else ui.roomWait[kind === 'room-qr' ? id + ':qr' : id] = T.now(); T.render(); setTimeout(T.render, PEND_WAIT + 500); });
   }
   function pending(s) {
     var p = ui.roomPend;
@@ -83,12 +86,26 @@
     if (t.length > 140) t = t.slice(0, 139) + '…';
     return '<p class="rlast"><span class="mut sm">' + (m.from_device ? 'Your phone' : esc(m.from)) + ' · ' + esc(ago(m.at)) + '</span><br>' + esc(t) + '</p>';
   }
-  function qr(r) {
-    var inv = r.invite;
-    if (!inv || inv.used) return '<p class="mut sm">' + (inv ? 'This QR was used. Another phone needs a new room.' : 'No QR for this room.') + '</p>';
-    if (!QR_URL.test(String(inv.url || ''))) return '<p class="mut sm">The QR is not available.</p>';
-    var svg = T.qrSvg(inv.url, 'QR code to talk to the manager in ' + (r.title || r.id));
-    return svg ? '<div class="rqr">' + svg + '<p class="mut sm">Scan it with the phone camera. It works once.</p></div>' : '<p class="mut sm">The QR is too long to draw.</p>';
+  function qrBlock(url, label, note) {
+    var svg = T.qrSvg(url, label);
+    return svg ? '<div class="rqr">' + svg + '<p class="mut sm">' + note + '</p></div>' : '<p class="mut sm">The QR is too long to draw.</p>';
+  }
+  /* permanent: no code, works as often as you want on a phone already in the room */
+  function openBlock(r) {
+    var u = String(r.open_url || '');
+    var body = !u ? '<p class="mut sm">No link for this room.</p>' : !QR_URL.test(u) || PAIR_URL.test(u) ? '<p class="mut sm">The link is not available.</p>' :
+      '<div class="rlink"><a class="rurl" href="' + esc(u) + '" target="_blank" rel="noopener">' + esc(u) + '</a> <button class="alink" data-act="rm-copy" data-key="' + esc(u) + '">Copy</button></div>' +
+      qrBlock(u, 'QR code to open ' + (r.title || r.id) + ' on a phone already in it', 'No code in it.');
+    return '<div class="rblock ropen"><b>Open on my phone</b><p class="mut sm">Permanent. Works as many times as you want on a phone that is already in the room.</p>' + body + '</div>';
+  }
+  /* one use: each code pairs one phone, New QR makes another */
+  function pairBlock(r) {
+    var inv = r.invite, fresh = inv && !inv.used && QR_URL.test(String(inv.url || '')) && PAIR_URL.test(inv.url);
+    var wait = ui.roomWait[r.id + ':qr'] && T.now() - ui.roomWait[r.id + ':qr'] < PEND_WAIT;
+    var body = fresh ? qrBlock(inv.url, 'QR code to connect another phone to ' + (r.title || r.id), 'Scan it with the phone camera. It works once.') :
+      '<p class="mut sm">' + (inv && !inv.used ? 'The QR is not available.' : 'The last QR was used.') + '</p>';
+    return '<div class="rblock rpair"><b>Connect another phone</b><p class="mut sm">One use. Each QR pairs one phone; make one per phone.</p>' + body +
+      (ROOM_ID.test(String(r.id)) ? '<button class="sadd" data-act="rm-qr" data-key="' + esc(r.id) + '"' + (wait ? ' disabled' : '') + '>' + (wait ? 'Making…' : 'New QR') + '</button>' : '') + '</div>';
   }
   function popover(r) {
     var a = ui.roomAsk[r.id]; if (!a) return '';
@@ -116,7 +133,8 @@
       '<span class="rconn ' + (r.connected ? 'on' : 'off') + '">' + T.dot(r.connected ? 'green' : 'grey', r.connected ? 'Connected' : 'Not connected') + (r.connected ? 'Connected' : 'Not connected') + '</span>' +
       (r.me ? '<span class="mut sm rme" title="Your key id here">you: ' + esc(r.me.name) + ' <code>' + esc(short(r.me.key_id)) + '</code></span>' : '') + '</div>' +
       (r.error && !r.connected ? '<div class="ierr rerr">' + esc(r.error) + '</div>' : '') +
-      '<div class="rgrid"><div>' + who(r) + last(r) + '</div>' + qr(r) + '</div>' +
+      '<div class="rgrid"><div>' + who(r) + last(r) + '</div></div>' +
+      (r.connected ? '<div class="rgrid rblocks">' + openBlock(r) + pairBlock(r) + '</div>' : '<div class="rgrid rblocks">' + pairBlock(r) + '</div>') +
       (ok ? '<div class="sfoot"><button class="sadd" data-act="rm-ask" data-key="' + esc(r.id) + '" data-v="invite">Invite a manager</button>' +
         '<button class="sadd rleave" data-act="rm-ask" data-key="' + esc(r.id) + '" data-v="leave">Leave</button></div>' : '') + popover(r) + '</div>';
   }
@@ -147,6 +165,7 @@
     e.stopPropagation();
     if (act === 'rm-new') newRoom();
     else if (act === 'rm-ask') { ui.roomAsk[key] = ui.roomAsk[key] === b.getAttribute('data-v') ? null : b.getAttribute('data-v'); T.render(); }
+    else if (act === 'rm-qr') roomReq('room-qr', key);
     else if (act === 'rm-get-code') roomReq('room-invite', key);
     else if (act === 'rm-leave') roomReq('room-leave', key);
     else if (act === 'rm-close') { ui.roomAsk[key] = null; T.render(); }
