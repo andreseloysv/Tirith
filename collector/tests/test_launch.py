@@ -122,7 +122,7 @@ def test_refuses_when_a_working_lane_has_the_step(project, home: Path, capsys) -
 
 def test_refuses_when_check_fails(project, capsys) -> None:
     repo, _ = project
-    (repo / "tirith.toml").unlink()
+    (repo / "tirith.toml").write_text("not [valid toml\n", encoding="utf-8")  # a missing file alone does not block
     assert main(["launch", "--project", "demo", "--step", "2"]) == 3
     assert "tirith check fails" in capsys.readouterr().err
 
@@ -258,3 +258,20 @@ def test_handler_command_with_right_token_reaches_launch(project, home: Path) ->
     done = subprocess.run(["/bin/sh", "-c", _handler_command(home, url)], capture_output=True, text=True, env=env)
     assert done.returncode == 3 and "token" not in done.stderr and "done" in done.stderr
     assert not [r for r in read_jsonl(home / "events.jsonl") if r.get("rule") == "launch-token"] and started == []
+
+
+def test_new_project_bootstrap_plans_and_launches_without_manifest(home: Path, tmp_path: Path, capsys,
+                                                                   monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = make_repo(tmp_path / "fresh")
+    write_config(home, [{"id": "fresh", "name": "Fresh", "repo": str(repo)}],
+                 extra='[launch]\ncommand = "agentcmd --brief {brief} --cwd {workspace}"\n')
+    started: list[list[str]] = []
+    monkeypatch.setattr(launch_mod, "spawn_detached", lambda argv, home, log: started.append(argv) or 4242)
+    assert not (repo / "tirith.toml").exists() and not (repo / "docs" / "TODO.md").exists()
+    assert main(["plan", "add", "--project", "fresh", "--step", "1", "--title", "Pipelines",
+                 "--text", "Configure the pipelines in tirith.toml."]) == 0
+    assert "## 1. Pipelines" in (repo / "docs" / "TODO.md").read_text(encoding="utf-8")
+    assert main(["launch", "--project", "fresh", "--step", "1", "--item", "Configure the pipelines in tirith.toml."]) == 0
+    assert capsys.readouterr().out.strip().splitlines()[-1].startswith("lane ")
+    assert len(started) == 1
+    make_hooks_mutable(tmp_path / "fresh-lanes")
