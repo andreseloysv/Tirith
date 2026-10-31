@@ -30,7 +30,11 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Revisar el plan (2026-10-29) (en revisión)
 - [x] Manager de guardia: atender el chat
 - [ ] Verificar: Verify Commit lane/manager-permission-questions-nev, me (en curso: verify-commit-lane-manager-permi-2)
-- [ ] Manager de guardia: atender el chat (en curso: manager-96e996c6)
+- [ ] Manager de guardia: atender el chat (en curso: manager-641e297a)
+- [ ] Revisar el plan (2026-10-31) (en revisión)
+- [x] Revisar el plan (2026-10-31) (hecho: sin cambios)
+- [x] Manager de guardia: atender el chat
+- [x] Manager de guardia: atender el chat
 - [x] Manager de guardia: atender el chat
 - [x] Manager de guardia: atender el chat
 - [x] Manager de guardia: atender el chat
@@ -479,6 +483,9 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [ ] El test test_false_tick_a_merged_lane_gets_the_merge_that_brought_it_not_a_later_one no falla al azar: hoy falla 1 de cada 2 veces incluso solo. (check: `cd collector && uv run -q pytest -q tests/test_plangate.py -k test_false_tick_a_merged_lane_gets`) (en curso: u-flaky2)
 - [x] Llevar a main lane/u-stagetimeout resolviendo su conflicto con el tren en mergeq.py. (check: `cd collector && uv run -q pytest -q tests -k stage_timeout_is_not_red`) (hecho: c610830)
 - [ ] La lista de proyectos no muestra carpetas temporales de lanes o de la cola, como _mergeq-tirith-se-mejora o amchat. (check: `cd collector && uv run -q pytest -q tests -k temp_worktrees_are_not_projects`) (en revisión)
+- [ ] El ciclo del collector tarda menos de 10 s de verdad con la configuración real: hoy tarda de 1 a 4 minutos, casi todo en el paso inbox, y un proyecto nuevo o un QR tardan eso en verse. (check: `cd collector && uv run -q pytest -q tests -k real_cycle_budget`) (en curso: u-cycle2)
+- [ ] El límite de 3 lanes esperando en la cola entra de verdad en main: wip_block no está en main aunque su elemento quedó marcado con 56448d5, un commit de otro lane. Llevar b7d1965 de lane/tirith-se-mejora-usando-tirith-12, que choca con main en mergeq.py y CONTRACT-mergeq.md. (check: `cd collector && uv run -q pytest -q tests -k wip_limit`)
+- [ ] Un proyecto recién añadido, sin tirith.toml ni docs/TODO.md, puede configurar sus pipelines: tirith plan add --title crea el plan y tirith launch arranca ese elemento aunque tirith check falle solo por manifest-missing. Hoy se bloquea con SuperPolitika. (check: `cd collector && uv run -q pytest -q tests -k new_project_bootstrap`) (en curso: tirith-se-mejora-usando-tirith-17)
 - [x] La suite de tests de Python vuelve a pasar entera en main tras el tren de integración. (check: `cd collector && uv run -q pytest -q -n 8`) (hecho: b133b4b)
 
 ## 18. Salas privadas: hablar con el manager desde el móvil
