@@ -5,14 +5,15 @@ Output (committed): `out/tirith-demo.mp4` and `out/tirith-demo.gif` (the README 
 
 ## Reproduce
 
-Needs Microsoft Edge, `playwright-core` (`PLAYWRIGHT_CORE` = a `node_modules` folder that has it), `ffmpeg`, Node 20+ and,
-for the voice, macOS `say` (or `TEXT_TO_SPEACH_GOOGLE_API_KEY` for Google Cloud Text-to-Speech). No collector, server,
-port or network; nothing is written to `~/.tirith`.
+Needs Playwright's bundled Chromium, `playwright-core` (`PLAYWRIGHT_CORE` = a `node_modules` folder that has it),
+`ffmpeg`, Node 20+ and, for the voice, macOS `say` (or `TEXT_TO_SPEACH_GOOGLE_API_KEY` for Google Cloud Text-to-Speech).
+No collector, server, port or network; nothing is written to `~/.tirith`.
+Install the matching browser with `npx playwright-core install chromium` from the `playwright-core` installation.
 
 ```bash
 cd docs/demo
 node narrate.mjs     # narration.json -> out/work/audio/*.wav and timings.json (clip lengths set the scene lengths)
-node record.mjs      # Edge 1920x1080 with recordVideo -> out/work/raw/*.webm and scenes.json
+node record.mjs      # headless Chromium 1920x1080 with recordVideo -> out/work/raw/*.webm and scenes.json
 node assemble.mjs    # ffmpeg: video + narration -> out/tirith-demo.mp4 and out/tirith-demo.gif
 node cards.mjs       # optional: the problem and closing cards as PNG, to look at them
 ```

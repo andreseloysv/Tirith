@@ -1,4 +1,4 @@
-/* Run with: node web/js/onemanager.test.mjs  (needs playwright-core and the msedge channel; no servers).
+/* Run with: node web/js/onemanager.test.mjs  (needs playwright-core and bundled headless Chromium; no servers).
    The one persistent manager in the chat, CLI style: the turn under the owner's message is a live block (task list,
    coloured diff, text as it is typed, the lane it started nested), a second message typed meanwhile is "Queued",
    Esc / Stop interrupt, Up recalls the last message. Writes web/screenshots/one-manager.png. */
@@ -66,7 +66,7 @@ function writeState(busy) {
 writeFile(turnFile, 'manager-turn-aa11.steps', STEPS);
 writeFile(laneFile, 'lane-1.steps', LANE);
 writeState(true);
-const browser = await chromium.launch({ channel: 'msedge' });
+const browser = await chromium.launch({ headless: true });
 try {
   const page = await browser.newPage({ viewport: { width: 1600, height: 1100 } });
   const errors = [];

@@ -5,7 +5,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(process.env.PLAYWRIGHT_CORE ? join(resolve(process.env.PLAYWRIGHT_CORE), 'x.js') : import.meta.url);
 const { chromium } = require('playwright-core');
-const b = await chromium.launch({ channel: 'msedge' });
+const b = await chromium.launch({ headless: true });
 const p = await b.newPage({ viewport: { width: 1280, height: 640 } });
 await p.goto(pathToFileURL(join(here, 'social-preview.html')).href);
 await p.waitForTimeout(400);

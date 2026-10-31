@@ -1,4 +1,4 @@
-/* Run with: node web/js/chatsend.test.mjs  (needs playwright-core and the msedge channel; no servers).
+/* Run with: node web/js/chatsend.test.mjs  (needs playwright-core and bundled headless Chromium; no servers).
    A chat message is never lost: a send whose Tauri command rejects shows
    "Not sent · Retry · Copy text" and gives the text back to the composer; a command that resolves is "Delivered",
    never "Not sent", however slowly the state shows it; the tirith:// link path says "Not confirmed" after 30 s; a send that reaches the state turns normal;
@@ -46,7 +46,7 @@ const fake = mode => `
     return Promise.resolve(args.id || 'in-00000000');
   } } };`;
 
-const browser = await chromium.launch({ channel: 'msedge' });
+const browser = await chromium.launch({ headless: true });
 let passed = 0;
 const ok = name => { console.log('ok  ' + name); passed++; };
 try {

@@ -1,11 +1,11 @@
-// Records the Tirith demo (Edge, 1920x1080, playwright video) on the demo story in story.mjs.
+// Records the Tirith demo (headless Chromium, 1920x1080, playwright video) on the demo story in story.mjs.
 //
 //   node narrate.mjs [outDir]   # first: narration audio + <out>/timings.json
 //   node record.mjs  [outDir]   # then:  <out>/raw/*.webm and <out>/scenes.json
 //   ./assemble.sh    [outDir]   # finally: docs/demo/out/tirith-demo.mp4 and tirith-demo.gif
 //
-// Needs Microsoft Edge and playwright-core (PLAYWRIGHT_CORE can point at a node_modules folder that has it). No
-// collector, no server, no port, no network: the page is a local file that follows <out>/state/state.js, which this
+// Needs Playwright's bundled Chromium and playwright-core (PLAYWRIGHT_CORE can point at a node_modules folder that has it).
+// No collector, no server, no port, no network: the page is a local file that follows <out>/state/state.js, which this
 // script rewrites as the story goes on (a request in the chat, the manager's steps, two agents, a rule, a merge...).
 // Nothing is written to ~/.tirith.
 import { createRequire } from 'node:module';
@@ -46,7 +46,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const beat = (o) => { story.set(o).write(); };
 const heartbeat = setInterval(() => story.write(), 2000);   // generated_at stays fresh, like a live collector
 
-const browser = await chromium.launch({ channel: 'msedge', headless: true });
+const browser = await chromium.launch({ headless: true });
 const ctx = await browser.newContext({
   viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1,
   recordVideo: { dir: join(out, 'raw'), size: { width: 1920, height: 1080 } },

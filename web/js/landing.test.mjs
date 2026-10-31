@@ -1,4 +1,4 @@
-/* Run with: node web/js/landing.test.mjs  (needs the repo's own playwright-core, else skips with a warning, and the msedge channel; no servers).
+/* Run with: node web/js/landing.test.mjs  (needs the repo's own playwright-core, else skips with a warning, and bundled headless Chromium; no servers).
    site/index.html loads from file:// with no console errors, every image exists, and the page does not
    scroll sideways at 360px and 1440px. Writes web/screenshots/landing-1440.png and landing-360.png. */
 import assert from 'node:assert/strict';
@@ -40,7 +40,7 @@ assert.ok(scripts.every(t => /src="scroll\.js"/.test(t)), 'the only script is th
 assert.ok(fs.existsSync(path.join(site, 'scroll.js')), 'missing scroll.js');
 assert.ok(!/(?:src|href)="https?:\/\/[^"]*\.(?:js|png|jpe?g|webp|gif)/i.test(html), 'no third-party assets');
 
-const b = await chromium.launch({ channel: 'msedge' });
+const b = await chromium.launch({ headless: true });
 try {
   for (const width of [360, 1440]) {
     const p = await b.newPage({ viewport: { width, height: 900 } });

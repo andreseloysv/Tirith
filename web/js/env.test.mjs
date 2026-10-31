@@ -1,4 +1,4 @@
-/* Run with: node web/js/env.test.mjs [screenshot.png]  (needs playwright-core and the msedge channel; no servers).
+/* Run with: node web/js/env.test.mjs [screenshot.png]  (needs playwright-core and bundled headless Chromium; no servers).
    Settings > Environment: the selected project's variables are a table with the values in full; add, edit, delete,
    keys are validated, Save sends the whole set through `project_env_set` (app), `tirith://env-set` (browser with the
    handler) or shows the CLI line, and the table settles once the state shows the saved set. */
@@ -38,7 +38,7 @@ const fake = `
   window.__calls = [];
   window.__TAURI__ = { core: { invoke: (cmd, args) => { window.__calls.push({ cmd, args }); return Promise.resolve('ok'); } } };`;
 
-const browser = await chromium.launch({ channel: 'msedge' });
+const browser = await chromium.launch({ headless: true });
 let passed = 0;
 const ok = name => { console.log('ok  ' + name); passed++; };
 try {

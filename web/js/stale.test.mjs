@@ -1,4 +1,4 @@
-/* Run with: node web/js/stale.test.mjs  (needs playwright-core and the msedge channel; no servers).
+/* Run with: node web/js/stale.test.mjs  (needs playwright-core and bundled headless Chromium; no servers).
    A calm banner shows only when the state is older than 30 s, and goes away when it is fresh again. */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -29,7 +29,7 @@ const banner = page => page.evaluate(() => {
   return b && !b.hidden && getComputedStyle(b).display !== 'none' ? b.textContent : null;
 });
 
-const browser = await chromium.launch({ channel: 'msedge' });
+const browser = await chromium.launch({ headless: true });
 try {
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
   const errors = [];

@@ -1,4 +1,4 @@
-/* Run with: node web/js/chatgrow.test.mjs  (needs playwright-core and the msedge channel; no servers).
+/* Run with: node web/js/chatgrow.test.mjs  (needs playwright-core and bundled headless Chromium; no servers).
    A long multi-line message makes the chat box grow up to half the window, then scroll inside; no text is lost. */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -19,7 +19,7 @@ const file = path.join(dir, 'state.js');
 fs.writeFileSync(file, 'window.TIRITH_STATE = ' + JSON.stringify(holder.window.TIRITH_STATE) + ';');
 
 const sel = 'textarea[data-act="mc-text"]';
-const browser = await chromium.launch({ channel: 'msedge' });
+const browser = await chromium.launch({ headless: true });
 try {
   const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
   const errors = [];
