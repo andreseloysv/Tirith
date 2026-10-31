@@ -16,6 +16,7 @@ import os
 import re
 import subprocess
 import sys
+import threading
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -493,6 +494,56 @@ def backoff_s(failures: int) -> float:
     return min(30.0, 2.0 ** failures) if failures else 0.0
 
 
+GUARD_RECHECK_S = 300.0  # the guard check of a repo, when none of its hook files changed
+SLOW_PAUSE_S = 2.0  # between two passes of the slow work
+
+
+class SlowWork:
+    """The work that may take minutes on a loaded machine (the dispatcher's pass: free space, sweep, autoreview, the
+    self-check, the merge queue, the claim checks; and the GitHub poll) runs here, in its own thread, so a cycle
+    never waits for a git call. The cycle hands over what it just read (:meth:`offer`) and reads what the thread
+    wrote to disk; the thread waits for the first offer, so it never works on nothing."""
+
+    def __init__(self, owner: "Collector"):
+        self.owner = owner
+        self.entries: list = []
+        self._offer: tuple | None = None
+        self._lock = threading.Lock()
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._loop, name="tirith-slow-work", daemon=True)
+
+    def start(self) -> None:
+        self._thread.start()
+
+    def offer(self, config, agents: list[dict], lanes: list[dict], projects: list[dict]) -> None:
+        with self._lock:
+            self._offer = (config, list(agents), list(lanes), list(projects))
+
+    def stop(self, timeout_s: float) -> bool:
+        self._stop.set()
+        if self._thread.is_alive():
+            self._thread.join(timeout_s)
+        return not self._thread.is_alive()
+
+    def _loop(self) -> None:
+        failures = 0
+        while not self._stop.wait(SLOW_PAUSE_S + backoff_s(failures)):
+            with self._lock:
+                offer = self._offer
+            if offer is None:
+                continue
+            config, agents, lanes, projects = offer
+            try:
+                self.owner.github.poll(config, self.entries)
+                dispatch_mod.run(self.owner.home, config, datetime.now(timezone.utc), agents=agents, lanes=lanes,
+                                 status_of=lane_status, projects=projects)
+                failures = 0
+            except Exception as exc:  # one bad pass must not end the thread
+                failures += 1
+                print(f"tirith collect: slow work failed ({type(exc).__name__}: {exc}); "
+                      f"retrying (failure {failures})", file=sys.stderr, flush=True)
+
+
 class Collector:
     """Owns one home directory and builds ``state.json`` cycle by cycle."""
 
@@ -519,6 +570,24 @@ class Collector:
         self._phase_s: dict[str, float] = {}
         self._phase_total: dict[str, float] = {}
         self._inbox_tried: dict[str, float] = {}  # request id -> monotonic time of the last brain try
+        self._guard_seen: dict[str, tuple[float, tuple, list[str]]] = {}
+        self._slow: SlowWork | None = None  # the background thread of the slow periodic work (continuous mode only)
+
+    def _verify_guard(self, repo: Path, words: list[str]) -> list[str]:
+        """The guard check of a repo (git calls): run again when a hook file changed or the words did, else once
+        every ``GUARD_RECHECK_S``. The check itself is the same."""
+        hooks = Path(repo) / ".git" / "hooks"
+        try:
+            stamp = tuple((e.name, e.stat().st_mtime_ns) for e in sorted(os.scandir(hooks), key=lambda e: e.name))
+        except OSError:
+            stamp = None  # a worktree, or a repo with another hooks folder: the time alone decides
+        key, at = str(repo), time.monotonic()
+        seen = self._guard_seen.get(key)
+        if seen and seen[1] == (stamp, tuple(words)) and at - seen[0] < GUARD_RECHECK_S:
+            return list(seen[2])
+        problems = verify_guard(repo, words)
+        self._guard_seen[key] = (at, (stamp, tuple(words)), list(problems))
+        return problems
 
     def _tick(self, name: str | None) -> None:
         """Charge the time since the last tick to phase ``name`` (``None`` only restarts the clock)."""
@@ -1235,7 +1304,7 @@ class Collector:
             if guard_replies.get(proj.id, ("", None))[0] == "never" and proj.guard:
                 projects_mod.set_project_guard(self.home, proj.id, False)
                 proj = dataclasses.replace(proj, guard=False)
-            problems = [] if not proj.guard else verify_guard(
+            problems = [] if not proj.guard else self._verify_guard(
                 proj.repo, self.config.words_for(proj, words_default)) \
                 if proj.repo is not None else ["no repo path configured"]
             guard_ok = not problems
@@ -1279,7 +1348,10 @@ class Collector:
         local_runs = self._pipelines(sorted(events + git_runs, key=lambda e: str(e.get("at") or ""))
                                      if git_runs else events, resolve, entries)
         self._flow_git_hooks(git_runs)
-        remote_runs, remote_agents = self.github.poll(self.config, entries)
+        if self._slow is not None:
+            self._slow.entries = entries
+        remote_runs, remote_agents = (self.github.cached() if self._slow is not None
+                                      else self.github.poll(self.config, entries))
         runs = sorted(local_runs + remote_runs, key=lambda r: str(r["started_at"] or ""),
                       reverse=True)
         agent_rows += remote_agents
@@ -1458,8 +1530,12 @@ class Collector:
                now: datetime, lanes: list[dict] | None = None) -> list[dict]:
         """``state.inbox``; the dispatcher handles ``finish``, an unanswered question gets one brain answer
         (at once when the dispatcher is on, else after ``AUTO_ANSWER_AFTER_S``)."""
-        rows = dispatch_mod.run(self.home, self.config, now, agents=agents, lanes=lanes or [],
-                                status_of=lane_status, projects=projects)
+        if self._slow is not None:  # the dispatcher runs in its own thread: the cycle only reads what it left
+            self._slow.offer(self.config, agents, lanes or [], projects)
+            rows = inbox_mod.requests(self.home)
+        else:
+            rows = dispatch_mod.run(self.home, self.config, now, agents=agents, lanes=lanes or [],
+                                    status_of=lane_status, projects=projects)
         wait_s = 0 if self.config.dispatch_enabled else inbox_mod.AUTO_ANSWER_AFTER_S
         if self.worker.enabled:
             by_project = {p["id"]: p for p in projects}
@@ -1650,6 +1726,8 @@ class Collector:
         deadline = time.monotonic() + timeout_s
         left = lambda: max(0.1, deadline - time.monotonic())  # noqa: E731
         ended = [self.rooms.stop(left()), self.worker.stop(left()), self.activity.wait_idle(left())]
+        if self._slow is not None:
+            ended.append(self._slow.stop(left()))
         return all(ended)
 
     def run(self, interval: float = 2.0, once: bool = False, reload_check=None) -> dict:
@@ -1669,6 +1747,8 @@ class Collector:
             return state
         if once:
             return self.cycle()
+        self._slow = SlowWork(self)
+        self._slow.start()
         state: dict = {}
         failures = 0
         try:
