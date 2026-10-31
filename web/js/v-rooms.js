@@ -19,7 +19,7 @@
   var QR_URL = /^https:\/\/agentsmessenger\.com\/chat#r=sealed-[a-z0-9_-]{1,57}&(?:c=[0-9a-f]{32}&)?m=[0-9a-f]{8,64}(?:&t=[A-Za-z0-9._~%-]{1,400})?$/;
   var PAIR_URL = /&c=[0-9a-f]{32}&/;
   var ROOM_ID = /^sealed-[a-z0-9_-]{1,57}$/;
-  var PEER_CODE = /^sealed-[a-z0-9_-]{1,57}:[0-9a-f]{64}$/;
+  var PEER_CODE = /^sealed-[a-z0-9_-]{1,57}:[0-9a-f]{64}(:[0-9a-f]{32})?$/;
 
   function shq(t) { return "'" + String(t).replace(/'/g, "'\\''") + "'"; }
   function short(id) { return String(id || '').slice(0, 8); }
@@ -75,7 +75,7 @@
     if (!rows.length) return '<p class="mut sm rwho">Nobody else is here yet.</p>';
     return '<ul class="rwho">' + rows.map(function (x) {
       var p = x[1];
-      return '<li><span class="rk">' + (x[0] === 'phone' ? 'Your phone' : 'Manager') + '</span><b>' + esc(p.name) + '</b><code title="Key id">' + esc(short(p.key_id)) + '</code>' +
+      return '<li><span class="rk">' + (x[0] === 'phone' ? 'Your phone' : p.accepted ? 'Manager' : 'Peer, no code') + '</span><b>' + esc(p.name) + '</b><code title="Key id">' + esc(short(p.key_id)) + '</code>' +
         (p.last_seen ? '<span class="mut sm">seen ' + esc(ago(p.last_seen)) + '</span>' : '') + '</li>';
     }).join('') + '</ul>';
   }

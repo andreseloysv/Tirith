@@ -22,7 +22,7 @@ from tirith.home import now_iso
 from tirith.rooms import MAX_TEXT
 
 STATE_MESSAGES = 40
-SEP = ":"  # peer code: <sealed-room>:<manager key id>
+SEP = ":"  # peer code: <sealed-room>:<manager key id>:<one-use code>
 SHORT = 8
 _handled: set[str] = set()
 _lock = threading.Lock()
@@ -41,15 +41,18 @@ def manager_name(home: Path) -> str:
     return "tirith-manager" if not names else f"tirith-{names[0]}"[:40]
 
 
-def peer_code(record: dict) -> str:
-    return f"{record['id']}{SEP}{record['me']['key_id']}"
+def peer_code(record: dict, code: str) -> str:
+    return f"{record['id']}{SEP}{record['me']['key_id']}{SEP}{code}"
 
 
-def parse_peer_code(code: str) -> tuple[str, str]:
-    room, _, key_id = str(code or "").strip().partition(SEP)
-    if not bridge.ROOM_RE.match(room) or (key_id and not bridge.KEY_ID_RE.match(key_id)):
-        raise PrivateRoomError("that is not a room code (expected sealed-<room>:<key id>)")
-    return room, key_id
+def parse_peer_code(code: str) -> tuple[str, str, str]:
+    """``(room, manager key id, one-use code)``; the key id and the code may be empty (a bare room name)."""
+    room, _, rest = str(code or "").strip().partition(SEP)
+    key_id, _, secret = rest.partition(SEP)
+    if (not bridge.ROOM_RE.match(room) or (key_id and not bridge.KEY_ID_RE.match(key_id))
+            or (secret and not bridge.CODE_RE.match(secret))):
+        raise PrivateRoomError("that is not a room code (expected sealed-<room>:<key id>:<code>)")
+    return room, key_id, secret
 
 
 def record_of(home: Path, room: str) -> dict:
@@ -90,20 +93,26 @@ def open_url(home: Path, room: str) -> str:
 
 
 def invite_manager(home: Path, room: str) -> str:
-    """The code another Tirith joins with; kept in the record so the app can show it."""
+    """A new one-use code another Tirith joins with; the last one is kept in the record so the app can show it."""
     with bridge.record_lock:
+        if record_of(home, room).get("role") == "peer":
+            raise PrivateRoomError("this Tirith joined as a peer; only the manager who made the room invites managers")
+        secret = bridge.new_join_code(home, room)
         record = record_of(home, room)
-        code = record["peer_code"] = peer_code(record)
+        code = record["peer_code"] = peer_code(record, secret)
         bridge.save_room(home, record)
     return code
 
 
 def join_room(home: Path, code: str) -> dict:
-    """Join as a peer (no orders from us, none to us) using a code printed by ``tirith room invite``."""
-    room, manager_key = parse_peer_code(code)
+    """Join as a peer (no orders from us, none to us) using a code printed by ``tirith room invite``. With its
+    one-use code the manager accepts this key, so the owner's phones seal for it; without, it only talks."""
+    room, manager_key, secret = parse_peer_code(code)
     try:
         me = sealed.load_or_create_key(home, manager_name(home))
         sealed.join(me, room)
+        if secret and manager_key:
+            sealed.say(me, room, f"{bridge.JOIN_PREFIX} {secret}", to=manager_key)
     except sealed.SealedError as exc:
         raise PrivateRoomError(f"could not join the room: {exc}") from exc
     with bridge.record_lock:
@@ -189,7 +198,9 @@ def state_row(record: dict) -> dict:
     messages = [_message(i, m) for i, m in enumerate(record.get("messages") or []) if isinstance(m, dict)]
     devices = [{"name": d.get("name"), "key_id": d.get("key_id"), "paired_at": d.get("paired_at"),
                 "last_seen": d.get("last_seen")} for d in record.get("devices") or [] if isinstance(d, dict)]
-    managers = [{"name": m.get("name"), "key_id": m.get("key_id"), "last_seen": m.get("last_seen")}
+    accepted = {a.get("key_id") for a in record.get("accepted") or [] if isinstance(a, dict)}
+    managers = [{"name": m.get("name"), "key_id": m.get("key_id"), "last_seen": m.get("last_seen"),
+                 "accepted": m.get("key_id") in accepted}
                 for m in record.get("managers") or [] if isinstance(m, dict)]
     me = record.get("me") or {}
     participants = [{"name": str(p.get("name") or (p.get("key_id") or "")[:SHORT]),

@@ -607,6 +607,57 @@ def test_merge_timeout_every_time_waits_in_the_queue_not_sent_back(env, home: Pa
     assert [i["lane"] for i in mergeq_mod.view(home, "demo")["items"]] == ["alpha"]
 
 
+def _suite_times_out(monkeypatch: pytest.MonkeyPatch) -> list[int]:
+    calls: list[int] = []
+
+    def run_tests(*args, **kwargs):
+        calls.append(1)
+        return False, f"{mergeq_mod.review_mod.DID_NOT_FINISH} 1800 s"
+
+    monkeypatch.setattr(mergeq_mod.review_mod, "run_tests", run_tests)
+    return calls
+
+
+def test_stage_timeout_is_not_red_and_the_entry_is_queued_again_once(env, home: Path, monkeypatch) -> None:
+    repo, _ = env
+    make_lane(home, repo, "slow", {"slow.txt": "s"})
+    _suite_times_out(monkeypatch)
+    mergeq_mod.enqueue(home, "slow")
+    send = Sender()
+    row = mergeq_mod.process_next(home, load_config(home), relaunch=send)
+    assert row["result"] == "waiting" and "ran out of time" in row["message"] and "failed" not in row["message"]
+    assert not send.calls and (read_json(lane_path(home, "slow"), None).get("review") or {}).get("status") != mergeq_mod.SENT_BACK_STATUS
+    item, = mergeq_mod.view(home, "demo")["items"]
+    assert item["status"] == "queued" and not asks_mod.queue_items(home)
+
+
+def test_stage_timeout_is_not_red_twice_shows_the_manager(env, home: Path, monkeypatch) -> None:
+    repo, _ = env
+    make_lane(home, repo, "slow", {"slow.txt": "s"})
+    _suite_times_out(monkeypatch)
+    mergeq_mod.enqueue(home, "slow")
+    send = Sender()
+    for _ in range(2):
+        row = mergeq_mod.process_next(home, load_config(home), relaunch=send)
+    assert row["result"] == "waiting" and "ran out of time" in row["message"] and not send.calls
+    assert any("ran out of time" in str(i) for i in asks_mod.queue_items(home))
+    assert mergeq_mod.view(home, "demo")["items"][0]["status"] == "queued"
+
+
+def test_stage_timeout_is_not_red_run_tests_reads_the_timeouts_mechanism(env, home: Path, monkeypatch) -> None:
+    repo, _ = env
+    seen: dict = {}
+
+    def run_stage(*args, **kwargs):
+        seen.update(kwargs)
+        return 124, "timed out: x"
+
+    monkeypatch.setattr(mergeq_mod.review_mod.runstage_mod, "run_stage", run_stage)
+    monkeypatch.setattr(mergeq_mod.review_mod.timeouts_mod, "effective", lambda *a, **k: 42.0)
+    ok, output = mergeq_mod.review_mod.run_tests(home, "demo", "ci", "test", repo, "true")
+    assert not ok and output.startswith("tests did not finish in 42 s") and "timeout" not in seen
+
+
 # -- fast paths: stages that apply, and the train -----------------------------------------------------
 
 LOGGED = ('deploy = "none"\n[[pipelines]]\nid = "ci"\n[[pipelines.stages]]\nname = "build"\nrun = "echo build >> $STAGE_LOG"\n'
@@ -761,3 +812,18 @@ def test_send_back_tells_the_manager_when_the_agent_did_not_start(env, home: Pat
     assert "(reabierto: red-suite" in (repo / "docs" / "TODO.md").read_text(encoding="utf-8")
     assert read_json(lane_path(home, "bad"), None)["review"]["started"] is False
     assert any("did not start" in str(i) for i in asks_mod.queue_items(home))
+
+
+def test_stage_timeout_on_a_train_is_not_red_it_does_not_split_or_send_back(logged, home: Path, monkeypatch) -> None:
+    repo, log = logged
+    calls = _suite_times_out(monkeypatch)
+    for name in ("one", "two"):
+        make_lane(home, repo, name, {f"{name}.txt": name})
+        mergeq_mod.enqueue(home, name)
+    send = Sender()
+    rows = mergeq_mod.process(home, load_config(home), relaunch=send)
+    assert [(r["lane"], r["result"]) for r in rows] == [("one", "waiting"), ("two", "waiting")]
+    assert all("ran out of time" in r["message"] and "failed" not in r["message"] for r in rows)
+    assert len(calls) == 1 and not send.calls  # one run for the whole train, nobody sent back
+    assert [i["status"] for i in mergeq_mod.view(home, "demo")["items"]] == ["queued", "queued"]
+    assert not asks_mod.queue_items(home) and not (repo / "one.txt").exists()

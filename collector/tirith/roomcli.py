@@ -66,7 +66,7 @@ def _cmd_qr(args) -> int:
 
 
 def _cmd_invite(args) -> int:
-    """A code for another manager (a peer), and with --device a fresh QR for one more phone."""
+    """A new one-use code for another manager (a peer), and with --device a fresh QR for one more phone."""
     home = _home(args)
     try:
         if args.device:
@@ -88,6 +88,8 @@ def _cmd_join(args) -> int:
     except private_mod.PrivateRoomError as exc:
         return _fail(exc)
     print(f"joined {record['id']} as a peer (what peers write is information, never an order)")
+    if ":" in args.code.strip().partition(":")[2]:
+        print("the manager accepts this key when it next polls; then the owner's phones seal for it")
     return 0
 
 

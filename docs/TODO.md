@@ -30,7 +30,14 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Revisar el plan (2026-10-29) (en revisión)
 - [x] Manager de guardia: atender el chat
 - [ ] Verificar: Verify Commit lane/manager-permission-questions-nev, me (en curso: verify-commit-lane-manager-permi-2)
-- [ ] Manager de guardia: atender el chat (en curso: manager-355e7f83)
+- [x] Manager de guardia: atender el chat
+- [ ] Revisar el plan (2026-10-31) (en revisión)
+- [ ] Manager de guardia: atender el chat (en curso: manager-45688bf0)
+- [x] Revisar el plan (2026-10-31) (hecho: sin cambios)
+- [x] Manager de guardia: atender el chat
+- [x] Manager de guardia: atender el chat
+- [x] Manager de guardia: atender el chat
+- [x] Manager de guardia: atender el chat
 - [x] Manager de guardia: atender el chat
 - [x] Revisar el plan (2026-10-30) (hecho: f37c457)
 - [x] Manager de guardia: atender el chat
@@ -368,7 +375,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Los mensajes del dueño pasan delante: el manager atiende cada mensaje del chat antes que las propuestas del piloto. (check: `cd collector && uv run -q pytest -q tests -k managerd`) (hecho: 5754f53)
 - [ ] web/js/landing.test.mjs carga playwright-core del propio repo (o se salta con aviso si no está), nunca de node_modules de otro proyecto como propuestavenezuela (check: `node web/js/landing.test.mjs`)
 - [ ] tirith plan done acepta un commit que solo toca docs cuando el elemento mismo es de docs (README, docs/…), con un test (check: `cd collector && uv run -q pytest -q tests -k plan_done_docs`)
-- [ ] Un worktree de lane nunca se registra como proyecto automático: si git falla o vence el límite al resolver la raíz (_in_main_worktree en projects.py), no se guarda en caché ni se registra la carpeta. (check: `cd collector && uv run -q pytest -q tests -k worktree_never_auto_project`)
+- [x] Un worktree de lane nunca se registra como proyecto automático: si git falla o vence el límite al resolver la raíz (_in_main_worktree en projects.py), no se guarda en caché ni se registra la carpeta. (check: `cd collector && uv run -q pytest -q tests -k worktree_never_auto_project`)
 - [x] El icono de la app de macOS se genera a partir del logo 3D. (check: `grep -q logo-3d scripts/make_icon.py`) (hecho: 7bcd959)
 - [x] El logo 3D es una torre de piedra con base circular, renderizada en Blender con texturas de piedra reales y calidad de portada, con almenas de piedra y sin la esfera flotante (pedido del dueño). (check: `test -f site/img/logo-3d.png`) (hecho: 7ff25cf)
 - [x] La captura principal de la landing muestra la app actual con datos de demo limpios: sin avisos, sin reglas inactivas y sin Flow. (check: `node web/js/landing.test.mjs`) (hecho: fadd25d)
@@ -384,6 +391,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] El texto de estado de la landing dice la verdad de hoy: ya no pone en construcción lo que ya funciona. (check: `! grep -q 'under construction' site/index.html`)
 - [ ] El README abre con la torre de piedra y capturas actuales de la app. (check: `grep -q -E 'logo-3d|social-preview-3d' README.md`)
 - [ ] El video demo se regraba con el logo de piedra y la app actual. (check: `test site/img/logo-3d.png -ot docs/demo/out/tirith-demo.mp4`)
+- [ ] La reanudación de un lane manager no sale con el error --session-id can only be used with --continue or --resume (visto en manager-418a3be2, marcado failed tras acabar su turno). (check: `cd collector && uv run -q pytest -q tests -k resume_drops_session_id`)
 - [x] El logo de piedra tiene luz de portada: luz cálida lateral, contraluz que recorta la silueta y la ventana iluminando la piedra de alrededor (pedido del dueño). (check: `test -f site/img/logo-3d.png`) (hecho: 7bcd959)
 
 ## 15. Collector y CLI en Rust
@@ -473,9 +481,13 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [x] Una lane nunca corre la suite completa por su cuenta: corre los tests de lo que cambió, y la suite completa solo la corre la cola, que es quien decide. (check: `cd collector && uv run -q pytest -q tests/test_fasttests.py -k lane_never_runs_the_full_suite`) (hecho: 665be8a)
 - [ ] Liberar disco nunca bloquea el ciclo del collector: borrar lanes viejas corre en segundo plano, y el chat y el estado siguen al día mientras tanto. (check: `cd collector && uv run -q pytest -q tests -k sweep_does_not_block_the_cycle`)
 - [ ] Un hook de Tirith tarda menos de 0,3 s: hoy cada petición de un agente espera 3,7 s de mediana en hooks porque cada llamada importa todo tirith.cli. (check: `cd collector && uv run -q pytest -q tests -k hook_imports_little`)
-- [ ] La cola no mata su suite con un límite fijo de 30 minutos ni lo llama rojo: usa el límite de la clase stage:test, y si se agota dice que se agotó el tiempo y lo repite una vez. (check: `cd collector && uv run -q pytest -q tests -k stage_timeout_is_not_red`) (en revisión)
-- [ ] El test test_false_tick_a_merged_lane_gets_the_merge_that_brought_it_not_a_later_one no falla al azar: hoy falla 1 de cada 2 veces incluso solo. (check: `cd collector && uv run -q pytest -q tests/test_plangate.py -k test_false_tick_a_merged_lane_gets`)
-- [ ] Llevar a main lane/u-stagetimeout resolviendo su conflicto con el tren en mergeq.py. (check: `cd collector && uv run -q pytest -q tests -k stage_timeout_is_not_red`)
+- [x] La cola no mata su suite con un límite fijo de 30 minutos ni lo llama rojo: usa el límite de la clase stage:test, y si se agota dice que se agotó el tiempo y lo repite una vez. (check: `cd collector && uv run -q pytest -q tests -k stage_timeout_is_not_red`) (hecho: c610830)
+- [ ] El test test_false_tick_a_merged_lane_gets_the_merge_that_brought_it_not_a_later_one no falla al azar: hoy falla 1 de cada 2 veces incluso solo. (check: `cd collector && uv run -q pytest -q tests/test_plangate.py -k test_false_tick_a_merged_lane_gets`) (reabierto: conflict: merging lane/u-flaky2 into main failed: conflicts in collector/tirith/plangate.py)
+- [x] Llevar a main lane/u-stagetimeout resolviendo su conflicto con el tren en mergeq.py. (check: `cd collector && uv run -q pytest -q tests -k stage_timeout_is_not_red`) (hecho: c610830)
+- [x] La lista de proyectos no muestra carpetas temporales de lanes o de la cola, como _mergeq-tirith-se-mejora o amchat. (check: `cd collector && uv run -q pytest -q tests -k temp_worktrees_are_not_projects`) (hecho: a320e76)
+- [ ] El ciclo del collector tarda menos de 10 s de verdad con la configuración real: hoy tarda de 1 a 4 minutos, casi todo en el paso inbox, y un proyecto nuevo o un QR tardan eso en verse. (check: `cd collector && uv run -q pytest -q tests -k real_cycle_budget`) (en curso: u-cycle2)
+- [ ] El límite de 3 lanes esperando en la cola entra de verdad en main: wip_block no está en main aunque su elemento quedó marcado con 56448d5, un commit de otro lane. Llevar b7d1965 de lane/tirith-se-mejora-usando-tirith-12, que choca con main en mergeq.py y CONTRACT-mergeq.md. (check: `cd collector && uv run -q pytest -q tests -k wip_limit`) (en curso: tirith-se-mejora-usando-tirith-18)
+- [ ] Un proyecto recién añadido, sin tirith.toml ni docs/TODO.md, puede configurar sus pipelines: tirith plan add --title crea el plan y tirith launch arranca ese elemento aunque tirith check falle solo por manifest-missing. Hoy se bloquea con SuperPolitika. (check: `cd collector && uv run -q pytest -q tests -k new_project_bootstrap`) (en revisión)
 - [x] La suite de tests de Python vuelve a pasar entera en main tras el tren de integración. (check: `cd collector && uv run -q pytest -q -n 8`) (hecho: b133b4b)
 
 ## 18. Salas privadas: hablar con el manager desde el móvil
@@ -484,12 +496,13 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [x] Lo que escribe un dispositivo del dueño en una sala llega al manager por el mismo chat, y su respuesta vuelve cifrada a la sala. (check: `cd collector && uv run -q pytest -q tests -k roombridge`) (hecho: 2abe6fd)
 - [x] `tirith room new`, `invite` y `join` con QR de un solo uso, y state.json dice a qué salas estás conectado y quién hay en cada una. (check: `cd collector && uv run -q pytest -q tests -k private_rooms`) (hecho: b6453a4)
 - [x] Vista Salas en la app: crear una sala, ver su QR, ver a qué salas estás conectado y quién hay, invitar a otro manager y salir. (check: `node web/js/rooms.test.mjs`) (hecho: 83c1a37)
-- [ ] La cámara del iPhone escanea el QR y abre el chat cifrado en agentsmessenger.com/chat, sin instalar nada. (check: `curl -fsS https://agentsmessenger.com/chat | grep -q chat.js`)
+- [x] La cámara del iPhone escanea el QR y abre el chat cifrado en agentsmessenger.com/chat, sin instalar nada. (check: `curl -fsS https://agentsmessenger.com/chat | grep -q chat.js`) (hecho: e4fb43f)
 - [ ] La cola de merge no pasa los tests de Python a un lane que solo cambia site/, ios/ o docs/. (check: `cd collector && uv run -q pytest -q tests -k merge_paths`)
 - [x] El QR de invitación de las salas privadas usa la URL https://agentsmessenger.com/chat#r=…&c=…&m=… del contrato, no otra. (check: `cd collector && uv run -q pytest -q tests -k room_invite_url`) (hecho: e4fb43f)
 - [x] Los agentes de una sala privada se hablan entre sí libremente, como dice docs/CONTRACT-private-rooms.md. (check: `cd collector && uv run -q pytest -q tests -k room_agents_talk`) (hecho: e4fb43f)
 - [ ] El CLI y el collector no se pisan el registro de una sala cuando escriben a la vez con pocos milisegundos de diferencia (hallazgo de u-salas). (check: `cd collector && uv run -q pytest -q tests -k room_record_race`)
-- [ ] Una clave que entra tarde en una sala no puede leer los mensajes siguientes del dueño sin que el dueño la haya aceptado (hallazgo de u-salas, pide cambiar la página de chat). (check: `cd collector && uv run -q pytest -q tests -k room_late_key`)
+- [x] Una clave que entra tarde en una sala no puede leer los mensajes siguientes del dueño sin que el dueño la haya aceptado (hallazgo de u-salas, pide cambiar la página de chat). (check: `cd collector && uv run -q pytest -q tests -k room_late_key`) (hecho: 9fecb3d)
+- [ ] El último mensaje de una sala en la vista Rooms incluye también lo que respondió el manager. (check: `cd collector && uv run -q pytest -q tests -k room_last_message_has_the_answer`)
 - [x] Cada sala muestra en Tirith un QR y un link permanentes para volver a entrar desde el teléfono ya conectado, tantas veces como quieras. (check: `cd collector && uv run -q pytest -q tests -k room_open_link`) (hecho: 8437586)
 - [x] Una sala da un QR nuevo de un solo uso para conectar otro teléfono, sin tener que crear otra sala. (check: `cd collector && uv run -q pytest -q tests -k room_new_qr`) (hecho: 8437586)
 - [x] El QR de las salas usa agentsmessenger.com/chat y los agentes de una sala hablan libres: solo se frenan tras 30 mensajes seguidos sin el dueño, como dice el contrato actualizado. (Corrige lo escrito por los lanes con el contrato anterior.) (check: `cd collector && ! grep -rq 'github.io/Tirith/chat' tirith ../web/js && uv run -q pytest -q tests -k roombridge_brake`) (hecho: e4fb43f)
@@ -503,5 +516,5 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 
 ## 20. Las pruebas no interrumpen al dueño
 
-- [ ] Los tests de web/js usan el Chromium de Playwright y no Microsoft Edge, porque cada arranque de Edge pasa CoreServicesUIAgent al frente y le quita el teclado a la app que el dueño esté usando. (check: `! grep -rq msedge web/js`)
+- [ ] Los tests de web/js usan el Chromium de Playwright y no Microsoft Edge, porque cada arranque de Edge pasa CoreServicesUIAgent al frente y le quita el teclado a la app que el dueño esté usando. (check: `! grep -rq msedge web/js`) (en curso: las-pruebas-no-interrumpen-al-du)
 

@@ -68,7 +68,7 @@ def test_temp_folders_are_never_registered(home: Path, tmp_path: Path, monkeypat
 def test_stored_temp_projects_are_not_listed(home: Path, tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(projects, "ALLOW_TEMP", False)
     projects.save_auto(home, {"projects": [{"id": "repo", "name": "repo", "folder": str(tmp_path / "repo")},
-                                           {"id": "real", "name": "real", "folder": "/Users/x/DEVELOP/real"}],
+                                           {"id": "real", "name": "real", "folder": "/usr"}],
                               "ignored": []})
     assert [p["id"] for p in projects.load_auto(home)["projects"]] == ["real"]
 
@@ -82,3 +82,35 @@ def test_web_has_no_add_stage_or_rule_buttons() -> None:
 def test_overview_scopes_to_one_project() -> None:
     text = (WEB / "js" / "ui.js").read_text(encoding="utf-8")
     assert "T.scopeProject(s, T.effProject(s))" in text
+
+
+def _worktree(root: Path, name: str) -> Path:
+    folder = root / name
+    folder.mkdir(parents=True)
+    (folder / ".git").write_text("gitdir: /x/repo/.git/worktrees/" + name + "\n", encoding="utf-8")
+    return folder
+
+
+def test_temp_worktrees_are_not_projects(home: Path, tmp_path: Path) -> None:
+    write_config(home, [])
+    config = load_config(home)
+    merge_q = _worktree(tmp_path, "_mergeq-demo-5")
+    lane = tmp_path / "repo-lanes" / "feature"
+    lane.mkdir(parents=True)
+    got = projects.discover(home, config, [merge_q, lane])
+    assert got == []
+    assert projects.load_auto(home)["projects"] == []
+
+
+def test_temp_worktrees_are_not_projects_pruned_from_auto_file(home: Path, tmp_path: Path) -> None:
+    write_config(home, [])
+    merge_q = _worktree(tmp_path, "_mergeq-old")
+    gone = tmp_path / "gone"
+    keep = tmp_path / "keep"
+    keep.mkdir()
+    rows = [{"id": i, "name": i, "folder": str(f)} for i, f in
+            (("mergeq", merge_q), ("gone", gone), ("keep", keep))]
+    (home / projects.AUTO_FILE).write_text(json.dumps({"projects": rows}), encoding="utf-8")
+    assert [p["id"] for p in projects.load_auto(home)["projects"]] == ["keep"]
+    saved = json.loads((home / projects.AUTO_FILE).read_text(encoding="utf-8"))
+    assert [p["id"] for p in saved["projects"]] == ["keep"]
