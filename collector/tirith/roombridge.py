@@ -37,6 +37,8 @@ log = logging.getLogger("tirith.roombridge")
 DEFAULT_TITLE = "Private room"
 CHAT_URL = "https://agentsmessenger.com/chat"  # the page that pairs with this bridge (agentsmessenger src/chat)
 PAIR_PREFIX = "tirith-pair"
+JOIN_PREFIX = "tirith-join"
+ROSTER_PREFIX = "tirith-roster"
 WAIT_S = 25
 MIN_PAUSE_S = 2.0
 IDLE_S = 5.0
@@ -99,7 +101,7 @@ def new_record(room: str, me: dict, title: str = "", project: str = "") -> dict:
     """A fresh record for a room this Tirith made (``me``: ``{name, key_id}``)."""
     return {"id": room, "private": True, "title": title or room, "project": project, "connected": True,
             "me": {"name": me["name"], "key_id": me["key_id"]}, "devices": [], "managers": [],
-            "codes": [], "invite": {"url": "", "used": False}, "cursor": None, "handled": [],
+            "codes": [], "join_codes": [], "accepted": [], "roster_sig": None, "invite": {"url": "", "used": False}, "cursor": None, "handled": [],
             "pending": [], "agent_streak": 0, "braked": False, "messages": [], "last_error": None,
             "polled_at": None}
 
@@ -149,20 +151,58 @@ def pairing_url(record: dict, code: str) -> str:
     return chat_url(record, code)
 
 
-def _burn_code(record: dict, text: str) -> bool:
-    """True and the code is gone if ``text`` is ``tirith-pair <code>`` with an unused code (constant-time)."""
+def new_join_code(home: Path, room: str) -> str:
+    """A fresh one-use code for another manager to join with (kept apart from the phones' codes), until used."""
+    with record_lock:
+        record = load_room(home, room)
+        if record is None:
+            raise ValueError(f"no private room {room}")
+        code = secrets.token_hex(16)
+        record["join_codes"] = (record.get("join_codes") or [])[-(CODES_KEPT - 1):] + [{"code": code, "at": now_iso()}]
+        save_room(home, record)
+    return code
+
+
+def _burn_code(record: dict, text: str, prefix: str = PAIR_PREFIX, field: str = "codes") -> bool:
+    """True and the code is gone if ``text`` is ``<prefix> <code>`` with an unused code of ``field`` (constant-time)."""
     parts = text.strip().split()
-    if len(parts) != 2 or parts[0] != PAIR_PREFIX or not CODE_RE.match(parts[1]):
+    if len(parts) != 2 or parts[0] != prefix or not CODE_RE.match(parts[1]):
         return False
     hit = None
-    for entry in record.get("codes") or []:
+    for entry in record.get(field) or []:
         if secrets.compare_digest(str(entry.get("code") or ""), parts[1]):
             hit = entry
     if hit is None:
         return False
-    record["codes"] = [e for e in record["codes"] if e is not hit]
+    record[field] = [e for e in record[field] if e is not hit]
+    if field != "codes":
+        return True
     record["invite"] = {"url": "" if not record["codes"] else record["invite"].get("url", ""), "used": True}
     return True
+
+
+# -- the roster: the other keys that may read the owner ----------------------------------------------
+
+
+def roster_ids(record: dict) -> list[str]:
+    """Every key the owner's words may be sealed for besides this manager: paired phones and accepted managers."""
+    ids = [str(e.get("key_id") or "") for e in (record.get("devices") or []) + (record.get("accepted") or [])]
+    return sorted({i for i in ids if KEY_ID_RE.match(i)})
+
+
+def roster_text(record: dict, to: str) -> str:
+    """The roster message for the device ``to``: everyone but itself, ``tirith-roster`` + space + comma list."""
+    return ROSTER_PREFIX + " " + ",".join(i for i in roster_ids(record) if i != to)
+
+
+def sync_roster(record: dict, say) -> None:
+    """Send the roster to every paired device when the set of keys changed since it was last sent (not saved)."""
+    sig = ",".join(roster_ids(record))
+    if sig == record.get("roster_sig"):
+        return
+    for device in record.get("devices") or []:
+        say(roster_text(record, device["key_id"]), device["key_id"])
+    record["roster_sig"] = sig
 
 
 # -- handling one message -------------------------------------------------------------------------
@@ -243,6 +283,13 @@ def handle_message(home: Path, record: dict, msg, say) -> None:
         return
     _remember(record, msg, text, False, now)
     _upsert(record["managers"], msg.key_id, msg.author, now)
+    if text.strip().split(None, 1)[:1] == [JOIN_PREFIX]:
+        if _burn_code(record, text, JOIN_PREFIX, "join_codes"):
+            _upsert(record["accepted"], msg.key_id, msg.author, now, accepted_at=now)
+            log.info("room %s: accepted manager %s", room, _short(msg.key_id))
+        else:
+            log.info("room %s: refused a join message from %s", room, _short(msg.key_id))
+        return
     if not text.strip():
         return
     record["agent_streak"] = record.get("agent_streak", 0) + 1
@@ -310,6 +357,7 @@ def poll_room(home: Path, room: str, wait: int = 0, sealed=None) -> int:
                 return 0
             for msg in messages:
                 handle_message(home, record, msg, say)
+            sync_roster(record, say)
             record["cursor"] = max(cursor, record.get("cursor") or 0)
             forward_answers(home, record, say)
             record["last_error"] = None
