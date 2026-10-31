@@ -917,3 +917,33 @@ def test_backfill_ticks_the_listed_items_once(proj, home: Path, monkeypatch) -> 
     assert plangate.backfill(home, cfg)
     assert f"- [x] Write the docs. (hecho: {sha})" in _plan(repo)
     assert not plangate.backfill(home, cfg)
+
+
+def test_plan_commit_failure_says_why(proj, home: Path, monkeypatch) -> None:
+    repo, _ = proj
+    real = plangate._git
+    seen: list[tuple] = []
+
+    def fake(repo_, *a):
+        if a[:1] == ("commit",):
+            seen.append(a)
+            return subprocess.CompletedProcess(a, 124, "", "")
+        return real(repo_, *a)
+
+    monkeypatch.setattr(plangate, "_git", fake)
+    with pytest.raises(plangate.PlanGateError, match="committing the plan failed: git exited 124"):
+        plangate.commit_change(home, repo, "demo", lambda t: t.replace("Write the docs.", "Write the docs. "), "m")
+    assert seen
+
+
+def test_a_plan_commit_gets_the_commit_deadline(monkeypatch, tmp_path: Path) -> None:
+    classes: list[str] = []
+
+    def fake_run(argv, cls, **kw):
+        classes.append(cls)
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    monkeypatch.setattr(plangate.timeouts_mod, "run", fake_run)
+    plangate._git(tmp_path, "commit", "-q")
+    plangate._git(tmp_path, "status")
+    assert classes == ["git-commit", "git"]
