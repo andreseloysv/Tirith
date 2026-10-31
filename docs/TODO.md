@@ -480,6 +480,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [x] Llevar a main lane/u-stagetimeout resolviendo su conflicto con el tren en mergeq.py. (check: `cd collector && uv run -q pytest -q tests -k stage_timeout_is_not_red`) (hecho: c610830)
 - [ ] La lista de proyectos no muestra carpetas temporales de lanes o de la cola, como _mergeq-tirith-se-mejora o amchat. (check: `cd collector && uv run -q pytest -q tests -k temp_worktrees_are_not_projects`) (en revisión)
 - [ ] El ciclo del collector tarda menos de 10 s de verdad con la configuración real: hoy tarda de 1 a 4 minutos, casi todo en el paso inbox, y un proyecto nuevo o un QR tardan eso en verse. (check: `cd collector && uv run -q pytest -q tests -k real_cycle_budget`) (en curso: u-cycle2)
+- [ ] El límite de 3 lanes esperando en la cola entra de verdad en main: wip_block no está en main aunque su elemento quedó marcado con 56448d5, un commit de otro lane. Llevar b7d1965 de lane/tirith-se-mejora-usando-tirith-12, que choca con main en mergeq.py y CONTRACT-mergeq.md. (check: `cd collector && uv run -q pytest -q tests -k wip_limit`)
 - [x] La suite de tests de Python vuelve a pasar entera en main tras el tren de integración. (check: `cd collector && uv run -q pytest -q -n 8`) (hecho: b133b4b)
 
 ## 18. Salas privadas: hablar con el manager desde el móvil
