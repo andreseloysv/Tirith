@@ -78,12 +78,18 @@ try {
   console.log('ok  rooms: lock, who is in each (8-char key ids), last message');
 
   /* the QR is an inline svg, only for an unused invite, and nothing was fetched */
-  assert.equal(await first.locator('.rqr svg.qr').count(), 1);
+  assert.equal(await first.locator('.rpair .rqr svg.qr').count(), 1, 'one-use QR');
+  assert.equal(await first.locator('.ropen .rqr svg.qr').count(), 1, 'permanent QR');
   assert.ok(await first.locator('.rqr svg.qr path').count());
   const second = page.locator('.rcard').nth(1);
-  assert.equal(await second.locator('svg.qr').count(), 0, 'a used invite draws no QR');
+  assert.equal(await second.locator('svg.qr').count(), 0, 'a used invite draws no QR, and a room not connected has no permanent one');
   assert.match(await second.textContent(), /Not connected/);
-  assert.match(await second.textContent(), /QR was used/);
+  assert.match(await second.textContent(), /last QR was used/);
+  assert.equal(await second.locator('[data-act="rm-qr"]').count(), 1, 'New QR is offered when the code was used');
+  assert.match(await first.locator('.ropen').textContent(), /Permanent/);
+  assert.match(await first.locator('.rpair').textContent(), /One use/);
+  assert.equal(await first.locator('.ropen .rurl').getAttribute('href'), fixture.rooms[0].open_url);
+  assert.ok(!/[?&]c=/.test(await first.locator('.ropen .rurl').getAttribute('href')), 'the permanent link has no code');
   assert.equal(await page.locator('#view img, #view canvas').count(), 0);
   console.log('ok  QR drawn in the page, none for a used invite');
 
@@ -96,27 +102,39 @@ try {
   /* an invite URL that is not the contract's shape is never drawn */
   const evil = JSON.parse(JSON.stringify(fixture.rooms));
   evil[0].invite.url = 'https://evil.example/chat#r=sealed-x&c=00&m=y';
+  evil[0].open_url = 'https://evil.example/chat#r=sealed-x&m=' + 'ab'.repeat(32);
   write(evil);
   await page.waitForFunction(() => !document.querySelector('svg.qr'), null, { timeout: 8000 });
   assert.doesNotMatch(await page.textContent('.mrooms'), /evil\.example/, 'the URL is not shown either');
   write(fixture.rooms, { launch: { token: 'tok123', available: true } });
-  await page.waitForFunction(() => document.querySelectorAll('svg.qr').length === 1, null, { timeout: 8000 });
+  await page.waitForFunction(() => document.querySelectorAll('svg.qr').length === 2, null, { timeout: 8000 });
   console.log('ok  a foreign URL is not drawn');
 
   /* neither the pairing code nor a key is written as text */
   assert.doesNotMatch(await page.textContent('.mrooms'), /3f9a1c7e5b2d48a0916c0e7d2b4f8a35/, 'the pairing code is only inside the QR');
 
   /* the old GitHub Pages URL, a non-hex key id and an upper-case room are not what the chat page takes: not drawn */
-  for (const bad of ['https://andreseloysv.github.io/Tirith/chat/#r=sealed-x&c=3f9a1c7e5b2d48a0916c0e7d2b4f8a35&m=' + 'ab'.repeat(32),
+  for (const bad of ['https://agentsmessenger.com/chat#r=sealed-x&c=3f9a1c7e5b2d48a0916c0e7d2b4f8a35&m=' + 'ab'.repeat(32) + '&t=<b>',
+    'https://agentsmessenger.com/chat#r=sealed-x&c=3f9a1c7e5b2d48a0916c0e7d2b4f8a35&m=' + 'ab'.repeat(32) + '&x=1',
+    'https://agentsmessenger.com/chat#r=sealed-x&c=3f9a&m=' + 'ab'.repeat(32),'https://andreseloysv.github.io/Tirith/chat/#r=sealed-x&c=3f9a1c7e5b2d48a0916c0e7d2b4f8a35&m=' + 'ab'.repeat(32),
     'https://agentsmessenger.com/chat#r=sealed-x&c=3f9a1c7e5b2d48a0916c0e7d2b4f8a35&m=kQ7mZp2xT9aWcD4e',
     'https://agentsmessenger.com/chat#r=sealed-X&c=3f9a1c7e5b2d48a0916c0e7d2b4f8a35&m=' + 'ab'.repeat(32)]) {
-    const odd = JSON.parse(JSON.stringify(fixture.rooms)); odd[0].invite.url = bad;
+    const odd = JSON.parse(JSON.stringify(fixture.rooms)); odd[0].invite.url = bad; odd[0].open_url = bad;
     write(odd);
     await page.waitForFunction(() => !document.querySelector('svg.qr'), null, { timeout: 8000 });
   }
   write(fixture.rooms, { launch: { token: 'tok123', available: true } });
-  await page.waitForFunction(() => document.querySelectorAll('svg.qr').length === 1, null, { timeout: 8000 });
+  await page.waitForFunction(() => document.querySelectorAll('svg.qr').length === 2, null, { timeout: 8000 });
   console.log('ok  only the chat page URL in the shape the page parses is drawn');
+
+  /* New QR sends a room-qr request for its own room */
+  await page.evaluate(() => { window.__links = []; HTMLAnchorElement.prototype.click = function () { window.__links.push(this.href); }; });
+  await page.locator('.rcard').nth(1).locator('[data-act="rm-qr"]').click();
+  const qrSent = await page.evaluate(() => window.__links);
+  assert.equal(qrSent.length, 1);
+  assert.match(qrSent[0], /^tirith:\/\/inbox\?kind=room-qr&project=&step=&text=/);
+  assert.equal(decodeURIComponent(qrSent[0].match(/text=([^&]*)/)[1]), fixture.rooms[1].id);
+  console.log('ok  New QR sends a room-qr request');
 
   /* Invite a manager and Leave send room-invite / room-leave requests (the collector handles them) */
   await page.evaluate(() => { window.__links = []; HTMLAnchorElement.prototype.click = function () { window.__links.push(this.href); }; });

@@ -34,6 +34,7 @@ from tirith.store import read_json, write_json_atomic
 
 log = logging.getLogger("tirith.roombridge")
 
+DEFAULT_TITLE = "Private room"
 CHAT_URL = "https://agentsmessenger.com/chat"  # the page that pairs with this bridge (agentsmessenger src/chat)
 PAIR_PREFIX = "tirith-pair"
 WAIT_S = 25
@@ -132,9 +133,20 @@ def renew_invite(home: Path, room: str) -> str:
     return load_room(home, room)["invite"]["url"]
 
 
+def chat_url(record: dict, code: str | None = None) -> str:
+    """The chat page URL for a room; the fragment never reaches a server. With ``code`` it is a one-use pairing
+    QR (``r``, ``c``, ``m``), without it the permanent link of a phone already in the room (``r``, ``m``). ``t`` is
+    the room's title, only when it has one."""
+    parts = [("r", record["id"])] + ([("c", code)] if code else []) + [("m", record["me"]["key_id"])]
+    title = str(record.get("title") or "").strip()
+    if title and title not in (DEFAULT_TITLE, record["id"]):
+        parts.append(("t", title))
+    return CHAT_URL + "#" + "&".join(f"{k}={quote(v, safe='')}" for k, v in parts)
+
+
 def pairing_url(record: dict, code: str) -> str:
-    """The QR URL; the fragment never reaches a server."""
-    return f"{CHAT_URL}#r={quote(record['id'], safe='')}&c={quote(code, safe='')}&m={quote(record['me']['key_id'], safe='')}"
+    """The QR URL of one pairing code."""
+    return chat_url(record, code)
 
 
 def _burn_code(record: dict, text: str) -> bool:

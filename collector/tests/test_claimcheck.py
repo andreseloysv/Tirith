@@ -148,7 +148,7 @@ def test_merged_and_pushed(work, home: Path, tmp_path: Path) -> None:
     assert cc.verify(home, lane, repo, report="Merged to main.").ok
     assert "pushed" in bad(cc.verify(home, lane, repo, report="Pushed to origin."))
     remote = tmp_path / "remote.git"
-    subprocess.run(["git", "init", "-q", "--bare", str(remote)], check=True)
+    subprocess.run(["git", "init", "-q", "--template=", "--bare", str(remote)], check=True)
     git(repo, "remote", "add", "origin", str(remote))
     git(repo, "push", "-q", "origin", "HEAD")
     git(repo, "fetch", "-q", "origin")

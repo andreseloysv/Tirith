@@ -15,6 +15,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+UNLOCK_ROOT_BUDGET_S = 1.0  # the walk of the shared temp root is slow where files are scanned; old dirs go a little each run
 GIT = "/usr/bin/git" if Path("/usr/bin/git").exists() else (shutil.which("git") or "git")
 
 
@@ -39,7 +40,8 @@ def cpu_seconds() -> float:
 def make_repo(path: Path) -> Path:
     """Create a throwaway git repo with one commit (tmp dirs only)."""
     path.mkdir(parents=True, exist_ok=True)
-    subprocess.run([GIT, "init", "-q", str(path)], check=True)
+    subprocess.run([GIT, "init", "-q", "--template=", str(path)], check=True)
+    (path / ".git" / "hooks").mkdir(exist_ok=True)  # a repo has the folder; no template means no sample files in it
     (path / "README.md").write_text("# demo repo\n", encoding="utf-8")
     subprocess.run([GIT, "-C", str(path), "add", "."], check=True)
     subprocess.run(
@@ -130,7 +132,7 @@ def _unlock_basetemp(tmp_path_factory):
     yield
     _unlock_tree(base)
     if root != base:
-        _unlock_tree(root, budget_s=5.0)
+        _unlock_tree(root, budget_s=UNLOCK_ROOT_BUDGET_S)
 
 
 @pytest.fixture(autouse=True)
@@ -233,3 +235,18 @@ def _no_hourly_canary_in_dispatch(monkeypatch):
     spawner only expect the commands they ask for. test_canary drives ``canary.tick`` directly."""
     from tirith import dispatch
     monkeypatch.setattr(dispatch, "canary_mod", types.SimpleNamespace(tick=lambda home, now, spawn: False))
+
+
+@pytest.fixture(autouse=True)
+def _tick_merged_every_call(monkeypatch):
+    """``tick_merged`` looks at a lane once a minute in the collector; a test calls it again at once."""
+    from tirith import plangate
+    monkeypatch.setattr(plangate, "TICK_EVERY_S", 0.0)
+    plangate._ticked_at.clear()
+
+
+@pytest.fixture(autouse=True)
+def _no_wait_for_returned_agents(monkeypatch):
+    """The merge queue waits for a returned lane's agent to register; tests with a fake relauncher must not."""
+    from tirith import mergeq
+    monkeypatch.setattr(mergeq, "START_WAIT", 0.0)
