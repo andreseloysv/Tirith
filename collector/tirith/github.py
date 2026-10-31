@@ -210,6 +210,10 @@ class GithubReader:
             self._slugs[key] = self.slug_of(folder)
         return self._slugs[key]
 
+    def cached(self) -> tuple[list[dict], list[dict]]:
+        """What the last :meth:`poll` found (a thread polls; the cycle only reads)."""
+        return self._result
+
     def poll(self, config: Config, entries, env: dict | None = None) -> tuple[list[dict], list[dict]]:
         """``(pipeline runs, agents)``; ([], []) without a token or a GitHub project."""
         token = token_for(config, env)

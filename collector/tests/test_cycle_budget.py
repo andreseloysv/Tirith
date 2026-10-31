@@ -189,3 +189,66 @@ def test_cycle_budget_merge_runner_stops_after_an_entry_when_the_code_changed(ho
     rows[:] = [{"lane": f"l{n}", "result": mergeq.MERGED} for n in range(3)]
     assert [r["lane"] for r in mergeq.drain(home, None, watch=Code(True))] == ["l0"]  # one pass, then a fresh runner
     assert len(rows) == 2
+
+
+def _count_subprocesses(monkeypatch) -> list[tuple[str, str]]:
+    """Every process a pass starts: ``(thread name, command line)``."""
+    import threading
+    calls: list[tuple[str, str]] = []
+    real = subprocess.Popen
+
+    class Spy(real):
+        def __init__(self, argv, *args, **kwargs):
+            calls.append((threading.current_thread().name, " ".join(map(str, argv)) if isinstance(argv, (list, tuple)) else str(argv)))
+            super().__init__(argv, *args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "Popen", Spy)
+    return calls
+
+
+def test_real_cycle_budget_a_pass_with_nothing_new_starts_few_processes(busy_home: Path, monkeypatch) -> None:
+    collector = Collector(busy_home, client=None)
+    for _ in range(3):  # the first passes read every file and settle what is settled
+        collector.cycle()
+    calls = _count_subprocesses(monkeypatch)
+    collector.cycle()
+    assert len(calls) <= 12, calls
+
+
+def test_real_cycle_budget_the_slow_work_never_runs_inside_the_cycle(busy_home: Path, monkeypatch) -> None:
+    """With the slow-work thread on (continuous mode) a cycle hands the dispatcher its snapshot and starts no process
+    for it: no free-space check, sweep, claim check, merge queue or GitHub poll."""
+    collector = Collector(busy_home, client=None)
+    collector._slow = collector_mod.SlowWork(collector)  # not started: whatever it would do shows as a call
+    for _ in range(3):
+        collector.cycle()
+    calls = _count_subprocesses(monkeypatch)
+    collector.cycle()
+    calls = [(t, c) for t, c in calls if t == "MainThread"]  # the activity refresh has its own thread
+    assert len(calls) <= 3, calls
+    assert not [c for _, c in calls if any(w in c for w in ("merge-base", "rev-list", "log --merges", "worktree", "df "))]
+
+
+def test_real_cycle_budget_a_change_in_config_shows_in_the_next_cycle(home: Path, tmp_path: Path) -> None:
+    first, second = make_repo(tmp_path / "one"), make_repo(tmp_path / "two")
+    write_config(home, [{"id": "one", "name": "One", "repo": str(first)}])
+    collector = Collector(home, client=None)
+    collector._slow = collector_mod.SlowWork(collector)
+    assert [p["id"] for p in collector.cycle()["projects"]] == ["one"]
+    write_config(home, [{"id": "one", "name": "One", "repo": str(first)}, {"id": "two", "name": "Two", "repo": str(second)}])
+    assert sorted(p["id"] for p in collector.cycle()["projects"]) == ["one", "two"]
+
+
+def test_real_cycle_budget_the_claim_check_waits_while_no_branch_moves(ended_home, monkeypatch) -> None:
+    from tirith import plangate
+    home, lanes = ended_home
+    config = collector_mod.load_config(home)
+    monkeypatch.setattr(plangate, "TICK_EVERY_S", 0.0)  # every pass is due; only an unmoved branch keeps it quiet
+    plangate._ticked_at.clear()
+    nothing = lambda *a, **k: None  # noqa: E731
+    calls = _count_git(monkeypatch)
+    plangate.sync(home, config, lanes, nothing)
+    assert calls  # the lanes in review were looked at once
+    before = len(calls)
+    plangate.sync(home, config, lanes, nothing)
+    assert len(calls) == before  # nothing moved: no git
