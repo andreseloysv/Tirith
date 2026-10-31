@@ -370,6 +370,17 @@ def kill_group(proc: subprocess.Popen, grace: float = KILL_GRACE_S) -> None:
     signal_group(signal.SIGKILL)  # the leader may be gone while a child ignored SIGTERM
 
 
+def why(done, limit: int = 200) -> str:
+    """Why a finished command failed, never empty: its own output, else the timeout or start error, else the exit code."""
+    def text(value) -> str:
+        return (value.decode("utf-8", "replace") if isinstance(value, bytes) else str(value or "")).strip()
+    said = text(done.stderr) or text(done.stdout)
+    if getattr(done, "timed_out", False) or not said:
+        extra = text(getattr(done, "error", ""))
+        said = " ".join(part for part in (said, extra) if part) or f"git exited with code {done.returncode} and said nothing"
+    return said if len(said) <= limit else said[:limit] + "…"
+
+
 def timeout_message(cls: str, seconds: float, what: str = "") -> str:
     return (f"timed out after {seconds:g} s (class {cls}{'; ' + what if what else ''}); "
             f"raise it with: tirith timeout set --class {base_class(cls)} --seconds N --reason \"…\"")

@@ -196,7 +196,7 @@ def _finish(home: Path, entry: dict, result: str, message: str = "", *, keep: bo
 
 
 def _git(folder: Path, *args: str):
-    return timeouts_mod.run(["git", "-C", str(folder), *args], "git", text=True)
+    return plangate_mod._git(folder, *args)
 
 def _remove_worktree(repo: Path, *args: str):
     """``git worktree remove`` deletes every file of the lane, so it has its own (minutes-long) limit, not ``git``'s."""
@@ -360,7 +360,7 @@ def _land(home: Path, repo: Path, tmp: Path, project: str, base: str, tested: st
         if moved.returncode != 0 and "index.lock" in moved.stderr and plangate_mod.recover_git_lock(repo):
             moved = _git(repo, "merge", "--ff-only", "-q", tested)
         if moved.returncode != 0:
-            return "", (WAITING, f"fast-forwarding {main_branch} failed: {_tail(moved.stderr or moved.stdout)}")
+            return "", (WAITING, f"fast-forwarding {main_branch} failed: {timeouts_mod.why(moved, OUTPUT_MAX)}")
     return tested, None
 
 
