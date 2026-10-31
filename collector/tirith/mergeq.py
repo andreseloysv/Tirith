@@ -52,6 +52,7 @@ MAX_SENT_BACK = 3  # after this many returns the manager (never the owner) decid
 START_WAIT = 20.0  # seconds a returned lane's new agent has to register itself before the manager hears of it
 MAX_TRIES = 3  # main moved under the merge: start again from the new main
 TIMED_OUT = "timed out"  # a git command stopped at its deadline: retried by the queue, never sent back
+OUT_OF_TIME = "out-of-time"  # a stage hit its time limit: the suite did not fail
 HISTORY = 20
 DOC_ONLY = ("docs/", "site/", "ios/")  # a lane that changes only these (or *.md) has nothing for the test stages
 RUST_STAGE = "rust-test"
@@ -182,7 +183,7 @@ def _finish(home: Path, entry: dict, result: str, message: str = "", *, keep: bo
         if keep:
             for e in data["queue"]:
                 if e["lane"] == entry["lane"]:
-                    e.update(status=QUEUED, message=message[:OUTPUT_MAX])
+                    e.update(status=QUEUED, message=message[:OUTPUT_MAX], **extra)
                     e.pop("pid", None)
         else:
             data["queue"] = [e for e in data["queue"] if e["lane"] != entry["lane"]]
@@ -389,6 +390,8 @@ def _run_stages(home: Path, project: str, stages: list, tmp: Path, lane_id: str
     passed, flaky = None, []
     for pipeline, stage in stages:
         ok, output = review_mod.run_tests(home, project, pipeline, stage.name, tmp, stage.run, lane_id)
+        if not ok and output.startswith(review_mod.DID_NOT_FINISH):  # out of time: nothing to repeat
+            return f"{pipeline}/{stage.name}", output, passed, flaky
         if not ok:
             again = rerun_failed(home, project, pipeline, stage, tmp, lane_id, output)
             if again is None:
@@ -434,6 +437,8 @@ def _try(home: Path, repo: Path, lane: dict, entry: dict) -> tuple[str, str, dic
             return WAITING, "the manifest has no build or test stage with a run command", {}
         stages, skipped = select_stages(stages, [needs_of(changed_paths(repo, base, branch))])
         broke, output, passed, flaky = _run_stages(home, project, stages, tmp, lane_id)
+        if broke and output.startswith(review_mod.DID_NOT_FINISH):  # out of time, not red: never sent back
+            return OUT_OF_TIME, f"stage {broke} ran out of time on {branch}: {_tail(output)}", {}
         if broke:
             return RED, f"stage {broke} failed on {branch} merged with {main_branch}:\n{_tail(output)}", {"main": main_branch}
         tested = _git(tmp, "rev-parse", "HEAD").stdout.strip()
@@ -510,6 +515,8 @@ def _try_train(home: Path, repo: Path, members: list[tuple[dict, dict]]) -> tupl
         ids = ", ".join(str(lane["id"]) for _, lane in joined)
         broke, output, passed, flaky = _run_stages(home, str(joined[0][1].get("project") or ""), stages, tmp,
                                                    str(joined[0][1]["id"]))
+        if broke and output.startswith(review_mod.DID_NOT_FINISH):  # out of time, not red: the train stays whole
+            return OUT_OF_TIME, f"stage {broke} ran out of time on the train ({ids}) merged with {main_branch}: {_tail(output)}", info
         if broke:
             return RED, f"stage {broke} failed on the train ({ids}) merged with {main_branch}:\n{_tail(output)}", info
         tested = _git(tmp, "rev-parse", "HEAD").stdout.strip()
@@ -684,6 +691,13 @@ def _settle(home: Path, config: Config, entry: dict, lane: dict, repo: Path, res
         return _finish(home, entry, WAITING, message, keep=True, retried=True)
     if result == WAITING:
         return _finish(home, entry, WAITING, message, keep=True)
+    if result == OUT_OF_TIME:  # the suite ran out of time, it did not fail: never sent back
+        count = int(entry.get("timeouts") or 0) + 1
+        if count == 2:
+            asks_mod.queue_add(home, entry["project"], entry["lane"], f"Merge queue: {lane.get('feature') or entry['lane']} "
+                               f"({entry['lane']}) {message.splitlines()[0][:200]}\n- It waits in the queue. Raise the limit "
+                               "with: tirith timeout set --class stage:test --reason \"…\"")
+        return _finish(home, entry, WAITING, message, keep=True, timeouts=count)
     if result == plangate_mod.WORK_NONE:  # committed what was left and main already has it all: no merge, no tick here
         _remove_worktree(repo, "--force", str(lane["workspace"]))
         _git(repo, "branch", "-D", str(extra["branch"]))
