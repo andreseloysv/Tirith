@@ -499,3 +499,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [ ] Un lane que espera respuesta en una sala queda marcado «esperando en la sala X» y Tirith lo reanuda al llegar la respuesta, como dice ~/DEVELOP/agentsmessenger/docs/agentes-callados.md. (check: `cd collector && uv run -q pytest -q tests -k lane_room_wait`)
 - [ ] Tirith avisa al manager cuando un lane lleva 30 minutos esperando respuesta en una sala, como dice ~/DEVELOP/agentsmessenger/docs/agentes-callados.md. (check: `cd collector && uv run -q pytest -q tests -k lane_room_timeout`)
 
+## 20. Las pruebas no interrumpen al dueño
+
+- [ ] Los tests de web/js usan el Chromium de Playwright y no Microsoft Edge, porque cada arranque de Edge pasa CoreServicesUIAgent al frente y le quita el teclado a la app que el dueño esté usando. (check: `! grep -rq msedge web/js`)
+
