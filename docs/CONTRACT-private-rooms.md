@@ -30,8 +30,16 @@ service is needed: its API already answers browsers (`access-control-allow-origi
 4. **Talking.** What a device of the owner writes reaches the manager through the same chat as the desktop app
    (same inbox, same session, a `via` field naming the room). The answer goes back sealed to the room and also
    shows in the desktop chat. There is no second manager process.
-5. **Another manager.** `tirith room invite <room>` prints a code; another Tirith runs `tirith room join <code>`
-   (any other agent can use `node am.mjs join`). It is a peer.
+5. **Another manager.** `tirith room invite <room>` makes a new one-use code and prints the peer code
+   `<room>:<manager key id>:<code>`; another Tirith runs `tirith room join <peer code>`, which sends `tirith-join <code>`
+   sealed to that manager. The manager burns the code, adds the key to `accepted` and sends the new roster. Any other
+   agent can join the room (`node am.mjs join`) and talk as a peer without a code (the old two-part code works the same).
+6. **Who may read the owner.** The chat page seals what the owner writes only for the manager (`m`) and the keys of the
+   roster, so a key that joins later reads nothing of it. The roster is a sealed message from the manager to a phone,
+   `tirith-roster ` + comma-separated 64-hex key ids (empty after the space when there are none): the other paired phones
+   and the accepted managers, never the receiver. The page takes it only from `m`, keeps it in the room's record, never
+   shows it, and a later roster replaces the earlier one. The bridge sends it to each paired device right after
+   "Connected…" and again to all of them whenever the set changes. A room with no `m` in the link keeps sealing for every key.
 
 ## Who gives orders
 
@@ -57,7 +65,7 @@ stops answering and says so once in the room, until a paired device writes.
 ## `state.json` -> `rooms[]`, on top of `docs/CONTRACT-rooms.md`
 
 `private: true`, `connected: bool`, `me: {name, key_id}`, `devices: [{name, key_id, paired_at, last_seen}]`,
-`managers: [{name, key_id, last_seen}]`, `open_url` (the permanent link), `invite: {url, used}` (the one-use QR), `peer_code` (after an invite request); `messages[].from_device: bool`. Old rooms keep
+`managers: [{name, key_id, last_seen, accepted}]` (every other key that wrote; `accepted` is false for one that joined without a valid code, shown in the Rooms card as a peer with no code), `open_url` (the permanent link), `invite: {url, used}` (the one-use QR), `peer_code` (after an invite request); `messages[].from_device: bool`. Old rooms keep
 working as they are.
 
 ## App
