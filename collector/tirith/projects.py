@@ -153,13 +153,29 @@ def is_temp_folder(folder: str | Path) -> bool:
     return False
 
 
+def is_worktree_folder(folder: str | Path) -> bool:
+    """A linked git worktree (``.git`` is a file pointing into ``worktrees/``) or a folder under a ``*-lanes`` folder."""
+    path = real(folder)
+    if any(part.endswith("-lanes") for part in path.parts[:-1]):
+        return True
+    try:
+        marker = path / ".git"
+        return marker.is_file() and "/worktrees/" in marker.read_text(errors="replace").replace("\\", "/")
+    except OSError:
+        return False
+
+
 def load_auto(home: Path) -> dict:
-    data = read_json(Path(home) / AUTO_FILE, {})
+    path = Path(home) / AUTO_FILE
+    data = read_json(path, {})
     if not isinstance(data, dict):
         data = {}
-    projects = [p for p in data.get("projects") or []
-                if isinstance(p, dict) and p.get("id") and p.get("folder")
-                and (ALLOW_TEMP or not is_temp_folder(p["folder"]))]
+    rows = [p for p in data.get("projects") or []
+            if isinstance(p, dict) and p.get("id") and p.get("folder")
+            and (ALLOW_TEMP or not is_temp_folder(p["folder"]))]
+    projects = [p for p in rows if real(p["folder"]).exists() and not is_worktree_folder(p["folder"])]
+    if len(projects) < len(rows):  # worktree and vanished folders leave the file for good
+        write_json_atomic(path, {**data, "projects": projects})
     ignored = [str(f) for f in data.get("ignored") or []]
     return {"projects": projects, "ignored": ignored}
 
@@ -218,6 +234,8 @@ def discover(home: Path, config: Config, folders: list[str | Path]) -> list[Entr
             continue
         root = project_root(canonical(folder))
         if not ALLOW_TEMP and (is_temp_folder(folder) or is_temp_folder(root)):
+            continue
+        if is_worktree_folder(root):  # lanes and merge queue folders count for their main repository
             continue
         if str(root) in auto["ignored"] or match(root, items) is not None:
             continue
