@@ -377,7 +377,7 @@ def why(done, limit: int = 200) -> str:
     said = text(done.stderr) or text(done.stdout)
     if getattr(done, "timed_out", False) or not said:
         extra = text(getattr(done, "error", ""))
-        said = " ".join(part for part in (said, extra) if part) or f"git exited with code {done.returncode} and said nothing"
+        said = " ".join(part for part in (said, extra) if part) or f"git exited {done.returncode}"
     return said if len(said) <= limit else said[:limit] + "…"
 
 
