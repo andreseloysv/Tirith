@@ -321,6 +321,15 @@ def _result_key(review: dict) -> str:
     return f"{review.get('status') or ''}@{review.get('at') or ''}" if review.get("at") else ""
 
 
+def _settled(rec: dict | None, seen: dict) -> bool:
+    """A lane row that is not running, is not waiting on a review and whose result was already answered."""
+    review = seen.get("review")
+    if not rec or not isinstance(review, dict) or not seen.get("ended_at"):
+        return False
+    status = review.get("status")
+    return status in TERMINAL and status != review_mod.MERGE_FAILED and rec.get("settled") == _result_key(review)
+
+
 def run(home: Path, config: Config, now: datetime, state: dict, lanes: list[dict], *,
         spawn: Callable | None = None, notify: Callable[[str, str], None] | None = None) -> bool:
     """One pass over the finished lanes; returns True when ``state`` changed."""
@@ -330,6 +339,8 @@ def run(home: Path, config: Config, now: datetime, state: dict, lanes: list[dict
     overdue = state.setdefault("overdue", {})
     for seen in lanes:
         lane_id = str(seen.get("id") or "")
+        if _settled(book.get(lane_id), seen):
+            continue
         lane = read_lane(home, lane_id) if lane_id else None
         if not isinstance(lane, dict) or not lane.get("ended_at") or lane.get("result") != "done":
             continue
