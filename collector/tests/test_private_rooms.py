@@ -120,7 +120,7 @@ def test_room_flow_new_pair_once_talk_sealed_answer_second_manager(home, tmp_pat
     rec = rb.load_room(home, room)
     assert [d["key_id"] for d in rec["devices"]] == [phone.key_id]
     assert rec["codes"] == [] and rec["invite"]["used"] is True, "code burnt"
-    assert net.heard(phone, room) == [f"Connected to {manager.name} on {__import__('socket').gethostname()}"]
+    assert net.heard(phone, room) == [f"Connected to {manager.name} on {__import__('socket').gethostname()}", "tirith-roster "]
     net.join(thief, room)  # a later key reads nothing of what came before, and the answer was for the device only
     assert net.heard(thief, room) == []
 
@@ -142,16 +142,17 @@ def test_room_flow_new_pair_once_talk_sealed_answer_second_manager(home, tmp_pat
     # a second manager joins with the code of `tirith room invite` and is a peer
     assert cli.main(["room", "invite", room]) == 0
     code = capsys.readouterr().out.splitlines()[0]
-    assert code == f"{room}:{manager.key_id}"
+    assert re.fullmatch(f"{room}:{manager.key_id}:[0-9a-f]{{32}}", code)
     other_home = tmp_path / "other-home"
     other_home.mkdir()
     monkeypatch.setenv("TIRITH_HOME", str(other_home))
     monkeypatch.setattr(private_mod, "manager_name", lambda h: "tirith-backup")
     assert cli.main(["room", "join", code]) == 0
     capsys.readouterr()
+    rb.poll_room(home, room)  # the manager reads tirith-join
     joined = rb.load_room(other_home, room)
     assert joined["role"] == "peer" and joined["managers"][0]["key_id"] == manager.key_id and not joined["invite"]["url"]
-    backup = key(other_home, "tirith-backup")
+    backup = sealed.load_or_create_key(other_home, "tirith-backup")
     monkeypatch.setenv("TIRITH_HOME", str(home))
     net.say(backup, room, "the lanes are fine here, anything to share?")
     rb.poll_room(home, room)
@@ -320,3 +321,87 @@ def test_room_new_qr_request_from_the_app_is_handled(home, net, capsys):
     assert done["status"] == "done" and "new one-use QR" in done["answers"][0]["text"]
     after = rb.load_room(home, room)
     assert after["invite"]["url"] != before and len(after["codes"]) == 2
+
+
+def _roster(heard):
+    return [m for m in heard if m.startswith("tirith-roster")]
+
+
+def _pair(home, net, who, room):
+    code = rb.new_pairing(home, room)
+    net.join(who, room)
+    net.say(who, room, f"tirith-pair {code}")
+    rb.poll_room(home, room)
+
+
+def test_room_late_key_without_a_code_talks_but_gets_nothing_the_owner_wrote(home, tmp_path, net, capsys, monkeypatch):
+    room = new_room(home, capsys, "--title", "Phone")["id"]
+    phone = key(tmp_path, "phone")
+    _pair(home, net, phone, room)
+    assert _roster(net.heard(phone, room)) == ["tirith-roster "], "the first roster is empty: nobody else yet"
+
+    # a second home joins with a code and is accepted; the phone is told
+    assert cli.main(["room", "invite", room]) == 0
+    code = capsys.readouterr().out.splitlines()[0]
+    other_home = tmp_path / "other-home"
+    other_home.mkdir()
+    monkeypatch.setenv("TIRITH_HOME", str(other_home))
+    monkeypatch.setattr(private_mod, "manager_name", lambda h: "tirith-backup")
+    assert cli.main(["room", "join", code]) == 0
+    capsys.readouterr()
+    backup = sealed.load_or_create_key(other_home, "tirith-backup")
+    monkeypatch.setenv("TIRITH_HOME", str(home))
+    rb.poll_room(home, room)
+    rec = rb.load_room(home, room)
+    assert [a["key_id"] for a in rec["accepted"]] == [backup.key_id] and rec["join_codes"] == []
+    assert _roster(net.heard(phone, room))[-1] == f"tirith-roster {backup.key_id}"
+    row = private_mod.state_row(rec)
+    assert [(m["name"], m["accepted"]) for m in row["managers"]] == [("tirith-backup", True)]
+
+    # the burnt code again, and a key with no code: both talk as peers, neither is accepted
+    thief = key(tmp_path, "thief")
+    net.join(thief, room)
+    net.say(thief, room, f"tirith-join {code.rsplit(':', 1)[1]}")
+    net.say(thief, room, "hello, anyone?")
+    rb.poll_room(home, room)
+    rec = rb.load_room(home, room)
+    assert [a["key_id"] for a in rec["accepted"]] == [backup.key_id]
+    assert any(m["key_id"] == thief.key_id and not m["accepted"] for m in private_mod.state_row(rec)["managers"])
+    assert any("hello, anyone?" in r["text"] for r in inbox_mod.requests(home)), "a peer still talks, as information"
+    assert thief.key_id not in rb.roster_ids(rec)
+
+    # the manager's answer goes to the device alone
+    manager = sealed.load_or_create_key(home, "tirith-manager")
+    net.say(phone, room, "private plan", to=manager.key_id)  # what the page does: manager and roster only
+    rb.poll_room(home, room)
+    (req,) = [r for r in inbox_mod.requests(home) if r["text"] == "private plan"]
+    inbox_mod.add_answer(home, req["id"], "noted")
+    rb.poll_room(home, room)
+    assert net.heard(thief, room) == [] and "noted" not in net.heard(backup, room)
+    assert net.heard(phone, room)[-1] == "noted"
+
+
+def test_room_late_key_roster_goes_to_each_phone_and_again_when_it_changes(home, tmp_path, net, capsys):
+    room = new_room(home, capsys)["id"]
+    first, second = key(tmp_path, "p1"), key(tmp_path, "p2")
+    _pair(home, net, first, room)
+    _pair(home, net, second, room)
+    assert _roster(net.heard(first, room)) == ["tirith-roster ", f"tirith-roster {second.key_id}"]
+    assert _roster(net.heard(second, room)) == [f"tirith-roster {first.key_id}"]
+    rb.poll_room(home, room)  # nothing changed: nothing sent again
+    assert len(_roster(net.heard(first, room))) == 2
+
+
+def test_room_late_key_join_code_is_new_each_time_and_only_the_manager_invites(home, tmp_path, net, capsys, monkeypatch):
+    room = new_room(home, capsys)["id"]
+    code = private_mod.invite_manager(home, room)
+    assert private_mod.invite_manager(home, room) != code, "every invite is a new code"
+    other = tmp_path / "o"
+    other.mkdir()
+    monkeypatch.setattr(private_mod, "manager_name", lambda h: "tirith-o")
+    private_mod.join_room(other, code)
+    with pytest.raises(private_mod.PrivateRoomError):
+        private_mod.invite_manager(other, room)
+    with pytest.raises(private_mod.PrivateRoomError):
+        private_mod.parse_peer_code(f"{room}:{'a' * 64}:nothex")
+    assert private_mod.parse_peer_code(f"{room}:{'a' * 64}") == (room, "a" * 64, "")

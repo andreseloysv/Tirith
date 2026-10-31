@@ -59,22 +59,58 @@ def git_toplevel(folder: Path) -> Path | None:
     return real(top) if out.returncode == 0 and top else None
 
 
-@functools.lru_cache(maxsize=512)
-def _in_main_worktree(path: str) -> str:
-    """``path`` moved into the repository's main worktree when it lies in a linked git worktree."""
-    folder = Path(path)
-    top = git_toplevel(folder if folder.is_dir() else folder.parent)
-    if top is None:
-        return path
+class _Unresolved(Exception):
+    """git failed or timed out: whether the folder is in a lane worktree is unknown."""
+
+
+def _git_ok(argv: list[str]):
+    """Run git; a timeout or start failure raises ``_Unresolved``, other results are returned."""
     try:
-        out = timeouts_mod.run(["git", "-C", str(top), "rev-parse", "--path-format=absolute",
-                                "--git-common-dir"], "git", text=True)
-    except (OSError, subprocess.SubprocessError):
+        out = timeouts_mod.run(argv, "git", text=True)
+    except (OSError, subprocess.SubprocessError) as error:
+        raise _Unresolved(str(error)) from error
+    if getattr(out, "timed_out", False) or out.returncode in (124, 127):
+        raise _Unresolved(getattr(out, "error", None) or "git did not answer")
+    return out
+
+
+@functools.lru_cache(maxsize=512)
+def _resolve_main_worktree(path: str) -> str:
+    """``path`` moved into the repository's main worktree when it lies in a linked git worktree.
+
+    Raises ``_Unresolved`` (and so is never cached) when git fails or times out."""
+    folder = Path(path)
+    base = folder if folder.is_dir() else folder.parent
+    if not base.is_dir():
         return path
-    common = real(out.stdout.strip()) if out.returncode == 0 and out.stdout.strip() else None
-    if common is None or common.name != ".git" or common.parent == top:
+    out = _git_ok(["git", "-C", str(base), "rev-parse", "--show-toplevel"])
+    if out.returncode != 0 or not out.stdout.strip():
+        return path  # not a git repository
+    top = real(out.stdout.strip())
+    out = _git_ok(["git", "-C", str(top), "rev-parse", "--path-format=absolute", "--git-common-dir"])
+    if out.returncode != 0 or not out.stdout.strip():
+        raise _Unresolved("git-common-dir unavailable")
+    common = real(out.stdout.strip())
+    if common.name != ".git" or common.parent == top:
         return path
     return str(common.parent / folder.relative_to(top))
+
+
+def _in_main_worktree(path: str) -> str:
+    """Like ``_resolve_main_worktree`` but an unresolved folder stays as it is (and is not cached)."""
+    try:
+        return _resolve_main_worktree(path)
+    except _Unresolved:
+        return path
+
+
+def resolved(folder: str | Path) -> bool:
+    """False when git could not tell whether ``folder`` is a lane worktree (failure or timeout)."""
+    try:
+        _resolve_main_worktree(str(real(folder)))
+    except _Unresolved:
+        return False
+    return True
 
 
 def canonical(folder: str | Path) -> Path:
@@ -117,13 +153,29 @@ def is_temp_folder(folder: str | Path) -> bool:
     return False
 
 
+def is_worktree_folder(folder: str | Path) -> bool:
+    """A linked git worktree (``.git`` is a file pointing into ``worktrees/``) or a folder under a ``*-lanes`` folder."""
+    path = real(folder)
+    if any(part.endswith("-lanes") for part in path.parts[:-1]):
+        return True
+    try:
+        marker = path / ".git"
+        return marker.is_file() and "/worktrees/" in marker.read_text(errors="replace").replace("\\", "/")
+    except OSError:
+        return False
+
+
 def load_auto(home: Path) -> dict:
-    data = read_json(Path(home) / AUTO_FILE, {})
+    path = Path(home) / AUTO_FILE
+    data = read_json(path, {})
     if not isinstance(data, dict):
         data = {}
-    projects = [p for p in data.get("projects") or []
-                if isinstance(p, dict) and p.get("id") and p.get("folder")
-                and (ALLOW_TEMP or not is_temp_folder(p["folder"]))]
+    rows = [p for p in data.get("projects") or []
+            if isinstance(p, dict) and p.get("id") and p.get("folder")
+            and (ALLOW_TEMP or not is_temp_folder(p["folder"]))]
+    projects = [p for p in rows if real(p["folder"]).exists() and not is_worktree_folder(p["folder"])]
+    if len(projects) < len(rows):  # worktree and vanished folders leave the file for good
+        write_json_atomic(path, {**data, "projects": projects})
     ignored = [str(f) for f in data.get("ignored") or []]
     return {"projects": projects, "ignored": ignored}
 
@@ -178,8 +230,12 @@ def discover(home: Path, config: Config, folders: list[str | Path]) -> list[Entr
     for folder in folders:
         if not folder or not real(folder).exists() or match(folder, items) is not None:
             continue
-        root = project_root(folder)
+        if not resolved(folder):  # a lane worktree must never become an auto project
+            continue
+        root = project_root(canonical(folder))
         if not ALLOW_TEMP and (is_temp_folder(folder) or is_temp_folder(root)):
+            continue
+        if is_worktree_folder(root):  # lanes and merge queue folders count for their main repository
             continue
         if str(root) in auto["ignored"] or match(root, items) is not None:
             continue
