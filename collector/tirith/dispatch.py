@@ -26,6 +26,7 @@ from tirith import asks as asks_mod
 from tirith import autopilot as autopilot_mod
 from tirith import autoreview as autoreview_mod
 from tirith import canary as canary_mod
+from tirith import coordination
 from tirith import mergeq as mergeq_mod
 from tirith import diskdiet as diskdiet_mod
 from tirith import fallback as fallback_mod
@@ -385,6 +386,8 @@ def run(home: Path, config: Config, now: datetime, *, agents: list[dict], lanes:
         changed = True
     diskdiet_mod.start_temp_cleanup(home, diskdiet_mod.smallest_free(home, config, free))
     # outcomes the plan could not take yet; a lane that ended without a plan report is started once more
+    if coordination.recover(home, now.timestamp()):
+        changed = True
     if plangate_mod.sync(home, config, lanes, relauncher or _default_relauncher):
         changed = True
     room = not diskdiet_mod.low(state)  # disk almost full: no new lane (the manager queue says why)

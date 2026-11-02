@@ -49,6 +49,9 @@ Every item below is on `main`; the contract file named next to it says exactly h
 - **Tirith is the only plan writer.** Agents cannot edit the plan file (the `roadmap-edit` rule); they ask Tirith with `tirith plan add`.
 - **Items are ticked when the work is on `main`**, not when an agent says so.
 - **No duplicate agents** on the same plan item.
+- **Shared task coordination.** Permanent task IDs, explicit prerequisites, atomic claims and declared
+  write reservations let independent items in one step proceed together. Worker inboxes support durable
+  handoffs and acknowledgements. ([`CONTRACT-coordination.md`](docs/CONTRACT-coordination.md))
 
 ### Rules in code
 

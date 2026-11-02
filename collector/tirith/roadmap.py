@@ -7,6 +7,8 @@ Parsing never raises: a missing or unreadable file gives ``None``.
 from __future__ import annotations
 
 import hashlib
+import json
+import uuid
 import re
 from datetime import date
 from pathlib import Path
@@ -37,6 +39,36 @@ _NOTE_RE = re.compile(r"\s*\((en curso|en revisión|bloqueado|reabierto)(?::\s*(
 _CHECK_RE = re.compile(r"\s*\((?:check|comprobación)\s*:\s*`([^`]+)`\s*\)", re.IGNORECASE)
 
 _cache: dict[str, tuple[int, int, list[dict]]] = {}
+_TASK_META = re.compile(r"\s*<!-- tirith:(\{.*?\}) -->")
+
+
+def task_metadata(text: str) -> dict:
+    found = _TASK_META.search(text)
+    if not found:
+        if "<!-- tirith:" in text:
+            raise EditError("invalid task metadata comment")
+        return {}
+    try:
+        value = json.loads(found.group(1))
+        if not isinstance(value, dict) or not re.fullmatch(r"i-[a-f0-9]{8,32}", value.get("id", "")):
+            raise ValueError("invalid task ID")
+        if set(value) - {"id", "depends_on", "writes"}:
+            raise ValueError("unknown task metadata field")
+        for key in ("depends_on", "writes"):
+            if not isinstance(value.get(key, []), list) or any(not isinstance(v, str) for v in value.get(key, [])):
+                raise ValueError(f"invalid {key}")
+        return value
+    except (ValueError, TypeError) as error:
+        raise EditError(f"invalid task metadata: {error}") from error
+
+
+def without_metadata(text: str) -> str:
+    return _TASK_META.sub("", text)
+
+
+def with_metadata(text: str, metadata: dict) -> str:
+    body = without_metadata(text).strip()
+    return body + " <!-- tirith:" + json.dumps(metadata, separators=(",", ":")) + " -->" if metadata else body
 
 
 def check_of(text: str) -> str | None:
@@ -80,6 +112,7 @@ def split_status(text: str) -> tuple[str, str, str | None]:
     """``(clean text, state, detail)``: the item without the note Tirith keeps at its end, and what the note
     says (``open`` without one). ``detail`` is the lane for ``progress`` and the reason for ``blocked`` /
     ``reopened``."""
+    text = without_metadata(text)
     found = _NOTE_RE.search(text)
     if not found:
         return norm(text), STATE_OPEN, None
@@ -97,7 +130,7 @@ def with_status(clean: str, state: str = STATE_OPEN, detail: str | None = None) 
 
 def item_id(text: str) -> str:
     """The stable id of an item: ``i-`` and 8 hex digits of its clean text."""
-    return "i-" + hashlib.sha1(split_status(text)[0].encode()).hexdigest()[:8]
+    return task_metadata(text).get("id") or "i-" + hashlib.sha1(split_status(text)[0].encode()).hexdigest()[:8]
 
 
 def item_state(item: dict) -> tuple[str, str | None]:
@@ -215,6 +248,16 @@ def parse(text: str) -> list[dict]:
             item = None
         elif item is not None:
             item["text"] = f"{item['text']} {line.strip()}"
+    for group in steps:
+        for entry in group["items"]:
+            try:
+                metadata = task_metadata(entry["text"])
+            except EditError as error:
+                entry["metadata_error"] = str(error)
+                continue
+            if metadata:
+                entry.update(metadata)
+                entry["text"] = without_metadata(entry["text"])
     return steps
 
 
@@ -373,7 +416,7 @@ def build(folder: str | Path | None, project: str, agents: list[dict], today: da
         for raw in step["items"]:
             who = who_on(raw, today)
             state, detail = item_state(raw)
-            item = {"text": raw["text"], "done": raw["done"], "who": who, "state": state}
+            item = {**raw, "text": raw["text"], "done": raw["done"], "who": who, "state": state}
             if detail:
                 item["detail"] = detail
             if check_of(raw["text"]):
@@ -501,7 +544,8 @@ def edit(text: str, step_id: str, item_text: str = "", new_text: str | None = No
         lines.insert(at, line)
         return "".join(lines)
     wanted = " ".join(item_text.split())
-    hit = next((b for b in blocks if not b[3] and " ".join(b[2].split()) == wanted), None)
+    hit = next((b for b in blocks if not b[3] and
+                (norm(without_metadata(b[2])) == wanted or item_id(b[2]) == wanted)), None)
     if hit is None:
         raise EditError("that item changed in the plan meanwhile (or was ticked); reload the Plan and try again")
     first, last = hit[0], hit[1]
@@ -511,6 +555,14 @@ def edit(text: str, step_id: str, item_text: str = "", new_text: str | None = No
     new_text = " ".join((new_text or "").split())
     if not new_text:
         raise EditError("the new text is empty")
+    # Preserve an existing identity, and freeze legacy IDs before changing their text.
+    metadata = task_metadata(hit[2])
+    if not metadata:
+        old_id = item_id(hit[2])
+        old_ids = [i.get("id") or item_id(i["text"]) for s in parse(text) for i in s["items"]
+                   if not i.get("metadata_error")]
+        metadata = {"id": old_id if old_ids.count(old_id) == 1 else "i-" + uuid.uuid4().hex}
+    new_text = with_metadata(new_text, metadata)
     head = _ITEM_RE.match(lines[first].rstrip("\r\n"))
     lines[first:last] = [lines[first][:head.start(2)] + new_text + eol]
     return "".join(lines)
@@ -521,7 +573,8 @@ def find_item(steps: list[dict], step_id: str, wanted: str) -> dict | None:
     step = next((s for s in steps if s["id"] == str(step_id)), None)
     clean = split_status(wanted)[0]
     for item in (step["items"] if step else []):
-        if not item["done"] and (split_status(item["text"])[0] == clean or item_id(item["text"]) == clean):
+        if not item["done"] and (split_status(item["text"])[0] == clean or
+                                 (item.get("id") or item_id(item["text"])) == clean):
             return item
     return None
 
@@ -538,16 +591,18 @@ def _open_block(lines: list[str], step_id: str, wanted: str, what: str):
     return span, hit
 
 
-def set_item(text: str, step_id: str, wanted: str, new_text: str | None = None, tick: bool = False) -> str:
+def set_item(text: str, step_id: str, wanted: str, new_text: str | None = None, tick: bool = False,
+             metadata: dict | None = None) -> str:
     """``text`` with the open item whose clean text (or id) is ``wanted`` rewritten to ``new_text`` (one line)
     and/or ticked. Raises ``EditError`` when the step or the item is not there."""
     lines = text.splitlines(keepends=True)
-    _, (first, last, _, _) = _open_block(lines, step_id, wanted, "that item")
+    _, (first, last, previous, _) = _open_block(lines, step_id, wanted, "that item")
     eol = "\r\n" if text.count("\r\n") > text.count("\n") / 2 else "\n"
     if new_text is not None:
         body = norm(new_text)
         if not body:
             raise EditError("the new text is empty")
+        body = with_metadata(body, task_metadata(previous) if metadata is None else metadata)
         head = _ITEM_RE.match(lines[first].rstrip("\r\n"))
         lines[first:last] = [lines[first][:head.start(2)] + body + eol]
         last = first + 1

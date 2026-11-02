@@ -18,12 +18,14 @@ restart). State lives in ``dispatch.json`` under ``autopilot``. See ``docs/CONTR
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
 from tirith import actions as actions_mod
+from tirith import coordination
 from tirith import flows as flows_mod
 from tirith import inbox as inbox_mod
 from tirith import loadlimit as loadlimit_mod
@@ -228,7 +230,7 @@ def _queue_owned(item: dict, detail: str | None, mine: list[dict], queued: set[s
     return any(str(a["id"]) in queued and a.get("item") and roadmap_mod.norm(a["item"]) == item for a in mine)
 
 
-def candidates(projects: list[dict], agents: list[dict], queued: set[str] | None = None
+def candidates(projects: list[dict], agents: list[dict], queued: set[str] | None = None, home: Path | None = None
                ) -> tuple[dict[str, dict], set[str]]:
     """``(open, present)``: ``open`` maps item key -> the open agent items nobody works on (the ones to tell the
     manager about; not the ones whose lane is in the merge queue); ``present`` is the keys of every open agent
@@ -237,16 +239,36 @@ def candidates(projects: list[dict], agents: list[dict], queued: set[str] | None
     present: set[str] = set()
     for project in projects:
         road = project.get("roadmap") or {}
+        all_items = [item for group in road.get("steps", []) for item in group["items"]]
+        by_id = {i.get("id") or roadmap_mod.item_id(i["text"]): i for i in all_items}
+        reservations = coordination.reservations(home, project["id"]) if home else []
         for step in road.get("steps", []):
             if step["id"] == plangate_mod.OPS_STEP:
                 continue  # step 0 holds Tirith's own work (reviews, plan refresh, manager)
-            busy = _busy(agents, project["id"], step["id"])
             mine = _on_step(agents, project["id"], step["id"])
             for item in _open_agent(step):
                 clean, state, detail = roadmap_mod.split_status(item["text"])
-                key = f"{project['id']}|{step['id']}|{roadmap_mod.item_id(item['text'])}"
+                task_id = item.get("id") or roadmap_mod.item_id(item["text"])
+                key = f"{project['id']}|{step['id']}|{task_id}"
                 present.add(key)
-                if busy is None and not _queue_owned(clean, detail, mine, queued or set()):
+                # Old lane records without an item remain conservative; known items no longer block a whole step.
+                related = [agent for agent in mine if (not agent.get("item") and not agent.get("task_id")) or
+                           roadmap_mod.split_status(str(agent.get("item") or ""))[0] == clean or agent.get("task_id") == task_id]
+                busy = _busy(related, project["id"], step["id"])
+                blocked = bool(item.get("metadata_error")) or any(dependency not in by_id or not by_id[dependency]["done"]
+                              for dependency in item.get("depends_on", []))
+                reserved = any(row["id"] == task_id or coordination.overlaps(item.get("writes", []), json.loads(row["writes"]))
+                               for row in reservations if not by_id.get(row["id"], {}).get("done"))
+                for agent in agents:
+                    if agent.get("project") != project["id"] or not (
+                            agent.get("status") == "working" or _review_status(agent) in (*REVIEW_OPEN, "ready")):
+                        continue
+                    other = next((i for i in all_items if
+                                  (i.get("id") and i["id"] == agent.get("task_id")) or
+                                  (agent.get("item") and roadmap_mod.split_status(i["text"])[0] ==
+                                   roadmap_mod.split_status(agent["item"])[0])), {})
+                    reserved |= coordination.overlaps(item.get("writes", []), other.get("writes", []))
+                if not busy and not blocked and not reserved and not _queue_owned(clean, detail, mine, queued or set()):
                     found[key] = {"key": key, "project": project["id"], "step": step["id"], "title": step.get("title") or "",
                                   "item": clean, "state": state, "detail": detail, "raw": item["text"],
                                   "fp": _fingerprint(step["id"], item["text"]), "plan": road.get("file")}
@@ -341,7 +363,7 @@ def _propose(home: Path, state: dict, projects: list[dict], agents: list[dict], 
     """One open proposal per (project, step) that lists its items nobody works on (after ``DEBOUNCE_S``). When the
     facts change it is closed and replaced; older ones (before this rule) are collapsed into it."""
     own, at, changed = _own(state), now_iso(now), False
-    found, present = candidates(projects, agents, queued_lanes(home))
+    found, present = candidates(projects, agents, queued_lanes(home), home=home)
     groups = _step_groups(found)
     present_steps = {k.rsplit("|", 1)[0] for k in present}
     by_step: dict[str, list[dict]] = {}

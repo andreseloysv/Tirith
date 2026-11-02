@@ -16,8 +16,10 @@
 from __future__ import annotations
 
 import re
+import os
 import subprocess
 import time
+import uuid
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Callable
@@ -216,6 +218,15 @@ def check_start(home: Path, repo: Path, project: str, step: str | None, item: st
         raise PlanGateError(("that item is already done in the plan. " if done else
                              f"that item is not an open item of step {step}. ") + add_hint(project, step))
     clean, state, detail = roadmap_mod.split_status(found["text"])
+    from tirith import coordination
+    try:
+        rows = coordination.plan_rows(steps)
+        pending = [dependency for dependency in found.get("depends_on", [])
+                   if not next(row for row in rows if row["id"] == dependency)["done"]]
+        if pending:
+            raise PlanGateError("unfinished prerequisites: " + ", ".join(pending))
+    except coordination.CoordinationError as error:
+        raise PlanGateError(str(error)) from error
     if state == roadmap_mod.STATE_REVIEW:
         raise PlanGateError("that item is in review; it is done when the review passes")
     if state == roadmap_mod.STATE_BLOCKED:
@@ -231,9 +242,19 @@ def check_start(home: Path, repo: Path, project: str, step: str | None, item: st
 def begin(home: Path, repo: Path, project: str, step: str, item: str, lane_id: str) -> bool:
     """Mark ``item`` "(en curso: <lane>)" in the plan; True when the plan changed."""
     clean = roadmap_mod.split_status(item)[0]
+    task_id = read_json(lane_path(home, lane_id), {}).get("task_id")
+
+    def mutate(text):
+        found = roadmap_mod.find_item(roadmap_mod.parse(text), step, clean)
+        metadata = None
+        if found and task_id and not found.get("id"):
+            metadata = {"id": task_id}
+        return roadmap_mod.set_item(text, step, clean,
+                                    roadmap_mod.with_status(clean, roadmap_mod.STATE_PROGRESS, lane_id),
+                                    metadata=metadata)
+
     return commit_change(
-        home, repo, project,
-        lambda text: roadmap_mod.set_item(text, step, clean, roadmap_mod.with_status(clean, roadmap_mod.STATE_PROGRESS, lane_id)),
+        home, repo, project, mutate,
         _message("start", step, lane_id))
 
 
@@ -263,6 +284,7 @@ def ensure_item(home: Path, repo: Path, project: str, step: str, text: str, lane
     A missing step is created with ``title``."""
     clean = roadmap_mod.split_status(text)[0]
     note = roadmap_mod.with_status(clean, roadmap_mod.STATE_PROGRESS, lane_id) if lane_id else clean
+    note = roadmap_mod.with_metadata(note, roadmap_mod.task_metadata(text))
 
     def mutate(body: str) -> str:
         if title:
@@ -270,9 +292,14 @@ def ensure_item(home: Path, repo: Path, project: str, step: str, text: str, lane
         found = roadmap_mod.find_item(roadmap_mod.parse(body), step, clean)
         if found is not None:
             return body
-        if parent:
-            return roadmap_mod.add_sub(body, step, parent, note)
-        return roadmap_mod.edit(body, step, add=note)
+        new = (roadmap_mod.add_sub(body, step, parent, note) if parent else
+               roadmap_mod.edit(body, step, add=note))
+        from tirith import coordination
+        try:
+            coordination.plan_rows(roadmap_mod.parse(new))
+        except coordination.CoordinationError as error:
+            raise PlanGateError(str(error)) from error
+        return new
 
     commit_change(home, repo, project, mutate, _message("add", step, who))
     return clean
@@ -326,7 +353,8 @@ def check_item(repo: Path, step: str, item: str) -> tuple[bool, str]:
 
 
 def add_item(home: Path, repo: Path, project: str, step: str, text: str, who: str, title: str | None = None,
-             check: str | None = None) -> str:
+             check: str | None = None, depends_on: list[str] | None = None,
+             writes: list[str] | None = None) -> str:
     """``tirith plan add``: one new open item at the end of step ``step``; returns its clean text.
     Refuses an item too big for ~30 minutes; ``check`` is the command that says it is done."""
     text = roadmap_mod.norm(text)
@@ -340,7 +368,46 @@ def add_item(home: Path, repo: Path, project: str, step: str, text: str, who: st
         if "`" in check or not check.strip():
             raise PlanGateError("--check must be a command without backticks")
         text = roadmap_mod.with_check(text, check)
+    from tirith import coordination
+    try:
+        metadata = {"id": "i-" + uuid.uuid4().hex, "depends_on": list(dict.fromkeys(depends_on or [])),
+                    "writes": coordination.write_paths(writes or [])}
+    except coordination.CoordinationError as error:
+        raise PlanGateError(str(error)) from error
+    text = roadmap_mod.with_metadata(text, metadata)
     return ensure_item(home, repo, project, step, text, None, who, title=title)
+
+
+def configure_task(home: Path, repo: Path, project: str, step: str, item: str,
+                   depends_on: list[str] | None = None, writes: list[str] | None = None) -> str:
+    """Change task coordination metadata through the same protected plan writer."""
+    from tirith import coordination
+    result = {}
+
+    def mutate(text):
+        steps = roadmap_mod.parse(text)
+        found = roadmap_mod.find_item(steps, step, item)
+        if found is None or roadmap_mod.item_state(found)[0] not in (roadmap_mod.STATE_OPEN, roadmap_mod.STATE_REOPENED):
+            raise PlanGateError("configure an open or reopened task before it starts")
+        task_id = found.get("id") or roadmap_mod.item_id(found["text"])
+        if any(row["id"] == task_id for row in coordination.reservations(home, project)):
+            raise PlanGateError("the task is already reserved; wait for its worker to finish")
+        old_ids = [i.get("id") or roadmap_mod.item_id(i["text"]) for s in steps for i in s["items"]
+                   if not i.get("metadata_error")]
+        permanent_id = task_id if found.get("id") or old_ids.count(task_id) == 1 else "i-" + uuid.uuid4().hex
+        metadata = {"id": permanent_id,
+                    "depends_on": found.get("depends_on", []) if depends_on is None else list(dict.fromkeys(depends_on)),
+                    "writes": coordination.write_paths(found.get("writes", []) if writes is None else writes)}
+        new = roadmap_mod.set_item(text, step, item, found["text"], metadata=metadata)
+        coordination.plan_rows(roadmap_mod.parse(new))
+        result.update(metadata)
+        return new
+
+    try:
+        commit_change(home, repo, project, mutate, _message("configure", step, "tirith"))
+    except coordination.CoordinationError as error:
+        raise PlanGateError(str(error)) from error
+    return result["id"]
 
 
 def ops_item(home: Path, repo: Path, project: str, text: str, lane_id: str | None, who: str = "tirith",
@@ -362,9 +429,19 @@ def lane_item(lane: dict) -> tuple[str, str] | None:
     return (step, item) if item and step else None
 
 
+def current_lane_item(repo: Path, lane: dict) -> tuple[str, str] | None:
+    linked = lane_item(lane)
+    if linked and lane.get("task_id"):
+        _, steps = _read(repo)
+        found = roadmap_mod.find_item(steps, linked[0], lane["task_id"])
+        if found:
+            return linked[0], roadmap_mod.split_status(found["text"])[0]
+    return linked
+
+
 def apply_outcome(home: Path, repo: Path, project: str, lane: dict) -> None:
     """Write a lane's outcome into the plan: the item's note and the new items (idempotent)."""
-    outcome, linked = lane.get("outcome") or {}, lane_item(lane)
+    outcome, linked = lane.get("outcome") or {}, current_lane_item(repo, lane)
     if not outcome or not linked:
         return
     step, item = linked
@@ -404,16 +481,27 @@ def report(home: Path, lane_id: str, status: str, adds: list[str] | None = None,
         raise PlanGateError(f"--status must be one of {', '.join(STATUSES)}")
     if lane_item(lane) is None:
         raise PlanGateError(f"lane {lane_id} is not linked to a plan item")
+    if (os.environ.get("TIRITH_LANE") == lane_id and os.environ.get("TIRITH_TASK_ATTEMPT") and
+            os.environ["TIRITH_TASK_ATTEMPT"] != lane.get("task_attempt")):
+        raise PlanGateError("this task attempt is stale; its report was refused")
     adds = [roadmap_mod.norm(a) for a in adds or [] if roadmap_mod.norm(a)]
     if status == "blocked" and not roadmap_mod.norm(reason or ""):
         raise PlanGateError('--status blocked needs --reason "<why, and who can unblock it>"')
     if status == "partial" and not adds:
         raise PlanGateError('--status partial needs the rest as new items: --add "<what is left>"')
+    from tirith import coordination
+    try:
+        coordination.update(home, lane, phase="verifying")
+    except coordination.CoordinationError as error:
+        raise PlanGateError(str(error)) from error
     lane["outcome"] = {"status": status, "added": adds, "reason": roadmap_mod.norm(reason or "") or None,
                        "at": now_iso(), "applied": False}
     write_json_atomic(lane_path(home, lane_id), lane)
     repo = repo_of(home, str(lane.get("project") or ""))
     if repo is not None:
+        linked = current_lane_item(repo, lane)
+        if linked:
+            lane["item"] = linked[1]
         try:
             apply_outcome(home, repo, str(lane["project"]), lane)
             lane["outcome"]["applied"] = True
@@ -543,7 +631,7 @@ def lane_work(home: Path, repo: Path, lane: dict) -> tuple[str, str | None]:
 
 def review_passed(home: Path, repo: Path, lane: dict) -> str:
     """The review passed: tick the item (if the claim holds on main) and its review sub-item. Returns a line."""
-    linked = lane_item(lane)
+    linked = current_lane_item(repo, lane)
     if linked is None:
         return ""
     step, item = linked
@@ -567,7 +655,7 @@ def review_passed(home: Path, repo: Path, lane: dict) -> str:
 
 def review_failed(home: Path, repo: Path, lane: dict, reason: str) -> str:
     """The review failed: close the review sub-item with the reason and reopen the item with it."""
-    linked = lane_item(lane)
+    linked = current_lane_item(repo, lane)
     if linked is None:
         return ""
     step, item = linked

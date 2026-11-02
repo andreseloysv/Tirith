@@ -248,7 +248,8 @@ def test_plan_add_writes_and_commits_only_the_plan(proj, home: Path, capsys) -> 
     repo, _ = proj
     (repo / "scratch.txt").write_text("dirty\n", encoding="utf-8")  # not the plan: stays out of the commit
     assert main(["plan", "add", "--project", "demo", "--step", "1", "--text", "Review the web panel"]) == 0
-    assert "- [ ] Review the web panel\n" in _plan(repo)
+    assert "- [ ] Review the web panel\n" in roadmap.without_metadata(_plan(repo))
+    assert roadmap.parse(_plan(repo))[0]["items"][2]["id"].startswith("i-")
     assert _commits(repo)[0] == "Roadmap: add in step 1 (owner)"
     status = subprocess.run([GIT, "-C", str(repo), "status", "--porcelain"], capture_output=True, text=True).stdout
     assert "scratch.txt" in status and "TODO.md" not in status
@@ -264,7 +265,7 @@ def test_plan_add_names_the_lane_and_refuses_bad_input(proj, home: Path, capsys,
     assert main(["plan", "add", "--project", "demo", "--step", "9", "--text", "X"]) == 3
     assert "step 9 is not in the plan" in capsys.readouterr().err
     assert main(["plan", "add", "--project", "demo", "--step", "9", "--title", "New step", "--text", "Y"]) == 0
-    assert "## 9. New step\n\n- [ ] Y\n" in _plan(repo)
+    assert "## 9. New step\n\n- [ ] Y\n" in roadmap.without_metadata(_plan(repo))
     assert main(["plan", "add", "--project", "nope", "--step", "1", "--text", "X"]) == 3
 
 
@@ -290,7 +291,9 @@ def test_the_writer_lock_serializes_changes(proj, home: Path) -> None:
     [t.start() for t in threads]
     [t.join() for t in threads]
     assert not errors
-    assert all(f"- [ ] Parallel item {n}\n" in _plan(repo) for n in range(6))
+    assert all(f"- [ ] Parallel item {n}\n" in roadmap.without_metadata(_plan(repo)) for n in range(6))
+    ids = [i["id"] for i in roadmap.parse(_plan(repo))[0]["items"] if "id" in i]
+    assert len(ids) == len(set(ids)) == 6
     assert len(_commits(repo)) == before + 6
 
 

@@ -172,6 +172,10 @@ def build_brief(title: str, intro: str, open_items: list[str], step_id: str, ite
             "## Where to read",
             "- `docs/TODO.md` (read only): the plan; do not edit it. Only Tirith writes it.",
             "- `docs/CONTRACT*.md`: the contracts of the parts you touch; update the one you change.",
+            "", "## Worker coordination",
+            "- Read your local inbox with `tirith task inbox --project $TIRITH_PROJECT --lane $TIRITH_LANE`.",
+            "- After handling messages, acknowledge their exact IDs with `tirith task ack --project $TIRITH_PROJECT --lane $TIRITH_LANE <ids>`.",
+            "- Send a local handoff with `tirith task send --project $TIRITH_PROJECT --sender $TIRITH_LANE --to <lane> --key <unique-key> \"<message>\"`; reuse the key when retrying delivery.",
             ""]
     return "\n".join(out)
 
