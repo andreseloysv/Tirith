@@ -25,7 +25,8 @@ def identity(monkeypatch: pytest.MonkeyPatch) -> None:
 def dispatcher(home: Path, spawn):
     """What the collector's own dispatch pass does for the merge queue."""
     def pump() -> None:
-        mergeq_mod.run(home, load_config(home), read_lanes(home), spawn=spawn)
+        # None selects the production spawner; explicitly disable it for the missing-spawner scenario.
+        mergeq_mod.run(home, load_config(home), read_lanes(home), spawn=spawn, dry_run=spawn is None)
     return pump
 
 

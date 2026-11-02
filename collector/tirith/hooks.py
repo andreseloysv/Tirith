@@ -232,6 +232,27 @@ def decide(agent: str, event: dict, payload, home: Path | None = None) -> int:
     Each violation is also recorded as a ``kind: "violation"`` event. Only ``[gates] enabled = false``
     in config.toml switches this off; no environment variable does.
     """
+    if home is not None and event.get("lane"):
+        from tirith import coordination
+        from tirith.store import lane_path, read_json
+        lane = read_json(lane_path(home, event["lane"]), {})
+        try:
+            if (lane.get("task_id") and os.environ.get("TIRITH_TASK_ATTEMPT") and
+                    os.environ["TIRITH_TASK_ATTEMPT"] != lane.get("task_attempt")):
+                raise coordination.CoordinationError("this task attempt is stale; stop this worker")
+            coordination.update(home, lane)
+        except coordination.CoordinationError as error:
+            if event.get("event") == "PreToolUse":
+                print(str(error), file=sys.stderr)
+                return 2
+        if (agent == "anthropic" and event.get("event") in ("SessionStart", "UserPromptSubmit", "PostToolUse")
+                and lane.get("project") and not str(lane.get("id", "")).startswith("manager")
+                and (Path(home) / "coordination.sqlite3").exists()):
+            messages = coordination.inbox(home, lane["project"], lane.get("id") or event["lane"])
+            if messages:
+                text = "Pending worker messages (acknowledge only these IDs after handling):\n" + json.dumps(messages[:10])
+                print(json.dumps({"hookSpecificOutput": {"hookEventName": event["event"], "additionalContext": text}}))
+                return 0
     if home is not None and event.get("event") != "PreToolUse":
         return _manager_inbox(agent, event, home)
     if event.get("event") != "PreToolUse" or home is None:

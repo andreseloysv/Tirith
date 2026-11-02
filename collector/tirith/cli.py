@@ -29,6 +29,7 @@ from tirith.guardwrap import (
     default_words, guard_upgrade_steps, install_guard, reinstall_guard, verify_guard,
 )
 from tirith import actions as actions_mod
+from tirith import coordination
 from tirith import agentrun as agentrun_mod
 from tirith import asks as asks_mod
 from tirith import fallback as fallback_mod
@@ -198,6 +199,11 @@ def end_lane(home: Path, lane_id: str, result: str, report: str | None = None) -
     if report is not None:
         lane["report"] = bound_text(report, REPORT_MAX)
     write_lane(home, lane)
+    if lane.get("task_id") and (result != "done" or (lane.get("outcome") or {}).get("status") != "done"):
+        try:
+            coordination.update(home, lane, phase="ready", release=True)
+        except coordination.CoordinationError:
+            pass  # an earlier attempt must never release its replacement's reservation
     flows_mod.append_flow(
         home, f"agent:{lane_id}", "manager", "report",
         f"{result}: " + (flows_mod.first_line(report) or str(lane.get("feature") or "")),
@@ -343,6 +349,8 @@ def _wrapper_path_env(home: Path | None = None, lane_id: str | None = None,
     if lane_id:
         env["TIRITH_LANE"] = lane_id
         env["TIRITH_HOME"] = str(home or tirith_home())  # the shims look the lane file up here
+    if project:
+        env["TIRITH_PROJECT"] = project
     if token:
         env[gates_mod.TOKEN_ENV] = token
     session = projects_mod.current_session(home or tirith_home())
@@ -484,6 +492,7 @@ def _run_child(home: Path, lane: dict, lane_id: str, command: list[str], workspa
     output, worktree change or CPU for the idle limit) with the hard cap as the safety net; ``_IDLE`` keeps
     whether the run was stopped for silence, for the continue loop."""
     with log_path.open("ab") as log_handle:
+        coordination.update(home, lane, phase="running")
         proc = subprocess.Popen(
             command, cwd=str(workspace), env=env,
             stdin=subprocess.PIPE if stdin_text else subprocess.DEVNULL,
@@ -589,11 +598,26 @@ def _cmd_lane_run(args) -> int:
         while not args.id and (launch_mod.worktree_path(repo, lane_id).exists()
                                or launch_mod.branch_exists(repo, f"lane/{lane_id}")):
             lane_id = _unique_lane_id(home, f"{lane_id}-2")
-        workspace = _lane_workspace(repo, lane_id, False)
+    try:
+        task_claim = {} if plangate_mod.manager_lane(lane_id, args.hero_class) else coordination.claim(
+            home, Path(proj.repo), args.project, args.item_step or args.step, item, lane_id)
+    except coordination.CoordinationError as error:
+        print(f"tirith: task claim: {error}", file=sys.stderr)
+        return 3
+    if not args.workspace and not manager_lane:
+        try:
+            workspace = _lane_workspace(repo, lane_id, False)
+        except BaseException:
+            coordination.update(home, {"id": lane_id, "project": args.project, **task_claim}, phase="ready", release=True)
+            raise
     if (not interactive and not args.no_detach and (args.detach or (
             not args.by_tirith and in_manager_session()))):  # a manager's turn must end right away
-        launch_mod.spawn_detached(_detached_argv(args, home, lane_id, Path(workspace), raw_command), home,
-                                  home / "logs" / f"{lane_id}.launch.log")
+        try:
+            launch_mod.spawn_detached(_detached_argv(args, home, lane_id, Path(workspace), raw_command), home,
+                                      home / "logs" / f"{lane_id}.launch.log")
+        except BaseException:
+            coordination.update(home, {"id": lane_id, "project": args.project, **task_claim}, phase="ready", release=True)
+            raise
         print(lane_id)
         print(f"detached; worktree: {workspace}")
         return 0
@@ -608,6 +632,9 @@ def _cmd_lane_run(args) -> int:
         pid=None, brief=args.brief, step=args.step,
         request_id=getattr(args, "request", None), item=item, item_step=args.item_step,
         retry_of=args.retry_of)
+    lane.update(task_claim)
+    lane["controller_pid"] = os.getpid()  # remains alive while waiting for stages or resuming the child
+    write_lane(home, lane)
     _plan_begin(home, lane)
     lane["token"] = secrets.token_urlsafe(24)
     if interactive:
@@ -624,10 +651,16 @@ def _cmd_lane_run(args) -> int:
     write_lane(home, lane)
     began = time.monotonic()
     env = _wrapper_path_env(home, lane_id, lane["token"], args.project)
+    if task_claim:
+        env["TIRITH_TASK_ATTEMPT"] = task_claim["task_attempt"]
     if args.agent:
         env = agentrun_mod.child_env(config, args.agent, args.project, env)
     if interactive:
-        exit_code = _run_interactive(home, lane, command, workspace, env)
+        try:
+            exit_code = _run_interactive(home, lane, command, workspace, env)
+        except OSError:
+            end_lane(home, lane_id, "failed", "The interactive agent process could not be started.")
+            raise
         answer = _last_stop_message(home, lane_id, lane.get("started_at"))
     else:
         stdin_text = getattr(args, "stdin_text", None)
@@ -635,7 +668,11 @@ def _cmd_lane_run(args) -> int:
         alias = _lane_alias(args, raw_command or command, config)
         began_at, reported = time.time() - 2, set()
         while True:
-            exit_code, answer = _run_child(home, lane, lane_id, command, workspace, env, log_path, stdin_text)
+            try:
+                exit_code, answer = _run_child(home, lane, lane_id, command, workspace, env, log_path, stdin_text)
+            except OSError:
+                end_lane(home, lane_id, "failed", "The agent process could not be started.")
+                raise
             stopped = lanestop_mod.marker(read_json(lane_path(home, lane_id), None) or {})
             agent_lane = bool(alias)
             if (not stopped and agent_lane and exit_code == timeouts_mod.EXIT_TIMED_OUT
@@ -712,6 +749,7 @@ def _run_interactive(home: Path, lane: dict, command: list[str], workspace: Path
 
     Returns the exit code (128 + signal number when the child died of a signal).
     """
+    coordination.update(home, lane, phase="running")
     proc = subprocess.Popen(command, cwd=str(workspace), env=env)  # inherits stdin/stdout/stderr
     lane["pid"] = proc.pid
     write_lane(home, lane)
@@ -1478,7 +1516,15 @@ def launch_step(home: Path, project_id: str, step_id: str, agent: str | None = N
             f"tirith check fails for '{project_id}', so no lane may start. Fix these, then run "
             f"`tirith check --project {project_id}`:\n" + "\n".join(f"  {p}" for p in failed))
     if not item and (by_tirith or auto_item):
-        item = open_items[0]
+        for candidate in open_items:
+            try:
+                plangate_mod.check_start(home, repo, project_id, step["id"], candidate)
+            except plangate_mod.PlanGateError:
+                continue
+            item = candidate
+            break
+        if not item:
+            raise launch_mod.LaunchError("no ready item: prerequisites or plan gates block this step")
     try:
         item = plangate_mod.check_start(home, repo, project_id, step["id"], item)
     except plangate_mod.PlanGateError as error:
@@ -1501,10 +1547,18 @@ def launch_step(home: Path, project_id: str, step_id: str, agent: str | None = N
         print(f"lane {lane_id} (dry run)\nworktree: {workspace} (branch lane/{lane_id})\n"
               f"brief: {brief_path}\ncommand: {' '.join(argv)}\n\n{brief}", file=out)
         return lane_id
-    launch_mod.create_worktree(repo, lane_id)
-    brief_path.parent.mkdir(parents=True, exist_ok=True)
-    brief_path.write_text(brief, encoding="utf-8")
-    launch_mod.spawn_detached(argv, home, home / "logs" / f"{lane_id}.launch.log")
+    try:
+        task_claim = coordination.claim(home, repo, project_id, step["id"], item, lane_id)
+    except coordination.CoordinationError as error:
+        raise launch_mod.LaunchError(str(error)) from error
+    try:
+        launch_mod.create_worktree(repo, lane_id)
+        brief_path.parent.mkdir(parents=True, exist_ok=True)
+        brief_path.write_text(brief, encoding="utf-8")
+        launch_mod.spawn_detached(argv, home, home / "logs" / f"{lane_id}.launch.log")
+    except BaseException:
+        coordination.update(home, {"id": lane_id, "project": project_id, **task_claim}, phase="ready", release=True)
+        raise
     print(f"lane {lane_id}", file=out)
     return lane_id
 
@@ -1661,11 +1715,81 @@ def _cmd_plan_add(args) -> int:
     who = os.environ.get("TIRITH_LANE") or ("manager" if in_manager_session() else "owner")
     try:
         text = plangate_mod.add_item(home, repo, args.project, str(args.step), args.text, who, args.title,
-                                      getattr(args, "check", None))
+                                      getattr(args, "check", None), args.depends_on, args.writes)
     except plangate_mod.PlanGateError as error:
         print(f"tirith plan add: {error}", file=sys.stderr)
         return 3
     print(f"added to step {args.step}: {text}")
+    _, steps = plangate_mod._read(repo)
+    item = roadmap_mod.find_item(steps, str(args.step), text)
+    if item and item.get("id"):
+        print(item["id"])
+    return 0
+
+
+def _cmd_task(args) -> int:
+    home = _home(args)
+    try:
+        actor = os.environ.get("TIRITH_LANE")
+        lane_id = args.sender if args.task_command == "send" else getattr(args, "lane", None)
+        if actor and lane_id and actor != lane_id:
+            raise coordination.CoordinationError("a worker may only send, acknowledge, or renew as its own lane")
+        if actor and os.environ.get("TIRITH_TASK_ATTEMPT"):
+            acting_lane = read_json(lane_path(home, actor), {})
+            if acting_lane.get("task_id") and acting_lane.get("task_attempt") != os.environ["TIRITH_TASK_ATTEMPT"]:
+                raise coordination.CoordinationError("this task attempt is stale; stop this worker")
+        if args.task_command == "list":
+            repo = plangate_mod.repo_of(home, args.project)
+            if repo is None:
+                raise coordination.CoordinationError("unknown project")
+            _, steps = plangate_mod._read(repo)
+            with coordination.database(home) as db:
+                coordination._sync(db, args.project, coordination.plan_rows(steps))
+                rows = [dict(row) for row in db.execute(
+                    "SELECT id,step,text,done,owner,phase,needs,writes FROM tasks WHERE project=? AND present=1 ORDER BY step,id",
+                    (args.project,))]
+            for row in rows:
+                row["depends_on"], row["writes"] = json.loads(row.pop("needs")), json.loads(row["writes"])
+            for row in rows:
+                row["blocked_by"] = [dependency for dependency in row["depends_on"]
+                                     if not any(r["id"] == dependency and r["done"] for r in rows)]
+                row["reserved_by"] = [other["id"] for other in rows if other["id"] != row["id"] and other["owner"] and not other["done"]
+                                      and coordination.overlaps(row["writes"], other["writes"])]
+                row["ready"] = bool(not row["done"] and not row["owner"] and not row["blocked_by"] and not row["reserved_by"]
+                                    and roadmap_mod.split_status(row["text"])[1] in ("open", "reopened"))
+            print(json.dumps(rows, indent=2))
+        elif args.task_command == "send":
+            message_id = coordination.send(home, args.project, args.sender, args.to, args.text, args.key)
+            flows_mod.append_flow(home, f"agent:{args.sender}", f"agent:{args.to}", "message", args.text,
+                                  ref=str(message_id), project=args.project)
+            print(message_id)
+        else:
+            lane = read_json(lane_path(home, args.lane), {})
+            if lane.get("project") != args.project:
+                raise coordination.CoordinationError("lane is not part of this project")
+            if args.task_command == "inbox":
+                print(json.dumps(coordination.inbox(home, args.project, args.lane), indent=2))
+            elif args.task_command == "ack":
+                coordination.acknowledge(home, args.project, args.lane, args.ids)
+            elif args.task_command == "heartbeat":
+                coordination.update(home, lane)
+    except (coordination.CoordinationError, roadmap_mod.EditError) as error:
+        print(f"tirith task: {error}", file=sys.stderr)
+        return 3
+    return 0
+
+
+def _cmd_plan_configure(args) -> int:
+    home = _home(args)
+    repo = plangate_mod.repo_of(home, args.project)
+    try:
+        if repo is None:
+            raise plangate_mod.PlanGateError("unknown project")
+        print(plangate_mod.configure_task(home, repo, args.project, args.step, args.item,
+                                         args.depends_on, args.writes))
+    except plangate_mod.PlanGateError as error:
+        print(f"tirith plan configure: {error}", file=sys.stderr)
+        return 3
     return 0
 
 
@@ -2694,7 +2818,16 @@ def build_parser() -> argparse.ArgumentParser:
     pl_add.add_argument("--text", required=True, help="the new item")
     pl_add.add_argument("--title", default=None, help="create the step with this title when it is not in the plan")
     pl_add.add_argument("--check", default=None, help="a command that passes when the item is done")
+    pl_add.add_argument("--depends-on", action="append", default=[], help="prerequisite task ID (repeatable)")
+    pl_add.add_argument("--writes", action="append", default=[], help="file or directory this task will modify (repeatable)")
     pl_add.set_defaults(func=_cmd_plan_add)
+    pl_configure = plan_sub.add_parser("configure", parents=[common], help="set dependencies and write paths on an open task")
+    pl_configure.add_argument("--project", required=True)
+    pl_configure.add_argument("--step", required=True)
+    pl_configure.add_argument("--item", required=True)
+    pl_configure.add_argument("--depends-on", nargs="*", default=None, help="prerequisite IDs; no values clears them")
+    pl_configure.add_argument("--writes", nargs="*", default=None, help="write paths; no values clears them")
+    pl_configure.set_defaults(func=_cmd_plan_configure)
     pl_check = plan_sub.add_parser("check", parents=[common], help="run an item's done check (exit 0 = done)")
     pl_check.add_argument("--project", required=True)
     pl_check.add_argument("--step", required=True, help="step number")
@@ -2714,6 +2847,22 @@ def build_parser() -> argparse.ArgumentParser:
     pl_done.add_argument("--item", required=True, help="the exact text of the item")
     pl_done.add_argument("--commit", required=True, help="the commit on main that did the work")
     pl_done.set_defaults(func=_cmd_plan_done)
+
+    task = sub.add_parser("task", parents=[common], help="shared task records and local worker inboxes")
+    task_sub = task.add_subparsers(dest="task_command", required=True)
+    for name in ("list", "send", "inbox", "ack", "heartbeat"):
+        command = task_sub.add_parser(name, parents=[common])
+        command.add_argument("--project", required=True)
+        command.set_defaults(func=_cmd_task)
+        if name == "send":
+            command.add_argument("--sender", required=True)
+            command.add_argument("--to", required=True)
+            command.add_argument("--key", required=True, help="unique delivery key; reuse when retrying this message")
+            command.add_argument("text")
+        elif name != "list":
+            command.add_argument("--lane", required=True)
+            if name == "ack":
+                command.add_argument("ids", nargs="+", type=int, help="IDs from the delivered inbox snapshot")
 
     canary = sub.add_parser("canary", parents=[common], help="the end-to-end test lane (runs every hour by itself)")
     canary_sub = canary.add_subparsers(dest="canary_command", required=True)

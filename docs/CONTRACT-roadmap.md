@@ -259,3 +259,9 @@ send a `plan-edit` request (`CONTRACT-inbox.md`) and the dispatcher changes the 
   is refused the file is restored.
 - After a change it queues one `plan-refresh` (Update the plan) for the project, unless one is already
   queued, so the auditor checks the plan again.
+# Shared task coordination
+
+New items have permanent IDs and optional prerequisites/write reservations.
+See [CONTRACT-coordination.md](CONTRACT-coordination.md) for metadata, atomic
+claiming, recovery, and task-level autopilot readiness. Existing plan gates,
+verification, and the rule that integration ticks an item remain in force.

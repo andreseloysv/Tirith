@@ -77,7 +77,8 @@ def _refreshes(home: Path) -> list[dict]:
 
 def test_edit_replaces_one_item_and_keeps_the_rest() -> None:
     new = rm.edit(TODO, "1", "Open one wrapped on a second line.", new_text="Open one, rewritten")
-    assert "- [ ] Open one, rewritten\n- [ ] Open two" in new
+    assert "- [ ] Open one, rewritten\n- [ ] Open two" in rm.without_metadata(new)
+    assert rm.parse(new)[0]["items"][1]["id"] == rm.item_id("Open one wrapped on a second line.")
     assert "wrapped on" not in new and new.count("\n") == TODO.count("\n") - 1
     assert [i["text"] for i in rm.parse(new)[0]["items"]] == ["Done one.", "Open one, rewritten", "Open two (dueño: do it)"]
 
@@ -143,7 +144,7 @@ def test_dispatcher_applies_and_commits_only_the_plan(project, home: Path, paylo
     rid = inbox_mod.add_request(home, "plan-edit", "demo", "1", _payload(**payload), at=_at(5))["id"]
     _run(home)
     text = (project / "docs" / "TODO.md").read_text(encoding="utf-8")
-    assert (expect in text) if expect else ("Open two" not in text)
+    assert (expect in rm.without_metadata(text)) if expect else ("Open two" not in text)
     assert _log(project)[0] == f"Roadmap: {verb} in step 1 (owner)"
     changed = subprocess.run(["git", "-C", str(project), "show", "--name-only", "--format=", "HEAD"],
                              capture_output=True, text=True).stdout.split()
