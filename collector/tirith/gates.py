@@ -53,6 +53,7 @@ DESCRIPTIONS: dict[str, str] = {
     "raw-stage": "Tests and builds must run through Tirith, so you can see them in Pipelines.",
     "lane-brief": "Every lane starts with a written task, so the agent knows what to do.",
     "project-check": "No new lane starts while the project's setup has problems.",
+    "plan-item": "No agent starts unless it is tied to an open item of the project's plan.",
     "commit-guard": "Commits are checked for banned words and failing tests before they are accepted.",
     "workspace-write": "Agents may only write inside their own copy of the project and in temporary folders.",
     "no-secrets": "Agents may never read passwords, keys or login files from your computer.",

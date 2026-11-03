@@ -35,6 +35,7 @@ BUILT_IN: tuple[tuple[str, str, list[str]], ...] = (
     ("raw-stage", "Raw pipeline stage", ["hook"]),
     ("lane-brief", "Lane without brief", ["lane run"]),
     ("project-check", "Project check failing", ["lane run"]),
+    ("plan-item", "Agents start only from the plan", ["lane run"]),
     ("commit-guard", "Commit guard", ["git"]),
     ("workspace-write", "Write outside the lane copy", ["hook"]),
     ("no-secrets", "Read credentials", ["hook"]),

@@ -127,6 +127,15 @@ def test_bad_rules_are_agent_style_errors(tmp_path: Path, body: str, rule: str) 
     assert "Fix:" in str(found[0]) and not m.rules
 
 
+def test_plan_item_gate_is_a_built_in_rule(tmp_path: Path) -> None:
+    """The plan-item gate (docs/CONTRACT-gates.md) is registered: described, shown, and its id is reserved."""
+    assert "plan-item" in mf.BUILT_IN_RULES and gates.DESCRIPTIONS["plan-item"].strip()
+    assert "plan-item" in {rid for rid, _, _ in setup_mod.BUILT_IN}
+    body = 'id = "plan-item"\nmatch = "x"\naction = "block"\nmessage = "m"\ninstead = "i"'
+    m = mf.parse_text(BASE + "\n[[rules]]\n" + body + "\n", tmp_path / "tirith.toml")
+    assert "rule-id" in [p.rule for p in m.problems] and not m.rules
+
+
 def test_duplicate_rule_id(tmp_path: Path) -> None:
     m = mf.parse_text(BASE + RULE + RULE, tmp_path / "tirith.toml")
     assert [p.rule for p in m.problems] == ["rule-duplicate"] and len(m.rules) == 1
