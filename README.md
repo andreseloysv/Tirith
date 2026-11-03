@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="site/img/logo-3d.png" srcset="site/img/logo-3d.png 1x, site/img/logo-3d@2x.png 2x" alt="Tirith: a stone tower with a lit window" width="220">
+
 # Tirith
 
 **An autonomous manager for your coding agents. They finish the plan; you see everything and decide only what only you can.**
@@ -78,7 +80,12 @@ the exact command to use instead ([`CONTRACT-gates.md`](docs/CONTRACT-gates.md))
   collector answers, delegates to sub-agents and keeps notes.
 - **Self-check that heals itself.** Every pass Tirith checks the collector, the manager, the autopilot, the
   disk and the reviews, fixes what it safely can, and raises one item when it cannot. The header has a health dot. ([`CONTRACT-selfcheck.md`](docs/CONTRACT-selfcheck.md))
-- **Auto-merge.** A finished lane is tested, claim-checked and merged without asking you; merging is never an owner question.
+- **Auto-merge through one merge queue.** A finished lane is tested, claim-checked and merged without asking you;
+  merging is never an owner question. Agents never touch `main`. Up to 5 lanes of a project can be tested together
+  in one "train", and a red train is split to find the culprit. With 3 or more lanes waiting, no new lane starts
+  (WIP limit). ([`CONTRACT-mergeq.md`](docs/CONTRACT-mergeq.md))
+- **New projects bootstrap without `tirith.toml`.** `tirith plan add --title ...` creates the plan, and the first
+  item can start even though `tirith check` still reports the missing manifest.
 - **Disk guard** removes merged worktrees when free space runs low.
 - **The collector reloads itself** when its code changes on `main`.
 - **Timeouts for every command** Tirith starts (git, stages, agents), learned from history, with the process
@@ -110,14 +117,15 @@ local files and Tauri IPC.
 
 ## How Meta's models are used
 
-- **Muse Spark** (`muse-spark-1.3`, Meta Model API) is the brain, in `collector/tirith/brain.py`. Six jobs,
+- **Muse Spark** (`muse-spark-1.3`, Meta Model API) is the brain, in `collector/tirith/brain.py`. Seven jobs,
   each cached by input hash:
   1. a one-sentence summary of each agent's recent log;
   2. a detector for things that need the owner;
   3. an architecture map of a project from its file tree and key files;
   4. a lasting epithet for each agent;
   5. a one-line summary of each chat room;
-  6. a "needs the owner" check on room messages.
+  6. a "needs the owner" check on room messages;
+  7. a short answer to the owner's question about a plan step.
 
   The key is read only from the environment (`META_SI_API_KEY` or `META_API_KEY`) and is never logged or
   stored. Without a key everything still works, with plain log lines.
@@ -177,16 +185,14 @@ Inside a project that has a `tirith.toml`, tests run as `tirith run --project ti
 
 ## Status
 
-Under construction, honestly. What is described above runs today on `main`.
+Under construction, honestly. Recently landed: the merge queue with trains and a WIP limit, the plan-item rule, new-project bootstrap and the fix that keeps the persistent manager starting. What is described above runs today on `main`.
 
 **In progress** (lanes running now, not shipped yet):
 
 - agents run with no permission prompts, with hooks as the only barrier;
 - a continue-until-done loop for lanes;
-- a single merge queue;
 - faster tests and smaller plan items;
 - autopilot proposals that go to the manager;
-- a fix so the persistent manager always starts;
 - chat with Muse Code through `muse serve` (blocked on its protocol).
 
 Layout: `collector/` CLI and collector · `web/` page · `app/` desktop app · `rust/` Rust port in progress ·
