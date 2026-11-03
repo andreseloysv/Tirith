@@ -162,7 +162,7 @@ def merge_lane(repo: Path, workspace: Path, lane_id: str, feature: str) -> str:
     if _git(workspace, "diff", "--cached", "--quiet").returncode != 0:
         done = _git(workspace, "commit", "-q", "-m", f"Lane {lane_id}: {feature}")
         if done.returncode != 0:
-            raise ReviewError(f"committing the lane failed: {_tail(done.stderr or done.stdout)}")
+            raise ReviewError(f"committing the lane failed: {timeouts_mod.why(done)}")
     plangate_mod.recover_git_lock(repo)
     done = _git(repo, "merge", "--no-ff", "-q", "-m", f"Merge {branch}: {feature}", branch)
     if done.returncode != 0:

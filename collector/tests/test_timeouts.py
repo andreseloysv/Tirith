@@ -348,3 +348,11 @@ def test_git_deadline_scales_with_load_within_the_class_maximum(home: Path) -> N
     assert timeouts_mod.deadline(home, config, "git", load=4.0, cpus=4) == policy
     assert timeouts_mod.deadline(home, config, "git", load=8.0, cpus=4) == pytest.approx(policy * 2)
     assert timeouts_mod.deadline(home, config, "git", load=4000.0, cpus=4) == timeouts_mod.bounds("git")[2]
+
+
+def test_why_a_command_failed_is_never_empty():
+    quiet = timeouts_mod.Result(["git"], 1)
+    assert timeouts_mod.why(quiet) == "git exited 1"
+    killed = timeouts_mod.Result(["git"], 124, "", "", True, 30.0, "timed out after 30 s (class git)")
+    assert "timed out after 30 s" in timeouts_mod.why(killed)
+    assert timeouts_mod.why(timeouts_mod.Result(["git"], 1, "", b"fatal: a lock\n")) == "fatal: a lock"
