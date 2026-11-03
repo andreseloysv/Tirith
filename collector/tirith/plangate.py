@@ -109,9 +109,13 @@ def writer_lock(home: Path, project: str):
         handle.close()  # closing releases the flock
 
 
+COMMIT_CHECKED = frozenset({"commit", "merge"})  # the git commands that run the commit checks (the guard hook)
+
+
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
-    # a commit runs the commit checks, so it gets the commit deadline (the read one times out under load)
-    return timeouts_mod.run(["git", "-C", str(repo), *args], "git-commit" if args[:1] == ("commit",) else "git", text=True)
+    """A git command; one that runs the commit checks has the commit limit, not a read's."""
+    return timeouts_mod.run(["git", "-C", str(repo), *args], "git-commit" if args[:1] and args[0] in COMMIT_CHECKED else "git",
+                            text=True)
 
 
 LOCK_STALE_SECONDS = 60  # a git index lock older than this was left by a crash (git holds it for milliseconds)
@@ -180,8 +184,7 @@ def commit_change(home: Path, repo: Path, project: str, mutate: Callable[[str], 
         if made.returncode != 0:  # the guard (or git) refused: leave the plan as it was
             _git(repo, "reset", "-q", "--", rel)
             _git(repo, "checkout", "--", rel)
-            why = (made.stderr or made.stdout).strip() or getattr(made, "error", "") or f"git exited {made.returncode}"
-            raise PlanGateError(f"committing the plan failed: {why[:200]}")
+            raise PlanGateError(f"committing the plan failed: {timeouts_mod.why(made)}")
     return True
 
 
