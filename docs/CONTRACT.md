@@ -63,6 +63,9 @@ Pipeline events (`tirith run --project chromasol --pipeline android-release --st
  "stage": "build", "event": "start|end", "status": "running|passed|failed", "log": "/abs/stage.log"}
 ```
 `tirith run` executes the command, streams it to the stage log, and returns its exit code.
+The current run of a pipeline (`pipelines.json`, `current_run`) belongs to the worktree that took it (`worktree`):
+the stages of one worktree share the run, a stage started from another worktree takes the next number, so two
+worktrees running stages at once never share a run number or a log file (`<run>-<stage>.log`).
 `tirith pipeline declare <pipeline> --stages build,test,lint,sign,device,store,review` fixes the order
 (stages not yet run show as `pending`).
 

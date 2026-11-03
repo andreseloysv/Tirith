@@ -356,3 +356,26 @@ def test_why_a_command_failed_is_never_empty():
     killed = timeouts_mod.Result(["git"], 124, "", "", True, 30.0, "timed out after 30 s (class git)")
     assert "timed out after 30 s" in timeouts_mod.why(killed)
     assert timeouts_mod.why(timeouts_mod.Result(["git"], 1, "", b"fatal: a lock\n")) == "fatal: a lock"
+
+
+def test_load_scaled_limits_for_every_short_class(home: Path) -> None:
+    """Under load every plain-deadline class grows (not only git), within its maximum; stages keep theirs."""
+    config = load_config(home)
+    for cls in ("git", "git-commit", "git-worktree-remove", "agent-bash", "generic", "npm", "cargo", "muse"):
+        policy = timeouts_mod.effective(home, config, cls)
+        assert timeouts_mod.deadline(home, config, cls, load=4.0, cpus=4) == policy
+        want = min(policy * 2, timeouts_mod.bounds(cls)[2])
+        assert timeouts_mod.deadline(home, config, cls, load=8.0, cpus=4) == pytest.approx(want), cls
+        assert timeouts_mod.deadline(home, config, cls, load=4000.0, cpus=4) == timeouts_mod.bounds(cls)[2]
+    assert timeouts_mod.deadline(home, config, "generic", 10, load=8.0, cpus=4) == pytest.approx(20)
+    stage = timeouts_mod.effective(home, config, "stage:test")
+    assert timeouts_mod.deadline(home, config, "stage:test", load=4000.0, cpus=4) == stage
+
+
+def test_load_scaled_agent_bash_timeout_under_load(home: Path, monkeypatch) -> None:
+    from tirith import loadlimit
+    config = load_config(home)
+    monkeypatch.setattr(loadlimit, "cores", lambda: 4)
+    monkeypatch.setattr(loadlimit, "load_average", lambda: 8.0)
+    out = timeouts_mod.bash_update(home, config, {"command": "ls"})
+    assert out["timeout"] == int(timeouts_mod.effective(home, config, "agent-bash") * 2 * 1000)

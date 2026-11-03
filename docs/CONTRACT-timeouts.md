@@ -31,6 +31,15 @@ The value in force for a class, first match wins:
    (`stage:<name>` uses its own durations, else the class's);
 4. **default**.
 
+## Load
+
+The machine's load average (per core, above 1.0) raises the plain deadline of every short class (`git`, `git-commit`,
+`git-worktree-remove`, `agent-bash`, `muse`, `cargo`, `npm`, `generic`): `limit x load / cores`, never below the
+value in force and never above the class maximum. This applies to the runner (`timeouts.deadline`) and to the
+`timeout` the `PreToolUse` hook gives an agent's Bash call. A `hint` (a caller's own limit) grows the same way. Stages
+and agent runs are not scaled: they stop on silence (idle limits), not on a fixed deadline. So slow git on a
+busy machine does not turn health red. Tests: `load_scaled`.
+
 ## Idle limits
 
 An agent run and a stage are not cut because they last long, only because nothing happens. `agent-turn` and

@@ -12,7 +12,7 @@ license = { text = "MIT" }
 dependencies = []
 
 [project.scripts]
-tirith = "tirith.cli:main"
+tirith = "tirith.entry:main"
 
 [dependency-groups]
 dev = [

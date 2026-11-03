@@ -20,6 +20,12 @@ network, every exception caught, exit 0. `PreToolUse` can block (exit 2): see `d
 - `UserPromptSubmit` also writes `~/.tirith/requests/<agent_session_id>.json`:
   `{"agent_session_id", "prompt", "at"}` (the owner's last request, for lanes to link to).
 
+Start-up: the console script is `tirith.entry:main`. A plain hook call (`hook --agent A [--event E] [--home H]`, no
+`install` / `uninstall` / `verify`) imports only `tirith.hooks`, `tirith.gates` and what they need, never `tirith.cli`,
+`tirith.dispatch`, `tirith.managerd` or the merge queue (the manager inbox loads `dispatch` only for a manager session:
+`TIRITH_ROLE` or `[manager] session_cwd` set, no `TIRITH_LANE`). Every other command loads `tirith.cli` as before.
+Test `hook_imports_little` checks the module list in a subprocess.
+
 ## Adapters
 
 `anthropic` (Anthropic's coding CLI): events `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `SubagentStop`, `Stop`
