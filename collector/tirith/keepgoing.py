@@ -141,6 +141,14 @@ def prompt_flag_index(command: list[str], flag: str) -> int | None:
         return None
 
 
+def _without_flag(command: list[str], flag: str) -> list[str]:
+    """``command`` without ``flag`` and its value (the agent CLI refuses ``--session-id`` next to ``--resume``)."""
+    if not flag or flag not in command:
+        return command
+    i = command.index(flag)
+    return command[:i] + command[i + 2:]
+
+
 def resume_command(config: Config, alias: str, project: str | None, command: list[str], sid: str | None,
                    text: str, previous_report: str, brief: str, left: str = "") -> tuple[list[str], str | None] | None:
     """``(argv, stdin text)`` that sends ``text`` to the session ``sid`` of ``alias``; without a resume flag
@@ -152,6 +160,8 @@ def resume_command(config: Config, alias: str, project: str | None, command: lis
     flag = settings.get("resume_flag") or RESUME_FLAGS.get(alias)
     print_flag = settings.get("print_flag")
     if flag and sid and print_flag and (at := prompt_flag_index(command, str(print_flag))) is not None:
+        command = _without_flag(command, str(settings.get("session_flag") or ""))  # a new-session id clashes with resume
+        at = prompt_flag_index(command, str(print_flag)) or at
         rest = command[at + 1:]
         inline = bool(rest) and not rest[0].startswith("-")
         head = command[:at + 1] + ([text] if inline else [])
