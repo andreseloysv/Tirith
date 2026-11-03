@@ -32,6 +32,27 @@ is enqueued (`tirith merge request`, or by the dispatcher). Tirith merges (`coll
    closes (`closed`, "nothing to merge"), the worktree and branch are removed and the queue ticks nothing (the claim
    check in `docs/CONTRACT-launch.md` decides the item). "Already merged" for a gone worktree comes from the same check.
 
+6. A commit that fails on an abandoned `index.lock` in the lane's worktree (older than 60 s, held by nobody) removes the
+   lock and is tried again; it is not a red suite.
+7. A lane whose commits are all already in another queued lane's branch (a continuation cut from it) stops like step 5:
+   no suite, no merge, `review.status` `no-work`, message "already in the queued branch of <lane>", worktree and
+   branch removed. Two branches on the same commit keep the one queued first.
+
+Send-back details. The branch used to continue a returned lane is `mergeq.branch_of` (the branch recorded on the lane or
+checked out in its worktree), not `lane/<id>`, so a continuation lane that reuses another lane's worktree can be returned.
+A lane with no registered agent (`agent` null) is returned to the configured worker; one whose agent is not in
+`config.toml` is not returned and the manager's queue is told why.
+
+Continuation lanes. A lane whose workspace is another lane's worktree (a folder of `<repo>-lanes`) is enqueued by the
+dispatcher when it ends `done` with outcome `done`, like a lane that owns its worktree.
+
+Tested trees. A stage whose name contains `test` that passes is remembered by the git tree hash of the worktree (tracked
+and untracked files, ignored ones left out) in `<home>/tested.json` (`{project|pipeline|stage|command hash: [{tree, at,
+run, log}]}`, last 40). `runstage.run_stage(reuse=True)` (the lane's `tirith run --stage`, the review run with its claim check and the
+queue) does not run the same stage with the same command on a tree that already passed: it records a passing run
+(`cached: true` in `events.jsonl`) whose log keeps the earlier output, so the claim check still reads the counts. A failed
+or timed out run is never remembered. `TIRITH_RETEST=1` forces the run; `*-rerun` stages always run.
+
 WIP limit (`mergeq.WIP_LIMIT` = 3, `mergeq.wip_block`): with 3 or more lanes waiting in the queue (any project,
 queued or running) no new lane starts, whoever asks (manager, autopilot, owner-less launch): `launch_step`,
 `launch_plan` and `launch_verify` refuse with a Tirith block that says how many wait and what to do; the plan

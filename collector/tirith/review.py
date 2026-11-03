@@ -146,7 +146,7 @@ def run_tests(home: Path, project: str, pipeline: str, stage: str, workspace: Pa
     code, output = runstage_mod.run_stage(
         home, project, pipeline, stage, command, workspace, lane=lane_id or tags.get("lane"),
         worktree=tags.get("worktree") or str(workspace), branch=tags.get("branch"),
-        echo=False, env=env, new_run=True, run_id=run_id)
+        echo=False, env=env, new_run=True, run_id=run_id, reuse=True)
     if code == timeouts_mod.EXIT_TIMED_OUT:
         return False, f"{DID_NOT_FINISH} {limit:g} s\n{output}".strip()
     return code == 0, output
