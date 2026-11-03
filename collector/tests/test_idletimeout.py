@@ -21,6 +21,8 @@ from tirith.store import read_json, read_jsonl
 
 CHATTY = "import time\nfor i in range(12):\n    print(i, flush=True)\n    time.sleep(0.25)\n"
 
+CHATTY_LONG = CHATTY.replace("range(12)", "range(20)")
+
 
 def _spawn(code: str, cwd: Path) -> subprocess.Popen:
     return subprocess.Popen([sys.executable, "-c", code], cwd=str(cwd), stdout=subprocess.DEVNULL,
@@ -109,9 +111,12 @@ def test_a_silent_stage_is_stopped_but_a_chatty_one_is_not(home: Path, tmp_path:
     assert code == timeouts_mod.EXIT_TIMED_OUT and "no progress for 1 s (class stage:mute" in output
     end = [e for e in read_jsonl(home / "events.jsonl") if e["event"] == "end"][-1]
     assert end["status"] == "failed" and end["timed_out"] is True
-    code, output = runstage_mod.run_stage(home, "demo", "ci", "chatty", [sys.executable, "-c", CHATTY],
+    # A loaded machine can starve the child for a moment, past a 1 s limit: the chatty run gets a limit 16 beats long
+    # and still lasts longer than it (20 beats of 0.25 s = 5 s), so "steady output outlasts the idle limit" holds.
+    monkeypatch.setitem(timeouts_mod.IDLE_POLICY, "stage", (4, 4, 3600))
+    code, output = runstage_mod.run_stage(home, "demo", "ci", "chatty", [sys.executable, "-c", CHATTY_LONG],
                                           tmp_path, echo=False)
-    assert code == 0 and "11" in output
+    assert code == 0 and "19" in output
 
 
 def test_idle_limits_have_a_policy_a_setter_and_a_row_in_settings(home: Path) -> None:

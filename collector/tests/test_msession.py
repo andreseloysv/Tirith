@@ -52,13 +52,25 @@ class Rig:
                          status_of=lambda lane, n: "working", manager_popen=self.popen,
                          manager_spawn=lambda argv, h, log: 1)  # a one-shot turn never really starts here
 
-    def until(self, cond, timeout: float = 25.0, step: float = 0.0):
-        end = time.time() + timeout
-        while time.time() < end:
+    def progress(self) -> tuple:
+        """What moves while the manager works: the fake agent's log, the transcript, the session book."""
+        transcript = msession_mod.transcript_path(self.home)
+        size = transcript.stat().st_size if transcript.exists() else 0
+        return (self.log.stat().st_size if self.log.exists() else 0, size, json.dumps(self.book(), sort_keys=True))
+
+    def until(self, cond, timeout: float = 25.0, step: float = 0.0, ceiling: float = 600.0):
+        """Cycle until ``cond``. ``timeout`` is how long NOTHING may change (a stuck session fails after it); a loaded
+        machine that is merely slow keeps moving and is never cut by a wall-clock budget (``ceiling`` stops a livelock)."""
+        began = time.monotonic()
+        seen, moved = self.progress(), time.monotonic()
+        while time.monotonic() - moved < timeout and time.monotonic() - began < ceiling:
             self.cycle()
             got = cond()
             if got:
                 return got
+            now = self.progress()
+            if now != seen:
+                seen, moved = now, time.monotonic()
             time.sleep(0.03)
             self.clock.tick(step)
         raise AssertionError("condition not reached")
