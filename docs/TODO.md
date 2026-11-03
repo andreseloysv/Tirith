@@ -524,4 +524,5 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 ## 21. Auditoría de accesos de los agentes
 
 - [ ] Contrato de la auditoría de accesos (solo registra, nunca bloquea ni pregunta al dueño): qué cuenta como acceso (credenciales, variables del proyecto, git push, gh, APIs, navegador), formato del registro y retención. Idea de neoid «Agentenzugriffe». (check: `test -f docs/CONTRACT-access-audit.md`) <!-- tirith:{"id":"i-c061fdfb9d4b41f2ac5b3993a44751db","depends_on":[],"writes":[]} -->
+- [ ] Registrar cada acceso de un agente en <home>/access/<proyecto>.ndjson: agente, punto del plan, sistema, acción y hora, desde el hook de herramientas, sin guardar valores secretos. (check: `test -f collector/tirith/access_audit.py`) <!-- tirith:{"id":"i-12b0de4eeef3451fa471a1f0218d9c95","depends_on":[],"writes":[]} -->
 
