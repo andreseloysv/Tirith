@@ -9,6 +9,7 @@ import vm from 'node:vm';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { chromium } from './pw.mjs';
+import { shotPath } from './shots.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const holder = { window: {} };
@@ -86,7 +87,7 @@ try {
       });
       return out;
     });
-    await page.screenshot({ path: path.join(here, '..', 'screenshots', W === 380 ? 'chat-overflow.png' : path.join(dir, 'o' + W + '.png')) });
+    await page.screenshot({ path: shotPath('chat-overflow' + (W === 380 ? '' : '-' + W) + '.png') });
     assert.deepEqual([...new Set(bad)], [], 'overflow at ' + W + 'px');
     assert.deepEqual(errors, [], 'no page errors');
     n++; console.log('ok  no overflow at ' + W + 'px');

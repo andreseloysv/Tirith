@@ -8,6 +8,7 @@ import vm from 'node:vm';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { chromium } from './pw.mjs';
+import { shotPath } from './shots.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const holder = { window: {} };
@@ -42,7 +43,7 @@ try {
   assert.ok(r.sh > r.ch, 'scrolls inside once capped');
   const logOk = await page.evaluate(() => { const l = document.getElementById('mc-log'); return l.scrollHeight - l.scrollTop - l.clientHeight < 48; });
   assert.ok(logOk, 'message list stays at the bottom');
-  await page.screenshot({ path: path.join(here, '..', 'screenshots', 'chat-grow.png') });
+  await page.screenshot({ path: shotPath('chat-grow.png') });
   await page.keyboard.press('Enter');
   await page.waitForTimeout(600);
   const hs = await h();

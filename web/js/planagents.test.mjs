@@ -1,6 +1,6 @@
 /* Run with: node web/js/planagents.test.mjs  (needs playwright-core and bundled headless Chromium; no servers).
    A Plan step with 1, 3 and 10 agents at widths 1440 and 900: the header never overlaps, title / bar / count stay
-   visible, one control opens a popover that lists every agent. Writes web/screenshots/plan-many-agents.png. */
+   visible, one control opens a popover that lists every agent. Saves plan-many-agents.png to a temp folder (UPDATE_SCREENSHOTS=1 refreshes the versioned one). */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -9,6 +9,7 @@ import vm from 'node:vm';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { chromium } from './pw.mjs';
+import { shotPath } from './shots.mjs';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const holder = { window: {} };
 vm.runInNewContext(fs.readFileSync(path.join(here, '..', '..', 'fixtures', 'state.planquiet.js'), 'utf8'), holder);
@@ -73,7 +74,7 @@ try {
       assert.equal(await pop.locator('.pwrow').count(), count, 'popover lists every agent');
       assert.equal(await pop.locator('.pwrow .stopb').count(), count, 'each agent has its Stop in the popover');
       assert.ok((await pop.textContent()).includes('Agent' + (count - 1)));
-      if (count === 10 && width === 1440) await page.screenshot({ path: path.join(here, '..', 'screenshots', 'plan-many-agents.png'), clip: { x: 0, y: Math.max(0, rb.y - 80), width, height: 560 } });
+      if (count === 10 && width === 1440) await page.screenshot({ path: shotPath('plan-many-agents.png'), clip: { x: 0, y: Math.max(0, rb.y - 80), width, height: 560 } });
       await row.locator('.pwho').click();
       assert.equal(await row.locator('.pwhopop').count(), 0, 'the popover closes');
       n++;
