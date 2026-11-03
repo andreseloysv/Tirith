@@ -597,6 +597,25 @@ def _lane_of(folder: Path, repo: Path) -> bool:
     return folder == repo or folder.parent == repo.parent / f"{repo.name}-lanes"
 
 
+def _reads_only(name: str, args: list[str]) -> bool:
+    """A plain reader (``cat``, ``grep``, ``sed -n`` without ``-i`` or a ``w`` command, git's read-only commands):
+    it can only change a file through a redirection."""
+    if name in _READ_ONLY:
+        return True
+    if name == "git":
+        return next((a for a in args if not a.startswith("-")), "") in _GIT_READERS
+    if name == "sed":
+        in_place = any(a == "--in-place" or a.startswith("--in-place=") or re.match(r"^-[A-Za-z]*i", a) for a in args)
+        return not in_place and not any(re.search(r"(^|[;{}\s/])[wWe]\s+\S", a) for a in args)
+    return False
+
+
+def _redirect_targets(tokens: list[str]) -> list[str]:
+    """Words one simple command redirects its output to (``> f``, ``>> f``, ``2>f``); ``2>&1`` and quoted ``">"`` are not."""
+    from tirith import lanegates
+    return lanegates.write_targets(tokens)
+
+
 def _roadmap_bash(segments: list[list[str]], line: str, files: list[Path], cwd) -> Violation | None:
     """A shell command that writes to a plan file (readers, and git's read-only commands, are fine)."""
     for tokens in segments:
@@ -604,9 +623,7 @@ def _roadmap_bash(segments: list[list[str]], line: str, files: list[Path], cwd) 
         hit = next((f for f in files if any(_same(t.lstrip("<>").split("=", 1)[-1], f, cwd) for t in tokens)), None)
         if hit is None:
             continue
-        if name in _READ_ONLY and not any(">" in t for t in tokens):
-            continue
-        if name == "git" and next((a for a in args if not a.startswith("-")), "") in _GIT_READERS:
+        if _reads_only(name, args) and not any(_same(t, f, cwd) for t in _redirect_targets(tokens) for f in files):
             continue
         return Violation("roadmap-edit", f"{hit.name} is the project's plan, only Tirith writes it: {_clip(line)}",
                          ROADMAP_HINT)
@@ -655,7 +672,8 @@ def _base_rules(config: Config, tool: str | None, tool_input, cwd, project: str 
     protect = _settings_bash(line, segments, protected_paths(config, home), cwd)
     if protect:
         out.append(protect)
-    plan = _roadmap_bash(segments, line, roadmap_files(find_manifest_folder(cwd), config), cwd)
+    from tirith import lanegates
+    plan = _roadmap_bash(lanegates.expand_segments(line), line, roadmap_files(find_manifest_folder(cwd), config), cwd)
     if plan:
         out.append(plan)
     commands = agent_commands(config)

@@ -319,6 +319,27 @@ def test_rules_decide_by_code(home: Path, rig: Rig) -> None:
     assert any(f["kind"] == "deny" for f in read_jsonl(home / "flows.jsonl"))  # a deny is visible
 
 
+def test_manager_bash_reads_and_git_options(home: Path, rig: Rig) -> None:
+    config = load_config(home)
+
+    def verdict(line):
+        return msession_mod.decide(config, home, "anthropic", "Bash", {"command": line}, rig.repo, "demo")[0]
+
+    for line in ("git branch --list", "git branch", "git branch -a", "git branch --merged main",
+                 "git worktree list", "git stash list", "git tag -l", "git tag --list 'v*'", "git tag",
+                 "git -C . branch --list", "git -c color.ui=never branch --list",
+                 "echo brief > /tmp/brief-u17.md", "cat > /tmp/brief-u17.md <<'EOF'\nhi\nEOF",
+                 "S=$(mktemp -d); echo hi > $S/brief.md", "echo hi > /tmp/u17/x 2>/dev/null"):
+        assert verdict(line) == "allow", line
+    for line in ("git -c x=y commit -m x", "git -c user.name=a -c x=y merge lane/x", "git -c x=y push",
+                 "git merge lane/x", "git push origin main", "git commit -m x", "git branch newname",
+                 "git branch -D old", "git worktree add ../x", "git worktree remove x", "git stash",
+                 "git stash drop", "git tag v1", "git tag -d v1", "git -C . -c x=y commit -m x",
+                 f"echo x > {rig.repo}/a.py", "echo x > /etc/u17", "echo x > /tmp/../etc/u17",
+                 "S=/etc; echo hi > $S/x", "S=$(date); echo hi > $S/x", "git branch --list; git -c x=y commit"):
+        assert verdict(line) == "deny", line
+
+
 def test_no_permission_question_reaches_the_owner(home: Path, rig: Rig) -> None:
     from tirith.store import append_jsonl
     append_jsonl(home / "waits.jsonl", {"id": "perm-old", "at": "2026-10-30T07:35:00Z", "project": "demo",

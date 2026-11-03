@@ -950,3 +950,33 @@ def test_a_plan_commit_gets_the_commit_deadline(monkeypatch, tmp_path: Path) -> 
     plangate._git(tmp_path, "commit", "-q")
     plangate._git(tmp_path, "status")
     assert classes == ["git-commit", "git"]
+
+
+@pytest.mark.parametrize("command", [
+    "grep -n step docs/TODO.md; sed -n '1,5p' docs/other.md",
+    "grep -c step docs/TODO.md 2>/dev/null && python3 -c \"print(open('docs/other.md').read())\"",
+    "grep -n '->' docs/TODO.md | sed -n 1,5p",
+    "grep -n '>' docs/TODO.md",
+    "sed -n '1,20p' docs/TODO.md",
+    "sed -n '/step 17/,/step 18/p' docs/TODO.md 2>&1",
+    "cat docs/TODO.md > /dev/null",
+    "git diff docs/TODO.md > /tmp/plan.diff",
+])
+def test_roadmap_edit_read_only_commands_pass(gate, command) -> None:
+    _, lane_dir, cfg = gate
+    assert gates.check_call(cfg, "Bash", {"command": command}, lane_dir) == []
+
+
+@pytest.mark.parametrize("command", [
+    "grep step docs/TODO.md; sed -i 's/a/b/' docs/TODO.md",
+    "grep step docs/TODO.md > docs/TODO.md",
+    "cat docs/TODO.md >> docs/TODO.md",
+    "grep x docs/other.md 2>docs/TODO.md",
+    "sed -n '1p' docs/TODO.md > docs/TODO.md",
+    "sed -n 'w docs/TODO.md' README.md docs/TODO.md",
+    "git log docs/TODO.md > docs/TODO.md",
+    "grep step docs/TODO.md; python3 - docs/TODO.md",
+])
+def test_roadmap_edit_read_only_does_not_open_real_edits(gate, command) -> None:
+    _, lane_dir, cfg = gate
+    assert "roadmap-edit" in [v.rule for v in gates.check_call(cfg, "Bash", {"command": command}, lane_dir)]

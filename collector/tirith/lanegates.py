@@ -102,10 +102,48 @@ def _resolve(text: str, cwd: str, env) -> str | None:
     return _real(text)
 
 
+class Literal(str):
+    """A shell word that had a quoted ``<``/``>`` in it: data (a grep pattern), never a redirection."""
+
+
+_MASK = {"<": "\ue000", ">": "\ue001"}
+
+
+def _mask_quoted(line: str) -> str:
+    """``line`` with every ``<``/``>`` inside quotes replaced by a private character, so the tokenizer's
+    output can tell a quoted ``">"`` from a redirection."""
+    out: list[str] = []
+    quote = ""
+    escaped = False
+    for ch in line:
+        if escaped:
+            escaped = False
+        elif ch == "\\" and quote != "'":
+            escaped = True
+        elif quote:
+            if ch == quote:
+                quote = ""
+            elif ch in _MASK:
+                ch = _MASK[ch]
+        elif ch in "'\"":
+            quote = ch
+        out.append(ch)
+    return "".join(out)
+
+
+def _unmask(tokens: list[str]) -> list[str]:
+    fixed = []
+    for word in tokens:
+        if any(c in word for c in _MASK.values()):
+            word = Literal(word.replace(_MASK["<"], "<").replace(_MASK[">"], ">"))
+        fixed.append(word)
+    return fixed
+
+
 def expand_segments(line: str, depth: int = 0) -> list[list[str]]:
     """Simple commands of a line, plus those inside ``bash -c "..."`` and ``eval``."""
     out: list[list[str]] = []
-    for tokens in split_commands(line):
+    for tokens in map(_unmask, split_commands(_mask_quoted(str(line)))):
         out.append(tokens)
         name, args = _program(tokens)
         if name in gates._SHELLS and depth < 3 and "-c" in args[:-1]:
@@ -133,6 +171,8 @@ def write_targets(tokens: list[str]) -> list[str]:
     """Path words one simple command writes to (redirections and mutating programs)."""
     out: list[str] = []
     for index, word in enumerate(tokens):
+        if isinstance(word, Literal):
+            continue
         if word and set(word) <= set("<>&") and ">" in word:
             nxt = tokens[index + 1] if index + 1 < len(tokens) else ""
             if word.endswith("&") and (nxt.isdigit() or nxt == "-"):
@@ -164,14 +204,51 @@ def write_targets(tokens: list[str]) -> list[str]:
                 out.append(plain[-1])
     elif name == "sed" and any(a == "--in-place" or a.startswith("--in-place=")
                                or re.match(r"^-[A-Za-z]*i", a) for a in args):
-        plain = _flagless(args)
-        scripted = any(a in ("-e", "-f") or a.startswith("--expression") for a in args)
-        out += plain if scripted else plain[1:]
+        files, scripted, skip = [], False, False
+        for a in args:  # the argument of -e/-f is a sed script, not a path
+            if skip:
+                skip = False
+            elif a in ("-e", "-f", "--expression", "--file") or (
+                    re.match(r"^-[A-Za-z]*[ef]$", a) and "i" not in a):
+                scripted = skip = True
+            elif a.startswith(("--expression=", "--file=")) or re.match(r"^-[A-Za-z]*[ef].", a) and "i" not in a:
+                scripted = True
+            else:
+                files.append(a)
+        plain = _flagless(files)
+        if not scripted:
+            plain = plain[1:] if plain[:1] != [""] else plain[2:]  # [BSD suffix ''] then the script
+        out += plain
     elif name == "perl" and any(re.match(r"^-[A-Za-z]*i", a) for a in args):
         out += _flagless(args)[1:]
     elif name == "dd":
         out += [a[3:] for a in args if a.startswith("of=")]
     return out
+
+
+def track_assignment(tokens: list[str], following: list[str] | None, names: dict, here: str, env) -> None:
+    """Record the shell variables a simple command sets in ``names`` (``S=/tmp/x``, ``export S=...``, and
+    ``S=$(mktemp -d)``, which the tokenizer splits into ``S=`` and ``mktemp -d``), so a later ``$S/x`` can be judged
+    by its real path. A value that cannot be known is recorded as "" (still unresolvable)."""
+    words = list(tokens)
+    if words[:1] and os.path.basename(words[0]) in ("export", "local", "declare", "typeset", "readonly"):
+        words = [w for w in words[1:] if not w.startswith("-")]
+    elif not all(re.match(r"^[A-Za-z_]\w*=", w) for w in words):
+        return  # `S=x cmd` sets it for that command only
+    merged = {**env, **names}
+    for word in words:
+        name, _, value = word.partition("=")
+        if not re.match(r"^[A-Za-z_]\w*$", name):
+            continue
+        if value == "" and len(words) == 1 and following:
+            prog, args = _program(following)
+            if prog == "mktemp":
+                base = next((args[i + 1] for i, a in enumerate(args[:-1]) if a in ("-p", "--tmpdir")), None)
+                base = base or next((a.split("=", 1)[1] for a in args if a.startswith("--tmpdir=")), None)
+                base = base or next((os.path.dirname(a) for a in args if not a.startswith("-") and "/" in a), None)
+                value = (base or str(merged.get("TMPDIR") or tempfile.gettempdir())).rstrip("/") + "/mktemp.tmp"
+        real = _resolve(value, here, merged) if value else None
+        names[name] = real or ""
 
 
 def _git_c(tokens: list[str]) -> tuple[str | None, str]:
@@ -218,20 +295,23 @@ def workspace_write(config, tool: str, data: dict, segments: list[list[str]], cw
     out: list[Violation] = []
     mains = _main_checkouts(config, workspace)
     line = " ".join(" ".join(t) for t in segments)
-    for tokens in segments:
+    names: dict = {}
+    for at, tokens in enumerate(segments):
         moved = _cd_target(tokens)
         if moved is not None:
             new = _resolve(moved, here, env)
             here = new or here
             continue
+        track_assignment(tokens, segments[at + 1] if at + 1 < len(segments) else None, names, here, env)
+        scope = {**env, **names}
         for target in write_targets(tokens):
-            real = _resolve(target, here, env)
+            real = _resolve(target, here, scope)
             if real is None or not _inside(real, roots):
                 out.append(Violation("workspace-write", f"writing outside the lane's copy is not allowed: "
                                      f"{target} (in: {_clip(' '.join(tokens))})", WORKSPACE_HINT))
         folder, sub = _git_c(tokens)
         if folder is not None and sub not in _GIT_READ:
-            real = _resolve(folder, here, env)
+            real = _resolve(folder, here, scope)
             if real is None or not (_inside(real, roots) or (sub in _GIT_INTEGRATE and real in mains)):
                 out.append(Violation("workspace-write", f"git -C {folder} {sub} changes a folder outside the "
                                      f"lane's copy: {_clip(line)}", WORKSPACE_HINT))
