@@ -4,11 +4,12 @@
 //! Python state is missing from the Rust state on purpose; the parity harness reports them as
 //! "not ported yet" (see `docs/RUST-PORT.md`).
 
+use crate::feeds;
 use crate::home::{load_config, Config};
 use crate::projects::{discover, Entry};
 use crate::roadmap;
 use crate::state::{ProjectRow, State, STATE_VERSION};
-use crate::store::write_json_atomic;
+use crate::store::{read_lanes, write_json_atomic};
 use crate::timeutil::iso;
 use chrono::{DateTime, Local, Utc};
 use serde_json::Value;
@@ -33,10 +34,14 @@ impl Collector {
         let entries = discover(&self.home, &config, &[]);
         let agents: Vec<Value> = Vec::new(); // agent rows come with the agents lane
         let today = now.with_timezone(&Local).date_naive();
+        let lane_ids: Vec<String> = read_lanes(&self.home).iter().map(|l| feeds::id_str(&l["id"])).collect();
         State {
             version: STATE_VERSION,
             generated_at: iso(now),
             projects: project_rows(&config, &entries, &agents, today),
+            loose_events: feeds::loose_events(&feeds::read_hook_rows(&self.home), &lane_ids),
+            violations: feeds::violations(&self.home),
+            says: feeds::says(&self.home),
         }
     }
 
