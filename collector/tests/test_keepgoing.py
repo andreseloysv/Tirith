@@ -196,6 +196,16 @@ def test_alias_without_resume_flag_starts_again_with_the_previous_report(home) -
     assert "THE BRIEF" in text and "I did y" in text and "Missing: x" in text
 
 
+def test_resume_drops_session_id(home) -> None:
+    write_config(home, [], extra='[agents.anthropic]\ncommand = "agentcli"\nprint_flag = "-p"\n')
+    config = load_config(home)
+    command = ["agentcli", "-p", "brief", "--session-id", "abc", "--model", "m"]
+    argv, stdin = keepgoing_mod.resume_command(config, "anthropic", None, command, "abc", "More", "r", "b")
+    assert "--session-id" not in argv and "abc" in argv
+    assert argv[argv.index("--resume") + 1] == "abc" and argv[:2] == ["agentcli", "-p"]
+    assert argv[-2:] == ["--model", "m"]
+
+
 def test_session_id_is_the_last_one_in_the_log(tmp_path) -> None:
     log = tmp_path / "a.log"
     log.write_text('{"session_id": "a"}\nnoise\n{"type":"result","session_id":"b"}\n', encoding="utf-8")
