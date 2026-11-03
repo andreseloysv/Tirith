@@ -1,24 +1,19 @@
-/* Run with: node web/js/landing.test.mjs  (needs the repo's own playwright-core, else skips with a warning, and bundled headless Chromium; no servers).
+/* Run with: node web/js/landing.test.mjs  (needs the repo's own playwright-core or PLAYWRIGHT_FROM, else skips with a warning, and bundled headless Chromium; no servers).
    site/index.html loads from file:// with no console errors, every image exists, and the page does not
-   scroll sideways at 360px and 1440px. Writes web/screenshots/landing-1440.png and landing-360.png. */
+   scroll sideways at 360px and 1440px. Screenshots go to a temp dir (web/screenshots/ only with UPDATE_SCREENSHOTS=1). */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { createRequire } from 'node:module';
+import os from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(here, '..', '..');
 
-// playwright-core must come from this repo (root or web/ node_modules), never from another project's node_modules.
-let chromium = null;
-for (const dir of [root, path.join(root, 'web')]) {
-  try { ({ chromium } = createRequire(path.join(dir, 'x.js'))('playwright-core')); break; } catch {}
-}
-if (!chromium) {
-  console.warn('SKIP landing.test.mjs: playwright-core is not installed in this repo (npm i --no-save playwright-core in the repo root to run it)');
-  process.exit(0);
-}
+import { chromium } from './pw.mjs';  // the repo's own playwright-core (or PLAYWRIGHT_FROM); skips with a warning if missing
+
+const shots = process.env.UPDATE_SCREENSHOTS === '1' ? path.join(root, 'web', 'screenshots') : fs.mkdtempSync(path.join(os.tmpdir(), 'landing-'));
+fs.mkdirSync(shots, { recursive: true });
 
 const site = path.join(root, 'site');
 const url = pathToFileURL(path.join(site, 'index.html')).href;
@@ -67,7 +62,14 @@ try {
       const clip = await p.evaluate(() => { const c = document.querySelector('.hero .shot .crop').getBoundingClientRect(), t = document.querySelector('.hero figcaption').getBoundingClientRect(); return c.bottom - t.top; });
       assert.ok(clip <= 1, `hero caption overlaps the screenshot by ${clip}px at ${width}px, scroll ${y}`);
     }
-    await p.screenshot({ path: path.join(root, 'web', 'screenshots', `landing-${width}.png`), fullPage: true });
+    // nothing inside the page scrolls sideways: the diagram and every code block fit whole (matters at 360px)
+    const wide = await p.evaluate(() => [...document.querySelectorAll('.diagram, .diagram svg, pre, pre code')].filter(e => e.scrollWidth > e.clientWidth + 1 && getComputedStyle(e).display !== 'none').map(e => e.tagName + '.' + e.className + ' ' + (e.scrollWidth - e.clientWidth)));
+    assert.deepEqual(wide, [], `diagram or code block overflows sideways at ${width}px`);
+    const diag = await p.evaluate(() => [...document.querySelectorAll('.diagram svg')].filter(e => getComputedStyle(e).display !== 'none').map(e => { const r = e.getBoundingClientRect(), c = e.closest('.diagram').getBoundingClientRect(); return { n: 1, inside: r.left >= c.left - 1 && r.right <= c.right + 1, w: r.width }; }));
+    assert.equal(diag.length, 1, `exactly one diagram variant shows at ${width}px`);
+    assert.ok(diag[0].inside && diag[0].w >= 250, `the diagram fits its box at ${width}px`);
+    assert.ok(await p.evaluate(() => document.querySelectorAll('pre').length) >= 2, 'code blocks exist');
+    await p.screenshot({ path: path.join(shots, `landing-${width}.png`), fullPage: true });
     await p.close();
   }
 
@@ -82,6 +84,8 @@ try {
     const hidden0 = await p.evaluate(() => [...document.querySelectorAll('.rv')].filter(e => getComputedStyle(e).opacity === '0').length);
     assert.ok(hidden0 > 5, `some elements start hidden below the fold at ${width}px (got ${hidden0})`);
     const total = await p.evaluate(() => document.querySelectorAll('.rv').length);
+    const kinds = await p.evaluate(() => ({ card: document.querySelectorAll('.card.rv').length, shot: document.querySelectorAll('.shot.rv').length, sec: document.querySelectorAll('main > section > h2.rv').length }));
+    assert.ok(kinds.card >= 3 && kinds.shot >= 2 && kinds.sec >= 3, `sections, screenshots and cards all reveal: ${JSON.stringify(kinds)}`);
     assert.ok(total >= 20, `revealed elements marked (got ${total})`);
     assert.equal(await p.evaluate(() => document.documentElement.classList.contains('js')), true);
     const h = await p.evaluate(() => document.documentElement.scrollHeight);
@@ -107,6 +111,10 @@ try {
     await q.goto(url);
     const st = await q.evaluate(() => [...document.querySelectorAll('.rv')].filter(e => { const c = getComputedStyle(e); return c.opacity !== '1' || c.transform !== 'none' || parseFloat(c.transitionDuration) > 0; }).length);
     assert.equal(st, 0, `reduced motion shows everything immediately at ${width}px`);
+    const anim = await q.evaluate(() => [...document.querySelectorAll('.rv, .hero .shot img')].filter(e => { const c = getComputedStyle(e); return c.animationName !== 'none' || c.transform !== 'none'; }).length);
+    assert.equal(anim, 0, `reduced motion: no transform or animation at ${width}px`);
+    await q.evaluate(() => window.scrollTo({ top: 400, behavior: 'instant' })); await q.waitForTimeout(200);
+    assert.equal(await q.evaluate(() => getComputedStyle(document.querySelector('.hero .shot img')).transform), 'none', 'reduced motion: no hero parallax');
     await ctx.close();
   }
   // no JS: everything visible

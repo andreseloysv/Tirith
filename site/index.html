@@ -189,7 +189,7 @@
   <h2>How it works</h2>
   <p class="sub">A local collector writes one state file. The page and the app follow it. Nothing listens on a port.</p>
   <div class="card diagram">
-    <svg viewBox="0 0 900 330" role="img" aria-labelledby="dt dd">
+    <svg class="wide" viewBox="0 0 900 330" role="img" aria-labelledby="dt dd">
       <title id="dt">Architecture diagram</title>
       <desc id="dd">Agents in git worktrees send hook events to the collector. The collector, with gates, plan, claim check and self-check, writes a state file. The web page and the desktop app read that file. You write to the collector through the inbox file.</desc>
       <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="head"/></marker></defs>
@@ -216,6 +216,31 @@
       <path class="arrow" d="M345 120 C290 175 200 190 150 152" marker-end="url(#ah)"/>
       <text class="dim" x="215" y="212" text-anchor="middle">starts lanes from plan items</text>
     </svg>
+    <svg class="tall" viewBox="0 0 300 520" role="img" aria-labelledby="dt2 dd2">
+      <title id="dt2">Architecture diagram</title>
+      <desc id="dd2">Agents in git worktrees send hook events to the collector. The collector writes a state file that the web page and the desktop app read. You write to the collector through the inbox file.</desc>
+      <defs><marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="head"/></marker></defs>
+      <rect class="box" x="30" y="10" width="240" height="84" rx="14"/>
+      <text x="150" y="40" text-anchor="middle" font-weight="600">Agents</text>
+      <text class="dim" x="150" y="62" text-anchor="middle">one git worktree each</text>
+      <text class="dim" x="150" y="80" text-anchor="middle">hooks block bad calls</text>
+      <path class="arrow" d="M150 94 V150" marker-end="url(#ah2)"/>
+      <text class="dim" x="160" y="127">events.jsonl</text>
+      <rect class="box hot" x="30" y="152" width="240" height="84" rx="14"/>
+      <text x="150" y="182" text-anchor="middle" font-weight="600">Collector</text>
+      <text class="dim" x="150" y="204" text-anchor="middle">gates · plan · claim check</text>
+      <text class="dim" x="150" y="222" text-anchor="middle">self-check · auto-merge</text>
+      <path class="arrow" d="M150 236 V292" marker-end="url(#ah2)"/>
+      <text class="dim" x="160" y="269">state.json</text>
+      <rect class="box" x="30" y="294" width="240" height="84" rx="14"/>
+      <text x="150" y="324" text-anchor="middle" font-weight="600">Web page / desktop app</text>
+      <text class="dim" x="150" y="346" text-anchor="middle">read-only view</text>
+      <text class="dim" x="150" y="364" text-anchor="middle">no server, no port</text>
+      <rect class="box" x="30" y="436" width="240" height="74" rx="14"/>
+      <text x="150" y="466" text-anchor="middle" font-weight="600">You</text>
+      <text class="dim" x="150" y="488" text-anchor="middle">chat · buttons · inbox.jsonl</text>
+      <path class="arrow" d="M286 473 H292 V194 H272" marker-end="url(#ah2)"/>
+    </svg>
   </div>
   <ul class="bullets" style="margin-top:16px">
     <li><strong>Collector</strong> (Python with uv) reads events, lanes, pipelines and the plan, and writes one state file.</li>
@@ -234,7 +259,7 @@
   <pre><code>export META_SI_API_KEY=...   # optional: switches the Muse Spark brain on
 ./run            # collector in the background + Tirith in your browser</code></pre>
   <p class="note">Requirements: <a href="https://docs.astral.sh/uv/">uv</a> and a browser. The desktop app is built from <code>app/</code> (<code>npm run tauri dev</code>).</p>
-  <p class="note"><strong>Status:</strong> under construction, honestly. What this page describes runs today on <code>main</code>; lanes without permission prompts, a merge queue and chat with Muse Code over <code>muse serve</code> are still in progress.</p>
+  <p class="note"><strong>Status:</strong> what this page describes runs today on <code>main</code>, including the merge queue: Tirith merges a lane only after the full tests pass, merges in trains, and keeps at most three lanes in flight. Still in progress: chat with Muse Code over <code>muse serve</code>, and agents that never ask for permission prompts (in review).</p>
 </section>
 </main>
 
