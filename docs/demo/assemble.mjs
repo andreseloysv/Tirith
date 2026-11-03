@@ -32,7 +32,7 @@ console.log(`recording ${start}..${start + main} (${main} s)`, d.scenes);
 const clips = Object.entries(d.narration), inputs = [];
 let filt = '', labels = '';
 clips.forEach(([clip, at], i) => {
-  const ms = Math.round((at - start) * 1000);
+  const ms = Math.max(0, Math.round((at - start) * 1000));
   inputs.push('-i', join(work, 'audio', clip + '.wav'));
   filt += `[${i}:a]adelay=${ms}|${ms},apad[a${i}];`; labels += `[a${i}]`;
 });
