@@ -154,7 +154,40 @@ def tirith_self(root: Path) -> Path:
     return _home(root, _row("tirith", folder, name="Tirith"))
 
 
+def feeds(root: Path) -> Path:
+    """Hook, violation, inbox and queue logs: loose events, violations, says and the manager queue."""
+    import json
+
+    home = _home(root, "")
+    dump = lambda rows: "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows)  # noqa: E731
+    events = [{"kind": "hook", "ts": f"2026-01-01T00:00:{i:02d}Z", "agent": "anthropic", "event": "PreToolUse",
+               "lane": "ghost" if i % 2 else "lane-1", "tool": "Bash", "summary": f"step {i}"} for i in range(70)]
+    events += [
+        {"kind": "violation", "ts": "2026-01-02T00:00:00Z", "rule": "raw-git", "agent": "anthropic", "lane": "lane-1",
+         "project": "x", "message": "tirith: raw-git: git commit is blocked. Do this instead: tirith commit"},
+        {"kind": "violation", "rule": "odd", "message": "no separator here"},
+        {"kind": "violation", "message": "tirith: other: prefix of another rule. Do this instead: a. Do this instead: b"},
+        {"kind": "git-hook", "ts": "x"},
+    ]
+    (home / "events.jsonl").write_text(dump(events) + "not json\n[1]\n", encoding="utf-8")
+    (home / "lanes").mkdir()
+    (home / "lanes" / "lane-1.json").write_text(json.dumps(
+        {"id": "lane-1", "started_at": "2026-01-01T00:00:00Z", "ended_at": "2026-01-01T00:01:00Z"}), encoding="utf-8")
+    (home / "inbox.jsonl").write_text(dump([
+        {"id": "s1", "at": "2026-01-01T00:00:00Z", "kind": "say", "project": "p", "text": "hello"},
+        {"id": "s2", "kind": "say", "text": ""}, {"id": "r1", "kind": "request", "text": "ask"},
+        {"id": 3, "kind": "say", "text": "numeric id", "project": None},
+    ]), encoding="utf-8")
+    (home / "steward_queue.jsonl").write_text(dump([
+        {"id": "q1", "at": "2026-01-01T00:00:00Z", "text": "review it", "project": "p", "lane": "lane-1"},
+        {"id": "q2", "kind": "agent-can-do", "text": "verify"}, {"id": "q1", "done": True, "result": "merged"},
+        {"id": "q3", "text": "third"}, {"text": "no id"}, {"id": "q3", "text": "dup"},
+    ]), encoding="utf-8")
+    return home
+
+
 FIXTURES = {
+    "feeds": feeds,
     "empty-home": empty_home,
     "basic-roadmap": basic_roadmap,
     "date-tags": date_tags,

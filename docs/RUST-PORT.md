@@ -17,6 +17,7 @@ rust/tirith-core/             library: everything shared
   src/manifest.rs             tirith.toml: roadmap / deadline / plans       (manifest.py, partial)
   src/roadmap.rs              checklist parser, state.roadmap, state.plans  (roadmap.py)
   src/projects.rs             registered + auto projects, matching          (projects.py)
+  src/feeds.rs                violations, loose_events, says, queue rows   (hooks, inbox, asks)
   src/state.rs                serde types of state.json
   src/collect.rs              Collector: build_state / cycle / run_once     (collector.py)
 rust/tirith-cli/              binary `tirith-rs` (never shadows the live Python `tirith`)
@@ -74,10 +75,13 @@ Status of `state.json` (owner = the lane that ports it; blank until assigned).
 | `agents`, `projects[].usage` | agentrun, livesteps, logview, review, lanestop | not ported | |
 | `pipelines` | runstage, manifest, hooks (git hooks), github | not ported | |
 | `waiting_on_you`, `answered_waits` | asks, ownergate, actions | not ported | |
-| `manager`, `steward`, `manager_queue`, `steward_queue` | managerd, dispatch, asks | not ported | |
-| `inbox`, `says` | inbox, actions, filerefs | not ported | |
-| `flows`, `sessions`, `loose_events` | flows, projects (sessions), hooks | not ported | |
-| `violations`, `rules` | hooks, manifest (rules) | not ported | |
+| `manager`, `steward`, `manager_queue`, `steward_queue` | managerd, dispatch, asks | not ported (`feeds::manager_queue` reads the file; Python also enqueues from `waiting_on_you`) | |
+| `inbox` | inbox, actions, filerefs | not ported | |
+| `says` | inbox | ported (`feeds.rs`) | |
+| `flows`, `sessions` | flows, projects (sessions) | not ported | |
+| `loose_events` | hooks | ported (`feeds.rs`) | |
+| `violations` | hooks | ported (`feeds.rs`) | |
+| `rules` | manifest (rules) | not ported | |
 | `rooms` | rooms, brain | not ported | |
 | `autopilot`, `launch`, `disk`, `health` | autopilot, launch, diskdiet, selfcheck, fallback | not ported | |
 | `models`, `brain` | models, brain | not ported | |

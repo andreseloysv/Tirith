@@ -2,6 +2,7 @@
 //! each lane adds its own section here as it ports a module (see `docs/RUST-PORT.md`).
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 pub const STATE_VERSION: u32 = 1;
 
@@ -94,4 +95,9 @@ pub struct State {
     pub version: u32,
     pub generated_at: String,
     pub projects: Vec<ProjectRow>,
+    // Feeds of plain rows, built by `feeds.rs`. `manager_queue` / `steward_queue` are not emitted yet: Python also
+    // enqueues items from `waiting_on_you` (collector._split_waiting), which is not ported.
+    pub loose_events: Vec<Value>,
+    pub violations: Vec<Value>,
+    pub says: Vec<Value>,
 }

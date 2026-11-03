@@ -4,6 +4,7 @@
 //! parity harness and the conventions.
 
 pub mod collect;
+pub mod feeds;
 pub mod home;
 pub mod lock;
 pub mod manifest;
