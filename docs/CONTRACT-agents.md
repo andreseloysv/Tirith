@@ -144,3 +144,10 @@ and the Meta brain would stay off. Code: `collector/tirith/ownerenv.py`, called 
   `ownerenv` health check (`CONTRACT-selfcheck.md`) turns red with the reason in plain words, no values.
 - The per-agent `unset_env` rule above (`GITHUB_TOKEN`, `GH_TOKEN` for `copilot`) still applies to the child.
 - Project variables (`CONTRACT-projenv.md`) still win over inherited ones.
+
+## Stalled
+
+A lane whose log has not changed for 10 minutes is `stalled`, unless a pipeline stage tagged with that lane is running
+(started, not ended, process alive): the agent is waiting for its tests, so it stays `working`.
+
+Projects: a merge queue copy (a folder named `_mergeq-*`) is never a project, auto-discovered or proposed for by the autopilot.

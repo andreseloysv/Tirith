@@ -262,3 +262,28 @@ def test_the_owner_gate_sends_disk_space_items_to_the_manager(home: Path) -> Non
     (item, *_) = asks_mod.queue_items(home, only_open=True)
     assert item["kind"] == gate.DISK_KIND
     assert gate.admit(home, "i2", "demo", "Sign in to the store", "credentials") == gate.OWNER
+
+
+def test_sweep_does_not_block_the_cycle(home: Path, repo: Path, monkeypatch) -> None:
+    """Deleting old lanes runs in the background: the dispatcher pass returns while it works, then says the result."""
+    import threading
+    release, started = threading.Event(), threading.Event()
+
+    def slow_sweep(home, config, now, busy=None):
+        started.set()
+        release.wait(10)
+        return {"worktrees": 2, "bytes": 3 * GB}
+
+    monkeypatch.setattr(diskdiet_mod, "sweep", slow_sweep)
+    config, state = load_config(home), {}
+    low = lambda folder: 2 * GB
+    assert diskdiet_mod.free_space(home, config, state, now(), free=low, background=True) is False
+    assert started.wait(5)
+    assert diskdiet_mod.free_space(home, config, state, now(), free=low, background=True) is False  # still deleting
+    rows = dispatch_mod.run(home, config, now(), agents=[], lanes=[], status_of=lambda lane, n: "working",
+                            launcher=lambda *a, **k: "x", free=low)
+    assert isinstance(rows, list)  # a whole pass finished while the sweep still waits
+    release.set()
+    diskdiet_mod._sweeps[str(home)]["thread"].join(5)
+    assert diskdiet_mod.free_space(home, config, state, now(), free=low, background=True) is True
+    assert "Freed 3.0 GB: 2 old lane folders" in (home / "diskdiet.jsonl").read_text()

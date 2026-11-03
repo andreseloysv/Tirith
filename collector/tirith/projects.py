@@ -153,9 +153,20 @@ def is_temp_folder(folder: str | Path) -> bool:
     return False
 
 
+MERGE_WORKTREE_PREFIX = "_mergeq-"  # the merge queue's temporary worktrees: _mergeq-<lane>, _mergeq-train-*
+
+
+def is_merge_worktree(folder: str | Path | None) -> bool:
+    """A merge queue copy of a project, whatever is left of it on disk: never a project of its own."""
+    return bool(folder) and any(part.startswith(MERGE_WORKTREE_PREFIX) for part in Path(str(folder)).parts)
+
+
 def is_worktree_folder(folder: str | Path) -> bool:
-    """A linked git worktree (``.git`` is a file pointing into ``worktrees/``) or a folder under a ``*-lanes`` folder."""
+    """A linked git worktree (``.git`` is a file pointing into ``worktrees/``), a folder under a ``*-lanes`` folder
+    or a merge queue copy (``_mergeq-*``)."""
     path = real(folder)
+    if is_merge_worktree(path):
+        return True
     if any(part.endswith("-lanes") for part in path.parts[:-1]):
         return True
     try:

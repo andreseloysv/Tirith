@@ -600,3 +600,25 @@ def test_the_selfcheck_counts_open_proposals_per_step(home, repo) -> None:
     for text in ("a", "b"):
         inbox_mod.add_request(home, inbox_mod.PROPOSAL, "demo", "1", text, at="2026-10-29T10:00:00Z", sender="tirith")
     assert autopilot_mod.open_per_step(home) == {"demo|1": 2}
+
+
+def test_autopilot_ignores_merge_worktree(home, repo, tmp_path) -> None:
+    """A merge queue copy (_mergeq-<lane>) repeats its project's TODO.md: it never gets proposals."""
+    copy = tmp_path / "_mergeq-demo-5"
+    (copy / "docs").mkdir(parents=True)
+    (copy / "docs" / "TODO.md").write_text(PLAN, encoding="utf-8")
+    pilot = Pilot(home, copy)
+    pilot.cycle()
+    pilot.cycle()
+    assert _proposals(home) == []
+    found, present = autopilot_mod.candidates(pilot.projects(), [])
+    assert found == {} and present == set()
+
+
+def test_autopilot_ignores_merge_worktree_as_a_discovered_project(home, tmp_path) -> None:
+    from tirith import projects as projects_mod
+    for name in ("_mergeq-lane-a", "_mergeq-train-lane-a"):
+        (tmp_path / name).mkdir()
+        assert projects_mod.is_worktree_folder(tmp_path / name)
+        entries = projects_mod.discover(home, load_config(home), [tmp_path / name])
+        assert [e.folder for e in entries if e.folder == projects_mod.real(tmp_path / name)] == []
