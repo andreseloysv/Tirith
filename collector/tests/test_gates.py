@@ -315,13 +315,23 @@ def test_lane_run_refuses_without_a_brief(home, tmp_path, monkeypatch, capsys) -
 
 def test_lane_run_refuses_when_tirith_check_fails(home, tmp_path, monkeypatch, capsys) -> None:
     repo = _lane_repo(home, tmp_path, monkeypatch)
-    (repo / "tirith.toml").unlink()
+    (repo / "tirith.toml").write_text("not [valid toml\n", encoding="utf-8")  # a missing file alone does not block
     try:
         assert main(_lane(repo / "brief.md", sys.executable, "-c", "print(1)")) == 3
         err = capsys.readouterr().err
-        assert "tirith: project-check: " in err and "manifest-missing" in err
+        assert "tirith: project-check: " in err and "toml-syntax" in err
         assert "tirith check --project demo" in err
         assert not (home / "lanes" / "g1.json").exists()
+    finally:
+        make_hooks_mutable(repo)
+
+
+def test_lane_run_starts_in_a_new_project_without_tirith_toml(home, tmp_path, monkeypatch) -> None:
+    repo = _lane_repo(home, tmp_path, monkeypatch)
+    (repo / "tirith.toml").unlink()
+    try:
+        assert main(_lane(repo / "brief.md", sys.executable, "-c", "print(1)")) == 0
+        assert (home / "lanes" / "g1.json").exists()
     finally:
         make_hooks_mutable(repo)
 
