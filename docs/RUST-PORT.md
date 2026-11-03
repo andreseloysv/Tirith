@@ -37,7 +37,7 @@ Run from the worktree: `tirith run --project tirith --stage <name>`.
 | `test` | the Python suite (`pytest`) |
 | `rust-test` | `cargo test -p tirith-app` (the desktop app only; the port is paused) |
 | `rust-port` pipeline | on demand, not gating: `tirith run --project tirith --stage port-build` / `port-test` build and test `tirith-core` and `tirith-cli`; back in the gate when the port resumes |
-| `parity` | builds `tirith-rs`, then runs the parity harness |
+| `parity` | builds `tirith-rs`, then runs the parity harness. On demand only (pipeline `rust-port` in `tirith-port.toml`), not in the merge gate while the port is paused |
 
 ## How parity works
 
