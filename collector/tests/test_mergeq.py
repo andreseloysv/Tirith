@@ -394,7 +394,7 @@ def test_gate_does_not_apply_outside_a_lane_worktree(env, home: Path) -> None:
 # -- no existing rule was weakened ----------------------------------------------------------------
 
 EXISTING_RULES = {"subagent-tool", "agent-cli", "no-verify", "hooks-path", "git-hooks", "settings-edit",
-                  "roadmap-edit", "raw-stage", "guard-reinstall", "lane-brief", "project-check", "commit-guard",
+                  "roadmap-edit", "raw-stage", "guard-reinstall", "lane-brief", "project-check", "plan-item", "commit-guard",
                   "workspace-write", "no-servers", "no-secrets", "own-processes"}
 
 
