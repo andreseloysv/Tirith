@@ -684,7 +684,22 @@ def done_note(clean: str, sha: str) -> str:
 
 
 TICK_EVERY_S = 60.0  # a lane whose item is not "en revisión" or not on main yet is looked at again after this
-_ticked_at: dict[tuple[str, str], float] = {}
+TICK_UNCHANGED_S = 900.0  # ... or after this when no branch of its repo moved since (the claim check is a few git calls)
+_ticked_at: dict[tuple[str, str], tuple[float, Path | None, tuple]] = {}
+
+
+def refs_stamp(repo: Path | None, lane_file: Path | None = None) -> tuple:
+    """Changes whenever a branch of ``repo`` is created, moved or deleted (git renames a lock file over the ref, which
+    touches the folder) or the lane's file is written, without running git. Empty when there is no such repo."""
+    if repo is None:
+        return ()
+    git_dir, stamp = repo / ".git", []
+    for path in (git_dir / "HEAD", git_dir / "packed-refs", git_dir / "refs" / "heads", git_dir / "refs" / "heads" / "lane", lane_file or git_dir):
+        try:
+            stamp.append(path.stat().st_mtime_ns)
+        except OSError:
+            stamp.append(0)
+    return tuple(stamp)
 
 
 def tick_merged(home: Path, config: Config, lanes: list[dict]) -> bool:
@@ -698,9 +713,12 @@ def tick_merged(home: Path, config: Config, lanes: list[dict]) -> bool:
         if outcome.get("status") != "done" or not outcome.get("applied") or "item" not in seen:
             continue
         key, at = (str(home), str(seen.get("id") or "")), time.monotonic()
-        if key in _ticked_at and at - _ticked_at[key] < TICK_EVERY_S:
-            continue  # settled lanes do not change: no file read, no git, until the next minute
-        _ticked_at[key] = at
+        if key in _ticked_at:
+            before, seen_repo, seen_stamp = _ticked_at[key]
+            if at - before < TICK_EVERY_S or (at - before < TICK_UNCHANGED_S and seen_repo is not None
+                                              and refs_stamp(seen_repo, lane_path(home, key[1])) == seen_stamp):
+                continue  # settled lanes do not change: no file read, no git, until a branch moves (or much later)
+        _ticked_at[key] = (at, None, ())
         lane = read_json(lane_path(home, str(seen.get("id") or "")), None)
         linked = lane_item(lane) if isinstance(lane, dict) else None
         if linked is None or standing(lane):
@@ -709,6 +727,7 @@ def tick_merged(home: Path, config: Config, lanes: list[dict]) -> bool:
         repo = repo_of(home, project, config)
         if repo is None:
             continue
+        stamp = refs_stamp(repo, lane_path(home, key[1]))
         if project not in plans:
             try:
                 plans[project] = _read(repo)[1]
@@ -719,6 +738,8 @@ def tick_merged(home: Path, config: Config, lanes: list[dict]) -> bool:
         if found is None or roadmap_mod.split_status(found["text"])[1] != roadmap_mod.STATE_REVIEW:
             continue
         state, sha = lane_work(home, repo, lane)
+        # unsaved work is a file state, not a ref: it is asked again at the usual pace
+        _ticked_at[key] = (at, repo if state != WORK_UNSAVED else None, stamp)
         if state == WORK_NONE and step == OPS_STEP and lane.get("ended_at"):
             sha = NO_CHANGES
         elif state != WORK_MERGED:
