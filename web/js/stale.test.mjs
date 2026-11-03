@@ -5,11 +5,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
-import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const require = createRequire(process.env.PLAYWRIGHT_FROM || '/Users/andreseloyasanchezva/DEVELOP/propuestavenezuela/node_modules/x.js');
-const { chromium } = require('playwright-core');
+import { chromium } from './pw.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const page_url = pathToFileURL(path.join(here, '..', 'index.html')).href;
