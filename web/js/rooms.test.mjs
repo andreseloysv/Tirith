@@ -6,14 +6,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
-import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const home = os.homedir();
-const from = [process.env.PLAYWRIGHT_FROM, `${home}/DEVELOP/propuestavenezuela/node_modules/x.js`, `${home}/DEVELOP/VenezuelaGame/node_modules/x.js`, `${home}/DEVELOP/meshy-download/node_modules/x.js`]
-  .filter(Boolean).find(f => fs.existsSync(path.dirname(f)));
-const { chromium } = createRequire(from)('playwright-core');
+import { chromium } from './pw.mjs';
 
 const page_url = pathToFileURL(path.join(here, '..', 'index.html')).href;
 const holder = { window: {} };

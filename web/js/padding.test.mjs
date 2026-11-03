@@ -3,11 +3,9 @@
    edge than the page title, and no view overflows horizontally, at 1440, 1100 and 760 px. */
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const require = createRequire(process.env.PLAYWRIGHT_FROM || '/Users/andreseloyasanchezva/DEVELOP/propuestavenezuela/node_modules/x.js');
-const { chromium } = require('playwright-core');
+import { chromium } from './pw.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(here, '..', '..');
