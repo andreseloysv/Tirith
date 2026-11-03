@@ -388,7 +388,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] El icono de la app de macOS (el mismo modelo de torre de piedra) se lee bien a 32 px: se genera una versión pequeña y se comprueba su contraste (pedido del dueño). (check: `test -f app/src-tauri/icons/32x32.png && grep -q stone_tower scripts/make_icon.py`) (hecho: 849dc41)
 - [x] En el móvil, el diagrama de la landing cabe entero sin desplazarse de lado. (check: `node web/js/landing.test.mjs`) (hecho: 40ed8f2)
 - [x] En el móvil, los bloques de código de la landing se leen enteros sin desplazarse de lado. (check: `node web/js/landing.test.mjs`) (hecho: 40ed8f2)
-- [ ] El texto de estado de la landing dice la verdad de hoy: ya no pone en construcción lo que ya funciona. (check: `! grep -q 'under construction' site/index.html`)
+- [x] El texto de estado de la landing dice la verdad de hoy: ya no pone en construcción lo que ya funciona. (check: `! grep -q 'under construction' site/index.html`) (hecho: 40ed8f2)
 - [ ] El README abre con la torre de piedra y capturas actuales de la app. (check: `grep -q -E 'logo-3d|social-preview-3d' README.md`)
 - [ ] El video demo se regraba con el logo de piedra y la app actual. (check: `test site/img/logo-3d.png -ot docs/demo/out/tirith-demo.mp4`)
 - [x] La reanudación de un lane manager no sale con el error --session-id can only be used with --continue or --resume (visto en manager-418a3be2, marcado failed tras acabar su turno). (check: `cd collector && uv run -q pytest -q tests -k resume_drops_session_id`) (hecho: 5a29510)
