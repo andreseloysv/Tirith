@@ -519,7 +519,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 ## 20. Las pruebas no interrumpen al dueño
 
 - [x] Los tests de web/js usan el Chromium de Playwright y no Microsoft Edge, porque cada arranque de Edge pasa CoreServicesUIAgent al frente y le quita el teclado a la app que el dueño esté usando. (check: `! grep -rq msedge web/js`) (hecho: 551dbe4)
-- [ ] Los tests de web/js encuentran playwright-core sin depender de otro proyecto: hoy apuntan a propuestavenezuela/node_modules, que ya no existe, y PLAYWRIGHT_FROM va a VenezuelaGame como parche. (check: `! grep -rq propuestavenezuela web/js`)
+- [x] Los tests de web/js encuentran playwright-core sin depender de otro proyecto: hoy apuntan a propuestavenezuela/node_modules, que ya no existe, y PLAYWRIGHT_FROM va a VenezuelaGame como parche. (check: `! grep -rq propuestavenezuela web/js`) (hecho: 995323f)
 
 ## 21. Auditoría de accesos de los agentes
 
