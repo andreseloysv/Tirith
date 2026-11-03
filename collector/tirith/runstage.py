@@ -40,8 +40,12 @@ def pipelines_lock(home: Path):
             fcntl.flock(handle, fcntl.LOCK_UN)
 
 
-def resolve_run(home: Path, project: str, pipeline: str, explicit: str | None, new_run: bool) -> str:
-    """The run id of ``project/pipeline``: ``explicit``, the current run, or the next one."""
+def resolve_run(home: Path, project: str, pipeline: str, explicit: str | None, new_run: bool,
+                worktree: str | None = None) -> str:
+    """The run id of ``project/pipeline``: ``explicit``, the current run, or the next one.
+
+    The current run belongs to the worktree that last took it; a run from another worktree gets the next number
+    (so two worktrees never share a run number, and with it a log file). ``worktree`` is None outside a lane."""
     if explicit:
         return explicit
     key = f"{project}/{pipeline}"
@@ -51,10 +55,15 @@ def resolve_run(home: Path, project: str, pipeline: str, explicit: str | None, n
         if entry is None:
             entry = book.get(f"*/{pipeline}") if isinstance(book.get(f"*/{pipeline}"), dict) else {}
         counter = int(entry.get("counter") or 0)
-        if new_run or counter == 0:
+        owner = entry.get("worktree") if "worktree" in entry else None  # no owner recorded: anyone may reuse
+        elsewhere = "worktree" in entry and (owner or None) != (worktree or None)
+        if new_run or counter == 0 or elsewhere:
             counter += 1
-            entry = {**entry, "counter": counter, "current_run": f"{pipeline}#{counter}"}
+            entry = {**entry, "counter": counter, "current_run": f"{pipeline}#{counter}", "worktree": worktree or None}
             book[key] = entry
+            write_json_atomic(home / "pipelines.json", book)
+        elif "worktree" not in entry and worktree:
+            book[key] = {**entry, "worktree": worktree}
             write_json_atomic(home / "pipelines.json", book)
         return str(entry.get("current_run") or f"{pipeline}#{counter}")
 
@@ -130,7 +139,7 @@ def run_stage(home: Path, project: str, pipeline: str, stage: str, command: list
 
     ``command`` is an argv list, or a shell line. ``echo`` copies the output to this process's stdout.
     The run id is resolved from ``pipelines.json`` when not given."""
-    run_id = resolve_run(home, project, pipeline, run_id, new_run)
+    run_id = resolve_run(home, project, pipeline, run_id, new_run, worktree)
     safe_run = run_id.replace("#", "-").replace("/", "-")
     log_path = Path(log).expanduser().resolve() if log else home / "logs" / f"{safe_run}-{stage}.log"
     log_path.parent.mkdir(parents=True, exist_ok=True)

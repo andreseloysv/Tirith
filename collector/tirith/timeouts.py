@@ -83,7 +83,10 @@ def clamp(cls: str, seconds: float) -> float:
     return max(low, min(high, float(seconds)))
 
 
-GIT_CLASSES = frozenset({"git", "git-commit"})
+# Classes whose limit is a plain deadline: they grow with the machine load. A stage and an agent run have an idle
+# limit instead (nothing happens), and a slow machine does not make them silent.
+LOAD_CLASSES = frozenset({"git", "git-commit", "git-worktree-remove", "agent-bash", "muse", "cargo", "npm",
+                          "generic"})
 
 
 def load_scaled(cls: str, seconds: float, *, load: float | None = None, cpus: int | None = None) -> float:
@@ -100,9 +103,14 @@ def load_scaled(cls: str, seconds: float, *, load: float | None = None, cpus: in
 def deadline(home: Path, config: Config | None, cls: str, hint: float | None = None, *,
              load: float | None = None, cpus: int | None = None) -> float:
     """The limit :func:`run` applies. A git command takes the class policy, raised under load; a ``hint`` may
-    only raise it, never lower it below the policy. Other classes take ``hint`` as given, else the policy."""
-    if base_class(cls) not in GIT_CLASSES:
-        return float(hint) if hint else effective(home, config, cls)
+    only raise it, never lower it below the policy. Other short classes take ``hint`` as given, else the policy;
+    both grow with the machine load (``load_scaled``). A stage and an agent run keep their own limit."""
+    git = base_class(cls) in ("git", "git-commit")
+    if not git:
+        base = float(hint) if hint else effective(home, config, cls)
+        if base_class(cls) not in LOAD_CLASSES:
+            return base
+        return load_scaled(cls, base, load=load, cpus=cpus)
     policy = effective(home, config, cls)
     return load_scaled(cls, max(policy, float(hint or 0)), load=load, cpus=cpus)
 
@@ -682,7 +690,8 @@ def bash_update(home: Path, config: Config, tool_input) -> dict | None:
     if not isinstance(tool_input, dict) or not tool_input.get("command") or tool_input.get("run_in_background"):
         return None
     cls = classify_command(str(tool_input["command"]))
-    policy_s = effective(home, config, cls)
+    policy_s = load_scaled(cls, effective(home, config, cls)) if base_class(cls) in LOAD_CLASSES \
+        else effective(home, config, cls)
     top_s = max(bounds(cls)[2], policy_s)
     asked = tool_input.get("timeout")
     asked_ms = float(asked) if isinstance(asked, (int, float)) and not isinstance(asked, bool) and asked > 0 else 0.0

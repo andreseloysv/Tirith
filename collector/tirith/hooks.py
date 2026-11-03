@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from tirith import timeouts as timeouts_mod
-from tirith import dispatch, gates, managerd
+from tirith import gates
 from tirith import projects as projects_mod
 from tirith.home import load_config, now_iso
 from tirith.store import append_jsonl, read_json, write_json_atomic
@@ -206,7 +206,12 @@ def _manager_inbox(agent: str, event: dict, home: Path, environ=None) -> int:
         return 0
     env = os.environ if environ is None else environ
     config = load_config(home)
-    if not config.dispatch_enabled or not dispatch.is_manager(config, env, event.get("cwd")):
+    if not config.dispatch_enabled:
+        return 0
+    if env.get("TIRITH_LANE") or not (env.get("TIRITH_ROLE") or config.manager_session_cwd):
+        return 0  # cannot be the manager (see dispatch.is_manager): skip its heavy imports
+    from tirith import dispatch, managerd  # heavy: only a manager session with dispatch on needs them
+    if not dispatch.is_manager(config, env, event.get("cwd")):
         return 0
     now = datetime.now(timezone.utc)
     managerd.heartbeat(home, event.get("agent_session_id"), now)  # the live session is attached while this keeps coming
@@ -337,6 +342,7 @@ def default_settings(agent: str, agents: dict | None = None) -> Path:
 
 def hook_command(agent: str, event: str, tirith: str = "tirith", role: str | None = None) -> str:
     role = "manager" if role == "steward" else role
+    from tirith import dispatch
     prefix = f"{dispatch.ROLE_ENV}={shlex.quote(role)} " if role else ""
     return f"{prefix}{shlex.quote(tirith)} hook --agent {shlex.quote(agent)} --event {shlex.quote(event)}"
 
@@ -497,6 +503,7 @@ def has_hooks(path: Path, agent: str) -> bool:
 
 def _installed_form(path: Path, agent: str) -> tuple[str, str | None]:
     """The executable and role of the installed ``PreToolUse`` entry (so a heal writes the same)."""
+    from tirith import dispatch
     try:
         groups = json.loads(Path(path).read_text(encoding="utf-8"))["hooks"]["PreToolUse"]
         for group in groups:
