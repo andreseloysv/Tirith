@@ -132,28 +132,76 @@ _GIT_WRITES = {"commit", "merge", "push", "reset", "checkout", "switch", "rebase
                "rm", "mv", "restore", "clean", "stash", "pull", "apply", "am", "tag", "branch", "worktree"}
 
 
+_GIT_VALUE_OPTIONS = {"-c", "-C", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--config-env"}
+_TAG_WRITES = {"-d", "--delete", "-a", "-s", "-u", "-f", "--force", "-m", "-F", "--annotate", "--sign", "-v",
+               "--verify"}
+_BRANCH_WRITES = {"-d", "-D", "--delete", "-m", "-M", "--move", "-c", "-C", "--copy", "-u", "--set-upstream-to",
+                  "--unset-upstream", "-f", "--force", "--edit-description", "--track", "-t", "--no-track"}
+_BRANCH_LISTS = {"-l", "--list", "-a", "--all", "-r", "--remotes", "-v", "-vv", "--verbose", "--show-current",
+                 "--contains", "--no-contains", "--merged", "--no-merged", "--points-at"}
+
+
+def _git_sub(args: list[str]) -> tuple[str, list[str]]:
+    """The subcommand of a git line and its arguments, past git's own options (``-c x=y``, ``-C dir``)."""
+    at = 0
+    while at < len(args):
+        word = args[at]
+        if word in _GIT_VALUE_OPTIONS:
+            at += 2
+        elif word.startswith("-"):
+            at += 1
+        else:
+            return word, args[at + 1:]
+    return "", []
+
+
+def _git_changes(sub: str, rest: list[str]) -> bool:
+    """True when this git command may change something; ``branch --list``, ``worktree list``, ``stash list`` and
+    ``tag -l`` only read."""
+    if sub == "branch":
+        names = [a for a in rest if not a.startswith("-")]
+        return any(a.split("=")[0] in _BRANCH_WRITES for a in rest) or (bool(names) and not any(
+            a.split("=")[0] in _BRANCH_LISTS for a in rest))
+    if sub == "tag":
+        names = [a for a in rest if not a.startswith("-")]
+        return any(a in _TAG_WRITES for a in rest) or (bool(names) and not any(a in ("-l", "--list") for a in rest))
+    if sub == "worktree":
+        return rest[:1] != ["list"]
+    if sub == "stash":
+        return rest[:1] not in (["list"], ["show"])
+    return sub in _GIT_WRITES
+
+
 def _bash_writes(home: Path, data: dict, cwd) -> str | None:
-    """The first write of a Bash line outside the Tirith home (a redirect to a file, ``tee``, ``sed -i``,
-    ``mv``/``cp``/``rm``, a changing ``git`` command), or None. Harmless redirects (``2>&1``, ``>/dev/null``) and
-    function definitions are not writes."""
+    """The first write of a Bash line outside the Tirith home and the temp folder (a redirect to a file, ``tee``,
+    ``sed -i``, ``mv``/``cp``/``rm``, a changing ``git`` command), or None. Harmless redirects (``2>&1``,
+    ``>/dev/null``) and function definitions are not writes."""
     line = gates_mod.strip_heredocs(str(data.get("command") or ""))
     here, roots = str(cwd or os.getcwd()), [lanegates_mod._real(home)]
-    for tokens in lanegates_mod.expand_segments(line):
+    temps = lanegates_mod.allowed_roots(None, os.environ)
+    project = lanegates_mod.git_root(here)
+    project = lanegates_mod._real(project) if project else None
+    names: dict = {}
+    segments = lanegates_mod.expand_segments(line)
+    for at, tokens in enumerate(segments):
         moved = lanegates_mod._cd_target(tokens)
         if moved is not None:
             here = lanegates_mod._resolve(moved, here, os.environ) or here
             continue
+        lanegates_mod.track_assignment(tokens, segments[at + 1] if at + 1 < len(segments) else None, names, here,
+                                       os.environ)
+        scope = {**os.environ, **names}
         for target in lanegates_mod.write_targets(tokens):
-            real = lanegates_mod._resolve(target, here, os.environ)
-            if real is None or not lanegates_mod._inside(real, roots):
+            real = lanegates_mod._resolve(target, here, scope)
+            if real is None or not (lanegates_mod._inside(real, roots) or (
+                    lanegates_mod._inside(real, temps) and not (project and lanegates_mod._inside(real, [project])))):
                 return target
         folder, sub = lanegates_mod._git_c(tokens)
         name, args = gates_mod._program(tokens)
         if name == "git":
-            if folder is None:
-                sub = next((a for a in args if not a.startswith("-")), "")
-            where = lanegates_mod._resolve(folder, here, os.environ) if folder is not None else here
-            if sub in _GIT_WRITES and (where is None or not lanegates_mod._inside(where, roots)):
+            sub, rest = _git_sub(args[args.index("-C") + 2:] if folder is not None else args)
+            where = lanegates_mod._resolve(folder, here, scope) if folder is not None else here
+            if _git_changes(sub, rest) and (where is None or not lanegates_mod._inside(where, roots)):
                 return f"git {sub}"
     return None
 

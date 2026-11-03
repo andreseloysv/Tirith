@@ -186,3 +186,34 @@ def test_a_deny_is_recorded_as_a_violation_with_rule_and_command(home: Path, lan
     assert rows[-1]["lane"] == "perms"
     ok = dict(payload, tool_input={"command": "echo x > out.txt"})
     assert hooks.decide("anthropic", event, ok, home) == 0
+
+
+@pytest.mark.parametrize("command", [
+    "S=$(mktemp -d); echo hi > $S/x", "S=$(mktemp -d) && cp a.txt $S/b.txt && rm $S/b.txt",
+    "S=/tmp/work; mkdir -p $S/x", "export S=$TMPDIR/w; touch $S/y",
+    "ls nothing 2>/dev/null", "ls nothing 2>/dev/null || true",
+    "git log | grep -n '>' ", "cat a | grep -c \">>\" ", "git log --oneline | grep -E '>foo|>>bar' | head -3",
+    "cat a | grep -v x 2>/dev/null", "git log | grep -n '>' /etc/hosts", "cat a | grep -c \">>\" /etc/hosts",
+    "cat a | grep -e '>' -e '2>x' /etc/hosts",
+])
+def test_workspace_write_false_positives_are_allowed(lane: Path, command: str) -> None:
+    assert "workspace-write" not in _bash(lane, command)
+
+
+@pytest.mark.parametrize("command", [
+    "S=/etc; echo hi > $S/x", "S=$(mktemp -d -p /etc); echo hi > $S/x", "S=$(date); echo hi > $S/x",
+    "echo hi > $S/x", "cat a | grep x > /etc/passwd", "cat a | grep x 2>/etc/err",
+    "S=$(mktemp -d); echo hi > $S/../../etc/x",
+])
+def test_workspace_write_false_positives_do_not_open_real_writes(lane: Path, command: str) -> None:
+    assert "workspace-write" in _bash(lane, command)
+
+
+def test_workspace_write_sed_expression_is_not_a_path(lane: Path) -> None:
+    for command in ("sed -i -e '/^=======$/d' src/a.py", "sed -i '' -e '/^=======$/d' -e '/^>>>>>>> /d' src/a.py",
+                    "sed -i '/^=======$/d' src/a.py", "sed -i '' '/^=======$/d' src/a.py",
+                    "sed -i -ne 's|a|/etc/b|p' src/a.py", "sed --in-place --expression='/x/d' src/a.py"):
+        assert "workspace-write" not in _bash(lane, command), command
+    for command in ("sed -i -e '/^=======$/d' /etc/hosts", "sed -i '/^=======$/d' /etc/hosts",
+                    "sed -i '' -e '/x/d' src/a.py /etc/hosts", "sed -i -f script.sed /etc/hosts"):
+        assert "workspace-write" in _bash(lane, command), command
