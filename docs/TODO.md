@@ -521,3 +521,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [ ] Los tests de web/js usan el Chromium de Playwright y no Microsoft Edge, porque cada arranque de Edge pasa CoreServicesUIAgent al frente y le quita el teclado a la app que el dueño esté usando. (check: `! grep -rq msedge web/js`) (en curso: las-pruebas-no-interrumpen-al-du)
 - [ ] Los tests de web/js encuentran playwright-core sin depender de otro proyecto: hoy apuntan a propuestavenezuela/node_modules, que ya no existe, y PLAYWRIGHT_FROM va a VenezuelaGame como parche. (check: `! grep -rq propuestavenezuela web/js`)
 
+## 21. Auditoría de accesos de los agentes
+
+- [ ] Contrato de la auditoría de accesos (solo registra, nunca bloquea ni pregunta al dueño): qué cuenta como acceso (credenciales, variables del proyecto, git push, gh, APIs, navegador), formato del registro y retención. Idea de neoid «Agentenzugriffe». (check: `test -f docs/CONTRACT-access-audit.md`) <!-- tirith:{"id":"i-c061fdfb9d4b41f2ac5b3993a44751db","depends_on":[],"writes":[]} -->
+
