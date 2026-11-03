@@ -827,3 +827,138 @@ def test_stage_timeout_on_a_train_is_not_red_it_does_not_split_or_send_back(logg
     assert len(calls) == 1 and not send.calls  # one run for the whole train, nobody sent back
     assert [i["status"] for i in mergeq_mod.view(home, "demo")["items"]] == ["queued", "queued"]
     assert not asks_mod.queue_items(home) and not (repo / "one.txt").exists()
+
+
+# -- the queue's loose ends: lock, continuation, agent null, tested trees, absorbed lanes ----------------------
+
+
+def test_commit_workspace_recovers_lock(env, home: Path) -> None:
+    repo, _ = env
+    worktree = make_lane(home, repo, "locked-lane", {"l.txt": "1"})
+    lock = Path(git(worktree, "rev-parse", "--path-format=absolute", "--git-path", "index.lock"))
+    lock.write_text("")
+    old = time.time() - 600
+    os.utime(lock, (old, old))
+    mergeq_mod.enqueue(home, "locked-lane")
+    row = mergeq_mod.process_next(home, load_config(home), relaunch=Sender())
+    assert row["result"] == "merged" and (repo / "l.txt").exists() and not lock.exists()
+
+
+def _done_continuation(home: Path, worktree: Path, lane_id: str) -> None:
+    register_lane(home, lane_id=lane_id, project="demo", hero_class="glasswright", feature=lane_id.title(),
+                  workspace=str(worktree), log=None, pid=None, brief=None, step="2")
+    (worktree / "more.txt").write_text("m", encoding="utf-8")
+    end_lane(home, lane_id, "done", "more")
+    lane = read_json(lane_path(home, lane_id), None)
+    lane["outcome"] = {"status": "done", "added": [], "reason": None, "at": "x", "applied": True}
+    write_lane(home, lane)
+
+
+def test_continuation_lane_auto_enqueued(env, home: Path) -> None:
+    repo, _ = env
+    worktree = make_lane(home, repo, "orig", {"o.txt": "o"})
+    _done_continuation(home, worktree, "orig-2")
+    elsewhere = home / "elsewhere"
+    elsewhere.mkdir()
+    register_lane(home, lane_id="loose", project="demo", hero_class="glasswright", feature="Loose",
+                  workspace=str(elsewhere), log=None, pid=None, brief=None, step="2")
+    end_lane(home, "loose", "done", "x")
+    lane = read_json(lane_path(home, "loose"), None)
+    lane["outcome"] = {"status": "done", "added": [], "reason": None, "at": "x", "applied": True}
+    write_lane(home, lane)
+    mergeq_mod.run(home, load_config(home), read_lanes(home), spawn=lambda *a: None, dry_run=True)
+    assert [i["lane"] for i in mergeq_mod.view(home)["items"]] == ["orig-2"]  # not a folder of someone else's
+
+
+def test_send_back_continuation(env, home: Path, monkeypatch) -> None:
+    from tirith.cli import relaunch_lane
+    repo, _ = env
+    worktree = make_lane(home, repo, "orig", {"o.txt": "o"})
+    _done_continuation(home, worktree, "orig-2")
+    brief = home / "brief.md"
+    brief.write_text("# Lane: x\n", encoding="utf-8")
+    lane = read_json(lane_path(home, "orig-2"), None)
+    lane["brief"] = str(brief)
+    write_lane(home, lane)
+    spawned: list[list[str]] = []
+    monkeypatch.setattr(launch_mod, "spawn_detached", lambda argv, h, log: spawned.append(argv) or 1)
+    monkeypatch.setattr(launch_mod, "agent_command", lambda *a, **k: ["true"])
+    new_id = relaunch_lane(home, lane, "anthropic", by_tirith=True, note="fix it")
+    new_workspace = spawned[-1][spawned[-1].index("--workspace") + 1]
+    assert git(Path(new_workspace), "log", "--format=%s", "-1").startswith("Lane orig-2")
+    assert (Path(new_workspace) / "more.txt").exists() and new_id != "orig-2"
+
+
+class RecordingSender(Sender):
+    def __init__(self) -> None:
+        super().__init__()
+        self.aliases: list = []
+
+    def __call__(self, home, lane, alias, note) -> str:
+        self.aliases.append(alias)
+        return super().__call__(home, lane, alias, note)
+
+
+def test_send_back_without_agent(env, home: Path) -> None:
+    repo, _ = env
+    make_lane(home, repo, "bad", {"BAD": "x"})
+    lane = read_json(lane_path(home, "bad"), None)
+    lane["agent"] = None
+    write_lane(home, lane)
+    mergeq_mod.enqueue(home, "bad")
+    send = RecordingSender()
+    row = mergeq_mod.process_next(home, load_config(home), relaunch=send)
+    assert row["result"] == "red-suite" and row["sent_to"] == "bad-2" and send.aliases == [None]
+    make_lane(home, repo, "bad2", {"BAD": "x"})
+    lane = read_json(lane_path(home, "bad2"), None)
+    lane["agent"] = "ghost"
+    write_lane(home, lane)
+    mergeq_mod.enqueue(home, "bad2")
+    mergeq_mod.process_next(home, load_config(home), relaunch=send)
+    assert send.aliases == [None] and any("'ghost' is not in the configuration" in str(i)
+                                          for i in asks_mod.queue_items(home))
+
+
+def test_same_tree_is_not_tested_again(logged, home: Path) -> None:
+    repo, log = logged
+    wt = make_lane(home, repo, "one", {"x.txt": "x"})
+    test_cmd = "echo test >> $STAGE_LOG; echo 4 passed; ! test -f BAD"
+    ok, out = mergeq_mod.review_mod.run_tests(home, "demo", "ci", "test", wt, test_cmd, "one")  # the lane's own run
+    assert ok and log() == ["test"]
+    again, text = mergeq_mod.review_mod.run_tests(home, "demo", "ci", "test", wt, test_cmd, "one")
+    assert again and log() == ["test"] and "4 passed" in text and "not run again" in text
+    (wt / "x.txt").write_text("changed", encoding="utf-8")  # another tree: it runs
+    assert mergeq_mod.review_mod.run_tests(home, "demo", "ci", "test", wt, test_cmd, "one")[0]
+    assert log() == ["test", "test"]
+    (wt / "BAD").write_text("", encoding="utf-8")  # a failed tree is never remembered
+    assert not mergeq_mod.review_mod.run_tests(home, "demo", "ci", "test", wt, test_cmd, "one")[0]
+    assert not mergeq_mod.review_mod.run_tests(home, "demo", "ci", "test", wt, test_cmd, "one")[0]
+    assert log() == ["test", "test", "test", "test"]
+    (wt / "BAD").unlink()
+    # the queue merges that same tree: its test stage is not run again
+    mergeq_mod.enqueue(home, "one")
+    row = land(home)[0]
+    assert row["result"] == "merged" and log() == ["test", "test", "test", "test", "build"]
+
+
+def test_absorbed_lane_stops(env, home: Path, monkeypatch) -> None:
+    repo, _ = env
+    base = make_lane(home, repo, "base", {"a.txt": "a"})
+    git(base, "add", "-A")
+    git(base, "commit", "-q", "-m", "base work")
+    top = launch_mod.create_worktree(repo, "top", base="lane/base")  # a continuation: holds base's commits
+    register_lane(home, lane_id="top", project="demo", hero_class="glasswright", feature="Top",
+                  workspace=str(top), log=None, pid=None, brief=None, step="2")
+    (top / "b.txt").write_text("b", encoding="utf-8")
+    end_lane(home, "top", "done", "more")
+    calls = []
+    real = mergeq_mod.review_mod.run_tests
+    monkeypatch.setattr(mergeq_mod.review_mod, "run_tests", lambda *a, **k: calls.append(a[2:4]) or real(*a, **k))
+    mergeq_mod.enqueue(home, "base")
+    mergeq_mod.enqueue(home, "top")
+    rows = mergeq_mod.drain(home, load_config(home), relaunch=Sender())
+    by_lane = {r["lane"]: r for r in rows}
+    assert by_lane["base"]["result"] == "closed" and "already in the queued branch of top" in by_lane["base"]["message"]
+    assert by_lane["top"]["result"] == "merged" and calls == [("ci", "build"), ("ci", "test")]
+    assert (repo / "a.txt").exists() and (repo / "b.txt").exists() and mergeq_mod.view(home)["items"] == []
+    assert read_json(lane_path(home, "base"), None)["review"]["status"] == "no-work"

@@ -919,7 +919,7 @@ def _cmd_run(args) -> int:
             home, args.project, args.pipeline, args.stage, command, cwd,
             lane=tags.get("lane") or (os.environ.get("TIRITH_LANE") or None), run_id=args.run,
             worktree=tags.get("worktree"), branch=tags.get("branch"), agent=args.agent,
-            log=args.log, new_run=args.new_run)
+            log=args.log, new_run=args.new_run, reuse=True)
     return code
 
 
@@ -1694,7 +1694,7 @@ def relaunch_lane(home: Path, lane: dict, alias: str | None, by_tirith: bool = F
         timeouts_mod.run(["git", "-C", str(old), "add", "-A"], "git")
         timeouts_mod.run(["git", "-C", str(old), "commit", "-q", "-m", f"Lane {lane['id']}: work before the claim check"],
                          "git-commit")
-        workspace = launch_mod.create_worktree(repo, lane_id, base=f"lane/{lane['id']}")
+        workspace = launch_mod.create_worktree(repo, lane_id, base=mergeq_mod.branch_of(lane, old))
         brief = brief.with_name(f"{brief.stem}-{lane_id}.md")
         brief.write_text(Path(str(lane["brief"])).read_text(encoding="utf-8") + "\n\n" + note, encoding="utf-8")
     else:

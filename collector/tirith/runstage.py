@@ -9,7 +9,11 @@ from __future__ import annotations
 
 import contextlib
 import fcntl
+import hashlib
+import json
 import os
+import shutil
+import tempfile
 import subprocess
 import sys
 from pathlib import Path
@@ -21,6 +25,9 @@ from tirith.home import now_iso
 from tirith.store import append_jsonl, read_json, read_lanes, write_json_atomic
 
 OUTPUT_MAX = 4000
+TESTED_FILE = "tested.json"  # {key: [{tree, at, run, log}]}: trees whose test stage already passed
+TESTED_KEEP = 40  # trees remembered per stage key
+FORCE_ENV = "TIRITH_RETEST"  # set to 1 to run a test stage even when this exact tree already passed
 
 
 def pipeline_book(home: Path) -> dict:
@@ -130,15 +137,98 @@ def _tail(text: str) -> str:
     return text if len(text) <= OUTPUT_MAX else "…" + text[-OUTPUT_MAX:]
 
 
+def tree_of(folder: str | Path) -> str | None:
+    """The git tree hash of everything in ``folder``'s worktree (tracked and untracked files, working-tree
+    content, ignored files left out), computed in a copy of the index so the real one is never touched;
+    None outside a git worktree."""
+    folder = Path(folder)
+    if not folder.is_dir():
+        return None
+    index = _git(folder, "rev-parse", "--path-format=absolute", "--git-path", "index")
+    top = _git(folder, "rev-parse", "--show-toplevel")
+    if not index or not top:
+        return None
+    fd, temp = tempfile.mkstemp(prefix="tirith-tree-")
+    os.close(fd)
+    try:
+        if Path(index).is_file():
+            shutil.copyfile(index, temp)
+        else:
+            os.unlink(temp)  # no index yet: git builds one
+        env = {**os.environ, "GIT_INDEX_FILE": temp}
+        for args in (("add", "-A"), ("write-tree",)):
+            done = timeouts_mod.run(["git", "-C", top, *args], "git", text=True, env=env)
+            if done.returncode != 0:
+                return None
+        return done.stdout.strip() or None
+    except (OSError, subprocess.SubprocessError):
+        return None
+    finally:
+        with contextlib.suppress(OSError):
+            os.unlink(temp)
+
+
+def _tested_key(project: str, pipeline: str, stage: str, command, env: dict | None = None) -> str:
+    line = (command if isinstance(command, str) else json.dumps(list(command))) + json.dumps(env or {}, sort_keys=True)
+    return f"{project}|{pipeline}|{stage}|{hashlib.sha1(line.encode()).hexdigest()[:16]}"
+
+
+def cacheable(stage: str) -> bool:
+    return "test" in stage and not stage.endswith("-rerun") and os.environ.get(FORCE_ENV) != "1"
+
+
+def tested_before(home: Path, key: str, tree: str) -> dict | None:
+    """The record of the earlier passing run of this stage on exactly ``tree``, else None."""
+    book = read_json(home / TESTED_FILE, {})
+    for row in book.get(key, []) if isinstance(book, dict) else []:
+        if isinstance(row, dict) and row.get("tree") == tree:
+            return row
+    return None
+
+
+def remember_tested(home: Path, key: str, tree: str, run_id: str, log: Path) -> None:
+    home.mkdir(parents=True, exist_ok=True)
+    with (home / (TESTED_FILE + ".lock")).open("a") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        try:
+            book = read_json(home / TESTED_FILE, {})
+            book = book if isinstance(book, dict) else {}
+            rows = [r for r in book.get(key, []) if isinstance(r, dict) and r.get("tree") != tree]
+            book[key] = (rows + [{"tree": tree, "at": now_iso(), "run": run_id, "log": str(log)}])[-TESTED_KEEP:]
+            write_json_atomic(home / TESTED_FILE, book)
+        finally:
+            fcntl.flock(handle, fcntl.LOCK_UN)
+
+
+def _reuse(home: Path, base: dict, before: dict, tree: str, log_path: Path, echo: bool) -> tuple[int, str]:
+    """Record a passing run that did not execute anything: the tree already passed (``before``). Its log keeps the
+    earlier output, so the claim check still reads the counts."""
+    try:
+        earlier = Path(str(before.get("log"))).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        earlier = ""
+    note = f"tirith: tree {tree[:12]} already passed this stage in run {before.get('run')} ({before.get('at')}); not run again"
+    text = _tail(f"{note}\n{earlier}")
+    log_path.write_text(text + "\n", encoding="utf-8")
+    if echo:
+        sys.stdout.write(note + "\n")
+        sys.stdout.flush()
+    append_jsonl(home / "events.jsonl", {"at": now_iso(), **base, "pid": os.getpid(), "event": "start", "status": "running",
+                                         "cached": True})
+    append_jsonl(home / "events.jsonl", {"at": now_iso(), **base, "event": "end", "status": "passed", "cached": True})
+    return 0, text
+
+
 def run_stage(home: Path, project: str, pipeline: str, stage: str, command: list[str] | str,
               cwd: str | Path | None, lane: str | None = None, run_id: str | None = None, *,
               worktree: str | None = None, branch: str | None = None, agent: str | None = None,
               log: str | Path | None = None, echo: bool = True, env: dict | None = None,
-              timeout: float | None = None, new_run: bool = False) -> tuple[int, str]:
+              timeout: float | None = None, new_run: bool = False, reuse: bool = False) -> tuple[int, str]:
     """Run one stage command, recording start and end in ``events.jsonl``; returns ``(exit code, output tail)``.
 
     ``command`` is an argv list, or a shell line. ``echo`` copies the output to this process's stdout.
-    The run id is resolved from ``pipelines.json`` when not given."""
+    The run id is resolved from ``pipelines.json`` when not given. With ``reuse`` (the lane's ``tirith run``, the
+    review and the merge queue) a test stage is not run again on a tree that already passed it."""
     run_id = resolve_run(home, project, pipeline, run_id, new_run, worktree)
     safe_run = run_id.replace("#", "-").replace("/", "-")
     log_path = Path(log).expanduser().resolve() if log else home / "logs" / f"{safe_run}-{stage}.log"
@@ -149,6 +239,13 @@ def run_stage(home: Path, project: str, pipeline: str, stage: str, command: list
     for key, value in (("agent", agent), ("lane", lane), ("worktree", worktree), ("branch", branch)):
         if value:
             base[key] = value
+    tree = key = None
+    if reuse and timeout is None and cacheable(stage):  # a tree that already passed this stage is not tested again
+        tree = tree_of(work)
+        key = _tested_key(project, pipeline, stage, command, env)
+        before = tested_before(home, key, tree) if tree else None
+        if before:
+            return _reuse(home, base, before, tree, log_path, echo)
     child_env = projenv_mod.apply(home, project, env)
     session = projects_mod.current_session(home)
     if session:
@@ -195,4 +292,6 @@ def run_stage(home: Path, project: str, pipeline: str, stage: str, command: list
     if ended["timed_out"]:
         output = f"{ended['message']}\n{output}".strip()
         exit_code = timeouts_mod.EXIT_TIMED_OUT
+    elif exit_code == 0 and tree and key:
+        remember_tested(home, key, tree, run_id, log_path)
     return exit_code, output

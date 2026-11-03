@@ -112,11 +112,20 @@ def enqueue(home: Path, lane_id: str) -> int:
         return len(data["queue"])
 
 
+def shares_lane_worktree(lane: dict, repo: Path) -> bool:
+    """True for a continuation lane: its workspace is another lane's worktree (a folder of ``<repo>-lanes``)."""
+    if not lane.get("workspace"):
+        return False
+    folder = Path(str(lane["workspace"])).resolve()
+    return folder.parent == worktree_path(repo, "x").parent.resolve() and not folder.name.startswith(("_", "."))
+
+
 def ready_to_enqueue(home: Path, lane: dict, repo: Path | None) -> bool:
     """A finished launched lane whose plan outcome is ``done`` and that is not merged or queued yet."""
     if not lane.get("ended_at") or lane.get("result") != "done" or repo is None:
         return False
-    if (lane.get("outcome") or {}).get("status") != "done" or not review_mod.launched(lane, repo):
+    if (lane.get("outcome") or {}).get("status") != "done" or not (review_mod.launched(lane, repo)
+                                                                   or shares_lane_worktree(lane, repo)):
         return False
     status = (lane.get("review") or {}).get("status")
     return status in (None, review_mod.PENDING, review_mod.READY) and Path(str(lane["workspace"])).is_dir() \
@@ -315,13 +324,43 @@ def branch_of(lane: dict, workspace: Path) -> str:
     return f"lane/{lane['id']}"
 
 
+def absorbed_by(home: Path, repo: Path, lane_id: str, branch: str) -> str:
+    """The id of another queued lane whose branch already contains every commit of ``branch``, else "". A lane
+    continued from this one holds its commits, so testing both is a second suite for the same code; when two
+    branches are the same commit the one queued first is kept."""
+    queue = [e for e in load(home)["queue"]]
+    mine = next((n for n, e in enumerate(queue) if e["lane"] == lane_id), len(queue))
+    for n, other in enumerate(queue):
+        if other["lane"] == lane_id:
+            continue
+        found = read_json(lane_path(home, other["lane"]), None)
+        if not isinstance(found, dict) or not found.get("workspace"):
+            continue
+        theirs = branch_of(found, Path(str(found["workspace"])))
+        if theirs == branch or not branch_exists(repo, theirs):
+            continue
+        if _git(repo, "merge-base", "--is-ancestor", branch, theirs).returncode != 0:
+            continue
+        if _git(repo, "merge-base", "--is-ancestor", theirs, branch).returncode == 0 and n > mine \
+                and not _git(Path(str(found["workspace"])), "status", "--porcelain").stdout.strip():
+            continue  # the same commit and nothing more in its worktree: the first in the queue stays
+        return str(other["lane"])
+    return ""
+
+
 def _commit_workspace(workspace: Path, lane_id: str, feature: str) -> str | None:
     """Commit what the agent left in its worktree; the error text when that fails."""
-    _git(workspace, "add", "-A")
+    added = _git(workspace, "add", "-A")
+    if added.returncode != 0 and "index.lock" in added.stderr and plangate_mod.recover_git_lock(workspace):
+        added = _git(workspace, "add", "-A")  # a crashed git left its lock in the lane's worktree
     if _git(workspace, "diff", "--cached", "--quiet").returncode != 0:
         done = _git(workspace, "commit", "-q", "-m", f"Lane {lane_id}: {feature}")
+        if done.returncode != 0 and "index.lock" in done.stderr and plangate_mod.recover_git_lock(workspace):
+            done = _git(workspace, "commit", "-q", "-m", f"Lane {lane_id}: {feature}")
         if done.returncode != 0:
             return f"{TIMED_OUT}: {done.error}" if done.timed_out else _tail(done.stderr or done.stdout)
+    elif added.returncode != 0:
+        return _tail(added.stderr or added.stdout)
     return None
 
 
@@ -428,6 +467,10 @@ def _try(home: Path, repo: Path, lane: dict, entry: dict) -> tuple[str, str, dic
         return WAITING, f"branch not found: {branch}", {}
     if _git(repo, "merge-base", "--is-ancestor", branch, "HEAD").returncode == 0:
         return plangate_mod.WORK_NONE, f"nothing to merge: {branch} has no commits main lacks", {"branch": branch}
+    inside = absorbed_by(home, repo, lane_id, branch)
+    if inside:
+        return plangate_mod.WORK_NONE, f"nothing to merge: {branch} is already in the queued branch of {inside}", \
+            {"branch": branch}
     base = _git(repo, "rev-parse", "HEAD").stdout.strip()
     main_branch = _git(repo, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
     tmp, error = _make_tmp(repo, f"_mergeq-{lane_id}", base)
@@ -486,6 +529,10 @@ def _try_train(home: Path, repo: Path, members: list[tuple[dict, dict]]) -> tupl
         elif _git(repo, "merge-base", "--is-ancestor", branch, "HEAD").returncode == 0:  # main has all of it
             left.append((entry, lane, plangate_mod.WORK_NONE,
                          f"nothing to merge: {branch} has no commits main lacks", {"branch": branch}))
+        elif absorbed_by(home, repo, lane_id, branch):
+            left.append((entry, lane, plangate_mod.WORK_NONE,
+                         f"nothing to merge: {branch} is already in the queued branch of "
+                         f"{absorbed_by(home, repo, lane_id, branch)}", {"branch": branch}))
         else:
             joined.append((entry, lane))
     if not joined:
@@ -604,13 +651,15 @@ def send_back(home: Path, config: Config, lane: dict, result: str, message: str,
             from tirith.cli import relaunch_lane
             return relaunch_lane(home, lane, alias, by_tirith=True, note=note)
     sent, why = None, ""
-    if alias in config.agents and _sent_back_count(lane) < MAX_SENT_BACK:
+    if alias and alias not in config.agents:
+        why = f" (its agent '{alias}' is not in the configuration)"
+    elif _sent_back_count(lane) >= MAX_SENT_BACK:
+        why = f" (sent back {MAX_SENT_BACK} times already)"
+    else:  # no registered agent (null): the configured worker takes it
         try:
-            sent = relaunch(home, lane, alias, note)
+            sent = relaunch(home, lane, alias or None, note)
         except (Exception, SystemExit) as error:
             why = f" (sending it back failed: {error})"
-    elif alias in config.agents:
-        why = f" (sent back {MAX_SENT_BACK} times already)"
     reopen_error = _reopen_item(home, config, lane, result, message)
     if reopen_error:
         why += f" (its plan item could not be reopened: {reopen_error})"
