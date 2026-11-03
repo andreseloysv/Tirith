@@ -380,7 +380,7 @@ def run(home: Path, config: Config, now: datetime, *, agents: list[dict], lanes:
     # before the autopilot, so a relaunched lane is known as the step's lane
     if fallback_mod.run(home, config, now, state, lanes, relauncher or _default_relauncher):
         changed = True
-    if diskdiet_mod.free_space(home, config, state, now, free=free):
+    if diskdiet_mod.free_space(home, config, state, now, free=free, background=True):
         changed = True  # frees space by itself first, so the check below sees the result
     if diskdiet_mod.check(home, config, state, now, free):
         changed = True

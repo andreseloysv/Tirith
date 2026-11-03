@@ -271,6 +271,8 @@ The step's checkboxes in the roadmap are still ticked by the owner.
   `dispatch.json`): the smallest free space of the folders holding the projects' lanes. Below `[disk] min_free_gb`
   (default 5) `low` is true: the autopilot starts no lane, `finish` / plan requests wait unanswered, and one
   manager queue item (`kind: "disk"`, not an owner item) says why; it closes when space is back.
+  Freeing space (deleting merged lane folders, the build cache) runs on a background thread: the dispatcher pass never
+  waits for it, and a later pass says what was freed.
 
 ## Real launch from the browser (owner checklist)
 

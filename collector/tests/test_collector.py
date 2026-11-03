@@ -180,3 +180,25 @@ def test_manager_live_follows_manager_json(home: Path) -> None:
     assert _collector(home).cycle()["manager"]["live"] == {"heartbeat": "2026-10-29T09:00:00Z"}
     (home / "manager.json").write_text("not json", encoding="utf-8")
     assert _collector(home).cycle()["manager"]["live"] is None
+
+
+def test_stalled_while_tests_run(home: Path, tmp_path: Path) -> None:
+    """The agent's log is silent while its test stage runs: a lane waiting for tests is not stalled."""
+    log = tmp_path / "a.log"
+    log.write_text("running tests\n", encoding="utf-8")
+    old = time.time() - 20 * 60
+    os.utime(log, (old, old))
+    _lane(home, "a-1", log)
+    append_jsonl(home / "events.jsonl", {"at": now_iso(), "run": "ci#1", "project": "demo", "pipeline": "ci",
+                                         "stage": "test", "lane": "a-1", "event": "start", "status": "running",
+                                         "pid": os.getpid(), "timeout": 3600})
+    state = _collector(home).cycle()
+    assert state["agents"][0]["status"] == "working"
+    append_jsonl(home / "events.jsonl", {"at": now_iso(), "run": "ci#1", "project": "demo", "pipeline": "ci",
+                                         "stage": "test", "lane": "a-1", "event": "end", "status": "passed"})
+    assert _collector(home).cycle()["agents"][0]["status"] == "stalled"
+    from tirith.collector import lane_status, testing_lanes
+    lane = {"id": "z", "log": str(log), "pid": os.getpid()}
+    assert lane_status(lane, datetime.now(timezone.utc), {"z"}) == "working"
+    assert testing_lanes([{"lane": "z", "run": "r", "stage": "test", "event": "start", "pid": 2 ** 22 - 3}],
+                         datetime.now(timezone.utc)) in (set(), {"z"})

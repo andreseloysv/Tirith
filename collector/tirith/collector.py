@@ -227,8 +227,26 @@ def log_mtime(path: str | Path | None) -> float | None:
         return None
 
 
-def lane_status(lane: dict, now: datetime) -> str:
-    """working/done/failed/stalled for one lane registration."""
+def testing_lanes(events: list[dict], now: datetime) -> set[str]:
+    """Ids of the lanes with a pipeline stage running now: started, not ended, its process alive, in time."""
+    open_stages: dict[tuple, dict] = {}
+    for event in events:
+        lane = event.get("lane")
+        if not lane or not event.get("stage"):
+            continue
+        key = (event.get("run"), event.get("stage"))
+        if event.get("event") == "start":
+            open_stages[key] = {"lane": str(lane), "started_at": event.get("at"),
+                                "_pid": event.get("pid") if isinstance(event.get("pid"), int) else None,
+                                "_timeout": event.get("timeout") if isinstance(event.get("timeout"), (int, float)) else None}
+        elif event.get("event") == "end":
+            open_stages.pop(key, None)
+    return {s["lane"] for s in open_stages.values() if _stage_alive(s, now)}
+
+
+def lane_status(lane: dict, now: datetime, testing: set[str] | frozenset[str] = frozenset()) -> str:
+    """working/done/failed/stalled for one lane registration. A lane in ``testing`` (its test stage runs; the
+    agent's own log is silent meanwhile) is never stalled."""
     if lane.get("ended_at"):
         return "done" if lane.get("result") == "done" else "failed"
     pid = lane.get("pid")
@@ -238,7 +256,7 @@ def lane_status(lane: dict, now: datetime) -> str:
     if last_activity is None:
         started = parse_iso(lane.get("started_at"))
         last_activity = started.timestamp() if started else now.timestamp()
-    if now.timestamp() - last_activity > STALLED_AFTER_S:
+    if now.timestamp() - last_activity > STALLED_AFTER_S and str(lane.get("id")) not in testing:
         return "stalled"
     return "working"
 
@@ -536,7 +554,7 @@ class SlowWork:
             try:
                 self.owner.github.poll(config, self.entries)
                 dispatch_mod.run(self.owner.home, config, datetime.now(timezone.utc), agents=agents, lanes=lanes,
-                                 status_of=lane_status, projects=projects)
+                                 status_of=self.owner._lane_status, projects=projects)
                 failures = 0
             except Exception as exc:  # one bad pass must not end the thread
                 failures += 1
@@ -565,6 +583,7 @@ class Collector:
         self._usage_cache: dict = {}
         self._detail_hashes: dict[str, str] = {}
         self._live_steps: dict[str, list] = {}  # lane id -> live transcript steps of this cycle
+        self._testing: set[str] = set()  # lanes whose test stage runs now (never stalled)
         self._cycles = 0
         self._tick_at = time.monotonic()
         self._phase_s: dict[str, float] = {}
@@ -572,6 +591,9 @@ class Collector:
         self._inbox_tried: dict[str, float] = {}  # request id -> monotonic time of the last brain try
         self._guard_seen: dict[str, tuple[float, tuple, list[str]]] = {}
         self._slow: SlowWork | None = None  # the background thread of the slow periodic work (continuous mode only)
+
+    def _lane_status(self, lane: dict, now: datetime) -> str:
+        return lane_status(lane, now, self._testing)
 
     def _verify_guard(self, repo: Path, words: list[str]) -> list[str]:
         """The guard check of a repo (git calls): run again when a hook file changed or the words did, else once
@@ -1186,6 +1208,7 @@ class Collector:
         lanes = read_lanes(self.home)
         close_dead_lanes(self.home, lanes, now)
         events = [e for e in read_jsonl(self.home / "events.jsonl") if e.get("kind") not in ("hook", "violation", "git-hook")]
+        self._testing = testing_lanes(events, now)
         hook_rows = hooks_mod.read_hook_rows(self.home / "events.jsonl")
         _, loose_events = hooks_mod.attach(hook_rows, [str(l["id"]) for l in lanes])
         rows_by_lane: dict[str, list[dict]] = {}
@@ -1228,7 +1251,7 @@ class Collector:
                 continue
             identity = agents[str(lane["id"])]
             lane_project = resolve(lane.get("project"), lane.get("workspace"))
-            status = lane_status(lane, now)
+            status = self._lane_status(lane, now)
             log_tail = tail_lines(lane.get("log"), LOG_TAIL_LINES)
             started = parse_iso(lane.get("started_at"))
             end_ref = ended or now
@@ -1535,7 +1558,7 @@ class Collector:
             rows = inbox_mod.requests(self.home)
         else:
             rows = dispatch_mod.run(self.home, self.config, now, agents=agents, lanes=lanes or [],
-                                    status_of=lane_status, projects=projects)
+                                    status_of=self._lane_status, projects=projects)
         wait_s = 0 if self.config.dispatch_enabled else inbox_mod.AUTO_ANSWER_AFTER_S
         if self.worker.enabled:
             by_project = {p["id"]: p for p in projects}

@@ -31,6 +31,7 @@ from tirith import inbox as inbox_mod
 from tirith import loadlimit as loadlimit_mod
 from tirith import mergeq as mergeq_mod
 from tirith import plangate as plangate_mod
+from tirith import projects as projects_mod
 from tirith import roadmap as roadmap_mod
 from tirith.home import Config, now_iso, parse_iso
 from tirith.store import read_json, write_json_atomic
@@ -238,6 +239,8 @@ def candidates(projects: list[dict], agents: list[dict], queued: set[str] | None
     found: dict[str, dict] = {}
     present: set[str] = set()
     for project in projects:
+        if projects_mod.is_merge_worktree(project.get("folder")):
+            continue  # a merge queue copy (_mergeq-*) repeats the plan of its project: no proposals from it
         road = project.get("roadmap") or {}
         all_items = [item for group in road.get("steps", []) for item in group["items"]]
         by_id = {i.get("id") or roadmap_mod.item_id(i["text"]): i for i in all_items}

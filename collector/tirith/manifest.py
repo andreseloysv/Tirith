@@ -360,6 +360,8 @@ def _coverage_problems(manifest: Manifest, need_deploy: bool = True) -> list[Pro
     needed = ("build", "test", "deploy") if need_deploy else ("build", "test")
     best: set[str] = set()
     for pipe in manifest.pipelines:
+        if not pipe.gating:
+            continue  # an include file's pipeline never runs for a merge: it cannot cover build or test
         kinds = {stage_kind(s) for s in pipe.stages}
         if len(kinds & set(needed)) > len(best):
             best = kinds & set(needed)

@@ -353,13 +353,23 @@ def _biggest(count: int = 3) -> list[tuple[str, int]]:
     return sorted(sizes, key=lambda x: -x[1])[:count]
 
 
+_sweeps: dict[str, dict] = {}  # home -> {"thread", "result"} of the background sweep
+
+
 def free_space(home: Path, config: Config, state: dict, now: datetime, *,
                free: Callable[[Path], int] | None = None, busy: Callable[[], list[Path]] | None = None,
                running: Callable[[], bool] | None = None,
-               biggest: Callable[[], list[tuple[str, int]]] | None = None) -> bool:
+               biggest: Callable[[], list[tuple[str, int]]] | None = None,
+               background: bool = False, wait: bool = False) -> bool:
     """Below the limit plus ``HEADROOM_GB`` clean by itself: merged lane folders, then the build cache; one calm chat line says what was freed. Nothing left to clean: one information line with
     the biggest folders outside Tirith (never a question). True when it said something."""
     free = free or free_bytes
+    entry = _sweeps.setdefault(str(home), {})
+    if background:
+        if _harvest(home, state, now, biggest):  # the sweep of an earlier pass finished: say what it freed
+            return True
+        if entry.get("thread") is not None and entry["thread"].is_alive():
+            return False  # still deleting; this pass goes on with the chat and the state
     try:
         before = min(free(folder) for folder in lanes_volumes(home, config))
     except OSError:
@@ -369,8 +379,35 @@ def free_space(home: Path, config: Config, state: dict, now: datetime, *,
         return False
     if not any(proj.repo for proj in config.projects):
         return False  # no project, no lanes folder: nothing of Tirith's to clean or to report
-    swept = sweep(home, config, now, busy)
-    cache = clear_build_cache(home, config, running)
+    if not background:
+        return _report(home, state, now, before, sweep(home, config, now, busy),
+                       clear_build_cache(home, config, running), biggest)
+
+    def work() -> None:
+        try:
+            swept, cache = sweep(home, config, now, busy), clear_build_cache(home, config, running)
+            entry["result"] = (before, swept, cache)
+        except Exception as exc:  # a background pass never takes the collector down
+            append_log(home, f"Freeing disk failed: {exc}")
+
+    entry["thread"] = threading.Thread(target=work, name="tirith-disk-sweep", daemon=True)
+    entry["thread"].start()
+    if wait:
+        entry["thread"].join()
+        return _harvest(home, state, now, biggest)
+    return False
+
+
+def _harvest(home: Path, state: dict, now: datetime, biggest=None) -> bool:
+    """Say what a finished background sweep freed (on the caller's thread, which owns ``state``)."""
+    entry = _sweeps.get(str(home))
+    if not entry or "result" not in entry:
+        return False
+    before, swept, cache = entry.pop("result")
+    return _report(home, state, now, before, swept, cache, biggest)
+
+
+def _report(home: Path, state: dict, now: datetime, before: int, swept: dict, cache: int, biggest=None) -> bool:
     total = swept["bytes"] + cache
     parts = []
     if swept["worktrees"]:
