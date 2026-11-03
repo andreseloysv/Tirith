@@ -53,3 +53,8 @@ only show when no session is selected.
 `index.html`, `css/style.css`, `js/util.js` (time formatting, icons, helpers), `js/ui.js` (shell, shared
 components, Overview, merged messages), `js/v-pipelines.js`, `js/v-agents.js`, `js/main.js`
 (loader, hash, filters, status). `screenshots/` holds headless captures (Edge, 1600x900 and 1920x1080).
+
+## Browser tests and captures
+
+`web/js/*.test.mjs` never write into versioned files. Captures go to a temporary folder by default (see `web/js/shots.mjs`).
+To refresh the versioned ones in `web/screenshots/` on purpose: `UPDATE_SCREENSHOTS=1 node web/js/<name>.test.mjs`.

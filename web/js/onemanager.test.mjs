@@ -1,7 +1,7 @@
 /* Run with: node web/js/onemanager.test.mjs  (needs playwright-core and bundled headless Chromium; no servers).
    The one persistent manager in the chat, CLI style: the turn under the owner's message is a live block (task list,
    coloured diff, text as it is typed, the lane it started nested), a second message typed meanwhile is "Queued",
-   Esc / Stop interrupt, Up recalls the last message. Writes web/screenshots/one-manager.png. */
+   Esc / Stop interrupt, Up recalls the last message. Saves one-manager.png to a temp folder (UPDATE_SCREENSHOTS=1 refreshes the versioned one). */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -10,6 +10,7 @@ import vm from 'node:vm';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { chromium } from './pw.mjs';
+import { shotPath } from './shots.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const holder = { window: {} };
@@ -137,7 +138,7 @@ try {
   if (await open.locator('.ls-dl').count() === 30) await open.locator('.ls-more').click();   /* collapsed again for the picture */
   await page.waitForFunction(() => document.querySelectorAll('#mc-log .livesteps.run .ls-diff')[1].querySelectorAll('.ls-dl').length === 20, null, { timeout: 3000 });
   await page.evaluate(() => { document.getElementById('mc-log').scrollTop = 0; });
-  await page.screenshot({ path: path.join(here, '..', 'screenshots', 'one-manager.png') });
+  await page.screenshot({ path: shotPath('one-manager.png') });
 
   assert.deepEqual(errors, [], 'no page errors');
   console.log('ok  the one manager in the chat: live turn, task list, diffs, nested lane, queued, Stop, Esc, Up');

@@ -12,6 +12,7 @@ import vm from 'node:vm';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { chromium } from './pw.mjs';
+import { shotPath } from './shots.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const page_url = pathToFileURL(path.join(here, '..', 'index.html')).href;
@@ -159,7 +160,7 @@ try {
   assert.equal(geo.inside, true, 'the x sits inside the thumbnail');
   assert.ok(geo.w <= 20, 'the x is small');
   assert.ok(await page.evaluate(() => window.__calls.some(c => c.cmd === 'app_log' && /drop 2 file/.test(c.args.line))), 'the drop is logged');
-  await page.screenshot({ path: path.join(here, '..', 'screenshots', 'chat-attach-thumb.png'), clip: await page.locator('.mc-comp').first().boundingBox() });
+  await page.screenshot({ path: shotPath('chat-attach-thumb.png'), clip: await page.locator('.mc-comp').first().boundingBox() });
   ok('a drop pushed by the app adds the thumbnail and chip, the small x is inside the corner, and it is logged');
   assert.deepEqual(errors, [], 'no page errors');
   await ctx.close();

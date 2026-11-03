@@ -9,6 +9,7 @@ import vm from 'node:vm';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { chromium } from './pw.mjs';
+import { shotPath } from './shots.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const holder = { window: {} };
@@ -84,7 +85,7 @@ try {
   await page.waitForTimeout(1300);
   const t1 = await page.locator('#mc-log .livesteps .ls-line .tick').innerText();
   assert.notEqual(t0, t1, 'the timer ticks (' + t0 + ' -> ' + t1 + ')');
-  await page.screenshot({ path: path.join(here, '..', 'screenshots', 'chat-live-working.png') });
+  await page.screenshot({ path: shotPath('chat-live-working.png') });
 
   /* the turn ends: the file and the state change, the next poll collapses it */
   writeSteps(MORE);
@@ -100,7 +101,7 @@ try {
   await done.locator('.ls-sum').click();
   await page.waitForFunction(() => document.querySelectorAll('#mc-log .livesteps.done .ls-list li').length === 12, null, { timeout: 5000 });
   assert.match(await page.locator('#mc-log .livesteps.done .ls-sum').innerText(), /hide$/);
-  await page.screenshot({ path: path.join(here, '..', 'screenshots', 'chat-live.png') });
+  await page.screenshot({ path: shotPath('chat-live.png') });
   await page.locator('#mc-log .livesteps.done .ls-sum').click();
   await page.waitForFunction(() => !document.querySelector('#mc-log .livesteps.done .ls-list'), null, { timeout: 3000 });
   assert.deepEqual(errors, [], 'no page errors');
