@@ -379,3 +379,34 @@ def test_load_scaled_agent_bash_timeout_under_load(home: Path, monkeypatch) -> N
     monkeypatch.setattr(loadlimit, "load_average", lambda: 8.0)
     out = timeouts_mod.bash_update(home, config, {"command": "ls"})
     assert out["timeout"] == int(timeouts_mod.effective(home, config, "agent-bash") * 2 * 1000)
+
+
+# -- a timeout stops the whole tree and cleans the locks --------------------------------------
+
+
+def test_timeout_kills_tree_including_children_that_left_the_group(home: Path, tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(timeouts_mod, "KILL_GRACE_S", 0.5)
+    near, far = tmp_path / "near.pid", tmp_path / "far.pid"
+    # `far` starts its own session (so its own process group) under a grandchild that ignores SIGTERM
+    script = (f"sh -c 'trap \"\" TERM; echo $$ > {near}; "
+              f"python3 -c \"import os,time; os.setsid(); open(\\\"{far}\\\",\\\"w\\\").write(str(os.getpid())); "
+              f"time.sleep(60)\"' & wait")
+    done = timeouts_mod.run(["/bin/sh", "-c", script], "generic", timeout=2)
+    assert done.timed_out and done.returncode == timeouts_mod.EXIT_TIMED_OUT
+    time.sleep(0.5)
+    assert not alive(int(near.read_text())) and not alive(int(far.read_text()))
+
+
+def test_timeout_kills_tree_of_a_supervised_process_and_removes_its_lock(home: Path, tmp_path: Path) -> None:
+    import subprocess
+    repo = make_repo(tmp_path / "repo")
+    pidfile = tmp_path / "child.pid"
+    argv = ["/bin/sh", "-c", f"touch .git/index.lock; sleep 60 & echo $! > {pidfile}; wait"]
+    proc = subprocess.Popen(argv, cwd=repo, start_new_session=True)
+    done = timeouts_mod.supervise(proc, "git-commit", timeout=1, argv=argv, cwd=repo)
+    proc.wait(timeout=15)
+    info = done()
+    assert info["timed_out"]
+    time.sleep(0.3)
+    assert not alive(int(pidfile.read_text()))
+    assert not (repo / ".git" / "index.lock").exists()

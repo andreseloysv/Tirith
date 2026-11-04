@@ -93,7 +93,8 @@ review, merge, plan writer, plan gate, launch, actions, the doctor). It returns 
 `stdout`, `stderr`, `timed_out`, `seconds`, `error`:
 
 * the command starts in its own process group;
-* at the deadline the whole group gets SIGTERM, and SIGKILL after 3 s if anything is left;
+* at the deadline the whole group, and every descendant found with `ps` (also one that started its own session),
+  gets SIGTERM, and SIGKILL after 3 s if anything is left (`timeouts.kill_group`, also used by `supervise`);
 * the class cleanup runs: for `git` and `git-commit`, the `index.lock` of the repository (also of a linked
   worktree) is removed **only if** it was created since the command started and no process has it open (`lsof`);
 * the duration (or the timeout) is recorded;
