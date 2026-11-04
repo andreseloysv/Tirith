@@ -205,9 +205,14 @@ touches; `--full`, a review that merges and the merge queue (outside a lane) run
 `<home>/selections.jsonl` (`mode`: `map`, `changed` or `full`).
 
 - **Python, with an execution map** (`mode: map`): when `<home>/testmon/<project>/.testmondata` exists and every
-  changed `collector` file is a `.py` file, the lane runs `pytest -p no:xdist --testmon` (pytest-testmon, a dev
-  dependency): only the tests whose recorded code changed, also through side effects the file names do not show.
-  It runs without xdist (a selected run under xdist runs no tests). The map is copied to
+  changed `collector` file is a `.py` file, the lane runs `(cd collector && tirith testmap run)` with the `tirith`
+  of the main checkout (pytest-testmon, a dev dependency): only the tests whose recorded code changed, also through
+  side effects the file names do not show. It first asks testmon what it picks (`pytest -p no:xdist --testmon
+  --collect-only`, a few seconds): nothing picked passes; up to 20 tests run in one process with testmon
+  (`pytest -p no:xdist --testmon`; a selected run under xdist runs no tests); more run in parallel by node id
+  (`pytest -n auto --maxprocesses 8 -p no:testmon @<list>`), because a map some merges old picks half the suite
+  and one process ran 888 tests in 10.6 min where xdist runs 939 in 2.8 min. `VIRTUAL_ENV` is dropped, so pytest
+  runs in the lane's venv. The map is copied to
   `<worktree>/collector/.testmondata` before the first selected run; the lane keeps and updates its own copy
   (`.testmondata*` is gitignored). Any other change (data files, `pyproject.toml`) falls back to the next rule.
 - **Python, without a map** (`mode: changed`): by names (`tirith/x.py` -> `tests/test_x*.py`), changed test files and

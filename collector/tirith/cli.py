@@ -1966,6 +1966,10 @@ def _cmd_testmap_build(args) -> int:
     return 0 if ok else 1
 
 
+def _cmd_testmap_run(args) -> int:
+    return testmap_mod.run_selected(Path(args.folder or ".").resolve())
+
+
 def _cmd_merge_status(args) -> int:
     home = _home(args)
     shown = mergeq_mod.view(home, args.project)
@@ -2987,6 +2991,10 @@ def build_parser() -> argparse.ArgumentParser:
     t_build.add_argument("--repo", default=None, help="default: the project's folder")
     t_build.add_argument("--base", default="main", help="the branch to build from")
     t_build.set_defaults(func=_cmd_testmap_build)
+    t_run = testmap_sub.add_parser("run", parents=[common], help="run the tests the map picks for the change here "
+                                   "(a few with testmon, more in parallel)")
+    t_run.add_argument("--folder", default=None, help="the collector folder (default: the cwd)")
+    t_run.set_defaults(func=_cmd_testmap_run)
 
     inbox = sub.add_parser("inbox", parents=[common], help="the owner's requests on plan steps")
     inbox_sub = inbox.add_subparsers(dest="inbox_command", required=True)
