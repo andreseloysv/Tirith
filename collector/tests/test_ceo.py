@@ -217,3 +217,11 @@ def test_one_ceo_pass_at_a_time(home: Path, started: list) -> None:
         assert mine
         assert not ceo.run(home, load_config(home), local(14, 1), force=True)
     assert len(started) == 0
+
+
+def test_a_directive_id_used_before_does_not_overwrite_the_earlier_one(home: Path) -> None:
+    ceo.deliver(home, RESULT, "ceo-aaaa", "tirith", local(9), add_wait=Waits())
+    ceo.deliver(home, {**RESULT, "directives": [{"id": "d-1", "text": "Another", "why": "w"}]}, "ceo-bbbb", "tirith",
+                local(14), add_wait=Waits())
+    assert ceo.directives(home)["d-1"]["text"] == "Give every wait a deadline"
+    assert ceo.directives(home)["d-1-bbbb"]["text"] == "Another"
