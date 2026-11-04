@@ -394,6 +394,12 @@ def run(home: Path, config: Config, now: datetime, *, agents: list[dict], lanes:
     if autopilot_mod.run(home, config, now, state, agents=agents, projects=projects or [], launcher=launcher,
                          launch=room):
         changed = True
+    try:  # the CEO: settle its review, record the answers, start one when due ([ceo] enabled)
+        from tirith import ceo as ceo_mod
+        if ceo_mod.run(home, config, now):
+            changed = True
+    except Exception as err:  # the CEO must never stop the dispatcher
+        print(f"tirith: ceo: {type(err).__name__}: {err}", file=sys.stderr)
     # what the owner gate found an agent can do becomes a verification lane, never an owner item
     if verifylane_mod.run(home, config, verify_launcher or _default_verify_launcher, room=room):
         changed = True
