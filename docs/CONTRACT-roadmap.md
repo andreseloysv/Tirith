@@ -185,7 +185,14 @@ max_parallel = 4     # kept for old configs; nothing is launched by the autopilo
   asked again after 2 h (`ANSWER_EXPIRES_S`), quoting the earlier answer ("Asked again: you answered at … and
   nobody is on these items since: "…""), so a "wait" never parks a step forever. A proposal closed without an
   answer is no decision: it is asked again 2 h after it was asked ("Asked again: it was asked at … and closed
-  without an answer"). What blocks a launch for a
+  without an answer"). A wait is asked again sooner, 10 min after the answer at the earliest
+  (`ANSWER_EARLY_S`), once what it waited for happened: a lane it names (by id or by its number, "-28") ended or
+  its review ended (merged, failed, sent back), or it waited for a slot ("slot", "busy", "limit", "4/4") and any
+  lane ended ("Asked again: you answered at …: "…"; since then lane X ended at …"). Only what happened after the
+  answer counts; a wait for anything else (the owner, a key) stands until it expires. Every proposal ends with the
+  slots in use as it is written ("Now: 1 of 4 agent slots in use (lane-id)"; the manager's lane takes none), so
+  the manager answers on the facts of now, not on what its conversation remembers; that line is no fact of the
+  step (its fingerprint is taken without it). What blocks a launch for a
   known reason (load, a failing project check, an owner stop) is held by code instead and never reaches the
   manager.
 - **The switch** is the Plan's Pause / Resume (inbox request `autopilot`). Off means no proposals; opening
