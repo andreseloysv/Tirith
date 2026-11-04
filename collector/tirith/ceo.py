@@ -299,6 +299,8 @@ def deliver(home: Path, data: dict, lane_id: str, project: str, now: datetime,
         if len(open_now) + len(sent) >= MAX_DIRECTIVES:
             break
         did = str(d.get("id") or "d-" + uuid.uuid4().hex[:6])
+        if did in directives(home):  # an id an earlier review used: keep both
+            did = f"{did}-{lane_id.removeprefix(LANE_PREFIX)}"
         text = (f"CEO directive {did}: {d['text']}\nWhy: {d['why']}" + (f"\nExpected: {d['expect']}" if d.get("expect") else "")
                 + (f"\nChecked by: {d['check']}" if d.get("check") else "")
                 + "\nAnswer it: done (what you changed), cannot (why) or disagree (why).")
