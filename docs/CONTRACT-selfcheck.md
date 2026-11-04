@@ -18,6 +18,14 @@ so a restart it asks for happens in the same pass). State: `dispatch.json` under
 "Unrelated": the failing test files named in the review output (`test_x.py`, `x.test.mjs`) are neither in the
 lane's diff nor the test of a module it changed. A failure that names no test file is never called unrelated.
 
+When the unrelated failure is still there after its one rerun, code looks at the other lanes' reviews. When one of
+them fails in the same test files too, main (or the machine) is the cause and the manager gets the queue item
+("look at main"). When none does, the lane's own change is the likely cause, through a side effect the file names do
+not show (shared state, a new step that runs on every pass, a real command run from the tests): the lane goes back
+to its agent once with the failing output (the same relaunch as a failed claim check), the check stays `healing`,
+and the manager says "The tests of lane X fail only in that lane (…): I sent it back to its agent to find the side
+effect." If the next review fails the same way, the manager gets the queue item.
+
 ## Remedies
 
 At most 3 tries per episode (1 for unrelated test failures), never twice within 90 s. When the tries are used up
