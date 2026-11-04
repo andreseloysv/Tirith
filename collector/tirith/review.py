@@ -138,6 +138,10 @@ def _tail(text: str) -> str:
 
 def _set(home: Path, lane: dict, status: str, message: str | None = None, **extra) -> dict:
     lane["review"] = {"status": status, "at": now_iso(), "pid": os.getpid(), **extra}
+    try:  # the review runs in its own process group (spawned detached): saved so it can be found again
+        lane["review"]["pgid"] = os.getpgid(0)
+    except (AttributeError, OSError):
+        pass
     if message:
         lane["review"]["message"] = message
     write_lane(home, lane)
