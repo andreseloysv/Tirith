@@ -189,8 +189,8 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] La cola de merge usa la rama real de cada lane, la de su worktree. (check: `cd collector && uv run -q pytest -q tests -k mergeq`) (hecho: 9fea4fd)
 - [ ] Cada fallo de la cola de merge vuelve con su motivo al lane o al manager. (check: `cd collector && uv run -q pytest -q tests -k mergeq`) (en revisión) <!-- tirith:{"id":"i-ca536736"} -->
 - [x] i-3a1bd406 (hecho: e95c9f2)
-- [ ] Tirith guarda una copia del brief de cada lane en su carpeta, así un lane cortado se puede retomar tras un reinicio. (check: `cd collector && uv run -q pytest -q tests -k brief`) (en revisión) <!-- tirith:{"id":"i-a6a4050c"} -->
-  - [ ] Revisar: Tirith guarda una copia del brief de cada lane en su carpeta, así un lane cortado se puede retomar tras un reinicio. (check: `cd collector && uv run -q pytest -q tests -k brief`) (en curso: revisión de reglas-de-c-digo-errores-de-comp-4)
+- [x] Tirith guarda una copia del brief de cada lane en su carpeta, así un lane cortado se puede retomar tras un reinicio. (check: `cd collector && uv run -q pytest -q tests -k brief`) <!-- tirith:{"id":"i-a6a4050c"} -->
+  - [x] Revisar: Tirith guarda una copia del brief de cada lane en su carpeta, así un lane cortado se puede retomar tras un reinicio. (check: `cd collector && uv run -q pytest -q tests -k brief`)
 - [x] Ninguna petición de permiso del manager llega al dueño: el código la permite o la bloquea según las reglas. (check: `cd collector && uv run -q pytest -q tests -k msession`)
   - [x] Revisar: Ninguna petición de permiso del manager llega al dueño: el código la permite o la bloquea según las reglas. (check: `cd collector && uv run -q pytest -q tests -k msession`) — falló: the merge did not go through: the review was interrupted; run it again
 - [x] Cada hora un lane de prueba recorre todo el camino en un repo de prueba, del plan al push, y la salud se pone roja si no llega. (check: `cd collector && uv run -q pytest -q tests -k canary`) (hecho: b69b549)
