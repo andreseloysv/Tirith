@@ -53,7 +53,7 @@
     var cost = turns.reduce(function (s, t) { return s + ((t.live && t.live.cost_usd) || 0); }, 0);
     var ctx = m.presence && m.presence.session && m.presence.session.context_tokens;
     var made = decisions(state).map(function (d) {
-      return '<li><span class="mut">' + esc(T.clockTime(d.at)) + ' · ' + esc(label(d.req)) + '</span> ' + T.mdInline(clip(d.text, TEXT)) + '</li>';
+      return '<li><span class="mut">' + esc(T.clockTime(d.at)) + ' · ' + esc(label(d.req)) + '</span> ' + T.mdInline(T.boldLead ? T.boldLead(clip(d.text, TEXT)) : clip(d.text, TEXT)) + '</li>';
     });
     return '<div class="card acard lead">' + head(a, 'Manager', 'Manager') +
       (ran ? '<span class="mut">' + esc(ran) + '</span>' : '') + now +
@@ -75,9 +75,9 @@
       (c.last_result === 'failed' && c.last_error ? '<span class="mut">Its last review gave no usable result: ' + esc(clip(c.last_error, TEXT)) + '</span>' : '');
     var report = (c.report || []).map(function (l) { return '<li>' + T.mdInline(clip(l, TEXT)) + '</li>'; });
     var dirs = (c.directives || []).map(function (d) {
-      return '<li><span class="mut">' + esc(d.status || 'open') + '</span> ' + T.mdInline(clip(d.text, TEXT)) + '</li>';
+      return '<li><span class="mut">' + esc(d.status || 'open') + '</span> ' + T.mdInline(T.boldLead ? T.boldLead(clip(d.text, TEXT)) : clip(d.text, TEXT)) + '</li>';
     });
-    var asks = (c.proposals || []).filter(function (p) { return !p.decided; }).map(function (p) { return '<li>' + T.mdInline(clip(p.text, TEXT)) + '</li>'; });
+    var asks = (c.proposals || []).filter(function (p) { return !p.decided; }).map(function (p) { return '<li>' + T.mdInline(T.boldLead ? T.boldLead(clip(p.text, TEXT)) : clip(p.text, TEXT)) + '</li>'; });
     return '<div class="card acard lead">' + head(null, 'CEO', 'Supervises the manager') + now +
       (report.length ? '<span class="lead-h">Report</span>' + list(report) : '') +
       (dirs.length ? '<span class="lead-h">Directives to the manager</span>' + list(dirs) : '') +
