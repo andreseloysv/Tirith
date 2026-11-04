@@ -170,7 +170,7 @@ def select(folder: Path, stage: str, files: list[str] | None = None, base: str =
     else:
         sel.tests, sel.reason = _python(folder, py) if py else ([], "no python change")
     sel.web = _web(folder, web)
-    if not (sel.tests or sel.web):
+    if not (sel.tests or sel.web or sel.mapped):
         others = [f for f in code if f not in rust]
         sel.reason = f"no tests map to {others[0]}" if others else "only docs or Rust changed"
     return sel

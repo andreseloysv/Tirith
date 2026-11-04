@@ -190,7 +190,7 @@ def test_the_map_picks_python_tests_only_for_python_changes(tmp_path):
     sel = fasttests.select(root, "test", ["collector/tirith/alpha.py", "web/js/chat.js"], mapped=True)
     assert sel.mapped and sel.tests == [] and sel.web == ["web/js/chat.test.mjs"] and sel.record()["mode"] == "map"
     cmd = fasttests.command(sel)
-    assert "--testmon" in cmd and "-p no:xdist" in cmd and "-n auto" not in cmd and "node web/js/chat.test.mjs" in cmd
+    assert "(cd collector && " in cmd and " testmap run)" in cmd and "node web/js/chat.test.mjs" in cmd
     for other in (["collector/pyproject.toml"], ["collector/tirith/alpha.py", "collector/state.schema.json"]):
         sel = fasttests.select(root, "test", other, mapped=True)
         assert not sel.mapped, other  # testmon does not see data files: names and the import graph
@@ -198,14 +198,52 @@ def test_the_map_picks_python_tests_only_for_python_changes(tmp_path):
     assert not fasttests.select(root, "rust-test", ["collector/tirith/alpha.py"], mapped=True).mapped
 
 
-def test_the_map_command_accepts_nothing_selected(tmp_path):
-    _stub_tools(tmp_path / "bin")
-    (tmp_path / "collector").mkdir()
-    env = {**os.environ, "PATH": f"{tmp_path / 'bin'}:{os.environ['PATH']}"}
-    for exit_code, expected in ((0, 0), (5, 0), (1, 1)):
-        (tmp_path / "bin" / "uv").write_text(f"#!/bin/sh\nexit {exit_code}\n")
-        done = subprocess.run(["/bin/sh", "-c", testmap.command()], cwd=tmp_path, env=env)
-        assert done.returncode == expected
+class _Pytest:
+    """A fake ``subprocess.run`` for :func:`testmap.run_selected`: ``--collect-only`` lists ``ids``, a run exits ``rc``."""
+
+    def __init__(self, ids: list[str], rc: int = 0, listed_rc: int | None = None) -> None:
+        self.ids, self.rc, self.calls, self.args_file = ids, rc, [], None
+        self.listed_rc = listed_rc if listed_rc is not None else (0 if ids else testmap.NO_TESTS)
+
+    def __call__(self, argv, **kw):
+        self.calls.append(argv)
+        assert "VIRTUAL_ENV" not in kw["env"]  # the lane's venv, never the one tirith runs in
+        if "--collect-only" in argv:
+            out = "\n".join(self.ids) + f"\n\n{len(self.ids)}/40 tests collected (3 deselected) in 0.1s\n"
+            return subprocess.CompletedProcess(argv, self.listed_rc, out, "")
+        files = [a[1:] for a in argv if a.startswith("@")]
+        if files:
+            self.args_file = Path(files[0]).read_text().split("\n")
+        return subprocess.CompletedProcess(argv, self.rc, "", "")
+
+
+def test_the_map_run_passes_when_nothing_is_picked(tmp_path, monkeypatch):
+    monkeypatch.setenv("VIRTUAL_ENV", "/somewhere/else/.venv")
+    run = _Pytest([])
+    assert testmap.run_selected(tmp_path, run=run, out=open(os.devnull, "w")) == 0
+    assert len(run.calls) == 1  # listed, nothing to run
+    run = _Pytest([], listed_rc=2)  # pytest could not even collect: that is a failure
+    assert testmap.run_selected(tmp_path, run=run, out=open(os.devnull, "w")) == 2
+
+
+def test_a_few_picked_tests_run_with_testmon_in_one_process(tmp_path):
+    run = _Pytest([f"tests/test_a.py::test_{n}" for n in range(testmap.SERIAL_MAX)], rc=testmap.NO_TESTS)
+    assert testmap.run_selected(tmp_path, run=run, out=open(os.devnull, "w")) == 0
+    assert "--testmon" in run.calls[-1] and "no:xdist" in run.calls[-1] and run.args_file is None
+
+
+def test_many_picked_tests_run_in_parallel_by_node_id(tmp_path):
+    ids = [f"tests/test_a.py::test_x[case {n} \\u2192 b]" for n in range(testmap.SERIAL_MAX + 1)]
+    run = _Pytest(["tests/test_a.py::test_y", *ids], rc=1)
+    assert testmap.run_selected(tmp_path, run=run, out=open(os.devnull, "w")) == 1  # a failing test fails the stage
+    last = run.calls[-1]
+    assert "-n" in last and "no:testmon" in last and "--testmon" not in last
+    assert run.args_file[:-1] == ["tests/test_a.py::test_y", *ids]  # one node id per line, spaces kept
+    assert not Path(next(a[1:] for a in last if a.startswith("@"))).exists()  # the list is removed after the run
+
+
+def test_the_map_command_runs_tirith_testmap_from_collector():
+    assert testmap.command("/x/bin/tirith") == "(cd collector && /x/bin/tirith testmap run)"
 
 
 def test_for_lane_copies_the_map_once_and_records_the_mode(home, tmp_path):

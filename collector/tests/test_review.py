@@ -193,7 +193,7 @@ def test_review_runs_the_selected_tests_not_the_full_suite(launched, home: Path,
     testmap.map_file(home, "demo").write_bytes(b"map")
     assert main(["lane", "review", "web-panel", "--tests-only"]) == 0  # with a map: testmon
     command, full, _ = seen[-1]
-    assert full is False and "--testmon" in command and "-p no:xdist" in command
+    assert full is False and " testmap run" in command
     assert (worktree / "collector" / testmap.MAP).read_bytes() == b"map"  # copied into the worktree
 
 
