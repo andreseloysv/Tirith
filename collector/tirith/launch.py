@@ -20,6 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlsplit
 
+from tirith import codemap as codemap_mod
 from tirith import timeouts as timeouts_mod
 from tirith import manifest as manifest_mod
 from tirith import models as models_mod
@@ -159,7 +160,8 @@ def working_lane(lanes: list[dict], project: str, step_id: str, status_of, item:
     return None
 
 
-def build_brief(title: str, intro: str, open_items: list[str], step_id: str, item: str | None = None) -> str:
+def build_brief(title: str, intro: str, open_items: list[str], step_id: str, item: str | None = None,
+                repo: Path | None = None) -> str:
     out = [f"# Lane: {title}", "", "## Why",
            f"Step {step_id} of the project plan: {title}.", ""]
     if intro:
@@ -167,8 +169,11 @@ def build_brief(title: str, intro: str, open_items: list[str], step_id: str, ite
     if item:
         out += ["## Your item", f"- {item}", "",
                 "Report this item when you finish (see the hard rules); the rest of the step is not yours.", ""]
-    out += ["## What to build", *(f"- {text}" for text in (open_items if not item else [item])), "",
-            "## Hard rules", *(f"- {rule}" for rule in HARD_RULES), "",
+    out += ["## What to build", *(f"- {text}" for text in (open_items if not item else [item])), ""]
+    code_map = codemap_mod.section(repo, item or " ".join(open_items))
+    if code_map:
+        out += code_map.rstrip("\n").split("\n") + [""]
+    out += ["## Hard rules", *(f"- {rule}" for rule in HARD_RULES), "",
             "## Where to read",
             "- `docs/TODO.md` (read only): the plan; do not edit it. Only Tirith writes it.",
             "- `docs/CONTRACT*.md`: the contracts of the parts you touch; update the one you change.",
