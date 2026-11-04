@@ -962,3 +962,26 @@ def test_absorbed_lane_stops(env, home: Path, monkeypatch) -> None:
     assert by_lane["top"]["result"] == "merged" and calls == [("ci", "build"), ("ci", "test")]
     assert (repo / "a.txt").exists() and (repo / "b.txt").exists() and mergeq_mod.view(home)["items"] == []
     assert read_json(lane_path(home, "base"), None)["review"]["status"] == "no-work"
+
+
+def test_a_repeating_wait_tells_the_manager_its_reason_once(env, home: Path) -> None:
+    repo, _ = env
+    make_lane(home, repo, "late2", {"late.txt": "l"})
+    (repo / "README.md").write_text("edited\n", encoding="utf-8")
+    mergeq_mod.enqueue(home, "late2")
+    mergeq_mod.process_next(home, load_config(home), relaunch=Sender())
+    assert not asks_mod.queue_items(home)
+    for _ in range(2):
+        assert mergeq_mod.process_next(home, load_config(home), relaunch=Sender())["result"] == "waiting"
+    items = [i for i in asks_mod.queue_items(home) if "uncommitted changes" in str(i)]
+    assert len(items) == 1 and items[0]["to"] == "manager"
+
+
+def test_a_failed_push_tells_the_manager(env, home: Path, monkeypatch) -> None:
+    repo, _ = env
+    make_lane(home, repo, "pushy", {"p.txt": "p"})
+    mergeq_mod.enqueue(home, "pushy")
+    monkeypatch.setattr(mergeq_mod, "_push", lambda repo, branch: "remote rejected")
+    row = mergeq_mod.process_next(home, load_config(home), relaunch=Sender())
+    assert row["result"] == "push-failed"
+    assert any("push-failed: remote rejected" in str(i) for i in asks_mod.queue_items(home))

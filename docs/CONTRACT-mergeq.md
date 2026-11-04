@@ -89,3 +89,11 @@ into one temporary worktree:
    every lane is ticked, closed and gets its own history row (`train` lists the lanes that landed together).
 4. Red: the same lanes are redone one at a time with the normal single-lane flow, so only the culprit is
    rejected (sent back); the others land on their own.
+
+## Every failure comes back with its reason
+
+- conflict / red stage / failed commit → the same agent (send back), the manager's queue when that cannot happen.
+- `waiting` (dirty main, branch not found, no temp worktree, no stage...): the entry stays queued; on the 2nd
+  consecutive `waiting` (`WAIT_NOTICE`) the manager's queue gets one item with the reason.
+- `push-failed` (main merged, origin not): a manager item at once, with the reason and the command to push.
+- out of time: manager item on the 2nd time (as before). A lane or project that is gone: flow alert to the manager.
