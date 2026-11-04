@@ -198,3 +198,22 @@ def test_the_ceo_cannot_write_into_the_project(tmp_path: Path, monkeypatch) -> N
     target = tmp_path / "proj" / "a.txt"
     assert "workspace-write" in _ceo_rules(tmp_path, "Bash", tmpdir="/nonexistent-tmp", command=f"echo x > {target}")
     assert lanegates.ceo_read_only("Read", {"file_path": "x"}, None, {}) == []
+
+
+def test_a_review_started_moments_ago_blocks_a_second_one(home: Path, started: list) -> None:
+    """`tirith ceo run` and the collector's pass once started two reviews in the same second."""
+    enable(home)
+    config = load_config(home)
+    assert ceo.run(home, config, local(14, 49), force=True) and len(started) == 1
+    assert not ceo.run(home, config, local(14, 49))  # its lane file is not there yet: it counts as running
+    assert not ceo.run(home, config, local(14, 50), force=True)
+    assert len(started) == 1
+    assert ceo.run(home, config, local(15, 5), force=True) and len(started) == 2  # after STARTING_S
+
+
+def test_one_ceo_pass_at_a_time(home: Path, started: list) -> None:
+    enable(home)
+    with ceo._pass_lock(home) as mine:
+        assert mine
+        assert not ceo.run(home, load_config(home), local(14, 1), force=True)
+    assert len(started) == 0
