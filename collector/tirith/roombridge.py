@@ -24,11 +24,8 @@ import re
 import secrets
 import socket
 import threading
-<<<<<<< HEAD
 from contextlib import contextmanager
-=======
 import types
->>>>>>> main
 from pathlib import Path
 from urllib.parse import quote
 
