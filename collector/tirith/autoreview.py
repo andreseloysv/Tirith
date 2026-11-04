@@ -331,8 +331,12 @@ def _settled(rec: dict | None, seen: dict) -> bool:
 
 
 def run(home: Path, config: Config, now: datetime, state: dict, lanes: list[dict], *,
-        spawn: Callable | None = None, notify: Callable[[str, str], None] | None = None) -> bool:
-    """One pass over the finished lanes; returns True when ``state`` changed."""
+        spawn: Callable | None = None, notify: Callable[[str, str], None] | None = None,
+        persist: Callable[[], None] | None = None) -> bool:
+    """One pass over the finished lanes (``autoreview.run``); returns True when ``state`` changed.
+
+    ``persist`` saves ``state`` right after a review is spawned, so a collector reload that cuts the pass there
+    never starts the same review twice."""
     spawn = spawn or launch_mod.spawn_detached
     changed = False
     book = state.setdefault("reviews", {})
@@ -382,6 +386,8 @@ def run(home: Path, config: Config, now: datetime, state: dict, lanes: list[dict
                 spawn(argv, home, home / "logs" / f"{lane_id}.review.log")
                 book[lane_id] = {"started": now_iso(now), "queue": item["id"]}
                 changed = True
+                if persist is not None:  # a reload may cut this pass here: the review is running, never start it twice
+                    persist()
                 continue
         elif review.get("status") in TERMINAL and rec.get("settled") != _result_key(review):
             settle(home, config, lane, review, rec, now, repo)

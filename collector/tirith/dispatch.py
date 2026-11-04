@@ -434,7 +434,8 @@ def run(home: Path, config: Config, now: datetime, *, agents: list[dict], lanes:
             changed = True
     if mergeq_mod.run(home, config, lanes, spawn=spawn):
         changed = True
-    if autoreview_mod.run(home, config, now, state, lanes, spawn=spawn, notify=notify):
+    if autoreview_mod.run(home, config, now, state, lanes, spawn=spawn, notify=notify,
+                          persist=lambda: save_state(home, state)):
         changed = True
     if spawn is not None and canary_mod.tick(home, now, spawn):  # the hourly end-to-end test lane
         changed = True
