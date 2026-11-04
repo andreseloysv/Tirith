@@ -5,7 +5,10 @@ is enqueued (`tirith merge request`, or by the dispatcher). Tirith merges (`coll
 `<home>/mergeq.json`) one pass at a time; a pass is one lane, or a train of several (see "Fast paths" below):
 
 1. In a temporary worktree cut from main it merges `lane/<id>`.
-2. It runs every build and test stage of the manifest there (recorded pipeline runs).
+2. It runs every build and test stage of the manifest there (recorded pipeline runs): the full suite, once per
+   pass (a train is one pass). The Python test stage holds the machine's one full-suite lock, so two full suites
+   never run at once (`docs/CONTRACT-launch.md`, "Test selection"); a lane's tests-only review only ran what its change reaches.
+   After a landing it starts `tirith testmap build` in the background when the execution map is missing or old.
 3. Under the plan writer lock (stale `index.lock` recovery) it fast-forwards the main checkout to exactly the
    tested commit. If main moved meanwhile only by commits that touch the plan file(s) (the manifest `roadmap`
    and `plans`; Tirith commits every plan change there, so main moves every few minutes), it merges the new main

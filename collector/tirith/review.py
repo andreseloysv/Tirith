@@ -7,13 +7,16 @@ branch into the branch checked out in the repo and removes the worktree. See ``d
 
 from __future__ import annotations
 
+import contextlib
 import os
 import re
 import subprocess
 from pathlib import Path
 
 from tirith import timeouts as timeouts_mod
+from tirith import ceo as ceo_mod
 from tirith import claimcheck as claimcheck_mod
+from tirith import fasttests as fasttests_mod
 from tirith import manifest as manifest_mod
 from tirith import plangate as plangate_mod
 from tirith import runstage as runstage_mod
@@ -155,16 +158,22 @@ def tests_passed(output: str) -> int | None:
 
 
 def run_tests(home: Path, project: str, pipeline: str, stage: str, workspace: Path, command: str,
-              lane_id: str | None = None, run_id: str | None = None) -> tuple[bool, str]:
-    """Run the test stage as a recorded pipeline run (same path as ``tirith run``), tagged with the lane."""
+              lane_id: str | None = None, run_id: str | None = None, full: bool = True) -> tuple[bool, str]:
+    """Run the test stage as a recorded pipeline run (same path as ``tirith run``), tagged with the lane.
+
+    ``full``: the command is a whole suite, so it also holds the machine's one full-suite lock. A CEO lane never
+    runs a test suite."""
+    if str(lane_id or "").startswith(ceo_mod.LANE_PREFIX):
+        return True, "a CEO lane never runs a test suite"
     env = {k: v for k, v in os.environ.items() if k != "TIRITH_LANE"}
     limit = timeouts_mod.effective(home, None, f"stage:{stage}")  # run_stage applies the same cap
     tags = runstage_mod.lane_tags(home, workspace)
     from tirith import loadlimit as loadlimit_mod
     from tirith.home import load_config
     allowed, _why = loadlimit_mod.current(load_config(home), home)
-    # a full suite per review: never more at once than the load allows (they all slowed down to a halt together)
-    with loadlimit_mod.slot(home, allowed, wait=SLOT_WAIT_S):
+    # never more stage runs at once than the load allows, and one full suite at a time (they all slowed down together)
+    with loadlimit_mod.full_suite(home) if full else contextlib.nullcontext(), \
+            loadlimit_mod.slot(home, allowed, wait=SLOT_WAIT_S):
         code, output = runstage_mod.run_stage(
             home, project, pipeline, stage, command, workspace, lane=lane_id or tags.get("lane"),
             worktree=tags.get("worktree") or str(workspace), branch=tags.get("branch"),
@@ -209,7 +218,13 @@ def review_lane(home: Path, lane_id: str, repo: Path | None, merge: bool = True)
     project = str(lane.get("project") or "")
     run_id = runstage_mod.resolve_run(home, project, pipeline, None, True)  # known while the tests run
     _set(home, lane, RUNNING, run=run_id)
-    ok, output = run_tests(home, project, pipeline, stage.name, workspace, stage.run, lane_id, run_id)
+    command, full = stage.run, True
+    # a review that merges runs the full suite (the selection misses code run in other processes: hooks, a
+    # `tirith` started from a test); a tests-only review runs what the change reaches
+    if not merge and stage.name == "test" and fasttests_mod.supported(workspace):
+        selected = fasttests_mod.command(fasttests_mod.for_lane(home, project, workspace, stage.name))
+        command, full = (selected, False) if selected else (stage.run, True)
+    ok, output = run_tests(home, project, pipeline, stage.name, workspace, command, lane_id, run_id, full)
     if not ok:
         return _set(home, lane, TESTS_FAILED, output or "tests failed", run=run_id)
     passed = tests_passed(output)
