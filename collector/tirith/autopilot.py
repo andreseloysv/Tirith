@@ -53,6 +53,8 @@ REVIEW_BUSY = (*REVIEW_OPEN, "ready", *REVIEW_FAILED)
 INTERRUPTED = "interrupted"  # in the message of a review whose process died (``review.public``)
 HOLD_RECHECK_S = 60.0    # a held step is checked again after this long (the project check reads files)
 OWNER_STOP_HOLD_S = 6 * 3600.0  # a step whose lane the owner stopped is not proposed again for this long
+ANSWER_EXPIRES_S = 2 * 3600.0   # an answered proposal whose items still sit with nobody on them is asked again
+ANSWER_QUOTED = 200             # characters of the earlier answer quoted in the new proposal
 
 
 def _own(state: dict) -> dict:
@@ -390,6 +392,22 @@ def _hold(home: Path, config: Config, project: str, step: str, agents: list[dict
     return None
 
 
+def _clip(text: str, limit: int) -> str:
+    text = " ".join(str(text or "").split())
+    return text if len(text) <= limit else text[:limit - 1] + "…"
+
+
+def _expired_answer(req: dict | None, now: datetime) -> dict | None:
+    """The manager's last answer to the done proposal ``req`` once it is ``ANSWER_EXPIRES_S`` old, else None."""
+    if not req:
+        return None
+    answers = [a for a in req.get("answers", []) if a.get("by") == "manager"]
+    at = parse_iso(answers[-1].get("at")) if answers else None
+    if at is None or (now - at).total_seconds() < ANSWER_EXPIRES_S:
+        return None
+    return answers[-1]
+
+
 def _propose(home: Path, state: dict, projects: list[dict], agents: list[dict], now: datetime,
              config: Config | None = None) -> bool:
     """One open proposal per (project, step) that lists its items nobody works on (after ``DEBOUNCE_S``). When the
@@ -399,9 +417,12 @@ def _propose(home: Path, state: dict, projects: list[dict], agents: list[dict], 
     groups = _step_groups(found)
     present_steps = {k.rsplit("|", 1)[0] for k in present}
     by_step: dict[str, list[dict]] = {}
+    answered: dict[str, dict] = {}
     for req in inbox_mod.requests(home):
         if req["kind"] == inbox_mod.PROPOSAL and req["status"] != "done":
             by_step.setdefault(_key(req["project"], str(req["step"] or "")), []).append(req)
+        elif req["kind"] == inbox_mod.PROPOSAL:
+            answered[req["id"]] = req
     for key in [k for k in own["proposals"] if k.count("|") != 1]:
         del own["proposals"][key]  # one per item, from before: collapsed below
         changed = True
@@ -431,8 +452,11 @@ def _propose(home: Path, state: dict, projects: list[dict], agents: list[dict], 
         text = proposal_text(cands, agents)
         fp = _step_fp(text)
         rec = own["proposals"].get(key)
+        earlier = None
         if rec and rec["fp"] == fp:
-            continue
+            earlier = _expired_answer(answered.get(rec["id"]), now)
+            if earlier is None:
+                continue  # answered (or still open) and not expired: the manager's decision stands
         seen = own["seen"].get(key)
         if not seen or seen["fp"] != fp:
             own["seen"][key] = {"fp": fp, "at": at}
@@ -458,6 +482,9 @@ def _propose(home: Path, state: dict, projects: list[dict], agents: list[dict], 
         for req in by_step.get(key, []):
             if _open_request(req) and rec and req["id"] == rec["id"]:
                 _close(home, req, cands[0]["project"], cands[0]["step"], "its facts changed; replaced by a new one", at)
+        if earlier is not None:  # a wait without a deadline would park the step forever: ask again, with the answer
+            text += (f"\nAsked again: you answered at {earlier['at']} and nobody is on these items since: "
+                     f"\"{_clip(earlier['text'], ANSWER_QUOTED)}\"")
         row = inbox_mod.add_request(home, inbox_mod.PROPOSAL, cands[0]["project"], cands[0]["step"],
                                     text, at=at, sender="tirith")
         own["proposals"][key] = {"id": row["id"], "fp": fp, "at": at}
