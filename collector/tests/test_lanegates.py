@@ -24,9 +24,9 @@ def lane(tmp_path: Path) -> Path:
     return work
 
 
-def _rules(lane: Path, tool: str, **inputs) -> list[str]:
+def _rules(lane: Path, tool: str, tmpdir: str = "/tmp", **inputs) -> list[str]:
     cfg = Config(projects=[ProjectConfig(id="proj", name="proj", repo=lane.parent.parent / "proj")])
-    found = gates.check_call(cfg, tool, inputs, str(lane), "proj", lane="perms", env={"TMPDIR": "/tmp", "HOME": HOME})
+    found = gates.check_call(cfg, tool, inputs, str(lane), "proj", lane="perms", env={"TMPDIR": tmpdir, "HOME": HOME})
     return [v.rule for v in found]
 
 
@@ -91,11 +91,15 @@ def test_git_c_integration_into_the_main_checkout_is_allowed(lane: Path, monkeyp
     monkeypatch.setattr(lanegates, "TEMP_ROOTS", ())  # the test folders live in the temp area
     monkeypatch.setattr(lanegates.tempfile, "gettempdir", lambda: "/nonexistent-tmp")
     main = str(lane.parent.parent / "proj")
-    assert "workspace-write" not in _bash(lane, f"git -C {main} merge --no-ff lane/perms")
-    assert "workspace-write" not in _bash(lane, f"git -C {main} push origin main")
-    assert "workspace-write" not in _bash(lane, f"git -C {main} status")
-    assert "workspace-write" in _bash(lane, f"git -C {main} reset --hard")
-    assert "workspace-write" in _bash(lane, "git -C /elsewhere merge x")
+
+    def bash(command: str) -> list[str]:  # TMPDIR too: on Linux the test folders are under /tmp
+        return _rules(lane, "Bash", tmpdir="/nonexistent-tmp", command=command)
+
+    assert "workspace-write" not in bash(f"git -C {main} merge --no-ff lane/perms")
+    assert "workspace-write" not in bash(f"git -C {main} push origin main")
+    assert "workspace-write" not in bash(f"git -C {main} status")
+    assert "workspace-write" in bash(f"git -C {main} reset --hard")
+    assert "workspace-write" in bash("git -C /elsewhere merge x")
 
 
 @pytest.mark.parametrize("command", [

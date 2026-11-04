@@ -118,3 +118,30 @@ def test_state_shows_the_review(launched, home: Path) -> None:
     state = json.loads((home / "state.json").read_text(encoding="utf-8"))
     agent = next(a for a in state["agents"] if a["id"] == "web-panel")
     assert agent["review"] == {"status": "pending"}
+
+
+def _died_running(home: Path) -> None:
+    """The review's process died mid-run: the lane file still says running, with a pid that is gone."""
+    lane = read_json(lane_path(home, "web-panel"), None)
+    lane["review"] = {"status": "running", "at": "2026-10-31T08:20:44Z", "pid": 2 ** 22 + 12345, "run": "ci#1"}
+    from tirith.store import write_lane
+    write_lane(home, lane)
+
+
+def test_a_dead_review_whose_worktree_is_gone_is_settled_not_left_running(launched, home: Path, capsys) -> None:
+    repo, worktree = launched
+    _died_running(home)
+    git(repo, "worktree", "remove", "--force", str(worktree))
+    assert main(["lane", "review", "web-panel"]) == 3
+    assert "is gone" in capsys.readouterr().err
+    review = read_json(lane_path(home, "web-panel"), None)["review"]
+    assert review["status"] == "merge-failed" and "worktree is gone" in review["message"]
+
+
+def test_a_dead_review_of_work_already_on_main_is_settled_merged(launched, home: Path, capsys) -> None:
+    repo, worktree = launched
+    assert main(["lane", "review", "web-panel"]) == 0  # merged; worktree and branch removed
+    _died_running(home)
+    assert main(["lane", "review", "web-panel"]) == 3
+    review = read_json(lane_path(home, "web-panel"), None)["review"]
+    assert review["status"] == "merged" and review["commit"]

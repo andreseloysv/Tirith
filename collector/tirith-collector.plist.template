@@ -19,6 +19,10 @@
   <true/>
   <key>KeepAlive</key>
   <true/>
+  <!-- While the desktop app's collector holds the lock this one exits at once (no login shell, no start-up)
+       and launchd tries again after ThrottleInterval seconds: it takes over within a minute of the app closing. -->
+  <key>ThrottleInterval</key>
+  <integer>60</integer>
   <key>StandardOutPath</key>
   <string>__REPLACE__/collector.log</string>
   <key>StandardErrorPath</key>

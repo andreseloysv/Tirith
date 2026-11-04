@@ -44,3 +44,18 @@ def hold_collector_lock(home: Path):
         handle.write(f"{os.getpid()}\n")
         handle.flush()
         yield
+
+
+def running_pid(home: Path) -> int | None:
+    """The pid of the collector holding the lock, 0 when it holds it without a pid in the file, None when free.
+    Only tries the lock (released at once): a cheap check before the expensive start-up."""
+    path = home / LOCK_NAME
+    if not path.exists():
+        return None
+    with path.open("a+") as handle:
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            return _read_pid(handle) or 0
+        fcntl.flock(handle, fcntl.LOCK_UN)
+    return None
