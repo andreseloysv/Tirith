@@ -362,14 +362,41 @@ def recent_timeouts(home: Path, since_s: float, now=None) -> dict[str, list[dict
 # -- stopping a process with its children -----------------------------------------------------
 
 
+def descendants(pid: int) -> list[int]:
+    """Every live descendant of ``pid`` (children, grandchildren...), also those that left its process group."""
+    try:
+        listing = subprocess.run(["ps", "-A", "-o", "pid=,ppid="], capture_output=True, text=True, timeout=5).stdout
+    except (OSError, subprocess.SubprocessError):
+        return []
+    children: dict[int, list[int]] = {}
+    for line in listing.splitlines():
+        parts = line.split()
+        if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+            children.setdefault(int(parts[1]), []).append(int(parts[0]))
+    found: list[int] = []
+    queue = [pid]
+    while queue:
+        for child in children.get(queue.pop(), []):
+            if child not in found:
+                found.append(child)
+                queue.append(child)
+    return found
+
+
 def kill_group(proc: subprocess.Popen, grace: float = KILL_GRACE_S) -> None:
-    """SIGTERM the process group of ``proc``, SIGKILL it when it is still there after ``grace`` seconds."""
+    """Stop ``proc`` with all its children: SIGTERM the process group and every descendant (also those that
+    started their own session), SIGKILL what is still there after ``grace`` seconds."""
+    tree = descendants(proc.pid) if os.name == "posix" else []
+
     def signal_group(sig) -> None:
         try:
             os.killpg(proc.pid, sig)
         except (OSError, AttributeError):
             with contextlib.suppress(OSError):
                 proc.send_signal(sig)
+        for pid in tree:
+            with contextlib.suppress(OSError):
+                os.kill(pid, sig)
     signal_group(signal.SIGTERM)
     try:
         proc.wait(timeout=grace)
