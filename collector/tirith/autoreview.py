@@ -321,6 +321,11 @@ def _result_key(review: dict) -> str:
     return f"{review.get('status') or ''}@{review.get('at') or ''}" if review.get("at") else ""
 
 
+def is_interrupted(review: dict) -> bool:
+    """A review whose process is gone before it finished (``review.public`` reports it as merge-failed)."""
+    return review.get("status") == review_mod.MERGE_FAILED and "interrupted" in str(review.get("message"))
+
+
 def _settled(rec: dict | None, seen: dict) -> bool:
     """A lane row that is not running, is not waiting on a review and whose result was already answered."""
     review = seen.get("review")
@@ -383,12 +388,23 @@ def run(home: Path, config: Config, now: datetime, state: dict, lanes: list[dict
                 except plangate_mod.PlanGateError:
                     pass
                 argv = [*launch_mod.tirith_argv(home), "lane", "review", lane_id]
-                spawn(argv, home, home / "logs" / f"{lane_id}.review.log")
-                book[lane_id] = {"started": now_iso(now), "queue": item["id"]}
+                pid = spawn(argv, home, home / "logs" / f"{lane_id}.review.log")
+                book[lane_id] = {"started": now_iso(now), "queue": item["id"], "pid": pid}
                 changed = True
                 if persist is not None:  # a reload may cut this pass here: the review is running, never start it twice
                     persist()
                 continue
+        elif (is_interrupted(review) and not rec.get("resumed") and unmerged_work(repo, lane)
+              and Path(str(lane["workspace"])).is_dir()):
+            # the review process died (manager restart, collector reload): resume it once, detached, never settle it
+            argv = [*launch_mod.tirith_argv(home), "lane", "review", lane_id]
+            rec["resumed"] = now_iso(now)
+            rec["pid"] = spawn(argv, home, home / "logs" / f"{lane_id}.review.log")
+            rec.pop("settled", None)
+            changed = True
+            if persist is not None:
+                persist()
+            continue
         elif review.get("status") in TERMINAL and rec.get("settled") != _result_key(review):
             settle(home, config, lane, review, rec, now, repo)
             rec["settled"] = _result_key(review)

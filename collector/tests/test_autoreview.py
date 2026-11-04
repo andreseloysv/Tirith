@@ -352,3 +352,48 @@ def test_review_survives_reload(env, home: Path, monkeypatch: pytest.MonkeyPatch
     cycle(home, second)
     assert len(first.calls) == 1 and not [c for c in second.calls if "review" in c]
     assert "web-panel" in read_json(home / "dispatch.json", {})["reviews"]
+
+
+# -- an interrupted review resumes by itself, once ---------------------------------------------
+
+
+def _interrupt(home: Path) -> None:
+    """The review process died while running (manager restart / collector reload): a dead pid is saved."""
+    lane = read_json(lane_path(home, "web-panel"), None)
+    lane["review"] = {"status": "running", "at": "2026-01-01T00:00:00Z", "pid": 2 ** 22 + 12345}
+    from tirith.store import write_lane
+    write_lane(home, lane)
+
+
+def test_review_interrupted_resumes_once_and_is_never_merge_failed(env, home: Path) -> None:
+    _lane(home, env)
+    first = Spawner(home, env, run=False)
+    cycle(home, first)
+    book = read_json(home / "dispatch.json", {})["reviews"]["web-panel"]
+    assert len(first.calls) == 1 and book["pid"] == 1  # the spawn pid is saved
+    _interrupt(home)
+    second = Spawner(home, env)
+    cycle(home, second)
+    assert len(second.calls) == 1 and second.calls[0][-3:] == ["lane", "review", "web-panel"]
+    assert read_json(home / "dispatch.json", {})["reviews"]["web-panel"]["resumed"]
+    assert read_json(lane_path(home, "web-panel"), None)["review"]["status"] == "merged"
+    assert (env / "feature.txt").is_file()
+
+
+def test_review_interrupted_again_is_settled_not_resumed_twice(env, home: Path) -> None:
+    _lane(home, env)
+    cycle(home, Spawner(home, env, run=False))
+    _interrupt(home)
+    cycle(home, Spawner(home, env, run=False))  # the resume dies as well
+    _interrupt(home)
+    third = Spawner(home, env, run=False)
+    cycle(home, third)
+    assert third.calls == []
+    assert [q for q in asks_mod.queue_items(home, only_open=True) if "did not go through" in q["text"]]
+
+
+def test_review_process_runs_in_its_own_group_and_saves_pid(env, home: Path) -> None:
+    _lane(home, env)
+    review_mod.review_lane(home, "web-panel", env)
+    saved = read_json(lane_path(home, "web-panel"), None)["review"]
+    assert saved["pid"] and saved["pgid"]
