@@ -804,6 +804,7 @@ def mark_done(home: Path, repo: Path, project: str, step: str, item: str, commit
     found = roadmap_mod.find_item(steps, step, clean)
     if found is None:
         raise PlanGateError(f"that item is not an open item of step {step}")
+    clean = roadmap_mod.split_status(found["text"])[0]  # the plan's own text, however the item was named
     command = roadmap_mod.check_of(found["text"])
     if command:  # an item with a done check is done only when it passes
         passed, output = run_check(command, repo)

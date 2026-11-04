@@ -220,3 +220,28 @@ def test_agent_items_skip_tagged() -> None:
     assert rm.agent_items(steps[0], date(2026, 10, 29)) == ["Agent work."]
     assert rm.agent_items(steps[2], date(2026, 10, 29)) == []
     assert rm.agent_items(steps[2], date(2026, 11, 3)) == ["Check the quota (desde 2026-11-02: cuota de Muse)."]
+
+
+_CHECKED = ("Ship the thing (hoy: 'not an open item of step N') (check: `pytest -k 'item and text'`) "
+            '<!-- tirith:{"id":"i-7619dbb1","depends_on":[],"writes":[]} -->')
+_CHECKED_PLAN = f"# P\n\n## 17. S\n\n- [ ] {_CHECKED}\n- [ ] Other thing.\n"
+
+
+def test_find_item_by_exact_text_with_check_and_metadata() -> None:
+    steps = rm.parse(_CHECKED_PLAN)
+    full = rm.without_metadata(_CHECKED)
+    for wanted in (full, _CHECKED, "i-7619dbb1", full + " (en curso: lane-x)"):
+        assert rm.find_item(steps, "17", wanted)["id"] == "i-7619dbb1"
+
+
+def test_find_item_by_text_without_check_note_or_case_or_spaces() -> None:
+    steps = rm.parse(_CHECKED_PLAN)
+    for wanted in ("Ship the thing (hoy: 'not an open item of step N')",
+                   "  ship THE thing   (hoy: 'not an open item of step N') "):
+        assert rm.find_item(steps, "17", wanted)["id"] == "i-7619dbb1"
+    assert rm.find_item(steps, "17", "Ship") is None
+
+
+def test_set_item_text_without_check_note_finds_the_item() -> None:
+    out = rm.set_item(_CHECKED_PLAN, "17", "Ship the thing (hoy: 'not an open item of step N')", tick=True)
+    assert "- [x] Ship the thing" in out and "(check: `pytest" in out
