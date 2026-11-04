@@ -394,6 +394,11 @@ def _lane_run_refusal(args, config, proj, workspace: Path) -> str | None:
         return (f"tirith: lane-brief: lane run needs a brief: the file is missing or empty{shown}. "
                 "Do this instead: write the task (goal, files, rules, how to report) into a file "
                 "and pass it with --brief <file>")
+    return project_refusal(config, proj, workspace)
+
+
+def project_refusal(config, proj, workspace: Path) -> str | None:
+    """Why no lane may start in ``proj`` (its commit guard or its ``tirith check``), else None."""
     problems = verify_guard(workspace, config.words_for(proj, default_words())) if proj.guard else []
     if problems:
         return "refusing to start: commit guard is not intact:\n" + \

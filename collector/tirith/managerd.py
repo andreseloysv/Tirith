@@ -342,14 +342,25 @@ def manager_alias(config: Config) -> tuple[str, models_mod.Choice]:
     return (choice.agent or DEFAULT_ALIAS), choice
 
 
-def _project_for(home: Path, config: Config, items: dict):
-    """The project the lane runs in: the first pending request's, else the first configured one."""
-    wanted = [r["project"] for r in items["requests"] if r["project"]]
-    for pid in wanted:
-        proj = config.project(pid)
-        if proj is not None and proj.repo:
+def _project_for(home: Path, config: Config, items: dict, refusal: Callable | None = None):
+    """The project the lane runs in: the first pending request's, else the first configured one, skipping a
+    project where ``lane run`` would refuse to start (commit guard not intact, ``tirith check`` failing). The manager
+    serves every project, so one broken project must not stop it; when every one refuses, the first is returned and
+    the refusal is recorded as the session's error like before."""
+    from tirith import projects as projects_mod
+    if refusal is None:
+        from tirith.cli import project_refusal as refusal  # late: cli imports this module
+    wanted = [config.project(r["project"]) for r in items["requests"] if r["project"]]
+    seen, first = set(), None
+    for proj in [*wanted, *config.projects]:
+        if proj is None or not proj.repo or proj.id in seen:
+            continue
+        seen.add(proj.id)
+        first = first or proj
+        repo = projects_mod.real(proj.repo)
+        if repo is not None and refusal(config, proj, repo) is None:
             return proj
-    return next((p for p in config.projects if p.repo), None)
+    return first
 
 
 def launch(home: Path, config: Config, items: dict, now: datetime, spawn: Callable | None = None) -> str:
