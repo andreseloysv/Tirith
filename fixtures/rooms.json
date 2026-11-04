@@ -31,7 +31,8 @@
         {
           "name": "backup-manager",
           "key_id": "e1a47c3b9d025f68c4b1a7e3905d2f8cb6a0d4e19f37b52c8a60d1e4f93b7a25",
-          "last_seen": "2026-10-30T08:50:00Z"
+          "last_seen": "2026-10-30T08:50:00Z",
+          "presence": {"state": "asleep", "since": "2026-10-30T08:50:00Z", "wake": ["muse", "anthropic"]}
         }
       ],
       "invite": {
