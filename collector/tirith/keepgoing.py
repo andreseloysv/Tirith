@@ -7,7 +7,8 @@ that merges cleanly with main. A lane whose agent ends while a stage it started 
 finished either: ``wait_for_stages`` waits for the stage and ``stage_message`` tells the same session its result. Anything missing is sent back to the SAME agent session (``resume_command``:
 the alias's resume flag with the session id read from the stream log; an alias without one starts again
 with the brief and its previous report) with a short message that lists exactly what is missing. Up to
-``MAX_ROUNDS`` rounds; after them one manager-queue item holds the gaps (``queue_gaps``). The checks only
+``MAX_ROUNDS`` rounds; after them, or sooner when a round fixed none of the gaps it was sent back with
+(``stalled``), one manager-queue item holds the gaps (``queue_gaps``). The checks only
 read; no gate, claim check or plan rule is relaxed by this.
 """
 
@@ -177,22 +178,38 @@ def resume_command(config: Config, alias: str, project: str | None, command: lis
     return built, (prompt if stdin else None)
 
 
-def queue_gaps(home: Path, lane: dict, missing: list[str]) -> None:
-    """After ``MAX_ROUNDS`` rounds: one manager-queue item with the gaps that remain."""
+def stalled(sent: list[str], missing: list[str]) -> bool:
+    """True when the round fixed nothing: every gap the agent was sent back with is still missing."""
+    return bool(sent) and set(sent) <= set(missing)
+
+
+def queue_gaps(home: Path, lane: dict, missing: list[str], rounds: int = MAX_ROUNDS, stuck: bool = False) -> None:
+    """After ``MAX_ROUNDS`` rounds, or a round that fixed nothing: one manager-queue item with the gaps that remain."""
     listed = "\n".join(f"- {m}" for m in missing)
+    why = (f"came back with the same gaps after round {rounds} of {MAX_ROUNDS}, so it was not sent back again"
+           if stuck else f"still has gaps after {rounds} rounds of being sent back")
     asks_mod.queue_add(
         home, str(lane.get("project") or ""), str(lane["id"]),
-        f"Lane **{lane.get('feature') or lane['id']}** ({lane['id']}) still has gaps after {MAX_ROUNDS} "
-        f"rounds of being sent back:\n{listed}\nLook at it: tirith lane review {lane['id']}",
+        f"Lane **{lane.get('feature') or lane['id']}** ({lane['id']}) {why}:\n{listed}\n"
+        f"Look at it: tirith lane review {lane['id']}",
         kind=QUEUE_KIND, item_id=f"sq-incomplete-{lane['id']}")
 
 
 def round_label(lane: dict) -> str | None:
-    """``"round 2/3"`` for the Agents view, or None when the lane was never sent back."""
+    """``"round 2/3"`` (``"round 1/3, stalled"``) for the Agents view, or None when the lane was never sent back."""
     info = lane.get("keep_going")
     if isinstance(info, dict) and info.get("round"):
-        return f"round {int(info['round'])}/{int(info.get('max') or MAX_ROUNDS)}"
+        label = f"round {int(info['round'])}/{int(info.get('max') or MAX_ROUNDS)}"
+        return label + ", stalled" if info.get("stalled") else label
     return None
+
+
+def note_stalled(home: Path, lane_id: str) -> None:
+    """Keep on the lane that its last round fixed nothing (the Agents view and the scoreboard read it)."""
+    lane = read_json(lane_path(home, lane_id), None)
+    if isinstance(lane, dict) and isinstance(lane.get("keep_going"), dict):
+        lane["keep_going"]["stalled"] = True
+        write_lane(home, lane)
 
 
 def note_round(home: Path, lane_id: str, round_no: int, missing: list[str]) -> dict:

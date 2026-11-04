@@ -43,6 +43,14 @@ if mode.startswith("stage") and not resumed:
     print(json.dumps({"type": "system", "session_id": "sess-1"}))
     print(json.dumps({"type": "result", "result": "Waiting for the test stage.", "session_id": "sess-1"}))
     sys.exit(0)
+if mode == "slow":  # round 1 fixes one gap (commits), round 2 fixes none (new uncommitted work again)
+    if calls == 2:
+        subprocess.run(["git", "add", "-A"], check=True)
+        subprocess.run(["git", "-c", "user.email=a@b.c", "-c", "user.name=a", "commit", "-q", "--no-verify",
+                        "-m", "work"], check=True)
+    print(json.dumps({"type": "system", "session_id": "sess-1"}))
+    print(json.dumps({"type": "result", "result": "Finished.", "session_id": "sess-1"}))
+    sys.exit(0)
 if mode == "never" or (mode == "fix-on-resume" and not resumed):
     pass  # leaves the file uncommitted and gives no plan report
 else:
@@ -100,13 +108,37 @@ def test_missing_report_and_uncommitted_work_resume_the_same_session(home, tmp_p
     assert not asks_mod.queue_items(home, only_open=True)
 
 
-def test_three_rounds_then_one_manager_queue_item(home, tmp_path, monkeypatch) -> None:
+def test_a_round_that_fixes_nothing_goes_to_the_manager_queue_at_once(home, tmp_path, monkeypatch) -> None:
     code, calls, lane = _run(home, tmp_path, monkeypatch, "never")
-    assert len(calls) == 1 + keepgoing_mod.MAX_ROUNDS
-    assert all("--resume" in c for c in calls[1:])
+    assert len(calls) == 2 and "--resume" in calls[1]
     (item,) = [i for i in asks_mod.queue_items(home, only_open=True) if i["kind"] == keepgoing_mod.QUEUE_KIND]
     assert item["id"] == "sq-incomplete-loop" and "no plan report" in item["text"]
-    assert keepgoing_mod.round_label(lane) == "round 3/3"
+    assert "same gaps after round 1 of 3" in item["text"]
+    assert keepgoing_mod.round_label(lane) == "round 1/3, stalled"
+
+
+def test_a_round_that_fixes_something_earns_another(home, tmp_path, monkeypatch) -> None:
+    code, calls, lane = _run(home, tmp_path, monkeypatch, "slow")
+    assert len(calls) == 3 and all("--resume" in c for c in calls[1:])
+    assert "uncommitted changes" in calls[1][1] and "uncommitted changes" not in calls[2][1]
+    (item,) = [i for i in asks_mod.queue_items(home, only_open=True) if i["kind"] == keepgoing_mod.QUEUE_KIND]
+    assert "same gaps after round 2 of 3" in item["text"]
+    assert keepgoing_mod.round_label(lane) == "round 2/3, stalled"
+
+
+def test_stalled_only_when_every_gap_sent_back_is_still_missing() -> None:
+    assert not keepgoing_mod.stalled([], ["a"])
+    assert keepgoing_mod.stalled(["a", "b"], ["a", "b"])
+    assert keepgoing_mod.stalled(["a"], ["a", "b"])
+    assert not keepgoing_mod.stalled(["a", "b"], ["a"])
+    assert not keepgoing_mod.stalled(["claim check: x"], ["claim check: y"])
+
+
+def test_three_rounds_then_one_manager_queue_item(home, tmp_path) -> None:
+    lane = {"id": "loop", "project": "demo", "feature": "Loop"}
+    keepgoing_mod.queue_gaps(home, lane, ["no plan report"], keepgoing_mod.MAX_ROUNDS)
+    (item,) = asks_mod.queue_items(home, only_open=True)
+    assert "still has gaps after 3 rounds" in item["text"]
 
 
 def test_keepalive_waits_for_the_running_stage_then_resumes_with_its_result(home, tmp_path, monkeypatch) -> None:
