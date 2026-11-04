@@ -320,6 +320,11 @@ def run_hook(home: Path, agent: str, event: str | None, stdin) -> int:
         except Exception:
             payload = {}
         row = record(home, agent, payload, event)
+        try:
+            from tirith import collectlock as collectlock_mod
+            collectlock_mod.revive(home)  # a stat in the usual case: the collector is alive
+        except Exception:
+            pass
         return decide(agent, row, payload, home)
     except Exception:
         return 0
