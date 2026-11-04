@@ -440,7 +440,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [x] Tren de integración B: todos los lanes terminados de la app, la web y la landing, juntos en una rama probada una sola vez. (check: `git merge-base --is-ancestor lane/u-stonetower main`) (hecho: b6f5817)
 - [x] Al devolver un lane, la cola de merge reabre su elemento del plan y comprueba que el agente arrancó. (check: `cd collector && uv run -q pytest -q tests -k send_back`) (hecho: 9a0d35c)
 - [x] La ronda de seguimiento de un lane (keep-going) arranca su agente sin que la regla agent-cli la bloquee, y un lane con informe done no termina como failed por ese bloqueo. (check: `cd collector && uv run -q pytest -q tests -k keepgoing_resume_not_blocked`) (hecho: 1abd541)
-- [ ] Tirith sube main a GitHub como mucho 5 minutos después de cada cambio del plan. (check: `cd collector && uv run -q pytest -q tests -k push_plan`)
+- [ ] Tirith sube main a GitHub como mucho 5 minutos después de cada cambio del plan. (check: `cd collector && uv run -q pytest -q tests -k push_plan`) (en curso: tirith-se-mejora-usando-tirith-15) <!-- tirith:{"id":"i-77418384"} -->
 - [x] La cola de merge distingue un git cortado por tiempo de un conflicto real, y reintenta el primero sin devolver el lane. (check: `cd collector && uv run -q pytest -q tests -k merge_timeout`) (hecho: 1589d3d)
 - [x] Un lane ya mezclado a mano sale de la cola y de las revisiones sin intervención. (check: `cd collector && uv run -q pytest -q tests -k already_merged`) (hecho: 2203df2)
 - [x] i-aef081ed (hecho: fde18e0)
