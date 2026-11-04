@@ -330,6 +330,8 @@ def test_a_stuck_review_that_is_alive_is_ended_first(home: Path, project: Path) 
     lane = review_lane(home, project, "running", NOW, pid=os.getpid())
     fake = Fake()
     check(home, {}, at(1300), fake, lanes=[lane])
+    assert fake.killed == [] and fake.spawned == []  # alive: it waits for a slot or tests, it is not killed at 20 min
+    check(home, {}, at(selfcheck_mod.REVIEW_ALIVE_STUCK_S + 60), fake, lanes=[lane])
     assert fake.killed == [{"pid": os.getpid()}] and fake.spawned == []
 
 
