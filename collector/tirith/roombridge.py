@@ -24,7 +24,11 @@ import re
 import secrets
 import socket
 import threading
+<<<<<<< HEAD
 from contextlib import contextmanager
+=======
+import types
+>>>>>>> main
 from pathlib import Path
 from urllib.parse import quote
 
@@ -353,6 +357,10 @@ def forward_answers(home: Path, record: dict, say) -> bool:
             changed = True
             for i in range(0, len(text), ANSWER_MAX):
                 say(text[i:i + ANSWER_MAX], item["to"])
+            # the room's own list keeps what the manager answered, so the last message of the room is the answer
+            now = now_iso()
+            _remember(record, types.SimpleNamespace(id=f"answer-{req['id']}-{item['sent']}", at=now,
+                                                    author=record["me"]["name"]), text, False, now)
         if req["status"] != "done" or item["sent"] < len(answers):
             keep.append(item)
         else:

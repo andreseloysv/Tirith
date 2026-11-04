@@ -242,6 +242,7 @@
     if (T.setup) h += T.setup(s);
     if (T.rulesSection) h += T.rulesSection(s);
     h += pipelinesSection(s, runs);
+    if (T.leaders) h += T.leaders(s);  /* what the manager and the CEO are doing */
     var stalled = ags.filter(function (a) { return a.status === 'stalled'; }).length;  /* same count as the Agents tab */
     h += '<section><h2>Working agents <span class="n">' + (ags.length - stalled) + '</span>' +
       (stalled ? ' <span class="mut">· ' + stalled + ' stalled</span>' : '') + '</h2>' + (ags.length ? '<div class="grid2">' + ags.map(function (a) { return T.agentCard(a, false).replace('data-act="agent"', 'data-act="goagent"'); }).join('') + '</div>' : T.empty('No agents working')) + '</section>';

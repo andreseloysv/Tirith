@@ -164,6 +164,25 @@ def test_room_flow_new_pair_once_talk_sealed_answer_second_manager(home, tmp_pat
     assert [d["key_id"] for d in rb.load_room(home, room)["devices"]] == [phone.key_id], "a peer never becomes a device"
 
 
+def test_room_last_message_has_the_answer(home, tmp_path, net, capsys):
+    record = new_room(home, capsys, "--title", "Phone")
+    room, manager = record["id"], sealed.load_or_create_key(home, "tirith-manager")
+    phone = key(tmp_path, "phone")
+    net.join(phone, room)
+    net.say(phone, room, f"tirith-pair {fragment(record['invite']['url'])['c']}")
+    rb.poll_room(home, room)
+    net.say(phone, room, "how are the lanes?")
+    rb.poll_room(home, room)
+    (req,) = [r for r in inbox_mod.requests(home) if r["text"] == "how are the lanes?"]
+    inbox_mod.add_answer(home, req["id"], "All green.")
+    rb.poll_room(home, room)
+    rb.poll_room(home, room)  # the manager's own message read back is not added twice
+    row = private_mod.state_row(rb.load_room(home, room))
+    assert [m["text"] for m in row["messages"]][-2:] == ["how are the lanes?", "All green."]
+    assert row["messages"][-1]["from"] == manager.name and not row["messages"][-1]["from_device"]
+    assert row["message_count"] == len(row["messages"]) and row["last_message_at"] == row["messages"][-1]["at"]
+
+
 def test_room_new_request_json_title_invite_and_leave_requests(home, net):
     inbox_mod.add_request(home, "room-new", text=json.dumps({"title": "My phone"}))
     private_mod.handle_requests(home)
