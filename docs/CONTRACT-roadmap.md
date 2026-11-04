@@ -179,6 +179,11 @@ max_parallel = 4     # kept for old configs; nothing is launched by the autopilo
   answers on the proposal with one short line ("Autopilot: step 9 item … -> started lane X") and closes it; the
   chat shows the proposal as an "Autopilot" line and the answer as a manager line. A proposal is never escalated
   to the owner. A proposal unanswered for more than 10 min is a manager-health problem (`CONTRACT-selfcheck.md`).
+- **A decision expires.** An answered proposal whose items still sit with nobody on them, facts unchanged, is
+  asked again after 2 h (`ANSWER_EXPIRES_S`), quoting the earlier answer ("Asked again: you answered at … and
+  nobody is on these items since: "…""), so a "wait" never parks a step forever. What blocks a launch for a
+  known reason (load, a failing project check, an owner stop) is held by code instead and never reaches the
+  manager.
 - **The switch** is the Plan's Pause / Resume (inbox request `autopilot`). Off means no proposals; opening
   proposals stay with the manager. The value is kept in `<home>/autopilot.json` (`{"on": bool}`), which wins
   over a lost or stale `dispatch.json`, so it survives any restart or reload.
