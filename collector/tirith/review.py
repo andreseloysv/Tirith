@@ -105,8 +105,20 @@ def check_ready(home: Path, lane_id: str, repo: Path | None) -> dict:
     if review.get("status") == RUNNING and _alive(review.get("pid")):
         raise ReviewError(f"lane {lane_id} is already being reviewed")
     if not Path(str(lane["workspace"])).is_dir():
+        if review.get("status") == RUNNING:  # its process died and the worktree went: settle it, never "running" forever
+            _settle_gone(home, lane, repo)
         raise ReviewError(f"the worktree {lane['workspace']} is gone")
     return lane
+
+
+def _settle_gone(home: Path, lane: dict, repo: Path) -> dict:
+    """A review whose process died and whose worktree is gone: ``merged`` when the claim check finds the lane's work
+    on main, else ``merge-failed`` with the reason (the plan item is then reopened like for any failed review)."""
+    work, sha = plangate_mod.lane_work(home, repo, lane)
+    if work == plangate_mod.WORK_MERGED:
+        return _set(home, lane, MERGED, "the review stopped, but the lane's work is on main", commit=sha)
+    return _set(home, lane, MERGE_FAILED, "the review stopped before it finished and the worktree is gone: "
+                                          f"{plangate_mod.WORK_REASONS.get(work, work)}")
 
 
 def _git(folder: Path, *args: str) -> subprocess.CompletedProcess:

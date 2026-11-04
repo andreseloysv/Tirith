@@ -38,7 +38,10 @@ Or use the Makefile shortcuts: `make install`, `make test`, `make collect`,
 `tirith-collector.plist.template` is a ready-to-adapt launchd template.
 Nothing installs it for you. To use it: replace the two `__REPLACE__` paths,
 copy it to `~/Library/LaunchAgents/com.tirith.collector.plist`, then
-`launchctl load` it yourself.
+`launchctl load` it yourself. It works next to the desktop app: while the app's
+collector holds `collector.lock` the launchd one exits at once and is retried
+every minute, so Tirith keeps running (manager, autopilot, merge queue) when the
+app is closed.
 
 ## Configure
 

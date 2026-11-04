@@ -51,6 +51,8 @@ REVIEW_OPEN = ("pending", "running")
 REVIEW_FAILED = ("tests-failed", "claims-failed", "merge-failed")
 REVIEW_BUSY = (*REVIEW_OPEN, "ready", *REVIEW_FAILED)
 INTERRUPTED = "interrupted"  # in the message of a review whose process died (``review.public``)
+HOLD_RECHECK_S = 60.0    # a held step is checked again after this long (the project check reads files)
+OWNER_STOP_HOLD_S = 6 * 3600.0  # a step whose lane the owner stopped is not proposed again for this long
 
 
 def _own(state: dict) -> dict:
@@ -362,7 +364,34 @@ def _step_fp(text: str) -> str:
     return hashlib.sha1(text.encode()).hexdigest()[:12]
 
 
-def _propose(home: Path, state: dict, projects: list[dict], agents: list[dict], now: datetime) -> bool:
+def _hold(home: Path, config: Config, project: str, step: str, agents: list[dict], now: datetime) -> str | None:
+    """Why the manager could not launch anything for ``project`` step ``step`` now, in plain words; None when it can.
+    Decided by code so that no manager turn is spent answering "wait"."""
+    working = sum(1 for a in agents if a.get("status") == "working" and not str(a.get("id", "")).startswith("manager"))
+    allowed, why = loadlimit_mod.current(config, home)
+    if working >= allowed:
+        return f"the agents running now fill the limit of {allowed}" + (f" ({why})" if why else "")
+    proj = next((p for p in config.projects if p.id == project), None)
+    if proj is not None and proj.repo:
+        from tirith import manifest as manifest_mod
+        from tirith.guardwrap import default_words
+        failed = [p for p in manifest_mod.check(proj.repo, config.words_for(proj, default_words()))
+                  if p.rule != "manifest-missing"]
+        if failed:
+            return f"tirith check fails for '{project}' (run `tirith check --project {project}`)"
+    from tirith.store import read_lanes
+    for lane in read_lanes(home):
+        stop = lane.get("stop") if isinstance(lane, dict) else None
+        at = parse_iso((stop or {}).get("at")) if isinstance(stop, dict) else None
+        if (at and stop.get("by") == "owner" and lane.get("project") == project
+                and str(lane.get("item_step") or lane.get("step") or "") == step
+                and (now - at).total_seconds() < OWNER_STOP_HOLD_S):
+            return f"the owner stopped lane {lane['id']} of this step at {stop['at']}"
+    return None
+
+
+def _propose(home: Path, state: dict, projects: list[dict], agents: list[dict], now: datetime,
+             config: Config | None = None) -> bool:
     """One open proposal per (project, step) that lists its items nobody works on (after ``DEBOUNCE_S``). When the
     facts change it is closed and replaced; older ones (before this rule) are collapsed into it."""
     own, at, changed = _own(state), now_iso(now), False
@@ -412,6 +441,20 @@ def _propose(home: Path, state: dict, projects: list[dict], agents: list[dict], 
         first = parse_iso(seen["at"])
         if first is None or (now - first).total_seconds() < DEBOUNCE_S:
             continue
+        if config is not None:
+            held = own.setdefault("held", {})
+            last = held.get(key) if isinstance(held.get(key), dict) else None
+            checked = parse_iso((last or {}).get("checked"))
+            if last and checked and (now - checked).total_seconds() < HOLD_RECHECK_S:
+                continue
+            why = _hold(home, config, cands[0]["project"], str(cands[0]["step"]), agents, now)
+            if why:
+                if not last or last.get("why") != why:
+                    changed = True
+                held[key] = {"why": why, "checked": at}
+                continue
+            if held.pop(key, None) is not None:
+                changed = True
         for req in by_step.get(key, []):
             if _open_request(req) and rec and req["id"] == rec["id"]:
                 _close(home, req, cands[0]["project"], cands[0]["step"], "its facts changed; replaced by a new one", at)
@@ -491,7 +534,7 @@ def run(home: Path, config: Config, now: datetime, state: dict, *, agents: list[
     planned = [p for p in projects if p.get("roadmap")]
     changed |= _owner_items(home, state, planned, now_iso(now))
     if launch and effective(config, state):
-        changed |= _propose(home, state, planned, agents, now)
+        changed |= _propose(home, state, planned, agents, now, config)
     return changed
 
 
@@ -539,6 +582,10 @@ def public(home: Path, config: Config, agents: list[dict] | None = None, project
     if diskdiet_mod.low(state):
         counts["skipped"] += [{"project": p, "step": s, "why": "it waits for free disk space"}
                               for p, s in {tuple(k.split("|")[:2]) for k in candidates(planned, agents, queued)[0]}]
+    for key, held in (own.get("held") or {}).items():
+        if isinstance(held, dict) and key.count("|") == 1:
+            project, step = key.split("|")
+            counts["skipped"].append({"project": project, "step": step, "why": held.get("why")})
     steps = {(p["id"], st["id"]) for p in planned for st in p["roadmap"]["steps"]}
     working = sum(1 for a in agents if a.get("status") == "working" and (a.get("project"), str(a.get("step") or "")) in steps)
     allowed, why = loadlimit_mod.current(config, home)  # lowered while the machine is loaded or the disk is low

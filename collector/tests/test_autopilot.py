@@ -622,3 +622,51 @@ def test_autopilot_ignores_merge_worktree_as_a_discovered_project(home, tmp_path
         assert projects_mod.is_worktree_folder(tmp_path / name)
         entries = projects_mod.discover(home, load_config(home), [tmp_path / name])
         assert [e.folder for e in entries if e.folder == projects_mod.real(tmp_path / name)] == []
+
+
+# -- held by code: the manager is not asked when nothing could start --------------------------------
+
+
+def _held(pilot: Pilot) -> dict:
+    return {k: v["why"] for k, v in (pilot.state().get("held") or {}).items()}
+
+
+def test_no_proposal_while_running_agents_fill_the_limit(home, repo) -> None:
+    pilot = Pilot(home, repo, "[autopilot]\nmax_parallel = 1")
+    pilot.agents.append({"id": "busy", "project": "demo", "step": "9", "status": "working"})
+    pilot.cycle()
+    pilot.cycle()
+    assert _proposals(home) == []
+    assert all("fill the limit of 1" in why for why in _held(pilot).values()) and len(_held(pilot)) == 3
+    pilot.end("busy")
+    pilot.cycle(autopilot_mod.HOLD_RECHECK_S + 1)
+    assert sorted(r["step"] for r in _proposals(home)) == ["1", "2", "3"]
+    assert _held(pilot) == {}
+
+
+def test_no_proposal_while_the_project_check_fails(home, repo, monkeypatch) -> None:
+    from tirith import manifest as manifest_mod
+    failing = [manifest_mod.Problem("tirith.toml", 1, "roadmap-missing", "the plan is unreadable", "fix it")]
+    monkeypatch.setattr(manifest_mod, "check", lambda *a, **k: failing)
+    pilot = Pilot(home, repo)
+    pilot.cycle()
+    pilot.cycle()
+    assert _proposals(home) == []
+    assert all("tirith check fails for 'demo'" in why for why in _held(pilot).values())
+    skipped = autopilot_mod.public(home, load_config(home), pilot.agents, pilot.projects())["skipped"]  # on the page
+    assert {"project": "demo", "step": "1", "why": _held(pilot)["demo|1"]} in skipped
+
+
+def test_a_step_the_owner_stopped_is_held_for_a_while_not_forever(home, repo) -> None:
+    from tirith.store import write_lane
+    write_lane(home, {"id": "stopped-1", "project": "demo", "step": "1", "item_step": "1",
+                      "stop": {"by": "owner", "reason": "", "at": NOW.strftime("%Y-%m-%dT%H:%M:%SZ")}})
+    write_lane(home, {"id": "stopped-2", "project": "demo", "step": "2", "item_step": "2",
+                      "stop": {"by": "manager", "reason": "", "at": NOW.strftime("%Y-%m-%dT%H:%M:%SZ")}})
+    pilot = Pilot(home, repo)
+    pilot.cycle()
+    pilot.cycle()
+    assert sorted(r["step"] for r in _proposals(home)) == ["2", "3"]
+    assert "the owner stopped lane stopped-1" in _held(pilot)["demo|1"]
+    pilot.cycle(autopilot_mod.OWNER_STOP_HOLD_S)
+    assert sorted(r["step"] for r in _proposals(home)) == ["1", "2", "3"]

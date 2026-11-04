@@ -160,6 +160,12 @@ max_parallel = 4     # kept for old configs; nothing is launched by the autopilo
   end in "… and N more"). When the facts change the proposal is closed and replaced by a new one (after the
   same ~30 s debounce); there is never a second open one for the step. A flow `tirith -> manager`
   ("Autopilot proposes <project> step <n>: …") records each.
+- **Held by code, not asked.** Before a proposal is sent Tirith checks whether the manager could start anything
+  for that step now (`autopilot._hold`). It holds the proposal, and spends no manager turn, while: the agents
+  working fill the load limit (`loadlimit.current`), `tirith check` fails for the project, or the owner stopped a
+  lane of that step (`tirith lane stop --by owner`) less than 6 h ago (`OWNER_STOP_HOLD_S`; a manager stop does not
+  hold). A held step is checked again every minute (`HOLD_RECHECK_S`) and is listed in `state.autopilot.skipped`
+  with the reason; it is proposed as soon as nothing holds it.
 - **The merge queue owns its lanes.** An item whose lane (linked in its note, or the lane of that item) is
   waiting, running or being merged in `mergeq.json`, or under a running review, gets no proposal; an open one
   is closed. It comes back only when the queue sends the lane back (conflict, red suite, gone): the proposal
