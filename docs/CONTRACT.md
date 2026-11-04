@@ -35,7 +35,8 @@ Meta Model API for the brain (see below); everything works without it.
 names. `tirith collect` takes the lock without waiting, writes its pid, and holds it until it exits (the OS
 frees it on a crash). If it is taken, `tirith collect` prints `a collector is already running, pid N` and
 exits 0. The desktop app and `./run` check by trying to take the lock themselves (held = running) and
-release it at once. `tirith collect --once` does not take the lock. Windows has no lock check: the app
+release it at once. `tirith collect --once` does not take the lock. A taken lock is checked first, before the owner's login shell and
+the collector start, so a launchd fallback retrying every minute next to the app's collector costs nothing. Windows has no lock check: the app
 always starts its own collector.
 
 Lane registration (`tirith lane start --project chromasol --class stonewright --feature "Room database"
