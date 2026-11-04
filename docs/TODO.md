@@ -204,7 +204,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Cada bloqueo de un hook enseña la alternativa exacta y el agente sigue; varios bloqueos seguidos van al manager, nunca al dueño. (en revisión)
 - [ ] Tests rápidos en la lane (solo lo relacionado con el cambio) y suite completa en la cola de fusión; el paralelismo se ajusta a CPU y disco. (en revisión)
 - [ ] El tiempo límite de un agente mide inactividad (sin salida ni progreso durante N minutos), no el tiempo total; una lane que sigue trabajando nunca se corta por durar mucho. (en revisión)
-- [ ] Al vencer el timeout de un comando de una etapa o de un agente, Tirith detiene el proceso con todos sus hijos y limpia sus bloqueos. (check: `cd collector && uv run -q pytest -q tests -k timeout_kills_tree`) (en curso: reglas-de-c-digo-errores-de-comp-6) <!-- tirith:{"id":"i-6caa45d6","depends_on":[],"writes":[]} -->
+- [ ] Al vencer el timeout de un comando de una etapa o de un agente, Tirith detiene el proceso con todos sus hijos y limpia sus bloqueos. (check: `cd collector && uv run -q pytest -q tests -k timeout_kills_tree`) (en revisión) <!-- tirith:{"id":"i-6caa45d6","depends_on":[],"writes":[]} -->
 - [x] Los tests limpian sus carpetas temporales, incluidos los hooks bloqueados que crean, para no llenar el disco. (check: `cd collector && uv run -q pytest -q tests -k cleanup`) (hecho: 46f4696)
 - [x] La cola de merge arranca sola desde el collector: ningún lane terminado espera en la cola sin un proceso de merge. (check: `cd collector && uv run -q pytest -q tests -k mergeq`) (hecho: fbb405e)
 - [x] La cola de merge usa la rama real de cada lane, la de su worktree. (check: `cd collector && uv run -q pytest -q tests -k mergeq`) (hecho: 9fea4fd)
