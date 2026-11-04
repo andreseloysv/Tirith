@@ -17,6 +17,10 @@ jobs:
         with:
           python-version: "3.12"
       - uses: astral-sh/setup-uv@v5
+      - name: Git identity
+        run: |
+          git config --global user.name "Tirith CI"
+          git config --global user.email "ci@tirith.invalid"
       - name: Collector tests
         working-directory: collector
         run: uv run -q pytest -q

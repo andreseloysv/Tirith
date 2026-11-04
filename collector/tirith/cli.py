@@ -1369,6 +1369,9 @@ def _cmd_map(args) -> int:
 
 def _cmd_collect(args) -> int:
     home = _home(args)
+    if not args.once and (pid := collectlock_mod.running_pid(home)) is not None:
+        print(collectlock_mod.CollectorRunning(pid or None))  # before the login shell and the Collector: a
+        return 0  # launchd fallback that retries every minute while the app's collector runs costs nothing
     ownerenv_mod.load(home)  # before the Collector: the brain reads its key from the environment
     collector = Collector(home)
     if not args.once and hasattr(signal, "SIGTERM"):

@@ -96,3 +96,23 @@ def test_second_sigterm_is_silent(home: Path) -> None:
         if proc.poll() is None:
             proc.kill()
             proc.communicate()
+
+
+def test_running_pid_only_tries_the_lock(home: Path) -> None:
+    from tirith.collectlock import running_pid
+    assert running_pid(home) is None  # no lock file yet
+    with hold_collector_lock(home):
+        assert running_pid(home) == os.getpid()
+        assert running_pid(home) == os.getpid()  # checking does not take or release it
+    assert running_pid(home) is None
+
+
+def test_a_second_collector_refuses_before_its_expensive_start_up(home: Path, monkeypatch, capsys) -> None:
+    from tirith import cli
+    def boom(*a, **k):
+        raise AssertionError("the login shell must not be asked while another collector runs")
+    monkeypatch.setattr(cli.ownerenv_mod, "load", boom)
+    monkeypatch.setenv("TIRITH_HOME", str(home))
+    with hold_collector_lock(home):
+        assert cli.main(["collect", "--interval", "2"]) == 0
+    assert capsys.readouterr().out.strip() == f"a collector is already running, pid {os.getpid()}"
