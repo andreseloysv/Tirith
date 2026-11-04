@@ -76,7 +76,7 @@ _TEST_FILE = re.compile(r"[\w./-]*(?:test_\w+\.py|[\w-]+\.test\.mjs)")
 
 def _book(state: dict) -> dict:
     book = state.setdefault("health", {})
-    for key in ("tries", "queued", "notices"):
+    for key in ("tries", "queued", "notices", "sent"):
         if not isinstance(book.get(key), dict):
             book[key] = {}
     return book
@@ -372,7 +372,7 @@ def _rerun(home: Path, config: Config, lane_id: str, spawn: Callable) -> None:
 
 
 def _reviews(home: Path, config: Config, now: datetime, book: dict, lanes: list[dict], spawn: Callable,
-             kill: Callable, diff: Callable, active: set[str]) -> dict:
+             kill: Callable, diff: Callable, active: set[str], relaunch: Callable | None = None) -> dict:
     worst = _check("ok", OK_TEXT["reviews"])
     for seen in lanes:
         lane_id = str(seen.get("id") or "")
@@ -414,7 +414,8 @@ def _reviews(home: Path, config: Config, now: datetime, book: dict, lanes: list[
         elif status == review_mod.TESTS_FAILED:
             repo = autoreview_repo(config, lane)
             files = diff(repo, lane_id) if repo else []
-            if not unrelated(str(review.get("message") or ""), files):
+            message = str(review.get("message") or "")
+            if not unrelated(message, files):
                 continue
             key = f"review-unrelated:{lane_id}"
             active.add(key)
@@ -424,18 +425,61 @@ def _reviews(home: Path, config: Config, now: datetime, book: dict, lanes: list[
                     _notice(book, key, f"The tests of lane {lane_id} failed on something the lane did not touch; "
                                        "I ran them again.", now)
                 found = _check("healing", f"Tests failed on code lane {lane_id} did not touch; running them again.")
+            elif not failing_elsewhere(home, lanes, lane_id, failing_tests(message)) \
+                    and _send_back(home, config, book, lane, review, message, now, relaunch):
+                # no other lane fails there: the lane's change breaks them through a side effect
+                found = _check("healing", f"Tests fail only in lane {lane_id}; sent back to its agent.")
             else:
                 _queue(home, book, key, project, lane_id,
                        f"Self-check: the tests of lane {lane_id} fail twice in "
-                       f"{', '.join(sorted(failing_tests(str(review.get('message') or ''))))}, which its diff "
+                       f"{', '.join(sorted(failing_tests(message)))}, which its diff "
                        f"({len(files)} file(s)) does not touch. Something else broke them; look at main.\n"
-                       f"{str(review.get('message') or '')[-800:]}")
+                       f"{message[-800:]}")
                 found = _check("failed", f"Tests fail on code lane {lane_id} did not touch.")
         else:
             continue
         if LEVELS.index(found["level"]) > LEVELS.index(worst["level"]):
             worst = found
     return worst
+
+
+def failing_elsewhere(home: Path, lanes: list[dict], lane_id: str, tests: set[str]) -> bool:
+    """True when another lane's review fails in one of ``tests`` too: then main (or the machine) is the cause."""
+    for seen in lanes:
+        other = str(seen.get("id") or "")
+        lane = read_lane(home, other) if other and other != lane_id else None
+        review = lane.get("review") if isinstance(lane, dict) else None
+        if isinstance(review, dict) and review.get("status") == review_mod.TESTS_FAILED \
+                and tests & failing_tests(str(review.get("message") or "")):
+            return True
+    return False
+
+
+def _send_back(home: Path, config: Config, book: dict, lane: dict, review: dict, message: str, now: datetime,
+               relaunch: Callable | None) -> bool:
+    """The lane goes back to its agent with the failing tests, once per lane; True while that answer is pending
+    (the review result is still the one it was sent back for). False when it cannot be sent or came back failing."""
+    lane_id = str(lane["id"])
+    sent = book["sent"].get(lane_id)
+    if sent is not None:
+        return sent == review.get("at")
+    alias = str(lane.get("agent") or "")
+    if alias not in config.agents:
+        return False
+    tests = ", ".join(sorted(failing_tests(message)))
+    note = (f"The review's tests fail in {tests}, twice, also after a rerun. No other lane fails there, so your "
+            "change most likely breaks them through a side effect (shared state, a new step that runs on every "
+            "pass, a real command run from the tests) even though you did not edit those files. Find the cause, "
+            f"fix it and end the lane again.\n{message[-1500:]}")
+    try:
+        from tirith import autoreview as autoreview_mod
+        (relaunch or autoreview_mod.relauncher)(home, lane, alias, note)
+    except (Exception, SystemExit):  # the manager decides when it cannot be sent back
+        return False
+    book["sent"][lane_id] = review.get("at")
+    _notice(book, f"review-sendback:{lane_id}", f"The tests of lane {lane_id} fail only in that lane ({tests}): "
+                                                "I sent it back to its agent to find the side effect.", now)
+    return True
 
 
 def autoreview_repo(config: Config, lane: dict) -> Path | None:
@@ -448,7 +492,7 @@ def autoreview_repo(config: Config, lane: dict) -> Path | None:
 
 def run(home: Path, config: Config, now: datetime, state: dict, *, lanes: list[dict], agents: list[dict] | None = None,
         projects: list[dict] | None = None, spawn: Callable | None = None, kill: Callable | None = None,
-        diff: Callable | None = None) -> bool:
+        diff: Callable | None = None, relaunch: Callable | None = None) -> bool:
     """One self-check; True when ``state`` (``state["health"]``) changed."""
     home = Path(home)
     book = _book(state)
@@ -459,7 +503,7 @@ def run(home: Path, config: Config, now: datetime, state: dict, *, lanes: list[d
     checks["manager"] = _manager(home, config, now, state, book, lanes, kill, active)
     checks["autopilot"] = _autopilot(config, now, state, book, home, agents or [], projects or [], active)
     checks["disk"] = _disk(state, now, active)
-    checks["reviews"] = _reviews(home, config, now, book, lanes, spawn, kill, diff or diff_files, active)
+    checks["reviews"] = _reviews(home, config, now, book, lanes, spawn, kill, diff or diff_files, active, relaunch)
     checks["mergeq"] = _mergeq(home, now, book, active)
     checks["timeouts"] = _timeouts(home, now, book, active)
     checks["canary"] = _canary(home, now, book, active)

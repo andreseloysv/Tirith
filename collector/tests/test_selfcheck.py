@@ -362,6 +362,42 @@ def test_unrelated_test_failure_is_run_again_once_then_queued(home: Path, projec
     assert len(queue_ids(home)) == 1 and "test_billing.py" in asks_mod.queue_items(home, only_open=True)[0]["text"]
 
 
+def test_a_failure_only_this_lane_has_goes_back_to_its_agent(home: Path, project: Path) -> None:
+    lane = review_lane(home, project, "tests-failed", NOW, FAIL)
+    write_lane(home, {**read_lane(home, lane["id"]), "agent": "anthropic"})
+    state, fake, sent = {}, Fake(), []
+
+    def relaunch(home, lane, alias, note):
+        sent.append((lane["id"], alias, note))
+        return lane["id"]
+
+    def diff(repo, lane_id):
+        return ["collector/tirith/dispatch.py"]
+
+    check(home, state, at(10), fake, lanes=[lane], diff=diff, relaunch=relaunch)
+    check(home, state, at(200), fake, lanes=[lane], diff=diff, relaunch=relaunch)
+    assert len(sent) == 1 and "test_billing.py" in sent[0][2] and "side effect" in sent[0][2]
+    assert level(state, "reviews") == "healing" and queue_ids(home) == []
+    check(home, state, at(400), fake, lanes=[lane], diff=diff, relaunch=relaunch)
+    assert len(sent) == 1 and any("sent it back" in t for t in says(home))
+    write_lane(home, {**read_lane(home, lane["id"]),
+                      "review": {**read_lane(home, lane["id"])["review"], "at": at(500).strftime(Z)}})
+    check(home, state, at(600), fake, lanes=[lane], diff=diff, relaunch=relaunch)
+    assert len(sent) == 1 and level(state, "reviews") == "failed" and len(queue_ids(home)) == 1  # back and still red
+
+
+def test_a_failure_other_lanes_share_points_at_main(home: Path, project: Path) -> None:
+    lane = review_lane(home, project, "tests-failed", NOW, FAIL)
+    write_lane(home, {**read_lane(home, lane["id"]), "agent": "anthropic"})
+    write_lane(home, {"id": "other", "project": "demo", "review": {"status": "tests-failed", "message": FAIL}})
+    state, fake, sent = {}, Fake(), []
+    for when in (10, 200):
+        check(home, state, at(when), fake, lanes=[lane, {"id": "other"}], diff=lambda repo, lane_id: ["README.md"],
+              relaunch=lambda *a: sent.append(a))
+    assert sent == [] and level(state, "reviews") == "failed"
+    assert "look at main" in asks_mod.queue_items(home, only_open=True)[0]["text"]
+
+
 def test_a_rerun_in_progress_keeps_the_count(home: Path, project: Path) -> None:
     lane = review_lane(home, project, "tests-failed", NOW, FAIL)
     state, fake = {}, Fake()

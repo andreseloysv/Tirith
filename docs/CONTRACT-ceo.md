@@ -79,6 +79,10 @@ merge queue like any other.
 - **Schedule**: by default 09:00, 14:00 and 20:00 local time, visible on the page with "run now", "pause" and the
   receipt of the last run.
 - **Watchdog alarm**: a target fails and code cannot fix it.
+- **Red self-check**: a self-check check turns `failed` ("Something needs a look", `CONTRACT-selfcheck.md`). The
+  CEO is started out of schedule with the failed checks in the snapshot (`alarm`) and the brief's "Alarm" section:
+  it finds the cause from the data and sends the manager a directive, or asks the owner. Each check and text alarms
+  once (`book.json` `alarmed`); a check that turns green again may alarm again later.
 - **Owner request**: "CEO, why is nothing moving?"
 - **Skip by code**: before a scheduled run, code compares the snapshot with the last one; when nothing moved, no
   alarm fired and no directive is due, the run is skipped and costs nothing.

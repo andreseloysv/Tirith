@@ -225,3 +225,26 @@ def test_a_directive_id_used_before_does_not_overwrite_the_earlier_one(home: Pat
                 local(14), add_wait=Waits())
     assert ceo.directives(home)["d-1"]["text"] == "Give every wait a deadline"
     assert ceo.directives(home)["d-1-bbbb"]["text"] == "Another"
+
+
+def red(home: Path, text: str | None) -> None:
+    checks = {"reviews": {"level": "failed", "text": text}} if text else {"reviews": {"level": "ok", "text": "fine"}}
+    (home / "dispatch.json").write_text(json.dumps({"health": {"checks": checks}}), encoding="utf-8")
+
+
+def test_a_red_self_check_wakes_the_ceo_once(home: Path, started: list) -> None:
+    enable(home)
+    config = load_config(home)
+    red(home, "Tests fail on code lane l-1 did not touch.")
+    assert ceo.run(home, config, local(11)) and len(started) == 1  # out of schedule
+    assert started[0]["snap"]["alarm"] == {"reviews": "Tests fail on code lane l-1 did not touch."}
+    assert "## Alarm" in ceo.brief(home, started[0]["snap"], ceo.settings(home), False)
+    assert "## Alarm" not in ceo.brief(home, {"merged_today": 0}, ceo.settings(home), False)
+    write_lane(home, {"id": "ceo-1", "ended_at": "x", "report": json.dumps(RESULT), "project": "tirith"})
+    ceo.run(home, config, local(11, 30))
+    assert len(started) == 1  # the same alarm is not raised twice
+    red(home, None)
+    ceo.run(home, config, local(12))
+    red(home, "Tests fail on code lane l-1 did not touch.")
+    ceo.run(home, config, local(12, 30))
+    assert len(started) == 2  # it went green and red again
