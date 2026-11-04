@@ -380,6 +380,12 @@ def _reviews(home: Path, config: Config, now: datetime, book: dict, lanes: list[
         if not isinstance(review, dict):
             continue
         project, status = str(lane.get("project") or ""), review.get("status")
+        if (status == review_mod.RUNNING and not review_mod._alive(review.get("pid"))
+                and not Path(str(lane.get("workspace") or "")).is_dir()):
+            repo = autoreview_repo(config, lane)  # nothing left to run again: settle it from the claim check
+            if repo is not None:
+                review_mod.settle_gone(home, lane, repo)
+                continue
         if status == review_mod.RUNNING:
             for key in (f"review-stuck:{lane_id}", f"review-unrelated:{lane_id}"):
                 if key in book["tries"]:

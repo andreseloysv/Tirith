@@ -17,7 +17,7 @@ from tirith import inbox as inbox_mod
 from tirith import managerd as managerd_mod
 from tirith import selfcheck as selfcheck_mod
 from tirith.home import load_config
-from tirith.store import write_lane
+from tirith.store import read_lane, write_lane
 
 NOW = datetime(2026, 10, 29, 12, 0, tzinfo=timezone.utc)
 AGENTS = '[agents.anthropic]\ncommand = "agent-bin"\n\n[manager]\nsession = false\n'
@@ -293,11 +293,24 @@ def test_low_disk_is_red_in_plain_words_and_recovers(home: Path, project: Path) 
 # -- reviews ------------------------------------------------------------------------------------
 
 
-def review_lane(home: Path, project: Path, status: str, when: datetime, message: str = "", pid: int = 0) -> dict:
+def review_lane(home: Path, project: Path, status: str, when: datetime, message: str = "", pid: int = 0,
+                gone: bool = False) -> dict:
     lane = {"id": "lane-a", "project": "demo", "workspace": str(project / "w"), "ended_at": NOW.strftime(Z),
             "result": "done", "review": {"status": status, "at": when.strftime(Z), "pid": pid, "message": message}}
+    if not gone:
+        (project / "w").mkdir(exist_ok=True)  # the lane's worktree is still there
     write_lane(home, lane)
     return lane
+
+
+def test_a_dead_review_whose_worktree_is_gone_is_settled_without_a_rerun(home: Path, project: Path) -> None:
+    lane = review_lane(home, project, "running", NOW, pid=DEAD_PID, gone=True)
+    state, fake = {}, Fake()
+    for n in range(selfcheck_mod.MAX_TRIES + 1):  # also once the tries are used up
+        check(home, state, at(1300 + 100 * n), fake, lanes=[lane])
+    assert fake.spawned == [] and queue_ids(home) == []
+    review = read_lane(home, "lane-a")["review"]
+    assert review["status"] == "merge-failed" and "worktree is gone" in review["message"]
 
 
 def test_a_review_running_over_20_min_with_a_dead_process_is_run_again(home: Path, project: Path) -> None:
