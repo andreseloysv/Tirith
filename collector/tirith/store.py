@@ -112,6 +112,34 @@ def lane_path(home: Path, lane_id: str) -> Path:
     return home / "lanes" / f"{lane_id}.json"
 
 
+def lane_brief_copy(home: Path, lane_id: str) -> Path:
+    """Tirith's own copy of the lane's brief, in the lane's folder (``lanes/<lane-id>/brief.md``)."""
+    return home / "lanes" / lane_id / "brief.md"
+
+
+def save_lane_brief(home: Path, lane_id: str, brief: str | None) -> Path | None:
+    """Copy the brief file into the lane's folder so a cut lane can restart after a reboot; None when there is none."""
+    try:
+        source = Path(brief).expanduser() if brief else None
+        if source is None or not source.is_file():
+            return None
+        target = lane_brief_copy(home, lane_id)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(source.read_text(encoding="utf-8", errors="replace"), encoding="utf-8")
+        return target
+    except OSError:
+        return None
+
+
+def lane_brief_path(home: Path, lane: dict) -> Path | None:
+    """The brief to read for ``lane``: its original file, else Tirith's copy; None when neither exists."""
+    original = Path(str(lane.get("brief") or ""))
+    if lane.get("brief") and original.is_file():
+        return original
+    copy_path = lane_brief_copy(home, str(lane.get("id") or ""))
+    return copy_path if copy_path.is_file() else None
+
+
 _LANE_CACHE_MAX = 4096
 _lane_cache: dict[str, tuple[tuple, object]] = {}
 
