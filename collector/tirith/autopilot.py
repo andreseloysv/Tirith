@@ -55,6 +55,9 @@ HOLD_RECHECK_S = 60.0    # a held step is checked again after this long (the pro
 OWNER_STOP_HOLD_S = 6 * 3600.0  # a step whose lane the owner stopped is not proposed again for this long
 ANSWER_EXPIRES_S = 2 * 3600.0   # an answered proposal whose items still sit with nobody on them is asked again
 ANSWER_QUOTED = 200             # characters of the earlier answer quoted in the new proposal
+ANSWER_EARLY_S = 10 * 60.0      # ... or after this long, once what the answer waited for ended (a lane, its review)
+# an answer that waits for a free slot: any lane that ends after it may be what it waited for
+WAITS_FOR_SLOT = re.compile(r"\bslots?\b|\bbusy\b|\blimit\b|\b\d+\s*/\s*\d+\b", re.I)
 
 
 def _own(state: dict) -> dict:
@@ -319,8 +322,9 @@ def _why_short(state: str) -> str:
             roadmap_mod.STATE_REOPENED: "reopened"}.get(state, "open, nobody on it")
 
 
-def proposal_text(cands: list[dict], agents: list[dict]) -> str:
-    """One step's proposal, under ``MAX_TEXT`` characters: its items that need a decision, each with its facts."""
+def proposal_text(cands: list[dict], agents: list[dict], now_line: str = "") -> str:
+    """One step's proposal, under ``MAX_TEXT`` characters: its items that need a decision, each with its facts, and
+    ``now_line`` (the slots in use, which is no fact of the step: its fingerprint is taken without it)."""
     first = cands[0]
     plan = str(first["plan"] or "docs/TODO.md")
     plan = plan if len(plan) <= 60 else "…" + plan[-59:]
@@ -330,12 +334,12 @@ def proposal_text(cands: list[dict], agents: list[dict]) -> str:
     tail = ["Decide: launch (written brief + plan link), combine with a lane, wait (say why) or drop (plan edit; "
             "`tirith plan done` if on main). Answer here, then close it."]
     shown = cands[:ITEMS_SHOWN]
-    room = MAX_TEXT - len(head[0]) - len(tail[0]) - 30 - len(shown)  # the "more" line and the newlines
-    each = max(60, room // max(len(shown), 1))
+    room = MAX_TEXT - len(head[0]) - len(tail[0]) - 30 - len(shown) - (len(now_line) + 1 if now_line else 0)
+    each = max(50, room // max(len(shown), 1))  # 8 lines of 50 leave room for the head, the slots and the tail
     lines = [flows_mod.one_line(f"- {c['item'][:60]} [{_why_short(c['state'])}] {_facts(c, agents)}", each) for c in shown]
     if len(cands) > len(shown):
         lines.append(f"- … and {len(cands) - len(shown)} more")
-    return "\n".join([*head, *lines, *tail])[:MAX_TEXT]
+    return "\n".join([*head, *lines, *([now_line] if now_line else []), *tail])[:MAX_TEXT]
 
 
 def proposal_line(text: str) -> str:
@@ -366,10 +370,24 @@ def _step_fp(text: str) -> str:
     return hashlib.sha1(text.encode()).hexdigest()[:12]
 
 
+def _working(agents: list[dict]) -> list[dict]:
+    """The agents that take a slot now: every working lane but the manager's."""
+    return [a for a in agents if a.get("status") == "working" and not str(a.get("id", "")).startswith("manager")]
+
+
+def _now_line(home: Path, config: Config | None, agents: list[dict]) -> str:
+    """The slots in use as the proposal is written, so the manager answers on the facts of now, not on what its
+    conversation remembers (a lane it saw working may have died with a restart since)."""
+    working = sorted(str(a.get("id")) for a in _working(agents))
+    used = f"{len(working)} of {loadlimit_mod.current(config, home)[0]}" if config is not None else str(len(working))
+    return flows_mod.one_line(f"Now: {used} agent slots in use" + (f" ({', '.join(working)})" if working else ""),
+                              120)
+
+
 def _hold(home: Path, config: Config, project: str, step: str, agents: list[dict], now: datetime) -> str | None:
     """Why the manager could not launch anything for ``project`` step ``step`` now, in plain words; None when it can.
     Decided by code so that no manager turn is spent answering "wait"."""
-    working = sum(1 for a in agents if a.get("status") == "working" and not str(a.get("id", "")).startswith("manager"))
+    working = len(_working(agents))
     allowed, why = loadlimit_mod.current(config, home)
     if working >= allowed:
         return f"the agents running now fill the limit of {allowed}" + (f" ({why})" if why else "")
@@ -397,17 +415,60 @@ def _clip(text: str, limit: int) -> str:
     return text if len(text) <= limit else text[:limit - 1] + "…"
 
 
-def _expired_answer(req: dict | None, now: datetime) -> dict | None:
-    """The manager's last answer to the done proposal ``req`` once it is ``ANSWER_EXPIRES_S`` old, else None.
-    A proposal closed without an answer is no decision: it counts from when it was asked (its ``text`` is empty)."""
+def _ended_since(agents: list[dict], at: datetime) -> list[tuple[datetime, str, str]]:
+    """``(when, lane id, what happened)`` for every lane (not the manager's or the CEO's) that ended, or whose review
+    ended, after ``at``; newest first."""
+    done = (mergeq_mod.SENT_BACK_STATUS, "merged", *REVIEW_FAILED)
+    found = []
+    for agent in agents:
+        lane = str(agent.get("id", ""))
+        if not lane or lane.startswith(("manager", "ceo-")):
+            continue
+        ended = parse_iso(agent.get("ended_at"))
+        if ended and ended > at:
+            found.append((ended, lane, f"lane {lane} ended at {agent['ended_at']}"))
+        review = agent.get("review") if isinstance(agent.get("review"), dict) else {}
+        closed = parse_iso(review.get("at"))
+        if closed and closed > at and review.get("status") in done:
+            found.append((closed, lane, f"the review of lane {lane} ended ({review['status']}) at {review['at']}"))
+    return sorted(found, key=lambda row: row[0], reverse=True)
+
+
+def _names(text: str, lane: str) -> bool:
+    """Whether the answer ``text`` names ``lane``: by its id, or by its number as the manager writes it (``-28``)."""
+    if lane in text:
+        return True
+    number = re.search(r"-\d+$", lane)
+    return bool(number and re.search(rf"(?<![\w-]){re.escape(number.group())}(?!\d)", text))
+
+
+def _waited_for(last: dict, agents: list[dict], now: datetime) -> str | None:
+    """What the answer ``last`` waited for and that happened since, once it is ``ANSWER_EARLY_S`` old: a lane it
+    names ended (or its review did), or it waited for a free slot and a lane ended. None otherwise: a wait for
+    anything else (the owner, a key) stands until it expires."""
+    at, text = parse_iso(last.get("at")), str(last.get("text") or "")
+    if at is None or not text or (now - at).total_seconds() < ANSWER_EARLY_S:
+        return None
+    ended = _ended_since(agents, at)
+    named = next((what for _, lane, what in ended if _names(text, lane)), None)
+    return named or (ended[0][2] if ended and WAITS_FOR_SLOT.search(text) else None)
+
+
+def _expired_answer(req: dict | None, now: datetime, agents: list[dict] | None = None) -> dict | None:
+    """The manager's last answer to the done proposal ``req`` once it is ``ANSWER_EXPIRES_S`` old, or earlier once
+    what it waited for happened (``since`` says what, see :func:`_waited_for`); else None. A proposal closed without an
+    answer is no decision: it counts from when it was asked (its ``text`` is empty)."""
     if not req:
         return None
     answers = [a for a in req.get("answers", []) if a.get("by") == "manager"]
     last = answers[-1] if answers else {"at": req.get("at"), "text": ""}
     at = parse_iso(last.get("at"))
-    if at is None or (now - at).total_seconds() < ANSWER_EXPIRES_S:
+    if at is None:
         return None
-    return last
+    if (now - at).total_seconds() >= ANSWER_EXPIRES_S:
+        return last
+    since = _waited_for(last, agents or [], now)
+    return {**last, "since": since} if since else None
 
 
 def _propose(home: Path, state: dict, projects: list[dict], agents: list[dict], now: datetime,
@@ -456,7 +517,7 @@ def _propose(home: Path, state: dict, projects: list[dict], agents: list[dict], 
         rec = own["proposals"].get(key)
         earlier = None
         if rec and rec["fp"] == fp:
-            earlier = _expired_answer(answered.get(rec["id"]), now)
+            earlier = _expired_answer(answered.get(rec["id"]), now, agents)
             if earlier is None:
                 continue  # answered (or still open) and not expired: the manager's decision stands
         seen = own["seen"].get(key)
@@ -481,10 +542,14 @@ def _propose(home: Path, state: dict, projects: list[dict], agents: list[dict], 
                 continue
             if held.pop(key, None) is not None:
                 changed = True
+        text = proposal_text(cands, agents, _now_line(home, config, agents))
         for req in by_step.get(key, []):
             if _open_request(req) and rec and req["id"] == rec["id"]:
                 _close(home, req, cands[0]["project"], cands[0]["step"], "its facts changed; replaced by a new one", at)
-        if earlier is not None and earlier["text"]:  # a wait without a deadline would park the step forever
+        if earlier is not None and earlier.get("since"):  # what it waited for happened: no need to sit out the wait
+            text += (f"\nAsked again: you answered at {earlier['at']}: \"{_clip(earlier['text'], ANSWER_QUOTED)}\"; "
+                     f"since then {earlier['since']}.")
+        elif earlier is not None and earlier["text"]:  # a wait without a deadline would park the step forever
             text += (f"\nAsked again: you answered at {earlier['at']} and nobody is on these items since: "
                      f"\"{_clip(earlier['text'], ANSWER_QUOTED)}\"")
         elif earlier is not None:  # closed without a word: the step would never be asked again

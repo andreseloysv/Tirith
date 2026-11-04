@@ -233,6 +233,87 @@ def test_a_proposal_closed_without_an_answer_is_asked_again(home, repo) -> None:
     assert len([r for r in _proposals(home) if r["step"] == "1"]) == 2
 
 
+def _iso(moment: datetime) -> str:
+    return moment.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _wait_on_step_1(home: Path, repo: Path, answer: str) -> Pilot:
+    """Step 1 proposed while lane ``demo-fix-28`` works on step 9, answered ``answer`` and closed."""
+    pilot = Pilot(home, repo)
+    pilot.agents.append({"id": "demo-fix-28", "project": "demo", "step": "9", "status": "working"})
+    pilot.cycle()
+    pilot.cycle()
+    req = next(r for r in _proposals(home) if r["step"] == "1")
+    inbox_mod.add_answer(home, req["id"], answer, at=_iso(pilot.now))
+    inbox_mod.mark_done(home, req["id"])
+    return pilot
+
+
+def _lane_ends(pilot: Pilot, lane: str) -> None:
+    pilot.end(lane)
+    next(a for a in pilot.agents if a["id"] == lane)["ended_at"] = _iso(pilot.now)
+
+
+def test_the_proposal_says_which_slots_are_in_use_now(home, repo) -> None:
+    pilot = Pilot(home, repo)
+    pilot.agents.append({"id": "demo-fix-28", "project": "demo", "step": "9", "status": "working"})
+    pilot.agents.append({"id": "manager-1", "project": "demo", "status": "working"})  # the manager takes no slot
+    pilot.cycle()
+    pilot.cycle()
+    text = next(r for r in _proposals(home) if r["step"] == "1")["text"]
+    assert "Now: 1 of " in text and " agent slots in use (demo-fix-28)\nDecide:" in text and "manager-1" not in text
+
+
+def test_a_wait_for_a_lane_is_asked_again_once_that_lane_ends(home, repo) -> None:
+    pilot = _wait_on_step_1(home, repo, "Autopilot: step 1 → waiting for -28's fix, until 23:30 UTC.")
+    pilot.cycle(autopilot_mod.ANSWER_EARLY_S + 60)
+    assert len([r for r in _proposals(home) if r["step"] == "1"]) == 1  # the lane still works: the wait stands
+    _lane_ends(pilot, "demo-fix-28")
+    pilot.cycle()
+    again = [r for r in _proposals(home) if r["step"] == "1"]
+    assert len(again) == 2 and again[-1]["manager_pending"]
+    assert "since then lane demo-fix-28 ended" in again[-1]["text"] and "waiting for -28's fix" in again[-1]["text"]
+    assert "Now: 0 of " in again[-1]["text"]
+    pilot.cycle()
+    assert len([r for r in _proposals(home) if r["step"] == "1"]) == 2  # once, until it is answered again
+
+
+def test_a_wait_for_a_merge_is_asked_again_once_the_review_merged(home, repo) -> None:
+    pilot = _wait_on_step_1(home, repo, "Autopilot: step 1 → waiting for lane demo-fix-28 to merge.")
+    _lane_ends(pilot, "demo-fix-28")  # the lane ends right away; the answer counts from its own time
+    pilot.cycle(30)
+    row = next(a for a in pilot.agents if a["id"] == "demo-fix-28")
+    row["review"] = {"status": "merged", "at": _iso(pilot.now)}
+    pilot.cycle(autopilot_mod.ANSWER_EARLY_S)
+    again = [r for r in _proposals(home) if r["step"] == "1"]
+    assert len(again) == 2 and "the review of lane demo-fix-28 ended (merged)" in again[-1]["text"]
+
+
+@pytest.mark.parametrize("answer, asked", [
+    ("Autopilot: step 1 → waiting for a free slot (4/4 busy), until 23:30 UTC.", True),
+    ("Autopilot: step 1 → frozen: only the owner can install the guard; it is on their list.", False),
+])
+def test_only_a_wait_for_a_slot_or_a_lane_is_asked_again_early(home, repo, answer, asked) -> None:
+    pilot = _wait_on_step_1(home, repo, answer)
+    pilot.cycle(autopilot_mod.ANSWER_EARLY_S + 60)
+    _lane_ends(pilot, "demo-fix-28")
+    pilot.cycle()
+    assert len([r for r in _proposals(home) if r["step"] == "1"]) == (2 if asked else 1)
+
+
+def test_a_lane_that_ended_before_the_answer_is_not_what_it_waits_for(home, repo) -> None:
+    pilot = Pilot(home, repo)
+    pilot.agents.append({"id": "demo-fix-28", "project": "demo", "step": "9", "status": "done",
+                         "ended_at": _iso(pilot.now)})
+    pilot.cycle()
+    pilot.cycle()
+    req = next(r for r in _proposals(home) if r["step"] == "1")
+    inbox_mod.add_answer(home, req["id"], "Autopilot: step 1 → waiting for -28 (4/4 busy).", at=_iso(pilot.now))
+    inbox_mod.mark_done(home, req["id"])
+    pilot.cycle(autopilot_mod.ANSWER_EARLY_S + 60)
+    assert len([r for r in _proposals(home) if r["step"] == "1"]) == 1
+
+
 def test_the_facts_of_earlier_lanes_are_in_the_proposal(home, repo) -> None:
     pilot = Pilot(home, repo)
     path = repo / "docs" / "TODO.md"
