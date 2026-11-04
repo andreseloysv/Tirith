@@ -230,7 +230,27 @@ def link_node_modules(repo: Path, worktree: Path) -> bool:
         target.symlink_to(source.resolve(), target_is_directory=True)
     except OSError:
         return False
+    exclude_from_status(worktree, "/node_modules")
     return True
+
+
+def exclude_from_status(worktree: Path, pattern: str) -> None:
+    """Add ``pattern`` to the repository's ``info/exclude`` so it is not an uncommitted change. A
+    ``node_modules/`` line in .gitignore does not match a symlink, so the link needs this."""
+    done = timeouts_mod.run(["git", "-C", str(worktree), "rev-parse", "--path-format=absolute", "--git-path",
+                             "info/exclude"], "git", text=True)
+    if done.returncode != 0 or not done.stdout.strip():
+        return
+    exclude = Path(done.stdout.strip())
+    try:
+        current = exclude.read_text() if exclude.is_file() else ""
+        if pattern in current.splitlines():
+            return
+        exclude.parent.mkdir(parents=True, exist_ok=True)
+        with exclude.open("a") as handle:
+            handle.write(("" if not current or current.endswith("\n") else "\n") + pattern + "\n")
+    except OSError:
+        return
 
 
 def agent_command(config: Config, agent: str | None, brief: Path, workspace: Path,
