@@ -20,7 +20,31 @@ official install pages (read 2026-10-29) or from this repo's code; "not checked"
 | Alias | Hooks (`tirith hook`) | Shim (`tirith shim install`) | Hook file | Streaming chat (`chat_args`) |
 | - | - | - | - | - |
 | `anthropic` | yes (own adapter) | yes | its `settings.json` | yes |
-| `muse` | yes (generic adapter) | yes | `~/.config/muse/settings.json` | no (see below) |
+| `muse` | yes (generic adapter) | yes | `~/.config/muse/settings.json` | yes, `muse serve` over MSP (see below) |
+| `codex` | yes (generic adapter) | yes | `~/.codex/hooks.json` | no |
+| `copilot` | yes (generic adapter, flat entries) | yes | `~/.copilot/hooks/tirith.json` | no |
+
+Shims are per command name (`sh` wrapper on macOS and Linux, `.cmd` on Windows), so they do not depend
+on the alias.
+
+### `muse serve` and the chat
+
+`muse serve` by default is a stdio host that speaks JSON-RPC 2.0 (the Muse Session Protocol, MSP; a connection
+must `initialize` first); `--listen` would open a socket daemon, which Tirith does not use (no local servers or
+ports). The manager chat drives it through an adapter (`collector/tirith/mspchat.py`): the `muse` preset has
+`chat_protocol = "msp"` and `chat_args = ["serve", "--disable-request-user-input"]`. Flow: `initialize`,
+`session/start` (approval mode `promptUnmatched`), one `turn/start` per message (with `reasoningEffort`, default
+`minimal`, from `[agents.muse] chat_effort` or `effort`), text from `item/delta`, tool steps from `toolCall` /
+`userShell` items, permission questions from `approval/request` answered by code with `approval/decide`, turn end
+from `turn/completed`. Not covered: resuming a host session (each start is a new conversation), interrupting a turn
+(`stop` and `restart` end the process), `userInput/request` dialogs. The adapter is tested against a fake host
+(`tools/msp_fake_host.py`, optionally checked against `muse schema generate-json-schema` output via `MSP_SCHEMA`);
+no real `muse serve` session was run here.
+
+Streaming chat (`chat_args`) |
+| - | - | - | - | - |
+| `anthropic` | yes (own adapter) | yes | its `settings.json` | yes |
+| `muse` | yes (generic adapter) | yes | `~/.config/muse/settings.json` | yes, `muse serve` over MSP (see below) |
 | `codex` | yes (generic adapter) | yes | `~/.codex/hooks.json` | no |
 | `copilot` | yes (generic adapter, flat entries) | yes | `~/.copilot/hooks/tirith.json` | no |
 
