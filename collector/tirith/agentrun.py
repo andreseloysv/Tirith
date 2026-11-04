@@ -51,6 +51,9 @@ PRESET_DEFAULTS: dict[str, dict] = {
         "effort_flag": "--reasoning-effort",  # none|minimal|low|medium|high|xhigh|max|ultra
         "add_dir_flag": None,
         "prompt_file_flag": "--prompt-file",  # a long prompt goes through a file, not argv
+        # the manager chat: an MSP host over stdio (no ports), see mspchat.py
+        "chat_args": ["serve", "--disable-request-user-input"],
+        "chat_protocol": "msp",
     },
     # Flags checked against each CLI's real help (read through a lane); a full run is still
     # unconfirmed (docs/CONTRACT-agents.md).

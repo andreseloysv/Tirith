@@ -152,10 +152,9 @@ Linux: signing is optional; nothing needed.
   `cargo check` and `cargo test` pass.
 - Auto-update, actual signing, a Windows shim/guard tested on Windows (`scripts/package.ps1` was not
   run on Windows either).
-- `muse serve` as a chat agent: the app only speaks the `anthropic` streaming JSON dialect (see Chat).
-  `muse serve` speaks JSON-RPC 2.0 over stdio (or a socket with `--listen`, not used: no ports), not that
-  dialect; its methods are not documented where we could read them, so no `chat_args` exists for it
-  (docs/PLATFORMS.md).
+- `muse serve` chat: the manager chat speaks MSP through `collector/tirith/mspchat.py` (`chat_protocol = "msp"`,
+  `docs/PLATFORMS.md`). Tested against a fake host only; not covered: resuming a session, interrupting a turn,
+  `userInput/request` dialogs.
 - Mobile: out of this plan. Tauri 2 can target Android and iOS, but nothing here is set up for it, and
   the chat spawns local processes.
 - Python as a sidecar.
