@@ -37,6 +37,7 @@ from tirith import manifest as manifest_mod
 from tirith import plangate as plangate_mod
 from tirith import review as review_mod
 from tirith import selfreload as selfreload_mod
+from tirith import testmap as testmap_mod
 from tirith import timeouts as timeouts_mod
 from tirith.home import Config, now_iso
 from tirith.launch import worktree_path
@@ -257,11 +258,18 @@ def rerun_failed(home: Path, project: str, pipeline: str, stage, tmp: Path, lane
         return None
     for test in tests:
         ok, _ = review_mod.run_tests(home, project, pipeline, f"{stage.name}-rerun", tmp,
-                                     f"{stage.run} -n 0 {shlex.quote(test)}", lane_id)
+                                     f"{stage.run} -n 0 {shlex.quote(test)}", lane_id, full=False)
         if not ok:
             return None
     note_flaky(home, project, tests)
     return tests
+
+
+def refresh_map(home: Path, repo: Path, project: str, base: str, stages: list) -> None:
+    """After a landing, start the build of the execution map when it is missing or old (see ``tirith.testmap``)."""
+    for _, stage in stages:
+        if manifest_mod.stage_kind(stage) == "test" and testmap_mod.refresh(home, project, repo, base, stage.run):
+            return
 
 
 def stages_of(folder: Path) -> list[tuple[str, manifest_mod.Stage]]:
@@ -440,7 +448,8 @@ def _run_stages(home: Path, project: str, stages: list, tmp: Path, lane_id: str
     A red stage first repeats its failed tests alone (:func:`rerun_failed`): when they all pass the stage goes on."""
     passed, flaky = None, []
     for pipeline, stage in stages:
-        ok, output = review_mod.run_tests(home, project, pipeline, stage.name, tmp, stage.run, lane_id)
+        suite = manifest_mod.stage_kind(stage) == "test" and stage.name != RUST_STAGE  # one full suite at a time
+        ok, output = review_mod.run_tests(home, project, pipeline, stage.name, tmp, stage.run, lane_id, full=suite)
         if not ok and output.startswith(review_mod.DID_NOT_FINISH):  # out of time: nothing to repeat
             return f"{pipeline}/{stage.name}", output, passed, flaky
         if not ok:
@@ -500,6 +509,7 @@ def _try(home: Path, repo: Path, lane: dict, entry: dict) -> tuple[str, str, dic
         tested, refused = _land(home, repo, tmp, project, base, tested, main_branch, feature, branch)
         if refused:
             return refused[0], refused[1], {}
+        refresh_map(home, repo, project, main_branch, stages)
         return MERGED, "tests passed; merged" + skip_note(skipped) + flaky_note(flaky), \
             {"commit": tested, "main": main_branch, "passed": passed, "branch": branch, "skipped": skipped,
              **({"flaky": flaky} if flaky else {})}
@@ -584,6 +594,7 @@ def _try_train(home: Path, repo: Path, members: list[tuple[dict, dict]]) -> tupl
         if refused:
             return refused[0], refused[1], info
         info.update(commit=tested, passed=passed, skipped=skipped, flaky=flaky)
+        refresh_map(home, repo, str(joined[0][1].get("project") or ""), main_branch, stages)
         return MERGED, f"tests passed; merged in a train of {len(joined)}" + skip_note(skipped) + flaky_note(flaky), info
     finally:
         _drop_tmp(repo, tmp)
