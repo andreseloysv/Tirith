@@ -13,9 +13,12 @@ import fcntl
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 LOCK_NAME = "collector.lock"
+REVIVE_STALE_S = 300.0  # state.json this old while nobody holds the lock: the collector is down
+REVIVE_EVERY_S = 300.0  # at most one revival try in this long
 LAUNCHD_LABEL = "com.tirith.collector"
 LAUNCHD_PLIST = Path("launchd") / f"{LAUNCHD_LABEL}.plist"  # under the home: a managed Mac may lock ~/Library/LaunchAgents
 
@@ -82,3 +85,33 @@ def ensure_launchd(home: Path, run=subprocess.run) -> str:
     except (OSError, subprocess.TimeoutExpired):
         return "none"
     return "loaded" if done.returncode == 0 else "none"
+
+
+def revive(home: Path, now: float | None = None, run=subprocess.run) -> str:
+    """Bring a collector that is down back: ``state.json`` older than ``REVIVE_STALE_S`` and the lock free. Loads
+    the launchd job (which starts it) or, when it is loaded, starts it now; tried at most every ``REVIVE_EVERY_S``.
+    Every agent hook calls this, so a collector that died (a reload that lost the lock race, a job unloaded from
+    outside) comes back as soon as any agent does anything. Returns what it did."""
+    now = time.time() if now is None else now
+    try:
+        if now - (home / "state.json").stat().st_mtime < REVIVE_STALE_S:
+            return "alive"
+    except OSError:
+        return "no-state"
+    mark = home / "revive.at"
+    try:
+        if now - float(mark.read_text(encoding="utf-8").strip() or 0) < REVIVE_EVERY_S:
+            return "recent"
+    except (OSError, ValueError):
+        pass
+    if running_pid(home) is not None:
+        return "running"  # alive but slow: not ours to restart
+    mark.write_text(f"{int(now)}\n", encoding="utf-8")
+    done = ensure_launchd(home, run=run)
+    if done == "present":
+        try:
+            run(["launchctl", "kickstart", f"gui/{os.getuid()}/{LAUNCHD_LABEL}"], capture_output=True, timeout=10)
+        except (OSError, subprocess.TimeoutExpired):
+            return "none"
+        return "kicked"
+    return done
