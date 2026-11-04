@@ -41,6 +41,7 @@ from tirith import hooks as hooks_mod
 from tirith import autopilot as autopilot_mod
 from tirith import canary as canary_mod
 from tirith import dispatch as dispatch_mod
+from tirith import appupdate as appupdate_mod
 from tirith import selfcheck as selfcheck_mod
 from tirith import livesteps as livesteps_mod
 from tirith import managerd as managerd_mod
@@ -566,6 +567,11 @@ class SlowWork:
                 self.owner.github.poll(config, self.entries)
                 dispatch_mod.run(self.owner.home, config, datetime.now(timezone.utc), agents=agents, lanes=lanes,
                                  status_of=self.owner._lane_status, projects=projects)
+                try:
+                    appupdate_mod.maybe_start(self.owner.home)  # Rust code changed on main: signed rebuild + restart
+                except Exception as exc:  # never let the app update hold back the dispatcher
+                    print(f"tirith collect: app update check failed ({type(exc).__name__}: {exc})",
+                          file=sys.stderr, flush=True)
                 failures = 0
             except Exception as exc:  # one bad pass must not end the thread
                 failures += 1
