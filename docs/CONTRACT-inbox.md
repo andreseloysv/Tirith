@@ -620,7 +620,9 @@ in which the session could not start (`dispatch.json` `manager.session.error` sa
 - **The process.** The collector starts ONE agent process per Tirith home, the first time something is pending
   for the manager: `tirith lane run --interactive --id manager-<hex> --class steward --feature Manager
   --as-agent <alias> --by-tirith -- <command> <chat_args>` with piped stdin/stdout, in its own process group,
-  in the first pending request's project folder. The alias and model/effort come from `[models.manager]`
+  in the first pending request's project folder, skipping a project where `lane run` would refuse (commit guard
+  not intact, `tirith check` failing: `cli.project_refusal`) for the next one, then any configured project; only
+  when every project refuses does it try the first and record why it exited. The alias and model/effort come from `[models.manager]`
   (default `anthropic`). `chat_args` is `[agents.<alias>] chat_args`, default for `anthropic`: `-p
   --input-format stream-json --output-format stream-json --verbose --permission-prompt-tool stdio`; Tirith adds
   `--include-partial-messages` (text arrives token by token) and `--resume <session-id>` when restarting.
