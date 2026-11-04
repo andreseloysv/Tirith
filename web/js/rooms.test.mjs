@@ -73,6 +73,28 @@ try {
   assert.doesNotMatch(await page.textContent('.mrooms'), /Public/);
   console.log('ok  rooms: lock, who is in each (8-char key ids), last message');
 
+  /* real agent state: asleep for N minutes with who can wake it; busy; listening; no report = unknown */
+  const mk = (state, minutes, wake) => ({ state, since: new Date(Date.now() - minutes * 60000).toISOString(), wake });
+  const pr = JSON.parse(JSON.stringify(fixture.rooms));
+  pr[0].managers = [
+    { name: 'sleeper', key_id: 'aa'.repeat(32), presence: mk('asleep', 12, ['muse', 'anthropic']) },
+    { name: 'worker', key_id: 'bb'.repeat(32), presence: mk('busy', 3, []) },
+    { name: 'ear', key_id: 'cc'.repeat(32), presence: mk('listening', 0, []) },
+    { name: 'silent', key_id: 'dd'.repeat(32) },
+    { name: 'lonely', key_id: 'ee'.repeat(32), presence: mk('asleep', 90, ['<img src=x>']) }
+  ];
+  write(pr);
+  await page.waitForFunction(() => /sleeper/.test(document.querySelector('.mrooms').textContent), null, { timeout: 8000 });
+  const rowOf = n => page.locator('.rcard').first().locator('.rwho li', { hasText: n });
+  assert.match(await rowOf('sleeper').textContent(), /Asleep for 12 min.*can be woken by muse, anthropic/);
+  assert.match(await rowOf('worker').textContent(), /Busy for 3 min/);
+  assert.match(await rowOf('ear').textContent(), /Listening/);
+  assert.match(await rowOf('silent').textContent(), /Status unknown/);
+  assert.match(await rowOf('lonely').textContent(), /Asleep for 90 min.*nobody can wake it/, 'an invalid alias is not shown');
+  assert.equal(await page.locator('.rwho img').count(), 0);
+  write([...fixture.rooms]);
+  console.log('ok  agent state: listening, busy, asleep for N min with who wakes it, unknown');
+
   /* the QR is an inline svg, only for an unused invite, and nothing was fetched */
   assert.equal(await first.locator('.rpair .rqr svg.qr').count(), 1, 'one-use QR');
   assert.equal(await first.locator('.ropen .rqr svg.qr').count(), 1, 'permanent QR');
