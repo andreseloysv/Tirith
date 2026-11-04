@@ -165,3 +165,44 @@ def test_a_reviews_test_suite_waits_for_a_stage_slot(home: Path, tmp_path: Path,
     (home / "config.toml").write_text("", encoding="utf-8")
     assert review_mod.run_tests(home, "demo", "ci", "test", tmp_path, "pytest") == (True, "3 passed")
     assert seen == [("slot", 2, review_mod.SLOT_WAIT_S), ("run",), ("free",)]
+
+
+def _capture_run_tests(monkeypatch) -> list:
+    seen: list = []
+
+    def run_tests(home, project, pipeline, stage, workspace, command, lane_id=None, run_id=None, full=True):
+        seen.append((command, full, lane_id))
+        return True, ""
+
+    monkeypatch.setattr(review_mod, "run_tests", run_tests)
+    return seen
+
+
+def test_review_runs_the_selected_tests_not_the_full_suite(launched, home: Path, monkeypatch) -> None:
+    from tirith import testmap
+    repo, worktree = launched
+    seen = _capture_run_tests(monkeypatch)
+    (worktree / "collector" / "tirith").mkdir(parents=True)
+    (worktree / "collector" / "tests").mkdir()
+    (worktree / "collector" / "tirith" / "x.py").write_text("X = 1\n")
+    (worktree / "collector" / "tests" / "test_x.py").write_text("from tirith import x\n")
+    assert main(["lane", "review", "web-panel", "--tests-only"]) == 0  # no map: the names and the import graph
+    command, full, _ = seen[-1]
+    assert full is False and "tests/test_x.py" in command and "--testmon" not in command
+    testmap.map_file(home, "demo").parent.mkdir(parents=True)
+    testmap.map_file(home, "demo").write_bytes(b"map")
+    assert main(["lane", "review", "web-panel", "--tests-only"]) == 0  # with a map: testmon
+    command, full, _ = seen[-1]
+    assert full is False and "--testmon" in command and "-p no:xdist" in command
+    assert (worktree / "collector" / testmap.MAP).read_bytes() == b"map"  # copied into the worktree
+
+
+def test_review_of_a_project_without_the_layout_keeps_its_command(launched, home: Path, monkeypatch) -> None:
+    seen = _capture_run_tests(monkeypatch)
+    assert main(["lane", "review", "web-panel", "--tests-only"]) == 0
+    assert seen[-1][:2] == ("test -f feature.txt", True)
+
+
+def test_a_ceo_lane_never_runs_a_test_suite(home: Path, tmp_path: Path) -> None:
+    ok, output = review_mod.run_tests(home, "demo", "ci", "test", tmp_path, "exit 1", "ceo-ab12cd34")
+    assert ok and "never runs" in output

@@ -7,7 +7,7 @@ import subprocess
 from pathlib import Path
 
 from conftest import GIT, make_repo
-from tirith import fasttests, gates, loadlimit
+from tirith import fasttests, gates, loadlimit, testmap
 from tirith.cli import main
 from tirith.home import load_config
 from tirith.store import read_jsonl
@@ -165,3 +165,113 @@ def test_existing_gate_ids_are_still_present():
     for rule in ids:
         assert f'"{rule}"' in source, rule
     assert gates.Violation("no-verify", "w", "i").action == "block"
+
+
+def _stub_tools(bin_dir: Path) -> None:
+    bin_dir.mkdir()
+    for name, body in (("uv", "exit 0"), ("node", '[ -f "$1" ] || { echo "no such file $1"; exit 1; }')):
+        tool = bin_dir / name
+        tool.write_text(f"#!/bin/sh\n{body}\n")
+        tool.chmod(0o755)
+
+
+def test_python_and_web_steps_run_from_the_right_folders(tmp_path):
+    root = _tree(tmp_path)
+    sel = fasttests.select(root, "test", ["collector/tirith/gamma.py", "web/js/chat.js"])
+    assert sel.tests and sel.web
+    _stub_tools(tmp_path / "bin")
+    env = {**os.environ, "PATH": f"{tmp_path / 'bin'}:{os.environ['PATH']}"}
+    done = subprocess.run(["/bin/sh", "-c", fasttests.command(sel)], cwd=root, env=env, capture_output=True, text=True)
+    assert done.returncode == 0, done.stdout + done.stderr  # `node web/...` used to run inside collector/
+
+
+def test_the_map_picks_python_tests_only_for_python_changes(tmp_path):
+    root = _tree(tmp_path)
+    sel = fasttests.select(root, "test", ["collector/tirith/alpha.py", "web/js/chat.js"], mapped=True)
+    assert sel.mapped and sel.tests == [] and sel.web == ["web/js/chat.test.mjs"] and sel.record()["mode"] == "map"
+    cmd = fasttests.command(sel)
+    assert "--testmon" in cmd and "-p no:xdist" in cmd and "-n auto" not in cmd and "node web/js/chat.test.mjs" in cmd
+    for other in (["collector/pyproject.toml"], ["collector/tirith/alpha.py", "collector/state.schema.json"]):
+        sel = fasttests.select(root, "test", other, mapped=True)
+        assert not sel.mapped, other  # testmon does not see data files: names and the import graph
+    assert not fasttests.select(root, "test", ["collector/tirith/alpha.py"], mapped=False).mapped
+    assert not fasttests.select(root, "rust-test", ["collector/tirith/alpha.py"], mapped=True).mapped
+
+
+def test_the_map_command_accepts_nothing_selected(tmp_path):
+    _stub_tools(tmp_path / "bin")
+    (tmp_path / "collector").mkdir()
+    env = {**os.environ, "PATH": f"{tmp_path / 'bin'}:{os.environ['PATH']}"}
+    for exit_code, expected in ((0, 0), (5, 0), (1, 1)):
+        (tmp_path / "bin" / "uv").write_text(f"#!/bin/sh\nexit {exit_code}\n")
+        done = subprocess.run(["/bin/sh", "-c", testmap.command()], cwd=tmp_path, env=env)
+        assert done.returncode == expected
+
+
+def test_for_lane_copies_the_map_once_and_records_the_mode(home, tmp_path):
+    root = _tree(make_repo(tmp_path / "wt"))  # the files are new to git: all of them count as changed
+    first = fasttests.for_lane(home, "p", root, "test")  # no map yet: names and the import graph
+    assert not first.mapped and first.tests
+    assert testmap.stale(home, "p") and not testmap.usable(home, "p")
+    testmap.map_file(home, "p").parent.mkdir(parents=True)
+    testmap.map_file(home, "p").write_bytes(b"main map")
+    assert not testmap.stale(home, "p")
+    second = fasttests.for_lane(home, "p", root, "test")
+    assert second.mapped and (root / "collector" / testmap.MAP).read_bytes() == b"main map"
+    (root / "collector" / testmap.MAP).write_bytes(b"lane map")  # the lane's own copy is newer: kept
+    assert testmap.install(home, "p", root) and (root / "collector" / testmap.MAP).read_bytes() == b"lane map"
+    assert [r["mode"] for r in read_jsonl(home / "selections.jsonl")] == ["changed", "map"]
+
+
+def test_the_map_is_refreshed_only_for_pytest_and_an_old_map(home, tmp_path, monkeypatch):
+    started = []
+    monkeypatch.setattr("tirith.launch.spawn_detached", lambda argv, h, log: started.append(argv) or 1)
+    assert not testmap.refresh(home, "p", tmp_path, "main", "cargo test")
+    assert testmap.refresh(home, "p", tmp_path, "main", "cd collector && uv run pytest -q")
+    assert started and "testmap" in started[0] and "build" in started[0]
+    testmap.map_file(home, "p").write_bytes(b"x")
+    assert not testmap.refresh(home, "p", tmp_path, "main", "uv run pytest")  # fresh map
+    old = testmap.map_file(home, "p").stat().st_mtime - testmap.MAX_AGE_S - 10
+    os.utime(testmap.map_file(home, "p"), (old, old))
+    assert testmap.refresh(home, "p", tmp_path, "main", "uv run pytest")
+
+
+def test_one_full_suite_at_a_time(home):
+    with loadlimit.full_suite(home) as first:
+        assert first is True
+        with loadlimit.full_suite(home, wait=0.0, poll=0.01) as second:
+            assert second is False  # waited out: runs anyway
+        with loadlimit.slot(home, 1) as slot:  # the stage slots are separate
+            assert slot == 0
+    with loadlimit.full_suite(home) as again:
+        assert again is True
+
+
+def test_a_ceo_lane_run_skips_the_test_stage(home, tmp_path, monkeypatch, capsys):
+    repo = make_repo(tmp_path / "proj")
+    (repo / "tirith.toml").write_text('[[pipelines]]\nid = "ci"\n[[pipelines.stages]]\nname = "test"\nrun = "echo FULLRUN"\n')
+    (home / "config.toml").write_text(f'[[projects]]\nid = "p"\nname = "P"\nrepo = "{repo}"\n', encoding="utf-8")
+    monkeypatch.setenv("TIRITH_LANE", "ceo-12345678")
+    monkeypatch.chdir(repo)
+    assert main(["--home", str(home), "run", "--project", "p", "--stage", "test", "--full"]) == 0
+    out = capsys.readouterr().out
+    assert "never runs a test suite" in out and "FULLRUN" not in out
+
+
+def test_build_runs_the_suite_in_its_own_worktree_of_main(home, tmp_path, monkeypatch):
+    repo = make_repo(tmp_path / "proj")
+    (repo / "collector").mkdir()
+    (repo / "collector" / "marker.txt").write_text("v1\n")
+    for args in (["add", "."], ["-c", "user.email=t@example.invalid", "-c", "user.name=T", "commit", "-q", "-m", "m"]):
+        subprocess.run([GIT, "-C", str(repo), *args], check=True)
+    monkeypatch.setattr(testmap, "BASE_COMMAND", 'cp marker.txt "$TESTMON_DATAFILE"')
+    head = lambda: subprocess.run([GIT, "-C", str(repo), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+    ok, output = testmap.build(home, "p", repo, head())
+    assert ok, output
+    assert testmap.map_file(home, "p").read_text() == "v1\n" and testmap.usable(home, "p")
+    (repo / "collector" / "marker.txt").write_text("v2\n")  # a second build moves the same worktree to the new commit
+    subprocess.run([GIT, "-C", str(repo), "-c", "user.email=t@example.invalid", "-c", "user.name=T",
+                    "commit", "-qam", "m2"], check=True)
+    assert testmap.build(home, "p", repo, head())[0] and testmap.map_file(home, "p").read_text() == "v2\n"
+    monkeypatch.setattr(testmap, "BASE_COMMAND", "exit 1")
+    assert not testmap.build(home, "p", repo, head())[0] and not testmap.usable(home, "p")  # a failed build leaves no map
