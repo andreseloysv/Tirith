@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import unicodedata
 import uuid
 import re
 from datetime import date
@@ -568,15 +569,31 @@ def edit(text: str, step_id: str, item_text: str = "", new_text: str | None = No
     return "".join(lines)
 
 
-def find_item(steps: list[dict], step_id: str, wanted: str) -> dict | None:
-    """The open item of step ``step_id`` whose clean text (or ``i-xxxxxxxx`` id) is ``wanted``."""
-    step = next((s for s in steps if s["id"] == str(step_id)), None)
+def _text_key(text: str) -> str:
+    """The comparable form of an item's text: no metadata, status note or check note; Unicode-normalised,
+    whitespace-collapsed and case-folded."""
+    clean = without_check(split_status(text)[0])
+    return unicodedata.normalize("NFC", clean).casefold()
+
+
+def _matches(item_text: str, item_ident: str, wanted: str) -> bool:
     clean = split_status(wanted)[0]
-    for item in (step["items"] if step else []):
-        if not item["done"] and (split_status(item["text"])[0] == clean or
-                                 (item.get("id") or item_id(item["text"])) == clean):
+    return split_status(item_text)[0] == clean or item_ident == clean
+
+
+def find_item(steps: list[dict], step_id: str, wanted: str) -> dict | None:
+    """The open item of step ``step_id`` whose clean text (or ``i-xxxxxxxx`` id) is ``wanted``.
+
+    An exact match wins. Otherwise the text is compared without the ``(check: ...)`` note, the status note and
+    the metadata, ignoring case, whitespace and Unicode form; that must single out one open item."""
+    step = next((s for s in steps if s["id"] == str(step_id)), None)
+    items = [i for i in (step["items"] if step else []) if not i["done"]]
+    for item in items:
+        if _matches(item["text"], item.get("id") or item_id(item["text"]), wanted):
             return item
-    return None
+    key = _text_key(wanted)
+    loose = [i for i in items if key and _text_key(i["text"]) == key]
+    return loose[0] if len(loose) == 1 else None
 
 
 def _open_block(lines: list[str], step_id: str, wanted: str, what: str):
@@ -584,8 +601,12 @@ def _open_block(lines: list[str], step_id: str, wanted: str, what: str):
     if span is None:
         raise EditError(f"step {step_id} is not in the plan any more")
     clean = split_status(wanted)[0]
-    hit = next((b for b in _item_blocks(lines, *span) if not b[3]
-                and (split_status(b[2])[0] == clean or item_id(b[2]) == clean)), None)
+    blocks = [b for b in _item_blocks(lines, *span) if not b[3]]
+    hit = next((b for b in blocks if split_status(b[2])[0] == clean or item_id(b[2]) == clean), None)
+    if hit is None:
+        key = _text_key(wanted)
+        loose = [b for b in blocks if key and _text_key(b[2]) == key]
+        hit = loose[0] if len(loose) == 1 else None
     if hit is None:
         raise EditError(f"{what} changed in the plan meanwhile (or was ticked)")
     return span, hit
