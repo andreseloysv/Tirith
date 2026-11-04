@@ -218,6 +218,21 @@ def test_a_wait_expires_and_the_step_is_asked_again_with_the_earlier_answer(home
     assert len([r for r in _proposals(home) if r["step"] == "1"]) == 2  # once, until it is answered again
 
 
+def test_a_proposal_closed_without_an_answer_is_asked_again(home, repo) -> None:
+    pilot = Pilot(home, repo)
+    pilot.cycle()
+    pilot.cycle()
+    req = next(r for r in _proposals(home) if r["step"] == "1")
+    inbox_mod.mark_done(home, req["id"])  # closed, not a word: no decision
+    pilot.cycle(autopilot_mod.ANSWER_EXPIRES_S - 120)
+    assert len([r for r in _proposals(home) if r["step"] == "1"]) == 1
+    pilot.cycle(240)
+    again = [r for r in _proposals(home) if r["step"] == "1"]
+    assert len(again) == 2 and again[-1]["manager_pending"] and "closed without an answer" in again[-1]["text"]
+    pilot.cycle()
+    assert len([r for r in _proposals(home) if r["step"] == "1"]) == 2
+
+
 def test_the_facts_of_earlier_lanes_are_in_the_proposal(home, repo) -> None:
     pilot = Pilot(home, repo)
     path = repo / "docs" / "TODO.md"

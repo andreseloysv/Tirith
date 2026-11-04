@@ -183,7 +183,9 @@ max_parallel = 4     # kept for old configs; nothing is launched by the autopilo
   to the owner. A proposal unanswered for more than 10 min is a manager-health problem (`CONTRACT-selfcheck.md`).
 - **A decision expires.** An answered proposal whose items still sit with nobody on them, facts unchanged, is
   asked again after 2 h (`ANSWER_EXPIRES_S`), quoting the earlier answer ("Asked again: you answered at … and
-  nobody is on these items since: "…""), so a "wait" never parks a step forever. What blocks a launch for a
+  nobody is on these items since: "…""), so a "wait" never parks a step forever. A proposal closed without an
+  answer is no decision: it is asked again 2 h after it was asked ("Asked again: it was asked at … and closed
+  without an answer"). What blocks a launch for a
   known reason (load, a failing project check, an owner stop) is held by code instead and never reaches the
   manager.
 - **The switch** is the Plan's Pause / Resume (inbox request `autopilot`). Off means no proposals; opening
