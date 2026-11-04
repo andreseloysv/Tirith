@@ -50,6 +50,7 @@ SENT_BACK_STATUS = "sent-back"  # the lane's ``review.status`` once the queue re
 MARK = "[merge queue]"
 MAX_SENT_BACK = 3  # after this many returns the manager (never the owner) decides
 START_WAIT = 20.0  # seconds a returned lane's new agent has to register itself before the manager hears of it
+WAIT_NOTICE = 2  # consecutive `waiting` results of one entry after which the manager is told why
 MAX_TRIES = 3  # main moved under the merge: start again from the new main
 TIMED_OUT = "timed out"  # a git command stopped at its deadline: retried by the queue, never sent back
 OUT_OF_TIME = "out-of-time"  # a stage hit its time limit: the suite did not fail
@@ -679,6 +680,14 @@ def send_back(home: Path, config: Config, lane: dict, result: str, message: str,
     return sent or ""
 
 
+def _tell_manager(home: Path, entry: dict, lane: dict, result: str, message: str, hint: str) -> None:
+    """A manager queue item with the reason a merge-queue attempt did not land (never the owner)."""
+    lane_id = str(entry["lane"])
+    first = message.strip().splitlines()[0][:200] if message.strip() else "no reason given"
+    asks_mod.queue_add(home, str(entry.get("project") or ""), lane_id,
+                       f"Merge queue: {lane.get('feature') or lane_id} ({lane_id}) {result}: {first}\n- {hint}")
+
+
 def _close_gone(home: Path, entry: dict, lane: dict | None, repo: Path | None) -> dict:
     """An entry whose lane, worktree or project is gone leaves the queue with its reason (flow + history), so
     the lanes behind it go on."""
@@ -749,8 +758,12 @@ def _settle(home: Path, config: Config, entry: dict, lane: dict, repo: Path, res
     """Act on the outcome for one lane: wait, send back, or close it as merged (pushing first when ``push``)."""
     if result == "retry":
         return _finish(home, entry, WAITING, message, keep=True, retried=True)
-    if result == WAITING:
-        return _finish(home, entry, WAITING, message, keep=True)
+    if result == WAITING:  # the same reason twice in a row is not luck: the manager hears of it (once)
+        count = int(entry.get("waits") or 0) + 1
+        if count == WAIT_NOTICE:
+            _tell_manager(home, entry, lane, WAITING, message, "It waits in the queue and is tried again; fix the reason "
+                          "above (or `tirith lane drop <lane>`).")
+        return _finish(home, entry, WAITING, message, keep=True, waits=count)
     if result == OUT_OF_TIME:  # the suite ran out of time, it did not fail: never sent back
         count = int(entry.get("timeouts") or 0) + 1
         if count == 2:
@@ -772,7 +785,11 @@ def _settle(home: Path, config: Config, entry: dict, lane: dict, repo: Path, res
         failed = extra.get("push_error") if "push_error" in extra else _push(repo, str(extra["main"]))
         if failed:
             extra["push_error"] = failed
-    return _close_merged(home, repo, lane, entry, extra, message, files)
+    row = _close_merged(home, repo, lane, entry, extra, message, files)
+    if row["result"] == PUSH_FAILED:  # main has the lane but origin does not: nobody else would see it
+        _tell_manager(home, entry, lane, PUSH_FAILED, str(row["message"]),
+                      "The lane is merged into main; push it with `git push origin <main branch>` once the cause is fixed.")
+    return row
 
 
 def _process_train(home: Path, config: Config, members: list[tuple[dict, dict]], repo: Path,
