@@ -148,6 +148,13 @@ def snapshot(home: Path, config: Config, now: datetime) -> dict:
     }
 
 
+def red_checks(home: Path) -> dict[str, str]:
+    """The self-check's failed checks ("Something needs a look"), ``{check: text}``."""
+    dstate = read_json(Path(home) / "dispatch.json", {}) or {}
+    checks = ((dstate.get("health") or {}).get("checks") or {}) if isinstance(dstate, dict) else {}
+    return {k: str(v.get("text") or "") for k, v in checks.items() if isinstance(v, dict) and v.get("level") == "failed"}
+
+
 def fingerprint(snap: dict) -> str:
     """What makes a review worth paying for: the counts, not the clock."""
     keep = {k: v for k, v in snap.items() if k not in ("at", "manager_oldest_pending_min", "manager_cost_today")}
@@ -205,7 +212,7 @@ def brief(home: Path, snap: dict, cfg: dict, catch_up: bool) -> str:
     for d in dirs:
         d["manager_answer"] = _manager_answer(home, d.get("request"))
     last = next(iter(reversed(read_jsonl(folder(home) / "runs.jsonl"))), None)
-    return "\n\n".join([
+    return "\n\n".join(part for part in [
         "# You are Tirith's CEO",
         "You supervise the manager: you judge whether the way it runs the work turns the plan into verified work on "
         "main, fast and cheaply, without needing the owner. You never do the manager's job. Read docs/CONTRACT-ceo.md "
@@ -220,6 +227,10 @@ def brief(home: Path, snap: dict, cfg: dict, catch_up: bool) -> str:
         "needs a measurement you can repeat; an agent's claim is not evidence.",
         ("## Catch-up\nTirith was off since your last review: check every open directive again before anything "
          "else." if catch_up else ""),
+        ("## Alarm\nThis review was started out of schedule because the self-check turned red (snapshot `alarm`). "
+         "Start with it: find the cause from the data (logs, lane and review records, `tirith check`), not from "
+         "the alarm's own wording, then tell the manager what to do about it (a directive) or ask the owner when "
+         "only they can fix it." if snap.get("alarm") else ""),
         "## Procedure\n1. Re-check each open finding with its `check`; fixed ones get change \"fixed\".\n"
         "2. For each open directive: did the manager do it (its answer), and did the number in `expect` move? One "
         "that did not move after its `runs` reviews becomes a finding.\n3. Look for new problems against the targets "
@@ -242,7 +253,7 @@ def brief(home: Path, snap: dict, cfg: dict, catch_up: bool) -> str:
         "## Your proposals and the owner's decisions\n" + _data("ceo decisions", _bounded(decided, MEMORY_CHARS // 4)),
         "## Your open directives and the manager's answers\n" + _data("ceo directives", dirs),
         "## Your last review\n" + _data("last run", last or "none"),
-    ]).replace("\n\n\n\n", "\n\n")
+    ] if part)
 
 
 # -- the result ------------------------------------------------------------------------------------
@@ -449,27 +460,38 @@ def _run(home: Path, config: Config, now: datetime, cfg: dict, spawn: Callable |
     changed = _settle_lanes(home, book, now) | settle_decisions(home) | settle_directives(home)
     running = any(not l.get("ended_at") for l in _ceo_lanes(home)) or _starting(home, now)
     slot = _slot(now, cfg["hours"])
-    due = force or (slot is not None and slot != book.get("slot"))
+    red = red_checks(home)
+    alarm = {k: v for k, v in red.items() if f"{k}: {v}" not in book.get("alarmed", [])}
+    if book.get("alarmed") and not running:  # a check that turned green again may alarm again later
+        kept = [a for a in book["alarmed"] if a in {f"{k}: {v}" for k, v in red.items()}]
+        changed |= kept != book["alarmed"]
+        book["alarmed"] = kept
+    due = force or bool(alarm) or (slot is not None and slot != book.get("slot"))
     if running or not due:
         if changed:
             _save_book(home, book)
         return changed
-    book["slot"] = slot or book.get("slot")
+    if slot is not None and slot != book.get("slot"):
+        book["slot"] = slot
     snap = snapshot(home, config, now)
+    if alarm:  # the self-check turned red: a review now, outside the schedule
+        snap["alarm"] = alarm
+        book["alarmed"] = [*book.get("alarmed", []), *(f"{k}: {v}" for k, v in alarm.items())]
     fp = fingerprint(snap)
     open_dirs = [d for d in directives(home).values() if d.get("status") in ("open", "answered")]
     last = parse_iso(book.get("last_at"))
     catch_up = last is not None and (now - last).total_seconds() > 26 * 3600
-    if not force and fp == book.get("fp") and not open_dirs:
+    if not force and not alarm and fp == book.get("fp") and not open_dirs:
         append_jsonl(folder(home) / "runs.jsonl", {"id": f"skip-{slot}", "at": now_iso(now), "status": "skipped",
                                                    "why": "nothing changed since the last review"})
-    elif not force and _runs_today(home, now) >= cfg["runs_per_day"]:
+    elif not force and not alarm and _runs_today(home, now) >= cfg["runs_per_day"]:  # past it, only alarms run
         append_jsonl(folder(home) / "runs.jsonl", {"id": f"skip-{slot}", "at": now_iso(now), "status": "skipped",
                                                    "why": f"the budget of {cfg['runs_per_day']} reviews a day is used"})
     else:
         try:
             lane_id = start(home, config, now, snap, cfg, catch_up, spawn)
-            append_jsonl(folder(home) / "runs.jsonl", {"id": lane_id, "at": now_iso(now), "status": "started"})
+            append_jsonl(folder(home) / "runs.jsonl", {"id": lane_id, "at": now_iso(now), "status": "started",
+                                                       **({"alarm": sorted(alarm)} if alarm else {})})
             book.update(fp=fp, last_at=now_iso(now))
         except (launch_mod.LaunchError, plangate_mod.PlanGateError) as err:
             append_jsonl(folder(home) / "runs.jsonl", {"id": f"fail-{slot}", "at": now_iso(now),
