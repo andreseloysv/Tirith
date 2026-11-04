@@ -208,5 +208,13 @@
   var mdToggle = function (key) { open[key] = !open[key]; };
 
   T.md = md; T.mdInline = mdInline; T.mdBox = mdBox; T.mdFit = mdFit; T.mdToggle = mdToggle;
+  /* who speaks, bold for fast reading: a leading "CEO proposal:", "CEO directive d-1:" or "Autopilot:" of a text */
+  var LEAD = /^(CEO proposal:|CEO directive [^\s:]+:|Autopilot:)/;
+  T.boldLead = function (text) { return String(text == null ? '' : text).replace(LEAD, '**$1**'); };
+  /* the speaker of a message line, bold: "Manager · tirith" -> <b>Manager</b> · tirith (escaped) */
+  T.ctxHtml = function (ctx) {
+    var s = String(ctx || ''), at = s.indexOf(' · ');
+    return at < 0 ? '<b>' + T.esc(s) + '</b>' : '<b>' + T.esc(s.slice(0, at)) + '</b>' + T.esc(s.slice(at));
+  };
   if (typeof module !== 'undefined' && module.exports) module.exports = { md: md, mdInline: mdInline, mdBox: mdBox, splitRef: splitRef };
 })();
