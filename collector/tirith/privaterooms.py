@@ -94,7 +94,7 @@ def open_url(home: Path, room: str) -> str:
 
 def invite_manager(home: Path, room: str) -> str:
     """A new one-use code another Tirith joins with; the last one is kept in the record so the app can show it."""
-    with bridge.record_lock:
+    with bridge.locked(home):
         if record_of(home, room).get("role") == "peer":
             raise PrivateRoomError("this Tirith joined as a peer; only the manager who made the room invites managers")
         secret = bridge.new_join_code(home, room)
@@ -115,7 +115,7 @@ def join_room(home: Path, code: str) -> dict:
             sealed.say(me, room, f"{bridge.JOIN_PREFIX} {secret}", to=manager_key)
     except sealed.SealedError as exc:
         raise PrivateRoomError(f"could not join the room: {exc}") from exc
-    with bridge.record_lock:
+    with bridge.locked(home):
         record = bridge.load_room(home, room) or bridge.new_record(room, {"name": me.name, "key_id": me.key_id}, "Private room")
         if manager_key and not any(m.get("key_id") == manager_key for m in record["managers"]):
             record["managers"].append({"name": None, "key_id": manager_key, "last_seen": None})
@@ -129,7 +129,7 @@ def leave_room(home: Path, room: str) -> None:
     """Stop listening and forget the room here. The key stays (it is the identity, not the room's)."""
     if not bridge.ROOM_RE.match(room or ""):
         raise PrivateRoomError("invalid room")
-    with bridge.record_lock:
+    with bridge.locked(home):
         record_of(home, room)
         bridge.room_path(home, room).unlink(missing_ok=True)
 
