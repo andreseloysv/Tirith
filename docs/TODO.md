@@ -226,7 +226,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Comunicación web ↔ app por IPC de Tauri (sin puertos).
 - [x] Vista de chat: cada conversación es un lane (`lane run --interactive` por debajo).
 - [x] Agentes por stdin/stdout: modo stream-json del agente `anthropic` (`chat_args`).
-- [ ] Chat con `muse serve` (en curso: u-musechat)
+- [ ] Chat con `muse serve` (en curso: app-de-escritorio-tauri-con-chat-10) <!-- tirith:{"id":"i-2e787d8f"} -->
 - [x] Preguntas de permiso del agente en la UI.
 - [x] La app arranca el collector si no hay uno (con uv; Python aún no va empaquetado).
 - [x] Abrir la app en modo dev y comprobar que se ve y se actualiza.
