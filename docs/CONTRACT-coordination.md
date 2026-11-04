@@ -91,3 +91,12 @@ Anthropic workers receive pending messages through their existing session/prompt
 post-tool hooks, without acknowledging them automatically. Every agent alias can
 use the CLI inbox protocol described in its brief. New workers still start only
 through Tirith's plan-linked lane launcher.
+
+## `tirith do`
+
+`tirith do "<goal>" --project <id> [--step N] [--agent <alias>] [--dry-run]` splits the goal (lines, bullets,
+sentences, `;`) into at most 8 small plan items (`tirith/dogoal.py`). Each item is added with `plan add` rules and
+a check, `cd collector && uv run -q pytest -q tests -k do_<slug>`, so the lane writes the test that proves it.
+Without `--step` the items go in a new step. Each item then starts through `tirith launch`; one that cannot
+start (work limit, plan gate) is printed as "not started" and the exit code is 3. `--dry-run` adds the items to
+the plan and starts nothing.

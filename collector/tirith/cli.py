@@ -54,6 +54,7 @@ from tirith import howto as howto_mod
 from tirith import ownergate as ownergate_mod
 from tirith import planlane as planlane_mod
 from tirith import plangate as plangate_mod
+from tirith import dogoal as dogoal_mod
 from tirith import verifylane as verifylane_mod
 from tirith import roadmap as roadmap_mod
 from tirith import review as review_mod
@@ -1984,6 +1985,41 @@ def _cmd_launch(args) -> int:
     return 0
 
 
+def _cmd_do(args) -> int:
+    """``tirith do "<goal>"``: split the goal into small plan items, each with its check, and launch them."""
+    home = _home(args)
+    repo = plangate_mod.repo_of(home, args.project)
+    if repo is None:
+        print(f"tirith do: unknown project '{args.project}'", file=sys.stderr)
+        return 3
+    items = dogoal_mod.plan_items(args.goal)
+    if not items:
+        print("tirith do: the goal is empty", file=sys.stderr)
+        return 3
+    who = os.environ.get("TIRITH_LANE") or ("manager" if in_manager_session() else "owner")
+    try:
+        _, steps = plangate_mod._read(repo)
+        step = str(args.step) if args.step else dogoal_mod.next_step(steps)
+        title = " ".join(args.goal.split())[:80]
+        added = [(plangate_mod.add_item(home, repo, args.project, step, text, who, title, check), check)
+                 for text, check in items]
+    except plangate_mod.PlanGateError as error:
+        print(f"tirith do: {error}", file=sys.stderr)
+        return 3
+    print(f"step {step}: {len(added)} items")
+    failed = 0
+    for text, check in added:
+        print(f"- {text}\n  check: {check}")
+        if args.dry_run and not args.launch:
+            continue
+        try:
+            launch_step(home, args.project, step, args.agent, args.dry_run, item=text)
+        except launch_mod.LaunchError as error:
+            failed += 1
+            print(f"  not started: {error}", file=sys.stderr)
+    return 3 if failed else 0
+
+
 def _open_file(home: Path, project: str, path: str, line: int | None, col: int | None) -> None:
     """Open one file named in the chat, checked against the registered project folders."""
     config = load_config(home)
@@ -2890,6 +2926,15 @@ def build_parser() -> argparse.ArgumentParser:
     launch.add_argument("--request", default=None, help="inbox request id this lane answers")
     launch.add_argument("--dry-run", action="store_true", help="print the brief and command, start nothing")
     launch.set_defaults(func=_cmd_launch)
+
+    do = sub.add_parser("do", parents=[common], help="turn a big goal into small plan items, each with its check, and launch them")
+    do.add_argument("goal", help="the goal; lines, bullets, sentences and ';' become one item each")
+    do.add_argument("--project", required=True)
+    do.add_argument("--step", default=None, help="plan step to add the items to (default: a new step)")
+    do.add_argument("--agent", default=None, help="agent alias")
+    do.add_argument("--dry-run", action="store_true", help="add the items to the plan and show them; start nothing")
+    do.add_argument("--launch", action="store_true", help=argparse.SUPPRESS)
+    do.set_defaults(func=_cmd_do)
 
     plan = sub.add_parser("plan", parents=[common],
                           help="the plan is the only way to start and finish an agent: add items, report outcomes")
