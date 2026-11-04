@@ -49,7 +49,8 @@ AUTOPILOT_IDLE_S = 120.0     # an open item nobody works on and no proposal for 
 PROPOSAL_STUCK_S = 600.0     # a proposal the manager has not answered
 QUEUE_STUCK_S = 600.0        # a merge queue entry "queued" with no runner
 SPAWN_LOG_S = 120.0          # a runner stamped "spawned" this long ago must have a log
-REVIEW_STUCK_S = 1200.0      # a review in "running"
+REVIEW_STUCK_S = 1200.0      # a review in "running" whose process is gone
+REVIEW_ALIVE_STUCK_S = 3 * 3600.0  # one whose process lives: it waits for a stage slot or tests (the stage has its own limit)
 TIMEOUTS_WINDOW_S = 3600.0   # timeouts of one class are counted over this long
 TIMEOUTS_REPEATED = 3        # this many in the window is not chance
 COLLECTOR_GAP_S = 150.0      # no pass for this long: the collector was down
@@ -390,7 +391,8 @@ def _reviews(home: Path, config: Config, now: datetime, book: dict, lanes: list[
             for key in (f"review-stuck:{lane_id}", f"review-unrelated:{lane_id}"):
                 if key in book["tries"]:
                     active.add(key)  # a re-run is in progress: the episode goes on
-        if status == review_mod.RUNNING and _age_s(review.get("at"), now) >= REVIEW_STUCK_S:
+        alive = review_mod._alive(review.get("pid"))
+        if status == review_mod.RUNNING and _age_s(review.get("at"), now) >= (REVIEW_ALIVE_STUCK_S if alive else REVIEW_STUCK_S):
             key, mins = f"review-stuck:{lane_id}", _minutes(_age_s(review.get("at"), now))
             active.add(key)
 
