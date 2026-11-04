@@ -44,3 +44,5 @@ jobs:
         run: node web/js/links.test.mjs
       - name: Your turn tests
         run: node web/js/needs.test.mjs
+      - name: Running Tirith tests
+        run: node web/js/leaders.test.mjs
