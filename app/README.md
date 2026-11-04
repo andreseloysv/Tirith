@@ -56,6 +56,18 @@ npm run tauri build    # bundles for the current platform
 cd src-tauri && cargo test     # permission reply, line classification, live web paths and MIME types
 ```
 
+## Self-update (macOS)
+
+When the Rust side changes on main (git trees of `app/src-tauri`, `rust/`, `Cargo.toml`, `Cargo.lock` at the
+checked-out `HEAD` of the repo) the collector starts one detached `tirith app-update`
+(`collector/tirith/appupdate.py`): `scripts/package.sh` builds and signs, the result must carry a "Developer ID
+Application" signature (else it is not installed), the running app is quit, the installed `Tirith.app` is
+replaced and opened again if it was running. Nothing for the owner to do. Installed app:
+`[app] install_path`, else `/Applications/Tirith.app`, else `~/Applications/Tirith.app`; none installed, nothing
+happens. `[app] auto_update = false` turns it off, `[app] repo_dir` sets the repo. State and errors:
+`~/.tirith/app-update.json`, log `~/.tirith/logs/app-update.log`. A failed build is not retried until main
+changes again. The first look takes the installed app as current. No server, no port.
+
 ## Agents per platform
 
 Aliases the code knows (`agentrun.PRESET_DEFAULTS`): `anthropic`, `muse`. Which of them has a build
@@ -150,7 +162,7 @@ Linux: signing is optional; nothing needed.
 - Loading `tirithweb://` in a real window was not tried (no GUI session); the handler is covered by
   unit tests only. Opening the window in dev mode and looking at it was not done in this session;
   `cargo check` and `cargo test` pass.
-- Auto-update, actual signing, a Windows shim/guard tested on Windows (`scripts/package.ps1` was not
+- Auto-update on Windows/Linux (macOS only), actual signing, a Windows shim/guard tested on Windows (`scripts/package.ps1` was not
   run on Windows either).
 - `muse serve` chat: the manager chat speaks MSP through `collector/tirith/mspchat.py` (`chat_protocol = "msp"`,
   `docs/PLATFORMS.md`). Tested against a fake host only; not covered: resuming a session, interrupting a turn,
