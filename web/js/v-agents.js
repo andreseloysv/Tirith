@@ -52,6 +52,7 @@
       [['list', 'List'], ['kanban', 'Kanban'], ['tree', 'Tree']].map(function (m) {
         return '<button data-act="mode" data-v="' + m[0] + '" class="' + (mode === m[0] ? 'on' : '') + '">' + m[1] + '</button>';
       }).join('') + '</div></div>';
+    if (T.leaders) tb = '<div class="pad leadpad">' + T.leaders(s) + '</div>' + tb;  /* the manager and the CEO first */
     if (!all.length) { el.innerHTML = tb + '<div class="pad">' + T.empty('No agents in this session') + '</div>'; return; }
     var old = all.filter(isOld), vis = ui.showEarlier ? all : all.filter(function (a) { return !isOld(a); });
     var more = old.length ? '<button class="link" data-act="earlier">' + (ui.showEarlier ? 'Hide earlier' : 'Show ' + old.length + ' earlier') + '</button>' : '';
