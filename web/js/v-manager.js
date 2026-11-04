@@ -146,11 +146,13 @@
     }).join('') + '</div>';
   }
   T.chatThumbs = thumbs;
+  function lead(t) { return T.boldLead ? T.boldLead(t) : t; }          /* md.js: "Autopilot:", "CEO proposal:" bold */
+  function ctxHtml(c) { return T.ctxHtml ? T.ctxHtml(c) : esc(c); }  /* md.js: the speaker bold */
   function msg(m, state) {
     if (m.item) return turnMsg(m, state);
     if (m.side === 'live') return T.liveBlock(m.row, state);
-    var body = m.side === 'me' ? esc(m.text).replace(/\n/g, '<br>') : T.md(m.text, T.chatOpts(state, m.project));
-    var meta = (m.ctx ? esc(m.ctx) + ' · ' : '') + esc(T.clockTime(m.at));
+    var body = m.side === 'me' ? esc(m.text).replace(/\n/g, '<br>') : T.md(lead(m.text), T.chatOpts(state, m.project));
+    var meta = (m.ctx ? ctxHtml(m.ctx) + ' · ' : '') + esc(T.clockTime(m.at));
     if (m.queued) meta = '<span class="mc-wait" title="The manager is working on an earlier message; this one goes into the same session when that turn ends">Queued</span> · ' + meta;
     if (m.local === 'sending') meta = 'Sending… · ' + meta;
     else if (m.local === 'sent') meta = '<span class="mc-wait" title="Written to the inbox; waiting for the manager to pick it up">Delivered ✓</span> · ' + meta;
@@ -164,10 +166,10 @@
   /* a message that needs the owner (open) or needed it (answered): the text, then options and Run actions */
   function turnMsg(m, state) {
     var w = m.item.w, replying = ui.chatReplyTo === w.id;
-    return '<div class="mc-m mgr turn' + (m.open ? ' wait' : '') + (replying ? ' replying' : '') + '" data-wait="' + esc(w.id) + '"><div class="mc-b md">' + T.md(m.text, T.chatOpts(state, m.project)) + '</div>' +
+    return '<div class="mc-m mgr turn' + (m.open ? ' wait' : '') + (replying ? ' replying' : '') + '" data-wait="' + esc(w.id) + '"><div class="mc-b md">' + T.md(lead(m.text), T.chatOpts(state, m.project)) + '</div>' +
       (w.reason_tag ? '<div class="nacts"><span class="nchip nreason">' + esc(w.reason_tag) + '</span></div>' : '') +
       T.turnBlock(m.item, state) +
-      '<div class="mc-meta">' + (m.open ? '<b class="mc-await">Waits for you</b> · ' : '') + esc(m.ctx) + ' · ' + esc(T.clockTime(m.at)) + '</div></div>';
+      '<div class="mc-meta">' + (m.open ? '<b class="mc-await">Waits for you</b> · ' : '') + ctxHtml(m.ctx) + ' · ' + esc(T.clockTime(m.at)) + '</div></div>';
   }
   /* What is really happening to the oldest pending request: the manager is writing, or nobody is. */
   var LIVE_FRESH = 5 * 60 * 1000, LATE = 30 * 60 * 1000;
