@@ -148,6 +148,9 @@ and the Meta brain would stay off. Code: `collector/tirith/ownerenv.py`, called 
 ## Stalled
 
 A lane whose log has not changed for 10 minutes is `stalled`, unless a pipeline stage tagged with that lane is running
-(started, not ended, process alive): the agent is waiting for its tests, so it stays `working`.
+(started, not ended, process alive): the agent is waiting for its tests, so it stays `working`. A live interactive
+lane (the persistent manager session, the owner's own conversation) is never `stalled`: between turns it waits for the
+next message. The Overview's "Working agents" heading counts `working` lanes only, like the Agents tab's Working
+column, and names the stalled ones next to it.
 
 Projects: a merge queue copy (a folder named `_mergeq-*`) is never a project, auto-discovered or proposed for by the autopilot.
