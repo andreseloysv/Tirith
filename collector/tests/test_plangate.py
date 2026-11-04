@@ -663,6 +663,30 @@ def test_a_self_merged_lane_is_ticked_with_its_commit(proj, home: Path) -> None:
     assert not plangate.tick_merged(home, cfg, [read_json(home / "lanes" / "self1.json", {})])
 
 
+def test_item_stays_open_until_merged(proj, home: Path) -> None:
+    """A lane never leaves its item ticked before its work is on main: reporting done, ending, and a branch that is
+    committed but not merged all leave it open; only the merge ticks it."""
+    repo, _ = proj
+    _lane(home, repo, "early1", ended_at="2026-01-01T00:00:00Z", result="done")
+    plangate.report(home, "early1", "done")
+    assert "- [ ] Build the button. (en revisión)" in _plan(repo)
+    assert plangate.lane_ended(home, read_json(home / "lanes" / "early1.json", {})) == "done"
+    assert "- [x] Build the button" not in _plan(repo)
+    seen = [read_json(home / "lanes" / "early1.json", {})]
+    cfg = load_config(home)
+    assert not plangate.tick_merged(home, cfg, seen)  # no branch at all: no proof
+    _git_do(repo, "checkout", "-q", "-b", "lane/early1")
+    (repo / "early.py").write_text("z = 3\n", encoding="utf-8")
+    _git_do(repo, "add", "early.py")
+    _git_do(repo, "commit", "-q", "-m", "wip")
+    _git_do(repo, "checkout", "-q", "-")
+    assert not plangate.tick_merged(home, cfg, seen)  # committed, not merged
+    assert "- [x] Build the button" not in _plan(repo)
+    _git_do(repo, "merge", "--no-ff", "-q", "-m", "Merge branch 'lane/early1'", "lane/early1")
+    assert plangate.tick_merged(home, cfg, seen)
+    assert "- [x] Build the button. (hecho: " in _plan(repo)
+
+
 def test_a_lane_not_on_main_stays_in_review(proj, home: Path) -> None:
     repo, _ = proj
     _lane(home, repo, "open1", ended_at="2026-01-01T00:00:00Z", result="done")
