@@ -37,29 +37,54 @@ def cpu_seconds() -> float:
     return t.user + t.system + t.children_user + t.children_system
 
 
-def make_repo(path: Path) -> Path:
-    """Create a throwaway git repo with one commit (tmp dirs only)."""
-    path.mkdir(parents=True, exist_ok=True)
+_TEMPLATE_REPO: Path | None = None
+
+
+def _init_repo(path: Path) -> None:
+    """``git init`` + one commit of what ``path`` holds and a README; no background git after commits."""
     subprocess.run([GIT, "init", "-q", "--template=", str(path)], check=True)
     (path / ".git" / "hooks").mkdir(exist_ok=True)  # a repo has the folder; no template means no sample files in it
+    with (path / ".git" / "config").open("a", encoding="utf-8") as config:
+        config.write("[maintenance]\n\tauto = false\n[gc]\n\tauto = 0\n")
     (path / "README.md").write_text("# demo repo\n", encoding="utf-8")
     subprocess.run([GIT, "-C", str(path), "add", "."], check=True)
     subprocess.run(
         [GIT, "-C", str(path), "-c", "user.email=t@example.invalid",
          "-c", "user.name=Tirith Test", "commit", "-q", "-m", "initial"],
         check=True)
+
+
+def make_repo(path: Path) -> Path:
+    """Create a throwaway git repo with one commit (tmp dirs only). An empty ``path`` gets a copy of one template
+    repo built once per test process (git runs for it once, not for every test)."""
+    global _TEMPLATE_REPO
+    path.mkdir(parents=True, exist_ok=True)
+    if any(path.iterdir()):  # its files go into the first commit
+        _init_repo(path)
+        return path
+    if _TEMPLATE_REPO is None or not _TEMPLATE_REPO.is_dir():
+        import atexit
+        import tempfile
+        folder = Path(tempfile.mkdtemp(prefix="tirith-template-repo-"))
+        atexit.register(shutil.rmtree, folder, True)
+        _TEMPLATE_REPO = folder / "repo"
+        _TEMPLATE_REPO.mkdir()
+        _init_repo(_TEMPLATE_REPO)
+    shutil.copytree(_TEMPLATE_REPO, path, dirs_exist_ok=True)
     return path
 
 
 def make_hooks_mutable(repo: Path) -> None:
     """Clear immutable flags the guard sets, so tmp cleanup can proceed."""
-    try:
-        out = subprocess.run(
-            [GIT, "-C", str(repo), "rev-parse", "--path-format=absolute", "--git-common-dir"],
-            capture_output=True, text=True, check=True).stdout.strip()
-    except (OSError, subprocess.SubprocessError):
-        return
-    hooks = Path(out) / "hooks"
+    hooks = Path(repo) / ".git" / "hooks"  # a plain repo: no git process needed
+    if not (Path(repo) / ".git").is_dir():
+        try:
+            out = subprocess.run(
+                [GIT, "-C", str(repo), "rev-parse", "--path-format=absolute", "--git-common-dir"],
+                capture_output=True, text=True, check=True).stdout.strip()
+        except (OSError, subprocess.SubprocessError):
+            return
+        hooks = Path(out) / "hooks"
     if not hooks.is_dir():
         return
     for hook in hooks.iterdir():

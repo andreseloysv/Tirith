@@ -223,10 +223,16 @@ def render(words: list[str], chained: frozenset[str] | set[str] = frozenset(),
     return out
 
 
+_COMMON_DIRS: dict[str, str] = {}  # repo -> its git common dir, asked once per process
+
+
 def hooks_dir(repo: Path) -> Path:
-    out = subprocess.run([_git(), "-C", str(repo), "rev-parse", "--path-format=absolute",
-                          "--git-common-dir"], capture_output=True, text=True, check=True).stdout.strip()
-    return Path(out) / "hooks"
+    common = _COMMON_DIRS.get(str(repo))
+    if common is None or not os.path.isdir(common):
+        common = subprocess.run([_git(), "-C", str(repo), "rev-parse", "--path-format=absolute",
+                                 "--git-common-dir"], capture_output=True, text=True, check=True).stdout.strip()
+        _COMMON_DIRS[str(repo)] = common
+    return Path(common) / "hooks"
 
 
 def _read(p: Path) -> str:
