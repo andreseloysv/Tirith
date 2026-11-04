@@ -1030,3 +1030,12 @@ button.vwho:hover b { text-decoration: underline; }
 .rlink { margin-bottom: 8px; overflow-wrap: anywhere; } .rurl { font-size: 12px; color: var(--mut); }
 .rleave { color: var(--red); background: rgba(229,72,77,.06); border-color: rgba(229,72,77,.25); }
 .rempty { padding: 6px 2px; }
+
+/* "Running Tirith": the manager and CEO cards (js/leaders.js) */
+.lead { cursor: default; }
+.lead .lead-h { font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--mut, #8a8f98); }
+.lead-list { margin: 0; padding-left: 16px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.lead-list li { overflow-wrap: anywhere; }
+.lead-mark { width: 36px; height: 36px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+  font-weight: 700; background: var(--blue, #3b6fe0); color: #fff; flex: none; }
+.leadpad { padding-bottom: 0; }
