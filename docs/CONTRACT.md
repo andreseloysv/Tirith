@@ -21,6 +21,7 @@ Meta Model API for the brain (see below); everything works without it.
 |---|---|---|
 | `config.toml` | owner | projects: `id`, `name`, `repo` path, `color`; brain settings |
 | `lanes/<lane-id>.json` | `tirith lane start` / `tirith lane end` | lane registration (below) |
+| `lanes/<lane-id>/brief.md` | `tirith lane start` | Tirith's copy of the lane's brief; a restart (`lane` fallback/retry) reads it when the original brief file is gone |
 | `events.jsonl` | `tirith run`, `tirith hook` | pipeline stage events (below) and agent hook events (`kind: "hook"`, see `CONTRACT-hooks.md`), one JSON object per line |
 | `notes.jsonl` | `tirith note` | `{"at","project","text"}` orchestrator decisions |
 | `waits.jsonl` | `tirith wait add/done` | `{"id","at","project","text","link","done_at"}` |
