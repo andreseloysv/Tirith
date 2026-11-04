@@ -219,9 +219,11 @@ def review_lane(home: Path, lane_id: str, repo: Path | None, merge: bool = True)
     run_id = runstage_mod.resolve_run(home, project, pipeline, None, True)  # known while the tests run
     _set(home, lane, RUNNING, run=run_id)
     command, full = stage.run, True
-    if stage.name == "test" and fasttests_mod.supported(workspace):  # a review runs what the change reaches
-        sel = fasttests_mod.for_lane(home, project, workspace, stage.name)
-        command, full = fasttests_mod.command(sel) or stage.run, False
+    # a review that merges runs the full suite (the selection misses code run in other processes: hooks, a
+    # `tirith` started from a test); a tests-only review runs what the change reaches
+    if not merge and stage.name == "test" and fasttests_mod.supported(workspace):
+        selected = fasttests_mod.command(fasttests_mod.for_lane(home, project, workspace, stage.name))
+        command, full = (selected, False) if selected else (stage.run, True)
     ok, output = run_tests(home, project, pipeline, stage.name, workspace, command, lane_id, run_id, full)
     if not ok:
         return _set(home, lane, TESTS_FAILED, output or "tests failed", run=run_id)
