@@ -120,26 +120,12 @@ def test_no_secrets_allows_ordinary_reads(lane: Path, command: str) -> None:
     assert "no-secrets" not in _bash(lane, command)
 
 
-def test_no_secrets_covers_the_read_tools(lane: Path, monkeypatch) -> None:
-    calls = []
-    real_sensitive = lanegates._sensitive
-    def spy(path, workspace):
-        out = real_sensitive(path, workspace)
-        calls.append((path, str(workspace), out))
-        return out
-    monkeypatch.setattr(lanegates, "_sensitive", spy)
+def test_no_secrets_covers_the_read_tools(lane: Path) -> None:
     assert "no-secrets" in _rules(lane, "Read", file_path=f"{HOME}/.ssh/id_rsa")
     assert "no-secrets" in _rules(lane, "Grep", pattern="x", path=f"{HOME}/.aws")
     assert "no-secrets" in _rules(lane, "Read", file_path="/somewhere/.env")
     assert "no-secrets" in _rules(lane, "Read", file_path="/somewhere/cert.pem")
-    cfg = Config(projects=[ProjectConfig(id="proj", name="proj", repo=lane.parent.parent / "proj")])
-    found = gates.check_call(cfg, "Read", {"file_path": str(lane / ".env")}, str(lane), "proj", lane="perms",
-                             env={"TMPDIR": "/tmp", "HOME": HOME})
-    seen = {"workspace": str(lanegates.lane_workspace(None, "perms", str(lane))), "git": (lane / ".git").exists(),
-            "real": lanegates._real(str(lane / ".env")), "real_ws": lanegates._real(str(lane))}
-    print("lane-gate calls:", [c for c in calls if ".env" in c[0]][-3:])
-    print("lane-gate diagnostics:", seen, lanegates._sensitive(seen["real"], lanegates.lane_workspace(None, "perms", str(lane))))
-    assert not [v for v in found if v.rule == "no-secrets"], ([v.message() for v in found], seen)  # the reason, on CI too
+    assert "no-secrets" not in _rules(lane, "Read", file_path=str(lane / ".env"))
     assert "no-secrets" not in _rules(lane, "Read", file_path=str(lane / "src" / "a.py"))
     assert "no-secrets" in _rules(lane, "Write", file_path=f"{HOME}/.ssh/authorized_keys")
 
@@ -235,3 +221,12 @@ def test_workspace_write_sed_expression_is_not_a_path(lane: Path) -> None:
     for command in ("sed -i -e '/^=======$/d' /etc/hosts", "sed -i '/^=======$/d' /etc/hosts",
                     "sed -i '' -e '/x/d' src/a.py /etc/hosts", "sed -i -f script.sed /etc/hosts"):
         assert "workspace-write" in _bash(lane, command), command
+
+
+def test_the_lanes_own_env_is_readable_wherever_the_lane_lives() -> None:
+    """The probe for `open('/x/.env')` words once dropped the first folder of every path: `/work/ws/.env` became
+    `/ws/.env`, outside the lane (it passed only where that folder was a symlink, like macOS /var)."""
+    work = Path("/nonexistent-root/lanes/ws")
+    assert lanegates.no_secrets("Read", {"file_path": str(work / ".env")}, [], str(work), work, {}) == []
+    assert lanegates.no_secrets("Bash", {}, [["cat", str(work / ".env")]], str(work), work, {}) == []
+    assert lanegates.no_secrets("Bash", {}, [["python3", "-c", f"open('{HOME}/.ssh/id_rsa')"]], str(work), work, {})
