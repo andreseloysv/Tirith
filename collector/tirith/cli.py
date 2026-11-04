@@ -1395,6 +1395,11 @@ def _cmd_map(args) -> int:
     return 0
 
 
+def _cmd_app_update(args) -> int:
+    from tirith import appupdate as appupdate_mod
+    return appupdate_mod.update(_home(args), args.fingerprint)
+
+
 def _cmd_collect(args) -> int:
     home = _home(args)
     if not args.once and (pid := collectlock_mod.running_pid(home)) is not None:
@@ -2791,6 +2796,10 @@ def build_parser() -> argparse.ArgumentParser:
     map_cmd = sub.add_parser("map", parents=[common], help="map project architecture")
     map_cmd.add_argument("project")
     map_cmd.set_defaults(func=_cmd_map)
+
+    app_update = sub.add_parser("app-update", parents=[common], help="rebuild (signed) and restart the desktop app")
+    app_update.add_argument("--fingerprint", default=None)
+    app_update.set_defaults(func=_cmd_app_update)
 
     collect = sub.add_parser("collect", parents=[common], help="run the collector")
     collect.add_argument("--once", action="store_true")
