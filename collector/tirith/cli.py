@@ -65,6 +65,7 @@ from tirith import fasttests as fasttests_mod
 from tirith import loadlimit as loadlimit_mod
 from tirith import repeats as repeats_mod
 from tirith import scoreboard as scoreboard_mod
+from tirith import ceo as ceo_mod
 from tirith import projects as projects_mod
 from tirith import projenv as projenv_mod
 from tirith import roomcli as roomcli_mod
@@ -338,6 +339,16 @@ def _cmd_lane_drop(args) -> int:
 def _cmd_lane_stats(args) -> int:
     board = scoreboard_mod.score(scoreboard_mod.ended_lanes(_home(args), args.days), args.by)
     print(json.dumps(board, indent=2) if args.json else scoreboard_mod.render(board, args.by, args.days))
+    return 0
+
+
+def _cmd_ceo(args) -> int:
+    home = _home(args)
+    if args.ceo_command == "run":
+        started = ceo_mod.run(home, load_config(home), datetime.now(timezone.utc), force=True)
+        print("CEO review started" if started else "nothing to start")
+        return 0
+    print(json.dumps(ceo_mod.public(home, datetime.now(timezone.utc)), indent=2, ensure_ascii=False))
     return 0
 
 
@@ -690,7 +701,7 @@ def _cmd_lane_run(args) -> int:
                 end_lane(home, lane_id, "failed", "The agent process could not be started.")
                 raise
             stopped = lanestop_mod.marker(read_json(lane_path(home, lane_id), None) or {})
-            agent_lane = bool(alias)
+            agent_lane = bool(alias) and not lane_id.startswith(ceo_mod.LANE_PREFIX)  # a CEO review is judged by its result
             if (not stopped and agent_lane and exit_code == timeouts_mod.EXIT_TIMED_OUT
                     and _IDLE.pop(lane_id, False) and idle_rounds < keepgoing_mod.MAX_ROUNDS
                     and keepgoing_mod.has_work(workspace, lane.get("start_commit"))):
@@ -2569,6 +2580,10 @@ def build_parser() -> argparse.ArgumentParser:
     drop = lane_sub.add_parser("drop", parents=[common], help="throw away a launched lane's worktree and branch")
     drop.add_argument("lane_id")
     drop.set_defaults(func=_cmd_lane_drop)
+    ceo = sub.add_parser("ceo", parents=[common], help="the CEO: show its state, or start a review now")
+    ceo_sub = ceo.add_subparsers(dest="ceo_command", required=True)
+    ceo_sub.add_parser("show", parents=[common], help="last review, report, directives, proposals").set_defaults(func=_cmd_ceo)
+    ceo_sub.add_parser("run", parents=[common], help="start a review now (also when [ceo] is off)").set_defaults(func=_cmd_ceo)
     stats = lane_sub.add_parser("stats", parents=[common],
                                 help="scoreboard of ended lanes: first-try rate, rounds, merges, cost, common gaps")
     stats.add_argument("--days", type=float, default=14.0)

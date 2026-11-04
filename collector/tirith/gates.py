@@ -59,6 +59,7 @@ DESCRIPTIONS: dict[str, str] = {
     "no-secrets": "Agents may never read passwords, keys or login files from your computer.",
     "no-servers": "Agents may not start servers or open ports on your computer.",
     "own-processes": "Agents may only stop the processes they started themselves.",
+    "ceo-read-only": "The CEO only reads: it changes nothing itself, it sends directives and proposals.",
 }
 
 

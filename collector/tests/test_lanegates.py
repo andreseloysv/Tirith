@@ -37,7 +37,7 @@ def _bash(lane: Path, command: str) -> list[str]:
 def test_all_existing_gate_ids_are_still_present_and_described() -> None:
     old = {"subagent-tool", "agent-cli", "no-verify", "hooks-path", "git-hooks", "settings-edit",
            "roadmap-edit", "raw-stage", "lane-brief", "project-check", "commit-guard"}
-    new = {"workspace-write", "no-secrets", "no-servers", "own-processes"}
+    new = {"workspace-write", "no-secrets", "no-servers", "own-processes", "ceo-read-only"}
     assert old <= set(mf.BUILT_IN_RULES) and new <= set(mf.BUILT_IN_RULES)
     assert set(lanegates.RULE_IDS) == new
     assert (old | new) <= set(gates.DESCRIPTIONS)
