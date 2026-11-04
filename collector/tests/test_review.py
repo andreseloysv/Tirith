@@ -197,6 +197,18 @@ def test_review_runs_the_selected_tests_not_the_full_suite(launched, home: Path,
     assert (worktree / "collector" / testmap.MAP).read_bytes() == b"map"  # copied into the worktree
 
 
+def test_a_review_that_merges_runs_the_full_suite(launched, home: Path, monkeypatch) -> None:
+    from tirith import testmap
+    repo, worktree = launched
+    seen = _capture_run_tests(monkeypatch)
+    (worktree / "collector" / "tirith").mkdir(parents=True)
+    (worktree / "collector" / "tirith" / "x.py").write_text("X = 1\n")
+    testmap.map_file(home, "demo").parent.mkdir(parents=True)
+    testmap.map_file(home, "demo").write_bytes(b"map")
+    main(["lane", "review", "web-panel"])
+    assert seen[-1][:2] == ("test -f feature.txt", True)  # main only gets what the whole suite passed
+
+
 def test_review_of_a_project_without_the_layout_keeps_its_command(launched, home: Path, monkeypatch) -> None:
     seen = _capture_run_tests(monkeypatch)
     assert main(["lane", "review", "web-panel", "--tests-only"]) == 0

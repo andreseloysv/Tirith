@@ -174,10 +174,12 @@ The agent leaves its work uncommitted in the worktree; review finishes the job:
 
 1. Refuses (exit 3) when the lane is unknown, still running, not `done`, not a launched lane, already
    merged or already being reviewed, or when the manifest has no test stage with a `run` command.
-2. Runs the first test stage of `tirith.toml` (kind `test`, else a name like `test`) in the worktree. A stage
-   named `test` in a project with a `collector/tirith` folder runs only what the lane's change reaches (the same
-   selection as `tirith run --stage test` in a lane, see "Test selection" below), not the full suite; the merge
-   queue runs the full suite. A CEO lane (`ceo-` prefix) never runs a test suite.
+2. Runs the first test stage of `tirith.toml` (kind `test`, else a name like `test`) in the worktree. A review
+   that merges runs the full suite, holding the machine's one full-suite lock: the selection misses code run in
+   other processes, and main only gets what the whole suite passed. A `--tests-only` review of a stage named `test`
+   in a project with a `collector/tirith` folder runs only what the lane's change reaches (the same selection as
+   `tirith run --stage test` in a lane, see "Test selection" below). A CEO lane (`ceo-` prefix) never runs a test
+   suite.
    Failing tests: `review.status = "tests-failed"`, nothing is merged (exit 1).
 3. With `--tests-only`: stops with `ready`.
 4. Otherwise: refuses (`merge-failed`) if the repo has uncommitted tracked changes; commits the worktree
@@ -197,8 +199,8 @@ halt. The self-check settles such a review the same way without running it again
 
 ### Test selection (`collector/tirith/fasttests.py`, `collector/tirith/testmap.py`)
 
-`tirith run --stage test|rust-test` in a lane's worktree and the lane review run only what the change touches;
-`--full` and the merge queue (outside a lane) run everything. The selection is recorded in
+`tirith run --stage test|rust-test` in a lane's worktree and a `--tests-only` review run only what the change
+touches; `--full`, a review that merges and the merge queue (outside a lane) run everything. The selection is recorded in
 `<home>/selections.jsonl` (`mode`: `map`, `changed` or `full`).
 
 - **Python, with an execution map** (`mode: map`): when `<home>/testmon/<project>/.testmondata` exists and every
@@ -211,15 +213,15 @@ halt. The self-check settles such a review the same way without running it again
   the import graph while it stays under 60 % of the suite.
 - **Web and Rust** selection is unchanged. The Python step runs in a subshell (`(cd collector && ...)`), so the web
   tests (`node web/js/x.test.mjs`) run from the repo root.
-- testmon does not see code run in other processes (git hooks, `tirith` started as a subprocess): the merge queue
-  keeps the full suite.
+- testmon does not see code run in other processes (git hooks, `tirith` started as a subprocess): a review that
+  merges and the merge queue keep the full suite.
 - **Building the map**: `tirith testmap build [--project p] [--repo dir] [--base main]` moves a detached worktree
   of its own (`<home>/testmon/<project>/tree`) to the base branch and runs the suite there (incrementally: testmon
   runs only what changed since the last build). The merge queue starts it in the background after a landing when
   the project's test stage runs pytest and the map is missing or older than 6 h (`testmap.MAX_AGE_S`). A failed
   build deletes the map. With no usable map nothing breaks: the lane uses the names rule.
-- **One full suite at a time**: every full suite (`tirith run --stage test` without a selection, the merge queue's
-  test stage, a map build) holds `<home>/full-suite.lock` (`loadlimit.full_suite`, waits up to 3 h, then runs anyway),
+- **One full suite at a time**: every full suite (`tirith run --stage test` without a selection, a review that
+  merges, the merge queue's test stage, a map build) holds `<home>/full-suite.lock` (`loadlimit.full_suite`, waits up to 3 h, then runs anyway),
   taken before a stage slot. Selected runs and other stages only use their slots.
 - A lane with the `ceo-` prefix never runs a test suite: `tirith run --stage test|rust-test` and the review
   skip it (exit 0).
