@@ -18,8 +18,11 @@ When you run several coding agents, you spend the day asking "what is everyone d
 - **Rules are code.** A hook blocks the agent's tool call and tells it the exact command to use instead: tests and builds through Tirith, no helpers started behind its back, no skipping commit checks, no editing the plan or the agents' settings.
 - **The owner gate.** Nothing reaches you unless only you can do it (credentials, payment, a personal account, a physical device, your decision). The rest goes to an on-call manager.
 - **A claim check.** Before a merge, the agent's report is compared with the real change (files, tests added, tests passing). A false claim blocks the merge. It uses regexes and git, not a model.
+- **Keep going until done.** A lane that ends with gaps (no report, uncommitted work, no passing tests, a branch that does not merge) is sent back to the same agent session with exactly what is missing; a round that fixes nothing goes to the manager at once.
+- **Loop detection.** An agent that repeats the same tool call with the same input is reminded at 3 and stopped at 8.
+- **The CEO.** A few times a day a read-only agent reviews how the manager runs the work, from numbers measured by code, never from agents' claims. It sends the manager directives and asks the owner only for decisions that are theirs, keeps its own findings and decisions so it never repeats itself, and changes nothing itself (a hook enforces it).
 - **Autonomy.** An on-call manager answers in the chat and delegates; Tirith checks itself every pass and heals what it can; finished lanes go through one merge queue (tested together in trains, claim-checked, merged; no new lane starts with 3 or more waiting); a disk guard, no duplicate agents, a collector that reloads itself, and a timeout on every command.
-- **Visibility.** A chat that shows the manager's work live like a CLI, Overview with "Your turn", Agents, Pipelines in GitLab style, the Plan, and a health dot.
+- **Visibility.** A chat that shows the manager's work live like a CLI, Overview with "Your turn", Agents (with what the manager and the CEO are doing right now), Pipelines in GitLab style, the Plan, a lane scoreboard (`tirith lane stats`: first-try rate, rounds, merges, cost per merged lane), and a health dot. Proposals that cannot run now (machine load, a failing project check, a step the owner stopped) are held by code, and a manager's "wait" expires after 2 hours.
 - **A desktop app** (Tauri), signed and notarized for macOS. Chat with photos and files, environment variables per project, model and effort per role with a fallback when an agent runs out of credits.
 
 No servers and no ports: a local collector writes one state file; the page and the app follow it.
@@ -40,7 +43,7 @@ No servers and no ports: a local collector writes one state file; the page and t
 ## What's real, and what is not
 
 - Real, on `main`, each with a contract in `docs/CONTRACT-*.md` and tests in `collector/tests/`: everything above.
-- In progress, not claimed: agents with no permission prompts and hooks as the only barrier, a continue-until-done loop, faster tests, autopilot proposals to the manager, and chat with Muse Code over `muse serve` (blocked on its protocol).
+- In progress, not claimed: agents with no permission prompts and hooks as the only barrier, faster tests, chat with Muse Code over `muse serve` (blocked on its protocol), and for the CEO: the watchdog, a dollar budget and the owner's ratings (`docs/CONTRACT-ceo.md`).
 - The Rust port in `rust/` is a foundation, not the shipped collector.
 
 ## What was built during the hackathon
