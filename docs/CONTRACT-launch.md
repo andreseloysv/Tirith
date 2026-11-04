@@ -374,3 +374,13 @@ not done by a lane (it would start an agent outside `lane run`). The owner check
 2. Click "Start an agent now"; the browser asks to open "Tirith Launcher" (accept, and tick "always allow").
 3. Within 90 s the step shows the new agent and `<home>/logs/<lane-id>.launch.log` exists; `tirith lane list` shows `lane <id>`.
 4. If nothing happens: `tirith url verify`, then `tirith url open "<link>"` by hand to see the refusal reason (exit 3 = token).
+
+## App self-update
+
+`collector/tirith/appupdate.py`; `tirith app-update [--fingerprint <fp>]`. Each slow-work pass of the collector
+(macOS only, `[app] auto_update` not `false`, an installed `Tirith.app` found) hashes the git trees of
+`app/src-tauri`, `rust`, `Cargo.toml`, `Cargo.lock` at the repo's `HEAD` and compares with `built` in
+`<home>/app-update.json`. The first look only records a baseline. A difference starts one detached
+`tirith app-update` (own session, so it survives the app quitting): `scripts/package.sh` (signed), refuse a
+bundle without a "Developer ID Application" signature, quit the app, replace the installed bundle, reopen it
+if it was running. Failure sets `failed` + `error` and is not retried for that fingerprint.
