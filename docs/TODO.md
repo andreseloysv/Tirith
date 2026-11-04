@@ -34,6 +34,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Revisar el plan (2026-10-31) (en revisión)
 - [x] Manager de guardia: atender el chat
 - [ ] CEO: revisar cómo trabaja el manager
+- [ ] Manager de guardia: atender el chat (en curso: manager-8fd1f8fa)
 - [x] Manager de guardia: atender el chat
 - [x] Manager de guardia: atender el chat
 - [x] Manager de guardia: atender el chat
@@ -455,8 +456,9 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [x] Un lane ya mezclado a mano sale de la cola y de las revisiones sin intervención. (check: `cd collector && uv run -q pytest -q tests -k already_merged`) (hecho: 2203df2)
 - [x] i-aef081ed (hecho: fde18e0)
 - [x] Dos ejecuciones simultáneas de etapas en worktrees distintos no comparten número de ejecución ni fichero de log. (check: `cd collector && uv run -q pytest -q tests -k concurrent_runs_separate_logs`) (hecho: 583aa22)
-- [ ] Un lane no deja su item marcado como hecho en el plan antes de que su trabajo entre en main. (check: `cd collector && uv run -q pytest -q tests -k item_stays_open_until_merged`) (reabierto: the merge did not go through: merging lane/tirith-se-mejora-usando-tirith-16 failed conflicts? : Auto-merging collector/tests/tes) <!-- tirith:{"id":"i-fab8ba1c"} -->
+- [ ] Un lane no deja su item marcado como hecho en el plan antes de que su trabajo entre en main. (check: `cd collector && uv run -q pytest -q tests -k item_stays_open_until_merged`) (en revisión) <!-- tirith:{"id":"i-fab8ba1c"} -->
   - [x] Revisar: Un lane no deja su item marcado como hecho en el plan antes de que su trabajo entre en main. (check: `cd collector && uv run -q pytest -q tests -k item_stays_open_until_merged`) — falló: the merge did not go through: the review was interrupted; run it again
+  - [ ] Revisar: Un lane no deja su item marcado como hecho en el plan antes de que su trabajo entre en main. (check: `cd collector && uv run -q pytest -q tests -k item_stays_open_until_merged`) (en curso: revisión de tirith-se-mejora-usando-tirith-20)
 - [x] tirith check: _coverage_problems in manifest.py counts pipelines from include files, so a project whose build or test stages exist only in an include passes the check while the merge queue finds no stage to run; count only gating pipelines (hecho: f87217d)
 - [x] La cola de merge reintenta el commit de la lane cuando encuentra un index.lock abandonado en su worktree, en vez de marcarla red-suite y devolverla (check: `cd collector && uv run -q pytest -q tests -k commit_workspace_recovers_lock`) (hecho: 1d334c7)
 - [x] Una lane de continuación que reutiliza el worktree de otra entra sola en la cola de merge al terminar con done (check: `cd collector && uv run -q pytest -q tests -k continuation_lane_auto_enqueued`) (hecho: 1d334c7)
@@ -497,7 +499,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [ ] Tirith mide el trabajo tirado (suites repetidas, fusiones probadas descartadas, lanes absorbidas) y lo muestra en la salud: la meta del dueño es no hacer trabajo estúpido. (check: `cd collector && uv run -q pytest -q tests -k wasted_work`)
 - [ ] El push automático de main (pushplan) no frena el despachador: corre fuera de la pasada, y un push que falla espera cada vez más (1, 2, 4… hasta 30 min) en vez de repetirse cada 60 s con sus hooks. (check: `cd collector && uv run -q pytest -q tests -k push_plan_backoff`) <!-- tirith:{"id":"i-c1227b58903f4ddaa9bb866613d5df4f","depends_on":[],"writes":[]} -->
 - [ ] Una revisión de lane en curso no se corta cuando el collector se recarga por un cambio de su código. (check: `cd collector && uv run -q pytest -q tests -k review_survives_reload`) (en revisión) <!-- tirith:{"id":"i-cb38390bc26345d5a6ff71380c48e5fd","depends_on":[],"writes":[]} -->
-- [ ] Resolver el conflicto de merge de la lane tirith-se-mejora-usando-tirith-16 con main (collector/tests/test_plangate.py) para que su revisión pueda mergear (check: `git merge-base --is-ancestor lane/tirith-se-mejora-usando-tirith-16 main`) <!-- tirith:{"id":"i-7f2847c3","depends_on":[],"writes":[]} -->
+- [ ] Resolver el conflicto de merge de la lane tirith-se-mejora-usando-tirith-16 con main (collector/tests/test_plangate.py) para que su revisión pueda mergear (check: `git merge-base --is-ancestor lane/tirith-se-mejora-usando-tirith-16 main`) (en curso: tirith-se-mejora-usando-tirith-21) <!-- tirith:{"id":"i-7f2847c3","depends_on":[],"writes":[]} -->
 - [ ] Una revisión de lane interrumpida se reanuda sola una vez: corre separada (su propio grupo de procesos, pid guardado) y no queda en merge-failed tras un reinicio del manager o recarga del collector (check: `cd collector && uv run pytest -q -k 'review and (resume or interrupted)'`) <!-- tirith:{"id":"i-c1d438cc","depends_on":[],"writes":[]} -->
 - [x] Una lane nunca corre la suite completa por su cuenta: corre los tests de lo que cambió, y la suite completa solo la corre la cola, que es quien decide. (check: `cd collector && uv run -q pytest -q tests/test_fasttests.py -k lane_never_runs_the_full_suite`) (hecho: 665be8a)
 - [x] Liberar disco nunca bloquea el ciclo del collector: borrar lanes viejas corre en segundo plano, y el chat y el estado siguen al día mientras tanto. (check: `cd collector && uv run -q pytest -q tests -k sweep_does_not_block_the_cycle`) (hecho: f87217d)
