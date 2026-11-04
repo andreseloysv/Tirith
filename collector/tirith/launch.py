@@ -214,7 +214,23 @@ def create_worktree(repo: Path, lane_id: str, base: str | None = None) -> Path:
                              *([base] if base else [])], "git", text=True)
     if done.returncode != 0:
         raise LaunchError(f"git worktree add failed: {(done.stderr or done.stdout).strip()}")
+    link_node_modules(repo, path)
     return path
+
+
+def link_node_modules(repo: Path, worktree: Path) -> bool:
+    """A Node project's worktree gets ``node_modules`` as a link to the main checkout's, so the lane and
+    its review can import the dependencies (no ERR_MODULE_NOT_FOUND). False when nothing was linked."""
+    source, target = repo / "node_modules", worktree / "node_modules"
+    if not (repo / "package.json").is_file() or not (worktree / "package.json").is_file():
+        return False
+    if not source.is_dir() or target.exists() or target.is_symlink():
+        return False
+    try:
+        target.symlink_to(source.resolve(), target_is_directory=True)
+    except OSError:
+        return False
+    return True
 
 
 def agent_command(config: Config, agent: str | None, brief: Path, workspace: Path,
