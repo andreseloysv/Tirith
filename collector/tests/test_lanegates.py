@@ -120,7 +120,14 @@ def test_no_secrets_allows_ordinary_reads(lane: Path, command: str) -> None:
     assert "no-secrets" not in _bash(lane, command)
 
 
-def test_no_secrets_covers_the_read_tools(lane: Path) -> None:
+def test_no_secrets_covers_the_read_tools(lane: Path, monkeypatch) -> None:
+    calls = []
+    real_sensitive = lanegates._sensitive
+    def spy(path, workspace):
+        out = real_sensitive(path, workspace)
+        calls.append((path, str(workspace), out))
+        return out
+    monkeypatch.setattr(lanegates, "_sensitive", spy)
     assert "no-secrets" in _rules(lane, "Read", file_path=f"{HOME}/.ssh/id_rsa")
     assert "no-secrets" in _rules(lane, "Grep", pattern="x", path=f"{HOME}/.aws")
     assert "no-secrets" in _rules(lane, "Read", file_path="/somewhere/.env")
@@ -130,6 +137,7 @@ def test_no_secrets_covers_the_read_tools(lane: Path) -> None:
                              env={"TMPDIR": "/tmp", "HOME": HOME})
     seen = {"workspace": str(lanegates.lane_workspace(None, "perms", str(lane))), "git": (lane / ".git").exists(),
             "real": lanegates._real(str(lane / ".env")), "real_ws": lanegates._real(str(lane))}
+    print("lane-gate calls:", [c for c in calls if ".env" in c[0]][-3:])
     print("lane-gate diagnostics:", seen, lanegates._sensitive(seen["real"], lanegates.lane_workspace(None, "perms", str(lane))))
     assert not [v for v in found if v.rule == "no-secrets"], ([v.message() for v in found], seen)  # the reason, on CI too
     assert "no-secrets" not in _rules(lane, "Read", file_path=str(lane / "src" / "a.py"))
