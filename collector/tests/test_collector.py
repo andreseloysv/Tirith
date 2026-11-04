@@ -200,5 +200,8 @@ def test_stalled_while_tests_run(home: Path, tmp_path: Path) -> None:
     from tirith.collector import lane_status, testing_lanes
     lane = {"id": "z", "log": str(log), "pid": os.getpid()}
     assert lane_status(lane, datetime.now(timezone.utc), {"z"}) == "working"
+    assert lane_status(lane, datetime.now(timezone.utc)) == "stalled"
+    assert lane_status({**lane, "interactive": True}, datetime.now(timezone.utc)) == "working"  # waits for a message
+    assert lane_status({**lane, "interactive": True, "pid": 2 ** 22 - 3}, datetime.now(timezone.utc)) == "failed"
     assert testing_lanes([{"lane": "z", "run": "r", "stage": "test", "event": "start", "pid": 2 ** 22 - 3}],
                          datetime.now(timezone.utc)) in (set(), {"z"})
