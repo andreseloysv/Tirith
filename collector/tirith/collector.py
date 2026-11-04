@@ -246,7 +246,8 @@ def testing_lanes(events: list[dict], now: datetime) -> set[str]:
 
 def lane_status(lane: dict, now: datetime, testing: set[str] | frozenset[str] = frozenset()) -> str:
     """working/done/failed/stalled for one lane registration. A lane in ``testing`` (its test stage runs; the
-    agent's own log is silent meanwhile) is never stalled."""
+    agent's own log is silent meanwhile) is never stalled, nor is a live interactive lane (the persistent manager,
+    the owner's own conversation): between turns it waits for the next message, it is not stuck."""
     if lane.get("ended_at"):
         return "done" if lane.get("result") == "done" else "failed"
     pid = lane.get("pid")
@@ -256,6 +257,8 @@ def lane_status(lane: dict, now: datetime, testing: set[str] | frozenset[str] = 
     if last_activity is None:
         started = parse_iso(lane.get("started_at"))
         last_activity = started.timestamp() if started else now.timestamp()
+    if lane.get("interactive"):
+        return "working"
     if now.timestamp() - last_activity > STALLED_AFTER_S and str(lane.get("id")) not in testing:
         return "stalled"
     return "working"
