@@ -39,7 +39,10 @@ release it at once. `tirith collect --once` does not take the lock. A taken lock
 the collector start, so a launchd fallback retrying every minute next to the app's collector costs nothing. On macOS a collector that
 takes the lock loads `<home>/launchd/com.tirith.collector.plist` into `gui/<uid>` when that file exists and the job
 is not loaded (`collectlock.ensure_launchd`), because a job loaded from outside `~/Library/LaunchAgents` ends at
-logout. Windows has no lock check: the app
+logout. A collector that is down anyway (a reload that lost the lock race, the job unloaded from outside) comes
+back from any agent: every `tirith hook` call checks `state.json`; when it is older than 5 min and nobody holds the
+lock, it loads the job or, when loaded, starts it (`launchctl kickstart`), at most once every 5 min
+(`collectlock.revive`, `<home>/revive.at`). Windows has no lock check: the app
 always starts its own collector.
 
 Lane registration (`tirith lane start --project chromasol --class stonewright --feature "Room database"

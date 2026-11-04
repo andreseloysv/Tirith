@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+from tirith import collectlock
 from tirith.collectlock import CollectorRunning, hold_collector_lock
 
 
@@ -140,3 +141,44 @@ def test_the_launchd_fallback_is_loaded_again_when_missing(home: Path, monkeypat
     assert collectlock.ensure_launchd(home, run=there) == "present" and there.calls == ["print"]
     monkeypatch.setattr(collectlock.sys, "platform", "linux")
     assert collectlock.ensure_launchd(home, run=_Launchctl(False)) == "none"
+
+
+def test_revive_brings_a_dead_collector_back_once(tmp_path: Path, monkeypatch) -> None:
+    calls: list[list[str]] = []
+
+    def run(argv, **kw):
+        calls.append(argv)
+        return subprocess.CompletedProcess(argv, 1 if argv[1] == "print" else 0)
+
+    monkeypatch.setattr(collectlock.sys, "platform", "darwin")
+    home = tmp_path / "home"
+    (home / "launchd").mkdir(parents=True)
+    (home / collectlock.LAUNCHD_PLIST).write_text("<plist/>")
+    state = home / "state.json"
+    state.write_text("{}")
+    now = state.stat().st_mtime
+    assert collectlock.revive(home, now + 10, run=run) == "alive" and calls == []
+    assert collectlock.revive(home, now + collectlock.REVIVE_STALE_S + 1, run=run) == "loaded"
+    assert [c[1] for c in calls] == ["print", "bootstrap"]
+    assert collectlock.revive(home, now + collectlock.REVIVE_STALE_S + 60, run=run) == "recent"  # once per while
+    with collectlock.hold_collector_lock(home):
+        assert collectlock.revive(home, now + 2 * collectlock.REVIVE_STALE_S + 120, run=run) == "running"
+
+
+def test_revive_starts_a_loaded_job_that_is_not_running(tmp_path: Path, monkeypatch) -> None:
+    calls: list[list[str]] = []
+    monkeypatch.setattr(collectlock.sys, "platform", "darwin")
+
+    def run(argv, **kw):
+        calls.append(argv)
+        return subprocess.CompletedProcess(argv, 0)
+    home = tmp_path / "home"
+    (home / "launchd").mkdir(parents=True)
+    (home / collectlock.LAUNCHD_PLIST).write_text("<plist/>")
+    (home / "state.json").write_text("{}")
+    assert collectlock.revive(home, (home / "state.json").stat().st_mtime + 900, run=run) == "kicked"
+    assert calls[-1][1] == "kickstart"
+
+
+def test_revive_without_a_state_file_does_nothing(tmp_path: Path) -> None:
+    assert collectlock.revive(tmp_path) == "no-state"

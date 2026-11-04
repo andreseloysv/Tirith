@@ -398,14 +398,16 @@ def _clip(text: str, limit: int) -> str:
 
 
 def _expired_answer(req: dict | None, now: datetime) -> dict | None:
-    """The manager's last answer to the done proposal ``req`` once it is ``ANSWER_EXPIRES_S`` old, else None."""
+    """The manager's last answer to the done proposal ``req`` once it is ``ANSWER_EXPIRES_S`` old, else None.
+    A proposal closed without an answer is no decision: it counts from when it was asked (its ``text`` is empty)."""
     if not req:
         return None
     answers = [a for a in req.get("answers", []) if a.get("by") == "manager"]
-    at = parse_iso(answers[-1].get("at")) if answers else None
+    last = answers[-1] if answers else {"at": req.get("at"), "text": ""}
+    at = parse_iso(last.get("at"))
     if at is None or (now - at).total_seconds() < ANSWER_EXPIRES_S:
         return None
-    return answers[-1]
+    return last
 
 
 def _propose(home: Path, state: dict, projects: list[dict], agents: list[dict], now: datetime,
@@ -482,9 +484,12 @@ def _propose(home: Path, state: dict, projects: list[dict], agents: list[dict], 
         for req in by_step.get(key, []):
             if _open_request(req) and rec and req["id"] == rec["id"]:
                 _close(home, req, cands[0]["project"], cands[0]["step"], "its facts changed; replaced by a new one", at)
-        if earlier is not None:  # a wait without a deadline would park the step forever: ask again, with the answer
+        if earlier is not None and earlier["text"]:  # a wait without a deadline would park the step forever
             text += (f"\nAsked again: you answered at {earlier['at']} and nobody is on these items since: "
                      f"\"{_clip(earlier['text'], ANSWER_QUOTED)}\"")
+        elif earlier is not None:  # closed without a word: the step would never be asked again
+            text += (f"\nAsked again: it was asked at {earlier['at']} and closed without an answer; nobody is on "
+                     "these items since. Answer what you decide (launch, or wait until when, and why).")
         row = inbox_mod.add_request(home, inbox_mod.PROPOSAL, cands[0]["project"], cands[0]["step"],
                                     text, at=at, sender="tirith")
         own["proposals"][key] = {"id": row["id"], "fp": fp, "at": at}
