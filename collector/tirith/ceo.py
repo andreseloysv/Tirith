@@ -13,6 +13,8 @@ Later), and the owner's answer is recorded. Records live in ``<home>/ceo/``: ``r
 
 from __future__ import annotations
 
+import contextlib
+import fcntl
 import hashlib
 import json
 import re
@@ -42,6 +44,7 @@ MAX_DIRECTIVES = 3        # open at a time
 MEMORY_CHARS = 16_000     # of findings and decisions in one brief
 REPORT_LINES = 5
 RESULTS = ("healthy", "directives", "needs-owner", "paused")
+STARTING_S = 600.0        # a review started this recently counts as running until its lane file appears
 OPTIONS = ["Approve|approve", "Decline|decline", "Later|later"]
 
 
@@ -404,14 +407,45 @@ def start(home: Path, config: Config, now: datetime, snap: dict, cfg: dict, catc
     return lane_id
 
 
+@contextlib.contextmanager
+def _pass_lock(home: Path):
+    """One CEO pass at a time (the collector's and ``tirith ceo run``): yields False when another holds it."""
+    folder(home).mkdir(parents=True, exist_ok=True)
+    with (folder(home) / "pass.lock").open("a") as handle:
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            yield False
+            return
+        try:
+            yield True
+        finally:
+            fcntl.flock(handle, fcntl.LOCK_UN)
+
+
+def _starting(home: Path, now: datetime) -> bool:
+    """A review was started moments ago and its lane file is not written yet."""
+    for row in read_jsonl(folder(home) / "runs.jsonl")[-5:]:
+        at = parse_iso(row.get("at"))
+        if (row.get("status") == "started" and at and (now - at).total_seconds() < STARTING_S
+                and not lane_path(home, str(row.get("id"))).exists()):
+            return True
+    return False
+
+
 def run(home: Path, config: Config, now: datetime, spawn: Callable | None = None, force: bool = False) -> bool:
     """One dispatcher pass: settle what ended, record the owner's and the manager's answers, start a due review."""
     cfg = settings(home)
     if not cfg["enabled"] and not force:
         return False
+    with _pass_lock(home) as mine:
+        return _run(home, config, now, cfg, spawn, force) if mine else False
+
+
+def _run(home: Path, config: Config, now: datetime, cfg: dict, spawn: Callable | None, force: bool) -> bool:
     book = _book(home)
     changed = _settle_lanes(home, book, now) | settle_decisions(home) | settle_directives(home)
-    running = any(not l.get("ended_at") for l in _ceo_lanes(home))
+    running = any(not l.get("ended_at") for l in _ceo_lanes(home)) or _starting(home, now)
     slot = _slot(now, cfg["hours"])
     due = force or (slot is not None and slot != book.get("slot"))
     if running or not due:
