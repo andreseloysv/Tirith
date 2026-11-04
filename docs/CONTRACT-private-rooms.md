@@ -56,6 +56,8 @@ stops answering and says so once in the room, until a paired device writes.
 - `collector/tirith/roombridge.py`: its own thread, never blocks the loop; long polls (`wait=25`), backs off on
   errors, keeps its cursor in `~/.tirith/rooms/<room>.json`, never handles a message twice.
 - The private key stays in `~/.tirith/am/` (mode 600). Keys never go to logs, flows or `state.json`.
+- A room record (`<home>/rooms/<room>.json`) is changed only inside `roombridge.locked(home)`: a thread lock plus an
+  `flock` on `rooms/.record.lock`, so the CLI and the collector (two processes) never lose each other's load-change-save.
 - CLI: `tirith room new|link|qr|invite|join|leave`. `link <room>` prints the permanent link and its QR; `qr <room>`
   prints a new one-use QR. The Rooms view sends the same as inbox requests that Tirith handles by code:
   `room-new` (text: `{"title": ...}` or the title), `room-invite`, `room-qr` (a new one-use QR) and `room-leave` (text: the room id); each is
