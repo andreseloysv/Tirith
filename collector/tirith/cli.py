@@ -1768,8 +1768,9 @@ def _cmd_plan_add(args) -> int:
     print(f"added to step {args.step}: {text}")
     _, steps = plangate_mod._read(repo)
     item = roadmap_mod.find_item(steps, str(args.step), text)
-    if item and item.get("id"):
-        print(item["id"])
+    if item:
+        print(f"id: {item.get('id') or roadmap_mod.item_id(item['text'])} "
+              f"(pass it as --item to lane run, plan check, plan done and plan configure)")
     return 0
 
 
@@ -2880,14 +2881,14 @@ def build_parser() -> argparse.ArgumentParser:
     pl_configure = plan_sub.add_parser("configure", parents=[common], help="set dependencies and write paths on an open task")
     pl_configure.add_argument("--project", required=True)
     pl_configure.add_argument("--step", required=True)
-    pl_configure.add_argument("--item", required=True)
+    pl_configure.add_argument("--item", required=True, help="the exact text or the i-xxxxxxxx id of the item")
     pl_configure.add_argument("--depends-on", nargs="*", default=None, help="prerequisite IDs; no values clears them")
     pl_configure.add_argument("--writes", nargs="*", default=None, help="write paths; no values clears them")
     pl_configure.set_defaults(func=_cmd_plan_configure)
     pl_check = plan_sub.add_parser("check", parents=[common], help="run an item's done check (exit 0 = done)")
     pl_check.add_argument("--project", required=True)
     pl_check.add_argument("--step", required=True, help="step number")
-    pl_check.add_argument("--item", required=True, help="the exact text of the item")
+    pl_check.add_argument("--item", required=True, help="the exact text or the i-xxxxxxxx id of the item")
     pl_check.set_defaults(func=_cmd_plan_check)
     pl_rep = plan_sub.add_parser("report", parents=[common],
                                  help="the outcome of a lane's item: done, partial or blocked")
@@ -2900,7 +2901,7 @@ def build_parser() -> argparse.ArgumentParser:
                                   help="tick an item whose work is already on main (the manager names the commit)")
     pl_done.add_argument("--project", required=True)
     pl_done.add_argument("--step", required=True, help="step number")
-    pl_done.add_argument("--item", required=True, help="the exact text of the item")
+    pl_done.add_argument("--item", required=True, help="the exact text or the i-xxxxxxxx id of the item")
     pl_done.add_argument("--commit", required=True, help="the commit on main that did the work")
     pl_done.set_defaults(func=_cmd_plan_done)
 

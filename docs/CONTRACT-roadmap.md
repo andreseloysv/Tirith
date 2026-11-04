@@ -106,6 +106,8 @@ is created on first use, and the autopilot never starts a lane on it.
   review; the owner's plan edits from the Plan card (below) use the same writer. With `--title`, a project without
   `docs/TODO.md` gets the file created. `tirith launch` and `lane run` do not count `manifest-missing` as a failed
   check, so a new project (no `tirith.toml`) can configure its pipelines in a lane.
+  `plan add` prints the new item's short id (`id: i-xxxxxxxx`, 8 hex digits, unique in the plan); `lane run --item`,
+  `plan check`, `plan done` and `plan configure` accept that id in place of the item's exact text.
 - **Finish = an outcome**: `tirith plan report --lane L --status done|partial|blocked [--add …]… [--reason …]`.
 - **Done only when verified**: the review ticks the item, or reopens it with the reason.
 
