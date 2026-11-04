@@ -128,7 +128,9 @@ def test_no_secrets_covers_the_read_tools(lane: Path) -> None:
     cfg = Config(projects=[ProjectConfig(id="proj", name="proj", repo=lane.parent.parent / "proj")])
     found = gates.check_call(cfg, "Read", {"file_path": str(lane / ".env")}, str(lane), "proj", lane="perms",
                              env={"TMPDIR": "/tmp", "HOME": HOME})
-    assert not [v for v in found if v.rule == "no-secrets"], [v.message() for v in found]  # the reason, on CI too
+    seen = {"workspace": str(lanegates.lane_workspace(None, "perms", str(lane))), "git": (lane / ".git").exists(),
+            "real": lanegates._real(str(lane / ".env")), "real_ws": lanegates._real(str(lane))}
+    assert not [v for v in found if v.rule == "no-secrets"], ([v.message() for v in found], seen)  # the reason, on CI too
     assert "no-secrets" not in _rules(lane, "Read", file_path=str(lane / "src" / "a.py"))
     assert "no-secrets" in _rules(lane, "Write", file_path=f"{HOME}/.ssh/authorized_keys")
 
