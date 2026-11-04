@@ -329,3 +329,26 @@ def test_a_lane_already_merged_by_hand_is_settled_not_reviewed(env, home: Path) 
         cycle(home, spawn)
     assert spawn.calls == [] and asks_mod.queue_items(home) == []
     assert read_json(home / "dispatch.json", {})["reviews"]["web-panel"]["settled"] == "merged"
+
+
+def test_review_survives_reload(env, home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The collector re-executes itself mid-pass right after it started a review: the next collector must see the
+    review as started, not start it a second time (the running one is detached and keeps going)."""
+    from tirith import canary as canary_mod
+    _lane(home, env)
+    first = Spawner(home, env, run=False)
+
+    def cut(*args, **kwargs):
+        raise KeyboardInterrupt  # the exec: nothing after the spawn in this pass runs, nothing is saved
+
+    monkeypatch.setattr(canary_mod, "tick", cut)
+    try:
+        cycle(home, first)
+    except KeyboardInterrupt:
+        pass
+    assert first.calls, "the review was never spawned in the first pass"
+    monkeypatch.undo()
+    second = Spawner(home, env, run=False)
+    cycle(home, second)
+    assert len(first.calls) == 1 and not [c for c in second.calls if "review" in c]
+    assert "web-panel" in read_json(home / "dispatch.json", {})["reviews"]
