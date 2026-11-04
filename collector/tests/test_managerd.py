@@ -397,3 +397,18 @@ def test_the_live_session_becomes_the_conversation(project, home: Path, spawned:
 def test_an_alias_without_session_flags_keeps_only_notes(project, home: Path) -> None:
     write_config(home, [dict(id="demo", name="Demo", repo=str(project))], '[agents.muse]\ncommand = "muse-bin"\n')
     assert managerd_mod.session_plan(home, load_config(home), "muse") is None
+
+
+def test_the_manager_runs_in_a_project_where_lanes_may_start(home, tmp_path) -> None:
+    """A request about a project whose commit guard is broken must not stop the manager: it runs in another one."""
+    for name in ("broken", "fine"):
+        (tmp_path / name).mkdir()
+    write_config(home, [{"id": "broken", "name": "Broken", "repo": str(tmp_path / "broken")},
+                        {"id": "fine", "name": "Fine", "repo": str(tmp_path / "fine")}])
+    config = load_config(home)
+    items = {"requests": [{"project": "broken"}], "results": [], "queue": []}
+    refuse = lambda bad: (lambda cfg, proj, repo: "refusing to start: commit guard is not intact" if proj.id in bad else None)
+    assert managerd_mod._project_for(home, config, items, refusal=refuse({"broken"})).id == "fine"
+    assert managerd_mod._project_for(home, config, items, refusal=refuse(set())).id == "broken"
+    assert managerd_mod._project_for(home, config, items, refusal=refuse({"broken", "fine"})).id == "broken"  # error shown
+    assert managerd_mod._project_for(home, config, {"requests": []}, refusal=refuse({"broken"})).id == "fine"
