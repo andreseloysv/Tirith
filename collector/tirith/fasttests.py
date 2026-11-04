@@ -1,6 +1,8 @@
 """Fast tests in a lane: ``tirith run --stage test`` runs only the tests related to the lane's changes.
 
-A lane never runs the full suite (``--full`` and the merge queue do). Python modules map to tests by name
+A lane never runs the full suite (``--full`` and the merge queue do). With an execution map (``tirith.testmap``)
+and only ``collector`` Python files changed, pytest-testmon runs the tests whose recorded code changed. Without
+one, Python modules map to tests by name
 (``tirith/x.py`` -> ``tests/test_x*.py``), the test files the lane changed run themselves, and the import graph
 (a test that imports ``tirith.x``, directly or through another module that imports it) adds tests only while the
 selection stays under ``MOST`` of the suite. A Rust change runs only the crate touched (and the crates that
@@ -15,7 +17,10 @@ import shlex
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from tirith import testmap as testmap_mod
 from tirith import timeouts as timeouts_mod
+from tirith.home import now_iso
+from tirith.store import append_jsonl
 
 RUST_CRATES = {"rust/tirith-core": "tirith-core", "rust/tirith-cli": "tirith-cli"}
 RUST_DEPENDENTS = {"tirith-core": ["tirith-core", "tirith-cli"], "tirith-cli": ["tirith-cli"]}
@@ -32,17 +37,20 @@ class Selection:
     crates: list[str] = field(default_factory=list)  # cargo packages
     web: list[str] = field(default_factory=list)     # web test files relative to the repo root
     changed: list[str] = field(default_factory=list)
+    mapped: bool = False                             # the Python tests come from the execution map (testmon)
 
     def record(self) -> dict:
-        return {"stage": self.stage, "mode": "full" if self.full else "changed", "reason": self.reason,
+        mode = "full" if self.full else "map" if self.mapped else "changed"
+        return {"stage": self.stage, "mode": mode, "reason": self.reason,
                 "tests": self.tests, "crates": self.crates, "web": self.web, "changed": self.changed}
 
     def summary(self) -> str:
         if self.full:
             return f"full suite ({self.reason})"
-        if not (self.tests or self.crates or self.web):
+        if not (self.tests or self.crates or self.web or self.mapped):
             return f"changed only: nothing to run ({self.reason}); the merge queue runs the full suite"
-        parts = [f"{len(self.tests)} python test files"] if self.tests else []
+        parts = ["python tests by the execution map"] if self.mapped else \
+            [f"{len(self.tests)} python test files"] if self.tests else []
         if self.crates:
             parts.append("crates " + ", ".join(self.crates))
         if self.web:
@@ -133,8 +141,12 @@ def _web(folder: Path, files: list[str]) -> list[str]:
     return sorted(p for p in picked if (folder / p).is_file())
 
 
-def select(folder: Path, stage: str, files: list[str] | None = None, base: str = "main") -> Selection:
-    """What the ``test`` or ``rust-test`` stage should run for the lane's changes (never the whole suite)."""
+def select(folder: Path, stage: str, files: list[str] | None = None, base: str = "main",
+           mapped: bool = False) -> Selection:
+    """What the ``test`` or ``rust-test`` stage should run for the lane's changes (never the whole suite).
+
+    ``mapped``: an execution map exists; it picks the Python tests when every changed ``collector`` file is Python
+    (testmon does not see data files, so any other change falls back to names and the import graph)."""
     folder = Path(folder)
     files = changed_files(folder, base) if files is None else files
     sel = Selection(stage=stage, changed=files)
@@ -153,7 +165,10 @@ def select(folder: Path, stage: str, files: list[str] | None = None, base: str =
                 crates.update(RUST_DEPENDENTS[crate])
         sel.crates, sel.reason = sorted(crates), "only the crates touched" if crates else "no crate touched"
         return sel
-    sel.tests, sel.reason = _python(folder, py) if py else ([], "no python change")
+    if mapped and py and all(f.endswith(".py") for f in code if f.startswith("collector/")):
+        sel.mapped, sel.reason = True, f"{len(py)} python files changed"
+    else:
+        sel.tests, sel.reason = _python(folder, py) if py else ([], "no python change")
     sel.web = _web(folder, web)
     if not (sel.tests or sel.web):
         others = [f for f in code if f not in rust]
@@ -169,7 +184,27 @@ def command(sel: Selection) -> str | None:
     if sel.stage == "rust-test":
         steps = [f"cargo test -q {' '.join('-p ' + c for c in sel.crates)}"] if sel.crates else []
     else:
-        if sel.tests:
-            steps.append("cd collector && uv run -q pytest -q -n auto --maxprocesses 4 " + " ".join(shlex.quote(t) for t in sel.tests))
+        if sel.mapped:
+            steps.append(testmap_mod.command())
+        elif sel.tests:  # a subshell: the web tests below run from the repo root
+            steps.append("(cd collector && uv run -q pytest -q -n auto --maxprocesses 4 "
+                         + " ".join(shlex.quote(t) for t in sel.tests) + ")")
         steps.extend(f"node {shlex.quote(w)}" for w in sel.web)
     return " && ".join(steps) if steps else "true"
+
+
+def supported(folder: Path) -> bool:
+    """Whether the project has the layout this selection reads (``collector/tirith``); others keep their own command."""
+    return (Path(folder) / "collector" / "tirith").is_dir()
+
+
+def for_lane(home: Path, project: str, folder: Path, stage: str) -> Selection:
+    """The selection for a lane's worktree: from the execution map when there is one (copied into the worktree),
+    else by names and the import graph. Recorded in ``selections.jsonl``."""
+    folder = Path(folder)
+    sel = select(folder, stage, mapped=stage == "test" and testmap_mod.usable(home, project))
+    if sel.mapped and not testmap_mod.install(home, project, folder):
+        sel = select(folder, stage, sel.changed)
+    append_jsonl(home / "selections.jsonl", {"at": now_iso(), "project": project, "worktree": str(folder),
+                                              **sel.record()})
+    return sel

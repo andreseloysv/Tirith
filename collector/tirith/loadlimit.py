@@ -16,6 +16,7 @@ try:
 except ImportError:  # Windows: no slots, the limit is advisory
     fcntl = None  # type: ignore[assignment]
 
+SUITE_WAIT_S = 3 * 3600.0  # a full suite waits this long for the machine's one full-suite slot
 HIGH_LOAD = 1.0  # load per core at which the limit starts to drop
 GB = 1024 ** 3
 
@@ -95,3 +96,31 @@ def slot(home: Path, maximum: int, *, wait: float = 600.0, poll: float = 1.0) ->
         if handle is not None:
             fcntl.flock(handle, fcntl.LOCK_UN)
             handle.close()
+
+
+@contextmanager
+def full_suite(home: Path, *, wait: float = SUITE_WAIT_S, poll: float = 1.0) -> Iterator[bool]:
+    """Hold the machine's one full-suite lock (at most one full suite at a time, whatever the stage slots allow);
+    waits up to ``wait`` seconds, then runs anyway. Yields whether the lock is held. Take it before a stage slot."""
+    if fcntl is None:
+        yield False
+        return
+    home.mkdir(parents=True, exist_ok=True)
+    handle = open(home / "full-suite.lock", "a")
+    held = False
+    deadline = time.monotonic() + wait
+    while True:
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            held = True
+            break
+        except OSError:
+            if time.monotonic() >= deadline:
+                break
+            time.sleep(poll)
+    try:
+        yield held
+    finally:
+        if held:
+            fcntl.flock(handle, fcntl.LOCK_UN)
+        handle.close()

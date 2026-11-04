@@ -8,6 +8,7 @@ the hooks folder of the repo the owner named). No command opens a port.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 from urllib.parse import parse_qs, urlsplit
 import os
@@ -62,6 +63,7 @@ from tirith import runstage as runstage_mod
 from tirith import canary as canary_mod
 from tirith import stable as stable_mod
 from tirith import fasttests as fasttests_mod
+from tirith import testmap as testmap_mod
 from tirith import loadlimit as loadlimit_mod
 from tirith import repeats as repeats_mod
 from tirith import scoreboard as scoreboard_mod
@@ -922,17 +924,20 @@ def _manifest_stage(args, home: Path, command: list[str]) -> list[str]:
     return ["/bin/sh", "-c", fast or stage.run]
 
 
+TEST_STAGES = ("test", "rust-test")
+
+
 def _fast_command(args, home: Path, info: dict | None, folder: Path) -> str | None:
     """``--stage test|rust-test`` in a lane's worktree runs only what the change touches (``--full`` and the
-    merge queue, which runs outside a lane, run everything); the selection is recorded in ``selections.jsonl``."""
-    if args.stage not in ("test", "rust-test") or getattr(args, "full", False):
+    merge queue, which runs outside a lane, run everything); the selection is recorded in ``selections.jsonl``.
+    A CEO lane never runs a test suite."""
+    if args.stage not in TEST_STAGES or getattr(args, "full", False):
         return None
     if not (getattr(args, "changed", False) or info):
         return None
-    sel = fasttests_mod.select(folder, args.stage)
-    append_jsonl(home / "selections.jsonl", {"at": now_iso(), "project": args.project, "worktree": str(folder),
-                                              **sel.record()})
+    sel = fasttests_mod.for_lane(home, args.project, folder, args.stage)
     print(f"tirith: {args.stage}: {sel.summary()}", flush=True)
+    args.selected = True
     return fasttests_mod.command(sel)
 
 
@@ -946,10 +951,17 @@ def _cmd_run(args) -> int:
     tags = runstage_mod.lane_tags(home, cwd)
     config = load_config(home)
     allowed, _ = loadlimit_mod.current(config, home)
-    with loadlimit_mod.slot(home, allowed):  # concurrent stage runs adapt to load and free disk
+    lane = tags.get("lane") or (os.environ.get("TIRITH_LANE") or None)
+    if args.stage in TEST_STAGES and str(lane or "").startswith(ceo_mod.LANE_PREFIX):
+        print(f"tirith: {args.stage}: a CEO lane never runs a test suite", flush=True)
+        return 0
+    # the full Python suite (no selection) is one at a time on the machine, taken before a stage slot
+    suite = loadlimit_mod.full_suite(home) if args.stage == "test" and not getattr(args, "selected", False) \
+        else contextlib.nullcontext()
+    with suite, loadlimit_mod.slot(home, allowed):  # concurrent stage runs adapt to load and free disk
         code, _ = runstage_mod.run_stage(
             home, args.project, args.pipeline, args.stage, command, cwd,
-            lane=tags.get("lane") or (os.environ.get("TIRITH_LANE") or None), run_id=args.run,
+            lane=lane, run_id=args.run,
             worktree=tags.get("worktree"), branch=tags.get("branch"), agent=args.agent,
             log=args.log, new_run=args.new_run, reuse=True)
     return code
@@ -1934,6 +1946,19 @@ def _cmd_merge_run(args) -> int:
     for row in rows:
         print(f"lane {row['lane']}: {row['result']}" + (f" ({row['message'].splitlines()[0]})" if row.get("message") else ""))
     return 0 if all(r["result"] in (mergeq_mod.MERGED, mergeq_mod.PUSH_FAILED) for r in rows) else 1
+
+
+def _cmd_testmap_build(args) -> int:
+    home = _home(args)
+    project, folder = _project_folder_of(home, args.project)
+    repo = Path(args.repo) if args.repo else folder
+    if not (project and repo):
+        print("tirith testmap build: pass --project (or run it inside a known project)", file=sys.stderr)
+        return 3
+    ok, output = testmap_mod.build(home, project, repo, args.base)
+    print(output[-2000:] if output else "")
+    print(f"tirith testmap: {'built' if ok else 'failed'}: {testmap_mod.map_file(home, project)}")
+    return 0 if ok else 1
 
 
 def _cmd_merge_status(args) -> int:
@@ -2945,6 +2970,14 @@ def build_parser() -> argparse.ArgumentParser:
     m_st = merge_sub.add_parser("status", parents=[common], help="show the queue and the last result")
     m_st.add_argument("--project", default=None)
     m_st.set_defaults(func=_cmd_merge_status)
+
+    testmap = sub.add_parser("testmap", parents=[common], help="the execution map that selects a lane's Python tests")
+    testmap_sub = testmap.add_subparsers(dest="testmap_command", required=True)
+    t_build = testmap_sub.add_parser("build", parents=[common], help="update the map from main (runs the suite once, without xdist)")
+    t_build.add_argument("--project", default=None, help="default: the project containing the cwd")
+    t_build.add_argument("--repo", default=None, help="default: the project's folder")
+    t_build.add_argument("--base", default="main", help="the branch to build from")
+    t_build.set_defaults(func=_cmd_testmap_build)
 
     inbox = sub.add_parser("inbox", parents=[common], help="the owner's requests on plan steps")
     inbox_sub = inbox.add_subparsers(dest="inbox_command", required=True)
