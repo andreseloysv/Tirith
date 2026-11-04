@@ -869,15 +869,10 @@ def verify_shims(config: Config, shim_dir: Path, path_env: str | None = None) ->
 REPO_BIN = str(Path(__file__).resolve().parents[2] / "bin")  # `tirith` for agents lives in the repo
 
 
-FAST_GIT_DIR = Path.home() / ".local" / "fastgit"  # the owner's fast path in front of the git wrapper, if installed
-
-
 def lane_path(home: Path, base: str | None = None) -> str:
-    """The PATH a lane gets: agent shims first, then the owner's fast git front (when installed), the git
-    wrapper, then the repo ``bin``."""
+    """The PATH a lane gets: agent shims first, then the git wrapper, then the repo ``bin``."""
     wrapper_dir = str(Path.home() / ".local" / "bin")
-    fast = [str(FAST_GIT_DIR)] if (FAST_GIT_DIR / "git").is_file() else []
-    return os.pathsep.join([str(Path(home) / "shims"), *fast, wrapper_dir, REPO_BIN,
+    return os.pathsep.join([str(Path(home) / "shims"), wrapper_dir, REPO_BIN,
                             os.environ.get("PATH", "") if base is None else base])
 
 
