@@ -33,7 +33,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Manager de guardia: atender el chat
 - [ ] Revisar el plan (2026-10-31) (en revisión)
 - [x] Manager de guardia: atender el chat
-- [ ] CEO: revisar cómo trabaja el manager (en curso: ceo-413e3a07)
+- [ ] CEO: revisar cómo trabaja el manager
 - [x] Manager de guardia: atender el chat
 - [x] Manager de guardia: atender el chat
 - [x] Manager de guardia: atender el chat
