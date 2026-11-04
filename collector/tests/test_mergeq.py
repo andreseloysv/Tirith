@@ -683,6 +683,7 @@ def land(home: Path, **config) -> list[dict]:
 @pytest.mark.parametrize("files,ran", [
     ({"docs/PLAN.md": "x"}, ["build"]),
     ({"README.md": "x", "site/index.html": "x"}, ["build"]),
+    ({"ios/App/Main.swift": "x"}, ["build"]),
     ({"web/app.js": "x"}, ["build", "test"]),
     ({"collector/x.py": "x", "docs/a.md": "x"}, ["build", "test"]),
     ({"tirith.toml.bak": "x"}, ["build", "test"]),
