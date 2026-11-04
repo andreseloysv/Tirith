@@ -145,3 +145,23 @@ def test_a_dead_review_of_work_already_on_main_is_settled_merged(launched, home:
     assert main(["lane", "review", "web-panel"]) == 3
     review = read_json(lane_path(home, "web-panel"), None)["review"]
     assert review["status"] == "merged" and review["commit"]
+
+
+def test_a_reviews_test_suite_waits_for_a_stage_slot(home: Path, tmp_path: Path, monkeypatch) -> None:
+    """Every review ran its full suite at once under load and none finished: a review holds a stage slot."""
+    import contextlib
+    from tirith import loadlimit as loadlimit_mod
+    from tirith import runstage as runstage_mod
+    seen = []
+
+    @contextlib.contextmanager
+    def slot(home_, maximum, wait=600.0, poll=1.0):
+        seen.append(("slot", maximum, wait))
+        yield 0
+        seen.append(("free",))
+    monkeypatch.setattr(loadlimit_mod, "slot", slot)
+    monkeypatch.setattr(loadlimit_mod, "current", lambda config, home_: (2, "load 20.0 on 12 cores"))
+    monkeypatch.setattr(runstage_mod, "run_stage", lambda *a, **k: (seen.append(("run",)) or (0, "3 passed")))
+    (home / "config.toml").write_text("", encoding="utf-8")
+    assert review_mod.run_tests(home, "demo", "ci", "test", tmp_path, "pytest") == (True, "3 passed")
+    assert seen == [("slot", 2, review_mod.SLOT_WAIT_S), ("run",), ("free",)]
