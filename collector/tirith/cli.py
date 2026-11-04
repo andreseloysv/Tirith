@@ -63,6 +63,8 @@ from tirith import canary as canary_mod
 from tirith import stable as stable_mod
 from tirith import fasttests as fasttests_mod
 from tirith import loadlimit as loadlimit_mod
+from tirith import repeats as repeats_mod
+from tirith import scoreboard as scoreboard_mod
 from tirith import projects as projects_mod
 from tirith import projenv as projenv_mod
 from tirith import roomcli as roomcli_mod
@@ -198,6 +200,7 @@ def end_lane(home: Path, lane_id: str, result: str, report: str | None = None) -
         lane["diff"] = stored
     if report is not None:
         lane["report"] = bound_text(report, REPORT_MAX)
+    repeats_mod.settle(home, lane)
     write_lane(home, lane)
     if lane.get("task_id") and (result != "done" or (lane.get("outcome") or {}).get("status") != "done"):
         try:
@@ -327,6 +330,12 @@ def _cmd_lane_drop(args) -> int:
         print(f"tirith lane drop: {error}", file=sys.stderr)
         return 3
     print(f"lane {args.lane_id}: dropped")
+    return 0
+
+
+def _cmd_lane_stats(args) -> int:
+    board = scoreboard_mod.score(scoreboard_mod.ended_lanes(_home(args), args.days), args.by)
+    print(json.dumps(board, indent=2) if args.json else scoreboard_mod.render(board, args.by, args.days))
     return 0
 
 
@@ -664,7 +673,7 @@ def _cmd_lane_run(args) -> int:
         answer = _last_stop_message(home, lane_id, lane.get("started_at"))
     else:
         stdin_text = getattr(args, "stdin_text", None)
-        rounds, idle_rounds, stage_waits, missing = 0, 0, 0, []
+        rounds, idle_rounds, stage_waits, missing, sent, stuck = 0, 0, 0, [], [], False
         alias = _lane_alias(args, raw_command or command, config)
         began_at, reported = time.time() - 2, set()
         while True:
@@ -708,7 +717,12 @@ def _cmd_lane_run(args) -> int:
             missing = keepgoing_mod.gaps(home, lane, proj.repo, answer)
             if not missing or rounds >= keepgoing_mod.MAX_ROUNDS:
                 break
+            if keepgoing_mod.stalled(sent, missing):  # the last round fixed nothing: another one would not either
+                stuck = True
+                keepgoing_mod.note_stalled(home, lane_id)
+                break
             rounds += 1
+            sent = missing
             keepgoing_mod.note_round(home, lane_id, rounds, missing)
             resumed = _resume_child(home, config, args, lane, command, log_path, answer,
                                     keepgoing_mod.message(missing, rounds))
@@ -716,7 +730,7 @@ def _cmd_lane_run(args) -> int:
                 break
             command, stdin_text = resumed
         if missing and not stopped and exit_code == 0:
-            keepgoing_mod.queue_gaps(home, lane, missing)
+            keepgoing_mod.queue_gaps(home, lane, missing, rounds, stuck)
     stopped = lanestop_mod.marker(read_json(lane_path(home, lane_id), None) or {})
     if stopped:  # `tirith lane stop`: failed, with who stopped it and why
         exit_code, answer = exit_code or 1, lanestop_mod.report_for(stopped["by"], stopped.get("reason"))
@@ -2544,6 +2558,12 @@ def build_parser() -> argparse.ArgumentParser:
     drop = lane_sub.add_parser("drop", parents=[common], help="throw away a launched lane's worktree and branch")
     drop.add_argument("lane_id")
     drop.set_defaults(func=_cmd_lane_drop)
+    stats = lane_sub.add_parser("stats", parents=[common],
+                                help="scoreboard of ended lanes: first-try rate, rounds, merges, cost, common gaps")
+    stats.add_argument("--days", type=float, default=14.0)
+    stats.add_argument("--by", choices=list(scoreboard_mod.BY), default="agent")
+    stats.add_argument("--json", action="store_true")
+    stats.set_defaults(func=_cmd_lane_stats)
     lane_run = lane_sub.add_parser("run", parents=[common],
                                    help="start an agent command as a lane")
     lane_run.add_argument("--project", required=True)

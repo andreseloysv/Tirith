@@ -146,6 +146,16 @@ that is not executable. `install` also locks (`uchg`) a guard that is exactly as
 `[[projects]] guard = false` in `config.toml` (written by the "Never for this project" button) switches
 the check off for one project.
 
+## Repeated calls (`tirith/repeats.py`)
+
+On every `PreToolUse` of a lane (not the manager's: it polls its inbox by design) the hook counts identical calls
+in a row: the same tool with the same input as the call before (any other call starts a new chain, so an edit
+between two test runs breaks it). At **3** and **5** in a row the next `PostToolUse` adds a reminder as
+`additionalContext` (anthropic only); from **8** in a row the call is blocked (exit 2, the message says the count
+and the input and asks for another approach or a report). The chain of a lane is `<home>/repeats/<lane>.json`;
+`end_lane` moves its totals into the lane file as `repeats: {nudged, blocked, longest}` (only when there were any)
+and removes the file. `[gates] enabled = false` switches it off with the other rules.
+
 ## Stop a running lane: `tirith lane stop <lane-id> [--reason ..] [--by owner|manager]`
 
 `lane run` starts a non-interactive child as the leader of its own process group and stores `pgid` in
