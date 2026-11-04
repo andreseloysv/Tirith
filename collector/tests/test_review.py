@@ -218,3 +218,16 @@ def test_review_of_a_project_without_the_layout_keeps_its_command(launched, home
 def test_a_ceo_lane_never_runs_a_test_suite(home: Path, tmp_path: Path) -> None:
     ok, output = review_mod.run_tests(home, "demo", "ci", "test", tmp_path, "exit 1", "ceo-ab12cd34")
     assert ok and "never runs" in output
+
+
+def test_review_node_modules_linked_when_the_worktree_lacks_it(launched, home: Path, monkeypatch) -> None:
+    repo, worktree = launched
+    (repo / "package.json").write_text("{}\n")
+    (worktree / "package.json").write_text("{}\n")
+    (repo / "node_modules" / "tweetnacl").mkdir(parents=True)
+    seen = []
+    monkeypatch.setattr(review_mod, "run_tests", lambda *a, **k: (seen.append((worktree / "node_modules").is_symlink())
+                                                                   or (True, "")))
+    main(["lane", "review", "web-panel", "--tests-only"])
+    assert seen == [True]
+    assert (worktree / "node_modules" / "tweetnacl").is_dir()

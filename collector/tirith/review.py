@@ -21,7 +21,7 @@ from tirith import manifest as manifest_mod
 from tirith import plangate as plangate_mod
 from tirith import runstage as runstage_mod
 from tirith.home import now_iso
-from tirith.launch import worktree_path
+from tirith.launch import link_node_modules, worktree_path
 from tirith.store import lane_path, read_json, write_lane
 
 OUTPUT_MAX = 4000
@@ -210,6 +210,8 @@ def review_lane(home: Path, lane_id: str, repo: Path | None, merge: bool = True)
     """Tests, then (when ``merge``) the merge. Returns the stored review; failures are stored too."""
     lane = check_ready(home, lane_id, repo)
     workspace = Path(str(lane["workspace"]))
+    if repo is not None:
+        link_node_modules(repo, workspace)  # a lane made before the link existed still imports its dependencies
     found = test_stage(workspace)
     if not found:
         raise ReviewError("the manifest has no test stage with a run command. "
