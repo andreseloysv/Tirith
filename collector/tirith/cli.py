@@ -1586,7 +1586,7 @@ def launch_step(home: Path, project_id: str, step_id: str, agent: str | None = N
         raise launch_mod.LaunchError(f"that item of step {step['id']} already has a working lane: {busy['id']}")
     lane_id = launch_mod.lane_id_for(title, {str(l["id"]) for l in read_lanes(home)}, repo)
     brief_path = home / "briefs" / f"{lane_id}.md"
-    brief = launch_mod.build_brief(title, intro, open_items, step["id"], item)
+    brief = launch_mod.build_brief(title, intro, open_items, step["id"], item, repo)
     workspace = launch_mod.worktree_path(repo, lane_id)
     if agent is None:  # the first agent of the chain that did not run out of credits in the last hour
         agent = fallback_mod.pick_alias(config, read_lanes(home), datetime.now(timezone.utc), project_id, step["id"])

@@ -101,6 +101,7 @@ lane cannot be told from one that only synced with main, so the manager ticks it
    | `## Why` | the step number and title, then the roadmap intro paragraph |
    | `## Your item` | the item the lane works on and a reminder to report it |
    | `## What to build` | the item |
+   | `## Code map` | the files likely relevant to the item (code, tests, contracts), found by name and content in the tracked files (`tirith/codemap.py`); left out when nothing is found |
    | `## Hard rules` | do not commit, alias-only agent names, no servers, tests must pass, report what changed, no sub-agents outside `lane run`, nothing outside the worktree, never edit `docs/TODO.md`, and the two commands `tirith plan add` and `tirith plan report` |
    | `## Where to read` | `docs/TODO.md` (read only, only Tirith writes it) and `docs/CONTRACT*.md` |
 
