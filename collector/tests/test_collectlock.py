@@ -116,3 +116,27 @@ def test_a_second_collector_refuses_before_its_expensive_start_up(home: Path, mo
     with hold_collector_lock(home):
         assert cli.main(["collect", "--interval", "2"]) == 0
     assert capsys.readouterr().out.strip() == f"a collector is already running, pid {os.getpid()}"
+
+
+class _Launchctl:
+    def __init__(self, loaded: bool) -> None:
+        self.loaded, self.calls = loaded, []
+
+    def __call__(self, argv, **kw):
+        self.calls.append(argv[1])
+        code = 0 if (argv[1] == "bootstrap" or self.loaded) else 113
+        return subprocess.CompletedProcess(argv, code, b"", b"")
+
+
+def test_the_launchd_fallback_is_loaded_again_when_missing(home: Path, monkeypatch) -> None:
+    from tirith import collectlock
+    monkeypatch.setattr(collectlock.sys, "platform", "darwin")
+    assert collectlock.ensure_launchd(home, run=_Launchctl(False)) == "none"  # the owner did not set it up
+    (home / "launchd").mkdir()
+    (home / collectlock.LAUNCHD_PLIST).write_text("<plist/>", encoding="utf-8")
+    missing = _Launchctl(False)
+    assert collectlock.ensure_launchd(home, run=missing) == "loaded" and missing.calls == ["print", "bootstrap"]
+    there = _Launchctl(True)
+    assert collectlock.ensure_launchd(home, run=there) == "present" and there.calls == ["print"]
+    monkeypatch.setattr(collectlock.sys, "platform", "linux")
+    assert collectlock.ensure_launchd(home, run=_Launchctl(False)) == "none"

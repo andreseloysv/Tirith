@@ -41,7 +41,10 @@ copy it to `~/Library/LaunchAgents/com.tirith.collector.plist`, then
 `launchctl load` it yourself. It works next to the desktop app: while the app's
 collector holds `collector.lock` the launchd one exits at once and is retried
 every minute, so Tirith keeps running (manager, autopilot, merge queue) when the
-app is closed.
+app is closed. Where `~/Library/LaunchAgents` is not writable (a managed Mac), put
+the file at `~/.tirith/launchd/com.tirith.collector.plist` and load it with
+`launchctl bootstrap gui/$(id -u) <file>`: every collector start loads it again
+when it is missing, so after a restart opening the app once brings it back.
 
 ## Configure
 

@@ -36,7 +36,10 @@ names. `tirith collect` takes the lock without waiting, writes its pid, and hold
 frees it on a crash). If it is taken, `tirith collect` prints `a collector is already running, pid N` and
 exits 0. The desktop app and `./run` check by trying to take the lock themselves (held = running) and
 release it at once. `tirith collect --once` does not take the lock. A taken lock is checked first, before the owner's login shell and
-the collector start, so a launchd fallback retrying every minute next to the app's collector costs nothing. Windows has no lock check: the app
+the collector start, so a launchd fallback retrying every minute next to the app's collector costs nothing. On macOS a collector that
+takes the lock loads `<home>/launchd/com.tirith.collector.plist` into `gui/<uid>` when that file exists and the job
+is not loaded (`collectlock.ensure_launchd`), because a job loaded from outside `~/Library/LaunchAgents` ends at
+logout. Windows has no lock check: the app
 always starts its own collector.
 
 Lane registration (`tirith lane start --project chromasol --class stonewright --feature "Room database"

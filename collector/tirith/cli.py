@@ -1387,6 +1387,7 @@ def _cmd_collect(args) -> int:
             collector.run(interval=args.interval, once=True)
         else:
             with collectlock_mod.hold_collector_lock(home):
+                collectlock_mod.ensure_launchd(home)  # the fallback that runs Tirith while the app is closed
                 try:
                     collector.run(interval=args.interval, once=False,
                                   reload_check=selfreload_mod.CodeWatch().changed)

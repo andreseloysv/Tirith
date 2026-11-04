@@ -11,9 +11,13 @@ from __future__ import annotations
 import contextlib
 import fcntl
 import os
+import subprocess
+import sys
 from pathlib import Path
 
 LOCK_NAME = "collector.lock"
+LAUNCHD_LABEL = "com.tirith.collector"
+LAUNCHD_PLIST = Path("launchd") / f"{LAUNCHD_LABEL}.plist"  # under the home: a managed Mac may lock ~/Library/LaunchAgents
 
 
 class CollectorRunning(Exception):
@@ -59,3 +63,22 @@ def running_pid(home: Path) -> int | None:
             return _read_pid(handle) or 0
         fcntl.flock(handle, fcntl.LOCK_UN)
     return None
+
+
+def ensure_launchd(home: Path, run=subprocess.run) -> str:
+    """Register the owner's launchd fallback (``<home>/launchd/com.tirith.collector.plist``) when it is not loaded.
+
+    A job loaded from outside ``~/Library/LaunchAgents`` lasts until logout, so every collector start loads it
+    again: after a restart, opening the app once brings back the collector that keeps Tirith running when the app
+    is closed. Returns ``"loaded"``, ``"present"`` or ``"none"`` (no file, not macOS, or launchctl refused)."""
+    plist = home / LAUNCHD_PLIST
+    if sys.platform != "darwin" or not plist.is_file():
+        return "none"
+    domain = f"gui/{os.getuid()}"
+    try:
+        if run(["launchctl", "print", f"{domain}/{LAUNCHD_LABEL}"], capture_output=True, timeout=10).returncode == 0:
+            return "present"
+        done = run(["launchctl", "bootstrap", domain, str(plist)], capture_output=True, timeout=10)
+    except (OSError, subprocess.TimeoutExpired):
+        return "none"
+    return "loaded" if done.returncode == 0 else "none"

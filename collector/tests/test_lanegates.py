@@ -125,7 +125,10 @@ def test_no_secrets_covers_the_read_tools(lane: Path) -> None:
     assert "no-secrets" in _rules(lane, "Grep", pattern="x", path=f"{HOME}/.aws")
     assert "no-secrets" in _rules(lane, "Read", file_path="/somewhere/.env")
     assert "no-secrets" in _rules(lane, "Read", file_path="/somewhere/cert.pem")
-    assert "no-secrets" not in _rules(lane, "Read", file_path=str(lane / ".env"))
+    cfg = Config(projects=[ProjectConfig(id="proj", name="proj", repo=lane.parent.parent / "proj")])
+    found = gates.check_call(cfg, "Read", {"file_path": str(lane / ".env")}, str(lane), "proj", lane="perms",
+                             env={"TMPDIR": "/tmp", "HOME": HOME})
+    assert not [v for v in found if v.rule == "no-secrets"], [v.message() for v in found]  # the reason, on CI too
     assert "no-secrets" not in _rules(lane, "Read", file_path=str(lane / "src" / "a.py"))
     assert "no-secrets" in _rules(lane, "Write", file_path=f"{HOME}/.ssh/authorized_keys")
 
