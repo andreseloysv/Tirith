@@ -24,6 +24,7 @@ import re
 import secrets
 import socket
 import threading
+from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import quote
 
@@ -58,6 +59,36 @@ CODE_RE = re.compile(r"^[0-9a-f]{32}$")
 _lock = threading.Lock()
 record_lock = threading.RLock()  # one writer of a record at a time in this process (load, change, save)
 _started: dict[str, threading.Thread] = {}
+_held = threading.local()  # (home -> depth) of the file locks this thread holds: the lock is re-entrant
+
+
+@contextmanager
+def locked(home: Path):
+    """One writer of any room record at a time, across threads *and* processes (the CLI and the collector):
+    load, change and save happen inside it. Re-entrant in a thread."""
+    try:
+        import fcntl
+    except ImportError:  # Windows: the in-process lock is all there is
+        fcntl = None  # type: ignore[assignment]
+    key = str(Path(home))
+    depths = _held.__dict__.setdefault("depths", {})
+    with record_lock:
+        if depths.get(key) or fcntl is None:
+            depths[key] = depths.get(key, 0) + 1
+            try:
+                yield
+            finally:
+                depths[key] -= 1
+            return
+        rooms_dir(home).mkdir(parents=True, exist_ok=True)
+        with open(rooms_dir(home) / ".record.lock", "a+") as handle:
+            fcntl.flock(handle, fcntl.LOCK_EX)
+            depths[key] = 1
+            try:
+                yield
+            finally:
+                depths[key] = 0
+                fcntl.flock(handle, fcntl.LOCK_UN)
 
 
 # -- room records ---------------------------------------------------------------------------------
@@ -120,7 +151,7 @@ def add_code(record: dict) -> str:
 
 def new_pairing(home: Path, room: str) -> str:
     """A fresh one-time code for ``room``, stored until used."""
-    with record_lock:
+    with locked(home):
         record = load_room(home, room)
         if record is None:
             raise ValueError(f"no private room {room}")
@@ -153,7 +184,7 @@ def pairing_url(record: dict, code: str) -> str:
 
 def new_join_code(home: Path, room: str) -> str:
     """A fresh one-use code for another manager to join with (kept apart from the phones' codes), until used."""
-    with record_lock:
+    with locked(home):
         record = load_room(home, room)
         if record is None:
             raise ValueError(f"no private room {room}")
@@ -341,9 +372,12 @@ def poll_room(home: Path, room: str, wait: int = 0, sealed=None) -> int:
         return 0
     me = sealed.load_or_create_key(home, record["me"]["name"])
     if me.key_id != record["me"]["key_id"]:
-        record["last_error"] = "the key of this room changed"
-        record["connected"] = False
-        save_room(home, record)
+        with locked(home):
+            record = load_room(home, room)
+            if record is not None:
+                record["last_error"] = "the key of this room changed"
+                record["connected"] = False
+                save_room(home, record)
         return 0
 
     def say(text: str, to: str | None) -> None:
@@ -351,7 +385,7 @@ def poll_room(home: Path, room: str, wait: int = 0, sealed=None) -> int:
 
     try:
         messages, cursor = sealed.read(me, room, since=record.get("cursor"), wait=wait)  # the slow part: no lock
-        with record_lock:  # what changed meanwhile (a new code, a leave) is kept: handle on a fresh copy
+        with locked(home):  # what changed meanwhile (a new code, a leave) is kept: handle on a fresh copy
             record = load_room(home, room)
             if record is None:
                 return 0
@@ -364,7 +398,7 @@ def poll_room(home: Path, room: str, wait: int = 0, sealed=None) -> int:
             record["polled_at"] = now_iso()
             save_room(home, record)
     except Exception as exc:  # the thread must survive anything the network or a hostile message does
-        with record_lock:
+        with locked(home):
             record = load_room(home, room)  # not when the owner left the room meanwhile
             if record is not None:
                 record["last_error"] = type(exc).__name__ + ": " + str(exc)[:200]

@@ -405,3 +405,31 @@ def test_room_late_key_join_code_is_new_each_time_and_only_the_manager_invites(h
     with pytest.raises(private_mod.PrivateRoomError):
         private_mod.parse_peer_code(f"{room}:{'a' * 64}:nothex")
     assert private_mod.parse_peer_code(f"{room}:{'a' * 64}") == (room, "a" * 64, "")
+
+
+def test_room_record_race(home: Path, tmp_path: Path) -> None:
+    """The CLI and the collector are two processes: their load-change-save of one record never lose a write."""
+    import subprocess
+    import sys
+    record = rb.new_record("sealed-race", {"name": "tirith-x", "key_id": "a" * 64}, "Race")
+    record["count"] = 0
+    rb.save_room(home, record)
+    code = (
+        "import sys\nfrom pathlib import Path\nfrom tirith import roombridge as rb\n"
+        "home = Path(sys.argv[1])\n"
+        "for _ in range(40):\n"
+        "    with rb.locked(home):\n"
+        "        r = rb.load_room(home, 'sealed-race')\n"
+        "        n = r['count']\n"
+        "        import time; time.sleep(0.002)\n"
+        "        r['count'] = n + 1\n"
+        "        rb.save_room(home, r)\n")
+    procs = [subprocess.Popen([sys.executable, "-c", code, str(home)]) for _ in range(3)]
+    for _ in range(40):  # this process too, from threads' side: re-entrant inside itself
+        with rb.locked(home):
+            with rb.locked(home):
+                r = rb.load_room(home, "sealed-race")
+                r["count"] += 1
+                rb.save_room(home, r)
+    assert [p.wait(timeout=60) for p in procs] == [0, 0, 0]
+    assert rb.load_room(home, "sealed-race")["count"] == 160
