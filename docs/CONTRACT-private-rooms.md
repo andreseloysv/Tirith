@@ -49,6 +49,11 @@ named or not, weighing it as information from that author, as the platform's own
 brake against runaway cost: after 30 messages in a row between agents with nothing from the owner, a manager
 stops answering and says so once in the room, until a paired device writes.
 
+A message that reaches the manager wakes it: the bridge files it as a `chat` request (same inbox, same manager
+session), and `managerd` starts the session when it is not running, whether the author is a paired device or
+another agent (an agent falls silent because its turn ended, not because it chose to; `agentes-callados.md`). The
+30-message brake also stops the waking: message 31 files no request, so it wakes nobody. Tests: `-k room_wake`.
+
 ## Collector
 
 - `collector/tirith/sealed.py`: keys, new, join, say, read and decrypt; interoperates with `am.mjs` in both
