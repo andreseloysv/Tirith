@@ -22,6 +22,7 @@ from tirith.launch import worktree_path
 from tirith.store import lane_path, read_json, write_lane
 
 OUTPUT_MAX = 4000
+SLOT_WAIT_S = 3 * 3600.0  # a review waits this long for a free stage slot (a review is never urgent)
 DID_NOT_FINISH = "tests did not finish in"  # starts the output of a suite that was stopped at its time limit
 
 PENDING = "pending"          # launched lane, done, not reviewed yet
@@ -155,10 +156,15 @@ def run_tests(home: Path, project: str, pipeline: str, stage: str, workspace: Pa
     env = {k: v for k, v in os.environ.items() if k != "TIRITH_LANE"}
     limit = timeouts_mod.effective(home, None, f"stage:{stage}")  # run_stage applies the same cap
     tags = runstage_mod.lane_tags(home, workspace)
-    code, output = runstage_mod.run_stage(
-        home, project, pipeline, stage, command, workspace, lane=lane_id or tags.get("lane"),
-        worktree=tags.get("worktree") or str(workspace), branch=tags.get("branch"),
-        echo=False, env=env, new_run=True, run_id=run_id, reuse=True)
+    from tirith import loadlimit as loadlimit_mod
+    from tirith.home import load_config
+    allowed, _why = loadlimit_mod.current(load_config(home), home)
+    # a full suite per review: never more at once than the load allows (they all slowed down to a halt together)
+    with loadlimit_mod.slot(home, allowed, wait=SLOT_WAIT_S):
+        code, output = runstage_mod.run_stage(
+            home, project, pipeline, stage, command, workspace, lane=lane_id or tags.get("lane"),
+            worktree=tags.get("worktree") or str(workspace), branch=tags.get("branch"),
+            echo=False, env=env, new_run=True, run_id=run_id, reuse=True)
     if code == timeouts_mod.EXIT_TIMED_OUT:
         return False, f"{DID_NOT_FINISH} {limit:g} s\n{output}".strip()
     return code == 0, output

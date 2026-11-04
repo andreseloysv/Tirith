@@ -187,7 +187,9 @@ is `{status, at?, message?}` with `status` one of `pending` (launched lane, done
 review whose process died shows as `merge-failed` ("interrupted"). When it is run again and its worktree is gone, the
 lane file is settled instead of staying `running`: `merged` when the claim check finds the lane's work on main,
 else `merge-failed` ("the review stopped before it finished and the worktree is gone: <reason>"), so the plan item
-is reopened like for any failed review. The self-check settles such a review the same way without running it again
+is reopened like for any failed review. A review's test suite holds one of the stage slots of `tirith run` (as many as the load limit allows) and waits
+for one up to 3 h (`review.SLOT_WAIT_S`) instead of 10 min: full suites started together under load all slowed to a
+halt. The self-check settles such a review the same way without running it again
 (its tries may be used up already).
 
 `tirith lane stats [--days 14] [--by agent|model|project|class] [--json]` is the scoreboard of ended agent lanes
