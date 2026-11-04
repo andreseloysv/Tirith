@@ -67,7 +67,7 @@ stops answering and says so once in the room, until a paired device writes.
 ## `state.json` -> `rooms[]`, on top of `docs/CONTRACT-rooms.md`
 
 `private: true`, `connected: bool`, `me: {name, key_id}`, `devices: [{name, key_id, paired_at, last_seen}]`,
-`managers: [{name, key_id, last_seen, accepted}]` (every other key that wrote; `accepted` is false for one that joined without a valid code, shown in the Rooms card as a peer with no code), `open_url` (the permanent link), `invite: {url, used}` (the one-use QR), `peer_code` (after an invite request); `messages[].from_device: bool`. Old rooms keep
+`managers: [{name, key_id, last_seen, accepted, presence}]` (`presence` = `{state: listening|busy|asleep, since, wake: [agent alias]}`: what the agent is really doing, not what it says; asleep shows "for N min" from `since` and who can wake it; without `presence` the card says "Status unknown") (every other key that wrote; `accepted` is false for one that joined without a valid code, shown in the Rooms card as a peer with no code), `open_url` (the permanent link), `invite: {url, used}` (the one-use QR), `peer_code` (after an invite request); `messages[].from_device: bool`. Old rooms keep
 working as they are.
 
 ## App

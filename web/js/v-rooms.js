@@ -68,6 +68,20 @@
   }
 
   /* ---------- drawing ---------- */
+  /* An agent's real state in the room: presence {state: listening|busy|asleep, since, wake: [alias]} (docs/CONTRACT-private-rooms.md).
+     Asleep shows for how long and who can wake it; nothing reported is "Status unknown", never a guess. */
+  var PSTATE = { listening: 'Listening', busy: 'Busy', asleep: 'Asleep' };
+  function mins(iso) { var t = T.ms(iso); return t == null ? null : Math.max(0, Math.round((T.now() - t) / 60000)); }
+  function presence(p) {
+    var pr = p && p.presence, st = pr && PSTATE[pr.state] ? pr.state : '';
+    if (!st) return '<span class="rpres rp-unknown">Status unknown</span>';
+    var m = mins(pr.since), txt = PSTATE[st];
+    if (st === 'asleep') txt += m == null ? '' : m < 1 ? ' for under a minute' : ' for ' + m + ' min';
+    else if (st === 'busy' && m != null) txt += ' for ' + m + ' min';
+    var wake = (Array.isArray(pr.wake) ? pr.wake : []).filter(function (a) { return typeof a === 'string' && /^[a-z0-9_-]{1,40}$/i.test(a); });
+    var tail = st === 'asleep' ? '<span class="mut sm rwake">' + (wake.length ? 'can be woken by ' + wake.map(esc).join(', ') : 'nobody can wake it') + '</span>' : '';
+    return '<span class="rpres rp-' + st + '">' + esc(txt) + '</span>' + tail;
+  }
   function who(r) {
     var rows = [];
     (r.devices || []).forEach(function (d) { rows.push(['phone', d]); });
@@ -75,7 +89,7 @@
     if (!rows.length) return '<p class="mut sm rwho">Nobody else is here yet.</p>';
     return '<ul class="rwho">' + rows.map(function (x) {
       var p = x[1];
-      return '<li><span class="rk">' + (x[0] === 'phone' ? 'Your phone' : p.accepted ? 'Manager' : 'Peer, no code') + '</span><b>' + esc(p.name) + '</b><code title="Key id">' + esc(short(p.key_id)) + '</code>' +
+      return '<li><span class="rk">' + (x[0] === 'phone' ? 'Your phone' : p.accepted ? 'Manager' : 'Peer, no code') + '</span><b>' + esc(p.name) + '</b><code title="Key id">' + esc(short(p.key_id)) + '</code>' + (x[0] === 'manager' ? presence(p) : '') +
         (p.last_seen ? '<span class="mut sm">seen ' + esc(ago(p.last_seen)) + '</span>' : '') + '</li>';
     }).join('') + '</ul>';
   }
