@@ -24,6 +24,7 @@ from typing import Callable
 
 from tirith import gates as gates_mod
 from tirith import lanegates as lanegates_mod
+from tirith import mspchat as mspchat_mod
 from tirith.home import Config, now_iso
 from tirith.store import append_jsonl, read_json, read_jsonl, write_json_atomic
 
@@ -88,11 +89,24 @@ def chat_command(config: Config, alias: str, model: str | None = None, effort: s
     if model and s.get("model_flag"):
         cmd += [str(s["model_flag"]), str(model)]
     effort = effort or s.get("effort")
-    if effort and s.get("effort_flag"):
+    if effort and s.get("effort_flag") and not is_msp(s):  # an MSP host takes the effort with each turn
         cmd += [str(s["effort_flag"]), str(effort)]
-    if resume:
+    if resume and not is_msp(s):  # an MSP host starts a fresh conversation each time
         cmd += ["--resume", resume]
     return cmd
+
+
+def is_msp(settings: dict) -> bool:
+    return settings.get("chat_protocol") == mspchat_mod.PROTOCOL
+
+
+def chat_adapter(config: Config, alias: str, effort: str | None = None):
+    """The MSP adapter for an alias that speaks it (``chat_protocol = "msp"``), else None."""
+    from tirith import agentrun as agentrun_mod
+    s = agentrun_mod.agent_settings(config, alias, None)
+    if not is_msp(s):
+        return None
+    return mspchat_mod.Msp(str(effort or s.get("chat_effort") or s.get("effort") or "minimal"))
 
 
 # -- permissions decided by code --------------------------------------------------------------
@@ -275,8 +289,10 @@ class Turn:
 class Session:
     """The running agent process and everything the reader thread learns from its stdout."""
 
-    def __init__(self, home: Path, lane_id: str, proc, decide_fn: Callable, workspace, resumed: bool = False):
+    def __init__(self, home: Path, lane_id: str, proc, decide_fn: Callable, workspace, resumed: bool = False,
+                 adapter=None):
         self.home, self.lane_id, self.proc, self.decide, self.workspace = Path(home), lane_id, proc, decide_fn, workspace
+        self.adapter = adapter  # an MSP host (``mspchat``): the stream-json lines are translated both ways
         self.resumed = resumed
         self.lock = threading.RLock()
         self.session_id: str | None = None
@@ -292,6 +308,8 @@ class Session:
         self.started = datetime.now(timezone.utc)
         self.got_event = False
         self._out = None
+        if adapter is not None:
+            self._raw(adapter.hello())
         self.thread = threading.Thread(target=self._read, daemon=True)
         self.thread.start()
 
@@ -305,14 +323,35 @@ class Session:
     def busy(self) -> bool:
         return self.turn is not None
 
-    def write(self, obj: dict) -> bool:
+    def _raw(self, lines: list[str]) -> bool:
         with self.lock:
             try:
-                self.proc.stdin.write((json.dumps(obj) + "\n").encode("utf-8"))
+                for line in lines:
+                    self.proc.stdin.write((line + "\n").encode("utf-8"))
                 self.proc.stdin.flush()
                 return True
             except (OSError, ValueError):
                 return False
+
+    def write(self, obj: dict) -> bool:
+        with self.lock:
+            if self.adapter is not None:
+                return self._write_msp(obj)
+            return self._raw([json.dumps(obj)])
+
+    def _write_msp(self, obj: dict) -> bool:
+        """A stream-json line for the session, as the MSP host wants it."""
+        if obj.get("type") == "user":
+            text = "".join(b.get("text", "") for b in (obj.get("message") or {}).get("content") or []
+                           if isinstance(b, dict))
+            return self._raw(self.adapter.user(text))
+        if obj.get("type") == "control_response":
+            resp = obj.get("response") or {}
+            body = resp.get("response") or {}
+            line = self.adapter.answer(str(resp.get("request_id") or ""), body.get("behavior") == "allow",
+                                       str(body.get("message") or ""))
+            return line is not None and self._raw([line])
+        return False  # an interrupt: the host's method is not known, stop / restart end the process
 
     def send(self, text: str, requests: list[str], now: datetime) -> bool:
         """Start a turn: one user message on stdin. Only when the session is idle."""
@@ -329,6 +368,8 @@ class Session:
         """Stop the running turn (the session lives on)."""
         with self.lock:
             if self.turn is None:
+                return False
+            if self.adapter is not None:
                 return False
             self.interrupted = True
             return self.write({"type": "control_request", "request_id": "int-" + uuid.uuid4().hex[:8],
@@ -384,11 +425,12 @@ class Session:
                 if not line.strip().startswith("{"):
                     continue
                 self.got_event = True
-                self._append(line)
-                try:
-                    self._event(line)
-                except Exception:  # one odd line never stops the reader
-                    continue
+                for ui in self._translate(line):
+                    self._append(ui)
+                    try:
+                        self._event(ui)
+                    except Exception:  # one odd line never stops the reader
+                        continue
         finally:
             code = None
             try:
@@ -403,6 +445,15 @@ class Session:
                     self._finish_turn(datetime.now(timezone.utc))
                 if self._out is not None:
                     self._out.close()
+
+    def _translate(self, line: str) -> list[str]:
+        """The stream-json lines for one line of the agent's stdout (itself for a stream-json agent)."""
+        if self.adapter is None:
+            return [line]
+        with self.lock:
+            out = self.adapter.incoming(line)
+            self._raw(out.send)
+        return out.ui
 
     def _exit_reason(self) -> str:
         """Why the process is gone: the last lines of its launch log (``tirith lane run`` says why it refused), else its code."""
