@@ -8,7 +8,7 @@
 
 **Repository:** https://github.com/andreseloysv/Tirith (public)
 
-**Demo video (3 min):** `<PASTE VIDEO LINK HERE>`
+**Demo video (2:48):** https://youtu.be/LVqD1oW3KDw
 
 ## Description
 
