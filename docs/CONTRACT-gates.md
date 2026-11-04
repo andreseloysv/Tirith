@@ -68,7 +68,7 @@ enabled = false
 
 ## Shims
 
-`tirith shim install|uninstall|verify [--dir <folder>]` (default `~/.tirith/shims`, which `lane run` puts first in every lane's PATH, before the git wrapper in `~/.local/bin`; when the owner installed a fast git front in `~/.local/fastgit/git` (read-only commands straight to the real git, everything else to the wrapper), it comes between the two). For every
+`tirith shim install|uninstall|verify [--dir <folder>]` (default `~/.tirith/shims`, which `lane run` puts first in every lane's PATH, before the git wrapper in `~/.local/bin`). For every
 `[agents.<alias>] command` it writes an executable `sh` wrapper named like that command. The wrapper
 `exec`s the real binary (resolved at install from `PATH` without the shim folder) when stdin and stdout
 are terminals, or when `TIRITH_LANE_TOKEN` equals the `token` in `lanes/$TIRITH_LANE.json`; otherwise
