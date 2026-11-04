@@ -70,6 +70,7 @@ from tirith import projenv as projenv_mod
 from tirith import roomcli as roomcli_mod
 from tirith import rooms as rooms_mod
 from tirith.home import ensure_home, load_config, now_iso, parse_iso, tirith_home
+from tirith import store as store_mod
 from tirith.store import (
     append_jsonl, final_answer, lane_path, read_json, read_jsonl, read_lane, read_lanes, write_json_atomic,
     write_lane,
@@ -180,6 +181,7 @@ def register_lane(home: Path, *, lane_id: str | None, project: str, hero_class: 
     if retry_of:
         lane["retry_of"] = retry_of
     write_lane(home, lane)
+    store_mod.save_lane_brief(home, lane_id, lane["brief"])
     source = "manager" if parent in ("manager", "steward") else f"agent:{parent}"
     flows_mod.append_flow(home, source, f"agent:{lane_id}", "brief",
                           f"Brief: {feature}", lane["brief"], project=project)
@@ -1698,8 +1700,8 @@ def relaunch_lane(home: Path, lane: dict, alias: str | None, by_tirith: bool = F
     worktree starts from it."""
     config, proj = _project_or_exit(home, str(lane.get("project") or ""))
     repo = projects_mod.real(proj.repo) if proj.repo else None
-    brief = Path(str(lane.get("brief") or ""))
-    if repo is None or not brief.is_file():
+    brief = store_mod.lane_brief_path(home, lane)  # the original file, else Tirith's copy in the lane folder
+    if repo is None or brief is None:
         raise launch_mod.LaunchError(f"lane {lane.get('id')} has no repo or brief to start again from")
     title = str(lane.get("feature") or lane["id"])
     lane_id = launch_mod.lane_id_for(title, {str(l["id"]) for l in read_lanes(home)}, repo)
@@ -1710,7 +1712,7 @@ def relaunch_lane(home: Path, lane: dict, alias: str | None, by_tirith: bool = F
                          "git-commit")
         workspace = launch_mod.create_worktree(repo, lane_id, base=mergeq_mod.branch_of(lane, old))
         brief = brief.with_name(f"{brief.stem}-{lane_id}.md")
-        brief.write_text(Path(str(lane["brief"])).read_text(encoding="utf-8") + "\n\n" + note, encoding="utf-8")
+        brief.write_text(store_mod.lane_brief_path(home, lane).read_text(encoding="utf-8") + "\n\n" + note, encoding="utf-8")
     else:
         dirty = timeouts_mod.run(["git", "-C", str(old), "status", "--porcelain"], "git", text=True)
         if old.is_dir() and dirty.returncode == 0 and not dirty.stdout.strip():
