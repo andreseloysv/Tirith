@@ -26,6 +26,15 @@ Start-up: the console script is `tirith.entry:main`. A plain hook call (`hook --
 `TIRITH_ROLE` or `[manager] session_cwd` set, no `TIRITH_LANE`). Every other command loads `tirith.cli` as before.
 Test `hook_imports_little` checks the module list in a subprocess.
 
+## Access audit
+
+Every `PreToolUse` call also appends one line to `<home>/access/<project>.ndjson` (`_loose` outside a project),
+written by `tirith.access_audit` from the same hook call (append only, never raises):
+`{"ts", "agent", "lane", "plan", "system", "tool", "action"}`. `plan` is `<step>: <item>` of the lane (or null),
+`system` is `git`, `github`, `tirith`, `network`, `package`, `shell`, `files`, `agent` or `mcp:<server>`.
+`action` is the first line of the call, cut to 200 characters, with tokens, passwords, keys, `NAME=secret`
+values and URL credentials replaced by `***`; file contents and prompts are never stored.
+
 ## Adapters
 
 `anthropic` (Anthropic's coding CLI): events `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `SubagentStop`, `Stop`

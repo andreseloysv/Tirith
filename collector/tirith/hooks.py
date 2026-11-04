@@ -321,6 +321,12 @@ def run_hook(home: Path, agent: str, event: str | None, stdin) -> int:
             payload = {}
         row = record(home, agent, payload, event)
         try:
+            from tirith import access_audit
+            access_audit.record(home, row, _pick(payload if isinstance(payload, dict) else {},
+                                                 "tool_input", "input", "arguments", "args", "toolArgs"))
+        except Exception:
+            pass
+        try:
             from tirith import collectlock as collectlock_mod
             collectlock_mod.revive(home)  # a stat in the usual case: the collector is alive
         except Exception:
