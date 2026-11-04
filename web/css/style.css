@@ -1038,4 +1038,4 @@ button.vwho:hover b { text-decoration: underline; }
 .lead-list li { overflow-wrap: anywhere; }
 .lead-mark { width: 36px; height: 36px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
   font-weight: 700; background: var(--blue, #3b6fe0); color: #fff; flex: none; }
-.leadpad { padding-bottom: 0; }
+.leadpad { padding-bottom: 0; flex: none; max-height: 42vh; overflow-y: auto; }  /* the Agents board keeps the rest */
