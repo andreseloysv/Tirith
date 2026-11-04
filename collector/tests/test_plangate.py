@@ -980,3 +980,18 @@ def test_roadmap_edit_read_only_commands_pass(gate, command) -> None:
 def test_roadmap_edit_read_only_does_not_open_real_edits(gate, command) -> None:
     _, lane_dir, cfg = gate
     assert "roadmap-edit" in [v.rule for v in gates.check_call(cfg, "Bash", {"command": command}, lane_dir)]
+
+
+def test_item_id_plan_add_shows_a_short_id_every_command_accepts(proj, home: Path, capsys) -> None:
+    repo, _ = proj
+    assert main(["plan", "add", "--project", "demo", "--step", "1", "--text", "Add the short id item.",
+                 "--check", "true"]) == 0
+    out = capsys.readouterr().out
+    import re
+    item_id = re.search(r"id: (i-[a-f0-9]{8})\b", out).group(1)
+    assert main(["plan", "check", "--project", "demo", "--step", "1", "--item", item_id]) == 0
+    assert main(["plan", "configure", "--project", "demo", "--step", "1", "--item", item_id,
+                 "--writes", "src"]) == 0
+    assert _run(repo, "--id", "shortid", "--step", "1", "--item", item_id) == 0
+    assert "(en curso: shortid)" in _plan(repo)
+    assert read_json(home / "lanes" / "shortid.json", {})["item"].startswith("Add the short id item.")

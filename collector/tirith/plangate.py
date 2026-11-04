@@ -361,6 +361,19 @@ def check_item(repo: Path, step: str, item: str) -> tuple[bool, str]:
     return (True, "") if command is None else run_check(command, repo)
 
 
+def _new_item_id(repo: Path) -> str:
+    """A short id (``i-`` and 8 hex digits) no item of the plan has yet."""
+    try:
+        _, steps = _read(repo)
+        taken = {i.get("id") or roadmap_mod.item_id(i["text"]) for s in steps for i in s["items"]}
+    except Exception:
+        taken = set()
+    while True:
+        new = "i-" + uuid.uuid4().hex[:8]
+        if new not in taken:
+            return new
+
+
 def add_item(home: Path, repo: Path, project: str, step: str, text: str, who: str, title: str | None = None,
              check: str | None = None, depends_on: list[str] | None = None,
              writes: list[str] | None = None) -> str:
@@ -379,7 +392,7 @@ def add_item(home: Path, repo: Path, project: str, step: str, text: str, who: st
         text = roadmap_mod.with_check(text, check)
     from tirith import coordination
     try:
-        metadata = {"id": "i-" + uuid.uuid4().hex, "depends_on": list(dict.fromkeys(depends_on or [])),
+        metadata = {"id": _new_item_id(repo), "depends_on": list(dict.fromkeys(depends_on or [])),
                     "writes": coordination.write_paths(writes or [])}
     except coordination.CoordinationError as error:
         raise PlanGateError(str(error)) from error
