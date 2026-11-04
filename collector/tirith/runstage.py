@@ -88,9 +88,9 @@ def worktree_info(folder: str | Path) -> dict | None:
     folder = Path(folder)
     if not folder.is_dir():
         return None
-    top = _git(folder, "rev-parse", "--show-toplevel")
-    git_dir = _git(folder, "rev-parse", "--path-format=absolute", "--git-dir")
-    common = _git(folder, "rev-parse", "--path-format=absolute", "--git-common-dir")
+    lines = (_git(folder, "rev-parse", "--path-format=absolute", "--show-toplevel", "--git-dir",
+                  "--git-common-dir") or "").splitlines()  # one git process answers all three
+    top, git_dir, common = (lines + ["", "", ""])[:3]
     if not (top and git_dir and common) or projects_mod.real(git_dir) == projects_mod.real(common):
         return None
     return {"worktree": str(projects_mod.real(top)),
@@ -144,8 +144,9 @@ def tree_of(folder: str | Path) -> str | None:
     folder = Path(folder)
     if not folder.is_dir():
         return None
-    index = _git(folder, "rev-parse", "--path-format=absolute", "--git-path", "index")
-    top = _git(folder, "rev-parse", "--show-toplevel")
+    lines = (_git(folder, "rev-parse", "--path-format=absolute", "--git-path", "index", "--show-toplevel")
+             or "").splitlines()  # one git process answers both
+    index, top = (lines + ["", ""])[:2]
     if not index or not top:
         return None
     fd, temp = tempfile.mkstemp(prefix="tirith-tree-")
