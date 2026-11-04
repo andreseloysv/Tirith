@@ -231,6 +231,10 @@ def _manager_inbox(agent: str, event: dict, home: Path, environ=None) -> int:
     return 0
 
 
+def _is_manager_lane(lane_id: str) -> bool:
+    return str(lane_id).startswith("manager")  # the manager polls its inbox by design: no repeat rule
+
+
 def decide(agent: str, event: dict, payload, home: Path | None = None) -> int:
     """Block a ``PreToolUse`` call that breaks a rule (``tirith.gates``): exit 2, message on stderr.
 
@@ -250,14 +254,23 @@ def decide(agent: str, event: dict, payload, home: Path | None = None) -> int:
             if event.get("event") == "PreToolUse":
                 print(str(error), file=sys.stderr)
                 return 2
+        notes = []
+        if agent == "anthropic" and event.get("event") == "PostToolUse" and not _is_manager_lane(event["lane"]):
+            from tirith import repeats
+            reminder = repeats.nudge(home, event["lane"])
+            if reminder:
+                notes.append(reminder)
         if (agent == "anthropic" and event.get("event") in ("SessionStart", "UserPromptSubmit", "PostToolUse")
                 and lane.get("project") and not str(lane.get("id", "")).startswith("manager")
                 and (Path(home) / "coordination.sqlite3").exists()):
             messages = coordination.inbox(home, lane["project"], lane.get("id") or event["lane"])
             if messages:
-                text = "Pending worker messages (acknowledge only these IDs after handling):\n" + json.dumps(messages[:10])
-                print(json.dumps({"hookSpecificOutput": {"hookEventName": event["event"], "additionalContext": text}}))
-                return 0
+                notes.append("Pending worker messages (acknowledge only these IDs after handling):\n"
+                             + json.dumps(messages[:10]))
+        if notes:
+            print(json.dumps({"hookSpecificOutput": {"hookEventName": event["event"],
+                                                     "additionalContext": "\n\n".join(notes)}}))
+            return 0
     if home is not None and event.get("event") != "PreToolUse":
         return _manager_inbox(agent, event, home)
     if event.get("event") != "PreToolUse" or home is None:
@@ -268,6 +281,12 @@ def decide(agent: str, event: dict, payload, home: Path | None = None) -> int:
     data = payload if isinstance(payload, dict) else {}
     fields = adapt(agent, data)
     tool_input = _pick(data, "tool_input", "input", "arguments", "args", "toolArgs")
+    if event.get("lane") and not _is_manager_lane(event["lane"]):
+        from tirith import repeats
+        count = repeats.note(home, event["lane"], event.get("tool"), tool_input)
+        if count >= repeats.BLOCK_AT:
+            print(repeats.blocked_message(count, event.get("tool"), tool_input), file=sys.stderr)
+            return 2
     found = gates.check_call(config, event.get("tool"), tool_input, event.get("cwd"),
                              event.get("project"), home, lane=event.get("lane"))
     for violation in found:

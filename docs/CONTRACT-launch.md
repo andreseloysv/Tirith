@@ -186,6 +186,18 @@ is `{status, at?, message?}` with `status` one of `pending` (launched lane, done
 `tests-failed`, `claims-failed`, `ready`, `merge-failed`, `merged`; `null` for lanes not started by `tirith launch`. A `running`
 review whose process died shows as `merge-failed` ("interrupted").
 
+`tirith lane stats [--days 14] [--by agent|model|project|class] [--json]` is the scoreboard of ended agent lanes
+(`tirith/scoreboard.py`; not the manager's or the owner's own sessions). Per group: lanes, done on the first try
+(`result` done, plan report `done` or no plan item, never sent back by keepgoing), average keepgoing rounds, stalled,
+failed, merged (`review.status = "merged"`), merge trouble (`conflict`, `red-suite`, `sent-back`), lanes the repeat
+rule blocked, total cost from the lane logs and cost per merged lane; then the kinds of gaps keepgoing sent lanes back
+with, most common first. It only reads.
+
+**Keep going** (`tirith/keepgoing.py`): a lane whose agent ends with gaps is sent back to the same session, up to 3
+rounds. A round that fixed none of the gaps it was sent back with stops the lane at once: `keep_going.stalled = true`
+(the Agents view shows `round N/3, stalled`) and the `sq-incomplete-<lane>` manager queue item says the same gaps came
+back after round N.
+
 `tirith lane drop <lane-id>` removes the worktree and the branch of an unmerged launched lane (`review.status = "dropped"`).
 `state.agents[].review` also carries `run` (the pipeline run of the tests, known while they run), and after a
 merge or passing tests `files`, `branch` and `passed` (the count the test runner printed, if any).
