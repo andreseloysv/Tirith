@@ -83,14 +83,14 @@ def _resolve_main_worktree(path: str) -> str:
     base = folder if folder.is_dir() else folder.parent
     if not base.is_dir():
         return path
-    out = _git_ok(["git", "-C", str(base), "rev-parse", "--show-toplevel"])
-    if out.returncode != 0 or not out.stdout.strip():
+    out = _git_ok(["git", "-C", str(base), "rev-parse", "--path-format=absolute", "--show-toplevel",
+                   "--git-common-dir"])  # one git process answers both
+    lines = out.stdout.splitlines()
+    if out.returncode != 0 or not lines or not lines[0].strip():
         return path  # not a git repository
-    top = real(out.stdout.strip())
-    out = _git_ok(["git", "-C", str(top), "rev-parse", "--path-format=absolute", "--git-common-dir"])
-    if out.returncode != 0 or not out.stdout.strip():
+    if len(lines) < 2 or not lines[1].strip():
         raise _Unresolved("git-common-dir unavailable")
-    common = real(out.stdout.strip())
+    top, common = real(lines[0].strip()), real(lines[1].strip())
     if common.name != ".git" or common.parent == top:
         return path
     return str(common.parent / folder.relative_to(top))

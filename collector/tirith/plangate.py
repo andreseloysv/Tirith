@@ -119,6 +119,7 @@ def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
 
 
 LOCK_STALE_SECONDS = 60  # a git index lock older than this was left by a crash (git holds it for milliseconds)
+_LOCK_PATHS: dict[str, Path] = {}  # repo -> where its index lock lives
 
 
 def _held(path: Path) -> bool:
@@ -134,12 +135,16 @@ def recover_git_lock(repo: Path) -> bool:
     """Remove an abandoned ``index.lock`` of ``repo`` (the main checkout); True when one was removed.
 
     Only a lock older than ``LOCK_STALE_SECONDS`` is abandoned; a live git command holds its lock for moments."""
-    found = _git(repo, "rev-parse", "--git-path", "index.lock")
-    if found.returncode != 0:
-        return False
-    lock = Path(found.stdout.strip())
-    if not lock.is_absolute():
-        lock = repo / lock
+    lock = _LOCK_PATHS.get(str(repo))
+    if lock is None:
+        found = _git(repo, "rev-parse", "--git-path", "index.lock")
+        if found.returncode != 0:
+            return False
+        lock = Path(found.stdout.strip())
+        if not lock.is_absolute():
+            lock = repo / lock
+        if lock.parent.is_dir():
+            _LOCK_PATHS[str(repo)] = lock  # asked once per process
     try:
         if time.time() - lock.stat().st_mtime < LOCK_STALE_SECONDS or _held(lock):
             return False
