@@ -358,7 +358,8 @@ def no_secrets(tool: str, data: dict, segments: list[list[str]], cwd, workspace:
         if not word or word.startswith("-") and "/" not in word:
             continue
         probe = word
-        for text in (probe, re.sub(r"^.*?(?=[~/$])", "", probe)):  # also `open('/x/.ssh/id')` style words
+        # also `open('/x/.ssh/id')` style words: drop the text before the path, never a folder of the path itself
+        for text in (probe, re.sub(r"^[^~/$]*(?=[~/$])", "", probe, count=1)):
             if not text:
                 continue
             real = _resolve(text, here, env)
