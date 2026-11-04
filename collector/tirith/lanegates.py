@@ -34,7 +34,13 @@ SERVERS_HINT = ("do not start servers or open ports; test through `tirith run --
 PROCESS_HINT = ("only stop processes you started in this lane (kill <pid> of your own background job); "
                 "never pkill/killall by name")
 
-RULE_IDS = ("workspace-write", "no-secrets", "no-servers", "own-processes")
+RULE_IDS = ("workspace-write", "no-secrets", "no-servers", "own-processes", "ceo-read-only")
+CEO_PREFIX = "ceo-"  # the CEO's review lanes (``tirith.ceo``): read-only
+CEO_GIT = {"log", "show", "diff", "status", "blame", "ls-files", "rev-parse", "grep", "rev-list", "cat-file",
+           "shortlog", "describe", "for-each-ref", "merge-base"}
+CEO_TIRITH = {("status",), ("check",), ("lane", "stats"), ("inbox", "list"), ("queue", "list"), ("ceo", "show")}
+CEO_HINT = ("you only read: put what should change in your result, as a directive to the manager or a "
+            "proposal to the owner")
 
 
 
@@ -480,6 +486,26 @@ def own_processes(segments: list[list[str]], group: int | None = None, line: str
     return out
 
 
+def ceo_read_only(tool: str, data: dict, cwd, env) -> list[Violation]:
+    """The CEO's lanes change nothing: no edit tool, and only the read-only git and ``tirith`` commands."""
+    if tool in gates.EDIT_TOOLS:
+        return [Violation("ceo-read-only", f"{tool} changes a file", CEO_HINT)]
+    if tool != "Bash":
+        return []
+    for tokens in expand_segments(gates.strip_heredocs(str(data.get("command") or data.get("cmd") or ""))):
+        name, args = _program(tokens)
+        words = [a for a in args if not a.startswith("-")]
+        if name == "git":
+            rest = list(args)
+            while rest and rest[0].startswith("-"):  # git -C <dir> / -c k=v before the subcommand
+                rest = rest[2:] if rest[0] in ("-C", "-c") else rest[1:]
+            if rest and rest[0] not in CEO_GIT:
+                return [Violation("ceo-read-only", f"git {rest[0]} changes the repository", CEO_HINT)]
+        if name == "tirith" and words and tuple(words[:1]) not in CEO_TIRITH and tuple(words[:2]) not in CEO_TIRITH:
+            return [Violation("ceo-read-only", f"tirith {' '.join(words[:2])} changes Tirith's state", CEO_HINT)]
+    return []
+
+
 def check(config, tool: str, data: dict, cwd, *, lane: str | None, home: Path | None = None, env=None,
           group: int | None = None) -> list[Violation]:
     """Every lane rule that blocks one call (``[]`` when ``lane`` is unset: only lanes are fenced)."""
@@ -488,6 +514,9 @@ def check(config, tool: str, data: dict, cwd, *, lane: str | None, home: Path | 
     env = os.environ if env is None else env
     workspace = lane_workspace(home, lane, cwd)
     out: list[Violation] = []
+    if str(lane).startswith(CEO_PREFIX):
+        out += ceo_read_only(tool, data, cwd, env)
+        workspace = Path(tempfile.gettempdir())  # nothing of the project is its to write
     if tool == "Bash":
         line = gates.strip_heredocs(str(data.get("command") or data.get("cmd") or ""))
         segments = expand_segments(line)

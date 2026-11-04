@@ -41,6 +41,7 @@ BUILT_IN: tuple[tuple[str, str, list[str]], ...] = (
     ("no-secrets", "Read credentials", ["hook"]),
     ("no-servers", "Start a server", ["hook"]),
     ("own-processes", "Stop another process", ["hook"]),
+    ("ceo-read-only", "The CEO changes something", ["hook"]),
 )
 
 

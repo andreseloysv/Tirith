@@ -244,6 +244,14 @@ def testing_lanes(events: list[dict], now: datetime) -> set[str]:
     return {s["lane"] for s in open_stages.values() if _stage_alive(s, now)}
 
 
+def _ceo_public(home: Path, now: datetime) -> dict | None:
+    from tirith import ceo as ceo_mod
+    try:
+        return ceo_mod.public(home, now)
+    except Exception:  # the page must render without it
+        return None
+
+
 def lane_status(lane: dict, now: datetime, testing: set[str] | frozenset[str] = frozenset()) -> str:
     """working/done/failed/stalled for one lane registration. A lane in ``testing`` (its test stage runs; the
     agent's own log is silent meanwhile) is never stalled, nor is a live interactive lane (the persistent manager,
@@ -1502,6 +1510,7 @@ class Collector:
             "health": selfcheck_mod.public(dispatch_mod.load_state(self.home).get("health")),
             "timeouts": timeouts_mod.table(self.home, self.config),
             "autopilot": autopilot_mod.public(self.home, self.config, agent_rows, projects, now),
+            "ceo": _ceo_public(self.home, now),
             "launch": {"token": launch_mod.launch_token(self.home),
                        "available": launch_mod.handler_installed()},
             "models": models_mod.state(self.config, [

@@ -156,6 +156,14 @@ and the input and asks for another approach or a report). The chain of a lane is
 `end_lane` moves its totals into the lane file as `repeats: {nudged, blocked, longest}` (only when there were any)
 and removes the file. `[gates] enabled = false` switches it off with the other rules.
 
+## The CEO only reads (`ceo-read-only`)
+
+A lane whose id starts with `ceo-` (`tirith/ceo.py`) changes nothing: every edit tool is blocked, git runs only its
+read subcommands (log, show, diff, status, blame, ls-files, rev-parse, grep, rev-list, cat-file, shortlog, describe,
+for-each-ref, merge-base), `tirith` only `status`, `check`, `lane stats`, `inbox list`, `queue list` and `ceo show`,
+and its writable folders are the temp folders only (not the project). What it wants changed goes into its result as
+a directive or a proposal (`docs/CONTRACT-ceo.md`).
+
 ## Stop a running lane: `tirith lane stop <lane-id> [--reason ..] [--by owner|manager]`
 
 `lane run` starts a non-interactive child as the leader of its own process group and stores `pgid` in
