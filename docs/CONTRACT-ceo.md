@@ -1,6 +1,23 @@
 # CEO contract: a supervisor for the manager (proposed)
 
-Status: proposed, not built. The owner sets the targets and limits below before it is.
+Status: version 1 built (`collector/tirith/ceo.py`), off until `[ceo] enabled = true`. Built: the snapshot by code,
+the schedule with the skip check and the daily budget, the read-only review lane, the typed result, delivery of
+directives (inbox kind `directive`) and proposals (owner decisions), the findings / directives / decisions records,
+the catch-up after downtime, `state.ceo` and the CEO card ("Running Tirith" on the Overview and the Agents tab),
+`tirith ceo show` and `tirith ceo run`. Not built yet: the watchdog, a dollar budget, the owner's ratings, editing
+targets from the page.
+
+`config.toml`:
+
+```toml
+[ceo]
+enabled = true
+hours = [9, 14, 20]      # local time
+runs_per_day = 6
+# model = "...", effort = "..."   (default: the manager's)
+[ceo.targets]            # optional; the contract's defaults otherwise
+merged_per_day = 10
+```
 
 ## Why
 

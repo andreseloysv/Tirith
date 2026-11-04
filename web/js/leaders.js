@@ -71,7 +71,8 @@
     }
     var now = c.running ? '<span class="anow live"><i class="pdot2"></i>Reviewing how the work is run</span>' :
       '<span class="anow">' + (c.last_at ? 'Last review ' + esc(T.clockTime(c.last_at)) + (c.last_result ? ' · ' + esc(c.last_result) : '') : 'No review yet') +
-      (c.next_at ? ' · next ' + esc(T.clockTime(c.next_at)) : '') + '</span>';
+      (c.next_at ? ' · next ' + esc(T.clockTime(c.next_at)) : '') + '</span>' +
+      (c.last_result === 'failed' && c.last_error ? '<span class="mut">Its last review gave no usable result: ' + esc(clip(c.last_error, TEXT)) + '</span>' : '');
     var report = (c.report || []).map(function (l) { return '<li>' + T.mdInline(clip(l, TEXT)) + '</li>'; });
     var dirs = (c.directives || []).map(function (d) {
       return '<li><span class="mut">' + esc(d.status || 'open') + '</span> ' + T.mdInline(clip(d.text, TEXT)) + '</li>';
