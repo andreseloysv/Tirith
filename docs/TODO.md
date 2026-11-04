@@ -228,7 +228,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Comunicación web ↔ app por IPC de Tauri (sin puertos).
 - [x] Vista de chat: cada conversación es un lane (`lane run --interactive` por debajo).
 - [x] Agentes por stdin/stdout: modo stream-json del agente `anthropic` (`chat_args`).
-- [ ] Chat con `muse serve` (en curso: app-de-escritorio-tauri-con-chat-10) <!-- tirith:{"id":"i-2e787d8f"} -->
+- [ ] Chat con `muse serve` (en revisión) <!-- tirith:{"id":"i-2e787d8f"} -->
 - [x] Preguntas de permiso del agente en la UI.
 - [x] La app arranca el collector si no hay uno (con uv; Python aún no va empaquetado).
 - [x] Abrir la app en modo dev y comprobar que se ve y se actualiza.
@@ -246,6 +246,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Llevar a main el cambio de la lane app-de-escritorio-tauri-con-chat-7 (clip, arrastrar, sin scroll horizontal; tests ya verdes): reaplicar a mano /Users/andreseloyasanchezva/.tirith/diffs/app-de-escritorio-tauri-con-chat-7.patch sobre main, sin rediseñar, y resolver el conflicto en app/README.md conservando lo de main. (hecho: bd92d3b)
   - [x] Revisar: Llevar a main el cambio de la lane app-de-escritorio-tauri-con-chat-7 (clip, arrastrar, sin scroll horizontal; tests ya verdes): reaplicar a mano /Users/andreseloyasanchezva/.tirith/diffs/app-de-escritorio-tauri-con-chat-7.patch sobre main, sin rediseñar, y resolver el conflicto en app/README.md conservando lo de main. — falló: the tests failed: …tauri-con-chat-8/collector/.venv/lib/python3.12/site-packages/_pytest/pathlib.py:123: PytestWarning
 - [ ] La app de escritorio se recompila y se reinicia sola cuando cambia su código Rust en main (firmada), sin que el dueño tenga que hacer nada.
+- [ ] Confirmar el chat con muse serve en una sesión real (un mensaje mínimo, ajustes más baratos) y añadir la interrupción de turno y la reanudación si el protocolo las ofrece
 - [x] Integrar en main el arreglo de adjuntos (clip y arrastrar) de la lane app-de-escritorio-tauri-con-chat-8, hoy sin commit. (hecho: bd92d3b)
 - [x] Arrastrar archivos al chat funciona de verdad en la app de escritorio, y la miniatura adjunta se ve bien (✕ pequeño dentro de la esquina, nombre y tamaño). (hecho: 931214a)
 - [x] La app de macOS funciona sola en un Mac limpio: incluye el collector y la web, y en el primer arranque instala lo que falte (uv) con un botón. (check: `bash scripts/check-standalone-app.sh`) (hecho: 79cb84d)
