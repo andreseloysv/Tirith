@@ -200,6 +200,24 @@ def test_the_managers_decision_answers_the_proposal_and_it_is_not_asked_again(ho
     assert len([r for r in _proposals(home) if r["step"] == "1"]) == 1   # "wait" or "launched": not again
 
 
+def test_a_wait_expires_and_the_step_is_asked_again_with_the_earlier_answer(home, repo) -> None:
+    pilot = Pilot(home, repo)
+    pilot.cycle()
+    pilot.cycle()
+    req = next(r for r in _proposals(home) if r["step"] == "1")
+    inbox_mod.add_answer(home, req["id"], "Autopilot: step 1 → wait: the load is 34, I launch nothing now.",
+                         at=pilot.now.strftime("%Y-%m-%dT%H:%M:%SZ"))
+    inbox_mod.mark_done(home, req["id"])
+    pilot.cycle(autopilot_mod.ANSWER_EXPIRES_S - 120)
+    assert len([r for r in _proposals(home) if r["step"] == "1"]) == 1  # the decision stands for a while
+    pilot.cycle(240)
+    again = [r for r in _proposals(home) if r["step"] == "1"]
+    assert len(again) == 2 and again[-1]["status"] != "done" and again[-1]["manager_pending"]
+    assert "Asked again" in again[-1]["text"] and "the load is 34" in again[-1]["text"]
+    pilot.cycle()
+    assert len([r for r in _proposals(home) if r["step"] == "1"]) == 2  # once, until it is answered again
+
+
 def test_the_facts_of_earlier_lanes_are_in_the_proposal(home, repo) -> None:
     pilot = Pilot(home, repo)
     path = repo / "docs" / "TODO.md"
