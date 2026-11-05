@@ -283,3 +283,14 @@ def test_brief_tells_lanes_to_commit_without_trailer_or_push() -> None:
     assert "Do NOT commit" not in text
     assert "Commit your work on the lane branch" in text
     assert "attribution trailer" in text and "Never merge and never push" in text
+
+
+def test_brief_allows_commit() -> None:
+    """No lane brief tells an agent not to commit: Tirith commits a dirty worktree at report anyway."""
+    import re
+    from tirith import launch as launch_mod, planlane as planlane_mod
+    forbidden = re.compile(r"(do not|don't|never|must not)\s+commit", re.I)
+    for rules in (launch_mod.HARD_RULES, planlane_mod.RULES):
+        text = " ".join(rules)
+        assert not forbidden.search(text)
+        assert "commit on the lane branch" in text.lower() or "commit your work on the lane branch" in text.lower()
