@@ -1074,3 +1074,17 @@ def test_item_stays_open_until_merged_an_interactive_lane_whose_work_is_on_main_
     _merge_named(repo, "lane/chat8", "Merge lane/chat8: Work")
     assert plangate.lane_ended(home, read_json(home / "lanes" / "chat8.json", {})) == "done"
     assert "- [x] Build the button." in _plan(repo)
+
+
+def test_plan_add_same_title_twice(proj, home: Path, capsys) -> None:
+    import re
+    repo, _ = proj
+    ids = []
+    for _ in range(2):
+        assert main(["plan", "add", "--project", "demo", "--step", "1", "--text", "Revisar el plan (hoy)"]) == 0
+        out = capsys.readouterr().out
+        assert "added to step 1" in out
+        ids.append(re.search(r"id: (i-[a-f0-9]{8})\b", out).group(1))
+    assert ids[0] != ids[1]
+    items = [i for i in roadmap.parse(_plan(repo))[0]["items"] if i["text"].startswith("Revisar el plan")]
+    assert sorted(i["id"] for i in items) == sorted(ids)
