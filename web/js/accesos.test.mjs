@@ -30,10 +30,11 @@ assert.equal(groups('git', '7')[0].rows.length, 1, 'system filter');
 assert.equal(groups('', '1')[0].rows.length, 2, 'today');
 
 const el = {};
+state.accesses[1].external = ['web x.dev'];
 T.views.accesos(state, el);
-assert.match(el.innerHTML, /data-act="goagent" data-key="w1"/, 'linked to the agent');
-assert.match(el.innerHTML, /data-act="goplan" data-key="tirith"[^>]*>21: Vista/, 'linked to the plan point');
-assert.doesNotMatch(el.innerHTML, /<em>/, 'no counter badge');
+assert.match(el.innerHTML, /External/, 'what reached outside the machine');
+assert.match(el.innerHTML, /<b>x\.dev<\/b>/, 'its destination');
+assert.doesNotMatch(el.innerHTML, /class="rows card"/, 'no list of every agent action (noise to the owner)');
 T.views.accesos({ accesses: [] }, el);
-assert.match(el.innerHTML, /No accesses recorded/);
+assert.match(el.innerHTML, /Nothing reached outside the machine/);
 console.log('accesos ok');
