@@ -289,3 +289,60 @@ def _no_wait_for_returned_agents(monkeypatch):
     """The merge queue waits for a returned lane's agent to register; tests with a fake relauncher must not."""
     from tirith import mergeq
     monkeypatch.setattr(mergeq, "START_WAIT", 0.0)
+
+
+def reap(procs=(), pids=(), pgids=()) -> None:
+    """Kill the given children with their whole process groups (never the caller's own group) and wait for them."""
+    import signal
+    own = os.getpgid(0)
+    groups = set(pgids)
+    for proc in procs:
+        try:
+            groups.add(os.getpgid(proc.pid))
+        except OSError:
+            pass
+    for group in groups:
+        if group > 1 and group != own:
+            try:
+                os.killpg(group, signal.SIGKILL)
+            except OSError:
+                pass
+    for pid in pids:
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except OSError:
+            pass
+    for proc in procs:
+        try:
+            if proc.poll() is None:
+                proc.kill()
+            proc.wait(timeout=10)
+        except Exception:
+            pass
+        for stream in (getattr(proc, "stdout", None), getattr(proc, "stderr", None)):
+            try:
+                if stream:
+                    stream.close()
+            except OSError:
+                pass
+
+
+@pytest.fixture
+def reap_children():
+    """Returns ``track(proc=None, pid=None, pgid=None)``. At teardown every tracked child is reaped with its whole
+    process group, so no subprocess outlives its test."""
+    procs: list = []
+    pids: list[int] = []
+    pgids: list[int] = []
+
+    def track(proc=None, pid: int | None = None, pgid: int | None = None):
+        if proc is not None:
+            procs.append(proc)
+        if pid:
+            pids.append(int(pid))
+        if pgid:
+            pgids.append(int(pgid))
+        return proc
+
+    yield track
+    reap(procs, pids, pgids)
