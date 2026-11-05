@@ -724,8 +724,30 @@ def _push(repo: Path, branch: str) -> str | None:
         return None
     # a push writes to the origin and may run hooks: it takes the commit's limit, not the read-only `git` one (30 s
     # is too short for a loaded machine, and a timed-out push read as push-failed)
-    done = timeouts_mod.run(["git", "-C", str(repo), "push", "-q", "origin", branch], "git-commit", text=True)
-    return None if done.returncode == 0 else _tail(done.stderr or done.stdout)
+    def push():
+        return timeouts_mod.run(["git", "-C", str(repo), "push", "-q", "origin", branch], "git-commit", text=True)
+
+    done = push()
+    if done.returncode == 0:
+        return None
+    error = _tail(done.stderr or done.stdout)
+    # a failed push may be a race: look at origin before calling it failed
+    head = _git(repo, "rev-parse", branch).stdout.strip()
+    if _git(repo, "fetch", "-q", "origin", branch).returncode != 0 or not head:
+        return error
+    theirs = _git(repo, "rev-parse", "FETCH_HEAD").stdout.strip()
+    if not theirs:
+        return error
+    if _git(repo, "merge-base", "--is-ancestor", head, theirs).returncode == 0:
+        return None  # the merged commit is already on origin's main
+    if _git(repo, "merge-base", "--is-ancestor", theirs, head).returncode == 0:
+        return error  # origin is behind: the push failed for another reason
+    # main moved ahead on origin without our commit: rebase onto it and push once more
+    if _git(repo, "rebase", theirs).returncode != 0:
+        _git(repo, "rebase", "--abort")
+        return error
+    again = push()
+    return None if again.returncode == 0 else _tail(again.stderr or again.stdout)
 
 
 def _sent_back_count(lane: dict) -> int:

@@ -1005,6 +1005,47 @@ def test_a_failed_push_tells_the_manager(env, home: Path, monkeypatch) -> None:
     assert any("push-failed: remote rejected" in str(i) for i in asks_mod.queue_items(home))
 
 
+def _fail_first_push(monkeypatch, really_push: bool) -> None:
+    real = mergeq_mod.timeouts_mod.run
+    state = {"n": 0}
+
+    def run(cmd, *args, **kwargs):
+        if "push" in cmd and state["n"] == 0:
+            state["n"] = 1
+            if really_push:
+                real(cmd, *args, **kwargs)
+            return subprocess.CompletedProcess(cmd, 1, "", "connection reset")
+        return real(cmd, *args, **kwargs)
+    monkeypatch.setattr(mergeq_mod.timeouts_mod, "run", run)
+
+
+def test_push_race_already_on_origin_is_merged(env, home: Path, monkeypatch) -> None:
+    repo, origin = env
+    make_lane(home, repo, "racer", {"r.txt": "r"})
+    mergeq_mod.enqueue(home, "racer")
+    _fail_first_push(monkeypatch, True)
+    row = mergeq_mod.process_next(home, load_config(home), relaunch=Sender())
+    assert row["result"] == "merged"
+    assert git(origin, "rev-parse", "HEAD") == git(repo, "rev-parse", "HEAD")
+
+
+def test_push_race_main_moved_ahead_is_rebased_and_pushed(env, home: Path, monkeypatch, tmp_path: Path) -> None:
+    repo, origin = env
+    make_lane(home, repo, "racer2", {"r.txt": "r"})
+    mergeq_mod.enqueue(home, "racer2")
+    other = tmp_path / "other"
+    subprocess.run(["git", "clone", "-q", str(origin), str(other)], check=True)
+    (other / "o.txt").write_text("o", encoding="utf-8")
+    git(other, "add", "o.txt")
+    git(other, "commit", "-q", "-m", "other")
+    git(other, "push", "-q", "origin", "HEAD")
+    _fail_first_push(monkeypatch, False)
+    row = mergeq_mod.process_next(home, load_config(home), relaunch=Sender())
+    assert row["result"] == "merged"
+    assert git(origin, "rev-parse", "HEAD") == git(repo, "rev-parse", "HEAD")
+    assert (repo / "o.txt").exists() and (repo / "r.txt").exists()
+
+
 def test_merge_priority_a_queue_fix_goes_before_waiting_lanes(env, home: Path) -> None:
     repo, _ = env
     make_lane(home, repo, "plain1", {"a.txt": "1"})
