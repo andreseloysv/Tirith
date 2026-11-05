@@ -332,23 +332,24 @@ def test_an_agents_own_pytest_command_runs_in_parallel():
 
 
 _REAL_CPU_IDLE = loadlimit.cpu_idle
+_REAL_TIRITH_IDLE = loadlimit.tirith_idle
 
 
 def test_loadlimit_free_cpu_uses_idle_percent_not_load_average(monkeypatch) -> None:
     monkeypatch.setattr(loadlimit, "load_average", lambda: 99.0)  # a huge load average must not matter
-    monkeypatch.setattr(loadlimit, "cpu_idle", lambda sample=0.0: 90.0)
+    monkeypatch.setattr(loadlimit, "tirith_idle", lambda sample=0.0, cpus=None: 90.0)
     assert loadlimit.limit(4, cpus=8) == (4, "")
-    monkeypatch.setattr(loadlimit, "cpu_idle", lambda sample=0.0: 10.0)  # 0.8 free cores
+    monkeypatch.setattr(loadlimit, "tirith_idle", lambda sample=0.0, cpus=None: 10.0)  # 0.8 free cores
     allowed, why = loadlimit.limit(4, cpus=8)
-    assert allowed == 1 and "10% idle" in why
-    monkeypatch.setattr(loadlimit, "cpu_idle", lambda sample=0.0: 0.0)
+    assert allowed == 1 and "10% left" in why
+    monkeypatch.setattr(loadlimit, "tirith_idle", lambda sample=0.0, cpus=None: 0.0)
     assert loadlimit.limit(4, cpus=8)[0] == 1  # never below one
     assert loadlimit.limit(4, cpus=16, idle=20.0)[0] == 1  # 3.2 free cores -> half -> 1
     assert loadlimit.limit(8, cpus=32, idle=20.0)[0] == 3  # 6.4 free cores -> half -> 3
 
 
 def test_loadlimit_free_cpu_falls_back_to_load_average(monkeypatch) -> None:
-    monkeypatch.setattr(loadlimit, "cpu_idle", lambda sample=0.0: None)
+    monkeypatch.setattr(loadlimit, "tirith_idle", lambda sample=0.0, cpus=None: None)
     monkeypatch.setattr(loadlimit, "load_average", lambda: 14.0)
     allowed, why = loadlimit.limit(4, cpus=8)
     assert allowed == 1 and "load 14.0" in why
@@ -361,3 +362,42 @@ def test_loadlimit_free_cpu_reads_host_counters(monkeypatch) -> None:
     assert loadlimit.cpu_idle(sample=0.0) == 80.0
     monkeypatch.setattr(loadlimit, "_cpu_ticks", lambda: None)
     assert loadlimit.cpu_idle(sample=0.0) is None
+
+
+def test_loadlimit_tirith_cpu_parses_ps_cputime() -> None:
+    assert loadlimit._parse_cputime("1:23.50") == 83.5
+    assert loadlimit._parse_cputime("01:02:03") == 3723.0
+    assert loadlimit._parse_cputime("1-00:00:10") == 86410.0
+    assert loadlimit._parse_cputime("junk") == 0.0
+
+
+def test_loadlimit_tirith_cpu_counts_only_own_processes_over_the_window(monkeypatch) -> None:
+    monkeypatch.setattr(loadlimit, "_history", [])
+    now = [0.0]
+    readings = iter([{1: 10.0, 2: 5.0}, {1: 14.0, 2: 7.0, 3: 2.0}])  # pid 3 is new: all its CPU counts
+    slept: list[float] = []
+
+    def sleep(s: float) -> None:
+        slept.append(s)
+        now[0] += s
+
+    reader = lambda: next(readings)  # noqa: E731
+    busy = loadlimit.tirith_busy_cores(2.0, reader=reader, clock=lambda: now[0], sleep=sleep)
+    assert slept == [2.0]  # a first reading waits for the minimum window
+    assert busy == 4.0  # (4 + 2 + 2) CPU seconds over 2 s
+    # a later call reuses the stored reading: no wait once one is old enough
+    now[0] += 3.0
+    later = loadlimit.tirith_busy_cores(2.0, reader=lambda: {1: 20.0, 2: 7.0, 3: 2.0}, clock=lambda: now[0], sleep=sleep)
+    assert slept == [2.0] and later == 2.0  # 6 CPU seconds over 3 s
+    assert loadlimit.tirith_busy_cores(2.0, reader=lambda: None) is None
+
+
+def test_loadlimit_tirith_cpu_other_apps_do_not_lower_the_limit(monkeypatch) -> None:
+    monkeypatch.setattr(loadlimit, "tirith_idle", _REAL_TIRITH_IDLE)  # the autouse fixture calms it
+    monkeypatch.setattr(loadlimit, "load_average", lambda: 99.0)
+    monkeypatch.setattr(loadlimit, "cpu_idle", lambda sample=0.0: 0.0)  # the host is saturated by other apps
+    monkeypatch.setattr(loadlimit, "tirith_busy_cores", lambda sample=2.0: 1.0)  # Tirith uses 1 of 8 cores
+    assert loadlimit.limit(4, cpus=8) == (4, "")
+    monkeypatch.setattr(loadlimit, "tirith_busy_cores", lambda sample=2.0: 7.5)  # Tirith itself fills the machine
+    allowed, why = loadlimit.limit(4, cpus=8)
+    assert allowed == 1 and "left by Tirith" in why

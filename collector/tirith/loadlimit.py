@@ -1,12 +1,14 @@
 """Adaptive parallelism: how many lanes and stage runs may go at once, from CPU load and free disk.
 
-The limit is the configured maximum, lowered while the machine's real free CPU (idle % from the host CPU
-stats) is low or the disk is nearly full, and never below 1 (work always moves). Without CPU stats it falls back to
+The limit is the configured maximum, lowered while the CPU left over by Tirith's own processes (lanes, CI stages,
+reviews and everything they spawn, measured over at least ``TIRITH_SAMPLE_S`` seconds) is low or the disk is nearly
+full, and never below 1 (work always moves). Other apps' CPU does not count. Without process stats it falls back to
 the 1-minute load average. Stage runs wait for a slot (a lock file per slot)."""
 
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 import time
@@ -22,6 +24,7 @@ except ImportError:  # Windows: no slots, the limit is advisory
 SUITE_WAIT_S = 3 * 3600.0  # a full suite waits this long for the machine's one full-suite slot
 HIGH_LOAD = 1.0  # load per core at which the limit starts to drop (fallback when no CPU stats)
 LOW_IDLE_PCT = 25.0  # free CPU (idle %) under which the limit starts to drop
+TIRITH_SAMPLE_S = 2.0  # least window over which Tirith's own CPU is measured
 IDLE_SAMPLE_S = 0.1  # window between the two host CPU counter readings
 GB = 1024 ** 3
 
@@ -74,22 +77,101 @@ def cpu_idle(sample: float = IDLE_SAMPLE_S) -> float | None:
     return min(max((second[0] - first[0]) / total * 100.0, 0.0), 100.0)
 
 
+def _parse_cputime(text: str) -> float:
+    """``[DD-][hh:]mm:ss[.cc]`` as seconds (the ``ps`` cputime column); 0 when unreadable."""
+    try:
+        days, _, rest = text.rpartition("-")
+        seconds = 0.0
+        for part in rest.split(":"):
+            seconds = seconds * 60 + float(part)
+        return seconds + (int(days) * 86400 if days else 0)
+    except ValueError:
+        return 0.0
+
+
+def tirith_cpu_seconds() -> dict[int, float] | None:
+    """CPU seconds used so far by each of Tirith's own processes (any process whose command line mentions tirith,
+    plus all their descendants: agents, stage runners, test runs), or None when ``ps`` is unavailable."""
+    try:
+        out = subprocess.run(["ps", "-Ao", "pid=,ppid=,cputime=,args="], capture_output=True, text=True,
+                             timeout=10, check=True).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    rows: dict[int, tuple[int, float, str]] = {}
+    for line in out.splitlines():
+        m = re.match(r"\s*(\d+)\s+(\d+)\s+(\S+)\s*(.*)", line)
+        if m and "ps -Ao" not in m[4]:
+            rows[int(m[1])] = (int(m[2]), _parse_cputime(m[3]), m[4])
+    own = {pid for pid, (_, _, args) in rows.items() if "tirith" in args.lower()}
+    own.add(os.getpid())
+    grew = True
+    while grew:  # descendants of Tirith's processes are Tirith's too
+        grew = False
+        for pid, (parent, _, _) in rows.items():
+            if pid not in own and parent in own:
+                own.add(pid)
+                grew = True
+    return {pid: rows[pid][1] for pid in own if pid in rows}
+
+
+_history: list[tuple[float, dict[int, float]]] = []  # recent (monotonic time, per-process CPU seconds) readings
+_HISTORY_KEEP_S = 30.0
+
+
+def tirith_busy_cores(sample: float = TIRITH_SAMPLE_S, *, reader: Callable[[], dict[int, float] | None] | None = None,
+                      clock: Callable[[], float] = time.monotonic,
+                      sleep: Callable[[float], None] = time.sleep) -> float | None:
+    """Cores kept busy by Tirith's own processes, averaged over at least ``sample`` seconds: the rate between a
+    reading at least that old (kept from earlier calls, so a long-running caller never waits) and a fresh one.
+    None when the platform cannot tell."""
+    reader = reader or tirith_cpu_seconds
+    now = reader()
+    if now is None:
+        return None
+    t_now = clock()
+    old = [(t, snap) for t, snap in _history if t_now - t >= sample]
+    if old:
+        t0, base = old[-1]  # the newest reading that is old enough
+    else:
+        t0, base = _history[0] if _history else (t_now, now)
+        if sample - (t_now - t0) > 0:
+            sleep(sample - (t_now - t0))
+            now = reader()
+            if now is None:
+                return None
+            t_now = clock()
+    _history.append((t_now, now))
+    _history[:] = [(t, snap) for t, snap in _history if t_now - t <= _HISTORY_KEEP_S]
+    if t_now - t0 <= 0:
+        return None
+    # a process that exited between the readings is missed; a new one counts all its CPU
+    return sum(max(cpu - base.get(pid, 0.0), 0.0) for pid, cpu in now.items()) / (t_now - t0)
+
+
+def tirith_idle(sample: float = TIRITH_SAMPLE_S, *, cpus: int | None = None) -> float | None:
+    """Percentage of the machine's CPU left after Tirith's own processes (100 - their share), or None if unknown."""
+    busy = tirith_busy_cores(sample)
+    if busy is None:
+        return None
+    return min(max(100.0 - busy / max(cpus or cores(), 1) * 100.0, 0.0), 100.0)
+
+
 def limit(maximum: int, *, cpus: int | None = None, load: float | None = None, idle: float | None = None,
           free_bytes: int | None = None, min_free_bytes: int = 0) -> tuple[int, str]:
     """``(allowed, why)``: ``maximum`` lowered by low free CPU and by low disk; ``why`` is empty at full speed.
-    ``idle`` is the host idle percentage (measured when neither ``idle`` nor ``load`` is given); the 1-minute
-    ``load`` average is only the fallback when there are no CPU stats."""
+    ``idle`` is the CPU percentage left by Tirith's own processes (measured when neither ``idle`` nor ``load`` is
+    given); the 1-minute ``load`` average is only the fallback when the processes cannot be read."""
     maximum = max(int(maximum), 1)
     cpus = max(cpus or cores(), 1)
     if idle is None and load is None:
-        idle = cpu_idle()
+        idle = tirith_idle(cpus=cpus)
     allowed, why = maximum, ""
     if idle is not None:
         free = cpus * idle / 100.0  # cores that are not busy
         if idle < LOW_IDLE_PCT:
             allowed = max(min(maximum, int(free // 2) or 1), 1)
             if allowed < maximum:
-                why = f"CPU {idle:.0f}% idle on {cpus} cores"
+                why = f"CPU {idle:.0f}% left by Tirith on {cpus} cores"
     else:
         load = load_average() if load is None else load
         if load / cpus > HIGH_LOAD:
