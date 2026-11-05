@@ -689,3 +689,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [x] Vista «Accesos» en la página, solo para consultar cuando haga falta: lista por agente con filtros por sistema y fecha, enlazada al agente y a su punto del plan, sin avisos ni contador en Tu turno. (check: `grep -rqi 'accesos' web/js`) <!-- tirith:{"id":"i-277688afa3b44901b3a380c5d8d575b1","depends_on":["i-12b0de4eeef3451fa471a1f0218d9c95"],"writes":[]} -->
   - [x] Revisar: Vista «Accesos» en la página, solo para consultar cuando haga falta: lista por agente con filtros por sistema y fecha, enlazada al agente y a su punto del plan, sin avisos ni contador en Tu turno. (check: `grep -rqi 'accesos' web/js`)
 
+## 22. Empresa que crece: worker, manager y CEO según el trabajo
+
+- [ ] Cuando el trabajo vuelve a ser una tarea pequeña, el CEO y el manager on-demand se retiran tras un tiempo sin nada que hacer, y queda registrado en company.jsonl (check: `cd collector && uv run -q pytest -q tests -k roles_shrink`) <!-- tirith:{"id":"i-55fab955","depends_on":[],"writes":[]} -->
+
