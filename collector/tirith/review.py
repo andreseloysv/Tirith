@@ -206,12 +206,25 @@ def merge_lane(repo: Path, workspace: Path, lane_id: str, feature: str) -> str:
     return head
 
 
+def main_checkout_of(lane) -> Path | None:
+    """The main checkout a lane's worktree belongs to (found from the worktree), when no repo was given."""
+    workspace = lane.get("workspace") if isinstance(lane, dict) else None
+    if not workspace or not Path(str(workspace)).is_dir():
+        return None
+    done = _git(Path(str(workspace)), "rev-parse", "--path-format=absolute", "--git-common-dir")
+    common = done.stdout.strip()
+    if done.returncode != 0 or not common:
+        return None
+    return Path(common).parent
+
+
 def review_lane(home: Path, lane_id: str, repo: Path | None, merge: bool = True) -> dict:
     """Tests, then (when ``merge``) the merge. Returns the stored review; failures are stored too."""
+    if repo is None:
+        repo = main_checkout_of(read_json(lane_path(home, lane_id), None))
     lane = check_ready(home, lane_id, repo)
     workspace = Path(str(lane["workspace"]))
-    if repo is not None:
-        link_node_modules(repo, workspace)  # a lane made before the link existed still imports its dependencies
+    link_node_modules(repo, workspace)  # a lane made before the link existed still imports its dependencies
     found = test_stage(workspace)
     if not found:
         raise ReviewError("the manifest has no test stage with a run command. "
