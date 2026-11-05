@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -193,6 +195,14 @@ def manual_tree(repo: Path, name: str, commit: bool = False) -> Path:
     return tree
 
 
+def age(tree: Path) -> None:
+    """Make a worktree look an hour old to git and the filesystem (a lane launched just now is never swept)."""
+    gitdir = Path(git(tree, "rev-parse", "--absolute-git-dir").strip())
+    old = time.time() - 3600
+    for path in [tree] + [gitdir / n for n in ("index", "HEAD", "logs/HEAD") if (gitdir / n).exists()]:
+        os.utime(path, (old, old))
+
+
 def say_texts(home: Path) -> list[str]:
     return [s["text"] for s in inbox_mod.says(home)]
 
@@ -215,6 +225,15 @@ def test_sweep_removes_any_merged_clean_idle_worktree_in_the_lanes_folder(home: 
     assert repo.is_dir()
 
 
+def test_sweep_keeps_a_fresh_launching_worktree_and_removes_it_once_old(home: Path, repo: Path) -> None:
+    tree = manual_tree(repo, "fresh")  # branch == main, no lane record yet
+    assert diskdiet_mod.sweep(home, load_config(home), now(), busy=lambda: [])["worktrees"] == 0
+    assert tree.is_dir()
+    age(tree)
+    assert diskdiet_mod.sweep(home, load_config(home), now(), busy=lambda: [])["worktrees"] == 1
+    assert not tree.exists()
+
+
 def test_sweep_skips_the_shared_target_and_a_busy_subfolder(home: Path, repo: Path) -> None:
     target = repo.parent / "demo-lanes" / ".cargo-target" / "debug"
     target.mkdir(parents=True)
@@ -224,7 +243,7 @@ def test_sweep_skips_the_shared_target_and_a_busy_subfolder(home: Path, repo: Pa
 
 
 def test_low_space_frees_lanes_and_cache_and_says_it_once_calmly(home: Path, repo: Path) -> None:
-    manual_tree(repo, "merged")
+    age(manual_tree(repo, "merged"))
     incremental = repo.parent / "demo-lanes" / ".cargo-target" / "debug" / "incremental"
     incremental.mkdir(parents=True)
     (incremental / "c.bin").write_bytes(b"0" * 2048)
