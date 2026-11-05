@@ -50,6 +50,9 @@ _SHOT = re.compile(r"\b(?:screenshots?|looked at|viewed|inspected|eyeballed)\b",
 _IMAGE = re.compile(r"\.(?:png|jpe?g|gif|webp)$", re.IGNORECASE)
 _FIX_ITEM = re.compile(r"^\s*(?:[-*]|\d+[.)])\s*\**(?:fix|repair|correct)\b[^\n]*", re.IGNORECASE | re.MULTILINE)
 _DO_ITEM = re.compile(r"^\s*(?:[-*]|\d+[.)])\s*\**do\b(?!\s*not|n't)[^\n]*", re.IGNORECASE | re.MULTILINE)
+_BULLET = re.compile(r"^\s*(?:[-*]|\d+[.)])\s+(.+)$", re.MULTILINE)
+_VERIFY_ITEM = re.compile(r"^\**(?:(?:do|please)\s+)?(?:verify|verif(?:y|ies)|check|audit|review|inspect|confirm|validate|"
+                          r"report on|investigate|comprueb\w*|verific\w*|revis\w*|audit\w*)\b", re.IGNORECASE)
 _DOC_WORDS = re.compile(r"\b(?:docs?|documentation|readme|wording|text|comment|typo|copy)\b", re.IGNORECASE)
 _DOC_FILE = re.compile(r"(?:\.(?:md|rst)$|(?:^|/)docs?/|(?:^|/)readme)", re.IGNORECASE)
 _TEST_FN = [re.compile(p) for p in (
@@ -324,10 +327,17 @@ def fix_items(brief: str) -> list[str]:
     return [m.group(0).strip(" -*\t") for m in [*_FIX_ITEM.finditer(brief), *_DO_ITEM.finditer(brief)]]
 
 
+def verify_only(brief: str) -> bool:
+    """A lane that only verifies: every bullet of its brief asks to verify/check/audit. Its diff is empty by
+    design and the files its report cites are findings, not changes."""
+    items = [m.group(1).strip() for m in _BULLET.finditer(brief or "")]
+    return bool(items) and all(_VERIFY_ITEM.match(i) for i in items)
+
+
 def check_fix(brief: str, paths: list[str], result: Result) -> None:
     """The brief asks to fix or do something, the diff touches only docs (or nothing): it was explained."""
     items = [i for i in fix_items(brief) if not _DOC_WORDS.search(i)]
-    if not items:
+    if not items or verify_only(brief):
         return
     result.claims.append("the brief's fix/do items")
     if not paths or all(_DOC_FILE.search(p) for p in paths):
@@ -357,7 +367,8 @@ def verify(home: Path, lane: dict, repo: Path | None = None, *, report: str | No
             brief = Path(str(lane.get("brief") or "")).read_text(encoding="utf-8", errors="replace")
         except OSError:
             brief = ""
-    check_files(text, paths, result)
+    if not verify_only(brief or ""):
+        check_files(text, paths, result)
     check_tests_added(text, added, result)
     check_tests_pass(text, home, workspace, last_change(workspace, paths), result, start_ts)
     check_git(text, workspace, repo, result)
