@@ -93,8 +93,9 @@ def test_tests_only_leaves_the_lane_unmerged(launched, home: Path) -> None:
 
 
 def test_dirty_repo_blocks_the_merge(launched, home: Path) -> None:
-    repo, _ = launched
+    repo, worktree = launched
     (repo / "README.md").write_text("changed\n", encoding="utf-8")
+    (worktree / "README.md").write_text("lane change\n", encoding="utf-8")
     assert main(["lane", "review", "web-panel"]) == 1
     lane = read_json(lane_path(home, "web-panel"), None)
     assert lane["review"]["status"] == "merge-failed" and "uncommitted" in lane["review"]["message"]

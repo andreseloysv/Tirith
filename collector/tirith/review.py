@@ -194,17 +194,26 @@ def run_tests(home: Path, project: str, pipeline: str, stage: str, workspace: Pa
     return code == 0, output
 
 
+class MainDirtyUnrelated(ReviewError):
+    """The main checkout is dirty, but only in files the lane does not touch: the merge queue lands it."""
+
+
 def merge_lane(repo: Path, workspace: Path, lane_id: str, feature: str) -> str:
     """Commit the worktree, merge ``lane/<id>`` into the repo's current branch; returns the merge commit."""
     branch = f"lane/{lane_id}"
-    if _git(repo, "status", "--porcelain", "--untracked-files=no").stdout.strip():
-        raise ReviewError(f"{repo} has uncommitted changes, so nothing can be merged into it. "
-                          "Fix: commit or stash them, then run the review again")
+    dirty = set(_git(repo, "diff", "--name-only", "HEAD").stdout.split())
     stage_all(workspace)
     if _git(workspace, "diff", "--cached", "--quiet").returncode != 0:
         done = _git(workspace, "commit", "-q", "-m", f"Lane {lane_id}: {feature}")
         if done.returncode != 0:
             raise ReviewError(f"committing the lane failed: {timeouts_mod.why(done)}")
+    if dirty:
+        base = _git(repo, "merge-base", "HEAD", branch).stdout.strip()
+        touched = set(_git(repo, "diff", "--name-only", base, branch).stdout.split()) if base else set()
+        if dirty & touched:
+            raise ReviewError(f"{repo} has uncommitted changes, so nothing can be merged into it. "
+                              "Fix: commit or stash them, then run the review again")
+        raise MainDirtyUnrelated(f"{repo} has uncommitted changes in files the lane does not touch")
     plangate_mod.recover_git_lock(repo)
     done = _git(repo, "merge", "--no-ff", "-q", "-m", f"Merge {branch}: {feature}", branch)
     if done.returncode != 0:
@@ -304,6 +313,11 @@ def _review_lane(home: Path, lane_id: str, repo: Path | None, merge: bool = True
         return _set(home, lane, READY, "tests passed", run=run_id, passed=passed, claims=claims.public())
     try:
         head = merge_lane(repo, workspace, lane_id, str(lane.get("feature") or lane_id))
+    except MainDirtyUnrelated as error:  # same rule as the train: only a dirty file the merge changes blocks it
+        from tirith import mergeq as mergeq_mod  # mergeq imports this module
+        place = mergeq_mod.enqueue(home, lane_id)
+        return _set(home, lane, READY, f"tests passed; queued for the merge queue (#{place}): {error}",
+                    run=run_id, passed=passed, claims=claims.public())
     except ReviewError as error:
         return _set(home, lane, MERGE_FAILED, str(error), run=run_id, passed=passed, claims=claims.public())
     files = _git(repo, "diff", "--name-only", f"{head}^1", head).stdout.split()
