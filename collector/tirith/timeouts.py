@@ -504,6 +504,7 @@ def run(argv, cls: str = "generic", cwd=None, env=None, *, home: Path | None = N
     what = " ".join(map(str, argv))[:200] if isinstance(argv, (list, tuple)) else str(argv)[:200]
     try:
         proc = subprocess.Popen(argv, cwd=str(cwd) if cwd else None, env=env, shell=shell, text=text,
+                                errors="replace" if text else None,
                                 stdin=subprocess.PIPE if input is not None else stdin, stdout=out_arg,
                                 stderr=err_arg, start_new_session=os.name == "posix")
     except OSError as error:

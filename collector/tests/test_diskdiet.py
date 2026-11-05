@@ -329,3 +329,24 @@ def test_under_the_warning_level_disk_is_amber_and_cleaning_starts(home: Path, r
     diskdiet_mod.check(home, config, state, now(), free=lambda f: 20 * GB)
     assert state["disk"]["warn"] and not state["disk"]["low"]
     assert diskdiet_mod.trigger_gb(config) == 30.0
+
+
+def test_free_space_survives_non_utf8_output_and_waits_a_minute_after_a_failure(home: Path, repo: Path, monkeypatch) -> None:
+    """diskdiet utf8: git printing byte 0x8e does not break the pass; a failure delays the next try by 60 s."""
+    from datetime import timedelta
+    from tirith import timeouts as timeouts_mod
+    out = timeouts_mod.run(["python3", "-c", "import sys; sys.stdout.buffer.write(b'a\\x8eb')"], text=True)
+    assert out.stdout == "a�b"
+    config, state, t0 = load_config(home), {}, now()
+    calls = []
+
+    def boom(*a, **k):
+        calls.append(1)
+        raise UnicodeDecodeError("utf-8", b"\x8e", 0, 1, "invalid start byte")
+
+    monkeypatch.setattr(diskdiet_mod, "_free_space", boom)
+    assert diskdiet_mod.free_space(home, config, state, t0) is False
+    assert diskdiet_mod.free_space(home, config, state, t0 + timedelta(seconds=30)) is False
+    assert len(calls) == 1  # waited
+    diskdiet_mod.free_space(home, config, state, t0 + timedelta(seconds=61))
+    assert len(calls) == 2
