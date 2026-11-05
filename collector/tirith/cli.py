@@ -1456,20 +1456,24 @@ def _cmd_collect(args) -> int:
             signal.signal(signal.SIGTERM, signal.SIG_IGN)
             raise SystemExit(0)
         signal.signal(signal.SIGTERM, _terminate)
-    reload_now = False
     try:
         if args.once:  # a single cycle may overlap a running collector
             collector.run(interval=args.interval, once=True)
         else:
-            with collectlock_mod.hold_collector_lock(home):
-                collectlock_mod.ensure_launchd(home)  # the fallback that runs Tirith while the app is closed
-                try:
-                    collector.run(interval=args.interval, once=False,
-                                  reload_check=selfreload_mod.CodeWatch().changed)
-                except selfreload_mod.ReloadRequested:
-                    reload_now = True  # re-exec only after the lock is released
-        if reload_now:
-            selfreload_mod.reexec(quiesce=collector.quiesce)
+            while True:
+                reload_now = False
+                with collectlock_mod.hold_collector_lock(home):
+                    collectlock_mod.ensure_launchd(home)  # the fallback that runs Tirith while the app is closed
+                    try:
+                        collector.run(interval=args.interval, once=False,
+                                      reload_check=selfreload_mod.CodeWatch(verify=selfreload_mod.preflight).changed)
+                    except selfreload_mod.ReloadRequested:
+                        reload_now = True  # re-exec only after the lock is released
+                if not reload_now:
+                    break
+                if selfreload_mod.reexec(quiesce=collector.quiesce):
+                    break
+                collector = Collector(home)  # exec failed: carry on with the old code, fresh workers
     except collectlock_mod.CollectorRunning as running:
         print(running)
         return 0
