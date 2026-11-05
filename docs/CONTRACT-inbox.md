@@ -689,7 +689,7 @@ in which the session could not start (`dispatch.json` `manager.session.error` sa
   than twice in an hour.
 - **Chat.** Under each owner message the page draws the turn that answers it (spinner, the newest steps, the
   task list, coloured diffs, the lanes it started as nested blocks), collapsing to "N steps · 48s · $0.21 · show"
-  when the turn ends. Esc stops the running turn; Up on an empty box brings back the last message. The app-only
+  when the turn ends. Esc stops the running turn (in the box or anywhere on the page, unless a field or the image lightbox has the focus); Up on an empty box brings back the last message. The app-only
   agent chat (`v-chat.js`, `chat_start` ...) is gone.
 
 ### Sending never loses a message

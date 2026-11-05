@@ -451,18 +451,21 @@ def test_context_tokens_come_from_the_last_request_not_the_sum_of_the_turn(rig: 
     assert rig.session().context_tokens == 2000
 
 
-def test_unknown_tools_ask_the_owner_with_allow_deny_buttons_and_the_reply_answers(rig: Rig) -> None:
-    config = load_config(rig.home)
-    assert msession_mod.decide(config, rig.home, "anthropic", "Grep", {"pattern": "x"}, rig.repo, "demo")[0] == "allow"
-    assert msession_mod.decide(config, rig.home, "anthropic", "mcp__x__do", {}, rig.repo, "demo")[0] == "ask"
-    rig.chat('PERM:mcp__x__do:{"a": 1}')
-    wait = rig.until(lambda: next((r for r in read_jsonl(rig.home / "waits.jsonl")
-                                   if str(r.get("id")).startswith("perm-")), None))
-    assert [o["value"] for o in wait["options"]] == ["allow", "deny"] and wait["why_owner"] == "owner-decision"
-    assert not [r for r in rig.fake_log() if "permission" in r]  # nothing answered until the owner replies
-    inbox_mod.add_reply(rig.home, wait["id"], value="deny")
-    rig.until(lambda: [r for r in rig.fake_log() if "permission" in r])
-    assert [r["permission"] for r in rig.fake_log() if "permission" in r] == ["deny"]
+def test_safe_calls_are_approved_by_code_and_the_rest_asks_the_owner(home: Path, rig: Rig) -> None:
+    config = load_config(home)
+
+    def verdict(tool, data):
+        return msession_mod.decide(config, home, "anthropic", tool, data, rig.repo, "demo", ask_owner=True)[0]
+
+    for tool, data in (("Read", {"file_path": "x"}), ("Grep", {"pattern": "a"}),
+                       ("Bash", {"command": "ls -la && git status"}),
+                       ("Bash", {"command": "tirith inbox list | head -5"}),
+                       ("Bash", {"command": "git log --oneline"})):
+        assert verdict(tool, data) == "allow", (tool, data)
+    for tool, data in (("Bash", {"command": "npm install"}), ("Bash", {"command": f"ls > {home}/out.txt"}),
+                       ("Bash", {"command": "ls $(whoami)"}), ("Bash", {"command": "ls; npm install"}), ("WebFetch", {"url": "https://example.com"})):
+        assert verdict(tool, data) == "ask", (tool, data)
+    assert verdict("Bash", {"command": "git commit --no-verify -m x"}) == "deny"  # gates still win
 
 
 def test_a_collector_restart_keeps_the_one_conversation(rig: Rig) -> None:
