@@ -498,6 +498,72 @@ def resolve_plan_conflict(repo: Path, tmp: Path, lane: dict, files: list[str]) -
     return _git(tmp, "commit", "-q", "--no-edit").returncode == 0
 
 
+def _bytes_git(repo: Path, *args: str, env: dict | None = None, stdin: bytes | None = None,
+               cwd: Path | None = None):
+    return timeouts_mod.run(["git", "-C", str(cwd or repo), *args], "git-commit", input=stdin,
+                            env={**os.environ, **(env or {})})
+
+
+def _apply_kept(repo: Path, staged: bytes, unstaged: bytes, paths: list[str], tree: str,
+                scratch: Path | None) -> bool:
+    """Apply the owner's saved changes on ``tree``. With ``scratch`` it is a dry run in a throwaway index and folder
+    (the owner's checkout is not touched); without it the changes go into the real index and work tree."""
+    env: dict = {}
+    where: Path | None = None
+    if scratch is not None:
+        where = scratch / "tree"
+        where.mkdir(parents=True, exist_ok=True)
+        gitdir = _bytes_git(repo, "rev-parse", "--absolute-git-dir").stdout.decode().strip()
+        env = {"GIT_DIR": gitdir, "GIT_WORK_TREE": str(where), "GIT_INDEX_FILE": str(scratch / "index")}
+        if _bytes_git(repo, "read-tree", tree, env=env).returncode != 0:
+            return False
+        if _bytes_git(repo, "checkout-index", "-f", "-u", "--", *paths, env=env, cwd=where).returncode != 0:
+            return False
+    for patch, flags in ((staged, ["--index"]), (unstaged, [])):
+        if patch.strip():
+            done = _bytes_git(repo, "apply", "--whitespace=nowarn", *flags, "-", env=env, stdin=patch, cwd=where)
+            if done.returncode != 0:
+                return False
+    return True
+
+
+def _land_over_dirty(repo: Path, tmp: Path, clash: list[str], tested: str) -> tuple[bool, str]:
+    """Fast-forward onto ``tested`` while the owner's uncommitted changes in the ``clash`` files stay uncommitted.
+    The changes of those files only are saved, checked to apply cleanly on the tested tree, taken out, the
+    fast-forward is made and they are applied again (staged stays staged). ``(True, "")`` when it landed, else
+    ``(False, why)`` with the checkout exactly as before."""
+    staged = _bytes_git(repo, "diff", "--cached", "--binary", "--full-index", "HEAD", "--", *clash).stdout
+    unstaged = _bytes_git(repo, "diff", "--binary", "--full-index", "--", *clash).stdout
+    scratch = tmp.parent / (tmp.name + "-keep")
+    try:
+        if not _apply_kept(repo, staged, unstaged, clash, tested, scratch):
+            return False, "they do not apply cleanly on the merge"
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
+    head = _git(repo, "rev-parse", "HEAD").stdout.strip()
+    # Taking the changes out: the clash files go back to HEAD in index and work tree, nothing else is touched.
+    if _bytes_git(repo, "reset", "-q", "HEAD", "--", *clash).returncode != 0 \
+            or _bytes_git(repo, "checkout", "HEAD", "--", *clash).returncode != 0:
+        _restore_kept(repo, staged, unstaged, clash, head)
+        return False, "they could not be set aside"
+    plangate_mod.recover_git_lock(repo)
+    moved = _git(repo, "merge", "--ff-only", "-q", tested)
+    if moved.returncode != 0:
+        _restore_kept(repo, staged, unstaged, clash, head)
+        return False, f"fast-forwarding failed: {timeouts_mod.why(moved, OUTPUT_MAX)}"
+    if not _apply_kept(repo, staged, unstaged, clash, tested, None):
+        # Leave main where it was and the owner's work as it was.
+        # ``reset --keep`` moves back only the files the merge changed; other local changes stay.
+        _git(repo, "reset", "-q", "--keep", head)
+        _restore_kept(repo, staged, unstaged, clash, head)
+        return False, "they could not be applied again"
+    return True, ""
+
+
+def _restore_kept(repo: Path, staged: bytes, unstaged: bytes, clash: list[str], head: str) -> None:
+    _apply_kept(repo, staged, unstaged, clash, head, None)
+
+
 def _land(home: Path, repo: Path, tmp: Path, project: str, base: str, tested: str, main_branch: str,
           subject: str, via: str, clashing: list[str] | None = None) -> tuple[str, tuple[str, str] | None]:
     """Fast-forward main to the tested commit under the plan writer lock: ``(commit, None)``, else ``("", (result, message))``."""
@@ -513,6 +579,9 @@ def _land(home: Path, repo: Path, tmp: Path, project: str, base: str, tested: st
         if dirty:
             clash = sorted(dirty & set(_git(repo, "diff", "--name-only", "HEAD", tested).stdout.split()))
             if clash:
+                kept, why = _land_over_dirty(repo, tmp, clash, tested)
+                if kept:
+                    return tested, None
                 if clashing is not None:
                     clashing.extend(clash)
                 return "", (WAITING, f"{repo} {DIRTY_WAIT} {', '.join(clash)}, which the merge changes; "
