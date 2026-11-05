@@ -100,7 +100,12 @@ problem (`roles-value` / `roles-key`) naming the key. Parsed into `Manifest.role
 With `manager = "on-demand"`, `promote.promote_to_manager(mode, task, parallel_items, subagents, diff)` says when a
 worker becomes a manager: the task does not fit in one lane (`plangate.size_problem` / `budget_note`), 2 or more items
 run in parallel, or the task asks for sub-agents. It returns the reason, or `None` to stay a worker; `"always"` and
-`"off"` never promote.
+`"off"` never promote. `promote.manager_decision(...)` returns the same verdict as `{rule, measured, threshold, reason}`
+(`task_size`, `lane_diff`, `parallel_items`, `subagents`).
+
+Every promotion or retirement is appended to `<home>/company.jsonl` by `promote.log_change(home, event, role, rule,
+measured, threshold, reason)` (`event` = `promote` | `retire`; `log_decision` records a `manager_decision`), one line
+`{ts, event, role, rule, measured, threshold, reason}`; `promote.read_log(home)` reads it back.
 
 TODO: nothing else enforces `"off"` / `"on-demand"` yet. The CEO runner (`ceo.py`) and the manager start are decided per
 Tirith home (`config.toml`), not per project, so there is no single per-project gate to wire.
