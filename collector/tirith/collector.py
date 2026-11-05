@@ -850,6 +850,10 @@ class Collector:
             netwatch_mod.annotate(rows, home=self.home)
         except Exception:  # noqa: BLE001 - a missing domain is no reason to lose the state
             pass
+        try:
+            access_audit_mod.annotate_keys(self.home, rows)
+        except Exception:  # noqa: BLE001 - nor a missing key name
+            pass
         return rows
 
     def architecture_for(self, proj: ProjectConfig) -> dict:

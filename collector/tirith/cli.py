@@ -66,6 +66,7 @@ from tirith import roadmap as roadmap_mod
 from tirith import runstage as runstage_mod
 from tirith import canary as canary_mod
 from tirith import stable as stable_mod
+from tirith import access_audit as access_audit_mod
 from tirith import fasttests as fasttests_mod
 from tirith import netproxy as netproxy_mod
 from tirith import testmap as testmap_mod
@@ -719,6 +720,7 @@ def _cmd_lane_run(args) -> int:
         env["TIRITH_TASK_ATTEMPT"] = task_claim["task_attempt"]
     if args.agent:
         env = agentrun_mod.child_env(config, args.agent, args.project, env)
+    lane["env_secrets"] = access_audit_mod.secret_names(env)  # names only: which keys this lane's agent was given
     if not interactive:  # behind the network guard: the sandbox and Tirith's proxy (tirith.netproxy)
         env = netproxy_mod.lane_env(home, lane_id, lane["token"], env)
         lane["network"] = "guarded" if env.get(netproxy_mod.SANDBOXED_ENV) == "1" else netproxy_mod.status(home).get("why")
