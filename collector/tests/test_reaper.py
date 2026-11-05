@@ -97,3 +97,41 @@ def test_reap_ended_lanes_kills_leftovers_of_ended_lanes_only(tmp_path: Path) ->
         for p in (a, b):
             p.kill()
             p.wait()
+
+
+def test_reap_skips_live_review(tmp_path: Path) -> None:
+    from tirith.store import write_lane
+    home = tmp_path / "home"
+    (home / "lanes").mkdir(parents=True)
+    ws = _workspace(tmp_path)
+    a = subprocess.Popen([sys.executable, "-c", SLEEP], cwd=ws, start_new_session=True)
+    try:
+        write_lane(home, {"id": "lane-x", "workspace": str(ws), "ended_at": "2026-01-01T00:00:00Z",
+                          "review": {"status": "running", "pid": os.getpid()}})
+        time.sleep(0.2)
+        assert reaper.reap_ended_lanes(home, term_wait=0.5) == [] and a.poll() is None
+        write_lane(home, {"id": "lane-x", "workspace": str(ws), "ended_at": "2026-01-01T00:00:00Z",
+                          "review": {"status": "running", "pid": 2 ** 22 + 12345}})
+        assert a.pid in reaper.reap_ended_lanes(home, term_wait=0.5)
+    finally:
+        a.kill()
+        a.wait()
+
+
+def test_reap_skips_live_merge(tmp_path: Path) -> None:
+    from tirith import mergeq
+    from tirith.store import write_json_atomic, write_lane
+    home = tmp_path / "home"
+    (home / "lanes").mkdir(parents=True)
+    ws = _workspace(tmp_path)
+    a = subprocess.Popen([sys.executable, "-c", SLEEP], cwd=ws, start_new_session=True)
+    try:
+        write_lane(home, {"id": "lane-x", "workspace": str(ws), "ended_at": "2026-01-01T00:00:00Z"})
+        data = mergeq.load(home)
+        data["queue"].append({"lane": "lane-x", "status": "running", "pid": os.getpid()})
+        write_json_atomic(mergeq._path(home), data)
+        time.sleep(0.2)
+        assert reaper.reap_ended_lanes(home, term_wait=0.5) == [] and a.poll() is None
+    finally:
+        a.kill()
+        a.wait()

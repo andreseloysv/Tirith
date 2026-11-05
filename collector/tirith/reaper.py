@@ -95,6 +95,21 @@ def _send(pid: int, sig: int) -> None:
 SWEEP_EVERY_S = 180.0
 
 
+def stage_running(home: Path, lane: dict) -> bool:
+    """True while a review, merge or CI stage of ``lane`` is alive: its pytest workers run under the worktree
+    and the sweep must not kill them (``OSError: cannot send``). Never raises (unknown counts as not running)."""
+    from tirith import mergeq, review
+    try:
+        rev = lane.get("review") or {}
+        if rev.get("status") == review.RUNNING and review._alive(rev.get("pid")):
+            return True
+        lane_id = lane.get("id")
+        return any(e.get("lane") == lane_id and e.get("status") == mergeq.RUNNING and mergeq._alive(e.get("pid"))
+                   for e in mergeq.load(Path(home))["queue"])
+    except Exception:
+        return False
+
+
 def reap_ended_lanes(home: Path | str, term_wait: float = TERM_WAIT_S,
                      sleep: Callable[[float], None] = time.sleep) -> list[int]:
     """Sweep: reap what is still running under the worktree of every lane that already ended
@@ -106,6 +121,6 @@ def reap_ended_lanes(home: Path | str, term_wait: float = TERM_WAIT_S,
     except Exception:
         return killed
     for lane in lanes:
-        if lane.get("ended_at") and lane.get("workspace"):
+        if lane.get("ended_at") and lane.get("workspace") and not stage_running(home, lane):
             killed += reap_lane_leftovers(lane["workspace"], term_wait=term_wait, sleep=sleep)
     return killed
