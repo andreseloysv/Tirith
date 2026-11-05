@@ -111,3 +111,15 @@ waiting lane without it, behind the running entry and earlier priority lanes. It
   consecutive `waiting` (`WAIT_NOTICE`) the manager's queue gets one item with the reason.
 - `push-failed` (main merged, origin not): a manager item at once, with the reason and the command to push.
 - out of time: manager item on the 2nd time (as before). A lane or project that is gone: flow alert to the manager.
+
+## Push of main
+
+The merge queue pushes after a merge, but Tirith also commits every plan change on main between merges. The dispatcher
+pass (`collector/tirith/pushplan.py`, after the merge queue) therefore pushes `main` to `origin` of every project whose
+local `main` is ahead of `origin/main`: a plain fast-forward push (`refs/heads/main:refs/heads/main`, never a force),
+so `main` is on GitHub at most 5 minutes after a plan change (the pass runs every few seconds; `MAX_DELAY_S`). A project
+without `origin` or without a `main` branch is skipped. A failed push (no network, a diverged origin, a refusing hook)
+is recorded in the dispatcher state under `pushed.<project>` (`{at, ok, commit, error}`) and tried again after 1 min, then 2, 4... up to 30 min
+(`pushed.<project>.fails`, `retry_s`; a success resets it), not every 60 s with its hooks. The push runs in a thread
+outside the dispatcher pass (the pass only starts it and collects the result), so a slow hook or network never stalls
+the dispatcher; it never blocks the plan, the queue or an agent. No server and no port: it is a `git push` run by the collector.
