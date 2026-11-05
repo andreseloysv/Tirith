@@ -143,6 +143,19 @@ def test_a_report_with_only_agent_work_says_nothing_is_the_owners(home: Path) ->
     assert ownergate.filter_report(home, "demo", "refresh", clean) == clean.rstrip("\n")
 
 
+def test_plan_update_skips_open_owner_items(home: Path) -> None:
+    assert dispatch_mod.add_owner_item(home, "w-8", "demo", "Add the Gemini API key to the keychain.", OPTION, AT,
+                                       why_owner="credentials") == "owner"
+    report = ("**Needs the owner**\n- [credentials] Gemini API key missing\n"
+              "- [credentials] Apple signing password\n")
+    out = ownergate.filter_report(home, "demo", "refresh", report)
+    assert "Gemini" not in out and "Apple signing password" in out
+    assert len(_waits(home)) == 1 and not _acd(home) and "handed to the manager" not in out
+    # once the item is closed, the credential is reported again
+    dispatch_mod.close_owner_item(home, "w-8", AT)
+    assert "Gemini API key missing" in ownergate.filter_report(home, "demo", "refresh", report)
+
+
 def test_a_report_check_about_an_out_of_plan_item_is_dropped(home: Path) -> None:
     out = ownergate.filter_report(
         home, "demo", "r", "**Needs the owner**\n- [payment] Windows signing certificate\n",
