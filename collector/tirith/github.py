@@ -88,7 +88,7 @@ def token_for(config: Config, env: dict | None = None) -> str | None:
 
 
 def _status(item: dict) -> str:
-    """pending | running | passed | failed | skipped for a run, job or check run."""
+    """pending | running | passed | failed | skipped | cancelled for a run, job or check run."""
     state = item.get("status")
     if state == "completed":
         conclusion = item.get("conclusion")
@@ -96,6 +96,8 @@ def _status(item: dict) -> str:
             return "passed"
         if conclusion == "skipped":
             return "skipped"
+        if conclusion in ("cancelled", "stale", "action_required"):
+            return "cancelled"  # nobody saw a result: never a failure
         return "failed"
     return "running" if state == "in_progress" else "pending"
 
@@ -105,7 +107,7 @@ def _seconds(start, end) -> int | None:
     return max(0, int((b - a).total_seconds())) if a and b else None
 
 
-_STEP_MARK = {"passed": "✓", "failed": "✗", "skipped": "-", "running": "…", "pending": "·"}
+_STEP_MARK = {"passed": "✓", "failed": "✗", "skipped": "-", "cancelled": "-", "running": "…", "pending": "·"}
 
 
 def map_job(job: dict) -> dict:
@@ -127,11 +129,12 @@ def map_run(slug: str, project: str, run: dict, jobs: list[dict]) -> dict:
     if stages:
         if any(s["status"] == "failed" for s in stages):
             status = "failed"
-        elif status == "passed" and not all(s["status"] in ("passed", "skipped") for s in stages):
+        elif status == "passed" and not all(
+                s["status"] in ("passed", "skipped", "cancelled") for s in stages):
             status = "running"
     name = str(run.get("name") or run.get("display_title") or "workflow")
     started = run.get("run_started_at") or run.get("created_at")
-    finished = status in ("passed", "failed")
+    finished = status in ("passed", "failed", "cancelled")
     return {
         "run": f"github:{slug}:{name}#{run.get('run_number') or run.get('id')}",
         "project": project, "pipeline": name, "session": None, "status": status,
