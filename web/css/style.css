@@ -1045,11 +1045,3 @@ button.vwho:hover b { text-decoration: underline; }
 .pevt { max-height: 160px; overflow: auto; margin: 4px 0; padding: 6px 8px; font-size: 11px; white-space: pre-wrap; border-radius: 6px; background: rgba(120,135,160,.10); }
 .pevs img { max-width: 160px; max-height: 110px; margin: 2px 6px 2px 0; border-radius: 6px; border: 1px solid rgba(120,135,160,.25); }
 
-.ownerreqs { margin: 6px 20px 0; padding: 5px 12px; border-radius: 8px; background: #f4f6fa; border: 1px solid #e1e5ee; font-size: 12.5px; }
-.ownerreqs[hidden] { display: none; }
-.ownerreqs summary { cursor: pointer; font-weight: 600; }
-.or-r { display: flex; gap: 8px; align-items: baseline; padding: 2px 0; }
-.or-s { font-weight: 600; min-width: 62px; }
-.or-r.open .or-s { color: #b45309; } .or-r.answered .or-s { color: #1d4ed8; } .or-r.done .or-s { color: #15803d; }
-.or-t { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.or-l { opacity: .75; } .or-l.none { font-style: italic; }
