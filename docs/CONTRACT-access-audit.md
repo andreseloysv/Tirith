@@ -108,6 +108,14 @@ this section first. The Access
 page lists them under **Environment variables**: one line per name, marked `secret` when it looks like one
 (token, key, password…), with the roles that used it, how often and when last.
 
+## The key a destination used
+
+The proxy sees a domain, never what travels inside the encrypted connection. So `tirith lane run` notes
+the names (never values) of the key-looking variables it gives the agent (`lane.env_secrets`,
+`access_audit.secret_names`), and each proxy or connection row gets `keys`: those that belong to its service (the
+domain's name, `github` in `api.github.com` gives `GITHUB_TOKEN`; GitHub's `GH_*` too), or `login: true` when the
+lane had none (the program then uses its own saved login, e.g. in the keychain). The page shows it under each line.
+
 ## Blocking a destination
 
 The owner blocks a destination with **Block** on a line of External (or `tirith net block <domain|ip|cidr>`;

@@ -132,3 +132,17 @@ def test_env_names_lists_the_variables_a_call_uses_never_values() -> None:
     assert e("Write", {"content": code}) == ["BRAIN_API_KEY", "SLACK_TOKEN"]  # read by code an agent wrote
     assert e("Read", {"file_path": "x"}) == [] and access_audit.env_secret("SLACK_TOKEN")
     assert not access_audit.env_secret("BUILD_FLAVOR")
+
+
+def test_a_destination_shows_the_key_its_lane_had_for_it(tmp_path) -> None:
+    names = access_audit.secret_names({"GITHUB_TOKEN": "x", "GH_ENTERPRISE_TOKEN": "y", "ANTHROPIC_API_KEY": "z",
+                                       "TIRITH_LANE_TOKEN": "t", "PATH": "/bin"})
+    assert names == ["ANTHROPIC_API_KEY", "GH_ENTERPRISE_TOKEN", "GITHUB_TOKEN"]  # names only, Tirith's own left out
+    write_json_atomic(lane_path(tmp_path, "lane-a"), {"id": "lane-a", "env_secrets": ["GITHUB_TOKEN"]})
+    rows = [{"tool": "proxy", "lane": "lane-a", "domain": "api.github.com", "external": ["https api.github.com:443"]},
+            {"tool": "proxy", "lane": "lane-a", "domain": "pypi.org", "external": ["https pypi.org:443"]},
+            {"tool": "proxy", "lane": "old", "domain": "api.github.com"}]
+    access_audit.annotate_keys(tmp_path, rows)
+    assert (rows[0]["keys"], rows[0]["login"]) == (["GITHUB_TOKEN"], False)
+    assert (rows[1]["keys"], rows[1]["login"]) == ([], True)  # no key for it: its own saved login, if any
+    assert "keys" not in rows[2]  # a lane from before keys were noted
