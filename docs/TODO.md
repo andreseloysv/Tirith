@@ -417,7 +417,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Instrucciones al dueño concretas y prerrellenadas, con botón «Open in Terminal»; se cierran solas al comprobarse.
 - [ ] Un solo manager con sesión persistente que vive en Tirith (misma memoria con la app abierta o cerrada).
   - [x] Revisar: Un solo manager con sesión persistente que vive en Tirith (misma memoria con la app abierta o cerrada). — falló: the merge did not go through: merging lane/manager-de-guardia-chat-y-piloto-2 failed conflicts? : error: Your local changes to th
-  - [ ] Revisar: Un solo manager con sesión persistente que vive en Tirith (misma memoria con la app abierta o cerrada). (en curso: revisión de manager-de-guardia-chat-y-piloto-13)
+  - [ ] Revisar: Un solo manager con sesión persistente que vive en Tirith (misma memoria con la app abierta o cerrada). (en curso: manager-de-guardia-chat-y-piloto-18)
 - [x] El chat muestra el trabajo del manager en vivo: texto, herramientas y resultados de cada paso (secretos tapados).
 - [ ] El chat del manager como el CLI: texto palabra a palabra, diffs en color, lista de tareas; Esc interrumpe y ↑ recupera. (en curso: manager-de-guardia-chat-y-piloto-17)
 - [ ] Sub-agentes anidados en la conversación; permisos seguros aprobados por código y el resto como botones Allow/Deny. (en curso: manager-de-guardia-chat-y-piloto-16)
