@@ -22,6 +22,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from tirith import access_audit as access_audit_mod
+from tirith import netwatch as netwatch_mod
 from tirith import timeouts as timeouts_mod
 from tirith import activity as activity_mod
 from tirith import asks as asks_mod
@@ -822,6 +823,14 @@ class Collector:
             })
         return waits
 
+    def _accesses(self, lanes: list[dict]) -> list[dict]:
+        """``state.accesses``, after the network watch wrote the lanes' new connections (it never stops a cycle)."""
+        try:
+            netwatch_mod.sample(self.home, lanes)
+        except Exception as err:  # noqa: BLE001 - a watch is no reason to lose the state
+            print(f"tirith: network watch: {type(err).__name__}: {err}", file=sys.stderr)
+        return access_audit_mod.recent(self.home)
+
     def architecture_for(self, proj: ProjectConfig) -> dict:
         """Stored brain/manual map, else config map, else empty/none.
 
@@ -1557,7 +1566,7 @@ class Collector:
             "sessions": sessions,
             "loose_events": loose_events,
             "violations": violations,
-            "accesses": access_audit_mod.recent(self.home),
+            "accesses": self._accesses(lanes),
             "rules": rules_state,
             "inbox": inbox_rows,
             "owner_requests": inbox_mod.owner_requests(inbox_rows),

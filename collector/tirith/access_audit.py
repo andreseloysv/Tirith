@@ -90,6 +90,59 @@ def action_of(tool, tool_input, cwd=None) -> str:
     return tool
 
 
+_ENDPOINT = re.compile(r"\b((?:https?|wss?|ftp)://)([^/\s'\"?#]+)([^\s'\"]*)")
+_SSH = re.compile(r"(?:^|[;&|(]\s*|\s)(?:ssh|scp|rsync|sftp)\s+(?:-\S+\s+(?:\S+\s+)?)*(?:[\w.-]+@)?([\w.-]+\.[\w.-]+|[\w-]+)(?=[:\s]|$)")
+_GIT_REMOTE = re.compile(r"(?:^|[;&|(]\s*|\s)git\s+(?:-C\s+\S+\s+)?(push|pull|fetch|clone|ls-remote)\b")
+_GIT_HOST = re.compile(r"(?:git@|https?://)([\w.-]+)[:/]")
+_GH = re.compile(r"(?:^|[;&|(]\s*)gh\s")
+_INSTALL = re.compile(r"(?:^|[;&|(]\s*)(npm|pnpm|yarn|pip3?|uv|cargo|brew|gem|go)\s+(?:\S+\s+)*?(install|add|i|sync|update|upgrade|get|fetch)\b")
+_REGISTRY = {"npm": "registry.npmjs.org", "pnpm": "registry.npmjs.org", "yarn": "registry.yarnpkg.com",
+             "pip": "pypi.org", "pip3": "pypi.org", "uv": "pypi.org", "cargo": "crates.io", "brew": "formulae.brew.sh",
+             "gem": "rubygems.org", "go": "proxy.golang.org"}
+
+
+def _kind(scheme: str, path: str, host: str = "") -> str:
+    scheme = scheme.lower().rstrip(":/")
+    if scheme in ("ws", "wss"):
+        return "websocket"
+    if scheme == "ftp":
+        return "ftp"
+    api = host.lower().startswith("api.") or re.search(r"/(?:api|v\d+|graphql|rpc)(?:/|$)|\.json\b", path)
+    return "api" if api else "web"
+
+
+def external(tool, tool_input) -> list[str]:
+    """What outside the machine a call reaches, ``"<kind> <host>"`` each (web, api, websocket, ssh, git, github,
+    package, search, mcp): from the URLs, hosts and commands in the call. Empty for local work."""
+    data = tool_input if isinstance(tool_input, dict) else {}
+    tool, out = str(tool or ""), []
+
+    def add(item: str) -> None:
+        if item not in out:
+            out.append(item)
+
+    if tool.startswith("mcp__"):
+        add("mcp " + (tool.split("__")[1] if tool.count("__") >= 2 else tool))
+    if tool == "WebSearch":
+        add("search " + scrub(data.get("query"), 60))
+    text = str(data.get("command") or data.get("cmd") or data.get("url") or "") if tool in ("Bash", "WebFetch") else ""
+    for scheme, host, path in _ENDPOINT.findall(text):
+        host = re.sub(r"^[^@]*@", "", host)  # never a user or a password
+        if host.split(":")[0] not in ("localhost", "127.0.0.1", "0.0.0.0", "[::1]"):
+            add(f"{_kind(scheme, path, host)} {host}")
+    if tool == "Bash":
+        for host in _SSH.findall(text):
+            add(f"ssh {host}")
+        if _GIT_REMOTE.search(text):
+            found = _GIT_HOST.search(text)
+            add("git " + (found.group(1) if found else "remote"))
+        if _GH.search(text):
+            add("github api.github.com")
+        for manager, _ in _INSTALL.findall(text):
+            add(f"package {_REGISTRY.get(manager, manager)}")
+    return out
+
+
 def plan_point(home: Path, lane_id) -> str | None:
     """The plan point a lane works on: ``<step>: <item>`` from its lane file, or None."""
     if not lane_id:
@@ -111,6 +164,9 @@ def record(home: Path, event: dict, tool_input=None) -> dict | None:
     row = {"ts": event.get("ts"), "agent": event.get("agent"), "lane": event.get("lane"),
            "plan": plan_point(home, event.get("lane")), "system": system_of(event["tool"], tool_input),
            "tool": event["tool"], "action": action_of(event["tool"], tool_input, event.get("cwd"))}
+    reached = external(event["tool"], tool_input)
+    if reached:
+        row["external"] = reached
     append_jsonl(home / ACCESS_DIR / f"{project}.ndjson", row)
     return row
 

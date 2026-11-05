@@ -39,16 +39,44 @@
       who + ' <span class="mut sm">' + esc(g.agent || '') + '</span><span class="feat">' + plan + '</span>' +
       '<span class="mut proj">' + esc(g.project ? T.proj(g.project) : '') + '</span><span class="mut sm">' + g.rows.length + ' · ' + esc(T.clockTime(g.last)) + '</span></div>';
     if (open) h += '<div class="detail"><table class="mtab"><tbody>' + g.rows.slice().reverse().map(function (r) {
-      return '<tr><td class="sm">' + esc(T.clockTime(r.ts)) + '</td><td class="sm">' + esc(r.system || '') + '</td><td>' + esc(r.action || r.tool || '') + '</td></tr>';
+      return '<tr><td class="sm">' + esc(T.clockTime(r.ts)) + '</td><td class="sm">' + esc(r.system || '') + '</td><td>' + esc(r.action || r.tool || '') +
+        ((r.external || []).length ? ' <span class="mut sm">→ ' + esc(r.external.join(', ')) + '</span>' : '') + '</td></tr>';
     }).join('') + '</tbody></table></div>';
     return h + '</li>';
+  }
+  /* what reached outside the machine (a web page, an API, a websocket, ssh, a git remote, a package registry,
+     a search, an MCP server), newest first: from the commands and from the connections the processes really opened */
+  var KINDS = { web: 'Web', api: 'API', websocket: 'WebSocket', ssh: 'SSH', git: 'Git remote', github: 'GitHub',
+    'package': 'Packages', search: 'Search', mcp: 'MCP', https: 'HTTPS', http: 'HTTP', tcp: 'TCP', ftp: 'FTP' };
+  T.externalRows = function (s, days) {
+    var out = [];
+    (s.accesses || []).forEach(function (r) {
+      if (!inRange(r, days)) return;
+      (r.external || []).forEach(function (x) {
+        var sp = String(x).indexOf(' ');
+        out.push({ ts: r.ts, kind: sp > 0 ? String(x).slice(0, sp) : String(x), dest: sp > 0 ? String(x).slice(sp + 1) : '',
+          row: r, live: r.tool === 'connection' });
+      });
+    });
+    return out.sort(function (a, b) { return String(b.ts).localeCompare(String(a.ts)); });
+  };
+  function externalSection(s) {
+    var rows = T.externalRows(s, f.days);
+    var body = rows.length ? '<table class="mtab ext"><tbody>' + rows.slice(0, 200).map(function (x) {
+      var a = x.row.lane ? T.agentById(s, x.row.lane) : null;
+      var who = a ? '<button class="link" data-act="goagent" data-key="' + esc(a.id) + '">' + esc(T.agentRole ? T.agentRole(a) : a.name) + ' · ' + esc(a.name) + '</button>' : esc(x.row.lane || x.row.agent || '');
+      return '<tr><td class="sm">' + esc(T.clockTime(x.ts)) + '</td><td><span class="chip xk ' + esc(x.kind) + '">' + esc(KINDS[x.kind] || x.kind) + '</span></td>' +
+        '<td><b>' + esc(x.dest) + '</b></td><td class="sm">' + who + '</td><td class="sm mut" title="' + esc(x.row.action || '') + '">' +
+        esc(x.live ? 'connection opened' : (x.row.action || x.row.tool || '')) + '</td></tr>';
+    }).join('') + '</tbody></table>' : '<p class="mut sm">Nothing reached outside the machine in this period.</p>';
+    return '<section class="pad extsec"><h2>External <span class="mut">' + rows.length + '</span></h2>' + body + '</section>';
   }
   function view(s, el) {
     var all = s.accesses || [], systems = [['', 'All systems']];
     var seen = {}; all.forEach(function (r) { if (r.system && !seen[r.system]) { seen[r.system] = 1; systems.push([r.system, r.system]); } });
     var tb = '<div class="toolbar">' + chips(systems, f.sys, 'accsys') + ' ' + chips(RANGES, f.days, 'accdays') + '</div>';
     var gs = T.accessGroups(s, f.sys, f.days);
-    el.innerHTML = tb + '<div class="pad"><p class="mut sm">Everything the agents did, recorded by Tirith. Values of secrets are never stored.</p></div>' +
+    el.innerHTML = tb + externalSection(s) + '<div class="pad"><p class="mut sm">Everything the agents did, recorded by Tirith. Values of secrets are never stored.</p></div>' +
       (gs.length ? '<div class="listwrap" data-scroll="accesos"><ul class="rows card">' + gs.map(function (g) { return group(s, g); }).join('') + '</ul></div>'
         : '<div class="pad">' + T.empty('No accesses recorded for these filters') + '</div>');
   }
