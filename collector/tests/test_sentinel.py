@@ -95,3 +95,20 @@ def test_sentinel_counts_mergeq_as_work() -> None:
     assert statuscard.build({**idle, **review}, NOW, {})["why"] == "Moving"
     waiting = {"projects": [{"id": "tirith", "merge_queue": {"items": [{"lane": "w9", "status": "queued"}]}}]}
     assert statuscard.build({**idle, **waiting}, NOW, {})["level"] == "warn"
+
+
+def test_the_card_says_all_done_when_nothing_is_left_for_the_agents() -> None:
+    """Open items that only the owner, a date or a standing role can close: the plan reads as closed, not amber."""
+    idle = {**_state(), "agents": [], "health": {"level": "green", "checks": []}}
+    closed = {**idle, "autopilot": {"enabled": True, "open_items": 3, "queued": 0, "proposed": 0, "skipped": []}}
+    st = statuscard.build(closed, NOW, {"tirith/tirith": "passed"})
+    assert (st["level"], st["why"]) == ("done", "All done: nothing is left for the agents")
+    assert st["plan"] == {"done": 9, "total": 19}
+    held = {**closed, "autopilot": {**closed["autopilot"], "skipped": [{"project": "tirith", "step": "7", "why": "load"}]}}
+    assert statuscard.build(held, NOW, {})["level"] == "warn"  # held only for now: still work to do
+    off = {**closed, "autopilot": {**closed["autopilot"], "enabled": False}}
+    assert statuscard.build(off, NOW, {})["level"] == "warn"  # autopilot off: nothing launches by itself
+    assert statuscard.build(closed, NOW, {}, lasting=["disk"])["level"] == "warn"
+    assert statuscard.build(closed, NOW, {"tirith/tirith": "failed"})["level"] == "bad"
+    empty = {**closed, "autopilot": {**closed["autopilot"], "open_items": 0}}
+    assert statuscard.build(empty, NOW, {})["level"] == "done"

@@ -1,6 +1,6 @@
 """The Status card: Tirith's development at a glance, in four lines, built by code from the state (no model).
 
-1. Is it going well? ``level`` (ok / warn / bad) and ``why`` in plain words: the health, CI on main, nothing
+1. Is it going well? ``level`` (ok / warn / bad, or done: nothing left an agent can do) and ``why`` in plain words: the health, CI on main, nothing
    running while items are ready.
 2. What is being worked on? The plan steps with an agent working, each with its progress.
 3. What just landed? The last merges, one line each.
@@ -33,6 +33,25 @@ def running_runs(state: dict) -> int:
     return queue + reviews
 
 
+def launchable(state: dict) -> bool:
+    """Whether the autopilot still has work an agent could take: items about to be proposed, told to the manager,
+    or held back only for now (load, a review, a failing check)."""
+    pilot = state.get("autopilot") or {}
+    if pilot.get("enabled") is not True or "queued" not in pilot:
+        return True  # off, or not known: nothing launches by itself, so open items are not "done"
+    return bool(pilot.get("queued") or pilot.get("proposed") or pilot.get("skipped"))
+
+
+def plan_totals(state: dict) -> dict:
+    """Items done and in total over every project's plan, for the progress bar."""
+    done = total = 0
+    for project in state.get("projects") or []:
+        for step in ((project or {}).get("roadmap") or {}).get("steps") or []:
+            done += int(step.get("done") or 0)
+            total += int(step.get("total") or 0)
+    return {"done": done, "total": total}
+
+
 def build(state: dict, now: datetime, ci: dict | None = None, merged_today: int | None = None,
           lasting: list[str] | None = None) -> dict:
     """``merged_today``: counted from every lane record (the state keeps only recent agents); ``lasting``: the checks
@@ -61,8 +80,13 @@ def build(state: dict, now: datetime, ci: dict | None = None, merged_today: int 
     if bad_checks or ci_red:
         level = "bad"
         why = "; ".join([*(c.get("text") or c.get("label") or "" for c in bad_checks), *(f"CI red: {k}" for k in ci_red)])
+    elif not moving and open_items and not lasting and not launchable(state):
+        level = "done"  # every item left waits for the owner, a date or a standing role: the plan is closed
+        why = "All done: nothing is left for the agents"
     elif not moving and open_items:
         level, why = "warn", f"Nothing working while {open_items} plan items are open"
+    elif not moving and not lasting:
+        level, why = "done", "All done: every plan item is finished"
     elif lasting:
         level = "warn"
         why = next((c.get("text") for c in health.get("checks") or [] if c.get("id") in lasting), "") or "A check is not ok"
@@ -73,7 +97,7 @@ def build(state: dict, now: datetime, ci: dict | None = None, merged_today: int 
         "merged_today": merged_today if merged_today is not None else
         sum(1 for a in merged if _today((a.get("review") or {}).get("at"), now)),
         "working": len(working), "limit": limit, "ci": "red" if ci_red else ("green" if ci else None),
-        "steps": steps,
+        "steps": steps, "plan": plan_totals(state),
         "recent": [{"text": without_check(split_status(str(a.get("item") or a.get("feature") or a.get("id")))[0]).strip()[:120],
                     "at": (a.get("review") or {}).get("at"), "project": a.get("project")} for a in merged[:RECENT]],
         "owner": [{"id": w.get("id"), "text": str(w.get("text") or "")[:100]} for w in waits][:5],
