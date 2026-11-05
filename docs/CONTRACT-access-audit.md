@@ -70,7 +70,12 @@ a line over 4 KB has `target` cut and `truncated: true`.
 
 `state.json` gets `agents[].accesses` (the last 50 rows of that lane, newest last) and `loose_accesses`
 (lane unknown), same shape as above. The page shows them per agent and as a tree by `parent`. Counts per
-category per agent are derived, not stored. The audit adds no server and no open port.
+category per agent are derived, not stored.
+
+`state.accesses` also carries the newest 600 rows of `<home>/access/<project>.ndjson` (`ts`, `agent`, `lane`, `plan`,
+`system`, `tool`, `action`, plus `project`), oldest first. The page's «Accesos» view (`web/js/v-accesos.js`) lists them
+per agent, filtered by system and date, linked to the agent and its plan point. It is look-up only: no alert and no
+counter, and nothing from it goes into Your turn. The audit adds no server and no open port.
 
 ## Out of scope
 
