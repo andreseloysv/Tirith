@@ -22,6 +22,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from tirith import access_audit as access_audit_mod
+from tirith import netblock as netblock_mod
 from tirith import netwatch as netwatch_mod
 from tirith import timeouts as timeouts_mod
 from tirith import activity as activity_mod
@@ -1572,6 +1573,7 @@ class Collector:
             "loose_events": loose_events,
             "violations": violations,
             "accesses": self._accesses(lanes),
+            "netblock": netblock_mod.rules(self.home),
             "rules": rules_state,
             "inbox": inbox_rows,
             "owner_requests": inbox_mod.owner_requests(inbox_rows),
