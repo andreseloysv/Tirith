@@ -30,8 +30,9 @@ repeatable.
 
 ## The role
 
-The CEO owns **outcomes, not tasks**: is Tirith turning the plan into verified work on main, fast and cheaply,
-without needing the owner? It judges and changes how the manager works; it never does the manager's job.
+The CEO owns **outcomes, not tasks**: it makes sure the plan's work gets done as well and as fast as possible,
+without the owner, the owner's goals first. It finds what slows or wastes the work and gets it changed: through
+the manager (directives), a fix a lane makes, or the capacity it may set itself; it never does the manager's job.
 
 ```
 Owner ── decides what only the owner can; approves CEO proposals; rates CEO reports
@@ -68,6 +69,7 @@ Targets are durable objects with a phase (`active`, `paused`): the owner pauses 
 | Read all of `<home>` and the projects, run read-only commands | Launch lanes, merge, edit code, gates or config |
 | Write its own records (`<home>/ceo/`) | Talk to lanes |
 | Send **directives** to the manager (inbox kind `directive`), fixes included | Undo or work around an owner decision |
+| Set **capacity**: `[autopilot] max_parallel` within `[ceo] max_parallel_range` (default 2..8), recorded as a decision | Go outside that range |
 | Change plan **priorities**: order steps, freeze a step, a lane limit per step | Edit plan items' text or tick them |
 | Send **proposals** to the owner, with options | Read the manager's memory or its full transcript |
 
@@ -100,6 +102,14 @@ proposal; once approved it becomes a plan item the same way.
 - **Budget**: at most `[ceo] runs_per_day` (default 72) and `[ceo] usd_per_day`; past either, only alarms run.
 - **After downtime**: when Tirith was off since the last run, the next run is a catch-up: every open directive is
   checked again before the manager acts on it any further (a directive from before the gap is not trusted blindly).
+
+## Throughput
+
+Every review sees `throughput` (`ceo.throughput`): lanes and merges today, merges per step (Tirith's own upkeep
+versus the owner's goals), the median minutes a lane works and from start to main, the whole test suites lanes ran
+(1000 tests or more) and their median minutes, tests failing in 3 or more lanes today (red on main), and the
+capacity: `max_parallel`, the load limit and why, the CPU left idle, the range it may set. It must find the biggest
+cause of slowness and act: a fix directive, a manager policy, or `capacity` in its result.
 
 ## The sentinel and the Status card
 
