@@ -49,6 +49,17 @@ def test_public_review_is_pending_for_a_finished_launched_lane(launched, home: P
     assert review_mod.public({**lane, "ended_at": None}, repo) is None
 
 
+def test_public_review_is_none_once_the_lane_folder_is_gone(launched, home: Path) -> None:
+    """A lane that ended with nothing to merge and whose folder Tirith removed is never reviewed: shown as
+    pending it held its plan step for good (no agent was ever told about the step again)."""
+    repo, _ = launched
+    lane = read_json(lane_path(home, "web-panel"), None)
+    for gone in ("removed", "retired"):
+        assert review_mod.public({**lane, "cleanup": {"status": gone}}, repo) is None
+    assert review_mod.public({**lane, "cleanup": {"status": "removed"}, "review": {"status": "merged"}},
+                             repo) == {"status": "merged"}
+
+
 def test_review_runs_tests_commits_merges_and_cleans_up(launched, home: Path, capsys) -> None:
     repo, worktree = launched
     assert main(["lane", "review", "web-panel"]) == 0
