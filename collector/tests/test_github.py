@@ -100,6 +100,26 @@ def test_runs_map_to_pipelines_with_jobs_as_stages(tmp_path: Path) -> None:
     assert [s["status"] for s in running["stages"]] == ["running", "pending"]
 
 
+@pytest.mark.parametrize("conclusion", ["cancelled", "stale", "action_required"])
+def test_cancelled_run_never_counts_as_failed(conclusion: str) -> None:
+    item = {"status": "completed", "conclusion": conclusion}
+    assert gh._status(item) == "cancelled"
+    pr = {"number": 1, "draft": False, "user": {"login": "x"}}
+    assert gh.map_pr("o/r", "p", pr, [item], [])["status"] != "failed"
+
+    def run(n: int, concl: str, at: str) -> dict:
+        row = gh.map_run("o/r", "p", {"name": "ci", "run_number": n, "status": "completed",
+                                      "conclusion": concl, "run_started_at": at}, [])
+        return row
+
+    older = run(1, "success", "2026-10-01T00:00:00Z")
+    newer = run(2, conclusion, "2026-10-02T00:00:00Z")
+    assert newer["status"] == "cancelled"
+    # the newest real result counts: the cancelled run is skipped
+    assert gh.last_finished([older, newer])["p/ci"]["status"] == "passed"
+    assert gh.last_finished([newer]) == {}
+
+
 def test_cloud_agent_pull_requests(tmp_path: Path) -> None:
     _, agents = _reader(Recorded()).poll(_config(), [Entry("demo", tmp_path)], env={"GH_TOKEN": "t"})
     assert len(agents) == 1  # the other author is not a configured agent account
