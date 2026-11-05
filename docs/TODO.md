@@ -38,7 +38,6 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
   - [x] Revisar: El plan no repite ningún id permanente: Revisar el plan (2026-11-05) sigue dos veces con el id i-2975f07c, así que una recibe un id nuevo (check: `test $(grep -o 'tirith:{"id":"i-[0-9a-f]*"' docs/TODO.md | sort | uniq -d | wc -l) -eq 0`)
 - [x] Verificar: Verify Drag an image from Finder onto the Tirith chat o (hecho: bafcf90e) <!-- tirith:{"id":"i-9aa639be"} -->
 - [x] Do one real Finder image drag onto the Tirith chat and look for 'drag: window drop' in app.log (hecho: bafcf90e)
-- [ ] Revisar el plan (2026-11-05 13:20) (reabierto: update-the-plan-23: the lane's work is not on main) <!-- tirith:{"id":"i-60ae3833"} -->
 - [x] Cuando Tirith escribe el plan, repara los ids permanentes repetidos que ya existen: la segunda línea con el mismo id recibe un id nuevo (hoy i-2975f07c sale dos veces y ningún agente puede editar docs/TODO.md) (check: `test $(grep -o 'tirith:{"id":"i-[0-9a-f]*"' docs/TODO.md | sort | uniq -d | wc -l) -eq 0`) (hecho: 13350c57) <!-- tirith:{"id":"i-06ba8f40"} -->
   - [x] Revisar: Cuando Tirith escribe el plan, repara los ids permanentes repetidos que ya existen: la segunda línea con el mismo id recibe un id nuevo (hoy i-2975f07c sale dos veces y ningún agente puede editar docs/TODO.md) (check: `test $(grep -o 'tirith:{"id":"i-[0-9a-f]*"' docs/TODO.md | sort | uniq -d | wc -l) -eq 0`)
 - [x] Revisar el plan (2026-11-05 12:31) (hecho: sin cambios) <!-- tirith:{"id":"i-fa9487dc"} -->
