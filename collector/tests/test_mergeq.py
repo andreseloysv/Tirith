@@ -1167,3 +1167,20 @@ def test_canary_merge_check_skips_the_full_suite_lock(tmp_path: Path, monkeypatc
     for project in ("canary", "tirith"):
         mergeq_mod._run_stages(tmp_path, project, [("ci", stage)], tmp_path, "l-1")
     assert seen == [("canary", False), ("tirith", True)]
+
+
+def test_mergeq_no_stage_goes_once_to_the_manager_without_retry(env, home: Path) -> None:
+    repo, _ = env
+    (repo / "tirith.toml").write_text('deploy = "none"\n', encoding="utf-8")
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "no stages")
+    make_lane(home, repo, "bare", {"bare.txt": "x"})
+    mergeq_mod.enqueue(home, "bare")
+    send = Sender()
+    row = mergeq_mod.process_next(home, load_config(home), relaunch=send)
+    assert row["result"] == mergeq_mod.NEEDS_STAGE and not send.calls
+    assert mergeq_mod.view(home, "demo")["items"] == []  # left the queue: no retry, no stuck alarm
+    assert read_json(lane_path(home, "bare"), None)["review"]["status"] == "needs a test stage"
+    assert sum("needs a test stage" in str(i) for i in asks_mod.queue_items(home)) == 1
+    assert mergeq_mod.process_next(home, load_config(home), relaunch=send) is None
+    assert sum("needs a test stage" in str(i) for i in asks_mod.queue_items(home)) == 1
