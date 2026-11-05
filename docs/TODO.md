@@ -730,6 +730,6 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [ ] Con roles on-demand, se crea un CEO con más de 2 workers a la vez, más de 1 h de trabajo sin nadie mirando o un fallo que el self-check no arregla (check: `cd collector && uv run -q pytest -q tests -k promote_to_ceo`) <!-- tirith:{"id":"i-609029b8","depends_on":["i-e92781ab"],"writes":[]} -->
 - [ ] Run collector tests (cd collector && uv run -q pytest -q tests) to completion and confirm green for company-lab fixture
 - [x] Check whether test_cta lane_stop_kills_a_child, test_idletimeout child_cpu/silent_lane and test_timeouts kills_tree fail on main too, then fix or quarantine (hecho: 0bcd5b94)
-- [ ] Fix 3 pre-existing failing tests (process-kill/idle: test_cta lane_stop_kills_a_child_that_ignores_sigterm, test_idletimeout child_cpu_is_progress, test_timeouts timeout_kills_tree_including_children_that_left_the_group) so the full suite is green
+- [x] Fix 3 pre-existing failing tests (process-kill/idle: test_cta lane_stop_kills_a_child_that_ignores_sigterm, test_idletimeout child_cpu_is_progress, test_timeouts timeout_kills_tree_including_children_that_left_the_group) so the full suite is green (hecho: 0bcd5b94)
 - [ ] Confirm whether test_cta::test_lane_stop_kills_a_child_that_ignores_sigterm, test_idletimeout::test_child_cpu_is_progress and test_timeouts::test_timeout_kills_tree_including_children_that_left_the_group fail on main without the roles change; the full collector suite is not green until they pass
 
