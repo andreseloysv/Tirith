@@ -33,6 +33,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Manager de guardia: atender el chat
 - [ ] CEO: revisar cómo trabaja el manager
 - [ ] Manager de guardia: atender el chat (en curso: manager-950a4ca5)
+- [ ] Revisar el plan (2026-11-05 08:38) (en curso: update-the-plan-17)
 - [x] Revisar el plan (2026-11-05 07:01) (hecho: sin cambios) <!-- tirith:{"id":"i-0d103239"} -->
 - [x] Revisar el plan (2026-11-05) (hecho: sin cambios) <!-- tirith:{"id":"i-2975f07c"} -->
 - [x] Manager de guardia: atender el chat
