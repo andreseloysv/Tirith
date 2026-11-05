@@ -112,5 +112,9 @@ Every promotion or retirement is appended to `<home>/company.jsonl` by `promote.
 measured, threshold, reason)` (`event` = `promote` | `retire`; `log_decision` records a `manager_decision`), one line
 `{ts, event, role, rule, measured, threshold, reason}`; `promote.read_log(home)` reads it back.
 
+The collector exports the last 200 rows as `state.company`. The page's Company view (`web/js/v-company.js`) draws them
+as a timeline, newest first: when, promotion or retirement, the role, the rule with the measured value against its
+threshold, and the reason. Test: `node web/js/company.test.mjs`.
+
 TODO: nothing else enforces `"off"` / `"on-demand"` yet. The CEO runner (`ceo.py`) and the manager start are decided per
 Tirith home (`config.toml`), not per project, so there is no single per-project gate to wire.
