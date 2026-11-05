@@ -66,7 +66,8 @@
       var a = x.row.lane ? T.agentById(s, x.row.lane) : null;
       var who = a ? '<button class="link" data-act="goagent" data-key="' + esc(a.id) + '">' + esc(T.agentRole ? T.agentRole(a) : a.name) + ' · ' + esc(a.name) + '</button>' : esc(x.row.lane || x.row.agent || '');
       return '<tr><td class="sm">' + esc(T.clockTime(x.ts)) + '</td><td><span class="chip xk ' + esc(x.kind) + '">' + esc(KINDS[x.kind] || x.kind) + '</span></td>' +
-        '<td><b>' + esc(x.dest) + '</b></td><td class="sm">' + who + '</td><td class="sm mut" title="' + esc(x.row.action || '') + '">' +
+        '<td><b>' + esc(x.dest) + '</b>' + (x.row.address && x.dest.indexOf(x.row.address) < 0 ? ' <span class="mut sm" title="' +
+          esc(x.row.reverse || '') + '">' + esc(x.row.address) + '</span>' : '') + '</td><td class="sm">' + who + '</td><td class="sm mut" title="' + esc(x.row.action || '') + '">' +
         esc(x.live ? 'connection opened' : (x.row.action || x.row.tool || '')) + '</td></tr>';
     }).join('') + '</tbody></table>' : '<p class="mut sm">Nothing reached outside the machine in this period.</p>';
     return '<section class="pad extsec"><h2>External <span class="mut">' + rows.length + '</span></h2>' + body + '</section>';
