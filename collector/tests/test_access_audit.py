@@ -50,3 +50,36 @@ def test_recent_reads_all_projects_oldest_first(tmp_path) -> None:
     rows = access_audit.recent(tmp_path)
     assert [(r["agent"], r["project"]) for r in rows] == [("muse", None), ("anthropic", "tirith")]
     assert access_audit.recent(tmp_path / "none") == []
+
+
+def test_external_names_what_a_call_reaches() -> None:
+    e = access_audit.external
+    assert e("Bash", {"command": "curl -s https://api.github.com/repos/x/y"}) == ["api api.github.com"]
+    assert e("Bash", {"command": "node am.mjs watch --url wss://agentsmessenger.com/socket"}) == ["websocket agentsmessenger.com"]
+    assert e("WebFetch", {"url": "https://docs.python.org/3/"}) == ["web docs.python.org"]
+    assert e("Bash", {"command": "git clone git@github.com:a/b.git"}) == ["git github.com"]
+    assert e("Bash", {"command": "cd x && git push origin main"}) == ["git remote"]
+    assert e("Bash", {"command": "ssh -p 22 me@build.example.com uptime"}) == ["ssh build.example.com"]
+    assert e("Bash", {"command": "uv sync && npm install left-pad"}) == ["package pypi.org", "package registry.npmjs.org"]
+    assert e("Bash", {"command": "gh run list"}) == ["github api.github.com"]
+    assert e("WebSearch", {"query": "pytest xdist"}) == ["search pytest xdist"]
+    assert e("mcp__docs__batch", {}) == ["mcp docs"]
+    assert e("Bash", {"command": "curl https://user:pw@example.com/api/v1/x"}) == ["api example.com"]  # no credentials
+    assert e("Bash", {"command": "curl http://localhost:8080/x"}) == [] and e("Bash", {"command": "ls"}) == []
+
+
+def test_the_network_watch_records_a_lanes_new_connections_once(tmp_path) -> None:
+    from tirith import netwatch
+    lsof = "\n".join(["p500", "cpython3", "n10.0.0.2:5555->140.82.112.3:443", "n127.0.0.1:1->127.0.0.1:2",
+                      "p900", "cSafari", "n10.0.0.2:6666->17.1.1.1:443"])
+    ps = "  500  400\n  400  300\n  900    1\n"
+    run = lambda argv: lsof if argv[0] == "lsof" else ps  # noqa: E731
+    lanes = [{"id": "lane-a", "pid": 300, "project": "demo", "agent": "anthropic"}, {"id": "old", "pid": 1, "ended_at": "x"}]
+    netwatch._last["at"] = 0.0
+    rows = netwatch.sample(tmp_path, lanes, now=1000.0, run=run, name=lambda h: "lb.github.com")
+    assert [r["external"] for r in rows] == [["https lb.github.com:443"]]  # python3 under lane-a; Safari and loopback are not
+    assert rows[0]["tool"] == "connection" and rows[0]["system"] == "network" and "python3" in rows[0]["action"]
+    assert netwatch.sample(tmp_path, lanes, now=1005.0, run=run) == []  # not before EVERY_S
+    assert netwatch.sample(tmp_path, lanes, now=1100.0, run=run, name=lambda h: "lb.github.com") == []  # seen once
+    logged = [json.loads(l) for l in (tmp_path / "access" / "demo.ndjson").read_text().splitlines()]
+    assert len(logged) == 1 and logged[0]["lane"] == "lane-a"
