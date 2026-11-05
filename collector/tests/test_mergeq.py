@@ -34,6 +34,9 @@ def git(repo: Path, *args: str) -> str:
 
 @pytest.fixture
 def env(home: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    # drain() stops after a pass once the package on disk changed; another lane or a live edit touching the code
+    # while a test runs must not cut a drain short, so the fingerprint is frozen here.
+    monkeypatch.setattr(mergeq_mod.selfreload_mod, "code_fingerprint", lambda *a, **k: ())
     for key in ("AUTHOR", "COMMITTER"):
         monkeypatch.setenv(f"GIT_{key}_NAME", "Tirith Test")
         monkeypatch.setenv(f"GIT_{key}_EMAIL", "t@example.invalid")
