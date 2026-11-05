@@ -600,6 +600,22 @@ def edit(text: str, step_id: str, item_text: str = "", new_text: str | None = No
     return "".join(lines)
 
 
+def edit_retrying(text: str, step_id: str, item_text: str = "", new_text: str | None = None,
+                  delete: bool = False, add: str | None = None) -> str:
+    """``edit``, and when it fails only because the item changed meanwhile (a Roadmap marker commit added or
+    changed its status note), reload ``text`` once, find the item again ignoring that note and retry by its
+    permanent id."""
+    try:
+        return edit(text, step_id, item_text, new_text, delete, add)
+    except EditError as error:
+        if add is not None or "changed in the plan meanwhile" not in str(error):
+            raise
+        hit = find_item(parse(text), step_id, item_text)
+        if hit is None:
+            raise
+        return edit(text, step_id, hit.get("id") or item_id(hit["text"]), new_text, delete, add)
+
+
 def _text_key(text: str) -> str:
     """The comparable form of an item's text: no metadata, status note or check note; Unicode-normalised,
     whitespace-collapsed and case-folded."""
