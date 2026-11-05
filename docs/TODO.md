@@ -590,7 +590,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [x] Un lane que espera respuesta en una sala queda marcado «esperando en la sala X» y Tirith lo reanuda al llegar la respuesta, como dice ~/DEVELOP/agentsmessenger/docs/agentes-callados.md. (check: `cd collector && uv run -q pytest -q tests -k lane_room_wait`) (hecho: 1b95b48) <!-- tirith:{"id":"i-24ab8900"} -->
   - [x] Revisar: Un lane que espera respuesta en una sala queda marcado «esperando en la sala X» y Tirith lo reanuda al llegar la respuesta, como dice ~/DEVELOP/agentsmessenger/docs/agentes-callados.md. (check: `cd collector && uv run -q pytest -q tests -k lane_room_wait`)
 - [x] Tirith avisa al manager cuando un lane lleva 30 minutos esperando respuesta en una sala, como dice ~/DEVELOP/agentsmessenger/docs/agentes-callados.md. (check: `cd collector && uv run -q pytest -q tests -k lane_room_timeout`) (hecho: 78c0b6e) <!-- tirith:{"id":"i-0effabb7"} -->
-  - [ ] Revisar: Tirith avisa al manager cuando un lane lleva 30 minutos esperando respuesta en una sala, como dice ~/DEVELOP/agentsmessenger/docs/agentes-callados.md. (check: `cd collector && uv run -q pytest -q tests -k lane_room_timeout`) (en curso: revisión de que-los-agentes-de-una-sala-no-s-4)
+  - [x] Revisar: Tirith avisa al manager cuando un lane lleva 30 minutos esperando respuesta en una sala, como dice ~/DEVELOP/agentsmessenger/docs/agentes-callados.md. (check: `cd collector && uv run -q pytest -q tests -k lane_room_timeout`)
 
 ## 20. Las pruebas no interrumpen al dueño
 
