@@ -1885,7 +1885,13 @@ class Collector:
                   f"retrying (failure {failures})", file=sys.stderr, flush=True)
         while True:
             time.sleep(max(0.2, interval) + backoff_s(failures))
-            if reload_check is not None and reload_check():
+            wants_reload = False
+            if reload_check is not None:
+                try:
+                    wants_reload = reload_check()
+                except Exception:  # a broken watcher must not stop the collector
+                    wants_reload = False
+            if wants_reload:
                 from tirith.selfreload import ReloadRequested
                 raise ReloadRequested()
             try:
