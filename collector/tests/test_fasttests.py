@@ -329,3 +329,35 @@ def test_an_agents_own_pytest_command_runs_in_parallel():
     assert p(["sh", "-c", line]) == ["sh", "-c", "cd collector && uv run -q pytest -n auto --maxprocesses 8 -q tests 2>&1 | tail -8"]
     assert p(["bash", "-c", "uv run pytest -p no:xdist --testmon"]) == ["bash", "-c", "uv run pytest -p no:xdist --testmon"]
     assert p(["sh", "-c", "make test"]) == ["sh", "-c", "make test"]
+
+
+_REAL_CPU_IDLE = loadlimit.cpu_idle
+
+
+def test_loadlimit_free_cpu_uses_idle_percent_not_load_average(monkeypatch) -> None:
+    monkeypatch.setattr(loadlimit, "load_average", lambda: 99.0)  # a huge load average must not matter
+    monkeypatch.setattr(loadlimit, "cpu_idle", lambda sample=0.0: 90.0)
+    assert loadlimit.limit(4, cpus=8) == (4, "")
+    monkeypatch.setattr(loadlimit, "cpu_idle", lambda sample=0.0: 10.0)  # 0.8 free cores
+    allowed, why = loadlimit.limit(4, cpus=8)
+    assert allowed == 1 and "10% idle" in why
+    monkeypatch.setattr(loadlimit, "cpu_idle", lambda sample=0.0: 0.0)
+    assert loadlimit.limit(4, cpus=8)[0] == 1  # never below one
+    assert loadlimit.limit(4, cpus=16, idle=20.0)[0] == 1  # 3.2 free cores -> half -> 1
+    assert loadlimit.limit(8, cpus=32, idle=20.0)[0] == 3  # 6.4 free cores -> half -> 3
+
+
+def test_loadlimit_free_cpu_falls_back_to_load_average(monkeypatch) -> None:
+    monkeypatch.setattr(loadlimit, "cpu_idle", lambda sample=0.0: None)
+    monkeypatch.setattr(loadlimit, "load_average", lambda: 14.0)
+    allowed, why = loadlimit.limit(4, cpus=8)
+    assert allowed == 1 and "load 14.0" in why
+
+
+def test_loadlimit_free_cpu_reads_host_counters(monkeypatch) -> None:
+    monkeypatch.setattr(loadlimit, "cpu_idle", _REAL_CPU_IDLE)  # the autouse fixture calms it
+    ticks = iter([(100.0, 200.0), (180.0, 300.0)])
+    monkeypatch.setattr(loadlimit, "_cpu_ticks", lambda: next(ticks))
+    assert loadlimit.cpu_idle(sample=0.0) == 80.0
+    monkeypatch.setattr(loadlimit, "_cpu_ticks", lambda: None)
+    assert loadlimit.cpu_idle(sample=0.0) is None
