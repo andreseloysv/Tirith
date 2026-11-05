@@ -26,7 +26,9 @@ tirith task list --project demo
 
 The IDs above are placeholders. `configure --depends-on` or `--writes` with no
 values clears that declaration. Configure a task before it is claimed.
-Dependencies must name existing, unambiguous IDs and form an acyclic graph.
+Dependencies must name existing, unambiguous IDs and form an acyclic graph. A permanent ID repeated on an open
+item refuses the plan; repeated only among done items (two plan reviews on one day once wrote two) it claims
+nothing and is allowed, so it never stops every launch of the project.
 Deleting a prerequisite does not make a dependent ready: missing IDs fail closed.
 Prerequisites become satisfied when their plan checkbox is ticked by the existing
 integration/verification path, never merely from an agent's `done` report.
