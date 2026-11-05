@@ -298,6 +298,10 @@ def test_the_snapshot_holds_what_the_hourly_check_looks_at(home: Path) -> None:
     snap = ceo.snapshot(home, load_config(home), now)
     assert snap["open_items"] == 7 and snap["idle_min"] == 90 and snap["last_merge_min"] == 80
     assert snap["ci_main"] == {"tirith/tirith": "failed"}  # the newest finished run of each workflow
+    (home / "ci-main.json").write_text(json.dumps({"workflows": {"tirith/tirith": {"status": "passed"},
+                                                                 "tirith/pages": {"status": "passed"}}}))
+    assert ceo.snapshot(home, load_config(home), now)["ci_main"] == {"tirith/pages": "passed", "tirith/tirith": "passed"}
+    (home / "ci-main.json").unlink()  # the collector's file wins: it saw every run, state.json keeps the newest
     assert snap["test_maps"]["tirith"]["present"] and snap["test_maps"]["agentsmessenger"] == {"present": False, "age_h": None}
     assert snap["launch_failures"]["count"] == 1 and "must be unique" in snap["launch_failures"]["last"][0]
     assert [w["step"] for w in snap["owner_waits_unasked"]] == ["17"]  # nothing of tirith is on the owner's list
