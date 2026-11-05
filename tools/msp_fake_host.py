@@ -2,7 +2,7 @@
 """A fake MSP host (what `muse serve` is on the wire): JSON-RPC 2.0, one JSON object per line on stdio.
 
 Used by the desktop chat adapter's test (app/src-tauri/src/msp.rs). It answers `initialize`,
-`session/start`, `session/resume`, `turn/start`, `turn/interrupt` and `approval/decide`. A turn whose text contains "tool" runs a tool call
+`session/start`, `session/resume`, `turn/start`, `turn/interrupt` and `approval/decide`. A turn whose text contains "slow" runs until `turn/interrupt`. A turn whose text contains "tool" runs a tool call
 that first needs an approval (`approval/request`); any other turn just streams "echo: <text>".
 No model, no network, no ports.
 
@@ -62,6 +62,7 @@ def item(item_id, kind, **kw):
 def main():
     session = "ses-fake"
     turn_no = 0
+    slow = False  # a "slow" turn runs until it is interrupted
     waiting = None  # (approvalId, tool item) while a tool call waits for approve/deny
     for line in sys.stdin:
         msg = json.loads(line)
@@ -88,8 +89,8 @@ def main():
         elif method == "turn/interrupt":
             out({"jsonrpc": "2.0", "id": mid, "result": {
                 "commandId": params["commandId"], "status": "accepted", "turnId": params.get("turnId") or f"t{turn_no}"}})
-            if waiting:
-                waiting = None
+            if waiting or slow:
+                waiting, slow = None, False
                 notify("turn/completed", {"sessionId": session, "turnId": f"t{turn_no}", "terminal": "interrupted",
                                           "viewCursor": f"c{turn_no}"})
         elif method == "turn/start":
@@ -98,7 +99,9 @@ def main():
             out({"jsonrpc": "2.0", "id": mid, "result": {
                 "commandId": params["commandId"], "disposition": "started", "startedNewTurn": True,
                 "status": "accepted", "turnId": f"t{turn_no}"}})
-            if "tool" in text:
+            if "slow" in text:
+                slow = True
+            elif "tool" in text:
                 tool = item(f"tool{turn_no}", "toolCall", status="inProgress", tool="shell",
                             args=json.dumps({"command": "echo hi"}))
                 notify("item/started", {"sessionId": session, "item": tool})

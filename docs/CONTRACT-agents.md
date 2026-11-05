@@ -112,7 +112,7 @@ with the wrapper on PATH; reported as FAIL "cannot test" when there is no `~/.lo
 `muse` chats through `muse serve` (MSP, JSON-RPC over stdio): its preset has `chat_protocol = "msp"` and
 `chat_args = ["serve", "--disable-request-user-input"]`. With `chat_protocol = "msp"` the collector translates
 between that protocol and the stream-json lines below (`collector/tirith/mspchat.py`; `docs/PLATFORMS.md`), the
-effort goes with each turn (`chat_effort`, else `effort`, else `minimal`) and `--resume` is not used. The rest of
+effort goes with each turn (`chat_effort`, else `effort`, else `minimal`) and `--resume` is not used (the stored session id goes as `session/resume`, Stop as `turn/interrupt`). The rest of
 this section describes the `anthropic` dialect.
 
 The persistent manager session (`docs/CONTRACT-inbox.md`, "One manager") starts `<command> <chat_args>` under

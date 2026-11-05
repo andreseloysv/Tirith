@@ -152,3 +152,50 @@ def test_interrupt_and_resume_use_the_schema_params() -> None:
     assert stop["params"]["retract"] is True and stop["params"]["commandId"]
     m.incoming(rpc(method="turn/completed", params={"terminal": "interrupted"}))
     assert "turnId" not in json.loads(m.interrupt())["params"]
+
+
+def test_resume_falls_back_to_a_new_session_when_refused() -> None:
+    m = mspchat_mod.Msp()
+    m.resume("old")
+    hello = json.loads(m.hello()[0])
+    res = json.loads(m.incoming(rpc(id=hello["id"], result={})).send[0])
+    out = m.incoming(rpc(id=res["id"], error={"code": 1, "message": "gone"}))
+    start = json.loads(out.send[0])
+    assert start["method"] == "session/start" and out.ui == []
+    out = m.incoming(rpc(id=start["id"], result={"session": {"sessionId": "new"}}))
+    assert json.loads(out.ui[0])["session_id"] == "new"
+
+
+def test_interrupt_ends_the_running_turn(home: Path) -> None:
+    proc = subprocess.Popen([sys.executable, HOST], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    sess = msession_mod.Session(home, "lane-x", proc, lambda t, d: ("allow", ""), home, adapter=mspchat_mod.Msp())
+    try:
+        assert not sess.interrupt()  # idle
+        assert sess.send("slow one", ["r1"], datetime.now(timezone.utc))
+        end = time.monotonic() + 20
+        while sess.busy and time.monotonic() < end:
+            sess.interrupt()
+            time.sleep(0.1)
+        assert not sess.busy and sess.views()[-1]["interrupted"]
+        assert sess.send("hello", ["r2"], datetime.now(timezone.utc))  # the session lives on
+        end = time.monotonic() + 20
+        while sess.busy and time.monotonic() < end:
+            time.sleep(0.02)
+        assert sess.views()[-1]["answer"] == "echo: hello"
+    finally:
+        sess.terminate()
+
+
+def test_session_resumes_against_the_fake_host(home: Path) -> None:
+    proc = subprocess.Popen([sys.executable, HOST], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    sess = msession_mod.Session(home, "lane-x", proc, lambda t, d: ("allow", ""), home,
+                                adapter=msession_mod.mspchat_mod.Msp())
+    sess.adapter.resume("ses-fake")
+    try:
+        assert sess.send("hello", ["r1"], datetime.now(timezone.utc))
+        end = time.monotonic() + 20
+        while sess.busy and time.monotonic() < end:
+            time.sleep(0.02)
+        assert sess.views()[-1]["answer"] == "echo: hello" and sess.session_id == "ses-fake"
+    finally:
+        sess.terminate()
