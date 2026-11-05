@@ -29,6 +29,16 @@ def alive(pid: int) -> bool:
     return True
 
 
+def wait_gone(*pids: int, within: float = 15.0) -> bool:
+    """Poll until none of the pids is alive (a killed process may take a moment to be reaped on a loaded machine)."""
+    deadline = time.monotonic() + within
+    while time.monotonic() < deadline:
+        if not any(alive(p) for p in pids):
+            return True
+        time.sleep(0.05)
+    return not any(alive(p) for p in pids)
+
+
 def start_lane(home: Path, lane_id: str = "w1", ended: bool = False) -> None:
     write_lane(home, {"id": lane_id, "project": "demo", "ended_at": "2026-10-29T12:00:00Z" if ended else None})
 
@@ -75,8 +85,7 @@ def test_run_stops_the_whole_group_and_says_how_to_raise_it(home: Path, tmp_path
     assert "timed out after 1 s (class npm" in done.error and "tirith timeout set --class npm" in done.error
     child = int(pidfile.read_text())
     reap_children(pid=child)
-    time.sleep(0.3)
-    assert not alive(child)  # the child of the shell went with it
+    assert wait_gone(child)  # the child of the shell went with it
     book = read_json(home / "timeouts.json", {})
     assert book["timeouts"]["npm"][0]["seconds"] == 1 and "sleep 60" in book["timeouts"]["npm"][0]["command"]
     assert "npm" not in book["durations"]  # a timeout says nothing about how long the class takes
@@ -89,8 +98,7 @@ def test_run_kills_a_child_that_ignores_sigterm(home: Path, tmp_path: Path, monk
     done = timeouts_mod.run(["/bin/sh", "-c", script], "generic", timeout=1)
     assert done.timed_out
     reap_children(pid=int(pidfile.read_text()))
-    time.sleep(0.3)
-    assert not alive(int(pidfile.read_text()))
+    assert wait_gone(int(pidfile.read_text()))
 
 
 def test_a_missing_program_is_an_error_result_not_an_exception(home: Path) -> None:
@@ -425,13 +433,17 @@ def test_timeout_kills_tree_including_children_that_left_the_group(home: Path, t
     script = (f"sh -c 'trap \"\" TERM; echo $$ > {near}; "
               f"python3 -c \"import os,time; os.setsid(); open(\\\"{far}\\\",\\\"w\\\").write(str(os.getpid())); "
               f"time.sleep(60)\"' & wait")
-    done = timeouts_mod.run(["/bin/sh", "-c", script], "generic", timeout=2)
+    # the timeout must outlast python's start-up on a loaded machine, or `far` is killed before it writes its pid
+    done = timeouts_mod.run(["/bin/sh", "-c", script], "generic", timeout=10)
     assert done.timed_out and done.returncode == timeouts_mod.EXIT_TIMED_OUT
+    pids = []
     for pidfile in (near, far):
-        if pidfile.exists():
-            reap_children(pid=int(pidfile.read_text()))
-    time.sleep(0.5)
-    assert not alive(int(near.read_text())) and not alive(int(far.read_text()))
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline and not (pidfile.exists() and pidfile.read_text().strip()):
+            time.sleep(0.05)
+        pids.append(int(pidfile.read_text()))
+        reap_children(pid=pids[-1])
+    assert wait_gone(*pids)
 
 
 def test_timeout_kills_tree_of_a_supervised_process_and_removes_its_lock(home: Path, tmp_path: Path, reap_children) -> None:
@@ -445,8 +457,7 @@ def test_timeout_kills_tree_of_a_supervised_process_and_removes_its_lock(home: P
     info = done()
     assert info["timed_out"]
     reap_children(pid=int(pidfile.read_text()))
-    time.sleep(0.3)
-    assert not alive(int(pidfile.read_text()))
+    assert wait_gone(int(pidfile.read_text()))
     assert not (repo / ".git" / "index.lock").exists()
 
 
@@ -458,6 +469,5 @@ def test_reap_children_fixture_kills_a_group_that_outlives_its_test(reap_childre
     grandchild = int(proc.stdout.readline())
     assert alive(grandchild)
     reap([proc])  # what the fixture does at teardown
-    time.sleep(0.3)
-    assert proc.poll() is not None and not alive(grandchild)
+    assert proc.poll() is not None and wait_gone(grandchild)
     reap_children(proc)  # tracking a finished child is harmless
