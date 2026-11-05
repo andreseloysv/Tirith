@@ -692,4 +692,5 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 ## 22. Empresa que crece: worker, manager y CEO según el trabajo
 
 - [ ] Cuando el trabajo vuelve a ser una tarea pequeña, el CEO y el manager on-demand se retiran tras un tiempo sin nada que hacer, y queda registrado en company.jsonl (check: `cd collector && uv run -q pytest -q tests -k roles_shrink`) <!-- tirith:{"id":"i-55fab955","depends_on":[],"writes":[]} -->
+- [ ] Proyecto de prueba company-lab (fixtures/company-lab) con 5 escenarios en orden de tamaño (typo, feature pequeña, login en 3 partes, app en 5 pasos desatendida, fallo provocado) más llegadas a mitad, objetivo vago, petición al dueño, test inestable y reinicio (check: `test -f fixtures/company-lab/scenarios.json`) <!-- tirith:{"id":"i-443e3461","depends_on":[],"writes":[]} -->
 
