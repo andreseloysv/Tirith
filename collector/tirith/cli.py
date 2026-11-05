@@ -1815,17 +1815,14 @@ def _cmd_plan_add(args) -> int:
         return 3
     who = os.environ.get("TIRITH_LANE") or ("manager" if in_manager_session() else "owner")
     try:
-        text = plangate_mod.add_item(home, repo, args.project, str(args.step), args.text, who, args.title,
-                                      getattr(args, "check", None), args.depends_on, args.writes)
+        text, new_id = plangate_mod.add_item_with_id(
+            home, repo, args.project, str(args.step), args.text, who, args.title,
+            getattr(args, "check", None), args.depends_on, args.writes)
     except plangate_mod.PlanGateError as error:
-        print(f"tirith plan add: {error}", file=sys.stderr)
+        print(f"tirith plan add: NOT added: {error}", file=sys.stderr)
         return 3
     print(f"added to step {args.step}: {text}")
-    _, steps = plangate_mod._read(repo)
-    item = roadmap_mod.find_item(steps, str(args.step), text)
-    if item:
-        print(f"id: {item.get('id') or roadmap_mod.item_id(item['text'])} "
-              f"(pass it as --item to lane run, plan check, plan done and plan configure)")
+    print(f"id: {new_id} (pass it as --item to lane run, plan check, plan done and plan configure)")
     return 0
 
 

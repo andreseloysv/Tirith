@@ -292,7 +292,8 @@ def release(home: Path, repo: Path, project: str, step: str, item: str, lane_id:
 
 
 def ensure_item(home: Path, repo: Path, project: str, step: str, text: str, lane_id: str | None = None,
-                who: str = "tirith", parent: str | None = None, title: str | None = None) -> str:
+                who: str = "tirith", parent: str | None = None, title: str | None = None,
+                always_new: bool = False) -> str:
     """Make sure the open item ``text`` exists in step ``step`` (a sub-item of ``parent`` when given), already
     marked "(en curso: <lane>)" when ``lane_id`` is given so the autopilot never takes it. Returns its clean text.
     A missing step is created with ``title``."""
@@ -303,7 +304,7 @@ def ensure_item(home: Path, repo: Path, project: str, step: str, text: str, lane
     def mutate(body: str) -> str:
         if title:
             body = roadmap_mod.add_step(body, step, title)
-        found = roadmap_mod.find_item(roadmap_mod.parse(body), step, clean)
+        found = None if always_new else roadmap_mod.find_item(roadmap_mod.parse(body), step, clean)
         if found is not None:
             return body
         new = (roadmap_mod.add_sub(body, step, parent, note) if parent else
@@ -382,8 +383,14 @@ def _new_item_id(repo: Path) -> str:
 def add_item(home: Path, repo: Path, project: str, step: str, text: str, who: str, title: str | None = None,
              check: str | None = None, depends_on: list[str] | None = None,
              writes: list[str] | None = None) -> str:
-    """``tirith plan add``: one new open item at the end of step ``step``; returns its clean text.
-    Refuses an item too big for ~30 minutes; ``check`` is the command that says it is done."""
+    return add_item_with_id(home, repo, project, step, text, who, title, check, depends_on, writes)[0]
+
+
+def add_item_with_id(home: Path, repo: Path, project: str, step: str, text: str, who: str,
+                     title: str | None = None, check: str | None = None, depends_on: list[str] | None = None,
+                     writes: list[str] | None = None) -> tuple[str, str]:
+    """``tirith plan add``: one new open item at the end of step ``step``; returns (clean text, new id). A repeated title
+    is a new item with a fresh id, never a no-op. Refuses an item too big for ~30 minutes; ``check`` is the command that says it is done."""
     text = roadmap_mod.norm(text)
     if not text:
         raise PlanGateError("the new item is empty")
@@ -402,7 +409,8 @@ def add_item(home: Path, repo: Path, project: str, step: str, text: str, who: st
     except coordination.CoordinationError as error:
         raise PlanGateError(str(error)) from error
     text = roadmap_mod.with_metadata(text, metadata)
-    return ensure_item(home, repo, project, step, text, None, who, title=title)
+    clean = ensure_item(home, repo, project, step, text, None, who, title=title, always_new=True)
+    return clean, metadata["id"]
 
 
 def configure_task(home: Path, repo: Path, project: str, step: str, item: str,
