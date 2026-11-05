@@ -30,6 +30,7 @@ from tirith.guardwrap import (
     default_words, guard_upgrade_steps, install_guard, reinstall_guard, verify_guard,
 )
 from tirith import actions as actions_mod
+from tirith import friction as friction_mod
 from tirith import coordination
 from tirith import agentrun as agentrun_mod
 from tirith import asks as asks_mod
@@ -1049,6 +1050,7 @@ def add_wait(home: Path, project: str, text: str, link: str | None = None,
     if actions:
         row["actions"] = actions
     append_jsonl(home / "waits.jsonl", row)
+    friction_mod.record(home, project, friction_mod.PERSON, f"{why_owner or 'ask'}: {text}"[:200], wait_id=wait_id)
     flows_mod.append_flow(home, "manager", "owner", "request", text, link, project=project)
     return wait_id
 
@@ -1811,6 +1813,19 @@ def _cmd_plan_add(args) -> int:
     if item:
         print(f"id: {item.get('id') or roadmap_mod.item_id(item['text'])} "
               f"(pass it as --item to lane run, plan check, plan done and plan configure)")
+    return 0
+
+
+def _cmd_friction(args) -> int:
+    home = _home(args)
+    if args.friction_command == "record":
+        friction_mod.record(home, args.project, args.kind, args.detail, args.seconds)
+    elif args.friction_command == "surface":
+        text = friction_mod.surface(home, args.project)
+        print(f"on top of the plan: {text}" if text else "nothing to put on top of the plan")
+    else:
+        for g in friction_mod.ranked(home, args.project):
+            print(f"{g['score']:>8.0f}  {g['times']}x  {g['kind']:<6} {g['detail']}")
     return 0
 
 
@@ -2977,6 +2992,20 @@ def build_parser() -> argparse.ArgumentParser:
     do.add_argument("--dry-run", action="store_true", help="add the items to the plan and show them; start nothing")
     do.add_argument("--launch", action="store_true", help=argparse.SUPPRESS)
     do.set_defaults(func=_cmd_do)
+
+    fr = sub.add_parser("friction", parents=[common], help="log when a person was needed or something waited; biggest first")
+    fr_sub = fr.add_subparsers(dest="friction_command", required=True)
+    fr_rec = fr_sub.add_parser("record", parents=[common], help="log one friction event")
+    fr_rec.add_argument("--project", required=True)
+    fr_rec.add_argument("--kind", choices=[friction_mod.PERSON, friction_mod.WAIT], default=friction_mod.WAIT)
+    fr_rec.add_argument("--detail", required=True)
+    fr_rec.add_argument("--seconds", type=float, default=0)
+    fr_list = fr_sub.add_parser("list", parents=[common], help="frictions, the biggest first")
+    fr_list.add_argument("--project", default=None)
+    fr_surf = fr_sub.add_parser("surface", parents=[common], help="put the biggest friction on top of the plan")
+    fr_surf.add_argument("--project", required=True)
+    for f in (fr_rec, fr_list, fr_surf):
+        f.set_defaults(func=_cmd_friction)
 
     plan = sub.add_parser("plan", parents=[common],
                           help="the plan is the only way to start and finish an agent: add items, report outcomes")

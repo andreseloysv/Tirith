@@ -700,3 +700,10 @@ in which the session could not start (`dispatch.json` `manager.session.error` sa
 - Drafts are kept in `localStorage` per project (`tirith.chat.draft.<project>`), and sends still unconfirmed are
   kept in `tirith.chat.unsent`; after a reload they come back as "Sending…" and are checked against the state.
   Storage that is blocked only means nothing survives a reload.
+
+## Friction (`tirith.friction`)
+
+Every time a person was needed (`tirith wait add` reaches the owner) or something waited, a row goes to
+`<home>/friction.jsonl` (`at, project, kind person|wait, key, detail, seconds`). `tirith friction record|list|surface`.
+Rows with the same `key` are one friction; its score is the seconds waited plus 600 s per time a person was needed.
+`surface` puts the biggest friction (at least twice) as the first open item of the "Trabajo automático" step, once.
