@@ -179,6 +179,8 @@ class StepParser:
         content = [{"type": "text", "text": content}] if isinstance(content, str) else content
         blocks = [b for b in content if isinstance(b, dict)] if isinstance(content, list) else []
         rows = self.rows
+        before = len(rows)
+        depth = 1 if rec.get("parent_tool_use_id") else 0  # inside a sub-agent (the Task / Agent tool) the CLI runs
         if kind == "assistant":
             self.partial = ""
             for b in blocks:
@@ -222,6 +224,10 @@ class StepParser:
             summary["cost_usd"] = round(float(cost), 4) if isinstance(cost, (int, float)) else None
             ms = rec.get("duration_ms")
             summary["duration_s"] = round(ms / 1000) if isinstance(ms, (int, float)) else None
+        if depth:
+            for row in rows[before:]:
+                row["depth"] = depth
+                row["parent"] = str(rec["parent_tool_use_id"])
         self.summary["steps"] = len(rows)
 
 
