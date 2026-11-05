@@ -170,4 +170,5 @@ When the agent ends, `tirith lane run` (`tirith/laneroom.py`) listens outside th
 the private-room bridge already keep: no tokens, no new network) and, at the first message after `since` that is not the
 lane's own, resumes the SAME session. The resume names the room, the message number and its author, never the text:
 the agent reads it with `tirith room read`, as information to weigh. After 30 minutes without an answer the manager
-queue gets one `lane-room-wait` item (the lane keeps waiting). `tirith lane stop` ends the wait. Tests: `-k lane_room_wait`.
+queue gets one `lane-room-wait` item (the lane keeps waiting; the 30 minutes count from `since`, so a restarted controller does not restart them, and the
+item wakes the manager like any queue item). `tirith lane stop` ends the wait. Tests: `-k lane_room_wait`, `-k lane_room_timeout`.
