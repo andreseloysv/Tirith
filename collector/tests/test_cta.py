@@ -387,3 +387,10 @@ def test_an_older_guard_item_runs_reinstall_because_install_leaves_it(home: Path
         assert action["label"] == "Update the word guard in Demo"
     finally:
         make_hooks_mutable(repo)
+
+
+def test_the_check_hint_for_an_older_guard_is_reinstall() -> None:
+    from tirith import guardwrap
+    assert guardwrap.fix_command("demo", "pre-push: differs from the expected guard for words a,b") \
+        == "tirith guard reinstall demo"
+    assert guardwrap.fix_command("demo", "pre-commit: missing") == "tirith guard install demo"

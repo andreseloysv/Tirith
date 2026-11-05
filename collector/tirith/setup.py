@@ -13,6 +13,7 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from tirith import guardwrap as guardwrap_mod
 from tirith import gates as gates_mod
 from tirith import hooks as hooks_mod
 from tirith import inbox as inbox_mod
@@ -189,7 +190,7 @@ def build(folder: Path | None, project: str, machine: Machine, runs: list[dict],
         for p in manifest_mod.check(folder, words, ci=True):
             problems.append({"rule": p.rule, "message": p.message, "fix": p.fix, "line": p.line})
     for text in guard_problems if exists and not guard_ok else []:
-        problems.append({"rule": "commit-guard", "message": text, "fix": f"tirith guard install {folder}",
+        problems.append({"rule": "commit-guard", "message": text, "fix": guardwrap_mod.fix_command(folder, text),
                          "line": 1})
     pipelines = []
     for pipe in (loaded.pipelines if exists else []):

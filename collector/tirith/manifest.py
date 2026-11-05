@@ -397,8 +397,13 @@ def _coverage_problems(manifest: Manifest, need_deploy: bool = True) -> list[Pro
                     "add to one pipeline: " + "; ".join(fixes))]
 
 
+def guardwrap_fix(repo, text: str) -> str:
+    from tirith.guardwrap import fix_command
+    return fix_command(repo, text)
+
+
 def _guard_problems(manifest: Manifest, folder: str | Path, words: list[str]) -> list[Problem]:
     repo = Path(folder)
     problems = verify_guard(repo, words)
     return [Problem(str(manifest.path), 1, "commit-guard", text,
-                    f"tirith guard install {repo}") for text in problems]
+                    guardwrap_fix(repo, text)) for text in problems]

@@ -56,6 +56,13 @@ def verify_guard(repo: Path | None, words: list[str]) -> list[str]:
         return [f"guard check failed: {exc}"]
 
 
+def fix_command(target, problem: str) -> str:
+    """The command that fixes one guard problem: ``reinstall`` for an older guard (``install`` leaves an
+    existing guard hook as it is), else ``install``."""
+    action = "reinstall" if "differs from the expected guard" in problem else "install"
+    return f"tirith guard {action} {target}"
+
+
 def install_guard(repo: Path, words: list[str], chain: bool = False) -> list[str]:
     """Install missing hooks via the guard module (``chain``: keep the repo's own hooks as ``.local``);
     returns problems left."""
