@@ -492,6 +492,32 @@ def state_rows(home: Path) -> list[dict]:
     return requests(home)[-STATE_ROWS:]
 
 
+OWNER_REQUEST_KINDS = ("finish", "ask", "chat", "plan-new", "plan-edit", "plan-refresh")
+
+
+def owner_requests(rows: list[dict]) -> list[dict]:
+    """The owner's own requests (not Tirith's jobs), each tied to a plan item or to an answer.
+
+    ``{id, at, kind, project, text, status, link}``; ``link`` is ``{type: "plan", step, lanes}`` when the request
+    is about a plan step or a lane took it, ``{type: "answer", by, at}`` when it got an answer, else None
+    (the request is still unlinked). ``status`` is open, answered or done, as in ``state.inbox``."""
+    out = []
+    for req in rows:
+        if req.get("kind") not in OWNER_REQUEST_KINDS or req.get("from", "owner") != "owner":
+            continue
+        step, lanes = str(req.get("step") or ""), list(req.get("lanes") or [])
+        answers = req.get("answers") or []
+        if step and step != PLAN_STEP or req["kind"] in ("plan-new", "plan-edit") or lanes:
+            link = {"type": "plan", "step": step, "lanes": lanes}
+        elif answers:
+            link = {"type": "answer", "by": answers[-1]["by"], "at": answers[-1]["at"]}
+        else:
+            link = None
+        out.append({"id": req["id"], "at": req.get("at"), "kind": req["kind"], "project": req.get("project", ""),
+                    "text": req.get("text", ""), "status": req["status"], "link": link})
+    return out
+
+
 def link_lanes(rows: list[dict], agents: list[dict]) -> None:
     """Set ``lanes`` on each request: the lane ids named by its answers, then the agents whose
     ``request_id`` is the request."""
