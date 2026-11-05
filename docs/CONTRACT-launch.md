@@ -195,7 +195,10 @@ lane's review before it dies when it can: `killed by SIGTERM` (also SIGHUP, SIGI
 exception; the public message then reads "the review was interrupted (<cause>); run it again" (SIGKILL leaves none). When it is run again and its worktree is gone, the
 lane file is settled instead of staying `running`: `merged` when the claim check finds the lane's work on main,
 else `merge-failed` ("the review stopped before it finished and the worktree is gone: <reason>"), so the plan item
-is reopened like for any failed review. A review's tests hold one of the stage slots of `tirith run` (as many as the load limit allows) and wait
+is reopened like for any failed review. The load limit (`loadlimit.limit`) counts only the CPU used by Tirith's own processes (any process mentioning tirith and
+their descendants: lanes, CI stages, reviews), averaged over at least 2 s (`loadlimit.TIRITH_SAMPLE_S`; readings are kept
+so a long-running caller does not wait); other apps' CPU does not lower it, and the load average is only the fallback.
+A review's tests hold one of the stage slots of `tirith run` (as many as the load limit allows) and wait
 for one up to 3 h (`review.SLOT_WAIT_S`) instead of 10 min: full suites started together under load all slowed to a
 halt. The self-check settles such a review the same way without running it again
 (its tries may be used up already).

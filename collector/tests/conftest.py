@@ -265,6 +265,7 @@ def _calm_machine(monkeypatch: pytest.MonkeyPatch) -> None:
     from tirith import diskdiet, loadlimit
     monkeypatch.setattr(loadlimit, "load_average", lambda: 0.0)
     monkeypatch.setattr(loadlimit, "cpu_idle", lambda sample=0.0: 100.0)
+    monkeypatch.setattr(loadlimit, "tirith_idle", lambda sample=0.0, cpus=None: 100.0)
     monkeypatch.setattr(diskdiet, "free_bytes", lambda folder: 500 * 1024 ** 3)
 
 
