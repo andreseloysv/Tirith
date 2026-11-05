@@ -3,7 +3,7 @@
 turns MSP notifications into those lines and the session's replies back into MSP requests. No I/O here: the
 caller writes ``send`` lines to the host and feeds ``ui`` lines to its normal event handler.
 
-Flow: ``initialize`` -> ``session/start`` -> one ``turn/start`` per user message. The host asks permission with
+Flow: ``initialize`` -> ``initialized`` (client notification, no params, closes the handshake) -> ``session/start`` -> one ``turn/start`` per user message. The host asks permission with
 ``approval/request`` (a server request answered with an empty receipt); the decision is ``approval/decide``.
 ``interrupt()`` sends ``turn/interrupt`` (``commandId`` + ``sessionId``, optional ``turnId``/``retract``) and
 ``resume(session_id)`` sends ``session/resume`` (``commandId`` + ``sessionId``) instead of ``session/start``; both
@@ -153,6 +153,7 @@ class Msp:
             out.ui.append(_text(f"Muse error: {v['error'].get('message') or 'request failed'}"))
             return
         if rid == self.init_id and rid:
+            out.send.append(_frame({"jsonrpc": "2.0", "method": "initialized"}))  # the host refuses requests before it
             if self.resume_id:
                 self.start_id, line = self._request("session/resume", {"commandId": "tirith-resume",
                                                                        "sessionId": self.resume_id})

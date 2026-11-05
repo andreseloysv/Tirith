@@ -23,7 +23,9 @@ def rpc(**kw) -> str:
 def opened(m: mspchat_mod.Msp) -> None:
     hello = json.loads(m.hello()[0])
     assert hello["method"] == "initialize" and hello["params"]["clientInfo"]["name"] == "tirith"
-    start = json.loads(m.incoming(rpc(id=hello["id"], result={})).send[0])
+    sent = [json.loads(x) for x in m.incoming(rpc(id=hello["id"], result={})).send]
+    assert sent[0] == {"jsonrpc": "2.0", "method": "initialized"}  # the notification muse serve requires
+    start = sent[1]
     assert start["method"] == "session/start"
     assert m.incoming(rpc(id=start["id"], result={"session": {"sessionId": "s-1"}})).send == []
 
@@ -32,7 +34,7 @@ def test_queued_message_becomes_a_turn_after_the_handshake() -> None:
     m = mspchat_mod.Msp("minimal")
     assert m.user("hi") == []
     hello = json.loads(m.hello()[0])
-    start = json.loads(m.incoming(rpc(id=hello["id"], result={})).send[0])
+    start = json.loads(m.incoming(rpc(id=hello["id"], result={})).send[1])
     turn = json.loads(m.incoming(rpc(id=start["id"], result={"session": {"sessionId": "s-9"}})).send[0])
     assert turn["method"] == "turn/start" and turn["params"]["sessionId"] == "s-9"
     assert turn["params"]["reasoningEffort"] == "minimal"
@@ -140,7 +142,7 @@ def test_interrupt_and_resume_use_the_schema_params() -> None:
     assert m.interrupt() is None
     m.resume("s-old")
     hello = json.loads(m.hello()[0])
-    res = json.loads(m.incoming(rpc(id=hello["id"], result={})).send[0])
+    res = json.loads(m.incoming(rpc(id=hello["id"], result={})).send[1])
     assert res["method"] == "session/resume"
     assert set(res["params"]) == {"commandId", "sessionId"} and res["params"]["sessionId"] == "s-old"
     m.incoming(rpc(id=res["id"], result={"session": {"sessionId": "s-old"}}))
@@ -158,7 +160,7 @@ def test_resume_falls_back_to_a_new_session_when_refused() -> None:
     m = mspchat_mod.Msp()
     m.resume("old")
     hello = json.loads(m.hello()[0])
-    res = json.loads(m.incoming(rpc(id=hello["id"], result={})).send[0])
+    res = json.loads(m.incoming(rpc(id=hello["id"], result={})).send[1])
     out = m.incoming(rpc(id=res["id"], error={"code": 1, "message": "gone"}))
     start = json.loads(out.send[0])
     assert start["method"] == "session/start" and out.ui == []
@@ -199,3 +201,15 @@ def test_session_resumes_against_the_fake_host(home: Path) -> None:
         assert sess.views()[-1]["answer"] == "echo: hello" and sess.session_id == "ses-fake"
     finally:
         sess.terminate()
+
+
+def test_fake_host_refuses_requests_before_initialized() -> None:
+    proc = subprocess.Popen([sys.executable, HOST], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+    try:
+        proc.stdin.write(rpc(id=1, method="initialize", params={}) + "\n" + rpc(id=2, method="session/start", params={}) + "\n")
+        proc.stdin.flush()
+        proc.stdout.readline()
+        err = json.loads(proc.stdout.readline())
+        assert err["id"] == 2 and err["error"]["message"] == "Not initialized"
+    finally:
+        proc.kill()
