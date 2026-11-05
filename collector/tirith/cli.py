@@ -1841,6 +1841,11 @@ def _cmd_digest(args) -> int:
         for text in added:
             print(f"added to the plan: {text}")
         return 0
+    if args.digest_command == "away":
+        repo = plangate_mod.repo_of(home, args.project)
+        data = digest_mod.while_away(home, args.project, args.since, repo)
+        print(json.dumps(data, indent=2) if args.json else digest_mod.render_away(data))
+        return 0
     data = digest_mod.build(home, args.project)
     if args.json:
         print(json.dumps(data, indent=2))
@@ -3052,6 +3057,11 @@ def build_parser() -> argparse.ArgumentParser:
     dg_fb.add_argument("--step", default=None, help="step number (default: the last step with open items)")
     dg_fb.add_argument("--text", required=True, help="the opinion; one plan item per line")
     dg_fb.set_defaults(func=_cmd_digest, digest_command="feedback", json=False)
+    dg_away = digest_sub.add_parser("away", parents=[common], help="what came in, failed and is next since a time")
+    dg_away.add_argument("--project", required=True)
+    dg_away.add_argument("--since", required=True, help="ISO time the owner left, e.g. 2026-11-01T00:00:00Z")
+    dg_away.add_argument("--json", action="store_true")
+    dg_away.set_defaults(func=_cmd_digest, digest_command="away")
 
     plan = sub.add_parser("plan", parents=[common],
                           help="the plan is the only way to start and finish an agent: add items, report outcomes")

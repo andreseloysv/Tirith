@@ -719,3 +719,7 @@ The page ends with the opinion button ("Give your opinion": the `tirith://inbox?
 link, plus the line to copy). `tirith digest feedback --project P [--step N] --text "<opinion>"` turns each
 non-empty line of the opinion (bullets stripped) into an open plan item through `tirith plan add`'s writer;
 without `--step` the items go to the last real step that still has open items. An empty opinion exits 3.
+
+## While you were away
+
+`tirith digest away --project P --since <iso> [--json]` prints what came in (merged lanes), what failed (other merge-queue results) and what is next (open items of the first step with any), since the given time. Static text, no server.
