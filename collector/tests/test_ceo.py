@@ -382,3 +382,14 @@ def test_every_review_names_the_biggest_bottleneck() -> None:
     assert ceo.parse_result(json.dumps({**RESULT, "bottleneck": neck}))["bottleneck"] == neck
     data = ceo.parse_result(json.dumps({k: v for k, v in RESULT.items() if k != "bottleneck"}))  # it says so
     assert data["bottleneck"] is None and "No bottleneck named" in data["report"][-1]
+
+
+def test_the_owner_can_change_a_decision_on_a_closed_proposal(home: Path, monkeypatch) -> None:
+    monkeypatch.delenv("TIRITH_LANE", raising=False)
+    ceo.deliver(home, RESULT, "ceo-1", "tirith", local(9), add_wait=Waits())
+    assert ceo.owner_decides(home, "p-1", "decline")["status"] == "rejected"
+    assert ceo.owner_decides(home, "p-1", "approve", "CPU is idle")["status"] == "approved"
+    assert ceo.decisions(home)["p-1"]["status"] == "approved"  # the last row of an id wins
+    monkeypatch.setenv("TIRITH_LANE", "lane-a")
+    with pytest.raises(ValueError, match="only the owner"):
+        ceo.owner_decides(home, "p-1", "decline")
