@@ -106,6 +106,8 @@ def test_the_card_says_all_done_when_nothing_is_left_for_the_agents() -> None:
     assert st["plan"] == {"done": 9, "total": 19}
     held = {**closed, "autopilot": {**closed["autopilot"], "skipped": [{"project": "tirith", "step": "7", "why": "load"}]}}
     assert statuscard.build(held, NOW, {})["level"] == "warn"  # held only for now: still work to do
+    canary = {**closed, "autopilot": {**closed["autopilot"], "skipped": [{"project": "canary", "step": "1", "why": "review"}]}}
+    assert statuscard.build(canary, NOW, {})["level"] == "done"  # the hourly self-test does not reopen the plan
     off = {**closed, "autopilot": {**closed["autopilot"], "enabled": False}}
     assert statuscard.build(off, NOW, {})["level"] == "warn"  # autopilot off: nothing launches by itself
     assert statuscard.build(closed, NOW, {}, lasting=["disk"])["level"] == "warn"
