@@ -21,6 +21,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
+from tirith import reaper as reaper_mod
 from tirith import timeouts as timeouts_mod
 from tirith import asks as asks_mod
 from tirith import inbox as inbox_mod
@@ -97,6 +98,7 @@ def cleanup(home: Path, config: Config, now: datetime) -> bool:
         if _git(workspace, "status", "--porcelain").stdout.strip():
             changed |= _note(home, lane, "dirty", now, message="the worktree has uncommitted changes; left in place")
             continue
+        reaper_mod.reap_lane_leftovers(workspace)
         done = _remove_worktree(repo, str(workspace))
         if done.returncode != 0:
             changed |= _note(home, lane, "blocked", now, message=(done.stderr or done.stdout).strip()[:300])

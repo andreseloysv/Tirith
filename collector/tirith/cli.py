@@ -22,6 +22,7 @@ import time
 from datetime import date, datetime, timezone
 from pathlib import Path
 
+from tirith import reaper as reaper_mod
 from tirith import timeouts as timeouts_mod
 from tirith.collector import (
     Collector, collect_tree, git_head, heuristic_architecture, lane_shortstat, lane_status,
@@ -213,6 +214,7 @@ def end_lane(home: Path, lane_id: str, result: str, report: str | None = None) -
         lane["report"] = bound_text(report, REPORT_MAX)
     repeats_mod.settle(home, lane)
     write_lane(home, lane)
+    reaper_mod.reap_lane_leftovers(lane.get("workspace"))  # whatever the lane left running dies with it
     if lane.get("task_id") and (result != "done" or (lane.get("outcome") or {}).get("status") != "done"):
         try:
             coordination.update(home, lane, phase="ready", release=True)
@@ -1036,6 +1038,8 @@ def _cmd_run(args) -> int:
             lane=lane, run_id=args.run,
             worktree=tags.get("worktree"), branch=tags.get("branch"), agent=args.agent,
             log=args.log, new_run=args.new_run, reuse=True)
+    if args.stage == "test" and not getattr(args, "selected", False):
+        reaper_mod.reap_lane_leftovers(tags.get("worktree") or cwd)  # a full suite leaves nothing behind
     return code
 
 
