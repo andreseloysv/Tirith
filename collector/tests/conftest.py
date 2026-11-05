@@ -74,8 +74,21 @@ def make_repo(path: Path) -> Path:
     return path
 
 
+def inside_temp(path: Path) -> bool:
+    """True when ``path`` really (symlinks resolved) lies in a temp folder: only there may a test clear the
+    guard's protection flag. A real repository's hooks (a worktree's common dir, a symlink) never qualify."""
+    import tempfile
+    try:
+        real = Path(os.path.realpath(path))
+        roots = {Path(os.path.realpath(tempfile.gettempdir())), Path(os.path.realpath("/tmp")),
+                 Path(os.path.realpath("/var/folders"))}
+    except OSError:
+        return False
+    return any(r == real or r in real.parents for r in roots)
+
+
 def make_hooks_mutable(repo: Path) -> None:
-    """Clear immutable flags the guard sets, so tmp cleanup can proceed."""
+    """Clear immutable flags the guard sets, so tmp cleanup can proceed (temp folders only)."""
     hooks = Path(repo) / ".git" / "hooks"  # a plain repo: no git process needed
     if not (Path(repo) / ".git").is_dir():
         try:
@@ -85,7 +98,7 @@ def make_hooks_mutable(repo: Path) -> None:
         except (OSError, subprocess.SubprocessError):
             return
         hooks = Path(out) / "hooks"
-    if not hooks.is_dir():
+    if not hooks.is_dir() or not inside_temp(hooks):
         return
     for hook in hooks.iterdir():
         try:
@@ -124,7 +137,7 @@ def _unlock_tree(root: Path, budget_s: float | None = None) -> None:
         if deadline is not None and time.monotonic() > deadline:
             return
         try:
-            if not path.is_symlink() and tirith_guard._is_locked(path):
+            if not path.is_symlink() and inside_temp(path) and tirith_guard._is_locked(path):
                 tirith_guard._unlock(path)
         except OSError:
             pass
