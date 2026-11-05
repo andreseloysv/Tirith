@@ -40,6 +40,7 @@ from tirith import review as review_mod
 from tirith import selfreload as selfreload_mod
 from tirith import stable as stable_mod
 from tirith import testmap as testmap_mod
+from tirith import reaper as reaper_mod
 from tirith import timeouts as timeouts_mod
 from tirith.home import Config, now_iso
 from tirith.launch import stage_all, worktree_path
@@ -834,6 +835,7 @@ def _close_merged(home: Path, repo: Path, lane: dict, entry: dict, extra: dict, 
     except plangate_mod.PlanGateError as error:
         extra["plan_error"] = str(error)
     workspace = Path(str(lane["workspace"]))
+    reaper_mod.reap_lane_leftovers(workspace)
     _remove_worktree(repo, "--force", str(workspace))
     _git(repo, "branch", "-D", str(extra["branch"]))
     if files is None:

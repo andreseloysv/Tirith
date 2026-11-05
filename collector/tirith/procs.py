@@ -104,3 +104,38 @@ def snapshot() -> list[Proc]:
         if found:
             return found
     return []
+
+
+class _VnodePath(ctypes.Structure):
+    _fields_ = [("info", ctypes.c_char * 152), ("path", ctypes.c_char * 1024)]
+
+
+class _VnodePathInfo(ctypes.Structure):
+    _fields_ = [("cdir", _VnodePath), ("rdir", _VnodePath)]
+
+
+def locations(pid: int) -> tuple[str, str]:
+    """``(exe, cwd)`` of a process; ``""`` for what cannot be read (gone, or owned by someone else)."""
+    exe = cwd = ""
+    if sys.platform == "darwin":
+        try:
+            lib = ctypes.CDLL("/usr/lib/libproc.dylib", use_errno=True)
+            buf = ctypes.create_string_buffer(4096)
+            if lib.proc_pidpath(pid, buf, ctypes.sizeof(buf)) > 0:
+                exe = buf.value.decode("utf-8", "replace")
+            info = _VnodePathInfo()
+            if lib.proc_pidinfo(pid, 9, 0, ctypes.byref(info), ctypes.sizeof(info)) == ctypes.sizeof(info):
+                cwd = info.cdir.path.decode("utf-8", "replace")
+        except (OSError, AttributeError):
+            pass
+        return exe, cwd
+    for name, kind in (("exe", "exe"), ("cwd", "cwd")):
+        try:
+            value = os.readlink(f"/proc/{pid}/{name}")
+        except OSError:
+            value = ""
+        if kind == "exe":
+            exe = value
+        else:
+            cwd = value
+    return exe, cwd

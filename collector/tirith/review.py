@@ -13,6 +13,7 @@ import re
 import subprocess
 from pathlib import Path
 
+from tirith import reaper as reaper_mod
 from tirith import timeouts as timeouts_mod
 from tirith import ceo as ceo_mod
 from tirith import claimcheck as claimcheck_mod
@@ -181,6 +182,8 @@ def run_tests(home: Path, project: str, pipeline: str, stage: str, workspace: Pa
             home, project, pipeline, stage, command, workspace, lane=lane_id or tags.get("lane"),
             worktree=tags.get("worktree") or str(workspace), branch=tags.get("branch"),
             echo=False, env=env, new_run=True, run_id=run_id, reuse=True)
+    if full:
+        reaper_mod.reap_lane_leftovers(tags.get("worktree") or workspace)  # a full suite leaves nothing behind
     if code == timeouts_mod.EXIT_TIMED_OUT:
         return False, f"{DID_NOT_FINISH} {limit:g} s\n{output}".strip()
     return code == 0, output
