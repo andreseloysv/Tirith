@@ -41,6 +41,12 @@ is enqueued (`tirith merge request`, or by the dispatcher). Tirith merges (`coll
    no suite, no merge, `review.status` `no-work`, message "already in the queued branch of <lane>", worktree and
    branch removed. Two branches on the same commit keep the one queued first.
 
+8. Cancelling the merge in progress. While a single lane's suite runs, the queue asks before every stage and once more
+   before moving main whether another queued lane's branch now holds all of the running lane's commits
+   (`mergeq.superseded_message`, the check of step 7 repeated). If so the merge is cancelled: the remaining stages
+   do not run, main is untouched, and the lane ends like step 7 (`closed`, `review.status` `no-work`, "already in
+   the queued branch of <lane>"). A lane queued while the merge runs can thus make it unnecessary.
+
 Send-back details. The branch used to continue a returned lane is `mergeq.branch_of` (the branch recorded on the lane or
 checked out in its worktree), not `lane/<id>`, so a continuation lane that reuses another lane's worktree can be returned.
 A lane with no registered agent (`agent` null) is returned to the configured worker; one whose agent is not in

@@ -1013,3 +1013,39 @@ def test_merge_priority_never_overtakes_the_running_merge(env, home: Path) -> No
     mergeq_mod.enqueue(home, "plain1")
     assert mergeq_mod._claim(home)["lane"] == "plain1"
     assert mergeq_mod.enqueue(home, "fix") == 2
+
+
+def test_merge_cancel_a_lane_queued_meanwhile_that_holds_the_running_one_cancels_it(env, home: Path, monkeypatch) -> None:
+    repo, _ = env
+    base = make_lane(home, repo, "base", {"a.txt": "a"})
+    git(base, "add", "-A")
+    git(base, "commit", "-q", "-m", "base work")
+    top = launch_mod.create_worktree(repo, "top", base="lane/base")
+    register_lane(home, lane_id="top", project="demo", hero_class="glasswright", feature="Top",
+                  workspace=str(top), log=None, pid=None, brief=None, step="2")
+    (top / "b.txt").write_text("b", encoding="utf-8")
+    end_lane(home, "top", "done", "more")
+    mergeq_mod.enqueue(home, "base")
+    real = mergeq_mod.review_mod.run_tests
+    calls = []
+
+    def run_tests(*args, **kwargs):
+        calls.append(args[3])
+        if len(calls) == 1:  # while base's build runs, the continuation is queued
+            mergeq_mod.enqueue(home, "top")
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(mergeq_mod.review_mod, "run_tests", run_tests)
+    row = mergeq_mod.process_next(home, load_config(home), relaunch=Sender())
+    assert row["lane"] == "base" and row["result"] == "closed"
+    assert "already in the queued branch of top" in row["message"] and calls == ["build"]
+    assert not (repo / "a.txt").exists()  # main untouched by the cancelled merge
+    assert read_json(lane_path(home, "base"), None)["review"]["status"] == "no-work"
+    assert [i["lane"] for i in mergeq_mod.view(home, "demo")["items"]] == ["top"]
+
+
+def test_merge_cancel_without_a_superseding_lane_merges_as_before(env, home: Path) -> None:
+    repo, _ = env
+    make_lane(home, repo, "solo", {"s.txt": "s"})
+    mergeq_mod.enqueue(home, "solo")
+    assert mergeq_mod.process_next(home, load_config(home), relaunch=Sender())["result"] == "merged"
