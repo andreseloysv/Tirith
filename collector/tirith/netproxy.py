@@ -23,6 +23,7 @@ import ctypes
 import fcntl
 import json
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -155,6 +156,25 @@ def argv(home: Path, command: list[str], env: dict) -> list[str]:
     if env.get(SANDBOXED_ENV) != "1" or os.environ.get(SANDBOXED_ENV) == "1" or not available():
         return command
     return ["sandbox-exec", "-f", str(profile(home)), *command]
+
+
+_SWIFT_LINE = re.compile(r"(?<![\w./-])(swift\s+(?:build|test|run|package))(?=\s|$)(?![^;&|]*--disable-sandbox)")
+_SWIFT_SUB = ("build", "test", "run", "package")
+
+
+def swiftpm(command, env: dict | None = None):
+    """``command`` with ``--disable-sandbox`` after ``swift build|test|run|package`` when it runs inside the lane
+    sandbox: SwiftPM wraps manifest evaluation in its own ``sandbox-exec``, which macOS refuses to nest
+    ("sandbox_apply: Operation not permitted" on Package.swift). The lane is confined by ours already. Only
+    those four subcommands change; any other command is returned as it came."""
+    if (env or {}).get(SANDBOXED_ENV) != "1" and os.environ.get(SANDBOXED_ENV) != "1":
+        return command
+    if isinstance(command, str):
+        return _SWIFT_LINE.sub(r"\1 --disable-sandbox", command)
+    words = [str(w) for w in command]
+    if len(words) >= 2 and Path(words[0]).name == "swift" and words[1] in _SWIFT_SUB and "--disable-sandbox" not in words:
+        return [*command[:2], "--disable-sandbox", *command[2:]]
+    return command
 
 
 # -- the proxy -------------------------------------------------------------------------------------
