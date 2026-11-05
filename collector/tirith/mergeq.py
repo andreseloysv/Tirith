@@ -475,13 +475,26 @@ def _drop_tmp(repo: Path, tmp: Path) -> None:
     _git(repo, "worktree", "prune")
 
 
-def _run_stages(home: Path, project: str, stages: list, tmp: Path, lane_id: str
-                ) -> tuple[str | None, str, str | None, list[str]]:
+class Cancelled(Exception):
+    """The merge in progress became unnecessary (another queued lane holds all of its commits)."""
+
+
+def superseded_message(home: Path, repo: Path, lane_id: str, branch: str) -> str:
+    """Why the running merge of ``branch`` is no longer needed (empty while it is): another queued lane's branch
+    now contains every commit of it. Checked between stages, so a lane queued meanwhile cancels the merge."""
+    inside = absorbed_by(home, repo, lane_id, branch)
+    return f"nothing to merge: {branch} is already in the queued branch of {inside}" if inside else ""
+
+
+def _run_stages(home: Path, project: str, stages: list, tmp: Path, lane_id: str,
+                stop: Callable[[], str] | None = None) -> tuple[str | None, str, str | None, list[str]]:
     """Run the stages: ``(failed "pipeline/stage" | None, output of the failure, passed summary, flaky test ids)``.
 
     A red stage first repeats its failed tests alone (:func:`rerun_failed`): when they all pass the stage goes on."""
     passed, flaky = None, []
     for pipeline, stage in stages:
+        if stop and (why := stop()):
+            raise Cancelled(why)
         suite = manifest_mod.stage_kind(stage) == "test" and stage.name != RUST_STAGE  # one full suite at a time
         ok, output = review_mod.run_tests(home, project, pipeline, stage.name, tmp, stage.run, lane_id, full=suite)
         if not ok and output.startswith(review_mod.DID_NOT_FINISH):  # out of time: nothing to repeat
@@ -534,11 +547,17 @@ def _try(home: Path, repo: Path, lane: dict, entry: dict) -> tuple[str, str, dic
         if not stages:
             return WAITING, "the manifest has no build or test stage with a run command", {}
         stages, skipped = select_stages(stages, [needs_of(changed_paths(repo, base, branch))])
-        broke, output, passed, flaky = _run_stages(home, project, stages, tmp, lane_id)
+        try:
+            broke, output, passed, flaky = _run_stages(home, project, stages, tmp, lane_id,
+                                                       lambda: superseded_message(home, repo, lane_id, branch))
+        except Cancelled as cancelled:  # another lane made this merge unnecessary: stop the suite, leave main alone
+            return plangate_mod.WORK_NONE, str(cancelled), {"branch": branch}
         if broke and output.startswith(review_mod.DID_NOT_FINISH):  # out of time, not red: never sent back
             return OUT_OF_TIME, f"stage {broke} ran out of time on {branch}: {_tail(output)}", {}
         if broke:
             return RED, f"stage {broke} failed on {branch} merged with {main_branch}:\n{_tail(output)}", {"main": main_branch}
+        if why := superseded_message(home, repo, lane_id, branch):  # last look before main moves
+            return plangate_mod.WORK_NONE, why, {"branch": branch}
         tested = _git(tmp, "rev-parse", "HEAD").stdout.strip()
         tested, refused = _land(home, repo, tmp, project, base, tested, main_branch, feature, branch)
         if refused:
