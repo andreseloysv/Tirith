@@ -796,3 +796,25 @@ def test_a_step_the_owner_stopped_is_held_for_a_while_not_forever(home, repo) ->
     assert "the owner stopped lane stopped-1" in _held(pilot)["demo|1"]
     pilot.cycle(autopilot_mod.OWNER_STOP_HOLD_S)
     assert sorted(r["step"] for r in _proposals(home)) == ["1", "2", "3"]
+
+
+def test_waited_item_not_reproposed_while_another_item_of_the_step_changes(home, repo) -> None:
+    _two_items(repo)
+    pilot = Pilot(home, repo)
+    pilot.cycle()
+    pilot.cycle()
+    req = next(r for r in _open(home) if r["step"] == "1")
+    inbox_mod.add_answer(home, req["id"], "wait: the load is 34", at=_iso(pilot.now))
+    inbox_mod.mark_done(home, req["id"])
+    path = repo / "docs" / "TODO.md"
+    path.write_text(path.read_text().replace("Build the other thing.", "Build the other thing. (reabierto: it broke)"))
+    pilot.cycle()
+    pilot.cycle()
+    new = [r for r in _open(home) if r["step"] == "1"]
+    assert len(new) == 1 and new[0]["id"] != req["id"]
+    assert "1 item needs a decision" in new[0]["text"]
+    assert "Build the other thing." in new[0]["text"] and "Build the first thing." not in new[0]["text"]
+    # the wait ends after ANSWER_EXPIRES_S: the item is listed again
+    pilot.cycle(autopilot_mod.ANSWER_EXPIRES_S + 60)
+    pilot.cycle()
+    assert any("Build the first thing." in r["text"] for r in _open(home) if r["step"] == "1")

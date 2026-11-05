@@ -127,6 +127,90 @@ def _addresses(domain: str, now: float) -> set[str]:
     return ips
 
 
+# domains agents and their tools commonly reach: an address with no reverse name is matched against these
+KNOWN_DOMAINS = ("api.anthropic.com", "api.meta.ai", "statsig.anthropic.com", "api.statsig.com", "sentry.io", "api.openai.com",
+                 "chatgpt.com", "generativelanguage.googleapis.com", "github.com", "api.github.com",
+                 "codeload.github.com", "objects.githubusercontent.com", "raw.githubusercontent.com", "pypi.org",
+                 "files.pythonhosted.org", "registry.npmjs.org", "registry.yarnpkg.com", "crates.io",
+                 "static.crates.io", "agentsmessenger.com", "http-intake.logs.datadoghq.com", "api.segment.io")
+
+
+CERT_FILE = "netwatch-certs.json"
+_certs: dict[str, dict] = {}
+_cert_pending: set[str] = set()
+
+
+def read_cert(address: str, port: int = 443, run: Callable[[list[str]], str] | None = None) -> dict:
+    """The names the server at ``address`` serves, from its TLS certificate (a handshake without a name, like any
+    client's first hello; nothing is sent): ``{"domain": "logs.us5.datadoghq.com", "org": "Datadog, Inc."}`` or
+    ``{}``. A wildcard name loses its ``*.``; the first DNS name of the certificate wins over its subject."""
+    def default(argv: list[str]) -> str:
+        try:
+            hello = subprocess.run(argv[:4], input="", capture_output=True, text=True, timeout=8)
+            return subprocess.run(argv[4:], input=hello.stdout, capture_output=True, text=True, timeout=8).stdout
+        except (OSError, subprocess.TimeoutExpired):
+            return ""
+    text = (run or default)(["openssl", "s_client", "-connect", f"{address}:{port}",
+                             "openssl", "x509", "-noout", "-subject", "-ext", "subjectAltName"])
+    names = [n.strip()[4:] for n in text.replace(",", "\n").splitlines() if n.strip().startswith("DNS:")]
+    subject = next((l for l in text.splitlines() if l.startswith("subject=")), "")
+    cn = next((part.split("=", 1)[1].strip() for part in subject[8:].split(",") if part.strip().startswith("CN")), "")
+    org = next((part.split("=", 1)[1].strip() for part in subject[8:].split(",") if part.strip().startswith("O")), "")
+    if not org and " O=" in subject:
+        org = subject.split(" O=", 1)[1].split(",")[0].strip()
+    domain = (names[0] if names else cn).lstrip("*.").strip()
+    return {"domain": domain, **({"org": org} if org else {})} if "." in domain else {}
+
+
+def cert_domain(home: Path | None, address: str, port: int = 443, wait_s: float = 0.0) -> dict:
+    """``read_cert`` once per address, kept in ``<home>/netwatch-certs.json``; looked up in the background, so a
+    first call may return ``{}`` and a later one the names."""
+    if not _certs and home is not None:
+        _certs.update(read_json(Path(home) / CERT_FILE, {}) or {})
+    if address in _certs:
+        return _certs[address]
+    if address not in _cert_pending:
+        _cert_pending.add(address)
+
+        def look() -> None:
+            found = read_cert(address, port)
+            _certs[address] = found
+            _cert_pending.discard(address)
+            if home is not None:
+                write_json_atomic(Path(home) / CERT_FILE, dict(list(_certs.items())[-SEEN_MAX:]))
+        future = _pool.submit(look)
+        if wait_s:
+            wait([future], timeout=wait_s)
+    return _certs.get(address, {})
+
+
+def known_domain(address: str, resolve: Callable[[str], set[str]] | None = None) -> str | None:
+    """The domain of ``KNOWN_DOMAINS`` that resolves to ``address``, else None."""
+    resolve = resolve or (lambda d: _addresses(d, time.time()))
+    return next((d for d in KNOWN_DOMAINS if address in resolve(d)), None)
+
+
+def annotate(rows: list[dict], resolve: Callable[[str], set[str]] | None = None, home: Path | None = None,
+             certs: Callable[[str], dict] | None = None) -> list[dict]:
+    """Connection rows whose domain was not known when written get it now, for the page: a known domain that
+    resolves to the address, else the server's certificate (looked up in the background, cached)."""
+    certs = certs or (lambda a: cert_domain(home, a))
+    for row in rows:
+        if row.get("tool") != "connection" or (row.get("domain") and row.get("org") is not None):
+            continue
+        address = row.get("address") or str((row.get("external") or [""])[0]).split(" ", 1)[-1].rsplit(":", 1)[0]
+        if not address:
+            continue
+        found = row.get("domain") or known_domain(address, resolve)
+        cert = {} if found and row.get("domain") else certs(address)
+        found = found or cert.get("domain")
+        if found:
+            row["domain"], row["address"] = found, address
+        if cert.get("org"):
+            row["org"] = cert["org"]
+    return rows
+
+
 def lane_domains(home: Path, lane: dict) -> list[str]:
     """The domains a lane's own calls named (``external`` of its access rows), newest first."""
     from tirith.store import read_jsonl
@@ -145,10 +229,12 @@ def lane_domains(home: Path, lane: dict) -> list[str]:
 def domain_of(address: str, reverse: str, domains: list[str], resolve: Callable[[str], set[str]]) -> str | None:
     """The domain visited at ``address``: one the lane named that resolves to it, else the base of the reverse
     name, else None."""
-    for domain in domains:
+    for domain in [*domains, *KNOWN_DOMAINS]:
         if address in resolve(domain):
             return domain
-    return base_domain(reverse) if reverse != address else None
+    if reverse != address and base_domain(reverse):
+        return base_domain(reverse)
+    return None
 
 
 def sample(home: Path, lanes: list[dict], now: float | None = None, run: Callable[[list[str]], str] = _run,
@@ -184,14 +270,19 @@ def sample(home: Path, lanes: list[dict], now: float | None = None, run: Callabl
         reverse = name(c["host"])
         domain = domain_of(c["host"], reverse, lane_domains(home, lane),
                            resolve or (lambda d: _addresses(d, now)))
+        cert = {} if resolve is not None else cert_domain(home, c["host"], c["port"], wait_s=LOOKUP_BUDGET_S)
+        domain = domain or cert.get("domain")
         kind = PORTS.get(c["port"], "tcp")
+        runtime = c["pid"] in roots  # the agent's own program (its model API, telemetry), not what its work runs
         project = str(lane.get("project") or access_mod.LOOSE)
         where = domain or c["host"]
-        row = {"ts": now_iso(), "agent": lane.get("agent"), "lane": lane["id"],
+        program = "the agent" if runtime else c["program"]
+        row = {"ts": now_iso(), "agent": lane.get("agent"), "lane": lane["id"], "runtime": runtime,
                "plan": access_mod.plan_point(home, lane["id"]), "system": "network", "tool": "connection",
-               "action": f"{c['program']} connected to {where}:{c['port']}" + (f" ({c['host']})" if domain else ""),
+               "action": f"{program} connected to {where}:{c['port']}" + (f" ({c['host']})" if domain else ""),
                "external": [f"{kind} {where}:{c['port']}"],
-               "domain": domain, "address": c["host"], "reverse": reverse if reverse != c["host"] else None}
+               "domain": domain, "address": c["host"], "reverse": reverse if reverse != c["host"] else None,
+               **({"org": cert["org"]} if cert.get("org") else {})}
         append_jsonl(home / access_mod.ACCESS_DIR / f"{project}.ndjson", row)
         rows.append(row)
     if rows:

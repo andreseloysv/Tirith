@@ -76,10 +76,11 @@ def test_the_network_watch_records_a_lanes_new_connections_once(tmp_path) -> Non
     run = lambda argv: lsof if argv[0] == "lsof" else ps  # noqa: E731
     lanes = [{"id": "lane-a", "pid": 300, "project": "demo", "agent": "anthropic"}, {"id": "old", "pid": 1, "ended_at": "x"}]
     netwatch._last["at"] = 0.0
-    rows = netwatch.sample(tmp_path, lanes, now=1000.0, run=run, name=lambda h: "lb.github.com")
+    rows = netwatch.sample(tmp_path, lanes, now=1000.0, run=run, name=lambda h: "lb.github.com", resolve=lambda d: set())
     assert [r["external"] for r in rows] == [["https github.com:443"]]  # python3 under lane-a; Safari and loopback are not
     assert rows[0]["domain"] == "github.com" and rows[0]["address"] == "140.82.112.3" and rows[0]["reverse"] == "lb.github.com"
     assert rows[0]["tool"] == "connection" and rows[0]["system"] == "network" and "python3" in rows[0]["action"]
+    assert rows[0]["runtime"] is False  # python3 is a process the lane's work started, not the agent itself
     assert netwatch.sample(tmp_path, lanes, now=1005.0, run=run) == []  # not before EVERY_S
     assert netwatch.sample(tmp_path, lanes, now=1100.0, run=run, name=lambda h: "lb.github.com") == []  # seen once
     logged = [json.loads(l) for l in (tmp_path / "access" / "demo.ndjson").read_text().splitlines()]
@@ -98,3 +99,25 @@ def test_the_domain_a_lane_named_wins_over_the_reverse_name(tmp_path) -> None:
     assert netwatch.domain_of("1.2.3.4", "ec2-1-2-3-4.compute.amazonaws.com", [], resolve) == "amazonaws.com"
     assert netwatch.domain_of("1.2.3.4", "1.2.3.4", [], resolve) is None  # no name at all: the address stays
     assert netwatch.base_domain("news.bbc.co.uk") == "bbc.co.uk" and netwatch.base_domain("10.0.0.1") is None
+
+
+def test_a_known_domain_names_an_address_with_no_reverse_name() -> None:
+    from tirith import netwatch
+    resolve = lambda d: {"160.79.104.10"} if d == "api.anthropic.com" else set()  # noqa: E731
+    assert netwatch.domain_of("160.79.104.10", "160.79.104.10", [], resolve) == "api.anthropic.com"
+    rows = [{"tool": "connection", "external": ["https 160.79.104.10:443"]}, {"tool": "Bash"}]
+    netwatch.annotate(rows, resolve, certs=lambda a: {})
+    assert rows[0]["domain"] == "api.anthropic.com" and rows[0]["address"] == "160.79.104.10" and "domain" not in rows[1]
+
+
+def test_the_servers_certificate_names_an_unknown_address() -> None:
+    from tirith import netwatch
+    text = ("subject=C=US, ST=New York, L=New York, O=Datadog, Inc., CN=*.logs.us5.datadoghq.com\n"
+            "X509v3 Subject Alternative Name: \n    DNS:*.logs.us5.datadoghq.com, DNS:logs.us5.datadoghq.com\n")
+    assert netwatch.read_cert("34.149.66.165", run=lambda argv: text) == {"domain": "logs.us5.datadoghq.com", "org": "Datadog"}
+    text = "subject=CN=downloads.example.org\nX509v3 Subject Alternative Name: \n    DNS:downloads.example.org, DNS:x\n"
+    assert netwatch.read_cert("35.190.46.17", run=lambda argv: text) == {"domain": "downloads.example.org"}
+    assert netwatch.read_cert("10.0.0.1", run=lambda argv: "") == {}
+    rows = [{"tool": "connection", "external": ["https 35.190.46.17:443"]}]
+    netwatch.annotate(rows, resolve=lambda d: set(), certs=lambda a: {"domain": "downloads.example.org"})
+    assert rows[0]["domain"] == "downloads.example.org"
