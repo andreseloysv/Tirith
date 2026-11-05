@@ -66,7 +66,7 @@ def test_run_returns_output_and_records_the_duration(home: Path) -> None:
     assert len(read_json(home / "timeouts.json", {})["durations"]["git"]) == 1
 
 
-def test_run_stops_the_whole_group_and_says_how_to_raise_it(home: Path, tmp_path: Path) -> None:
+def test_run_stops_the_whole_group_and_says_how_to_raise_it(home: Path, tmp_path: Path, reap_children) -> None:
     pidfile = tmp_path / "child.pid"
     started = time.monotonic()
     done = timeouts_mod.run(["/bin/sh", "-c", f"sleep 60 & echo $! > {pidfile}; wait"], "npm", timeout=1)
@@ -74,6 +74,7 @@ def test_run_stops_the_whole_group_and_says_how_to_raise_it(home: Path, tmp_path
     assert done.timed_out and done.returncode == timeouts_mod.EXIT_TIMED_OUT
     assert "timed out after 1 s (class npm" in done.error and "tirith timeout set --class npm" in done.error
     child = int(pidfile.read_text())
+    reap_children(pid=child)
     time.sleep(0.3)
     assert not alive(child)  # the child of the shell went with it
     book = read_json(home / "timeouts.json", {})
@@ -81,12 +82,13 @@ def test_run_stops_the_whole_group_and_says_how_to_raise_it(home: Path, tmp_path
     assert "npm" not in book["durations"]  # a timeout says nothing about how long the class takes
 
 
-def test_run_kills_a_child_that_ignores_sigterm(home: Path, tmp_path: Path, monkeypatch) -> None:
+def test_run_kills_a_child_that_ignores_sigterm(home: Path, tmp_path: Path, monkeypatch, reap_children) -> None:
     pidfile = tmp_path / "stubborn.pid"
     script = f"trap '' TERM; sh -c 'trap \"\" TERM; echo $$ > {pidfile}; sleep 60' & wait"
     monkeypatch.setattr(timeouts_mod, "KILL_GRACE_S", 0.5)
     done = timeouts_mod.run(["/bin/sh", "-c", script], "generic", timeout=1)
     assert done.timed_out
+    reap_children(pid=int(pidfile.read_text()))
     time.sleep(0.3)
     assert not alive(int(pidfile.read_text()))
 
@@ -415,7 +417,8 @@ def test_load_scaled_agent_bash_timeout_under_load(home: Path, monkeypatch) -> N
 # -- a timeout stops the whole tree and cleans the locks --------------------------------------
 
 
-def test_timeout_kills_tree_including_children_that_left_the_group(home: Path, tmp_path: Path, monkeypatch) -> None:
+def test_timeout_kills_tree_including_children_that_left_the_group(home: Path, tmp_path: Path, monkeypatch,
+                                                                   reap_children) -> None:
     monkeypatch.setattr(timeouts_mod, "KILL_GRACE_S", 0.5)
     near, far = tmp_path / "near.pid", tmp_path / "far.pid"
     # `far` starts its own session (so its own process group) under a grandchild that ignores SIGTERM
@@ -424,20 +427,37 @@ def test_timeout_kills_tree_including_children_that_left_the_group(home: Path, t
               f"time.sleep(60)\"' & wait")
     done = timeouts_mod.run(["/bin/sh", "-c", script], "generic", timeout=2)
     assert done.timed_out and done.returncode == timeouts_mod.EXIT_TIMED_OUT
+    for pidfile in (near, far):
+        if pidfile.exists():
+            reap_children(pid=int(pidfile.read_text()))
     time.sleep(0.5)
     assert not alive(int(near.read_text())) and not alive(int(far.read_text()))
 
 
-def test_timeout_kills_tree_of_a_supervised_process_and_removes_its_lock(home: Path, tmp_path: Path) -> None:
+def test_timeout_kills_tree_of_a_supervised_process_and_removes_its_lock(home: Path, tmp_path: Path, reap_children) -> None:
     import subprocess
     repo = make_repo(tmp_path / "repo")
     pidfile = tmp_path / "child.pid"
     argv = ["/bin/sh", "-c", f"touch .git/index.lock; sleep 60 & echo $! > {pidfile}; wait"]
-    proc = subprocess.Popen(argv, cwd=repo, start_new_session=True)
+    proc = reap_children(subprocess.Popen(argv, cwd=repo, start_new_session=True))
     done = timeouts_mod.supervise(proc, "git-commit", timeout=1, argv=argv, cwd=repo)
     proc.wait(timeout=15)
     info = done()
     assert info["timed_out"]
+    reap_children(pid=int(pidfile.read_text()))
     time.sleep(0.3)
     assert not alive(int(pidfile.read_text()))
     assert not (repo / ".git" / "index.lock").exists()
+
+
+def test_reap_children_fixture_kills_a_group_that_outlives_its_test(reap_children) -> None:
+    import subprocess
+    from conftest import reap
+    proc = subprocess.Popen(["/bin/sh", "-c", "sleep 60 & echo $!; wait"], stdout=subprocess.PIPE, text=True,
+                            start_new_session=True)
+    grandchild = int(proc.stdout.readline())
+    assert alive(grandchild)
+    reap([proc])  # what the fixture does at teardown
+    time.sleep(0.3)
+    assert proc.poll() is not None and not alive(grandchild)
+    reap_children(proc)  # tracking a finished child is harmless

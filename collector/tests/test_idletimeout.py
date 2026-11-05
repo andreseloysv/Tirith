@@ -24,9 +24,24 @@ CHATTY = "import time\nfor i in range(12):\n    print(i, flush=True)\n    time.s
 CHATTY_LONG = CHATTY.replace("range(12)", "range(20)")
 
 
+_REAP = None  # the running test's reap_children tracker
+
+
+@pytest.fixture(autouse=True)
+def _reap_spawned(reap_children):
+    """Every process ``_spawn`` starts is reaped when its test ends."""
+    global _REAP
+    _REAP = reap_children
+    yield
+    _REAP = None
+
+
 def _spawn(code: str, cwd: Path) -> subprocess.Popen:
-    return subprocess.Popen([sys.executable, "-c", code], cwd=str(cwd), stdout=subprocess.DEVNULL,
+    proc = subprocess.Popen([sys.executable, "-c", code], cwd=str(cwd), stdout=subprocess.DEVNULL,
                             stderr=subprocess.DEVNULL, start_new_session=True)
+    if _REAP:
+        _REAP(proc)
+    return proc
 
 
 def test_steady_output_never_times_out_though_it_outlasts_the_idle_limit(home: Path, tmp_path: Path) -> None:
