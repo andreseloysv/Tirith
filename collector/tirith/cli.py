@@ -371,6 +371,14 @@ def _cmd_ceo(args) -> int:
         started = ceo_mod.run(home, load_config(home), datetime.now(timezone.utc), force=True)
         print("CEO review started" if started else "nothing to start")
         return 0
+    if args.ceo_command == "decide":
+        try:
+            row = ceo_mod.owner_decides(home, args.id, args.verdict, args.why or "")
+        except ValueError as err:
+            print(f"tirith ceo decide: {err}", file=sys.stderr)
+            return 3
+        print(f"{row['id']}: {row['status']} by the owner")
+        return 0
     print(json.dumps(ceo_mod.public(home, datetime.now(timezone.utc)), indent=2, ensure_ascii=False))
     return 0
 
@@ -2832,6 +2840,12 @@ def build_parser() -> argparse.ArgumentParser:
     ceo_sub = ceo.add_subparsers(dest="ceo_command", required=True)
     ceo_sub.add_parser("show", parents=[common], help="last review, report, directives, proposals").set_defaults(func=_cmd_ceo)
     ceo_sub.add_parser("run", parents=[common], help="start a review now (also when [ceo] is off)").set_defaults(func=_cmd_ceo)
+    ceo_dec = ceo_sub.add_parser("decide", parents=[common],
+                                 help="the owner changes a decision on a CEO proposal (approve or decline), even a closed one")
+    ceo_dec.add_argument("id", help="the proposal id, e.g. p-2")
+    ceo_dec.add_argument("verdict", choices=("approve", "decline"))
+    ceo_dec.add_argument("--why", default=None)
+    ceo_dec.set_defaults(func=_cmd_ceo)
     stats = lane_sub.add_parser("stats", parents=[common],
                                 help="scoreboard of ended lanes: first-try rate, rounds, merges, cost, common gaps")
     stats.add_argument("--days", type=float, default=14.0)

@@ -17,6 +17,7 @@ import contextlib
 import fcntl
 import hashlib
 import json
+import os
 import re
 import tomllib
 import uuid
@@ -620,6 +621,19 @@ def deliver(home: Path, data: dict, lane_id: str, project: str, now: datetime,
                                                     "status": "implemented", "text": f"max_parallel = {applied}",
                                                     "why": cap.get("why")})
     return {"directives": sent, "proposals": asked, **({"capacity": applied} if applied is not None else {})}
+
+
+def owner_decides(home: Path, pid: str, verdict: str, why: str = "") -> dict:
+    """The owner changes the decision on proposal ``pid`` (``tirith ceo decide``): ``approve`` or ``decline``, also
+    for one already closed; recorded like an answer to the proposal, so the CEO acts on it at its next review."""
+    if pid not in decisions(home):
+        raise ValueError(f"no CEO proposal {pid}")
+    if os.environ.get("TIRITH_LANE"):
+        raise ValueError("only the owner decides on CEO proposals, never an agent in a lane")
+    row = {"id": pid, "at": now_iso(), "status": "approved" if verdict == "approve" else "rejected", "by": "owner",
+           "owner_text": why or None}
+    append_jsonl(folder(home) / "decisions.jsonl", row)
+    return row
 
 
 def settle_decisions(home: Path) -> bool:

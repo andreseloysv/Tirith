@@ -103,6 +103,12 @@ proposal; once approved it becomes a plan item the same way.
 - **After downtime**: when Tirith was off since the last run, the next run is a catch-up: every open directive is
   checked again before the manager acts on it any further (a directive from before the gap is not trusted blindly).
 
+## The owner changes a decision
+
+`tirith ceo decide <p-id> approve|decline [--why ...]` records the owner's decision on a CEO proposal, also on a
+closed one (the last row of an id wins); refused inside a lane: only the owner decides. The CEO acts on it at its
+next review.
+
 ## Throughput
 
 Every review sees `throughput` (`ceo.throughput`): lanes and merges today, merges per step (Tirith's own upkeep
