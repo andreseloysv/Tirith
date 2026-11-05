@@ -42,6 +42,47 @@ def build(home: Path, project: str | None = None) -> dict:
     return {"project": project, "at": now_iso(), "count": len(cards), "cards": cards}
 
 
+NEXT_MAX = 5
+
+
+def while_away(home: Path, project: str, since: str, repo: Path | None = None) -> dict:
+    """What happened since ``since`` (ISO time): ``{"entered", "failed", "next"}``.
+
+    ``entered`` are the merged lanes, ``failed`` the other merge-queue results, ``next`` the open plan
+    items of the first step that still has any (at most ``NEXT_MAX``).
+    """
+    entered, failed = [], []
+    for row in mergeq.load(Path(home))["history"]:
+        if row.get("project") != project or str(row.get("at") or "") <= since:
+            continue
+        line = {"lane": row.get("lane"), "at": row.get("at"), "result": row.get("result"),
+                "summary": " ".join(str(row.get("message") or "").split())}
+        (entered if row.get("result") in GOOD else failed).append(line)
+    upcoming: list[str] = []
+    if repo is not None:
+        try:
+            _, steps = plangate._read(repo)
+        except plangate.PlanGateError:
+            steps = []
+        for step in steps:
+            if str(step["id"]) == roadmap_mod.OPS_STEP:
+                continue
+            upcoming = [i["text"] for i in step["items"] if not i["done"]][:NEXT_MAX]
+            if upcoming:
+                break
+    return {"project": project, "since": since, "entered": entered, "failed": failed, "next": upcoming}
+
+
+def render_away(data: dict) -> str:
+    """The summary as plain text: what came in, what failed, what is next."""
+    def block(title: str, rows: list[str]) -> list[str]:
+        return [f"{title} ({len(rows)}):"] + ([f"  - {r}" for r in rows] or ["  - nothing"])
+    entered = [f"{r['lane']}: {r['summary'] or 'merged'}" for r in data["entered"]]
+    failed = [f"{r['lane']}: {r['result']} {r['summary']}".strip() for r in data["failed"]]
+    return "\n".join([f"While you were away since {data['since']}:"] + block("Came in", entered)
+                      + block("Failed", failed) + block("Next", list(data["next"])))
+
+
 def feedback_command(project: str) -> str:
     return f"tirith digest feedback --project {shlex.quote(project)} --text \"<your opinion>\""
 
