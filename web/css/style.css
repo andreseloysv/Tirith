@@ -1066,6 +1066,40 @@ button.vwho:hover b { text-decoration: underline; }
 .stcard .stk { display: inline-block; min-width: 72px; color: var(--mut, #64748b); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
 .stcard .stbar { font-family: ui-monospace, monospace; letter-spacing: -1px; color: #2563eb; } .stcard .stbar i { color: #cbd5e1; font-style: normal; }
 .stcard .stown b { color: #b45309; } .stcard .stsen { font-size: 12px; }
+/* "All done": a calm, closed card: a drawn check, a full bar with a light sweeping over it, confetti once */
+.stcard.done { position: relative; overflow: hidden; border-left-color: #22c55e;
+  background: linear-gradient(120deg, rgba(34,197,94,.10), rgba(47,111,237,.06) 55%, rgba(168,85,247,.08)); }
+.stdone { display: flex; align-items: center; gap: 16px; padding: 4px 0 8px; }
+.stbadge { flex: none; width: 56px; height: 56px; border-radius: 50%; animation: stglow 3s ease-in-out infinite; }
+.stbadge svg { width: 56px; height: 56px; fill: none; stroke: #16a34a; stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; }
+.stbadge circle { stroke-dasharray: 145; } .stbadge path { stroke-dasharray: 40; }
+.stbadge circle.drawing { stroke-dashoffset: 145; animation: stdraw .9s ease-out forwards; }
+.stbadge path.drawing { stroke-dashoffset: 40; animation: stdraw .5s ease-out forwards; }
+.stdtxt { flex: 1; min-width: 0; }
+.stdtitle { font-size: 22px; font-weight: 700; letter-spacing: -.01em;
+  background: linear-gradient(90deg, #16a34a, #2f6fed, #a855f7, #16a34a); background-size: 300% 100%;
+  -webkit-background-clip: text; background-clip: text; color: transparent; animation: stsheen 8s linear infinite; }
+.stdsub { font-size: 13px; color: var(--mut, #64748b); }
+.stdbar { position: relative; height: 8px; margin: 8px 0 4px; border-radius: 99px; background: rgba(100,116,139,.18); overflow: hidden; }
+.stdbar i { position: absolute; inset: 0 auto 0 0; border-radius: 99px;
+  background: linear-gradient(90deg, #22c55e 0%, #22c55e 40%, #bbf7d0 50%, #22c55e 60%, #22c55e 100%); background-size: 250% 100%;
+  animation: stsweep 2.6s linear infinite; }
+.stdnum { font-size: 12px; }
+.stcard.done .stk { min-width: 0; margin-right: 8px; }
+.stconf { position: absolute; inset: 0; pointer-events: none; }
+.stconf i { position: absolute; top: -12px; width: 7px; height: 11px; border-radius: 2px; opacity: 0;
+  animation: stfall 2.6s cubic-bezier(.2,.6,.4,1) forwards; }
+@keyframes stdraw { to { stroke-dashoffset: 0; } }
+@keyframes stglow { 50% { box-shadow: 0 0 0 8px rgba(34,197,94,.12), 0 0 24px rgba(34,197,94,.35); } }
+@keyframes stsheen { to { background-position: 300% 0; } }
+@keyframes stsweep { from { background-position: 125% 0; } to { background-position: -125% 0; } }
+@keyframes stfall { 0% { opacity: 1; transform: translate(0, 0) rotate(0); } 100% { opacity: 0; transform: translate(var(--dx), 190px) rotate(var(--r)); } }
+:root[data-theme="dark"] .stcard.done { background: linear-gradient(120deg, rgba(34,197,94,.14), rgba(47,111,237,.08) 55%, rgba(168,85,247,.10)); }
+:root[data-theme="dark"] .stbadge svg { stroke: #4ade80; }
+@media (prefers-reduced-motion: reduce) {
+  .stbadge, .stdtitle, .stdbar i { animation: none; } .stconf { display: none; }
+  .stbadge .drawing { animation: none; stroke-dashoffset: 0; }
+}
 .co-row { display: flex; gap: 14px; padding: 8px 0; border-bottom: 1px solid var(--line, rgba(128,128,128,.2)); }
 .co-when { width: 84px; flex: none; }
 .co-retire b { color: #e0a24a; } .co-promote b { color: #4cc9a4; }
