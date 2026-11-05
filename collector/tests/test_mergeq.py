@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
@@ -1201,3 +1202,30 @@ def test_mergeq_no_stage_goes_once_to_the_manager_without_retry(env, home: Path)
     assert sum("needs a test stage" in str(i) for i in asks_mod.queue_items(home)) == 1
     assert mergeq_mod.process_next(home, load_config(home), relaunch=send) is None
     assert sum("needs a test stage" in str(i) for i in asks_mod.queue_items(home)) == 1
+
+
+def test_a_waiting_lane_does_not_block_the_lanes_behind_it(env, home: Path) -> None:
+    repo, _ = env
+    make_lane(home, repo, "blocked", {"README.md": "from lane\n"})
+    make_lane(home, repo, "behind", {"behind.txt": "b"})
+    mergeq_mod.enqueue(home, "blocked")
+    mergeq_mod.enqueue(home, "behind")
+    (repo / "README.md").write_text("edited\n", encoding="utf-8")
+    rows = mergeq_mod.drain(home, load_config(home), relaunch=Sender())
+    assert [(r["lane"], r["result"]) for r in rows] == [("blocked", "waiting"), ("behind", "merged")]
+    assert [i["lane"] for i in mergeq_mod.view(home, "demo")["items"]] == ["blocked"]
+    rows = mergeq_mod.drain(home, load_config(home), relaunch=Sender())  # next pass: tried once, not in a loop
+    assert [(r["lane"], r["result"]) for r in rows] == [("blocked", "waiting")]
+    git(repo, "checkout", "--", "README.md")
+    assert [r["result"] for r in mergeq_mod.drain(home, load_config(home), relaunch=Sender())] == ["merged"]
+
+
+def test_the_wip_limit_ignores_lanes_waiting_on_the_owners_dirty_checkout(home: Path) -> None:
+    rows = [{"lane": f"q{i}", "project": "demo", "status": "queued"} for i in range(2)]
+    rows += [{"lane": "dirty", "project": "demo", "status": "queued",
+              "message": f"/x/demo {mergeq_mod.DIRTY_WAIT} a.swift, which the merge changes"}]
+    (home / "mergeq.json").write_text(json.dumps({"queue": rows}), encoding="utf-8")
+    assert mergeq_mod.wip_block(home) == ""
+    rows[2].pop("message")
+    (home / "mergeq.json").write_text(json.dumps({"queue": rows}), encoding="utf-8")
+    assert mergeq_mod.wip_block(home)
