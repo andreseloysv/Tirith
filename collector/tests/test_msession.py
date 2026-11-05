@@ -463,3 +463,19 @@ def test_unknown_tools_ask_the_owner_with_allow_deny_buttons_and_the_reply_answe
     inbox_mod.add_reply(rig.home, wait["id"], value="deny")
     rig.until(lambda: [r for r in rig.fake_log() if "permission" in r])
     assert [r["permission"] for r in rig.fake_log() if "permission" in r] == ["deny"]
+
+
+def test_a_collector_restart_keeps_the_one_conversation(rig: Rig) -> None:
+    """The app closes (the collector with it) and opens again: the same conversation, still ONE manager."""
+    rig.chat("hello")
+    rig.until(lambda: rig.book().get("done_turns"))
+    sid = rig.book()["session_id"]
+    assert sid
+    rig.session().terminate()  # the collector process ends and takes the session with it
+    msession_mod.register(rig.home, None)  # a new collector process has no session in memory, only the disk
+    rig.clock.tick(60)
+    rig.chat("back again")
+    rig.until(lambda: len([r for r in rig.fake_log() if "start" in r]) == 2)
+    starts = [r for r in rig.fake_log() if "start" in r]
+    assert starts[1]["resume"] == sid  # resumed from the id kept on disk
+    assert rig.book()["session_id"] == sid
