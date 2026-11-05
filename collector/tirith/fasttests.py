@@ -217,8 +217,20 @@ _SERIAL_FLAGS = ("-n", "--numprocesses", "--dist", "no:xdist", "--testmon", "--c
 def parallel_pytest(command: list[str]) -> list[str]:
     """An agent's pytest command with xdist added: agents ran ``uv run pytest -q tests`` in one process (1842
     tests in 13 min, against 2 min in parallel). Left as it is when it is no pytest run, or it already chooses
-    (``-n``, ``-p no:xdist``, ``--testmon``), or it debugs (``--pdb``, ``-s``), or it is one shell string."""
+    (``-n``, ``-p no:xdist``, ``--testmon``), or it debugs (``--pdb``, ``-s``). In ``sh -c '...'`` the line gets it
+    after its first ``pytest`` (agents wrapped the command that way and ran 1868 tests in one process, 19 min)."""
+    if len(command) >= 3 and Path(command[0]).name in ("sh", "bash", "zsh") and command[1] in ("-c", "-lc"):
+        return [*command[:2], _parallel_line(command[2]), *command[3:]]  # sh -c '... pytest ...': inside the line
     if "pytest" not in command or any(arg.startswith(_SERIAL_FLAGS) for arg in command):
         return command
     return [*command, *PARALLEL_ARGS]
+
+
+def _parallel_line(line: str) -> str:
+    """A shell line's first ``pytest`` with xdist right behind it, unless the line already chooses or debugs."""
+    words = line.split()
+    if not any(w == "pytest" or w.endswith("/pytest") for w in words) or \
+            any(w.startswith(_SERIAL_FLAGS) for w in words):
+        return line
+    return re.sub(r"(?<![\w/-])((?:\S*/)?pytest)(?=\s|$)", lambda m: m.group(1) + " " + " ".join(PARALLEL_ARGS), line, count=1)
 
