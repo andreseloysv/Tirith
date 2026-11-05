@@ -397,3 +397,56 @@ def test_review_process_runs_in_its_own_group_and_saves_pid(env, home: Path) -> 
     review_mod.review_lane(home, "web-panel", env)
     saved = read_json(lane_path(home, "web-panel"), None)["review"]
     assert saved["pid"] and saved["pgid"]
+
+
+# -- an interrupted review records its cause -----------------------------------------------------
+
+_CHILD = """
+import sys, time
+from pathlib import Path
+from tirith import review
+home, repo, mode, marker = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3], Path(sys.argv[4])
+def stop(*args, **kwargs):
+    marker.write_text("running")
+    if mode == "exit":
+        sys.exit(3)
+    time.sleep(60)
+review.run_tests = stop
+review.review_lane(home, "web-panel", repo)
+"""
+
+
+def _run_child(home: Path, repo: Path, mode: str, tmp_path: Path, kill: int | None = None) -> int:
+    import os
+    import signal
+    import sys
+    import time
+    marker = tmp_path / f"{mode}.marker"
+    proc = subprocess.Popen([sys.executable, "-c", _CHILD, str(home), str(repo), mode, str(marker)],
+                            env={**os.environ, "TIRITH_HOME": str(home)})
+    deadline = time.time() + 30
+    while not marker.exists() and time.time() < deadline:
+        time.sleep(0.05)
+    assert marker.exists()
+    if kill:
+        proc.send_signal(kill)
+    return proc.wait(timeout=30)
+
+
+def test_review_interrupted_records_cause(env, home: Path, tmp_path: Path) -> None:
+    import signal
+    _lane(home, env)
+    code = _run_child(home, env, "sleep", tmp_path, kill=signal.SIGTERM)  # the review process is killed
+    assert code == 128 + signal.SIGTERM
+    saved = read_json(lane_path(home, "web-panel"), None)
+    assert saved["review"]["status"] == "running" and saved["review"]["cause"] == "killed by SIGTERM"
+    public = review_mod.public(saved, env)
+    assert public["status"] == "merge-failed" and public["cause"] == "killed by SIGTERM"
+    assert "SIGTERM" in public["message"] and autoreview_mod.is_interrupted(public)
+    # the exit code of a review that stops by itself is recorded the same way
+    lane = read_json(lane_path(home, "web-panel"), None)
+    lane["review"] = None
+    from tirith.store import write_lane
+    write_lane(home, lane)
+    assert _run_child(home, env, "exit", tmp_path) == 3
+    assert read_json(lane_path(home, "web-panel"), None)["review"]["cause"] == "exit code 3"

@@ -190,7 +190,9 @@ The agent leaves its work uncommitted in the worktree; review finishes the job:
 The result is stored on the lane file as `review` `{status, at, pid, message?, commit?}`. `state.agents[].review`
 is `{status, at?, message?}` with `status` one of `pending` (launched lane, done, not reviewed), `running`,
 `tests-failed`, `claims-failed`, `ready`, `merge-failed`, `merged`; `null` for lanes not started by `tirith launch`. A `running`
-review whose process died shows as `merge-failed` ("interrupted"). When it is run again and its worktree is gone, the
+review whose process died shows as `merge-failed` ("interrupted"). The review process records the `cause` on the
+lane's review before it dies when it can: `killed by SIGTERM` (also SIGHUP, SIGINT, SIGQUIT), `exit code N` or the
+exception; the public message then reads "the review was interrupted (<cause>); run it again" (SIGKILL leaves none). When it is run again and its worktree is gone, the
 lane file is settled instead of staying `running`: `merged` when the claim check finds the lane's work on main,
 else `merge-failed` ("the review stopped before it finished and the worktree is gone: <reason>"), so the plan item
 is reopened like for any failed review. A review's tests hold one of the stage slots of `tirith run` (as many as the load limit allows) and wait
