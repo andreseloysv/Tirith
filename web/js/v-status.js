@@ -16,7 +16,7 @@
     if (!sn) return '';
     if (!sn.enabled) return '<span class="mut">Sentinel off</span>';
     var last = sn.last, wake = sn.wake;
-    var txt = 'Sentinel (' + esc(sn.model || '?') + ', every ' + esc(sn.every_min) + ' min): ' +
+    var txt = 'Sentinel (' + esc(sn.model || '?') + ', every ' + esc(sn.every_min) + ' min, all projects): ' +
       (last ? (last.error ? 'could not look: ' + esc(last.error) : last.wake ? 'woke the CEO' : 'ok') + ' · ' + esc(ago(last.at)) : 'no look yet');
     if (wake && wake.why && (!last || last.at === wake.at)) txt += ' — ' + esc(wake.why);
     return '<span class="mut">' + txt + '</span>';

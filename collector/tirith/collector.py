@@ -839,16 +839,20 @@ class Collector:
 
     def _merged_today(self, now: datetime) -> int:
         """Lanes whose review merged today (local day), from every lane record; recounted every 30 s."""
+        return sum(self._merged_today_by_project(now).values())
+
+    def _merged_today_by_project(self, now: datetime) -> dict[str, int]:
         cached = getattr(self, "_merged_cache", None)
         if cached and time.monotonic() - cached[0] < 30:
             return cached[1]
         day = now.astimezone().date()
-        count = 0
+        count: dict[str, int] = {}
         for lane in read_lanes(self.home):
             review = lane.get("review") if isinstance(lane, dict) and isinstance(lane.get("review"), dict) else {}
             at = parse_iso(review.get("at")) if review.get("status") == "merged" else None
             if at and at.astimezone().date() == day:
-                count += 1
+                pid = str(lane.get("project") or "")
+                count[pid] = count.get(pid, 0) + 1
         self._merged_cache = (time.monotonic(), count)
         return count
 
@@ -874,6 +878,7 @@ class Collector:
             ci = {k: str(v.get("status")) for k, v in ((read_json(self.home / github_mod.CI_FILE, {}) or {})
                                                         .get("workflows") or {}).items() if isinstance(v, dict)}
             state["status"] = statuscard_mod.build(state, now, ci, self._merged_today(now), self._lasting(now))
+            state["status"]["by_project"] = statuscard_mod.build_by_project(state, now, ci, self._merged_today_by_project(now))
         except Exception as err:  # noqa: BLE001
             print(f"tirith: status card: {type(err).__name__}: {err}", file=sys.stderr)
         try:

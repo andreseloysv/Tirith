@@ -775,7 +775,9 @@ def _counts(own: dict, requests: list[dict], projects: list[dict], agents: list[
                   if (own["proposals"].get(key) or {}).get("fp") != _step_fp(proposal_text(c, agents)))
     return {"proposed": proposed, "queued": waiting,
             "steps_working": working, "steps_in_review": reviewing, "skipped": skipped,
-            "open_items": len(present)}
+            "open_items": len(present),
+            "open_by_project": {pid: sum(1 for k in present if k.split("|", 1)[0] == pid)
+                                for pid in sorted({k.split("|", 1)[0] for k in present})}}
 
 
 def public(home: Path, config: Config, agents: list[dict] | None = None, projects: list[dict] | None = None,
