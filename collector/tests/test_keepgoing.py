@@ -51,7 +51,11 @@ if mode == "slow":  # round 1 fixes one gap (the plan report), round 2 fixes non
     print(json.dumps({"type": "system", "session_id": "sess-1"}))
     print(json.dumps({"type": "result", "result": "Finished.", "session_id": "sess-1"}))
     sys.exit(0)
-if mode == "never" or (mode == "fix-on-resume" and not resumed):
+if mode == "report-dirty":  # reports done and leaves the work uncommitted
+    sys.path.insert(0, @ROOT@)
+    from tirith.cli import main
+    main(["plan", "report", "--status", "done"])
+elif mode == "never" or (mode == "fix-on-resume" and not resumed):
     pass  # leaves the file uncommitted and gives no plan report
 else:
     subprocess.run(["git", "add", "-A"], check=True)
@@ -119,6 +123,18 @@ def test_brief_and_finish_gate_agree_on_commit(home, tmp_path, monkeypatch) -> N
     assert "work1.txt" in keepgoing_mod._git(ws, "show", "--stat", "--format=%s", "HEAD~0").stdout \
         or "work1.txt" in keepgoing_mod._git(ws, "log", "--stat", "--format=%s").stdout
     assert keepgoing_mod.has_work(ws, lane.get("start_commit"))
+
+
+def test_done_report_dirty_worktree_merge_ready(home, tmp_path, monkeypatch) -> None:
+    """A done report with uncommitted changes: Tirith commits them (message from the item), no send-back."""
+    code, calls, lane = _run(home, tmp_path, monkeypatch, "report-dirty")
+    assert code == 0 and len(calls) == 1
+    ws = Path(lane["workspace"])
+    assert not keepgoing_mod._git(ws, "status", "--porcelain").stdout.strip()
+    assert keepgoing_mod._git(ws, "log", "-1", "--format=%s").stdout.strip() == "Do the thing"
+    assert "work1.txt" in keepgoing_mod._git(ws, "show", "--stat", "--format=", "HEAD").stdout
+    assert lane["outcome"]["status"] == "done" and lane["result"] == "done"
+    assert not asks_mod.queue_items(home, only_open=True)
 
 
 def test_a_round_that_fixes_nothing_goes_to_the_manager_queue_at_once(home, tmp_path, monkeypatch) -> None:
