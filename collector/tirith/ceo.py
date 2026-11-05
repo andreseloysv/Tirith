@@ -19,6 +19,7 @@ import hashlib
 import json
 import os
 import re
+import time
 import tomllib
 import uuid
 from datetime import datetime, timedelta
@@ -770,6 +771,22 @@ def _settle_lanes(home: Path, book: dict, now: datetime) -> bool:
     return changed
 
 
+DIRTY_PLAN_WAIT_S = 60.0  # the plan file is dirty for a moment while someone edits it: wait this long for it
+DIRTY_PLAN_POLL_S = 2.0
+
+
+def _ops_item_waiting(home: Path, repo: Path, project: str, lane_id: str) -> str:
+    """The CEO's plan item; a plan file with uncommitted changes is retried for up to DIRTY_PLAN_WAIT_S."""
+    deadline = time.monotonic() + DIRTY_PLAN_WAIT_S
+    while True:
+        try:
+            return plangate_mod.ops_item(home, repo, project, CEO_ITEM, lane_id)[1]
+        except plangate_mod.PlanGateError as err:
+            if "uncommitted changes" not in str(err) or time.monotonic() >= deadline:
+                raise
+            time.sleep(DIRTY_PLAN_POLL_S)
+
+
 def start(home: Path, config: Config, now: datetime, snap: dict, cfg: dict, catch_up: bool,
           spawn: Callable | None = None) -> str:
     """Start one CEO review lane, detached; returns its id."""
@@ -784,7 +801,7 @@ def start(home: Path, config: Config, now: datetime, snap: dict, cfg: dict, catc
     path = Path(home) / "briefs" / f"{lane_id}.md"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(brief(home, snap, cfg, catch_up), encoding="utf-8")
-    item = plangate_mod.ops_item(home, repo, proj.id, CEO_ITEM, lane_id)[1]
+    item = _ops_item_waiting(home, repo, proj.id, lane_id)
     argv = [*launch_mod.tirith_argv(), "lane", "run", "--id", lane_id, "--project", proj.id, "--class", HERO_CLASS,
             "--feature", FEATURE, "--brief", str(path), "--workspace", str(repo), "--agent", alias, "--by-tirith",
             "--item", item, "--item-step", plangate_mod.OPS_STEP]
@@ -859,6 +876,7 @@ def _run(home: Path, config: Config, now: datetime, cfg: dict, spawn: Callable |
         if changed:
             _save_book(home, book)
         return changed
+    undo = {k: book.get(k) for k in ("slot", "next_due")}  # put back when the start fails: the slot stays due
     if slot is not None and slot != book.get("slot"):
         book["slot"] = slot
     if not cfg["fixed"]:  # until its answer picks another interval, the last one it chose (an hour at first)
@@ -892,7 +910,17 @@ def _run(home: Path, config: Config, now: datetime, cfg: dict, spawn: Callable |
                 lanes_alarm[lane_id] = sorted(alarm)
                 for old in sorted(lanes_alarm)[:-50]:
                     del lanes_alarm[old]
-        except (launch_mod.LaunchError, plangate_mod.PlanGateError) as err:
+        except plangate_mod.PlanGateError as err:
+            if "uncommitted changes" not in str(err):
+                append_jsonl(folder(home) / "runs.jsonl", {"id": f"fail-{slot}", "at": now_iso(now),
+                                                           "status": "failed", "error": str(err)})
+            else:  # a dirty plan file is not a review: no row, the cadence does not move, the next pass retries
+                for k, v in undo.items():
+                    if v is None:
+                        book.pop(k, None)
+                    else:
+                        book[k] = v
+        except launch_mod.LaunchError as err:
             append_jsonl(folder(home) / "runs.jsonl", {"id": f"fail-{slot}", "at": now_iso(now),
                                                        "status": "failed", "error": str(err)})
     _save_book(home, book)
