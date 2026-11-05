@@ -79,14 +79,16 @@ def _reaped(lane: dict) -> bool:
     """The child is gone, or only a zombie that its waiting parent has not collected yet."""
     if not _group_alive(lane):
         return True
-    pid = lane.get("pid")
+    from tirith import procs
     try:
-        from tirith import timeouts as timeouts_mod
-        state = timeouts_mod.run(["ps", "-o", "stat=", "-p", str(int(pid))], "generic", text=True,
-                                 timeout=5).stdout.strip()
-    except (OSError, TypeError, ValueError):
+        pid = int(lane.get("pid"))
+    except (TypeError, ValueError):
         return False
-    return state.startswith("Z") or not state
+    table = procs.snapshot()
+    if not table:
+        return False
+    mine = [p for p in table if p.pid == pid]
+    return not mine or mine[0].zombie
 
 
 def stop_lane(home: Path, lane_id: str, by: str = "manager", reason: str | None = None,
