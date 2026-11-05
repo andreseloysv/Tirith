@@ -303,6 +303,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
   - [x] Revisar: La app de escritorio se recompila y se reinicia sola cuando cambia su código Rust en main (firmada), sin que el dueño tenga que hacer nada.
 - [ ] Confirmar el chat con muse serve en una sesión real (un mensaje mínimo, ajustes más baratos) y añadir la interrupción de turno y la reanudación si el protocolo las ofrece (en revisión) <!-- tirith:{"id":"i-c226d1ce"} -->
 - [ ] Probar muse serve en una sesión real con un mensaje mínimo (vía tirith lane run) y comprobar con el esquema real los params de turn/interrupt y session/resume (en revisión) <!-- tirith:{"id":"i-51da13a1"} -->
+  - [ ] Revisar: Probar muse serve en una sesión real con un mensaje mínimo (vía tirith lane run) y comprobar con el esquema real los params de turn/interrupt y session/resume (en curso: revisión de app-de-escritorio-tauri-con-chat-14)
 - [ ] Volcar el esquema real de muse serve (muse schema generate-json-schema) a un fichero para comprobar turn/interrupt y session/resume (en revisión) <!-- tirith:{"id":"i-aa8e3eda","depends_on":[],"writes":[]} -->
 - [ ] Ejecutar un turno real de muse serve (mensaje mínimo) con un driver stdio vía tirith lane run, ahora que el adaptador soporta turn/interrupt y session/resume
 - [x] Integrar en main el arreglo de adjuntos (clip y arrastrar) de la lane app-de-escritorio-tauri-con-chat-8, hoy sin commit. (hecho: bd92d3b)
