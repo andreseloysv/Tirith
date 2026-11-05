@@ -22,3 +22,23 @@ def test_promote_to_manager_only_on_demand():
     assert pr.promote_to_manager("always", "x" * 400, parallel_items=3, subagents=True) is None
     assert pr.promote_to_manager("off", "x" * 400, parallel_items=3, subagents=True) is None
     assert pr.promote_to_manager("on-demand", "Fix the bug") is None
+
+
+def test_promote_to_ceo_with_more_than_two_workers():
+    assert "3 workers" in pr.promote_to_ceo("on-demand", workers=3)
+    assert pr.promote_to_ceo("on-demand", workers=2) is None
+
+
+def test_promote_to_ceo_after_an_hour_unattended():
+    assert "nobody watching" in pr.promote_to_ceo("on-demand", unattended_hours=1.5)
+    assert pr.promote_to_ceo("on-demand", unattended_hours=1) is None
+
+
+def test_promote_to_ceo_when_selfcheck_cannot_fix():
+    assert "self-check" in pr.promote_to_ceo("on-demand", selfcheck_failed=True)
+    assert pr.ceo_decision("on-demand", selfcheck_failed=True)["rule"] == "selfcheck"
+
+
+def test_promote_to_ceo_only_on_demand():
+    for mode in ("always", "off"):
+        assert pr.promote_to_ceo(mode, workers=9, unattended_hours=9, selfcheck_failed=True) is None
