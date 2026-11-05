@@ -31,7 +31,7 @@
   function list(items) { return items.length ? '<ul class="lead-list">' + items.join('') + '</ul>' : ''; }
   function head(a, title, pill) {
     return '<span class="ahead">' + (a ? T.avatar(a, 36) : '<span class="lead-mark">' + esc(title.charAt(0)) + '</span>') +
-      '<span class="aname"><b>' + esc(a && a.name ? a.name : title) + '</b><span class="pill">' + esc(pill) + '</span></span></span>';
+      '<span class="aname"><b>' + esc(title) + '</b>' + (pill ? '<span class="pill">' + esc(pill) + '</span>' : '') + '</span></span>';
   }
 
   function managerCard(state) {
@@ -55,7 +55,7 @@
     var made = decisions(state).map(function (d) {
       return '<li><span class="mut">' + esc(T.clockTime(d.at)) + ' · ' + esc(label(d.req)) + '</span> ' + T.mdInline(T.boldLead ? T.boldLead(clip(d.text, TEXT)) : clip(d.text, TEXT)) + '</li>';
     });
-    return '<div class="card acard lead">' + head(a, 'Manager', 'Manager') +
+    return '<div class="card acard lead">' + head(a, 'Manager', a && a.name ? a.name : '') +
       (ran ? '<span class="mut">' + esc(ran) + '</span>' : '') + now +
       (made.length ? '<span class="lead-h">Last decisions</span>' + list(made) : '') +
       '<span class="afoot mut">Today: ' + turns.length + (turns.length === 1 ? ' turn' : ' turns') +

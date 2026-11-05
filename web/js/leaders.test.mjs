@@ -31,6 +31,7 @@ const state = {
 let html = T.leaders(state);
 assert.match(html, /Running Tirith/);
 assert.match(html, /Tarewenus/);
+assert.match(html, /<b>Manager<\/b><span class="pill">Tarewenus<\/span>/, 'role is the bold title, the name the grey line under it');
 assert.match(html, /m-5 · medium/);
 assert.match(html, /Waiting for the next message · last answer 13:10/, 'idle: it waits, with its last answer');
 assert.ok(html.indexOf('The load limit is 1.') < html.indexOf('step 7 → started lane x'), 'decisions newest first');
