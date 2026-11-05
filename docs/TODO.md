@@ -38,6 +38,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Verificar: Verify Drag an image from Finder onto the Tirith chat o (en revisión) <!-- tirith:{"id":"i-9aa639be"} -->
 - [x] Do one real Finder image drag onto the Tirith chat and look for 'drag: window drop' in app.log (hecho: bafcf90e)
 - [ ] Revisar el plan (2026-11-05 11:00) (reabierto: update-the-plan-19: the lane's work is not on main) <!-- tirith:{"id":"i-11d919e9"} -->
+- [ ] Revisar el plan (2026-11-05 12:31) (en curso: update-the-plan-22)
 - [x] Revisar el plan (2026-11-05 12:27) (hecho: sin cambios) <!-- tirith:{"id":"i-afe49bed"} -->
 - [x] Revisar el plan (2026-11-05 12:08) (hecho: sin cambios) <!-- tirith:{"id":"i-6911fd38"} -->
 - [x] Revisar el plan (2026-11-05 09:02) (hecho: sin cambios) <!-- tirith:{"id":"i-1a9117c8"} -->
