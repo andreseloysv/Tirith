@@ -43,6 +43,7 @@ EVERY_MIN, MIN_EVERY_MIN, MAX_EVERY_MIN = 60, 10, 480  # the CEO picks its next 
 RUNS_PER_DAY = 72
 WATCH_WINDOW_S = 6 * 3600.0  # launch failures and owner waits the snapshot looks back on
 LONG_REVIEW_S = 3600.0       # a live review running longer than this is counted as long
+UNWELL_ALARM_MIN = 20       # a health check not ok (healing, amber) this long wakes the CEO; failed wakes it at once
 OWNER_WORDS = re.compile(r"\b(?:owner|owner's|dueñ[oa])\b", re.I)
 MAX_DIRECTIVES = 3        # open at a time
 MEMORY_CHARS = 16_000     # of findings and decisions in one brief
@@ -213,11 +214,31 @@ def _test_maps(home: Path, now: datetime) -> dict[str, dict]:
     return out
 
 
-def red_checks(home: Path) -> dict[str, str]:
-    """The self-check's failed checks ("Something needs a look"), ``{check: text}``."""
+def _health(home: Path) -> dict[str, dict]:
     dstate = read_json(Path(home) / "dispatch.json", {}) or {}
     checks = ((dstate.get("health") or {}).get("checks") or {}) if isinstance(dstate, dict) else {}
-    return {k: str(v.get("text") or "") for k, v in checks.items() if isinstance(v, dict) and v.get("level") == "failed"}
+    return {k: v for k, v in checks.items() if isinstance(v, dict)}
+
+
+def red_checks(home: Path) -> dict[str, str]:
+    """The self-check's failed checks ("Something needs a look"), ``{check: text}``."""
+    return {k: str(v.get("text") or "") for k, v in _health(home).items() if v.get("level") == "failed"}
+
+
+def alarm_checks(home: Path, book: dict, now: datetime) -> dict[str, str]:
+    """The checks that wake the CEO, ``{check: text}``: a failed one at once, any other one that is not ok (healing,
+    amber) once it stayed so for ``UNWELL_ALARM_MIN``: code had its chance to heal it. ``book["unwell"]`` keeps
+    since when each check is not ok; a check that is ok again leaves it."""
+    bad = {k: v for k, v in _health(home).items() if v.get("level") not in (None, "ok")}
+    unwell = book.setdefault("unwell", {})
+    for key in [k for k in unwell if k not in bad]:
+        del unwell[key]
+    out = {}
+    for key, check in bad.items():
+        since = parse_iso(unwell.setdefault(key, now_iso(now)))
+        if check.get("level") == "failed" or (since and (now - since).total_seconds() >= UNWELL_ALARM_MIN * 60):
+            out[key] = str(check.get("text") or "")
+    return out
 
 
 def fingerprint(snap: dict) -> str:
@@ -295,7 +316,8 @@ def brief(home: Path, snap: dict, cfg: dict, catch_up: bool) -> str:
         "needs a measurement you can repeat; an agent's claim is not evidence.",
         ("## Catch-up\nTirith was off since your last review: check every open directive again before anything "
          "else." if catch_up else ""),
-        ("## Alarm\nThis review was started out of schedule because the self-check turned red (snapshot `alarm`). "
+        ("## Alarm\nThis review was started out of schedule because a self-check check failed, or stayed not ok "
+         f"for {UNWELL_ALARM_MIN} min while code tried to heal it (snapshot `alarm`). "
          "Start with it: find the cause from the data (logs, lane and review records, `tirith check`), not from "
          "the alarm's own wording, then tell the manager what to do about it (a directive) or ask the owner when "
          "only they can fix it." if snap.get("alarm") else ""),
@@ -564,7 +586,9 @@ def _run(home: Path, config: Config, now: datetime, cfg: dict, spawn: Callable |
     slot = _slot(now, cfg["hours"]) if cfg["fixed"] else None
     nxt = parse_iso(book.get("next_due"))
     scheduled = (slot is not None and slot != book.get("slot")) if cfg["fixed"] else (nxt is None or now >= nxt)
-    red = red_checks(home)
+    before = dict(book.get("unwell") or {})
+    red = alarm_checks(home, book, now)
+    changed |= book.get("unwell") != before
     alarm = {k: v for k, v in red.items() if f"{k}: {v}" not in book.get("alarmed", [])}
     if book.get("alarmed") and not running:  # a check that turned green again may alarm again later
         kept = [a for a in book["alarmed"] if a in {f"{k}: {v}" for k, v in red.items()}]

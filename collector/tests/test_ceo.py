@@ -311,3 +311,19 @@ def test_the_snapshot_holds_what_the_hourly_check_looks_at(home: Path) -> None:
     assert ceo.fingerprint({**snap, "idle_min": 150}) != ceo.fingerprint(snap)  # a new idle hour is
     assert "## First: is Tirith working?" in ceo.brief(home, snap, ceo.settings(home), False)
     assert "needs no owner approval" in ceo.brief(home, snap, ceo.settings(home), False)
+
+
+def test_a_check_that_stays_amber_wakes_the_ceo_after_code_had_its_chance(home: Path, started: list) -> None:
+    # "The autopilot: some plan items have nobody on them" stayed healing for hours and the CEO never looked
+    enable(home, "hours = [23]")  # no scheduled review in the way
+    config = load_config(home)
+    amber = {"autopilot": {"level": "healing", "text": "Some plan items have nobody on them."}}
+    (home / "dispatch.json").write_text(json.dumps({"health": {"checks": amber}}), encoding="utf-8")
+    ceo.run(home, config, local(10))
+    ceo.run(home, config, local(10, ceo.UNWELL_ALARM_MIN - 1))
+    assert started == []  # code may still heal it
+    ceo.run(home, config, local(10, ceo.UNWELL_ALARM_MIN + 1))
+    assert len(started) == 1 and started[0]["snap"]["alarm"] == {"autopilot": "Some plan items have nobody on them."}
+    (home / "dispatch.json").write_text(json.dumps({"health": {"checks": {"autopilot": {"level": "ok"}}}}))
+    ceo.run(home, config, local(11))
+    assert "autopilot" not in json.loads((home / "ceo" / "book.json").read_text()).get("unwell", {})  # healed: forgotten
