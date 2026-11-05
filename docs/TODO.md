@@ -31,8 +31,8 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Verificar: Verify Commit lane/manager-permission-questions-nev, me (en curso: verify-commit-lane-manager-permi-2)
 - [x] Manager de guardia: atender el chat
 - [x] Manager de guardia: atender el chat
-- [ ] CEO: revisar cómo trabaja el manager
-- [ ] Manager de guardia: atender el chat
+- [ ] CEO: revisar cómo trabaja el manager (en curso: ceo-2a1b5169)
+- [ ] Manager de guardia: atender el chat (en curso: manager-e7c3970c)
 - [x] Revisar el plan (2026-11-05 08:38) (hecho: sin cambios) <!-- tirith:{"id":"i-32bf740b"} -->
 - [ ] El plan no repite ningún id permanente: Revisar el plan (2026-11-05) sigue dos veces con el id i-2975f07c, así que una recibe un id nuevo (check: `test $(grep -o 'tirith:{"id":"i-[0-9a-f]*"' docs/TODO.md | sort | uniq -d | wc -l) -eq 0`) <!-- tirith:{"id":"i-4d54f8b9","depends_on":[],"writes":[]} -->
 - [ ] Verificar: Verify Drag an image from Finder onto the Tirith chat o (en revisión) <!-- tirith:{"id":"i-9aa639be"} -->
@@ -415,7 +415,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Tests fiables: sin fallos al azar dentro de las lanes; las revisiones atascadas se vuelven a lanzar.
 - [x] Al dueño solo le llega lo que solo él puede hacer, con el motivo (credenciales, pago, cuenta, aparato o decisión).
 - [x] Instrucciones al dueño concretas y prerrellenadas, con botón «Open in Terminal»; se cierran solas al comprobarse.
-- [ ] Un solo manager con sesión persistente que vive en Tirith (misma memoria con la app abierta o cerrada). (reabierto: the merge did not go through: merging lane/manager-de-guardia-chat-y-piloto-2 failed conflicts? : Auto-merging collector/tests/te)
+- [ ] Un solo manager con sesión persistente que vive en Tirith (misma memoria con la app abierta o cerrada). (en curso: manager-de-guardia-chat-y-piloto-13)
   - [x] Revisar: Un solo manager con sesión persistente que vive en Tirith (misma memoria con la app abierta o cerrada). — falló: the merge did not go through: merging lane/manager-de-guardia-chat-y-piloto-2 failed conflicts? : error: Your local changes to th
 - [x] El chat muestra el trabajo del manager en vivo: texto, herramientas y resultados de cada paso (secretos tapados).
 - [ ] El chat del manager como el CLI: texto palabra a palabra, diffs en color, lista de tareas; Esc interrumpe y ↑ recupera.
@@ -433,6 +433,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] El manager persistente arranca siempre: comparte el elemento fijo del manager con los turnos sueltos (sin bloquearse por «ya en curso») y, si falla, el modo de respaldo responde en menos de 1 minuto. (hecho: b70ce39)
 - [ ] Los permisos de comandos seguros (solo lectura, comandos de Tirith) se aprueban por código; al dueño nunca le llega una pregunta de permiso que no sea suya.
 - [ ] La autorrevisión no escribe en el chat lo que arregló sola: queda en el punto de salud (al hacer clic); el chat solo muestra lo que necesita al dueño. (en revisión) <!-- tirith:{"id":"i-2a7b6720"} -->
+  - [ ] Revisar: La autorrevisión no escribe en el chat lo que arregló sola: queda en el punto de salud (al hacer clic); el chat solo muestra lo que necesita al dueño. (en curso: revisión de selfreview-not-in-chat)
 - [x] Llevar a main el trabajo de la lane manager-de-guardia-chat-y-piloto-2: aplicar a mano ~/.tirith/diffs/manager-de-guardia-chat-y-piloto-2.patch sobre main y resolver los conflictos en collector/tirith/agentrun.py y collector/tirith/managerd.py conservando lo que ya hay en main (los tests de la lane pasaban: 1113). (hecho: 329f2c4)
   - [x] Revisar: Llevar a main el trabajo de la lane manager-de-guardia-chat-y-piloto-2: aplicar a mano ~/.tirith/diffs/manager-de-guardia-chat-y-piloto-2.patch sobre main y resolver los conflictos en collector/tirith/agentrun.py y collector/tirith/managerd.py conservando lo que ya hay en main (los tests de la lane pasaban: 1113). — falló: the merge did not go through: the review was interrupted; run it again
 - [x] Bucle «sigue hasta terminar» por código: si al acabar falta informe, verificación, tests o rama lista, Tirith reanuda la misma sesión con la lista de lo que falta (hasta 3 veces) y solo después avisa al manager. (hecho: 4e04435)
@@ -617,7 +618,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
   - [x] Revisar: An item marked (en revisión) whose lane ended done with no review, queue entry or branch left is closed by code (ticked, or reopened if its work is missing) instead of waiting forever (check: `cd collector && uv run pytest -q tests -k in_review_without_review_closes`)
 - [x] Merge queue picks up and merges canary lanes (project canary) (check: `timeout 600 tirith canary run && tail -1 $(ls -t ~/.tirith/logs/canary-*.log | head -1) | grep -qiv FAILED`) <!-- tirith:{"id":"i-5888dfc9","depends_on":[],"writes":[]} -->
   - [x] Revisar: Merge queue picks up and merges canary lanes (project canary) (check: `timeout 600 tirith canary run && tail -1 $(ls -t ~/.tirith/logs/canary-*.log | head -1) | grep -qiv FAILED`)
-- [ ] full suite has 3 failing process-kill tests (test_cta lane_stop_kills_child_ignoring_sigterm, test_idletimeout child_cpu_is_progress, test_timeouts kills_tree_children_left_group), lane diff does not touch that code; lane commit f44bf3b8 not yet merged to main; no real tirith canary run done yet
+- [x] full suite has 3 failing process-kill tests (test_cta lane_stop_kills_child_ignoring_sigterm, test_idletimeout child_cpu_is_progress, test_timeouts kills_tree_children_left_group), lane diff does not touch that code; lane commit f44bf3b8 not yet merged to main; no real tirith canary run done yet (hecho: 0bcd5b94)
   - [x] Revisar: Merge queue picks up and merges canary lanes (project canary) (check: `timeout 600 tirith canary run && tail -1 $(ls -t ~/.tirith/logs/canary-*.log | head -1) | grep -qiv FAILED`) — falló: the report does not match the change
 - [x] launch.py brief no longer says 'Do NOT commit': it tells the lane to commit its work on the lane branch, as the finish gate expects (check: `! grep -q 'Do NOT commit' collector/tirith/launch.py && cd collector && uv run -q pytest -q tests -k launch`) <!-- tirith:{"id":"i-ffe9fdaf","depends_on":[],"writes":[]} -->
   - [x] Revisar: launch.py brief no longer says 'Do NOT commit': it tells the lane to commit its work on the lane branch, as the finish gate expects (check: `! grep -q 'Do NOT commit' collector/tirith/launch.py && cd collector && uv run -q pytest -q tests -k launch`)
@@ -728,11 +729,11 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
   - [x] Revisar: Cada proyecto elige sus roles en [roles] de tirith.toml: ceo y manager pueden ser always, on-demand u off, y Tirith los tiene en always (check: `cd collector && uv run -q pytest -q tests -k roles_setting`)
 - [x] Un proyecto nuevo empieza con ceo y manager en on-demand (check: `cd collector && uv run -q pytest -q tests -k roles_default_on_demand`) <!-- tirith:{"id":"i-efb2d1de","depends_on":["i-eb7c75f3"],"writes":[]} -->
   - [x] Revisar: Un proyecto nuevo empieza con ceo y manager en on-demand (check: `cd collector && uv run -q pytest -q tests -k roles_default_on_demand`)
-- [ ] Con roles on-demand, el worker pasa a manager cuando la tarea no cabe en una lane, hay 2 o más items en paralelo o pide sub-agentes (check: `cd collector && uv run -q pytest -q tests -k promote_to_manager`) <!-- tirith:{"id":"i-8aa596e4","depends_on":["i-eb7c75f3"],"writes":[]} -->
+- [ ] Con roles on-demand, el worker pasa a manager cuando la tarea no cabe en una lane, hay 2 o más items en paralelo o pide sub-agentes (check: `cd collector && uv run -q pytest -q tests -k promote_to_manager`) (en curso: empresa-que-crece-worker-manager-2) <!-- tirith:{"id":"i-8aa596e4","depends_on":["i-eb7c75f3"],"writes":[]} -->
 - [ ] Cada promoción o retirada queda en <home>/company.jsonl con la regla, el valor medido y el umbral (check: `cd collector && uv run -q pytest -q tests -k company_log`) <!-- tirith:{"id":"i-e92781ab","depends_on":["i-8aa596e4"],"writes":[]} -->
 - [ ] Con roles on-demand, se crea un CEO con más de 2 workers a la vez, más de 1 h de trabajo sin nadie mirando o un fallo que el self-check no arregla (check: `cd collector && uv run -q pytest -q tests -k promote_to_ceo`) <!-- tirith:{"id":"i-609029b8","depends_on":["i-e92781ab"],"writes":[]} -->
-- [ ] Run collector tests (cd collector && uv run -q pytest -q tests) to completion and confirm green for company-lab fixture
-- [ ] Fix 3 failing process-kill tests: test_cta lane_stop_kills_a_child_that_ignores_sigterm, test_idletimeout child_cpu_is_progress, test_timeouts kill_tree_including_children_that_left_the_group
+- [x] Run collector tests (cd collector && uv run -q pytest -q tests) to completion and confirm green for company-lab fixture (hecho: 9a4725f4)
+- [x] Fix 3 failing process-kill tests: test_cta lane_stop_kills_a_child_that_ignores_sigterm, test_idletimeout child_cpu_is_progress, test_timeouts kill_tree_including_children_that_left_the_group (hecho: 0bcd5b94)
 - [ ] Load limit uses real free CPU (idle % from host CPU stats) instead of the 1-min load average in collector/tirith/loadlimit.py, with tests (check: `cd collector && uv run -q pytest -q tests -k loadlimit_free_cpu`) (en revisión) <!-- tirith:{"id":"i-057420c4","depends_on":[],"writes":[]} -->
 - [x] Check whether test_cta lane_stop_kills_a_child, test_idletimeout child_cpu/silent_lane and test_timeouts kills_tree fail on main too, then fix or quarantine (hecho: 0bcd5b94)
 - [x] Fix 3 pre-existing failing tests (process-kill/idle: test_cta lane_stop_kills_a_child_that_ignores_sigterm, test_idletimeout child_cpu_is_progress, test_timeouts timeout_kills_tree_including_children_that_left_the_group) so the full suite is green (hecho: 0bcd5b94)
