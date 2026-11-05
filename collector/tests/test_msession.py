@@ -58,7 +58,7 @@ class Rig:
         size = transcript.stat().st_size if transcript.exists() else 0
         return (self.log.stat().st_size if self.log.exists() else 0, size, json.dumps(self.book(), sort_keys=True))
 
-    def until(self, cond, timeout: float = 25.0, step: float = 0.0, ceiling: float = 600.0):
+    def until(self, cond, timeout: float = 90.0, step: float = 0.0, ceiling: float = 600.0):
         """Cycle until ``cond``. ``timeout`` is how long NOTHING may change (a stuck session fails after it); a loaded
         machine that is merely slow keeps moving and is never cut by a wall-clock budget (``ceiling`` stops a livelock)."""
         began = time.monotonic()
@@ -243,7 +243,7 @@ def test_compact_that_does_not_help_restarts_once_an_hour_with_a_handoff(rig: Ri
     assert rig.book()["turns_total"] == 0 and rig.book()["primed"] is False and rig.book()["handoff"] is not None
     pending = rig.chat("after the fresh start")
     rig.clock.tick(60)
-    rig.until(lambda: starts(rig) == 2, timeout=10)
+    rig.until(lambda: starts(rig) == 2)  # default stuck-window: a loaded box may take long to spawn python
     assert [r for r in rig.fake_log() if "start" in r][1]["resume"] is None
     # the cap: this session is big again and compaction fails again, but there is no second restart within the hour
     rig.until(lambda: compacts(rig) >= 2 and rig.session() is not None and not rig.session().busy)
