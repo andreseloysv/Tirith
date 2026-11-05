@@ -109,7 +109,7 @@ manager and of its own past conclusions.
    whether Tirith is working adds: `open_items`, `idle_min` (open items and no lane working, since the last lane ended), `last_merge_min`,
    `reviews_running_long` (live, over 1 h), `launch_failures` (Tirith's "could not" answers in the last 6 h),
    `owner_waits_unasked` (the manager's last answer to a proposal names the owner while nothing of that project is
-   on the owner's list), `ci_main` (the newest finished GitHub run of each workflow) and `test_maps` (each
+   on the owner's list), `ci_main` (the newest finished GitHub run of each workflow, from `<home>/ci-main.json`, which the collector writes from every GitHub run it read: `state.json` keeps only the newest runs) and `test_maps` (each
    project's map: there or not, age). The fingerprint ignores the clock (`idle_min` counts in whole hours, map ages
    and `last_merge_min` not at all).
 2. **Re-check findings**: every open finding runs its `check` again. Fixed ones close quietly; a closed one that

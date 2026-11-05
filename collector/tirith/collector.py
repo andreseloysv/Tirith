@@ -1437,6 +1437,10 @@ class Collector:
                                       else self.github.poll(self.config, entries))
         runs = sorted(local_runs + remote_runs, key=lambda r: str(r["started_at"] or ""),
                       reverse=True)
+        ci = github_mod.last_finished(remote_runs)  # every GitHub run, not only the newest kept in state.json
+        if ci and ci != getattr(self, "_ci_written", None):
+            write_json_atomic(self.home / github_mod.CI_FILE, {"at": now_iso(), "workflows": ci})
+            self._ci_written = ci
         agent_rows += remote_agents
         self._tick("pipelines")
         for pid in [row["project"] for row in agent_rows] + [r["project"] for r in runs]:

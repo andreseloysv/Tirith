@@ -265,3 +265,19 @@ class GithubReader:
             out.append(map_pr(slug, project, pr, (checks or {}).get("check_runs") or [],
                               files or []))
         return out
+
+
+CI_FILE = "ci-main.json"
+
+
+def last_finished(runs: list[dict]) -> dict[str, dict]:
+    """The newest finished run of each GitHub workflow, ``project/workflow`` -> ``{status, started_at, run}``."""
+    out: dict[str, dict] = {}
+    for run in runs:
+        if not isinstance(run, dict) or run.get("source") != "github" or run.get("status") not in ("passed", "failed"):
+            continue
+        key, at = f"{run.get('project')}/{run.get('pipeline')}", str(run.get("started_at") or "")
+        if key not in out or at > out[key]["started_at"]:
+            out[key] = {"status": run["status"], "started_at": at, "run": run.get("run")}
+    return dict(sorted(out.items()))
+
