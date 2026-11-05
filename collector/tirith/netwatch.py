@@ -94,8 +94,65 @@ def _name(host: str) -> str:
     return _names[host]
 
 
+_SECOND_LEVEL = {"co", "com", "net", "org", "gov", "ac", "edu"}
+RESOLVE_TTL_S = 600.0
+_resolved: dict[str, tuple[float, set[str]]] = {}
+
+
+def base_domain(name: str) -> str | None:
+    """``github.com`` for ``lb-140-82-112-3-iad.github.com``; None for an address or a single label."""
+    try:
+        ipaddress.ip_address(name)
+        return None
+    except ValueError:
+        pass
+    labels = [l for l in str(name or "").lower().rstrip(".").split(".") if l]
+    if len(labels) < 2:
+        return None
+    keep = 3 if len(labels) >= 3 and len(labels[-1]) == 2 and labels[-2] in _SECOND_LEVEL else 2
+    return ".".join(labels[-keep:])
+
+
+def _addresses(domain: str, now: float) -> set[str]:
+    hit = _resolved.get(domain)
+    if hit and now - hit[0] < RESOLVE_TTL_S:
+        return hit[1]
+    future = _pool.submit(lambda: {i[4][0] for i in socket.getaddrinfo(domain, None)})
+    done, _ = wait([future], timeout=LOOKUP_BUDGET_S)
+    try:
+        ips = future.result() if done else set()
+    except OSError:
+        ips = set()
+    _resolved[domain] = (now, ips)
+    return ips
+
+
+def lane_domains(home: Path, lane: dict) -> list[str]:
+    """The domains a lane's own calls named (``external`` of its access rows), newest first."""
+    from tirith.store import read_jsonl
+    project = str(lane.get("project") or access_mod.LOOSE)
+    out = []
+    for row in reversed(read_jsonl(Path(home) / access_mod.ACCESS_DIR / f"{project}.ndjson")[-400:]):
+        if row.get("lane") != lane.get("id") or row.get("tool") == "connection":
+            continue
+        for item in row.get("external") or []:
+            host = str(item).split(" ", 1)[-1].split(":")[0].strip("[]")
+            if "." in host and base_domain(host) and host not in out:
+                out.append(host)
+    return out[:20]
+
+
+def domain_of(address: str, reverse: str, domains: list[str], resolve: Callable[[str], set[str]]) -> str | None:
+    """The domain visited at ``address``: one the lane named that resolves to it, else the base of the reverse
+    name, else None."""
+    for domain in domains:
+        if address in resolve(domain):
+            return domain
+    return base_domain(reverse) if reverse != address else None
+
+
 def sample(home: Path, lanes: list[dict], now: float | None = None, run: Callable[[list[str]], str] = _run,
-           name: Callable[[str], str] = _name) -> list[dict]:
+           name: Callable[[str], str] = _name, resolve: Callable[[str], set[str]] | None = None) -> list[dict]:
     """One pass when ``EVERY_S`` passed: the new connections of the lanes' processes, written to the access log."""
     now = time.time() if now is None else now
     if now - _last["at"] < EVERY_S:
@@ -124,13 +181,17 @@ def sample(home: Path, lanes: list[dict], now: float | None = None, run: Callabl
         if key in seen:
             continue
         seen[key] = now_iso()
-        host = name(c["host"])
+        reverse = name(c["host"])
+        domain = domain_of(c["host"], reverse, lane_domains(home, lane),
+                           resolve or (lambda d: _addresses(d, now)))
         kind = PORTS.get(c["port"], "tcp")
         project = str(lane.get("project") or access_mod.LOOSE)
+        where = domain or c["host"]
         row = {"ts": now_iso(), "agent": lane.get("agent"), "lane": lane["id"],
                "plan": access_mod.plan_point(home, lane["id"]), "system": "network", "tool": "connection",
-               "action": f"{c['program']} connected to {host}:{c['port']}",
-               "external": [f"{kind} {host}:{c['port']}"]}
+               "action": f"{c['program']} connected to {where}:{c['port']}" + (f" ({c['host']})" if domain else ""),
+               "external": [f"{kind} {where}:{c['port']}"],
+               "domain": domain, "address": c["host"], "reverse": reverse if reverse != c["host"] else None}
         append_jsonl(home / access_mod.ACCESS_DIR / f"{project}.ndjson", row)
         rows.append(row)
     if rows:

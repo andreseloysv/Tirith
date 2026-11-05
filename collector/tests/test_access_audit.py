@@ -77,9 +77,24 @@ def test_the_network_watch_records_a_lanes_new_connections_once(tmp_path) -> Non
     lanes = [{"id": "lane-a", "pid": 300, "project": "demo", "agent": "anthropic"}, {"id": "old", "pid": 1, "ended_at": "x"}]
     netwatch._last["at"] = 0.0
     rows = netwatch.sample(tmp_path, lanes, now=1000.0, run=run, name=lambda h: "lb.github.com")
-    assert [r["external"] for r in rows] == [["https lb.github.com:443"]]  # python3 under lane-a; Safari and loopback are not
+    assert [r["external"] for r in rows] == [["https github.com:443"]]  # python3 under lane-a; Safari and loopback are not
+    assert rows[0]["domain"] == "github.com" and rows[0]["address"] == "140.82.112.3" and rows[0]["reverse"] == "lb.github.com"
     assert rows[0]["tool"] == "connection" and rows[0]["system"] == "network" and "python3" in rows[0]["action"]
     assert netwatch.sample(tmp_path, lanes, now=1005.0, run=run) == []  # not before EVERY_S
     assert netwatch.sample(tmp_path, lanes, now=1100.0, run=run, name=lambda h: "lb.github.com") == []  # seen once
     logged = [json.loads(l) for l in (tmp_path / "access" / "demo.ndjson").read_text().splitlines()]
     assert len(logged) == 1 and logged[0]["lane"] == "lane-a"
+
+
+def test_the_domain_a_lane_named_wins_over_the_reverse_name(tmp_path) -> None:
+    from tirith import netwatch
+    (tmp_path / "access").mkdir()
+    (tmp_path / "access" / "demo.ndjson").write_text(json.dumps(
+        {"lane": "lane-a", "tool": "Bash", "external": ["api api.github.com", "git remote"]}) + "\n")
+    lane = {"id": "lane-a", "project": "demo"}
+    assert netwatch.lane_domains(tmp_path, lane) == ["api.github.com"]
+    resolve = lambda d: {"140.82.112.6"} if d == "api.github.com" else set()  # noqa: E731
+    assert netwatch.domain_of("140.82.112.6", "lb-140-82-112-6-iad.github.com", ["api.github.com"], resolve) == "api.github.com"
+    assert netwatch.domain_of("1.2.3.4", "ec2-1-2-3-4.compute.amazonaws.com", [], resolve) == "amazonaws.com"
+    assert netwatch.domain_of("1.2.3.4", "1.2.3.4", [], resolve) is None  # no name at all: the address stays
+    assert netwatch.base_domain("news.bbc.co.uk") == "bbc.co.uk" and netwatch.base_domain("10.0.0.1") is None
