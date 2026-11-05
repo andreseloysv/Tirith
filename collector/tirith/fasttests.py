@@ -208,3 +208,17 @@ def for_lane(home: Path, project: str, folder: Path, stage: str) -> Selection:
     append_jsonl(home / "selections.jsonl", {"at": now_iso(), "project": project, "worktree": str(folder),
                                               **sel.record()})
     return sel
+
+
+PARALLEL_ARGS = ["-n", "auto", "--maxprocesses", "8"]
+_SERIAL_FLAGS = ("-n", "--numprocesses", "--dist", "no:xdist", "--testmon", "--collect-only", "--co", "--pdb", "-s")
+
+
+def parallel_pytest(command: list[str]) -> list[str]:
+    """An agent's pytest command with xdist added: agents ran ``uv run pytest -q tests`` in one process (1842
+    tests in 13 min, against 2 min in parallel). Left as it is when it is no pytest run, or it already chooses
+    (``-n``, ``-p no:xdist``, ``--testmon``), or it debugs (``--pdb``, ``-s``), or it is one shell string."""
+    if "pytest" not in command or any(arg.startswith(_SERIAL_FLAGS) for arg in command):
+        return command
+    return [*command, *PARALLEL_ARGS]
+
