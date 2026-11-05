@@ -101,6 +101,21 @@ proposal; once approved it becomes a plan item the same way.
 - **After downtime**: when Tirith was off since the last run, the next run is a catch-up: every open directive is
   checked again before the manager acts on it any further (a directive from before the gap is not trusted blindly).
 
+## The sentinel and the Status card
+
+**Status card** (`tirith/statuscard.py`, `state.status`, first on the Overview): four lines by code, no model: is it
+going well (green, amber only for a check not ok for 20 min or nothing working with open items, red for a failed
+check or CI red), the plan steps being worked on with their progress, the last merges, and what waits on the owner.
+
+**Sentinel** (`tirith/sentinel.py`, `state.sentinel`): a small, cheap model that looks every few minutes and wakes the
+CEO when something is off that no code check catches (the manager answering "wait" to everything, lanes failing the
+same way, the plan not moving while all is green). Set in Settings (`[models.sentinel]`: agent of any vendor, model,
+effort, on/off, every N minutes; unset: the workers' agent, the cheapest-looking of its models, effort low, 5 min).
+The live collector starts `tirith sentinel run` in the background only when the snapshot changed since its last
+look; the run builds the command with the lanes' builder (any agent alias) without tool permissions, in an empty
+folder, gives it the snapshot and reads `{"wake": bool, "why": "..."}` from any output format. A wake is the CEO's
+`sentinel` alarm, once per wake. Each look is a row of `<home>/sentinel.jsonl` (time, model, cost, verdict).
+
 ## One run
 
 Each run is a **fresh session** (no memory of earlier runs except its records), so it stays independent of the

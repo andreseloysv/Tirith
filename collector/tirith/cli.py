@@ -2689,7 +2689,8 @@ def _models_apply(home: Path, request_id: str, setup: dict) -> int:
                 effort=setup.get("effort") or None, agent=setup.get("agent") or None,
                 project=setup.get("project") or None, step=setup.get("step") or None,
                 clear=bool(setup.get("clear")),
-                fallback=[str(a) for a in setup["fallback"]] if isinstance(setup.get("fallback"), list) else None)
+                fallback=[str(a) for a in setup["fallback"]] if isinstance(setup.get("fallback"), list) else None,
+                enabled=setup.get("enabled") or None, every_min=str(setup["every_min"]) if setup.get("every_min") else None)
     except models_mod.ModelsError as error:
         inbox_mod.add_answer(home, request_id, f"Could not apply: {error}")
         inbox_mod.mark_done(home, request_id)
@@ -2719,10 +2720,22 @@ def _cmd_models(args) -> int:
         else:
             print(models_mod.set_models(home, args.role, model=args.model, effort=args.effort,
                                         agent=args.agent, project=args.project, step=args.step,
-                                        clear=args.clear, fallback=_fallback_arg(args.fallback)))
+                                        clear=args.clear, fallback=_fallback_arg(args.fallback),
+                                        enabled=args.enabled, every_min=args.every_min))
     except models_mod.ModelsError as error:
         print(f"tirith models {args.models_command}: {error}", file=sys.stderr)
         return 3
+    return 0
+
+
+def _cmd_sentinel(args) -> int:
+    from tirith import sentinel as sentinel_mod
+    home = _home(args)
+    if args.sentinel_command == "run":
+        row = sentinel_mod.run(home)
+        print(json.dumps(row))
+        return 0 if not row.get("error") else 1
+    print(json.dumps(sentinel_mod.public(home, datetime.now(timezone.utc)), indent=1))
     return 0
 
 
@@ -3338,10 +3351,17 @@ def build_parser() -> argparse.ArgumentParser:
     mo_set.add_argument("--project", default=None, help="workers: override for this project")
     mo_set.add_argument("--step", default=None, help="workers: override for this step (with --project)")
     mo_set.add_argument("--clear", action="store_true", help="remove the project or step override")
+    mo_set.add_argument("--enabled", choices=("on", "off"), default=None, help="sentinel: on or off")
+    mo_set.add_argument("--every-min", dest="every_min", default=None, help="sentinel: minutes between looks")
     mo_apply = models_sub.add_parser("apply-manager", parents=[common],
                                      help="write the manager model into the manager agent's user settings")
     for mo_cmd in (mo_show, mo_set, mo_apply):
         mo_cmd.set_defaults(func=_cmd_models)
+
+    sen = sub.add_parser("sentinel", parents=[common], help="the small model that wakes the CEO when something is off")
+    sen_sub = sen.add_subparsers(dest="sentinel_command", required=True)
+    sen_sub.add_parser("run", parents=[common], help="one look (the collector starts it)").set_defaults(func=_cmd_sentinel)
+    sen_sub.add_parser("status", parents=[common], help="its settings and its last look").set_defaults(func=_cmd_sentinel)
 
     url = sub.add_parser("url", parents=[common], help="the tirith:// link handler (macOS)")
     url_sub = url.add_subparsers(dest="url_command", required=True)

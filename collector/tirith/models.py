@@ -18,7 +18,7 @@ from tirith.home import Config
 from tirith.store import write_json_atomic, write_text_atomic
 
 EFFORTS = ("low", "medium", "high", "xhigh", "max")
-ROLES = ("manager", "workers")
+ROLES = ("manager", "workers", "sentinel")
 FIELDS = ("agent", "model", "effort")
 
 # alias -> flag that carries the effort on its command line when the preset has none; an alias that is
@@ -78,9 +78,21 @@ def parse(raw) -> dict:
         "patterns": _strings(raw.get("out_of_credits_patterns")),
         "manager": _pick(_table(raw.get("manager"))),
         "workers": _pick(workers),
+        "sentinel": {**_pick(_table(raw.get("sentinel"))), **_sentinel_extra(_table(raw.get("sentinel")))},
         "projects": {str(k): _pick(_table(v)) for k, v in _table(workers.get("projects")).items()},
         "steps": {str(k): _pick(_table(v)) for k, v in _table(workers.get("steps")).items()},
     }
+
+
+def _sentinel_extra(table: dict) -> dict:
+    """The sentinel's switch and pace: ``enabled`` ("on" / "off") and ``every_min`` (a number of minutes)."""
+    out = {}
+    if isinstance(table.get("enabled"), str) and table["enabled"].strip().lower() in ("on", "off"):
+        out["enabled"] = table["enabled"].strip().lower()
+    every = table.get("every_min")
+    if isinstance(every, str) and every.strip().isdigit():
+        out["every_min"] = every.strip()
+    return out
 
 
 def resolve_workers(config: Config, project: str | None = None, step: str | None = None) -> Choice:
@@ -203,10 +215,10 @@ def _key(part: str) -> str:
 
 
 def header_for(role: str, project: str | None = None, step: str | None = None) -> str:
-    if role == "manager":
+    if role in ("manager", "sentinel"):
         if project or step:
-            raise ModelsError("the manager has no per-project or per-step setting")
-        return "models.manager"
+            raise ModelsError(f"the {role} has no per-project or per-step setting")
+        return f"models.{role}"
     if step is not None and not project:
         raise ModelsError("--step needs --project")
     if step is not None:
@@ -305,7 +317,8 @@ def remove_table(text: str, header: str) -> str:
 
 def set_models(home: Path, role: str, *, model: str | None = None, effort: str | None = None,
                agent: str | None = None, project: str | None = None, step: str | None = None,
-               clear: bool = False, fallback: list[str] | None = None) -> str:
+               clear: bool = False, fallback: list[str] | None = None, enabled: str | None = None,
+               every_min: str | None = None) -> str:
     """Write the setting into ``<home>/config.toml`` and return a one-line description."""
     if role not in ROLES:
         raise ModelsError(f"role must be one of {', '.join(ROLES)}")
@@ -317,11 +330,18 @@ def set_models(home: Path, role: str, *, model: str | None = None, effort: str |
             raise ModelsError("--clear removes a per-project or per-step override only")
         new = remove_table(text, header)
     else:
-        if not (model or effort or agent) and fallback is None:
+        if not (model or effort or agent or enabled or every_min) and fallback is None:
             raise ModelsError("nothing to set: pass --model, --effort, --agent or --fallback")
+        if (enabled or every_min) and role != "sentinel":
+            raise ModelsError("only the sentinel has enabled and every_min")
+        if enabled and enabled not in ("on", "off"):
+            raise ModelsError("enabled is on or off")
+        if every_min and not (str(every_min).isdigit() and 1 <= int(every_min) <= 1440):
+            raise ModelsError("every_min is a number of minutes from 1 to 1440")
         if fallback is not None and role != "workers":
             raise ModelsError("only the workers have a fallback chain")
-        given = {"agent": agent, "model": model, "effort": effort}
+        given = {"agent": agent, "model": model, "effort": effort, "enabled": enabled,
+                 "every_min": str(every_min) if every_min else None}
         values = {k: v for k, v in given.items() if v}  # unset keys stay
         if fallback is not None:
             values["fallback"] = list(dict.fromkeys(fallback))
@@ -409,6 +429,8 @@ def state(config: Config, pending: list[str] | None = None, status: dict | None 
         "manager": {**manager, "settings": held, "in_sync": synced,
                     "effort_key": bool(SETTINGS_KEYS.get(manager["agent"] or "", {}).get("effort"))},
         "workers": {**{k: cfg["workers"].get(k) for k in FIELDS}, "fallback": cfg["workers"].get("fallback") or []},
+        "sentinel": {**{k: cfg["sentinel"].get(k) for k in FIELDS}, "enabled": cfg["sentinel"].get("enabled", "on"),
+                     "every_min": cfg["sentinel"].get("every_min")},
         "projects": cfg["projects"], "steps": cfg["steps"],
         "choices": cfg["choices"], "choices_by_agent": {a: choices_for(config, a) for a in aliases},
         "efforts": cfg["efforts"] or list(EFFORTS), "agents": aliases,

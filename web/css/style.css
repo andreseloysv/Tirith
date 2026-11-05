@@ -1056,3 +1056,11 @@ button.vwho:hover b { text-decoration: underline; }
 .chip.xk { white-space: nowrap; }
 .chip.xk.blk { background: #fef2f2; color: #b91c1c; }
 .listwrap > .extsec { padding-left: 0; padding-right: 0; }
+
+/* the Status card (first on the Overview) */
+.stcard { padding: 12px 16px; margin-bottom: 14px; font-size: 13.5px; line-height: 1.7; border-left: 4px solid #22c55e; }
+.stcard.warn { border-left-color: #f59e0b; } .stcard.bad { border-left-color: #ef4444; }
+.stcard .stl1 { font-size: 15px; }
+.stcard .stk { display: inline-block; min-width: 72px; color: var(--mut, #64748b); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+.stcard .stbar { font-family: ui-monospace, monospace; letter-spacing: -1px; color: #2563eb; } .stcard .stbar i { color: #cbd5e1; font-style: normal; }
+.stcard .stown b { color: #b45309; } .stcard .stsen { font-size: 12px; }
