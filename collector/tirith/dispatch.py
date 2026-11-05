@@ -362,6 +362,23 @@ def _cleanup_due(home: Path) -> bool:
     return True
 
 
+def _net_rule(home: Path, req: dict, now: datetime) -> str:
+    """The owner blocked or unblocked a destination on the Accesos page: applied by code, answered and closed."""
+    from tirith import netblock as netblock_mod
+    setup = req.get("setup") or {}
+    try:
+        if setup.get("action") == "net-block":
+            text = f"Blocked {netblock_mod.add(home, str(setup.get('match') or ''))}: no agent may reach it."
+        else:
+            gone = netblock_mod.remove(home, str(setup.get("match") or ""))
+            text = f"Unblocked {netblock_mod.clean(str(setup.get('match') or ''))}." if gone else "It was not blocked."
+    except ValueError as err:
+        text = f"Could not apply: {err}"
+    inbox_mod.add_answer(home, req["id"], text, by="tirith", at=now_iso(now))
+    inbox_mod.mark_done(home, req["id"], now_iso(now))
+    return "answered"
+
+
 def run(home: Path, config: Config, now: datetime, *, agents: list[dict], lanes: list[dict],
         status_of: Callable, launcher: Callable | None = None,
         notify: Callable[[str, str], None] = macos_notify, spawn: Callable | None = None,
@@ -417,6 +434,8 @@ def run(home: Path, config: Config, now: datetime, *, agents: list[dict], lanes:
                 done = _plan(home, req, config, lanes, status_of, plan_launcher, now)
             elif req["kind"] == "plan-edit" and not req["answers"]:
                 done = _plan_edit(home, req, config, now)
+            elif req["kind"] == "setup" and (req.get("setup") or {}).get("action") in inbox_mod.NET_ACTIONS:
+                done = _net_rule(home, req, now)
             else:
                 own = req["kind"] in ("finish", "plan-edit") or req["kind"] in inbox_mod.PLAN_KINDS
                 done = "answered" if own else "manager"

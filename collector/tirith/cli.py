@@ -2050,6 +2050,25 @@ def _cmd_testmap_run(args) -> int:
     return testmap_mod.run_selected(Path(args.folder or ".").resolve())
 
 
+def _cmd_net(args) -> int:
+    """``tirith net block|unblock <domain|ip|cidr>`` and ``tirith net list``: destinations no agent may reach."""
+    from tirith import netblock as netblock_mod
+    home = _home(args)
+    if args.net_command == "list":
+        for rule in netblock_mod.rules(home):
+            print(f"{rule['match']}  (blocked {rule.get('at')} by {rule.get('by')})")
+        return 0
+    if args.net_command == "block":
+        try:
+            print(f"blocked {netblock_mod.add(home, args.match)}")
+        except ValueError as err:
+            print(f"tirith net block: {err}", file=sys.stderr)
+            return 3
+        return 0
+    print(f"unblocked {netblock_mod.clean(args.match)}" if netblock_mod.remove(home, args.match) else "it was not blocked")
+    return 0
+
+
 def _cmd_merge_status(args) -> int:
     home = _home(args)
     shown = mergeq_mod.view(home, args.project)
@@ -3163,6 +3182,15 @@ def build_parser() -> argparse.ArgumentParser:
                                    "(a few with testmon, more in parallel)")
     t_run.add_argument("--folder", default=None, help="the collector folder (default: the cwd)")
     t_run.set_defaults(func=_cmd_testmap_run)
+
+    net = sub.add_parser("net", parents=[common], help="destinations no agent may reach (domains, addresses, ranges)")
+    net_sub = net.add_subparsers(dest="net_command", required=True)
+    for verb, text in (("block", "block a domain (and its subdomains), an address or a CIDR range"),
+                       ("unblock", "remove a block")):
+        n = net_sub.add_parser(verb, parents=[common], help=text)
+        n.add_argument("match")
+        n.set_defaults(func=_cmd_net)
+    net_sub.add_parser("list", parents=[common], help="the blocked destinations").set_defaults(func=_cmd_net)
 
     inbox = sub.add_parser("inbox", parents=[common], help="the owner's requests on plan steps")
     inbox_sub = inbox.add_subparsers(dest="inbox_command", required=True)

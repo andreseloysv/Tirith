@@ -77,8 +77,43 @@
       return '<tr class="rt"><td class="sm">' + esc(T.clockTime(g.last)) + '</td><td><span class="chip xk rt">Agent runtime</span></td><td><b>' +
         esc(g.dest) + '</b>' + (g.org ? ' <span class="mut sm">' + esc(g.org) + '</span>' : '') + '</td><td class="sm">' +
         esc(Object.keys(g.who).join(', ')) + '</td><td class="sm mut">' + g.n + (g.n === 1 ? ' connection' : ' connections') +
-        ' · opened by the agent program itself, not by a command it ran</td></tr>';
+        ' · opened by the agent program itself, not by a command it ran</td><td class="sm">' + blockBtn(s, g.dest) + '</td></tr>';
     }).join('');
+  }
+  /* blocking: a setup request (action net-block / net-unblock) that Tirith applies at once */
+  ui.netPend = ui.netPend || {}; ui.netErr = ui.netErr || null; ui.netCli = ui.netCli || null;
+  function hostOf(dest) { var d = String(dest || ''); return d.indexOf(':') > 0 && d.split(':').length === 2 ? d.split(':')[0] : d; }
+  function blockedBy(s, host) {
+    var h = String(host || '').toLowerCase();
+    return (s.netblock || []).filter(function (r) { var m = r.match; return h === m || h.slice(-(m.length + 1)) === '.' + m; })[0] || null;
+  }
+  function netSend(action, match) {
+    var st = T.rawState && T.rawState(), L = st && st.launch, tauri = window.__TAURI__;
+    var text = JSON.stringify({ action: action, match: match });
+    ui.netErr = null; ui.netCli = null;
+    function sent() { ui.netPend[match] = action; T.render(); setTimeout(function () { delete ui.netPend[match]; T.render(); }, 8000); }
+    if (tauri && tauri.core && tauri.core.invoke) {
+      tauri.core.invoke('inbox_add', { kind: 'setup', project: 'all', step: 'setup', text: text }).then(sent, function (err) { ui.netErr = 'Could not send: ' + err; T.render(); });
+    } else if (L && L.token && L.available) {
+      var a = document.createElement('a');
+      a.href = 'tirith://inbox?kind=setup&project=all&step=setup&text=' + encodeURIComponent(text) + '&token=' + encodeURIComponent(L.token);
+      a.style.display = 'none'; document.body.appendChild(a); a.click(); document.body.removeChild(a); sent();
+    } else { ui.netCli = 'tirith net ' + (action === 'net-block' ? 'block ' : 'unblock ') + match; T.render(); }
+  }
+  function blockBtn(s, dest) {
+    var host = hostOf(dest), rule = blockedBy(s, host), pend = ui.netPend[host] || (rule && ui.netPend[rule.match]);
+    if (pend) return '<span class="mut sm">' + (pend === 'net-block' ? 'Blocking…' : 'Unblocking…') + '</span>';
+    return rule ? '<span class="chip xk blk">Blocked</span> <button class="link sm" data-act="netunblock" data-key="' + esc(rule.match) + '">Unblock</button>'
+      : '<button class="link sm" data-act="netblock" data-key="' + esc(host) + '" title="No agent may reach ' + esc(host) + ' or its subdomains">Block</button>';
+  }
+  function blockList(s) {
+    var rules = s.netblock || [];
+    var h = rules.length ? '<p class="sm"><b>Blocked:</b> ' + rules.map(function (r) {
+      return '<span class="chip xk blk">' + esc(r.match) + '</span> <button class="link sm" data-act="netunblock" data-key="' + esc(r.match) + '">Unblock</button>';
+    }).join(' ') + '</p>' : '';
+    if (ui.netErr) h += '<p class="ierr">' + esc(ui.netErr) + '</p>';
+    if (ui.netCli) h += '<p class="icli">Tirith cannot send from this page. Run in a terminal: <code>' + esc(ui.netCli) + '</code></p>';
+    return h;
   }
   function destinations(list) { var d = {}; list.forEach(function (x) { d[x.dest] = 1; }); return Object.keys(d).length; }
   function externalSection(s) {
@@ -91,11 +126,12 @@
         '<td><b>' + esc(x.dest) + '</b>' + (x.row.org ? ' <span class="mut sm">' + esc(x.row.org) + '</span>' : '') +
           (x.row.address && x.dest.indexOf(x.row.address) < 0 ? ' <span class="mut sm" title="' +
           esc(x.row.reverse || '') + '">' + esc(x.row.address) + '</span>' : '') + '</td><td class="sm">' + who + '</td><td class="sm mut" title="' + esc(x.row.action || '') + '">' +
-        esc(x.live ? 'connection opened' : (x.row.action || x.row.tool || '')) + '</td></tr>';
+        esc(x.row.blocked ? x.row.action : x.live ? 'connection opened' : (x.row.action || x.row.tool || '')) + '</td><td class="sm">' +
+        (x.kind === 'search' || x.kind === 'mcp' || x.dest === 'remote' ? '' : blockBtn(s, x.dest)) + '</td></tr>';
     }).join('') + '</tbody></table>' : '<p class="mut sm">Nothing reached outside the machine in this period.</p>';
     var lines = destinations(own) + Math.min(rows.length, 200);
     return '<section class="pad extsec"><h2>External <span class="mut">' + lines + (lines === 1 ? ' line' : ' lines') +
-      (all.length !== lines ? ' · ' + all.length + ' accesses' : '') + '</span></h2>' + body + '</section>';
+      (all.length !== lines ? ' · ' + all.length + ' accesses' : '') + '</span></h2>' + blockList(s) + body + '</section>';
   }
   function view(s, el) {
     var all = s.accesses || [], systems = [['', 'All systems']];
@@ -114,6 +150,8 @@
     if (act === 'accsys') f.sys = key;
     else if (act === 'accdays') f.days = key;
     else if (act === 'accopen') f.open[key] = !f.open[key];
+    else if (act === 'netblock') { netSend('net-block', key); return; }
+    else if (act === 'netunblock') { netSend('net-unblock', key); return; }
     else if (act === 'goplan') { T.filter.project = key; T.setFilter('view', 'overview'); return; }
     else return;
     T.render();
