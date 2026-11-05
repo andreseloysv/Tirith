@@ -199,8 +199,13 @@ def branch_exists(repo: Path, branch: str) -> bool:
                             "git").returncode == 0
 
 
+RESERVED_PREFIXES = ("manager", "ceo-", "canary-")  # Tirith's own lanes; a work lane named so was taken for one
+
+
 def lane_id_for(title: str, taken: set[str], repo: Path) -> str:
     base = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:32].strip("-") or "lane"
+    if base.startswith(RESERVED_PREFIXES):  # "Manager de guardia…" gave "manager-de-guardia…": counted as the manager
+        base = ("step-" + base)[:32].strip("-")
     candidate, n = base, 2
     while (candidate in taken or worktree_path(repo, candidate).exists()
            or branch_exists(repo, f"lane/{candidate}")):
