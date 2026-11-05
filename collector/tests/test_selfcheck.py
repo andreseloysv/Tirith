@@ -386,6 +386,52 @@ def test_a_failure_only_this_lane_has_goes_back_to_its_agent(home: Path, project
     assert len(sent) == 1 and level(state, "reviews") == "failed" and len(queue_ids(home)) == 1  # back and still red
 
 
+def test_a_failure_another_lane_carries_on_does_not_count(home: Path, project: Path) -> None:
+    lane = review_lane(home, project, "tests-failed", NOW, FAIL)
+    write_lane(home, {**read_lane(home, lane["id"]), "agent": "anthropic"})
+    write_lane(home, {"id": "carry-on", "project": "demo", "retry_of": lane["id"]})  # died with a restart, say
+    state, fake, sent = {}, Fake(), []
+    for when in (10, 200):
+        check(home, state, at(when), fake, lanes=[lane], diff=lambda repo, lane_id: ["collector/tirith/dispatch.py"],
+              relaunch=lambda *a: sent.append(a))
+    assert sent == [] and fake.spawned == [] and level(state, "reviews") == "ok" and queue_ids(home) == []
+
+
+def test_a_send_back_nothing_came_of_goes_to_the_manager(home: Path, project: Path) -> None:
+    lane = review_lane(home, project, "tests-failed", NOW, FAIL)
+    write_lane(home, {**read_lane(home, lane["id"]), "agent": "anthropic"})
+    state, fake, sent = {}, Fake(), []
+    diff = lambda repo, lane_id: ["collector/tirith/dispatch.py"]  # noqa: E731
+    relaunch = lambda home, lane, alias, note: sent.append(lane["id"])  # noqa: E731  (its lane never registers)
+    for when in (10, 200, 200 + selfcheck_mod.SENDBACK_WAIT_S - 60):
+        check(home, state, at(when), fake, lanes=[lane], diff=diff, relaunch=relaunch)
+        assert level(state, "reviews") == "healing"  # a rerun first, then the send-back waits for an answer
+    check(home, state, at(260 + selfcheck_mod.SENDBACK_WAIT_S), fake, lanes=[lane], diff=diff, relaunch=relaunch)
+    assert len(sent) == 1 and level(state, "reviews") == "failed"
+    assert "was sent back to its agent" in asks_mod.queue_items(home, only_open=True)[0]["text"]
+
+
+def test_the_lane_a_send_back_started_is_not_sent_back_again(home: Path, project: Path) -> None:
+    lane = review_lane(home, project, "tests-failed", NOW, FAIL)
+    write_lane(home, {**read_lane(home, lane["id"]), "agent": "anthropic"})
+    state, fake, sent = {}, Fake(), []
+    diff = lambda repo, lane_id: ["collector/tirith/dispatch.py"]  # noqa: E731
+
+    def relaunch(home, old, alias, note):
+        sent.append(old["id"])
+        write_lane(home, {**read_lane(home, old["id"]), "id": "child", "retry_of": old["id"]})  # fails the same way
+        return "child"
+
+    check(home, state, at(10), fake, lanes=[lane], diff=diff, relaunch=relaunch)
+    check(home, state, at(200), fake, lanes=[lane], diff=diff, relaunch=relaunch)
+    assert sent == [lane["id"]]
+    child = read_lane(home, "child")
+    for when in (400, 600):
+        check(home, state, at(when), fake, lanes=[lane, child], diff=diff, relaunch=relaunch)
+    assert sent == [lane["id"]] and level(state, "reviews") == "failed"  # the parent is the child's; the child is the manager's
+    assert "child was sent back" not in says(home) and len(queue_ids(home)) == 1
+
+
 def test_a_failure_other_lanes_share_points_at_main(home: Path, project: Path) -> None:
     lane = review_lane(home, project, "tests-failed", NOW, FAIL)
     write_lane(home, {**read_lane(home, lane["id"]), "agent": "anthropic"})
