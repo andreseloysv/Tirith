@@ -143,6 +143,22 @@ recorded as `the repository's own <hook> hook failed`). `verify` accepts the cha
 the expected text with the chain block for every hook that has a `.local` file, and reports a `.local` file
 that is not executable. `install` also locks (`uchg`) a guard that is exactly as expected but lost its flag.
 
+### Loss of the flag at 30 Oct 18:58:19Z (what is and is not known)
+
+Evidence in `~/.tirith` (`events.jsonl`, `flows.jsonl`, `selections.jsonl`): the owner alert
+`Commit guard needs attention in Tirith: pre-commit: not immutable (uchg)` is only the *detection* (18:59:40Z).
+In the minute around 18:58:19Z the only run on the main checkout's behalf is the `salas-privadas` lane's
+`tirith run --stage build` and `--stage test` (hook at 18:58:18Z; `ci#213` build 18:57:58Z-18:58:05Z and again
+18:59:24Z-18:59:31Z), next to the `tirith-se-mejora-usando-tirith-11` full test run (`ci#211` ended 18:58:00Z,
+a new one started 18:58:57Z). No log records a `chflags`, so **the cause is not proven**. The hooks' `ctime`
+(30 Oct 19:12Z) is the owner's re-lock and overwrote the removal time, so it cannot be recovered afterwards.
+
+The working hypothesis is that the test cleanup (`conftest.make_hooks_mutable` / `_unlock_tree`) cleared the flag
+through a symlink or a worktree's shared git dir. It is the only code in the repository that clears `uchg`
+outside the owner-only `guard reinstall`; it is now confined to temp folders (`inside_temp`, tests
+`guard_flags_stay`), which removes that path but does not confirm it was the one taken. If the alert comes back,
+check first: the `ctime` of `.git/hooks/*` before re-locking, and the runs in `events.jsonl` in that minute.
+
 `[[projects]] guard = false` in `config.toml` (written by the "Never for this project" button) switches
 the check off for one project.
 
@@ -192,3 +208,7 @@ executable and role as before, and a `hooks-removed` violation is recorded with 
 installed is reported but not touched. `[gates] enabled = false` switches the healing off too. The result
 is kept in `~/.tirith/protect.json` and shown in `state.projects[].setup.protection`
 (`[{agent, ok, checked_at, healed_at}]`); the Setup card shows "Hooks protected · last check 2 s ago".
+
+## Lost guard flag
+
+When the collector's guard check finds a hook's `uchg` flag lost, it appends one line to `~/.tirith/guard-flags.jsonl`: `{kind: "guard-flag-lost", at, repo, hooks, hooks_ctime: {hook: iso}, runs: [{lane, alias, project, pid, testing}]}` (the runs active at that moment). One line per loss: written again only after the flag was seen intact, or when the hooks' ctime moved. Attribute a repeat by matching `hooks_ctime` against the runs.
