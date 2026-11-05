@@ -268,6 +268,9 @@ not checked for 167 passed (backticks still name files and tests).
 - "looked at the screenshot <path>": the file must exist and be newer than the lane's start;
 - the brief's "Fix"/"Do" bullet items against a diff that is empty or only docs (`*.md`, `*.rst`, `docs/`,
   README), unless the item itself is about docs/wording.
+- a verify-only lane (every bullet of its brief starts with verify/check/audit/review/inspect/confirm/comprobar/
+  verificar/revisar…) is expected to leave an empty diff: the fix/do check is skipped and the files its report
+  cites are findings, not changes, so they are not checked against the diff (tests, git and screenshot claims still are).
 A lane sent back (`fallback_lane`) is judged against the first lane's `start_commit` and start time.
 
 Any mismatch: `review.status = "claims-failed"`, `review.message` is the list, nothing is merged (exit 1).

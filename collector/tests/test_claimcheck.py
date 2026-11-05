@@ -196,6 +196,17 @@ def test_brief_fix_with_docs_only_diff_is_flagged(work, home: Path) -> None:
     assert cc.verify(home, lane_of(work), report="x", brief="- Fix the typo in the docs\n").ok  # a docs item
 
 
+def test_claim_check_verify_lane_empty_diff_and_cited_files_are_fine(work, home: Path) -> None:
+    lane = lane_of(work)
+    brief = "## Your item\n- Verify that the demo state is consistent\n- Do verify docs/CONTRACT-launch.md\n"
+    report = "Checked web/demo/state.demo.js, which is wrong at line 3. I updated nothing."
+    assert cc.verify(home, lane, report="Verified. Found problems in web/demo/state.demo.js.", brief=brief).ok
+    assert cc.verify(home, lane, report="Updated web/demo/state.pipelines.js as a finding.", brief=brief).ok
+    assert cc.verify(home, lane, report=report, brief=brief).ok
+    build = "- Verify the state\n- Fix the crash\n"
+    assert not cc.verify(home, lane, report="Changed web/demo/state.demo.js.", brief=build).ok
+
+
 # -- review and autoreview -----------------------------------------------------------------------
 
 MANIFEST = ('deploy = "none"\n[[pipelines]]\nid = "ci"\n[[pipelines.stages]]\nname = "build"\nrun = "true"\n'
