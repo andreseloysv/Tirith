@@ -441,6 +441,31 @@ def _with_plan_moves(repo: Path, tmp: Path, base: str, head: str, tested: str, b
     return landed
 
 
+def resolve_plan_conflict(repo: Path, tmp: Path, lane: dict, files: list[str]) -> bool:
+    """A merge in ``tmp`` stopped on conflicts: when they are all in plan files (docs/TODO.md), keep main's
+    version of them, write the lane's plan report again (``tirith plan report``) and finish the merge.
+    False leaves the merge unfinished (the caller aborts it)."""
+    plans = _plan_paths(repo)
+    if not files or any(name not in plans for name in files):
+        return False
+    linked = plangate_mod.lane_item(lane)
+    mutate = plangate_mod.outcome_mutation(lane, *linked) if linked else None
+    for name in files:
+        if _git(tmp, "checkout", "--ours", "--", name).returncode != 0:
+            return False
+        if mutate:
+            path = tmp / name
+            try:
+                path.write_text(mutate(path.read_text(encoding="utf-8")), encoding="utf-8")
+            except Exception:  # the item is gone from main's plan: main's version stands
+                _git(tmp, "checkout", "--ours", "--", name)
+        if _git(tmp, "add", "--", name).returncode != 0:
+            return False
+    if _git(tmp, "diff", "--name-only", "--diff-filter=U").stdout.split():
+        return False
+    return _git(tmp, "commit", "-q", "--no-edit").returncode == 0
+
+
 def _land(home: Path, repo: Path, tmp: Path, project: str, base: str, tested: str, main_branch: str,
           subject: str, via: str) -> tuple[str, tuple[str, str] | None]:
     """Fast-forward main to the tested commit under the plan writer lock: ``(commit, None)``, else ``("", (result, message))``."""
@@ -549,9 +574,11 @@ def _try(home: Path, repo: Path, lane: dict, entry: dict) -> tuple[str, str, dic
             return "retry", f"merging {branch} into {main_branch} {TIMED_OUT}; trying again", {}
         if merged.returncode != 0:
             files = _git(tmp, "diff", "--name-only", "--diff-filter=U").stdout.split()
-            _git(tmp, "merge", "--abort")
-            what = ("conflicts in " + ", ".join(files)) if files else _tail(merged.stderr or merged.stdout)
-            return CONFLICT, f"merging {branch} into {main_branch} failed: {what}", {"main": main_branch, "files": files}
+            if not resolve_plan_conflict(repo, tmp, lane, files):
+                _git(tmp, "merge", "--abort")
+                what = ("conflicts in " + ", ".join(files)) if files else _tail(merged.stderr or merged.stdout)
+                return CONFLICT, f"merging {branch} into {main_branch} failed: {what}", \
+                    {"main": main_branch, "files": files}
         stages = stages_of(tmp)
         if not stages:
             return WAITING, "the manifest has no build or test stage with a run command", {}
@@ -625,8 +652,8 @@ def _try_train(home: Path, repo: Path, members: list[tuple[dict, dict]]) -> tupl
             if merged.timed_out:
                 _git(tmp, "merge", "--abort")
                 return "retry", f"merging {branch} into {main_branch} {TIMED_OUT}; trying again", info
-            if merged.returncode != 0:
-                files = _git(tmp, "diff", "--name-only", "--diff-filter=U").stdout.split()
+            files = _git(tmp, "diff", "--name-only", "--diff-filter=U").stdout.split() if merged.returncode != 0 else []
+            if merged.returncode != 0 and not resolve_plan_conflict(repo, tmp, lane, files):
                 _git(tmp, "merge", "--abort")
                 what = ("conflicts in " + ", ".join(files)) if files else _tail(merged.stderr or merged.stdout)
                 joined.remove(pair)

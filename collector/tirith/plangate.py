@@ -466,12 +466,11 @@ def current_lane_item(repo: Path, lane: dict) -> tuple[str, str] | None:
     return linked
 
 
-def apply_outcome(home: Path, repo: Path, project: str, lane: dict) -> None:
-    """Write a lane's outcome into the plan: the item's note and the new items (idempotent)."""
-    outcome, linked = lane.get("outcome") or {}, current_lane_item(repo, lane)
-    if not outcome or not linked:
-        return
-    step, item = linked
+def outcome_mutation(lane: dict, step: str, item: str) -> Callable[[str], str] | None:
+    """The plan edit that writes a lane's reported outcome (the item's note and the new items); None without one."""
+    outcome = lane.get("outcome") or {}
+    if not outcome:
+        return None
     clean = roadmap_mod.split_status(item)[0]
     status, reason = outcome["status"], str(outcome.get("reason") or "")
     if status == "blocked":
@@ -493,7 +492,16 @@ def apply_outcome(home: Path, repo: Path, project: str, lane: dict) -> None:
                 taken.add(roadmap_mod.split_status(new)[0])
         return text
 
-    commit_change(home, repo, project, mutate, _message(f"report {status}", step, str(lane["id"])))
+    return mutate
+
+
+def apply_outcome(home: Path, repo: Path, project: str, lane: dict) -> None:
+    """Write a lane's outcome into the plan: the item's note and the new items (idempotent)."""
+    linked = current_lane_item(repo, lane)
+    mutate = outcome_mutation(lane, *linked) if linked else None
+    if mutate:
+        commit_change(home, repo, project, mutate,
+                      _message(f"report {lane['outcome']['status']}", linked[0], str(lane["id"])))
 
 
 def report(home: Path, lane_id: str, status: str, adds: list[str] | None = None, reason: str | None = None) -> dict:

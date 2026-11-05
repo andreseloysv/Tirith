@@ -17,6 +17,8 @@ is enqueued (`tirith merge request`, or by the dispatcher). Tirith merges (`coll
    main moved in any other file it starts again (3 tries); if it still moves, the entry goes back to the queue
    with its reason and the runner goes on to the next entry (it does not stop). Then it pushes `origin`, ticks the plan
    item and removes both worktrees and the branch.
+3b. A merge conflict only in plan files (`docs/TODO.md`, manifest `plans`) is resolved by the queue itself: it keeps
+   main's version and writes the lane's `tirith plan report` into it again; any other conflict goes back as below.
 4. A conflict or a red stage goes back to the same agent: a relaunch whose brief continues the lane's branch
    with the conflict / failure appended (marker `[merge queue]`; after 3 returns the manager's queue decides).
    Never the owner. A git command cut off at its time limit (exit 124, e.g. the merge) is not a conflict: the
