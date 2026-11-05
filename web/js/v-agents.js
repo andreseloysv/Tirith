@@ -70,7 +70,8 @@
       el.innerHTML = tb + '<div class="listwrap treewrap" data-scroll="atree">' + tree(vis) + '</div>' + (more ? '<div class="moreline">' + more + '</div>' : '') + drawerFor();
       return;
     }
-    var cols = [['working', 'Working', 'blue'], ['stalled', 'Stalled', 'amber'], ['done', 'Done', 'green'], ['failed', 'Failed', 'red']];
+    /* only what can still need someone: Done and Failed were noise to the owner (List and Tree still show every agent) */
+    var cols = [['working', 'Working', 'blue'], ['stalled', 'Stalled', 'amber']];
     var board = cols.map(function (c) {
       var l = vis.filter(function (a) { return a.status === c[0]; });
       return '<section class="col ' + c[2] + '"><header><b>' + c[1] + '</b><span class="n">' + l.length + '</span></header><div class="cbody" data-scroll="col-' + c[0] + '">' +
