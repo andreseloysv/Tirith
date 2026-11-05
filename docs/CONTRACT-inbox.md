@@ -707,3 +707,15 @@ Every time a person was needed (`tirith wait add` reaches the owner) or somethin
 `<home>/friction.jsonl` (`at, project, kind person|wait, key, detail, seconds`). `tirith friction record|list|surface`.
 Rows with the same `key` are one friction; its score is the seconds waited plus 600 s per time a person was needed.
 `surface` puts the biggest friction (at least twice) as the first open item of the "Trabajo automático" step, once.
+
+## Digest (what reached main)
+
+`tirith digest [--project P] [--json]` builds one card per lane the merge queue merged (from the
+`mergeq.json` history, newest first, at most 20) and writes a static page to `<home>/digest/<P|all>.html`
+(no server, no port); `--json` prints the data instead. The same data is `state.projects[].digest`
+(`{project, at, count, cards: [{lane, project, at, summary, commit, train, skipped, flaky}]}`).
+
+The page ends with the opinion button ("Give your opinion": the `tirith://inbox?kind=digest-feedback`
+link, plus the line to copy). `tirith digest feedback --project P [--step N] --text "<opinion>"` turns each
+non-empty line of the opinion (bullets stripped) into an open plan item through `tirith plan add`'s writer;
+without `--step` the items go to the last real step that still has open items. An empty opinion exits 3.
