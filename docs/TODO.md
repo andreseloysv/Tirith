@@ -34,6 +34,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Revisar el plan (2026-10-31) (en revisión)
 - [x] Manager de guardia: atender el chat
 - [ ] CEO: revisar cómo trabaja el manager
+- [ ] Manager de guardia: atender el chat (en curso: manager-984f65e8)
 - [x] Manager de guardia: atender el chat
 - [x] Manager de guardia: atender el chat
 - [x] Manager de guardia: atender el chat
@@ -220,7 +221,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Tests rápidos en la lane (solo lo relacionado con el cambio) y suite completa en la cola de fusión; el paralelismo se ajusta a CPU y disco. (hecho: 5b1c355)
 - [x] El tiempo límite de un agente mide inactividad (sin salida ni progreso durante N minutos), no el tiempo total; una lane que sigue trabajando nunca se corta por durar mucho. (hecho: 10bece7)
 - [ ] Repasar los 6 elementos grandes del paso 7 marcados (en revisión): lo que ya está en main se marca hecho con su commit y lo que falta se divide con tirith plan add en elementos de unos 30 minutos con su check. (check: `test $(grep -c '(en revisión)' docs/TODO.md) -lt 6`) (en revisión) <!-- tirith:{"id":"i-ea7a2601","depends_on":[],"writes":[]} -->
-- [ ] Un agente puede subir o bajar el timeout de un comando dentro de límites dando un motivo que Tirith registra, porque reglas-8 marcó hecho el elemento grande sin verificar esta parte. (check: `cd collector && uv run -q pytest -q tests -k timeout_override`) <!-- tirith:{"id":"i-173a70ef","depends_on":[],"writes":[]} -->
+- [ ] Un agente puede subir o bajar el timeout de un comando dentro de límites dando un motivo que Tirith registra, porque reglas-8 marcó hecho el elemento grande sin verificar esta parte. (check: `cd collector && uv run -q pytest -q tests -k timeout_override`) (en curso: reglas-de-c-digo-errores-de-comp-9) <!-- tirith:{"id":"i-173a70ef","depends_on":[],"writes":[]} -->
 - [x] Tirith corta un agente solo tras N minutos sin salida ni progreso, nunca por el tiempo total: una lane que sigue escribiendo salida no se corta por durar mucho. (check: `cd collector && uv run -q pytest -q tests -k idle_timeout`) <!-- tirith:{"id":"i-6f47c8a6","depends_on":[],"writes":[]} -->
   - [x] Revisar: Tirith corta un agente solo tras N minutos sin salida ni progreso, nunca por el tiempo total: una lane que sigue escribiendo salida no se corta por durar mucho. (check: `cd collector && uv run -q pytest -q tests -k idle_timeout`)
 - [x] Al vencer el timeout de un comando de una etapa o de un agente, Tirith detiene el proceso con todos sus hijos y limpia sus bloqueos. (check: `cd collector && uv run -q pytest -q tests -k timeout_kills_tree`) (hecho: 0438f8e) <!-- tirith:{"id":"i-6caa45d6","depends_on":[],"writes":[]} -->
@@ -461,7 +462,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
   - [x] Revisar: El planificador no lanza a la vez dos lanes que tocan los mismos archivos. (check: `cd collector && uv run -q pytest -q tests -k conflicts`)
 - [x] La cola de merge prueba varios lanes juntos en una sola pasada de tests y separa al culpable si falla. (check: `cd collector && uv run -q pytest -q tests -k mergetrain`) (hecho: 69fee04)
 - [ ] Cada elemento terminado muestra su evidencia en la app: salida de tests y capturas si cambia la interfaz. (check: `cd collector && uv run -q pytest -q tests -k evidence`) (en revisión) <!-- tirith:{"id":"i-a284892e"} -->
-- [ ] La app muestra cuánto tarda un elemento en llegar a main, cuántos llegan por hora y cuántas veces hizo falta el dueño. (check: `cd collector && uv run -q pytest -q tests -k metrics`)
+- [ ] La app muestra cuánto tarda un elemento en llegar a main, cuántos llegan por hora y cuántas veces hizo falta el dueño. (check: `cd collector && uv run -q pytest -q tests -k metrics`) (en curso: velocidad-y-autonom-a-de-un-obje-7) <!-- tirith:{"id":"i-100695a9"} -->
 - [x] Cada lane recibe en su brief un mapa del código con los archivos relevantes para su elemento. (check: `cd collector && uv run -q pytest -q tests -k codemap`) (hecho: 7da4eb3) <!-- tirith:{"id":"i-3d811adb"} -->
   - [x] Revisar: Cada lane recibe en su brief un mapa del código con los archivos relevantes para su elemento. (check: `cd collector && uv run -q pytest -q tests -k codemap`)
 - [x] `tirith plan add` muestra el id corto del elemento y todos los comandos lo aceptan. (check: `cd collector && uv run -q pytest -q tests -k item_id`) <!-- tirith:{"id":"i-d27c6822"} -->
