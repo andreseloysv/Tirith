@@ -106,11 +106,18 @@
     return rule ? '<span class="chip xk blk">Blocked</span> <button class="link sm" data-act="netunblock" data-key="' + esc(rule.match) + '">Unblock</button>'
       : '<button class="link sm" data-act="netblock" data-key="' + esc(host) + '" title="No agent may reach ' + esc(host) + ' or its subdomains">Block</button>';
   }
+  function guardLine(s) {
+    var n = s.network || null;
+    if (!n) return '';
+    return n.guard === 'on'
+      ? '<p class="sm"><span class="chip xk api">Network guard on</span> <span class="mut">Lanes run in a sandbox: they reach the outside only through Tirith\'s proxy (127.0.0.1:' + esc(n.port) + '), which sees each domain and refuses the blocked ones.</span></p>'
+      : '<p class="sm"><span class="chip xk blk">Network guard off</span> <span class="mut">' + esc(n.why || '') + '</span></p>';
+  }
   function blockList(s) {
     var rules = s.netblock || [];
-    var h = rules.length ? '<p class="sm"><b>Blocked:</b> ' + rules.map(function (r) {
+    var h = guardLine(s) + (rules.length ? '<p class="sm"><b>Blocked:</b> ' + rules.map(function (r) {
       return '<span class="chip xk blk">' + esc(r.match) + '</span> <button class="link sm" data-act="netunblock" data-key="' + esc(r.match) + '">Unblock</button>';
-    }).join(' ') + '</p>' : '';
+    }).join(' ') + '</p>' : '');
     if (ui.netErr) h += '<p class="ierr">' + esc(ui.netErr) + '</p>';
     if (ui.netCli) h += '<p class="icli">Tirith cannot send from this page. Run in a terminal: <code>' + esc(ui.netCli) + '</code></p>';
     return h;
