@@ -46,3 +46,16 @@ def test_digest_feedback_defaults_to_a_step_and_refuses_empty(proj, home: Path, 
     assert main(["digest", "feedback", "--project", "demo", "--text", "Only one"]) == 0
     assert "Only one" in _plan(repo)
     assert main(["digest", "feedback", "--project", "demo", "--text", "  \n "]) == 3
+
+
+def test_while_away_summarizes_entered_failed_and_next(proj, home: Path, capsys) -> None:  # noqa: F811
+    repo, _ = proj
+    _history(home)
+    data = digest_mod.while_away(home, "demo", "2026-11-01T10:30:00Z", repo)
+    assert data["entered"] == [] and [r["lane"] for r in data["failed"]] == ["a2"]
+    assert data["next"]
+    data = digest_mod.while_away(home, "demo", "2026-11-01T00:00:00Z", repo)
+    assert [r["lane"] for r in data["entered"]] == ["a1"]
+    assert main(["digest", "away", "--project", "demo", "--since", "2026-11-01T00:00:00Z"]) == 0
+    out = capsys.readouterr().out
+    assert "Came in (1)" in out and "Failed (1)" in out and "red-suite" in out and "Next (" in out
