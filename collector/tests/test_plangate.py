@@ -366,7 +366,13 @@ def test_report_is_kept_when_the_plan_is_dirty_and_written_later(proj, home: Pat
     (repo / "docs" / "TODO.md").write_text(clean + "\n", encoding="utf-8")
     assert main(["plan", "report", "--lane", "l1", "--status", "done"]) == 0
     assert read_json(home / "lanes" / "l1.json", {})["outcome"]["applied"] is False
-    subprocess.run([GIT, "-C", str(repo), "checkout", "--", "docs/TODO.md"], check=True)
+    # Restore the committed plan by content, not through git's stat cache (a checkout can skip a file whose
+    # size and mtime still match the index entry), and prove the file is clean before the dispatcher's pass.
+    (repo / "docs" / "TODO.md").write_text(clean, encoding="utf-8")
+    subprocess.run([GIT, "-C", str(repo), "update-index", "--really-refresh"], check=True, capture_output=True)
+    status = subprocess.run([GIT, "-C", str(repo), "status", "--porcelain", "--", "docs/TODO.md"],
+                            capture_output=True, text=True, check=True).stdout
+    assert status.strip() == "", f"the plan must be clean before sync: {status!r}"
     assert plangate.sync(home, load_config(home), [{"id": "l1"}])
     assert "Build the button. (en revisión)" in _plan(repo)
     assert read_json(home / "lanes" / "l1.json", {})["outcome"]["applied"] is True
