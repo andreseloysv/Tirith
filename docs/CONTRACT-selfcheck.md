@@ -39,21 +39,25 @@ At most 3 tries per episode (1 for unrelated test failures), never twice within 
 evidence. It is never an owner item. The item closes by itself when the problem is gone. An episode lasts until
 the owner has been told how it ended.
 
-## Telling the owner
+## What it fixed alone
 
-After a remedy the manager says one calm line in the chat (`inbox.add_say`), once:
+After a remedy, one calm line goes into `health.fixed` (last 20, `{text, at}`), once; it is **not** written in the
+chat (`inbox.add_say` is not used). The owner sees it by clicking the health dot. The chat only shows what needs
+the owner. Lines:
 
-- manager restart: after the waiting messages are answered: "The manager got stuck for 3 min; I restarted it and
+- manager restart (after the waiting messages are answered): "The manager got stuck for 3 min; I restarted it and
   answered your 2 message(s)."
 - manager process: "A manager process stayed open after answering; I closed it."
 - review: "The review of lane X was stuck for 22 min; I started it again." / "The tests of lane X failed on
   something the lane did not touch; I ran them again."
+- send-back: "The tests of lane X fail only in that lane (…): I sent it back to its agent to find the side effect."
 
 ## `state.health`
 
 ```json
 {"level": "green|amber|red", "at": "<iso>",
- "checks": [{"id": "manager", "label": "The manager", "level": "ok|healing|failed", "text": "plain words"}]}
+ "checks": [{"id": "manager", "label": "The manager", "level": "ok|healing|failed", "text": "plain words"}],
+ "fixed": [{"text": "plain words", "at": "<iso>"}]}
 ```
 
 `null` before the first pass. `level`: red if any check `failed` (a remedy failed or none exists), else amber if
@@ -62,7 +66,7 @@ any `healing`, else green. No raw errors, ids or paths except a lane id.
 ## Web
 
 A dot in the header (hidden without `state.health`): green, amber while a remedy works, red only when one
-failed. Click: the checks in plain words; Escape closes. Test: `node web/js/health.test.mjs`.
+failed. Click: the checks in plain words, then "Fixed by Tirith" with `fixed` (newest first); Escape closes. Test: `node web/js/health.test.mjs`.
 
 ## Stable copy
 
