@@ -344,6 +344,16 @@
     var a = i.done ? null : itemAgent(i, state);
     return a ? '<button class="pia" data-act="goagent" data-key="' + esc(a.id) + '" title="' + esc(a.name) + ' is working on this">' + T.avatar(a, 16) + '</button>' : '';
   }
+  /* The proof of a done item: commit, test output and screenshots, folded under the item. */
+  function evidenceOf(i) {
+    var e = i.done && i.evidence, h;
+    if (!e) return '';
+    h = '<details class="pev"><summary>Evidence</summary>';
+    if (e.commit) h += '<div class="pevc">Commit <code>' + esc(e.commit) + '</code></div>';
+    if (e.tests) h += '<pre class="pevt">' + esc(e.tests) + '</pre>';
+    (e.shots || []).forEach(function (f) { h += '<a class="pevs" href="file://' + esc(encodeURI(f)) + '" target="_blank" rel="noopener"><img src="file://' + esc(encodeURI(f)) + '" alt="Screenshot ' + esc(f.split('/').pop()) + '" loading="lazy"></a>'; });
+    return h + '</details>';
+  }
   function itemRow(i, c, pend, quiet, state) {
     var key = c.pid + '|' + c.plan + '|' + c.sid, e = same(ui.pedit, c) && ui.pedit.text === i.text ? ui.pedit : null, p = null, txt = i.done ? i.text : i.text.replace(NOTE, ''), h, extra;
     if (e) return editInput(c, e, key);
@@ -352,7 +362,7 @@
     extra = p ? '<span class="pwhen saving">' + (p.err ? 'Not saved' : 'Saving…') + '</span>' :
       i.who === 'owner' && i.owner_item && quiet ? '<button class="pitbtn" data-act="goowner" data-key="' + esc(i.owner_item) + '" title="Open what Tirith needs from you">Open</button>' :
       i.who === 'date' && i.until && quiet ? '<span class="pwhen">from ' + esc(shortDate(i.until)) + '</span>' : '';
-    h = '<li class="' + (p ? 'psav' + (p.kind === 'delete' ? ' gone' : '') : '') + (i.done ? ' ok' : '') + '"><span class="pi">' + (i.done ? OK : OPEN) + '</span><span class="pit">' + rich(quiet && i.who === 'date' ? dateless(txt) : txt) + '</span>' + itemAva(i, state) + stateChip(i) + extra;
+    h = '<li class="' + (p ? 'psav' + (p.kind === 'delete' ? ' gone' : '') : '') + (i.done ? ' ok' : '') + '"><span class="pi">' + (i.done ? OK : OPEN) + '</span><span class="pit">' + rich(quiet && i.who === 'date' ? dateless(txt) : txt) + evidenceOf(i) + '</span>' + itemAva(i, state) + stateChip(i) + extra;
     if (!i.done && !p && c.edit) h += '<span class="pedtools">' + tool('pe-edit', '', PEN, 'Edit', c, i.text) + tool('pe-del', 'del', TRASH, 'Delete', c, i.text) + '</span>';
     if (same(ui.pdel, c) && ui.pdel.text === i.text) {
       h += '<span class="pdelpop" role="alertdialog" aria-label="Delete this item from the plan?"><span>Delete this item from the plan?</span>' +
