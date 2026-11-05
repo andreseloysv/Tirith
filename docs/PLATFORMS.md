@@ -36,29 +36,12 @@ ports). The manager chat drives it through an adapter (`collector/tirith/mspchat
 `session/start` (approval mode `promptUnmatched`), one `turn/start` per message (with `reasoningEffort`, default
 `minimal`, from `[agents.muse] chat_effort` or `effort`), text from `item/delta`, tool steps from `toolCall` /
 `userShell` items, permission questions from `approval/request` answered by code with `approval/decide`, turn end
-from `turn/completed`. Not covered: resuming a host session (each start is a new conversation), interrupting a turn
-(`stop` and `restart` end the process), `userInput/request` dialogs. The adapter is tested against a fake host
-(`tools/msp_fake_host.py`, optionally checked against `muse schema generate-json-schema` output via `MSP_SCHEMA`);
-no real `muse serve` session was run here.
-
-Streaming chat (`chat_args`) |
-| - | - | - | - | - |
-| `anthropic` | yes (own adapter) | yes | its `settings.json` | yes |
-| `muse` | yes (generic adapter) | yes | `~/.config/muse/settings.json` | yes, `muse serve` over MSP (see below) |
-| `codex` | yes (generic adapter) | yes | `~/.codex/hooks.json` | no |
-| `copilot` | yes (generic adapter, flat entries) | yes | `~/.copilot/hooks/tirith.json` | no |
-
-Shims are per command name (`sh` wrapper on macOS and Linux, `.cmd` on Windows), so they do not depend
-on the alias.
-
-### `muse serve` and the chat
-
-`muse serve` by default is a stdio host that speaks JSON-RPC 2.0 (a connection must `initialize`
-first); `--listen` would open a socket daemon, which Tirith does not use (no local servers or ports).
-The desktop chat only speaks the `anthropic` streaming JSON dialect, and `muse` has no flag for it
-(`muse exec` is one headless prompt). So `muse` has no `chat_args`: the JSON-RPC methods are not
-documented where we could read them and one probe (`initialize` on stdin) printed nothing we could
-capture. Blocked until the protocol is known.
+from `turn/completed`. Also supported: `turn/interrupt` (`commandId`, `sessionId`; optional `turnId`, `retract`) and `session/resume`
+(`commandId`, `sessionId`; optional `config`, `cursor`, `history`, `modelId`, `recoveryMode`, ...), checked against
+the real schema of this binary (`muse schema generate-json-schema --out DIR`, run through `tirith lane run`,
+2026-11-05). Not covered: `userInput/request` dialogs. The adapter is tested against a fake host
+(`tools/msp_fake_host.py`, optionally checked against `msp.schema.json` via `MSP_SCHEMA`). The schema export was
+run for real; a full `muse serve` model turn was not run (it needs credits and a driver that is not in the repo).
 
 Streaming chat (`chat_args`, `docs/CONTRACT-agents.md`) is the same on every platform for `anthropic`:
 it is the agent's print mode with streaming JSON on stdin and stdout. It was run end to end on macOS

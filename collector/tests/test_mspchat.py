@@ -133,3 +133,22 @@ def test_session_tool_permission_is_decided_by_code(home: Path) -> None:
     assert any(s["kind"] == "tool" for s in view["steps"])
     view, calls = run_session(home, "use a tool", False)
     assert calls == ["Bash:echo hi"] and view["answer"] == "tool denied"
+
+
+def test_interrupt_and_resume_use_the_schema_params() -> None:
+    m = mspchat_mod.Msp()
+    assert m.interrupt() is None
+    m.resume("s-old")
+    hello = json.loads(m.hello()[0])
+    res = json.loads(m.incoming(rpc(id=hello["id"], result={})).send[0])
+    assert res["method"] == "session/resume"
+    assert set(res["params"]) == {"commandId", "sessionId"} and res["params"]["sessionId"] == "s-old"
+    m.incoming(rpc(id=res["id"], result={"session": {"sessionId": "s-old"}}))
+    turn = json.loads(m.user("x")[0])
+    m.incoming(rpc(id=turn["id"], result={"turnId": "t7"}))
+    stop = json.loads(m.interrupt(retract=True))
+    assert stop["method"] == "turn/interrupt"
+    assert stop["params"]["sessionId"] == "s-old" and stop["params"]["turnId"] == "t7"
+    assert stop["params"]["retract"] is True and stop["params"]["commandId"]
+    m.incoming(rpc(method="turn/completed", params={"terminal": "interrupted"}))
+    assert "turnId" not in json.loads(m.interrupt())["params"]
