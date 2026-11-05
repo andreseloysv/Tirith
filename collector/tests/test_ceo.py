@@ -275,6 +275,36 @@ def test_ceo_alarm_storm_same_text_is_throttled(home: Path, started: list) -> No
     assert len(started) == 2
 
 
+def test_ceo_same_alarm_no_rerun_after_a_run_that_sent_a_directive(home: Path, started: list) -> None:
+    enable(home, "hours = [9, 14, 20]")
+    config = load_config(home)
+    text = "Disk is almost full."
+    red(home, text)
+    assert ceo.run(home, config, local(11)) and len(started) == 1
+    # the review runs 40 min (longer than the 20 min limit), flaps green during it, and ends with a directive
+    red(home, None)
+    ceo.run(home, config, local(11, 20))
+    red(home, text)
+    write_lane(home, {"id": "ceo-1", "ended_at": "x", "project": "tirith",
+                      "report": json.dumps({**RESULT, "next_review_min": 10})})
+    assert ceo.run(home, config, local(11, 40)) is True  # settles the run
+    assert len(started) == 1  # the run just ended: no new one at once
+    red(home, None)
+    ceo.run(home, config, local(11, 41))
+    red(home, text)
+    ceo.run(home, config, local(11, 42))
+    ceo.run(home, config, local(11, 59))
+    assert len(started) == 1  # nor within 20 min of its end
+    ceo.run(home, config, local(12, 1))
+    assert len(started) == 2  # after 20 min the same alarm may wake it again
+    write_lane(home, {"id": "ceo-2", "ended_at": "x", "project": "tirith",
+                      "report": json.dumps({**RESULT, "next_review_min": 10})})
+    ceo.run(home, config, local(12, 30))
+    red(home, "A different failure.")
+    ceo.run(home, config, local(12, 31))
+    assert len(started) == 3  # new text starts one
+
+
 def test_the_ceo_picks_when_it_looks_again(home: Path, started: list, monkeypatch) -> None:
     enable(home)
     assert not ceo.settings(home)["fixed"]  # no [ceo] hours: its own interval, an hour until it picks one
