@@ -307,6 +307,8 @@ def _review_lane(home: Path, lane_id: str, repo: Path | None, merge: bool = True
     except ReviewError as error:
         return _set(home, lane, MERGE_FAILED, str(error), run=run_id, passed=passed, claims=claims.public())
     files = _git(repo, "diff", "--name-only", f"{head}^1", head).stdout.split()
+    from tirith import mergeq as mergeq_mod  # mergeq imports this module
+    mergeq_mod.note_merged(home, project, lane_id, head, "tests passed; merged (lane review)")
     return _set(home, lane, MERGED, "tests passed; merged", commit=head, run=run_id, passed=passed,
                 claims=claims.public(), files=len(files), branch=_git(repo, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip())
 
