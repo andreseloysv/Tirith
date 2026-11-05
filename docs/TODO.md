@@ -528,6 +528,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
   - [x] Revisar: `tirith plan add` muestra el id corto del elemento y todos los comandos lo aceptan. (check: `cd collector && uv run -q pytest -q tests -k item_id`) — falló: the merge did not go through: the review was interrupted; run it again
 - [x] El dueño recibe un resumen visual de lo que llegó a main, con un botón de opinión que se convierte en elementos del plan. (check: `cd collector && uv run -q pytest -q tests -k digest`) <!-- tirith:{"id":"i-d2bd7370"} -->
   - [x] Revisar: El dueño recibe un resumen visual de lo que llegó a main, con un botón de opinión que se convierte en elementos del plan. (check: `cd collector && uv run -q pytest -q tests -k digest`)
+- [ ] A lane that reports done with uncommitted changes is committed by Tirith through the guard hooks (message built from the item) and goes merge-ready without a send-back (check: `cd collector && uv run -q pytest -q tests -k done_report_dirty_worktree_merge_ready`) <!-- tirith:{"id":"i-913c63be","depends_on":[],"writes":[]} -->
 
 ## 17. Tirith se mejora usando Tirith
 
