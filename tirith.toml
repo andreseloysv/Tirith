@@ -20,3 +20,7 @@ run = "cd collector && uv run -q pytest -q -n auto --maxprocesses 8"
 name = "rust-test"
 kind = "test"
 run = "cargo test -q -p tirith-app"
+
+[roles]
+ceo = "always"
+manager = "always"

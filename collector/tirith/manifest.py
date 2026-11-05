@@ -30,6 +30,10 @@ _HEADER_RE = re.compile(r"^\s*\[\[\s*([A-Za-z0-9_.-]+)\s*\]\]")
 _PARSE_LINE_RE = re.compile(r"\(at (?:line (\d+)|end of document)")
 
 
+ROLE_MODES = ("always", "on-demand", "off")
+ROLE_DEFAULTS = {"ceo": "always", "manager": "always"}   # today's behaviour
+
+
 @dataclass
 class Problem:
     file: str
@@ -93,6 +97,7 @@ class Manifest:
     deploy_none: bool = False
     roadmap: str | None = None
     deadline: str | None = None
+    roles: dict[str, str] = field(default_factory=lambda: dict(ROLE_DEFAULTS))
     plans: list[str] = field(default_factory=list)
     includes: list[str] = field(default_factory=list)
     problems: list[Problem] = field(default_factory=list)
@@ -176,6 +181,19 @@ def parse_text(text: str, path: Path) -> Manifest:
     manifest.deploy_none = str(data.get("deploy") or "").lower() == "none"
     manifest.roadmap = str(data.get("roadmap") or "").strip() or None
     manifest.deadline = str(data.get("deadline") or "").strip() or None
+    roles = data.get("roles")
+    if roles is not None and not isinstance(roles, dict):
+        _problem(manifest, 1, "roles-shape", "[roles] must be a table", 'write [roles] then ceo = "always"')
+    for key, value in (roles if isinstance(roles, dict) else {}).items():
+        line = next((n for n, t in enumerate(text.splitlines(), 1) if t.strip() == "[roles]"), 1)
+        if key not in ROLE_DEFAULTS:
+            _problem(manifest, line, "roles-key", f"unknown role '{key}' in [roles]",
+                     "use only: " + ", ".join(ROLE_DEFAULTS))
+        elif value not in ROLE_MODES:
+            _problem(manifest, line, "roles-value", f"roles.{key} = {value!r} is not valid",
+                     f"set roles.{key} to one of: " + ", ".join(ROLE_MODES))
+        else:
+            manifest.roles[key] = value
     plans = data.get("plans")
     manifest.plans = [str(p).strip() for p in plans if str(p).strip()] if isinstance(plans, list) else []
     includes = data.get("include")
