@@ -40,7 +40,7 @@ from tirith import selfreload as selfreload_mod
 from tirith import testmap as testmap_mod
 from tirith import timeouts as timeouts_mod
 from tirith.home import Config, now_iso
-from tirith.launch import worktree_path
+from tirith.launch import stage_all, worktree_path
 from tirith.store import lane_path, read_json, read_lane, write_json_atomic, write_lane
 
 FILE = "mergeq.json"
@@ -393,9 +393,9 @@ def absorbed_by(home: Path, repo: Path, lane_id: str, branch: str) -> str:
 
 def _commit_workspace(workspace: Path, lane_id: str, feature: str) -> str | None:
     """Commit what the agent left in its worktree; the error text when that fails."""
-    added = _git(workspace, "add", "-A")
+    added = stage_all(workspace)
     if added.returncode != 0 and "index.lock" in added.stderr and plangate_mod.recover_git_lock(workspace):
-        added = _git(workspace, "add", "-A")  # a crashed git left its lock in the lane's worktree
+        added = stage_all(workspace)  # a crashed git left its lock in the lane's worktree
     if _git(workspace, "diff", "--cached", "--quiet").returncode != 0:
         done = _git(workspace, "commit", "-q", "-m", f"Lane {lane_id}: {feature}")
         if done.returncode != 0 and "index.lock" in done.stderr and plangate_mod.recover_git_lock(workspace):
