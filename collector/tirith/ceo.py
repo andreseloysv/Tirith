@@ -255,7 +255,26 @@ def throughput(home: Path, config: Config, now: datetime, cpu=None) -> dict:
         "max_parallel": config.autopilot_max_parallel, "load_limit": allowed, "load_why": why,
         "cpu_idle_pct": (cpu or cpu_idle)(),
         "max_parallel_range": capacity_range(home),
+        **upkeep(home, lanes),
     }
+
+
+def upkeep(home: Path, lanes: list[dict]) -> dict:
+    """``[ceo] upkeep_steps`` (``["<project>:<step>", ...]``: the steps where the project fixes and improves its
+    own tooling) and ``upkeep_max_share`` (default 0.3): today's share of lanes spent on them versus the target."""
+    raw = settings_raw(home)
+    steps = {str(s) for s in raw.get("upkeep_steps") or [] if isinstance(s, str) and ":" in s}
+    share = raw.get("upkeep_max_share", UPKEEP_MAX_SHARE)
+    share = float(share) if isinstance(share, (int, float)) and not isinstance(share, bool) and 0 <= share <= 1 \
+        else UPKEEP_MAX_SHARE
+    if not steps:
+        return {}
+    on = sum(1 for l in lanes if f"{l.get('project')}:{l.get('item_step') or l.get('step')}" in steps)
+    return {"upkeep_steps": sorted(steps), "upkeep_lanes_today": on,
+            "upkeep_share_today": round(on / len(lanes), 2) if lanes else 0.0, "upkeep_max_share": share}
+
+
+UPKEEP_MAX_SHARE = 0.3
 
 
 def cpu_idle() -> float | None:
@@ -458,7 +477,10 @@ def brief(home: Path, snap: dict, cfg: dict, catch_up: bool) -> str:
         "the biggest cause of slowness, name it in `bottleneck` (every review, even a healthy one: there is always a "
         "biggest one) and act on it now: a fix directive (one plan item with a check, launched "
         "first), a manager policy, or a capacity change. Upkeep crowding out the owner's goals, lanes re-running whole "
-        "suites, red tests on main, and slots left empty while the CPU is idle are all yours to fix.",
+        "suites, red tests on main, and slots left empty while the CPU is idle are all yours to fix. When "
+        "`upkeep_share_today` is over `upkeep_max_share`, the owner's goals are being crowded out: send a directive "
+        "that the next launches go to the goal steps, and upkeep items wait unless they fix a failed check or "
+        "something that stops the work.",
         "## Your limits (enforced by code)\nYou may read anything under ~/.tirith and the project folders and run "
         "read-only commands (`tirith lane stats`, `tirith status`, `tirith inbox list`, `tirith queue list`, `tirith "
         "check`, read-only git). You may not edit files, launch or stop lanes, merge, or change the plan: the hooks "

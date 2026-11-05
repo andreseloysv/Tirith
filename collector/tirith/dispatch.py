@@ -246,8 +246,9 @@ def _refresh_queued(home: Path, project: str) -> bool:
 
 
 def _plan_edit(home: Path, req: dict, config: Config, now: datetime) -> str:
-    """Handle one ``plan-edit`` by code: change the project's plan file, commit that file, and queue one
-    ``plan-refresh`` so the plan is checked again. Returns what was done."""
+    """Handle one ``plan-edit`` by code: change the project's plan file, commit that file, and, for an edit of the
+    owner, queue one ``plan-refresh`` so the plan is checked again (not for the manager's own edits). Returns what
+    was done."""
     at, project = now_iso(now), req["project"]
     verb = inbox_mod.edit_verb(req["edit"])
     _flow(home, "owner", "tirith", "request", f"Plan {verb} on {_step_name(req)}", req, at)
@@ -265,12 +266,17 @@ def _plan_edit(home: Path, req: dict, config: Config, now: datetime) -> str:
         _flow(home, "tirith", "owner", "alert", f"Plan {verb} refused on {_step_name(req)}: {_short(str(err))}",
               req, at)
         return "refused"
-    if _refresh_queued(home, project):
+    if req.get("from") not in (None, "owner"):
+        # the manager (or the CEO through it) edited on purpose: an auditor lane after each of its edits mostly
+        # found nothing to change and cost an agent run each time
+        follow = ""
+    elif _refresh_queued(home, project):
         follow = "A check of the plan is already queued."
     else:
         inbox_mod.add_request(home, "plan-refresh", project, "", at=at)
         follow = "The plan will be checked again."
-    inbox_mod.add_answer(home, req["id"], f"Done: {message}. {follow}", by="tirith", auto=True, at=at)
+    inbox_mod.add_answer(home, req["id"], f"Done: {message}." + (f" {follow}" if follow else ""), by="tirith",
+                         auto=True, at=at)
     return "applied"
 
 
