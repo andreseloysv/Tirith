@@ -1702,7 +1702,8 @@ def launch_plan(home: Path, project_id: str, kind: str, request_id: str | None =
     brief_path = home / "briefs" / f"{lane_id}.md"
     workspace = launch_mod.worktree_path(repo, lane_id)
     command = launch_mod.agent_command(config, None, brief_path, workspace, project_id, step)
-    item_text = (f"Revisar el plan ({date.today().isoformat()})" if kind == "plan-refresh"
+    # with the time: two reviews on one day must not be one item (the same text gives the same permanent ID)
+    item_text = (f"Revisar el plan ({datetime.now().strftime('%Y-%m-%d %H:%M')})" if kind == "plan-refresh"
                  else f"Plan nuevo: {plan['title']}")
     item = _ops_item(home, repo, project_id, item_text, lane_id)
     argv = launch_mod.lane_run_argv(project_id, step, planlane_mod.HERO_CLASS, title, brief_path, workspace,

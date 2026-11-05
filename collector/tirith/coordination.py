@@ -95,7 +95,10 @@ def plan_rows(steps):
         if row["id"] not in explicit_set and counts[row["id"]] > 1:
             row["id"] = "i-" + hashlib.sha256((row["step"] + "\0" + row["id"]).encode()).hexdigest()[:16]
     ids = [row["id"] for row in rows]
-    if len(set(explicit)) != len(explicit):
+    repeated = {task_id for task_id, n in Counter(explicit).items() if n > 1}
+    if any(row["id"] in repeated and not row["done"] for row in rows):
+        # a repeated ID among done items only (two plan reviews on one day) claims nothing: it must never stop
+        # every launch of the project; an open one would be ambiguous
         raise CoordinationError("permanent task IDs must be unique")
     # Legacy plans occasionally repeat an identical checklist item in one or more steps.
     # They remain readable, but claiming ambiguous IDs is refused below.

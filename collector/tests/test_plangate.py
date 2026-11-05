@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+import re
 import subprocess
 import sys
 import threading
@@ -215,11 +216,12 @@ def test_tirith_picks_the_item_for_its_own_launches(proj, home: Path) -> None:
 def test_tirith_creates_the_items_of_its_own_work(proj, home: Path) -> None:
     repo, started = proj
     lane_id = launch_plan(home, "demo", "plan-refresh", out=io.StringIO(), by_tirith=True)
-    text = f"Revisar el plan ({date.today().isoformat()})"
+    argv = started[-1]
+    text = argv[argv.index("--item") + 1]  # with the time: two reviews on one day are two items
+    assert re.fullmatch(rf"Revisar el plan \({date.today().isoformat()} \d\d:\d\d\)", text), text
     assert f"- [ ] {text} (en curso: {lane_id})" in _plan(repo)
     assert "## 0. Trabajo automático de Tirith" in _plan(repo)
-    argv = started[-1]
-    assert argv[argv.index("--item") + 1] == text and argv[argv.index("--item-step") + 1] == "0"
+    assert argv[argv.index("--item-step") + 1] == "0"
     assert argv[argv.index("--step") + 1] == "plan-refresh"
     verify_id = launch_verify(home, "demo", "agent can do: open the link", out=io.StringIO(), by_tirith=True)
     assert f"- [ ] Verificar: Verify open the link (en curso: {verify_id})" in _plan(repo)

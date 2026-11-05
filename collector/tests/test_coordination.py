@@ -284,6 +284,17 @@ def test_message_ids_are_not_reused_after_retention_cleanup(home, monkeypatch):
     assert [row["id"] for row in coordination.inbox(home, "demo", "two")] == [second]
 
 
+def test_a_permanent_id_repeated_only_by_done_items_does_not_stop_the_plan():
+    # two plan reviews on one day wrote two done "Revisar el plan (2026-11-05)" with one ID: every launch failed
+    done = '- [x] Revisar el plan (2026-11-05) <!-- tirith:{"id":"i-2975f07c"} -->\n'
+    steps = roadmap.parse(f"## 0. Ops\n\n{done}{done}\n## 1. Work\n\n- [ ] Build it\n")
+    rows = coordination.plan_rows(steps)
+    assert [r["text"] for r in rows if not r["done"]] == ["Build it"]
+    opened = '- [ ] Revisar el plan (2026-11-05) <!-- tirith:{"id":"i-2975f07c"} -->\n'
+    with pytest.raises(coordination.CoordinationError, match="unique"):  # an open one would be ambiguous
+        coordination.plan_rows(roadmap.parse(f"## 0. Ops\n\n{done}{opened}"))
+
+
 def test_metadata_cannot_override_checkboxes_and_stays_readable():
     steps = roadmap.parse('## 1. Work\n\n- [ ] Work <!-- tirith:{"id":"i-11111111","done":true} -->\n')
     assert not steps[0]["items"][0]["done"]
