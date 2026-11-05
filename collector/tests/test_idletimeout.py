@@ -210,3 +210,28 @@ def test_a_lane_that_stays_silent_goes_to_the_manager_after_its_attempts(home, t
     assert code == timeouts_mod.EXIT_TIMED_OUT and len(calls) == 1 + keepgoing_mod.MAX_ROUNDS
     assert lane["result"] == "failed" and "no progress" in lane["report"]
     assert any(i["id"] == "sq-lane-idle" for i in asks_mod.queue_items(home, only_open=True))
+
+
+CHATTY_FAKE = FAKE.replace("if calls == 1 or os.path.exists(os.path.join(here, \"always\")):\n    time.sleep(120)  # goes silent",
+                           "for i in range(14):\n    print(json.dumps({\"type\": \"assistant\", \"n\": i}), flush=True)\n    time.sleep(0.5)")
+
+
+def test_idle_timeout_never_cuts_a_lane_that_keeps_writing_though_it_lasts_longer_than_the_limit(home, tmp_path, monkeypatch) -> None:
+    monkeypatch.setitem(timeouts_mod.IDLE_POLICY, "agent-turn", (3, 1, 7200))
+    monkeypatch.setattr(keepgoing_mod, "gaps", lambda *a, **k: [])
+    repo = _lane_run_setup(home, tmp_path, monkeypatch)
+    agent = tmp_path / "agent"
+    agent.mkdir()
+    (agent / "fake.py").write_text(CHATTY_FAKE, encoding="utf-8")
+    began = time.monotonic()
+    try:
+        code = main(["lane", "run", "--project", "demo", "--class", "warden", "--feature", "Chatty",
+                     "--brief", str(repo / "brief.md"), "--step", "1", "--item", "Do the thing.",
+                     "--id", "chatty", "--workspace", str(repo), "--as-agent", "anthropic", "--",
+                     sys.executable, str(agent / "fake.py"), "-p", "the brief", "--output-format", "stream-json"])
+    finally:
+        make_hooks_mutable(repo)
+    calls = (agent / "calls.jsonl").read_text().splitlines()
+    lane = read_json(home / "lanes" / "chatty.json", {})
+    assert time.monotonic() - began > 6.5  # outlasted the 3 s idle limit more than twice
+    assert code == 0 and len(calls) == 1 and not lane.get("idle_resumes")
