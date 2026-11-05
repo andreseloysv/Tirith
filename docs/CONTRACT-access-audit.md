@@ -59,6 +59,27 @@ a line over 4 KB has `target` cut and `truncated: true`.
 - Rows are never edited or deleted by an agent. Pipeline code ignores `kind: "access"` rows in `events.jsonl`
   and the audit file alike.
 
+## What reached outside the machine
+
+The owner's first question is what an agent reached outside the machine, so every row that did carries
+`external`: a list of `"<kind> <destination>"`.
+
+- From the call (`access_audit.external`): `web <host>`, `api <host>` (an `api.` host or a path like `/api/`,
+  `/v1/`, `/graphql`), `websocket <host>` (`ws://`, `wss://`), `ftp <host>`, `ssh <host>` (ssh, scp, rsync, sftp),
+  `git <host>` or `git remote` (push, pull, fetch, clone, ls-remote), `github api.github.com` (`gh`),
+  `package <registry>` (npm, pnpm, yarn, pip, uv, cargo, brew, gem, go installs), `search <query>` (WebSearch),
+  `mcp <server>`. Loopback is not external. A URL's user and password are never kept.
+- From what the processes really opened (`tirith/netwatch.py`): a command shows only what it says, not what a
+  script does inside (a Python file calling an API, a Node process opening a websocket). Every 15 s the
+  collector lists the established TCP connections (`lsof -nP -iTCP -sTCP:ESTABLISHED`), keeps those of a
+  process under a working lane (by parent chain up to the lane's `pid` or `controller_pid`), and writes each
+  new `(lane, host, port, program)` once (`<home>/netwatch.json`) as a row with `tool: "connection"`,
+  `system: "network"`, `action: "<program> connected to <host>:<port>"` and `external: ["<https|http|ssh|git|tcp>
+  <host>:<port>"]`. The host is a reverse lookup with a 1 s budget, else the address.
+
+The «Accesos» page starts with **External**: every such destination, newest first, with its kind (Web, API,
+WebSocket, SSH, Git remote, Packages, Search, MCP, HTTPS…), the agent (role and name) and what caused it.
+
 ## Retention
 
 - Rotation at 16 MB: `access.jsonl` → `access.jsonl.1` → … → `.3`; the oldest is dropped.
