@@ -107,7 +107,10 @@ waiting lane without it, behind the running entry and earlier priority lanes. It
 ## Every failure comes back with its reason
 
 - conflict / red stage / failed commit → the same agent (send back), the manager's queue when that cannot happen.
-- `waiting` (dirty main, branch not found, no temp worktree, no stage...): the entry stays queued; on the 2nd
+- A dirty main checkout does not stop a tested merge: it lands when no dirty tracked file is one the fast-forward
+  changes (the owner's edits stay untouched). Only a clash waits, naming the files; the tested tree is remembered, so
+  the retry does not run the suite again.
+- `waiting` (dirty files the merge changes, branch not found, no temp worktree, no stage...): the entry stays queued; on the 2nd
   consecutive `waiting` (`WAIT_NOTICE`) the manager's queue gets one item with the reason.
 - `push-failed` (main merged, origin not): a manager item at once, with the reason and the command to push.
 - out of time: manager item on the 2nd time (as before). A lane or project that is gone: flow alert to the manager.
