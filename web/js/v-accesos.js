@@ -179,7 +179,7 @@
     /* one scroll area for all of it: the External section above the list once pushed the list out of reach */
     /* only what reached outside the machine: the full list of every agent action was noise to the owner (the
        rows stay in <home>/access for looking things up) */
-    el.innerHTML = tb + '<div class="listwrap" data-scroll="accesos">' + externalSection(s) + envSection(s) + '</div>';
+    el.innerHTML = tb + '<div class="listwrap" data-scroll="accesos">' + envSection(s) + externalSection(s) + '</div>';
   }
   T.views.accesos = view;
 
