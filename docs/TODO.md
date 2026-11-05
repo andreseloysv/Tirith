@@ -531,6 +531,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [x] A lane that reports done with uncommitted changes is committed by Tirith through the guard hooks (message built from the item) and goes merge-ready without a send-back (check: `cd collector && uv run -q pytest -q tests -k done_report_dirty_worktree_merge_ready`) <!-- tirith:{"id":"i-913c63be","depends_on":[],"writes":[]} -->
   - [x] Revisar: A lane that reports done with uncommitted changes is committed by Tirith through the guard hooks (message built from the item) and goes merge-ready without a send-back (check: `cd collector && uv run -q pytest -q tests -k done_report_dirty_worktree_merge_ready`)
 - [ ] Lane briefs no longer tell agents not to commit, matching Tirith committing a dirty worktree at report (check: `cd collector && uv run -q pytest -q tests -k brief_allows_commit`) (en revisión) <!-- tirith:{"id":"i-416047ae","depends_on":[],"writes":[]} -->
+  - [ ] Revisar: Lane briefs no longer tell agents not to commit, matching Tirith committing a dirty worktree at report (check: `cd collector && uv run -q pytest -q tests -k brief_allows_commit`) (en curso: revisión de velocidad-y-autonom-a-de-un-obje-12)
 
 ## 17. Tirith se mejora usando Tirith
 
