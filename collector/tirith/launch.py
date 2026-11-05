@@ -253,6 +253,16 @@ def install_node_modules(repo: Path) -> bool:
     return (repo / "node_modules").is_dir()
 
 
+def stage_all(worktree: Path, env: dict | None = None) -> "timeouts_mod.Result":
+    """``git add -A`` for a lane's worktree, minus the ``node_modules`` link to main's. A committed link would
+    replace main's real ``node_modules`` when the lane merges, and the next commit would delete it."""
+    done = timeouts_mod.run(["git", "-C", str(worktree), "add", "-A"], "git", text=True, **({"env": env} if env else {}))
+    if (worktree / "node_modules").is_symlink():
+        timeouts_mod.run(["git", "-C", str(worktree), "reset", "-q", "--", "node_modules"], "git", text=True,
+                         **({"env": env} if env else {}))
+    return done
+
+
 def exclude_from_status(worktree: Path, pattern: str) -> None:
     """Add ``pattern`` to the repository's ``info/exclude`` so it is not an uncommitted change. A
     ``node_modules/`` line in .gitignore does not match a symlink, so the link needs this."""
