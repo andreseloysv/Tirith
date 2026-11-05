@@ -77,3 +77,23 @@ def test_reap_lane_leftovers_ignores_main_checkouts_and_ourselves(tmp_path: Path
     finally:
         proc.kill()
         proc.wait()
+
+
+def test_reap_ended_lanes_kills_leftovers_of_ended_lanes_only(tmp_path: Path) -> None:
+    from tirith.store import write_lane
+    home = tmp_path / "home"
+    (home / "lanes").mkdir(parents=True)
+    ended, running = _workspace(tmp_path), tmp_path / "Tirith-lanes" / "lane-y"
+    running.mkdir()
+    a = subprocess.Popen([sys.executable, "-c", SLEEP], cwd=ended, start_new_session=True)
+    b = subprocess.Popen([sys.executable, "-c", SLEEP], cwd=running, start_new_session=True)
+    try:
+        write_lane(home, {"id": "lane-x", "workspace": str(ended), "ended_at": "2026-01-01T00:00:00Z"})
+        write_lane(home, {"id": "lane-y", "workspace": str(running)})
+        time.sleep(0.2)
+        assert a.pid in reaper.reap_ended_lanes(home, term_wait=0.5)
+        assert _gone(a) and b.poll() is None
+    finally:
+        for p in (a, b):
+            p.kill()
+            p.wait()

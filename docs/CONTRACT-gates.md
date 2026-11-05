@@ -216,3 +216,5 @@ When the collector's guard check finds a hook's `uchg` flag lost, it appends one
 ## Lane leftovers are reaped
 
 When a lane ends (`end_lane`: done, failed, stopped), when a full suite finishes (`tirith run --stage test` without a selection, and the review's full suite) and before a merged lane's worktree is removed, Tirith kills every process whose executable or working folder is under the lane's worktree `Tirith-lanes/<lane>/` (`tirith.reaper`): SIGTERM, then SIGKILL after 3 s for what ignored it. Only worktrees under a `Tirith-lanes` folder are touched, never the main checkout; Tirith's own process and its ancestors are skipped. Check: `cd collector && uv run -q pytest -q tests -k reap_lane_leftovers`.
+
+The collector also sweeps lanes that already ended (`ended_at` set): at start and every 3 minutes `tirith.reaper.reap_ended_lanes` reaps what still runs under their worktrees (SIGTERM, SIGKILL after 3 s). Check: `cd collector && uv run -q pytest -q tests -k reap_ended_lanes`.
