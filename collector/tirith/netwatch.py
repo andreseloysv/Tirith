@@ -127,6 +127,31 @@ def _addresses(domain: str, now: float) -> set[str]:
     return ips
 
 
+# domains agents and their tools commonly reach: an address with no reverse name is matched against these
+KNOWN_DOMAINS = ("api.anthropic.com", "statsig.anthropic.com", "api.statsig.com", "sentry.io", "api.openai.com",
+                 "chatgpt.com", "generativelanguage.googleapis.com", "github.com", "api.github.com",
+                 "codeload.github.com", "objects.githubusercontent.com", "raw.githubusercontent.com", "pypi.org",
+                 "files.pythonhosted.org", "registry.npmjs.org", "registry.yarnpkg.com", "crates.io",
+                 "static.crates.io", "agentsmessenger.com", "http-intake.logs.datadoghq.com", "api.segment.io")
+
+
+def known_domain(address: str, resolve: Callable[[str], set[str]] | None = None) -> str | None:
+    """The domain of ``KNOWN_DOMAINS`` that resolves to ``address``, else None."""
+    resolve = resolve or (lambda d: _addresses(d, time.time()))
+    return next((d for d in KNOWN_DOMAINS if address in resolve(d)), None)
+
+
+def annotate(rows: list[dict], resolve: Callable[[str], set[str]] | None = None) -> list[dict]:
+    """Connection rows written before their domain was known get it now (``domain``), for the page."""
+    for row in rows:
+        if row.get("tool") == "connection" and not row.get("domain"):
+            address = row.get("address") or str((row.get("external") or [""])[0]).split(" ", 1)[-1].rsplit(":", 1)[0]
+            found = known_domain(address, resolve) if address else None
+            if found:
+                row["domain"], row["address"] = found, address
+    return rows
+
+
 def lane_domains(home: Path, lane: dict) -> list[str]:
     """The domains a lane's own calls named (``external`` of its access rows), newest first."""
     from tirith.store import read_jsonl
@@ -145,7 +170,7 @@ def lane_domains(home: Path, lane: dict) -> list[str]:
 def domain_of(address: str, reverse: str, domains: list[str], resolve: Callable[[str], set[str]]) -> str | None:
     """The domain visited at ``address``: one the lane named that resolves to it, else the base of the reverse
     name, else None."""
-    for domain in domains:
+    for domain in [*domains, *KNOWN_DOMAINS]:
         if address in resolve(domain):
             return domain
     return base_domain(reverse) if reverse != address else None
@@ -185,11 +210,13 @@ def sample(home: Path, lanes: list[dict], now: float | None = None, run: Callabl
         domain = domain_of(c["host"], reverse, lane_domains(home, lane),
                            resolve or (lambda d: _addresses(d, now)))
         kind = PORTS.get(c["port"], "tcp")
+        runtime = c["pid"] in roots  # the agent's own program (its model API, telemetry), not what its work runs
         project = str(lane.get("project") or access_mod.LOOSE)
         where = domain or c["host"]
-        row = {"ts": now_iso(), "agent": lane.get("agent"), "lane": lane["id"],
+        program = "the agent" if runtime else c["program"]
+        row = {"ts": now_iso(), "agent": lane.get("agent"), "lane": lane["id"], "runtime": runtime,
                "plan": access_mod.plan_point(home, lane["id"]), "system": "network", "tool": "connection",
-               "action": f"{c['program']} connected to {where}:{c['port']}" + (f" ({c['host']})" if domain else ""),
+               "action": f"{program} connected to {where}:{c['port']}" + (f" ({c['host']})" if domain else ""),
                "external": [f"{kind} {where}:{c['port']}"],
                "domain": domain, "address": c["host"], "reverse": reverse if reverse != c["host"] else None}
         append_jsonl(home / access_mod.ACCESS_DIR / f"{project}.ndjson", row)
