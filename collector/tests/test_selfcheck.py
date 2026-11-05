@@ -68,6 +68,10 @@ def says(home: Path) -> list[str]:
     return [s["text"] for s in inbox_mod.says(home)]
 
 
+def fixed(state: dict) -> list[str]:
+    return [f["text"] for f in selfcheck_mod.public(state["health"])["fixed"]]
+
+
 def queue_ids(home: Path) -> list[str]:
     return [q["id"] for q in asks_mod.queue_items(home, only_open=True) if q["kind"] == "selfcheck"]
 
@@ -126,13 +130,14 @@ def test_a_chat_message_nobody_works_on_restarts_the_manager_and_is_told(home: P
     assert level(state, "manager") == "healing" and state["health"]["level"] == "amber"
     assert state["manager"]["tries"] == 0 and "key" not in state["manager"] and "error" not in state["manager"]
     assert first in state["manager"]["evidence"] and queue_ids(home) == []
-    assert says(home) == []  # told once the messages are answered, not before
+    assert fixed(state) == []  # recorded once the messages are answered, not before
     for rid in (first, second):
         inbox_mod.add_answer(home, rid, "ok", by="manager")
     check(home, state, at(260), fake)
-    assert says(home) == ["The manager got stuck for 3 min; I restarted it and answered your 2 message(s)."]
+    assert fixed(state) == ["The manager got stuck for 3 min; I restarted it and answered your 2 message(s)."]
+    assert says(home) == []  # the chat does not carry what Tirith fixed alone
     check(home, state, at(300), fake)
-    assert len(says(home)) == 1 and state["health"]["level"] == "green"
+    assert len(fixed(state)) == 1 and state["health"]["level"] == "green"
 
 
 def test_the_restart_reaches_the_next_manager_brief(home: Path, project: Path) -> None:
@@ -212,9 +217,9 @@ def test_a_manager_process_alive_after_its_result_is_ended_and_the_owner_told(ho
     lane = lingering_lane(tmp_path, 90)
     check(home, state, NOW, fake, lanes=[lane])
     assert fake.killed == [lane] and level(state, "manager") == "healing"
-    assert says(home) == ["A manager process stayed open after answering; I closed it."]
+    assert fixed(state) == ["A manager process stayed open after answering; I closed it."] and says(home) == []
     check(home, state, at(10), fake, lanes=[lane])  # inside the grace: not killed twice, not said twice
-    assert len(fake.killed) == 1 and len(says(home)) == 1
+    assert len(fake.killed) == 1 and len(fixed(state)) == 1 and says(home) == []
 
 
 def test_a_process_that_survives_every_kill_is_a_queue_item(home: Path, project: Path, tmp_path: Path) -> None:
@@ -321,7 +326,7 @@ def test_a_review_running_over_20_min_with_a_dead_process_is_run_again(home: Pat
     check(home, state, at(1300), fake, lanes=[lane])
     assert len(fake.spawned) == 1 and fake.spawned[0][-3:] == ["lane", "review", "lane-a"]
     assert level(state, "reviews") == "healing"
-    assert says(home) == ["The review of lane lane-a was stuck for 22 min; I started it again."]
+    assert fixed(state) == ["The review of lane lane-a was stuck for 22 min; I started it again."] and says(home) == []
     check(home, state, at(1310), fake, lanes=[lane])
     assert len(fake.spawned) == 1  # inside the grace
 
@@ -356,7 +361,7 @@ def test_unrelated_test_failure_is_run_again_once_then_queued(home: Path, projec
 
     check(home, state, at(10), fake, lanes=[lane], diff=diff)
     assert len(fake.spawned) == 1 and level(state, "reviews") == "healing"
-    assert "did not touch" in says(home)[0]
+    assert "did not touch" in fixed(state)[0] and says(home) == []
     check(home, state, at(200), fake, lanes=[lane], diff=diff)
     assert len(fake.spawned) == 1 and level(state, "reviews") == "failed"
     assert len(queue_ids(home)) == 1 and "test_billing.py" in asks_mod.queue_items(home, only_open=True)[0]["text"]
@@ -379,7 +384,7 @@ def test_a_failure_only_this_lane_has_goes_back_to_its_agent(home: Path, project
     assert len(sent) == 1 and "test_billing.py" in sent[0][2] and "side effect" in sent[0][2]
     assert level(state, "reviews") == "healing" and queue_ids(home) == []
     check(home, state, at(400), fake, lanes=[lane], diff=diff, relaunch=relaunch)
-    assert len(sent) == 1 and any("sent it back" in t for t in says(home))
+    assert len(sent) == 1 and any("sent it back" in t for t in fixed(state)) and says(home) == []
     write_lane(home, {**read_lane(home, lane["id"]),
                       "review": {**read_lane(home, lane["id"])["review"], "at": at(500).strftime(Z)}})
     check(home, state, at(600), fake, lanes=[lane], diff=diff, relaunch=relaunch)
@@ -429,7 +434,7 @@ def test_the_lane_a_send_back_started_is_not_sent_back_again(home: Path, project
     for when in (400, 600):
         check(home, state, at(when), fake, lanes=[lane, child], diff=diff, relaunch=relaunch)
     assert sent == [lane["id"]] and level(state, "reviews") == "failed"  # the parent is the child's; the child is the manager's
-    assert "child was sent back" not in says(home) and len(queue_ids(home)) == 1
+    assert "child was sent back" not in fixed(state) and len(queue_ids(home)) == 1
 
 
 def test_a_failure_other_lanes_share_points_at_main(home: Path, project: Path) -> None:
