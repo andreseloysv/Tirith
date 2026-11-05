@@ -73,6 +73,30 @@ def with_metadata(text: str, metadata: dict) -> str:
     return body + " <!-- tirith:" + json.dumps(metadata, separators=(",", ":")) + " -->" if metadata else body
 
 
+_META_ID = re.compile(r'(<!-- tirith:\{"id":")(i-[a-f0-9]{8,32})(")')
+
+
+def repair_duplicate_ids(text: str) -> str:
+    """``text`` where every permanent id is used once: a later line with an id an earlier line has gets a new id."""
+    taken = {m.group(2) for m in _META_ID.finditer(text)}
+    seen: set[str] = set()
+
+    def fresh(match: re.Match) -> str:
+        old = match.group(2)
+        if old not in seen:
+            seen.add(old)
+            return match.group(0)
+        while True:
+            new = "i-" + uuid.uuid4().hex[:8]
+            if new not in taken:
+                break
+        taken.add(new)
+        seen.add(new)
+        return match.group(1) + new + match.group(3)
+
+    return _META_ID.sub(fresh, text)
+
+
 def check_of(text: str) -> str | None:
     """The done-check command of an item's text, else None."""
     found = _CHECK_RE.search(text)
