@@ -750,6 +750,20 @@ def refs_stamp(repo: Path | None, lane_file: Path | None = None) -> tuple:
     return tuple(stamp)
 
 
+def _orphaned_review(home: Path, repo: Path, lane: dict) -> bool:
+    """True when nothing can ever move an "(en revisión)" item of an ended lane: no review running, no merge-queue
+    entry and no branch of the lane left."""
+    from tirith import mergeq as mergeq_mod  # late import: mergeq imports this module
+    review = lane.get("review") or {}
+    if review.get("status") == "running" and mergeq_mod._alive(review.get("pid")):
+        return False
+    if mergeq_mod.queued(home, str(lane.get("id") or "")):
+        return False
+    workspace = Path(str(lane["workspace"])) if lane.get("workspace") else Path()
+    branches = {f"lane/{lane.get('id')}", mergeq_mod.branch_of(lane, workspace)}
+    return not any(mergeq_mod.branch_exists(repo, b) for b in branches)
+
+
 def tick_merged(home: Path, config: Config, lanes: list[dict]) -> bool:
     """Lanes that reported ``done`` and merged themselves never get a review, so their item would stay
     "(en revisión)": tick it "(hecho: <sha>)" once the lane's work is on main (the claim check, :func:`lane_work`).
@@ -791,6 +805,16 @@ def tick_merged(home: Path, config: Config, lanes: list[dict]) -> bool:
         if state == WORK_NONE and step == OPS_STEP and lane.get("ended_at"):
             sha = NO_CHANGES
         elif state != WORK_MERGED:
+            if lane.get("ended_at") and _orphaned_review(home, repo, lane):
+                try:  # nothing will ever review it and the work is not on main: back to the plan, open
+                    changed |= commit_change(
+                        home, repo, project,
+                        lambda text: roadmap_mod.set_item(text, step, clean, roadmap_mod.with_status(
+                            clean, roadmap_mod.STATE_REOPENED, f"{lane['id']}: {WORK_REASONS[state]}")),
+                        _message("reopen", step, str(lane["id"])))
+                except PlanGateError:
+                    continue
+                plans.pop(project, None)
             continue
         try:
             changed |= commit_change(

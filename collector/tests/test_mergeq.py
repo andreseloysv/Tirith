@@ -306,8 +306,9 @@ def test_false_tick_the_queue_merges_nothing_for_a_lane_that_changed_nothing(env
     lane = read_json(lane_path(home, "empty"), None)
     assert lane["review"]["status"] == plangate.WORK_NONE
     assert plangate.lane_work(home, repo, lane) == (plangate.WORK_NONE, None)
-    assert not plangate.tick_merged(home, load_config(home), [lane])
-    assert "- [ ] Add the feature file. (en revisión)" in _plan(repo)
+    plangate.tick_merged(home, load_config(home), [lane])
+    plan = _plan(repo)  # nothing ticked it; with no review, queue entry or branch left it is reopened
+    assert "- [x] Add the feature file" not in plan and "(en revisión)" not in plan and "reabierto" in plan
     assert not mergeq_mod.ready_to_enqueue(home, lane, repo)
 
 
