@@ -115,6 +115,15 @@ def _day(iso, now: datetime) -> bool:
     return at is not None and at.astimezone().date() == now.astimezone().date()
 
 
+def _runs(home: Path, reviews: list[dict]) -> int:
+    """Merge-queue runs and lane reviews running now (a live process): their CI is work although no lane is."""
+    from tirith import mergeq as mergeq_mod
+    from tirith import review as review_mod
+    queue = sum(1 for e in mergeq_mod.load(home)["queue"]
+                if e.get("status") == mergeq_mod.RUNNING and mergeq_mod._alive(e.get("pid")))
+    return queue + sum(1 for r in reviews if r.get("status") == review_mod.RUNNING and review_mod._alive(r.get("pid")))
+
+
 def snapshot(home: Path, config: Config, now: datetime) -> dict:
     """The numbers a review starts from, all measured by code (no agent's words)."""
     from tirith import loadlimit as loadlimit_mod
@@ -140,7 +149,7 @@ def snapshot(home: Path, config: Config, now: datetime) -> dict:
     return {
         "at": now_iso(now),
         "lanes_started_today": sum(1 for l in workers if _day(l.get("started_at"), now)),
-        "lanes_working": sum(1 for l in workers if not l.get("ended_at")),
+        "lanes_working": sum(1 for l in workers if not l.get("ended_at")) + _runs(home, reviews),
         "merged_today": sum(1 for r in reviews if r.get("status") == "merged" and _day(r.get("at"), now)),
         "reviews_running_dead": sum(1 for r in reviews if r.get("status") == review_mod.RUNNING
                                     and not review_mod._alive(r.get("pid"))),
@@ -168,7 +177,7 @@ def _watch(home: Path, now: datetime, state: dict, workers: list[dict], reviews:
     from tirith import review as review_mod
     since = now - timedelta(seconds=WATCH_WINDOW_S)
     open_items = int((state.get("autopilot") or {}).get("open_items") or 0)
-    working = any(not l.get("ended_at") for l in workers)
+    working = any(not l.get("ended_at") for l in workers) or _runs(home, reviews) > 0
     ended = [t for l in workers if (t := parse_iso(l.get("ended_at")))]
     idle = None if working or not open_items else (round((now - max(ended)).total_seconds() / 60) if ended else None)
     merged = [t for r in reviews if r.get("status") == "merged" and (t := parse_iso(r.get("at")))]
