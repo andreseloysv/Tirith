@@ -67,6 +67,7 @@ from tirith import runstage as runstage_mod
 from tirith import canary as canary_mod
 from tirith import stable as stable_mod
 from tirith import fasttests as fasttests_mod
+from tirith import netproxy as netproxy_mod
 from tirith import testmap as testmap_mod
 from tirith import loadlimit as loadlimit_mod
 from tirith import repeats as repeats_mod
@@ -542,7 +543,7 @@ def _run_child(home: Path, lane: dict, lane_id: str, command: list[str], workspa
     with log_path.open("ab") as log_handle:
         coordination.update(home, lane, phase="running")
         proc = subprocess.Popen(
-            command, cwd=str(workspace), env=env,
+            netproxy_mod.argv(home, command, env), cwd=str(workspace), env=env,  # in the sandbox when guarded
             stdin=subprocess.PIPE if stdin_text else subprocess.DEVNULL,
             stdout=log_handle, stderr=subprocess.STDOUT,
             start_new_session=os.name == "posix")  # its own process group: `lane stop` ends all of it
@@ -703,6 +704,10 @@ def _cmd_lane_run(args) -> int:
         env["TIRITH_TASK_ATTEMPT"] = task_claim["task_attempt"]
     if args.agent:
         env = agentrun_mod.child_env(config, args.agent, args.project, env)
+    if not interactive:  # behind the network guard: the sandbox and Tirith's proxy (tirith.netproxy)
+        env = netproxy_mod.lane_env(home, lane_id, lane["token"], env)
+        lane["network"] = "guarded" if env.get(netproxy_mod.SANDBOXED_ENV) == "1" else netproxy_mod.status(home).get("why")
+        write_lane(home, lane)
     if interactive:
         try:
             exit_code = _run_interactive(home, lane, command, workspace, env)
@@ -2051,6 +2056,11 @@ def _cmd_net(args) -> int:
     """``tirith net block|unblock <domain|ip|cidr>`` and ``tirith net list``: destinations no agent may reach."""
     from tirith import netblock as netblock_mod
     home = _home(args)
+    if args.net_command == "serve":
+        return netproxy_mod.serve(home, args.port)
+    if args.net_command == "status":
+        print(netproxy_mod.describe(home))
+        return 0
     if args.net_command == "list":
         for rule in netblock_mod.rules(home):
             print(f"{rule['match']}  (blocked {rule.get('at')} by {rule.get('by')})")
@@ -3188,6 +3198,10 @@ def build_parser() -> argparse.ArgumentParser:
         n.add_argument("match")
         n.set_defaults(func=_cmd_net)
     net_sub.add_parser("list", parents=[common], help="the blocked destinations").set_defaults(func=_cmd_net)
+    n_serve = net_sub.add_parser("serve", parents=[common], help="run Tirith's network proxy (the collector starts it)")
+    n_serve.add_argument("--port", type=int, default=None)
+    n_serve.set_defaults(func=_cmd_net)
+    net_sub.add_parser("status", parents=[common], help="whether lanes run behind the network guard").set_defaults(func=_cmd_net)
 
     inbox = sub.add_parser("inbox", parents=[common], help="the owner's requests on plan steps")
     inbox_sub = inbox.add_subparsers(dest="inbox_command", required=True)
