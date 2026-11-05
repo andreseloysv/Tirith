@@ -500,9 +500,8 @@ def resolve_plan_conflict(repo: Path, tmp: Path, lane: dict, files: list[str]) -
 
 def _bytes_git(repo: Path, *args: str, env: dict | None = None, stdin: bytes | None = None,
                cwd: Path | None = None):
-    import subprocess
-    return subprocess.run(["git", "-C", str(cwd or repo), *args], input=stdin, capture_output=True,
-                          env={**os.environ, **(env or {})}, timeout=300)
+    return timeouts_mod.run(["git", "-C", str(cwd or repo), *args], "git-commit", input=stdin,
+                            env={**os.environ, **(env or {})})
 
 
 def _apply_kept(repo: Path, staged: bytes, unstaged: bytes, paths: list[str], tree: str,
