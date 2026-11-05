@@ -444,7 +444,7 @@ def _hold(home: Path, config: Config, project: str, step: str, agents: list[dict
     if proj is not None and proj.repo:
         from tirith import manifest as manifest_mod
         from tirith.guardwrap import default_words
-        failed = [p for p in manifest_mod.check(proj.repo, config.words_for(proj, default_words()))
+        failed = [p for p in manifest_mod.check(proj.repo, config.words_for(proj, default_words()), guard=proj.guard)
                   if p.rule != "manifest-missing"]
         if failed:
             return f"tirith check fails for '{project}' (run `tirith check --project {project}`)"
@@ -552,6 +552,9 @@ def _propose(home: Path, state: dict, projects: list[dict], agents: list[dict], 
         if key not in all_groups:  # a step whose items all wait keeps its debounce
             del own["seen"][key]
             changed = True
+    for key in [k for k in own.get("held") or {} if k not in all_groups]:
+        del own["held"][key]  # its step has nothing left to launch: the old reason would stay on the page forever
+        changed = True
     for key in set(by_step) | set(own["proposals"]):
         project, _, step = key.partition("|")
         rec, opens = own["proposals"].get(key), by_step.get(key, [])
