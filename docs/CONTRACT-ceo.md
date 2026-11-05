@@ -12,8 +12,8 @@ targets from the page.
 ```toml
 [ceo]
 enabled = true
-hours = [9, 14, 20]      # local time
-runs_per_day = 6
+# hours = [9, 14, 20]    # a fixed schedule (local time); without it the CEO picks when it looks again
+runs_per_day = 72
 # model = "...", effort = "..."   (default: the manager's)
 [ceo.targets]            # optional; the contract's defaults otherwise
 merged_per_day = 10
@@ -67,17 +67,26 @@ Targets are durable objects with a phase (`active`, `paused`): the owner pauses 
 |---|---|
 | Read all of `<home>` and the projects, run read-only commands | Launch lanes, merge, edit code, gates or config |
 | Write its own records (`<home>/ceo/`) | Talk to lanes |
-| Send **directives** to the manager (inbox kind `directive`) | Undo or work around an owner decision |
+| Send **directives** to the manager (inbox kind `directive`), fixes included | Undo or work around an owner decision |
 | Change plan **priorities**: order steps, freeze a step, a lane limit per step | Edit plan items' text or tick them |
 | Send **proposals** to the owner, with options | Read the manager's memory or its full transcript |
 
-A code change the CEO wants is a proposal; once approved it becomes a plan item and goes through a lane and the
-merge queue like any other.
+A fix for a bug in Tirith that stops or slows the work (launches failing, a lost test map, a check stuck, a wait
+nobody can end) is a **directive**, not a proposal: the manager adds one plan item for it with a `--check` that
+fails today and launches it now; it goes through a lane, its tests, the review and the merge queue like any other
+work, so it needs no owner approval. Any other code change (a behavior the owner chose), budget or targets is a
+proposal; once approved it becomes a plan item the same way.
 
 ## When it runs
 
-- **Schedule**: by default 09:00, 14:00 and 20:00 local time, visible on the page with "run now", "pause" and the
-  receipt of the last run.
+- **Schedule**: the CEO picks when it looks again. Its result carries `next_review_min`, from 10 to 480 minutes
+  (at least three reviews a day): short while something is broken or a fix it asked for is landing, about an hour
+  while work moves normally, hours when nothing runs and nothing is expected to. Until it picks, an hour
+  (`ceo.EVERY_MIN`); `book.json` keeps `every_min` and `next_due`, and `state.ceo` shows `next_at` and
+  `every_min`. A fixed `[ceo] hours` set by the owner replaces this with those hours. Each review answers first:
+  is Tirith working? (the hourly check a person did by hand on the night of 2026-11-04: work moving, launches
+  working, CI on main green, the test map there, no review stuck, no wait on an owner who was never asked, the
+  manager answering). A review where nothing moved is skipped by code at no cost, so a short interval is cheap.
 - **Watchdog alarm**: a target fails and code cannot fix it.
 - **Red self-check**: a self-check check turns `failed` ("Something needs a look", `CONTRACT-selfcheck.md`). The
   CEO is started out of schedule with the failed checks in the snapshot (`alarm`) and the brief's "Alarm" section:
@@ -86,7 +95,7 @@ merge queue like any other.
 - **Owner request**: "CEO, why is nothing moving?"
 - **Skip by code**: before a scheduled run, code compares the snapshot with the last one; when nothing moved, no
   alarm fired and no directive is due, the run is skipped and costs nothing.
-- **Budget**: at most `[ceo] runs_per_day` (default 6) and `[ceo] usd_per_day`; past either, only alarms run.
+- **Budget**: at most `[ceo] runs_per_day` (default 72) and `[ceo] usd_per_day`; past either, only alarms run.
 - **After downtime**: when Tirith was off since the last run, the next run is a catch-up: every open directive is
   checked again before the manager acts on it any further (a directive from before the gap is not trusted blindly).
 
@@ -96,7 +105,13 @@ Each run is a **fresh session** (no memory of earlier runs except its records), 
 manager and of its own past conclusions.
 
 1. **Snapshot (code)**: the targets, `tirith lane stats`, the watchdog report, CI, open waits and their deadlines,
-   and the manager's decisions since the last run as a **bounded summary** (not its transcript).
+   and the manager's decisions since the last run as a **bounded summary** (not its transcript). The check of
+   whether Tirith is working adds: `open_items`, `idle_min` (open items and no lane working, since the last lane ended), `last_merge_min`,
+   `reviews_running_long` (live, over 1 h), `launch_failures` (Tirith's "could not" answers in the last 6 h),
+   `owner_waits_unasked` (the manager's last answer to a proposal names the owner while nothing of that project is
+   on the owner's list), `ci_main` (the newest finished GitHub run of each workflow) and `test_maps` (each
+   project's map: there or not, age). The fingerprint ignores the clock (`idle_min` counts in whole hours, map ages
+   and `last_merge_min` not at all).
 2. **Re-check findings**: every open finding runs its `check` again. Fixed ones close quietly; a closed one that
    fails again is a regression.
 3. **Follow up directives**: did the manager do it, and did the number move? A directive whose number did not move
@@ -122,7 +137,8 @@ A run ends with exactly one JSON object, checked by code; a malformed one is rej
  "findings": [{"id": "zombie-reviews", "change": "new | regressed | still-open | fixed", "evidence": "…", "check": "…"}],
  "directives": [{"id": "d-12", "text": "…", "why": "…", "expect": "…", "check": "…", "runs": 2}],
  "proposals": [{"id": "p-4", "text": "…", "why": "…", "options": ["Approve", "Decline", "Later"]}],
- "report": "at most 5 lines for the owner"}
+ "report": "at most 5 lines for the owner",
+ "next_review_min": 60}
 ```
 
 Code delivers the directives to the manager's inbox and the proposals to the owner; the CEO never writes to them
