@@ -103,6 +103,11 @@ run in parallel, or the task asks for sub-agents. It returns the reason, or `Non
 `"off"` never promote. `promote.manager_decision(...)` returns the same verdict as `{rule, measured, threshold, reason}`
 (`task_size`, `lane_diff`, `parallel_items`, `subagents`).
 
+With `ceo = "on-demand"`, `promote.promote_to_ceo(mode, workers, unattended_hours, selfcheck_failed)` says when a CEO is
+created: more than 2 workers at once (`CEO_WORKERS`), more than 1 h of work with nobody watching
+(`CEO_UNATTENDED_HOURS`), or a failure the self-check does not fix. Reason or `None`; `promote.ceo_decision(...)` gives
+`{rule, measured, threshold, reason}` (`workers`, `unattended`, `selfcheck`). `"always"` and `"off"` never promote.
+
 Every promotion or retirement is appended to `<home>/company.jsonl` by `promote.log_change(home, event, role, rule,
 measured, threshold, reason)` (`event` = `promote` | `retire`; `log_decision` records a `manager_decision`), one line
 `{ts, event, role, rule, measured, threshold, reason}`; `promote.read_log(home)` reads it back.
