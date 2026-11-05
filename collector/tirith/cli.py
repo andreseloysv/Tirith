@@ -1767,7 +1767,7 @@ def relaunch_lane(home: Path, lane: dict, alias: str | None, by_tirith: bool = F
     lane_id = launch_mod.lane_id_for(title, {str(l["id"]) for l in read_lanes(home)}, repo)
     old = Path(str(lane.get("workspace") or ""))
     if note:
-        timeouts_mod.run(["git", "-C", str(old), "add", "-A"], "git")
+        launch_mod.stage_all(old)
         timeouts_mod.run(["git", "-C", str(old), "commit", "-q", "-m", f"Lane {lane['id']}: work before the claim check"],
                          "git-commit")
         workspace = launch_mod.create_worktree(repo, lane_id, base=mergeq_mod.branch_of(lane, old))
