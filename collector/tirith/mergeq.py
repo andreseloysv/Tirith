@@ -497,7 +497,7 @@ def resolve_plan_conflict(repo: Path, tmp: Path, lane: dict, files: list[str]) -
 
 
 def _land(home: Path, repo: Path, tmp: Path, project: str, base: str, tested: str, main_branch: str,
-          subject: str, via: str) -> tuple[str, tuple[str, str] | None]:
+          subject: str, via: str, clashing: list[str] | None = None) -> tuple[str, tuple[str, str] | None]:
     """Fast-forward main to the tested commit under the plan writer lock: ``(commit, None)``, else ``("", (result, message))``."""
     with plangate_mod.writer_lock(home, project):
         head = _git(repo, "rev-parse", "HEAD").stdout.strip()
@@ -511,6 +511,8 @@ def _land(home: Path, repo: Path, tmp: Path, project: str, base: str, tested: st
         if dirty:
             clash = sorted(dirty & set(_git(repo, "diff", "--name-only", "HEAD", tested).stdout.split()))
             if clash:
+                if clashing is not None:
+                    clashing.extend(clash)
                 return "", (WAITING, f"{repo} has uncommitted changes in {', '.join(clash)}, which the merge changes; "
                                      "the queue waits for them to be committed or dropped")
         plangate_mod.recover_git_lock(repo)
@@ -710,7 +712,7 @@ def _try_train(home: Path, repo: Path, members: list[tuple[dict, dict]]) -> tupl
             return RED, f"stage {broke} failed on the train ({ids}) merged with {main_branch}:\n{_tail(output)}", info
         tested = _git(tmp, "rev-parse", "HEAD").stdout.strip()
         tested, refused = _land(home, repo, tmp, str(joined[0][1].get("project") or ""), base, tested, main_branch,
-                                f"train of {len(joined)}: {ids}", "train")
+                                f"train of {len(joined)}: {ids}", "train", info.setdefault("clash", []))
         if refused:
             return refused[0], refused[1], info
         info.update(commit=tested, passed=passed, skipped=skipped, flaky=flaky)
@@ -967,6 +969,17 @@ def _process_train(home: Path, config: Config, members: list[tuple[dict, dict]],
     joined = info["joined"]
     if result == RED and len(joined) > 1:  # who is the culprit? the same lanes, one at a time
         return rows + [_process_one(home, config, entry, lane, repo, relaunch, push) for entry, lane in joined]
+    if result == WAITING and info.get("clash") and len(joined) > 1:
+        # The owner's uncommitted files block only the lanes that change them: the others go on without those.
+        clash = set(info["clash"])
+        blocked = [(e, l) for e, l in joined
+                   if clash & set(changed_paths(repo, "HEAD", branch_of(l, Path(str(l["workspace"])))))]
+        free = [pair for pair in joined if pair not in blocked]
+        if blocked and free:
+            rows += (_process_train(home, config, free, repo, relaunch, push) if len(free) > 1
+                     else [_process_one(home, config, *free[0], repo, relaunch, push)])
+            return rows + [_settle(home, config, entry, lane, repo, result, message, info, relaunch, push)
+                           for entry, lane in blocked]
     if result != MERGED:
         return rows + [_settle(home, config, entry, lane, repo, result, message, info, relaunch, push)
                        for entry, lane in joined]
