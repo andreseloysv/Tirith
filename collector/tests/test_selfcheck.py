@@ -81,7 +81,7 @@ def test_a_quiet_home_is_green(home: Path, project: Path) -> None:
     assert state["health"]["level"] == "green"
     public = selfcheck_mod.public(state["health"])
     assert public["level"] == "green"
-    assert [c["id"] for c in public["checks"]] == ["collector", "manager", "autopilot", "disk", "reviews", "mergeq", "timeouts", "canary", "ownerenv"]
+    assert [c["id"] for c in public["checks"]] == ["collector", "manager", "autopilot", "disk", "reviews", "mergeq", "timeouts", "wasted", "canary", "ownerenv"]
     assert all(c["level"] == "ok" and c["text"] for c in public["checks"])
 
 
@@ -513,3 +513,24 @@ def test_a_spawned_stamp_without_a_runner_log_is_amber(home: Path, project: Path
         {"lane": "u-new", "project": "demo", "at": recent, "status": "queued", "feature": "New"}]})
     check(home, state, NOW, Fake())
     assert level(state, "mergeq") == "healing" and "does not exist" in state["health"]["checks"]["mergeq"]["text"]
+
+
+def test_wasted_work_is_counted_and_shown_in_the_health(home: Path) -> None:
+    from tirith import mergeq as mergeq_mod
+    from tirith import wasted as wasted_mod
+
+    assert wasted_mod.summary(home) == "No work has been thrown away."
+    entry = {"lane": "a", "project": "demo"}
+    mergeq_mod._finish(home, entry, "red", "stage test/test failed on x:\nboom")        # suite 1
+    mergeq_mod._finish(home, entry, "merged", "tests passed; merged", commit="c")      # suite 2: a repeat
+    mergeq_mod._finish(home, {"lane": "b", "project": "demo"}, "closed", "nothing to merge: x", wasted="discarded")
+    mergeq_mod._finish(home, {"lane": "c", "project": "demo"}, "closed", "nothing to merge: y", wasted="absorbed")
+    mergeq_mod._finish(home, {"lane": "d", "project": "demo"}, "closed", "nothing to merge: z")  # plain: not waste
+    assert wasted_mod.totals(home) == {"repeated": 1, "discarded": 1, "absorbed": 1}
+    state: dict = {}
+    selfcheck_mod.run(home, load_config(home), NOW, state, lanes=[], spawn=lambda *a: 1, kill=lambda l: None)
+    check = state["health"]["checks"]["wasted"]
+    assert check["level"] == "ok"
+    assert "1 suite(s) run again" in check["text"] and "1 tested merge(s) discarded" in check["text"]
+    assert "1 lane(s) absorbed" in check["text"]
+    assert selfcheck_mod.public(state["health"])["checks"][-3]["label"] == "Wasted work"

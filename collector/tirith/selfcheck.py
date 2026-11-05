@@ -27,6 +27,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
+from tirith import wasted as wasted_mod
 from tirith import timeouts as timeouts_mod
 from tirith import asks as asks_mod
 from tirith import autopilot as autopilot_mod
@@ -66,7 +67,7 @@ QUEUE_KIND = "selfcheck"
 LEVELS = ("ok", "healing", "failed")
 LABELS = {"collector": "Tirith itself", "manager": "The manager", "autopilot": "The autopilot",
           "disk": "Disk space", "reviews": "Reviews", "mergeq": "The merge queue", "timeouts": "Command timeouts",
-          "canary": "The end-to-end test", "ownerenv": "Your shell environment"}
+          "wasted": "Wasted work", "canary": "The end-to-end test", "ownerenv": "Your shell environment"}
 OK_TEXT = {"collector": "Tirith is collecting normally.", "manager": "The manager is answering normally.",
            "autopilot": "The autopilot is on track.", "disk": "There is enough free disk space.",
            "reviews": "Reviews are moving.", "mergeq": "The merge queue is moving.", "timeouts": "No command keeps running out of time.",
@@ -529,6 +530,7 @@ def run(home: Path, config: Config, now: datetime, state: dict, *, lanes: list[d
     checks["reviews"] = _reviews(home, config, now, book, lanes, spawn, kill, diff or diff_files, active, relaunch)
     checks["mergeq"] = _mergeq(home, now, book, active)
     checks["timeouts"] = _timeouts(home, now, book, active)
+    checks["wasted"] = _check("ok", wasted_mod.summary(home))  # info only: the owner sees the waste, nothing to fix
     checks["canary"] = _canary(home, now, book, active)
 
 

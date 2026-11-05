@@ -715,3 +715,15 @@ Tirith's own jobs) is listed in `state.owner_requests`, built from `state.inbox`
 `{id, at, kind, project, text, status, link}`. `status` is `open | answered | done`. `link` ties it to what became
 of it: `{type: "plan", step, lanes}` when it names a plan step, edits the plan or a lane took it;
 `{type: "answer", by, at}` when it was answered; `null` while it is neither (still unlinked).
+
+## Digest (what reached main)
+
+`tirith digest [--project P] [--json]` builds one card per lane the merge queue merged (from the
+`mergeq.json` history, newest first, at most 20) and writes a static page to `<home>/digest/<P|all>.html`
+(no server, no port); `--json` prints the data instead. The same data is `state.projects[].digest`
+(`{project, at, count, cards: [{lane, project, at, summary, commit, train, skipped, flaky}]}`).
+
+The page ends with the opinion button ("Give your opinion": the `tirith://inbox?kind=digest-feedback`
+link, plus the line to copy). `tirith digest feedback --project P [--step N] --text "<opinion>"` turns each
+non-empty line of the opinion (bullets stripped) into an open plan item through `tirith plan add`'s writer;
+without `--step` the items go to the last real step that still has open items. An empty opinion exits 3.
