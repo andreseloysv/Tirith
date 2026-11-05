@@ -85,7 +85,7 @@
       '<span class="afoot mut">' + (c.findings_open || 0) + ' open findings' + (c.cost_today ? ' · today $' + Number(c.cost_today).toFixed(2) : '') + '</span></div>';
   }
 
-  /* the section for the Overview and the Agents tab */
+  /* the section for the Overview (the Agents tab shows the manager and the CEO as cards of its board) */
   T.leaders = function (state) {
     return '<section class="leaders"><h2>Running Tirith</h2><div class="grid2">' + managerCard(state) + ceoCard(state) + '</div></section>';
   };
