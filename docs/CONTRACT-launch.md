@@ -28,7 +28,7 @@ Add it to the plan first: tirith plan add --project demo --step 2 --text "<what 
 It is also refused when the plan has no such step, the item is already done, in review, blocked, or in progress
 by a lane that is still running, or the project has no plan file. What Tirith starts by itself gets its item from
 Tirith before it starts (`tirith.plangate.ops_item`, in step `0` "Trabajo automático de Tirith", already marked
-"(en curso: <lane>)" so the autopilot never takes it): plan refresh `Revisar el plan (<date>)`, new plan
+"(en curso: <lane>)" so the autopilot never takes it): plan refresh `Revisar el plan (<date> <HH:MM>)` (with the time: two reviews on one day are two items), new plan
 `Plan nuevo: <title>`, verification `Verificar: <check>`, the manager lane `Manager de guardia: atender el chat`
 (one standing item), the owner's chat `Chat con el dueño: <chat id>` (ticked when the chat ends, unless its worktree holds work not yet on main: then the item stays open until the merge), a review
 `Revisar: <item>` (a sub-item under the reviewed item). The autopilot, a click on a step and the owner's "Finish
