@@ -315,3 +315,24 @@ def test_cli_configures_legacy_tasks_and_lists_blockers(home, tmp_path, capsys):
     assert main(["task", "list", "--project", "demo"]) == 0
     tasks = {row["text"]: row for row in json.loads(capsys.readouterr().out)}
     assert not tasks["Second"]["ready"] and tasks["Second"]["reserved_by"] == [first_id]
+
+
+def _ready(repo, home, agents=()):
+    road = roadmap.build(repo, "demo", [], date(2026, 11, 2))
+    found, _ = autopilot.candidates([{"id": "demo", "roadmap": road}], list(agents), home=home)
+    return [row["item"] for row in found.values()]
+
+
+def test_conflicts_two_ready_items_on_the_same_files_are_not_launched_together(home, repo):
+    (repo / "docs/TODO.md").write_text("## 1. Work\n\n" + item("A", "i-aaaaaaaa", writes=["src/api"]) +
+                                       item("B", "i-bbbbbbbb", writes=["src/api/client.py"]) +
+                                       item("C", "i-cccccccc", writes=["docs"]))
+    assert _ready(repo, home) == ["A", "C"]
+
+
+def test_conflicts_an_item_waits_while_a_working_lane_touches_its_files(home, repo):
+    (repo / "docs/TODO.md").write_text("## 1. Work\n\n" + item("A", "i-aaaaaaaa", writes=["src"]) +
+                                       item("B", "i-bbbbbbbb", writes=["src/ui"]) +
+                                       item("C", "i-cccccccc", writes=["docs"]))
+    agents = [{"id": "one", "project": "demo", "step": "1", "status": "working", "task_id": "i-aaaaaaaa"}]
+    assert _ready(repo, home, agents) == ["C"]
