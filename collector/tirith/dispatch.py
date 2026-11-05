@@ -436,6 +436,11 @@ def run(home: Path, config: Config, now: datetime, *, agents: list[dict], lanes:
                 done = _plan_edit(home, req, config, now)
             elif req["kind"] == "setup" and (req.get("setup") or {}).get("action") in inbox_mod.NET_ACTIONS:
                 done = _net_rule(home, req, now)
+            elif req["kind"] == "setup" and (req.get("setup") or {}).get("action") == "models-set" \
+                    and (req.get("setup") or {}).get("role") == "sentinel":
+                from tirith.cli import _models_apply  # late: cli imports a lot
+                _models_apply(home, rid, req["setup"])  # the owner's Settings choice: applied at once, by code
+                done = "answered"
             else:
                 own = req["kind"] in ("finish", "plan-edit") or req["kind"] in inbox_mod.PLAN_KINDS
                 done = "answered" if own else "manager"

@@ -245,6 +245,7 @@
     var runs = (s.pipelines || []).filter(function (p) { return p.status === 'running'; });
     var ags = (s.agents || []).filter(function (a) { return a.status === 'working' || a.status === 'stalled'; });
     var h = '<div class="ovg"><div class="ovmain" data-scroll="ovmain">';
+    if (T.statusCard) h += T.statusCard(s);  /* the state of the development, first: read in 5 seconds */
     var spent = T.sumUsage && T.sumUsage(s.agents || []);
     if (spent) h += '<p class="mut sm usage ovusage" title="All agents in this view">Spent ' + esc(T.usageLine(spent)) + '</p>';
     if (T.plan) h += T.plan(s);

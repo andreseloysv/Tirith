@@ -827,6 +827,52 @@ class Collector:
             })
         return waits
 
+    def _merged_today(self, now: datetime) -> int:
+        """Lanes whose review merged today (local day), from every lane record; recounted every 30 s."""
+        cached = getattr(self, "_merged_cache", None)
+        if cached and time.monotonic() - cached[0] < 30:
+            return cached[1]
+        day = now.astimezone().date()
+        count = 0
+        for lane in read_lanes(self.home):
+            review = lane.get("review") if isinstance(lane, dict) and isinstance(lane.get("review"), dict) else {}
+            at = parse_iso(review.get("at")) if review.get("status") == "merged" else None
+            if at and at.astimezone().date() == day:
+                count += 1
+        self._merged_cache = (time.monotonic(), count)
+        return count
+
+    def _lasting(self, now: datetime) -> list[str]:
+        """Checks not ok for 20 minutes or more (the CEO's book), the amber the Status card shows."""
+        from tirith import ceo as ceo_mod
+        book = read_json(self.home / ceo_mod.DIR / "book.json", {}) or {}
+        out = []
+        for key, rec in (book.get("unwell") or {}).items():
+            since = parse_iso(rec.get("since") if isinstance(rec, dict) else rec)
+            if since and not (isinstance(rec, dict) and rec.get("ok_since")) and \
+                    (now - since).total_seconds() >= ceo_mod.UNWELL_ALARM_MIN * 60:
+                out.append(key)
+        return out
+
+    def _status_and_sentinel(self, state: dict, now: datetime) -> None:
+        """``state.status`` (the Status card, by code) and ``state.sentinel``; the live collector starts a sentinel
+        look when one is due. Neither may cost the cycle."""
+        from tirith import github as github_mod
+        from tirith import sentinel as sentinel_mod
+        from tirith import statuscard as statuscard_mod
+        try:
+            ci = {k: str(v.get("status")) for k, v in ((read_json(self.home / github_mod.CI_FILE, {}) or {})
+                                                        .get("workflows") or {}).items() if isinstance(v, dict)}
+            state["status"] = statuscard_mod.build(state, now, ci, self._merged_today(now), self._lasting(now))
+        except Exception as err:  # noqa: BLE001
+            print(f"tirith: status card: {type(err).__name__}: {err}", file=sys.stderr)
+        try:
+            state["sentinel"] = sentinel_mod.public(self.home, now)
+            if self._live:
+                sentinel_mod.tick(self.home, state)
+        except Exception as err:  # noqa: BLE001
+            print(f"tirith: sentinel: {type(err).__name__}: {err}", file=sys.stderr)
+
     def _spawn(self):
         """What the dispatcher starts detached work with: only the long-running collector passes one, so the hourly
         end-to-end test starts there (it never did: no caller passed it) and never from a cycle run by a test."""
@@ -1842,6 +1888,7 @@ class Collector:
         self._tick("sessions")  # what is left of build_state after the inbox
         state = self.slim_state(built, now)
         self._tick("slim")
+        self._status_and_sentinel(state, now)
         write_json_atomic(self.home / "state.json", state, compact=True)
         # The same JSON as a script, so a page opened from file:// can load it without CORS.
         write_text_atomic(self.home / "state.js", state_js(state, compact=True))

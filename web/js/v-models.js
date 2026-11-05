@@ -126,13 +126,29 @@
     return h;
   }
 
+  /* the sentinel: a small cheap model of any vendor that looks every few minutes and wakes the CEO (tirith/sentinel.py) */
+  function sentinelCard(M) {
+    var sn = M.sentinel || {}, en = draft('sentinel', 'enabled', sn.enabled || 'on'), every = draft('sentinel', 'every_min', sn.every_min || '5');
+    var pick = function (f, cur, list, label) {
+      return '<label class="sf"><span>' + esc(label) + '</span><select data-act="mod-f" data-key="sentinel|' + f + '" aria-label="' + esc(label) + '">' +
+        list.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (String(o[0]) === String(cur) ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('') + '</select></label>';
+    };
+    return '<div class="card scard"><div class="phead"><b>Sentinel</b><span class="mut sm">A small, cheap model that looks at Tirith every few minutes and wakes the CEO when something is off</span></div>' +
+      '<div class="sfields mfields">' + pick('enabled', en, [['on', 'On'], ['off', 'Off']], 'Sentinel') +
+      labeled('sentinel', 'agent', 'Agent', sn.agent, M, '(the workers\' agent)') +
+      labeled('sentinel', 'model', 'Model', sn.model, M, '(the cheapest of the agent)') +
+      labeled('sentinel', 'effort', 'Effort', sn.effort, M, '(low)') +
+      pick('every_min', every, [['3', '3 min'], ['5', '5 min'], ['10', '10 min'], ['15', '15 min'], ['30', '30 min'], ['60', '1 h']], 'Every') + '</div>' +
+      '<div class="sfoot"><button class="isend" data-act="mod-save" data-key="sentinel">Save</button></div></div>';
+  }
+
   T.views.settings = function (state, el) {
     lastState = state;
     var M = state.models;
     if (!M) { el.innerHTML = '<section>' + T.empty('No settings in this state yet: run the collector again') + '</section>'; return; }
     el.innerHTML = '<section class="msettings">' +
       '<p class="mut sm mlead">Model and effort come from <code>~/.tirith/config.toml</code> under <code>[models]</code>; the manager keeps its own in the agent\'s settings file.</p>' +
-      managerCard(M) + workersCard(M, state) + agentsCard() + pending(M) + cliBlock() + '</section>';
+      managerCard(M) + workersCard(M, state) + sentinelCard(M) + agentsCard() + pending(M) + cliBlock() + '</section>';
   };
 
   /* Agent CLIs per platform (docs/PLATFORMS.md; read 2026-10-29). "?" = not checked. */
@@ -170,12 +186,14 @@
   }
   function flags(o) {
     return ['agent', 'model', 'effort'].filter(function (k) { return o[k]; }).map(function (k) { return ' --' + k + ' ' + shq(o[k]); }).join('') +
-      (o.fallback ? ' --fallback ' + shq(o.fallback.join(',')) : '');
+      (o.fallback ? ' --fallback ' + shq(o.fallback.join(',')) : '') + (o.enabled ? ' --enabled ' + o.enabled : '') +
+      (o.every_min ? ' --every-min ' + o.every_min : '');
   }
   function summary(req) {
     return 'models ' + req.role + (req.project ? ' ' + req.project + (req.step ? '/' + req.step : '') : '') +
       ['agent', 'model', 'effort'].filter(function (k) { return req[k]; }).map(function (k) { return ' ' + k + '=' + req[k]; }).join('') +
-      (req.fallback ? ' fallback=' + (req.fallback.join(',') || 'none') : '');
+      (req.fallback ? ' fallback=' + (req.fallback.join(',') || 'none') : '') + (req.enabled ? ' ' + req.enabled : '') +
+      (req.every_min ? ' every ' + req.every_min + ' min' : '');
   }
   function set(req) {
     var cli = 'tirith models set ' + req.role + flags(req) + (req.project ? ' --project ' + shq(req.project) : '') + (req.step ? ' --step ' + shq(req.step) : '') + (req.clear ? ' --clear' : '');
@@ -187,8 +205,13 @@
       var v = String(draft(scope, f, f === 'model' && held && !base.model ? held.model : base[f])).trim(); if (v) req[f] = v;
     });
     if (scope === 'workers' && ui.modDraft['workers|fallback']) req.fallback = ui.modDraft['workers|fallback'].slice();
+    if (scope === 'sentinel') {
+      req.enabled = String(draft('sentinel', 'enabled', base.enabled || 'on'));
+      req.every_min = String(draft('sentinel', 'every_min', base.every_min || '5'));
+      delete ui.modDraft['sentinel|enabled']; delete ui.modDraft['sentinel|every_min'];
+    }
     if (scope === 'manager' && (!req.agent || !req.model)) { ui.modErr = 'The manager needs an agent and a model.'; T.render(); return; }
-    if (!req.model && !req.effort && !req.agent && !req.fallback) { ui.modErr = 'Nothing to save: choose a model, an effort or an agent.'; T.render(); return; }
+    if (!req.model && !req.effort && !req.agent && !req.fallback && !req.enabled) { ui.modErr = 'Nothing to save: choose a model, an effort or an agent.'; T.render(); return; }
     ['agent', 'model', 'effort', 'fallback'].forEach(function (f) { delete ui.modDraft[scope + '|' + f]; delete ui.modOther[scope + '|' + f]; });
     set(req);
   }

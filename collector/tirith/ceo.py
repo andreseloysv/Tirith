@@ -244,6 +244,11 @@ def alarm_checks(home: Path, book: dict, now: datetime) -> dict[str, str]:
                 continue
         unwell[key] = rec
     out = {}
+    from tirith import sentinel as sentinel_mod
+    wake = sentinel_mod.last(home).get("wake") or {}
+    if wake.get("why") and wake.get("at") != book.get("sentinel_seen"):  # the sentinel saw something code did not
+        out["sentinel"] = str(wake["why"])
+        book["sentinel_seen"] = wake.get("at")
     for key, check in bad.items():
         rec = unwell.setdefault(key, {"since": now_iso(now)})
         since = parse_iso(rec["since"])
