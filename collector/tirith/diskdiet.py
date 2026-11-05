@@ -205,7 +205,7 @@ def _tree_size(folder: Path) -> int:
 
 def busy_folders() -> list[Path]:
     """Working folders of every running process (``lsof`` cwd listing); empty when it cannot be read."""
-    done = subprocess.run(["lsof", "-d", "cwd", "-Fn"], capture_output=True, text=True)
+    done = subprocess.run(["lsof", "-d", "cwd", "-Fn"], capture_output=True, text=True, errors="replace")
     return [Path(line[1:]) for line in done.stdout.splitlines() if line.startswith("n/")]
 
 
@@ -360,11 +360,11 @@ def _remove_tree(folder: Path, root: Path, deadline: float) -> int:
 def pytest_in_use(base: Path) -> set[Path]:
     """``pytest-N`` folders under ``base`` that a running pytest uses as its basetemp (open files or ``--basetemp``;
     with any pytest running, also the newest run, which ``pytest-current`` names)."""
-    pids = subprocess.run(["pgrep", "-f", "pytest"], capture_output=True, text=True).stdout.split()
+    pids = subprocess.run(["pgrep", "-f", "pytest"], capture_output=True, text=True, errors="replace").stdout.split()
     if not pids:
         return set()
-    text = subprocess.run(["lsof", "-p", ",".join(pids), "-Fn"], capture_output=True, text=True).stdout
-    text += subprocess.run(["ps", "-p", ",".join(pids), "-ww", "-o", "command="], capture_output=True, text=True).stdout
+    text = subprocess.run(["lsof", "-p", ",".join(pids), "-Fn"], capture_output=True, text=True, errors="replace").stdout
+    text += subprocess.run(["ps", "-p", ",".join(pids), "-ww", "-o", "command="], capture_output=True, text=True, errors="replace").stdout
     used = set()
     for match in re.finditer(re.escape(str(base)) + r"/(pytest-\d+)", text):
         used.add(base / match.group(1))
@@ -446,7 +446,7 @@ def _biggest(count: int = 3) -> list[tuple[str, int]]:
     for entry in Path.home().iterdir():
         if entry.name.startswith(".") or not entry.is_dir() or entry.is_symlink():
             continue
-        done = subprocess.run(["du", "-sk", str(entry)], capture_output=True, text=True, timeout=120)
+        done = subprocess.run(["du", "-sk", str(entry)], capture_output=True, text=True, errors="replace", timeout=120)
         match = re.match(r"\d+", done.stdout)
         if match:
             sizes.append((entry.name, int(match.group()) * 1024))
@@ -456,7 +456,23 @@ def _biggest(count: int = 3) -> list[tuple[str, int]]:
 _sweeps: dict[str, dict] = {}  # home -> {"thread", "result"} of the background sweep
 
 
-def free_space(home: Path, config: Config, state: dict, now: datetime, *,
+FAIL_WAIT_S = 60  # after a failed pass, no new one for at least this long
+
+
+def free_space(home: Path, config: Config, state: dict, now: datetime, **kw) -> bool:
+    """:func:`_free_space` that survives any error (non-UTF-8 output, ...) and waits ``FAIL_WAIT_S`` after one."""
+    retry = state.get("disk_retry_at")
+    if retry and now.timestamp() < float(retry):
+        return False
+    try:
+        return _free_space(home, config, state, now, **kw)
+    except Exception as exc:
+        state["disk_retry_at"] = now.timestamp() + FAIL_WAIT_S
+        append_log(home, f"Freeing disk failed: {exc}")
+        return False
+
+
+def _free_space(home: Path, config: Config, state: dict, now: datetime, *,
                free: Callable[[Path], int] | None = None, busy: Callable[[], list[Path]] | None = None,
                running: Callable[[], bool] | None = None,
                biggest: Callable[[], list[tuple[str, int]]] | None = None,
