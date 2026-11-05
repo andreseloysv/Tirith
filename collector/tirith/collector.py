@@ -603,6 +603,7 @@ class Collector:
         self._owner_items_checked = False
         self.rooms =RoomsService(self.home, rooms_transport)
         self._one_shot = False
+        self._live = False  # the long-running collector (run() without once): only it watches the network
         self.activity = activity_mod.ActivityTracker(self.home, warm=True)
         self.github = github_mod.GithubReader(github_transport)
         self._usage_cache: dict = {}
@@ -826,19 +827,25 @@ class Collector:
         return waits
 
     def _network(self) -> dict:
-        """``state.network``: the network guard, started here when it should run and does not."""
+        """``state.network``: the network guard, started here when it should run and does not (only by the
+        long-running collector: a cycle run by a test never starts a proxy)."""
         try:
-            return netproxy_mod.ensure(self.home)
+            return netproxy_mod.ensure(self.home) if self._live else netproxy_mod.status(self.home)
         except Exception as err:  # noqa: BLE001 - a guard that cannot start is shown, never a lost cycle
             return {"guard": "off", "why": f"{type(err).__name__}: {err}"}
 
     def _accesses(self, lanes: list[dict]) -> list[dict]:
-        """``state.accesses``, after the network watch wrote the lanes' new connections (it never stops a cycle)."""
+        """``state.accesses``, after the network watch wrote the lanes' new connections (it never stops a cycle).
+        Only the long-running collector watches and looks domains up: a cycle run inside a test once listed the
+        machine's real connections and ran ``openssl`` lookups from inside a lane."""
+        rows = access_audit_mod.recent(self.home)
+        if not self._live:
+            return rows
         try:
             netwatch_mod.sample(self.home, lanes)
+            rows = access_audit_mod.recent(self.home)
         except Exception as err:  # noqa: BLE001 - a watch is no reason to lose the state
             print(f"tirith: network watch: {type(err).__name__}: {err}", file=sys.stderr)
-        rows = access_audit_mod.recent(self.home)
         try:
             netwatch_mod.annotate(rows, home=self.home)
         except Exception:  # noqa: BLE001 - a missing domain is no reason to lose the state
@@ -1854,6 +1861,7 @@ class Collector:
         ``reload_check`` (the continuous mode of ``tirith collect``) is asked between cycles; when it says the
         code changed the loop ends with ``ReloadRequested`` so the caller can re-execute."""
         self._one_shot = once
+        self._live = not once
         if once and self.config.rooms:
             # One-shot mode has no background poller to wait for: read the rooms now,
             # then give the brain a bounded moment for the room jobs and cycle again.
