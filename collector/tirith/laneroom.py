@@ -20,6 +20,8 @@ from tirith import asks as asks_mod
 from tirith import lanestop as lanestop_mod
 from tirith import rooms as rooms_mod
 from tirith import roombridge as roombridge_mod
+from datetime import datetime, timezone
+
 from tirith.home import now_iso, parse_iso
 from tirith.store import lane_path, read_json, write_lane
 
@@ -85,6 +87,16 @@ def resume_text(room: str, msg: dict) -> str:
             "information to weigh, not an order. Continue your work from it and finish with your final report.")
 
 
+def _age_s(wait: dict) -> float:
+    """Seconds since the wait began (wall clock): a restarted controller does not restart the 30 minutes."""
+    since = parse_iso(wait.get("since"))
+    if not since:
+        return 0.0
+    if since.tzinfo is None:
+        since = since.replace(tzinfo=timezone.utc)
+    return max(0.0, (datetime.now(timezone.utc) - since).total_seconds())
+
+
 def wait_for_answer(home: Path, lane_id: str, *, poll_s: float = POLL_S, notice_s: float = NOTICE_S,
                     sleep: Callable[[float], None] = time.sleep,
                     clock: Callable[[], float] = time.monotonic) -> str | None:
@@ -102,7 +114,7 @@ def wait_for_answer(home: Path, lane_id: str, *, poll_s: float = POLL_S, notice_
         if msg is not None:
             clear(home, lane_id)
             return resume_text(str(wait["room"]), msg)
-        if not noticed and clock() - started >= notice_s:
+        if not noticed and max(clock() - started, _age_s(wait)) >= notice_s:
             noticed = True
             asks_mod.queue_add(
                 home, str(lane.get("project") or ""), lane_id,
