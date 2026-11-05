@@ -21,7 +21,7 @@ from tirith import manifest as manifest_mod
 from tirith import plangate as plangate_mod
 from tirith import runstage as runstage_mod
 from tirith.home import now_iso
-from tirith.launch import link_node_modules, worktree_path
+from tirith.launch import link_node_modules, stage_all, worktree_path
 from tirith.store import lane_path, read_json, write_lane
 
 OUTPUT_MAX = 4000
@@ -189,7 +189,7 @@ def merge_lane(repo: Path, workspace: Path, lane_id: str, feature: str) -> str:
     if _git(repo, "status", "--porcelain", "--untracked-files=no").stdout.strip():
         raise ReviewError(f"{repo} has uncommitted changes, so nothing can be merged into it. "
                           "Fix: commit or stash them, then run the review again")
-    _git(workspace, "add", "-A")
+    stage_all(workspace)
     if _git(workspace, "diff", "--cached", "--quiet").returncode != 0:
         done = _git(workspace, "commit", "-q", "-m", f"Lane {lane_id}: {feature}")
         if done.returncode != 0:
