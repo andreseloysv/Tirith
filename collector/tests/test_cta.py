@@ -261,9 +261,13 @@ def test_chain_command_line_and_fresh_guard_still_verify(home: Path, tmp_path: P
 
 # -- lane stop -----------------------------------------------------------------------------------
 
-SLEEPER = "import time\nwhile True: time.sleep(0.2)"
-STUBBORN = ("import signal, time\nsignal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
-            "print('ignoring term', flush=True)\nwhile True: time.sleep(0.2)")
+# Each child ends by itself after CHILD_MAX_S: when pytest is killed (a stopped lane, a dead xdist worker) the
+# teardown never runs, and a child that ignores SIGTERM used to live on for hours.
+CHILD_MAX_S = 120
+_LOOP = f"while True:\n    time.sleep(0.2)\n    if time.time() - _t0 > {CHILD_MAX_S}: break"
+SLEEPER = "import time\n_t0 = time.time()\n" + _LOOP
+STUBBORN = ("import signal, time\n_t0 = time.time()\nsignal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+            "print('ignoring term', flush=True)\n" + _LOOP)
 
 
 def _start_lane(home: Path, tmp_path: Path, lane_id: str, code: str, reap=None):
