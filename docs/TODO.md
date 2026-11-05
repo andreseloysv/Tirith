@@ -465,7 +465,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
   - [x] Revisar: El planificador no lanza a la vez dos lanes que tocan los mismos archivos. (check: `cd collector && uv run -q pytest -q tests -k conflicts`)
 - [x] La cola de merge prueba varios lanes juntos en una sola pasada de tests y separa al culpable si falla. (check: `cd collector && uv run -q pytest -q tests -k mergetrain`) (hecho: 69fee04)
 - [x] Cada elemento terminado muestra su evidencia en la app: salida de tests y capturas si cambia la interfaz. (check: `cd collector && uv run -q pytest -q tests -k evidence`) (hecho: c3e1b9d) <!-- tirith:{"id":"i-a284892e"} -->
-  - [ ] Revisar: Cada elemento terminado muestra su evidencia en la app: salida de tests y capturas si cambia la interfaz. (check: `cd collector && uv run -q pytest -q tests -k evidence`) (en curso: revisión de velocidad-y-autonom-a-de-un-obje-9)
+  - [x] Revisar: Cada elemento terminado muestra su evidencia en la app: salida de tests y capturas si cambia la interfaz. (check: `cd collector && uv run -q pytest -q tests -k evidence`)
 - [x] La app muestra cuánto tarda un elemento en llegar a main, cuántos llegan por hora y cuántas veces hizo falta el dueño. (check: `cd collector && uv run -q pytest -q tests -k metrics`) <!-- tirith:{"id":"i-100695a9"} -->
   - [x] Revisar: La app muestra cuánto tarda un elemento en llegar a main, cuántos llegan por hora y cuántas veces hizo falta el dueño. (check: `cd collector && uv run -q pytest -q tests -k metrics`)
 - [x] Cada lane recibe en su brief un mapa del código con los archivos relevantes para su elemento. (check: `cd collector && uv run -q pytest -q tests -k codemap`) (hecho: 7da4eb3) <!-- tirith:{"id":"i-3d811adb"} -->
