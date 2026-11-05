@@ -83,3 +83,15 @@ def test_a_wake_alarms_the_ceo_once(home: Path) -> None:
     book: dict = {}
     assert ceo.alarm_checks(home, book, NOW) == {"sentinel": "lanes fail the same way"}
     assert ceo.alarm_checks(home, book, NOW) == {}  # once per wake
+
+
+def test_sentinel_counts_mergeq_as_work() -> None:
+    idle = {**_state(), "agents": []}
+    assert statuscard.build(idle, NOW, {})["why"] == "Nothing working while 9 plan items are open"
+    queue = {"projects": [{"id": "tirith", "merge_queue": {"items": [{"lane": "w9", "status": "running"}]}}]}
+    st = statuscard.build({**idle, **queue}, NOW, {})
+    assert (st["level"], st["why"]) == ("ok", "Moving")
+    review = {"agents": [{"id": "w8", "status": "done", "ended_at": "2026-11-05T09:40:00Z", "review": {"status": "running"}}]}
+    assert statuscard.build({**idle, **review}, NOW, {})["why"] == "Moving"
+    waiting = {"projects": [{"id": "tirith", "merge_queue": {"items": [{"lane": "w9", "status": "queued"}]}}]}
+    assert statuscard.build({**idle, **waiting}, NOW, {})["level"] == "warn"
