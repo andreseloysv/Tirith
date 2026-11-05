@@ -13,6 +13,7 @@ so a restart it asks for happens in the same pass). State: `dispatch.json` under
 | `autopilot` | an open agent item (whatever its note) with no lane working and no review running, that the manager was not told about for 2 min; or an `autopilot-proposal` unanswered for 10 min (amber, the `manager` check restarts the turn); the check counts open proposals per step, and more than one for a step is amber until the autopilot collapses them | none that is safe | one queue item with the items |
 | `disk` | below `[disk] min_free_gb` | the disk guard (`diskdiet`) already removes merged worktrees | red until space is free |
 | `reviews` | a review `running` for 20 min with its process gone, or for 3 h with it alive (it waits for a stage slot or tests; the stage has its own time limit); or `tests-failed` on tests the lane's diff does not touch | end the stuck process, run `tirith lane review <id>` again; run the unrelated failure again once | a queue item with the output |
+| `wasted` | (info only, never red) work thrown away: `repeated` suites run again for a lane whose suite already ran, `discarded` merges tested and then not needed because another queued lane held their commits, `absorbed` lanes dropped before testing for the same reason | none: it only shows the totals in plain words | — |
 | `ownerenv` | the owner's login shell could not be read at collector start (failed, empty or over 10 s; `CONTRACT-agents.md`, "The owner's environment") | none: it is read again on the next collector start | red with the reason, no variable names or values |
 
 "Unrelated": the failing test files named in the review output (`test_x.py`, `x.test.mjs`) are neither in the
@@ -73,3 +74,11 @@ A promoted release is on trial for 30 min: when `state.health.level` stays red f
 dispatcher pass), `previous` is put back as `current` by itself (`last_rollback`) and the bad release is deleted.
 `tirith stable rollback` does it by hand, `tirith stable status` prints `<home>/stable/stable.json`'s summary.
 Three releases are kept. Code: `tirith/stable.py`; test: `pytest -k stable`.
+
+## Wasted work
+
+`collector/tirith/wasted.py`: `mergeq._finish` calls `wasted.record` for each row that leaves the queue; the totals
+(`repeated`, `discarded`, `absorbed`, plus a per-lane suite count) live in `<home>/wasted.json`. The merge queue
+marks a settled row `wasted: "discarded"` (the suite ran, then another queued lane absorbed the merge) or
+`wasted: "absorbed"` (dropped before testing). A suite counts as run for `merged`, `push-failed` and a `red` whose
+message starts with `stage `. Test: `pytest -k wasted_work`.

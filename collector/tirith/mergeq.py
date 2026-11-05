@@ -34,6 +34,7 @@ except ImportError:  # Windows: one dispatcher, one queue consumer
 from tirith import asks as asks_mod
 from tirith import flows as flows_mod
 from tirith import manifest as manifest_mod
+from tirith import wasted as wasted_mod
 from tirith import plangate as plangate_mod
 from tirith import review as review_mod
 from tirith import selfreload as selfreload_mod
@@ -244,6 +245,7 @@ def _finish(home: Path, entry: dict, result: str, message: str = "", *, keep: bo
         else:
             data["queue"] = [e for e in data["queue"] if e["lane"] != entry["lane"]]
             data["history"] = (data["history"] + [row])[-HISTORY:]
+            wasted_mod.record(home, row)
         data["last"][entry["project"]] = row
         write_json_atomic(_path(home), data)
     return row
@@ -527,7 +529,7 @@ def _try(home: Path, repo: Path, lane: dict, entry: dict) -> tuple[str, str, dic
     inside = absorbed_by(home, repo, lane_id, branch)
     if inside:
         return plangate_mod.WORK_NONE, f"nothing to merge: {branch} is already in the queued branch of {inside}", \
-            {"branch": branch}
+            {"branch": branch, "wasted": "absorbed"}
     base = _git(repo, "rev-parse", "HEAD").stdout.strip()
     main_branch = _git(repo, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
     tmp, error = _make_tmp(repo, f"_mergeq-{lane_id}", base)
@@ -551,13 +553,13 @@ def _try(home: Path, repo: Path, lane: dict, entry: dict) -> tuple[str, str, dic
             broke, output, passed, flaky = _run_stages(home, project, stages, tmp, lane_id,
                                                        lambda: superseded_message(home, repo, lane_id, branch))
         except Cancelled as cancelled:  # another lane made this merge unnecessary: stop the suite, leave main alone
-            return plangate_mod.WORK_NONE, str(cancelled), {"branch": branch}
+            return plangate_mod.WORK_NONE, str(cancelled), {"branch": branch, "wasted": "discarded"}
         if broke and output.startswith(review_mod.DID_NOT_FINISH):  # out of time, not red: never sent back
             return OUT_OF_TIME, f"stage {broke} ran out of time on {branch}: {_tail(output)}", {}
         if broke:
             return RED, f"stage {broke} failed on {branch} merged with {main_branch}:\n{_tail(output)}", {"main": main_branch}
         if why := superseded_message(home, repo, lane_id, branch):  # last look before main moves
-            return plangate_mod.WORK_NONE, why, {"branch": branch}
+            return plangate_mod.WORK_NONE, why, {"branch": branch, "wasted": "discarded"}
         tested = _git(tmp, "rev-parse", "HEAD").stdout.strip()
         tested, refused = _land(home, repo, tmp, project, base, tested, main_branch, feature, branch)
         if refused:
@@ -596,7 +598,7 @@ def _try_train(home: Path, repo: Path, members: list[tuple[dict, dict]]) -> tupl
         elif absorbed_by(home, repo, lane_id, branch):
             left.append((entry, lane, plangate_mod.WORK_NONE,
                          f"nothing to merge: {branch} is already in the queued branch of "
-                         f"{absorbed_by(home, repo, lane_id, branch)}", {"branch": branch}))
+                         f"{absorbed_by(home, repo, lane_id, branch)}", {"branch": branch, "wasted": "absorbed"}))
         else:
             joined.append((entry, lane))
     if not joined:
@@ -841,7 +843,7 @@ def _settle(home: Path, config: Config, entry: dict, lane: dict, repo: Path, res
         fresh = read_json(lane_path(home, entry["lane"]), lane)
         fresh["review"] = {"status": plangate_mod.WORK_NONE, "at": now_iso(), "by": "mergeq", "message": message}
         write_lane(home, fresh)
-        return _finish(home, entry, CLOSED, message)
+        return _finish(home, entry, CLOSED, message, wasted=extra.get("wasted"))
     if result in (CONFLICT, RED):
         sent = send_back(home, config, lane, result, message, str(extra.get("main") or "main"), relaunch)
         return _finish(home, entry, result, message, sent_to=sent or None)
