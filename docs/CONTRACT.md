@@ -120,7 +120,7 @@ Rules: times are ISO-8601 UTC; unknown values are `null`, never missing keys; ar
 
 ### `now` (the bar at the top of the app)
 
-`state.now` (`tirith/nowbar.py`, drawn by `web/js/v-nowbar.js` above every view, no click needed) is built from the
+`state.now` (`tirith/nowbar.py`; no longer drawn on the page: the owner found the bar noise) is built from the
 agent rows, never from agent reports: `{day, merged, doing, stuck, counts: {merged, doing, stuck}}`. `merged`: lanes whose
 review status is `merged` with a merge time today (local day); `doing`: lanes still working; `stuck`: lanes that
 stalled or failed, or whose review is `conflict`, `red-suite`, `sent-back`, `tests-failed`, `claims-failed`,
