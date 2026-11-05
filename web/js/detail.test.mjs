@@ -46,7 +46,7 @@ try {
   const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
   const errors = [];
   page.on('pageerror', e => errors.push(String(e)));
-  await page.goto(page_url + '#state=' + pathToFileURL(stateFile).href + '&view=agents');
+  await page.goto(page_url + '#state=' + pathToFileURL(stateFile).href + '&view=agents&mode=tree');  // Kanban hides Done agents; Tree shows every agent
   await page.waitForTimeout(800);
   const card = page.locator('[data-act="agent"][data-key="old-1"]').first();
   await card.waitFor({ timeout: 3000 });
