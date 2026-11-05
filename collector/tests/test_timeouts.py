@@ -226,6 +226,37 @@ def test_an_agents_value_ends_with_its_lane_but_the_owners_stays(home: Path, mon
     assert read_jsonl(home / "flows.jsonl")[-1]["from"] == "owner"
 
 
+def test_timeout_override_raises_and_lowers_within_limits_and_records_the_reason(home: Path, monkeypatch) -> None:
+    start_lane(home)
+    monkeypatch.setenv("TIRITH_LANE", "w1")
+    default, low, high = timeouts_mod.bounds("git-commit")
+    up = min(high, default + 100)
+    down = max(low, default - 20)
+    assert up > default > down
+    assert main(["timeout", "set", "--class", "git-commit", "--seconds", str(up), "--reason", "slow hooks"]) == 0
+    row = timeouts_mod.describe(home, Config(), "git-commit")
+    assert row["seconds"] == up and row["reason"] == "slow hooks" and row["source"] == "agent"
+    assert main(["timeout", "set", "--class", "git-commit", "--seconds", str(down), "--reason", "fail fast"]) == 0
+    row = timeouts_mod.describe(home, Config(), "git-commit")
+    assert row["seconds"] == down and row["reason"] == "fail fast"
+    stored = read_json(home / "timeouts.json", {})["set"]["git-commit"]
+    assert stored["reason"] == "fail fast" and stored["lane"] == "w1"
+    flows = [f for f in read_jsonl(home / "flows.jsonl") if f.get("why")]
+    assert [f["why"] for f in flows[-2:]] == ["slow hooks", "fail fast"]
+
+
+def test_timeout_override_outside_limits_or_without_reason_changes_nothing(home: Path, monkeypatch) -> None:
+    start_lane(home)
+    monkeypatch.setenv("TIRITH_LANE", "w1")
+    _, low, high = timeouts_mod.bounds("git-commit")
+    for seconds in (low - 1, high + 1):
+        with pytest.raises(SystemExit, match="takes"):
+            main(["timeout", "set", "--class", "git-commit", "--seconds", str(seconds), "--reason", "x"])
+    with pytest.raises(SystemExit, match="--reason"):
+        main(["timeout", "set", "--class", "git-commit", "--seconds", str(high), "--reason", "  "])
+    assert timeouts_mod.describe(home, Config(), "git-commit")["source"] == "default"
+
+
 # -- the Bash hook ------------------------------------------------------------------------------
 
 
