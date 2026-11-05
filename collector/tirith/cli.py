@@ -971,7 +971,10 @@ def _cmd_run(args) -> int:
     command = list(args.command or [])
     if command and command[0] == "--":
         command = command[1:]
+    given = bool(command)
     command = _manifest_stage(args, home, command)
+    if given:  # an agent's own command (`tirith run --stage test -- uv run pytest -q tests`): parallel unless it says no
+        command = fasttests_mod.parallel_pytest(command)
     cwd = getattr(args, "stage_cwd", None) or str(Path.cwd().resolve())
     tags = runstage_mod.lane_tags(home, cwd)
     config = load_config(home)

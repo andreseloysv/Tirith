@@ -316,3 +316,12 @@ def test_build_runs_the_suite_in_its_own_worktree_of_main(home, tmp_path, monkey
     assert not testmap.build(home, "p", repo, head())[0] and testmap.usable(home, "p")
     monkeypatch.setattr(testmap, "BASE_COMMAND", "exit 2")  # interrupted: a half-written map selects nothing
     assert not testmap.build(home, "p", repo, head())[0] and not testmap.usable(home, "p")
+
+
+def test_an_agents_own_pytest_command_runs_in_parallel():
+    # agents ran `tirith run --stage test -- uv run pytest -q tests -x`: 1842 tests in one process, 13 min
+    p = fasttests.parallel_pytest
+    assert p(["uv", "run", "pytest", "-q", "tests", "-x"]) == ["uv", "run", "pytest", "-q", "tests", "-x", *fasttests.PARALLEL_ARGS]
+    for chosen in (["-n", "4"], ["--numprocesses=2"], ["-p", "no:xdist"], ["--testmon"], ["-s"], ["--pdb"], ["--collect-only"]):
+        assert p(["uv", "run", "pytest", "tests", *chosen]) == ["uv", "run", "pytest", "tests", *chosen]
+    assert p(["cargo", "test"]) == ["cargo", "test"] and p(["sh", "-c", "uv run pytest tests"]) == ["sh", "-c", "uv run pytest tests"]
