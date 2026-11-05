@@ -8,6 +8,7 @@ See ``docs/CONTRACT-launch.md``.
 
 from __future__ import annotations
 
+import json
 import os
 import plistlib
 import re
@@ -224,7 +225,9 @@ def link_node_modules(repo: Path, worktree: Path) -> bool:
     source, target = repo / "node_modules", worktree / "node_modules"
     if not (repo / "package.json").is_file() or not (worktree / "package.json").is_file():
         return False
-    if not source.is_dir() or target.exists() or target.is_symlink():
+    if target.exists() or target.is_symlink():
+        return False
+    if not source.is_dir() and not install_node_modules(repo):
         return False
     try:
         target.symlink_to(source.resolve(), target_is_directory=True)
@@ -232,6 +235,22 @@ def link_node_modules(repo: Path, worktree: Path) -> bool:
         return False
     exclude_from_status(worktree, "/node_modules")
     return True
+
+
+def install_node_modules(repo: Path) -> bool:
+    """The main checkout declares dependencies but has no ``node_modules`` (never installed), so every lane
+    worktree stayed without the link. Install them there once (``npm ci`` from the lockfile, else
+    ``npm install``; no scripts) so the lanes can link it. True when ``node_modules`` exists afterwards."""
+    try:
+        package = json.loads((repo / "package.json").read_text())
+    except (OSError, ValueError):
+        return False
+    if not isinstance(package, dict) or not (package.get("dependencies") or package.get("devDependencies")):
+        return False
+    verb = "ci" if (repo / "package-lock.json").is_file() else "install"
+    timeouts_mod.run(["npm", verb, "--ignore-scripts", "--no-audit", "--no-fund", "--prefer-offline"], "npm",
+                     cwd=repo, text=True)
+    return (repo / "node_modules").is_dir()
 
 
 def exclude_from_status(worktree: Path, pattern: str) -> None:
