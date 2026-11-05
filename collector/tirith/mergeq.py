@@ -57,7 +57,9 @@ START_WAIT = 20.0  # seconds a returned lane's new agent has to register itself 
 WAIT_NOTICE = 2  # consecutive `waiting` results of one entry after which the manager is told why
 MAX_TRIES = 3  # main moved under the merge: start again from the new main
 TIMED_OUT = "timed out"  # a git command stopped at its deadline: retried by the queue, never sent back
+NEEDS_STAGE = "needs a test stage"  # the project has no runnable build or test stage: told to the manager once, not retried
 OUT_OF_TIME = "out-of-time"  # a stage hit its time limit: the suite did not fail
+NO_STAGE_MESSAGE = "the manifest has no build or test stage with a run command"
 HISTORY = 20
 DOC_ONLY = ("docs/", "site/", "ios/")  # a lane that changes only these (or *.md) has nothing for the test stages
 RUST_STAGE = "rust-test"
@@ -610,7 +612,7 @@ def _try(home: Path, repo: Path, lane: dict, entry: dict) -> tuple[str, str, dic
                     {"main": main_branch, "files": files}
         stages = stages_of(tmp)
         if not stages:
-            return WAITING, "the manifest has no build or test stage with a run command", {}
+            return NEEDS_STAGE, NO_STAGE_MESSAGE, {}
         stages, skipped = select_stages(stages, [needs_of(changed_paths(repo, base, branch))])
         try:
             broke, output, passed, flaky = _run_stages(home, project, stages, tmp, lane_id,
@@ -697,7 +699,7 @@ def _try_train(home: Path, repo: Path, members: list[tuple[dict, dict]]) -> tupl
             return WAITING, "no lane could join the train", info
         stages = stages_of(tmp)
         if not stages:
-            return WAITING, "the manifest has no build or test stage with a run command", info
+            return NEEDS_STAGE, NO_STAGE_MESSAGE, info
         stages, skipped = select_stages(stages, needs)
         ids = ", ".join(str(lane["id"]) for _, lane in joined)
         broke, output, passed, flaky = _run_stages(home, str(joined[0][1].get("project") or ""), stages, tmp,
@@ -910,6 +912,13 @@ def _settle(home: Path, config: Config, entry: dict, lane: dict, repo: Path, res
     """Act on the outcome for one lane: wait, send back, or close it as merged (pushing first when ``push``)."""
     if result == "retry":
         return _finish(home, entry, WAITING, message, keep=True, retried=True)
+    if result == NEEDS_STAGE:  # nothing can test this lane: it leaves the queue (no retry, no stuck alarm); the manager hears once
+        fresh = read_json(lane_path(home, entry["lane"]), lane)
+        fresh["review"] = {"status": NEEDS_STAGE, "at": now_iso(), "by": "mergeq", "message": message}
+        write_lane(home, fresh)
+        _tell_manager(home, entry, lane, NEEDS_STAGE, message, "Add a build or test stage with a `run` command to the "
+                      "project's tirith.toml; the lane is not queued again until then.")
+        return _finish(home, entry, NEEDS_STAGE, message)
     if result == WAITING:  # the same reason twice in a row is not luck: the manager hears of it (once)
         count = int(entry.get("waits") or 0) + 1
         if count == WAIT_NOTICE:
