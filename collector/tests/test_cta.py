@@ -266,7 +266,7 @@ STUBBORN = ("import signal, time\nsignal.signal(signal.SIGTERM, signal.SIG_IGN)\
             "print('ignoring term', flush=True)\nwhile True: time.sleep(0.2)")
 
 
-def _start_lane(home: Path, tmp_path: Path, lane_id: str, code: str):
+def _start_lane(home: Path, tmp_path: Path, lane_id: str, code: str, reap=None):
     repo = make_repo(tmp_path / "repo")
     write_lane_manifest(repo)
     write_plan(repo)
@@ -285,9 +285,13 @@ def _start_lane(home: Path, tmp_path: Path, lane_id: str, code: str):
          "--feature", "Long job", "--id", lane_id, "--brief", str(repo / "brief.md"),
          "--step", "1", "--item", "Do the thing.", "--",
          sys.executable, "-c", code], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    if reap:
+        reap(runner)
     deadline = time.monotonic() + 60
     while time.monotonic() < deadline:
         lane = read_json(home / "lanes" / f"{lane_id}.json", {}) or {}
+        if reap and lane.get("pgid"):
+            reap(pgid=lane["pgid"])
         if lane.get("pid") and lane.get("pgid") and ready.exists():
             return runner, repo, lane
         time.sleep(0.1)
@@ -303,8 +307,8 @@ def _gone(pid: int) -> bool:
     return False
 
 
-def test_lane_stop_ends_a_running_lane_as_failed_and_keeps_the_worktree(home: Path, tmp_path: Path, capsys) -> None:
-    runner, repo, lane = _start_lane(home, tmp_path, "long-1", SLEEPER)
+def test_lane_stop_ends_a_running_lane_as_failed_and_keeps_the_worktree(home: Path, tmp_path: Path, capsys, reap_children) -> None:
+    runner, repo, lane = _start_lane(home, tmp_path, "long-1", SLEEPER, reap_children)
     try:
         assert main(["lane", "stop", "long-1", "--by", "owner", "--reason", "not needed any more"]) == 0
         assert runner.wait(timeout=20) != 0
@@ -324,8 +328,8 @@ def test_lane_stop_ends_a_running_lane_as_failed_and_keeps_the_worktree(home: Pa
         make_hooks_mutable(repo)
 
 
-def test_lane_stop_kills_a_child_that_ignores_sigterm(home: Path, tmp_path: Path) -> None:
-    runner, repo, lane = _start_lane(home, tmp_path, "stubborn-1", STUBBORN)
+def test_lane_stop_kills_a_child_that_ignores_sigterm(home: Path, tmp_path: Path, reap_children) -> None:
+    runner, repo, lane = _start_lane(home, tmp_path, "stubborn-1", STUBBORN, reap_children)
     try:
         started = time.monotonic()
         ended = lanestop_mod.stop_lane(home, "stubborn-1", "manager", None, term_wait=1.0)
@@ -339,8 +343,8 @@ def test_lane_stop_kills_a_child_that_ignores_sigterm(home: Path, tmp_path: Path
         make_hooks_mutable(repo)
 
 
-def test_lane_stop_ends_the_lane_itself_when_lane_run_is_gone(home: Path) -> None:
-    child = subprocess.Popen([sys.executable, "-c", SLEEPER], start_new_session=True)
+def test_lane_stop_ends_the_lane_itself_when_lane_run_is_gone(home: Path, reap_children) -> None:
+    child = reap_children(subprocess.Popen([sys.executable, "-c", SLEEPER], start_new_session=True))
     try:
         lane = {"id": "orphan", "project": "demo", "feature": "Orphan", "pid": child.pid, "pgid": child.pid,
                 "started_at": "2026-10-29T00:00:00Z", "ended_at": None, "result": None, "report": None}
