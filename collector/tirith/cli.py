@@ -390,6 +390,20 @@ def _cmd_lab(args) -> int:
     return 0 if report["ok"] else 1
 
 
+def _cmd_lab_compare(args) -> int:
+    from . import labcompare
+    on = labcompare.load_reports(Path(args.on_demand).expanduser())
+    fx = labcompare.load_reports(Path(args.fixed).expanduser())
+    result = labcompare.compare(on, fx)
+    if not result["scenarios"]:
+        print("no scenarios in common between the two report folders", file=sys.stderr)
+        return 2
+    j, m = labcompare.write(result, Path(args.out).expanduser())
+    print(m.read_text(encoding="utf-8"))
+    print(f"report: {j}")
+    return 0
+
+
 def _cmd_lane_end(args) -> int:
     home = _home(args)
     report = args.report
@@ -2808,6 +2822,11 @@ def build_parser() -> argparse.ArgumentParser:
     lab_run.add_argument("--lab", default="fixtures/company-lab", help="the fixture folder")
     lab_run.add_argument("--out", default="lab-reports", help="folder for the JSON and markdown report")
     lab_run.set_defaults(func=_cmd_lab)
+    lab_cmp = lab_sub.add_parser("compare", parents=[common], help="compare on-demand vs fixed role lab reports")
+    lab_cmp.add_argument("--on-demand", required=True, help="folder of lab run reports with on-demand roles")
+    lab_cmp.add_argument("--fixed", required=True, help="folder of lab run reports with fixed roles")
+    lab_cmp.add_argument("--out", default="lab-reports", help="folder for compare.json and compare.md")
+    lab_cmp.set_defaults(func=_cmd_lab_compare)
 
     ceo = sub.add_parser("ceo", parents=[common], help="the CEO: show its state, or start a review now")
     ceo_sub = ceo.add_subparsers(dest="ceo_command", required=True)
