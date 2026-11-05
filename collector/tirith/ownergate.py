@@ -135,6 +135,34 @@ _NONE = re.compile(r"(?i)[\s\-*_.]*(none|nothing|n/?a|no)\b.*")
 NOTHING = "- nothing: no check is only yours"
 
 
+_KEY_WORD_RE = re.compile(r"[a-z0-9áéíóúñü]{3,}")
+_KEY_STOP = frozenset({"the", "and", "for", "add", "your", "with", "into", "set", "get", "need", "needs"})
+
+
+def _key_words(text: str) -> set[str]:
+    return set(_KEY_WORD_RE.findall(str(text or "").lower())) - _KEY_STOP
+
+
+def has_open_owner_item(home: Path, project: str | None, text: str, why: str = "credentials") -> bool:
+    """True when ``waits.jsonl`` already holds an open owner item of reason ``why`` for the same project that
+    names the same thing as ``text`` (e.g. the Gemini key), so a report need not raise it again."""
+    mine = _key_words(text)
+    latest: dict[str, dict] = {}
+    for row in read_jsonl(Path(home) / "waits.jsonl"):
+        if row.get("id"):
+            latest[str(row["id"])] = row
+    for row in latest.values():
+        if row.get("done_at") or asks_mod.why_key(row.get("why_owner")) != why:
+            continue
+        if project and row.get("project") and row.get("project") != project:
+            continue
+        theirs = _key_words(row.get("text"))
+        shared = mine & theirs
+        if len(shared) >= 2 and len(shared) / min(len(mine), len(theirs)) >= 0.6:
+            return True
+    return False
+
+
 def filter_report(home: Path, project: str | None, lane_id: str, report: str,
                   out_items: list[str] | tuple[str, ...] = (), at: str | None = None) -> str:
     """The report with the bullets of its "needs the owner" section passed through ``admit``.
@@ -164,6 +192,8 @@ def filter_report(home: Path, project: str | None, lane_id: str, report: str,
             if tag:
                 why, _, detail = (tag.group(1) or tag.group(2) or "").partition(":")
                 body = body[tag.end():]
+            if asks_mod.why_key(why) == "credentials" and has_open_owner_item(home, project, body):
+                continue  # the owner already has that credential open: not reported again
             item_id = "report-" + hashlib.sha1(f"{lane_id}\n{body}".encode("utf-8")).hexdigest()[:8]
             if admit(home, item_id, project, body, why, via=f"report:{lane_id}", at=at, out_items=out_items) == OWNER:
                 kept.append(f"{bullet.group(1)}{body} ({asks_mod.reason_tag(asks_mod.why_key(why), detail.strip() or None)})")
