@@ -499,8 +499,10 @@ def test_code_move_is_retried_and_the_next_entry_still_runs(env, home: Path, mon
     config = load_config(home)
     config.mergeq_train = 1  # the single-lane path under test
     rows = mergeq_mod.drain(home, config, relaunch=Sender())
-    assert [(r["lane"], r["result"]) for r in rows] == [("one", "waiting"), ("two", "merged")], rows
-    assert rows[0]["message"] == "main moved while the suite ran"
+    # pytest shortens a list of dicts to "{...}, ...": spell out every row so a failing log says why a lane waited
+    said = "\n".join(f"{r['lane']}: {r['result']}: {r.get('message')}" for r in rows)
+    assert [(r["lane"], r["result"]) for r in rows] == [("one", "waiting"), ("two", "merged")], said
+    assert rows[0]["message"] == "main moved while the suite ran", said
     assert [i["lane"] for i in mergeq_mod.view(home, "demo")["items"]] == ["one"]
 
 
