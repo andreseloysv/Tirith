@@ -705,6 +705,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
   - [x] Revisar: When the merge queue's push of main fails, it fetches origin: a merged commit already on origin's main ends MERGED, not PUSH_FAILED, and a main that moved ahead without it is rebased and pushed once more (check: `cd collector && uv run -q pytest -q tests -k push_race_already_on_origin_is_merged`)
 - [ ] Canary: el paso 'tick' de collector/tirith/canary.py espera con _plan_item_done cada POLL_S hasta 120 s antes de fallar en vez de mirar una vez, y una ejecución hace un solo commit 'Roadmap: done' (averiguar por qué 8aa7558 y d47aec6 salieron dos) (check: `python3 -m pytest -q collector/tests -k 'canary and tick'`) <!-- tirith:{"id":"i-2f2d297f","depends_on":[],"writes":[]} -->
 - [ ] x <!-- tirith:{"id":"i-f735509b","depends_on":[],"writes":[]} -->
+- [ ] Lanzar no pierde el worktree: diskdiet.sweep respeta un worktree de lane con menos de 15 min (rama igual a main, lane aún sin registrar), que hoy borra antes de que arranque el agente (FileNotFoundError en _run_child de -79 y -80) (check: `python3 -m pytest -q collector/tests -k 'diskdiet and fresh'`) <!-- tirith:{"id":"i-a425a3b6","depends_on":[],"writes":[]} -->
 
 ## 18. Salas privadas: hablar con el manager desde el móvil
 
