@@ -17,6 +17,12 @@
     panel.hidden = !ui.healthOpen;
     panel.innerHTML = '<b>' + esc(TITLE[h.level] || '') + '</b>' + (h.checks || []).map(function (c) {
       return '<div class="hc"><i class="dot ' + (LEVEL[c.level] || 'grey') + '"></i><span><b>' + esc(c.label) + '</b> ' + esc(c.text) + '</span></div>';
+    }).join('') + fixed(h.fixed);
+  }
+  function fixed(list) {
+    if (!list || !list.length) return '';
+    return '<b class="hfixed">Fixed by Tirith</b>' + list.slice().reverse().map(function (f) {
+      return '<div class="hc"><i class="dot green"></i><span>' + esc(f.text) + '</span></div>';
     }).join('');
   }
   T.render = function (fstate, raw) {

@@ -15,7 +15,8 @@ one). Seven checks, results in ``dispatch.json`` under ``health`` and, in plain 
 A failing check gets a remedy by code where that is safe (restart the manager turn, end a lingering manager
 process, run a review again), at most ``MAX_TRIES`` times per episode and never twice within ``GRACE_S``;
 otherwise (or when the tries are used up) one manager queue item with the evidence, never an owner item.
-After a remedy the manager says in the chat, in one calm line, what happened. The header dot is green, amber
+After a remedy one calm line is kept in ``state.health.fixed`` (shown when the health dot is clicked); the chat
+stays for what needs the owner. The header dot is green, amber
 while a remedy is working and red only when a remedy failed. See ``docs/CONTRACT-selfcheck.md``.
 """
 
@@ -63,6 +64,7 @@ RESTARTS_WINDOW_S = 3600.0   # fresh starts of the manager session are counted o
 MAX_RESTARTS_PER_HOUR = 2    # more than this is a problem
 NOTICE_KEPT_S = 1800.0       # a notice whose messages were never answered is dropped after this
 SAVE_EVERY_S = 30.0
+FIXED_KEPT = 20               # fixes kept for the health dot
 QUEUE_KIND = "selfcheck"
 LEVELS = ("ok", "healing", "failed")
 LABELS = {"collector": "Tirith itself", "manager": "The manager", "autopilot": "The autopilot",
@@ -81,6 +83,8 @@ def _book(state: dict) -> dict:
     for key in ("tries", "queued", "notices", "sent"):
         if not isinstance(book.get(key), dict):
             book[key] = {}
+    if not isinstance(book.get("fixed"), list):
+        book["fixed"] = []
     return book
 
 
@@ -123,7 +127,7 @@ def _queue(home: Path, book: dict, key: str, project: str, lane: str, text: str)
 
 
 def _notice(book: dict, key: str, text: str, now: datetime, waiting: list[str] | None = None) -> None:
-    """Something to tell the owner in the chat: now, or once ``waiting`` (request ids) are answered."""
+    """A fix to record for the health dot (not the chat): now, or once ``waiting`` (request ids) are answered."""
     book["notices"].setdefault(key, {"text": text, "wait": list(waiting or []), "at": now_iso(now)})
 
 
@@ -135,7 +139,9 @@ def _announce(home: Path, book: dict, now: datetime) -> bool:
             del book["notices"][key]
             changed = True
         elif not open_ids.intersection(note["wait"]):
-            inbox_mod.add_say(home, note["text"].format(n=len(note["wait"])), at=now_iso(now))
+            # what Tirith fixed alone is kept for the health dot, never said in the chat
+            book["fixed"].append({"text": note["text"].format(n=len(note["wait"])), "at": now_iso(now)})
+            del book["fixed"][:-FIXED_KEPT]
             del book["notices"][key]
             changed = True
     return changed
@@ -565,5 +571,6 @@ def public(book: dict | None) -> dict | None:
     if not isinstance(book, dict) or not book.get("checks"):
         return None
     return {"level": book.get("level") or "green", "at": book.get("at"),
+            "fixed": [dict(f) for f in book.get("fixed") or [] if isinstance(f, dict)],
             "checks": [{"id": cid, "label": LABELS.get(cid, cid), "level": c["level"], "text": c["text"]}
                        for cid, c in book["checks"].items()]}
