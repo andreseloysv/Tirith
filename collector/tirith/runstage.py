@@ -22,6 +22,7 @@ from pathlib import Path
 from tirith import timeouts as timeouts_mod
 from tirith import projects as projects_mod
 from tirith import projenv as projenv_mod
+from tirith import netproxy as netproxy_mod
 from tirith.home import now_iso
 from tirith.store import append_jsonl, read_json, read_lanes, write_json_atomic
 
@@ -265,6 +266,7 @@ def run_stage(home: Path, project: str, pipeline: str, stage: str, command: list
         shared = cargo_target_dir(home, project, work)
         if shared:
             child_env["CARGO_TARGET_DIR"] = str(shared)
+    command = netproxy_mod.swiftpm(command, child_env)  # SwiftPM cannot nest a sandbox-exec inside a lane's
     limit = timeout or timeouts_mod.effective(home, None, f"stage:{stage}")
     started = {"pid": os.getpid(), "timeout": int(limit)}
     if is_partial(command):

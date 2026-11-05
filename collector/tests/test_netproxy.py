@@ -122,3 +122,35 @@ def test_inside_the_sandbox_only_localhost_is_reachable(home: Path) -> None:
     out = subprocess.run(netproxy.argv(home, [sys.executable, "-c", code], {netproxy.SANDBOXED_ENV: "1"}),
                          capture_output=True, text=True, timeout=30, env={**os.environ, netproxy.SANDBOXED_ENV: ""}).stdout
     assert out.strip() == "errno 1"  # Operation not permitted: the sandbox, not a timeout
+
+
+def test_swift_in_the_lane_sandbox_gets_disable_sandbox(monkeypatch) -> None:
+    """SwiftPM's own sandbox-exec cannot nest in ours: swift build/test/run/package gets --disable-sandbox."""
+    box = {netproxy.SANDBOXED_ENV: "1"}
+    monkeypatch.delenv(netproxy.SANDBOXED_ENV, raising=False)
+    assert netproxy.swiftpm(["swift", "test", "--filter", "A/b"], box) == ["swift", "test", "--disable-sandbox", "--filter", "A/b"]
+    assert netproxy.swiftpm(["/usr/bin/swift", "build"], box) == ["/usr/bin/swift", "build", "--disable-sandbox"]
+    assert netproxy.swiftpm("cd Packages/Z && swift test --filter X && swift build", box) == \
+        "cd Packages/Z && swift test --disable-sandbox --filter X && swift build --disable-sandbox"
+    assert netproxy.swiftpm("swift test --disable-sandbox", box) == "swift test --disable-sandbox"
+    assert netproxy.swiftpm(["swift", "test", "--disable-sandbox"], box) == ["swift", "test", "--disable-sandbox"]
+    for other in (["swift", "--version"], ["swiftlint", "test"], ["echo", "swift", "test"], ["pytest"]):
+        assert netproxy.swiftpm(other, box) == other
+    assert netproxy.swiftpm("echo swift tests; myswift test", box) == "echo swift tests; myswift test"
+    assert netproxy.swiftpm(["swift", "test"], {}) == ["swift", "test"]  # outside a lane sandbox: untouched
+    monkeypatch.setenv(netproxy.SANDBOXED_ENV, "1")  # a stage run from inside a lane inherits the marker
+    assert netproxy.swiftpm(["swift", "run"], {}) == ["swift", "run", "--disable-sandbox"]
+
+
+@pytest.mark.skipif(sys.platform != "darwin" or not shutil.which("sandbox-exec") or not shutil.which("swift")
+                    or netproxy.sandboxed(), reason="macOS sandbox and swift, from outside a sandbox")
+def test_swift_package_builds_under_the_sandbox(home: Path, tmp_path: Path) -> None:
+    (tmp_path / "Sources" / "T").mkdir(parents=True)
+    (tmp_path / "Package.swift").write_text('// swift-tools-version:5.5\nimport PackageDescription\n'
+                                            'let package = Package(name: "T", targets: [.target(name: "T")])\n')
+    (tmp_path / "Sources" / "T" / "T.swift").write_text("public let x = 1\n")
+    env = {**os.environ, netproxy.SANDBOXED_ENV: ""}
+    command = netproxy.swiftpm(["swift", "build", "--scratch-path", str(tmp_path / ".b")], {netproxy.SANDBOXED_ENV: "1"})
+    out = subprocess.run(netproxy.argv(home, command, {netproxy.SANDBOXED_ENV: "1"}), cwd=tmp_path,
+                         capture_output=True, text=True, timeout=300, env=env)
+    assert out.returncode == 0, out.stdout + out.stderr
