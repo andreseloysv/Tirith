@@ -92,6 +92,12 @@ post-tool hooks, without acknowledging them automatically. Every agent alias can
 use the CLI inbox protocol described in its brief. New workers still start only
 through Tirith's plan-linked lane launcher.
 
+## Planner: no two lanes on the same files
+
+The autopilot (`autopilot.candidates`) never proposes an item whose `writes` overlap those of a lane that is
+working or being checked/merged, a claimed task, or an item already proposed in the same pass (the first in
+plan order goes; the other comes back once it lands). `coordination.claim` refuses the overlap as a last guard.
+
 ## `tirith do`
 
 `tirith do "<goal>" --project <id> [--step N] [--agent <alias>] [--dry-run]` splits the goal (lines, bullets,
