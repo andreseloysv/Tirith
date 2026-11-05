@@ -266,7 +266,7 @@ def test_the_map_is_refreshed_only_for_pytest_and_an_old_map(home, tmp_path, mon
     monkeypatch.setattr("tirith.launch.spawn_detached", lambda argv, h, log: started.append(argv) or 1)
     assert not testmap.refresh(home, "p", tmp_path, "main", "cargo test")
     assert testmap.refresh(home, "p", tmp_path, "main", "cd collector && uv run pytest -q")
-    assert started and "testmap" in started[0] and "build" in started[0]
+    assert started and "testmap" in started[0] and "build" in started[0] and "--if-stale" in started[0]
     testmap.map_file(home, "p").write_bytes(b"x")
     assert not testmap.refresh(home, "p", tmp_path, "main", "uv run pytest")  # fresh map
     old = testmap.map_file(home, "p").stat().st_mtime - testmap.MAX_AGE_S - 10
@@ -311,5 +311,8 @@ def test_build_runs_the_suite_in_its_own_worktree_of_main(home, tmp_path, monkey
     subprocess.run([GIT, "-C", str(repo), "-c", "user.email=t@example.invalid", "-c", "user.name=T",
                     "commit", "-qam", "m2"], check=True)
     assert testmap.build(home, "p", repo, head())[0] and testmap.map_file(home, "p").read_text() == "v2\n"
-    monkeypatch.setattr(testmap, "BASE_COMMAND", "exit 1")
-    assert not testmap.build(home, "p", repo, head())[0] and not testmap.usable(home, "p")  # a failed build leaves no map
+    assert testmap.build(home, "p", repo, head(), if_stale=True) == (True, "the map was built meanwhile")
+    monkeypatch.setattr(testmap, "BASE_COMMAND", "exit 1")  # the run finished with a failing test: the map stays
+    assert not testmap.build(home, "p", repo, head())[0] and testmap.usable(home, "p")
+    monkeypatch.setattr(testmap, "BASE_COMMAND", "exit 2")  # interrupted: a half-written map selects nothing
+    assert not testmap.build(home, "p", repo, head())[0] and not testmap.usable(home, "p")
