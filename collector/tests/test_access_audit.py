@@ -40,3 +40,13 @@ def test_system_and_scrub() -> None:
     assert access_audit.system_of("Edit", {}) == "files"
     assert "s3cr3t" not in access_audit.scrub("API_KEY=s3cr3t run")
     assert "pw" not in access_audit.scrub("git clone https://u:pw@host/r")
+
+
+def test_recent_reads_all_projects_oldest_first(tmp_path) -> None:
+    from tirith.store import append_jsonl
+
+    append_jsonl(tmp_path / "access" / "tirith.ndjson", {"ts": "2026-11-05T10:00:00Z", "agent": "anthropic"})
+    append_jsonl(tmp_path / "access" / "_loose.ndjson", {"ts": "2026-11-05T09:00:00Z", "agent": "muse"})
+    rows = access_audit.recent(tmp_path)
+    assert [(r["agent"], r["project"]) for r in rows] == [("muse", None), ("anthropic", "tirith")]
+    assert access_audit.recent(tmp_path / "none") == []
