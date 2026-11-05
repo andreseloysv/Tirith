@@ -757,10 +757,9 @@ def _settle_lanes(home: Path, book: dict, now: datetime) -> bool:
             if data.get("process"):
                 book["process_at"] = now_iso(now)  # questioned the way of working: due again in a day
             book["every_min"] = data["next_review_min"]  # its own choice, from when it answered
-            if sent.get("directives"):  # the same alarm may wake it again only ALARM_REPEAT_MIN after this end
-                fired = book.setdefault("alarm_fired", {})
-                for text in (book.get("alarm_lane") or {}).get(lane["id"], []):
-                    fired[text] = now_iso(now)
+            fired = book.setdefault("alarm_fired", {})  # the same check may wake it again only ALARM_REPEAT_MIN after this end
+            for name in (book.get("alarm_lane") or {}).get(lane["id"], []):
+                fired[name] = now_iso(now)
             book["next_due"] = now_iso(now + timedelta(minutes=data["next_review_min"]))
         except ResultError as err:
             row["error"] = str(err)
@@ -843,16 +842,16 @@ def _run(home: Path, config: Config, now: datetime, cfg: dict, spawn: Callable |
     before = dict(book.get("unwell") or {})
     red = alarm_checks(home, book, now)
     changed |= book.get("unwell") != before
-    alarm = {k: v for k, v in red.items() if f"{k}: {v}" not in book.get("alarmed", [])}
+    alarm = {k: v for k, v in red.items() if k not in book.get("alarmed", [])}
     fired = book.setdefault("alarm_fired", {})
     nxt_review = parse_iso(book.get("next_due"))  # set when a review answered, fixed hours or not
-    for k, v in list(alarm.items()):  # the same text again: at most every ALARM_REPEAT_MIN, not before next_review_min
-        at = parse_iso(fired.get(f"{k}: {v}"))
+    for k, v in list(alarm.items()):  # the same check again (figures in its text do not make it new): at most every ALARM_REPEAT_MIN, not before next_review_min
+        at = parse_iso(fired.get(k))
         if at is not None and ((now - at).total_seconds() < ALARM_REPEAT_MIN * 60
                                or (nxt_review is not None and now < nxt_review)):
             del alarm[k]
     if book.get("alarmed") and not running:  # a check that turned green again may alarm again later
-        kept = [a for a in book["alarmed"] if a in {f"{k}: {v}" for k, v in red.items()}]
+        kept = [a for a in book["alarmed"] if a in red]
         changed |= kept != book["alarmed"]
         book["alarmed"] = kept
     due = force or bool(alarm) or scheduled
@@ -867,9 +866,9 @@ def _run(home: Path, config: Config, now: datetime, cfg: dict, spawn: Callable |
     snap = snapshot(home, config, now)
     if alarm:  # the self-check turned red: a review now, outside the schedule
         snap["alarm"] = alarm
-        book["alarmed"] = [*book.get("alarmed", []), *(f"{k}: {v}" for k, v in alarm.items())]
+        book["alarmed"] = [*book.get("alarmed", []), *alarm]
         for k, v in alarm.items():
-            fired[f"{k}: {v}"] = now_iso(now)
+            fired[k] = now_iso(now)
         for old in sorted(fired, key=lambda a: fired[a])[:-100]:
             del fired[old]
     fp = fingerprint(snap)
@@ -890,7 +889,7 @@ def _run(home: Path, config: Config, now: datetime, cfg: dict, spawn: Callable |
             book.update(fp=fp, last_at=now_iso(now))
             if alarm:  # remembered so the end of this run, not its start, begins the alarm's wait
                 lanes_alarm = book.setdefault("alarm_lane", {})
-                lanes_alarm[lane_id] = [f"{k}: {v}" for k, v in alarm.items()]
+                lanes_alarm[lane_id] = sorted(alarm)
                 for old in sorted(lanes_alarm)[:-50]:
                     del lanes_alarm[old]
         except (launch_mod.LaunchError, plangate_mod.PlanGateError) as err:
