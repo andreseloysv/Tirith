@@ -14,7 +14,7 @@
   }
   /* rows kept by the date and system filters, grouped by agent (alias + lane) */
   T.accessGroups = function (s, sys, days) {
-    var rows = (s.accesses || []).filter(function (r) { return (!sys || r.system === sys); });
+    var rows = (s.accesses || []).filter(function (r) { return (!sys || r.system === sys) && matches(r); });
     rows = rows.filter(function (r) { return inRange(r, days); });
     var by = {}, out = [];
     rows.forEach(function (r) {
@@ -50,11 +50,18 @@
     'package': 'Packages', search: 'Search', mcp: 'MCP', https: 'HTTPS', http: 'HTTP', tcp: 'TCP', ftp: 'FTP' };
   /* the agent's own program (its model API, telemetry): marked by the collector, or an older row whose program
      is named by its version ("2.1.318 connected to …") */
-  function runtime(r) { return r.tool === 'connection' && (r.runtime === true || /^\d+\.\d+\.\d+ connected/.test(r.action || '')); }
+  function runtime(r) { return (r.tool === 'connection' || r.tool === 'proxy') && (r.runtime === true || /^\d+\.\d+\.\d+ connected/.test(r.action || '')); }
+  /* the search box at the top: any word of the row (destination, organization, agent, lane, plan point, action) */
+  function matches(r, extra) {
+    var q = String((T.filter && T.filter.q) || '').trim().toLowerCase();
+    if (!q) return true;
+    var text = [r.domain, r.org, r.address, r.agent, r.lane, r.plan, r.action, r.tool, r.system, extra].concat(r.external || []).join(' ').toLowerCase();
+    return q.split(/\s+/).every(function (w) { return text.indexOf(w) >= 0; });
+  }
   T.externalRows = function (s, days, sys) {
     var out = [];
     (s.accesses || []).forEach(function (r) {
-      if (!inRange(r, days) || (sys && r.system !== sys)) return;
+      if (!inRange(r, days) || (sys && r.system !== sys) || !matches(r)) return;
       (r.external || []).forEach(function (x) {
         var sp = String(x).indexOf(' '), dest = sp > 0 ? String(x).slice(sp + 1) : '';
         if (r.domain && r.address && dest.indexOf(r.address) === 0) dest = r.domain + dest.slice(r.address.length);
