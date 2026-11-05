@@ -217,6 +217,10 @@ touches; `--full`, a review that merges and the merge queue (outside a lane) run
   runs in the lane's venv. The map is copied to
   `<worktree>/collector/.testmondata` before the first selected run; the lane keeps and updates its own copy
   (`.testmondata*` is gitignored). Any other change (data files, `pyproject.toml`) falls back to the next rule.
+- **An agent's own command** (`tirith run --stage test -- uv run pytest -q tests`): when it is a pytest run that
+  does not choose (`-n`, `-p no:xdist`, `--testmon`, `--pdb`, `-s`, `--collect-only`), Tirith adds
+  `-n auto --maxprocesses 8` (`fasttests.parallel_pytest`): agents ran the whole suite in one process, 1842
+  tests in 13 min against 2 min in parallel.
 - **Python, without a map** (`mode: changed`): by names (`tirith/x.py` -> `tests/test_x*.py`), changed test files and
   the import graph while it stays under 60 % of the suite.
 - **Web and Rust** selection is unchanged. The Python step runs in a subshell (`(cd collector && ...)`), so the web
