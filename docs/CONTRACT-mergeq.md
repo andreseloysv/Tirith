@@ -114,6 +114,7 @@ waiting lane without it, behind the running entry and earlier priority lanes. It
   the retry does not run the suite again.
 - `waiting` (dirty files the merge changes, branch not found, no temp worktree, no stage...): the entry stays queued; on the 2nd
   consecutive `waiting` (`WAIT_NOTICE`) the manager's queue gets one item with the reason.
+- Push race: when the push of main fails, the queue fetches origin first. A merged commit already on origin's main ends `merged`; a main that moved ahead without it is rebased onto origin and pushed once more. Only if that still fails does it end `push-failed`.
 - `push-failed` (main merged, origin not): a manager item at once, with the reason and the command to push.
 - out of time: manager item on the 2nd time (as before). A lane or project that is gone: flow alert to the manager.
 
