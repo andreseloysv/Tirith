@@ -374,6 +374,21 @@ def _cmd_ceo(args) -> int:
     return 0
 
 
+def _cmd_lab(args) -> int:
+    import shlex
+    from . import labrun
+    lab = Path(args.lab).expanduser()
+    try:
+        report = labrun.run_scenario(lab, args.scenario, shlex.split(args.agent))
+    except KeyError as exc:
+        print(exc.args[0], file=sys.stderr)
+        return 2
+    j, m = labrun.write_report(report, Path(args.out).expanduser())
+    print(m.read_text(encoding="utf-8"))
+    print(f"report: {j}")
+    return 0 if report["ok"] else 1
+
+
 def _cmd_lane_end(args) -> int:
     home = _home(args)
     report = args.report
@@ -2766,6 +2781,15 @@ def build_parser() -> argparse.ArgumentParser:
     drop = lane_sub.add_parser("drop", parents=[common], help="throw away a launched lane's worktree and branch")
     drop.add_argument("lane_id")
     drop.set_defaults(func=_cmd_lane_drop)
+    lab = sub.add_parser("lab", parents=[common], help="run scenarios on the company-lab fixture")
+    lab_sub = lab.add_subparsers(dest="lab_command", required=True)
+    lab_run = lab_sub.add_parser("run", parents=[common], help="run a scenario in a throwaway copy, write a report")
+    lab_run.add_argument("scenario")
+    lab_run.add_argument("--agent", required=True, help="agent command (JSON lines on stdin/stdout)")
+    lab_run.add_argument("--lab", default="fixtures/company-lab", help="the fixture folder")
+    lab_run.add_argument("--out", default="lab-reports", help="folder for the JSON and markdown report")
+    lab_run.set_defaults(func=_cmd_lab)
+
     ceo = sub.add_parser("ceo", parents=[common], help="the CEO: show its state, or start a review now")
     ceo_sub = ceo.add_subparsers(dest="ceo_command", required=True)
     ceo_sub.add_parser("show", parents=[common], help="last review, report, directives, proposals").set_defaults(func=_cmd_ceo)
