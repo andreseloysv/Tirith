@@ -289,3 +289,15 @@ New items have permanent IDs and optional prerequisites/write reservations.
 See [CONTRACT-coordination.md](CONTRACT-coordination.md) for metadata, atomic
 claiming, recovery, and task-level autopilot readiness. Existing plan gates,
 verification, and the rule that integration ticks an item remain in force.
+
+## Project ready (`tirith project add`)
+
+Adding a new folder leaves it ready in one go (`collector/tirith/projectready.py`), and skips each part that
+already exists, so nothing is overwritten:
+
+- **plan**: `docs/TODO.md` with step `1. Primeros pasos` (committed through the plan gate when the folder is a git repo).
+- **tirith.toml**: minimal (`deploy = "none"`, `roadmap = "docs/TODO.md"`).
+- **guard**: one item on the owner's list (`guard-install-<project>`, git repos only) with a Run action
+  `tirith guard install <project>`: the owner installs the guard with one click.
+
+An already registered folder changes nothing. Test: `pytest -k project_ready`.
