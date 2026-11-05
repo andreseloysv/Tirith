@@ -450,3 +450,14 @@ def test_review_interrupted_records_cause(env, home: Path, tmp_path: Path) -> No
     write_lane(home, lane)
     assert _run_child(home, env, "exit", tmp_path) == 3
     assert read_json(lane_path(home, "web-panel"), None)["review"]["cause"] == "exit code 3"
+
+
+def test_autoreview_dirty_main_unrelated_files_queues_the_lane(env, home: Path) -> None:
+    from tirith import mergeq as mergeq_mod
+    _lane(home, env)
+    (env / "README.md").write_text("owner edit\n", encoding="utf-8")  # the owner's dirty file; the lane never touches it
+    review_mod.review_lane(home, "web-panel", env)
+    lane = read_json(lane_path(home, "web-panel"), None)
+    assert lane["review"]["status"] != "merge-failed"
+    assert mergeq_mod.queued(home, "web-panel")
+    assert not (env / "feature.txt").exists()

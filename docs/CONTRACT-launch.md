@@ -183,7 +183,7 @@ The agent leaves its work uncommitted in the worktree; review finishes the job:
    suite.
    Failing tests: `review.status = "tests-failed"`, nothing is merged (exit 1).
 3. With `--tests-only`: stops with `ready`.
-4. Otherwise: refuses (`merge-failed`) if the repo has uncommitted tracked changes; commits the worktree
+4. Otherwise: refuses (`merge-failed`) if the repo has uncommitted tracked changes in a file the lane also changes; when the dirty files are all ones the lane does not touch, the lane goes to the merge queue instead (review `ready`, message `queued for the merge queue`), the same rule as the train; commits the worktree
    (`Lane <id>: <feature>`), merges `lane/<id>` into the branch checked out in the repo with `--no-ff`
    (a conflict is aborted: `merge-failed`), then removes the worktree and the branch: `merged`.
 
