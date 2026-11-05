@@ -56,6 +56,7 @@ MAX_SENT_BACK = 3  # after this many returns the manager (never the owner) decid
 START_WAIT = 20.0  # seconds a returned lane's new agent has to register itself before the manager hears of it
 WAIT_NOTICE = 2  # consecutive `waiting` results of one entry after which the manager is told why
 MAX_TRIES = 3  # main moved under the merge: start again from the new main
+DIRTY_WAIT = "has uncommitted changes in"  # the WAITING message when the owner's dirty main checkout holds a landing
 TIMED_OUT = "timed out"  # a git command stopped at its deadline: retried by the queue, never sent back
 NEEDS_STAGE = "needs a test stage"  # the project has no runnable build or test stage: told to the manager once, not retried
 OUT_OF_TIME = "out-of-time"  # a stage hit its time limit: the suite did not fail
@@ -185,7 +186,8 @@ def _may_enqueue(seen: dict) -> bool:
 
 def wip_block(home: Path) -> str:
     """Why no new lane may start now (empty when it may): ``WIP_LIMIT`` or more lanes wait in the queue."""
-    waiting = len(load(home)["queue"])
+    # A lane waiting on the owner's dirty main checkout is outside the lanes' control: it does not count.
+    waiting = sum(1 for e in load(home)["queue"] if DIRTY_WAIT not in str(e.get("message") or ""))
     if waiting < WIP_LIMIT:
         return ""
     return (f"{waiting} lanes are waiting in the merge queue (limit {WIP_LIMIT}): finish what was started before "
@@ -513,7 +515,7 @@ def _land(home: Path, repo: Path, tmp: Path, project: str, base: str, tested: st
             if clash:
                 if clashing is not None:
                     clashing.extend(clash)
-                return "", (WAITING, f"{repo} has uncommitted changes in {', '.join(clash)}, which the merge changes; "
+                return "", (WAITING, f"{repo} {DIRTY_WAIT} {', '.join(clash)}, which the merge changes; "
                                      "the queue waits for them to be committed or dropped")
         plangate_mod.recover_git_lock(repo)
         moved = _git(repo, "merge", "--ff-only", "-q", tested)
@@ -1025,7 +1027,7 @@ def process_next(home: Path, config: Config, *, relaunch: Callable | None = None
 
 
 def drain(home: Path, config: Config, *, watch: selfreload_mod.CodeWatch | None = None, **kwargs) -> list[dict]:
-    """Merge every waiting lane, one pass (a train) after the other; stops after a pass once the code on disk
+    """Merge every waiting lane, one pass (a train) after the other; a lane that waits is skipped, not retried in this drain; stops after a pass once the code on disk
     changed (the dispatcher starts a fresh runner), so a long queue never merges with code that main has already replaced."""
     out, tried = [], set()
     watch = watch or selfreload_mod.CodeWatch(stable_s=0.0)
@@ -1036,9 +1038,9 @@ def drain(home: Path, config: Config, *, watch: selfreload_mod.CodeWatch | None 
         if not rows:
             return out
         out += rows
-        if any(r["result"] == WAITING and not r.get("retried") for r in rows):
-            return out
-        tried.update(r["lane"] for r in rows if r["result"] == WAITING and r.get("retried"))  # main moved: next entry
+        # A lane that waits (dirty main checkout, timeout, main moved...) stays queued for the next runner pass but
+        # does not hold back the entries behind it; each lane is tried at most once per drain.
+        tried.update(r["lane"] for r in rows if r["result"] == WAITING)
 
 
 # -- the dispatcher ----------------------------------------------------------------------------
