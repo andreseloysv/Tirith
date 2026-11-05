@@ -11,6 +11,7 @@ import contextlib
 import fcntl
 import hashlib
 import json
+import re
 import os
 import shutil
 import tempfile
@@ -220,6 +221,15 @@ def _reuse(home: Path, base: dict, before: dict, tree: str, log_path: Path, echo
     return 0, text
 
 
+_PARTIAL = re.compile(r"(?:^|\s)(?:-k\s|-k\S|--deselect\b)|pytest\b[^&|;]*?\s[\w./-]*test_\w*\.py\b")
+
+
+def is_partial(command) -> bool:
+    """Whether a test command runs a selection (pytest ``-k`` or named test files), not the whole suite."""
+    line = command if isinstance(command, str) else " ".join(map(str, command))
+    return bool(_PARTIAL.search(line))
+
+
 def run_stage(home: Path, project: str, pipeline: str, stage: str, command: list[str] | str,
               cwd: str | Path | None, lane: str | None = None, run_id: str | None = None, *,
               worktree: str | None = None, branch: str | None = None, agent: str | None = None,
@@ -257,6 +267,8 @@ def run_stage(home: Path, project: str, pipeline: str, stage: str, command: list
             child_env["CARGO_TARGET_DIR"] = str(shared)
     limit = timeout or timeouts_mod.effective(home, None, f"stage:{stage}")
     started = {"pid": os.getpid(), "timeout": int(limit)}
+    if is_partial(command):
+        started["partial"] = True  # a -k or file selection: the claim check accepts its count (claimcheck.py)
     append_jsonl(home / "events.jsonl", {"at": now_iso(), **base, **started, "event": "start", "status": "running"})
     exit_code, kept = 1, b""
     stop = None
