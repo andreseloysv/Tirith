@@ -145,9 +145,11 @@
     var seen = {}; all.forEach(function (r) { if (r.system && !seen[r.system]) { seen[r.system] = 1; systems.push([r.system, r.system]); } });
     var tb = '<div class="toolbar">' + chips(systems, f.sys, 'accsys') + ' ' + chips(RANGES, f.days, 'accdays') + '</div>';
     var gs = T.accessGroups(s, f.sys, f.days);
-    el.innerHTML = tb + externalSection(s) + '<div class="pad"><p class="mut sm">Everything the agents did, recorded by Tirith. Values of secrets are never stored.</p></div>' +
-      (gs.length ? '<div class="listwrap" data-scroll="accesos"><ul class="rows card">' + gs.map(function (g) { return group(s, g); }).join('') + '</ul></div>'
-        : '<div class="pad">' + T.empty('No accesses recorded for these filters') + '</div>');
+    /* one scroll area for all of it: the External section above the list once pushed the list out of reach */
+    el.innerHTML = tb + '<div class="listwrap" data-scroll="accesos">' + externalSection(s) +
+      '<p class="mut sm">Everything the agents did, recorded by Tirith. Values of secrets are never stored.</p>' +
+      (gs.length ? '<ul class="rows card">' + gs.map(function (g) { return group(s, g); }).join('') + '</ul>'
+        : T.empty('No accesses recorded for these filters')) + '</div>';
   }
   T.views.accesos = view;
 
