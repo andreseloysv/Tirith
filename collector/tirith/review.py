@@ -62,6 +62,9 @@ def launched(lane: dict, repo: Path | None) -> bool:
     return Path(str(lane["workspace"])).resolve() == worktree_path(repo, str(lane["id"])).resolve()
 
 
+GONE = ("removed", "retired")  # ``lane.cleanup.status`` once Tirith removed the lane folder
+
+
 def public(lane: dict, repo: Path | None) -> dict | None:
     """The ``review`` object for state.json: None unless the lane is a finished launched lane."""
     review = lane.get("review")
@@ -74,6 +77,8 @@ def public(lane: dict, repo: Path | None) -> dict | None:
                 out["cause"] = review["cause"]
                 out["message"] = f"the review was interrupted ({review['cause']}); run it again"
         return out
+    if (lane.get("cleanup") or {}).get("status") in GONE:
+        return None  # its folder is gone (nothing to merge, or kept as a patch): no review will ever run
     if lane.get("ended_at") and lane.get("result") == "done" and launched(lane, repo):
         return {"status": PENDING}
     return None
