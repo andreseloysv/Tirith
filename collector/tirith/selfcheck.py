@@ -280,10 +280,14 @@ def _autopilot(config: Config, now: datetime, state: dict, book: dict, home: Pat
 
 
 def _disk(state: dict, now: datetime, active: set[str]) -> dict:
-    if not diskdiet_mod.low(state):
-        return _check("ok", OK_TEXT["disk"])
     disk = state.get("disk") or {}
     gb = int(disk.get("free_bytes") or 0) / diskdiet_mod.GB
+    if not diskdiet_mod.low(state):
+        if disk.get("warn"):  # amber: Tirith clears its lane folders; still low after a while, the CEO is woken
+            warn = int(disk.get("warn_free_bytes") or 0) / diskdiet_mod.GB
+            return _check("healing", f"Disk space is getting low ({gb:.1f} GB free, under {warn:.0f} GB); "
+                                     "Tirith is clearing old lane folders and build cache.")
+        return _check("ok", OK_TEXT["disk"])
     active.add("disk")
     return _check("failed", f"The disk is almost full ({gb:.1f} GB free); no new work starts until space is freed.")
 

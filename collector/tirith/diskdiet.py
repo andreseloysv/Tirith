@@ -33,6 +33,8 @@ GB = 1024 ** 3
 DISK_ITEM = "disk"
 HEADROOM_GB = 3  # cache is cleared when free space is below the limit plus this
 PYTEST_MIN_AGE_S = 3600
+STALE_S = 24 * 3600  # a lane folder nobody touched for this long goes, whatever its branch: the branch stays
+KEPT_REF = "refs/tirith/kept/"  # uncommitted changes of a retired lane folder are saved here first
 TEMP_CLEANUP_ENABLED = True  # the test suite turns it off: no pass touches the real temp folder
 
 
@@ -68,12 +70,18 @@ def _note(home: Path, lane: dict, status: str, now: datetime, **extra) -> bool:
 def cleanup(home: Path, config: Config, now: datetime) -> bool:
     """Remove the worktree (never ``--force``) and local branch of every merged lane; True when a lane changed.
 
-    Only launched lanes (never the manager lane or the main checkout) that ended ``done``."""
+    Only launched lanes (never the manager lane or the main checkout) that ended ``done``. A lane that ended
+    (any result) over ``STALE_S`` ago and is unmerged or dirty is retired instead: see :func:`retire`."""
     changed = False
     for lane in read_lanes(home):
-        if not lane.get("ended_at") or lane.get("result") != "done":
+        if not lane.get("ended_at"):
             continue
-        if (lane.get("cleanup") or {}).get("status") == "removed":
+        if (lane.get("cleanup") or {}).get("status") in ("removed", "retired"):
+            continue
+        if _ended_s(lane, now) >= STALE_S:
+            changed |= _retire_lane(home, config, lane, now)
+            continue
+        if lane.get("result") != "done":
             continue
         repo = _repo(config, lane)
         if repo is None or not review_mod.launched(lane, repo):
@@ -97,6 +105,79 @@ def cleanup(home: Path, config: Config, now: datetime) -> bool:
         _note(home, lane, "removed", now, branch_deleted=deleted)
         changed = True
     return changed
+
+
+def _ended_s(lane: dict, now: datetime) -> float:
+    try:
+        ended = datetime.fromisoformat(str(lane.get("ended_at")).replace("Z", "+00:00"))
+    except ValueError:
+        return 0.0
+    return (now - ended).total_seconds()
+
+
+def _retire_lane(home: Path, config: Config, lane: dict, now: datetime) -> bool:
+    repo = _repo(config, lane)
+    workspace = Path(str(lane.get("workspace") or ""))
+    if repo is None or not lane.get("workspace") or not workspace.is_dir() or not review_mod.launched(lane, repo):
+        return False
+    review = lane.get("review") or {}
+    if review.get("status") == review_mod.RUNNING and review_mod._alive(review.get("pid")):
+        return False
+    if any(_inside(p.resolve(), workspace.resolve()) for p in busy_folders()):
+        return False
+    done = retire(repo, workspace, f"lane/{lane['id']}", lane["id"])
+    if done is None:
+        return _note(home, lane, "blocked", now, message="could not save its uncommitted changes; left in place")
+    _note(home, lane, "retired", now, kept=done or None)
+    return True
+
+
+def _keep_changes(folder: Path, name: str) -> str | None:
+    """Save every uncommitted change of ``folder`` (tracked and untracked, not ignored) as a commit under
+    ``refs/tirith/kept/<name>``, leaving the branch and the folder as they are. The ref, "" when clean, None when
+    it could not be saved."""
+    if not _git(folder, "status", "--porcelain").stdout.strip():
+        return ""
+    with tempfile.TemporaryDirectory() as tmp:
+        env = {**os.environ, "GIT_INDEX_FILE": str(Path(tmp) / "index"), "GIT_AUTHOR_NAME": "Tirith",
+               "GIT_AUTHOR_EMAIL": "tirith@localhost", "GIT_COMMITTER_NAME": "Tirith",
+               "GIT_COMMITTER_EMAIL": "tirith@localhost"}
+
+        def git(*args: str) -> subprocess.CompletedProcess:
+            return timeouts_mod.run(["git", "-C", str(folder), *args], "git", env=env, text=True)
+
+        if git("read-tree", "HEAD").returncode or git("add", "-A").returncode:
+            return None
+        tree = git("write-tree")
+        commit = git("commit-tree", tree.stdout.strip(), "-p", "HEAD",
+                     "-m", f"Uncommitted changes of {name}, kept when Tirith removed its folder") if not tree.returncode else tree
+        ref = KEPT_REF + re.sub(r"[^A-Za-z0-9._-]", "-", name)
+        if commit.returncode or git("update-ref", ref, commit.stdout.strip()).returncode:
+            return None
+        return ref
+
+
+def retire(repo: Path, folder: Path, branch: str, name: str) -> str | None:
+    """Remove a lane folder nobody uses any more, losing nothing: uncommitted changes go to a kept ref first,
+    the branch stays unless it is merged. The kept ref ("" when there was nothing), None when it stays."""
+    kept = _keep_changes(folder, name)
+    if kept is None or _remove_worktree(repo, "--force", str(folder)).returncode != 0:
+        return None
+    _git(repo, "branch", "-d", branch)  # only goes when merged
+    return kept
+
+
+def idle_s(folder: Path, now_s: float | None = None) -> float:
+    """Seconds since git last touched the worktree ``folder`` (its index, HEAD or reflog) or the folder itself."""
+    now_s = time.time() if now_s is None else now_s
+    stamps = []
+    gitdir = _git(folder, "rev-parse", "--absolute-git-dir").stdout.strip()
+    for path in [folder] + ([Path(gitdir) / n for n in ("index", "HEAD", "logs/HEAD")] if gitdir else []):
+        try:
+            stamps.append(path.stat().st_mtime)
+        except OSError:
+            pass
+    return now_s - max(stamps) if stamps else 0.0
 
 
 # -- freeing space by itself ------------------------------------------------------------------
@@ -148,7 +229,8 @@ def _worktrees(repo: Path) -> list[tuple[Path, str]]:
 
 
 def sweep(home: Path, config: Config, now: datetime, busy: Callable[[], list[Path]] | None = None) -> dict:
-    """Remove every merged, clean, idle worktree under the lanes folder of each project, whoever made it.
+    """Remove every merged, clean, idle worktree under the lanes folder of each project, whoever made it, and
+    every other one git did not touch for ``STALE_S`` (see :func:`retire`: nothing is lost).
 
     Never the main checkout, the shared cargo target, a worktree of a lane still working, a worktree a process
     runs in, or one with uncommitted changes (never ``--force``). The fully merged branch goes too.
@@ -167,18 +249,21 @@ def sweep(home: Path, config: Config, now: datetime, busy: Callable[[], list[Pat
                 continue
             if any(_inside(folder, w) or _inside(w, folder) for w in working):
                 continue
-            if _git(repo, "merge-base", "--is-ancestor", branch, "HEAD").returncode != 0:
-                continue
-            if _git(folder, "status", "--porcelain").stdout.strip():
-                continue
+            merged = _git(repo, "merge-base", "--is-ancestor", branch, "HEAD").returncode == 0
+            clean = merged and not _git(folder, "status", "--porcelain").stdout.strip()
+            if not clean and idle_s(folder) < STALE_S:
+                continue  # unmerged or dirty: only once nobody touched it for a day
             if busy_list is None:
                 busy_list = [p.resolve() for p in (busy or busy_folders)()]
             if any(_inside(p, folder) for p in busy_list):
                 continue
             size = _tree_size(folder)
-            if _remove_worktree(repo, str(folder)).returncode != 0:
+            if clean:
+                if _remove_worktree(repo, str(folder)).returncode != 0:
+                    continue
+                _git(repo, "branch", "-d", branch)
+            elif retire(repo, folder, branch, folder.name) is None:
                 continue
-            _git(repo, "branch", "-d", branch)
             removed += 1
             freed += size
     _git_prune = [proj for proj in config.projects if proj.repo]
@@ -374,7 +459,7 @@ def free_space(home: Path, config: Config, state: dict, now: datetime, *,
         before = min(free(folder) for folder in lanes_volumes(home, config))
     except OSError:
         return False
-    if before >= int((config.disk_min_free_gb + HEADROOM_GB) * GB):
+    if before >= int(trigger_gb(config) * GB):
         state.pop("disk_nothing_said", None)
         return False
     if not any(proj.repo for proj in config.projects):
@@ -435,6 +520,11 @@ def _report(home: Path, state: dict, now: datetime, before: int, swept: dict, ca
     return True
 
 
+def trigger_gb(config: Config) -> float:
+    """Free space below which Tirith clears lane folders and cache by itself."""
+    return max(config.disk_min_free_gb + HEADROOM_GB, config.disk_warn_free_gb)
+
+
 def append_log(home: Path, line: str) -> None:
     from tirith.store import append_jsonl
     append_jsonl(Path(home) / "diskdiet.jsonl", {"at": now_iso(), "text": line})
@@ -483,7 +573,9 @@ def check(home: Path, config: Config, state: dict, now: datetime,
         return False
     limit = int(config.disk_min_free_gb * GB)
     old = state.get("disk") if isinstance(state.get("disk"), dict) else {}
-    disk = {"free_bytes": smallest, "min_free_bytes": limit, "low": smallest < limit, "at": now_iso(now)}
+    warn = int(max(config.disk_warn_free_gb, config.disk_min_free_gb) * GB)
+    disk = {"free_bytes": smallest, "min_free_bytes": limit, "warn_free_bytes": warn, "low": smallest < limit,
+            "warn": smallest < warn, "at": now_iso(now)}
     queue = old.get("queue")
     if disk["low"] and not _open(home, queue):
         text = (f"Disk is almost full: {smallest / GB:.1f} GB free, below the {limit / GB:.1f} GB limit. "
@@ -496,7 +588,7 @@ def check(home: Path, config: Config, state: dict, now: datetime,
         queue = None
     if queue:
         disk["queue"] = queue
-    changed = (not old or disk["low"] != old.get("low") or disk.get("queue") != old.get("queue")
+    changed = (not old or disk["low"] != old.get("low") or disk["warn"] != old.get("warn") or disk.get("queue") != old.get("queue")
                or abs(smallest - int(old.get("free_bytes") or 0)) >= GB // 10)
     if changed:
         state["disk"] = disk
