@@ -451,7 +451,6 @@ def test_context_tokens_come_from_the_last_request_not_the_sum_of_the_turn(rig: 
     assert rig.session().context_tokens == 2000
 
 
-<<<<<<< HEAD
 def test_safe_calls_are_approved_by_code_and_the_rest_asks_the_owner(home: Path, rig: Rig) -> None:
     config = load_config(home)
 
@@ -467,7 +466,8 @@ def test_safe_calls_are_approved_by_code_and_the_rest_asks_the_owner(home: Path,
                        ("Bash", {"command": "ls $(whoami)"}), ("Bash", {"command": "ls; npm install"}), ("WebFetch", {"url": "https://example.com"})):
         assert verdict(tool, data) == "ask", (tool, data)
     assert verdict("Bash", {"command": "git commit --no-verify -m x"}) == "deny"  # gates still win
-=======
+
+
 def test_a_collector_restart_keeps_the_one_conversation(rig: Rig) -> None:
     """The app closes (the collector with it) and opens again: the same conversation, still ONE manager."""
     rig.chat("hello")
@@ -482,4 +482,3 @@ def test_a_collector_restart_keeps_the_one_conversation(rig: Rig) -> None:
     starts = [r for r in rig.fake_log() if "start" in r]
     assert starts[1]["resume"] == sid  # resumed from the id kept on disk
     assert rig.book()["session_id"] == sid
->>>>>>> main
