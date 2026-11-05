@@ -946,6 +946,33 @@ def test_plan_done_checks_the_commit(proj, home: Path, capsys) -> None:
     assert main([*args, "--commit", sha]) == 3  # no longer open
 
 
+def _docs_commit(repo: Path) -> str:
+    (repo / "docs" / "guide.md").write_text("more\n", encoding="utf-8")
+    _git_do(repo, "add", "docs/guide.md")
+    _git_do(repo, "commit", "-q", "-m", "docs only")
+    return _git_do(repo, "rev-parse", "--short", "HEAD")
+
+
+def test_plan_done_docs_commit_closes_a_docs_item(proj, home: Path, capsys) -> None:
+    repo, _ = proj
+    write_plan(repo, PLAN.replace("Write the docs.", "Update docs/guide.md with the flow."))
+    _git_do(repo, "add", "-A")
+    _git_do(repo, "commit", "-q", "-m", "plan")
+    sha = _docs_commit(repo)
+    args = ["plan", "done", "--project", "demo", "--step", "1", "--item", "Update docs/guide.md with the flow."]
+    assert main([*args, "--commit", sha]) == 0
+    assert f"- [x] Update docs/guide.md with the flow. (hecho: {sha})" in _plan(repo)
+
+
+def test_plan_done_docs_commit_still_refused_for_a_code_item(proj, home: Path, capsys) -> None:
+    repo, _ = proj
+    sha = _docs_commit(repo)
+    args = ["plan", "done", "--project", "demo", "--step", "1", "--item", "Build the button."]
+    assert main([*args, "--commit", sha]) == 3
+    assert "outside the docs" in capsys.readouterr().err
+    assert "- [ ] Build the button." in _plan(repo)
+
+
 def test_nothing_to_commit_counts_as_success(proj, home: Path, monkeypatch) -> None:
     repo, _ = proj
     real = plangate._git
