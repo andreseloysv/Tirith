@@ -54,6 +54,7 @@ from tirith import projenv as projenv_mod
 from tirith import fallback as fallback_mod
 from tirith import filerefs as filerefs_mod
 from tirith import models as models_mod
+from tirith import metrics as metrics_mod
 from tirith import nowbar as nowbar_mod
 from tirith import review as review_mod
 from tirith.logview import entries_from_events, log_entries
@@ -1505,7 +1506,7 @@ class Collector:
             "steward_queue": manager_queue,  # old key, same value
             "projects": projects,
             "agents": agent_rows,
-            "now": nowbar_mod.build(agent_rows, now),
+            "now": {**nowbar_mod.build(agent_rows, now), "metrics": metrics_mod.load(self.home, agent_rows, now)},
             "pipelines": events_pipelines,
             "rooms": rooms_state,
             "flows": all_flows[-flows_mod.STATE_FLOWS:],

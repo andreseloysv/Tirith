@@ -127,6 +127,10 @@ stalled or failed, or whose review is `conflict`, `red-suite`, `sent-back`, `tes
 `merge-failed` or `push-failed`. Each item: `{lane, project, agent (alias), name, item, step, status, review, at, why}`;
 newest first, at most 12 per list (`counts` are the full totals). The manager's own lane is left out.
 
+`state.now.metrics` (`tirith/metrics.py`) is the speed and autonomy line of the bar, over the last 24 h:
+`{window_hours, merged, per_hour, median_seconds, avg_seconds, owner_needed, owner_per_merged}`. Time to main is the
+review merge time minus the lane's `started_at`; `owner_needed` counts the `person` rows of `friction.jsonl`.
+
 ## The brain (Meta models doing real work)
 
 The collector calls the **Meta Model API** (Muse Spark) only when its input changed, caches by hash,
