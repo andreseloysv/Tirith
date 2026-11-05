@@ -160,8 +160,9 @@ def test_runs(home: Path, workspace: Path) -> list[dict]:
         elif event.get("event") == "end" and event.get("status") == "passed" and "test" in str(event.get("stage")):
             at = parse_iso(event.get("at"))
             counts = _log_counts(event.get("log"))
+            partial = bool((open_start.get(key) or {}).get("partial"))
             if at:
-                runs.append({"at": at.timestamp(), "counts": counts, "run": event.get("run")})
+                runs.append({"at": at.timestamp(), "counts": counts, "run": event.get("run"), "partial": partial})
     return runs
 
 
@@ -248,19 +249,23 @@ def check_tests_added(report: str, added: dict[str, list[str]], result: Result) 
                 result.mismatches.append(f"said it added {name} in {files[0]}; the diff adds it in {hit[0]}")
 
 
-def check_tests_pass(report: str, home: Path, workspace: Path, since: float, result: Result) -> None:
+def check_tests_pass(report: str, home: Path, workspace: Path, since: float, result: Result, started: float = 0.0) -> None:
     for line in _lines(report):
         passes = _PASS_CLAIM.search(line) and not _NEGATED.search(line)
         counts = [int(n) for n in _PASSED.findall(line)]
         if not passes and not counts:
             continue
-        runs = [r for r in test_runs(home, workspace) if r["at"] + 1 >= since]  # event times have whole seconds
+        every = test_runs(home, workspace)
+        runs = [r for r in every if r["at"] + 1 >= since]  # event times have whole seconds
+        # a registered partial run (-k or a file) is a run of its own: its count is true even when a later
+        # edit means the whole-suite run is the one that follows the last change
+        partial = [r for r in every if r["partial"] and r["at"] + 1 >= started]
         result.claims.append("tests passed" + (f" ({', '.join(map(str, counts))})" if counts else ""))
-        if not runs:
+        if not runs and not (partial and counts):
             result.mismatches.append(
                 "said the tests pass; no passing test run of the lane's worktree is recorded after its last change")
             continue
-        known = {n for run in runs for n in run["counts"]}
+        known = {n for run in [*runs, *partial] for n in run["counts"]}
         for count in counts:
             if known and count not in known:
                 result.mismatches.append(
@@ -348,7 +353,7 @@ def verify(home: Path, lane: dict, repo: Path | None = None, *, report: str | No
             brief = ""
     check_files(text, paths, result)
     check_tests_added(text, added, result)
-    check_tests_pass(text, home, workspace, last_change(workspace, paths), result)
+    check_tests_pass(text, home, workspace, last_change(workspace, paths), result, start_ts)
     check_git(text, workspace, repo, result)
     check_screenshots(text, workspace, start_ts, result)
     check_fix(brief or "", paths, result)

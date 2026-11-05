@@ -51,14 +51,15 @@ def bad(result: cc.Result) -> str:
     return "\n".join(result.mismatches)
 
 
-def record_run(home: Path, repo: Path, passed: int, status: str = "passed", at: float | None = None) -> None:
-    log = home / "logs" / "r.log"
+def record_run(home: Path, repo: Path, passed: int, status: str = "passed", at: float | None = None,
+               partial: bool = False, run: str = "ci#1") -> None:
+    log = home / "logs" / f"{run.replace('#', '-')}.log"
     log.parent.mkdir(parents=True, exist_ok=True)
     log.write_text(f"{passed} passed in 1s\n", encoding="utf-8")
     stamp = time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime(at or time.time() + 5))
-    base = {"run": "ci#1", "stage": "test", "worktree": str(repo), "cwd": str(repo), "log": str(log), "at": stamp}
+    base = {"run": run, "stage": "test", "worktree": str(repo), "cwd": str(repo), "log": str(log), "at": stamp}
     with (home / "events.jsonl").open("a", encoding="utf-8") as fh:
-        fh.write(json.dumps({**base, "event": "start"}) + "\n")
+        fh.write(json.dumps({**base, "event": "start", **({"partial": True} if partial else {})}) + "\n")
         fh.write(json.dumps({**base, "event": "end", "status": status}) + "\n")
 
 
@@ -284,3 +285,26 @@ def test_verify_follows_the_chain_to_the_first_lane(launched, home: Path) -> Non
            "started_at": now_iso()}
     assert [l["id"] for l in cc.chain(home, nxt)] == ["panel-2", "panel"]
     assert lane["start_commit"]
+
+
+def test_claim_partial_run_count_is_accepted_when_registered(work, home: Path) -> None:
+    add_test(work)
+    lane = lane_of(work)
+    record_run(home, work, 1738, run="ci#1")
+    record_run(home, work, 167, run="ci#2", partial=True)
+    assert cc.verify(home, lane, report="Tests: 167 passed (-k claim_partial_run).").ok
+    assert cc.verify(home, lane, report="1738 passed").ok
+    assert not cc.verify(home, lane, report="999 passed").ok
+
+
+def test_claim_partial_run_count_is_refused_when_not_partial(work, home: Path) -> None:
+    add_test(work)
+    record_run(home, work, 1738, run="ci#1")
+    assert not cc.verify(home, lane_of(work), report="167 passed").ok
+
+
+def test_claim_partial_run_is_flagged_by_the_command() -> None:
+    from tirith.runstage import is_partial
+    assert is_partial("(cd collector && uv run -q pytest -q -k claim_partial_run)")
+    assert is_partial(["uv", "run", "pytest", "tests/test_claimcheck.py"])
+    assert not is_partial("cd collector && uv run -q pytest -q tests")
