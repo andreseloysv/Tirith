@@ -97,3 +97,45 @@ def test_reload_with_busy_background_pool_does_not_hang(tmp_path, monkeypatch):
 def test_quiesce_reports_clean_when_idle(tmp_path):
     collector = Collector(tmp_path)
     assert collector.quiesce(0.5)
+
+
+def test_reload_exec_failure_keeps_running(capsys):
+    def boom(path, argv):
+        raise OSError("exec failed")
+    assert selfreload.reexec(boom) is False
+    assert "keeping the running code" in capsys.readouterr().err
+
+
+def test_reload_failed_preflight_keeps_old_code(tmp_path):
+    pkg, clock = _pkg(tmp_path), Clock()
+    watch = CodeWatch(pkg, clock=clock, verify=lambda: False)
+    (pkg / "a.py").write_text("def (:\n")
+    watch.changed()
+    clock.t += 6
+    assert not watch.changed()
+    clock.t += 60
+    assert not watch.changed()  # not retried until the code changes again
+
+
+def test_reload_hanging_preflight_times_out(monkeypatch):
+    import subprocess
+
+    def hang(*a, **k):
+        raise subprocess.TimeoutExpired("x", 1)
+    monkeypatch.setattr(selfreload.subprocess, "run", hang)
+    assert selfreload.preflight(0.1) is False
+
+
+def test_reload_watcher_error_does_not_stop_collector(tmp_path, monkeypatch):
+    collector = Collector(tmp_path)
+    n = []
+    monkeypatch.setattr(collector, "cycle", lambda: n.append(1) or {})
+    monkeypatch.setattr("tirith.collector.time.sleep", lambda s: None)
+
+    def check():
+        if len(n) >= 3:
+            return True
+        raise RuntimeError("watcher broke")
+    with pytest.raises(ReloadRequested):
+        collector.run(interval=0.2, reload_check=check)
+    assert len(n) >= 3
