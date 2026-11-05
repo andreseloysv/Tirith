@@ -38,8 +38,12 @@ LANE_PREFIX = "ceo-"
 HERO_CLASS = "steward"  # a standing lane: no plan report is asked of it
 FEATURE = "CEO"
 CEO_ITEM = "CEO: revisar cómo trabaja el manager"
-HOURS = (9, 14, 20)       # local hours of the scheduled reviews
-RUNS_PER_DAY = 6
+HOURS = (9, 14, 20)       # local hours of a fixed schedule, only when the owner sets [ceo] hours
+EVERY_MIN, MIN_EVERY_MIN, MAX_EVERY_MIN = 60, 10, 480  # the CEO picks its next review: 10 min to 8 h (>= 3 a day)
+RUNS_PER_DAY = 72
+WATCH_WINDOW_S = 6 * 3600.0  # launch failures and owner waits the snapshot looks back on
+LONG_REVIEW_S = 3600.0       # a live review running longer than this is counted as long
+OWNER_WORDS = re.compile(r"\b(?:owner|owner's|dueñ[oa])\b", re.I)
 MAX_DIRECTIVES = 3        # open at a time
 MEMORY_CHARS = 16_000     # of findings and decisions in one brief
 REPORT_LINES = 5
@@ -56,13 +60,15 @@ def folder(home: Path) -> Path:
 
 
 def settings(home: Path) -> dict:
-    """``[ceo]`` of config.toml: enabled, hours, runs_per_day, model, effort, targets."""
+    """``[ceo]`` of config.toml: enabled, hours (a fixed schedule; without it the CEO picks when it looks again),
+    runs_per_day, model, effort, targets."""
     try:
         raw = tomllib.loads((Path(home) / "config.toml").read_text(encoding="utf-8")).get("ceo") or {}
     except (OSError, tomllib.TOMLDecodeError):
         raw = {}
+    fixed = isinstance(raw.get("hours"), list)
     hours = [int(h) for h in raw.get("hours", HOURS) if isinstance(h, int) and 0 <= h <= 23] or list(HOURS)
-    return {"enabled": raw.get("enabled") is True, "hours": sorted(set(hours)),
+    return {"enabled": raw.get("enabled") is True, "hours": sorted(set(hours)), "fixed": fixed,
             "runs_per_day": int(raw.get("runs_per_day") or RUNS_PER_DAY),
             "model": raw.get("model"), "effort": raw.get("effort"),
             "targets": raw.get("targets") if isinstance(raw.get("targets"), dict) else {}}
@@ -123,6 +129,8 @@ def snapshot(home: Path, config: Config, now: datetime) -> dict:
     dstate = read_json(Path(home) / "dispatch.json", {}) or {}
     health = ((dstate.get("health") or {}).get("checks") or {}) if isinstance(dstate, dict) else {}
     allowed, why = loadlimit_mod.current(config, home)
+    state = read_json(Path(home) / "state.json", {}) or {}
+    state = state if isinstance(state, dict) else {}
     turns = [read_json(p, {}) for p in sorted((Path(home) / "manager" / "turns").glob("*.json"))]
     today_turns = [t for t in turns if isinstance(t, dict) and _day(t.get("started_at"), now)]
     oldest = min((parse_iso(r["at"]) for r in pending if parse_iso(r["at"])), default=None)
@@ -145,7 +153,65 @@ def snapshot(home: Path, config: Config, now: datetime) -> dict:
         "load_limit": allowed, "load_why": why,
         "held_steps": sorted(((dstate.get("autopilot") or {}).get("held") or {}).keys()),
         "health_not_ok": {k: v.get("text") for k, v in health.items() if isinstance(v, dict) and v.get("level") != "ok"},
+        **_watch(home, now, state, workers, reviews, reqs),
     }
+
+
+def _watch(home: Path, now: datetime, state: dict, workers: list[dict], reviews: list[dict], reqs: list[dict]) -> dict:
+    """What the hourly check looks at besides the manager: is the work moving, do launches work, is CI on main
+    green, is the test map there, does a review run too long, does the manager wait on an owner it never asked."""
+    from tirith import review as review_mod
+    since = now - timedelta(seconds=WATCH_WINDOW_S)
+    open_items = int((state.get("autopilot") or {}).get("open_items") or 0)
+    working = any(not l.get("ended_at") for l in workers)
+    ended = [t for l in workers if (t := parse_iso(l.get("ended_at")))]
+    idle = None if working or not open_items else (round((now - max(ended)).total_seconds() / 60) if ended else None)
+    merged = [t for r in reviews if r.get("status") == "merged" and (t := parse_iso(r.get("at")))]
+    failures = [str(a.get("text") or "")[:200] for r in reqs for a in r["answers"]
+                if a.get("by") == "tirith" and (t := parse_iso(a.get("at"))) and t >= since
+                and re.search(r"\bcould not\b", str(a.get("text") or ""), re.I)]
+    on_list = {str(w.get("project") or "") for w in state.get("waiting_on_you") or [] if isinstance(w, dict)}
+    unasked = [{"project": r["project"], "step": r["step"], "answer": str(a.get("text") or "")[:200]}
+               for r in reqs if r["kind"] == inbox_mod.PROPOSAL for a in r["answers"][-1:]
+               if a.get("by") == "manager" and (t := parse_iso(a.get("at"))) and t >= since
+               and OWNER_WORDS.search(str(a.get("text") or "")) and r["project"] not in on_list]
+    long_reviews = sum(1 for r in reviews if r.get("status") == review_mod.RUNNING and review_mod._alive(r.get("pid"))
+                       and (t := parse_iso(r.get("at"))) and (now - t).total_seconds() > LONG_REVIEW_S)
+    return {
+        "open_items": open_items,
+        "idle_min": idle,  # open items and no lane working, since the last lane ended
+        "last_merge_min": round((now - max(merged)).total_seconds() / 60) if merged else None,
+        "reviews_running_long": long_reviews,
+        "launch_failures": {"count": len(failures), "last": failures[-3:]},
+        "owner_waits_unasked": unasked[-5:],
+        "ci_main": _ci_main(state),
+        "test_maps": _test_maps(home, now),
+    }
+
+
+def _ci_main(state: dict) -> dict[str, str]:
+    """The last finished GitHub run of each workflow (``project/workflow``: passed or failed)."""
+    last: dict[str, tuple[str, str]] = {}
+    for run in state.get("pipelines") or []:
+        if not isinstance(run, dict) or run.get("source") != "github" or run.get("status") not in ("passed", "failed"):
+            continue
+        key, at = f"{run.get('project')}/{run.get('pipeline')}", str(run.get("started_at") or "")
+        if key not in last or at > last[key][0]:
+            last[key] = (at, str(run["status"]))
+    return {key: status for key, (_, status) in sorted(last.items())}
+
+
+def _test_maps(home: Path, now: datetime) -> dict[str, dict]:
+    """Each project's test execution map (``<home>/testmon/<project>``): there or not, and its age in hours."""
+    from tirith import testmap as testmap_mod
+    root, out = Path(home) / "testmon", {}
+    for where in sorted(root.iterdir()) if root.is_dir() else []:
+        try:
+            age = (now.timestamp() - (where / testmap_mod.MAP).stat().st_mtime) / 3600
+        except OSError:
+            age = None
+        out[where.name] = {"present": age is not None, "age_h": None if age is None else round(age, 1)}
+    return out
 
 
 def red_checks(home: Path) -> dict[str, str]:
@@ -157,7 +223,10 @@ def red_checks(home: Path) -> dict[str, str]:
 
 def fingerprint(snap: dict) -> str:
     """What makes a review worth paying for: the counts, not the clock."""
-    keep = {k: v for k, v in snap.items() if k not in ("at", "manager_oldest_pending_min", "manager_cost_today")}
+    keep = {k: v for k, v in snap.items() if k not in ("at", "manager_oldest_pending_min", "manager_cost_today",
+                                                         "last_merge_min", "idle_min", "test_maps")}
+    keep["idle_hours"] = (snap.get("idle_min") or 0) // 60  # the clock moves every pass; an idle hour is news
+    keep["test_maps"] = {k: v.get("present") for k, v in (snap.get("test_maps") or {}).items()}
     return hashlib.sha256(json.dumps(keep, sort_keys=True, default=str).encode()).hexdigest()[:16]
 
 
@@ -231,6 +300,21 @@ def brief(home: Path, snap: dict, cfg: dict, catch_up: bool) -> str:
          "Start with it: find the cause from the data (logs, lane and review records, `tirith check`), not from "
          "the alarm's own wording, then tell the manager what to do about it (a directive) or ask the owner when "
          "only they can fix it." if snap.get("alarm") else ""),
+        "## First: is Tirith working?\nYou run all day, so nobody has to watch Tirith by hand. Answer first, "
+        "from the snapshot and the raw data: is the work moving (`lanes_working`, `last_merge_min`, `idle_min` with "
+        "`open_items` and a free `load_limit`)? Do launches work (`launch_failures`)? Is CI on main green "
+        "(`ci_main`)? Is each project's test map there (`test_maps`)? Is a review stuck or too long "
+        "(`reviews_running_dead`, `reviews_running_long`)? Does the manager wait on the owner for something the "
+        "owner was never asked (`owner_waits_unasked`)? Is the manager answering (`manager_pending`)? For each "
+        "problem find the cause in the data (`~/.tirith/logs`, lane and review records, the plan, `git log`), not "
+        "in anyone's words.",
+        "## Getting it fixed without the owner\nWhen the cause is a bug in Tirith that stops or slows the work "
+        "(launches failing, a lost map, a check stuck, a wait nobody can end), send a directive: the manager adds "
+        "ONE plan item for the fix to the project's improvement step, with a `--check` that fails today, and "
+        "launches it now, before other work. The fix goes through a lane, its tests, the review and the merge "
+        "queue like any other work, so it needs no owner approval. When the cause is a decision of the manager "
+        "(a wait on a fact that is no longer true, a wait on an owner nobody asked), the directive says what to do "
+        "now. Only a change of a behavior the owner chose, of budget or of targets is a proposal.",
         "## Procedure\n1. Re-check each open finding with its `check`; fixed ones get change \"fixed\".\n"
         "2. For each open directive: did the manager do it (its answer), and did the number in `expect` move? One "
         "that did not move after its `runs` reviews becomes a finding.\n3. Look for new problems against the targets "
@@ -244,8 +328,15 @@ def brief(home: Path, snap: dict, cfg: dict, catch_up: bool) -> str:
         '"check": "how to measure it again"}],\n'
         ' "directives": [{"id": "d-...", "text": "...", "why": "...", "expect": "...", "check": "...", "runs": 2}],\n'
         ' "proposals": [{"id": "p-...", "text": "...", "why": "..."}],\n'
-        f' "report": ["at most {REPORT_LINES} short lines for the owner: only what changed"]}}\n'
+        f' "report": ["at most {REPORT_LINES} short lines for the owner: only what changed"],\n'
+        ' "next_review_min": 60}\n'
         "Report nothing new as new: what your records already hold is still-open, not news.",
+        f"## When you look again\nYou pick it: `next_review_min`, from {MIN_EVERY_MIN} to {MAX_EVERY_MIN} minutes "
+        "(at least three reviews a day). Short (10-30) while something is broken or a fix you asked for is "
+        "landing, so you see it worked; about 60 while work moves normally; 120-480 when nothing runs and nothing "
+        "is expected to (a plan with nothing an agent can do, a quiet night). A review where nothing changed is "
+        "skipped by code at no cost, so a short interval is cheap when all is still. A red self-check wakes you "
+        "anyway.",
         "## Targets\n" + _data("owner targets (config.toml [ceo.targets])", cfg.get("targets") or
                                "none set: use docs/CONTRACT-ceo.md's defaults"),
         "## Snapshot (measured by code just now)\n" + _data("snapshot", snap),
@@ -284,7 +375,17 @@ def parse_result(text: str) -> dict:
             if not isinstance(row, dict) or any(not str(row.get(n) or "").strip() for n in need):
                 raise ResultError(f"every item of {key} needs {', '.join(need)}")
     data["report"] = [str(l) for l in data.get("report", [])][:REPORT_LINES]
+    data["next_review_min"] = interval(data.get("next_review_min"))
     return data
+
+
+def interval(value) -> int:
+    """The CEO's choice of minutes until its next review, kept between ``MIN_EVERY_MIN`` and ``MAX_EVERY_MIN``."""
+    try:
+        minutes = int(float(value))
+    except (TypeError, ValueError):
+        return EVERY_MIN
+    return max(MIN_EVERY_MIN, min(MAX_EVERY_MIN, minutes))
 
 
 def _manager_answer(home: Path, request_id: str | None) -> str | None:
@@ -383,7 +484,9 @@ def _settle_lanes(home: Path, book: dict, now: datetime) -> bool:
             data = parse_result(lane.get("report") or "")
             sent = deliver(home, data, lane["id"], str(lane.get("project") or ""), now)
             row.update(status="done", result=data["result"], report=data["report"],
-                       findings=len(data.get("findings", [])), **sent)
+                       findings=len(data.get("findings", [])), next_review_min=data["next_review_min"], **sent)
+            book["every_min"] = data["next_review_min"]  # its own choice, from when it answered
+            book["next_due"] = now_iso(now + timedelta(minutes=data["next_review_min"]))
         except ResultError as err:
             row["error"] = str(err)
         append_jsonl(folder(home) / "runs.jsonl", row)
@@ -459,20 +562,24 @@ def _run(home: Path, config: Config, now: datetime, cfg: dict, spawn: Callable |
     book = _book(home)
     changed = _settle_lanes(home, book, now) | settle_decisions(home) | settle_directives(home)
     running = any(not l.get("ended_at") for l in _ceo_lanes(home)) or _starting(home, now)
-    slot = _slot(now, cfg["hours"])
+    slot = _slot(now, cfg["hours"]) if cfg["fixed"] else None
+    nxt = parse_iso(book.get("next_due"))
+    scheduled = (slot is not None and slot != book.get("slot")) if cfg["fixed"] else (nxt is None or now >= nxt)
     red = red_checks(home)
     alarm = {k: v for k, v in red.items() if f"{k}: {v}" not in book.get("alarmed", [])}
     if book.get("alarmed") and not running:  # a check that turned green again may alarm again later
         kept = [a for a in book["alarmed"] if a in {f"{k}: {v}" for k, v in red.items()}]
         changed |= kept != book["alarmed"]
         book["alarmed"] = kept
-    due = force or bool(alarm) or (slot is not None and slot != book.get("slot"))
+    due = force or bool(alarm) or scheduled
     if running or not due:
         if changed:
             _save_book(home, book)
         return changed
     if slot is not None and slot != book.get("slot"):
         book["slot"] = slot
+    if not cfg["fixed"]:  # until its answer picks another interval, the last one it chose (an hour at first)
+        book["next_due"] = now_iso(now + timedelta(minutes=interval(book.get("every_min"))))
     snap = snapshot(home, config, now)
     if alarm:  # the self-check turned red: a review now, outside the schedule
         snap["alarm"] = alarm
@@ -517,7 +624,9 @@ def public(home: Path, now: datetime) -> dict:
             "last_at": last.get("at") if last else None,
             "last_result": (last.get("result") or last.get("status")) if last else None,
             "last_error": last.get("error") if last else None,
-            "next_at": next_at(now, cfg["hours"], _book(home)) if cfg["enabled"] else None,
+            "next_at": (next_at(now, cfg["hours"], _book(home)) if cfg["fixed"] else _book(home).get("next_due"))
+            if cfg["enabled"] else None,
+            "every_min": None if cfg["fixed"] else interval(_book(home).get("every_min")),
             "report": (last or {}).get("report") or [], "directives": dirs, "proposals": props,
             "findings_open": sum(1 for f in findings(home).values() if f.get("status") == "open"),
             "cost_today": round(cost, 2)}
