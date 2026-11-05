@@ -109,7 +109,9 @@ Every review sees `throughput` (`ceo.throughput`): lanes and merges today, merge
 versus the owner's goals), the median minutes a lane works and from start to main, the whole test suites lanes ran
 (1000 tests or more) and their median minutes, tests failing in 3 or more lanes today (red on main), and the
 capacity: `max_parallel`, the load limit and why, the CPU left idle, the range it may set. It must find the biggest
-cause of slowness and act: a fix directive, a manager policy, or `capacity` in its result.
+cause of slowness and act: a fix directive, a manager policy, or `capacity` in its result. Every result names it in
+`bottleneck` (`what`, `evidence`, `action`), a healthy review too; one without it gets a report line saying so.
+`whole_suite_minutes_total` is the lane time spent today re-running the whole suite.
 
 ## The sentinel and the Status card
 
