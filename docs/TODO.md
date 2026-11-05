@@ -309,7 +309,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Probar a mano en la app Tauri real que arrastrar una imagen al chat la adjunta (revisar ~/.tirith/logs/app.log: 'over chat: true')
 - [ ] Agent card in the app: the role (Manager) is the bold title on top and the agent name (e.g. Quileatar) the smaller line below (check: `cd app && grep -rq 'role' src`) (en revisión) <!-- tirith:{"id":"i-960f1ac7","depends_on":[],"writes":[]} -->
   - [ ] Revisar: Agent card in the app: the role (Manager) is the bold title on top and the agent name (e.g. Quileatar) the smaller line below (check: `cd app && grep -rq 'role' src`) (en curso: revisión de role-title-on-agent-card)
-- [ ] Fix pre-existing failure in web/js/detail.test.mjs (waitFor agent card old-1 times out)
+- [ ] Fix pre-existing failure in web/js/detail.test.mjs (waitFor agent card old-1 times out) (en curso: detail-test-old-1) <!-- tirith:{"id":"i-814eeac4"} -->
 - [x] Volver a ejecutar tools/chat_check.py muse con un mensaje mínimo y con --interrupt hasta ver la línea result (la primera vez, 05:16Z, muse no respondió en 240 s y recibió SIGTERM) <!-- tirith:{"id":"i-6e46d7ba","depends_on":[],"writes":[]} -->
 - [x] mspchat.py envía tras initialize la notificación que muse serve 1.4.14 exige según su esquema real (hoy responde a id 2 'Not initialized', ver /tmp/chatcheck-muse.log), cubierta en msp_fake_host y test_mspchat (check: `cd collector && uv run -q pytest -q tests/test_mspchat.py`) <!-- tirith:{"id":"i-b398c369","depends_on":[],"writes":[]} -->
 - [x] Integrar en main la rama lane/chatoverflow (mensajes del chat sin cortes). (hecho: a71d1cb)
