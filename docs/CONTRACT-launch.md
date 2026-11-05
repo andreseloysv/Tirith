@@ -253,6 +253,8 @@ merge or passing tests `files`, `branch` and `passed` (the count the test runner
 After the tests pass and before any merge, the lane's final report (`lane.report`) is checked against facts, by
 regexes and line structure only (no model). Each claim that does not hold is one sentence in
 `review.claims.mismatches`; `review.claims` is `{ok, checked, mismatches}` (also on `ready`/`merged`).
+Text in double quotes ("…", “…”) is no claim: a second report that says the first one 'said "167 passed"' is
+not checked for 167 passed (backticks still name files and tests).
 - files said changed/added/created/updated: must be in `git diff <start_commit>` (commits and uncommitted)
   or untracked; lines with a negation ("did not change") are skipped;
 - "added N tests" / `test_x in <file>`: the diff must add that many test functions (python `def test_`,

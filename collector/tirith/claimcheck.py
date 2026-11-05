@@ -176,8 +176,14 @@ def _log_counts(path) -> list[int]:
 # -- the claims --------------------------------------------------------------------------------
 
 
+_QUOTED = re.compile(r'"[^"\n]*"|“[^”\n]*”')  # "…" or “…”: words quoted (from an earlier report or check)
+
+
 def _lines(report: str) -> list[str]:
-    return [ln.strip() for ln in str(report or "").splitlines() if ln.strip()]
+    """The report's lines without the text in double quotes: a quote is no claim (a second report that says the
+    first one 'said "167 passed"' does not claim 167 passed). Backticks stay: they name files and tests."""
+    lines = (_QUOTED.sub(" ", ln).strip() for ln in str(report or "").splitlines())
+    return [ln for ln in lines if ln]
 
 
 def _clean(token: str) -> str:

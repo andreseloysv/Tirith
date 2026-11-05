@@ -115,6 +115,19 @@ def test_tests_pass_needs_a_recorded_run_with_that_count(work, home: Path) -> No
         cc.verify(home, lane, report="13 passed"))
 
 
+def test_a_quoted_count_is_no_claim(work, home: Path) -> None:
+    add_test(work)
+    lane = lane_of(work)
+    record_run(home, work, 1738)
+    second = ('The earlier report failed the claim check because it said "167 passed", while the recorded runs '
+              "show 1738. This report gives no pass count of its own.")
+    assert cc.verify(home, lane, report=second).ok
+    assert cc.verify(home, lane, report="It said \u201c167 passed\u201d before.").ok
+    assert "167 passed" in bad(cc.verify(home, lane, report="Tests: 167 passed (it was \"1738\" before)."))
+    assert "tests/test_new.py; it is not in the lane diff" in bad(
+        cc.verify(home, lane, report="I added `tests/test_new.py`."))  # backticks name files: still checked
+
+
 def test_a_run_before_the_last_change_or_a_failed_run_does_not_count(work, home: Path) -> None:
     add_test(work)
     lane = lane_of(work)
