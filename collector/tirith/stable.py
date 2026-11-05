@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import os
 import shutil
+import subprocess
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Callable
@@ -169,3 +171,30 @@ def status(home: Path) -> dict:
     return {"current": record.get("current"), "previous": record.get("previous"),
             "on_trial": bool(record.get("promoted_at")), "last_rejected": record.get("last_rejected"),
             "last_rollback": record.get("last_rollback")}
+
+
+def run_command(home: Path) -> str | None:
+    """The shell command that runs the collector from ``stable/current`` (None before the first promotion)."""
+    import shlex
+    cur = current_dir(home)
+    return f"uv run --project {shlex.quote(str(cur))} tirith" if cur is not None else None
+
+
+def promote_after_merge(home: Path, repo: Path, popen=subprocess.Popen) -> bool:
+    """Start a detached ``tirith stable promote`` of ``repo``'s collector (main, right after a merge).
+
+    The full test takes long, so it never blocks the merge queue. Runs from ``repo`` itself, not from the stable
+    copy it is about to replace. Returns False when ``repo`` has no collector to promote or the start failed."""
+    collector = Path(repo) / "collector"
+    if not (collector / "pyproject.toml").is_file() or not (collector / "tirith").is_dir():
+        return False
+    log = home / "logs"
+    try:
+        log.mkdir(parents=True, exist_ok=True)
+        with open(log / "stable-promote.log", "ab") as out:
+            popen([sys.executable, "-m", "tirith", "stable", "promote", "--source", str(collector)],
+                  stdout=out, stderr=out, stdin=subprocess.DEVNULL, start_new_session=True, cwd=str(collector),
+                  env={**os.environ, "TIRITH_HOME": str(home)})
+    except OSError:
+        return False
+    return True
