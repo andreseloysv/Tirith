@@ -96,6 +96,15 @@ inside a test once listed the machine's real connections (a test lane with pid 1
 and ran `openssl` lookups from inside a lane. Certificates are read on port 443 only; plain HTTP has none, and
 its domain (the Host header) is seen only by the proxy.
 
+## Environment variables an agent used
+
+Each access row of a call that uses environment variables carries `env`: their **names**, never values
+(`access_audit.env_names`): `$NAME`, `${NAME}`, `printenv` / `export` / `unset NAME`, `env | grep NAME` in a
+command, and `os.environ[...]`, `os.getenv(...)`, `process.env.X`, `env::var(...)` in code a Write or Edit
+puts in a file. The shell's and system's own names (`PATH`, `HOME`, …) and `TIRITH_*` are left out. The Access
+page lists them under **Environment variables**: one line per name, marked `secret` when it looks like one
+(token, key, password…), with the roles that used it, how often and when last.
+
 ## Blocking a destination
 
 The owner blocks a destination with **Block** on a line of External (or `tirith net block <domain|ip|cidr>`;
