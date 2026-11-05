@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -132,7 +133,8 @@ def ended_home(home: Path, tmp_path: Path, monkeypatch) -> tuple[Path, list[dict
     for n in range(ENDED):
         lane = register_lane(home, lane_id=f"old-{n}", project="demo", hero_class="warden", feature="Work",
                              workspace=str(repo), log=None, pid=None, brief=None, step="1", item=f"Item {n}.")
-        lane.update(ended_at="2026-01-01T00:00:00Z", result="done", outcome={"status": "done", "applied": True})
+        lane.update(ended_at="2026-01-01T00:00:00Z", result="done", outcome={"status": "done", "applied": True},
+                    review={"status": "running", "pid": os.getpid()})  # a review is running: nothing is orphaned
         write_lane(home, lane)
     return home, read_lanes(home)
 
