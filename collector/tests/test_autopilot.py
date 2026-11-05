@@ -770,6 +770,19 @@ def test_no_proposal_while_running_agents_fill_the_limit(home, repo) -> None:
     assert _held(pilot) == {}
 
 
+def test_a_hold_goes_away_when_its_step_has_nothing_left(home, repo) -> None:
+    """A step that was held (limit full) and then got done must not stay on the page with the old reason."""
+    pilot = Pilot(home, repo, "[autopilot]\nmax_parallel = 1")
+    pilot.agents.append({"id": "busy", "project": "demo", "step": "9", "status": "working"})
+    pilot.cycle()
+    pilot.cycle()
+    assert "demo|1" in _held(pilot)
+    pilot.tick("Build the first thing.")
+    pilot.cycle()
+    assert "demo|1" not in _held(pilot)
+    assert "demo|2" in _held(pilot)
+
+
 def test_no_proposal_while_the_project_check_fails(home, repo, monkeypatch) -> None:
     from tirith import manifest as manifest_mod
     failing = [manifest_mod.Problem("tirith.toml", 1, "roadmap-missing", "the plan is unreadable", "fix it")]

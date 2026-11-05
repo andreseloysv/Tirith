@@ -355,11 +355,12 @@ def _load_include(path: Path, name: str) -> Manifest:
 # -- tirith check ---------------------------------------------------------------------------
 
 
-def check(folder: str | Path, words: list[str], ci: bool = False) -> list[Problem]:
+def check(folder: str | Path, words: list[str], ci: bool = False, guard: bool = True) -> list[Problem]:
     """Run the ``tirith check`` rules for a project folder; [] = all pass.
 
     ``ci`` marks a run outside a local clone with hooks (a CI runner): the commit-guard rule
-    is not applicable there and is skipped."""
+    is not applicable there and is skipped. ``guard=False`` is a project with ``guard = false`` in
+    config.toml: it has no commit guard on purpose, so the rule is skipped too."""
     manifest = load(folder)
     if not manifest.exists:
         return [Problem(str(manifest.path), 1, "manifest-missing", f"{FILENAME} not found",
@@ -369,7 +370,7 @@ def check(folder: str | Path, words: list[str], ci: bool = False) -> list[Proble
     syntax_broken = any(p.rule == "toml-syntax" for p in problems)
     if not syntax_broken:
         problems += _coverage_problems(manifest, need_deploy=not manifest.deploy_none)
-    if not ci:
+    if not ci and guard:
         problems += _guard_problems(manifest, folder, words)
     return problems
 

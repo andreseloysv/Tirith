@@ -476,7 +476,7 @@ def project_refusal(config, proj, workspace: Path) -> str | None:
     if problems:
         return "refusing to start: commit guard is not intact:\n" + \
             "\n".join(f"  {problem}" for problem in problems)
-    failed = [p for p in manifest_mod.check(workspace, config.words_for(proj, default_words()))
+    failed = [p for p in manifest_mod.check(workspace, config.words_for(proj, default_words()), guard=proj.guard)
               if p.rule not in ("commit-guard", "manifest-missing")]  # guard verified above; a new project has no tirith.toml yet
     if failed:
         return ("tirith: project-check: tirith check fails for '" + proj.id + "', so no lane may "
@@ -1621,7 +1621,8 @@ def _cmd_check(args) -> int:
                              else "tirith check: cwd is in no known project; pass a folder or --project")
         folder, proj = found, config.project(pid)
     words = config.words_for(proj, default_words())
-    problems = manifest_mod.check(folder, words, ci=bool(getattr(args, "ci", False)))
+    problems = manifest_mod.check(folder, words, ci=bool(getattr(args, "ci", False)),
+                                 guard=proj.guard if proj is not None else True)
     for problem in problems:
         print(problem)
     if not problems:
@@ -1655,7 +1656,7 @@ def launch_step(home: Path, project_id: str, step_id: str, agent: str | None = N
                                          "(they wait for the owner or for a date)")
         raise launch_mod.LaunchError(f"step {step['id']} ({title}) is already done" if step["items"]
                                      else f"step {step['id']} ({title}) has no items to finish")
-    failed = [p for p in manifest_mod.check(repo, config.words_for(proj, default_words()))
+    failed = [p for p in manifest_mod.check(repo, config.words_for(proj, default_words()), guard=proj.guard)
               if p.rule != "manifest-missing"]  # a new project configures its pipelines in a lane
     if failed:
         raise launch_mod.LaunchError(
@@ -1727,7 +1728,7 @@ def launch_plan(home: Path, project_id: str, kind: str, request_id: str | None =
     busy = launch_mod.working_lane(lanes, project_id, step, lane_status) if kind == "plan-refresh" else None
     if busy:
         raise launch_mod.LaunchError(f"{project_id} already has a plan update running: lane {busy['id']}")
-    failed = manifest_mod.check(repo, config.words_for(proj, default_words()))
+    failed = manifest_mod.check(repo, config.words_for(proj, default_words()), guard=proj.guard)
     if failed:
         raise launch_mod.LaunchError(
             f"tirith check fails for '{project_id}', so no lane may start. Fix these, then run "
@@ -1784,7 +1785,7 @@ def launch_verify(home: Path, project_id: str, text: str, out=None, by_tirith: b
     blocked = mergeq_mod.wip_block(home)
     if blocked:
         raise launch_mod.LaunchError(blocked)
-    failed = manifest_mod.check(repo, config.words_for(proj, default_words()))
+    failed = manifest_mod.check(repo, config.words_for(proj, default_words()), guard=proj.guard)
     if failed:
         raise launch_mod.LaunchError(f"tirith check fails for '{project_id}', so no lane may start")
     lanes = read_lanes(home)
