@@ -69,6 +69,8 @@ def test_review_runs_tests_commits_merges_and_cleans_up(launched, home: Path, ca
     assert not worktree.exists() and "lane/web-panel" not in git(repo, "branch", "--list")
     lane = read_json(lane_path(home, "web-panel"), None)
     assert lane["review"]["status"] == "merged" and lane["review"]["commit"] == git(repo, "rev-parse", "HEAD").strip()
+    from tirith import mergeq as mergeq_mod  # the plan page shows this merge as the newest, not an old failure
+    assert mergeq_mod.view(home, "demo")["last"]["commit"] == lane["review"]["commit"]
     assert main(["lane", "review", "web-panel"]) == 3  # already merged
     assert "already merged" in capsys.readouterr().err
 

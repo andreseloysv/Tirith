@@ -267,6 +267,19 @@ def _finish(home: Path, entry: dict, result: str, message: str = "", *, keep: bo
     return row
 
 
+def note_merged(home: Path, project: str, lane: str, commit: str, message: str, **extra) -> dict:
+    """Remember a merge made outside the queue (``tirith lane review`` merges on its own), so ``last`` on the
+    plan page is the newest merge and not an old failure of the queue."""
+    with _locked(home):
+        data = load(home)
+        row = {"lane": lane, "project": project, "result": "merged", "at": now_iso(),
+               "message": message[:OUTPUT_MAX], "commit": commit, **extra}
+        data["history"] = (data["history"] + [row])[-HISTORY:]
+        data["last"][project] = row
+        write_json_atomic(_path(home), data)
+    return row
+
+
 # -- the merge ---------------------------------------------------------------------------------
 
 
