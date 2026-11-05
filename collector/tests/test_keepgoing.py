@@ -109,9 +109,9 @@ def test_missing_report_and_uncommitted_work_resume_the_same_session(home, tmp_p
 
 
 def test_brief_and_finish_gate_agree_on_commit(home, tmp_path, monkeypatch) -> None:
-    """The brief says "Do NOT commit"; a lane that obeys it is never sent back for it: Tirith commits."""
+    """The brief tells the lane to commit; a lane that leaves leftovers has Tirith commit them."""
     from tirith import launch as launch_mod
-    assert any("Do NOT commit" in r for r in launch_mod.HARD_RULES)
+    assert any("Commit your work" in r for r in launch_mod.HARD_RULES)
     code, calls, lane = _run(home, tmp_path, monkeypatch, "fix-on-resume")
     assert all("uncommitted" not in c[1] for c in calls[1:])
     ws = Path(lane["workspace"])

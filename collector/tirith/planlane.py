@@ -20,7 +20,7 @@ REQUESTS_SHOWN = 30
 LANES_SHOWN = 40
 RULES = (
     "Change only the files named below. The review of this lane runs the tests, commits and merges, "
-    "so do not commit yourself.",
+    "so commit on the lane branch without a attribution trailer, and never merge or push.",
     "The plan is the only way to start and to finish: never edit the project's plan file (a gate blocks it; "
     "only Tirith writes it). Missing work goes in with `tirith plan add --project <id> --step <N> --text "
     "\"<item>\"`. Before you finish, report the outcome of your item: `tirith plan report --lane $TIRITH_LANE "
