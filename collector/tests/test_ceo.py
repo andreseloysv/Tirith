@@ -342,3 +342,35 @@ def test_a_check_that_comes_and_goes_still_wakes_the_ceo(home: Path, started: li
         path.write_text(text)
         ceo.run(home, config, local(10, minute))
     assert len(started) == 1 and started[0]["snap"]["alarm"] == {"autopilot": "Nobody on them."}
+
+
+def test_the_ceo_sets_the_capacity_within_the_owners_range(home: Path) -> None:
+    (home / "config.toml").write_text("[ceo]\nenabled = true\nmax_parallel_range = [2, 6]\n\n[autopilot]\nmax_parallel = 4\n")
+    sent = ceo.deliver(home, {**RESULT, "proposals": [], "capacity": {"max_parallel": 9, "why": "CPU idle"}},
+                       "ceo-1", "tirith", local(10), add_wait=Waits())
+    assert sent["capacity"] == 6 and load_config(home).autopilot_max_parallel == 6  # clamped to the owner's range
+    assert ceo.decisions(home)["capacity-ceo-1"]["text"] == "max_parallel = 6"
+    assert "capacity" not in ceo.deliver(home, {**RESULT, "proposals": [], "directives": [], "capacity": {"max_parallel": 6}},
+                                         "ceo-2", "tirith", local(11), add_wait=Waits())  # already so: nothing to do
+
+
+def test_the_ceo_sees_how_fast_the_work_goes(home: Path) -> None:
+    now = local(12)
+    iso = lambda dt: dt.strftime("%Y-%m-%dT%H:%M:%SZ")  # noqa: E731
+    log = home / "logs" / "ci-1-test.log"
+    log.parent.mkdir(parents=True)
+    log.write_text("FAILED tests/test_x.py::test_y - boom\n1 failed, 1700 passed in 1140.0s (0:19:00)\n")
+    rows = []
+    for n in range(3):
+        write_lane(home, {"id": f"l-{n}", "project": "tirith", "step": "17", "feature": "Upkeep",
+                          "started_at": iso(now - timedelta(minutes=60)), "ended_at": iso(now - timedelta(minutes=50)),
+                          "review": {"status": "merged", "at": iso(now - timedelta(minutes=40))}})
+        rows.append(json.dumps({"at": iso(now - timedelta(minutes=55)), "lane": f"l-{n}", "stage": "test", "event": "end",
+                                "log": str(log)}))
+    (home / "events.jsonl").write_text("\n".join(rows) + "\n")
+    t = ceo.throughput(home, load_config(home), now, cpu=lambda: 60.0)
+    assert t["merged_today"] == 3 and t["merged_by_step"] == {"tirith step 17: Upkeep": 3}
+    assert (t["lane_minutes_median"], t["start_to_main_minutes_median"]) == (10, 20)
+    assert (t["whole_suites_in_lanes"], t["whole_suite_minutes_median"]) == (3, 19.0)
+    assert t["red_in_many_lanes"] == ["tests/test_x.py::test_y"] and t["cpu_idle_pct"] == 60.0
+    assert "## Throughput: is enough getting done?" in ceo.brief(home, {"throughput": t}, ceo.settings(home), False)
