@@ -84,3 +84,18 @@ Exit 0 when all rules pass, 1 otherwise. One line per problem, written for agent
 | `hook-event`, `hook-run` | every `[[hooks]]` entry is valid |
 | `rule-id`, `rule-duplicate`, `rule-match`, `rule-regex`, `rule-paths`, `rule-action`, `rule-message`, `rule-instead`, `rule-shape` | every `[[rules]]` entry is valid (see `CONTRACT-setup.md`) |
 | `commit-guard` | the commit guard is intact (`verify_guard`) |
+
+## `[roles]`: which roles a project uses
+
+```toml
+[roles]
+ceo = "always"       # "always" (default) | "on-demand" | "off"
+manager = "always"   # same values
+```
+
+Missing table or key = `"always"` (today's behaviour). Any other value, or an unknown key, is a `tirith check`
+problem (`roles-value` / `roles-key`) naming the key. Parsed into `Manifest.roles` and exported as `roles` in
+`state.roadmap`.
+
+TODO: nothing enforces `"off"` / `"on-demand"` yet. The CEO runner (`ceo.py`) and the manager start are decided per
+Tirith home (`config.toml`), not per project, so there is no single per-project gate to wire.

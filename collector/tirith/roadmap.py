@@ -446,7 +446,7 @@ def build(folder: str | Path | None, project: str, agents: list[dict], today: da
         if row["status"] == "blocked-date":
             row["until"] = min(i["until"] for i in open_by["date"])
         rows.append(row)
-    return {"file": str(path), "deadline": manifest.deadline,
+    return {"file": str(path), "deadline": manifest.deadline, "roles": manifest.roles,
             "done": sum(r["done"] for r in rows), "total": sum(r["total"] for r in rows),
             "steps": rows}
 
