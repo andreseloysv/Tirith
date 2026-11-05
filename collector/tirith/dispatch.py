@@ -41,6 +41,7 @@ from tirith import planlane as planlane_mod
 from tirith import plangate as plangate_mod
 from tirith import verifylane as verifylane_mod
 from tirith import projects as projects_mod
+from tirith import promote as promote_mod
 from tirith import pushplan as pushplan_mod
 from tirith import roadmap as roadmap_mod
 from tirith import selfcheck as selfcheck_mod
@@ -465,6 +466,8 @@ def run(home: Path, config: Config, now: datetime, *, agents: list[dict], lanes:
     if pushplan_mod.run(home, config, now, state):  # main reaches the origin soon after every plan change
         changed = True
     if spawn is not None and canary_mod.tick(home, now, spawn):  # the hourly end-to-end test lane
+        changed = True
+    if promote_mod.retire_on_tick(home, projects or [], lanes, now, state):  # idle on-demand CEO/manager retire
         changed = True
     if _cleanup_due(home):
         diskdiet_mod.cleanup(home, config, now)
