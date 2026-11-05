@@ -147,3 +147,15 @@ def test_declared_pipeline_that_never_ran_is_pending(tmp_path):
     state = Collector(home, client=None).cycle()
     runs = [r for r in state["pipelines"] if r["pipeline"] == "ci"]
     assert runs and runs[0]["status"] == "pending"
+
+
+def test_roles_setting(tmp_path):
+    def parse(body):
+        return mf.parse_text(body, tmp_path / "tirith.toml")
+    assert parse("").roles == {"ceo": "always", "manager": "always"}
+    for mode in ("always", "on-demand", "off"):
+        m = parse(f'[roles]\nceo = "{mode}"\nmanager = "{mode}"\n')
+        assert m.roles == {"ceo": mode, "manager": mode} and not m.problems
+    m = parse('[roles]\nmanager = "sometimes"\n')
+    assert m.roles["manager"] == "always"
+    assert any("roles.manager" in p.message for p in m.problems)
