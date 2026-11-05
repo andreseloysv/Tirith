@@ -827,6 +827,14 @@ def tick_merged(home: Path, config: Config, lanes: list[dict]) -> bool:
     return changed
 
 
+_DOCS_ITEM_RE = re.compile(r"\bREADME\b|\bdocs/|\((?:docs|documentación)\)", re.IGNORECASE)
+
+
+def is_docs_item(text: str) -> bool:
+    """A docs item: its text or check names README or docs/ files, or it carries the ``(docs)`` flag."""
+    return bool(_DOCS_ITEM_RE.search(text))
+
+
 def mark_done(home: Path, repo: Path, project: str, step: str, item: str, commit: str) -> str:
     """``tirith plan done``: tick ``item`` because ``commit`` (on main, with code beyond docs) did its work.
     Returns the short sha; raises ``PlanGateError`` when it does not hold."""
@@ -839,8 +847,6 @@ def mark_done(home: Path, repo: Path, project: str, step: str, item: str, commit
         repo, "rev-parse", "-q", "--verify", f"{sha}^1").returncode == 0 else _git(
         repo, "show", "--name-only", "--format=", sha).stdout.split()
     code = [f for f in files if not f.startswith("docs/") and not f.lower().endswith(DOC_SUFFIXES)]
-    if not code:
-        raise PlanGateError(f"{commit} changes nothing outside the docs, so it is not the work of that item")
     short = _git(repo, "rev-parse", "--short", sha).stdout.strip()
     _, steps = _read(repo)
     if not any(s["id"] == step for s in steps):
@@ -849,6 +855,8 @@ def mark_done(home: Path, repo: Path, project: str, step: str, item: str, commit
     found = roadmap_mod.find_item(steps, step, clean)
     if found is None:
         raise PlanGateError(f"that item is not an open item of step {step}")
+    if not code and not is_docs_item(found["text"]):
+        raise PlanGateError(f"{commit} changes nothing outside the docs, so it is not the work of that item")
     clean = roadmap_mod.split_status(found["text"])[0]  # the plan's own text, however the item was named
     command = roadmap_mod.check_of(found["text"])
     if command:  # an item with a done check is done only when it passes
