@@ -189,6 +189,8 @@ def _watch(home: Path, now: datetime, state: dict, workers: list[dict], reviews:
         "launch_failures": {"count": len(failures), "last": failures[-3:]},
         "owner_waits_unasked": unasked[-5:],
         "ci_main": _ci_main(home, state),
+        "disk_free_gb": round(int((state.get("disk") or {}).get("free_bytes") or 0) / 1024 ** 3, 1)
+                        if (state.get("disk") or {}).get("free_bytes") else None,
         "test_maps": _test_maps(home, now),
     }
 
@@ -381,7 +383,8 @@ def alarm_checks(home: Path, book: dict, now: datetime) -> dict[str, str]:
 def fingerprint(snap: dict) -> str:
     """What makes a review worth paying for: the counts, not the clock."""
     keep = {k: v for k, v in snap.items() if k not in ("at", "manager_oldest_pending_min", "manager_cost_today",
-                                                         "last_merge_min", "idle_min", "test_maps", "throughput")}
+                                                         "last_merge_min", "idle_min", "test_maps", "throughput",
+                                                         "disk_free_gb")}
     thru = snap.get("throughput") or {}
     keep["throughput"] = {k: thru.get(k) for k in ("merged_today", "whole_suites_in_lanes", "red_in_many_lanes",
                                                    "max_parallel")}  # minutes and idle CPU move with the clock
@@ -487,6 +490,10 @@ def brief(home: Path, snap: dict, cfg: dict, catch_up: bool) -> str:
         "queue like any other work, so it needs no owner approval. When the cause is a decision of the manager "
         "(a wait on a fact that is no longer true, a wait on an owner nobody asked), the directive says what to do "
         "now. Only a change of a behavior the owner chose, of budget or of targets is a proposal.",
+        "## Disk\n`disk_free_gb` is the free space of the volume holding the lanes. Tirith removes old lane folders "
+        "by itself (unmerged work is kept in its branch and under refs/tirith/kept/). When it stays low, find what "
+        "fills it (lane folders, build output, logs, caches of a project) and get a fix through a plan item; "
+        "space outside Tirith's folders is the owner's: one finding that names the biggest folders.",
         "## Procedure\n1. Re-check each open finding with its `check`; fixed ones get change \"fixed\".\n"
         "2. For each open directive: did the manager do it (its answer), and did the number in `expect` move? One "
         "that did not move after its `runs` reviews becomes a finding.\n3. Look for new problems against the targets "

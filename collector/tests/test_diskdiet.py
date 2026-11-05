@@ -287,3 +287,41 @@ def test_sweep_does_not_block_the_cycle(home: Path, repo: Path, monkeypatch) -> 
     diskdiet_mod._sweeps[str(home)]["thread"].join(5)
     assert diskdiet_mod.free_space(home, config, state, now(), free=low, background=True) is True
     assert "Freed 3.0 GB: 2 old lane folders" in (home / "diskdiet.jsonl").read_text()
+
+
+# -- stale lane folders go, losing nothing ----------------------------------------------------
+
+
+def test_a_lane_that_ended_a_day_ago_unmerged_and_dirty_is_retired_keeping_its_work(home: Path, repo: Path) -> None:
+    from datetime import timedelta
+    worktree = lane(home, repo, "abandoned")
+    (worktree / "wip.txt").write_text("half done\n", encoding="utf-8")
+    assert not diskdiet_mod.cleanup(home, load_config(home), now())  # fresh: untouched
+    assert worktree.is_dir()
+    later = now() + timedelta(seconds=diskdiet_mod.STALE_S + 60)
+    assert diskdiet_mod.cleanup(home, load_config(home), later)
+    assert not worktree.exists()
+    assert "lane/abandoned" in git(repo, "branch", "--list")  # unmerged commits stay in the branch
+    kept = record(home, "abandoned")["cleanup"]
+    assert kept["status"] == "retired" and kept["kept"] == "refs/tirith/kept/abandoned"
+    assert git(repo, "show", "refs/tirith/kept/abandoned:wip.txt") == "half done\n"
+
+
+def test_sweep_retires_an_untouched_unmerged_folder_and_keeps_a_recent_one(home: Path, repo: Path, monkeypatch) -> None:
+    old, recent = manual_tree(repo, "old-unmerged", True), manual_tree(repo, "recent-unmerged", True)
+    (old / "notes.txt").write_text("keep me\n", encoding="utf-8")
+    monkeypatch.setattr(diskdiet_mod, "idle_s", lambda folder, now_s=None:
+                        diskdiet_mod.STALE_S + 1 if folder.name == "old-unmerged" else 60)
+    assert diskdiet_mod.sweep(home, load_config(home), now(), busy=lambda: [])["worktrees"] == 1
+    assert not old.exists() and recent.is_dir()
+    assert "lane/old-unmerged" in git(repo, "branch", "--list")
+    assert git(repo, "show", "refs/tirith/kept/old-unmerged:notes.txt") == "keep me\n"
+
+
+def test_under_the_warning_level_disk_is_amber_and_cleaning_starts(home: Path, repo: Path) -> None:
+    state: dict = {}
+    config = load_config(home)
+    assert config.disk_warn_free_gb == 30.0
+    diskdiet_mod.check(home, config, state, now(), free=lambda f: 20 * GB)
+    assert state["disk"]["warn"] and not state["disk"]["low"]
+    assert diskdiet_mod.trigger_gb(config) == 30.0
