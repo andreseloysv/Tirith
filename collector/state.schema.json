@@ -21,6 +21,17 @@
     "generated_at": {
       "type": "string"
     },
+    "now": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "day": {"type": "string"},
+        "merged": {"type": "array", "items": {"type": "object"}},
+        "doing": {"type": "array", "items": {"type": "object"}},
+        "stuck": {"type": "array", "items": {"type": "object"}},
+        "counts": {"type": "object"}
+      }
+    },
     "collector": {
       "type": "object",
       "additionalProperties": true,

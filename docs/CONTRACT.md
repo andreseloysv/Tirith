@@ -118,6 +118,15 @@ Rules: times are ISO-8601 UTC; unknown values are `null`, never missing keys; ar
 24 h ago are dropped; the last 20 pipeline runs are kept. Ranks follow `docs/LORE.md`
 (renown thresholds 0/100/300/700/1500; +100 lane done, +20 per passed stage it ran, −30 failed lane).
 
+### `now` (the bar at the top of the app)
+
+`state.now` (`tirith/nowbar.py`, drawn by `web/js/v-nowbar.js` above every view, no click needed) is built from the
+agent rows, never from agent reports: `{day, merged, doing, stuck, counts: {merged, doing, stuck}}`. `merged`: lanes whose
+review status is `merged` with a merge time today (local day); `doing`: lanes still working; `stuck`: lanes that
+stalled or failed, or whose review is `conflict`, `red-suite`, `sent-back`, `tests-failed`, `claims-failed`,
+`merge-failed` or `push-failed`. Each item: `{lane, project, agent (alias), name, item, step, status, review, at, why}`;
+newest first, at most 12 per list (`counts` are the full totals). The manager's own lane is left out.
+
 ## The brain (Meta models doing real work)
 
 The collector calls the **Meta Model API** (Muse Spark) only when its input changed, caches by hash,
