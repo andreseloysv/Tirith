@@ -91,6 +91,18 @@ each lane (`agents[].item`, `agents[].outcome`).
 Step `0` "Trabajo automático de Tirith" holds Tirith's own work (reviews of other items are sub-items instead). It
 is created on first use, and the autopilot never starts a lane on it.
 
+## Evidence
+
+A done item shows its proof in the app. `tirith/evidence.py` builds `items[].evidence` for each ticked item that
+has any: `{"commit": "<sha>" | null, "tests": "<end of the test output>", "shots": ["/abs/path.png"]}`.
+
+- `commit` comes from the `(hecho: <sha>)` note (`sin cambios` gives none).
+- The rest lives in `docs/evidence/<item id>/` of the project (`i-` and 8 hex digits): `*.txt` / `*.log` are the test
+  output (the last 4000 characters are kept), `*.png` / `*.jpg` / `*.webp` / `*.gif` the screenshots of a changed
+  interface (up to 12). A lane puts them there with the item's work; other files are ignored.
+- The Plan shows an "Evidence" fold under the done item (commit, test output, screenshots). An item with no proof has
+  no `evidence` key.
+
 ## The plan gate
 
 *The plan is the only way to start and to finish an agent* (`tirith/plangate.py`):

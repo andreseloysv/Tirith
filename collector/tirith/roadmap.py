@@ -15,6 +15,7 @@ from datetime import date
 from pathlib import Path
 
 from tirith import asks as asks_mod
+from tirith import evidence as evidence_mod
 from tirith import manifest as manifest_mod
 
 MAX_BYTES = 256 * 1024
@@ -420,6 +421,10 @@ def build(folder: str | Path | None, project: str, agents: list[dict], today: da
             item = {**raw, "text": raw["text"], "done": raw["done"], "who": who, "state": state}
             if detail:
                 item["detail"] = detail
+            if raw["done"] and who != "out":
+                found = evidence_mod.for_item(folder, raw.get("id") or item_id(raw["text"]), raw["text"])
+                if found:
+                    item["evidence"] = found
             if check_of(raw["text"]):
                 item["check"] = check_of(raw["text"])
             if who == "date":
