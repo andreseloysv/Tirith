@@ -386,6 +386,7 @@ def test_an_older_guard_item_runs_reinstall_because_install_leaves_it(home: Path
     try:
         wait = _guard_wait(_state(home))
         assert wait and "differs from the expected guard" in wait["text"]
+        assert "no lane of Demo can start until you click Update" in wait["text"]
         action = wait["actions"][0]
         assert action["command"] == tirithcmd.resolved(home) + " guard reinstall demo"
         assert action["label"] == "Update the word guard in Demo"

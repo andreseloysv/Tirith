@@ -711,6 +711,8 @@ def _counts(own: dict, requests: list[dict], projects: list[dict], agents: list[
         for st in (p.get("roadmap") or {}).get("steps", []):
             if st["id"] == plangate_mod.OPS_STEP or not _open_agent(st):
                 continue
+            if any(k.startswith(f"{p['id']}|{st['id']}|") for k in found):
+                continue  # an item of this step can start now: work in review does not hold the step
             why = _busy(agents, p["id"], st["id"])
             if why:
                 skipped.append({"project": p["id"], "step": st["id"], "why": why})
