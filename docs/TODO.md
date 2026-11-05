@@ -39,7 +39,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Verificar: Verify Drag an image from Finder onto the Tirith chat o (hecho: bafcf90e) <!-- tirith:{"id":"i-9aa639be"} -->
 - [x] Do one real Finder image drag onto the Tirith chat and look for 'drag: window drop' in app.log (hecho: bafcf90e)
 - [ ] Revisar el plan (2026-11-05 13:20) (reabierto: update-the-plan-23: the lane's work is not on main) <!-- tirith:{"id":"i-60ae3833"} -->
-- [ ] Dar un id nuevo a una de las dos líneas «Revisar el plan (2026-11-05)» que repiten i-2975f07c en docs/TODO.md (check: test $(grep -o 'tirith:{"id":"i-[0-9a-f]*"' docs/TODO.md | sort | uniq -d | wc -l) -eq 0)
+- [ ] Cuando Tirith escribe el plan, repara los ids permanentes repetidos que ya existen: la segunda línea con el mismo id recibe un id nuevo (hoy i-2975f07c sale dos veces y ningún agente puede editar docs/TODO.md) <!-- tirith:{"id":"i-06ba8f40"} -->
 - [x] Revisar el plan (2026-11-05 12:31) (hecho: sin cambios) <!-- tirith:{"id":"i-fa9487dc"} -->
 - [x] Revisar el plan (2026-11-05 12:27) (hecho: sin cambios) <!-- tirith:{"id":"i-afe49bed"} -->
 - [x] Revisar el plan (2026-11-05 12:08) (hecho: sin cambios) <!-- tirith:{"id":"i-6911fd38"} -->
