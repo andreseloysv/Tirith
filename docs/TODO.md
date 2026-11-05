@@ -455,7 +455,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 
 - [x] Tirith se ejecuta desde una copia estable que solo avanza cuando la prueba completa pasa en la versión nueva, y vuelve atrás sola si la salud se pone roja. (check: `cd collector && uv run -q pytest -q tests -k stable`)
 - [ ] Tirith registra cada vez que hizo falta una persona o algo esperó, y pone la fricción mayor arriba del plan. (check: `cd collector && uv run -q pytest -q tests -k friction`)
-- [ ] La cola de merge tiene prioridad: los arreglos de la propia cola y de sus etapas entran primero. (check: `cd collector && uv run -q pytest -q tests -k merge_priority`) (en curso: tirith-se-mejora-usando-tirith-32) <!-- tirith:{"id":"i-f22f3f94"} -->
+- [ ] La cola de merge tiene prioridad: los arreglos de la propia cola y de sus etapas entran primero. (check: `cd collector && uv run -q pytest -q tests -k merge_priority`) (en revisión) <!-- tirith:{"id":"i-f22f3f94"} -->
 - [x] Las instrucciones de los lanes dicen quién revisa de verdad: Tirith hace el commit y la cola de merge revisa, nunca «para que lo revise el dueño». (check: `! grep -rq 'for the owner to review' collector/tirith`) (hecho: 39e0c0b)
 - [x] Los lanes que lanza Tirith desde la app ven las variables de entorno del dueño (claves como GITHUB_TOKEN o GEMINI_API_KEY de su shell), sin copiarlas a ningún archivo del repo. (check: `cd collector && uv run -q pytest -q tests -k owner_env`) (hecho: 7e9adbc)
 - [x] Los límites de tiempo de los comandos crecen con la carga de la máquina, así git lento con carga alta no pone la salud en rojo. (check: `cd collector && uv run -q pytest -q tests -k load_scaled`) (hecho: 583aa22)
