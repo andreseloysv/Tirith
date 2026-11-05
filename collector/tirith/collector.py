@@ -831,7 +831,7 @@ class Collector:
             print(f"tirith: network watch: {type(err).__name__}: {err}", file=sys.stderr)
         rows = access_audit_mod.recent(self.home)
         try:
-            netwatch_mod.annotate(rows)
+            netwatch_mod.annotate(rows, home=self.home)
         except Exception:  # noqa: BLE001 - a missing domain is no reason to lose the state
             pass
         return rows
