@@ -165,7 +165,7 @@ Linux: signing is optional; nothing needed.
 - Auto-update on Windows/Linux (macOS only), actual signing, a Windows shim/guard tested on Windows (`scripts/package.ps1` was not
   run on Windows either).
 - `muse serve` chat: the manager chat speaks MSP through `collector/tirith/mspchat.py` (`chat_protocol = "msp"`,
-  `docs/PLATFORMS.md`). Tested against a fake host only; not covered: resuming a session, interrupting a turn,
+  `docs/PLATFORMS.md`). Tested against a fake host only; with `turn/interrupt` (Stop) and `session/resume`; not covered:
   `userInput/request` dialogs.
 - Mobile: out of this plan. Tauri 2 can target Android and iOS, but nothing here is set up for it, and
   the chat spawns local processes.
