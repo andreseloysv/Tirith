@@ -31,7 +31,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Verificar: Verify Commit lane/manager-permission-questions-nev, me (en curso: verify-commit-lane-manager-permi-2)
 - [x] Manager de guardia: atender el chat
 - [x] Manager de guardia: atender el chat
-- [ ] CEO: revisar cómo trabaja el manager
+- [ ] CEO: revisar cómo trabaja el manager (en curso: ceo-e1d7fc9a)
 - [ ] Manager de guardia: atender el chat
 - [x] Revisar el plan (2026-11-05 07:01) (hecho: sin cambios) <!-- tirith:{"id":"i-0d103239"} -->
 - [x] Revisar el plan (2026-11-05) (hecho: sin cambios) <!-- tirith:{"id":"i-2975f07c"} -->
