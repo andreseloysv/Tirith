@@ -707,3 +707,11 @@ Every time a person was needed (`tirith wait add` reaches the owner) or somethin
 `<home>/friction.jsonl` (`at, project, kind person|wait, key, detail, seconds`). `tirith friction record|list|surface`.
 Rows with the same `key` are one friction; its score is the seconds waited plus 600 s per time a person was needed.
 `surface` puts the biggest friction (at least twice) as the first open item of the "Trabajo automático" step, once.
+
+## Owner requests (`state.owner_requests`)
+
+Every request the owner writes in the chat (`finish`, `ask`, `chat`, `plan-new`, `plan-edit`, `plan-refresh`; never
+Tirith's own jobs) is listed in `state.owner_requests`, built from `state.inbox` by `inbox.owner_requests`:
+`{id, at, kind, project, text, status, link}`. `status` is `open | answered | done`. `link` ties it to what became
+of it: `{type: "plan", step, lanes}` when it names a plan step, edits the plan or a lane took it;
+`{type: "answer", by, at}` when it was answered; `null` while it is neither (still unlinked).
