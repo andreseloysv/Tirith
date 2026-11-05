@@ -407,3 +407,25 @@ def test_the_owner_can_change_a_decision_on_a_closed_proposal(home: Path, monkey
     monkeypatch.setenv("TIRITH_LANE", "lane-a")
     with pytest.raises(ValueError, match="only the owner"):
         ceo.owner_decides(home, "p-1", "decline")
+
+
+PROCESS = {"now": "one item per lane, whole suite per merge", "alternative": "trains of 3 lanes per merge",
+           "evidence": "40 merges, 4 min suite each", "gain": "about 100 min of suite a day", "change": "d-7"}
+
+
+def test_once_a_day_the_ceo_must_question_the_way_of_working(home: Path, monkeypatch) -> None:
+    assert ceo.process_due(home, local(9))  # never asked yet
+    assert "## Is this the best way to work?" in ceo.brief(home, {"process_review_due": True}, ceo.settings(home), False)
+    assert "best way to work" not in ceo.brief(home, {"process_review_due": False}, ceo.settings(home), False)
+    assert ceo.parse_result(json.dumps(RESULT))["process"] is None
+    assert ceo.parse_result(json.dumps({**RESULT, "process": {"now": "x"}}))["process"] is None  # half an answer
+    assert ceo.parse_result(json.dumps({**RESULT, "process": PROCESS}))["process"] == PROCESS
+    # a settled review that answered it: not due again for a day, and the owner sees the answer
+    book: dict = {}
+    write_lane(home, {"id": "ceo-1", "ended_at": "x", "report": json.dumps({**RESULT, "process": PROCESS}),
+                      "project": "tirith"})
+    monkeypatch.setattr(ceo, "deliver", lambda *a, **k: {})
+    assert ceo._settle_lanes(home, book, local(9))
+    ceo._save_book(home, book)
+    assert not ceo.process_due(home, local(20)) and ceo.process_due(home, local(9, 1, day=5))
+    assert ceo.public(home, local(10))["process"] == PROCESS

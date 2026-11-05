@@ -158,6 +158,7 @@ def snapshot(home: Path, config: Config, now: datetime) -> dict:
         "health_not_ok": {k: v.get("text") for k, v in health.items() if isinstance(v, dict) and v.get("level") != "ok"},
         **_watch(home, now, state, workers, reviews, reqs),
         "throughput": throughput(home, config, now),
+        "process_review_due": process_due(home, now),
     }
 
 
@@ -254,6 +255,10 @@ def throughput(home: Path, config: Config, now: datetime, cpu=None) -> dict:
         "red_in_many_lanes": sorted(t for t, ls in red.items() if len(ls) >= RED_IN_LANES)[:8],
         "max_parallel": config.autopilot_max_parallel, "load_limit": allowed, "load_why": why,
         "cpu_idle_pct": (cpu or cpu_idle)(),
+        # how the work is done, for the daily question of whether this is the best way
+        "sent_back_lanes_today": sum(1 for l in lanes if (l.get("keep_going") or {}).get("round")),
+        "no_work_lanes_today": sum(1 for l in lanes if (l.get("review") or {}).get("status") == "no-work"),
+        "short_lanes_today": sum(1 for m in work if m < 3),
         "max_parallel_range": capacity_range(home),
         **upkeep(home, lanes),
     }
@@ -275,6 +280,13 @@ def upkeep(home: Path, lanes: list[dict]) -> dict:
 
 
 UPKEEP_MAX_SHARE = 0.3
+PROCESS_EVERY_H = 24  # how often the CEO must question the way of working itself, not only tune it
+
+
+def process_due(home: Path, now: datetime) -> bool:
+    """True when the last review that questioned the way of working is ``PROCESS_EVERY_H`` old (or none yet)."""
+    last = parse_iso(_book(home).get("process_at"))
+    return last is None or (now - last).total_seconds() >= PROCESS_EVERY_H * 3600
 
 
 def cpu_idle() -> float | None:
@@ -481,6 +493,17 @@ def brief(home: Path, snap: dict, cfg: dict, catch_up: bool) -> str:
         "`upkeep_share_today` is over `upkeep_max_share`, the owner's goals are being crowded out: send a directive "
         "that the next launches go to the goal steps, and upkeep items wait unless they fix a failed check or "
         "something that stops the work.",
+        *(["## Is this the best way to work? (due in this review)\nOnce a day you question the way of working "
+           "itself, not only what slows it inside it. Look at how the work flows from the plan to main: one item per "
+           "lane or bigger batches, the manager's turns, the review and the merge queue (whole suite per merge, "
+           "trains), how tests are chosen, the size of plan items, the plan checks, the roles and the model and "
+           "effort each one uses, how often agents are sent back (`sent_back_lanes_today`), lanes that produce "
+           "nothing (`no_work_lanes_today`, `short_lanes_today`) and what each costs. Name the step that costs the "
+           "most for what it gives, and compare the current way with at least one concrete alternative, using "
+           "numbers from the snapshot (`tirith lane stats` and the logs for more). Answer in `process`. If the "
+           "alternative is clearly better, get it done: a plan item for a change in Tirith's code (through a "
+           "directive), a manager policy, or a proposal when it changes something the owner chose. Keeping the "
+           "current way is a fine answer when the numbers say so; say why."] if snap.get("process_review_due") else []),
         "## Your limits (enforced by code)\nYou may read anything under ~/.tirith and the project folders and run "
         "read-only commands (`tirith lane stats`, `tirith status`, `tirith inbox list`, `tirith queue list`, `tirith "
         "check`, read-only git). You may not edit files, launch or stop lanes, merge, or change the plan: the hooks "
@@ -533,6 +556,9 @@ def brief(home: Path, snap: dict, cfg: dict, catch_up: bool) -> str:
         ' "bottleneck": {"what": "the biggest cause of slowness now", "evidence": "numbers from throughput", '
         '"action": "d-... | capacity | p-... | none: why"},\n'
         ' "capacity": {"max_parallel": 6, "why": "..."} (optional: lanes at once, within the snapshot\'s range),\n'
+        ' "process": {"now": "how the work is done now", "alternative": "a concrete other way", "evidence": '
+        '"numbers", "gain": "what it would save", "change": "d-... | p-... | none: why"} (when the process '
+        'review is due),\n'
         ' "next_review_min": 60}\n'
         "Report nothing new as new: what your records already hold is still-open, not news.",
         f"## When you look again\nYou pick it: `next_review_min`, from {MIN_EVERY_MIN} to {MAX_EVERY_MIN} minutes "
@@ -584,6 +610,9 @@ def parse_result(text: str) -> dict:
     if not isinstance(neck, dict) or not str(neck.get("what") or "").strip():
         data["bottleneck"] = None
         data["report"] = (data["report"] + ["(No bottleneck named: the review skipped its main question.)"])[:REPORT_LINES + 1]
+    proc = data.get("process")
+    if not isinstance(proc, dict) or not all(str(proc.get(k) or "").strip() for k in ("now", "alternative", "change")):
+        data["process"] = None
     return data
 
 
@@ -714,7 +743,9 @@ def _settle_lanes(home: Path, book: dict, now: datetime) -> bool:
             sent = deliver(home, data, lane["id"], str(lane.get("project") or ""), now)
             row.update(status="done", result=data["result"], report=data["report"],
                        findings=len(data.get("findings", [])), next_review_min=data["next_review_min"],
-                       bottleneck=data.get("bottleneck"), **sent)
+                       bottleneck=data.get("bottleneck"), process=data.get("process"), **sent)
+            if data.get("process"):
+                book["process_at"] = now_iso(now)  # questioned the way of working: due again in a day
             book["every_min"] = data["next_review_min"]  # its own choice, from when it answered
             book["next_due"] = now_iso(now + timedelta(minutes=data["next_review_min"]))
         except ResultError as err:
@@ -860,6 +891,7 @@ def public(home: Path, now: datetime) -> dict:
             if cfg["enabled"] else None,
             "every_min": None if cfg["fixed"] else interval(_book(home).get("every_min")),
             "report": (last or {}).get("report") or [], "bottleneck": (last or {}).get("bottleneck"),
+            "process": next((r.get("process") for r in reversed(reviews) if r.get("process")), None),
             "directives": dirs, "proposals": props,
             "findings_open": sum(1 for f in findings(home).values() if f.get("status") == "open"),
             "cost_today": round(cost, 2)}
