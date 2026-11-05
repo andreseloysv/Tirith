@@ -64,11 +64,16 @@ queue) does not run the same stage with the same command on a tree that already 
 (`cached: true` in `events.jsonl`) whose log keeps the earlier output, so the claim check still reads the counts. A failed
 or timed out run is never remembered. `TIRITH_RETEST=1` forces the run; `*-rerun` stages always run.
 
+Head-of-line. `drain` tries each queued lane at most once per run: a lane that ends `waiting` (dirty main checkout,
+timeout, main moved) stays in the queue, is skipped for the rest of that run and does not hold back the lanes behind it
+(any project); the next runner pass tries it again.
+
 WIP limit (`mergeq.WIP_LIMIT` = 3, `mergeq.wip_block`): with 3 or more lanes waiting in the queue (any project,
 queued or running) no new lane starts, whoever asks (manager, autopilot, owner-less launch): `launch_step`,
 `launch_plan` and `launch_verify` refuse with a Tirith block that says how many wait and what to do; the plan
 item stays open and can be launched once the queue is below 3. Lanes already running and lanes the queue sends
-back (`relaunch_lane`) are not affected. Decision: a `running` entry counts as waiting (it is not merged yet).
+back (`relaunch_lane`) are not affected. A lane whose last result is the wait on the owner's dirty main checkout
+("has uncommitted changes in ...") does not count: only the owner can free it. Decision: a `running` entry counts as waiting (it is not merged yet).
 
 After a merge the lane records the merged `branch`. `state.projects[].merge_queue`: `{items: [{lane, position, status: queued|running, since, feature}], last, recent}`;
 the Plan card shows it. Commands: `tirith merge request|run|status`.
