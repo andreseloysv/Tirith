@@ -28,7 +28,7 @@ from tirith import asks as asks_mod
 from tirith import howto as howto_mod
 from tirith import ownergate as ownergate_mod
 from tirith import brain as brain_mod
-from tirith.guardwrap import default_words, verify_guard
+from tirith.guardwrap import default_words, guard_module, verify_guard
 from tirith.home import Config, ProjectConfig, ensure_home, load_config, now_iso, parse_iso
 from tirith import agentrun as agentrun_mod
 from tirith import keepgoing as keepgoing_mod
@@ -631,7 +631,44 @@ class Collector:
             return list(seen[2])
         problems = verify_guard(repo, words)
         self._guard_seen[key] = (at, (stamp, tuple(words)), list(problems))
+        self._note_lost_flags(repo, problems)
         return problems
+
+    def _note_lost_flags(self, repo: Path, problems: list[str]) -> None:
+        """When the guard check finds a hook's uchg flag lost, append one line to ``guard-flags.jsonl`` with the
+        hooks' ctime (the flag change moves it) and the runs active at that moment, so a repeat can be attributed.
+        One line per loss: logged again only after the flag was seen intact, or the hooks' ctime moved."""
+        lost = sorted(p.split(":", 1)[0] for p in problems if "not immutable (uchg)" in p)
+        seen = getattr(self, "_flags_lost", None)
+        if seen is None:
+            seen = self._flags_lost = {}
+        key = str(repo)
+        if not lost:
+            seen.pop(key, None)
+            return
+        try:
+            folder = guard_module().hooks_dir(Path(repo))
+            ctimes = {n: datetime.fromtimestamp((folder / n).stat().st_ctime, timezone.utc).isoformat(timespec="seconds")
+                      for n in lost if (folder / n).exists()}
+        except Exception:
+            ctimes = {}
+        mark = (tuple(lost), tuple(sorted(ctimes.items())))
+        if seen.get(key) == mark:
+            return
+        seen[key] = mark
+        now = datetime.now(timezone.utc)
+        try:
+            lanes = read_lanes(self.home)
+            testing = testing_lanes([e for e in read_jsonl(self.home / "events.jsonl")
+                                     if e.get("kind") not in ("hook", "violation", "git-hook")], now)
+            runs = [{"lane": str(l.get("id")), "alias": l.get("alias"), "project": l.get("project"),
+                     "pid": l.get("pid"), "testing": str(l.get("id")) in testing}
+                    for l in lanes if not l.get("ended_at") and (l.get("pid") is None or pid_alive(l.get("pid")))]
+            append_jsonl(self.home / "guard-flags.jsonl", {
+                "kind": "guard-flag-lost", "at": now_iso(now), "repo": key, "hooks": lost,
+                "hooks_ctime": ctimes, "runs": runs})
+        except Exception:
+            pass  # the log must never break a collect
 
     def _tick(self, name: str | None) -> None:
         """Charge the time since the last tick to phase ``name`` (``None`` only restarts the clock)."""
