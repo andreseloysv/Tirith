@@ -347,6 +347,9 @@ The step's checkboxes in the roadmap are still ticked by the owner.
   untracked, not ignored) are saved as a binary patch `~/.tirith/kept/<lane>.patch` (`git apply` on the branch; no commit: the guard
   allows none without hooks), the folder is removed with
   `--force`, the branch stays unless merged. The record gets `cleanup = {status: "retired", kept, at}`.
+- **Fresh launches survive the sweep.** `sweep` skips a worktree git touched less than 15 min ago (`FRESH_S`)
+  whose branch is at the project checkout's HEAD: a lane being launched looks merged and has no record yet, and
+  removing it before the agent starts gave `FileNotFoundError` in `_run_child`.
 - **Shared cargo target.** Every stage run (`runstage.run_stage`, so `tirith run` and the review) sets
   `CARGO_TARGET_DIR` unless the environment already has it: the project's `cargo_target_dir` in
   `config.toml` (`[[projects]]` / `[projects.<id>]`), else `<repo>-lanes/.cargo-target`. Worktrees share compiled
