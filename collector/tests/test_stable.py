@@ -84,3 +84,23 @@ def test_stable_old_releases_are_pruned(home, tmp_path):
     folders = list((stable.stable_root(home) / "releases").iterdir())
     assert len(folders) == stable.KEEP
     assert stable.current_dir(home) in [f.resolve() for f in folders]
+
+
+def test_run_command_follows_current_and_resolver_uses_it(home, tmp_path):
+    from tirith import tirithcmd
+    assert stable.run_command(home) is None
+    stable.promote(home, _src(tmp_path), lambda d: True, at(0))
+    cmd = stable.run_command(home)
+    assert cmd == f"uv run --project {stable.current_dir(home)} tirith"
+    assert tirithcmd.resolved(home) == cmd
+
+
+def test_promote_after_merge_spawns_detached_only_for_a_collector(home, tmp_path):
+    calls = []
+    assert not stable.promote_after_merge(home, tmp_path, lambda *a, **k: calls.append((a, k)))
+    (tmp_path / "collector" / "tirith").mkdir(parents=True)
+    (tmp_path / "collector" / "pyproject.toml").write_text("[project]\n")
+    assert stable.promote_after_merge(home, tmp_path, lambda *a, **k: calls.append((a, k)))
+    argv, kw = calls[0][0][0], calls[0][1]
+    assert argv[-4:-2] == ["stable", "promote"] and argv[-1] == str(tmp_path / "collector")
+    assert kw["start_new_session"] and kw["env"]["TIRITH_HOME"] == str(home)

@@ -34,7 +34,15 @@ def configured_path(home: Path | None) -> str | None:
 
 
 def resolved(home: Path | None = None) -> str:
-    return tirith_command(configured_path(home))
+    """``[app] tirith`` if set, else the stable copy (``<home>/stable/current``) once one was promoted, else the repo."""
+    configured = configured_path(home)
+    if not configured:
+        from tirith import stable  # late: stable imports home
+        from tirith.home import tirith_home
+        cmd = stable.run_command(Path(home) if home is not None else tirith_home())
+        if cmd:
+            return cmd
+    return tirith_command(configured)
 
 
 def rewrite(command: str, home: Path | None = None, cmd: str | None = None) -> str:
