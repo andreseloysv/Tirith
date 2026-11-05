@@ -134,6 +134,12 @@ try {
   await box.fill('');
   await page.evaluate(() => { const c = document.querySelector('.mchat .icli'); if (c) c.remove(); });
   await pressUntil('Escape', () => /tirith manager interrupt/.test(document.querySelector('.mchat').innerText));
+  /* Esc also stops the turn when the focus is not in the box (after a click in the thread) */
+  await page.evaluate(() => { const c = document.querySelector('.mchat .icli'); if (c) c.remove(); document.activeElement.blur(); });
+  for (let i = 0; i < 6; i++) {
+    await page.keyboard.press('Escape');
+    try { await page.waitForFunction(() => /tirith manager interrupt/.test(document.querySelector('.mchat').innerText), null, { timeout: 700 }); break; } catch (e) { if (i === 5) assert.fail('Esc outside the box had no effect'); }
+  }
   const open = page.locator('#mc-log .livesteps.run .ls-diff').nth(1);
   if (await open.locator('.ls-dl').count() === 30) await open.locator('.ls-more').click();   /* collapsed again for the picture */
   await page.waitForFunction(() => document.querySelectorAll('#mc-log .livesteps.run .ls-diff')[1].querySelectorAll('.ls-dl').length === 20, null, { timeout: 3000 });
