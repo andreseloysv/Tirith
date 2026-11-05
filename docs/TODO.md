@@ -31,8 +31,8 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Verificar: Verify Commit lane/manager-permission-questions-nev, me (en curso: verify-commit-lane-manager-permi-2)
 - [x] Manager de guardia: atender el chat
 - [x] Manager de guardia: atender el chat
-- [ ] CEO: revisar cómo trabaja el manager (en curso: ceo-061e3225)
-- [ ] Manager de guardia: atender el chat (en curso: manager-d63a69e6)
+- [ ] CEO: revisar cómo trabaja el manager
+- [ ] Manager de guardia: atender el chat (en curso: manager-94ef0286)
 - [x] Revisar el plan (2026-11-05 08:38) (hecho: sin cambios) <!-- tirith:{"id":"i-32bf740b"} -->
 - [ ] El plan no repite ningún id permanente: Revisar el plan (2026-11-05) sigue dos veces con el id i-2975f07c, así que una recibe un id nuevo (check: `test $(grep -o 'tirith:{"id":"i-[0-9a-f]*"' docs/TODO.md | sort | uniq -d | wc -l) -eq 0`) <!-- tirith:{"id":"i-4d54f8b9","depends_on":[],"writes":[]} -->
 - [ ] Verificar: Verify Drag an image from Finder onto the Tirith chat o (en revisión) <!-- tirith:{"id":"i-9aa639be"} -->
@@ -307,7 +307,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Probar a mano en la app Tauri real (npm run tauri dev): clip, arrastrar y sin scroll horizontal; no hubo sesión gráfica (bloqueado: Needs a graphical session to run 'npm run tauri dev' and check clip, drag and no horizontal scroll by hand; this lane has none, and I made no code changes. The existing static tests chatoverflow, attach, chatdrop, padding are unchanged.) <!-- tirith:{"id":"i-79e7307c"} -->
 - [x] Arrastrar una imagen al chat de la app de escritorio la adjunta de verdad (el dueño dice que hoy no funciona): encontrar dónde se pierde (handle_drag en lib.rs → webview → adjunto), arreglarlo y cubrirlo en chatdrop.test.mjs (check: `node web/js/chatdrop.test.mjs`) <!-- tirith:{"id":"i-2a0e66f3","depends_on":[],"writes":[]} -->
   - [x] Revisar: Arrastrar una imagen al chat de la app de escritorio la adjunta de verdad (el dueño dice que hoy no funciona): encontrar dónde se pierde (handle_drag en lib.rs → webview → adjunto), arreglarlo y cubrirlo en chatdrop.test.mjs (check: `node web/js/chatdrop.test.mjs`)
-- [ ] Probar a mano en la app Tauri real que arrastrar una imagen al chat la adjunta (revisar ~/.tirith/logs/app.log: 'over chat: true')
+- [x] Probar a mano en la app Tauri real que arrastrar una imagen al chat la adjunta (revisar ~/.tirith/logs/app.log: 'over chat: true') (hecho: bafcf90e)
 - [x] Agent card in the app: the role (Manager) is the bold title on top and the agent name (e.g. Quileatar) the smaller line below (check: `cd app && grep -rq 'role' src`) <!-- tirith:{"id":"i-960f1ac7","depends_on":[],"writes":[]} -->
   - [x] Revisar: Agent card in the app: the role (Manager) is the bold title on top and the agent name (e.g. Quileatar) the smaller line below (check: `cd app && grep -rq 'role' src`)
 - [x] Fix pre-existing failure in web/js/detail.test.mjs (waitFor agent card old-1 times out) (hecho: e3ea3148) <!-- tirith:{"id":"i-814eeac4"} -->
@@ -415,11 +415,13 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Tests fiables: sin fallos al azar dentro de las lanes; las revisiones atascadas se vuelven a lanzar.
 - [x] Al dueño solo le llega lo que solo él puede hacer, con el motivo (credenciales, pago, cuenta, aparato o decisión).
 - [x] Instrucciones al dueño concretas y prerrellenadas, con botón «Open in Terminal»; se cierran solas al comprobarse.
-- [ ] Un solo manager con sesión persistente que vive en Tirith (misma memoria con la app abierta o cerrada). (en curso: manager-de-guardia-chat-y-piloto-13)
+- [x] Un solo manager con sesión persistente que vive en Tirith (misma memoria con la app abierta o cerrada).
   - [x] Revisar: Un solo manager con sesión persistente que vive en Tirith (misma memoria con la app abierta o cerrada). — falló: the merge did not go through: merging lane/manager-de-guardia-chat-y-piloto-2 failed conflicts? : error: Your local changes to th
+  - [x] Revisar: Un solo manager con sesión persistente que vive en Tirith (misma memoria con la app abierta o cerrada).
 - [x] El chat muestra el trabajo del manager en vivo: texto, herramientas y resultados de cada paso (secretos tapados).
 - [ ] El chat del manager como el CLI: texto palabra a palabra, diffs en color, lista de tareas; Esc interrumpe y ↑ recupera.
-- [ ] Sub-agentes anidados en la conversación; permisos seguros aprobados por código y el resto como botones Allow/Deny.
+  - [ ] Revisar: El chat del manager como el CLI: texto palabra a palabra, diffs en color, lista de tareas; Esc interrumpe y ↑ recupera. (en curso: revisión de manager-de-guardia-chat-y-piloto-17)
+- [ ] Sub-agentes anidados en la conversación; permisos seguros aprobados por código y el resto como botones Allow/Deny. (en revisión)
 - [x] Autorrevisión cada minuto (collector, manager, piloto, disco, revisiones) con arreglo automático y una línea en el chat.
 - [x] Lo que dice un agente en su informe se verifica contra su cambio real antes de fusionar.
 - [x] El collector vuelve a tardar menos de 3 s por ciclo (hoy ~20 s) y un test lo vigila. (hecho: abdf921)
@@ -431,7 +433,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] El piloto automático no lanza agentes: avisa al manager en el chat de cada paso listo y el manager decide (lanzar con buenas instrucciones, juntar, esperar o descartar). (hecho: 634c8fe)
 - [x] Tirith libera disco solo cuando queda poco (carpetas de lanes ya fusionadas y cachés de compilación) y nunca se lo pide al dueño. (hecho: 4ef849a)
 - [x] El manager persistente arranca siempre: comparte el elemento fijo del manager con los turnos sueltos (sin bloquearse por «ya en curso») y, si falla, el modo de respaldo responde en menos de 1 minuto. (hecho: b70ce39)
-- [ ] Los permisos de comandos seguros (solo lectura, comandos de Tirith) se aprueban por código; al dueño nunca le llega una pregunta de permiso que no sea suya.
+- [ ] Los permisos de comandos seguros (solo lectura, comandos de Tirith) se aprueban por código; al dueño nunca le llega una pregunta de permiso que no sea suya. (en revisión)
 - [ ] La autorrevisión no escribe en el chat lo que arregló sola: queda en el punto de salud (al hacer clic); el chat solo muestra lo que necesita al dueño. (en curso: selfreview-not-in-chat-2) <!-- tirith:{"id":"i-2a7b6720"} -->
   - [x] Revisar: La autorrevisión no escribe en el chat lo que arregló sola: queda en el punto de salud (al hacer clic); el chat solo muestra lo que necesita al dueño. — falló: the report does not match the change
 - [x] Llevar a main el trabajo de la lane manager-de-guardia-chat-y-piloto-2: aplicar a mano ~/.tirith/diffs/manager-de-guardia-chat-y-piloto-2.patch sobre main y resolver los conflictos en collector/tirith/agentrun.py y collector/tirith/managerd.py conservando lo que ya hay en main (los tests de la lane pasaban: 1113). (hecho: 329f2c4)
@@ -478,7 +480,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Evidencia de la torre de piedra: capturas de la landing publicada en escritorio y móvil, antes y después, en docs/evidence/logo-torre/. (check: `cd docs/evidence/logo-torre && test -f antes-escritorio.png && test -f antes-movil.png && test -f despues-escritorio.png && test -f despues-movil.png`) (hecho: 40ed8f2)
 - [x] La landing deja de mostrar render-board.png (pedido del dueño). (check: `! grep -q render-board site/index.html`) (hecho: 7ecbd87)
 - [ ] Imágenes de inspiración para los renders, generadas con un modelo de imagen de Google y guardadas fuera del repo (espera: una clave de Google que funcione, del dueño). (check: `test -n "$(ls ~/.cache/tirith-inspiration 2>/dev/null)"`)
-- [ ] Change the check of the compacts_then_restarts msession item to -k compact so it matches the current test names (check: `cd collector && uv run -q pytest -q tests -k compact`) (reabierto: compact-check: the lane's work is not on main) <!-- tirith:{"id":"i-8ba0ea2c","depends_on":[],"writes":[]} -->
+- [ ] Change the check of the compacts_then_restarts msession item to -k compact so it matches the current test names (check: `cd collector && uv run -q pytest -q tests -k compact`) (en curso: manager-de-guardia-chat-y-piloto-19) <!-- tirith:{"id":"i-8ba0ea2c","depends_on":[],"writes":[]} -->
 - [x] Confirm 3 failing process-kill tests (test_cta sigterm, test_idletimeout cpu_is_progress, test_timeouts left_the_group) fail on main too (hecho: 0bcd5b94) <!-- tirith:{"id":"i-d0f63b29"} -->
   - [x] Revisar: Confirm 3 failing process-kill tests (test_cta sigterm, test_idletimeout cpu_is_progress, test_timeouts left_the_group) fail on main too
 - [x] El icono de la app de macOS (el mismo modelo de torre de piedra) se lee bien a 32 px: se genera una versión pequeña y se comprueba su contraste (pedido del dueño). (check: `test -f app/src-tauri/icons/32x32.png && grep -q stone_tower scripts/make_icon.py`) (hecho: 849dc41)
@@ -612,8 +614,8 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
   - [x] Revisar: Deflake test_plangate dirty-plan test (test_report_is_kept_when_the_plan_is_dirty_and_written_later): no timing cause found by reading; needs a reproduction under load
 - [ ] Reproduce the test_plangate dirty-plan flake under load (no timing cause found by reading; the test now asserts the plan is clean before sync, so a recurrence shows why) (en revisión) <!-- tirith:{"id":"i-0a756df0"} -->
 - [ ] Keep trying to reproduce the test_plangate dirty-plan flake (one full-suite run under 12 busy-loop CPU hogs passed: 1839 passed); if it recurs in CI, the new 'plan must be clean before sync' assertion message shows why
-- [ ] A GitHub run with conclusion cancelled, stale or action_required never counts as failed: github.py _status returns 'cancelled' and last_finished/ci_main skip it so the newest real result counts, with a test (check: `cd collector && uv run -q pytest -q tests -k cancelled`) (en revisión) <!-- tirith:{"id":"i-e90a1f87","depends_on":[],"writes":[]} -->
-  - [ ] Revisar: A GitHub run with conclusion cancelled, stale or action_required never counts as failed: github.py _status returns 'cancelled' and last_finished/ci_main skip it so the newest real result counts, with a test (check: `cd collector && uv run -q pytest -q tests -k cancelled`) (en curso: revisión de tirith-se-mejora-usando-tirith-63)
+- [x] A GitHub run with conclusion cancelled, stale or action_required never counts as failed: github.py _status returns 'cancelled' and last_finished/ci_main skip it so the newest real result counts, with a test (check: `cd collector && uv run -q pytest -q tests -k cancelled`) <!-- tirith:{"id":"i-e90a1f87","depends_on":[],"writes":[]} -->
+  - [x] Revisar: A GitHub run with conclusion cancelled, stale or action_required never counts as failed: github.py _status returns 'cancelled' and last_finished/ci_main skip it so the newest real result counts, with a test (check: `cd collector && uv run -q pytest -q tests -k cancelled`)
 - [x] A lane that follows its brief is never sent back for it: the launch.py brief rule 'Do NOT commit' and the keepgoing.py finish gate 'uncommitted changes in your worktree' agree, pinned by a test (check: `cd collector && uv run pytest -q tests -k brief_and_finish_gate_agree_on_commit`) <!-- tirith:{"id":"i-2f3273de","depends_on":[],"writes":[]} -->
   - [x] Revisar: A lane that follows its brief is never sent back for it: the launch.py brief rule 'Do NOT commit' and the keepgoing.py finish gate 'uncommitted changes in your worktree' agree, pinned by a test (check: `cd collector && uv run pytest -q tests -k brief_and_finish_gate_agree_on_commit`)
 - [x] An item marked (en revisión) whose lane ended done with no review, queue entry or branch left is closed by code (ticked, or reopened if its work is missing) instead of waiting forever (check: `cd collector && uv run pytest -q tests -k in_review_without_review_closes`) <!-- tirith:{"id":"i-a6488803","depends_on":[],"writes":[]} -->
@@ -731,7 +733,8 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
   - [x] Revisar: Cada proyecto elige sus roles en [roles] de tirith.toml: ceo y manager pueden ser always, on-demand u off, y Tirith los tiene en always (check: `cd collector && uv run -q pytest -q tests -k roles_setting`)
 - [x] Un proyecto nuevo empieza con ceo y manager en on-demand (check: `cd collector && uv run -q pytest -q tests -k roles_default_on_demand`) <!-- tirith:{"id":"i-efb2d1de","depends_on":["i-eb7c75f3"],"writes":[]} -->
   - [x] Revisar: Un proyecto nuevo empieza con ceo y manager en on-demand (check: `cd collector && uv run -q pytest -q tests -k roles_default_on_demand`)
-- [ ] Con roles on-demand, el worker pasa a manager cuando la tarea no cabe en una lane, hay 2 o más items en paralelo o pide sub-agentes (check: `cd collector && uv run -q pytest -q tests -k promote_to_manager`) (en curso: empresa-que-crece-worker-manager-2) <!-- tirith:{"id":"i-8aa596e4","depends_on":["i-eb7c75f3"],"writes":[]} -->
+- [ ] Con roles on-demand, el worker pasa a manager cuando la tarea no cabe en una lane, hay 2 o más items en paralelo o pide sub-agentes (check: `cd collector && uv run -q pytest -q tests -k promote_to_manager`) (en revisión) <!-- tirith:{"id":"i-8aa596e4","depends_on":["i-eb7c75f3"],"writes":[]} -->
+  - [ ] Revisar: Con roles on-demand, el worker pasa a manager cuando la tarea no cabe en una lane, hay 2 o más items en paralelo o pide sub-agentes (check: `cd collector && uv run -q pytest -q tests -k promote_to_manager`) (en curso: revisión de empresa-que-crece-worker-manager-2)
 - [ ] Cada promoción o retirada queda en <home>/company.jsonl con la regla, el valor medido y el umbral (check: `cd collector && uv run -q pytest -q tests -k company_log`) <!-- tirith:{"id":"i-e92781ab","depends_on":["i-8aa596e4"],"writes":[]} -->
 - [ ] Con roles on-demand, se crea un CEO con más de 2 workers a la vez, más de 1 h de trabajo sin nadie mirando o un fallo que el self-check no arregla (check: `cd collector && uv run -q pytest -q tests -k promote_to_ceo`) <!-- tirith:{"id":"i-609029b8","depends_on":["i-e92781ab"],"writes":[]} -->
 - [x] Run collector tests (cd collector && uv run -q pytest -q tests) to completion and confirm green for company-lab fixture (hecho: 9a4725f4)
