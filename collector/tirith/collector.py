@@ -21,6 +21,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from tirith import access_audit as access_audit_mod
 from tirith import timeouts as timeouts_mod
 from tirith import activity as activity_mod
 from tirith import asks as asks_mod
@@ -1507,6 +1508,7 @@ class Collector:
             "sessions": sessions,
             "loose_events": loose_events,
             "violations": violations,
+            "accesses": access_audit_mod.recent(self.home),
             "rules": rules_state,
             "inbox": inbox_rows,
             "says": says,

@@ -113,3 +113,23 @@ def record(home: Path, event: dict, tool_input=None) -> dict | None:
            "tool": event["tool"], "action": action_of(event["tool"], tool_input, event.get("cwd"))}
     append_jsonl(home / ACCESS_DIR / f"{project}.ndjson", row)
     return row
+
+
+STATE_ROWS = 600  # newest rows put in state.json for the page's «Accesos» view
+
+
+def recent(home: Path, limit: int = STATE_ROWS) -> list[dict]:
+    """The newest ``limit`` rows of every project file, oldest first, each with its ``project``. Read only."""
+    from tirith.store import read_jsonl
+
+    rows: list[dict] = []
+    try:
+        files = sorted((Path(home) / ACCESS_DIR).glob("*.ndjson"))
+    except OSError:
+        return []
+    for path in files:
+        project = None if path.stem == LOOSE else path.stem
+        for row in read_jsonl(path)[-limit:]:
+            rows.append({**row, "project": project})
+    rows.sort(key=lambda r: str(r.get("ts") or ""))
+    return rows[-limit:]
