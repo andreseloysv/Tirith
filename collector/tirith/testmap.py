@@ -27,6 +27,7 @@ MAP = ".testmondata"
 MAX_AGE_S = 6 * 3600.0  # the merge queue builds a new map after a landing when the map is older than this
 BASE_COMMAND = "uv run -q pytest -q -p no:xdist --testmon"  # without xdist: a selected run under it runs no tests
 NO_TESTS = 5  # pytest's exit code when it collected nothing
+TESTS_FAILED = 1  # pytest's exit code when the run finished with failing tests
 SERIAL_MAX = 20  # a selection this small runs in one process with testmon; a larger one runs in parallel
 PARALLEL_COMMAND = "uv run -q pytest -q -n auto --maxprocesses 8 -p no:testmon"  # the picked tests, by node id
 
@@ -112,7 +113,7 @@ def run_selected(collector: Path, run=subprocess.run, out=None) -> int:
     return 0 if done.returncode == NO_TESTS else done.returncode
 
 
-def build(home: Path, project: str, repo: Path, base: str = "main") -> tuple[bool, str]:
+def build(home: Path, project: str, repo: Path, base: str = "main", if_stale: bool = False) -> tuple[bool, str]:
     """Update the map from ``base`` of ``repo``: a detached worktree of its own is moved to ``base`` and the
     suite runs there without xdist (testmon runs only what changed since the last build). Holds the machine's
     one full-suite slot. ``(ok, output)``."""
@@ -130,14 +131,16 @@ def build(home: Path, project: str, repo: Path, base: str = "main") -> tuple[boo
     env = {**os.environ, "TESTMON_DATAFILE": str(data)}
     env.pop("TIRITH_LANE", None)
     with loadlimit_mod.full_suite(home):
+        if if_stale and not stale(home, project):  # waited for the slot behind another build: that one is enough
+            return True, "the map was built meanwhile"
         done = timeouts_mod.run(["/bin/sh", "-c", BASE_COMMAND], "stage:test", cwd=tree / "collector", env=env,
                                 home=home, text=True)
     output = ((done.stdout or "") + (done.stderr or "")).strip()
-    if done.returncode in (0, NO_TESTS):
-        if data.is_file():
-            os.utime(data)  # an unchanged map is still current: its age counts from this build
-        return True, output
-    data.unlink(missing_ok=True)  # a half-written map must not select anything
+    if done.returncode in (0, NO_TESTS, TESTS_FAILED) and data.is_file():
+        # a run that finished is a whole map, failing tests included (testmon picks them again in every lane)
+        os.utime(data)  # an unchanged map is still current: its age counts from this build
+        return done.returncode != TESTS_FAILED, output
+    data.unlink(missing_ok=True)  # a half-written map (interrupted, timed out, crashed) must not select anything
     return False, output
 
 
@@ -148,7 +151,7 @@ def refresh(home: Path, project: str, repo: Path, base: str, stage_run: str) -> 
         return False
     from tirith import launch as launch_mod
     argv = [*launch_mod.tirith_argv(home), "--home", str(home), "testmap", "build", "--project", project,
-            "--repo", str(repo), "--base", base]
+            "--repo", str(repo), "--base", base, "--if-stale"]
     log = folder(home, project) / "build.log"
     log.parent.mkdir(parents=True, exist_ok=True)
     launch_mod.spawn_detached(argv, home, log)

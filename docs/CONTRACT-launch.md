@@ -224,8 +224,12 @@ touches; `--full`, a review that merges and the merge queue (outside a lane) run
 - **Building the map**: `tirith testmap build [--project p] [--repo dir] [--base main]` moves a detached worktree
   of its own (`<home>/testmon/<project>/tree`) to the base branch and runs the suite there (incrementally: testmon
   runs only what changed since the last build). The merge queue starts it in the background after a landing when
-  the project's test stage runs pytest and the map is missing or older than 6 h (`testmap.MAX_AGE_S`). A failed
-  build deletes the map. With no usable map nothing breaks: the lane uses the names rule.
+  the project's test stage runs pytest and the map is missing or older than 6 h (`testmap.MAX_AGE_S`), with
+  `--if-stale`: a build that waited for the full-suite slot behind another one does nothing when that one made the
+  map fresh. A run that finished keeps the map, failing tests included (pytest exit 1: the build reports failed,
+  and testmon picks failing tests again in every lane); one flaky test once deleted a whole map and every landing
+  started another 12-minute serial build. Only an unfinished run (interrupted, timed out, crashed) deletes the map.
+  With no usable map nothing breaks: the lane uses the names rule.
 - **One full suite at a time**: every full suite (`tirith run --stage test` without a selection, a review that
   merges, the merge queue's test stage, a map build) holds `<home>/full-suite.lock` (`loadlimit.full_suite`, waits up to 3 h, then runs anyway),
   taken before a stage slot. Selected runs and other stages only use their slots.

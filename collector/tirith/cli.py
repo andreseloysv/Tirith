@@ -2036,7 +2036,7 @@ def _cmd_testmap_build(args) -> int:
     if not (project and repo):
         print("tirith testmap build: pass --project (or run it inside a known project)", file=sys.stderr)
         return 3
-    ok, output = testmap_mod.build(home, project, repo, args.base)
+    ok, output = testmap_mod.build(home, project, repo, args.base, if_stale=args.if_stale)
     print(output[-2000:] if output else "")
     print(f"tirith testmap: {'built' if ok else 'failed'}: {testmap_mod.map_file(home, project)}")
     return 0 if ok else 1
@@ -3152,6 +3152,8 @@ def build_parser() -> argparse.ArgumentParser:
     t_build.add_argument("--project", default=None, help="default: the project containing the cwd")
     t_build.add_argument("--repo", default=None, help="default: the project's folder")
     t_build.add_argument("--base", default="main", help="the branch to build from")
+    t_build.add_argument("--if-stale", action="store_true",
+                         help="only when the map is still old once the full-suite slot is free (after a landing)")
     t_build.set_defaults(func=_cmd_testmap_build)
     t_run = testmap_sub.add_parser("run", parents=[common], help="run the tests the map picks for the change here "
                                    "(a few with testmon, more in parallel)")
