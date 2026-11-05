@@ -1,11 +1,14 @@
 """Adaptive parallelism: how many lanes and stage runs may go at once, from CPU load and free disk.
 
-The limit is the configured maximum, lowered while the load average (per core) is high or the disk is
-nearly full, and never below 1 (work always moves). Stage runs wait for a slot (a lock file per slot)."""
+The limit is the configured maximum, lowered while the machine's real free CPU (idle % from the host CPU
+stats) is low or the disk is nearly full, and never below 1 (work always moves). Without CPU stats it falls back to
+the 1-minute load average. Stage runs wait for a slot (a lock file per slot)."""
 
 from __future__ import annotations
 
 import os
+import subprocess
+import sys
 import time
 from contextlib import contextmanager
 from pathlib import Path
@@ -17,7 +20,9 @@ except ImportError:  # Windows: no slots, the limit is advisory
     fcntl = None  # type: ignore[assignment]
 
 SUITE_WAIT_S = 3 * 3600.0  # a full suite waits this long for the machine's one full-suite slot
-HIGH_LOAD = 1.0  # load per core at which the limit starts to drop
+HIGH_LOAD = 1.0  # load per core at which the limit starts to drop (fallback when no CPU stats)
+LOW_IDLE_PCT = 25.0  # free CPU (idle %) under which the limit starts to drop
+IDLE_SAMPLE_S = 0.1  # window between the two host CPU counter readings
 GB = 1024 ** 3
 
 
@@ -32,19 +37,66 @@ def load_average() -> float:
         return 0.0
 
 
-def limit(maximum: int, *, cpus: int | None = None, load: float | None = None,
+def _cpu_ticks() -> tuple[float, float] | None:
+    """``(idle, total)`` CPU ticks of the whole host since boot, or None when the platform has no counters."""
+    try:
+        if sys.platform.startswith("linux"):
+            parts = Path("/proc/stat").read_text(encoding="utf-8").splitlines()[0].split()
+            values = [float(v) for v in parts[1:9]]  # user nice system idle iowait irq softirq steal
+            return values[3] + values[4], sum(values)
+        if sys.platform == "darwin":
+            import ctypes
+            lib = ctypes.CDLL("/usr/lib/libSystem.B.dylib")
+            lib.mach_host_self.restype = ctypes.c_uint
+            count = ctypes.c_uint(4)
+            info = (ctypes.c_uint * 4)()  # user system idle nice
+            # HOST_CPU_LOAD_INFO = 3
+            if lib.host_statistics(lib.mach_host_self(), 3, info, ctypes.byref(count)) != 0:
+                return None
+            return float(info[2]), float(sum(info))
+    except Exception:  # noqa: BLE001 - any failure means "no stats", never a crash
+        return None
+    return None
+
+
+def cpu_idle(sample: float = IDLE_SAMPLE_S) -> float | None:
+    """Real free CPU of the host as an idle percentage (0-100) over a short window, or None if unavailable."""
+    first = _cpu_ticks()
+    if first is None:
+        return None
+    time.sleep(sample)
+    second = _cpu_ticks()
+    if second is None:
+        return None
+    total = second[1] - first[1]
+    if total <= 0:
+        return None
+    return min(max((second[0] - first[0]) / total * 100.0, 0.0), 100.0)
+
+
+def limit(maximum: int, *, cpus: int | None = None, load: float | None = None, idle: float | None = None,
           free_bytes: int | None = None, min_free_bytes: int = 0) -> tuple[int, str]:
-    """``(allowed, why)``: ``maximum`` lowered by load per core and by low disk; ``why`` is empty at full speed."""
+    """``(allowed, why)``: ``maximum`` lowered by low free CPU and by low disk; ``why`` is empty at full speed.
+    ``idle`` is the host idle percentage (measured when neither ``idle`` nor ``load`` is given); the 1-minute
+    ``load`` average is only the fallback when there are no CPU stats."""
     maximum = max(int(maximum), 1)
     cpus = max(cpus or cores(), 1)
-    load = load_average() if load is None else load
+    if idle is None and load is None:
+        idle = cpu_idle()
     allowed, why = maximum, ""
-    per_core = load / cpus
-    if per_core > HIGH_LOAD:
-        idle = max(cpus - load, 0)  # cores that are not busy
-        allowed = max(min(maximum, int(idle // 2) or 1), 1)
-        if allowed < maximum:
-            why = f"load {load:.1f} on {cpus} cores"
+    if idle is not None:
+        free = cpus * idle / 100.0  # cores that are not busy
+        if idle < LOW_IDLE_PCT:
+            allowed = max(min(maximum, int(free // 2) or 1), 1)
+            if allowed < maximum:
+                why = f"CPU {idle:.0f}% idle on {cpus} cores"
+    else:
+        load = load_average() if load is None else load
+        if load / cpus > HIGH_LOAD:
+            free = max(cpus - load, 0)
+            allowed = max(min(maximum, int(free // 2) or 1), 1)
+            if allowed < maximum:
+                why = f"load {load:.1f} on {cpus} cores"
     if free_bytes is not None and min_free_bytes > 0:
         if free_bytes < min_free_bytes:
             allowed, why = 1, f"disk {free_bytes / GB:.1f} GB free, below {min_free_bytes / GB:.1f} GB"
