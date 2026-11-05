@@ -75,7 +75,8 @@
   function runtimeLines(s, rows) {
     var by = {}, keys = [];
     rows.forEach(function (x) {
-      if (!by[x.dest]) { by[x.dest] = { dest: x.dest, n: 0, last: x.ts, who: {}, org: x.row.org || '' }; keys.push(x.dest); }
+      if (!by[x.dest]) { by[x.dest] = { dest: x.dest, n: 0, last: x.ts, who: {}, org: x.row.org || '', rows: [] }; keys.push(x.dest); }
+      by[x.dest].rows.push(x.row);
       var g = by[x.dest], a = x.row.lane ? T.agentById(s, x.row.lane) : null;
       g.n++; g.who[a && T.agentRole ? T.agentRole(a) : 'Agent'] = 1;
     });
@@ -84,7 +85,7 @@
       return '<tr class="rt"><td class="sm">' + esc(T.clockTime(g.last)) + '</td><td><span class="chip xk rt">Agent runtime</span></td><td><b>' +
         esc(g.dest) + '</b>' + (g.org ? ' <span class="mut sm">' + esc(g.org) + '</span>' : '') + '</td><td class="sm">' +
         esc(Object.keys(g.who).join(', ')) + '</td><td class="sm mut">' + g.n + (g.n === 1 ? ' connection' : ' connections') +
-        ' · opened by the agent program itself, not by a command it ran</td><td class="sm">' + blockBtn(s, g.dest) + '</td></tr>';
+        ' · opened by the agent program itself, not by a command it ran' + keyText(g.rows) + '</td><td class="sm">' + blockBtn(s, g.dest) + '</td></tr>';
     }).join('');
   }
   /* blocking: a setup request (action net-block / net-unblock) that Tirith applies at once */
@@ -129,6 +130,15 @@
     if (ui.netCli) h += '<p class="icli">Tirith cannot send from this page. Run in a terminal: <code>' + esc(ui.netCli) + '</code></p>';
     return h;
   }
+  /* the key a line used: the environment keys its lane had for that service (names), or its own saved login */
+  function keyText(rows) {
+    var keys = {}, login = false, known = false;
+    rows.forEach(function (r) { if (r.keys) { known = true; r.keys.forEach(function (k) { keys[k] = 1; }); if (r.login) login = true; } });
+    if (!known) return '';
+    var names = Object.keys(keys);
+    return '<br><span class="sm">' + (names.length ? 'key: <b>' + esc(names.join(', ')) + '</b>' : '') +
+      (login ? (names.length ? ' · ' : '') + '<span class="mut">no key given: its own saved login (keychain)</span>' : '') + '</span>';
+  }
   function destinations(list) { var d = {}; list.forEach(function (x) { d[x.dest] = 1; }); return Object.keys(d).length; }
   function externalSection(s) {
     var all = T.externalRows(s, f.days, f.sys);
@@ -140,7 +150,7 @@
         '<td><b>' + esc(x.dest) + '</b>' + (x.row.org ? ' <span class="mut sm">' + esc(x.row.org) + '</span>' : '') +
           (x.row.address && x.dest.indexOf(x.row.address) < 0 ? ' <span class="mut sm" title="' +
           esc(x.row.reverse || '') + '">' + esc(x.row.address) + '</span>' : '') + '</td><td class="sm">' + who + '</td><td class="sm mut" title="' + esc(x.row.action || '') + '">' +
-        esc(x.row.blocked ? x.row.action : x.live ? 'connection opened' : (x.row.action || x.row.tool || '')) + '</td><td class="sm">' +
+        esc(x.row.blocked ? x.row.action : x.live ? 'connection opened' : (x.row.action || x.row.tool || '')) + keyText([x.row]) + '</td><td class="sm">' +
         (x.kind === 'search' || x.kind === 'mcp' || x.dest === 'remote' ? '' : blockBtn(s, x.dest)) + '</td></tr>';
     }).join('') + '</tbody></table>' : '<p class="mut sm">Nothing reached outside the machine in this period.</p>';
     var lines = destinations(own) + Math.min(rows.length, 200);
