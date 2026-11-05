@@ -107,6 +107,29 @@ a CIDR range blocks addresses. Two guards enforce it:
   stopped: that would stop the agent; its row says so. Cutting a single connection of a process needs a
   firewall with root rights, which Tirith does not use.
 
+## The network guard (lanes in a sandbox, through Tirith's proxy)
+
+`tirith/netproxy.py`, on by default on macOS (`[network] sandbox = false` turns it off; `proxy_port`, default
+47811). A lane's agent (every `tirith lane run` that is not interactive) runs under `sandbox-exec` with a profile
+that denies every outbound connection but `localhost` and local sockets, so nothing in its process tree (the
+agent program, a test, a script) can reach an outside address directly: it gets "Operation not permitted". Its
+environment points `HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY` (and the lowercase ones) at Tirith's proxy with the
+lane id as user (`http://<lane>:<token>@127.0.0.1:<port>`), `NO_PROXY` at loopback, and `NODE_USE_ENV_PROXY=1`.
+
+The proxy (`tirith net serve`, one per machine, lock `<home>/netproxy.lock`, `<home>/netproxy.json`) is started
+by the collector, never from inside a lane (it could not reach anything there). It answers `CONNECT` and plain
+HTTP, checks the `netblock` rules on the domain and then on the addresses it resolves to (when a rule is an
+address or range), answers `403` with `X-Tirith-Blocked` for a blocked one, else connects and pipes. Each new
+`(lane, host, port, program)` and every refusal is an access row with `tool: "proxy"`, the exact domain, and
+`runtime: true` when the client is the lane's agent program (by the pid on the other end of the loopback
+connection). A lane started from inside another lane is confined already (a sandbox only narrows) and is not
+wrapped twice. When the proxy is not running a lane starts without the guard, `lane.network` says why, and
+`state.network` shows it on the Accesos page.
+
+Checked on 2026-11-05 with a real agent lane: its model API and connectors went through the proxy by name, a
+command's `curl` reached PyPI through it, a direct socket to an address got `EPERM`, and with `datadoghq.com`
+blocked the agent's telemetry was refused while the lane still finished in 22 s.
+
 ## Retention
 
 - Rotation at 16 MB: `access.jsonl` → `access.jsonl.1` → … → `.3`; the oldest is dropped.

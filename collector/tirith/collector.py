@@ -23,6 +23,7 @@ from pathlib import Path
 
 from tirith import access_audit as access_audit_mod
 from tirith import netblock as netblock_mod
+from tirith import netproxy as netproxy_mod
 from tirith import netwatch as netwatch_mod
 from tirith import timeouts as timeouts_mod
 from tirith import activity as activity_mod
@@ -824,6 +825,13 @@ class Collector:
             })
         return waits
 
+    def _network(self) -> dict:
+        """``state.network``: the network guard, started here when it should run and does not."""
+        try:
+            return netproxy_mod.ensure(self.home)
+        except Exception as err:  # noqa: BLE001 - a guard that cannot start is shown, never a lost cycle
+            return {"guard": "off", "why": f"{type(err).__name__}: {err}"}
+
     def _accesses(self, lanes: list[dict]) -> list[dict]:
         """``state.accesses``, after the network watch wrote the lanes' new connections (it never stops a cycle)."""
         try:
@@ -1574,6 +1582,7 @@ class Collector:
             "violations": violations,
             "accesses": self._accesses(lanes),
             "netblock": netblock_mod.rules(self.home),
+            "network": self._network(),
             "rules": rules_state,
             "inbox": inbox_rows,
             "owner_requests": inbox_mod.owner_requests(inbox_rows),
