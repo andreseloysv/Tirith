@@ -157,6 +157,7 @@ _ENV_IGNORED = {"PATH", "HOME", "PWD", "OLDPWD", "USER", "LOGNAME", "SHELL", "TM
                 "TERM", "IFS", "RANDOM", "SECONDS", "LINENO", "PPID", "UID", "EUID", "HOSTNAME", "PS1", "PS2", "COLUMNS",
                 "LINES", "EDITOR", "PAGER", "SHLVL", "OSTYPE", "BASH_SOURCE", "FUNCNAME", "PIPESTATUS", "REPLY", "OPTARG",
                 "OPTIND", "BASHPID", "CI", "VIRTUAL_ENV", "PYTHONPATH", "NODE_ENV", "XDG_CONFIG_HOME", "XDG_CACHE_HOME"}
+_ENV_NAME = re.compile(r"[A-Z][A-Z0-9_]{2,}")
 _ENV_SECRET = re.compile(r"SECRET|TOKEN|PASSWORD|PASSWD|API_?KEY|PRIVATE|CREDENTIAL|AUTH|_KEY$|^KEY_", re.I)
 
 
@@ -175,7 +176,9 @@ def env_names(tool, tool_input) -> list[str]:
     out: list[str] = []
     for pattern in _ENV_PATTERNS:
         for name in pattern.findall(text):
-            if len(name) > 1 and name not in _ENV_IGNORED and not name.startswith("TIRITH_") and name not in out:
+            # environment variables are named in capitals; a lowercase $name is a shell variable (a loop's)
+            if (_ENV_NAME.fullmatch(name) and name not in _ENV_IGNORED and not name.startswith("TIRITH")
+                    and name not in out):
                 out.append(name)
     return out[:20]
 
@@ -230,6 +233,13 @@ def recent(home: Path, limit: int = STATE_ROWS) -> list[dict]:
     for path in files:
         project = None if path.stem == LOOSE else path.stem
         for row in read_jsonl(path)[-limit:]:
+            if "env" not in row and row.get("tool") == "Bash" and str(row.get("action") or "").startswith("Bash: "):
+                text = row["action"][6:]
+                if text.endswith("…"):  # a cut line: its last word may be half a name
+                    text = text.rsplit(" ", 1)[0] if " " in text else ""
+                names = env_names("Bash", {"command": text})  # rows from before env names were kept
+                if names:
+                    row = {**row, "env": names}
             rows.append({**row, "project": project})
     rows.sort(key=lambda r: str(r.get("ts") or ""))
     return rows[-limit:]

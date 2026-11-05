@@ -101,7 +101,10 @@ its domain (the Host header) is seen only by the proxy.
 Each access row of a call that uses environment variables carries `env`: their **names**, never values
 (`access_audit.env_names`): `$NAME`, `${NAME}`, `printenv` / `export` / `unset NAME`, `env | grep NAME` in a
 command, and `os.environ[...]`, `os.getenv(...)`, `process.env.X`, `env::var(...)` in code a Write or Edit
-puts in a file. The shell's and system's own names (`PATH`, `HOME`, …) and `TIRITH_*` are left out. The Access
+puts in a file. Only capital names of 3 or more characters count (a lowercase `$name` is a shell variable);
+the shell's and system's own names (`PATH`, `HOME`, …) and `TIRITH*` are left out. Rows written before the names
+were kept get them from their recorded command line (its last word dropped when the line was cut). The page shows
+this section first. The Access
 page lists them under **Environment variables**: one line per name, marked `secret` when it looks like one
 (token, key, password…), with the roles that used it, how often and when last.
 
