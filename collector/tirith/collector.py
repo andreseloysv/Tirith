@@ -574,7 +574,8 @@ class SlowWork:
             try:
                 self.owner.github.poll(config, self.entries)
                 dispatch_mod.run(self.owner.home, config, datetime.now(timezone.utc), agents=agents, lanes=lanes,
-                                 status_of=self.owner._lane_status, projects=projects)
+                                 status_of=self.owner._lane_status, projects=projects,
+                                 spawn=self.owner._spawn())
                 try:
                     appupdate_mod.maybe_start(self.owner.home)  # Rust code changed on main: signed rebuild + restart
                 except Exception as exc:  # never let the app update hold back the dispatcher
@@ -825,6 +826,12 @@ class Collector:
                 "text": str(item), "since": since, "link": None, "source": "brain",
             })
         return waits
+
+    def _spawn(self):
+        """What the dispatcher starts detached work with: only the long-running collector passes one, so the hourly
+        end-to-end test starts there (it never did: no caller passed it) and never from a cycle run by a test."""
+        from tirith import launch as launch_mod
+        return launch_mod.spawn_detached if self._live else None
 
     def _network(self) -> dict:
         """``state.network``: the network guard, started here when it should run and does not (only by the
@@ -1664,7 +1671,7 @@ class Collector:
             rows = inbox_mod.requests(self.home)
         else:
             rows = dispatch_mod.run(self.home, self.config, now, agents=agents, lanes=lanes or [],
-                                    status_of=self._lane_status, projects=projects)
+                                    status_of=self._lane_status, projects=projects, spawn=self._spawn())
         wait_s = 0 if self.config.dispatch_enabled else inbox_mod.AUTO_ANSWER_AFTER_S
         if self.worker.enabled:
             by_project = {p["id"]: p for p in projects}
