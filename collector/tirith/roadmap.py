@@ -518,7 +518,7 @@ def _item_blocks(lines: list[str], start: int, end: int) -> list[tuple[int, int,
 
 
 def edit(text: str, step_id: str, item_text: str = "", new_text: str | None = None,
-         delete: bool = False, add: str | None = None) -> str:
+         delete: bool = False, add: str | None = None, top: bool = False) -> str:
     """``text`` with one change in step ``step_id``: the open item whose text is exactly ``item_text`` gets
     ``new_text`` (its checkbox, bullet and indent stay; a wrapped item becomes one line) or is removed
     (``delete``); ``add`` appends a new open item after the step's last open item.
@@ -536,7 +536,9 @@ def edit(text: str, step_id: str, item_text: str = "", new_text: str | None = No
         if not add:
             raise EditError("the new item is empty")
         open_blocks = [b for b in blocks if not b[3]] or blocks
-        if open_blocks:
+        if open_blocks and top:
+            at, line = open_blocks[0][0], "- [ ] " + add + eol
+        elif open_blocks:
             at, line = open_blocks[-1][1], "- [ ] " + add + eol
         else:
             at, line = start, eol + "- [ ] " + add + eol
