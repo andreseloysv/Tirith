@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -67,3 +68,22 @@ def test_canary_project_is_hidden_and_due_hourly(home: Path) -> None:
     assert canary_mod.tick(home, now, lambda *a: started.append(a))
     assert not canary_mod.tick(home, now, lambda *a: started.append(a))  # one at a time
     assert len(started) == 1
+
+
+def test_canary_tick_waits_for_the_plan_item_instead_of_looking_once(home: Path, monkeypatch) -> None:
+    real, calls = canary_mod._plan_item_done, []
+
+    def late(repo, text):
+        calls.append(text)
+        return len(calls) >= 3 and real(repo, text)
+
+    monkeypatch.setattr(canary_mod, "_plan_item_done", late)
+    row = canary_mod.run(home, wait_s=60, pump=dispatcher(home, drain_spawn(home)), sleep=lambda s: None)
+    assert row["state"] == "ok" and len(calls) >= 3
+
+
+def test_canary_tick_fails_after_the_wait(home: Path, monkeypatch) -> None:
+    monkeypatch.setattr(canary_mod, "_plan_item_done", lambda repo, text: False)
+    monkeypatch.setattr(canary_mod, "TICK_WAIT_S", 0.05)
+    row = canary_mod.run(home, wait_s=60, pump=dispatcher(home, drain_spawn(home)), sleep=lambda s: time.sleep(0.02))
+    assert row["state"] == "failed" and row["step"] == "tick"
