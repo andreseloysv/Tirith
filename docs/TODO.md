@@ -34,7 +34,8 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Revisar el plan (2026-10-31) (en revisión)
 - [x] Manager de guardia: atender el chat
 - [ ] CEO: revisar cómo trabaja el manager
-- [ ] Manager de guardia: atender el chat (en curso: manager-60259758)
+- [x] Manager de guardia: atender el chat
+- [x] Manager de guardia: atender el chat
 - [x] Manager de guardia: atender el chat
 - [x] Manager de guardia: atender el chat
 - [x] Manager de guardia: atender el chat
@@ -464,16 +465,16 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [x] El planificador no lanza a la vez dos lanes que tocan los mismos archivos. (check: `cd collector && uv run -q pytest -q tests -k conflicts`) (hecho: e8db252) <!-- tirith:{"id":"i-e6f95c7d"} -->
   - [x] Revisar: El planificador no lanza a la vez dos lanes que tocan los mismos archivos. (check: `cd collector && uv run -q pytest -q tests -k conflicts`)
 - [x] La cola de merge prueba varios lanes juntos en una sola pasada de tests y separa al culpable si falla. (check: `cd collector && uv run -q pytest -q tests -k mergetrain`) (hecho: 69fee04)
-- [ ] Cada elemento terminado muestra su evidencia en la app: salida de tests y capturas si cambia la interfaz. (check: `cd collector && uv run -q pytest -q tests -k evidence`) (en revisión) <!-- tirith:{"id":"i-a284892e"} -->
-  - [ ] Revisar: Cada elemento terminado muestra su evidencia en la app: salida de tests y capturas si cambia la interfaz. (check: `cd collector && uv run -q pytest -q tests -k evidence`) (en curso: revisión de velocidad-y-autonom-a-de-un-obje-9)
+- [x] Cada elemento terminado muestra su evidencia en la app: salida de tests y capturas si cambia la interfaz. (check: `cd collector && uv run -q pytest -q tests -k evidence`) (hecho: c3e1b9d) <!-- tirith:{"id":"i-a284892e"} -->
+  - [x] Revisar: Cada elemento terminado muestra su evidencia en la app: salida de tests y capturas si cambia la interfaz. (check: `cd collector && uv run -q pytest -q tests -k evidence`)
 - [x] La app muestra cuánto tarda un elemento en llegar a main, cuántos llegan por hora y cuántas veces hizo falta el dueño. (check: `cd collector && uv run -q pytest -q tests -k metrics`) <!-- tirith:{"id":"i-100695a9"} -->
   - [x] Revisar: La app muestra cuánto tarda un elemento en llegar a main, cuántos llegan por hora y cuántas veces hizo falta el dueño. (check: `cd collector && uv run -q pytest -q tests -k metrics`)
 - [x] Cada lane recibe en su brief un mapa del código con los archivos relevantes para su elemento. (check: `cd collector && uv run -q pytest -q tests -k codemap`) (hecho: 7da4eb3) <!-- tirith:{"id":"i-3d811adb"} -->
   - [x] Revisar: Cada lane recibe en su brief un mapa del código con los archivos relevantes para su elemento. (check: `cd collector && uv run -q pytest -q tests -k codemap`)
 - [x] `tirith plan add` muestra el id corto del elemento y todos los comandos lo aceptan. (check: `cd collector && uv run -q pytest -q tests -k item_id`) <!-- tirith:{"id":"i-d27c6822"} -->
   - [x] Revisar: `tirith plan add` muestra el id corto del elemento y todos los comandos lo aceptan. (check: `cd collector && uv run -q pytest -q tests -k item_id`) — falló: the merge did not go through: the review was interrupted; run it again
-- [ ] El dueño recibe un resumen visual de lo que llegó a main, con un botón de opinión que se convierte en elementos del plan. (check: `cd collector && uv run -q pytest -q tests -k digest`) (en revisión) <!-- tirith:{"id":"i-d2bd7370"} -->
-  - [ ] Revisar: El dueño recibe un resumen visual de lo que llegó a main, con un botón de opinión que se convierte en elementos del plan. (check: `cd collector && uv run -q pytest -q tests -k digest`) (en curso: revisión de velocidad-y-autonom-a-de-un-obje-10)
+- [x] El dueño recibe un resumen visual de lo que llegó a main, con un botón de opinión que se convierte en elementos del plan. (check: `cd collector && uv run -q pytest -q tests -k digest`) <!-- tirith:{"id":"i-d2bd7370"} -->
+  - [x] Revisar: El dueño recibe un resumen visual de lo que llegó a main, con un botón de opinión que se convierte en elementos del plan. (check: `cd collector && uv run -q pytest -q tests -k digest`)
 
 ## 17. Tirith se mejora usando Tirith
 
@@ -513,7 +514,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [x] Devolver una lane de continuación que reutiliza el worktree de otra funciona: relaunch_lane usa la rama real de la lane (mergeq.branch_of), no lane/<id>, que hoy falla con invalid reference: lane/u-testfix-port (check: `cd collector && uv run -q pytest -q tests -k send_back_continuation`) (hecho: 1d334c7)
 - [x] La app muestra arriba, sin preguntar, qué entró hoy en main, qué se está haciendo, qué está atascado y quién lo lleva. (check: `cd collector && uv run -q pytest -q tests -k now_bar`) (hecho: 5e46807) <!-- tirith:{"id":"i-05bc1f8a"} -->
   - [x] Revisar: La app muestra arriba, sin preguntar, qué entró hoy en main, qué se está haciendo, qué está atascado y quién lo lleva. (check: `cd collector && uv run -q pytest -q tests -k now_bar`)
-- [ ] Cada petición del dueño en el chat queda ligada a un elemento del plan o a una respuesta, y la app lista sus peticiones con su estado. (check: `cd collector && uv run -q pytest -q tests -k owner_requests`)
+- [ ] Cada petición del dueño en el chat queda ligada a un elemento del plan o a una respuesta, y la app lista sus peticiones con su estado. (check: `cd collector && uv run -q pytest -q tests -k owner_requests`) (en revisión) <!-- tirith:{"id":"i-37316566"} -->
 - [ ] Al volver, el dueño ve un resumen de lo que pasó mientras no estaba: lo que entró, lo que falló y lo que sigue. (check: `cd collector && uv run -q pytest -q tests -k while_away`)
 - [x] Un ciclo del collector tarda menos de 5 segundos con carga alta: hoy llegó a 66 s, 49 s de ellos en el despachador. (check: `cd collector && uv run -q pytest -q tests -k cycle_budget`) (hecho: f22221a)
 - [x] El tamaño de contexto del manager se mide con la última petición, no con la suma de todas las del turno. (check: `cd collector && uv run -q pytest -q tests -k context_tokens`) (hecho: ee2eb5a)
@@ -544,8 +545,8 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [x] La regla workspace-write no toma las expresiones de sed -i -e como rutas de escritura (hoy bloquea /^=======$/d como si fuera un archivo). (check: `cd collector && uv run -q pytest -q tests -k workspace_write_sed_expression`) (hecho: ca1aa39)
 - [x] Un árbol que ya pasó sus tests no se vuelve a probar: Tirith recuerda el árbol probado, y ni la lane, ni la claim check, ni la cola repiten esa etapa. (check: `cd collector && uv run -q pytest -q tests -k same_tree_is_not_tested_again`) (hecho: 1d334c7)
 - [x] Una lane cuyo commit ya está en otra rama de la cola o en main se para y sale de la cola sola, sin correr más tests. (check: `cd collector && uv run -q pytest -q tests -k absorbed_lane_stops`) (hecho: 1d334c7)
-- [ ] Tirith mide el trabajo tirado (suites repetidas, fusiones probadas descartadas, lanes absorbidas) y lo muestra en la salud: la meta del dueño es no hacer trabajo estúpido. (check: `cd collector && uv run -q pytest -q tests -k wasted_work`) (en revisión) <!-- tirith:{"id":"i-24455b97"} -->
-  - [ ] Revisar: Tirith mide el trabajo tirado (suites repetidas, fusiones probadas descartadas, lanes absorbidas) y lo muestra en la salud: la meta del dueño es no hacer trabajo estúpido. (check: `cd collector && uv run -q pytest -q tests -k wasted_work`) (en curso: revisión de tirith-se-mejora-usando-tirith-45)
+- [x] Tirith mide el trabajo tirado (suites repetidas, fusiones probadas descartadas, lanes absorbidas) y lo muestra en la salud: la meta del dueño es no hacer trabajo estúpido. (check: `cd collector && uv run -q pytest -q tests -k wasted_work`) (hecho: 2b11e1d) <!-- tirith:{"id":"i-24455b97"} -->
+  - [x] Revisar: Tirith mide el trabajo tirado (suites repetidas, fusiones probadas descartadas, lanes absorbidas) y lo muestra en la salud: la meta del dueño es no hacer trabajo estúpido. (check: `cd collector && uv run -q pytest -q tests -k wasted_work`)
 - [ ] El push automático de main (pushplan) no frena el despachador: corre fuera de la pasada, y un push que falla espera cada vez más (1, 2, 4… hasta 30 min) en vez de repetirse cada 60 s con sus hooks. (check: `cd collector && uv run -q pytest -q tests -k push_plan_backoff`) <!-- tirith:{"id":"i-c1227b58903f4ddaa9bb866613d5df4f","depends_on":[],"writes":[]} -->
 - [x] Una revisión de lane en curso no se corta cuando el collector se recarga por un cambio de su código. (check: `cd collector && uv run -q pytest -q tests -k review_survives_reload`) <!-- tirith:{"id":"i-cb38390bc26345d5a6ff71380c48e5fd","depends_on":[],"writes":[]} -->
 - [ ] Resolver el conflicto de merge de la lane tirith-se-mejora-usando-tirith-16 con main (collector/tests/test_plangate.py) para que su revisión pueda mergear (check: `git merge-base --is-ancestor lane/tirith-se-mejora-usando-tirith-16 main`) (en revisión) <!-- tirith:{"id":"i-7f2847c3","depends_on":[],"writes":[]} -->
@@ -559,6 +560,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
   - [x] Revisar: tirith lane review --tests-only que-los-agentes-no-se-queden-cal crea el enlace node_modules en su worktree, que hoy sigue sin él tras -30 y -33 aunque repo y package.json son correctos, con un test que reproduce ese lane. (check: `cd collector && uv run -q pytest -q tests -k review_link_real_lane`)
 - [x] Quitar la worktree de un lane Node no borra el node_modules de main a través del enlace: el de ~/DEVELOP/agentsmessenger desapareció tras cerrar lanes con enlace. Encontrar qué lo borra, arreglarlo y volver a instalarlo con npm ci. (check: `test -d /Users/andreseloyasanchezva/DEVELOP/agentsmessenger/node_modules/tweetnacl && cd collector && uv run -q pytest -q tests -k worktree_removal_keeps_node_modules`) (hecho: ad9c8fb) <!-- tirith:{"id":"i-bf55f5fc","depends_on":[],"writes":[]} -->
 - [ ] Deflake test_plangate dirty-plan test (test_report_is_kept_when_the_plan_is_dirty_and_written_later): no timing cause found by reading; needs a reproduction under load
+- [ ] La app muestra la lista de peticiones del dueño (state.owner_requests) con su vínculo y estado
 - [x] La rama lane/tirith-se-mejora-usando-tirith-38 (registro de fricción) se fusiona con main: resolver el conflicto en collector/tirith/cli.py conservando ambos cambios y que pasen los tests de friction. (check: `cd collector && uv run -q pytest -q tests -k friction`) (hecho: a59ac81) <!-- tirith:{"id":"i-2ffb6c95","depends_on":[],"writes":[]} -->
   - [x] Revisar: La rama lane/tirith-se-mejora-usando-tirith-38 (registro de fricción) se fusiona con main: resolver el conflicto en collector/tirith/cli.py conservando ambos cambios y que pasen los tests de friction. (check: `cd collector && uv run -q pytest -q tests -k friction`)
 - [x] La rama lane/tirith-se-mejora-usando-tirith-37 (el enlace node_modules nunca entra en un commit) se fusiona con main: resolver el conflicto en collector/tests/test_worktree_node_modules.py conservando los tests de ambos lados. (check: `cd collector && uv run -q pytest -q tests -k node_modules`) <!-- tirith:{"id":"i-cc75b3b1","depends_on":[],"writes":[]} -->

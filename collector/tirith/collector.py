@@ -38,6 +38,7 @@ from tirith import github as github_mod
 from tirith import manifest as manifest_mod
 from tirith import setup as setup_mod
 from tirith import roadmap as roadmap_mod
+from tirith import digest as digest_mod
 from tirith import mergeq as mergeq_mod
 from tirith import hooks as hooks_mod
 from tirith import autopilot as autopilot_mod
@@ -1419,6 +1420,7 @@ class Collector:
         for proj_row in projects:
             proj_row["env"] = projenv_mod.load(self.home, proj_row["id"])  # shown in full on Settings
             proj_row["merge_queue"] = mergeq_mod.view(self.home, proj_row["id"])
+            proj_row["digest"] = digest_mod.build(self.home, proj_row["id"])
             guard = proj_row.get("guard") or {}
             proj_row["setup"] = setup_mod.build(
                 Path(proj_row["folder"]) if proj_row.get("folder") else None, proj_row["id"], machine, runs,

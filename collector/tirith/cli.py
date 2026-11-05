@@ -31,6 +31,7 @@ from tirith.guardwrap import (
 )
 from tirith import actions as actions_mod
 from tirith import friction as friction_mod
+from tirith import digest as digest_mod
 from tirith import coordination
 from tirith import agentrun as agentrun_mod
 from tirith import asks as asks_mod
@@ -1824,6 +1825,30 @@ def _cmd_plan_add(args) -> int:
     return 0
 
 
+def _cmd_digest(args) -> int:
+    home = _home(args)
+    if args.digest_command == "feedback":
+        repo = plangate_mod.repo_of(home, args.project)
+        if repo is None:
+            print(f"tirith digest: unknown project '{args.project}'", file=sys.stderr)
+            return 3
+        who = os.environ.get("TIRITH_LANE") or ("manager" if in_manager_session() else "owner")
+        try:
+            added = digest_mod.feedback(home, repo, args.project, args.text, who, args.step)
+        except plangate_mod.PlanGateError as error:
+            print(f"tirith digest feedback: {error}", file=sys.stderr)
+            return 3
+        for text in added:
+            print(f"added to the plan: {text}")
+        return 0
+    data = digest_mod.build(home, args.project)
+    if args.json:
+        print(json.dumps(data, indent=2))
+    else:
+        print(digest_mod.write(home, args.project))
+    return 0
+
+
 def _cmd_friction(args) -> int:
     home = _home(args)
     if args.friction_command == "record":
@@ -3014,6 +3039,19 @@ def build_parser() -> argparse.ArgumentParser:
     fr_surf.add_argument("--project", required=True)
     for f in (fr_rec, fr_list, fr_surf):
         f.set_defaults(func=_cmd_friction)
+
+    digest = sub.add_parser("digest", parents=[common], help="what reached main, and the owner's opinion as plan items")
+    digest.add_argument("--project", default=None)
+    digest.add_argument("--json", action="store_true", help="print the data instead of writing the page")
+    digest.add_argument("--step", default=None)
+    digest.add_argument("--text", default=None)
+    digest.set_defaults(func=_cmd_digest, digest_command="show")
+    digest_sub = digest.add_subparsers(dest="digest_command")
+    dg_fb = digest_sub.add_parser("feedback", parents=[common], help="turn an opinion into open plan items")
+    dg_fb.add_argument("--project", required=True)
+    dg_fb.add_argument("--step", default=None, help="step number (default: the last step with open items)")
+    dg_fb.add_argument("--text", required=True, help="the opinion; one plan item per line")
+    dg_fb.set_defaults(func=_cmd_digest, digest_command="feedback", json=False)
 
     plan = sub.add_parser("plan", parents=[common],
                           help="the plan is the only way to start and finish an agent: add items, report outcomes")
