@@ -1,6 +1,6 @@
-/* «Accesos» view: what each agent touched (state.accesses, docs/CONTRACT-access-audit.md). Only for looking things
-   up: no alerts, nothing in Your turn, no counter in the sidebar. Grouped by agent, filtered by system and date,
-   each group linked to the agent and to the plan point it works on. Agents are shown by alias, never by product. */
+/* «Access» view: what the agents reached outside the machine (state.accesses, docs/CONTRACT-access-audit.md), filtered
+   by system, date and the search box, with Block / Unblock per destination. The full list of every agent action is
+   not shown (the owner found it noise); its rows stay in <home>/access. */
 (function () {
   var T = window.T, esc = T.esc, ui = T.ui, DAY = 86400000;
   var f = ui.acc = ui.acc || { sys: '', days: '7', open: {} };
@@ -151,12 +151,10 @@
     var all = s.accesses || [], systems = [['', 'All systems']];
     var seen = {}; all.forEach(function (r) { if (r.system && !seen[r.system]) { seen[r.system] = 1; systems.push([r.system, r.system]); } });
     var tb = '<div class="toolbar">' + chips(systems, f.sys, 'accsys') + ' ' + chips(RANGES, f.days, 'accdays') + '</div>';
-    var gs = T.accessGroups(s, f.sys, f.days);
     /* one scroll area for all of it: the External section above the list once pushed the list out of reach */
-    el.innerHTML = tb + '<div class="listwrap" data-scroll="accesos">' + externalSection(s) +
-      '<p class="mut sm">Everything the agents did, recorded by Tirith. Values of secrets are never stored.</p>' +
-      (gs.length ? '<ul class="rows card">' + gs.map(function (g) { return group(s, g); }).join('') + '</ul>'
-        : T.empty('No accesses recorded for these filters')) + '</div>';
+    /* only what reached outside the machine: the full list of every agent action was noise to the owner (the
+       rows stay in <home>/access for looking things up) */
+    el.innerHTML = tb + '<div class="listwrap" data-scroll="accesos">' + externalSection(s) + '</div>';
   }
   T.views.accesos = view;
 
