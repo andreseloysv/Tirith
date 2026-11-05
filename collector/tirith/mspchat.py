@@ -5,7 +5,10 @@ caller writes ``send`` lines to the host and feeds ``ui`` lines to its normal ev
 
 Flow: ``initialize`` -> ``session/start`` -> one ``turn/start`` per user message. The host asks permission with
 ``approval/request`` (a server request answered with an empty receipt); the decision is ``approval/decide``.
-Not supported: resuming a host session, interrupting a turn (``stop`` / ``restart`` end the process).
+``interrupt()`` sends ``turn/interrupt`` (``commandId`` + ``sessionId``, optional ``turnId``/``retract``) and
+``resume(session_id)`` sends ``session/resume`` (``commandId`` + ``sessionId``) instead of ``session/start``; both
+param sets are taken from the schema of ``muse schema generate-json-schema``.
+Not supported: ``userInput/request`` dialogs.
 """
 
 from __future__ import annotations
@@ -61,6 +64,9 @@ class Msp:
         self.streamed: set[str] = set()
         self.stepped: set[str] = set()
         self.said: list[str] = []  # the assistant text of the running turn
+        self.resume_id: str | None = None  # a host session to reopen instead of starting a new one
+        self.turn_ids: dict[int, str] = {}  # turn/start request id -> command id
+        self.turn: str | None = None  # the running turn id
 
     def _id(self) -> int:
         self.next += 1
@@ -78,9 +84,26 @@ class Msp:
 
     def _turn(self, session: str, text: str) -> str:
         command = f"tirith-{self._id()}"
-        return self._request("turn/start", {"sessionId": session, "commandId": command,
-                                            "reasoningEffort": self.effort,
-                                            "input": [{"type": "text", "text": text}]})[1]
+        rid, line = self._request("turn/start", {"sessionId": session, "commandId": command,
+                                                 "reasoningEffort": self.effort,
+                                                 "input": [{"type": "text", "text": text}]})
+        self.turn_ids[rid] = command
+        return line
+
+    def resume(self, session_id: str) -> None:
+        """Reopen a host session (``session/resume``) after ``hello``; call before the handshake finishes."""
+        self.resume_id = session_id
+
+    def interrupt(self, retract: bool = False) -> str | None:
+        """The ``turn/interrupt`` line for the running turn, None when no session is open."""
+        if not self.session:
+            return None
+        params: dict = {"sessionId": self.session, "commandId": f"tirith-{self._id()}"}
+        if self.turn:
+            params["turnId"] = self.turn
+        if retract:
+            params["retract"] = True
+        return self._request("turn/interrupt", params)[1]
 
     def user(self, text: str) -> list[str]:
         """One user message; held until the session is open."""
@@ -124,8 +147,12 @@ class Msp:
             out.ui.append(_text(f"Muse error: {v['error'].get('message') or 'request failed'}"))
             return
         if rid == self.init_id and rid:
-            self.start_id, line = self._request("session/start", {"commandId": "tirith-start",
-                                                                  "approvalMode": "promptUnmatched"})
+            if self.resume_id:
+                self.start_id, line = self._request("session/resume", {"commandId": "tirith-resume",
+                                                                       "sessionId": self.resume_id})
+            else:
+                self.start_id, line = self._request("session/start", {"commandId": "tirith-start",
+                                                                      "approvalMode": "promptUnmatched"})
             out.send.append(line)
         elif rid == self.start_id and rid:
             sid = ((v.get("result") or {}).get("session") or {}).get("sessionId")
@@ -135,6 +162,10 @@ class Msp:
             self.session = sid
             queued, self.queue = self.queue, []
             out.send.extend(self._turn(sid, t) for t in queued)
+        elif rid in self.turn_ids:
+            self.turn_ids.pop(rid)
+            tid = (v.get("result") or {}).get("turnId")
+            self.turn = tid if isinstance(tid, str) else None
 
     def _on_request(self, method: str, rid, p: dict, out: Out) -> None:
         out.send.append(_frame({"jsonrpc": "2.0", "id": rid, "result": {}}))  # a receipt; the decision is a command
@@ -182,6 +213,7 @@ class Msp:
                     {"command": item["commandText"]} if item.get("commandText") else "")
                 out.ui.append(_tool(iid, name, args))
         elif method == "turn/completed":
+            self.turn = None
             failed = p.get("terminal") != "completed"
             err = p.get("error")
             if isinstance(err, dict) and err.get("message"):
