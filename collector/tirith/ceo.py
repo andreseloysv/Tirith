@@ -44,6 +44,7 @@ RUNS_PER_DAY = 72
 WATCH_WINDOW_S = 6 * 3600.0  # launch failures and owner waits the snapshot looks back on
 LONG_REVIEW_S = 3600.0       # a live review running longer than this is counted as long
 UNWELL_ALARM_MIN = 20       # a health check not ok (healing, amber) this long wakes the CEO; failed wakes it at once
+UNWELL_FORGET_MIN = 10       # ... and is forgotten only after it was ok this long in a row (it may come and go)
 OWNER_WORDS = re.compile(r"\b(?:owner|owner's|dueñ[oa])\b", re.I)
 MAX_DIRECTIVES = 3        # open at a time
 MEMORY_CHARS = 16_000     # of findings and decisions in one brief
@@ -231,11 +232,21 @@ def alarm_checks(home: Path, book: dict, now: datetime) -> dict[str, str]:
     since when each check is not ok; a check that is ok again leaves it."""
     bad = {k: v for k, v in _health(home).items() if v.get("level") not in (None, "ok")}
     unwell = book.setdefault("unwell", {})
-    for key in [k for k in unwell if k not in bad]:
-        del unwell[key]
+    for key in list(unwell):
+        rec = unwell[key] if isinstance(unwell[key], dict) else {"since": unwell[key]}
+        if key in bad:
+            rec.pop("ok_since", None)
+        else:  # a check that comes and goes stays counted until it was ok for UNWELL_FORGET_MIN in a row
+            rec.setdefault("ok_since", now_iso(now))
+            ok = parse_iso(rec["ok_since"])
+            if ok is None or (now - ok).total_seconds() >= UNWELL_FORGET_MIN * 60:
+                del unwell[key]
+                continue
+        unwell[key] = rec
     out = {}
     for key, check in bad.items():
-        since = parse_iso(unwell.setdefault(key, now_iso(now)))
+        rec = unwell.setdefault(key, {"since": now_iso(now)})
+        since = parse_iso(rec["since"])
         if check.get("level") == "failed" or (since and (now - since).total_seconds() >= UNWELL_ALARM_MIN * 60):
             out[key] = str(check.get("text") or "")
     return out
