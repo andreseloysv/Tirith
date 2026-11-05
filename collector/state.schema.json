@@ -29,7 +29,8 @@
         "merged": {"type": "array", "items": {"type": "object"}},
         "doing": {"type": "array", "items": {"type": "object"}},
         "stuck": {"type": "array", "items": {"type": "object"}},
-        "counts": {"type": "object"}
+        "counts": {"type": "object"},
+        "metrics": {"type": "object"}
       }
     },
     "collector": {
