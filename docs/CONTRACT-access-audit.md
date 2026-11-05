@@ -91,6 +91,11 @@ The owner's first question is what an agent reached outside the machine, so ever
 The «Accesos» page starts with **External**: every such destination, newest first, with its kind (Web, API,
 WebSocket, SSH, Git remote, Packages, Search, MCP, HTTPS…), the agent (role and name) and what caused it.
 
+Only the long-running collector watches the network, looks domains up and starts the proxy: a cycle run
+inside a test once listed the machine's real connections (a test lane with pid 1 is every process's ancestor)
+and ran `openssl` lookups from inside a lane. Certificates are read on port 443 only; plain HTTP has none, and
+its domain (the Host header) is seen only by the proxy.
+
 ## Blocking a destination
 
 The owner blocks a destination with **Block** on a line of External (or `tirith net block <domain|ip|cidr>`;
