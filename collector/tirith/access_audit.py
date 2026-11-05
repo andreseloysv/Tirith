@@ -187,6 +187,43 @@ def env_secret(name: str) -> bool:
     return bool(_ENV_SECRET.search(name))
 
 
+def secret_names(env: dict) -> list[str]:
+    """The names (never values) of the variables in ``env`` that look like keys; Tirith's own are left out."""
+    return sorted(n for n in env if env_secret(n) and not n.startswith("TIRITH") and _ENV_NAME.fullmatch(n))
+
+
+def keys_for(domain: str, names: list[str]) -> list[str]:
+    """The key names of ``names`` that belong to the service at ``domain``: those holding its name (``github`` in
+    ``api.github.com`` gives ``GITHUB_TOKEN``; GitHub's ``GH_`` names too)."""
+    labels = [l for l in str(domain or "").lower().split(":")[0].split(".") if l]
+    if len(labels) < 2:
+        return []
+    service = labels[-2].upper()
+    if len(service) < 3:
+        return []
+    return [n for n in names if service in n or (service == "GITHUB" and n.startswith("GH_"))]
+
+
+def annotate_keys(home: Path, rows: list[dict]) -> list[dict]:
+    """Each proxy or connection row gets ``keys``: the environment keys its lane had for that destination (names),
+    and ``login: true`` when it had none (the program then uses its own saved login, e.g. in the keychain)."""
+    lanes: dict[str, list[str] | None] = {}
+    for row in rows:
+        if row.get("tool") not in ("proxy", "connection") or not row.get("lane"):
+            continue
+        lane_id = row["lane"]
+        if lane_id not in lanes:
+            lane = read_json(lane_path(home, lane_id), {}) or {}
+            lanes[lane_id] = lane.get("env_secrets") if isinstance(lane.get("env_secrets"), list) else None
+        names = lanes[lane_id]
+        if names is None:
+            continue  # a lane from before keys were noted: unknown
+        domain = row.get("domain") or str((row.get("external") or [""])[0]).split(" ", 1)[-1]
+        found = keys_for(domain, names)
+        row["keys"], row["login"] = found, not found
+    return rows
+
+
 def plan_point(home: Path, lane_id) -> str | None:
     """The plan point a lane works on: ``<step>: <item>`` from its lane file, or None."""
     if not lane_id:
