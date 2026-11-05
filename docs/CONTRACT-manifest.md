@@ -108,6 +108,11 @@ created: more than 2 workers at once (`CEO_WORKERS`), more than 1 h of work with
 (`CEO_UNATTENDED_HOURS`), or a failure the self-check does not fix. Reason or `None`; `promote.ceo_decision(...)` gives
 `{rule, measured, threshold, reason}` (`workers`, `unattended`, `selfcheck`). `"always"` and `"off"` never promote.
 
+When the work is small again (at most `CEO_WORKERS` workers; for a manager, fewer than `PARALLEL_ITEMS` parallel items)
+and an on-demand role has had nothing to do for more than `RETIRE_IDLE_SECONDS` (3600), `promote.retire_decision(mode,
+role, workers, idle_seconds, parallel_items)` returns `{rule: "idle_seconds", measured, threshold, reason}` and
+`promote.retire_if_idle(home, ...)` also appends the `retire` row to `company.jsonl`. `"always"` and `"off"` never retire.
+
 Every promotion or retirement is appended to `<home>/company.jsonl` by `promote.log_change(home, event, role, rule,
 measured, threshold, reason)` (`event` = `promote` | `retire`; `log_decision` records a `manager_decision`), one line
 `{ts, event, role, rule, measured, threshold, reason}`; `promote.read_log(home)` reads it back.

@@ -27,6 +27,7 @@ COMPANY_LOG = "company.jsonl"
 PARALLEL_ITEMS = 2
 CEO_WORKERS = 2            # a CEO is created with MORE than this many workers at once
 CEO_UNATTENDED_HOURS = 1   # ... or with more than this many hours of work nobody watches
+RETIRE_IDLE_SECONDS = 3600  # an on-demand CEO or manager retires after this long with nothing to do
 _SUBAGENT_RE = re.compile(r"sub-?agent|subagente|tirith (?:lane run|launch)", re.IGNORECASE)
 
 
@@ -97,6 +98,33 @@ def promote_to_ceo(mode: str, workers: int = 0, unattended_hours: float = 0.0,
     """Why a CEO should be created, or ``None`` to go on without one."""
     decision = ceo_decision(mode, workers, unattended_hours, selfcheck_failed)
     return decision["reason"] if decision else None
+
+
+def retire_decision(mode: str, role: str, workers: int = 0, idle_seconds: float = 0.0,
+                    parallel_items: int = 1) -> dict | None:
+    """The rule that retires an on-demand CEO or manager: ``{rule, measured, threshold, reason}``, or ``None``.
+
+    Only with ``[roles] <role> = "on-demand"``, and only when the work is small again (the worker count is at
+    or below ``CEO_WORKERS``, and for a manager fewer than ``PARALLEL_ITEMS`` items run in parallel) and the
+    role has had nothing to do for more than ``RETIRE_IDLE_SECONDS``."""
+    if mode != "on-demand" or role not in ("ceo", "manager"):
+        return None
+    if workers > CEO_WORKERS or (role == "manager" and parallel_items >= PARALLEL_ITEMS):
+        return None
+    if idle_seconds > RETIRE_IDLE_SECONDS:
+        return {"rule": "idle_seconds", "measured": idle_seconds, "threshold": RETIRE_IDLE_SECONDS,
+                "reason": f"small work again and nothing to do for {idle_seconds:g} s"}
+    return None
+
+
+def retire_if_idle(home: Path, mode: str, role: str, workers: int = 0, idle_seconds: float = 0.0,
+                   parallel_items: int = 1, now: datetime | None = None) -> dict | None:
+    """Retire the role when ``retire_decision`` says so and record it in ``company.jsonl``; returns the row."""
+    decision = retire_decision(mode, role, workers, idle_seconds, parallel_items)
+    if decision is None:
+        return None
+    return log_change(home, "retire", role, decision["rule"], decision["measured"], decision["threshold"],
+                      decision["reason"], now)
 
 
 def log_change(home: Path, event: str, role: str, rule: str, measured, threshold, reason: str = "",
