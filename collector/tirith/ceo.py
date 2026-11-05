@@ -757,6 +757,10 @@ def _settle_lanes(home: Path, book: dict, now: datetime) -> bool:
             if data.get("process"):
                 book["process_at"] = now_iso(now)  # questioned the way of working: due again in a day
             book["every_min"] = data["next_review_min"]  # its own choice, from when it answered
+            if sent.get("directives"):  # the same alarm may wake it again only ALARM_REPEAT_MIN after this end
+                fired = book.setdefault("alarm_fired", {})
+                for text in (book.get("alarm_lane") or {}).get(lane["id"], []):
+                    fired[text] = now_iso(now)
             book["next_due"] = now_iso(now + timedelta(minutes=data["next_review_min"]))
         except ResultError as err:
             row["error"] = str(err)
@@ -884,6 +888,11 @@ def _run(home: Path, config: Config, now: datetime, cfg: dict, spawn: Callable |
             append_jsonl(folder(home) / "runs.jsonl", {"id": lane_id, "at": now_iso(now), "status": "started",
                                                        **({"alarm": sorted(alarm)} if alarm else {})})
             book.update(fp=fp, last_at=now_iso(now))
+            if alarm:  # remembered so the end of this run, not its start, begins the alarm's wait
+                lanes_alarm = book.setdefault("alarm_lane", {})
+                lanes_alarm[lane_id] = [f"{k}: {v}" for k, v in alarm.items()]
+                for old in sorted(lanes_alarm)[:-50]:
+                    del lanes_alarm[old]
         except (launch_mod.LaunchError, plangate_mod.PlanGateError) as err:
             append_jsonl(folder(home) / "runs.jsonl", {"id": f"fail-{slot}", "at": now_iso(now),
                                                        "status": "failed", "error": str(err)})
