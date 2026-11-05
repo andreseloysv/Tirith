@@ -173,7 +173,7 @@ def commit_change(home: Path, repo: Path, project: str, mutate: Callable[[str], 
             raise PlanGateError(f"{rel} has uncommitted changes, so it was left as it is")
         text = path.read_text(encoding="utf-8") if path.exists() else "# TODO\n"
         try:
-            new = mutate(text)
+            new = roadmap_mod.repair_duplicate_ids(mutate(text))
         except roadmap_mod.EditError as err:
             raise PlanGateError(str(err))
         if new == text:
