@@ -200,6 +200,54 @@ def test_dirty_checkout_with_other_files_still_lands(env, home: Path) -> None:
     assert "# local edit" in (repo / "tirith.toml").read_text()  # the owner's edit is untouched
 
 
+def _numbered(first: str, last: str) -> str:
+    return first + "\n" + "".join(f"line {n}\n" for n in range(2, 50)) + last + "\n"
+
+
+def test_mergeq_dirty_keeps_change_in_another_hunk_and_lands(env, home: Path) -> None:
+    repo, _ = env
+    (repo / "f.txt").write_text(_numbered("one", "fifty"))
+    (repo / "g.txt").write_text("g\n")
+    git(repo, "add", "."), git(repo, "commit", "-q", "-m", "f")
+    make_lane(home, repo, "late", {"f.txt": _numbered("one", "FIFTY")})
+    (repo / "f.txt").write_text(_numbered("ONE", "fifty"))
+    (repo / "g.txt").write_text("g staged\n")
+    git(repo, "add", "g.txt")
+    mergeq_mod.enqueue(home, "late")
+    row = mergeq_mod.process_next(home, load_config(home), relaunch=Sender())
+    assert row["result"] == "merged"
+    assert (repo / "f.txt").read_text() == _numbered("ONE", "FIFTY")
+    assert git(repo, "status", "--porcelain", "--untracked-files=no") == "M f.txt\nM  g.txt"
+    assert git(repo, "show", "HEAD:f.txt") == _numbered("one", "FIFTY").strip()
+
+
+def test_mergeq_dirty_keeps_change_staged_stays_staged(env, home: Path) -> None:
+    repo, _ = env
+    (repo / "f.txt").write_text(_numbered("one", "fifty"))
+    git(repo, "add", "."), git(repo, "commit", "-q", "-m", "f")
+    make_lane(home, repo, "late", {"f.txt": _numbered("one", "FIFTY")})
+    (repo / "f.txt").write_text(_numbered("ONE", "fifty"))
+    git(repo, "add", "f.txt")
+    mergeq_mod.enqueue(home, "late")
+    assert mergeq_mod.process_next(home, load_config(home), relaunch=Sender())["result"] == "merged"
+    assert git(repo, "status", "--porcelain", "--untracked-files=no") == "M  f.txt"
+    assert (repo / "f.txt").read_text() == _numbered("ONE", "FIFTY")
+
+
+def test_mergeq_dirty_real_conflict_still_waits_and_keeps_checkout_identical(env, home: Path) -> None:
+    repo, _ = env
+    (repo / "f.txt").write_text(_numbered("one", "fifty"))
+    git(repo, "add", "."), git(repo, "commit", "-q", "-m", "f")
+    make_lane(home, repo, "late", {"f.txt": _numbered("lane", "fifty")})
+    (repo / "f.txt").write_text(_numbered("owner", "fifty"))
+    before, head = (repo / "f.txt").read_bytes(), git(repo, "rev-parse", "HEAD")
+    mergeq_mod.enqueue(home, "late")
+    row = mergeq_mod.process_next(home, load_config(home), relaunch=Sender())
+    assert row["result"] == "waiting" and "f.txt" in row["message"]
+    assert (repo / "f.txt").read_bytes() == before and git(repo, "rev-parse", "HEAD") == head
+    assert git(repo, "status", "--porcelain", "--untracked-files=no") == "M f.txt"
+
+
 def test_stale_index_lock_in_main_is_recovered(env, home: Path) -> None:
     repo, _ = env
     make_lane(home, repo, "locked", {"l.txt": "1"})
