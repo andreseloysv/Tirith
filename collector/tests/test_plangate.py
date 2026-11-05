@@ -299,6 +299,15 @@ def test_the_writer_lock_serializes_changes(proj, home: Path) -> None:
     assert len(_commits(repo)) == before + 6
 
 
+def test_ensure_item_gives_a_fresh_id_to_a_repeated_text(proj, home: Path) -> None:
+    repo, _ = proj
+    for _ in range(2):
+        plangate.ensure_item(home, repo, "demo", "1", "Revisar el plan (2026-11-05)", always_new=True)
+    items = [i for i in roadmap.parse(_plan(repo))[0]["items"] if i["text"].startswith("Revisar el plan")]
+    ids = [i.get("id") or roadmap.item_id(i["text"]) for i in items]
+    assert len(ids) == 2 and len(set(ids)) == 2
+
+
 # -- finish: an outcome, no exceptions --------------------------------------------------------------
 
 
