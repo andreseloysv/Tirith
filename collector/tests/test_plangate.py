@@ -1044,3 +1044,21 @@ def test_tirith_do_dry_run_starts_nothing_and_new_step(proj, home: Path) -> None
     assert main(["do", "One thing. Another thing.", "--project", "demo", "--dry-run"]) == 0
     assert "## 3. One thing" in _plan(repo) and started == []
     assert main(["do", " ", "--project", "demo"]) == 3
+
+
+def test_item_stays_open_until_merged_an_interactive_lane_with_unmerged_work(proj, home: Path) -> None:
+    repo, _ = proj
+    worktree = _in_worktree(home, repo, "chat9", report=False, interactive=True)
+    _commit_in(worktree)
+    lane = read_json(home / "lanes" / "chat9.json", {})
+    assert plangate.lane_ended(home, lane) == "done"
+    assert "- [ ] Build the button." in _plan(repo) and "- [x] Build the button." not in _plan(repo)
+
+
+def test_item_stays_open_until_merged_an_interactive_lane_whose_work_is_on_main_is_ticked(proj, home: Path) -> None:
+    repo, _ = proj
+    worktree = _in_worktree(home, repo, "chat8", report=False, interactive=True)
+    _commit_in(worktree)
+    _merge_named(repo, "lane/chat8", "Merge lane/chat8: Work")
+    assert plangate.lane_ended(home, read_json(home / "lanes" / "chat8.json", {})) == "done"
+    assert "- [x] Build the button." in _plan(repo)
