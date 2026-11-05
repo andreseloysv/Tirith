@@ -1064,3 +1064,6 @@ button.vwho:hover b { text-decoration: underline; }
 .stcard .stk { display: inline-block; min-width: 72px; color: var(--mut, #64748b); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
 .stcard .stbar { font-family: ui-monospace, monospace; letter-spacing: -1px; color: #2563eb; } .stcard .stbar i { color: #cbd5e1; font-style: normal; }
 .stcard .stown b { color: #b45309; } .stcard .stsen { font-size: 12px; }
+.co-row { display: flex; gap: 14px; padding: 8px 0; border-bottom: 1px solid var(--line, rgba(128,128,128,.2)); }
+.co-when { width: 84px; flex: none; }
+.co-retire b { color: #e0a24a; } .co-promote b { color: #4cc9a4; }
