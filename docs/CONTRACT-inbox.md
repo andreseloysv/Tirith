@@ -18,7 +18,7 @@ collector: state.inbox -> the Plan shows the chip and the answers under the step
 
 | Row | Fields |
 |---|---|
-| request | `id`, `at`, `kind` (`finish`, `ask`, `setup`, `chat`, `autopilot`, `autopilot-proposal`, `directive`, `plan-refresh`, `plan-new` or `plan-edit`), `project`, `step`, `text`, `from` (`"owner"`, `"tirith"` for `autopilot-proposal`, `"ceo"` for `directive`: the CEO's policy for the manager, step `ceo`, pending until the manager answers done / cannot / disagree, see `docs/CONTRACT-ceo.md`), `status` (`"open"`) |
+| request | `id`, `at`, `kind` (`finish`, `ask`, `setup`, `chat`, `autopilot`, `autopilot-proposal`, `directive`, `plan-refresh`, `plan-new` or `plan-edit`), `project`, `step`, `text`, `from` (`"owner"`, `"manager"` for `tirith inbox add` run inside a lane (`TIRITH_LANE` set: the manager's own plan edit is no owner request and never interrupts its turn), `"tirith"` for `autopilot-proposal`, `"ceo"` for `directive`: the CEO's policy for the manager, step `ceo`, pending until the manager answers done / cannot / disagree, see `docs/CONTRACT-ceo.md`), `status` (`"open"`) |
 | answer | `id` (of the request), `at`, `kind: "answer"`, `by` (`manager`, `brain` or `tirith`), `text` (markdown), `auto` (bool), optional `lane` (id of the lane that took the request) |
 | done | `id`, `at`, `kind: "done"` |
 
