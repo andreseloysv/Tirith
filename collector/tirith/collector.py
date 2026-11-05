@@ -829,7 +829,12 @@ class Collector:
             netwatch_mod.sample(self.home, lanes)
         except Exception as err:  # noqa: BLE001 - a watch is no reason to lose the state
             print(f"tirith: network watch: {type(err).__name__}: {err}", file=sys.stderr)
-        return access_audit_mod.recent(self.home)
+        rows = access_audit_mod.recent(self.home)
+        try:
+            netwatch_mod.annotate(rows)
+        except Exception:  # noqa: BLE001 - a missing domain is no reason to lose the state
+            pass
+        return rows
 
     def architecture_for(self, proj: ProjectConfig) -> dict:
         """Stored brain/manual map, else config map, else empty/none.
