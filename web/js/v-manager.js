@@ -582,9 +582,18 @@
     else T.render();
   });
   /* the app's events carry the pointer in physical pixels of the webview */
+  /* macOS reports the pointer in logical pixels although the event says physical (seen in app.log: x up to 1286 in a
+     1440-wide window on a 2x screen), so the point is tried as physical and, if that misses, as logical */
   function chatAt(pos) {
-    var r = window.devicePixelRatio || 1, el = pos ? document.elementFromPoint(pos.x / r, pos.y / r) : null;
-    return el && el.closest ? el.closest('.mchat') : null;
+    if (!pos) return null;
+    var r = window.devicePixelRatio || 1, tries = r === 1 ? [pos.x, pos.y, 1] : [pos.x / r, pos.y / r, 1, pos.x, pos.y, 1];
+    for (var i = 0; i < tries.length; i += 3) {
+      var x = tries[i], y = tries[i + 1];
+      if (x < 0 || y < 0 || x >= window.innerWidth || y >= window.innerHeight) continue;
+      var el = document.elementFromPoint(x, y), c = el && el.closest ? el.closest('.mchat') : null;
+      if (c) return c;
+    }
+    return null;
   }
   /* desktop only: a line in the app's log, so a drop that does nothing leaves a trace */
   function applog(line) {
