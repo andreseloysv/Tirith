@@ -424,8 +424,8 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] El chat muestra el trabajo del manager en vivo: texto, herramientas y resultados de cada paso (secretos tapados).
 - [x] El chat del manager como el CLI: texto palabra a palabra, diffs en color, lista de tareas; Esc interrumpe y ↑ recupera.
   - [x] Revisar: El chat del manager como el CLI: texto palabra a palabra, diffs en color, lista de tareas; Esc interrumpe y ↑ recupera.
-- [ ] Sub-agentes anidados en la conversación; permisos seguros aprobados por código y el resto como botones Allow/Deny.
-  - [ ] Revisar: Sub-agentes anidados en la conversación; permisos seguros aprobados por código y el resto como botones Allow/Deny. (en curso: revisión de manager-de-guardia-chat-y-piloto-16)
+- [x] Sub-agentes anidados en la conversación; permisos seguros aprobados por código y el resto como botones Allow/Deny.
+  - [x] Revisar: Sub-agentes anidados en la conversación; permisos seguros aprobados por código y el resto como botones Allow/Deny.
 - [x] Autorrevisión cada minuto (collector, manager, piloto, disco, revisiones) con arreglo automático y una línea en el chat.
 - [x] Lo que dice un agente en su informe se verifica contra su cambio real antes de fusionar.
 - [x] El collector vuelve a tardar menos de 3 s por ciclo (hoy ~20 s) y un test lo vigila. (hecho: abdf921)
