@@ -48,29 +48,54 @@
      a search, an MCP server), newest first: from the commands and from the connections the processes really opened */
   var KINDS = { web: 'Web', api: 'API', websocket: 'WebSocket', ssh: 'SSH', git: 'Git remote', github: 'GitHub',
     'package': 'Packages', search: 'Search', mcp: 'MCP', https: 'HTTPS', http: 'HTTP', tcp: 'TCP', ftp: 'FTP' };
-  T.externalRows = function (s, days) {
+  /* the agent's own program (its model API, telemetry): marked by the collector, or an older row whose program
+     is named by its version ("2.1.318 connected to …") */
+  function runtime(r) { return r.tool === 'connection' && (r.runtime === true || /^\d+\.\d+\.\d+ connected/.test(r.action || '')); }
+  T.externalRows = function (s, days, sys) {
     var out = [];
     (s.accesses || []).forEach(function (r) {
-      if (!inRange(r, days)) return;
+      if (!inRange(r, days) || (sys && r.system !== sys)) return;
       (r.external || []).forEach(function (x) {
-        var sp = String(x).indexOf(' ');
-        out.push({ ts: r.ts, kind: sp > 0 ? String(x).slice(0, sp) : String(x), dest: sp > 0 ? String(x).slice(sp + 1) : '',
-          row: r, live: r.tool === 'connection' });
+        var sp = String(x).indexOf(' '), dest = sp > 0 ? String(x).slice(sp + 1) : '';
+        if (r.domain && r.address && dest.indexOf(r.address) === 0) dest = r.domain + dest.slice(r.address.length);
+        out.push({ ts: r.ts, kind: sp > 0 ? String(x).slice(0, sp) : String(x), dest: dest,
+          row: r, live: r.tool === 'connection', runtime: runtime(r) });
       });
     });
     return out.sort(function (a, b) { return String(b.ts).localeCompare(String(a.ts)); });
   };
+  /* the agents' own traffic, one line per destination: how many connections, which roles, the last one */
+  function runtimeLines(s, rows) {
+    var by = {}, keys = [];
+    rows.forEach(function (x) {
+      if (!by[x.dest]) { by[x.dest] = { dest: x.dest, n: 0, last: x.ts, who: {}, org: x.row.org || '' }; keys.push(x.dest); }
+      var g = by[x.dest], a = x.row.lane ? T.agentById(s, x.row.lane) : null;
+      g.n++; g.who[a && T.agentRole ? T.agentRole(a) : 'Agent'] = 1;
+    });
+    return keys.map(function (k) {
+      var g = by[k];
+      return '<tr class="rt"><td class="sm">' + esc(T.clockTime(g.last)) + '</td><td><span class="chip xk rt">Agent runtime</span></td><td><b>' +
+        esc(g.dest) + '</b>' + (g.org ? ' <span class="mut sm">' + esc(g.org) + '</span>' : '') + '</td><td class="sm">' +
+        esc(Object.keys(g.who).join(', ')) + '</td><td class="sm mut">' + g.n + (g.n === 1 ? ' connection' : ' connections') +
+        ' · opened by the agent program itself, not by a command it ran</td></tr>';
+    }).join('');
+  }
+  function destinations(list) { var d = {}; list.forEach(function (x) { d[x.dest] = 1; }); return Object.keys(d).length; }
   function externalSection(s) {
-    var rows = T.externalRows(s, f.days);
-    var body = rows.length ? '<table class="mtab ext"><tbody>' + rows.slice(0, 200).map(function (x) {
+    var all = T.externalRows(s, f.days, f.sys);
+    var own = all.filter(function (x) { return x.runtime; }), rows = all.filter(function (x) { return !x.runtime; });
+    var body = all.length ? '<table class="mtab ext"><tbody>' + runtimeLines(s, own) + rows.slice(0, 200).map(function (x) {
       var a = x.row.lane ? T.agentById(s, x.row.lane) : null;
       var who = a ? '<button class="link" data-act="goagent" data-key="' + esc(a.id) + '">' + esc(T.agentRole ? T.agentRole(a) : a.name) + ' · ' + esc(a.name) + '</button>' : esc(x.row.lane || x.row.agent || '');
       return '<tr><td class="sm">' + esc(T.clockTime(x.ts)) + '</td><td><span class="chip xk ' + esc(x.kind) + '">' + esc(KINDS[x.kind] || x.kind) + '</span></td>' +
-        '<td><b>' + esc(x.dest) + '</b>' + (x.row.address && x.dest.indexOf(x.row.address) < 0 ? ' <span class="mut sm" title="' +
+        '<td><b>' + esc(x.dest) + '</b>' + (x.row.org ? ' <span class="mut sm">' + esc(x.row.org) + '</span>' : '') +
+          (x.row.address && x.dest.indexOf(x.row.address) < 0 ? ' <span class="mut sm" title="' +
           esc(x.row.reverse || '') + '">' + esc(x.row.address) + '</span>' : '') + '</td><td class="sm">' + who + '</td><td class="sm mut" title="' + esc(x.row.action || '') + '">' +
         esc(x.live ? 'connection opened' : (x.row.action || x.row.tool || '')) + '</td></tr>';
     }).join('') + '</tbody></table>' : '<p class="mut sm">Nothing reached outside the machine in this period.</p>';
-    return '<section class="pad extsec"><h2>External <span class="mut">' + rows.length + '</span></h2>' + body + '</section>';
+    var lines = destinations(own) + Math.min(rows.length, 200);
+    return '<section class="pad extsec"><h2>External <span class="mut">' + lines + (lines === 1 ? ' line' : ' lines') +
+      (all.length !== lines ? ' · ' + all.length + ' accesses' : '') + '</span></h2>' + body + '</section>';
   }
   function view(s, el) {
     var all = s.accesses || [], systems = [['', 'All systems']];

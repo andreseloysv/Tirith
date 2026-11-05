@@ -193,6 +193,11 @@ max_parallel = 4     # kept for old configs; nothing is launched by the autopilo
   answers on the proposal with one short line ("Autopilot: step 9 item … -> started lane X") and closes it; the
   chat shows the proposal as an "Autopilot" line and the answer as a manager line. A proposal is never escalated
   to the owner. A proposal unanswered for more than 10 min is a manager-health problem (`CONTRACT-selfcheck.md`).
+- **A wait is remembered per item.** When the manager answers a proposal, each item it listed that still sits
+  with nobody on it is recorded in `state.autopilot.waits` (item key -> hash of that item's own facts, answer
+  time). While that hash is unchanged and the answer is under `ANSWER_EXPIRES_S` old (or what it waited for has
+  not happened, as below), the item is left out of the step's proposals, even when other items of the same step
+  change and the step's proposal is replaced.
 - **A decision expires.** An answered proposal whose items still sit with nobody on them, facts unchanged, is
   asked again after 2 h (`ANSWER_EXPIRES_S`), quoting the earlier answer ("Asked again: you answered at … and
   nobody is on these items since: "…""), so a "wait" never parks a step forever. A proposal closed without an

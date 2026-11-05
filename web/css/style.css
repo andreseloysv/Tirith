@@ -1052,3 +1052,5 @@ button.vwho:hover b { text-decoration: underline; }
 .chip.xk { font-size: 11.5px; padding: 1px 7px; border-radius: 6px; background: #eef2ff; color: #3730a3; }
 .chip.xk.websocket { background: #fdf2f8; color: #9d174d; } .chip.xk.api { background: #ecfdf5; color: #065f46; }
 .chip.xk.ssh, .chip.xk.tcp { background: #fff7ed; color: #9a3412; }
+.chip.xk.rt { background: #f1f5f9; color: #475569; }
+.chip.xk { white-space: nowrap; }
