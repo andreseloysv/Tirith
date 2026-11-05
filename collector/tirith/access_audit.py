@@ -101,6 +101,9 @@ _REGISTRY = {"npm": "registry.npmjs.org", "pnpm": "registry.npmjs.org", "yarn": 
              "gem": "rubygems.org", "go": "proxy.golang.org"}
 
 
+_QUOTED = re.compile(r"'[^']*'|\"[^\"]*\"")
+
+
 def _kind(scheme: str, path: str, host: str = "") -> str:
     scheme = scheme.lower().rstrip(":/")
     if scheme in ("ws", "wss"):
@@ -131,6 +134,7 @@ def external(tool, tool_input) -> list[str]:
         if host.split(":")[0] not in ("localhost", "127.0.0.1", "0.0.0.0", "[::1]"):
             add(f"{_kind(scheme, path, host)} {host}")
     if tool == "Bash":
+        text = _QUOTED.sub(" ", text)  # words inside quotes (a sed pattern, a message) are no command
         for host in _SSH.findall(text):
             add(f"ssh {host}")
         if _GIT_REMOTE.search(text):

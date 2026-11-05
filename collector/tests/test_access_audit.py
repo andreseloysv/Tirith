@@ -146,3 +146,22 @@ def test_a_destination_shows_the_key_its_lane_had_for_it(tmp_path) -> None:
     assert (rows[0]["keys"], rows[0]["login"]) == (["GITHUB_TOKEN"], False)
     assert (rows[1]["keys"], rows[1]["login"]) == ([], True)  # no key for it: its own saved login, if any
     assert "keys" not in rows[2]  # a lane from before keys were noted
+
+
+def test_words_inside_quotes_are_no_command() -> None:
+    # a sed that rewrote "ls; npm test" into "ls; npm install" inside a test file was taken for a package install
+    e = access_audit.external
+    assert e("Bash", {"command": "sed -i 's/ls; npm test/ls; npm install/' tests/test_x.py"}) == []
+    assert e("Bash", {"command": 'git commit -m "fix ssh deploy and git push docs"'}) == []
+    assert e("Bash", {"command": 'curl -s "https://api.example.com/v1/x"'}) == ["api api.example.com"]  # a quoted URL is
+    assert e("Bash", {"command": "npm install left-pad"}) == ["package registry.npmjs.org"]
+
+
+def test_a_work_lane_never_gets_a_name_reserved_for_tirith_s_own(tmp_path) -> None:
+    from conftest import make_repo
+    from tirith import launch
+    repo = make_repo(tmp_path / "repo")
+    # "Manager de guardia…" gave "manager-de-guardia…", and the lane was counted as the manager, not as work
+    assert launch.lane_id_for("Manager de guardia, chat y piloto", set(), repo).startswith("step-manager-de-guardia")
+    assert launch.lane_id_for("CEO: revisar", set(), repo).startswith("step-ceo-")
+    assert launch.lane_id_for("Fix the parser", set(), repo) == "fix-the-parser"
