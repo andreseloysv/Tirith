@@ -34,7 +34,8 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Revisar el plan (2026-10-31) (en revisión)
 - [x] Manager de guardia: atender el chat
 - [ ] CEO: revisar cómo trabaja el manager
-- [ ] Manager de guardia: atender el chat (en curso: manager-82bbbdac)
+- [ ] Manager de guardia: atender el chat (en curso: manager-69b749e8)
+- [x] Manager de guardia: atender el chat
 - [x] Manager de guardia: atender el chat
 - [x] Manager de guardia: atender el chat
 - [x] Manager de guardia: atender el chat
@@ -302,11 +303,11 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
   - [x] Revisar: Llevar a main el cambio de la lane app-de-escritorio-tauri-con-chat-7 (clip, arrastrar, sin scroll horizontal; tests ya verdes): reaplicar a mano /Users/andreseloyasanchezva/.tirith/diffs/app-de-escritorio-tauri-con-chat-7.patch sobre main, sin rediseñar, y resolver el conflicto en app/README.md conservando lo de main. — falló: the tests failed: …tauri-con-chat-8/collector/.venv/lib/python3.12/site-packages/_pytest/pathlib.py:123: PytestWarning
 - [x] La app de escritorio se recompila y se reinicia sola cuando cambia su código Rust en main (firmada), sin que el dueño tenga que hacer nada. (hecho: 60f5650) <!-- tirith:{"id":"i-f1cd1bc7"} -->
   - [x] Revisar: La app de escritorio se recompila y se reinicia sola cuando cambia su código Rust en main (firmada), sin que el dueño tenga que hacer nada.
-- [ ] Confirmar el chat con muse serve en una sesión real (un mensaje mínimo, ajustes más baratos) y añadir la interrupción de turno y la reanudación si el protocolo las ofrece (en revisión) <!-- tirith:{"id":"i-c226d1ce"} -->
+- [x] Confirmar el chat con muse serve en una sesión real (un mensaje mínimo, ajustes más baratos) y añadir la interrupción de turno y la reanudación si el protocolo las ofrece (hecho: 6584fad) <!-- tirith:{"id":"i-c226d1ce"} -->
 - [x] Probar muse serve en una sesión real con un mensaje mínimo (vía tirith lane run) y comprobar con el esquema real los params de turn/interrupt y session/resume <!-- tirith:{"id":"i-51da13a1"} -->
   - [x] Revisar: Probar muse serve en una sesión real con un mensaje mínimo (vía tirith lane run) y comprobar con el esquema real los params de turn/interrupt y session/resume
 - [x] Volcar el esquema real de muse serve (muse schema generate-json-schema) a un fichero para comprobar turn/interrupt y session/resume (hecho: a1cdd3c) <!-- tirith:{"id":"i-aa8e3eda","depends_on":[],"writes":[]} -->
-- [ ] Ejecutar un turno real de muse serve (mensaje mínimo) con un driver stdio vía tirith lane run, ahora que el adaptador soporta turn/interrupt y session/resume
+- [ ] Ejecutar un turno real de muse serve (mensaje mínimo) con un driver stdio vía tirith lane run, ahora que el adaptador soporta turn/interrupt y session/resume (en curso: app-de-escritorio-tauri-con-chat-18) <!-- tirith:{"id":"i-1c43c823"} -->
 - [x] Recuperar el trabajo de app-13 (parche guardado en ~/.tirith/diffs/app-de-escritorio-tauri-con-chat-13.patch: reanudación en chat_adapter, interrupt y tests contra msp_fake_host) sobre main, reconciliado con la interrupción/reanudación de app-14 (check: `cd collector && uv run pytest -q tests/test_mspchat.py -k 'interrupt_ends_the_running_turn or session_resumes_against_the_fake_host'`) <!-- tirith:{"id":"i-6beaa8d8","depends_on":[],"writes":[]} -->
 - [x] Integrar en main el arreglo de adjuntos (clip y arrastrar) de la lane app-de-escritorio-tauri-con-chat-8, hoy sin commit. (hecho: bd92d3b)
 - [x] Arrastrar archivos al chat funciona de verdad en la app de escritorio, y la miniatura adjunta se ve bien (✕ pequeño dentro de la esquina, nombre y tamaño). (hecho: 931214a)
@@ -432,7 +433,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] El recargado automático del collector nunca lo deja bloqueado. (check: `cd collector && uv run -q pytest -q tests -k reload`)
 - [x] Tras arrancar o recargar, el collector escribe un estado útil en menos de 30 s. (check: `cd collector && uv run -q pytest -q tests -k first_cycle`) (hecho: bb947e4)
 - [ ] Quitar worktrees de lanes sin chocar con el límite 'git': 'git worktree remove' (diskdiet.py, review.py) usa su propia clase de límite 'git-worktree-remove' (minutos, no los ~9 s aprendidos de git), con el test test_worktree_remove_uses_own_timeout_class (check: `cd collector && python3 -m pytest -q tests -k test_worktree_remove_uses_own_timeout_class`)
-- [ ] Hacer robusto el test test_context_over_the_limit_compacts_then_restarts_with_a_handoff de test_msession.py, que falla bajo carga porque Rig.until espera 25 s de reloj real (check: `cd collector && uv run pytest tests/test_msession.py -q -k compacts_then_restarts`)
+- [ ] Hacer robusto el test test_context_over_the_limit_compacts_then_restarts_with_a_handoff de test_msession.py, que falla bajo carga porque Rig.until espera 25 s de reloj real (check: `cd collector && uv run pytest tests/test_msession.py -q -k compacts_then_restarts`) (en curso: manager-de-guardia-chat-y-piloto-11)
 - [x] La landing page tiene animaciones al hacer scroll (aparición suave de secciones, capturas y tarjetas) respetando «reducir movimiento». (check: `node web/js/landing.test.mjs`) (hecho: 40ed8f2)
 - [x] Logo de Tirith en 3D renderizado con Blender y renders 3D en la landing page. (check: `test -f site/img/logo-3d.png`) (hecho: 7fabf84)
 - [ ] Registrar en la revisión de una lane la causa cuando se interrumpe (señal o código de salida del proceso), con un test que mata el proceso de la revisión y comprueba la causa registrada. (check: `cd collector && uv run pytest -q -k review_interrupted_records_cause`)
