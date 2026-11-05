@@ -584,7 +584,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
   - [x] Revisar: Si llega a una sala un mensaje para el manager y su sesión no corre, roombridge la despierta por el mismo chat, también si lo escribe otro agente, con el freno de 30 mensajes. Un agente se calla porque terminó su turno: ~/DEVELOP/agentsmessenger/docs/agentes-callados.md (check: `cd collector && uv run -q pytest -q tests -k room_wake`)
 - [x] Un lane que espera respuesta en una sala queda marcado «esperando en la sala X» y Tirith lo reanuda al llegar la respuesta, como dice ~/DEVELOP/agentsmessenger/docs/agentes-callados.md. (check: `cd collector && uv run -q pytest -q tests -k lane_room_wait`) (hecho: 1b95b48) <!-- tirith:{"id":"i-24ab8900"} -->
   - [x] Revisar: Un lane que espera respuesta en una sala queda marcado «esperando en la sala X» y Tirith lo reanuda al llegar la respuesta, como dice ~/DEVELOP/agentsmessenger/docs/agentes-callados.md. (check: `cd collector && uv run -q pytest -q tests -k lane_room_wait`)
-- [ ] Tirith avisa al manager cuando un lane lleva 30 minutos esperando respuesta en una sala, como dice ~/DEVELOP/agentsmessenger/docs/agentes-callados.md. (check: `cd collector && uv run -q pytest -q tests -k lane_room_timeout`)
+- [ ] Tirith avisa al manager cuando un lane lleva 30 minutos esperando respuesta en una sala, como dice ~/DEVELOP/agentsmessenger/docs/agentes-callados.md. (check: `cd collector && uv run -q pytest -q tests -k lane_room_timeout`) (en curso: que-los-agentes-de-una-sala-no-s-4) <!-- tirith:{"id":"i-0effabb7"} -->
 
 ## 20. Las pruebas no interrumpen al dueño
 
