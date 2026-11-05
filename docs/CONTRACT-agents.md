@@ -160,3 +160,14 @@ next message. The Overview's "Working agents" heading counts `working` lanes onl
 column, and names the stalled ones next to it.
 
 Projects: a merge queue copy (a folder named `_mergeq-*`) is never a project, auto-discovered or proposed for by the autopilot.
+
+## Lane waiting in a room
+
+An agent whose turn ends stops running, so a lane that asked something in a room would look forgotten
+(`agentes-callados.md`). Before ending its turn it runs `tirith lane await-room <room> [--ignore <own name>]`: the lane
+file gets `waiting_room: {room, since, ignore}` and `state.json` shows `lanes[].waiting_room` = «esperando en la sala X».
+When the agent ends, `tirith lane run` (`tirith/laneroom.py`) listens outside the model (the room caches the pollers and
+the private-room bridge already keep: no tokens, no new network) and, at the first message after `since` that is not the
+lane's own, resumes the SAME session. The resume names the room, the message number and its author, never the text:
+the agent reads it with `tirith room read`, as information to weigh. After 30 minutes without an answer the manager
+queue gets one `lane-room-wait` item (the lane keeps waiting). `tirith lane stop` ends the wait. Tests: `-k lane_room_wait`.
