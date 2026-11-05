@@ -384,3 +384,17 @@ def test_collector_without_log_or_workspace(home: Path, tmp_path: Path) -> None:
     assert agent["goal"] == "Feature work" and agent["files"] == [] and agent["tests"] == []
     assert agent["tools"] == [] and agent["events"] == []
     assert agent["last_activity_at"] is None and agent["active"] is False
+
+
+def test_activity_main_checkout_manager_no_full_diff(tmp_path: Path, monkeypatch) -> None:
+    repo = make_repo(tmp_path / "repo")
+    calls = []
+    monkeypatch.setattr("tirith.activity._git", lambda *a, **k: calls.append(a) or "")
+    tracker = ActivityTracker()
+    lane = _lane(tmp_path, None, id="manager-ab12cd34", workspace=str(repo), start_commit=git_head(repo))
+    assert tracker.files(lane, False) == ([], (0, 0, 0))
+    tracker.prefetch([lane, {**lane, "id": "manager-ff"}])
+    assert calls == []
+    worker = _lane(tmp_path, None, workspace=str(repo), start_commit=git_head(repo))
+    tracker.files(worker, False)
+    assert any("--numstat" in c for c in calls)

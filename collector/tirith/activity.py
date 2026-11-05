@@ -534,6 +534,16 @@ def _count_lines(path: Path) -> int:
     return 0 if b"\0" in data else data.count(b"\n") + (1 if data and not data.endswith(b"\n") else 0)
 
 
+MAIN_CHECKOUT_PREFIXES = ("manager-",)  # sessions that run in the project's main checkout
+
+
+def lane_files(lane: dict) -> tuple[list[dict], tuple[int, int, int]]:
+    """``git_files`` for a lane; a manager session (main checkout, maybe a huge index) skips the full diff."""
+    if str(lane.get("id") or "").startswith(MAIN_CHECKOUT_PREFIXES):
+        return [], (0, 0, 0)
+    return git_files(lane.get("workspace"), lane.get("start_commit"))
+
+
 def git_files(workspace, start_commit) -> tuple[list[dict], tuple[int, int, int]]:
     """Files changed since ``start_commit`` (diff pair + untracked) and tracked totals.
 
@@ -713,7 +723,7 @@ class ActivityTracker:
             self._finish_warm()
             return
         with ThreadPoolExecutor(max_workers=PREFETCH_WORKERS) as pool:
-            results = list(pool.map(lambda l: git_files(l.get("workspace"), l.get("start_commit")), todo))
+            results = list(pool.map(lane_files, todo))
         at = time.monotonic()
         for lane, result in zip(todo, results):
             self._deferred.pop(str(lane["id"]), None)
@@ -745,7 +755,7 @@ class ActivityTracker:
         if lane_id in self._deferred:
             return [], (0, 0, 0)
         if ended:
-            result = git_files(lane.get("workspace"), lane.get("start_commit"))
+            result = lane_files(lane)
             self._store_ended(lane, result)
             self._live_files.pop(lane_id, None)
             return result
@@ -754,16 +764,15 @@ class ActivityTracker:
         if cached is None and self._warm:
             return [], (0, 0, 0)
         if cached is None:  # first sight: the caller waits for it
-            result = git_files(lane.get("workspace"), lane.get("start_commit"))
+            result = lane_files(lane)
             self._live_files[lane_id] = (time.monotonic(), result)
             return result
         if time.monotonic() - cached[0] >= FILES_TTL_S and lane_id not in self._refreshing:
             self._refreshing.add(lane_id)
-            workspace, start = lane.get("workspace"), lane.get("start_commit")
 
             def refresh() -> None:
                 try:
-                    self._live_files[lane_id] = (time.monotonic(), git_files(workspace, start))
+                    self._live_files[lane_id] = (time.monotonic(), lane_files(lane))
                 finally:
                     self._refreshing.discard(lane_id)
 
