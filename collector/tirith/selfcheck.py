@@ -41,7 +41,7 @@ from tirith import review as review_mod
 from tirith import stable as stable_mod
 from tirith import timeouts as timeouts_mod
 from tirith.home import Config, now_iso, parse_iso
-from tirith.store import read_lane
+from tirith.store import read_lane, read_lanes
 
 MANAGER_STUCK_S = 60.0       # an owner message without a first answer, nothing blocking it
 LINGER_S = 60.0              # a manager process alive this long after its result
@@ -57,6 +57,7 @@ COLLECTOR_GAP_S = 150.0      # no pass for this long: the collector was down
 GAP_SHOWN_S = 600.0          # how long the gap stays in the result
 GRACE_S = 90.0               # a remedy gets this long to work before the next try
 MAX_TRIES = 3
+SENDBACK_WAIT_S = 2 * 3600.0  # a lane sent back to its agent that nothing came of after this long goes to the manager
 RESTARTS_WINDOW_S = 3600.0   # fresh starts of the manager session are counted over this long
 MAX_RESTARTS_PER_HOUR = 2    # more than this is a problem
 NOTICE_KEPT_S = 1800.0       # a notice whose messages were never answered is dropped after this
@@ -412,6 +413,8 @@ def _reviews(home: Path, config: Config, now: datetime, book: dict, lanes: list[
                        f"{MAX_TRIES} restarts did not finish it. Run `tirith lane review {lane_id}` yourself.")
                 found = _check("failed", f"The review of lane {lane_id} is stuck and could not be restarted.")
         elif status == review_mod.TESTS_FAILED:
+            if _continued(home, lane_id):
+                continue  # another lane carries its work on (a relaunch, a send-back): the failure is that lane's
             repo = autoreview_repo(config, lane)
             files = diff(repo, lane_id) if repo else []
             message = str(review.get("message") or "")
@@ -429,6 +432,13 @@ def _reviews(home: Path, config: Config, now: datetime, book: dict, lanes: list[
                     and _send_back(home, config, book, lane, review, message, now, relaunch):
                 # no other lane fails there: the lane's change breaks them through a side effect
                 found = _check("healing", f"Tests fail only in lane {lane_id}; sent back to its agent.")
+            elif lane_id in book["sent"] or str(lane.get("retry_of") or "") in book["sent"]:
+                tests = ", ".join(sorted(failing_tests(message)))
+                _queue(home, book, key, project, lane_id,
+                       f"Self-check: lane {lane_id} was sent back to its agent for tests that fail only in it "
+                       f"({tests}) and that did not fix them. Start a fresh lane on main for its item, or drop it.\n"
+                       f"{message[-800:]}")
+                found = _check("failed", f"Lane {lane_id} was sent back and its tests still fail; the manager decides.")
             else:
                 _queue(home, book, key, project, lane_id,
                        f"Self-check: the tests of lane {lane_id} fail twice in "
@@ -455,14 +465,27 @@ def failing_elsewhere(home: Path, lanes: list[dict], lane_id: str, tests: set[st
     return False
 
 
+def _continued(home: Path, lane_id: str) -> str | None:
+    """The lane that carries ``lane_id``'s work on (a relaunch, a send-back, a claim-check retry), else None."""
+    for other in read_lanes(home):
+        if other.get("id") != lane_id and lane_id in (other.get("retry_of"), other.get("fallback_lane")):
+            return str(other.get("id"))
+    return None
+
+
 def _send_back(home: Path, config: Config, book: dict, lane: dict, review: dict, message: str, now: datetime,
                relaunch: Callable | None) -> bool:
-    """The lane goes back to its agent with the failing tests, once per lane; True while that answer is pending
-    (the review result is still the one it was sent back for). False when it cannot be sent or came back failing."""
+    """The lane goes back to its agent with the failing tests, once per lane and once per chain (a lane that is
+    itself a send-back is not sent again); True while that answer is pending: the review result is still the one
+    it was sent back for and less than ``SENDBACK_WAIT_S`` passed (the new lane, once registered, takes the failure
+    over). False when it cannot be sent, came back failing, or nothing came of it: the manager decides."""
     lane_id = str(lane["id"])
     sent = book["sent"].get(lane_id)
     if sent is not None:
-        return sent == review.get("at")
+        at, when = (sent.get("at"), parse_iso(sent.get("sent"))) if isinstance(sent, dict) else (sent, None)
+        return at == review.get("at") and when is not None and (now - when).total_seconds() < SENDBACK_WAIT_S
+    if str(lane.get("retry_of") or "") in book["sent"]:
+        return False  # the lane a send-back started fails too: no chain of send-backs
     alias = str(lane.get("agent") or "")
     if alias not in config.agents:
         return False
@@ -476,7 +499,7 @@ def _send_back(home: Path, config: Config, book: dict, lane: dict, review: dict,
         (relaunch or autoreview_mod.relauncher)(home, lane, alias, note)
     except (Exception, SystemExit):  # the manager decides when it cannot be sent back
         return False
-    book["sent"][lane_id] = review.get("at")
+    book["sent"][lane_id] = {"at": review.get("at"), "sent": now_iso(now)}
     _notice(book, f"review-sendback:{lane_id}", f"The tests of lane {lane_id} fail only in that lane ({tests}): "
                                                 "I sent it back to its agent to find the side effect.", now)
     return True
