@@ -173,6 +173,20 @@ if [ -x "$tirith_local" ]; then
 fi
 '''
 
+# A lane's agent adds its default attribution trailer; inside a lane (TIRITH_LANE set) the line is
+# dropped from the message before the owner's check, so the commit passes without the trailer.
+_LANE_TRAILER = r'''
+# --- Tirith: a lane commit's default attribution trailer is dropped, not blocked ---
+if [ -n "${TIRITH_LANE:-}" ] && [ -f "${1:-}" ]; then
+    tirith_msg=$(mktemp "${TMPDIR:-/tmp}/tirith-msg.XXXXXX") || tirith_msg=
+    if [ -n "$tirith_msg" ]; then
+        { grep -v -i -E '^[[:space:]]*co-[a-z]+-by:' "$1" || true; } > "$tirith_msg"
+        cat "$tirith_msg" > "$1"
+        rm -f "$tirith_msg"
+    fi
+fi
+'''
+
 _ALLOWED = r'''
 trap - EXIT
 tirith_record "$TIRITH_HOOK" allowed ok
@@ -213,7 +227,8 @@ def render(words: list[str], chained: frozenset[str] | set[str] = frozenset(),
     out = {}
     for name, text in render_v1(words).items():
         head, sep, body = text.partition(_BODY_START)
-        out[name] = (head + sep + _record_part(name, reasons[name]) + "\n" + body + _RUN_HOOKS
+        out[name] = (head + sep + _record_part(name, reasons[name])
+                     + (_LANE_TRAILER if name == "commit-msg" else "") + "\n" + body + _RUN_HOOKS
                      + (_CHAIN.replace("@HOOK@", name) if name in chained else "") + _ALLOWED)
     out["pre-push"] = (PRE_PUSH.format(words=",".join(words)) + _record_part("pre-push", "tirith check failed")
                        + _RUN_CHECK + _RUN_HOOKS
