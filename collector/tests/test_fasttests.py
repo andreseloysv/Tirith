@@ -324,4 +324,8 @@ def test_an_agents_own_pytest_command_runs_in_parallel():
     assert p(["uv", "run", "pytest", "-q", "tests", "-x"]) == ["uv", "run", "pytest", "-q", "tests", "-x", *fasttests.PARALLEL_ARGS]
     for chosen in (["-n", "4"], ["--numprocesses=2"], ["-p", "no:xdist"], ["--testmon"], ["-s"], ["--pdb"], ["--collect-only"]):
         assert p(["uv", "run", "pytest", "tests", *chosen]) == ["uv", "run", "pytest", "tests", *chosen]
-    assert p(["cargo", "test"]) == ["cargo", "test"] and p(["sh", "-c", "uv run pytest tests"]) == ["sh", "-c", "uv run pytest tests"]
+    assert p(["cargo", "test"]) == ["cargo", "test"]
+    line = "cd collector && uv run -q pytest -q tests 2>&1 | tail -8"
+    assert p(["sh", "-c", line]) == ["sh", "-c", "cd collector && uv run -q pytest -n auto --maxprocesses 8 -q tests 2>&1 | tail -8"]
+    assert p(["bash", "-c", "uv run pytest -p no:xdist --testmon"]) == ["bash", "-c", "uv run pytest -p no:xdist --testmon"]
+    assert p(["sh", "-c", "make test"]) == ["sh", "-c", "make test"]
