@@ -234,6 +234,27 @@
         }
       }
     },
+    "owner_requests": {
+      "description": "The owner's own chat requests, each tied to a plan item or an answer, with its status. See docs/CONTRACT-inbox.md.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["id", "at", "kind", "project", "text", "status", "link"],
+        "properties": {
+          "id": {"type": "string"},
+          "at": {"type": ["string", "null"]},
+          "kind": {"type": "string"},
+          "project": {"type": "string"},
+          "text": {"type": "string"},
+          "status": {"enum": ["open", "answered", "done"]},
+          "link": {
+            "type": ["object", "null"],
+            "description": "{type: plan, step, lanes} or {type: answer, by, at}; null while unlinked."
+          }
+        }
+      }
+    },
     "says": {
       "description": "Plain messages the manager wrote to the owner (tirith chat say), oldest first. Shown in the chat thread. See docs/CONTRACT-inbox.md.",
       "type": "array",
