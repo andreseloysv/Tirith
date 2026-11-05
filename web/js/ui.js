@@ -120,8 +120,8 @@
   /* the role first (what the owner cares about), the name under it */
   T.agentRole = function (a) {
     var id = String(a.id || '');
-    if (/^manager/.test(id)) return 'Manager';
-    if (/^ceo-/.test(id)) return 'CEO';
+    if (/^manager-[0-9a-f]{8}$/.test(id) || id === 'manager') return 'Manager';  /* not "manager-de-guardia…", a work lane */
+    if (/^ceo-[0-9a-f]{8}$/.test(id)) return 'CEO';
     return T.cap(a['class']) || 'Worker';
   };
   T.agentCard = function (a, selected) {
