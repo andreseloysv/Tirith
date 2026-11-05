@@ -24,7 +24,12 @@ them fails in the same test files too, main (or the machine) is the cause and th
 not show (shared state, a new step that runs on every pass, a real command run from the tests): the lane goes back
 to its agent once with the failing output (the same relaunch as a failed claim check), the check stays `healing`,
 and the manager says "The tests of lane X fail only in that lane (…): I sent it back to its agent to find the side
-effect." If the next review fails the same way, the manager gets the queue item.
+effect." If the next review fails the same way, the manager gets the queue item ("was sent back to its agent … and
+that did not fix them. Start a fresh lane on main for its item, or drop it"); so it does when nothing came of the
+send-back in 2 h (`SENDBACK_WAIT_S`: no new lane, same review result), instead of `healing` for ever. A lane whose
+work another lane carries on (`retry_of` or `fallback_lane` names it: a relaunch, a send-back, a claim-check
+retry) is not checked: its failure is the new lane's, even when that one died with a restart. The lane a send-back
+started is never sent back itself (one send-back per chain): when it fails the same way, the manager decides.
 
 ## Remedies
 
