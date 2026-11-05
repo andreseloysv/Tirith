@@ -341,7 +341,8 @@ The step's checkboxes in the roadmap are still ticked by the owner.
   records and logs are kept.
 - **Stale lane folders.** A lane that ended (any result) over 24 h ago and is unmerged or dirty is retired, and
   so is any other worktree in `<repo>-lanes` that git did not touch for 24 h: uncommitted changes (tracked and
-  untracked, not ignored) are saved as a commit under `refs/tirith/kept/<lane>`, the folder is removed with
+  untracked, not ignored) are saved as a binary patch `~/.tirith/kept/<lane>.patch` (`git apply` on the branch; no commit: the guard
+  allows none without hooks), the folder is removed with
   `--force`, the branch stays unless merged. The record gets `cleanup = {status: "retired", kept, at}`.
 - **Shared cargo target.** Every stage run (`runstage.run_stage`, so `tirith run` and the review) sets
   `CARGO_TARGET_DIR` unless the environment already has it: the project's `cargo_target_dir` in
