@@ -232,7 +232,7 @@ def _apply_edit(home: Path, repo: Path, req: dict) -> str:
     try:  # the single writer of the plan (``tirith.plangate``): locked, one commit
         plangate_mod.commit_change(
             home, repo, req["project"],
-            lambda text: roadmap_mod.edit(text, step, edit.get("item_text", ""), edit.get("new_text"),
+            lambda text: roadmap_mod.edit_retrying(text, step, edit.get("item_text", ""), edit.get("new_text"),
                                           bool(edit.get("delete")), edit.get("add")),
             message, path)
     except plangate_mod.PlanGateError as err:

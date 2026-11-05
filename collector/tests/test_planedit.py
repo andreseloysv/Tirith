@@ -225,3 +225,29 @@ def test_an_edit_of_the_manager_queues_no_plan_check(project, home: Path) -> Non
     assert _refreshes(home) == []
     answer = _by_id(home)[row["id"]]["answers"][0]["text"]
     assert answer.startswith("Done:") and "checked again" not in answer
+
+
+# -- a Roadmap marker commit touched the item -------------------------------------------------------
+
+
+def test_plan_edit_retries_after_marker_change() -> None:
+    marked = TODO.replace("- [ ] Open two (dueño: do it)", "- [ ] Open two (dueño: do it) (en curso: lane-1)")
+    with pytest.raises(rm.EditError, match="changed in the plan meanwhile"):
+        rm.edit(marked, "1", "Open two (dueño: do it)", new_text="x")
+    new = rm.edit_retrying(marked, "1", "Open two (dueño: do it)", new_text="Open two, new")
+    assert "- [ ] Open two, new" in rm.without_metadata(new) and "en curso" not in new
+    gone = rm.edit_retrying(marked, "1", "Open two (dueño: do it)", delete=True)
+    assert "Open two" not in gone
+    with pytest.raises(rm.EditError, match="changed in the plan meanwhile"):
+        rm.edit_retrying(marked, "1", "Never existed", delete=True)
+
+
+def test_plan_edit_retries_after_marker_change_in_the_dispatcher(project, home: Path) -> None:
+    plan = project / "docs" / "TODO.md"
+    plan.write_text(TODO.replace("Lonely item", "Lonely item (en curso: lane-1)"), encoding="utf-8")
+    subprocess.run([*GIT, "-C", str(project), "commit", "-qam", "Roadmap: step 2 progress from lane-1"], check=True)
+    rid = inbox_mod.add_request(home, "plan-edit", "demo", "2", _payload(item_text="Lonely item", delete=True),
+                                at=_at(5))["id"]
+    _run(home)
+    assert _by_id(home)[rid]["answers"][0]["text"].startswith("Done")
+    assert "Lonely" not in plan.read_text(encoding="utf-8")
