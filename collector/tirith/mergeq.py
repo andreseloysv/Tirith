@@ -469,13 +469,19 @@ def _land(home: Path, repo: Path, tmp: Path, project: str, base: str, tested: st
           subject: str, via: str) -> tuple[str, tuple[str, str] | None]:
     """Fast-forward main to the tested commit under the plan writer lock: ``(commit, None)``, else ``("", (result, message))``."""
     with plangate_mod.writer_lock(home, project):
-        if _git(repo, "status", "--porcelain", "--untracked-files=no").stdout.strip():
-            return "", (WAITING, f"{repo} has uncommitted changes; the queue waits for it to be clean")
         head = _git(repo, "rev-parse", "HEAD").stdout.strip()
         if head != base:
             tested = _with_plan_moves(repo, tmp, base, head, tested, via, subject)
             if tested is None:
                 return "", ("retry", "main moved while the suite ran")
+        # A dirty main checkout only blocks the landing when a dirty file is one the fast-forward would change;
+        # the tested tree is remembered, so waiting for it does not run the suite again.
+        dirty = set(_git(repo, "diff", "--name-only", "HEAD").stdout.split())
+        if dirty:
+            clash = sorted(dirty & set(_git(repo, "diff", "--name-only", "HEAD", tested).stdout.split()))
+            if clash:
+                return "", (WAITING, f"{repo} has uncommitted changes in {', '.join(clash)}, which the merge changes; "
+                                     "the queue waits for them to be committed or dropped")
         plangate_mod.recover_git_lock(repo)
         moved = _git(repo, "merge", "--ff-only", "-q", tested)
         if moved.returncode != 0 and "index.lock" in moved.stderr and plangate_mod.recover_git_lock(repo):

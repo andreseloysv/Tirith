@@ -2822,6 +2822,10 @@ window.TIRITH_STATE = {
     "token": "demo-launch-token-0123456789",
     "available": true
   },
+  "owner_requests": [
+    {"id": "or-1", "at": "2026-11-05T09:00:00Z", "kind": "finish", "project": "demo", "text": "Finish the login step", "status": "open", "link": {"type": "plan", "step": "3", "lanes": []}},
+    {"id": "or-2", "at": "2026-11-05T09:10:00Z", "kind": "chat", "project": "demo", "text": "Why is nothing moving?", "status": "answered", "link": {"type": "answer", "by": "manager", "at": "2026-11-05T09:11:00Z"}}
+  ],
   "inbox": [
     {
       "id": "in-3f9a21c0",

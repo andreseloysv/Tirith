@@ -179,13 +179,24 @@ def test_a_lane_sent_back_too_often_goes_to_the_manager_not_the_owner(env, home:
 
 def test_dirty_main_makes_the_queue_wait_then_merge(env, home: Path) -> None:
     repo, _ = env
-    make_lane(home, repo, "late", {"late.txt": "l"})
+    make_lane(home, repo, "late", {"README.md": "from lane\n"})
     (repo / "README.md").write_text("edited\n", encoding="utf-8")
     mergeq_mod.enqueue(home, "late")
     row = mergeq_mod.process_next(home, load_config(home), relaunch=Sender())
-    assert row["result"] == "waiting" and mergeq_mod.view(home, "demo")["items"][0]["status"] == "queued"
+    assert row["result"] == "waiting" and "README.md" in row["message"]
+    assert mergeq_mod.view(home, "demo")["items"][0]["status"] == "queued"
     git(repo, "checkout", "--", "README.md")
     assert mergeq_mod.process_next(home, load_config(home), relaunch=Sender())["result"] == "merged"
+
+
+def test_dirty_checkout_with_other_files_still_lands(env, home: Path) -> None:
+    repo, _ = env
+    make_lane(home, repo, "late", {"late.txt": "l"})
+    (repo / "tirith.toml").write_text(MANIFEST + "# local edit\n", encoding="utf-8")  # tracked, not touched by the lane
+    mergeq_mod.enqueue(home, "late")
+    row = mergeq_mod.process_next(home, load_config(home), relaunch=Sender())
+    assert row["result"] == "merged" and (repo / "late.txt").read_text() == "l"
+    assert "# local edit" in (repo / "tirith.toml").read_text()  # the owner's edit is untouched
 
 
 def test_stale_index_lock_in_main_is_recovered(env, home: Path) -> None:
@@ -970,7 +981,7 @@ def test_absorbed_lane_stops(env, home: Path, monkeypatch) -> None:
 
 def test_a_repeating_wait_tells_the_manager_its_reason_once(env, home: Path) -> None:
     repo, _ = env
-    make_lane(home, repo, "late2", {"late.txt": "l"})
+    make_lane(home, repo, "late2", {"README.md": "l"})
     (repo / "README.md").write_text("edited\n", encoding="utf-8")
     mergeq_mod.enqueue(home, "late2")
     mergeq_mod.process_next(home, load_config(home), relaunch=Sender())
@@ -1067,3 +1078,15 @@ def test_todo_conflict_keeps_main_and_reapplies_the_lane_plan_report(env, home: 
     text = _plan(repo)
     assert "- [x] Add the feature file.\n" in text  # main's version, the item ticked by the merge
     assert "<<<<<<<" not in text and "lane edit" not in text and (repo / "feature.txt").exists()
+
+
+def test_dirty_checkout_clash_waits_without_running_the_suite_again(logged, home: Path) -> None:
+    repo, log = logged
+    make_lane(home, repo, "late", {"README.md": "from lane\n"})
+    (repo / "README.md").write_text("edited\n", encoding="utf-8")
+    mergeq_mod.enqueue(home, "late")
+    assert mergeq_mod.process_next(home, load_config(home), relaunch=Sender())["result"] == "waiting"
+    ran = log()
+    git(repo, "checkout", "--", "README.md")
+    assert mergeq_mod.process_next(home, load_config(home), relaunch=Sender())["result"] == "merged"
+    assert log().count("test") == ran.count("test")  # the proven tree was not tested again

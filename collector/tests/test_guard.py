@@ -84,3 +84,25 @@ def test_lane_run_refuses_without_guard_then_runs(home: Path, tmp_path: Path, ca
         assert state["agents"][0]["status"] == "done"
     finally:
         make_hooks_mutable(repo)
+
+
+def test_lost_uchg_flag_is_logged_once_with_ctime_and_runs(home: Path, tmp_path: Path) -> None:
+    import json
+    from tirith.store import write_lane
+    repo = make_repo(tmp_path / "repo")
+    try:
+        write_config(home, [{"id": "demo", "name": "Demo", "repo": str(repo), "color": "#123456"}])
+        main(["guard", "install", "demo"])
+        write_lane(home, {"id": "lane-a", "alias": "a1", "project": "demo", "pid": os.getpid()})
+        col = Collector(home, client=None)
+        col._note_lost_flags(repo, ["pre-commit: not immutable (uchg)"])
+        col._note_lost_flags(repo, ["pre-commit: not immutable (uchg)"])  # same loss: no second line
+        rows = [json.loads(l) for l in (home / "guard-flags.jsonl").read_text().splitlines()]
+        assert len(rows) == 1
+        assert rows[0]["hooks"] == ["pre-commit"] and "pre-commit" in rows[0]["hooks_ctime"]
+        assert [r["lane"] for r in rows[0]["runs"]] == ["lane-a"]
+        col._note_lost_flags(repo, [])  # seen intact again, then lost again: a new line
+        col._note_lost_flags(repo, ["pre-commit: not immutable (uchg)"])
+        assert len((home / "guard-flags.jsonl").read_text().splitlines()) == 2
+    finally:
+        make_hooks_mutable(repo)

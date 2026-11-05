@@ -716,6 +716,9 @@ Tirith's own jobs) is listed in `state.owner_requests`, built from `state.inbox`
 of it: `{type: "plan", step, lanes}` when it names a plan step, edits the plan or a lane took it;
 `{type: "answer", by, at}` when it was answered; `null` while it is neither (still unlinked).
 
+The app lists them in the "Your requests" panel under the now bar (`web/js/v-requests.js`): newest first, the last 8, each with
+its status and its link (plan step and lanes, the agent that answered, or "not linked yet").
+
 ## Digest (what reached main)
 
 `tirith digest [--project P] [--json]` builds one card per lane the merge queue merged (from the
