@@ -128,7 +128,7 @@ def _addresses(domain: str, now: float) -> set[str]:
 
 
 # domains agents and their tools commonly reach: an address with no reverse name is matched against these
-KNOWN_DOMAINS = ("api.anthropic.com", "statsig.anthropic.com", "api.statsig.com", "sentry.io", "api.openai.com",
+KNOWN_DOMAINS = ("api.anthropic.com", "api.meta.ai", "statsig.anthropic.com", "api.statsig.com", "sentry.io", "api.openai.com",
                  "chatgpt.com", "generativelanguage.googleapis.com", "github.com", "api.github.com",
                  "codeload.github.com", "objects.githubusercontent.com", "raw.githubusercontent.com", "pypi.org",
                  "files.pythonhosted.org", "registry.npmjs.org", "registry.yarnpkg.com", "crates.io",
