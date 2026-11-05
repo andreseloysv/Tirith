@@ -69,6 +69,9 @@ def public(lane: dict, repo: Path | None) -> dict | None:
                if review.get(k) is not None and review.get(k) != ""}
         if out["status"] == RUNNING and not _alive(review.get("pid")):
             out["status"], out["message"] = MERGE_FAILED, "the review was interrupted; run it again"
+            if review.get("cause"):
+                out["cause"] = review["cause"]
+                out["message"] = f"the review was interrupted ({review['cause']}); run it again"
         return out
     if lane.get("ended_at") and lane.get("result") == "done" and launched(lane, repo):
         return {"status": PENDING}
@@ -218,8 +221,50 @@ def main_checkout_of(lane) -> Path | None:
     return Path(common).parent
 
 
+CAUSE_SIGNALS = ("SIGTERM", "SIGHUP", "SIGINT", "SIGQUIT")
+
+
+def record_cause(home: Path, lane_id: str, cause: str) -> None:
+    """Save why a running review stops (a signal, an exit code, an exception) on the lane's review, so
+    :func:`public` can say it. Only a review still ``running`` takes it; a finished one keeps its result."""
+    lane = read_json(lane_path(home, lane_id), None)
+    review = lane.get("review") if isinstance(lane, dict) else None
+    if isinstance(review, dict) and review.get("status") == RUNNING and not review.get("cause"):  # the first cause stands
+        review["cause"] = cause
+        write_lane(home, lane)
+
+
 def review_lane(home: Path, lane_id: str, repo: Path | None, merge: bool = True) -> dict:
-    """Tests, then (when ``merge``) the merge. Returns the stored review; failures are stored too."""
+    """Tests, then (when ``merge``) the merge. Returns the stored review; failures are stored too.
+
+    A signal that stops the process (SIGTERM, SIGHUP, SIGINT, SIGQUIT) or a non-zero exit / exception before the
+    review has a result is recorded as the review's ``cause`` (SIGKILL cannot be caught: it leaves none)."""
+    import signal
+    import threading
+    saved = {}
+    if threading.current_thread() is threading.main_thread():
+        def on_signal(number, _frame):
+            record_cause(home, lane_id, f"killed by {signal.Signals(number).name}")
+            raise SystemExit(128 + number)
+        for name in CAUSE_SIGNALS:
+            number = getattr(signal, name, None)
+            if number is not None:
+                saved[number] = signal.signal(number, on_signal)
+    try:
+        return _review_lane(home, lane_id, repo, merge)
+    except SystemExit as error:
+        if error.code not in (0, None):
+            record_cause(home, lane_id, f"exit code {error.code}")
+        raise
+    except Exception as error:
+        record_cause(home, lane_id, f"{type(error).__name__}: {error}"[:200])
+        raise
+    finally:
+        for number, handler in saved.items():
+            signal.signal(number, handler)
+
+
+def _review_lane(home: Path, lane_id: str, repo: Path | None, merge: bool = True) -> dict:
     if repo is None:
         repo = main_checkout_of(read_json(lane_path(home, lane_id), None))
     lane = check_ready(home, lane_id, repo)
