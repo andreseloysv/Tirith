@@ -551,6 +551,17 @@ def standing(lane: dict) -> bool:
             or str(lane.get("id") or "").startswith("manager"))
 
 
+def _unmerged_work(home: Path, repo: Path, lane: dict) -> bool:
+    """True when a lane that works in its own worktree (it has a ``start_commit``) has work that is not on main yet:
+    its item must stay open until the merge, whatever way the lane ended."""
+    if not lane.get("start_commit"):
+        return False  # a chat in the main checkout has nothing to merge
+    try:
+        return lane_work(home, repo, lane)[0] in (WORK_NOT_MERGED, WORK_UNSAVED)
+    except (OSError, ValueError):
+        return False
+
+
 def lane_ended(home: Path, lane: dict) -> str:
     """What an ended lane's result should be: ``no-outcome`` for ``done`` without an outcome on an item.
     Standing lanes (the manager, the owner's chat) give their item back instead."""
@@ -561,7 +572,7 @@ def lane_ended(home: Path, lane: dict) -> str:
         repo = repo_of(home, str(lane.get("project") or ""))
         if repo is not None:
             try:  # the manager's item stays open for the next manager; a chat is over, so its item is done
-                if str(lane.get("class")) == "chat" or lane.get("interactive"):
+                if (str(lane.get("class")) == "chat" or lane.get("interactive")) and not _unmerged_work(home, repo, lane):
                     clean = roadmap_mod.split_status(linked[1])[0]
                     commit_change(home, repo, str(lane["project"]),
                                   lambda text: roadmap_mod.set_item(text, linked[0], clean, clean, tick=True),
