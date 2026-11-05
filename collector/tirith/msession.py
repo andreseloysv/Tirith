@@ -91,7 +91,7 @@ def chat_command(config: Config, alias: str, model: str | None = None, effort: s
     effort = effort or s.get("effort")
     if effort and s.get("effort_flag") and not is_msp(s):  # an MSP host takes the effort with each turn
         cmd += [str(s["effort_flag"]), str(effort)]
-    if resume and not is_msp(s):  # an MSP host starts a fresh conversation each time
+    if resume and not is_msp(s):  # an MSP host resumes through ``session/resume`` (``chat_adapter``)
         cmd += ["--resume", resume]
     return cmd
 
@@ -100,13 +100,16 @@ def is_msp(settings: dict) -> bool:
     return settings.get("chat_protocol") == mspchat_mod.PROTOCOL
 
 
-def chat_adapter(config: Config, alias: str, effort: str | None = None):
+def chat_adapter(config: Config, alias: str, effort: str | None = None, resume: str | None = None):
     """The MSP adapter for an alias that speaks it (``chat_protocol = "msp"``), else None."""
     from tirith import agentrun as agentrun_mod
     s = agentrun_mod.agent_settings(config, alias, None)
     if not is_msp(s):
         return None
-    return mspchat_mod.Msp(str(effort or s.get("chat_effort") or s.get("effort") or "minimal"))
+    adapter = mspchat_mod.Msp(str(effort or s.get("chat_effort") or s.get("effort") or "minimal"))
+    if resume:
+        adapter.resume(resume)  # ``session/resume``; a refusal falls back to a new session
+    return adapter
 
 
 # -- permissions decided by code --------------------------------------------------------------
@@ -351,7 +354,7 @@ class Session:
             line = self.adapter.answer(str(resp.get("request_id") or ""), body.get("behavior") == "allow",
                                        str(body.get("message") or ""))
             return line is not None and self._raw([line])
-        return False  # an interrupt: the host's method is not known, stop / restart end the process
+        return False
 
     def send(self, text: str, requests: list[str], now: datetime) -> bool:
         """Start a turn: one user message on stdin. Only when the session is idle."""
@@ -370,7 +373,9 @@ class Session:
             if self.turn is None:
                 return False
             if self.adapter is not None:
-                return False
+                line = self.adapter.interrupt()
+                self.interrupted = line is not None
+                return line is not None and self._raw([line])
             self.interrupted = True
             return self.write({"type": "control_request", "request_id": "int-" + uuid.uuid4().hex[:8],
                                "request": {"subtype": "interrupt"}})

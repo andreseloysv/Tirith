@@ -144,6 +144,12 @@ class Msp:
 
     def _on_response(self, rid, v: dict, out: Out) -> None:
         if isinstance(v.get("error"), dict):
+            if rid == self.start_id and rid and self.resume_id:  # the host would not resume: a new conversation
+                self.resume_id = None
+                self.start_id, line = self._request("session/start", {"commandId": "tirith-start",
+                                                                      "approvalMode": "promptUnmatched"})
+                out.send.append(line)
+                return
             out.ui.append(_text(f"Muse error: {v['error'].get('message') or 'request failed'}"))
             return
         if rid == self.init_id and rid:
@@ -155,11 +161,12 @@ class Msp:
                                                                       "approvalMode": "promptUnmatched"})
             out.send.append(line)
         elif rid == self.start_id and rid:
-            sid = ((v.get("result") or {}).get("session") or {}).get("sessionId")
+            sid = ((v.get("result") or {}).get("session") or {}).get("sessionId") or self.resume_id
             if not isinstance(sid, str):
                 out.ui.append(_text("Muse error: session/start returned no session id"))
                 return
-            self.session = sid
+            self.session, self.resume_id = sid, None
+            out.ui.append(_frame({"type": "system", "subtype": "init", "session_id": sid}))  # kept for the next start
             queued, self.queue = self.queue, []
             out.send.extend(self._turn(sid, t) for t in queued)
         elif rid in self.turn_ids:
