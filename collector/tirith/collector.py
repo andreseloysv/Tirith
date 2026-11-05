@@ -1506,6 +1506,7 @@ class Collector:
             "steward_queue": manager_queue,  # old key, same value
             "projects": projects,
             "agents": agent_rows,
+            # state.now.metrics: time to main, merges per hour, times the owner was needed (tirith/metrics.py)
             "now": {**nowbar_mod.build(agent_rows, now), "metrics": metrics_mod.load(self.home, agent_rows, now)},
             "pipelines": events_pipelines,
             "rooms": rooms_state,
