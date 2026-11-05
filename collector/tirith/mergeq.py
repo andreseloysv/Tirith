@@ -206,16 +206,30 @@ def view(home: Path, project: str | None = None) -> dict:
 # -- taking work -------------------------------------------------------------------------------
 
 
+CANARY = "canary"  # the end-to-end test project: its own tiny check, its own track, never behind other projects
+
+
+def _lane_of(entry: dict) -> bool:
+    return entry.get("project") == CANARY
+
+
 def _claim_many(home: Path, skip: frozenset[str] = frozenset(), limit: int = 1) -> list[dict]:
-    """Take the oldest waiting entry and up to ``limit - 1`` more of the same project, oldest first."""
+    """Take the oldest waiting entry and up to ``limit - 1`` more of the same project, oldest first.
+
+    One merger at a time per track: the canary has its own track, so a busy tirith merge never holds it back."""
     with _locked(home):
         data = load(home)
         for entry in data["queue"]:
-            if entry["status"] == RUNNING and _alive(entry.get("pid")):
-                return []  # one at a time
-            if entry["status"] == RUNNING:
+            if entry["status"] == RUNNING and not _alive(entry.get("pid")):
                 entry["status"] = QUEUED  # the merger died: take it again
-        waiting = [e for e in data["queue"] if e["status"] == QUEUED and e["lane"] not in skip]
+        live = {_lane_of(e) for e in data["queue"] if e["status"] == RUNNING}
+        waiting = []
+        for track in (True, False):  # the canary track first: it is tiny and must not wait for the others
+            if track not in live:
+                waiting = [e for e in data["queue"] if e["status"] == QUEUED and e["lane"] not in skip
+                           and _lane_of(e) == track]
+                if waiting:
+                    break
         if not waiting:
             write_json_atomic(_path(home), data)
             return []
@@ -529,7 +543,8 @@ def _run_stages(home: Path, project: str, stages: list, tmp: Path, lane_id: str,
     for pipeline, stage in stages:
         if stop and (why := stop()):
             raise Cancelled(why)
-        suite = manifest_mod.stage_kind(stage) == "test" and stage.name != RUST_STAGE  # one full suite at a time
+        suite = (manifest_mod.stage_kind(stage) == "test" and stage.name != RUST_STAGE
+                 and project != CANARY)  # one full suite at a time; the canary's tiny check never waits for one
         ok, output = review_mod.run_tests(home, project, pipeline, stage.name, tmp, stage.run, lane_id, full=suite)
         if not ok and output.startswith(review_mod.DID_NOT_FINISH):  # out of time: nothing to repeat
             return f"{pipeline}/{stage.name}", output, passed, flaky
@@ -986,8 +1001,12 @@ def run(home: Path, config: Config, lanes: list[dict], *, spawn: Callable | None
             enqueue(home, str(lane["id"]))
             changed = True
     data = load(home)
-    busy = any(e["status"] == RUNNING and _alive(e.get("pid")) for e in data["queue"])
-    if not busy and any(e["status"] in (QUEUED, RUNNING) for e in data["queue"]):
+    def track_busy(canary: bool) -> bool:
+        return any(e["status"] == RUNNING and _alive(e.get("pid")) and _lane_of(e) == canary for e in data["queue"])
+
+    work = any(e["status"] in (QUEUED, RUNNING) and not _lane_of(e) for e in data["queue"]) and not track_busy(False)
+    work = work or (any(e["status"] in (QUEUED, RUNNING) and _lane_of(e) for e in data["queue"]) and not track_busy(True))
+    if work:
         stamp = datetime.now(timezone.utc).timestamp()
         if stamp - float(data.get("spawned") or 0) > 30:  # a runner that just started has not claimed yet
             if dry_run:  # tests, dry runs: only enqueue
