@@ -54,6 +54,33 @@ def plan_totals(state: dict) -> dict:
     return {"done": done, "total": total}
 
 
+def for_project(state: dict, pid: str) -> dict:
+    """``state`` limited to one project: its agents, plan, waits and open plan items. The health checks and the
+    autopilot's global queue are Tirith's own, so a project's card does not show them."""
+    out = dict(state)
+    for name in ("agents", "waiting_on_you"):
+        out[name] = [r for r in state.get(name) or [] if isinstance(r, dict) and r.get("project") == pid]
+    out["projects"] = [p for p in state.get("projects") or [] if isinstance(p, dict) and p.get("id") == pid]
+    pilot = dict(state.get("autopilot") or {})
+    pilot["open_items"] = int((pilot.get("open_by_project") or {}).get(pid) or 0)
+    pilot.pop("queued", None)  # not known per project: open items with nothing working read as "nothing working"
+    out["autopilot"] = pilot
+    out["health"] = {}
+    return out
+
+
+def build_by_project(state: dict, now: datetime, ci: dict | None, merged: dict[str, int]) -> dict[str, dict]:
+    """The card of each project, for the Overview with a project selected (CI keys are ``project/workflow``)."""
+    out = {}
+    for project in state.get("projects") or []:
+        pid = project.get("id") if isinstance(project, dict) else None
+        if not pid:
+            continue
+        mine = {k: v for k, v in (ci or {}).items() if str(k).split("/", 1)[0] == pid}
+        out[pid] = build(for_project(state, pid), now, mine, int(merged.get(pid, 0)))
+    return out
+
+
 def build(state: dict, now: datetime, ci: dict | None = None, merged_today: int | None = None,
           lasting: list[str] | None = None) -> dict:
     """``merged_today``: counted from every lane record (the state keeps only recent agents); ``lasting``: the checks
