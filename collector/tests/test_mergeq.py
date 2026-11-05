@@ -774,6 +774,23 @@ def test_mergetrain_a_red_train_falls_back_and_only_the_culprit_is_rejected(logg
     assert mergeq_mod.view(home, "demo")["items"] == []
 
 
+def test_mergeq_train_dirty_clash_holds_back_only_the_lane_that_changes_the_dirty_file(logged, home: Path) -> None:
+    repo, log = logged
+    (repo / "f.txt").write_text("base\n")
+    (repo / "g.txt").write_text("base\n")
+    git(repo, "add", "."), git(repo, "commit", "-q", "-m", "f and g")
+    make_lane(home, repo, "a", {"f.txt": "from a\n"})
+    make_lane(home, repo, "b", {"g.txt": "from b\n"})
+    for name in ("a", "b"):
+        mergeq_mod.enqueue(home, name)
+    (repo / "f.txt").write_text("owner edit\n")
+    rows = mergeq_mod.process(home, load_config(home), relaunch=Sender())
+    assert {r["lane"]: r["result"] for r in rows} == {"a": "waiting", "b": "merged"}
+    assert "f.txt" in {r["lane"]: r for r in rows}["a"]["message"]
+    assert (repo / "g.txt").read_text() == "from b\n" and (repo / "f.txt").read_text() == "owner edit\n"
+    assert [i["lane"] for i in mergeq_mod.view(home, "demo")["items"]] == ["a"]
+
+
 def test_mergetrain_size_one_turns_it_off(logged, home: Path) -> None:
     repo, log = logged
     with open(home / "config.toml", "a", encoding="utf-8") as handle:
