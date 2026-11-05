@@ -34,7 +34,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] CEO: revisar cómo trabaja el manager
 - [ ] Manager de guardia: atender el chat (en curso: manager-5262c3cb)
 - [x] Revisar el plan (2026-11-05 08:38) (hecho: sin cambios) <!-- tirith:{"id":"i-32bf740b"} -->
-- [ ] El plan no repite ningún id permanente: Revisar el plan (2026-11-05) sigue dos veces con el id i-2975f07c, así que una recibe un id nuevo (check: `test $(grep -o 'tirith:{"id":"i-[0-9a-f]*"' docs/TODO.md | sort | uniq -d | wc -l) -eq 0`) <!-- tirith:{"id":"i-4d54f8b9","depends_on":[],"writes":[]} -->
+- [ ] El plan no repite ningún id permanente: Revisar el plan (2026-11-05) sigue dos veces con el id i-2975f07c, así que una recibe un id nuevo (check: `test $(grep -o 'tirith:{"id":"i-[0-9a-f]*"' docs/TODO.md | sort | uniq -d | wc -l) -eq 0`) (en curso: guarda-de-commits-compatible-2) <!-- tirith:{"id":"i-4d54f8b9","depends_on":[],"writes":[]} -->
 - [x] Verificar: Verify Drag an image from Finder onto the Tirith chat o (hecho: bafcf90e) <!-- tirith:{"id":"i-9aa639be"} -->
 - [x] Do one real Finder image drag onto the Tirith chat and look for 'drag: window drop' in app.log (hecho: bafcf90e)
 - [ ] Revisar el plan (2026-11-05 11:00) (reabierto: update-the-plan-19: the lane's work is not on main) <!-- tirith:{"id":"i-11d919e9"} -->
