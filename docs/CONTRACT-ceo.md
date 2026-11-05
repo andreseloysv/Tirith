@@ -95,7 +95,9 @@ proposal; once approved it becomes a plan item the same way.
   instead of waiting. The
   CEO is started out of schedule with the failed checks in the snapshot (`alarm`) and the brief's "Alarm" section:
   it finds the cause from the data and sends the manager a directive, or asks the owner. Each check and text alarms
-  once (`book.json` `alarmed`); a check that turns green again may alarm again later.
+  once (`book.json` `alarmed`); a check that turns green again may alarm again later, but the same text never
+  wakes the CEO more than once per 20 min (`alarm_fired`) nor before the `next_review_min` of the last review;
+  a new text or a new failed check is not held back.
 - **Owner request**: "CEO, why is nothing moving?"
 - **Skip by code**: before a scheduled run, code compares the snapshot with the last one; when nothing moved, no
   alarm fired and no directive is due, the run is skipped and costs nothing.

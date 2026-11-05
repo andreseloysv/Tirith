@@ -44,7 +44,8 @@ EVERY_MIN, MIN_EVERY_MIN, MAX_EVERY_MIN = 60, 10, 480  # the CEO picks its next 
 RUNS_PER_DAY = 72
 WATCH_WINDOW_S = 6 * 3600.0  # launch failures and owner waits the snapshot looks back on
 LONG_REVIEW_S = 3600.0       # a live review running longer than this is counted as long
-UNWELL_ALARM_MIN = 20       # a health check not ok (healing, amber) this long wakes the CEO; failed wakes it at once
+ALARM_REPEAT_MIN = 20       # the same alarm text wakes the CEO at most this often (and not before next_review_min)
+UNWELL_ALARM_MIN = 20      # a health check not ok (healing, amber) this long wakes the CEO; failed wakes it at once
 UNWELL_FORGET_MIN = 10       # ... and is forgotten only after it was ok this long in a row (it may come and go)
 OWNER_WORDS = re.compile(r"\b(?:owner|owner's|dueñ[oa])\b", re.I)
 MAX_DIRECTIVES = 3        # open at a time
@@ -839,6 +840,13 @@ def _run(home: Path, config: Config, now: datetime, cfg: dict, spawn: Callable |
     red = alarm_checks(home, book, now)
     changed |= book.get("unwell") != before
     alarm = {k: v for k, v in red.items() if f"{k}: {v}" not in book.get("alarmed", [])}
+    fired = book.setdefault("alarm_fired", {})
+    nxt_review = parse_iso(book.get("next_due"))  # set when a review answered, fixed hours or not
+    for k, v in list(alarm.items()):  # the same text again: at most every ALARM_REPEAT_MIN, not before next_review_min
+        at = parse_iso(fired.get(f"{k}: {v}"))
+        if at is not None and ((now - at).total_seconds() < ALARM_REPEAT_MIN * 60
+                               or (nxt_review is not None and now < nxt_review)):
+            del alarm[k]
     if book.get("alarmed") and not running:  # a check that turned green again may alarm again later
         kept = [a for a in book["alarmed"] if a in {f"{k}: {v}" for k, v in red.items()}]
         changed |= kept != book["alarmed"]
@@ -856,6 +864,10 @@ def _run(home: Path, config: Config, now: datetime, cfg: dict, spawn: Callable |
     if alarm:  # the self-check turned red: a review now, outside the schedule
         snap["alarm"] = alarm
         book["alarmed"] = [*book.get("alarmed", []), *(f"{k}: {v}" for k, v in alarm.items())]
+        for k, v in alarm.items():
+            fired[f"{k}: {v}"] = now_iso(now)
+        for old in sorted(fired, key=lambda a: fired[a])[:-100]:
+            del fired[old]
     fp = fingerprint(snap)
     open_dirs = [d for d in directives(home).values() if d.get("status") in ("open", "answered")]
     last = parse_iso(book.get("last_at"))

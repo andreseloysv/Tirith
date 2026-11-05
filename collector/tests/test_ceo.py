@@ -251,6 +251,30 @@ def test_a_red_self_check_wakes_the_ceo_once(home: Path, started: list) -> None:
     assert len(started) == 2  # it went green and red again
 
 
+def test_ceo_alarm_storm_same_text_is_throttled(home: Path, started: list) -> None:
+    enable(home, "hours = [9, 14, 20]")
+    config = load_config(home)
+    text = "Tests fail on code lane l-1 did not touch."
+    red(home, text)
+    assert ceo.run(home, config, local(11)) and len(started) == 1
+    write_lane(home, {"id": "ceo-1", "ended_at": "x", "project": "tirith",
+                      "report": json.dumps({**RESULT, "next_review_min": 60})})
+    for minute in (3, 6, 9, 12, 15):  # flapping green/red inside 20 min and before next_review_min
+        red(home, None)
+        ceo.run(home, config, local(11, minute))
+        red(home, text)
+        ceo.run(home, config, local(11, minute + 1))
+    assert len(started) == 1
+    red(home, None)
+    ceo.run(home, config, local(11, 40))
+    red(home, text)
+    ceo.run(home, config, local(11, 45))  # 45 min since the alarm, but the review chose 60
+    assert len(started) == 1
+    red(home, "A different failure.")  # new text goes through
+    ceo.run(home, config, local(11, 50))
+    assert len(started) == 2
+
+
 def test_the_ceo_picks_when_it_looks_again(home: Path, started: list, monkeypatch) -> None:
     enable(home)
     assert not ceo.settings(home)["fixed"]  # no [ceo] hours: its own interval, an hour until it picks one
