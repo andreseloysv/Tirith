@@ -52,6 +52,10 @@
     }).join('') + '</ul></li>';
   }
   function step(s, key) {
+    var html = stepHtml(s, key);
+    return s.depth ? html.replace('<li class="', '<li class="ls-sub ') : html;   /* a step of a sub-agent is nested under its call */
+  }
+  function stepHtml(s, key) {
     var text = esc(s.summary || '');
     if (s.kind === 'todo') return todo(s);
     if (s.kind === 'tool') return '<li class="ls-tool"><span class="ls-dot">●</span><span class="ls-t">' + text + (s.diff ? diff(s, key) : '') + '</span></li>';

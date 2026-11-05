@@ -174,3 +174,5 @@ queue gets one `lane-room-wait` item (the lane keeps waiting; the 30 minutes cou
 item wakes the manager like any queue item). `tirith lane stop` ends the wait. Tests: `-k lane_room_wait`, `-k lane_room_timeout`.
 
 Safe calls are approved by code. `msession.is_safe_call` is true for the read-only tools and for a Bash line made only of readers (`cat`, `ls`, `grep`, read-only `git`, ...) and `tirith` commands, with no redirect or substitution. `msession.decide(..., ask_owner=True)` (a session the owner can answer) returns `allow` for those, `deny` when a gate or the delegate-edits rule says so, and `ask` for the rest: only that last case becomes a question for the owner (`Session.asks`, `answer_ask`). The manager keeps `ask_owner=False`: it never asks.
+
+Nested sub-agents: live steps (`livesteps.StepParser`) carry `depth` and `parent` for the steps a sub-agent runs inside a `Task` / `Agent` call (`parent_tool_use_id` in the stream); the chat indents them under the call.
