@@ -1229,6 +1229,14 @@ def _cmd_project_add(args) -> int:
     except ValueError as exc:
         raise SystemExit(str(exc))
     print(f"{pid}: {folder}" if created else f"{folder} is already registered as {pid}")
+    if created:
+        from tirith import projectready as ready_mod
+        name = args.name or Path(folder).name or pid
+        done = ready_mod.make_ready(home, pid, folder, name)
+        for key, text in (("plan", "plan created (docs/TODO.md)"), ("manifest", "tirith.toml written"),
+                          ("guard", "guard waits for the owner's click")):
+            if done[key]:
+                print(f"  {text}")
     return 0
 
 
