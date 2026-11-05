@@ -122,6 +122,16 @@ With `[ceo] upkeep_steps = ["<project>:<step>", ...]` (the steps where a project
 `upkeep_lanes_today`, `upkeep_share_today` and `upkeep_max_share` (`[ceo] upkeep_max_share`, default 0.3); over the
 target, its directive sends the next launches to the goal steps (upkeep waits unless it fixes a failed check or a stop).
 
+**Is this the best way to work?** Once a day (`process_review_due` in the snapshot, `ceo.process_due`: no review
+answered it in the last 24 h) the brief asks the CEO to question the way of working itself, not only what slows it:
+how work flows from the plan to main (lane size, the manager's turns, review and merge queue, test choice, plan
+item size, plan checks, roles, models and effort), with `sent_back_lanes_today`, `no_work_lanes_today` and
+`short_lanes_today` in `throughput`. It compares the current way with at least one concrete alternative and answers
+`process` (`now`, `alternative`, `evidence`, `gain`, `change`); a clearly better way is acted on (a directive with a
+plan item, a manager policy, or a proposal when it changes an owner's choice). An answer with `now`, `alternative`
+and `change` sets `book.process_at`; without one the question stays due. `ceo.public` shows the last `process`.
+The flag is part of the fingerprint, so a quiet day still gets the review.
+
 ## The sentinel and the Status card
 
 **Status card** (`tirith/statuscard.py`, `state.status`, first on the Overview): four lines by code, no model: is it
