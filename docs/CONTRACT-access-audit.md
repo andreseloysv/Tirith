@@ -88,7 +88,7 @@ The owner's first question is what an agent reached outside the machine, so ever
   the page sums those into one "Agent runtime" line per destination and lists what the work opened one by one.
   The page's system and date filters apply to External too.
 
-The «Accesos» page starts with **External**: every such destination, newest first, with its kind (Web, API,
+The «Access» page shows only **External** (the list of every agent action is not drawn: the owner found it noise; its rows stay in `<home>/access`): every such destination, newest first, with its kind (Web, API,
 WebSocket, SSH, Git remote, Packages, Search, MCP, HTTPS…), the agent (role and name) and what caused it.
 
 Only the long-running collector watches the network, looks domains up and starts the proxy: a cycle run
