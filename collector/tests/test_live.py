@@ -9,8 +9,11 @@ import pytest
 from tirith import brain as brain_mod
 from tirith.home import Config
 
+# a real, paid call to the brain's API: only when asked (TIRITH_LIVE_TESTS=1). Every full suite of every lane ran it
+# whenever the key was in the environment, and the network watch showed lanes reaching the API from their tests.
 pytestmark = pytest.mark.skipif(
-    brain_mod.api_key_from_env() is None, reason="no Meta Model API key in the environment")
+    os.environ.get("TIRITH_LIVE_TESTS") != "1" or brain_mod.api_key_from_env() is None,
+    reason="live test: set TIRITH_LIVE_TESTS=1 (and the brain's API key) to run it")
 
 
 def test_live_summary_round_trip() -> None:
