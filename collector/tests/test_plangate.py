@@ -1081,6 +1081,20 @@ def test_item_stays_open_until_merged_an_interactive_lane_whose_work_is_on_main_
     assert "- [x] Build the button." in _plan(repo)
 
 
+def test_plan_add_same_title_twice(proj, home: Path, capsys) -> None:
+    import re
+    repo, _ = proj
+    ids = []
+    for _ in range(2):
+        assert main(["plan", "add", "--project", "demo", "--step", "1", "--text", "Revisar el plan (hoy)"]) == 0
+        out = capsys.readouterr().out
+        assert "added to step 1" in out
+        ids.append(re.search(r"id: (i-[a-f0-9]{8})\b", out).group(1))
+    assert ids[0] != ids[1]
+    items = [i for i in roadmap.parse(_plan(repo))[0]["items"] if i["text"].startswith("Revisar el plan")]
+    assert sorted(i["id"] for i in items) == sorted(ids)
+
+
 def test_in_review_without_review_closes_by_ticking_when_the_work_is_on_main(proj, home: Path) -> None:
     repo, _ = proj
     _lane(home, repo, "orph1", ended_at="2026-01-01T00:00:00Z", result="done")
