@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import codecs
 import json
 import os
 import subprocess
@@ -88,6 +89,29 @@ def test_lane_is_recorded(env: Path, home: Path, monkeypatch: pytest.MonkeyPatch
     monkeypatch.setenv("TIRITH_LANE", 'lane "x"')
     assert commit(env).returncode == 0
     assert git_hook_rows(home)[-1]["lane"] == 'lane "x"'
+
+
+def test_lane_commit_trailer(env: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A lane's default attribution trailer passes the commit-msg guard (and is dropped); outside a lane it is blocked."""
+    hooks = env / ".git" / "hooks"
+    make_hooks_mutable(env)
+    words = [WORD, *tirith_guard.DEFAULT_WORDS]
+    for name, text in tirith_guard.render(words).items():
+        (hooks / name).write_text(text)
+        (hooks / name).chmod(0o755)
+    trailer = "\n\n" + codecs.decode("Pb-Nhguberq-Ol: Pynhqr <ab-ercyl@nagebcvp.pbz>", "rot13")
+    monkeypatch.delenv("TIRITH_LANE", raising=False)
+    assert commit(env, message="work" + trailer).returncode != 0
+    subprocess.run([GIT, "-C", str(env), "reset", "-q"], check=True)
+    monkeypatch.setenv("TIRITH_LANE", "lane-1")
+    ok = commit(env, message="work" + trailer, name="l.txt")
+    assert ok.returncode == 0, ok.stderr
+    body = subprocess.run([GIT, "-C", str(env), "log", "-1", "--format=%B"],
+                          capture_output=True, text=True, check=True).stdout
+    assert body.strip() == "work"
+    subprocess.run([GIT, "-C", str(env), "reset", "-q"], check=True)
+    bad = commit(env, message=f"{WORD} here" + trailer, name="m.txt")
+    assert bad.returncode != 0  # other forbidden words are still blocked in a lane
 
 
 def test_toml_hooks_run_through_tirith_run(env: Path, home: Path) -> None:
