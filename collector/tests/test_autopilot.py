@@ -81,6 +81,7 @@ class Pilot:
         self.now += timedelta(seconds=seconds)
         dispatch_mod.run(self.home, load_config(self.home), self.now, agents=self.agents, lanes=[],
                          status_of=lambda lane, now: "working", launcher=self.launcher,
+                         spawn=lambda *args, **kwargs: None,  # never a real `tirith merge run`: it would drain the queue file
                          projects=self.projects())
 
     def end(self, lane: str, review: dict | None = None, report: str | None = None) -> None:
