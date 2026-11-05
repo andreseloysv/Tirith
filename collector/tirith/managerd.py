@@ -791,7 +791,7 @@ def _start_session(home: Path, config: Config, items: dict, now: datetime, book:
         return msession_mod.decide(config, home, alias, tool, data, repo, project_id)
 
     msession_mod.register(home, msession_mod.Session(home, lane_id, proc, decide, repo, resumed=bool(resume),
-                                                       adapter=msession_mod.chat_adapter(config, alias, effort)))
+                                                       adapter=msession_mod.chat_adapter(config, alias, effort, resume)))
     book.update(lane=lane_id, project=project_id, started_at=now_iso(now), resumed=bool(resume))
     if not resume:
         book["primed"], book["session_id"] = False, None
