@@ -245,6 +245,7 @@ def candidates(projects: list[dict], agents: list[dict], queued: set[str] | None
     item (working or not)."""
     found: dict[str, dict] = {}
     present: set[str] = set()
+    picked: dict[str, list[list[str]]] = {}
     for project in projects:
         if projects_mod.is_merge_worktree(project.get("folder")):
             continue  # a merge queue copy (_mergeq-*) repeats the plan of its project: no proposals from it
@@ -278,7 +279,12 @@ def candidates(projects: list[dict], agents: list[dict], queued: set[str] | None
                                   (agent.get("item") and roadmap_mod.split_status(i["text"])[0] ==
                                    roadmap_mod.split_status(agent["item"])[0])), {})
                     reserved |= coordination.overlaps(item.get("writes", []), other.get("writes", []))
+                # Two ready items that write the same files are not launched together: the first in plan order goes.
+                writes = item.get("writes", [])
+                reserved |= any(coordination.overlaps(writes, taken) for taken in picked.get(project["id"], []))
                 if not busy and not blocked and not reserved and not _queue_owned(clean, detail, mine, queued or set()):
+                    if writes:
+                        picked.setdefault(project["id"], []).append(writes)
                     found[key] = {"key": key, "project": project["id"], "step": step["id"], "title": step.get("title") or "",
                                   "item": clean, "state": state, "detail": detail, "raw": item["text"],
                                   "fp": _fingerprint(step["id"], item["text"]), "plan": road.get("file")}
