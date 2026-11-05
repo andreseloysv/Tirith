@@ -201,7 +201,11 @@ max_parallel = 4     # kept for old configs; nothing is launched by the autopilo
   (`ANSWER_EARLY_S`), once what it waited for happened: a lane it names (by id or by its number, "-28") ended or
   its review ended (merged, failed, sent back), or it waited for a slot ("slot", "busy", "limit", "4/4") and any
   lane ended ("Asked again: you answered at …: "…"; since then lane X ended at …"). Only what happened after the
-  answer counts; a wait for anything else (the owner, a key) stands until it expires. Every proposal ends with the
+  answer counts; a wait for anything else (the owner, a key) stands until it expires. A wait that names the
+  owner ("owner", "dueño") is asked again with one more line when nothing of the project is on the owner's list
+  (`state.json` `waiting_on_you`): "Nothing of this project is on the owner's list (no question, no stop): if only
+  the owner can decide, ask them now in one line (`tirith wait add`), else decide yourself", so a step never waits
+  all night on an owner who was never asked. Every proposal ends with the
   slots in use as it is written ("Now: 1 of 4 agent slots in use (lane-id)"; the manager's lane takes none), so
   the manager answers on the facts of now, not on what its conversation remembers; that line is no fact of the
   step (its fingerprint is taken without it). What blocks a launch for a
