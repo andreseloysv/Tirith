@@ -447,7 +447,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Repo preparado para conseguir estrellas: README con GIF y estrella arriba, badges, inicio en una línea, imagen social, CONTRIBUTING y plantillas de issues. (hecho: aa90394)
 - [x] Licencia MIT (elegida por el dueño): archivo LICENSE, campo license en los manifiestos y badge en el README. (hecho: b740efc)
 - [x] La app reinicia el collector si el estado deja de actualizarse aunque el proceso siga vivo. (check: `cd app/src-tauri && cargo test -q staleness`) (hecho: c4775c9)
-- [ ] El recargado automático del collector nunca lo deja bloqueado. (check: `cd collector && uv run -q pytest -q tests -k reload`) (en curso: reload-never-blocks) <!-- tirith:{"id":"i-08c61413"} -->
+- [ ] El recargado automático del collector nunca lo deja bloqueado. (check: `cd collector && uv run -q pytest -q tests -k reload`) (en revisión) <!-- tirith:{"id":"i-08c61413"} -->
 - [x] Tras arrancar o recargar, el collector escribe un estado útil en menos de 30 s. (check: `cd collector && uv run -q pytest -q tests -k first_cycle`) (hecho: bb947e4)
 - [x] Quitar worktrees de lanes sin chocar con el límite 'git': 'git worktree remove' (diskdiet.py, review.py) usa su propia clase de límite 'git-worktree-remove' (minutos, no los ~9 s aprendidos de git), con el test test_worktree_remove_uses_own_timeout_class (check: `cd collector && python3 -m pytest -q tests -k test_worktree_remove_uses_own_timeout_class`) (hecho: b2e07de)
 - [x] Hacer robusto el test test_context_over_the_limit_compacts_then_restarts_with_a_handoff de test_msession.py, que falla bajo carga porque Rig.until espera 25 s de reloj real (check: `cd collector && uv run pytest tests/test_msession.py -q -k compacts_then_restarts`)
@@ -476,6 +476,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] La landing deja de mostrar render-board.png (pedido del dueño). (check: `! grep -q render-board site/index.html`) (hecho: 7ecbd87)
 - [ ] Imágenes de inspiración para los renders, generadas con un modelo de imagen de Google y guardadas fuera del repo (espera: una clave de Google que funcione, del dueño). (check: `test -n "$(ls ~/.cache/tirith-inspiration 2>/dev/null)"`)
 - [ ] Change the check of the compacts_then_restarts msession item to -k compact so it matches the current test names (check: `cd collector && uv run -q pytest -q tests -k compact`) (reabierto: compact-check: the lane's work is not on main) <!-- tirith:{"id":"i-8ba0ea2c","depends_on":[],"writes":[]} -->
+- [ ] Confirm 3 failing process-kill tests (test_cta sigterm, test_idletimeout cpu_is_progress, test_timeouts left_the_group) fail on main too
 - [x] El icono de la app de macOS (el mismo modelo de torre de piedra) se lee bien a 32 px: se genera una versión pequeña y se comprueba su contraste (pedido del dueño). (check: `test -f app/src-tauri/icons/32x32.png && grep -q stone_tower scripts/make_icon.py`) (hecho: 849dc41)
 - [x] En el móvil, el diagrama de la landing cabe entero sin desplazarse de lado. (check: `node web/js/landing.test.mjs`) (hecho: 40ed8f2)
 - [x] En el móvil, los bloques de código de la landing se leen enteros sin desplazarse de lado. (check: `node web/js/landing.test.mjs`) (hecho: 40ed8f2)
