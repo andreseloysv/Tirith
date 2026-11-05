@@ -61,14 +61,24 @@ def session_id(log: str | Path | None) -> str | None:
     return found[-1] if found else None
 
 
-def commit_leftovers(workspace: Path, lane_id: str) -> str | None:
+def commit_message(lane: dict) -> str:
+    """The commit message for a lane's leftovers, built from its plan item (the lane id when it has none)."""
+    lane_id = str(lane.get("id") or "")
+    item = plangate_mod.roadmap_mod.split_status(str(lane.get("item") or ""))[0]
+    subject = re.sub(r"\s+", " ", item).strip().rstrip(".")
+    if len(subject) > 72:
+        subject = subject[:71].rstrip() + "…"
+    return f"{subject}\n\nCommitted by Tirith from lane {lane_id}." if subject else f"Lane {lane_id}: work left in the working tree"
+
+
+def commit_leftovers(workspace: Path, lane_id: str, msg: str | None = None) -> str | None:
     """Commit the lane's leftover changes on its branch (the guard runs). None when done, else why not."""
     ident = [] if _git(workspace, "config", "user.email").stdout.strip() else [
         "-c", "user.name=Tirith", "-c", "user.email=tirith@localhost"]
     if (added := _git(workspace, "add", "-A")).returncode != 0:
         return (added.stderr or "git add failed").strip()[:200]
     made = timeouts_mod.run(["git", "-C", str(workspace), *ident, "commit", "-q", "-m",
-                             f"Lane {lane_id}: work left in the working tree"], "git-commit", text=True)
+                             msg or f"Lane {lane_id}: work left in the working tree"], "git-commit", text=True)
     return None if made.returncode == 0 else timeouts_mod.why(made)[:200]
 
 
@@ -97,7 +107,7 @@ def gaps(home: Path, lane: dict, repo: Path | None, report: str) -> list[str]:
                        "(it runs only the tests your change maps to; the merge queue runs the full suite)")
     dirty = _git(workspace, "status", "--porcelain")
     if dirty.returncode == 0 and dirty.stdout.strip():
-        refused = commit_leftovers(workspace, lane_id)  # the brief says "do not commit": Tirith does
+        refused = commit_leftovers(workspace, lane_id, commit_message(lane))  # the brief says "do not commit": Tirith does
         if refused is not None:
             out.append("uncommitted changes in your worktree that Tirith could not commit "
                        f"({refused}): fix what the guard names and commit them with a normal `git commit` "
