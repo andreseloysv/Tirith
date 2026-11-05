@@ -220,7 +220,8 @@ touches; `--full`, a review that merges and the merge queue (outside a lane) run
 - **An agent's own command** (`tirith run --stage test -- uv run pytest -q tests`): when it is a pytest run that
   does not choose (`-n`, `-p no:xdist`, `--testmon`, `--pdb`, `-s`, `--collect-only`), Tirith adds
   `-n auto --maxprocesses 8` (`fasttests.parallel_pytest`): agents ran the whole suite in one process, 1842
-  tests in 13 min against 2 min in parallel.
+  tests in 13 min against 2 min in parallel. In `sh -c '...'` (or bash, zsh) the line gets it right after its first
+  `pytest`: agents wrapped the command that way and ran 1868 tests in one process again (19 min).
 - **Python, without a map** (`mode: changed`): by names (`tirith/x.py` -> `tests/test_x*.py`), changed test files and
   the import graph while it stays under 60 % of the suite.
 - **Web and Rust** selection is unchanged. The Python step runs in a subshell (`(cd collector && ...)`), so the web
