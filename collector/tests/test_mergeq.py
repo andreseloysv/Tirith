@@ -1052,3 +1052,18 @@ def test_merge_cancel_without_a_superseding_lane_merges_as_before(env, home: Pat
     make_lane(home, repo, "solo", {"s.txt": "s"})
     mergeq_mod.enqueue(home, "solo")
     assert mergeq_mod.process_next(home, load_config(home), relaunch=Sender())["result"] == "merged"
+
+
+def test_todo_conflict_keeps_main_and_reapplies_the_lane_plan_report(env, home: Path) -> None:
+    repo, _ = env
+    worktree = make_lane(home, repo, "plan", {"feature.txt": "a\n"})
+    _linked(home, "plan")
+    # the report went into main's plan; the lane's own copy of the same line diverged
+    (worktree / "docs" / "TODO.md").write_text(PLAN.replace("file.", "file (lane edit)."), encoding="utf-8")
+    assert "(en revisión)" in _plan(repo)
+    mergeq_mod.enqueue(home, "plan")
+    row = mergeq_mod.process_next(home, load_config(home), relaunch=Sender())
+    assert row["result"] == "merged", row
+    text = _plan(repo)
+    assert "- [x] Add the feature file.\n" in text  # main's version, the item ticked by the merge
+    assert "<<<<<<<" not in text and "lane edit" not in text and (repo / "feature.txt").exists()
