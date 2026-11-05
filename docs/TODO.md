@@ -36,7 +36,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Revisar el plan (2026-11-05 08:38) (hecho: sin cambios) <!-- tirith:{"id":"i-32bf740b"} -->
 - [ ] El plan no repite ningún id permanente: Revisar el plan (2026-11-05) sigue dos veces con el id i-2975f07c, así que una recibe un id nuevo (check: `test $(grep -o 'tirith:{"id":"i-[0-9a-f]*"' docs/TODO.md | sort | uniq -d | wc -l) -eq 0`) <!-- tirith:{"id":"i-4d54f8b9","depends_on":[],"writes":[]} -->
 - [ ] Verificar: Verify Drag an image from Finder onto the Tirith chat o (en revisión) <!-- tirith:{"id":"i-9aa639be"} -->
-- [ ] Do one real Finder image drag onto the Tirith chat and look for 'drag: window drop' in app.log
+- [x] Do one real Finder image drag onto the Tirith chat and look for 'drag: window drop' in app.log (hecho: bafcf90e)
 - [ ] Revisar el plan (2026-11-05 11:00) (reabierto: update-the-plan-19: the lane's work is not on main) <!-- tirith:{"id":"i-11d919e9"} -->
 - [x] Revisar el plan (2026-11-05 09:02) (hecho: sin cambios) <!-- tirith:{"id":"i-1a9117c8"} -->
 - [x] Revisar el plan (2026-11-05 07:01) (hecho: sin cambios) <!-- tirith:{"id":"i-0d103239"} -->
