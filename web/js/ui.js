@@ -117,19 +117,28 @@
     var t = T.ranText && T.ranText(a).replace(/ effort$/, '');
     return t ? '<span class="aran" title="Model and effort this agent ran with">' + esc(t) + '</span>' : '';
   }
+  /* the role first (what the owner cares about), the name under it */
+  T.agentRole = function (a) {
+    var id = String(a.id || '');
+    if (/^manager/.test(id)) return 'Manager';
+    if (/^ceo-/.test(id)) return 'CEO';
+    return T.cap(a['class']) || 'Worker';
+  };
   T.agentCard = function (a, selected) {
-    var head = '<span class="ahead">' + T.avatar(a, 36) + '<span class="aname"><b title="' + esc((a.name || '') + (a.epithet ? ' ' + a.epithet : '')) + '">' + esc(a.name) + '</b>' +
-      '<span class="pill">' + (a.source === 'github' ? T.ghMark(a) + ' ' + esc(a.epithet) : esc([T.cap(a.rank), T.cap(a['class'])].filter(Boolean).join(' · '))) + '</span></span></span>';
+    var role = T.agentRole(a);
+    var who = a.source === 'github' ? T.ghMark(a) + ' ' + esc(a.name) + (a.epithet ? ' · ' + esc(a.epithet) : '')
+      : esc([a.name, T.cap(a.rank)].filter(Boolean).join(' · '));
+    var head = '<span class="ahead">' + T.avatar(a, 36) + '<span class="aname"><b title="' + esc(role) + '">' + esc(role) + '</b>' +
+      '<span class="pill" title="' + esc((a.name || '') + (a.epithet ? ' ' + a.epithet : '')) + '">' + who + '</span></span></span>';
+    var feat = a.feature && a.feature !== role ? '<span class="afeat">' + esc(a.feature) + '</span>' : '';
     if (a.status === 'working') {
       var g = T.cardGoal(a).text;
-      return '<button class="card acard work' + (selected ? ' sel' : '') + '" data-act="agent" data-key="' + esc(a.id) + '">' + head +
-        '<span class="afeat">' + esc(a.feature) + '</span>' +
+      return '<button class="card acard work' + (selected ? ' sel' : '') + '" data-act="agent" data-key="' + esc(a.id) + '">' + head + feat +
         (g ? '<span class="agoalc">' + T.mdInline(g) + '</span>' : '') +
         (a.summary ? '<span class="anow' + (a.active ? ' live' : '') + '"><i class="pdot2"></i>' + T.mdInline(a.summary) + '</span>' : '') +
         ruleBadge(a) + ranChip(a) + workingFoot(a) + (T.stopBtn ? T.stopBtn(a, 'card') : '') + '</button>';
     }
-    return '<button class="card acard' + (selected ? ' sel' : '') + '" data-act="agent" data-key="' + esc(a.id) + '">' + head +
-      '<span class="afeat">' + esc(a.feature) + '</span>' + ruleBadge(a) + ranChip(a) +
+    return '<button class="card acard' + (selected ? ' sel' : '') + '" data-act="agent" data-key="' + esc(a.id) + '">' + head + feat + ruleBadge(a) + ranChip(a) +
       '<span class="afoot"><span class="aproj">' + esc(T.proj(a.project)) + '</span><span class="aclock">' + T.lineIcon(T.ICON.clock, 13, 'currentColor', 1.7) + '<span>' + T.agentClock(a) + '</span></span></span></button>';
   };
   T.drawer = function (title, body, head) {
