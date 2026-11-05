@@ -19,7 +19,8 @@ RESULT = {"result": "directives",
           "directives": [{"id": "d-1", "text": "Give every wait a deadline", "why": "steps parked for days",
                           "expect": "waits older than 2 h = 0", "check": "count", "runs": 2}],
           "proposals": [{"id": "p-1", "text": "Count only Tirith's CPU in the load limit", "why": "other apps"}],
-          "report": ["3 items reached main today (target 10)."]}
+          "report": ["3 items reached main today (target 10)."],
+          "bottleneck": {"what": "steps wait for the owner", "evidence": "9 waits", "action": "d-1"}}
 
 
 def local(hour: int, minute: int = 0, day: int = 4) -> datetime:
@@ -374,3 +375,10 @@ def test_the_ceo_sees_how_fast_the_work_goes(home: Path) -> None:
     assert (t["whole_suites_in_lanes"], t["whole_suite_minutes_median"]) == (3, 19.0)
     assert t["red_in_many_lanes"] == ["tests/test_x.py::test_y"] and t["cpu_idle_pct"] == 60.0
     assert "## Throughput: is enough getting done?" in ceo.brief(home, {"throughput": t}, ceo.settings(home), False)
+
+
+def test_every_review_names_the_biggest_bottleneck() -> None:
+    neck = {"what": "lanes re-run the whole suite", "evidence": "148 suites, 325 min", "action": "d-9"}
+    assert ceo.parse_result(json.dumps({**RESULT, "bottleneck": neck}))["bottleneck"] == neck
+    data = ceo.parse_result(json.dumps({k: v for k, v in RESULT.items() if k != "bottleneck"}))  # it says so
+    assert data["bottleneck"] is None and "No bottleneck named" in data["report"][-1]

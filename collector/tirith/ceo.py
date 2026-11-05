@@ -247,6 +247,7 @@ def throughput(home: Path, config: Config, now: datetime, cpu=None) -> dict:
         "start_to_main_minutes_median": round(statistics.median(to_main)) if to_main else None,
         "whole_suites_in_lanes": len(suites),
         "whole_suite_minutes_median": round(statistics.median(suites), 1) if suites else None,
+        "whole_suite_minutes_total": round(sum(suites)),  # lane time spent re-running the whole suite today
         "red_in_many_lanes": sorted(t for t, ls in red.items() if len(ls) >= RED_IN_LANES)[:8],
         "max_parallel": config.autopilot_max_parallel, "load_limit": allowed, "load_why": why,
         "cpu_idle_pct": (cpu or cpu_idle)(),
@@ -450,7 +451,8 @@ def brief(home: Path, snap: dict, cfg: dict, catch_up: bool) -> str:
         "reached main today and on which steps (work on Tirith's own upkeep versus the owner's goals), how long a "
         "lane takes from start to merge, how many whole test suites lanes ran and how long they took, tests that "
         "fail in many lanes (red on main), and the capacity (`max_parallel`, the load limit, the CPU left idle). Find "
-        "the biggest cause of slowness and act on it now: a fix directive (one plan item with a check, launched "
+        "the biggest cause of slowness, name it in `bottleneck` (every review, even a healthy one: there is always a "
+        "biggest one) and act on it now: a fix directive (one plan item with a check, launched "
         "first), a manager policy, or a capacity change. Upkeep crowding out the owner's goals, lanes re-running whole "
         "suites, red tests on main, and slots left empty while the CPU is idle are all yours to fix.",
         "## Your limits (enforced by code)\nYou may read anything under ~/.tirith and the project folders and run "
@@ -498,6 +500,8 @@ def brief(home: Path, snap: dict, cfg: dict, catch_up: bool) -> str:
         ' "directives": [{"id": "d-...", "text": "...", "why": "...", "expect": "...", "check": "...", "runs": 2}],\n'
         ' "proposals": [{"id": "p-...", "text": "...", "why": "..."}],\n'
         f' "report": ["at most {REPORT_LINES} short lines for the owner: only what changed"],\n'
+        ' "bottleneck": {"what": "the biggest cause of slowness now", "evidence": "numbers from throughput", '
+        '"action": "d-... | capacity | p-... | none: why"},\n'
         ' "capacity": {"max_parallel": 6, "why": "..."} (optional: lanes at once, within the snapshot\'s range),\n'
         ' "next_review_min": 60}\n'
         "Report nothing new as new: what your records already hold is still-open, not news.",
@@ -546,6 +550,10 @@ def parse_result(text: str) -> dict:
                 raise ResultError(f"every item of {key} needs {', '.join(need)}")
     data["report"] = [str(l) for l in data.get("report", [])][:REPORT_LINES]
     data["next_review_min"] = interval(data.get("next_review_min"))
+    neck = data.get("bottleneck")
+    if not isinstance(neck, dict) or not str(neck.get("what") or "").strip():
+        data["bottleneck"] = None
+        data["report"] = (data["report"] + ["(No bottleneck named: the review skipped its main question.)"])[:REPORT_LINES + 1]
     return data
 
 
@@ -662,7 +670,8 @@ def _settle_lanes(home: Path, book: dict, now: datetime) -> bool:
             data = parse_result(lane.get("report") or "")
             sent = deliver(home, data, lane["id"], str(lane.get("project") or ""), now)
             row.update(status="done", result=data["result"], report=data["report"],
-                       findings=len(data.get("findings", [])), next_review_min=data["next_review_min"], **sent)
+                       findings=len(data.get("findings", [])), next_review_min=data["next_review_min"],
+                       bottleneck=data.get("bottleneck"), **sent)
             book["every_min"] = data["next_review_min"]  # its own choice, from when it answered
             book["next_due"] = now_iso(now + timedelta(minutes=data["next_review_min"]))
         except ResultError as err:
@@ -807,6 +816,7 @@ def public(home: Path, now: datetime) -> dict:
             "next_at": (next_at(now, cfg["hours"], _book(home)) if cfg["fixed"] else _book(home).get("next_due"))
             if cfg["enabled"] else None,
             "every_min": None if cfg["fixed"] else interval(_book(home).get("every_min")),
-            "report": (last or {}).get("report") or [], "directives": dirs, "proposals": props,
+            "report": (last or {}).get("report") or [], "bottleneck": (last or {}).get("bottleneck"),
+            "directives": dirs, "proposals": props,
             "findings_open": sum(1 for f in findings(home).values() if f.get("status") == "open"),
             "cost_today": round(cost, 2)}
