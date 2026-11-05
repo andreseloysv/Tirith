@@ -233,9 +233,10 @@ window.TIRITH_STATE = {
             "total": 2,
             "items": [
               {
-                "text": "Room database",
+                "text": "Room database (hecho: 3fa9c21)",
                 "done": true,
-                "who": "agent"
+                "who": "agent",
+                "evidence": {"commit": "3fa9c21", "tests": "........................ [100%]\n24 passed in 1.8s", "shots": []}
               },
               {
                 "text": "Importar partidas antiguas",

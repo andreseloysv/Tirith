@@ -794,7 +794,16 @@
                               "description": "from the note Tirith keeps at the end of the item"},
                     "detail": {"type": "string", "description": "the lane (progress) or the reason (blocked, reopened)"},
                     "until": {"type": "string"},
-                    "owner_item": {"type": "string", "description": "id of the owner item raised for this item"}
+                    "owner_item": {"type": "string", "description": "id of the owner item raised for this item"},
+                    "evidence": {
+                      "type": "object",
+                      "description": "done items: the proof (docs/evidence/<item id>/ and the (hecho: sha) note). See docs/CONTRACT-roadmap.md.",
+                      "properties": {
+                        "commit": {"type": ["string", "null"]},
+                        "tests": {"type": "string", "description": "the end of the test output"},
+                        "shots": {"type": "array", "items": {"type": "string"}, "description": "absolute paths of screenshots"}
+                      }
+                    }
                   }
                 }
               },
