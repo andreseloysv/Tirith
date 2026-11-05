@@ -106,5 +106,18 @@ def test_a_known_domain_names_an_address_with_no_reverse_name() -> None:
     resolve = lambda d: {"160.79.104.10"} if d == "api.anthropic.com" else set()  # noqa: E731
     assert netwatch.domain_of("160.79.104.10", "160.79.104.10", [], resolve) == "api.anthropic.com"
     rows = [{"tool": "connection", "external": ["https 160.79.104.10:443"]}, {"tool": "Bash"}]
-    netwatch.annotate(rows, resolve)
+    netwatch.annotate(rows, resolve, certs=lambda a: {})
     assert rows[0]["domain"] == "api.anthropic.com" and rows[0]["address"] == "160.79.104.10" and "domain" not in rows[1]
+
+
+def test_the_servers_certificate_names_an_unknown_address() -> None:
+    from tirith import netwatch
+    text = ("subject=C=US, ST=New York, L=New York, O=Datadog, Inc., CN=*.logs.us5.datadoghq.com\n"
+            "X509v3 Subject Alternative Name: \n    DNS:*.logs.us5.datadoghq.com, DNS:logs.us5.datadoghq.com\n")
+    assert netwatch.read_cert("34.149.66.165", run=lambda argv: text) == {"domain": "logs.us5.datadoghq.com", "org": "Datadog"}
+    text = "subject=CN=downloads.example.org\nX509v3 Subject Alternative Name: \n    DNS:downloads.example.org, DNS:x\n"
+    assert netwatch.read_cert("35.190.46.17", run=lambda argv: text) == {"domain": "downloads.example.org"}
+    assert netwatch.read_cert("10.0.0.1", run=lambda argv: "") == {}
+    rows = [{"tool": "connection", "external": ["https 35.190.46.17:443"]}]
+    netwatch.annotate(rows, resolve=lambda d: set(), certs=lambda a: {"domain": "downloads.example.org"})
+    assert rows[0]["domain"] == "downloads.example.org"

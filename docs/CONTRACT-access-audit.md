@@ -81,7 +81,10 @@ The owner's first question is what an agent reached outside the machine, so ever
   and `reverse`; the page shows the domain big and the address small beside it. Lookups have a 1 s budget.
   An address with no reverse name is matched against `netwatch.KNOWN_DOMAINS` (model APIs, GitHub, package
   registries, agentsmessenger…), also for rows written before (`netwatch.annotate`, when the state is built).
-  A connection of the lane's own process (the agent program: its model API, telemetry) has `runtime: true`;
+  Still unknown, the server's TLS certificate names it (`netwatch.read_cert`: an `openssl s_client` handshake
+  without a name, its first DNS name or subject, and its organization as `org`), once per address in
+  `<home>/netwatch-certs.json`, looked up in the background. A connection of the lane's own process (the agent
+  program itself, not a command it ran) has `runtime: true`;
   the page sums those into one "Agent runtime" line per destination and lists what the work opened one by one.
   The page's system and date filters apply to External too.
 
