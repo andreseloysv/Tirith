@@ -260,7 +260,9 @@ not checked for 167 passed (backticks still name files and tests).
 - "added N tests" / `test_x in <file>`: the diff must add that many test functions (python `def test_`,
   rust `#[test] fn`, js `test(`/`it(`), the named ones, in the named file;
 - "tests pass" / "N passed": a passing test-stage run of the lane's worktree must be recorded in
-  `events.jsonl` after the last changed file, and N must be a count printed by such a run's log;
+  `events.jsonl` after the last changed file, and N must be a count printed by such a run's log. A registered partial run (`-k` or named test files; its start event
+  has `partial: true`) after the lane's start also counts, so "167 passed" of a partial run holds next to a
+  full run of 1738;
 - "committed as <sha>": the commit must exist; "merged": the lane's HEAD must be in the repo's branch;
   "pushed": the lane's HEAD must be on a remote branch ("merged main into ..." and future tense are skipped);
 - "looked at the screenshot <path>": the file must exist and be newer than the lane's start;
