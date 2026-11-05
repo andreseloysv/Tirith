@@ -29,6 +29,16 @@ def test_add_writes_one_open_row(home: Path, capsys) -> None:
     assert row["at"].endswith("Z")
 
 
+def test_a_request_added_from_a_lane_is_the_managers(home: Path, capsys, monkeypatch) -> None:
+    # the manager's own plan edit was taken for the owner's: Tirith interrupted the manager's turn for it, and the
+    # manager then waited all night for an owner decision nobody had asked for
+    monkeypatch.setenv("TIRITH_LANE", "manager-ad094750")
+    _add(capsys, "--kind", "plan-edit", "--project", "demo", "--step", "17", "--text", '{"item_text": "x", "delete": true}')
+    (row,) = read_jsonl(home / "inbox.jsonl")
+    assert row["from"] == "manager"
+    assert inbox_mod.owner_requests(inbox_mod.requests(home)) == []  # not in the owner's list either
+
+
 def test_finish_needs_no_text_but_ask_does(home: Path, capsys) -> None:
     assert _add(capsys, "--kind", "finish", "--project", "demo", "--step", "1")
     assert main(["inbox", "add", "--kind", "ask", "--project", "demo", "--step", "1"]) == 3
