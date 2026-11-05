@@ -73,6 +73,10 @@ moves `current` (the old one becomes `previous`), a red test deletes the copy an
 A promoted release is on trial for 30 min: when `state.health.level` stays red for 2 min (checked every
 dispatcher pass), `previous` is put back as `current` by itself (`last_rollback`) and the bad release is deleted.
 `tirith stable rollback` does it by hand, `tirith stable status` prints `<home>/stable/stable.json`'s summary.
+Once a release is current, everything Tirith starts (`tirithcmd.resolved`: launch, the link handler, launchd, the app's
+run actions) runs `uv run --project <home>/stable/current tirith` unless `[app] tirith` is set. After each lane the merge
+queue merges into main, it starts a detached `tirith stable promote --source <main>/collector` (log
+`<home>/logs/stable-promote.log`), so the stable copy follows main only through a passing full test.
 Three releases are kept. Code: `tirith/stable.py`; test: `pytest -k stable`.
 
 ## Wasted work

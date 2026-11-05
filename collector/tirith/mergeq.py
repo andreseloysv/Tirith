@@ -38,6 +38,7 @@ from tirith import wasted as wasted_mod
 from tirith import plangate as plangate_mod
 from tirith import review as review_mod
 from tirith import selfreload as selfreload_mod
+from tirith import stable as stable_mod
 from tirith import testmap as testmap_mod
 from tirith import timeouts as timeouts_mod
 from tirith.home import Config, now_iso
@@ -903,6 +904,8 @@ def process(home: Path, config: Config, *, relaunch: Callable | None = None, pus
         rows.append(_process_one(home, config, *members[0], repo, relaunch, push))
     elif members:
         rows += _process_train(home, config, members, repo, relaunch, push)
+    if repo is not None and any(r["result"] == MERGED for r in rows):
+        stable_mod.promote_after_merge(home, repo)  # main moved: the stable copy follows once the full test passes
     place = {e["lane"]: n for n, e in enumerate(entries)}
     return sorted(rows, key=lambda r: place.get(r["lane"], len(place)))  # queue order, whoever left the train
 
