@@ -24,6 +24,15 @@ def _today(iso, now: datetime) -> bool:
     return at is not None and at.astimezone().date() == now.astimezone().date()
 
 
+def running_runs(state: dict) -> int:
+    """Merge-queue entries and lane reviews running now (their CI is work although no agent is working)."""
+    queue = sum(1 for p in state.get("projects") or [] if isinstance(p, dict)
+                for i in ((p.get("merge_queue") or {}).get("items") or []) if isinstance(i, dict) and i.get("status") == "running")
+    reviews = sum(1 for a in state.get("agents") or [] if isinstance(a, dict) and isinstance(a.get("review"), dict)
+                  and a["review"].get("status") == "running")
+    return queue + reviews
+
+
 def build(state: dict, now: datetime, ci: dict | None = None, merged_today: int | None = None,
           lasting: list[str] | None = None) -> dict:
     """``merged_today``: counted from every lane record (the state keeps only recent agents); ``lasting``: the checks
@@ -46,11 +55,13 @@ def build(state: dict, now: datetime, ci: dict | None = None, merged_today: int 
     ci = ci or {}
     ci_red = sorted(k for k, v in ci.items() if v == "failed")
     open_items = int((state.get("autopilot") or {}).get("open_items") or 0)
-    level, why = "ok", "Moving" if working else "Idle: nothing to do"
+    running = running_runs(state)  # a merge-queue or review CI run is work too
+    moving = bool(working) or running > 0
+    level, why = "ok", "Moving" if moving else "Idle: nothing to do"
     if bad_checks or ci_red:
         level = "bad"
         why = "; ".join([*(c.get("text") or c.get("label") or "" for c in bad_checks), *(f"CI red: {k}" for k in ci_red)])
-    elif not working and open_items:
+    elif not moving and open_items:
         level, why = "warn", f"Nothing working while {open_items} plan items are open"
     elif lasting:
         level = "warn"
