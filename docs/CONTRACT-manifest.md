@@ -112,6 +112,9 @@ When the work is small again (at most `CEO_WORKERS` workers; for a manager, fewe
 and an on-demand role has had nothing to do for more than `RETIRE_IDLE_SECONDS` (3600), `promote.retire_decision(mode,
 role, workers, idle_seconds, parallel_items)` returns `{rule: "idle_seconds", measured, threshold, reason}` and
 `promote.retire_if_idle(home, ...)` also appends the `retire` row to `company.jsonl`. `"always"` and `"off"` never retire.
+The dispatcher's regular pass calls `promote.retire_on_tick(home, projects, lanes, now, state)`: it measures the idle time
+of each on-demand `ceo-`/`manager-` role (since its last lane ended; 0 while one runs) and calls `retire_if_idle`, once
+per period of activity (`dispatch.json` `retired`).
 
 Every promotion or retirement is appended to `<home>/company.jsonl` by `promote.log_change(home, event, role, rule,
 measured, threshold, reason)` (`event` = `promote` | `retire`; `log_decision` records a `manager_decision`), one line

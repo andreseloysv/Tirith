@@ -20,7 +20,7 @@ from pathlib import Path
 from tirith import plangate as plangate_mod
 from tirith import roadmap as roadmap_mod
 from tirith import store
-from tirith.home import now_iso
+from tirith.home import now_iso, parse_iso
 
 COMPANY_LOG = "company.jsonl"
 
@@ -125,6 +125,50 @@ def retire_if_idle(home: Path, mode: str, role: str, workers: int = 0, idle_seco
         return None
     return log_change(home, "retire", role, decision["rule"], decision["measured"], decision["threshold"],
                       decision["reason"], now)
+
+
+_ROLE_LANE_PREFIX = {"ceo": "ceo-", "manager": "manager-"}
+
+
+def _idle_seconds(role_lanes: list[dict], now: datetime) -> tuple[float, str | None]:
+    """Seconds since the role last did anything (0 while one of its lanes runs), and that last moment."""
+    if any(not l.get("ended_at") for l in role_lanes):
+        return 0.0, None
+    stamps = [t for l in role_lanes if (t := parse_iso(l.get("ended_at")) or parse_iso(l.get("started_at")))]
+    if not stamps:
+        return 0.0, None
+    last = max(stamps)
+    return max(0.0, (now - last).total_seconds()), last.isoformat()
+
+
+def retire_on_tick(home: Path, projects: list[dict], lanes: list[dict], now: datetime, state: dict) -> bool:
+    """Called on the dispatcher's regular pass: measure how long each on-demand CEO and manager has been idle
+    (since its last lane ended) and call ``retire_if_idle``. A retirement is recorded once per period of
+    activity (``state["retired"]``). Returns True when ``state`` changed."""
+    retired = state.setdefault("retired", {})
+    changed = False
+    for project in projects:
+        pid = str(project.get("id") or "")
+        roles = (project.get("roadmap") or {}).get("roles") or {}
+        mine = [l for l in lanes if isinstance(l, dict) and l.get("project") in (pid, None, "")]
+        workers = [l for l in mine if not l.get("ended_at")
+                   and not any(str(l.get("id", "")).startswith(p) for p in _ROLE_LANE_PREFIX.values())]
+        for role, prefix in _ROLE_LANE_PREFIX.items():
+            if roles.get(role) != "on-demand":
+                continue
+            idle, last = _idle_seconds([l for l in mine if str(l.get("id", "")).startswith(prefix)], now)
+            key = f"{pid}:{role}"
+            if last is None:
+                if retired.pop(key, None) is not None:  # active again: may retire again later
+                    changed = True
+                continue
+            if retired.get(key) == last:
+                continue
+            if retire_if_idle(home, "on-demand", role, workers=len(workers), idle_seconds=idle,
+                              parallel_items=len(workers), now=now):
+                retired[key] = last
+                changed = True
+    return changed
 
 
 def log_change(home: Path, event: str, role: str, rule: str, measured, threshold, reason: str = "",

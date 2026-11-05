@@ -58,3 +58,26 @@ def test_roles_shrink_keeps_roles_while_busy_or_not_on_demand(tmp_path):
 def test_company_log_rejects_an_unknown_event(tmp_path):
     with pytest.raises(ValueError):
         pr.log_change(tmp_path, "hire", "ceo", "r", 1, 1)
+
+
+def test_retire_on_tick_retires_idle_on_demand_roles_once(tmp_path):
+    from datetime import datetime, timedelta, timezone
+    now = datetime(2026, 1, 1, 12, tzinfo=timezone.utc)
+    ended = (now - timedelta(seconds=pr.RETIRE_IDLE_SECONDS + 60)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    projects = [{"id": "p", "roadmap": {"roles": {"ceo": "on-demand", "manager": "always"}}}]
+    lanes = [{"id": "ceo-1", "project": "p", "ended_at": ended}, {"id": "manager-1", "project": "p", "ended_at": ended}]
+    state = {}
+    assert pr.retire_on_tick(tmp_path, projects, lanes, now, state) is True
+    assert [(r["event"], r["role"]) for r in pr.read_log(tmp_path)] == [("retire", "ceo")]
+    assert pr.retire_on_tick(tmp_path, projects, lanes, now, state) is False  # not logged twice
+    assert len(pr.read_log(tmp_path)) == 1
+
+
+def test_retire_on_tick_keeps_a_running_or_recent_role(tmp_path):
+    from datetime import datetime, timedelta, timezone
+    now = datetime(2026, 1, 1, 12, tzinfo=timezone.utc)
+    projects = [{"id": "p", "roadmap": {"roles": {"ceo": "on-demand", "manager": "on-demand"}}}]
+    recent = (now - timedelta(seconds=60)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    lanes = [{"id": "ceo-1", "project": "p"}, {"id": "manager-1", "project": "p", "ended_at": recent}]
+    assert pr.retire_on_tick(tmp_path, projects, lanes, now, {}) is False
+    assert pr.read_log(tmp_path) == []
