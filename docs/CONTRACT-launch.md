@@ -347,6 +347,10 @@ The step's checkboxes in the roadmap are still ticked by the owner.
   untracked, not ignored) are saved as a binary patch `~/.tirith/kept/<lane>.patch` (`git apply` on the branch; no commit: the guard
   allows none without hooks), the folder is removed with
   `--force`, the branch stays unless merged. The record gets `cleanup = {status: "retired", kept, at}`.
+- **Low disk retires every ended lane.** When free space is under the trigger (30 GB by default), `sweep` first
+  retires the folder of every ended lane (`done`, `stopped` or `failed`) of every project, however recent, the
+  same way (patch in `~/.tirith/kept/` first, branch stays unless merged). Skipped: a lane in the merge queue, one
+  whose review is `pending`, `running` or `ready`, one still working, and a folder a process runs in.
 - **Fresh launches survive the sweep.** `sweep` skips a worktree git touched less than 15 min ago (`FRESH_S`)
   whose branch is at the project checkout's HEAD: a lane being launched looks merged and has no record yet, and
   removing it before the agent starts gave `FileNotFoundError` in `_run_child`.
