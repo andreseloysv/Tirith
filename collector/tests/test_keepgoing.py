@@ -284,3 +284,18 @@ def test_existing_gate_ids_are_still_present_and_active(home) -> None:
     config = load_config(home)
     got = {v.rule for v in gates.check_call(config, "Bash", {"command": "git commit --no-verify -m x"}, "/tmp")}
     assert "no-verify" in got
+
+
+def test_finish_check_never_stages_or_commits_in_the_manager_checkout(home, tmp_path, monkeypatch) -> None:
+    """The on-call manager works in the owner's checkout: the finish check leaves its files and index alone."""
+    import subprocess
+    repo = _lane_run_setup(home, tmp_path, monkeypatch)
+    (repo / "owner-file.txt").write_text("x", encoding="utf-8")
+    monkeypatch.setattr(keepgoing_mod.claimcheck_mod, "test_runs", lambda *a: [{"at": 9e12, "counts": [], "run": "r"}])
+    head = keepgoing_mod._git(repo, "rev-parse", "HEAD").stdout
+    manager = {"id": "manager-1", "project": "demo", "class": "steward", "workspace": str(repo)}
+    missing = keepgoing_mod.gaps(home, manager, repo, "")
+    assert not any("uncommitted" in m for m in missing)
+    assert keepgoing_mod._git(repo, "rev-parse", "HEAD").stdout == head
+    assert "?? owner-file.txt" in keepgoing_mod._git(repo, "status", "--porcelain").stdout
+    assert not keepgoing_mod.owns_worktree(manager) and keepgoing_mod.owns_worktree({"id": "x", "class": "warden"})

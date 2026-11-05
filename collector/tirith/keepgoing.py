@@ -82,6 +82,12 @@ def commit_leftovers(workspace: Path, lane_id: str, msg: str | None = None) -> s
     return None if made.returncode == 0 else timeouts_mod.why(made)[:200]
 
 
+def owns_worktree(lane: dict) -> bool:
+    """False for a manager lane (the on-call session or a turn): its directory is the owner's main checkout,
+    not a lane worktree, so its files are not the lane's to stage or commit."""
+    return not plangate_mod.manager_lane(str(lane.get("id") or ""), str(lane.get("class") or ""))
+
+
 def gaps(home: Path, lane: dict, repo: Path | None, report: str) -> list[str]:
     """What is missing for ``lane`` to be finished, one sentence with the command to fix it each."""
     out: list[str] = []
@@ -105,6 +111,8 @@ def gaps(home: Path, lane: dict, repo: Path | None, report: str) -> list[str]:
             out.append("no passing test run recorded after your last change: run "
                        "`tirith run --project <project> --stage test` (and `--stage build`) in your worktree "
                        "(it runs only the tests your change maps to; the merge queue runs the full suite)")
+    if not owns_worktree(lane):
+        return out  # the on-call manager works in the owner's checkout: never `git add` or commit there
     dirty = _git(workspace, "status", "--porcelain")
     if dirty.returncode == 0 and dirty.stdout.strip():
         refused = commit_leftovers(workspace, lane_id, commit_message(lane))  # the brief says "do not commit": Tirith does
