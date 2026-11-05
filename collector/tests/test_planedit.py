@@ -217,3 +217,11 @@ def test_collector_state_shows_the_edit_request(project, home: Path) -> None:
     assert row["edit"]["add"] == "Shown" and row["manager_pending"] is False
     plan = next(p for p in state["projects"] if p["id"] == "demo")["roadmap"]
     assert any(i["text"] == "Shown" for s in plan["steps"] if s["id"] == "1" for i in s["items"])
+
+
+def test_an_edit_of_the_manager_queues_no_plan_check(project, home: Path) -> None:
+    row = inbox_mod.add_request(home, "plan-edit", "demo", "1", _payload(add="x"), at=_at(5), sender="manager")
+    _run(home)
+    assert _refreshes(home) == []
+    answer = _by_id(home)[row["id"]]["answers"][0]["text"]
+    assert answer.startswith("Done:") and "checked again" not in answer

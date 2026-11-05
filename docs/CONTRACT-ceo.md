@@ -118,6 +118,9 @@ capacity: `max_parallel`, the load limit and why, the CPU left idle, the range i
 cause of slowness and act: a fix directive, a manager policy, or `capacity` in its result. Every result names it in
 `bottleneck` (`what`, `evidence`, `action`), a healthy review too; one without it gets a report line saying so.
 `whole_suite_minutes_total` is the lane time spent today re-running the whole suite.
+With `[ceo] upkeep_steps = ["<project>:<step>", ...]` (the steps where a project fixes its own tooling) it also sees
+`upkeep_lanes_today`, `upkeep_share_today` and `upkeep_max_share` (`[ceo] upkeep_max_share`, default 0.3); over the
+target, its directive sends the next launches to the goal steps (upkeep waits unless it fixes a failed check or a stop).
 
 ## The sentinel and the Status card
 
