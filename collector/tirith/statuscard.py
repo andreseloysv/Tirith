@@ -17,6 +17,7 @@ from tirith.home import parse_iso
 from tirith.roadmap import split_status, without_check
 
 RECENT = 3
+CANARY = "canary"  # the end-to-end test project (tirith.mergeq.CANARY)
 
 
 def _today(iso, now: datetime) -> bool:
@@ -39,7 +40,8 @@ def launchable(state: dict) -> bool:
     pilot = state.get("autopilot") or {}
     if pilot.get("enabled") is not True or "queued" not in pilot:
         return True  # off, or not known: nothing launches by itself, so open items are not "done"
-    return bool(pilot.get("queued") or pilot.get("proposed") or pilot.get("skipped"))
+    held = [x for x in pilot.get("skipped") or [] if not (isinstance(x, dict) and x.get("project") == CANARY)]
+    return bool(pilot.get("queued") or pilot.get("proposed") or held)  # the canary's hourly self-test is not work
 
 
 def plan_totals(state: dict) -> dict:
