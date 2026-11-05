@@ -2230,9 +2230,12 @@ def _cmd_inbox(args) -> int:
     try:
         if action == "add":
             text = args.text if args.text is not None else ""
+            # from a lane (the manager or an agent) it is the manager's request, never the owner's: an owner
+            # request interrupts the manager's turn, and the manager took that for the owner stopping it
+            sender = "manager" if os.environ.get("TIRITH_LANE") else "owner"
             print(inbox_mod.add_request(home, args.kind, args.project, str(args.step or ""), text,
                                         attachments=inbox_mod.attachment_list(args.attach),
-                                        cid=args.cid)["id"])
+                                        cid=args.cid, sender=sender)["id"])
         elif action == "list":
             for req in inbox_mod.requests(home):
                 if args.open and req["status"] != "open":
