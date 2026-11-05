@@ -303,8 +303,12 @@ def test_a_lane_that_ended_a_day_ago_unmerged_and_dirty_is_retired_keeping_its_w
     assert not worktree.exists()
     assert "lane/abandoned" in git(repo, "branch", "--list")  # unmerged commits stay in the branch
     kept = record(home, "abandoned")["cleanup"]
-    assert kept["status"] == "retired" and kept["kept"] == "refs/tirith/kept/abandoned"
-    assert git(repo, "show", "refs/tirith/kept/abandoned:wip.txt") == "half done\n"
+    patch = home / "kept" / "abandoned.patch"
+    assert kept["status"] == "retired" and kept["kept"] == str(patch)
+    back = launch_mod.create_worktree(repo, "back")
+    git(back, "reset", "-q", "--hard", "lane/abandoned")
+    git(back, "apply", str(patch))
+    assert (back / "wip.txt").read_text(encoding="utf-8") == "half done\n"
 
 
 def test_sweep_retires_an_untouched_unmerged_folder_and_keeps_a_recent_one(home: Path, repo: Path, monkeypatch) -> None:
@@ -315,7 +319,7 @@ def test_sweep_retires_an_untouched_unmerged_folder_and_keeps_a_recent_one(home:
     assert diskdiet_mod.sweep(home, load_config(home), now(), busy=lambda: [])["worktrees"] == 1
     assert not old.exists() and recent.is_dir()
     assert "lane/old-unmerged" in git(repo, "branch", "--list")
-    assert git(repo, "show", "refs/tirith/kept/old-unmerged:notes.txt") == "keep me\n"
+    assert "+keep me" in (home / "kept" / "old-unmerged.patch").read_text(encoding="utf-8")
 
 
 def test_under_the_warning_level_disk_is_amber_and_cleaning_starts(home: Path, repo: Path) -> None:
