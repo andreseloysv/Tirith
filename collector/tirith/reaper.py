@@ -90,3 +90,22 @@ def _send(pid: int, sig: int) -> None:
         os.kill(pid, sig)
     except OSError:
         pass
+
+
+SWEEP_EVERY_S = 180.0
+
+
+def reap_ended_lanes(home: Path | str, term_wait: float = TERM_WAIT_S,
+                     sleep: Callable[[float], None] = time.sleep) -> list[int]:
+    """Sweep: reap what is still running under the worktree of every lane that already ended
+    (``ended_at`` set). Run at collector start and every ``SWEEP_EVERY_S``. Returns the pids signalled. Never raises."""
+    from tirith.store import read_lanes
+    killed: list[int] = []
+    try:
+        lanes = read_lanes(Path(home))
+    except Exception:
+        return killed
+    for lane in lanes:
+        if lane.get("ended_at") and lane.get("workspace"):
+            killed += reap_lane_leftovers(lane["workspace"], term_wait=term_wait, sleep=sleep)
+    return killed

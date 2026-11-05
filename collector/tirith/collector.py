@@ -22,6 +22,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from tirith import access_audit as access_audit_mod
+from tirith import reaper as reaper_mod
 from tirith import netblock as netblock_mod
 from tirith import netproxy as netproxy_mod
 from tirith import netwatch as netwatch_mod
@@ -1930,6 +1931,12 @@ class Collector:
             ended.append(self._slow.stop(left()))
         return all(ended)
 
+    def _sweep_ended_lanes(self) -> None:
+        try:
+            reaper_mod.reap_ended_lanes(self.home)
+        except Exception:  # a sweep must never stop the collector
+            pass
+
     def run(self, interval: float = 2.0, once: bool = False, reload_check=None) -> dict:
         """Loop forever (or once) writing state every ``interval`` seconds.
 
@@ -1958,8 +1965,13 @@ class Collector:
             failures = 1
             print(f"tirith collect: cycle failed ({type(exc).__name__}: {exc}); "
                   f"retrying (failure {failures})", file=sys.stderr, flush=True)
+        last_sweep = time.monotonic()
+        self._sweep_ended_lanes()
         while True:
             time.sleep(max(0.2, interval) + backoff_s(failures))
+            if time.monotonic() - last_sweep >= reaper_mod.SWEEP_EVERY_S:
+                last_sweep = time.monotonic()
+                self._sweep_ended_lanes()
             wants_reload = False
             if reload_check is not None:
                 try:
