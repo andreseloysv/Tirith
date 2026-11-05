@@ -2,7 +2,7 @@
 
 When the agent of a ``lane run --as-agent <alias>`` ends, ``gaps`` checks what the owner's rules ask of a
 finished lane: a plan report (``tirith plan report``), a report whose claims hold (``claimcheck``), the
-quick tests recorded green after the last change, the work committed on the lane's branch and a branch
+quick tests recorded green after the last change, the work committed on the lane's branch (Tirith commits what the brief told the lane to leave) and a branch
 that merges cleanly with main. A lane whose agent ends while a stage it started is still running is not
 finished either: ``wait_for_stages`` waits for the stage and ``stage_message`` tells the same session its result. Anything missing is sent back to the SAME agent session (``resume_command``:
 the alias's resume flag with the session id read from the stream log; an alias without one starts again
@@ -61,6 +61,17 @@ def session_id(log: str | Path | None) -> str | None:
     return found[-1] if found else None
 
 
+def commit_leftovers(workspace: Path, lane_id: str) -> str | None:
+    """Commit the lane's leftover changes on its branch (the guard runs). None when done, else why not."""
+    ident = [] if _git(workspace, "config", "user.email").stdout.strip() else [
+        "-c", "user.name=Tirith", "-c", "user.email=tirith@localhost"]
+    if (added := _git(workspace, "add", "-A")).returncode != 0:
+        return (added.stderr or "git add failed").strip()[:200]
+    made = timeouts_mod.run(["git", "-C", str(workspace), *ident, "commit", "-q", "-m",
+                             f"Lane {lane_id}: work left in the working tree"], "git-commit", text=True)
+    return None if made.returncode == 0 else timeouts_mod.why(made)[:200]
+
+
 def gaps(home: Path, lane: dict, repo: Path | None, report: str) -> list[str]:
     """What is missing for ``lane`` to be finished, one sentence with the command to fix it each."""
     out: list[str] = []
@@ -86,8 +97,11 @@ def gaps(home: Path, lane: dict, repo: Path | None, report: str) -> list[str]:
                        "(it runs only the tests your change maps to; the merge queue runs the full suite)")
     dirty = _git(workspace, "status", "--porcelain")
     if dirty.returncode == 0 and dirty.stdout.strip():
-        out.append("uncommitted changes in your worktree: commit them on your branch with a normal "
-                   "`git commit` (the guard runs; never skip hooks)")
+        refused = commit_leftovers(workspace, lane_id)  # the brief says "do not commit": Tirith does
+        if refused is not None:
+            out.append("uncommitted changes in your worktree that Tirith could not commit "
+                       f"({refused}): fix what the guard names and commit them with a normal `git commit` "
+                       "(never skip hooks)")
     branch = _git(workspace, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
     base = _base_branch(workspace)
     if base and branch and branch not in (base, "HEAD"):

@@ -43,11 +43,11 @@ if mode.startswith("stage") and not resumed:
     print(json.dumps({"type": "system", "session_id": "sess-1"}))
     print(json.dumps({"type": "result", "result": "Waiting for the test stage.", "session_id": "sess-1"}))
     sys.exit(0)
-if mode == "slow":  # round 1 fixes one gap (commits), round 2 fixes none (new uncommitted work again)
+if mode == "slow":  # round 1 fixes one gap (the plan report), round 2 fixes none
     if calls == 2:
-        subprocess.run(["git", "add", "-A"], check=True)
-        subprocess.run(["git", "-c", "user.email=a@b.c", "-c", "user.name=a", "commit", "-q", "--no-verify",
-                        "-m", "work"], check=True)
+        sys.path.insert(0, @ROOT@)
+        from tirith.cli import main
+        main(["plan", "report", "--status", "done"])
     print(json.dumps({"type": "system", "session_id": "sess-1"}))
     print(json.dumps({"type": "result", "result": "Finished.", "session_id": "sess-1"}))
     sys.exit(0)
@@ -101,11 +101,24 @@ def test_missing_report_and_uncommitted_work_resume_the_same_session(home, tmp_p
     first, second = calls
     assert first[:2] == ["-p", "the brief"] and "--resume" not in first
     assert second[0] == "-p" and "Missing:" in second[1] and "no plan report" in second[1]
-    assert "uncommitted changes" in second[1] and "round 1 of 3" in second[1]
+    assert "uncommitted changes" not in second[1] and "round 1 of 3" in second[1]
     assert second[second.index("--resume") + 1] == "sess-1"
     assert lane["outcome"]["status"] == "done" and lane["result"] == "done"
     assert keepgoing_mod.round_label(lane) == "round 1/3"
     assert not asks_mod.queue_items(home, only_open=True)
+
+
+def test_brief_and_finish_gate_agree_on_commit(home, tmp_path, monkeypatch) -> None:
+    """The brief says "Do NOT commit"; a lane that obeys it is never sent back for it: Tirith commits."""
+    from tirith import launch as launch_mod
+    assert any("Do NOT commit" in r for r in launch_mod.HARD_RULES)
+    code, calls, lane = _run(home, tmp_path, monkeypatch, "fix-on-resume")
+    assert all("uncommitted" not in c[1] for c in calls[1:])
+    ws = Path(lane["workspace"])
+    assert not keepgoing_mod._git(ws, "status", "--porcelain").stdout.strip()
+    assert "work1.txt" in keepgoing_mod._git(ws, "show", "--stat", "--format=%s", "HEAD~0").stdout \
+        or "work1.txt" in keepgoing_mod._git(ws, "log", "--stat", "--format=%s").stdout
+    assert keepgoing_mod.has_work(ws, lane.get("start_commit"))
 
 
 def test_a_round_that_fixes_nothing_goes_to_the_manager_queue_at_once(home, tmp_path, monkeypatch) -> None:
@@ -118,9 +131,9 @@ def test_a_round_that_fixes_nothing_goes_to_the_manager_queue_at_once(home, tmp_
 
 
 def test_a_round_that_fixes_something_earns_another(home, tmp_path, monkeypatch) -> None:
-    code, calls, lane = _run(home, tmp_path, monkeypatch, "slow")
+    code, calls, lane = _run(home, tmp_path, monkeypatch, "slow", tests_green=False)
     assert len(calls) == 3 and all("--resume" in c for c in calls[1:])
-    assert "uncommitted changes" in calls[1][1] and "uncommitted changes" not in calls[2][1]
+    assert "no plan report" in calls[1][1] and "no plan report" not in calls[2][1]
     (item,) = [i for i in asks_mod.queue_items(home, only_open=True) if i["kind"] == keepgoing_mod.QUEUE_KIND]
     assert "same gaps after round 2 of 3" in item["text"]
     assert keepgoing_mod.round_label(lane) == "round 2/3, stalled"
