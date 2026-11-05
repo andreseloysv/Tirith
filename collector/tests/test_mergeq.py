@@ -1093,3 +1093,36 @@ def test_dirty_checkout_clash_waits_without_running_the_suite_again(logged, home
     git(repo, "checkout", "--", "README.md")
     assert mergeq_mod.process_next(home, load_config(home), relaunch=Sender())["result"] == "merged"
     assert log().count("test") == ran.count("test")  # the proven tree was not tested again
+
+
+# -- the canary has its own track: never behind another project's merge or its full-suite lock ----
+
+
+def _entry(lane: str, project: str, status: str = "queued", pid: int | None = None) -> dict:
+    return {"lane": lane, "project": project, "at": "2026-01-01T00:00:00Z", "status": status,
+            "feature": lane, **({"pid": pid} if pid else {})}
+
+
+def test_canary_merge_claimed_while_another_project_merges(tmp_path: Path) -> None:
+    write_json_atomic(mergeq_mod._path(tmp_path), {"queue": [
+        _entry("t-1", "tirith", "running", os.getpid()), _entry("t-2", "tirith"), _entry("c-1", "canary")],
+        "last": {}, "history": []})
+    assert [e["lane"] for e in mergeq_mod._claim_many(tmp_path)] == ["c-1"]
+    assert mergeq_mod._claim_many(tmp_path) == []  # t-1 still runs on its track, c-1 on the canary's
+
+
+def test_canary_merge_does_not_hold_back_tirith(tmp_path: Path) -> None:
+    write_json_atomic(mergeq_mod._path(tmp_path), {"queue": [
+        _entry("c-1", "canary", "running", os.getpid()), _entry("t-1", "tirith")], "last": {}, "history": []})
+    assert [e["lane"] for e in mergeq_mod._claim_many(tmp_path)] == ["t-1"]
+
+
+def test_canary_merge_check_skips_the_full_suite_lock(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    seen = []
+    monkeypatch.setattr(mergeq_mod.review_mod, "run_tests",
+                        lambda home, project, pipeline, stage, tmp, run, lane, full=True:
+                        seen.append((project, full)) or (True, "1 passed"))
+    stage = manifest_mod.Stage(name="test", run="echo 1 passed", kind="test")
+    for project in ("canary", "tirith"):
+        mergeq_mod._run_stages(tmp_path, project, [("ci", stage)], tmp_path, "l-1")
+    assert seen == [("canary", False), ("tirith", True)]
