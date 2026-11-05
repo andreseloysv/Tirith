@@ -90,6 +90,15 @@ def test_status_notes_round_trip() -> None:
     assert roadmap.item_id("A (en curso: l1)") == roadmap.item_id("A")
 
 
+def test_repeated_permanent_ids_get_a_new_id_on_the_second_line() -> None:
+    line = '- [x] A <!-- tirith:{"id":"i-2975f07c"} -->\n'
+    other = '- [ ] B <!-- tirith:{"id":"i-11111111","depends_on":[]} -->\n'
+    fixed = roadmap.repair_duplicate_ids("## 1. S\n" + line + other + line)
+    ids = re.findall(r'"id":"(i-[0-9a-f]+)"', fixed)
+    assert len(ids) == 3 and len(set(ids)) == 3 and ids[0] == "i-2975f07c" and ids[1] == "i-11111111"
+    assert roadmap.repair_duplicate_ids(fixed) == fixed
+
+
 def test_items_in_progress_are_not_agent_items() -> None:
     steps = roadmap.parse("## 1. S\n\n- [ ] Free.\n- [ ] Taken. (en curso: l1)\n- [ ] Mine. (reabierto: failed)\n"
                           "- [ ] In review. (en revisión)\n- [ ] Stuck. (bloqueado: why)\n")
