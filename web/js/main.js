@@ -110,6 +110,9 @@
     for (k in s) out[k] = s[k];
     ['agents', 'pipelines', 'waiting_on_you', 'answered_waits', 'violations', 'rooms'].forEach(function (n) { if (s[n]) out[n] = s[n].filter(on); });
     out.projects = (s.projects || []).filter(function (p) { return p.id === pid; });
+    /* the Status card of that project (state.status.by_project); a state without it keeps the global card */
+    var mine = s.status && s.status.by_project && s.status.by_project[pid];
+    if (mine) out.status = mine;
     return out;
   };
 

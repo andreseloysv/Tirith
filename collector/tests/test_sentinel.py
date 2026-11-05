@@ -114,3 +114,24 @@ def test_the_card_says_all_done_when_nothing_is_left_for_the_agents() -> None:
     assert statuscard.build(closed, NOW, {"tirith/tirith": "failed"})["level"] == "bad"
     empty = {**closed, "autopilot": {**closed["autopilot"], "open_items": 0}}
     assert statuscard.build(empty, NOW, {})["level"] == "done"
+
+
+def test_a_projects_card_counts_only_that_project() -> None:
+    state = {
+        "agents": [{"id": "a-1", "project": "tirith", "status": "working"},
+                   {"id": "a-2", "project": "zoo", "status": "ended", "item": "Zoo gate", "review": {"status": "merged", "at": "2026-11-05T09:00:00Z"}},
+                   {"id": "a-3", "project": "tirith", "status": "ended", "item": "Tirith fix", "review": {"status": "merged", "at": "2026-11-05T09:30:00Z"}}],
+        "projects": [{"id": "tirith", "roadmap": {"steps": []}}, {"id": "zoo", "roadmap": {"steps": [{"id": "1", "title": "Zoo", "done": 1, "total": 8}]}}],
+        "waiting_on_you": [{"id": "w-t", "project": "tirith", "text": "Tirith wait"}, {"id": "w-z", "project": "zoo", "text": "Zoo commit guard"}],
+        "autopilot": {"open_items": 10, "open_by_project": {"tirith": 3, "zoo": 7}, "limit": 5, "queued": 2},
+        "health": {"checks": [{"level": "failed", "text": "Tirith check"}]},
+    }
+    ci = {"tirith/tirith": "failed", "zoo/ci": "passed"}
+    by = statuscard.build_by_project(state, NOW, ci, {"tirith": 134, "zoo": 2})
+    zoo = by["zoo"]
+    assert (zoo["why"], zoo["merged_today"], zoo["working"], zoo["ci"]) == ("Nothing working while 7 plan items are open", 2, 0, "green")
+    assert [r["text"] for r in zoo["recent"]] == ["Zoo gate"]
+    assert [o["text"] for o in zoo["owner"]] == ["Zoo commit guard"] and zoo["owner_count"] == 1
+    assert zoo["plan"] == {"done": 1, "total": 8}
+    assert (by["tirith"]["ci"], by["tirith"]["working"], by["tirith"]["owner_count"]) == ("red", 1, 1)
+    assert statuscard.build(state, NOW, ci, 136)["owner_count"] == 2  # the global card is unchanged
