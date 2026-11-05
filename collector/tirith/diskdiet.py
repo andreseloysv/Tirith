@@ -35,7 +35,8 @@ DISK_ITEM = "disk"
 HEADROOM_GB = 3  # cache is cleared when free space is below the limit plus this
 PYTEST_MIN_AGE_S = 3600
 STALE_S = 24 * 3600  # a lane folder nobody touched for this long goes, whatever its branch: the branch stays
-KEPT_DIR = "kept"  # <home>/kept/<lane>.patch: uncommitted changes of a retired lane folder, saved first
+FRESH_S = 15 * 60  # a worktree younger than this on the project's own commit is a lane still launching
+KEPT_DIR ="kept"  # <home>/kept/<lane>.patch: uncommitted changes of a retired lane folder, saved first
 TEMP_CLEANUP_ENABLED = True  # the test suite turns it off: no pass touches the real temp folder
 
 
@@ -232,6 +233,14 @@ def _worktrees(repo: Path) -> list[tuple[Path, str]]:
     return found
 
 
+def _fresh_launch(repo: Path, folder: Path, branch: str) -> bool:
+    """A worktree younger than ``FRESH_S`` whose branch still points where the project's branch does: a lane
+    being launched (looks merged, has no record yet), not a finished one."""
+    tip = _git(repo, "rev-parse", branch).stdout.strip()
+    head = _git(repo, "rev-parse", "HEAD").stdout.strip()
+    return bool(tip) and tip == head and idle_s(folder) < FRESH_S
+
+
 def sweep(home: Path, config: Config, now: datetime, busy: Callable[[], list[Path]] | None = None) -> dict:
     """Remove every merged, clean, idle worktree under the lanes folder of each project, whoever made it, and
     every other one git did not touch for ``STALE_S`` (see :func:`retire`: nothing is lost).
@@ -253,6 +262,8 @@ def sweep(home: Path, config: Config, now: datetime, busy: Callable[[], list[Pat
                 continue
             if any(_inside(folder, w) or _inside(w, folder) for w in working):
                 continue
+            if _fresh_launch(repo, folder, branch):
+                continue  # just launched: the agent has not started and the lane is not registered yet
             merged = _git(repo, "merge-base", "--is-ancestor", branch, "HEAD").returncode == 0
             clean = merged and not _git(folder, "status", "--porcelain").stdout.strip()
             if not clean and idle_s(folder) < STALE_S:
