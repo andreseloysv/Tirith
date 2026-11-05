@@ -202,7 +202,8 @@ def annotate(rows: list[dict], resolve: Callable[[str], set[str]] | None = None,
         if not address:
             continue
         found = row.get("domain") or known_domain(address, resolve)
-        cert = {} if found and row.get("domain") else certs(address)
+        tls = str((row.get("external") or [""])[0]).startswith("https ")
+        cert = {} if (found and row.get("domain")) or not tls else certs(address)
         found = found or cert.get("domain")
         if found:
             row["domain"], row["address"] = found, address
@@ -265,7 +266,7 @@ def sample(home: Path, lanes: list[dict], now: float | None = None, run: Callabl
         if not isinstance(lane, dict) or lane.get("ended_at"):
             continue
         for key in ("pid", "controller_pid"):
-            if isinstance(lane.get(key), int):
+            if isinstance(lane.get(key), int) and lane[key] > 1:  # pid 1 is every process's ancestor
                 roots[lane[key]] = lane
     if not roots:
         return []
@@ -288,7 +289,8 @@ def sample(home: Path, lanes: list[dict], now: float | None = None, run: Callabl
         reverse = name(c["host"])
         domain = domain_of(c["host"], reverse, lane_domains(home, lane),
                            resolve or (lambda d: _addresses(d, now)))
-        cert = {} if resolve is not None else cert_domain(home, c["host"], c["port"], wait_s=LOOKUP_BUDGET_S)
+        cert = {} if resolve is not None or c["port"] != 443 else cert_domain(home, c["host"], c["port"],
+                                                                                wait_s=LOOKUP_BUDGET_S)  # no TLS, no names
         domain = domain or cert.get("domain")
         hit = hit or (netblock_mod.blocked(block, domain, reverse) if block else None)
         kind = PORTS.get(c["port"], "tcp")
