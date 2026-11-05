@@ -177,3 +177,18 @@ def test_todowrite_is_one_checklist_updated_in_place_without_its_result() -> Non
     steps = parser.steps()
     assert [s["kind"] for s in steps] == ["todo", "tool"]  # no result steps for the task list
     assert [(t["content"], t["status"]) for t in steps[0]["todos"]] == [("Read", "completed"), ("Answer", "in_progress")]
+
+
+def test_steps_of_a_sub_agent_are_nested_under_its_call() -> None:
+    import json
+    lines = [json.dumps(r) for r in (
+        {"type": "assistant", "message": {"content": [
+            {"type": "tool_use", "id": "a1", "name": "Task", "input": {"description": "look around"}}]}},
+        {"type": "assistant", "parent_tool_use_id": "a1", "message": {"content": [
+            {"type": "tool_use", "id": "b1", "name": "Read", "input": {"file_path": "x.py"}}]}},
+        {"type": "user", "parent_tool_use_id": "a1", "message": {"content": [
+            {"type": "tool_result", "tool_use_id": "b1", "content": "ok"}]}},
+        {"type": "assistant", "message": {"content": [{"type": "text", "text": "done"}]}})]
+    steps, _ = livesteps.parse(lines)
+    assert [s.get("depth", 0) for s in steps] == [0, 1, 1, 0]
+    assert steps[1]["parent"] == "a1"

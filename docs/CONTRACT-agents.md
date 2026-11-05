@@ -172,3 +172,12 @@ lane's own, resumes the SAME session. The resume names the room, the message num
 the agent reads it with `tirith room read`, as information to weigh. After 30 minutes without an answer the manager
 queue gets one `lane-room-wait` item (the lane keeps waiting; the 30 minutes count from `since`, so a restarted controller does not restart them, and the
 item wakes the manager like any queue item). `tirith lane stop` ends the wait. Tests: `-k lane_room_wait`, `-k lane_room_timeout`.
+
+## Manager permissions and nested sub-agents
+
+- `msession.decide` returns `allow`, `deny` or `ask`. Gates and the "manager delegates edits" rule deny; reads,
+  searches and the tools in `msession.SAFE_TOOLS` are approved by code; any other tool (an MCP tool, a new one)
+  is `ask`: an item `perm-<request id>` with **Allow** / **Deny** buttons (`why_owner: owner-decision`) goes on
+  the owner's list and the session waits. The owner's reply (inbox `reply`) answers it in `managerd._settle_asks`.
+- Live steps (`livesteps.StepParser`) carry `depth` and `parent` for the steps a sub-agent runs inside a
+  `Task` / `Agent` call (`parent_tool_use_id` in the stream); the chat indents them under the call.
