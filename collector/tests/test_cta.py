@@ -372,3 +372,18 @@ def test_stop_link_checks_token_and_lane(home: Path, capsys) -> None:
     assert main(["url", "open", "tirith://stop?lane=x&token=wrong"]) == 3
     assert main(["url", "open", f"tirith://stop?lane=nope&token={token}"]) == 3
     assert "not a running lane" in capsys.readouterr().err
+
+
+def test_an_older_guard_item_runs_reinstall_because_install_leaves_it(home: Path, tmp_path: Path) -> None:
+    from tirith import guardwrap
+    repo = make_repo(tmp_path / "repo")
+    write_config(home, [{"id": "demo", "name": "Demo", "repo": str(repo), "color": "#123456"}])
+    guardwrap.install_guard(repo, ["one", "two"])  # a guard for other words: "differs" from the expected one
+    try:
+        wait = _guard_wait(_state(home))
+        assert wait and "differs from the expected guard" in wait["text"]
+        action = wait["actions"][0]
+        assert action["command"] == tirithcmd.resolved(home) + " guard reinstall demo"
+        assert action["label"] == "Update the word guard in Demo"
+    finally:
+        make_hooks_mutable(repo)

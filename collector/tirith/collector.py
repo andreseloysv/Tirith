@@ -1236,7 +1236,8 @@ class Collector:
         """The owner item for a guard that is not intact: what is wrong and the buttons that fix it.
 
         A repo that has its own hook gets "add the guard and keep the hook" (``install --chain``); anything
-        else gets ``tirith guard install``. Both can wait 7 days or be switched off for the project."""
+        else gets ``tirith guard install``, or ``tirith guard reinstall`` when an older guard is there (install leaves
+        it). All can wait 7 days or be switched off for the project."""
         chain = any(f"without the {GUARD_MARKER} marker" in p for p in problems)
         cwd = str(proj.repo) if proj.repo else None
         if chain:
@@ -1244,6 +1245,12 @@ class Collector:
             action = actions_mod.register_generated(
                 self.home, proj.id, f"ac-guard-chain-{proj.id}", label,
                 f"tirith guard install {proj.id} --chain", cwd)
+        elif any("differs from the expected guard" in p for p in problems):
+            # an older guard is installed: ``install`` leaves an existing guard hook as it is, only ``reinstall``
+            # replaces it (owner only)
+            action = actions_mod.register_generated(
+                self.home, proj.id, f"ac-guard-reinstall-{proj.id}", f"Update the word guard in {proj.name}",
+                f"tirith guard reinstall {proj.id}", cwd)
         else:
             action = actions_mod.register_generated(
                 self.home, proj.id, f"ac-guard-install-{proj.id}", f"Install the word guard in {proj.name}",
