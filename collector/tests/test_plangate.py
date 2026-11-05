@@ -383,6 +383,7 @@ def test_report_is_kept_when_the_plan_is_dirty_and_written_later(proj, home: Pat
     repo, _ = proj
     _lane(home, repo)
     clean = _plan(repo)
+    # An uncommitted edit of the plan (the plan gate refuses to write over it).
     (repo / "docs" / "TODO.md").write_text(clean + "\n", encoding="utf-8")
     assert main(["plan", "report", "--lane", "l1", "--status", "done"]) == 0
     assert read_json(home / "lanes" / "l1.json", {})["outcome"]["applied"] is False
@@ -393,9 +394,17 @@ def test_report_is_kept_when_the_plan_is_dirty_and_written_later(proj, home: Pat
     status = subprocess.run([GIT, "-C", str(repo), "status", "--porcelain", "--", "docs/TODO.md"],
                             capture_output=True, text=True, check=True).stdout
     assert status.strip() == "", f"the plan must be clean before sync: {status!r}"
-    assert plangate.sync(home, load_config(home), [{"id": "l1"}])
+    # The dispatcher repeats its pass until the plan takes the outcome (a git lock held for a moment by a
+    # background git command is retried, not fatal); `sync` is True even when a pass failed, so look at the lane.
+    cfg = load_config(home)
+    for _ in range(5):
+        plangate.sync(home, cfg, [{"id": "l1"}])
+        outcome = read_json(home / "lanes" / "l1.json", {})["outcome"]
+        if outcome["applied"]:
+            break
+        time.sleep(0.5)
+    assert outcome["applied"] is True, f"the outcome was not written: {outcome.get('error')!r}"
     assert "Build the button. (en revisión)" in _plan(repo)
-    assert read_json(home / "lanes" / "l1.json", {})["outcome"]["applied"] is True
 
 
 def test_a_lane_that_ends_without_a_report_has_no_outcome(proj, home: Path, capsys) -> None:
