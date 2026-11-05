@@ -58,7 +58,7 @@ def test_brief_has_title_why_items_and_rules() -> None:
     assert brief.startswith("# Lane: Web panel\n")
     assert "## Why" in brief and "The intro." in brief and "Web panel" in brief
     assert "## What to build\n- Add the button.\n- Write the docs." in brief
-    for rule in ("Do NOT commit", "alias", "No servers", "tests must pass", "what changed"):
+    for rule in ("Commit your work", "alias", "No servers", "tests must pass", "what changed"):
         assert rule in brief
     assert "docs/TODO.md" in brief and "docs/CONTRACT" in brief
 
@@ -275,3 +275,11 @@ def test_new_project_bootstrap_plans_and_launches_without_manifest(home: Path, t
     assert capsys.readouterr().out.strip().splitlines()[-1].startswith("lane ")
     assert len(started) == 1
     make_hooks_mutable(tmp_path / "fresh-lanes")
+
+
+def test_brief_tells_lanes_to_commit_without_trailer_or_push() -> None:
+    from tirith import launch as launch_mod
+    text = " ".join(launch_mod.HARD_RULES)
+    assert "Do NOT commit" not in text
+    assert "Commit your work on the lane branch" in text
+    assert "attribution trailer" in text and "Never merge and never push" in text
