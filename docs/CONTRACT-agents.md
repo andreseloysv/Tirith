@@ -172,3 +172,5 @@ lane's own, resumes the SAME session. The resume names the room, the message num
 the agent reads it with `tirith room read`, as information to weigh. After 30 minutes without an answer the manager
 queue gets one `lane-room-wait` item (the lane keeps waiting; the 30 minutes count from `since`, so a restarted controller does not restart them, and the
 item wakes the manager like any queue item). `tirith lane stop` ends the wait. Tests: `-k lane_room_wait`, `-k lane_room_timeout`.
+
+Safe calls are approved by code. `msession.is_safe_call` is true for the read-only tools and for a Bash line made only of readers (`cat`, `ls`, `grep`, read-only `git`, ...) and `tirith` commands, with no redirect or substitution. `msession.decide(..., ask_owner=True)` (a session the owner can answer) returns `allow` for those, `deny` when a gate or the delegate-edits rule says so, and `ask` for the rest: only that last case becomes a question for the owner (`Session.asks`, `answer_ask`). The manager keeps `ask_owner=False`: it never asks.
