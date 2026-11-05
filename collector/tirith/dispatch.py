@@ -41,6 +41,7 @@ from tirith import planlane as planlane_mod
 from tirith import plangate as plangate_mod
 from tirith import verifylane as verifylane_mod
 from tirith import projects as projects_mod
+from tirith import pushplan as pushplan_mod
 from tirith import roadmap as roadmap_mod
 from tirith import selfcheck as selfcheck_mod
 from tirith.home import Config, now_iso, parse_iso
@@ -62,7 +63,7 @@ OLD_MANAGER_ROLE = "steward"  # the old name, still accepted in TIRITH_ROLE
 def load_state(home: Path) -> dict:
     data = read_json(Path(home) / STATE_FILE, {})
     data = data if isinstance(data, dict) else {}
-    for key in ("handled", "escalated", "stop", "reviews", "overdue", "autopilot", "manager"):
+    for key in ("handled", "escalated", "stop", "reviews", "overdue", "autopilot", "manager", "pushed"):
         if not isinstance(data.get(key), dict):
             data[key] = {}
     return data
@@ -436,6 +437,8 @@ def run(home: Path, config: Config, now: datetime, *, agents: list[dict], lanes:
         changed = True
     if autoreview_mod.run(home, config, now, state, lanes, spawn=spawn, notify=notify,
                           persist=lambda: save_state(home, state)):
+        changed = True
+    if pushplan_mod.run(home, config, now, state):  # main reaches the origin soon after every plan change
         changed = True
     if spawn is not None and canary_mod.tick(home, now, spawn):  # the hourly end-to-end test lane
         changed = True
