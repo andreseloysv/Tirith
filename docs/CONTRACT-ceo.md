@@ -88,7 +88,9 @@ proposal; once approved it becomes a plan item the same way.
   working, CI on main green, the test map there, no review stuck, no wait on an owner who was never asked, the
   manager answering). A review where nothing moved is skipped by code at no cost, so a short interval is cheap.
 - **Watchdog alarm**: a target fails and code cannot fix it.
-- **Red or lasting amber self-check**: a self-check check turns `failed` ("Something needs a look", `CONTRACT-selfcheck.md`), or stays not ok (healing, amber) for 20 min (`ceo.UNWELL_ALARM_MIN`; `book.json` `unwell` keeps since when): code had its chance to heal it, so the CEO acts instead of waiting. The
+- **Red or lasting amber self-check**: a self-check check turns `failed` ("Something needs a look", `CONTRACT-selfcheck.md`), or stays not ok (healing, amber) for 20 min (`ceo.UNWELL_ALARM_MIN`; `book.json` `unwell` keeps since when; a check that turns ok for a moment stays counted until it was ok for 10 min in a row,
+  `ceo.UNWELL_FORGET_MIN`, so one that comes and goes wakes it too): code had its chance to heal it, so the CEO acts
+  instead of waiting. The
   CEO is started out of schedule with the failed checks in the snapshot (`alarm`) and the brief's "Alarm" section:
   it finds the cause from the data and sends the manager a directive, or asks the owner. Each check and text alarms
   once (`book.json` `alarmed`); a check that turns green again may alarm again later.
