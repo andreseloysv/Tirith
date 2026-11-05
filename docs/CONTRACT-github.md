@@ -39,9 +39,9 @@ One entry in `state.pipelines` per workflow run:
 |---|---|
 | `run` | `github:<owner>/<repo>:<workflow>#<run_number>` |
 | `pipeline` | workflow name |
-| `status` | `failed` if any job failed or the run failed/cancelled/timed out; `passed`; `running`; `pending` (queued) |
+| `status` | `failed` if any job failed or the run failed/timed out; `cancelled` if the conclusion is cancelled, stale or action_required (never a failure: `last_finished` and `ci_main` skip it so the newest real result counts); `passed`; `running`; `pending` (queued) |
 | `started_at` / `ended_at` | run start; last update when finished |
-| `stages[]` | one per job: `name`, `status` (adds `skipped`), `started_at`, `ended_at`, `duration_s`, `html_url`, `log_tail` = the job's steps (`✓ name`, `✗ name`, `- name`, `… name`) |
+| `stages[]` | one per job: `name`, `status` (adds `skipped`, `cancelled`), `started_at`, `ended_at`, `duration_s`, `html_url`, `log_tail` = the job's steps (`✓ name`, `✗ name`, `- name`, `… name`) |
 | `source`, `html_url` | `"github"`, the run page |
 
 Finished remote runs do not create `report` flows (the first poll would flood the feed with history).

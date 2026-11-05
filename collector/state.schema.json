@@ -1074,7 +1074,8 @@
             "running",
             "failed",
             "pending",
-            "skipped"
+            "skipped",
+            "cancelled"
           ]
         },
         "started_at": {
@@ -1133,7 +1134,8 @@
             "pending",
             "running",
             "passed",
-            "failed"
+            "failed",
+            "cancelled"
           ]
         },
         "started_at": {
