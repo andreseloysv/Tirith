@@ -93,6 +93,11 @@ into one temporary worktree:
 4. Red: the same lanes are redone one at a time with the normal single-lane flow, so only the culprit is
    rejected (sent back); the others land on their own.
 
+**Priority.** The queue's own fixes enter first: a lane whose work (against the merge base with main) changes
+`collector/tirith/{mergeq,runstage,testmap,timeouts}.py`, `collector/tests/test_mergeq.py`,
+`docs/CONTRACT-mergeq.md` or `tirith.toml` (`mergeq.PRIORITY_PATHS`) is enqueued with `priority: true` before every
+waiting lane without it, behind the running entry and earlier priority lanes. It never preempts a running merge.
+
 ## Every failure comes back with its reason
 
 - conflict / red stage / failed commit → the same agent (send back), the manager's queue when that cannot happen.

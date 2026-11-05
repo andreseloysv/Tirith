@@ -986,3 +986,30 @@ def test_a_failed_push_tells_the_manager(env, home: Path, monkeypatch) -> None:
     row = mergeq_mod.process_next(home, load_config(home), relaunch=Sender())
     assert row["result"] == "push-failed"
     assert any("push-failed: remote rejected" in str(i) for i in asks_mod.queue_items(home))
+
+
+def test_merge_priority_a_queue_fix_goes_before_waiting_lanes(env, home: Path) -> None:
+    repo, _ = env
+    make_lane(home, repo, "plain1", {"a.txt": "1"})
+    make_lane(home, repo, "plain2", {"b.txt": "2"})
+    make_lane(home, repo, "fix", {})
+    fix = read_json(lane_path(home, "fix"), None)
+    target = Path(fix["workspace"]) / "collector" / "tirith"
+    target.mkdir(parents=True)
+    (target / "mergeq.py").write_text("# fix\n", encoding="utf-8")
+    mergeq_mod.enqueue(home, "plain1")
+    mergeq_mod.enqueue(home, "plain2")
+    assert mergeq_mod.enqueue(home, "fix") == 1
+    assert [i["lane"] for i in mergeq_mod.view(home, "demo")["items"]] == ["fix", "plain1", "plain2"]
+
+
+def test_merge_priority_never_overtakes_the_running_merge(env, home: Path) -> None:
+    repo, _ = env
+    make_lane(home, repo, "plain1", {"a.txt": "1"})
+    make_lane(home, repo, "fix", {})
+    fix = read_json(lane_path(home, "fix"), None)
+    (Path(fix["workspace"]) / "docs").mkdir(exist_ok=True)
+    (Path(fix["workspace"]) / "docs" / "CONTRACT-mergeq.md").write_text("x\n", encoding="utf-8")
+    mergeq_mod.enqueue(home, "plain1")
+    assert mergeq_mod._claim(home)["lane"] == "plain1"
+    assert mergeq_mod.enqueue(home, "fix") == 2
