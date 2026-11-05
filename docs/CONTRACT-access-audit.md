@@ -79,6 +79,11 @@ The owner's first question is what an agent reached outside the machine, so ever
   (`external` of its rows) that resolves to the connection's address, else the base domain of the reverse name
   (`lb-140-82-112-3-iad.github.com` gives `github.com`), else the address. The row also keeps `domain`, `address`
   and `reverse`; the page shows the domain big and the address small beside it. Lookups have a 1 s budget.
+  An address with no reverse name is matched against `netwatch.KNOWN_DOMAINS` (model APIs, GitHub, package
+  registries, agentsmessenger…), also for rows written before (`netwatch.annotate`, when the state is built).
+  A connection of the lane's own process (the agent program: its model API, telemetry) has `runtime: true`;
+  the page sums those into one "Agent runtime" line per destination and lists what the work opened one by one.
+  The page's system and date filters apply to External too.
 
 The «Accesos» page starts with **External**: every such destination, newest first, with its kind (Web, API,
 WebSocket, SSH, Git remote, Packages, Search, MCP, HTTPS…), the agent (role and name) and what caused it.
