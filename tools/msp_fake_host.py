@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """A fake MSP host (what `muse serve` is on the wire): JSON-RPC 2.0, one JSON object per line on stdio.
 
-Used by the desktop chat adapter's test (app/src-tauri/src/msp.rs). It answers `initialize`,
+Used by the desktop chat adapter's test (app/src-tauri/src/msp.rs). It answers `initialize` (and wants the `initialized` notification after it, else `Not initialized`),
 `session/start`, `session/resume`, `turn/start`, `turn/interrupt` and `approval/decide`. A turn whose text contains "slow" runs until `turn/interrupt`. A turn whose text contains "tool" runs a tool call
 that first needs an approval (`approval/request`); any other turn just streams "echo: <text>".
 No model, no network, no ports.
@@ -63,12 +63,20 @@ def main():
     session = "ses-fake"
     turn_no = 0
     slow = False  # a "slow" turn runs until it is interrupted
+    ready = False  # the client sent `initialized`; requests before it are refused like muse serve does
     waiting = None  # (approvalId, tool item) while a tool call waits for approve/deny
     for line in sys.stdin:
         msg = json.loads(line)
         method, mid, params = msg.get("method"), msg.get("id"), msg.get("params", {})
         if method is None:
             continue  # a receipt for approval/request
+        if method == "initialized":  # the client notification closing the handshake: no id, no params
+            ready = mid is None and not params
+            continue
+        if method != "initialize" and not ready:
+            out({"jsonrpc": "2.0", "id": mid, "error": {
+                "code": -32600, "message": "Not initialized", "data": {"kind": "notInitialized"}}})
+            continue
         bad = check(method, params)
         if bad:
             out({"jsonrpc": "2.0", "id": mid, "error": {"code": -32602, "message": f"{method}: {bad}"}})
