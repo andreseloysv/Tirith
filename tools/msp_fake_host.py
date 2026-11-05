@@ -2,7 +2,7 @@
 """A fake MSP host (what `muse serve` is on the wire): JSON-RPC 2.0, one JSON object per line on stdio.
 
 Used by the desktop chat adapter's test (app/src-tauri/src/msp.rs). It answers `initialize`,
-`session/start`, `turn/start` and `approval/decide`. A turn whose text contains "tool" runs a tool call
+`session/start`, `session/resume`, `turn/start`, `turn/interrupt` and `approval/decide`. A turn whose text contains "tool" runs a tool call
 that first needs an approval (`approval/request`); any other turn just streams "echo: <text>".
 No model, no network, no ports.
 
@@ -80,6 +80,18 @@ def main():
                 "serverInfo": {"name": "fake", "version": "0"}, "userAgent": "fake/0"}})
         elif method == "session/start":
             out({"jsonrpc": "2.0", "id": mid, "result": {"session": {"sessionId": session}}})
+        elif method == "session/resume":
+            if params["sessionId"] != session:
+                out({"jsonrpc": "2.0", "id": mid, "error": {"code": -32004, "message": "no such session"}})
+                continue
+            out({"jsonrpc": "2.0", "id": mid, "result": {"session": {"sessionId": session}}})
+        elif method == "turn/interrupt":
+            out({"jsonrpc": "2.0", "id": mid, "result": {
+                "commandId": params["commandId"], "status": "accepted", "turnId": params.get("turnId") or f"t{turn_no}"}})
+            if waiting:
+                waiting = None
+                notify("turn/completed", {"sessionId": session, "turnId": f"t{turn_no}", "terminal": "interrupted",
+                                          "viewCursor": f"c{turn_no}"})
         elif method == "turn/start":
             turn_no += 1
             text = params["input"][0].get("text", "")
