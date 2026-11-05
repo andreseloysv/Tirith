@@ -25,6 +25,8 @@ from tirith.home import now_iso
 COMPANY_LOG = "company.jsonl"
 
 PARALLEL_ITEMS = 2
+CEO_WORKERS = 2            # a CEO is created with MORE than this many workers at once
+CEO_UNATTENDED_HOURS = 1   # ... or with more than this many hours of work nobody watches
 _SUBAGENT_RE = re.compile(r"sub-?agent|subagente|tirith (?:lane run|launch)", re.IGNORECASE)
 
 
@@ -67,6 +69,33 @@ def promote_to_manager(mode: str, task: str = "", parallel_items: int = 1, subag
 
     ``mode`` is ``[roles] manager``; ``diff`` is ``(files, plus, minus)`` of the lane so far."""
     decision = manager_decision(mode, task, parallel_items, subagents, diff)
+    return decision["reason"] if decision else None
+
+
+def ceo_decision(mode: str, workers: int = 0, unattended_hours: float = 0.0,
+                 selfcheck_failed: bool = False) -> dict | None:
+    """The first rule that creates a CEO: ``{rule, measured, threshold, reason}``, or ``None``.
+
+    Only with ``[roles] ceo = "on-demand"``. Rules: more than ``CEO_WORKERS`` workers at once, more than
+    ``CEO_UNATTENDED_HOURS`` of work with nobody watching, or a failure the self-check does not fix."""
+    if mode != "on-demand":
+        return None
+    if workers > CEO_WORKERS:
+        return {"rule": "workers", "measured": workers, "threshold": CEO_WORKERS,
+                "reason": f"{workers} workers run at once"}
+    if unattended_hours > CEO_UNATTENDED_HOURS:
+        return {"rule": "unattended", "measured": unattended_hours, "threshold": CEO_UNATTENDED_HOURS,
+                "reason": f"{unattended_hours:g} h of work with nobody watching"}
+    if selfcheck_failed:
+        return {"rule": "selfcheck", "measured": 1, "threshold": 0,
+                "reason": "a failure the self-check does not fix"}
+    return None
+
+
+def promote_to_ceo(mode: str, workers: int = 0, unattended_hours: float = 0.0,
+                   selfcheck_failed: bool = False) -> str | None:
+    """Why a CEO should be created, or ``None`` to go on without one."""
+    decision = ceo_decision(mode, workers, unattended_hours, selfcheck_failed)
     return decision["reason"] if decision else None
 
 
