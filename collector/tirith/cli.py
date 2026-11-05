@@ -45,6 +45,7 @@ from tirith import selfreload as selfreload_mod
 from tirith import inbox as inbox_mod
 from tirith import setup as setup_mod
 from tirith import keepgoing as keepgoing_mod
+from tirith import laneroom as laneroom_mod
 from tirith import lanestop as lanestop_mod
 from tirith import managerd as managerd_mod
 from tirith import ownerenv as ownerenv_mod
@@ -324,6 +325,21 @@ def _cmd_lane_stop(args) -> int:
         print(f"tirith lane stop: {error}", file=sys.stderr)
         return 3
     print(f"lane {args.lane_id}: {lane.get('result')} ({lane.get('report')})")
+    return 0
+
+
+def _cmd_lane_await_room(args) -> int:
+    home = _home(args)
+    lane_id = args.lane or os.environ.get("TIRITH_LANE")
+    if not lane_id:
+        print("tirith lane await-room: run it inside a lane or pass --lane", file=sys.stderr)
+        return 3
+    try:
+        laneroom_mod.mark(home, lane_id, args.room, args.ignore)
+    except (ValueError, LookupError) as error:
+        print(f"tirith lane await-room: {error}", file=sys.stderr)
+        return 3
+    print(f"lane {lane_id}: esperando en la sala {args.room}; end your turn, Tirith resumes you when it answers")
     return 0
 
 
@@ -734,6 +750,12 @@ def _cmd_lane_run(args) -> int:
                     if resumed is not None:
                         command, stdin_text = resumed
                         continue
+            waited = laneroom_mod.wait_for_answer(home, lane_id)  # waiting in a room: resume when it answers
+            if waited:
+                resumed = _resume_child(home, config, args, lane, command, log_path, answer, waited)
+                if resumed is not None:
+                    command, stdin_text = resumed
+                    continue
             missing = keepgoing_mod.gaps(home, lane, proj.repo, answer)
             if not missing or rounds >= keepgoing_mod.MAX_ROUNDS:
                 break
@@ -2607,6 +2629,13 @@ def build_parser() -> argparse.ArgumentParser:
     stop.add_argument("--by", choices=list(lanestop_mod.STOPPERS), default=None,
                       help="who stops it (default: manager from a script or an agent, owner at a terminal)")
     stop.set_defaults(func=_cmd_lane_stop)
+    await_room = lane_sub.add_parser("await-room", parents=[common],
+                                     help="mark this lane as waiting for an answer in a room; Tirith resumes it")
+    await_room.add_argument("room")
+    await_room.add_argument("--lane", default=None, help="default: $TIRITH_LANE")
+    await_room.add_argument("--ignore", action="append", default=[], metavar="NAME",
+                            help="author whose messages are not the answer (your own name); repeatable")
+    await_room.set_defaults(func=_cmd_lane_await_room)
     review = lane_sub.add_parser("review", parents=[common],
                                  help="run the tests of a launched lane, then merge it")
     review.add_argument("lane_id")
