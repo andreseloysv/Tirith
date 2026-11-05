@@ -228,8 +228,8 @@ def test_a_directive_id_used_before_does_not_overwrite_the_earlier_one(home: Pat
     assert ceo.directives(home)["d-1-bbbb"]["text"] == "Another"
 
 
-def red(home: Path, text: str | None) -> None:
-    checks = {"reviews": {"level": "failed", "text": text}} if text else {"reviews": {"level": "ok", "text": "fine"}}
+def red(home: Path, text: str | None, name: str = "reviews") -> None:
+    checks = {name: {"level": "failed", "text": text}} if text else {name: {"level": "ok", "text": "fine"}}
     (home / "dispatch.json").write_text(json.dumps({"health": {"checks": checks}}), encoding="utf-8")
 
 
@@ -270,8 +270,27 @@ def test_ceo_alarm_storm_same_text_is_throttled(home: Path, started: list) -> No
     red(home, text)
     ceo.run(home, config, local(11, 45))  # 45 min since the alarm, but the review chose 60
     assert len(started) == 1
-    red(home, "A different failure.")  # new text goes through
+    red(home, "A different failure.", "other")  # new text goes through
     ceo.run(home, config, local(11, 50))
+    assert len(started) == 2
+
+
+def test_ceo_alarm_keyed_by_check_not_figures(home: Path, started: list) -> None:
+    enable(home, "hours = [9, 14, 20]")
+    config = load_config(home)
+    red(home, "Disk: 15.5 GB free", "disk")
+    assert ceo.run(home, config, local(11)) and len(started) == 1
+    write_lane(home, {"id": "ceo-1", "ended_at": "x", "project": "tirith",
+                      "report": json.dumps({**RESULT, "directives": [], "next_review_min": 10})})
+    ceo.run(home, config, local(11, 30))  # settles: no directives sent
+    red(home, "Disk: 15.4 GB free", "disk")  # one minute later, only the figures changed
+    ceo.run(home, config, local(11, 31))
+    assert len(started) == 1
+    red(home, "Disk: 15.3 GB free", "disk")
+    ceo.run(home, config, local(11, 31 + ceo.ALARM_REPEAT_MIN - 2))
+    assert len(started) == 1
+    red(home, "Disk: 15.3 GB free", "other")  # a different check failing starts one
+    ceo.run(home, config, local(11, 45))
     assert len(started) == 2
 
 
@@ -300,7 +319,7 @@ def test_ceo_same_alarm_no_rerun_after_a_run_that_sent_a_directive(home: Path, s
     write_lane(home, {"id": "ceo-2", "ended_at": "x", "project": "tirith",
                       "report": json.dumps({**RESULT, "next_review_min": 10})})
     ceo.run(home, config, local(12, 30))
-    red(home, "A different failure.")
+    red(home, "A different failure.", "other")
     ceo.run(home, config, local(12, 31))
     assert len(started) == 3  # new text starts one
 
