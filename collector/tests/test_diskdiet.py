@@ -330,6 +330,29 @@ def test_a_lane_that_ended_a_day_ago_unmerged_and_dirty_is_retired_keeping_its_w
     assert (back / "wip.txt").read_text(encoding="utf-8") == "half done\n"
 
 
+def test_lane_cleanup_low_disk_removes_every_ended_lane(home: Path, repo: Path) -> None:
+    from tirith import mergeq as mergeq_mod
+    done, failed, stopped = (lane(home, repo, n, end=False) for n in ("l-done", "l-failed", "l-stopped"))
+    for name, result in (("l-done", "done"), ("l-failed", "failed"), ("l-stopped", "stopped")):
+        end_lane(home, name, result, "")
+    (failed / "wip.txt").write_text("half\n", encoding="utf-8")
+    queued, reviewing, working = lane(home, repo, "l-queued"), lane(home, repo, "l-review"), lane(home, repo, "l-work", end=False)
+    mergeq_mod.enqueue(home, "l-queued")
+    from tirith.store import write_lane
+    rec = record(home, "l-review")
+    rec["review"] = {"status": "pending"}
+    write_lane(home, rec)
+    config = load_config(home)
+    assert not diskdiet_mod.free_space(home, config, {}, now(), free=lambda f: 50 * GB)  # room: nothing goes
+    assert done.is_dir()
+    diskdiet_mod.free_space(home, config, {}, now(), free=lambda f: 2 * GB)
+    assert not done.exists() and not failed.exists() and not stopped.exists()
+    assert queued.is_dir() and reviewing.is_dir() and working.is_dir()
+    assert "wip" in (home / "kept" / "l-failed.patch").read_text(encoding="utf-8")
+    assert "lane/l-failed" in git(repo, "branch", "--list")
+    assert record(home, "l-done")["cleanup"]["status"] == "retired"
+
+
 def test_sweep_retires_an_untouched_unmerged_folder_and_keeps_a_recent_one(home: Path, repo: Path, monkeypatch) -> None:
     old, recent = manual_tree(repo, "old-unmerged", True), manual_tree(repo, "recent-unmerged", True)
     (old / "notes.txt").write_text("keep me\n", encoding="utf-8")

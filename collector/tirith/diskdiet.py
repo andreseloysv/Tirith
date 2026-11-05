@@ -241,6 +241,43 @@ def _fresh_launch(repo: Path, folder: Path, branch: str) -> bool:
     return bool(tip) and tip == head and idle_s(folder) < FRESH_S
 
 
+ENDED = ("done", "stopped", "failed")
+WAITING_REVIEW = (review_mod.PENDING, review_mod.RUNNING, review_mod.READY)
+
+
+def _retire_ended(home: Path, config: Config, now: datetime,
+                  busy: Callable[[], list[Path]] | None = None) -> tuple[int, int]:
+    """Low disk: retire the folder of EVERY ended lane (done, stopped or failed), of every project, not only the
+    old ones. Skipped: a lane in the merge queue, one with a review pending or running, a folder a process runs
+    in. Uncommitted changes are saved first in ``<home>/kept/`` (see :func:`retire`); the branch stays unless
+    merged. Returns ``(folders, bytes)``."""
+    from tirith import mergeq as mergeq_mod
+    busy_list, removed, freed = None, 0, 0
+    for lane in read_lanes(home):
+        if not lane.get("ended_at") or lane.get("result") not in ENDED or not lane.get("workspace"):
+            continue
+        if (lane.get("cleanup") or {}).get("status") in ("removed", "retired"):
+            continue
+        repo, workspace = _repo(config, lane), Path(str(lane["workspace"]))
+        if repo is None or not workspace.is_dir() or not review_mod.launched(lane, repo):
+            continue
+        if (lane.get("review") or {}).get("status") in WAITING_REVIEW or mergeq_mod.queued(home, str(lane["id"])):
+            continue
+        if busy_list is None:
+            busy_list = [p.resolve() for p in (busy or busy_folders)()]
+        if any(_inside(p, workspace.resolve()) for p in busy_list):
+            continue
+        size = _tree_size(workspace)
+        done = retire(home, repo, workspace, f"lane/{lane['id']}", lane["id"])
+        if done is None:
+            _note(home, lane, "blocked", now, message="could not save its uncommitted changes; left in place")
+            continue
+        _note(home, lane, "retired", now, kept=done or None)
+        removed += 1
+        freed += size
+    return removed, freed
+
+
 def sweep(home: Path, config: Config, now: datetime, busy: Callable[[], list[Path]] | None = None) -> dict:
     """Remove every merged, clean, idle worktree under the lanes folder of each project, whoever made it, and
     every other one git did not touch for ``STALE_S`` (see :func:`retire`: nothing is lost).
@@ -248,7 +285,8 @@ def sweep(home: Path, config: Config, now: datetime, busy: Callable[[], list[Pat
     Never the main checkout, the shared cargo target, a worktree of a lane still working, a worktree a process
     runs in, or one with uncommitted changes (never ``--force``). The fully merged branch goes too.
     Returns ``{"worktrees": n, "bytes": freed}``."""
-    busy_list, removed, freed = None, 0, 0
+    removed, freed = _retire_ended(home, config, now, busy)
+    busy_list = None
     working = {Path(str(l["workspace"])).resolve() for l in read_lanes(home)
                if l.get("workspace") and not l.get("ended_at")}
     for proj in config.projects:
