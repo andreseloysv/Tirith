@@ -184,21 +184,20 @@ def _watch(home: Path, now: datetime, state: dict, workers: list[dict], reviews:
         "reviews_running_long": long_reviews,
         "launch_failures": {"count": len(failures), "last": failures[-3:]},
         "owner_waits_unasked": unasked[-5:],
-        "ci_main": _ci_main(state),
+        "ci_main": _ci_main(home, state),
         "test_maps": _test_maps(home, now),
     }
 
 
-def _ci_main(state: dict) -> dict[str, str]:
-    """The last finished GitHub run of each workflow (``project/workflow``: passed or failed)."""
-    last: dict[str, tuple[str, str]] = {}
-    for run in state.get("pipelines") or []:
-        if not isinstance(run, dict) or run.get("source") != "github" or run.get("status") not in ("passed", "failed"):
-            continue
-        key, at = f"{run.get('project')}/{run.get('pipeline')}", str(run.get("started_at") or "")
-        if key not in last or at > last[key][0]:
-            last[key] = (at, str(run["status"]))
-    return {key: status for key, (_, status) in sorted(last.items())}
+def _ci_main(home: Path, state: dict) -> dict[str, str]:
+    """The last finished GitHub run of each workflow (``project/workflow``: passed or failed): the collector's
+    ``ci-main.json`` (all the runs it read), else the runs ``state.json`` still holds."""
+    from tirith import github as github_mod
+    saved = read_json(Path(home) / github_mod.CI_FILE, None)
+    rows = saved.get("workflows") if isinstance(saved, dict) else None
+    if not isinstance(rows, dict) or not rows:
+        rows = github_mod.last_finished(state.get("pipelines") or [])
+    return {key: str(row.get("status")) for key, row in sorted(rows.items()) if isinstance(row, dict)}
 
 
 def _test_maps(home: Path, now: datetime) -> dict[str, dict]:
