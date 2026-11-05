@@ -261,6 +261,15 @@ def _ceo_public(home: Path, now: datetime) -> dict | None:
         return None
 
 
+def _company_public(home: Path) -> list[dict]:
+    """``state.company``: the promotions and retirements of ``<home>/company.jsonl``, newest last."""
+    from tirith import promote as promote_mod
+    try:
+        return promote_mod.read_log(home)[-200:]
+    except Exception:  # the page must render without it
+        return []
+
+
 def lane_status(lane: dict, now: datetime, testing: set[str] | frozenset[str] = frozenset()) -> str:
     """working/done/failed/stalled for one lane registration. A lane in ``testing`` (its test stage runs; the
     agent's own log is silent meanwhile) is never stalled, nor is a live interactive lane (the persistent manager,
@@ -1658,6 +1667,7 @@ class Collector:
             "timeouts": timeouts_mod.table(self.home, self.config),
             "autopilot": autopilot_mod.public(self.home, self.config, agent_rows, projects, now),
             "ceo": _ceo_public(self.home, now),
+            "company": _company_public(self.home),
             "launch": {"token": launch_mod.launch_token(self.home),
                        "available": launch_mod.handler_installed()},
             "models": models_mod.state(self.config, [
