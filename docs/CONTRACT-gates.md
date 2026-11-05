@@ -208,3 +208,7 @@ executable and role as before, and a `hooks-removed` violation is recorded with 
 installed is reported but not touched. `[gates] enabled = false` switches the healing off too. The result
 is kept in `~/.tirith/protect.json` and shown in `state.projects[].setup.protection`
 (`[{agent, ok, checked_at, healed_at}]`); the Setup card shows "Hooks protected · last check 2 s ago".
+
+## Lost guard flag
+
+When the collector's guard check finds a hook's `uchg` flag lost, it appends one line to `~/.tirith/guard-flags.jsonl`: `{kind: "guard-flag-lost", at, repo, hooks, hooks_ctime: {hook: iso}, runs: [{lane, alias, project, pid, testing}]}` (the runs active at that moment). One line per loss: written again only after the flag was seen intact, or when the hooks' ctime moved. Attribute a repeat by matching `hooks_ctime` against the runs.
