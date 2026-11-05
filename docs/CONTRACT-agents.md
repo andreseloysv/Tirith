@@ -173,11 +173,6 @@ the agent reads it with `tirith room read`, as information to weigh. After 30 mi
 queue gets one `lane-room-wait` item (the lane keeps waiting; the 30 minutes count from `since`, so a restarted controller does not restart them, and the
 item wakes the manager like any queue item). `tirith lane stop` ends the wait. Tests: `-k lane_room_wait`, `-k lane_room_timeout`.
 
-## Manager permissions and nested sub-agents
+Safe calls are approved by code. `msession.is_safe_call` is true for the read-only tools and for a Bash line made only of readers (`cat`, `ls`, `grep`, read-only `git`, ...) and `tirith` commands, with no redirect or substitution. `msession.decide(..., ask_owner=True)` (a session the owner can answer) returns `allow` for those, `deny` when a gate or the delegate-edits rule says so, and `ask` for the rest: only that last case becomes a question for the owner (`Session.asks`, `answer_ask`). The manager keeps `ask_owner=False`: it never asks.
 
-- `msession.decide` returns `allow`, `deny` or `ask`. Gates and the "manager delegates edits" rule deny; reads,
-  searches and the tools in `msession.SAFE_TOOLS` are approved by code; any other tool (an MCP tool, a new one)
-  is `ask`: an item `perm-<request id>` with **Allow** / **Deny** buttons (`why_owner: owner-decision`) goes on
-  the owner's list and the session waits. The owner's reply (inbox `reply`) answers it in `managerd._settle_asks`.
-- Live steps (`livesteps.StepParser`) carry `depth` and `parent` for the steps a sub-agent runs inside a
-  `Task` / `Agent` call (`parent_tool_use_id` in the stream); the chat indents them under the call.
+Nested sub-agents: live steps (`livesteps.StepParser`) carry `depth` and `parent` for the steps a sub-agent runs inside a `Task` / `Agent` call (`parent_tool_use_id` in the stream); the chat indents them under the call.

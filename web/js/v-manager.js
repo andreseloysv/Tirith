@@ -640,6 +640,15 @@
     if (act === 'mc-proj') { saveDraft(); ui.chatProj = t.value; syncDraftProject(); T.render(); }
     else if (act === 'mc-file') { addPics(t.files); t.value = ''; }
   });
+  /* Esc interrupts the running turn from anywhere in the page, like the CLI, once the chat is on screen
+     (the box handles its own Esc below; a field, the lightbox or a dialog keeps its Esc) */
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape' || e.defaultPrevented || !lastState) return;
+    var t = e.target, tag = t && t.tagName;
+    if (tag === 'TEXTAREA' || tag === 'INPUT' || tag === 'SELECT' || (t && t.isContentEditable)) return;
+    if (!document.getElementById('mc-log') || !T.managerTurn || !T.managerTurn(lastState)) return;
+    e.preventDefault(); interrupt();
+  });
   view.addEventListener('keydown', function (e) {
     var t = e.target; if (!t.getAttribute || t.getAttribute('data-act') !== 'mc-text') return;
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); ui.chatDraft = t.value; send(); }

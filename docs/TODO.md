@@ -31,13 +31,14 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [ ] Verificar: Verify Commit lane/manager-permission-questions-nev, me (en curso: verify-commit-lane-manager-permi-2)
 - [x] Manager de guardia: atender el chat
 - [x] Manager de guardia: atender el chat
-- [ ] CEO: revisar cómo trabaja el manager
-- [ ] Manager de guardia: atender el chat (en curso: manager-94ef0286)
+- [ ] CEO: revisar cómo trabaja el manager (en curso: ceo-560ea132)
+- [ ] Manager de guardia: atender el chat
 - [x] Revisar el plan (2026-11-05 08:38) (hecho: sin cambios) <!-- tirith:{"id":"i-32bf740b"} -->
 - [ ] El plan no repite ningún id permanente: Revisar el plan (2026-11-05) sigue dos veces con el id i-2975f07c, así que una recibe un id nuevo (check: `test $(grep -o 'tirith:{"id":"i-[0-9a-f]*"' docs/TODO.md | sort | uniq -d | wc -l) -eq 0`) <!-- tirith:{"id":"i-4d54f8b9","depends_on":[],"writes":[]} -->
 - [ ] Verificar: Verify Drag an image from Finder onto the Tirith chat o (en revisión) <!-- tirith:{"id":"i-9aa639be"} -->
-- [ ] Do one real Finder image drag onto the Tirith chat and look for 'drag: window drop' in app.log
+- [x] Do one real Finder image drag onto the Tirith chat and look for 'drag: window drop' in app.log (hecho: bafcf90e)
 - [ ] Revisar el plan (2026-11-05 11:00) (reabierto: update-the-plan-19: the lane's work is not on main) <!-- tirith:{"id":"i-11d919e9"} -->
+- [x] Revisar el plan (2026-11-05 12:08) (hecho: sin cambios) <!-- tirith:{"id":"i-6911fd38"} -->
 - [x] Revisar el plan (2026-11-05 09:02) (hecho: sin cambios) <!-- tirith:{"id":"i-1a9117c8"} -->
 - [x] Revisar el plan (2026-11-05 07:01) (hecho: sin cambios) <!-- tirith:{"id":"i-0d103239"} -->
 - [x] Revisar el plan (2026-11-05) (hecho: sin cambios) <!-- tirith:{"id":"i-2975f07c"} -->
@@ -419,8 +420,8 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
   - [x] Revisar: Un solo manager con sesión persistente que vive en Tirith (misma memoria con la app abierta o cerrada). — falló: the merge did not go through: merging lane/manager-de-guardia-chat-y-piloto-2 failed conflicts? : error: Your local changes to th
   - [x] Revisar: Un solo manager con sesión persistente que vive en Tirith (misma memoria con la app abierta o cerrada).
 - [x] El chat muestra el trabajo del manager en vivo: texto, herramientas y resultados de cada paso (secretos tapados).
-- [ ] El chat del manager como el CLI: texto palabra a palabra, diffs en color, lista de tareas; Esc interrumpe y ↑ recupera.
-  - [ ] Revisar: El chat del manager como el CLI: texto palabra a palabra, diffs en color, lista de tareas; Esc interrumpe y ↑ recupera. (en curso: revisión de manager-de-guardia-chat-y-piloto-17)
+- [x] El chat del manager como el CLI: texto palabra a palabra, diffs en color, lista de tareas; Esc interrumpe y ↑ recupera.
+  - [x] Revisar: El chat del manager como el CLI: texto palabra a palabra, diffs en color, lista de tareas; Esc interrumpe y ↑ recupera.
 - [ ] Sub-agentes anidados en la conversación; permisos seguros aprobados por código y el resto como botones Allow/Deny. (en revisión)
 - [x] Autorrevisión cada minuto (collector, manager, piloto, disco, revisiones) con arreglo automático y una línea en el chat.
 - [x] Lo que dice un agente en su informe se verifica contra su cambio real antes de fusionar.
@@ -433,7 +434,8 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] El piloto automático no lanza agentes: avisa al manager en el chat de cada paso listo y el manager decide (lanzar con buenas instrucciones, juntar, esperar o descartar). (hecho: 634c8fe)
 - [x] Tirith libera disco solo cuando queda poco (carpetas de lanes ya fusionadas y cachés de compilación) y nunca se lo pide al dueño. (hecho: 4ef849a)
 - [x] El manager persistente arranca siempre: comparte el elemento fijo del manager con los turnos sueltos (sin bloquearse por «ya en curso») y, si falla, el modo de respaldo responde en menos de 1 minuto. (hecho: b70ce39)
-- [ ] Los permisos de comandos seguros (solo lectura, comandos de Tirith) se aprueban por código; al dueño nunca le llega una pregunta de permiso que no sea suya. (en curso: manager-de-guardia-chat-y-piloto-14)
+- [x] Los permisos de comandos seguros (solo lectura, comandos de Tirith) se aprueban por código; al dueño nunca le llega una pregunta de permiso que no sea suya.
+  - [x] Revisar: Los permisos de comandos seguros (solo lectura, comandos de Tirith) se aprueban por código; al dueño nunca le llega una pregunta de permiso que no sea suya.
 - [ ] La autorrevisión no escribe en el chat lo que arregló sola: queda en el punto de salud (al hacer clic); el chat solo muestra lo que necesita al dueño. (en curso: selfreview-not-in-chat-2) <!-- tirith:{"id":"i-2a7b6720"} -->
   - [x] Revisar: La autorrevisión no escribe en el chat lo que arregló sola: queda en el punto de salud (al hacer clic); el chat solo muestra lo que necesita al dueño. — falló: the report does not match the change
 - [x] Llevar a main el trabajo de la lane manager-de-guardia-chat-y-piloto-2: aplicar a mano ~/.tirith/diffs/manager-de-guardia-chat-y-piloto-2.patch sobre main y resolver los conflictos en collector/tirith/agentrun.py y collector/tirith/managerd.py conservando lo que ya hay en main (los tests de la lane pasaban: 1113). (hecho: 329f2c4)
@@ -480,7 +482,6 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Evidencia de la torre de piedra: capturas de la landing publicada en escritorio y móvil, antes y después, en docs/evidence/logo-torre/. (check: `cd docs/evidence/logo-torre && test -f antes-escritorio.png && test -f antes-movil.png && test -f despues-escritorio.png && test -f despues-movil.png`) (hecho: 40ed8f2)
 - [x] La landing deja de mostrar render-board.png (pedido del dueño). (check: `! grep -q render-board site/index.html`) (hecho: 7ecbd87)
 - [ ] Imágenes de inspiración para los renders, generadas con un modelo de imagen de Google y guardadas fuera del repo (espera: una clave de Google que funcione, del dueño). (check: `test -n "$(ls ~/.cache/tirith-inspiration 2>/dev/null)"`)
-- [ ] Change the check of the compacts_then_restarts msession item to -k compact so it matches the current test names (check: `cd collector && uv run -q pytest -q tests -k compact`) (en curso: manager-de-guardia-chat-y-piloto-19) <!-- tirith:{"id":"i-8ba0ea2c","depends_on":[],"writes":[]} -->
 - [x] Confirm 3 failing process-kill tests (test_cta sigterm, test_idletimeout cpu_is_progress, test_timeouts left_the_group) fail on main too (hecho: 0bcd5b94) <!-- tirith:{"id":"i-d0f63b29"} -->
   - [x] Revisar: Confirm 3 failing process-kill tests (test_cta sigterm, test_idletimeout cpu_is_progress, test_timeouts left_the_group) fail on main too
 - [x] El icono de la app de macOS (el mismo modelo de torre de piedra) se lee bien a 32 px: se genera una versión pequeña y se comprueba su contraste (pedido del dueño). (check: `test -f app/src-tauri/icons/32x32.png && grep -q stone_tower scripts/make_icon.py`) (hecho: 849dc41)
@@ -733,9 +734,9 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
   - [x] Revisar: Cada proyecto elige sus roles en [roles] de tirith.toml: ceo y manager pueden ser always, on-demand u off, y Tirith los tiene en always (check: `cd collector && uv run -q pytest -q tests -k roles_setting`)
 - [x] Un proyecto nuevo empieza con ceo y manager en on-demand (check: `cd collector && uv run -q pytest -q tests -k roles_default_on_demand`) <!-- tirith:{"id":"i-efb2d1de","depends_on":["i-eb7c75f3"],"writes":[]} -->
   - [x] Revisar: Un proyecto nuevo empieza con ceo y manager en on-demand (check: `cd collector && uv run -q pytest -q tests -k roles_default_on_demand`)
-- [ ] Con roles on-demand, el worker pasa a manager cuando la tarea no cabe en una lane, hay 2 o más items en paralelo o pide sub-agentes (check: `cd collector && uv run -q pytest -q tests -k promote_to_manager`) (en revisión) <!-- tirith:{"id":"i-8aa596e4","depends_on":["i-eb7c75f3"],"writes":[]} -->
-  - [ ] Revisar: Con roles on-demand, el worker pasa a manager cuando la tarea no cabe en una lane, hay 2 o más items en paralelo o pide sub-agentes (check: `cd collector && uv run -q pytest -q tests -k promote_to_manager`) (en curso: revisión de empresa-que-crece-worker-manager-2)
-- [ ] Cada promoción o retirada queda en <home>/company.jsonl con la regla, el valor medido y el umbral (check: `cd collector && uv run -q pytest -q tests -k company_log`) <!-- tirith:{"id":"i-e92781ab","depends_on":["i-8aa596e4"],"writes":[]} -->
+- [x] Con roles on-demand, el worker pasa a manager cuando la tarea no cabe en una lane, hay 2 o más items en paralelo o pide sub-agentes (check: `cd collector && uv run -q pytest -q tests -k promote_to_manager`) <!-- tirith:{"id":"i-8aa596e4","depends_on":["i-eb7c75f3"],"writes":[]} -->
+  - [x] Revisar: Con roles on-demand, el worker pasa a manager cuando la tarea no cabe en una lane, hay 2 o más items en paralelo o pide sub-agentes (check: `cd collector && uv run -q pytest -q tests -k promote_to_manager`)
+- [ ] Cada promoción o retirada queda en <home>/company.jsonl con la regla, el valor medido y el umbral (check: `cd collector && uv run -q pytest -q tests -k company_log`) (en curso: empresa-que-crece-worker-manager-3) <!-- tirith:{"id":"i-e92781ab","depends_on":["i-8aa596e4"],"writes":[]} -->
 - [ ] Con roles on-demand, se crea un CEO con más de 2 workers a la vez, más de 1 h de trabajo sin nadie mirando o un fallo que el self-check no arregla (check: `cd collector && uv run -q pytest -q tests -k promote_to_ceo`) <!-- tirith:{"id":"i-609029b8","depends_on":["i-e92781ab"],"writes":[]} -->
 - [x] Run collector tests (cd collector && uv run -q pytest -q tests) to completion and confirm green for company-lab fixture (hecho: 9a4725f4)
 - [x] Fix 3 failing process-kill tests: test_cta lane_stop_kills_a_child_that_ignores_sigterm, test_idletimeout child_cpu_is_progress, test_timeouts kill_tree_including_children_that_left_the_group (hecho: 0bcd5b94)

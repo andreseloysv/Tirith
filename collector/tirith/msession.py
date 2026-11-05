@@ -44,11 +44,6 @@ CONTEXT_TOKENS = 150000  # context use that triggers /compact
 OPS = ("interrupt", "stop", "restart")
 SAFE_TOOLS = ("Read", "Glob", "Grep", "TodoWrite", "NotebookRead", "LS")
 EDIT_TOOLS = ("Edit", "MultiEdit", "Write", "NotebookEdit")
-# Tools that cannot change anything outside the rules above: approved by code. Any other tool (an MCP tool, a
-# new one) is the owner's to judge: an Allow / Deny question in the chat (``ask_owner``).
-SAFE_TOOLS = ("Read", "Glob", "Grep", "LS", "NotebookRead", "TodoWrite", "Task", "Agent", "WebSearch", "WebFetch",
-              "BashOutput", "KillShell", "Skill", "SlashCommand", "ExitPlanMode", "ToolSearch")
-PERM_PREFIX = "perm-"
 
 
 def manager_dir(home: Path) -> Path:
@@ -228,9 +223,34 @@ def _bash_writes(home: Path, data: dict, cwd) -> str | None:
     return None
 
 
-def decide(config: Config, home: Path, alias: str, tool: str, data, cwd, project: str | None = None
-           ) -> tuple[str, str]:
+def is_safe_call(tool: str, data) -> bool:
+    """True for a call that cannot change anything: a read-only tool, or a Bash line made only of readers
+    (``cat``, ``ls``, ``grep``, read-only ``git``...) and ``tirith`` commands, with no redirect or substitution."""
+    if tool in SAFE_TOOLS:
+        return True
+    if tool != "Bash":
+        return False
+    line = gates_mod.strip_heredocs(str((data or {}).get("command") or "") if isinstance(data, dict) else "")
+    if not line.strip() or any(mark in line for mark in ("$(", "`", ">", "<(", "<<")):
+        return False
+    segments = gates_mod.split_commands(line)
+    if not segments:
+        return False
+    for tokens in segments:
+        name, args = gates_mod._program(tokens)
+        if name != "tirith" and not (name and gates_mod._reads_only(name, args)):
+            return False
+        if name == "git" and _git_changes(*_git_sub(args)):
+            return False
+    return True
+
+
+def decide(config: Config, home: Path, alias: str, tool: str, data, cwd, project: str | None = None,
+           ask_owner: bool = False) -> tuple[str, str]:
     """``("allow"|"deny", message)`` for a tool call the manager asks to make; never a question for the owner.
+
+    With ``ask_owner`` (a session whose owner can answer, like the chat) a call that passes the gates is allowed by
+    code only when it is safe (``is_safe_call``); anything else is ``("ask", "")``, a question for the owner.
 
     The gates first (their deny rules), then the manager delegates edits (a file edit or a Bash write outside the
     Tirith home is denied with the lane message), everything else is allowed. A deny is logged as a flow."""
@@ -243,6 +263,8 @@ def decide(config: Config, home: Path, alias: str, tool: str, data, cwd, project
                                   session=None, project=project)
         except OSError:
             pass
+    elif ask_owner and not is_safe_call(tool, data):
+        return "ask", ""
     return verdict, message
 
 
@@ -256,23 +278,7 @@ def _verdict(config: Config, home: Path, tool: str, data: dict, cwd, project: st
         return ("allow", "") if inside else ("deny", LANE_MESSAGE)
     if tool == "Bash" and _bash_writes(home, data, cwd):
         return "deny", LANE_MESSAGE
-    if tool != "Bash" and tool not in SAFE_TOOLS:
-        return "ask", ""
     return "allow", ""
-
-
-def ask_owner(home: Path, request_id: str, tool: str, data, project: str | None = None) -> str:
-    """Put an Allow / Deny question for one tool call on the owner's list; returns its id (``perm-<request id>``).
-    The reply (an inbox ``reply`` to that id) is read by ``managerd._settle_asks``."""
-    from tirith.livesteps import mask, tool_summary
-    wait_id = PERM_PREFIX + request_id
-    text = f"The manager asks to use **{tool}**: {mask(tool_summary(tool, data))}. Allow it?"
-    append_jsonl(Path(home) / "waits.jsonl", {
-        "id": wait_id, "at": now_iso(), "project": project or "", "text": text, "link": None, "done_at": None,
-        "kind": "approval", "command": None, "why_owner": "owner-decision",
-        "reason_tag": "Needs your decision",
-        "options": [{"label": "Allow", "value": "allow"}, {"label": "Deny", "value": "deny"}]})
-    return wait_id
 
 
 # -- one turn and the session -----------------------------------------------------------------
@@ -556,14 +562,10 @@ class Session:
             verdict, message = self.decide(tool, data)
         except Exception as err:  # a rule that cannot be checked denies
             verdict, message = "deny", f"The rule check failed ({err}); try a simpler command."
-        if verdict == "ask":
-            with self.lock:
-                self.asks[rid] = {"tool": tool, "input": data if isinstance(data, dict) else {},
-                                  "at": now_iso(), "wait": PERM_PREFIX + rid}
-            try:
-                ask_owner(self.home, rid, tool, data)
-            except OSError:
-                self.answer_ask(rid, False)  # a question that cannot be shown is a no
+        if verdict == "ask":  # not safe and not forbidden: the owner's to answer (``answer_ask``)
+            self.asks[rid] = {"tool": tool, "input": data if isinstance(data, dict) else {},
+                              "summary": str((data or {}).get("command") or (data or {}).get("file_path") or tool
+                                             ) if isinstance(data, dict) else tool, "at": now_iso(datetime.now(timezone.utc))}
         elif verdict == "allow":
             self.write(permission_reply(rid, True, data))
         else:
