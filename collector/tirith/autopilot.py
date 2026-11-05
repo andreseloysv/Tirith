@@ -34,6 +34,7 @@ from tirith import plangate as plangate_mod
 from tirith import projects as projects_mod
 from tirith import roadmap as roadmap_mod
 from tirith.home import Config, now_iso, parse_iso
+from tirith.store import lane_path as store_lane_path
 from tirith.store import read_json, write_json_atomic
 
 SUMMARY_MAX = 400
@@ -689,6 +690,52 @@ def report_summary(report: str | None) -> str:
 # -- the cycle --------------------------------------------------------------------------------
 
 
+def _ghost(home: Path, item_state: str, lane_id: str, agents: list[dict], queued: set[str]) -> bool:
+    """True when the lane named by an "en curso" / "en revisión" marker does not exist, or has ended and nothing
+    (a working lane, a review running or ready, the merge queue, a failed review for the manager) holds the item."""
+    if not lane_id:
+        return False
+    agent = _agents_by_id(agents).get(lane_id)
+    if agent is None:
+        return not isinstance(read_json(store_lane_path(home, lane_id), None), dict) and lane_id not in queued
+    if agent.get("status") == "working" or lane_id in queued:
+        return False
+    status = _review_status(agent)
+    if status in REVIEW_BUSY:
+        return False
+    if item_state == roadmap_mod.STATE_REVIEW:  # a merged review is ticked by plangate.tick_merged; a done lane too
+        outcome = agent.get("outcome")
+        done = outcome == "done" or (isinstance(outcome, dict) and outcome.get("status") == "done")
+        return status is None and not done
+    return status != "merged"
+
+
+def _release_ghosts(home: Path, config: Config, projects: list[dict], agents: list[dict]) -> bool:
+    """Take the marker off every item held by a lane or review that does not exist or has ended."""
+    changed, queued = False, queued_lanes(home)
+    for project in projects:
+        if projects_mod.is_merge_worktree(project.get("folder")):
+            continue
+        repo = plangate_mod.repo_of(home, project["id"], config)
+        if repo is None:
+            continue
+        for step in (project.get("roadmap") or {}).get("steps", []):
+            for item in step["items"]:
+                if item["done"]:
+                    continue
+                clean, state, detail = roadmap_mod.split_status(item["text"])
+                if state not in (roadmap_mod.STATE_PROGRESS, roadmap_mod.STATE_REVIEW) or not detail:
+                    continue
+                lane_id = detail.split()[-1]
+                if not _ghost(home, state, lane_id, agents, queued):
+                    continue
+                try:
+                    changed |= plangate_mod.release(home, repo, project["id"], step["id"], clean, lane_id)
+                except plangate_mod.PlanGateError:
+                    pass
+    return changed
+
+
 def run(home: Path, config: Config, now: datetime, state: dict, *, agents: list[dict], projects: list[dict],
         launcher: Callable | None = None, launch: bool = True) -> bool:
     """One autopilot pass; True when ``state`` changed. It never starts an agent (``launcher`` is ignored).
@@ -698,6 +745,7 @@ def run(home: Path, config: Config, now: datetime, state: dict, *, agents: list[
     planned = [p for p in projects if p.get("roadmap")]
     changed |= _owner_items(home, state, planned, now_iso(now))
     if launch and effective(config, state):
+        changed |= _release_ghosts(home, config, planned, agents)
         changed |= _propose(home, state, planned, agents, now, config)
     return changed
 
