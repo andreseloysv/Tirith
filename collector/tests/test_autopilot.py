@@ -344,14 +344,42 @@ def test_the_facts_of_earlier_lanes_are_in_the_proposal(home, repo) -> None:
 def test_every_kind_of_note_is_reported_once_nobody_is_on_it(home, repo) -> None:
     path = repo / "docs" / "TODO.md"
     text = path.read_text()
-    for word, note in (("first", "(en curso: lane-q)"), ("second", "(reabierto: it broke)"), ("third", "(bloqueado: waiting)")):
+    for word, note in (("second", "(reabierto: it broke)"), ("third", "(bloqueado: waiting)")):
         text = text.replace(f"- [ ] Build the {word} thing.", f"- [ ] Build the {word} thing. {note}")
     path.write_text(text)
     pilot = Pilot(home, repo)
     pilot.cycle()
     pilot.cycle()
     why = {r["step"]: r["text"] for r in _proposals(home)}
-    assert "marked in progress" in why["1"] and "reopened" in why["2"] and "marked blocked" in why["3"]
+    assert "reopened" in why["2"] and "marked blocked" in why["3"]
+
+
+def _commit_plan(repo: Path) -> None:
+    import subprocess
+    for args in (["init", "-q"], ["add", "."], ["-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-q", "-m", "plan"]):
+        subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True)
+
+
+@pytest.mark.parametrize("note", ["(en curso: lane-gone)", "(en revisión: lane-gone)", "(en curso: lane-end)"])
+def test_autopilot_releases_ghost_marker(home, repo, note) -> None:
+    path = repo / "docs" / "TODO.md"
+    path.write_text(path.read_text().replace("- [ ] Build the first thing.", f"- [ ] Build the first thing. {note}"))
+    _commit_plan(repo)
+    pilot = Pilot(home, repo)
+    pilot.agents.append({"id": "lane-end", "project": "demo", "step": "9", "status": "done"})
+    pilot.cycle()
+    assert "(en " not in path.read_text()
+
+
+def test_autopilot_keeps_a_marker_with_a_live_lane(home, repo) -> None:
+    path = repo / "docs" / "TODO.md"
+    path.write_text(path.read_text().replace("- [ ] Build the first thing.", "- [ ] Build the first thing. (en curso: w)")
+                    .replace("- [ ] Build the second thing.", "- [ ] Build the second thing. (en revisión: r)"))
+    pilot = Pilot(home, repo)
+    pilot.agents.append({"id": "w", "project": "demo", "step": "1", "status": "working"})
+    pilot.agents.append({"id": "r", "project": "demo", "step": "2", "status": "done", "review": {"status": "running"}})
+    pilot.cycle()
+    assert "(en curso: w)" in path.read_text() and "(en revisión: r)" in path.read_text()
 
 
 def test_an_item_with_a_lane_working_or_a_review_running_is_not_reported(home, repo) -> None:
