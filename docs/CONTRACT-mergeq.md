@@ -112,8 +112,10 @@ waiting lane without it, behind the running entry and earlier priority lanes. It
 - A dirty main checkout does not stop a tested merge: it lands when no dirty tracked file is one the fast-forward
   changes (the owner's edits stay untouched). Only a clash waits, naming the files; the tested tree is remembered, so
   the retry does not run the suite again.
-- `waiting` (dirty files the merge changes, branch not found, no temp worktree, no stage...): the entry stays queued; on the 2nd
+- `waiting` (dirty files the merge changes, branch not found, no temp worktree...): the entry stays queued; on the 2nd
   consecutive `waiting` (`WAIT_NOTICE`) the manager's queue gets one item with the reason.
+- `needs a test stage` (the manifest has no build or test stage with a `run` command): the lane leaves the queue at once (no retry, so no
+  `no merge runner alive` alarm), `review.status` is `needs a test stage`, and the manager gets one queue item. It is not queued again until a stage exists.
 - Push race: when the push of main fails, the queue fetches origin first. A merged commit already on origin's main ends `merged`; a main that moved ahead without it is rebased onto origin and pushed once more. Only if that still fails does it end `push-failed`.
 - `push-failed` (main merged, origin not): a manager item at once, with the reason and the command to push.
 - out of time: manager item on the 2nd time (as before). A lane or project that is gone: flow alert to the manager.
