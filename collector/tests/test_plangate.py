@@ -1019,3 +1019,22 @@ def test_item_id_plan_add_shows_a_short_id_every_command_accepts(proj, home: Pat
     assert _run(repo, "--id", "shortid", "--step", "1", "--item", item_id) == 0
     assert "(en curso: shortid)" in _plan(repo)
     assert read_json(home / "lanes" / "shortid.json", {})["item"].startswith("Add the short id item.")
+
+
+def test_tirith_do_splits_a_goal_into_checked_items_and_launches_them(proj, home: Path, capsys) -> None:
+    repo, started = proj
+    goal = "Add the export command; write its docs.\n- Cover it with a test"
+    assert main(["do", goal, "--project", "demo", "--step", "2"]) == 0
+    plan = _plan(repo)
+    assert "Add the export command (test: do_add_the_export_command)." in plan
+    assert "pytest -q tests -k do_write_its_docs" in plan
+    assert len(started) == 3
+    assert all("--item" in argv for argv in started)
+    assert "3 items" in capsys.readouterr().out
+
+
+def test_tirith_do_dry_run_starts_nothing_and_new_step(proj, home: Path) -> None:
+    repo, started = proj
+    assert main(["do", "One thing. Another thing.", "--project", "demo", "--dry-run"]) == 0
+    assert "## 3. One thing" in _plan(repo) and started == []
+    assert main(["do", " ", "--project", "demo"]) == 3

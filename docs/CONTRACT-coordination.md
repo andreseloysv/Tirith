@@ -97,3 +97,13 @@ through Tirith's plan-linked lane launcher.
 The autopilot (`autopilot.candidates`) never proposes an item whose `writes` overlap those of a lane that is
 working or being checked/merged, a claimed task, or an item already proposed in the same pass (the first in
 plan order goes; the other comes back once it lands). `coordination.claim` refuses the overlap as a last guard.
+=======
+## `tirith do`
+
+`tirith do "<goal>" --project <id> [--step N] [--agent <alias>] [--dry-run]` splits the goal (lines, bullets,
+sentences, `;`) into at most 8 small plan items (`tirith/dogoal.py`). Each item is added with `plan add` rules and
+a check, `cd collector && uv run -q pytest -q tests -k do_<slug>`, so the lane writes the test that proves it.
+Without `--step` the items go in a new step. Each item then starts through `tirith launch`; one that cannot
+start (work limit, plan gate) is printed as "not started" and the exit code is 3. `--dry-run` adds the items to
+the plan and starts nothing.
+>>>>>>> main
