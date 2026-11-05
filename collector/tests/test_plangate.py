@@ -670,11 +670,10 @@ def _merged_branch(repo: Path, name: str, filename: str = "feature.py") -> str:
 
 def test_a_self_merged_lane_is_ticked_with_its_commit(proj, home: Path) -> None:
     repo, _ = proj
-    lane = _lane(home, repo, "self1", ended_at="2026-01-01T00:00:00Z", result="done")
+    _lane(home, repo, "self1", ended_at="2026-01-01T00:00:00Z", result="done")
     plangate.report(home, "self1", "done")
     assert "(en revisión)" in _plan(repo)
     cfg = load_config(home)
-    assert not plangate.tick_merged(home, cfg, [{"id": "self1", "item": lane["item"], "outcome": {"status": "done", "applied": True}}])
     sha = _merged_branch(repo, "self1")
     assert plangate.tick_merged(home, cfg, [read_json(home / "lanes" / "self1.json", {})])
     assert f"- [x] Build the button. (hecho: {sha})" in _plan(repo)
@@ -692,8 +691,9 @@ def test_item_stays_open_until_merged(proj, home: Path) -> None:
     assert "- [x] Build the button" not in _plan(repo)
     seen = [read_json(home / "lanes" / "early1.json", {})]
     cfg = load_config(home)
-    assert not plangate.tick_merged(home, cfg, seen)  # no branch at all: no proof
-    _git_do(repo, "checkout", "-q", "-b", "lane/early1")
+    _git_do(repo, "branch", "lane/early1")  # a branch waits for its merge: nothing closes the item
+    assert not plangate.tick_merged(home, cfg, seen)  # no commits: no proof
+    _git_do(repo, "checkout", "-q", "lane/early1")
     (repo / "early.py").write_text("z = 3\n", encoding="utf-8")
     _git_do(repo, "add", "early.py")
     _git_do(repo, "commit", "-q", "-m", "wip")
@@ -753,7 +753,12 @@ def _merge_named(repo: Path, branch: str, subject: str) -> str:
 
 
 def _ticks(home: Path, lane_id: str) -> bool:
-    return plangate.tick_merged(home, load_config(home), [read_json(home / "lanes" / f"{lane_id}.json", {})])
+    """True when a pass over the lane ticked an item (a reopened one is not a tick)."""
+    cfg = load_config(home)
+    before = _plan(cfg.projects[0].repo)
+    plangate.tick_merged(home, cfg, [read_json(home / "lanes" / f"{lane_id}.json", {})])
+    after = _plan(cfg.projects[0].repo)
+    return after != before and "(hecho" in after and "(hecho" not in before
 
 
 def _state(home: Path, repo: Path, lane_id: str) -> tuple[str, str | None]:
@@ -1074,3 +1079,23 @@ def test_item_stays_open_until_merged_an_interactive_lane_whose_work_is_on_main_
     _merge_named(repo, "lane/chat8", "Merge lane/chat8: Work")
     assert plangate.lane_ended(home, read_json(home / "lanes" / "chat8.json", {})) == "done"
     assert "- [x] Build the button." in _plan(repo)
+
+
+def test_in_review_without_review_closes_by_ticking_when_the_work_is_on_main(proj, home: Path) -> None:
+    repo, _ = proj
+    _lane(home, repo, "orph1", ended_at="2026-01-01T00:00:00Z", result="done")
+    plangate.report(home, "orph1", "done")
+    sha = _merged_branch(repo, "orph1")
+    _git_do(repo, "branch", "-D", "lane/orph1")
+    assert plangate.tick_merged(home, load_config(home), [read_json(home / "lanes" / "orph1.json", {})])
+    assert f"- [x] Build the button. (hecho: {sha})" in _plan(repo)
+
+
+def test_in_review_without_review_closes_by_reopening_when_the_work_is_missing(proj, home: Path) -> None:
+    repo, _ = proj
+    _lane(home, repo, "orph2", ended_at="2026-01-01T00:00:00Z", result="done")
+    plangate.report(home, "orph2", "done")
+    assert "(en revisión)" in _plan(repo)
+    assert plangate.tick_merged(home, load_config(home), [read_json(home / "lanes" / "orph2.json", {})])
+    plan = _plan(repo)
+    assert "(en revisión)" not in plan and "- [ ] Build the button." in plan and "reabierto" in plan
