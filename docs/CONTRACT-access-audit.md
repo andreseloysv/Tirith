@@ -75,7 +75,10 @@ The owner's first question is what an agent reached outside the machine, so ever
   process under a working lane (by parent chain up to the lane's `pid` or `controller_pid`), and writes each
   new `(lane, host, port, program)` once (`<home>/netwatch.json`) as a row with `tool: "connection"`,
   `system: "network"`, `action: "<program> connected to <host>:<port>"` and `external: ["<https|http|ssh|git|tcp>
-  <host>:<port>"]`. The host is a reverse lookup with a 1 s budget, else the address.
+  <host>:<port>"]`. The host is the **domain visited** when one is known: a domain the lane's own calls named
+  (`external` of its rows) that resolves to the connection's address, else the base domain of the reverse name
+  (`lb-140-82-112-3-iad.github.com` gives `github.com`), else the address. The row also keeps `domain`, `address`
+  and `reverse`; the page shows the domain big and the address small beside it. Lookups have a 1 s budget.
 
 The «Accesos» page starts with **External**: every such destination, newest first, with its kind (Web, API,
 WebSocket, SSH, Git remote, Packages, Search, MCP, HTTPS…), the agent (role and name) and what caused it.
