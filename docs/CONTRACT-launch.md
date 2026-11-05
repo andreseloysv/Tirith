@@ -339,15 +339,20 @@ The step's checkboxes in the roadmap are still ticked by the owner.
   the same way. A worktree with uncommitted changes is left alone: `lane.cleanup = {status: "dirty", message, at}`
   (`blocked` when git refuses). A removed lane gets `cleanup = {status: "removed", branch_deleted, at}`. Lane
   records and logs are kept.
+- **Stale lane folders.** A lane that ended (any result) over 24 h ago and is unmerged or dirty is retired, and
+  so is any other worktree in `<repo>-lanes` that git did not touch for 24 h: uncommitted changes (tracked and
+  untracked, not ignored) are saved as a commit under `refs/tirith/kept/<lane>`, the folder is removed with
+  `--force`, the branch stays unless merged. The record gets `cleanup = {status: "retired", kept, at}`.
 - **Shared cargo target.** Every stage run (`runstage.run_stage`, so `tirith run` and the review) sets
   `CARGO_TARGET_DIR` unless the environment already has it: the project's `cargo_target_dir` in
   `config.toml` (`[[projects]]` / `[projects.<id>]`), else `<repo>-lanes/.cargo-target`. Worktrees share compiled
   dependencies instead of building ~2 GB each.
-- **Disk guard.** Each pass records `state.disk = {free_bytes, min_free_bytes, low, at, queue?}` (also in
+- **Disk guard.** Each pass records `state.disk = {free_bytes, min_free_bytes, warn_free_bytes, low, warn, at, queue?}` (also in
   `dispatch.json`): the smallest free space of the folders holding the projects' lanes. Below `[disk] min_free_gb`
   (default 5) `low` is true: the autopilot starts no lane, `finish` / plan requests wait unanswered, and one
   manager queue item (`kind: "disk"`, not an owner item) says why; it closes when space is back.
-  Freeing space (deleting merged lane folders, the build cache) runs on a background thread: the dispatcher pass never
+  Below `[disk] warn_free_gb` (default 30) `warn` is true: the `disk` health check is amber (so the CEO is woken
+  when it lasts) and freeing space starts. Freeing space (deleting merged and stale lane folders, the build cache) runs on a background thread: the dispatcher pass never
   waits for it, and a later pass says what was freed.
 
 ## Real launch from the browser (owner checklist)
