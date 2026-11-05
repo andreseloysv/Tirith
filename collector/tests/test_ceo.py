@@ -375,6 +375,20 @@ def test_the_ceo_sees_how_fast_the_work_goes(home: Path) -> None:
     assert (t["whole_suites_in_lanes"], t["whole_suite_minutes_median"]) == (3, 19.0)
     assert t["red_in_many_lanes"] == ["tests/test_x.py::test_y"] and t["cpu_idle_pct"] == 60.0
     assert "## Throughput: is enough getting done?" in ceo.brief(home, {"throughput": t}, ceo.settings(home), False)
+    assert "upkeep_share_today" not in t  # no upkeep steps configured: no share
+
+
+def test_the_ceo_sees_the_share_of_upkeep(home: Path) -> None:
+    now = local(12)
+    iso = lambda dt: dt.strftime("%Y-%m-%dT%H:%M:%SZ")  # noqa: E731
+    with (home / "config.toml").open("a", encoding="utf-8") as handle:
+        handle.write('\n[ceo]\nupkeep_steps = ["tirith:17"]\nupkeep_max_share = 0.25\n')
+    for n, step in enumerate(("17", "17", "14", "22")):
+        write_lane(home, {"id": f"l-{n}", "project": "tirith", "step": step, "feature": "x",
+                          "started_at": iso(now - timedelta(minutes=60))})
+    t = ceo.throughput(home, load_config(home), now, cpu=lambda: 60.0)
+    assert (t["upkeep_lanes_today"], t["upkeep_share_today"], t["upkeep_max_share"]) == (2, 0.5, 0.25)
+    assert "crowded out" in ceo.brief(home, {"throughput": t}, ceo.settings(home), False)
 
 
 def test_every_review_names_the_biggest_bottleneck() -> None:

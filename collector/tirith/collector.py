@@ -1256,9 +1256,13 @@ class Collector:
             action = actions_mod.register_generated(
                 self.home, proj.id, f"ac-guard-install-{proj.id}", f"Install the word guard in {proj.name}",
                 f"tirith guard install {proj.id}", cwd)
+        outdated = not chain and any("differs from the expected guard" in p for p in problems)
+        text = (f"Tirith's commit guard changed and {proj.name}'s hooks are the older version: no lane of "
+                f"{proj.name} can start until you click Update ({problems[0]})" if outdated
+                else f"Commit guard needs attention in {proj.name}: {problems[0]}")
         return {
             "id": f"guard-{proj.id}", "project": proj.id,
-            "text": f"Commit guard needs attention in {proj.name}: {problems[0]}",
+            "text": text,
             "since": since, "link": None, "source": "guard", "kind": "action",
             "why_owner": "owner-decision", "why_detail": "choice: install the guard, not now or never",
             "reason_tag": asks_mod.reason_tag("owner-decision", "install the guard, not now or never"),
