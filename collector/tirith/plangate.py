@@ -571,8 +571,10 @@ def lane_ended(home: Path, lane: dict) -> str:
     if standing(lane):
         repo = repo_of(home, str(lane.get("project") or ""))
         if repo is not None:
-            try:  # the manager's item stays open for the next manager; a chat is over, so its item is done
-                if (str(lane.get("class")) == "chat" or lane.get("interactive")) and not _unmerged_work(home, repo, lane):
+            try:  # the manager's item stays open for the next manager; a chat that ended done is over, so its item is done
+                # a chat that ended failed never ticks its item: it goes back to the plan, open
+                if (lane.get("result") == "done" and (str(lane.get("class")) == "chat" or lane.get("interactive"))
+                        and not _unmerged_work(home, repo, lane)):
                     clean = roadmap_mod.split_status(linked[1])[0]
                     commit_change(home, repo, str(lane["project"]),
                                   lambda text: roadmap_mod.set_item(text, linked[0], clean, clean, tick=True),

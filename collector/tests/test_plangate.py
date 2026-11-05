@@ -450,6 +450,16 @@ def test_standing_lanes_give_their_item_back(proj, home: Path) -> None:
     assert "- [x] Chat con el dueño: chat-1" in _plan(repo)
 
 
+def test_interactive_failed_keeps_item_open(proj, home: Path) -> None:
+    repo, _ = proj
+    plangate.ops_item(home, repo, "demo", "Chat con el dueño: chat-2", "chat-2")
+    chat = {"id": "chat-2", "project": "demo", "class": "chat", "interactive": True, "result": "failed",
+            "item": "Chat con el dueño: chat-2", "item_step": "0"}
+    assert plangate.lane_ended(home, chat) == "failed"
+    assert "- [x] Chat con el dueño: chat-2" not in _plan(repo)
+    assert "- [ ] Chat con el dueño: chat-2" in _plan(repo)
+
+
 def test_a_manager_lane_takes_over_the_standing_item_from_a_running_old_one(proj, home: Path) -> None:
     repo, _ = proj
     plangate.ops_item(home, repo, "demo", plangate.MANAGER_ITEM, "manager-old")
