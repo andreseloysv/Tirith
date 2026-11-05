@@ -61,6 +61,9 @@ RUST_STAGE = "rust-test"
 FLAKY_FILE = "flaky.json"  # {project: {test id: {"count": n, "last": iso}}}: tests that failed in the suite and passed alone
 WIP_LIMIT = 3  # lanes waiting in the queue at which no new lane starts until it drains below this
 OUTPUT_MAX = 1500
+PRIORITY_PATHS = frozenset({  # the queue, its stages and their contract: fixes here enter the queue first
+    "collector/tirith/mergeq.py", "collector/tirith/runstage.py", "collector/tirith/testmap.py",
+    "collector/tirith/timeouts.py", "collector/tests/test_mergeq.py", "docs/CONTRACT-mergeq.md", "tirith.toml"})
 
 
 def _path(home: Path) -> Path:
@@ -98,20 +101,51 @@ def queued(home: Path, lane_id: str) -> bool:
     return any(e["lane"] == lane_id for e in load(home)["queue"])
 
 
+def is_priority_path(path: str) -> bool:
+    """True for a file of the merge queue or of its stages: a fix there must not wait behind other lanes."""
+    return path in PRIORITY_PATHS
+
+
+def lane_touches_queue(lane: dict) -> bool:
+    """True when the lane's work (committed or not, against the merge base with main) changes the merge queue or
+    its stages. Any git failure reads as False: the lane then queues in order."""
+    workspace = Path(str(lane.get("workspace") or ""))
+    if not workspace.is_dir():
+        return False
+    common = _git(workspace, "rev-parse", "--path-format=absolute", "--git-common-dir").stdout.strip()
+    if not common:
+        return False
+    main = timeouts_mod.run(["git", "--git-dir", common, "rev-parse", "HEAD"], "git", text=True).stdout.strip()
+    base = _git(workspace, "merge-base", "HEAD", main).stdout.strip() if main else ""
+    if not base:
+        return False
+    paths = _git(workspace, "diff", "--name-only", base).stdout.split()
+    paths += _git(workspace, "ls-files", "--others", "--exclude-standard").stdout.split()
+    return any(is_priority_path(p) for p in paths)
+
+
 def enqueue(home: Path, lane_id: str) -> int:
-    """Add the lane at the end of the queue (once); returns its 1-based position."""
+    """Add the lane to the queue (once); returns its 1-based position. A lane that fixes the queue or its
+    stages goes before the waiting lanes that do not (behind the running one and earlier priority lanes)."""
     lane = read_json(lane_path(home, lane_id), None)
     if not isinstance(lane, dict):
         raise review_mod.ReviewError(f"unknown lane: {lane_id}")
+    priority = lane_touches_queue(lane)
     with _locked(home):
         data = load(home)
         for n, entry in enumerate(data["queue"], 1):
             if entry["lane"] == lane_id:
                 return n
-        data["queue"].append({"lane": lane_id, "project": str(lane.get("project") or ""), "at": now_iso(),
-                              "status": QUEUED, "feature": str(lane.get("feature") or lane_id)})
+        row = {"lane": lane_id, "project": str(lane.get("project") or ""), "at": now_iso(),
+               "status": QUEUED, "feature": str(lane.get("feature") or lane_id)}
+        place = len(data["queue"])
+        if priority:
+            row["priority"] = True
+            place = next((n for n, e in enumerate(data["queue"])
+                          if e["status"] != RUNNING and not e.get("priority")), place)
+        data["queue"].insert(place, row)
         write_json_atomic(_path(home), data)
-        return len(data["queue"])
+        return place + 1
 
 
 def shares_lane_worktree(lane: dict, repo: Path) -> bool:
