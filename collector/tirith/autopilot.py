@@ -64,7 +64,7 @@ WAITS_FOR_SLOT = re.compile(r"\bslots?\b|\bbusy\b|\blimit\b|\b\d+\s*/\s*\d+\b", 
 
 def _own(state: dict) -> dict:
     own = state.setdefault("autopilot", {})
-    for key in ("owner_items", "proposals", "seen"):
+    for key in ("owner_items", "proposals", "seen", "waits"):
         if not isinstance(own.get(key), dict):
             own[key] = {}
     return own
@@ -378,6 +378,47 @@ def _step_fp(text: str) -> str:
     return hashlib.sha1(text.encode()).hexdigest()[:12]
 
 
+def _item_fp(cand: dict, agents: list[dict]) -> str:
+    """A hash of one item's own facts: its text and note, why it is open and the lane facts shown for it."""
+    return _step_fp(f"{cand['fp']}|{_why_short(cand['state'])}|{_facts(cand, agents)}")
+
+
+def _remember_waits(own: dict, reqs: dict[str, dict], now: datetime) -> bool:
+    """Remember, per item, that the manager answered the proposal that listed it (the item still sat with nobody
+    on it, so the answer was a wait), keyed by the item and a hash of its own facts. Forgets what is ``ANSWER_EXPIRES_S`` old."""
+    changed = False
+    for rec in own["proposals"].values():
+        req, items = reqs.get(rec.get("id")), rec.get("items")
+        answers = [a for a in (req or {}).get("answers", []) if a.get("by") == "manager"]
+        if not answers or not isinstance(items, dict):
+            continue
+        for ikey, ifp in items.items():
+            row = {"fp": ifp, "at": answers[-1]["at"], "text": _clip(answers[-1].get("text"), ANSWER_QUOTED)}
+            if own["waits"].get(ikey) != row:
+                own["waits"][ikey] = row
+                changed = True
+    for ikey in [k for k, w in own["waits"].items()
+                 if not (parse_iso(w.get("at")) and (now - parse_iso(w["at"])).total_seconds() < ANSWER_EXPIRES_S)]:
+        del own["waits"][ikey]
+        changed = True
+    return changed
+
+
+def _unwaited(own: dict, found: dict[str, dict], agents: list[dict], now: datetime) -> dict[str, dict]:
+    """``found`` without the items the manager answered with a wait whose own facts did not change since, even when
+    other items of their step changed. The wait ends as the step's answer does: ``ANSWER_EXPIRES_S`` old, or earlier
+    once what it waited for happened (:func:`_waited_for`)."""
+    out = {}
+    for key, cand in found.items():
+        wait = own["waits"].get(key)
+        if wait and wait.get("fp") == _item_fp(cand, agents) and not _waited_for(wait, agents, now):
+            at = parse_iso(wait.get("at"))
+            if at is not None and (now - at).total_seconds() < ANSWER_EXPIRES_S:
+                continue
+        out[key] = cand
+    return out
+
+
 def _working(agents: list[dict]) -> list[dict]:
     """The agents that take a slot now: every working lane but the manager's."""
     return [a for a in agents if a.get("status") == "working" and not str(a.get("id", "")).startswith("manager")]
@@ -492,7 +533,10 @@ def _propose(home: Path, state: dict, projects: list[dict], agents: list[dict], 
     facts change it is closed and replaced; older ones (before this rule) are collapsed into it."""
     own, at, changed = _own(state), now_iso(now), False
     found, present = candidates(projects, agents, queued_lanes(home), home=home)
-    groups = _step_groups(found)
+    reqs = {r["id"]: r for r in inbox_mod.requests(home) if r["kind"] == inbox_mod.PROPOSAL}
+    changed = _remember_waits(own, reqs, now) or changed
+    all_groups = _step_groups(found)
+    groups = _step_groups(_unwaited(own, found, agents, now))
     present_steps = {k.rsplit("|", 1)[0] for k in present}
     by_step: dict[str, list[dict]] = {}
     answered: dict[str, dict] = {}
@@ -505,7 +549,7 @@ def _propose(home: Path, state: dict, projects: list[dict], agents: list[dict], 
         del own["proposals"][key]  # one per item, from before: collapsed below
         changed = True
     for key in list(own["seen"]):
-        if key not in groups:
+        if key not in all_groups:  # a step whose items all wait keeps its debounce
             del own["seen"][key]
             changed = True
     for key in set(by_step) | set(own["proposals"]):
@@ -576,7 +620,8 @@ def _propose(home: Path, state: dict, projects: list[dict], agents: list[dict], 
                      "can decide, ask them now in one line (`tirith wait add`), else decide yourself.")
         row = inbox_mod.add_request(home, inbox_mod.PROPOSAL, cands[0]["project"], cands[0]["step"],
                                     text, at=at, sender="tirith")
-        own["proposals"][key] = {"id": row["id"], "fp": fp, "at": at}
+        own["proposals"][key] = {"id": row["id"], "fp": fp, "at": at,
+                                 "items": {c["key"]: _item_fp(c, agents) for c in cands[:ITEMS_SHOWN]}}
         flows_mod.append_flow(home, "tirith", "manager", "request",
                               f"Autopilot proposes {cands[0]['project']} step {cands[0]['step']}: "
                               f"{len(cands)} item{'s' if len(cands) != 1 else ''}",
@@ -599,7 +644,7 @@ def sitting(home: Path, state: dict, projects: list[dict], agents: list[dict], n
     """Open items nobody works on that the manager was not told about yet, each with ``idle_s`` (how long)."""
     own = _own(state)
     found, _ = candidates([p for p in projects if p.get("roadmap")], agents, queued_lanes(home))
-    groups = _step_groups(found)
+    groups = _step_groups(_unwaited(own, found, agents, now))
     out = []
     for key, cands in groups.items():
         rec = own["proposals"].get(key)
