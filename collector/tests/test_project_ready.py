@@ -31,6 +31,24 @@ def test_project_ready_twice_changes_nothing(home: Path, tmp_path: Path) -> None
     assert len(read_jsonl(home / "waits.jsonl")) == 1
 
 
+def test_roles_default_on_demand_new_project(home: Path, tmp_path: Path) -> None:
+    from tirith import projectready
+    repo = make_repo(tmp_path / "app")
+    pid, folder, _ = projects.add_project(home, repo)
+    projectready.make_ready(home, pid, folder, "app")
+    m = manifest_mod.load(repo)
+    assert m.roles == {"ceo": "on-demand", "manager": "on-demand"} and not m.problems
+
+
+def test_roles_default_on_demand_keeps_existing_setting(home: Path, tmp_path: Path) -> None:
+    from tirith import projectready
+    repo = make_repo(tmp_path / "app")
+    (repo / "tirith.toml").write_text('[roles]\nceo = "always"\nmanager = "off"\n', encoding="utf-8")
+    pid, folder, _ = projects.add_project(home, repo)
+    assert projectready.make_ready(home, pid, folder, "app")["manifest"] is False
+    assert manifest_mod.load(repo).roles == {"ceo": "always", "manager": "off"}
+
+
 def test_project_ready_cli_prints_what_it_did(home: Path, tmp_path: Path, capsys) -> None:
     repo = make_repo(tmp_path / "app")
     assert cli.main(["project", "add", str(repo)]) == 0

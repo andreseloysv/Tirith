@@ -20,7 +20,11 @@ from tirith.home import now_iso
 PLAN_STEP, PLAN_TITLE = "1", "Primeros pasos"
 MINIMAL_TOML = ('# Pipelines and rules of this project. Format: docs/CONTRACT-manifest.md\n'
                 'deploy = "none"\n'
-                'roadmap = "docs/TODO.md"\n')
+                'roadmap = "docs/TODO.md"\n'
+                '\n'
+                '[roles]\n'
+                'ceo = "on-demand"\n'
+                'manager = "on-demand"\n')
 
 
 def guard_item_id(project: str) -> str:
