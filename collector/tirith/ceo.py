@@ -491,7 +491,7 @@ def brief(home: Path, snap: dict, cfg: dict, catch_up: bool) -> str:
         "(a wait on a fact that is no longer true, a wait on an owner nobody asked), the directive says what to do "
         "now. Only a change of a behavior the owner chose, of budget or of targets is a proposal.",
         "## Disk\n`disk_free_gb` is the free space of the volume holding the lanes. Tirith removes old lane folders "
-        "by itself (unmerged work is kept in its branch and under refs/tirith/kept/). When it stays low, find what "
+        "by itself (unmerged work is kept in its branch, uncommitted changes in ~/.tirith/kept/). When it stays low, find what "
         "fills it (lane folders, build output, logs, caches of a project) and get a fix through a plan item; "
         "space outside Tirith's folders is the owner's: one finding that names the biggest folders.",
         "## Procedure\n1. Re-check each open finding with its `check`; fixed ones get change \"fixed\".\n"

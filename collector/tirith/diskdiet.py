@@ -34,7 +34,7 @@ DISK_ITEM = "disk"
 HEADROOM_GB = 3  # cache is cleared when free space is below the limit plus this
 PYTEST_MIN_AGE_S = 3600
 STALE_S = 24 * 3600  # a lane folder nobody touched for this long goes, whatever its branch: the branch stays
-KEPT_REF = "refs/tirith/kept/"  # uncommitted changes of a retired lane folder are saved here first
+KEPT_DIR = "kept"  # <home>/kept/<lane>.patch: uncommitted changes of a retired lane folder, saved first
 TEMP_CLEANUP_ENABLED = True  # the test suite turns it off: no pass touches the real temp folder
 
 
@@ -125,42 +125,44 @@ def _retire_lane(home: Path, config: Config, lane: dict, now: datetime) -> bool:
         return False
     if any(_inside(p.resolve(), workspace.resolve()) for p in busy_folders()):
         return False
-    done = retire(repo, workspace, f"lane/{lane['id']}", lane["id"])
+    done = retire(home, repo, workspace, f"lane/{lane['id']}", lane["id"])
     if done is None:
         return _note(home, lane, "blocked", now, message="could not save its uncommitted changes; left in place")
     _note(home, lane, "retired", now, kept=done or None)
     return True
 
 
-def _keep_changes(folder: Path, name: str) -> str | None:
-    """Save every uncommitted change of ``folder`` (tracked and untracked, not ignored) as a commit under
-    ``refs/tirith/kept/<name>``, leaving the branch and the folder as they are. The ref, "" when clean, None when
-    it could not be saved."""
+def _keep_changes(home: Path, folder: Path, name: str) -> str | None:
+    """Save every uncommitted change of ``folder`` (tracked and untracked, not ignored) as a binary patch
+    ``<home>/kept/<name>.patch`` (``git apply`` it on the lane's branch to get them back), leaving the folder as it
+    is. No commit is made: the guard allows none without hooks. The patch path, "" when clean, None when it could
+    not be saved."""
     if not _git(folder, "status", "--porcelain").stdout.strip():
         return ""
     with tempfile.TemporaryDirectory() as tmp:
-        env = {**os.environ, "GIT_INDEX_FILE": str(Path(tmp) / "index"), "GIT_AUTHOR_NAME": "Tirith",
-               "GIT_AUTHOR_EMAIL": "tirith@localhost", "GIT_COMMITTER_NAME": "Tirith",
-               "GIT_COMMITTER_EMAIL": "tirith@localhost"}
+        env = {**os.environ, "GIT_INDEX_FILE": str(Path(tmp) / "index")}
 
         def git(*args: str) -> subprocess.CompletedProcess:
             return timeouts_mod.run(["git", "-C", str(folder), *args], "git", env=env, text=True)
 
         if git("read-tree", "HEAD").returncode or git("add", "-A").returncode:
             return None
-        tree = git("write-tree")
-        commit = git("commit-tree", tree.stdout.strip(), "-p", "HEAD",
-                     "-m", f"Uncommitted changes of {name}, kept when Tirith removed its folder") if not tree.returncode else tree
-        ref = KEPT_REF + re.sub(r"[^A-Za-z0-9._-]", "-", name)
-        if commit.returncode or git("update-ref", ref, commit.stdout.strip()).returncode:
+        diff = git("diff", "--cached", "--binary", "HEAD")
+        if diff.returncode:
             return None
-        return ref
+    kept = Path(home) / KEPT_DIR / (re.sub(r"[^A-Za-z0-9._-]", "-", name) + ".patch")
+    try:
+        kept.parent.mkdir(parents=True, exist_ok=True)
+        kept.write_text(diff.stdout, encoding="utf-8")
+    except OSError:
+        return None
+    return str(kept)
 
 
-def retire(repo: Path, folder: Path, branch: str, name: str) -> str | None:
-    """Remove a lane folder nobody uses any more, losing nothing: uncommitted changes go to a kept ref first,
-    the branch stays unless it is merged. The kept ref ("" when there was nothing), None when it stays."""
-    kept = _keep_changes(folder, name)
+def retire(home: Path, repo: Path, folder: Path, branch: str, name: str) -> str | None:
+    """Remove a lane folder nobody uses any more, losing nothing: uncommitted changes go to a kept patch first,
+    the branch stays unless it is merged. The patch path ("" when there was nothing), None when it stays."""
+    kept = _keep_changes(home, folder, name)
     if kept is None or _remove_worktree(repo, "--force", str(folder)).returncode != 0:
         return None
     _git(repo, "branch", "-d", branch)  # only goes when merged
@@ -262,7 +264,7 @@ def sweep(home: Path, config: Config, now: datetime, busy: Callable[[], list[Pat
                 if _remove_worktree(repo, str(folder)).returncode != 0:
                     continue
                 _git(repo, "branch", "-d", branch)
-            elif retire(repo, folder, branch, folder.name) is None:
+            elif retire(home, repo, folder, branch, folder.name) is None:
                 continue
             removed += 1
             freed += size
