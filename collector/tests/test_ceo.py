@@ -112,7 +112,7 @@ def write_lane_config(home: Path) -> None:
 def test_off_by_default_then_one_review_per_scheduled_hour(home: Path, started: list) -> None:
     config = load_config(home)
     assert not ceo.run(home, config, local(9, 5)) and started == []  # [ceo] enabled is not set
-    enable(home)
+    enable(home, "hours = [9, 14, 20]")
     assert not ceo.run(home, config, local(8, 59))  # before the first hour
     assert ceo.run(home, config, local(9, 5)) and len(started) == 1
     assert not ceo.run(home, config, local(9, 40))  # same slot
@@ -233,7 +233,7 @@ def red(home: Path, text: str | None) -> None:
 
 
 def test_a_red_self_check_wakes_the_ceo_once(home: Path, started: list) -> None:
-    enable(home)
+    enable(home, "hours = [9, 14, 20]")
     config = load_config(home)
     red(home, "Tests fail on code lane l-1 did not touch.")
     assert ceo.run(home, config, local(11)) and len(started) == 1  # out of schedule
@@ -248,3 +248,62 @@ def test_a_red_self_check_wakes_the_ceo_once(home: Path, started: list) -> None:
     red(home, "Tests fail on code lane l-1 did not touch.")
     ceo.run(home, config, local(12, 30))
     assert len(started) == 2  # it went green and red again
+
+
+def test_the_ceo_picks_when_it_looks_again(home: Path, started: list, monkeypatch) -> None:
+    enable(home)
+    assert not ceo.settings(home)["fixed"]  # no [ceo] hours: its own interval, an hour until it picks one
+    config = load_config(home)
+    n = iter(range(100))
+    monkeypatch.setattr(ceo, "snapshot", lambda home, config, now: {"tick": next(n)})
+    assert ceo.run(home, config, local(1, 0)) and len(started) == 1
+    assert not ceo.run(home, config, local(1, 30))  # running
+    write_lane(home, {"id": "ceo-1", "ended_at": "x", "report": json.dumps({**RESULT, "next_review_min": 15})})
+    ceo.run(home, config, local(1, 40))  # settled: it asked to look again in 15 min
+    assert len(started) == 1 and ceo.public(home, local(1, 40))["every_min"] == 15
+    ceo.run(home, config, local(1, 50))
+    assert len(started) == 1
+    ceo.run(home, config, local(1, 56))
+    assert len(started) == 2
+    assert [ceo.interval(v) for v in (5, 9999, None, "x", 120)] == [10, 480, 60, 60, 120]  # 10 min to 8 h
+    assert "next_review_min" in ceo.brief(home, {"merged_today": 0}, ceo.settings(home), False)
+
+
+def _pipeline(project: str, workflow: str, status: str, at: str) -> dict:
+    return {"run": f"github:o/r:{workflow}#1", "project": project, "pipeline": workflow, "status": status,
+            "source": "github", "started_at": at}
+
+
+def test_the_snapshot_holds_what_the_hourly_check_looks_at(home: Path) -> None:
+    now = local(5)
+    iso = lambda dt: dt.strftime("%Y-%m-%dT%H:%M:%SZ")  # noqa: E731
+    (home / "state.json").write_text(json.dumps({
+        "autopilot": {"open_items": 7},
+        "waiting_on_you": [{"id": "w-1", "project": "other"}],
+        "pipelines": [_pipeline("tirith", "tirith", "failed", "2026-11-04T03:00:00Z"),
+                      _pipeline("tirith", "tirith", "passed", "2026-11-04T02:00:00Z"),
+                      _pipeline("tirith", "pages", "running", "2026-11-04T04:00:00Z")]}))
+    write_lane(home, {"id": "l-1", "project": "tirith", "ended_at": iso(now - timedelta(minutes=90)),
+                      "review": {"status": "merged", "at": iso(now - timedelta(minutes=80))}})
+    (home / "testmon" / "tirith").mkdir(parents=True)
+    (home / "testmon" / "agentsmessenger").mkdir(parents=True)
+    (home / "testmon" / "tirith" / ".testmondata").write_bytes(b"map")
+    proposal = inbox_mod.add_request(home, inbox_mod.PROPOSAL, "tirith", "17", "Autopilot: …", at=iso(now - timedelta(hours=1)),
+                                     sender="tirith")
+    inbox_mod.add_answer(home, proposal["id"], "Autopilot: step 17 → wait: the cleanup waits on the owner's decision.",
+                         at=iso(now - timedelta(minutes=50)))
+    plan = inbox_mod.add_request(home, "plan-refresh", "tirith", "plan", "", at=iso(now - timedelta(hours=1)))
+    inbox_mod.add_answer(home, plan["id"], "Could not start an agent for \"Update the plan\": permanent task IDs must "
+                         "be unique", by="tirith", at=iso(now - timedelta(minutes=40)))
+    snap = ceo.snapshot(home, load_config(home), now)
+    assert snap["open_items"] == 7 and snap["idle_min"] == 90 and snap["last_merge_min"] == 80
+    assert snap["ci_main"] == {"tirith/tirith": "failed"}  # the newest finished run of each workflow
+    assert snap["test_maps"]["tirith"]["present"] and snap["test_maps"]["agentsmessenger"] == {"present": False, "age_h": None}
+    assert snap["launch_failures"]["count"] == 1 and "must be unique" in snap["launch_failures"]["last"][0]
+    assert [w["step"] for w in snap["owner_waits_unasked"]] == ["17"]  # nothing of tirith is on the owner's list
+    later = {**snap, "idle_min": 110, "last_merge_min": 100, "at": "x",
+             "test_maps": {**snap["test_maps"], "tirith": {"present": True, "age_h": 9.9}}}
+    assert ceo.fingerprint(later) == ceo.fingerprint(snap)  # the clock alone is no news
+    assert ceo.fingerprint({**snap, "idle_min": 150}) != ceo.fingerprint(snap)  # a new idle hour is
+    assert "## First: is Tirith working?" in ceo.brief(home, snap, ceo.settings(home), False)
+    assert "needs no owner approval" in ceo.brief(home, snap, ceo.settings(home), False)
