@@ -84,6 +84,26 @@ try {
   await page.waitForFunction(() => document.querySelectorAll('.mc-strip img').length === 2, null, { timeout: 3000 });
   ok('a pasted image adds a thumbnail');
 
+  /* the desktop app on a 2x screen: macOS reports the pointer in LOGICAL pixels (app.log: x up to 1286 in a 1440 window),
+     so a drop on the chat arrives as e.g. (css x, css y), not (css x * 2, css y * 2); both readings must hit the chat */
+  const ctx2 = await browser.newContext({ viewport: { width: 1600, height: 1000 }, deviceScaleFactor: 2 });
+  await ctx2.addInitScript(fake);
+  const p2 = await ctx2.newPage();
+  await p2.goto(page_url + '#state=' + pathToFileURL(file).href);
+  await p2.locator('textarea[data-act="mc-text"]').first().waitFor({ timeout: 3000 });
+  const pt = await p2.locator('.mc-box').first().evaluate(e => { const r = e.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
+  const dropAt = (x, y) => p2.evaluate(([x, y, png]) => window.__tirithDrag({ phase: 'drop', x, y, files: [{ name: 'shot.png', type: 'image/png', size: 70, b64: png }] }), [x, y, PNG]);
+  await p2.evaluate(() => window.__tirithDrag({ phase: 'enter', x: 0, y: 0 }));
+  await p2.evaluate(([x, y]) => window.__tirithDrag({ phase: 'over', x, y }), [pt.x, pt.y]);
+  assert.equal(await p2.locator('.mchat.drop').count(), 1, 'logical pointer position marks the chat');
+  await dropAt(pt.x, pt.y);
+  await p2.locator('.mc-strip img').first().waitFor({ timeout: 3000 });
+  ok('a native drop with the pointer in logical pixels (macOS, 2x) lands on the chat');
+  await p2.waitForTimeout(900);
+  await p2.evaluate(([x, y]) => window.__tirithDrag({ phase: 'drop', x, y, files: [] }), [pt.x * 2, pt.y * 2]);
+  assert.equal(await p2.locator('.mchat.drop').count(), 0);
+  await ctx2.close();
+
   assert.deepEqual(errors, [], 'no page errors');
   await ctx.close();
 } finally {
