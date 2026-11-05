@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -299,6 +300,16 @@ def test_only_a_wait_for_a_slot_or_a_lane_is_asked_again_early(home, repo, answe
     _lane_ends(pilot, "demo-fix-28")
     pilot.cycle()
     assert len([r for r in _proposals(home) if r["step"] == "1"]) == (2 if asked else 1)
+
+
+@pytest.mark.parametrize("waiting, said", [([], True), ([{"id": "w1", "project": "demo"}], False),
+                                            ([{"id": "w2", "project": "other"}], True)])
+def test_a_wait_on_an_owner_who_was_never_asked_says_so(home, repo, waiting, said) -> None:
+    (home / "state.json").write_text(json.dumps({"waiting_on_you": waiting}), encoding="utf-8")
+    pilot = _wait_on_step_1(home, repo, "Autopilot: step 1 → wait: the cleanup waits on the owner's decision.")
+    pilot.cycle(autopilot_mod.ANSWER_EXPIRES_S + 60)
+    again = [r for r in _proposals(home) if r["step"] == "1"]
+    assert len(again) == 2 and ("Nothing of this project is on the owner's list" in again[-1]["text"]) is said
 
 
 def test_a_lane_that_ended_before_the_answer_is_not_what_it_waits_for(home, repo) -> None:
