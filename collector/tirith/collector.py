@@ -1519,6 +1519,7 @@ class Collector:
             "accesses": access_audit_mod.recent(self.home),
             "rules": rules_state,
             "inbox": inbox_rows,
+            "owner_requests": inbox_mod.owner_requests(inbox_rows),
             "says": says,
             "file_refs": filerefs_mod.build(
                 filerefs_mod.chat_texts(inbox_rows, says, waiting + answered_waits), projects),
