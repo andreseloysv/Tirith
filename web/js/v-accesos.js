@@ -147,6 +147,31 @@
     return '<section class="pad extsec"><h2>External <span class="mut">' + lines + (lines === 1 ? ' line' : ' lines') +
       (all.length !== lines ? ' · ' + all.length + ' accesses' : '') + '</span></h2>' + blockList(s) + body + '</section>';
   }
+  /* the environment variable names the agents used (never values): in their commands, or read by the code they
+     wrote; one line per name with the roles that used it, how often and when last */
+  var SECRET = /SECRET|TOKEN|PASSWORD|PASSWD|API_?KEY|PRIVATE|CREDENTIAL|AUTH|_KEY$|^KEY_/i;
+  function envSection(s) {
+    var by = {}, names = [];
+    (s.accesses || []).forEach(function (r) {
+      if (!(r.env || []).length || !inRange(r, f.days) || !matches(r, (r.env || []).join(' '))) return;
+      var a = r.lane ? T.agentById(s, r.lane) : null, who = a && T.agentRole ? T.agentRole(a) + ' · ' + a.name : (r.lane || r.agent || '');
+      r.env.forEach(function (n) {
+        if (!by[n]) { by[n] = { name: n, n: 0, last: r.ts, who: {}, code: false }; names.push(n); }
+        var g = by[n]; g.n++; if (String(r.ts) > String(g.last)) g.last = r.ts; if (who) g.who[who] = 1;
+        if (r.tool !== 'Bash') g.code = true;
+      });
+    });
+    names.sort(function (x, y) { return String(by[y].last).localeCompare(String(by[x].last)); });
+    var body = names.length ? '<table class="mtab ext"><tbody>' + names.map(function (n) {
+      var g = by[n], who = Object.keys(g.who);
+      return '<tr><td class="sm">' + esc(T.clockTime(g.last)) + '</td><td><b>' + esc(n) + '</b>' +
+        (SECRET.test(n) ? ' <span class="chip xk blk">secret</span>' : '') + '</td><td class="sm">' +
+        esc(who.slice(0, 3).join(', ') + (who.length > 3 ? ' +' + (who.length - 3) : '')) + '</td><td class="sm mut">' + g.n +
+        (g.n === 1 ? ' use' : ' uses') + (g.code ? ' · read by code an agent wrote' : '') + '</td></tr>';
+    }).join('') + '</tbody></table>' : '<p class="mut sm">No agent used an environment variable in this period.</p>';
+    return '<section class="pad extsec"><h2>Environment variables <span class="mut">' + names.length + '</span></h2>' +
+      '<p class="mut sm">Names only: the values are never recorded.</p>' + body + '</section>';
+  }
   function view(s, el) {
     var all = s.accesses || [], systems = [['', 'All systems']];
     var seen = {}; all.forEach(function (r) { if (r.system && !seen[r.system]) { seen[r.system] = 1; systems.push([r.system, r.system]); } });
@@ -154,7 +179,7 @@
     /* one scroll area for all of it: the External section above the list once pushed the list out of reach */
     /* only what reached outside the machine: the full list of every agent action was noise to the owner (the
        rows stay in <home>/access for looking things up) */
-    el.innerHTML = tb + '<div class="listwrap" data-scroll="accesos">' + externalSection(s) + '</div>';
+    el.innerHTML = tb + '<div class="listwrap" data-scroll="accesos">' + externalSection(s) + envSection(s) + '</div>';
   }
   T.views.accesos = view;
 

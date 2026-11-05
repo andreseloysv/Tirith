@@ -121,3 +121,14 @@ def test_the_servers_certificate_names_an_unknown_address() -> None:
     rows = [{"tool": "connection", "external": ["https 35.190.46.17:443"]}]
     netwatch.annotate(rows, resolve=lambda d: set(), certs=lambda a: {"domain": "downloads.example.org"})
     assert rows[0]["domain"] == "downloads.example.org"
+
+
+def test_env_names_lists_the_variables_a_call_uses_never_values() -> None:
+    e = access_audit.env_names
+    assert e("Bash", {"command": 'curl -H "Authorization: Bearer $GITHUB_TOKEN" x; echo ${GEMINI_API_KEY:-no} $HOME $1'}) == \
+        ["GITHUB_TOKEN", "GEMINI_API_KEY"]  # the shell's own names and positions are left out
+    assert e("Bash", {"command": "printenv OPENAI_API_KEY; export BUILD_FLAVOR=dev"}) == ["OPENAI_API_KEY", "BUILD_FLAVOR"]
+    code = 'k = os.environ["BRAIN_API_KEY"]\nh = os.getenv("TIRITH_HOME")\nconst t = process.env.SLACK_TOKEN'
+    assert e("Write", {"content": code}) == ["BRAIN_API_KEY", "SLACK_TOKEN"]  # read by code an agent wrote
+    assert e("Read", {"file_path": "x"}) == [] and access_audit.env_secret("SLACK_TOKEN")
+    assert not access_audit.env_secret("BUILD_FLAVOR")

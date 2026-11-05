@@ -143,6 +143,47 @@ def external(tool, tool_input) -> list[str]:
     return out
 
 
+_ENV_PATTERNS = (
+    re.compile(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)"),                                   # $NAME, ${NAME}
+    re.compile(r"\b(?:printenv|unset|export)\s+([A-Za-z_][A-Za-z0-9_]*)"),           # printenv NAME, export NAME=
+    re.compile(r"\benv\b[^|;&]*\|\s*grep\s+(?:-\w+\s+)*['\"]?([A-Za-z_][A-Za-z0-9_]{2,})"),  # env | grep NAME
+    re.compile(r"os\.environ(?:\.get)?\s*[\[(]\s*['\"]([A-Za-z_][A-Za-z0-9_]*)"),  # os.environ["X"], .get("X")
+    re.compile(r"os\.getenv\(\s*['\"]([A-Za-z_][A-Za-z0-9_]*)"),                     # os.getenv("X")
+    re.compile(r"process\.env(?:\.|\[\s*['\"])([A-Za-z_][A-Za-z0-9_]*)"),          # process.env.X, ["X"]
+    re.compile(r"(?:std::)?env::var(?:_os)?\(\s*\"([A-Za-z_][A-Za-z0-9_]*)"),         # Rust env::var("X")
+)
+# the shell's and the system's own names, and Tirith's: noise when the owner asks which variables agents use
+_ENV_IGNORED = {"PATH", "HOME", "PWD", "OLDPWD", "USER", "LOGNAME", "SHELL", "TMPDIR", "TMP", "TEMP", "LANG", "LC_ALL",
+                "TERM", "IFS", "RANDOM", "SECONDS", "LINENO", "PPID", "UID", "EUID", "HOSTNAME", "PS1", "PS2", "COLUMNS",
+                "LINES", "EDITOR", "PAGER", "SHLVL", "OSTYPE", "BASH_SOURCE", "FUNCNAME", "PIPESTATUS", "REPLY", "OPTARG",
+                "OPTIND", "BASHPID", "CI", "VIRTUAL_ENV", "PYTHONPATH", "NODE_ENV", "XDG_CONFIG_HOME", "XDG_CACHE_HOME"}
+_ENV_SECRET = re.compile(r"SECRET|TOKEN|PASSWORD|PASSWD|API_?KEY|PRIVATE|CREDENTIAL|AUTH|_KEY$|^KEY_", re.I)
+
+
+def env_names(tool, tool_input) -> list[str]:
+    """The environment variable names a call uses (never their values): in a command, or read by the code a call
+    writes. Single letters, digits-only positions and the shell's own names are left out."""
+    data = tool_input if isinstance(tool_input, dict) else {}
+    tool = str(tool or "")
+    if tool == "Bash":
+        text = str(data.get("command") or data.get("cmd") or "")
+    elif tool in ("Write", "Edit", "MultiEdit", "NotebookEdit"):
+        text = " ".join(str(data.get(k) or "") for k in ("content", "new_string", "new_source"))
+        text += " ".join(str(e.get("new_string") or "") for e in data.get("edits") or [] if isinstance(e, dict))
+    else:
+        return []
+    out: list[str] = []
+    for pattern in _ENV_PATTERNS:
+        for name in pattern.findall(text):
+            if len(name) > 1 and name not in _ENV_IGNORED and not name.startswith("TIRITH_") and name not in out:
+                out.append(name)
+    return out[:20]
+
+
+def env_secret(name: str) -> bool:
+    return bool(_ENV_SECRET.search(name))
+
+
 def plan_point(home: Path, lane_id) -> str | None:
     """The plan point a lane works on: ``<step>: <item>`` from its lane file, or None."""
     if not lane_id:
@@ -167,6 +208,9 @@ def record(home: Path, event: dict, tool_input=None) -> dict | None:
     reached = external(event["tool"], tool_input)
     if reached:
         row["external"] = reached
+    names = env_names(event["tool"], tool_input)
+    if names:
+        row["env"] = names
     append_jsonl(home / ACCESS_DIR / f"{project}.ndjson", row)
     return row
 
