@@ -364,15 +364,10 @@ def recent_timeouts(home: Path, since_s: float, now=None) -> dict[str, list[dict
 
 def descendants(pid: int) -> list[int]:
     """Every live descendant of ``pid`` (children, grandchildren...), also those that left its process group."""
-    try:
-        listing = subprocess.run(["ps", "-A", "-o", "pid=,ppid="], capture_output=True, text=True, timeout=5).stdout
-    except (OSError, subprocess.SubprocessError):
-        return []
+    from tirith import procs
     children: dict[int, list[int]] = {}
-    for line in listing.splitlines():
-        parts = line.split()
-        if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
-            children.setdefault(int(parts[1]), []).append(int(parts[0]))
+    for proc in procs.snapshot():
+        children.setdefault(proc.ppid, []).append(proc.pid)
     found: list[int] = []
     queue = [pid]
     while queue:
@@ -547,30 +542,13 @@ def run(argv, cls: str = "generic", cwd=None, env=None, *, home: Path | None = N
     return result
 
 
-def _cpu_seconds(text: str) -> float:
-    """``[dd-][hh:]mm:ss[.cc]`` as ps prints CPU time."""
-    days, _, rest = text.partition("-") if "-" in text else ("0", "", text)
-    total = 0.0
-    for part in rest.split(":"):
-        total = total * 60 + float(part)
-    return total + float(days) * 86400
-
-
 def group_cpu(pgid: int) -> float | None:
     """CPU seconds used so far by the live processes of one process group; None when ps cannot say."""
-    try:
-        done = subprocess.run(["ps", "-axo", "pgid=,time="], capture_output=True, text=True, timeout=5)
-    except (OSError, subprocess.SubprocessError):
+    from tirith import procs
+    table = procs.snapshot()
+    if not table or all(p.cpu is None for p in table):
         return None
-    total = 0.0
-    for line in done.stdout.splitlines():
-        fields = line.split()
-        if len(fields) == 2 and fields[0] == str(pgid):
-            try:
-                total += _cpu_seconds(fields[1])
-            except ValueError:
-                pass
-    return total
+    return sum(p.cpu or 0.0 for p in table if p.pgid == pgid)
 
 
 def newest_change(folder: Path, limit: int = SCAN_LIMIT) -> float:
