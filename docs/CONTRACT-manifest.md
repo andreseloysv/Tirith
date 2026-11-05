@@ -97,5 +97,10 @@ Missing table or key = `"always"` (today's behaviour). Any other value, or an un
 problem (`roles-value` / `roles-key`) naming the key. Parsed into `Manifest.roles` and exported as `roles` in
 `state.roadmap`.
 
-TODO: nothing enforces `"off"` / `"on-demand"` yet. The CEO runner (`ceo.py`) and the manager start are decided per
+With `manager = "on-demand"`, `promote.promote_to_manager(mode, task, parallel_items, subagents, diff)` says when a
+worker becomes a manager: the task does not fit in one lane (`plangate.size_problem` / `budget_note`), 2 or more items
+run in parallel, or the task asks for sub-agents. It returns the reason, or `None` to stay a worker; `"always"` and
+`"off"` never promote.
+
+TODO: nothing else enforces `"off"` / `"on-demand"` yet. The CEO runner (`ceo.py`) and the manager start are decided per
 Tirith home (`config.toml`), not per project, so there is no single per-project gate to wire.
