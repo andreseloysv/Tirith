@@ -307,8 +307,18 @@ def ensure_item(home: Path, repo: Path, project: str, step: str, text: str, lane
         found = None if always_new else roadmap_mod.find_item(roadmap_mod.parse(body), step, clean)
         if found is not None:
             return body
-        new = (roadmap_mod.add_sub(body, step, parent, note) if parent else
-               roadmap_mod.edit(body, step, add=note))
+        item_note = note
+        if not roadmap_mod.task_metadata(note).get("id"):
+            # a text-derived id repeats when two items share a text: give the newcomer a fresh permanent id
+            taken = {i.get("id") or roadmap_mod.item_id(i["text"])
+                     for s in roadmap_mod.parse(body) for i in s["items"] if not i.get("metadata_error")}
+            if roadmap_mod.item_id(note) in taken:
+                fresh = "i-" + uuid.uuid4().hex[:8]
+                while fresh in taken:
+                    fresh = "i-" + uuid.uuid4().hex[:8]
+                item_note = roadmap_mod.with_metadata(note, {**roadmap_mod.task_metadata(note), "id": fresh})
+        new = (roadmap_mod.add_sub(body, step, parent, item_note) if parent else
+               roadmap_mod.edit(body, step, add=item_note))
         from tirith import coordination
         try:
             coordination.plan_rows(roadmap_mod.parse(new))
