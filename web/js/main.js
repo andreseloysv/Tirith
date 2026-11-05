@@ -227,14 +227,22 @@
     srcLine();
     if (tauri) {
       /* desktop app: Rust reads ~/.tirith/state.json and pushes it by event; no polling, no files */
+      var heard = Date.now();
       tauri.core.invoke('current_state').then(function (s) { if (s) gotState(s); });
       tauri.event.listen('tirith://state', function (e) {
+        heard = Date.now();
         /* the demo stays until a real project shows up */
         if (demoOn && !(e.payload.projects || []).length) return;
         demoOn = false; gotState(e.payload);
       });
       /* nothing changed but the clock: only the new generated_at arrives, so "updated N s ago" stays right */
-      tauri.event.listen('tirith://alive', function (e) { if (raw) { raw.generated_at = e.payload; srcLine(); } });
+      tauri.event.listen('tirith://alive', function (e) { heard = Date.now(); if (raw) { raw.generated_at = e.payload; srcLine(); } });
+      /* the app pushes every 2 s; 10 s of silence means the push stopped (the page once stayed 25 min on an old
+         state, the owner's message "waiting" though answered): ask for the state instead */
+      setInterval(function () {
+        if (Date.now() - heard < 10000 || demoOn) return;
+        tauri.core.invoke('current_state').then(function (s) { if (s) { heard = Date.now(); gotState(s); } });
+      }, 5000);
     } else {
       load();
       setInterval(load, 2000);
