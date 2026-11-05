@@ -502,3 +502,43 @@ def test_once_a_day_the_ceo_must_question_the_way_of_working(home: Path, monkeyp
     ceo._save_book(home, book)
     assert not ceo.process_due(home, local(20)) and ceo.process_due(home, local(9, 1, day=5))
     assert ceo.public(home, local(10))["process"] == PROCESS
+
+
+def _dirty_plan_setup(home: Path, monkeypatch, dirty: int):
+    from types import SimpleNamespace
+    from tirith import managerd, plangate, projects
+    write_lane_config(home)
+    enable(home)
+    monkeypatch.setattr(ceo, "snapshot", lambda home, config, now: {"merged_today": 0})
+    monkeypatch.setattr(managerd, "_project_for", lambda *a: SimpleNamespace(id="tirith", repo=str(home)))
+    monkeypatch.setattr(projects, "real", lambda r: Path(r))
+    monkeypatch.setattr(managerd, "manager_alias", lambda c: ("x", SimpleNamespace(model=None, effort=None)))
+    monkeypatch.setattr(ceo, "DIRTY_PLAN_POLL_S", 0.0)
+    calls = {"n": 0, "dirty": dirty}
+
+    def ops_item(*a, **k):
+        calls["n"] += 1
+        if calls["n"] <= calls["dirty"]:
+            raise plangate.PlanGateError("docs/TODO.md has uncommitted changes, so it was left as it is")
+        return ("17", "item")
+    monkeypatch.setattr(plangate, "ops_item", ops_item)
+    spawned: list = []
+    return calls, spawned, lambda argv, home, log: spawned.append(argv)
+
+
+def test_dirty_plan_start_retries_and_runs_in_the_same_tick(home: Path, monkeypatch) -> None:
+    calls, spawned, spawn = _dirty_plan_setup(home, monkeypatch, dirty=2)
+    assert ceo.run(home, load_config(home), local(9, 5), spawn=spawn)
+    assert len(spawned) == 1 and calls["n"] == 3
+    assert [r["status"] for r in read_jsonl(home / "ceo" / "runs.jsonl")] == ["started"]
+
+
+def test_dirty_plan_start_that_keeps_failing_leaves_the_slot_due(home: Path, monkeypatch) -> None:
+    calls, spawned, spawn = _dirty_plan_setup(home, monkeypatch, dirty=10 ** 6)
+    monkeypatch.setattr(ceo, "DIRTY_PLAN_WAIT_S", 0.0)
+    config = load_config(home)
+    ceo.run(home, config, local(9, 5), spawn=spawn)
+    assert spawned == [] and not any(r.get("status") == "failed" for r in read_jsonl(home / "ceo" / "runs.jsonl"))
+    calls["dirty"] = 0  # the plan file is clean again: the next tick starts the review of the same slot
+    ceo.run(home, config, local(9, 10), spawn=spawn)
+    assert len(spawned) == 1
