@@ -73,6 +73,15 @@ try {
   assert.equal((await dot(page)).panel, null);
   console.log('ok  red only for a failed fix; Escape closes');
 
+  write({ level: 'green', at: 'x', checks: checks('ok', 'The manager is answering normally.'),
+          fixed: [{ text: 'A manager process stayed open after answering; I closed it.', at: 'x' }] });
+  await page.waitForTimeout(3500);
+  await page.click('#health-btn');
+  d = await dot(page);
+  assert.match(d.panel, /Fixed by Tirith/);
+  assert.match(d.panel, /I closed it\./);
+  console.log('ok  what Tirith fixed alone is listed in the panel');
+
   assert.deepEqual(errors, []);
 } finally {
   await browser.close();
