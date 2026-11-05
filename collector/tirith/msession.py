@@ -44,6 +44,11 @@ CONTEXT_TOKENS = 150000  # context use that triggers /compact
 OPS = ("interrupt", "stop", "restart")
 SAFE_TOOLS = ("Read", "Glob", "Grep", "TodoWrite", "NotebookRead", "LS")
 EDIT_TOOLS = ("Edit", "MultiEdit", "Write", "NotebookEdit")
+# Tools that cannot change anything outside the rules above: approved by code. Any other tool (an MCP tool, a
+# new one) is the owner's to judge: an Allow / Deny question in the chat (``ask_owner``).
+SAFE_TOOLS = ("Read", "Glob", "Grep", "LS", "NotebookRead", "TodoWrite", "Task", "Agent", "WebSearch", "WebFetch",
+              "BashOutput", "KillShell", "Skill", "SlashCommand", "ExitPlanMode", "ToolSearch")
+PERM_PREFIX = "perm-"
 
 
 def manager_dir(home: Path) -> Path:
@@ -251,7 +256,23 @@ def _verdict(config: Config, home: Path, tool: str, data: dict, cwd, project: st
         return ("allow", "") if inside else ("deny", LANE_MESSAGE)
     if tool == "Bash" and _bash_writes(home, data, cwd):
         return "deny", LANE_MESSAGE
+    if tool != "Bash" and tool not in SAFE_TOOLS:
+        return "ask", ""
     return "allow", ""
+
+
+def ask_owner(home: Path, request_id: str, tool: str, data, project: str | None = None) -> str:
+    """Put an Allow / Deny question for one tool call on the owner's list; returns its id (``perm-<request id>``).
+    The reply (an inbox ``reply`` to that id) is read by ``managerd._settle_asks``."""
+    from tirith.livesteps import mask, tool_summary
+    wait_id = PERM_PREFIX + request_id
+    text = f"The manager asks to use **{tool}**: {mask(tool_summary(tool, data))}. Allow it?"
+    append_jsonl(Path(home) / "waits.jsonl", {
+        "id": wait_id, "at": now_iso(), "project": project or "", "text": text, "link": None, "done_at": None,
+        "kind": "approval", "command": None, "why_owner": "owner-decision",
+        "reason_tag": "Needs your decision",
+        "options": [{"label": "Allow", "value": "allow"}, {"label": "Deny", "value": "deny"}]})
+    return wait_id
 
 
 # -- one turn and the session -----------------------------------------------------------------
@@ -535,7 +556,15 @@ class Session:
             verdict, message = self.decide(tool, data)
         except Exception as err:  # a rule that cannot be checked denies
             verdict, message = "deny", f"The rule check failed ({err}); try a simpler command."
-        if verdict == "allow":
+        if verdict == "ask":
+            with self.lock:
+                self.asks[rid] = {"tool": tool, "input": data if isinstance(data, dict) else {},
+                                  "at": now_iso(), "wait": PERM_PREFIX + rid}
+            try:
+                ask_owner(self.home, rid, tool, data)
+            except OSError:
+                self.answer_ask(rid, False)  # a question that cannot be shown is a no
+        elif verdict == "allow":
             self.write(permission_reply(rid, True, data))
         else:
             self.write(permission_reply(rid, False, data, message))

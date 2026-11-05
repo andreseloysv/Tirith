@@ -811,10 +811,20 @@ def _settle_asks(home: Path, book: dict, sess, now: datetime) -> bool:
     for rid in list(book.get("asks", {})):
         book["asks"].pop(rid)
         changed = True
+    live = {a.get("wait") for a in (sess.open_asks() if sess is not None else {}).values()}
     for wait in {r.get("id") for r in read_jsonl(Path(home) / "waits.jsonl")
-                 if str(r.get("id") or "").startswith("perm-")}:
+                 if str(r.get("id") or "").startswith("perm-")} - live:
         _close_wait(home, wait, now)  # a no-op for one already closed
+    replies = {r["wait"]: r for r in inbox_mod.replies(home)}
     for rid, ask in (sess.open_asks() if sess is not None else {}).items():
+        if ask.get("wait"):  # a question for the owner (Allow / Deny buttons): wait for the reply
+            reply = replies.get(ask["wait"])
+            if reply is None:
+                continue
+            sess.answer_ask(rid, reply["value"] == "allow")
+            _close_wait(home, ask["wait"], now)
+            changed = True
+            continue
         try:
             allow = sess.decide(ask["tool"], ask["input"])[0] == "allow"
         except Exception:
