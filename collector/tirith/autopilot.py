@@ -56,6 +56,8 @@ OWNER_STOP_HOLD_S = 6 * 3600.0  # a step whose lane the owner stopped is not pro
 ANSWER_EXPIRES_S = 2 * 3600.0   # an answered proposal whose items still sit with nobody on them is asked again
 ANSWER_QUOTED = 200             # characters of the earlier answer quoted in the new proposal
 ANSWER_EARLY_S = 10 * 60.0      # ... or after this long, once what the answer waited for ended (a lane, its review)
+# an answer that waits on the owner: asked again, it says so when nothing is open for the owner to answer
+WAITS_ON_OWNER = re.compile(r"\b(?:owner|owner's|dueñ[oa])\b", re.I)
 # an answer that waits for a free slot: any lane that ends after it may be what it waited for
 WAITS_FOR_SLOT = re.compile(r"\bslots?\b|\bbusy\b|\blimit\b|\b\d+\s*/\s*\d+\b", re.I)
 
@@ -460,6 +462,13 @@ def _waited_for(last: dict, agents: list[dict], now: datetime) -> str | None:
     return named or (ended[0][2] if ended and WAITS_FOR_SLOT.search(text) else None)
 
 
+def _owner_asked(home: Path, project: str) -> bool:
+    """Whether anything of ``project`` is on the owner's list now (``state.json``'s ``waiting_on_you``)."""
+    state = read_json(home / "state.json", None)
+    rows = state.get("waiting_on_you") if isinstance(state, dict) else None
+    return any(isinstance(w, dict) and str(w.get("project") or "") == project for w in rows or [])
+
+
 def _expired_answer(req: dict | None, now: datetime, agents: list[dict] | None = None) -> dict | None:
     """The manager's last answer to the done proposal ``req`` once it is ``ANSWER_EXPIRES_S`` old, or earlier once
     what it waited for happened (``since`` says what, see :func:`_waited_for`); else None. A proposal closed without an
@@ -561,6 +570,10 @@ def _propose(home: Path, state: dict, projects: list[dict], agents: list[dict], 
         elif earlier is not None:  # closed without a word: the step would never be asked again
             text += (f"\nAsked again: it was asked at {earlier['at']} and closed without an answer; nobody is on "
                      "these items since. Answer what you decide (launch, or wait until when, and why).")
+        if earlier is not None and WAITS_ON_OWNER.search(str(earlier.get("text") or "")) \
+                and not _owner_asked(home, cands[0]["project"]):  # a wait on an owner who was never asked
+            text += ("\nNothing of this project is on the owner's list (no question, no stop): if only the owner "
+                     "can decide, ask them now in one line (`tirith wait add`), else decide yourself.")
         row = inbox_mod.add_request(home, inbox_mod.PROPOSAL, cands[0]["project"], cands[0]["step"],
                                     text, at=at, sender="tirith")
         own["proposals"][key] = {"id": row["id"], "fp": fp, "at": at}
