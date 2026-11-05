@@ -107,6 +107,7 @@ class Config:
     autopilot_max_parallel: int = 4  # [autopilot] max_parallel: autopilot lanes running at once
     review_auto_merge: bool = True  # [review] auto_merge: ignored; a passing lane is always merged
     disk_min_free_gb: float = 5.0  # [disk] min_free_gb: below this free space no new lane is started
+    disk_warn_free_gb: float = 30.0  # [disk] warn_free_gb: below this Tirith clears old lanes and the CEO hears of it
     manager_session_cwd: str | None = None  # [manager] session_cwd: the folder the manager runs in
     manager_session: bool = True  # [manager] session: one persistent session (false: one print-mode turn per batch)
     manager_max_turns: int = 40  # [manager] max_turns: compact, then restart with a handoff after this many turns
@@ -215,6 +216,9 @@ def load_config(home: Path) -> Config:
     min_free = disk.get("min_free_gb", 5.0)
     cfg.disk_min_free_gb = float(min_free) if isinstance(min_free, (int, float)) and not isinstance(min_free, bool) \
         and min_free >= 0 else 5.0
+    warn_free = disk.get("warn_free_gb", 30.0)
+    cfg.disk_warn_free_gb = float(warn_free) if isinstance(warn_free, (int, float)) \
+        and not isinstance(warn_free, bool) and warn_free >= 0 else 30.0
     agents_raw = raw.get("agents") if isinstance(raw.get("agents"), dict) else {}
     cfg.agents = {str(alias): dict(table) for alias, table in agents_raw.items()
                   if isinstance(table, dict)}
