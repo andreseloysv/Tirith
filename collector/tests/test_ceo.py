@@ -326,4 +326,19 @@ def test_a_check_that_stays_amber_wakes_the_ceo_after_code_had_its_chance(home: 
     assert len(started) == 1 and started[0]["snap"]["alarm"] == {"autopilot": "Some plan items have nobody on them."}
     (home / "dispatch.json").write_text(json.dumps({"health": {"checks": {"autopilot": {"level": "ok"}}}}))
     ceo.run(home, config, local(11))
+    assert "autopilot" in json.loads((home / "ceo" / "book.json").read_text())["unwell"]  # ok a moment: still counted
+    ceo.run(home, config, local(11, ceo.UNWELL_FORGET_MIN + 1))
     assert "autopilot" not in json.loads((home / "ceo" / "book.json").read_text()).get("unwell", {})  # healed: forgotten
+
+
+def test_a_check_that_comes_and_goes_still_wakes_the_ceo(home: Path, started: list) -> None:
+    # "Some plan items have nobody on them" turned ok for a moment now and then, and each time the clock restarted
+    enable(home, "hours = [23]")
+    config = load_config(home)
+    path = home / "dispatch.json"
+    amber = json.dumps({"health": {"checks": {"autopilot": {"level": "healing", "text": "Nobody on them."}}}})
+    green = json.dumps({"health": {"checks": {"autopilot": {"level": "ok"}}}})
+    for minute, text in ((0, amber), (8, green), (9, amber), (15, green), (16, amber), (21, amber)):
+        path.write_text(text)
+        ceo.run(home, config, local(10, minute))
+    assert len(started) == 1 and started[0]["snap"]["alarm"] == {"autopilot": "Nobody on them."}
