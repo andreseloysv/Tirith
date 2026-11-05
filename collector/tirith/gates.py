@@ -60,6 +60,7 @@ DESCRIPTIONS: dict[str, str] = {
     "no-servers": "Agents may not start servers or open ports on your computer.",
     "own-processes": "Agents may only stop the processes they started themselves.",
     "ceo-read-only": "The CEO only reads: it changes nothing itself, it sends directives and proposals.",
+    "net-blocked": "Agents may not reach a destination the owner blocked (Accesos page, tirith net block).",
 }
 
 
@@ -637,9 +638,26 @@ def check_call(config: Config, tool: str | None, tool_input, cwd, project: str |
     held to the lane rules of ``tirith.lanegates`` (write only in its copy, no secrets, no servers, own
     processes only)."""
     from tirith import lanegates
-    found = _base_rules(config, tool, tool_input, cwd, project, home)
+    found = _base_rules(config, tool, tool_input, cwd, project, home) + _net_blocked(tool, tool_input, home)
     data = tool_input if isinstance(tool_input, dict) else {}
     return found + lanegates.check(config, tool or "", data, cwd, lane=lane, home=home, env=env)
+
+
+def _net_blocked(tool: str | None, tool_input, home: Path | None) -> list[Violation]:
+    """A call whose destination the owner blocked (``tirith.netblock``)."""
+    from tirith import access_audit, netblock
+    from tirith.home import tirith_home
+    rule_list = netblock.rules(home or tirith_home())
+    if not rule_list:
+        return []
+    for item in access_audit.external(tool, tool_input):
+        dest = str(item).split(" ", 1)[-1]
+        rule = netblock.blocked(rule_list, dest)
+        if rule:
+            return [Violation("net-blocked", f"{dest} is blocked by the owner (rule {rule})",
+                              f"{NO_ALTERNATIVE} to reach it: do the work without {dest}, or tell the owner why "
+                              "you need it in your final report")]
+    return []
 
 
 def _base_rules(config: Config, tool: str | None, tool_input, cwd, project: str | None = None,

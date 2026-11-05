@@ -91,6 +91,22 @@ The owner's first question is what an agent reached outside the machine, so ever
 The «Accesos» page starts with **External**: every such destination, newest first, with its kind (Web, API,
 WebSocket, SSH, Git remote, Packages, Search, MCP, HTTPS…), the agent (role and name) and what caused it.
 
+## Blocking a destination
+
+The owner blocks a destination with **Block** on a line of External (or `tirith net block <domain|ip|cidr>`;
+`tirith net unblock`, `tirith net list`). The page sends a `setup` request with action `net-block` or
+`net-unblock` and match, applied by code in the next dispatcher pass (`tirith/netblock.py`, `<home>/netblock.json`,
+`state.netblock`). A rule `example.com` blocks it and its subdomains (`*.example.com` is the same); an address or
+a CIDR range blocks addresses. Two guards enforce it:
+
+- **Before a call** (rule `net-blocked`, `gates._net_blocked`): a tool call whose destination (`external`) is
+  blocked is refused, for every agent, the owner's own sessions included.
+- **After a connection** (`netwatch`): with rules set the watch looks every 3 s; a lane's process that opened a
+  connection to a blocked destination (by address, reverse name or certificate domain) gets SIGTERM, and the
+  row says `stopped <program>: <dest> is blocked`. The agent program itself (the lane's own process) is never
+  stopped: that would stop the agent; its row says so. Cutting a single connection of a process needs a
+  firewall with root rights, which Tirith does not use.
+
 ## Retention
 
 - Rotation at 16 MB: `access.jsonl` → `access.jsonl.1` → … → `.3`; the oldest is dropped.

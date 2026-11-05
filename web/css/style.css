@@ -1054,3 +1054,4 @@ button.vwho:hover b { text-decoration: underline; }
 .chip.xk.ssh, .chip.xk.tcp { background: #fff7ed; color: #9a3412; }
 .chip.xk.rt { background: #f1f5f9; color: #475569; }
 .chip.xk { white-space: nowrap; }
+.chip.xk.blk { background: #fef2f2; color: #b91c1c; }

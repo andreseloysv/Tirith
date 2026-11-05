@@ -237,11 +237,27 @@ def domain_of(address: str, reverse: str, domains: list[str], resolve: Callable[
     return None
 
 
+BLOCKED_EVERY_S = 3.0  # with blocked destinations the watch looks more often
+
+
+def _kill(pid: int) -> bool:
+    import os
+    import signal
+    try:
+        os.kill(pid, signal.SIGTERM)
+        return True
+    except OSError:
+        return False
+
+
 def sample(home: Path, lanes: list[dict], now: float | None = None, run: Callable[[list[str]], str] = _run,
-           name: Callable[[str], str] = _name, resolve: Callable[[str], set[str]] | None = None) -> list[dict]:
+           name: Callable[[str], str] = _name, resolve: Callable[[str], set[str]] | None = None,
+           kill: Callable[[int], bool] = _kill) -> list[dict]:
     """One pass when ``EVERY_S`` passed: the new connections of the lanes' processes, written to the access log."""
+    from tirith import netblock as netblock_mod
     now = time.time() if now is None else now
-    if now - _last["at"] < EVERY_S:
+    block = netblock_mod.rules(home)
+    if now - _last["at"] < (BLOCKED_EVERY_S if block else EVERY_S):
         return []
     _last["at"] = now
     roots = {}
@@ -264,7 +280,9 @@ def sample(home: Path, lanes: list[dict], now: float | None = None, run: Callabl
         if lane is None:
             continue
         key = f"{lane['id']}|{c['host']}|{c['port']}|{c['program']}"
-        if key in seen:
+        hit = netblock_mod.blocked(block, c["host"], _names.get(c["host"]), *(
+            [_certs[c["host"]].get("domain")] if c["host"] in _certs else [])) if block else None
+        if key in seen and (not hit or c["pid"] in roots):  # a blocked one is stopped each time; the agent's own once
             continue
         seen[key] = now_iso()
         reverse = name(c["host"])
@@ -272,17 +290,24 @@ def sample(home: Path, lanes: list[dict], now: float | None = None, run: Callabl
                            resolve or (lambda d: _addresses(d, now)))
         cert = {} if resolve is not None else cert_domain(home, c["host"], c["port"], wait_s=LOOKUP_BUDGET_S)
         domain = domain or cert.get("domain")
+        hit = hit or (netblock_mod.blocked(block, domain, reverse) if block else None)
         kind = PORTS.get(c["port"], "tcp")
         runtime = c["pid"] in roots  # the agent's own program (its model API, telemetry), not what its work runs
         project = str(lane.get("project") or access_mod.LOOSE)
         where = domain or c["host"]
         program = "the agent" if runtime else c["program"]
+        stopped = bool(hit) and not runtime and kill(c["pid"])
         row = {"ts": now_iso(), "agent": lane.get("agent"), "lane": lane["id"], "runtime": runtime,
                "plan": access_mod.plan_point(home, lane["id"]), "system": "network", "tool": "connection",
                "action": f"{program} connected to {where}:{c['port']}" + (f" ({c['host']})" if domain else ""),
                "external": [f"{kind} {where}:{c['port']}"],
                "domain": domain, "address": c["host"], "reverse": reverse if reverse != c["host"] else None,
                **({"org": cert["org"]} if cert.get("org") else {})}
+        if hit:
+            row["blocked"] = hit
+            row["action"] = (f"stopped {program}: {where}:{c['port']} is blocked (rule {hit})" if stopped else
+                             f"{program} reached blocked {where}:{c['port']} (rule {hit}); "
+                             + ("the agent program itself was not stopped" if runtime else "it could not be stopped"))
         append_jsonl(home / access_mod.ACCESS_DIR / f"{project}.ndjson", row)
         rows.append(row)
     if rows:
