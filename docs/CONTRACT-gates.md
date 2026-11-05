@@ -212,3 +212,7 @@ is kept in `~/.tirith/protect.json` and shown in `state.projects[].setup.protect
 ## Lost guard flag
 
 When the collector's guard check finds a hook's `uchg` flag lost, it appends one line to `~/.tirith/guard-flags.jsonl`: `{kind: "guard-flag-lost", at, repo, hooks, hooks_ctime: {hook: iso}, runs: [{lane, alias, project, pid, testing}]}` (the runs active at that moment). One line per loss: written again only after the flag was seen intact, or when the hooks' ctime moved. Attribute a repeat by matching `hooks_ctime` against the runs.
+
+## Lane leftovers are reaped
+
+When a lane ends (`end_lane`: done, failed, stopped), when a full suite finishes (`tirith run --stage test` without a selection, and the review's full suite) and before a merged lane's worktree is removed, Tirith kills every process whose executable or working folder is under the lane's worktree `Tirith-lanes/<lane>/` (`tirith.reaper`): SIGTERM, then SIGKILL after 3 s for what ignored it. Only worktrees under a `Tirith-lanes` folder are touched, never the main checkout; Tirith's own process and its ancestors are skipped. Check: `cd collector && uv run -q pytest -q tests -k reap_lane_leftovers`.
