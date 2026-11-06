@@ -170,7 +170,13 @@ pub fn install(app: &Shared, project: &Project) -> Result<(), String> {
     for hook in HOOKS {
         let path = dir.join(hook);
         if path.exists() && !ours(&path) {
-            return Err(format!("{} is not Tirith's hook: merge the guard into it by hand", path.display()));
+            // The repository's own hook keeps running after ours, as <hook>.local.
+            let local = dir.join(format!("{hook}.local"));
+            if local.exists() {
+                return Err(format!("{} is not Tirith's hook and {} exists: merge them by hand", path.display(), local.display()));
+            }
+            unlock(&path);
+            std::fs::rename(&path, &local).map_err(|e| format!("{}: {e}", path.display()))?;
         }
     }
     let old_push = dir.join("pre-push");
