@@ -1,13 +1,14 @@
 """Fast tests in a lane: ``tirith run --stage test`` runs only the tests related to the lane's changes.
 
-A lane never runs the full suite (``--full`` and the merge queue do). With an execution map (``tirith.testmap``)
+A lane runs the full suite only with ``--full``, in the merge queue, or when code changed that no test maps to. With an execution map (``tirith.testmap``)
 and only ``collector`` Python files changed, pytest-testmon runs the tests whose recorded code changed. Without
 one, Python modules map to tests by name
 (``tirith/x.py`` -> ``tests/test_x*.py``), the test files the lane changed run themselves, and the import graph
 (a test that imports ``tirith.x``, directly or through another module that imports it) adds tests only while the
 selection stays under ``MOST`` of the suite. A Rust change runs only the crate touched (and the crates that
-depend on it); a web change only the matching ``*.test.mjs``. When nothing maps (shared files, unknown kinds of
-files) no tests run and the merge queue runs the full suite."""
+depend on it); a web change only the matching ``*.test.mjs``. When code changed but nothing maps (shared files, unknown kinds of
+files, a project without a map) the full test stage runs and the pass is recorded in ``selections.jsonl``; docs-only
+changes run nothing."""
 
 from __future__ import annotations
 
@@ -173,6 +174,8 @@ def select(folder: Path, stage: str, files: list[str] | None = None, base: str =
     if not (sel.tests or sel.web or sel.mapped):
         others = [f for f in code if f not in rust]
         sel.reason = f"no tests map to {others[0]}" if others else "only docs or Rust changed"
+        if code:  # code changed but no test maps to it: run the whole stage and record the pass, not "nothing to run"
+            sel.full, sel.reason = True, f"no test is mapped to the changed files ({sel.reason})"
     return sel
 
 
