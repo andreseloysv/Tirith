@@ -30,7 +30,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Manager de guardia: atender el chat
 - [x] Manager de guardia: atender el chat
 - [x] Manager de guardia: atender el chat
-- [ ] CEO: revisar cómo trabaja el manager
+- [ ] CEO: revisar cómo trabaja el manager (en curso: ceo-540d9e68)
 - [ ] Manager de guardia: atender el chat (en curso: manager-c8c716ec)
 - [x] Revisar el plan (2026-11-05 08:38) (hecho: sin cambios) <!-- tirith:{"id":"i-32bf740b"} -->
 - [x] El plan no repite ningún id permanente: Revisar el plan (2026-11-05) sigue dos veces con el id i-2975f07c, así que una recibe un id nuevo (check: `test $(grep -o 'tirith:{"id":"i-[0-9a-f]*"' docs/TODO.md | sort | uniq -d | wc -l) -eq 0`) <!-- tirith:{"id":"i-4d54f8b9","depends_on":[],"writes":[]} -->
