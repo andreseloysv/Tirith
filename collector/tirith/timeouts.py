@@ -397,6 +397,8 @@ def kill_group(proc: subprocess.Popen, grace: float = KILL_GRACE_S) -> None:
         proc.wait(timeout=grace)
     except subprocess.TimeoutExpired:
         pass
+    if os.name == "posix":  # whatever forked or left the group since the first look
+        tree = list(dict.fromkeys([*tree, *descendants(proc.pid)]))
     signal_group(signal.SIGKILL)  # the leader may be gone while a child ignored SIGTERM
 
 
