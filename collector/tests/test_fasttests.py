@@ -169,6 +169,14 @@ def test_the_merge_queue_has_its_own_slot_not_counted_against_lanes(home):
         assert two is None  # the merge slot itself is exclusive
 
 
+def test_a_slot_wait_asks_the_limit_again_on_every_poll(home):
+    limits = iter([1, 1, 2, 2, 2])
+    with loadlimit.slot(home, 1) as held:
+        assert held == 0
+        with loadlimit.slot(home, lambda: next(limits), wait=5.0, poll=0.01) as second:
+            assert second == 1  # the limit rose while it waited: slot 1 is open now
+
+
 def test_a_long_slot_wait_names_the_holder_once(home):
     said = []
     with loadlimit.slot(home, 1) as held:

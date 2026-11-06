@@ -1030,7 +1030,6 @@ def _cmd_run(args) -> int:
     cwd = getattr(args, "stage_cwd", None) or str(Path.cwd().resolve())
     tags = runstage_mod.lane_tags(home, cwd)
     config = load_config(home)
-    allowed, _ = loadlimit_mod.current(config, home)
     lane = tags.get("lane") or (os.environ.get("TIRITH_LANE") or None)
     if args.stage in TEST_STAGES and str(lane or "").startswith(ceo_mod.LANE_PREFIX):
         print(f"tirith: {args.stage}: a CEO lane never runs a test suite", flush=True)
@@ -1038,7 +1037,9 @@ def _cmd_run(args) -> int:
     # the full Python suite (no selection) is one at a time on the machine, taken before a stage slot
     suite = loadlimit_mod.full_suite(home) if args.stage == "test" and not getattr(args, "selected", False) \
         else contextlib.nullcontext()
-    with suite, loadlimit_mod.slot(home, lambda: loadlimit_mod.current(config, home)[0], notice=lambda text: print(f"tirith: {text}", flush=True)):  # concurrent stage runs adapt to load and free disk
+    # concurrent stage runs adapt to load and free disk (asked again on every poll of the wait)
+    with suite, loadlimit_mod.slot(home, lambda: loadlimit_mod.current(config, home)[0],
+                                   notice=lambda text: print(f"tirith: {text}", flush=True)):
         code, _ = runstage_mod.run_stage(
             home, args.project, args.pipeline, args.stage, command, cwd,
             lane=lane, run_id=args.run,
