@@ -10,6 +10,7 @@ and no review result is a ``review-overdue`` violation. See ``docs/CONTRACT-laun
 
 from __future__ import annotations
 
+import glob
 import re
 import subprocess
 from datetime import datetime
@@ -28,6 +29,7 @@ from tirith import planlane as planlane_mod
 from tirith import plangate as plangate_mod
 from tirith import projects as projects_mod
 from tirith import review as review_mod
+from tirith import runstage as runstage_mod
 from tirith import roadmap as roadmap_mod
 from tirith.home import Config, now_iso, parse_iso
 from tirith.store import read_lane
@@ -197,8 +199,9 @@ def update_plan(home: Path, repo: Path, lane: dict) -> str:
 
 
 def _log_hint(home: Path, review: dict, lane_id: str) -> str:
-    run = str(review.get("run") or "").replace("#", "-").replace("/", "-")
-    found = sorted((home / "logs").glob(f"{run}-*.log")) if run else []
+    run = str(review.get("run") or "")
+    prefix = runstage_mod.stage_log_prefix(str(review.get("project") or ""), run) if run else ""
+    found = sorted((home / "logs").glob(f"{glob.escape(prefix)}-*.log")) if run else []
     return str(found[-1] if found else home / "logs" / f"{lane_id}.review.log")
 
 
