@@ -8,7 +8,7 @@
 
 mod sealed;
 
-use crate::app::{now_iso, Shared};
+use crate::app::{bad, now_iso, Shared, R};
 use crate::client::{call, Flag};
 use crate::config::get as cfg_get;
 use crate::{brain, manager};
@@ -153,7 +153,6 @@ pub fn start(app: Shared) {
             }
         };
     }
-    import(&app);
     tokio::spawn(async move {
         loop {
             for p in public_cfg(&app).into_iter().filter(|p| !p.id.is_empty()) {
@@ -169,64 +168,6 @@ pub fn start(app: Shared) {
             tokio::time::sleep(Duration::from_secs(30)).await;
         }
     });
-}
-
-/// Imports the older Tirith's `<home>/rooms/<room>.json` records once (pairings, codes, cursor and brake state
-/// carry over, so a paired phone keeps working and nothing is handled twice). The files stay in place.
-fn import(app: &Shared) {
-    let Ok(dir) = std::fs::read_dir(app.home.join("rooms")) else { return };
-    for path in dir.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "json")) {
-        let Some(v) = std::fs::read_to_string(&path).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()) else { continue };
-        let id = v["id"].as_str().unwrap_or("").to_string();
-        let mark = format!("rooms-imported:{id}");
-        if id.is_empty() || room(&id).is_some() || app.kv(&mark).is_some() {
-            continue;
-        }
-        let s = |v: &Value, k: &str| v[k].as_str().unwrap_or("").to_string();
-        let accepted: Vec<String> = v["accepted"].as_array().into_iter().flatten().map(|a| s(a, "key_id")).collect();
-        let peers = |k: &str, device: bool| -> Vec<Peer> {
-            v[k].as_array().into_iter().flatten().filter(|p| s(p, "key_id").len() == 64).map(|p| Peer {
-                name: s(p, "name"), key_id: s(p, "key_id"), since: s(p, "paired_at"), last_seen: s(p, "last_seen"),
-                accepted: device || accepted.contains(&s(p, "key_id")), ..Default::default()
-            }).collect()
-        };
-        let codes: Vec<String> = v["codes"].as_array().into_iter().flatten().map(|c| s(c, "code")).filter(|c| c.len() == 32).collect();
-        let join_codes: Vec<String> = v["join_codes"].as_array().into_iter().flatten().map(|c| s(c, "code")).filter(|c| c.len() == 32).collect();
-        let invite = s(&v["invite"], "url").split("c=").nth(1).map(|c| c.chars().take(32).collect::<String>()).filter(|c| v["invite"]["used"] != true && codes.contains(c)).unwrap_or_default();
-        let messages = v["messages"].as_array().into_iter().flatten().map(|m| Msg {
-            n: m["n"].as_u64().unwrap_or(0), at: s(m, "at"), from: s(m, "from"), text: s(m, "text"), device: m["from_device"] == true,
-        }).collect();
-        let private = id.starts_with("sealed-");
-        let mut r = Room {
-            id: id.clone(), title: s(&v, "title"), project: s(&v, "project"), messages,
-            kind: if !private { "public".into() } else if v["role"] == "peer" { "peer".into() } else { "manager".into() },
-            me: Some(s(&v["me"], "name")).filter(|n| !n.is_empty()).unwrap_or_else(|| my_name(app)), me_id: s(&v["me"], "key_id"),
-            cursor: v["cursor"].as_u64().or(v["after"].as_u64()), devices: peers("devices", true), managers: peers("managers", false),
-            codes, join_codes, invite, peer_code: s(&v, "peer_code"), streak: v["agent_streak"].as_u64().unwrap_or(0) as u32,
-            braked: v["braked"] == true, roster: v["roster_sig"].as_str().unwrap_or("").to_string(), ..Default::default()
-        };
-        if !private && r.title.is_empty() {
-            r.title = id.clone();
-        }
-        save(app, &r);
-        app.set_kv(&mark, Some(&now_iso()));
-    }
-}
-
-/// Fills in the public keys of phones and managers known only by key id (records imported from the older Tirith).
-async fn learn_keys(app: &Shared, base: &str, r: &Room) -> Result<(), String> {
-    if r.devices.iter().chain(&r.managers).all(|p| !p.public.is_empty()) {
-        return Ok(());
-    }
-    let keys = sealed::keys(base, &r.id, &r.me).await?;
-    update(app, &r.id, |r| {
-        for p in r.devices.iter_mut().chain(r.managers.iter_mut()).filter(|p| p.public.is_empty()) {
-            if let Some((public, _)) = keys.iter().find(|(k, _)| sealed::key_id(k) == p.key_id) {
-                p.public = public.clone();
-            }
-        }
-    });
-    Ok(())
 }
 
 /// Starts the room's task unless it runs already.
@@ -275,13 +216,19 @@ async fn poll(app: &Shared, r: &Room) -> Result<(), String> {
     let base = base(app);
     let me = sealed::identity(&app.home, &r.me)?;
     let platform = sealed::platform(&base).await?;
-    if r.private() {
-        learn_keys(app, &base, r).await?;
-    } else if r.messages.is_empty() && r.cursor.is_some() {
+    if !r.private() && r.messages.is_empty() && r.cursor.is_some() {
         // a public room whose cursor came without its messages (imported): show what is already there, deliver none
         let old = sealed::page(&base, &r.id, None, 0, &me.name).await?;
         let shown = old["messages"].as_array().into_iter().flatten().filter(|m| m["n"].as_u64() <= r.cursor && m["text"].is_string() && sealed::genuine(&m["event"], &platform, &r.id));
-        let shown: Vec<Msg> = shown.map(|m| Msg { n: m["n"].as_u64().unwrap_or(0), at: m["at"].as_str().unwrap_or("").into(), from: sealed::clean(m["from"].as_str().unwrap_or("")), text: m["text"].as_str().unwrap_or("").into(), device: false }).collect();
+        let shown: Vec<Msg> = shown
+            .map(|m| Msg {
+                n: m["n"].as_u64().unwrap_or(0),
+                at: m["at"].as_str().unwrap_or("").into(),
+                from: sealed::clean(m["from"].as_str().unwrap_or("")),
+                text: m["text"].as_str().unwrap_or("").into(),
+                device: false,
+            })
+            .collect();
         update(app, &r.id, |r| r.messages = shown);
     }
     let after = r.cursor.or(if r.private() { Some(0) } else { None });
@@ -514,9 +461,7 @@ fn view(app: &Shared, r: &Room) -> Value {
         .messages
         .iter()
         .enumerate()
-        .filter(|(i, m)| {
-            !speakers.contains(&m.from) && owners(app).iter().any(|o| mentions(&m.text, o)) && !r.messages[i + 1..].iter().any(|l| speakers.contains(&l.from))
-        })
+        .filter(|(i, m)| !speakers.contains(&m.from) && owners(app).iter().any(|o| mentions(&m.text, o)) && !r.messages[i + 1..].iter().any(|l| speakers.contains(&l.from)))
         .map(|(_, m)| m.n)
         .collect();
     let mut people: BTreeMap<&str, (u32, &str)> = BTreeMap::new();
@@ -588,12 +533,6 @@ async fn say(app: &Shared, id: &str, text: &str) -> Result<(), String> {
     let r = update(app, id, |r| (r.streak, r.braked) = (0, false)).and(room(id)).ok_or("no such room")?;
     let me = sealed::identity(&app.home, &r.me)?;
     send(&base(app), &me, &r, text, &r.readers()).await
-}
-
-type R = Result<Json<Value>, (StatusCode, String)>;
-
-fn bad(e: String) -> (StatusCode, String) {
-    (StatusCode::BAD_REQUEST, e)
 }
 
 fn known(id: &str) -> Result<Room, (StatusCode, String)> {

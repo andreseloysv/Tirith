@@ -28,9 +28,12 @@ pub struct Launch {
 }
 
 impl Launch {
-    pub fn command(&self) -> tokio::process::Command {
+    pub fn command(&self, app: &Shared) -> tokio::process::Command {
         let mut c = tokio::process::Command::new(&self.program);
         c.args(&self.args);
+        if !self.env.iter().any(|(k, _)| k == "PATH") {
+            c.env("PATH", app.child_path());
+        }
         for (k, v) in &self.env {
             c.env(k, v);
         }
@@ -98,10 +101,7 @@ pub fn wrap(app: &Shared, who: &str, argv: Vec<String>) -> Launch {
     }
     let (port, user, token) = (proxy_port(app), user(who), token(who));
     let url = format!("http://{user}:{token}@127.0.0.1:{port}");
-    let mut env: Vec<(String, String)> = ["HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY", "https_proxy", "http_proxy", "all_proxy"]
-        .iter()
-        .map(|k| (k.to_string(), url.clone()))
-        .collect();
+    let mut env: Vec<(String, String)> = ["HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY", "https_proxy", "http_proxy", "all_proxy"].iter().map(|k| (k.to_string(), url.clone())).collect();
     for (k, v) in [("NO_PROXY", NO_PROXY), ("no_proxy", NO_PROXY), ("NODE_USE_ENV_PROXY", "1"), ("TIRITH_SANDBOXED", "1")] {
         env.push((k.into(), v.into()));
     }
@@ -208,19 +208,23 @@ fn in_range(ip: IpAddr, (net, bits): (IpAddr, u32)) -> bool {
 pub fn blocked(host: &str) -> Option<String> {
     let host = host.trim().trim_matches(['.', '[', ']']).to_lowercase();
     let ip: Option<IpAddr> = host.parse().ok();
-    BLOCKS.read().unwrap().iter().find(|rule| match (ip, cidr(rule)) {
-        (Some(ip), Some(range)) => in_range(ip, range),
-        (None, None) => host == **rule || host.ends_with(&format!(".{rule}")),
-        _ => false,
-    }).cloned()
+    BLOCKS
+        .read()
+        .unwrap()
+        .iter()
+        .find(|rule| match (ip, cidr(rule)) {
+            (Some(ip), Some(range)) => in_range(ip, range),
+            (None, None) => host == **rule || host.ends_with(&format!(".{rule}")),
+            _ => false,
+        })
+        .cloned()
 }
 
-static HOSTS: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?i)(?:^|[^a-z0-9_.-])((?:[a-z0-9-]+\.)+[a-z0-9-]+|\[[0-9a-f:.]+\])").unwrap());
+static HOSTS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)(?:^|[^a-z0-9_.-])((?:[a-z0-9-]+\.)+[a-z0-9-]+|\[[0-9a-f:.]+\])").unwrap());
 
 /// For agent sessions NOT started by Tirith (the owner's own sessions): the refusal when a tool call names a
 /// blocked destination (a URL or host in a Bash command, a WebFetch url), else `None`.
-pub fn check_command(_app: &Shared, tool: &str, input: &Value) -> Option<String> {
+pub fn check_command(tool: &str, input: &Value) -> Option<String> {
     if BLOCKS.read().unwrap().is_empty() {
         return None;
     }
@@ -229,18 +233,21 @@ pub fn check_command(_app: &Shared, tool: &str, input: &Value) -> Option<String>
         "WebFetch" => input["url"].as_str()?,
         _ => return None,
     };
-    HOSTS.captures_iter(text).find_map(|c| blocked(&c[1]).map(|rule| format!(
-        "{} is blocked by the owner (rule {rule}): Tirith refuses calls to it. Use another source, or ask the \
+    HOSTS.captures_iter(text).find_map(|c| {
+        blocked(&c[1]).map(|rule| {
+            format!(
+                "{} is blocked by the owner (rule {rule}): Tirith refuses calls to it. Use another source, or ask the \
          owner to allow it again (tirith net unblock {rule}, or Desbloquear in the Red section of the page).",
-        &c[1]
-    )))
+                &c[1]
+            )
+        })
+    })
 }
 
 static CRED: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"[^\s'";|&<>]*/\.(?:ssh|aws|gnupg|kube|docker)(?:/[^\s'";|&<>]*)?|[^\s'";|&<>]*\.config/gh(?:/[^\s'";|&<>]*)?|(?:^|[\s/'"=])\.env(?:\.[\w-]+)*\b|[^\s'";|&<>]*\.(?:netrc|git-credentials|npmrc|pypirc)\b|\bsecurity\s+(?:find-[a-z-]+|dump-keychain)\b[^;&|\n]*"#).unwrap()
 });
-static GIT_PUSH: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"\bgit\b[^;&|\n]*?\b(push\b[^;&|\n]*|remote\s+(?:add|set-url)\b[^;&|\n]*)").unwrap());
+static GIT_PUSH: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\bgit\b[^;&|\n]*?\b(push\b[^;&|\n]*|remote\s+(?:add|set-url)\b[^;&|\n]*)").unwrap());
 static GH: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?:^|[;&|(\n]\s*|\bxargs\s+)gh\s+([a-z-]+(?:\s+[a-z-]+)?)").unwrap());
 static ENV: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\$\{?([A-Z][A-Z0-9_]{2,})|\bprintenv\s+([A-Z][A-Z0-9_]{2,})").unwrap());
 const ENV_SKIP: [&str; 8] = ["PATH", "HOME", "USER", "SHELL", "PWD", "TMPDIR", "LANG", "TERM"];
@@ -326,10 +333,13 @@ pub fn routes() -> Router<Shared> {
         Ok(Json(json!({"rule": rule, "blocks": *BLOCKS.read().unwrap()})))
     }
     Router::new()
-        .route("/api/net/status", get(|State(app): State<Shared>| async move {
-            Json(json!({"sandbox": enabled(&app).is_ok(), "why": enabled(&app).err(), "proxy_port": proxy_port(&app),
+        .route(
+            "/api/net/status",
+            get(|State(app): State<Shared>| async move {
+                Json(json!({"sandbox": enabled(&app).is_ok(), "why": enabled(&app).err(), "proxy_port": proxy_port(&app),
                 "proxy": proxy::state(), "blocks": *BLOCKS.read().unwrap()}))
-        }))
+            }),
+        )
         .route(
             "/api/net/blocks",
             get(|| async { Json(json!(*BLOCKS.read().unwrap())) })

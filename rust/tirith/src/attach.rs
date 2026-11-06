@@ -28,7 +28,11 @@ fn sanitize(name: &str) -> String {
     let base = name.rsplit(['/', '\\']).next().unwrap_or("");
     let s: String = base.chars().map(|c| if c.is_alphanumeric() || matches!(c, '.' | '-' | '_') { c } else { '_' }).collect();
     let s: String = s.trim_start_matches('.').chars().take(120).collect();
-    if s.is_empty() { "file".into() } else { s }
+    if s.is_empty() {
+        "file".into()
+    } else {
+        s
+    }
 }
 
 fn content_type(name: &str) -> &'static str {
@@ -71,14 +75,6 @@ async fn fetch(State(app): State<Shared>, Path((id, name)): Path<(String, String
     }
 }
 
-pub fn start(_app: Shared) {}
-
 pub fn routes() -> Router<Shared> {
-    Router::new()
-        .route("/api/attachments", post(upload).layer(DefaultBodyLimit::max(LIMIT)))
-        .route("/api/attachments/{id}/{name}", get(fetch))
-}
-
-pub fn cli(_pos: &[&str], _flag: crate::client::Flag) -> Option<Result<(), String>> {
-    None
+    Router::new().route("/api/attachments", post(upload).layer(DefaultBodyLimit::max(LIMIT))).route("/api/attachments/{id}/{name}", get(fetch))
 }

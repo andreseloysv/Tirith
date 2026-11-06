@@ -115,10 +115,7 @@ fn open_pipeline(app: &Shared, project: &str, kind: &str, lanes: &str, sha: &str
         let db = app.db.lock().unwrap();
         let n: i64 = db.query_row("SELECT COUNT(*) FROM pipelines WHERE project = ?1", [project], |r| r.get(0)).unwrap_or(0);
         let id = format!("{project}-{}", n + 1);
-        let _ = db.execute(
-            "INSERT INTO pipelines (id, project, kind, lanes, sha, status, started_at) VALUES (?1,?2,?3,?4,?5,'running',?6)",
-            params![id, project, kind, lanes, sha, now_iso()],
-        );
+        let _ = db.execute("INSERT INTO pipelines (id, project, kind, lanes, sha, status, started_at) VALUES (?1,?2,?3,?4,?5,'running',?6)", params![id, project, kind, lanes, sha, now_iso()]);
         id
     };
     let p = Pipe { id, project: project.into(), lanes: lanes.into(), sha: sha.into() };
@@ -153,9 +150,7 @@ fn pipeline(app: &Shared, id: &str) -> Value {
 pub fn list(app: &Shared, limit: u32) -> Vec<Value> {
     let ids: Vec<String> = {
         let db = app.db.lock().unwrap();
-        db.prepare(&format!("SELECT id FROM pipelines ORDER BY rowid DESC LIMIT {limit}"))
-            .and_then(|mut q| q.query_map([], |r| r.get(0)).map(|rows| rows.flatten().collect()))
-            .unwrap_or_default()
+        db.prepare(&format!("SELECT id FROM pipelines ORDER BY rowid DESC LIMIT {limit}")).and_then(|mut q| q.query_map([], |r| r.get(0)).map(|rows| rows.flatten().collect())).unwrap_or_default()
     };
     ids.iter().map(|id| pipeline(app, id)).collect()
 }
@@ -176,19 +171,9 @@ async fn run_stage(app: &Shared, pipe: &Pipe, dir: &Path, name: &str, run: &str)
     let file = std::fs::File::create(&log).map_err(|e| e.to_string())?;
     let who = format!("merge:{}", pipe.lanes.split(',').next().filter(|l| !l.is_empty()).unwrap_or("main"));
     let launch = sandbox::wrap(app, &who, vec!["sh".into(), "-c".into(), run.into()]);
-    let mut command = launch.command();
+    let mut command = launch.command(app);
     command.env("CARGO_TARGET_DIR", crate::lanes::shared_target(app, &pipe.project));
-    if !launch.env.iter().any(|(k, _)| k == "PATH") {
-        command.env("PATH", app.child_path());
-    }
-    let mut child = command
-        .current_dir(dir)
-        .stdin(Stdio::null())
-        .stdout(file.try_clone().map_err(|e| e.to_string())?)
-        .stderr(file)
-        .process_group(0)
-        .spawn()
-        .map_err(|e| e.to_string())?;
+    let mut child = command.current_dir(dir).stdin(Stdio::null()).stdout(file.try_clone().map_err(|e| e.to_string())?).stderr(file).process_group(0).spawn().map_err(|e| e.to_string())?;
     let limit = Duration::from_secs(app.cfg().stage_timeout_min * 60);
     let status = match tokio::time::timeout(limit, child.wait()).await {
         Ok(Ok(s)) if s.success() => "passed",
@@ -201,10 +186,7 @@ async fn run_stage(app: &Shared, pipe: &Pipe, dir: &Path, name: &str, run: &str)
             "timeout"
         }
     };
-    let _ = app.db.lock().unwrap().execute(
-        "UPDATE runs SET status = ?1, ended_at = ?2, log = ?3 WHERE id = ?4",
-        params![status, now_iso(), log.display().to_string(), id],
-    );
+    let _ = app.db.lock().unwrap().execute("UPDATE runs SET status = ?1, ended_at = ?2, log = ?3 WHERE id = ?4", params![status, now_iso(), log.display().to_string(), id]);
     row["status"] = json!(status);
     app.emit("run", row);
     app.emit("pipeline", pipeline(app, &pipe.id));
@@ -316,9 +298,7 @@ async fn train(app: &Shared, batch: Vec<Lane>) {
         return close_pipeline(app, &pipe, "failed");
     }
     let changed: Vec<String> = git(&slot, &["diff", "--name-only", &base, "HEAD"]).await.unwrap_or_default().lines().map(String::from).collect();
-    let mut stages: Vec<(String, String)> = if merged.is_empty() { vec![] } else {
-        manifest.stages.iter().filter(|s| wanted(s, &changed)).map(|s| (s.name.clone(), s.run.clone())).collect()
-    };
+    let mut stages: Vec<(String, String)> = if merged.is_empty() { vec![] } else { manifest.stages.iter().filter(|s| wanted(s, &changed)).map(|s| (s.name.clone(), s.run.clone())).collect() };
     stages.extend(merged.iter().filter_map(|l| check(l).map(|c| (format!("check {}", l.id), c))));
     for (name, run) in &stages {
         if let Err(why) = run_stage(app, &pipe, &slot, name, run).await {
@@ -338,7 +318,13 @@ async fn train(app: &Shared, batch: Vec<Lane>) {
                     app.emit("plan", json!({"project": pid}));
                     requeue(app, &[lane], true, "main is red: waits for a green main");
                     if was.is_none() {
-                        manager::notify(app, &format!("main of {pid} is red: check '{name}' fails on main itself ({}). The autopilot pauses {pid} until main is green; fix main or retry the main pipeline.", &base[..8.min(base.len())]));
+                        manager::notify(
+                            app,
+                            &format!(
+                                "main of {pid} is red: check '{name}' fails on main itself ({}). The autopilot pauses {pid} until main is green; fix main or retry the main pipeline.",
+                                &base[..8.min(base.len())]
+                            ),
+                        );
                     }
                     return;
                 }

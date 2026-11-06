@@ -2,7 +2,7 @@
 //! autopilot starts the open items of each project's current plan step when the machine has room; a lane whose
 //! process ends goes to the merge queue, where the checks (never the agent) decide that its item is done.
 
-use crate::app::{add_worktree, alive, git, kill_group, now_iso, now_s, tail, Lane, Shared};
+use crate::app::{add_worktree, alive, git, kill_group, log_age, now_iso, now_s, tail, Lane, Shared};
 use crate::config::Project;
 use crate::{brain, guard, manager, models, plan, sandbox};
 use std::collections::{BTreeMap, HashMap};
@@ -32,9 +32,7 @@ fn slug(text: &str) -> String {
 pub fn start(app: &Shared, project: &str, step: &str, item: &str, agent: Option<String>) -> Result<Lane, String> {
     let item = plan::clean(item);
     if !plan::is_open(app, project, step, &item)? {
-        return Err(format!(
-            "\"{item}\" is not an open item of step {step} of {project}. Add it first: tirith plan add {project} {step} \"<text>\""
-        ));
+        return Err(format!("\"{item}\" is not an open item of step {step} of {project}. Add it first: tirith plan add {project} {step} \"<text>\""));
     }
     if let Some(l) = app.lanes.lock().unwrap().values().find(|l| l.active() && l.project == project && l.step == step && l.item == item) {
         return Err(format!("lane {} already works on that item ({})", l.id, l.status));
@@ -62,7 +60,11 @@ fn load_per_core() -> f64 {
     let mut l = [0f64; 3];
     let n = unsafe { libc::getloadavg(l.as_mut_ptr(), 3) };
     let cores = std::thread::available_parallelism().map(|c| c.get()).unwrap_or(1) as f64;
-    if n > 0 { l[0] / cores } else { 0.0 }
+    if n > 0 {
+        l[0] / cores
+    } else {
+        0.0
+    }
 }
 
 fn free_gb(dir: &Path) -> f64 {
@@ -136,9 +138,7 @@ fn next_item(app: &Shared, lanes: &[Lane], rr: &mut usize, ok: &mut dyn FnMut(&P
             continue;
         }
         let Ok(steps) = plan::read(app, &p.id) else { continue };
-        let latest = |step: &str, item: &str| {
-            lanes.iter().filter(|l| l.project == p.id && l.step == step && l.item == item).max_by(|a, b| a.created_at.cmp(&b.created_at))
-        };
+        let latest = |step: &str, item: &str| lanes.iter().filter(|l| l.project == p.id && l.step == step && l.item == item).max_by(|a, b| a.created_at.cmp(&b.created_at));
         let skipped = |l: Option<&Lane>| l.is_some_and(|l| matches!(l.status.as_str(), "failed" | "stopped"));
         let Some(st) = steps.iter().find(|s| s.items.iter().any(|i| !i.done && !is_role_item(&i.text) && !skipped(latest(&s.num, &i.text)))) else { continue };
         let Some(it) = st.items.iter().find(|i| !i.done && !is_role_item(&i.text) && latest(&st.num, &i.text).is_none_or(|l| !l.active() && !skipped(Some(l)))) else {
@@ -176,10 +176,7 @@ pub async fn scheduler(app: Shared) {
         app.emit("load", serde_json::json!({"load": (load * 100.0).round() / 100.0, "running": running, "max": cfg.max_parallel}));
         for l in lanes.iter().filter(|l| l.pid.is_some()) {
             let tracked = app.children.lock().unwrap().contains(&l.id);
-            let log_idle = std::fs::metadata(app.home.join(format!("logs/lanes/{}.log", l.id)))
-                .and_then(|m| m.modified())
-                .map(|t| t.elapsed().map(|d| d.as_secs()).unwrap_or(0))
-                .unwrap_or(u64::MAX);
+            let log_idle = log_age(&app, &l.id);
             let idle = (now_s().saturating_sub(l.last_activity)).min(log_idle);
             if l.status == "running" && idle > cfg.inactivity_min * 60 {
                 kill_group(l.pid.unwrap_or(0), libc::SIGKILL);
@@ -222,12 +219,7 @@ pub async fn scheduler(app: Shared) {
 async fn take_slot(app: &Shared, project: &Project, lane: &Lane) -> Result<PathBuf, String> {
     let (repo, dir) = (project.repo(), project.lanes_dir());
     let all: Vec<Lane> = app.lanes.lock().unwrap().values().cloned().collect();
-    let mut nums: Vec<u32> = std::fs::read_dir(&dir)
-        .into_iter()
-        .flatten()
-        .flatten()
-        .filter_map(|e| e.file_name().to_str()?.strip_prefix("slot-")?.parse().ok())
-        .collect();
+    let mut nums: Vec<u32> = std::fs::read_dir(&dir).into_iter().flatten().flatten().filter_map(|e| e.file_name().to_str()?.strip_prefix("slot-")?.parse().ok()).collect();
     nums.sort();
     let main = git(&repo, &["rev-parse", "HEAD"]).await?;
     let held = |s: &Path| all.iter().any(|l| l.active() && l.id != lane.id && Path::new(&l.workspace) == s);
@@ -236,7 +228,10 @@ async fn take_slot(app: &Shared, project: &Project, lane: &Lane) -> Result<PathB
             let prev = all.iter().filter(|l| Path::new(&l.workspace) == s).max_by(|a, b| a.created_at.cmp(&b.created_at));
             if let Some(p) = prev.filter(|p| matches!(p.status.as_str(), "stopped" | "failed")) {
                 if !git(&s, &["status", "--porcelain"]).await.unwrap_or_default().is_empty() {
-                    let saved = match git(&s, &["add", "-A"]).await { Ok(_) => git(&s, &["commit", "-qm", "Saved by Tirith"]).await, e => e };
+                    let saved = match git(&s, &["add", "-A"]).await {
+                        Ok(_) => git(&s, &["commit", "-qm", "Saved by Tirith"]).await,
+                        e => e,
+                    };
                     if let Err(e) = saved {
                         app.event(&p.id, &p.project, "error", "slot", &format!("could not save the work left in {}: {e}", s.display()), "");
                     }
@@ -260,16 +255,17 @@ fn brief(app: &Shared, lane: &Lane) -> String {
     let lanes: Vec<Lane> = app.lanes.lock().unwrap().values().filter(|l| l.project == lane.project).cloned().collect();
     let step = steps.iter().find(|s| s.num == lane.step);
     let check = step.and_then(|s| s.items.iter().find(|i| i.text == lane.item)).and_then(|i| i.check.clone());
-    let items: Vec<String> = step.map(|s| &s.items[..]).unwrap_or_default().iter().map(|i| {
-        let l = lanes.iter().filter(|l| l.step == lane.step && l.item == i.text).max_by(|a, b| a.created_at.cmp(&b.created_at));
-        let who = l.filter(|_| !i.done).map(|l| format!("  ({}: {})", l.id, l.status)).unwrap_or_default();
-        format!("- [{}] {}{who}", if i.done { "x" } else { " " }, i.text)
-    }).collect();
-    let others: Vec<String> = lanes
+    let items: Vec<String> = step
+        .map(|s| &s.items[..])
+        .unwrap_or_default()
         .iter()
-        .filter(|l| l.id != lane.id && matches!(l.status.as_str(), "running" | "waiting"))
-        .map(|l| format!("- {} ({}): {}", l.id, l.status, l.item))
+        .map(|i| {
+            let l = lanes.iter().filter(|l| l.step == lane.step && l.item == i.text).max_by(|a, b| a.created_at.cmp(&b.created_at));
+            let who = l.filter(|_| !i.done).map(|l| format!("  ({}: {})", l.id, l.status)).unwrap_or_default();
+            format!("- [{}] {}{who}", if i.done { "x" } else { " " }, i.text)
+        })
         .collect();
+    let others: Vec<String> = lanes.iter().filter(|l| l.id != lane.id && matches!(l.status.as_str(), "running" | "waiting")).map(|l| format!("- {} ({}): {}", l.id, l.status, l.item)).collect();
     let red = app.kv(&format!("main_red:{}", lane.project));
     let rules: Vec<String> = app.cfg().project(&lane.project).map(|p| app.manifest(&p.repo()).rules).unwrap_or_default().iter().map(|r| format!("- {}", r.message)).collect();
     let mut b = format!(
@@ -320,7 +316,7 @@ async fn launch(app: &Shared, mut lane: Lane) -> Result<(), String> {
     }
     let role = models::role(app, "workers");
     let over = (lane.agent != role.agent || lane.model.is_some()).then_some(lane.agent.as_str());
-    let cmd = models::lane_argv(app, &lane.project, over, lane.model.as_deref(), &brief_path, &ws, resume)?;
+    let cmd = models::lane_argv(app, over, lane.model.as_deref(), &brief_path, &ws, resume)?;
     let used = match lane.model.clone().or(if over.is_none() { role.model } else { None }) {
         Some(m) => format!("{}:{m}", cmd.alias),
         None => cmd.alias.clone(),
@@ -329,15 +325,8 @@ async fn launch(app: &Shared, mut lane: Lane) -> Result<(), String> {
         lane.tried.push(used); // the fallback chain skips what this lane already used
     }
     let launch = sandbox::wrap(app, &lane.id, cmd.argv);
-    let log = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(app.home.join(format!("logs/lanes/{}.log", lane.id)))
-        .map_err(|e| e.to_string())?;
-    let mut command = launch.command();
-    if !launch.env.iter().any(|(k, _)| k == "PATH") {
-        command.env("PATH", app.child_path());
-    }
+    let log = std::fs::OpenOptions::new().create(true).append(true).open(app.home.join(format!("logs/lanes/{}.log", lane.id))).map_err(|e| e.to_string())?;
+    let mut command = launch.command(app);
     let mut child = command
         .current_dir(&ws)
         .env("TIRITH_LANE", &lane.id)
@@ -428,7 +417,10 @@ pub fn ask(app: &Shared, id: &str, question: &str) -> Result<Lane, String> {
         l.question = question.trim().into();
         l.resume.clear();
     });
-    manager::notify(app, &format!("lane {id} ({}: {}) asks: {}\nAnswer with: tirith answer {id} \"<answer>\"", lane.as_ref().map_or("", |l| &l.project), lane.as_ref().map_or("", |l| &l.item), question.trim()));
+    manager::notify(
+        app,
+        &format!("lane {id} ({}: {}) asks: {}\nAnswer with: tirith answer {id} \"<answer>\"", lane.as_ref().map_or("", |l| &l.project), lane.as_ref().map_or("", |l| &l.item), question.trim()),
+    );
     lane.ok_or("lane vanished".into())
 }
 
@@ -443,11 +435,7 @@ pub fn answer(app: &Shared, id: &str, text: &str) -> Result<Lane, String> {
         tell(id, &format!("Answer from the manager: {text}"));
     }
     let lane = app.update_lane(id, |l| {
-        l.resume = if l.session.is_empty() {
-            format!("You asked the manager: {}\nAnswer from the manager: {text}", l.question)
-        } else {
-            format!("Answer from the manager: {text}")
-        };
+        l.resume = if l.session.is_empty() { format!("You asked the manager: {}\nAnswer from the manager: {text}", l.question) } else { format!("Answer from the manager: {text}") };
         if !live {
             l.status = "queued".into();
         }

@@ -131,10 +131,7 @@ fn inner_message(author: &str, tag: &str, text: &str) -> String {
 /// The event matches its id, its author's signature and the platform's time stamp.
 pub fn genuine(e: &Value, platform: &str, room: &str) -> bool {
     let s = |k: &str| e[k].as_str().unwrap_or("").to_string();
-    s("tag") == format!("#{room}")
-        && s("id") == event_id(e)
-        && verify(&s("id"), &s("sig"), &s("author"))
-        && verify(&format!("{}:{}", s("id"), e["server_ts"]), &s("server_sig"), platform)
+    s("tag") == format!("#{room}") && s("id") == event_id(e) && verify(&s("id"), &s("sig"), &s("author")) && verify(&format!("{}:{}", s("id"), e["server_ts"]), &s("server_sig"), platform)
 }
 
 /// `text` sealed for `readers` (public keys, hex) and for me.
