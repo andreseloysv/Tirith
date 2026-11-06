@@ -182,3 +182,29 @@ def test_swift_package_builds_under_the_sandbox(home: Path, tmp_path: Path) -> N
     out = subprocess.run(netproxy.argv(home, command, {netproxy.SANDBOXED_ENV: "1"}), cwd=tmp_path,
                          capture_output=True, text=True, timeout=300, env=env)
     assert out.returncode == 0, out.stdout + out.stderr
+
+
+def test_xcodebuild_sandbox_flags_in_a_lane(tmp_path: Path, monkeypatch) -> None:
+    """xcodebuild in a lane stage gets the package sandbox flags, literal or through the PATH shim."""
+    monkeypatch.delenv(netproxy.SANDBOXED_ENV, raising=False)
+    monkeypatch.delenv("TIRITH_LANE", raising=False)
+    flags = list(netproxy.XCODE_FLAGS)
+    lane = {"TIRITH_LANE": "l1"}
+    assert netproxy.xcodebuild(["xcodebuild", "test"], {}) == ["xcodebuild", "test"]  # outside a lane
+    assert netproxy.xcodebuild(["xcodebuild", "test"], lane) == ["xcodebuild", *flags, "test"]
+    assert netproxy.xcodebuild(["xcodebuild", *flags, "test"], lane) == ["xcodebuild", *flags, "test"]
+    assert netproxy.xcodebuild(["echo", "xcodebuild"], lane) == ["echo", "xcodebuild"]
+    assert netproxy.xcodebuild("cd a && xcodebuild test -scheme Z", lane) == \
+        "cd a && xcodebuild " + " ".join(flags) + " test -scheme Z"
+    assert netproxy.xcodebuild("myxcodebuild test", lane) == "myxcodebuild test"
+    real = tmp_path / "real"
+    real.mkdir()
+    (real / "xcodebuild").write_text('#!/bin/sh\necho "$@"\n')
+    (real / "xcodebuild").chmod(0o755)
+    env = {"TIRITH_LANE": "l1", "PATH": f"{real}:/usr/bin:/bin"}
+    netproxy.xcodebuild_shim(tmp_path, env)
+    assert env["PATH"].startswith(str(tmp_path / "shims"))
+    out = subprocess.run(["xcodebuild", "test"], capture_output=True, text=True, env=env).stdout.strip()
+    assert out == " ".join([*flags, "test"])
+    out = subprocess.run(["xcodebuild", *flags, "test"], capture_output=True, text=True, env=env).stdout.strip()
+    assert out == " ".join([*flags, "test"])

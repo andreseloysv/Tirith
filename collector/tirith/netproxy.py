@@ -210,6 +210,52 @@ def swift_shim(home: Path, env: dict) -> None:
         env["PATH"] = str(directory) + os.pathsep + path
 
 
+XCODE_FLAGS = ("-IDEPackageSupportDisableManifestSandbox=YES", "-IDEPackageSupportDisablePluginExecutionSandbox=YES")
+_XCODE_LINE = re.compile(r"(?<![\w./-])(xcodebuild)(?=\s|$)(?![^;&|]*-IDEPackageSupportDisableManifestSandbox)")
+
+
+def xcodebuild(command, env: dict | None = None):
+    """``command`` with the two ``-IDEPackageSupportDisable*Sandbox=YES`` flags after ``xcodebuild`` when it runs
+    inside the lane sandbox: Xcode wraps package manifests and plugins in its own ``sandbox-exec``, which macOS
+    refuses to nest ("sandbox-exec: Operation not permitted"). Any other command is returned as it came."""
+    env = env or {}
+    boxed = "1" in (env.get(SANDBOXED_ENV), os.environ.get(SANDBOXED_ENV))
+    in_lane = bool(env.get("TIRITH_LANE") or os.environ.get("TIRITH_LANE"))
+    if not boxed and not in_lane:
+        return command
+    if isinstance(command, str):
+        return _XCODE_LINE.sub("xcodebuild " + " ".join(XCODE_FLAGS), command)
+    words = [str(w) for w in command]
+    if words and Path(words[0]).name == "xcodebuild" and not any(w.startswith(XCODE_FLAGS[0].split("=")[0]) for w in words):
+        return [command[0], *XCODE_FLAGS, *command[1:]]
+    return command
+
+
+def xcodebuild_shim(home: Path, env: dict) -> None:
+    """Put an ``xcodebuild`` wrapper first on ``env["PATH"]`` for a lane stage, so a script or ``make`` that
+    reaches xcodebuild gets the flags of :func:`xcodebuild` too. No-op outside a lane."""
+    in_lane = env.get("TIRITH_LANE") or os.environ.get("TIRITH_LANE")
+    if not in_lane and "1" not in (env.get(SANDBOXED_ENV), os.environ.get(SANDBOXED_ENV)):
+        return
+    directory = Path(home) / "shims"
+    shim = directory / "xcodebuild"
+    script = ('#!/bin/sh\n'
+              'self="$(cd "$(dirname "$0")" && pwd)"\n'
+              "PATH=$(printf %s \"$PATH\" | tr : '\\n' | grep -vxF \"$self\" | paste -sd: -)\n"
+              'case " $* " in *" -IDEPackageSupportDisableManifestSandbox"*) exec xcodebuild "$@";; esac\n'
+              f'exec xcodebuild {XCODE_FLAGS[0]} {XCODE_FLAGS[1]} "$@"\n')
+    try:
+        if not shim.exists() or shim.read_text() != script:
+            directory.mkdir(parents=True, exist_ok=True)
+            shim.write_text(script)
+            shim.chmod(0o755)
+    except OSError:
+        return
+    path = env.get("PATH") or os.environ.get("PATH", "")
+    if str(directory) not in path.split(os.pathsep):
+        env["PATH"] = str(directory) + os.pathsep + path
+
+
 # -- the proxy -------------------------------------------------------------------------------------
 
 
