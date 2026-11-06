@@ -23,7 +23,7 @@ tirith lane start <project> <step> \"<item text>\"\n  tirith lane stop <lane>\n 
 tirith answer <lane> \"<answer>\"\n  tirith ask-owner --kind credentials|payment|account|device|decision \"<question>\"\n  \
 tirith autopilot on|off <project>\n  tirith room say <room> \"<text>\"\n\
 Messages that start with [tirith] come from Tirith (questions of lanes, merges, failures, a red main, the \
-owner's answers): act on them. A failed or stopped item is skipped by the autopilot until you restart it with \
+owner's answers): act on them, but run tirith status first, because a message can be older than the state. A failed or stopped item is skipped by the autopilot until you restart it with \
 tirith lane start (make the item clearer first if that is why it failed).";
 
 fn user_line(text: &str) -> String {
