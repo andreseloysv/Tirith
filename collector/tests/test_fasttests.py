@@ -158,6 +158,34 @@ def test_slots_are_exclusive(home):
         assert again == 0
 
 
+def test_the_merge_queue_has_its_own_slot_not_counted_against_lanes(home):
+    with loadlimit.slot(home, 1) as lane:  # a lane holds the only lane slot
+        assert lane == 0
+        with loadlimit.slot(home, 1, wait=0.0, poll=0.01, merge=True) as merged:
+            assert merged == -1  # the queue is not behind the lane
+            with loadlimit.slot(home, 1, wait=0.0, poll=0.01) as other:
+                assert other is None  # lanes still wait for their own slots
+    with loadlimit.slot(home, 1, merge=True), loadlimit.slot(home, 1, wait=0.0, poll=0.01, merge=True) as two:
+        assert two is None  # the merge slot itself is exclusive
+
+
+def test_a_slot_wait_asks_the_limit_again_on_every_poll(home):
+    limits = iter([1, 1, 2, 2, 2])
+    with loadlimit.slot(home, 1) as held:
+        assert held == 0
+        with loadlimit.slot(home, lambda: next(limits), wait=5.0, poll=0.01) as second:
+            assert second == 1  # the limit rose while it waited: slot 1 is open now
+
+
+def test_a_long_slot_wait_names_the_holder_once(home):
+    said = []
+    with loadlimit.slot(home, 1) as held:
+        assert held == 0
+        with loadlimit.slot(home, 1, wait=0.2, poll=0.02, notice=said.append, notice_after=0.05):
+            pass
+    assert len(said) == 1 and "slot 0 held by pid" in said[0] and "waiting" in said[0]
+
+
 def test_existing_gate_ids_are_still_present():
     source = Path(gates.__file__).read_text(encoding="utf-8")
     ids = ["agent-cli", "git-hooks", "guard-reinstall", "hooks-path", "no-verify", "raw-stage",

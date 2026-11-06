@@ -327,7 +327,8 @@ def rerun_failed(home: Path, project: str, pipeline: str, stage, tmp: Path, lane
         return None
     for test in tests:
         ok, _ = review_mod.run_tests(home, project, pipeline, f"{stage.name}-rerun", tmp,
-                                     f"{stage.run} -n 0 {shlex.quote(test)}", lane_id, full=False)
+                                     f"{stage.run} -n 0 {shlex.quote(test)}", lane_id, full=False,
+                                     merge=True)
         if not ok:
             return None
     note_flaky(home, project, tests)
@@ -641,7 +642,8 @@ def _run_stages(home: Path, project: str, stages: list, tmp: Path, lane_id: str,
             raise Cancelled(why)
         suite = (manifest_mod.stage_kind(stage) == "test" and stage.name != RUST_STAGE
                  and project != CANARY)  # one full suite at a time; the canary's tiny check never waits for one
-        ok, output = review_mod.run_tests(home, project, pipeline, stage.name, tmp, stage.run, lane_id, full=suite)
+        ok, output = review_mod.run_tests(home, project, pipeline, stage.name, tmp, stage.run, lane_id,
+                                       full=suite, merge=True)
         if not ok and output.startswith(review_mod.DID_NOT_FINISH):  # out of time: nothing to repeat
             return f"{pipeline}/{stage.name}", output, passed, flaky
         if not ok:

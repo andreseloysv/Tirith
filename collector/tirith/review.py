@@ -11,6 +11,8 @@ import contextlib
 import os
 import re
 import subprocess
+import sys
+import time
 from pathlib import Path
 
 from tirith import reaper as reaper_mod
@@ -26,6 +28,7 @@ from tirith.launch import link_node_modules, stage_all, worktree_path
 from tirith.store import lane_path, read_json, write_lane
 
 OUTPUT_MAX = 4000
+MERGE_SLOT_WAIT_S = 600.0  # the merge queue lands finished work: it waits for its own slot this long, then runs anyway
 SLOT_WAIT_S = 3 * 3600.0  # a review waits this long for a free stage slot (a review is never urgent)
 DID_NOT_FINISH = "tests did not finish in"  # starts the output of a suite that was stopped at its time limit
 
@@ -166,12 +169,25 @@ def tests_passed(output: str) -> int | None:
     return int(found[-1]) if found else None
 
 
+def _slot_notice(home: Path, merge: bool, text: str) -> None:
+    """Say once that a stage run is stuck behind a slot holder: in mergeq.log for the queue, else on stderr."""
+    line = f"tirith: {text}"
+    if not merge:
+        print(line, file=sys.stderr, flush=True)
+        return
+    log = home / "logs" / "mergeq.log"
+    log.parent.mkdir(parents=True, exist_ok=True)
+    with log.open("a", encoding="utf-8") as fh:
+        fh.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {line}\n")
+
+
 def run_tests(home: Path, project: str, pipeline: str, stage: str, workspace: Path, command: str,
-              lane_id: str | None = None, run_id: str | None = None, full: bool = True) -> tuple[bool, str]:
+              lane_id: str | None = None, run_id: str | None = None, full: bool = True,
+              merge: bool = False) -> tuple[bool, str]:
     """Run the test stage as a recorded pipeline run (same path as ``tirith run``), tagged with the lane.
 
     ``full``: the command is a whole suite, so it also holds the machine's one full-suite lock. A CEO lane never
-    runs a test suite."""
+    runs a test suite. ``merge``: the merge queue's run, which uses the reserved merge slot (never behind lanes)."""
     if str(lane_id or "").startswith(ceo_mod.LANE_PREFIX):
         return True, "a CEO lane never runs a test suite"
     env = {k: v for k, v in os.environ.items() if k != "TIRITH_LANE"}
@@ -179,10 +195,12 @@ def run_tests(home: Path, project: str, pipeline: str, stage: str, workspace: Pa
     tags = runstage_mod.lane_tags(home, workspace)
     from tirith import loadlimit as loadlimit_mod
     from tirith.home import load_config
-    allowed, _why = loadlimit_mod.current(load_config(home), home)
+    config = load_config(home)
+    allowed = lambda: loadlimit_mod.current(config, home)[0]  # noqa: E731 - asked again on every poll of the wait
     # never more stage runs at once than the load allows, and one full suite at a time (they all slowed down together)
     with loadlimit_mod.full_suite(home) if full else contextlib.nullcontext(), \
-            loadlimit_mod.slot(home, allowed, wait=SLOT_WAIT_S):
+            loadlimit_mod.slot(home, allowed, wait=MERGE_SLOT_WAIT_S if merge else SLOT_WAIT_S, merge=merge,
+                               notice=lambda text: _slot_notice(home, merge, text)):
         code, output = runstage_mod.run_stage(
             home, project, pipeline, stage, command, workspace, lane=lane_id or tags.get("lane"),
             worktree=tags.get("worktree") or str(workspace), branch=tags.get("branch"),
