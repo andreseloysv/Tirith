@@ -867,6 +867,17 @@ def _reopen_item(home: Path, config: Config, lane: dict, result: str, message: s
     return ""
 
 
+def _release_claim(home: Path, lane: dict) -> None:
+    """Free the task the sent-back lane still owns so the lane that fixes it can claim it."""
+    if not lane.get("task_id"):
+        return
+    from tirith import coordination  # late import: keeps module import light
+    try:
+        coordination.update(home, lane, release=True)
+    except coordination.CoordinationError:
+        pass  # already released or owned by a newer attempt: nothing to free
+
+
 def send_back(home: Path, config: Config, lane: dict, result: str, message: str, main: str,
               relaunch: Callable | None = None) -> str:
     """Return the lane to its agent with the conflict or failure; the id of the new lane, else the manager item."""
@@ -883,6 +894,7 @@ def send_back(home: Path, config: Config, lane: dict, result: str, message: str,
     elif _sent_back_count(lane) >= MAX_SENT_BACK:
         why = f" (sent back {MAX_SENT_BACK} times already)"
     else:  # no registered agent (null): the configured worker takes it
+        _release_claim(home, lane)  # else the fix lane is refused: "task already claimed by <this lane>"
         try:
             sent = relaunch(home, lane, alias or None, note)
         except (Exception, SystemExit) as error:
