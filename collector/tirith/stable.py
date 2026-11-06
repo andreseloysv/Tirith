@@ -1,7 +1,7 @@
 """Tirith runs from a stable copy that only advances when the full test passes on the new version.
 
-``<home>/stable/releases/<id>/`` holds copies of the collector (``tirith/``, ``tests/``, ``pyproject.toml``,
-``uv.lock``); ``<home>/stable/current`` points at the one Tirith runs from and ``previous`` at the one before.
+``<home>/stable/releases/<id>/`` holds a repo-shaped copy: ``collector/`` (``tirith/``, ``tests/``, ``pyproject.toml``,
+``uv.lock``, ``state.schema.json``…) plus ``fixtures/``, ``bin/``, ``run``; ``<home>/stable/current`` points at the one Tirith runs from and ``previous`` at the one before.
 :func:`promote` copies the source into a new release, runs the test on that copy and moves ``current`` only when
 it passes; a red test throws the copy away and ``current`` stays. :func:`guard` is fed the health level of every
 dispatcher pass: red for ``RED_S`` right after a promotion (within ``WATCH_S``) puts ``previous`` back by itself.
@@ -26,6 +26,7 @@ RED_S = 120.0      # health must stay red this long (no flapping) before the rel
 KEEP = 3           # releases kept on disk (current and previous always)
 COPY = ("tirith", "tests", "pyproject.toml", "uv.lock", "state.schema.json", "tirith_guard.py", "fixture_js.py",
         "demo.py", "tirith-collector.plist.template", "README.md")
+REPO_COPY = ("fixtures", "bin", "run", "pyproject.toml")
 _IGNORE = shutil.ignore_patterns("__pycache__", "*.pyc", ".pytest_cache", ".venv")
 
 
@@ -64,14 +65,23 @@ def _name(path: Path | None) -> str | None:
     return path.name if path else None
 
 
+def project_dir(release: Path) -> Path:
+    """The collector folder inside a release (where ``pyproject.toml`` and the test run live)."""
+    return release / "collector"
+
+
 def copy_release(source: Path, dest: Path) -> None:
+    """Copy the collector at ``source`` to ``dest/collector`` and the repo-level folders the tests read
+    (``fixtures``, ``bin``, ``run``, root ``pyproject.toml``) next to it, so ``ROOT``-based tests find them."""
     dest.mkdir(parents=True)
-    for entry in COPY:
-        src = source / entry
-        if src.is_dir():
-            shutil.copytree(src, dest / entry, ignore=_IGNORE)
-        elif src.is_file():
-            shutil.copy2(src, dest / entry)
+    for base, target, names in ((source, project_dir(dest), COPY), (source.parent, dest, REPO_COPY)):
+        target.mkdir(exist_ok=True)
+        for entry in names:
+            src = base / entry
+            if src.is_dir():
+                shutil.copytree(src, target / entry, ignore=_IGNORE)
+            elif src.is_file():
+                shutil.copy2(src, target / entry)
 
 
 def _release_id(home: Path, now: datetime | None) -> str:
@@ -178,7 +188,7 @@ def run_command(home: Path) -> str | None:
     """The shell command that runs the collector from ``stable/current`` (None before the first promotion)."""
     import shlex
     cur = current_dir(home)
-    return f"uv run --project {shlex.quote(str(cur))} tirith" if cur is not None else None
+    return f"uv run --project {shlex.quote(str(project_dir(cur)))} tirith" if cur is not None else None
 
 
 def promote_after_merge(home: Path, repo: Path, popen=subprocess.Popen) -> bool:

@@ -23,7 +23,7 @@ def test_stable_advances_only_when_test_passes(home, tmp_path):
     seen = []
     assert stable.promote(home, src, lambda d: seen.append(d) or True, at(0))["promoted"]
     first = stable.current_dir(home)
-    assert first == seen[0].resolve() and (first / "tirith" / "a.py").read_text() == "v = 1\n"
+    assert first == seen[0].resolve() and (first / "collector" / "tirith" / "a.py").read_text() == "v = 1\n"
     _src(tmp_path, "2")
     result = stable.promote(home, src, lambda d: False, at(10))
     assert not result["promoted"]
@@ -91,7 +91,7 @@ def test_run_command_follows_current_and_resolver_uses_it(home, tmp_path):
     assert stable.run_command(home) is None
     stable.promote(home, _src(tmp_path), lambda d: True, at(0))
     cmd = stable.run_command(home)
-    assert cmd == f"uv run --project {stable.current_dir(home)} tirith"
+    assert cmd == f"uv run --project {stable.project_dir(stable.current_dir(home))} tirith"
     assert tirithcmd.resolved(home) == cmd
 
 
@@ -110,6 +110,9 @@ def test_release_copy_includes_schema_and_test_files(home, tmp_path):
     src = _src(tmp_path)
     (src / "state.schema.json").write_text("{}")
     (src / "README.md").write_text("x")
+    (tmp_path / "pyproject.toml").write_text("[project]\n")
     stable.promote(home, src, lambda d: True, at(0))
     cur = stable.current_dir(home)
-    assert (cur / "state.schema.json").is_file() and (cur / "README.md").is_file()
+    coll = cur / "collector"
+    assert (coll / "state.schema.json").is_file() and (coll / "README.md").is_file()
+    assert (coll / "tirith" / "a.py").is_file() and (cur / "pyproject.toml").is_file()

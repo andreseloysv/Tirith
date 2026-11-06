@@ -2059,7 +2059,7 @@ def _cmd_stable(args) -> int:
     source = Path(args.source).resolve() if args.source else Path(__file__).resolve().parent.parent
 
     def test(release: Path) -> bool:
-        return subprocess.run(args.test, shell=True, cwd=release).returncode == 0
+        return subprocess.run(args.test, shell=True, cwd=stable_mod.project_dir(release)).returncode == 0
 
     result = stable_mod.promote(home, source, test)
     print(f"stable: {'now on ' + result['release'] if result['promoted'] else 'kept the current copy'}: {result['reason']}")
