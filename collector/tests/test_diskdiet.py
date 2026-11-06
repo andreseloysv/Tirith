@@ -333,6 +333,7 @@ def test_a_lane_that_ended_a_day_ago_unmerged_and_dirty_is_retired_keeping_its_w
 def test_lane_cleanup_low_disk_removes_every_ended_lane(home: Path, repo: Path) -> None:
     from tirith import mergeq as mergeq_mod
     done, failed, stopped = (lane(home, repo, n, end=False) for n in ("l-done", "l-failed", "l-stopped"))
+    git(repo, "merge", "--no-ff", "-q", "-m", "merge", "lane/l-done")
     for name, result in (("l-done", "done"), ("l-failed", "failed"), ("l-stopped", "stopped")):
         end_lane(home, name, result, "")
     (failed / "wip.txt").write_text("half\n", encoding="utf-8")
@@ -351,6 +352,19 @@ def test_lane_cleanup_low_disk_removes_every_ended_lane(home: Path, repo: Path) 
     assert "wip" in (home / "kept" / "l-failed.patch").read_text(encoding="utf-8")
     assert "lane/l-failed" in git(repo, "branch", "--list")
     assert record(home, "l-done")["cleanup"]["status"] == "retired"
+
+
+def test_lane_cleanup_keeps_done_lane_awaiting_review(home: Path, repo: Path) -> None:
+    from tirith.store import write_lane
+    fresh, failed = lane(home, repo, "l-norev"), lane(home, repo, "l-failrev")
+    rec = record(home, "l-failrev")
+    rec["review"] = {"status": "tests-failed"}
+    write_lane(home, rec)
+    config = load_config(home)
+    diskdiet_mod.free_space(home, config, {}, now(), free=lambda f: 2 * GB)
+    diskdiet_mod.cleanup(home, config, now())
+    diskdiet_mod.sweep(home, config, now(), busy=lambda: [])
+    assert fresh.is_dir() and failed.is_dir()
 
 
 def test_sweep_retires_an_untouched_unmerged_folder_and_keeps_a_recent_one(home: Path, repo: Path, monkeypatch) -> None:
