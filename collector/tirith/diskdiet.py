@@ -337,18 +337,103 @@ def sweep(home: Path, config: Config, now: datetime, busy: Callable[[], list[Pat
                 continue
             removed += 1
             freed += size
+    parked, parked_bytes = _remove_parked(home, config, busy)
+    removed, freed = removed + parked, freed + parked_bytes
     _git_prune = [proj for proj in config.projects if proj.repo]
     for proj in _git_prune:
         _git(projects_mod.real(proj.repo), "worktree", "prune")
     return {"worktrees": removed, "bytes": freed}
 
 
-def clear_build_cache(home: Path, config: Config, running: Callable[[], bool] | None = None) -> int:
-    """Remove the ``incremental`` folders of each project's shared cargo target when no cargo / rustc runs."""
+BUILD_DIRS = ("build", ".gradle")  # regenerable output of a gradle project
+PARKED_DIRS = (".wt", ".wt-salvage")  # worktrees parked inside a project checkout
+
+
+def _gradle_project(folder: Path) -> bool:
+    return any((folder / n).is_file() for n in ("build.gradle", "build.gradle.kts", "settings.gradle",
+                                                "settings.gradle.kts", "gradlew"))
+
+
+def _checkouts(repo: Path) -> list[Path]:
+    """The project checkout plus every linked worktree git lists for it (branch or detached)."""
+    found = [repo]
+    for line in _git(repo, "worktree", "list", "--porcelain").stdout.splitlines():
+        if line.startswith("worktree "):
+            folder = Path(line[9:])
+            if folder.resolve() != repo.resolve() and folder.is_dir():
+                found.append(folder)
+    return found
+
+
+def clear_project_builds(home: Path, config: Config, busy: Callable[[], list[Path]] | None = None) -> int:
+    """Remove ``build/`` and ``.gradle`` of every gradle checkout and worktree of each project (never tracked
+    files, never a folder a process runs in). Returns the bytes freed."""
+    freed, busy_list = 0, None
+    for proj in config.projects:
+        if not proj.repo:
+            continue
+        for folder in _checkouts(projects_mod.real(proj.repo)):
+            if not _gradle_project(folder):
+                continue
+            for name in BUILD_DIRS:
+                target = folder / name
+                if not target.is_dir() or target.is_symlink():
+                    continue
+                if _git(folder, "ls-files", "--", name).stdout.strip():
+                    continue  # tracked: it is source, not output
+                if busy_list is None:
+                    busy_list = [p.resolve() for p in (busy or busy_folders)()]
+                if any(_inside(p, target) or _inside(target, p) for p in busy_list):
+                    continue
+                freed += _tree_size(target)
+                shutil.rmtree(target, ignore_errors=True)
+    return freed
+
+
+def _remove_parked(home: Path, config: Config, busy: Callable[[], list[Path]] | None = None) -> tuple[int, int]:
+    """Remove worktrees under ``<repo>/.wt`` and ``<repo>/.wt-salvage`` whose work is already in the project's
+    branch and that have no uncommitted changes. Unmerged or dirty ones stay. Returns ``(count, bytes)``."""
+    removed = freed = 0
+    busy_list = None
+    for proj in config.projects:
+        if not proj.repo:
+            continue
+        repo = projects_mod.real(proj.repo).resolve()
+        roots = [repo / n for n in PARKED_DIRS]
+        for folder in _checkouts(repo)[1:]:
+            folder = folder.resolve()
+            if not any(_inside(folder, r) and folder != r for r in roots):
+                continue
+            if _git(folder, "status", "--porcelain").stdout.strip():
+                continue
+            tip = _git(folder, "rev-parse", "HEAD").stdout.strip()
+            if not tip or _git(repo, "merge-base", "--is-ancestor", tip, "HEAD").returncode != 0:
+                continue
+            branch = _git(folder, "symbolic-ref", "--short", "-q", "HEAD").stdout.strip()
+            if branch and _git(repo, "merge-base", "--is-ancestor", branch, "HEAD").returncode != 0:
+                continue
+            if busy_list is None:
+                busy_list = [p.resolve() for p in (busy or busy_folders)()]
+            if any(_inside(p, folder) for p in busy_list):
+                continue
+            size = _tree_size(folder)
+            if _remove_worktree(repo, str(folder)).returncode != 0:
+                continue
+            if branch:
+                _git(repo, "branch", "-d", branch)
+            removed += 1
+            freed += size
+    return removed, freed
+
+
+def clear_build_cache(home: Path, config: Config, running: Callable[[], bool] | None = None,
+                      busy: Callable[[], list[Path]] | None = None) -> int:
+    """Remove ``build/`` and ``.gradle`` of gradle projects and, when no cargo / rustc runs, the ``incremental``
+    folders of each project's shared cargo target."""
     from tirith import runstage as runstage_mod
+    freed = clear_project_builds(home, config, busy)
     if (running or (lambda: process_running("cargo", "rustc")))():
-        return 0
-    freed = 0
+        return freed
     for proj in config.projects:
         target = runstage_mod.cargo_target_dir(home, proj.id, proj.repo or ".") if proj.repo else None
         if target is None or not Path(target).is_dir():
@@ -553,11 +638,11 @@ def _free_space(home: Path, config: Config, state: dict, now: datetime, *,
         return False  # no project, no lanes folder: nothing of Tirith's to clean or to report
     if not background:
         return _report(home, state, now, before, sweep(home, config, now, busy),
-                       clear_build_cache(home, config, running), biggest)
+                       clear_build_cache(home, config, running, busy), biggest)
 
     def work() -> None:
         try:
-            swept, cache = sweep(home, config, now, busy), clear_build_cache(home, config, running)
+            swept, cache = sweep(home, config, now, busy), clear_build_cache(home, config, running, busy)
             entry["result"] = (before, swept, cache)
         except Exception as exc:  # a background pass never takes the collector down
             append_log(home, f"Freeing disk failed: {exc}")
