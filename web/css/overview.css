@@ -1,1 +1,33 @@
 /* overview: styles of this area that css/style.css (the old page) does not have. */
+/* status card: the metrics as one line of dots, the CEO line with its review */
+.stcard.ok { border-left-color: #22c55e; }
+.stcard .stms { display: flex; flex-wrap: wrap; align-items: baseline; }
+.stcard .stms .stk { flex: none; }
+.stmlist { flex: 1 1 240px; min-width: 0; }
+.stm { display: inline-block; margin-right: 16px; }
+.stm .dot { vertical-align: 2px; margin-right: 5px; } .stm b { font-weight: 600; } .stm b.bad { color: var(--red); }
+.stceo { display: flex; flex-wrap: wrap; align-items: center; gap: 0 8px; min-width: 0; }
+.stceo .stk { flex: none; }
+.ovrev { flex: 1; min-width: 0; font-size: 13px; } .ovrev > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ovrev[aria-expanded="true"] svg { transform: none; }
+.ovnow { flex: none; margin-left: auto; } .ovnow:disabled { opacity: .6; cursor: default; }
+.ovlive { flex: 1 1 auto; min-width: 0; display: inline-flex; align-items: center; gap: 7px; color: var(--blue); }
+.ovrevbody { margin: 4px 0 6px 80px; padding: 8px 12px; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; max-height: 320px; overflow: auto; }
+.ovinl { margin: 4px 0 0; }
+/* plan: done steps keep their (green) bar, as on the old Overview */
+.ovmain .ptog, .ovmain .pstep.done .ptog { grid-template-columns: 18px minmax(0, 1fr) clamp(40px, 22%, 110px) 38px; }
+.ovmain .pitems .pit { flex: 1 1 auto; min-width: 6em; }
+@media (max-width: 640px) { .ovmain .ptog, .ovmain .pstep.done .ptog { grid-template-columns: 18px minmax(0, 1fr) 38px; } }
+.ovplan + .ovplan { margin-top: 4px; }
+.ovred { margin: 0 0 8px; }
+.pitems .pstate { display: inline-block; margin: 0; flex: 0 1 auto; min-width: 0; }
+.pchk code { font-size: 11px; color: var(--mut); }
+.pchk { flex: 0 1 auto; min-width: 0; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pitems li.pediting { display: flex; }
+/* needs you */
+.ovsend { flex: none; margin-left: 8px; } .ovsend:disabled, .nbtn:disabled { opacity: .55; cursor: default; }
+/* setup */
+.ovinst { margin-left: 8px; }
+/* running pipelines and agent cards are links to their views */
+.ovpipe { cursor: pointer; }
+@media (max-width: 640px) { .ovrevbody { margin-left: 0; } .stceo { flex-wrap: wrap; } }
