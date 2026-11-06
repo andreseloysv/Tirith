@@ -169,6 +169,19 @@ def test_merged_and_pushed(work, home: Path, tmp_path: Path) -> None:
     assert cc.verify(home, lane, repo, report="Pushed to origin.").ok
 
 
+def test_claim_merged_into_lane_branch_is_no_main_claim(work, home: Path) -> None:
+    repo = work
+    lane_dir = launch_mod.create_worktree(repo, "feat2")
+    (lane_dir / "f.txt").write_text("x\n", encoding="utf-8")
+    git(lane_dir, "add", "-A")
+    git(lane_dir, "commit", "-qm", "f")
+    lane = lane_of(lane_dir, id="feat2", start_commit=git(repo, "rev-parse", "HEAD").strip())
+    for report in ("Merged main into the lane branch.", "I merged lane X into this branch.",
+                   "Merged origin/main into my branch; conflicts resolved."):
+        assert cc.verify(home, lane, repo, report=report).ok, report
+    assert "merged" in bad(cc.verify(home, lane, repo, report="Merged to main."))
+
+
 # -- screenshots ---------------------------------------------------------------------------------
 
 
