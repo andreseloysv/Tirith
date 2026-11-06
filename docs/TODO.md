@@ -796,6 +796,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
   - [x] Revisar: CEO: la alarma se recuerda por nombre de check y no por su texto con cifras, así que pasar de 15.5 a 15.4 GB libres no relanza al CEO antes de ALARM_REPEAT_MIN (check: `cd collector && uv run -q pytest -q tests/test_ceo.py -k 'alarm and figures'`)
 - [x] CEO: no arranca una revisión por una alarma con los mismos checks y texto que la última revisión terminada que mandó directiva por ella, hasta 20 min después de esa revisión o hasta que cambie el texto (hoy 3 runs seguidos por la alarma de disco) (check: `cd collector && uv run -q pytest -q tests -k 'ceo and same_alarm_no_rerun'`) <!-- tirith:{"id":"i-e17a03de","depends_on":[],"writes":[]} -->
   - [x] Revisar: CEO: no arranca una revisión por una alarma con los mismos checks y texto que la última revisión terminada que mandó directiva por ella, hasta 20 min después de esa revisión o hasta que cambie el texto (hoy 3 runs seguidos por la alarma de disco) (check: `cd collector && uv run -q pytest -q tests -k 'ceo and same_alarm_no_rerun'`)
+- [ ] Revisar los items abiertos del paso 17 cuyo check usa `cd collector` (eliminado en 43b855b9): tachar los obsoletos con nota y reescribir los que siguen vigentes para el daemon Rust con un check cargo test (check: `! grep -n "^- \[ \].*cd collector" docs/TODO.md`)
 
 ## 18. Salas privadas: hablar con el manager desde el móvil
 
