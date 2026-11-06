@@ -51,6 +51,7 @@ class Stage:
     name: str
     run: str | None
     kind: str | None
+    paths: list[str] = field(default_factory=list)  # globs from the repo root; the stage runs only when a changed file matches
 
 
 @dataclass
@@ -166,8 +167,44 @@ def _read_stages(manifest: Manifest, row: dict, stage_lines: list[int], pipe_id:
                      f'set kind = "{KINDS[0]}" (or test / deploy), or remove the kind line')
             kind = None
         run = item.get("run")
-        stages.append(Stage(name, str(run) if run is not None else None, kind))
+        paths = item.get("paths", [])
+        if not isinstance(paths, list) or not all(isinstance(g, str) and g.strip() for g in paths):
+            _problem(manifest, line, "stage-paths",
+                     f"stage '{name}' has paths that are not a list of non-empty strings",
+                     'set paths = ["src/**", "!**/*.md"] (globs from the repo root), or remove the paths line')
+            paths = []
+        stages.append(Stage(name, str(run) if run is not None else None, kind, [g.strip() for g in paths]))
     return stages
+
+
+def _glob_regex(glob: str) -> "re.Pattern[str]":
+    out, i = "", 0
+    while i < len(glob):
+        if glob.startswith("**/", i):
+            out, i = out + "(?:.*/)?", i + 3
+        elif glob.startswith("**", i):
+            out, i = out + ".*", i + 2
+        elif glob[i] == "*":
+            out, i = out + "[^/]*", i + 1
+        elif glob[i] == "?":
+            out, i = out + "[^/]", i + 1
+        else:
+            out, i = out + re.escape(glob[i]), i + 1
+    return re.compile(out + r"\Z")
+
+
+def path_matches(globs: list[str], path: str) -> bool:
+    """Whether ``path`` (relative to the repo root) is selected by a stage's ``paths``: it matches a glob and no
+    ``!glob``; with only ``!`` globs every other file is selected."""
+    positive = [g for g in globs if not g.startswith("!")]
+    if any(_glob_regex(g[1:].strip()).match(path) for g in globs if g.startswith("!")):
+        return False
+    return not positive or any(_glob_regex(g).match(path) for g in positive)
+
+
+def stage_needed(stage: "Stage", changed: list[str]) -> bool:
+    """A stage with ``paths`` runs when the diff is unknown (empty) or a changed file matches; without ``paths`` always."""
+    return not stage.paths or not changed or any(path_matches(stage.paths, f) for f in changed)
 
 
 def parse_text(text: str, path: Path) -> Manifest:

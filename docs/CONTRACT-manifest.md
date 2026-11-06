@@ -24,6 +24,23 @@ run = "make lint"
 Stage kind: the explicit `kind`, else recognised from the stage name (`build`/`compile` → build,
 `test`/`check`/`lint` → test, `deploy`/`release`/`publish`/`ship` → deploy).
 
+Stage `paths` (optional, list of non-empty strings): globs relative to the repo root (`*` inside a folder, `**`
+across folders, `?` one character; a leading `!` excludes, and a list of only `!` globs means every other file). A stage
+with `paths` runs in the merge queue only when a file the lane changed matches (in a merge train: any file changed by
+any lane of the train); otherwise it is skipped with the usual note `skipped <stage>: nothing it tests changed`.
+`tirith run --stage <name> --changed` (and any run inside a lane worktree) does the same with the lane's changed files
+and just says it was skipped. An unknown or empty diff runs everything. A stage without `paths` keeps the built-in
+rules: docs-only diffs skip test stages, and `rust-test` runs only when `app/src-tauri/` or `Cargo.*` changed.
+Validated by `tirith check` as `stage-paths`.
+
+```toml
+[[pipelines.stages]]
+name = "android"
+kind = "test"
+run = "cd android && ./gradlew test"
+paths = ["android/**", "gradle/**", "!**/*.md"]
+```
+
 Pipelines from an `include` file do not gate merges: the merge queue and the lane review skip them.
 They still run on demand with `tirith run --stage <name>` and show up like any other pipeline.
 
@@ -79,7 +96,7 @@ Exit 0 when all rules pass, 1 otherwise. One line per problem, written for agent
 | Rule | Meaning |
 |---|---|
 | `manifest-missing`, `toml-syntax` | `tirith.toml` exists and parses |
-| `pipeline-id`, `pipeline-duplicate`, `pipeline-stages`, `stage-name`, `stage-duplicate`, `stage-kind` | shape of pipelines and stages |
+| `pipeline-id`, `pipeline-duplicate`, `pipeline-stages`, `stage-name`, `stage-duplicate`, `stage-kind`, `stage-paths` | shape of pipelines and stages |
 | `pipeline-coverage` | one gating pipeline (not one from an `include` file) declares build, test and deploy (deploy waived by `deploy = "none"`) |
 | `hook-event`, `hook-run` | every `[[hooks]]` entry is valid |
 | `rule-id`, `rule-duplicate`, `rule-match`, `rule-regex`, `rule-paths`, `rule-action`, `rule-message`, `rule-instead`, `rule-shape` | every `[[rules]]` entry is valid (see `CONTRACT-setup.md`) |
