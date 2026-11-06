@@ -348,13 +348,18 @@ def table(home: Path, config: Config, now=None) -> list[dict]:
 
 
 def recent_timeouts(home: Path, since_s: float, now=None) -> dict[str, list[dict]]:
-    """class -> the timeouts recorded within the last ``since_s`` seconds."""
+    """class -> the timeouts recorded within the last ``since_s`` seconds, leaving out those from before the
+    class's latest limit raise (``set.at``): the limit was fixed since, so they no longer count."""
     from datetime import datetime, timezone
     now = now or datetime.now(timezone.utc)
+    book = _book(home)
     found: dict[str, list[dict]] = {}
-    for cls, vals in _book(home)["timeouts"].items():
+    for cls, vals in book["timeouts"].items():
+        raised = [parse_iso(row.get("at")) for slot in (cls, base_class(cls))
+                  if isinstance(row := book["set"].get(slot), dict)]
+        raised_at = max((r for r in raised if r), default=None)
         keep = [t for t in vals if isinstance(t, dict) and (when := parse_iso(t.get("at")))
-                and (now - when).total_seconds() <= since_s]
+                and (now - when).total_seconds() <= since_s and (raised_at is None or when > raised_at)]
         if keep:
             found[cls] = keep
     return found

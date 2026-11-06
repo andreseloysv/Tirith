@@ -135,4 +135,4 @@ default, min, max, reason?, samples, last}`. Settings > Timeouts shows them in p
 owner fixes a value in `config.toml`).
 
 Self-check `timeouts`: 3 timeouts of one class within an hour put one manager queue item (kind `selfcheck`) with
-the commands and times as evidence; the check is red until the timeouts age out.
+the commands and times as evidence; the check is red until the timeouts age out or the class's limit is raised (`set.at` in `timeouts.json`): timeouts from before the latest raise are ignored.
