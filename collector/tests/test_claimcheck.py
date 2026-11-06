@@ -345,3 +345,15 @@ def test_claim_partial_run_is_flagged_by_the_command() -> None:
     assert is_partial("(cd collector && uv run -q pytest -q -k claim_partial_run)")
     assert is_partial(["uv", "run", "pytest", "tests/test_claimcheck.py"])
     assert not is_partial("cd collector && uv run -q pytest -q tests")
+
+
+def test_claim_nonpython_ts_spec_and_swift_tests_count(work, home: Path) -> None:
+    (work / "web").mkdir()
+    (work / "web" / "a.test.ts").write_text(
+        "describe('x', () => {\n  it('one', () => {});\n  test.skip('two', () => {});\n});\n", encoding="utf-8")
+    (work / "web" / "b.spec.js").write_text("test('one', () => {});\n", encoding="utf-8")
+    (work / "AppTests.swift").write_text(
+        "final class AppTests {\n    func testLaunch() {}\n    func helper() {}\n}\n", encoding="utf-8")
+    (work / "util.ts").write_text("it('not a test file', () => {});\n", encoding="utf-8")
+    assert cc.verify(home, lane_of(work), report="Added 4 tests").ok
+    assert not cc.verify(home, lane_of(work), report="Added 5 tests").ok
