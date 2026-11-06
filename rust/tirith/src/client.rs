@@ -22,17 +22,18 @@ pub fn call_with(method: &str, path: &str, body: String, headers: &[(&str, Strin
     let mut s = TcpStream::connect_timeout(&addr, Duration::from_secs(2)).map_err(|_| "tirith is not running: start it with `tirith serve`".to_string())?;
     s.set_read_timeout(Some(timeout)).ok();
     let extra: String = headers.iter().map(|(k, v)| format!("{k}: {v}\r\n")).collect();
-    let req = format!(
-        "{method} {path} HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: {}\r\n{extra}Connection: close\r\n\r\n{body}",
-        body.len()
-    );
+    let req = format!("{method} {path} HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: {}\r\n{extra}Connection: close\r\n\r\n{body}", body.len());
     s.write_all(req.as_bytes()).map_err(|e| e.to_string())?;
     let mut raw = Vec::new();
     s.read_to_end(&mut raw).map_err(|e| e.to_string())?;
     let raw = String::from_utf8_lossy(&raw);
     let (head, body) = raw.split_once("\r\n\r\n").unwrap_or((&raw, ""));
     let code: u16 = head.split_whitespace().nth(1).and_then(|c| c.parse().ok()).unwrap_or(0);
-    if (200..300).contains(&code) { Ok(body.to_string()) } else { Err(body.trim().to_string()) }
+    if (200..300).contains(&code) {
+        Ok(body.to_string())
+    } else {
+        Err(body.trim().to_string())
+    }
 }
 
 /// Prints a lane-shaped answer as one line, anything else as "ok".

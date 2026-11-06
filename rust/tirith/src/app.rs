@@ -75,6 +75,11 @@ pub fn bad(e: String) -> (axum::http::StatusCode, String) {
     (axum::http::StatusCode::BAD_REQUEST, e)
 }
 
+/// Seconds since the lane's log last changed (`u64::MAX` without a log).
+pub fn log_age(app: &Shared, id: &str) -> u64 {
+    std::fs::metadata(app.home.join(format!("logs/lanes/{id}.log"))).and_then(|m| m.modified()).map(|t| t.elapsed().map(|d| d.as_secs()).unwrap_or(0)).unwrap_or(u64::MAX)
+}
+
 pub fn now_iso() -> String {
     chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string()
 }
@@ -110,7 +115,8 @@ impl App {
         )
         .expect("create tables");
         for col in ["pipeline", "sha"] {
-            let _ = db.execute(&format!("ALTER TABLE runs ADD COLUMN {col} TEXT"), []); // fails once it exists
+            let _ = db.execute(&format!("ALTER TABLE runs ADD COLUMN {col} TEXT"), []);
+            // fails once it exists
         }
         let mut lanes = BTreeMap::new();
         {
@@ -177,10 +183,7 @@ impl App {
 
     pub fn save_lane(&self, lane: &Lane) {
         let data = serde_json::to_string(lane).unwrap_or_default();
-        let _ = self.db.lock().unwrap().execute(
-            "INSERT INTO lanes (id, data) VALUES (?1, ?2) ON CONFLICT(id) DO UPDATE SET data = ?2",
-            params![lane.id, data],
-        );
+        let _ = self.db.lock().unwrap().execute("INSERT INTO lanes (id, data) VALUES (?1, ?2) ON CONFLICT(id) DO UPDATE SET data = ?2", params![lane.id, data]);
         self.lanes.lock().unwrap().insert(lane.id.clone(), lane.clone());
         self.emit("lane", json!(lane));
     }
@@ -196,28 +199,17 @@ impl App {
     /// The working lane whose worktree holds `cwd`.
     pub fn lane_for_cwd(&self, cwd: &str) -> Option<Lane> {
         let cwd = Path::new(cwd);
-        self.lanes
-            .lock()
-            .unwrap()
-            .values()
-            .find(|l| matches!(l.status.as_str(), "running" | "waiting") && !l.workspace.is_empty() && cwd.starts_with(&l.workspace))
-            .cloned()
+        self.lanes.lock().unwrap().values().find(|l| matches!(l.status.as_str(), "running" | "waiting") && !l.workspace.is_empty() && cwd.starts_with(&l.workspace)).cloned()
     }
 
     pub fn event(&self, lane: &str, project: &str, kind: &str, tool: &str, summary: &str, session: &str) {
         let at = now_iso();
         let id = {
             let db = self.db.lock().unwrap();
-            let _ = db.execute(
-                "INSERT INTO events (at, lane, project, kind, tool, summary, session) VALUES (?1,?2,?3,?4,?5,?6,?7)",
-                params![at, lane, project, kind, tool, summary, session],
-            );
+            let _ = db.execute("INSERT INTO events (at, lane, project, kind, tool, summary, session) VALUES (?1,?2,?3,?4,?5,?6,?7)", params![at, lane, project, kind, tool, summary, session]);
             db.last_insert_rowid()
         };
-        self.emit(
-            "event",
-            json!({"id": id, "at": at, "lane": lane, "project": project, "kind": kind, "tool": tool, "summary": summary}),
-        );
+        self.emit("event", json!({"id": id, "at": at, "lane": lane, "project": project, "kind": kind, "tool": tool, "summary": summary}));
     }
 
     pub fn chat(&self, role: &str, text: &str) {
@@ -251,11 +243,14 @@ impl App {
             let mut obj = serde_json::Map::new();
             for (i, c) in cols.iter().enumerate() {
                 let v: rusqlite::types::Value = r.get(i)?;
-                obj.insert(c.to_string(), match v {
-                    rusqlite::types::Value::Integer(n) => json!(n),
-                    rusqlite::types::Value::Text(s) => json!(s),
-                    _ => Value::Null,
-                });
+                obj.insert(
+                    c.to_string(),
+                    match v {
+                        rusqlite::types::Value::Integer(n) => json!(n),
+                        rusqlite::types::Value::Text(s) => json!(s),
+                        _ => Value::Null,
+                    },
+                );
             }
             Ok(Value::Object(obj))
         });
@@ -266,10 +261,7 @@ impl App {
 
     /// Keeps the event table bounded: the newest 50 000 rows.
     pub fn trim(&self) {
-        let _ = self.db.lock().unwrap().execute(
-            "DELETE FROM events WHERE id < (SELECT COALESCE(MAX(id), 0) - 50000 FROM events)",
-            [],
-        );
+        let _ = self.db.lock().unwrap().execute("DELETE FROM events WHERE id < (SELECT COALESCE(MAX(id), 0) - 50000 FROM events)", []);
     }
 
     /// PATH for agents and checks: this binary's folder first, so `tirith` is this daemon's client.
@@ -285,14 +277,7 @@ impl App {
 
 /// `git -C dir args…`: stdout on success, the error text otherwise.
 pub async fn git(dir: &Path, args: &[&str]) -> Result<String, String> {
-    let out = tokio::process::Command::new("git")
-        .arg("-C")
-        .arg(dir)
-        .args(args)
-        .stdin(std::process::Stdio::null())
-        .output()
-        .await
-        .map_err(|e| e.to_string())?;
+    let out = tokio::process::Command::new("git").arg("-C").arg(dir).args(args).stdin(std::process::Stdio::null()).output().await.map_err(|e| e.to_string())?;
     let text = |b: &[u8]| String::from_utf8_lossy(b).trim().to_string();
     if out.status.success() {
         Ok(text(&out.stdout))

@@ -6,7 +6,7 @@
 //! session whose answer goes to the owner's chat and to the manager. Back to green ends the episode.
 //! While everything is green no model is called.
 
-use crate::app::{kill_group, now_iso, now_s, tail, Lane, Shared};
+use crate::app::{kill_group, log_age, now_iso, now_s, tail, Lane, Shared};
 use crate::{config, manager, models, plan, sandbox};
 use axum::extract::State;
 use axum::http::StatusCode;
@@ -107,27 +107,43 @@ fn compute(app: &Shared) -> Vec<Metric> {
     let mut out = vec![];
 
     let target = t("merged_per_day", 10.0);
-    out.push(Metric { id: "merged", label: "En main (24 h)", value: merged.len() as f64, target: Some(target), at_least: true,
+    out.push(Metric {
+        id: "merged",
+        label: "En main (24 h)",
+        value: merged.len() as f64,
+        target: Some(target),
+        at_least: true,
         red: work && (merged.len() as f64) < target,
-        facts: format!("merged in 24 h: [{}]; open items in autopilot projects: [{open_txt}]", ids(&merged)) });
+        facts: format!("merged in 24 h: [{}]; open items in autopilot projects: [{open_txt}]", ids(&merged)),
+    });
 
-    let mut mins: Vec<(f64, &str)> = merged
-        .iter()
-        .filter_map(|l| Some(((merged_at(l)? - secs(&l.created_at)?) as f64 / 60.0, l.id.as_str())))
-        .collect();
+    let mut mins: Vec<(f64, &str)> = merged.iter().filter_map(|l| Some(((merged_at(l)? - secs(&l.created_at)?) as f64 / 60.0, l.id.as_str()))).collect();
     mins.sort_by(|a, b| a.0.total_cmp(&b.0));
     let median = if mins.is_empty() { 0.0 } else { (mins[(mins.len() - 1) / 2].0 + mins[mins.len() / 2].0) / 2.0 };
     let target = t("median_merge_minutes", 120.0);
-    out.push(Metric { id: "median", label: "Mediana lanzar→main (min)", value: median.round(), target: Some(target), at_least: false,
+    out.push(Metric {
+        id: "median",
+        label: "Mediana lanzar→main (min)",
+        value: median.round(),
+        target: Some(target),
+        at_least: false,
         red: !mins.is_empty() && median > target,
-        facts: mins.iter().rev().take(8).map(|(m, id)| format!("{id} {m:.0} min")).collect::<Vec<_>>().join(", ") });
+        facts: mins.iter().rev().take(8).map(|(m, id)| format!("{id} {m:.0} min")).collect::<Vec<_>>().join(", "),
+    });
 
     let first: Vec<&Lane> = merged.iter().filter(|l| l.attempts == 0).copied().collect();
     let pct = if merged.is_empty() { 100.0 } else { (100 * first.len() / merged.len()) as f64 };
     let retried: Vec<&Lane> = merged.iter().filter(|l| l.attempts > 0).copied().collect();
     let target = t("first_try_pct", 50.0);
-    out.push(Metric { id: "first_try", label: "A la primera (%)", value: pct, target: Some(target), at_least: true,
-        red: !merged.is_empty() && pct < target, facts: format!("merged after being sent back: [{}]", ids(&retried)) });
+    out.push(Metric {
+        id: "first_try",
+        label: "A la primera (%)",
+        value: pct,
+        target: Some(target),
+        at_least: true,
+        red: !merged.is_empty() && pct < target,
+        facts: format!("merged after being sent back: [{}]", ids(&retried)),
+    });
 
     // Idle: a project with open items, autopilot on and nothing queued, running or merging.
     let mut idle = vec![];
@@ -145,44 +161,39 @@ fn compute(app: &Shared) -> Vec<Metric> {
     }
     let worst = idle.iter().map(|i| i.2).max().unwrap_or(0) as f64;
     let target = t("idle_minutes", 10.0);
-    out.push(Metric { id: "idle", label: "Parado con trabajo (min)", value: worst, target: Some(target), at_least: false,
+    out.push(Metric {
+        id: "idle",
+        label: "Parado con trabajo (min)",
+        value: worst,
+        target: Some(target),
+        at_least: false,
         red: worst > target,
-        facts: idle.iter().map(|(p, n, m)| format!("{p}: {n} open items, nothing running for {m} min")).collect::<Vec<_>>().join("; ") });
+        facts: idle.iter().map(|(p, n, m)| format!("{p}: {n} open items, nothing running for {m} min")).collect::<Vec<_>>().join("; "),
+    });
 
     let half = cfg.inactivity_min * 30;
     let stuck: Vec<String> = lanes
         .iter()
         .filter(|l| l.status == "running")
         .filter_map(|l| {
-            let log = std::fs::metadata(app.home.join(format!("logs/lanes/{}.log", l.id)))
-                .and_then(|m| m.modified())
-                .map(|t| t.elapsed().map(|d| d.as_secs()).unwrap_or(0))
-                .unwrap_or(u64::MAX);
+            let log = log_age(app, &l.id);
             let quiet = (now as u64).saturating_sub(l.last_activity).min(log);
             (quiet > half).then(|| format!("{} ({}) quiet {} min", l.id, l.project, quiet / 60))
         })
         .collect();
     let target = t("stuck", 0.0);
-    out.push(Metric { id: "stuck", label: "Lanes atascadas", value: stuck.len() as f64, target: Some(target), at_least: false,
-        red: stuck.len() as f64 > target, facts: stuck.join("; ") });
+    out.push(Metric { id: "stuck", label: "Lanes atascadas", value: stuck.len() as f64, target: Some(target), at_least: false, red: stuck.len() as f64 > target, facts: stuck.join("; ") });
 
-    let red: Vec<String> =
-        cfg.projects.iter().filter_map(|p| flag(app, &format!("main_red:{}", p.id)).map(|v| format!("{}: {v}", p.id))).collect();
+    let red: Vec<String> = cfg.projects.iter().filter_map(|p| flag(app, &format!("main_red:{}", p.id)).map(|v| format!("{}: {v}", p.id))).collect();
     let target = t("main_red", 0.0);
-    out.push(Metric { id: "main_red", label: "Main en rojo", value: red.len() as f64, target: Some(target), at_least: false,
-        red: red.len() as f64 > target, facts: red.join("; ") });
+    out.push(Metric { id: "main_red", label: "Main en rojo", value: red.len() as f64, target: Some(target), at_least: false, red: red.len() as f64 > target, facts: red.join("; ") });
 
-    let failed: Vec<String> = lanes
-        .iter()
-        .filter(|l| l.status == "failed" && l.ended_at.as_deref().and_then(secs).is_some_and(|e| e >= day))
-        .map(|l| format!("{}: {}", l.id, l.note.lines().next().unwrap_or("")))
-        .collect();
-    out.push(Metric { id: "failed", label: "Fallidas (24 h)", value: failed.len() as f64, target: None, at_least: false, red: false,
-        facts: failed.join("; ") });
+    let failed: Vec<String> =
+        lanes.iter().filter(|l| l.status == "failed" && l.ended_at.as_deref().and_then(secs).is_some_and(|e| e >= day)).map(|l| format!("{}: {}", l.id, l.note.lines().next().unwrap_or(""))).collect();
+    out.push(Metric { id: "failed", label: "Fallidas (24 h)", value: failed.len() as f64, target: None, at_least: false, red: false, facts: failed.join("; ") });
 
     let qs = owner_questions(app);
-    out.push(Metric { id: "owner", label: "Preguntas al dueño", value: qs.len() as f64, target: None, at_least: false, red: false,
-        facts: qs.join("; ") });
+    out.push(Metric { id: "owner", label: "Preguntas al dueño", value: qs.len() as f64, target: None, at_least: false, red: false, facts: qs.join("; ") });
     out
 }
 
@@ -245,11 +256,7 @@ fn tick(app: &Shared) {
 
 fn reviews_today(app: &Shared) -> u64 {
     let day = iso(now_s().saturating_sub(86400));
-    app.db
-        .lock()
-        .unwrap()
-        .query_row("SELECT COUNT(*) FROM ceo_reviews WHERE at >= ?1 AND metric != 'owner'", [day], |r| r.get(0))
-        .unwrap_or(0)
+    app.db.lock().unwrap().query_row("SELECT COUNT(*) FROM ceo_reviews WHERE at >= ?1 AND metric != 'owner'", [day], |r| r.get(0)).unwrap_or(0)
 }
 
 fn payload(app: &Shared, metrics: Vec<Value>) -> Value {
@@ -266,10 +273,7 @@ fn start_review(app: &Shared, metric: String, why: String) -> bool {
         app.emit("ceo", json!({"running": true}));
         let result = review(&app, &why).await;
         let text = result.clone().unwrap_or_else(|e| format!("(the CEO review could not run: {e})"));
-        let _ = app.db.lock().unwrap().execute(
-            "INSERT INTO ceo_reviews (at, metric, text) VALUES (?1, ?2, ?3)",
-            rusqlite::params![now_iso(), metric, text],
-        );
+        let _ = app.db.lock().unwrap().execute("INSERT INTO ceo_reviews (at, metric, text) VALUES (?1, ?2, ?3)", rusqlite::params![now_iso(), metric, text]);
         app.chat("ceo", &text);
         if result.is_ok() {
             manager::tell(&app, &format!("CEO review: {text}"));
@@ -295,9 +299,7 @@ fn brief(app: &Shared, why: &str) -> String {
     let day = iso(now_s().saturating_sub(86400));
     let runs: Vec<(String, String, String, String)> = {
         let db = app.db.lock().unwrap();
-        let q = db.prepare(
-            "SELECT lane, stage, status, COALESCE(log, '') FROM runs WHERE status IN ('failed', 'timeout') AND started_at >= ?1 ORDER BY id DESC LIMIT 5",
-        );
+        let q = db.prepare("SELECT lane, stage, status, COALESCE(log, '') FROM runs WHERE status IN ('failed', 'timeout') AND started_at >= ?1 ORDER BY id DESC LIMIT 5");
         q.and_then(|mut q| q.query_map([&day], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?.collect()).unwrap_or_default()
     };
     for (lane, stage, status, log) in &runs {
@@ -328,10 +330,7 @@ async fn review(app: &Shared, why: &str) -> Result<String, String> {
     let dir = app.home.join("ceo");
     let _ = std::fs::create_dir_all(&dir);
     let log = std::fs::OpenOptions::new().create(true).append(true).open(app.home.join("logs/ceo.log")).map_err(|e| e.to_string())?;
-    let mut command = launch.command();
-    if !launch.env.iter().any(|(k, _)| k == "PATH") {
-        command.env("PATH", app.child_path());
-    }
+    let mut command = launch.command(app);
     let mut child = command
         .current_dir(&dir)
         .env("TIRITH_ROLE", "ceo")
