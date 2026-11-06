@@ -157,7 +157,3 @@ pub fn routes() -> Router<Shared> {
         .route("/api/brain/ask", post(ask_route))
         .route("/api/brain/architecture/{project}", get(arch_route))
 }
-
-pub fn cli(_pos: &[&str], _flag: crate::client::Flag) -> Option<Result<(), String>> {
-    None
-}

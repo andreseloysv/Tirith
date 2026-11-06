@@ -420,7 +420,3 @@ async fn review_now(State(app): State<Shared>) -> Result<Json<Value>, (StatusCod
 pub fn routes() -> Router<Shared> {
     Router::new().route("/api/metrics", get(metrics)).route("/api/ceo/review", post(review_now))
 }
-
-pub fn cli(_pos: &[&str], _flag: crate::client::Flag) -> Option<Result<(), String>> {
-    None
-}

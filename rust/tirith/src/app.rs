@@ -69,6 +69,12 @@ pub struct App {
     cfg_mtime: Mutex<Option<SystemTime>>,
 }
 
+pub type R = Result<axum::Json<Value>, (axum::http::StatusCode, String)>;
+
+pub fn bad(e: String) -> (axum::http::StatusCode, String) {
+    (axum::http::StatusCode::BAD_REQUEST, e)
+}
+
 pub fn now_iso() -> String {
     chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string()
 }

@@ -1,6 +1,6 @@
 //! HTTP on 127.0.0.1: the page, its JSON API, the change stream (SSE) and the agents' hooks.
 
-use crate::app::{now_s, tail, Shared};
+use crate::app::{bad, now_s, tail, Shared, R};
 use crate::{attach, brain, guard, lanes, manager, merge, metrics, models, plan, rooms, rules, sandbox};
 use axum::body::Bytes;
 use axum::extract::{Path, Query, Request, State};
@@ -17,12 +17,6 @@ use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::{Stream, StreamExt};
 
 static PORT: OnceLock<u16> = OnceLock::new();
-type R = Result<Json<Value>, (StatusCode, String)>;
-
-fn bad(e: String) -> (StatusCode, String) {
-    (StatusCode::BAD_REQUEST, e)
-}
-
 fn s(v: &Value, k: &str) -> String {
     v[k].as_str().unwrap_or("").to_string()
 }

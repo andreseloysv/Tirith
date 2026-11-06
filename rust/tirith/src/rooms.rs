@@ -8,7 +8,7 @@
 
 mod sealed;
 
-use crate::app::{now_iso, Shared};
+use crate::app::{bad, now_iso, Shared, R};
 use crate::client::{call, Flag};
 use crate::config::get as cfg_get;
 use crate::{brain, manager};
@@ -588,12 +588,6 @@ async fn say(app: &Shared, id: &str, text: &str) -> Result<(), String> {
     let r = update(app, id, |r| (r.streak, r.braked) = (0, false)).and(room(id)).ok_or("no such room")?;
     let me = sealed::identity(&app.home, &r.me)?;
     send(&base(app), &me, &r, text, &r.readers()).await
-}
-
-type R = Result<Json<Value>, (StatusCode, String)>;
-
-fn bad(e: String) -> (StatusCode, String) {
-    (StatusCode::BAD_REQUEST, e)
 }
 
 fn known(id: &str) -> Result<Room, (StatusCode, String)> {
