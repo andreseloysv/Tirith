@@ -253,6 +253,19 @@ def test_no_diff_without_start_commit(home: Path, tmp_path: Path) -> None:
     assert agentrun.store_diff(home, lane) is None
 
 
+def test_store_diff_main_checkout_no_full_diff(home: Path, tmp_path: Path, monkeypatch) -> None:
+    repo = make_repo(tmp_path / "repo")
+    start = subprocess.run([GIT, "-C", str(repo), "rev-parse", "HEAD"], capture_output=True,
+                           text=True).stdout.strip()
+    (repo / "new.txt").write_text("hi\n", encoding="utf-8")
+    calls: list = []
+    monkeypatch.setattr(agentrun, "_git", lambda *a: calls.append(a))
+    assert agentrun.build_patch(str(repo), start, "manager-turn-1") == ""
+    out = agentrun.store_diff(home, {"id": "manager-turn-1", "workspace": str(repo), "start_commit": start})
+    assert out is not None and out["size"] == 0
+    assert calls == []
+
+
 # -- doctor ------------------------------------------------------------------------------------
 
 
