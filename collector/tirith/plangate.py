@@ -834,11 +834,16 @@ def tick_merged(home: Path, config: Config, lanes: list[dict]) -> bool:
                     continue
                 plans.pop(project, None)
             continue
+        sub = review_text(clean)
+
+        def tick_both(text: str, step=step, clean=clean, sha=sha, sub=sub) -> str:
+            # one commit ticks the item and its review sub-item (else review_passed made a second "done" commit)
+            if roadmap_mod.find_item(roadmap_mod.parse(text), step, sub) is not None:
+                text = roadmap_mod.set_item(text, step, sub, roadmap_mod.norm(sub), tick=True)
+            return roadmap_mod.set_item(text, step, clean, done_note(clean, sha), tick=True)
+
         try:
-            changed |= commit_change(
-                home, repo, project,
-                lambda text: roadmap_mod.set_item(text, step, clean, done_note(clean, sha), tick=True),
-                _message("done", step, str(lane["id"])))
+            changed |= commit_change(home, repo, project, tick_both, _message("done", step, str(lane["id"])))
         except PlanGateError:
             continue
         plans.pop(project, None)
