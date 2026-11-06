@@ -1,6 +1,7 @@
 //! The plan: the project's markdown checklist (`## N. Title` steps, `- [ ] item` lines). Its content changes
 //! (new item, ticked item) are written to the file at once and committed in batches; which lane works on
-//! an item lives in the daemon, not in the file. The daemon is the only writer.
+//! an item lives in the daemon, not in the file. The daemon is the only writer. An item may carry its own check:
+//! `- [ ] Text (check: `cmd`)`; the merge queue runs it, and ticks a merged item in the merge commit itself.
 
 use crate::app::{git, Shared};
 use regex::Regex;
@@ -9,6 +10,7 @@ use serde_json::json;
 use std::path::PathBuf;
 use std::sync::LazyLock;
 
+static CHECK: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\(check:\s*`([^`]+)`\s*\)").unwrap());
 static STATUS: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"\s*\((en curso|hecho|en revisión|falló|bloqueado|parcial|in progress|done)\b[^)]*\)\s*$").unwrap()
 });
@@ -17,6 +19,8 @@ static STATUS: LazyLock<Regex> = LazyLock::new(|| {
 pub struct Item {
     pub text: String,
     pub done: bool,
+    /// The command that proves the item is done, from `(check: `cmd`)` in its text.
+    pub check: Option<String>,
     #[serde(skip)]
     line: usize,
 }
@@ -53,7 +57,8 @@ pub fn parse(text: &str) -> Vec<Step> {
                 Some("- [x] ") | Some("- [X] ") => (true, &line[6..]),
                 _ => continue,
             };
-            step.items.push(Item { text: clean(rest), done, line: i });
+            let check = CHECK.captures(rest).map(|c| c[1].to_string());
+            step.items.push(Item { text: clean(rest), done, check, line: i });
         }
     }
     steps.retain(|s| !s.num.is_empty());
@@ -77,6 +82,25 @@ pub fn is_open(app: &Shared, project: &str, step: &str, item: &str) -> Result<bo
     let steps = read(app, project)?;
     let s = steps.iter().find(|s| s.num == step).ok_or(format!("the plan of {project} has no step {step}"))?;
     Ok(s.items.iter().any(|i| !i.done && i.text == clean(item)))
+}
+
+/// One item of the plan in the main checkout.
+pub fn find(app: &Shared, project: &str, step: &str, item: &str) -> Option<Item> {
+    let steps = read(app, project).ok()?;
+    steps.into_iter().find(|s| s.num == step)?.items.into_iter().find(|i| i.text == item)
+}
+
+/// Ticks the open `(step, item)` pairs in a plan text: the new text and how many were ticked.
+pub fn tick_text(text: &str, items: &[(String, String)]) -> (String, usize) {
+    let mut lines: Vec<String> = text.lines().map(String::from).collect();
+    let mut n = 0;
+    for s in parse(text) {
+        for it in s.items.iter().filter(|it| !it.done && items.iter().any(|(st, i)| *st == s.num && *i == it.text)) {
+            lines[it.line] = lines[it.line].replacen("- [ ] ", "- [x] ", 1);
+            n += 1;
+        }
+    }
+    (lines.join("\n") + "\n", n)
 }
 
 /// Applies `edit` to the plan's lines under the writer lock, then queues the commit.
@@ -113,36 +137,28 @@ pub async fn add(app: &Shared, project: &str, step: &str, text: &str) -> Result<
     .await
 }
 
-pub async fn tick(app: &Shared, project: &str, step: &str, item: &str) -> Result<(), String> {
-    let item = clean(item);
-    change(app, project, |lines, steps| {
-        let s = steps.iter().find(|s| s.num == step).ok_or(format!("the plan has no step {step}"))?;
-        let it = s.items.iter().find(|it| !it.done && it.text == item).ok_or("the item is not open")?;
-        lines[it.line] = format!("- [x] {}", it.text);
-        Ok(())
-    })
-    .await
-}
-
 /// Commits the plan files changed since the last commit: one commit per project, whatever the number of changes.
 pub async fn flush(app: &Shared, only: Option<&str>) {
     let projects: Vec<String> = app.plan_dirty.lock().unwrap().iter().filter(|p| only.is_none_or(|o| o == *p)).cloned().collect();
     for project in projects {
         let _guard = app.plan_lock.lock().await;
-        let Ok(file) = path(app, &project) else { continue };
-        let Some(repo) = app.cfg().project(&project).map(|p| p.repo()) else { continue };
-        let rel = file.strip_prefix(&repo).unwrap_or(&file).to_string_lossy().to_string();
-        let pending = git(&repo, &["status", "--porcelain", "--", &rel]).await.unwrap_or_default();
-        let result = if pending.is_empty() {
-            Ok(String::new())
-        } else {
-            git(&repo, &["commit", "-q", "-m", "Plan: update from Tirith", "--", &rel]).await
-        };
-        match result {
-            Ok(_) => {
-                app.plan_dirty.lock().unwrap().remove(&project);
-            }
-            Err(e) => app.event("", &project, "error", "plan", &format!("plan commit failed: {e}"), ""),
+        flush_locked(app, &project).await;
+    }
+}
+
+/// `flush` of one project for a caller that already holds the plan lock.
+pub async fn flush_locked(app: &Shared, project: &str) {
+    if !app.plan_dirty.lock().unwrap().contains(project) {
+        return;
+    }
+    let (Ok(file), Some(repo)) = (path(app, project), app.cfg().project(project).map(|p| p.repo())) else { return };
+    let rel = file.strip_prefix(&repo).unwrap_or(&file).to_string_lossy().to_string();
+    let pending = git(&repo, &["status", "--porcelain", "--", &rel]).await.unwrap_or_default();
+    let result = if pending.is_empty() { Ok(String::new()) } else { git(&repo, &["commit", "-q", "-m", "Plan: update from Tirith", "--", &rel]).await };
+    match result {
+        Ok(_) => {
+            app.plan_dirty.lock().unwrap().remove(project);
         }
+        Err(e) => app.event("", project, "error", "plan", &format!("plan commit failed: {e}"), ""),
     }
 }
