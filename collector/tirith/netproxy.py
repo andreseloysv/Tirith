@@ -218,6 +218,7 @@ def swift_shim(home: Path, env: dict) -> None:
 
 
 XCODE_FLAGS = ("-IDEPackageSupportDisableManifestSandbox=YES", "-IDEPackageSupportDisablePluginExecutionSandbox=YES")
+XCODE_SWIFT = "OTHER_SWIFT_FLAGS=$(inherited) -disable-sandbox"  # Swift macros (@Observable) need the plugin server unsandboxed
 _XCODE_LINE = re.compile(r"(?<![\w./-])(xcodebuild)(?=\s|$)(?![^;&|]*-IDEPackageSupportDisableManifestSandbox)")
 
 
@@ -228,10 +229,12 @@ def xcodebuild(command, env: dict | None = None):
     if not nested(env):
         return command
     if isinstance(command, str):
-        return _XCODE_LINE.sub("xcodebuild " + " ".join(XCODE_FLAGS), command)
+        extra = "" if "OTHER_SWIFT_FLAGS=" in command else " '" + XCODE_SWIFT + "'"
+        return _XCODE_LINE.sub(lambda m: "xcodebuild " + " ".join(XCODE_FLAGS) + extra, command)
     words = [str(w) for w in command]
     if words and Path(words[0]).name == "xcodebuild" and not any(w.startswith(XCODE_FLAGS[0].split("=")[0]) for w in words):
-        return [command[0], *XCODE_FLAGS, *command[1:]]
+        swift = [] if any(w.startswith("OTHER_SWIFT_FLAGS=") for w in words) else [XCODE_SWIFT]
+        return [command[0], *XCODE_FLAGS, *swift, *command[1:]]
     return command
 
 
@@ -246,7 +249,9 @@ def xcodebuild_shim(home: Path, env: dict) -> None:
               'self="$(cd "$(dirname "$0")" && pwd)"\n'
               "PATH=$(printf %s \"$PATH\" | tr : '\\n' | grep -vxF \"$self\" | paste -sd: -)\n"
               'case " $* " in *" -IDEPackageSupportDisableManifestSandbox"*) exec xcodebuild "$@";; esac\n'
-              f'exec xcodebuild {XCODE_FLAGS[0]} {XCODE_FLAGS[1]} "$@"\n')
+              'case " $* " in *" OTHER_SWIFT_FLAGS="*) exec xcodebuild '
+              f'{XCODE_FLAGS[0]} {XCODE_FLAGS[1]} "$@";; esac\n'
+              f"exec xcodebuild {XCODE_FLAGS[0]} {XCODE_FLAGS[1]} '{XCODE_SWIFT}' \"$@\"\n")
     try:
         if not shim.exists() or shim.read_text() != script:
             directory.mkdir(parents=True, exist_ok=True)
