@@ -888,5 +888,5 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [x] The running Tirith measures how long the on-demand CEO and manager have been idle and calls retire_if_idle (promote.py) on its regular tick, so they retire on their own (check: `cd collector && uv run -q pytest -q tests -k retire_on_tick`) <!-- tirith:{"id":"i-d78a6bf4","depends_on":[],"writes":[]} -->
   - [x] Revisar: The running Tirith measures how long the on-demand CEO and manager have been idle and calls retire_if_idle (promote.py) on its regular tick, so they retire on their own (check: `cd collector && uv run -q pytest -q tests -k retire_on_tick`)
 - [x] El autopilot no inicia como lane los ítems de rol del paso 0 («Manager de guardia: atender el chat», «CEO: …»): esos los atienden el manager o el CEO, sin crear worktree (check: `cargo test -q autopilot_skips_role_items`)
-- [ ] El autopilot no arranca lanes para ítems marcados (espera: …) del dueño, y una lane sin commits no entra en la cola de merge: termina con su motivo (check: `cargo test -q autopilot_skips_owner_wait_items`)
+- [x] El autopilot no arranca lanes para ítems marcados (espera: …) del dueño, y una lane sin commits no entra en la cola de merge: termina con su motivo (check: `cargo test -q autopilot_skips_owner_wait_items`)
 
