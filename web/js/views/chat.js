@@ -418,8 +418,8 @@ export function Chat({ project }) {
           <input type="file" ref=${file} multiple hidden onChange=${(e) => { addFiles(e.target.files); e.target.value = ''; }} />
           <label class="mc-chip" title="Tell the manager which project this is about">${BUBBLE}
             <select aria-label="Project of this message" value=${cur} onChange=${(e) => setProj(e.target.value)}>
-              <option value="">No project</option>
-              ${s.projects.map((p) => html`<option value=${p.id}>${p.name || p.id}</option>`)}
+              <option value="" selected=${!cur}>No project</option>
+              ${s.projects.map((p) => html`<option value=${p.id} selected=${p.id === cur}>${p.name || p.id}</option>`)}
             </select></label>
           <span class="mc-hint">Enter sends · Shift+Enter new line</span>
           <button class="mc-send" type="button" aria-label="Send" title="Send to the manager" onClick=${send}>${SEND}</button>
