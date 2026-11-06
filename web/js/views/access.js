@@ -8,6 +8,12 @@ import { useAction } from './settings/ui.js';
 
 const MAX_ROWS = 200;
 const IP = /^[0-9.]+$|:/;
+/** Who reached a destination, by role as the old page showed it: "Manager, CEO, 48 lanes" (hover lists them all). */
+const whoText = (who) => {
+  const roles = [...new Set(who.filter((w) => w === 'manager' || w === 'ceo' || w.startsWith('ceo-')).map((w) => (w === 'manager' ? 'Manager' : 'CEO')))];
+  const lanes = who.length - who.filter((w) => w === 'manager' || w === 'ceo' || w.startsWith('ceo-')).length;
+  return [...roles, ...(lanes ? [`${lanes} ${lanes === 1 ? 'lane' : 'lanes'}`] : [])].join(', ');
+};
 
 function Guard({ st }) {
   if (!st) return null;
@@ -71,7 +77,7 @@ export function Access({ project }) {
           <td class="sm num">${clockTime(d.last)}</td>
           <td><span class=${`chip xk ${d.rule ? 'blk' : IP.test(d.host) ? 'tcp' : 'https'}`}>${IP.test(d.host) ? 'Address' : 'Web'}</span></td>
           <td><b>${d.host}</b></td>
-          <td class="sm">${(d.lanes || []).join(', ')}</td>
+          <td class="sm" title=${(d.lanes || []).join(', ')}>${whoText(d.lanes || [])}</td>
           <td class="sm mut num">${d.count} ${d.count === 1 ? 'connection' : 'connections'}${d.refused ? html` · <span class="nref">${d.refused} refused</span>` : null}</td>
           <td class="sm tact">${btn(d)}</td></tr>`)}</tbody></table>
           ${rows.length > MAX_ROWS ? html`<p class="mut sm">Showing the newest ${MAX_ROWS} of ${rows.length}.</p>` : null}`
