@@ -45,6 +45,7 @@ pub fn router(app: Shared, port: u16) -> Router {
         .route("/api/pipelines/{id}/retry", post(pipeline_retry))
         .route("/api/runs/{id}/log", get(run_log))
         .route("/api/chat", post(chat))
+        .route("/api/manager/interrupt", post(manager_interrupt))
         .route("/hook/{event}", post(hook))
         .merge(rooms::routes())
         .merge(sandbox::routes())
@@ -80,7 +81,7 @@ async fn state(State(app): State<Shared>) -> Json<Value> {
         "events": app.recent("events", &["id", "at", "lane", "project", "kind", "tool", "summary"], 200),
         "runs": app.recent("runs", &["id", "lane", "project", "stage", "status", "started_at", "ended_at", "log"], 40),
         "owner": manager::owner_open(&app),
-        "busy": false,
+        "busy": manager::busy(),
     }))
 }
 
@@ -168,6 +169,11 @@ async fn chat(State(app): State<Shared>, Json(b): Json<Value>) -> R {
         return Err(bad("empty message".into()));
     }
     manager::say(&app, &text);
+    Ok(Json(json!({"ok": true})))
+}
+
+async fn manager_interrupt(State(app): State<Shared>) -> R {
+    manager::interrupt(&app).map_err(bad)?;
     Ok(Json(json!({"ok": true})))
 }
 
