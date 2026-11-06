@@ -79,6 +79,10 @@ fn owner_questions(app: &Shared) -> Vec<String> {
     q.query_map([], |r| r.get::<_, String>(0)).map(|r| r.flatten().collect()).unwrap_or_default()
 }
 
+fn startable(text: &str) -> bool {
+    !crate::lanes::is_autopilot_skipped(text)
+}
+
 fn merged_at(l: &Lane) -> Option<i64> {
     let v = json!(l);
     v["merged_at"].as_str().or(l.ended_at.as_deref()).and_then(secs)
@@ -93,7 +97,8 @@ fn compute(app: &Shared) -> Vec<Metric> {
     // Open items of the projects the autopilot works on.
     let mut open: Vec<(String, usize)> = vec![];
     for p in cfg.projects.iter().filter(|p| crate::lanes::autopilot_on(app, &p.id)) {
-        let n = plan::read(app, &p.id).map(|s| s.iter().flat_map(|s| &s.items).filter(|i| !i.done).count()).unwrap_or(0);
+        // Only items the autopilot can start: no step-0 role items, no owner-wait items.
+        let n = plan::read(app, &p.id).map(|s| s.iter().flat_map(|s| &s.items).filter(|i| !i.done && startable(&i.text)).count()).unwrap_or(0);
         if n > 0 {
             open.push((p.id.clone(), n));
         }
@@ -380,4 +385,15 @@ async fn metrics(State(app): State<Shared>) -> Json<Value> {
 
 pub fn routes() -> Router<Shared> {
     Router::new().route("/api/metrics", get(metrics))
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn idle_health_ignores_unstartable_items() {
+        assert!(!super::startable("Manager de guardia: atender el chat"));
+        assert!(!super::startable("CEO: revisar"));
+        assert!(!super::startable("Elegir dominio (espera: el dueño)"));
+        assert!(super::startable("Arreglar el parser"));
+    }
 }
