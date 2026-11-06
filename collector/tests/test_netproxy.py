@@ -208,3 +208,14 @@ def test_xcodebuild_sandbox_flags_in_a_lane(tmp_path: Path, monkeypatch) -> None
     assert out == " ".join([*flags, "test"])
     out = subprocess.run(["xcodebuild", *flags, "test"], capture_output=True, text=True, env=env).stdout.strip()
     assert out == " ".join([*flags, "test"])
+
+
+def test_swift_lane_stage_without_tirith_lane_gets_disable_sandbox(monkeypatch) -> None:
+    """The review / merge-queue run drops TIRITH_LANE; run_stage marks a lane's stage so swift still skips its sandbox."""
+    monkeypatch.delenv("TIRITH_LANE", raising=False)
+    monkeypatch.delenv(netproxy.SANDBOXED_ENV, raising=False)
+    env = {netproxy.LANE_STAGE_ENV: "1"}
+    cmd = "(cd Packages/ZooCore && swift test --skip 'A/test(B|C)') && node --test x"
+    assert netproxy.swiftpm(cmd, env) == "(cd Packages/ZooCore && swift test --disable-sandbox --skip 'A/test(B|C)') && node --test x"
+    assert netproxy.xcodebuild(["xcodebuild", "test"], env)[1].startswith("-IDEPackageSupport")
+    assert netproxy.swiftpm(cmd, {}) == cmd

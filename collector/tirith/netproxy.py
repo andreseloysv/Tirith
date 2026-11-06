@@ -162,15 +162,23 @@ _SWIFT_LINE = re.compile(r"(?<![\w./-])(swift\s+(?:build|test|run|package))(?=\s
 _SWIFT_SUB = ("build", "test", "run", "package")
 
 
+LANE_STAGE_ENV = "TIRITH_LANE_STAGE"  # set by run_stage for a stage of a lane (review/merge-queue runs drop TIRITH_LANE)
+
+
+def nested(env: dict | None) -> bool:
+    """Whether a command run with ``env`` may sit inside a sandbox that macOS will not let it nest another in: the lane
+    sandbox, the agent's own (``TIRITH_LANE``), or a stage run for a lane by a process started from one."""
+    env = env or {}
+    return any(env.get(k) or os.environ.get(k) for k in ("TIRITH_LANE", LANE_STAGE_ENV)) \
+        or "1" in (env.get(SANDBOXED_ENV), os.environ.get(SANDBOXED_ENV))
+
+
 def swiftpm(command, env: dict | None = None):
     """``command`` with ``--disable-sandbox`` after ``swift build|test|run|package`` when it runs inside the lane
     sandbox: SwiftPM wraps manifest evaluation in its own ``sandbox-exec``, which macOS refuses to nest
     ("sandbox_apply: Operation not permitted" on Package.swift). The lane is confined by ours already. Only
     those four subcommands change; any other command is returned as it came."""
-    env = env or {}
-    boxed = "1" in (env.get(SANDBOXED_ENV), os.environ.get(SANDBOXED_ENV))
-    in_lane = bool(env.get("TIRITH_LANE") or os.environ.get("TIRITH_LANE"))  # the agent's own sandbox also nests
-    if not boxed and not in_lane:
+    if not nested(env):
         return command
     if isinstance(command, str):
         return _SWIFT_LINE.sub(r"\1 --disable-sandbox", command)
@@ -185,8 +193,7 @@ def swift_shim(home: Path, env: dict) -> None:
     ``swift test`` in the stage command, but a script or ``make`` reaches swift without it and SwiftPM's nested
     ``sandbox-exec`` fails ("zoocore: Invalid manifest"). The wrapper adds ``--disable-sandbox`` to
     build|test|run|package and runs the next ``swift`` on PATH. No-op outside a lane."""
-    in_lane = env.get("TIRITH_LANE") or os.environ.get("TIRITH_LANE")
-    if not in_lane and "1" not in (env.get(SANDBOXED_ENV), os.environ.get(SANDBOXED_ENV)):
+    if not nested(env):
         return
     directory = Path(home) / "shims"
     shim = directory / "swift"
@@ -218,10 +225,7 @@ def xcodebuild(command, env: dict | None = None):
     """``command`` with the two ``-IDEPackageSupportDisable*Sandbox=YES`` flags after ``xcodebuild`` when it runs
     inside the lane sandbox: Xcode wraps package manifests and plugins in its own ``sandbox-exec``, which macOS
     refuses to nest ("sandbox-exec: Operation not permitted"). Any other command is returned as it came."""
-    env = env or {}
-    boxed = "1" in (env.get(SANDBOXED_ENV), os.environ.get(SANDBOXED_ENV))
-    in_lane = bool(env.get("TIRITH_LANE") or os.environ.get("TIRITH_LANE"))
-    if not boxed and not in_lane:
+    if not nested(env):
         return command
     if isinstance(command, str):
         return _XCODE_LINE.sub("xcodebuild " + " ".join(XCODE_FLAGS), command)
@@ -234,8 +238,7 @@ def xcodebuild(command, env: dict | None = None):
 def xcodebuild_shim(home: Path, env: dict) -> None:
     """Put an ``xcodebuild`` wrapper first on ``env["PATH"]`` for a lane stage, so a script or ``make`` that
     reaches xcodebuild gets the flags of :func:`xcodebuild` too. No-op outside a lane."""
-    in_lane = env.get("TIRITH_LANE") or os.environ.get("TIRITH_LANE")
-    if not in_lane and "1" not in (env.get(SANDBOXED_ENV), os.environ.get(SANDBOXED_ENV)):
+    if not nested(env):
         return
     directory = Path(home) / "shims"
     shim = directory / "xcodebuild"
