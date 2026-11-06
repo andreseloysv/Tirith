@@ -326,7 +326,13 @@ async fn launch(app: &Shared, mut lane: Lane) -> Result<(), String> {
 /// of the fallback chain); a waiting lane waits for its answer.
 async fn ended(app: &Shared, id: &str, code: Option<i32>) {
     let Some(lane) = app.lane(id) else { return };
-    let log = tail(&app.home.join(format!("logs/lanes/{id}.log")), 200);
+    // Only what the agent program itself said counts: its plain-text output and its final result event, never the
+    // files and command output it read (a lane working on Tirith reads the very patterns that detect it).
+    let log: String = tail(&app.home.join(format!("logs/lanes/{id}.log")), 200)
+        .lines()
+        .filter(|l| !l.trim_start().starts_with('{') || (l.contains("\"type\":\"result\"") && l.contains("\"is_error\":true")))
+        .collect::<Vec<_>>()
+        .join("\n");
     if lane.status == "running" && models::out_of_credits(&log) {
         let next = models::fallback(app, "workers", &lane.tried);
         app.update_lane(id, |l| {
