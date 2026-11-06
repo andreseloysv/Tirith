@@ -158,7 +158,7 @@ def argv(home: Path, command: list[str], env: dict) -> list[str]:
     return ["sandbox-exec", "-f", str(profile(home)), *command]
 
 
-_SWIFT_LINE = re.compile(r"(?<![\w./-])(swift\s+(?:build|test|run|package))(?=\s|$)(?![^;&|]*--disable-sandbox)")
+_SWIFT_LINE = re.compile(r"(?<![\w./-])((?:[\w./-]*/)?swift\s+(?:build|test|run|package))(?=\s|$)(?![^;&|]*--disable-sandbox)")
 _SWIFT_SUB = ("build", "test", "run", "package")
 
 
@@ -183,6 +183,9 @@ def swiftpm(command, env: dict | None = None):
     if isinstance(command, str):
         return _SWIFT_LINE.sub(r"\1 --disable-sandbox", command)
     words = [str(w) for w in command]
+    if len(words) >= 3 and Path(words[0]).name in ("sh", "bash", "zsh") and re.fullmatch(r"-\w*c", words[1]):
+        # `tirith run --stage` hands the manifest line over as ``/bin/sh -c "<line>"``: rewrite the line itself
+        return [*command[:2], swiftpm(words[2], env), *command[3:]]
     if len(words) >= 2 and Path(words[0]).name == "swift" and words[1] in _SWIFT_SUB and "--disable-sandbox" not in words:
         return [*command[:2], "--disable-sandbox", *command[2:]]
     return command
