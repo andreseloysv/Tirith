@@ -147,6 +147,29 @@ def test_swift_in_the_lane_sandbox_gets_disable_sandbox(monkeypatch) -> None:
     assert netproxy.swiftpm(["swift", "run"], {}) == ["swift", "run", "--disable-sandbox"]
 
 
+def test_swift_manifest_lane_stage_shim_adds_disable_sandbox(tmp_path: Path, monkeypatch) -> None:
+    """A swift reached through a script in a lane stage still gets --disable-sandbox."""
+    monkeypatch.delenv(netproxy.SANDBOXED_ENV, raising=False)
+    monkeypatch.delenv("TIRITH_LANE", raising=False)
+    plain = {"PATH": "/usr/bin"}
+    netproxy.swift_shim(tmp_path, plain)
+    assert plain == {"PATH": "/usr/bin"}  # outside a lane: untouched
+    real = tmp_path / "real"
+    real.mkdir()
+    (real / "swift").write_text('#!/bin/sh\necho "$@"\n')
+    (real / "swift").chmod(0o755)
+    env = {"TIRITH_LANE": "l1", "PATH": f"{real}:/usr/bin:/bin"}
+    netproxy.swift_shim(tmp_path, env)
+    assert env["PATH"].startswith(str(tmp_path / "shims"))
+
+    def run(*args: str) -> str:
+        return subprocess.run(["swift", *args], capture_output=True, text=True, env=env).stdout.strip()
+
+    assert run("test", "--filter", "X") == "test --disable-sandbox --filter X"
+    assert run("build", "--disable-sandbox") == "build --disable-sandbox"
+    assert run("--version") == "--version"
+
+
 @pytest.mark.skipif(sys.platform != "darwin" or not shutil.which("sandbox-exec") or not shutil.which("swift")
                     or netproxy.sandboxed(), reason="macOS sandbox and swift, from outside a sandbox")
 def test_swift_package_builds_under_the_sandbox(home: Path, tmp_path: Path) -> None:
