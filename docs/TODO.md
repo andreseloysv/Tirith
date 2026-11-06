@@ -208,6 +208,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Codex y Copilot probados con `lane run` (presets por alias, salida JSON, permisos). (hecho: d7cda11)
 - [x] Agentes en la nube y CI remoto desde GitHub (PRs y Actions).
 - [x] Token de GitHub disponible para el collector.
+- [ ] Las lanes con el agente codex pueden ejecutar comandos: hoy cada comando de codex dentro de la lane falla con "sandbox-exec: sandbox_apply: Operation not permitted" (sandbox anidado), p. ej. la lane simplificar-el-daemon-rust-tirit-6648 (check: `cargo test -q codex_lane_runs_commands`)
 
 ## 6. Pipelines con autodescubrimiento (`tirith.toml`)
 
