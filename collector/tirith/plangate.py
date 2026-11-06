@@ -154,6 +154,30 @@ def recover_git_lock(repo: Path) -> bool:
     return True
 
 
+def _plan_line(line: str) -> bool:
+    """True for a line the plan itself is made of (blank, heading, checklist item or deadline)."""
+    return (not line.strip() or bool(roadmap_mod._HEADING_RE.match(line)) or bool(roadmap_mod._ITEM_RE.match(line))
+            or bool(roadmap_mod._DEADLINE_RE.match(line)))
+
+
+def _leftover(repo: Path, rel: str) -> bool:
+    """True when the plan's uncommitted changes are only plan lines: what a Tirith commit that failed
+    (e.g. ENOSPC) leaves behind. Prose or anything else edited by hand is not a leftover."""
+    status = _git(repo, "status", "--porcelain", "--", rel).stdout
+    if status.startswith("??"):
+        path = repo / rel
+        try:
+            return all(_plan_line(l) for l in path.read_text(encoding="utf-8").splitlines())
+        except (OSError, UnicodeDecodeError):
+            return False
+    diff = _git(repo, "diff", "-U0", "HEAD", "--", rel)
+    if diff.returncode != 0:
+        return False
+    changed = [l[1:] for l in diff.stdout.splitlines()
+               if l[:1] in "+-" and not l.startswith(("+++", "---"))]
+    return all(_plan_line(l) for l in changed)
+
+
 def commit_change(home: Path, repo: Path, project: str, mutate: Callable[[str], str], message: str,
                   path: Path | None = None, create: bool = False) -> bool:
     """Apply ``mutate`` to the plan file and commit only that file; False when nothing changed.
@@ -169,14 +193,17 @@ def commit_change(home: Path, repo: Path, project: str, mutate: Callable[[str], 
         raise PlanGateError("the plan file is outside the project folder")
     rel = str(path.relative_to(repo))
     with writer_lock(home, project):
+        leftover = False
         if _git(repo, "status", "--porcelain", "--", rel).stdout.strip():
-            raise PlanGateError(f"{rel} has uncommitted changes, so it was left as it is")
+            if not _leftover(repo, rel):
+                raise PlanGateError(f"{rel} has uncommitted changes, so it was left as it is")
+            leftover = True  # plan lines of an earlier failed commit: this write commits them too
         text = path.read_text(encoding="utf-8") if path.exists() else "# TODO\n"
         try:
             new = roadmap_mod.repair_duplicate_ids(mutate(text))
         except roadmap_mod.EditError as err:
             raise PlanGateError(str(err))
-        if new == text:
+        if new == text and not leftover:
             return False
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(new, encoding="utf-8")
@@ -191,7 +218,9 @@ def commit_change(home: Path, repo: Path, project: str, mutate: Callable[[str], 
             return False  # the plan already was in the target state: success
         if made.returncode != 0:  # the guard (or git) refused: leave the plan as it was
             _git(repo, "reset", "-q", "--", rel)
-            if _git(repo, "ls-files", "--", rel).stdout.strip():
+            if leftover:
+                path.write_text(text, encoding="utf-8")  # back to the leftover, not to HEAD
+            elif _git(repo, "ls-files", "--", rel).stdout.strip():
                 _git(repo, "checkout", "--", rel)
             else:
                 path.unlink(missing_ok=True)
