@@ -17,16 +17,25 @@ const HOOKS: [&str; 2] = ["pre-commit", "commit-msg"];
 const HEAD: &str = "#!/bin/bash\n# FORBIDDEN_WORDS_GUARD\n# {what}\n# Installed by Tirith; words: {words}\nset -euo pipefail\nexport TIRITH_GUARD_RE='{re}'\n";
 
 const PRE_COMMIT: &str = r#"
+# In a merge, what a parent already has is not the merge's doing: only what the merge adds is checked.
+export TIRITH_MERGE_HEAD=$(git rev-parse -q --verify MERGE_HEAD 2>/dev/null || true)
 git diff --cached --no-color --no-ext-diff -U0 --diff-filter=ACMR | perl -ne '
-    BEGIN { $re = qr/(?<![A-Za-z0-9])($ENV{TIRITH_GUARD_RE})(?![A-Za-z0-9])/i; $bad = 0 }
+    BEGIN { $re = qr/(?<![A-Za-z0-9])($ENV{TIRITH_GUARD_RE})(?![A-Za-z0-9])/i; $bad = 0; $mh = $ENV{TIRITH_MERGE_HEAD}; %seen = () }
     if (/^\+\+\+ b\/(.*)$/) {
         $file = $1;
-        if ($file =~ $re) { print STDERR "  $file: \"$1\" in the file name\n"; $bad = 1 }
+        %seen = ();
+        $inparent = 0;
+        if ($mh) {
+            my $out = `git show \Q$mh\E:\Q$file\E 2>/dev/null`;
+            if ($? == 0) { $inparent = 1; for my $l (split /\n/, $out, -1) { $seen{$l} = 1 } }
+        }
+        if (!$inparent && $file =~ $re) { print STDERR "  $file: \"$1\" in the file name\n"; $bad = 1 }
         next;
     }
     if (/^@@ -\S+ \+(\d+)/) { $line = $1; next }
     if (/^\+/) {
-        if (/$re/) { chomp; my $t = substr($_, 1, 120); print STDERR "  $file:$line: \"$1\" in: $t\n"; $bad = 1 }
+        my $text = substr($_, 1); chomp $text;
+        if (!$seen{$text} && /$re/) { chomp; my $t = substr($_, 1, 120); print STDERR "  $file:$line: \"$1\" in: $t\n"; $bad = 1 }
         $line++;
     }
     END {
@@ -259,4 +268,58 @@ pub fn cli(pos: &[&str], _flag: crate::client::Flag) -> Option<Result<(), String
         }
         _ => return None,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::process::Command;
+
+    fn git(dir: &std::path::Path, args: &[&str]) -> std::process::Output {
+        Command::new("git").current_dir(dir).args(["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"]).args(args).output().unwrap()
+    }
+
+    #[test]
+    fn guard_merge_ignores_parent_content() {
+        let w = ["op", "us"].concat();
+        let dir = std::env::temp_dir().join(format!("tirith-guard-merge-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        git(&dir, &["init", "-q", "-b", "main"]);
+        std::fs::write(dir.join("a.txt"), "one\n").unwrap();
+        git(&dir, &["add", "."]);
+        assert!(git(&dir, &["commit", "-q", "-m", "base"]).status.success());
+        git(&dir, &["checkout", "-q", "-b", "side"]);
+        std::fs::write(dir.join("zoo.txt"), &format!("see {w} here\n")).unwrap();
+        git(&dir, &["add", "."]);
+        assert!(git(&dir, &["commit", "-q", "-m", "side"]).status.success());
+        git(&dir, &["checkout", "-q", "-b", "other", "main"]);
+        std::fs::write(dir.join("c.txt"), "c\n").unwrap();
+        git(&dir, &["add", "."]);
+        assert!(git(&dir, &["commit", "-q", "-m", "other"]).status.success());
+        git(&dir, &["checkout", "-q", "main"]);
+        std::fs::write(dir.join("a.txt"), "one\ntwo\n").unwrap();
+        assert!(git(&dir, &["commit", "-q", "-am", "main"]).status.success());
+        // Install the guard now that history exists.
+        let hooks = dir.join(".git").join("hooks");
+        std::fs::create_dir_all(&hooks).unwrap();
+        let hook = hooks.join("pre-commit");
+        std::fs::write(&hook, render("pre-commit", &[w.clone()])).unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+        // The merge brings the parent's forbidden line: allowed.
+        let m = git(&dir, &["merge", "-q", "side", "-m", "merge"]);
+        assert!(m.status.success(), "merge with parent content must pass: {}", String::from_utf8_lossy(&m.stderr));
+        // A plain commit adding the word is still blocked.
+        std::fs::write(dir.join("b.txt"), format!("{w}\n")).unwrap();
+        git(&dir, &["add", "."]);
+        assert!(!git(&dir, &["commit", "-q", "-m", "x"]).status.success());
+        git(&dir, &["reset", "-q", "--hard", "HEAD"]);
+        // A merge that adds a forbidden line of its own is still blocked.
+        git(&dir, &["merge", "-q", "--no-commit", "--no-ff", "other"]);
+        std::fs::write(dir.join("c.txt"), format!("c\n{w}\n")).unwrap();
+        git(&dir, &["add", "."]);
+        assert!(!git(&dir, &["commit", "-q", "-m", "merge2"]).status.success(), "merge-added content must still be blocked");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
