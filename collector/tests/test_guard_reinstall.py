@@ -24,3 +24,16 @@ def test_agents_are_blocked_from_reinstalling_the_guard():
     rules = [v.rule for v in gates.check_call(Config(), "Bash",
                                               {"command": "cd collector && uv run tirith guard reinstall demo"}, "/tmp")]
     assert rules == ["guard-reinstall"]
+
+
+def test_reinstall_mentioned_as_text_is_not_blocked():
+    cmds = [
+        'tirith wait add --project demo "Reinstall the guard" --run "uv run tirith guard reinstall demo"',
+        'tirith plan add --project demo --step 3 --text "owner runs tirith guard reinstall demo"',
+    ]
+    for cmd in cmds:
+        rules = [v.rule for v in gates.check_call(Config(), "Bash", {"command": cmd}, "/tmp")]
+        assert "guard-reinstall" not in rules, cmd
+    for cmd in ("uv run tirith guard reinstall demo", "FOO=1 tirith guard reinstall demo && true"):
+        rules = [v.rule for v in gates.check_call(Config(), "Bash", {"command": cmd}, "/tmp")]
+        assert rules == ["guard-reinstall"], cmd
