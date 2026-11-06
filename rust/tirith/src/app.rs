@@ -361,8 +361,8 @@ mod tests {
         let wt = repo.join("../wt-sp");
         add_worktree(&repo, &wt, Some("lane/z"), &ex).await.unwrap();
         assert!(wt.join("cms/f").exists() && ex.iter().all(|p| !wt.join(p).exists()));
-        let _ = std::fs::remove_dir_all(&repo);
         let _ = std::fs::remove_dir_all(&wt);
+        let _ = std::fs::remove_dir_all(&repo);
     }
 }
 
