@@ -109,15 +109,7 @@ fn set_flag(argv: &mut Vec<String>, flag: &Option<String>, alts: &[&str], value:
 /// The argv of a lane run. `agent`/`model` override the workers role (a fallback relaunch passes them).
 /// `resume = Some((session_id, message))` continues that agent session with `message` instead of the brief;
 /// an alias without `resume_args` starts fresh with the brief.
-pub fn lane_argv(
-    app: &Shared,
-    _project: &str,
-    agent: Option<&str>,
-    model: Option<&str>,
-    brief: &Path,
-    workspace: &Path,
-    resume: Option<(&str, &str)>,
-) -> Result<AgentCmd, String> {
+pub fn lane_argv(app: &Shared, agent: Option<&str>, model: Option<&str>, brief: &Path, workspace: &Path, resume: Option<(&str, &str)>) -> Result<AgentCmd, String> {
     let cfg = app.cfg();
     let w = role(app, "workers");
     let alias = agent.unwrap_or(&w.agent).to_string();
@@ -148,9 +140,7 @@ pub fn chat_argv(app: &Shared, role_name: &str, resume: Option<&str>) -> Result<
     let r = role(app, role_name);
     let a = cfg.agents.get(&r.agent).ok_or(format!("no agent alias '{}' in config.toml", r.agent))?;
     let mut argv = vec![a.command.clone()];
-    argv.extend(a.chat_args.clone().unwrap_or_else(|| {
-        ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose"].map(String::from).to_vec()
-    }));
+    argv.extend(a.chat_args.clone().unwrap_or_else(|| ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose"].map(String::from).to_vec()));
     let (mflag, eflag, _, _) = flags(&cfg, &r.agent);
     set_flag(&mut argv, &mflag, &["--model", "-m"], &r.model);
     set_flag(&mut argv, &eflag, &["--effort", "--reasoning-effort"], &r.effort);
@@ -266,16 +256,11 @@ pub fn state(app: &Shared) -> Value {
 }
 
 pub fn routes() -> Router<Shared> {
-    Router::new()
-        .route("/api/models", GET(|State(app): State<Shared>| async move { Json(state(&app)) }))
-        .route("/api/models/preview", GET(preview))
-        .route(
-            "/api/models/{role}",
-            axum::routing::post(|State(app): State<Shared>, UrlPath(r): UrlPath<String>, Json(b): Json<Value>| async move {
-                save(&app, &r, Some(&b)).map(|s| Json(json!(s))).map_err(bad)
-            })
+    Router::new().route("/api/models", GET(|State(app): State<Shared>| async move { Json(state(&app)) })).route("/api/models/preview", GET(preview)).route(
+        "/api/models/{role}",
+        axum::routing::post(|State(app): State<Shared>, UrlPath(r): UrlPath<String>, Json(b): Json<Value>| async move { save(&app, &r, Some(&b)).map(|s| Json(json!(s))).map_err(bad) })
             .delete(|State(app): State<Shared>, UrlPath(r): UrlPath<String>| async move { save(&app, &r, None).map(|s| Json(json!(s))).map_err(bad) }),
-        )
+    )
 }
 
 /// GET /api/models/preview?role=workers&project=<id>[&agent=A&model=M&session=S&message=T]: the argv it would run.
@@ -286,7 +271,7 @@ async fn preview(State(app): State<Shared>, Query(q): Query<HashMap<String, Stri
             let project = q("project").unwrap_or("");
             let ws = app.cfg().project(project).map(|p| p.lanes_dir().join("<lane>")).unwrap_or("<workspace>".into());
             let resume = q("session").map(|s| (s, q("message").unwrap_or("")));
-            lane_argv(&app, project, q("agent"), q("model"), &app.home.join("briefs/<lane>.md"), &ws, resume)
+            lane_argv(&app, q("agent"), q("model"), &app.home.join("briefs/<lane>.md"), &ws, resume)
         }
         r @ ("manager" | "ceo") => chat_argv(&app, r, q("session")),
         r => Err(format!("role {r} runs no agent")),
@@ -314,8 +299,7 @@ pub fn cli(pos: &[&str], flag: Flag) -> Option<Result<(), String>> {
             Ok(())
         }),
         ["models", "set", r] => {
-            let body: serde_json::Map<String, Value> =
-                ["agent", "model", "effort", "fallback"].iter().filter_map(|k| flag(&format!("--{k}")).map(|v| (k.to_string(), json!(v)))).collect();
+            let body: serde_json::Map<String, Value> = ["agent", "model", "effort", "fallback"].iter().filter_map(|k| flag(&format!("--{k}")).map(|v| (k.to_string(), json!(v)))).collect();
             show(call("POST", &format!("/api/models/{r}"), Some(Value::Object(body))))
         }
         ["models", "reset", r] => show(call("DELETE", &format!("/api/models/{r}"), None)),

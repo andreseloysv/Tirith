@@ -11,9 +11,7 @@ use std::path::PathBuf;
 use std::sync::LazyLock;
 
 static CHECK: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\(check:\s*`([^`]+)`\s*\)").unwrap());
-static STATUS: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"\s*\((en curso|hecho|en revisión|falló|bloqueado|parcial|in progress|done)\b[^)]*\)\s*$").unwrap()
-});
+static STATUS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s*\((en curso|hecho|en revisión|falló|bloqueado|parcial|in progress|done)\b[^)]*\)\s*$").unwrap());
 
 #[derive(Serialize, Clone)]
 pub struct Item {
@@ -120,7 +118,11 @@ async fn change(app: &Shared, project: &str, edit: impl FnOnce(&mut Vec<String>,
 pub fn check_problem(check: &str) -> Option<String> {
     static CALL: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?:^|[\s;&|(])(?:(cd\s+(?:\./)?collector(?:[/\s;&]|$))|tirith\s+([A-Za-z-][\w-]*))").unwrap());
     const OK: [&str; 16] = ["serve", "hook", "hooks", "status", "plan", "lane", "ask", "answer", "ask-owner", "autopilot", "say", "room", "net", "models", "guard", "help"];
-    CALL.captures_iter(check).find_map(|c| c.get(2).map_or(Some("the check does `cd collector`, a removed folder (the daemon is Rust: use cargo test -q <name>)".to_string()), |s| (!OK.contains(&s.as_str())).then(|| format!("the check calls `tirith {}`, which is not a tirith command", s.as_str()))))
+    CALL.captures_iter(check).find_map(|c| {
+        c.get(2).map_or(Some("the check does `cd collector`, a removed folder (the daemon is Rust: use cargo test -q <name>)".to_string()), |s| {
+            (!OK.contains(&s.as_str())).then(|| format!("the check calls `tirith {}`, which is not a tirith command", s.as_str()))
+        })
+    })
 }
 
 pub async fn add(app: &Shared, project: &str, step: &str, text: &str) -> Result<(), String> {
@@ -128,7 +130,9 @@ pub async fn add(app: &Shared, project: &str, step: &str, text: &str) -> Result<
     if text.is_empty() {
         return Err("the item needs a text".into());
     }
-    if let Some(p) = CHECK.captures(&text).and_then(|c| check_problem(&c[1])) { return Err(p); }
+    if let Some(p) = CHECK.captures(&text).and_then(|c| check_problem(&c[1])) {
+        return Err(p);
+    }
     change(app, project, |lines, steps| {
         let i = steps.iter().position(|s| s.num == step).ok_or(format!("the plan has no step {step}"))?;
         if steps[i].items.iter().any(|it| it.text == text) {
@@ -173,5 +177,12 @@ pub async fn flush_locked(app: &Shared, project: &str) {
 
 #[cfg(test)]
 mod tests {
-    #[test] fn plan_add_rejects_invalid_checks() { let b = super::check_problem; assert!(["tirith run -s test", "tirith check", "cd collector && ls", "cargo test && tirith run"].iter().all(|c| b(c).is_some()) && ["cargo test -q x", "tirith plan show p", "cd collectors"].iter().all(|c| b(c).is_none())); }
+    #[test]
+    fn plan_add_rejects_invalid_checks() {
+        let b = super::check_problem;
+        assert!(
+            ["tirith run -s test", "tirith check", "cd collector && ls", "cargo test && tirith run"].iter().all(|c| b(c).is_some())
+                && ["cargo test -q x", "tirith plan show p", "cd collectors"].iter().all(|c| b(c).is_none())
+        );
+    }
 }

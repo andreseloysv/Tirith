@@ -34,15 +34,17 @@ pub fn state() -> String {
 /// The destinations seen so far from the `net` / `net-blocked` events, so the page keeps its history.
 pub fn seed(app: &Shared) {
     let db = app.db.lock().unwrap();
-    let Ok(mut q) = db.prepare(
-        "SELECT summary, lane, kind, COUNT(*), MAX(at) FROM events WHERE kind IN ('net', 'net-blocked') GROUP BY summary, lane, kind",
-    ) else { return };
+    let Ok(mut q) = db.prepare("SELECT summary, lane, kind, COUNT(*), MAX(at) FROM events WHERE kind IN ('net', 'net-blocked') GROUP BY summary, lane, kind") else { return };
     let rows = q.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, u64>(3)?, r.get::<_, String>(4)?)));
     let mut dests = DESTS.lock().unwrap();
     for (dest, lane, kind, n, at) in rows.into_iter().flatten().flatten() {
         let host = dest.rsplit_once(':').map(|(h, _)| h).unwrap_or(&dest).to_string();
         let d = dests.entry(host).or_default();
-        if kind == "net" { d.count += n } else { d.refused += n }
+        if kind == "net" {
+            d.count += n
+        } else {
+            d.refused += n
+        }
         d.last = d.last.clone().max(at);
         d.lanes.insert(lane);
     }
@@ -51,10 +53,7 @@ pub fn seed(app: &Shared) {
 /// The destinations, newest first: host, connections, refusals, callers, last seen and the rule blocking it now.
 pub fn destinations() -> Value {
     let dests = DESTS.lock().unwrap();
-    let mut out: Vec<Value> = dests
-        .iter()
-        .map(|(h, d)| json!({"host": h, "count": d.count, "refused": d.refused, "lanes": d.lanes, "last": d.last, "rule": blocked(h)}))
-        .collect();
+    let mut out: Vec<Value> = dests.iter().map(|(h, d)| json!({"host": h, "count": d.count, "refused": d.refused, "lanes": d.lanes, "last": d.last, "rule": blocked(h)})).collect();
     out.sort_by(|a, b| b["last"].as_str().cmp(&a["last"].as_str()));
     out.truncate(300);
     json!(out)
@@ -89,10 +88,7 @@ pub async fn serve(app: Shared) {
 }
 
 async fn answer(c: &mut TcpStream, status: &str, extra: &str, body: &str) -> Result<(), String> {
-    let text = format!(
-        "HTTP/1.1 {status}\r\n{extra}Content-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-        body.len()
-    );
+    let text = format!("HTTP/1.1 {status}\r\n{extra}Content-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
     c.write_all(text.as_bytes()).await.map_err(|e| e.to_string())
 }
 
@@ -121,7 +117,10 @@ fn host_port(text: &str, default: u16) -> Option<(String, u16)> {
             None => (text, None),
         },
     };
-    let port = match port { Some(p) => p.parse().ok()?, None => default };
+    let port = match port {
+        Some(p) => p.parse().ok()?,
+        None => default,
+    };
     (!host.is_empty()).then(|| (host.trim_end_matches('.').to_lowercase(), port))
 }
 
@@ -130,7 +129,11 @@ fn record(app: &Shared, who: &str, host: &str, port: u16, rule: Option<&str>) {
     {
         let mut dests = DESTS.lock().unwrap();
         let d = dests.entry(host.to_string()).or_default();
-        if rule.is_some() { d.refused += 1 } else { d.count += 1 }
+        if rule.is_some() {
+            d.refused += 1
+        } else {
+            d.count += 1
+        }
         d.last = now_iso();
         d.lanes.insert(lane.clone());
     }

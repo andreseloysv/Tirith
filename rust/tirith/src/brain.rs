@@ -20,11 +20,9 @@ const DEFAULT_MODEL: &str = "muse-spark-1.3";
 const KEY_VARS: [&str; 2] = ["META_API_KEY", "META_SI_API_KEY"];
 
 /// The jobs: name and system prompt (the input is the user message).
-const JOBS: [(&str, &str); 4] = [
+const JOBS: [(&str, &str); 2] = [
     ("room-summary", "Below are the latest messages of a chat room where AI agents talk. Reply with ONE plain sentence saying what the room is discussing right now. No preamble."),
-    ("room-needs-owner", "Below are the latest numbered messages of a chat room where AI agents talk with the human owner. Find the messages addressed to the owner or that need the owner personally (a question for them, a decision, an approval, a credential). Messages between agents that do not need the owner do not count. Reply with ONLY a JSON array like [{\"n\": 12, \"reason\": \"asks the owner to approve the budget\"}], or [] when nothing needs the owner."),
     ("architecture", "Below are the file tree, the README and the key manifests of a software project. Write a summary of its architecture for a coding agent about to work on it, at most 15 plain lines: what it is, the main parts and where they live (paths), how they connect, how to build and check it. Only facts from the input. No preamble."),
-    ("epithet", "Below is what an AI coding agent did. Reply with ONLY a fitting epithet of 2 to 4 words for that agent. No punctuation, no preamble."),
 ];
 
 static CALLS: AtomicU64 = AtomicU64::new(0);
@@ -52,7 +50,7 @@ fn cache_key(job: &str, input: &str) -> String {
     Sha256::digest(format!("{job}\n{input}").as_bytes()).iter().map(|b| format!("{b:02x}")).collect()
 }
 
-/// One job ("room-summary", "room-needs-owner", "architecture", "epithet") on `input`: the model's answer,
+/// One job ("room-summary", "architecture") on `input`: the model's answer,
 /// cached by the hash of (job, input). `None` without an API key or when the call fails.
 pub async fn ask(app: &Shared, job: &str, input: &str) -> Option<String> {
     let prompt = JOBS.iter().find(|(j, _)| *j == job)?.1;
@@ -79,10 +77,7 @@ pub async fn ask(app: &Shared, job: &str, input: &str) -> Option<String> {
     .await;
     *LAST_ERROR.lock().unwrap() = result.as_ref().err().cloned();
     let answer = result.ok()?;
-    let _ = app.db.lock().unwrap().execute(
-        "INSERT OR REPLACE INTO brain_cache (key, job, answer, at) VALUES (?1, ?2, ?3, ?4)",
-        params![hash, job, answer, crate::app::now_iso()],
-    );
+    let _ = app.db.lock().unwrap().execute("INSERT OR REPLACE INTO brain_cache (key, job, answer, at) VALUES (?1, ?2, ?3, ?4)", params![hash, job, answer, crate::app::now_iso()]);
     Some(answer)
 }
 
@@ -152,8 +147,5 @@ async fn arch_route(State(app): State<Shared>, Path(project): Path<String>) -> J
 }
 
 pub fn routes() -> Router<Shared> {
-    Router::new()
-        .route("/api/brain", get(info))
-        .route("/api/brain/ask", post(ask_route))
-        .route("/api/brain/architecture/{project}", get(arch_route))
+    Router::new().route("/api/brain", get(info)).route("/api/brain/ask", post(ask_route)).route("/api/brain/architecture/{project}", get(arch_route))
 }

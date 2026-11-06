@@ -93,10 +93,7 @@ pub fn get<T: DeserializeOwned>(t: &toml::Table, path: &[&str]) -> Option<T> {
 
 impl Config {
     pub fn load() -> Config {
-        let t: toml::Table = std::fs::read_to_string(tirith_home().join("config.toml"))
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or_default();
+        let t: toml::Table = std::fs::read_to_string(tirith_home().join("config.toml")).ok().and_then(|s| s.parse().ok()).unwrap_or_default();
         let port = std::env::var("TIRITH_PORT").ok().and_then(|p| p.parse().ok());
         Config {
             raw: t.clone(),
@@ -105,9 +102,7 @@ impl Config {
             launch: get(&t, &["launch", "command"]).unwrap_or_default(),
             workers: get(&t, &["models", "workers"]),
             port: port.or_else(|| get(&t, &["server", "port"])).unwrap_or(7717),
-            max_parallel: get(&t, &["lanes", "max_parallel"])
-                .or_else(|| get(&t, &["autopilot", "max_parallel"]))
-                .unwrap_or(3),
+            max_parallel: get(&t, &["lanes", "max_parallel"]).or_else(|| get(&t, &["autopilot", "max_parallel"])).unwrap_or(3),
             max_load: get(&t, &["lanes", "max_load"]).unwrap_or(2.0),
             inactivity_min: get(&t, &["lanes", "inactivity_minutes"]).unwrap_or(20),
             push: get(&t, &["merge", "push"]).unwrap_or(true),
@@ -124,10 +119,7 @@ impl Config {
     /// The project a folder belongs to: inside its repo or inside its lanes folder.
     pub fn project_for(&self, cwd: &str) -> Option<&Project> {
         let cwd = Path::new(cwd);
-        self.projects
-            .iter()
-            .filter(|p| !p.repo.is_empty())
-            .find(|p| cwd.starts_with(p.repo()) || cwd.starts_with(p.lanes_dir()))
+        self.projects.iter().filter(|p| !p.repo.is_empty()).find(|p| cwd.starts_with(p.repo()) || cwd.starts_with(p.lanes_dir()))
     }
 }
 
@@ -166,10 +158,7 @@ pub struct Manifest {
 
 impl Manifest {
     pub fn load(repo: &Path) -> Manifest {
-        let t: toml::Table = std::fs::read_to_string(repo.join("tirith.toml"))
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or_default();
+        let t: toml::Table = std::fs::read_to_string(repo.join("tirith.toml")).ok().and_then(|s| s.parse().ok()).unwrap_or_default();
         let pipelines: Vec<Pipeline> = get(&t, &["pipelines"]).unwrap_or_default();
         Manifest {
             roadmap: get(&t, &["roadmap"]).unwrap_or_else(|| "docs/TODO.md".into()),
