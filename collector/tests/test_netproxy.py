@@ -128,6 +128,7 @@ def test_swift_in_the_lane_sandbox_gets_disable_sandbox(monkeypatch) -> None:
     """SwiftPM's own sandbox-exec cannot nest in ours: swift build/test/run/package gets --disable-sandbox."""
     box = {netproxy.SANDBOXED_ENV: "1"}
     monkeypatch.delenv(netproxy.SANDBOXED_ENV, raising=False)
+    monkeypatch.delenv("TIRITH_LANE", raising=False)
     assert netproxy.swiftpm(["swift", "test", "--filter", "A/b"], box) == ["swift", "test", "--disable-sandbox", "--filter", "A/b"]
     assert netproxy.swiftpm(["/usr/bin/swift", "build"], box) == ["/usr/bin/swift", "build", "--disable-sandbox"]
     assert netproxy.swiftpm("cd Packages/Z && swift test --filter X && swift build", box) == \
@@ -138,6 +139,10 @@ def test_swift_in_the_lane_sandbox_gets_disable_sandbox(monkeypatch) -> None:
         assert netproxy.swiftpm(other, box) == other
     assert netproxy.swiftpm("echo swift tests; myswift test", box) == "echo swift tests; myswift test"
     assert netproxy.swiftpm(["swift", "test"], {}) == ["swift", "test"]  # outside a lane sandbox: untouched
+    assert netproxy.swiftpm(["swift", "test"], {"TIRITH_LANE": "l1"}) == ["swift", "test", "--disable-sandbox"]  # agent's own sandbox
+    monkeypatch.setenv("TIRITH_LANE", "l1")
+    assert netproxy.swiftpm(["swift", "test"], {}) == ["swift", "test", "--disable-sandbox"]
+    monkeypatch.delenv("TIRITH_LANE")
     monkeypatch.setenv(netproxy.SANDBOXED_ENV, "1")  # a stage run from inside a lane inherits the marker
     assert netproxy.swiftpm(["swift", "run"], {}) == ["swift", "run", "--disable-sandbox"]
 
