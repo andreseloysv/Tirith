@@ -167,7 +167,10 @@ def swiftpm(command, env: dict | None = None):
     sandbox: SwiftPM wraps manifest evaluation in its own ``sandbox-exec``, which macOS refuses to nest
     ("sandbox_apply: Operation not permitted" on Package.swift). The lane is confined by ours already. Only
     those four subcommands change; any other command is returned as it came."""
-    if (env or {}).get(SANDBOXED_ENV) != "1" and os.environ.get(SANDBOXED_ENV) != "1":
+    env = env or {}
+    boxed = "1" in (env.get(SANDBOXED_ENV), os.environ.get(SANDBOXED_ENV))
+    in_lane = bool(env.get("TIRITH_LANE") or os.environ.get("TIRITH_LANE"))  # the agent's own sandbox also nests
+    if not boxed and not in_lane:
         return command
     if isinstance(command, str):
         return _SWIFT_LINE.sub(r"\1 --disable-sandbox", command)
