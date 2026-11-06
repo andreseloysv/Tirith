@@ -1,10 +1,7 @@
 #!/usr/bin/env bash
-# `tirith` for agents: the collector CLI of this repo, run in the current folder.
+# `tirith` from this checkout: the Rust binary, built on first use.
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-if ! command -v uv >/dev/null 2>&1; then
-  # started without a login PATH (e.g. from the desktop app): look in the usual places
-  PATH="$PATH:/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$HOME/.cargo/bin"
-  export PATH
-fi
-exec uv run -q --project "$ROOT/collector" tirith "$@"
+BIN="$ROOT/target/release/tirith"
+[ -x "$BIN" ] || cargo build -q --release -p tirith --manifest-path "$ROOT/Cargo.toml" >&2
+exec "$BIN" "$@"

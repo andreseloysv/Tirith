@@ -1,8 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Main window: events from the Rust side and the app's own commands",
+  "description": "Main window: the daemon's page, no app commands",
   "windows": ["main"],
-  "remote": { "urls": ["tirithweb://localhost/*", "http://tirithweb.localhost/*"] },
-  "permissions": ["core:default", "core:event:default", "dialog:allow-open"]
+  "permissions": ["core:default"]
 }
