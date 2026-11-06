@@ -98,8 +98,8 @@ def gaps(home: Path, lane: dict, repo: Path | None, report: str) -> list[str]:
     if plangate_mod.lane_item(lane) is not None and not plangate_mod.standing(lane) and not lane.get("outcome"):
         out.append("no plan report: run `tirith plan report --status done` (or `partial --add \"<what is "
                    "left>\"` / `blocked --reason \"<why>\"`) when the work is finished")
-    if not workspace.is_dir():
-        return out
+    if not workspace.is_dir() or not owns_worktree(lane):
+        return out  # the on-call manager has no worktree of its own: no test run, claim check or commit is asked of it
     if report.strip():
         out += [f"claim check: {m}" for m in claimcheck_mod.verify(home, lane, repo, report=report).mismatches]
     _, paths = claimcheck_mod.lane_diff(workspace, lane.get("start_commit"))
@@ -111,8 +111,6 @@ def gaps(home: Path, lane: dict, repo: Path | None, report: str) -> list[str]:
             out.append("no passing test run recorded after your last change: run "
                        "`tirith run --project <project> --stage test` (and `--stage build`) in your worktree "
                        "(it runs only the tests your change maps to; the merge queue runs the full suite)")
-    if not owns_worktree(lane):
-        return out  # the on-call manager works in the owner's checkout: never `git add` or commit there
     dirty = _git(workspace, "status", "--porcelain")
     if dirty.returncode == 0 and dirty.stdout.strip():
         refused = commit_leftovers(workspace, lane_id, commit_message(lane))  # the brief says "do not commit": Tirith does
