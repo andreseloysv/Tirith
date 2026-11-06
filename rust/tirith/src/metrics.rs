@@ -94,7 +94,7 @@ fn compute(app: &Shared) -> Vec<Metric> {
     let t = |k: &str, d: f64| ceo_cfg(app, &["ceo", "targets", k], d);
     // Open items of the projects the autopilot works on.
     let mut open: Vec<(String, usize)> = vec![];
-    for p in cfg.projects.iter().filter(|p| flag(app, &format!("autopilot:{}", p.id)).is_some()) {
+    for p in cfg.projects.iter().filter(|p| crate::lanes::autopilot_on(app, &p.id)) {
         let n = plan::read(app, &p.id).map(|s| s.iter().flat_map(|s| &s.items).filter(|i| !i.done).count()).unwrap_or(0);
         if n > 0 {
             open.push((p.id.clone(), n));
@@ -288,7 +288,7 @@ fn brief(app: &Shared, why: &str) -> String {
     lanes.sort_by(|a, b| b.created_at.cmp(&a.created_at));
     let mut s = format!("# Red metrics\n{why}\n\n# Last lanes (newest first)\n");
     for l in lanes.iter().take(20) {
-        let note = l.report.as_ref().map(|r| r.note.as_str()).filter(|n| !n.is_empty()).unwrap_or(&l.note);
+        let note = &l.note;
         s += &format!("- {} [{}] {}:{} \"{}\" tries {} created {}: {}\n", l.id, l.status, l.project, l.step, l.item, l.attempts + 1, l.created_at, note.lines().next().unwrap_or(""));
     }
     s += "\n# Failing checks (last 24 h)\n";
@@ -305,7 +305,7 @@ fn brief(app: &Shared, why: &str) -> String {
     }
     s += "\n# Plans\n";
     for p in &app.cfg().projects {
-        let auto = flag(app, &format!("autopilot:{}", p.id)).map_or("off", |_| "on");
+        let auto = if crate::lanes::autopilot_on(app, &p.id) { "on" } else { "off" };
         let main = flag(app, &format!("main_red:{}", p.id)).unwrap_or("green".into());
         s += &format!("## {} (autopilot {auto}, main {main})\n", p.id);
         for st in plan::read(app, &p.id).unwrap_or_default() {

@@ -131,12 +131,22 @@ pub fn intact(app: &Shared, project: &Project) -> Result<(), String> {
     Ok(())
 }
 
-/// Clears the immutable flag the Python-era installer set on its hooks.
-fn unlock(path: &std::path::Path) {
+/// Sets or clears the immutable flag (macOS `uchg`): installed hooks cannot be changed or deleted, by agents or
+/// anyone, until the installer clears it. Elsewhere a no-op.
+#[cfg(target_os = "macos")]
+fn immutable(path: &std::path::Path, on: bool) {
     use std::os::macos::fs::MetadataExt;
     if let (Ok(m), Ok(c)) = (std::fs::metadata(path), std::ffi::CString::new(path.as_os_str().as_encoded_bytes())) {
-        unsafe { libc::chflags(c.as_ptr(), m.st_flags() & !libc::UF_IMMUTABLE) };
+        let flags = if on { m.st_flags() | libc::UF_IMMUTABLE } else { m.st_flags() & !libc::UF_IMMUTABLE };
+        unsafe { libc::chflags(c.as_ptr(), flags) };
     }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn immutable(_path: &std::path::Path, _on: bool) {}
+
+fn unlock(path: &std::path::Path) {
+    immutable(path, false);
 }
 
 /// Writes both hooks (mode 755) where they are missing or ours (an older guard is replaced, its pre-push
@@ -166,6 +176,7 @@ pub fn install(app: &Shared, project: &Project) -> Result<(), String> {
         std::fs::write(&path, render(hook, &words)).map_err(|e| format!("{}: {e}", path.display()))?;
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).map_err(|e| e.to_string())?;
+        immutable(&path, true);
     }
     intact(app, project)
 }
