@@ -377,6 +377,8 @@ def _test_maps(home: Path, now: datetime) -> dict[str, dict]:
         except OSError:
             age = None
         out[where.name] = {"present": age is not None, "age_h": None if age is None else round(age, 1)}
+    for name in testmap_mod.PATH_MAPS:  # a path map is code: always there, never old
+        out[name] = {"present": True, "age_h": 0.0, "kind": "paths"}
     return out
 
 

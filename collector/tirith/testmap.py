@@ -156,3 +156,29 @@ def refresh(home: Path, project: str, repo: Path, base: str, stage_run: str) -> 
     log.parent.mkdir(parents=True, exist_ok=True)
     launch_mod.spawn_detached(argv, home, log)
     return True
+
+
+# Projects without a pytest suite: changed paths pick the test command (run from the repo root).
+PATH_MAPS: dict[str, list[tuple[str, str]]] = {
+    "zoo": [("cms/server", "node --test cms/server/tests"),
+            ("cms/web", "npx vitest run --root cms/web"),
+            ("Packages/ZooCore", "swift test --package-path Packages/ZooCore")],
+}
+
+
+def path_map(project: str) -> list[tuple[str, str]]:
+    return PATH_MAPS.get(project, [])
+
+
+def path_commands(project: str, files: list[str]) -> tuple[list[str], list[str]]:
+    """``(commands, unmapped)``: the test commands for the changed code files of a project with a path map, and
+    the files no path covers (those make the full stage run)."""
+    rules, found, unmapped = path_map(project), [], []
+    for f in files:
+        hit = next((cmd for prefix, cmd in rules if f.startswith(prefix + "/")), None)
+        if hit is None:
+            unmapped.append(f)
+        elif hit not in found:
+            found.append(hit)
+    order = [cmd for _, cmd in rules]
+    return sorted(found, key=order.index), unmapped
