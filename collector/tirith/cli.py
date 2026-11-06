@@ -1038,7 +1038,7 @@ def _cmd_run(args) -> int:
     # the full Python suite (no selection) is one at a time on the machine, taken before a stage slot
     suite = loadlimit_mod.full_suite(home) if args.stage == "test" and not getattr(args, "selected", False) \
         else contextlib.nullcontext()
-    with suite, loadlimit_mod.slot(home, allowed, notice=lambda text: print(f"tirith: {text}", flush=True)):  # concurrent stage runs adapt to load and free disk
+    with suite, loadlimit_mod.slot(home, lambda: loadlimit_mod.current(config, home)[0], notice=lambda text: print(f"tirith: {text}", flush=True)):  # concurrent stage runs adapt to load and free disk
         code, _ = runstage_mod.run_stage(
             home, args.project, args.pipeline, args.stage, command, cwd,
             lane=lane, run_id=args.run,

@@ -28,6 +28,7 @@ from tirith.launch import link_node_modules, stage_all, worktree_path
 from tirith.store import lane_path, read_json, write_lane
 
 OUTPUT_MAX = 4000
+MERGE_SLOT_WAIT_S = 600.0  # the merge queue lands finished work: it waits for its own slot this long, then runs anyway
 SLOT_WAIT_S = 3 * 3600.0  # a review waits this long for a free stage slot (a review is never urgent)
 DID_NOT_FINISH = "tests did not finish in"  # starts the output of a suite that was stopped at its time limit
 
@@ -194,10 +195,11 @@ def run_tests(home: Path, project: str, pipeline: str, stage: str, workspace: Pa
     tags = runstage_mod.lane_tags(home, workspace)
     from tirith import loadlimit as loadlimit_mod
     from tirith.home import load_config
-    allowed, _why = loadlimit_mod.current(load_config(home), home)
+    config = load_config(home)
+    allowed = lambda: loadlimit_mod.current(config, home)[0]  # noqa: E731 - asked again on every poll of the wait
     # never more stage runs at once than the load allows, and one full suite at a time (they all slowed down together)
     with loadlimit_mod.full_suite(home) if full else contextlib.nullcontext(), \
-            loadlimit_mod.slot(home, allowed, wait=SLOT_WAIT_S, merge=merge,
+            loadlimit_mod.slot(home, allowed, wait=MERGE_SLOT_WAIT_S if merge else SLOT_WAIT_S, merge=merge,
                                notice=lambda text: _slot_notice(home, merge, text)):
         code, output = runstage_mod.run_stage(
             home, project, pipeline, stage, command, workspace, lane=lane_id or tags.get("lane"),
