@@ -217,24 +217,26 @@ def _who() -> str:
 
 
 @contextmanager
-def slot(home: Path, maximum: int, *, wait: float = 600.0, poll: float = 1.0, merge: bool = False,
+def slot(home: Path, maximum: int | Callable[[], int], *, wait: float = 600.0, poll: float = 1.0, merge: bool = False,
          notice: Callable[[str], None] | None = None, notice_after: float = WAIT_NOTICE_S) -> Iterator[int | None]:
     """Hold one of ``maximum`` stage slots; waits (up to ``wait`` seconds, then runs anyway) while all are taken.
 
     ``merge``: the merge queue's run. It uses its own reserved slot (``slots/merge.lock``), so lane test runs
     can never starve the queue that lands their work, and it does not count against ``maximum``. Yields the slot
     number (``-1`` for the merge slot). Once the wait passes ``notice_after`` seconds, ``notice`` is called once
-    with the slot holders, so a stall can be diagnosed."""
-    if fcntl is None or (maximum < 1 and not merge):
+    with the slot holders, so a stall can be diagnosed. ``maximum`` may be a function: it is asked again on every
+    poll, so a wait follows the load and the disk as they ease (a count read once at the start went stale)."""
+    count = maximum if callable(maximum) else (lambda: maximum)
+    if fcntl is None or (count() < 1 and not merge):
         yield None
         return
     folder = home / "slots"
     folder.mkdir(parents=True, exist_ok=True)
-    names = [MERGE_SLOT] if merge else [str(n) for n in range(maximum)]
     start = time.monotonic()
     deadline = start + wait
     handle, number, told = None, None, False
     while handle is None:
+        names = [MERGE_SLOT] if merge else [str(n) for n in range(max(int(count()), 1))]
         for name in names:
             fh = open(folder / f"{name}.lock", "a")
             try:
