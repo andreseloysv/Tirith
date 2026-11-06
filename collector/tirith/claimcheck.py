@@ -67,7 +67,11 @@ _DOC_WORDS = re.compile(r"\b(?:docs?|documentation|readme|wording|text|comment|t
 _DOC_FILE = re.compile(r"(?:\.(?:md|rst)$|(?:^|/)docs?/|(?:^|/)readme)", re.IGNORECASE)
 _TEST_FN = [re.compile(p) for p in (
     r"^\+\s*(?:async\s+)?def\s+(test_\w+)", r"^\+\s*(?:pub\s+)?(?:async\s+)?fn\s+(test_\w+|\w+)\s*\(",
-    r"^\+\s*(?:test|it)\(\s*['\"`]([^'\"`]+)", r"^\+\s*(?:async\s+)?function\s+(test\w+)")]
+    r"^\+\s*(?:test|it)(?:\.(?:only|skip|concurrent|todo|fails))*\(\s*['\"`]([^'\"`]+)",
+    r"^\+\s*(?:async\s+)?function\s+(test\w+)")]
+_JS_TEST_FILE = re.compile(r"(?:\.(?:test|spec)\.[cm]?[jt]sx?$|(?:^|/)__tests__/[^/]+\.[cm]?[jt]sx?$)")
+_SWIFT_TEST_FILE = re.compile(r"Tests?\.swift$")
+_SWIFT_FN = re.compile(r"^\+\s*(?:@\w+\s+)*(?:(?:public|open|private|fileprivate|internal)\s+)?func\s+(test\w*)\s*\(")
 
 
 @dataclass
@@ -133,14 +137,22 @@ def lane_diff(workspace: Path, base: str | None) -> tuple[dict[str, list[str]], 
     return added, paths
 
 
-def test_functions(lines: list[str]) -> set[str]:
-    """Names of the test functions among added diff lines (python, rust, js)."""
+def test_functions(lines: list[str], rel: str | None = None) -> set[str]:
+    """Names of the test functions among added diff lines (python, rust, js, swift). With ``rel`` (the file
+    path), ``test(``/``it(`` count only in js/ts test files and ``func test...`` only in ``*Tests.swift``."""
     names, rust = set(), False
     for line in lines:
+        if rel is not None and _SWIFT_TEST_FILE.search(rel):
+            found = _SWIFT_FN.match(line)
+            if found:
+                names.add(found.group(1))
+            continue
         rust = rust or bool(re.match(r"^\+\s*#\[(?:tokio::)?test", line))
         for index, pattern in enumerate(_TEST_FN):
             found = pattern.match(line)
             if not found:
+                continue
+            if index in (2, 3) and rel is not None and not _JS_TEST_FILE.search(rel):
                 continue
             if index == 1 and not (found.group(1).startswith("test_") or rust):
                 continue
@@ -243,8 +255,8 @@ def check_files(report: str, paths: list[str], result: Result) -> None:
 
 
 def check_tests_added(report: str, added: dict[str, list[str]], result: Result) -> None:
-    per_file = {rel: test_functions(lines) for rel, lines in added.items()}
-    everything = set().union(*per_file.values()) if per_file else set()
+    per_file = {rel: test_functions(lines, rel) for rel, lines in added.items()}
+    total = sum(len(names) for names in per_file.values())  # same name in two files is two tests
     for line in _lines(report):
         if _NEGATED.search(line) and not _ADDED_TESTS.search(line):
             continue
@@ -252,9 +264,9 @@ def check_tests_added(report: str, added: dict[str, list[str]], result: Result) 
         if counted:
             wanted = _number(counted.group(1))
             result.claims.append(f"added {wanted} test(s)")
-            if wanted > len(everything):
+            if wanted > total:
                 result.mismatches.append(
-                    f"said it added {wanted} test(s); the diff adds {len(everything)} test function(s)")
+                    f"said it added {wanted} test(s); the diff adds {total} test function(s)")
         if not (_CHANGE.search(line) or counted):
             continue
         files = [t for t in _paths_in(line) if not t.startswith(("/", "~"))]
