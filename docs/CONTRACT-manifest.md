@@ -85,6 +85,26 @@ Exit 0 when all rules pass, 1 otherwise. One line per problem, written for agent
 | `rule-id`, `rule-duplicate`, `rule-match`, `rule-regex`, `rule-paths`, `rule-action`, `rule-message`, `rule-instead`, `rule-shape` | every `[[rules]]` entry is valid (see `CONTRACT-setup.md`) |
 | `commit-guard` | the commit guard is intact (`verify_guard`) |
 
+## `lane_exclude`: heavy paths a lane does not check out
+
+```toml
+lane_exclude = ["ZooBundles/*/audio", "output"]   # git pathspec-style globs, relative to the repo root
+mergeq_exclude = false                            # true: the merge queue's temporary worktrees skip them too
+```
+
+For a repo with thousands of heavy tracked files (audio, images), a lane worktree copies them all (minutes, GBs).
+With `lane_exclude`, `launch.create_worktree` runs `git worktree add --no-checkout`, then
+`git sparse-checkout set --no-cone` with the patterns `/*` and `!/<path>/` for each entry, then `git checkout`: the
+excluded paths are not on disk. They stay tracked, so `git add -A` in the lane does not stage their deletion and a merge
+never removes them. A lane must not need those files (its build and tests run without them).
+
+The merge queue's `_mergeq-*` worktrees check out everything by default, because the project's build and test stages may
+read those files. `mergeq_exclude = true` (opt-in, uses the same `lane_exclude` list) makes them sparse too; set it only
+when no stage reads the excluded paths. Both keys are top-level; a missing key means nothing is excluded.
+
+If `git worktree add` (or a sparse step) fails or times out, the half-made folder is removed and `git worktree prune`
+runs, so no stale folder is left. Worktree creation has its own timeout class, `git-worktree-add` (default 600 s).
+
 ## `[roles]`: which roles a project uses
 
 ```toml

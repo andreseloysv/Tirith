@@ -43,7 +43,7 @@ from tirith import testmap as testmap_mod
 from tirith import reaper as reaper_mod
 from tirith import timeouts as timeouts_mod
 from tirith.home import Config, now_iso
-from tirith.launch import stage_all, worktree_path
+from tirith.launch import stage_all, worktree_add, worktree_path
 from tirith.store import lane_path, read_json, read_lane, write_json_atomic, write_lane
 
 FILE = "mergeq.json"
@@ -602,8 +602,9 @@ def _make_tmp(repo: Path, name: str, base: str):
         _remove_worktree(repo, "--force", str(tmp))
         shutil.rmtree(tmp, ignore_errors=True)
     _git(repo, "worktree", "prune")
-    made = _git(repo, "worktree", "add", "-q", "--detach", str(tmp), base)
-    return tmp, (None if made.returncode == 0 else _tail(made.stderr or made.stdout))
+    found = manifest_mod.load(repo)
+    error = worktree_add(repo, tmp, base=base, exclude=found.lane_exclude if found.mergeq_exclude else None)
+    return tmp, (None if error is None else _tail(error))
 
 
 def _drop_tmp(repo: Path, tmp: Path) -> None:
