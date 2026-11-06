@@ -299,3 +299,12 @@ def test_finish_check_never_stages_or_commits_in_the_manager_checkout(home, tmp_
     assert keepgoing_mod._git(repo, "rev-parse", "HEAD").stdout == head
     assert "?? owner-file.txt" in keepgoing_mod._git(repo, "status", "--porcelain").stdout
     assert not keepgoing_mod.owns_worktree(manager) and keepgoing_mod.owns_worktree({"id": "x", "class": "warden"})
+
+
+def test_finish_check_asks_the_oneshot_manager_for_no_tests_or_claim_check(home, tmp_path, monkeypatch) -> None:
+    """A one-shot manager turn has no worktree: no test run or claim-check facts are asked, so no send-back round."""
+    repo = _lane_run_setup(home, tmp_path, monkeypatch)
+    (repo / "owner-file.txt").write_text("x", encoding="utf-8")
+    monkeypatch.setattr(keepgoing_mod.claimcheck_mod, "test_runs", lambda *a: [])
+    manager = {"id": "manager-20260101", "project": "demo", "class": "steward", "workspace": str(repo)}
+    assert keepgoing_mod.gaps(home, manager, repo, "I ran 12 tests, 12 passed") == []
