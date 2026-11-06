@@ -180,6 +180,36 @@ def swiftpm(command, env: dict | None = None):
     return command
 
 
+def swift_shim(home: Path, env: dict) -> None:
+    """Put a ``swift`` wrapper first on ``env["PATH"]`` for a lane stage: ``swiftpm`` only rewrites a literal
+    ``swift test`` in the stage command, but a script or ``make`` reaches swift without it and SwiftPM's nested
+    ``sandbox-exec`` fails ("zoocore: Invalid manifest"). The wrapper adds ``--disable-sandbox`` to
+    build|test|run|package and runs the next ``swift`` on PATH. No-op outside a lane."""
+    in_lane = env.get("TIRITH_LANE") or os.environ.get("TIRITH_LANE")
+    if not in_lane and "1" not in (env.get(SANDBOXED_ENV), os.environ.get(SANDBOXED_ENV)):
+        return
+    directory = Path(home) / "shims"
+    shim = directory / "swift"
+    script = ('#!/bin/sh\n'
+              'self="$(cd "$(dirname "$0")" && pwd)"\n'
+              "PATH=$(printf %s \"$PATH\" | tr : '\\n' | grep -vxF \"$self\" | paste -sd: -)\n"
+              'case "$1" in build|test|run|package)\n'
+              '  sub="$1"; shift\n'
+              '  case " $* " in *" --disable-sandbox "*) exec swift "$sub" "$@";; esac\n'
+              '  exec swift "$sub" --disable-sandbox "$@";;\n'
+              'esac\nexec swift "$@"\n')
+    try:
+        if not shim.exists() or shim.read_text() != script:
+            directory.mkdir(parents=True, exist_ok=True)
+            shim.write_text(script)
+            shim.chmod(0o755)
+    except OSError:
+        return
+    path = env.get("PATH") or os.environ.get("PATH", "")
+    if str(directory) not in path.split(os.pathsep):
+        env["PATH"] = str(directory) + os.pathsep + path
+
+
 # -- the proxy -------------------------------------------------------------------------------------
 
 

@@ -266,6 +266,7 @@ def run_stage(home: Path, project: str, pipeline: str, stage: str, command: list
         shared = cargo_target_dir(home, project, work)
         if shared:
             child_env["CARGO_TARGET_DIR"] = str(shared)
+    netproxy_mod.swift_shim(home, child_env)  # swift reached through a script or make gets the flag too
     command = netproxy_mod.swiftpm(command, child_env)  # SwiftPM cannot nest a sandbox-exec inside a lane's
     limit = timeout or timeouts_mod.effective(home, None, f"stage:{stage}")
     started = {"pid": os.getpid(), "timeout": int(limit)}
