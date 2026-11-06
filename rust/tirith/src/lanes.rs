@@ -163,7 +163,7 @@ pub async fn scheduler(app: Shared) {
         let load = load_per_core();
         let lanes: Vec<Lane> = app.lanes.lock().unwrap().values().cloned().collect();
         let running = lanes.iter().filter(|l| l.pid.is_some()).count();
-        if tick % 100 == 0 {
+        if tick.is_multiple_of(100) {
             free_disk(&app, &lanes).await; // every ~5 minutes
         }
         tick += 1;
