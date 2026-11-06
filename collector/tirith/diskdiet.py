@@ -373,12 +373,9 @@ def clear_project_builds(home: Path, config: Config, busy: Callable[[], list[Pat
         if not proj.repo:
             continue
         for folder in _checkouts(projects_mod.real(proj.repo)):
-            if not _gradle_project(folder):
-                continue
-            for name in BUILD_DIRS:
-                target = folder / name
-                if not target.is_dir() or target.is_symlink():
-                    continue
+            gradle = _gradle_project(folder)
+            for target in _build_targets(folder, gradle):
+                name = target.relative_to(folder).as_posix()
                 if _git(folder, "ls-files", "--", name).stdout.strip():
                     continue  # tracked: it is source, not output
                 if busy_list is None:
@@ -388,6 +385,39 @@ def clear_project_builds(home: Path, config: Config, busy: Callable[[], list[Pat
                 freed += _tree_size(target)
                 shutil.rmtree(target, ignore_errors=True)
     return freed
+
+
+NESTED_DEPTH = 6  # how far below a checkout root nested build folders are looked for
+SKIP_DIRS = {".git", "node_modules", ".wt", ".wt-salvage", ".venv", "venv"}
+
+
+def _build_targets(root: Path, gradle_root: bool) -> list[Path]:
+    """``build/`` and ``.gradle`` folders to consider: those at the root of a gradle checkout, and any nested
+    below the root (a module whose gradle file is gone still leaves its output). Nested git checkouts and
+    symlinks are not entered."""
+    found: list[Path] = []
+    if gradle_root:
+        found += [root / n for n in BUILD_DIRS if (root / n).is_dir() and not (root / n).is_symlink()]
+
+    def walk(folder: Path, depth: int) -> None:
+        try:
+            entries = sorted(os.scandir(folder), key=lambda e: e.name)
+        except OSError:
+            return
+        for entry in entries:
+            try:
+                if entry.is_symlink() or not entry.is_dir(follow_symlinks=False):
+                    continue
+            except OSError:
+                continue
+            path = Path(entry.path)
+            if entry.name in BUILD_DIRS:
+                found.append(path)  # output: not entered
+            elif entry.name not in SKIP_DIRS and depth < NESTED_DEPTH and not (path / ".git").exists():
+                walk(path, depth + 1)
+
+    walk(root, 1)
+    return found
 
 
 def _remove_parked(home: Path, config: Config, busy: Callable[[], list[Path]] | None = None) -> tuple[int, int]:
