@@ -281,6 +281,8 @@ def run_stage(home: Path, project: str, pipeline: str, stage: str, command: list
         shared = cargo_target_dir(home, project, work)
         if shared:
             child_env["CARGO_TARGET_DIR"] = str(shared)
+    if lane or base.get("lane"):  # review and merge-queue runs drop TIRITH_LANE but still sit under the lane's sandbox
+        child_env[netproxy_mod.LANE_STAGE_ENV] = "1"
     netproxy_mod.swift_shim(home, child_env)  # swift reached through a script or make gets the flag too
     command = netproxy_mod.swiftpm(command, child_env)  # SwiftPM cannot nest a sandbox-exec inside a lane's
     netproxy_mod.xcodebuild_shim(home, child_env)  # xcodebuild likewise: Xcode's own sandbox-exec cannot nest
