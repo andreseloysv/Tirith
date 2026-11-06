@@ -74,6 +74,38 @@ fn free_gb(dir: &Path) -> f64 {
     s.f_bavail as f64 * s.f_frsize as f64 / 1e9
 }
 
+/// One cargo build folder per project, shared by its lanes and checks: a folder per worktree costs gigabytes each.
+pub fn shared_target(app: &Shared, project: &str) -> PathBuf {
+    app.home.join("build").join(project).join("cargo")
+}
+
+/// With less than 10 GB free: the build caches git ignores (target, .build, node_modules, build, .gradle) are
+/// removed from the worktree folders of `<repo>-lanes` that no active lane holds. Nothing tracked is touched.
+async fn free_disk(app: &Shared, lanes: &[Lane]) {
+    let cfg = app.cfg();
+    for p in &cfg.projects {
+        let dir = p.lanes_dir();
+        if free_gb(&dir) >= 10.0 {
+            return;
+        }
+        let merging = lanes.iter().any(|l| l.project == p.id && l.status == "merging");
+        for slot in std::fs::read_dir(&dir).into_iter().flatten().flatten().map(|e| e.path()) {
+            let name = slot.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            let held = lanes.iter().any(|l| l.active() && Path::new(&l.workspace) == slot) || (name == "merge" && merging);
+            if held || !(name.starts_with("slot-") || name == "merge") {
+                continue;
+            }
+            for cache in ["target", ".build", "node_modules", "build", ".gradle", "android/build", "android/app/build", "android/.gradle"] {
+                let path = slot.join(cache);
+                if path.is_dir() && git(&slot, &["check-ignore", "-q", cache]).await.is_ok() {
+                    let _ = std::fs::remove_dir_all(&path);
+                    app.event("", &p.id, "disk", "diet", &format!("removed {} (low disk)", path.display()), "");
+                }
+            }
+        }
+    }
+}
+
 /// Why a project cannot start a lane now (merge backlog, disk, commit guard), or `None`.
 fn blocked(app: &Shared, p: &Project, lanes: &[Lane]) -> Option<String> {
     let backlog = lanes.iter().filter(|l| l.project == p.id && matches!(l.status.as_str(), "merge-queued" | "merging")).count();
@@ -123,6 +155,7 @@ fn next_item(app: &Shared, lanes: &[Lane], rr: &mut usize, ok: &mut dyn FnMut(&P
 pub async fn scheduler(app: Shared) {
     let mut rr = 0;
     let mut said: HashMap<String, String> = HashMap::new();
+    let mut tick: u64 = 0;
     loop {
         let _ = tokio::time::timeout(Duration::from_secs(3), app.sched_wake.notified()).await;
         app.reload_config();
@@ -130,6 +163,10 @@ pub async fn scheduler(app: Shared) {
         let load = load_per_core();
         let lanes: Vec<Lane> = app.lanes.lock().unwrap().values().cloned().collect();
         let running = lanes.iter().filter(|l| l.pid.is_some()).count();
+        if tick.is_multiple_of(100) {
+            free_disk(&app, &lanes).await; // every ~5 minutes
+        }
+        tick += 1;
         app.emit("load", serde_json::json!({"load": (load * 100.0).round() / 100.0, "running": running, "max": cfg.max_parallel}));
         for l in lanes.iter().filter(|l| l.pid.is_some()) {
             let tracked = app.children.lock().unwrap().contains(&l.id);
@@ -299,6 +336,7 @@ async fn launch(app: &Shared, mut lane: Lane) -> Result<(), String> {
         .current_dir(&ws)
         .env("TIRITH_LANE", &lane.id)
         .env("TIRITH_PROJECT", &lane.project)
+        .env("CARGO_TARGET_DIR", shared_target(app, &lane.project))
         .env("TIRITH_HOME", &app.home)
         .stdin(Stdio::null())
         .stdout(log.try_clone().map_err(|e| e.to_string())?)
@@ -326,7 +364,13 @@ async fn launch(app: &Shared, mut lane: Lane) -> Result<(), String> {
 /// of the fallback chain); a waiting lane waits for its answer.
 async fn ended(app: &Shared, id: &str, code: Option<i32>) {
     let Some(lane) = app.lane(id) else { return };
-    let log = tail(&app.home.join(format!("logs/lanes/{id}.log")), 200);
+    // Only what the agent program itself said counts: its plain-text output and its final result event, never the
+    // files and command output it read (a lane working on Tirith reads the very patterns that detect it).
+    let log: String = tail(&app.home.join(format!("logs/lanes/{id}.log")), 200)
+        .lines()
+        .filter(|l| !l.trim_start().starts_with('{') || (l.contains("\"type\":\"result\"") && l.contains("\"is_error\":true")))
+        .collect::<Vec<_>>()
+        .join("\n");
     if lane.status == "running" && models::out_of_credits(&log) {
         let next = models::fallback(app, "workers", &lane.tried);
         app.update_lane(id, |l| {
