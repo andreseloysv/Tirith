@@ -55,6 +55,14 @@ perl -ne '
 ' "$1"
 "#;
 
+/// The repository's own hook, kept next to ours as `<hook>.local` when the guard was installed, still runs.
+const LOCAL: &str = r#"
+local_hook="$(cd "$(dirname "$0")" && pwd)/$(basename "$0").local"
+if [ -x "$local_hook" ]; then
+    "$local_hook" "$@" || exit 1
+fi
+"#;
+
 /// The project's forbidden words; empty when it needs no guard.
 pub fn words(app: &Shared, project: &Project) -> Vec<String> {
     let cfg = app.cfg();
@@ -94,7 +102,7 @@ fn render(hook: &str, words: &[String]) -> String {
         _ => ("Blocks the commit when the message contains a forbidden word (whole word, any case); # lines are ignored.", COMMIT_MSG),
     };
     let re = words.join("|").replace('\'', "'\\''");
-    HEAD.replace("{what}", what).replace("{words}", &words.join(",")).replace("{re}", &re) + body
+    HEAD.replace("{what}", what).replace("{words}", &words.join(",")).replace("{re}", &re) + body + LOCAL
 }
 
 /// A `core.hooksPath` in the repo's or the user's git config makes git skip the guard.
