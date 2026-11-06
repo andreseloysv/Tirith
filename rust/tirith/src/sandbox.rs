@@ -123,6 +123,7 @@ pub fn wrap(app: &Shared, who: &str, argv: Vec<String>) -> Launch {
         }
     }
     env.push(("PATH".into(), format!("{}:{}", app.home.join("net/bin").display(), app.child_path())));
+    env.push(("ZDOTDIR".into(), app.home.join("net/zdot").display().to_string()));
     let mut all = vec!["-p".to_string(), PROFILE.to_string(), program];
     all.extend(args);
     Launch { program: SANDBOX_EXEC.into(), args: all, env }
@@ -158,6 +159,14 @@ fn write_wrappers(app: &Shared) {
         }
         use std::os::unix::fs::PermissionsExt;
         let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755));
+    }
+    // Agents run commands in zsh login shells, where macOS's path_helper puts /usr/bin before the wrappers again:
+    // the ZDOTDIR given to sandboxed processes loads the owner's own startup files, then puts the wrappers first.
+    let zdot = app.home.join("net/zdot");
+    let _ = std::fs::create_dir_all(&zdot);
+    for file in [".zshenv", ".zprofile", ".zshrc", ".zlogin"] {
+        let text = format!("[ -f \"$HOME/{file}\" ] && . \"$HOME/{file}\"\nexport PATH=\"{}:$PATH\"\n", dir.display());
+        let _ = std::fs::write(zdot.join(file), text);
     }
 }
 
