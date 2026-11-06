@@ -353,27 +353,33 @@ def changed_paths(repo: Path, base: str, branch: str) -> list[str]:
     return _git(repo, "diff", "--name-only", mb, branch).stdout.split() if mb else []
 
 
-def needs_of(paths: list[str]) -> tuple[bool, bool]:
-    """``(test stages, rust stage)`` a lane with these changed files needs; an unknown diff needs everything."""
+def needs_of(paths: list[str]) -> tuple[bool, bool, list[str]]:
+    """``(test stages, rust stage, changed files)`` a lane with these changed files needs; an unknown diff needs
+    everything. The files are kept for the stages that declare ``paths``."""
     if not paths:
-        return True, True
+        return True, True, []
     if all(p.startswith(DOC_ONLY) or p.endswith(".md") for p in paths):
-        return False, False
+        return False, False, paths
     rust = any(p.startswith("app/src-tauri/") or p.rsplit("/", 1)[-1].startswith("Cargo.") for p in paths)
-    return True, rust
+    return True, rust, paths
 
 
-def select_stages(stages: list[tuple[str, manifest_mod.Stage]], needs: list[tuple[bool, bool]]
+def select_stages(stages: list[tuple[str, manifest_mod.Stage]], needs: list[tuple[bool, bool, list[str]]]
                   ) -> tuple[list[tuple[str, manifest_mod.Stage]], list[str]]:
-    """The stages to run for lanes with these ``needs`` (the union), and the names skipped. Builds always run."""
+    """The stages to run for lanes with these ``needs`` (the union), and the names skipped. Builds always run,
+    unless they declare ``paths``; a stage with ``paths`` runs only when a file changed by any lane matches (a lane
+    with an unknown diff runs everything). Without ``paths``: docs-only skips tests, the Rust stage needs Rust."""
     tests, rust = any(n[0] for n in needs), any(n[1] for n in needs)
+    changed = [f for n in needs for f in n[2]]
+    unknown = any(not n[2] for n in needs)
     kept, skipped = [], []
     for pipeline, stage in stages:
         is_test = manifest_mod.stage_kind(stage) == "test"
-        if is_test and not (rust if stage.name == RUST_STAGE else tests):
-            skipped.append(stage.name)
+        if stage.paths:
+            run = unknown or manifest_mod.stage_needed(stage, changed)
         else:
-            kept.append((pipeline, stage))
+            run = not is_test or (rust if stage.name == RUST_STAGE else tests)
+        (kept if run else skipped).append((pipeline, stage) if run else stage.name)
     return kept, skipped
 
 
