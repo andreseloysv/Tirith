@@ -148,8 +148,8 @@ fn hook(event: String) -> Result<(), String> {
         eprintln!("{why}");
         std::process::exit(2);
     }
-    if v["hookSpecificOutput"]["additionalContext"].is_string() {
-        println!("{body}");
+    if v["hookSpecificOutput"].is_object() {
+        println!("{body}"); // an allow decision or context for the agent
     }
     Ok(())
 }

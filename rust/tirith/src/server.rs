@@ -223,6 +223,12 @@ async fn hook(State(app): State<Shared>, Path(event): Path<String>, headers: Hea
         }
         return Json(json!({"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": lines.join("\n")}}));
     }
+    if event == "PreToolUse" {
+        // In a lane the rules above (with the network sandbox) are the barrier: an allowed call needs no
+        // permission prompt, which a headless agent could never answer.
+        return Json(json!({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow",
+            "permissionDecisionReason": "allowed by Tirith's rules"}}));
+    }
     if event == "Stop" {
         let last = s(&p, "last_assistant_message");
         if !last.trim().is_empty() {
