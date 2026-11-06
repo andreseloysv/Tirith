@@ -170,7 +170,7 @@ def test_a_reviews_test_suite_waits_for_a_stage_slot(home: Path, tmp_path: Path,
 
     @contextlib.contextmanager
     def slot(home_, maximum, wait=600.0, poll=1.0):
-        seen.append(("slot", maximum, wait))
+        seen.append(("slot", maximum(), wait))
         yield 0
         seen.append(("free",))
     monkeypatch.setattr(loadlimit_mod, "slot", slot)
