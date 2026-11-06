@@ -22,11 +22,13 @@ from tirith.store import read_json, read_jsonl, write_lane
 
 
 def alive(pid: int) -> bool:
+    """Running, not merely present: a killed orphan nobody reaps (PID 1 in a container) stays a zombie."""
+    from tirith import procs
     try:
         os.kill(pid, 0)
     except OSError:
         return False
-    return True
+    return not any(p.pid == pid and p.zombie for p in procs.snapshot())
 
 
 def wait_gone(*pids: int, within: float = 15.0) -> bool:
