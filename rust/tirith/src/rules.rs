@@ -7,7 +7,11 @@ use serde_json::Value;
 use std::sync::LazyLock;
 
 static GUARD: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"--no-verify|\bgit\b[^;&|]*\bcommit\b[^;&|]*\s-[a-zA-Z]*n\b|core\.hooksPath|\.git/hooks").unwrap()
+    Regex::new(r"--no-verify|\bgit\b[^;&|]*\bcommit\b[^;&|]*\s-[a-zA-Z]*n\b|core\.hooksPath").unwrap()
+});
+/// A shell command that changes files: with `.git/hooks` in it, it is refused (reading the hooks stays allowed).
+static WRITES: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"\b(rm|mv|cp|ln|chmod|chflags|chown|tee|truncate|touch|install|unlink|rsync)\b|>|\b(sed|perl)\s+-[a-zA-Z]*i").unwrap()
 });
 static MAIN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"\bgit\b[^;&|]*\b(push|update-ref)\b|\bgit\b[^;&|]*\b(checkout|switch)\s+(main|master)\b|\bgit\b[^;&|]*\bbranch\s+-[fDM]\b[^;&|]*\b(main|master)\b").unwrap()
@@ -23,7 +27,8 @@ pub fn check(app: &Shared, tool: &str, input: &Value, lane: Option<&Lane>, proje
     let edit = EDIT_TOOLS.contains(&tool);
     let bash = tool == "Bash";
 
-    if (bash && GUARD.is_match(cmd)) || (edit && file.contains("/.git/hooks/")) {
+    let hooks_write = bash && cmd.contains(".git/hooks") && WRITES.is_match(cmd);
+    if (bash && GUARD.is_match(cmd)) || hooks_write || (edit && file.contains("/.git/hooks/")) {
         return Some("Commit checks are never skipped (--no-verify, commit -n, core.hooksPath, .git/hooks). \
                      Fix what the check reports and commit again."
             .into());
