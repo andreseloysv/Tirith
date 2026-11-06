@@ -71,7 +71,7 @@ failed. Click: the checks in plain words, then "Fixed by Tirith" with `fixed` (n
 ## Stable copy
 
 Tirith runs from `<home>/stable/current`, a symlink to `<home>/stable/releases/<id>/` (copies of `tirith/`,
-`tests/`, `pyproject.toml`, `uv.lock`). `tirith stable promote [--source <collector>] [--test <cmd>]` copies the
+`tests/`, `pyproject.toml`, `uv.lock`, `state.schema.json` and the other top-level files the tests read). `tirith stable promote [--source <collector>] [--test <cmd>]` copies the
 source to a new release and runs the full test (default `uv run -q pytest -q tests`) inside the copy; only a pass
 moves `current` (the old one becomes `previous`), a red test deletes the copy and records `last_rejected`.
 A promoted release is on trial for 30 min: when `state.health.level` stays red for 2 min (checked every

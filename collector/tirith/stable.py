@@ -24,7 +24,8 @@ from tirith.store import read_json, write_json_atomic
 WATCH_S = 1800.0   # a new release is on trial this long after it became current
 RED_S = 120.0      # health must stay red this long (no flapping) before the release is rolled back
 KEEP = 3           # releases kept on disk (current and previous always)
-COPY = ("tirith", "tests", "pyproject.toml", "uv.lock")
+COPY = ("tirith", "tests", "pyproject.toml", "uv.lock", "state.schema.json", "tirith_guard.py", "fixture_js.py",
+        "demo.py", "tirith-collector.plist.template", "README.md")
 _IGNORE = shutil.ignore_patterns("__pycache__", "*.pyc", ".pytest_cache", ".venv")
 
 
