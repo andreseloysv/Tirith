@@ -37,6 +37,7 @@ EVERY_S = 3600.0   # a run every hour
 LIMIT_S = 900.0    # from the start of a run to the push and the tick
 KEPT = 10          # results kept
 POLL_S = 2.0
+TICK_WAIT_S = 120.0  # the collector ticks the merged item on its own pass: wait for it, do not look once
 MANIFEST = ('deploy = "none"\n\n[[pipelines]]\nid = "ci"\n\n[[pipelines.stages]]\nname = "build"\nrun = "true"\n\n'
             '[[pipelines.stages]]\nname = "test"\nrun = "echo 1 passed"\n')
 PLAN = "# Canary plan\n\n## 1. Canary\n\n"
@@ -253,6 +254,11 @@ def run(home: Path, *, wait_s: float = LIMIT_S, pump: Callable[[], None] | None 
         if last["result"] == mergeq_mod.PUSH_FAILED or _git(origin_of(home), "cat-file", "-e", "main:canary.txt").returncode:
             return work.finish(False, "push", last.get("message") or "canary.txt is not on the origin's main")
         work.reach("tick")
+        tick_deadline = time.monotonic() + TICK_WAIT_S
+        while not _plan_item_done(repo, item) and time.monotonic() < tick_deadline:
+            if pump is not None:
+                pump()
+            sleep(POLL_S)
         if not _plan_item_done(repo, item):
             return work.finish(False, "tick", "the plan item is not ticked in the canary's docs/TODO.md")
         return work.finish(True, "tick")
