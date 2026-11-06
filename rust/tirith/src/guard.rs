@@ -66,20 +66,13 @@ fi
 /// The project's forbidden words; empty when it needs no guard.
 pub fn words(app: &Shared, project: &Project) -> Vec<String> {
     let cfg = app.cfg();
-    let entry = cfg.raw.get("projects").and_then(|p| p.as_array()).and_then(|ps| {
-        ps.iter().find(|p| p.get("id").and_then(|i| i.as_str()) == Some(project.id.as_str())).cloned()
-    });
+    let entry = cfg.raw.get("projects").and_then(|p| p.as_array()).and_then(|ps| ps.iter().find(|p| p.get("id").and_then(|i| i.as_str()) == Some(project.id.as_str())).cloned());
     let entry = entry.unwrap_or(toml::Value::Table(Default::default()));
     if entry.get("guard").and_then(|g| g.as_bool()) == Some(false) {
         return vec![];
     }
     let list = |v: Option<&toml::Value>| -> Option<Vec<String>> { v?.clone().try_into().ok() };
-    list(entry.get("guard_words"))
-        .or_else(|| list(cfg.raw.get("guard").and_then(|g| g.get("words"))))
-        .unwrap_or_default()
-        .into_iter()
-        .filter(|w| !w.trim().is_empty())
-        .collect()
+    list(entry.get("guard_words")).or_else(|| list(cfg.raw.get("guard").and_then(|g| g.get("words")))).unwrap_or_default().into_iter().filter(|w| !w.trim().is_empty()).collect()
 }
 
 /// The repo's common git dir, by reading `.git` (a folder, or a file pointing into a worktree's git dir).
@@ -107,9 +100,9 @@ fn render(hook: &str, words: &[String]) -> String {
 
 /// A `core.hooksPath` in the repo's or the user's git config makes git skip the guard.
 fn hooks_path_set(git: &std::path::Path) -> Option<PathBuf> {
-    [git.join("config"), home_dir().join(".gitconfig")].into_iter().find(|f| {
-        std::fs::read_to_string(f).is_ok_and(|t| t.lines().any(|l| l.trim().to_lowercase().replace(' ', "").starts_with("hookspath=")))
-    })
+    [git.join("config"), home_dir().join(".gitconfig")]
+        .into_iter()
+        .find(|f| std::fs::read_to_string(f).is_ok_and(|t| t.lines().any(|l| l.trim().to_lowercase().replace(' ', "").starts_with("hookspath="))))
 }
 
 /// Ok when the project's guard is installed and intact (or the project opts out); the reason otherwise.
@@ -243,7 +236,11 @@ pub fn cli(pos: &[&str], _flag: crate::client::Flag) -> Option<Result<(), String
             for p in &ps {
                 println!("{:<20} {}", p["project"].as_str().unwrap_or(""), p["reason"].as_str().unwrap_or(""));
             }
-            if ps.iter().all(|p| p["ok"] == true) { Ok(()) } else { Err("some project's guard needs attention".into()) }
+            if ps.iter().all(|p| p["ok"] == true) {
+                Ok(())
+            } else {
+                Err("some project's guard needs attention".into())
+            }
         }),
         ["guard", "install", rest @ ..] if rest.len() <= 1 => {
             let ids: Vec<String> = match rest.first() {
@@ -254,10 +251,17 @@ pub fn cli(pos: &[&str], _flag: crate::client::Flag) -> Option<Result<(), String
             for id in ids {
                 match call("POST", &format!("/api/guard/{id}/install"), None) {
                     Ok(_) => println!("{id}: installed"),
-                    Err(e) => { eprintln!("{id}: {e}"); failed = true; }
+                    Err(e) => {
+                        eprintln!("{id}: {e}");
+                        failed = true;
+                    }
                 }
             }
-            if failed { Err("some guards were not installed".into()) } else { Ok(()) }
+            if failed {
+                Err("some guards were not installed".into())
+            } else {
+                Ok(())
+            }
         }
         _ => return None,
     })

@@ -1,6 +1,6 @@
 //! HTTP on 127.0.0.1: the page, its JSON API, the change stream (SSE) and the agents' hooks.
 
-use crate::app::{now_s, tail, Shared};
+use crate::app::{bad, now_s, tail, Shared, R};
 use crate::{attach, brain, guard, lanes, manager, merge, metrics, models, plan, rooms, rules, sandbox};
 use axum::body::Bytes;
 use axum::extract::{Path, Query, Request, State};
@@ -17,12 +17,6 @@ use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::{Stream, StreamExt};
 
 static PORT: OnceLock<u16> = OnceLock::new();
-type R = Result<Json<Value>, (StatusCode, String)>;
-
-fn bad(e: String) -> (StatusCode, String) {
-    (StatusCode::BAD_REQUEST, e)
-}
-
 fn s(v: &Value, k: &str) -> String {
     v[k].as_str().unwrap_or("").to_string()
 }
@@ -66,13 +60,23 @@ async fn same_origin(req: Request, next: Next) -> Response {
         None => true,
         Some(o) => o == format!("http://127.0.0.1:{port}") || o == format!("http://localhost:{port}"),
     };
-    if ok { next.run(req).await } else { (StatusCode::FORBIDDEN, "foreign origin").into_response() }
+    if ok {
+        next.run(req).await
+    } else {
+        (StatusCode::FORBIDDEN, "foreign origin").into_response()
+    }
 }
 
 async fn state(State(app): State<Shared>) -> Json<Value> {
     let cfg = app.cfg();
-    let projects: Vec<Value> = cfg.projects.iter().map(|p| json!({"id": p.id, "name": p.name, "color": p.color,
-        "autopilot": lanes::autopilot_on(&app, &p.id), "main_red": app.kv(&format!("main_red:{}", p.id))})).collect();
+    let projects: Vec<Value> = cfg
+        .projects
+        .iter()
+        .map(|p| {
+            json!({"id": p.id, "name": p.name, "color": p.color,
+        "autopilot": lanes::autopilot_on(&app, &p.id), "main_red": app.kv(&format!("main_red:{}", p.id))})
+        })
+        .collect();
     let lanes: Vec<Value> = app.lanes.lock().unwrap().values().map(|l| json!(l)).collect();
     Json(json!({
         "projects": projects,
@@ -203,8 +207,7 @@ async fn hook(State(app): State<Shared>, Path(event): Path<String>, headers: Hea
     }
     if event == "PreToolUse" {
         let unsandboxed = lane.is_none() && header("x-tirith-role").is_none();
-        let refusal = rules::check(&app, &tool, &p["tool_input"], lane.as_ref(), project.as_ref())
-            .or_else(|| if unsandboxed { sandbox::check_command(&app, &tool, &p["tool_input"]) } else { None });
+        let refusal = rules::check(&app, &tool, &p["tool_input"], lane.as_ref(), project.as_ref()).or_else(|| if unsandboxed { sandbox::check_command(&tool, &p["tool_input"]) } else { None });
         if let Some(why) = refusal {
             app.event(&lane_id, &project_id, "blocked", &tool, &format!("{summary} — {why}"), &session);
             return Json(json!({"hookSpecificOutput": {"hookEventName": "PreToolUse",

@@ -40,7 +40,7 @@ tirith hooks install                           point the agents' hooks at the da
 (modules add: tirith room …, tirith net …, tirith models …, tirith guard …)";
 
 type ModuleCli = fn(&[&str], client::Flag) -> Option<Result<(), String>>;
-const MODULE_CLI: [ModuleCli; 7] = [rooms::cli, sandbox::cli, models::cli, guard::cli, metrics::cli, brain::cli, attach::cli];
+const MODULE_CLI: [ModuleCli; 4] = [rooms::cli, sandbox::cli, models::cli, guard::cli];
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -67,11 +67,7 @@ fn main() {
         ["status"] => status(),
         ["plan", "show", project] => plan_show(project),
         ["plan", "add", project, step, text] => print(call("POST", &format!("/api/plan/{project}"), Some(json!({"step": step, "text": text})))),
-        ["lane", "start", project, step, item] => print(call(
-            "POST",
-            "/api/lanes",
-            Some(json!({"project": project, "step": step, "item": item, "agent": flag("--agent")})),
-        )),
+        ["lane", "start", project, step, item] => print(call("POST", "/api/lanes", Some(json!({"project": project, "step": step, "item": item, "agent": flag("--agent")})))),
         ["lane", "stop", id] => print(call("POST", &format!("/api/lanes/{id}/stop"), None)),
         ["lane", "log", id] => call("GET", &format!("/api/lanes/{id}/log"), None).map(|b| println!("{b}")),
         ["ask", question] => {
@@ -103,7 +99,14 @@ fn status() -> Result<(), String> {
     let lanes = s["lanes"].as_array().cloned().unwrap_or_default();
     let mut shown = 0;
     for l in lanes.iter().filter(|l| matches!(l["status"].as_str(), Some("queued" | "running" | "waiting" | "merge-queued" | "merging"))) {
-        println!("{:<14} {:<40} {}:{} {}", l["status"].as_str().unwrap_or(""), l["id"].as_str().unwrap_or(""), l["project"].as_str().unwrap_or(""), l["step"].as_str().unwrap_or(""), l["item"].as_str().unwrap_or(""));
+        println!(
+            "{:<14} {:<40} {}:{} {}",
+            l["status"].as_str().unwrap_or(""),
+            l["id"].as_str().unwrap_or(""),
+            l["project"].as_str().unwrap_or(""),
+            l["step"].as_str().unwrap_or(""),
+            l["item"].as_str().unwrap_or("")
+        );
         shown += 1;
     }
     if shown == 0 {
@@ -136,10 +139,7 @@ fn plan_show(project: &str) -> Result<(), String> {
 fn hook(event: String) -> Result<(), String> {
     let mut input = String::new();
     let _ = std::io::stdin().read_to_string(&mut input);
-    let headers = [
-        ("X-Tirith-Lane", std::env::var("TIRITH_LANE").unwrap_or_default()),
-        ("X-Tirith-Role", std::env::var("TIRITH_ROLE").unwrap_or_default()),
-    ];
+    let headers = [("X-Tirith-Lane", std::env::var("TIRITH_LANE").unwrap_or_default()), ("X-Tirith-Role", std::env::var("TIRITH_ROLE").unwrap_or_default())];
     let Ok(body) = call_with("POST", &format!("/hook/{event}"), input, &headers, Duration::from_secs(5)) else { return Ok(()) };
     let v: Value = serde_json::from_str(&body).unwrap_or(json!({}));
     let deny = v["hookSpecificOutput"]["permissionDecisionReason"].as_str().filter(|_| v["hookSpecificOutput"]["permissionDecision"] == "deny");
@@ -172,11 +172,8 @@ fn install_hooks() -> Result<(), String> {
             .into_iter()
             .map(|mut g| {
                 if let Some(hs) = g["hooks"].as_array() {
-                    let hs: Vec<Value> = hs
-                        .iter()
-                        .filter(|h| !h["command"].as_str().unwrap_or("").starts_with("tirith hook") && !h["url"].as_str().unwrap_or("").contains("/hook/"))
-                        .cloned()
-                        .collect();
+                    let hs: Vec<Value> =
+                        hs.iter().filter(|h| !h["command"].as_str().unwrap_or("").starts_with("tirith hook") && !h["url"].as_str().unwrap_or("").contains("/hook/")).cloned().collect();
                     g["hooks"] = json!(hs);
                 }
                 g
@@ -197,10 +194,8 @@ fn serve() -> Result<(), String> {
     rt.block_on(async {
         let app = app::App::open();
         let port = app.cfg().port;
-        let listener = tokio::net::TcpListener::bind(("127.0.0.1", port))
-            .await
-            .map_err(|e| format!("port {port} is taken (is tirith already running?): {e}"))?;
-        for start in [sandbox::start, models::start, rooms::start, brain::start, guard::start, metrics::start, attach::start] {
+        let listener = tokio::net::TcpListener::bind(("127.0.0.1", port)).await.map_err(|e| format!("port {port} is taken (is tirith already running?): {e}"))?;
+        for start in [sandbox::start, rooms::start, brain::start, guard::start, metrics::start] {
             start(app.clone());
         }
         tokio::spawn(lanes::scheduler(app.clone()));

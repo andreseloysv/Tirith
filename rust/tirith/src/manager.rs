@@ -3,10 +3,10 @@
 
 use crate::app::{kill_group, now_iso, now_s, Shared};
 use crate::{models, rooms, rules, sandbox};
-use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::Mutex;
 use serde_json::{json, Value};
 use std::process::Stdio;
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Mutex;
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::mpsc;
@@ -132,11 +132,8 @@ pub fn ask_owner(app: &Shared, kind: &str, question: &str) -> Result<Value, Stri
         let db = app.db.lock().unwrap();
         let n: i64 = db.query_row("SELECT COUNT(*) FROM owner_items", [], |r| r.get(0)).unwrap_or(0);
         let row = json!({"id": format!("o{}", n + 1), "at": now_iso(), "kind": kind, "question": question.trim(), "status": "open", "answer": ""});
-        db.execute(
-            "INSERT INTO owner_items (id, at, kind, question, status, answer) VALUES (?1,?2,?3,?4,'open','')",
-            rusqlite::params![row["id"].as_str(), row["at"].as_str(), kind, question.trim()],
-        )
-        .map_err(|e| e.to_string())?;
+        db.execute("INSERT INTO owner_items (id, at, kind, question, status, answer) VALUES (?1,?2,?3,?4,'open','')", rusqlite::params![row["id"].as_str(), row["at"].as_str(), kind, question.trim()])
+            .map_err(|e| e.to_string())?;
         row
     };
     app.emit("owner", row.clone());
@@ -145,12 +142,7 @@ pub fn ask_owner(app: &Shared, kind: &str, question: &str) -> Result<Value, Stri
 
 /// The owner's answer to an open card, handed to the manager.
 pub fn owner_answer(app: &Shared, id: &str, answer: &str) -> Result<Value, String> {
-    let kind: String = app
-        .db
-        .lock()
-        .unwrap()
-        .query_row("SELECT kind FROM owner_items WHERE id = ?1 AND status = 'open'", [id], |r| r.get(0))
-        .map_err(|_| format!("no open question '{id}'"))?;
+    let kind: String = app.db.lock().unwrap().query_row("SELECT kind FROM owner_items WHERE id = ?1 AND status = 'open'", [id], |r| r.get(0)).map_err(|_| format!("no open question '{id}'"))?;
     let _ = app.db.lock().unwrap().execute("UPDATE owner_items SET status = 'answered', answer = ?1 WHERE id = ?2", rusqlite::params![answer, id]);
     app.emit("owner", json!({"id": id, "status": "answered", "answer": answer}));
     notify(app, &format!("The owner answered {id} ({kind}): {answer}"));
@@ -189,10 +181,7 @@ async fn session(app: &Shared) -> Result<(), String> {
     cmd.argv.extend(["--append-system-prompt".into(), PROMPT.into()]);
     let launch = sandbox::wrap(app, "manager", cmd.argv);
     let log = std::fs::OpenOptions::new().create(true).append(true).open(app.home.join("logs/manager.log")).map_err(|e| e.to_string())?;
-    let mut command = launch.command();
-    if !launch.env.iter().any(|(k, _)| k == "PATH") {
-        command.env("PATH", app.child_path());
-    }
+    let mut command = launch.command(app);
     let mut child = command
         .current_dir(app.home.join("manager"))
         .env("TIRITH_ROLE", "manager")
