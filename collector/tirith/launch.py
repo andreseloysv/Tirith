@@ -213,14 +213,41 @@ def lane_id_for(title: str, taken: set[str], repo: Path) -> str:
     return candidate
 
 
+def sparse_patterns(exclude: list[str]) -> str:
+    """Non-cone sparse-checkout patterns: everything except each excluded path."""
+    return "\n".join(["/*", *(f"!/{p}/" for p in exclude)]) + "\n"
+
+
+def worktree_add(repo: Path, path: Path, *, branch: str | None = None, base: str | None = None,
+                 exclude: list[str] | None = None) -> str | None:
+    """``git worktree add`` at ``path`` (new ``branch`` from ``base``, else a detached ``base``/HEAD), with the
+    ``exclude`` paths left out of the checkout (sparse, so committing there never deletes them). On failure or
+    timeout the half-made folder is removed and worktrees pruned; returns the error text, else ``None``."""
+    args = ["git", "-C", str(repo), "worktree", "add", "-q", *(["--no-checkout"] if exclude else []),
+            *(["-b", branch] if branch else ["--detach"]), str(path), *([base] if base else [])]
+    done = timeouts_mod.run(args, "git-worktree-add", text=True)
+    if done.returncode == 0 and exclude:
+        done = timeouts_mod.run(["git", "-C", str(path), "sparse-checkout", "set", "--no-cone", "--stdin"], "git",
+                                text=True, input=sparse_patterns(exclude))
+        if done.returncode == 0:
+            done = timeouts_mod.run(["git", "-C", str(path), "checkout", "-q"], "git-worktree-add", text=True)
+    if done.returncode == 0:
+        return None
+    error = (getattr(done, "error", None) or done.stderr or done.stdout or "git failed").strip()
+    shutil.rmtree(path, ignore_errors=True)
+    timeouts_mod.run(["git", "-C", str(repo), "worktree", "prune"], "git", text=True)
+    return error
+
+
 def create_worktree(repo: Path, lane_id: str, base: str | None = None) -> Path:
-    """The worktree ``<repo>-lanes/<lane-id>`` on a new branch ``lane/<lane-id>`` (from ``base``, else HEAD)."""
+    """The worktree ``<repo>-lanes/<lane-id>`` on a new branch ``lane/<lane-id>`` (from ``base``, else HEAD).
+    The manifest's ``lane_exclude`` paths are not checked out."""
     path = worktree_path(repo, lane_id)
     path.parent.mkdir(parents=True, exist_ok=True)
-    done = timeouts_mod.run(["git", "-C", str(repo), "worktree", "add", "-q", "-b", f"lane/{lane_id}", str(path),
-                             *([base] if base else [])], "git", text=True)
-    if done.returncode != 0:
-        raise LaunchError(f"git worktree add failed: {(done.stderr or done.stdout).strip()}")
+    error = worktree_add(repo, path, branch=f"lane/{lane_id}", base=base,
+                         exclude=manifest_mod.load(repo).lane_exclude)
+    if error is not None:
+        raise LaunchError(f"git worktree add failed: {error}")
     link_node_modules(repo, path)
     return path
 
