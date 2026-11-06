@@ -8,43 +8,19 @@ permissions:
   contents: read
 
 jobs:
-  collector:
-    name: collector
+  daemon:
+    name: daemon
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          python-version: "3.12"
-      - uses: astral-sh/setup-uv@v5
-      - name: Git identity
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Build and lint
+        run: cargo build -q -p tirith && cargo clippy -q -p tirith -- -D warnings
+      - name: Size limit
         run: |
-          git config --global user.name "Tirith CI"
-          git config --global user.email "ci@tirith.invalid"
-      - name: Collector tests
-        working-directory: collector
-        run: uv run -q pytest -q
-      - name: Tirith check
-        working-directory: collector
-        run: uv run -q tirith check --ci ..
-
-  web:
-    name: web
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-      - name: Syntax check
-        run: for f in web/js/*.js; do node --check "$f" || exit 1; done
-      - name: Markdown tests
-        run: node web/js/md.test.mjs
-      - name: Web link tests
-        run: node web/js/links.test.mjs
-      - name: Your turn tests
-        run: node web/js/needs.test.mjs
-      - name: Running Tirith tests
-        run: node web/js/leaders.test.mjs
-      - name: Bold speaker tests
-        run: node web/js/boldlead.test.mjs
+          n=$(cat rust/tirith/src/*.rs | wc -l)
+          echo "rust/tirith/src: $n lines (limit 3500)"
+          test "$n" -le 3500

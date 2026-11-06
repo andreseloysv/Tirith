@@ -1,4 +1,4 @@
 [workspace]
 resolver = "2"
-members = ["rust/tirith-core", "rust/tirith-cli", "app/src-tauri"]
-default-members = ["app/src-tauri"]
+members = ["rust/tirith", "app/src-tauri"]
+default-members = ["rust/tirith"]
