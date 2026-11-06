@@ -1121,13 +1121,15 @@ def run(home: Path, config: Config, lanes: list[dict], *, spawn: Callable | None
     (``spawn`` defaults to ``launch.spawn_detached``; only ``dry_run`` skips starting it)."""
     from tirith import autoreview as autoreview_mod, launch as launch_mod
     spawn = spawn or launch_mod.spawn_detached
-    from tirith.store import read_lane
+    from tirith.store import read_lanes
     changed = False
-    for seen in lanes:
-        if not _may_enqueue(seen):
+    # The snapshot the dispatcher got can be a whole cycle old (a lane that ended since still reads as running, a
+    # lane started and ended in between is missing): the lane files on disk are the truth, so a done lane queues
+    # in this tick (``lanes`` is kept for the callers; it is not consulted).
+    for lane in read_lanes(home):
+        if not _may_enqueue(lane):
             continue
-        lane = read_lane(home, str(seen.get("id") or ""))
-        if isinstance(lane, dict) and ready_to_enqueue(home, lane, autoreview_mod.repo_of(config, lane)):
+        if ready_to_enqueue(home, lane, autoreview_mod.repo_of(config, lane)):
             enqueue(home, str(lane["id"]))
             changed = True
     data = load(home)
