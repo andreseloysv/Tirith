@@ -171,6 +171,7 @@ async fn run_stage(app: &Shared, pipe: &Pipe, dir: &Path, name: &str, run: &str)
     let who = format!("merge:{}", pipe.lanes.split(',').next().filter(|l| !l.is_empty()).unwrap_or("main"));
     let launch = sandbox::wrap(app, &who, vec!["sh".into(), "-c".into(), run.into()]);
     let mut command = launch.command();
+    command.env("CARGO_TARGET_DIR", crate::lanes::shared_target(app, &pipe.project));
     if !launch.env.iter().any(|(k, _)| k == "PATH") {
         command.env("PATH", app.child_path());
     }
