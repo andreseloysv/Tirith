@@ -48,7 +48,14 @@ _NOT_DONE = re.compile(r"\b(?:no|nothing|none|not|never|won'?t|will not|cannot|c
                        r"\b(?:not|never|n't|nothing|un)\s*(?:yet\s+)?(?:be\s+|been\s+)?(?:merged|pushed)\b|"
                        r"\b(?:to|will|ready to|can|must|should|before|until|then)\s+(?:be\s+)?(?:merge|push)(?:ed)?\b|"
                        r"\bunmerged\b|\bmerged\s+(?:origin/)?(?:main|master)\b|\bmerge\s+(?:origin/)?(?:main|master)\b|"
-                       r"\bmerged\b[^.\n]*?\binto\s+(?:this|the|my|our|its|that)\s+(?:\w+\s+)?branch\b", re.IGNORECASE)
+                       r"\bmerged\b[^.\n]*?\binto\s+(?:this|the|my|our|its|that)\s+(?:\w+\s+)?branch\b|"
+                       # main coming into the lane is not the lane joining main
+                       r"\b(?:main|master)\b[^.\n]*?\bmerged\s+(?:in)?to\s+(?:this|the|my|our|its|that)\s+(?:\w+\s+)?lane\b|"
+                       r"\bmerged\s+(?:in)?to\s+(?:this|the|my|our|its|that)\s+(?:\w+\s+)?lane\b|"
+                       r"\barrived\s+(?:through|via|with|from|by)\b[^.\n]*?\bmerge\b|"
+                       r"\bthrough\s+(?:lane\s+)?[\w-]+(?:'s|\u2019s)\s+merge\b", re.IGNORECASE)
+# a word cited in quotes ('merged') names the word; it claims nothing
+_QUOTED_VERB = re.compile(r"(?<![\w])(['\"`\u2018\u201c])\s*(?:merged|pushed|merge|push)\s*(['\"`\u2019\u201d])(?!\w)", re.IGNORECASE)
 _SHOT = re.compile(r"\b(?:screenshots?|looked at|viewed|inspected|eyeballed)\b", re.IGNORECASE)
 _IMAGE = re.compile(r"\.(?:png|jpe?g|gif|webp)$", re.IGNORECASE)
 _FIX_ITEM = re.compile(r"^\s*(?:[-*]|\d+[.)])\s*\**(?:fix|repair|correct)\b[^\n]*", re.IGNORECASE | re.MULTILINE)
@@ -296,7 +303,7 @@ def check_git(report: str, workspace: Path, repo: Path | None, result: Result) -
             result.claims.append(f"commit {sha}")
             if not _ok(workspace, "cat-file", "-e", f"{sha}^{{commit}}"):
                 result.mismatches.append(f"said it committed as {sha}; there is no such commit in the repo")
-    text = "\n".join(ln for ln in _lines(report) if not _NOT_DONE.search(ln))
+    text = "\n".join(ln for ln in (_QUOTED_VERB.sub("", l) for l in _lines(report)) if not _NOT_DONE.search(ln))
     if _MERGED.search(text) and repo is not None and head:
         result.claims.append("merged")
         if not _ok(repo, "merge-base", "--is-ancestor", head, "HEAD"):
