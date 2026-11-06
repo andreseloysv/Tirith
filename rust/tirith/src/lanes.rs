@@ -133,7 +133,7 @@ fn is_owner_wait(text: &str) -> bool {
     t.contains("(espera:") || t.contains("(espera :")
 }
 
-fn is_autopilot_skipped(text: &str) -> bool {
+pub(crate) fn is_autopilot_skipped(text: &str) -> bool {
     is_role_item(text) || is_owner_wait(text)
 }
 
