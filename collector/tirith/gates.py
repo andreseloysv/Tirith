@@ -277,9 +277,16 @@ def _commit_no_verify(args: list[str]) -> bool:
     return False
 
 
+def _runs_guard_reinstall(tokens: list[str]) -> bool:
+    """True when this simple command runs `tirith guard reinstall` (not just quotes it as text)."""
+    words = [os.path.basename(t) for t in tokens]
+    return any(words[i] == "tirith" and words[i + 1:i + 3] == ["guard", "reinstall"]
+               for i in range(len(words)))
+
+
 def _git_rules(line: str, segments: list[list[str]]) -> list[Violation]:
     out: list[Violation] = []
-    if re.search(r"\btirith\b.*\bguard\s+reinstall\b", line):
+    if any(_runs_guard_reinstall(tokens) for tokens in segments):
         out.append(Violation(
             "guard-reinstall", f"only the owner reinstalls the commit guard: {_clip(line)}",
             "ask the owner: tirith wait add --project <id> \"Reinstall the guard\" --run "
