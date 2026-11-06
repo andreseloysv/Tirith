@@ -231,6 +231,22 @@ def is_partial(command) -> bool:
     return bool(_PARTIAL.search(line))
 
 
+def _safe(text: str) -> str:
+    return re.sub(r"[^\w.-]+", "-", str(text)).strip("-") or "x"
+
+
+def stage_log_prefix(project: str, run_id: str) -> str:
+    """``ci-<project>-<n>`` for run ``ci#<n>``: the project is in the name, so two projects never share a log."""
+    kind, sep, number = str(run_id).partition("#")
+    if not sep:
+        return f"{_safe(project)}-{_safe(run_id)}" if project else _safe(run_id)
+    return "-".join(_safe(part) for part in (kind, project, number) if part)
+
+
+def stage_log_path(home: Path, project: str, run_id: str, stage: str) -> Path:
+    return Path(home) / "logs" / f"{stage_log_prefix(project, run_id)}-{stage}.log"
+
+
 def run_stage(home: Path, project: str, pipeline: str, stage: str, command: list[str] | str,
               cwd: str | Path | None, lane: str | None = None, run_id: str | None = None, *,
               worktree: str | None = None, branch: str | None = None, agent: str | None = None,
@@ -242,8 +258,7 @@ def run_stage(home: Path, project: str, pipeline: str, stage: str, command: list
     The run id is resolved from ``pipelines.json`` when not given. With ``reuse`` (the lane's ``tirith run``, the
     review and the merge queue) a test stage is not run again on a tree that already passed it."""
     run_id = resolve_run(home, project, pipeline, run_id, new_run, worktree)
-    safe_run = run_id.replace("#", "-").replace("/", "-")
-    log_path = Path(log).expanduser().resolve() if log else home / "logs" / f"{safe_run}-{stage}.log"
+    log_path = Path(log).expanduser().resolve() if log else stage_log_path(home, project, run_id, stage)
     log_path.parent.mkdir(parents=True, exist_ok=True)
     work = str(Path(cwd).resolve()) if cwd else str(Path.cwd().resolve())
     base = {"run": run_id, "project": project, "pipeline": pipeline, "stage": stage,
