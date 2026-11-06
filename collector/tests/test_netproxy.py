@@ -229,3 +229,17 @@ def test_swift_lane_stage_without_tirith_lane_gets_disable_sandbox(monkeypatch) 
     assert netproxy.swiftpm(cmd, env) == "(cd Packages/ZooCore && swift test --disable-sandbox --skip 'A/test(B|C)') && node --test x"
     assert netproxy.xcodebuild(["xcodebuild", "test"], env)[1].startswith("-IDEPackageSupport")
     assert netproxy.swiftpm(cmd, {}) == cmd
+
+
+def test_swiftpm_audio28_sh_dash_c_line_and_absolute_swift(monkeypatch) -> None:
+    """zoo audio-28: `tirith run --stage test` passes the manifest line as ["/bin/sh", "-c", line]; the flag must reach
+    the swift inside it, also when swift is written with its path."""
+    monkeypatch.delenv("TIRITH_LANE", raising=False)
+    monkeypatch.delenv(netproxy.SANDBOXED_ENV, raising=False)
+    env = {netproxy.LANE_STAGE_ENV: "1"}
+    line = "(cd Packages/ZooCore && swift test --skip 'A/b') && (test ! -d cms || node --test cms)"
+    out = netproxy.swiftpm(["/bin/sh", "-c", line], env)
+    assert out == ["/bin/sh", "-c", line.replace("swift test", "swift test --disable-sandbox")]
+    assert netproxy.swiftpm(out, env) == out
+    assert netproxy.swiftpm("/usr/bin/swift build && myswift test", env) == "/usr/bin/swift build --disable-sandbox && myswift test"
+    assert netproxy.swiftpm(["/bin/sh", "-c", line], {}) == ["/bin/sh", "-c", line]
