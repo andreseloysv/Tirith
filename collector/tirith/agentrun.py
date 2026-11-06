@@ -325,9 +325,15 @@ def _is_binary(data: bytes) -> bool:
     return b"\0" in data[:8192]
 
 
-def build_patch(workspace: str, start_commit: str) -> str:
+MAIN_CHECKOUT_PREFIXES = ("manager-",)  # sessions in the project's main checkout (same as activity.lane_files)
+
+
+def build_patch(workspace: str, start_commit: str, lane_id: str = "") -> str:
     """``git diff <start_commit>`` plus the contents of untracked files as added-file patches.
-    Binary files are listed only; the whole text is cut at ``DIFF_MAX`` bytes."""
+    Binary files are listed only; the whole text is cut at ``DIFF_MAX`` bytes. A manager session
+    (main checkout, maybe a huge index) gets an empty patch: no full diff."""
+    if str(lane_id).startswith(MAIN_CHECKOUT_PREFIXES):
+        return ""
     tracked = _git(workspace, "diff", "--no-color", start_commit)
     parts = [tracked.stdout.decode("utf-8", "replace")] if tracked.returncode == 0 else []
     listing = _git(workspace, "ls-files", "--others", "--exclude-standard", "-z")
@@ -363,7 +369,7 @@ def store_diff(home: Path, lane: dict) -> dict | None:
     if not workspace or not start or not Path(workspace).is_dir():
         return None
     try:
-        patch = build_patch(str(workspace), str(start))
+        patch = build_patch(str(workspace), str(start), str(lane.get("id") or ""))
     except (OSError, subprocess.SubprocessError):
         return None
     target = diff_path(home, str(lane["id"]))
