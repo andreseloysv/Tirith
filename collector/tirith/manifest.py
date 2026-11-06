@@ -99,6 +99,8 @@ class Manifest:
     deadline: str | None = None
     roles: dict[str, str] = field(default_factory=lambda: dict(ROLE_DEFAULTS))
     plans: list[str] = field(default_factory=list)
+    lane_exclude: list[str] = field(default_factory=list)  # heavy paths a lane worktree does not check out
+    mergeq_exclude: bool = False  # the merge queue's temporary worktrees skip them too
     includes: list[str] = field(default_factory=list)
     problems: list[Problem] = field(default_factory=list)
 
@@ -196,6 +198,9 @@ def parse_text(text: str, path: Path) -> Manifest:
             manifest.roles[key] = value
     plans = data.get("plans")
     manifest.plans = [str(p).strip() for p in plans if str(p).strip()] if isinstance(plans, list) else []
+    excl = data.get("lane_exclude")
+    manifest.lane_exclude = [str(p).strip().strip("/") for p in excl if str(p).strip().strip("/")] if isinstance(excl, list) else []
+    manifest.mergeq_exclude = data.get("mergeq_exclude") is True
     includes = data.get("include")
     manifest.includes = [str(p).strip() for p in includes if str(p).strip()] if isinstance(includes, list) else []
     pipes = data.get("pipelines")
