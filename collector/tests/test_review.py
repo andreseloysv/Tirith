@@ -169,7 +169,7 @@ def test_a_reviews_test_suite_waits_for_a_stage_slot(home: Path, tmp_path: Path,
     seen = []
 
     @contextlib.contextmanager
-    def slot(home_, maximum, wait=600.0, poll=1.0):
+    def slot(home_, maximum, wait=600.0, poll=1.0, **_):
         seen.append(("slot", maximum(), wait))
         yield 0
         seen.append(("free",))
