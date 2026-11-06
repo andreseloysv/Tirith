@@ -220,15 +220,8 @@ async fn poll(app: &Shared, r: &Room) -> Result<(), String> {
         // a public room whose cursor came without its messages (imported): show what is already there, deliver none
         let old = sealed::page(&base, &r.id, None, 0, &me.name).await?;
         let shown = old["messages"].as_array().into_iter().flatten().filter(|m| m["n"].as_u64() <= r.cursor && m["text"].is_string() && sealed::genuine(&m["event"], &platform, &r.id));
-        let shown: Vec<Msg> = shown
-            .map(|m| Msg {
-                n: m["n"].as_u64().unwrap_or(0),
-                at: m["at"].as_str().unwrap_or("").into(),
-                from: sealed::clean(m["from"].as_str().unwrap_or("")),
-                text: m["text"].as_str().unwrap_or("").into(),
-                device: false,
-            })
-            .collect();
+        let shown: Vec<Msg> =
+            shown.map(|m| Msg { n: m["n"].as_u64().unwrap_or(0), at: m["at"].as_str().unwrap_or("").into(), from: sealed::clean(m["from"].as_str().unwrap_or("")), text: m["text"].as_str().unwrap_or("").into(), device: false }).collect();
         update(app, &r.id, |r| r.messages = shown);
     }
     let after = r.cursor.or(if r.private() { Some(0) } else { None });
@@ -457,13 +450,8 @@ fn view(app: &Shared, r: &Room) -> Value {
     let base = base(app);
     let mut speakers: Vec<String> = owners(app);
     speakers.push(r.me.clone());
-    let needs: Vec<u64> = r
-        .messages
-        .iter()
-        .enumerate()
-        .filter(|(i, m)| !speakers.contains(&m.from) && owners(app).iter().any(|o| mentions(&m.text, o)) && !r.messages[i + 1..].iter().any(|l| speakers.contains(&l.from)))
-        .map(|(_, m)| m.n)
-        .collect();
+    let needs: Vec<u64> =
+        r.messages.iter().enumerate().filter(|(i, m)| !speakers.contains(&m.from) && owners(app).iter().any(|o| mentions(&m.text, o)) && !r.messages[i + 1..].iter().any(|l| speakers.contains(&l.from))).map(|(_, m)| m.n).collect();
     let mut people: BTreeMap<&str, (u32, &str)> = BTreeMap::new();
     for m in &r.messages {
         let e = people.entry(&m.from).or_default();
@@ -570,15 +558,19 @@ async fn api_join(State(app): State<Shared>, Json(b): Json<Value>) -> R {
     Ok(Json(view(&app, &r)))
 }
 
+/// Adds a one-use code, forgetting the oldest beyond eight.
+fn keep(codes: &mut Vec<String>, code: &str) {
+    codes.push(code.to_string());
+    codes.drain(..codes.len().saturating_sub(8));
+}
+
 async fn api_qr(State(app): State<Shared>, Path(id): Path<String>) -> R {
     let code = new_code();
     let ok = update(&app, &id, |r| {
         if r.kind != "manager" {
             return false;
         }
-        r.codes.push(code.clone());
-        let extra = r.codes.len().saturating_sub(8);
-        r.codes.drain(..extra);
+        keep(&mut r.codes, &code);
         r.invite = code.clone();
         true
     });
@@ -593,9 +585,7 @@ async fn api_invite(State(app): State<Shared>, Path(id): Path<String>) -> R {
     let code = new_code();
     let peer = update(&app, &id, |r| {
         (r.kind == "manager").then(|| {
-            r.join_codes.push(code.clone());
-            let extra = r.join_codes.len().saturating_sub(8);
-            r.join_codes.drain(..extra);
+            keep(&mut r.join_codes, &code);
             r.peer_code = format!("{}:{}:{code}", r.id, r.me_id);
             r.peer_code.clone()
         })

@@ -72,8 +72,7 @@ fn main() {
         ["lane", "log", id] => call("GET", &format!("/api/lanes/{id}/log"), None).map(|b| println!("{b}")),
         ["ask", question] => {
             let lane = std::env::var("TIRITH_LANE").map_err(|_| "tirith ask works inside a lane (TIRITH_LANE); the manager asks the owner with tirith ask-owner".to_string());
-            lane.and_then(|l| call("POST", &format!("/api/lanes/{l}/ask"), Some(json!({"question": question}))))
-                .map(|_| println!("Asked the manager. End your turn now; you will be resumed with the answer."))
+            lane.and_then(|l| call("POST", &format!("/api/lanes/{l}/ask"), Some(json!({"question": question})))).map(|_| println!("Asked the manager. End your turn now; you will be resumed with the answer."))
         }
         ["answer", id, answer] => print(call("POST", &format!("/api/lanes/{id}/answer"), Some(json!({"answer": answer})))),
         ["ask-owner", question] => {
@@ -99,14 +98,7 @@ fn status() -> Result<(), String> {
     let lanes = s["lanes"].as_array().cloned().unwrap_or_default();
     let mut shown = 0;
     for l in lanes.iter().filter(|l| matches!(l["status"].as_str(), Some("queued" | "running" | "waiting" | "merge-queued" | "merging"))) {
-        println!(
-            "{:<14} {:<40} {}:{} {}",
-            l["status"].as_str().unwrap_or(""),
-            l["id"].as_str().unwrap_or(""),
-            l["project"].as_str().unwrap_or(""),
-            l["step"].as_str().unwrap_or(""),
-            l["item"].as_str().unwrap_or("")
-        );
+        println!("{:<14} {:<40} {}:{} {}", l["status"].as_str().unwrap_or(""), l["id"].as_str().unwrap_or(""), l["project"].as_str().unwrap_or(""), l["step"].as_str().unwrap_or(""), l["item"].as_str().unwrap_or(""));
         shown += 1;
     }
     if shown == 0 {
@@ -172,8 +164,7 @@ fn install_hooks() -> Result<(), String> {
             .into_iter()
             .map(|mut g| {
                 if let Some(hs) = g["hooks"].as_array() {
-                    let hs: Vec<Value> =
-                        hs.iter().filter(|h| !h["command"].as_str().unwrap_or("").starts_with("tirith hook") && !h["url"].as_str().unwrap_or("").contains("/hook/")).cloned().collect();
+                    let hs: Vec<Value> = hs.iter().filter(|h| !h["command"].as_str().unwrap_or("").starts_with("tirith hook") && !h["url"].as_str().unwrap_or("").contains("/hook/")).cloned().collect();
                     g["hooks"] = json!(hs);
                 }
                 g

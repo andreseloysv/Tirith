@@ -180,9 +180,6 @@ mod tests {
     #[test]
     fn plan_add_rejects_invalid_checks() {
         let b = super::check_problem;
-        assert!(
-            ["tirith run -s test", "tirith check", "cd collector && ls", "cargo test && tirith run"].iter().all(|c| b(c).is_some())
-                && ["cargo test -q x", "tirith plan show p", "cd collectors"].iter().all(|c| b(c).is_none())
-        );
+        assert!(["tirith run -s test", "tirith check", "cd collector && ls", "cargo test && tirith run"].iter().all(|c| b(c).is_some()) && ["cargo test -q x", "tirith plan show p", "cd collectors"].iter().all(|c| b(c).is_none()));
     }
 }

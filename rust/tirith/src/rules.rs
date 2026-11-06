@@ -9,8 +9,7 @@ use std::sync::LazyLock;
 static GUARD: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"--no-verify|\bgit\b[^;&|]*\bcommit\b[^;&|]*\s-[a-zA-Z]*n\b|core\.hooksPath").unwrap());
 /// A shell command that changes files: with `.git/hooks` in it, it is refused (reading the hooks stays allowed).
 static WRITES: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b(rm|mv|cp|ln|chmod|chflags|chown|tee|truncate|touch|install|unlink|rsync)\b|>|\b(sed|perl)\s+-[a-zA-Z]*i").unwrap());
-static MAIN: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"\bgit\b[^;&|]*\b(push|update-ref)\b|\bgit\b[^;&|]*\b(checkout|switch)\s+(main|master)\b|\bgit\b[^;&|]*\bbranch\s+-[fDM]\b[^;&|]*\b(main|master)\b").unwrap());
+static MAIN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\bgit\b[^;&|]*\b(push|update-ref)\b|\bgit\b[^;&|]*\b(checkout|switch)\s+(main|master)\b|\bgit\b[^;&|]*\bbranch\s+-[fDM]\b[^;&|]*\b(main|master)\b").unwrap());
 
 const EDIT_TOOLS: [&str; 4] = ["Edit", "Write", "MultiEdit", "NotebookEdit"];
 
@@ -92,7 +91,5 @@ pub fn summary(tool: &str, input: &Value) -> String {
 /// True when a shell command writes to `path`: redirect, tee, in-place edit, move, copy, delete or restore.
 fn writes_to(cmd: &str, path: &str) -> bool {
     let p = regex::escape(path.trim_start_matches("./"));
-    Regex::new(&format!(r"(>>?\s*|\btee\s+(-a\s+)?|\b(sed|perl)\s+-[a-zA-Z]*i\S*\s[^;&|]*|\b(mv|cp|rm|truncate)\s[^;&|]*|\bgit\s+(checkout|restore)\s[^;&|]*)\S*{p}"))
-        .map(|r| r.is_match(cmd))
-        .unwrap_or(false)
+    Regex::new(&format!(r"(>>?\s*|\btee\s+(-a\s+)?|\b(sed|perl)\s+-[a-zA-Z]*i\S*\s[^;&|]*|\b(mv|cp|rm|truncate)\s[^;&|]*|\bgit\s+(checkout|restore)\s[^;&|]*)\S*{p}")).map(|r| r.is_match(cmd)).unwrap_or(false)
 }

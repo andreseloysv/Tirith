@@ -7,14 +7,12 @@
 //! While everything is green no model is called.
 
 use crate::app::{kill_group, log_age, now_iso, now_s, tail, Lane, Shared};
-use crate::{config, manager, models, plan, sandbox};
+use crate::{config, manager, models, plan};
 use axum::extract::State;
-use axum::http::StatusCode;
-use axum::routing::{get, post};
+use axum::routing::get;
 use axum::{Json, Router};
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{LazyLock, Mutex};
 use std::time::Duration;
@@ -135,15 +133,7 @@ fn compute(app: &Shared) -> Vec<Metric> {
     let pct = if merged.is_empty() { 100.0 } else { (100 * first.len() / merged.len()) as f64 };
     let retried: Vec<&Lane> = merged.iter().filter(|l| l.attempts > 0).copied().collect();
     let target = t("first_try_pct", 50.0);
-    out.push(Metric {
-        id: "first_try",
-        label: "A la primera (%)",
-        value: pct,
-        target: Some(target),
-        at_least: true,
-        red: !merged.is_empty() && pct < target,
-        facts: format!("merged after being sent back: [{}]", ids(&retried)),
-    });
+    out.push(Metric { id: "first_try", label: "A la primera (%)", value: pct, target: Some(target), at_least: true, red: !merged.is_empty() && pct < target, facts: format!("merged after being sent back: [{}]", ids(&retried)) });
 
     // Idle: a project with open items, autopilot on and nothing queued, running or merging.
     let mut idle = vec![];
@@ -188,8 +178,7 @@ fn compute(app: &Shared) -> Vec<Metric> {
     let target = t("main_red", 0.0);
     out.push(Metric { id: "main_red", label: "Main en rojo", value: red.len() as f64, target: Some(target), at_least: false, red: red.len() as f64 > target, facts: red.join("; ") });
 
-    let failed: Vec<String> =
-        lanes.iter().filter(|l| l.status == "failed" && l.ended_at.as_deref().and_then(secs).is_some_and(|e| e >= day)).map(|l| format!("{}: {}", l.id, l.note.lines().next().unwrap_or(""))).collect();
+    let failed: Vec<String> = lanes.iter().filter(|l| l.status == "failed" && l.ended_at.as_deref().and_then(secs).is_some_and(|e| e >= day)).map(|l| format!("{}: {}", l.id, l.note.lines().next().unwrap_or(""))).collect();
     out.push(Metric { id: "failed", label: "Fallidas (24 h)", value: failed.len() as f64, target: None, at_least: false, red: false, facts: failed.join("; ") });
 
     let qs = owner_questions(app);
@@ -326,25 +315,9 @@ fn brief(app: &Shared, why: &str) -> String {
 async fn review(app: &Shared, why: &str) -> Result<String, String> {
     let mut cmd = models::chat_argv(app, "ceo", None)?;
     cmd.argv.extend(["--append-system-prompt".into(), PROMPT.into()]);
-    let launch = sandbox::wrap(app, "ceo", cmd.argv);
-    let dir = app.home.join("ceo");
-    let _ = std::fs::create_dir_all(&dir);
-    let log = std::fs::OpenOptions::new().create(true).append(true).open(app.home.join("logs/ceo.log")).map_err(|e| e.to_string())?;
-    let mut command = launch.command(app);
-    let mut child = command
-        .current_dir(&dir)
-        .env("TIRITH_ROLE", "ceo")
-        .env("TIRITH_HOME", &app.home)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(log)
-        .process_group(0)
-        .kill_on_drop(true)
-        .spawn()
-        .map_err(|e| format!("cannot start the CEO ({}): {e}", launch.program))?;
+    let (mut child, mut stdin, stdout) = manager::spawn_chat(app, "ceo", cmd.argv)?;
     let pid = child.id().unwrap_or(0);
-    let mut stdin = child.stdin.take().ok_or("no stdin")?;
-    let mut lines = BufReader::new(child.stdout.take().ok_or("no stdout")?).lines();
+    let mut lines = BufReader::new(stdout).lines();
     let msg = json!({"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": brief(app, why)}]}});
     let send = |line: String| (line + "\n").into_bytes();
     stdin.write_all(&send(msg.to_string())).await.map_err(|e| e.to_string())?;
@@ -367,8 +340,7 @@ async fn review(app: &Shared, why: &str) -> Result<String, String> {
                     } else {
                         json!({"behavior": "allow", "updatedInput": msg["request"]["input"]})
                     };
-                    let reply = json!({"type": "control_response", "response": {"subtype": "success", "request_id": msg["request_id"], "response": behavior}});
-                    let _ = stdin.write_all(&send(reply.to_string())).await;
+                    let _ = stdin.write_all(&send(manager::control_reply(&msg, behavior))).await;
                 }
                 _ => {}
             }
@@ -406,16 +378,6 @@ async fn metrics(State(app): State<Shared>) -> Json<Value> {
     Json(v)
 }
 
-async fn review_now(State(app): State<Shared>) -> Result<Json<Value>, (StatusCode, String)> {
-    let red: Vec<String> = compute(&app).iter().filter(|m| m.red).map(describe).collect();
-    let why = format!("The owner asked for a review now. {}", if red.is_empty() { "Every metric is green.".into() } else { red.join("\n") });
-    if start_review(&app, "owner".into(), why) {
-        Ok(Json(json!({"ok": true, "started": true})))
-    } else {
-        Err((StatusCode::CONFLICT, "a CEO review is already running".into()))
-    }
-}
-
 pub fn routes() -> Router<Shared> {
-    Router::new().route("/api/metrics", get(metrics)).route("/api/ceo/review", post(review_now))
+    Router::new().route("/api/metrics", get(metrics))
 }
