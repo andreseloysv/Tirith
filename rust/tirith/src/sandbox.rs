@@ -342,9 +342,7 @@ pub fn routes() -> Router<Shared> {
         )
         .route(
             "/api/net/blocks",
-            get(|| async { Json(json!(*BLOCKS.read().unwrap())) })
-                .post(|State(app): State<Shared>, Json(b): Json<Value>| change(app, b, true))
-                .delete(|State(app): State<Shared>, Json(b): Json<Value>| change(app, b, false)),
+            get(|| async { Json(json!(*BLOCKS.read().unwrap())) }).post(|State(app): State<Shared>, Json(b): Json<Value>| change(app, b, true)).delete(|State(app): State<Shared>, Json(b): Json<Value>| change(app, b, false)),
         )
         .route("/api/net/destinations", get(|| async { Json(proxy::destinations()) }))
 }

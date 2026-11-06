@@ -132,8 +132,7 @@ pub fn ask_owner(app: &Shared, kind: &str, question: &str) -> Result<Value, Stri
         let db = app.db.lock().unwrap();
         let n: i64 = db.query_row("SELECT COUNT(*) FROM owner_items", [], |r| r.get(0)).unwrap_or(0);
         let row = json!({"id": format!("o{}", n + 1), "at": now_iso(), "kind": kind, "question": question.trim(), "status": "open", "answer": ""});
-        db.execute("INSERT INTO owner_items (id, at, kind, question, status, answer) VALUES (?1,?2,?3,?4,'open','')", rusqlite::params![row["id"].as_str(), row["at"].as_str(), kind, question.trim()])
-            .map_err(|e| e.to_string())?;
+        db.execute("INSERT INTO owner_items (id, at, kind, question, status, answer) VALUES (?1,?2,?3,?4,'open','')", rusqlite::params![row["id"].as_str(), row["at"].as_str(), kind, question.trim()]).map_err(|e| e.to_string())?;
         row
     };
     app.emit("owner", row.clone());
@@ -154,8 +153,7 @@ pub fn owner_open(app: &Shared) -> Vec<Value> {
     let db = app.db.lock().unwrap();
     db.prepare("SELECT id, at, kind, question FROM owner_items WHERE status = 'open' ORDER BY rowid")
         .and_then(|mut q| {
-            q.query_map([], |r| Ok(json!({"id": r.get::<_, String>(0)?, "at": r.get::<_, String>(1)?, "kind": r.get::<_, String>(2)?, "question": r.get::<_, String>(3)?, "status": "open"})))
-                .map(|rows| rows.flatten().collect())
+            q.query_map([], |r| Ok(json!({"id": r.get::<_, String>(0)?, "at": r.get::<_, String>(1)?, "kind": r.get::<_, String>(2)?, "question": r.get::<_, String>(3)?, "status": "open"}))).map(|rows| rows.flatten().collect())
         })
         .unwrap_or_default()
 }
@@ -175,16 +173,16 @@ pub async fn run(app: Shared) {
     }
 }
 
-async fn session(app: &Shared) -> Result<(), String> {
-    let resumed = app.kv("manager_session");
-    let mut cmd = models::chat_argv(app, "manager", resumed.as_deref())?;
-    cmd.argv.extend(["--append-system-prompt".into(), PROMPT.into()]);
-    let launch = sandbox::wrap(app, "manager", cmd.argv);
-    let log = std::fs::OpenOptions::new().create(true).append(true).open(app.home.join("logs/manager.log")).map_err(|e| e.to_string())?;
-    let mut command = launch.command(app);
-    let mut child = command
-        .current_dir(app.home.join("manager"))
-        .env("TIRITH_ROLE", "manager")
+/// Starts a streaming chat agent of `role` ("manager" or "ceo") in `<home>/<role>`, sandboxed, logging to `logs/<role>.log`.
+pub fn spawn_chat(app: &Shared, role: &str, argv: Vec<String>) -> Result<(tokio::process::Child, tokio::process::ChildStdin, tokio::process::ChildStdout), String> {
+    let launch = sandbox::wrap(app, role, argv);
+    let dir = app.home.join(role);
+    let _ = std::fs::create_dir_all(&dir);
+    let log = std::fs::OpenOptions::new().create(true).append(true).open(app.home.join(format!("logs/{role}.log"))).map_err(|e| e.to_string())?;
+    let mut child = launch
+        .command(app)
+        .current_dir(&dir)
+        .env("TIRITH_ROLE", role)
         .env("TIRITH_HOME", &app.home)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -192,10 +190,22 @@ async fn session(app: &Shared) -> Result<(), String> {
         .process_group(0)
         .kill_on_drop(true)
         .spawn()
-        .map_err(|e| format!("cannot start the manager ({}): {e}", launch.program))?;
+        .map_err(|e| format!("cannot start the {role} ({}): {e}", launch.program))?;
+    let (stdin, stdout) = (child.stdin.take().ok_or("no stdin")?, child.stdout.take().ok_or("no stdout")?);
+    Ok((child, stdin, stdout))
+}
+
+/// The answer to a `can_use_tool` control request: `behavior` is `{"behavior": "allow"|"deny", …}`.
+pub fn control_reply(msg: &Value, behavior: Value) -> String {
+    json!({"type": "control_response", "response": {"subtype": "success", "request_id": msg["request_id"], "response": behavior}}).to_string()
+}
+
+async fn session(app: &Shared) -> Result<(), String> {
+    let resumed = app.kv("manager_session");
+    let mut cmd = models::chat_argv(app, "manager", resumed.as_deref())?;
+    cmd.argv.extend(["--append-system-prompt".into(), PROMPT.into()]);
+    let (mut child, mut stdin, stdout) = spawn_chat(app, "manager", cmd.argv)?;
     PID.store(child.id().unwrap_or(0), Ordering::Relaxed);
-    let mut stdin = child.stdin.take().ok_or("no stdin")?;
-    let stdout = child.stdout.take().ok_or("no stdout")?;
     let (tx, mut rx) = mpsc::unbounded_channel::<String>();
     for line in app.manager_pending.lock().unwrap().drain(..) {
         let _ = tx.send(line);
@@ -243,9 +253,7 @@ async fn session(app: &Shared) -> Result<(), String> {
             }
             "control_request" if msg["request"]["subtype"] == "can_use_tool" => {
                 // The rules already ran in the PreToolUse hook; anything that reaches here is allowed.
-                let reply = json!({"type": "control_response", "response": {"subtype": "success",
-                    "request_id": msg["request_id"], "response": {"behavior": "allow", "updatedInput": msg["request"]["input"]}}});
-                let _ = tx.send(reply.to_string());
+                let _ = tx.send(control_reply(&msg, json!({"behavior": "allow", "updatedInput": msg["request"]["input"]})));
             }
             _ => {}
         }

@@ -100,9 +100,7 @@ fn render(hook: &str, words: &[String]) -> String {
 
 /// A `core.hooksPath` in the repo's or the user's git config makes git skip the guard.
 fn hooks_path_set(git: &std::path::Path) -> Option<PathBuf> {
-    [git.join("config"), home_dir().join(".gitconfig")]
-        .into_iter()
-        .find(|f| std::fs::read_to_string(f).is_ok_and(|t| t.lines().any(|l| l.trim().to_lowercase().replace(' ', "").starts_with("hookspath="))))
+    [git.join("config"), home_dir().join(".gitconfig")].into_iter().find(|f| std::fs::read_to_string(f).is_ok_and(|t| t.lines().any(|l| l.trim().to_lowercase().replace(' ', "").starts_with("hookspath="))))
 }
 
 /// Ok when the project's guard is installed and intact (or the project opts out); the reason otherwise.
@@ -146,10 +144,6 @@ fn immutable(path: &std::path::Path, on: bool) {
 #[cfg(not(target_os = "macos"))]
 fn immutable(_path: &std::path::Path, _on: bool) {}
 
-fn unlock(path: &std::path::Path) {
-    immutable(path, false);
-}
-
 /// Writes both hooks (mode 755) where they are missing or ours (an older guard is replaced, its pre-push
 /// removed); never over a hook that is not ours.
 pub fn install(app: &Shared, project: &Project) -> Result<(), String> {
@@ -168,18 +162,18 @@ pub fn install(app: &Shared, project: &Project) -> Result<(), String> {
             if local.exists() {
                 return Err(format!("{} is not Tirith's hook and {} exists: merge them by hand", path.display(), local.display()));
             }
-            unlock(&path);
+            immutable(&path, false);
             std::fs::rename(&path, &local).map_err(|e| format!("{}: {e}", path.display()))?;
         }
     }
     let old_push = dir.join("pre-push");
     if ours(&old_push) {
-        unlock(&old_push);
+        immutable(&old_push, false);
         std::fs::remove_file(&old_push).map_err(|e| format!("{}: {e}", old_push.display()))?;
     }
     for hook in HOOKS {
         let path = dir.join(hook);
-        unlock(&path);
+        immutable(&path, false);
         std::fs::write(&path, render(hook, &words)).map_err(|e| format!("{}: {e}", path.display()))?;
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).map_err(|e| e.to_string())?;
