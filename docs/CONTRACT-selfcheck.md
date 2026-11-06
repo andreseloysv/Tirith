@@ -70,15 +70,15 @@ failed. Click: the checks in plain words, then "Fixed by Tirith" with `fixed` (n
 
 ## Stable copy
 
-Tirith runs from `<home>/stable/current`, a symlink to `<home>/stable/releases/<id>/` (copies of `tirith/`,
-`tests/`, `pyproject.toml`, `uv.lock`, `state.schema.json` and the other top-level files the tests read). `tirith stable promote [--source <collector>] [--test <cmd>]` copies the
+Tirith runs from `<home>/stable/current`, a symlink to `<home>/stable/releases/<id>/` (a repo-shaped copy: `collector/` with `tirith/`,
+`tests/`, `pyproject.toml`, `uv.lock`, `state.schema.json` and the other files the tests read, plus `fixtures/`, `bin/`, `run` and the root `pyproject.toml` next to `collector/`, so ROOT-based tests such as `test_schema.py` collect). `tirith stable promote [--source <collector>] [--test <cmd>]` copies the
 source to a new release and runs the full test (default `uv run -q pytest -q tests`) inside the copy; only a pass
 moves `current` (the old one becomes `previous`), a red test deletes the copy and records `last_rejected`.
 A promoted release is on trial for 30 min: when `state.health.level` stays red for 2 min (checked every
 dispatcher pass), `previous` is put back as `current` by itself (`last_rollback`) and the bad release is deleted.
 `tirith stable rollback` does it by hand, `tirith stable status` prints `<home>/stable/stable.json`'s summary.
 Once a release is current, everything Tirith starts (`tirithcmd.resolved`: launch, the link handler, launchd, the app's
-run actions) runs `uv run --project <home>/stable/current tirith` unless `[app] tirith` is set. After each lane the merge
+run actions) runs `uv run --project <home>/stable/current/collector tirith` unless `[app] tirith` is set. After each lane the merge
 queue merges into main, it starts a detached `tirith stable promote --source <main>/collector` (log
 `<home>/logs/stable-promote.log`), so the stable copy follows main only through a passing full test.
 Three releases are kept. Code: `tirith/stable.py`; test: `pytest -k stable`.
