@@ -119,6 +119,12 @@ fn blocked(app: &Shared, p: &Project, lanes: &[Lane]) -> Option<String> {
     }
 }
 
+/// Role items of step 0 («Manager de guardia: …», «CEO: …») are attended by the manager or the CEO, not by a lane.
+fn is_role_item(text: &str) -> bool {
+    let t = text.trim_start().to_lowercase();
+    t.starts_with("manager de guardia:") || t.starts_with("ceo:")
+}
+
 /// The autopilot's next item: in round-robin over the projects, an open item of the project's current step
 /// (the first step with an open item that did not fail or stop) that no lane works on.
 fn next_item(app: &Shared, lanes: &[Lane], rr: &mut usize, ok: &mut dyn FnMut(&Project) -> bool) -> Option<Lane> {
@@ -134,8 +140,8 @@ fn next_item(app: &Shared, lanes: &[Lane], rr: &mut usize, ok: &mut dyn FnMut(&P
             lanes.iter().filter(|l| l.project == p.id && l.step == step && l.item == item).max_by(|a, b| a.created_at.cmp(&b.created_at))
         };
         let skipped = |l: Option<&Lane>| l.is_some_and(|l| matches!(l.status.as_str(), "failed" | "stopped"));
-        let Some(st) = steps.iter().find(|s| s.items.iter().any(|i| !i.done && !skipped(latest(&s.num, &i.text)))) else { continue };
-        let Some(it) = st.items.iter().find(|i| !i.done && latest(&st.num, &i.text).is_none_or(|l| !l.active() && !skipped(Some(l)))) else {
+        let Some(st) = steps.iter().find(|s| s.items.iter().any(|i| !i.done && !is_role_item(&i.text) && !skipped(latest(&s.num, &i.text)))) else { continue };
+        let Some(it) = st.items.iter().find(|i| !i.done && !is_role_item(&i.text) && latest(&st.num, &i.text).is_none_or(|l| !l.active() && !skipped(Some(l)))) else {
             continue;
         };
         if !ok(p) {
@@ -492,4 +498,14 @@ pub fn send_back(app: &Shared, lane: &Lane, reason: &str) {
 
 fn nanos() -> u32 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.subsec_nanos()).unwrap_or(0)
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn autopilot_skips_role_items() {
+        assert!(super::is_role_item("Manager de guardia: atender el chat"));
+        assert!(super::is_role_item("CEO: revisar el plan"));
+        assert!(!super::is_role_item("Arreglar el CEO: bug"));
+    }
 }
