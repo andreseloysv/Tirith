@@ -104,3 +104,12 @@ def test_promote_after_merge_spawns_detached_only_for_a_collector(home, tmp_path
     argv, kw = calls[0][0][0], calls[0][1]
     assert argv[-4:-2] == ["stable", "promote"] and argv[-1] == str(tmp_path / "collector")
     assert kw["start_new_session"] and kw["env"]["TIRITH_HOME"] == str(home)
+
+
+def test_release_copy_includes_schema_and_test_files(home, tmp_path):
+    src = _src(tmp_path)
+    (src / "state.schema.json").write_text("{}")
+    (src / "README.md").write_text("x")
+    stable.promote(home, src, lambda d: True, at(0))
+    cur = stable.current_dir(home)
+    assert (cur / "state.schema.json").is_file() and (cur / "README.md").is_file()
