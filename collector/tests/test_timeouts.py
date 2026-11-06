@@ -347,6 +347,19 @@ def test_repeated_timeouts_of_a_class_reach_the_manager_queue(home: Path) -> Non
     assert len([q for q in asks_mod.queue_items(home, only_open=True) if q["kind"] == "selfcheck"]) == 1
 
 
+def test_health_ignores_timeouts_before_the_limit_raise(home: Path) -> None:
+    now = datetime.now(timezone.utc)
+    state: dict = {}
+    run = lambda: selfcheck_mod.run(home, load_config(home), now, state, lanes=[])  # noqa: E731
+    for _ in range(selfcheck_mod.TIMEOUTS_REPEATED):
+        timeouts_mod.record(home, "git-commit", 1, "timeout", command="git commit", timeout=180)
+    run()
+    assert state["health"]["checks"]["timeouts"]["level"] == "failed"
+    timeouts_mod.set_timeout(home, load_config(home), "git-commit", 600, "slow disk")
+    run()
+    assert state["health"]["checks"]["timeouts"]["level"] == "ok"
+
+
 def test_the_state_lists_every_class_for_settings(home: Path) -> None:
     rows = timeouts_mod.table(home, Config())
     assert [r["class"] for r in rows] == list(timeouts_mod.POLICY)
