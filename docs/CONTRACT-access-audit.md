@@ -155,6 +155,25 @@ Checked on 2026-11-05 with a real agent lane: its model API and connectors went 
 command's `curl` reached PyPI through it, a direct socket to an address got `EPERM`, and with `datadoghq.com`
 blocked the agent's telemetry was refused while the lane still finished in 22 s.
 
+## Toolchains in a lane (Swift, Xcode, Gradle)
+
+The lane profile is `(allow default)` plus the network denial above: it does not restrict file writes, so the
+toolchains' caches (`~/Library/Developer/Xcode/DerivedData`, `~/Library/Caches/org.swift.swiftpm`, `~/.gradle`,
+`~/.android`, `~/.m2`, `TMPDIR`) and loopback sockets (Gradle daemon, SwiftPM) need no rule. What fails inside the
+sandbox is a tool that starts a sandbox of its own, because macOS refuses to nest `sandbox-exec`
+("sandbox_apply: Operation not permitted"), and a tool that ignores `HTTPS_PROXY`. `tirith run` (`runstage.py`)
+handles both for every stage of a lane, also when review or the merge queue runs it (`TIRITH_LANE_STAGE`):
+
+| Tool | Rule |
+|---|---|
+| `swift build\|test\|run\|package` | `--disable-sandbox` is added to the stage line (also inside `/bin/sh -c`, also written with a path), and a `swift` wrapper on `PATH` does the same for scripts and `make`. |
+| `xcodebuild` | `-IDEPackageSupportDisableManifestSandbox=YES -IDEPackageSupportDisablePluginExecutionSandbox=YES` and `OTHER_SWIFT_FLAGS=$(inherited) -disable-sandbox` (Swift macros such as `@Observable` run in a plugin server that cannot nest), by rewrite and by wrapper. |
+| Gradle / any JVM build | `GRADLE_OPTS` gets `-Dhttp(s).proxyHost/Port/User/Password` and `nonProxyHosts` for the guard's proxy (Gradle ignores `HTTPS_PROXY`), so dependency resolution goes through the proxy and the `netblock` rules; nothing is opened. `JAVA_HOME` and `ANDROID_HOME` stay the manifest's job. |
+
+The outer sandbox is never widened: outside addresses are reachable only through the proxy. Checked on 2026-11-06
+inside `sandbox-exec -f lane.sb` on a full zoo worktree: `swift test` (Packages/ZooCore), the `ios` stage and the
+`android` stage (`./gradlew testDebugUnitTest`) each ended with a real exit code.
+
 ## Retention
 
 - Rotation at 16 MB: `access.jsonl` → `access.jsonl.1` → … → `.3`; the oldest is dropped.
