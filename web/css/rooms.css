@@ -51,8 +51,6 @@
 
 @media (max-width: 640px) { .netadd .rtitle { width: auto; flex: 1; } .rpublic .sfoot { flex-wrap: wrap; } }
 .nref { color: var(--red-fg); }
-/* the prismatic edge of style.css (.rcard::before, a composited mask) paints the whole card black in WebKit: off here */
-.mrooms .rcard::before { display: none; }
 .v-accesos .listwrap > .extsec { padding-top: 6px; padding-bottom: 0; margin-bottom: 18px; }
 /* the kind chips of Access were light-only on the old page */
 :root[data-theme="dark"] .chip.xk { background: rgba(122,162,240,.16); color: #b8cdfa; }
