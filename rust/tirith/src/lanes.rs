@@ -127,6 +127,16 @@ fn is_role_item(text: &str) -> bool {
     t.starts_with("manager de guardia:") || t.starts_with("ceo:")
 }
 
+/// Items marked «(espera: …)» wait for the owner: the autopilot starts no lane for them.
+fn is_owner_wait(text: &str) -> bool {
+    let t = text.to_lowercase();
+    t.contains("(espera:") || t.contains("(espera :")
+}
+
+fn is_autopilot_skipped(text: &str) -> bool {
+    is_role_item(text) || is_owner_wait(text)
+}
+
 /// The autopilot's next item: in round-robin over the projects, an open item of the project's current step
 /// (the first step with an open item that did not fail or stop) that no lane works on.
 fn next_item(app: &Shared, lanes: &[Lane], rr: &mut usize, ok: &mut dyn FnMut(&Project) -> bool) -> Option<Lane> {
@@ -140,8 +150,8 @@ fn next_item(app: &Shared, lanes: &[Lane], rr: &mut usize, ok: &mut dyn FnMut(&P
         let Ok(steps) = plan::read(app, &p.id) else { continue };
         let latest = |step: &str, item: &str| lanes.iter().filter(|l| l.project == p.id && l.step == step && l.item == item).max_by(|a, b| a.created_at.cmp(&b.created_at));
         let skipped = |l: Option<&Lane>| l.is_some_and(|l| matches!(l.status.as_str(), "failed" | "stopped"));
-        let Some(st) = steps.iter().find(|s| s.items.iter().any(|i| !i.done && !is_role_item(&i.text) && !skipped(latest(&s.num, &i.text)))) else { continue };
-        let Some(it) = st.items.iter().find(|i| !i.done && !is_role_item(&i.text) && latest(&st.num, &i.text).is_none_or(|l| !l.active() && !skipped(Some(l)))) else {
+        let Some(st) = steps.iter().find(|s| s.items.iter().any(|i| !i.done && !is_autopilot_skipped(&i.text) && !skipped(latest(&s.num, &i.text)))) else { continue };
+        let Some(it) = st.items.iter().find(|i| !i.done && !is_autopilot_skipped(&i.text) && latest(&st.num, &i.text).is_none_or(|l| !l.active() && !skipped(Some(l)))) else {
             continue;
         };
         if !ok(p) {
@@ -382,6 +392,15 @@ async fn ended(app: &Shared, id: &str, code: Option<i32>) {
         if next.is_none() {
             manager::notify(app, &format!("lane {id} ({}: {}) failed: out of credits on every agent of the workers role", lane.project, lane.item));
         }
+    } else if lane.status == "running" && no_commits(app, &lane).await {
+        app.update_lane(id, |l| {
+            l.pid = None;
+            l.ended_at = Some(now_iso());
+            l.status = "failed".into();
+            l.note = format!("ended without commits (exit {}): nothing to merge", code.map(|c| c.to_string()).unwrap_or("?".into()));
+        });
+        app.sched_wake.notify_one();
+        return;
     } else {
         app.update_lane(id, |l| {
             l.pid = None;
@@ -400,6 +419,15 @@ async fn ended(app: &Shared, id: &str, code: Option<i32>) {
         app.merge_wake.notify_one();
     }
     app.sched_wake.notify_one();
+}
+
+/// True when the lane's branch has no commit beyond the project's HEAD (it is known and countable).
+async fn no_commits(app: &Shared, lane: &Lane) -> bool {
+    let Some(p) = app.cfg().projects.iter().find(|p| p.id == lane.project).cloned() else { return false };
+    if lane.branch.is_empty() {
+        return false;
+    }
+    matches!(git(&p.repo(), &["rev-list", "--count", &format!("HEAD..{}", lane.branch)]).await.as_deref(), Ok("0"))
 }
 
 /// `tirith ask` from a lane: it waits, and the manager is told how to answer.
@@ -483,6 +511,13 @@ fn nanos() -> u32 {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn autopilot_skips_owner_wait_items() {
+        assert!(super::is_owner_wait("Elegir dominio (espera: el dueño decide)"));
+        assert!(super::is_autopilot_skipped("CEO: revisar"));
+        assert!(!super::is_owner_wait("Arreglar el parser"));
+    }
+
     #[test]
     fn autopilot_skips_role_items() {
         assert!(super::is_role_item("Manager de guardia: atender el chat"));
