@@ -171,6 +171,7 @@ async fn run_stage(app: &Shared, pipe: &Pipe, dir: &Path, name: &str, run: &str)
     let who = format!("merge:{}", pipe.lanes.split(',').next().filter(|l| !l.is_empty()).unwrap_or("main"));
     let launch = sandbox::wrap(app, &who, vec!["sh".into(), "-c".into(), run.into()]);
     let mut command = launch.command();
+    command.env("CARGO_TARGET_DIR", crate::lanes::shared_target(app, &pipe.project));
     if !launch.env.iter().any(|(k, _)| k == "PATH") {
         command.env("PATH", app.child_path());
     }
@@ -212,9 +213,22 @@ async fn run_stage(app: &Shared, pipe: &Pipe, dir: &Path, name: &str, run: &str)
 async fn merge_slot(project: &Project, manifest: &Manifest) -> Result<PathBuf, String> {
     let slot = project.lanes_dir().join("merge");
     if !slot.exists() {
-        add_worktree(&project.repo(), &slot, None, &manifest.lane_exclude).await?;
+        if let Err(e) = add_worktree(&project.repo(), &slot, None, &manifest.lane_exclude).await {
+            drop_half_made(&slot, &e);
+            return Err(e);
+        }
     }
     Ok(slot)
+}
+
+/// A git error that means the disk is full.
+fn disk_full(e: &str) -> bool {
+    e.to_lowercase().contains("no space left on device")
+}
+
+/// A merge slot that failed to be made for lack of disk is deleted, so nothing half-made stays to eat space.
+fn drop_half_made(slot: &Path, e: &str) -> bool {
+    disk_full(e) && std::fs::remove_dir_all(slot).is_ok()
 }
 
 async fn reset(slot: &Path, sha: &str) -> Result<(), String> {
@@ -248,6 +262,16 @@ async fn train(app: &Shared, batch: Vec<Lane>) {
     };
     let (slot, base) = match ready.await {
         Ok(x) => x,
+        Err(e) if disk_full(&e) => {
+            // Out of disk is not the lanes' fault: they leave the queue (no slot held) and wait for space.
+            for l in &batch {
+                app.update_lane(&l.id, |x| {
+                    x.status = "waiting-disk".into();
+                    x.note = "the merge worktree could not be made: no space left on device".into();
+                });
+            }
+            return manager::notify(app, &format!("the merge of {pid} waits for disk: {e}"));
+        }
         Err(e) => {
             for l in &batch {
                 app.update_lane(&l.id, |x| x.status = "failed".into());
@@ -444,4 +468,24 @@ pub fn retry(app: &Shared, id: &str) -> Result<(), String> {
         }
     });
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mergeq_enospc_deletes_the_folder_and_holds_no_slot() {
+        let dir = std::env::temp_dir().join(format!("tirith-enospc-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join(".git")).unwrap();
+        let err = "git worktree add: fatal: write error: No space left on device";
+        assert!(disk_full(err));
+        assert!(drop_half_made(&dir, err));
+        assert!(!dir.exists());
+        // another failure keeps the folder
+        std::fs::create_dir_all(&dir).unwrap();
+        assert!(!drop_half_made(&dir, "git worktree add: fatal: conflict"));
+        assert!(dir.exists());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 }

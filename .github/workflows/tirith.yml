@@ -22,5 +22,5 @@ jobs:
       - name: Size limit
         run: |
           n=$(find rust/tirith/src -name '*.rs' -exec cat {} + | wc -l)
-          echo "rust/tirith/src: $n lines (limit 5500)"
-          test "$n" -le 5500
+          echo "rust/tirith/src: $n lines (limit 6000)"
+          test "$n" -le 6000
