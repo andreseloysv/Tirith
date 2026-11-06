@@ -116,10 +116,32 @@ async fn change(app: &Shared, project: &str, edit: impl FnOnce(&mut Vec<String>,
     Ok(())
 }
 
+/// The `tirith` subcommands that exist; a check calling any other one can never pass.
+const SUBCOMMANDS: [&str; 17] = [
+    "serve", "hook", "hooks", "status", "plan", "lane", "ask", "answer", "ask-owner", "autopilot", "say", "room", "net", "models", "guard", "help", "--help",
+];
+static TIRITH_CALL: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?:^|[\s;&|(])tirith\s+([A-Za-z-][\w-]*)").unwrap());
+static REMOVED_PATH: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?:^|[\s;&|(])cd\s+(?:\./)?collector(?:/|\s|;|&|$)").unwrap());
+
+/// Why an item's check can never pass: it calls a tirith subcommand that does not exist or a removed path.
+pub fn check_problem(check: &str) -> Option<String> {
+    if REMOVED_PATH.is_match(check) {
+        return Some("the check does `cd collector`, a folder that was removed (the daemon is Rust: use cargo test -q <name>)".into());
+    }
+    TIRITH_CALL
+        .captures_iter(check)
+        .map(|c| c[1].to_string())
+        .find(|sub| !SUBCOMMANDS.contains(&sub.as_str()))
+        .map(|sub| format!("the check calls `tirith {sub}`, which is not a tirith command"))
+}
+
 pub async fn add(app: &Shared, project: &str, step: &str, text: &str) -> Result<(), String> {
     let text = clean(text);
     if text.is_empty() {
         return Err("the item needs a text".into());
+    }
+    if let Some(problem) = CHECK.captures(&text).and_then(|c| check_problem(&c[1])) {
+        return Err(problem);
     }
     change(app, project, |lines, steps| {
         let i = steps.iter().position(|s| s.num == step).ok_or(format!("the plan has no step {step}"))?;
@@ -160,5 +182,22 @@ pub async fn flush_locked(app: &Shared, project: &str) {
             app.plan_dirty.lock().unwrap().remove(project);
         }
         Err(e) => app.event("", project, "error", "plan", &format!("plan commit failed: {e}"), ""),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::check_problem;
+
+    #[test]
+    fn plan_add_rejects_invalid_checks() {
+        assert!(check_problem("tirith run --stage test").is_some());
+        assert!(check_problem("tirith check").is_some());
+        assert!(check_problem("cd collector && uv run -q pytest -q tests").is_some());
+        assert!(check_problem("cd collector/ && ls").is_some());
+        assert!(check_problem("cargo test -q x && tirith run --project p").is_some());
+        assert!(check_problem("cargo test -q plan_add_rejects_invalid_checks").is_none());
+        assert!(check_problem("tirith plan show tirith | grep -q x").is_none());
+        assert!(check_problem("cd collectors && ls").is_none());
     }
 }
