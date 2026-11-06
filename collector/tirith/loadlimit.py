@@ -200,34 +200,76 @@ def current(config, home: Path, maximum: int | None = None,
     return limit(top, free_bytes=smallest, min_free_bytes=int(config.disk_min_free_gb * GB))
 
 
+WAIT_NOTICE_S = 60.0  # a stage run that waited this long for a slot says who holds them
+MERGE_SLOT = "merge"  # the merge queue's own slot file: not one of the lane slots, not counted in the lane limit
+
+
+def _holder_text(path: Path) -> str:
+    try:
+        text = path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return "unknown"
+    return text or "unknown"
+
+
+def _who() -> str:
+    return f"pid {os.getpid()}: {' '.join(sys.argv)[:120]}"
+
+
 @contextmanager
-def slot(home: Path, maximum: int, *, wait: float = 600.0, poll: float = 1.0) -> Iterator[int | None]:
-    """Hold one of ``maximum`` stage slots; waits (up to ``wait`` seconds, then runs anyway) while all are taken."""
-    if fcntl is None or maximum < 1:
+def slot(home: Path, maximum: int, *, wait: float = 600.0, poll: float = 1.0, merge: bool = False,
+         notice: Callable[[str], None] | None = None, notice_after: float = WAIT_NOTICE_S) -> Iterator[int | None]:
+    """Hold one of ``maximum`` stage slots; waits (up to ``wait`` seconds, then runs anyway) while all are taken.
+
+    ``merge``: the merge queue's run. It uses its own reserved slot (``slots/merge.lock``), so lane test runs
+    can never starve the queue that lands their work, and it does not count against ``maximum``. Yields the slot
+    number (``-1`` for the merge slot). Once the wait passes ``notice_after`` seconds, ``notice`` is called once
+    with the slot holders, so a stall can be diagnosed."""
+    if fcntl is None or (maximum < 1 and not merge):
         yield None
         return
     folder = home / "slots"
     folder.mkdir(parents=True, exist_ok=True)
-    deadline = time.monotonic() + wait
-    handle, number = None, None
+    names = [MERGE_SLOT] if merge else [str(n) for n in range(maximum)]
+    start = time.monotonic()
+    deadline = start + wait
+    handle, number, told = None, None, False
     while handle is None:
-        for n in range(maximum):
-            fh = open(folder / f"{n}.lock", "a")
+        for name in names:
+            fh = open(folder / f"{name}.lock", "a")
             try:
                 fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except OSError:
                 fh.close()
                 continue
-            handle, number = fh, n
+            handle, number = fh, (-1 if merge else int(name))
+            try:
+                fh.truncate(0)
+                fh.write(_who())
+                fh.flush()
+            except OSError:
+                pass
             break
         if handle is None:
-            if time.monotonic() >= deadline:
+            now = time.monotonic()
+            if now >= deadline:
                 break
+            if not told and notice is not None and now - start >= notice_after:
+                told = True
+                holders = "; ".join(f"slot {n} held by {_holder_text(folder / f'{n}.lock')}" for n in names)
+                try:
+                    notice(f"waiting {now - start:.0f} s for a stage slot: {holders}")
+                except Exception:  # noqa: BLE001 - a diagnostic never stops the run
+                    pass
             time.sleep(poll)
     try:
         yield number
     finally:
         if handle is not None:
+            try:
+                handle.truncate(0)
+            except OSError:
+                pass
             fcntl.flock(handle, fcntl.LOCK_UN)
             handle.close()
 

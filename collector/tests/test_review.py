@@ -181,6 +181,27 @@ def test_a_reviews_test_suite_waits_for_a_stage_slot(home: Path, tmp_path: Path,
     assert seen == [("slot", 2, review_mod.SLOT_WAIT_S), ("run",), ("free",)]
 
 
+def test_the_merge_queues_test_run_uses_the_reserved_slot(home: Path, tmp_path: Path, monkeypatch) -> None:
+    import contextlib
+    from tirith import loadlimit as loadlimit_mod
+    from tirith import runstage as runstage_mod
+    seen = []
+
+    @contextlib.contextmanager
+    def slot(home_, maximum, **kw):
+        seen.append(kw["merge"])
+        kw["notice"]("waiting 61 s for a stage slot: slot merge held by pid 1")
+        yield -1
+
+    monkeypatch.setattr(loadlimit_mod, "slot", slot)
+    monkeypatch.setattr(loadlimit_mod, "current", lambda config, home_: (1, "disk"))
+    monkeypatch.setattr(runstage_mod, "run_stage", lambda *a, **k: (0, "1 passed"))
+    (home / "config.toml").write_text("", encoding="utf-8")
+    assert review_mod.run_tests(home, "demo", "ci", "test", tmp_path, "pytest", merge=True)[0]
+    assert seen == [True]
+    assert "held by pid 1" in (home / "logs" / "mergeq.log").read_text(encoding="utf-8")
+
+
 def _capture_run_tests(monkeypatch) -> list:
     seen: list = []
 
