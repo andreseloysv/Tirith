@@ -78,6 +78,11 @@ static NOTES: Mutex<Vec<String>> = Mutex::new(Vec::new());
 /// together with every other note of the next 2 seconds, so many events cost one turn.
 pub fn notify(app: &Shared, text: &str) {
     app.chat("tirith", text);
+    tell(app, text);
+}
+
+/// Hands a report to the manager (gathered with the others of the next 2 s) without a chat line of its own.
+pub fn tell(app: &Shared, text: &str) {
     let first = {
         let mut n = NOTES.lock().unwrap();
         n.push(text.to_string());

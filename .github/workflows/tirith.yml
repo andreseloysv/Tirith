@@ -21,6 +21,6 @@ jobs:
         run: cargo build -q -p tirith && cargo clippy -q -p tirith -- -D warnings
       - name: Size limit
         run: |
-          n=$(cat rust/tirith/src/*.rs | wc -l)
-          echo "rust/tirith/src: $n lines (limit 3500)"
-          test "$n" -le 3500
+          n=$(find rust/tirith/src -name '*.rs' -exec cat {} + | wc -l)
+          echo "rust/tirith/src: $n lines (limit 5500)"
+          test "$n" -le 5500

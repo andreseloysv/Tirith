@@ -312,8 +312,12 @@ async fn poll(app: &Shared, r: &Room) -> Result<(), String> {
             app.event("", &r.project, "error", "rooms", &format!("{}: {e}", r.id), "");
         }
     }
-    for (author, text) in &out.deliver {
-        manager::from_room(app, &r.id, author, text);
+    // Public rooms are only watched: what is said there never reaches the manager, so its answers are never
+    // posted in public by themselves (the manager writes there on purpose with `tirith room say`).
+    if r.private() {
+        for (author, text) in &out.deliver {
+            manager::from_room(app, &r.id, author, text);
+        }
     }
     for m in out.mentions {
         app.emit("room-mention", m);

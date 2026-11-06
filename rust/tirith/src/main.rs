@@ -1,9 +1,6 @@
 //! `tirith`: the daemon (`tirith serve`) and its thin command-line client. Every other command is one HTTP
 //! call to the daemon on 127.0.0.1, so it starts in milliseconds.
 
-// Parallel build phase: module stubs are not all used yet. Removed when the modules are integrated.
-#![allow(dead_code)]
-
 mod app;
 mod attach;
 mod brain;
@@ -47,6 +44,10 @@ const MODULE_CLI: [ModuleCli; 7] = [rooms::cli, sandbox::cli, models::cli, guard
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().map(String::as_str) != Some("serve") {
+        // A CLI command piped into `head` ends quietly instead of panicking on the closed pipe.
+        unsafe { libc::signal(libc::SIGPIPE, libc::SIG_DFL) };
+    }
     let flag = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).cloned();
     let mut pos: Vec<&str> = vec![];
     let mut skip = false;

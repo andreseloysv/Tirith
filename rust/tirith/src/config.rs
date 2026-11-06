@@ -58,11 +58,10 @@ pub struct Agent {
     pub args: Option<Vec<String>>,
 }
 
+/// `[models.workers]` as far as the core needs it (the models module reads the rest of `[models.*]`).
 #[derive(Deserialize, Clone, Default)]
 pub struct Role {
     pub agent: String,
-    #[serde(default)]
-    pub model: Option<String>,
 }
 
 #[derive(Clone)]
@@ -72,7 +71,6 @@ pub struct Config {
     pub projects: Vec<Project>,
     pub agents: BTreeMap<String, Agent>,
     pub launch: Vec<String>,
-    pub manager: Option<Role>,
     pub workers: Option<Role>,
     pub port: u16,
     pub max_parallel: usize,
@@ -105,7 +103,6 @@ impl Config {
             projects: get(&t, &["projects"]).unwrap_or_default(),
             agents: get(&t, &["agents"]).unwrap_or_default(),
             launch: get(&t, &["launch", "command"]).unwrap_or_default(),
-            manager: get(&t, &["models", "manager"]),
             workers: get(&t, &["models", "workers"]),
             port: port.or_else(|| get(&t, &["server", "port"])).unwrap_or(7717),
             max_parallel: get(&t, &["lanes", "max_parallel"])
