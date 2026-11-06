@@ -14,7 +14,6 @@
 
 [**Landing page**](https://andreseloysv.github.io/Tirith/) · [Submission](docs/SUBMISSION.md) · [Contributing](CONTRIBUTING.md)
 
-![The manager works live in the chat, in CLI style](web/screenshots/one-manager.png)
 
 ⭐ **If Tirith helps you, please star the repo.** It is the best way to say it is useful.
 
@@ -23,179 +22,165 @@
 ## Quick start
 
 ```bash
-git clone https://github.com/andreseloysv/Tirith && cd Tirith && ./run --demo
+git clone https://github.com/andreseloysv/Tirith && cd Tirith && ./run
 ```
 
-No agents or keys needed: it opens the page on demo data. Requires [uv](https://docs.astral.sh/uv/) and a browser.
-
-- **Problem.** You run several coding agents at once. You ask "what is everyone doing?" all day, you
-  re-explain the rules, and the agents ask you things they could settle themselves.
-- **Solution.** Tirith keeps a plan, starts agents only from plan items, checks what they report, merges what
-  passes and answers questions in a chat. Rules are code that blocks, not text the agent may ignore.
-- **Result.** You open the app, see what runs and what is done, and are asked only what needs you: a password,
-  a payment, a choice that is yours.
-
-Built for the Meta Global AI Developer Hackathon (track: Build for Your World).
-**Everything in this repository was created during the hackathon, starting 2026-10-28.**
-Submission text for the judges: [`docs/SUBMISSION.md`](docs/SUBMISSION.md).
+Needs Rust (`cargo`) and git. `./run` builds the `tirith` binary, starts the daemon when nothing answers on its
+port and opens its page (`http://127.0.0.1:7717/`). The daemon keeps running; `tirith status` shows what it does.
 
 ## What it does
 
-Every item below is on `main`; the contract file named next to it says exactly how it works.
+Agents stop halfway, ask what they could decide, and lose the big picture. Tirith keeps the plan moving to the
+end with code, and puts a model in the loop only where judgment is needed.
 
-### Plan-driven
-
-- **Agents start only from a plan item.** `tirith lane run` and `tirith launch` refuse to start without an open
-  item of the project's plan (`--step N --item "..."`). No item, no agent. ([`CONTRACT-roadmap.md`](docs/CONTRACT-roadmap.md), [`CONTRACT-launch.md`](docs/CONTRACT-launch.md))
-- **Every agent reports an outcome** (`tirith plan report --status done|partial|blocked`). A lane that ends without one is not merged; its item is reopened and it is started once more.
-- **Tirith is the only plan writer.** Agents cannot edit the plan file (the `roadmap-edit` rule); they ask Tirith with `tirith plan add`.
-- **Items are ticked when the work is on `main`**, not when an agent says so.
-- **No duplicate agents** on the same plan item.
-- **Shared task coordination.** Permanent task IDs, explicit prerequisites, atomic claims and declared
-  write reservations let independent items in one step proceed together. Worker inboxes support durable
-  handoffs and acknowledgements. ([`CONTRACT-coordination.md`](docs/CONTRACT-coordination.md))
-
-### Rules in code
-
-Each rule is checked by code, in a hook that runs before the agent's tool call, and the refusal tells the agent
-the exact command to use instead ([`CONTRACT-gates.md`](docs/CONTRACT-gates.md)). In plain words:
-
-- Tests and builds run through Tirith (`tirith run --stage ...`), so they show up in Pipelines.
-- An agent may not start another agent or its own sub-agents; helpers start through Tirith so you can see them.
-- Nobody skips the checks that run before a commit (`--no-verify`, `core.hooksPath`, `.git/hooks` are blocked).
-- Agents may not edit the plan, the agents' settings files or Tirith's config.
-- A lane starts only with a written brief, a passing project check and an intact commit guard.
-- Custom rules per project in `tirith.toml`, enforced the same way.
-- **Owner gate:** nothing reaches you unless only you can do it (credentials, payment, personal account,
-  physical device, your decision). Everything else goes to the manager. ([`CONTRACT-inbox.md`](docs/CONTRACT-inbox.md))
-- **Claim check:** before a merge, the agent's report is compared with the real change: files it says it
-  changed, tests it says it added, "tests pass" against a recorded test run. A false claim blocks the merge
-  and sends the lane back. No model is involved; it is regexes and git. ([`CONTRACT-launch.md`](docs/CONTRACT-launch.md))
-
-![Rules that blocked agents today, in plain words](web/screenshots/rules.png)
-
-### Autonomy
-
-- **An on-call manager in the chat.** Write to it in the app. One persistent manager session owned by the
-  collector answers, delegates to sub-agents and keeps notes.
-- **Self-check that heals itself.** Every pass Tirith checks the collector, the manager, the autopilot, the
-  disk and the reviews, fixes what it safely can, and raises one item when it cannot. The header has a health dot. ([`CONTRACT-selfcheck.md`](docs/CONTRACT-selfcheck.md))
-- **Auto-merge through one merge queue.** A finished lane is tested, claim-checked and merged without asking you;
-  merging is never an owner question. Agents never touch `main`. Up to 5 lanes of a project can be tested together
-  in one "train", and a red train is split to find the culprit. With 3 or more lanes waiting, no new lane starts
-  (WIP limit). ([`CONTRACT-mergeq.md`](docs/CONTRACT-mergeq.md))
-- **New projects bootstrap without `tirith.toml`.** `tirith plan add --title ...` creates the plan, and the first
-  item can start even though `tirith check` still reports the missing manifest.
-- **Disk guard** removes merged worktrees when free space runs low.
-- **The collector reloads itself** when its code changes on `main`.
-- **Timeouts for every command** Tirith starts (git, stages, agents), learned from history, with the process
-  group stopped and its locks cleaned up. ([`CONTRACT-timeouts.md`](docs/CONTRACT-timeouts.md))
-- **Out of credits?** Work continues with the next agent in your fallback list.
-
-### Visibility
-
-- **Chat** that shows the manager's work live, in the style of a CLI: plan steps, file reads, diffs, commands.
-- **Overview:** your turn (with buttons, not questions), the plan per project, the activity feed.
-- **Agents:** every lane, its summary, log, review state and "Claims verified".
-- **Pipelines**, GitLab-style: runs, stages, durations, logs, retry.
-- **Plan** with a progress bar per step, a deadline countdown, and "Start an agent now" on each open step.
-
-![Your turn and the manager chat](web/screenshots/manager-chat.png)
-![Pipelines](web/screenshots/pipelines-gitlab.png)
-![The plan](web/screenshots/overview-plan.png)
-
-### Desktop app
-
-A [Tauri](app/README.md) app, **signed and notarized for macOS** (`scripts/notarize-macos.sh`). It keeps the
-collector running, so closing the terminal never kills your lanes. Chat with photos and files, per-project
-environment variables ([`CONTRACT-projenv.md`](docs/CONTRACT-projenv.md)), and the model and effort for the
-manager and for workers, per project or per step, with a fallback chain
-([`CONTRACT-models.md`](docs/CONTRACT-models.md)). No servers and no ports: the app and the page talk through
-local files and Tauri IPC.
-
-![Model and effort per role, with fallback](web/screenshots/settings-models.png)
-
-## How Meta's models are used
-
-- **Muse Spark** (`muse-spark-1.3`, Meta Model API) is the brain, in `collector/tirith/brain.py`. Seven jobs,
-  each cached by input hash:
-  1. a one-sentence summary of each agent's recent log;
-  2. a detector for things that need the owner;
-  3. an architecture map of a project from its file tree and key files;
-  4. a lasting epithet for each agent;
-  5. a one-line summary of each chat room;
-  6. a "needs the owner" check on room messages;
-  7. a short answer to the owner's question about a plan step.
-
-  The key is read only from the environment (`META_SI_API_KEY` or `META_API_KEY`) and is never logged or
-  stored. Without a key everything still works, with plain log lines.
-- **Muse Code** is a first-class agent alias (`muse`). `tirith lane run --agent muse` builds its headless
-  `exec --json` command, reads its real output stream (captured from a real run and covered by a test), shows
-  its steps live and takes its final answer as the lane's report. Hooks for Muse Code install with
-  `tirith hook install --agent muse`, and the same rules apply to it as to every agent. If another agent runs out of
-  credits, `muse` can be the fallback in `[models.workers]`.
-- Muse Code agents built part of Tirith during the hackathon; the rest was built with other coding agents
-  after the Muse Code quota ran out. The commit history shows it.
-
-## Try it
-
-On a Mac, download the app from the [latest release](https://github.com/andreseloysv/Tirith/releases/latest) and open it. It carries the
-collector and the page. If [uv](https://docs.astral.sh/uv/) is missing it says so and offers an **Install uv** button (the official
-installer, in a visible Terminal). Then click **Add a project**, or look at the labelled demo data first.
-
-From source, no agents needed:
-
-```bash
-git clone https://github.com/andreseloysv/Tirith && cd Tirith
-./run --demo     # the page on demo data (the screenshots above), no collector
-```
-
-With your own agents:
-
-```bash
-./run            # collector in the background + Tirith in your browser (data from ~/.tirith)
-```
-
-Requirements: [uv](https://docs.astral.sh/uv/) and a browser. Set `META_SI_API_KEY` to switch the Muse Spark
-brain on. The desktop app is built from `app/` (`npm run tauri dev`, see [`app/README.md`](app/README.md)); the
-notarized macOS build comes from `scripts/notarize-macos.sh`; `bash scripts/check-standalone-app.sh` proves the
-built app works without this repository.
-
-Tests: `cd collector && uv run pytest -q` (900+ test functions in `collector/tests/`).
-Inside a project that has a `tirith.toml`, tests run as `tirith run --project tirith --stage test`.
+- **Plan-driven.** Each project's plan is a markdown checklist (`docs/TODO.md`: `## N. Title` steps,
+  `- [ ] item` lines, optionally `(check: \`cmd\`)`). Tirith is its only writer; agents add items with
+  `tirith plan add`.
+- **Autopilot.** Code starts the open items of a project's current step (the first step with open work; steps
+  run in order, the items of a step in parallel), as far as the machine has room: `[lanes] max_parallel`, the load
+  per core, the merge backlog, free disk and an intact commit guard. Failed or stopped items wait for the manager.
+- **Lanes.** One agent, one item, one branch, in a reusable worktree (`<repo>-lanes/slot-N`) whose build caches
+  stay warm. A lane cannot end its turn with a question; it asks the manager with `tirith ask` and is resumed with
+  the answer. Messages reach running lanes through their hooks ("main advanced: …").
+- **Done means checked.** A lane that ends goes to the merge queue: merged with main (several lanes in one
+  train), the project's checks and each item's check run, and only a green result moves main, with the plan item
+  ticked in the same fast-forward. A red check that also fails on main marks main red and pauses the autopilot;
+  otherwise the same agent session gets its work back with the log, twice at most.
+- **Rules in code.** Every tool call of every agent passes the rules first, in 1–4 ms: commit checks are never
+  skipped, the plan and the agents' settings are not edited by agents, a lane writes only in its own worktree,
+  never pushes or touches main and never starts other agents. Projects add rules in `tirith.toml`.
+- **Network sandbox.** Everything Tirith starts (lanes, the manager, CEO reviews, merge checks) runs in a macOS
+  sandbox that allows the network only through the daemon's own proxy, which records every destination by
+  domain and refuses the ones you block (`tirith net block …`). Swift, Xcode, Gradle, npm, cargo and git work
+  inside it. Tool calls that touch credentials, push or read secret variables are audited.
+- **The manager.** One long-lived session you chat with on the page (files and images can be attached). The
+  autopilot starts the work; the manager answers lanes, keeps the plan good and asks you only for credentials,
+  payments, personal accounts, physical devices or real decisions (`tirith ask-owner --kind …`).
+- **Health and the CEO.** Metrics by code (items merged per day, time to merge, first-try rate, idle projects,
+  stuck lanes, red main). A red metric goes to the manager; still red 15 minutes later, an independent one-shot
+  review (the CEO) says what is wrong and what to do. No model runs while everything is green.
+- **Rooms on agentsmessenger.com.** Talk to the manager from your phone in an end-to-end encrypted room
+  (scan a QR, nothing to install), add other managers with a code, and watch public rooms with a summary.
+- **Models per role.** Agent, model and effort for the manager, the lanes, the CEO and the brain, with a fallback
+  chain when an agent runs out of credits.
+- **Brain.** Small text jobs on the Meta Model API (room summaries, an architecture summary in every brief),
+  cached, never on a hot path.
+- **Commit guard.** Git hooks in every project refuse commits with your forbidden words; they are immutable,
+  and a lane only starts when they are intact.
 
 ## How it works
 
+One resident process, `tirith serve`, holds the state in memory and in one SQLite file
+(`~/.tirith/tirith.sqlite3`); everything else talks to it on `127.0.0.1`:
+
+- **Hooks over HTTP.** `tirith hooks install` points the Anthropic CLI's hooks at the daemon; other agents use
+  the command bridge `tirith hook <Event>` (about 10 ms). No process starts per tool call.
+- **A thin CLI.** Every `tirith` command is one HTTP call (about 20 ms).
+- **Changes, not snapshots.** The page loads the state once and then receives only what changed (SSE).
+- **Events, not polling.** No model runs on a timer; the autopilot and the merge queue react to what happens.
+
+## Commands
+
 ```
- agents (lanes, one git worktree each)         you
-   │  hooks: tirith hook → events.jsonl         │  chat · buttons · inbox
-   ▼                                            ▼
- collector (every 2 s) ── dispatcher ── manager session
-   │   gates · plan · claim check · self-check · auto-merge
-   ▼
- ~/.tirith/state.json + state.js ──► web page / desktop app (read-only view, no server, no port)
+tirith serve | status
+tirith plan show <project> | plan add <project> <step> "<text>"
+tirith lane start <project> <step> "<item>" [--agent <alias>] | lane stop <lane> | lane log <lane>
+tirith autopilot on|off <project>
+tirith say "<text>"                          write to the manager
+tirith ask "<question>"                      (a lane) ask the manager, then end the turn
+tirith answer <lane> "<answer>"              (the manager)
+tirith ask-owner --kind credentials|payment|account|device|decision "<question>"   (the manager)
+tirith room new [--title T] | link <room> | qr <room> | invite <room> | join <peer code> | leave <room> | list | tail <room> | say <room> "<text>"
+tirith net status | list | block <domain|ip|cidr> | unblock <rule>
+tirith models | models set <role> [--agent A] [--model M] [--effort E] [--fallback "a:m,b"] | models reset <role>
+tirith guard check | guard install [project]
+tirith hook <Event> | hooks install
 ```
 
-- The **collector** (`collector/`, Python with uv) reads events, lanes, pipelines and the plan, and writes one state file.
-- The **page** (`web/`, plain HTML and JS) and the **app** (`app/`) follow that file. Nothing listens on a port.
-- Each **lane** is an agent in its own git worktree and branch (`lane/<id>`); the commit guard and the hooks
-  are the barrier, not the agent's good will.
-- The **inbox** (`~/.tirith/inbox.jsonl`) is how buttons and chat reach the manager: one line in a local file.
-- The data contracts are `docs/CONTRACT-*.md`.
+## Configuration
 
-## Status
+`~/.tirith/config.toml` (outside every repo; agents cannot edit it). Everything has a default.
 
-Under construction, honestly. Recently landed: the merge queue with trains and a WIP limit, the plan-item rule, new-project bootstrap and the fix that keeps the persistent manager starting. What is described above runs today on `main`.
+```toml
+[[projects]]
+id = "zoo"
+name = "Zoo"
+repo = "~/DEVELOP/zoo"
+# guard_words = ["…"]               # this project's forbidden words (else [guard] words); guard = false opts out
 
-**In progress** (lanes running now, not shipped yet):
+[agents.anthropic]                  # agents are aliases; the real command lives only here
+command = "…"
+settings = "~/…/settings.json"      # protected from agents; `tirith hooks install` edits it
+chat_args = ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose"]
+# args, model_flag, effort_flag, resume_args: how a lane runs this agent ({brief} {workspace} {session} {message})
 
-- agents run with no permission prompts, with hooks as the only barrier;
-- a continue-until-done loop for lanes;
-- faster tests and smaller plan items;
-- autopilot proposals that go to the manager;
-- chat with Muse Code through `muse serve` (blocked on its protocol).
+[launch]                            # optional: the full lane command of the default worker agent
+command = ["…", "-p", "Read the brief at {brief} and implement it in {workspace}."]
 
-Layout: `collector/` CLI and collector · `web/` page · `app/` desktop app · `rust/` Rust port in progress ·
-`fixtures/` demo state · `docs/` contracts.
+[models.manager]                    # also [models.workers], [models.ceo], [models.brain]; the page can override
+agent = "anthropic"
+model = "…"
+effort = "medium"
+fallback = ["muse", "codex:…"]      # used when the agent runs out of credits
+
+[guard]
+words = ["…"]                       # your forbidden words (regexes allowed)
+
+[server]
+port = 7717
+[autopilot]
+enabled = true                      # per project on the page or with `tirith autopilot`
+[lanes]
+max_parallel = 3
+max_load = 2.0                      # 1-minute load per core above which no new lane starts
+inactivity_minutes = 20
+[merge]
+push = true
+stage_timeout_minutes = 30
+[plan]
+commit_seconds = 120
+[network]
+sandbox = true
+proxy_port = 47812
+[messenger]
+url = "https://agentsmessenger.com"
+name = "tirith-manager"
+[owner]
+names = ["…"]                       # messages naming you in public rooms are highlighted
+[[rooms]]
+id = "some-public-room"             # watched only
+[ceo]
+review_after_minutes = 15
+max_per_day = 6
+[ceo.targets]
+merged_per_day = 10
+median_merge_minutes = 120
+```
+
+Each project's `tirith.toml`:
+
+```toml
+roadmap = "docs/TODO.md"
+lane_exclude = ["assets/audio"]     # left out of lane and merge worktrees (sparse checkout)
+
+[[pipelines]]
+id = "ci"
+[[pipelines.stages]]
+name = "test"
+run = "npm test"
+paths = ["src/**", "!**/*.md"]      # optional: run only when a changed file matches
+
+[[rules]]                           # optional: extra refusals
+id = "no-prod-db"
+pattern = "psql .*prod"
+message = "Never touch the production database from a lane."
+tools = ["Bash"]
+lanes_only = true
+```
+
+## Layout
+
+`rust/tirith/` the daemon and CLI (`src/`, one file per module) and its page (`ui/`) · `app/` the desktop app, a
+window on the daemon · `docs/` the plan and the hackathon submission · `site/` the landing page.
 
 License: MIT. See [LICENSE](LICENSE).

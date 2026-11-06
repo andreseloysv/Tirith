@@ -1,0 +1,337 @@
+//! The daemon's shared state: config, SQLite, the lanes in memory and the change feed the page listens to.
+
+use crate::config::{tirith_home, Config, Manifest};
+use rusqlite::{params, Connection};
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, RwLock};
+use std::time::{SystemTime, UNIX_EPOCH};
+use tokio::sync::{broadcast, mpsc, Notify};
+
+pub type Shared = Arc<App>;
+
+#[derive(Serialize, Deserialize, Clone, Default)]
+#[serde(default)]
+pub struct Lane {
+    pub id: String,
+    pub project: String,
+    pub step: String,
+    pub item: String,
+    pub agent: String,
+    pub model: Option<String>,
+    /// queued, running, waiting (asked the manager), merge-queued, merging, merged, failed, stopped
+    pub status: String,
+    /// Its worktree slot (`<repo>-lanes/slot-N`), kept until the lane is merged, failed or stopped.
+    pub workspace: String,
+    pub branch: String,
+    pub pid: Option<u32>,
+    pub attempts: u32,
+    /// The agent's last message (Stop hook) or Tirith's note.
+    pub note: String,
+    /// The agent session id seen in its hooks (a resume continues it).
+    pub session: String,
+    pub question: String,
+    /// The message the next run starts with: resumes `session` when there is one, else ends the brief.
+    pub resume: String,
+    /// Agent aliases already used (out-of-credits fallback).
+    pub tried: Vec<String>,
+    /// Merged alone (its train was red).
+    pub solo: bool,
+    pub created_at: String,
+    pub started_at: Option<String>,
+    pub ended_at: Option<String>,
+    pub merged_at: Option<String>,
+    pub last_activity: u64,
+}
+
+impl Lane {
+    pub fn active(&self) -> bool {
+        matches!(self.status.as_str(), "queued" | "running" | "waiting" | "merge-queued" | "merging")
+    }
+}
+
+pub struct App {
+    pub home: PathBuf,
+    pub cfg: RwLock<Arc<Config>>,
+    pub db: Mutex<Connection>,
+    pub lanes: Mutex<BTreeMap<String, Lane>>,
+    pub tx: broadcast::Sender<String>,
+    pub plan_dirty: Mutex<BTreeSet<String>>,
+    pub plan_lock: tokio::sync::Mutex<()>,
+    pub sched_wake: Notify,
+    pub merge_wake: Notify,
+    pub children: Mutex<HashSet<String>>,
+    pub manager_in: Mutex<Option<mpsc::UnboundedSender<String>>>,
+    pub manager_pending: Mutex<Vec<String>>,
+    manifests: Mutex<HashMap<PathBuf, (Option<SystemTime>, Manifest)>>,
+    cfg_mtime: Mutex<Option<SystemTime>>,
+}
+
+pub fn now_iso() -> String {
+    chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string()
+}
+
+pub fn now_s() -> u64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
+}
+
+fn mtime(p: &Path) -> Option<SystemTime> {
+    std::fs::metadata(p).and_then(|m| m.modified()).ok()
+}
+
+impl App {
+    pub fn open() -> Shared {
+        let home = tirith_home();
+        for dir in ["logs/lanes", "logs/runs", "briefs", "manager"] {
+            let _ = std::fs::create_dir_all(home.join(dir));
+        }
+        let db = Connection::open(home.join("tirith.sqlite3")).expect("open tirith.sqlite3");
+        db.execute_batch(
+            "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA busy_timeout=5000;
+             CREATE TABLE IF NOT EXISTS lanes (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+             CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY, at TEXT, lane TEXT, project TEXT,
+                 kind TEXT, tool TEXT, summary TEXT, session TEXT);
+             CREATE TABLE IF NOT EXISTS chat (id INTEGER PRIMARY KEY, at TEXT, role TEXT, text TEXT);
+             CREATE TABLE IF NOT EXISTS runs (id INTEGER PRIMARY KEY, lane TEXT, project TEXT, stage TEXT,
+                 status TEXT, started_at TEXT, ended_at TEXT, log TEXT);
+             CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT);
+             CREATE TABLE IF NOT EXISTS pipelines (id TEXT PRIMARY KEY, project TEXT, kind TEXT, lanes TEXT, sha TEXT,
+                 status TEXT, started_at TEXT, ended_at TEXT);
+             CREATE TABLE IF NOT EXISTS owner_items (id TEXT PRIMARY KEY, at TEXT, kind TEXT, question TEXT,
+                 status TEXT, answer TEXT);",
+        )
+        .expect("create tables");
+        for col in ["pipeline", "sha"] {
+            let _ = db.execute(&format!("ALTER TABLE runs ADD COLUMN {col} TEXT"), []); // fails once it exists
+        }
+        let mut lanes = BTreeMap::new();
+        {
+            let mut q = db.prepare("SELECT data FROM lanes").expect("read lanes");
+            let rows = q.query_map([], |r| r.get::<_, String>(0)).expect("read lanes");
+            for lane in rows.flatten().filter_map(|s| serde_json::from_str::<Lane>(&s).ok()) {
+                lanes.insert(lane.id.clone(), lane);
+            }
+        }
+        let cfg_mtime = mtime(&home.join("config.toml"));
+        Arc::new(App {
+            home,
+            cfg: RwLock::new(Arc::new(Config::load())),
+            db: Mutex::new(db),
+            lanes: Mutex::new(lanes),
+            tx: broadcast::channel(1024).0,
+            plan_dirty: Mutex::new(BTreeSet::new()),
+            plan_lock: tokio::sync::Mutex::new(()),
+            sched_wake: Notify::new(),
+            merge_wake: Notify::new(),
+            children: Mutex::new(HashSet::new()),
+            manager_in: Mutex::new(None),
+            manager_pending: Mutex::new(Vec::new()),
+            manifests: Mutex::new(HashMap::new()),
+            cfg_mtime: Mutex::new(cfg_mtime),
+        })
+    }
+
+    pub fn cfg(&self) -> Arc<Config> {
+        self.cfg.read().unwrap().clone()
+    }
+
+    /// Re-reads `config.toml` when it changed on disk (one stat).
+    pub fn reload_config(&self) {
+        let now = mtime(&self.home.join("config.toml"));
+        let mut last = self.cfg_mtime.lock().unwrap();
+        if *last != now {
+            *last = now;
+            *self.cfg.write().unwrap() = Arc::new(Config::load());
+        }
+    }
+
+    /// A project's `tirith.toml`, re-read only when its mtime changed.
+    pub fn manifest(&self, repo: &Path) -> Manifest {
+        let stamp = mtime(&repo.join("tirith.toml"));
+        let mut cache = self.manifests.lock().unwrap();
+        if let Some((m, man)) = cache.get(repo) {
+            if *m == stamp {
+                return man.clone();
+            }
+        }
+        let man = Manifest::load(repo);
+        cache.insert(repo.to_path_buf(), (stamp, man.clone()));
+        man
+    }
+
+    pub fn emit(&self, t: &str, d: Value) {
+        let _ = self.tx.send(json!({ "t": t, "d": d }).to_string());
+    }
+
+    pub fn lane(&self, id: &str) -> Option<Lane> {
+        self.lanes.lock().unwrap().get(id).cloned()
+    }
+
+    pub fn save_lane(&self, lane: &Lane) {
+        let data = serde_json::to_string(lane).unwrap_or_default();
+        let _ = self.db.lock().unwrap().execute(
+            "INSERT INTO lanes (id, data) VALUES (?1, ?2) ON CONFLICT(id) DO UPDATE SET data = ?2",
+            params![lane.id, data],
+        );
+        self.lanes.lock().unwrap().insert(lane.id.clone(), lane.clone());
+        self.emit("lane", json!(lane));
+    }
+
+    /// Changes one lane in place (memory, SQLite, page) and returns the new value.
+    pub fn update_lane(&self, id: &str, f: impl FnOnce(&mut Lane)) -> Option<Lane> {
+        let mut lane = self.lane(id)?;
+        f(&mut lane);
+        self.save_lane(&lane);
+        Some(lane)
+    }
+
+    /// The working lane whose worktree holds `cwd`.
+    pub fn lane_for_cwd(&self, cwd: &str) -> Option<Lane> {
+        let cwd = Path::new(cwd);
+        self.lanes
+            .lock()
+            .unwrap()
+            .values()
+            .find(|l| matches!(l.status.as_str(), "running" | "waiting") && !l.workspace.is_empty() && cwd.starts_with(&l.workspace))
+            .cloned()
+    }
+
+    pub fn event(&self, lane: &str, project: &str, kind: &str, tool: &str, summary: &str, session: &str) {
+        let at = now_iso();
+        let id = {
+            let db = self.db.lock().unwrap();
+            let _ = db.execute(
+                "INSERT INTO events (at, lane, project, kind, tool, summary, session) VALUES (?1,?2,?3,?4,?5,?6,?7)",
+                params![at, lane, project, kind, tool, summary, session],
+            );
+            db.last_insert_rowid()
+        };
+        self.emit(
+            "event",
+            json!({"id": id, "at": at, "lane": lane, "project": project, "kind": kind, "tool": tool, "summary": summary}),
+        );
+    }
+
+    pub fn chat(&self, role: &str, text: &str) {
+        let at = now_iso();
+        let id = {
+            let db = self.db.lock().unwrap();
+            let _ = db.execute("INSERT INTO chat (at, role, text) VALUES (?1,?2,?3)", params![at, role, text]);
+            db.last_insert_rowid()
+        };
+        self.emit("chat", json!({"id": id, "at": at, "role": role, "text": text}));
+    }
+
+    pub fn kv(&self, key: &str) -> Option<String> {
+        self.db.lock().unwrap().query_row("SELECT value FROM kv WHERE key = ?1", [key], |r| r.get(0)).ok()
+    }
+
+    pub fn set_kv(&self, key: &str, value: Option<&str>) {
+        let db = self.db.lock().unwrap();
+        let _ = match value {
+            Some(v) => db.execute("INSERT OR REPLACE INTO kv (key, value) VALUES (?1, ?2)", params![key, v]),
+            None => db.execute("DELETE FROM kv WHERE key = ?1", [key]),
+        };
+    }
+
+    /// The last `limit` rows of a table as JSON objects, oldest first.
+    pub fn recent(&self, table: &str, cols: &[&str], limit: u32) -> Vec<Value> {
+        let db = self.db.lock().unwrap();
+        let sql = format!("SELECT {} FROM {table} ORDER BY id DESC LIMIT {limit}", cols.join(", "));
+        let Ok(mut q) = db.prepare(&sql) else { return vec![] };
+        let rows = q.query_map([], |r| {
+            let mut obj = serde_json::Map::new();
+            for (i, c) in cols.iter().enumerate() {
+                let v: rusqlite::types::Value = r.get(i)?;
+                obj.insert(c.to_string(), match v {
+                    rusqlite::types::Value::Integer(n) => json!(n),
+                    rusqlite::types::Value::Text(s) => json!(s),
+                    _ => Value::Null,
+                });
+            }
+            Ok(Value::Object(obj))
+        });
+        let mut out: Vec<Value> = rows.map(|r| r.flatten().collect()).unwrap_or_default();
+        out.reverse();
+        out
+    }
+
+    /// Keeps the event table bounded: the newest 50 000 rows.
+    pub fn trim(&self) {
+        let _ = self.db.lock().unwrap().execute(
+            "DELETE FROM events WHERE id < (SELECT COALESCE(MAX(id), 0) - 50000 FROM events)",
+            [],
+        );
+    }
+
+    /// PATH for agents and checks: this binary's folder first, so `tirith` is this daemon's client.
+    pub fn child_path(&self) -> String {
+        let exe_dir = std::env::current_exe().ok().and_then(|e| e.parent().map(Path::to_path_buf));
+        let rest = std::env::var("PATH").unwrap_or_default();
+        match exe_dir {
+            Some(d) => format!("{}:{rest}", d.display()),
+            None => rest,
+        }
+    }
+}
+
+/// `git -C dir args…`: stdout on success, the error text otherwise.
+pub async fn git(dir: &Path, args: &[&str]) -> Result<String, String> {
+    let out = tokio::process::Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(args)
+        .stdin(std::process::Stdio::null())
+        .output()
+        .await
+        .map_err(|e| e.to_string())?;
+    let text = |b: &[u8]| String::from_utf8_lossy(b).trim().to_string();
+    if out.status.success() {
+        Ok(text(&out.stdout))
+    } else {
+        Err(format!("git {}: {} {}", args.join(" "), text(&out.stderr), text(&out.stdout)).trim().to_string())
+    }
+}
+
+/// A worktree at `base` (a new branch when `branch` is given), without the manifest's `lane_exclude` paths.
+pub async fn add_worktree(repo: &Path, dir: &Path, branch: Option<&str>, exclude: &[String]) -> Result<(), String> {
+    if let Some(parent) = dir.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let d = dir.to_string_lossy().to_string();
+    let mut args = vec!["worktree", "add"];
+    if !exclude.is_empty() {
+        args.push("--no-checkout");
+    }
+    match branch {
+        Some(b) => args.extend(["-b", b, &d, "HEAD"]),
+        None => args.extend(["--detach", &d, "HEAD"]),
+    }
+    git(repo, &args).await?;
+    if !exclude.is_empty() {
+        let mut sparse: Vec<String> = vec!["sparse-checkout".into(), "set".into(), "--no-cone".into(), "/*".into()];
+        sparse.extend(exclude.iter().map(|p| format!("!/{}/", p.trim_matches('/'))));
+        git(dir, &sparse.iter().map(String::as_str).collect::<Vec<_>>()).await?;
+        git(dir, &["checkout", "-q"]).await?;
+    }
+    Ok(())
+}
+
+pub fn kill_group(pid: u32, signal: i32) {
+    unsafe {
+        libc::kill(-(pid as i32), signal);
+    }
+}
+
+pub fn alive(pid: u32) -> bool {
+    unsafe { libc::kill(pid as i32, 0) == 0 }
+}
+
+/// The last `lines` lines of a file.
+pub fn tail(path: &Path, lines: usize) -> String {
+    let text = std::fs::read(path).map(|b| String::from_utf8_lossy(&b).into_owned()).unwrap_or_default();
+    let all: Vec<&str> = text.lines().collect();
+    all[all.len().saturating_sub(lines)..].join("\n")
+}

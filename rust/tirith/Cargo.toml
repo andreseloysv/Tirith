@@ -1,0 +1,30 @@
+[package]
+name = "tirith"
+version = "0.2.0"
+description = "Tirith: one resident process that runs coding agents from a plan, enforces rules and merges verified work"
+edition = "2021"
+license = "MIT"
+
+[[bin]]
+name = "tirith"
+path = "src/main.rs"
+
+[dependencies]
+axum = { version = "0.8", default-features = false, features = ["http1", "json", "tokio", "query"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "io-util", "sync", "time", "net", "fs"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+rusqlite = "0.37"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+regex = "1"
+libc = "0.2"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+base64 = "0.22"
+sha2 = "0.10"
+rand = "0.8"
+ed25519-dalek = "2"
+crypto_box = { version = "0.9", default-features = false, features = ["salsa20", "alloc"] }
+crypto_secretbox = { version = "0.1", default-features = false, features = ["salsa20", "alloc"] }
+qrcode = { version = "0.14", default-features = false, features = ["svg"] }
