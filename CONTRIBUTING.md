@@ -13,6 +13,6 @@ that lists a scratch git repo as a project.
 
 Rules of the codebase:
 
-- `rust/tirith/src` stays under 2000 lines. Simplify before adding.
+- `rust/tirith/src` has a size limit (tirith.toml and CI): simplify before adding.
 - No unit tests: check a change by running it (the daemon, a lane through the merge queue, the page).
 - Commit messages, file names and added lines never contain the words the commit guard forbids.

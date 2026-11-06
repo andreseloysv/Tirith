@@ -272,7 +272,7 @@ fn start_review(app: &Shared, metric: String, why: String) -> bool {
         );
         app.chat("ceo", &text);
         if result.is_ok() {
-            manager::notify(&app, &format!("CEO review: {text}"));
+            manager::tell(&app, &format!("CEO review: {text}"));
         }
         REVIEWING.store(false, Ordering::SeqCst);
         app.emit("ceo", json!({"running": false}));
