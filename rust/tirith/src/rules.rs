@@ -27,7 +27,7 @@ pub fn check(app: &Shared, tool: &str, input: &Value, lane: Option<&Lane>, proje
     let edit = EDIT_TOOLS.contains(&tool);
     let bash = tool == "Bash";
 
-    let hooks_write = bash && cmd.contains(".git/hooks") && WRITES.is_match(cmd);
+    let hooks_write = bash && cmd.contains(".git/hooks") && WRITES.is_match(&cmd.replace("2>/dev/null", "").replace(">/dev/null", ""));
     if (bash && GUARD.is_match(cmd)) || hooks_write || (edit && file.contains("/.git/hooks/")) {
         return Some("Commit checks are never skipped (--no-verify, commit -n, core.hooksPath, .git/hooks). \
                      Fix what the check reports and commit again."
