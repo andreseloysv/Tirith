@@ -355,7 +355,6 @@ def test_lane_cleanup_low_disk_removes_every_ended_lane(home: Path, repo: Path) 
 
 
 def test_lane_cleanup_keeps_done_lane_awaiting_review(home: Path, repo: Path) -> None:
-    from datetime import timedelta
     from tirith.store import write_lane
     fresh, failed = lane(home, repo, "l-norev"), lane(home, repo, "l-failrev")
     rec = record(home, "l-failrev")
@@ -363,9 +362,8 @@ def test_lane_cleanup_keeps_done_lane_awaiting_review(home: Path, repo: Path) ->
     write_lane(home, rec)
     config = load_config(home)
     diskdiet_mod.free_space(home, config, {}, now(), free=lambda f: 2 * GB)
-    later = now() + timedelta(seconds=diskdiet_mod.STALE_S + 60)
-    diskdiet_mod.cleanup(home, config, later)
-    diskdiet_mod.sweep(home, config, later, busy=lambda: [])
+    diskdiet_mod.cleanup(home, config, now())
+    diskdiet_mod.sweep(home, config, now(), busy=lambda: [])
     assert fresh.is_dir() and failed.is_dir()
 
 
