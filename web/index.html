@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tirith</title>
+<meta name="color-scheme" content="light dark">
+<script>/* theme before first paint: localStorage "tirith.theme" = light | dark (anything else is System) */
+try { var t = localStorage.getItem('tirith.theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}
+</script>
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -45,6 +49,7 @@
 <script src="js/v-models.js"></script>
 <script src="js/v-env.js"></script>
 <script src="js/v-timeouts.js"></script>
+<script src="js/v-theme.js"></script>
 <script src="js/v-accesos.js"></script>
 <script src="js/qr.js"></script>
 <script src="js/v-rooms.js"></script>
