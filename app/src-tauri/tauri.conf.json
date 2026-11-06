@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "identifier": "app.tirith.desktop",
   "build": {
-    "frontendDist": "../../rust/tirith/ui"
+    "frontendDist": "../../web"
   },
   "app": {
     "withGlobalTauri": true,
