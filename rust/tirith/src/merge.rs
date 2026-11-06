@@ -158,10 +158,7 @@ pub fn list(app: &Shared, limit: u32) -> Vec<Value> {
 async fn run_stage(app: &Shared, pipe: &Pipe, dir: &Path, name: &str, run: &str) -> Result<(), String> {
     let id = {
         let db = app.db.lock().unwrap();
-        let _ = db.execute(
-            "INSERT INTO runs (lane, project, stage, status, started_at, pipeline, sha) VALUES (?1,?2,?3,'running',?4,?5,?6)",
-            params![pipe.lanes, pipe.project, name, now_iso(), pipe.id, pipe.sha],
-        );
+        let _ = db.execute("INSERT INTO runs (lane, project, stage, status, started_at, pipeline, sha) VALUES (?1,?2,?3,'running',?4,?5,?6)", params![pipe.lanes, pipe.project, name, now_iso(), pipe.id, pipe.sha]);
         db.last_insert_rowid()
     };
     let log = app.home.join(format!("logs/runs/{id}.log"));
@@ -318,13 +315,7 @@ async fn train(app: &Shared, batch: Vec<Lane>) {
                     app.emit("plan", json!({"project": pid}));
                     requeue(app, &[lane], true, "main is red: waits for a green main");
                     if was.is_none() {
-                        manager::notify(
-                            app,
-                            &format!(
-                                "main of {pid} is red: check '{name}' fails on main itself ({}). The autopilot pauses {pid} until main is green; fix main or retry the main pipeline.",
-                                &base[..8.min(base.len())]
-                            ),
-                        );
+                        manager::notify(app, &format!("main of {pid} is red: check '{name}' fails on main itself ({}). The autopilot pauses {pid} until main is green; fix main or retry the main pipeline.", &base[..8.min(base.len())]));
                     }
                     return;
                 }

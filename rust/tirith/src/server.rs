@@ -250,7 +250,6 @@ async fn hook(State(app): State<Shared>, Path(event): Path<String>, headers: Hea
     Json(json!({}))
 }
 
-
 /// The page: the files of `web/` (`[app] web_dir` of config.toml, else this repository's), read from disk on each
 /// request so a change to the page shows on reload. Nothing outside that folder is ever served.
 async fn web_file(State(app): State<Shared>, uri: axum::http::Uri) -> Response {
@@ -259,9 +258,7 @@ async fn web_file(State(app): State<Shared>, uri: axum::http::Uri) -> Response {
     if rel.split('/').any(|p| p.is_empty() || p == ".." || p.starts_with('.')) {
         return (StatusCode::NOT_FOUND, "not found").into_response();
     }
-    let dir = crate::config::get::<String>(&app.cfg().raw, &["app", "web_dir"])
-        .map(|d| crate::config::expand(&d))
-        .unwrap_or_else(|| std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../web")));
+    let dir = crate::config::get::<String>(&app.cfg().raw, &["app", "web_dir"]).map(|d| crate::config::expand(&d)).unwrap_or_else(|| std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../web")));
     let Ok(body) = tokio::fs::read(dir.join(rel)).await else { return (StatusCode::NOT_FOUND, "not found").into_response() };
     let kind = match rel.rsplit('.').next().unwrap_or("") {
         "html" => "text/html; charset=utf-8",
