@@ -188,14 +188,14 @@ def test_xcodebuild_sandbox_flags_in_a_lane(tmp_path: Path, monkeypatch) -> None
     """xcodebuild in a lane stage gets the package sandbox flags, literal or through the PATH shim."""
     monkeypatch.delenv(netproxy.SANDBOXED_ENV, raising=False)
     monkeypatch.delenv("TIRITH_LANE", raising=False)
-    flags = list(netproxy.XCODE_FLAGS)
+    flags = [*netproxy.XCODE_FLAGS, netproxy.XCODE_SWIFT]
     lane = {"TIRITH_LANE": "l1"}
     assert netproxy.xcodebuild(["xcodebuild", "test"], {}) == ["xcodebuild", "test"]  # outside a lane
     assert netproxy.xcodebuild(["xcodebuild", "test"], lane) == ["xcodebuild", *flags, "test"]
     assert netproxy.xcodebuild(["xcodebuild", *flags, "test"], lane) == ["xcodebuild", *flags, "test"]
     assert netproxy.xcodebuild(["echo", "xcodebuild"], lane) == ["echo", "xcodebuild"]
     assert netproxy.xcodebuild("cd a && xcodebuild test -scheme Z", lane) == \
-        "cd a && xcodebuild " + " ".join(flags) + " test -scheme Z"
+        "cd a && xcodebuild " + " ".join(flags[:2]) + " '" + flags[2] + "' test -scheme Z"
     assert netproxy.xcodebuild("myxcodebuild test", lane) == "myxcodebuild test"
     real = tmp_path / "real"
     real.mkdir()
@@ -206,8 +206,18 @@ def test_xcodebuild_sandbox_flags_in_a_lane(tmp_path: Path, monkeypatch) -> None
     assert env["PATH"].startswith(str(tmp_path / "shims"))
     out = subprocess.run(["xcodebuild", "test"], capture_output=True, text=True, env=env).stdout.strip()
     assert out == " ".join([*flags, "test"])
-    out = subprocess.run(["xcodebuild", *flags, "test"], capture_output=True, text=True, env=env).stdout.strip()
-    assert out == " ".join([*flags, "test"])
+    out = subprocess.run(["xcodebuild", *flags[:2], "test"], capture_output=True, text=True, env=env).stdout.strip()
+    assert out == " ".join([*flags[:2], "test"])
+
+
+def test_xcodebuild_other_swift_flags_disable_sandbox(monkeypatch) -> None:
+    """The shim adds OTHER_SWIFT_FLAGS with -disable-sandbox so macros expand; a caller's own value is kept."""
+    monkeypatch.delenv(netproxy.SANDBOXED_ENV, raising=False)
+    lane = {"TIRITH_LANE": "l1"}
+    assert "-disable-sandbox" in netproxy.XCODE_SWIFT and "$(inherited)" in netproxy.XCODE_SWIFT
+    assert netproxy.XCODE_SWIFT in netproxy.xcodebuild(["xcodebuild", "build"], lane)
+    own = ["xcodebuild", "OTHER_SWIFT_FLAGS=-x", "build"]
+    assert netproxy.XCODE_SWIFT not in netproxy.xcodebuild(own, lane)
 
 
 def test_swift_lane_stage_without_tirith_lane_gets_disable_sandbox(monkeypatch) -> None:
