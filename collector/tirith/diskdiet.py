@@ -81,6 +81,9 @@ def cleanup(home: Path, config: Config, now: datetime) -> bool:
         if (lane.get("cleanup") or {}).get("status") in ("removed", "retired"):
             continue
         if _ended_s(lane, now) >= STALE_S:
+            repo = _repo(config, lane)
+            if repo is not None and awaiting_review(lane, repo):
+                continue
             changed |= _retire_lane(home, config, lane, now)
             continue
         if lane.get("result") != "done":
@@ -245,6 +248,17 @@ ENDED = ("done", "stopped", "failed")
 WAITING_REVIEW = (review_mod.PENDING, review_mod.RUNNING, review_mod.READY)
 
 
+def awaiting_review(lane: dict, repo: Path) -> bool:
+    """A done lane whose review has not run (no record), is waiting or failed, and whose branch is not merged:
+    its folder is what the review (or a retry) needs, so it is never removed."""
+    if lane.get("result") != "done":
+        return False
+    if (lane.get("review") or {}).get("status") in (review_mod.MERGED, review_mod.DROPPED):
+        return False
+    branch = f"lane/{lane['id']}"
+    return _git(repo, "merge-base", "--is-ancestor", branch, "HEAD").returncode != 0
+
+
 def _retire_ended(home: Path, config: Config, now: datetime,
                   busy: Callable[[], list[Path]] | None = None) -> tuple[int, int]:
     """Low disk: retire the folder of EVERY ended lane (done, stopped or failed), of every project, not only the
@@ -262,6 +276,8 @@ def _retire_ended(home: Path, config: Config, now: datetime,
         if repo is None or not workspace.is_dir() or not review_mod.launched(lane, repo):
             continue
         if (lane.get("review") or {}).get("status") in WAITING_REVIEW or mergeq_mod.queued(home, str(lane["id"])):
+            continue
+        if awaiting_review(lane, repo):
             continue
         if busy_list is None:
             busy_list = [p.resolve() for p in (busy or busy_folders)()]
@@ -287,8 +303,13 @@ def sweep(home: Path, config: Config, now: datetime, busy: Callable[[], list[Pat
     Returns ``{"worktrees": n, "bytes": freed}``."""
     removed, freed = _retire_ended(home, config, now, busy)
     busy_list = None
-    working = {Path(str(l["workspace"])).resolve() for l in read_lanes(home)
-               if l.get("workspace") and not l.get("ended_at")}
+    working = set()
+    for l in read_lanes(home):
+        if not l.get("workspace"):
+            continue
+        lane_repo = _repo(config, l)
+        if not l.get("ended_at") or (lane_repo is not None and awaiting_review(l, lane_repo)):
+            working.add(Path(str(l["workspace"])).resolve())
     for proj in config.projects:
         if not proj.repo:
             continue
