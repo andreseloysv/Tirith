@@ -13,35 +13,42 @@ use tokio::sync::{broadcast, mpsc, Notify};
 pub type Shared = Arc<App>;
 
 #[derive(Serialize, Deserialize, Clone, Default)]
-pub struct Report {
-    pub status: String,
-    pub note: String,
-}
-
-#[derive(Serialize, Deserialize, Clone, Default)]
+#[serde(default)]
 pub struct Lane {
     pub id: String,
     pub project: String,
     pub step: String,
     pub item: String,
     pub agent: String,
-    /// queued, running, merge-queued, merging, merged, partial, blocked, no-report, failed, stopped
+    pub model: Option<String>,
+    /// queued, running, waiting (asked the manager), merge-queued, merging, merged, failed, stopped
     pub status: String,
+    /// Its worktree slot (`<repo>-lanes/slot-N`), kept until the lane is merged, failed or stopped.
     pub workspace: String,
     pub branch: String,
     pub pid: Option<u32>,
     pub attempts: u32,
-    pub report: Option<Report>,
+    /// The agent's last message (Stop hook) or Tirith's note.
     pub note: String,
+    /// The agent session id seen in its hooks (a resume continues it).
+    pub session: String,
+    pub question: String,
+    /// The message the next run starts with: resumes `session` when there is one, else ends the brief.
+    pub resume: String,
+    /// Agent aliases already used (out-of-credits fallback).
+    pub tried: Vec<String>,
+    /// Merged alone (its train was red).
+    pub solo: bool,
     pub created_at: String,
     pub started_at: Option<String>,
     pub ended_at: Option<String>,
+    pub merged_at: Option<String>,
     pub last_activity: u64,
 }
 
 impl Lane {
     pub fn active(&self) -> bool {
-        matches!(self.status.as_str(), "queued" | "running" | "merge-queued" | "merging")
+        matches!(self.status.as_str(), "queued" | "running" | "waiting" | "merge-queued" | "merging")
     }
 }
 
@@ -89,9 +96,16 @@ impl App {
              CREATE TABLE IF NOT EXISTS chat (id INTEGER PRIMARY KEY, at TEXT, role TEXT, text TEXT);
              CREATE TABLE IF NOT EXISTS runs (id INTEGER PRIMARY KEY, lane TEXT, project TEXT, stage TEXT,
                  status TEXT, started_at TEXT, ended_at TEXT, log TEXT);
-             CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT);",
+             CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT);
+             CREATE TABLE IF NOT EXISTS pipelines (id TEXT PRIMARY KEY, project TEXT, kind TEXT, lanes TEXT, sha TEXT,
+                 status TEXT, started_at TEXT, ended_at TEXT);
+             CREATE TABLE IF NOT EXISTS owner_items (id TEXT PRIMARY KEY, at TEXT, kind TEXT, question TEXT,
+                 status TEXT, answer TEXT);",
         )
         .expect("create tables");
+        for col in ["pipeline", "sha"] {
+            let _ = db.execute(&format!("ALTER TABLE runs ADD COLUMN {col} TEXT"), []); // fails once it exists
+        }
         let mut lanes = BTreeMap::new();
         {
             let mut q = db.prepare("SELECT data FROM lanes").expect("read lanes");
@@ -173,14 +187,14 @@ impl App {
         Some(lane)
     }
 
-    /// The running lane whose worktree holds `cwd`.
+    /// The working lane whose worktree holds `cwd`.
     pub fn lane_for_cwd(&self, cwd: &str) -> Option<Lane> {
         let cwd = Path::new(cwd);
         self.lanes
             .lock()
             .unwrap()
             .values()
-            .find(|l| l.status == "running" && !l.workspace.is_empty() && cwd.starts_with(&l.workspace))
+            .find(|l| matches!(l.status.as_str(), "running" | "waiting") && !l.workspace.is_empty() && cwd.starts_with(&l.workspace))
             .cloned()
     }
 

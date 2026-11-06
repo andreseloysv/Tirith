@@ -33,7 +33,10 @@ tirith plan add <project> <step> \"<text>\"      add an item to a step
 tirith lane start <project> <step> \"<item>\" [--agent <alias>]
 tirith lane stop <lane>
 tirith lane log <lane>
-tirith report --status done|partial|blocked --note \"<text>\" [--lane <lane>]
+tirith ask \"<question>\"                       (inside a lane) ask the manager, then end your turn
+tirith answer <lane> \"<answer>\"                (the manager) answer a waiting lane
+tirith ask-owner --kind credentials|payment|account|device|decision \"<question>\"   (the manager)
+tirith autopilot on|off <project>              let Tirith start the plan's items by itself, or not
 tirith say \"<text>\"                            write to the manager
 tirith hook <Event>                            agent hook bridge (stdin JSON; also --agent A --event E)
 tirith hooks install                           point the agents' hooks at the daemon over HTTP
@@ -70,11 +73,21 @@ fn main() {
         )),
         ["lane", "stop", id] => print(call("POST", &format!("/api/lanes/{id}/stop"), None)),
         ["lane", "log", id] => call("GET", &format!("/api/lanes/{id}/log"), None).map(|b| println!("{b}")),
-        ["report"] => {
-            let lane = flag("--lane").or_else(|| std::env::var("TIRITH_LANE").ok()).unwrap_or_default();
-            let body = json!({"status": flag("--status").unwrap_or_default(), "note": flag("--note").unwrap_or_default()});
-            print(call("POST", &format!("/api/lanes/{lane}/report"), Some(body)))
+        ["ask", question] => {
+            let lane = std::env::var("TIRITH_LANE").map_err(|_| "tirith ask works inside a lane (TIRITH_LANE); the manager asks the owner with tirith ask-owner".to_string());
+            lane.and_then(|l| call("POST", &format!("/api/lanes/{l}/ask"), Some(json!({"question": question}))))
+                .map(|_| println!("Asked the manager. End your turn now; you will be resumed with the answer."))
         }
+        ["answer", id, answer] => print(call("POST", &format!("/api/lanes/{id}/answer"), Some(json!({"answer": answer})))),
+        ["ask-owner", question] => {
+            if std::env::var("TIRITH_LANE").is_ok_and(|l| !l.is_empty()) {
+                Err("a lane does not ask the owner: ask the manager with tirith ask \"<question>\"".to_string())
+            } else {
+                let body = json!({"kind": flag("--kind").unwrap_or_default(), "question": question});
+                call("POST", "/api/owner", Some(body)).map(|b| println!("{b}"))
+            }
+        }
+        ["autopilot", on @ ("on" | "off"), project] => print(call("POST", &format!("/api/autopilot/{project}"), Some(json!({"on": *on == "on"})))),
         ["say", text] => print(call("POST", "/api/chat", Some(json!({"text": text})))),
         _ => Err(USAGE.to_string()),
     });
@@ -88,7 +101,7 @@ fn status() -> Result<(), String> {
     let s: Value = serde_json::from_str(&call("GET", "/api/state", None)?).map_err(|e| e.to_string())?;
     let lanes = s["lanes"].as_array().cloned().unwrap_or_default();
     let mut shown = 0;
-    for l in lanes.iter().filter(|l| matches!(l["status"].as_str(), Some("queued" | "running" | "merge-queued" | "merging"))) {
+    for l in lanes.iter().filter(|l| matches!(l["status"].as_str(), Some("queued" | "running" | "waiting" | "merge-queued" | "merging"))) {
         println!("{:<14} {:<40} {}:{} {}", l["status"].as_str().unwrap_or(""), l["id"].as_str().unwrap_or(""), l["project"].as_str().unwrap_or(""), l["step"].as_str().unwrap_or(""), l["item"].as_str().unwrap_or(""));
         shown += 1;
     }

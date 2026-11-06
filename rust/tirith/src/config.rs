@@ -81,6 +81,8 @@ pub struct Config {
     pub push: bool,
     pub stage_timeout_min: u64,
     pub plan_commit_s: u64,
+    /// `[autopilot] enabled`: the default of each project's autopilot switch.
+    pub autopilot: bool,
 }
 
 pub fn get<T: DeserializeOwned>(t: &toml::Table, path: &[&str]) -> Option<T> {
@@ -114,6 +116,7 @@ impl Config {
             push: get(&t, &["merge", "push"]).unwrap_or(true),
             stage_timeout_min: get(&t, &["merge", "stage_timeout_minutes"]).unwrap_or(30),
             plan_commit_s: get(&t, &["plan", "commit_seconds"]).unwrap_or(120),
+            autopilot: get(&t, &["autopilot", "enabled"]).unwrap_or(true),
         }
     }
 
@@ -128,10 +131,6 @@ impl Config {
             .iter()
             .filter(|p| !p.repo.is_empty())
             .find(|p| cwd.starts_with(p.repo()) || cwd.starts_with(p.lanes_dir()))
-    }
-
-    pub fn worker_agent(&self) -> String {
-        self.workers.as_ref().map(|r| r.agent.clone()).unwrap_or_else(|| "anthropic".into())
     }
 }
 
