@@ -45,7 +45,8 @@ _MERGED = re.compile(r"\bmerged\b", re.IGNORECASE)
 _PUSHED = re.compile(r"\bpushed\b", re.IGNORECASE)
 _NOT_DONE = re.compile(r"\b(?:not|never|n't|nothing|un)\s*(?:yet\s+)?(?:be\s+|been\s+)?(?:merged|pushed)\b|"
                        r"\b(?:to|will|ready to|can|must|should|before|until|then)\s+(?:be\s+)?(?:merge|push)(?:ed)?\b|"
-                       r"\bunmerged\b|\bmerged\s+(?:origin/)?(?:main|master)\b|\bmerge\s+(?:origin/)?(?:main|master)\b", re.IGNORECASE)
+                       r"\bunmerged\b|\bmerged\s+(?:origin/)?(?:main|master)\b|\bmerge\s+(?:origin/)?(?:main|master)\b|"
+                       r"\bmerged\b[^.\n]*?\binto\s+(?:this|the|my|our|its|that)\s+(?:\w+\s+)?branch\b", re.IGNORECASE)
 _SHOT = re.compile(r"\b(?:screenshots?|looked at|viewed|inspected|eyeballed)\b", re.IGNORECASE)
 _IMAGE = re.compile(r"\.(?:png|jpe?g|gif|webp)$", re.IGNORECASE)
 _FIX_ITEM = re.compile(r"^\s*(?:[-*]|\d+[.)])\s*\**(?:fix|repair|correct)\b[^\n]*", re.IGNORECASE | re.MULTILINE)
