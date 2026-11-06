@@ -1008,7 +1008,7 @@ def _fast_command(args, home: Path, info: dict | None, folder: Path) -> str | No
         return None
     sel = fasttests_mod.for_lane(home, args.project, folder, args.stage)
     print(f"tirith: {args.stage}: {sel.summary()}", flush=True)
-    args.selected = True
+    args.selected = not sel.full  # a full pass takes the one-at-a-time suite slot
     return fasttests_mod.command(sel)
 
 
