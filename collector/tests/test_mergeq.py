@@ -1277,3 +1277,24 @@ def test_the_wip_limit_ignores_lanes_waiting_on_the_owners_dirty_checkout(home: 
     rows[2].pop("message")
     (home / "mergeq.json").write_text(json.dumps({"queue": rows}), encoding="utf-8")
     assert mergeq_mod.wip_block(home)
+
+
+def test_send_back_releases_the_original_lane_claim_before_the_fix_lane_starts(env, home: Path) -> None:
+    from tirith import coordination
+    repo, _ = env
+    make_lane(home, repo, "bad", {"BAD": "x"})
+    _link_item(home, "bad")
+    claim = coordination.claim(home, repo, "demo", "2", "Add the feature file.", "bad")
+    lane = read_json(lane_path(home, "bad"), None)
+    lane.update(claim)
+    write_lane(home, lane)
+    seen = {}
+
+    class Claiming(Sender):
+        def __call__(self, home, lane, alias, note) -> str:
+            seen["claim"] = coordination.claim(home, repo, "demo", "2", "Add the feature file.", "bad-2")
+            return super().__call__(home, lane, alias, note)
+
+    mergeq_mod.enqueue(home, "bad")
+    row = mergeq_mod.process_next(home, load_config(home), relaunch=Claiming())
+    assert row["result"] == "red-suite" and seen["claim"]["task_id"] == claim["task_id"]
