@@ -90,3 +90,21 @@ def test_merged_parked_worktrees_go_and_unmerged_or_dirty_stay(home: Path, repo:
     assert not merged.exists()
     assert salvage.is_dir() and dirty.is_dir()
     assert "lane/unmerged" in git(repo, "branch", "--list", "lane/unmerged")
+
+def test_nested_build_folders_go_without_a_gradle_file_but_tracked_and_busy_stay(home: Path, repo: Path) -> None:
+    nested = repo / "zoo" / "android" / "app" / "build"
+    nested.mkdir(parents=True)
+    (nested / "x.bin").write_bytes(b"0" * 2048)
+    tracked = repo / "web" / "build"
+    tracked.mkdir(parents=True)
+    (tracked / "src.txt").write_text("source")
+    busy = repo / "svc" / ".gradle"
+    busy.mkdir(parents=True)
+    (busy / "y").write_text("y")
+    git(repo, "add", "-f", "web/build/src.txt")
+    git(repo, "commit", "-m", "tracked nested")
+    freed = diskdiet_mod.clear_build_cache(home, load_config(home), busy=lambda: [busy])
+    assert freed >= 2048
+    assert not nested.exists()
+    assert (tracked / "src.txt").is_file()
+    assert busy.is_dir()
