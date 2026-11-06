@@ -1,7 +1,7 @@
 //! The manager: one long-lived agent session (stream-json in and out). The owner's messages go straight to
 //! its stdin; its text, its tool calls and the end of each turn go straight to the page.
 
-use crate::app::{kill_group, now_s, Shared};
+use crate::app::{kill_group, now_iso, now_s, Shared};
 use crate::{models, rooms, rules, sandbox};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Mutex;
@@ -12,13 +12,19 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::mpsc;
 
 const PROMPT: &str = "You are the manager inside Tirith. The owner chats with you here: answer briefly, in the \
-owner's language. You do not write project code yourself: you turn requests into plan items and start lanes \
-(an agent in its own git worktree; Tirith merges its branch after the project's checks pass). Commands, run with \
-your shell tool:\n  tirith status\n  tirith plan show <project>\n  tirith plan add <project> <step> \"<item text>\"\n  \
-tirith lane start <project> <step> \"<item text>\"\n  tirith lane stop <lane>\n  tirith lane log <lane>\n\
-Messages that start with [tirith] are reports from Tirith about lanes: act on them (start the next item, send a \
-failed lane back with a clearer item, or tell the owner). Ask the owner only for what only the owner can do: \
-credentials, payments, personal accounts, physical devices or real decisions.";
+owner's language. You do not write project code yourself. Tirith's autopilot starts the open items of each \
+project's current plan step by itself (an agent per item, in its own git worktree); when an agent ends, Tirith \
+runs the checks and merges its branch only when they pass. Your job: answer the lanes' questions \
+(tirith answer), keep the plan good (clear items, and a check where one proves the item: \
+`- [ ] Text (check: `cmd`)`), handle failed lanes and a red main, start or stop lanes by hand when needed, and \
+ask the owner only for what only the owner can do, only with tirith ask-owner. Commands, run with your shell \
+tool:\n  tirith status\n  tirith plan show <project>\n  tirith plan add <project> <step> \"<item text>\"\n  \
+tirith lane start <project> <step> \"<item text>\"\n  tirith lane stop <lane>\n  tirith lane log <lane>\n  \
+tirith answer <lane> \"<answer>\"\n  tirith ask-owner --kind credentials|payment|account|device|decision \"<question>\"\n  \
+tirith autopilot on|off <project>\n  tirith room say <room> \"<text>\"\n\
+Messages that start with [tirith] come from Tirith (questions of lanes, merges, failures, a red main, the \
+owner's answers): act on them. A failed or stopped item is skipped by the autopilot until you restart it with \
+tirith lane start (make the item clearer first if that is why it failed).";
 
 fn user_line(text: &str) -> String {
     json!({"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": text}]}}).to_string()
@@ -65,10 +71,73 @@ pub fn say(app: &Shared, text: &str) {
     deliver(app, text);
 }
 
-/// A report from Tirith (a lane ended, merged, failed): shown in the chat and handed to the manager.
+/// Notes from Tirith not yet handed to the manager.
+static NOTES: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+/// A report from Tirith (a lane asked, merged, failed): shown in the chat at once and handed to the manager
+/// together with every other note of the next 2 seconds, so many events cost one turn.
 pub fn notify(app: &Shared, text: &str) {
     app.chat("tirith", text);
-    deliver(app, &format!("[tirith] {text}"));
+    let first = {
+        let mut n = NOTES.lock().unwrap();
+        n.push(text.to_string());
+        n.len() == 1
+    };
+    if first {
+        let app = app.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_secs(2)).await;
+            let notes = std::mem::take(&mut *NOTES.lock().unwrap());
+            deliver(&app, &format!("[tirith] {}", notes.join("\n\n[tirith] ")));
+        });
+    }
+}
+
+const KINDS: [&str; 5] = ["credentials", "payment", "account", "device", "decision"];
+
+/// `tirith ask-owner`: a card on the owner's page until answered.
+pub fn ask_owner(app: &Shared, kind: &str, question: &str) -> Result<Value, String> {
+    if !KINDS.contains(&kind) || question.trim().is_empty() {
+        return Err(format!("ask the owner with --kind {} and a question", KINDS.join("|")));
+    }
+    let row = {
+        let db = app.db.lock().unwrap();
+        let n: i64 = db.query_row("SELECT COUNT(*) FROM owner_items", [], |r| r.get(0)).unwrap_or(0);
+        let row = json!({"id": format!("o{}", n + 1), "at": now_iso(), "kind": kind, "question": question.trim(), "status": "open", "answer": ""});
+        db.execute(
+            "INSERT INTO owner_items (id, at, kind, question, status, answer) VALUES (?1,?2,?3,?4,'open','')",
+            rusqlite::params![row["id"].as_str(), row["at"].as_str(), kind, question.trim()],
+        )
+        .map_err(|e| e.to_string())?;
+        row
+    };
+    app.emit("owner", row.clone());
+    Ok(row)
+}
+
+/// The owner's answer to an open card, handed to the manager.
+pub fn owner_answer(app: &Shared, id: &str, answer: &str) -> Result<Value, String> {
+    let kind: String = app
+        .db
+        .lock()
+        .unwrap()
+        .query_row("SELECT kind FROM owner_items WHERE id = ?1 AND status = 'open'", [id], |r| r.get(0))
+        .map_err(|_| format!("no open question '{id}'"))?;
+    let _ = app.db.lock().unwrap().execute("UPDATE owner_items SET status = 'answered', answer = ?1 WHERE id = ?2", rusqlite::params![answer, id]);
+    app.emit("owner", json!({"id": id, "status": "answered", "answer": answer}));
+    notify(app, &format!("The owner answered {id} ({kind}): {answer}"));
+    Ok(json!({"ok": true}))
+}
+
+/// The owner's open cards, oldest first.
+pub fn owner_open(app: &Shared) -> Vec<Value> {
+    let db = app.db.lock().unwrap();
+    db.prepare("SELECT id, at, kind, question FROM owner_items WHERE status = 'open' ORDER BY rowid")
+        .and_then(|mut q| {
+            q.query_map([], |r| Ok(json!({"id": r.get::<_, String>(0)?, "at": r.get::<_, String>(1)?, "kind": r.get::<_, String>(2)?, "question": r.get::<_, String>(3)?, "status": "open"})))
+                .map(|rows| rows.flatten().collect())
+        })
+        .unwrap_or_default()
 }
 
 pub async fn run(app: Shared) {
