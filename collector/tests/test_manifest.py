@@ -159,3 +159,20 @@ def test_roles_setting(tmp_path):
     m = parse('[roles]\nmanager = "sometimes"\n')
     assert m.roles["manager"] == "always"
     assert any("roles.manager" in p.message for p in m.problems)
+
+
+def test_stage_paths_parse_and_validate(tmp_path: Path) -> None:
+    head = '[[pipelines]]\nid = "a"\n[[pipelines.stages]]\nname = "x"\n'
+    ok = mf.parse_text(head + 'paths = ["android/**", "!**/*.md"]\n', tmp_path / "tirith.toml")
+    assert not ok.problems and ok.pipelines[0].stages[0].paths == ["android/**", "!**/*.md"]
+    for bad in ('paths = "android/**"\n', 'paths = ["a", ""]\n', 'paths = [1]\n'):
+        m = mf.parse_text(head + bad, tmp_path / "tirith.toml")
+        assert _rules(m.problems) == ["stage-paths"] and m.problems[0].line == 3
+
+
+def test_path_matches_globs() -> None:
+    assert mf.path_matches(["android/**"], "android/app/x.kt") and not mf.path_matches(["android/**"], "androidx/a")
+    assert mf.path_matches(["project.yml"], "project.yml") and not mf.path_matches(["project.yml"], "a/project.yml")
+    assert mf.path_matches(["**/*.kt"], "A.kt") and mf.path_matches(["*.kt"], "A.kt") and not mf.path_matches(["*.kt"], "a/A.kt")
+    assert not mf.path_matches(["!**/*.md"], "docs/a.md") and mf.path_matches(["!**/*.md"], "a.kt")
+    assert not mf.path_matches(["src/**", "!**/*.md"], "src/a.md")

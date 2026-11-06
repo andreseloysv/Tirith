@@ -991,6 +991,12 @@ def _manifest_stage(args, home: Path, command: list[str]) -> list[str]:
     if not stage.run:
         raise SystemExit(f"stage '{args.stage}' has no run command in {loaded.path}")
     args.stage_cwd = str(Path(loaded.path).parent)  # manifest commands run from the project root
+    if stage.paths and not getattr(args, "full", False) and (getattr(args, "changed", False) or info):
+        files = fasttests_mod.changed_files(Path(args.stage_cwd))
+        if not manifest_mod.stage_needed(stage, files):
+            note = f"{args.stage}: skipped, nothing it tests changed (paths: {', '.join(stage.paths)})"
+            print(f"tirith: {note}", flush=True)
+            return ["/bin/sh", "-c", f"echo {shlex.quote(note)}"]
     fast = _fast_command(args, home, info, Path(args.stage_cwd))
     return ["/bin/sh", "-c", fast or stage.run]
 
