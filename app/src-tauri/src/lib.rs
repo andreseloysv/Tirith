@@ -78,6 +78,7 @@ pub fn run() {
             tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::External(url))
                 .title("Tirith")
                 .inner_size(1440.0, 900.0)
+                .disable_drag_drop_handler()
                 .build()?;
             Ok(())
         })
