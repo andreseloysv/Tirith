@@ -50,3 +50,15 @@ def test_lane_agent_entry_script_reaching_swift_gets_disable_sandbox(swiftrepo) 
     _pipeline(repo, "./run-tests.sh")
     assert main(["run", "--project", "zoo", "--stage", "test"]) == 0
     assert seen.read_text().strip() == "test --disable-sandbox --filter Z"
+
+
+def test_swift_sandbox_lane_root_zoo_stage_runs_in_zoocore(swiftrepo) -> None:
+    """The zoo test stage launched from a lane root (zoo-lanes/<lane>) runs swift in Packages/ZooCore with the flag."""
+    repo, seen = swiftrepo
+    (repo / "Packages" / "ZooCore").mkdir(parents=True)
+    (repo / "Packages" / "ZooCore" / "Package.swift").write_text("// pkg\n")
+    fake = Path(os.environ["PATH"].split(os.pathsep)[0])
+    (fake / "swift").write_text(f'#!/bin/sh\necho "$(basename "$PWD") $@" >> "{seen}"\n[ -f Package.swift ] || exit 1\n')
+    _pipeline(repo, "(cd Packages/ZooCore && swift test --skip 'A/test(B|C)|D') && (test ! -d cms/server/tests || true)")
+    assert main(["run", "--project", "zoo", "--stage", "test"]) == 0
+    assert seen.read_text().strip() == "ZooCore test --disable-sandbox --skip A/test(B|C)|D"
