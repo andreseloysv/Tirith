@@ -380,7 +380,7 @@ def clear_project_builds(home: Path, config: Config, busy: Callable[[], list[Pat
                     continue  # tracked: it is source, not output
                 if busy_list is None:
                     busy_list = [p.resolve() for p in (busy or busy_folders)()]
-                if any(_inside(p, target) or _inside(target, p) for p in busy_list):
+                if any(_inside(p, target) for p in busy_list):  # a process at the repo root above does not count
                     continue
                 freed += _tree_size(target)
                 shutil.rmtree(target, ignore_errors=True)
