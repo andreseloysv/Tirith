@@ -73,13 +73,17 @@ pub fn role(app: &Shared, role: &str) -> RoleSetting {
     role_with_source(app, role).0
 }
 
+/// Codex must not apply its own sandbox: the lane already runs inside the daemon's `sandbox-exec`, and a nested one
+/// fails every command with "sandbox_apply: Operation not permitted".
+const NO_SANDBOX: &str = "--dangerously-bypass-approvals-and-sandbox";
+
 /// Per alias: (model flag, effort flag, resume args, lane args), from `[agents.<alias>]` or the known defaults.
 fn flags(cfg: &Config, alias: &str) -> (Option<String>, Option<String>, Vec<String>, Vec<String>) {
     let v = |a: &[&str]| a.iter().map(|s| s.to_string()).collect::<Vec<_>>();
     let (m, e, resume, args): (&str, &str, Vec<String>, Vec<String>) = match alias {
         "anthropic" => ("--model", "--effort", v(&["--resume", "{session}", "-p", "{message}"]), v(&["-p", PROMPT])),
         "muse" => ("--model", "--reasoning-effort", vec![], v(&["exec", "--json", "--workspace", "{workspace}", "--prompt-file", "{brief}"])),
-        "codex" => ("--model", "", v(&["exec", "--json", "resume", "{session}", "{message}"]), v(&["exec", "--json", "--sandbox", "workspace-write", PROMPT])),
+        "codex" => ("--model", "", v(&["exec", "--json", NO_SANDBOX, "resume", "{session}", "{message}"]), v(&["exec", "--json", NO_SANDBOX, PROMPT])),
         "copilot" => (
             "--model",
             "--reasoning-effort",
@@ -330,4 +334,31 @@ pub fn cli(pos: &[&str], flag: Flag) -> Option<Result<(), String>> {
         ["models", "reset", r] => show(call("DELETE", &format!("/api/models/{r}"), None)),
         _ => return None,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn codex_lane_runs_commands() {
+        let c = crate::config::Config {
+            raw: Default::default(),
+            projects: vec![],
+            agents: Default::default(),
+            launch: vec![],
+            workers: None,
+            port: 0,
+            max_parallel: 1,
+            max_load: 1.0,
+            inactivity_min: 1,
+            push: false,
+            stage_timeout_min: 1,
+            plan_commit_s: 1,
+            autopilot: false,
+        };
+        let (_, _, resume, args) = super::flags(&c, "codex");
+        for a in [resume, args] {
+            assert!(a.iter().any(|x| x == super::NO_SANDBOX));
+            assert!(!a.iter().any(|x| x == "--sandbox"));
+        }
+    }
 }
