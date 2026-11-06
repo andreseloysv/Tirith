@@ -120,10 +120,7 @@ async fn change(app: &Shared, project: &str, edit: impl FnOnce(&mut Vec<String>,
 pub fn check_problem(check: &str) -> Option<String> {
     static CALL: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?:^|[\s;&|(])(?:(cd\s+(?:\./)?collector(?:[/\s;&]|$))|tirith\s+([A-Za-z-][\w-]*))").unwrap());
     const OK: [&str; 16] = ["serve", "hook", "hooks", "status", "plan", "lane", "ask", "answer", "ask-owner", "autopilot", "say", "room", "net", "models", "guard", "help"];
-    CALL.captures_iter(check).find_map(|c| match c.get(2) {
-        None => Some("the check does `cd collector`, a removed folder (the daemon is Rust: use cargo test -q <name>)".to_string()),
-        Some(sub) => (!OK.contains(&sub.as_str())).then(|| format!("the check calls `tirith {}`, which is not a tirith command", sub.as_str())),
-    })
+    CALL.captures_iter(check).find_map(|c| c.get(2).map_or(Some("the check does `cd collector`, a removed folder (the daemon is Rust: use cargo test -q <name>)".to_string()), |s| (!OK.contains(&s.as_str())).then(|| format!("the check calls `tirith {}`, which is not a tirith command", s.as_str()))))
 }
 
 pub async fn add(app: &Shared, project: &str, step: &str, text: &str) -> Result<(), String> {
@@ -131,9 +128,7 @@ pub async fn add(app: &Shared, project: &str, step: &str, text: &str) -> Result<
     if text.is_empty() {
         return Err("the item needs a text".into());
     }
-    if let Some(problem) = CHECK.captures(&text).and_then(|c| check_problem(&c[1])) {
-        return Err(problem);
-    }
+    if let Some(p) = CHECK.captures(&text).and_then(|c| check_problem(&c[1])) { return Err(p); }
     change(app, project, |lines, steps| {
         let i = steps.iter().position(|s| s.num == step).ok_or(format!("the plan has no step {step}"))?;
         if steps[i].items.iter().any(|it| it.text == text) {
@@ -178,15 +173,5 @@ pub async fn flush_locked(app: &Shared, project: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::check_problem as bad;
-
-    #[test]
-    fn plan_add_rejects_invalid_checks() {
-        for c in ["tirith run --stage test", "tirith check", "cd collector && uv run pytest", "cargo test -q x && tirith run -p p"] {
-            assert!(bad(c).is_some(), "{c}");
-        }
-        for c in ["cargo test -q plan_add_rejects_invalid_checks", "tirith plan show tirith | grep -q x", "cd collectors && ls"] {
-            assert!(bad(c).is_none(), "{c}");
-        }
-    }
+    #[test] fn plan_add_rejects_invalid_checks() { let b = super::check_problem; assert!(["tirith run -s test", "tirith check", "cd collector && ls", "cargo test && tirith run"].iter().all(|c| b(c).is_some()) && ["cargo test -q x", "tirith plan show p", "cd collectors"].iter().all(|c| b(c).is_none())); }
 }
