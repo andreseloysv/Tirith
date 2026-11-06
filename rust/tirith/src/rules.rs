@@ -50,8 +50,8 @@ pub fn check(app: &Shared, tool: &str, input: &Value, lane: Option<&Lane>, proje
             return Some(format!("A lane writes only inside its own copy: {}. Change the file there.", l.workspace));
         }
         if bash && MAIN.is_match(cmd) {
-            return Some("A lane never pushes or touches main. Commit on your branch, then run: \
-                         tirith report --status done --note \"<what you did>\". Tirith merges after the checks pass."
+            return Some("A lane never pushes or touches main. Commit on your branch and end your turn: \
+                         Tirith runs the checks and merges."
                 .into());
         }
         let names: Vec<String> = cfg
@@ -62,11 +62,9 @@ pub fn check(app: &Shared, tool: &str, input: &Value, lane: Option<&Lane>, proje
         let spawns = !names.is_empty()
             && Regex::new(&format!(r"(^|[;&|(]\s*|\bexec\s+|\bnohup\s+)({})\b", names.join("|"))).map(|r| r.is_match(cmd)).unwrap_or(false);
         if tool == "Task" || tool == "Agent" || (bash && spawns) {
-            return Some(format!(
-                "Agents start only through Tirith, so the owner sees them. Ask for a helper lane: \
-                 tirith lane start {} <step> \"<item>\" (the item must be in the plan).",
-                l.project
-            ));
+            return Some("Agents start only through Tirith, so the owner sees them. If the item needs more hands, \
+                 ask the manager: tirith ask \"<question>\"."
+                .into());
         }
     }
     for r in manifest.map(|m| m.rules).unwrap_or_default() {

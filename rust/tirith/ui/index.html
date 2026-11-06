@@ -32,8 +32,11 @@ h2{font-size:12px;text-transform:uppercase;letter-spacing:1px;color:var(--mute);
 .lane .note{color:var(--mute);font-size:12px;margin-top:3px;white-space:pre-wrap}
 .lane button{margin-left:auto;padding:2px 8px;font-size:12px}.lane button+button{margin-left:4px}
 .b{font-size:11px;padding:1px 7px;border-radius:9px;border:1px solid currentColor;white-space:nowrap}
-.running,.merging{color:var(--run)}.queued,.merge-queued{color:var(--wait)}.merged,.passed{color:var(--ok)}
-.failed,.no-report,.blocked,.timeout,.stopped,.partial{color:var(--bad)}
+.running,.merging{color:var(--run)}.queued,.merge-queued,.waiting{color:var(--wait)}.merged,.passed{color:var(--ok)}
+.failed,.timeout,.stopped{color:var(--bad)}
+.card{border:1px solid var(--acc);background:var(--panel);border-radius:10px;padding:9px 11px;margin-bottom:8px}
+.card form{display:flex;gap:6px;margin-top:6px}.card input{flex:1}
+#ap{font-size:12px;text-transform:none;letter-spacing:0;margin-left:8px}#red{color:var(--bad);text-transform:none;letter-spacing:0;margin-left:8px}
 .step{margin-bottom:10px}.step summary{cursor:pointer;font-weight:600}.step .count{color:var(--mute);font-weight:400}
 .item{display:flex;gap:8px;align-items:baseline;padding:3px 0 3px 14px}.item span.t{flex:1}
 .item button{padding:1px 8px;font-size:12px}
@@ -41,7 +44,6 @@ h2{font-size:12px;text-transform:uppercase;letter-spacing:1px;color:var(--mute);
 #events div{font-size:12px;padding:2px 0;border-bottom:1px dashed var(--line);display:flex;gap:8px}
 #events .at{color:var(--mute);font-family:ui-monospace,Menlo,monospace}#events .blocked{color:var(--bad)}
 #events .who{color:var(--mute);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-#runs div{font-size:12px;padding:2px 0}
 #modal{position:fixed;inset:5%;background:var(--panel);border:1px solid var(--line);border-radius:10px;display:none;flex-direction:column}
 #modal pre{flex:1;overflow:auto;margin:0;padding:12px;font:12px ui-monospace,Menlo,monospace;white-space:pre-wrap}
 #modal.on{display:flex}#modal header{border:0}
@@ -58,21 +60,22 @@ h2{font-size:12px;text-transform:uppercase;letter-spacing:1px;color:var(--mute);
     <form id="say"><textarea id="text" placeholder="Escribe al manager… (Enter envía, Shift+Enter salto de línea)"></textarea><button class="pri">Enviar</button></form>
   </div>
   <section>
+    <div id="needs" hidden><h2>Te necesitan</h2><div id="owner"></div></div>
     <h2>Trabajando</h2><div id="active"></div>
-    <h2>Plan <select id="proj"></select></h2><div id="plan" class="quiet">Elige un proyecto.</div>
-    <h2>Checks</h2><div id="runs"></div>
+    <h2>Plan <select id="proj"></select><label id="ap" hidden><input type="checkbox" id="apon"> autopiloto</label><span id="red"></span></h2>
+    <div id="plan" class="quiet">Elige un proyecto.</div>
     <h2>Terminadas</h2><div id="ended"></div>
     <h2>Actividad</h2><div id="events"></div>
   </section>
 </main>
 <div id="modal"><header><b id="mtitle"></b><button style="margin-left:auto" onclick="modal.classList.remove('on')">Cerrar</button></header><pre id="mbody"></pre></div>
 <script>
-const S = {lanes: {}, runs: {}, project: (() => { try { return localStorage.getItem("tirith.project") || ""; } catch { return ""; } })()};
+const S = {lanes: {}, owner: {}, project: (() => { try { return localStorage.getItem("tirith.project") || ""; } catch { return ""; } })()};
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const ACTIVE = ['queued', 'running', 'merge-queued', 'merging'];
-const LABEL = {queued:'en cola', running:'trabajando', 'merge-queued':'esperando merge', merging:'checks', merged:'en main',
-  failed:'falló', 'no-report':'sin reporte', partial:'parcial', blocked:'bloqueada', stopped:'parada', passed:'ok', timeout:'tiempo'};
+const ACTIVE = ['queued', 'running', 'waiting', 'merge-queued', 'merging'];
+const LABEL = {queued:'en cola', running:'trabajando', waiting:'esperando al manager', 'merge-queued':'esperando merge',
+  merging:'checks', merged:'en main', failed:'falló', stopped:'parada', passed:'ok', timeout:'tiempo'};
 async function api(method, path, body) {
   const r = await fetch(path, {method, headers: {'Content-Type': 'application/json'}, body: body ? JSON.stringify(body) : undefined});
   const t = await r.text();
@@ -95,7 +98,8 @@ function laneHtml(l) {
     <span class="id">${esc(l.project)}:${esc(l.step)} · ${esc(l.id)}</span>
     <button data-log="${esc(l.id)}">log</button>${act ? `<button data-stop="${esc(l.id)}">parar</button>` : ''}</div>
     <div>${esc(l.item)}</div>
-    ${(l.report && l.report.note) || l.note ? `<div class="note">${esc((l.report && l.report.note) || l.note)}</div>` : ''}`;
+    ${l.status === 'waiting' && l.question ? `<div class="note">Pregunta: ${esc(l.question)}</div>` : ''}
+    ${l.note ? `<div class="note">${esc(l.note.length > 300 ? l.note.slice(0, 300) + '…' : l.note)}</div>` : ''}`;
 }
 function renderLane(l) {
   let el = document.getElementById('lane-' + l.id);
@@ -113,9 +117,13 @@ function addEvent(e) {
   $('events').prepend(el);
   while ($('events').children.length > 200) $('events').lastChild.remove();
 }
-function renderRuns() {
-  const runs = Object.values(S.runs).sort((a, b) => b.id - a.id).slice(0, 12);
-  $('runs').innerHTML = runs.map(r => `<div><span class="b ${esc(r.status)}">${esc(LABEL[r.status] || r.status)}</span> ${esc(r.stage)} · <span class="quiet">${esc(r.lane)}</span></div>`).join('') || '<div class="quiet">Ningún check todavía.</div>';
+const KIND = {credentials:'credenciales', payment:'pago', account:'cuenta', device:'dispositivo', decision:'decisión'};
+function renderOwner() {
+  const open = Object.values(S.owner).filter(o => o.status === 'open');
+  $('needs').hidden = !open.length;
+  $('owner').innerHTML = open.map(o => `<div class="card"><span class="b waiting">${esc(KIND[o.kind] || o.kind)}</span>
+    <span class="quiet">${time(o.at)}</span><div>${esc(o.question)}</div>
+    <form class="answer" data-owner="${esc(o.id)}"><input placeholder="Tu respuesta…"><button class="pri">Responder</button></form></div>`).join('');
 }
 async function loadPlan() {
   if (!S.project) return;
@@ -123,9 +131,11 @@ async function loadPlan() {
   const open = {};
   document.querySelectorAll('#plan details[open]').forEach(d => open[d.dataset.step] = 1);
   $('plan').classList.remove('quiet');
+  $('ap').hidden = false; $('apon').checked = !!p.autopilot;
+  $('red').textContent = p.main_red ? `main en rojo: ${p.main_red}` : '';
   $('plan').innerHTML = p.steps.map(st => {
     const todo = st.items.filter(i => !i.done);
-    const items = todo.map(i => `<div class="item"><span class="t">${esc(i.text)}</span>${i.lane && ACTIVE.includes(i.lane.status)
+    const items = todo.map(i => `<div class="item" title="${esc(i.check ? 'check: ' + i.check : '')}"><span class="t">${esc(i.text)}</span>${i.lane && ACTIVE.includes(i.lane.status)
       ? `<span class="b ${esc(i.lane.status)}">${esc(LABEL[i.lane.status])}</span>`
       : `<button data-start="${esc(st.num)}" data-item="${esc(i.text)}">empezar</button>`}</div>`).join('');
     return `<details class="step" data-step="${esc(st.num)}" ${open[st.num] || (todo.length && Object.keys(open).length === 0 && st === p.steps.find(s => s.items.some(i => !i.done))) ? 'open' : ''}>
@@ -138,11 +148,11 @@ let es;
 async function boot() {
   const s = await api('GET', '/api/state');
   $('chat').innerHTML = ''; $('active').innerHTML = ''; $('ended').innerHTML = ''; $('events').innerHTML = '';
+  S.owner = {}; (s.owner || []).forEach(o => S.owner[o.id] = o); renderOwner();
   s.chat.forEach(addChat);
   s.lanes.sort((a, b) => (a.created_at || '').localeCompare(b.created_at || '')).forEach(l => { S.lanes[l.id] = l; renderLane(l); });
   if (!$('active').children.length) $('active').innerHTML = '<div class="quiet" id="none">Ninguna lane trabajando.</div>';
   s.events.forEach(addEvent);
-  S.runs = {}; s.runs.forEach(r => S.runs[r.id] = r); renderRuns();
   $('proj').innerHTML = '<option value="">—</option>' + s.projects.map(p => `<option value="${esc(p.id)}">${esc(p.name || p.id)}</option>`).join('');
   $('proj').value = S.project; loadPlan();
   es && es.close();
@@ -155,7 +165,8 @@ async function boot() {
     else if (m.t === 'event') addEvent(d);
     else if (m.t === 'chat') addChat(d);
     else if (m.t === 'busy') $('busy').textContent = d ? 'El manager está trabajando…' : '';
-    else if (m.t === 'run') { S.runs[d.id] = d; renderRuns(); }
+    else if (m.t === 'owner') { S.owner[d.id] = Object.assign(S.owner[d.id] || {}, d); renderOwner(); }
+    else if (m.t === 'autopilot' && d.project === S.project) $('apon').checked = d.on;
     else if (m.t === 'plan' && d.project === S.project) loadPlan();
     else if (m.t === 'load') $('load').textContent = `carga ${d.load} por núcleo · ${d.running}/${d.max} lanes`;
     (T.handlers[m.t] || []).forEach(fn => { try { fn(d); } catch (err) { console.error(err); } });
@@ -177,12 +188,16 @@ document.addEventListener('submit', async e => {
   if (f.id === 'say') {
     const text = $('text').value.trim();
     if (text) { $('text').value = ''; await api('POST', '/api/chat', {text}); }
+  } else if (f.dataset.owner) {
+    const answer = f.querySelector('input').value.trim();
+    if (answer) await api('POST', `/api/owner/${f.dataset.owner}`, {answer});
   } else if (f.classList.contains('add')) {
     const input = f.querySelector('input'), text = input.value.trim();
     if (text) { await api('POST', '/api/plan/' + encodeURIComponent(S.project), {step: f.dataset.step, text}); input.value = ''; }
   }
 });
 $('text').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('say').requestSubmit(); } });
+$('apon').addEventListener('change', e => api('POST', '/api/autopilot/' + encodeURIComponent(S.project), {on: e.target.checked}));
 $('proj').addEventListener('change', e => { S.project = e.target.value; try { localStorage.setItem('tirith.project', S.project); } catch {} loadPlan(); });
 const modal = $('modal');
 // For the module scripts (/ui/<module>.js): T.on(type, fn) gets the stream's changes of that type;
