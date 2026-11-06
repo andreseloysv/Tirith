@@ -337,6 +337,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] La app de macOS funciona sola en un Mac limpio: incluye el collector y la web, y en el primer arranque instala lo que falte (uv) con un botón. (check: `bash scripts/check-standalone-app.sh`) (hecho: 79cb84d)
 - [x] Llevar a main lane/standalone (bf1c2de): el elemento de integrar se marcó hecho con 09cf8bd, un commit del plan, y main no tiene scripts/check-standalone-app.sh ni standalone.rs. (check: `git cat-file -e main:scripts/check-standalone-app.sh && git cat-file -e main:app/src-tauri/src/standalone.rs`) (hecho: 1316f44)
 - [x] Integrar en main la rama lane/standalone (bf1c2de, app sola en un Mac limpio) con bash scripts/check-standalone-app.sh en verde. (check: `git cat-file -e main:scripts/check-standalone-app.sh && git cat-file -e main:app/src-tauri/src/standalone.rs`) (hecho: 09cf8bd)
+- [ ] Probar a mano los adjuntos (clip y arrastrar archivos) y que no haya scroll horizontal en /Applications/Tirith.app cuando la interfaz nueva esté desplegada (espera: el dueño o el integrador, hace falta una sesión gráfica)
 
 ## 10. Plan visible en el Overview
 
@@ -802,6 +803,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [ ] Daemon Rust: los worktrees de lanes y de la cola de merge copian los local.properties ignorados por git (p. ej. zoo android/local.properties con sdk.dir) desde el checkout principal, y los checks de items usan el env de la etapa del pipeline (JAVA_HOME JDK 17, ANDROID_HOME) (si ya existe, solo añadir el test) (check: `cargo test -q worktree_local_properties`)
 - [ ] Daemon Rust: la dieta de disco borra carpetas <proyecto>-lanes sin registro de lane, guardando antes sus cambios sin commit en ~/.tirith/kept y sus commits sin merge en una rama, nunca una carpeta con un proceso vivo (si ya existe, solo añadir el test) (check: `cargo test -q diskdiet_orphan_lane_folder`)
 - [ ] Lanes cuyo item no necesita cambios (ya verde, verificado u obsoleto) pueden cerrarlo sin diff: un comando de lane (p. ej. tirith done --no-change "<motivo>") marca el item hecho con la nota y termina la lane sin pasar por la cola de merge (check: `cargo test -q lane_done_no_change`)
+- [ ] tirith plan add rechaza ítems cuyo check llama a subcomandos de tirith que no existen (tirith run, tirith check) o a rutas eliminadas (cd collector) (check: `cargo test -q plan_add_rejects_invalid_checks`)
 
 ## 18. Salas privadas: hablar con el manager desde el móvil
 
@@ -883,4 +885,5 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [x] The running Tirith measures how long the on-demand CEO and manager have been idle and calls retire_if_idle (promote.py) on its regular tick, so they retire on their own (check: `cd collector && uv run -q pytest -q tests -k retire_on_tick`) <!-- tirith:{"id":"i-d78a6bf4","depends_on":[],"writes":[]} -->
   - [x] Revisar: The running Tirith measures how long the on-demand CEO and manager have been idle and calls retire_if_idle (promote.py) on its regular tick, so they retire on their own (check: `cd collector && uv run -q pytest -q tests -k retire_on_tick`)
 - [ ] El autopilot no inicia como lane los ítems de rol del paso 0 («Manager de guardia: atender el chat», «CEO: …»): esos los atienden el manager o el CEO, sin crear worktree (check: `cargo test -q autopilot_skips_role_items`)
+- [ ] El autopilot no arranca lanes para ítems marcados (espera: …) del dueño, y una lane sin commits no entra en la cola de merge: termina con su motivo (check: `cargo test -q autopilot_skips_owner_wait_items`)
 
