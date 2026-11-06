@@ -243,6 +243,11 @@ touches; `--full`, a review that merges and the merge queue (outside a lane) run
 - **One full suite at a time**: every full suite (`tirith run --stage test` without a selection, a review that
   merges, the merge queue's test stage, a map build) holds `<home>/full-suite.lock` (`loadlimit.full_suite`, waits up to 3 h, then runs anyway),
   taken before a stage slot. Selected runs and other stages only use their slots.
+- **The merge queue has its own stage slot**: its test runs take `<home>/slots/merge.lock` (`loadlimit.slot(merge=True)`),
+  not one of the lane slots `slots/{0..n-1}.lock` and not counted in the lane limit, so lane test runs never
+  starve the queue that lands their work. Lanes keep adapting to CPU and disk (the disk guard still limits new
+  lanes). A stage run that waits more than 60 s for a slot says once, in its output (the queue: `logs/mergeq.log`),
+  which holder it waits for (each slot file holds the pid and command of its holder).
 - A lane with the `ceo-` prefix never runs a test suite: `tirith run --stage test|rust-test` and the review
   skip it (exit 0).
 
