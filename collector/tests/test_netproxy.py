@@ -243,3 +243,17 @@ def test_swiftpm_audio28_sh_dash_c_line_and_absolute_swift(monkeypatch) -> None:
     assert netproxy.swiftpm(out, env) == out
     assert netproxy.swiftpm("/usr/bin/swift build && myswift test", env) == "/usr/bin/swift build --disable-sandbox && myswift test"
     assert netproxy.swiftpm(["/bin/sh", "-c", line], {}) == ["/bin/sh", "-c", line]
+
+
+def test_gradle_gets_the_proxy_as_jvm_properties_in_a_lane(home: Path, monkeypatch) -> None:
+    monkeypatch.setattr(netproxy, "status", lambda h: {"guard": "on", "port": 47811})
+    monkeypatch.delenv(netproxy.SANDBOXED_ENV, raising=False)
+    env = netproxy.lane_env(home, "lane-a", "tok", {"GRADLE_OPTS": "-Xmx2g -Dhttps.proxyPort=1234"})
+    opts = env["GRADLE_OPTS"].split()
+    assert opts[0] == "-Xmx2g"  # the lane's own options stay first
+    assert "-Dhttps.proxyHost=127.0.0.1" in opts and "-Dhttp.proxyPort=47811" in opts
+    assert "-Dhttps.proxyPort=1234" in opts and "-Dhttps.proxyPort=47811" not in opts  # a property already set wins
+    assert "-Dhttps.proxyUser=lane-a" in opts and "-Dhttps.proxyPassword=tok" in opts
+    assert "-Dhttps.nonProxyHosts=localhost|127.0.0.1" in opts
+    monkeypatch.setattr(netproxy, "status", lambda h: {"guard": "off", "why": "x"})
+    assert netproxy.lane_env(home, "lane-a", "tok", {}) == {}  # no guard, no proxy properties

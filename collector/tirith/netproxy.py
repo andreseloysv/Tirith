@@ -147,7 +147,22 @@ def lane_env(home: Path, lane_id: str, token: str | None, env: dict) -> dict:
     url = f"http://{lane_id}:{token or 'x'}@127.0.0.1:{state['port']}"
     out = {**env, **{name: url for name in PROXY_VARS}, "NO_PROXY": NO_PROXY, "no_proxy": NO_PROXY,
            "NODE_USE_ENV_PROXY": "1", SANDBOXED_ENV: "1"}
+    out["GRADLE_OPTS"] = gradle_opts(out.get("GRADLE_OPTS"), state["port"], lane_id, token)
     return out
+
+
+def gradle_opts(current: str | None, port: int, lane_id: str, token: str | None) -> str:
+    """``GRADLE_OPTS`` with the guard's proxy as JVM system properties: Gradle (and the JVM) ignore ``HTTPS_PROXY``, so
+    without them dependency resolution dials out directly and the sandbox refuses it. Gradle sends the user and
+    password to the proxy itself, which is how the connection is the lane's. Properties already set are kept."""
+    have = current or ""
+    props = {"http.proxyHost": "127.0.0.1", "https.proxyHost": "127.0.0.1",
+             "http.proxyPort": str(port), "https.proxyPort": str(port),
+             "http.proxyUser": lane_id, "https.proxyUser": lane_id,
+             "http.proxyPassword": token or "x", "https.proxyPassword": token or "x",
+             "http.nonProxyHosts": "localhost|127.0.0.1", "https.nonProxyHosts": "localhost|127.0.0.1"}
+    extra = [f"-D{k}={v}" for k, v in props.items() if f"-D{k}=" not in have]
+    return " ".join([have.strip(), *extra]).strip()
 
 
 def argv(home: Path, command: list[str], env: dict) -> list[str]:
