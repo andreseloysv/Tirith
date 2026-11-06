@@ -428,3 +428,7 @@ not done by a lane (it would start an agent outside `lane run`). The owner check
 `tirith app-update` (own session, so it survives the app quitting): `scripts/package.sh` (signed), refuse a
 bundle without a "Developer ID Application" signature, quit the app, replace the installed bundle, reopen it
 if it was running. Failure sets `failed` + `error` and is not retried for that fingerprint.
+
+## Path test maps (projects without pytest)
+
+`tirith.testmap.PATH_MAPS` maps changed paths to test commands for a project (`zoo`: `cms/server` → `node --test cms/server/tests`, `cms/web` → `npx vitest run --root cms/web`, `Packages/ZooCore` → `swift test --package-path Packages/ZooCore`). `tirith run --stage test` in a lane of that project runs only the commands of the paths changed; code no path covers runs the full stage; docs-only runs nothing. The CEO snapshot lists the map in `test_maps.<project>` as present (`kind: paths`).

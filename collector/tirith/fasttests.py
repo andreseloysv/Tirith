@@ -38,16 +38,20 @@ class Selection:
     crates: list[str] = field(default_factory=list)  # cargo packages
     web: list[str] = field(default_factory=list)     # web test files relative to the repo root
     changed: list[str] = field(default_factory=list)
+    commands: list[str] = field(default_factory=list)  # test commands picked by a project's path map
     mapped: bool = False                             # the Python tests come from the execution map (testmon)
 
     def record(self) -> dict:
         mode = "full" if self.full else "map" if self.mapped else "changed"
         return {"stage": self.stage, "mode": mode, "reason": self.reason,
-                "tests": self.tests, "crates": self.crates, "web": self.web, "changed": self.changed}
+                "tests": self.tests, "crates": self.crates, "web": self.web, "commands": self.commands,
+                "changed": self.changed}
 
     def summary(self) -> str:
         if self.full:
             return f"full suite ({self.reason})"
+        if self.commands:
+            return f"changed only: {len(self.commands)} test commands by path ({self.reason})"
         if not (self.tests or self.crates or self.web or self.mapped):
             return f"changed only: nothing to run ({self.reason}); the merge queue runs the full suite"
         parts = ["python tests by the execution map"] if self.mapped else \
@@ -184,7 +188,9 @@ def command(sel: Selection) -> str | None:
     if sel.full:
         return None
     steps = []
-    if sel.stage == "rust-test":
+    if sel.commands:
+        steps = list(sel.commands)
+    elif sel.stage == "rust-test":
         steps = [f"cargo test -q {' '.join('-p ' + c for c in sel.crates)}"] if sel.crates else []
     else:
         if sel.mapped:
@@ -201,10 +207,30 @@ def supported(folder: Path) -> bool:
     return (Path(folder) / "collector" / "tirith").is_dir()
 
 
+def select_paths(project: str, stage: str, files: list[str]) -> Selection:
+    """Selection by the project's path map (``testmap.PATH_MAPS``): each mapped folder runs its own tests; code no
+    path covers runs the whole stage; docs-only changes run nothing."""
+    sel = Selection(stage=stage, changed=files)
+    code = [f for f in files if not f.endswith(DOC_SUFFIXES) and not f.startswith("docs/")]
+    sel.commands, unmapped = testmap_mod.path_commands(project, code)
+    if unmapped:
+        sel.commands, sel.full = [], True
+        sel.reason = f"no test path covers {unmapped[0]}"
+    else:
+        sel.reason = "paths " + ", ".join(sorted({p for p, c in testmap_mod.path_map(project) if c in sel.commands})) \
+            if sel.commands else "no code change" if files else "no change found"
+    return sel
+
+
 def for_lane(home: Path, project: str, folder: Path, stage: str) -> Selection:
     """The selection for a lane's worktree: from the execution map when there is one (copied into the worktree),
     else by names and the import graph. Recorded in ``selections.jsonl``."""
     folder = Path(folder)
+    if stage == "test" and testmap_mod.path_map(project):
+        sel = select_paths(project, stage, changed_files(folder))
+        append_jsonl(home / "selections.jsonl", {"at": now_iso(), "project": project, "worktree": str(folder),
+                                                  **sel.record()})
+        return sel
     sel = select(folder, stage, mapped=stage == "test" and testmap_mod.usable(home, project))
     if sel.mapped and not testmap_mod.install(home, project, folder):
         sel = select(folder, stage, sel.changed)
