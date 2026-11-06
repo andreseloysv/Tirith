@@ -316,7 +316,46 @@ pub async fn add_worktree(repo: &Path, dir: &Path, branch: Option<&str>, exclude
         git(dir, &sparse.iter().map(String::as_str).collect::<Vec<_>>()).await?;
         git(dir, &["checkout", "-q"]).await?;
     }
+    copy_local_properties(repo, dir).await;
     Ok(())
+}
+
+/// Copy the git-ignored `local.properties` files (Android `sdk.dir`) from the main checkout into a new worktree.
+pub async fn copy_local_properties(repo: &Path, dir: &Path) {
+    let args = ["ls-files", "--others", "--ignored", "--exclude-standard", "-z", "--", ":(glob)**/local.properties"];
+    let Ok(list) = git(repo, &args).await else { return };
+    for rel in list.split('\0').filter(|r| !r.is_empty()) {
+        let to = dir.join(rel);
+        if let Some(parent) = to.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let _ = std::fs::copy(repo.join(rel), to);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn worktree_local_properties() {
+        let base = std::env::temp_dir().join(format!("tirith-lp-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let repo = base.join("repo");
+        std::fs::create_dir_all(repo.join("android")).unwrap();
+        for a in [vec!["init", "-q"], vec!["config", "user.email", "t@t"], vec!["config", "user.name", "t"]] {
+            git(&repo, &a).await.unwrap();
+        }
+        std::fs::write(repo.join(".gitignore"), "local.properties\n").unwrap();
+        std::fs::write(repo.join("README"), "x").unwrap();
+        git(&repo, &["add", "."]).await.unwrap();
+        git(&repo, &["commit", "-qm", "init"]).await.unwrap();
+        std::fs::write(repo.join("android/local.properties"), "sdk.dir=/sdk\n").unwrap();
+        let wt = base.join("wt");
+        add_worktree(&repo, &wt, None, &[]).await.unwrap();
+        assert_eq!(std::fs::read_to_string(wt.join("android/local.properties")).unwrap(), "sdk.dir=/sdk\n");
+        let _ = std::fs::remove_dir_all(&base);
+    }
 }
 
 pub fn kill_group(pid: u32, signal: i32) {
