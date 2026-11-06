@@ -282,9 +282,20 @@ def test_plan_add_names_the_lane_and_refuses_bad_input(proj, home: Path, capsys,
 
 def test_plan_add_refuses_a_plan_with_uncommitted_changes(proj, home: Path, capsys) -> None:
     repo, _ = proj
-    (repo / "docs" / "TODO.md").write_text(_plan(repo) + "\n- [ ] by hand\n", encoding="utf-8")
+    (repo / "docs" / "TODO.md").write_text(_plan(repo) + "\nnotes by hand\n", encoding="utf-8")
     assert main(["plan", "add", "--project", "demo", "--step", "1", "--text", "X"]) == 3
     assert "uncommitted changes" in capsys.readouterr().err
+
+
+def test_plan_leftover_uncommitted_plan_lines_are_committed_by_the_next_write(proj, home: Path) -> None:
+    repo, _ = proj
+    (repo / "docs" / "TODO.md").write_text(_plan(repo).replace("- [ ] Write the docs.", "- [x] Write the docs."),
+                                           encoding="utf-8")  # a failed commit left this behind
+    assert main(["plan", "add", "--project", "demo", "--step", "1", "--text", "X"]) == 0
+    status = subprocess.run([GIT, "-C", str(repo), "status", "--porcelain", "--", "docs/TODO.md"],
+                            capture_output=True, text=True).stdout
+    assert status.strip() == ""
+    assert "- [x] Write the docs." in _plan(repo) and "X" in _plan(repo)
 
 
 def test_the_writer_lock_serializes_changes(proj, home: Path) -> None:
@@ -384,7 +395,7 @@ def test_report_is_kept_when_the_plan_is_dirty_and_written_later(proj, home: Pat
     _lane(home, repo)
     clean = _plan(repo)
     # An uncommitted edit of the plan (the plan gate refuses to write over it).
-    (repo / "docs" / "TODO.md").write_text(clean + "\n", encoding="utf-8")
+    (repo / "docs" / "TODO.md").write_text(clean + "\nmy notes\n", encoding="utf-8")
     assert main(["plan", "report", "--lane", "l1", "--status", "done"]) == 0
     assert read_json(home / "lanes" / "l1.json", {})["outcome"]["applied"] is False
     # Restore the committed plan by content, not through git's stat cache (a checkout can skip a file whose

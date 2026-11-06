@@ -166,7 +166,7 @@ def test_a_mismatch_is_refused_with_a_clear_answer_and_changes_nothing(project, 
 
 
 def test_uncommitted_plan_is_left_alone(project, home: Path) -> None:
-    (project / "docs" / "TODO.md").write_text(TODO + "\n- [ ] mine\n", encoding="utf-8")
+    (project / "docs" / "TODO.md").write_text(TODO + "\nmy notes\n", encoding="utf-8")
     rid = inbox_mod.add_request(home, "plan-edit", "demo", "2", _payload(add="x"), at=_at(5))["id"]
     _run(home)
     assert "uncommitted changes" in _by_id(home)[rid]["answers"][0]["text"]
