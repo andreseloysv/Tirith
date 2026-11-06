@@ -43,7 +43,9 @@ _SHA = re.compile(r"\b(?:commit(?:ted)?|sha|as|at|commit id)\s*[:=]?\s*(?:as\s+)
                   re.IGNORECASE)
 _MERGED = re.compile(r"\bmerged\b", re.IGNORECASE)
 _PUSHED = re.compile(r"\bpushed\b", re.IGNORECASE)
-_NOT_DONE = re.compile(r"\b(?:not|never|n't|nothing|un)\s*(?:yet\s+)?(?:be\s+|been\s+)?(?:merged|pushed)\b|"
+_NOT_DONE = re.compile(r"\b(?:no|nothing|none|not|never|won'?t|will not|cannot|can'?t|don'?t|do not|didn'?t|did not|nor|without|"
+                       r"unless|if)\b[^.;\n]{0,40}?\b(?:merge[sd]?|push(?:ed|es)?)\b|"
+                       r"\b(?:not|never|n't|nothing|un)\s*(?:yet\s+)?(?:be\s+|been\s+)?(?:merged|pushed)\b|"
                        r"\b(?:to|will|ready to|can|must|should|before|until|then)\s+(?:be\s+)?(?:merge|push)(?:ed)?\b|"
                        r"\bunmerged\b|\bmerged\s+(?:origin/)?(?:main|master)\b|\bmerge\s+(?:origin/)?(?:main|master)\b|"
                        r"\bmerged\b[^.\n]*?\binto\s+(?:this|the|my|our|its|that)\s+(?:\w+\s+)?branch\b", re.IGNORECASE)
