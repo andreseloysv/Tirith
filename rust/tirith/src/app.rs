@@ -347,6 +347,23 @@ mod tests {
         assert_eq!(std::fs::read_to_string(wt.join("android/local.properties")).unwrap(), "sdk.dir=/sdk\n");
         let _ = std::fs::remove_dir_all(&base);
     }
+
+    #[tokio::test]
+    async fn sparse_zoo_lane() {
+        let repo = std::env::temp_dir().join(format!("tirith-sp-{}", std::process::id()));
+        let ex: Vec<String> = ["output/research", "tools/content", "ZooBundles"].map(String::from).into();
+        for d in ex.iter().map(String::as_str).chain(["cms"]) {
+            std::fs::create_dir_all(repo.join(d)).and_then(|_| std::fs::write(repo.join(d).join("f"), "x")).unwrap();
+        }
+        for a in ["init -q", "config user.email t@t", "config user.name t", "add .", "commit -qm i"] {
+            git(&repo, &a.split(' ').collect::<Vec<_>>()).await.unwrap();
+        }
+        let wt = repo.join("../wt-sp");
+        add_worktree(&repo, &wt, Some("lane/z"), &ex).await.unwrap();
+        assert!(wt.join("cms/f").exists() && ex.iter().all(|p| !wt.join(p).exists()));
+        let _ = std::fs::remove_dir_all(&wt);
+        let _ = std::fs::remove_dir_all(&repo);
+    }
 }
 
 pub fn kill_group(pid: u32, signal: i32) {
