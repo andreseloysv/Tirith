@@ -7,11 +7,10 @@
 //! lives only in config.toml. Optional per alias: `model_flag`, `effort_flag` ("" = none) and `resume_args`
 //! (`{session}` and `{message}` are filled in); the known aliases have defaults.
 
-use crate::app::Shared;
+use crate::app::{bad, Shared, R};
 use crate::client::{call, Flag};
 use crate::config::{get, Config};
 use axum::extract::{Path as UrlPath, Query, State};
-use axum::http::StatusCode;
 use axum::routing::get as GET;
 use axum::{Json, Router};
 use regex::Regex;
@@ -189,8 +188,6 @@ pub fn fallback(app: &Shared, role_name: &str, tried: &[String]) -> Option<(Stri
     })
 }
 
-pub fn start(_app: Shared) {}
-
 fn valid(v: &str) -> bool {
     v.chars().next().is_some_and(|c| c.is_ascii_alphanumeric()) && v.chars().all(|c| c.is_ascii_alphanumeric() || "._:/+-[]".contains(c))
 }
@@ -266,12 +263,6 @@ pub fn state(app: &Shared) -> Value {
     let efforts: Vec<String> = get(&cfg.raw, &["models", "efforts"]).unwrap_or_else(|| EFFORTS.map(String::from).to_vec());
     let models: Vec<String> = get(&cfg.raw, &["models", "choices"]).unwrap_or_default();
     json!({"roles": roles, "choices": {"agents": cfg.agents.keys().collect::<Vec<_>>(), "models": models, "efforts": efforts}})
-}
-
-type R = Result<Json<Value>, (StatusCode, String)>;
-
-fn bad(e: String) -> (StatusCode, String) {
-    (StatusCode::BAD_REQUEST, e)
 }
 
 pub fn routes() -> Router<Shared> {

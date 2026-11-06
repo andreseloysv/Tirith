@@ -71,14 +71,8 @@ async fn fetch(State(app): State<Shared>, Path((id, name)): Path<(String, String
     }
 }
 
-pub fn start(_app: Shared) {}
-
 pub fn routes() -> Router<Shared> {
     Router::new()
         .route("/api/attachments", post(upload).layer(DefaultBodyLimit::max(LIMIT)))
         .route("/api/attachments/{id}/{name}", get(fetch))
-}
-
-pub fn cli(_pos: &[&str], _flag: crate::client::Flag) -> Option<Result<(), String>> {
-    None
 }

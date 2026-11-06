@@ -40,7 +40,7 @@ tirith hooks install                           point the agents' hooks at the da
 (modules add: tirith room …, tirith net …, tirith models …, tirith guard …)";
 
 type ModuleCli = fn(&[&str], client::Flag) -> Option<Result<(), String>>;
-const MODULE_CLI: [ModuleCli; 7] = [rooms::cli, sandbox::cli, models::cli, guard::cli, metrics::cli, brain::cli, attach::cli];
+const MODULE_CLI: [ModuleCli; 4] = [rooms::cli, sandbox::cli, models::cli, guard::cli];
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -200,7 +200,7 @@ fn serve() -> Result<(), String> {
         let listener = tokio::net::TcpListener::bind(("127.0.0.1", port))
             .await
             .map_err(|e| format!("port {port} is taken (is tirith already running?): {e}"))?;
-        for start in [sandbox::start, models::start, rooms::start, brain::start, guard::start, metrics::start, attach::start] {
+        for start in [sandbox::start, rooms::start, brain::start, guard::start, metrics::start] {
             start(app.clone());
         }
         tokio::spawn(lanes::scheduler(app.clone()));
