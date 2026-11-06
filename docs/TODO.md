@@ -279,7 +279,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] La regla roadmap-edit no bloquea comandos que solo leen el plan: un grep del plan en un comando que también usa sed -n o python -c open() de otros ficheros pasa. (check: `cd collector && uv run -q pytest -q tests -k roadmap_edit_read_only`) (hecho: ca1aa39)
 - [x] tirith.toml no nombra el port a Rust (tirith-core, tirith-cli) en ninguna etapa que bloquea merges: mover el pipeline rust-port a un archivo aparte. (check: `! grep -qE 'tirith-core|tirith-cli|--workspace' tirith.toml`) (hecho: d2f1927)
 - [x] Un lane no termina mientras su etapa de tests sigue corriendo: Tirith espera el resultado y se lo pasa al agente. (check: `cd collector && uv run -q pytest -q tests -k keepalive`) (hecho: ec74885)
-- [ ] La guarda de palabras prohibidas en pre-commit/commit-msg ignora en un merge commit las líneas que ya están en uno de los padres (p. ej. datos de zoo cuyas URLs de Wikimedia contienen palabras de la lista, traídos desde main), y solo mira lo que añade el merge (check: `cargo test -q guard_merge_ignores_parent_content`)
+- [x] La guarda de palabras prohibidas en pre-commit/commit-msg ignora en un merge commit las líneas que ya están en uno de los padres (p. ej. datos de zoo cuyas URLs de Wikimedia contienen palabras de la lista, traídos desde main), y solo mira lo que añade el merge (check: `cargo test -q guard_merge_ignores_parent_content`)
 
 ## 8. Más visibilidad por agente
 
