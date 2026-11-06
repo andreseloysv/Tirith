@@ -132,7 +132,7 @@ pub fn lane_argv(
     let fill = |s: &String| s.replace("{brief}", &brief).replace("{workspace}", &ws).replace("{session}", session).replace("{message}", message);
     let mut argv: Vec<String> = if resume.is_some() && !resume_args.is_empty() {
         std::iter::once(a.command.clone()).chain(resume_args.iter().map(fill)).collect()
-    } else if alias == cfg.worker_agent() && !cfg.launch.is_empty() {
+    } else if Some(alias.as_str()) == cfg.workers.as_ref().map(|r| r.agent.as_str()).or(Some("anthropic")) && !cfg.launch.is_empty() {
         cfg.launch.iter().map(fill).collect()
     } else {
         std::iter::once(a.command.clone()).chain(args.iter().map(fill)).collect()
