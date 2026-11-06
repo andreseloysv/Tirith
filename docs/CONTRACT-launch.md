@@ -351,6 +351,11 @@ The step's checkboxes in the roadmap are still ticked by the owner.
   retires the folder of every ended lane (`done`, `stopped` or `failed`) of every project, however recent, the
   same way (patch in `~/.tirith/kept/` first, branch stays unless merged). Skipped: a lane in the merge queue, one
   whose review is `pending`, `running` or `ready`, one still working, and a folder a process runs in.
+- **Project builds and parked worktrees.** Under the same low-disk trigger, `build/` and `.gradle` are removed from
+  every gradle checkout and worktree of each project (a folder with `build.gradle[.kts]`, `settings.gradle[.kts]`
+  or `gradlew`; never tracked files, never a folder a process runs in). `sweep` also removes worktrees under
+  `<repo>/.wt` and `<repo>/.wt-salvage` whose HEAD (and branch) is already in the project checkout's HEAD and
+  that have no uncommitted changes; unmerged or dirty ones are never touched.
 - **Fresh launches survive the sweep.** `sweep` skips a worktree git touched less than 15 min ago (`FRESH_S`)
   whose branch is at the project checkout's HEAD: a lane being launched looks merged and has no record yet, and
   removing it before the agent starts gave `FileNotFoundError` in `_run_child`.
