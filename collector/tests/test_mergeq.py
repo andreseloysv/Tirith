@@ -1298,3 +1298,73 @@ def test_send_back_releases_the_original_lane_claim_before_the_fix_lane_starts(e
     mergeq_mod.enqueue(home, "bad")
     row = mergeq_mod.process_next(home, load_config(home), relaunch=Claiming())
     assert row["result"] == "red-suite" and seen["claim"]["task_id"] == claim["task_id"]
+
+
+PATHED = (LOGGED + '[[pipelines.stages]]\nname = "android"\nkind = "test"\npaths = ["android/**", "gradle/**"]\n'
+          'run = "echo android >> $STAGE_LOG"\n'
+          '[[pipelines.stages]]\nname = "ios"\nkind = "test"\npaths = ["Wildnis/**", "project.yml", "!**/*.md"]\n'
+          'run = "echo ios >> $STAGE_LOG"\n')
+
+
+@pytest.fixture
+def pathed(logged):
+    repo, log = logged
+    (repo / "tirith.toml").write_text(PATHED, encoding="utf-8")
+    git(repo, "commit", "-q", "-am", "stages with paths")
+    return repo, log
+
+
+def lane_with(home: Path, repo: Path, name: str, files: list[str]) -> None:
+    wt = make_lane(home, repo, name, {})
+    for f in files:
+        (wt / f).parent.mkdir(parents=True, exist_ok=True)
+        (wt / f).write_text("x", encoding="utf-8")
+    mergeq_mod.enqueue(home, name)
+
+
+def test_stage_paths_matching_file_runs_the_stage(pathed, home: Path) -> None:
+    repo, log = pathed
+    lane_with(home, repo, "one", ["android/app/build.gradle"])
+    rows = land(home)
+    assert rows[0]["result"] == "merged"
+    assert log() == ["build", "test", "android"]
+    assert rows[0]["skipped"] == ["rust-test", "ios"] and "skipped rust-test, ios: nothing it tests changed" in rows[0]["message"]
+
+
+def test_stage_paths_non_matching_change_skips_the_stage_with_the_note(pathed, home: Path) -> None:
+    repo, log = pathed
+    lane_with(home, repo, "one", ["web/app.js"])
+    rows = land(home)
+    assert log() == ["build", "test"] and rows[0]["skipped"] == ["rust-test", "android", "ios"]
+    assert "skipped rust-test, android, ios: nothing it tests changed" in rows[0]["message"]
+
+
+def test_stage_paths_negation_and_docs_only_diffs(pathed, home: Path) -> None:
+    repo, log = pathed
+    lane_with(home, repo, "one", ["Wildnis/README.md"])
+    land(home)
+    assert "ios" not in log() and "android" not in log()
+
+
+def test_stage_paths_train_runs_the_union_of_the_lanes(pathed, home: Path) -> None:
+    repo, log = pathed
+    lane_with(home, repo, "one", ["android/a.kt"])
+    lane_with(home, repo, "two", ["project.yml"])
+    rows = land(home)
+    assert [r["result"] for r in rows] == ["merged", "merged"] and rows[0]["train"] == ["one", "two"]
+    assert log() == ["build", "test", "android", "ios"]  # one pass, both path stages, no rust
+
+
+def test_stage_without_paths_and_rust_rule_are_unchanged(pathed, home: Path) -> None:
+    repo, log = pathed
+    lane_with(home, repo, "one", ["app/src-tauri/lib.rs"])
+    land(home)
+    assert log() == ["build", "test", "rust"]
+
+
+def test_stage_paths_unknown_diff_runs_everything() -> None:
+    stages = [("ci", manifest_mod.Stage("android", "x", "test", ["android/**"])), ("ci", manifest_mod.Stage("test", "x", "test"))]
+    kept, skipped = mergeq_mod.select_stages(stages, [mergeq_mod.needs_of([])])
+    assert len(kept) == 2 and skipped == []
+    kept, skipped = mergeq_mod.select_stages(stages, [mergeq_mod.needs_of(["docs/a.md"])])
+    assert kept == [] and skipped == ["android", "test"]
