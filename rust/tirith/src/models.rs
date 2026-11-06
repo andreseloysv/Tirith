@@ -7,16 +7,15 @@
 //! lives only in config.toml. Optional per alias: `model_flag`, `effort_flag` ("" = none) and `resume_args`
 //! (`{session}` and `{message}` are filled in); the known aliases have defaults.
 
-use crate::app::{bad, Shared, R};
+use crate::app::{bad, Shared};
 use crate::client::{call, Flag};
 use crate::config::{get, Config};
-use axum::extract::{Path as UrlPath, Query, State};
+use axum::extract::{Path as UrlPath, State};
 use axum::routing::get as GET;
 use axum::{Json, Router};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::collections::HashMap;
 use std::path::Path;
 use std::sync::OnceLock;
 
@@ -83,12 +82,7 @@ fn flags(cfg: &Config, alias: &str) -> (Option<String>, Option<String>, Vec<Stri
         "anthropic" => ("--model", "--effort", v(&["--resume", "{session}", "-p", "{message}"]), v(&["-p", PROMPT])),
         "muse" => ("--model", "--reasoning-effort", vec![], v(&["exec", "--json", "--workspace", "{workspace}", "--prompt-file", "{brief}"])),
         "codex" => ("--model", "", v(&["exec", "--json", NO_SANDBOX, "resume", "{session}", "{message}"]), v(&["exec", "--json", NO_SANDBOX, PROMPT])),
-        "copilot" => (
-            "--model",
-            "--reasoning-effort",
-            v(&["--resume", "{session}", "-p", "{message}"]),
-            v(&["--output-format", "json", "--no-ask-user", "--allow-tool", "write", "--allow-tool", "shell", "-p", PROMPT]),
-        ),
+        "copilot" => ("--model", "--reasoning-effort", v(&["--resume", "{session}", "-p", "{message}"]), v(&["--output-format", "json", "--no-ask-user", "--allow-tool", "write", "--allow-tool", "shell", "-p", PROMPT])),
         _ => ("--model", "", v(&["--resume", "{session}", "-p", "{message}"]), v(&["-p", PROMPT])),
     };
     let key = |k: &str, d: &str| Some(get::<String>(&cfg.raw, &["agents", alias, k]).unwrap_or(d.into())).filter(|f| !f.is_empty());
@@ -260,28 +254,11 @@ pub fn state(app: &Shared) -> Value {
 }
 
 pub fn routes() -> Router<Shared> {
-    Router::new().route("/api/models", GET(|State(app): State<Shared>| async move { Json(state(&app)) })).route("/api/models/preview", GET(preview)).route(
+    Router::new().route("/api/models", GET(|State(app): State<Shared>| async move { Json(state(&app)) })).route(
         "/api/models/{role}",
         axum::routing::post(|State(app): State<Shared>, UrlPath(r): UrlPath<String>, Json(b): Json<Value>| async move { save(&app, &r, Some(&b)).map(|s| Json(json!(s))).map_err(bad) })
             .delete(|State(app): State<Shared>, UrlPath(r): UrlPath<String>| async move { save(&app, &r, None).map(|s| Json(json!(s))).map_err(bad) }),
     )
-}
-
-/// GET /api/models/preview?role=workers&project=<id>[&agent=A&model=M&session=S&message=T]: the argv it would run.
-async fn preview(State(app): State<Shared>, Query(q): Query<HashMap<String, String>>) -> R {
-    let q = |k: &str| q.get(k).map(String::as_str).filter(|v| !v.is_empty());
-    let cmd = match q("role").unwrap_or("workers") {
-        "workers" => {
-            let project = q("project").unwrap_or("");
-            let ws = app.cfg().project(project).map(|p| p.lanes_dir().join("<lane>")).unwrap_or("<workspace>".into());
-            let resume = q("session").map(|s| (s, q("message").unwrap_or("")));
-            lane_argv(&app, q("agent"), q("model"), &app.home.join("briefs/<lane>.md"), &ws, resume)
-        }
-        r @ ("manager" | "ceo") => chat_argv(&app, r, q("session")),
-        r => Err(format!("role {r} runs no agent")),
-    }
-    .map_err(bad)?;
-    Ok(Json(json!({"alias": cmd.alias, "argv": cmd.argv})))
 }
 
 /// `tirith models`, `tirith models set <role> [--agent A] [--model M] [--effort E] [--fallback "a:m,b"]`,

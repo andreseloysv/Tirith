@@ -4,8 +4,8 @@
 
 use crate::app::{git, now_s, Shared};
 use crate::models;
-use axum::extract::{Path, State};
-use axum::routing::{get, post};
+use axum::extract::State;
+use axum::routing::get;
 use axum::{Json, Router};
 use rusqlite::params;
 use serde_json::{json, Value};
@@ -137,15 +137,6 @@ async fn info(State(app): State<Shared>) -> Json<Value> {
         "reason": if enabled { Value::Null } else { json!("no API key: set META_API_KEY or META_SI_API_KEY in the daemon's environment") }}))
 }
 
-async fn ask_route(State(app): State<Shared>, Json(b): Json<Value>) -> Json<Value> {
-    let answer = ask(&app, b["job"].as_str().unwrap_or(""), b["input"].as_str().unwrap_or("")).await;
-    Json(json!({"answer": answer}))
-}
-
-async fn arch_route(State(app): State<Shared>, Path(project): Path<String>) -> Json<Value> {
-    Json(json!({"summary": architecture(&app, &project)}))
-}
-
 pub fn routes() -> Router<Shared> {
-    Router::new().route("/api/brain", get(info)).route("/api/brain/ask", post(ask_route)).route("/api/brain/architecture/{project}", get(arch_route))
+    Router::new().route("/api/brain", get(info))
 }
