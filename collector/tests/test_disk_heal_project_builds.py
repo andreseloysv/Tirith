@@ -80,6 +80,12 @@ def test_a_folder_a_process_runs_in_keeps_its_build(home: Path, repo: Path) -> N
     assert (repo / "build").is_dir()
 
 
+def test_a_process_at_the_repo_root_does_not_keep_the_build(home: Path, repo: Path) -> None:
+    build_output(repo)
+    diskdiet_mod.clear_build_cache(home, load_config(home), busy=lambda: [repo])
+    assert not (repo / "build").exists()
+
+
 def test_merged_parked_worktrees_go_and_unmerged_or_dirty_stay(home: Path, repo: Path) -> None:
     merged = worktree(repo, repo / ".wt" / "merged", "lane/merged")
     salvage = worktree(repo, repo / ".wt-salvage" / "unmerged", "lane/unmerged", commit=True)
