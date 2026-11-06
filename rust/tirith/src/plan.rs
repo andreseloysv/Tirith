@@ -133,6 +133,13 @@ pub async fn add(app: &Shared, project: &str, step: &str, text: &str) -> Result<
     if let Some(p) = CHECK.captures(&text).and_then(|c| check_problem(&c[1])) {
         return Err(p);
     }
+    // A forbidden word of the project's commit guard would make the plan uncommittable and block every merge.
+    if let Some(p) = app.cfg().project(project).cloned() {
+        let words = crate::guard::words(app, &p);
+        if let Some(m) = regex::Regex::new(&format!(r"(?i)\b({})\b", words.join("|"))).ok().filter(|_| !words.is_empty()).and_then(|r| r.find(&text)) {
+            return Err(format!("\"{}\" is a forbidden word of this project's commit guard: say it another way", m.as_str()));
+        }
+    }
     change(app, project, |lines, steps| {
         let i = steps.iter().position(|s| s.num == step).ok_or(format!("the plan has no step {step}"))?;
         if steps[i].items.iter().any(|it| it.text == text) {
