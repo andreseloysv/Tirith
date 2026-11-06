@@ -78,7 +78,9 @@ def test_canary_tick_waits_for_the_plan_item_instead_of_looking_once(home: Path,
         return len(calls) >= 3 and real(repo, text)
 
     monkeypatch.setattr(canary_mod, "_plan_item_done", late)
-    row = canary_mod.run(home, wait_s=60, pump=dispatcher(home, drain_spawn(home)), sleep=lambda s: None)
+    # real merges take 40-70s under -n 8 load: the deadlines only matter when something is stuck, so keep them wide
+    monkeypatch.setattr(canary_mod, "TICK_WAIT_S", 300.0)
+    row = canary_mod.run(home, wait_s=300, pump=dispatcher(home, drain_spawn(home)), sleep=lambda s: None)
     assert row["state"] == "ok" and len(calls) >= 3
 
 
