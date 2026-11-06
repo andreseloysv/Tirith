@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tirith</title>
+<meta name="color-scheme" content="light dark">
+<script>/* theme before first paint: localStorage "tirith.theme" = light | dark (anything else is System) */
+try { var q = location.search.match(/theme=(light|dark)/); var t = q ? q[1] : localStorage.getItem('tirith.theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}
+</script>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/overview.css">
+<link rel="stylesheet" href="css/chat.css">
+<link rel="stylesheet" href="css/agents.css">
+<link rel="stylesheet" href="css/rooms.css">
+</head>
+<body>
+<div id="blobs" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+<div id="app" style="display: contents"></div>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

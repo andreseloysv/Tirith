@@ -1,0 +1,20 @@
+/* manager chat (js/views/chat.js): only what the old style.css did not have */
+.mc-earlier { align-self: center; flex: none; font-size: 12px; color: var(--blue); padding: 3px 10px; border-radius: 8px; }
+.mc-earlier:hover { background: var(--soft); }
+.mc-log > * { flex: none; }
+
+/* Tirith's notes, room messages and CEO reviews: quieter than the manager's answers */
+.mc-m.note .mc-b, .mc-m.room .mc-b { font-size: 12px; color: var(--ink3); background: rgb(var(--w) / .32); border: 1px dashed rgba(120,135,160,.32); box-shadow: none; }
+.mc-m.note .mc-b .md, .mc-m.room .mc-b .md { font-size: 12px; color: inherit; }
+.mc-m.ceo .mc-b { border-left: 3px solid rgba(139,92,246,.55); }
+:root[data-theme="dark"] .mc-m.note .mc-b, :root[data-theme="dark"] .mc-m.room .mc-b { background: rgba(255,255,255,.03); border-color: rgba(255,255,255,.16); box-shadow: none; }
+
+/* the owner's attached files that are not pictures are links */
+a.mc-file { text-decoration: none; }
+.mc-pics span.mc-pic { cursor: default; }
+.mc-head .mc-stop { flex: none; font-size: 12px; line-height: 20px; }
+.mc-head { min-height: 22px; }
+:root[data-theme="dark"] .mc-b.md a:not(.fref):not(.lref) { color: #8fb0f5; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .mc-b.md a:not(.fref):not(.lref) { color: #8fb0f5; } }
+:root[data-theme="dark"] .mc-b.md .mdh:not(.mdh4) { color: var(--fg); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .mc-b.md .mdh:not(.mdh4) { color: var(--fg); } }

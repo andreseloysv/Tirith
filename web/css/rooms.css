@@ -1,0 +1,66 @@
+/* Rooms, Access and Settings views: only what style.css (the old page's CSS, unchanged) does not already draw. */
+
+/* the views scroll inside the page, as the old ones did */
+.v-rooms > .msettings, .v-settings > .msettings { flex: 1; min-height: 0; overflow-y: auto; }
+.v-accesos > .listwrap { padding-top: 4px; }
+
+/* text boxes of the rooms (the old .envv look) */
+.rtitle { height: 28px; padding: 0 8px; font: inherit; font-size: 12.5px; color: var(--fg); background: rgb(var(--w) / .9);
+  border: 1px solid rgba(120,135,160,.35); border-radius: 8px; min-width: 0; }
+.rtitle:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(47,111,237,.14); }
+.rnew .sfoot { align-items: center; flex-wrap: wrap; } .rnew .rjoin { margin-top: 8px; } .rcode { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.rcard .sfoot { flex-wrap: wrap; align-items: center; }
+.sadd.on { background: rgba(47,111,237,.16); } .sadd:disabled, .isend:disabled, .abtn:disabled { opacity: .5; cursor: default; }
+.rleave { color: var(--red-fg); background: var(--red-bg); border-color: var(--red-line); }
+.rcard .acpop { margin-top: 10px; }
+.rblock .sadd { margin-top: 8px; }
+.rqr img.qr { background: #fff; }
+.rbrake { margin: 0 0 8px; }
+
+/* public rooms */
+.rsec { font-size: 15px; margin: 22px 0 10px; }
+.rpub { color: var(--blue); }
+.rsum { margin: 0 0 10px; color: var(--ink2); }
+.rmsgs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.rmsgs li { display: flex; flex-direction: column; gap: 1px; padding: 5px 8px; border-radius: 8px; overflow-wrap: anywhere; }
+.rmsgs li.rment { background: var(--warn-bg); border: 1px solid var(--warn-line); }
+.rmsgs li.rment .rtext { font-weight: 500; }
+.rpeople { flex: 0 1 240px; min-width: 0; } .rpeople .rwho li { gap: 6px; }
+.rpublic .sfoot { flex-wrap: nowrap; } .rsay { flex: 1; max-width: none; }
+
+/* Access */
+.netline { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 0 0 8px; }
+.netblocks { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0 0 8px; }
+.netadd { display: flex; gap: 8px; align-items: center; margin: 0 0 14px; } .netadd .rtitle { width: 260px; }
+.mtab.ext td.num { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.mtab.ext td.tact { text-align: right; white-space: nowrap; }
+
+/* Settings */
+.msrc { margin-left: auto; }
+.ssrc { font-size: 11.5px; padding: 0 8px; line-height: 20px; border-radius: 10px; background: var(--neu); color: var(--mut); white-space: nowrap; }
+.ssrc.page { background: var(--accent-soft2); color: var(--blue); }
+.srow2 { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 6px 0; border-top: 1px solid var(--line); font-size: 12.5px; }
+.srow2:first-of-type { border-top: 0; }
+.srow2 .grow { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.srow2 .seg { margin-left: 0; }
+.bkv { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 2px 0 6px; font-size: 12.5px; } .bkv span b { font-weight: 500; }
+
+/* dark theme: the colored chips of the old page were light-only */
+:root[data-theme="dark"] .rmsgs li.rment { background: rgba(232,163,23,.14); border-color: rgba(232,163,23,.35); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .rmsgs li.rment { background: rgba(232,163,23,.14); border-color: rgba(232,163,23,.35); } }
+
+@media (max-width: 640px) { .netadd .rtitle { width: auto; flex: 1; } .rpublic .sfoot { flex-wrap: wrap; } }
+.nref { color: var(--red-fg); }
+.v-accesos .listwrap > .extsec { padding-top: 6px; padding-bottom: 0; margin-bottom: 18px; }
+/* the kind chips of Access were light-only on the old page */
+:root[data-theme="dark"] .chip.xk { background: rgba(122,162,240,.16); color: #b8cdfa; }
+:root[data-theme="dark"] .chip.xk.api { background: rgba(70,200,110,.15); color: #8ee0a8; }
+:root[data-theme="dark"] .chip.xk.tcp, :root[data-theme="dark"] .chip.xk.ssh { background: rgba(255,170,90,.15); color: #ffc58f; }
+:root[data-theme="dark"] .chip.xk.blk { background: rgba(255,123,128,.14); color: #ff9da1; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .chip.xk { background: rgba(122,162,240,.16); color: #b8cdfa; }
+  :root:not([data-theme="light"]) .chip.xk.api { background: rgba(70,200,110,.15); color: #8ee0a8; }
+  :root:not([data-theme="light"]) .chip.xk.tcp, :root:not([data-theme="light"]) .chip.xk.ssh { background: rgba(255,170,90,.15); color: #ffc58f; }
+  :root:not([data-theme="light"]) .chip.xk.blk { background: rgba(255,123,128,.14); color: #ff9da1; }
+}
+.rjoin .rcode { flex: 1 1 260px; max-width: 420px; } .mrooms .phead > b { white-space: nowrap; }
