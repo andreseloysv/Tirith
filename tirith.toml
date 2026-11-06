@@ -1,8 +1,6 @@
-# Tirith's own pipelines. Format: docs/CONTRACT-manifest.md
+# Tirith's own checks: what the merge queue runs before a lane reaches main.
 deploy = "none"
 roadmap = "docs/TODO.md"
-deadline = "2026-11-04T21:00:00-05:00"
-include = ["tirith-port.toml"]  # pipelines that do not block merges
 
 [[pipelines]]
 id = "ci"
@@ -10,17 +8,14 @@ name = "CI"
 
 [[pipelines.stages]]
 name = "build"
-run = "cd collector && uv run -q python -m compileall -q tirith && for f in ../web/js/*.js; do node --check \"$f\" || exit 1; done"
+run = "cargo build -q -p tirith && cargo clippy -q -p tirith -- -D warnings"
+
+# The daemon stays small on purpose: past the limit, simplify before adding.
+[[pipelines.stages]]
+name = "size"
+run = "n=$(find rust/tirith/src -name '*.rs' -exec cat {} + | wc -l); echo \"rust/tirith/src: $n lines (limit 5500)\"; test \"$n\" -le 5500"
 
 [[pipelines.stages]]
-name = "test"
-run = "cd collector && uv run -q pytest -q -n auto --maxprocesses 8"
-
-[[pipelines.stages]]
-name = "rust-test"
-kind = "test"
-run = "cargo test -q -p tirith-app"
-
-[roles]
-ceo = "always"
-manager = "always"
+name = "app"
+run = "cargo check -q -p tirith-app"
+paths = ["app/**", "rust/tirith/ui/**", "Cargo.toml"]

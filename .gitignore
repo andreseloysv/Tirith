@@ -1,8 +1,3 @@
-# Python
-.venv/
-__pycache__/
-.pytest_cache/
-*.pyc
 # Rust workspace build output
 /target/
 # macOS
@@ -12,4 +7,3 @@ generated_images/
 # Demo video: scratch recording (the final files in docs/demo/out/ are kept)
 docs/demo/out/work/
 docs/demo/out/*.webm
-.testmondata*
