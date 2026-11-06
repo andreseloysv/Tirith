@@ -33,6 +33,12 @@ pub async fn worker(app: Shared) {
     for id in cut {
         app.update_lane(&id, |l| l.status = "merge-queued".into()); // a merge cut short by a restart starts over
     }
+    {
+        // ... and its pipeline and runs, left "running" by the restart, end as interrupted.
+        let db = app.db.lock().unwrap();
+        let _ = db.execute("UPDATE pipelines SET status = 'interrupted', ended_at = ?1 WHERE status = 'running'", [now_iso()]);
+        let _ = db.execute("UPDATE runs SET status = 'interrupted', ended_at = ?1 WHERE status = 'running'", [now_iso()]);
+    }
     loop {
         let batch = next_batch(&app).await;
         if batch.is_empty() {
