@@ -21,7 +21,7 @@ pub struct Lane {
     pub item: String,
     pub agent: String,
     pub model: Option<String>,
-    /// queued, running, waiting (asked the manager), merge-queued, merging, merged, failed, stopped
+    /// queued, running, waiting (asked the manager), merge-queued, merging, waiting-disk (outside the queue), merged, failed, stopped
     pub status: String,
     /// Its worktree slot (`<repo>-lanes/slot-N`), kept until the lane is merged, failed or stopped.
     pub workspace: String,
