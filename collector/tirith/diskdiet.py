@@ -81,9 +81,6 @@ def cleanup(home: Path, config: Config, now: datetime) -> bool:
         if (lane.get("cleanup") or {}).get("status") in ("removed", "retired"):
             continue
         if _ended_s(lane, now) >= STALE_S:
-            repo = _repo(config, lane)
-            if repo is not None and awaiting_review(lane, repo):
-                continue
             changed |= _retire_lane(home, config, lane, now)
             continue
         if lane.get("result") != "done":
