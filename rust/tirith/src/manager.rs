@@ -35,7 +35,10 @@ fn deliver(app: &Shared, text: &str) {
     let line = user_line(text);
     let tx = app.manager_in.lock().unwrap().clone();
     match tx {
-        Some(tx) if tx.send(line.clone()).is_ok() => app.emit("busy", json!(true)),
+        Some(tx) if tx.send(line.clone()).is_ok() => {
+            BUSY.store(true, Ordering::Relaxed);
+            app.emit("busy", json!(true))
+        }
         _ => app.manager_pending.lock().unwrap().push(line),
     }
 }
@@ -64,6 +67,26 @@ pub fn restart() {
     if pid != 0 {
         kill_group(pid, libc::SIGTERM);
     }
+}
+
+/// True while a turn runs (between the owner's message and the session's `result`).
+static BUSY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// True while the manager works on a turn.
+pub fn busy() -> bool {
+    BUSY.load(Ordering::Relaxed)
+}
+
+/// Stops the current turn of the session (the session lives on): a stream-json `control_request` with subtype
+/// `interrupt`, as the old collector sent. Err when no session runs or no turn is running.
+pub fn interrupt(app: &Shared) -> Result<(), String> {
+    if !BUSY.load(Ordering::Relaxed) {
+        return Err("the manager is not working on a turn".into());
+    }
+    let tx = app.manager_in.lock().unwrap().clone().ok_or("no manager session is running")?;
+    let id = format!("int-{:08x}", rand::random::<u32>());
+    let line = json!({"type": "control_request", "request_id": id, "request": {"subtype": "interrupt"}}).to_string();
+    tx.send(line).map_err(|_| "the manager session ended".to_string())
 }
 
 pub fn say(app: &Shared, text: &str) {
@@ -153,6 +176,7 @@ pub async fn run(app: Shared) {
             app.event("", "", "error", "manager", &e, "");
         }
         *app.manager_in.lock().unwrap() = None;
+        BUSY.store(false, Ordering::Relaxed);
         app.emit("busy", json!(false));
         backoff = if now_s() - started > 60 { 2 } else { (backoff * 2).min(60) };
         tokio::time::sleep(Duration::from_secs(backoff)).await;
@@ -220,6 +244,7 @@ async fn session(app: &Shared) -> Result<(), String> {
                 }
             }
             "result" => {
+                BUSY.store(false, Ordering::Relaxed);
                 app.emit("busy", json!(false));
                 let rooms_now = std::mem::take(&mut *REPLY_TO.lock().unwrap());
                 let text = std::mem::take(&mut *TURN_TEXT.lock().unwrap());
