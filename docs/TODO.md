@@ -807,6 +807,9 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [x] Lanes cuyo item no necesita cambios (ya verde, verificado u obsoleto) pueden cerrarlo sin diff: un comando de lane (p. ej. tirith done --no-change "<motivo>") marca el item hecho con la nota y termina la lane sin pasar por la cola de merge (check: `cargo test -q lane_done_no_change`)
 - [x] tirith plan add rechaza ítems cuyo check llama a subcomandos de tirith que no existen (tirith run, tirith check) o a rutas eliminadas (cd collector) (check: `cargo test -q plan_add_rejects_invalid_checks`)
 - [x] Simplificar el daemon: rust/tirith/src baja a 5100 líneas o menos sin cambiar comportamiento (quitar duplicados y código muerto; los tests siguen pasando), porque está a 5487 de su límite de 5500 y la lane de sparse checkout de zoo falló por la etapa size (check: `test $(find rust/tirith/src -name "*.rs" -exec cat {} + | wc -l) -le 5400 && cargo test -q`)
+- [ ] Daemon Rust: los timeouts aprendidos de las etapas se guardan por proyecto y etapa (zoo:build aparte de tirith:build), y un límite de etapa que pone el manager dura hasta que se cambie o 24 h, no solo mientras viva su lane (si ya existe, solo añadir el test) (check: `cargo test -q stage_timeouts_per_project`)
+- [ ] Guarda: la regla de solo lectura del CEO deja pasar los comandos de tirith que solo leen (status, plan show, lane log, timeout get, merge status), que ayer le bloquearon varias veces (si ya existe, solo añadir el test) (check: `cargo test -q ceo_read_only_allows_reads`)
+- [ ] Disco lleno: cuando el disco baja de 5 GB libres, Tirith avisa al dueño una sola vez con ask-owner (kind device) indicando las carpetas que más ocupan, en vez de dejar lanes fallando con No space left on device (check: `cargo test -q low_disk_asks_owner_once`)
 
 ## 18. Salas privadas: hablar con el manager desde el móvil
 
