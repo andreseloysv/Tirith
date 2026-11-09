@@ -83,6 +83,15 @@ fn startable(text: &str) -> bool {
     !crate::lanes::is_autopilot_skipped(text)
 }
 
+/// Why the autopilot starts no lane for the project (the scheduler's last «paused» reason) and the command that fixes it.
+fn paused_note(app: &Shared, project: &str) -> String {
+    app.kv(&format!("paused:{project}")).map(|w| paused_text(project, &w)).unwrap_or_default()
+}
+
+fn paused_text(project: &str, why: &str) -> String {
+    format!(" [{project} paused: {why}; fix: {}]", crate::lanes::paused_fix(project, why))
+}
+
 fn merged_at(l: &Lane) -> Option<i64> {
     let v = json!(l);
     v["merged_at"].as_str().or(l.ended_at.as_deref()).and_then(secs)
@@ -117,7 +126,7 @@ fn compute(app: &Shared) -> Vec<Metric> {
         target: Some(target),
         at_least: true,
         red: work && (merged.len() as f64) < target,
-        facts: format!("merged in 24 h: [{}]; open items in autopilot projects: [{open_txt}]", ids(&merged)),
+        facts: format!("merged in 24 h: [{}]; open items in autopilot projects: [{open_txt}]{}", ids(&merged), open.iter().map(|(p, _)| paused_note(app, p)).collect::<String>()),
     });
 
     let mut mins: Vec<(f64, &str)> = merged.iter().filter_map(|l| Some(((merged_at(l)? - secs(&l.created_at)?) as f64 / 60.0, l.id.as_str()))).collect();
@@ -163,7 +172,7 @@ fn compute(app: &Shared) -> Vec<Metric> {
         target: Some(target),
         at_least: false,
         red: worst > target,
-        facts: idle.iter().map(|(p, n, m)| format!("{p}: {n} open items, nothing running for {m} min")).collect::<Vec<_>>().join("; "),
+        facts: idle.iter().map(|(p, n, m)| format!("{p}: {n} open items, nothing running for {m} min{}", paused_note(app, p))).collect::<Vec<_>>().join("; "),
     });
 
     let half = cfg.inactivity_min * 30;
@@ -404,6 +413,15 @@ mod tests {
         for t in ["Write", "Edit", "MultiEdit", "NotebookEdit"] {
             assert_eq!(super::ceo_permission(t, &serde_json::json!({}))["behavior"], "deny", "{t}");
         }
+    }
+
+    #[test]
+    fn health_reports_paused_reason() {
+        let t = super::paused_text("tirith", "commit guard: the pre-commit hook is outdated or has other words than config.toml (tirith guard install tirith)");
+        assert!(t.contains("paused: commit guard"), "{t}");
+        assert!(t.contains("fix: tirith guard install tirith"), "{t}");
+        assert!(super::paused_text("p", "3 lanes wait for the merge queue").contains("fix: tirith merge status"));
+        assert!(super::paused_text("p", "less than 5 GB free on /x").contains("fix: free disk space"));
     }
 
     #[test]
