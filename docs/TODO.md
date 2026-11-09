@@ -811,6 +811,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [x] Guarda: la regla de solo lectura del CEO deja pasar los comandos de tirith que solo leen (status, plan show, lane log, timeout get, merge status), que ayer le bloquearon varias veces (si ya existe, solo añadir el test) (check: `cargo test -q ceo_read_only_allows_reads`)
 - [x] Disco lleno: cuando el disco baja de 5 GB libres, Tirith avisa al dueño una sola vez con ask-owner (kind device) indicando las carpetas que más ocupan, en vez de dejar lanes fallando con No space left on device (check: `cargo test -q low_disk_asks_owner_once`)
 - [x] Los checks y etapas del daemon encuentran cargo aunque el daemon arranque sin ~/.cargo/bin en su PATH (p. ej. tras reiniciar el Mac): child_path añade ~/.cargo/bin si existe; el 2026-11-09 main quedó rojo con «sh: cargo: command not found» (check: `cargo test -q child_path_includes_cargo_bin`)
+- [ ] Las lanes de Rust pasan cargo clippy -- -D warnings antes de terminar, igual que la etapa build de la cola, para no gastar un intento extra (el 2026-11-09 la lane de disco lleno falló por clippy::unnecessary_sort_by) (check: `cargo test -q lane_runs_clippy_before_finish`)
 
 ## 18. Salas privadas: hablar con el manager desde el móvil
 
@@ -859,6 +860,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
   - [x] Revisar: Registrar cada acceso de un agente en <home>/access/<proyecto>.ndjson: agente, punto del plan, sistema, acción y hora, desde el hook de herramientas, sin guardar valores secretos. (check: `test -f collector/tirith/access_audit.py`)
 - [x] Vista «Accesos» en la página, solo para consultar cuando haga falta: lista por agente con filtros por sistema y fecha, enlazada al agente y a su punto del plan, sin avisos ni contador en Tu turno. (check: `grep -rqi 'accesos' web/js`) <!-- tirith:{"id":"i-277688afa3b44901b3a380c5d8d575b1","depends_on":["i-12b0de4eeef3451fa471a1f0218d9c95"],"writes":[]} -->
   - [x] Revisar: Vista «Accesos» en la página, solo para consultar cuando haga falta: lista por agente con filtros por sistema y fecha, enlazada al agente y a su punto del plan, sin avisos ni contador en Tu turno. (check: `grep -rqi 'accesos' web/js`)
+- [ ] Los logs de las lanes ocultan los valores de las variables *KEY*/*TOKEN* enteros, incluido el principio (hoy lane log muestra el inicio de claves de Google) (check: `cargo test -q lane_log_redacts_key_prefixes`)
 
 ## 22. Empresa que crece: worker, manager y CEO según el trabajo
 
@@ -895,4 +897,6 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [x] El autopilot no arranca lanes para ítems marcados (espera: …) del dueño, y una lane sin commits no entra en la cola de merge: termina con su motivo (check: `cargo test -q autopilot_skips_owner_wait_items`)
 - [x] La salud «Parado con trabajo» solo cuenta ítems que el autopilot puede arrancar: no cuenta los ítems de rol del paso 0 ni los marcados (espera: …) del dueño, que hoy hicieron saltar la alarma en tirith y superpolitika sin trabajo real (check: `cargo test -q idle_health_ignores_unstartable_items`)
 - [x] Cuando el autopilot no arranca lanes de un proyecto (evento paused: guard desactualizada, disco, cola de merge), la salud lo dice con el motivo y la orden que lo arregla, en vez de solo «En main 0»: el 2026-11-07 la guarda de tirith dejó el proyecto parado 2 días sin aviso (check: `cargo test -q health_reports_paused_reason`)
+- [ ] Una lane que termina sin commits pero cuyo check pasa queda como hecha («already true»), no como failed: el 2026-11-09 la lane de imágenes de inspiración generó los archivos fuera del repo y quedó en failed (check: `cargo test -q lane_without_commits_check_passes_is_done`)
+- [ ] La salud de «En main 24 h» distingue «sin trabajo arrancable en el plan» de «lanes que no llegan a main», e indica qué proyectos con autopilot tienen el plan vacío y la orden para añadir trabajo (check: `cargo test -q health_merged_reports_empty_plans`)
 
