@@ -316,6 +316,16 @@ fn brief(app: &Shared, why: &str) -> String {
     s
 }
 
+/// The CEO review is read-only: file-writing tools are denied; everything else, including every `tirith`
+/// command that only reads (status, plan show, lane log, timeout get, merge status), is allowed.
+fn ceo_permission(tool: &str, input: &Value) -> Value {
+    if matches!(tool, "Write" | "Edit" | "MultiEdit" | "NotebookEdit") {
+        json!({"behavior": "deny", "message": "the CEO review is read-only"})
+    } else {
+        json!({"behavior": "allow", "updatedInput": input})
+    }
+}
+
 /// One fresh, read-only session: one user message in, the assistant's text until the "result" event out.
 async fn review(app: &Shared, why: &str) -> Result<String, String> {
     let mut cmd = models::chat_argv(app, "ceo", None)?;
@@ -339,12 +349,7 @@ async fn review(app: &Shared, why: &str) -> Result<String, String> {
                 }
                 "result" => return true,
                 "control_request" if msg["request"]["subtype"] == "can_use_tool" => {
-                    let tool = msg["request"]["tool_name"].as_str().unwrap_or("");
-                    let behavior = if matches!(tool, "Write" | "Edit" | "MultiEdit" | "NotebookEdit") {
-                        json!({"behavior": "deny", "message": "the CEO review is read-only"})
-                    } else {
-                        json!({"behavior": "allow", "updatedInput": msg["request"]["input"]})
-                    };
+                    let behavior = ceo_permission(msg["request"]["tool_name"].as_str().unwrap_or(""), &msg["request"]["input"]);
                     let _ = stdin.write_all(&send(manager::control_reply(&msg, behavior))).await;
                 }
                 _ => {}
@@ -389,6 +394,18 @@ pub fn routes() -> Router<Shared> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn ceo_read_only_allows_reads() {
+        for cmd in ["tirith status", "tirith plan show tirith", "tirith lane log some-lane", "tirith timeout get", "tirith merge status"] {
+            let input = serde_json::json!({"command": cmd});
+            assert_eq!(super::ceo_permission("Bash", &input)["behavior"], "allow", "{cmd}");
+        }
+        assert_eq!(super::ceo_permission("Read", &serde_json::json!({"file_path": "/x"}))["behavior"], "allow");
+        for t in ["Write", "Edit", "MultiEdit", "NotebookEdit"] {
+            assert_eq!(super::ceo_permission(t, &serde_json::json!({}))["behavior"], "deny", "{t}");
+        }
+    }
+
     #[test]
     fn idle_health_ignores_unstartable_items() {
         assert!(!super::startable("Manager de guardia: atender el chat"));
