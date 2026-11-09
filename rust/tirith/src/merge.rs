@@ -155,6 +155,36 @@ pub fn list(app: &Shared, limit: u32) -> Vec<Value> {
     ids.iter().map(|id| pipeline(app, id)).collect()
 }
 
+const MANAGER_LIMIT_SECS: u64 = 24 * 3600;
+
+fn now_secs() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
+}
+
+/// A limit the manager sets for one stage of one project: it lasts until changed or 24 h, whatever happens to its lane.
+pub fn set_stage_limit(app: &Shared, project: &str, stage: &str, minutes: u64) {
+    app.set_kv(&format!("stage_limit:{project}:{stage}"), Some(&format!("{minutes}@{}", now_secs())));
+}
+
+/// The limit in minutes for a stage: the manager's (within 24 h), else the one learned from past timeouts, else the default. Each project and stage has its own.
+fn limit_from(get: impl Fn(&str) -> Option<String>, project: &str, stage: &str, default: u64) -> u64 {
+    let set = get(&format!("stage_limit:{project}:{stage}")).and_then(|v| {
+        let (m, at) = v.split_once('@')?;
+        (now_secs().saturating_sub(at.parse().ok()?) < MANAGER_LIMIT_SECS).then(|| m.parse().ok()).flatten()
+    });
+    set.or_else(|| get(&format!("stage_learned:{project}:{stage}")).and_then(|v| v.parse().ok())).unwrap_or(default)
+}
+
+pub fn stage_limit_min(app: &Shared, project: &str, stage: &str) -> u64 {
+    limit_from(|k| app.kv(k), project, stage, app.cfg().stage_timeout_min)
+}
+
+/// A stage that timed out gets a doubled limit next time, for that project and stage only.
+fn learn_stage_limit(app: &Shared, project: &str, stage: &str) {
+    let next = stage_limit_min(app, project, stage) * 2;
+    app.set_kv(&format!("stage_learned:{project}:{stage}"), Some(&next.to_string()));
+}
+
 async fn run_stage(app: &Shared, pipe: &Pipe, dir: &Path, name: &str, run: &str) -> Result<(), String> {
     let id = {
         let db = app.db.lock().unwrap();
@@ -171,7 +201,7 @@ async fn run_stage(app: &Shared, pipe: &Pipe, dir: &Path, name: &str, run: &str)
     let mut command = launch.command(app);
     command.env("CARGO_TARGET_DIR", crate::lanes::shared_target(app, &pipe.project));
     let mut child = command.current_dir(dir).stdin(Stdio::null()).stdout(file.try_clone().map_err(|e| e.to_string())?).stderr(file).process_group(0).spawn().map_err(|e| e.to_string())?;
-    let limit = Duration::from_secs(app.cfg().stage_timeout_min * 60);
+    let limit = Duration::from_secs(stage_limit_min(app, &pipe.project, name) * 60);
     let status = match tokio::time::timeout(limit, child.wait()).await {
         Ok(Ok(s)) if s.success() => "passed",
         Ok(_) => "failed",
@@ -180,6 +210,7 @@ async fn run_stage(app: &Shared, pipe: &Pipe, dir: &Path, name: &str, run: &str)
                 kill_group(pid, libc::SIGKILL);
             }
             let _ = child.wait().await;
+            learn_stage_limit(app, &pipe.project, name);
             "timeout"
         }
     };
@@ -456,6 +487,19 @@ pub fn retry(app: &Shared, id: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stage_timeouts_per_project() {
+        let mut kv = std::collections::HashMap::new();
+        kv.insert("stage_learned:zoo:build".to_string(), "60".to_string());
+        kv.insert("stage_limit:tirith:test".to_string(), format!("99@{}", now_secs()));
+        kv.insert("stage_limit:tirith:old".to_string(), format!("99@{}", now_secs() - MANAGER_LIMIT_SECS - 1));
+        let get = |k: &str| kv.get(k).cloned();
+        assert_eq!(limit_from(get, "zoo", "build", 30), 60);
+        assert_eq!(limit_from(get, "tirith", "build", 30), 30);
+        assert_eq!(limit_from(get, "tirith", "test", 30), 99);
+        assert_eq!(limit_from(get, "tirith", "old", 30), 30);
+    }
 
     #[test]
     fn mergeq_enospc_deletes_the_folder_and_holds_no_slot() {
