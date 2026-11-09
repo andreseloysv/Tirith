@@ -37,6 +37,7 @@ pub fn router(app: Shared, port: u16) -> Router {
         .route("/api/autopilot/{project}", post(autopilot))
         .route("/api/pipelines", get(pipelines))
         .route("/api/pipelines/{id}/retry", post(pipeline_retry))
+        .route("/api/stage-limit/{project}/{stage}", post(stage_limit))
         .route("/api/runs/{id}/log", get(run_log))
         .route("/api/chat", post(chat))
         .route("/api/manager/interrupt", post(manager_interrupt))
@@ -159,6 +160,13 @@ async fn pipelines(State(app): State<Shared>, Query(q): Query<std::collections::
 async fn pipeline_retry(State(app): State<Shared>, Path(id): Path<String>) -> R {
     merge::retry(&app, &id).map_err(bad)?;
     Ok(Json(json!({"ok": true})))
+}
+
+/// The manager sets a stage's time limit in minutes; it lasts until changed or 24 h.
+async fn stage_limit(State(app): State<Shared>, Path((project, stage)): Path<(String, String)>, Json(b): Json<Value>) -> R {
+    let minutes = b["minutes"].as_u64().filter(|m| *m > 0).ok_or_else(|| bad("minutes must be a positive number".into()))?;
+    merge::set_stage_limit(&app, &project, &stage, minutes);
+    Ok(Json(json!({"project": project, "stage": stage, "minutes": minutes})))
 }
 
 async fn run_log(State(app): State<Shared>, Path(id): Path<i64>) -> String {
