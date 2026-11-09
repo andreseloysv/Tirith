@@ -92,6 +92,11 @@ fn paused_text(project: &str, why: &str) -> String {
     format!(" [{project} paused: {why}; fix: {}]", crate::lanes::paused_fix(project, why))
 }
 
+/// Autopilot projects with nothing the autopilot can start in the plan, with the command that adds work.
+fn empty_plan_note(empty: &[String]) -> String {
+    empty.iter().map(|p| format!(" [{p} plan empty: nothing startable; fix: tirith plan add {p} <step> \"<text>\"]")).collect()
+}
+
 fn merged_at(l: &Lane) -> Option<i64> {
     let v = json!(l);
     v["merged_at"].as_str().or(l.ended_at.as_deref()).and_then(secs)
@@ -105,11 +110,14 @@ fn compute(app: &Shared) -> Vec<Metric> {
     let t = |k: &str, d: f64| ceo_cfg(app, &["ceo", "targets", k], d);
     // Open items of the projects the autopilot works on.
     let mut open: Vec<(String, usize)> = vec![];
+    let mut empty: Vec<String> = vec![];
     for p in cfg.projects.iter().filter(|p| crate::lanes::autopilot_on(app, &p.id)) {
         // Only items the autopilot can start: no step-0 role items, no owner-wait items.
         let n = plan::read(app, &p.id).map(|s| s.iter().flat_map(|s| &s.items).filter(|i| !i.done && startable(&i.text)).count()).unwrap_or(0);
         if n > 0 {
             open.push((p.id.clone(), n));
+        } else {
+            empty.push(p.id.clone());
         }
     }
     let work = !open.is_empty();
@@ -126,7 +134,13 @@ fn compute(app: &Shared) -> Vec<Metric> {
         target: Some(target),
         at_least: true,
         red: work && (merged.len() as f64) < target,
-        facts: format!("merged in 24 h: [{}]; open items in autopilot projects: [{open_txt}]{}", ids(&merged), open.iter().map(|(p, _)| paused_note(app, p)).collect::<String>()),
+        facts: format!(
+            "merged in 24 h: [{}]; open items in autopilot projects: [{open_txt}]; {}{}{}",
+            ids(&merged),
+            if empty.is_empty() { "no empty plans: lanes that do not reach main are the problem" } else { "no startable work in the plan (not a lane failure) for:" },
+            empty_plan_note(&empty),
+            open.iter().map(|(p, _)| paused_note(app, p)).collect::<String>()
+        ),
     });
 
     let mut mins: Vec<(f64, &str)> = merged.iter().filter_map(|l| Some(((merged_at(l)? - secs(&l.created_at)?) as f64 / 60.0, l.id.as_str()))).collect();
@@ -422,6 +436,14 @@ mod tests {
         assert!(t.contains("fix: tirith guard install tirith"), "{t}");
         assert!(super::paused_text("p", "3 lanes wait for the merge queue").contains("fix: tirith merge status"));
         assert!(super::paused_text("p", "less than 5 GB free on /x").contains("fix: free disk space"));
+    }
+
+    #[test]
+    fn health_merged_reports_empty_plans() {
+        let t = super::empty_plan_note(&["tirith".to_string(), "p2".to_string()]);
+        assert!(t.contains("tirith plan empty") && t.contains("fix: tirith plan add tirith <step>"), "{t}");
+        assert!(t.contains("p2 plan empty"), "{t}");
+        assert!(super::empty_plan_note(&[]).is_empty());
     }
 
     #[test]
