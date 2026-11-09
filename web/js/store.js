@@ -85,6 +85,7 @@ function apply(m) {
       S.owner = S.owner.filter((o) => o.id !== d.id);
       if (d.status !== 'answered') S.owner.push(d);
       break;
+    case 'projects': if (Array.isArray(d)) S.projects = d; break; // a project was added or config.toml changed
     case 'autopilot': {
       const p = S.projects.find((x) => x.id === d.project);
       if (p) p.autopilot = d.on;

@@ -1,6 +1,5 @@
-//! Adding a project: the "+" next to Projects on the page and `tirith project add <folder>`. The folder gets what
-//! Tirith needs to work in it (a git repository, the commit guard, a plan with a first step), then a `[[projects]]`
-//! block appended to config.toml, whose existing text is never rewritten.
+//! Adding a project (the page's "+", `tirith project add`): the folder gets a git repository, the commit guard and a
+//! plan with a first step, then a `[[projects]]` block appended to config.toml (its existing text is never rewritten).
 
 use crate::app::{bad, git, Shared, R};
 use crate::config::{expand, home_dir, Project};
@@ -26,7 +25,8 @@ pub fn list(app: &Shared) -> Vec<Value> {
 /// The real folder behind `raw` (a full path or `~/…`), or why it cannot be a project; a project's own folder passes.
 fn folder(raw: &str, projects: &[Project]) -> Result<PathBuf, String> {
     let path = if raw.trim() == "~" { home_dir() } else { expand(raw.trim()) };
-    let dir = path.canonicalize().ok().filter(|d| path.is_absolute() && d.is_dir()).ok_or(format!("{raw:?} is not the full path of a folder (/Users/… or ~/…)"))?;
+    let missing = if path.is_absolute() { format!("there is no folder {raw:?}") } else { format!("{raw:?} is not the full path of a folder (/Users/… or ~/…)") };
+    let dir = path.canonicalize().ok().filter(|d| path.is_absolute() && d.is_dir()).ok_or(missing)?;
     let temp = ["/tmp", "/private/tmp", "/var/tmp", "/private/var/tmp", "/var/folders", "/private/var/folders"].map(PathBuf::from).into_iter().chain([std::env::temp_dir()]);
     let why = if temp.map(|t| t.canonicalize().unwrap_or(t)).any(|t| dir.starts_with(t)) {
         Some("is a temporary folder".to_string())
@@ -35,20 +35,14 @@ fn folder(raw: &str, projects: &[Project]) -> Result<PathBuf, String> {
     } else if dir.components().any(|c| c.as_os_str() == ".git") || dir.join(".git").is_file() {
         Some("is a git worktree or inside a .git folder".into())
     } else {
-        projects.iter().filter(|p| !p.repo.is_empty() && p.repo() != dir).find_map(|p| {
-            let name = if p.name.is_empty() { &p.id } else { &p.name };
-            if dir.starts_with(p.lanes_dir()) {
-                Some(format!("is one of the agents' copies of {name}"))
-            } else if dir.starts_with(p.repo()) {
-                Some(format!("is inside the project {name}"))
-            } else {
-                p.repo().starts_with(&dir).then(|| format!("holds the project {name}"))
-            }
+        let named = |p: &Project, what: &str| format!("{what} {}", if p.name.is_empty() { &p.id } else { &p.name });
+        projects.iter().filter(|p| !p.repo.is_empty() && p.repo() != dir).find_map(|p| match () {
+            _ if dir.starts_with(p.lanes_dir()) => Some(named(p, "is one of the agents' copies of")),
+            _ if dir.starts_with(p.repo()) => Some(named(p, "is inside the project")),
+            _ => p.repo().starts_with(&dir).then(|| named(p, "holds the project")),
         })
     };
-    if let Some(w) = why {
-        return Err(format!("{} {w}: pick a project's own folder", dir.display()));
-    }
+    why.map_or(Ok(()), |w| Err(format!("{} {w}: pick a project's own folder", dir.display())))?;
     Ok(dir)
 }
 
@@ -161,10 +155,8 @@ async fn folders(State(app): State<Shared>) -> Json<Value> {
 async fn pick(State(app): State<Shared>) -> R {
     let start = app.cfg().projects.iter().find(|p| !p.repo.is_empty()).and_then(|p| p.repo().parent().map(Path::to_path_buf)).unwrap_or_else(home_dir);
     let script = ["on run argv", "activate", "POSIX path of (choose folder with prompt \"Choose the project folder\" default location (POSIX file (item 1 of argv)))", "end run"];
-    let mut cmd = tokio::process::Command::new("osascript");
-    cmd.args(script.iter().flat_map(|l| ["-e", *l])).arg(start).stdin(std::process::Stdio::null()).kill_on_drop(true);
-    let out = tokio::time::timeout(Duration::from_secs(600), cmd.output()).await.map_err(|_| bad("the folder picker was open too long".into()))?;
-    let out = out.map_err(|e| bad(format!("there is no folder picker here ({e}): type the folder's path")))?;
+    let out = tokio::process::Command::new("osascript").args(script.iter().flat_map(|l| ["-e", *l])).arg(start).kill_on_drop(true).output();
+    let out = tokio::time::timeout(Duration::from_secs(600), out).await.map_err(|_| bad("the folder picker was open too long".into()))?.map_err(|e| bad(format!("no folder picker here ({e}): type the path")))?;
     let err = String::from_utf8_lossy(&out.stderr);
     if !out.status.success() && !err.contains("-128") {
         return Err(bad(format!("the folder picker did not open: {}", err.trim())));
@@ -229,8 +221,8 @@ mod tests {
         }
         std::fs::write(base.join("file"), "x").and_then(|_| std::fs::write(base.join("wt/.git"), "gitdir: /elsewhere")).unwrap();
         let ps = [Project { id: "repo".into(), repo: at("repo"), ..Default::default() }];
-        let refusals = [("", "full path"), ("relative/dir", "full path"), ("/no/such/dir-4821", "full path"), ("/tmp", "temporary"), ("/", "home folder")];
-        let mine = [("file", "full path"), ("repo/sub", "inside the project"), ("repo-lanes/slot-1", "copies"), ("", "holds the project"), ("repo/.git/info", ".git"), ("wt", "worktree")];
+        let refusals = [("", "full path"), ("relative/dir", "full path"), ("/no/such/dir-4821", "no folder"), ("/tmp", "temporary"), ("/", "home folder")];
+        let mine = [("file", "no folder"), ("repo/sub", "inside the project"), ("repo-lanes/slot-1", "copies"), ("", "holds the project"), ("repo/.git/info", ".git"), ("wt", "worktree")];
         let err = |raw: String| folder(&raw, &ps).err().unwrap_or_default();
         let got: Vec<(String, &str)> = refusals.iter().map(|(r, w)| (err(r.to_string()), *w)).chain(mine.iter().map(|(r, w)| (err(at(r)), *w))).collect();
         let fine = (folder(&at("other"), &ps), folder(&at("repo"), &ps));
