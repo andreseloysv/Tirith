@@ -124,7 +124,7 @@ async fn lane_stop(State(app): State<Shared>, Path(id): Path<String>) -> R {
 
 async fn lane_log(State(app): State<Shared>, Path(id): Path<String>) -> String {
     let safe: String = id.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-').collect();
-    tail(&app.home.join(format!("logs/lanes/{safe}.log")), 400)
+    crate::app::redact_secrets(&tail(&app.home.join(format!("logs/lanes/{safe}.log")), 400))
 }
 
 async fn lane_ask(State(app): State<Shared>, Path(id): Path<String>, Json(b): Json<Value>) -> R {
