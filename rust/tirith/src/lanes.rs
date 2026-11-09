@@ -108,6 +108,50 @@ async fn free_disk(app: &Shared, lanes: &[Lane]) {
     }
 }
 
+const LOW_DISK_GB: f64 = 5.0;
+
+/// Ask once per low-disk spell: `asked` is whether a card is already out; it re-arms after the disk recovers (7 GB).
+fn low_disk_ask(free: f64, asked: bool) -> Option<bool> {
+    if free < LOW_DISK_GB && !asked {
+        Some(true)
+    } else if free >= LOW_DISK_GB + 2.0 && asked {
+        Some(false)
+    } else {
+        None
+    }
+}
+
+/// The `n` largest folders directly under `dir`, as (path, KB), biggest first.
+fn biggest_dirs(dir: &Path, n: usize) -> Vec<(String, u64)> {
+    let out = std::process::Command::new("du").arg("-sk").args(std::fs::read_dir(dir).into_iter().flatten().flatten().map(|e| e.path())).output();
+    let text = out.map(|o| String::from_utf8_lossy(&o.stdout).into_owned()).unwrap_or_default();
+    let mut rows: Vec<(String, u64)> = text.lines().filter_map(|l| l.split_once('\t')).filter_map(|(k, p)| Some((p.to_string(), k.trim().parse().ok()?))).collect();
+    rows.sort_by_key(|a| std::cmp::Reverse(a.1));
+    rows.truncate(n);
+    rows
+}
+
+/// Below 5 GB free on a project's lanes disk: one ask-owner card (kind device) naming the folders that fill it.
+async fn warn_low_disk(app: &Shared) {
+    for p in &app.cfg().projects {
+        let dir = if p.lanes_dir().exists() { p.lanes_dir() } else { p.repo() };
+        let key = format!("low_disk_asked:{}", dir.display());
+        let free = free_gb(&dir);
+        match low_disk_ask(free, app.kv(&key).is_some()) {
+            Some(true) => {
+                app.set_kv(&key, Some("1"));
+                let d = dir.clone();
+                let rows = tokio::task::spawn_blocking(move || biggest_dirs(&d, 5)).await.unwrap_or_default();
+                let list = rows.iter().map(|(p, k)| format!("{p} ({:.1} GB)", *k as f64 / 1e6)).collect::<Vec<_>>().join(", ");
+                let q = format!("Only {free:.1} GB free on {}: lanes will fail with No space left on device. Biggest folders: {list}. Free some space (delete what you no longer need).", dir.display());
+                let _ = crate::manager::ask_owner(app, "device", &q);
+            }
+            Some(false) => app.set_kv(&key, None),
+            None => {}
+        }
+    }
+}
+
 /// Why a project cannot start a lane now (merge backlog, disk, commit guard), or `None`.
 fn blocked(app: &Shared, p: &Project, lanes: &[Lane]) -> Option<String> {
     let backlog = lanes.iter().filter(|l| l.project == p.id && matches!(l.status.as_str(), "merge-queued" | "merging")).count();
@@ -180,6 +224,7 @@ pub async fn scheduler(app: Shared) {
         let lanes: Vec<Lane> = app.lanes.lock().unwrap().values().cloned().collect();
         let running = lanes.iter().filter(|l| l.pid.is_some()).count();
         if tick.is_multiple_of(100) {
+            warn_low_disk(&app).await;
             free_disk(&app, &lanes).await; // every ~5 minutes
         }
         tick += 1;
@@ -511,6 +556,22 @@ fn nanos() -> u32 {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn low_disk_asks_owner_once() {
+        assert_eq!(super::low_disk_ask(8.0, false), None);
+        assert_eq!(super::low_disk_ask(4.0, false), Some(true));
+        assert_eq!(super::low_disk_ask(3.0, true), None); // already asked: silent
+        assert_eq!(super::low_disk_ask(5.5, true), None); // not recovered yet
+        assert_eq!(super::low_disk_ask(9.0, true), Some(false)); // re-armed
+        let dir = std::env::temp_dir().join(format!("tirith-lowdisk-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("big")).unwrap();
+        std::fs::create_dir_all(dir.join("small")).unwrap();
+        std::fs::write(dir.join("big/f"), vec![1u8; 300_000]).unwrap();
+        let rows = super::biggest_dirs(&dir, 5);
+        assert!(rows[0].0.ends_with("big"));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
     #[test]
     fn autopilot_skips_owner_wait_items() {
         assert!(super::is_owner_wait("Elegir dominio (espera: el dueño decide)"));
