@@ -467,7 +467,7 @@ async fn ended(app: &Shared, id: &str, code: Option<i32>) {
         if next.is_none() {
             manager::notify(app, &format!("lane {id} ({}: {}) failed: out of credits on every agent of the workers role", lane.project, lane.item));
         }
-    } else if lane.status == "running" && no_commits(app, &lane).await {
+    } else if lane.status == "running" && no_commits(app, &lane).await && !has_check(app, &lane) {
         app.update_lane(id, |l| {
             l.pid = None;
             l.ended_at = Some(now_iso());
@@ -494,6 +494,12 @@ async fn ended(app: &Shared, id: &str, code: Option<i32>) {
         app.merge_wake.notify_one();
     }
     app.sched_wake.notify_one();
+}
+
+/// A lane that ended without commits may still be done: the item's check can already be true. Such a lane goes to
+/// the merge queue, where the check runs on main; passing ticks it ("already true"), failing sends it back.
+fn has_check(app: &Shared, lane: &Lane) -> bool {
+    plan::find(app, &lane.project, &lane.step, &lane.item).is_some_and(|i| i.check.is_some())
 }
 
 /// True when the lane's branch has no commit beyond the project's HEAD (it is known and countable).
@@ -616,6 +622,16 @@ mod tests {
         assert!(super::is_owner_wait("Elegir dominio (espera: el dueño decide)"));
         assert!(super::is_autopilot_skipped("CEO: revisar"));
         assert!(!super::is_owner_wait("Arreglar el parser"));
+    }
+
+    #[test]
+    fn lane_without_commits_check_passes_is_done() {
+        // The merge train ticks a commitless lane whose check passes as "already true on main"; `ended` must
+        // therefore queue it for merge instead of failing it. Pin the wiring.
+        let src = include_str!("lanes.rs");
+        assert!(src.contains("no_commits(app, &lane).await && !has_check(app, &lane)"));
+        let merge = include_str!("merge.rs");
+        assert!(merge.contains("\"already true on main\""));
     }
 
     #[test]
