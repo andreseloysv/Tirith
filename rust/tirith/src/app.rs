@@ -335,6 +335,17 @@ mod tests {
     use super::*;
 
     #[test]
+    fn lane_log_redacts_key_prefixes() {
+        let log = "GOOGLE_API_KEY=AIzaSyABCDEFGHIJKLMNOP\n{\"GITHUB_TOKEN\":\"ghp_abcdefghijklmnop12\"}\nMY_KEY: sk-abcdef123456789\nused AIzaSyZZZZZZZZZZZZZZ here\nplain line";
+        let out = redact_secrets(log);
+        for leak in ["AIza", "ghp_", "sk-", "abcdefghijklmnop12"] {
+            assert!(!out.contains(leak), "leaked {leak}: {out}");
+        }
+        assert!(out.contains("GOOGLE_API_KEY=[redacted]"));
+        assert!(out.contains("plain line"));
+    }
+
+    #[test]
     fn child_path_includes_cargo_bin() {
         let home = std::env::temp_dir().join(format!("tirith-cp-{}", std::process::id()));
         let cargo = home.join(".cargo/bin");
@@ -392,6 +403,24 @@ pub fn kill_group(pid: u32, signal: i32) {
 
 pub fn alive(pid: u32) -> bool {
     unsafe { libc::kill(pid as i32, 0) == 0 }
+}
+
+/// Hides whole secret values in log text: the value of any `*KEY*`/`*TOKEN*`/`*SECRET*`/`*PASSWORD*` variable
+/// (`NAME=value`, `NAME: value`, `"NAME":"value"`) and bare well-known key shapes. Nothing of the value is kept,
+/// not even its first characters.
+pub fn redact_secrets(text: &str) -> String {
+    use regex::Regex;
+    use std::sync::OnceLock;
+    static NAMED: OnceLock<Regex> = OnceLock::new();
+    static BARE: OnceLock<Regex> = OnceLock::new();
+    let named = NAMED.get_or_init(|| {
+        Regex::new(r#"(?i)(\b[A-Za-z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD)[A-Za-z0-9_]*\\?["']?\s*[=:]\s*\\?["']?)([^\s"'\\,;}&]+)"#).unwrap()
+    });
+    let bare = BARE.get_or_init(|| {
+        Regex::new(r"\bAIza[0-9A-Za-z_\-]{10,}|\bsk-[0-9A-Za-z_\-]{10,}|\bgh[pousr]_[0-9A-Za-z]{10,}|\bxox[abpr]-[0-9A-Za-z\-]{10,}|\bAKIA[0-9A-Z]{12,}").unwrap()
+    });
+    let step = named.replace_all(text, "${1}[redacted]");
+    bare.replace_all(&step, "[redacted]").into_owned()
 }
 
 /// The last `lines` lines of a file.
