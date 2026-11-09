@@ -126,7 +126,7 @@ fn biggest_dirs(dir: &Path, n: usize) -> Vec<(String, u64)> {
     let out = std::process::Command::new("du").arg("-sk").args(std::fs::read_dir(dir).into_iter().flatten().flatten().map(|e| e.path())).output();
     let text = out.map(|o| String::from_utf8_lossy(&o.stdout).into_owned()).unwrap_or_default();
     let mut rows: Vec<(String, u64)> = text.lines().filter_map(|l| l.split_once('\t')).filter_map(|(k, p)| Some((p.to_string(), k.trim().parse().ok()?))).collect();
-    rows.sort_by(|a, b| b.1.cmp(&a.1));
+    rows.sort_by_key(|a| std::cmp::Reverse(a.1));
     rows.truncate(n);
     rows
 }
