@@ -861,7 +861,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [x] Vista «Accesos» en la página, solo para consultar cuando haga falta: lista por agente con filtros por sistema y fecha, enlazada al agente y a su punto del plan, sin avisos ni contador en Tu turno. (check: `grep -rqi 'accesos' web/js`) <!-- tirith:{"id":"i-277688afa3b44901b3a380c5d8d575b1","depends_on":["i-12b0de4eeef3451fa471a1f0218d9c95"],"writes":[]} -->
   - [x] Revisar: Vista «Accesos» en la página, solo para consultar cuando haga falta: lista por agente con filtros por sistema y fecha, enlazada al agente y a su punto del plan, sin avisos ni contador en Tu turno. (check: `grep -rqi 'accesos' web/js`)
 - [x] Los logs de las lanes ocultan los valores de las variables *KEY*/*TOKEN* enteros, incluido el principio (hoy lane log muestra el inicio de claves de Google) (check: `cargo test -q lane_log_redacts_key_prefixes`)
-- [ ] La API del daemon rechaza peticiones cuyo Host no es 127.0.0.1 ni localhost (con o sin el puerto del daemon), además de comprobar el Origin, para que una página web con DNS rebinding no pueda leer /api/state ni /api/projects/folders; el CLI (Host 127.0.0.1 sin puerto), los hooks HTTP y la página siguen funcionando (check: `cargo test -q same_origin_checks_host`)
+- [x] La API del daemon rechaza peticiones cuyo Host no es 127.0.0.1 ni localhost (con o sin el puerto del daemon), además de comprobar el Origin, para que una página web con DNS rebinding no pueda leer /api/state ni /api/projects/folders; el CLI (Host 127.0.0.1 sin puerto), los hooks HTTP y la página siguen funcionando (check: `cargo test -q same_origin_checks_host`)
 
 ## 22. Empresa que crece: worker, manager y CEO según el trabajo
 
