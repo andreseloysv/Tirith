@@ -86,6 +86,7 @@ tirith serve | status
 tirith plan show <project> | plan add <project> <step> "<text>"
 tirith lane start <project> <step> "<item>" [--agent <alias>] | lane stop <lane> | lane log <lane>
 tirith autopilot on|off <project>
+tirith project add <folder> [--name N] [--color #rrggbb]   add a folder as a project (the + next to Projects does the same)
 tirith say "<text>"                          write to the manager
 tirith ask "<question>"                      (a lane) ask the manager, then end the turn
 tirith answer <lane> "<answer>"              (the manager)
@@ -99,7 +100,10 @@ tirith hook <Event> | hooks install
 
 ## Configuration
 
-`~/.tirith/config.toml` (outside every repo; agents cannot edit it). Everything has a default.
+`~/.tirith/config.toml` (outside every repo; agents cannot edit it). Everything has a default. Add a project with
+the **+** next to Projects on the page (or `tirith project add`): Tirith appends its `[[projects]]` block, creates a
+git repository and a first plan when the folder has none, and installs the commit guard; a plan that already has
+open items waits for you to resume the autopilot.
 
 ```toml
 [[projects]]

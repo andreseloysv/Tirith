@@ -9,12 +9,19 @@ use axum::{Json, Router};
 use serde_json::{json, Value};
 use std::io::Write;
 use std::os::unix::fs::OpenOptionsExt;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::time::Duration;
 
 const COLORS: [&str; 8] = ["#2f7d5b", "#3b6fd8", "#8a5cd0", "#d0663b", "#c2417c", "#b8860b", "#0e8aa0", "#64748b"];
-/// One config.toml write at a time, so two adds never lose one another.
+/// One config.toml write at a time, so two adds never lose one another; one folder picker on screen at a time.
 static WRITING: std::sync::Mutex<()> = std::sync::Mutex::new(());
+static PICKING: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+/// AppKit's open panel through JXA, floating above every window: since macOS 14 a helper process may not come to the
+/// front, so AppleScript's `choose folder` opened behind the page. It prints the folder, or nothing when cancelled.
+const PANEL: &str = "ObjC.import('AppKit'); function run(argv) { const app = $.NSApplication.sharedApplication, p = $.NSOpenPanel.openPanel; \
+    app.setActivationPolicy($.NSApplicationActivationPolicyAccessory); p.canChooseFiles = false; p.canChooseDirectories = true; p.canCreateDirectories = true; \
+    p.message = 'Choose the project folder'; p.directoryURL = $.NSURL.fileURLWithPath(argv[0]); p.level = $.NSStatusWindowLevel; app.activateIgnoringOtherApps(true); \
+    return p.runModal == $.NSModalResponseOK ? ObjC.unwrap(p.URL.path) : '' }";
 
 /// The projects as the page shows them.
 pub fn list(app: &Shared) -> Vec<Value> {
@@ -71,7 +78,7 @@ fn unique_id(name: &str, projects: &[Project]) -> String {
 /// What to append to config.toml (`text`) for the project, checked to parse with the project in it.
 fn block(text: &str, p: &Project) -> Result<String, String> {
     let q = |s: &str| toml::Value::String(s.into()).to_string();
-    let sep = if text.trim().is_empty() { "" } else if text.ends_with('\n') { "\n" } else { "\n\n" };
+    let sep = if text.trim().is_empty() { "" } else { &"\n\n"[usize::from(text.ends_with('\n'))..] }; // one blank line before the block
     let block = format!("{sep}[[projects]]\nid = {}\nname = {}\nrepo = {}\ncolor = {}\n", q(&p.id), q(&p.name), q(&p.repo), q(p.color.as_deref().unwrap_or("")));
     let t: toml::Table = format!("{text}{block}").parse().map_err(|e| format!("config.toml would not parse with the project: {e}"))?;
     let added = crate::config::get::<Vec<Project>>(&t, &["projects"]).is_some_and(|ps| ps.iter().any(|x| x.id == p.id && x.repo == p.repo));
@@ -107,14 +114,22 @@ async fn add(app: &Shared, raw: &str, name: &str, color: &str, dry: bool) -> Res
     if let Some(p) = cfg.projects.iter().find(|p| !p.repo.is_empty() && p.repo() == dir) {
         return Ok(shown(p, true, &[]));
     }
-    let top = git(&dir, &["rev-parse", "--show-toplevel"]).await.ok().map(|t| PathBuf::from(&t).canonicalize().unwrap_or_else(|_| t.into()));
+    // A repo git cannot read is an error, not a folder to init; a home folder kept in git is no project's repo.
+    let home = home_dir().canonicalize().unwrap_or_else(|_| home_dir());
+    let top = match git(&dir, &["rev-parse", "--show-toplevel"]).await {
+        Err(e) if dir.join(".git").exists() => return Err(e),
+        r => r.ok().map(|t| PathBuf::from(&t).canonicalize().unwrap_or_else(|_| t.into())).filter(|t| !home.starts_with(t)),
+    };
     if let Some(t) = top.as_ref().filter(|t| **t != dir) {
         return Err(format!("{} is inside the git repository {}: add that folder instead", dir.display(), t.display()));
     }
     let p = project(&dir, name, color, &cfg.projects)?;
+    block(&std::fs::read_to_string(app.home.join("config.toml")).unwrap_or_default(), &p)?; // config.toml takes it: only then touch the folder
     let plan = dir.join(app.manifest(&dir).roadmap);
+    let open = std::fs::read_to_string(&plan).map(|t| crate::plan::parse(&t).iter().flat_map(|s| &s.items).filter(|i| !i.done).count()).unwrap_or(0);
+    let start = !plan.exists() && plan.starts_with(&dir) && !plan.components().any(|c| c == Component::ParentDir); // never outside the folder
     if dry {
-        return Ok(json!({"id": p.id, "name": p.name, "folder": dir, "color": p.color, "git": top.is_some(), "plan": plan.exists()}));
+        return Ok(json!({"id": p.id, "name": p.name, "folder": dir, "color": p.color, "git": top.is_some(), "plan": !start, "open": open}));
     }
     let mut notes = vec![];
     if top.is_none() {
@@ -122,17 +137,22 @@ async fn add(app: &Shared, raw: &str, name: &str, color: &str, dry: bool) -> Res
         notes.push("Created a git repository in the folder.".to_string());
     }
     notes.extend(crate::guard::install(app, &p).err());
-    if !plan.exists() {
+    if start {
         let rel = plan.strip_prefix(&dir).unwrap_or(&plan).display().to_string();
         let started: Result<String, String> = async {
             plan.parent().map_or(Ok(()), std::fs::create_dir_all).and_then(|_| std::fs::write(&plan, "# Plan\n\n## 1. First steps\n")).map_err(|e| e.to_string())?;
-            git(&dir, &["add", "--", &rel]).await?;
-            git(&dir, &["commit", "-q", "-m", "Plan: start the plan", "--", &rel]).await
+            git(&dir, &["-c", "core.fsmonitor=false", "add", "--", &rel]).await?;
+            git(&dir, &["-c", "core.fsmonitor=false", "commit", "-q", "-m", "Plan: start the plan", "--", &rel]).await
         }
         .await;
         notes.push(started.map_or_else(|e| format!("Its plan {rel} could not be started: {e}"), |_| format!("Started its plan in {rel}: add the first items on the Overview.")));
     }
+    // A plan that already has open items: agents start on it only once the owner resumes the autopilot.
+    let hold = |id: &str| (open > 0).then(|| app.set_kv(&format!("autopilot:{id}"), Some("off")));
+    hold(&p.id);
     let (p, created) = register(app, p)?;
+    hold(&p.id);
+    notes.extend((open > 0).then(|| format!("Its plan has {open} open items: the autopilot waits until you resume it on the Overview.")));
     app.emit("projects", json!(list(app)));
     app.sched_wake.notify_one();
     Ok(shown(&p, !created, &notes))
@@ -151,15 +171,14 @@ async fn folders(State(app): State<Shared>) -> Json<Value> {
     Json(json!(found.iter().take(200).map(|(_, d)| json!({"folder": d, "name": d.file_name().map(|n| n.to_string_lossy())})).collect::<Vec<_>>()))
 }
 
-/// The macOS folder picker, opened by the daemon in the owner's session: the folder, or "" when cancelled.
+/// The macOS folder picker, opened by the daemon in the owner's session (one at a time): the folder, or "" when cancelled.
 async fn pick(State(app): State<Shared>) -> R {
-    let start = app.cfg().projects.iter().find(|p| !p.repo.is_empty()).and_then(|p| p.repo().parent().map(Path::to_path_buf)).unwrap_or_else(home_dir);
-    let script = ["on run argv", "activate", "POSIX path of (choose folder with prompt \"Choose the project folder\" default location (POSIX file (item 1 of argv)))", "end run"];
-    let out = tokio::process::Command::new("osascript").args(script.iter().flat_map(|l| ["-e", *l])).arg(start).kill_on_drop(true).output();
+    let Ok(_one) = PICKING.try_lock() else { return Err(bad("the folder picker is already open".into())) };
+    let start = app.cfg().projects.iter().find(|p| !p.repo.is_empty()).and_then(|p| p.repo().parent().map(Path::to_path_buf)).filter(|d| d.is_dir()).unwrap_or_else(home_dir);
+    let out = tokio::process::Command::new("osascript").args(["-l", "JavaScript", "-e", PANEL]).arg(start).kill_on_drop(true).output();
     let out = tokio::time::timeout(Duration::from_secs(600), out).await.map_err(|_| bad("the folder picker was open too long".into()))?.map_err(|e| bad(format!("no folder picker here ({e}): type the path")))?;
-    let err = String::from_utf8_lossy(&out.stderr);
-    if !out.status.success() && !err.contains("-128") {
-        return Err(bad(format!("the folder picker did not open: {}", err.trim())));
+    if !out.status.success() {
+        return Err(bad(format!("the folder picker did not open: {}", String::from_utf8_lossy(&out.stderr).trim())));
     }
     Ok(Json(json!({"folder": String::from_utf8_lossy(&out.stdout).trim()})))
 }
@@ -180,12 +199,10 @@ pub fn cli(pos: &[&str], flag: crate::client::Flag) -> Option<Result<(), String>
     }
     let full = std::env::current_dir().map(|d| d.join(raw).display().to_string()).unwrap_or(raw.to_string()); // an absolute path stays
     let body = json!({"folder": if raw.starts_with('~') { raw.to_string() } else { full }, "name": flag("--name").unwrap_or_default(), "color": flag("--color").unwrap_or_default()});
-    Some(crate::client::call("POST", "/api/projects", Some(body)).and_then(|b| {
-        let v: Value = serde_json::from_str(&b).map_err(|e| e.to_string())?;
+    Some(crate::client::call("POST", "/api/projects", Some(body)).and_then(|b| serde_json::from_str::<Value>(&b).map_err(|e| e.to_string())).map(|v| {
         let (id, dir) = (v["id"].as_str().unwrap_or(""), v["folder"].as_str().unwrap_or(""));
         println!("{}", if v["exists"] == true { format!("{dir} is already the project {id}") } else { format!("{id}: {dir}") });
         v["notes"].as_array().into_iter().flatten().filter_map(Value::as_str).for_each(|n| println!("  {n}"));
-        Ok(())
     }))
 }
 
