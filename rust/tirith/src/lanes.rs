@@ -236,8 +236,9 @@ pub async fn scheduler(app: Shared) {
     let mut tick: u64 = 0;
     loop {
         let _ = tokio::time::timeout(Duration::from_secs(3), app.sched_wake.notified()).await;
+        // config.toml changed by hand: the page gets the projects again
         if app.reload_config(false) {
-            app.emit("projects", serde_json::json!(crate::projects::list(&app))); // config.toml changed by hand
+            app.emit("projects", serde_json::json!(crate::projects::list(&app)));
         }
         let cfg = app.cfg();
         let load = load_per_core();
