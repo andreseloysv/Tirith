@@ -324,6 +324,15 @@ async fn take_slot(app: &Shared, project: &Project, lane: &Lane) -> Result<PathB
     Ok(slot)
 }
 
+/// Rust lanes run the same clippy gate as the queue's build stage, so a warning does not cost a second attempt.
+fn clippy_rule(workspace: &str) -> &'static str {
+    if std::path::Path::new(workspace).join("Cargo.toml").exists() {
+        "- Before you finish, run `cargo clippy -- -D warnings` and fix every warning: the queue's build stage runs it too.\n"
+    } else {
+        ""
+    }
+}
+
 fn brief(app: &Shared, lane: &Lane) -> String {
     let steps = plan::read(app, &lane.project).unwrap_or_default();
     let lanes: Vec<Lane> = app.lanes.lock().unwrap().values().filter(|l| l.project == lane.project).cloned().collect();
@@ -362,9 +371,10 @@ fn brief(app: &Shared, lane: &Lane) -> String {
          - Commit your work on this branch. When you are finished just end your turn: Tirith runs the checks and merges.\n\
          - If you need a decision you cannot make yourself: tirith ask \"<question>\", then end your turn.\n\
          - Never push, never touch main, never start other agents or sub-agents. The plan is written only by Tirith.\n\
-         - Commit checks are never skipped.\n{rules}\n\nBrief written {at} by Tirith.\n",
+         - Commit checks are never skipped.\n{clippy}{rules}\n\nBrief written {at} by Tirith.\n",
         ws = lane.workspace,
         branch = lane.branch,
+        clippy = clippy_rule(&lane.workspace),
         rules = rules.join("\n"),
         at = now_iso(),
     )
@@ -575,6 +585,15 @@ fn nanos() -> u32 {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn lane_runs_clippy_before_finish() {
+        let dir = std::env::temp_dir().join(format!("tirith-clippy-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        assert_eq!(super::clippy_rule(dir.to_str().unwrap()), "");
+        std::fs::write(dir.join("Cargo.toml"), "").unwrap();
+        assert!(super::clippy_rule(dir.to_str().unwrap()).contains("cargo clippy -- -D warnings"));
+        std::fs::remove_dir_all(&dir).ok();
+    }
     #[test]
     fn low_disk_asks_owner_once() {
         assert_eq!(super::low_disk_ask(8.0, false), None);
