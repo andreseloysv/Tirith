@@ -7,10 +7,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 pub fn expand(p: &str) -> PathBuf {
-    match p.strip_prefix("~/") {
-        Some(rest) => home_dir().join(rest),
-        None => PathBuf::from(p),
-    }
+    p.strip_prefix("~/").map_or_else(|| PathBuf::from(p), |rest| home_dir().join(rest))
 }
 
 pub fn home_dir() -> PathBuf {

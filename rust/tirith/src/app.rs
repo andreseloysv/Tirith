@@ -149,14 +149,16 @@ impl App {
         self.cfg.read().unwrap().clone()
     }
 
-    /// Re-reads `config.toml` when it changed on disk (one stat).
-    pub fn reload_config(&self) {
+    /// Re-reads `config.toml` when it changed on disk (one stat) or when `force`d; true when it was re-read.
+    pub fn reload_config(&self, force: bool) -> bool {
         let now = mtime(&self.home.join("config.toml"));
         let mut last = self.cfg_mtime.lock().unwrap();
-        if *last != now {
-            *last = now;
-            *self.cfg.write().unwrap() = Arc::new(Config::load());
+        if *last == now && !force {
+            return false;
         }
+        *last = now;
+        *self.cfg.write().unwrap() = Arc::new(Config::load());
+        true
     }
 
     /// A project's `tirith.toml`, re-read only when its mtime changed.

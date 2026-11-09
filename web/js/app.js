@@ -1,4 +1,4 @@
-// The shell: sidebar (views and projects), header (crumb, search, health) and the current view.
+// The shell: sidebar (views, projects and the "+" that adds one), header (crumb, search, health) and the current view.
 // Same markup and classes as the old page, so css/style.css draws it the same way.
 import { html, render, useState, useEffect } from '../vendor/preact-htm.js';
 import { useStore, useFetch, setUi } from './store.js';
@@ -9,6 +9,7 @@ import { Agents } from './views/agents.js';
 import { Rooms } from './views/rooms.js';
 import { Access } from './views/access.js';
 import { Settings } from './views/settings.js';
+import { AddProject } from './views/addproject.js';
 
 const VIEWS = [
   ['overview', 'Overview', Overview],
@@ -31,7 +32,7 @@ function useRoute() {
   return r;
 }
 
-function Nav({ r }) {
+function Nav({ r, onAdd }) {
   const s = useStore();
   const lanes = Object.values(s.lanes);
   return html`<aside id="nav">
@@ -41,7 +42,8 @@ function Nav({ r }) {
         <div class="grp">Views</div>
         ${VIEWS.map(([id, label]) => html`<button class=${`nav${r.view === id ? ' on' : ''}`} onClick=${() => go(id, r.project)}>
           <${Icon} d=${ICON[id] || ICON.overview} size=${16} w=${1.7} /><span>${label}</span></button>`)}
-        <div class="grp">Projects</div>
+        <div class="grp grp-add"><span>Projects</span><button type="button" class="grp-plus" aria-label="Add project" title="Add project"
+          onClick=${onAdd}><${Icon} d="M12 5v14 M5 12h14" size=${14} w=${2} /></button></div>
         ${s.projects.map((p) => {
           const n = lanes.filter((l) => l.project === p.id && ACTIVE.includes(l.status)).length;
           return html`<button class=${`nav${r.project === p.id ? ' on' : ''}`} onClick=${() => go(r.view, r.project === p.id ? '' : p.id)}>
@@ -80,15 +82,16 @@ function Top({ r }) {
 function App() {
   const r = useRoute();
   const s = useStore();
+  const [adding, setAdding] = useState(false);
   const View = (VIEWS.find((v) => v[0] === r.view) || VIEWS[0])[2];
   return html`<div id="shell">
-    <${Nav} r=${r} />
+    <${Nav} r=${r} onAdd=${() => setAdding(true)} />
     <div id="content">
       <${Top} r=${r} />
       ${!s.connected && s.loaded ? html`<div id="stale" class="stale" role="status">Tirith is not updating — reconnecting…</div>` : null}
       <div id="view" class=${`view v-${r.view}`}>${s.loaded ? html`<${View} project=${r.project} />` : null}</div>
     </div>
-  </div>`;
+  </div>${adding ? html`<${AddProject} onClose=${() => setAdding(false)} />` : null}`;
 }
 
 render(html`<${App} />`, document.getElementById('app'));

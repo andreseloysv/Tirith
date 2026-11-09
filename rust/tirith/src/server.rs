@@ -1,7 +1,7 @@
 //! HTTP on 127.0.0.1: the page, its JSON API, the change stream (SSE) and the agents' hooks.
 
 use crate::app::{bad, now_s, tail, Shared, R};
-use crate::{attach, brain, guard, lanes, manager, merge, metrics, models, plan, rooms, rules, sandbox};
+use crate::{attach, brain, guard, lanes, manager, merge, metrics, models, plan, projects, rooms, rules, sandbox};
 use axum::body::Bytes;
 use axum::extract::{Path, Query, Request, State};
 use axum::http::{HeaderMap, StatusCode};
@@ -49,6 +49,7 @@ pub fn router(app: Shared, port: u16) -> Router {
         .merge(metrics::routes())
         .merge(brain::routes())
         .merge(attach::routes())
+        .merge(projects::routes())
         .fallback(web_file)
         .layer(middleware::from_fn(same_origin))
         .with_state(app)
@@ -69,18 +70,9 @@ async fn same_origin(req: Request, next: Next) -> Response {
 }
 
 async fn state(State(app): State<Shared>) -> Json<Value> {
-    let cfg = app.cfg();
-    let projects: Vec<Value> = cfg
-        .projects
-        .iter()
-        .map(|p| {
-            json!({"id": p.id, "name": p.name, "color": p.color,
-        "autopilot": lanes::autopilot_on(&app, &p.id), "main_red": app.kv(&format!("main_red:{}", p.id))})
-        })
-        .collect();
     let lanes: Vec<Value> = app.lanes.lock().unwrap().values().map(|l| json!(l)).collect();
     Json(json!({
-        "projects": projects,
+        "projects": projects::list(&app),
         "lanes": lanes,
         "chat": app.recent("chat", &["id", "at", "role", "text"], 300),
         "events": app.recent("events", &["id", "at", "lane", "project", "kind", "tool", "summary"], 200),

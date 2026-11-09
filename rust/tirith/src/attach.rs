@@ -28,16 +28,11 @@ fn sanitize(name: &str) -> String {
     let base = name.rsplit(['/', '\\']).next().unwrap_or("");
     let s: String = base.chars().map(|c| if c.is_alphanumeric() || matches!(c, '.' | '-' | '_') { c } else { '_' }).collect();
     let s: String = s.trim_start_matches('.').chars().take(120).collect();
-    if s.is_empty() {
-        "file".into()
-    } else {
-        s
-    }
+    Some(s).filter(|s| !s.is_empty()).unwrap_or_else(|| "file".into())
 }
 
 fn content_type(name: &str) -> &'static str {
-    let ext = name.rsplit('.').next().unwrap_or("").to_lowercase();
-    match ext.as_str() {
+    match name.rsplit('.').next().unwrap_or("").to_lowercase().as_str() {
         "png" => "image/png",
         "jpg" | "jpeg" => "image/jpeg",
         "gif" => "image/gif",

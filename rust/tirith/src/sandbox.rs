@@ -78,11 +78,6 @@ fn token(who: &str) -> String {
     digest.iter().take(16).map(|b| format!("{b:02x}")).collect()
 }
 
-/// `who` as a proxy user name: ':' is the user/password separator, so "merge:x" travels as "merge~x".
-fn user(who: &str) -> String {
-    who.replace(':', "~")
-}
-
 /// The lane and project an event of `who` belongs to ("merge:<lane>" is the lane's; "manager" stays itself).
 fn owner(app: &Shared, who: &str) -> (String, String) {
     let id = who.strip_prefix("merge:").unwrap_or(who);
@@ -99,12 +94,11 @@ pub fn wrap(app: &Shared, who: &str, argv: Vec<String>) -> Launch {
         app.event(&lane, &project, "net-off", "sandbox", &format!("{who} runs without the network sandbox: {why}"), "");
         return Launch { program, args, env: vec![] };
     }
-    let (port, user, token) = (proxy_port(app), user(who), token(who));
+    // ':' is the proxy user/password separator, so "merge:x" travels as "merge~x".
+    let (port, user, token) = (proxy_port(app), who.replace(':', "~"), token(who));
     let url = format!("http://{user}:{token}@127.0.0.1:{port}");
     let mut env: Vec<(String, String)> = ["HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY", "https_proxy", "http_proxy", "all_proxy"].iter().map(|k| (k.to_string(), url.clone())).collect();
-    for (k, v) in [("NO_PROXY", NO_PROXY), ("no_proxy", NO_PROXY), ("NODE_USE_ENV_PROXY", "1"), ("TIRITH_SANDBOXED", "1")] {
-        env.push((k.into(), v.into()));
-    }
+    env.extend([("NO_PROXY", NO_PROXY), ("no_proxy", NO_PROXY), ("NODE_USE_ENV_PROXY", "1"), ("TIRITH_SANDBOXED", "1")].map(|(k, v)| (k.to_string(), v.to_string())));
     // Gradle and the JVM ignore HTTPS_PROXY; the JDK refuses Basic proxy auth on tunnels unless re-enabled.
     let mut gradle = std::env::var("GRADLE_OPTS").unwrap_or_default();
     for scheme in ["http", "https"] {
@@ -117,16 +111,12 @@ pub fn wrap(app: &Shared, who: &str, argv: Vec<String>) -> Launch {
     gradle += " -Djdk.http.auth.tunneling.disabledSchemes= -Djdk.http.auth.proxying.disabledSchemes=";
     env.push(("GRADLE_OPTS".into(), gradle.trim().into()));
     // ssh ignores proxy variables: git over ssh goes through the proxy with `tirith net tunnel`.
-    if std::env::var_os("GIT_SSH_COMMAND").is_none() {
-        if let Ok(exe) = std::env::current_exe() {
-            env.push(("GIT_SSH_COMMAND".into(), format!("ssh -o ProxyCommand='{} net tunnel %h %p'", exe.display())));
-        }
+    if let Some(exe) = std::env::current_exe().ok().filter(|_| std::env::var_os("GIT_SSH_COMMAND").is_none()) {
+        env.push(("GIT_SSH_COMMAND".into(), format!("ssh -o ProxyCommand='{} net tunnel %h %p'", exe.display())));
     }
     env.push(("PATH".into(), format!("{}:{}", app.home.join("net/bin").display(), app.child_path())));
     env.push(("ZDOTDIR".into(), app.home.join("net/zdot").display().to_string()));
-    let mut all = vec!["-p".to_string(), PROFILE.to_string(), program];
-    all.extend(args);
-    Launch { program: SANDBOX_EXEC.into(), args: all, env }
+    Launch { program: SANDBOX_EXEC.into(), args: ["-p".to_string(), PROFILE.to_string(), program].into_iter().chain(args).collect(), env }
 }
 
 /// The wrappers in `<home>/net/bin`: tools that start a sandbox of their own (macOS refuses to nest them) get it
@@ -148,9 +138,7 @@ fn write_wrappers(app: &Shared) {
          exec xcodebuild {XCODE_FLAGS} $scm 'OTHER_SWIFT_FLAGS=$(inherited) -disable-sandbox' \"$@\"\n"
     );
     let mut files = vec![("swift".to_string(), swift.to_string()), ("xcodebuild".into(), xcode)];
-    for tool in ["swift-build", "swift-test", "swift-run", "swift-package"] {
-        files.push((tool.into(), format!("case \" $* \" in *\" --disable-sandbox \"*) exec {tool} \"$@\";; esac\nexec {tool} --disable-sandbox \"$@\"\n")));
-    }
+    files.extend(["swift-build", "swift-test", "swift-run", "swift-package"].map(|tool| (tool.into(), format!("case \" $* \" in *\" --disable-sandbox \"*) exec {tool} \"$@\";; esac\nexec {tool} --disable-sandbox \"$@\"\n"))));
     for (name, body) in files {
         let path = dir.join(name);
         let text = format!("{head}{body}");
@@ -172,16 +160,10 @@ fn write_wrappers(app: &Shared) {
 
 /// `https://api.example.com:443/x` -> `api.example.com`; `*.x.com` -> `x.com`; addresses and ranges stay.
 fn clean(rule: &str) -> String {
-    let mut t = rule.trim().to_lowercase();
-    if let Some((_, rest)) = t.split_once("://") {
-        t = rest.to_string();
-    }
-    if cidr(&t).is_none() {
-        t = t.split(['/', '?', '#']).next().unwrap_or("").to_string();
-    }
-    if t.matches(':').count() == 1 {
-        t = t.split(':').next().unwrap_or("").to_string();
-    }
+    let t = rule.trim().to_lowercase();
+    let t = t.split_once("://").map_or(t.as_str(), |(_, rest)| rest);
+    let t = if cidr(t).is_none() { t.split(['/', '?', '#']).next().unwrap_or("") } else { t };
+    let t = if t.matches(':').count() == 1 { t.split(':').next().unwrap_or("") } else { t };
     t.trim_start_matches("*.").trim_matches(['.', '[', ']']).to_string()
 }
 
@@ -258,10 +240,7 @@ pub fn tags(tool: &str, input: &Value) -> Vec<(&'static str, String)> {
     let mut out = vec![];
     if tool != "Bash" {
         let file = ["file_path", "path", "notebook_path"].iter().find_map(|k| input[*k].as_str()).unwrap_or("");
-        if !file.is_empty() && CRED.is_match(file) && !file.ends_with(".example") {
-            out.push(("credential", file.to_string()));
-        }
-        return out;
+        return (!file.is_empty() && CRED.is_match(file) && !file.ends_with(".example")).then(|| ("credential", file.to_string())).into_iter().collect();
     }
     let cmd = input["command"].as_str().unwrap_or("");
     for m in CRED.find_iter(cmd) {
@@ -273,8 +252,7 @@ pub fn tags(tool: &str, input: &Value) -> Vec<(&'static str, String)> {
     out.extend(GIT_PUSH.captures_iter(cmd).map(|c| ("git_push", format!("git {}", c[1].trim()))));
     out.extend(GH.captures_iter(cmd).map(|c| ("gh", format!("gh {}", c[1].trim()))));
     let mut names: Vec<&str> = vec![];
-    for c in ENV.captures_iter(cmd) {
-        let n = c.get(1).or(c.get(2)).map(|m| m.as_str()).unwrap_or("");
+    for n in ENV.captures_iter(cmd).filter_map(|c| c.get(1).or(c.get(2))).map(|m| m.as_str()) {
         if !ENV_SKIP.contains(&n) && !n.starts_with("TIRITH") && !names.contains(&n) {
             names.push(n);
         }
