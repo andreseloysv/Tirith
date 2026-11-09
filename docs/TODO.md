@@ -811,7 +811,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [x] Guarda: la regla de solo lectura del CEO deja pasar los comandos de tirith que solo leen (status, plan show, lane log, timeout get, merge status), que ayer le bloquearon varias veces (si ya existe, solo añadir el test) (check: `cargo test -q ceo_read_only_allows_reads`)
 - [x] Disco lleno: cuando el disco baja de 5 GB libres, Tirith avisa al dueño una sola vez con ask-owner (kind device) indicando las carpetas que más ocupan, en vez de dejar lanes fallando con No space left on device (check: `cargo test -q low_disk_asks_owner_once`)
 - [x] Los checks y etapas del daemon encuentran cargo aunque el daemon arranque sin ~/.cargo/bin en su PATH (p. ej. tras reiniciar el Mac): child_path añade ~/.cargo/bin si existe; el 2026-11-09 main quedó rojo con «sh: cargo: command not found» (check: `cargo test -q child_path_includes_cargo_bin`)
-- [ ] Las lanes de Rust pasan cargo clippy -- -D warnings antes de terminar, igual que la etapa build de la cola, para no gastar un intento extra (el 2026-11-09 la lane de disco lleno falló por clippy::unnecessary_sort_by) (check: `cargo test -q lane_runs_clippy_before_finish`)
+- [x] Las lanes de Rust pasan cargo clippy -- -D warnings antes de terminar, igual que la etapa build de la cola, para no gastar un intento extra (el 2026-11-09 la lane de disco lleno falló por clippy::unnecessary_sort_by) (check: `cargo test -q lane_runs_clippy_before_finish`)
 
 ## 18. Salas privadas: hablar con el manager desde el móvil
 
