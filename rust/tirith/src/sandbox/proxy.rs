@@ -40,11 +40,8 @@ pub fn seed(app: &Shared) {
     for (dest, lane, kind, n, at) in rows.into_iter().flatten().flatten() {
         let host = dest.rsplit_once(':').map(|(h, _)| h).unwrap_or(&dest).to_string();
         let d = dests.entry(host).or_default();
-        if kind == "net" {
-            d.count += n
-        } else {
-            d.refused += n
-        }
+        let counter = if kind == "net" { &mut d.count } else { &mut d.refused };
+        *counter += n;
         d.last = d.last.clone().max(at);
         d.lanes.insert(lane);
     }
@@ -69,17 +66,13 @@ pub async fn serve(app: Shared) {
                 *STATE.lock().unwrap() = "listening".into();
                 loop {
                     let Ok((conn, _)) = listener.accept().await else { continue };
-                    let app = app.clone();
-                    tokio::spawn(async move {
-                        let _ = handle(app, conn).await;
-                    });
+                    tokio::spawn(handle(app.clone(), conn));
                 }
             }
             Err(e) => {
                 *STATE.lock().unwrap() = format!("cannot listen on 127.0.0.1:{port}: {e}");
-                if !told {
+                if !std::mem::replace(&mut told, true) {
                     app.event("", "", "error", "proxy", &state(), "");
-                    told = true;
                 }
                 tokio::time::sleep(Duration::from_secs(10)).await;
             }
@@ -95,10 +88,7 @@ async fn answer(c: &mut TcpStream, status: &str, extra: &str, body: &str) -> Res
 /// The caller of a request: the `who` of a valid `Proxy-Authorization: Basic who:token`.
 fn caller(headers: &[&str]) -> Option<String> {
     let value = headers.iter().find_map(|h| h.split_once(':').filter(|(k, _)| k.trim().eq_ignore_ascii_case("proxy-authorization")))?.1.trim();
-    let (scheme, data) = value.split_once(' ')?;
-    if !scheme.eq_ignore_ascii_case("basic") {
-        return None;
-    }
+    let (_, data) = value.split_once(' ').filter(|(scheme, _)| scheme.eq_ignore_ascii_case("basic"))?;
     let raw = String::from_utf8(base64::engine::general_purpose::STANDARD.decode(data.trim()).ok()?).ok()?;
     let (user, pass) = raw.rsplit_once(':')?;
     let who = user.replace("%3A", ":").replace("%3a", ":").replace('~', ":");
@@ -112,15 +102,9 @@ fn host_port(text: &str, default: u16) -> Option<(String, u16)> {
             let (h, rest) = v6.split_once(']')?;
             (h, rest.strip_prefix(':'))
         }
-        None => match text.rsplit_once(':') {
-            Some((h, p)) => (h, Some(p)),
-            None => (text, None),
-        },
+        None => text.rsplit_once(':').map_or((text, None), |(h, p)| (h, Some(p))),
     };
-    let port = match port {
-        Some(p) => p.parse().ok()?,
-        None => default,
-    };
+    let port = port.map_or(Some(default), |p| p.parse().ok())?;
     (!host.is_empty()).then(|| (host.trim_end_matches('.').to_lowercase(), port))
 }
 
@@ -129,11 +113,8 @@ fn record(app: &Shared, who: &str, host: &str, port: u16, rule: Option<&str>) {
     {
         let mut dests = DESTS.lock().unwrap();
         let d = dests.entry(host.to_string()).or_default();
-        if rule.is_some() {
-            d.refused += 1
-        } else {
-            d.count += 1
-        }
+        let counter = if rule.is_some() { &mut d.refused } else { &mut d.count };
+        *counter += 1;
         d.last = now_iso();
         d.lanes.insert(lane.clone());
     }

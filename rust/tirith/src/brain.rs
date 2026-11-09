@@ -56,9 +56,8 @@ pub async fn ask(app: &Shared, job: &str, input: &str) -> Option<String> {
     let prompt = JOBS.iter().find(|(j, _)| *j == job)?.1;
     let key = key()?;
     let hash = cache_key(job, input);
-    let cached = app.db.lock().unwrap().query_row("SELECT answer FROM brain_cache WHERE key = ?1", [&hash], |r| r.get::<_, String>(0)).ok();
-    if cached.is_some() {
-        return cached;
+    if let Ok(cached) = app.db.lock().unwrap().query_row("SELECT answer FROM brain_cache WHERE key = ?1", [&hash], |r| r.get::<_, String>(0)) {
+        return Some(cached);
     }
     let tail: String = input.chars().rev().take(16000).collect::<Vec<_>>().into_iter().rev().collect();
     let body = json!({"model": model(app), "max_tokens": 4096, "temperature": 0.3, "reasoning_effort": "low",
@@ -98,15 +97,9 @@ pub fn architecture(app: &Shared, project: &str) -> Option<String> {
     if due {
         let (app, project, known) = (app.clone(), project.to_string(), last.as_ref().map(|l| l["commit"].as_str().unwrap_or("").to_string()));
         tokio::spawn(async move {
-            let Some(p) = app.cfg().project(&project).cloned() else { return };
-            let repo = p.repo();
-            let commit = match git(&repo, &["rev-parse", "main"]).await {
-                Ok(c) => c,
-                Err(_) => match git(&repo, &["rev-parse", "HEAD"]).await {
-                    Ok(c) => c,
-                    Err(_) => return,
-                },
-            };
+            let Some(repo) = app.cfg().project(&project).map(|p| p.repo()) else { return };
+            let first = git(&repo, &["rev-parse", "main"]).await;
+            let Ok(commit) = (if first.is_ok() { first } else { git(&repo, &["rev-parse", "HEAD"]).await }) else { return };
             if known.as_deref() == Some(commit.as_str()) {
                 return;
             }
