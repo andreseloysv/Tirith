@@ -13,6 +13,7 @@ mod merge;
 mod metrics;
 mod models;
 mod plan;
+mod projects;
 mod rooms;
 mod rules;
 mod sandbox;
@@ -34,13 +35,14 @@ tirith ask \"<question>\"                       (inside a lane) ask the manager,
 tirith answer <lane> \"<answer>\"                (the manager) answer a waiting lane
 tirith ask-owner --kind credentials|payment|account|device|decision \"<question>\"   (the manager)
 tirith autopilot on|off <project>              let Tirith start the plan's items by itself, or not
+tirith project add <folder> [--name N] [--color #rrggbb]   add a folder as a project (the page's + does the same)
 tirith say \"<text>\"                            write to the manager
 tirith hook <Event>                            agent hook bridge (stdin JSON; also --agent A --event E)
 tirith hooks install                           point the agents' hooks at the daemon over HTTP
 (modules add: tirith room …, tirith net …, tirith models …, tirith guard …)";
 
 type ModuleCli = fn(&[&str], client::Flag) -> Option<Result<(), String>>;
-const MODULE_CLI: [ModuleCli; 4] = [rooms::cli, sandbox::cli, models::cli, guard::cli];
+const MODULE_CLI: [ModuleCli; 5] = [rooms::cli, sandbox::cli, models::cli, guard::cli, projects::cli];
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
