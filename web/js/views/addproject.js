@@ -10,7 +10,7 @@ const base = (p) => String(p || '').replace(/[\\/]+$/, '').split(/[\\/]/).pop() 
 /** The daemon's message; an older daemon than the page answers "not found" to the projects API. */
 const why = (e) => {
   const m = String((e && e.message) || e).trim();
-  return /^not found$/i.test(m) ? 'The running Tirith is older than this page: quit and reopen Tirith, then add the project.' : m;
+  return /^not found$/i.test(m) ? 'The running Tirith daemon is older than this page and cannot add projects: quit Tirith, stop the daemon (pkill -f "tirith serve"), open Tirith again.' : m;
 };
 
 export function AddProject({ onClose }) {
