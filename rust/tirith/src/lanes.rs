@@ -23,7 +23,7 @@ pub fn drain(id: &str) -> Vec<String> {
     LIVE.lock().unwrap().remove(id).unwrap_or_default()
 }
 
-fn slug(text: &str) -> String {
+pub(crate) fn slug(text: &str) -> String {
     let s: String = text.to_lowercase().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect();
     let s = s.split('-').filter(|p| !p.is_empty()).collect::<Vec<_>>().join("-");
     s.chars().take(32).collect::<String>().trim_end_matches('-').to_string()
@@ -236,7 +236,10 @@ pub async fn scheduler(app: Shared) {
     let mut tick: u64 = 0;
     loop {
         let _ = tokio::time::timeout(Duration::from_secs(3), app.sched_wake.notified()).await;
-        app.reload_config();
+        // config.toml changed by hand: the page gets the projects again
+        if app.reload_config(false) {
+            app.emit("projects", serde_json::json!(crate::projects::list(&app)));
+        }
         let cfg = app.cfg();
         let load = load_per_core();
         let lanes: Vec<Lane> = app.lanes.lock().unwrap().values().cloned().collect();

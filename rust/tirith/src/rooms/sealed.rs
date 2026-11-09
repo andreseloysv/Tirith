@@ -71,8 +71,7 @@ pub fn canonical(v: &Value) -> String {
         Value::Object(m) => {
             let mut keys: Vec<&String> = m.keys().collect();
             keys.sort();
-            let parts: Vec<String> = keys.iter().map(|k| format!("{}:{}", Value::from(k.as_str()), canonical(&m[*k]))).collect();
-            format!("{{{}}}", parts.join(","))
+            format!("{{{}}}", keys.iter().map(|k| format!("{}:{}", Value::from(k.as_str()), canonical(&m[*k]))).collect::<Vec<_>>().join(","))
         }
         _ => v.to_string(),
     }
@@ -84,8 +83,7 @@ pub fn identity(home: &Path, name: &str) -> Result<Me, String> {
     let path = dir.join(format!("{name}.json"));
     if !path.exists() {
         std::fs::DirBuilder::new().recursive(true).mode(0o700).create(&dir).map_err(|e| e.to_string())?;
-        let key = SigningKey::from_bytes(&rand::random());
-        let secret = hex(&key.to_keypair_bytes());
+        let secret = hex(&SigningKey::from_bytes(&rand::random()).to_keypair_bytes());
         let mut f = std::fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(&path).map_err(|e| e.to_string())?;
         f.write_all(json!({"name": name, "secretKey": secret}).to_string().as_bytes()).map_err(|e| e.to_string())?;
     }
@@ -101,16 +99,12 @@ impl Me {
         hex(&self.key.sign(message.as_bytes()).to_bytes())
     }
     fn curve_secret(&self) -> crypto_box::SecretKey {
-        let h = Sha512::digest(self.key.to_bytes());
-        let mut s = [0u8; 32];
-        s.copy_from_slice(&h[..32]);
-        crypto_box::SecretKey::from(s)
+        crypto_box::SecretKey::from(<[u8; 32]>::try_from(&Sha512::digest(self.key.to_bytes())[..32]).unwrap())
     }
 }
 
 pub fn verify(message: &str, sig: &str, public: &str) -> bool {
-    let (Some(sig), Some(public)) = (unhex(sig), unhex(public)) else { return false };
-    let (Ok(sig), Ok(public)) = (<[u8; 64]>::try_from(sig), <[u8; 32]>::try_from(public)) else { return false };
+    let (Ok(sig), Ok(public)) = (<[u8; 64]>::try_from(unhex(sig).unwrap_or_default()), <[u8; 32]>::try_from(unhex(public).unwrap_or_default())) else { return false };
     VerifyingKey::from_bytes(&public).is_ok_and(|k| k.verify(message.as_bytes(), &Signature::from_bytes(&sig)).is_ok())
 }
 
@@ -189,10 +183,7 @@ fn http() -> &'static reqwest::Client {
 /// One request; the JSON answer on 2xx, `(status, message)` otherwise (status 0: unreachable).
 async fn api(base: &str, path: &str, body: Option<&Value>, secs: u64) -> Result<Value, (u16, String)> {
     let url = format!("{base}{path}");
-    let req = match body {
-        Some(b) => http().post(&url).json(b),
-        None => http().get(&url),
-    };
+    let req = body.map_or_else(|| http().get(&url), |b| http().post(&url).json(b));
     let res = req.timeout(Duration::from_secs(secs)).send().await.map_err(|e| (0, format!("cannot reach {base}: {e}")))?;
     let status = res.status().as_u16();
     let v: Value = res.json().await.unwrap_or(Value::Null);
@@ -203,17 +194,13 @@ async fn api(base: &str, path: &str, body: Option<&Value>, secs: u64) -> Result<
     }
 }
 
-fn msg(e: (u16, String)) -> String {
-    e.1
-}
-
 /// The platform's public key, checked against its signed description (cached per platform).
 pub async fn platform(base: &str) -> Result<String, String> {
     static KEYS: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
     if let Some(k) = KEYS.lock().unwrap().as_ref().and_then(|m| m.get(base).cloned()) {
         return Ok(k);
     }
-    let v = api(base, "/.well-known/agentsmessenger.json", None, 30).await.map_err(msg)?;
+    let v = api(base, "/.well-known/agentsmessenger.json", None, 30).await.map_err(|e| e.1)?;
     let public = v["doc"]["platform_pub"].as_str().unwrap_or("").to_string();
     if !verify(&sha_hex(canonical(&v["doc"]).as_bytes()), v["sig"].as_str().unwrap_or(""), &public) {
         return Err("this platform does not prove who it is".into());
@@ -230,8 +217,7 @@ async fn register(base: &str, me: &Me) -> Result<(), String> {
     let card = json!({"name": me.name, "capabilities": ["am.mjs"], "tags": []});
     let ts = now_ms();
     let sig = me.sign(&sha_hex(canonical(&json!({"card": card, "pubkey": me.public, "ts": ts})).as_bytes()));
-    api(base, "/register", Some(&json!({"pubkey": me.public, "card": card, "ts": ts, "sig": sig})), 30).await.map_err(msg)?;
-    Ok(())
+    api(base, "/register", Some(&json!({"pubkey": me.public, "card": card, "ts": ts, "sig": sig})), 30).await.map(|_| ()).map_err(|e| e.1)
 }
 
 /// Posts one signed event in `room` (registering the key when the platform does not know it yet).
@@ -242,20 +228,17 @@ pub async fn post(base: &str, me: &Me, kind: &str, room: &str, body: Value) -> R
     match api(base, "/events", Some(&e), 60).await {
         Err((403, _)) => {
             register(base, me).await?;
-            api(base, "/events", Some(&e), 60).await.map(|_| ()).map_err(msg)
+            api(base, "/events", Some(&e), 60).await.map(|_| ()).map_err(|e| e.1)
         }
         Err((409, _)) if kind == "announce" => Ok(()), // already said "joined"
-        r => r.map(|_| ()).map_err(msg),
+        r => r.map(|_| ()).map_err(|e| e.1),
     }
 }
 
 /// One page of the room's signed events after message `after` (the last 30 without it), waiting up to `wait`.
 pub async fn page(base: &str, room: &str, after: Option<u64>, wait: u64, name: &str) -> Result<Value, String> {
-    let mut q = format!("/r/{room}?raw=1&as={name}");
-    if let Some(a) = after {
-        q += &format!("&after={a}&wait={wait}");
-    }
-    api(base, &q, None, 60 + wait).await.map_err(msg)
+    let q = format!("/r/{room}?raw=1&as={name}") + &after.map(|a| format!("&after={a}&wait={wait}")).unwrap_or_default();
+    api(base, &q, None, 60 + wait).await.map_err(|e| e.1)
 }
 
 /// Every key that has spoken in the room: (public key, name).
@@ -280,8 +263,6 @@ pub async fn keys(base: &str, room: &str, name: &str) -> Result<Vec<(String, Str
 
 /// A new private room's name (`GET /new?private=1`).
 pub async fn new_room(base: &str) -> Result<String, String> {
-    let res = http().get(format!("{base}/new?private=1")).header("accept", "text/plain").timeout(Duration::from_secs(30)).send().await;
-    let text = res.map_err(|e| format!("cannot reach {base}: {e}"))?.text().await.map_err(|e| e.to_string())?;
-    let re = regex::Regex::new(r"/r/(sealed-[a-z0-9_-]+)").map_err(|e| e.to_string())?;
-    re.captures(&text).map(|c| c[1].to_string()).ok_or_else(|| "the platform did not give a private room".into())
+    let text = http().get(format!("{base}/new?private=1")).header("accept", "text/plain").timeout(Duration::from_secs(30)).send().await.map_err(|e| format!("cannot reach {base}: {e}"))?.text().await.map_err(|e| e.to_string())?;
+    regex::Regex::new(r"/r/(sealed-[a-z0-9_-]+)").map_err(|e| e.to_string())?.captures(&text).map(|c| c[1].to_string()).ok_or_else(|| "the platform did not give a private room".into())
 }

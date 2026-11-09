@@ -92,8 +92,7 @@ static ROOMS: Mutex<BTreeMap<String, Room>> = Mutex::new(BTreeMap::new());
 static RUNNING: Mutex<Option<HashSet<String>>> = Mutex::new(None);
 
 fn base(app: &Shared) -> String {
-    let url: Option<String> = cfg_get(&app.cfg().raw, &["messenger", "url"]);
-    url.unwrap_or_else(|| "https://agentsmessenger.com".into()).trim_end_matches('/').to_string()
+    cfg_get::<String>(&app.cfg().raw, &["messenger", "url"]).unwrap_or_else(|| "https://agentsmessenger.com".into()).trim_end_matches('/').to_string()
 }
 
 fn owners(app: &Shared) -> Vec<String> {
@@ -102,8 +101,7 @@ fn owners(app: &Shared) -> Vec<String> {
 
 /// The manager's name in rooms (its key is `<home>/am/<name>.json`): `[messenger] name`, else `tirith-manager`.
 fn my_name(app: &Shared) -> String {
-    let set: Option<String> = cfg_get(&app.cfg().raw, &["messenger", "name"]);
-    Some(sealed::clean(&set.unwrap_or_default())).filter(|n| !n.is_empty()).unwrap_or_else(|| "tirith-manager".into())
+    Some(sealed::clean(&cfg_get::<String>(&app.cfg().raw, &["messenger", "name"]).unwrap_or_default())).filter(|n| !n.is_empty()).unwrap_or_else(|| "tirith-manager".into())
 }
 
 #[derive(Deserialize, Default)]
@@ -148,9 +146,7 @@ pub fn start(app: Shared) {
         if let Ok(mut q) = db.prepare("SELECT data FROM am_rooms") {
             let rows: Vec<String> = q.query_map([], |r| r.get(0)).map(|r| r.flatten().collect()).unwrap_or_default();
             let mut rooms = ROOMS.lock().unwrap();
-            for r in rows.iter().filter_map(|s| serde_json::from_str::<Room>(s).ok()) {
-                rooms.insert(r.id.clone(), r);
-            }
+            rooms.extend(rows.iter().filter_map(|s| serde_json::from_str::<Room>(s).ok()).map(|r| (r.id.clone(), r)));
         };
     }
     tokio::spawn(async move {
@@ -255,13 +251,9 @@ async fn poll(app: &Shared, r: &Room) -> Result<(), String> {
     // Public rooms are only watched: what is said there never reaches the manager, so its answers are never
     // posted in public by themselves (the manager writes there on purpose with `tirith room say`).
     if r.private() {
-        for (author, text) in &out.deliver {
-            manager::from_room(app, &r.id, author, text);
-        }
+        out.deliver.iter().for_each(|(author, text)| manager::from_room(app, &r.id, author, text));
     }
-    for m in out.mentions {
-        app.emit("room-mention", m);
-    }
+    out.mentions.into_iter().for_each(|m| app.emit("room-mention", m));
     if !r.private() && !list.is_empty() {
         summarize(app, &r.id);
     }
@@ -313,9 +305,7 @@ fn handle(r: &mut Room, me: &sealed::Me, platform: &str, m: &Value, backlog: boo
     }
     if r.private() && !mine && word == "tirith-join" {
         if r.kind == "manager" && burn(&mut r.join_codes, &text, "tirith-join") {
-            if let Some(p) = r.managers.iter_mut().find(|p| p.key_id == id) {
-                p.accepted = true;
-            }
+            r.managers.iter_mut().find(|p| p.key_id == id).into_iter().for_each(|p| p.accepted = true);
         }
         return;
     }
@@ -505,8 +495,7 @@ async fn join(app: &Shared, code: &str) -> Result<Room, String> {
     let base = base(app);
     let me = sealed::identity(&app.home, &my_name(app))?;
     sealed::post(&base, &me, "announce", id, json!("joined")).await?;
-    let keys = sealed::keys(&base, id, &me.name).await?;
-    let (public, name) = keys.into_iter().find(|(p, _)| sealed::key_id(p) == key).ok_or("that manager is not in the room")?;
+    let (public, name) = sealed::keys(&base, id, &me.name).await?.into_iter().find(|(p, _)| sealed::key_id(p) == key).ok_or("that manager is not in the room")?;
     sealed::post(&base, &me, "message", id, sealed::seal(&me, &format!("tirith-join {secret}"), &format!("#{id}"), std::slice::from_ref(&public))).await?;
     let count = sealed::page(&base, id, None, 0, &me.name).await?["count"].as_u64();
     let host = Peer { name, key_id: key.to_string(), public, since: now_iso(), accepted: true, ..Default::default() };
@@ -519,8 +508,7 @@ async fn join(app: &Shared, code: &str) -> Result<Room, String> {
 /// The owner writes in a room (page or CLI): it counts as the owner for the brake.
 async fn say(app: &Shared, id: &str, text: &str) -> Result<(), String> {
     let r = update(app, id, |r| (r.streak, r.braked) = (0, false)).and(room(id)).ok_or("no such room")?;
-    let me = sealed::identity(&app.home, &r.me)?;
-    send(&base(app), &me, &r, text, &r.readers()).await
+    send(&base(app), &sealed::identity(&app.home, &r.me)?, &r, text, &r.readers()).await
 }
 
 fn known(id: &str) -> Result<Room, (StatusCode, String)> {
@@ -549,13 +537,11 @@ async fn api_one(State(app): State<Shared>, Path(id): Path<String>) -> R {
 }
 
 async fn api_new(State(app): State<Shared>, Json(b): Json<Value>) -> R {
-    let r = create(&app, b["title"].as_str().unwrap_or("")).await.map_err(bad)?;
-    Ok(Json(view(&app, &r)))
+    Ok(Json(view(&app, &create(&app, b["title"].as_str().unwrap_or("")).await.map_err(bad)?)))
 }
 
 async fn api_join(State(app): State<Shared>, Json(b): Json<Value>) -> R {
-    let r = join(&app, b["code"].as_str().unwrap_or("")).await.map_err(bad)?;
-    Ok(Json(view(&app, &r)))
+    Ok(Json(view(&app, &join(&app, b["code"].as_str().unwrap_or("")).await.map_err(bad)?)))
 }
 
 /// Adds a one-use code, forgetting the oldest beyond eight.
@@ -564,37 +550,32 @@ fn keep(codes: &mut Vec<String>, code: &str) {
     codes.drain(..codes.len().saturating_sub(8));
 }
 
+/// Changes a room this manager made (pairing phones, inviting managers): 400 `refusal` for any other room, 404 when it is gone.
+fn as_manager<T>(app: &Shared, id: &str, refusal: &str, f: impl FnOnce(&mut Room) -> T) -> Result<T, (StatusCode, String)> {
+    match update(app, id, |r| (r.kind == "manager").then(|| f(r))) {
+        Some(Some(v)) => Ok(v),
+        Some(None) => Err(bad(refusal.into())),
+        None => Err((StatusCode::NOT_FOUND, format!("no room {id}"))),
+    }
+}
+
 async fn api_qr(State(app): State<Shared>, Path(id): Path<String>) -> R {
     let code = new_code();
-    let ok = update(&app, &id, |r| {
-        if r.kind != "manager" {
-            return false;
-        }
+    as_manager(&app, &id, "only the manager who made the room pairs phones", |r| {
         keep(&mut r.codes, &code);
-        r.invite = code.clone();
-        true
-    });
-    match ok {
-        Some(true) => Ok(Json(view(&app, &known(&id)?))),
-        Some(false) => Err(bad("only the manager who made the room pairs phones".into())),
-        None => Err(known(&id).err().unwrap_or((StatusCode::NOT_FOUND, id))),
-    }
+        r.invite = code;
+    })?;
+    Ok(Json(view(&app, &known(&id)?)))
 }
 
 async fn api_invite(State(app): State<Shared>, Path(id): Path<String>) -> R {
     let code = new_code();
-    let peer = update(&app, &id, |r| {
-        (r.kind == "manager").then(|| {
-            keep(&mut r.join_codes, &code);
-            r.peer_code = format!("{}:{}:{code}", r.id, r.me_id);
-            r.peer_code.clone()
-        })
-    });
-    match peer {
-        Some(Some(p)) => Ok(Json(json!({"peer_code": p}))),
-        Some(None) => Err(bad("only the manager who made the room invites managers".into())),
-        None => Err((StatusCode::NOT_FOUND, format!("no room {id}"))),
-    }
+    let peer = as_manager(&app, &id, "only the manager who made the room invites managers", |r| {
+        keep(&mut r.join_codes, &code);
+        r.peer_code = format!("{}:{}:{code}", r.id, r.me_id);
+        r.peer_code.clone()
+    })?;
+    Ok(Json(json!({"peer_code": peer})))
 }
 
 async fn api_leave(State(app): State<Shared>, Path(id): Path<String>) -> R {
@@ -619,8 +600,7 @@ async fn api_say(State(app): State<Shared>, Path(id): Path<String>, Json(b): Jso
 
 async fn api_svg(State(app): State<Shared>, Path(id): Path<String>, Query(q): Query<HashMap<String, String>>) -> Response {
     let Ok(r) = known(&id) else { return (StatusCode::NOT_FOUND, "no such room").into_response() };
-    let v = view(&app, &r);
-    let url = v[if q.get("kind").map(String::as_str) == Some("invite") { "invite" } else { "link" }].as_str().unwrap_or("").to_string();
+    let url = view(&app, &r)[if q.get("kind").map(String::as_str) == Some("invite") { "invite" } else { "link" }].as_str().unwrap_or("").to_string();
     if url.is_empty() {
         return (StatusCode::NOT_FOUND, "no such link").into_response();
     }
@@ -667,9 +647,7 @@ pub fn cli(pos: &[&str], flag: Flag) -> Option<Result<(), String>> {
         }),
         ["room", "link", id] => one(id).map(|v| show_link(&v, "link", "Open on my phone")),
         ["room", "qr", id] => call("POST", &format!("/api/rooms/{id}/qr"), None).and_then(parse).map(|v| show_link(&v, "invite", "Connect another phone (one use)")),
-        ["room", "invite", id] => call("POST", &format!("/api/rooms/{id}/invite"), None).and_then(parse).map(|v| {
-            println!("{}\nThe other Tirith runs: tirith room join <that code>", v["peer_code"].as_str().unwrap_or(""));
-        }),
+        ["room", "invite", id] => call("POST", &format!("/api/rooms/{id}/invite"), None).and_then(parse).map(|v| println!("{}\nThe other Tirith runs: tirith room join <that code>", v["peer_code"].as_str().unwrap_or(""))),
         ["room", "join", code] => call("POST", "/api/rooms/join", Some(json!({"code": code}))).and_then(parse).map(|v| println!("joined {}", v["id"].as_str().unwrap_or(""))),
         ["room", "leave", id] => call("POST", &format!("/api/rooms/{id}/leave"), None).map(|_| println!("left {id}")),
         ["room", "say", id, text] => call("POST", &format!("/api/rooms/{id}/say"), Some(json!({"text": text}))).map(|_| println!("ok")),

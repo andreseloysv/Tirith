@@ -8,17 +8,13 @@ use std::time::Duration;
 /// `flag("--name")`: the value after a `--name` argument.
 pub type Flag<'a> = &'a dyn Fn(&str) -> Option<String>;
 
-fn port() -> u16 {
-    crate::config::Config::load().port
-}
-
 /// One request to the daemon; the body on 2xx, the daemon's message otherwise.
 pub fn call(method: &str, path: &str, body: Option<Value>) -> Result<String, String> {
     call_with(method, path, body.map(|b| b.to_string()).unwrap_or_default(), &[], Duration::from_secs(30))
 }
 
 pub fn call_with(method: &str, path: &str, body: String, headers: &[(&str, String)], timeout: Duration) -> Result<String, String> {
-    let addr = SocketAddr::from(([127, 0, 0, 1], port()));
+    let addr = SocketAddr::from(([127, 0, 0, 1], crate::config::Config::load().port));
     let mut s = TcpStream::connect_timeout(&addr, Duration::from_secs(2)).map_err(|_| "tirith is not running: start it with `tirith serve`".to_string())?;
     s.set_read_timeout(Some(timeout)).ok();
     let extra: String = headers.iter().map(|(k, v)| format!("{k}: {v}\r\n")).collect();
@@ -29,11 +25,7 @@ pub fn call_with(method: &str, path: &str, body: String, headers: &[(&str, Strin
     let raw = String::from_utf8_lossy(&raw);
     let (head, body) = raw.split_once("\r\n\r\n").unwrap_or((&raw, ""));
     let code: u16 = head.split_whitespace().nth(1).and_then(|c| c.parse().ok()).unwrap_or(0);
-    if (200..300).contains(&code) {
-        Ok(body.to_string())
-    } else {
-        Err(body.trim().to_string())
-    }
+    (200..300).contains(&code).then(|| body.to_string()).ok_or_else(|| body.trim().to_string())
 }
 
 /// Prints a lane-shaped answer as one line, anything else as "ok".

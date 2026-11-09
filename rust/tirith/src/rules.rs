@@ -23,11 +23,7 @@ pub fn check(app: &Shared, tool: &str, input: &Value, lane: Option<&Lane>, proje
 
     let hooks_write = bash && cmd.contains(".git/hooks") && WRITES.is_match(&cmd.replace("2>/dev/null", "").replace(">/dev/null", ""));
     if (bash && GUARD.is_match(cmd)) || hooks_write || (edit && file.contains("/.git/hooks/")) {
-        return Some(
-            "Commit checks are never skipped (--no-verify, commit -n, core.hooksPath, .git/hooks). \
-                     Fix what the check reports and commit again."
-                .into(),
-        );
+        return Some("Commit checks are never skipped (--no-verify, commit -n, core.hooksPath, .git/hooks). Fix what the check reports and commit again.".into());
     }
     let mut protected: Vec<String> = cfg.agents.values().filter_map(|a| a.settings.as_deref()).map(|s| expand(s).display().to_string()).collect();
     protected.push(format!("{}/", app.home.display()));
@@ -48,20 +44,12 @@ pub fn check(app: &Shared, tool: &str, input: &Value, lane: Option<&Lane>, proje
             return Some(format!("A lane writes only inside its own copy: {}. Change the file there.", l.workspace));
         }
         if bash && MAIN.is_match(cmd) {
-            return Some(
-                "A lane never pushes or touches main. Commit on your branch and end your turn: \
-                         Tirith runs the checks and merges."
-                    .into(),
-            );
+            return Some("A lane never pushes or touches main. Commit on your branch and end your turn: Tirith runs the checks and merges.".into());
         }
         let names: Vec<String> = cfg.agents.values().filter_map(|a| std::path::Path::new(&a.command).file_name().map(|n| regex::escape(&n.to_string_lossy()))).collect();
         let spawns = !names.is_empty() && Regex::new(&format!(r"(^|[;&|(]\s*|\bexec\s+|\bnohup\s+)({})\b", names.join("|"))).map(|r| r.is_match(cmd)).unwrap_or(false);
         if tool == "Task" || tool == "Agent" || (bash && spawns) {
-            return Some(
-                "Agents start only through Tirith, so the owner sees them. If the item needs more hands, \
-                 ask the manager: tirith ask \"<question>\"."
-                    .into(),
-            );
+            return Some("Agents start only through Tirith, so the owner sees them. If the item needs more hands, ask the manager: tirith ask \"<question>\".".into());
         }
     }
     for r in manifest.map(|m| m.rules).unwrap_or_default() {
@@ -79,8 +67,7 @@ pub fn check(app: &Shared, tool: &str, input: &Value, lane: Option<&Lane>, proje
 /// A one-line summary of a tool call for the activity feed.
 pub fn summary(tool: &str, input: &Value) -> String {
     let detail = ["command", "file_path", "notebook_path", "pattern", "url", "description", "prompt"].iter().find_map(|k| input[*k].as_str()).unwrap_or("");
-    let line = detail.lines().next().unwrap_or("");
-    let short: String = line.chars().take(160).collect();
+    let short: String = detail.lines().next().unwrap_or("").chars().take(160).collect();
     if tool.is_empty() {
         short
     } else {

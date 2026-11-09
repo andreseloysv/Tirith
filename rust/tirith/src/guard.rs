@@ -92,10 +92,7 @@ pub fn git_dir(repo: &std::path::Path) -> Option<PathBuf> {
     }
     let text = std::fs::read_to_string(&dot).ok()?;
     let dir = repo.join(text.strip_prefix("gitdir:")?.trim());
-    match std::fs::read_to_string(dir.join("commondir")) {
-        Ok(c) => Some(dir.join(c.trim())),
-        Err(_) => Some(dir),
-    }
+    Some(std::fs::read_to_string(dir.join("commondir")).map_or_else(|_| dir.clone(), |c| dir.join(c.trim())))
 }
 
 fn render(hook: &str, words: &[String]) -> String {
@@ -239,11 +236,7 @@ pub fn cli(pos: &[&str], _flag: crate::client::Flag) -> Option<Result<(), String
             for p in &ps {
                 println!("{:<20} {}", p["project"].as_str().unwrap_or(""), p["reason"].as_str().unwrap_or(""));
             }
-            if ps.iter().all(|p| p["ok"] == true) {
-                Ok(())
-            } else {
-                Err("some project's guard needs attention".into())
-            }
+            ps.iter().all(|p| p["ok"] == true).then_some(()).ok_or_else(|| "some project's guard needs attention".into())
         }),
         ["guard", "install", rest @ ..] if rest.len() <= 1 => {
             let ids: Vec<String> = match rest.first() {
@@ -260,11 +253,7 @@ pub fn cli(pos: &[&str], _flag: crate::client::Flag) -> Option<Result<(), String
                     }
                 }
             }
-            if failed {
-                Err("some guards were not installed".into())
-            } else {
-                Ok(())
-            }
+            (!failed).then_some(()).ok_or_else(|| "some guards were not installed".into())
         }
         _ => return None,
     })
