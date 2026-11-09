@@ -860,7 +860,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
   - [x] Revisar: Registrar cada acceso de un agente en <home>/access/<proyecto>.ndjson: agente, punto del plan, sistema, acción y hora, desde el hook de herramientas, sin guardar valores secretos. (check: `test -f collector/tirith/access_audit.py`)
 - [x] Vista «Accesos» en la página, solo para consultar cuando haga falta: lista por agente con filtros por sistema y fecha, enlazada al agente y a su punto del plan, sin avisos ni contador en Tu turno. (check: `grep -rqi 'accesos' web/js`) <!-- tirith:{"id":"i-277688afa3b44901b3a380c5d8d575b1","depends_on":["i-12b0de4eeef3451fa471a1f0218d9c95"],"writes":[]} -->
   - [x] Revisar: Vista «Accesos» en la página, solo para consultar cuando haga falta: lista por agente con filtros por sistema y fecha, enlazada al agente y a su punto del plan, sin avisos ni contador en Tu turno. (check: `grep -rqi 'accesos' web/js`)
-- [ ] Los logs de las lanes ocultan los valores de las variables *KEY*/*TOKEN* enteros, incluido el principio (hoy lane log muestra el inicio de claves de Google) (check: `cargo test -q lane_log_redacts_key_prefixes`)
+- [x] Los logs de las lanes ocultan los valores de las variables *KEY*/*TOKEN* enteros, incluido el principio (hoy lane log muestra el inicio de claves de Google) (check: `cargo test -q lane_log_redacts_key_prefixes`)
 
 ## 22. Empresa que crece: worker, manager y CEO según el trabajo
 
