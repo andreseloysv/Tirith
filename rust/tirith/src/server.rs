@@ -56,16 +56,51 @@ pub fn router(app: Shared, port: u16) -> Router {
 }
 
 /// A browser page from another origin may not call the API (no CSRF against 127.0.0.1).
+/// It also checks Host, so a DNS-rebinding page (Host: evil.example) cannot read the API either.
 async fn same_origin(req: Request, next: Next) -> Response {
     let port = PORT.get().copied().unwrap_or(0);
-    let ok = match req.headers().get("origin").and_then(|o| o.to_str().ok()) {
-        None => true,
-        Some(o) => o == format!("http://127.0.0.1:{port}") || o == format!("http://localhost:{port}"),
+    let ok = {
+        let h = |k: &str| req.headers().get(k).map(|v| v.to_str().unwrap_or("\u{0}"));
+        origin_host_ok(h("host"), h("origin"), port)
     };
     if ok {
         next.run(req).await
     } else {
         (StatusCode::FORBIDDEN, "foreign origin").into_response()
+    }
+}
+
+fn origin_host_ok(host: Option<&str>, origin: Option<&str>, port: u16) -> bool {
+    let host_ok = match host {
+        None => true,
+        Some(h) => ["127.0.0.1", "localhost"].iter().any(|n| h.eq_ignore_ascii_case(n) || h.eq_ignore_ascii_case(&format!("{n}:{port}"))),
+    };
+    let origin_ok = match origin {
+        None => true,
+        Some(o) => o == format!("http://127.0.0.1:{port}") || o == format!("http://localhost:{port}"),
+    };
+    host_ok && origin_ok
+}
+
+#[cfg(test)]
+mod tests {
+    use super::origin_host_ok;
+
+    #[test]
+    fn same_origin_checks_host() {
+        let p = 7777;
+        // CLI, hooks and the page
+        assert!(origin_host_ok(Some("127.0.0.1"), None, p));
+        assert!(origin_host_ok(Some("127.0.0.1:7777"), None, p));
+        assert!(origin_host_ok(Some("localhost:7777"), Some("http://localhost:7777"), p));
+        assert!(origin_host_ok(Some("127.0.0.1:7777"), Some("http://127.0.0.1:7777"), p));
+        // DNS rebinding: foreign Host, even with no or a matching-looking Origin
+        assert!(!origin_host_ok(Some("evil.example:7777"), None, p));
+        assert!(!origin_host_ok(Some("evil.example"), Some("http://evil.example:7777"), p));
+        assert!(!origin_host_ok(Some("127.0.0.1.evil.example"), None, p));
+        assert!(!origin_host_ok(Some("127.0.0.1:9999"), None, p));
+        // foreign Origin with a good Host
+        assert!(!origin_host_ok(Some("127.0.0.1:7777"), Some("http://evil.example"), p));
     }
 }
 
