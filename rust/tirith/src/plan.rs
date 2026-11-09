@@ -117,7 +117,7 @@ async fn change(app: &Shared, project: &str, edit: impl FnOnce(&mut Vec<String>,
 /// Why an item's check can never pass: it calls a tirith subcommand that does not exist, or the removed `collector/`.
 pub fn check_problem(check: &str) -> Option<String> {
     static CALL: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?:^|[\s;&|(])(?:(cd\s+(?:\./)?collector(?:[/\s;&]|$))|tirith\s+([A-Za-z-][\w-]*))").unwrap());
-    const OK: [&str; 16] = ["serve", "hook", "hooks", "status", "plan", "lane", "ask", "answer", "ask-owner", "autopilot", "say", "room", "net", "models", "guard", "help"];
+    const OK: [&str; 17] = ["serve", "hook", "hooks", "status", "plan", "lane", "ask", "answer", "ask-owner", "autopilot", "say", "room", "net", "models", "guard", "project", "help"];
     CALL.captures_iter(check).find_map(|c| {
         c.get(2).map_or(Some("the check does `cd collector`, a removed folder (the daemon is Rust: use cargo test -q <name>)".to_string()), |s| {
             (!OK.contains(&s.as_str())).then(|| format!("the check calls `tirith {}`, which is not a tirith command", s.as_str()))
