@@ -264,15 +264,21 @@ impl App {
         let _ = self.db.lock().unwrap().execute("DELETE FROM events WHERE id < (SELECT COALESCE(MAX(id), 0) - 50000 FROM events)", []);
     }
 
-    /// PATH for agents and checks: this binary's folder first, so `tirith` is this daemon's client.
+    /// PATH for agents and checks: this binary's folder first, so `tirith` is this daemon's client, and `~/.cargo/bin` last when it exists.
     pub fn child_path(&self) -> String {
         let exe_dir = std::env::current_exe().ok().and_then(|e| e.parent().map(Path::to_path_buf));
-        let rest = std::env::var("PATH").unwrap_or_default();
-        match exe_dir {
-            Some(d) => format!("{}:{rest}", d.display()),
-            None => rest,
-        }
+        path_with_cargo(exe_dir.as_deref(), &std::env::var("PATH").unwrap_or_default(), &crate::config::home_dir())
     }
+}
+
+fn path_with_cargo(exe_dir: Option<&Path>, rest: &str, home: &Path) -> String {
+    let cargo = home.join(".cargo/bin");
+    let mut parts: Vec<String> = exe_dir.iter().map(|d| d.display().to_string()).collect();
+    parts.extend(rest.split(':').filter(|p| !p.is_empty()).map(String::from));
+    if cargo.is_dir() && !parts.iter().any(|p| Path::new(p) == cargo) {
+        parts.push(cargo.display().to_string());
+    }
+    parts.join(":")
 }
 
 /// `git -C dir args…`: stdout on success, the error text otherwise.
@@ -327,6 +333,18 @@ pub async fn copy_local_properties(repo: &Path, dir: &Path) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn child_path_includes_cargo_bin() {
+        let home = std::env::temp_dir().join(format!("tirith-cp-{}", std::process::id()));
+        let cargo = home.join(".cargo/bin");
+        std::fs::create_dir_all(&cargo).unwrap();
+        let p = path_with_cargo(Some(Path::new("/x")), "/usr/bin", &home);
+        assert_eq!(p, format!("/x:/usr/bin:{}", cargo.display()));
+        assert_eq!(path_with_cargo(None, &format!("/a:{}", cargo.display()), &home), format!("/a:{}", cargo.display()));
+        let _ = std::fs::remove_dir_all(&home);
+        assert_eq!(path_with_cargo(None, "/usr/bin", &home), "/usr/bin");
+    }
 
     #[tokio::test]
     async fn worktree_local_properties() {
