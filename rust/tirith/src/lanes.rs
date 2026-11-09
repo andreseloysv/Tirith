@@ -165,6 +165,24 @@ fn blocked(app: &Shared, p: &Project, lanes: &[Lane]) -> Option<String> {
     }
 }
 
+/// The command that fixes a reason `blocked` gave, for the health report.
+pub(crate) fn paused_fix(project: &str, why: &str) -> String {
+    if let (Some(a), Some(b)) = (why.find('('), why.rfind(')')) {
+        if why[a + 1..b].starts_with("tirith ") {
+            return why[a + 1..b].to_string();
+        }
+    }
+    if why.contains("merge queue") {
+        "tirith merge status".into()
+    } else if why.contains("GB free") {
+        format!("free disk space (tirith lane clean {project})")
+    } else if why.contains("core.hooksPath") || why.contains("not Tirith's") {
+        "fix the git hooks by hand, then tirith guard install ".to_string() + project
+    } else {
+        format!("tirith guard install {project}")
+    }
+}
+
 /// Role items of step 0 («Manager de guardia: …», «CEO: …») are attended by the manager or the CEO, not by a lane.
 fn is_role_item(text: &str) -> bool {
     let t = text.trim_start().to_lowercase();
@@ -248,6 +266,7 @@ pub async fn scheduler(app: Shared) {
             if let Some(w) = why.as_ref().filter(|w| said.get(&p.id) != Some(*w)) {
                 app.event("", &p.id, "paused", "", &format!("no new lane: {w}"), "");
             }
+            app.set_kv(&format!("paused:{}", p.id), why.as_deref());
             said.insert(p.id.clone(), why.clone().unwrap_or_default());
             why.is_none()
         };
