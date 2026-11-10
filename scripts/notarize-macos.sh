@@ -6,7 +6,7 @@ set -eu
 
 root=$(cd "$(dirname "$0")/.." && pwd)
 profile="${TIRITH_NOTARY_PROFILE:-tirith-notary}"
-export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/Users/andreseloyasanchezva/DEVELOP/Tirith-lanes/tauri/app/src-tauri/target}"
+export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$root/target}"
 
 [ "$(uname -s)" = Darwin ] || { echo "macOS only" >&2; exit 1; }
 

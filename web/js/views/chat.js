@@ -1,9 +1,11 @@
 // The manager chat: the old page's right column (v-manager.js + livesteps.js), same markup and classes.
-// Messages come from useStore().chat ({id, at, role, text}); a run of manager/tool messages is one turn of the
-// manager, drawn CLI-style (livesteps) with its final text as a markdown bubble. Owner messages may list
-// attached files (the daemon appends them to the text); pictures show as thumbnails.
+// It shows ONE conversation: the selected project's with its own manager, or (no project selected) the one of no
+// project, where health reports, the CEO's reviews and questions across projects live. Rows ({id, at, role, text,
+// project}) come from useTalk(project); a run of manager/tool rows is one turn of the manager, drawn CLI-style
+// (livesteps) with its final text as a markdown bubble. Owner messages may list attached files (the daemon appends
+// them to the text); pictures show as thumbnails.
 import { html, Component, useState, useEffect, useLayoutEffect, useRef, useMemo } from '../../vendor/preact-htm.js';
-import { useStore, api } from '../store.js';
+import { useStore, useTalk, api } from '../store.js';
 import { clockTime, dur, elapsed, Span } from '../common.js';
 import { md, esc, boldLead, ctxHtml } from '../md.js';
 
@@ -13,9 +15,10 @@ const DIFF_SHOWN = 20;
 const PIC_MAX = 6, FILE_BYTES = 25 * 1024 * 1024;
 const PIC_EXT = /\.(png|jpe?g|gif|webp)$/i;
 const ATTACHED = '\n\nAttached files (open them with your file-reading tool):\n';
-const PROJECT_TAG = /^\[project ([\w.-]+)\] /;
+const PROJECT_TAG = /^\[project ([\w.-]+)\] /;   /* rows from before every project had its own conversation */
 const DRAFT_KEY = 'tirith.chat.draft';
-const TRIGGER = { owner: 1, tirith: 1, room: 1, ceo: 1 };
+const MERGED = /^merged on [\w.-]+ at ([0-9a-f]{6,12}): ([\s\S]*)$/;
+const CHECKS = /\s*\(check:\s*`[^`]*`\)/gi;
 
 const SEND = html`<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M8 13V3.2M3.8 7.2L8 3l4.2 4.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const BUBBLE = html`<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3 3h10a1 1 0 011 1v6a1 1 0 01-1 1H7.5L4.6 13.6V11H3a1 1 0 01-1-1V4a1 1 0 011-1z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>`;
@@ -165,6 +168,8 @@ const Msg = pure(({ m, projects, onZoom }) => {
       <div class="mc-meta" dangerouslySetInnerHTML=${{ __html: (ctx ? ctxHtml(ctx) + ' · ' : '') + esc(time) }} /></div>`;
   }
   let text = m.text, ctx = 'Tirith', cls = 'mgr note';
+  const merged = m.role === 'tirith' && MERGED.exec(text);
+  if (merged) text = `On main (\`${merged[1]}\`): ${merged[2].replace(CHECKS, '')}`;
   if (m.role === 'room') {
     const r = /^(.+?) \((.+?)\): ([\s\S]*)$/.exec(text);
     if (r) { ctx = `${r[1]} · room ${r[2]}`; text = r[3]; } else ctx = 'Room';
@@ -214,26 +219,30 @@ function Local({ o, projects, onRetry, onCopy }) {
 /* ---------- the chat ---------- */
 let cidN = 0;
 
-export function Chat({ project }) {
+/** The conversation of `project` ('' or none: the one of no project). Mount it with key=project, so the draft, the
+    files being attached and the scroll position belong to one conversation. */
+export function Chat({ project = '' }) {
   const s = useStore();
+  const talk = useTalk(project);
+  const name = projName(s.projects, project);
+  const draftKey = project ? `${DRAFT_KEY}:${project}` : DRAFT_KEY;
   const [shown, setShown] = useState(SHOWN);
-  const [draft, setDraft] = useState(() => store(DRAFT_KEY));
+  const [draft, setDraft] = useState(() => store(draftKey));
   const [pics, setPics] = useState([]);       /* {file, name, type, size, url (pictures only)} */
   const [out, setOut] = useState([]);         /* local sends: {cid, text, body, project, pics, state, err, at, after} */
   const [err, setErr] = useState(null);
   const [drag, setDrag] = useState(false);
   const [zoom, setZoom] = useState(null);
-  const [proj, setProj] = useState(null);     /* project chip: null follows the sidebar */
   const anchor = useRef(null), log = useRef(null), ta = useRef(null), stick = useRef(true), file = useRef(null), lastSent = useRef('');
-  const cur = proj != null ? proj : (project || '');
 
-  const chat = s.chat, lastId = chat.length ? chat[chat.length - 1].id : 0;
+  const chat = talk.rows, lastId = chat.length ? chat[chat.length - 1].id : 0;
+  const busy = !!s.busy[project];
   const items = useMemo(() => group(chat.slice(-shown)), [chat.length, lastId, shown]);
   const hidden = Math.max(0, chat.length - shown);
 
   /* a local send leaves once the daemon shows an owner message after it with its text */
   useEffect(() => {
-    const seen = out.filter((o) => o.state === 'sending' && o.done && chat.some((m) => m.id > o.after && m.role === 'owner' && m.text.startsWith(o.body)));
+    const seen = out.filter((o) => o.state === 'sending' && o.done && chat.some((m) => m.id > o.after && m.role === 'owner' && m.text.startsWith(o.text)));
     if (seen.length) setOut((xs) => xs.filter((o) => !seen.includes(o)));
   }, [lastId, out]);
 
@@ -262,22 +271,22 @@ export function Chat({ project }) {
   useLayoutEffect(fit, [draft]);
   useEffect(() => { addEventListener('resize', fit); return () => removeEventListener('resize', fit); }, []);
 
-  const edit = (v) => { setDraft(v); store(DRAFT_KEY, v); };
+  const edit = (v) => { setDraft(v); store(draftKey, v); };
 
   const interrupt = () => {
-    api('POST', '/api/manager/interrupt').then(() => setErr(null), (e) => setErr(`Could not stop: ${e.message}`));
+    api('POST', '/api/manager/interrupt', { project }).then(() => setErr(null), (e) => setErr(`Could not stop: ${e.message}`));
   };
   /* Esc anywhere outside a field stops the running turn, like the CLI */
   useEffect(() => {
     const key = (e) => {
-      if (e.key !== 'Escape' || e.defaultPrevented || !s.busy || zoom) return;
+      if (e.key !== 'Escape' || e.defaultPrevented || !busy || zoom) return;
       const tag = e.target && e.target.tagName;
       if (tag === 'TEXTAREA' || tag === 'INPUT' || tag === 'SELECT') return;
       e.preventDefault(); interrupt();
     };
     addEventListener('keydown', key);
     return () => removeEventListener('keydown', key);
-  }, [s.busy, zoom]);
+  }, [busy, zoom]);
 
   /* ---------- attachments ---------- */
   const addFiles = (list) => {
@@ -336,7 +345,7 @@ export function Chat({ project }) {
       if (!r.ok) throw new Error(`${p.name}: ${t || r.statusText}`);
       p.saved = JSON.parse(t).path;
     }
-    await api('POST', '/api/chat', { text: o.body, attachments: o.pics.map((p) => p.saved) });
+    await api('POST', '/api/chat', { text: o.text, project, attachments: o.pics.map((p) => p.saved) });
   };
   const dispatch = (o) => {
     o.state = 'sending'; o.err = null; o.done = false; o.at = Date.now();
@@ -353,9 +362,8 @@ export function Chat({ project }) {
   const send = () => {
     const text = draft.trim();
     if (!text && !pics.length) return;
-    const body = (cur ? `[project ${cur}] ` : '') + text;
     lastSent.current = text;
-    dispatch({ cid: ++cidN, text, body, project: cur, pics: pics.slice() });
+    dispatch({ cid: ++cidN, text, pics: pics.slice() });
     edit(''); setPics([]); setErr(null);
   };
   const retry = (o) => {
@@ -371,7 +379,7 @@ export function Chat({ project }) {
   };
   const onKey = (e) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); }
-    else if (e.key === 'Escape' && s.busy) { e.preventDefault(); e.stopPropagation(); interrupt(); }
+    else if (e.key === 'Escape' && busy) { e.preventDefault(); e.stopPropagation(); interrupt(); }
     else if (e.key === 'ArrowUp' && !e.target.value && !pics.length && lastOwnerText()) { e.preventDefault(); edit(lastOwnerText()); }
   };
   const onPaste = (e) => {
@@ -380,7 +388,6 @@ export function Chat({ project }) {
   };
 
   /* ---------- the thread ---------- */
-  const busy = !!s.busy;
   const lastItem = items[items.length - 1];
   const runningKey = busy && lastItem && lastItem.kind === 'turn' ? lastItem.key : null;
   /* start of the running turn: the message that started it */
@@ -394,12 +401,17 @@ export function Chat({ project }) {
     ? html`<div class="livesteps run"><${Working} start=${lastItem.kind === 'msg' ? lastItem.m.at : null} onStop=${interrupt} /></div>` : null;
 
   return html`<section class=${`mchat${drag ? ' drop' : ''}`}>
-    <div class="mc-head"><h2>Manager</h2>
-      ${busy ? html`<span class="mc-presence work" role="status">Manager is working on your message…</span>
+    <div class="mc-head"><h2>Manager <span class="mc-of">${project ? name : 'all projects'}</span></h2>
+      ${busy ? html`<span class="mc-presence work" role="status">Working…</span>
         <button class="mc-stop" type="button" onClick=${interrupt} title="Stop the current turn (Esc)">Stop</button>` : null}</div>
     <div class="mc-log" id="mc-log" ref=${log} onScroll=${onScroll}>
       ${hidden ? html`<button type="button" class="mc-earlier" onClick=${() => { const el = log.current; stick.current = false; anchor.current = el.scrollHeight - el.scrollTop; setShown(shown + SHOWN); }}>Show earlier (${hidden})</button>` : null}
-      ${rows.length || out.length ? rows : html`<p class="quiet">Write to the manager here. Its answers, and what it needs from you, show in this thread.</p>`}
+      ${talk.error && !talk.loaded ? html`<div class="ierr mc-note">${/not found|not allowed/i.test(talk.error.message)
+          ? 'The running Tirith daemon is older than this page: quit Tirith, stop the daemon (pkill -f "tirith serve") and open Tirith again.'
+          : `Could not read this conversation: ${talk.error.message}`}</div>` : null}
+      ${rows.length || out.length ? rows : !talk.loaded ? null : html`<p class="quiet">${project
+        ? `Write to the manager of ${name} here. It works on this project only: its answers, its agents' questions and what lands on main show in this thread.`
+        : 'Write here about anything that is not one project\'s: this manager gets the health reports and the CEO\'s reviews. Every project has its own manager: select a project to talk to it.'}</p>`}
       ${pending}
       ${out.map((o) => html`<${Local} key=${o.cid} o=${o} projects=${s.projects} onRetry=${() => retry(o)} onCopy=${() => copy(o)} />`)}
     </div>
@@ -411,16 +423,11 @@ export function Chat({ project }) {
               <button type="button" aria-label=${`Remove ${p.name}`} title="Remove" onClick=${() => unpic(i)}>×</button></span>
               <span class="mc-thn">${p.name}</span><span class="mc-ths">${size(p.size)}</span></span>`
           : html`<${FileChip} name=${p.name} bytes=${p.size} title=${p.name} onRemove=${() => unpic(i)} />`))}</div>` : null}
-        <textarea ref=${ta} rows="1" maxlength="4000" placeholder="Message the manager…" aria-label="Message to the manager"
+        <textarea ref=${ta} rows="1" maxlength="4000" placeholder=${project ? `Message the manager of ${name}…` : 'Message the manager…'} aria-label="Message to the manager"
           value=${draft} onInput=${(e) => edit(e.target.value)} onKeyDown=${onKey} onPaste=${onPaste}></textarea>
         <div class="mc-row">
           <button class="mc-clip" type="button" aria-label="Attach files" title="Attach images or files (or paste, or drop them here)" onClick=${() => file.current.click()}>${CLIP}</button>
           <input type="file" ref=${file} multiple hidden onChange=${(e) => { addFiles(e.target.files); e.target.value = ''; }} />
-          <label class="mc-chip" title="Tell the manager which project this is about">${BUBBLE}
-            <select aria-label="Project of this message" value=${cur} onChange=${(e) => setProj(e.target.value)}>
-              <option value="" selected=${!cur}>No project</option>
-              ${s.projects.map((p) => html`<option value=${p.id} selected=${p.id === cur}>${p.name || p.id}</option>`)}
-            </select></label>
           <span class="mc-hint">Enter sends · Shift+Enter new line</span>
           <button class="mc-send" type="button" aria-label="Send" title="Send to the manager" onClick=${send}>${SEND}</button>
         </div>

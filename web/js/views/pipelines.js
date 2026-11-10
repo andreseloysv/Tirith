@@ -120,7 +120,7 @@ function Detail({ p, projName, stage, setStage }) {
     setBusy(true); setErr('');
     api('POST', `/api/pipelines/${encodeURIComponent(p.id)}/retry`).catch((x) => { setBusy(false); setErr(x.message); });
   };
-  const openLane = (id) => { setUi('openLane', id); go('agents', ''); };
+  const openLane = (id) => { setUi('openLane', id); go('agents', p.project || ''); };
   return html`<div class="stagearea">
     <div class="pinfo"><span class=${`pst s-${ps}`} title=${LABEL[p.status] || p.status}>${glyph(p.status, 12)}</span>
       <b>${kind} <span class="mut">${num}</span></b><span class="pchip">${projName}</span>
@@ -141,7 +141,7 @@ function Detail({ p, projName, stage, setStage }) {
 
 export function Pipelines({ project }) {
   const s = useStore();
-  const [list, , error] = useFetch('/api/pipelines?limit=50', ['pipeline', 'run']);
+  const [list, , error] = useFetch(`/api/pipelines?limit=50${project ? `&project=${encodeURIComponent(project)}` : ''}`, ['pipeline', 'run']);
   const [sel, setSel] = useState(() => new URLSearchParams(location.search).get('pipeline') || '');
   const [stage, setStage] = useState(() => Number(new URLSearchParams(location.search).get('stage')) || 0);
   const [caps, setCaps] = useState({});
@@ -159,7 +159,7 @@ export function Pipelines({ project }) {
     .sort((a, b) => startMs(b) - startMs(a)), [list, project, q]);
 
   if (!list) return html`<div class="pad"><p class="quiet">${error ? `Could not load the pipelines: ${error.message}` : 'Loading…'}</p></div>`;
-  if (!runs.length) return html`<div class="pad"><p class="quiet">${q || project ? 'No pipelines match' : 'No pipelines yet: they run when a lane is merged'}</p></div>`;
+  if (!runs.length) return html`<div class="pad"><p class="quiet">${q ? 'No pipelines match' : `No pipelines${project ? ' for this project' : ''} yet: they run when a lane is merged`}</p></div>`;
   const cur = runs.find((p) => p.id === sel) || runs.find((p) => sClass(p.status) === 'running') || runs[0];
   const open = (id) => { setSel(id); setStage(0); };
   return html`<div class="pv">

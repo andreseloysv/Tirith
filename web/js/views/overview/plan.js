@@ -99,12 +99,12 @@ function Step({ project, s, mode, onToggle, laneOf, q, adding, setAdding }) {
     ${shown.length || adding ? html`<ul class=${`pitems${mode === 'quiet' ? ' pquiet' : ''}`}>
       ${shown.map((i) => html`<${Item} key=${i.text} i=${i} lane=${laneOf(i)} />`)}
       ${open || adding ? html`<${AddItem} project=${project} step=${s.num} editing=${adding} setEditing=${(on) => setAdding(on ? s.num : null)} />` : null}
-    </ul>` : mode === 'all' ? html`<ul class="pitems"><li class="none">No items yet</li>
+    </ul>` : open && !s.total ? html`<ul class="pitems"><li class="none">No items yet</li>
       <${AddItem} project=${project} step=${s.num} editing=${adding} setEditing=${(on) => setAdding(on ? s.num : null)} /></ul>` : null}
   </li>`;
 }
 
-function Autopilot({ p, working, open }) {
+function Autopilot({ p, working, open, total }) {
   const [want, setWant] = useState(null);
   const [err, setErr] = useState('');
   const on = want != null && want !== !!p.autopilot ? want : !!p.autopilot;
@@ -114,7 +114,7 @@ function Autopilot({ p, working, open }) {
     setWant(next); setErr('');
     api('POST', `/api/autopilot/${encodeURIComponent(p.id)}`, { on: next }).catch((e) => { setWant(null); setErr(String(e.message || e)); });
   };
-  const bits = on ? [working ? `${working} ${working === 1 ? 'agent' : 'agents'} working` : null, open ? `${open} open` : 'all done'].filter(Boolean) : ['Paused'];
+  const bits = on ? [working ? `${working} ${working === 1 ? 'agent' : 'agents'} working` : null, open ? `${open} open` : total ? 'all done' : 'nothing planned yet'].filter(Boolean) : ['Paused'];
   return html`<div class=${`pauto${on ? ' on' : ''}`}><i class="pdot3"></i>
     <span><b>${on ? 'Autopilot on' : 'Autopilot off'}</b>${bits.map((b) => html` <span class="mut">·</span> ${b}`)}</span>
     <button class="ibtn" onClick=${flip} title=${on ? 'Stop starting lanes for open items; running lanes finish' : 'Start lanes for the open items again'}>
@@ -140,7 +140,8 @@ const PlanCard = memo(function PlanCard({ p, plan, lanes, q, multi }) {
     return { ...st, total, done, status };
   });
   const laneOf = (num) => (i) => latest[`${num}\n${i.text}`] || i.lane || null;
-  const current = (steps.find((s) => s.status !== 'done' && s.status !== 'empty') || {}).num;
+  /* the step shown unfolded: the first with open work, else (a plan nobody filled yet) the first empty one */
+  const current = (steps.find((s) => s.status !== 'done' && s.status !== 'empty') || steps.find((s) => s.status === 'empty') || {}).num;
   const total = steps.reduce((n, s) => n + s.total, 0), done = steps.reduce((n, s) => n + s.done, 0);
   const visible = q && !hit(q, p.name, p.id) ? steps.filter((s) => s.items.some((i) => hit(q, i.text, s.title))) : steps;
   if (q && !visible.length) return null;
@@ -148,7 +149,7 @@ const PlanCard = memo(function PlanCard({ p, plan, lanes, q, multi }) {
   const red = plan.main_red || p.main_red;
   const modeOf = (s) => (q ? 'all' : modes[s.num] || (s.num === current ? 'quiet' : 'closed'));
   return html`<div class="ovplan">
-    <${Autopilot} p=${p} working=${working} open=${total - done} />
+    <${Autopilot} p=${p} working=${working} open=${total - done} total=${total} />
     <div class=${`card pcard${multi ? ' compact' : ''}`}>
       <div class="phead"><b>${p.name || p.id}</b><${Bar} done=${done} total=${total} cls="ptotal" /><span class="pcnt big">${done} / ${total}</span></div>
       ${red ? html`<div class="ierr ovred" role="alert"><b>Main is red.</b> Merges wait until it is green again${typeof red === 'string' && red !== 'true' && red !== '1' ? html`: <span>${red}</span>` : '.'}</div>` : null}
@@ -160,7 +161,8 @@ const PlanCard = memo(function PlanCard({ p, plan, lanes, q, multi }) {
 
 function PlanProject({ p, lanes, q, multi }) {
   const { data } = usePlan(p.id);
-  if (!data || !(data.steps || []).length) return null;
+  if (!data) return null;
+  if (!(data.steps || []).length) return multi ? null : html`<p class="quiet">This project has no plan yet: ask its manager, in the chat, to write one.</p>`;
   const lanesSig = lanes.map((l) => `${l.id}:${l.status}`).join(',');
   const pSig = `${p.name}|${p.autopilot}|${p.main_red}`;
   return html`<${PlanCard} p=${p} plan=${data} lanes=${lanes} lanesSig=${lanesSig} pSig=${pSig} q=${q} multi=${multi} />`;
