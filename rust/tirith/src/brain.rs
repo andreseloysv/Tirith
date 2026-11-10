@@ -12,11 +12,10 @@ use rusqlite::params;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{LazyLock, Mutex, OnceLock};
 use std::time::Duration;
 
 const DEFAULT_URL: &str = "https://api.meta.ai/v1";
-const DEFAULT_MODEL: &str = "muse-spark-1.3";
 const KEY_VARS: [&str; 2] = ["META_API_KEY", "META_SI_API_KEY"];
 
 /// The jobs: name and system prompt (the input is the user message).
@@ -27,7 +26,7 @@ const JOBS: [(&str, &str); 2] = [
 
 static CALLS: AtomicU64 = AtomicU64::new(0);
 static LAST_ERROR: Mutex<Option<String>> = Mutex::new(None);
-static ARCH_TRIED: Mutex<Option<HashMap<String, u64>>> = Mutex::new(None);
+static ARCH_TRIED: LazyLock<Mutex<HashMap<String, u64>>> = LazyLock::new(Default::default);
 
 fn key() -> Option<String> {
     KEY_VARS.iter().find_map(|v| std::env::var(v).ok().filter(|k| !k.trim().is_empty()))
@@ -38,7 +37,7 @@ fn url(app: &Shared) -> String {
 }
 
 fn model(app: &Shared) -> String {
-    models::role(app, "brain").model.unwrap_or_else(|| DEFAULT_MODEL.into())
+    models::role(app, "brain").model.unwrap_or_else(|| models::BRAIN_MODEL.into())
 }
 
 fn client() -> &'static reqwest::Client {
@@ -83,7 +82,6 @@ pub fn architecture(app: &Shared, project: &str) -> Option<String> {
     let last: Option<Value> = app.kv(&format!("brain.architecture.{project}")).and_then(|s| serde_json::from_str(&s).ok());
     let due = {
         let mut tried = ARCH_TRIED.lock().unwrap();
-        let tried = tried.get_or_insert_with(HashMap::new);
         let due = now_s().saturating_sub(tried.get(project).copied().unwrap_or(0)) >= 60;
         if due {
             tried.insert(project.to_string(), now_s());
