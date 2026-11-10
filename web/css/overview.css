@@ -35,3 +35,6 @@
 /* a card's project, named only where the cards of every project are listed */
 .nchip.nproj { display: inline-flex; align-items: center; color: var(--ink2); }
 .nchip.nproj .pdot { animation: none; width: 7px; height: 7px; margin: 0 5px 0 0; }
+
+/* a step nobody filled yet offers "Add item" without waiting for the pointer */
+.pitems li.none ~ li.padd { opacity: 1; }
