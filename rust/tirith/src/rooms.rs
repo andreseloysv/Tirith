@@ -6,7 +6,7 @@
 //! agents reach the manager as information. After 30 agent messages in a row with nothing from a paired phone,
 //! Tirith stops delivering and says so once, until a phone writes.
 
-mod sealed;
+pub(crate) mod sealed;
 
 use crate::app::{bad, now_iso, Shared, R};
 use crate::client::{call, Flag};
@@ -401,11 +401,8 @@ pub fn reply(app: &Shared, rooms: &[String], text: &str) {
             let Some(r) = room(&id) else { continue };
             let turn = update(&app, &id, |r| std::mem::take(&mut r.turn)).unwrap_or_default();
             let readers: Vec<String> = r.readers().into_iter().chain(turn).collect();
-            let res = match sealed::identity(&app.home, &r.me) {
-                Ok(me) => send(&base(&app), &me, &r, &text, &readers).await,
-                Err(e) => Err(e),
-            };
-            if let Err(e) = res {
+            let res = async { send(&base(&app), &sealed::identity(&app.home, &r.me)?, &r, &text, &readers).await };
+            if let Err(e) = res.await {
                 app.event("", &r.project, "error", "rooms", &format!("{id}: {e}"), "");
             }
         }
@@ -468,7 +465,7 @@ fn view(app: &Shared, r: &Room) -> Value {
 // ---- actions (the API and the CLI) ------------------------------------------------------------------------
 
 fn new_code() -> String {
-    rand::random::<[u8; 16]>().iter().map(|b| format!("{b:02x}")).collect()
+    sealed::hex(&rand::random::<[u8; 16]>())
 }
 
 async fn create(app: &Shared, title: &str, project: &str) -> Result<Room, String> {

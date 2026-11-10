@@ -8,6 +8,7 @@ mod proxy;
 use crate::app::{now_iso, Shared};
 use crate::client::{call, Flag};
 use crate::config;
+use crate::rooms::sealed::{hex, sha_hex};
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::routing::get;
@@ -15,7 +16,6 @@ use axum::{Json, Router};
 use base64::Engine;
 use regex::Regex;
 use serde_json::{json, Value};
-use sha2::{Digest, Sha256};
 use std::io::{Read, Write};
 use std::net::IpAddr;
 use std::sync::{LazyLock, OnceLock, RwLock};
@@ -74,8 +74,7 @@ fn enabled(app: &Shared) -> Result<(), String> {
 /// before a daemon restart keep their access.
 fn token(who: &str) -> String {
     let secret = SECRET.get().map(String::as_str).unwrap_or("");
-    let digest = Sha256::digest(format!("{secret}\n{who}").as_bytes());
-    digest.iter().take(16).map(|b| format!("{b:02x}")).collect()
+    sha_hex(format!("{secret}\n{who}").as_bytes())[..32].to_string()
 }
 
 /// The lane and project an event of `who` belongs to ("merge:<lane>" is the lane's; "manager" stays itself).
@@ -274,7 +273,7 @@ pub fn start(app: Shared) {
         };
     }
     let secret = app.kv("net_secret").unwrap_or_else(|| {
-        let s: String = rand::random::<[u8; 32]>().iter().map(|b| format!("{b:02x}")).collect();
+        let s = hex(&rand::random::<[u8; 32]>());
         app.set_kv("net_secret", Some(&s));
         s
     });

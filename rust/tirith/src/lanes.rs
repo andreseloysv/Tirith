@@ -472,8 +472,6 @@ async fn ended(app: &Shared, id: &str, code: Option<i32>) {
             l.status = "failed".into();
             l.note = format!("ended without commits (exit {}): nothing to merge", code.map(|c| c.to_string()).unwrap_or("?".into()));
         });
-        app.sched_wake.notify_one();
-        return;
     } else {
         app.update_lane(id, |l| {
             l.pid = None;

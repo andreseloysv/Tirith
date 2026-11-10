@@ -98,8 +98,7 @@ fn empty_plan_note(empty: &[String]) -> String {
 }
 
 fn merged_at(l: &Lane) -> Option<i64> {
-    let v = json!(l);
-    v["merged_at"].as_str().or(l.ended_at.as_deref()).and_then(secs)
+    l.merged_at.as_deref().or(l.ended_at.as_deref()).and_then(secs)
 }
 
 fn compute(app: &Shared) -> Vec<Metric> {

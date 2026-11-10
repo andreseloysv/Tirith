@@ -42,13 +42,8 @@ pub fn parse(text: &str) -> Vec<Step> {
     let mut steps: Vec<Step> = vec![];
     for (i, line) in text.lines().enumerate() {
         if let Some(head) = line.strip_prefix("## ") {
-            if let Some((num, title)) = head.split_once(". ") {
-                if !num.is_empty() && num.chars().all(|c| c.is_ascii_digit()) {
-                    steps.push(Step { num: num.into(), title: title.trim().into(), items: vec![], line: i });
-                    continue;
-                }
-            }
-            steps.push(Step { num: String::new(), title: head.trim().into(), items: vec![], line: i });
+            let (num, title) = head.split_once(". ").filter(|(n, _)| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit())).unwrap_or(("", head));
+            steps.push(Step { num: num.into(), title: title.trim().into(), items: vec![], line: i });
         } else if let Some(step) = steps.last_mut() {
             let (done, rest) = match line.get(..6) {
                 Some("- [ ] ") => (false, &line[6..]),

@@ -265,8 +265,7 @@ pub fn routes() -> Router<Shared> {
 /// `tirith models reset <role>`; `None` when `pos` is not one of this module's commands.
 pub fn cli(pos: &[&str], flag: Flag) -> Option<Result<(), String>> {
     let show = |body: Result<String, String>| -> Result<(), String> {
-        let v: Value = serde_json::from_str(&body?).map_err(|e| e.to_string())?;
-        let s: RoleSetting = serde_json::from_value(v.clone()).map_err(|e| e.to_string())?;
+        let s: RoleSetting = serde_json::from_str(&body?).map_err(|e| e.to_string())?;
         println!("{}", line(&s));
         Ok(())
     };
@@ -292,21 +291,7 @@ pub fn cli(pos: &[&str], flag: Flag) -> Option<Result<(), String>> {
 mod tests {
     #[test]
     fn codex_lane_runs_commands() {
-        let c = crate::config::Config {
-            raw: Default::default(),
-            projects: vec![],
-            agents: Default::default(),
-            launch: vec![],
-            workers: None,
-            port: 0,
-            max_parallel: 1,
-            max_load: 1.0,
-            inactivity_min: 1,
-            push: false,
-            stage_timeout_min: 1,
-            plan_commit_s: 1,
-            autopilot: false,
-        };
+        let c = crate::config::Config::default();
         let (_, _, resume, args) = super::flags(&c, "codex");
         for a in [resume, args] {
             assert!(a.iter().any(|x| x == super::NO_SANDBOX));

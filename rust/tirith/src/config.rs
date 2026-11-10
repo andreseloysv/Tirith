@@ -60,7 +60,7 @@ pub struct Role {
     pub agent: String,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Config {
     /// The whole file, for modules that read their own sections (`[network]`, `[messenger]`, `[guard]`, ...).
     pub raw: toml::Table,
