@@ -17,7 +17,6 @@ use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::{Stream, StreamExt};
 
 static PORT: OnceLock<u16> = OnceLock::new();
-const CHAT: [&str; 5] = ["id", "at", "role", "text", "project"];
 fn s(v: &Value, k: &str) -> String {
     v[k].as_str().unwrap_or("").to_string()
 }
@@ -110,9 +109,7 @@ async fn state(State(app): State<Shared>) -> Json<Value> {
     Json(json!({
         "projects": projects::list(&app),
         "lanes": lanes,
-        "chat": app.recent("chat", &CHAT, None, 300),
         "events": app.recent("events", &["id", "at", "lane", "project", "kind", "tool", "summary"], None, 200),
-        "runs": app.recent("runs", &["id", "lane", "project", "stage", "status", "started_at", "ended_at", "log"], None, 40),
         "owner": manager::owner_open(&app),
         "busy": manager::busy(),
     }))
@@ -214,7 +211,7 @@ async fn chat(State(app): State<Shared>, Json(b): Json<Value>) -> R {
 
 /// The last rows of one conversation: `?project=<id>`, or the one of no project.
 async fn chat_rows(State(app): State<Shared>, Query(q): Query<std::collections::HashMap<String, String>>) -> Json<Value> {
-    Json(json!(app.recent("chat", &CHAT, Some(q.get("project").map_or("", String::as_str)), 300)))
+    Json(json!(app.recent("chat", &["id", "at", "role", "text", "project"], Some(q.get("project").map_or("", String::as_str)), 300)))
 }
 
 async fn manager_interrupt(Json(b): Json<Value>) -> R {
