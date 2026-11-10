@@ -3,7 +3,7 @@
 // Join with a code — and the public rooms Tirith listens to: summary, participants, the last messages with the
 // owner's mentions marked, and a box to say something. Data: GET /api/rooms, refetched on SSE "room" / "room-mention".
 import { html, useState, useMemo } from '../../vendor/preact-htm.js';
-import { useFetch, api } from '../store.js';
+import { useFetch, useStore, api } from '../store.js';
 import { agoText, CopyBtn, useAction } from './settings/ui.js';
 
 const LOCK = html`<svg class="rlock" viewBox="0 0 16 16" width="13" height="13" role="img" aria-label="Encrypted" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><title>Encrypted</title><rect x="3.2" y="7" width="9.6" height="6.4" rx="1.6"/><path d="M5.4 7V5.2a2.6 2.6 0 015.2 0V7"/></svg>`;
@@ -98,13 +98,13 @@ function PrivateCard({ r, reload }) {
   </div>`;
 }
 
-function NewRoom({ reload }) {
+function NewRoom({ reload, project, name }) {
   const [title, setTitle] = useState('');
   const [code, setCode] = useState('');
   const [busy, error, run] = useAction();
   const create = async () => {
     if (busy) return;
-    const ok = await run('new', () => api('POST', '/api/rooms', { title: title.trim().slice(0, 80) }));
+    const ok = await run('new', () => api('POST', '/api/rooms', { title: title.trim().slice(0, 80), project: project || '' }));
     if (ok) setTitle('');
     reload();
   };
@@ -115,7 +115,7 @@ function NewRoom({ reload }) {
     reload();
   };
   return html`<div class="card scard rnew">
-    <div class="phead"><b>New room</b><span class="mut sm">An encrypted room on agentsmessenger.com. Scan its QR with your phone to talk to the manager.</span></div>
+    <div class="phead"><b>New room</b><span class="mut sm">An encrypted room on agentsmessenger.com. Scan its QR with your phone to talk to ${project ? `the manager of ${name}` : 'the manager'}.</span></div>
     <div class="sfoot"><input type="text" class="rtitle" maxlength="80" placeholder="Name (optional)" aria-label="Room name" autocomplete="off"
         value=${title} onInput=${(e) => setTitle(e.target.value)} onKeyDown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); create(); } }} />
       <button class="isend" disabled=${busy === 'new'} onClick=${create}>${busy === 'new' ? 'Creating…' : 'New room'}</button></div>
@@ -163,19 +163,22 @@ function PublicCard({ r, reload }) {
   </div>`;
 }
 
+/** Inside a project: that project's rooms (a room made there talks to its manager); with none selected: all. */
 export function Rooms({ project }) {
+  const s = useStore();
   const [data, reload, err] = useFetch('/api/rooms', ['room', 'room-mention']);
   const rooms = (data && data.rooms) || [];
   const [priv, pub] = useMemo(() => {
     const byTitle = (a, b) => String(a.title || a.id).localeCompare(String(b.title || b.id));
-    return [rooms.filter((r) => r.private).sort(byTitle),
-      rooms.filter((r) => !r.private && (!project || !r.project || r.project === project)).sort(byTitle)];
+    const mine = rooms.filter((r) => !project || r.project === project).sort(byTitle);
+    return [mine.filter((r) => r.private), mine.filter((r) => !r.private)];
   }, [data, project]);
+  const name = (s.projects.find((p) => p.id === project) || {}).name || project;
   return html`<div class="msettings mrooms">
-    <${NewRoom} reload=${reload} />
+    <${NewRoom} reload=${reload} project=${project} name=${name} />
     ${err && !data ? html`<div class="ierr">Could not read the rooms: ${err.message}</div>` : null}
     ${priv.length ? priv.map((r) => html`<${PrivateCard} key=${r.id} r=${r} reload=${reload} />`)
-      : data ? html`<p class="quiet rempty">No private rooms yet. A room is an encrypted chat: create one, scan its QR with your phone and talk to the manager from there.</p>` : null}
+      : data ? html`<p class="quiet rempty">${project ? `No private rooms for ${name} yet.` : 'No private rooms yet.'} A room is an encrypted chat: create one, scan its QR with your phone and talk to the manager from there.</p>` : null}
     ${pub.length ? html`<h2 class="rsec">Public rooms <span class="n">${pub.length}</span></h2>
       ${pub.map((r) => html`<${PublicCard} key=${r.id} r=${r} reload=${reload} />`)}` : null}
   </div>`;

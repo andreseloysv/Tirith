@@ -1,12 +1,15 @@
 // The page's data: loaded once from /api/state, then kept current by the daemon's change stream (SSE).
 // Components read it with useStore(); views that need other endpoints use useFetch(path, types), which
 // refetches when the stream reports a change of one of those types. Repaints are batched per animation frame.
+// Every project has its own conversation with its own manager ('' is the conversation of no project): `talks`
+// holds the ones the page has opened (useTalk), `busy` the ones whose manager works on a turn.
 import { useState, useEffect, useRef } from '../vendor/preact-htm.js';
 
 export const S = {
-  projects: [], lanes: {}, chat: [], events: [], owner: [], busy: false, load: null,
-  connected: false, loaded: false, updated: 0,
+  projects: [], lanes: {}, talks: {}, events: [], owner: [], busy: {}, load: null,
+  connected: false, loaded: false, updated: 0, boots: 0,
 };
+const TALK_ROWS = 600;
 
 const subs = new Set();
 const listeners = new Set();
@@ -73,13 +76,35 @@ export function useFetch(path, types = [], deps = []) {
   return [state.data, load, state.error];
 }
 
+/** One conversation: `{rows, loaded, error}`, read from the daemon when first asked for and after every
+    reconnect, then kept current by the stream (rows that arrive while it loads are kept). */
+export function useTalk(project) {
+  const s = useStore();
+  useEffect(() => {
+    const t = S.talks[project] || (S.talks[project] = { rows: [], loaded: false, error: null });
+    api('GET', `/api/chat?project=${encodeURIComponent(project)}`).then((rows) => {
+      if (!Array.isArray(rows)) throw new Error('not found');
+      const have = new Set(rows.map((r) => r.id));
+      t.rows = rows.concat(t.rows.filter((r) => !have.has(r.id))).sort((a, b) => a.id - b.id);
+      t.loaded = true; t.error = null;
+      changed();
+    }).catch((error) => { t.error = error; changed(); });
+  }, [project, s.boots]);
+  return S.talks[project] || { rows: [], loaded: false, error: null };
+}
+
 function apply(m) {
   const d = m.d;
   switch (m.t) {
     case 'lane': S.lanes[d.id] = d; break;
     case 'event': S.events.push(d); if (S.events.length > 400) S.events.splice(0, S.events.length - 400); break;
-    case 'chat': S.chat.push(d); if (S.chat.length > 600) S.chat.splice(0, S.chat.length - 600); break;
-    case 'busy': S.busy = !!d; break;
+    case 'chat': {
+      const t = S.talks[d.project || '']; // a conversation the page never opened is read when it is opened
+      if (!t || t.rows.some((r) => r.id === d.id)) break;
+      t.rows = t.rows.concat(d).slice(-TALK_ROWS);
+      break;
+    }
+    case 'busy': if (d && d.on) S.busy[d.project || ''] = true; else if (d) delete S.busy[d.project || '']; break;
     case 'load': S.load = d; break;
     case 'owner':
       S.owner = S.owner.filter((o) => o.id !== d.id);
@@ -101,11 +126,11 @@ async function boot() {
     const s = await api('GET', '/api/state');
     S.projects = s.projects || [];
     S.lanes = Object.fromEntries((s.lanes || []).map((l) => [l.id, l]));
-    S.chat = s.chat || [];
     S.events = s.events || [];
     S.owner = s.owner || [];
-    S.busy = !!s.busy;
+    S.busy = Object.fromEntries((Array.isArray(s.busy) ? s.busy : []).map((p) => [p, true]));
     S.loaded = true;
+    S.boots += 1;
   } catch {
     setTimeout(boot, 2000);
     return;

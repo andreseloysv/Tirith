@@ -112,7 +112,7 @@ function LanePipelines({ id }) {
   if (!list) return html`<p class="quiet sm">Loading…</p>`;
   const mine = list.filter((p) => laneIds(p).includes(id)).sort((x, y) => startMs(y) - startMs(x));
   if (!mine.length) return html`<p class="quiet sm">No pipeline ran for this lane yet</p>`;
-  const open = (p) => { setUi('openPipeline', p.id); go('pipelines', ''); };
+  const open = (p) => { setUi('openPipeline', p.id); go('pipelines', p.project || ''); };
   return html`<ul class="lpipes">${mine.map((p) => {
     const [kind, num] = pipeName(p);
     return html`<li key=${p.id}><button class="lprow" onClick=${() => open(p)}>
@@ -234,7 +234,7 @@ export function Agents({ project }) {
   const more = old.length ? html`<button class="link" onClick=${() => setEarlier(!earlier)}>${earlier ? 'Hide earlier' : `Show ${old.length} earlier`}</button>` : null;
 
   if (!all.length) {
-    return [tb, html`<div class="pad"><p class="quiet">${q || project ? 'No lanes match' : 'No agents yet: lanes appear here when the plan or the manager starts them'}</p></div>`];
+    return [tb, html`<div class="pad"><p class="quiet">${q ? 'No lanes match' : `No agents${project ? ' in this project' : ''} yet: lanes appear here when the plan or the manager starts them`}</p></div>`];
   }
   if (mode === 'list') {
     const rank = (a) => (a.status === 'running' ? 0 : a.status === 'waiting' ? 1 : ['queued', 'merge-queued', 'merging'].includes(a.status) ? 2 : 3);
