@@ -1,5 +1,7 @@
-// Overview: the old page's .ovg grid. Main column, in the old order: status (metrics and the CEO's last review),
-// plan, needs you, setup (routed project), running pipelines, working agents; the manager chat on the right.
+// Overview: the old page's .ovg grid. With no project selected the main column shows everything: status (metrics
+// and the CEO's last review), every plan, what needs you, running pipelines, working agents. Inside a project it
+// shows that project only: its plan, its cards, and its setup, pipelines and agents when there is something to see;
+// the health of the whole and the CEO stay out. The chat on the right is the selected project's conversation.
 import { html, useState } from '../../vendor/preact-htm.js';
 import { useStore, useFetch, api } from '../store.js';
 import { ICON, Icon, Span, ACTIVE, ago, clockTime, laneLabel, laneClass, go } from '../common.js';
@@ -19,7 +21,7 @@ function Ceo({ reviews, reviewing }) {
   const [open, setOpen] = useState(false);
   const [err, setErr] = useState('');
   const [asked, setAsked] = useState(false);
-  const last = reviews[0];
+  const last = reviews[reviews.length - 1];
   const busy = reviewing || asked;
   const now = () => {
     setErr(''); setAsked(true);
@@ -53,7 +55,7 @@ const Status = memo(function Status({ data, working }) {
 /* ---------- needs you ---------- */
 const KIND = { credentials: 'Credentials', payment: 'Payment', account: 'Account', device: 'Device', decision: 'Decision' };
 
-function Need({ o }) {
+function Need({ o, p }) {
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -65,7 +67,8 @@ function Need({ o }) {
     setBusy(false);
   };
   return html`<li class="ncard">
-    <div class="nhead"><div class="ntitle">${o.question}</div><span class="nchip">${KIND[o.kind] || o.kind}</span><span class="nage">${ago(o.at)}</span></div>
+    <div class="nhead"><div class="ntitle">${o.question}</div>${p ? html`<span class="nchip nproj"><i class="pdot" style=${`background:${p.color || '#9ca3af'}`}></i>${p.name || p.id}</span>` : null}
+      <span class="nchip">${KIND[o.kind] || o.kind}</span><span class="nage">${ago(o.at)}</span></div>
     ${o.kind === 'decision' ? null : html`<div class="nacts"><button class="nbtn primary" disabled=${busy} onClick=${() => send('Done')}>Done</button></div>`}
     <div class="nwrite"><input class="iin" type="text" placeholder=${o.kind === 'decision' ? 'Your answer…' : 'Or write what you need…'} aria-label="Answer"
       value=${draft} disabled=${busy} onInput=${(e) => setDraft(e.target.value)} onKeyDown=${(e) => { if (e.key === 'Enter') send(draft); }} />
@@ -74,20 +77,22 @@ function Need({ o }) {
   </li>`;
 }
 
-function Needs({ owner, q }) {
-  const list = owner.filter((o) => hit(q, o.question, o.kind));
+/** The open cards: inside a project its own, and those about the machine itself (a full disk stops every project's
+    agents); with none selected all of them, each named by its project. */
+function Needs({ owner, project, projects, q }) {
+  const list = owner.filter((o) => (!project || o.project === project || (!o.project && o.kind === 'device')) && hit(q, o.question, o.kind));
   if (!list.length) return null;
   return html`<section class="needs-sec"><h2>Needs you <span class="icount">${list.length}</span></h2>
-    <ul class="nlist">${list.map((o) => html`<${Need} key=${o.id} o=${o} />`)}</ul></section>`;
+    <ul class="nlist">${list.map((o) => html`<${Need} key=${o.id} o=${o} p=${project ? null : projects.find((x) => x.id === o.project)} />`)}</ul></section>`;
 }
 
-/* ---------- setup (commit guard) of the routed project ---------- */
+/* ---------- setup (commit guard) of the routed project: drawn only when it needs attention ---------- */
 function Setup({ project, name }) {
   const [guard, reload] = useFetch('/api/guard', []);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const g = (guard || []).find((x) => x.project === project);
-  if (!g) return null;
+  if (!g || !g.words || g.ok) return null;
   const none = !g.words, on = g.ok && !none;
   const install = async () => {
     setBusy(true); setErr('');
@@ -129,8 +134,9 @@ function PipeRow({ p, color, name }) {
 }
 
 function Pipelines({ project, projects, q }) {
-  const [list] = useFetch('/api/pipelines?limit=30', ['pipeline', 'run']);
+  const [list] = useFetch(`/api/pipelines?limit=30${project ? `&project=${encodeURIComponent(project)}` : ''}`, ['pipeline', 'run']);
   const run = (list || []).filter((p) => p && (p.status === 'running' || p.status === 'pending') && (!project || p.project === project) && hit(q, p.kind, p.project, p.lanes, p.id));
+  if (project && !run.length) return null;
   const pr = (id) => projects.find((x) => x.id === id) || {};
   return html`<section><h2>Pipelines running <span class="n">${run.length}</span></h2>
     ${run.length ? html`<div class="ptable">${run.map((p) => html`<${PipeRow} key=${p.id} p=${p} color=${pr(p.project).color || '#9aa1ac'} name=${project ? '' : pr(p.project).name || p.project} />`)}</div>`
@@ -159,6 +165,7 @@ function Agents({ lanes, events, projects, project, q }) {
   const last = {};
   for (let i = events.length - 1; i >= 0; i--) { const e = events[i]; if (e.lane && !last[e.lane] && e.summary) last[e.lane] = e.summary; }
   const pname = (id) => (project ? '' : (projects.find((x) => x.id === id) || {}).name || id);
+  if (project && !act.length) return null;
   return html`<section><h2>Working agents <span class="n">${act.length}</span></h2>
     ${act.length ? html`<div class="grid2">${act.map((l) => html`<${AgentCard} key=${l.id} l=${l} now=${last[l.id] || l.question || l.note} pname=${pname(l.project)} />`)}</div>`
       : html`<p class="quiet">No agents working</p>`}</section>`;
@@ -166,19 +173,19 @@ function Agents({ lanes, events, projects, project, q }) {
 
 export function Overview({ project }) {
   const s = useStore();
-  const [metrics] = useFetch('/api/metrics', ['metrics', 'ceo']);
+  const [metrics] = useFetch(project ? '' : '/api/metrics', ['metrics', 'ceo']);
   const q = String(s.q || '').trim().toLowerCase();
   const lanes = Object.values(s.lanes);
   const projects = project ? s.projects.filter((p) => p.id === project) : s.projects;
   const working = lanes.filter((l) => ACTIVE.includes(l.status) && (!project || l.project === project)).length;
   const p = s.projects.find((x) => x.id === project);
   return html`<div class="ovg"><div class="ovmain">
-      <${Status} data=${metrics} working=${working} />
+      ${project ? null : html`<${Status} data=${metrics} working=${working} />`}
       <${Plan} projects=${projects} lanes=${lanes} q=${q} />
-      <${Needs} owner=${s.owner} q=${q} />
+      <${Needs} owner=${s.owner} project=${project} projects=${s.projects} q=${q} />
       ${p ? html`<${Setup} project=${p.id} name=${p.name} />` : null}
       <${Pipelines} project=${project} projects=${s.projects} q=${q} />
       <${Agents} lanes=${lanes} events=${s.events} projects=${s.projects} project=${project} q=${q} />
     </div>
-    <aside class="ovside"><${Chat} project=${project} /></aside></div>`;
+    <aside class="ovside"><${Chat} key=${project || ''} project=${project || ''} /></aside></div>`;
 }

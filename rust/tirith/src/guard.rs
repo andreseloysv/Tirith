@@ -127,9 +127,6 @@ pub fn intact(app: &Shared, project: &Project) -> Result<(), String> {
             return Err(format!("commit guard: the {hook} hook is outdated or has other words than config.toml {fix}"));
         }
     }
-    if std::fs::read_to_string(git.join("hooks/pre-push")).is_ok_and(|t| t.contains(MARKER)) {
-        return Err(format!("commit guard: an old pre-push hook of the Python era is still installed {fix}"));
-    }
     if let Some(f) = hooks_path_set(&git) {
         return Err(format!("commit guard: core.hooksPath in {} makes git skip the guard", f.display()));
     }
@@ -150,8 +147,7 @@ fn immutable(path: &std::path::Path, on: bool) {
 #[cfg(not(target_os = "macos"))]
 fn immutable(_path: &std::path::Path, _on: bool) {}
 
-/// Writes both hooks (mode 755) where they are missing or ours (an older guard is replaced, its pre-push
-/// removed); never over a hook that is not ours.
+/// Writes both hooks (mode 755) where they are missing or ours (an older guard is replaced); never over a hook that is not ours.
 pub fn install(app: &Shared, project: &Project) -> Result<(), String> {
     let words = words(app, project);
     if words.is_empty() {
@@ -171,11 +167,6 @@ pub fn install(app: &Shared, project: &Project) -> Result<(), String> {
             immutable(&path, false);
             std::fs::rename(&path, &local).map_err(|e| format!("{}: {e}", path.display()))?;
         }
-    }
-    let old_push = dir.join("pre-push");
-    if ours(&old_push) {
-        immutable(&old_push, false);
-        std::fs::remove_file(&old_push).map_err(|e| format!("{}: {e}", old_push.display()))?;
     }
     for hook in HOOKS {
         let path = dir.join(hook);

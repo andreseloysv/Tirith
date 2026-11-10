@@ -1,5 +1,6 @@
 // Settings view (the old v-models.js, v-theme.js and the setup cards): Appearance (System / Light / Dark), the
-// models of each role, the commit guard and the autopilot of each project, and the brain's status.
+// models of each role, the commit guard and the autopilot of each project, and the brain's status. Inside a project
+// its own two cards (autopilot, commit guard) come first; the rest is the same for every project, and says so.
 import { html, useState } from '../../vendor/preact-htm.js';
 import { useStore, useFetch, api } from '../store.js';
 import { RoleCard, ROLES } from './settings/models.js';
@@ -68,13 +69,14 @@ function BrainCard() {
 
 export function Settings({ project }) {
   const [M, reload, err] = useFetch('/api/models', ['models']);
+  const own = html`<${AutopilotCard} project=${project} /><${GuardCard} project=${project} />`;
   return html`<section class="msettings">
+    ${project ? html`${own}<h2 class="rsec">For all projects</h2>` : null}
     <${Appearance} />
     <p class="mut sm mlead">Model and effort come from <code>config.toml</code> under <code>[models]</code>; what you save here overrides it until you go back to config.toml.</p>
     ${err && !M ? html`<div class="ierr">Could not read the models: ${err.message}</div>` : null}
     ${M ? ROLES.map(([id, label, note]) => html`<${RoleCard} key=${id} id=${id} label=${label} note=${note} M=${M} reload=${reload} />`) : null}
-    <${GuardCard} project=${project} />
-    <${AutopilotCard} project=${project} />
+    ${project ? null : own}
     <${BrainCard} />
   </section>`;
 }

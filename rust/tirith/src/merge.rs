@@ -1,9 +1,9 @@
 //! The merge queue. Up to five lanes of one project ride one train: in the project's merge slot
-//! (`<repo>-lanes/merge`) their branches are merged with main, the project's checks and the items' own checks
+//! (`<tirith home>/lanes/<project>/merge`) their branches are merged with main, the project's checks and the items' own checks
 //! run, and only a green train moves main (fast-forward), with the plan ticks in the same commits. A red train is
 //! split into single lanes; a red single lane is first compared with main, so a broken main never blames a lane.
 
-use crate::app::{add_worktree, git, kill_group, now_iso, tail, Lane, Shared};
+use crate::app::{add_worktree, git, kill_group, now_iso, now_s, tail, Lane, Shared};
 use crate::config::{Manifest, Project, Stage};
 use crate::{lanes, manager, plan, sandbox};
 use regex::Regex;
@@ -61,8 +61,7 @@ async fn next_batch(app: &Shared) -> Vec<Lane> {
     red.dedup();
     for p in red {
         let Some(why) = app.kv(&format!("main_red:{p}")) else { continue };
-        let repo = app.cfg().project(&p).map(|p| p.repo());
-        let head = match repo {
+        let head = match app.cfg().project(&p).map(|p| p.repo()) {
             Some(r) => git(&r, &["rev-parse", "HEAD"]).await.unwrap_or_default(),
             None => String::new(),
         };
@@ -146,31 +145,28 @@ fn pipeline(app: &Shared, id: &str) -> Value {
     row
 }
 
-/// The newest pipelines, newest first.
-pub fn list(app: &Shared, limit: u32) -> Vec<Value> {
+/// The newest pipelines (of one project, or of all with ""), newest first.
+pub fn list(app: &Shared, project: &str, limit: u32) -> Vec<Value> {
     let ids: Vec<String> = {
         let db = app.db.lock().unwrap();
-        db.prepare(&format!("SELECT id FROM pipelines ORDER BY rowid DESC LIMIT {limit}")).and_then(|mut q| q.query_map([], |r| r.get(0)).map(|rows| rows.flatten().collect())).unwrap_or_default()
+        let sql = format!("SELECT id FROM pipelines WHERE ?1 = '' OR project = ?1 ORDER BY rowid DESC LIMIT {limit}");
+        db.prepare(&sql).and_then(|mut q| q.query_map([project], |r| r.get(0)).map(|rows| rows.flatten().collect())).unwrap_or_default()
     };
     ids.iter().map(|id| pipeline(app, id)).collect()
 }
 
 const MANAGER_LIMIT_SECS: u64 = 24 * 3600;
 
-fn now_secs() -> u64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
-}
-
 /// A limit the manager sets for one stage of one project: it lasts until changed or 24 h, whatever happens to its lane.
 pub fn set_stage_limit(app: &Shared, project: &str, stage: &str, minutes: u64) {
-    app.set_kv(&format!("stage_limit:{project}:{stage}"), Some(&format!("{minutes}@{}", now_secs())));
+    app.set_kv(&format!("stage_limit:{project}:{stage}"), Some(&format!("{minutes}@{}", now_s())));
 }
 
 /// The limit in minutes for a stage: the manager's (within 24 h), else the one learned from past timeouts, else the default. Each project and stage has its own.
 fn limit_from(get: impl Fn(&str) -> Option<String>, project: &str, stage: &str, default: u64) -> u64 {
     let set = get(&format!("stage_limit:{project}:{stage}")).and_then(|v| {
         let (m, at) = v.split_once('@')?;
-        (now_secs().saturating_sub(at.parse().ok()?) < MANAGER_LIMIT_SECS).then(|| m.parse().ok()).flatten()
+        (now_s().saturating_sub(at.parse().ok()?) < MANAGER_LIMIT_SECS).then(|| m.parse().ok()).flatten()
     });
     set.or_else(|| get(&format!("stage_learned:{project}:{stage}")).and_then(|v| v.parse().ok())).unwrap_or(default)
 }
@@ -286,13 +282,13 @@ async fn train(app: &Shared, batch: Vec<Lane>) {
                     x.note = "the merge worktree could not be made: no space left on device".into();
                 });
             }
-            return manager::notify(app, &format!("the merge of {pid} waits for disk: {e}"));
+            return manager::notify(app, &pid, &format!("the merge of {pid} waits for disk: {e}"));
         }
         Err(e) => {
             for l in &batch {
                 app.update_lane(&l.id, |x| x.status = "failed".into());
             }
-            return manager::notify(app, &format!("the merge slot of {pid} is broken: {e}"));
+            return manager::notify(app, &pid, &format!("the merge slot of {pid} is broken: {e}"));
         }
     };
     let ids: Vec<&str> = batch.iter().map(|l| l.id.as_str()).collect();
@@ -346,7 +342,11 @@ async fn train(app: &Shared, batch: Vec<Lane>) {
                     app.emit("plan", json!({"project": pid}));
                     requeue(app, &[lane], true, "main is red: waits for a green main");
                     if was.is_none() {
-                        manager::notify(app, &format!("main of {pid} is red: check '{name}' fails on main itself ({}). The autopilot pauses {pid} until main is green; fix main or retry the main pipeline.", &base[..8.min(base.len())]));
+                        manager::notify(
+                            app,
+                            &pid,
+                            &format!("main of {pid} is red: check '{name}' fails on main itself ({}). The autopilot pauses {pid} until main is green; fix main or retry the main pipeline.", &base[..8.min(base.len())]),
+                        );
                     }
                     return;
                 }
@@ -419,7 +419,11 @@ async fn land(app: &Shared, project: &Project, pipe: &Pipe, slot: &Path, base: &
     for id in working {
         lanes::tell(&id, &format!("[tirith] main advanced: {} (files: {})", items.join("; "), files.join(", ")));
     }
-    manager::notify(app, &format!("merged on {} at {sha8}: {}", project.id, items.join("; ")));
+    // A merge is news, not a question: the manager gets a turn for it only when it leaves the plan without open work.
+    manager::inform(app, &project.id, &format!("merged on {} at {sha8}: {}", project.id, items.join("; ")));
+    if plan::read(app, &project.id).is_ok_and(|steps| !steps.iter().flat_map(|s| &s.items).any(|i| !i.done && !lanes::is_autopilot_skipped(&i.text))) {
+        manager::tell(app, &project.id, "The plan has no open item left: tell the owner what is done, and ask for the next goal if the project needs one.");
+    }
     app.emit("plan", json!({"project": project.id}));
     app.sched_wake.notify_one();
 }
@@ -445,7 +449,7 @@ fn clear_red(app: &Shared, project: &str) {
     if app.kv(&key).is_some() {
         app.set_kv(&key, None);
         app.emit("plan", json!({"project": project}));
-        manager::notify(app, &format!("main of {project} is green again: the autopilot continues"));
+        manager::inform(app, project, &format!("main of {project} is green again: the autopilot continues"));
         app.sched_wake.notify_one();
         app.merge_wake.notify_one();
     }
@@ -492,8 +496,8 @@ mod tests {
     fn stage_timeouts_per_project() {
         let mut kv = std::collections::HashMap::new();
         kv.insert("stage_learned:zoo:build".to_string(), "60".to_string());
-        kv.insert("stage_limit:tirith:test".to_string(), format!("99@{}", now_secs()));
-        kv.insert("stage_limit:tirith:old".to_string(), format!("99@{}", now_secs() - MANAGER_LIMIT_SECS - 1));
+        kv.insert("stage_limit:tirith:test".to_string(), format!("99@{}", now_s()));
+        kv.insert("stage_limit:tirith:old".to_string(), format!("99@{}", now_s() - MANAGER_LIMIT_SECS - 1));
         let get = |k: &str| kv.get(k).cloned();
         assert_eq!(limit_from(get, "zoo", "build", 30), 60);
         assert_eq!(limit_from(get, "tirith", "build", 30), 30);

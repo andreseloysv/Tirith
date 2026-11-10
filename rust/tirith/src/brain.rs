@@ -4,12 +4,12 @@
 
 use crate::app::{git, now_s, Shared};
 use crate::models;
+use crate::rooms::sealed::sha_hex;
 use axum::extract::State;
 use axum::routing::get;
 use axum::{Json, Router};
 use rusqlite::params;
 use serde_json::{json, Value};
-use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
@@ -46,16 +46,12 @@ fn client() -> &'static reqwest::Client {
     C.get_or_init(|| reqwest::Client::builder().timeout(Duration::from_secs(30)).build().unwrap_or_default())
 }
 
-fn cache_key(job: &str, input: &str) -> String {
-    Sha256::digest(format!("{job}\n{input}").as_bytes()).iter().map(|b| format!("{b:02x}")).collect()
-}
-
 /// One job ("room-summary", "architecture") on `input`: the model's answer,
 /// cached by the hash of (job, input). `None` without an API key or when the call fails.
 pub async fn ask(app: &Shared, job: &str, input: &str) -> Option<String> {
     let prompt = JOBS.iter().find(|(j, _)| *j == job)?.1;
     let key = key()?;
-    let hash = cache_key(job, input);
+    let hash = sha_hex(format!("{job}\n{input}").as_bytes());
     if let Ok(cached) = app.db.lock().unwrap().query_row("SELECT answer FROM brain_cache WHERE key = ?1", [&hash], |r| r.get::<_, String>(0)) {
         return Some(cached);
     }

@@ -1,4 +1,5 @@
 // The shell: sidebar (views, projects and the "+" that adds one), header (crumb, search, health) and the current view.
+// A project selected in the sidebar scopes every view to it (#/<view>/<project>); with none, the views show all.
 // Same markup and classes as the old page, so css/style.css draws it the same way.
 import { html, render, useState, useEffect } from '../vendor/preact-htm.js';
 import { useStore, useFetch, setUi } from './store.js';
@@ -75,7 +76,7 @@ function Top({ r }) {
       <input id="f-q" type="search" placeholder="Search" aria-label="Search" autocomplete="off" value=${s.q || ''}
         onInput=${(e) => setUi('q', e.target.value)} /><kbd>⌘K</kbd></label>
     <button id="health-btn" class=${`health-btn ${red.length ? 'red' : 'green'}`} type="button"
-      title=${red.length ? red.map((m) => m.label).join(', ') : 'Healthy'} onClick=${() => go('overview', r.project)}><i class="dot"></i></button>
+      title=${`All projects: ${red.length ? red.map((m) => m.label).join(', ') : 'healthy'}`} onClick=${() => go('overview', '')}><i class="dot"></i></button>
   </header>`;
 }
 
@@ -83,6 +84,7 @@ function App() {
   const r = useRoute();
   const s = useStore();
   const [adding, setAdding] = useState(false);
+  useEffect(() => { setUi('q', ''); }, [r.project]); /* a search belongs to the project it was typed in */
   const View = (VIEWS.find((v) => v[0] === r.view) || VIEWS[0])[2];
   return html`<div id="shell">
     <${Nav} r=${r} onAdd=${() => setAdding(true)} />

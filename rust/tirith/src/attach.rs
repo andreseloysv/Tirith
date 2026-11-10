@@ -61,12 +61,10 @@ async fn upload(State(app): State<Shared>, Query(q): Query<HashMap<String, Strin
 }
 
 async fn fetch(State(app): State<Shared>, Path((id, name)): Path<(String, String)>) -> Response {
-    if id.is_empty() || !id.chars().all(|c| c.is_ascii_hexdigit()) || sanitize(&name) != name {
-        return (StatusCode::NOT_FOUND, "no such attachment").into_response();
-    }
-    match tokio::fs::read(app.home.join("attachments").join(&id).join(&name)).await {
-        Ok(bytes) => ([("content-type", content_type(&name)), ("x-content-type-options", "nosniff"), ("content-security-policy", "sandbox")], bytes).into_response(),
-        Err(_) => (StatusCode::NOT_FOUND, "no such attachment").into_response(),
+    let valid = !id.is_empty() && id.chars().all(|c| c.is_ascii_hexdigit()) && sanitize(&name) == name;
+    match if valid { tokio::fs::read(app.home.join("attachments").join(&id).join(&name)).await.ok() } else { None } {
+        Some(bytes) => ([("content-type", content_type(&name)), ("x-content-type-options", "nosniff"), ("content-security-policy", "sandbox")], bytes).into_response(),
+        None => (StatusCode::NOT_FOUND, "no such attachment").into_response(),
     }
 }
 

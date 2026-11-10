@@ -39,8 +39,8 @@ end with code, and puts a model in the loop only where judgment is needed.
 - **Autopilot.** Code starts the open items of a project's current step (the first step with open work; steps
   run in order, the items of a step in parallel), as far as the machine has room: `[lanes] max_parallel`, the load
   per core, the merge backlog, free disk and an intact commit guard. Failed or stopped items wait for the manager.
-- **Lanes.** One agent, one item, one branch, in a reusable worktree (`<repo>-lanes/slot-N`) whose build caches
-  stay warm. A lane cannot end its turn with a question; it asks the manager with `tirith ask` and is resumed with
+- **Lanes.** One agent, one item, one branch, in a reusable worktree whose build caches stay warm. The worktrees
+  live in Tirith's own folder (`~/.tirith/lanes/<project>/slot-N`), not next to your repositories. A lane cannot end its turn with a question; it asks the manager with `tirith ask` and is resumed with
   the answer. Messages reach running lanes through their hooks ("main advanced: …").
 - **Done means checked.** A lane that ends goes to the merge queue: merged with main (several lanes in one
   train), the project's checks and each item's check run, and only a green result moves main, with the plan item
@@ -53,9 +53,13 @@ end with code, and puts a model in the loop only where judgment is needed.
   sandbox that allows the network only through the daemon's own proxy, which records every destination by
   domain and refuses the ones you block (`tirith net block …`). Swift, Xcode, Gradle, npm, cargo and git work
   inside it. Tool calls that touch credentials, push or read secret variables are audited.
-- **The manager.** One long-lived session you chat with on the page (files and images can be attached). The
-  autopilot starts the work; the manager answers lanes, keeps the plan good and asks you only for credentials,
-  payments, personal accounts, physical devices or real decisions (`tirith ask-owner --kind …`).
+- **A manager per project.** Every project has its own conversation with its own manager session (files and
+  images can be attached): select the project and the chat, the cards that need you, the plan, the pipelines, the
+  agents, the rooms and the access list show that project only (what belongs to the machine, such as the block list
+  and the models, says so). With no project selected you see all of them, and talk to the manager of what belongs
+  to no single project (health, the CEO's reviews). The autopilot starts the work; a manager answers its project's lanes, keeps
+  its plan good and asks you only for credentials, payments, personal accounts, physical devices or real decisions
+  (`tirith ask-owner --kind …`). A merge shows in the project's chat without costing a manager turn.
 - **Health and the CEO.** Metrics by code (items merged per day, time to merge, first-try rate, idle projects,
   stuck lanes, red main). A red metric goes to the manager; still red 15 minutes later, an independent one-shot
   review (the CEO) says what is wrong and what to do. No model runs while everything is green.
@@ -82,15 +86,15 @@ One resident process, `tirith serve`, holds the state in memory and in one SQLit
 ## Commands
 
 ```
-tirith serve | status
+tirith serve | status [--project P]
 tirith plan show <project> | plan add <project> <step> "<text>"
 tirith lane start <project> <step> "<item>" [--agent <alias>] | lane stop <lane> | lane log <lane>
 tirith autopilot on|off <project>
 tirith project add <folder> [--name N] [--color #rrggbb]   add a folder as a project (the + next to Projects does the same)
-tirith say "<text>"                          write to the manager
+tirith say [--project P] "<text>"            write to a project's manager (without one: the manager of no project)
 tirith ask "<question>"                      (a lane) ask the manager, then end the turn
 tirith answer <lane> "<answer>"              (the manager)
-tirith ask-owner --kind credentials|payment|account|device|decision "<question>"   (the manager)
+tirith ask-owner [--project P] --kind credentials|payment|account|device|decision "<question>"   (a manager)
 tirith room new [--title T] | link <room> | qr <room> | invite <room> | join <peer code> | leave <room> | list | tail <room> | say <room> "<text>"
 tirith net status | list | block <domain|ip|cidr> | unblock <rule>
 tirith models | models set <role> [--agent A] [--model M] [--effort E] [--fallback "a:m,b"] | models reset <role>
