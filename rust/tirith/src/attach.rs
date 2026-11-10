@@ -40,8 +40,7 @@ fn content_type(name: &str) -> &'static str {
         "svg" => "image/svg+xml",
         "pdf" => "application/pdf",
         "json" => "application/json",
-        "txt" | "md" | "log" | "csv" | "rs" | "py" | "js" | "ts" | "toml" | "yaml" | "yml" | "sh" => "text/plain; charset=utf-8",
-        "html" | "htm" => "text/plain; charset=utf-8", // never rendered as a page on this origin
+        "txt" | "md" | "log" | "csv" | "rs" | "py" | "js" | "ts" | "toml" | "yaml" | "yml" | "sh" | "html" | "htm" => "text/plain; charset=utf-8", // html too: never rendered as a page on this origin
         _ => "application/octet-stream",
     }
 }
