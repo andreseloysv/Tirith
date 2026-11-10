@@ -190,7 +190,7 @@ async fn api(base: &str, path: &str, body: Option<&Value>, secs: u64) -> Result<
     if (200..300).contains(&status) {
         Ok(v)
     } else {
-        Err((status, v["error"].as_str().map(String::from).unwrap_or(format!("HTTP {status}"))))
+        Err((status, v["error"].as_str().map_or(format!("HTTP {status}"), |m| if status >= 500 { format!("HTTP {status}: {m}") } else { m.into() })))
     }
 }
 
