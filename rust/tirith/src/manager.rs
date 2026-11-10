@@ -349,17 +349,18 @@ async fn session(app: &Shared, project: &str) -> Result<(), String> {
             _ => {}
         }
     }
-    writer.abort();
-    kill_group(pid, libc::SIGTERM);
-    let _ = tokio::time::timeout(Duration::from_secs(10), child.wait()).await;
-    // What a dead turn left is never sent to a room with a later answer; what rooms wrote for it is handed over again, once.
+    // What a dead turn left is never sent to a room with a later answer; what rooms wrote for it is handed over again,
+    // once, and before the wait below, so a line that arrives during it (and waits in `pending`) is not handed twice.
     let died = talk(project, |t| {
         t.reply_to.clear();
-        ready && t.busy && t.tx.take().is_some()
+        t.tx.take().is_some() && ready && t.busy
     });
     if died {
         rooms::again(app, Some(project));
     }
+    writer.abort();
+    kill_group(pid, libc::SIGTERM);
+    let _ = tokio::time::timeout(Duration::from_secs(10), child.wait()).await;
     if ready || rest {
         return Ok(());
     }
