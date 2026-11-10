@@ -81,7 +81,7 @@ function Popover({ r, ask, close, act }) {
     <div class="apb"><button class="abtn" disabled=${busy === key} onClick=${async () => { await run(key, () => api('POST', `/api/rooms/${enc(r.id)}/leave`)); close(); }}>${busy === key ? 'Leaving…' : 'Leave'}</button>${closeBtn}</div></div>`;
 }
 
-function PrivateCard({ r, reload }) {
+function PrivateCard({ r, reload, title }) {
   const [ask, setAsk] = useState('');
   const [busy, error, run0] = useAction();
   const [last, setLast] = useState('');
@@ -90,7 +90,7 @@ function PrivateCard({ r, reload }) {
   const manager = r.kind === 'manager';
   const toggle = (k) => setAsk(ask === k ? '' : k);
   return html`<div class="card scard rcard" data-room=${r.id}>
-    <div class="phead">${LOCK}<b>${r.title || r.id}</b><${Status} r=${r} />
+    <div class="phead">${LOCK}<b>${title}</b><${Status} r=${r} />
       ${r.kind === 'peer' ? html`<span class="chip">peer</span>` : null}
       ${r.me && r.me.name ? html`<span class="mut sm rme" title="Your key id here">you: ${r.me.name} <code>${short(r.me.key_id)}</code></span>` : null}</div>
     ${r.error ? html`<div class="ierr rerr">${r.error}</div>` : null}
@@ -181,10 +181,12 @@ export function Rooms({ project }) {
     return [mine.filter((r) => r.private), mine.filter((r) => !r.private)];
   }, [data, project]);
   const name = (s.projects.find((p) => p.id === project) || {}).name || project;
+  /* a room without a name of its own goes by its project's, as it does on the phone */
+  const titleOf = (r) => r.title || (s.projects.find((p) => p.id === r.project) || {}).name || r.id;
   return html`<div class="msettings mrooms">
     <${NewRoom} reload=${reload} project=${project} name=${name} />
     ${err && !data ? html`<div class="ierr">Could not read the rooms: ${err.message}</div>` : null}
-    ${priv.length ? priv.map((r) => html`<${PrivateCard} key=${r.id} r=${r} reload=${reload} />`)
+    ${priv.length ? priv.map((r) => html`<${PrivateCard} key=${r.id} r=${r} reload=${reload} title=${titleOf(r)} />`)
       : data ? html`<p class="quiet rempty">${project ? `No private rooms for ${name} yet.` : 'No private rooms yet.'} A room is an encrypted chat: create one, scan its QR with your phone, and every project opens on it.</p>` : null}
     ${pub.length ? html`<h2 class="rsec">Public rooms <span class="n">${pub.length}</span></h2>
       ${pub.map((r) => html`<${PublicCard} key=${r.id} r=${r} reload=${reload} />`)}` : null}
