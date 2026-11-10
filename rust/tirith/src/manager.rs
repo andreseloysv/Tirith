@@ -66,8 +66,17 @@ fn set_busy(app: &Shared, project: &str, t: &mut Talk, on: bool) {
     app.emit("busy", json!({"project": project, "on": on}));
 }
 
+/// The conversation of `project`: its own, or the one of no project when there is no such project (any more).
+fn here<'a>(app: &Shared, project: &'a str) -> &'a str {
+    if app.cfg().project(project).is_some() {
+        project
+    } else {
+        ""
+    }
+}
+
 fn known(app: &Shared, project: &str) -> Result<(), String> {
-    (project.is_empty() || app.cfg().project(project).is_some()).then_some(()).ok_or(format!("unknown project '{project}'"))
+    (here(app, project) == project).then_some(()).ok_or(format!("unknown project '{project}'"))
 }
 
 fn user_line(text: &str) -> String {
@@ -76,7 +85,6 @@ fn user_line(text: &str) -> String {
 
 /// Hands the conversation its waiting reports and `text` as one message; its session starts when none runs.
 fn deliver(app: &Shared, project: &str, text: &str) {
-    let project = if known(app, project).is_ok() { project } else { "" }; // a project that is gone: the one of no project
     let start = talk(project, |t| {
         let mut all: Vec<String> = std::mem::take(&mut t.notes).into_iter().map(|n| format!("[tirith] {n}")).collect();
         all.extend((!text.is_empty()).then(|| text.to_string()));
@@ -99,6 +107,7 @@ fn deliver(app: &Shared, project: &str, text: &str) {
 /// A message from a room (a paired phone or another agent): shown in the chat of the room's project, handed to
 /// that project's manager, and the manager's answer to this turn goes back to that room.
 pub fn from_room(app: &Shared, project: &str, room: &str, author: &str, text: &str) {
+    let project = here(app, project);
     app.chat("room", &format!("{author} ({room}): {text}"), project);
     talk(project, |t| t.reply_to.insert(room.to_string()));
     deliver(app, project, &format!("[room {room}] {author}: {text}"));
@@ -142,7 +151,7 @@ pub fn notify(app: &Shared, project: &str, text: &str) {
 /// with its next message instead of costing a turn of its own.
 pub fn inform(app: &Shared, project: &str, text: &str) {
     app.chat("tirith", text, project);
-    talk(project, |t| {
+    talk(here(app, project), |t| {
         t.notes.push(text.to_string());
         t.notes.drain(..t.notes.len().saturating_sub(30));
     });
@@ -150,6 +159,7 @@ pub fn inform(app: &Shared, project: &str, text: &str) {
 
 /// Hands a report to the manager (gathered with the others of the next 2 s) without a chat line of its own.
 pub fn tell(app: &Shared, project: &str, text: &str) {
+    let project = here(app, project);
     let first = talk(project, |t| {
         t.notes.push(text.to_string());
         !std::mem::replace(&mut t.due, true)

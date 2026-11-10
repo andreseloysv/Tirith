@@ -110,7 +110,7 @@ function NewRoom({ reload, project, name }) {
   };
   const join = async () => {
     if (busy || !code.trim()) return;
-    const ok = await run('join', () => api('POST', '/api/rooms/join', { code: code.trim() }));
+    const ok = await run('join', () => api('POST', '/api/rooms/join', { code: code.trim(), project: project || '' }));
     if (ok) setCode('');
     reload();
   };

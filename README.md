@@ -54,9 +54,10 @@ end with code, and puts a model in the loop only where judgment is needed.
   domain and refuses the ones you block (`tirith net block …`). Swift, Xcode, Gradle, npm, cargo and git work
   inside it. Tool calls that touch credentials, push or read secret variables are audited.
 - **A manager per project.** Every project has its own conversation with its own manager session (files and
-  images can be attached): select the project and the chat, the cards that need you and every view show that
-  project only. With no project selected you see all of them, and talk to the manager of what belongs to no single
-  project (health, the CEO's reviews). The autopilot starts the work; a manager answers its project's lanes, keeps
+  images can be attached): select the project and the chat, the cards that need you, the plan, the pipelines, the
+  agents, the rooms and the access list show that project only (what belongs to the machine, such as the block list
+  and the models, says so). With no project selected you see all of them, and talk to the manager of what belongs
+  to no single project (health, the CEO's reviews). The autopilot starts the work; a manager answers its project's lanes, keeps
   its plan good and asks you only for credentials, payments, personal accounts, physical devices or real decisions
   (`tirith ask-owner --kind …`). A merge shows in the project's chat without costing a manager turn.
 - **Health and the CEO.** Metrics by code (items merged per day, time to merge, first-try rate, idle projects,

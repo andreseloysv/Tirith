@@ -77,9 +77,10 @@ function Need({ o, p }) {
   </li>`;
 }
 
-/** The open cards: inside a project only its own; with none selected all of them, each named by its project. */
+/** The open cards: inside a project its own, and those about the machine itself (a full disk stops every project's
+    agents); with none selected all of them, each named by its project. */
 function Needs({ owner, project, projects, q }) {
-  const list = owner.filter((o) => (!project || o.project === project) && hit(q, o.question, o.kind));
+  const list = owner.filter((o) => (!project || o.project === project || (!o.project && o.kind === 'device')) && hit(q, o.question, o.kind));
   if (!list.length) return null;
   return html`<section class="needs-sec"><h2>Needs you <span class="icount">${list.length}</span></h2>
     <ul class="nlist">${list.map((o) => html`<${Need} key=${o.id} o=${o} p=${project ? null : projects.find((x) => x.id === o.project)} />`)}</ul></section>`;
