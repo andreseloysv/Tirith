@@ -17,7 +17,7 @@ use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::{Stream, StreamExt};
 
 static PORT: OnceLock<u16> = OnceLock::new();
-fn s(v: &Value, k: &str) -> String {
+pub fn s(v: &Value, k: &str) -> String {
     v[k].as_str().unwrap_or("").to_string()
 }
 
@@ -71,14 +71,8 @@ async fn same_origin(req: Request, next: Next) -> Response {
 }
 
 fn origin_host_ok(host: Option<&str>, origin: Option<&str>, port: u16) -> bool {
-    let host_ok = match host {
-        None => true,
-        Some(h) => ["127.0.0.1", "localhost"].iter().any(|n| h.eq_ignore_ascii_case(n) || h.eq_ignore_ascii_case(&format!("{n}:{port}"))),
-    };
-    let origin_ok = match origin {
-        None => true,
-        Some(o) => o == format!("http://127.0.0.1:{port}") || o == format!("http://localhost:{port}"),
-    };
+    let host_ok = host.is_none_or(|h| ["127.0.0.1", "localhost"].iter().any(|n| h.eq_ignore_ascii_case(n) || h.eq_ignore_ascii_case(&format!("{n}:{port}"))));
+    let origin_ok = origin.is_none_or(|o| o == format!("http://127.0.0.1:{port}") || o == format!("http://localhost:{port}"));
     host_ok && origin_ok
 }
 
@@ -128,19 +122,16 @@ async fn plan_show(State(app): State<Shared>, Path(project): Path<String>) -> R 
         json!({"text": it.text, "done": it.done, "check": it.check, "lane": lane.map(|l| json!({"id": l.id, "status": l.status}))})
     };
     let steps: Vec<Value> = steps.iter().map(|st| json!({"num": st.num, "title": st.title, "items": st.items.iter().map(|it| item(&st.num, it)).collect::<Vec<_>>()})).collect();
-    let red = app.kv(&format!("main_red:{project}"));
-    Ok(Json(json!({"project": project, "steps": steps, "autopilot": lanes::autopilot_on(&app, &project), "main_red": red})))
+    Ok(Json(json!({"project": project, "steps": steps, "autopilot": lanes::autopilot_on(&app, &project), "main_red": app.kv(&format!("main_red:{project}"))})))
 }
 
 async fn plan_add(State(app): State<Shared>, Path(project): Path<String>, Json(b): Json<Value>) -> R {
-    plan::add(&app, &project, &s(&b, "step"), &s(&b, "text")).await.map_err(bad)?;
-    Ok(Json(json!({"ok": true})))
+    plan::add(&app, &project, &s(&b, "step"), &s(&b, "text")).await.map(|_| Json(json!({"ok": true}))).map_err(bad)
 }
 
 async fn lane_start(State(app): State<Shared>, Json(b): Json<Value>) -> R {
     let agent = b["agent"].as_str().filter(|a| !a.is_empty()).map(String::from);
-    let lane = lanes::start(&app, &s(&b, "project"), &s(&b, "step"), &s(&b, "item"), agent).map_err(bad)?;
-    Ok(Json(json!(lane)))
+    Ok(Json(json!(lanes::start(&app, &s(&b, "project"), &s(&b, "step"), &s(&b, "item"), agent).map_err(bad)?)))
 }
 
 async fn lane_stop(State(app): State<Shared>, Path(id): Path<String>) -> R {
@@ -183,8 +174,7 @@ async fn pipelines(State(app): State<Shared>, Query(q): Query<std::collections::
 }
 
 async fn pipeline_retry(State(app): State<Shared>, Path(id): Path<String>) -> R {
-    merge::retry(&app, &id).map_err(bad)?;
-    Ok(Json(json!({"ok": true})))
+    merge::retry(&app, &id).map(|_| Json(json!({"ok": true}))).map_err(bad)
 }
 
 /// The manager sets a stage's time limit in minutes; it lasts until changed or 24 h.
@@ -205,8 +195,7 @@ async fn chat(State(app): State<Shared>, Json(b): Json<Value>) -> R {
     if text.trim().is_empty() {
         return Err(bad("empty message".into()));
     }
-    manager::say(&app, &s(&b, "project"), &text).map_err(bad)?;
-    Ok(Json(json!({"ok": true})))
+    manager::say(&app, &s(&b, "project"), &text).map(|_| Json(json!({"ok": true}))).map_err(bad)
 }
 
 /// The last rows of one conversation: `?project=<id>`, or the one of no project.
@@ -215,8 +204,7 @@ async fn chat_rows(State(app): State<Shared>, Query(q): Query<std::collections::
 }
 
 async fn manager_interrupt(Json(b): Json<Value>) -> R {
-    manager::interrupt(&s(&b, "project")).map_err(bad)?;
-    Ok(Json(json!({"ok": true})))
+    manager::interrupt(&s(&b, "project")).map(|_| Json(json!({"ok": true}))).map_err(bad)
 }
 
 /// One agent hook call: record it, refuse a tool call that breaks a rule, hand a lane its live messages, and

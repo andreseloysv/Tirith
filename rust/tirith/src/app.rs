@@ -116,14 +116,8 @@ impl App {
         for (table, col) in [("runs", "pipeline TEXT"), ("runs", "sha TEXT"), ("chat", "project TEXT NOT NULL DEFAULT ''"), ("owner_items", "project TEXT NOT NULL DEFAULT ''")] {
             let _ = db.execute(&format!("ALTER TABLE {table} ADD COLUMN {col}"), []);
         }
-        let mut lanes = BTreeMap::new();
-        {
-            let mut q = db.prepare("SELECT data FROM lanes").expect("read lanes");
-            let rows = q.query_map([], |r| r.get::<_, String>(0)).expect("read lanes");
-            for lane in rows.flatten().filter_map(|s| serde_json::from_str::<Lane>(&s).ok()) {
-                lanes.insert(lane.id.clone(), lane);
-            }
-        }
+        let lanes: BTreeMap<String, Lane> =
+            db.prepare("SELECT data FROM lanes").expect("read lanes").query_map([], |r| r.get::<_, String>(0)).expect("read lanes").flatten().filter_map(|s| serde_json::from_str::<Lane>(&s).ok()).map(|l| (l.id.clone(), l)).collect();
         let cfg_mtime = mtime(&home.join("config.toml"));
         Arc::new(App {
             home,
@@ -161,10 +155,8 @@ impl App {
     pub fn manifest(&self, repo: &Path) -> Manifest {
         let stamp = mtime(&repo.join("tirith.toml"));
         let mut cache = self.manifests.lock().unwrap();
-        if let Some((m, man)) = cache.get(repo) {
-            if *m == stamp {
-                return man.clone();
-            }
+        if let Some((_, man)) = cache.get(repo).filter(|(m, _)| *m == stamp) {
+            return man.clone();
         }
         let man = Manifest::load(repo);
         cache.insert(repo.to_path_buf(), (stamp, man.clone()));
@@ -200,13 +192,16 @@ impl App {
         self.lanes.lock().unwrap().values().find(|l| matches!(l.status.as_str(), "running" | "waiting") && !l.workspace.is_empty() && cwd.starts_with(&l.workspace)).cloned()
     }
 
+    /// Runs an INSERT and returns the id of the new row.
+    pub fn insert(&self, sql: &str, values: &[&dyn rusqlite::ToSql]) -> i64 {
+        let db = self.db.lock().unwrap();
+        let _ = db.execute(sql, values);
+        db.last_insert_rowid()
+    }
+
     pub fn event(&self, lane: &str, project: &str, kind: &str, tool: &str, summary: &str, session: &str) {
         let at = now_iso();
-        let id = {
-            let db = self.db.lock().unwrap();
-            let _ = db.execute("INSERT INTO events (at, lane, project, kind, tool, summary, session) VALUES (?1,?2,?3,?4,?5,?6,?7)", params![at, lane, project, kind, tool, summary, session]);
-            db.last_insert_rowid()
-        };
+        let id = self.insert("INSERT INTO events (at, lane, project, kind, tool, summary, session) VALUES (?1,?2,?3,?4,?5,?6,?7)", params![at, lane, project, kind, tool, summary, session]);
         self.emit("event", json!({"id": id, "at": at, "lane": lane, "project": project, "kind": kind, "tool": tool, "summary": summary}));
     }
 
@@ -214,11 +209,7 @@ impl App {
     pub fn chat(&self, role: &str, text: &str, project: &str) {
         let project = if self.cfg().project(project).is_some() { project } else { "" }; // a project that is gone
         let at = now_iso();
-        let id = {
-            let db = self.db.lock().unwrap();
-            let _ = db.execute("INSERT INTO chat (at, role, text, project) VALUES (?1,?2,?3,?4)", params![at, role, text, project]);
-            db.last_insert_rowid()
-        };
+        let id = self.insert("INSERT INTO chat (at, role, text, project) VALUES (?1,?2,?3,?4)", params![at, role, text, project]);
         self.emit("chat", json!({"id": id, "at": at, "role": role, "text": text, "project": project}));
     }
 
@@ -295,9 +286,7 @@ pub async fn git(dir: &Path, args: &[&str]) -> Result<String, String> {
 
 /// A worktree at `base` (a new branch when `branch` is given), without the manifest's `lane_exclude` paths.
 pub async fn add_worktree(repo: &Path, dir: &Path, branch: Option<&str>, exclude: &[String]) -> Result<(), String> {
-    if let Some(parent) = dir.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
+    let _ = dir.parent().map(std::fs::create_dir_all);
     let d = dir.to_string_lossy().to_string();
     let mut args = vec!["worktree", "add"];
     if !exclude.is_empty() {
@@ -314,21 +303,14 @@ pub async fn add_worktree(repo: &Path, dir: &Path, branch: Option<&str>, exclude
         git(dir, &sparse.iter().map(String::as_str).collect::<Vec<_>>()).await?;
         git(dir, &["checkout", "-q"]).await?;
     }
-    copy_local_properties(repo, dir).await;
-    Ok(())
-}
-
-/// Copy the git-ignored `local.properties` files (Android `sdk.dir`) from the main checkout into a new worktree.
-pub async fn copy_local_properties(repo: &Path, dir: &Path) {
+    // Copy the git-ignored `local.properties` files (Android `sdk.dir`) from the main checkout into the new worktree.
     let args = ["ls-files", "--others", "--ignored", "--exclude-standard", "-z", "--", ":(glob)**/local.properties"];
-    let Ok(list) = git(repo, &args).await else { return };
-    for rel in list.split('\0').filter(|r| !r.is_empty()) {
+    for rel in git(repo, &args).await.unwrap_or_default().split('\0').filter(|r| !r.is_empty()) {
         let to = dir.join(rel);
-        if let Some(parent) = to.parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
+        let _ = to.parent().map(std::fs::create_dir_all);
         let _ = std::fs::copy(repo.join(rel), to);
     }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -412,13 +394,11 @@ pub fn alive(pid: u32) -> bool {
 /// not even its first characters.
 pub fn redact_secrets(text: &str) -> String {
     use regex::Regex;
-    use std::sync::OnceLock;
-    static NAMED: OnceLock<Regex> = OnceLock::new();
-    static BARE: OnceLock<Regex> = OnceLock::new();
-    let named = NAMED.get_or_init(|| Regex::new(r#"(?i)(\b[A-Za-z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD)[A-Za-z0-9_]*\\?["']?\s*[=:]\s*\\?["']?)([^\s"'\\,;}&]+)"#).unwrap());
-    let bare = BARE.get_or_init(|| Regex::new(r"\bAIza[0-9A-Za-z_\-]{10,}|\bsk-[0-9A-Za-z_\-]{10,}|\bgh[pousr]_[0-9A-Za-z]{10,}|\bxox[abpr]-[0-9A-Za-z\-]{10,}|\bAKIA[0-9A-Z]{12,}").unwrap());
-    let step = named.replace_all(text, "${1}[redacted]");
-    bare.replace_all(&step, "[redacted]").into_owned()
+    use std::sync::LazyLock;
+    static NAMED: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"(?i)(\b[A-Za-z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD)[A-Za-z0-9_]*\\?["']?\s*[=:]\s*\\?["']?)([^\s"'\\,;}&]+)"#).unwrap());
+    static BARE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\bAIza[0-9A-Za-z_\-]{10,}|\bsk-[0-9A-Za-z_\-]{10,}|\bgh[pousr]_[0-9A-Za-z]{10,}|\bxox[abpr]-[0-9A-Za-z\-]{10,}|\bAKIA[0-9A-Z]{12,}").unwrap());
+    let step = NAMED.replace_all(text, "${1}[redacted]");
+    BARE.replace_all(&step, "[redacted]").into_owned()
 }
 
 /// The last `lines` lines of a file.

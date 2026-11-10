@@ -5,12 +5,11 @@
 
 mod proxy;
 
-use crate::app::{now_iso, Shared};
+use crate::app::{bad, now_iso, Shared, R};
 use crate::client::{call, Flag};
 use crate::config;
 use crate::rooms::sealed::{hex, sha_hex};
 use axum::extract::State;
-use axum::http::StatusCode;
 use axum::routing::get;
 use axum::{Json, Router};
 use base64::Engine;
@@ -268,8 +267,7 @@ pub fn start(app: Shared) {
         let db = app.db.lock().unwrap();
         let _ = db.execute("CREATE TABLE IF NOT EXISTS net_blocks (rule TEXT PRIMARY KEY, at TEXT)", []);
         if let Ok(mut q) = db.prepare("SELECT rule FROM net_blocks ORDER BY at") {
-            let rules: Vec<String> = q.query_map([], |r| r.get(0)).map(|r| r.flatten().collect()).unwrap_or_default();
-            *BLOCKS.write().unwrap() = rules;
+            *BLOCKS.write().unwrap() = q.query_map([], |r| r.get(0)).map(|r| r.flatten().collect()).unwrap_or_default();
         };
     }
     let secret = app.kv("net_secret").unwrap_or_else(|| {
@@ -304,9 +302,8 @@ fn block(app: &Shared, rule: &str, on: bool) -> Result<String, String> {
 }
 
 pub fn routes() -> Router<Shared> {
-    type R = Result<Json<Value>, (StatusCode, String)>;
     async fn change(app: Shared, b: Value, on: bool) -> R {
-        let rule = block(&app, b["rule"].as_str().unwrap_or(""), on).map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+        let rule = block(&app, b["rule"].as_str().unwrap_or(""), on).map_err(bad)?;
         Ok(Json(json!({"rule": rule, "blocks": *BLOCKS.read().unwrap()})))
     }
     Router::new()

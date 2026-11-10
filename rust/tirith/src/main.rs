@@ -100,12 +100,11 @@ fn main() {
 fn status(project: &str) -> Result<(), String> {
     let s: Value = serde_json::from_str(&call("GET", "/api/state", None)?).map_err(|e| e.to_string())?;
     let lanes: Vec<Value> = s["lanes"].as_array().into_iter().flatten().filter(|l| project.is_empty() || l["project"] == project).cloned().collect();
-    let mut shown = 0;
-    for l in lanes.iter().filter(|l| matches!(l["status"].as_str(), Some("queued" | "running" | "waiting" | "merge-queued" | "merging"))) {
+    let working: Vec<&Value> = lanes.iter().filter(|l| matches!(l["status"].as_str(), Some("queued" | "running" | "waiting" | "merge-queued" | "merging"))).collect();
+    for l in &working {
         println!("{:<14} {:<40} {}:{} {}", l["status"].as_str().unwrap_or(""), l["id"].as_str().unwrap_or(""), l["project"].as_str().unwrap_or(""), l["step"].as_str().unwrap_or(""), l["item"].as_str().unwrap_or(""));
-        shown += 1;
     }
-    if shown == 0 {
+    if working.is_empty() {
         println!("no lane is working");
     }
     let mut ended: Vec<&Value> = lanes.iter().filter(|l| l["ended_at"].is_string() && !matches!(l["status"].as_str(), Some("merge-queued" | "merging"))).collect();

@@ -54,12 +54,6 @@ pub struct Agent {
     pub args: Option<Vec<String>>,
 }
 
-/// `[models.workers]` as far as the core needs it (the models module reads the rest of `[models.*]`).
-#[derive(Deserialize, Clone, Default)]
-pub struct Role {
-    pub agent: String,
-}
-
 #[derive(Clone, Default)]
 pub struct Config {
     /// The whole file, for modules that read their own sections (`[network]`, `[messenger]`, `[guard]`, ...).
@@ -67,7 +61,8 @@ pub struct Config {
     pub projects: Vec<Project>,
     pub agents: BTreeMap<String, Agent>,
     pub launch: Vec<String>,
-    pub workers: Option<Role>,
+    /// `[models.workers] agent`; the models module reads the rest of `[models.*]`.
+    pub workers_agent: Option<String>,
     pub port: u16,
     pub max_parallel: usize,
     pub max_load: f64,
@@ -80,24 +75,19 @@ pub struct Config {
 }
 
 pub fn get<T: DeserializeOwned>(t: &toml::Table, path: &[&str]) -> Option<T> {
-    let mut v = t.get(path[0])?;
-    for key in &path[1..] {
-        v = v.get(key)?;
-    }
-    v.clone().try_into().ok()
+    path[1..].iter().try_fold(t.get(path[0])?, |v, key| v.get(key))?.clone().try_into().ok()
 }
 
 impl Config {
     pub fn load() -> Config {
         let t: toml::Table = std::fs::read_to_string(tirith_home().join("config.toml")).ok().and_then(|s| s.parse().ok()).unwrap_or_default();
-        let port = std::env::var("TIRITH_PORT").ok().and_then(|p| p.parse().ok());
         Config {
             raw: t.clone(),
             projects: get(&t, &["projects"]).unwrap_or_default(),
             agents: get(&t, &["agents"]).unwrap_or_default(),
             launch: get(&t, &["launch", "command"]).unwrap_or_default(),
-            workers: get(&t, &["models", "workers"]),
-            port: port.or_else(|| get(&t, &["server", "port"])).unwrap_or(7717),
+            workers_agent: get(&t, &["models", "workers", "agent"]),
+            port: std::env::var("TIRITH_PORT").ok().and_then(|p| p.parse().ok()).or_else(|| get(&t, &["server", "port"])).unwrap_or(7717),
             max_parallel: get(&t, &["lanes", "max_parallel"]).or_else(|| get(&t, &["autopilot", "max_parallel"])).unwrap_or(3),
             max_load: get(&t, &["lanes", "max_load"]).unwrap_or(2.0),
             inactivity_min: get(&t, &["lanes", "inactivity_minutes"]).unwrap_or(20),
@@ -155,11 +145,10 @@ pub struct Manifest {
 impl Manifest {
     pub fn load(repo: &Path) -> Manifest {
         let t: toml::Table = std::fs::read_to_string(repo.join("tirith.toml")).ok().and_then(|s| s.parse().ok()).unwrap_or_default();
-        let pipelines: Vec<Pipeline> = get(&t, &["pipelines"]).unwrap_or_default();
         Manifest {
             roadmap: get(&t, &["roadmap"]).unwrap_or_else(|| "docs/TODO.md".into()),
             lane_exclude: get(&t, &["lane_exclude"]).unwrap_or_default(),
-            stages: pipelines.into_iter().flat_map(|p| p.stages).collect(),
+            stages: get::<Vec<Pipeline>>(&t, &["pipelines"]).unwrap_or_default().into_iter().flat_map(|p| p.stages).collect(),
             rules: get(&t, &["rules"]).unwrap_or_default(),
         }
     }
