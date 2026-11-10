@@ -124,35 +124,21 @@ fn compute(app: &Shared) -> Vec<Metric> {
     let mut out = vec![];
 
     let target = t("merged_per_day", 10.0);
-    out.push(Metric {
-        id: "merged",
-        label: "En main (24 h)",
-        value: merged.len() as f64,
-        target: Some(target),
-        at_least: true,
-        red: work && (merged.len() as f64) < target,
-        facts: format!(
-            "merged in 24 h: [{}]; open items in autopilot projects: [{open_txt}]; {}{}{}",
-            ids(&merged),
-            if empty.is_empty() { "no empty plans: lanes that do not reach main are the problem" } else { "no startable work in the plan (not a lane failure) for:" },
-            empty_plan_note(&empty),
-            open.iter().map(|(p, _)| paused_note(app, p)).collect::<String>()
-        ),
-    });
+    let facts = format!(
+        "merged in 24 h: [{}]; open items in autopilot projects: [{open_txt}]; {}{}{}",
+        ids(&merged),
+        if empty.is_empty() { "no empty plans: lanes that do not reach main are the problem" } else { "no startable work in the plan (not a lane failure) for:" },
+        empty_plan_note(&empty),
+        open.iter().map(|(p, _)| paused_note(app, p)).collect::<String>()
+    );
+    out.push(Metric { id: "merged", label: "En main (24 h)", value: merged.len() as f64, target: Some(target), at_least: true, red: work && (merged.len() as f64) < target, facts });
 
     let mut mins: Vec<(f64, &str)> = merged.iter().filter_map(|l| Some(((merged_at(l)? - secs(&l.created_at)?) as f64 / 60.0, l.id.as_str()))).collect();
     mins.sort_by(|a, b| a.0.total_cmp(&b.0));
     let median = if mins.is_empty() { 0.0 } else { (mins[(mins.len() - 1) / 2].0 + mins[mins.len() / 2].0) / 2.0 };
     let target = t("median_merge_minutes", 120.0);
-    out.push(Metric {
-        id: "median",
-        label: "Mediana lanzar→main (min)",
-        value: median.round(),
-        target: Some(target),
-        at_least: false,
-        red: !mins.is_empty() && median > target,
-        facts: mins.iter().rev().take(8).map(|(m, id)| format!("{id} {m:.0} min")).collect::<Vec<_>>().join(", "),
-    });
+    let facts = mins.iter().rev().take(8).map(|(m, id)| format!("{id} {m:.0} min")).collect::<Vec<_>>().join(", ");
+    out.push(Metric { id: "median", label: "Mediana lanzar→main (min)", value: median.round(), target: Some(target), at_least: false, red: !mins.is_empty() && median > target, facts });
 
     let first: Vec<&Lane> = merged.iter().filter(|l| l.attempts == 0).copied().collect();
     let pct = if merged.is_empty() { 100.0 } else { (100 * first.len() / merged.len()) as f64 };
@@ -176,15 +162,8 @@ fn compute(app: &Shared) -> Vec<Metric> {
     }
     let worst = idle.iter().map(|i| i.2).max().unwrap_or(0) as f64;
     let target = t("idle_minutes", 10.0);
-    out.push(Metric {
-        id: "idle",
-        label: "Parado con trabajo (min)",
-        value: worst,
-        target: Some(target),
-        at_least: false,
-        red: worst > target,
-        facts: idle.iter().map(|(p, n, m)| format!("{p}: {n} open items, nothing running for {m} min{}", paused_note(app, p))).collect::<Vec<_>>().join("; "),
-    });
+    let facts = idle.iter().map(|(p, n, m)| format!("{p}: {n} open items, nothing running for {m} min{}", paused_note(app, p))).collect::<Vec<_>>().join("; ");
+    out.push(Metric { id: "idle", label: "Parado con trabajo (min)", value: worst, target: Some(target), at_least: false, red: worst > target, facts });
 
     let half = cfg.inactivity_min * 30;
     let stuck: Vec<String> = lanes
@@ -278,10 +257,10 @@ fn payload(app: &Shared, metrics: Vec<Value>) -> Value {
     json!({"metrics": metrics, "reviews": app.recent("ceo_reviews", &["id", "at", "metric", "text"], None, 10)})
 }
 
-/// Starts one review in the background; false when one is already running.
-fn start_review(app: &Shared, metric: String, why: String) -> bool {
+/// Starts one review in the background; nothing when one is already running.
+fn start_review(app: &Shared, metric: String, why: String) {
     if REVIEWING.swap(true, Ordering::SeqCst) {
-        return false;
+        return;
     }
     let app = app.clone();
     tokio::spawn(async move {
@@ -298,7 +277,6 @@ fn start_review(app: &Shared, metric: String, why: String) -> bool {
         let metrics = BOOK.lock().unwrap().last.as_array().cloned().unwrap_or_default();
         app.emit("metrics", payload(&app, metrics));
     });
-    true
 }
 
 /// The facts a review reads: the red metrics, the last lanes, failing checks, plan progress, owner questions.
@@ -307,8 +285,7 @@ fn brief(app: &Shared, why: &str) -> String {
     lanes.sort_by(|a, b| b.created_at.cmp(&a.created_at));
     let mut s = format!("# Red metrics\n{why}\n\n# Last lanes (newest first)\n");
     for l in lanes.iter().take(20) {
-        let note = &l.note;
-        s += &format!("- {} [{}] {}:{} \"{}\" tries {} created {}: {}\n", l.id, l.status, l.project, l.step, l.item, l.attempts + 1, l.created_at, note.lines().next().unwrap_or(""));
+        s += &format!("- {} [{}] {}:{} \"{}\" tries {} created {}: {}\n", l.id, l.status, l.project, l.step, l.item, l.attempts + 1, l.created_at, l.note.lines().next().unwrap_or(""));
     }
     s += "\n# Failing checks (last 24 h)\n";
     let day = iso(now_s().saturating_sub(86400));
@@ -340,7 +317,7 @@ fn brief(app: &Shared, why: &str) -> String {
 /// The CEO review is read-only: file-writing tools are denied; everything else, including every `tirith`
 /// command that only reads (status, plan show, lane log, timeout get, merge status), is allowed.
 fn ceo_permission(tool: &str, input: &Value) -> Value {
-    if matches!(tool, "Write" | "Edit" | "MultiEdit" | "NotebookEdit") {
+    if crate::rules::EDIT_TOOLS.contains(&tool) {
         json!({"behavior": "deny", "message": "the CEO review is read-only"})
     } else {
         json!({"behavior": "allow", "updatedInput": input})

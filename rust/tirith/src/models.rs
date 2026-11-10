@@ -21,7 +21,7 @@ use std::sync::OnceLock;
 
 pub const ROLES: [&str; 4] = ["manager", "workers", "ceo", "brain"];
 const EFFORTS: [&str; 5] = ["low", "medium", "high", "xhigh", "max"];
-const BRAIN_MODEL: &str = "muse-spark-1.3";
+pub const BRAIN_MODEL: &str = "muse-spark-1.3";
 const PROMPT: &str = "Read the brief at {brief} and do it completely in {workspace}.";
 
 #[derive(Clone, Default, Serialize, Deserialize, PartialEq)]
@@ -121,7 +121,7 @@ pub fn lane_argv(app: &Shared, agent: Option<&str>, model: Option<&str>, brief: 
     let fill = |s: &String| s.replace("{brief}", &brief).replace("{workspace}", &ws).replace("{session}", session).replace("{message}", message);
     let mut argv: Vec<String> = if resume.is_some() && !resume_args.is_empty() {
         std::iter::once(a.command.clone()).chain(resume_args.iter().map(fill)).collect()
-    } else if Some(alias.as_str()) == cfg.workers.as_ref().map(|r| r.agent.as_str()).or(Some("anthropic")) && !cfg.launch.is_empty() {
+    } else if Some(alias.as_str()) == cfg.workers_agent.as_deref().or(Some("anthropic")) && !cfg.launch.is_empty() {
         cfg.launch.iter().map(fill).collect()
     } else {
         std::iter::once(a.command.clone()).chain(args.iter().map(fill)).collect()
@@ -205,15 +205,11 @@ pub fn save(app: &Shared, role_name: &str, b: Option<&Value>) -> Result<RoleSett
             _ => {}
         }
         let cfg = app.cfg();
-        for v in [&s.model, &s.effort].into_iter().flatten().chain(&s.fallback) {
-            if !valid(v) {
-                return Err(format!("'{v}' is not a valid model, effort or fallback entry"));
-            }
+        if let Some(v) = [&s.model, &s.effort].into_iter().flatten().chain(&s.fallback).find(|v| !valid(v)) {
+            return Err(format!("'{v}' is not a valid model, effort or fallback entry"));
         }
-        for alias in std::iter::once(&s.agent).filter(|_| role_name != "brain").chain(&s.fallback).map(|e| e.split(':').next().unwrap_or("")) {
-            if !cfg.agents.contains_key(alias) {
-                return Err(format!("no agent alias '{alias}' in config.toml"));
-            }
+        if let Some(alias) = std::iter::once(&s.agent).filter(|_| role_name != "brain").chain(&s.fallback).map(|e| e.split(':').next().unwrap_or("")).find(|a| !cfg.agents.contains_key(*a)) {
+            return Err(format!("no agent alias '{alias}' in config.toml"));
         }
         app.set_kv(&format!("models:{role_name}"), Some(&serde_json::to_string(&s).unwrap_or_default()));
     } else {
@@ -248,9 +244,8 @@ pub fn state(app: &Shared) -> Value {
             (r.to_string(), v)
         })
         .collect();
-    let efforts: Vec<String> = get(&cfg.raw, &["models", "efforts"]).unwrap_or_else(|| EFFORTS.map(String::from).to_vec());
-    let models: Vec<String> = get(&cfg.raw, &["models", "choices"]).unwrap_or_default();
-    json!({"roles": roles, "choices": {"agents": cfg.agents.keys().collect::<Vec<_>>(), "models": models, "efforts": efforts}})
+    json!({"roles": roles, "choices": {"agents": cfg.agents.keys().collect::<Vec<_>>(), "models": get::<Vec<String>>(&cfg.raw, &["models", "choices"]).unwrap_or_default(),
+        "efforts": get::<Vec<String>>(&cfg.raw, &["models", "efforts"]).unwrap_or_else(|| EFFORTS.map(String::from).to_vec())}})
 }
 
 pub fn routes() -> Router<Shared> {
