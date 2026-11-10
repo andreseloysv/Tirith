@@ -1,4 +1,4 @@
-//! Lanes: one agent, one plan item, one reusable worktree slot (`<repo>-lanes/slot-N`) on its own branch. The
+//! Lanes: one agent, one plan item, one reusable worktree slot (`<tirith home>/lanes/<project>/slot-N`) on its own branch. The
 //! autopilot starts the open items of each project's current plan step when the machine has room; a lane whose
 //! process ends goes to the merge queue, where the checks (never the agent) decide that its item is done.
 
@@ -82,16 +82,14 @@ pub fn shared_target(app: &Shared, project: &str) -> PathBuf {
 }
 
 /// With less than 10 GB free: the build caches git ignores (target, .build, node_modules, build, .gradle) are
-/// removed from the worktree folders of `<repo>-lanes` that no active lane holds. Nothing tracked is touched.
+/// removed from the lanes' worktrees that no active lane holds. Nothing tracked is touched.
 async fn free_disk(app: &Shared, lanes: &[Lane]) {
-    let cfg = app.cfg();
-    for p in &cfg.projects {
-        let dir = p.lanes_dir();
-        if free_gb(&dir) >= 10.0 {
-            return;
-        }
+    if free_gb(&app.home.join("lanes")) >= 10.0 {
+        return;
+    }
+    for p in &app.cfg().projects {
         let merging = lanes.iter().any(|l| l.project == p.id && l.status == "merging");
-        for slot in std::fs::read_dir(&dir).into_iter().flatten().flatten().map(|e| e.path()) {
+        for slot in std::fs::read_dir(p.lanes_dir()).into_iter().flatten().flatten().map(|e| e.path()) {
             let name = slot.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
             let held = lanes.iter().any(|l| l.active() && Path::new(&l.workspace) == slot) || (name == "merge" && merging);
             if held || !(name.starts_with("slot-") || name == "merge") {
@@ -131,35 +129,31 @@ fn biggest_dirs(dir: &Path, n: usize) -> Vec<(String, u64)> {
     rows
 }
 
-/// Below 5 GB free on a project's lanes disk: one ask-owner card (kind device) naming the folders that fill it.
+/// Below 5 GB free on the disk of the lanes' worktrees: one ask-owner card (kind device, of no project, since every
+/// project shares that disk) naming the biggest of Tirith's own folders.
 async fn warn_low_disk(app: &Shared) {
-    for p in &app.cfg().projects {
-        let dir = if p.lanes_dir().exists() { p.lanes_dir() } else { p.repo() };
-        let key = format!("low_disk_asked:{}", dir.display());
-        let free = free_gb(&dir);
-        match low_disk_ask(free, app.kv(&key).is_some()) {
-            Some(true) => {
-                app.set_kv(&key, Some("1"));
-                let d = dir.clone();
-                let rows = tokio::task::spawn_blocking(move || biggest_dirs(&d, 5)).await.unwrap_or_default();
-                let list = rows.iter().map(|(p, k)| format!("{p} ({:.1} GB)", *k as f64 / 1e6)).collect::<Vec<_>>().join(", ");
-                let q = format!("Only {free:.1} GB free on {}: lanes will fail with No space left on device. Biggest folders: {list}. Free some space (delete what you no longer need).", dir.display());
-                let _ = crate::manager::ask_owner(app, "device", &q);
-            }
-            Some(false) => app.set_kv(&key, None),
-            None => {}
+    let (home, key) = (app.home.clone(), "low_disk_asked");
+    let free = free_gb(&home.join("lanes"));
+    match low_disk_ask(free, app.kv(key).is_some()) {
+        Some(true) => {
+            app.set_kv(key, Some("1"));
+            let rows = tokio::task::spawn_blocking(move || biggest_dirs(&home, 5)).await.unwrap_or_default();
+            let list = rows.iter().map(|(p, k)| format!("{p} ({:.1} GB)", *k as f64 / 1e6)).collect::<Vec<_>>().join(", ");
+            let q = format!("Only {free:.1} GB free on this disk: lanes will fail with No space left on device. The biggest of Tirith's own folders: {list}. Free some space (delete what you no longer need).");
+            let _ = crate::manager::ask_owner(app, "", "device", &q);
         }
+        Some(false) => app.set_kv(key, None),
+        None => {}
     }
 }
 
 /// Why a project cannot start a lane now (merge backlog, disk, commit guard), or `None`.
 fn blocked(app: &Shared, p: &Project, lanes: &[Lane]) -> Option<String> {
     let backlog = lanes.iter().filter(|l| l.project == p.id && matches!(l.status.as_str(), "merge-queued" | "merging")).count();
-    let dir = if p.lanes_dir().exists() { p.lanes_dir() } else { p.repo() };
     if backlog >= 3 {
         Some(format!("{backlog} lanes wait for the merge queue"))
-    } else if free_gb(&dir) < 5.0 {
-        Some(format!("less than 5 GB free on {}", dir.display()))
+    } else if free_gb(&app.home.join("lanes")) < 5.0 {
+        Some("less than 5 GB free on the disk of the lanes' worktrees".into())
     } else {
         guard::intact(app, p).err()
     }
@@ -173,9 +167,9 @@ pub(crate) fn paused_fix(project: &str, why: &str) -> String {
         }
     }
     if why.contains("merge queue") {
-        "tirith merge status".into()
+        "wait for the merges (tirith status shows them)".into()
     } else if why.contains("GB free") {
-        format!("free disk space (tirith lane clean {project})")
+        "free disk space".into()
     } else if why.contains("core.hooksPath") || why.contains("not Tirith's") {
         "fix the git hooks by hand, then tirith guard install ".to_string() + project
     } else {
@@ -285,7 +279,7 @@ pub async fn scheduler(app: Shared) {
                     x.note = e.clone();
                     x.ended_at = Some(now_iso());
                 });
-                manager::notify(&app, &format!("lane {} could not start: {e}", next.id));
+                manager::notify(&app, &next.project, &format!("lane {} could not start: {e}", next.id));
             }
         }
     }
@@ -391,6 +385,7 @@ async fn launch(app: &Shared, mut lane: Lane) -> Result<(), String> {
     if lane.workspace.is_empty() || !Path::new(&lane.workspace).exists() {
         lane.branch = format!("lane/{}", lane.id);
         lane.workspace = take_slot(app, &project, &lane).await?.display().to_string();
+        lane.session.clear(); // an agent session lives in its folder: in another slot the lane starts from the brief
         app.save_lane(&lane);
     }
     let ws = PathBuf::from(&lane.workspace);
@@ -468,7 +463,7 @@ async fn ended(app: &Shared, id: &str, code: Option<i32>) {
             }
         });
         if next.is_none() {
-            manager::notify(app, &format!("lane {id} ({}: {}) failed: out of credits on every agent of the workers role", lane.project, lane.item));
+            manager::notify(app, &lane.project, &format!("lane {id} ({}: {}) failed: out of credits on every agent of the workers role", lane.project, lane.item));
         }
     } else if lane.status == "running" && no_commits(app, &lane).await && !has_check(app, &lane) {
         app.update_lane(id, |l| {
@@ -525,7 +520,8 @@ pub fn ask(app: &Shared, id: &str, question: &str) -> Result<Lane, String> {
         l.question = question.trim().into();
         l.resume.clear();
     });
-    manager::notify(app, &format!("lane {id} ({}: {}) asks: {}\nAnswer with: tirith answer {id} \"<answer>\"", lane.as_ref().map_or("", |l| &l.project), lane.as_ref().map_or("", |l| &l.item), question.trim()));
+    let project = lane.as_ref().map_or("", |l| &l.project);
+    manager::notify(app, project, &format!("lane {id} ({project}: {}) asks: {}\nAnswer with: tirith answer {id} \"<answer>\"", lane.as_ref().map_or("", |l| &l.item), question.trim()));
     lane.ok_or("lane vanished".into())
 }
 
@@ -576,7 +572,7 @@ pub fn send_back(app: &Shared, lane: &Lane, reason: &str) {
             l.status = "failed".into();
             l.note = reason.chars().take(2000).collect();
         });
-        manager::notify(app, &format!("lane {} ({}: {}) failed after {} tries: {}", lane.id, lane.project, lane.item, lane.attempts + 1, reason.lines().next().unwrap_or("")));
+        manager::notify(app, &lane.project, &format!("lane {} ({}: {}) failed after {} tries: {}", lane.id, lane.project, lane.item, lane.attempts + 1, reason.lines().next().unwrap_or("")));
         return;
     }
     app.update_lane(&lane.id, |l| {

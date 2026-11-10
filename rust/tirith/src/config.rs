@@ -34,11 +34,10 @@ impl Project {
         let p = expand(&self.repo);
         p.canonicalize().unwrap_or(p)
     }
-    /// Where the lanes' worktrees live: `<repo>-lanes` next to the repo.
+    /// Where the lanes' worktrees live: `<tirith home>/lanes/<id>`, out of the owner's own folders.
     pub fn lanes_dir(&self) -> PathBuf {
-        let repo = self.repo();
-        let name = repo.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-        repo.with_file_name(format!("{name}-lanes"))
+        let home = tirith_home();
+        home.canonicalize().unwrap_or(home).join("lanes").join(&self.id)
     }
 }
 

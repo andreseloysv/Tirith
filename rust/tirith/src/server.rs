@@ -17,6 +17,7 @@ use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::{Stream, StreamExt};
 
 static PORT: OnceLock<u16> = OnceLock::new();
+const CHAT: [&str; 5] = ["id", "at", "role", "text", "project"];
 fn s(v: &Value, k: &str) -> String {
     v[k].as_str().unwrap_or("").to_string()
 }
@@ -39,7 +40,7 @@ pub fn router(app: Shared, port: u16) -> Router {
         .route("/api/pipelines/{id}/retry", post(pipeline_retry))
         .route("/api/stage-limit/{project}/{stage}", post(stage_limit))
         .route("/api/runs/{id}/log", get(run_log))
-        .route("/api/chat", post(chat))
+        .route("/api/chat", get(chat_rows).post(chat))
         .route("/api/manager/interrupt", post(manager_interrupt))
         .route("/hook/{event}", post(hook))
         .merge(rooms::routes())
@@ -109,9 +110,9 @@ async fn state(State(app): State<Shared>) -> Json<Value> {
     Json(json!({
         "projects": projects::list(&app),
         "lanes": lanes,
-        "chat": app.recent("chat", &["id", "at", "role", "text"], 300),
-        "events": app.recent("events", &["id", "at", "lane", "project", "kind", "tool", "summary"], 200),
-        "runs": app.recent("runs", &["id", "lane", "project", "stage", "status", "started_at", "ended_at", "log"], 40),
+        "chat": app.recent("chat", &CHAT, None, 300),
+        "events": app.recent("events", &["id", "at", "lane", "project", "kind", "tool", "summary"], None, 200),
+        "runs": app.recent("runs", &["id", "lane", "project", "stage", "status", "started_at", "ended_at", "log"], None, 40),
         "owner": manager::owner_open(&app),
         "busy": manager::busy(),
     }))
@@ -163,7 +164,7 @@ async fn lane_answer(State(app): State<Shared>, Path(id): Path<String>, Json(b):
 }
 
 async fn owner_ask(State(app): State<Shared>, Json(b): Json<Value>) -> R {
-    manager::ask_owner(&app, &s(&b, "kind"), &s(&b, "question")).map(Json).map_err(bad)
+    manager::ask_owner(&app, &s(&b, "project"), &s(&b, "kind"), &s(&b, "question")).map(Json).map_err(bad)
 }
 
 async fn owner_answer(State(app): State<Shared>, Path(id): Path<String>, Json(b): Json<Value>) -> R {
@@ -181,7 +182,7 @@ async fn autopilot(State(app): State<Shared>, Path(project): Path<String>, Json(
 
 async fn pipelines(State(app): State<Shared>, Query(q): Query<std::collections::HashMap<String, String>>) -> Json<Value> {
     let limit = q.get("limit").and_then(|l| l.parse().ok()).unwrap_or(30u32).min(200);
-    Json(json!(merge::list(&app, limit)))
+    Json(json!(merge::list(&app, q.get("project").map_or("", String::as_str), limit)))
 }
 
 async fn pipeline_retry(State(app): State<Shared>, Path(id): Path<String>) -> R {
@@ -207,12 +208,17 @@ async fn chat(State(app): State<Shared>, Json(b): Json<Value>) -> R {
     if text.trim().is_empty() {
         return Err(bad("empty message".into()));
     }
-    manager::say(&app, &text);
+    manager::say(&app, &s(&b, "project"), &text).map_err(bad)?;
     Ok(Json(json!({"ok": true})))
 }
 
-async fn manager_interrupt(State(app): State<Shared>) -> R {
-    manager::interrupt(&app).map_err(bad)?;
+/// The last rows of one conversation: `?project=<id>`, or the one of no project.
+async fn chat_rows(State(app): State<Shared>, Query(q): Query<std::collections::HashMap<String, String>>) -> Json<Value> {
+    Json(json!(app.recent("chat", &CHAT, Some(q.get("project").map_or("", String::as_str)), 300)))
+}
+
+async fn manager_interrupt(Json(b): Json<Value>) -> R {
+    manager::interrupt(&s(&b, "project")).map_err(bad)?;
     Ok(Json(json!({"ok": true})))
 }
 

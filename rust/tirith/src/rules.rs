@@ -27,7 +27,10 @@ pub fn check(app: &Shared, tool: &str, input: &Value, lane: Option<&Lane>, proje
     }
     let mut protected: Vec<String> = cfg.agents.values().filter_map(|a| a.settings.as_deref()).map(|s| expand(s).display().to_string()).collect();
     protected.push(format!("{}/", app.home.display()));
-    if edit && protected.iter().any(|p| file.starts_with(p.as_str())) {
+    // The lanes' worktrees live inside Tirith's home: they are the one part of it agents write in.
+    let path = std::path::Path::new(file);
+    let in_lanes = cfg.projects.iter().any(|p| path.starts_with(p.lanes_dir()));
+    if edit && !in_lanes && protected.iter().any(|p| file.starts_with(p.as_str())) {
         return Some(format!("{file} belongs to Tirith or to an agent's settings: agents never change it. Ask the owner if it must change."));
     }
     let manifest = project.map(|p| app.manifest(&p.repo()));
@@ -38,8 +41,7 @@ pub fn check(app: &Shared, tool: &str, input: &Value, lane: Option<&Lane>, proje
         }
     }
     if let Some(l) = lane {
-        let path = std::path::Path::new(file);
-        let in_projects = cfg.projects.iter().any(|p| path.starts_with(p.repo()) || path.starts_with(p.lanes_dir()));
+        let in_projects = in_lanes || cfg.projects.iter().any(|p| path.starts_with(p.repo()));
         if edit && in_projects && !path.starts_with(&l.workspace) {
             return Some(format!("A lane writes only inside its own copy: {}. Change the file there.", l.workspace));
         }

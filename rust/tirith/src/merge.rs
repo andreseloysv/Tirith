@@ -1,5 +1,5 @@
 //! The merge queue. Up to five lanes of one project ride one train: in the project's merge slot
-//! (`<repo>-lanes/merge`) their branches are merged with main, the project's checks and the items' own checks
+//! (`<tirith home>/lanes/<project>/merge`) their branches are merged with main, the project's checks and the items' own checks
 //! run, and only a green train moves main (fast-forward), with the plan ticks in the same commits. A red train is
 //! split into single lanes; a red single lane is first compared with main, so a broken main never blames a lane.
 
@@ -146,11 +146,12 @@ fn pipeline(app: &Shared, id: &str) -> Value {
     row
 }
 
-/// The newest pipelines, newest first.
-pub fn list(app: &Shared, limit: u32) -> Vec<Value> {
+/// The newest pipelines (of one project, or of all with ""), newest first.
+pub fn list(app: &Shared, project: &str, limit: u32) -> Vec<Value> {
     let ids: Vec<String> = {
         let db = app.db.lock().unwrap();
-        db.prepare(&format!("SELECT id FROM pipelines ORDER BY rowid DESC LIMIT {limit}")).and_then(|mut q| q.query_map([], |r| r.get(0)).map(|rows| rows.flatten().collect())).unwrap_or_default()
+        let sql = format!("SELECT id FROM pipelines WHERE ?1 = '' OR project = ?1 ORDER BY rowid DESC LIMIT {limit}");
+        db.prepare(&sql).and_then(|mut q| q.query_map([project], |r| r.get(0)).map(|rows| rows.flatten().collect())).unwrap_or_default()
     };
     ids.iter().map(|id| pipeline(app, id)).collect()
 }
@@ -286,13 +287,13 @@ async fn train(app: &Shared, batch: Vec<Lane>) {
                     x.note = "the merge worktree could not be made: no space left on device".into();
                 });
             }
-            return manager::notify(app, &format!("the merge of {pid} waits for disk: {e}"));
+            return manager::notify(app, &pid, &format!("the merge of {pid} waits for disk: {e}"));
         }
         Err(e) => {
             for l in &batch {
                 app.update_lane(&l.id, |x| x.status = "failed".into());
             }
-            return manager::notify(app, &format!("the merge slot of {pid} is broken: {e}"));
+            return manager::notify(app, &pid, &format!("the merge slot of {pid} is broken: {e}"));
         }
     };
     let ids: Vec<&str> = batch.iter().map(|l| l.id.as_str()).collect();
@@ -346,7 +347,11 @@ async fn train(app: &Shared, batch: Vec<Lane>) {
                     app.emit("plan", json!({"project": pid}));
                     requeue(app, &[lane], true, "main is red: waits for a green main");
                     if was.is_none() {
-                        manager::notify(app, &format!("main of {pid} is red: check '{name}' fails on main itself ({}). The autopilot pauses {pid} until main is green; fix main or retry the main pipeline.", &base[..8.min(base.len())]));
+                        manager::notify(
+                            app,
+                            &pid,
+                            &format!("main of {pid} is red: check '{name}' fails on main itself ({}). The autopilot pauses {pid} until main is green; fix main or retry the main pipeline.", &base[..8.min(base.len())]),
+                        );
                     }
                     return;
                 }
@@ -419,7 +424,13 @@ async fn land(app: &Shared, project: &Project, pipe: &Pipe, slot: &Path, base: &
     for id in working {
         lanes::tell(&id, &format!("[tirith] main advanced: {} (files: {})", items.join("; "), files.join(", ")));
     }
-    manager::notify(app, &format!("merged on {} at {sha8}: {}", project.id, items.join("; ")));
+    // A merge is news, not a question: the manager gets a turn for it only when it leaves the plan without open work.
+    let report = format!("merged on {} at {sha8}: {}", project.id, items.join("; "));
+    if plan::read(app, &project.id).is_ok_and(|steps| steps.iter().flat_map(|s| &s.items).any(|i| !i.done && !lanes::is_autopilot_skipped(&i.text))) {
+        manager::inform(app, &project.id, &report);
+    } else {
+        manager::notify(app, &project.id, &format!("{report}\nThe plan has no open item left: tell the owner what is done, and ask for the next goal if the project needs one."));
+    }
     app.emit("plan", json!({"project": project.id}));
     app.sched_wake.notify_one();
 }
@@ -445,7 +456,7 @@ fn clear_red(app: &Shared, project: &str) {
     if app.kv(&key).is_some() {
         app.set_kv(&key, None);
         app.emit("plan", json!({"project": project}));
-        manager::notify(app, &format!("main of {project} is green again: the autopilot continues"));
+        manager::inform(app, project, &format!("main of {project} is green again: the autopilot continues"));
         app.sched_wake.notify_one();
         app.merge_wake.notify_one();
     }

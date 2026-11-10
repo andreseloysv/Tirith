@@ -25,7 +25,7 @@ use std::io::Read;
 use std::time::Duration;
 
 const USAGE: &str = "tirith serve                                   run the daemon (page on http://127.0.0.1:<port>/)
-tirith status                                  lanes, load and the merge queue
+tirith status [--project P]                    lanes and the merge queue (of one project)
 tirith plan show <project>                     the plan with what works on each item
 tirith plan add <project> <step> \"<text>\"      add an item to a step
 tirith lane start <project> <step> \"<item>\" [--agent <alias>]
@@ -33,10 +33,10 @@ tirith lane stop <lane>
 tirith lane log <lane>
 tirith ask \"<question>\"                       (inside a lane) ask the manager, then end your turn
 tirith answer <lane> \"<answer>\"                (the manager) answer a waiting lane
-tirith ask-owner --kind credentials|payment|account|device|decision \"<question>\"   (the manager)
+tirith ask-owner [--project P] --kind credentials|payment|account|device|decision \"<question>\"   (the manager)
 tirith autopilot on|off <project>              let Tirith start the plan's items by itself, or not
 tirith project add <folder> [--name N] [--color #rrggbb]   add a folder as a project (the page's + does the same)
-tirith say \"<text>\"                            write to the manager
+tirith say [--project P] \"<text>\"              write to the project's manager (without one: the manager of no project)
 tirith hook <Event>                            agent hook bridge (stdin JSON; also --agent A --event E)
 tirith hooks install                           point the agents' hooks at the daemon over HTTP
 (modules add: tirith room …, tirith net …, tirith models …, tirith guard …)";
@@ -51,6 +51,8 @@ fn main() {
         unsafe { libc::signal(libc::SIGPIPE, libc::SIG_DFL) };
     }
     let flag = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).cloned();
+    // The project a command is about: `--project`, else the project of the session Tirith started it in.
+    let project = flag("--project").or_else(|| std::env::var("TIRITH_PROJECT").ok()).unwrap_or_default();
     let mut pos: Vec<&str> = vec![];
     let mut skip = false;
     for a in &args {
@@ -66,7 +68,7 @@ fn main() {
         ["serve"] => serve(),
         ["hook", rest @ ..] => hook(flag("--event").or(rest.first().map(|s| s.to_string())).unwrap_or_default()),
         ["hooks", "install"] => install_hooks(),
-        ["status"] => status(),
+        ["status"] => status(&project),
         ["plan", "show", project] => plan_show(project),
         ["plan", "add", project, step, text] => print(call("POST", &format!("/api/plan/{project}"), Some(json!({"step": step, "text": text})))),
         ["lane", "start", project, step, item] => print(call("POST", "/api/lanes", Some(json!({"project": project, "step": step, "item": item, "agent": flag("--agent")})))),
@@ -81,12 +83,12 @@ fn main() {
             if std::env::var("TIRITH_LANE").is_ok_and(|l| !l.is_empty()) {
                 Err("a lane does not ask the owner: ask the manager with tirith ask \"<question>\"".to_string())
             } else {
-                let body = json!({"kind": flag("--kind").unwrap_or_default(), "question": question});
+                let body = json!({"kind": flag("--kind").unwrap_or_default(), "question": question, "project": project});
                 call("POST", "/api/owner", Some(body)).map(|b| println!("{b}"))
             }
         }
         ["autopilot", on @ ("on" | "off"), project] => print(call("POST", &format!("/api/autopilot/{project}"), Some(json!({"on": *on == "on"})))),
-        ["say", text] => print(call("POST", "/api/chat", Some(json!({"text": text})))),
+        ["say", text] => print(call("POST", "/api/chat", Some(json!({"text": text, "project": project})))),
         _ => Err(USAGE.to_string()),
     });
     if let Err(e) = result {
@@ -95,9 +97,9 @@ fn main() {
     }
 }
 
-fn status() -> Result<(), String> {
+fn status(project: &str) -> Result<(), String> {
     let s: Value = serde_json::from_str(&call("GET", "/api/state", None)?).map_err(|e| e.to_string())?;
-    let lanes = s["lanes"].as_array().cloned().unwrap_or_default();
+    let lanes: Vec<Value> = s["lanes"].as_array().into_iter().flatten().filter(|l| project.is_empty() || l["project"] == project).cloned().collect();
     let mut shown = 0;
     for l in lanes.iter().filter(|l| matches!(l["status"].as_str(), Some("queued" | "running" | "waiting" | "merge-queued" | "merging"))) {
         println!("{:<14} {:<40} {}:{} {}", l["status"].as_str().unwrap_or(""), l["id"].as_str().unwrap_or(""), l["project"].as_str().unwrap_or(""), l["step"].as_str().unwrap_or(""), l["item"].as_str().unwrap_or(""));
@@ -193,7 +195,6 @@ fn serve() -> Result<(), String> {
         }
         tokio::spawn(lanes::scheduler(app.clone()));
         tokio::spawn(merge::worker(app.clone()));
-        tokio::spawn(manager::run(app.clone()));
         let flusher = app.clone();
         tokio::spawn(async move {
             loop {
