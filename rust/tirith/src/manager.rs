@@ -68,11 +68,7 @@ fn set_busy(app: &Shared, project: &str, t: &mut Talk, on: bool) {
 
 /// The conversation of `project`: its own, or the one of no project when there is no such project (any more).
 fn here<'a>(app: &Shared, project: &'a str) -> &'a str {
-    if app.cfg().project(project).is_some() {
-        project
-    } else {
-        ""
-    }
+    app.cfg().project(project).map_or("", |_| project)
 }
 
 fn known(app: &Shared, project: &str) -> Result<(), String> {
