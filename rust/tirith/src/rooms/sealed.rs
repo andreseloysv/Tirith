@@ -32,7 +32,7 @@ pub fn sha_hex(data: &[u8]) -> String {
     hex(&Sha256::digest(data))
 }
 
-fn hex(b: &[u8]) -> String {
+pub fn hex(b: &[u8]) -> String {
     b.iter().map(|x| format!("{x:02x}")).collect()
 }
 
