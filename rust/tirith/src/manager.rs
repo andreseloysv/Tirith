@@ -1,12 +1,13 @@
-//! The manager: one long-lived agent session (stream-json in and out). The owner's messages go straight to
-//! its stdin; its text, its tool calls and the end of each turn go straight to the page.
+//! The managers: one long-lived agent session per project (stream-json in and out), and one for what belongs to no
+//! project. A message goes to the session of its project, which starts with its first message and rests after 30
+//! quiet minutes; its text, its tool calls and the end of each turn go straight to that project's chat on the page.
 
-use crate::app::{kill_group, now_iso, now_s, Shared};
+use crate::app::{kill_group, now_iso, Shared};
 use crate::{models, rooms, rules, sandbox};
 use serde_json::{json, Value};
+use std::collections::BTreeMap;
 use std::process::Stdio;
-use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::mpsc;
@@ -22,167 +23,242 @@ tool:\n  tirith status\n  tirith plan show <project>\n  tirith plan add <project
 tirith lane start <project> <step> \"<item text>\"\n  tirith lane stop <lane>\n  tirith lane log <lane>\n  \
 tirith answer <lane> \"<answer>\"\n  tirith ask-owner --kind credentials|payment|account|device|decision \"<question>\"\n  \
 tirith autopilot on|off <project>\n  tirith room say <room> \"<text>\"\n\
-Messages that start with [tirith] come from Tirith (questions of lanes, merges, failures, a red main, the \
-owner's answers): act on them, but run tirith status first, because a message can be older than the state. A failed or stopped item is skipped by the autopilot until you restart it with \
+Lines that start with [tirith] are Tirith's reports (questions of lanes, failures, a red main, the owner's \
+answers; merges are for your information and need no answer): act on what needs you, but run tirith status \
+first, because a report can be older than the state. A failed or stopped item is skipped by the autopilot until you restart it with \
 tirith lane start (make the item clearer first if that is why it failed).";
+const IDLE: Duration = Duration::from_secs(30 * 60);
+
+/// The session's system prompt: the manager's job, and which conversation this one is.
+fn prompt(app: &Shared, project: &str) -> String {
+    let scope = match app.cfg().project(project) {
+        Some(p) => format!(
+            "This conversation is only about the project {} (repository {}). Every other project has its own manager: say and do nothing about them. tirith status lists this project's lanes, and the cards you send with tirith ask-owner belong to it.",
+            p.id,
+            p.repo().display()
+        ),
+        None => "This conversation is not about one project: it gets the health reports, the CEO's reviews, the rooms of no project and what the owner asks across projects. Each project also has its own manager, who gets that project's lane questions, failures and merges: leave those to it. You may still read and change any project with the commands above when the owner or a report asks for it. A card about one project is sent with tirith ask-owner --project <project> …, one project per card."
+            .into(),
+    };
+    format!("{PROMPT}\n{scope}")
+}
+
+/// One conversation: a project's (under its id) or the one of no project (under "").
+#[derive(Default)]
+struct Talk {
+    /// The live session's stdin. Without one, `pending` waits for the session that `alive` says is on its way.
+    tx: Option<mpsc::UnboundedSender<String>>,
+    pending: Vec<String>,
+    alive: bool,
+    /// True while a turn runs (between a message handed to a live session and that session's `result`).
+    busy: bool,
+    pid: u32,
+    /// Rooms whose messages started the current turn (their answer goes back there) and the turn's text so far.
+    reply_to: Vec<String>,
+    text: String,
+    /// Reports from Tirith not yet handed over, and whether a hand-over is already on its way.
+    notes: Vec<String>,
+    due: bool,
+}
+
+static TALKS: Mutex<BTreeMap<String, Talk>> = Mutex::new(BTreeMap::new());
+
+fn talks() -> MutexGuard<'static, BTreeMap<String, Talk>> {
+    TALKS.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+fn talk<T>(project: &str, f: impl FnOnce(&mut Talk) -> T) -> T {
+    f(talks().entry(project.to_string()).or_default())
+}
+
+fn set_busy(app: &Shared, project: &str, t: &mut Talk, on: bool) {
+    t.busy = on;
+    app.emit("busy", json!({"project": project, "on": on}));
+}
+
+fn known(app: &Shared, project: &str) -> Result<(), String> {
+    (project.is_empty() || app.cfg().project(project).is_some()).then_some(()).ok_or(format!("unknown project '{project}'"))
+}
 
 fn user_line(text: &str) -> String {
     json!({"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": text}]}}).to_string()
 }
 
-/// Delivers a message to the session now, or when the next session starts.
-fn deliver(app: &Shared, text: &str) {
-    let line = user_line(text);
-    let tx = app.manager_in.lock().unwrap().clone();
-    match tx {
-        Some(tx) if tx.send(line.clone()).is_ok() => {
-            BUSY.store(true, Ordering::Relaxed);
-            app.emit("busy", json!(true))
+/// Hands the conversation its waiting reports and `text` as one message; its session starts when none runs.
+fn deliver(app: &Shared, project: &str, text: &str) {
+    let project = if known(app, project).is_ok() { project } else { "" }; // a project that is gone: the one of no project
+    let start = talk(project, |t| {
+        let mut all: Vec<String> = std::mem::take(&mut t.notes).into_iter().map(|n| format!("[tirith] {n}")).collect();
+        all.extend((!text.is_empty()).then(|| text.to_string()));
+        if all.is_empty() {
+            return false;
         }
-        _ => app.manager_pending.lock().unwrap().push(line),
+        let line = user_line(&all.join("\n\n"));
+        if t.tx.as_ref().is_some_and(|tx| tx.send(line.clone()).is_ok()) {
+            set_busy(app, project, t, true);
+        } else {
+            t.pending.push(line); // the session on its way takes it, and only then is the manager busy
+        }
+        !std::mem::replace(&mut t.alive, true)
+    });
+    if start {
+        tokio::spawn(run(app.clone(), project.to_string()));
     }
 }
 
-/// Rooms whose messages started the current turn (their answer goes back there), the turn's text so far, and
-/// the session's process group (to restart it).
-static REPLY_TO: Mutex<Vec<String>> = Mutex::new(Vec::new());
-static TURN_TEXT: Mutex<String> = Mutex::new(String::new());
-static PID: AtomicU32 = AtomicU32::new(0);
-
-/// A message from a room (a paired phone or another agent): shown in the chat, handed to the manager, and the
-/// manager's answer to this turn goes back to that room.
-pub fn from_room(app: &Shared, room: &str, author: &str, text: &str) {
-    app.chat("room", &format!("{author} ({room}): {text}"));
-    let mut to = REPLY_TO.lock().unwrap();
-    if !to.iter().any(|r| r == room) {
-        to.push(room.to_string());
-    }
-    drop(to);
-    deliver(app, &format!("[room {room}] {author}: {text}"));
+/// A message from a room (a paired phone or another agent): shown in the chat of the room's project, handed to
+/// that project's manager, and the manager's answer to this turn goes back to that room.
+pub fn from_room(app: &Shared, project: &str, room: &str, author: &str, text: &str) {
+    app.chat("room", &format!("{author} ({room}): {text}"), project);
+    talk(project, |t| {
+        if !t.reply_to.iter().any(|r| r == room) {
+            t.reply_to.push(room.to_string());
+        }
+    });
+    deliver(app, project, &format!("[room {room}] {author}: {text}"));
 }
 
-/// Ends the current session; the loop starts a new one with the current settings (resuming the conversation).
+/// Ends every session (the settings changed); each one resumes its conversation at its next message.
 pub fn restart() {
-    let pid = PID.load(Ordering::Relaxed);
-    if pid != 0 {
-        kill_group(pid, libc::SIGTERM);
-    }
+    talks().values().for_each(|t| kill_group(t.pid, libc::SIGTERM));
 }
 
-/// True while a turn runs (between the owner's message and the session's `result`).
-static BUSY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-
-/// True while the manager works on a turn.
-pub fn busy() -> bool {
-    BUSY.load(Ordering::Relaxed)
+/// The conversations whose manager works on a turn.
+pub fn busy() -> Vec<String> {
+    talks().iter().filter(|(_, t)| t.busy).map(|(p, _)| p.clone()).collect()
 }
 
-/// Stops the current turn of the session (the session lives on): a stream-json `control_request` with subtype
-/// `interrupt`, as the old collector sent. Err when no session runs or no turn is running.
-pub fn interrupt(app: &Shared) -> Result<(), String> {
-    if !BUSY.load(Ordering::Relaxed) {
-        return Err("the manager is not working on a turn".into());
-    }
-    let tx = app.manager_in.lock().unwrap().clone().ok_or("no manager session is running")?;
+/// Stops the current turn of the conversation's session (the session lives on): a stream-json `control_request`
+/// with subtype `interrupt`, as the old collector sent. Err when no turn is running.
+pub fn interrupt(project: &str) -> Result<(), String> {
+    let tx = talk(project, |t| t.tx.clone().filter(|_| t.busy)).ok_or("the manager is not working on a turn")?;
     let id = format!("int-{:08x}", rand::random::<u32>());
     let line = json!({"type": "control_request", "request_id": id, "request": {"subtype": "interrupt"}}).to_string();
     tx.send(line).map_err(|_| "the manager session ended".to_string())
 }
 
-pub fn say(app: &Shared, text: &str) {
-    app.chat("owner", text);
-    deliver(app, text);
+/// The owner's message to a project's manager.
+pub fn say(app: &Shared, project: &str, text: &str) -> Result<(), String> {
+    known(app, project)?;
+    app.chat("owner", text, project);
+    deliver(app, project, text);
+    Ok(())
 }
 
-/// Notes from Tirith not yet handed to the manager.
-static NOTES: Mutex<Vec<String>> = Mutex::new(Vec::new());
+/// A report from Tirith that needs the manager (a lane asked or failed, a red main): shown in the project's chat
+/// at once and handed over together with every other report of the next 2 seconds, so many events cost one turn.
+pub fn notify(app: &Shared, project: &str, text: &str) {
+    app.chat("tirith", text, project);
+    tell(app, project, text);
+}
 
-/// A report from Tirith (a lane asked, merged, failed): shown in the chat at once and handed to the manager
-/// together with every other note of the next 2 seconds, so many events cost one turn.
-pub fn notify(app: &Shared, text: &str) {
-    app.chat("tirith", text);
-    tell(app, text);
+/// A report that needs no decision (a merge, a green main): shown in the project's chat, and handed to the manager
+/// with its next message instead of costing a turn of its own.
+pub fn inform(app: &Shared, project: &str, text: &str) {
+    app.chat("tirith", text, project);
+    talk(project, |t| {
+        t.notes.push(text.to_string());
+        t.notes.drain(..t.notes.len().saturating_sub(30));
+    });
 }
 
 /// Hands a report to the manager (gathered with the others of the next 2 s) without a chat line of its own.
-pub fn tell(app: &Shared, text: &str) {
-    let first = {
-        let mut n = NOTES.lock().unwrap();
-        n.push(text.to_string());
-        n.len() == 1
-    };
+pub fn tell(app: &Shared, project: &str, text: &str) {
+    let first = talk(project, |t| {
+        t.notes.push(text.to_string());
+        !std::mem::replace(&mut t.due, true)
+    });
     if first {
-        let app = app.clone();
+        let (app, project) = (app.clone(), project.to_string());
         tokio::spawn(async move {
             tokio::time::sleep(Duration::from_secs(2)).await;
-            let notes = std::mem::take(&mut *NOTES.lock().unwrap());
-            deliver(&app, &format!("[tirith] {}", notes.join("\n\n[tirith] ")));
+            talk(&project, |t| t.due = false);
+            deliver(&app, &project, "");
         });
     }
 }
 
 const KINDS: [&str; 5] = ["credentials", "payment", "account", "device", "decision"];
 
-/// `tirith ask-owner`: a card on the owner's page until answered.
-pub fn ask_owner(app: &Shared, kind: &str, question: &str) -> Result<Value, String> {
+/// `tirith ask-owner`: a card on the owner's page, among its project's, until answered.
+pub fn ask_owner(app: &Shared, project: &str, kind: &str, question: &str) -> Result<Value, String> {
+    known(app, project)?;
     if !KINDS.contains(&kind) || question.trim().is_empty() {
         return Err(format!("ask the owner with --kind {} and a question", KINDS.join("|")));
     }
     let row = {
         let db = app.db.lock().unwrap();
-        let n: i64 = db.query_row("SELECT COUNT(*) FROM owner_items", [], |r| r.get(0)).unwrap_or(0);
-        let row = json!({"id": format!("o{}", n + 1), "at": now_iso(), "kind": kind, "question": question.trim(), "status": "open", "answer": ""});
-        db.execute("INSERT INTO owner_items (id, at, kind, question, status, answer) VALUES (?1,?2,?3,?4,'open','')", rusqlite::params![row["id"].as_str(), row["at"].as_str(), kind, question.trim()]).map_err(|e| e.to_string())?;
+        let n: i64 = db.query_row("SELECT COALESCE(MAX(CAST(SUBSTR(id, 2) AS INTEGER)), 0) FROM owner_items", [], |r| r.get(0)).unwrap_or(0);
+        let row = json!({"id": format!("o{}", n + 1), "at": now_iso(), "kind": kind, "project": project, "question": question.trim(), "status": "open", "answer": ""});
+        db.execute("INSERT INTO owner_items (id, at, kind, project, question, status, answer) VALUES (?1,?2,?3,?4,?5,'open','')", rusqlite::params![row["id"].as_str(), row["at"].as_str(), kind, project, question.trim()])
+            .map_err(|e| e.to_string())?;
         row
     };
     app.emit("owner", row.clone());
     Ok(row)
 }
 
-/// The owner's answer to an open card, handed to the manager.
+/// The owner's answer to an open card, handed to the manager of the card's project with the question it answers.
 pub fn owner_answer(app: &Shared, id: &str, answer: &str) -> Result<Value, String> {
-    let kind: String = app.db.lock().unwrap().query_row("SELECT kind FROM owner_items WHERE id = ?1 AND status = 'open'", [id], |r| r.get(0)).map_err(|_| format!("no open question '{id}'"))?;
+    let sql = "SELECT kind, project, question FROM owner_items WHERE id = ?1 AND status = 'open'";
+    let (kind, project, question): (String, String, String) = app.db.lock().unwrap().query_row(sql, [id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))).map_err(|_| format!("no open question '{id}'"))?;
     let _ = app.db.lock().unwrap().execute("UPDATE owner_items SET status = 'answered', answer = ?1 WHERE id = ?2", rusqlite::params![answer, id]);
     app.emit("owner", json!({"id": id, "status": "answered", "answer": answer}));
-    notify(app, &format!("The owner answered {id} ({kind}): {answer}"));
+    notify(app, &project, &format!("The owner answered {id} ({kind}: {question}): {answer}"));
     Ok(json!({"ok": true}))
 }
 
 /// The owner's open cards, oldest first.
 pub fn owner_open(app: &Shared) -> Vec<Value> {
     let db = app.db.lock().unwrap();
-    db.prepare("SELECT id, at, kind, question FROM owner_items WHERE status = 'open' ORDER BY rowid")
+    db.prepare("SELECT id, at, kind, question, project FROM owner_items WHERE status = 'open' ORDER BY rowid")
         .and_then(|mut q| {
-            q.query_map([], |r| Ok(json!({"id": r.get::<_, String>(0)?, "at": r.get::<_, String>(1)?, "kind": r.get::<_, String>(2)?, "question": r.get::<_, String>(3)?, "status": "open"}))).map(|rows| rows.flatten().collect())
+            let s = |r: &rusqlite::Row, i: usize| r.get::<_, String>(i);
+            q.query_map([], |r| Ok(json!({"id": s(r, 0)?, "at": s(r, 1)?, "kind": s(r, 2)?, "question": s(r, 3)?, "project": s(r, 4)?, "status": "open"}))).map(|rows| rows.flatten().collect())
         })
         .unwrap_or_default()
 }
 
-pub async fn run(app: Shared) {
+/// Runs the conversation's session, again while messages wait for one; then the conversation rests.
+async fn run(app: Shared, project: String) {
     let mut backoff = 2;
     loop {
-        let started = now_s();
-        if let Err(e) = session(&app).await {
-            app.event("", "", "error", "manager", &e, "");
+        let started = std::time::Instant::now();
+        if let Some(e) = session(&app, &project).await.err().filter(|_| backoff == 2) {
+            app.event("", &project, "error", "manager", &e, "");
+            app.chat("tirith", &format!("The manager could not start: {e}. Tirith keeps trying; what you wrote waits for it."), &project);
         }
-        *app.manager_in.lock().unwrap() = None;
-        BUSY.store(false, Ordering::Relaxed);
-        app.emit("busy", json!(false));
-        backoff = if now_s() - started > 60 { 2 } else { (backoff * 2).min(60) };
-        tokio::time::sleep(Duration::from_secs(backoff)).await;
+        let rest = talk(&project, |t| {
+            (t.tx, t.pid) = (None, 0);
+            t.reply_to.clear(); // what a dead turn left is never sent to a room with a later answer
+            t.text.clear();
+            set_busy(&app, &project, t, false);
+            t.alive = !t.pending.is_empty();
+            !t.alive
+        });
+        if rest {
+            return;
+        }
+        // A session that ended young is started again more and more slowly; one that lived is started again at once.
+        backoff = if started.elapsed().as_secs() > 60 { 2 } else { (backoff * 2).min(60) };
+        if backoff > 2 {
+            tokio::time::sleep(Duration::from_secs(backoff)).await;
+        }
     }
 }
 
-/// Starts a streaming chat agent of `role` ("manager" or "ceo") in `<home>/<role>`, sandboxed, logging to `logs/<role>.log`.
-pub fn spawn_chat(app: &Shared, role: &str, argv: Vec<String>) -> Result<(tokio::process::Child, tokio::process::ChildStdin, tokio::process::ChildStdout), String> {
+/// Starts a streaming chat agent of `role` ("manager" or "ceo") in `<home>/<role>` (a project's manager in its own
+/// folder below it, so the agent's own notes stay with the project), sandboxed, logging to `logs/<role>.log`.
+pub fn spawn_chat(app: &Shared, role: &str, project: &str, argv: Vec<String>) -> Result<(tokio::process::Child, tokio::process::ChildStdin, tokio::process::ChildStdout), String> {
     let launch = sandbox::wrap(app, role, argv);
-    let dir = app.home.join(role);
+    let dir = app.home.join(role).join(project);
     let _ = std::fs::create_dir_all(&dir);
     let log = std::fs::OpenOptions::new().create(true).append(true).open(app.home.join(format!("logs/{role}.log"))).map_err(|e| e.to_string())?;
     let mut child = launch
         .command(app)
         .current_dir(&dir)
         .env("TIRITH_ROLE", role)
+        .env("TIRITH_PROJECT", project)
         .env("TIRITH_HOME", &app.home)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -200,17 +276,20 @@ pub fn control_reply(msg: &Value, behavior: Value) -> String {
     json!({"type": "control_response", "response": {"subtype": "success", "request_id": msg["request_id"], "response": behavior}}).to_string()
 }
 
-async fn session(app: &Shared) -> Result<(), String> {
-    let resumed = app.kv("manager_session");
+/// One session of a conversation, until it ends or rests. Err when it never got ready: its messages wait again.
+async fn session(app: &Shared, project: &str) -> Result<(), String> {
+    let key = format!("manager_session{}{project}", if project.is_empty() { "" } else { ":" });
+    let resumed = app.kv(&key);
     let mut cmd = models::chat_argv(app, "manager", resumed.as_deref())?;
-    cmd.argv.extend(["--append-system-prompt".into(), PROMPT.into()]);
-    let (mut child, mut stdin, stdout) = spawn_chat(app, "manager", cmd.argv)?;
-    PID.store(child.id().unwrap_or(0), Ordering::Relaxed);
+    cmd.argv.extend(["--append-system-prompt".into(), prompt(app, project)]);
+    let (mut child, mut stdin, stdout) = spawn_chat(app, "manager", project, cmd.argv)?;
+    let pid = child.id().unwrap_or(0);
     let (tx, mut rx) = mpsc::unbounded_channel::<String>();
-    for line in app.manager_pending.lock().unwrap().drain(..) {
-        let _ = tx.send(line);
-    }
-    *app.manager_in.lock().unwrap() = Some(tx.clone());
+    let sent: Vec<String> = talk(project, |t| {
+        (t.pid, t.tx) = (pid, Some(tx.clone()));
+        set_busy(app, project, t, true);
+        t.pending.drain(..).inspect(|line| drop(tx.send(line.clone()))).collect()
+    });
     let writer = tokio::spawn(async move {
         while let Some(line) = rx.recv().await {
             if stdin.write_all(format!("{line}\n").as_bytes()).await.is_err() {
@@ -219,14 +298,24 @@ async fn session(app: &Shared) -> Result<(), String> {
             let _ = stdin.flush().await;
         }
     });
-    let started = now_s();
+    let (mut ready, mut rest) = (false, false);
     let mut lines = BufReader::new(stdout).lines();
-    while let Ok(Some(line)) = lines.next_line().await {
+    while !rest {
+        let line = match tokio::time::timeout(IDLE, lines.next_line()).await {
+            Ok(Ok(Some(line))) => line,
+            Ok(_) => break,
+            // 30 quiet minutes and no turn running: the session rests until the next message resumes it.
+            Err(_) => {
+                rest = talk(project, |t| !t.busy && t.tx.take().is_some());
+                continue;
+            }
+        };
         let Ok(msg) = serde_json::from_str::<Value>(&line) else { continue };
         match msg["type"].as_str().unwrap_or("") {
             "system" if msg["subtype"] == "init" => {
+                ready = true;
                 if let Some(id) = msg["session_id"].as_str() {
-                    app.set_kv("manager_session", Some(id));
+                    app.set_kv(&key, Some(id));
                 }
             }
             "assistant" => {
@@ -234,19 +323,19 @@ async fn session(app: &Shared) -> Result<(), String> {
                     match block["type"].as_str() {
                         Some("text") => {
                             let text = block["text"].as_str().unwrap_or("");
-                            app.chat("manager", text);
-                            TURN_TEXT.lock().unwrap().push_str(text);
+                            app.chat("manager", text, project);
+                            talk(project, |t| t.text.push_str(text));
                         }
-                        Some("tool_use") => app.chat("tool", &rules::summary(block["name"].as_str().unwrap_or(""), &block["input"])),
+                        Some("tool_use") => app.chat("tool", &rules::summary(block["name"].as_str().unwrap_or(""), &block["input"]), project),
                         _ => {}
                     }
                 }
             }
             "result" => {
-                BUSY.store(false, Ordering::Relaxed);
-                app.emit("busy", json!(false));
-                let rooms_now = std::mem::take(&mut *REPLY_TO.lock().unwrap());
-                let text = std::mem::take(&mut *TURN_TEXT.lock().unwrap());
+                let (rooms_now, text) = talk(project, |t| {
+                    set_busy(app, project, t, false);
+                    (std::mem::take(&mut t.reply_to), std::mem::take(&mut t.text))
+                });
                 if !rooms_now.is_empty() && !text.trim().is_empty() {
                     rooms::reply(app, &rooms_now, &text);
                 }
@@ -259,9 +348,16 @@ async fn session(app: &Shared) -> Result<(), String> {
         }
     }
     writer.abort();
-    let _ = child.wait().await;
-    if resumed.is_some() && now_s() - started < 20 {
-        app.set_kv("manager_session", None); // the resume does not work: next time a fresh session
+    kill_group(pid, libc::SIGTERM);
+    let _ = tokio::time::timeout(Duration::from_secs(10), child.wait()).await;
+    if ready || rest {
+        return Ok(());
     }
-    Err("the manager session ended".into())
+    // It ended before it was ready: what it was handed waits again. A resume that does not work becomes a fresh session.
+    talk(project, |t| drop(t.pending.splice(0..0, sent)));
+    if resumed.is_none() {
+        return Err("its agent ended before it was ready (logs/manager.log says why)".into());
+    }
+    app.set_kv(&key, None);
+    Ok(())
 }
