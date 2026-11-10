@@ -72,11 +72,9 @@ fn flag(app: &Shared, key: &str) -> Option<String> {
     app.kv(key).filter(|v| !matches!(v.trim(), "" | "0" | "off" | "false"))
 }
 
-/// The open owner questions (table of the core module; missing means none).
+/// The open owner questions, each with the project it is about.
 fn owner_questions(app: &Shared) -> Vec<String> {
-    let db = app.db.lock().unwrap();
-    let Ok(mut q) = db.prepare("SELECT question FROM owner_items WHERE status = 'open' ORDER BY id") else { return vec![] };
-    q.query_map([], |r| r.get::<_, String>(0)).map(|r| r.flatten().collect()).unwrap_or_default()
+    manager::owner_open(app).iter().map(|o| format!("{}: {}", o["project"].as_str().unwrap_or(""), o["question"].as_str().unwrap_or("")).trim_start_matches(": ").to_string()).collect()
 }
 
 fn startable(text: &str) -> bool {
@@ -98,8 +96,7 @@ fn empty_plan_note(empty: &[String]) -> String {
 }
 
 fn merged_at(l: &Lane) -> Option<i64> {
-    let v = json!(l);
-    v["merged_at"].as_str().or(l.ended_at.as_deref()).and_then(secs)
+    l.merged_at.as_deref().or(l.ended_at.as_deref()).and_then(secs)
 }
 
 fn compute(app: &Shared) -> Vec<Metric> {
@@ -257,11 +254,12 @@ fn tick(app: &Shared) {
         book.last = json!(list);
         list
     };
-    for m in notes {
+    // A red main is not reported again here: its project's manager already got it from the merge queue, with the facts.
+    for m in notes.into_iter().filter(|m| m.id != "main_red") {
         if m.id == "idle" {
             app.sched_wake.notify_one(); // the mechanical fix: wake the scheduler and the autopilot
         }
-        manager::notify(app, &format!("health: {}. Get it moving.", describe(m)));
+        manager::notify(app, "", &format!("health: {}. Get it moving.", describe(m)));
     }
     let max = ceo_cfg(app, &["ceo", "max_per_day"], 6u64);
     if !due.is_empty() && reviews_today(app) < max {
@@ -277,7 +275,7 @@ fn reviews_today(app: &Shared) -> u64 {
 }
 
 fn payload(app: &Shared, metrics: Vec<Value>) -> Value {
-    json!({"metrics": metrics, "reviews": app.recent("ceo_reviews", &["id", "at", "metric", "text"], 10)})
+    json!({"metrics": metrics, "reviews": app.recent("ceo_reviews", &["id", "at", "metric", "text"], None, 10)})
 }
 
 /// Starts one review in the background; false when one is already running.
@@ -291,9 +289,9 @@ fn start_review(app: &Shared, metric: String, why: String) -> bool {
         let result = review(&app, &why).await;
         let text = result.clone().unwrap_or_else(|e| format!("(the CEO review could not run: {e})"));
         let _ = app.db.lock().unwrap().execute("INSERT INTO ceo_reviews (at, metric, text) VALUES (?1, ?2, ?3)", rusqlite::params![now_iso(), metric, text]);
-        app.chat("ceo", &text);
+        app.chat("ceo", &text, "");
         if result.is_ok() {
-            manager::tell(&app, &format!("CEO review: {text}"));
+            manager::tell(&app, "", &format!("CEO review: {text}"));
         }
         REVIEWING.store(false, Ordering::SeqCst);
         app.emit("ceo", json!({"running": false}));
@@ -353,7 +351,7 @@ fn ceo_permission(tool: &str, input: &Value) -> Value {
 async fn review(app: &Shared, why: &str) -> Result<String, String> {
     let mut cmd = models::chat_argv(app, "ceo", None)?;
     cmd.argv.extend(["--append-system-prompt".into(), PROMPT.into()]);
-    let (mut child, mut stdin, stdout) = manager::spawn_chat(app, "ceo", cmd.argv)?;
+    let (mut child, mut stdin, stdout) = manager::spawn_chat(app, "ceo", "", cmd.argv)?;
     let pid = child.id().unwrap_or(0);
     let mut lines = BufReader::new(stdout).lines();
     let msg = json!({"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": brief(app, why)}]}});
@@ -434,7 +432,7 @@ mod tests {
         let t = super::paused_text("tirith", "commit guard: the pre-commit hook is outdated or has other words than config.toml (tirith guard install tirith)");
         assert!(t.contains("paused: commit guard"), "{t}");
         assert!(t.contains("fix: tirith guard install tirith"), "{t}");
-        assert!(super::paused_text("p", "3 lanes wait for the merge queue").contains("fix: tirith merge status"));
+        assert!(super::paused_text("p", "3 lanes wait for the merge queue").contains("fix: wait for the merges"));
         assert!(super::paused_text("p", "less than 5 GB free on /x").contains("fix: free disk space"));
     }
 

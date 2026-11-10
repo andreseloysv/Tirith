@@ -30,7 +30,7 @@ pub fn list(app: &Shared) -> Vec<Value> {
 }
 
 /// The real folder behind `raw` (a full path or `~/…`), or why it cannot be a project; a project's own folder passes.
-fn folder(raw: &str, projects: &[Project]) -> Result<PathBuf, String> {
+fn folder(raw: &str, projects: &[Project], tirith: &Path) -> Result<PathBuf, String> {
     let path = if raw.trim() == "~" { home_dir() } else { expand(raw.trim()) };
     let missing = if path.is_absolute() { format!("there is no folder {raw:?}") } else { format!("{raw:?} is not the full path of a folder (/Users/… or ~/…)") };
     let dir = path.canonicalize().ok().filter(|d| path.is_absolute() && d.is_dir()).ok_or(missing)?;
@@ -41,10 +41,11 @@ fn folder(raw: &str, projects: &[Project]) -> Result<PathBuf, String> {
         Some("holds your home folder".into())
     } else if dir.components().any(|c| c.as_os_str() == ".git") || dir.join(".git").is_file() {
         Some("is a git worktree or inside a .git folder".into())
+    } else if dir.starts_with(tirith.canonicalize().unwrap_or_else(|_| tirith.into())) {
+        Some("is Tirith's own folder (the agents' copies of the projects live there)".into())
     } else {
         let named = |p: &Project, what: &str| format!("{what} {}", if p.name.is_empty() { &p.id } else { &p.name });
         projects.iter().filter(|p| !p.repo.is_empty() && p.repo() != dir).find_map(|p| match () {
-            _ if dir.starts_with(p.lanes_dir()) => Some(named(p, "is one of the agents' copies of")),
             _ if dir.starts_with(p.repo()) => Some(named(p, "is inside the project")),
             _ => p.repo().starts_with(&dir).then(|| named(p, "holds the project")),
         })
@@ -109,7 +110,7 @@ fn register(app: &Shared, mut p: Project) -> Result<(Project, bool), String> {
 /// Adds the folder as a project; with `dry`, only says what adding it would do.
 async fn add(app: &Shared, raw: &str, name: &str, color: &str, dry: bool) -> Result<Value, String> {
     let cfg = app.cfg();
-    let dir = folder(raw, &cfg.projects)?;
+    let dir = folder(raw, &cfg.projects, &app.home)?;
     let shown = |p: &Project, exists: bool, notes: &[String]| json!({"id": p.id, "name": p.name, "folder": dir, "color": p.color, "exists": exists, "notes": notes});
     if let Some(p) = cfg.projects.iter().find(|p| !p.repo.is_empty() && p.repo() == dir) {
         return Ok(shown(p, true, &[]));
@@ -233,16 +234,16 @@ mod tests {
     fn project_add_refuses_folders_that_cannot_be_projects() {
         let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("../../target/projects-test-{}", std::process::id()));
         let at = |p: &str| base.join(p).display().to_string();
-        for d in ["repo/sub", "repo/.git/info", "repo-lanes/slot-1", "wt", "other"] {
+        for d in ["repo/sub", "repo/.git/info", "home/lanes/repo/slot-1", "wt", "other"] {
             std::fs::create_dir_all(base.join(d)).unwrap();
         }
         std::fs::write(base.join("file"), "x").and_then(|_| std::fs::write(base.join("wt/.git"), "gitdir: /elsewhere")).unwrap();
-        let ps = [Project { id: "repo".into(), repo: at("repo"), ..Default::default() }];
+        let (ps, home) = ([Project { id: "repo".into(), repo: at("repo"), ..Default::default() }], base.join("home"));
         let refusals = [("", "full path"), ("relative/dir", "full path"), ("/no/such/dir-4821", "no folder"), ("/tmp", "temporary"), ("/", "home folder")];
-        let mine = [("file", "no folder"), ("repo/sub", "inside the project"), ("repo-lanes/slot-1", "copies"), ("", "holds the project"), ("repo/.git/info", ".git"), ("wt", "worktree")];
-        let err = |raw: String| folder(&raw, &ps).err().unwrap_or_default();
+        let mine = [("file", "no folder"), ("repo/sub", "inside the project"), ("home/lanes/repo/slot-1", "Tirith's own"), ("home", "Tirith's own"), ("", "holds the project"), ("repo/.git/info", ".git"), ("wt", "worktree")];
+        let err = |raw: String| folder(&raw, &ps, &home).err().unwrap_or_default();
         let got: Vec<(String, &str)> = refusals.iter().map(|(r, w)| (err(r.to_string()), *w)).chain(mine.iter().map(|(r, w)| (err(at(r)), *w))).collect();
-        let fine = (folder(&at("other"), &ps), folder(&at("repo"), &ps));
+        let fine = (folder(&at("other"), &ps, &home), folder(&at("repo"), &ps, &home));
         let _ = std::fs::remove_dir_all(&base);
         assert!(got.iter().all(|(e, w)| e.contains(w)), "{got:?}");
         assert!(fine.0.is_ok() && fine.1.is_ok());

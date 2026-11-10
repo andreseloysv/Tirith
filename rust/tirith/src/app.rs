@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{SystemTime, UNIX_EPOCH};
-use tokio::sync::{broadcast, mpsc, Notify};
+use tokio::sync::{broadcast, Notify};
 
 pub type Shared = Arc<App>;
 
@@ -23,7 +23,7 @@ pub struct Lane {
     pub model: Option<String>,
     /// queued, running, waiting (asked the manager), merge-queued, merging, waiting-disk (outside the queue), merged, failed, stopped
     pub status: String,
-    /// Its worktree slot (`<repo>-lanes/slot-N`), kept until the lane is merged, failed or stopped.
+    /// Its worktree slot (`<tirith home>/lanes/<project>/slot-N`), kept until the lane is merged, failed or stopped.
     pub workspace: String,
     pub branch: String,
     pub pid: Option<u32>,
@@ -63,8 +63,6 @@ pub struct App {
     pub sched_wake: Notify,
     pub merge_wake: Notify,
     pub children: Mutex<HashSet<String>>,
-    pub manager_in: Mutex<Option<mpsc::UnboundedSender<String>>>,
-    pub manager_pending: Mutex<Vec<String>>,
     manifests: Mutex<HashMap<PathBuf, (Option<SystemTime>, Manifest)>>,
     cfg_mtime: Mutex<Option<SystemTime>>,
 }
@@ -95,7 +93,7 @@ fn mtime(p: &Path) -> Option<SystemTime> {
 impl App {
     pub fn open() -> Shared {
         let home = tirith_home();
-        for dir in ["logs/lanes", "logs/runs", "briefs", "manager"] {
+        for dir in ["logs/lanes", "logs/runs", "briefs", "lanes"] {
             let _ = std::fs::create_dir_all(home.join(dir));
         }
         let db = Connection::open(home.join("tirith.sqlite3")).expect("open tirith.sqlite3");
@@ -114,9 +112,9 @@ impl App {
                  status TEXT, answer TEXT);",
         )
         .expect("create tables");
-        for col in ["pipeline", "sha"] {
-            let _ = db.execute(&format!("ALTER TABLE runs ADD COLUMN {col} TEXT"), []);
-            // fails once it exists
+        // Columns added later (each ALTER fails once its column exists). A chat row and an owner card belong to a project; '' is none.
+        for (table, col) in [("runs", "pipeline TEXT"), ("runs", "sha TEXT"), ("chat", "project TEXT NOT NULL DEFAULT ''"), ("owner_items", "project TEXT NOT NULL DEFAULT ''")] {
+            let _ = db.execute(&format!("ALTER TABLE {table} ADD COLUMN {col}"), []);
         }
         let mut lanes = BTreeMap::new();
         {
@@ -138,8 +136,6 @@ impl App {
             sched_wake: Notify::new(),
             merge_wake: Notify::new(),
             children: Mutex::new(HashSet::new()),
-            manager_in: Mutex::new(None),
-            manager_pending: Mutex::new(Vec::new()),
             manifests: Mutex::new(HashMap::new()),
             cfg_mtime: Mutex::new(cfg_mtime),
         })
@@ -214,14 +210,16 @@ impl App {
         self.emit("event", json!({"id": id, "at": at, "lane": lane, "project": project, "kind": kind, "tool": tool, "summary": summary}));
     }
 
-    pub fn chat(&self, role: &str, text: &str) {
+    /// One row of a project's conversation with its manager (`project` "" is the conversation of no project).
+    pub fn chat(&self, role: &str, text: &str, project: &str) {
+        let project = if self.cfg().project(project).is_some() { project } else { "" }; // a project that is gone
         let at = now_iso();
         let id = {
             let db = self.db.lock().unwrap();
-            let _ = db.execute("INSERT INTO chat (at, role, text) VALUES (?1,?2,?3)", params![at, role, text]);
+            let _ = db.execute("INSERT INTO chat (at, role, text, project) VALUES (?1,?2,?3,?4)", params![at, role, text, project]);
             db.last_insert_rowid()
         };
-        self.emit("chat", json!({"id": id, "at": at, "role": role, "text": text}));
+        self.emit("chat", json!({"id": id, "at": at, "role": role, "text": text, "project": project}));
     }
 
     pub fn kv(&self, key: &str) -> Option<String> {
@@ -236,12 +234,13 @@ impl App {
         };
     }
 
-    /// The last `limit` rows of a table as JSON objects, oldest first.
-    pub fn recent(&self, table: &str, cols: &[&str], limit: u32) -> Vec<Value> {
+    /// The last `limit` rows of a table (with `project`, only that project's) as JSON objects, oldest first.
+    pub fn recent(&self, table: &str, cols: &[&str], project: Option<&str>, limit: u32) -> Vec<Value> {
         let db = self.db.lock().unwrap();
-        let sql = format!("SELECT {} FROM {table} ORDER BY id DESC LIMIT {limit}", cols.join(", "));
+        let only = if project.is_some() { "WHERE project = ?1" } else { "" };
+        let sql = format!("SELECT {} FROM {table} {only} ORDER BY id DESC LIMIT {limit}", cols.join(", "));
         let Ok(mut q) = db.prepare(&sql) else { return vec![] };
-        let rows = q.query_map([], |r| {
+        let rows = q.query_map(rusqlite::params_from_iter(project), |r| {
             let mut obj = serde_json::Map::new();
             for (i, c) in cols.iter().enumerate() {
                 let v: rusqlite::types::Value = r.get(i)?;
@@ -397,9 +396,10 @@ mod tests {
     }
 }
 
+/// Signals a process group; pid 0 would be the daemon's own group, so it is never signalled.
 pub fn kill_group(pid: u32, signal: i32) {
-    unsafe {
-        libc::kill(-(pid as i32), signal);
+    if pid != 0 {
+        unsafe { libc::kill(-(pid as i32), signal) };
     }
 }
 
@@ -415,12 +415,8 @@ pub fn redact_secrets(text: &str) -> String {
     use std::sync::OnceLock;
     static NAMED: OnceLock<Regex> = OnceLock::new();
     static BARE: OnceLock<Regex> = OnceLock::new();
-    let named = NAMED.get_or_init(|| {
-        Regex::new(r#"(?i)(\b[A-Za-z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD)[A-Za-z0-9_]*\\?["']?\s*[=:]\s*\\?["']?)([^\s"'\\,;}&]+)"#).unwrap()
-    });
-    let bare = BARE.get_or_init(|| {
-        Regex::new(r"\bAIza[0-9A-Za-z_\-]{10,}|\bsk-[0-9A-Za-z_\-]{10,}|\bgh[pousr]_[0-9A-Za-z]{10,}|\bxox[abpr]-[0-9A-Za-z\-]{10,}|\bAKIA[0-9A-Z]{12,}").unwrap()
-    });
+    let named = NAMED.get_or_init(|| Regex::new(r#"(?i)(\b[A-Za-z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD)[A-Za-z0-9_]*\\?["']?\s*[=:]\s*\\?["']?)([^\s"'\\,;}&]+)"#).unwrap());
+    let bare = BARE.get_or_init(|| Regex::new(r"\bAIza[0-9A-Za-z_\-]{10,}|\bsk-[0-9A-Za-z_\-]{10,}|\bgh[pousr]_[0-9A-Za-z]{10,}|\bxox[abpr]-[0-9A-Za-z\-]{10,}|\bAKIA[0-9A-Z]{12,}").unwrap());
     let step = named.replace_all(text, "${1}[redacted]");
     bare.replace_all(&step, "[redacted]").into_owned()
 }

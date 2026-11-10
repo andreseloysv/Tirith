@@ -6,7 +6,7 @@
 //! agents reach the manager as information. After 30 agent messages in a row with nothing from a paired phone,
 //! Tirith stops delivering and says so once, until a phone writes.
 
-mod sealed;
+pub(crate) mod sealed;
 
 use crate::app::{bad, now_iso, Shared, R};
 use crate::client::{call, Flag};
@@ -251,7 +251,7 @@ async fn poll(app: &Shared, r: &Room) -> Result<(), String> {
     // Public rooms are only watched: what is said there never reaches the manager, so its answers are never
     // posted in public by themselves (the manager writes there on purpose with `tirith room say`).
     if r.private() {
-        out.deliver.iter().for_each(|(author, text)| manager::from_room(app, &r.id, author, text));
+        out.deliver.iter().for_each(|(author, text)| manager::from_room(app, &r.project, &r.id, author, text));
     }
     out.mentions.into_iter().for_each(|m| app.emit("room-mention", m));
     if !r.private() && !list.is_empty() {
@@ -401,11 +401,8 @@ pub fn reply(app: &Shared, rooms: &[String], text: &str) {
             let Some(r) = room(&id) else { continue };
             let turn = update(&app, &id, |r| std::mem::take(&mut r.turn)).unwrap_or_default();
             let readers: Vec<String> = r.readers().into_iter().chain(turn).collect();
-            let res = match sealed::identity(&app.home, &r.me) {
-                Ok(me) => send(&base(&app), &me, &r, &text, &readers).await,
-                Err(e) => Err(e),
-            };
-            if let Err(e) = res {
+            let res = async { send(&base(&app), &sealed::identity(&app.home, &r.me)?, &r, &text, &readers).await };
+            if let Err(e) = res.await {
                 app.event("", &r.project, "error", "rooms", &format!("{id}: {e}"), "");
             }
         }
@@ -468,24 +465,24 @@ fn view(app: &Shared, r: &Room) -> Value {
 // ---- actions (the API and the CLI) ------------------------------------------------------------------------
 
 fn new_code() -> String {
-    rand::random::<[u8; 16]>().iter().map(|b| format!("{b:02x}")).collect()
+    sealed::hex(&rand::random::<[u8; 16]>())
 }
 
-async fn create(app: &Shared, title: &str) -> Result<Room, String> {
+async fn create(app: &Shared, title: &str, project: &str) -> Result<Room, String> {
     let base = base(app);
     let me = sealed::identity(&app.home, &my_name(app))?;
     let id = sealed::new_room(&base).await?;
     sealed::post(&base, &me, "announce", &id, json!("joined")).await?;
     let code = new_code();
     let title: String = title.chars().filter(|c| !c.is_control() && *c != '<' && *c != '>').take(80).collect();
-    let r = Room { id: id.clone(), title: title.trim().to_string(), kind: "manager".into(), me: me.name.clone(), me_id: me.id.clone(), codes: vec![code.clone()], invite: code, ..Default::default() };
+    let r = Room { id: id.clone(), title: title.trim().to_string(), project: project.into(), kind: "manager".into(), me: me.name.clone(), me_id: me.id.clone(), codes: vec![code.clone()], invite: code, ..Default::default() };
     save(app, &r);
     watch(app, &id);
     Ok(r)
 }
 
 /// Joins another manager's room with its peer code `<room>:<manager key id>:<code>`.
-async fn join(app: &Shared, code: &str) -> Result<Room, String> {
+async fn join(app: &Shared, code: &str, project: &str) -> Result<Room, String> {
     let parts: Vec<&str> = code.trim().split(':').collect();
     let ok = parts.len() == 3 && parts[0].starts_with("sealed-") && parts[1].len() == 64 && parts[2].len() == 32;
     let [id, key, secret] = parts[..] else { return Err("that is not a room code (sealed-<room>:<key id>:<code>)".into()) };
@@ -499,7 +496,7 @@ async fn join(app: &Shared, code: &str) -> Result<Room, String> {
     sealed::post(&base, &me, "message", id, sealed::seal(&me, &format!("tirith-join {secret}"), &format!("#{id}"), std::slice::from_ref(&public))).await?;
     let count = sealed::page(&base, id, None, 0, &me.name).await?["count"].as_u64();
     let host = Peer { name, key_id: key.to_string(), public, since: now_iso(), accepted: true, ..Default::default() };
-    let r = Room { id: id.to_string(), kind: "peer".into(), me: me.name.clone(), me_id: me.id.clone(), cursor: count, managers: vec![host], ..Default::default() };
+    let r = Room { id: id.to_string(), project: project.into(), kind: "peer".into(), me: me.name.clone(), me_id: me.id.clone(), cursor: count, managers: vec![host], ..Default::default() };
     save(app, &r);
     watch(app, id);
     Ok(r)
@@ -537,11 +534,11 @@ async fn api_one(State(app): State<Shared>, Path(id): Path<String>) -> R {
 }
 
 async fn api_new(State(app): State<Shared>, Json(b): Json<Value>) -> R {
-    Ok(Json(view(&app, &create(&app, b["title"].as_str().unwrap_or("")).await.map_err(bad)?)))
+    Ok(Json(view(&app, &create(&app, b["title"].as_str().unwrap_or(""), b["project"].as_str().unwrap_or("")).await.map_err(bad)?)))
 }
 
 async fn api_join(State(app): State<Shared>, Json(b): Json<Value>) -> R {
-    Ok(Json(view(&app, &join(&app, b["code"].as_str().unwrap_or("")).await.map_err(bad)?)))
+    Ok(Json(view(&app, &join(&app, b["code"].as_str().unwrap_or(""), b["project"].as_str().unwrap_or("")).await.map_err(bad)?)))
 }
 
 /// Adds a one-use code, forgetting the oldest beyond eight.

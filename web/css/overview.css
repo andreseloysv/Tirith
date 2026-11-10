@@ -31,3 +31,7 @@
 /* running pipelines and agent cards are links to their views */
 .ovpipe { cursor: pointer; }
 @media (max-width: 640px) { .ovrevbody { margin-left: 0; } .stceo { flex-wrap: wrap; } }
+
+/* a card's project, named only where the cards of every project are listed */
+.nchip.nproj { display: inline-flex; align-items: center; color: var(--ink2); }
+.nchip.nproj .pdot { animation: none; width: 7px; height: 7px; margin: 0 5px 0 0; }
