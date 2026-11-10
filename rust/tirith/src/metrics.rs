@@ -72,11 +72,9 @@ fn flag(app: &Shared, key: &str) -> Option<String> {
     app.kv(key).filter(|v| !matches!(v.trim(), "" | "0" | "off" | "false"))
 }
 
-/// The open owner questions (table of the core module; missing means none).
+/// The open owner questions, each with the project it is about.
 fn owner_questions(app: &Shared) -> Vec<String> {
-    let db = app.db.lock().unwrap();
-    let Ok(mut q) = db.prepare("SELECT CASE project WHEN '' THEN '' ELSE project || ': ' END || question FROM owner_items WHERE status = 'open' ORDER BY rowid") else { return vec![] };
-    q.query_map([], |r| r.get::<_, String>(0)).map(|r| r.flatten().collect()).unwrap_or_default()
+    manager::owner_open(app).iter().map(|o| format!("{}: {}", o["project"].as_str().unwrap_or(""), o["question"].as_str().unwrap_or("")).trim_start_matches(": ").to_string()).collect()
 }
 
 fn startable(text: &str) -> bool {

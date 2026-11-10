@@ -5,9 +5,9 @@
 use crate::app::{kill_group, now_iso, Shared};
 use crate::{models, rooms, rules, sandbox};
 use serde_json::{json, Value};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::process::Stdio;
-use std::sync::{Mutex, MutexGuard};
+use std::sync::Mutex;
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::mpsc;
@@ -28,18 +28,12 @@ answers; merges are for your information and need no answer): act on what needs 
 first, because a report can be older than the state. A failed or stopped item is skipped by the autopilot until you restart it with \
 tirith lane start (make the item clearer first if that is why it failed).";
 const IDLE: Duration = Duration::from_secs(30 * 60);
+/// What a session's prompt adds about its conversation: a project's own, or the one of no project.
+const ONE: &str = "This conversation is only about the project {id} (repository {repo}). Every other project has its own manager: say and do nothing about them. tirith status lists this project's lanes, and the cards you send with tirith ask-owner belong to it.";
+const REST: &str = "This conversation is not about one project: it gets the health reports, the CEO's reviews, the rooms of no project and what the owner asks across projects. Each project also has its own manager, who gets that project's lane questions, failures and merges: leave those to it. You may still read and change any project with the commands above when the owner or a report asks for it. A card about one project is sent with tirith ask-owner --project <project> …, one project per card.";
 
-/// The session's system prompt: the manager's job, and which conversation this one is.
 fn prompt(app: &Shared, project: &str) -> String {
-    let scope = match app.cfg().project(project) {
-        Some(p) => format!(
-            "This conversation is only about the project {} (repository {}). Every other project has its own manager: say and do nothing about them. tirith status lists this project's lanes, and the cards you send with tirith ask-owner belong to it.",
-            p.id,
-            p.repo().display()
-        ),
-        None => "This conversation is not about one project: it gets the health reports, the CEO's reviews, the rooms of no project and what the owner asks across projects. Each project also has its own manager, who gets that project's lane questions, failures and merges: leave those to it. You may still read and change any project with the commands above when the owner or a report asks for it. A card about one project is sent with tirith ask-owner --project <project> …, one project per card."
-            .into(),
-    };
+    let scope = app.cfg().project(project).map_or(REST.into(), |p| ONE.replace("{id}", &p.id).replace("{repo}", &p.repo().display().to_string()));
     format!("{PROMPT}\n{scope}")
 }
 
@@ -54,7 +48,7 @@ struct Talk {
     busy: bool,
     pid: u32,
     /// Rooms whose messages started the current turn (their answer goes back there) and the turn's text so far.
-    reply_to: Vec<String>,
+    reply_to: BTreeSet<String>,
     text: String,
     /// Reports from Tirith not yet handed over, and whether a hand-over is already on its way.
     notes: Vec<String>,
@@ -63,12 +57,8 @@ struct Talk {
 
 static TALKS: Mutex<BTreeMap<String, Talk>> = Mutex::new(BTreeMap::new());
 
-fn talks() -> MutexGuard<'static, BTreeMap<String, Talk>> {
-    TALKS.lock().unwrap_or_else(|e| e.into_inner())
-}
-
 fn talk<T>(project: &str, f: impl FnOnce(&mut Talk) -> T) -> T {
-    f(talks().entry(project.to_string()).or_default())
+    f(TALKS.lock().unwrap().entry(project.to_string()).or_default())
 }
 
 fn set_busy(app: &Shared, project: &str, t: &mut Talk, on: bool) {
@@ -110,22 +100,18 @@ fn deliver(app: &Shared, project: &str, text: &str) {
 /// that project's manager, and the manager's answer to this turn goes back to that room.
 pub fn from_room(app: &Shared, project: &str, room: &str, author: &str, text: &str) {
     app.chat("room", &format!("{author} ({room}): {text}"), project);
-    talk(project, |t| {
-        if !t.reply_to.iter().any(|r| r == room) {
-            t.reply_to.push(room.to_string());
-        }
-    });
+    talk(project, |t| t.reply_to.insert(room.to_string()));
     deliver(app, project, &format!("[room {room}] {author}: {text}"));
 }
 
 /// Ends every session (the settings changed); each one resumes its conversation at its next message.
 pub fn restart() {
-    talks().values().for_each(|t| kill_group(t.pid, libc::SIGTERM));
+    TALKS.lock().unwrap().values().for_each(|t| kill_group(t.pid, libc::SIGTERM));
 }
 
 /// The conversations whose manager works on a turn.
 pub fn busy() -> Vec<String> {
-    talks().iter().filter(|(_, t)| t.busy).map(|(p, _)| p.clone()).collect()
+    TALKS.lock().unwrap().iter().filter(|(_, t)| t.busy).map(|(p, _)| p.clone()).collect()
 }
 
 /// Stops the current turn of the conversation's session (the session lives on): a stream-json `control_request`
@@ -337,7 +323,7 @@ async fn session(app: &Shared, project: &str) -> Result<(), String> {
                     (std::mem::take(&mut t.reply_to), std::mem::take(&mut t.text))
                 });
                 if !rooms_now.is_empty() && !text.trim().is_empty() {
-                    rooms::reply(app, &rooms_now, &text);
+                    rooms::reply(app, &Vec::from_iter(rooms_now), &text);
                 }
             }
             "control_request" if msg["request"]["subtype"] == "can_use_tool" => {

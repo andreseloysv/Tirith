@@ -420,11 +420,9 @@ async fn land(app: &Shared, project: &Project, pipe: &Pipe, slot: &Path, base: &
         lanes::tell(&id, &format!("[tirith] main advanced: {} (files: {})", items.join("; "), files.join(", ")));
     }
     // A merge is news, not a question: the manager gets a turn for it only when it leaves the plan without open work.
-    let report = format!("merged on {} at {sha8}: {}", project.id, items.join("; "));
-    if plan::read(app, &project.id).is_ok_and(|steps| steps.iter().flat_map(|s| &s.items).any(|i| !i.done && !lanes::is_autopilot_skipped(&i.text))) {
-        manager::inform(app, &project.id, &report);
-    } else {
-        manager::notify(app, &project.id, &format!("{report}\nThe plan has no open item left: tell the owner what is done, and ask for the next goal if the project needs one."));
+    manager::inform(app, &project.id, &format!("merged on {} at {sha8}: {}", project.id, items.join("; ")));
+    if plan::read(app, &project.id).is_ok_and(|steps| !steps.iter().flat_map(|s| &s.items).any(|i| !i.done && !lanes::is_autopilot_skipped(&i.text))) {
+        manager::tell(app, &project.id, "The plan has no open item left: tell the owner what is done, and ask for the next goal if the project needs one.");
     }
     app.emit("plan", json!({"project": project.id}));
     app.sched_wake.notify_one();
