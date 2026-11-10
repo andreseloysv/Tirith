@@ -1,7 +1,8 @@
 // Rooms view (the old v-rooms.js): private, encrypted rooms on agentsmessenger.com — New room, Open on my phone
-// (permanent link and QR), Connect another phone (one-use QR), who is in each room, Invite a manager, Leave and
-// Join with a code — and the public rooms Tirith listens to: summary, participants, the last messages with the
-// owner's mentions marked, and a box to say something. Data: GET /api/rooms, refetched on SSE "room" / "room-mention".
+// (permanent link and QR), Connect another phone (one-use QR), who is in each room, Forget a phone, Invite a manager,
+// Leave and Join with a code — and the public rooms Tirith listens to: summary, participants, the last messages with
+// the owner's mentions marked, and a box to say something. A phone connected in one room is in every project's room:
+// Tirith makes those rooms itself. Data: GET /api/rooms, refetched on SSE "room" / "room-mention".
 import { html, useState, useMemo } from '../../vendor/preact-htm.js';
 import { useFetch, useStore, api } from '../store.js';
 import { agoText, CopyBtn, useAction } from './settings/ui.js';
@@ -18,12 +19,13 @@ function Status({ r }) {
   return html`<span class=${`rconn ${ok ? 'on' : 'off'}`}><i class=${`dot ${ok ? 'green' : 'grey'}`}></i>${ok ? 'Connected' : 'Not connected'}</span>`;
 }
 
-function Who({ r }) {
+function Who({ r, forget }) {
   const rows = [...(r.devices || []).map((d) => ['phone', d]), ...(r.managers || []).map((m) => ['manager', m])];
   if (!rows.length) return html`<p class="mut sm rwho">Nobody else is here yet.</p>`;
   return html`<ul class="rwho">${rows.map(([k, p]) => html`<li key=${k + p.key_id}>
-    <span class="rk">${k === 'phone' ? 'Your phone' : p.accepted ? 'Manager' : 'Peer, no code'}</span><b>${p.name}</b>
-    <code title="Key id">${short(p.key_id)}</code>${p.last_seen ? html`<span class="mut sm">seen ${agoText(p.last_seen)}</span>` : null}</li>`)}</ul>`;
+    <span class="rk">${k === 'phone' ? 'Your phone' : p.blocked ? 'Forgotten phone' : p.accepted ? 'Manager' : 'Peer, no code'}</span><b>${p.name}</b>
+    <code title="Key id">${short(p.key_id)}</code>${p.last_seen ? html`<span class="mut sm">seen ${agoText(p.last_seen)}</span>` : null}
+    ${k === 'phone' ? html`<button class="alink rforget" onClick=${() => forget(p.key_id)}>Forget</button>` : null}</li>`)}</ul>`;
 }
 
 function Last({ r }) {
@@ -50,7 +52,7 @@ function PairBlock({ r, act }) {
   const [busy, error, run] = act;
   const key = `qr:${r.id}`;
   return html`<div class="rblock rpair"><b>Connect another phone</b>
-    <p class="mut sm">One use. Each QR pairs one phone; make one per phone.</p>
+    <p class="mut sm">One use. Each QR pairs one phone; make one per phone. A phone connected here gets a chat with every project.</p>
     ${r.invite ? html`<${Qr} r=${r} kind="invite" label=${`QR code to connect another phone to ${r.title || r.id}`} note="Scan it with the phone camera. It works once." />`
       : html`<p class="mut sm">The last QR was used.</p>`}
     <button class="sadd" disabled=${busy === key} onClick=${() => run(key, () => api('POST', `/api/rooms/${enc(r.id)}/qr`))}>${busy === key ? 'Making…' : 'New QR'}</button>
@@ -69,8 +71,13 @@ function Popover({ r, ask, close, act }) {
       : html`<div>Tirith makes a code another manager joins this room with.</div><div class="apb">
         <button class="abtn" disabled=${busy === key} onClick=${() => run(key, () => api('POST', `/api/rooms/${enc(r.id)}/invite`))}>${busy === key ? 'Asking…' : 'Get a code'}</button>${closeBtn}</div>`}</div>`;
   }
+  if (ask.startsWith('forget:')) {
+    const id = ask.slice(7);
+    return html`<div class="acpop" role="dialog" aria-label="Forget a phone"><div>Forget the phone <code>${short(id)}</code>? It is disconnected from every project: it reads nothing more and what it writes is ignored. To connect it again, scan a new QR with it.</div>
+      <div class="apb"><button class="abtn" disabled=${busy === ask} onClick=${async () => { await run(ask, () => api('POST', '/api/rooms/forget', { key_id: id })); close(); }}>${busy === ask ? 'Forgetting…' : 'Forget'}</button>${closeBtn}</div></div>`;
+  }
   const key = `leave:${r.id}`;
-  return html`<div class="acpop" role="dialog" aria-label="Leave"><div>Leave this room? Tirith stops listening here. Phones already paired stay paired until you make a new room.</div>
+  return html`<div class="acpop" role="dialog" aria-label="Leave"><div>Leave this room? Tirith stops listening here and it goes from your phones. They stay connected to the other rooms (to disconnect a phone, use Forget), and a project left without a room gets a new one.</div>
     <div class="apb"><button class="abtn" disabled=${busy === key} onClick=${async () => { await run(key, () => api('POST', `/api/rooms/${enc(r.id)}/leave`)); close(); }}>${busy === key ? 'Leaving…' : 'Leave'}</button>${closeBtn}</div></div>`;
 }
 
@@ -88,7 +95,7 @@ function PrivateCard({ r, reload }) {
       ${r.me && r.me.name ? html`<span class="mut sm rme" title="Your key id here">you: ${r.me.name} <code>${short(r.me.key_id)}</code></span>` : null}</div>
     ${r.error ? html`<div class="ierr rerr">${r.error}</div>` : null}
     ${r.braked ? html`<div class="icli rbrake">The manager stopped answering here: too many messages in a row came from agents. It answers again when you write from a paired phone.</div>` : null}
-    <div class="rgrid"><div><${Who} r=${r} /><${Last} r=${r} /></div></div>
+    <div class="rgrid"><div><${Who} r=${r} forget=${(id) => toggle(`forget:${id}`)} /><${Last} r=${r} /></div></div>
     ${manager ? html`<div class="rgrid rblocks"><${OpenBlock} r=${r} /><${PairBlock} r=${r} act=${act} /></div>` : null}
     <div class="sfoot">
       ${manager ? html`<button class=${`sadd${ask === 'invite' ? ' on' : ''}`} onClick=${() => toggle('invite')}>Invite a manager</button>` : null}
@@ -115,7 +122,7 @@ function NewRoom({ reload, project, name }) {
     reload();
   };
   return html`<div class="card scard rnew">
-    <div class="phead"><b>New room</b><span class="mut sm">An encrypted room on agentsmessenger.com. Scan its QR with your phone to talk to ${project ? `the manager of ${name}` : 'the manager'}.</span></div>
+    <div class="phead"><b>New room</b><span class="mut sm">An encrypted room on agentsmessenger.com${project ? ` for ${name}` : ''}. Scan its QR with your phone once: the phone gets a chat with the manager of every project, also of those you add later.</span></div>
     <div class="sfoot"><input type="text" class="rtitle" maxlength="80" placeholder="Name (optional)" aria-label="Room name" autocomplete="off"
         value=${title} onInput=${(e) => setTitle(e.target.value)} onKeyDown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); create(); } }} />
       <button class="isend" disabled=${busy === 'new'} onClick=${create}>${busy === 'new' ? 'Creating…' : 'New room'}</button></div>
@@ -178,7 +185,7 @@ export function Rooms({ project }) {
     <${NewRoom} reload=${reload} project=${project} name=${name} />
     ${err && !data ? html`<div class="ierr">Could not read the rooms: ${err.message}</div>` : null}
     ${priv.length ? priv.map((r) => html`<${PrivateCard} key=${r.id} r=${r} reload=${reload} />`)
-      : data ? html`<p class="quiet rempty">${project ? `No private rooms for ${name} yet.` : 'No private rooms yet.'} A room is an encrypted chat: create one, scan its QR with your phone and talk to the manager from there.</p>` : null}
+      : data ? html`<p class="quiet rempty">${project ? `No private rooms for ${name} yet.` : 'No private rooms yet.'} A room is an encrypted chat: create one, scan its QR with your phone, and every project opens on it.</p>` : null}
     ${pub.length ? html`<h2 class="rsec">Public rooms <span class="n">${pub.length}</span></h2>
       ${pub.map((r) => html`<${PublicCard} key=${r.id} r=${r} reload=${reload} />`)}` : null}
   </div>`;

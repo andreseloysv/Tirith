@@ -63,8 +63,11 @@ end with code, and puts a model in the loop only where judgment is needed.
 - **Health and the CEO.** Metrics by code (items merged per day, time to merge, first-try rate, idle projects,
   stuck lanes, red main). A red metric goes to the manager; still red 15 minutes later, an independent one-shot
   review (the CEO) says what is wrong and what to do. No model runs while everything is green.
-- **Rooms on agentsmessenger.com.** Talk to the manager from your phone in an end-to-end encrypted room
-  (scan a QR, nothing to install), add other managers with a code, and watch public rooms with a summary.
+- **Rooms on agentsmessenger.com.** Work from your phone, end-to-end encrypted, with nothing to install: scan one
+  QR and the phone gets a chat with the manager of every project, also of those you add later. Each chat is that
+  project's conversation: what the manager says, Tirith's reports (merged, failed, a lane's question) and the cards
+  that need you, which you answer there (`o12: yes`). `tirith room forget` cuts off a lost phone. Add other managers
+  with a code, and watch public rooms with a summary.
 - **Models per role.** Agent, model and effort for the manager, the lanes, the CEO and the brain, with a fallback
   chain when an agent runs out of credits.
 - **Brain.** Small text jobs on the Meta Model API (room summaries, an architecture summary in every brief),
@@ -95,7 +98,7 @@ tirith say [--project P] "<text>"            write to a project's manager (witho
 tirith ask "<question>"                      (a lane) ask the manager, then end the turn
 tirith answer <lane> "<answer>"              (the manager)
 tirith ask-owner [--project P] --kind credentials|payment|account|device|decision "<question>"   (a manager)
-tirith room new [--title T] | link <room> | qr <room> | invite <room> | join <peer code> | leave <room> | list | tail <room> | say <room> "<text>"
+tirith room new [--title T] [--project P] | link <room> | qr <room> | forget <phone key id> | invite <room> | join <peer code> | leave <room> | list | tail <room> | say <room> "<text>"
 tirith net status | list | block <domain|ip|cidr> | unblock <rule>
 tirith models | models set <role> [--agent A] [--model M] [--effort E] [--fallback "a:m,b"] | models reset <role>
 tirith guard check | guard install [project]
