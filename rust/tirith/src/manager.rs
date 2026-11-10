@@ -352,7 +352,7 @@ async fn session(app: &Shared, project: &str) -> Result<(), String> {
     // What a dead turn left is never sent to a room with a later answer; what rooms wrote for it is handed over again,
     // once, and before the wait below, so a line that arrives during it (and waits in `pending`) is not handed twice.
     let died = talk(project, |t| {
-        t.reply_to.clear();
+        ready.then(|| t.reply_to.clear()); // a session that never got ready ran no turn: its lines wait, with their rooms
         t.tx.take().is_some() && ready && t.busy
     });
     if died {

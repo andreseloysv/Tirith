@@ -20,10 +20,11 @@ function Status({ r }) {
 }
 
 function Who({ r, forget }) {
-  const rows = [...(r.devices || []).map((d) => ['phone', d]), ...(r.managers || []).map((m) => ['manager', m])];
+  /* a forgotten phone is not shown: it is out, and the daemon keeps its key only to ignore it */
+  const rows = [...(r.devices || []).map((d) => ['phone', d]), ...(r.managers || []).filter((m) => !m.blocked).map((m) => ['manager', m])];
   if (!rows.length) return html`<p class="mut sm rwho">Nobody else is here yet.</p>`;
   return html`<ul class="rwho">${rows.map(([k, p]) => html`<li key=${k + p.key_id}>
-    <span class="rk">${k === 'phone' ? 'Your phone' : p.blocked ? 'Forgotten phone' : p.accepted ? 'Manager' : 'Peer, no code'}</span><b>${p.name}</b>
+    <span class="rk">${k === 'phone' ? 'Your phone' : p.accepted ? 'Manager' : 'Peer, no code'}</span><b>${p.name}</b>
     <code title="Key id">${short(p.key_id)}</code>${p.last_seen ? html`<span class="mut sm">seen ${agoText(p.last_seen)}</span>` : null}
     ${k === 'phone' ? html`<button class="alink rforget" onClick=${() => forget(p.key_id)}>Forget</button>` : null}</li>`)}</ul>`;
 }
