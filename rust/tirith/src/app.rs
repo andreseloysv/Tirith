@@ -212,6 +212,7 @@ impl App {
 
     /// One row of a project's conversation with its manager (`project` "" is the conversation of no project).
     pub fn chat(&self, role: &str, text: &str, project: &str) {
+        let project = if self.cfg().project(project).is_some() { project } else { "" }; // a project that is gone
         let at = now_iso();
         let id = {
             let db = self.db.lock().unwrap();

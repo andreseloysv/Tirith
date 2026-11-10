@@ -17,11 +17,10 @@ const PIC_EXT = /\.(png|jpe?g|gif|webp)$/i;
 const ATTACHED = '\n\nAttached files (open them with your file-reading tool):\n';
 const PROJECT_TAG = /^\[project ([\w.-]+)\] /;   /* rows from before every project had its own conversation */
 const DRAFT_KEY = 'tirith.chat.draft';
-const MERGED = /^merged on [\w.-]+ at ([0-9a-f]{6,12}): ([\s\S]*)$/;
+const MERGED = /^merged on ([\w.-]+) at ([0-9a-f]{6,12}): ([\s\S]*)$/;
 const CHECKS = /\s*\(check:\s*`[^`]*`\)/gi;
 
 const SEND = html`<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M8 13V3.2M3.8 7.2L8 3l4.2 4.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-const BUBBLE = html`<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3 3h10a1 1 0 011 1v6a1 1 0 01-1 1H7.5L4.6 13.6V11H3a1 1 0 01-1-1V4a1 1 0 011-1z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>`;
 const DOC = html`<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4 1.8h5l3 3v9.4H4z M9 1.8v3h3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>`;
 const CLIP = html`<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M13.2 7.6L8 12.8a3 3 0 01-4.2-4.2l5.5-5.5a2 2 0 012.9 2.9L6.7 11.4a1 1 0 01-1.4-1.4l4.8-4.8" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
@@ -157,8 +156,8 @@ function FileChip({ name, bytes, title, href, onRemove }) {
     : html`<span class="mc-file" title=${title}>${inner}</span>`;
 }
 
-/** One stored message that is not part of a manager turn. */
-const Msg = pure(({ m, projects, onZoom }) => {
+/** One stored message that is not part of a manager turn (`project`: the conversation it is drawn in). */
+const Msg = pure(({ m, project, projects, onZoom }) => {
   const time = clockTime(m.at);
   if (m.role === 'owner') {
     const p = ownerParts(m.text);
@@ -169,7 +168,8 @@ const Msg = pure(({ m, projects, onZoom }) => {
   }
   let text = m.text, ctx = 'Tirith', cls = 'mgr note';
   const merged = m.role === 'tirith' && MERGED.exec(text);
-  if (merged) text = `On main (\`${merged[1]}\`): ${merged[2].replace(CHECKS, '')}`;
+  /* a merge reads as one line; in the conversation of no project (rows from before the split) it names its project */
+  if (merged) text = `On main${merged[1] === project ? '' : ` of ${projName(projects, merged[1])}`} (\`${merged[2]}\`): ${merged[3].replace(CHECKS, '')}`;
   if (m.role === 'room') {
     const r = /^(.+?) \((.+?)\): ([\s\S]*)$/.exec(text);
     if (r) { ctx = `${r[1]} · room ${r[2]}`; text = r[3]; } else ctx = 'Room';
@@ -203,8 +203,7 @@ const Turn = pure(({ rows, running, start, onStop }) => {
 }, (a, b) => a.k === b.k && a.n === b.n && a.running === b.running && a.start === b.start);
 
 /** A message sent from this page that the daemon has not shown yet (sending) or refused (failed). */
-function Local({ o, projects, onRetry, onCopy }) {
-  const ctx = o.project ? `on ${projName(projects, o.project)}` : '';
+function Local({ o, onRetry, onCopy }) {
   const files = o.pics.map((p) => ({ name: p.name, url: p.url, pic: !!p.url, path: p.name }));
   return html`<div class=${`mc-m me local ${o.state}`}>
     ${files.length ? html`<div class="mc-pics">${files.map((f) => (f.pic
@@ -213,7 +212,7 @@ function Local({ o, projects, onRetry, onCopy }) {
     ${o.text ? html`<div class="mc-b">${o.text}</div>` : null}
     <div class="mc-meta">${o.state === 'failed'
       ? html`<b class="mc-bad">Not sent</b> · <button type="button" class="mc-lnk" onClick=${onRetry}>Retry</button> · <button type="button" class="mc-lnk" onClick=${onCopy}>Copy text</button>${o.err ? html`<br /><span class="mc-why">${o.err}</span>` : null}`
-      : html`Sending… · <span dangerouslySetInnerHTML=${{ __html: (ctx ? ctxHtml(ctx) + ' · ' : '') + esc(clockTime(new Date(o.at).toISOString())) }} />`}</div></div>`;
+      : html`Sending… · ${clockTime(new Date(o.at).toISOString())}`}</div></div>`;
 }
 
 /* ---------- the chat ---------- */
@@ -253,8 +252,8 @@ export function Chat({ project = '' }) {
     else if (el && anchor.current != null) { el.scrollTop = el.scrollHeight - anchor.current; anchor.current = null; }
   });
   const onScroll = () => {
-    const el = log.current;
-    stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+    const el = log.current; /* null once this conversation left the page: a late scroll event of its list */
+    if (el) stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
   };
 
   /* the box grows with its text up to half the window, then scrolls inside */
@@ -362,6 +361,8 @@ export function Chat({ project = '' }) {
   const send = () => {
     const text = draft.trim();
     if (!text && !pics.length) return;
+    /* a conversation that could not be read (a daemon older than this page) would swallow the message */
+    if (talk.error && !talk.loaded) { setErr('This conversation could not be read, so nothing was sent.'); return; }
     lastSent.current = text;
     dispatch({ cid: ++cidN, text, pics: pics.slice() });
     edit(''); setPics([]); setErr(null);
@@ -393,7 +394,7 @@ export function Chat({ project = '' }) {
   /* start of the running turn: the message that started it */
   const trigger = (i) => { for (let k = i - 1; k >= 0; k--) if (items[k].kind === 'msg') return items[k].m.at; return null; };
   const rows = items.map((it, i) => (it.kind === 'msg'
-    ? html`<${Msg} key=${it.key} m=${it.m} projects=${s.projects} onZoom=${setZoom} />`
+    ? html`<${Msg} key=${it.key} m=${it.m} project=${project} projects=${s.projects} onZoom=${setZoom} />`
     : html`<${Turn} key=${it.key} k=${it.key} rows=${it.rows} n=${it.rows.length} running=${it.key === runningKey}
         start=${trigger(i) || it.rows[0].at} onStop=${interrupt} />`));
   /* busy but no output yet: the working line under the newest message */
@@ -413,7 +414,7 @@ export function Chat({ project = '' }) {
         ? `Write to the manager of ${name} here. It works on this project only: its answers, its agents' questions and what lands on main show in this thread.`
         : 'Write here about anything that is not one project\'s: this manager gets the health reports and the CEO\'s reviews. Every project has its own manager: select a project to talk to it.'}</p>`}
       ${pending}
-      ${out.map((o) => html`<${Local} key=${o.cid} o=${o} projects=${s.projects} onRetry=${() => retry(o)} onCopy=${() => copy(o)} />`)}
+      ${out.map((o) => html`<${Local} key=${o.cid} o=${o} onRetry=${() => retry(o)} onCopy=${() => copy(o)} />`)}
     </div>
     <div class="mc-comp">
       ${err ? html`<div class="ierr mc-note">${err}</div>` : null}

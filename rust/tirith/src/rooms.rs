@@ -482,7 +482,7 @@ async fn create(app: &Shared, title: &str, project: &str) -> Result<Room, String
 }
 
 /// Joins another manager's room with its peer code `<room>:<manager key id>:<code>`.
-async fn join(app: &Shared, code: &str) -> Result<Room, String> {
+async fn join(app: &Shared, code: &str, project: &str) -> Result<Room, String> {
     let parts: Vec<&str> = code.trim().split(':').collect();
     let ok = parts.len() == 3 && parts[0].starts_with("sealed-") && parts[1].len() == 64 && parts[2].len() == 32;
     let [id, key, secret] = parts[..] else { return Err("that is not a room code (sealed-<room>:<key id>:<code>)".into()) };
@@ -496,7 +496,7 @@ async fn join(app: &Shared, code: &str) -> Result<Room, String> {
     sealed::post(&base, &me, "message", id, sealed::seal(&me, &format!("tirith-join {secret}"), &format!("#{id}"), std::slice::from_ref(&public))).await?;
     let count = sealed::page(&base, id, None, 0, &me.name).await?["count"].as_u64();
     let host = Peer { name, key_id: key.to_string(), public, since: now_iso(), accepted: true, ..Default::default() };
-    let r = Room { id: id.to_string(), kind: "peer".into(), me: me.name.clone(), me_id: me.id.clone(), cursor: count, managers: vec![host], ..Default::default() };
+    let r = Room { id: id.to_string(), project: project.into(), kind: "peer".into(), me: me.name.clone(), me_id: me.id.clone(), cursor: count, managers: vec![host], ..Default::default() };
     save(app, &r);
     watch(app, id);
     Ok(r)
@@ -538,7 +538,7 @@ async fn api_new(State(app): State<Shared>, Json(b): Json<Value>) -> R {
 }
 
 async fn api_join(State(app): State<Shared>, Json(b): Json<Value>) -> R {
-    Ok(Json(view(&app, &join(&app, b["code"].as_str().unwrap_or("")).await.map_err(bad)?)))
+    Ok(Json(view(&app, &join(&app, b["code"].as_str().unwrap_or(""), b["project"].as_str().unwrap_or("")).await.map_err(bad)?)))
 }
 
 /// Adds a one-use code, forgetting the oldest beyond eight.
