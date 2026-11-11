@@ -18,11 +18,9 @@ static LIVE: Mutex<BTreeMap<String, Vec<String>>> = Mutex::new(BTreeMap::new());
 pub fn tell(id: &str, text: &str) {
     LIVE.lock().unwrap().entry(id.into()).or_default().push(text.into());
 }
-
 pub fn drain(id: &str) -> Vec<String> {
     LIVE.lock().unwrap().remove(id).unwrap_or_default()
 }
-
 pub(crate) fn slug(text: &str) -> String {
     let s: String = text.to_lowercase().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect();
     let s = s.split('-').filter(|p| !p.is_empty()).collect::<Vec<_>>().join("-");
@@ -55,7 +53,6 @@ pub fn start(app: &Shared, project: &str, step: &str, item: &str, agent: Option<
 pub fn autopilot_on(app: &Shared, project: &str) -> bool {
     app.kv(&format!("autopilot:{project}")).map(|v| v == "on").unwrap_or(app.cfg().autopilot)
 }
-
 fn load_per_core() -> f64 {
     let mut l = [0f64; 3];
     let n = unsafe { libc::getloadavg(l.as_mut_ptr(), 3) };

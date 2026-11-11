@@ -31,15 +31,12 @@ static ARCH_TRIED: LazyLock<Mutex<HashMap<String, u64>>> = LazyLock::new(Default
 fn key() -> Option<String> {
     KEY_VARS.iter().find_map(|v| std::env::var(v).ok().filter(|k| !k.trim().is_empty()))
 }
-
 fn url(app: &Shared) -> String {
     crate::config::get::<String>(&app.cfg().raw, &["brain", "url"]).unwrap_or_else(|| DEFAULT_URL.into()).trim_end_matches('/').to_string()
 }
-
 fn model(app: &Shared) -> String {
     models::role(app, "brain").model.unwrap_or_else(|| models::BRAIN_MODEL.into())
 }
-
 fn client() -> &'static reqwest::Client {
     static C: OnceLock<reqwest::Client> = OnceLock::new();
     C.get_or_init(|| reqwest::Client::builder().timeout(Duration::from_secs(30)).build().unwrap_or_default())
@@ -115,7 +112,6 @@ pub fn architecture(app: &Shared, project: &str) -> Option<String> {
 pub fn start(app: Shared) {
     let _ = app.db.lock().unwrap().execute_batch("CREATE TABLE IF NOT EXISTS brain_cache (key TEXT PRIMARY KEY, job TEXT, answer TEXT, at TEXT);");
 }
-
 async fn info(State(app): State<Shared>) -> Json<Value> {
     let cached: i64 = app.db.lock().unwrap().query_row("SELECT COUNT(*) FROM brain_cache", [], |r| r.get(0)).unwrap_or(0);
     let enabled = key().is_some();
