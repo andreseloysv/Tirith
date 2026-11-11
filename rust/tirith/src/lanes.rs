@@ -60,8 +60,7 @@ fn load_per_core() -> f64 {
     let mut l = [0f64; 3];
     let n = unsafe { libc::getloadavg(l.as_mut_ptr(), 3) };
     let cores = std::thread::available_parallelism().map(|c| c.get()).unwrap_or(1) as f64;
-    let load = if n > 0 { l[0] } else { 0.0 };
-    load / cores
+    (if n > 0 { l[0] } else { 0.0 }) / cores
 }
 
 fn free_gb(dir: &Path) -> f64 {
@@ -85,10 +84,9 @@ async fn free_disk(app: &Shared, lanes: &[Lane]) {
         return;
     }
     for p in &app.cfg().projects {
-        let merging = lanes.iter().any(|l| l.project == p.id && l.status == "merging");
         for slot in std::fs::read_dir(p.lanes_dir()).into_iter().flatten().flatten().map(|e| e.path()) {
             let name = slot.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-            let held = lanes.iter().any(|l| l.active() && Path::new(&l.workspace) == slot) || (name == "merge" && merging);
+            let held = lanes.iter().any(|l| l.active() && Path::new(&l.workspace) == slot) || (name == "merge" && lanes.iter().any(|l| l.project == p.id && l.status == "merging"));
             if held || !(name.starts_with("slot-") || name == "merge") {
                 continue;
             }
@@ -241,8 +239,7 @@ pub async fn scheduler(app: Shared) {
         app.emit("load", serde_json::json!({"load": (load * 100.0).round() / 100.0, "running": running, "max": cfg.max_parallel}));
         for l in lanes.iter().filter(|l| l.pid.is_some()) {
             let tracked = app.children.lock().unwrap().contains(&l.id);
-            let log_idle = log_age(&app, &l.id);
-            let idle = (now_s().saturating_sub(l.last_activity)).min(log_idle);
+            let idle = (now_s().saturating_sub(l.last_activity)).min(log_age(&app, &l.id));
             if l.status == "running" && idle > cfg.inactivity_min * 60 {
                 kill_group(l.pid.unwrap_or(0), libc::SIGKILL);
                 app.event(&l.id, &l.project, "idle", "", &format!("stopped: no activity for {} min", cfg.inactivity_min), "");
@@ -264,8 +261,7 @@ pub async fn scheduler(app: Shared) {
         };
         let mut queued: Vec<&Lane> = lanes.iter().filter(|l| l.status == "queued").collect();
         queued.sort_by(|a, b| a.created_at.cmp(&b.created_at));
-        let pick = queued.into_iter().find(|l| cfg.project(&l.project).is_none_or(&mut ok)).cloned();
-        let Some(next) = pick.or_else(|| next_item(&app, &lanes, &mut rr, &mut ok)) else { continue };
+        let Some(next) = queued.into_iter().find(|l| cfg.project(&l.project).is_none_or(&mut ok)).cloned().or_else(|| next_item(&app, &lanes, &mut rr, &mut ok)) else { continue };
         match launch(&app, next.clone()).await {
             Ok(()) => app.sched_wake.notify_one(),
             Err(e) => {
@@ -341,7 +337,6 @@ fn brief(app: &Shared, lane: &Lane) -> String {
         })
         .collect();
     let others: Vec<String> = lanes.iter().filter(|l| l.id != lane.id && matches!(l.status.as_str(), "running" | "waiting")).map(|l| format!("- {} ({}): {}", l.id, l.status, l.item)).collect();
-    let red = app.kv(&format!("main_red:{}", lane.project));
     let rules: Vec<String> = app.cfg().project(&lane.project).map(|p| app.manifest(&p.repo()).rules).unwrap_or_default().iter().map(|r| format!("- {}", r.message)).collect();
     let mut b = format!(
         "# Lane {id}\n\nProject: {project}. Plan step {step}.\n\n## Your item\n{item}\n{check}\n## The step's items\n{items}\n\n\
@@ -353,7 +348,7 @@ fn brief(app: &Shared, lane: &Lane) -> String {
         check = check.map(|c| format!("\nIts check (must pass on the merged result): `{c}`\n")).unwrap_or_default(),
         items = items.join("\n"),
         others = if others.is_empty() { "none".into() } else { others.join("\n") },
-        red = red.map(|r| format!("red ({r}): not your job unless your item is about it")).unwrap_or("green".into()),
+        red = app.kv(&format!("main_red:{}", lane.project)).map(|r| format!("red ({r}): not your job unless your item is about it")).unwrap_or("green".into()),
     );
     if let Some(a) = brain::architecture(app, &lane.project) {
         b += &format!("\n## Architecture\n{a}\n");
@@ -400,8 +395,8 @@ async fn launch(app: &Shared, mut lane: Lane) -> Result<(), String> {
     }
     let launch = sandbox::wrap(app, &lane.id, cmd.argv);
     let log = std::fs::OpenOptions::new().create(true).append(true).open(app.home.join(format!("logs/lanes/{}.log", lane.id))).map_err(|e| e.to_string())?;
-    let mut command = launch.command(app);
-    let mut child = command
+    let mut child = launch
+        .command(app)
         .current_dir(&ws)
         .env("TIRITH_LANE", &lane.id)
         .env("TIRITH_PROJECT", &lane.project)

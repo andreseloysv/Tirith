@@ -65,8 +65,7 @@ pub fn path(app: &Shared, project: &str) -> Result<PathBuf, String> {
 
 pub fn read(app: &Shared, project: &str) -> Result<Vec<Step>, String> {
     let file = path(app, project)?;
-    let text = std::fs::read_to_string(&file).map_err(|_| format!("{} has no plan file ({})", project, file.display()))?;
-    Ok(parse(&text))
+    Ok(parse(&std::fs::read_to_string(&file).map_err(|_| format!("{} has no plan file ({})", project, file.display()))?))
 }
 
 pub fn is_open(app: &Shared, project: &str, step: &str, item: &str) -> Result<bool, String> {
@@ -77,8 +76,7 @@ pub fn is_open(app: &Shared, project: &str, step: &str, item: &str) -> Result<bo
 
 /// One item of the plan in the main checkout.
 pub fn find(app: &Shared, project: &str, step: &str, item: &str) -> Option<Item> {
-    let steps = read(app, project).ok()?;
-    steps.into_iter().find(|s| s.num == step)?.items.into_iter().find(|i| i.text == item)
+    read(app, project).ok()?.into_iter().find(|s| s.num == step)?.items.into_iter().find(|i| i.text == item)
 }
 
 /// Ticks the open `(step, item)` pairs in a plan text: the new text and how many were ticked.
@@ -138,8 +136,7 @@ pub async fn add(app: &Shared, project: &str, step: &str, text: &str) -> Result<
         if steps[i].items.iter().any(|it| it.text == text) {
             return Err(format!("step {step} already has that item"));
         }
-        let end = steps.get(i + 1).map(|s| s.line).unwrap_or(lines.len());
-        let mut at = end;
+        let mut at = steps.get(i + 1).map(|s| s.line).unwrap_or(lines.len());
         while at > steps[i].line + 1 && lines[at - 1].trim().is_empty() {
             at -= 1;
         }
@@ -165,13 +162,11 @@ pub async fn flush_locked(app: &Shared, project: &str) {
     }
     let (Ok(file), Some(repo)) = (path(app, project), app.cfg().project(project).map(|p| p.repo())) else { return };
     let rel = file.strip_prefix(&repo).unwrap_or(&file).to_string_lossy().to_string();
-    let pending = git(&repo, &["status", "--porcelain", "--", &rel]).await.unwrap_or_default();
-    let result = if pending.is_empty() { Ok(String::new()) } else { git(&repo, &["commit", "-q", "-m", "Plan: update from Tirith", "--", &rel]).await };
-    match result {
-        Ok(_) => {
-            app.plan_dirty.lock().unwrap().remove(project);
-        }
-        Err(e) => app.event("", project, "error", "plan", &format!("plan commit failed: {e}"), ""),
+    let result = if git(&repo, &["status", "--porcelain", "--", &rel]).await.unwrap_or_default().is_empty() { Ok(String::new()) } else { git(&repo, &["commit", "-q", "-m", "Plan: update from Tirith", "--", &rel]).await };
+    if let Err(e) = result {
+        app.event("", project, "error", "plan", &format!("plan commit failed: {e}"), "");
+    } else {
+        app.plan_dirty.lock().unwrap().remove(project);
     }
 }
 
