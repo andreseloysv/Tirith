@@ -2,16 +2,12 @@
 //! It authenticates the caller, refuses blocked destinations (by name, then by the addresses they resolve to),
 //! records each new destination of each caller, and pipes the bytes.
 
-use super::{blocked, owner, proxy_port, token};
 use crate::app::{now_iso, now_s, Shared};
+use super::{blocked, owner, proxy_port, token};
 use base64::Engine;
 use serde_json::{json, Value};
-use std::collections::{BTreeSet, HashMap, HashSet};
-use std::net::SocketAddr;
-use std::sync::{LazyLock, Mutex};
-use std::time::Duration;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpStream};
+use std::{collections::{BTreeSet, HashMap, HashSet}, net::SocketAddr, sync::{LazyLock, Mutex}, time::Duration};
+use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpListener, TcpStream}};
 
 #[derive(Default)]
 struct Dest {
@@ -134,16 +130,10 @@ async fn handle(app: Shared, mut c: TcpStream) -> Result<(), String> {
     let end = loop {
         let mut chunk = [0u8; 4096];
         let n = tokio::time::timeout(Duration::from_secs(30), c.read(&mut chunk)).await.map_err(|_| "slow client")?.map_err(|e| e.to_string())?;
-        if n == 0 {
-            return Ok(());
-        }
+        if n == 0 { return Ok(()); }
         buf.extend_from_slice(&chunk[..n]);
-        if let Some(i) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
-            break i + 4;
-        }
-        if buf.len() > 65536 {
-            return answer(&mut c, "431 Request Header Fields Too Large", "", "").await;
-        }
+        if let Some(i) = buf.windows(4).position(|w| w == b"\r\n\r\n") { break i + 4; }
+        if buf.len() > 65536 { return answer(&mut c, "431 Request Header Fields Too Large", "", "").await; }
     };
     let head = String::from_utf8_lossy(&buf[..end]).to_string();
     let mut lines = head.split("\r\n");
@@ -174,9 +164,7 @@ async fn handle(app: Shared, mut c: TcpStream) -> Result<(), String> {
             Err(e) => return answer(&mut c, "502 Bad Gateway", "", &format!("cannot resolve {host}: {e}\n")).await,
         },
     };
-    if let Some(rule) = addrs.iter().find_map(|a| blocked(&a.ip().to_string())) {
-        return refuse(&app, &mut c, &who, &host, port, &rule).await;
-    }
+    if let Some(rule) = addrs.iter().find_map(|a| blocked(&a.ip().to_string())) { return refuse(&app, &mut c, &who, &host, port, &rule).await; }
     record(&app, &who, &host, port, None);
     let mut up = match tokio::time::timeout(Duration::from_secs(15), TcpStream::connect(&addrs[..])).await {
         Ok(Ok(up)) => up,

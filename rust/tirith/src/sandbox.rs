@@ -5,19 +5,12 @@
 
 mod proxy;
 
-use crate::app::{bad, now_iso, Shared, R};
-use crate::client::{call, Flag};
-use crate::config;
-use crate::rooms::sealed::{hex, sha_hex};
-use axum::extract::State;
-use axum::routing::get;
-use axum::{Json, Router};
+use crate::{app::{bad, now_iso, R, Shared}, client::{call, Flag}, config, rooms::sealed::{hex, sha_hex}};
+use axum::{extract::State, routing::get, Json, Router};
 use base64::Engine;
 use regex::Regex;
 use serde_json::{json, Value};
-use std::io::{Read, Write};
-use std::net::IpAddr;
-use std::sync::{LazyLock, OnceLock, RwLock};
+use std::{io::{Read, Write}, net::IpAddr, sync::{LazyLock, OnceLock, RwLock}};
 
 /// A process to start: program, arguments and extra environment.
 pub struct Launch {
@@ -33,9 +26,9 @@ impl Launch {
         if !self.env.iter().any(|(k, _)| k == "PATH") {
             c.env("PATH", app.child_path());
         }
-        for (k, v) in &self.env {
+        self.env.iter().for_each(|(k, v)| {
             c.env(k, v);
-        }
+        });
         c
     }
 }
@@ -205,9 +198,7 @@ static HOSTS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)(?:^|[^a-z0-9_
 /// For agent sessions NOT started by Tirith (the owner's own sessions): the refusal when a tool call names a
 /// blocked destination (a URL or host in a Bash command, a WebFetch url), else `None`.
 pub fn check_command(tool: &str, input: &Value) -> Option<String> {
-    if BLOCKS.read().unwrap().is_empty() {
-        return None;
-    }
+    if BLOCKS.read().unwrap().is_empty() { return None; }
     let text = match tool {
         "Bash" => input["command"].as_str().filter(|c| !c.contains("tirith net "))?,
         "WebFetch" => input["url"].as_str()?,
@@ -284,9 +275,7 @@ pub fn start(app: Shared) {
 fn block(app: &Shared, rule: &str, on: bool) -> Result<String, String> {
     let rule = clean(rule);
     let domain = rule.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-');
-    if rule.is_empty() || !(domain || cidr(&rule).is_some()) {
-        return Err(format!("not a domain, address or range: {rule:?}"));
-    }
+    if rule.is_empty() || !(domain || cidr(&rule).is_some()) { return Err(format!("not a domain, address or range: {rule:?}")); }
     let db = app.db.lock().unwrap();
     let mut list = BLOCKS.write().unwrap();
     list.retain(|r| *r != rule);
@@ -361,9 +350,7 @@ fn tunnel(host: &str, port: &str) -> Result<(), String> {
         head.push(b[0]);
     }
     let head = String::from_utf8_lossy(&head);
-    if !head.starts_with("HTTP/1.1 200") && !head.starts_with("HTTP/1.0 200") {
-        return Err(format!("proxy refused {host}:{port}: {}", head.lines().next().unwrap_or("no answer")));
-    }
+    if !head.starts_with("HTTP/1.1 200") && !head.starts_with("HTTP/1.0 200") { return Err(format!("proxy refused {host}:{port}: {}", head.lines().next().unwrap_or("no answer"))); }
     let mut up = s.try_clone().map_err(|e| e.to_string())?;
     std::thread::spawn(move || {
         let _ = std::io::copy(&mut std::io::stdin(), &mut up);

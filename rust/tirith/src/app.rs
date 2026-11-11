@@ -4,10 +4,7 @@ use crate::config::{tirith_home, Config, Manifest};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, RwLock};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{collections::{BTreeMap, BTreeSet, HashMap, HashSet}, path::{Path, PathBuf}, sync::{Arc, Mutex, RwLock}, time::{SystemTime, UNIX_EPOCH}};
 use tokio::sync::{broadcast, Notify};
 
 pub type Shared = Arc<App>;
@@ -140,9 +137,7 @@ impl App {
     pub fn reload_config(&self, force: bool) -> bool {
         let now = mtime(&self.home.join("config.toml"));
         let mut last = self.cfg_mtime.lock().unwrap();
-        if *last == now && !force {
-            return false;
-        }
+        if *last == now && !force { return false; }
         *last = now;
         *self.cfg.write().unwrap() = Arc::new(Config::load());
         true
@@ -152,9 +147,7 @@ impl App {
     pub fn manifest(&self, repo: &Path) -> Manifest {
         let stamp = mtime(&repo.join("tirith.toml"));
         let mut cache = self.manifests.lock().unwrap();
-        if let Some((_, man)) = cache.get(repo).filter(|(m, _)| *m == stamp) {
-            return man.clone();
-        }
+        if let Some((_, man)) = cache.get(repo).filter(|(m, _)| *m == stamp) { return man.clone(); }
         let man = Manifest::load(repo);
         cache.insert(repo.to_path_buf(), (stamp, man.clone()));
         man
@@ -317,9 +310,7 @@ mod tests {
     fn lane_log_redacts_key_prefixes() {
         let log = "GOOGLE_API_KEY=AIzaSyABCDEFGHIJKLMNOP\n{\"GITHUB_TOKEN\":\"ghp_abcdefghijklmnop12\"}\nMY_KEY: sk-abcdef123456789\nused AIzaSyZZZZZZZZZZZZZZ here\nplain line";
         let out = redact_secrets(log);
-        for leak in ["AIza", "ghp_", "sk-", "abcdefghijklmnop12"] {
-            assert!(!out.contains(leak), "leaked {leak}: {out}");
-        }
+        ["AIza", "ghp_", "sk-", "abcdefghijklmnop12"].into_iter().for_each(|leak| assert!(!out.contains(leak), "leaked {leak}: {out}"));
         assert!(out.contains("GOOGLE_API_KEY=[redacted]") && out.contains("plain line"));
     }
     #[test]

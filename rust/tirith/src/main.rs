@@ -21,8 +21,7 @@ mod server;
 
 use client::{call, call_with, print};
 use serde_json::{json, Value};
-use std::io::Read;
-use std::time::Duration;
+use std::{io::Read, time::Duration};
 
 const USAGE: &str = "tirith serve                                   run the daemon (page on http://127.0.0.1:<port>/)
 tirith status [--project P]                    lanes and the merge queue (of one project)
