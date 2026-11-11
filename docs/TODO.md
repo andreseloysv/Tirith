@@ -812,7 +812,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [x] Disco lleno: cuando el disco baja de 5 GB libres, Tirith avisa al dueño una sola vez con ask-owner (kind device) indicando las carpetas que más ocupan, en vez de dejar lanes fallando con No space left on device (check: `cargo test -q low_disk_asks_owner_once`)
 - [x] Los checks y etapas del daemon encuentran cargo aunque el daemon arranque sin ~/.cargo/bin en su PATH (p. ej. tras reiniciar el Mac): child_path añade ~/.cargo/bin si existe; el 2026-11-09 main quedó rojo con «sh: cargo: command not found» (check: `cargo test -q child_path_includes_cargo_bin`)
 - [x] Las lanes de Rust pasan cargo clippy -- -D warnings antes de terminar, igual que la etapa build de la cola, para no gastar un intento extra (el 2026-11-09 la lane de disco lleno falló por clippy::unnecessary_sort_by) (check: `cargo test -q lane_runs_clippy_before_finish`)
-- [ ] Simplificar el daemon: rust/tirith/src baja a 5700 líneas o menos sin cambiar comportamiento (duplicados, código muerto, ayudas repetidas), porque está en 6000, justo en el límite de la etapa size, y el 2026-11-11 tres lanes tuvieron que recortar código y fueron devueltas (check: `test $(find rust/tirith/src -name "*.rs" -exec cat {} + | wc -l) -le 5700 && cargo test -q`)
+- [x] Simplificar el daemon: rust/tirith/src baja a 5700 líneas o menos sin cambiar comportamiento (duplicados, código muerto, ayudas repetidas), porque está en 6000, justo en el límite de la etapa size, y el 2026-11-11 tres lanes tuvieron que recortar código y fueron devueltas (check: `test $(find rust/tirith/src -name "*.rs" -exec cat {} + | wc -l) -le 5700 && cargo test -q`)
 
 ## 18. Salas privadas: hablar con el manager desde el móvil
 
