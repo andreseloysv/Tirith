@@ -19,8 +19,7 @@ pub fn describe(paths: &[String]) -> String {
     if paths.is_empty() {
         return String::new();
     }
-    let list: Vec<String> = paths.iter().map(|p| format!("- {p}")).collect();
-    format!("\n\nAttached files (open them with your file-reading tool):\n{}", list.join("\n"))
+    format!("\n\nAttached files (open them with your file-reading tool):\n{}", paths.iter().map(|p| format!("- {p}")).collect::<Vec<_>>().join("\n"))
 }
 
 /// A safe file name: the last path part, only letters, digits, `.`, `-`, `_`; no leading dots.

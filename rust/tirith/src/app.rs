@@ -188,8 +188,7 @@ impl App {
 
     /// The working lane whose worktree holds `cwd`.
     pub fn lane_for_cwd(&self, cwd: &str) -> Option<Lane> {
-        let cwd = Path::new(cwd);
-        self.lanes.lock().unwrap().values().find(|l| matches!(l.status.as_str(), "running" | "waiting") && !l.workspace.is_empty() && cwd.starts_with(&l.workspace)).cloned()
+        self.lanes.lock().unwrap().values().find(|l| matches!(l.status.as_str(), "running" | "waiting") && !l.workspace.is_empty() && Path::new(cwd).starts_with(&l.workspace)).cloned()
     }
 
     /// Runs an INSERT and returns the id of the new row.

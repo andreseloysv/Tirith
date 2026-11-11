@@ -270,12 +270,11 @@ pub fn start(app: Shared) {
             *BLOCKS.write().unwrap() = q.query_map([], |r| r.get(0)).map(|r| r.flatten().collect()).unwrap_or_default();
         };
     }
-    let secret = app.kv("net_secret").unwrap_or_else(|| {
+    let _ = SECRET.set(app.kv("net_secret").unwrap_or_else(|| {
         let s = hex(&rand::random::<[u8; 32]>());
         app.set_kv("net_secret", Some(&s));
         s
-    });
-    let _ = SECRET.set(secret);
+    }));
     write_wrappers(&app);
     proxy::seed(&app);
     tokio::spawn(proxy::serve(app));
@@ -283,8 +282,7 @@ pub fn start(app: Shared) {
 
 fn block(app: &Shared, rule: &str, on: bool) -> Result<String, String> {
     let rule = clean(rule);
-    let domain = rule.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-');
-    if rule.is_empty() || !(domain || cidr(&rule).is_some()) {
+    if rule.is_empty() || !(rule.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-') || cidr(&rule).is_some()) {
         return Err(format!("not a domain, address or range: {rule:?}"));
     }
     let db = app.db.lock().unwrap();
@@ -354,8 +352,7 @@ fn tunnel(host: &str, port: &str) -> Result<(), String> {
     let rest = url.strip_prefix("http://").ok_or("HTTPS_PROXY is not an http:// proxy")?.trim_end_matches('/');
     let (cred, addr) = rest.rsplit_once('@').ok_or("HTTPS_PROXY has no credentials")?;
     let mut s = std::net::TcpStream::connect(addr).map_err(|e| format!("proxy {addr}: {e}"))?;
-    let auth = base64::engine::general_purpose::STANDARD.encode(cred);
-    write!(s, "CONNECT {host}:{port} HTTP/1.1\r\nHost: {host}:{port}\r\nProxy-Authorization: Basic {auth}\r\n\r\n").map_err(|e| e.to_string())?;
+    write!(s, "CONNECT {host}:{port} HTTP/1.1\r\nHost: {host}:{port}\r\nProxy-Authorization: Basic {}\r\n\r\n", base64::engine::general_purpose::STANDARD.encode(cred)).map_err(|e| e.to_string())?;
     let (mut head, mut b) = (Vec::new(), [0u8; 1]);
     while !head.ends_with(b"\r\n\r\n") && head.len() < 16384 && s.read(&mut b).map_err(|e| e.to_string())? == 1 {
         head.push(b[0]);
