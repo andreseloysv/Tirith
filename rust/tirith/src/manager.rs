@@ -81,9 +81,6 @@ fn report(app: &Shared, project: &str, text: &str) {
 fn known(app: &Shared, project: &str) -> Result<(), String> {
     (here(app, project) == project).then_some(()).ok_or(format!("unknown project '{project}'"))
 }
-fn user_line(text: &str) -> String {
-    json!({"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": text}]}}).to_string()
-}
 
 /// Hands the conversation its waiting reports and `text` as one message; its session starts when none runs.
 fn deliver(app: &Shared, project: &str, text: &str) {
@@ -93,7 +90,7 @@ fn deliver(app: &Shared, project: &str, text: &str) {
         if all.is_empty() {
             return false;
         }
-        let line = user_line(&all.join("\n\n"));
+        let line = json!({"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": all.join("\n\n")}]}}).to_string();
         if t.tx.as_ref().is_some_and(|tx| tx.send(line.clone()).is_ok()) {
             set_busy(app, project, t, true);
         } else {

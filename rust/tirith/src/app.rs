@@ -183,12 +183,6 @@ impl App {
         Some(lane)
     }
 
-    /// The working lane whose worktree holds `cwd`.
-    pub fn lane_for_cwd(&self, cwd: &str) -> Option<Lane> {
-        let cwd = Path::new(cwd);
-        self.lanes.lock().unwrap().values().find(|l| matches!(l.status.as_str(), "running" | "waiting") && !l.workspace.is_empty() && cwd.starts_with(&l.workspace)).cloned()
-    }
-
     /// Runs an INSERT and returns the id of the new row.
     pub fn insert(&self, sql: &str, values: &[&dyn rusqlite::ToSql]) -> i64 {
         let db = self.db.lock().unwrap();

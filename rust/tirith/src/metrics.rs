@@ -179,8 +179,7 @@ fn compute(app: &Shared) -> Vec<Metric> {
 }
 
 fn describe(m: &Metric) -> String {
-    let side = if m.at_least { "at least" } else { "at most" };
-    let target = m.target.map(|t| format!(" (target: {side} {t})")).unwrap_or_default();
+    let target = m.target.map(|t| format!(" (target: {} {t})", if m.at_least { "at least" } else { "at most" })).unwrap_or_default();
     let facts = if m.facts.is_empty() { String::new() } else { format!(". Facts: {}", m.facts) };
     format!("{} [{}] is {}{target}{facts}", m.label, m.id, m.value)
 }

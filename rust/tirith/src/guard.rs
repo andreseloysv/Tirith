@@ -103,11 +103,6 @@ fn render(hook: &str, words: &[String]) -> String {
     HEAD.replace("{what}", what).replace("{words}", &words.join(",")).replace("{re}", &re) + body + LOCAL
 }
 
-/// A `core.hooksPath` in the repo's or the user's git config makes git skip the guard.
-fn hooks_path_set(git: &std::path::Path) -> Option<PathBuf> {
-    [git.join("config"), home_dir().join(".gitconfig")].into_iter().find(|f| std::fs::read_to_string(f).is_ok_and(|t| t.lines().any(|l| l.trim().to_lowercase().replace(' ', "").starts_with("hookspath="))))
-}
-
 /// Ok when the project's guard is installed and intact (or the project opts out); the reason otherwise.
 /// The scheduler calls it before it starts a lane of the project: a few small file reads, no git process.
 pub fn intact(app: &Shared, project: &Project) -> Result<(), String> {
@@ -126,10 +121,12 @@ pub fn intact(app: &Shared, project: &Project) -> Result<(), String> {
             return Err(format!("commit guard: the {hook} hook is outdated or has other words than config.toml {fix}"));
         }
     }
-    if let Some(f) = hooks_path_set(&git) {
-        return Err(format!("commit guard: core.hooksPath in {} makes git skip the guard", f.display()));
+    // A `core.hooksPath` in the repo's or the user's git config makes git skip the guard.
+    let skips = |f: &PathBuf| std::fs::read_to_string(f).is_ok_and(|t| t.lines().any(|l| l.trim().to_lowercase().replace(' ', "").starts_with("hookspath=")));
+    match [git.join("config"), home_dir().join(".gitconfig")].into_iter().find(skips) {
+        Some(f) => Err(format!("commit guard: core.hooksPath in {} makes git skip the guard", f.display())),
+        None => Ok(()),
     }
-    Ok(())
 }
 
 /// Sets or clears the immutable flag (macOS `uchg`): installed hooks cannot be changed or deleted, by agents or
