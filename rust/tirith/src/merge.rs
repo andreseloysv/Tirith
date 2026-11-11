@@ -45,10 +45,9 @@ pub async fn worker(app: Shared) {
             if tokio::time::timeout(Duration::from_secs(10), app.merge_wake.notified()).await.is_ok() {
                 tokio::time::sleep(Duration::from_secs(1)).await; // lanes ending together ride one train
             }
-            let (cfg, due) = (app.cfg(), |p: &&Project| app.kv(&format!("deploy_due:{}", p.id)).and_then(|t| t.parse().ok()).is_some_and(|t: u64| now_s().saturating_sub(t) >= 600));
-            if let Some(project) = cfg.projects.iter().find(due) {
+            if let Some(project) = app.cfg().projects.iter().find(|p| app.kv(&format!("deploy_due:{}", p.id)).and_then(|v| v.split('@').next()?.parse().ok()).is_some_and(|t: u64| now_s() >= t)).cloned() {
                 let _busy = BUSY.lock().await;
-                deploy(&app, project).await;
+                deploy(&app, &project, &[]).await; // a deploy that failed is tried again, on main as it is now
             }
             continue;
         }
@@ -144,8 +143,7 @@ fn pipeline(app: &Shared, id: &str) -> Value {
         let s = |i: usize| r.get::<_, Option<String>>(i);
         Ok(json!({"id": r.get::<_, i64>(0)?, "stage": s(1)?, "status": s(2)?, "started_at": s(3)?, "ended_at": s(4)?}))
     };
-    let sql = "SELECT id, stage, status, started_at, ended_at FROM runs WHERE pipeline = ?1 ORDER BY id";
-    let stages: Vec<Value> = db.prepare(sql).and_then(|mut q| q.query_map([id], stage).map(|rows| rows.flatten().collect())).unwrap_or_default();
+    let stages: Vec<Value> = db.prepare("SELECT id, stage, status, started_at, ended_at FROM runs WHERE pipeline = ?1 ORDER BY id").and_then(|mut q| q.query_map([id], stage).map(|rows| rows.flatten().collect())).unwrap_or_default();
     row["stages"] = json!(stages);
     row
 }
@@ -154,8 +152,7 @@ fn pipeline(app: &Shared, id: &str) -> Value {
 pub fn list(app: &Shared, project: &str, limit: u32) -> Vec<Value> {
     let ids: Vec<String> = {
         let db = app.db.lock().unwrap();
-        let sql = format!("SELECT id FROM pipelines WHERE ?1 = '' OR project = ?1 ORDER BY rowid DESC LIMIT {limit}");
-        db.prepare(&sql).and_then(|mut q| q.query_map([project], |r| r.get(0)).map(|rows| rows.flatten().collect())).unwrap_or_default()
+        db.prepare(&format!("SELECT id FROM pipelines WHERE ?1 = '' OR project = ?1 ORDER BY rowid DESC LIMIT {limit}")).and_then(|mut q| q.query_map([project], |r| r.get(0)).map(|rows| rows.flatten().collect())).unwrap_or_default()
     };
     ids.iter().map(|id| pipeline(app, id)).collect()
 }
@@ -187,13 +184,11 @@ async fn run_stage(app: &Shared, pipe: &Pipe, dir: &Path, name: &str, run: &str)
     app.emit("run", row.clone());
     app.emit("pipeline", pipeline(app, &pipe.id));
     let file = std::fs::File::create(&log).map_err(|e| e.to_string())?;
-    let who = format!("merge:{}", pipe.lanes.split(',').next().filter(|l| !l.is_empty()).unwrap_or("main"));
-    let launch = sandbox::wrap(app, &who, vec!["sh".into(), "-c".into(), run.into()]);
+    let launch = sandbox::wrap(app, &format!("merge:{}", pipe.lanes.split(',').next().filter(|l| !l.is_empty()).unwrap_or("main")), vec!["sh".into(), "-c".into(), run.into()]);
     let mut command = launch.command(app);
     command.env("CARGO_TARGET_DIR", crate::lanes::shared_target(app, &pipe.project));
     let mut child = command.current_dir(dir).stdin(Stdio::null()).stdout(file.try_clone().map_err(|e| e.to_string())?).stderr(file).process_group(0).spawn().map_err(|e| e.to_string())?;
-    let limit = Duration::from_secs(stage_limit_min(app, &pipe.project, name) * 60);
-    let status = match tokio::time::timeout(limit, child.wait()).await {
+    let status = match tokio::time::timeout(Duration::from_secs(stage_limit_min(app, &pipe.project, name) * 60), child.wait()).await {
         Ok(Ok(s)) if s.success() => "passed",
         Ok(_) => "failed",
         Err(_) => {
@@ -287,8 +282,7 @@ async fn train(app: &Shared, batch: Vec<Lane>) {
             return manager::notify(app, &pid, &format!("the merge slot of {pid} is broken: {e}"));
         }
     };
-    let ids: Vec<&str> = batch.iter().map(|l| l.id.as_str()).collect();
-    let pipe = open_pipeline(app, &pid, "merge", &ids.join(","), &base);
+    let pipe = open_pipeline(app, &pid, "merge", &batch.iter().map(|l| l.id.as_str()).collect::<Vec<_>>().join(","), &base);
     let check = |l: &Lane| plan::find(app, &pid, &l.step, &l.item).and_then(|i| i.check);
     let (mut merged, mut ticks, mut todo) = (vec![], vec![], vec![]);
     for lane in batch {
@@ -305,8 +299,7 @@ async fn train(app: &Shared, batch: Vec<Lane>) {
         }
     }
     for lane in todo {
-        let msg = format!("Merge {}: {}", lane.branch, lane.item.chars().take(120).collect::<String>());
-        match git(&slot, &["merge", "--no-ff", "-q", "-m", &msg, &lane.branch]).await {
+        match git(&slot, &["merge", "--no-ff", "-q", "-m", &format!("Merge {}: {}", lane.branch, lane.item.chars().take(120).collect::<String>()), &lane.branch]).await {
             Ok(_) => merged.push(lane),
             Err(e) => {
                 let _ = git(&slot, &["merge", "--abort"]).await;
@@ -357,8 +350,7 @@ async fn train(app: &Shared, batch: Vec<Lane>) {
 /// merge slot, and main fast-forwards to the result.
 #[allow(clippy::too_many_arguments)]
 async fn land(app: &Shared, project: &Project, pipe: &Pipe, slot: &Path, base: &str, merged: Vec<Lane>, ticks: Vec<Lane>, changed: &[String]) {
-    let (repo, roadmap) = (project.repo(), app.manifest(&project.repo()).roadmap);
-    let roadmap = roadmap.trim_start_matches("./").to_string();
+    let (repo, roadmap) = (project.repo(), app.manifest(&project.repo()).roadmap.trim_start_matches("./").to_string());
     let done: Vec<Lane> = merged.iter().chain(&ticks).cloned().collect();
     let result = async {
         let _plan = app.plan_lock.lock().await;
@@ -422,7 +414,7 @@ async fn land(app: &Shared, project: &Project, pipe: &Pipe, slot: &Path, base: &
     }
     app.emit("plan", json!({"project": project.id}));
     app.sched_wake.notify_one();
-    deploy(app, project).await;
+    deploy(app, project, changed).await;
 }
 
 /// A deploy stage (its `kind`, else a name that says so) is no check of a lane: it publishes main.
@@ -430,27 +422,35 @@ fn deploys(s: &Stage) -> bool {
     s.kind == "deploy" || (s.kind.is_empty() && ["deploy", "release", "publish", "ship"].contains(&s.name.as_str()))
 }
 
-/// Runs the project's deploy stages on main as it is now, in the merge slot, so what is on main is what is deployed.
-/// A failure never undoes or holds back a merge: the manager is told once, and the worker tries again every ten
-/// minutes (`deploy_due:<project>` is the time of the last failure) until it passes.
-async fn deploy(app: &Shared, project: &Project) {
-    let manifest = app.manifest(&project.repo());
-    let (Ok(slot), Ok(sha)) = (merge_slot(project, &manifest).await, git(&project.repo(), &["rev-parse", "HEAD"]).await) else { return };
-    if !manifest.stages.iter().any(deploys) || reset(&slot, &sha).await.is_err() {
-        return;
+/// Runs the project's deploy stages on main as it is now, in the merge slot, so what is on main is what is deployed
+/// (when the merge changed files: the stages whose `paths` match them; with none named: all). A failure never
+/// undoes or holds back a merge: the manager is told once and the worker tries again after ten minutes, then after
+/// twice as long each time, six hours at most (`deploy_due:<project>` is "<when>@<wait>"), until it passes.
+async fn deploy(app: &Shared, project: &Project, changed: &[String]) {
+    let (manifest, key) = (app.manifest(&project.repo()), format!("deploy_due:{}", project.id));
+    let stages: Vec<&Stage> = manifest.stages.iter().filter(|s| deploys(s) && (changed.is_empty() || wanted(s, changed))).collect();
+    if stages.is_empty() {
+        // Nothing to deploy now; and with no deploy stage at all (none named, none found), nothing to try again either.
+        return app.set_kv(&key, app.kv(&key).filter(|_| !changed.is_empty()).as_deref());
     }
-    let (pipe, key, mut failed) = (open_pipeline(app, &project.id, "deploy", "", &sha), format!("deploy_due:{}", project.id), None);
-    for st in manifest.stages.iter().filter(|s| deploys(s)) {
-        if failed.is_none() {
-            failed = run_stage(app, &pipe, &slot, &st.name, &st.run).await.err();
+    let sha = git(&project.repo(), &["rev-parse", "HEAD"]).await.unwrap_or_default();
+    let pipe = open_pipeline(app, &project.id, "deploy", "", &sha);
+    let run = async {
+        let slot = merge_slot(project, &manifest).await?;
+        reset(&slot, &sha).await?;
+        for st in stages {
+            run_stage(app, &pipe, &slot, &st.name, &st.run).await?;
         }
-    }
+        Ok::<_, String>(())
+    };
+    let failed = run.await.err();
     close_pipeline(app, &pipe, if failed.is_none() { "passed" } else { "failed" });
-    let (was, sha8, why) = (app.kv(&key).is_some(), &sha[..8.min(sha.len())], failed.as_ref().and_then(|e| e.lines().rev().find(|l| !l.trim().is_empty())).unwrap_or(""));
-    app.set_kv(&key, failed.as_ref().map(|_| now_s().to_string()).as_deref());
-    match (failed.is_some(), was) {
-        (false, _) => manager::inform(app, &project.id, &format!("deployed {} at {sha8}", project.id)),
-        (true, false) => manager::notify(app, &project.id, &format!("the deploy of {} at {sha8} failed: {why}\nWhat was merged stays on main; Tirith tries the deploy again every ten minutes.", project.id)),
+    let (was, sha8, pid) = (app.kv(&key), &sha[..8.min(sha.len())], &project.id);
+    let wait = was.as_ref().and_then(|v| v.split_once('@')?.1.parse::<u64>().ok()).map_or(600, |w| (w * 2).min(6 * 3600));
+    app.set_kv(&key, failed.as_ref().map(|_| format!("{}@{wait}", now_s() + wait)).as_deref());
+    match (failed, was) {
+        (None, _) => manager::inform(app, pid, &format!("deployed {pid} at {sha8}")),
+        (Some(e), None) => manager::notify(app, pid, &format!("the deploy of {pid} at {sha8} failed. What was merged stays on main, and Tirith tries the deploy again by itself until it passes (Retry on its pipeline tries at once).\n{e}")),
         _ => {}
     }
 }
@@ -507,7 +507,7 @@ pub fn retry(app: &Shared, id: &str) -> Result<(), String> {
     tokio::spawn(async move {
         let _busy = BUSY.lock().await;
         if deploying {
-            return deploy(&app, &project).await; // a deploy is retried as a deploy: on main as it is now
+            return deploy(&app, &project, &[]).await; // a deploy is retried as a deploy: on main as it is now
         }
         let manifest = app.manifest(&project.repo());
         let (Ok(slot), Ok(sha)) = (merge_slot(&project, &manifest).await, git(&project.repo(), &["rev-parse", "HEAD"]).await) else { return };
