@@ -100,8 +100,7 @@ fn render(hook: &str, words: &[String]) -> String {
         "pre-commit" => ("Blocks the commit when a staged file name or an added line contains a forbidden word (whole word, any case).", PRE_COMMIT),
         _ => ("Blocks the commit when the message contains a forbidden word (whole word, any case); # lines are ignored.", COMMIT_MSG),
     };
-    let re = words.join("|").replace('\'', "'\\''");
-    HEAD.replace("{what}", what).replace("{words}", &words.join(",")).replace("{re}", &re) + body + LOCAL
+    HEAD.replace("{what}", what).replace("{words}", &words.join(",")).replace("{re}", &words.join("|").replace('\'', "'\\''")) + body + LOCAL
 }
 
 /// A `core.hooksPath` in the repo's or the user's git config makes git skip the guard.
@@ -139,8 +138,7 @@ pub fn intact(app: &Shared, project: &Project) -> Result<(), String> {
 fn immutable(path: &std::path::Path, on: bool) {
     use std::os::macos::fs::MetadataExt;
     if let (Ok(m), Ok(c)) = (std::fs::metadata(path), std::ffi::CString::new(path.as_os_str().as_encoded_bytes())) {
-        let flags = if on { m.st_flags() | libc::UF_IMMUTABLE } else { m.st_flags() & !libc::UF_IMMUTABLE };
-        unsafe { libc::chflags(c.as_ptr(), flags) };
+        unsafe { libc::chflags(c.as_ptr(), if on { m.st_flags() | libc::UF_IMMUTABLE } else { m.st_flags() & !libc::UF_IMMUTABLE }) };
     }
 }
 
@@ -155,10 +153,9 @@ pub fn install(app: &Shared, project: &Project) -> Result<(), String> {
     }
     let dir = git_dir(&project.repo()).ok_or(format!("{} is not a git repo", project.repo().display()))?.join("hooks");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let ours = |p: &std::path::Path| std::fs::read_to_string(p).is_ok_and(|t| t.contains(MARKER));
     for hook in HOOKS {
         let path = dir.join(hook);
-        if path.exists() && !ours(&path) {
+        if path.exists() && !std::fs::read_to_string(&path).is_ok_and(|t| t.contains(MARKER)) {
             // The repository's own hook keeps running after ours, as <hook>.local.
             let local = dir.join(format!("{hook}.local"));
             if local.exists() {
@@ -193,7 +190,7 @@ pub fn start(app: Shared) {
 }
 
 async fn list(State(app): State<Shared>) -> Json<Value> {
-    let rows: Vec<Value> = app
+    Json(json!(app
         .cfg()
         .projects
         .iter()
@@ -202,8 +199,7 @@ async fn list(State(app): State<Shared>) -> Json<Value> {
             let r = intact(&app, p);
             json!({"project": p.id, "name": p.name, "words": n, "ok": r.is_ok(), "reason": r.err().unwrap_or_else(|| if n == 0 { "sin guarda".into() } else { "ok".into() })})
         })
-        .collect();
-    Json(json!(rows))
+        .collect::<Vec<Value>>()))
 }
 
 async fn install_one(State(app): State<Shared>, Path(project): Path<String>) -> Result<Json<Value>, (StatusCode, String)> {
@@ -234,12 +230,9 @@ pub fn cli(pos: &[&str], _flag: crate::client::Flag) -> Option<Result<(), String
             };
             let mut failed = false;
             for id in ids {
-                match call("POST", &format!("/api/guard/{id}/install"), None) {
-                    Ok(_) => println!("{id}: installed"),
-                    Err(e) => {
-                        eprintln!("{id}: {e}");
-                        failed = true;
-                    }
+                if let Err(e) = call("POST", &format!("/api/guard/{id}/install"), None).map(|_| println!("{id}: installed")) {
+                    eprintln!("{id}: {e}");
+                    failed = true;
                 }
             }
             (!failed).then_some(()).ok_or_else(|| "some guards were not installed".into())

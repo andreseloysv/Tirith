@@ -54,9 +54,8 @@ pub async fn ask(app: &Shared, job: &str, input: &str) -> Option<String> {
     if let Ok(cached) = app.db.lock().unwrap().query_row("SELECT answer FROM brain_cache WHERE key = ?1", [&hash], |r| r.get::<_, String>(0)) {
         return Some(cached);
     }
-    let tail: String = input.chars().rev().take(16000).collect::<Vec<_>>().into_iter().rev().collect();
     let body = json!({"model": model(app), "max_tokens": 4096, "temperature": 0.3, "reasoning_effort": "low",
-        "messages": [{"role": "system", "content": prompt}, {"role": "user", "content": tail}]});
+        "messages": [{"role": "system", "content": prompt}, {"role": "user", "content": input.chars().rev().take(16000).collect::<Vec<_>>().into_iter().rev().collect::<String>()}]});
     CALLS.fetch_add(1, Ordering::Relaxed);
     let result = async {
         let r = client().post(format!("{}/chat/completions", url(app))).bearer_auth(key).json(&body).send().await.map_err(|e| format!("call failed: {}", e.without_url()))?;

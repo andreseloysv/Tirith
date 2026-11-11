@@ -110,8 +110,7 @@ async fn state(State(app): State<Shared>) -> Json<Value> {
 }
 
 async fn stream(State(app): State<Shared>) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
-    let rx = BroadcastStream::new(app.tx.subscribe());
-    Sse::new(rx.filter_map(|m| m.ok().map(|d| Ok(Event::default().data(d))))).keep_alive(KeepAlive::default())
+    Sse::new(BroadcastStream::new(app.tx.subscribe()).filter_map(|m| m.ok().map(|d| Ok(Event::default().data(d))))).keep_alive(KeepAlive::default())
 }
 
 async fn plan_show(State(app): State<Shared>, Path(project): Path<String>) -> R {
@@ -169,8 +168,7 @@ async fn autopilot(State(app): State<Shared>, Path(project): Path<String>, Json(
 }
 
 async fn pipelines(State(app): State<Shared>, Query(q): Query<std::collections::HashMap<String, String>>) -> Json<Value> {
-    let limit = q.get("limit").and_then(|l| l.parse().ok()).unwrap_or(30u32).min(200);
-    Json(json!(merge::list(&app, q.get("project").map_or("", String::as_str), limit)))
+    Json(json!(merge::list(&app, q.get("project").map_or("", String::as_str), q.get("limit").and_then(|l| l.parse().ok()).unwrap_or(30u32).min(200))))
 }
 
 async fn pipeline_retry(State(app): State<Shared>, Path(id): Path<String>) -> R {
@@ -190,8 +188,7 @@ async fn run_log(State(app): State<Shared>, Path(id): Path<i64>) -> String {
 }
 
 async fn chat(State(app): State<Shared>, Json(b): Json<Value>) -> R {
-    let files: Vec<String> = b["attachments"].as_array().into_iter().flatten().filter_map(|f| f.as_str().map(String::from)).collect();
-    let text = s(&b, "text") + &attach::describe(&files);
+    let text = s(&b, "text") + &attach::describe(&b["attachments"].as_array().into_iter().flatten().filter_map(|f| f.as_str().map(String::from)).collect::<Vec<_>>());
     if text.trim().is_empty() {
         return Err(bad("empty message".into()));
     }
