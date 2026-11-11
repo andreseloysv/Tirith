@@ -38,7 +38,7 @@ pub fn start(app: &Shared, project: &str, step: &str, item: &str, agent: Option<
         return Err(format!("lane {} already works on that item ({})", l.id, l.status));
     }
     let lane = Lane {
-        id: format!("{}-{:04x}", slug(item.split(" (check:").next().unwrap_or("")), nanos() & 0xffff),
+        id: format!("{}-{:04x}", slug(item.split(" (check:").next().unwrap_or("")), chrono::Utc::now().timestamp_subsec_nanos() & 0xffff),
         project: project.into(),
         step: step.into(),
         item,
@@ -60,11 +60,8 @@ fn load_per_core() -> f64 {
     let mut l = [0f64; 3];
     let n = unsafe { libc::getloadavg(l.as_mut_ptr(), 3) };
     let cores = std::thread::available_parallelism().map(|c| c.get()).unwrap_or(1) as f64;
-    if n > 0 {
-        l[0] / cores
-    } else {
-        0.0
-    }
+    let load = if n > 0 { l[0] } else { 0.0 };
+    load / cores
 }
 
 fn free_gb(dir: &Path) -> f64 {
@@ -152,7 +149,7 @@ fn blocked(app: &Shared, p: &Project, lanes: &[Lane]) -> Option<String> {
     let backlog = lanes.iter().filter(|l| l.project == p.id && matches!(l.status.as_str(), "merge-queued" | "merging")).count();
     if backlog >= 3 {
         Some(format!("{backlog} lanes wait for the merge queue"))
-    } else if free_gb(&app.home.join("lanes")) < 5.0 {
+    } else if free_gb(&app.home.join("lanes")) < LOW_DISK_GB {
         Some("less than 5 GB free on the disk of the lanes' worktrees".into())
     } else {
         guard::intact(app, p).err()
@@ -161,10 +158,8 @@ fn blocked(app: &Shared, p: &Project, lanes: &[Lane]) -> Option<String> {
 
 /// The command that fixes a reason `blocked` gave, for the health report.
 pub(crate) fn paused_fix(project: &str, why: &str) -> String {
-    if let (Some(a), Some(b)) = (why.find('('), why.rfind(')')) {
-        if why[a + 1..b].starts_with("tirith ") {
-            return why[a + 1..b].to_string();
-        }
+    if let Some(fix) = why.find('(').zip(why.rfind(')')).map(|(a, b)| &why[a + 1..b]).filter(|f| f.starts_with("tirith ")) {
+        return fix.to_string();
     }
     if why.contains("merge queue") {
         "wait for the merges (tirith status shows them)".into()
@@ -399,10 +394,7 @@ async fn launch(app: &Shared, mut lane: Lane) -> Result<(), String> {
     let role = models::role(app, "workers");
     let over = (lane.agent != role.agent || lane.model.is_some()).then_some(lane.agent.as_str());
     let cmd = models::lane_argv(app, over, lane.model.as_deref(), &brief_path, &ws, resume)?;
-    let used = match lane.model.clone().or(if over.is_none() { role.model } else { None }) {
-        Some(m) => format!("{}:{m}", cmd.alias),
-        None => cmd.alias.clone(),
-    };
+    let used = lane.model.clone().or(role.model.filter(|_| over.is_none())).map_or_else(|| cmd.alias.clone(), |m| format!("{}:{m}", cmd.alias));
     if !lane.tried.contains(&used) {
         lane.tried.push(used); // the fallback chain skips what this lane already used
     }
@@ -472,6 +464,7 @@ async fn ended(app: &Shared, id: &str, code: Option<i32>) {
             l.status = "failed".into();
             l.note = format!("ended without commits (exit {}): nothing to merge", code.map(|c| c.to_string()).unwrap_or("?".into()));
         });
+        manager::notify(app, &lane.project, &format!("lane {id} ({}: {}) failed: it ended without commits, nothing to merge", lane.project, lane.item));
     } else {
         app.update_lane(id, |l| {
             l.pid = None;
@@ -581,10 +574,6 @@ pub fn send_back(app: &Shared, lane: &Lane, reason: &str) {
         l.status = "queued".into();
     });
     app.sched_wake.notify_one();
-}
-
-fn nanos() -> u32 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.subsec_nanos()).unwrap_or(0)
 }
 
 #[cfg(test)]

@@ -25,8 +25,7 @@ const PANEL: &str = "ObjC.import('AppKit'); function run(argv) { const app = $.N
 
 /// The projects as the page shows them.
 pub fn list(app: &Shared) -> Vec<Value> {
-    let row = |p: &Project| json!({"id": p.id, "name": p.name, "color": p.color, "autopilot": crate::lanes::autopilot_on(app, &p.id), "main_red": app.kv(&format!("main_red:{}", p.id))});
-    app.cfg().projects.iter().map(row).collect()
+    app.cfg().projects.iter().map(|p| json!({"id": p.id, "name": p.name, "color": p.color, "autopilot": crate::lanes::autopilot_on(app, &p.id), "main_red": app.kv(&format!("main_red:{}", p.id))})).collect()
 }
 
 /// The real folder behind `raw` (a full path or `~/…`), or why it cannot be a project; a project's own folder passes.
@@ -45,10 +44,7 @@ fn folder(raw: &str, projects: &[Project], tirith: &Path) -> Result<PathBuf, Str
         Some("is Tirith's own folder (the agents' copies of the projects live there)".into())
     } else {
         let named = |p: &Project, what: &str| format!("{what} {}", if p.name.is_empty() { &p.id } else { &p.name });
-        projects.iter().filter(|p| !p.repo.is_empty() && p.repo() != dir).find_map(|p| match () {
-            _ if dir.starts_with(p.repo()) => Some(named(p, "is inside the project")),
-            _ => p.repo().starts_with(&dir).then(|| named(p, "holds the project")),
-        })
+        projects.iter().filter(|p| !p.repo.is_empty() && p.repo() != dir).find_map(|p| dir.starts_with(p.repo()).then(|| named(p, "is inside the project")).or_else(|| p.repo().starts_with(&dir).then(|| named(p, "holds the project"))))
     };
     why.map_or(Ok(()), |w| Err(format!("{} {w}: pick a project's own folder", dir.display())))?;
     Ok(dir)
@@ -186,7 +182,7 @@ async fn pick(State(app): State<Shared>) -> R {
 
 pub fn routes() -> Router<Shared> {
     let add_route = |State(app): State<Shared>, Json(b): Json<Value>| async move {
-        let s = |k: &str| b[k].as_str().unwrap_or("").to_string();
+        let s = |k: &str| crate::server::s(&b, k);
         add(&app, &s("folder"), &s("name"), &s("color"), b["dry"] == true).await.map(Json).map_err(bad)
     };
     Router::new().route("/api/projects", post(add_route)).route("/api/projects/folders", get(folders)).route("/api/projects/pick", post(pick))

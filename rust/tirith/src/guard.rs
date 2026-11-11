@@ -192,20 +192,18 @@ pub fn start(app: Shared) {
     });
 }
 
-fn status(app: &Shared) -> Vec<Value> {
-    let cfg = app.cfg();
-    cfg.projects
+async fn list(State(app): State<Shared>) -> Json<Value> {
+    let rows: Vec<Value> = app
+        .cfg()
+        .projects
         .iter()
         .map(|p| {
-            let n = words(app, p).len();
-            let r = intact(app, p);
+            let n = words(&app, p).len();
+            let r = intact(&app, p);
             json!({"project": p.id, "name": p.name, "words": n, "ok": r.is_ok(), "reason": r.err().unwrap_or_else(|| if n == 0 { "sin guarda".into() } else { "ok".into() })})
         })
-        .collect()
-}
-
-async fn list(State(app): State<Shared>) -> Json<Value> {
-    Json(json!(status(&app)))
+        .collect();
+    Json(json!(rows))
 }
 
 async fn install_one(State(app): State<Shared>, Path(project): Path<String>) -> Result<Json<Value>, (StatusCode, String)> {

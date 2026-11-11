@@ -175,18 +175,8 @@ pub fn stage_limit_min(app: &Shared, project: &str, stage: &str) -> u64 {
     limit_from(|k| app.kv(k), project, stage, app.cfg().stage_timeout_min)
 }
 
-/// A stage that timed out gets a doubled limit next time, for that project and stage only.
-fn learn_stage_limit(app: &Shared, project: &str, stage: &str) {
-    let next = stage_limit_min(app, project, stage) * 2;
-    app.set_kv(&format!("stage_learned:{project}:{stage}"), Some(&next.to_string()));
-}
-
 async fn run_stage(app: &Shared, pipe: &Pipe, dir: &Path, name: &str, run: &str) -> Result<(), String> {
-    let id = {
-        let db = app.db.lock().unwrap();
-        let _ = db.execute("INSERT INTO runs (lane, project, stage, status, started_at, pipeline, sha) VALUES (?1,?2,?3,'running',?4,?5,?6)", params![pipe.lanes, pipe.project, name, now_iso(), pipe.id, pipe.sha]);
-        db.last_insert_rowid()
-    };
+    let id = app.insert("INSERT INTO runs (lane, project, stage, status, started_at, pipeline, sha) VALUES (?1,?2,?3,'running',?4,?5,?6)", params![pipe.lanes, pipe.project, name, now_iso(), pipe.id, pipe.sha]);
     let log = app.home.join(format!("logs/runs/{id}.log"));
     let mut row = json!({"id": id, "lane": pipe.lanes, "project": pipe.project, "stage": name, "status": "running", "pipeline": pipe.id, "log": log});
     app.emit("run", row.clone());
@@ -206,7 +196,8 @@ async fn run_stage(app: &Shared, pipe: &Pipe, dir: &Path, name: &str, run: &str)
                 kill_group(pid, libc::SIGKILL);
             }
             let _ = child.wait().await;
-            learn_stage_limit(app, &pipe.project, name);
+            // A stage that timed out gets a doubled limit next time, for that project and stage only.
+            app.set_kv(&format!("stage_learned:{}:{name}", pipe.project), Some(&(stage_limit_min(app, &pipe.project, name) * 2).to_string()));
             "timeout"
         }
     };
