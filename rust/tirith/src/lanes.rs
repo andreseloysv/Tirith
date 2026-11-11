@@ -188,6 +188,29 @@ pub(crate) fn is_autopilot_skipped(text: &str) -> bool {
     is_role_item(text) || is_owner_wait(text)
 }
 
+/// An item that says it waits for another item («wait until … on main», «made by the item …») names an open item
+/// of the plan: by quoting its text, or by sharing most of its significant words.
+fn waits_for_open_item(text: &str, open: &[&str]) -> bool {
+    let t = text.to_lowercase();
+    let marks = ["wait until", "waits until", "wait for the item", "made by the item", "produced by the item", "created by the item", "espera a que", "hasta que", "once the item", "after the item"];
+    if !marks.iter().any(|m| t.contains(m)) {
+        return false;
+    }
+    let words = |s: &str| -> Vec<String> { s.to_lowercase().split(|c: char| !c.is_alphanumeric()).filter(|w| w.chars().count() >= 5).map(String::from).collect() };
+    open.iter().any(|o| {
+        let ol = o.trim().to_lowercase();
+        if ol.is_empty() || ol == t.trim() {
+            return false;
+        }
+        if t.contains(&ol) {
+            return true;
+        }
+        let ow = words(o);
+        let hit = ow.iter().filter(|w| t.contains(w.as_str())).count();
+        ow.len() >= 3 && hit * 10 >= ow.len() * 6
+    })
+}
+
 /// The autopilot's next item: in round-robin over the projects, an open item of the project's current step
 /// (the first step with an open item that did not fail or stop) that no lane works on.
 fn next_item(app: &Shared, lanes: &[Lane], rr: &mut usize, ok: &mut dyn FnMut(&Project) -> bool) -> Option<Lane> {
@@ -199,10 +222,12 @@ fn next_item(app: &Shared, lanes: &[Lane], rr: &mut usize, ok: &mut dyn FnMut(&P
             continue;
         }
         let Ok(steps) = plan::read(app, &p.id) else { continue };
+        let open: Vec<&str> = steps.iter().flat_map(|s| s.items.iter()).filter(|i| !i.done).map(|i| i.text.as_str()).collect();
+        let blocked_on_dep = |text: &str| waits_for_open_item(text, &open);
         let latest = |step: &str, item: &str| lanes.iter().filter(|l| l.project == p.id && l.step == step && l.item == item).max_by(|a, b| a.created_at.cmp(&b.created_at));
         let skipped = |l: Option<&Lane>| l.is_some_and(|l| matches!(l.status.as_str(), "failed" | "stopped"));
-        let Some(st) = steps.iter().find(|s| s.items.iter().any(|i| !i.done && !is_autopilot_skipped(&i.text) && !skipped(latest(&s.num, &i.text)))) else { continue };
-        let Some(it) = st.items.iter().find(|i| !i.done && !is_autopilot_skipped(&i.text) && latest(&st.num, &i.text).is_none_or(|l| !l.active() && !skipped(Some(l)))) else {
+        let Some(st) = steps.iter().find(|s| s.items.iter().any(|i| !i.done && !is_autopilot_skipped(&i.text) && !blocked_on_dep(&i.text) && !skipped(latest(&s.num, &i.text)))) else { continue };
+        let Some(it) = st.items.iter().find(|i| !i.done && !is_autopilot_skipped(&i.text) && !blocked_on_dep(&i.text) && latest(&st.num, &i.text).is_none_or(|l| !l.active() && !skipped(Some(l)))) else {
             continue;
         };
         if !ok(p) {
@@ -618,6 +643,16 @@ mod tests {
         assert!(src.contains("no_commits(app, &lane).await && !has_check(app, &lane)"));
         let merge = include_str!("merge.rs");
         assert!(merge.contains("\"already true on main\""));
+    }
+
+    #[test]
+    fn autopilot_waits_for_dependency_items() {
+        let open = ["Generar los vídeos de la demo en 3 idiomas", "Subir a YouTube"];
+        let up = "Subir los vídeos de la demo en 3 idiomas a YouTube: wait until the videos are on main, made by the item «Generar los vídeos de la demo en 3 idiomas»";
+        assert!(super::waits_for_open_item(up, &open));
+        assert!(!super::waits_for_open_item(up, &["Subir a YouTube"])); // the other item is merged
+        assert!(!super::waits_for_open_item("Arreglar el parser", &open));
+        assert!(!super::waits_for_open_item("Generar los vídeos de la demo en 3 idiomas", &open));
     }
 
     #[test]
