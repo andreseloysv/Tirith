@@ -13,8 +13,15 @@
 .sadd.on { background: rgba(47,111,237,.16); } .sadd:disabled, .isend:disabled, .abtn:disabled { opacity: .5; cursor: default; }
 .rleave { color: var(--red-fg); background: var(--red-bg); border-color: var(--red-line); }
 .rcard .acpop { margin-top: 10px; }
-.rblock .sadd { margin-top: 8px; }
-.rqr img.qr { background: #fff; }
+/* the owner's phone: one QR, big enough to scan from the screen, and what to do with it */
+.rscan { display: flex; flex-wrap: wrap; gap: 14px 24px; align-items: flex-start; padding: 2px 0 4px; }
+.rscan .qr { flex: none; display: block; width: 232px; height: 232px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+.rscan .qrwait { display: flex; align-items: center; justify-content: center; font-size: 12.5px; color: #555; }
+.rhow { flex: 1 1 280px; min-width: 0; max-width: 560px; } .rhow p { margin: 0 0 8px; } .rhow .rwho { margin-top: 12px; }
+.rlead { font-size: 15px; font-weight: 600; }
+.rphone .acpop { margin-top: 10px; }
+.rcard > .rwho { margin-bottom: 0; }
+.rpeer { display: block; width: 100%; max-width: none; margin: 8px 0; } .rget { margin-top: 8px; }
 .rbrake { margin: 0 0 8px; }
 
 /* public rooms */
