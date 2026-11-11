@@ -2,10 +2,13 @@
 //! project. A message goes to the session of its project, which starts with its first message and rests after 30
 //! quiet minutes; its text, its tool calls and the end of each turn go straight to that project's chat on the page.
 
-use crate::{app::{kill_group, now_iso, Shared}, models, rooms, rules, sandbox};
+use crate::app::{kill_group, now_iso, Shared};
+use crate::{models, rooms, rules, sandbox};
 use serde_json::{json, Value};
-use std::{collections::{BTreeMap, BTreeSet}, process::Stdio, sync::Mutex, time::Duration};
-use tokio::{io::{AsyncBufReadExt, AsyncWriteExt, BufReader}, sync::mpsc};
+use std::collections::{BTreeMap, BTreeSet};
+use std::{process::Stdio, sync::Mutex, time::Duration};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::sync::mpsc;
 
 const PROMPT: &str = "You are the manager inside Tirith. The owner chats with you here: answer briefly, in the \
 owner's language. You do not write project code yourself. Tirith's autopilot starts the open items of each \
@@ -78,17 +81,16 @@ fn report(app: &Shared, project: &str, text: &str) {
 fn known(app: &Shared, project: &str) -> Result<(), String> {
     (here(app, project) == project).then_some(()).ok_or(format!("unknown project '{project}'"))
 }
-fn user_line(text: &str) -> String {
-    json!({"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": text}]}}).to_string()
-}
 
 /// Hands the conversation its waiting reports and `text` as one message; its session starts when none runs.
 fn deliver(app: &Shared, project: &str, text: &str) {
     let start = talk(project, |t| {
         let mut all: Vec<String> = std::mem::take(&mut t.notes).into_iter().map(|n| format!("[tirith] {n}")).collect();
         all.extend((!text.is_empty()).then(|| text.to_string()));
-        if all.is_empty() { return false; }
-        let line = user_line(&all.join("\n\n"));
+        if all.is_empty() {
+            return false;
+        }
+        let line = json!({"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": all.join("\n\n")}]}}).to_string();
         if t.tx.as_ref().is_some_and(|tx| tx.send(line.clone()).is_ok()) {
             set_busy(app, project, t, true);
         } else {
@@ -124,9 +126,8 @@ pub fn busy() -> Vec<String> {
 /// with subtype `interrupt`, as the old collector sent. Err when no turn is running.
 pub fn interrupt(project: &str) -> Result<(), String> {
     let tx = talk(project, |t| t.tx.clone().filter(|_| t.busy)).ok_or("the manager is not working on a turn")?;
-    let id = format!("int-{:08x}", rand::random::<u32>());
-    let line = json!({"type": "control_request", "request_id": id, "request": {"subtype": "interrupt"}}).to_string();
-    tx.send(line).map_err(|_| "the manager session ended".to_string())
+    let line = json!({"type": "control_request", "request_id": format!("int-{:08x}", rand::random::<u32>()), "request": {"subtype": "interrupt"}});
+    tx.send(line.to_string()).map_err(|_| "the manager session ended".to_string())
 }
 
 /// The owner's message to a project's manager.
@@ -176,7 +177,9 @@ const KINDS: [&str; 5] = ["credentials", "payment", "account", "device", "decisi
 /// `tirith ask-owner`: a card on the owner's page, among its project's, and on the owner's phones, until answered.
 pub fn ask_owner(app: &Shared, project: &str, kind: &str, question: &str) -> Result<Value, String> {
     known(app, project)?;
-    if !KINDS.contains(&kind) || question.trim().is_empty() { return Err(format!("ask the owner with --kind {} and a question", KINDS.join("|"))); }
+    if !KINDS.contains(&kind) || question.trim().is_empty() {
+        return Err(format!("ask the owner with --kind {} and a question", KINDS.join("|")));
+    }
     let row = {
         let db = app.db.lock().unwrap();
         let n: i64 = db.query_row("SELECT COALESCE(MAX(CAST(SUBSTR(id, 2) AS INTEGER)), 0) FROM owner_items", [], |r| r.get(0)).unwrap_or(0);
@@ -193,7 +196,9 @@ pub fn ask_owner(app: &Shared, project: &str, kind: &str, question: &str) -> Res
 
 /// The owner's answer to an open card, handed to the manager of the card's project with the question it answers.
 pub fn owner_answer(app: &Shared, id: &str, answer: &str) -> Result<Value, String> {
-    if app.lane(id).is_some_and(|l| l.status == "waiting") { return crate::lanes::answer(app, id, answer).map(|_| json!({"ok": true})); }
+    if app.lane(id).is_some_and(|l| l.status == "waiting") {
+        return crate::lanes::answer(app, id, answer).map(|_| json!({"ok": true}));
+    }
     let sql = "SELECT kind, project, question FROM owner_items WHERE id = ?1 AND status = 'open'";
     let (kind, project, question): (String, String, String) = app.db.lock().unwrap().query_row(sql, [id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))).map_err(|_| format!("no open question '{id}'"))?;
     let _ = app.db.lock().unwrap().execute("UPDATE owner_items SET status = 'answered', answer = ?1 WHERE id = ?2", rusqlite::params![answer, id]);
@@ -204,22 +209,17 @@ pub fn owner_answer(app: &Shared, id: &str, answer: &str) -> Result<Value, Strin
 
 /// A lane that asked with `tirith ask` is blocked until answered: it is an open question too.
 pub fn waiting_cards(lanes: &[crate::app::Lane]) -> Vec<Value> {
-    lanes.iter().filter(|l| l.status == "waiting").map(|l| json!({"id": l.id, "at": l.created_at, "kind": "lane", "project": l.project, "status": "open", "question": format!("lane bloqueada esperando al dueño ({}): {}", l.item, l.question)})).collect()
+    lanes
+        .iter()
+        .filter(|l| l.status == "waiting")
+        .map(|l| json!({"id": l.id, "at": l.created_at, "kind": "lane", "project": l.project, "status": "open", "question": format!("lane bloqueada esperando al dueño ({}): {}", l.item, l.question)}))
+        .collect()
 }
 
 /// The owner's open cards, oldest first, then the lanes waiting for an answer.
 pub fn owner_open(app: &Shared) -> Vec<Value> {
-    [owner_cards(app), waiting_cards(&app.lanes.lock().unwrap().values().cloned().collect::<Vec<_>>())].concat()
-}
-
-fn owner_cards(app: &Shared) -> Vec<Value> {
-    let db = app.db.lock().unwrap();
-    db.prepare("SELECT id, at, kind, question, project FROM owner_items WHERE status = 'open' ORDER BY rowid")
-        .and_then(|mut q| {
-            let s = |r: &rusqlite::Row, i: usize| r.get::<_, String>(i);
-            q.query_map([], |r| Ok(json!({"id": s(r, 0)?, "at": s(r, 1)?, "kind": s(r, 2)?, "question": s(r, 3)?, "project": s(r, 4)?, "status": "open"}))).map(|rows| rows.flatten().collect())
-        })
-        .unwrap_or_default()
+    let cards = app.objects("SELECT id, at, kind, question, project, status FROM owner_items WHERE status = 'open' ORDER BY rowid", [], &["id", "at", "kind", "question", "project", "status"]);
+    [cards, waiting_cards(&app.lanes.lock().unwrap().values().cloned().collect::<Vec<_>>())].concat()
 }
 
 /// Why an open question no longer applies: it proposes turning its project's autopilot off (on) and that is already so.
@@ -261,7 +261,9 @@ async fn run(app: Shared, project: String) {
             t.alive = !t.pending.is_empty();
             !t.alive
         });
-        if rest { return; }
+        if rest {
+            return;
+        }
         // A session that ended young is started again more and more slowly; one that lived is started again at once.
         backoff = if started.elapsed().as_secs() > 60 { 2 } else { (backoff * 2).min(60) };
         if backoff > 2 {
@@ -315,7 +317,9 @@ async fn session(app: &Shared, project: &str) -> Result<(), String> {
     });
     let writer = tokio::spawn(async move {
         while let Some(line) = rx.recv().await {
-            if stdin.write_all(format!("{line}\n").as_bytes()).await.is_err() { break; }
+            if stdin.write_all(format!("{line}\n").as_bytes()).await.is_err() {
+                break;
+            }
             let _ = stdin.flush().await;
         }
     });
@@ -379,10 +383,14 @@ async fn session(app: &Shared, project: &str) -> Result<(), String> {
     writer.abort();
     kill_group(pid, libc::SIGTERM);
     let _ = tokio::time::timeout(Duration::from_secs(10), child.wait()).await;
-    if ready || rest { return Ok(()); }
+    if ready || rest {
+        return Ok(());
+    }
     // It ended before it was ready: what it was handed waits again. A resume that does not work becomes a fresh session.
     talk(project, |t| drop(t.pending.splice(0..0, sent)));
-    if resumed.is_none() { return Err("its agent ended before it was ready (logs/manager.log says why)".into()); }
+    if resumed.is_none() {
+        return Err("its agent ended before it was ready (logs/manager.log says why)".into());
+    }
     app.set_kv(&key, None);
     Ok(())
 }

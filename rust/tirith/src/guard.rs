@@ -2,8 +2,11 @@
 //! contain one of the owner's forbidden words (whole word, any case; a word may be a regex). The words come only
 //! from config.toml: the project's `guard_words`, else `[guard] words`; `guard = false` opts a project out.
 
-use crate::{app::Shared, config::{home_dir, Project}};
-use axum::{extract::{Path, State}, http::StatusCode, routing::{get, post}, Json, Router};
+use crate::app::Shared;
+use crate::config::{home_dir, Project};
+use axum::extract::{Path, State};
+use axum::routing::{get, post};
+use axum::{http::StatusCode, Json, Router};
 use serde_json::{json, Value};
 use std::path::PathBuf;
 
@@ -73,7 +76,9 @@ pub fn words(app: &Shared, project: &Project) -> Vec<String> {
     let cfg = app.cfg();
     let entry = cfg.raw.get("projects").and_then(|p| p.as_array()).and_then(|ps| ps.iter().find(|p| p.get("id").and_then(|i| i.as_str()) == Some(project.id.as_str())).cloned());
     let entry = entry.unwrap_or(toml::Value::Table(Default::default()));
-    if entry.get("guard").and_then(|g| g.as_bool()) == Some(false) { return vec![]; }
+    if entry.get("guard").and_then(|g| g.as_bool()) == Some(false) {
+        return vec![];
+    }
     let list = |v: Option<&toml::Value>| -> Option<Vec<String>> { v?.clone().try_into().ok() };
     list(entry.get("guard_words")).or_else(|| list(cfg.raw.get("guard").and_then(|g| g.get("words")))).unwrap_or_default().into_iter().filter(|w| !w.trim().is_empty()).collect()
 }
@@ -81,7 +86,9 @@ pub fn words(app: &Shared, project: &Project) -> Vec<String> {
 /// The repo's common git dir, by reading `.git` (a folder, or a file pointing into a worktree's git dir).
 pub fn git_dir(repo: &std::path::Path) -> Option<PathBuf> {
     let dot = repo.join(".git");
-    if dot.is_dir() { return Some(dot); }
+    if dot.is_dir() {
+        return Some(dot);
+    }
     let text = std::fs::read_to_string(&dot).ok()?;
     let dir = repo.join(text.strip_prefix("gitdir:")?.trim());
     Some(std::fs::read_to_string(dir.join("commondir")).map_or_else(|_| dir.clone(), |c| dir.join(c.trim())))
@@ -96,16 +103,13 @@ fn render(hook: &str, words: &[String]) -> String {
     HEAD.replace("{what}", what).replace("{words}", &words.join(",")).replace("{re}", &re) + body + LOCAL
 }
 
-/// A `core.hooksPath` in the repo's or the user's git config makes git skip the guard.
-fn hooks_path_set(git: &std::path::Path) -> Option<PathBuf> {
-    [git.join("config"), home_dir().join(".gitconfig")].into_iter().find(|f| std::fs::read_to_string(f).is_ok_and(|t| t.lines().any(|l| l.trim().to_lowercase().replace(' ', "").starts_with("hookspath="))))
-}
-
 /// Ok when the project's guard is installed and intact (or the project opts out); the reason otherwise.
 /// The scheduler calls it before it starts a lane of the project: a few small file reads, no git process.
 pub fn intact(app: &Shared, project: &Project) -> Result<(), String> {
     let words = words(app, project);
-    if words.is_empty() { return Ok(()); }
+    if words.is_empty() {
+        return Ok(());
+    }
     let git = git_dir(&project.repo()).ok_or(format!("commit guard: {} is not a git repo", project.repo().display()))?;
     let fix = format!("(tirith guard install {})", project.id);
     for hook in HOOKS {
@@ -113,10 +117,16 @@ pub fn intact(app: &Shared, project: &Project) -> Result<(), String> {
         if !text.contains(MARKER) {
             return Err(format!("commit guard: the {hook} hook is not Tirith's; merge the guard into it by hand"));
         }
-        if text != render(hook, &words) { return Err(format!("commit guard: the {hook} hook is outdated or has other words than config.toml {fix}")); }
+        if text != render(hook, &words) {
+            return Err(format!("commit guard: the {hook} hook is outdated or has other words than config.toml {fix}"));
+        }
     }
-    if let Some(f) = hooks_path_set(&git) { return Err(format!("commit guard: core.hooksPath in {} makes git skip the guard", f.display())); }
-    Ok(())
+    // A `core.hooksPath` in the repo's or the user's git config makes git skip the guard.
+    let skips = |f: &PathBuf| std::fs::read_to_string(f).is_ok_and(|t| t.lines().any(|l| l.trim().to_lowercase().replace(' ', "").starts_with("hookspath=")));
+    match [git.join("config"), home_dir().join(".gitconfig")].into_iter().find(skips) {
+        Some(f) => Err(format!("commit guard: core.hooksPath in {} makes git skip the guard", f.display())),
+        None => Ok(()),
+    }
 }
 
 /// Sets or clears the immutable flag (macOS `uchg`): installed hooks cannot be changed or deleted, by agents or
@@ -136,7 +146,9 @@ fn immutable(_path: &std::path::Path, _on: bool) {}
 /// Writes both hooks (mode 755) where they are missing or ours (an older guard is replaced); never over a hook that is not ours.
 pub fn install(app: &Shared, project: &Project) -> Result<(), String> {
     let words = words(app, project);
-    if words.is_empty() { return Ok(()); }
+    if words.is_empty() {
+        return Ok(());
+    }
     let dir = git_dir(&project.repo()).ok_or(format!("{} is not a git repo", project.repo().display()))?.join("hooks");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let ours = |p: &std::path::Path| std::fs::read_to_string(p).is_ok_and(|t| t.contains(MARKER));
@@ -145,7 +157,9 @@ pub fn install(app: &Shared, project: &Project) -> Result<(), String> {
         if path.exists() && !ours(&path) {
             // The repository's own hook keeps running after ours, as <hook>.local.
             let local = dir.join(format!("{hook}.local"));
-            if local.exists() { return Err(format!("{} is not Tirith's hook and {} exists: merge them by hand", path.display(), local.display())); }
+            if local.exists() {
+                return Err(format!("{} is not Tirith's hook and {} exists: merge them by hand", path.display(), local.display()));
+            }
             immutable(&path, false);
             std::fs::rename(&path, &local).map_err(|e| format!("{}: {e}", path.display()))?;
         }
@@ -241,21 +255,19 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("tirith-guard-merge-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
+        let save = |file: &str, text: &str, msg: &str| {
+            std::fs::write(dir.join(file), text).unwrap();
+            git(&dir, &["add", "."]);
+            git(&dir, &["commit", "-q", "-m", msg]).status.success()
+        };
         git(&dir, &["init", "-q", "-b", "main"]);
-        std::fs::write(dir.join("a.txt"), "one\n").unwrap();
-        git(&dir, &["add", "."]);
-        assert!(git(&dir, &["commit", "-q", "-m", "base"]).status.success());
+        assert!(save("a.txt", "one\n", "base"));
         git(&dir, &["checkout", "-q", "-b", "side"]);
-        std::fs::write(dir.join("zoo.txt"), &format!("see {w} here\n")).unwrap();
-        git(&dir, &["add", "."]);
-        assert!(git(&dir, &["commit", "-q", "-m", "side"]).status.success());
+        assert!(save("zoo.txt", &format!("see {w} here\n"), "side"));
         git(&dir, &["checkout", "-q", "-b", "other", "main"]);
-        std::fs::write(dir.join("c.txt"), "c\n").unwrap();
-        git(&dir, &["add", "."]);
-        assert!(git(&dir, &["commit", "-q", "-m", "other"]).status.success());
+        assert!(save("c.txt", "c\n", "other"));
         git(&dir, &["checkout", "-q", "main"]);
-        std::fs::write(dir.join("a.txt"), "one\ntwo\n").unwrap();
-        assert!(git(&dir, &["commit", "-q", "-am", "main"]).status.success());
+        assert!(save("a.txt", "one\ntwo\n", "main"));
         // Install the guard now that history exists.
         let hooks = dir.join(".git").join("hooks");
         std::fs::create_dir_all(&hooks).unwrap();
@@ -267,15 +279,11 @@ mod tests {
         let m = git(&dir, &["merge", "-q", "side", "-m", "merge"]);
         assert!(m.status.success(), "merge with parent content must pass: {}", String::from_utf8_lossy(&m.stderr));
         // A plain commit adding the word is still blocked.
-        std::fs::write(dir.join("b.txt"), format!("{w}\n")).unwrap();
-        git(&dir, &["add", "."]);
-        assert!(!git(&dir, &["commit", "-q", "-m", "x"]).status.success());
+        assert!(!save("b.txt", &format!("{w}\n"), "x"));
         git(&dir, &["reset", "-q", "--hard", "HEAD"]);
         // A merge that adds a forbidden line of its own is still blocked.
         git(&dir, &["merge", "-q", "--no-commit", "--no-ff", "other"]);
-        std::fs::write(dir.join("c.txt"), format!("c\n{w}\n")).unwrap();
-        git(&dir, &["add", "."]);
-        assert!(!git(&dir, &["commit", "-q", "-m", "merge2"]).status.success(), "merge-added content must still be blocked");
+        assert!(!save("c.txt", &format!("c\n{w}\n"), "merge2"), "merge-added content must still be blocked");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

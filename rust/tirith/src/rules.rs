@@ -1,6 +1,7 @@
 //! Rules as code, checked in memory on every `PreToolUse`. A refusal says what to do instead.
 
-use crate::{app::{Lane, Shared}, config::{expand, Project}};
+use crate::app::{Lane, Shared};
+use crate::config::{expand, Project};
 use regex::Regex;
 use serde_json::Value;
 use std::sync::LazyLock;
@@ -36,12 +37,18 @@ pub fn check(app: &Shared, tool: &str, input: &Value, lane: Option<&Lane>, proje
     let manifest = project.map(|p| app.manifest(&p.repo()));
     if let (Some(p), Some(m)) = (project, &manifest) {
         let plan = format!("/{}", m.roadmap.trim_start_matches("./"));
-        if (edit && file.ends_with(&plan)) || (bash && writes_to(cmd, &m.roadmap)) { return Some(format!("The plan is written only by Tirith. Add an item with: tirith plan add {} <step> \"<text>\"", p.id)); }
+        if (edit && file.ends_with(&plan)) || (bash && writes_to(cmd, &m.roadmap)) {
+            return Some(format!("The plan is written only by Tirith. Add an item with: tirith plan add {} <step> \"<text>\"", p.id));
+        }
     }
     if let Some(l) = lane {
         let in_projects = in_lanes || cfg.projects.iter().any(|p| path.starts_with(p.repo()));
-        if edit && in_projects && !path.starts_with(&l.workspace) { return Some(format!("A lane writes only inside its own copy: {}. Change the file there.", l.workspace)); }
-        if bash && MAIN.is_match(cmd) { return Some("A lane never pushes or touches main. Commit on your branch and end your turn: Tirith runs the checks and merges.".into()); }
+        if edit && in_projects && !path.starts_with(&l.workspace) {
+            return Some(format!("A lane writes only inside its own copy: {}. Change the file there.", l.workspace));
+        }
+        if bash && MAIN.is_match(cmd) {
+            return Some("A lane never pushes or touches main. Commit on your branch and end your turn: Tirith runs the checks and merges.".into());
+        }
         let names: Vec<String> = cfg.agents.values().filter_map(|a| std::path::Path::new(&a.command).file_name().map(|n| regex::escape(&n.to_string_lossy()))).collect();
         let spawns = !names.is_empty() && Regex::new(&format!(r"(^|[;&|(]\s*|\bexec\s+|\bnohup\s+)({})\b", names.join("|"))).map(|r| r.is_match(cmd)).unwrap_or(false);
         if tool == "Task" || tool == "Agent" || (bash && spawns) {
@@ -49,9 +56,13 @@ pub fn check(app: &Shared, tool: &str, input: &Value, lane: Option<&Lane>, proje
         }
     }
     for r in manifest.map(|m| m.rules).unwrap_or_default() {
-        if (r.lanes_only && lane.is_none()) || (!r.tools.is_empty() && !r.tools.iter().any(|t| t == tool)) { continue; }
+        if (r.lanes_only && lane.is_none()) || (!r.tools.is_empty() && !r.tools.iter().any(|t| t == tool)) {
+            continue;
+        }
         let text = if bash { cmd } else { file };
-        if Regex::new(&r.pattern).map(|re| re.is_match(text)).unwrap_or(false) { return Some(format!("{} ({})", r.message, r.id)); }
+        if Regex::new(&r.pattern).map(|re| re.is_match(text)).unwrap_or(false) {
+            return Some(format!("{} ({})", r.message, r.id));
+        }
     }
     None
 }

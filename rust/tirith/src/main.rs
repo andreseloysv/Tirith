@@ -52,13 +52,10 @@ fn main() {
     let flag = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).cloned();
     // The project a command is about: `--project`, else the project of the session Tirith started it in.
     let project = flag("--project").or_else(|| std::env::var("TIRITH_PROJECT").ok()).unwrap_or_default();
-    let mut pos: Vec<&str> = vec![];
-    let mut skip = false;
-    for a in &args {
-        if skip {
-            skip = false;
-        } else if a.starts_with("--") {
-            skip = true;
+    let (mut pos, mut rest): (Vec<&str>, _) = (vec![], args.iter());
+    while let Some(a) = rest.next() {
+        if a.starts_with("--") {
+            rest.next(); // a flag and its value
         } else {
             pos.push(a);
         }

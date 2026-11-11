@@ -2,8 +2,11 @@
 //! autopilot starts the open items of each project's current plan step when the machine has room; a lane whose
 //! process ends goes to the merge queue, where the checks (never the agent) decide that its item is done.
 
-use crate::{app::{add_worktree, alive, git, kill_group, log_age, now_iso, now_s, tail, Lane, Shared}, brain, config::Project, guard, manager, models, plan, sandbox};
-use std::{collections::{BTreeMap, HashMap}, os::unix::ffi::OsStrExt, path::{Path, PathBuf}, process::Stdio, sync::Mutex, time::Duration};
+use crate::app::{add_worktree, alive, git, kill_group, log_age, now_iso, now_s, tail, Lane, Shared};
+use crate::{brain, config::Project, guard, manager, models, plan, sandbox};
+use std::collections::{BTreeMap, HashMap};
+use std::path::{Path, PathBuf};
+use std::{os::unix::ffi::OsStrExt, process::Stdio, sync::Mutex, time::Duration};
 
 /// Messages for working lanes, handed to the agent by its next PostToolUse hook.
 static LIVE: Mutex<BTreeMap<String, Vec<String>>> = Mutex::new(BTreeMap::new());
@@ -22,7 +25,9 @@ pub(crate) fn slug(text: &str) -> String {
 
 pub fn start(app: &Shared, project: &str, step: &str, item: &str, agent: Option<String>) -> Result<Lane, String> {
     let item = plan::clean(item);
-    if !plan::is_open(app, project, step, &item)? { return Err(format!("\"{item}\" is not an open item of step {step} of {project}. Add it first: tirith plan add {project} {step} \"<text>\"")); }
+    if !plan::is_open(app, project, step, &item)? {
+        return Err(format!("\"{item}\" is not an open item of step {step} of {project}. Add it first: tirith plan add {project} {step} \"<text>\""));
+    }
     if let Some(l) = app.lanes.lock().unwrap().values().find(|l| l.active() && l.project == project && l.step == step && plan::same(&l.item, &item)) {
         return Err(format!("lane {} already works on that item ({})", l.id, l.status));
     }
@@ -69,13 +74,17 @@ pub fn shared_target(app: &Shared, project: &str) -> PathBuf {
 /// With less than 10 GB free: the build caches git ignores (target, .build, node_modules, build, .gradle) are
 /// removed from the lanes' worktrees that no active lane holds. Nothing tracked is touched.
 async fn free_disk(app: &Shared, lanes: &[Lane]) {
-    if free_gb(&app.home.join("lanes")) >= 10.0 { return; }
+    if free_gb(&app.home.join("lanes")) >= 10.0 {
+        return;
+    }
     for p in &app.cfg().projects {
         let merging = lanes.iter().any(|l| l.project == p.id && l.status == "merging");
         for slot in std::fs::read_dir(p.lanes_dir()).into_iter().flatten().flatten().map(|e| e.path()) {
             let name = slot.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
             let held = lanes.iter().any(|l| l.active() && Path::new(&l.workspace) == slot) || (name == "merge" && merging);
-            if held || !(name.starts_with("slot-") || name == "merge") { continue; }
+            if held || !(name.starts_with("slot-") || name == "merge") {
+                continue;
+            }
             for cache in ["target", ".build", "node_modules", "build", ".gradle", "android/build", "android/app/build", "android/.gradle"] {
                 let path = slot.join(cache);
                 if path.is_dir() && git(&slot, &["check-ignore", "-q", cache]).await.is_ok() {
@@ -140,7 +149,9 @@ fn blocked(app: &Shared, p: &Project, lanes: &[Lane]) -> Option<String> {
 
 /// The command that fixes a reason `blocked` gave, for the health report.
 pub(crate) fn paused_fix(project: &str, why: &str) -> String {
-    if let Some(fix) = why.find('(').zip(why.rfind(')')).map(|(a, b)| &why[a + 1..b]).filter(|f| f.starts_with("tirith ")) { return fix.to_string(); }
+    if let Some(fix) = why.find('(').zip(why.rfind(')')).map(|(a, b)| &why[a + 1..b]).filter(|f| f.starts_with("tirith ")) {
+        return fix.to_string();
+    }
     if why.contains("merge queue") {
         "wait for the merges (tirith status shows them)".into()
     } else if why.contains("GB free") {
@@ -178,7 +189,9 @@ fn next_item(app: &Shared, lanes: &[Lane], rr: &mut usize, ok: &mut dyn FnMut(&P
     let n = cfg.projects.len();
     for k in 0..n {
         let p = &cfg.projects[(*rr + k) % n];
-        if !autopilot_on(app, &p.id) || app.kv(&format!("main_red:{}", p.id)).is_some() { continue; }
+        if !autopilot_on(app, &p.id) || app.kv(&format!("main_red:{}", p.id)).is_some() {
+            continue;
+        }
         let Ok(steps) = plan::read(app, &p.id) else { continue };
         let open: Vec<&str> = steps.iter().flat_map(|s| s.items.iter()).filter(|i| !i.done).map(|i| i.text.as_str()).collect();
         let latest = |step: &str, item: &str| lanes.iter().filter(|l| l.project == p.id && l.step == step && plan::same(&l.item, item)).max_by(|a, b| a.created_at.cmp(&b.created_at));
@@ -187,7 +200,9 @@ fn next_item(app: &Shared, lanes: &[Lane], rr: &mut usize, ok: &mut dyn FnMut(&P
         let Some(it) = st.items.iter().find(|i| !i.done && !is_autopilot_skipped(&i.text) && !waits_for_open_item(&i.text, &open) && latest(&st.num, &i.text).is_none_or(|l| !l.active() && !skipped(Some(l)))) else {
             continue;
         };
-        if !ok(p) { continue; }
+        if !ok(p) {
+            continue;
+        }
         *rr = (*rr + k + 1) % n;
         match start(app, &p.id, &st.num, &it.text, None) {
             Ok(l) => return Some(l),
@@ -233,7 +248,9 @@ pub async fn scheduler(app: Shared) {
                 ended(&app, &l.id, None).await; // its process ended while the daemon was down
             }
         }
-        if running >= cfg.max_parallel || (running > 0 && load >= cfg.max_load) { continue; }
+        if running >= cfg.max_parallel || (running > 0 && load >= cfg.max_load) {
+            continue;
+        }
         let mut ok = |p: &Project| {
             let why = blocked(&app, p, &lanes);
             if let Some(w) = why.as_ref().filter(|w| said.get(&p.id) != Some(*w)) {
@@ -475,14 +492,18 @@ fn has_check(app: &Shared, lane: &Lane) -> bool {
 /// True when the lane's branch has no commit beyond the project's HEAD (it is known and countable).
 async fn no_commits(app: &Shared, lane: &Lane) -> bool {
     let Some(p) = app.cfg().projects.iter().find(|p| p.id == lane.project).cloned() else { return false };
-    if lane.branch.is_empty() { return false; }
+    if lane.branch.is_empty() {
+        return false;
+    }
     matches!(git(&p.repo(), &["rev-list", "--count", &format!("HEAD..{}", lane.branch)]).await.as_deref(), Ok("0"))
 }
 
 /// `tirith ask` from a lane: it waits, and the manager is told how to answer.
 pub fn ask(app: &Shared, id: &str, question: &str) -> Result<Lane, String> {
     let lane = app.lane(id).ok_or(format!("no lane '{id}'"))?;
-    if lane.status != "running" || question.trim().is_empty() { return Err(format!("lane {id} is {}: only a working lane asks, with a question", lane.status)); }
+    if lane.status != "running" || question.trim().is_empty() {
+        return Err(format!("lane {id} is {}: only a working lane asks, with a question", lane.status));
+    }
     let lane = app.update_lane(id, |l| {
         l.status = "waiting".into();
         l.question = question.trim().into();
@@ -496,7 +517,9 @@ pub fn ask(app: &Shared, id: &str, question: &str) -> Result<Lane, String> {
 /// `tirith answer` from the manager: a live message when the agent still runs, else a resumed run.
 pub fn answer(app: &Shared, id: &str, text: &str) -> Result<Lane, String> {
     let lane = app.lane(id).ok_or(format!("no lane '{id}'"))?;
-    if lane.status != "waiting" { return Err(format!("lane {id} is {}, not waiting for an answer", lane.status)); }
+    if lane.status != "waiting" {
+        return Err(format!("lane {id} is {}, not waiting for an answer", lane.status));
+    }
     let live = lane.pid.is_some_and(alive);
     if live {
         tell(id, &format!("Answer from the manager: {text}"));
@@ -513,7 +536,9 @@ pub fn answer(app: &Shared, id: &str, text: &str) -> Result<Lane, String> {
 
 pub fn stop(app: &Shared, id: &str) -> Result<Lane, String> {
     let lane = app.lane(id).ok_or(format!("no lane '{id}'"))?;
-    if !matches!(lane.status.as_str(), "queued" | "running" | "waiting" | "merge-queued") { return Err(format!("lane {id} is {}", lane.status)); }
+    if !matches!(lane.status.as_str(), "queued" | "running" | "waiting" | "merge-queued") {
+        return Err(format!("lane {id} is {}", lane.status));
+    }
     if let Some(pid) = lane.pid {
         kill_group(pid, libc::SIGTERM);
         tokio::spawn(async move {

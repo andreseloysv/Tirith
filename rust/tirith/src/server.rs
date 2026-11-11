@@ -1,7 +1,14 @@
 //! HTTP on 127.0.0.1: the page, its JSON API, the change stream (SSE) and the agents' hooks.
 
-use crate::{app::{bad, now_s, tail, R, Shared}, attach, brain, guard, lanes, manager, merge, metrics, models, plan, projects, rooms, rules, sandbox};
-use axum::{body::Bytes, extract::{Path, Query, Request, State}, http::{HeaderMap, StatusCode}, middleware::{self, Next}, response::{sse::{Event, KeepAlive, Sse}, IntoResponse, Response}, routing::{get, post}, Json, Router};
+use crate::app::{bad, now_s, tail, Shared, R};
+use crate::{attach, brain, guard, lanes, manager, merge, metrics, models, plan, projects, rooms, rules, sandbox};
+use axum::extract::{Path, Query, Request, State};
+use axum::http::{HeaderMap, StatusCode};
+use axum::middleware::{self, Next};
+use axum::response::sse::{Event, KeepAlive, Sse};
+use axum::response::{IntoResponse, Response};
+use axum::routing::{get, post};
+use axum::{body::Bytes, Json, Router};
 use serde_json::{json, Value};
 use std::{convert::Infallible, sync::OnceLock};
 use tokio_stream::{wrappers::BroadcastStream, Stream, StreamExt};
@@ -158,7 +165,7 @@ async fn pipeline_retry(State(app): State<Shared>, Path(id): Path<String>) -> R 
 /// The manager sets a stage's time limit in minutes; it lasts until changed or 24 h.
 async fn stage_limit(State(app): State<Shared>, Path((project, stage)): Path<(String, String)>, Json(b): Json<Value>) -> R {
     let minutes = b["minutes"].as_u64().filter(|m| *m > 0).ok_or_else(|| bad("minutes must be a positive number".into()))?;
-    merge::set_stage_limit(&app, &project, &stage, minutes);
+    app.set_kv(&format!("stage_limit:{project}:{stage}"), Some(&format!("{minutes}@{}", now_s())));
     Ok(Json(json!({"project": project, "stage": stage, "minutes": minutes})))
 }
 
@@ -169,7 +176,9 @@ async fn run_log(State(app): State<Shared>, Path(id): Path<i64>) -> String {
 async fn chat(State(app): State<Shared>, Json(b): Json<Value>) -> R {
     let files: Vec<String> = b["attachments"].as_array().into_iter().flatten().filter_map(|f| f.as_str().map(String::from)).collect();
     let text = s(&b, "text") + &attach::describe(&files);
-    if text.trim().is_empty() { return Err(bad("empty message".into())); }
+    if text.trim().is_empty() {
+        return Err(bad("empty message".into()));
+    }
     manager::say(&app, &s(&b, "project"), &text).map(|_| Json(json!({"ok": true}))).map_err(bad)
 }
 
@@ -187,7 +196,9 @@ async fn hook(State(app): State<Shared>, Path(event): Path<String>, headers: Hea
     let p: Value = serde_json::from_slice(&body).unwrap_or(json!({}));
     let cwd = s(&p, "cwd");
     let header = |k: &str| headers.get(k).and_then(|v| v.to_str().ok()).filter(|v| !v.is_empty() && !v.starts_with('$')).map(String::from);
-    let lane = header("x-tirith-lane").and_then(|id| app.lane(&id)).or_else(|| app.lane_for_cwd(&cwd));
+    // Without the header, the working lane whose worktree holds the agent's cwd.
+    let in_worktree = |l: &&crate::app::Lane| matches!(l.status.as_str(), "running" | "waiting") && !l.workspace.is_empty() && std::path::Path::new(&cwd).starts_with(&l.workspace);
+    let lane = header("x-tirith-lane").and_then(|id| app.lane(&id)).or_else(|| app.lanes.lock().unwrap().values().find(in_worktree).cloned());
     let cfg = app.cfg();
     let project = lane.as_ref().and_then(|l| cfg.project(&l.project)).or_else(|| cfg.project_for(&cwd)).cloned();
     let tool = s(&p, "tool_name");
@@ -218,7 +229,9 @@ async fn hook(State(app): State<Shared>, Path(event): Path<String>, headers: Hea
     let Some(l) = lane else { return Json(json!({})) };
     if event == "PostToolUse" {
         let lines = lanes::drain(&l.id);
-        if lines.is_empty() { return Json(json!({})); }
+        if lines.is_empty() {
+            return Json(json!({}));
+        }
         if l.status == "waiting" && !l.resume.is_empty() {
             app.update_lane(&l.id, |x| {
                 x.status = "running".into(); // the answer reached the live agent
@@ -251,7 +264,9 @@ async fn hook(State(app): State<Shared>, Path(event): Path<String>, headers: Hea
 async fn web_file(State(app): State<Shared>, uri: axum::http::Uri) -> Response {
     let rel = uri.path().trim_start_matches('/');
     let rel = if rel.is_empty() { "index.html" } else { rel };
-    if rel.split('/').any(|p| p.is_empty() || p == ".." || p.starts_with('.')) { return (StatusCode::NOT_FOUND, "not found").into_response(); }
+    if rel.split('/').any(|p| p.is_empty() || p == ".." || p.starts_with('.')) {
+        return (StatusCode::NOT_FOUND, "not found").into_response();
+    }
     let dir = crate::config::get::<String>(&app.cfg().raw, &["app", "web_dir"]).map(|d| crate::config::expand(&d)).unwrap_or_else(|| std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../web")));
     let Ok(body) = tokio::fs::read(dir.join(rel)).await else { return (StatusCode::NOT_FOUND, "not found").into_response() };
     let kind = match rel.rsplit('.').next().unwrap_or("") {

@@ -4,7 +4,10 @@ use crate::config::{tirith_home, Config, Manifest};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::{collections::{BTreeMap, BTreeSet, HashMap, HashSet}, path::{Path, PathBuf}, sync::{Arc, Mutex, RwLock}, time::{SystemTime, UNIX_EPOCH}};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, RwLock};
+use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::{broadcast, Notify};
 
 pub type Shared = Arc<App>;
@@ -137,7 +140,9 @@ impl App {
     pub fn reload_config(&self, force: bool) -> bool {
         let now = mtime(&self.home.join("config.toml"));
         let mut last = self.cfg_mtime.lock().unwrap();
-        if *last == now && !force { return false; }
+        if *last == now && !force {
+            return false;
+        }
         *last = now;
         *self.cfg.write().unwrap() = Arc::new(Config::load());
         true
@@ -147,7 +152,9 @@ impl App {
     pub fn manifest(&self, repo: &Path) -> Manifest {
         let stamp = mtime(&repo.join("tirith.toml"));
         let mut cache = self.manifests.lock().unwrap();
-        if let Some((_, man)) = cache.get(repo).filter(|(m, _)| *m == stamp) { return man.clone(); }
+        if let Some((_, man)) = cache.get(repo).filter(|(m, _)| *m == stamp) {
+            return man.clone();
+        }
         let man = Manifest::load(repo);
         cache.insert(repo.to_path_buf(), (stamp, man.clone()));
         man
@@ -174,12 +181,6 @@ impl App {
         f(&mut lane);
         self.save_lane(&lane);
         Some(lane)
-    }
-
-    /// The working lane whose worktree holds `cwd`.
-    pub fn lane_for_cwd(&self, cwd: &str) -> Option<Lane> {
-        let cwd = Path::new(cwd);
-        self.lanes.lock().unwrap().values().find(|l| matches!(l.status.as_str(), "running" | "waiting") && !l.workspace.is_empty() && cwd.starts_with(&l.workspace)).cloned()
     }
 
     /// Runs an INSERT and returns the id of the new row.
@@ -215,28 +216,29 @@ impl App {
         };
     }
 
-    /// The last `limit` rows of a table (with `project`, only that project's) as JSON objects, oldest first.
-    pub fn recent(&self, table: &str, cols: &[&str], project: Option<&str>, limit: u32) -> Vec<Value> {
+    /// The rows of a query, each mapped by `f`; a query that fails gives none.
+    pub fn query<T>(&self, sql: &str, args: impl rusqlite::Params, f: impl FnMut(&rusqlite::Row) -> rusqlite::Result<T>) -> Vec<T> {
         let db = self.db.lock().unwrap();
-        let only = if project.is_some() { "WHERE project = ?1" } else { "" };
-        let sql = format!("SELECT {} FROM {table} {only} ORDER BY id DESC LIMIT {limit}", cols.join(", "));
-        let Ok(mut q) = db.prepare(&sql) else { return vec![] };
-        let rows = q.query_map(rusqlite::params_from_iter(project), |r| {
+        let Ok(mut q) = db.prepare(sql) else { return vec![] };
+        q.query_map(args, f).map(|rows| rows.flatten().collect()).unwrap_or_default()
+    }
+
+    /// The rows of a query as JSON objects named by `cols` (numbers and text; anything else is null).
+    pub fn objects(&self, sql: &str, args: impl rusqlite::Params, cols: &[&str]) -> Vec<Value> {
+        self.query(sql, args, |r| {
             let mut obj = serde_json::Map::new();
             for (i, c) in cols.iter().enumerate() {
-                let v: rusqlite::types::Value = r.get(i)?;
-                obj.insert(
-                    c.to_string(),
-                    match v {
-                        rusqlite::types::Value::Integer(n) => json!(n),
-                        rusqlite::types::Value::Text(s) => json!(s),
-                        _ => Value::Null,
-                    },
-                );
+                let v = r.get_ref(i)?;
+                obj.insert(c.to_string(), v.as_i64().map(|n| json!(n)).or_else(|_| v.as_str().map(|s| json!(s))).unwrap_or(Value::Null));
             }
             Ok(Value::Object(obj))
-        });
-        let mut out: Vec<Value> = rows.map(|r| r.flatten().collect()).unwrap_or_default();
+        })
+    }
+
+    /// The last `limit` rows of a table (with `project`, only that project's) as JSON objects, oldest first.
+    pub fn recent(&self, table: &str, cols: &[&str], project: Option<&str>, limit: u32) -> Vec<Value> {
+        let only = if project.is_some() { "WHERE project = ?1" } else { "" };
+        let mut out = self.objects(&format!("SELECT {} FROM {table} {only} ORDER BY id DESC LIMIT {limit}", cols.join(", ")), rusqlite::params_from_iter(project), cols);
         out.reverse();
         out
     }
@@ -333,19 +335,23 @@ mod tests {
         let p = path_with_cargo(None, "/usr/bin", &base, &dirs);
         assert_eq!((p.clone(), path_with_cargo(None, &p, &base, &dirs)), (format!("/usr/bin:{}", brew.display()), p));
     }
+    /// A repository with one commit holding `files` (each a folder-relative path and its text).
+    async fn committed(repo: &Path, files: &[(&str, &str)]) {
+        for (file, text) in files {
+            let path = repo.join(file);
+            std::fs::create_dir_all(path.parent().unwrap()).and_then(|_| std::fs::write(path, text)).unwrap();
+        }
+        for a in ["init -q", "config user.email t@t", "config user.name t", "add .", "commit -qm i"] {
+            git(repo, &a.split(' ').collect::<Vec<_>>()).await.unwrap();
+        }
+    }
     #[tokio::test]
     async fn worktree_local_properties() {
         let base = std::env::temp_dir().join(format!("tirith-lp-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&base);
         let repo = base.join("repo");
+        committed(&repo, &[(".gitignore", "local.properties\n"), ("README", "x")]).await;
         std::fs::create_dir_all(repo.join("android")).unwrap();
-        for a in [vec!["init", "-q"], vec!["config", "user.email", "t@t"], vec!["config", "user.name", "t"]] {
-            git(&repo, &a).await.unwrap();
-        }
-        std::fs::write(repo.join(".gitignore"), "local.properties\n").unwrap();
-        std::fs::write(repo.join("README"), "x").unwrap();
-        git(&repo, &["add", "."]).await.unwrap();
-        git(&repo, &["commit", "-qm", "init"]).await.unwrap();
         std::fs::write(repo.join("android/local.properties"), "sdk.dir=/sdk\n").unwrap();
         let wt = base.join("wt");
         add_worktree(&repo, &wt, None, &[]).await.unwrap();
@@ -356,12 +362,8 @@ mod tests {
     async fn sparse_zoo_lane() {
         let repo = std::env::temp_dir().join(format!("tirith-sp-{}", std::process::id()));
         let ex: Vec<String> = ["output/research", "tools/content", "ZooBundles"].map(String::from).into();
-        for d in ex.iter().map(String::as_str).chain(["cms"]) {
-            std::fs::create_dir_all(repo.join(d)).and_then(|_| std::fs::write(repo.join(d).join("f"), "x")).unwrap();
-        }
-        for a in ["init -q", "config user.email t@t", "config user.name t", "add .", "commit -qm i"] {
-            git(&repo, &a.split(' ').collect::<Vec<_>>()).await.unwrap();
-        }
+        let files: Vec<(String, &str)> = ex.iter().map(String::as_str).chain(["cms"]).map(|d| (format!("{d}/f"), "x")).collect();
+        committed(&repo, &files.iter().map(|(f, t)| (f.as_str(), *t)).collect::<Vec<_>>()).await;
         let wt = repo.join("../wt-sp");
         add_worktree(&repo, &wt, Some("lane/z"), &ex).await.unwrap();
         assert!(wt.join("cms/f").exists() && ex.iter().all(|p| !wt.join(p).exists()));
