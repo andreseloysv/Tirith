@@ -246,19 +246,20 @@ impl App {
         let _ = self.db.lock().unwrap().execute("DELETE FROM events WHERE id < (SELECT COALESCE(MAX(id), 0) - 50000 FROM events)", []);
     }
 
-    /// PATH for agents and checks: this binary's folder first, so `tirith` is this daemon's client, and `~/.cargo/bin` last when it exists.
+    /// PATH for agents and checks: this binary's folder first, so `tirith` is this daemon's client, and `~/.cargo/bin`, `/opt/homebrew/bin`, `/usr/local/bin` last when they exist.
     pub fn child_path(&self) -> String {
         let exe_dir = std::env::current_exe().ok().and_then(|e| e.parent().map(Path::to_path_buf));
-        path_with_cargo(exe_dir.as_deref(), &std::env::var("PATH").unwrap_or_default(), &crate::config::home_dir())
+        path_with_cargo(exe_dir.as_deref(), &std::env::var("PATH").unwrap_or_default(), &crate::config::home_dir(), &["/opt/homebrew/bin", "/usr/local/bin"])
     }
 }
 
-fn path_with_cargo(exe_dir: Option<&Path>, rest: &str, home: &Path) -> String {
+fn path_with_cargo(exe_dir: Option<&Path>, rest: &str, home: &Path, tool_dirs: &[&str]) -> String {
     let cargo = home.join(".cargo/bin");
-    let mut parts: Vec<String> = exe_dir.iter().map(|d| d.display().to_string()).collect();
-    parts.extend(rest.split(':').filter(|p| !p.is_empty()).map(String::from));
-    if cargo.is_dir() && !parts.iter().any(|p| Path::new(p) == cargo) {
-        parts.push(cargo.display().to_string());
+    let mut parts: Vec<String> = exe_dir.iter().map(|d| d.display().to_string()).chain(rest.split(':').filter(|p| !p.is_empty()).map(String::from)).collect();
+    for dir in std::iter::once(cargo).chain(tool_dirs.iter().map(PathBuf::from)) {
+        if dir.is_dir() && !parts.iter().any(|p| Path::new(p) == dir) {
+            parts.push(dir.display().to_string());
+        }
     }
     parts.join(":")
 }
@@ -297,8 +298,7 @@ pub async fn add_worktree(repo: &Path, dir: &Path, branch: Option<&str>, exclude
     let args = ["ls-files", "--others", "--ignored", "--exclude-standard", "-z", "--", ":(glob)**/local.properties"];
     for rel in git(repo, &args).await.unwrap_or_default().split('\0').filter(|r| !r.is_empty()) {
         let to = dir.join(rel);
-        let _ = to.parent().map(std::fs::create_dir_all);
-        let _ = std::fs::copy(repo.join(rel), to);
+        let _ = to.parent().map(std::fs::create_dir_all).map(|_| std::fs::copy(repo.join(rel), &to));
     }
     Ok(())
 }
@@ -318,11 +318,20 @@ mod tests {
         let home = std::env::temp_dir().join(format!("tirith-cp-{}", std::process::id()));
         let cargo = home.join(".cargo/bin");
         std::fs::create_dir_all(&cargo).unwrap();
-        let p = path_with_cargo(Some(Path::new("/x")), "/usr/bin", &home);
+        let p = path_with_cargo(Some(Path::new("/x")), "/usr/bin", &home, &[]);
         assert_eq!(p, format!("/x:/usr/bin:{}", cargo.display()));
-        assert_eq!(path_with_cargo(None, &format!("/a:{}", cargo.display()), &home), format!("/a:{}", cargo.display()));
+        assert_eq!(path_with_cargo(None, &format!("/a:{}", cargo.display()), &home, &[]), format!("/a:{}", cargo.display()));
         let _ = std::fs::remove_dir_all(&home);
-        assert_eq!(path_with_cargo(None, "/usr/bin", &home), "/usr/bin");
+        assert_eq!(path_with_cargo(None, "/usr/bin", &home, &[]), "/usr/bin");
+    }
+    #[test]
+    fn child_path_includes_homebrew_bin() {
+        let base = std::env::temp_dir().join(format!("tirith-hb-{}", std::process::id()));
+        let brew = base.join("brew/bin");
+        let dirs = [brew.to_str().unwrap(), "/nonexistent/bin"];
+        std::fs::create_dir_all(&brew).unwrap();
+        let p = path_with_cargo(None, "/usr/bin", &base, &dirs);
+        assert_eq!((p.clone(), path_with_cargo(None, &p, &base, &dirs)), (format!("/usr/bin:{}", brew.display()), p));
     }
     #[tokio::test]
     async fn worktree_local_properties() {
