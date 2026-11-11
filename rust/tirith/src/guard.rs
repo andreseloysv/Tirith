@@ -256,7 +256,6 @@ mod tests {
     fn git(dir: &std::path::Path, args: &[&str]) -> std::process::Output {
         Command::new("git").current_dir(dir).args(["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"]).args(args).output().unwrap()
     }
-
     #[test]
     fn guard_merge_ignores_parent_content() {
         let w = ["op", "us"].concat();
