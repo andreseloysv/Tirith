@@ -64,7 +64,6 @@ static TALKS: Mutex<BTreeMap<String, Talk>> = Mutex::new(BTreeMap::new());
 fn talk<T>(project: &str, f: impl FnOnce(&mut Talk) -> T) -> T {
     f(TALKS.lock().unwrap().entry(project.to_string()).or_default())
 }
-
 fn set_busy(app: &Shared, project: &str, t: &mut Talk, on: bool) {
     t.busy = on;
     app.emit("busy", json!({"project": project, "on": on}));
@@ -84,7 +83,6 @@ fn report(app: &Shared, project: &str, text: &str) {
 fn known(app: &Shared, project: &str) -> Result<(), String> {
     (here(app, project) == project).then_some(()).ok_or(format!("unknown project '{project}'"))
 }
-
 fn user_line(text: &str) -> String {
     json!({"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": text}]}}).to_string()
 }
@@ -223,36 +221,27 @@ pub fn owner_open(app: &Shared) -> Vec<Value> {
         .unwrap_or_default()
 }
 
-/// Why an open question no longer applies, given whether its project's autopilot is on; `None` while it still does.
-/// A question that proposes turning the autopilot off (on) is stale once it is off (on).
+/// Why an open question no longer applies: it proposes turning its project's autopilot off (on) and that is already so.
 pub fn stale_reason(question: &str, autopilot_on: bool) -> Option<&'static str> {
     let q = question.to_lowercase();
-    if !q.contains("autopilot") {
-        return None;
-    }
-    let off = ["turn off", "switch off", "disable", "pause the autopilot", "stop the autopilot", "apagar", "desactivar", "pausar"].iter().any(|w| q.contains(w));
-    let on = ["turn on", "switch on", "enable", "resume the autopilot", "encender", "activar", "reanudar"].iter().any(|w| q.contains(w));
-    match (off, on) {
-        (true, false) if !autopilot_on => Some("the autopilot is already off"),
-        (false, true) if autopilot_on => Some("the autopilot is already on"),
+    let has = |ws: &[&str]| ws.iter().any(|w| q.contains(w));
+    let (off, on) = (has(&["turn off", "switch off", "disable", "apagar", "desactivar", "pausar"]), has(&["turn on", "switch on", "enable", "encender", "activar", "reanudar"]));
+    match (q.contains("autopilot"), off, on, autopilot_on) {
+        (true, true, false, false) => Some("the autopilot is already off"),
+        (true, false, true, true) => Some("the autopilot is already on"),
         _ => None,
     }
 }
 
-/// Closes the open owner questions that no longer apply (see `stale_reason`); returns the ids closed.
-pub fn close_stale_questions(app: &Shared) -> Vec<String> {
-    let mut closed = vec![];
+/// Closes the open owner questions that no longer apply (see `stale_reason`).
+pub fn close_stale_questions(app: &Shared) {
     for o in owner_open(app) {
-        let (id, project, question) = (o["id"].as_str().unwrap_or(""), o["project"].as_str().unwrap_or(""), o["question"].as_str().unwrap_or(""));
-        let on = if project.is_empty() { app.cfg().autopilot } else { crate::lanes::autopilot_on(app, project) };
-        let Some(why) = stale_reason(question, on) else { continue };
+        let (id, project, q) = (o["id"].as_str().unwrap_or(""), o["project"].as_str().unwrap_or(""), o["question"].as_str().unwrap_or(""));
+        let Some(why) = stale_reason(q, if project.is_empty() { app.cfg().autopilot } else { crate::lanes::autopilot_on(app, project) }) else { continue };
         let answer = format!("closed by Tirith: {why}");
-        let _ = app.db.lock().unwrap().execute("UPDATE owner_items SET status = 'closed', answer = ?1 WHERE id = ?2 AND status = 'open'", rusqlite::params![answer, id]);
+        let _ = app.db.lock().unwrap().execute("UPDATE owner_items SET status = 'closed', answer = ?1 WHERE id = ?2", rusqlite::params![answer, id]);
         app.emit("owner", json!({"id": id, "status": "closed", "answer": answer}));
-        app.event("", project, "owner", "closed", &format!("question {id} closed: {why}"), "");
-        closed.push(id.to_string());
     }
-    closed
 }
 
 /// Runs the conversation's session, again while messages wait for one; then the conversation rests.
