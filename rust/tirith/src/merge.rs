@@ -1,7 +1,7 @@
 //! The merge queue. Up to five lanes of one project ride one train: in the project's merge slot
 //! (`<tirith home>/lanes/<project>/merge`) their branches are merged with main, the project's checks and the items' own checks
 //! run, and only a green train moves main (fast-forward), with the plan ticks in the same commits. A red train is
-//! split into single lanes; a red single lane is first compared with main, so a broken main never blames a lane.
+//! split into single lanes; a red single lane is first compared with main, so a broken main never blames a lane. Deploy stages run after main moved, on that main.
 
 use crate::app::{add_worktree, git, kill_group, now_iso, now_s, tail, Lane, Shared};
 use crate::config::{Manifest, Project, Stage};
@@ -44,6 +44,11 @@ pub async fn worker(app: Shared) {
         if batch.is_empty() {
             if tokio::time::timeout(Duration::from_secs(10), app.merge_wake.notified()).await.is_ok() {
                 tokio::time::sleep(Duration::from_secs(1)).await; // lanes ending together ride one train
+            }
+            let (cfg, due) = (app.cfg(), |p: &&Project| app.kv(&format!("deploy_due:{}", p.id)).and_then(|t| t.parse().ok()).is_some_and(|t: u64| now_s().saturating_sub(t) >= 600));
+            if let Some(project) = cfg.projects.iter().find(due) {
+                let _busy = BUSY.lock().await;
+                deploy(&app, project).await;
             }
             continue;
         }
@@ -313,7 +318,7 @@ async fn train(app: &Shared, batch: Vec<Lane>) {
         return close_pipeline(app, &pipe, "failed");
     }
     let changed: Vec<String> = git(&slot, &["diff", "--name-only", &base, "HEAD"]).await.unwrap_or_default().lines().map(String::from).collect();
-    let mut stages: Vec<(String, String)> = if merged.is_empty() { vec![] } else { manifest.stages.iter().filter(|s| wanted(s, &changed)).map(|s| (s.name.clone(), s.run.clone())).collect() };
+    let mut stages: Vec<(String, String)> = if merged.is_empty() { vec![] } else { manifest.stages.iter().filter(|s| !deploys(s) && wanted(s, &changed)).map(|s| (s.name.clone(), s.run.clone())).collect() };
     stages.extend(merged.iter().filter_map(|l| check(l).map(|c| (format!("check {}", l.id), c))));
     for (name, run) in &stages {
         if let Err(why) = run_stage(app, &pipe, &slot, name, run).await {
@@ -417,6 +422,37 @@ async fn land(app: &Shared, project: &Project, pipe: &Pipe, slot: &Path, base: &
     }
     app.emit("plan", json!({"project": project.id}));
     app.sched_wake.notify_one();
+    deploy(app, project).await;
+}
+
+/// A deploy stage (its `kind`, else a name that says so) is no check of a lane: it publishes main.
+fn deploys(s: &Stage) -> bool {
+    s.kind == "deploy" || (s.kind.is_empty() && ["deploy", "release", "publish", "ship"].contains(&s.name.as_str()))
+}
+
+/// Runs the project's deploy stages on main as it is now, in the merge slot, so what is on main is what is deployed.
+/// A failure never undoes or holds back a merge: the manager is told once, and the worker tries again every ten
+/// minutes (`deploy_due:<project>` is the time of the last failure) until it passes.
+async fn deploy(app: &Shared, project: &Project) {
+    let manifest = app.manifest(&project.repo());
+    let (Ok(slot), Ok(sha)) = (merge_slot(project, &manifest).await, git(&project.repo(), &["rev-parse", "HEAD"]).await) else { return };
+    if !manifest.stages.iter().any(deploys) || reset(&slot, &sha).await.is_err() {
+        return;
+    }
+    let (pipe, key, mut failed) = (open_pipeline(app, &project.id, "deploy", "", &sha), format!("deploy_due:{}", project.id), None);
+    for st in manifest.stages.iter().filter(|s| deploys(s)) {
+        if failed.is_none() {
+            failed = run_stage(app, &pipe, &slot, &st.name, &st.run).await.err();
+        }
+    }
+    close_pipeline(app, &pipe, if failed.is_none() { "passed" } else { "failed" });
+    let (was, sha8, why) = (app.kv(&key).is_some(), &sha[..8.min(sha.len())], failed.as_ref().and_then(|e| e.lines().rev().find(|l| !l.trim().is_empty())).unwrap_or(""));
+    app.set_kv(&key, failed.as_ref().map(|_| now_s().to_string()).as_deref());
+    match (failed.is_some(), was) {
+        (false, _) => manager::inform(app, &project.id, &format!("deployed {} at {sha8}", project.id)),
+        (true, false) => manager::notify(app, &project.id, &format!("the deploy of {} at {sha8} failed: {why}\nWhat was merged stays on main; Tirith tries the deploy again every ten minutes.", project.id)),
+        _ => {}
+    }
 }
 
 /// Runs one stage on a main commit in the merge slot (cached per commit unless `fresh`); green clears main_red.
@@ -447,7 +483,7 @@ fn clear_red(app: &Shared, project: &str) {
 }
 
 /// Retry from the page: a merge pipeline's failed lanes go back to the queue; a main pipeline runs its checks
-/// again on the current main.
+/// again on the current main; a deploy pipeline deploys the current main.
 pub fn retry(app: &Shared, id: &str) -> Result<(), String> {
     let p = pipeline(app, id);
     if p.is_null() {
@@ -467,9 +503,12 @@ pub fn retry(app: &Shared, id: &str) -> Result<(), String> {
     }
     let project = app.cfg().project(p["project"].as_str().unwrap_or("")).cloned().ok_or("unknown project")?;
     let names: Vec<String> = p["stages"].as_array().into_iter().flatten().filter_map(|s| s["stage"].as_str().map(String::from)).collect();
-    let app = app.clone();
+    let (app, deploying) = (app.clone(), p["kind"] == "deploy");
     tokio::spawn(async move {
         let _busy = BUSY.lock().await;
+        if deploying {
+            return deploy(&app, &project).await; // a deploy is retried as a deploy: on main as it is now
+        }
         let manifest = app.manifest(&project.repo());
         let (Ok(slot), Ok(sha)) = (merge_slot(&project, &manifest).await, git(&project.repo(), &["rev-parse", "HEAD"]).await) else { return };
         for st in manifest.stages.iter().filter(|s| names.contains(&s.name)) {
