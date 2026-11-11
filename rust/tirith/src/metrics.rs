@@ -58,11 +58,9 @@ static REVIEWING: AtomicBool = AtomicBool::new(false);
 fn secs(iso: &str) -> Option<i64> {
     chrono::DateTime::parse_from_rfc3339(iso).ok().map(|d| d.timestamp())
 }
-
 fn iso(s: u64) -> String {
     chrono::DateTime::from_timestamp(s as i64, 0).map(|d| d.format("%Y-%m-%dT%H:%M:%SZ").to_string()).unwrap_or_default()
 }
-
 fn ceo_cfg<T: serde::de::DeserializeOwned>(app: &Shared, path: &[&str], default: T) -> T {
     config::get(&app.cfg().raw, path).unwrap_or(default)
 }
@@ -76,7 +74,6 @@ fn flag(app: &Shared, key: &str) -> Option<String> {
 fn owner_questions(app: &Shared) -> Vec<String> {
     manager::owner_open(app).iter().map(|o| format!("{}: {}", o["project"].as_str().unwrap_or(""), o["question"].as_str().unwrap_or("")).trim_start_matches(": ").to_string()).collect()
 }
-
 fn startable(text: &str) -> bool {
     !crate::lanes::is_autopilot_skipped(text)
 }
@@ -85,7 +82,6 @@ fn startable(text: &str) -> bool {
 fn paused_note(app: &Shared, project: &str) -> String {
     app.kv(&format!("paused:{project}")).map(|w| paused_text(project, &w)).unwrap_or_default()
 }
-
 fn paused_text(project: &str, why: &str) -> String {
     format!(" [{project} paused: {why}; fix: {}]", crate::lanes::paused_fix(project, why))
 }
@@ -94,11 +90,9 @@ fn paused_text(project: &str, why: &str) -> String {
 fn empty_plan_note(empty: &[String]) -> String {
     empty.iter().map(|p| format!(" [{p} plan empty: nothing startable; fix: tirith plan add {p} <step> \"<text>\"]")).collect()
 }
-
 fn merged_at(l: &Lane) -> Option<i64> {
     l.merged_at.as_deref().or(l.ended_at.as_deref()).and_then(secs)
 }
-
 fn compute(app: &Shared) -> Vec<Metric> {
     let cfg = app.cfg();
     let now = now_s() as i64;
