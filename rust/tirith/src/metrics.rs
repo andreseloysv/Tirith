@@ -6,16 +6,10 @@
 //! session whose answer goes to the owner's chat and to the manager. Back to green ends the episode.
 //! While everything is green no model is called.
 
-use crate::app::{kill_group, log_age, now_iso, now_s, tail, Lane, Shared};
-use crate::{config, manager, models, plan};
-use axum::extract::State;
-use axum::routing::get;
-use axum::{Json, Router};
+use crate::{app::{kill_group, log_age, now_iso, now_s, tail, Lane, Shared}, config, manager, models, plan};
+use axum::{extract::State, routing::get, Json, Router};
 use serde_json::{json, Value};
-use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{LazyLock, Mutex};
-use std::time::Duration;
+use std::{collections::HashMap, sync::{atomic::{AtomicBool, Ordering}, LazyLock, Mutex}, time::Duration};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
 const PROMPT: &str = "You are the CEO review inside Tirith: an independent, read-only, one-shot review of how the \
@@ -253,9 +247,7 @@ fn payload(app: &Shared, metrics: Vec<Value>) -> Value {
 
 /// Starts one review in the background; nothing when one is already running.
 fn start_review(app: &Shared, metric: String, why: String) {
-    if REVIEWING.swap(true, Ordering::SeqCst) {
-        return;
-    }
+    if REVIEWING.swap(true, Ordering::SeqCst) { return; }
     let app = app.clone();
     tokio::spawn(async move {
         app.emit("ceo", json!({"running": true}));
@@ -278,9 +270,7 @@ fn brief(app: &Shared, why: &str) -> String {
     let mut lanes: Vec<Lane> = app.lanes.lock().unwrap().values().cloned().collect();
     lanes.sort_by(|a, b| b.created_at.cmp(&a.created_at));
     let mut s = format!("# Red metrics\n{why}\n\n# Last lanes (newest first)\n");
-    for l in lanes.iter().take(20) {
-        s += &format!("- {} [{}] {}:{} \"{}\" tries {} created {}: {}\n", l.id, l.status, l.project, l.step, l.item, l.attempts + 1, l.created_at, l.note.lines().next().unwrap_or(""));
-    }
+    lanes.iter().take(20).for_each(|l| s += &format!("- {} [{}] {}:{} \"{}\" tries {} created {}: {}\n", l.id, l.status, l.project, l.step, l.item, l.attempts + 1, l.created_at, l.note.lines().next().unwrap_or("")));
     s += "\n# Failing checks (last 24 h)\n";
     let day = iso(now_s().saturating_sub(86400));
     let runs: Vec<(String, String, String, String)> = {
@@ -288,9 +278,7 @@ fn brief(app: &Shared, why: &str) -> String {
         let q = db.prepare("SELECT lane, stage, status, COALESCE(log, '') FROM runs WHERE status IN ('failed', 'timeout') AND started_at >= ?1 ORDER BY id DESC LIMIT 5");
         q.and_then(|mut q| q.query_map([&day], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?.collect()).unwrap_or_default()
     };
-    for (lane, stage, status, log) in &runs {
-        s += &format!("- {lane} check '{stage}' {status}:\n```\n{}\n```\n", tail(std::path::Path::new(log), 15));
-    }
+    runs.iter().for_each(|(lane, stage, status, log)| s += &format!("- {lane} check '{stage}' {status}:\n```\n{}\n```\n", tail(std::path::Path::new(log), 15)));
     s += "\n# Plans\n";
     for p in &app.cfg().projects {
         let auto = if crate::lanes::autopilot_on(app, &p.id) { "on" } else { "off" };
@@ -302,9 +290,7 @@ fn brief(app: &Shared, why: &str) -> String {
         }
     }
     s += "\n# Open owner questions\n";
-    for q in owner_questions(app) {
-        s += &format!("- {q}\n");
-    }
+    owner_questions(app).into_iter().for_each(|q| s += &format!("- {q}\n"));
     s
 }
 
@@ -393,9 +379,7 @@ mod tests {
             assert_eq!(super::ceo_permission("Bash", &input)["behavior"], "allow", "{cmd}");
         }
         assert_eq!(super::ceo_permission("Read", &serde_json::json!({"file_path": "/x"}))["behavior"], "allow");
-        for t in ["Write", "Edit", "MultiEdit", "NotebookEdit"] {
-            assert_eq!(super::ceo_permission(t, &serde_json::json!({}))["behavior"], "deny", "{t}");
-        }
+        ["Write", "Edit", "MultiEdit", "NotebookEdit"].into_iter().for_each(|t| assert_eq!(super::ceo_permission(t, &serde_json::json!({}))["behavior"], "deny", "{t}"));
     }
     #[test]
     fn health_reports_paused_reason() {
