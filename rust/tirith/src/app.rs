@@ -327,7 +327,6 @@ mod tests {
         assert!(out.contains("GOOGLE_API_KEY=[redacted]"));
         assert!(out.contains("plain line"));
     }
-
     #[test]
     fn child_path_includes_cargo_bin() {
         let home = std::env::temp_dir().join(format!("tirith-cp-{}", std::process::id()));
