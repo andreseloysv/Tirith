@@ -1,9 +1,7 @@
 //! The CLI side: one HTTP/1.1 request to the daemon on 127.0.0.1 per command.
 
 use serde_json::Value;
-use std::io::{Read, Write};
-use std::net::{SocketAddr, TcpStream};
-use std::time::Duration;
+use std::{io::{Read, Write}, net::{SocketAddr, TcpStream}, time::Duration};
 
 /// `flag("--name")`: the value after a `--name` argument.
 pub type Flag<'a> = &'a dyn Fn(&str) -> Option<String>;

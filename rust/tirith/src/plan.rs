@@ -7,8 +7,7 @@ use crate::app::{git, Shared};
 use regex::Regex;
 use serde::Serialize;
 use serde_json::json;
-use std::path::PathBuf;
-use std::sync::LazyLock;
+use std::{path::PathBuf, sync::LazyLock};
 
 static CHECK: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\(check:\s*`([^`]+)`\s*\)").unwrap());
 static STATUS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s*\((en curso|hecho|en revisión|falló|bloqueado|parcial|in progress|done)\b[^)]*\)\s*$").unwrap());
@@ -120,12 +119,8 @@ pub fn check_problem(check: &str) -> Option<String> {
 
 pub async fn add(app: &Shared, project: &str, step: &str, text: &str) -> Result<(), String> {
     let text = clean(text);
-    if text.is_empty() {
-        return Err("the item needs a text".into());
-    }
-    if let Some(p) = CHECK.captures(&text).and_then(|c| check_problem(&c[1])) {
-        return Err(p);
-    }
+    if text.is_empty() { return Err("the item needs a text".into()); }
+    if let Some(p) = CHECK.captures(&text).and_then(|c| check_problem(&c[1])) { return Err(p); }
     // A forbidden word of the project's commit guard would make the plan uncommittable and block every merge.
     if let Some(p) = app.cfg().project(project).cloned() {
         let words = crate::guard::words(app, &p);
@@ -135,9 +130,7 @@ pub async fn add(app: &Shared, project: &str, step: &str, text: &str) -> Result<
     }
     change(app, project, |lines, steps| {
         let i = steps.iter().position(|s| s.num == step).ok_or(format!("the plan has no step {step}"))?;
-        if steps[i].items.iter().any(|it| it.text == text) {
-            return Err(format!("step {step} already has that item"));
-        }
+        if steps[i].items.iter().any(|it| it.text == text) { return Err(format!("step {step} already has that item")); }
         let end = steps.get(i + 1).map(|s| s.line).unwrap_or(lines.len());
         let mut at = end;
         while at > steps[i].line + 1 && lines[at - 1].trim().is_empty() {
@@ -160,9 +153,7 @@ pub async fn flush(app: &Shared, only: Option<&str>) {
 
 /// `flush` of one project for a caller that already holds the plan lock.
 pub async fn flush_locked(app: &Shared, project: &str) {
-    if !app.plan_dirty.lock().unwrap().contains(project) {
-        return;
-    }
+    if !app.plan_dirty.lock().unwrap().contains(project) { return; }
     let (Ok(file), Some(repo)) = (path(app, project), app.cfg().project(project).map(|p| p.repo())) else { return };
     let rel = file.strip_prefix(&repo).unwrap_or(&file).to_string_lossy().to_string();
     let pending = git(&repo, &["status", "--porcelain", "--", &rel]).await.unwrap_or_default();

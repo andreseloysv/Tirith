@@ -2,15 +2,10 @@
 //! project. A message goes to the session of its project, which starts with its first message and rests after 30
 //! quiet minutes; its text, its tool calls and the end of each turn go straight to that project's chat on the page.
 
-use crate::app::{kill_group, now_iso, Shared};
-use crate::{models, rooms, rules, sandbox};
+use crate::{app::{kill_group, now_iso, Shared}, models, rooms, rules, sandbox};
 use serde_json::{json, Value};
-use std::collections::{BTreeMap, BTreeSet};
-use std::process::Stdio;
-use std::sync::Mutex;
-use std::time::Duration;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::sync::mpsc;
+use std::{collections::{BTreeMap, BTreeSet}, process::Stdio, sync::Mutex, time::Duration};
+use tokio::{io::{AsyncBufReadExt, AsyncWriteExt, BufReader}, sync::mpsc};
 
 const PROMPT: &str = "You are the manager inside Tirith. The owner chats with you here: answer briefly, in the \
 owner's language. You do not write project code yourself. Tirith's autopilot starts the open items of each \
@@ -92,9 +87,7 @@ fn deliver(app: &Shared, project: &str, text: &str) {
     let start = talk(project, |t| {
         let mut all: Vec<String> = std::mem::take(&mut t.notes).into_iter().map(|n| format!("[tirith] {n}")).collect();
         all.extend((!text.is_empty()).then(|| text.to_string()));
-        if all.is_empty() {
-            return false;
-        }
+        if all.is_empty() { return false; }
         let line = user_line(&all.join("\n\n"));
         if t.tx.as_ref().is_some_and(|tx| tx.send(line.clone()).is_ok()) {
             set_busy(app, project, t, true);
@@ -183,9 +176,7 @@ const KINDS: [&str; 5] = ["credentials", "payment", "account", "device", "decisi
 /// `tirith ask-owner`: a card on the owner's page, among its project's, and on the owner's phones, until answered.
 pub fn ask_owner(app: &Shared, project: &str, kind: &str, question: &str) -> Result<Value, String> {
     known(app, project)?;
-    if !KINDS.contains(&kind) || question.trim().is_empty() {
-        return Err(format!("ask the owner with --kind {} and a question", KINDS.join("|")));
-    }
+    if !KINDS.contains(&kind) || question.trim().is_empty() { return Err(format!("ask the owner with --kind {} and a question", KINDS.join("|"))); }
     let row = {
         let db = app.db.lock().unwrap();
         let n: i64 = db.query_row("SELECT COALESCE(MAX(CAST(SUBSTR(id, 2) AS INTEGER)), 0) FROM owner_items", [], |r| r.get(0)).unwrap_or(0);
@@ -202,9 +193,7 @@ pub fn ask_owner(app: &Shared, project: &str, kind: &str, question: &str) -> Res
 
 /// The owner's answer to an open card, handed to the manager of the card's project with the question it answers.
 pub fn owner_answer(app: &Shared, id: &str, answer: &str) -> Result<Value, String> {
-    if app.lane(id).is_some_and(|l| l.status == "waiting") {
-        return crate::lanes::answer(app, id, answer).map(|_| json!({"ok": true}));
-    }
+    if app.lane(id).is_some_and(|l| l.status == "waiting") { return crate::lanes::answer(app, id, answer).map(|_| json!({"ok": true})); }
     let sql = "SELECT kind, project, question FROM owner_items WHERE id = ?1 AND status = 'open'";
     let (kind, project, question): (String, String, String) = app.db.lock().unwrap().query_row(sql, [id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))).map_err(|_| format!("no open question '{id}'"))?;
     let _ = app.db.lock().unwrap().execute("UPDATE owner_items SET status = 'answered', answer = ?1 WHERE id = ?2", rusqlite::params![answer, id]);
@@ -272,9 +261,7 @@ async fn run(app: Shared, project: String) {
             t.alive = !t.pending.is_empty();
             !t.alive
         });
-        if rest {
-            return;
-        }
+        if rest { return; }
         // A session that ended young is started again more and more slowly; one that lived is started again at once.
         backoff = if started.elapsed().as_secs() > 60 { 2 } else { (backoff * 2).min(60) };
         if backoff > 2 {
@@ -328,9 +315,7 @@ async fn session(app: &Shared, project: &str) -> Result<(), String> {
     });
     let writer = tokio::spawn(async move {
         while let Some(line) = rx.recv().await {
-            if stdin.write_all(format!("{line}\n").as_bytes()).await.is_err() {
-                break;
-            }
+            if stdin.write_all(format!("{line}\n").as_bytes()).await.is_err() { break; }
             let _ = stdin.flush().await;
         }
     });
@@ -394,14 +379,10 @@ async fn session(app: &Shared, project: &str) -> Result<(), String> {
     writer.abort();
     kill_group(pid, libc::SIGTERM);
     let _ = tokio::time::timeout(Duration::from_secs(10), child.wait()).await;
-    if ready || rest {
-        return Ok(());
-    }
+    if ready || rest { return Ok(()); }
     // It ended before it was ready: what it was handed waits again. A resume that does not work becomes a fresh session.
     talk(project, |t| drop(t.pending.splice(0..0, sent)));
-    if resumed.is_none() {
-        return Err("its agent ended before it was ready (logs/manager.log says why)".into());
-    }
+    if resumed.is_none() { return Err("its agent ended before it was ready (logs/manager.log says why)".into()); }
     app.set_kv(&key, None);
     Ok(())
 }
