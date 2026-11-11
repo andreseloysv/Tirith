@@ -45,9 +45,9 @@ pub async fn worker(app: Shared) {
             if tokio::time::timeout(Duration::from_secs(10), app.merge_wake.notified()).await.is_ok() {
                 tokio::time::sleep(Duration::from_secs(1)).await; // lanes ending together ride one train
             }
+            let _busy = BUSY.lock().await; // first: a deploy that is running has settled what is due by the time the lock is had
             if let Some(project) = app.cfg().projects.iter().find(|p| app.kv(&format!("deploy_due:{}", p.id)).and_then(|v| v.split('@').next()?.parse().ok()).is_some_and(|t: u64| now_s() >= t)).cloned() {
-                let _busy = BUSY.lock().await;
-                deploy(&app, &project, &[]).await; // a deploy that failed is tried again, on main as it is now
+                deploy(&app, &project, &[]).await; // a deploy that failed, or that a restart cut short, is tried again on main as it is now
             }
             continue;
         }
@@ -423,16 +423,18 @@ fn deploys(s: &Stage) -> bool {
 }
 
 /// Runs the project's deploy stages on main as it is now, in the merge slot, so what is on main is what is deployed
-/// (when the merge changed files: the stages whose `paths` match them; with none named: all). A failure never
+/// (when the merge changed files: the stages whose `paths` match them; else all, and with no such stage none is owed). A failure never
 /// undoes or holds back a merge: the manager is told once and the worker tries again after ten minutes, then after
-/// twice as long each time, six hours at most (`deploy_due:<project>` is "<when>@<wait>"), until it passes.
+/// twice as long each time, six hours at most, until it passes. `deploy_due:<project>` is "<when>@<wait>": when to
+/// try again and the wait since the last failure; "0@.." while a deploy runs, so one cut short by a restart is due at once.
 async fn deploy(app: &Shared, project: &Project, changed: &[String]) {
     let (manifest, key) = (app.manifest(&project.repo()), format!("deploy_due:{}", project.id));
     let stages: Vec<&Stage> = manifest.stages.iter().filter(|s| deploys(s) && (changed.is_empty() || wanted(s, changed))).collect();
     if stages.is_empty() {
-        // Nothing to deploy now; and with no deploy stage at all (none named, none found), nothing to try again either.
         return app.set_kv(&key, app.kv(&key).filter(|_| !changed.is_empty()).as_deref());
     }
+    let prev = app.kv(&key).and_then(|v| v.split_once('@')?.1.parse::<u64>().ok()).unwrap_or(0);
+    app.set_kv(&key, Some(&format!("0@{prev}")));
     let sha = git(&project.repo(), &["rev-parse", "HEAD"]).await.unwrap_or_default();
     let pipe = open_pipeline(app, &project.id, "deploy", "", &sha);
     let run = async {
@@ -445,12 +447,11 @@ async fn deploy(app: &Shared, project: &Project, changed: &[String]) {
     };
     let failed = run.await.err();
     close_pipeline(app, &pipe, if failed.is_none() { "passed" } else { "failed" });
-    let (was, sha8, pid) = (app.kv(&key), &sha[..8.min(sha.len())], &project.id);
-    let wait = was.as_ref().and_then(|v| v.split_once('@')?.1.parse::<u64>().ok()).map_or(600, |w| (w * 2).min(6 * 3600));
+    let (wait, sha8, pid) = (if prev == 0 { 600 } else { (prev * 2).min(6 * 3600) }, &sha[..8.min(sha.len())], &project.id);
     app.set_kv(&key, failed.as_ref().map(|_| format!("{}@{wait}", now_s() + wait)).as_deref());
-    match (failed, was) {
-        (None, _) => manager::inform(app, pid, &format!("deployed {pid} at {sha8}")),
-        (Some(e), None) => manager::notify(app, pid, &format!("the deploy of {pid} at {sha8} failed. What was merged stays on main, and Tirith tries the deploy again by itself until it passes (Retry on its pipeline tries at once).\n{e}")),
+    match failed {
+        None => manager::inform(app, pid, &format!("deployed {pid} at {sha8}")),
+        Some(e) if prev == 0 => manager::notify(app, pid, &format!("the deploy of {pid} at {sha8} failed. The merge stays on main; Tirith tries the deploy again by itself until it passes (Retry on its pipeline: at once).\n{e}")),
         _ => {}
     }
 }
