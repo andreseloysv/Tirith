@@ -480,7 +480,6 @@ pub fn retry(app: &Shared, id: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
     #[test]
     fn stage_timeouts_per_project() {
         let mut kv = std::collections::HashMap::new();

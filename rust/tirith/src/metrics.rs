@@ -412,7 +412,6 @@ mod tests {
         assert!(t.contains("p2 plan empty"), "{t}");
         assert!(super::empty_plan_note(&[]).is_empty());
     }
-
     #[test]
     fn idle_health_ignores_unstartable_items() {
         assert!(!super::startable("Manager de guardia: atender el chat"));

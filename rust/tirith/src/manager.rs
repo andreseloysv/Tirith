@@ -202,6 +202,9 @@ pub fn ask_owner(app: &Shared, project: &str, kind: &str, question: &str) -> Res
 
 /// The owner's answer to an open card, handed to the manager of the card's project with the question it answers.
 pub fn owner_answer(app: &Shared, id: &str, answer: &str) -> Result<Value, String> {
+    if app.lane(id).is_some_and(|l| l.status == "waiting") {
+        return crate::lanes::answer(app, id, answer).map(|_| json!({"ok": true}));
+    }
     let sql = "SELECT kind, project, question FROM owner_items WHERE id = ?1 AND status = 'open'";
     let (kind, project, question): (String, String, String) = app.db.lock().unwrap().query_row(sql, [id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))).map_err(|_| format!("no open question '{id}'"))?;
     let _ = app.db.lock().unwrap().execute("UPDATE owner_items SET status = 'answered', answer = ?1 WHERE id = ?2", rusqlite::params![answer, id]);
@@ -210,8 +213,17 @@ pub fn owner_answer(app: &Shared, id: &str, answer: &str) -> Result<Value, Strin
     Ok(json!({"ok": true}))
 }
 
-/// The owner's open cards, oldest first.
+/// A lane that asked with `tirith ask` is blocked until answered: it is an open question too.
+pub fn waiting_cards(lanes: &[crate::app::Lane]) -> Vec<Value> {
+    lanes.iter().filter(|l| l.status == "waiting").map(|l| json!({"id": l.id, "at": l.created_at, "kind": "lane", "project": l.project, "status": "open", "question": format!("lane bloqueada esperando al dueño ({}): {}", l.item, l.question)})).collect()
+}
+
+/// The owner's open cards, oldest first, then the lanes waiting for an answer.
 pub fn owner_open(app: &Shared) -> Vec<Value> {
+    [owner_cards(app), waiting_cards(&app.lanes.lock().unwrap().values().cloned().collect::<Vec<_>>())].concat()
+}
+
+fn owner_cards(app: &Shared) -> Vec<Value> {
     let db = app.db.lock().unwrap();
     db.prepare("SELECT id, at, kind, question, project FROM owner_items WHERE status = 'open' ORDER BY rowid")
         .and_then(|mut q| {
@@ -392,4 +404,15 @@ async fn session(app: &Shared, project: &str) -> Result<(), String> {
     }
     app.set_kv(&key, None);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn lane_ask_shows_in_open_questions() {
+        let lane = |id: &str, status: &str| crate::app::Lane { id: id.into(), status: status.into(), item: "Traducir".into(), question: "¿Aprobar 0,74 $?".into(), ..Default::default() };
+        let cards = super::waiting_cards(&[lane("l1", "waiting"), lane("l2", "running")]);
+        let q = cards[0]["question"].to_string();
+        assert!(cards.len() == 1 && cards[0]["id"] == "l1" && q.contains("lane bloqueada esperando al dueño") && q.contains("0,74"), "{q}");
+    }
 }
