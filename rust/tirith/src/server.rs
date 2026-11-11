@@ -1,20 +1,10 @@
 //! HTTP on 127.0.0.1: the page, its JSON API, the change stream (SSE) and the agents' hooks.
 
-use crate::app::{bad, now_s, tail, Shared, R};
-use crate::{attach, brain, guard, lanes, manager, merge, metrics, models, plan, projects, rooms, rules, sandbox};
-use axum::body::Bytes;
-use axum::extract::{Path, Query, Request, State};
-use axum::http::{HeaderMap, StatusCode};
-use axum::middleware::{self, Next};
-use axum::response::sse::{Event, KeepAlive, Sse};
-use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
-use axum::{Json, Router};
+use crate::{app::{bad, now_s, tail, R, Shared}, attach, brain, guard, lanes, manager, merge, metrics, models, plan, projects, rooms, rules, sandbox};
+use axum::{body::Bytes, extract::{Path, Query, Request, State}, http::{HeaderMap, StatusCode}, middleware::{self, Next}, response::{sse::{Event, KeepAlive, Sse}, IntoResponse, Response}, routing::{get, post}, Json, Router};
 use serde_json::{json, Value};
-use std::convert::Infallible;
-use std::sync::OnceLock;
-use tokio_stream::wrappers::BroadcastStream;
-use tokio_stream::{Stream, StreamExt};
+use std::{convert::Infallible, sync::OnceLock};
+use tokio_stream::{wrappers::BroadcastStream, Stream, StreamExt};
 
 static PORT: OnceLock<u16> = OnceLock::new();
 pub fn s(v: &Value, k: &str) -> String {
@@ -179,9 +169,7 @@ async fn run_log(State(app): State<Shared>, Path(id): Path<i64>) -> String {
 async fn chat(State(app): State<Shared>, Json(b): Json<Value>) -> R {
     let files: Vec<String> = b["attachments"].as_array().into_iter().flatten().filter_map(|f| f.as_str().map(String::from)).collect();
     let text = s(&b, "text") + &attach::describe(&files);
-    if text.trim().is_empty() {
-        return Err(bad("empty message".into()));
-    }
+    if text.trim().is_empty() { return Err(bad("empty message".into())); }
     manager::say(&app, &s(&b, "project"), &text).map(|_| Json(json!({"ok": true}))).map_err(bad)
 }
 
@@ -214,9 +202,7 @@ async fn hook(State(app): State<Shared>, Path(event): Path<String>, headers: Hea
             m.last_activity = now_s(); // in memory only: activity is not worth a disk write per tool call
         }
     }
-    for (tag, target) in sandbox::tags(&tool, &p["tool_input"]) {
-        app.event(&lane_id, &project_id, "access", tag, &target, &session);
-    }
+    sandbox::tags(&tool, &p["tool_input"]).into_iter().for_each(|(tag, target)| app.event(&lane_id, &project_id, "access", tag, &target, &session));
     if event == "PreToolUse" {
         let unsandboxed = lane.is_none() && header("x-tirith-role").is_none();
         let refusal = rules::check(&app, &tool, &p["tool_input"], lane.as_ref(), project.as_ref()).or_else(|| if unsandboxed { sandbox::check_command(&tool, &p["tool_input"]) } else { None });
@@ -232,9 +218,7 @@ async fn hook(State(app): State<Shared>, Path(event): Path<String>, headers: Hea
     let Some(l) = lane else { return Json(json!({})) };
     if event == "PostToolUse" {
         let lines = lanes::drain(&l.id);
-        if lines.is_empty() {
-            return Json(json!({}));
-        }
+        if lines.is_empty() { return Json(json!({})); }
         if l.status == "waiting" && !l.resume.is_empty() {
             app.update_lane(&l.id, |x| {
                 x.status = "running".into(); // the answer reached the live agent
@@ -267,9 +251,7 @@ async fn hook(State(app): State<Shared>, Path(event): Path<String>, headers: Hea
 async fn web_file(State(app): State<Shared>, uri: axum::http::Uri) -> Response {
     let rel = uri.path().trim_start_matches('/');
     let rel = if rel.is_empty() { "index.html" } else { rel };
-    if rel.split('/').any(|p| p.is_empty() || p == ".." || p.starts_with('.')) {
-        return (StatusCode::NOT_FOUND, "not found").into_response();
-    }
+    if rel.split('/').any(|p| p.is_empty() || p == ".." || p.starts_with('.')) { return (StatusCode::NOT_FOUND, "not found").into_response(); }
     let dir = crate::config::get::<String>(&app.cfg().raw, &["app", "web_dir"]).map(|d| crate::config::expand(&d)).unwrap_or_else(|| std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../web")));
     let Ok(body) = tokio::fs::read(dir.join(rel)).await else { return (StatusCode::NOT_FOUND, "not found").into_response() };
     let kind = match rel.rsplit('.').next().unwrap_or("") {

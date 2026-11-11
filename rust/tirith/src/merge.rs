@@ -3,17 +3,11 @@
 //! run, and only a green train moves main (fast-forward), with the plan ticks in the same commits. A red train is
 //! split into single lanes; a red single lane is first compared with main, so a broken main never blames a lane.
 
-use crate::app::{add_worktree, git, kill_group, now_iso, now_s, tail, Lane, Shared};
-use crate::config::{Manifest, Project, Stage};
-use crate::{lanes, manager, plan, sandbox};
+use crate::{app::{add_worktree, git, kill_group, now_iso, now_s, tail, Lane, Shared}, config::{Manifest, Project, Stage}, lanes, manager, plan, sandbox};
 use regex::Regex;
 use rusqlite::params;
 use serde_json::{json, Value};
-use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
-use std::process::Stdio;
-use std::sync::Mutex;
-use std::time::Duration;
+use std::{collections::BTreeMap, path::{Path, PathBuf}, process::Stdio, sync::Mutex, time::Duration};
 
 /// Held while something uses a merge slot (a train or a main check).
 static BUSY: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
@@ -70,9 +64,7 @@ async fn next_batch(app: &Shared) -> Vec<Lane> {
         }
     }
     let Some(first) = queued.first().cloned() else { return vec![] };
-    if first.solo {
-        return vec![first];
-    }
+    if first.solo { return vec![first]; }
     queued.into_iter().filter(|l| l.project == first.project && !l.solo).take(5).collect()
 }
 
@@ -100,9 +92,7 @@ fn glob(pattern: &str) -> Regex {
 
 /// A stage with `paths` runs only when a changed file matches them (`!pattern` excludes).
 fn wanted(stage: &Stage, changed: &[String]) -> bool {
-    if stage.paths.is_empty() {
-        return true;
-    }
+    if stage.paths.is_empty() { return true; }
     let (neg, pos): (Vec<&String>, Vec<&String>) = stage.paths.iter().partition(|p| p.starts_with('!'));
     let neg: Vec<Regex> = neg.iter().map(|p| glob(&p[1..])).collect();
     let pos: Vec<Regex> = pos.iter().map(|p| glob(p)).collect();
@@ -249,9 +239,7 @@ fn requeue(app: &Shared, lanes: &[Lane], solo: bool, note: &str) {
 
 async fn train(app: &Shared, batch: Vec<Lane>) {
     let pid = batch[0].project.clone();
-    for l in &batch {
-        app.update_lane(&l.id, |x| x.status = "merging".into());
-    }
+    batch.iter().for_each(|l| drop(app.update_lane(&l.id, |x| x.status = "merging".into())));
     let Some(project) = app.cfg().project(&pid).cloned() else { return requeue(app, &batch, false, "unknown project") };
     let (repo, manifest) = (project.repo(), app.manifest(&project.repo()));
     plan::flush(app, Some(&pid)).await;
@@ -274,9 +262,7 @@ async fn train(app: &Shared, batch: Vec<Lane>) {
             return manager::notify(app, &pid, &format!("the merge of {pid} waits for disk: {e}"));
         }
         Err(e) => {
-            for l in &batch {
-                app.update_lane(&l.id, |x| x.status = "failed".into());
-            }
+            batch.iter().for_each(|l| drop(app.update_lane(&l.id, |x| x.status = "failed".into())));
             return manager::notify(app, &pid, &format!("the merge slot of {pid} is broken: {e}"));
         }
     };
@@ -307,9 +293,7 @@ async fn train(app: &Shared, batch: Vec<Lane>) {
             }
         }
     }
-    if merged.is_empty() && ticks.is_empty() {
-        return close_pipeline(app, &pipe, "failed");
-    }
+    if merged.is_empty() && ticks.is_empty() { return close_pipeline(app, &pipe, "failed"); }
     let changed: Vec<String> = git(&slot, &["diff", "--name-only", &base, "HEAD"]).await.unwrap_or_default().lines().map(String::from).collect();
     let mut stages: Vec<(String, String)> = if merged.is_empty() { vec![] } else { manifest.stages.iter().filter(|s| wanted(s, &changed)).map(|s| (s.name.clone(), s.run.clone())).collect() };
     stages.extend(merged.iter().filter_map(|l| check(l).map(|c| (format!("check {}", l.id), c))));
@@ -358,9 +342,7 @@ async fn land(app: &Shared, project: &Project, pipe: &Pipe, slot: &Path, base: &
         plan::flush_locked(app, &project.id).await;
         let head = git(&repo, &["rev-parse", "HEAD"]).await?;
         if head != base {
-            if git(&repo, &["diff", "--name-only", base, &head]).await?.lines().any(|f| f != roadmap) {
-                return Err("main moved while the checks ran".to_string());
-            }
+            if git(&repo, &["diff", "--name-only", base, &head]).await?.lines().any(|f| f != roadmap) { return Err("main moved while the checks ran".to_string()); }
             git(slot, &["merge", "-q", "--no-edit", &head]).await?; // only plan edits: no new check needed
         }
         let file = slot.join(&roadmap);
@@ -420,9 +402,7 @@ async fn land(app: &Shared, project: &Project, pipe: &Pipe, slot: &Path, base: &
 /// Runs one stage on a main commit in the merge slot (cached per commit unless `fresh`); green clears main_red.
 async fn main_check(app: &Shared, project: &Project, slot: &Path, sha: &str, stage: &Stage, fresh: bool) -> bool {
     let key = (project.id.clone(), sha.to_string(), stage.name.clone());
-    if let Some(ok) = MAIN_OK.lock().unwrap().get(&key).filter(|_| !fresh) {
-        return *ok;
-    }
+    if let Some(ok) = MAIN_OK.lock().unwrap().get(&key).filter(|_| !fresh) { return *ok; }
     let pipe = open_pipeline(app, &project.id, "main", "", sha);
     let ok = reset(slot, sha).await.is_ok() && run_stage(app, &pipe, slot, &stage.name, &stage.run).await.is_ok();
     close_pipeline(app, &pipe, if ok { "passed" } else { "failed" });
@@ -448,17 +428,11 @@ fn clear_red(app: &Shared, project: &str) {
 /// again on the current main.
 pub fn retry(app: &Shared, id: &str) -> Result<(), String> {
     let p = pipeline(app, id);
-    if p.is_null() {
-        return Err(format!("no pipeline '{id}'"));
-    }
+    if p.is_null() { return Err(format!("no pipeline '{id}'")); }
     if p["kind"] == "merge" {
         let failed: Vec<Lane> = p["lanes"].as_str().unwrap_or("").split(',').filter_map(|l| app.lane(l)).filter(|l| l.status == "failed").collect();
-        if failed.is_empty() {
-            return Err("no lane of this pipeline is failed".into());
-        }
-        for l in &failed {
-            app.update_lane(&l.id, |x| x.attempts = 0);
-        }
+        if failed.is_empty() { return Err("no lane of this pipeline is failed".into()); }
+        failed.iter().for_each(|l| drop(app.update_lane(&l.id, |x| x.attempts = 0)));
         requeue(app, &failed, false, "retried");
         app.merge_wake.notify_one();
         return Ok(());

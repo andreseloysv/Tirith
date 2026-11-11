@@ -1,10 +1,8 @@
 //! `~/.tirith/config.toml` (projects, agent aliases, limits) and each project's `tirith.toml` (plan file,
 //! checks, lane excludes, extra rules). Unknown keys are ignored, so older files keep working.
 
-use serde::de::DeserializeOwned;
-use serde::Deserialize;
-use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use serde::{de::DeserializeOwned, Deserialize};
+use std::{collections::BTreeMap, path::{Path, PathBuf}};
 
 pub fn expand(p: &str) -> PathBuf {
     p.strip_prefix("~/").map_or_else(|| PathBuf::from(p), |rest| home_dir().join(rest))
