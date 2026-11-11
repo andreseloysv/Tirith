@@ -111,6 +111,9 @@ pub struct Stage {
     pub run: String,
     #[serde(default)]
     pub paths: Vec<String>,
+    /// "deploy" marks a stage that publishes main: it runs after a merge, never as a check before it.
+    #[serde(default)]
+    pub kind: String,
 }
 
 #[derive(Deserialize, Clone, Default)]
