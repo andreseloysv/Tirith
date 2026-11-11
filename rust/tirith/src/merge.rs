@@ -174,7 +174,6 @@ fn limit_from(get: impl Fn(&str) -> Option<String>, project: &str, stage: &str, 
 pub fn stage_limit_min(app: &Shared, project: &str, stage: &str) -> u64 {
     limit_from(|k| app.kv(k), project, stage, app.cfg().stage_timeout_min)
 }
-
 async fn run_stage(app: &Shared, pipe: &Pipe, dir: &Path, name: &str, run: &str) -> Result<(), String> {
     let id = app.insert("INSERT INTO runs (lane, project, stage, status, started_at, pipeline, sha) VALUES (?1,?2,?3,'running',?4,?5,?6)", params![pipe.lanes, pipe.project, name, now_iso(), pipe.id, pipe.sha]);
     let log = app.home.join(format!("logs/runs/{id}.log"));
@@ -233,7 +232,6 @@ fn disk_full(e: &str) -> bool {
 fn drop_half_made(slot: &Path, e: &str) -> bool {
     disk_full(e) && std::fs::remove_dir_all(slot).is_ok()
 }
-
 async fn reset(slot: &Path, sha: &str) -> Result<(), String> {
     git(slot, &["checkout", "-q", "-f", "--detach", sha]).await?;
     git(slot, &["clean", "-fdq"]).await.map(|_| ())
