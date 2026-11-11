@@ -77,15 +77,12 @@ pub fn bad(e: String) -> (axum::http::StatusCode, String) {
 pub fn log_age(app: &Shared, id: &str) -> u64 {
     std::fs::metadata(app.home.join(format!("logs/lanes/{id}.log"))).and_then(|m| m.modified()).map(|t| t.elapsed().map(|d| d.as_secs()).unwrap_or(0)).unwrap_or(u64::MAX)
 }
-
 pub fn now_iso() -> String {
     chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string()
 }
-
 pub fn now_s() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
-
 fn mtime(p: &Path) -> Option<SystemTime> {
     std::fs::metadata(p).and_then(|m| m.modified()).ok()
 }

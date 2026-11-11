@@ -111,7 +111,6 @@ static WAKE: Notify = Notify::const_new();
 fn base(app: &Shared) -> String {
     cfg_get::<String>(&app.cfg().raw, &["messenger", "url"]).unwrap_or_else(|| "https://agentsmessenger.com".into()).trim_end_matches('/').to_string()
 }
-
 fn owners(app: &Shared) -> Vec<String> {
     cfg_get::<Vec<String>>(&app.cfg().raw, &["owner", "names"]).unwrap_or_default().iter().map(|n| sealed::clean(n)).collect()
 }
@@ -132,7 +131,6 @@ struct PublicCfg {
 fn public_cfg(app: &Shared) -> Vec<PublicCfg> {
     cfg_get(&app.cfg().raw, &["rooms"]).unwrap_or_default()
 }
-
 fn room(id: &str) -> Option<Room> {
     ROOMS.lock().unwrap().get(id).cloned()
 }
@@ -600,7 +598,6 @@ async fn say(app: &Shared, id: &str, text: &str) -> Result<(), String> {
 fn known(id: &str) -> Result<Room, (StatusCode, String)> {
     room(id).ok_or((StatusCode::NOT_FOUND, format!("no room {id}")))
 }
-
 pub fn routes() -> Router<Shared> {
     Router::new()
         .route("/api/rooms", get(list).post(api_new))
@@ -724,11 +721,9 @@ tirith room leave <room> | list | tail <room> | say <room> \"<text>\"";
 fn qr_text(url: &str) -> String {
     qrcode::QrCode::new(url.as_bytes()).map(|c| c.render::<qrcode::render::unicode::Dense1x2>().quiet_zone(true).build()).unwrap_or_default()
 }
-
 fn one(id: &str) -> Result<Value, String> {
     serde_json::from_str(&call("GET", &format!("/api/rooms/{id}"), None)?).map_err(|e| e.to_string())
 }
-
 fn show_link(v: &Value, key: &str, label: &str) {
     match v[key].as_str() {
         Some(url) => println!("{label}: {url}\n{}", qr_text(url)),

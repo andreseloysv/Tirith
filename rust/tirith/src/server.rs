@@ -20,7 +20,6 @@ static PORT: OnceLock<u16> = OnceLock::new();
 pub fn s(v: &Value, k: &str) -> String {
     v[k].as_str().unwrap_or("").to_string()
 }
-
 pub fn router(app: Shared, port: u16) -> Router {
     let _ = PORT.set(port);
     Router::new()
@@ -112,7 +111,6 @@ async fn stream(State(app): State<Shared>) -> Sse<impl Stream<Item = Result<Even
     let rx = BroadcastStream::new(app.tx.subscribe());
     Sse::new(rx.filter_map(|m| m.ok().map(|d| Ok(Event::default().data(d))))).keep_alive(KeepAlive::default())
 }
-
 async fn plan_show(State(app): State<Shared>, Path(project): Path<String>) -> R {
     let steps = plan::read(&app, &project).map_err(bad)?;
     let lanes = app.lanes.lock().unwrap().clone();
@@ -127,37 +125,29 @@ async fn plan_show(State(app): State<Shared>, Path(project): Path<String>) -> R 
 async fn plan_add(State(app): State<Shared>, Path(project): Path<String>, Json(b): Json<Value>) -> R {
     plan::add(&app, &project, &s(&b, "step"), &s(&b, "text")).await.map(|_| Json(json!({"ok": true}))).map_err(bad)
 }
-
 async fn lane_start(State(app): State<Shared>, Json(b): Json<Value>) -> R {
     let agent = b["agent"].as_str().filter(|a| !a.is_empty()).map(String::from);
     Ok(Json(json!(lanes::start(&app, &s(&b, "project"), &s(&b, "step"), &s(&b, "item"), agent).map_err(bad)?)))
 }
-
 async fn lane_stop(State(app): State<Shared>, Path(id): Path<String>) -> R {
     Ok(Json(json!(lanes::stop(&app, &id).map_err(bad)?)))
 }
-
 async fn lane_log(State(app): State<Shared>, Path(id): Path<String>) -> String {
     let safe: String = id.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-').collect();
     crate::app::redact_secrets(&tail(&app.home.join(format!("logs/lanes/{safe}.log")), 400))
 }
-
 async fn lane_ask(State(app): State<Shared>, Path(id): Path<String>, Json(b): Json<Value>) -> R {
     Ok(Json(json!(lanes::ask(&app, &id, &s(&b, "question")).map_err(bad)?)))
 }
-
 async fn lane_answer(State(app): State<Shared>, Path(id): Path<String>, Json(b): Json<Value>) -> R {
     Ok(Json(json!(lanes::answer(&app, &id, &s(&b, "answer")).map_err(bad)?)))
 }
-
 async fn owner_ask(State(app): State<Shared>, Json(b): Json<Value>) -> R {
     manager::ask_owner(&app, &s(&b, "project"), &s(&b, "kind"), &s(&b, "question")).map(Json).map_err(bad)
 }
-
 async fn owner_answer(State(app): State<Shared>, Path(id): Path<String>, Json(b): Json<Value>) -> R {
     manager::owner_answer(&app, &id, &s(&b, "answer")).map(Json).map_err(bad)
 }
-
 async fn autopilot(State(app): State<Shared>, Path(project): Path<String>, Json(b): Json<Value>) -> R {
     app.cfg().project(&project).ok_or(bad(format!("unknown project '{project}'")))?;
     let on = b["on"].as_bool().unwrap_or(false);
@@ -171,7 +161,6 @@ async fn pipelines(State(app): State<Shared>, Query(q): Query<std::collections::
     let limit = q.get("limit").and_then(|l| l.parse().ok()).unwrap_or(30u32).min(200);
     Json(json!(merge::list(&app, q.get("project").map_or("", String::as_str), limit)))
 }
-
 async fn pipeline_retry(State(app): State<Shared>, Path(id): Path<String>) -> R {
     merge::retry(&app, &id).map(|_| Json(json!({"ok": true}))).map_err(bad)
 }
@@ -187,7 +176,6 @@ async fn run_log(State(app): State<Shared>, Path(id): Path<i64>) -> String {
     let log: Option<String> = app.db.lock().unwrap().query_row("SELECT log FROM runs WHERE id = ?1", [id], |r| r.get(0)).ok().flatten();
     log.map(|l| tail(std::path::Path::new(&l), 400)).unwrap_or_default()
 }
-
 async fn chat(State(app): State<Shared>, Json(b): Json<Value>) -> R {
     let files: Vec<String> = b["attachments"].as_array().into_iter().flatten().filter_map(|f| f.as_str().map(String::from)).collect();
     let text = s(&b, "text") + &attach::describe(&files);
@@ -201,7 +189,6 @@ async fn chat(State(app): State<Shared>, Json(b): Json<Value>) -> R {
 async fn chat_rows(State(app): State<Shared>, Query(q): Query<std::collections::HashMap<String, String>>) -> Json<Value> {
     Json(json!(app.recent("chat", &["id", "at", "role", "text", "project"], Some(q.get("project").map_or("", String::as_str)), 300)))
 }
-
 async fn manager_interrupt(Json(b): Json<Value>) -> R {
     manager::interrupt(&s(&b, "project")).map(|_| Json(json!({"ok": true}))).map_err(bad)
 }
