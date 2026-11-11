@@ -23,7 +23,7 @@ pub(crate) fn slug(text: &str) -> String {
 pub fn start(app: &Shared, project: &str, step: &str, item: &str, agent: Option<String>) -> Result<Lane, String> {
     let item = plan::clean(item);
     if !plan::is_open(app, project, step, &item)? { return Err(format!("\"{item}\" is not an open item of step {step} of {project}. Add it first: tirith plan add {project} {step} \"<text>\"")); }
-    if let Some(l) = app.lanes.lock().unwrap().values().find(|l| l.active() && l.project == project && l.step == step && l.item == item) {
+    if let Some(l) = app.lanes.lock().unwrap().values().find(|l| l.active() && l.project == project && l.step == step && plan::same(&l.item, &item)) {
         return Err(format!("lane {} already works on that item ({})", l.id, l.status));
     }
     let lane = Lane {
@@ -181,7 +181,7 @@ fn next_item(app: &Shared, lanes: &[Lane], rr: &mut usize, ok: &mut dyn FnMut(&P
         if !autopilot_on(app, &p.id) || app.kv(&format!("main_red:{}", p.id)).is_some() { continue; }
         let Ok(steps) = plan::read(app, &p.id) else { continue };
         let open: Vec<&str> = steps.iter().flat_map(|s| s.items.iter()).filter(|i| !i.done).map(|i| i.text.as_str()).collect();
-        let latest = |step: &str, item: &str| lanes.iter().filter(|l| l.project == p.id && l.step == step && l.item == item).max_by(|a, b| a.created_at.cmp(&b.created_at));
+        let latest = |step: &str, item: &str| lanes.iter().filter(|l| l.project == p.id && l.step == step && plan::same(&l.item, item)).max_by(|a, b| a.created_at.cmp(&b.created_at));
         let skipped = |l: Option<&Lane>| l.is_some_and(|l| matches!(l.status.as_str(), "failed" | "stopped"));
         let Some(st) = steps.iter().find(|s| s.items.iter().any(|i| !i.done && !is_autopilot_skipped(&i.text) && !waits_for_open_item(&i.text, &open) && !skipped(latest(&s.num, &i.text)))) else { continue };
         let Some(it) = st.items.iter().find(|i| !i.done && !is_autopilot_skipped(&i.text) && !waits_for_open_item(&i.text, &open) && latest(&st.num, &i.text).is_none_or(|l| !l.active() && !skipped(Some(l)))) else {
@@ -310,13 +310,13 @@ fn brief(app: &Shared, lane: &Lane) -> String {
     let steps = plan::read(app, &lane.project).unwrap_or_default();
     let lanes: Vec<Lane> = app.lanes.lock().unwrap().values().filter(|l| l.project == lane.project).cloned().collect();
     let step = steps.iter().find(|s| s.num == lane.step);
-    let check = step.and_then(|s| s.items.iter().find(|i| i.text == lane.item)).and_then(|i| i.check.clone());
+    let check = step.and_then(|s| s.items.iter().find(|i| plan::same(&i.text, &lane.item))).and_then(|i| i.check.clone());
     let items: Vec<String> = step
         .map(|s| &s.items[..])
         .unwrap_or_default()
         .iter()
         .map(|i| {
-            let l = lanes.iter().filter(|l| l.step == lane.step && l.item == i.text).max_by(|a, b| a.created_at.cmp(&b.created_at));
+            let l = lanes.iter().filter(|l| l.step == lane.step && plan::same(&l.item, &i.text)).max_by(|a, b| a.created_at.cmp(&b.created_at));
             let who = l.filter(|_| !i.done).map(|l| format!("  ({}: {})", l.id, l.status)).unwrap_or_default();
             format!("- [{}] {}{who}", if i.done { "x" } else { " " }, i.text)
         })
