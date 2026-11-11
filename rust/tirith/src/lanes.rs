@@ -2,15 +2,8 @@
 //! autopilot starts the open items of each project's current plan step when the machine has room; a lane whose
 //! process ends goes to the merge queue, where the checks (never the agent) decide that its item is done.
 
-use crate::app::{add_worktree, alive, git, kill_group, log_age, now_iso, now_s, tail, Lane, Shared};
-use crate::config::Project;
-use crate::{brain, guard, manager, models, plan, sandbox};
-use std::collections::{BTreeMap, HashMap};
-use std::os::unix::ffi::OsStrExt;
-use std::path::{Path, PathBuf};
-use std::process::Stdio;
-use std::sync::Mutex;
-use std::time::Duration;
+use crate::{app::{add_worktree, alive, git, kill_group, log_age, now_iso, now_s, tail, Lane, Shared}, brain, config::Project, guard, manager, models, plan, sandbox};
+use std::{collections::{BTreeMap, HashMap}, os::unix::ffi::OsStrExt, path::{Path, PathBuf}, process::Stdio, sync::Mutex, time::Duration};
 
 /// Messages for working lanes, handed to the agent by its next PostToolUse hook.
 static LIVE: Mutex<BTreeMap<String, Vec<String>>> = Mutex::new(BTreeMap::new());
@@ -18,11 +11,9 @@ static LIVE: Mutex<BTreeMap<String, Vec<String>>> = Mutex::new(BTreeMap::new());
 pub fn tell(id: &str, text: &str) {
     LIVE.lock().unwrap().entry(id.into()).or_default().push(text.into());
 }
-
 pub fn drain(id: &str) -> Vec<String> {
     LIVE.lock().unwrap().remove(id).unwrap_or_default()
 }
-
 pub(crate) fn slug(text: &str) -> String {
     let s: String = text.to_lowercase().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect();
     let s = s.split('-').filter(|p| !p.is_empty()).collect::<Vec<_>>().join("-");
@@ -31,9 +22,7 @@ pub(crate) fn slug(text: &str) -> String {
 
 pub fn start(app: &Shared, project: &str, step: &str, item: &str, agent: Option<String>) -> Result<Lane, String> {
     let item = plan::clean(item);
-    if !plan::is_open(app, project, step, &item)? {
-        return Err(format!("\"{item}\" is not an open item of step {step} of {project}. Add it first: tirith plan add {project} {step} \"<text>\""));
-    }
+    if !plan::is_open(app, project, step, &item)? { return Err(format!("\"{item}\" is not an open item of step {step} of {project}. Add it first: tirith plan add {project} {step} \"<text>\"")); }
     if let Some(l) = app.lanes.lock().unwrap().values().find(|l| l.active() && l.project == project && l.step == step && l.item == item) {
         return Err(format!("lane {} already works on that item ({})", l.id, l.status));
     }
@@ -55,7 +44,6 @@ pub fn start(app: &Shared, project: &str, step: &str, item: &str, agent: Option<
 pub fn autopilot_on(app: &Shared, project: &str) -> bool {
     app.kv(&format!("autopilot:{project}")).map(|v| v == "on").unwrap_or(app.cfg().autopilot)
 }
-
 fn load_per_core() -> f64 {
     let mut l = [0f64; 3];
     let n = unsafe { libc::getloadavg(l.as_mut_ptr(), 3) };
@@ -66,10 +54,11 @@ fn load_per_core() -> f64 {
 fn free_gb(dir: &Path) -> f64 {
     let Ok(c) = std::ffi::CString::new(dir.as_os_str().as_bytes()) else { return f64::MAX };
     let mut s: libc::statvfs = unsafe { std::mem::zeroed() };
-    if unsafe { libc::statvfs(c.as_ptr(), &mut s) } != 0 {
-        return f64::MAX;
+    if unsafe { libc::statvfs(c.as_ptr(), &mut s) } == 0 {
+        s.f_bavail as f64 * s.f_frsize as f64 / 1e9
+    } else {
+        f64::MAX
     }
-    s.f_bavail as f64 * s.f_frsize as f64 / 1e9
 }
 
 /// One cargo build folder per project, shared by its lanes and checks: a folder per worktree costs gigabytes each.
@@ -80,16 +69,13 @@ pub fn shared_target(app: &Shared, project: &str) -> PathBuf {
 /// With less than 10 GB free: the build caches git ignores (target, .build, node_modules, build, .gradle) are
 /// removed from the lanes' worktrees that no active lane holds. Nothing tracked is touched.
 async fn free_disk(app: &Shared, lanes: &[Lane]) {
-    if free_gb(&app.home.join("lanes")) >= 10.0 {
-        return;
-    }
+    if free_gb(&app.home.join("lanes")) >= 10.0 { return; }
     for p in &app.cfg().projects {
+        let merging = lanes.iter().any(|l| l.project == p.id && l.status == "merging");
         for slot in std::fs::read_dir(p.lanes_dir()).into_iter().flatten().flatten().map(|e| e.path()) {
             let name = slot.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-            let held = lanes.iter().any(|l| l.active() && Path::new(&l.workspace) == slot) || (name == "merge" && lanes.iter().any(|l| l.project == p.id && l.status == "merging"));
-            if held || !(name.starts_with("slot-") || name == "merge") {
-                continue;
-            }
+            let held = lanes.iter().any(|l| l.active() && Path::new(&l.workspace) == slot) || (name == "merge" && merging);
+            if held || !(name.starts_with("slot-") || name == "merge") { continue; }
             for cache in ["target", ".build", "node_modules", "build", ".gradle", "android/build", "android/app/build", "android/.gradle"] {
                 let path = slot.join(cache);
                 if path.is_dir() && git(&slot, &["check-ignore", "-q", cache]).await.is_ok() {
@@ -105,12 +91,10 @@ const LOW_DISK_GB: f64 = 5.0;
 
 /// Ask once per low-disk spell: `asked` is whether a card is already out; it re-arms after the disk recovers (7 GB).
 fn low_disk_ask(free: f64, asked: bool) -> Option<bool> {
-    if free < LOW_DISK_GB && !asked {
-        Some(true)
-    } else if free >= LOW_DISK_GB + 2.0 && asked {
-        Some(false)
-    } else {
-        None
+    match (free < LOW_DISK_GB, free >= LOW_DISK_GB + 2.0, asked) {
+        (true, _, false) => Some(true),
+        (_, true, true) => Some(false),
+        _ => None,
     }
 }
 
@@ -156,9 +140,7 @@ fn blocked(app: &Shared, p: &Project, lanes: &[Lane]) -> Option<String> {
 
 /// The command that fixes a reason `blocked` gave, for the health report.
 pub(crate) fn paused_fix(project: &str, why: &str) -> String {
-    if let Some(fix) = why.find('(').zip(why.rfind(')')).map(|(a, b)| &why[a + 1..b]).filter(|f| f.starts_with("tirith ")) {
-        return fix.to_string();
-    }
+    if let Some(fix) = why.find('(').zip(why.rfind(')')).map(|(a, b)| &why[a + 1..b]).filter(|f| f.starts_with("tirith ")) { return fix.to_string(); }
     if why.contains("merge queue") {
         "wait for the merges (tirith status shows them)".into()
     } else if why.contains("GB free") {
@@ -170,20 +152,23 @@ pub(crate) fn paused_fix(project: &str, why: &str) -> String {
     }
 }
 
-/// Role items of step 0 («Manager de guardia: …», «CEO: …») are attended by the manager or the CEO, not by a lane.
-fn is_role_item(text: &str) -> bool {
-    let t = text.trim_start().to_lowercase();
-    t.starts_with("manager de guardia:") || t.starts_with("ceo:")
-}
-
-/// Items marked «(espera: …)» wait for the owner: the autopilot starts no lane for them.
-fn is_owner_wait(text: &str) -> bool {
-    let t = text.to_lowercase();
-    t.contains("(espera:") || t.contains("(espera :")
-}
-
+/// Role items of step 0 («Manager de guardia: …», «CEO: …») are attended by the manager or the CEO, and items marked
+/// «(espera: …)» wait for the owner: the autopilot starts no lane for either.
 pub(crate) fn is_autopilot_skipped(text: &str) -> bool {
-    is_role_item(text) || is_owner_wait(text)
+    let t = text.trim_start().to_lowercase();
+    t.starts_with("manager de guardia:") || t.starts_with("ceo:") || t.contains("(espera:") || t.contains("(espera :")
+}
+
+/// Items that wait for another open item («wait until … on main», «made by the item …») by quoting it or sharing most of its words.
+fn waits_for_open_item(text: &str, open: &[&str]) -> bool {
+    let t = text.to_lowercase();
+    let marks = ["wait until", "made by the item", "created by the item", "after the item", "espera a que", "hasta que"];
+    let words = |s: &str| -> Vec<String> { s.to_lowercase().split(|c: char| !c.is_alphanumeric()).filter(|w| w.chars().count() >= 5).map(String::from).collect() };
+    marks.iter().any(|m| t.contains(m))
+        && open.iter().any(|o| {
+            let (ol, ow) = (o.trim().to_lowercase(), words(o));
+            ol != t.trim() && !ol.is_empty() && (t.contains(&ol) || (ow.len() >= 3 && ow.iter().filter(|w| t.contains(w.as_str())).count() * 10 >= ow.len() * 6))
+        })
 }
 
 /// The autopilot's next item: in round-robin over the projects, an open item of the project's current step
@@ -193,19 +178,16 @@ fn next_item(app: &Shared, lanes: &[Lane], rr: &mut usize, ok: &mut dyn FnMut(&P
     let n = cfg.projects.len();
     for k in 0..n {
         let p = &cfg.projects[(*rr + k) % n];
-        if !autopilot_on(app, &p.id) || app.kv(&format!("main_red:{}", p.id)).is_some() {
-            continue;
-        }
+        if !autopilot_on(app, &p.id) || app.kv(&format!("main_red:{}", p.id)).is_some() { continue; }
         let Ok(steps) = plan::read(app, &p.id) else { continue };
+        let open: Vec<&str> = steps.iter().flat_map(|s| s.items.iter()).filter(|i| !i.done).map(|i| i.text.as_str()).collect();
         let latest = |step: &str, item: &str| lanes.iter().filter(|l| l.project == p.id && l.step == step && l.item == item).max_by(|a, b| a.created_at.cmp(&b.created_at));
         let skipped = |l: Option<&Lane>| l.is_some_and(|l| matches!(l.status.as_str(), "failed" | "stopped"));
-        let Some(st) = steps.iter().find(|s| s.items.iter().any(|i| !i.done && !is_autopilot_skipped(&i.text) && !skipped(latest(&s.num, &i.text)))) else { continue };
-        let Some(it) = st.items.iter().find(|i| !i.done && !is_autopilot_skipped(&i.text) && latest(&st.num, &i.text).is_none_or(|l| !l.active() && !skipped(Some(l)))) else {
+        let Some(st) = steps.iter().find(|s| s.items.iter().any(|i| !i.done && !is_autopilot_skipped(&i.text) && !waits_for_open_item(&i.text, &open) && !skipped(latest(&s.num, &i.text)))) else { continue };
+        let Some(it) = st.items.iter().find(|i| !i.done && !is_autopilot_skipped(&i.text) && !waits_for_open_item(&i.text, &open) && latest(&st.num, &i.text).is_none_or(|l| !l.active() && !skipped(Some(l)))) else {
             continue;
         };
-        if !ok(p) {
-            continue;
-        }
+        if !ok(p) { continue; }
         *rr = (*rr + k + 1) % n;
         match start(app, &p.id, &st.num, &it.text, None) {
             Ok(l) => return Some(l),
@@ -235,11 +217,15 @@ pub async fn scheduler(app: Shared) {
             warn_low_disk(&app).await;
             free_disk(&app, &lanes).await; // every ~5 minutes
         }
+        if tick.is_multiple_of(10) {
+            manager::close_stale_questions(&app); // every ~30 s
+        }
         tick += 1;
         app.emit("load", serde_json::json!({"load": (load * 100.0).round() / 100.0, "running": running, "max": cfg.max_parallel}));
         for l in lanes.iter().filter(|l| l.pid.is_some()) {
             let tracked = app.children.lock().unwrap().contains(&l.id);
-            let idle = (now_s().saturating_sub(l.last_activity)).min(log_age(&app, &l.id));
+            let log_idle = log_age(&app, &l.id);
+            let idle = (now_s().saturating_sub(l.last_activity)).min(log_idle);
             if l.status == "running" && idle > cfg.inactivity_min * 60 {
                 kill_group(l.pid.unwrap_or(0), libc::SIGKILL);
                 app.event(&l.id, &l.project, "idle", "", &format!("stopped: no activity for {} min", cfg.inactivity_min), "");
@@ -247,9 +233,7 @@ pub async fn scheduler(app: Shared) {
                 ended(&app, &l.id, None).await; // its process ended while the daemon was down
             }
         }
-        if running >= cfg.max_parallel || (running > 0 && load >= cfg.max_load) {
-            continue;
-        }
+        if running >= cfg.max_parallel || (running > 0 && load >= cfg.max_load) { continue; }
         let mut ok = |p: &Project| {
             let why = blocked(&app, p, &lanes);
             if let Some(w) = why.as_ref().filter(|w| said.get(&p.id) != Some(*w)) {
@@ -261,7 +245,8 @@ pub async fn scheduler(app: Shared) {
         };
         let mut queued: Vec<&Lane> = lanes.iter().filter(|l| l.status == "queued").collect();
         queued.sort_by(|a, b| a.created_at.cmp(&b.created_at));
-        let Some(next) = queued.into_iter().find(|l| cfg.project(&l.project).is_none_or(&mut ok)).cloned().or_else(|| next_item(&app, &lanes, &mut rr, &mut ok)) else { continue };
+        let pick = queued.into_iter().find(|l| cfg.project(&l.project).is_none_or(&mut ok)).cloned();
+        let Some(next) = pick.or_else(|| next_item(&app, &lanes, &mut rr, &mut ok)) else { continue };
         match launch(&app, next.clone()).await {
             Ok(()) => app.sched_wake.notify_one(),
             Err(e) => {
@@ -337,6 +322,7 @@ fn brief(app: &Shared, lane: &Lane) -> String {
         })
         .collect();
     let others: Vec<String> = lanes.iter().filter(|l| l.id != lane.id && matches!(l.status.as_str(), "running" | "waiting")).map(|l| format!("- {} ({}): {}", l.id, l.status, l.item)).collect();
+    let red = app.kv(&format!("main_red:{}", lane.project));
     let rules: Vec<String> = app.cfg().project(&lane.project).map(|p| app.manifest(&p.repo()).rules).unwrap_or_default().iter().map(|r| format!("- {}", r.message)).collect();
     let mut b = format!(
         "# Lane {id}\n\nProject: {project}. Plan step {step}.\n\n## Your item\n{item}\n{check}\n## The step's items\n{items}\n\n\
@@ -348,7 +334,7 @@ fn brief(app: &Shared, lane: &Lane) -> String {
         check = check.map(|c| format!("\nIts check (must pass on the merged result): `{c}`\n")).unwrap_or_default(),
         items = items.join("\n"),
         others = if others.is_empty() { "none".into() } else { others.join("\n") },
-        red = app.kv(&format!("main_red:{}", lane.project)).map(|r| format!("red ({r}): not your job unless your item is about it")).unwrap_or("green".into()),
+        red = red.map(|r| format!("red ({r}): not your job unless your item is about it")).unwrap_or("green".into()),
     );
     if let Some(a) = brain::architecture(app, &lane.project) {
         b += &format!("\n## Architecture\n{a}\n");
@@ -395,8 +381,8 @@ async fn launch(app: &Shared, mut lane: Lane) -> Result<(), String> {
     }
     let launch = sandbox::wrap(app, &lane.id, cmd.argv);
     let log = std::fs::OpenOptions::new().create(true).append(true).open(app.home.join(format!("logs/lanes/{}.log", lane.id))).map_err(|e| e.to_string())?;
-    let mut child = launch
-        .command(app)
+    let mut command = launch.command(app);
+    let mut child = command
         .current_dir(&ws)
         .env("TIRITH_LANE", &lane.id)
         .env("TIRITH_PROJECT", &lane.project)
@@ -489,18 +475,14 @@ fn has_check(app: &Shared, lane: &Lane) -> bool {
 /// True when the lane's branch has no commit beyond the project's HEAD (it is known and countable).
 async fn no_commits(app: &Shared, lane: &Lane) -> bool {
     let Some(p) = app.cfg().projects.iter().find(|p| p.id == lane.project).cloned() else { return false };
-    if lane.branch.is_empty() {
-        return false;
-    }
+    if lane.branch.is_empty() { return false; }
     matches!(git(&p.repo(), &["rev-list", "--count", &format!("HEAD..{}", lane.branch)]).await.as_deref(), Ok("0"))
 }
 
 /// `tirith ask` from a lane: it waits, and the manager is told how to answer.
 pub fn ask(app: &Shared, id: &str, question: &str) -> Result<Lane, String> {
     let lane = app.lane(id).ok_or(format!("no lane '{id}'"))?;
-    if lane.status != "running" || question.trim().is_empty() {
-        return Err(format!("lane {id} is {}: only a working lane asks, with a question", lane.status));
-    }
+    if lane.status != "running" || question.trim().is_empty() { return Err(format!("lane {id} is {}: only a working lane asks, with a question", lane.status)); }
     let lane = app.update_lane(id, |l| {
         l.status = "waiting".into();
         l.question = question.trim().into();
@@ -514,9 +496,7 @@ pub fn ask(app: &Shared, id: &str, question: &str) -> Result<Lane, String> {
 /// `tirith answer` from the manager: a live message when the agent still runs, else a resumed run.
 pub fn answer(app: &Shared, id: &str, text: &str) -> Result<Lane, String> {
     let lane = app.lane(id).ok_or(format!("no lane '{id}'"))?;
-    if lane.status != "waiting" {
-        return Err(format!("lane {id} is {}, not waiting for an answer", lane.status));
-    }
+    if lane.status != "waiting" { return Err(format!("lane {id} is {}, not waiting for an answer", lane.status)); }
     let live = lane.pid.is_some_and(alive);
     if live {
         tell(id, &format!("Answer from the manager: {text}"));
@@ -533,9 +513,7 @@ pub fn answer(app: &Shared, id: &str, text: &str) -> Result<Lane, String> {
 
 pub fn stop(app: &Shared, id: &str) -> Result<Lane, String> {
     let lane = app.lane(id).ok_or(format!("no lane '{id}'"))?;
-    if !matches!(lane.status.as_str(), "queued" | "running" | "waiting" | "merge-queued") {
-        return Err(format!("lane {id} is {}", lane.status));
-    }
+    if !matches!(lane.status.as_str(), "queued" | "running" | "waiting" | "merge-queued") { return Err(format!("lane {id} is {}", lane.status)); }
     if let Some(pid) = lane.pid {
         kill_group(pid, libc::SIGTERM);
         tokio::spawn(async move {
@@ -580,7 +558,6 @@ mod tests {
         assert_eq!(super::clippy_rule(dir.to_str().unwrap()), "");
         std::fs::write(dir.join("Cargo.toml"), "").unwrap();
         assert!(super::clippy_rule(dir.to_str().unwrap()).contains("cargo clippy -- -D warnings"));
-        std::fs::remove_dir_all(&dir).ok();
     }
     #[test]
     fn low_disk_asks_owner_once() {
@@ -591,34 +568,41 @@ mod tests {
         assert_eq!(super::low_disk_ask(9.0, true), Some(false)); // re-armed
         let dir = std::env::temp_dir().join(format!("tirith-lowdisk-{}", std::process::id()));
         std::fs::create_dir_all(dir.join("big")).unwrap();
-        std::fs::create_dir_all(dir.join("small")).unwrap();
         std::fs::write(dir.join("big/f"), vec![1u8; 300_000]).unwrap();
         let rows = super::biggest_dirs(&dir, 5);
         assert!(rows[0].0.ends_with("big"));
         std::fs::remove_dir_all(&dir).unwrap();
     }
-
     #[test]
     fn autopilot_skips_owner_wait_items() {
-        assert!(super::is_owner_wait("Elegir dominio (espera: el dueño decide)"));
+        assert!(super::is_autopilot_skipped("Elegir dominio (espera: el dueño decide)"));
         assert!(super::is_autopilot_skipped("CEO: revisar"));
-        assert!(!super::is_owner_wait("Arreglar el parser"));
+        assert!(!super::is_autopilot_skipped("Arreglar el parser"));
+        assert!(super::is_autopilot_skipped("Manager de guardia: atender el chat"));
+        assert!(!super::is_autopilot_skipped("Arreglar el CEO: bug"));
     }
-
     #[test]
     fn lane_without_commits_check_passes_is_done() {
-        // The merge train ticks a commitless lane whose check passes as "already true on main"; `ended` must
-        // therefore queue it for merge instead of failing it. Pin the wiring.
-        let src = include_str!("lanes.rs");
-        assert!(src.contains("no_commits(app, &lane).await && !has_check(app, &lane)"));
-        let merge = include_str!("merge.rs");
-        assert!(merge.contains("\"already true on main\""));
+        assert!(include_str!("lanes.rs").contains("no_commits(app, &lane).await && !has_check(app, &lane)"));
+        assert!(include_str!("merge.rs").contains("\"already true on main\""));
     }
-
     #[test]
-    fn autopilot_skips_role_items() {
-        assert!(super::is_role_item("Manager de guardia: atender el chat"));
-        assert!(super::is_role_item("CEO: revisar el plan"));
-        assert!(!super::is_role_item("Arreglar el CEO: bug"));
+    fn autopilot_waits_for_dependency_items() {
+        let open = ["Generar los vídeos de la demo en 3 idiomas", "Subir a YouTube"];
+        let up = "Subir los vídeos de la demo a YouTube: wait until they are on main, made by the item «Generar los vídeos de la demo en 3 idiomas»";
+        assert!(super::waits_for_open_item(up, &open));
+        assert!(!super::waits_for_open_item(up, &["Subir a YouTube"]));
+        assert!(!super::waits_for_open_item("Arreglar el parser", &open));
+    }
+    #[test]
+    fn stale_owner_questions_close() {
+        use crate::manager::stale_reason;
+        let off = "Should I turn off the autopilot of tirith?";
+        assert_eq!(stale_reason(off, true), None); // still on: the question applies
+        assert!(stale_reason(off, false).is_some()); // already off: stale
+        assert!(stale_reason("¿Apagar el autopilot de superpolitika?", false).is_some());
+        assert!(stale_reason("Enable the autopilot again?", true).is_some());
+        assert_eq!(stale_reason("Enable the autopilot again?", false), None);
+        assert_eq!(stale_reason("Approve $0.74 for the translation?", false), None);
     }
 }

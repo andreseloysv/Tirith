@@ -6,16 +6,10 @@
 //! session whose answer goes to the owner's chat and to the manager. Back to green ends the episode.
 //! While everything is green no model is called.
 
-use crate::app::{kill_group, log_age, now_iso, now_s, tail, Lane, Shared};
-use crate::{config, manager, models, plan};
-use axum::extract::State;
-use axum::routing::get;
-use axum::{Json, Router};
+use crate::{app::{kill_group, log_age, now_iso, now_s, tail, Lane, Shared}, config, manager, models, plan};
+use axum::{extract::State, routing::get, Json, Router};
 use serde_json::{json, Value};
-use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{LazyLock, Mutex};
-use std::time::Duration;
+use std::{collections::HashMap, sync::{atomic::{AtomicBool, Ordering}, LazyLock, Mutex}, time::Duration};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
 const PROMPT: &str = "You are the CEO review inside Tirith: an independent, read-only, one-shot review of how the \
@@ -58,11 +52,9 @@ static REVIEWING: AtomicBool = AtomicBool::new(false);
 fn secs(iso: &str) -> Option<i64> {
     chrono::DateTime::parse_from_rfc3339(iso).ok().map(|d| d.timestamp())
 }
-
 fn iso(s: u64) -> String {
     chrono::DateTime::from_timestamp(s as i64, 0).map(|d| d.format("%Y-%m-%dT%H:%M:%SZ").to_string()).unwrap_or_default()
 }
-
 fn ceo_cfg<T: serde::de::DeserializeOwned>(app: &Shared, path: &[&str], default: T) -> T {
     config::get(&app.cfg().raw, path).unwrap_or(default)
 }
@@ -76,7 +68,6 @@ fn flag(app: &Shared, key: &str) -> Option<String> {
 fn owner_questions(app: &Shared) -> Vec<String> {
     manager::owner_open(app).iter().map(|o| format!("{}: {}", o["project"].as_str().unwrap_or(""), o["question"].as_str().unwrap_or("")).trim_start_matches(": ").to_string()).collect()
 }
-
 fn startable(text: &str) -> bool {
     !crate::lanes::is_autopilot_skipped(text)
 }
@@ -85,7 +76,6 @@ fn startable(text: &str) -> bool {
 fn paused_note(app: &Shared, project: &str) -> String {
     app.kv(&format!("paused:{project}")).map(|w| paused_text(project, &w)).unwrap_or_default()
 }
-
 fn paused_text(project: &str, why: &str) -> String {
     format!(" [{project} paused: {why}; fix: {}]", crate::lanes::paused_fix(project, why))
 }
@@ -94,11 +84,9 @@ fn paused_text(project: &str, why: &str) -> String {
 fn empty_plan_note(empty: &[String]) -> String {
     empty.iter().map(|p| format!(" [{p} plan empty: nothing startable; fix: tirith plan add {p} <step> \"<text>\"]")).collect()
 }
-
 fn merged_at(l: &Lane) -> Option<i64> {
     l.merged_at.as_deref().or(l.ended_at.as_deref()).and_then(secs)
 }
-
 fn compute(app: &Shared) -> Vec<Metric> {
     let cfg = app.cfg();
     let now = now_s() as i64;
@@ -117,20 +105,21 @@ fn compute(app: &Shared) -> Vec<Metric> {
             empty.push(p.id.clone());
         }
     }
+    let work = !open.is_empty();
     let merged: Vec<&Lane> = lanes.iter().filter(|l| l.status == "merged" && merged_at(l).is_some_and(|m| m >= day)).collect();
     let ids = |v: &[&Lane]| v.iter().map(|l| l.id.as_str()).collect::<Vec<_>>().join(", ");
+    let open_txt = open.iter().map(|(p, n)| format!("{p} {n}")).collect::<Vec<_>>().join(", ");
     let mut out = vec![];
 
     let target = t("merged_per_day", 10.0);
     let facts = format!(
-        "merged in 24 h: [{}]; open items in autopilot projects: [{}]; {}{}{}",
+        "merged in 24 h: [{}]; open items in autopilot projects: [{open_txt}]; {}{}{}",
         ids(&merged),
-        open.iter().map(|(p, n)| format!("{p} {n}")).collect::<Vec<_>>().join(", "),
         if empty.is_empty() { "no empty plans: lanes that do not reach main are the problem" } else { "no startable work in the plan (not a lane failure) for:" },
         empty_plan_note(&empty),
         open.iter().map(|(p, _)| paused_note(app, p)).collect::<String>()
     );
-    out.push(Metric { id: "merged", label: "En main (24 h)", value: merged.len() as f64, target: Some(target), at_least: true, red: !open.is_empty() && (merged.len() as f64) < target, facts });
+    out.push(Metric { id: "merged", label: "En main (24 h)", value: merged.len() as f64, target: Some(target), at_least: true, red: work && (merged.len() as f64) < target, facts });
 
     let mut mins: Vec<(f64, &str)> = merged.iter().filter_map(|l| Some(((merged_at(l)? - secs(&l.created_at)?) as f64 / 60.0, l.id.as_str()))).collect();
     mins.sort_by(|a, b| a.0.total_cmp(&b.0));
@@ -139,7 +128,8 @@ fn compute(app: &Shared) -> Vec<Metric> {
     let facts = mins.iter().rev().take(8).map(|(m, id)| format!("{id} {m:.0} min")).collect::<Vec<_>>().join(", ");
     out.push(Metric { id: "median", label: "Mediana lanzar→main (min)", value: median.round(), target: Some(target), at_least: false, red: !mins.is_empty() && median > target, facts });
 
-    let pct = if merged.is_empty() { 100.0 } else { (100 * merged.iter().filter(|l| l.attempts == 0).count() / merged.len()) as f64 };
+    let first: Vec<&Lane> = merged.iter().filter(|l| l.attempts == 0).copied().collect();
+    let pct = if merged.is_empty() { 100.0 } else { (100 * first.len() / merged.len()) as f64 };
     let retried: Vec<&Lane> = merged.iter().filter(|l| l.attempts > 0).copied().collect();
     let target = t("first_try_pct", 50.0);
     out.push(Metric { id: "first_try", label: "A la primera (%)", value: pct, target: Some(target), at_least: true, red: !merged.is_empty() && pct < target, facts: format!("merged after being sent back: [{}]", ids(&retried)) });
@@ -163,13 +153,14 @@ fn compute(app: &Shared) -> Vec<Metric> {
     let facts = idle.iter().map(|(p, n, m)| format!("{p}: {n} open items, nothing running for {m} min{}", paused_note(app, p))).collect::<Vec<_>>().join("; ");
     out.push(Metric { id: "idle", label: "Parado con trabajo (min)", value: worst, target: Some(target), at_least: false, red: worst > target, facts });
 
+    let half = cfg.inactivity_min * 30;
     let stuck: Vec<String> = lanes
         .iter()
         .filter(|l| l.status == "running")
         .filter_map(|l| {
             let log = log_age(app, &l.id);
             let quiet = (now as u64).saturating_sub(l.last_activity).min(log);
-            (quiet > cfg.inactivity_min * 30).then(|| format!("{} ({}) quiet {} min", l.id, l.project, quiet / 60))
+            (quiet > half).then(|| format!("{} ({}) quiet {} min", l.id, l.project, quiet / 60))
         })
         .collect();
     let target = t("stuck", 0.0);
@@ -188,7 +179,8 @@ fn compute(app: &Shared) -> Vec<Metric> {
 }
 
 fn describe(m: &Metric) -> String {
-    let target = m.target.map(|t| format!(" (target: {} {t})", if m.at_least { "at least" } else { "at most" })).unwrap_or_default();
+    let side = if m.at_least { "at least" } else { "at most" };
+    let target = m.target.map(|t| format!(" (target: {side} {t})")).unwrap_or_default();
     let facts = if m.facts.is_empty() { String::new() } else { format!(". Facts: {}", m.facts) };
     format!("{} [{}] is {}{target}{facts}", m.label, m.id, m.value)
 }
@@ -236,14 +228,17 @@ fn tick(app: &Shared) {
         }
         manager::notify(app, "", &format!("health: {}. Get it moving.", describe(m)));
     }
-    if !due.is_empty() && reviews_today(app) < ceo_cfg(app, &["ceo", "max_per_day"], 6u64) {
-        start_review(app, due.iter().map(|d| d.0).collect::<Vec<_>>().join(","), due.iter().map(|d| d.1.as_str()).collect::<Vec<_>>().join("\n"));
+    let max = ceo_cfg(app, &["ceo", "max_per_day"], 6u64);
+    if !due.is_empty() && reviews_today(app) < max {
+        let metric = due.iter().map(|d| d.0).collect::<Vec<_>>().join(",");
+        start_review(app, metric, due.iter().map(|d| d.1.as_str()).collect::<Vec<_>>().join("\n"));
     }
     app.emit("metrics", payload(app, list));
 }
 
 fn reviews_today(app: &Shared) -> u64 {
-    app.db.lock().unwrap().query_row("SELECT COUNT(*) FROM ceo_reviews WHERE at >= ?1 AND metric != 'owner'", [iso(now_s().saturating_sub(86400))], |r| r.get(0)).unwrap_or(0)
+    let day = iso(now_s().saturating_sub(86400));
+    app.db.lock().unwrap().query_row("SELECT COUNT(*) FROM ceo_reviews WHERE at >= ?1 AND metric != 'owner'", [day], |r| r.get(0)).unwrap_or(0)
 }
 
 fn payload(app: &Shared, metrics: Vec<Value>) -> Value {
@@ -252,9 +247,7 @@ fn payload(app: &Shared, metrics: Vec<Value>) -> Value {
 
 /// Starts one review in the background; nothing when one is already running.
 fn start_review(app: &Shared, metric: String, why: String) {
-    if REVIEWING.swap(true, Ordering::SeqCst) {
-        return;
-    }
+    if REVIEWING.swap(true, Ordering::SeqCst) { return; }
     let app = app.clone();
     tokio::spawn(async move {
         app.emit("ceo", json!({"running": true}));
@@ -277,18 +270,15 @@ fn brief(app: &Shared, why: &str) -> String {
     let mut lanes: Vec<Lane> = app.lanes.lock().unwrap().values().cloned().collect();
     lanes.sort_by(|a, b| b.created_at.cmp(&a.created_at));
     let mut s = format!("# Red metrics\n{why}\n\n# Last lanes (newest first)\n");
-    for l in lanes.iter().take(20) {
-        s += &format!("- {} [{}] {}:{} \"{}\" tries {} created {}: {}\n", l.id, l.status, l.project, l.step, l.item, l.attempts + 1, l.created_at, l.note.lines().next().unwrap_or(""));
-    }
+    lanes.iter().take(20).for_each(|l| s += &format!("- {} [{}] {}:{} \"{}\" tries {} created {}: {}\n", l.id, l.status, l.project, l.step, l.item, l.attempts + 1, l.created_at, l.note.lines().next().unwrap_or("")));
     s += "\n# Failing checks (last 24 h)\n";
+    let day = iso(now_s().saturating_sub(86400));
     let runs: Vec<(String, String, String, String)> = {
         let db = app.db.lock().unwrap();
         let q = db.prepare("SELECT lane, stage, status, COALESCE(log, '') FROM runs WHERE status IN ('failed', 'timeout') AND started_at >= ?1 ORDER BY id DESC LIMIT 5");
-        q.and_then(|mut q| q.query_map([&iso(now_s().saturating_sub(86400))], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?.collect()).unwrap_or_default()
+        q.and_then(|mut q| q.query_map([&day], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?.collect()).unwrap_or_default()
     };
-    for (lane, stage, status, log) in &runs {
-        s += &format!("- {lane} check '{stage}' {status}:\n```\n{}\n```\n", tail(std::path::Path::new(log), 15));
-    }
+    runs.iter().for_each(|(lane, stage, status, log)| s += &format!("- {lane} check '{stage}' {status}:\n```\n{}\n```\n", tail(std::path::Path::new(log), 15)));
     s += "\n# Plans\n";
     for p in &app.cfg().projects {
         let auto = if crate::lanes::autopilot_on(app, &p.id) { "on" } else { "off" };
@@ -300,9 +290,7 @@ fn brief(app: &Shared, why: &str) -> String {
         }
     }
     s += "\n# Open owner questions\n";
-    for q in owner_questions(app) {
-        s += &format!("- {q}\n");
-    }
+    owner_questions(app).into_iter().for_each(|q| s += &format!("- {q}\n"));
     s
 }
 
@@ -323,8 +311,9 @@ async fn review(app: &Shared, why: &str) -> Result<String, String> {
     let (mut child, mut stdin, stdout) = manager::spawn_chat(app, "ceo", "", cmd.argv)?;
     let pid = child.id().unwrap_or(0);
     let mut lines = BufReader::new(stdout).lines();
+    let msg = json!({"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": brief(app, why)}]}});
     let send = |line: String| (line + "\n").into_bytes();
-    stdin.write_all(&send(json!({"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": brief(app, why)}]}}).to_string())).await.map_err(|e| e.to_string())?;
+    stdin.write_all(&send(msg.to_string())).await.map_err(|e| e.to_string())?;
     let mut text = String::new();
     let read = async {
         while let Ok(Some(line)) = lines.next_line().await {
@@ -347,7 +336,9 @@ async fn review(app: &Shared, why: &str) -> Result<String, String> {
         false
     };
     let finished = tokio::time::timeout(Duration::from_secs(600), read).await;
-    kill_group(pid, libc::SIGKILL);
+    if pid != 0 {
+        kill_group(pid, libc::SIGKILL);
+    }
     let _ = child.wait().await;
     let text = text.trim().to_string();
     match finished {
@@ -388,11 +379,8 @@ mod tests {
             assert_eq!(super::ceo_permission("Bash", &input)["behavior"], "allow", "{cmd}");
         }
         assert_eq!(super::ceo_permission("Read", &serde_json::json!({"file_path": "/x"}))["behavior"], "allow");
-        for t in ["Write", "Edit", "MultiEdit", "NotebookEdit"] {
-            assert_eq!(super::ceo_permission(t, &serde_json::json!({}))["behavior"], "deny", "{t}");
-        }
+        ["Write", "Edit", "MultiEdit", "NotebookEdit"].into_iter().for_each(|t| assert_eq!(super::ceo_permission(t, &serde_json::json!({}))["behavior"], "deny", "{t}"));
     }
-
     #[test]
     fn health_reports_paused_reason() {
         let t = super::paused_text("tirith", "commit guard: the pre-commit hook is outdated or has other words than config.toml (tirith guard install tirith)");
@@ -401,7 +389,6 @@ mod tests {
         assert!(super::paused_text("p", "3 lanes wait for the merge queue").contains("fix: wait for the merges"));
         assert!(super::paused_text("p", "less than 5 GB free on /x").contains("fix: free disk space"));
     }
-
     #[test]
     fn health_merged_reports_empty_plans() {
         let t = super::empty_plan_note(&["tirith".to_string(), "p2".to_string()]);
@@ -409,7 +396,6 @@ mod tests {
         assert!(t.contains("p2 plan empty"), "{t}");
         assert!(super::empty_plan_note(&[]).is_empty());
     }
-
     #[test]
     fn idle_health_ignores_unstartable_items() {
         assert!(!super::startable("Manager de guardia: atender el chat"));

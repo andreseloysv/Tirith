@@ -9,20 +9,11 @@
 
 pub(crate) mod sealed;
 
-use crate::app::{bad, now_iso, now_s, Shared, R};
-use crate::client::{call, Flag};
-use crate::config::get as cfg_get;
-use crate::{brain, manager};
-use axum::extract::{Path, Query, State};
-use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
-use axum::{Json, Router};
+use crate::{app::{bad, now_iso, now_s, R, Shared}, brain, client::{call, Flag}, config::get as cfg_get, manager};
+use axum::{extract::{Path, Query, State}, http::StatusCode, response::{IntoResponse, Response}, routing::{get, post}, Json, Router};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::collections::{BTreeMap, HashMap, HashSet};
-use std::sync::{Mutex, OnceLock};
-use std::time::{Duration, Instant};
+use std::{collections::{BTreeMap, HashMap, HashSet}, sync::{Mutex, OnceLock}, time::{Duration, Instant}};
 use tokio::sync::{mpsc, Notify};
 
 const BRAKE: u32 = 30;
@@ -113,7 +104,6 @@ static WAKE: Notify = Notify::const_new();
 fn base(app: &Shared) -> String {
     cfg_get::<String>(&app.cfg().raw, &["messenger", "url"]).unwrap_or_else(|| "https://agentsmessenger.com".into()).trim_end_matches('/').to_string()
 }
-
 fn owners(app: &Shared) -> Vec<String> {
     cfg_get::<Vec<String>>(&app.cfg().raw, &["owner", "names"]).unwrap_or_default().iter().map(|n| sealed::clean(n)).collect()
 }
@@ -134,7 +124,6 @@ struct PublicCfg {
 fn public_cfg(app: &Shared) -> Vec<PublicCfg> {
     cfg_get(&app.cfg().raw, &["rooms"]).unwrap_or_default()
 }
-
 fn room(id: &str) -> Option<Room> {
     ROOMS.lock().unwrap().get(id).cloned()
 }
@@ -248,9 +237,7 @@ async fn provide(app: &Shared, said: &mut String) {
 
 /// Starts the room's task unless it runs already.
 fn watch(app: &Shared, id: &str) {
-    if !RUNNING.lock().unwrap().get_or_insert_with(HashSet::new).insert(id.to_string()) {
-        return;
-    }
+    if !RUNNING.lock().unwrap().get_or_insert_with(HashSet::new).insert(id.to_string()) { return; }
     let (app, id) = (app.clone(), id.to_string());
     tokio::spawn(async move {
         let mut backoff = 15;
@@ -303,9 +290,7 @@ async fn poll(app: &Shared, r: &Room) -> Result<(), String> {
         r.here = here;
         for m in &list {
             let n = m["n"].as_u64().unwrap_or(0);
-            if r.cursor.is_some_and(|c| n <= c) {
-                continue;
-            }
+            if r.cursor.is_some_and(|c| n <= c) { continue; }
             r.cursor = Some(n);
             handle(r, &me, &platform, m, backlog, &owner_names, &host, &mut out);
         }
@@ -316,9 +301,7 @@ async fn poll(app: &Shared, r: &Room) -> Result<(), String> {
         r.owed.extend(out.deliver.iter().cloned()); // saved with the cursor: a restart in between loses nothing
     })
     .is_none();
-    if gone {
-        return Ok(());
-    }
+    if gone { return Ok(()); }
     out.send.iter().for_each(|(text, readers)| queue(&r.id, text, readers.clone()));
     for (author, text) in &out.deliver {
         // `o12: yes` from a paired phone answers that card by code (a phone writes `O12`); everything else is for the manager.
@@ -340,9 +323,7 @@ async fn poll(app: &Shared, r: &Room) -> Result<(), String> {
 #[allow(clippy::too_many_arguments)]
 fn handle(r: &mut Room, me: &sealed::Me, platform: &str, m: &Value, backlog: bool, owners: &[String], host: &str, out: &mut Out) {
     let e = &m["event"];
-    if !sealed::genuine(e, platform, &r.id) {
-        return;
-    }
+    if !sealed::genuine(e, platform, &r.id) { return; }
     let author = e["author"].as_str().unwrap_or("").to_string();
     let (id, from, at) = (sealed::key_id(&author), sealed::clean(m["from"].as_str().unwrap_or("")), m["at"].as_str().unwrap_or("").to_string());
     let mine = author == me.public;
@@ -352,9 +333,7 @@ fn handle(r: &mut Room, me: &sealed::Me, platform: &str, m: &Value, backlog: boo
             None => r.managers.push(Peer { name: from.clone(), key_id: id.clone(), public: author.clone(), since: at.clone(), last_seen: at.clone(), ..Default::default() }),
         }
     }
-    if e["kind"] != "message" {
-        return;
-    }
+    if e["kind"] != "message" { return; }
     let text = match (&e["body"], r.private()) {
         (Value::String(s), false) => s.clone(),
         (Value::Object(_), _) => match sealed::unseal(me, e) {
@@ -364,9 +343,7 @@ fn handle(r: &mut Room, me: &sealed::Me, platform: &str, m: &Value, backlog: boo
         _ => return,
     };
     let word = text.split_whitespace().next().unwrap_or("");
-    if word == "tirith-roster" || word == "tirith-rooms" || (word == "tirith-join" && mine) {
-        return;
-    }
+    if word == "tirith-roster" || word == "tirith-rooms" || (word == "tirith-join" && mine) { return; }
     if r.private() && !mine && word == "tirith-pair" {
         // A phone that is here already may scan again: its code is used up and it is told so once more.
         if r.kind == "manager" && now_s().saturating_sub(r.invite_at) < CODE_SECS && burn(&mut r.invite, &text, "tirith-pair") {
@@ -386,17 +363,13 @@ fn handle(r: &mut Room, me: &sealed::Me, platform: &str, m: &Value, backlog: boo
         }
         return;
     }
-    if r.managers.iter().any(|p| p.blocked && p.key_id == id) {
-        return;
-    }
+    if r.managers.iter().any(|p| p.blocked && p.key_id == id) { return; }
     let device = r.devices.iter().position(|d| d.key_id == id);
     r.messages.push(Msg { n: m["n"].as_u64().unwrap_or(0), at: at.clone(), from: from.clone(), text: text.chars().take(2000).collect(), device: device.is_some() });
     if r.messages.len() > KEPT {
         r.messages.remove(0);
     }
-    if mine || backlog || text.trim().is_empty() {
-        return;
-    }
+    if mine || backlog || text.trim().is_empty() { return; }
     if let Some(i) = device {
         r.devices[i].last_seen = at;
         (r.streak, r.braked) = (0, false);
@@ -454,13 +427,9 @@ fn hostname() -> String {
 /// Posts `text` in the room as this Tirith: sealed for `readers` in a private room, plain in a public one.
 async fn send(app: &Shared, r: &Room, text: &str, readers: &[String]) -> Result<(), String> {
     let (base, me) = (base(app), sealed::identity(&app.home, &r.me)?);
-    if !r.private() {
-        return sealed::post(&base, &me, "message", &r.id, json!(text)).await;
-    }
+    if !r.private() { return sealed::post(&base, &me, "message", &r.id, json!(text)).await; }
     let readers: Vec<String> = readers.iter().filter(|p| !r.managers.iter().any(|m| m.blocked && m.public == **p)).cloned().collect(); // forgotten while this waited
-    if readers.is_empty() {
-        return Err("nobody in this room can read it yet: pair a phone first".into());
-    }
+    if readers.is_empty() { return Err("nobody in this room can read it yet: pair a phone first".into()); }
     sealed::post(&base, &me, "message", &r.id, sealed::seal(&me, text, &format!("#{}", r.id), &readers)).await
 }
 
@@ -577,9 +546,7 @@ async fn join(app: &Shared, code: &str, project: &str) -> Result<Room, String> {
     let parts: Vec<&str> = code.trim().split(':').collect();
     let ok = parts.len() == 3 && parts[0].starts_with("sealed-") && parts[1].len() == 64 && parts[2].len() == 32;
     let [id, key, secret] = parts[..] else { return Err("that is not a room code (sealed-<room>:<key id>:<code>)".into()) };
-    if !ok || !id.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_') {
-        return Err("that is not a room code (sealed-<room>:<key id>:<code>)".into());
-    }
+    if !ok || !id.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_') { return Err("that is not a room code (sealed-<room>:<key id>:<code>)".into()); }
     let base = base(app);
     let me = sealed::identity(&app.home, &my_name(app))?;
     sealed::post(&base, &me, "announce", id, json!("joined")).await?;
@@ -602,7 +569,6 @@ async fn say(app: &Shared, id: &str, text: &str) -> Result<(), String> {
 fn known(id: &str) -> Result<Room, (StatusCode, String)> {
     room(id).ok_or((StatusCode::NOT_FOUND, format!("no room {id}")))
 }
-
 pub fn routes() -> Router<Shared> {
     Router::new()
         .route("/api/rooms", get(list).post(api_new))
@@ -678,9 +644,7 @@ async fn api_invite(State(app): State<Shared>, Path(id): Path<String>) -> R {
 }
 
 async fn api_leave(State(app): State<Shared>, Path(id): Path<String>) -> R {
-    if !known(&id)?.private() {
-        return Err(bad("a public room is listed in config.toml: remove it there".into()));
-    }
+    if !known(&id)?.private() { return Err(bad("a public room is listed in config.toml: remove it there".into())); }
     ROOMS.lock().unwrap().remove(&id);
     let _ = app.db.lock().unwrap().execute("DELETE FROM am_rooms WHERE id = ?1", [&id]);
     app.emit("room", json!({"id": id, "gone": true}));
@@ -690,9 +654,7 @@ async fn api_leave(State(app): State<Shared>, Path(id): Path<String>) -> R {
 
 async fn api_say(State(app): State<Shared>, Path(id): Path<String>, Json(b): Json<Value>) -> R {
     let text = b["text"].as_str().unwrap_or("").trim().to_string();
-    if text.is_empty() {
-        return Err(bad("empty message".into()));
-    }
+    if text.is_empty() { return Err(bad("empty message".into())); }
     known(&id)?;
     say(&app, &id, &text).await.map_err(bad)?;
     Ok(Json(json!({"ok": true})))
@@ -701,9 +663,7 @@ async fn api_say(State(app): State<Shared>, Path(id): Path<String>, Json(b): Jso
 async fn api_svg(State(app): State<Shared>, Path(id): Path<String>, Query(q): Query<HashMap<String, String>>) -> Response {
     let Ok(r) = known(&id) else { return (StatusCode::NOT_FOUND, "no such room").into_response() };
     let url = view(&app, &r)[if q.get("kind").map(String::as_str) == Some("invite") { "invite" } else { "link" }].as_str().unwrap_or("").to_string();
-    if url.is_empty() {
-        return (StatusCode::NOT_FOUND, "no such link").into_response();
-    }
+    if url.is_empty() { return (StatusCode::NOT_FOUND, "no such link").into_response(); }
     match qrcode::QrCode::new(url.as_bytes()) {
         Ok(code) => {
             let svg = code.render::<qrcode::render::svg::Color>().min_dimensions(220, 220).dark_color(qrcode::render::svg::Color("#000")).light_color(qrcode::render::svg::Color("#fff")).build();
@@ -726,11 +686,9 @@ tirith room leave <room> | list | tail <room> | say <room> \"<text>\"";
 fn qr_text(url: &str) -> String {
     qrcode::QrCode::new(url.as_bytes()).map(|c| c.render::<qrcode::render::unicode::Dense1x2>().quiet_zone(true).build()).unwrap_or_default()
 }
-
 fn one(id: &str) -> Result<Value, String> {
     serde_json::from_str(&call("GET", &format!("/api/rooms/{id}"), None)?).map_err(|e| e.to_string())
 }
-
 fn show_link(v: &Value, key: &str, label: &str) {
     match v[key].as_str() {
         Some(url) => println!("{label}: {url}\n{}", qr_text(url)),
@@ -763,9 +721,7 @@ pub fn cli(pos: &[&str], flag: Flag) -> Option<Result<(), String>> {
             }
         }),
         ["room", "tail", id] => one(id).map(|v| {
-            for m in v["messages"].as_array().into_iter().flatten() {
-                println!("#{} {} {}: {}", m["n"], m["at"].as_str().unwrap_or(""), m["from"].as_str().unwrap_or(""), m["text"].as_str().unwrap_or(""));
-            }
+            v["messages"].as_array().into_iter().flatten().for_each(|m| println!("#{} {} {}: {}", m["n"], m["at"].as_str().unwrap_or(""), m["from"].as_str().unwrap_or(""), m["text"].as_str().unwrap_or("")));
         }),
         ["room", ..] => Err(USAGE.to_string()),
         _ => return None,

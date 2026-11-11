@@ -108,7 +108,7 @@ function apply(m) {
     case 'load': S.load = d; break;
     case 'owner':
       S.owner = S.owner.filter((o) => o.id !== d.id);
-      if (d.status !== 'answered') S.owner.push(d);
+      if (d.status !== 'answered' && d.status !== 'closed') S.owner.push(d);
       break;
     case 'projects': if (Array.isArray(d)) S.projects = d; break; // a project was added or config.toml changed
     case 'autopilot': {

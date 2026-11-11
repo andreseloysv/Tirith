@@ -2,21 +2,13 @@
 //! (`{name, secretKey: hex(seed||pub)}`), canonical JSON, signed events, and the sealed envelope
 //! (x25519-xsalsa20-poly1305 with the ed25519 keys converted to curve25519, one wrapped key per reader).
 
-use base64::engine::general_purpose::STANDARD as B64;
-use base64::Engine;
-use crypto_box::aead::generic_array::GenericArray;
-use crypto_box::aead::{Aead, KeyInit};
-use crypto_box::SalsaBox;
+use base64::{engine::general_purpose::STANDARD as B64, Engine};
+use crypto_box::{aead::{generic_array::GenericArray, Aead, KeyInit}, SalsaBox};
 use crypto_secretbox::XSalsa20Poly1305;
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256, Sha512};
-use std::collections::HashMap;
-use std::io::Write;
-use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
-use std::path::Path;
-use std::sync::{Mutex, OnceLock};
-use std::time::Duration;
+use std::{collections::HashMap, io::Write, os::unix::fs::{DirBuilderExt, OpenOptionsExt}, path::Path, sync::{Mutex, OnceLock}, time::Duration};
 
 const ALG: &str = "x25519-xsalsa20-poly1305";
 
@@ -31,15 +23,11 @@ pub struct Me {
 pub fn sha_hex(data: &[u8]) -> String {
     hex(&Sha256::digest(data))
 }
-
 pub fn hex(b: &[u8]) -> String {
     b.iter().map(|x| format!("{x:02x}")).collect()
 }
-
 fn unhex(s: &str) -> Option<Vec<u8>> {
-    if !s.len().is_multiple_of(2) {
-        return None;
-    }
+    if !s.len().is_multiple_of(2) { return None; }
     (0..s.len()).step_by(2).map(|i| u8::from_str_radix(s.get(i..i + 2)?, 16).ok()).collect()
 }
 
@@ -156,14 +144,10 @@ pub fn seal(me: &Me, text: &str, tag: &str, readers: &[String]) -> Value {
 pub fn unseal(me: &Me, e: &Value) -> Option<String> {
     let body = &e["body"];
     let author = e["author"].as_str()?;
-    if body["sender_pub"].as_str() != Some(author) || body["alg"] != ALG {
-        return None;
-    }
+    if body["sender_pub"].as_str() != Some(author) || body["alg"] != ALG { return None; }
     let mine = body["recipients"].as_array()?.iter().find(|r| r["pub"].as_str() == Some(&me.public))?;
     let wrapped = B64.decode(mine["wrapped_key"].as_str()?).ok()?;
-    if wrapped.len() < 24 + 16 {
-        return None;
-    }
+    if wrapped.len() < 24 + 16 { return None; }
     let key = SalsaBox::new(&curve_public(author)?, &me.curve_secret()).decrypt(GenericArray::from_slice(&wrapped[..24]), &wrapped[24..]).ok()?;
     let nonce = B64.decode(body["nonce"].as_str()?).ok().filter(|n| n.len() == 24)?;
     let cipher = B64.decode(body["ciphertext"].as_str()?).ok()?;
@@ -197,14 +181,10 @@ async fn api(base: &str, path: &str, body: Option<&Value>, secs: u64) -> Result<
 /// The platform's public key, checked against its signed description (cached per platform).
 pub async fn platform(base: &str) -> Result<String, String> {
     static KEYS: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
-    if let Some(k) = KEYS.lock().unwrap().as_ref().and_then(|m| m.get(base).cloned()) {
-        return Ok(k);
-    }
+    if let Some(k) = KEYS.lock().unwrap().as_ref().and_then(|m| m.get(base).cloned()) { return Ok(k); }
     let v = api(base, "/.well-known/agentsmessenger.json", None, 30).await.map_err(|e| e.1)?;
     let public = v["doc"]["platform_pub"].as_str().unwrap_or("").to_string();
-    if !verify(&sha_hex(canonical(&v["doc"]).as_bytes()), v["sig"].as_str().unwrap_or(""), &public) {
-        return Err("this platform does not prove who it is".into());
-    }
+    if !verify(&sha_hex(canonical(&v["doc"]).as_bytes()), v["sig"].as_str().unwrap_or(""), &public) { return Err("this platform does not prove who it is".into()); }
     KEYS.lock().unwrap().get_or_insert_with(HashMap::new).insert(base.to_string(), public.clone());
     Ok(public)
 }
@@ -212,7 +192,6 @@ pub async fn platform(base: &str) -> Result<String, String> {
 fn now_ms() -> u64 {
     chrono::Utc::now().timestamp_millis() as u64
 }
-
 async fn register(base: &str, me: &Me) -> Result<(), String> {
     let card = json!({"name": me.name, "capabilities": ["am.mjs"], "tags": []});
     let ts = now_ms();
@@ -254,9 +233,7 @@ pub async fn keys(base: &str, room: &str, name: &str) -> Result<Vec<(String, Str
             }
         }
         let last = list.last().and_then(|m| m["n"].as_u64()).unwrap_or(0);
-        if list.is_empty() || last >= got["count"].as_u64().unwrap_or(0) {
-            return Ok(out);
-        }
+        if list.is_empty() || last >= got["count"].as_u64().unwrap_or(0) { return Ok(out); }
         after = last;
     }
 }
