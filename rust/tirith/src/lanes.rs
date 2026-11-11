@@ -18,7 +18,6 @@ static LIVE: Mutex<BTreeMap<String, Vec<String>>> = Mutex::new(BTreeMap::new());
 pub fn tell(id: &str, text: &str) {
     LIVE.lock().unwrap().entry(id.into()).or_default().push(text.into());
 }
-
 pub fn drain(id: &str) -> Vec<String> {
     LIVE.lock().unwrap().remove(id).unwrap_or_default()
 }
@@ -60,17 +59,17 @@ fn load_per_core() -> f64 {
     let mut l = [0f64; 3];
     let n = unsafe { libc::getloadavg(l.as_mut_ptr(), 3) };
     let cores = std::thread::available_parallelism().map(|c| c.get()).unwrap_or(1) as f64;
-    let load = if n > 0 { l[0] } else { 0.0 };
-    load / cores
+    (if n > 0 { l[0] } else { 0.0 }) / cores
 }
 
 fn free_gb(dir: &Path) -> f64 {
     let Ok(c) = std::ffi::CString::new(dir.as_os_str().as_bytes()) else { return f64::MAX };
     let mut s: libc::statvfs = unsafe { std::mem::zeroed() };
-    if unsafe { libc::statvfs(c.as_ptr(), &mut s) } != 0 {
-        return f64::MAX;
+    if unsafe { libc::statvfs(c.as_ptr(), &mut s) } == 0 {
+        s.f_bavail as f64 * s.f_frsize as f64 / 1e9
+    } else {
+        f64::MAX
     }
-    s.f_bavail as f64 * s.f_frsize as f64 / 1e9
 }
 
 /// One cargo build folder per project, shared by its lanes and checks: a folder per worktree costs gigabytes each.
@@ -107,12 +106,10 @@ const LOW_DISK_GB: f64 = 5.0;
 
 /// Ask once per low-disk spell: `asked` is whether a card is already out; it re-arms after the disk recovers (7 GB).
 fn low_disk_ask(free: f64, asked: bool) -> Option<bool> {
-    if free < LOW_DISK_GB && !asked {
-        Some(true)
-    } else if free >= LOW_DISK_GB + 2.0 && asked {
-        Some(false)
-    } else {
-        None
+    match (free < LOW_DISK_GB, free >= LOW_DISK_GB + 2.0, asked) {
+        (true, _, false) => Some(true),
+        (_, true, true) => Some(false),
+        _ => None,
     }
 }
 
@@ -172,43 +169,23 @@ pub(crate) fn paused_fix(project: &str, why: &str) -> String {
     }
 }
 
-/// Role items of step 0 («Manager de guardia: …», «CEO: …») are attended by the manager or the CEO, not by a lane.
-fn is_role_item(text: &str) -> bool {
-    let t = text.trim_start().to_lowercase();
-    t.starts_with("manager de guardia:") || t.starts_with("ceo:")
-}
-
-/// Items marked «(espera: …)» wait for the owner: the autopilot starts no lane for them.
-fn is_owner_wait(text: &str) -> bool {
-    let t = text.to_lowercase();
-    t.contains("(espera:") || t.contains("(espera :")
-}
-
+/// Role items of step 0 («Manager de guardia: …», «CEO: …») are attended by the manager or the CEO, and items marked
+/// «(espera: …)» wait for the owner: the autopilot starts no lane for either.
 pub(crate) fn is_autopilot_skipped(text: &str) -> bool {
-    is_role_item(text) || is_owner_wait(text)
+    let t = text.trim_start().to_lowercase();
+    t.starts_with("manager de guardia:") || t.starts_with("ceo:") || t.contains("(espera:") || t.contains("(espera :")
 }
 
-/// An item that says it waits for another item («wait until … on main», «made by the item …») names an open item
-/// of the plan: by quoting its text, or by sharing most of its significant words.
+/// Items that wait for another open item («wait until … on main», «made by the item …») by quoting it or sharing most of its words.
 fn waits_for_open_item(text: &str, open: &[&str]) -> bool {
     let t = text.to_lowercase();
-    let marks = ["wait until", "waits until", "wait for the item", "made by the item", "produced by the item", "created by the item", "espera a que", "hasta que", "once the item", "after the item"];
-    if !marks.iter().any(|m| t.contains(m)) {
-        return false;
-    }
+    let marks = ["wait until", "made by the item", "created by the item", "after the item", "espera a que", "hasta que"];
     let words = |s: &str| -> Vec<String> { s.to_lowercase().split(|c: char| !c.is_alphanumeric()).filter(|w| w.chars().count() >= 5).map(String::from).collect() };
-    open.iter().any(|o| {
-        let ol = o.trim().to_lowercase();
-        if ol.is_empty() || ol == t.trim() {
-            return false;
-        }
-        if t.contains(&ol) {
-            return true;
-        }
-        let ow = words(o);
-        let hit = ow.iter().filter(|w| t.contains(w.as_str())).count();
-        ow.len() >= 3 && hit * 10 >= ow.len() * 6
-    })
+    marks.iter().any(|m| t.contains(m))
+        && open.iter().any(|o| {
+            let (ol, ow) = (o.trim().to_lowercase(), words(o));
+            ol != t.trim() && !ol.is_empty() && (t.contains(&ol) || (ow.len() >= 3 && ow.iter().filter(|w| t.contains(w.as_str())).count() * 10 >= ow.len() * 6))
+        })
 }
 
 /// The autopilot's next item: in round-robin over the projects, an open item of the project's current step
@@ -223,11 +200,10 @@ fn next_item(app: &Shared, lanes: &[Lane], rr: &mut usize, ok: &mut dyn FnMut(&P
         }
         let Ok(steps) = plan::read(app, &p.id) else { continue };
         let open: Vec<&str> = steps.iter().flat_map(|s| s.items.iter()).filter(|i| !i.done).map(|i| i.text.as_str()).collect();
-        let blocked_on_dep = |text: &str| waits_for_open_item(text, &open);
         let latest = |step: &str, item: &str| lanes.iter().filter(|l| l.project == p.id && l.step == step && l.item == item).max_by(|a, b| a.created_at.cmp(&b.created_at));
         let skipped = |l: Option<&Lane>| l.is_some_and(|l| matches!(l.status.as_str(), "failed" | "stopped"));
-        let Some(st) = steps.iter().find(|s| s.items.iter().any(|i| !i.done && !is_autopilot_skipped(&i.text) && !blocked_on_dep(&i.text) && !skipped(latest(&s.num, &i.text)))) else { continue };
-        let Some(it) = st.items.iter().find(|i| !i.done && !is_autopilot_skipped(&i.text) && !blocked_on_dep(&i.text) && latest(&st.num, &i.text).is_none_or(|l| !l.active() && !skipped(Some(l)))) else {
+        let Some(st) = steps.iter().find(|s| s.items.iter().any(|i| !i.done && !is_autopilot_skipped(&i.text) && !waits_for_open_item(&i.text, &open) && !skipped(latest(&s.num, &i.text)))) else { continue };
+        let Some(it) = st.items.iter().find(|i| !i.done && !is_autopilot_skipped(&i.text) && !waits_for_open_item(&i.text, &open) && latest(&st.num, &i.text).is_none_or(|l| !l.active() && !skipped(Some(l)))) else {
             continue;
         };
         if !ok(p) {
@@ -627,14 +603,12 @@ mod tests {
         assert!(rows[0].0.ends_with("big"));
         std::fs::remove_dir_all(&dir).unwrap();
     }
-
     #[test]
     fn autopilot_skips_owner_wait_items() {
-        assert!(super::is_owner_wait("Elegir dominio (espera: el dueño decide)"));
+        assert!(super::is_autopilot_skipped("Elegir dominio (espera: el dueño decide)"));
         assert!(super::is_autopilot_skipped("CEO: revisar"));
-        assert!(!super::is_owner_wait("Arreglar el parser"));
+        assert!(!super::is_autopilot_skipped("Arreglar el parser"));
     }
-
     #[test]
     fn lane_without_commits_check_passes_is_done() {
         // The merge train ticks a commitless lane whose check passes as "already true on main"; `ended` must
@@ -644,21 +618,18 @@ mod tests {
         let merge = include_str!("merge.rs");
         assert!(merge.contains("\"already true on main\""));
     }
-
     #[test]
     fn autopilot_waits_for_dependency_items() {
         let open = ["Generar los vídeos de la demo en 3 idiomas", "Subir a YouTube"];
-        let up = "Subir los vídeos de la demo en 3 idiomas a YouTube: wait until the videos are on main, made by the item «Generar los vídeos de la demo en 3 idiomas»";
+        let up = "Subir los vídeos de la demo a YouTube: wait until they are on main, made by the item «Generar los vídeos de la demo en 3 idiomas»";
         assert!(super::waits_for_open_item(up, &open));
-        assert!(!super::waits_for_open_item(up, &["Subir a YouTube"])); // the other item is merged
+        assert!(!super::waits_for_open_item(up, &["Subir a YouTube"]));
         assert!(!super::waits_for_open_item("Arreglar el parser", &open));
-        assert!(!super::waits_for_open_item("Generar los vídeos de la demo en 3 idiomas", &open));
     }
-
     #[test]
     fn autopilot_skips_role_items() {
-        assert!(super::is_role_item("Manager de guardia: atender el chat"));
-        assert!(super::is_role_item("CEO: revisar el plan"));
-        assert!(!super::is_role_item("Arreglar el CEO: bug"));
+        assert!(super::is_autopilot_skipped("Manager de guardia: atender el chat"));
+        assert!(super::is_autopilot_skipped("CEO: revisar el plan"));
+        assert!(!super::is_autopilot_skipped("Arreglar el CEO: bug"));
     }
 }
