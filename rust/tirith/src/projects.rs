@@ -1,22 +1,13 @@
 //! Adding a project (the page's "+", `tirith project add`): the folder gets a git repository, the commit guard and a
 //! plan with a first step, then a `[[projects]]` block appended to config.toml (its existing text is never rewritten).
 
-use crate::{
-    app::{bad, git, Shared, R},
-    config::{expand, home_dir, Project},
-};
-use axum::{
-    extract::State,
-    routing::{get, post},
-    Json, Router,
-};
+use crate::app::{bad, git, Shared, R};
+use crate::config::{expand, home_dir, Project};
+use axum::routing::{get, post};
+use axum::{extract::State, Json, Router};
 use serde_json::{json, Value};
-use std::{
-    io::Write,
-    os::unix::fs::OpenOptionsExt,
-    path::{Component, Path, PathBuf},
-    time::Duration,
-};
+use std::path::{Component, Path, PathBuf};
+use std::{io::Write, os::unix::fs::OpenOptionsExt, time::Duration};
 
 const COLORS: [&str; 8] = ["#2f7d5b", "#3b6fd8", "#8a5cd0", "#d0663b", "#c2417c", "#b8860b", "#0e8aa0", "#64748b"];
 /// One config.toml write at a time, so two adds never lose one another; one folder picker on screen at a time.

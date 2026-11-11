@@ -3,22 +3,15 @@
 //! (x25519-xsalsa20-poly1305 with the ed25519 keys converted to curve25519, one wrapped key per reader).
 
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
-use crypto_box::{
-    aead::{generic_array::GenericArray, Aead, KeyInit},
-    SalsaBox,
-};
+use crypto_box::aead::{generic_array::GenericArray, Aead, KeyInit};
+use crypto_box::SalsaBox;
 use crypto_secretbox::XSalsa20Poly1305;
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256, Sha512};
-use std::{
-    collections::HashMap,
-    io::Write,
-    os::unix::fs::{DirBuilderExt, OpenOptionsExt},
-    path::Path,
-    sync::{Mutex, OnceLock},
-    time::Duration,
-};
+use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
+use std::sync::{Mutex, OnceLock};
+use std::{collections::HashMap, io::Write, path::Path, time::Duration};
 
 const ALG: &str = "x25519-xsalsa20-poly1305";
 

@@ -7,16 +7,11 @@
 //! lives only in config.toml. Optional per alias: `model_flag`, `effort_flag` ("" = none) and `resume_args`
 //! (`{session}` and `{message}` are filled in); the known aliases have defaults.
 
-use crate::{
-    app::{bad, Shared},
-    client::{call, Flag},
-    config::{get, Config},
-};
-use axum::{
-    extract::{Path as UrlPath, State},
-    routing::get as GET,
-    Json, Router,
-};
+use crate::app::{bad, Shared};
+use crate::client::{call, Flag};
+use crate::config::{get, Config};
+use axum::extract::{Path as UrlPath, State};
+use axum::{routing::get as GET, Json, Router};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};

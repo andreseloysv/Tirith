@@ -2,16 +2,11 @@
 //! contain one of the owner's forbidden words (whole word, any case; a word may be a regex). The words come only
 //! from config.toml: the project's `guard_words`, else `[guard] words`; `guard = false` opts a project out.
 
-use crate::{
-    app::Shared,
-    config::{home_dir, Project},
-};
-use axum::{
-    extract::{Path, State},
-    http::StatusCode,
-    routing::{get, post},
-    Json, Router,
-};
+use crate::app::Shared;
+use crate::config::{home_dir, Project};
+use axum::extract::{Path, State};
+use axum::routing::{get, post};
+use axum::{http::StatusCode, Json, Router};
 use serde_json::{json, Value};
 use std::path::PathBuf;
 

@@ -4,12 +4,10 @@ use crate::config::{tirith_home, Config, Manifest};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
-    path::{Path, PathBuf},
-    sync::{Arc, Mutex, RwLock},
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, RwLock};
+use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::{broadcast, Notify};
 
 pub type Shared = Arc<App>;

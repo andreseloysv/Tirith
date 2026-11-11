@@ -2,21 +2,13 @@
 //! project. A message goes to the session of its project, which starts with its first message and rests after 30
 //! quiet minutes; its text, its tool calls and the end of each turn go straight to that project's chat on the page.
 
-use crate::{
-    app::{kill_group, now_iso, Shared},
-    models, rooms, rules, sandbox,
-};
+use crate::app::{kill_group, now_iso, Shared};
+use crate::{models, rooms, rules, sandbox};
 use serde_json::{json, Value};
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    process::Stdio,
-    sync::Mutex,
-    time::Duration,
-};
-use tokio::{
-    io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
-    sync::mpsc,
-};
+use std::collections::{BTreeMap, BTreeSet};
+use std::{process::Stdio, sync::Mutex, time::Duration};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::sync::mpsc;
 
 const PROMPT: &str = "You are the manager inside Tirith. The owner chats with you here: answer briefly, in the \
 owner's language. You do not write project code yourself. Tirith's autopilot starts the open items of each \

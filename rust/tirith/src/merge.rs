@@ -4,21 +4,14 @@
 //! split into single lanes; a red single lane is first compared with main, so a broken main never blames a lane.
 //! A project's deploy stages are no checks: they run after main has moved, on that main (`deploy`).
 
-use crate::{
-    app::{add_worktree, git, kill_group, now_iso, now_s, tail, Lane, Shared},
-    config::{Manifest, Project, Stage},
-    lanes, manager, plan, sandbox,
-};
+use crate::app::{add_worktree, git, kill_group, now_iso, now_s, tail, Lane, Shared};
+use crate::config::{Manifest, Project, Stage};
+use crate::{lanes, manager, plan, sandbox};
 use regex::Regex;
 use rusqlite::params;
 use serde_json::{json, Value};
-use std::{
-    collections::BTreeMap,
-    path::{Path, PathBuf},
-    process::Stdio,
-    sync::Mutex,
-    time::Duration,
-};
+use std::path::{Path, PathBuf};
+use std::{collections::BTreeMap, process::Stdio, sync::Mutex, time::Duration};
 
 /// Held while something uses a merge slot (a train or a main check).
 static BUSY: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
