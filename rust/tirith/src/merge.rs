@@ -34,6 +34,7 @@ pub async fn worker(app: Shared) {
         let _ = db.execute("UPDATE runs SET status = 'interrupted', ended_at = ?1 WHERE status = 'running'", [now_iso()]);
     }
     loop {
+        recheck_red(&app).await;
         let batch = next_batch(&app).await;
         if batch.is_empty() {
             if tokio::time::timeout(Duration::from_secs(10), app.merge_wake.notified()).await.is_ok() {
@@ -43,6 +44,30 @@ pub async fn worker(app: Shared) {
         }
         let _busy = BUSY.lock().await;
         train(&app, batch).await;
+    }
+}
+
+/// A `main_red` value is "<stage> at <sha8>": it is stale when main's head is another commit.
+fn red_stage_if_stale(why: &str, head: &str) -> Option<String> {
+    if head.len() < 8 || why.ends_with(&head[..8]) { return None; }
+    why.rsplit_once(" at ").map(|(stage, _)| stage.to_string())
+}
+
+/// After main moves while it is red (a merge, a manual commit), the queue tests the latest main again, so the
+/// health «Main en rojo» names the current commit and clears when it passes.
+async fn recheck_red(app: &Shared) {
+    let cfg = app.cfg();
+    for project in &cfg.projects {
+        let Some(why) = app.kv(&format!("main_red:{}", project.id)) else { continue };
+        let head = git(&project.repo(), &["rev-parse", "HEAD"]).await.unwrap_or_default();
+        let Some(stage) = red_stage_if_stale(&why, &head) else { continue };
+        let _busy = BUSY.lock().await;
+        let manifest = app.manifest(&project.repo());
+        let (Some(st), Ok(slot)) = (manifest.stages.iter().find(|s| s.name == stage), merge_slot(project, &manifest).await) else { continue };
+        if !main_check(app, project, &slot, &head, st, false).await {
+            app.set_kv(&format!("main_red:{}", project.id), Some(&format!("{stage} at {}", &head[..8])));
+            app.emit("plan", json!({"project": project.id}));
+        }
     }
 }
 
@@ -465,6 +490,13 @@ mod tests {
         assert_eq!(limit_from(get, "tirith", "build", 30), 30);
         assert_eq!(limit_from(get, "tirith", "test", 30), 99);
         assert_eq!(limit_from(get, "tirith", "old", 30), 30);
+    }
+    #[test]
+    fn main_red_uses_latest_main() {
+        let head = "0e89bb4aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        assert_eq!(red_stage_if_stale("test at d7fa7cd8", head), Some("test".into()));
+        assert_eq!(red_stage_if_stale("cargo test at 0e89bb4a", head), None);
+        assert_eq!(red_stage_if_stale("test at d7fa7cd8", ""), None);
     }
     #[test]
     fn mergeq_enospc_deletes_the_folder_and_holds_no_slot() {
