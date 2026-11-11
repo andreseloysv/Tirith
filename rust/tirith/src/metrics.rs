@@ -6,20 +6,13 @@
 //! session whose answer goes to the owner's chat and to the manager. Back to green ends the episode.
 //! While everything is green no model is called.
 
-use crate::{
-    app::{kill_group, log_age, now_iso, now_s, tail, Lane, Shared},
-    config, manager, models, plan,
-};
+use crate::app::{kill_group, log_age, now_iso, now_s, tail, Lane, Shared};
+use crate::{config, manager, models, plan};
 use axum::{extract::State, routing::get, Json, Router};
 use serde_json::{json, Value};
-use std::{
-    collections::HashMap,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        LazyLock, Mutex,
-    },
-    time::Duration,
-};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{LazyLock, Mutex};
+use std::{collections::HashMap, time::Duration};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
 const PROMPT: &str = "You are the CEO review inside Tirith: an independent, read-only, one-shot review of how the \

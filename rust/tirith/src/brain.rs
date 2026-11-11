@@ -2,22 +2,14 @@
 //! Never on a hot path: callers use the cached answer or a plain fallback. The key comes only from the
 //! environment (`META_API_KEY` or `META_SI_API_KEY`) and is never logged or stored.
 
-use crate::{
-    app::{git, now_s, Shared},
-    models,
-    rooms::sealed::sha_hex,
-};
+use crate::app::{git, now_s, Shared};
+use crate::{models, rooms::sealed::sha_hex};
 use axum::{extract::State, routing::get, Json, Router};
 use rusqlite::params;
 use serde_json::{json, Value};
-use std::{
-    collections::HashMap,
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        LazyLock, Mutex, OnceLock,
-    },
-    time::Duration,
-};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{LazyLock, Mutex, OnceLock};
+use std::{collections::HashMap, time::Duration};
 
 const DEFAULT_URL: &str = "https://api.meta.ai/v1";
 const KEY_VARS: [&str; 2] = ["META_API_KEY", "META_SI_API_KEY"];

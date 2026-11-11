@@ -2,20 +2,11 @@
 //! autopilot starts the open items of each project's current plan step when the machine has room; a lane whose
 //! process ends goes to the merge queue, where the checks (never the agent) decide that its item is done.
 
-use crate::{
-    app::{add_worktree, alive, git, kill_group, log_age, now_iso, now_s, tail, Lane, Shared},
-    brain,
-    config::Project,
-    guard, manager, models, plan, sandbox,
-};
-use std::{
-    collections::{BTreeMap, HashMap},
-    os::unix::ffi::OsStrExt,
-    path::{Path, PathBuf},
-    process::Stdio,
-    sync::Mutex,
-    time::Duration,
-};
+use crate::app::{add_worktree, alive, git, kill_group, log_age, now_iso, now_s, tail, Lane, Shared};
+use crate::{brain, config::Project, guard, manager, models, plan, sandbox};
+use std::collections::{BTreeMap, HashMap};
+use std::path::{Path, PathBuf};
+use std::{os::unix::ffi::OsStrExt, process::Stdio, sync::Mutex, time::Duration};
 
 /// Messages for working lanes, handed to the agent by its next PostToolUse hook.
 static LIVE: Mutex<BTreeMap<String, Vec<String>>> = Mutex::new(BTreeMap::new());

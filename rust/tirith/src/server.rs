@@ -1,21 +1,14 @@
 //! HTTP on 127.0.0.1: the page, its JSON API, the change stream (SSE) and the agents' hooks.
 
-use crate::{
-    app::{bad, now_s, tail, Shared, R},
-    attach, brain, guard, lanes, manager, merge, metrics, models, plan, projects, rooms, rules, sandbox,
-};
-use axum::{
-    body::Bytes,
-    extract::{Path, Query, Request, State},
-    http::{HeaderMap, StatusCode},
-    middleware::{self, Next},
-    response::{
-        sse::{Event, KeepAlive, Sse},
-        IntoResponse, Response,
-    },
-    routing::{get, post},
-    Json, Router,
-};
+use crate::app::{bad, now_s, tail, Shared, R};
+use crate::{attach, brain, guard, lanes, manager, merge, metrics, models, plan, projects, rooms, rules, sandbox};
+use axum::extract::{Path, Query, Request, State};
+use axum::http::{HeaderMap, StatusCode};
+use axum::middleware::{self, Next};
+use axum::response::sse::{Event, KeepAlive, Sse};
+use axum::response::{IntoResponse, Response};
+use axum::routing::{get, post};
+use axum::{body::Bytes, Json, Router};
 use serde_json::{json, Value};
 use std::{convert::Infallible, sync::OnceLock};
 use tokio_stream::{wrappers::BroadcastStream, Stream, StreamExt};

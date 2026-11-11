@@ -2,14 +2,10 @@
 //! `$TIRITH_HOME/attachments/<id>/<name>` so the manager can open them by path.
 
 use crate::app::Shared;
-use axum::{
-    body::Bytes,
-    extract::{DefaultBodyLimit, Path, Query, State},
-    http::StatusCode,
-    response::{IntoResponse, Response},
-    routing::{get, post},
-    Json, Router,
-};
+use axum::extract::{DefaultBodyLimit, Path, Query, State};
+use axum::response::{IntoResponse, Response};
+use axum::routing::{get, post};
+use axum::{body::Bytes, http::StatusCode, Json, Router};
 use rand::Rng;
 use serde_json::{json, Value};
 use std::collections::HashMap;

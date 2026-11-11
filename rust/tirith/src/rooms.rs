@@ -9,27 +9,18 @@
 
 pub(crate) mod sealed;
 
-use crate::{
-    app::{bad, now_iso, now_s, Shared, R},
-    brain,
-    client::{call, Flag},
-    config::get as cfg_get,
-    manager,
-};
-use axum::{
-    extract::{Path, Query, State},
-    http::StatusCode,
-    response::{IntoResponse, Response},
-    routing::{get, post},
-    Json, Router,
-};
+use crate::app::{bad, now_iso, now_s, Shared, R};
+use crate::client::{call, Flag};
+use crate::{brain, config::get as cfg_get, manager};
+use axum::extract::{Path, Query, State};
+use axum::response::{IntoResponse, Response};
+use axum::routing::{get, post};
+use axum::{http::StatusCode, Json, Router};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::{
-    collections::{BTreeMap, HashMap, HashSet},
-    sync::{Mutex, OnceLock},
-    time::{Duration, Instant},
-};
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, Notify};
 
 const BRAKE: u32 = 30;

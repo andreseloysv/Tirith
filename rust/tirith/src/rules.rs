@@ -1,9 +1,7 @@
 //! Rules as code, checked in memory on every `PreToolUse`. A refusal says what to do instead.
 
-use crate::{
-    app::{Lane, Shared},
-    config::{expand, Project},
-};
+use crate::app::{Lane, Shared};
+use crate::config::{expand, Project};
 use regex::Regex;
 use serde_json::Value;
 use std::sync::LazyLock;
