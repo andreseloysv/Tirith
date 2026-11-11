@@ -902,5 +902,5 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [x] La salud de «En main 24 h» distingue «sin trabajo arrancable en el plan» de «lanes que no llegan a main», e indica qué proyectos con autopilot tienen el plan vacío y la orden para añadir trabajo (check: `cargo test -q health_merged_reports_empty_plans`)
 - [ ] Una lane que pregunta al dueño con tirith ask hace que la pregunta aparezca en Preguntas abiertas y en la salud como «lane bloqueada esperando al dueño»: el 2026-11-11 la traducción fr/pt de thethreelittlepigs esperó una aprobación de 0,74 $ que no salía en la lista (check: `cargo test -q lane_ask_shows_in_open_questions`)
 - [x] El autopilot no arranca un ítem que depende de otro ítem abierto del plan («wait until … on main», «made by the item …») hasta que ese otro se haya mergeado: el 2026-11-11 arrancó la subida a YouTube antes de que existieran los vídeos (check: `cargo test -q autopilot_waits_for_dependency_items`)
-- [ ] Las preguntas al dueño que ya no aplican (p. ej. una que propone apagar un autopilot que ya está apagado) se cierran solas o se actualizan (check: `cargo test -q stale_owner_questions_close`)
+- [x] Las preguntas al dueño que ya no aplican (p. ej. una que propone apagar un autopilot que ya está apagado) se cierran solas o se actualizan (check: `cargo test -q stale_owner_questions_close`)
 
