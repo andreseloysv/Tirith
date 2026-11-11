@@ -1,10 +1,13 @@
 //! Adding a project (the page's "+", `tirith project add`): the folder gets a git repository, the commit guard and a
 //! plan with a first step, then a `[[projects]]` block appended to config.toml (its existing text is never rewritten).
 
-use crate::{app::{bad, git, R, Shared}, config::{expand, home_dir, Project}};
-use axum::{extract::State, routing::{get, post}, Json, Router};
+use crate::app::{bad, git, Shared, R};
+use crate::config::{expand, home_dir, Project};
+use axum::routing::{get, post};
+use axum::{extract::State, Json, Router};
 use serde_json::{json, Value};
-use std::{io::Write, os::unix::fs::OpenOptionsExt, path::{Component, Path, PathBuf}, time::Duration};
+use std::path::{Component, Path, PathBuf};
+use std::{io::Write, os::unix::fs::OpenOptionsExt, time::Duration};
 
 const COLORS: [&str; 8] = ["#2f7d5b", "#3b6fd8", "#8a5cd0", "#d0663b", "#c2417c", "#b8860b", "#0e8aa0", "#64748b"];
 /// One config.toml write at a time, so two adds never lose one another; one folder picker on screen at a time.
@@ -47,7 +50,9 @@ fn folder(raw: &str, projects: &[Project], tirith: &Path) -> Result<PathBuf, Str
 /// The project as it will be written: `name` (else the folder's), `color` (else the first one no project has), an id.
 fn project(dir: &Path, name: &str, color: &str, projects: &[Project]) -> Result<Project, String> {
     let name = Some(name.trim().to_string()).filter(|n| !n.is_empty()).or_else(|| Some(dir.file_name()?.to_string_lossy().into_owned())).unwrap_or_default();
-    if name.is_empty() || name.chars().count() > 80 || name.chars().any(char::is_control) { return Err("the name is one line of 1 to 80 characters".into()); }
+    if name.is_empty() || name.chars().count() > 80 || name.chars().any(char::is_control) {
+        return Err("the name is one line of 1 to 80 characters".into());
+    }
     let c = color.trim().to_lowercase();
     let free = COLORS.iter().find(|c| !projects.iter().any(|p| p.color.as_deref().is_some_and(|x| x.eq_ignore_ascii_case(c)))).unwrap_or(&COLORS[projects.len() % COLORS.len()]);
     let color = match c.as_str() {
@@ -79,7 +84,9 @@ fn register(app: &Shared, mut p: Project) -> Result<(Project, bool), String> {
     let _one = WRITING.lock().unwrap();
     app.reload_config(true);
     let cfg = app.cfg();
-    if let Some(old) = cfg.projects.iter().find(|o| !o.repo.is_empty() && o.repo() == p.repo()) { return Ok((old.clone(), false)); }
+    if let Some(old) = cfg.projects.iter().find(|o| !o.repo.is_empty() && o.repo() == p.repo()) {
+        return Ok((old.clone(), false));
+    }
     p.id = unique_id(&p.name, &cfg.projects);
     let file = app.home.join("config.toml");
     let fail = |e: std::io::Error| format!("{}: {e}", file.display());
@@ -98,20 +105,26 @@ async fn add(app: &Shared, raw: &str, name: &str, color: &str, dry: bool) -> Res
     let cfg = app.cfg();
     let dir = folder(raw, &cfg.projects, &app.home)?;
     let shown = |p: &Project, exists: bool, notes: &[String]| json!({"id": p.id, "name": p.name, "folder": dir, "color": p.color, "exists": exists, "notes": notes});
-    if let Some(p) = cfg.projects.iter().find(|p| !p.repo.is_empty() && p.repo() == dir) { return Ok(shown(p, true, &[])); }
+    if let Some(p) = cfg.projects.iter().find(|p| !p.repo.is_empty() && p.repo() == dir) {
+        return Ok(shown(p, true, &[]));
+    }
     // A repo git cannot read is an error, not a folder to init; a home folder kept in git is no project's repo.
     let home = home_dir().canonicalize().unwrap_or_else(|_| home_dir());
     let top = match git(&dir, &["rev-parse", "--show-toplevel"]).await {
         Err(e) if dir.join(".git").exists() => return Err(e),
         r => r.ok().map(|t| PathBuf::from(&t).canonicalize().unwrap_or_else(|_| t.into())).filter(|t| !home.starts_with(t)),
     };
-    if let Some(t) = top.as_ref().filter(|t| **t != dir) { return Err(format!("{} is inside the git repository {}: add that folder instead", dir.display(), t.display())); }
+    if let Some(t) = top.as_ref().filter(|t| **t != dir) {
+        return Err(format!("{} is inside the git repository {}: add that folder instead", dir.display(), t.display()));
+    }
     let p = project(&dir, name, color, &cfg.projects)?;
     block(&std::fs::read_to_string(app.home.join("config.toml")).unwrap_or_default(), &p)?; // config.toml takes it: only then touch the folder
     let plan = dir.join(app.manifest(&dir).roadmap);
     let open = std::fs::read_to_string(&plan).map(|t| crate::plan::parse(&t).iter().flat_map(|s| &s.items).filter(|i| !i.done).count()).unwrap_or(0);
     let start = !plan.exists() && plan.starts_with(&dir) && !plan.components().any(|c| c == Component::ParentDir); // never outside the folder
-    if dry { return Ok(json!({"id": p.id, "name": p.name, "folder": dir, "color": p.color, "git": top.is_some(), "plan": !start, "open": open})); }
+    if dry {
+        return Ok(json!({"id": p.id, "name": p.name, "folder": dir, "color": p.color, "git": top.is_some(), "plan": !start, "open": open}));
+    }
     let mut notes = vec![];
     if top.is_none() {
         git(&dir, &["init", "-q"]).await?;
@@ -158,7 +171,9 @@ async fn pick(State(app): State<Shared>) -> R {
     let start = app.cfg().projects.iter().find(|p| !p.repo.is_empty()).and_then(|p| p.repo().parent().map(Path::to_path_buf)).filter(|d| d.is_dir()).unwrap_or_else(home_dir);
     let out = tokio::process::Command::new("osascript").args(["-l", "JavaScript", "-e", PANEL]).arg(start).kill_on_drop(true).output();
     let out = tokio::time::timeout(Duration::from_secs(600), out).await.map_err(|_| bad("the folder picker was open too long".into()))?.map_err(|e| bad(format!("no folder picker here ({e}): type the path")))?;
-    if !out.status.success() { return Err(bad(format!("the folder picker did not open: {}", String::from_utf8_lossy(&out.stderr).trim()))); }
+    if !out.status.success() {
+        return Err(bad(format!("the folder picker did not open: {}", String::from_utf8_lossy(&out.stderr).trim())));
+    }
     Ok(Json(json!({"folder": String::from_utf8_lossy(&out.stdout).trim()})))
 }
 
@@ -173,7 +188,9 @@ pub fn routes() -> Router<Shared> {
 /// `tirith project add <folder> [--name N] [--color #rrggbb]`.
 pub fn cli(pos: &[&str], flag: crate::client::Flag) -> Option<Result<(), String>> {
     let ["project", "add", raw] = pos else { return None };
-    if std::env::var("TIRITH_LANE").is_ok_and(|l| !l.is_empty()) { return Some(Err("a lane does not add projects: ask the manager with tirith ask \"<question>\"".into())); }
+    if std::env::var("TIRITH_LANE").is_ok_and(|l| !l.is_empty()) {
+        return Some(Err("a lane does not add projects: ask the manager with tirith ask \"<question>\"".into()));
+    }
     let full = std::env::current_dir().map(|d| d.join(raw).display().to_string()).unwrap_or(raw.to_string()); // an absolute path stays
     let body = json!({"folder": if raw.starts_with('~') { raw.to_string() } else { full }, "name": flag("--name").unwrap_or_default(), "color": flag("--color").unwrap_or_default()});
     Some(crate::client::call("POST", "/api/projects", Some(body)).and_then(|b| serde_json::from_str::<Value>(&b).map_err(|e| e.to_string())).map(|v| {

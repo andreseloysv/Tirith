@@ -4,11 +4,14 @@
 //! split into single lanes; a red single lane is first compared with main, so a broken main never blames a lane.
 //! A project's deploy stages are no checks: they run after main has moved, on that main (`deploy`).
 
-use crate::{app::{add_worktree, git, kill_group, now_iso, now_s, tail, Lane, Shared}, config::{Manifest, Project, Stage}, lanes, manager, plan, sandbox};
+use crate::app::{add_worktree, git, kill_group, now_iso, now_s, tail, Lane, Shared};
+use crate::config::{Manifest, Project, Stage};
+use crate::{lanes, manager, plan, sandbox};
 use regex::Regex;
 use rusqlite::params;
 use serde_json::{json, Value};
-use std::{collections::BTreeMap, path::{Path, PathBuf}, process::Stdio, sync::Mutex, time::Duration};
+use std::path::{Path, PathBuf};
+use std::{collections::BTreeMap, process::Stdio, sync::Mutex, time::Duration};
 
 /// Held while something uses a merge slot (a train or a main check).
 static BUSY: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
@@ -32,9 +35,7 @@ struct Pipe {
 
 pub async fn worker(app: Shared) {
     let cut: Vec<String> = app.lanes.lock().unwrap().values().filter(|l| l.status == "merging").map(|l| l.id.clone()).collect();
-    for id in cut {
-        app.update_lane(&id, |l| l.status = "merge-queued".into()); // a merge cut short by a restart starts over
-    }
+    cut.iter().for_each(|id| drop(app.update_lane(id, |l| l.status = "merge-queued".into()))); // a merge cut short by a restart starts over
     {
         // ... and its pipeline and runs, left "running" by the restart, end as interrupted.
         let db = app.db.lock().unwrap();
@@ -64,7 +65,9 @@ pub async fn worker(app: Shared) {
 
 /// A `main_red` value is "<stage> at <sha8>": it is stale when main's head is another commit.
 fn red_stage_if_stale(why: &str, head: &str) -> Option<String> {
-    if head.len() < 8 || why.ends_with(&head[..8]) { return None; }
+    if head.len() < 8 || why.ends_with(&head[..8]) {
+        return None;
+    }
     why.rsplit_once(" at ").map(|(stage, _)| stage.to_string())
 }
 
@@ -104,35 +107,22 @@ async fn next_batch(app: &Shared) -> Vec<Lane> {
         }
     }
     let Some(first) = queued.first().cloned() else { return vec![] };
-    if first.solo { return vec![first]; }
+    if first.solo {
+        return vec![first];
+    }
     queued.into_iter().filter(|l| l.project == first.project && !l.solo).take(5).collect()
 }
 
 fn glob(pattern: &str) -> Regex {
-    let mut re = String::from("^");
-    let mut chars = pattern.chars().peekable();
-    while let Some(c) = chars.next() {
-        match c {
-            '*' if chars.peek() == Some(&'*') => {
-                chars.next();
-                if chars.peek() == Some(&'/') {
-                    chars.next();
-                    re += "(.*/)?";
-                } else {
-                    re += ".*";
-                }
-            }
-            '*' => re += "[^/]*",
-            '?' => re += "[^/]",
-            c => re += &regex::escape(&c.to_string()),
-        }
-    }
-    Regex::new(&(re + "$")).unwrap_or_else(|_| Regex::new("^$").unwrap())
+    let re = regex::escape(pattern).replace(r"\*\*/", "(.*/)?").replace(r"\*\*", ".*").replace(r"\*", "[^/]*").replace(r"\?", "[^/]");
+    Regex::new(&format!("^{re}$")).unwrap_or_else(|_| Regex::new("^$").unwrap())
 }
 
 /// A stage with `paths` runs only when a changed file matches them (`!pattern` excludes).
 fn wanted(stage: &Stage, changed: &[String]) -> bool {
-    if stage.paths.is_empty() { return true; }
+    if stage.paths.is_empty() {
+        return true;
+    }
     let (neg, pos): (Vec<&String>, Vec<&String>) = stage.paths.iter().partition(|p| p.starts_with('!'));
     let neg: Vec<Regex> = neg.iter().map(|p| glob(&p[1..])).collect();
     let pos: Vec<Regex> = pos.iter().map(|p| glob(p)).collect();
@@ -159,38 +149,19 @@ fn close_pipeline(app: &Shared, p: &Pipe, status: &str) {
 
 /// One pipeline with its stages, as the page shows it.
 fn pipeline(app: &Shared, id: &str) -> Value {
-    let db = app.db.lock().unwrap();
-    let row = db.query_row("SELECT id, project, kind, lanes, sha, status, started_at, ended_at FROM pipelines WHERE id = ?1", [id], |r| {
-        let s = |i: usize| r.get::<_, Option<String>>(i).map(|v| v.unwrap_or_default());
-        Ok(json!({"id": s(0)?, "project": s(1)?, "kind": s(2)?, "lanes": s(3)?, "sha": s(4)?, "status": s(5)?, "started_at": s(6)?, "ended_at": s(7)?}))
-    });
-    let Ok(mut row) = row else { return Value::Null };
-    let stage = |r: &rusqlite::Row| {
-        let s = |i: usize| r.get::<_, Option<String>>(i);
-        Ok(json!({"id": r.get::<_, i64>(0)?, "stage": s(1)?, "status": s(2)?, "started_at": s(3)?, "ended_at": s(4)?}))
-    };
-    let sql = "SELECT id, stage, status, started_at, ended_at FROM runs WHERE pipeline = ?1 ORDER BY id";
-    let stages: Vec<Value> = db.prepare(sql).and_then(|mut q| q.query_map([id], stage).map(|rows| rows.flatten().collect())).unwrap_or_default();
-    row["stages"] = json!(stages);
+    let mut rows = app.objects("SELECT id, project, kind, lanes, sha, status, started_at, ended_at FROM pipelines WHERE id = ?1", [id], &["id", "project", "kind", "lanes", "sha", "status", "started_at", "ended_at"]);
+    let Some(mut row) = rows.pop() else { return Value::Null };
+    row["stages"] = json!(app.objects("SELECT id, stage, status, started_at, ended_at FROM runs WHERE pipeline = ?1 ORDER BY id", [id], &["id", "stage", "status", "started_at", "ended_at"]));
     row
 }
 
 /// The newest pipelines (of one project, or of all with ""), newest first.
 pub fn list(app: &Shared, project: &str, limit: u32) -> Vec<Value> {
-    let ids: Vec<String> = {
-        let db = app.db.lock().unwrap();
-        let sql = format!("SELECT id FROM pipelines WHERE ?1 = '' OR project = ?1 ORDER BY rowid DESC LIMIT {limit}");
-        db.prepare(&sql).and_then(|mut q| q.query_map([project], |r| r.get(0)).map(|rows| rows.flatten().collect())).unwrap_or_default()
-    };
-    ids.iter().map(|id| pipeline(app, id)).collect()
+    let sql = format!("SELECT id FROM pipelines WHERE ?1 = '' OR project = ?1 ORDER BY rowid DESC LIMIT {limit}");
+    app.query(&sql, [project], |r| r.get::<_, String>(0)).iter().map(|id| pipeline(app, id)).collect()
 }
 
 const MANAGER_LIMIT_SECS: u64 = 24 * 3600;
-
-/// A limit the manager sets for one stage of one project: it lasts until changed or 24 h, whatever happens to its lane.
-pub fn set_stage_limit(app: &Shared, project: &str, stage: &str, minutes: u64) {
-    app.set_kv(&format!("stage_limit:{project}:{stage}"), Some(&format!("{minutes}@{}", now_s())));
-}
 
 /// The limit in minutes for a stage: the manager's (within 24 h), else the one learned from past timeouts, else the default. Each project and stage has its own.
 fn limit_from(get: impl Fn(&str) -> Option<String>, project: &str, stage: &str, default: u64) -> u64 {
@@ -335,7 +306,9 @@ async fn train(app: &Shared, batch: Vec<Lane>) {
             }
         }
     }
-    if merged.is_empty() && ticks.is_empty() { return close_pipeline(app, &pipe, "failed"); }
+    if merged.is_empty() && ticks.is_empty() {
+        return close_pipeline(app, &pipe, "failed");
+    }
     let changed: Vec<String> = git(&slot, &["diff", "--name-only", &base, "HEAD"]).await.unwrap_or_default().lines().map(String::from).collect();
     let mut stages: Vec<(String, String)> = if merged.is_empty() { vec![] } else { manifest.stages.iter().filter(|s| !deploys(s) && wanted(s, &changed)).map(|s| (s.name.clone(), s.run.clone())).collect() };
     stages.extend(merged.iter().filter_map(|l| check(l).map(|c| (format!("check {}", l.id), c))));
@@ -384,7 +357,9 @@ async fn land(app: &Shared, project: &Project, pipe: &Pipe, slot: &Path, base: &
         plan::flush_locked(app, &project.id).await;
         let head = git(&repo, &["rev-parse", "HEAD"]).await?;
         if head != base {
-            if git(&repo, &["diff", "--name-only", base, &head]).await?.lines().any(|f| f != roadmap) { return Err("main moved while the checks ran".to_string()); }
+            if git(&repo, &["diff", "--name-only", base, &head]).await?.lines().any(|f| f != roadmap) {
+                return Err("main moved while the checks ran".to_string());
+            }
             git(slot, &["merge", "-q", "--no-edit", &head]).await?; // only plan edits: no new check needed
         }
         let file = slot.join(&roadmap);
@@ -494,7 +469,9 @@ async fn deploy(app: &Shared, project: &Project, changed: &[String]) {
 /// Runs one stage on a main commit in the merge slot (cached per commit unless `fresh`); green clears main_red.
 async fn main_check(app: &Shared, project: &Project, slot: &Path, sha: &str, stage: &Stage, fresh: bool) -> bool {
     let key = (project.id.clone(), sha.to_string(), stage.name.clone());
-    if let Some(ok) = MAIN_OK.lock().unwrap().get(&key).filter(|_| !fresh) { return *ok; }
+    if let Some(ok) = MAIN_OK.lock().unwrap().get(&key).filter(|_| !fresh) {
+        return *ok;
+    }
     let pipe = open_pipeline(app, &project.id, "main", "", sha);
     let ok = reset(slot, sha).await.is_ok() && run_stage(app, &pipe, slot, &stage.name, &stage.run).await.is_ok();
     close_pipeline(app, &pipe, if ok { "passed" } else { "failed" });
@@ -520,10 +497,14 @@ fn clear_red(app: &Shared, project: &str) {
 /// again on the current main; a deploy pipeline deploys the current main.
 pub fn retry(app: &Shared, id: &str) -> Result<(), String> {
     let p = pipeline(app, id);
-    if p.is_null() { return Err(format!("no pipeline '{id}'")); }
+    if p.is_null() {
+        return Err(format!("no pipeline '{id}'"));
+    }
     if p["kind"] == "merge" {
         let failed: Vec<Lane> = p["lanes"].as_str().unwrap_or("").split(',').filter_map(|l| app.lane(l)).filter(|l| l.status == "failed").collect();
-        if failed.is_empty() { return Err("no lane of this pipeline is failed".into()); }
+        if failed.is_empty() {
+            return Err("no lane of this pipeline is failed".into());
+        }
         failed.iter().for_each(|l| drop(app.update_lane(&l.id, |x| x.attempts = 0)));
         requeue(app, &failed, false, "retried");
         app.merge_wake.notify_one();
@@ -577,7 +558,9 @@ mod tests {
             }));
         }
         drop(lock);
-        for t in tasks { t.await.unwrap(); }
+        for t in tasks {
+            t.await.unwrap();
+        }
         assert!(include_str!("merge.rs").contains("let _one_at_a_time = lock.lock().await;"));
     }
     #[test]

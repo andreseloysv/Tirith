@@ -2,11 +2,14 @@
 //! Never on a hot path: callers use the cached answer or a plain fallback. The key comes only from the
 //! environment (`META_API_KEY` or `META_SI_API_KEY`) and is never logged or stored.
 
-use crate::{app::{git, now_s, Shared}, models, rooms::sealed::sha_hex};
+use crate::app::{git, now_s, Shared};
+use crate::{models, rooms::sealed::sha_hex};
 use axum::{extract::State, routing::get, Json, Router};
 use rusqlite::params;
 use serde_json::{json, Value};
-use std::{collections::HashMap, sync::{atomic::{AtomicU64, Ordering}, LazyLock, Mutex, OnceLock}, time::Duration};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{LazyLock, Mutex, OnceLock};
+use std::{collections::HashMap, time::Duration};
 
 const DEFAULT_URL: &str = "https://api.meta.ai/v1";
 const KEY_VARS: [&str; 2] = ["META_API_KEY", "META_SI_API_KEY"];
@@ -41,14 +44,18 @@ pub async fn ask(app: &Shared, job: &str, input: &str) -> Option<String> {
     let prompt = JOBS.iter().find(|(j, _)| *j == job)?.1;
     let key = key()?;
     let hash = sha_hex(format!("{job}\n{input}").as_bytes());
-    if let Ok(cached) = app.db.lock().unwrap().query_row("SELECT answer FROM brain_cache WHERE key = ?1", [&hash], |r| r.get::<_, String>(0)) { return Some(cached); }
+    if let Ok(cached) = app.db.lock().unwrap().query_row("SELECT answer FROM brain_cache WHERE key = ?1", [&hash], |r| r.get::<_, String>(0)) {
+        return Some(cached);
+    }
     let tail: String = input.chars().rev().take(16000).collect::<Vec<_>>().into_iter().rev().collect();
     let body = json!({"model": model(app), "max_tokens": 4096, "temperature": 0.3, "reasoning_effort": "low",
         "messages": [{"role": "system", "content": prompt}, {"role": "user", "content": tail}]});
     CALLS.fetch_add(1, Ordering::Relaxed);
     let result = async {
         let r = client().post(format!("{}/chat/completions", url(app))).bearer_auth(key).json(&body).send().await.map_err(|e| format!("call failed: {}", e.without_url()))?;
-        if !r.status().is_success() { return Err(format!("model API returned HTTP {}", r.status().as_u16())); }
+        if !r.status().is_success() {
+            return Err(format!("model API returned HTTP {}", r.status().as_u16()));
+        }
         let v: Value = r.json().await.map_err(|_| "unexpected response".to_string())?;
         let c = &v["choices"][0]["message"]["content"];
         let text = c.as_str().map(String::from).unwrap_or_else(|| c.as_array().into_iter().flatten().filter_map(|p| p["text"].as_str()).collect());
@@ -76,7 +83,9 @@ pub fn architecture(app: &Shared, project: &str) -> Option<String> {
             let Some(repo) = app.cfg().project(&project).map(|p| p.repo()) else { return };
             let first = git(&repo, &["rev-parse", "main"]).await;
             let Ok(commit) = (if first.is_ok() { first } else { git(&repo, &["rev-parse", "HEAD"]).await }) else { return };
-            if known.as_deref() == Some(commit.as_str()) { return; }
+            if known.as_deref() == Some(commit.as_str()) {
+                return;
+            }
             let tree = git(&repo, &["ls-tree", "-r", "--name-only", &commit]).await.unwrap_or_default();
             let mut input = format!("Project {project}. Files:\n{}\n", tree.lines().take(400).collect::<Vec<_>>().join("\n"));
             for f in ["README.md", "Cargo.toml", "package.json", "pyproject.toml", "go.mod", "tirith.toml"] {
