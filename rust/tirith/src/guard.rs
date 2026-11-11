@@ -2,12 +2,8 @@
 //! contain one of the owner's forbidden words (whole word, any case; a word may be a regex). The words come only
 //! from config.toml: the project's `guard_words`, else `[guard] words`; `guard = false` opts a project out.
 
-use crate::app::Shared;
-use crate::config::{home_dir, Project};
-use axum::extract::{Path, State};
-use axum::http::StatusCode;
-use axum::routing::{get, post};
-use axum::{Json, Router};
+use crate::{app::Shared, config::{home_dir, Project}};
+use axum::{extract::{Path, State}, http::StatusCode, routing::{get, post}, Json, Router};
 use serde_json::{json, Value};
 use std::path::PathBuf;
 
@@ -77,9 +73,7 @@ pub fn words(app: &Shared, project: &Project) -> Vec<String> {
     let cfg = app.cfg();
     let entry = cfg.raw.get("projects").and_then(|p| p.as_array()).and_then(|ps| ps.iter().find(|p| p.get("id").and_then(|i| i.as_str()) == Some(project.id.as_str())).cloned());
     let entry = entry.unwrap_or(toml::Value::Table(Default::default()));
-    if entry.get("guard").and_then(|g| g.as_bool()) == Some(false) {
-        return vec![];
-    }
+    if entry.get("guard").and_then(|g| g.as_bool()) == Some(false) { return vec![]; }
     let list = |v: Option<&toml::Value>| -> Option<Vec<String>> { v?.clone().try_into().ok() };
     list(entry.get("guard_words")).or_else(|| list(cfg.raw.get("guard").and_then(|g| g.get("words")))).unwrap_or_default().into_iter().filter(|w| !w.trim().is_empty()).collect()
 }
@@ -87,9 +81,7 @@ pub fn words(app: &Shared, project: &Project) -> Vec<String> {
 /// The repo's common git dir, by reading `.git` (a folder, or a file pointing into a worktree's git dir).
 pub fn git_dir(repo: &std::path::Path) -> Option<PathBuf> {
     let dot = repo.join(".git");
-    if dot.is_dir() {
-        return Some(dot);
-    }
+    if dot.is_dir() { return Some(dot); }
     let text = std::fs::read_to_string(&dot).ok()?;
     let dir = repo.join(text.strip_prefix("gitdir:")?.trim());
     Some(std::fs::read_to_string(dir.join("commondir")).map_or_else(|_| dir.clone(), |c| dir.join(c.trim())))
@@ -100,7 +92,8 @@ fn render(hook: &str, words: &[String]) -> String {
         "pre-commit" => ("Blocks the commit when a staged file name or an added line contains a forbidden word (whole word, any case).", PRE_COMMIT),
         _ => ("Blocks the commit when the message contains a forbidden word (whole word, any case); # lines are ignored.", COMMIT_MSG),
     };
-    HEAD.replace("{what}", what).replace("{words}", &words.join(",")).replace("{re}", &words.join("|").replace('\'', "'\\''")) + body + LOCAL
+    let re = words.join("|").replace('\'', "'\\''");
+    HEAD.replace("{what}", what).replace("{words}", &words.join(",")).replace("{re}", &re) + body + LOCAL
 }
 
 /// A `core.hooksPath` in the repo's or the user's git config makes git skip the guard.
@@ -112,9 +105,7 @@ fn hooks_path_set(git: &std::path::Path) -> Option<PathBuf> {
 /// The scheduler calls it before it starts a lane of the project: a few small file reads, no git process.
 pub fn intact(app: &Shared, project: &Project) -> Result<(), String> {
     let words = words(app, project);
-    if words.is_empty() {
-        return Ok(());
-    }
+    if words.is_empty() { return Ok(()); }
     let git = git_dir(&project.repo()).ok_or(format!("commit guard: {} is not a git repo", project.repo().display()))?;
     let fix = format!("(tirith guard install {})", project.id);
     for hook in HOOKS {
@@ -122,13 +113,9 @@ pub fn intact(app: &Shared, project: &Project) -> Result<(), String> {
         if !text.contains(MARKER) {
             return Err(format!("commit guard: the {hook} hook is not Tirith's; merge the guard into it by hand"));
         }
-        if text != render(hook, &words) {
-            return Err(format!("commit guard: the {hook} hook is outdated or has other words than config.toml {fix}"));
-        }
+        if text != render(hook, &words) { return Err(format!("commit guard: the {hook} hook is outdated or has other words than config.toml {fix}")); }
     }
-    if let Some(f) = hooks_path_set(&git) {
-        return Err(format!("commit guard: core.hooksPath in {} makes git skip the guard", f.display()));
-    }
+    if let Some(f) = hooks_path_set(&git) { return Err(format!("commit guard: core.hooksPath in {} makes git skip the guard", f.display())); }
     Ok(())
 }
 
@@ -138,7 +125,8 @@ pub fn intact(app: &Shared, project: &Project) -> Result<(), String> {
 fn immutable(path: &std::path::Path, on: bool) {
     use std::os::macos::fs::MetadataExt;
     if let (Ok(m), Ok(c)) = (std::fs::metadata(path), std::ffi::CString::new(path.as_os_str().as_encoded_bytes())) {
-        unsafe { libc::chflags(c.as_ptr(), if on { m.st_flags() | libc::UF_IMMUTABLE } else { m.st_flags() & !libc::UF_IMMUTABLE }) };
+        let flags = if on { m.st_flags() | libc::UF_IMMUTABLE } else { m.st_flags() & !libc::UF_IMMUTABLE };
+        unsafe { libc::chflags(c.as_ptr(), flags) };
     }
 }
 
@@ -148,19 +136,16 @@ fn immutable(_path: &std::path::Path, _on: bool) {}
 /// Writes both hooks (mode 755) where they are missing or ours (an older guard is replaced); never over a hook that is not ours.
 pub fn install(app: &Shared, project: &Project) -> Result<(), String> {
     let words = words(app, project);
-    if words.is_empty() {
-        return Ok(());
-    }
+    if words.is_empty() { return Ok(()); }
     let dir = git_dir(&project.repo()).ok_or(format!("{} is not a git repo", project.repo().display()))?.join("hooks");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let ours = |p: &std::path::Path| std::fs::read_to_string(p).is_ok_and(|t| t.contains(MARKER));
     for hook in HOOKS {
         let path = dir.join(hook);
-        if path.exists() && !std::fs::read_to_string(&path).is_ok_and(|t| t.contains(MARKER)) {
+        if path.exists() && !ours(&path) {
             // The repository's own hook keeps running after ours, as <hook>.local.
             let local = dir.join(format!("{hook}.local"));
-            if local.exists() {
-                return Err(format!("{} is not Tirith's hook and {} exists: merge them by hand", path.display(), local.display()));
-            }
+            if local.exists() { return Err(format!("{} is not Tirith's hook and {} exists: merge them by hand", path.display(), local.display())); }
             immutable(&path, false);
             std::fs::rename(&path, &local).map_err(|e| format!("{}: {e}", path.display()))?;
         }
@@ -190,7 +175,7 @@ pub fn start(app: Shared) {
 }
 
 async fn list(State(app): State<Shared>) -> Json<Value> {
-    Json(json!(app
+    let rows: Vec<Value> = app
         .cfg()
         .projects
         .iter()
@@ -199,7 +184,8 @@ async fn list(State(app): State<Shared>) -> Json<Value> {
             let r = intact(&app, p);
             json!({"project": p.id, "name": p.name, "words": n, "ok": r.is_ok(), "reason": r.err().unwrap_or_else(|| if n == 0 { "sin guarda".into() } else { "ok".into() })})
         })
-        .collect::<Vec<Value>>()))
+        .collect();
+    Json(json!(rows))
 }
 
 async fn install_one(State(app): State<Shared>, Path(project): Path<String>) -> Result<Json<Value>, (StatusCode, String)> {
@@ -218,9 +204,7 @@ pub fn cli(pos: &[&str], _flag: crate::client::Flag) -> Option<Result<(), String
     let all = || -> Result<Vec<Value>, String> { serde_json::from_str(&call("GET", "/api/guard", None)?).map_err(|e| e.to_string()) };
     Some(match pos {
         ["guard", "check"] => all().and_then(|ps| {
-            for p in &ps {
-                println!("{:<20} {}", p["project"].as_str().unwrap_or(""), p["reason"].as_str().unwrap_or(""));
-            }
+            ps.iter().for_each(|p| println!("{:<20} {}", p["project"].as_str().unwrap_or(""), p["reason"].as_str().unwrap_or("")));
             ps.iter().all(|p| p["ok"] == true).then_some(()).ok_or_else(|| "some project's guard needs attention".into())
         }),
         ["guard", "install", rest @ ..] if rest.len() <= 1 => {
@@ -230,9 +214,12 @@ pub fn cli(pos: &[&str], _flag: crate::client::Flag) -> Option<Result<(), String
             };
             let mut failed = false;
             for id in ids {
-                if let Err(e) = call("POST", &format!("/api/guard/{id}/install"), None).map(|_| println!("{id}: installed")) {
-                    eprintln!("{id}: {e}");
-                    failed = true;
+                match call("POST", &format!("/api/guard/{id}/install"), None) {
+                    Ok(_) => println!("{id}: installed"),
+                    Err(e) => {
+                        eprintln!("{id}: {e}");
+                        failed = true;
+                    }
                 }
             }
             (!failed).then_some(()).ok_or_else(|| "some guards were not installed".into())
@@ -245,11 +232,9 @@ pub fn cli(pos: &[&str], _flag: crate::client::Flag) -> Option<Result<(), String
 mod tests {
     use super::*;
     use std::process::Command;
-
     fn git(dir: &std::path::Path, args: &[&str]) -> std::process::Output {
         Command::new("git").current_dir(dir).args(["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"]).args(args).output().unwrap()
     }
-
     #[test]
     fn guard_merge_ignores_parent_content() {
         let w = ["op", "us"].concat();

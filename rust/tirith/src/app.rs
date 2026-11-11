@@ -4,10 +4,7 @@ use crate::config::{tirith_home, Config, Manifest};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, RwLock};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{collections::{BTreeMap, BTreeSet, HashMap, HashSet}, path::{Path, PathBuf}, sync::{Arc, Mutex, RwLock}, time::{SystemTime, UNIX_EPOCH}};
 use tokio::sync::{broadcast, Notify};
 
 pub type Shared = Arc<App>;
@@ -77,15 +74,12 @@ pub fn bad(e: String) -> (axum::http::StatusCode, String) {
 pub fn log_age(app: &Shared, id: &str) -> u64 {
     std::fs::metadata(app.home.join(format!("logs/lanes/{id}.log"))).and_then(|m| m.modified()).map(|t| t.elapsed().map(|d| d.as_secs()).unwrap_or(0)).unwrap_or(u64::MAX)
 }
-
 pub fn now_iso() -> String {
     chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string()
 }
-
 pub fn now_s() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
-
 fn mtime(p: &Path) -> Option<SystemTime> {
     std::fs::metadata(p).and_then(|m| m.modified()).ok()
 }
@@ -143,9 +137,7 @@ impl App {
     pub fn reload_config(&self, force: bool) -> bool {
         let now = mtime(&self.home.join("config.toml"));
         let mut last = self.cfg_mtime.lock().unwrap();
-        if *last == now && !force {
-            return false;
-        }
+        if *last == now && !force { return false; }
         *last = now;
         *self.cfg.write().unwrap() = Arc::new(Config::load());
         true
@@ -155,9 +147,7 @@ impl App {
     pub fn manifest(&self, repo: &Path) -> Manifest {
         let stamp = mtime(&repo.join("tirith.toml"));
         let mut cache = self.manifests.lock().unwrap();
-        if let Some((_, man)) = cache.get(repo).filter(|(m, _)| *m == stamp) {
-            return man.clone();
-        }
+        if let Some((_, man)) = cache.get(repo).filter(|(m, _)| *m == stamp) { return man.clone(); }
         let man = Manifest::load(repo);
         cache.insert(repo.to_path_buf(), (stamp, man.clone()));
         man
@@ -188,7 +178,8 @@ impl App {
 
     /// The working lane whose worktree holds `cwd`.
     pub fn lane_for_cwd(&self, cwd: &str) -> Option<Lane> {
-        self.lanes.lock().unwrap().values().find(|l| matches!(l.status.as_str(), "running" | "waiting") && !l.workspace.is_empty() && Path::new(cwd).starts_with(&l.workspace)).cloned()
+        let cwd = Path::new(cwd);
+        self.lanes.lock().unwrap().values().find(|l| matches!(l.status.as_str(), "running" | "waiting") && !l.workspace.is_empty() && cwd.starts_with(&l.workspace)).cloned()
     }
 
     /// Runs an INSERT and returns the id of the new row.
@@ -315,18 +306,13 @@ pub async fn add_worktree(repo: &Path, dir: &Path, branch: Option<&str>, exclude
 #[cfg(test)]
 mod tests {
     use super::*;
-
     #[test]
     fn lane_log_redacts_key_prefixes() {
         let log = "GOOGLE_API_KEY=AIzaSyABCDEFGHIJKLMNOP\n{\"GITHUB_TOKEN\":\"ghp_abcdefghijklmnop12\"}\nMY_KEY: sk-abcdef123456789\nused AIzaSyZZZZZZZZZZZZZZ here\nplain line";
         let out = redact_secrets(log);
-        for leak in ["AIza", "ghp_", "sk-", "abcdefghijklmnop12"] {
-            assert!(!out.contains(leak), "leaked {leak}: {out}");
-        }
-        assert!(out.contains("GOOGLE_API_KEY=[redacted]"));
-        assert!(out.contains("plain line"));
+        ["AIza", "ghp_", "sk-", "abcdefghijklmnop12"].into_iter().for_each(|leak| assert!(!out.contains(leak), "leaked {leak}: {out}"));
+        assert!(out.contains("GOOGLE_API_KEY=[redacted]") && out.contains("plain line"));
     }
-
     #[test]
     fn child_path_includes_cargo_bin() {
         let home = std::env::temp_dir().join(format!("tirith-cp-{}", std::process::id()));
@@ -338,7 +324,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(&home);
         assert_eq!(path_with_cargo(None, "/usr/bin", &home), "/usr/bin");
     }
-
     #[tokio::test]
     async fn worktree_local_properties() {
         let base = std::env::temp_dir().join(format!("tirith-lp-{}", std::process::id()));
@@ -358,7 +343,6 @@ mod tests {
         assert_eq!(std::fs::read_to_string(wt.join("android/local.properties")).unwrap(), "sdk.dir=/sdk\n");
         let _ = std::fs::remove_dir_all(&base);
     }
-
     #[tokio::test]
     async fn sparse_zoo_lane() {
         let repo = std::env::temp_dir().join(format!("tirith-sp-{}", std::process::id()));

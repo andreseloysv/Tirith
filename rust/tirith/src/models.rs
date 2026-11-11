@@ -7,17 +7,12 @@
 //! lives only in config.toml. Optional per alias: `model_flag`, `effort_flag` ("" = none) and `resume_args`
 //! (`{session}` and `{message}` are filled in); the known aliases have defaults.
 
-use crate::app::{bad, Shared};
-use crate::client::{call, Flag};
-use crate::config::{get, Config};
-use axum::extract::{Path as UrlPath, State};
-use axum::routing::get as GET;
-use axum::{Json, Router};
+use crate::{app::{bad, Shared}, client::{call, Flag}, config::{get, Config}};
+use axum::{extract::{Path as UrlPath, State}, routing::get as GET, Json, Router};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::path::Path;
-use std::sync::OnceLock;
+use std::{path::Path, sync::OnceLock};
 
 pub const ROLES: [&str; 4] = ["manager", "workers", "ceo", "brain"];
 const EFFORTS: [&str; 5] = ["low", "medium", "high", "xhigh", "max"];
@@ -44,9 +39,7 @@ pub struct AgentCmd {
 
 /// The effective setting of a role and where it comes from: "page", "config" or "default".
 pub fn role_with_source(app: &Shared, role: &str) -> (RoleSetting, &'static str) {
-    if let Some(s) = app.kv(&format!("models:{role}")).and_then(|j| serde_json::from_str(&j).ok()) {
-        return (s, "page");
-    }
+    if let Some(s) = app.kv(&format!("models:{role}")).and_then(|j| serde_json::from_str(&j).ok()) { return (s, "page"); }
     let cfg = app.cfg();
     let default_agent = || if role == "workers" { "anthropic".to_string() } else { role_with_source(app, "workers").0.agent };
     let table: Option<toml::Table> = get(&cfg.raw, &["models", role]).or_else(|| (role == "ceo").then(|| get(&cfg.raw, &["ceo"])).flatten());
@@ -168,7 +161,8 @@ pub fn out_of_credits(text: &str) -> bool {
 pub fn fallback(app: &Shared, role_name: &str, tried: &[String]) -> Option<(String, Option<String>)> {
     let cfg = app.cfg();
     let r = role(app, role_name);
-    std::iter::once(r.model.as_ref().map(|m| format!("{}:{m}", r.agent)).unwrap_or(r.agent.clone())).chain(r.fallback).find_map(|e| {
+    let first = r.model.as_ref().map(|m| format!("{}:{m}", r.agent)).unwrap_or(r.agent.clone());
+    std::iter::once(first).chain(r.fallback).find_map(|e| {
         let (alias, model) = e.split_once(':').map(|(a, m)| (a.to_string(), Some(m.to_string()))).unwrap_or((e.clone(), None));
         let used = tried.iter().any(|t| *t == e || *t == alias);
         (!used && cfg.agents.contains_key(&alias)).then_some((alias, model))
@@ -182,9 +176,7 @@ fn valid(v: &str) -> bool {
 /// Saves the owner's setting of a role (fields absent from `b` keep their effective value, "" clears them),
 /// or with `None` goes back to config.toml. Restarts the manager session when its setting changed.
 pub fn save(app: &Shared, role_name: &str, b: Option<&Value>) -> Result<RoleSetting, String> {
-    if !ROLES.contains(&role_name) {
-        return Err(format!("role must be one of {}", ROLES.join(", ")));
-    }
+    if !ROLES.contains(&role_name) { return Err(format!("role must be one of {}", ROLES.join(", "))); }
     let before = role(app, "manager");
     if let Some(b) = b {
         let mut s = role(app, role_name);
@@ -204,9 +196,7 @@ pub fn save(app: &Shared, role_name: &str, b: Option<&Value>) -> Result<RoleSett
             _ => {}
         }
         let cfg = app.cfg();
-        if let Some(v) = [&s.model, &s.effort].into_iter().flatten().chain(&s.fallback).find(|v| !valid(v)) {
-            return Err(format!("'{v}' is not a valid model, effort or fallback entry"));
-        }
+        if let Some(v) = [&s.model, &s.effort].into_iter().flatten().chain(&s.fallback).find(|v| !valid(v)) { return Err(format!("'{v}' is not a valid model, effort or fallback entry")); }
         if let Some(alias) = std::iter::once(&s.agent).filter(|_| role_name != "brain").chain(&s.fallback).map(|e| e.split(':').next().unwrap_or("")).find(|a| !cfg.agents.contains_key(*a)) {
             return Err(format!("no agent alias '{alias}' in config.toml"));
         }

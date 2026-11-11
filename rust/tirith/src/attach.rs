@@ -2,12 +2,7 @@
 //! `$TIRITH_HOME/attachments/<id>/<name>` so the manager can open them by path.
 
 use crate::app::Shared;
-use axum::body::Bytes;
-use axum::extract::{DefaultBodyLimit, Path, Query, State};
-use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
-use axum::{Json, Router};
+use axum::{body::Bytes, extract::{DefaultBodyLimit, Path, Query, State}, http::StatusCode, response::{IntoResponse, Response}, routing::{get, post}, Json, Router};
 use rand::Rng;
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -16,10 +11,9 @@ const LIMIT: usize = 25 * 1024 * 1024;
 
 /// The text appended to the owner's message so the manager can open the attached files (absolute paths).
 pub fn describe(paths: &[String]) -> String {
-    if paths.is_empty() {
-        return String::new();
-    }
-    format!("\n\nAttached files (open them with your file-reading tool):\n{}", paths.iter().map(|p| format!("- {p}")).collect::<Vec<_>>().join("\n"))
+    if paths.is_empty() { return String::new(); }
+    let list: Vec<String> = paths.iter().map(|p| format!("- {p}")).collect();
+    format!("\n\nAttached files (open them with your file-reading tool):\n{}", list.join("\n"))
 }
 
 /// A safe file name: the last path part, only letters, digits, `.`, `-`, `_`; no leading dots.
@@ -45,9 +39,7 @@ fn content_type(name: &str) -> &'static str {
 }
 
 async fn upload(State(app): State<Shared>, Query(q): Query<HashMap<String, String>>, body: Bytes) -> Result<Json<Value>, (StatusCode, String)> {
-    if body.is_empty() {
-        return Err((StatusCode::BAD_REQUEST, "empty file".into()));
-    }
+    if body.is_empty() { return Err((StatusCode::BAD_REQUEST, "empty file".into())); }
     let name = sanitize(q.get("name").map(String::as_str).unwrap_or(""));
     let id = format!("{:016x}", rand::thread_rng().gen::<u64>());
     let dir = app.home.join("attachments").join(&id);

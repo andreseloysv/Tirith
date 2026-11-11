@@ -1,9 +1,7 @@
 //! The CLI side: one HTTP/1.1 request to the daemon on 127.0.0.1 per command.
 
 use serde_json::Value;
-use std::io::{Read, Write};
-use std::net::{SocketAddr, TcpStream};
-use std::time::Duration;
+use std::{io::{Read, Write}, net::{SocketAddr, TcpStream}, time::Duration};
 
 /// `flag("--name")`: the value after a `--name` argument.
 pub type Flag<'a> = &'a dyn Fn(&str) -> Option<String>;
@@ -12,7 +10,6 @@ pub type Flag<'a> = &'a dyn Fn(&str) -> Option<String>;
 pub fn call(method: &str, path: &str, body: Option<Value>) -> Result<String, String> {
     call_with(method, path, body.map(|b| b.to_string()).unwrap_or_default(), &[], Duration::from_secs(30))
 }
-
 pub fn call_with(method: &str, path: &str, body: String, headers: &[(&str, String)], timeout: Duration) -> Result<String, String> {
     let addr = SocketAddr::from(([127, 0, 0, 1], crate::config::Config::load().port));
     let mut s = TcpStream::connect_timeout(&addr, Duration::from_secs(2)).map_err(|_| "tirith is not running: start it with `tirith serve`".to_string())?;

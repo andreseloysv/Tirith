@@ -1,26 +1,15 @@
 //! HTTP on 127.0.0.1: the page, its JSON API, the change stream (SSE) and the agents' hooks.
 
-use crate::app::{bad, now_s, tail, Shared, R};
-use crate::{attach, brain, guard, lanes, manager, merge, metrics, models, plan, projects, rooms, rules, sandbox};
-use axum::body::Bytes;
-use axum::extract::{Path, Query, Request, State};
-use axum::http::{HeaderMap, StatusCode};
-use axum::middleware::{self, Next};
-use axum::response::sse::{Event, KeepAlive, Sse};
-use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
-use axum::{Json, Router};
+use crate::{app::{bad, now_s, tail, R, Shared}, attach, brain, guard, lanes, manager, merge, metrics, models, plan, projects, rooms, rules, sandbox};
+use axum::{body::Bytes, extract::{Path, Query, Request, State}, http::{HeaderMap, StatusCode}, middleware::{self, Next}, response::{sse::{Event, KeepAlive, Sse}, IntoResponse, Response}, routing::{get, post}, Json, Router};
 use serde_json::{json, Value};
-use std::convert::Infallible;
-use std::sync::OnceLock;
-use tokio_stream::wrappers::BroadcastStream;
-use tokio_stream::{Stream, StreamExt};
+use std::{convert::Infallible, sync::OnceLock};
+use tokio_stream::{wrappers::BroadcastStream, Stream, StreamExt};
 
 static PORT: OnceLock<u16> = OnceLock::new();
 pub fn s(v: &Value, k: &str) -> String {
     v[k].as_str().unwrap_or("").to_string()
 }
-
 pub fn router(app: Shared, port: u16) -> Router {
     let _ = PORT.set(port);
     Router::new()
@@ -79,7 +68,6 @@ fn origin_host_ok(host: Option<&str>, origin: Option<&str>, port: u16) -> bool {
 #[cfg(test)]
 mod tests {
     use super::origin_host_ok;
-
     #[test]
     fn same_origin_checks_host() {
         let p = 7777;
@@ -110,9 +98,9 @@ async fn state(State(app): State<Shared>) -> Json<Value> {
 }
 
 async fn stream(State(app): State<Shared>) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
-    Sse::new(BroadcastStream::new(app.tx.subscribe()).filter_map(|m| m.ok().map(|d| Ok(Event::default().data(d))))).keep_alive(KeepAlive::default())
+    let rx = BroadcastStream::new(app.tx.subscribe());
+    Sse::new(rx.filter_map(|m| m.ok().map(|d| Ok(Event::default().data(d))))).keep_alive(KeepAlive::default())
 }
-
 async fn plan_show(State(app): State<Shared>, Path(project): Path<String>) -> R {
     let steps = plan::read(&app, &project).map_err(bad)?;
     let lanes = app.lanes.lock().unwrap().clone();
@@ -127,37 +115,29 @@ async fn plan_show(State(app): State<Shared>, Path(project): Path<String>) -> R 
 async fn plan_add(State(app): State<Shared>, Path(project): Path<String>, Json(b): Json<Value>) -> R {
     plan::add(&app, &project, &s(&b, "step"), &s(&b, "text")).await.map(|_| Json(json!({"ok": true}))).map_err(bad)
 }
-
 async fn lane_start(State(app): State<Shared>, Json(b): Json<Value>) -> R {
     let agent = b["agent"].as_str().filter(|a| !a.is_empty()).map(String::from);
     Ok(Json(json!(lanes::start(&app, &s(&b, "project"), &s(&b, "step"), &s(&b, "item"), agent).map_err(bad)?)))
 }
-
 async fn lane_stop(State(app): State<Shared>, Path(id): Path<String>) -> R {
     Ok(Json(json!(lanes::stop(&app, &id).map_err(bad)?)))
 }
-
 async fn lane_log(State(app): State<Shared>, Path(id): Path<String>) -> String {
     let safe: String = id.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-').collect();
     crate::app::redact_secrets(&tail(&app.home.join(format!("logs/lanes/{safe}.log")), 400))
 }
-
 async fn lane_ask(State(app): State<Shared>, Path(id): Path<String>, Json(b): Json<Value>) -> R {
     Ok(Json(json!(lanes::ask(&app, &id, &s(&b, "question")).map_err(bad)?)))
 }
-
 async fn lane_answer(State(app): State<Shared>, Path(id): Path<String>, Json(b): Json<Value>) -> R {
     Ok(Json(json!(lanes::answer(&app, &id, &s(&b, "answer")).map_err(bad)?)))
 }
-
 async fn owner_ask(State(app): State<Shared>, Json(b): Json<Value>) -> R {
     manager::ask_owner(&app, &s(&b, "project"), &s(&b, "kind"), &s(&b, "question")).map(Json).map_err(bad)
 }
-
 async fn owner_answer(State(app): State<Shared>, Path(id): Path<String>, Json(b): Json<Value>) -> R {
     manager::owner_answer(&app, &id, &s(&b, "answer")).map(Json).map_err(bad)
 }
-
 async fn autopilot(State(app): State<Shared>, Path(project): Path<String>, Json(b): Json<Value>) -> R {
     app.cfg().project(&project).ok_or(bad(format!("unknown project '{project}'")))?;
     let on = b["on"].as_bool().unwrap_or(false);
@@ -168,9 +148,9 @@ async fn autopilot(State(app): State<Shared>, Path(project): Path<String>, Json(
 }
 
 async fn pipelines(State(app): State<Shared>, Query(q): Query<std::collections::HashMap<String, String>>) -> Json<Value> {
-    Json(json!(merge::list(&app, q.get("project").map_or("", String::as_str), q.get("limit").and_then(|l| l.parse().ok()).unwrap_or(30u32).min(200))))
+    let limit = q.get("limit").and_then(|l| l.parse().ok()).unwrap_or(30u32).min(200);
+    Json(json!(merge::list(&app, q.get("project").map_or("", String::as_str), limit)))
 }
-
 async fn pipeline_retry(State(app): State<Shared>, Path(id): Path<String>) -> R {
     merge::retry(&app, &id).map(|_| Json(json!({"ok": true}))).map_err(bad)
 }
@@ -186,12 +166,10 @@ async fn run_log(State(app): State<Shared>, Path(id): Path<i64>) -> String {
     let log: Option<String> = app.db.lock().unwrap().query_row("SELECT log FROM runs WHERE id = ?1", [id], |r| r.get(0)).ok().flatten();
     log.map(|l| tail(std::path::Path::new(&l), 400)).unwrap_or_default()
 }
-
 async fn chat(State(app): State<Shared>, Json(b): Json<Value>) -> R {
-    let text = s(&b, "text") + &attach::describe(&b["attachments"].as_array().into_iter().flatten().filter_map(|f| f.as_str().map(String::from)).collect::<Vec<_>>());
-    if text.trim().is_empty() {
-        return Err(bad("empty message".into()));
-    }
+    let files: Vec<String> = b["attachments"].as_array().into_iter().flatten().filter_map(|f| f.as_str().map(String::from)).collect();
+    let text = s(&b, "text") + &attach::describe(&files);
+    if text.trim().is_empty() { return Err(bad("empty message".into())); }
     manager::say(&app, &s(&b, "project"), &text).map(|_| Json(json!({"ok": true}))).map_err(bad)
 }
 
@@ -199,7 +177,6 @@ async fn chat(State(app): State<Shared>, Json(b): Json<Value>) -> R {
 async fn chat_rows(State(app): State<Shared>, Query(q): Query<std::collections::HashMap<String, String>>) -> Json<Value> {
     Json(json!(app.recent("chat", &["id", "at", "role", "text", "project"], Some(q.get("project").map_or("", String::as_str)), 300)))
 }
-
 async fn manager_interrupt(Json(b): Json<Value>) -> R {
     manager::interrupt(&s(&b, "project")).map(|_| Json(json!({"ok": true}))).map_err(bad)
 }
@@ -225,9 +202,7 @@ async fn hook(State(app): State<Shared>, Path(event): Path<String>, headers: Hea
             m.last_activity = now_s(); // in memory only: activity is not worth a disk write per tool call
         }
     }
-    for (tag, target) in sandbox::tags(&tool, &p["tool_input"]) {
-        app.event(&lane_id, &project_id, "access", tag, &target, &session);
-    }
+    sandbox::tags(&tool, &p["tool_input"]).into_iter().for_each(|(tag, target)| app.event(&lane_id, &project_id, "access", tag, &target, &session));
     if event == "PreToolUse" {
         let unsandboxed = lane.is_none() && header("x-tirith-role").is_none();
         let refusal = rules::check(&app, &tool, &p["tool_input"], lane.as_ref(), project.as_ref()).or_else(|| if unsandboxed { sandbox::check_command(&tool, &p["tool_input"]) } else { None });
@@ -243,9 +218,7 @@ async fn hook(State(app): State<Shared>, Path(event): Path<String>, headers: Hea
     let Some(l) = lane else { return Json(json!({})) };
     if event == "PostToolUse" {
         let lines = lanes::drain(&l.id);
-        if lines.is_empty() {
-            return Json(json!({}));
-        }
+        if lines.is_empty() { return Json(json!({})); }
         if l.status == "waiting" && !l.resume.is_empty() {
             app.update_lane(&l.id, |x| {
                 x.status = "running".into(); // the answer reached the live agent
@@ -278,9 +251,7 @@ async fn hook(State(app): State<Shared>, Path(event): Path<String>, headers: Hea
 async fn web_file(State(app): State<Shared>, uri: axum::http::Uri) -> Response {
     let rel = uri.path().trim_start_matches('/');
     let rel = if rel.is_empty() { "index.html" } else { rel };
-    if rel.split('/').any(|p| p.is_empty() || p == ".." || p.starts_with('.')) {
-        return (StatusCode::NOT_FOUND, "not found").into_response();
-    }
+    if rel.split('/').any(|p| p.is_empty() || p == ".." || p.starts_with('.')) { return (StatusCode::NOT_FOUND, "not found").into_response(); }
     let dir = crate::config::get::<String>(&app.cfg().raw, &["app", "web_dir"]).map(|d| crate::config::expand(&d)).unwrap_or_else(|| std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../web")));
     let Ok(body) = tokio::fs::read(dir.join(rel)).await else { return (StatusCode::NOT_FOUND, "not found").into_response() };
     let kind = match rel.rsplit('.').next().unwrap_or("") {

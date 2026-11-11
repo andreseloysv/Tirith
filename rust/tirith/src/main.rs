@@ -21,8 +21,7 @@ mod server;
 
 use client::{call, call_with, print};
 use serde_json::{json, Value};
-use std::io::Read;
-use std::time::Duration;
+use std::{io::Read, time::Duration};
 
 const USAGE: &str = "tirith serve                                   run the daemon (page on http://127.0.0.1:<port>/)
 tirith status [--project P]                    lanes and the merge queue (of one project)
@@ -183,9 +182,18 @@ fn install_hooks() -> Result<(), String> {
     Ok(())
 }
 
+/// Started by the desktop app, the daemon has launchd's short PATH and its checks find no node, npm or brew tools.
+/// The PATH of the owner's login shell goes first, so a check runs as it does in the owner's terminal.
+fn login_path() {
+    let out = std::process::Command::new(std::env::var("SHELL").unwrap_or("/bin/zsh".into())).args(["-lc", "printf '\\n%s' \"$PATH\""]).output();
+    let login = out.map(|o| String::from_utf8_lossy(&o.stdout).lines().last().unwrap_or("").trim().to_string()).unwrap_or_default();
+    if !login.is_empty() {
+        std::env::set_var("PATH", format!("{login}:{}", std::env::var("PATH").unwrap_or_default()));
+    }
+}
+
 fn serve() -> Result<(), String> {
-    let login = std::process::Command::new(std::env::var("SHELL").unwrap_or("/bin/zsh".into())).args(["-lc", "printf %s \"$PATH\""]).output().map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
-    std::env::set_var("PATH", format!("{}:{}", login.unwrap_or_default(), std::env::var("PATH").unwrap_or_default()).trim_start_matches(':')); // started by the app, the PATH is launchd's: checks would find no node or npm
+    login_path();
     let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().map_err(|e| e.to_string())?;
     rt.block_on(async {
         let app = app::App::open();
