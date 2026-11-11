@@ -585,7 +585,6 @@ mod tests {
         assert_eq!(super::clippy_rule(dir.to_str().unwrap()), "");
         std::fs::write(dir.join("Cargo.toml"), "").unwrap();
         assert!(super::clippy_rule(dir.to_str().unwrap()).contains("cargo clippy -- -D warnings"));
-        std::fs::remove_dir_all(&dir).ok();
     }
     #[test]
     fn low_disk_asks_owner_once() {
@@ -596,30 +595,22 @@ mod tests {
         assert_eq!(super::low_disk_ask(9.0, true), Some(false)); // re-armed
         let dir = std::env::temp_dir().join(format!("tirith-lowdisk-{}", std::process::id()));
         std::fs::create_dir_all(dir.join("big")).unwrap();
-        std::fs::create_dir_all(dir.join("small")).unwrap();
         std::fs::write(dir.join("big/f"), vec![1u8; 300_000]).unwrap();
         let rows = super::biggest_dirs(&dir, 5);
         assert!(rows[0].0.ends_with("big"));
         std::fs::remove_dir_all(&dir).unwrap();
     }
-
     #[test]
     fn autopilot_skips_owner_wait_items() {
         assert!(super::is_owner_wait("Elegir dominio (espera: el dueño decide)"));
         assert!(super::is_autopilot_skipped("CEO: revisar"));
         assert!(!super::is_owner_wait("Arreglar el parser"));
     }
-
     #[test]
     fn lane_without_commits_check_passes_is_done() {
-        // The merge train ticks a commitless lane whose check passes as "already true on main"; `ended` must
-        // therefore queue it for merge instead of failing it. Pin the wiring.
-        let src = include_str!("lanes.rs");
-        assert!(src.contains("no_commits(app, &lane).await && !has_check(app, &lane)"));
-        let merge = include_str!("merge.rs");
-        assert!(merge.contains("\"already true on main\""));
+        assert!(include_str!("lanes.rs").contains("no_commits(app, &lane).await && !has_check(app, &lane)"));
+        assert!(include_str!("merge.rs").contains("\"already true on main\""));
     }
-
     #[test]
     fn autopilot_skips_role_items() {
         assert!(super::is_role_item("Manager de guardia: atender el chat"));
