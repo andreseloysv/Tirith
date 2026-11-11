@@ -237,6 +237,9 @@ pub async fn scheduler(app: Shared) {
             warn_low_disk(&app).await;
             free_disk(&app, &lanes).await; // every ~5 minutes
         }
+        if tick.is_multiple_of(10) {
+            manager::close_stale_questions(&app); // every ~30 s
+        }
         tick += 1;
         app.emit("load", serde_json::json!({"load": (load * 100.0).round() / 100.0, "running": running, "max": cfg.max_parallel}));
         for l in lanes.iter().filter(|l| l.pid.is_some()) {
@@ -618,6 +621,18 @@ mod tests {
         assert!(src.contains("no_commits(app, &lane).await && !has_check(app, &lane)"));
         let merge = include_str!("merge.rs");
         assert!(merge.contains("\"already true on main\""));
+    }
+
+    #[test]
+    fn stale_owner_questions_close() {
+        use crate::manager::stale_reason;
+        let off = "Should I turn off the autopilot of tirith?";
+        assert_eq!(stale_reason(off, true), None); // still on: the question applies
+        assert!(stale_reason(off, false).is_some()); // already off: stale
+        assert!(stale_reason("¿Apagar el autopilot de superpolitika?", false).is_some());
+        assert!(stale_reason("Enable the autopilot again?", true).is_some());
+        assert_eq!(stale_reason("Enable the autopilot again?", false), None);
+        assert_eq!(stale_reason("Approve $0.74 for the translation?", false), None);
     }
 
     #[test]
