@@ -14,6 +14,13 @@ static BUSY: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 /// Main checks already run: (project, main sha, stage) → green.
 static MAIN_OK: Mutex<BTreeMap<(String, String, String), bool>> = Mutex::new(BTreeMap::new());
 
+/// One lock per project: test stages of one project never run at the same time (servers on one port, one folder).
+static STAGE_LOCKS: Mutex<BTreeMap<String, std::sync::Arc<tokio::sync::Mutex<()>>>> = Mutex::new(BTreeMap::new());
+
+fn stage_lock(project: &str) -> std::sync::Arc<tokio::sync::Mutex<()>> {
+    STAGE_LOCKS.lock().unwrap().entry(project.to_string()).or_default().clone()
+}
+
 /// One pipeline: a merge attempt ("merge") or a check of main ("main").
 struct Pipe {
     id: String,
@@ -165,6 +172,8 @@ pub fn stage_limit_min(app: &Shared, project: &str, stage: &str) -> u64 {
     limit_from(|k| app.kv(k), project, stage, app.cfg().stage_timeout_min)
 }
 async fn run_stage(app: &Shared, pipe: &Pipe, dir: &Path, name: &str, run: &str) -> Result<(), String> {
+    let lock = stage_lock(&pipe.project);
+    let _one_at_a_time = lock.lock().await;
     let id = app.insert("INSERT INTO runs (lane, project, stage, status, started_at, pipeline, sha) VALUES (?1,?2,?3,'running',?4,?5,?6)", params![pipe.lanes, pipe.project, name, now_iso(), pipe.id, pipe.sha]);
     let log = app.home.join(format!("logs/runs/{id}.log"));
     let mut row = json!({"id": id, "lane": pipe.lanes, "project": pipe.project, "stage": name, "status": "running", "pipeline": pipe.id, "log": log});
@@ -465,6 +474,25 @@ mod tests {
         assert_eq!(limit_from(get, "tirith", "build", 30), 30);
         assert_eq!(limit_from(get, "tirith", "test", 30), 99);
         assert_eq!(limit_from(get, "tirith", "old", 30), 30);
+    }
+    #[tokio::test]
+    async fn project_test_stages_serialized() {
+        assert!(std::sync::Arc::ptr_eq(&stage_lock("p1"), &stage_lock("p1")));
+        assert!(!std::sync::Arc::ptr_eq(&stage_lock("p1"), &stage_lock("p2")));
+        let (lock, running) = (stage_lock("ser"), std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0)));
+        let mut tasks = vec![];
+        for _ in 0..4 {
+            let (lock, running) = (stage_lock("ser"), running.clone());
+            tasks.push(tokio::spawn(async move {
+                let _g = lock.lock().await;
+                assert_eq!(running.fetch_add(1, std::sync::atomic::Ordering::SeqCst), 0);
+                tokio::time::sleep(Duration::from_millis(20)).await;
+                running.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+            }));
+        }
+        drop(lock);
+        for t in tasks { t.await.unwrap(); }
+        assert!(include_str!("merge.rs").contains("let _one_at_a_time = lock.lock().await;"));
     }
     #[test]
     fn mergeq_enospc_deletes_the_folder_and_holds_no_slot() {
