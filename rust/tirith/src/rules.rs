@@ -11,7 +11,7 @@ static GUARD: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"--no-verify|\bgit\
 static WRITES: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b(rm|mv|cp|ln|chmod|chflags|chown|tee|truncate|touch|install|unlink|rsync)\b|>|\b(sed|perl)\s+-[a-zA-Z]*i").unwrap());
 static MAIN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\bgit\b[^;&|]*\b(push|update-ref)\b|\bgit\b[^;&|]*\b(checkout|switch)\s+(main|master)\b|\bgit\b[^;&|]*\bbranch\s+-[fDM]\b[^;&|]*\b(main|master)\b").unwrap());
 
-const EDIT_TOOLS: [&str; 4] = ["Edit", "Write", "MultiEdit", "NotebookEdit"];
+pub const EDIT_TOOLS: [&str; 4] = ["Edit", "Write", "MultiEdit", "NotebookEdit"];
 
 /// The refusal for one tool call, or `None` when it may run.
 pub fn check(app: &Shared, tool: &str, input: &Value, lane: Option<&Lane>, project: Option<&Project>) -> Option<String> {
@@ -71,11 +71,8 @@ pub fn check(app: &Shared, tool: &str, input: &Value, lane: Option<&Lane>, proje
 pub fn summary(tool: &str, input: &Value) -> String {
     let detail = ["command", "file_path", "notebook_path", "pattern", "url", "description", "prompt"].iter().find_map(|k| input[*k].as_str()).unwrap_or("");
     let short: String = detail.lines().next().unwrap_or("").chars().take(160).collect();
-    if tool.is_empty() {
-        short
-    } else {
-        format!("{tool}: {short}")
-    }
+    let prefix = if tool.is_empty() { String::new() } else { format!("{tool}: ") };
+    prefix + &short
 }
 
 /// True when a shell command writes to `path`: redirect, tee, in-place edit, move, copy, delete or restore.

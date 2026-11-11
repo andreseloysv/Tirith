@@ -59,9 +59,7 @@ pub fn parse(text: &str) -> Vec<Step> {
 }
 
 pub fn path(app: &Shared, project: &str) -> Result<PathBuf, String> {
-    let cfg = app.cfg();
-    let p = cfg.project(project).ok_or(format!("unknown project '{project}'"))?;
-    let repo = p.repo();
+    let repo = app.cfg().project(project).ok_or(format!("unknown project '{project}'"))?.repo();
     Ok(repo.join(app.manifest(&repo).roadmap))
 }
 
