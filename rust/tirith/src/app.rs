@@ -323,8 +323,7 @@ mod tests {
         for leak in ["AIza", "ghp_", "sk-", "abcdefghijklmnop12"] {
             assert!(!out.contains(leak), "leaked {leak}: {out}");
         }
-        assert!(out.contains("GOOGLE_API_KEY=[redacted]"));
-        assert!(out.contains("plain line"));
+        assert!(out.contains("GOOGLE_API_KEY=[redacted]") && out.contains("plain line"));
     }
     #[test]
     fn child_path_includes_cargo_bin() {

@@ -205,8 +205,7 @@ pub fn ask_owner(app: &Shared, project: &str, kind: &str, question: &str) -> Res
 /// The owner's answer to an open card, handed to the manager of the card's project with the question it answers.
 pub fn owner_answer(app: &Shared, id: &str, answer: &str) -> Result<Value, String> {
     if app.lane(id).is_some_and(|l| l.status == "waiting") {
-        crate::lanes::answer(app, id, answer)?;
-        return Ok(json!({"ok": true}));
+        return crate::lanes::answer(app, id, answer).map(|_| json!({"ok": true}));
     }
     let sql = "SELECT kind, project, question FROM owner_items WHERE id = ?1 AND status = 'open'";
     let (kind, project, question): (String, String, String) = app.db.lock().unwrap().query_row(sql, [id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))).map_err(|_| format!("no open question '{id}'"))?;
@@ -395,7 +394,7 @@ mod tests {
         let lane = |id: &str, status: &str| crate::app::Lane { id: id.into(), status: status.into(), item: "Traducir".into(), question: "¿Aprobar 0,74 $?".into(), ..Default::default() };
         let cards = super::waiting_cards(&[lane("l1", "waiting"), lane("l2", "running")]);
         assert_eq!(cards.len(), 1);
-        let q = cards[0]["question"].as_str().unwrap();
+        let q = cards[0]["question"].to_string();
         assert!(cards[0]["id"] == "l1" && q.contains("lane bloqueada esperando al dueño") && q.contains("0,74"), "{q}");
     }
 }
