@@ -6,10 +6,20 @@
 //! session whose answer goes to the owner's chat and to the manager. Back to green ends the episode.
 //! While everything is green no model is called.
 
-use crate::{app::{kill_group, log_age, now_iso, now_s, tail, Lane, Shared}, config, manager, models, plan};
+use crate::{
+    app::{kill_group, log_age, now_iso, now_s, tail, Lane, Shared},
+    config, manager, models, plan,
+};
 use axum::{extract::State, routing::get, Json, Router};
 use serde_json::{json, Value};
-use std::{collections::HashMap, sync::{atomic::{AtomicBool, Ordering}, LazyLock, Mutex}, time::Duration};
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        LazyLock, Mutex,
+    },
+    time::Duration,
+};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
 const PROMPT: &str = "You are the CEO review inside Tirith: an independent, read-only, one-shot review of how the \
@@ -68,9 +78,6 @@ fn flag(app: &Shared, key: &str) -> Option<String> {
 fn owner_questions(app: &Shared) -> Vec<String> {
     manager::owner_open(app).iter().map(|o| format!("{}: {}", o["project"].as_str().unwrap_or(""), o["question"].as_str().unwrap_or("")).trim_start_matches(": ").to_string()).collect()
 }
-fn startable(text: &str) -> bool {
-    !crate::lanes::is_autopilot_skipped(text)
-}
 
 /// Why the autopilot starts no lane for the project (the scheduler's last «paused» reason) and the command that fixes it.
 fn paused_note(app: &Shared, project: &str) -> String {
@@ -98,7 +105,7 @@ fn compute(app: &Shared) -> Vec<Metric> {
     let mut empty: Vec<String> = vec![];
     for p in cfg.projects.iter().filter(|p| crate::lanes::autopilot_on(app, &p.id)) {
         // Only items the autopilot can start: no step-0 role items, no owner-wait items.
-        let n = plan::read(app, &p.id).map(|s| s.iter().flat_map(|s| &s.items).filter(|i| !i.done && startable(&i.text)).count()).unwrap_or(0);
+        let n = plan::read(app, &p.id).map(|s| s.iter().flat_map(|s| &s.items).filter(|i| !i.done && !crate::lanes::is_autopilot_skipped(&i.text)).count()).unwrap_or(0);
         if n > 0 {
             open.push((p.id.clone(), n));
         } else {
@@ -229,16 +236,12 @@ fn tick(app: &Shared) {
         manager::notify(app, "", &format!("health: {}. Get it moving.", describe(m)));
     }
     let max = ceo_cfg(app, &["ceo", "max_per_day"], 6u64);
-    if !due.is_empty() && reviews_today(app) < max {
+    let today: u64 = app.db.lock().unwrap().query_row("SELECT COUNT(*) FROM ceo_reviews WHERE at >= ?1 AND metric != 'owner'", [iso(now.saturating_sub(86400))], |r| r.get(0)).unwrap_or(0);
+    if !due.is_empty() && today < max {
         let metric = due.iter().map(|d| d.0).collect::<Vec<_>>().join(",");
         start_review(app, metric, due.iter().map(|d| d.1.as_str()).collect::<Vec<_>>().join("\n"));
     }
     app.emit("metrics", payload(app, list));
-}
-
-fn reviews_today(app: &Shared) -> u64 {
-    let day = iso(now_s().saturating_sub(86400));
-    app.db.lock().unwrap().query_row("SELECT COUNT(*) FROM ceo_reviews WHERE at >= ?1 AND metric != 'owner'", [day], |r| r.get(0)).unwrap_or(0)
 }
 
 fn payload(app: &Shared, metrics: Vec<Value>) -> Value {
@@ -247,7 +250,9 @@ fn payload(app: &Shared, metrics: Vec<Value>) -> Value {
 
 /// Starts one review in the background; nothing when one is already running.
 fn start_review(app: &Shared, metric: String, why: String) {
-    if REVIEWING.swap(true, Ordering::SeqCst) { return; }
+    if REVIEWING.swap(true, Ordering::SeqCst) {
+        return;
+    }
     let app = app.clone();
     tokio::spawn(async move {
         app.emit("ceo", json!({"running": true}));
@@ -273,11 +278,9 @@ fn brief(app: &Shared, why: &str) -> String {
     lanes.iter().take(20).for_each(|l| s += &format!("- {} [{}] {}:{} \"{}\" tries {} created {}: {}\n", l.id, l.status, l.project, l.step, l.item, l.attempts + 1, l.created_at, l.note.lines().next().unwrap_or("")));
     s += "\n# Failing checks (last 24 h)\n";
     let day = iso(now_s().saturating_sub(86400));
-    let runs: Vec<(String, String, String, String)> = {
-        let db = app.db.lock().unwrap();
-        let q = db.prepare("SELECT lane, stage, status, COALESCE(log, '') FROM runs WHERE status IN ('failed', 'timeout') AND started_at >= ?1 ORDER BY id DESC LIMIT 5");
-        q.and_then(|mut q| q.query_map([&day], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?.collect()).unwrap_or_default()
-    };
+    let runs = app.query("SELECT lane, stage, status, COALESCE(log, '') FROM runs WHERE status IN ('failed', 'timeout') AND started_at >= ?1 ORDER BY id DESC LIMIT 5", [&day], |r| {
+        Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, String>(3)?))
+    });
     runs.iter().for_each(|(lane, stage, status, log)| s += &format!("- {lane} check '{stage}' {status}:\n```\n{}\n```\n", tail(std::path::Path::new(log), 15)));
     s += "\n# Plans\n";
     for p in &app.cfg().projects {
@@ -398,9 +401,8 @@ mod tests {
     }
     #[test]
     fn idle_health_ignores_unstartable_items() {
-        assert!(!super::startable("Manager de guardia: atender el chat"));
-        assert!(!super::startable("CEO: revisar"));
-        assert!(!super::startable("Elegir dominio (espera: el dueño)"));
-        assert!(super::startable("Arreglar el parser"));
+        let skipped = crate::lanes::is_autopilot_skipped;
+        assert!(skipped("Manager de guardia: atender el chat") && skipped("CEO: revisar") && skipped("Elegir dominio (espera: el dueño)"));
+        assert!(!skipped("Arreglar el parser"));
     }
 }

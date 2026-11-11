@@ -126,8 +126,10 @@ pub fn check_problem(check: &str) -> Option<String> {
 
 pub async fn add(app: &Shared, project: &str, step: &str, text: &str) -> Result<(), String> {
     let text = clean(text);
-    if text.is_empty() { return Err("the item needs a text".into()); }
-    if let Some(p) = CHECK.captures(&text).and_then(|c| check_problem(&c[1])) { return Err(p); }
+    if text.is_empty() {
+        return Err("the item needs a text".into());
+    }
+    CHECK.captures(&text).and_then(|c| check_problem(&c[1])).map_or(Ok(()), Err)?;
     // A forbidden word of the project's commit guard would make the plan uncommittable and block every merge.
     if let Some(p) = app.cfg().project(project).cloned() {
         let words = crate::guard::words(app, &p);
@@ -137,12 +139,11 @@ pub async fn add(app: &Shared, project: &str, step: &str, text: &str) -> Result<
     }
     change(app, project, |lines, steps| {
         let i = steps.iter().position(|s| s.num == step).ok_or(format!("the plan has no step {step}"))?;
-        if steps[i].items.iter().any(|it| same(&it.text, &text)) { return Err(format!("step {step} already has that item")); }
-        let end = steps.get(i + 1).map(|s| s.line).unwrap_or(lines.len());
-        let mut at = end;
-        while at > steps[i].line + 1 && lines[at - 1].trim().is_empty() {
-            at -= 1;
+        if steps[i].items.iter().any(|it| same(&it.text, &text)) {
+            return Err(format!("step {step} already has that item"));
         }
+        let end = steps.get(i + 1).map(|s| s.line).unwrap_or(lines.len());
+        let at = (steps[i].line + 1..end).rev().find(|&k| !lines[k].trim().is_empty()).map_or(steps[i].line + 1, |k| k + 1);
         lines.insert(at, format!("- [ ] {text}"));
         Ok(())
     })
@@ -160,7 +161,9 @@ pub async fn flush(app: &Shared, only: Option<&str>) {
 
 /// `flush` of one project for a caller that already holds the plan lock.
 pub async fn flush_locked(app: &Shared, project: &str) {
-    if !app.plan_dirty.lock().unwrap().contains(project) { return; }
+    if !app.plan_dirty.lock().unwrap().contains(project) {
+        return;
+    }
     let (Ok(file), Some(repo)) = (path(app, project), app.cfg().project(project).map(|p| p.repo())) else { return };
     let rel = file.strip_prefix(&repo).unwrap_or(&file).to_string_lossy().to_string();
     let pending = git(&repo, &["status", "--porcelain", "--", &rel]).await.unwrap_or_default();

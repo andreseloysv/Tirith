@@ -2,12 +2,20 @@
 //! It authenticates the caller, refuses blocked destinations (by name, then by the addresses they resolve to),
 //! records each new destination of each caller, and pipes the bytes.
 
-use crate::app::{now_iso, now_s, Shared};
 use super::{blocked, owner, proxy_port, token};
+use crate::app::{now_iso, now_s, Shared};
 use base64::Engine;
 use serde_json::{json, Value};
-use std::{collections::{BTreeSet, HashMap, HashSet}, net::SocketAddr, sync::{LazyLock, Mutex}, time::Duration};
-use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpListener, TcpStream}};
+use std::{
+    collections::{BTreeSet, HashMap, HashSet},
+    net::SocketAddr,
+    sync::{LazyLock, Mutex},
+    time::Duration,
+};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::{TcpListener, TcpStream},
+};
 
 #[derive(Default)]
 struct Dest {
@@ -29,11 +37,10 @@ pub fn state() -> String {
 
 /// The destinations seen so far from the `net` / `net-blocked` events, so the page keeps its history.
 pub fn seed(app: &Shared) {
-    let db = app.db.lock().unwrap();
-    let Ok(mut q) = db.prepare("SELECT summary, lane, kind, COUNT(*), MAX(at) FROM events WHERE kind IN ('net', 'net-blocked') GROUP BY summary, lane, kind") else { return };
-    let rows = q.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, u64>(3)?, r.get::<_, String>(4)?)));
+    let sql = "SELECT summary, lane, kind, COUNT(*), MAX(at) FROM events WHERE kind IN ('net', 'net-blocked') GROUP BY summary, lane, kind";
+    let rows = app.query(sql, [], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, u64>(3)?, r.get::<_, String>(4)?)));
     let mut dests = DESTS.lock().unwrap();
-    for (dest, lane, kind, n, at) in rows.into_iter().flatten().flatten() {
+    for (dest, lane, kind, n, at) in rows {
         let host = dest.rsplit_once(':').map(|(h, _)| h).unwrap_or(&dest).to_string();
         let d = dests.entry(host).or_default();
         let counter = if kind == "net" { &mut d.count } else { &mut d.refused };
@@ -130,10 +137,16 @@ async fn handle(app: Shared, mut c: TcpStream) -> Result<(), String> {
     let end = loop {
         let mut chunk = [0u8; 4096];
         let n = tokio::time::timeout(Duration::from_secs(30), c.read(&mut chunk)).await.map_err(|_| "slow client")?.map_err(|e| e.to_string())?;
-        if n == 0 { return Ok(()); }
+        if n == 0 {
+            return Ok(());
+        }
         buf.extend_from_slice(&chunk[..n]);
-        if let Some(i) = buf.windows(4).position(|w| w == b"\r\n\r\n") { break i + 4; }
-        if buf.len() > 65536 { return answer(&mut c, "431 Request Header Fields Too Large", "", "").await; }
+        if let Some(i) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
+            break i + 4;
+        }
+        if buf.len() > 65536 {
+            return answer(&mut c, "431 Request Header Fields Too Large", "", "").await;
+        }
     };
     let head = String::from_utf8_lossy(&buf[..end]).to_string();
     let mut lines = head.split("\r\n");
@@ -164,7 +177,9 @@ async fn handle(app: Shared, mut c: TcpStream) -> Result<(), String> {
             Err(e) => return answer(&mut c, "502 Bad Gateway", "", &format!("cannot resolve {host}: {e}\n")).await,
         },
     };
-    if let Some(rule) = addrs.iter().find_map(|a| blocked(&a.ip().to_string())) { return refuse(&app, &mut c, &who, &host, port, &rule).await; }
+    if let Some(rule) = addrs.iter().find_map(|a| blocked(&a.ip().to_string())) {
+        return refuse(&app, &mut c, &who, &host, port, &rule).await;
+    }
     record(&app, &who, &host, port, None);
     let mut up = match tokio::time::timeout(Duration::from_secs(15), TcpStream::connect(&addrs[..])).await {
         Ok(Ok(up)) => up,
