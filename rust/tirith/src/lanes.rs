@@ -21,7 +21,6 @@ pub fn tell(id: &str, text: &str) {
 pub fn drain(id: &str) -> Vec<String> {
     LIVE.lock().unwrap().remove(id).unwrap_or_default()
 }
-
 pub(crate) fn slug(text: &str) -> String {
     let s: String = text.to_lowercase().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect();
     let s = s.split('-').filter(|p| !p.is_empty()).collect::<Vec<_>>().join("-");
@@ -54,7 +53,6 @@ pub fn start(app: &Shared, project: &str, step: &str, item: &str, agent: Option<
 pub fn autopilot_on(app: &Shared, project: &str) -> bool {
     app.kv(&format!("autopilot:{project}")).map(|v| v == "on").unwrap_or(app.cfg().autopilot)
 }
-
 fn load_per_core() -> f64 {
     let mut l = [0f64; 3];
     let n = unsafe { libc::getloadavg(l.as_mut_ptr(), 3) };
@@ -237,6 +235,9 @@ pub async fn scheduler(app: Shared) {
         if tick.is_multiple_of(100) {
             warn_low_disk(&app).await;
             free_disk(&app, &lanes).await; // every ~5 minutes
+        }
+        if tick.is_multiple_of(10) {
+            manager::close_stale_questions(&app); // every ~30 s
         }
         tick += 1;
         app.emit("load", serde_json::json!({"load": (load * 100.0).round() / 100.0, "running": running, "max": cfg.max_parallel}));
@@ -626,6 +627,18 @@ mod tests {
         assert!(!super::waits_for_open_item(up, &["Subir a YouTube"]));
         assert!(!super::waits_for_open_item("Arreglar el parser", &open));
     }
+    #[test]
+    fn stale_owner_questions_close() {
+        use crate::manager::stale_reason;
+        let off = "Should I turn off the autopilot of tirith?";
+        assert_eq!(stale_reason(off, true), None); // still on: the question applies
+        assert!(stale_reason(off, false).is_some()); // already off: stale
+        assert!(stale_reason("¿Apagar el autopilot de superpolitika?", false).is_some());
+        assert!(stale_reason("Enable the autopilot again?", true).is_some());
+        assert_eq!(stale_reason("Enable the autopilot again?", false), None);
+        assert_eq!(stale_reason("Approve $0.74 for the translation?", false), None);
+    }
+
     #[test]
     fn autopilot_skips_role_items() {
         assert!(super::is_autopilot_skipped("Manager de guardia: atender el chat"));

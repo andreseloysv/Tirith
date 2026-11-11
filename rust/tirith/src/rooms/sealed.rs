@@ -31,11 +31,9 @@ pub struct Me {
 pub fn sha_hex(data: &[u8]) -> String {
     hex(&Sha256::digest(data))
 }
-
 pub fn hex(b: &[u8]) -> String {
     b.iter().map(|x| format!("{x:02x}")).collect()
 }
-
 fn unhex(s: &str) -> Option<Vec<u8>> {
     if !s.len().is_multiple_of(2) {
         return None;
@@ -212,7 +210,6 @@ pub async fn platform(base: &str) -> Result<String, String> {
 fn now_ms() -> u64 {
     chrono::Utc::now().timestamp_millis() as u64
 }
-
 async fn register(base: &str, me: &Me) -> Result<(), String> {
     let card = json!({"name": me.name, "capabilities": ["am.mjs"], "tags": []});
     let ts = now_ms();
