@@ -73,10 +73,12 @@ function PhoneCard({ r, reload, title }) {
   const [busy, error, run] = act;
   const [ask, setAsk] = useState('');
   const asked = useRef(0);
+  const [bad, setBad] = useState('');   // the code whose picture did not load
   const make = () => run('qr', () => api('POST', `/api/rooms/${enc(r.id)}/qr`));
-  // Looked at on every draw (the rooms are read again at least every 15 s): no QR, so one is asked for, at most every 10 s.
+  const shown = r.invite && bad !== r.invite ? r.invite : '';
+  // Looked at on every draw (the rooms are read again at least every 15 s): no QR to show, so a new one is asked for, at most every 10 s.
   useEffect(() => {
-    if (r.invite) asked.current = 0;
+    if (shown) asked.current = 0;
     else if (Date.now() - asked.current > 10000) { asked.current = Date.now(); make(); }
   });
   // the url is part of the src so a new code draws a new picture
@@ -85,7 +87,7 @@ function PhoneCard({ r, reload, title }) {
     <div class="phead">${LOCK}<b>Your phone</b><${Status} r=${r} /></div>
     ${r.error ? html`<div class="ierr rerr">Tirith cannot reach agentsmessenger.com now, so a phone connects when it can again: ${r.error}</div>` : null}
     <div class="rscan">
-      ${r.invite ? html`<img class="qr" src=${src} alt="QR code that connects a phone to Tirith" width="232" height="232" />`
+      ${shown ? html`<img class="qr" src=${src} alt="QR code that connects a phone to Tirith" width="232" height="232" onError=${() => setBad(r.invite)} />`
         : html`<div class="qr qrwait">${busy === 'qr' || !error ? 'Making the QR…' : html`<button class="abtn" onClick=${make}>Show the QR</button>`}</div>`}
       <div class="rhow">
         <p class="rlead">Scan this QR with the phone's camera.</p>

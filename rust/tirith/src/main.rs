@@ -184,6 +184,8 @@ fn install_hooks() -> Result<(), String> {
 }
 
 fn serve() -> Result<(), String> {
+    let login = std::process::Command::new(std::env::var("SHELL").unwrap_or("/bin/zsh".into())).args(["-lc", "printf %s \"$PATH\""]).output().map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
+    std::env::set_var("PATH", format!("{}:{}", login.unwrap_or_default(), std::env::var("PATH").unwrap_or_default()).trim_start_matches(':')); // started by the app, the PATH is launchd's: checks would find no node or npm
     let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().map_err(|e| e.to_string())?;
     rt.block_on(async {
         let app = app::App::open();
