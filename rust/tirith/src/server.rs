@@ -105,7 +105,7 @@ async fn plan_show(State(app): State<Shared>, Path(project): Path<String>) -> R 
     let steps = plan::read(&app, &project).map_err(bad)?;
     let lanes = app.lanes.lock().unwrap().clone();
     let item = |num: &str, it: &plan::Item| {
-        let lane = lanes.values().filter(|l| l.project == project && l.step == num && l.item == it.text).max_by(|a, b| a.created_at.cmp(&b.created_at));
+        let lane = lanes.values().filter(|l| l.project == project && l.step == num && plan::same(&l.item, &it.text)).max_by(|a, b| a.created_at.cmp(&b.created_at));
         json!({"text": it.text, "done": it.done, "check": it.check, "lane": lane.map(|l| json!({"id": l.id, "status": l.status}))})
     };
     let steps: Vec<Value> = steps.iter().map(|st| json!({"num": st.num, "title": st.title, "items": st.items.iter().map(|it| item(&st.num, it)).collect::<Vec<_>>()})).collect();
