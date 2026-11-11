@@ -196,7 +196,9 @@ async fn hook(State(app): State<Shared>, Path(event): Path<String>, headers: Hea
     let p: Value = serde_json::from_slice(&body).unwrap_or(json!({}));
     let cwd = s(&p, "cwd");
     let header = |k: &str| headers.get(k).and_then(|v| v.to_str().ok()).filter(|v| !v.is_empty() && !v.starts_with('$')).map(String::from);
-    let lane = header("x-tirith-lane").and_then(|id| app.lane(&id)).or_else(|| app.lane_for_cwd(&cwd));
+    // Without the header, the working lane whose worktree holds the agent's cwd.
+    let in_worktree = |l: &&crate::app::Lane| matches!(l.status.as_str(), "running" | "waiting") && !l.workspace.is_empty() && std::path::Path::new(&cwd).starts_with(&l.workspace);
+    let lane = header("x-tirith-lane").and_then(|id| app.lane(&id)).or_else(|| app.lanes.lock().unwrap().values().find(in_worktree).cloned());
     let cfg = app.cfg();
     let project = lane.as_ref().and_then(|l| cfg.project(&l.project)).or_else(|| cfg.project_for(&cwd)).cloned();
     let tool = s(&p, "tool_name");
