@@ -21,8 +21,7 @@ pub fn check(app: &Shared, tool: &str, input: &Value, lane: Option<&Lane>, proje
     let edit = EDIT_TOOLS.contains(&tool);
     let bash = tool == "Bash";
 
-    let hooks_write = bash && cmd.contains(".git/hooks") && WRITES.is_match(&cmd.replace("2>/dev/null", "").replace(">/dev/null", ""));
-    if (bash && GUARD.is_match(cmd)) || hooks_write || (edit && file.contains("/.git/hooks/")) {
+    if (bash && GUARD.is_match(cmd)) || (bash && cmd.contains(".git/hooks") && WRITES.is_match(&cmd.replace("2>/dev/null", "").replace(">/dev/null", ""))) || (edit && file.contains("/.git/hooks/")) {
         return Some("Commit checks are never skipped (--no-verify, commit -n, core.hooksPath, .git/hooks). Fix what the check reports and commit again.".into());
     }
     let mut protected: Vec<String> = cfg.agents.values().filter_map(|a| a.settings.as_deref()).map(|s| expand(s).display().to_string()).collect();
@@ -36,8 +35,7 @@ pub fn check(app: &Shared, tool: &str, input: &Value, lane: Option<&Lane>, proje
     }
     let manifest = project.map(|p| app.manifest(&p.repo()));
     if let (Some(p), Some(m)) = (project, &manifest) {
-        let plan = format!("/{}", m.roadmap.trim_start_matches("./"));
-        if (edit && file.ends_with(&plan)) || (bash && writes_to(cmd, &m.roadmap)) {
+        if (edit && file.ends_with(&format!("/{}", m.roadmap.trim_start_matches("./")))) || (bash && writes_to(cmd, &m.roadmap)) {
             return Some(format!("The plan is written only by Tirith. Add an item with: tirith plan add {} <step> \"<text>\"", p.id));
         }
     }
@@ -59,8 +57,7 @@ pub fn check(app: &Shared, tool: &str, input: &Value, lane: Option<&Lane>, proje
         if (r.lanes_only && lane.is_none()) || (!r.tools.is_empty() && !r.tools.iter().any(|t| t == tool)) {
             continue;
         }
-        let text = if bash { cmd } else { file };
-        if Regex::new(&r.pattern).map(|re| re.is_match(text)).unwrap_or(false) {
+        if Regex::new(&r.pattern).map(|re| re.is_match(if bash { cmd } else { file })).unwrap_or(false) {
             return Some(format!("{} ({})", r.message, r.id));
         }
     }

@@ -117,21 +117,20 @@ fn compute(app: &Shared) -> Vec<Metric> {
             empty.push(p.id.clone());
         }
     }
-    let work = !open.is_empty();
     let merged: Vec<&Lane> = lanes.iter().filter(|l| l.status == "merged" && merged_at(l).is_some_and(|m| m >= day)).collect();
     let ids = |v: &[&Lane]| v.iter().map(|l| l.id.as_str()).collect::<Vec<_>>().join(", ");
-    let open_txt = open.iter().map(|(p, n)| format!("{p} {n}")).collect::<Vec<_>>().join(", ");
     let mut out = vec![];
 
     let target = t("merged_per_day", 10.0);
     let facts = format!(
-        "merged in 24 h: [{}]; open items in autopilot projects: [{open_txt}]; {}{}{}",
+        "merged in 24 h: [{}]; open items in autopilot projects: [{}]; {}{}{}",
         ids(&merged),
+        open.iter().map(|(p, n)| format!("{p} {n}")).collect::<Vec<_>>().join(", "),
         if empty.is_empty() { "no empty plans: lanes that do not reach main are the problem" } else { "no startable work in the plan (not a lane failure) for:" },
         empty_plan_note(&empty),
         open.iter().map(|(p, _)| paused_note(app, p)).collect::<String>()
     );
-    out.push(Metric { id: "merged", label: "En main (24 h)", value: merged.len() as f64, target: Some(target), at_least: true, red: work && (merged.len() as f64) < target, facts });
+    out.push(Metric { id: "merged", label: "En main (24 h)", value: merged.len() as f64, target: Some(target), at_least: true, red: !open.is_empty() && (merged.len() as f64) < target, facts });
 
     let mut mins: Vec<(f64, &str)> = merged.iter().filter_map(|l| Some(((merged_at(l)? - secs(&l.created_at)?) as f64 / 60.0, l.id.as_str()))).collect();
     mins.sort_by(|a, b| a.0.total_cmp(&b.0));
@@ -140,8 +139,7 @@ fn compute(app: &Shared) -> Vec<Metric> {
     let facts = mins.iter().rev().take(8).map(|(m, id)| format!("{id} {m:.0} min")).collect::<Vec<_>>().join(", ");
     out.push(Metric { id: "median", label: "Mediana lanzar→main (min)", value: median.round(), target: Some(target), at_least: false, red: !mins.is_empty() && median > target, facts });
 
-    let first: Vec<&Lane> = merged.iter().filter(|l| l.attempts == 0).copied().collect();
-    let pct = if merged.is_empty() { 100.0 } else { (100 * first.len() / merged.len()) as f64 };
+    let pct = if merged.is_empty() { 100.0 } else { (100 * merged.iter().filter(|l| l.attempts == 0).count() / merged.len()) as f64 };
     let retried: Vec<&Lane> = merged.iter().filter(|l| l.attempts > 0).copied().collect();
     let target = t("first_try_pct", 50.0);
     out.push(Metric { id: "first_try", label: "A la primera (%)", value: pct, target: Some(target), at_least: true, red: !merged.is_empty() && pct < target, facts: format!("merged after being sent back: [{}]", ids(&retried)) });
@@ -165,14 +163,13 @@ fn compute(app: &Shared) -> Vec<Metric> {
     let facts = idle.iter().map(|(p, n, m)| format!("{p}: {n} open items, nothing running for {m} min{}", paused_note(app, p))).collect::<Vec<_>>().join("; ");
     out.push(Metric { id: "idle", label: "Parado con trabajo (min)", value: worst, target: Some(target), at_least: false, red: worst > target, facts });
 
-    let half = cfg.inactivity_min * 30;
     let stuck: Vec<String> = lanes
         .iter()
         .filter(|l| l.status == "running")
         .filter_map(|l| {
             let log = log_age(app, &l.id);
             let quiet = (now as u64).saturating_sub(l.last_activity).min(log);
-            (quiet > half).then(|| format!("{} ({}) quiet {} min", l.id, l.project, quiet / 60))
+            (quiet > cfg.inactivity_min * 30).then(|| format!("{} ({}) quiet {} min", l.id, l.project, quiet / 60))
         })
         .collect();
     let target = t("stuck", 0.0);
@@ -191,8 +188,7 @@ fn compute(app: &Shared) -> Vec<Metric> {
 }
 
 fn describe(m: &Metric) -> String {
-    let side = if m.at_least { "at least" } else { "at most" };
-    let target = m.target.map(|t| format!(" (target: {side} {t})")).unwrap_or_default();
+    let target = m.target.map(|t| format!(" (target: {} {t})", if m.at_least { "at least" } else { "at most" })).unwrap_or_default();
     let facts = if m.facts.is_empty() { String::new() } else { format!(". Facts: {}", m.facts) };
     format!("{} [{}] is {}{target}{facts}", m.label, m.id, m.value)
 }
@@ -240,17 +236,14 @@ fn tick(app: &Shared) {
         }
         manager::notify(app, "", &format!("health: {}. Get it moving.", describe(m)));
     }
-    let max = ceo_cfg(app, &["ceo", "max_per_day"], 6u64);
-    if !due.is_empty() && reviews_today(app) < max {
-        let metric = due.iter().map(|d| d.0).collect::<Vec<_>>().join(",");
-        start_review(app, metric, due.iter().map(|d| d.1.as_str()).collect::<Vec<_>>().join("\n"));
+    if !due.is_empty() && reviews_today(app) < ceo_cfg(app, &["ceo", "max_per_day"], 6u64) {
+        start_review(app, due.iter().map(|d| d.0).collect::<Vec<_>>().join(","), due.iter().map(|d| d.1.as_str()).collect::<Vec<_>>().join("\n"));
     }
     app.emit("metrics", payload(app, list));
 }
 
 fn reviews_today(app: &Shared) -> u64 {
-    let day = iso(now_s().saturating_sub(86400));
-    app.db.lock().unwrap().query_row("SELECT COUNT(*) FROM ceo_reviews WHERE at >= ?1 AND metric != 'owner'", [day], |r| r.get(0)).unwrap_or(0)
+    app.db.lock().unwrap().query_row("SELECT COUNT(*) FROM ceo_reviews WHERE at >= ?1 AND metric != 'owner'", [iso(now_s().saturating_sub(86400))], |r| r.get(0)).unwrap_or(0)
 }
 
 fn payload(app: &Shared, metrics: Vec<Value>) -> Value {
@@ -288,11 +281,10 @@ fn brief(app: &Shared, why: &str) -> String {
         s += &format!("- {} [{}] {}:{} \"{}\" tries {} created {}: {}\n", l.id, l.status, l.project, l.step, l.item, l.attempts + 1, l.created_at, l.note.lines().next().unwrap_or(""));
     }
     s += "\n# Failing checks (last 24 h)\n";
-    let day = iso(now_s().saturating_sub(86400));
     let runs: Vec<(String, String, String, String)> = {
         let db = app.db.lock().unwrap();
         let q = db.prepare("SELECT lane, stage, status, COALESCE(log, '') FROM runs WHERE status IN ('failed', 'timeout') AND started_at >= ?1 ORDER BY id DESC LIMIT 5");
-        q.and_then(|mut q| q.query_map([&day], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?.collect()).unwrap_or_default()
+        q.and_then(|mut q| q.query_map([&iso(now_s().saturating_sub(86400))], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?.collect()).unwrap_or_default()
     };
     for (lane, stage, status, log) in &runs {
         s += &format!("- {lane} check '{stage}' {status}:\n```\n{}\n```\n", tail(std::path::Path::new(log), 15));
@@ -331,9 +323,8 @@ async fn review(app: &Shared, why: &str) -> Result<String, String> {
     let (mut child, mut stdin, stdout) = manager::spawn_chat(app, "ceo", "", cmd.argv)?;
     let pid = child.id().unwrap_or(0);
     let mut lines = BufReader::new(stdout).lines();
-    let msg = json!({"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": brief(app, why)}]}});
     let send = |line: String| (line + "\n").into_bytes();
-    stdin.write_all(&send(msg.to_string())).await.map_err(|e| e.to_string())?;
+    stdin.write_all(&send(json!({"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": brief(app, why)}]}}).to_string())).await.map_err(|e| e.to_string())?;
     let mut text = String::new();
     let read = async {
         while let Ok(Some(line)) = lines.next_line().await {
@@ -356,9 +347,7 @@ async fn review(app: &Shared, why: &str) -> Result<String, String> {
         false
     };
     let finished = tokio::time::timeout(Duration::from_secs(600), read).await;
-    if pid != 0 {
-        kill_group(pid, libc::SIGKILL);
-    }
+    kill_group(pid, libc::SIGKILL);
     let _ = child.wait().await;
     let text = text.trim().to_string();
     match finished {

@@ -168,8 +168,7 @@ pub fn out_of_credits(text: &str) -> bool {
 pub fn fallback(app: &Shared, role_name: &str, tried: &[String]) -> Option<(String, Option<String>)> {
     let cfg = app.cfg();
     let r = role(app, role_name);
-    let first = r.model.as_ref().map(|m| format!("{}:{m}", r.agent)).unwrap_or(r.agent.clone());
-    std::iter::once(first).chain(r.fallback).find_map(|e| {
+    std::iter::once(r.model.as_ref().map(|m| format!("{}:{m}", r.agent)).unwrap_or(r.agent.clone())).chain(r.fallback).find_map(|e| {
         let (alias, model) = e.split_once(':').map(|(a, m)| (a.to_string(), Some(m.to_string()))).unwrap_or((e.clone(), None));
         let used = tried.iter().any(|t| *t == e || *t == alias);
         (!used && cfg.agents.contains_key(&alias)).then_some((alias, model))

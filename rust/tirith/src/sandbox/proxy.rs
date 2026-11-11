@@ -38,8 +38,7 @@ pub fn seed(app: &Shared) {
     let rows = q.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, u64>(3)?, r.get::<_, String>(4)?)));
     let mut dests = DESTS.lock().unwrap();
     for (dest, lane, kind, n, at) in rows.into_iter().flatten().flatten() {
-        let host = dest.rsplit_once(':').map(|(h, _)| h).unwrap_or(&dest).to_string();
-        let d = dests.entry(host).or_default();
+        let d = dests.entry(dest.rsplit_once(':').map(|(h, _)| h).unwrap_or(&dest).to_string()).or_default();
         let counter = if kind == "net" { &mut d.count } else { &mut d.refused };
         *counter += n;
         d.last = d.last.clone().max(at);
@@ -81,8 +80,7 @@ pub async fn serve(app: Shared) {
 }
 
 async fn answer(c: &mut TcpStream, status: &str, extra: &str, body: &str) -> Result<(), String> {
-    let text = format!("HTTP/1.1 {status}\r\n{extra}Content-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
-    c.write_all(text.as_bytes()).await.map_err(|e| e.to_string())
+    c.write_all(format!("HTTP/1.1 {status}\r\n{extra}Content-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).as_bytes()).await.map_err(|e| e.to_string())
 }
 
 /// The caller of a request: the `who` of a valid `Proxy-Authorization: Basic who:token`.
@@ -124,8 +122,7 @@ fn record(app: &Shared, who: &str, host: &str, port: u16, rule: Option<&str>) {
         None => SEEN.lock().unwrap().insert(key),
     };
     if new {
-        let kind = if rule.is_some() { "net-blocked" } else { "net" };
-        app.event(&lane, &project, kind, "proxy", &format!("{host}:{port}"), "");
+        app.event(&lane, &project, if rule.is_some() { "net-blocked" } else { "net" }, "proxy", &format!("{host}:{port}"), "");
     }
 }
 
@@ -203,6 +200,5 @@ async fn handle(app: Shared, mut c: TcpStream) -> Result<(), String> {
 
 async fn refuse(app: &Shared, c: &mut TcpStream, who: &str, host: &str, port: u16, rule: &str) -> Result<(), String> {
     record(app, who, host, port, Some(rule));
-    let body = format!("Blocked by Tirith: {host} (rule {rule}). The owner blocked it; it is allowed again with: tirith net unblock {rule}\n");
-    answer(c, "403 Forbidden", &format!("X-Tirith-Blocked: {rule}\r\n"), &body).await
+    answer(c, "403 Forbidden", &format!("X-Tirith-Blocked: {rule}\r\n"), &format!("Blocked by Tirith: {host} (rule {rule}). The owner blocked it; it is allowed again with: tirith net unblock {rule}\n")).await
 }
