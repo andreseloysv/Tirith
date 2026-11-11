@@ -59,11 +59,8 @@ pub fn router(app: Shared, port: u16) -> Router {
 /// It also checks Host, so a DNS-rebinding page (Host: evil.example) cannot read the API either.
 async fn same_origin(req: Request, next: Next) -> Response {
     let port = PORT.get().copied().unwrap_or(0);
-    let ok = {
-        let h = |k: &str| req.headers().get(k).map(|v| v.to_str().unwrap_or("\u{0}"));
-        origin_host_ok(h("host"), h("origin"), port)
-    };
-    if ok {
+    let h = |k: &str| req.headers().get(k).map(|v| v.to_str().unwrap_or("\u{0}"));
+    if origin_host_ok(h("host"), h("origin"), port) {
         next.run(req).await
     } else {
         (StatusCode::FORBIDDEN, "foreign origin").into_response()
@@ -79,7 +76,6 @@ fn origin_host_ok(host: Option<&str>, origin: Option<&str>, port: u16) -> bool {
 #[cfg(test)]
 mod tests {
     use super::origin_host_ok;
-
     #[test]
     fn same_origin_checks_host() {
         let p = 7777;

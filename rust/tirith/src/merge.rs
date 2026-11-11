@@ -482,7 +482,6 @@ pub fn retry(app: &Shared, id: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
     #[test]
     fn stage_timeouts_per_project() {
         let mut kv = std::collections::HashMap::new();
@@ -495,7 +494,6 @@ mod tests {
         assert_eq!(limit_from(get, "tirith", "test", 30), 99);
         assert_eq!(limit_from(get, "tirith", "old", 30), 30);
     }
-
     #[test]
     fn mergeq_enospc_deletes_the_folder_and_holds_no_slot() {
         let dir = std::env::temp_dir().join(format!("tirith-enospc-{}", std::process::id()));
