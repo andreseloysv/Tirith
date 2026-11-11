@@ -46,6 +46,10 @@ end with code, and puts a model in the loop only where judgment is needed.
   train), the project's checks and each item's check run, and only a green result moves main, with the plan item
   ticked in the same fast-forward. A red check that also fails on main marks main red and pauses the autopilot;
   otherwise the same agent session gets its work back with the log, twice at most.
+- **Merged means deployed.** A project's deploy stages (`kind = "deploy"`) are no check of a lane: they run after
+  the merge, on main as it is then, so what is on main is what gets deployed. A deploy that fails never keeps
+  finished work out of main: the manager is told once, Tirith tries again by itself (after ten minutes, then
+  after twice as long each time) until it passes, and Retry on its pipeline tries at once.
 - **Rules in code.** Every tool call of every agent passes the rules first, in 1–4 ms: commit checks are never
   skipped, the plan and the agents' settings are not edited by agents, a lane writes only in its own worktree,
   never pushes or touches main and never starts other agents. Projects add rules in `tirith.toml`.
@@ -63,8 +67,9 @@ end with code, and puts a model in the loop only where judgment is needed.
 - **Health and the CEO.** Metrics by code (items merged per day, time to merge, first-try rate, idle projects,
   stuck lanes, red main). A red metric goes to the manager; still red 15 minutes later, an independent one-shot
   review (the CEO) says what is wrong and what to do. No model runs while everything is green.
-- **Rooms on agentsmessenger.com.** Work from your phone, end-to-end encrypted, with nothing to install: scan one
-  QR and the phone gets a chat with the manager of every project, also of those you add later. Each chat is that
+- **Rooms on agentsmessenger.com.** Work from your phone, end-to-end encrypted, with nothing to install: scan the
+  QR on the Rooms page (it works once and for fifteen minutes, and the page shows the next one by itself)
+  and the phone gets a chat with the manager of every project, also of those you add later. Each chat is that
   project's conversation: what the manager says, Tirith's reports (merged, failed, a lane's question) and the cards
   that need you, which you answer there (`o12: yes`). `tirith room forget` cuts off a lost phone. Add other managers
   with a code, and watch public rooms with a summary.
@@ -180,6 +185,10 @@ id = "ci"
 name = "test"
 run = "npm test"
 paths = ["src/**", "!**/*.md"]      # optional: run only when a changed file matches
+[[pipelines.stages]]
+name = "deploy"
+kind = "deploy"                     # runs after the merge, on main; a stage named deploy, release, publish or ship
+run = "tools/deploy.sh"             # is one without saying so (another kind makes it a check again)
 
 [[rules]]                           # optional: extra refusals
 id = "no-prod-db"
