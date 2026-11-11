@@ -71,13 +71,20 @@ pub fn read(app: &Shared, project: &str) -> Result<Vec<Step>, String> {
 pub fn is_open(app: &Shared, project: &str, step: &str, item: &str) -> Result<bool, String> {
     let steps = read(app, project)?;
     let s = steps.iter().find(|s| s.num == step).ok_or(format!("the plan of {project} has no step {step}"))?;
-    Ok(s.items.iter().any(|i| !i.done && i.text == clean(item)))
+    Ok(s.items.iter().any(|i| !i.done && same(&i.text, &clean(item))))
+}
+
+/// Two item texts that name the same item: equal once their `(check: ...)` is left out. A lane carries the text its
+/// item had when it started; when only the check is rewritten meanwhile, the lane still belongs to that item (it is
+/// checked with the check the plan has now, and ticked when it is merged).
+pub fn same(a: &str, b: &str) -> bool {
+    a == b || CHECK.replace(a, "").trim() == CHECK.replace(b, "").trim()
 }
 
 /// One item of the plan in the main checkout.
 pub fn find(app: &Shared, project: &str, step: &str, item: &str) -> Option<Item> {
     let steps = read(app, project).ok()?;
-    steps.into_iter().find(|s| s.num == step)?.items.into_iter().find(|i| i.text == item)
+    steps.into_iter().find(|s| s.num == step)?.items.into_iter().find(|i| same(&i.text, item))
 }
 
 /// Ticks the open `(step, item)` pairs in a plan text: the new text and how many were ticked.
@@ -85,7 +92,7 @@ pub fn tick_text(text: &str, items: &[(String, String)]) -> (String, usize) {
     let mut lines: Vec<String> = text.lines().map(String::from).collect();
     let mut n = 0;
     for s in parse(text) {
-        for it in s.items.iter().filter(|it| !it.done && items.iter().any(|(st, i)| *st == s.num && *i == it.text)) {
+        for it in s.items.iter().filter(|it| !it.done && items.iter().any(|(st, i)| *st == s.num && same(i, &it.text))) {
             lines[it.line] = lines[it.line].replacen("- [ ] ", "- [x] ", 1);
             n += 1;
         }
@@ -130,7 +137,7 @@ pub async fn add(app: &Shared, project: &str, step: &str, text: &str) -> Result<
     }
     change(app, project, |lines, steps| {
         let i = steps.iter().position(|s| s.num == step).ok_or(format!("the plan has no step {step}"))?;
-        if steps[i].items.iter().any(|it| it.text == text) { return Err(format!("step {step} already has that item")); }
+        if steps[i].items.iter().any(|it| same(&it.text, &text)) { return Err(format!("step {step} already has that item")); }
         let end = steps.get(i + 1).map(|s| s.line).unwrap_or(lines.len());
         let mut at = end;
         while at > steps[i].line + 1 && lines[at - 1].trim().is_empty() {
@@ -172,5 +179,13 @@ mod tests {
     fn plan_add_rejects_invalid_checks() {
         let b = super::check_problem;
         assert!(["tirith run -s test", "tirith check", "cd collector && ls", "cargo test && tirith run"].iter().all(|c| b(c).is_some()) && ["cargo test -q x", "tirith plan show p", "cd collectors"].iter().all(|c| b(c).is_none()));
+    }
+    #[test]
+    fn a_rewritten_check_keeps_the_lane_on_its_item() {
+        let (old, now) = ("Make the chat a PWA (check: `npm test`)", "Make the chat a PWA (check: `export PATH=/opt/homebrew/bin:$PATH; npm test`)");
+        assert!(super::same(old, now) && super::same(old, "Make the chat a PWA") && !super::same(old, "Make the chat a PWA, with icons (check: `npm test`)"));
+        // The lane started with the old text: merged, it ticks the item as the plan has it now, and no other.
+        let (text, n) = super::tick_text(&format!("## 1. Step\n- [ ] {now}\n- [ ] Another\n"), &[("1".into(), old.into())]);
+        assert_eq!((n, text.contains(&format!("- [x] {now}")), text.contains("- [ ] Another")), (1, true, true));
     }
 }
