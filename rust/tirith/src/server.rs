@@ -78,7 +78,6 @@ fn origin_host_ok(host: Option<&str>, origin: Option<&str>, port: u16) -> bool {
 #[cfg(test)]
 mod tests {
     use super::origin_host_ok;
-
     #[test]
     fn same_origin_checks_host() {
         let p = 7777;

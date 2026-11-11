@@ -313,7 +313,6 @@ pub async fn add_worktree(repo: &Path, dir: &Path, branch: Option<&str>, exclude
 #[cfg(test)]
 mod tests {
     use super::*;
-
     #[test]
     fn lane_log_redacts_key_prefixes() {
         let log = "GOOGLE_API_KEY=AIzaSyABCDEFGHIJKLMNOP\n{\"GITHUB_TOKEN\":\"ghp_abcdefghijklmnop12\"}\nMY_KEY: sk-abcdef123456789\nused AIzaSyZZZZZZZZZZZZZZ here\nplain line";
@@ -321,8 +320,7 @@ mod tests {
         for leak in ["AIza", "ghp_", "sk-", "abcdefghijklmnop12"] {
             assert!(!out.contains(leak), "leaked {leak}: {out}");
         }
-        assert!(out.contains("GOOGLE_API_KEY=[redacted]"));
-        assert!(out.contains("plain line"));
+        assert!(out.contains("GOOGLE_API_KEY=[redacted]") && out.contains("plain line"));
     }
     #[test]
     fn child_path_includes_cargo_bin() {
@@ -335,7 +333,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(&home);
         assert_eq!(path_with_cargo(None, "/usr/bin", &home), "/usr/bin");
     }
-
     #[tokio::test]
     async fn worktree_local_properties() {
         let base = std::env::temp_dir().join(format!("tirith-lp-{}", std::process::id()));
@@ -355,7 +352,6 @@ mod tests {
         assert_eq!(std::fs::read_to_string(wt.join("android/local.properties")).unwrap(), "sdk.dir=/sdk\n");
         let _ = std::fs::remove_dir_all(&base);
     }
-
     #[tokio::test]
     async fn sparse_zoo_lane() {
         let repo = std::env::temp_dir().join(format!("tirith-sp-{}", std::process::id()));

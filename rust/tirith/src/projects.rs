@@ -206,7 +206,6 @@ pub fn cli(pos: &[&str], flag: crate::client::Flag) -> Option<Result<(), String>
 #[cfg(test)]
 mod tests {
     use super::*;
-
     #[test]
     fn project_add_appends_a_block_and_keeps_the_file() {
         let old = "# mine\n[[projects]]\nid = \"a\"\nrepo = \"~/a\"\n\n[guard]\nwords = [\"x\"]";
@@ -215,7 +214,6 @@ mod tests {
         assert_eq!((ps.len(), ps[1].id.as_str(), ps[1].name.as_str(), ps[1].repo.as_str()), (2, "quote-and-back", "Quote \" and \\ back", "/Users/me/my \"b\""));
         assert!(block("projects = []\n", &p).is_err() && block("x = [\n", &p).is_err() && block("", &p).unwrap().starts_with("[[projects]]"));
     }
-
     #[test]
     fn project_add_names_ids_and_colors() {
         let mk = |id: &str| Project { id: id.into(), color: Some(COLORS[0].into()), ..Default::default() };
@@ -225,7 +223,6 @@ mod tests {
         assert_eq!((p("x", "").unwrap().color, p("x", " #ABCDEF ").unwrap().color), (Some(COLORS[1].into()), Some("#abcdef".into())));
         assert!(["red", "#12345g", "#ñññ"].iter().all(|c| p("x", c).is_err()) && p("two\nlines", "").is_err() && p(&"x".repeat(81), "").is_err());
     }
-
     #[test]
     fn project_add_refuses_folders_that_cannot_be_projects() {
         let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("../../target/projects-test-{}", std::process::id()));
