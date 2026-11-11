@@ -9,7 +9,7 @@
 
 pub(crate) mod sealed;
 
-use crate::app::{bad, now_iso, Shared, R};
+use crate::app::{bad, now_iso, now_s, Shared, R};
 use crate::client::{call, Flag};
 use crate::config::get as cfg_get;
 use crate::{brain, manager};
@@ -27,6 +27,7 @@ use tokio::sync::{mpsc, Notify};
 
 const BRAKE: u32 = 30;
 const KEPT: usize = 40;
+const CODE_SECS: u64 = 900; // how long a pairing code is good for: a picture of the page is soon worth nothing
 const BRAKE_TEXT: &str = "I stopped answering: 30 messages in a row came from agents and none from the owner. I answer again when the owner writes from a paired phone.";
 /// How the manager is told that a room's line is the owner's own.
 const PHONE: &str = "(the owner's paired phone)";
@@ -68,8 +69,9 @@ struct Room {
     cursor: Option<u64>,
     devices: Vec<Peer>,
     managers: Vec<Peer>,
-    /// The code of the current one-use QR; empty once it was used. A new QR replaces it.
+    /// The code of the current one-use QR, good for `CODE_SECS` from `invite_at`; empty once it was used. A new QR replaces it.
     invite: String,
+    invite_at: u64,
     /// The current one-use code for another manager, `<room>:<my key id>:<code>`; empty once it was used.
     peer_code: String,
     streak: u32,
@@ -367,7 +369,7 @@ fn handle(r: &mut Room, me: &sealed::Me, platform: &str, m: &Value, backlog: boo
     }
     if r.private() && !mine && word == "tirith-pair" {
         // A phone that is here already may scan again: its code is used up and it is told so once more.
-        if r.kind == "manager" && burn(&mut r.invite, &text, "tirith-pair") {
+        if r.kind == "manager" && now_s().saturating_sub(r.invite_at) < CODE_SECS && burn(&mut r.invite, &text, "tirith-pair") {
             r.managers.retain(|p| p.key_id != id);
             if !r.devices.iter().any(|d| d.key_id == id) {
                 r.devices.push(Peer { name: from, key_id: id, public: author.clone(), since: at.clone(), last_seen: at, accepted: true, blocked: false });
@@ -541,7 +543,7 @@ fn view(app: &Shared, r: &Room) -> Value {
         "id": r.id, "title": r.title, "project": r.project, "kind": r.kind, "private": r.private(),
         "url": format!("{base}/r/{}", r.id), "me": {"name": r.me, "key_id": r.me_id},
         "link": if manager { json!(chat_url(&base, r, None)) } else { Value::Null },
-        "invite": if manager && !r.invite.is_empty() { json!(chat_url(&base, r, Some(&r.invite))) } else { Value::Null },
+        "invite": if manager && !r.invite.is_empty() && now_s().saturating_sub(r.invite_at) < CODE_SECS { json!(chat_url(&base, r, Some(&r.invite))) } else { Value::Null },
         "peer_code": r.peer_code, "braked": r.braked, "error": r.error, "here": r.here, "summary": summary, "needs_owner": needs,
         "devices": r.devices.iter().map(|d| json!({"name": d.name, "key_id": d.key_id, "since": d.since, "last_seen": d.last_seen})).collect::<Vec<_>>(),
         "managers": r.managers.iter().map(|d| json!({"name": d.name, "key_id": d.key_id, "accepted": d.accepted, "blocked": d.blocked, "last_seen": d.last_seen})).collect::<Vec<_>>(),
@@ -563,7 +565,7 @@ async fn create(app: &Shared, title: &str, project: &str, invite: String) -> Res
     let id = sealed::new_room(&base).await?;
     sealed::post(&base, &me, "announce", &id, json!("joined")).await?;
     let title: String = title.chars().filter(|c| !c.is_control() && *c != '<' && *c != '>').take(80).collect();
-    let r = Room { id: id.clone(), title: title.trim().to_string(), project: project.into(), kind: "manager".into(), me: me.name.clone(), me_id: me.id.clone(), invite, ..Default::default() };
+    let r = Room { id: id.clone(), title: title.trim().to_string(), project: project.into(), kind: "manager".into(), me: me.name.clone(), me_id: me.id.clone(), invite, invite_at: now_s(), ..Default::default() };
     save(app, &r);
     watch(app, &id);
     WAKE.notify_one(); // the owner's phones are added to it
@@ -663,7 +665,7 @@ fn as_manager<T>(app: &Shared, id: &str, refusal: &str, f: impl FnOnce(&mut Room
 }
 
 async fn api_qr(State(app): State<Shared>, Path(id): Path<String>) -> R {
-    as_manager(&app, &id, "only the manager who made the room pairs phones", |r| r.invite = new_code())?;
+    as_manager(&app, &id, "only the manager who made the room pairs phones", |r| (r.invite, r.invite_at) = (new_code(), now_s()))?;
     Ok(Json(view(&app, &known(&id)?)))
 }
 
