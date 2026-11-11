@@ -196,8 +196,7 @@ async fn run_stage(app: &Shared, pipe: &Pipe, dir: &Path, name: &str, run: &str)
                 kill_group(pid, libc::SIGKILL);
             }
             let _ = child.wait().await;
-            // A stage that timed out gets a doubled limit next time, for that project and stage only.
-            app.set_kv(&format!("stage_learned:{}:{name}", pipe.project), Some(&(stage_limit_min(app, &pipe.project, name) * 2).to_string()));
+            app.set_kv(&format!("stage_learned:{}:{name}", pipe.project), Some(&(stage_limit_min(app, &pipe.project, name) * 2).to_string())); // timed out: a doubled limit next time, for that project and stage only
             "timeout"
         }
     };
@@ -419,16 +418,16 @@ async fn land(app: &Shared, project: &Project, pipe: &Pipe, slot: &Path, base: &
 
 /// A deploy stage (its `kind`, else a name that says so) is no check of a lane: it publishes main.
 fn deploys(s: &Stage) -> bool {
-    s.kind == "deploy" || (s.kind.is_empty() && ["deploy", "release", "publish", "ship"].contains(&s.name.as_str()))
+    let kind = s.kind.trim().to_ascii_lowercase();
+    kind == "deploy" || (kind.is_empty() && ["deploy", "release", "publish", "ship"].contains(&s.name.as_str()))
 }
 
-/// Runs the project's deploy stages on main as it is now, in the merge slot, so what is on main is what is deployed
-/// (when the merge changed files: the stages whose `paths` match them; else all, and with no such stage none is owed). A failure never
-/// undoes or holds back a merge: the manager is told once and the worker tries again after ten minutes, then after
-/// twice as long each time, six hours at most, until it passes. `deploy_due:<project>` is "<when>@<wait>": when to
-/// try again and the wait since the last failure; "0@.." while a deploy runs, so one cut short by a restart is due at once.
+/// Deploys main as it is now, in the merge slot: after a merge the stages whose `paths` match what it changed, else (or when one is owed) all.
+/// A failure never holds back a merge: the manager is told once, the worker tries again after 10 min, then twice as long each time (6 h at most).
+/// `deploy_due:<project>` is "<when>@<wait since the last failure>"; "0@.." while one runs, so one cut short by a restart is due at once.
 async fn deploy(app: &Shared, project: &Project, changed: &[String]) {
     let (manifest, key) = (app.manifest(&project.repo()), format!("deploy_due:{}", project.id));
+    let changed = if app.kv(&key).is_some() { &[][..] } else { changed }; // a deploy that is owed is a whole one
     let stages: Vec<&Stage> = manifest.stages.iter().filter(|s| deploys(s) && (changed.is_empty() || wanted(s, changed))).collect();
     if stages.is_empty() {
         return app.set_kv(&key, app.kv(&key).filter(|_| !changed.is_empty()).as_deref());
@@ -441,6 +440,7 @@ async fn deploy(app: &Shared, project: &Project, changed: &[String]) {
         let slot = merge_slot(project, &manifest).await?;
         reset(&slot, &sha).await?;
         for st in stages {
+            app.set_kv(&format!("stage_learned:{}:{}", project.id, st.name), None); // a hanging deploy is tried again with the usual limit, not a doubled one
             run_stage(app, &pipe, &slot, &st.name, &st.run).await?;
         }
         Ok::<_, String>(())
@@ -486,10 +486,7 @@ fn clear_red(app: &Shared, project: &str) {
 /// Retry from the page: a merge pipeline's failed lanes go back to the queue; a main pipeline runs its checks
 /// again on the current main; a deploy pipeline deploys the current main.
 pub fn retry(app: &Shared, id: &str) -> Result<(), String> {
-    let p = pipeline(app, id);
-    if p.is_null() {
-        return Err(format!("no pipeline '{id}'"));
-    }
+    let p = Some(pipeline(app, id)).filter(|p| !p.is_null()).ok_or(format!("no pipeline '{id}'"))?;
     if p["kind"] == "merge" {
         let failed: Vec<Lane> = p["lanes"].as_str().unwrap_or("").split(',').filter_map(|l| app.lane(l)).filter(|l| l.status == "failed").collect();
         if failed.is_empty() {
