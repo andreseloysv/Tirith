@@ -207,11 +207,27 @@ fn next_item(app: &Shared, lanes: &[Lane], rr: &mut usize, ok: &mut dyn FnMut(&P
     None
 }
 
+/// Seconds since the agent's log last got a line other than an `api_retry` one (those keep the file fresh while the agent is stuck). `seen` remembers per lane the last real line and when it appeared.
+fn quiet_s(seen: &mut HashMap<String, (u64, u64)>, id: &str, tail: &str, log_age: u64, now: u64) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let sig = tail.lines().rev().find(|l| !l.contains("\"api_retry\"")).map_or(0, |l| {
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        l.hash(&mut h);
+        h.finish()
+    });
+    let e = seen.entry(id.to_string()).or_insert((sig, now.saturating_sub(log_age)));
+    if e.0 != sig {
+        *e = (sig, now);
+    }
+    now.saturating_sub(e.1)
+}
+
 /// Every few seconds (or when woken): stop idle lanes, pick up ended processes, and when the machine has room start the oldest queued lane (manual, sent back or answered) or else the autopilot's next item.
 pub async fn scheduler(app: Shared) {
     let mut rr = 0;
     let mut said: HashMap<String, String> = HashMap::new();
     let mut tick: u64 = 0;
+    let mut seen: HashMap<String, (u64, u64)> = HashMap::new();
     loop {
         let _ = tokio::time::timeout(Duration::from_secs(3), app.sched_wake.notified()).await;
         // config.toml changed by hand: the page gets the projects again
@@ -233,11 +249,16 @@ pub async fn scheduler(app: Shared) {
         app.emit("load", serde_json::json!({"load": (load * 100.0).round() / 100.0, "running": running, "max": cfg.max_parallel}));
         for l in lanes.iter().filter(|l| l.pid.is_some()) {
             let tracked = app.children.lock().unwrap().contains(&l.id);
-            let log_idle = log_age(&app, &l.id);
-            let idle = (now_s().saturating_sub(l.last_activity)).min(log_idle);
+            let text = tail(&app.home.join(format!("logs/lanes/{}.log", l.id)), 200);
+            let quiet = quiet_s(&mut seen, &l.id, &text, log_age(&app, &l.id), now_s());
+            let idle = (now_s().saturating_sub(l.last_activity)).min(quiet);
             if l.status == "running" && idle > cfg.inactivity_min * 60 {
                 kill_group(l.pid.unwrap_or(0), libc::SIGKILL);
-                app.event(&l.id, &l.project, "idle", "", &format!("stopped: no activity for {} min", cfg.inactivity_min), "");
+                let why = format!("no new output for {} min (an agent stuck retrying its API call counts as silent)", cfg.inactivity_min);
+                app.event(&l.id, &l.project, "idle", "", &format!("stopped: {why}"), "");
+                app.update_lane(&l.id, |x| x.pid = None);
+                seen.remove(&l.id);
+                send_back(&app, l, &format!("Your agent was stopped: {why}. Continue the work on your branch."));
             } else if !tracked && !l.pid.is_some_and(alive) {
                 ended(&app, &l.id, None).await; // its process ended while the daemon was down
             }
@@ -579,6 +600,20 @@ pub fn send_back(app: &Shared, lane: &Lane, reason: &str) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn idle_lane_after_api_retry_is_stopped() {
+        let mut seen = std::collections::HashMap::new();
+        let real = "{\"type\":\"assistant\",\"text\":\"working\"}\n";
+        let retry = "{\"type\":\"system\",\"subtype\":\"api_retry\",\"attempt\":3}\n";
+        assert_eq!(super::quiet_s(&mut seen, "a", real, 0, 1000), 0);
+        // retries keep the file's mtime fresh (log_age 0) but are not output
+        let text = format!("{real}{retry}{retry}");
+        assert_eq!(super::quiet_s(&mut seen, "a", &text, 0, 1000 + 20 * 60 + 1), 20 * 60 + 1);
+        // a real line resets the clock
+        let text = format!("{text}{real}x\n");
+        assert_eq!(super::quiet_s(&mut seen, "a", &text, 0, 1000 + 20 * 60 + 2), 0);
+    }
+
     #[test]
     fn lane_runs_clippy_before_finish() {
         let dir = std::env::temp_dir().join(format!("tirith-clippy-{}", std::process::id()));
