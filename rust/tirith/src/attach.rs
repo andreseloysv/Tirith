@@ -14,11 +14,9 @@ const LIMIT: usize = 25 * 1024 * 1024;
 
 /// The text appended to the owner's message so the manager can open the attached files (absolute paths).
 pub fn describe(paths: &[String]) -> String {
-    let list: String = paths.iter().map(|p| format!("\n- {p}")).collect();
-    if paths.is_empty() {
-        list
-    } else {
-        format!("\n\nAttached files (open them with your file-reading tool):{list}")
+    match paths {
+        [] => String::new(),
+        _ => format!("\n\nAttached files (open them with your file-reading tool):{}", paths.iter().map(|p| format!("\n- {p}")).collect::<String>()),
     }
 }
 

@@ -165,9 +165,7 @@ pub async fn flush_locked(app: &Shared, project: &str) {
     let pending = git(&repo, &["status", "--porcelain", "--", &rel]).await.unwrap_or_default();
     let result = if pending.is_empty() { Ok(String::new()) } else { git(&repo, &["commit", "-q", "-m", "Plan: update from Tirith", "--", &rel]).await };
     match result {
-        Ok(_) => {
-            app.plan_dirty.lock().unwrap().remove(project);
-        }
+        Ok(_) => _ = app.plan_dirty.lock().unwrap().remove(project),
         Err(e) => app.event("", project, "error", "plan", &format!("plan commit failed: {e}"), ""),
     }
 }
