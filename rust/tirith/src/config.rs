@@ -1,5 +1,4 @@
-//! `~/.tirith/config.toml` (projects, agent aliases, limits) and each project's `tirith.toml` (plan file,
-//! checks, lane excludes, extra rules). Unknown keys are ignored, so older files keep working.
+//! `~/.tirith/config.toml` (projects, agent aliases, limits) and each project's `tirith.toml` (plan file, checks, lane excludes, extra rules). Unknown keys are ignored, so older files keep working.
 
 use serde::{de::DeserializeOwned, Deserialize};
 use std::collections::BTreeMap;
@@ -43,7 +42,6 @@ pub struct Agent {
     pub command: String,
     #[serde(default)]
     pub settings: Option<String>,
-    /// Arguments of the manager's streaming chat session.
     #[serde(default)]
     pub chat_args: Option<Vec<String>>,
     /// Arguments of a lane run; `{brief}` and `{workspace}` are filled in.
@@ -99,7 +97,6 @@ impl Config {
         self.projects.iter().find(|p| p.id == id)
     }
 
-    /// The project a folder belongs to: inside its repo or inside its lanes folder.
     pub fn project_for(&self, cwd: &str) -> Option<&Project> {
         let cwd = Path::new(cwd);
         self.projects.iter().filter(|p| !p.repo.is_empty()).find(|p| cwd.starts_with(p.repo()) || cwd.starts_with(p.lanes_dir()))

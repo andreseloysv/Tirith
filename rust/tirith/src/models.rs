@@ -1,11 +1,4 @@
-//! Models per role and the fallback chain.
-//!
-//! Roles: "manager" (the chat session), "workers" (lanes), "ceo" (one-shot review), "brain" (small text jobs
-//! through the model API: only its model matters). Each has an agent alias, a model, an effort and a fallback
-//! chain. The effective setting is the owner's override from the page (kv `models:<role>`), else
-//! `[models.<role>]` of `config.toml`, else a default. Agents are aliases (`[agents.<alias>]`); the real command
-//! lives only in config.toml. Optional per alias: `model_flag`, `effort_flag` ("" = none) and `resume_args`
-//! (`{session}` and `{message}` are filled in); the known aliases have defaults.
+//! Models per role (manager, workers, ceo, brain) and the fallback chain: the owner's override from the page, else `[models.<role>]` of config.toml, else a default.
 
 use crate::app::{bad, Shared};
 use crate::client::{call, Flag};
@@ -64,7 +57,6 @@ pub fn role_with_source(app: &Shared, role: &str) -> (RoleSetting, &'static str)
     }
 }
 
-/// The effective setting of a role.
 pub fn role(app: &Shared, role: &str) -> RoleSetting {
     role_with_source(app, role).0
 }

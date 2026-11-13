@@ -1,7 +1,4 @@
-//! The plan: the project's markdown checklist (`## N. Title` steps, `- [ ] item` lines). Its content changes
-//! (new item, ticked item) are written to the file at once and committed in batches; which lane works on
-//! an item lives in the daemon, not in the file. The daemon is the only writer. An item may carry its own check:
-//! `- [ ] Text (check: `cmd`)`; the merge queue runs it, and ticks a merged item in the merge commit itself.
+//! The plan: the project's markdown checklist, written by the daemon only; an item may carry its own `(check: `cmd`)` that the merge queue runs.
 
 use crate::app::{git, Shared};
 use regex::Regex;
@@ -73,14 +70,12 @@ pub fn is_open(app: &Shared, project: &str, step: &str, item: &str) -> Result<bo
     Ok(s.items.iter().any(|i| !i.done && same(&i.text, &clean(item))))
 }
 
-/// Two item texts that name the same item: equal once their `(check: ...)` is left out. A lane carries the text its
-/// item had when it started; when only the check is rewritten meanwhile, the lane still belongs to that item (it is
+/// Two item texts that name the same item: equal once their `(check: ...)` is left out. A lane carries the text its item had when it started; when only the check is rewritten meanwhile, the lane still belongs to that item (it is
 /// checked with the check the plan has now, and ticked when it is merged).
 pub fn same(a: &str, b: &str) -> bool {
     a == b || CHECK.replace(a, "").trim() == CHECK.replace(b, "").trim()
 }
 
-/// One item of the plan in the main checkout.
 pub fn find(app: &Shared, project: &str, step: &str, item: &str) -> Option<Item> {
     read(app, project).ok()?.into_iter().find(|s| s.num == step)?.items.into_iter().find(|i| same(&i.text, item))
 }

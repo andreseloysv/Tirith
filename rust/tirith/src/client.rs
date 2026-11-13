@@ -27,7 +27,6 @@ pub fn call_with(method: &str, path: &str, body: String, headers: &[(&str, Strin
     (200..300).contains(&code).then(|| body.to_string()).ok_or_else(|| body.trim().to_string())
 }
 
-/// Prints a lane-shaped answer as one line, anything else as "ok".
 pub fn print(r: Result<String, String>) -> Result<(), String> {
     let body = r?;
     match serde_json::from_str::<Value>(&body) {

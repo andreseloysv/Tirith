@@ -1,9 +1,4 @@
-//! agentsmessenger.com rooms: public rooms Tirith watches (`[[rooms]]` in config.toml), and private `sealed-` rooms where the owner talks to the managers from a phone, end-to-end encrypted, compatible with `am.mjs` and
-//! the agentsmessenger.com chat page. One task per room long-polls it.
-//!
-//! Who gives orders: only a phone paired with a one-use QR code (`tirith-pair <code>`) is the owner, in every room made
-//! here (each project gets a room, each room gets every phone). Other agents reach the manager as information. After 30
-//! agent messages in a row with nothing from a paired phone, Tirith stops delivering and says so once, until a phone writes.
+//! agentsmessenger.com rooms: public rooms Tirith watches, and private `sealed-` rooms where the owner talks to the managers from a phone, end-to-end encrypted. Only a phone paired with a one-use QR is the owner.
 
 pub(crate) mod sealed;
 
@@ -91,10 +86,6 @@ impl Room {
     fn private(&self) -> bool {
         self.kind != "public"
     }
-    /// Who may read what this Tirith writes: the paired phones and the accepted managers.
-    fn readers(&self) -> Vec<String> {
-        self.devices.iter().chain(self.managers.iter().filter(|m| m.accepted)).map(|p| p.public.clone()).filter(|p| !p.is_empty()).collect()
-    }
 }
 
 static ROOMS: Mutex<BTreeMap<String, Room>> = Mutex::new(BTreeMap::new());
@@ -131,7 +122,6 @@ fn room(id: &str) -> Option<Room> {
     ROOMS.lock().unwrap().get(id).cloned()
 }
 
-/// Writes a record to SQLite and tells the page.
 fn store(app: &Shared, r: &Room) {
     let data = serde_json::to_string(r).unwrap_or_default();
     let _ = app.db.lock().unwrap().execute("INSERT OR REPLACE INTO am_rooms (id, data) VALUES (?1, ?2)", [&r.id, &data]);
@@ -237,7 +227,6 @@ async fn provide(app: &Shared, said: &mut String) {
     }
 }
 
-/// Starts the room's task unless it runs already.
 fn watch(app: &Shared, id: &str) {
     let true = RUNNING.lock().unwrap().get_or_insert_with(HashSet::new).insert(id.to_string()) else { return };
     let (app, id) = (app.clone(), id.to_string());
@@ -515,7 +504,6 @@ pub fn again(app: &Shared, project: Option<&str>) {
     }
 }
 
-/// The page's summary of a public room, from the brain when it answers.
 fn summarize(app: &Shared, id: &str) {
     let Some(r) = room(id) else { return };
     let transcript: Vec<String> = r.messages.iter().map(|m| format!("{}: {}", m.from, m.text)).collect();
@@ -571,7 +559,6 @@ fn new_code() -> String {
     sealed::hex(&rand::random::<[u8; 16]>())
 }
 
-/// A room of this manager; `invite` is the code of its first one-use QR ("" for none).
 async fn create(app: &Shared, title: &str, project: &str, invite: String) -> Result<Room, String> {
     let base = base(app);
     let me = sealed::identity(&app.home, &my_name(app))?;
@@ -585,7 +572,6 @@ async fn create(app: &Shared, title: &str, project: &str, invite: String) -> Res
     Ok(r)
 }
 
-/// Joins another manager's room with its peer code `<room>:<manager key id>:<code>`.
 async fn join(app: &Shared, code: &str, project: &str) -> Result<Room, String> {
     let parts: Vec<&str> = code.trim().split(':').collect();
     let [id, key, secret] = parts[..] else { return Err("that is not a room code (sealed-<room>:<key id>:<code>)".into()) };
@@ -607,7 +593,8 @@ async fn join(app: &Shared, code: &str, project: &str) -> Result<Room, String> {
 /// The owner writes in a room (page or CLI): it counts as the owner for the brake.
 async fn say(app: &Shared, id: &str, text: &str) -> Result<(), String> {
     let r = update(app, id, |r| (r.streak, r.braked) = (0, false)).and(room(id)).ok_or("no such room")?;
-    send(app, &r, text, &r.readers()).await
+    let readers: Vec<String> = r.devices.iter().chain(r.managers.iter().filter(|m| m.accepted)).map(|p| p.public.clone()).filter(|p| !p.is_empty()).collect(); // the paired phones and the accepted managers
+    send(app, &r, text, &readers).await
 }
 
 fn known(id: &str) -> Result<Room, (StatusCode, String)> {
@@ -705,13 +692,7 @@ async fn api_svg(State(app): State<Shared>, Path(id): Path<String>, Query(q): Qu
     }
 }
 
-const USAGE: &str = "tirith room new [--title T] [--project P]   a private room: its QR connects your phone to every project
-tirith room link <room>              the permanent link of a phone already in the room
-tirith room qr <room>                a new one-use QR to connect another phone
-tirith room forget <phone key id>    a lost phone reads and orders nothing more, in any room
-tirith room invite <room>            a one-use code for another manager
-tirith room join <peer code>         join another manager's room
-tirith room leave <room> | list | tail <room> | say <room> \"<text>\"";
+const USAGE: &str = include_str!("../assets/usage-room.txt");
 
 fn one(id: &str) -> Result<Value, String> {
     serde_json::from_str(&call("GET", &format!("/api/rooms/{id}"), None)?).map_err(|e| e.to_string())

@@ -1,5 +1,4 @@
-//! Adding a project (the page's "+", `tirith project add`): the folder gets a git repository, the commit guard and a
-//! plan with a first step, then a `[[projects]]` block appended to config.toml (its existing text is never rewritten).
+//! Adding a project (the page's "+", `tirith project add`): git repository, commit guard, a plan with a first step, then a `[[projects]]` block appended to config.toml.
 
 use crate::app::{bad, git, Shared, R};
 use crate::config::{expand, home_dir, Project};
@@ -13,14 +12,9 @@ const COLORS: [&str; 8] = ["#2f7d5b", "#3b6fd8", "#8a5cd0", "#d0663b", "#c2417c"
 /// One config.toml write at a time, so two adds never lose one another; one folder picker on screen at a time.
 static WRITING: std::sync::Mutex<()> = std::sync::Mutex::new(());
 static PICKING: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
-/// AppKit's open panel through JXA, floating above every window: since macOS 14 a helper process may not come to the
-/// front, so AppleScript's `choose folder` opened behind the page. It prints the folder, or nothing when cancelled.
-const PANEL: &str = "ObjC.import('AppKit'); function run(argv) { const app = $.NSApplication.sharedApplication, p = $.NSOpenPanel.openPanel; \
-    app.setActivationPolicy($.NSApplicationActivationPolicyAccessory); p.canChooseFiles = false; p.canChooseDirectories = true; p.canCreateDirectories = true; \
-    p.message = 'Choose the project folder'; p.directoryURL = $.NSURL.fileURLWithPath(argv[0]); p.level = $.NSStatusWindowLevel; app.activateIgnoringOtherApps(true); \
-    return p.runModal == $.NSModalResponseOK ? ObjC.unwrap(p.URL.path) : '' }";
+/// AppKit's open panel through JXA, floating above every window: since macOS 14 a helper process may not come to the front, so AppleScript's `choose folder` opened behind the page. It prints the folder, or nothing when cancelled.
+const PANEL: &str = include_str!("../assets/panel.js");
 
-/// The projects as the page shows them.
 pub fn list(app: &Shared) -> Vec<Value> {
     app.cfg().projects.iter().map(|p| json!({"id": p.id, "name": p.name, "color": p.color, "autopilot": crate::lanes::autopilot_on(app, &p.id), "main_red": app.kv(&format!("main_red:{}", p.id))})).collect()
 }
