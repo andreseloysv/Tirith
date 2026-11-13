@@ -262,8 +262,7 @@ async fn hook(State(app): State<Shared>, Path(event): Path<String>, headers: Hea
 /// The page: the files of `web/` (`[app] web_dir` of config.toml, else this repository's), read from disk on each
 /// request so a change to the page shows on reload. Nothing outside that folder is ever served.
 async fn web_file(State(app): State<Shared>, uri: axum::http::Uri) -> Response {
-    let rel = uri.path().trim_start_matches('/');
-    let rel = if rel.is_empty() { "index.html" } else { rel };
+    let rel = Some(uri.path().trim_start_matches('/')).filter(|r| !r.is_empty()).unwrap_or("index.html");
     if rel.split('/').any(|p| p.is_empty() || p == ".." || p.starts_with('.')) {
         return (StatusCode::NOT_FOUND, "not found").into_response();
     }
