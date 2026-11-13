@@ -289,8 +289,7 @@ fn brief(app: &Shared, why: &str) -> String {
     s
 }
 
-/// The CEO review is read-only: file-writing tools are denied; everything else, including every `tirith`
-/// command that only reads (status, plan show, lane log, timeout get, merge status), is allowed.
+/// The CEO review is read-only: file-writing tools are denied; everything else, including every `tirith` command that only reads (status, plan show, lane log, timeout get, merge status), is allowed.
 fn ceo_permission(tool: &str, input: &Value) -> Value {
     if crate::rules::EDIT_TOOLS.contains(&tool) {
         json!({"behavior": "deny", "message": "the CEO review is read-only"})

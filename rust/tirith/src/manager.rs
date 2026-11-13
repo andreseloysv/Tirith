@@ -103,8 +103,7 @@ fn deliver(app: &Shared, project: &str, text: &str) {
     }
 }
 
-/// A message from a room (a paired phone or another agent): shown in the chat of the room's project, handed to
-/// that project's manager, and the manager's answer to this turn goes back to that room.
+/// A message from a room (a paired phone or another agent): shown in the chat of the room's project, handed to that project's manager, and the manager's answer to this turn goes back to that room.
 pub fn from_room(app: &Shared, project: &str, room: &str, author: &str, text: &str) {
     let project = here(app, project);
     app.chat("room", &format!("{author} ({room}): {text}"), project);
@@ -122,8 +121,7 @@ pub fn busy() -> Vec<String> {
     TALKS.lock().unwrap().iter().filter(|(_, t)| t.busy).map(|(p, _)| p.clone()).collect()
 }
 
-/// Stops the current turn of the conversation's session (the session lives on): a stream-json `control_request`
-/// with subtype `interrupt`, as the old collector sent. Err when no turn is running.
+/// Stops the current turn of the conversation's session (the session lives on): a stream-json `control_request` with subtype `interrupt`, as the old collector sent. Err when no turn is running.
 pub fn interrupt(project: &str) -> Result<(), String> {
     let tx = talk(project, |t| t.tx.clone().filter(|_| t.busy)).ok_or("the manager is not working on a turn")?;
     let line = json!({"type": "control_request", "request_id": format!("int-{:08x}", rand::random::<u32>()), "request": {"subtype": "interrupt"}});
@@ -138,15 +136,13 @@ pub fn say(app: &Shared, project: &str, text: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// A report from Tirith that needs the manager (a lane asked or failed, a red main): shown in the project's chat
-/// at once and handed over together with every other report of the next 2 seconds, so many events cost one turn.
+/// A report from Tirith that needs the manager (a lane asked or failed, a red main): shown in the project's chat at once and handed over together with every other report of the next 2 seconds, so many events cost one turn.
 pub fn notify(app: &Shared, project: &str, text: &str) {
     report(app, project, text);
     tell(app, project, text);
 }
 
-/// A report that needs no decision (a merge, a green main): shown in the project's chat, and handed to the manager
-/// with its next message instead of costing a turn of its own.
+/// A report that needs no decision (a merge, a green main): shown in the project's chat, and handed to the manager with its next message instead of costing a turn of its own.
 pub fn inform(app: &Shared, project: &str, text: &str) {
     report(app, project, text);
     talk(here(app, project), |t| {
@@ -272,8 +268,7 @@ async fn run(app: Shared, project: String) {
     }
 }
 
-/// Starts a streaming chat agent of `role` ("manager" or "ceo") in `<home>/<role>` (a project's manager in its own
-/// folder below it, so the agent's own notes stay with the project), sandboxed, logging to `logs/<role>.log`.
+/// Starts a streaming chat agent of `role` ("manager" or "ceo") in `<home>/<role>` (a project's manager in its own folder below it, so the agent's own notes stay with the project), sandboxed, logging to `logs/<role>.log`.
 pub fn spawn_chat(app: &Shared, role: &str, project: &str, argv: Vec<String>) -> Result<(tokio::process::Child, tokio::process::ChildStdin, tokio::process::ChildStdout), String> {
     let launch = sandbox::wrap(app, role, argv);
     let dir = app.home.join(role).join(project);
