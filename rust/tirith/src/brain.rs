@@ -53,9 +53,7 @@ pub async fn ask(app: &Shared, job: &str, input: &str) -> Option<String> {
     CALLS.fetch_add(1, Ordering::Relaxed);
     let result = async {
         let r = client().post(format!("{}/chat/completions", url(app))).bearer_auth(key).json(&body).send().await.map_err(|e| format!("call failed: {}", e.without_url()))?;
-        if !r.status().is_success() {
-            return Err(format!("model API returned HTTP {}", r.status().as_u16()));
-        }
+        (r.status().is_success()).then_some(()).ok_or_else(|| format!("model API returned HTTP {}", r.status().as_u16()))?;
         let v: Value = r.json().await.map_err(|_| "unexpected response".to_string())?;
         let c = &v["choices"][0]["message"]["content"];
         let text = c.as_str().map(String::from).unwrap_or_else(|| c.as_array().into_iter().flatten().filter_map(|p| p["text"].as_str()).collect());
