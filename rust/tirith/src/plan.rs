@@ -137,9 +137,7 @@ pub async fn add(app: &Shared, project: &str, step: &str, text: &str) -> Result<
     }
     change(app, project, |lines, steps| {
         let i = steps.iter().position(|s| s.num == step).ok_or(format!("the plan has no step {step}"))?;
-        if steps[i].items.iter().any(|it| same(&it.text, &text)) {
-            return Err(format!("step {step} already has that item"));
-        }
+        (!(steps[i].items.iter().any(|it| same(&it.text, &text)))).then_some(()).ok_or_else(|| format!("step {step} already has that item"))?;
         let end = steps.get(i + 1).map(|s| s.line).unwrap_or(lines.len());
         let at = (steps[i].line + 1..end).rev().find(|&k| !lines[k].trim().is_empty()).map_or(steps[i].line + 1, |k| k + 1);
         lines.insert(at, format!("- [ ] {text}"));
