@@ -1,8 +1,4 @@
-//! The merge queue. Up to five lanes of one project ride one train: in the project's merge slot
-//! (`<tirith home>/lanes/<project>/merge`) their branches are merged with main, the project's checks and the items' own checks
-//! run, and only a green train moves main (fast-forward), with the plan ticks in the same commits. A red train is
-//! split into single lanes; a red single lane is first compared with main, so a broken main never blames a lane.
-//! A project's deploy stages are no checks: they run after main has moved, on that main (`deploy`).
+//! The merge queue: up to five lanes of one project ride one train in the project's merge slot; only a green train moves main (fast-forward), then the deploy stages run on that main.
 
 use crate::app::{add_worktree, git, kill_group, now_iso, now_s, tail, Lane, Shared};
 use crate::config::{Manifest, Project, Stage};
@@ -25,7 +21,6 @@ fn stage_lock(project: &str) -> std::sync::Arc<tokio::sync::Mutex<()>> {
     STAGE_LOCKS.lock().unwrap().entry(project.to_string()).or_default().clone()
 }
 
-/// One pipeline: a merge attempt ("merge") or a check of main ("main").
 struct Pipe {
     id: String,
     project: String,
@@ -49,8 +44,7 @@ pub async fn worker(app: Shared) {
             if tokio::time::timeout(Duration::from_secs(10), app.merge_wake.notified()).await.is_ok() {
                 tokio::time::sleep(Duration::from_secs(1)).await; // lanes ending together ride one train
             }
-            // A deploy that failed, or that a restart cut short, is tried again on main as it is now. The lock comes
-            // first: a deploy that the page asked for has settled what is due by the time the lock is had.
+            // A deploy that failed, or that a restart cut short, is tried again on main as it is now. The lock comes first: a deploy that the page asked for has settled what is due by the time the lock is had.
             let _busy = BUSY.lock().await;
             let due = |p: &&Project| app.kv(&format!("deploy_due:{}", p.id)).and_then(|v| v.split('@').next()?.parse().ok()).is_some_and(|t: u64| now_s() >= t);
             if let Some(project) = app.cfg().projects.iter().find(due).cloned() {
@@ -145,7 +139,6 @@ fn close_pipeline(app: &Shared, p: &Pipe, status: &str) {
     app.emit("pipeline", pipeline(app, &p.id));
 }
 
-/// One pipeline with its stages, as the page shows it.
 fn pipeline(app: &Shared, id: &str) -> Value {
     let mut rows = app.objects("SELECT id, project, kind, lanes, sha, status, started_at, ended_at FROM pipelines WHERE id = ?1", [id], &["id", "project", "kind", "lanes", "sha", "status", "started_at", "ended_at"]);
     let Some(mut row) = rows.pop() else { return Value::Null };
@@ -153,7 +146,6 @@ fn pipeline(app: &Shared, id: &str) -> Value {
     row
 }
 
-/// The newest pipelines (of one project, or of all with ""), newest first.
 pub fn list(app: &Shared, project: &str, limit: u32) -> Vec<Value> {
     let sql = format!("SELECT id FROM pipelines WHERE ?1 = '' OR project = ?1 ORDER BY rowid DESC LIMIT {limit}");
     app.query(&sql, [project], |r| r.get::<_, String>(0)).iter().map(|id| pipeline(app, id)).collect()
@@ -222,7 +214,6 @@ async fn run_stage(app: &Shared, pipe: &Pipe, dir: &Path, name: &str, run: &str)
     }
 }
 
-/// The project's persistent merge slot.
 async fn merge_slot(project: &Project, manifest: &Manifest) -> Result<PathBuf, String> {
     let slot = project.lanes_dir().join("merge");
     if !slot.exists() {
@@ -234,7 +225,6 @@ async fn merge_slot(project: &Project, manifest: &Manifest) -> Result<PathBuf, S
     Ok(slot)
 }
 
-/// A git error that means the disk is full.
 fn disk_full(e: &str) -> bool {
     e.to_lowercase().contains("no space left on device")
 }

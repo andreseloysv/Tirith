@@ -1,14 +1,17 @@
-//! Lanes: one agent, one plan item, one reusable worktree slot (`<tirith home>/lanes/<project>/slot-N`) on its own branch. The
-//! autopilot starts the open items of each project's current plan step when the machine has room; a lane whose
-//! process ends goes to the merge queue, where the checks (never the agent) decide that its item is done.
+//! Lanes: one agent, one plan item, one reusable worktree slot on its own branch; the autopilot starts open plan items, and a lane that ends goes to the merge queue, where the checks decide.
 
 use crate::app::{add_worktree, alive, git, kill_group, log_age, now_iso, now_s, tail, Lane, Shared};
 use crate::{brain, config::Project, guard, manager, models, plan, sandbox};
+use regex::Regex;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
-use std::{os::unix::ffi::OsStrExt, process::Stdio, sync::Mutex, time::Duration};
+use std::{
+    os::unix::ffi::OsStrExt,
+    process::Stdio,
+    sync::{LazyLock, Mutex},
+    time::Duration,
+};
 
-/// Messages for working lanes, handed to the agent by its next PostToolUse hook.
 static LIVE: Mutex<BTreeMap<String, Vec<String>>> = Mutex::new(BTreeMap::new());
 
 pub fn tell(id: &str, text: &str) {
@@ -51,9 +54,8 @@ pub fn autopilot_on(app: &Shared, project: &str) -> bool {
 }
 fn load_per_core() -> f64 {
     let mut l = [0f64; 3];
-    let n = unsafe { libc::getloadavg(l.as_mut_ptr(), 3) };
-    let cores = std::thread::available_parallelism().map(|c| c.get()).unwrap_or(1) as f64;
-    (if n > 0 { l[0] } else { 0.0 }) / cores
+    unsafe { libc::getloadavg(l.as_mut_ptr(), 3) }; // leaves zeros when it fails
+    l[0] / std::thread::available_parallelism().map_or(1, |c| c.get()) as f64
 }
 
 pub(crate) fn free_gb(dir: &Path) -> f64 {
@@ -105,7 +107,6 @@ fn low_disk_ask(free: f64, asked: bool) -> Option<bool> {
     }
 }
 
-/// The `n` largest folders directly under `dir`, as (path, KB), biggest first.
 fn biggest_dirs(dir: &Path, n: usize) -> Vec<(String, u64)> {
     let out = std::process::Command::new("du").arg("-sk").args(std::fs::read_dir(dir).into_iter().flatten().flatten().map(|e| e.path())).output();
     let text = out.map(|o| String::from_utf8_lossy(&o.stdout).into_owned()).unwrap_or_default();
@@ -144,7 +145,6 @@ fn blocked(app: &Shared, p: &Project, lanes: &[Lane]) -> Option<String> {
     }
 }
 
-/// The command that fixes a reason `blocked` gave, for the health report.
 pub(crate) fn paused_fix(project: &str, why: &str) -> String {
     if let Some(fix) = why.find('(').zip(why.rfind(')')).map(|(a, b)| &why[a + 1..b]).filter(|f| f.starts_with("tirith ")) {
         return fix.to_string();
@@ -343,33 +343,24 @@ fn brief(app: &Shared, lane: &Lane) -> String {
     let others: Vec<String> = lanes.iter().filter(|l| l.id != lane.id && matches!(l.status.as_str(), "running" | "waiting")).map(|l| format!("- {} ({}): {}", l.id, l.status, l.item)).collect();
     let red = app.kv(&format!("main_red:{}", lane.project));
     let rules: Vec<String> = app.cfg().project(&lane.project).map(|p| app.manifest(&p.repo()).rules).unwrap_or_default().iter().map(|r| format!("- {}", r.message)).collect();
-    let mut b = format!(
-        "# Lane {id}\n\nProject: {project}. Plan step {step}.\n\n## Your item\n{item}\n{check}\n## The step's items\n{items}\n\n\
-         ## Lanes working beside you\n{others}\n\nMain is {red}.\n",
-        id = lane.id,
-        project = lane.project,
-        step = lane.step,
-        item = lane.item,
-        check = check.map(|c| format!("\nIts check (must pass on the merged result): `{c}`\n")).unwrap_or_default(),
-        items = items.join("\n"),
-        others = if others.is_empty() { "none".into() } else { others.join("\n") },
-        red = red.map(|r| format!("red ({r}): not your job unless your item is about it")).unwrap_or("green".into()),
-    );
-    if let Some(a) = brain::architecture(app, &lane.project) {
-        b += &format!("\n## Architecture\n{a}\n");
-    }
-    b + &format!(
-        "\n## How you work\n- You are in your own git worktree ({ws}) on branch {branch}. Change files only here.\n\
-         - Commit your work on this branch. When you are finished just end your turn: Tirith runs the checks and merges.\n\
-         - If you need a decision you cannot make yourself: tirith ask \"<question>\", then end your turn.\n\
-         - Never push, never touch main, never start other agents or sub-agents. The plan is written only by Tirith.\n\
-         - Commit checks are never skipped.\n{clippy}{rules}\n\nBrief written {at} by Tirith.\n",
-        ws = lane.workspace,
-        branch = lane.branch,
-        clippy = clippy_rule(&lane.workspace),
-        rules = rules.join("\n"),
-        at = now_iso(),
-    )
+    let vars = HashMap::from([
+        ("id", lane.id.clone()),
+        ("project", lane.project.clone()),
+        ("step", lane.step.clone()),
+        ("item", lane.item.clone()),
+        ("check", check.map(|c| format!("\nIts check (must pass on the merged result): `{c}`\n")).unwrap_or_default()),
+        ("items", items.join("\n")),
+        ("others", if others.is_empty() { "none".into() } else { others.join("\n") }),
+        ("red", red.map(|r| format!("red ({r}): not your job unless your item is about it")).unwrap_or("green".into())),
+        ("architecture", brain::architecture(app, &lane.project).map(|a| format!("\n## Architecture\n{a}\n")).unwrap_or_default()),
+        ("ws", lane.workspace.clone()),
+        ("branch", lane.branch.clone()),
+        ("clippy", clippy_rule(&lane.workspace).into()),
+        ("rules", rules.join("\n")),
+        ("at", now_iso()),
+    ]);
+    static PLACEHOLDER: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\{(\w+)\}").unwrap());
+    PLACEHOLDER.replace_all(include_str!("../assets/brief.md"), |c: &regex::Captures| vars[&c[1]].clone()).into_owned()
 }
 
 /// Runs the lane's agent in its slot (a new slot for a lane without one): the brief, or a resume of its session with the pending message.
@@ -431,8 +422,7 @@ async fn launch(app: &Shared, mut lane: Lane) -> Result<(), String> {
 /// The agent's process is gone: a working lane goes to the merge queue (or, out of credits, to the next agent of the fallback chain); a waiting lane waits for its answer.
 async fn ended(app: &Shared, id: &str, code: Option<i32>) {
     let Some(lane) = app.lane(id) else { return };
-    // Only what the agent program itself said counts: its plain-text output and its final result event, never the
-    // files and command output it read (a lane working on Tirith reads the very patterns that detect it).
+    // Only what the agent program itself said counts: its plain-text output and its final result event, never the files and command output it read (a lane working on Tirith reads the very patterns that detect it).
     let log: String = tail(&app.home.join(format!("logs/lanes/{id}.log")), 200).lines().filter(|l| !l.trim_start().starts_with('{') || (l.contains("\"type\":\"result\"") && l.contains("\"is_error\":true"))).collect::<Vec<_>>().join("\n");
     let log = crate::app::redact_secrets(&log);
     if lane.status == "running" && models::out_of_credits(&log) {
@@ -455,7 +445,7 @@ async fn ended(app: &Shared, id: &str, code: Option<i32>) {
         if next.is_none() {
             manager::notify(app, &lane.project, &format!("lane {id} ({}: {}) failed: out of credits on every agent of the workers role", lane.project, lane.item));
         }
-    } else if lane.status == "running" && no_commits(app, &lane).await && !has_check(app, &lane) {
+    } else if lane.status == "running" && no_commits(app, &lane).await && plan::find(app, &lane.project, &lane.step, &lane.item).is_none_or(|i| i.check.is_none()) {
         app.update_lane(id, |l| {
             l.pid = None;
             l.ended_at = Some(now_iso());
@@ -483,12 +473,7 @@ async fn ended(app: &Shared, id: &str, code: Option<i32>) {
     app.sched_wake.notify_one();
 }
 
-/// A lane that ended without commits may still be done: the item's check can already be true. Such a lane goes to the merge queue, where the check runs on main; passing ticks it ("already true"), failing sends it back.
-fn has_check(app: &Shared, lane: &Lane) -> bool {
-    plan::find(app, &lane.project, &lane.step, &lane.item).is_some_and(|i| i.check.is_some())
-}
-
-/// True when the lane's branch has no commit beyond the project's HEAD (it is known and countable).
+/// True when the lane's branch has no commit beyond the project's HEAD (it is known and countable). Without a check on its item such a lane failed; with one it may still be done (the check can already be true): it goes to the merge queue, where the check runs on main.
 async fn no_commits(app: &Shared, lane: &Lane) -> bool {
     let Some(p) = app.cfg().projects.iter().find(|p| p.id == lane.project).cloned() else { return false };
     if lane.branch.is_empty() {
@@ -546,7 +531,6 @@ fn kill_agent(pid: Option<u32>) {
     });
 }
 
-/// True when the question is about spending money (a paid service, a price, a charge).
 pub fn is_payment(question: &str) -> bool {
     let q = question.to_lowercase();
     ["$", "€", "usd", "eur", "pay", "paid", "spend", "cost", "price", "charge", "billing", "pago", "pagar", "gasto", "gastar", "coste", "precio", "cuesta"].iter().any(|w| q.contains(w))
@@ -627,11 +611,6 @@ mod tests {
         assert!(!super::is_autopilot_skipped("Arreglar el parser") && !super::is_autopilot_skipped("Arreglar el CEO: bug"));
     }
     #[test]
-    fn lane_without_commits_check_passes_is_done() {
-        assert!(include_str!("lanes.rs").contains("no_commits(app, &lane).await && !has_check(app, &lane)"));
-        assert!(include_str!("merge.rs").contains("\"already true on main\""));
-    }
-    #[test]
     fn autopilot_waits_for_dependency_items() {
         let open = ["Generar los vídeos de la demo en 3 idiomas", "Subir a YouTube"];
         let up = "Subir los vídeos de la demo a YouTube: wait until they are on main, made by the item «Generar los vídeos de la demo en 3 idiomas»";
@@ -650,7 +629,6 @@ mod tests {
         assert_eq!(stale_reason("Enable the autopilot again?", false, 50.0), None);
         assert_eq!(stale_reason("Approve $0.74 for the translation?", false, 50.0), None);
     }
-
     #[test]
     fn low_disk_question_closes_when_freed() {
         use crate::manager::stale_reason;

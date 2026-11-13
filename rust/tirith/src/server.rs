@@ -51,8 +51,7 @@ pub fn router(app: Shared, port: u16) -> Router {
         .with_state(app)
 }
 
-/// A browser page from another origin may not call the API (no CSRF against 127.0.0.1).
-/// It also checks Host, so a DNS-rebinding page (Host: evil.example) cannot read the API either.
+/// A browser page from another origin may not call the API (no CSRF against 127.0.0.1). It also checks Host, so a DNS-rebinding page (Host: evil.example) cannot read the API either.
 async fn same_origin(req: Request, next: Next) -> Response {
     let port = PORT.get().copied().unwrap_or(0);
     let ok = {
@@ -77,19 +76,12 @@ mod tests {
     use super::origin_host_ok;
     #[test]
     fn same_origin_checks_host() {
-        let p = 7777;
+        let ok = |host, origin| origin_host_ok(Some(host), origin, 7777);
         // CLI, hooks and the page
-        assert!(origin_host_ok(Some("127.0.0.1"), None, p));
-        assert!(origin_host_ok(Some("127.0.0.1:7777"), None, p));
-        assert!(origin_host_ok(Some("localhost:7777"), Some("http://localhost:7777"), p));
-        assert!(origin_host_ok(Some("127.0.0.1:7777"), Some("http://127.0.0.1:7777"), p));
-        // DNS rebinding: foreign Host, even with no or a matching-looking Origin
-        assert!(!origin_host_ok(Some("evil.example:7777"), None, p));
-        assert!(!origin_host_ok(Some("evil.example"), Some("http://evil.example:7777"), p));
-        assert!(!origin_host_ok(Some("127.0.0.1.evil.example"), None, p));
-        assert!(!origin_host_ok(Some("127.0.0.1:9999"), None, p));
-        // foreign Origin with a good Host
-        assert!(!origin_host_ok(Some("127.0.0.1:7777"), Some("http://evil.example"), p));
+        assert!(ok("127.0.0.1", None) && ok("127.0.0.1:7777", None) && ok("localhost:7777", Some("http://localhost:7777")) && ok("127.0.0.1:7777", Some("http://127.0.0.1:7777")));
+        // DNS rebinding (foreign Host, even with a matching-looking Origin) and a foreign Origin with a good Host
+        assert!(!ok("evil.example:7777", None) && !ok("evil.example", Some("http://evil.example:7777")) && !ok("127.0.0.1.evil.example", None) && !ok("127.0.0.1:9999", None));
+        assert!(!ok("127.0.0.1:7777", Some("http://evil.example")));
     }
 }
 
@@ -190,8 +182,7 @@ async fn manager_interrupt(Json(b): Json<Value>) -> R {
     manager::interrupt(&s(&b, "project")).map(|_| Json(json!({"ok": true}))).map_err(bad)
 }
 
-/// One agent hook call: record it, refuse a tool call that breaks a rule, hand a lane its live messages, and
-/// keep a lane from ending its turn on a question.
+/// One agent hook call: record it, refuse a tool call that breaks a rule, hand a lane its live messages, and keep a lane from ending its turn on a question.
 async fn hook(State(app): State<Shared>, Path(event): Path<String>, headers: HeaderMap, body: Bytes) -> Json<Value> {
     let p: Value = serde_json::from_slice(&body).unwrap_or(json!({}));
     let cwd = s(&p, "cwd");
@@ -241,8 +232,7 @@ async fn hook(State(app): State<Shared>, Path(event): Path<String>, headers: Hea
         return Json(json!({"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": lines.join("\n")}}));
     }
     if event == "PreToolUse" {
-        // In a lane the rules above (with the network sandbox) are the barrier: an allowed call needs no
-        // permission prompt, which a headless agent could never answer.
+        // In a lane the rules above (with the network sandbox) are the barrier: an allowed call needs no permission prompt, which a headless agent could never answer.
         return Json(json!({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow",
             "permissionDecisionReason": "allowed by Tirith's rules"}}));
     }
@@ -259,8 +249,7 @@ async fn hook(State(app): State<Shared>, Path(event): Path<String>, headers: Hea
     Json(json!({}))
 }
 
-/// The page: the files of `web/` (`[app] web_dir` of config.toml, else this repository's), read from disk on each
-/// request so a change to the page shows on reload. Nothing outside that folder is ever served.
+/// The page: the files of `web/` (`[app] web_dir` of config.toml, else this repository's), read from disk on each request so a change to the page shows on reload. Nothing outside that folder is ever served.
 async fn web_file(State(app): State<Shared>, uri: axum::http::Uri) -> Response {
     let rel = Some(uri.path().trim_start_matches('/')).filter(|r| !r.is_empty()).unwrap_or("index.html");
     if rel.split('/').any(|p| p.is_empty() || p == ".." || p.starts_with('.')) {
