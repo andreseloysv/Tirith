@@ -1,6 +1,5 @@
-//! The brain: small text jobs for a cheap, fast model of the Meta Model API (OpenAI-style `/chat/completions`).
-//! Never on a hot path: callers use the cached answer or a plain fallback. The key comes only from the
-//! environment (`META_API_KEY` or `META_SI_API_KEY`) and is never logged or stored.
+//! The brain: small text jobs for a cheap, fast model of the Meta Model API (OpenAI-style `/chat/completions`). Never on a hot path: callers use the cached answer or a plain fallback. The key comes only from the environment
+//! (`META_API_KEY` or `META_SI_API_KEY`) and is never logged or stored.
 
 use crate::app::{git, now_s, Shared};
 use crate::{models, rooms::sealed::sha_hex};
@@ -38,8 +37,7 @@ fn client() -> &'static reqwest::Client {
     C.get_or_init(|| reqwest::Client::builder().timeout(Duration::from_secs(30)).build().unwrap_or_default())
 }
 
-/// One job ("room-summary", "architecture") on `input`: the model's answer,
-/// cached by the hash of (job, input). `None` without an API key or when the call fails.
+/// One job ("room-summary", "architecture") on `input`: the model's answer, cached by the hash of (job, input). `None` without an API key or when the call fails.
 pub async fn ask(app: &Shared, job: &str, input: &str) -> Option<String> {
     let prompt = JOBS.iter().find(|(j, _)| *j == job)?.1;
     let key = key()?;
@@ -66,8 +64,7 @@ pub async fn ask(app: &Shared, job: &str, input: &str) -> Option<String> {
     Some(answer)
 }
 
-/// The project's architecture summary for lane briefs, for the current main commit; `None` until it exists
-/// (asking starts its computation in the background, at most once per project per minute).
+/// The project's architecture summary for lane briefs, for the current main commit; `None` until it exists (asking starts its computation in the background, at most once per project per minute).
 pub fn architecture(app: &Shared, project: &str) -> Option<String> {
     key()?;
     let last: Option<Value> = app.kv(&format!("brain.architecture.{project}")).and_then(|s| serde_json::from_str(&s).ok());

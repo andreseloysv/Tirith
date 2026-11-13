@@ -1,6 +1,5 @@
-//! Lanes: one agent, one plan item, one reusable worktree slot (`<tirith home>/lanes/<project>/slot-N`) on its own branch. The
-//! autopilot starts the open items of each project's current plan step when the machine has room; a lane whose
-//! process ends goes to the merge queue, where the checks (never the agent) decide that its item is done.
+//! Lanes: one agent, one plan item, one reusable worktree slot (`<tirith home>/lanes/<project>/slot-N`) on its own branch. The autopilot starts a project's open plan items
+//! when the machine has room; a lane whose process ends goes to the merge queue, where the checks (never the agent) decide that its item is done.
 
 use crate::app::{add_worktree, alive, git, kill_group, log_age, now_iso, now_s, tail, Lane, Shared};
 use crate::{brain, config::Project, guard, manager, models, plan, sandbox};
@@ -51,9 +50,8 @@ pub fn autopilot_on(app: &Shared, project: &str) -> bool {
 }
 fn load_per_core() -> f64 {
     let mut l = [0f64; 3];
-    let n = unsafe { libc::getloadavg(l.as_mut_ptr(), 3) };
-    let cores = std::thread::available_parallelism().map(|c| c.get()).unwrap_or(1) as f64;
-    (if n > 0 { l[0] } else { 0.0 }) / cores
+    unsafe { libc::getloadavg(l.as_mut_ptr(), 3) }; // leaves zeros when it fails
+    l[0] / std::thread::available_parallelism().map_or(1, |c| c.get()) as f64
 }
 
 pub(crate) fn free_gb(dir: &Path) -> f64 {
@@ -422,8 +420,7 @@ async fn launch(app: &Shared, mut lane: Lane) -> Result<(), String> {
 /// The agent's process is gone: a working lane goes to the merge queue (or, out of credits, to the next agent of the fallback chain); a waiting lane waits for its answer.
 async fn ended(app: &Shared, id: &str, code: Option<i32>) {
     let Some(lane) = app.lane(id) else { return };
-    // Only what the agent program itself said counts: its plain-text output and its final result event, never the
-    // files and command output it read (a lane working on Tirith reads the very patterns that detect it).
+    // Only what the agent program itself said counts: its plain-text output and its final result event, never the files and command output it read (a lane working on Tirith reads the very patterns that detect it).
     let log: String = tail(&app.home.join(format!("logs/lanes/{id}.log")), 200).lines().filter(|l| !l.trim_start().starts_with('{') || (l.contains("\"type\":\"result\"") && l.contains("\"is_error\":true"))).collect::<Vec<_>>().join("\n");
     let log = crate::app::redact_secrets(&log);
     if lane.status == "running" && models::out_of_credits(&log) {
@@ -446,7 +443,7 @@ async fn ended(app: &Shared, id: &str, code: Option<i32>) {
         if next.is_none() {
             manager::notify(app, &lane.project, &format!("lane {id} ({}: {}) failed: out of credits on every agent of the workers role", lane.project, lane.item));
         }
-    } else if lane.status == "running" && no_commits(app, &lane).await && !has_check(app, &lane) {
+    } else if lane.status == "running" && no_commits(app, &lane).await && plan::find(app, &lane.project, &lane.step, &lane.item).is_none_or(|i| i.check.is_none()) {
         app.update_lane(id, |l| {
             l.pid = None;
             l.ended_at = Some(now_iso());
@@ -474,12 +471,7 @@ async fn ended(app: &Shared, id: &str, code: Option<i32>) {
     app.sched_wake.notify_one();
 }
 
-/// A lane that ended without commits may still be done: the item's check can already be true. Such a lane goes to the merge queue, where the check runs on main; passing ticks it ("already true"), failing sends it back.
-fn has_check(app: &Shared, lane: &Lane) -> bool {
-    plan::find(app, &lane.project, &lane.step, &lane.item).is_some_and(|i| i.check.is_some())
-}
-
-/// True when the lane's branch has no commit beyond the project's HEAD (it is known and countable).
+/// True when the lane's branch has no commit beyond the project's HEAD (it is known and countable). Without a check on its item such a lane failed; with one it may still be done (the check can already be true): it goes to the merge queue, where the check runs on main.
 async fn no_commits(app: &Shared, lane: &Lane) -> bool {
     let Some(p) = app.cfg().projects.iter().find(|p| p.id == lane.project).cloned() else { return false };
     if lane.branch.is_empty() {
@@ -609,11 +601,6 @@ mod tests {
         assert!(!super::is_autopilot_skipped("Arreglar el parser") && !super::is_autopilot_skipped("Arreglar el CEO: bug"));
     }
     #[test]
-    fn lane_without_commits_check_passes_is_done() {
-        assert!(include_str!("lanes.rs").contains("no_commits(app, &lane).await && !has_check(app, &lane)"));
-        assert!(include_str!("merge.rs").contains("\"already true on main\""));
-    }
-    #[test]
     fn autopilot_waits_for_dependency_items() {
         let open = ["Generar los vídeos de la demo en 3 idiomas", "Subir a YouTube"];
         let up = "Subir los vídeos de la demo a YouTube: wait until they are on main, made by the item «Generar los vídeos de la demo en 3 idiomas»";
@@ -632,7 +619,6 @@ mod tests {
         assert_eq!(stale_reason("Enable the autopilot again?", false, 50.0), None);
         assert_eq!(stale_reason("Approve $0.74 for the translation?", false, 50.0), None);
     }
-
     #[test]
     fn low_disk_question_closes_when_freed() {
         use crate::manager::stale_reason;

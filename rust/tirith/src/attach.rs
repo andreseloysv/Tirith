@@ -1,5 +1,4 @@
-//! Chat attachments: files and images the owner drops, pastes or picks in the chat, saved under
-//! `$TIRITH_HOME/attachments/<id>/<name>` so the manager can open them by path.
+//! Chat attachments: files and images the owner drops, pastes or picks in the chat, saved under `$TIRITH_HOME/attachments/<id>/<name>` so the manager can open them by path.
 
 use crate::app::Shared;
 use axum::extract::{DefaultBodyLimit, Path, Query, State};

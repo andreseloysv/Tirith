@@ -1,5 +1,4 @@
-//! `~/.tirith/config.toml` (projects, agent aliases, limits) and each project's `tirith.toml` (plan file,
-//! checks, lane excludes, extra rules). Unknown keys are ignored, so older files keep working.
+//! `~/.tirith/config.toml` (projects, agent aliases, limits) and each project's `tirith.toml` (plan file, checks, lane excludes, extra rules). Unknown keys are ignored, so older files keep working.
 
 use serde::{de::DeserializeOwned, Deserialize};
 use std::collections::BTreeMap;

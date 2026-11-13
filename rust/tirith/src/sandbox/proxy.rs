@@ -1,6 +1,5 @@
-//! The daemon's HTTP proxy for sandboxed processes: `CONNECT host:port` and plain-HTTP absolute-form requests.
-//! It authenticates the caller, refuses blocked destinations (by name, then by the addresses they resolve to),
-//! records each new destination of each caller, and pipes the bytes.
+//! The daemon's HTTP proxy for sandboxed processes: `CONNECT host:port` and plain-HTTP absolute-form requests. It authenticates the caller, refuses blocked destinations (by name, then by the addresses they resolve to), records each
+//! new destination of each caller, and pipes the bytes.
 
 use super::{blocked, owner, proxy_port, token};
 use crate::app::{now_iso, now_s, Shared};
