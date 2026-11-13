@@ -219,8 +219,11 @@ pub fn owner_open(app: &Shared) -> Vec<Value> {
 }
 
 /// Why an open question no longer applies: it proposes turning its project's autopilot off (on) and that is already so.
-pub fn stale_reason(question: &str, autopilot_on: bool) -> Option<&'static str> {
+pub fn stale_reason(question: &str, autopilot_on: bool, free_gb: f64) -> Option<&'static str> {
     let q = question.to_lowercase();
+    if q.contains("gb free on this disk") && free_gb > 10.0 {
+        return Some("the disk has more than 10 GB free again");
+    }
     let has = |ws: &[&str]| ws.iter().any(|w| q.contains(w));
     let (off, on) = (has(&["turn off", "switch off", "disable", "apagar", "desactivar", "pausar"]), has(&["turn on", "switch on", "enable", "encender", "activar", "reanudar"]));
     match (q.contains("autopilot"), off, on, autopilot_on) {
@@ -234,7 +237,7 @@ pub fn stale_reason(question: &str, autopilot_on: bool) -> Option<&'static str> 
 pub fn close_stale_questions(app: &Shared) {
     for o in owner_open(app) {
         let (id, project, q) = (o["id"].as_str().unwrap_or(""), o["project"].as_str().unwrap_or(""), o["question"].as_str().unwrap_or(""));
-        let Some(why) = stale_reason(q, if project.is_empty() { app.cfg().autopilot } else { crate::lanes::autopilot_on(app, project) }) else { continue };
+        let Some(why) = stale_reason(q, if project.is_empty() { app.cfg().autopilot } else { crate::lanes::autopilot_on(app, project) }, crate::lanes::free_gb(&app.home.join("lanes"))) else { continue };
         let answer = format!("closed by Tirith: {why}");
         let _ = app.db.lock().unwrap().execute("UPDATE owner_items SET status = 'closed', answer = ?1 WHERE id = ?2", rusqlite::params![answer, id]);
         app.emit("owner", json!({"id": id, "status": "closed", "answer": answer}));
