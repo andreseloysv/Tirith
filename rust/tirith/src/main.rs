@@ -1,5 +1,4 @@
-//! `tirith`: the daemon (`tirith serve`) and its thin command-line client. Every other command is one HTTP
-//! call to the daemon on 127.0.0.1, so it starts in milliseconds.
+//! `tirith`: the daemon (`tirith serve`) and its thin command-line client. Every other command is one HTTP call to the daemon on 127.0.0.1, so it starts in milliseconds.
 
 mod app;
 mod attach;
@@ -23,22 +22,7 @@ use client::{call, call_with, print};
 use serde_json::{json, Value};
 use std::{io::Read, time::Duration};
 
-const USAGE: &str = "tirith serve                                   run the daemon (page on http://127.0.0.1:<port>/)
-tirith status [--project P]                    lanes and the merge queue (of one project)
-tirith plan show <project>                     the plan with what works on each item
-tirith plan add <project> <step> \"<text>\"      add an item to a step
-tirith lane start <project> <step> \"<item>\" [--agent <alias>]
-tirith lane stop <lane>
-tirith lane log <lane>
-tirith ask \"<question>\"                       (inside a lane) ask the manager, then end your turn
-tirith answer <lane> \"<answer>\"                (the manager) answer a waiting lane
-tirith ask-owner [--project P] --kind credentials|payment|account|device|decision \"<question>\"   (the manager)
-tirith autopilot on|off <project>              let Tirith start the plan's items by itself, or not
-tirith project add <folder> [--name N] [--color #rrggbb]   add a folder as a project (the page's + does the same)
-tirith say [--project P] \"<text>\"              write to the project's manager (without one: the manager of no project)
-tirith hook <Event>                            agent hook bridge (stdin JSON; also --agent A --event E)
-tirith hooks install                           point the agents' hooks at the daemon over HTTP
-(modules add: tirith room …, tirith net …, tirith models …, tirith guard …)";
+const USAGE: &str = include_str!("../assets/usage.txt");
 
 type ModuleCli = fn(&[&str], client::Flag) -> Option<Result<(), String>>;
 const MODULE_CLI: [ModuleCli; 5] = [rooms::cli, sandbox::cli, models::cli, guard::cli, projects::cli];
@@ -125,8 +109,7 @@ fn plan_show(project: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// The command-hook bridge for agents without HTTP hooks: never breaks the agent (any failure lets the call
-/// through); a refusal is exit 2 with the reason on stderr, which every supported agent understands.
+/// The command-hook bridge for agents without HTTP hooks: never breaks the agent (any failure lets the call through); a refusal is exit 2 with the reason on stderr, which every supported agent understands.
 fn hook(event: String) -> Result<(), String> {
     let mut input = String::new();
     let _ = std::io::stdin().read_to_string(&mut input);
@@ -145,8 +128,7 @@ fn hook(event: String) -> Result<(), String> {
     Ok(())
 }
 
-/// Rewrites the hooks of the configured agents whose settings file uses `tirith hook …` into HTTP hooks on the
-/// daemon (a backup of each file is kept next to it). Agents without HTTP hooks keep the command bridge.
+/// Rewrites the hooks of the configured agents whose settings file uses `tirith hook …` into HTTP hooks on the daemon (a backup of each file is kept next to it). Agents without HTTP hooks keep the command bridge.
 fn install_hooks() -> Result<(), String> {
     let cfg = config::Config::load();
     let agent = cfg.agents.get("anthropic").ok_or("no [agents.anthropic] in config.toml")?;
@@ -176,8 +158,7 @@ fn install_hooks() -> Result<(), String> {
     Ok(())
 }
 
-/// Started by the desktop app, the daemon has launchd's short PATH and its checks find no node, npm or brew tools.
-/// The PATH of the owner's login shell goes first, so a check runs as it does in the owner's terminal.
+/// Started by the desktop app, the daemon has launchd's short PATH and its checks find no node, npm or brew tools. The PATH of the owner's login shell goes first, so a check runs as it does in the owner's terminal.
 fn login_path() {
     let out = std::process::Command::new(std::env::var("SHELL").unwrap_or("/bin/zsh".into())).args(["-lc", "printf '\\n%s' \"$PATH\""]).output();
     let login = out.map(|o| String::from_utf8_lossy(&o.stdout).lines().last().unwrap_or("").trim().to_string()).unwrap_or_default();

@@ -13,7 +13,6 @@ static MAIN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\bgit\b[^;&|]*\b(pu
 
 pub const EDIT_TOOLS: [&str; 4] = ["Edit", "Write", "MultiEdit", "NotebookEdit"];
 
-/// The refusal for one tool call, or `None` when it may run.
 pub fn check(app: &Shared, tool: &str, input: &Value, lane: Option<&Lane>, project: Option<&Project>) -> Option<String> {
     let cfg = app.cfg();
     let cmd = input["command"].as_str().unwrap_or("");
@@ -27,8 +26,7 @@ pub fn check(app: &Shared, tool: &str, input: &Value, lane: Option<&Lane>, proje
     }
     let mut protected: Vec<String> = cfg.agents.values().filter_map(|a| a.settings.as_deref()).map(|s| expand(s).display().to_string()).collect();
     protected.push(format!("{}/", app.home.display()));
-    // The lanes' worktrees live inside Tirith's home: they are the one part of it agents write in. A path with `..`
-    // in it can end anywhere, so it is never taken for one inside a worktree.
+    // The lanes' worktrees live inside Tirith's home: they are the one part of it agents write in. A path with `..` in it can end anywhere, so it is never taken for one inside a worktree.
     let path = std::path::Path::new(file);
     let in_lanes = !path.components().any(|c| c == std::path::Component::ParentDir) && cfg.projects.iter().any(|p| path.starts_with(p.lanes_dir()));
     if edit && !in_lanes && protected.iter().any(|p| file.starts_with(p.as_str())) {
@@ -67,7 +65,6 @@ pub fn check(app: &Shared, tool: &str, input: &Value, lane: Option<&Lane>, proje
     None
 }
 
-/// A one-line summary of a tool call for the activity feed.
 pub fn summary(tool: &str, input: &Value) -> String {
     let detail = ["command", "file_path", "notebook_path", "pattern", "url", "description", "prompt"].iter().find_map(|k| input[*k].as_str()).unwrap_or("");
     let short: String = detail.lines().next().unwrap_or("").chars().take(160).collect();
