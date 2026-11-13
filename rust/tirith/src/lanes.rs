@@ -573,6 +573,12 @@ pub fn send_back(app: &Shared, lane: &Lane, reason: &str) {
 #[cfg(test)]
 mod tests {
     #[test]
+    fn brief_warns_against_blind_waits() {
+        let text = include_str!("../assets/brief.md");
+        assert!(text.contains("Never wait blindly") && text.contains("two minutes") && text.contains("find out why"));
+    }
+
+    #[test]
     fn idle_lane_after_api_retry_is_stopped() {
         let mut seen = std::collections::HashMap::new();
         let (real, retry) = ("{\"type\":\"assistant\"}\n", "{\"subtype\":\"api_retry\"}\n");
