@@ -1,5 +1,4 @@
-//! The managers: one long-lived agent session per project (stream-json in and out), and one for what belongs to no project. A message goes to the session of its project, which starts with its first message and rests after 30 quiet
-//! minutes; its text, its tool calls and the end of each turn go straight to that project's chat on the page.
+//! The managers: one long-lived agent session per project (and one for what belongs to no project); its text, tool calls and turn ends go straight to that project's chat.
 
 use crate::app::{kill_group, now_iso, Shared};
 use crate::{models, rooms, rules, sandbox};
@@ -9,7 +8,7 @@ use std::{process::Stdio, sync::Mutex, time::Duration};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::mpsc;
 
-const PROMPT: &str = include_str!("../prompts/manager.txt");
+const PROMPT: &str = include_str!("../assets/manager-prompt.txt");
 const IDLE: Duration = Duration::from_secs(30 * 60);
 /// What a session's prompt adds about its conversation: a project's own, or the one of no project.
 const ONE: &str = "This conversation is only about the project {id} (repository {repo}). Every other project has its own manager: say and do nothing about them. tirith status lists this project's lanes, and the cards you send with tirith ask-owner belong to it.";
@@ -53,7 +52,6 @@ pub(crate) fn here<'a>(app: &Shared, project: &'a str) -> &'a str {
     app.cfg().project(project).map_or("", |_| project)
 }
 
-/// A line from Tirith in a project's conversation: on the page, and on the owner's phones.
 fn report(app: &Shared, project: &str, text: &str) {
     app.chat("tirith", text, project);
     rooms::to_phones(app, here(app, project), &format!("Tirith: {text}"));
@@ -97,7 +95,6 @@ pub fn restart() {
     TALKS.lock().unwrap().values().for_each(|t| kill_group(t.pid, libc::SIGTERM));
 }
 
-/// The conversations whose manager works on a turn.
 pub fn busy() -> Vec<String> {
     TALKS.lock().unwrap().iter().filter(|(_, t)| t.busy).map(|(p, _)| p.clone()).collect()
 }
@@ -109,7 +106,6 @@ pub fn interrupt(project: &str) -> Result<(), String> {
     tx.send(line.to_string()).map_err(|_| "the manager session ended".to_string())
 }
 
-/// The owner's message to a project's manager.
 pub fn say(app: &Shared, project: &str, text: &str) -> Result<(), String> {
     known(app, project)?;
     app.chat("owner", text, project);
@@ -191,7 +187,6 @@ pub fn waiting_cards(lanes: &[crate::app::Lane]) -> Vec<Value> {
         .collect()
 }
 
-/// The owner's open cards, oldest first, then the lanes waiting for an answer.
 pub fn owner_open(app: &Shared) -> Vec<Value> {
     let cards = app.objects("SELECT id, at, kind, question, project, status FROM owner_items WHERE status = 'open' ORDER BY rowid", [], &["id", "at", "kind", "question", "project", "status"]);
     [cards, waiting_cards(&app.lanes.lock().unwrap().values().cloned().collect::<Vec<_>>())].concat()
@@ -212,7 +207,6 @@ pub fn stale_reason(question: &str, autopilot_on: bool, free_gb: f64) -> Option<
     }
 }
 
-/// Closes the open owner questions that no longer apply (see `stale_reason`).
 pub fn close_stale_questions(app: &Shared) {
     for o in owner_open(app) {
         let (id, project, q) = (o["id"].as_str().unwrap_or(""), o["project"].as_str().unwrap_or(""), o["question"].as_str().unwrap_or(""));
@@ -223,7 +217,6 @@ pub fn close_stale_questions(app: &Shared) {
     }
 }
 
-/// Runs the conversation's session, again while messages wait for one; then the conversation rests.
 async fn run(app: Shared, project: String) {
     let mut backoff = 2;
     loop {
@@ -273,7 +266,6 @@ pub fn spawn_chat(app: &Shared, role: &str, project: &str, argv: Vec<String>) ->
     Ok((child, stdin, stdout))
 }
 
-/// The answer to a `can_use_tool` control request: `behavior` is `{"behavior": "allow"|"deny", …}`.
 pub fn control_reply(msg: &Value, behavior: Value) -> String {
     json!({"type": "control_response", "response": {"subtype": "success", "request_id": msg["request_id"], "response": behavior}}).to_string()
 }

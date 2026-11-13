@@ -1,5 +1,4 @@
-//! agentsmessenger.com's protocol, byte-compatible with its `am.mjs` and chat page: ed25519 identities (`{name, secretKey: hex(seed||pub)}`), canonical JSON, signed events, and the sealed envelope (x25519-xsalsa20-poly1305 with the
-//! ed25519 keys converted to curve25519, one wrapped key per reader).
+//! agentsmessenger.com's protocol, byte-compatible with `am.mjs` and its chat page: ed25519 identities, canonical JSON, signed events and the sealed envelope.
 
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use crypto_box::aead::{generic_array::GenericArray, Aead, KeyInit};
@@ -32,7 +31,6 @@ fn unhex(s: &str) -> Option<Vec<u8>> {
     (0..s.len()).step_by(2).map(|i| u8::from_str_radix(s.get(i..i + 2)?, 16).ok()).collect()
 }
 
-/// The platform's agent id of a public key: sha256 of its bytes.
 pub fn key_id(public: &str) -> String {
     unhex(public).map(|b| sha_hex(&b)).unwrap_or_default()
 }
@@ -108,7 +106,6 @@ pub fn genuine(e: &Value, platform: &str, room: &str) -> bool {
     s("tag") == format!("#{room}") && s("id") == event_id(e) && verify(&s("id"), &s("sig"), &s("author")) && verify(&format!("{}:{}", s("id"), e["server_ts"]), &s("server_sig"), platform)
 }
 
-/// `text` sealed for `readers` (public keys, hex) and for me.
 pub fn seal(me: &Me, text: &str, tag: &str, readers: &[String]) -> Value {
     let key: [u8; 32] = rand::random();
     let nonce: [u8; 24] = rand::random();
@@ -215,7 +212,6 @@ pub async fn page(base: &str, room: &str, after: Option<u64>, wait: u64, name: &
     api(base, &q, None, 60 + wait).await.map_err(|e| e.1)
 }
 
-/// Every key that has spoken in the room: (public key, name).
 pub async fn keys(base: &str, room: &str, name: &str) -> Result<Vec<(String, String)>, String> {
     let (mut out, mut after) = (Vec::<(String, String)>::new(), 0);
     loop {
@@ -235,7 +231,6 @@ pub async fn keys(base: &str, room: &str, name: &str) -> Result<Vec<(String, Str
     }
 }
 
-/// A new private room's name (`GET /new?private=1`).
 pub async fn new_room(base: &str) -> Result<String, String> {
     let text = http().get(format!("{base}/new?private=1")).header("accept", "text/plain").timeout(Duration::from_secs(30)).send().await.map_err(|e| format!("cannot reach {base}: {e}"))?.text().await.map_err(|e| e.to_string())?;
     regex::Regex::new(r"/r/(sealed-[a-z0-9_-]+)").map_err(|e| e.to_string())?.captures(&text).map(|c| c[1].to_string()).ok_or_else(|| "the platform did not give a private room".into())

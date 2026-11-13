@@ -1,5 +1,4 @@
-//! Lanes: one agent, one plan item, one reusable worktree slot (`<tirith home>/lanes/<project>/slot-N`) on its own branch. The autopilot starts a project's open plan items
-//! when the machine has room; a lane whose process ends goes to the merge queue, where the checks (never the agent) decide that its item is done.
+//! Lanes: one agent, one plan item, one reusable worktree slot on its own branch; the autopilot starts open plan items, and a lane that ends goes to the merge queue, where the checks decide.
 
 use crate::app::{add_worktree, alive, git, kill_group, log_age, now_iso, now_s, tail, Lane, Shared};
 use crate::{brain, config::Project, guard, manager, models, plan, sandbox};
@@ -7,7 +6,6 @@ use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::{os::unix::ffi::OsStrExt, process::Stdio, sync::Mutex, time::Duration};
 
-/// Messages for working lanes, handed to the agent by its next PostToolUse hook.
 static LIVE: Mutex<BTreeMap<String, Vec<String>>> = Mutex::new(BTreeMap::new());
 
 pub fn tell(id: &str, text: &str) {
@@ -103,7 +101,6 @@ fn low_disk_ask(free: f64, asked: bool) -> Option<bool> {
     }
 }
 
-/// The `n` largest folders directly under `dir`, as (path, KB), biggest first.
 fn biggest_dirs(dir: &Path, n: usize) -> Vec<(String, u64)> {
     let out = std::process::Command::new("du").arg("-sk").args(std::fs::read_dir(dir).into_iter().flatten().flatten().map(|e| e.path())).output();
     let text = out.map(|o| String::from_utf8_lossy(&o.stdout).into_owned()).unwrap_or_default();
@@ -142,7 +139,6 @@ fn blocked(app: &Shared, p: &Project, lanes: &[Lane]) -> Option<String> {
     }
 }
 
-/// The command that fixes a reason `blocked` gave, for the health report.
 pub(crate) fn paused_fix(project: &str, why: &str) -> String {
     if let Some(fix) = why.find('(').zip(why.rfind(')')).map(|(a, b)| &why[a + 1..b]).filter(|f| f.starts_with("tirith ")) {
         return fix.to_string();
@@ -538,7 +534,6 @@ fn kill_agent(pid: Option<u32>) {
     });
 }
 
-/// True when the question is about spending money (a paid service, a price, a charge).
 pub fn is_payment(question: &str) -> bool {
     let q = question.to_lowercase();
     ["$", "€", "usd", "eur", "pay", "paid", "spend", "cost", "price", "charge", "billing", "pago", "pagar", "gasto", "gastar", "coste", "precio", "cuesta"].iter().any(|w| q.contains(w))

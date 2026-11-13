@@ -22,7 +22,7 @@ use client::{call, call_with, print};
 use serde_json::{json, Value};
 use std::{io::Read, time::Duration};
 
-const USAGE: &str = include_str!("../prompts/usage.txt");
+const USAGE: &str = include_str!("../assets/usage.txt");
 
 type ModuleCli = fn(&[&str], client::Flag) -> Option<Result<(), String>>;
 const MODULE_CLI: [ModuleCli; 5] = [rooms::cli, sandbox::cli, models::cli, guard::cli, projects::cli];

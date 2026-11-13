@@ -13,7 +13,6 @@ static MAIN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\bgit\b[^;&|]*\b(pu
 
 pub const EDIT_TOOLS: [&str; 4] = ["Edit", "Write", "MultiEdit", "NotebookEdit"];
 
-/// The refusal for one tool call, or `None` when it may run.
 pub fn check(app: &Shared, tool: &str, input: &Value, lane: Option<&Lane>, project: Option<&Project>) -> Option<String> {
     let cfg = app.cfg();
     let cmd = input["command"].as_str().unwrap_or("");
@@ -66,7 +65,6 @@ pub fn check(app: &Shared, tool: &str, input: &Value, lane: Option<&Lane>, proje
     None
 }
 
-/// A one-line summary of a tool call for the activity feed.
 pub fn summary(tool: &str, input: &Value) -> String {
     let detail = ["command", "file_path", "notebook_path", "pattern", "url", "description", "prompt"].iter().find_map(|k| input[*k].as_str()).unwrap_or("");
     let short: String = detail.lines().next().unwrap_or("").chars().take(160).collect();
