@@ -180,9 +180,7 @@ pub async fn platform(base: &str) -> Result<String, String> {
     }
     let v = api(base, "/.well-known/agentsmessenger.json", None, 30).await.map_err(|e| e.1)?;
     let public = v["doc"]["platform_pub"].as_str().unwrap_or("").to_string();
-    if !verify(&sha_hex(canonical(&v["doc"]).as_bytes()), v["sig"].as_str().unwrap_or(""), &public) {
-        return Err("this platform does not prove who it is".into());
-    }
+    verify(&sha_hex(canonical(&v["doc"]).as_bytes()), v["sig"].as_str().unwrap_or(""), &public).then_some(()).ok_or("this platform does not prove who it is")?;
     KEYS.lock().unwrap().get_or_insert_with(HashMap::new).insert(base.to_string(), public.clone());
     Ok(public)
 }

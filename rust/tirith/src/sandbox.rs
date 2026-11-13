@@ -281,9 +281,7 @@ pub fn start(app: Shared) {
 fn block(app: &Shared, rule: &str, on: bool) -> Result<String, String> {
     let rule = clean(rule);
     let domain = rule.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-');
-    if rule.is_empty() || !(domain || cidr(&rule).is_some()) {
-        return Err(format!("not a domain, address or range: {rule:?}"));
-    }
+    (!(rule.is_empty() || !(domain || cidr(&rule).is_some()))).then_some(()).ok_or_else(|| format!("not a domain, address or range: {rule:?}"))?;
     let db = app.db.lock().unwrap();
     let mut list = BLOCKS.write().unwrap();
     list.retain(|r| *r != rule);
@@ -358,9 +356,7 @@ fn tunnel(host: &str, port: &str) -> Result<(), String> {
         head.push(b[0]);
     }
     let head = String::from_utf8_lossy(&head);
-    if !head.starts_with("HTTP/1.1 200") && !head.starts_with("HTTP/1.0 200") {
-        return Err(format!("proxy refused {host}:{port}: {}", head.lines().next().unwrap_or("no answer")));
-    }
+    (!(!head.starts_with("HTTP/1.1 200") && !head.starts_with("HTTP/1.0 200"))).then_some(()).ok_or_else(|| format!("proxy refused {host}:{port}: {}", head.lines().next().unwrap_or("no answer")))?;
     let mut up = s.try_clone().map_err(|e| e.to_string())?;
     std::thread::spawn(move || {
         let _ = std::io::copy(&mut std::io::stdin(), &mut up);
