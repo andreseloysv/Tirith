@@ -59,11 +59,10 @@ fn load_per_core() -> f64 {
 pub(crate) fn free_gb(dir: &Path) -> f64 {
     let Ok(c) = std::ffi::CString::new(dir.as_os_str().as_bytes()) else { return f64::MAX };
     let mut s: libc::statvfs = unsafe { std::mem::zeroed() };
-    if unsafe { libc::statvfs(c.as_ptr(), &mut s) } == 0 {
-        s.f_bavail as f64 * s.f_frsize as f64 / 1e9
-    } else {
-        f64::MAX
+    if unsafe { libc::statvfs(c.as_ptr(), &mut s) } != 0 {
+        return f64::MAX;
     }
+    s.f_bavail as f64 * s.f_frsize as f64 / 1e9
 }
 
 /// One cargo build folder per project, shared by its lanes and checks: a folder per worktree costs gigabytes each.
@@ -207,11 +206,22 @@ fn next_item(app: &Shared, lanes: &[Lane], rr: &mut usize, ok: &mut dyn FnMut(&P
     None
 }
 
+/// Seconds since the agent's log last got a line other than an `api_retry` one (those keep the file fresh while the agent is stuck). `seen` remembers per lane the last real line and when it appeared.
+fn quiet_s(seen: &mut HashMap<String, (String, u64)>, id: &str, tail: &str, log_age: u64, now: u64) -> u64 {
+    let last = tail.lines().rev().find(|l| !l.contains("\"api_retry\"")).unwrap_or("");
+    let e = seen.entry(id.to_string()).or_insert((last.to_string(), now.saturating_sub(log_age)));
+    if e.0 != last {
+        *e = (last.to_string(), now);
+    }
+    now.saturating_sub(e.1)
+}
+
 /// Every few seconds (or when woken): stop idle lanes, pick up ended processes, and when the machine has room start the oldest queued lane (manual, sent back or answered) or else the autopilot's next item.
 pub async fn scheduler(app: Shared) {
     let mut rr = 0;
     let mut said: HashMap<String, String> = HashMap::new();
     let mut tick: u64 = 0;
+    let mut seen: HashMap<String, (String, u64)> = HashMap::new();
     loop {
         let _ = tokio::time::timeout(Duration::from_secs(3), app.sched_wake.notified()).await;
         // config.toml changed by hand: the page gets the projects again
@@ -232,13 +242,15 @@ pub async fn scheduler(app: Shared) {
         tick += 1;
         app.emit("load", serde_json::json!({"load": (load * 100.0).round() / 100.0, "running": running, "max": cfg.max_parallel}));
         for l in lanes.iter().filter(|l| l.pid.is_some()) {
-            let tracked = app.children.lock().unwrap().contains(&l.id);
-            let log_idle = log_age(&app, &l.id);
-            let idle = (now_s().saturating_sub(l.last_activity)).min(log_idle);
-            if l.status == "running" && idle > cfg.inactivity_min * 60 {
+            let text = tail(&app.home.join(format!("logs/lanes/{}.log", l.id)), 200);
+            let quiet = quiet_s(&mut seen, &l.id, &text, log_age(&app, &l.id), now_s());
+            if l.status == "running" && now_s().saturating_sub(l.last_activity).min(quiet) > cfg.inactivity_min * 60 {
                 kill_group(l.pid.unwrap_or(0), libc::SIGKILL);
-                app.event(&l.id, &l.project, "idle", "", &format!("stopped: no activity for {} min", cfg.inactivity_min), "");
-            } else if !tracked && !l.pid.is_some_and(alive) {
+                let why = format!("no new output for {} min (an agent stuck retrying its API call counts as silent)", cfg.inactivity_min);
+                app.event(&l.id, &l.project, "idle", "", &format!("stopped: {why}"), "");
+                app.update_lane(&l.id, |x| x.pid = None);
+                send_back(&app, l, &format!("Your agent was stopped: {why}. Continue the work on your branch."));
+            } else if !app.children.lock().unwrap().contains(&l.id) && !l.pid.is_some_and(alive) {
                 ended(&app, &l.id, None).await; // its process ended while the daemon was down
             }
         }
@@ -285,11 +297,8 @@ async fn take_slot(app: &Shared, project: &Project, lane: &Lane) -> Result<PathB
             let prev = all.iter().filter(|l| Path::new(&l.workspace) == s).max_by(|a, b| a.created_at.cmp(&b.created_at));
             if let Some(p) = prev.filter(|p| matches!(p.status.as_str(), "stopped" | "failed")) {
                 if !git(&s, &["status", "--porcelain"]).await.unwrap_or_default().is_empty() {
-                    let saved = match git(&s, &["add", "-A"]).await {
-                        Ok(_) => git(&s, &["commit", "-qm", "Saved by Tirith"]).await,
-                        e => e,
-                    };
-                    if let Err(e) = saved {
+                    let added = git(&s, &["add", "-A"]).await;
+                    if let Err(e) = if added.is_ok() { git(&s, &["commit", "-qm", "Saved by Tirith"]).await } else { added } {
                         app.event(&p.id, &p.project, "error", "slot", &format!("could not save the work left in {}: {e}", s.display()), "");
                     }
                 }
@@ -579,6 +588,15 @@ pub fn send_back(app: &Shared, lane: &Lane, reason: &str) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn idle_lane_after_api_retry_is_stopped() {
+        let mut seen = std::collections::HashMap::new();
+        let (real, retry) = ("{\"type\":\"assistant\"}\n", "{\"subtype\":\"api_retry\"}\n");
+        assert_eq!(super::quiet_s(&mut seen, "a", real, 0, 1000), 0);
+        assert_eq!(super::quiet_s(&mut seen, "a", &format!("{real}{retry}{retry}"), 0, 2200), 1200);
+        assert_eq!(super::quiet_s(&mut seen, "a", &format!("{real}{retry}x\n"), 0, 2201), 0);
+    }
+
     #[test]
     fn lane_runs_clippy_before_finish() {
         let dir = std::env::temp_dir().join(format!("tirith-clippy-{}", std::process::id()));
