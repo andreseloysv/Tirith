@@ -173,9 +173,7 @@ const KINDS: [&str; 5] = ["credentials", "payment", "account", "device", "decisi
 /// `tirith ask-owner`: a card on the owner's page, among its project's, and on the owner's phones, until answered.
 pub fn ask_owner(app: &Shared, project: &str, kind: &str, question: &str) -> Result<Value, String> {
     known(app, project)?;
-    if !KINDS.contains(&kind) || question.trim().is_empty() {
-        return Err(format!("ask the owner with --kind {} and a question", KINDS.join("|")));
-    }
+    (!(!KINDS.contains(&kind) || question.trim().is_empty())).then_some(()).ok_or_else(|| format!("ask the owner with --kind {} and a question", KINDS.join("|")))?;
     let row = {
         let db = app.db.lock().unwrap();
         let n: i64 = db.query_row("SELECT COALESCE(MAX(CAST(SUBSTR(id, 2) AS INTEGER)), 0) FROM owner_items", [], |r| r.get(0)).unwrap_or(0);

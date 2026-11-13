@@ -486,9 +486,7 @@ fn clear_red(app: &Shared, project: &str) {
 /// Retry from the page: a merge pipeline's failed lanes go back to the queue; a main pipeline runs its checks again on the current main; a deploy pipeline deploys the current main.
 pub fn retry(app: &Shared, id: &str) -> Result<(), String> {
     let p = pipeline(app, id);
-    if p.is_null() {
-        return Err(format!("no pipeline '{id}'"));
-    }
+    (!(p.is_null())).then_some(()).ok_or_else(|| format!("no pipeline '{id}'"))?;
     if p["kind"] == "merge" {
         let failed: Vec<Lane> = p["lanes"].as_str().unwrap_or("").split(',').filter_map(|l| app.lane(l)).filter(|l| l.status == "failed").collect();
         if failed.is_empty() {
