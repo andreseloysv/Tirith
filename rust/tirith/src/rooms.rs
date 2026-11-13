@@ -119,17 +119,11 @@ fn my_name(app: &Shared) -> String {
 #[derive(Deserialize, Default)]
 #[serde(default)]
 struct PublicCfg {
-    id: String,
-    project: String,
-    title: String,
+    id: String, project: String, title: String,
 }
 
-fn public_cfg(app: &Shared) -> Vec<PublicCfg> {
-    cfg_get(&app.cfg().raw, &["rooms"]).unwrap_or_default()
-}
-fn room(id: &str) -> Option<Room> {
-    ROOMS.lock().unwrap().get(id).cloned()
-}
+fn public_cfg(app: &Shared) -> Vec<PublicCfg> { cfg_get(&app.cfg().raw, &["rooms"]).unwrap_or_default() }
+fn room(id: &str) -> Option<Room> { ROOMS.lock().unwrap().get(id).cloned() }
 
 /// Writes a record to SQLite and tells the page.
 fn store(app: &Shared, r: &Room) {
@@ -138,19 +132,14 @@ fn store(app: &Shared, r: &Room) {
     app.emit("room", view(app, r));
 }
 
-fn save(app: &Shared, r: &Room) {
-    ROOMS.lock().unwrap().insert(r.id.clone(), r.clone());
-    store(app, r);
-}
+fn save(app: &Shared, r: &Room) { ROOMS.lock().unwrap().insert(r.id.clone(), r.clone()); store(app, r); }
 /// Changes a record in place under the rooms' lock, so two tasks never undo each other's change (`f` must not read or change the rooms itself). `None` when the room is gone (left meanwhile). Written only when what is kept changed.
 fn update<T>(app: &Shared, id: &str, f: impl FnOnce(&mut Room) -> T) -> Option<T> {
     let mut rooms = ROOMS.lock().unwrap();
     let r = rooms.get_mut(id)?;
     let before = serde_json::to_string(r).unwrap_or_default();
     let out = f(r);
-    if serde_json::to_string(r).unwrap_or_default() != before {
-        store(app, r);
-    }
+    if serde_json::to_string(r).unwrap_or_default() != before { store(app, r); }
     Some(out)
 }
 
@@ -177,16 +166,14 @@ pub fn start(app: Shared) {
         }
     });
     again(&app, None);
+    tokio::spawn(async { loop { expire_files(&crate::config::tirith_home().join("rooms/files"), Duration::from_secs(86400)); tokio::time::sleep(Duration::from_secs(3600)).await; } });
     tokio::spawn(async move {
         let mut said = String::new();
         loop {
             for p in public_cfg(&app).into_iter().filter(|p| !p.id.is_empty()) {
                 let title = if p.title.is_empty() { p.id.clone() } else { p.title.clone() };
-                if room(&p.id).is_none() {
-                    save(&app, &Room { id: p.id.clone(), title, project: p.project, kind: "public".into(), me: my_name(&app), ..Default::default() });
-                } else {
-                    update(&app, &p.id, |r| (r.title, r.project) = (title, p.project));
-                }
+                if room(&p.id).is_none() { save(&app, &Room { id: p.id.clone(), title, project: p.project, kind: "public".into(), me: my_name(&app), ..Default::default() }); }
+                else { update(&app, &p.id, |r| (r.title, r.project) = (title, p.project)); }
             }
             provide(&app, &mut said).await;
             let ids: Vec<String> = ROOMS.lock().unwrap().keys().cloned().collect();
@@ -421,7 +408,15 @@ fn save_image(json: &str, room: &str) -> Option<String> {
     std::fs::create_dir_all(&dir).ok()?;
     let path = dir.join(format!("{}.{ext}", &sealed::sha_hex(&bytes)[..16]));
     std::fs::write(&path, &bytes).ok()?;
-    Some(format!("[imagen: {}]\nLook at that file to see it.", path.display()))
+    Some(format!("[imagen: {}]\nLook at that file to see it. It is temporary: deleted after 24 h. To keep it, move it somewhere else.", path.display()))
+}
+
+/// Deletes the files older than `max` under `dir` and the folders left empty (not `dir` itself).
+fn expire_files(dir: &std::path::Path, max: Duration) {
+    for p in std::fs::read_dir(dir).into_iter().flatten().flatten().map(|e| e.path()) {
+        let old = p.metadata().and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).is_some_and(|a| a > max);
+        if p.is_dir() { expire_files(&p, max); let _ = std::fs::remove_dir(&p); } else if old { let _ = std::fs::remove_file(&p); }
+    }
 }
 
 /// True, and the code is used up, when `text` is `<prefix> <code>` with the room's current code (the last `:` part of `code`).
@@ -768,5 +763,15 @@ mod tests {
         assert!(!out.contains(png) && path.starts_with(home.join("rooms/files/sealed-abc").to_str().unwrap()) && path.ends_with(".png"), "{out}");
         assert!(std::fs::read(path).unwrap().starts_with(&[0x89, 0x50, 0x4e, 0x47]));
         assert!(save_image("{\"mime\":\"image/png\",\"data\":\"AAAA\"}", "r").is_none());
+    }
+
+    #[test]
+    fn room_files_expire_after_24h() {
+        let (root, then) = (std::env::temp_dir().join(format!("tirith-exp-{}", std::process::id())), std::time::SystemTime::now() - Duration::from_secs(90000));
+        let (old, new) = (root.join("a/old.png"), root.join("b/new.png"));
+        for f in [&old, &new] { std::fs::create_dir_all(f.parent().unwrap()).unwrap(); std::fs::write(f, b"x").unwrap(); }
+        std::fs::File::options().write(true).open(&old).unwrap().set_modified(then).unwrap();
+        expire_files(&root, Duration::from_secs(86400));
+        assert!(!old.exists() && !root.join("a").exists() && new.exists() && root.exists());
     }
 }
