@@ -71,8 +71,7 @@ pub fn shared_target(app: &Shared, project: &str) -> PathBuf {
     app.home.join("build").join(project).join("cargo")
 }
 
-/// With less than 10 GB free: the build caches git ignores (target, .build, node_modules, build, .gradle) are
-/// removed from the lanes' worktrees that no active lane holds. Nothing tracked is touched.
+/// With less than 10 GB free: the build caches git ignores (target, .build, node_modules, build, .gradle) are removed from the lanes' worktrees that no active lane holds. Nothing tracked is touched.
 async fn free_disk(app: &Shared, lanes: &[Lane]) {
     if free_gb(&app.home.join("lanes")) >= 10.0 {
         return;
@@ -117,8 +116,7 @@ fn biggest_dirs(dir: &Path, n: usize) -> Vec<(String, u64)> {
     rows
 }
 
-/// Below 5 GB free on the disk of the lanes' worktrees: one ask-owner card (kind device, of no project, since every
-/// project shares that disk) naming the biggest of Tirith's own folders.
+/// Below 5 GB free on the disk of the lanes' worktrees: one ask-owner card (kind device, of no project, since every project shares that disk) naming the biggest of Tirith's own folders.
 async fn warn_low_disk(app: &Shared) {
     let (home, key) = (app.home.clone(), "low_disk_asked");
     let free = free_gb(&home.join("lanes"));
@@ -163,8 +161,7 @@ pub(crate) fn paused_fix(project: &str, why: &str) -> String {
     }
 }
 
-/// Role items of step 0 («Manager de guardia: …», «CEO: …») are attended by the manager or the CEO, and items marked
-/// «(espera: …)» wait for the owner: the autopilot starts no lane for either.
+/// Role items of step 0 («Manager de guardia: …», «CEO: …») are attended by the manager or the CEO, and items marked «(espera: …)» wait for the owner: the autopilot starts no lane for either.
 pub(crate) fn is_autopilot_skipped(text: &str) -> bool {
     let t = text.trim_start().to_lowercase();
     t.starts_with("manager de guardia:") || t.starts_with("ceo:") || t.contains("(espera:") || t.contains("(espera :")
@@ -182,8 +179,7 @@ fn waits_for_open_item(text: &str, open: &[&str]) -> bool {
         })
 }
 
-/// The autopilot's next item: in round-robin over the projects, an open item of the project's current step
-/// (the first step with an open item that did not fail or stop) that no lane works on.
+/// The autopilot's next item: in round-robin over the projects, an open item of the project's current step (the first step with an open item that did not fail or stop) that no lane works on.
 fn next_item(app: &Shared, lanes: &[Lane], rr: &mut usize, ok: &mut dyn FnMut(&Project) -> bool) -> Option<Lane> {
     let cfg = app.cfg();
     let n = cfg.projects.len();
@@ -211,8 +207,7 @@ fn next_item(app: &Shared, lanes: &[Lane], rr: &mut usize, ok: &mut dyn FnMut(&P
     None
 }
 
-/// Every few seconds (or when woken): stop idle lanes, pick up ended processes, and when the machine has room
-/// start the oldest queued lane (manual, sent back or answered) or else the autopilot's next item.
+/// Every few seconds (or when woken): stop idle lanes, pick up ended processes, and when the machine has room start the oldest queued lane (manual, sent back or answered) or else the autopilot's next item.
 pub async fn scheduler(app: Shared) {
     let mut rr = 0;
     let mut said: HashMap<String, String> = HashMap::new();
@@ -277,8 +272,7 @@ pub async fn scheduler(app: Shared) {
     }
 }
 
-/// A free slot of the project checked out on a fresh `lane/<id>` branch at main. A slot is free when no active
-/// lane holds it; uncommitted work of a stopped or failed lane is first committed on that lane's branch.
+/// A free slot of the project checked out on a fresh `lane/<id>` branch at main. A slot is free when no active lane holds it; uncommitted work of a stopped or failed lane is first committed on that lane's branch.
 async fn take_slot(app: &Shared, project: &Project, lane: &Lane) -> Result<PathBuf, String> {
     let (repo, dir) = (project.repo(), project.lanes_dir());
     let all: Vec<Lane> = app.lanes.lock().unwrap().values().cloned().collect();
@@ -369,8 +363,7 @@ fn brief(app: &Shared, lane: &Lane) -> String {
     )
 }
 
-/// Runs the lane's agent in its slot (a new slot for a lane without one): the brief, or a resume of its session
-/// with the pending message.
+/// Runs the lane's agent in its slot (a new slot for a lane without one): the brief, or a resume of its session with the pending message.
 async fn launch(app: &Shared, mut lane: Lane) -> Result<(), String> {
     let cfg = app.cfg();
     let project = cfg.project(&lane.project).ok_or("unknown project")?.clone();
@@ -426,8 +419,7 @@ async fn launch(app: &Shared, mut lane: Lane) -> Result<(), String> {
     Ok(())
 }
 
-/// The agent's process is gone: a working lane goes to the merge queue (or, out of credits, to the next agent
-/// of the fallback chain); a waiting lane waits for its answer.
+/// The agent's process is gone: a working lane goes to the merge queue (or, out of credits, to the next agent of the fallback chain); a waiting lane waits for its answer.
 async fn ended(app: &Shared, id: &str, code: Option<i32>) {
     let Some(lane) = app.lane(id) else { return };
     // Only what the agent program itself said counts: its plain-text output and its final result event, never the
@@ -482,8 +474,7 @@ async fn ended(app: &Shared, id: &str, code: Option<i32>) {
     app.sched_wake.notify_one();
 }
 
-/// A lane that ended without commits may still be done: the item's check can already be true. Such a lane goes to
-/// the merge queue, where the check runs on main; passing ticks it ("already true"), failing sends it back.
+/// A lane that ended without commits may still be done: the item's check can already be true. Such a lane goes to the merge queue, where the check runs on main; passing ticks it ("already true"), failing sends it back.
 fn has_check(app: &Shared, lane: &Lane) -> bool {
     plan::find(app, &lane.project, &lane.step, &lane.item).is_some_and(|i| i.check.is_some())
 }
