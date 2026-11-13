@@ -24,8 +24,7 @@ const LOCAL: &str = include_str!("../hooks/local-hook.sh");
 /// The project's forbidden words; empty when it needs no guard.
 pub fn words(app: &Shared, project: &Project) -> Vec<String> {
     let cfg = app.cfg();
-    let entry = cfg.raw.get("projects").and_then(|p| p.as_array()).and_then(|ps| ps.iter().find(|p| p.get("id").and_then(|i| i.as_str()) == Some(project.id.as_str())).cloned());
-    let entry = entry.unwrap_or(toml::Value::Table(Default::default()));
+    let entry = cfg.raw.get("projects").and_then(|p| p.as_array()).and_then(|ps| ps.iter().find(|p| p.get("id").and_then(|i| i.as_str()) == Some(project.id.as_str())).cloned()).unwrap_or(toml::Value::Table(Default::default()));
     if entry.get("guard").and_then(|g| g.as_bool()) == Some(false) {
         return vec![];
     }
@@ -68,10 +67,7 @@ pub fn intact(app: &Shared, project: &Project) -> Result<(), String> {
     }
     // A `core.hooksPath` in the repo's or the user's git config makes git skip the guard.
     let skips = |f: &PathBuf| std::fs::read_to_string(f).is_ok_and(|t| t.lines().any(|l| l.trim().to_lowercase().replace(' ', "").starts_with("hookspath=")));
-    match [git.join("config"), home_dir().join(".gitconfig")].into_iter().find(skips) {
-        Some(f) => Err(format!("commit guard: core.hooksPath in {} makes git skip the guard", f.display())),
-        None => Ok(()),
-    }
+    [git.join("config"), home_dir().join(".gitconfig")].into_iter().find(skips).map_or(Ok(()), |f| Err(format!("commit guard: core.hooksPath in {} makes git skip the guard", f.display())))
 }
 
 /// Sets or clears the immutable flag (macOS `uchg`): installed hooks cannot be changed or deleted, by agents or anyone, until the installer clears it. Elsewhere a no-op.
