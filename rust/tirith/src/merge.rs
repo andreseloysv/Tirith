@@ -71,8 +71,7 @@ fn red_stage_if_stale(why: &str, head: &str) -> Option<String> {
     why.rsplit_once(" at ").map(|(stage, _)| stage.to_string())
 }
 
-/// After main moves while it is red (a merge, a manual commit), the queue tests the latest main again, so the
-/// health «Main en rojo» names the current commit and clears when it passes.
+/// After main moves while it is red (a merge, a manual commit), the queue tests the latest main again, so the health «Main en rojo» names the current commit and clears when it passes.
 async fn recheck_red(app: &Shared) {
     let cfg = app.cfg();
     for project in &cfg.projects {
@@ -89,8 +88,7 @@ async fn recheck_red(app: &Shared) {
     }
 }
 
-/// The oldest merge-queued lane alone when it is solo, else up to five non-solo lanes of its project. Projects
-/// whose main is red wait until main changes (then the main check decides again).
+/// The oldest merge-queued lane alone when it is solo, else up to five non-solo lanes of its project. Projects whose main is red wait until main changes (then the main check decides again).
 async fn next_batch(app: &Shared) -> Vec<Lane> {
     let mut queued: Vec<Lane> = app.lanes.lock().unwrap().values().filter(|l| l.status == "merge-queued").cloned().collect();
     queued.sort_by(|a, b| a.ended_at.cmp(&b.ended_at));
@@ -345,8 +343,7 @@ async fn train(app: &Shared, batch: Vec<Lane>) {
     land(app, &project, &pipe, &slot, &base, merged, ticks, &changed).await;
 }
 
-/// A green train: under the plan lock, pending plan edits are committed on main, the items are ticked in the
-/// merge slot, and main fast-forwards to the result.
+/// A green train: under the plan lock, pending plan edits are committed on main, the items are ticked in the merge slot, and main fast-forwards to the result.
 #[allow(clippy::too_many_arguments)]
 async fn land(app: &Shared, project: &Project, pipe: &Pipe, slot: &Path, base: &str, merged: Vec<Lane>, ticks: Vec<Lane>, changed: &[String]) {
     let (repo, roadmap) = (project.repo(), app.manifest(&project.repo()).roadmap);
@@ -428,12 +425,9 @@ fn deploys(s: &Stage) -> bool {
     kind == "deploy" || (kind.is_empty() && ["deploy", "release", "publish", "ship"].contains(&s.name.as_str()))
 }
 
-/// Runs the project's deploy stages on main as it is now, in the merge slot, so what is on main is what is deployed.
-/// After a merge only the stages whose `paths` match what it changed run; with no files named, or while an earlier
-/// deploy has not passed yet, all of them do. A failure never undoes or holds back a merge: the manager is told once,
-/// and the worker tries again after ten minutes, then after twice as long each time, six hours at most.
-/// `deploy_due:<project>` is "<when to try again>@<the wait since the last failure, 0 for none>"; "0@.." while a
-/// deploy is owed or runs, so one that a restart cut short is due at once.
+/// Runs the project's deploy stages on main as it is now, in the merge slot, so what is on main is what is deployed. After a merge only the stages whose `paths` match what it changed run; with no files named, or while an earlier
+/// deploy has not passed yet, all of them do. A failure never undoes or holds back a merge: the manager is told once, and the worker tries again after ten minutes, then after twice as long each time, six hours at most.
+/// `deploy_due:<project>` is "<when to try again>@<the wait since the last failure, 0 for none>"; "0@.." while a deploy is owed or runs, so one that a restart cut short is due at once.
 async fn deploy(app: &Shared, project: &Project, changed: &[String]) {
     let (manifest, key) = (app.manifest(&project.repo()), format!("deploy_due:{}", project.id));
     let prev = app.kv(&key).and_then(|v| v.split_once('@')?.1.parse::<u64>().ok()).unwrap_or(0);
@@ -493,8 +487,7 @@ fn clear_red(app: &Shared, project: &str) {
     }
 }
 
-/// Retry from the page: a merge pipeline's failed lanes go back to the queue; a main pipeline runs its checks
-/// again on the current main; a deploy pipeline deploys the current main.
+/// Retry from the page: a merge pipeline's failed lanes go back to the queue; a main pipeline runs its checks again on the current main; a deploy pipeline deploys the current main.
 pub fn retry(app: &Shared, id: &str) -> Result<(), String> {
     let p = pipeline(app, id);
     if p.is_null() {

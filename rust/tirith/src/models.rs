@@ -69,8 +69,7 @@ pub fn role(app: &Shared, role: &str) -> RoleSetting {
     role_with_source(app, role).0
 }
 
-/// Codex must not apply its own sandbox: the lane already runs inside the daemon's `sandbox-exec`, and a nested one
-/// fails every command with "sandbox_apply: Operation not permitted".
+/// Codex must not apply its own sandbox: the lane already runs inside the daemon's `sandbox-exec`, and a nested one fails every command with "sandbox_apply: Operation not permitted".
 const NO_SANDBOX: &str = "--dangerously-bypass-approvals-and-sandbox";
 
 /// Per alias: (model flag, effort flag, resume args, lane args), from `[agents.<alias>]` or the known defaults.
@@ -102,8 +101,7 @@ fn set_flag(argv: &mut Vec<String>, flag: &Option<String>, alts: &[&str], value:
     }
 }
 
-/// The argv of a lane run. `agent`/`model` override the workers role (a fallback relaunch passes them).
-/// `resume = Some((session_id, message))` continues that agent session with `message` instead of the brief;
+/// The argv of a lane run. `agent`/`model` override the workers role (a fallback relaunch passes them). `resume = Some((session_id, message))` continues that agent session with `message` instead of the brief;
 /// an alias without `resume_args` starts fresh with the brief.
 pub fn lane_argv(app: &Shared, agent: Option<&str>, model: Option<&str>, brief: &Path, workspace: &Path, resume: Option<(&str, &str)>) -> Result<AgentCmd, String> {
     let cfg = app.cfg();
@@ -129,8 +127,7 @@ pub fn lane_argv(app: &Shared, agent: Option<&str>, model: Option<&str>, brief: 
     Ok(AgentCmd { alias, argv })
 }
 
-/// The argv of a streaming chat session (stream-json in and out) for "manager" or "ceo".
-/// `resume` continues that session id. The caller appends its own system prompt.
+/// The argv of a streaming chat session (stream-json in and out) for "manager" or "ceo". `resume` continues that session id. The caller appends its own system prompt.
 pub fn chat_argv(app: &Shared, role_name: &str, resume: Option<&str>) -> Result<AgentCmd, String> {
     let cfg = app.cfg();
     let r = role(app, role_name);
@@ -161,8 +158,7 @@ pub fn out_of_credits(text: &str) -> bool {
     .is_match(text)
 }
 
-/// The next choice of a role's chain (its own agent, then `fallback`) that is not in `tried`: (alias, model).
-/// `tried` holds "alias" (every model of it is skipped) or "alias:model" (that one only).
+/// The next choice of a role's chain (its own agent, then `fallback`) that is not in `tried`: (alias, model). `tried` holds "alias" (every model of it is skipped) or "alias:model" (that one only).
 pub fn fallback(app: &Shared, role_name: &str, tried: &[String]) -> Option<(String, Option<String>)> {
     let cfg = app.cfg();
     let r = role(app, role_name);
@@ -178,8 +174,7 @@ fn valid(v: &str) -> bool {
     v.chars().next().is_some_and(|c| c.is_ascii_alphanumeric()) && v.chars().all(|c| c.is_ascii_alphanumeric() || "._:/+-[]".contains(c))
 }
 
-/// Saves the owner's setting of a role (fields absent from `b` keep their effective value, "" clears them),
-/// or with `None` goes back to config.toml. Restarts the manager session when its setting changed.
+/// Saves the owner's setting of a role (fields absent from `b` keep their effective value, "" clears them), or with `None` goes back to config.toml. Restarts the manager session when its setting changed.
 pub fn save(app: &Shared, role_name: &str, b: Option<&Value>) -> Result<RoleSetting, String> {
     if !ROLES.contains(&role_name) {
         return Err(format!("role must be one of {}", ROLES.join(", ")));
@@ -254,8 +249,7 @@ pub fn routes() -> Router<Shared> {
     )
 }
 
-/// `tirith models`, `tirith models set <role> [--agent A] [--model M] [--effort E] [--fallback "a:m,b"]`,
-/// `tirith models reset <role>`; `None` when `pos` is not one of this module's commands.
+/// `tirith models`, `tirith models set <role> [--agent A] [--model M] [--effort E] [--fallback "a:m,b"]`, `tirith models reset <role>`; `None` when `pos` is not one of this module's commands.
 pub fn cli(pos: &[&str], flag: Flag) -> Option<Result<(), String>> {
     let show = |body: Result<String, String>| -> Result<(), String> {
         let s: RoleSetting = serde_json::from_str(&body?).map_err(|e| e.to_string())?;
