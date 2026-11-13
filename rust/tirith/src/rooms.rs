@@ -705,13 +705,7 @@ async fn api_svg(State(app): State<Shared>, Path(id): Path<String>, Query(q): Qu
     }
 }
 
-const USAGE: &str = "tirith room new [--title T] [--project P]   a private room: its QR connects your phone to every project
-tirith room link <room>              the permanent link of a phone already in the room
-tirith room qr <room>                a new one-use QR to connect another phone
-tirith room forget <phone key id>    a lost phone reads and orders nothing more, in any room
-tirith room invite <room>            a one-use code for another manager
-tirith room join <peer code>         join another manager's room
-tirith room leave <room> | list | tail <room> | say <room> \"<text>\"";
+const USAGE: &str = include_str!("../prompts/usage-room.txt");
 
 fn one(id: &str) -> Result<Value, String> {
     serde_json::from_str(&call("GET", &format!("/api/rooms/{id}"), None)?).map_err(|e| e.to_string())

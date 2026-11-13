@@ -94,21 +94,7 @@ impl App {
             let _ = std::fs::create_dir_all(home.join(dir));
         }
         let db = Connection::open(home.join("tirith.sqlite3")).expect("open tirith.sqlite3");
-        db.execute_batch(
-            "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA busy_timeout=5000;
-             CREATE TABLE IF NOT EXISTS lanes (id TEXT PRIMARY KEY, data TEXT NOT NULL);
-             CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY, at TEXT, lane TEXT, project TEXT,
-                 kind TEXT, tool TEXT, summary TEXT, session TEXT);
-             CREATE TABLE IF NOT EXISTS chat (id INTEGER PRIMARY KEY, at TEXT, role TEXT, text TEXT);
-             CREATE TABLE IF NOT EXISTS runs (id INTEGER PRIMARY KEY, lane TEXT, project TEXT, stage TEXT,
-                 status TEXT, started_at TEXT, ended_at TEXT, log TEXT);
-             CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT);
-             CREATE TABLE IF NOT EXISTS pipelines (id TEXT PRIMARY KEY, project TEXT, kind TEXT, lanes TEXT, sha TEXT,
-                 status TEXT, started_at TEXT, ended_at TEXT);
-             CREATE TABLE IF NOT EXISTS owner_items (id TEXT PRIMARY KEY, at TEXT, kind TEXT, question TEXT,
-                 status TEXT, answer TEXT);",
-        )
-        .expect("create tables");
+        db.execute_batch(include_str!("../prompts/schema.sql")).expect("create tables");
         // Columns added later (each ALTER fails once its column exists). A chat row and an owner card belong to a project; '' is none.
         for (table, col) in [("runs", "pipeline TEXT"), ("runs", "sha TEXT"), ("chat", "project TEXT NOT NULL DEFAULT ''"), ("owner_items", "project TEXT NOT NULL DEFAULT ''")] {
             let _ = db.execute(&format!("ALTER TABLE {table} ADD COLUMN {col}"), []);

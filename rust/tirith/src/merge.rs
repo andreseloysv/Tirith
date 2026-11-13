@@ -1,8 +1,6 @@
-//! The merge queue. Up to five lanes of one project ride one train: in the project's merge slot
-//! (`<tirith home>/lanes/<project>/merge`) their branches are merged with main, the project's checks and the items' own checks
-//! run, and only a green train moves main (fast-forward), with the plan ticks in the same commits. A red train is
-//! split into single lanes; a red single lane is first compared with main, so a broken main never blames a lane.
-//! A project's deploy stages are no checks: they run after main has moved, on that main (`deploy`).
+//! The merge queue. Up to five lanes of one project ride one train: in the project's merge slot (`<tirith home>/lanes/<project>/merge`) their branches are merged with main, the project's checks and the items' own checks run, and
+//! only a green train moves main (fast-forward), with the plan ticks in the same commits. A red train is split into single lanes; a red single lane is first compared with main, so a broken main never blames a lane. A project's
+//! deploy stages are no checks: they run after main has moved, on that main (`deploy`).
 
 use crate::app::{add_worktree, git, kill_group, now_iso, now_s, tail, Lane, Shared};
 use crate::config::{Manifest, Project, Stage};
@@ -49,8 +47,7 @@ pub async fn worker(app: Shared) {
             if tokio::time::timeout(Duration::from_secs(10), app.merge_wake.notified()).await.is_ok() {
                 tokio::time::sleep(Duration::from_secs(1)).await; // lanes ending together ride one train
             }
-            // A deploy that failed, or that a restart cut short, is tried again on main as it is now. The lock comes
-            // first: a deploy that the page asked for has settled what is due by the time the lock is had.
+            // A deploy that failed, or that a restart cut short, is tried again on main as it is now. The lock comes first: a deploy that the page asked for has settled what is due by the time the lock is had.
             let _busy = BUSY.lock().await;
             let due = |p: &&Project| app.kv(&format!("deploy_due:{}", p.id)).and_then(|v| v.split('@').next()?.parse().ok()).is_some_and(|t: u64| now_s() >= t);
             if let Some(project) = app.cfg().projects.iter().find(due).cloned() {

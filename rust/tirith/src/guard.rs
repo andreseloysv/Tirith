@@ -1,6 +1,5 @@
-//! The commit guard: git hooks in every project that refuse a commit whose message, file names or added lines
-//! contain one of the owner's forbidden words (whole word, any case; a word may be a regex). The words come only
-//! from config.toml: the project's `guard_words`, else `[guard] words`; `guard = false` opts a project out.
+//! The commit guard: git hooks in every project that refuse a commit whose message, file names or added lines contain one of the owner's forbidden words (whole word, any case; a word may be a regex). The words come only from
+//! config.toml: the project's `guard_words`, else `[guard] words`; `guard = false` opts a project out.
 
 use crate::app::Shared;
 use crate::config::{home_dir, Project};
@@ -15,61 +14,12 @@ const HOOKS: [&str; 2] = ["pre-commit", "commit-msg"];
 
 const HEAD: &str = "#!/bin/bash\n# FORBIDDEN_WORDS_GUARD\n# {what}\n# Installed by Tirith; words: {words}\nset -euo pipefail\nexport TIRITH_GUARD_RE='{re}'\n";
 
-const PRE_COMMIT: &str = r#"
-# In a merge, what a parent already has is not the merge's doing: only what the merge adds is checked.
-export TIRITH_MERGE_HEAD=$(git rev-parse -q --verify MERGE_HEAD 2>/dev/null || true)
-git diff --cached --no-color --no-ext-diff -U0 --diff-filter=ACMR | perl -ne '
-    BEGIN { $re = qr/(?<![A-Za-z0-9])($ENV{TIRITH_GUARD_RE})(?![A-Za-z0-9])/i; $bad = 0; $mh = $ENV{TIRITH_MERGE_HEAD}; %seen = () }
-    if (/^\+\+\+ b\/(.*)$/) {
-        $file = $1;
-        %seen = ();
-        $inparent = 0;
-        if ($mh) {
-            my $out = `git show \Q$mh\E:\Q$file\E 2>/dev/null`;
-            if ($? == 0) { $inparent = 1; for my $l (split /\n/, $out, -1) { $seen{$l} = 1 } }
-        }
-        if (!$inparent && $file =~ $re) { print STDERR "  $file: \"$1\" in the file name\n"; $bad = 1 }
-        next;
-    }
-    if (/^@@ -\S+ \+(\d+)/) { $line = $1; next }
-    if (/^\+/) {
-        my $text = substr($_, 1); chomp $text;
-        if (!$seen{$text} && /$re/) { chomp; my $t = substr($_, 1, 120); print STDERR "  $file:$line: \"$1\" in: $t\n"; $bad = 1 }
-        $line++;
-    }
-    END {
-        if ($bad) { print STDERR "\npre-commit: commit blocked, forbidden words in the staged changes (see above).\n"; exit 1 }
-    }
-'
-"#;
+const PRE_COMMIT: &str = include_str!("../hooks/pre-commit.sh");
 
-const COMMIT_MSG: &str = r#"
-# A lane commit's default attribution trailer is dropped, not blocked.
-if [ -n "${TIRITH_LANE:-}" ] && [ -f "${1:-}" ]; then
-    tirith_msg=$(mktemp "${TMPDIR:-/tmp}/tirith-msg.XXXXXX") || tirith_msg=
-    if [ -n "$tirith_msg" ]; then
-        { grep -v -i -E '^[[:space:]]*co-[a-z]+-by:' "$1" || true; } > "$tirith_msg"
-        cat "$tirith_msg" > "$1"
-        rm -f "$tirith_msg"
-    fi
-fi
-perl -ne '
-    BEGIN { $re = qr/(?<![A-Za-z0-9])($ENV{TIRITH_GUARD_RE})(?![A-Za-z0-9])/i; $bad = 0 }
-    next if /^#/;
-    if (/$re/) { chomp; print STDERR "  line $.: \"$1\" in: $_\n"; $bad = 1 }
-    END {
-        if ($bad) { print STDERR "\ncommit-msg: commit blocked, forbidden words in the commit message (see above).\n"; exit 1 }
-    }
-' "$1"
-"#;
+const COMMIT_MSG: &str = include_str!("../hooks/commit-msg.sh");
 
 /// The repository's own hook, kept next to ours as `<hook>.local` when the guard was installed, still runs.
-const LOCAL: &str = r#"
-local_hook="$(cd "$(dirname "$0")" && pwd)/$(basename "$0").local"
-if [ -x "$local_hook" ]; then
-    "$local_hook" "$@" || exit 1
-fi
-"#;
+const LOCAL: &str = include_str!("../hooks/local-hook.sh");
 
 /// The project's forbidden words; empty when it needs no guard.
 pub fn words(app: &Shared, project: &Project) -> Vec<String> {
@@ -103,8 +53,7 @@ fn render(hook: &str, words: &[String]) -> String {
     HEAD.replace("{what}", what).replace("{words}", &words.join(",")).replace("{re}", &re) + body + LOCAL
 }
 
-/// Ok when the project's guard is installed and intact (or the project opts out); the reason otherwise.
-/// The scheduler calls it before it starts a lane of the project: a few small file reads, no git process.
+/// Ok when the project's guard is installed and intact (or the project opts out); the reason otherwise. The scheduler calls it before it starts a lane of the project: a few small file reads, no git process.
 pub fn intact(app: &Shared, project: &Project) -> Result<(), String> {
     let words = words(app, project);
     if words.is_empty() {
@@ -125,8 +74,7 @@ pub fn intact(app: &Shared, project: &Project) -> Result<(), String> {
     }
 }
 
-/// Sets or clears the immutable flag (macOS `uchg`): installed hooks cannot be changed or deleted, by agents or
-/// anyone, until the installer clears it. Elsewhere a no-op.
+/// Sets or clears the immutable flag (macOS `uchg`): installed hooks cannot be changed or deleted, by agents or anyone, until the installer clears it. Elsewhere a no-op.
 #[cfg(target_os = "macos")]
 fn immutable(path: &std::path::Path, on: bool) {
     use std::os::macos::fs::MetadataExt;

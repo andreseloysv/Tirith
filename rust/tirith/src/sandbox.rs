@@ -1,7 +1,5 @@
-//! Network sandbox. Every process Tirith starts (lane agents, the manager, CEO reviews, merge-queue checks) runs
-//! inside a macOS `sandbox-exec` profile that denies outbound network except loopback and local sockets, with its
-//! proxy variables pointing at the daemon's own HTTP/CONNECT proxy (`sandbox/proxy.rs`). The proxy authenticates
-//! the caller (`who` + token), applies the block list, and records each new destination as an event.
+//! Network sandbox. Every process Tirith starts (lane agents, the manager, CEO reviews, merge-queue checks) runs inside a macOS `sandbox-exec` profile that denies outbound network except loopback and local sockets, with its proxy
+//! variables pointing at the daemon's own HTTP/CONNECT proxy (`sandbox/proxy.rs`). The proxy authenticates the caller (`who` + token), applies the block list, and records each new destination as an event.
 
 mod proxy;
 
@@ -69,8 +67,7 @@ fn enabled(app: &Shared) -> Result<(), String> {
     }
 }
 
-/// The proxy password of `who`: derived from a random secret kept in the daemon's database, so processes started
-/// before a daemon restart keep their access.
+/// The proxy password of `who`: derived from a random secret kept in the daemon's database, so processes started before a daemon restart keep their access.
 fn token(who: &str) -> String {
     let secret = SECRET.get().map(String::as_str).unwrap_or("");
     sha_hex(format!("{secret}\n{who}").as_bytes())[..32].to_string()
@@ -82,8 +79,7 @@ fn owner(app: &Shared, who: &str) -> (String, String) {
     (id.to_string(), app.lane(id).map(|l| l.project).unwrap_or_default())
 }
 
-/// Wraps `argv` for a process Tirith starts on behalf of `who` (a lane id, "manager", "ceo" or "merge:<lane>"):
-/// `sandbox-exec -p <profile> argv…` with the proxy environment and the PATH with the tool wrappers first.
+/// Wraps `argv` for a process Tirith starts on behalf of `who` (a lane id, "manager", "ceo" or "merge:<lane>"): `sandbox-exec -p <profile> argv…` with the proxy environment and the PATH with the tool wrappers first.
 pub fn wrap(app: &Shared, who: &str, argv: Vec<String>) -> Launch {
     let mut it = argv.into_iter();
     let (program, args): (String, Vec<String>) = (it.next().unwrap_or_default(), it.collect());
@@ -117,8 +113,7 @@ pub fn wrap(app: &Shared, who: &str, argv: Vec<String>) -> Launch {
     Launch { program: SANDBOX_EXEC.into(), args: ["-p".to_string(), PROFILE.to_string(), program].into_iter().chain(args).collect(), env }
 }
 
-/// The wrappers in `<home>/net/bin`: tools that start a sandbox of their own (macOS refuses to nest them) get it
-/// turned off, since the outer sandbox confines them already. Each wrapper takes its own folder off PATH.
+/// The wrappers in `<home>/net/bin`: tools that start a sandbox of their own (macOS refuses to nest them) get it turned off, since the outer sandbox confines them already. Each wrapper takes its own folder off PATH.
 fn write_wrappers(app: &Shared) {
     let dir = app.home.join("net/bin");
     let _ = std::fs::create_dir_all(&dir);
@@ -146,8 +141,7 @@ fn write_wrappers(app: &Shared) {
         use std::os::unix::fs::PermissionsExt;
         let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755));
     }
-    // Agents run commands in zsh login shells, where macOS's path_helper puts /usr/bin before the wrappers again:
-    // the ZDOTDIR given to sandboxed processes loads the owner's own startup files, then puts the wrappers first.
+    // Agents run commands in zsh login shells, where macOS's path_helper puts /usr/bin before the wrappers again: the ZDOTDIR given to sandboxed processes loads the owner's own startup files, then puts the wrappers first.
     let zdot = app.home.join("net/zdot");
     let _ = std::fs::create_dir_all(&zdot);
     for file in [".zshenv", ".zprofile", ".zshrc", ".zlogin"] {
@@ -202,8 +196,7 @@ pub fn blocked(host: &str) -> Option<String> {
 
 static HOSTS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)(?:^|[^a-z0-9_.-])((?:[a-z0-9-]+\.)+[a-z0-9-]+|\[[0-9a-f:.]+\])").unwrap());
 
-/// For agent sessions NOT started by Tirith (the owner's own sessions): the refusal when a tool call names a
-/// blocked destination (a URL or host in a Bash command, a WebFetch url), else `None`.
+/// For agent sessions NOT started by Tirith (the owner's own sessions): the refusal when a tool call names a blocked destination (a URL or host in a Bash command, a WebFetch url), else `None`.
 pub fn check_command(tool: &str, input: &Value) -> Option<String> {
     if BLOCKS.read().unwrap().is_empty() {
         return None;
@@ -232,8 +225,7 @@ static GH: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?:^|[;&|(\n]\s*|\bxa
 static ENV: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\$\{?([A-Z][A-Z0-9_]{2,})|\bprintenv\s+([A-Z][A-Z0-9_]{2,})").unwrap());
 const ENV_SKIP: [&str; 8] = ["PATH", "HOME", "USER", "SHELL", "PWD", "TMPDIR", "LANG", "TERM"];
 
-/// Access-audit tags of one tool call: `(category, target)` with category one of "credential", "git_push",
-/// "gh", "env" (target = variable names, never values). Recorded by the hook handler as `access` events.
+/// Access-audit tags of one tool call: `(category, target)` with category one of "credential", "git_push", "gh", "env" (target = variable names, never values). Recorded by the hook handler as `access` events.
 pub fn tags(tool: &str, input: &Value) -> Vec<(&'static str, String)> {
     let mut out = vec![];
     if tool != "Bash" {

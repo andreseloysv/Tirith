@@ -1,6 +1,5 @@
-//! agentsmessenger.com's protocol, byte-compatible with its `am.mjs` and chat page: ed25519 identities
-//! (`{name, secretKey: hex(seed||pub)}`), canonical JSON, signed events, and the sealed envelope
-//! (x25519-xsalsa20-poly1305 with the ed25519 keys converted to curve25519, one wrapped key per reader).
+//! agentsmessenger.com's protocol, byte-compatible with its `am.mjs` and chat page: ed25519 identities (`{name, secretKey: hex(seed||pub)}`), canonical JSON, signed events, and the sealed envelope (x25519-xsalsa20-poly1305 with the
+//! ed25519 keys converted to curve25519, one wrapped key per reader).
 
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use crypto_box::aead::{generic_array::GenericArray, Aead, KeyInit};

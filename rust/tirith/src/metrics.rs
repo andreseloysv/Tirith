@@ -15,15 +15,7 @@ use std::sync::{LazyLock, Mutex};
 use std::{collections::HashMap, time::Duration};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
-const PROMPT: &str = "You are the CEO review inside Tirith: an independent, read-only, one-shot review of how the \
-work is run (not of the code). Tirith runs coding agents from each project's plan: lanes (one agent, one plan item, \
-one git worktree), a merge queue that only merges verified work, an autopilot that starts plan items, and a manager \
-agent that runs the work and talks to the owner. You get the health metrics that are red, the facts behind them, \
-the last lanes, failing checks, plan progress and open owner questions. You may read files and run read-only \
-commands; change nothing. Decide, do not ask questions. Answer briefly in Spanish (the owner reads it): \
-1) what is wrong and its most likely cause, 2) the concrete actions the manager must take now, as the commands it \
-runs (tirith lane start <project> <step> \"<item>\", tirith lane stop <lane>, tirith plan add <project> <step> \
-\"<item>\", tirith answer …, tirith autopilot …).";
+const PROMPT: &str = include_str!("../prompts/ceo.txt");
 
 struct Metric {
     id: &'static str,
@@ -386,11 +378,5 @@ mod tests {
         assert!(t.contains("tirith plan empty") && t.contains("fix: tirith plan add tirith <step>"), "{t}");
         assert!(t.contains("p2 plan empty"), "{t}");
         assert!(super::empty_plan_note(&[]).is_empty());
-    }
-    #[test]
-    fn idle_health_ignores_unstartable_items() {
-        let skipped = crate::lanes::is_autopilot_skipped;
-        assert!(skipped("Manager de guardia: atender el chat") && skipped("CEO: revisar") && skipped("Elegir dominio (espera: el dueño)"));
-        assert!(!skipped("Arreglar el parser"));
     }
 }

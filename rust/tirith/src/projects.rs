@@ -13,8 +13,7 @@ const COLORS: [&str; 8] = ["#2f7d5b", "#3b6fd8", "#8a5cd0", "#d0663b", "#c2417c"
 /// One config.toml write at a time, so two adds never lose one another; one folder picker on screen at a time.
 static WRITING: std::sync::Mutex<()> = std::sync::Mutex::new(());
 static PICKING: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
-/// AppKit's open panel through JXA, floating above every window: since macOS 14 a helper process may not come to the
-/// front, so AppleScript's `choose folder` opened behind the page. It prints the folder, or nothing when cancelled.
+/// AppKit's open panel through JXA, floating above every window: since macOS 14 a helper process may not come to the front, so AppleScript's `choose folder` opened behind the page. It prints the folder, or nothing when cancelled.
 const PANEL: &str = "ObjC.import('AppKit'); function run(argv) { const app = $.NSApplication.sharedApplication, p = $.NSOpenPanel.openPanel; \
     app.setActivationPolicy($.NSApplicationActivationPolicyAccessory); p.canChooseFiles = false; p.canChooseDirectories = true; p.canCreateDirectories = true; \
     p.message = 'Choose the project folder'; p.directoryURL = $.NSURL.fileURLWithPath(argv[0]); p.level = $.NSStatusWindowLevel; app.activateIgnoringOtherApps(true); \
