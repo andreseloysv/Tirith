@@ -119,11 +119,17 @@ fn my_name(app: &Shared) -> String {
 #[derive(Deserialize, Default)]
 #[serde(default)]
 struct PublicCfg {
-    id: String, project: String, title: String,
+    id: String,
+    project: String,
+    title: String,
 }
 
-fn public_cfg(app: &Shared) -> Vec<PublicCfg> { cfg_get(&app.cfg().raw, &["rooms"]).unwrap_or_default() }
-fn room(id: &str) -> Option<Room> { ROOMS.lock().unwrap().get(id).cloned() }
+fn public_cfg(app: &Shared) -> Vec<PublicCfg> {
+    cfg_get(&app.cfg().raw, &["rooms"]).unwrap_or_default()
+}
+fn room(id: &str) -> Option<Room> {
+    ROOMS.lock().unwrap().get(id).cloned()
+}
 
 /// Writes a record to SQLite and tells the page.
 fn store(app: &Shared, r: &Room) {
@@ -132,14 +138,19 @@ fn store(app: &Shared, r: &Room) {
     app.emit("room", view(app, r));
 }
 
-fn save(app: &Shared, r: &Room) { ROOMS.lock().unwrap().insert(r.id.clone(), r.clone()); store(app, r); }
+fn save(app: &Shared, r: &Room) {
+    ROOMS.lock().unwrap().insert(r.id.clone(), r.clone());
+    store(app, r);
+}
 /// Changes a record in place under the rooms' lock, so two tasks never undo each other's change (`f` must not read or change the rooms itself). `None` when the room is gone (left meanwhile). Written only when what is kept changed.
 fn update<T>(app: &Shared, id: &str, f: impl FnOnce(&mut Room) -> T) -> Option<T> {
     let mut rooms = ROOMS.lock().unwrap();
     let r = rooms.get_mut(id)?;
     let before = serde_json::to_string(r).unwrap_or_default();
     let out = f(r);
-    if serde_json::to_string(r).unwrap_or_default() != before { store(app, r); }
+    if serde_json::to_string(r).unwrap_or_default() != before {
+        store(app, r);
+    }
     Some(out)
 }
 
@@ -166,14 +177,21 @@ pub fn start(app: Shared) {
         }
     });
     again(&app, None);
-    tokio::spawn(async { loop { expire_files(&crate::config::tirith_home().join("rooms/files"), Duration::from_secs(86400)); tokio::time::sleep(Duration::from_secs(3600)).await; } });
     tokio::spawn(async move {
-        let mut said = String::new();
+        let (mut said, mut tick) = (String::new(), 0u32);
         loop {
+            // At start and then every hour (120 rounds of at most 30 s) the attachments older than 24 h go.
+            if tick % 120 == 0 {
+                expire_files(&crate::config::tirith_home().join("rooms/files"), Duration::from_secs(86400));
+            }
+            tick += 1;
             for p in public_cfg(&app).into_iter().filter(|p| !p.id.is_empty()) {
                 let title = if p.title.is_empty() { p.id.clone() } else { p.title.clone() };
-                if room(&p.id).is_none() { save(&app, &Room { id: p.id.clone(), title, project: p.project, kind: "public".into(), me: my_name(&app), ..Default::default() }); }
-                else { update(&app, &p.id, |r| (r.title, r.project) = (title, p.project)); }
+                if room(&p.id).is_none() {
+                    save(&app, &Room { id: p.id.clone(), title, project: p.project, kind: "public".into(), me: my_name(&app), ..Default::default() });
+                } else {
+                    update(&app, &p.id, |r| (r.title, r.project) = (title, p.project));
+                }
             }
             provide(&app, &mut said).await;
             let ids: Vec<String> = ROOMS.lock().unwrap().keys().cloned().collect();
@@ -221,9 +239,7 @@ async fn provide(app: &Shared, said: &mut String) {
 
 /// Starts the room's task unless it runs already.
 fn watch(app: &Shared, id: &str) {
-    if !RUNNING.lock().unwrap().get_or_insert_with(HashSet::new).insert(id.to_string()) {
-        return;
-    }
+    let true = RUNNING.lock().unwrap().get_or_insert_with(HashSet::new).insert(id.to_string()) else { return };
     let (app, id) = (app.clone(), id.to_string());
     tokio::spawn(async move {
         let mut backoff = 15;
@@ -272,7 +288,7 @@ async fn poll(app: &Shared, r: &Room) -> Result<(), String> {
     let here: Vec<String> = got["here"].as_array().into_iter().flatten().filter_map(|h| h["name"].as_str().map(String::from)).collect();
     let (owner_names, host) = (owners(app), hostname());
     let mut out = Out::default();
-    let gone = update(app, &r.id, |r| {
+    let Some(()) = update(app, &r.id, |r| {
         r.here = here;
         for m in &list {
             let n = m["n"].as_u64().unwrap_or(0);
@@ -286,11 +302,9 @@ async fn poll(app: &Shared, r: &Room) -> Result<(), String> {
         // Public rooms are only watched: nothing said there reaches the manager (it writes there with `tirith room say`).
         out.deliver.retain(|_| r.private());
         r.owed.extend(out.deliver.iter().cloned()); // saved with the cursor: a restart in between loses nothing
-    })
-    .is_none();
-    if gone {
+    }) else {
         return Ok(());
-    }
+    };
     out.send.iter().for_each(|(text, readers)| queue(&r.id, text, readers.clone()));
     for (author, text) in &out.deliver {
         // `o12: yes` from a paired phone answers that card by code (a phone writes `O12`); everything else is for the manager.
@@ -411,12 +425,16 @@ fn save_image(json: &str, room: &str) -> Option<String> {
     Some(format!("[imagen: {}]\nLook at that file to see it. It is temporary: deleted after 24 h. To keep it, move it somewhere else.", path.display()))
 }
 
-/// Deletes the files older than `max` under `dir` and the folders left empty (not `dir` itself).
+/// Deletes the files older than `max` under `dir`, and the folders left empty (`dir` too: saving a file makes it again).
 fn expire_files(dir: &std::path::Path, max: Duration) {
     for p in std::fs::read_dir(dir).into_iter().flatten().flatten().map(|e| e.path()) {
-        let old = p.metadata().and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).is_some_and(|a| a > max);
-        if p.is_dir() { expire_files(&p, max); let _ = std::fs::remove_dir(&p); } else if old { let _ = std::fs::remove_file(&p); }
+        if p.is_dir() {
+            expire_files(&p, max);
+        } else if p.metadata().and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).is_some_and(|a| a > max) {
+            let _ = std::fs::remove_file(&p);
+        }
     }
+    let _ = std::fs::remove_dir(dir);
 }
 
 /// True, and the code is used up, when `text` is `<prefix> <code>` with the room's current code (the last `:` part of `code`).
@@ -458,9 +476,10 @@ async fn send(app: &Shared, r: &Room, text: &str, readers: &[String]) -> Result<
     }
     let readers: Vec<String> = readers.iter().filter(|p| !r.managers.iter().any(|m| m.blocked && m.public == **p)).cloned().collect(); // forgotten while this waited
     if readers.is_empty() {
-        return Err("nobody in this room can read it yet: pair a phone first".into());
+        Err("nobody in this room can read it yet: pair a phone first".into())
+    } else {
+        sealed::post(&base, &me, "message", &r.id, sealed::seal(&me, text, &format!("#{}", r.id), &readers)).await
     }
-    sealed::post(&base, &me, "message", &r.id, sealed::seal(&me, text, &format!("#{}", r.id), &readers)).await
 }
 
 /// Queues `text` for a room, sealed for `readers`; nothing when there is nobody to read it or nothing to say.
@@ -570,9 +589,8 @@ async fn create(app: &Shared, title: &str, project: &str, invite: String) -> Res
 async fn join(app: &Shared, code: &str, project: &str) -> Result<Room, String> {
     let parts: Vec<&str> = code.trim().split(':').collect();
     let [id, key, secret] = parts[..] else { return Err("that is not a room code (sealed-<room>:<key id>:<code>)".into()) };
-    if !(id.starts_with("sealed-") && key.len() == 64 && secret.len() == 32 && id.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_')) {
-        return Err("that is not a room code (sealed-<room>:<key id>:<code>)".into());
-    }
+    let valid = id.starts_with("sealed-") && key.len() == 64 && secret.len() == 32 && id.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_');
+    valid.then_some(()).ok_or("that is not a room code (sealed-<room>:<key id>:<code>)")?;
     let base = base(app);
     let me = sealed::identity(&app.home, &my_name(app))?;
     sealed::post(&base, &me, "announce", id, json!("joined")).await?;
@@ -657,17 +675,12 @@ async fn api_qr(State(app): State<Shared>, Path(id): Path<String>) -> R {
 }
 
 async fn api_invite(State(app): State<Shared>, Path(id): Path<String>) -> R {
-    let peer = as_manager(&app, &id, "only the manager who made the room invites managers", |r| {
-        r.peer_code = format!("{}:{}:{}", r.id, r.me_id, new_code());
-        r.peer_code.clone()
-    })?;
-    Ok(Json(json!({"peer_code": peer})))
+    as_manager(&app, &id, "only the manager who made the room invites managers", |r| r.peer_code = format!("{}:{}:{}", r.id, r.me_id, new_code()))?;
+    Ok(Json(json!({"peer_code": known(&id)?.peer_code})))
 }
 
 async fn api_leave(State(app): State<Shared>, Path(id): Path<String>) -> R {
-    if !known(&id)?.private() {
-        return Err(bad("a public room is listed in config.toml: remove it there".into()));
-    }
+    known(&id)?.private().then_some(()).ok_or_else(|| bad("a public room is listed in config.toml: remove it there".into()))?;
     ROOMS.lock().unwrap().remove(&id);
     let _ = app.db.lock().unwrap().execute("DELETE FROM am_rooms WHERE id = ?1", [&id]);
     app.emit("room", json!({"id": id, "gone": true}));
@@ -677,9 +690,7 @@ async fn api_leave(State(app): State<Shared>, Path(id): Path<String>) -> R {
 
 async fn api_say(State(app): State<Shared>, Path(id): Path<String>, Json(b): Json<Value>) -> R {
     let text = b["text"].as_str().unwrap_or("").trim().to_string();
-    if text.is_empty() {
-        return Err(bad("empty message".into()));
-    }
+    (!text.is_empty()).then_some(()).ok_or_else(|| bad("empty message".into()))?;
     known(&id)?;
     say(&app, &id, &text).await.map_err(bad)?;
     Ok(Json(json!({"ok": true})))
@@ -687,10 +698,7 @@ async fn api_say(State(app): State<Shared>, Path(id): Path<String>, Json(b): Jso
 
 async fn api_svg(State(app): State<Shared>, Path(id): Path<String>, Query(q): Query<HashMap<String, String>>) -> Response {
     let Ok(r) = known(&id) else { return (StatusCode::NOT_FOUND, "no such room").into_response() };
-    let url = view(&app, &r)[if q.get("kind").map(String::as_str) == Some("invite") { "invite" } else { "link" }].as_str().unwrap_or("").to_string();
-    if url.is_empty() {
-        return (StatusCode::NOT_FOUND, "no such link").into_response();
-    }
+    let Some(url) = view(&app, &r)[if q.get("kind").map(String::as_str) == Some("invite") { "invite" } else { "link" }].as_str().map(String::from) else { return (StatusCode::NOT_FOUND, "no such link").into_response() };
     let svg = |c: qrcode::QrCode| c.render::<qrcode::render::svg::Color>().min_dimensions(220, 220).dark_color(qrcode::render::svg::Color("#000")).light_color(qrcode::render::svg::Color("#fff")).build();
     match qrcode::QrCode::new(url.as_bytes()) {
         Ok(code) => ([("content-type", "image/svg+xml"), ("cache-control", "no-store")], svg(code)).into_response(),
@@ -752,7 +760,6 @@ pub fn cli(pos: &[&str], flag: Flag) -> Option<Result<(), String>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
     #[test]
     fn room_attachment_saved_as_file() {
         let home = std::env::temp_dir().join(format!("tirith-att-{}", std::process::id()));
@@ -764,14 +771,16 @@ mod tests {
         assert!(std::fs::read(path).unwrap().starts_with(&[0x89, 0x50, 0x4e, 0x47]));
         assert!(save_image("{\"mime\":\"image/png\",\"data\":\"AAAA\"}", "r").is_none());
     }
-
     #[test]
     fn room_files_expire_after_24h() {
         let (root, then) = (std::env::temp_dir().join(format!("tirith-exp-{}", std::process::id())), std::time::SystemTime::now() - Duration::from_secs(90000));
         let (old, new) = (root.join("a/old.png"), root.join("b/new.png"));
-        for f in [&old, &new] { std::fs::create_dir_all(f.parent().unwrap()).unwrap(); std::fs::write(f, b"x").unwrap(); }
+        for f in [&old, &new] {
+            std::fs::create_dir_all(f.parent().unwrap()).unwrap();
+            std::fs::write(f, b"x").unwrap();
+        }
         std::fs::File::options().write(true).open(&old).unwrap().set_modified(then).unwrap();
         expire_files(&root, Duration::from_secs(86400));
-        assert!(!old.exists() && !root.join("a").exists() && new.exists() && root.exists());
+        assert!(!old.exists() && !root.join("a").exists() && new.exists());
     }
 }
