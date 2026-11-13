@@ -19,6 +19,7 @@ Main is {red}.
 - If you need a decision you cannot make yourself: tirith ask "<question>", then end your turn.
 - Never push, never touch main, never start other agents or sub-agents. The plan is written only by Tirith.
 - Commit checks are never skipped.
+- Never wait blindly on a process. Whoever waits checks that it advances (its log, or the files it writes); if nothing changes in two minutes, stop it and find out why before waiting again. Do not repeat the same long wait.
 {clippy}{rules}
 
 Brief written {at} by Tirith.
