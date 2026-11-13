@@ -2,9 +2,15 @@
 
 use crate::app::{add_worktree, alive, git, kill_group, log_age, now_iso, now_s, tail, Lane, Shared};
 use crate::{brain, config::Project, guard, manager, models, plan, sandbox};
+use regex::Regex;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
-use std::{os::unix::ffi::OsStrExt, process::Stdio, sync::Mutex, time::Duration};
+use std::{
+    os::unix::ffi::OsStrExt,
+    process::Stdio,
+    sync::{LazyLock, Mutex},
+    time::Duration,
+};
 
 static LIVE: Mutex<BTreeMap<String, Vec<String>>> = Mutex::new(BTreeMap::new());
 
@@ -337,33 +343,24 @@ fn brief(app: &Shared, lane: &Lane) -> String {
     let others: Vec<String> = lanes.iter().filter(|l| l.id != lane.id && matches!(l.status.as_str(), "running" | "waiting")).map(|l| format!("- {} ({}): {}", l.id, l.status, l.item)).collect();
     let red = app.kv(&format!("main_red:{}", lane.project));
     let rules: Vec<String> = app.cfg().project(&lane.project).map(|p| app.manifest(&p.repo()).rules).unwrap_or_default().iter().map(|r| format!("- {}", r.message)).collect();
-    let mut b = format!(
-        "# Lane {id}\n\nProject: {project}. Plan step {step}.\n\n## Your item\n{item}\n{check}\n## The step's items\n{items}\n\n\
-         ## Lanes working beside you\n{others}\n\nMain is {red}.\n",
-        id = lane.id,
-        project = lane.project,
-        step = lane.step,
-        item = lane.item,
-        check = check.map(|c| format!("\nIts check (must pass on the merged result): `{c}`\n")).unwrap_or_default(),
-        items = items.join("\n"),
-        others = if others.is_empty() { "none".into() } else { others.join("\n") },
-        red = red.map(|r| format!("red ({r}): not your job unless your item is about it")).unwrap_or("green".into()),
-    );
-    if let Some(a) = brain::architecture(app, &lane.project) {
-        b += &format!("\n## Architecture\n{a}\n");
-    }
-    b + &format!(
-        "\n## How you work\n- You are in your own git worktree ({ws}) on branch {branch}. Change files only here.\n\
-         - Commit your work on this branch. When you are finished just end your turn: Tirith runs the checks and merges.\n\
-         - If you need a decision you cannot make yourself: tirith ask \"<question>\", then end your turn.\n\
-         - Never push, never touch main, never start other agents or sub-agents. The plan is written only by Tirith.\n\
-         - Commit checks are never skipped.\n{clippy}{rules}\n\nBrief written {at} by Tirith.\n",
-        ws = lane.workspace,
-        branch = lane.branch,
-        clippy = clippy_rule(&lane.workspace),
-        rules = rules.join("\n"),
-        at = now_iso(),
-    )
+    let vars = HashMap::from([
+        ("id", lane.id.clone()),
+        ("project", lane.project.clone()),
+        ("step", lane.step.clone()),
+        ("item", lane.item.clone()),
+        ("check", check.map(|c| format!("\nIts check (must pass on the merged result): `{c}`\n")).unwrap_or_default()),
+        ("items", items.join("\n")),
+        ("others", if others.is_empty() { "none".into() } else { others.join("\n") }),
+        ("red", red.map(|r| format!("red ({r}): not your job unless your item is about it")).unwrap_or("green".into())),
+        ("architecture", brain::architecture(app, &lane.project).map(|a| format!("\n## Architecture\n{a}\n")).unwrap_or_default()),
+        ("ws", lane.workspace.clone()),
+        ("branch", lane.branch.clone()),
+        ("clippy", clippy_rule(&lane.workspace).into()),
+        ("rules", rules.join("\n")),
+        ("at", now_iso()),
+    ]);
+    static PLACEHOLDER: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\{(\w+)\}").unwrap());
+    PLACEHOLDER.replace_all(include_str!("../assets/brief.md"), |c: &regex::Captures| vars[&c[1]].clone()).into_owned()
 }
 
 /// Runs the lane's agent in its slot (a new slot for a lane without one): the brief, or a resume of its session with the pending message.
