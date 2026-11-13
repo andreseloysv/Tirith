@@ -216,6 +216,24 @@ fn quiet_s(seen: &mut HashMap<String, (String, u64)>, id: &str, tail: &str, log_
     now.saturating_sub(e.1)
 }
 
+/// Whether a running lane has gone `min` minutes since it started and was not reported yet (`min` 0: never).
+fn long_running_due(started_at: Option<&str>, now: u64, min: u64, reported: bool) -> bool {
+    let start = started_at.and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok()).map_or(now, |t| t.timestamp().max(0) as u64);
+    min > 0 && !reported && now.saturating_sub(start) >= min * 60
+}
+
+/// The last `n` shell commands the agent ran, from the tail of its stream-json log (oldest first).
+fn last_commands(tail: &str, n: usize) -> Vec<String> {
+    let mut cmds: Vec<String> = tail
+        .lines()
+        .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+        .flat_map(|v| v["message"]["content"].as_array().cloned().unwrap_or_default())
+        .filter_map(|c| c["input"]["command"].as_str().map(|s| s.chars().take(200).collect::<String>()))
+        .collect();
+    cmds.drain(..cmds.len().saturating_sub(n));
+    cmds
+}
+
 /// Every few seconds (or when woken): stop idle lanes, pick up ended processes, and when the machine has room start the oldest queued lane (manual, sent back or answered) or else the autopilot's next item.
 pub async fn scheduler(app: Shared) {
     let mut rr = 0;
@@ -244,6 +262,13 @@ pub async fn scheduler(app: Shared) {
         for l in lanes.iter().filter(|l| l.pid.is_some()) {
             let text = tail(&app.home.join(format!("logs/lanes/{}.log", l.id)), 200);
             let quiet = quiet_s(&mut seen, &l.id, &text, log_age(&app, &l.id), now_s());
+            let key = format!("long_running:{}", l.id);
+            if l.status == "running" && long_running_due(l.started_at.as_deref(), now_s(), cfg.long_running_min, app.kv(&key).is_some()) {
+                app.set_kv(&key, Some("1"));
+                let cmds = last_commands(&text, 5).iter().map(|c| format!("- {c}")).collect::<Vec<_>>().join("\n");
+                let msg = format!("lane {} has been running for more than {} min. Check that it advances or whether it waits on something stuck. Its last commands:\n{cmds}", l.id, cfg.long_running_min);
+                manager::notify(&app, &l.project, &msg);
+            }
             if l.status == "running" && now_s().saturating_sub(l.last_activity).min(quiet) > cfg.inactivity_min * 60 {
                 kill_group(l.pid.unwrap_or(0), libc::SIGKILL);
                 let why = format!("no new output for {} min (an agent stuck retrying its API call counts as silent)", cfg.inactivity_min);
@@ -587,6 +612,19 @@ mod tests {
         assert_eq!(super::quiet_s(&mut seen, "a", &format!("{real}{retry}x\n"), 0, 2201), 0);
     }
 
+    #[test]
+    fn long_running_lane_is_reported_once() {
+        let start = "2026-11-13T10:00:00Z";
+        let t0 = chrono::DateTime::parse_from_rfc3339(start).unwrap().timestamp() as u64;
+        assert!(!super::long_running_due(Some(start), t0 + 29 * 60, 30, false));
+        assert!(super::long_running_due(Some(start), t0 + 30 * 60, 30, false));
+        assert!(!super::long_running_due(Some(start), t0 + 40 * 60, 30, true)); // once
+        assert!(!super::long_running_due(Some(start), t0 + 40 * 60, 0, false)); // off
+        assert!(!super::long_running_due(None, t0, 30, false));
+        let log = "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"tool_use\",\"input\":{\"command\":\"sleep 590\"}}]}}\nnot json\n{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"tool_use\",\"input\":{\"command\":\"ls\"}}]}}\n";
+        assert_eq!(super::last_commands(log, 1), ["ls"]);
+        assert_eq!(super::last_commands(log, 5), ["sleep 590", "ls"]);
+    }
     #[test]
     fn lane_runs_clippy_before_finish() {
         let dir = std::env::temp_dir().join(format!("tirith-clippy-{}", std::process::id()));
