@@ -1,5 +1,4 @@
-//! The commit guard: git hooks in every project that refuse a commit whose message, file names or added lines contain one of the owner's forbidden words (whole word, any case; a word may be a regex). The words come only from
-//! config.toml: the project's `guard_words`, else `[guard] words`; `guard = false` opts a project out.
+//! The commit guard: git hooks in every project that refuse a commit containing one of the owner's forbidden words (from config.toml only; `guard = false` opts a project out).
 
 use crate::app::Shared;
 use crate::config::{home_dir, Project};
@@ -14,14 +13,13 @@ const HOOKS: [&str; 2] = ["pre-commit", "commit-msg"];
 
 const HEAD: &str = "#!/bin/bash\n# FORBIDDEN_WORDS_GUARD\n# {what}\n# Installed by Tirith; words: {words}\nset -euo pipefail\nexport TIRITH_GUARD_RE='{re}'\n";
 
-const PRE_COMMIT: &str = include_str!("../hooks/pre-commit.sh");
+const PRE_COMMIT: &str = include_str!("../assets/pre-commit.sh");
 
-const COMMIT_MSG: &str = include_str!("../hooks/commit-msg.sh");
+const COMMIT_MSG: &str = include_str!("../assets/commit-msg.sh");
 
 /// The repository's own hook, kept next to ours as `<hook>.local` when the guard was installed, still runs.
-const LOCAL: &str = include_str!("../hooks/local-hook.sh");
+const LOCAL: &str = include_str!("../assets/local-hook.sh");
 
-/// The project's forbidden words; empty when it needs no guard.
 pub fn words(app: &Shared, project: &Project) -> Vec<String> {
     let cfg = app.cfg();
     let entry = cfg.raw.get("projects").and_then(|p| p.as_array()).and_then(|ps| ps.iter().find(|p| p.get("id").and_then(|i| i.as_str()) == Some(project.id.as_str())).cloned()).unwrap_or(toml::Value::Table(Default::default()));

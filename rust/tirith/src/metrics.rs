@@ -1,10 +1,4 @@
-//! Health metrics and the CEO.
-//!
-//! Every minute code computes the metrics from the daemon's own data (lanes, runs, plans, kv). A metric that
-//! turns red starts an episode: the mechanical fix when there is one, then one note to the manager. Still red
-//! `[ceo] review_after_minutes` later, one CEO review runs for that episode: a fresh, independent, read-only
-//! session whose answer goes to the owner's chat and to the manager. Back to green ends the episode.
-//! While everything is green no model is called.
+//! Health metrics computed every minute from the daemon's own data, and the CEO review that a metric red for long enough starts; while everything is green no model is called.
 
 use crate::app::{kill_group, log_age, now_iso, now_s, tail, Lane, Shared};
 use crate::{config, manager, models, plan};
@@ -15,7 +9,7 @@ use std::sync::{LazyLock, Mutex};
 use std::{collections::HashMap, time::Duration};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
-const PROMPT: &str = include_str!("../prompts/ceo.txt");
+const PROMPT: &str = include_str!("../assets/ceo-prompt.txt");
 
 struct Metric {
     id: &'static str,
@@ -59,7 +53,6 @@ fn flag(app: &Shared, key: &str) -> Option<String> {
     app.kv(key).filter(|v| !matches!(v.trim(), "" | "0" | "off" | "false"))
 }
 
-/// The open owner questions, each with the project it is about.
 fn owner_questions(app: &Shared) -> Vec<String> {
     manager::owner_open(app).iter().map(|o| format!("{}: {}", o["project"].as_str().unwrap_or(""), o["question"].as_str().unwrap_or("")).trim_start_matches(": ").to_string()).collect()
 }
@@ -230,7 +223,6 @@ fn payload(app: &Shared, metrics: Vec<Value>) -> Value {
     json!({"metrics": metrics, "reviews": app.recent("ceo_reviews", &["id", "at", "metric", "text"], None, 10)})
 }
 
-/// Starts one review in the background; nothing when one is already running.
 fn start_review(app: &Shared, metric: String, why: String) {
     if REVIEWING.swap(true, Ordering::SeqCst) {
         return;

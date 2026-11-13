@@ -94,7 +94,7 @@ impl App {
             let _ = std::fs::create_dir_all(home.join(dir));
         }
         let db = Connection::open(home.join("tirith.sqlite3")).expect("open tirith.sqlite3");
-        db.execute_batch(include_str!("../prompts/schema.sql")).expect("create tables");
+        db.execute_batch(include_str!("../assets/schema.sql")).expect("create tables");
         // Columns added later (each ALTER fails once its column exists). A chat row and an owner card belong to a project; '' is none.
         for (table, col) in [("runs", "pipeline TEXT"), ("runs", "sha TEXT"), ("chat", "project TEXT NOT NULL DEFAULT ''"), ("owner_items", "project TEXT NOT NULL DEFAULT ''")] {
             let _ = db.execute(&format!("ALTER TABLE {table} ADD COLUMN {col}"), []);
@@ -169,7 +169,6 @@ impl App {
         Some(lane)
     }
 
-    /// Runs an INSERT and returns the id of the new row.
     pub fn insert(&self, sql: &str, values: &[&dyn rusqlite::ToSql]) -> i64 {
         let db = self.db.lock().unwrap();
         let _ = db.execute(sql, values);

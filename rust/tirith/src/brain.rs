@@ -1,5 +1,4 @@
-//! The brain: small text jobs for a cheap, fast model of the Meta Model API (OpenAI-style `/chat/completions`). Never on a hot path: callers use the cached answer or a plain fallback. The key comes only from the environment
-//! (`META_API_KEY` or `META_SI_API_KEY`) and is never logged or stored.
+//! The brain: small text jobs for a cheap model of the Meta Model API, never on a hot path (callers use the cached answer or a plain fallback); its key comes only from the environment.
 
 use crate::app::{git, now_s, Shared};
 use crate::{models, rooms::sealed::sha_hex};

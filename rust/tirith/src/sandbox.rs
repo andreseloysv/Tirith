@@ -1,5 +1,4 @@
-//! Network sandbox. Every process Tirith starts (lane agents, the manager, CEO reviews, merge-queue checks) runs inside a macOS `sandbox-exec` profile that denies outbound network except loopback and local sockets, with its proxy
-//! variables pointing at the daemon's own HTTP/CONNECT proxy (`sandbox/proxy.rs`). The proxy authenticates the caller (`who` + token), applies the block list, and records each new destination as an event.
+//! Network sandbox: every process Tirith starts runs inside a macOS `sandbox-exec` profile that only allows loopback, with proxy variables pointing at the daemon's own proxy (`sandbox/proxy.rs`).
 
 mod proxy;
 
@@ -19,7 +18,6 @@ use std::{
     sync::{LazyLock, OnceLock, RwLock},
 };
 
-/// A process to start: program, arguments and extra environment.
 pub struct Launch {
     pub program: String,
     pub args: Vec<String>,
@@ -54,7 +52,6 @@ pub fn proxy_port(app: &Shared) -> u16 {
     config::get(&app.cfg().raw, &["network", "proxy_port"]).unwrap_or(DEFAULT_PORT)
 }
 
-/// Ok when processes run sandboxed; why not otherwise.
 fn enabled(app: &Shared) -> Result<(), String> {
     if !config::get::<bool>(&app.cfg().raw, &["network", "sandbox"]).unwrap_or(true) {
         Err("[network] sandbox = false in config.toml".into())
@@ -117,21 +114,9 @@ pub fn wrap(app: &Shared, who: &str, argv: Vec<String>) -> Launch {
 fn write_wrappers(app: &Shared) {
     let dir = app.home.join("net/bin");
     let _ = std::fs::create_dir_all(&dir);
-    let head = format!(
-        "#!/bin/sh\n# Written by Tirith: inside its network sandbox, which macOS will not let a tool nest another in.\n\
-         PATH=$(printf %s \"$PATH\" | tr : '\\n' | grep -vxF '{}' | paste -sd: -)\n",
-        dir.display()
-    );
-    let swift = "case \"$1\" in build|test|run|package)\n  case \" $* \" in *\" --disable-sandbox \"*) exec swift \"$@\";; esac\n  \
-                 sub=$1; shift; exec swift \"$sub\" --disable-sandbox \"$@\";;\nesac\nexec swift \"$@\"\n";
-    let xcode = format!(
-        "case \" $* \" in *\" -IDEPackageSupportDisableManifestSandbox\"*) exec xcodebuild \"$@\";; esac\n\
-         case \" $* \" in *\" -scmProvider \"*) scm=;; *) scm='-scmProvider system';; esac\n\
-         case \" $* \" in *\" OTHER_SWIFT_FLAGS=\"*) exec xcodebuild {XCODE_FLAGS} $scm \"$@\";; esac\n\
-         exec xcodebuild {XCODE_FLAGS} $scm 'OTHER_SWIFT_FLAGS=$(inherited) -disable-sandbox' \"$@\"\n"
-    );
-    let mut files = vec![("swift".to_string(), swift.to_string()), ("xcodebuild".into(), xcode)];
-    files.extend(["swift-build", "swift-test", "swift-run", "swift-package"].map(|tool| (tool.into(), format!("case \" $* \" in *\" --disable-sandbox \"*) exec {tool} \"$@\";; esac\nexec {tool} --disable-sandbox \"$@\"\n"))));
+    let head = include_str!("../assets/net-head.sh").replace("{dir}", &dir.display().to_string());
+    let mut files: Vec<(String, String)> = [("swift", include_str!("../assets/net-swift.sh")), ("xcodebuild", include_str!("../assets/net-xcodebuild.sh"))].map(|(n, b)| (n.to_string(), b.replace("{flags}", XCODE_FLAGS))).into();
+    files.extend(["swift-build", "swift-test", "swift-run", "swift-package"].map(|tool| (tool.into(), include_str!("../assets/net-tool.sh").replace("{tool}", tool))));
     for (name, body) in files {
         let path = dir.join(name);
         let text = format!("{head}{body}");
