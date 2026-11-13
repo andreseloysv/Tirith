@@ -655,7 +655,6 @@ async fn api_forget(State(app): State<Shared>, Json(b): Json<Value>) -> R {
 fn as_manager<T>(app: &Shared, id: &str, refusal: &str, f: impl FnOnce(&mut Room) -> T) -> Result<T, (StatusCode, String)> {
     update(app, id, |r| (r.kind == "manager").then(|| f(r))).ok_or((StatusCode::NOT_FOUND, format!("no room {id}")))?.ok_or_else(|| bad(refusal.into()))
 }
-
 async fn api_qr(State(app): State<Shared>, Path(id): Path<String>) -> R {
     as_manager(&app, &id, "only the manager who made the room pairs phones", |r| (r.invite, r.invite_at) = (new_code(), now_s()))?;
     Ok(Json(view(&app, &known(&id)?)))
