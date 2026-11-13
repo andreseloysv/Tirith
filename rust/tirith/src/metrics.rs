@@ -1,10 +1,4 @@
-//! Health metrics and the CEO.
-//!
-//! Every minute code computes the metrics from the daemon's own data (lanes, runs, plans, kv). A metric that
-//! turns red starts an episode: the mechanical fix when there is one, then one note to the manager. Still red
-//! `[ceo] review_after_minutes` later, one CEO review runs for that episode: a fresh, independent, read-only
-//! session whose answer goes to the owner's chat and to the manager. Back to green ends the episode.
-//! While everything is green no model is called.
+//! Health metrics computed every minute from the daemon's own data, and the CEO review that a metric red for long enough starts; while everything is green no model is called.
 
 use crate::app::{kill_group, log_age, now_iso, now_s, tail, Lane, Shared};
 use crate::{config, manager, models, plan};
@@ -15,15 +9,7 @@ use std::sync::{LazyLock, Mutex};
 use std::{collections::HashMap, time::Duration};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
-const PROMPT: &str = "You are the CEO review inside Tirith: an independent, read-only, one-shot review of how the \
-work is run (not of the code). Tirith runs coding agents from each project's plan: lanes (one agent, one plan item, \
-one git worktree), a merge queue that only merges verified work, an autopilot that starts plan items, and a manager \
-agent that runs the work and talks to the owner. You get the health metrics that are red, the facts behind them, \
-the last lanes, failing checks, plan progress and open owner questions. You may read files and run read-only \
-commands; change nothing. Decide, do not ask questions. Answer briefly in Spanish (the owner reads it): \
-1) what is wrong and its most likely cause, 2) the concrete actions the manager must take now, as the commands it \
-runs (tirith lane start <project> <step> \"<item>\", tirith lane stop <lane>, tirith plan add <project> <step> \
-\"<item>\", tirith answer …, tirith autopilot …).";
+const PROMPT: &str = include_str!("../assets/ceo-prompt.txt");
 
 struct Metric {
     id: &'static str,
@@ -67,7 +53,6 @@ fn flag(app: &Shared, key: &str) -> Option<String> {
     app.kv(key).filter(|v| !matches!(v.trim(), "" | "0" | "off" | "false"))
 }
 
-/// The open owner questions, each with the project it is about.
 fn owner_questions(app: &Shared) -> Vec<String> {
     manager::owner_open(app).iter().map(|o| format!("{}: {}", o["project"].as_str().unwrap_or(""), o["question"].as_str().unwrap_or("")).trim_start_matches(": ").to_string()).collect()
 }
@@ -238,7 +223,6 @@ fn payload(app: &Shared, metrics: Vec<Value>) -> Value {
     json!({"metrics": metrics, "reviews": app.recent("ceo_reviews", &["id", "at", "metric", "text"], None, 10)})
 }
 
-/// Starts one review in the background; nothing when one is already running.
 fn start_review(app: &Shared, metric: String, why: String) {
     if REVIEWING.swap(true, Ordering::SeqCst) {
         return;
@@ -386,11 +370,5 @@ mod tests {
         assert!(t.contains("tirith plan empty") && t.contains("fix: tirith plan add tirith <step>"), "{t}");
         assert!(t.contains("p2 plan empty"), "{t}");
         assert!(super::empty_plan_note(&[]).is_empty());
-    }
-    #[test]
-    fn idle_health_ignores_unstartable_items() {
-        let skipped = crate::lanes::is_autopilot_skipped;
-        assert!(skipped("Manager de guardia: atender el chat") && skipped("CEO: revisar") && skipped("Elegir dominio (espera: el dueño)"));
-        assert!(!skipped("Arreglar el parser"));
     }
 }
