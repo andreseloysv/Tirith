@@ -62,6 +62,8 @@ pub struct Config {
     pub max_parallel: usize,
     pub max_load: f64,
     pub inactivity_min: u64,
+    /// `[lanes] long_running_minutes`: a lane running this long is reported once to its project's manager (0 turns it off).
+    pub long_running_min: u64,
     pub push: bool,
     pub stage_timeout_min: u64,
     pub plan_commit_s: u64,
@@ -86,6 +88,7 @@ impl Config {
             max_parallel: get(&t, &["lanes", "max_parallel"]).or_else(|| get(&t, &["autopilot", "max_parallel"])).unwrap_or(3),
             max_load: get(&t, &["lanes", "max_load"]).unwrap_or(2.0),
             inactivity_min: get(&t, &["lanes", "inactivity_minutes"]).unwrap_or(20),
+            long_running_min: get(&t, &["lanes", "long_running_minutes"]).unwrap_or(30),
             push: get(&t, &["merge", "push"]).unwrap_or(true),
             stage_timeout_min: get(&t, &["merge", "stage_timeout_minutes"]).unwrap_or(30),
             plan_commit_s: get(&t, &["plan", "commit_seconds"]).unwrap_or(120),
