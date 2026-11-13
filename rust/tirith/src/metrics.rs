@@ -158,8 +158,7 @@ fn compute(app: &Shared) -> Vec<Metric> {
         .iter()
         .filter(|l| l.status == "running")
         .filter_map(|l| {
-            let log = log_age(app, &l.id);
-            let quiet = (now as u64).saturating_sub(l.last_activity).min(log);
+            let quiet = (now as u64).saturating_sub(l.last_activity).min(log_age(app, &l.id));
             (quiet > half).then(|| format!("{} ({}) quiet {} min", l.id, l.project, quiet / 60))
         })
         .collect();
@@ -189,8 +188,7 @@ fn tick(app: &Shared) {
     let metrics = compute(app);
     let now = now_s();
     let after = ceo_cfg(app, &["ceo", "review_after_minutes"], 15u64) * 60;
-    let mut due = vec![];
-    let mut notes = vec![];
+    let (mut due, mut notes) = (vec![], vec![]);
     let list: Vec<Value> = {
         let mut book = BOOK.lock().unwrap();
         for m in &metrics {
@@ -270,9 +268,8 @@ fn brief(app: &Shared, why: &str) -> String {
     lanes.iter().take(20).for_each(|l| s += &format!("- {} [{}] {}:{} \"{}\" tries {} created {}: {}\n", l.id, l.status, l.project, l.step, l.item, l.attempts + 1, l.created_at, l.note.lines().next().unwrap_or("")));
     s += "\n# Failing checks (last 24 h)\n";
     let day = iso(now_s().saturating_sub(86400));
-    let runs = app.query("SELECT lane, stage, status, COALESCE(log, '') FROM runs WHERE status IN ('failed', 'timeout') AND started_at >= ?1 ORDER BY id DESC LIMIT 5", [&day], |r| {
-        Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, String>(3)?))
-    });
+    let runs: Vec<(String, String, String, String)> =
+        app.query("SELECT lane, stage, status, COALESCE(log, '') FROM runs WHERE status IN ('failed', 'timeout') AND started_at >= ?1 ORDER BY id DESC LIMIT 5", [&day], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)));
     runs.iter().for_each(|(lane, stage, status, log)| s += &format!("- {lane} check '{stage}' {status}:\n```\n{}\n```\n", tail(std::path::Path::new(log), 15)));
     s += "\n# Plans\n";
     for p in &app.cfg().projects {
