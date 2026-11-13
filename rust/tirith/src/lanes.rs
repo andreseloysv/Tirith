@@ -56,7 +56,7 @@ fn load_per_core() -> f64 {
     (if n > 0 { l[0] } else { 0.0 }) / cores
 }
 
-fn free_gb(dir: &Path) -> f64 {
+pub(crate) fn free_gb(dir: &Path) -> f64 {
     let Ok(c) = std::ffi::CString::new(dir.as_os_str().as_bytes()) else { return f64::MAX };
     let mut s: libc::statvfs = unsafe { std::mem::zeroed() };
     if unsafe { libc::statvfs(c.as_ptr(), &mut s) } == 0 {
@@ -630,11 +630,20 @@ mod tests {
     fn stale_owner_questions_close() {
         use crate::manager::stale_reason;
         let off = "Should I turn off the autopilot of tirith?";
-        assert_eq!(stale_reason(off, true), None); // still on: the question applies
-        assert!(stale_reason(off, false).is_some()); // already off: stale
-        assert!(stale_reason("¿Apagar el autopilot de superpolitika?", false).is_some());
-        assert!(stale_reason("Enable the autopilot again?", true).is_some());
-        assert_eq!(stale_reason("Enable the autopilot again?", false), None);
-        assert_eq!(stale_reason("Approve $0.74 for the translation?", false), None);
+        assert_eq!(stale_reason(off, true, 50.0), None); // still on: the question applies
+        assert!(stale_reason(off, false, 50.0).is_some()); // already off: stale
+        assert!(stale_reason("¿Apagar el autopilot de superpolitika?", false, 50.0).is_some());
+        assert!(stale_reason("Enable the autopilot again?", true, 50.0).is_some());
+        assert_eq!(stale_reason("Enable the autopilot again?", false, 50.0), None);
+        assert_eq!(stale_reason("Approve $0.74 for the translation?", false, 50.0), None);
+    }
+
+    #[test]
+    fn low_disk_question_closes_when_freed() {
+        use crate::manager::stale_reason;
+        let q = "Only 4.6 GB free on this disk: lanes will fail with No space left on device.";
+        assert_eq!(stale_reason(q, true, 4.6), None); // still low
+        assert_eq!(stale_reason(q, true, 9.0), None); // not above 10 GB yet
+        assert!(stale_reason(q, true, 39.0).is_some());
     }
 }
