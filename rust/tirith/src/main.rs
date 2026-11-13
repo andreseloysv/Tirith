@@ -161,14 +161,11 @@ fn install_hooks() -> Result<(), String> {
         let groups = settings["hooks"][event].as_array().cloned().unwrap_or_default();
         let mut kept: Vec<Value> = groups
             .into_iter()
-            .map(|mut g| {
-                if let Some(hs) = g["hooks"].as_array() {
-                    let hs: Vec<Value> = hs.iter().filter(|h| !h["command"].as_str().unwrap_or("").starts_with("tirith hook") && !h["url"].as_str().unwrap_or("").contains("/hook/")).cloned().collect();
-                    g["hooks"] = json!(hs);
-                }
-                g
+            .filter_map(|mut g| {
+                let hs: Vec<Value> = g["hooks"].as_array()?.iter().filter(|h| !h["command"].as_str().unwrap_or("").starts_with("tirith hook") && !h["url"].as_str().unwrap_or("").contains("/hook/")).cloned().collect();
+                g["hooks"] = json!(hs);
+                (!hs.is_empty()).then_some(g)
             })
-            .filter(|g| g["hooks"].as_array().is_some_and(|h| !h.is_empty()))
             .collect();
         kept.push(json!({"hooks": [ours]}));
         settings["hooks"][event] = json!(kept);
