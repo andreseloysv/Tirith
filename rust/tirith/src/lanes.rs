@@ -589,11 +589,8 @@ mod tests {
     }
     #[test]
     fn low_disk_asks_owner_once() {
-        assert_eq!(super::low_disk_ask(8.0, false), None);
-        assert_eq!(super::low_disk_ask(4.0, false), Some(true));
-        assert_eq!(super::low_disk_ask(3.0, true), None); // already asked: silent
-        assert_eq!(super::low_disk_ask(5.5, true), None); // not recovered yet
-        assert_eq!(super::low_disk_ask(9.0, true), Some(false)); // re-armed
+        let asks = [(8.0, false), (4.0, false), (3.0, true), (5.5, true), (9.0, true)].map(|(gb, asked)| super::low_disk_ask(gb, asked));
+        assert_eq!(asks, [None, Some(true), None, None, Some(false)]);
         let dir = std::env::temp_dir().join(format!("tirith-lowdisk-{}", std::process::id()));
         std::fs::create_dir_all(dir.join("big")).unwrap();
         std::fs::write(dir.join("big/f"), vec![1u8; 300_000]).unwrap();
@@ -607,11 +604,9 @@ mod tests {
     }
     #[test]
     fn autopilot_skips_owner_wait_items() {
-        assert!(super::is_autopilot_skipped("Elegir dominio (espera: el dueño decide)"));
-        assert!(super::is_autopilot_skipped("CEO: revisar"));
-        assert!(!super::is_autopilot_skipped("Arreglar el parser"));
-        assert!(super::is_autopilot_skipped("Manager de guardia: atender el chat"));
-        assert!(!super::is_autopilot_skipped("Arreglar el CEO: bug"));
+        let skipped = ["Elegir dominio (espera: el dueño decide)", "CEO: revisar", "Manager de guardia: atender el chat"];
+        assert!(skipped.iter().all(|t| super::is_autopilot_skipped(t)));
+        assert!(!super::is_autopilot_skipped("Arreglar el parser") && !super::is_autopilot_skipped("Arreglar el CEO: bug"));
     }
     #[test]
     fn lane_without_commits_check_passes_is_done() {

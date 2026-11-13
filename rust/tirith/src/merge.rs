@@ -173,6 +173,13 @@ fn limit_from(get: impl Fn(&str) -> Option<String>, project: &str, stage: &str, 
 pub fn stage_limit_min(app: &Shared, project: &str, stage: &str) -> u64 {
     limit_from(|k| app.kv(k), project, stage, app.cfg().stage_timeout_min)
 }
+/// An item's check runs with the `VAR=value` words (JAVA_HOME, ANDROID_HOME) of the pipeline stage it belongs to: the stage named in it, or one running the same program.
+fn stage_env(stages: &[Stage], check: &str) -> Vec<(String, String)> {
+    let said: Vec<String> = check.split(|c: char| !c.is_alphanumeric() && c != '_').map(str::to_lowercase).collect();
+    let assign = |w: &str| w.split_once('=').filter(|(k, _)| !k.is_empty() && k.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')).map(|(k, v)| (k.to_string(), v.trim_matches(['"', '\'']).to_string()));
+    let same = |s: &Stage| said.contains(&s.name.to_lowercase()) || s.run.split_whitespace().any(|w| w.len() > 4 && assign(w).is_none() && said.contains(&w.rsplit('/').next().unwrap_or("").to_lowercase()));
+    stages.iter().filter(|s| same(s)).flat_map(|s| s.run.split_whitespace().filter_map(assign)).collect()
+}
 async fn run_stage(app: &Shared, pipe: &Pipe, dir: &Path, name: &str, run: &str) -> Result<(), String> {
     let lock = stage_lock(&pipe.project);
     let _one_at_a_time = lock.lock().await;
@@ -186,6 +193,9 @@ async fn run_stage(app: &Shared, pipe: &Pipe, dir: &Path, name: &str, run: &str)
     let launch = sandbox::wrap(app, &who, vec!["sh".into(), "-c".into(), run.into()]);
     let mut command = launch.command(app);
     command.env("CARGO_TARGET_DIR", crate::lanes::shared_target(app, &pipe.project));
+    if name.starts_with("check ") {
+        command.envs(stage_env(&Manifest::load(dir).stages, run));
+    }
     let mut child = command.current_dir(dir).stdin(Stdio::null()).stdout(file.try_clone().map_err(|e| e.to_string())?).stderr(file).process_group(0).spawn().map_err(|e| e.to_string())?;
     let limit = Duration::from_secs(stage_limit_min(app, &pipe.project, name) * 60);
     let status = match tokio::time::timeout(limit, child.wait()).await {
@@ -521,20 +531,18 @@ mod tests {
     use super::*;
     #[test]
     fn stage_timeouts_per_project() {
-        let mut kv = std::collections::HashMap::new();
-        kv.insert("stage_learned:zoo:build".to_string(), "60".to_string());
-        kv.insert("stage_limit:tirith:test".to_string(), format!("99@{}", now_s()));
-        kv.insert("stage_limit:tirith:old".to_string(), format!("99@{}", now_s() - MANAGER_LIMIT_SECS - 1));
+        let kv = std::collections::HashMap::from([
+            ("stage_learned:zoo:build".to_string(), "60".to_string()),
+            ("stage_limit:tirith:test".to_string(), format!("99@{}", now_s())),
+            ("stage_limit:tirith:old".to_string(), format!("99@{}", now_s() - MANAGER_LIMIT_SECS - 1)),
+        ]);
         let get = |k: &str| kv.get(k).cloned();
-        assert_eq!(limit_from(get, "zoo", "build", 30), 60);
-        assert_eq!(limit_from(get, "tirith", "build", 30), 30);
-        assert_eq!(limit_from(get, "tirith", "test", 30), 99);
-        assert_eq!(limit_from(get, "tirith", "old", 30), 30);
+        let got = [("zoo", "build"), ("tirith", "build"), ("tirith", "test"), ("tirith", "old")].map(|(p, st)| limit_from(get, p, st, 30));
+        assert_eq!(got, [60, 30, 99, 30]);
     }
     #[tokio::test]
     async fn project_test_stages_serialized() {
-        assert!(std::sync::Arc::ptr_eq(&stage_lock("p1"), &stage_lock("p1")));
-        assert!(!std::sync::Arc::ptr_eq(&stage_lock("p1"), &stage_lock("p2")));
+        assert!(std::sync::Arc::ptr_eq(&stage_lock("p1"), &stage_lock("p1")) && !std::sync::Arc::ptr_eq(&stage_lock("p1"), &stage_lock("p2")));
         let (lock, running) = (stage_lock("ser"), std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0)));
         let mut tasks = vec![];
         for _ in 0..4 {
@@ -556,21 +564,25 @@ mod tests {
     fn main_red_uses_latest_main() {
         let head = "0e89bb4aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         assert_eq!(red_stage_if_stale("test at d7fa7cd8", head), Some("test".into()));
-        assert_eq!(red_stage_if_stale("cargo test at 0e89bb4a", head), None);
-        assert_eq!(red_stage_if_stale("test at d7fa7cd8", ""), None);
+        assert_eq!((red_stage_if_stale("cargo test at 0e89bb4a", head), red_stage_if_stale("test at d7fa7cd8", "")), (None, None));
     }
     #[test]
     fn mergeq_enospc_deletes_the_folder_and_holds_no_slot() {
         let dir = std::env::temp_dir().join(format!("tirith-enospc-{}", std::process::id()));
-        std::fs::create_dir_all(dir.join(".git")).unwrap();
         let err = "git worktree add: fatal: write error: No space left on device";
-        assert!(disk_full(err));
-        assert!(drop_half_made(&dir, err));
-        assert!(!dir.exists());
+        std::fs::create_dir_all(dir.join(".git")).unwrap();
+        assert!(disk_full(err) && drop_half_made(&dir, err) && !dir.exists());
         // another failure keeps the folder
         std::fs::create_dir_all(&dir).unwrap();
-        assert!(!drop_half_made(&dir, "git worktree add: fatal: conflict"));
-        assert!(dir.exists());
+        assert!(!drop_half_made(&dir, "git worktree add: fatal: conflict") && dir.exists());
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+    #[test]
+    fn item_check_uses_stage_env() {
+        let st = |name: &str, run: &str| Stage { name: name.into(), run: run.into(), paths: vec![], kind: String::new() };
+        let stages = [st("android", "cd android && JAVA_HOME=/jdk17 ANDROID_HOME=\"/sdk\" ./gradlew assembleDebug"), st("build", "cargo build")];
+        let env = stage_env(&stages, "cd android && ./gradlew lint");
+        assert_eq!(env, [("JAVA_HOME".into(), "/jdk17".into()), ("ANDROID_HOME".into(), "/sdk".into())]);
+        assert_eq!(stage_env(&stages, "cargo test -q x"), []);
     }
 }
