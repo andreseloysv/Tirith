@@ -176,9 +176,7 @@ fn valid(v: &str) -> bool {
 
 /// Saves the owner's setting of a role (fields absent from `b` keep their effective value, "" clears them), or with `None` goes back to config.toml. Restarts the manager session when its setting changed.
 pub fn save(app: &Shared, role_name: &str, b: Option<&Value>) -> Result<RoleSetting, String> {
-    if !ROLES.contains(&role_name) {
-        return Err(format!("role must be one of {}", ROLES.join(", ")));
-    }
+    (ROLES.contains(&role_name)).then_some(()).ok_or_else(|| format!("role must be one of {}", ROLES.join(", ")))?;
     let before = role(app, "manager");
     if let Some(b) = b {
         let mut s = role(app, role_name);

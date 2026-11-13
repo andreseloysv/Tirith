@@ -114,12 +114,8 @@ pub fn intact(app: &Shared, project: &Project) -> Result<(), String> {
     let fix = format!("(tirith guard install {})", project.id);
     for hook in HOOKS {
         let text = std::fs::read_to_string(git.join("hooks").join(hook)).map_err(|_| format!("commit guard: the {hook} hook is missing {fix}"))?;
-        if !text.contains(MARKER) {
-            return Err(format!("commit guard: the {hook} hook is not Tirith's; merge the guard into it by hand"));
-        }
-        if text != render(hook, &words) {
-            return Err(format!("commit guard: the {hook} hook is outdated or has other words than config.toml {fix}"));
-        }
+        (text.contains(MARKER)).then_some(()).ok_or_else(|| format!("commit guard: the {hook} hook is not Tirith's; merge the guard into it by hand"))?;
+        (!(text != render(hook, &words))).then_some(()).ok_or_else(|| format!("commit guard: the {hook} hook is outdated or has other words than config.toml {fix}"))?;
     }
     // A `core.hooksPath` in the repo's or the user's git config makes git skip the guard.
     let skips = |f: &PathBuf| std::fs::read_to_string(f).is_ok_and(|t| t.lines().any(|l| l.trim().to_lowercase().replace(' ', "").starts_with("hookspath=")));
@@ -157,9 +153,7 @@ pub fn install(app: &Shared, project: &Project) -> Result<(), String> {
         if path.exists() && !ours(&path) {
             // The repository's own hook keeps running after ours, as <hook>.local.
             let local = dir.join(format!("{hook}.local"));
-            if local.exists() {
-                return Err(format!("{} is not Tirith's hook and {} exists: merge them by hand", path.display(), local.display()));
-            }
+            (!(local.exists())).then_some(()).ok_or_else(|| format!("{} is not Tirith's hook and {} exists: merge them by hand", path.display(), local.display()))?;
             immutable(&path, false);
             std::fs::rename(&path, &local).map_err(|e| format!("{}: {e}", path.display()))?;
         }
