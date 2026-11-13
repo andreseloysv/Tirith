@@ -64,8 +64,7 @@ pub fn path(app: &Shared, project: &str) -> Result<PathBuf, String> {
 
 pub fn read(app: &Shared, project: &str) -> Result<Vec<Step>, String> {
     let file = path(app, project)?;
-    let text = std::fs::read_to_string(&file).map_err(|_| format!("{} has no plan file ({})", project, file.display()))?;
-    Ok(parse(&text))
+    std::fs::read_to_string(&file).map(|text| parse(&text)).map_err(|_| format!("{} has no plan file ({})", project, file.display()))
 }
 
 pub fn is_open(app: &Shared, project: &str, step: &str, item: &str) -> Result<bool, String> {
@@ -83,8 +82,7 @@ pub fn same(a: &str, b: &str) -> bool {
 
 /// One item of the plan in the main checkout.
 pub fn find(app: &Shared, project: &str, step: &str, item: &str) -> Option<Item> {
-    let steps = read(app, project).ok()?;
-    steps.into_iter().find(|s| s.num == step)?.items.into_iter().find(|i| same(&i.text, item))
+    read(app, project).ok()?.into_iter().find(|s| s.num == step)?.items.into_iter().find(|i| same(&i.text, item))
 }
 
 /// Ticks the open `(step, item)` pairs in a plan text: the new text and how many were ticked.

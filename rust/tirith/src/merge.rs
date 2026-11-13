@@ -325,16 +325,12 @@ async fn train(app: &Shared, batch: Vec<Lane>) {
             if let Some(st) = manifest.stages.iter().find(|s| s.name == *name) {
                 if !main_check(app, &project, &slot, &base, st, false).await {
                     let key = format!("main_red:{pid}");
-                    let was = app.kv(&key);
-                    app.set_kv(&key, Some(&format!("{name} at {}", &base[..8.min(base.len())])));
+                    let (was, sha) = (app.kv(&key), &base[..8.min(base.len())]);
+                    app.set_kv(&key, Some(&format!("{name} at {sha}")));
                     app.emit("plan", json!({"project": pid}));
                     requeue(app, &[lane], true, "main is red: waits for a green main");
                     if was.is_none() {
-                        manager::notify(
-                            app,
-                            &pid,
-                            &format!("main of {pid} is red: check '{name}' fails on main itself ({}). The autopilot pauses {pid} until main is green; fix main or retry the main pipeline.", &base[..8.min(base.len())]),
-                        );
+                        manager::notify(app, &pid, &format!("main of {pid} is red: check '{name}' fails on main itself ({sha}). The autopilot pauses {pid} until main is green; fix main or retry the main pipeline."));
                     }
                     return;
                 }

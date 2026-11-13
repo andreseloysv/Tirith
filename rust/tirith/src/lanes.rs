@@ -196,10 +196,9 @@ fn next_item(app: &Shared, lanes: &[Lane], rr: &mut usize, ok: &mut dyn FnMut(&P
         let open: Vec<&str> = steps.iter().flat_map(|s| s.items.iter()).filter(|i| !i.done).map(|i| i.text.as_str()).collect();
         let latest = |step: &str, item: &str| lanes.iter().filter(|l| l.project == p.id && l.step == step && plan::same(&l.item, item)).max_by(|a, b| a.created_at.cmp(&b.created_at));
         let skipped = |l: Option<&Lane>| l.is_some_and(|l| matches!(l.status.as_str(), "failed" | "stopped"));
-        let Some(st) = steps.iter().find(|s| s.items.iter().any(|i| !i.done && !is_autopilot_skipped(&i.text) && !waits_for_open_item(&i.text, &open) && !skipped(latest(&s.num, &i.text)))) else { continue };
-        let Some(it) = st.items.iter().find(|i| !i.done && !is_autopilot_skipped(&i.text) && !waits_for_open_item(&i.text, &open) && latest(&st.num, &i.text).is_none_or(|l| !l.active() && !skipped(Some(l)))) else {
-            continue;
-        };
+        let startable = |i: &plan::Item| !i.done && !is_autopilot_skipped(&i.text) && !waits_for_open_item(&i.text, &open);
+        let Some(st) = steps.iter().find(|s| s.items.iter().any(|i| startable(i) && !skipped(latest(&s.num, &i.text)))) else { continue };
+        let Some(it) = st.items.iter().find(|i| startable(i) && latest(&st.num, &i.text).is_none_or(|l| !l.active() && !skipped(Some(l)))) else { continue };
         if !ok(p) {
             continue;
         }
@@ -504,14 +503,17 @@ pub fn ask(app: &Shared, id: &str, question: &str) -> Result<Lane, String> {
     if lane.status != "running" || question.trim().is_empty() {
         return Err(format!("lane {id} is {}: only a working lane asks, with a question", lane.status));
     }
-    let lane = app.update_lane(id, |l| {
+    let updated = app.update_lane(id, |l| {
         l.status = "waiting".into();
         l.question = question.trim().into();
         l.resume.clear();
+        // A question about money stops the agent: it must not spend before the answer (it resumes with it).
+        if is_payment(question) {
+            kill_agent(l.pid.take());
+        }
     });
-    let project = lane.as_ref().map_or("", |l| &l.project);
-    manager::notify(app, project, &format!("lane {id} ({project}: {}) asks: {}\nAnswer with: tirith answer {id} \"<answer>\"", lane.as_ref().map_or("", |l| &l.item), question.trim()));
-    lane.ok_or("lane vanished".into())
+    manager::notify(app, &lane.project, &format!("lane {id} ({}: {}) asks: {}\nAnswer with: tirith answer {id} \"<answer>\"", lane.project, lane.item, question.trim()));
+    updated.ok_or("lane vanished".into())
 }
 
 /// `tirith answer` from the manager: a live message when the agent still runs, else a resumed run.
@@ -534,18 +536,28 @@ pub fn answer(app: &Shared, id: &str, text: &str) -> Result<Lane, String> {
     lane.ok_or("lane vanished".into())
 }
 
+/// SIGTERM to the agent's group, SIGKILL five seconds later.
+fn kill_agent(pid: Option<u32>) {
+    let Some(pid) = pid else { return };
+    kill_group(pid, libc::SIGTERM);
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_secs(5)).await;
+        kill_group(pid, libc::SIGKILL);
+    });
+}
+
+/// True when the question is about spending money (a paid service, a price, a charge).
+pub fn is_payment(question: &str) -> bool {
+    let q = question.to_lowercase();
+    ["$", "€", "usd", "eur", "pay", "paid", "spend", "cost", "price", "charge", "billing", "pago", "pagar", "gasto", "gastar", "coste", "precio", "cuesta"].iter().any(|w| q.contains(w))
+}
+
 pub fn stop(app: &Shared, id: &str) -> Result<Lane, String> {
     let lane = app.lane(id).ok_or(format!("no lane '{id}'"))?;
     if !matches!(lane.status.as_str(), "queued" | "running" | "waiting" | "merge-queued") {
         return Err(format!("lane {id} is {}", lane.status));
     }
-    if let Some(pid) = lane.pid {
-        kill_group(pid, libc::SIGTERM);
-        tokio::spawn(async move {
-            tokio::time::sleep(Duration::from_secs(5)).await;
-            kill_group(pid, libc::SIGKILL);
-        });
-    }
+    kill_agent(lane.pid);
     app.update_lane(id, |l| {
         l.status = "stopped".into();
         l.ended_at = Some(now_iso());
@@ -597,6 +609,10 @@ mod tests {
         let rows = super::biggest_dirs(&dir, 5);
         assert!(rows[0].0.ends_with("big"));
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+    #[test]
+    fn lane_waits_for_payment_answer() {
+        assert!(super::is_payment("¿Aprobar 0,74 $ de voces TTS de pago?") && !super::is_payment("Which name?"));
     }
     #[test]
     fn autopilot_skips_owner_wait_items() {
