@@ -126,7 +126,7 @@ async fn warn_low_disk(app: &Shared) {
             let rows = tokio::task::spawn_blocking(move || biggest_dirs(&home, 5)).await.unwrap_or_default();
             let list = rows.iter().map(|(p, k)| format!("{p} ({:.1} GB)", *k as f64 / 1e6)).collect::<Vec<_>>().join(", ");
             let q = format!("Only {free:.1} GB free on this disk: lanes will fail with No space left on device. The biggest of Tirith's own folders: {list}. Free some space (delete what you no longer need).");
-            let _ = crate::manager::ask_owner(app, "", "device", &q);
+            let _ = crate::manager::ask_owner(app, "", "device", &q, "");
         }
         Some(false) => app.set_kv(key, None),
         None => {}
@@ -522,22 +522,24 @@ pub fn ask(app: &Shared, id: &str, question: &str) -> Result<Lane, String> {
             kill_agent(l.pid.take());
         }
     });
-    manager::notify(app, &lane.project, &format!("lane {id} ({}: {}) asks: {}\nAnswer with: tirith answer {id} \"<answer>\"", lane.project, lane.item, question.trim()));
+    let (q, owner) = (question.trim(), format!("tirith ask-owner --lane {id} --kind <kind> \"<the question, in the owner's words>\""));
+    let told = format!("lane {id} ({}: {}) asks: {q}\nAnswer with: tirith answer {id} \"<answer>\". When only the owner can answer, ask them with {owner}: their answer goes straight to the lane.", lane.project, lane.item);
+    manager::notify_as(app, &lane.project, &format!("lane {id} asks the manager: {q}"), &told);
     updated.ok_or("lane vanished".into())
 }
 
-/// `tirith answer` from the manager: a live message when the agent still runs, else a resumed run.
-pub fn answer(app: &Shared, id: &str, text: &str) -> Result<Lane, String> {
+/// `tirith answer` from the manager, or the owner's answer (`who`): a live message when the agent still runs, else a resumed run.
+pub fn answer(app: &Shared, id: &str, text: &str, who: &str) -> Result<Lane, String> {
     let lane = app.lane(id).ok_or(format!("no lane '{id}'"))?;
     if lane.status != "waiting" {
         return Err(format!("lane {id} is {}, not waiting for an answer", lane.status));
     }
     let live = lane.pid.is_some_and(alive);
     if live {
-        tell(id, &format!("Answer from the manager: {text}"));
+        tell(id, &format!("Answer from {who}: {text}"));
     }
     let lane = app.update_lane(id, |l| {
-        l.resume = if l.session.is_empty() { format!("You asked the manager: {}\nAnswer from the manager: {text}", l.question) } else { format!("Answer from the manager: {text}") };
+        l.resume = if l.session.is_empty() { format!("You asked the manager: {}\nAnswer from {who}: {text}", l.question) } else { format!("Answer from {who}: {text}") };
         if !live {
             l.status = "queued".into();
         }

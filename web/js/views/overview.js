@@ -8,6 +8,7 @@ import { ICON, Icon, Span, ACTIVE, ago, clockTime, laneLabel, laneClass, go } fr
 import { Chat } from './chat.js';
 import { Plan } from './overview/plan.js';
 import { memo, Svg, Avatar, Rich, CHEV, REFRESH, clip, hit } from './overview/bits.js';
+import { Need, openCards } from './need.js';
 
 /* ---------- status: metrics and the CEO ---------- */
 const num = (v) => (v == null ? '–' : Number.isInteger(v) ? String(v) : (Math.round(v * 10) / 10).toString());
@@ -53,30 +54,6 @@ const Status = memo(function Status({ data, working }) {
 });
 
 /* ---------- needs you ---------- */
-const KIND = { credentials: 'Credentials', payment: 'Payment', account: 'Account', device: 'Device', decision: 'Decision' };
-
-function Need({ o, p }) {
-  const [draft, setDraft] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState('');
-  const send = async (answer) => {
-    answer = String(answer || '').trim();
-    if (!answer || busy) return;
-    setBusy(true); setErr('');
-    try { await api('POST', `/api/owner/${encodeURIComponent(o.id)}`, { answer }); setDraft(''); } catch (e) { setErr(String(e.message || e)); }
-    setBusy(false);
-  };
-  return html`<li class="ncard">
-    <div class="nhead"><div class="ntitle">${o.question}</div>${p ? html`<span class="nchip nproj"><i class="pdot" style=${`background:${p.color || '#9ca3af'}`}></i>${p.name || p.id}</span>` : null}
-      <span class="nchip">${KIND[o.kind] || o.kind}</span><span class="nage">${ago(o.at)}</span></div>
-    ${o.kind === 'decision' ? null : html`<div class="nacts"><button class="nbtn primary" disabled=${busy} onClick=${() => send('Done')}>Done</button></div>`}
-    <div class="nwrite"><input class="iin" type="text" placeholder=${o.kind === 'decision' ? 'Your answer…' : 'Or write what you need…'} aria-label="Answer"
-      value=${draft} disabled=${busy} onInput=${(e) => setDraft(e.target.value)} onKeyDown=${(e) => { if (e.key === 'Enter') send(draft); }} />
-      <button class="isend ovsend" disabled=${busy || !draft.trim()} onClick=${() => send(draft)}>${busy ? 'Sending…' : 'Answer'}</button></div>
-    ${err ? html`<div class="ierr">${err}</div>` : null}
-  </li>`;
-}
-
 /** The open cards: inside a project its own, and those about the machine itself (a full disk stops every project's
     agents); with none selected all of them, each named by its project. */
 function Needs({ owner, project, projects, q }) {
@@ -145,21 +122,21 @@ function Pipelines({ project, projects, q }) {
 
 /* ---------- working agents (the old agent cards) ---------- */
 const noCheck = (t) => String(t || '').replace(/\s*\(check:\s*`[^`]*`\)\s*/i, ' ').trim();
-const AgentCard = memo(function AgentCard({ l, now, pname }) {
+const AgentCard = memo(function AgentCard({ l, now, pname, you }) {
   const live = l.status === 'running';
   return html`<button class="card acard work" onClick=${() => go('agents', l.project)} title="Open the Agents view">
     <span class="ahead"><${Avatar} id=${l.id} size=${36} /><span class="aname"><b>${l.agent ? l.agent.charAt(0).toUpperCase() + l.agent.slice(1) : 'Worker'}</b>
       <span class="pill" title=${l.id}>${[l.id, l.model].filter(Boolean).join(' · ')}</span></span></span>
     ${l.item ? html`<span class="afeat"><${Rich} t=${noCheck(l.item)} /></span>` : null}
     ${now ? html`<span class=${`anow${live ? ' live' : ''}`}><i class="pdot2"></i><span class="md">${clip(now, 220)}</span></span>` : null}
-    <span class="afoot"><span class=${`rb ${laneClass(l.status) === 'working' ? 'running' : 'pending'}`}>${laneLabel(l.status)}</span>
+    <span class="afoot"><span class=${`rb ${laneClass(l.status) === 'working' ? 'running' : 'pending'}`}>${you ? 'Waiting for you' : laneLabel(l.status)}</span>
       ${l.step ? html`<span class="chip astep" title="Plan step">Step ${l.step}</span>` : null}
       <span class="aproj">${pname}</span>
       <span class="aclock"><${Icon} d=${ICON.clock} size=${13} w=${1.7} /><${Span} start=${l.started_at || l.created_at} /></span></span>
   </button>`;
 });
 
-function Agents({ lanes, events, projects, project, q }) {
+function Agents({ lanes, events, projects, project, q, needs }) {
   const act = lanes.filter((l) => ACTIVE.includes(l.status) && (!project || l.project === project) && hit(q, l.item, l.id, l.agent, l.project))
     .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
   const last = {};
@@ -167,7 +144,7 @@ function Agents({ lanes, events, projects, project, q }) {
   const pname = (id) => (project ? '' : (projects.find((x) => x.id === id) || {}).name || id);
   if (project && !act.length) return null;
   return html`<section><h2>Working agents <span class="n">${act.length}</span></h2>
-    ${act.length ? html`<div class="grid2">${act.map((l) => html`<${AgentCard} key=${l.id} l=${l} now=${last[l.id] || l.question || l.note} pname=${pname(l.project)} />`)}</div>`
+    ${act.length ? html`<div class="grid2">${act.map((l) => html`<${AgentCard} key=${l.id} l=${l} now=${(l.status === 'waiting' && l.question) || last[l.id] || l.note} pname=${pname(l.project)} you=${needs.some((o) => o.lane === l.id && o.kind !== 'lane')} />`)}</div>`
       : html`<p class="quiet">No agents working</p>`}</section>`;
 }
 
@@ -179,13 +156,14 @@ export function Overview({ project }) {
   const projects = project ? s.projects.filter((p) => p.id === project) : s.projects;
   const working = lanes.filter((l) => ACTIVE.includes(l.status) && (!project || l.project === project)).length;
   const p = s.projects.find((x) => x.id === project);
+  const needs = openCards(s);
   return html`<div class="ovg"><div class="ovmain">
       ${project ? null : html`<${Status} data=${metrics} working=${working} />`}
       <${Plan} projects=${projects} lanes=${lanes} q=${q} />
-      <${Needs} owner=${s.owner} project=${project} projects=${s.projects} q=${q} />
+      <${Needs} owner=${needs} project=${project} projects=${s.projects} q=${q} />
       ${p ? html`<${Setup} project=${p.id} name=${p.name} />` : null}
       <${Pipelines} project=${project} projects=${s.projects} q=${q} />
-      <${Agents} lanes=${lanes} events=${s.events} projects=${s.projects} project=${project} q=${q} />
+      <${Agents} lanes=${lanes} events=${s.events} projects=${s.projects} project=${project} q=${q} needs=${needs} />
     </div>
     <aside class="ovside"><${Chat} key=${project || ''} project=${project || ''} /></aside></div>`;
 }

@@ -7,13 +7,14 @@ import { ICON, Icon, Span, ms, ago, clockTime, laneLabel, projectColor, go } fro
 import { Md, MdInline } from './boards/md.js';
 import { LogView } from './boards/logview.js';
 import { pipeName, laneIds, StageChip, glyph, sClass, startMs } from './boards/pipe.js';
+import { Need, openCards } from './need.js';
 
 const DAY = 86400000;
 const CAP = 30;
 const COLS = [
   ['queued', 'Queued', 'grey', ['queued']],
   ['running', 'Working', 'blue', ['running']],
-  ['waiting', 'Waiting for the manager', 'amber', ['waiting']],
+  ['waiting', 'Waiting for an answer', 'amber', ['waiting']],
   ['merging', 'Merging', 'purple', ['merge-queued', 'merging']],
   ['merged', 'Done', 'green', ['merged']],
   ['failed', 'Failed / Stopped', 'red', ['failed', 'stopped']],
@@ -27,6 +28,10 @@ const newest = (a) => ms(a.merged_at || a.ended_at || a.started_at || a.created_
 const isOld = (a) => ['merged', 'failed', 'stopped'].includes(a.status) && Date.now() - newest(a) > DAY;
 const itemText = (t) => String(t || '').replace(/\s*\(check:\s*`?[^)]*`?\)\s*$/, '');
 const live = (a) => a.status === 'running' && a.last_activity && Date.now() / 1000 - a.last_activity < 90;
+/** The open question of a waiting lane: a card for the owner when the manager passed it on (--lane), else the lane's own. */
+const questionOf = (s, a) => (a.status === 'waiting' ? openCards(s).find((o) => o.lane === a.id) || null : null);
+const forYou = (q) => !!q && q.kind !== 'lane';
+const statusOf = (a, q) => (forYou(q) ? 'Waiting for you' : laneLabel(a.status));
 
 function loadMode() {
   const u = new URLSearchParams(location.search).get('mode');
@@ -66,11 +71,11 @@ function Clock({ a }) {
   return html`<span class="aclock"><${Icon} d=${ICON.clock} size=${13} w=${1.7} /><${Span} start=${startOf(a)} end=${endOf(a)} /></span>`;
 }
 
-function LaneCard({ a, sel, color, projName, onOpen, doing }) {
+function LaneCard({ a, sel, color, projName, onOpen, doing, q }) {
   const work = a.status === 'running';
   const head = html`<span class="ahead"><${Avatar} a=${a} color=${color} /><span class="aname"><b title=${a.agent}>${a.agent || 'agent'}</b>
     <span class="pill" title=${a.id}>${a.model || a.id}</span></span></span>`;
-  const now = a.status === 'waiting' && a.question ? html`<span class="anow ask"><i class="pdot2"></i><${MdInline} text=${a.question} /></span>`
+  const now = q ? html`<span class="anow ask"><i class="pdot2"></i>${forYou(q) ? html`<b>For you: </b>` : null}<${MdInline} text=${q.question} /></span>`
     : work && doing ? html`<span class=${`anow${live(a) ? ' live' : ''}`} title=${doing.summary}><i class="pdot2"></i><span class="md">${doing.summary}</span></span>`
     : (work || a.status === 'failed') && a.note ? html`<span class=${`anow${live(a) ? ' live' : ''}${a.status === 'failed' ? ' bad' : ''}`}><i class="pdot2"></i><${MdInline} text=${a.note} /></span>` : null;
   return html`<button class=${`card acard${work ? ' work' : ''}${sel ? ' sel' : ''}`} onClick=${() => onOpen(a.id)}>
@@ -142,6 +147,7 @@ function PlanItem({ a }) {
 
 /** Everything about one lane (drawer body, or the open row in the list). */
 function LaneDetail({ a, projName, color }) {
+  const q = questionOf(useStore(), a);
   const active = ['queued', 'running', 'waiting', 'merge-queued', 'merging'].includes(a.status);
   const log = useLaneLog(a.id, active);
   const st = a.status === 'running' ? 'active' : a.status === 'merged' ? 'done' : ['failed', 'stopped'].includes(a.status) ? 'failed' : 'idle';
@@ -149,12 +155,13 @@ function LaneDetail({ a, projName, color }) {
   return html`<div class="activity">
     ${STOPPABLE.includes(a.status) ? html`<div class="stoprow"><${StopBtn} a=${a} where="row" /></div>` : null}
     <${Sec} title="Item"><${PlanItem} a=${a} /></${Sec}>
-    <${Sec} title="Status"><div class="astat"><span class=${`sbadge ${st}`}>${st === 'active' ? html`<i class="pdot2"></i>` : null}${laneLabel(a.status)}</span>
-      <span class="mut">${active ? 'running ' : 'took '}<${Span} start=${startOf(a)} end=${endOf(a)} /></span>
+    <${Sec} title="Status"><div class="astat"><span class=${`sbadge ${st}${forYou(q) ? ' you' : ''}`}>${st === 'active' ? html`<i class="pdot2"></i>` : null}${statusOf(a, q)}</span>
+      <span class="mut">${a.status === 'waiting' ? 'open for ' : active ? 'running ' : 'took '}<${Span} start=${startOf(a)} end=${endOf(a)} /></span>
       ${active && last ? html`<span class="mut">last activity ${ago(last) === 'now' ? 'just now' : `${ago(last)} ago`}</span>` : null}
       ${a.attempts ? html`<span class="mut">try ${a.attempts + 1} of 3</span>` : null}</div></${Sec}>
-    ${a.status === 'waiting' && a.question ? html`<${Sec} title="Question to the manager"><div class="lquest"><${Md} text=${a.question} /></div></${Sec}>` : null}
-    ${a.note ? html`<${Sec} title="Note"><div class=${`sum${a.status === 'failed' ? ' lbad' : ''}`}><${Md} text=${a.note} /></div></${Sec}>` : null}
+    ${q ? html`<${Sec} title=${forYou(q) ? 'Question for you' : 'Question to the manager'}>${forYou(q) ? null : html`<div class="lquest"><${Md} text=${a.question} /></div>`}
+      <ul class="nlist lneed"><${Need} o=${forYou(q) ? q : { ...q, question: 'You can answer it too' }} full here /></ul></${Sec}>` : null}
+    ${a.note ? html`<${Sec} title=${a.status === 'failed' ? 'Why it failed' : 'Report'}><div class=${`sum${a.status === 'failed' ? ' lbad' : ''}`}><${Md} text=${a.note} /></div></${Sec}>` : null}
     <${Sec} title="Lane"><${KV} rows=${[
       ['Project', html`<span><i class="pdot" style=${`background:${color};animation:none;display:inline-block;margin-right:6px`}></i>${projName}</span>`],
       ['Step', a.step], ['Branch', a.branch && html`<code>${a.branch}</code>`], ['Worktree', a.workspace && html`<code title=${a.workspace}>${a.workspace}</code>`],
@@ -169,6 +176,7 @@ function LaneDetail({ a, projName, color }) {
 }
 
 function Drawer({ a, projName, color, onClose }) {
+  const q = questionOf(useStore(), a);
   useEffect(() => {
     const key = (e) => { if (e.key === 'Escape' && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) onClose(); };
     addEventListener('keydown', key);
@@ -176,26 +184,27 @@ function Drawer({ a, projName, color, onClose }) {
   }, [onClose]);
   return html`<aside class="drawer" role="dialog" aria-label=${itemText(a.item)}>
     <header><span class="dhead"><${Avatar} a=${a} color=${color} size=${28} /><span class="dtit"><b>${itemText(a.item)}</b>
-      <span class="mut">${a.agent}${a.model ? ` · ${a.model}` : ''} · ${laneLabel(a.status)}</span></span></span>
+      <span class="mut">${a.agent}${a.model ? ` · ${a.model}` : ''} · ${statusOf(a, q)}</span></span></span>
       <button class="x" aria-label="Close" onClick=${onClose}><${Icon} d=${ICON.close} size=${14} w=${2} /></button></header>
     <div class="dbody" key=${a.id}><${LaneDetail} a=${a} projName=${projName} color=${color} /></div>
   </aside>`;
 }
 
-function Column({ col, lanes, sel, onOpen, colorOf, nameOf, doing }) {
+function Column({ col, lanes, sel, onOpen, colorOf, nameOf, doing, qOf }) {
   const [cap, setCap] = useState(CAP);
   return html`<section class=${`col ${col[2]}`}>
     <header><b>${col[1]}</b><span class="n">${lanes.length}</span></header>
-    <div class="cbody">${lanes.slice(0, cap).map((a) => html`<${LaneCard} key=${a.id} a=${a} sel=${sel === a.id} color=${colorOf(a.project)} projName=${nameOf(a.project)} onOpen=${onOpen} doing=${doing[a.id]} />`)}
+    <div class="cbody">${lanes.slice(0, cap).map((a) => html`<${LaneCard} key=${a.id} a=${a} sel=${sel === a.id} color=${colorOf(a.project)} projName=${nameOf(a.project)} onOpen=${onOpen} doing=${doing[a.id]} q=${qOf(a)} />`)}
       ${lanes.length > cap ? html`<button class="link lshow" onClick=${() => setCap(cap + CAP)}>Show ${Math.min(CAP, lanes.length - cap)} more</button>` : null}</div>
   </section>`;
 }
 
 function ListRow({ a, open, onOpen, color, projName }) {
+  const q = questionOf(useStore(), a);
   return html`<li class=${`row${open ? ' open' : ''}`}>
     <button class="head agent" aria-expanded=${open} onClick=${() => onOpen(open ? '' : a.id)}>
       <span class="chv"></span><i class=${`dot ${DOT[a.status] || 'grey'}`} title=${laneLabel(a.status)}></i>
-      <span class="name" title=${a.id}>${a.agent} <span class="mut sm">${laneLabel(a.status)}${a.attempts ? ` · try ${a.attempts + 1}` : ''}</span></span>
+      <span class="name" title=${a.id}>${a.agent} <span class="mut sm">${statusOf(a, q)}${a.attempts ? ` · try ${a.attempts + 1}` : ''}</span></span>
       <span class="feat">${itemText(a.item)}</span><span class="mut proj">${projName}</span>
       <span class="time"><${Span} start=${startOf(a)} end=${endOf(a)} /></span></button>
     ${open ? html`<div class="detail"><${LaneDetail} a=${a} projName=${projName} color=${color} /></div>` : null}
@@ -245,7 +254,7 @@ export function Agents({ project }) {
   }
   return [tb,
     html`<div class="board lboard">${COLS.filter((c) => !cur || vis.some((a) => c[3].includes(a.status))).map((c) => html`<${Column} key=${c[0]} col=${c} lanes=${vis.filter((a) => c[3].includes(a.status))}
-      sel=${cur ? sel : ''} onOpen=${(id) => setSel(sel === id ? '' : id)} colorOf=${colorOf} nameOf=${nameOf} doing=${doing} />`)}</div>`,
+      sel=${cur ? sel : ''} onOpen=${(id) => setSel(sel === id ? '' : id)} colorOf=${colorOf} nameOf=${nameOf} doing=${doing} qOf=${(a) => questionOf(s, a)} />`)}</div>`,
     more ? html`<div class="moreline">${more}</div>` : null,
     cur ? html`<${Drawer} a=${cur} projName=${nameOf(cur.project)} color=${colorOf(cur.project)} onClose=${() => setSel('')} />` : null,
   ];

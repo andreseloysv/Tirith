@@ -21,3 +21,8 @@ a.mc-file { text-decoration: none; }
 
 /* whose conversation the chat shows: the selected project's, or the one of no project */
 .mc-head h2 .mc-of { margin-left: 6px; font-size: 12.5px; font-weight: 500; color: var(--mut); }
+
+/* a card the manager sent (tirith ask-owner): the card itself, with its answer box while it waits for the owner */
+.mc-m.mc-card { align-self: stretch; max-width: 100%; }
+.mc-m.mc-card .nlist { width: 100%; }
+.mc-m.mc-card .ncard:not(.done) { border-left: 3px solid var(--amber); }
