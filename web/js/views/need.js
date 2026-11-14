@@ -19,7 +19,7 @@ export function openCards(s) {
 }
 
 /** `p`: the project chip (only where several projects show); `full`: the whole question, not two lines; `done`: an
-    answered card, drawn without its answer box; `here`: drawn on its own lane, so without the link to it. */
+    answered or closed card (its label: 'Answered', 'Closed', else 'Done'), drawn without its answer box; `here`: drawn on its own lane, so without the link to it. */
 export function Need({ o, p, full, done, here }) {
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
@@ -32,11 +32,17 @@ export function Need({ o, p, full, done, here }) {
     setBusy(false);
   };
   const words = WORDS.includes(o.kind) || !!o.lane; /* a lane's question wants words, not Done */
+  const close = async () => { /* a card that no longer applies: closed, and its project's chat says so */
+    setBusy(true); setErr('');
+    try { await api('POST', `/api/owner/${encodeURIComponent(o.id)}/close`, { why: 'no longer needed' }); } catch (e) { setErr(String(e.message || e)); }
+    setBusy(false);
+  };
   const lane = o.lane && !here ? html`<button type="button" class="nlane" onClick=${() => { setUi('openLane', o.lane); go('agents', o.project); }}
     title="Open the agent this question is for">${o.kind === 'lane' ? 'An agent asks the manager' : 'For an agent'}${o.item ? `: ${o.item.slice(0, 90)}${o.item.length > 90 ? '…' : ''}` : ''}</button>` : null;
   return html`<li class=${`ncard${done ? ' done' : ''}`}>
     <div class="nhead"><div class=${`ntitle${full ? ' open' : ''}`}>${o.question}</div>${p ? html`<span class="nchip nproj"><i class="pdot" style=${`background:${p.color || '#9ca3af'}`}></i>${p.name || p.id}</span>` : null}
-      <span class="nchip">${done ? 'Answered' : KIND[o.kind] || o.kind}</span>${done ? null : html`<span class="nage">${ago(o.at)}</span>`}</div>
+      <span class="nchip">${done ? (typeof done === 'string' ? done : 'Done') : KIND[o.kind] || o.kind}</span>${done ? null : html`<span class="nage">${ago(o.at)}</span>`}
+      ${done || o.kind === 'lane' ? null : html`<button type="button" class="nclose" disabled=${busy} title="Close this card: it is no longer needed" aria-label="Close this card" onClick=${close}>×</button>`}</div>
     ${lane}
     ${done || words ? null : html`<div class="nacts"><button class="nbtn primary" disabled=${busy} onClick=${() => send('Done')}>Done</button></div>`}
     ${done ? null : html`<div class="nwrite"><input class="iin" type="text" placeholder=${o.kind === 'lane' ? 'Answer it yourself…' : words ? 'Your answer…' : 'Or write what you need…'} aria-label="Answer"

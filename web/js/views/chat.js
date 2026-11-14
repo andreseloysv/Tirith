@@ -21,6 +21,7 @@ const DRAFT_KEY = 'tirith.chat.draft';
 const MERGED = /^merged on ([\w.-]+) at ([0-9a-f]{6,12}): ([\s\S]*)$/;
 const CHECKS = /\s*\(check:\s*`[^`]*`\)/gi;
 const CARD = /^(o\d+) \((\w+)\): ([\s\S]*)$/;   /* a card the manager sent: "o12 (account): question" */
+const ENDED = { answered: 'Answered', closed: 'Closed' };
 
 const SEND = html`<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M8 13V3.2M3.8 7.2L8 3l4.2 4.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const DOC = html`<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4 1.8h5l3 3v9.4H4z M9 1.8v3h3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>`;
@@ -160,11 +161,11 @@ function FileChip({ name, bytes, title, href, onRemove }) {
 
 /** One stored message that is not part of a manager turn (`project`: the conversation it is drawn in; `open`: the
     card of a card row while it waits for the owner). */
-const Msg = pure(({ m, project, projects, onZoom, open }) => {
+const Msg = pure(({ m, project, projects, onZoom, open, ended }) => {
   const time = clockTime(m.at);
   if (m.role === 'card') {
     const [, id, kind, question] = CARD.exec(m.text) || [null, '', 'decision', m.text];
-    return html`<div class="mc-m mc-card"><ul class="nlist"><${Need} o=${open || { id, kind, question, at: m.at }} full done=${!open} /></ul>
+    return html`<div class="mc-m mc-card"><ul class="nlist"><${Need} o=${open || { id, kind, question, at: m.at }} full done=${open ? false : ENDED[ended] || true} /></ul>
       <div class="mc-meta" dangerouslySetInnerHTML=${{ __html: ctxHtml(open ? 'Needs you' : 'Asked you') + ' · ' + esc(time) }} /></div>`;
   }
   if (m.role === 'owner') {
@@ -186,7 +187,7 @@ const Msg = pure(({ m, project, projects, onZoom, open }) => {
   else if (m.role !== 'tirith') { ctx = m.role; }
   return html`<div class=${`mc-m ${cls}`}><div class="mc-b md" dangerouslySetInnerHTML=${{ __html: mdOf(m.id, text) }} />
     <div class="mc-meta" dangerouslySetInnerHTML=${{ __html: ctxHtml(ctx) + ' · ' + esc(time) }} /></div>`;
-}, (a, b) => a.m === b.m && a.projects === b.projects && a.open === b.open);
+}, (a, b) => a.m === b.m && a.projects === b.projects && a.open === b.open && a.ended === b.ended);
 
 /** One turn of the manager: its steps (live while running, a summary line once ended) and its answer. */
 const Turn = pure(({ rows, running, start, onStop }) => {
@@ -403,7 +404,7 @@ export function Chat({ project = '' }) {
   /* start of the running turn: the message that started it */
   const trigger = (i) => { for (let k = i - 1; k >= 0; k--) if (items[k].kind === 'msg') return items[k].m.at; return null; };
   const rows = items.map((it, i) => (it.kind === 'msg'
-    ? html`<${Msg} key=${it.key} m=${it.m} project=${project} projects=${s.projects} onZoom=${setZoom} open=${it.m.role === 'card' ? cardOf(it.m) : null} />`
+    ? html`<${Msg} key=${it.key} m=${it.m} project=${project} projects=${s.projects} onZoom=${setZoom} open=${it.m.role === 'card' ? cardOf(it.m) : null} ended=${it.m.role === 'card' ? s.ended[(CARD.exec(it.m.text) || [])[1]] : null} />`
     : html`<${Turn} key=${it.key} k=${it.key} rows=${it.rows} n=${it.rows.length} running=${it.key === runningKey}
         start=${trigger(i) || it.rows[0].at} onStop=${interrupt} />`));
   /* busy but no output yet: the working line under the newest message */

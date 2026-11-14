@@ -577,6 +577,36 @@ pub fn stop(app: &Shared, id: &str) -> Result<Lane, String> {
     .ok_or("lane vanished".into())
 }
 
+/// `tirith lane delete`: the lane is thrown away. Its agent stops, its branch and unsaved work go, it leaves every list, and its open item leaves the
+/// plan, so nothing starts it again (stopping keeps all that: the autopilot only skips the item).
+pub async fn delete(app: &Shared, id: &str) -> Result<(), String> {
+    let lane = app.lane(id).ok_or(format!("no lane '{id}'"))?;
+    if lane.status == "merging" {
+        return Err(format!("lane {id} is being merged right now: try again in a minute"));
+    }
+    kill_agent(lane.pid);
+    app.lanes.lock().unwrap().remove(id);
+    let _ = app.db.lock().unwrap().execute("DELETE FROM lanes WHERE id = ?1", [id]);
+    app.emit("lane", serde_json::json!({"id": id, "deleted": true}));
+    if lane.status != "merged" {
+        let _ = plan::drop_item(app, &lane.project, &lane.step, &lane.item).await;
+    }
+    let Some(p) = app.cfg().project(&lane.project).cloned() else { return Ok(()) };
+    if lane.pid.is_some() {
+        tokio::time::sleep(Duration::from_secs(6)).await; // the agent is gone (kill_agent) before its folder is touched
+    }
+    let ws = Path::new(&lane.workspace);
+    // Its slot, unless another lane has it now: off the branch (a branch checked out cannot be deleted), without the files it left.
+    if !lane.branch.is_empty() && ws.is_dir() && git(ws, &["rev-parse", "--abbrev-ref", "HEAD"]).await.is_ok_and(|b| b == lane.branch) {
+        let _ = git(ws, &["checkout", "-q", "-f", "--detach"]).await;
+        let _ = git(ws, &["clean", "-fdq"]).await;
+    }
+    if !lane.branch.is_empty() {
+        let _ = git(&p.repo(), &["branch", "-D", &lane.branch]).await;
+    }
+    Ok(())
+}
+
 /// The merge failed because of the lane: the same agent continues in its slot with the reason, twice at most.
 pub fn send_back(app: &Shared, lane: &Lane, reason: &str) {
     if lane.attempts >= 2 {

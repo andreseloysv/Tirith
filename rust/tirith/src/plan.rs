@@ -109,7 +109,7 @@ async fn change(app: &Shared, project: &str, edit: impl FnOnce(&mut Vec<String>,
 /// Why an item's check can never pass: it calls a tirith subcommand that does not exist, or the removed `collector/`.
 pub fn check_problem(check: &str) -> Option<String> {
     static CALL: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?:^|[\s;&|(])(?:(cd\s+(?:\./)?collector(?:[/\s;&]|$))|tirith\s+([A-Za-z-][\w-]*))").unwrap());
-    const OK: [&str; 17] = ["serve", "hook", "hooks", "status", "plan", "lane", "ask", "answer", "ask-owner", "autopilot", "say", "room", "net", "models", "guard", "project", "help"];
+    const OK: [&str; 18] = ["serve", "hook", "hooks", "status", "plan", "lane", "ask", "answer", "ask-owner", "card", "autopilot", "say", "room", "net", "models", "guard", "project", "help"];
     CALL.captures_iter(check).find_map(|c| {
         c.get(2).map_or(Some("the check does `cd collector`, a removed folder (the daemon is Rust: use cargo test -q <name>)".to_string()), |s| {
             (!OK.contains(&s.as_str())).then(|| format!("the check calls `tirith {}`, which is not a tirith command", s.as_str()))
@@ -136,6 +136,16 @@ pub async fn add(app: &Shared, project: &str, step: &str, text: &str) -> Result<
         let end = steps.get(i + 1).map(|s| s.line).unwrap_or(lines.len());
         let at = (steps[i].line + 1..end).rev().find(|&k| !lines[k].trim().is_empty()).map_or(steps[i].line + 1, |k| k + 1);
         lines.insert(at, format!("- [ ] {text}"));
+        Ok(())
+    })
+    .await
+}
+
+/// Takes an open item out of the plan (its lane was deleted).
+pub async fn drop_item(app: &Shared, project: &str, step: &str, item: &str) -> Result<(), String> {
+    change(app, project, |lines, steps| {
+        let it = steps.iter().filter(|s| s.num == step).flat_map(|s| &s.items).find(|i| !i.done && same(&i.text, item)).ok_or("no such open item")?;
+        lines.remove(it.line);
         Ok(())
     })
     .await
