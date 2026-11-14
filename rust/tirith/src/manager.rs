@@ -35,6 +35,8 @@ struct Talk {
     /// Reports from Tirith not yet handed over, and whether a hand-over is already on its way.
     notes: Vec<String>,
     due: bool,
+    /// The settings changed during a turn: the session ends when the turn does.
+    stale: bool,
 }
 
 static TALKS: Mutex<BTreeMap<String, Talk>> = Mutex::new(BTreeMap::new());
@@ -100,9 +102,15 @@ fn with_cards(app: &Shared, project: &str, text: &str) -> String {
     format!("{text}\n\n[tirith] Cards still open here: {}. If this answers one, close it with tirith answer <card> \"<the answer>\".", open.join(" | "))
 }
 
-/// Ends every session (the settings changed); each one resumes its conversation at its next message.
+/// Ends every session (the settings changed); one in the middle of a turn ends when the turn does, so its answer is not lost. Each one resumes its conversation at its next message.
 pub fn restart() {
-    TALKS.lock().unwrap().values().for_each(|t| kill_group(t.pid, libc::SIGTERM));
+    for t in TALKS.lock().unwrap().values_mut() {
+        if t.busy {
+            t.stale = true;
+        } else {
+            kill_group(t.pid, libc::SIGTERM);
+        }
+    }
 }
 
 pub fn busy() -> Vec<String> {
@@ -329,7 +337,7 @@ async fn session(app: &Shared, project: &str) -> Result<(), String> {
     let pid = child.id().unwrap_or(0);
     let (tx, mut rx) = mpsc::unbounded_channel::<String>();
     let sent: Vec<String> = talk(project, |t| {
-        (t.pid, t.tx) = (pid, Some(tx.clone()));
+        (t.pid, t.tx, t.stale) = (pid, Some(tx.clone()), false);
         set_busy(app, project, t, true);
         t.pending.drain(..).inspect(|line| drop(tx.send(line.clone()))).collect()
     });
@@ -378,6 +386,8 @@ async fn session(app: &Shared, project: &str) -> Result<(), String> {
             "result" => {
                 let (rooms_now, text) = talk(project, |t| {
                     set_busy(app, project, t, false);
+                    // A message that comes after this waits in `pending` for the next session, which has the new settings.
+                    rest = std::mem::take(&mut t.stale) && t.tx.take().is_some();
                     (std::mem::take(&mut t.reply_to), std::mem::take(&mut t.text))
                 });
                 rooms::reply(app, &Vec::from_iter(rooms_now), &text);
@@ -414,6 +424,13 @@ async fn session(app: &Shared, project: &str) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn restart_waits_for_a_running_turn() {
+        super::talk("restart-test", |t| (t.busy, t.pid) = (true, 0));
+        super::restart();
+        assert!(super::talk("restart-test", |t| t.stale));
+    }
+
     #[test]
     fn lane_ask_shows_in_open_questions() {
         let lane = |id: &str, status: &str| crate::app::Lane { id: id.into(), status: status.into(), item: "Traducir".into(), question: "¿Aprobar 0,74 $?".into(), ..Default::default() };
