@@ -25,11 +25,13 @@ pub fn router(app: Shared, port: u16) -> Router {
         .route("/api/plan/{project}", get(plan_show).post(plan_add))
         .route("/api/lanes", post(lane_start))
         .route("/api/lanes/{id}/stop", post(lane_stop))
+        .route("/api/lanes/{id}/delete", post(lane_delete))
         .route("/api/lanes/{id}/log", get(lane_log))
         .route("/api/lanes/{id}/ask", post(lane_ask))
         .route("/api/lanes/{id}/answer", post(lane_answer))
         .route("/api/owner", post(owner_ask))
         .route("/api/owner/{id}", post(owner_answer))
+        .route("/api/owner/{id}/close", post(owner_close))
         .route("/api/autopilot/{project}", post(autopilot))
         .route("/api/pipelines", get(pipelines))
         .route("/api/pipelines/{id}/retry", post(pipeline_retry))
@@ -117,6 +119,13 @@ async fn plan_add(State(app): State<Shared>, Path(project): Path<String>, Json(b
 async fn lane_start(State(app): State<Shared>, Json(b): Json<Value>) -> R {
     let agent = b["agent"].as_str().filter(|a| !a.is_empty()).map(String::from);
     Ok(Json(json!(lanes::start(&app, &s(&b, "project"), &s(&b, "step"), &s(&b, "item"), agent).map_err(bad)?)))
+}
+async fn lane_delete(State(app): State<Shared>, Path(id): Path<String>) -> R {
+    lanes::delete(&app, &id).await.map(|_| Json(json!({"ok": true}))).map_err(bad)
+}
+async fn owner_close(State(app): State<Shared>, Path(id): Path<String>, Json(b): Json<Value>) -> R {
+    let by = if s(&b, "by") == "manager" { "the manager" } else { "the owner" };
+    manager::close_card(&app, &id, by, &s(&b, "why")).map(Json).map_err(bad)
 }
 async fn lane_stop(State(app): State<Shared>, Path(id): Path<String>) -> R {
     Ok(Json(json!(lanes::stop(&app, &id).map_err(bad)?)))
