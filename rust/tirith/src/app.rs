@@ -95,8 +95,9 @@ impl App {
         }
         let db = Connection::open(home.join("tirith.sqlite3")).expect("open tirith.sqlite3");
         db.execute_batch(include_str!("../assets/schema.sql")).expect("create tables");
-        // Columns added later (each ALTER fails once its column exists). A chat row and an owner card belong to a project; '' is none.
-        for (table, col) in [("runs", "pipeline TEXT"), ("runs", "sha TEXT"), ("chat", "project TEXT NOT NULL DEFAULT ''"), ("owner_items", "project TEXT NOT NULL DEFAULT ''")] {
+        // Columns added later (each ALTER fails once its column exists). A chat row and an owner card belong to a project; '' is none. A card may carry a waiting lane's question.
+        let owner = [("owner_items", "project TEXT NOT NULL DEFAULT ''"), ("owner_items", "lane TEXT NOT NULL DEFAULT ''")];
+        for (table, col) in [("runs", "pipeline TEXT"), ("runs", "sha TEXT"), ("chat", "project TEXT NOT NULL DEFAULT ''")].into_iter().chain(owner) {
             let _ = db.execute(&format!("ALTER TABLE {table} ADD COLUMN {col}"), []);
         }
         let lanes: BTreeMap<String, Lane> =

@@ -87,7 +87,17 @@ pub fn from_room(app: &Shared, project: &str, room: &str, author: &str, text: &s
     let project = here(app, project);
     app.chat("room", &format!("{author} ({room}): {text}"), project);
     talk(project, |t| t.reply_to.insert(room.to_string()));
-    deliver(app, project, &format!("[room {room}] {author}: {text}"));
+    deliver(app, project, &with_cards(app, project, &format!("[room {room}] {author}: {text}")));
+}
+
+/// What the owner wrote, and the project's cards still open: an answer in plain words is then closed by the manager.
+fn with_cards(app: &Shared, project: &str, text: &str) -> String {
+    let sql = "SELECT id, question FROM owner_items WHERE status = 'open' AND project = ?1 ORDER BY rowid";
+    let open: Vec<String> = app.query(sql, [project], |r| Ok(format!("{}: {}", r.get::<_, String>(0)?, r.get::<_, String>(1)?.chars().take(160).collect::<String>())));
+    if open.is_empty() {
+        return text.to_string();
+    }
+    format!("{text}\n\n[tirith] Cards still open here: {}. If this answers one, close it with tirith answer <card> \"<the answer>\".", open.join(" | "))
 }
 
 /// Ends every session (the settings changed); each one resumes its conversation at its next message.
@@ -109,14 +119,19 @@ pub fn interrupt(project: &str) -> Result<(), String> {
 pub fn say(app: &Shared, project: &str, text: &str) -> Result<(), String> {
     known(app, project)?;
     app.chat("owner", text, project);
-    deliver(app, project, text);
+    deliver(app, project, &with_cards(app, project, text));
     Ok(())
 }
 
 /// A report from Tirith that needs the manager (a lane asked or failed, a red main): shown in the project's chat at once and handed over together with every other report of the next 2 seconds, so many events cost one turn.
 pub fn notify(app: &Shared, project: &str, text: &str) {
-    report(app, project, text);
-    tell(app, project, text);
+    notify_as(app, project, text, text);
+}
+
+/// `notify` with a shorter line for the chat and the phones than what the manager is told.
+pub fn notify_as(app: &Shared, project: &str, shown: &str, told: &str) {
+    report(app, project, shown);
+    tell(app, project, told);
 }
 
 /// A report that needs no decision (a merge, a green main): shown in the project's chat, and handed to the manager with its next message instead of costing a turn of its own.
@@ -147,34 +162,50 @@ pub fn tell(app: &Shared, project: &str, text: &str) {
 
 const KINDS: [&str; 5] = ["credentials", "payment", "account", "device", "decision"];
 
-/// `tirith ask-owner`: a card on the owner's page, among its project's, and on the owner's phones, until answered.
-pub fn ask_owner(app: &Shared, project: &str, kind: &str, question: &str) -> Result<Value, String> {
-    known(app, project)?;
-    (!(!KINDS.contains(&kind) || question.trim().is_empty())).then_some(()).ok_or_else(|| format!("ask the owner with --kind {} and a question", KINDS.join("|")))?;
+/// `tirith ask-owner`: a card in its project's chat (so on the owner's phones too) and among the open cards of the owner's page, until answered. With `lane` it carries that waiting lane's question: the lane shows it, and the answer goes straight to the lane.
+pub fn ask_owner(app: &Shared, project: &str, kind: &str, question: &str, lane: &str) -> Result<Value, String> {
+    let project = match app.lane(lane) {
+        Some(l) if l.status == "waiting" => l.project,
+        _ if lane.is_empty() => project.to_string(),
+        _ => return Err(format!("lane {lane} is not waiting for an answer")),
+    };
+    known(app, &project)?;
+    let question = question.trim();
+    (KINDS.contains(&kind) && !question.is_empty()).then_some(()).ok_or_else(|| format!("ask the owner with --kind {} and a question", KINDS.join("|")))?;
     let row = {
         let db = app.db.lock().unwrap();
         let n: i64 = db.query_row("SELECT COALESCE(MAX(CAST(SUBSTR(id, 2) AS INTEGER)), 0) FROM owner_items", [], |r| r.get(0)).unwrap_or(0);
-        let row = json!({"id": format!("o{}", n + 1), "at": now_iso(), "kind": kind, "project": project, "question": question.trim(), "status": "open", "answer": ""});
-        db.execute("INSERT INTO owner_items (id, at, kind, project, question, status, answer) VALUES (?1,?2,?3,?4,?5,'open','')", rusqlite::params![row["id"].as_str(), row["at"].as_str(), kind, project, question.trim()])
-            .map_err(|e| e.to_string())?;
+        let row = json!({"id": format!("o{}", n + 1), "at": now_iso(), "kind": kind, "project": project, "question": question, "status": "open", "answer": "", "lane": lane});
+        let sql = "INSERT INTO owner_items (id, at, kind, project, question, status, answer, lane) VALUES (?1,?2,?3,?4,?5,'open','',?6)";
+        db.execute(sql, rusqlite::params![row["id"].as_str(), row["at"].as_str(), kind, project, question, lane]).map_err(|e| e.to_string())?;
         row
     };
     app.emit("owner", row.clone());
     let id = row["id"].as_str().unwrap_or("");
-    rooms::to_phones(app, project, &format!("Needs you ({kind}), card {id}: {}\nAnswer it here with: {id}: <your answer>", question.trim()));
+    app.chat("card", &format!("{id} ({kind}): {question}"), &project);
+    rooms::to_phones(app, &project, &format!("❓ **Needs you** (card {id}, {kind})\n\n{question}\n\nAnswer here with `{id}: <your answer>`"));
     Ok(row)
 }
 
-/// The owner's answer to an open card, handed to the manager of the card's project with the question it answers.
-pub fn owner_answer(app: &Shared, id: &str, answer: &str) -> Result<Value, String> {
-    if app.lane(id).is_some_and(|l| l.status == "waiting") {
-        return crate::lanes::answer(app, id, answer).map(|_| json!({"ok": true}));
+/// The owner's answer to an open card: straight to the lane whose question it carries (the manager is told), else to the manager of the card's project with the question it answers. `by_manager`: the manager closes a card the owner answered in the chat.
+pub fn owner_answer(app: &Shared, id: &str, answer: &str, by_manager: bool) -> Result<Value, String> {
+    if let Some(l) = app.lane(id).filter(|l| l.status == "waiting") {
+        crate::lanes::answer(app, id, answer, "the owner")?;
+        inform(app, &l.project, &format!("The owner answered lane {id} ({}) directly: {answer}", l.question));
+        return Ok(json!({"ok": true}));
     }
-    let sql = "SELECT kind, project, question FROM owner_items WHERE id = ?1 AND status = 'open'";
-    let (kind, project, question): (String, String, String) = app.db.lock().unwrap().query_row(sql, [id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))).map_err(|_| format!("no open question '{id}'"))?;
+    let sql = "SELECT kind, project, question, lane FROM owner_items WHERE id = ?1 AND status = 'open'";
+    let (kind, project, question, lane): (String, String, String, String) = app.db.lock().unwrap().query_row(sql, [id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))).map_err(|_| format!("no open question '{id}'"))?;
     let _ = app.db.lock().unwrap().execute("UPDATE owner_items SET status = 'answered', answer = ?1 WHERE id = ?2", rusqlite::params![answer, id]);
     app.emit("owner", json!({"id": id, "status": "answered", "answer": answer}));
-    notify(app, &project, &format!("The owner answered {id} ({kind}: {question}): {answer}"));
+    let text = format!("The owner answered {id} ({kind}: {question}): {answer}");
+    if !lane.is_empty() && crate::lanes::answer(app, &lane, answer, "the owner").is_ok() {
+        inform(app, &project, &format!("{text}\nIt went straight to lane {lane}."));
+    } else if by_manager {
+        report(app, &project, &text);
+    } else {
+        notify(app, &project, &text);
+    }
     Ok(json!({"ok": true}))
 }
 
@@ -188,8 +219,12 @@ pub fn waiting_cards(lanes: &[crate::app::Lane]) -> Vec<Value> {
 }
 
 pub fn owner_open(app: &Shared) -> Vec<Value> {
-    let cards = app.objects("SELECT id, at, kind, question, project, status FROM owner_items WHERE status = 'open' ORDER BY rowid", [], &["id", "at", "kind", "question", "project", "status"]);
-    [cards, waiting_cards(&app.lanes.lock().unwrap().values().cloned().collect::<Vec<_>>())].concat()
+    let cols = ["id", "at", "kind", "question", "project", "status", "lane"];
+    let cards = app.objects("SELECT id, at, kind, question, project, status, lane FROM owner_items WHERE status = 'open' ORDER BY rowid", [], &cols);
+    // A lane whose question a card carries is that card.
+    let carried: BTreeSet<&str> = cards.iter().filter_map(|c| c["lane"].as_str()).collect();
+    let lanes: Vec<crate::app::Lane> = app.lanes.lock().unwrap().values().filter(|l| !carried.contains(l.id.as_str())).cloned().collect();
+    [cards, waiting_cards(&lanes)].concat()
 }
 
 /// Why an open question no longer applies: it proposes turning its project's autopilot off (on) and that is already so.
@@ -210,7 +245,9 @@ pub fn stale_reason(question: &str, autopilot_on: bool, free_gb: f64) -> Option<
 pub fn close_stale_questions(app: &Shared) {
     for o in owner_open(app) {
         let (id, project, q) = (o["id"].as_str().unwrap_or(""), o["project"].as_str().unwrap_or(""), o["question"].as_str().unwrap_or(""));
-        let Some(why) = stale_reason(q, if project.is_empty() { app.cfg().autopilot } else { crate::lanes::autopilot_on(app, project) }, crate::lanes::free_gb(&app.home.join("lanes"))) else { continue };
+        let lane = o["lane"].as_str().unwrap_or("");
+        let moot = (!lane.is_empty() && !app.lane(lane).is_some_and(|l| l.status == "waiting")).then_some("its lane no longer waits for an answer");
+        let Some(why) = moot.or_else(|| stale_reason(q, if project.is_empty() { app.cfg().autopilot } else { crate::lanes::autopilot_on(app, project) }, crate::lanes::free_gb(&app.home.join("lanes")))) else { continue };
         let answer = format!("closed by Tirith: {why}");
         let _ = app.db.lock().unwrap().execute("UPDATE owner_items SET status = 'closed', answer = ?1 WHERE id = ?2", rusqlite::params![answer, id]);
         app.emit("owner", json!({"id": id, "status": "closed", "answer": answer}));

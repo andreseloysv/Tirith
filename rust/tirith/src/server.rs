@@ -129,13 +129,13 @@ async fn lane_ask(State(app): State<Shared>, Path(id): Path<String>, Json(b): Js
     Ok(Json(json!(lanes::ask(&app, &id, &s(&b, "question")).map_err(bad)?)))
 }
 async fn lane_answer(State(app): State<Shared>, Path(id): Path<String>, Json(b): Json<Value>) -> R {
-    Ok(Json(json!(lanes::answer(&app, &id, &s(&b, "answer")).map_err(bad)?)))
+    Ok(Json(json!(lanes::answer(&app, &id, &s(&b, "answer"), "the manager").map_err(bad)?)))
 }
 async fn owner_ask(State(app): State<Shared>, Json(b): Json<Value>) -> R {
-    manager::ask_owner(&app, &s(&b, "project"), &s(&b, "kind"), &s(&b, "question")).map(Json).map_err(bad)
+    manager::ask_owner(&app, &s(&b, "project"), &s(&b, "kind"), &s(&b, "question"), &s(&b, "lane")).map(Json).map_err(bad)
 }
 async fn owner_answer(State(app): State<Shared>, Path(id): Path<String>, Json(b): Json<Value>) -> R {
-    manager::owner_answer(&app, &id, &s(&b, "answer")).map(Json).map_err(bad)
+    manager::owner_answer(&app, &id, &s(&b, "answer"), s(&b, "by") == "manager").map(Json).map_err(bad)
 }
 async fn autopilot(State(app): State<Shared>, Path(project): Path<String>, Json(b): Json<Value>) -> R {
     app.cfg().project(&project).ok_or(bad(format!("unknown project '{project}'")))?;
