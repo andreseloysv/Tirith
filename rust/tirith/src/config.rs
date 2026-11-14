@@ -59,7 +59,8 @@ pub struct Config {
     /// `[models.workers] agent`; the models module reads the rest of `[models.*]`.
     pub workers_agent: Option<String>,
     pub port: u16,
-    pub max_parallel: usize,
+    /// `[lanes] max_parallel`: a cap on lanes running at once; none unless set (the load per core still holds new lanes back).
+    pub max_parallel: Option<usize>,
     pub max_load: f64,
     pub inactivity_min: u64,
     /// `[lanes] long_running_minutes`: a lane running this long is reported once to its project's manager (0 turns it off).
@@ -85,7 +86,7 @@ impl Config {
             launch: get(&t, &["launch", "command"]).unwrap_or_default(),
             workers_agent: get(&t, &["models", "workers", "agent"]),
             port: std::env::var("TIRITH_PORT").ok().and_then(|p| p.parse().ok()).or_else(|| get(&t, &["server", "port"])).unwrap_or(7717),
-            max_parallel: get(&t, &["lanes", "max_parallel"]).or_else(|| get(&t, &["autopilot", "max_parallel"])).unwrap_or(3),
+            max_parallel: get(&t, &["lanes", "max_parallel"]).or_else(|| get(&t, &["autopilot", "max_parallel"])),
             max_load: get(&t, &["lanes", "max_load"]).unwrap_or(2.0),
             inactivity_min: get(&t, &["lanes", "inactivity_minutes"]).unwrap_or(20),
             long_running_min: get(&t, &["lanes", "long_running_minutes"]).unwrap_or(30),
