@@ -3,7 +3,9 @@ tirith status [--project P]                    lanes and the merge queue (of one
 tirith plan show <project>                     the plan with what works on each item
 tirith plan add <project> <step> "<text>"      add an item to a step
 tirith lane start <project> <step> "<item>" [--agent <alias>]
-tirith lane stop <lane>
+tirith lane stop <lane>                        stop it: its work is kept and the autopilot skips its item
+tirith lane delete <lane>                      throw it away: agent, branch, unsaved work and its open plan item
+tirith card close <card> "<why>"               (the manager) close an open card that is no longer needed
 tirith lane log <lane>
 tirith ask "<question>"                       (inside a lane) ask the manager, then end your turn
 tirith answer <lane|card> "<answer>"           (the manager) answer a waiting lane, or close a card the owner answered in the chat

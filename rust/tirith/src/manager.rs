@@ -209,6 +209,18 @@ pub fn owner_answer(app: &Shared, id: &str, answer: &str, by_manager: bool) -> R
     Ok(json!({"ok": true}))
 }
 
+/// `tirith card close` (`by` the manager) or the card's Close (`by` the owner): an open card that is no longer needed is closed with its reason,
+/// said in its project's chat and on the phones, so nobody is told to ignore it.
+pub fn close_card(app: &Shared, id: &str, by: &str, why: &str) -> Result<Value, String> {
+    let sql = "SELECT project FROM owner_items WHERE id = ?1 AND status = 'open'";
+    let project: String = app.db.lock().unwrap().query_row(sql, [id], |r| r.get(0)).map_err(|_| format!("no open card '{id}'"))?;
+    let note = format!("closed by {by}{}", if why.trim().is_empty() { String::new() } else { format!(": {}", why.trim()) });
+    let _ = app.db.lock().unwrap().execute("UPDATE owner_items SET status = 'closed', answer = ?1 WHERE id = ?2", rusqlite::params![note, id]);
+    app.emit("owner", json!({"id": id, "status": "closed", "answer": note}));
+    inform(app, &project, &format!("Card {id} {note}"));
+    Ok(json!({"ok": true}))
+}
+
 /// A lane that asked with `tirith ask` is blocked until answered: it is an open question too.
 pub fn waiting_cards(lanes: &[crate::app::Lane]) -> Vec<Value> {
     lanes
