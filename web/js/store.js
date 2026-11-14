@@ -6,7 +6,7 @@
 import { useState, useEffect, useRef } from '../vendor/preact-htm.js';
 
 export const S = {
-  projects: [], lanes: {}, talks: {}, events: [], owner: [], busy: {}, load: null,
+  projects: [], lanes: {}, talks: {}, events: [], owner: [], ended: {}, busy: {}, load: null,
   connected: false, loaded: false, updated: 0, boots: 0,
 };
 const TALK_ROWS = 600;
@@ -96,7 +96,7 @@ export function useTalk(project) {
 function apply(m) {
   const d = m.d;
   switch (m.t) {
-    case 'lane': S.lanes[d.id] = d; break;
+    case 'lane': if (d.deleted) delete S.lanes[d.id]; else S.lanes[d.id] = d; break; // tirith lane delete
     case 'event': S.events.push(d); if (S.events.length > 400) S.events.splice(0, S.events.length - 400); break;
     case 'chat': {
       const t = S.talks[d.project || '']; // a conversation the page never opened is read when it is opened
@@ -108,6 +108,7 @@ function apply(m) {
     case 'load': S.load = d; break;
     case 'owner':
       S.owner = S.owner.filter((o) => o.id !== d.id);
+      if (d.status === 'answered' || d.status === 'closed') S.ended[d.id] = d.status; // how a card shown in the chat ended
       if (d.status !== 'answered' && d.status !== 'closed') S.owner.push(d);
       break;
     case 'projects': if (Array.isArray(d)) S.projects = d; break; // a project was added or config.toml changed
