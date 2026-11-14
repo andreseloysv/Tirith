@@ -53,6 +53,8 @@ fn main() {
         ["plan", "add", project, step, text] => print(call("POST", &format!("/api/plan/{project}"), Some(json!({"step": step, "text": text})))),
         ["lane", "start", project, step, item] => print(call("POST", "/api/lanes", Some(json!({"project": project, "step": step, "item": item, "agent": flag("--agent")})))),
         ["lane", "stop", id] => print(call("POST", &format!("/api/lanes/{id}/stop"), None)),
+        ["lane", "delete", id] => print(call("POST", &format!("/api/lanes/{id}/delete"), None)),
+        ["card", "close", id, why] => print(call("POST", &format!("/api/owner/{id}/close"), Some(json!({"why": why, "by": "manager"})))),
         ["lane", "log", id] => call("GET", &format!("/api/lanes/{id}/log"), None).map(|b| println!("{b}")),
         ["ask", question] => {
             let lane = std::env::var("TIRITH_LANE").map_err(|_| "tirith ask works inside a lane (TIRITH_LANE); the manager asks the owner with tirith ask-owner".to_string());

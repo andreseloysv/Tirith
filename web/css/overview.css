@@ -42,3 +42,7 @@
 /* the agent a card's question is for: opens it */
 .nlane { display: block; margin-top: 4px; padding: 0; font-size: 12px; color: var(--mut); text-align: left; background: none; border: 0; cursor: pointer; }
 .nlane:hover { color: var(--blue); text-decoration: underline; }
+
+/* closing a card that no longer applies */
+.nclose { flex: none; width: 22px; height: 20px; padding: 0; border: 0; border-radius: 10px; background: none; color: var(--mut); font-size: 16px; line-height: 20px; cursor: pointer; }
+.nclose:hover { background: rgba(120,135,160,.14); color: var(--fg); }
