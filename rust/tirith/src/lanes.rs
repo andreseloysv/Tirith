@@ -98,6 +98,20 @@ async fn free_disk(app: &Shared, lanes: &[Lane]) {
 
 const LOW_DISK_GB: f64 = 5.0;
 
+/// Below 5 GB free, before the autopilot pauses: the shared build caches (`<home>/build/<project>`) of projects with no lane or stage under way are removed; the next build makes them again.
+fn clear_idle_builds(root: &Path, busy: &[String]) -> Vec<PathBuf> {
+    let dirs = std::fs::read_dir(root).into_iter().flatten().flatten().map(|e| e.path());
+    dirs.filter(|d| d.is_dir() && !busy.iter().any(|b| d.file_name() == Some(b.as_ref()))).filter(|d| std::fs::remove_dir_all(d).is_ok()).collect()
+}
+async fn free_idle_builds(app: &Shared, lanes: &[Lane]) {
+    let mut busy: Vec<String> = lanes.iter().filter(|l| l.pid.is_some() || matches!(l.status.as_str(), "running" | "waiting" | "merging")).map(|l| l.project.clone()).collect();
+    busy.extend(app.query("SELECT project FROM runs WHERE status = 'running'", [], |r| r.get::<_, String>(0)));
+    let root = app.home.join("build");
+    for d in tokio::task::spawn_blocking(move || clear_idle_builds(&root, &busy)).await.unwrap_or_default() {
+        app.event("", &d.file_name().unwrap_or_default().to_string_lossy(), "disk", "diet", &format!("removed {} (less than 5 GB free; no lane or stage of its project under way)", d.display()), "");
+    }
+}
+
 /// Ask once per low-disk spell: `asked` is whether a card is already out; it re-arms after the disk recovers (7 GB).
 fn low_disk_ask(free: f64, asked: bool) -> Option<bool> {
     match (free < LOW_DISK_GB, free >= LOW_DISK_GB + 2.0, asked) {
@@ -272,6 +286,9 @@ pub async fn scheduler(app: Shared) {
         let load = load_per_core();
         let lanes: Vec<Lane> = app.lanes.lock().unwrap().values().cloned().collect();
         let running = lanes.iter().filter(|l| l.pid.is_some()).count();
+        if free_gb(&app.home.join("lanes")) < LOW_DISK_GB {
+            free_idle_builds(&app, &lanes).await; // first, so neither the owner's card nor the pause comes when this is enough
+        }
         if tick.is_multiple_of(100) {
             warn_low_disk(&app).await;
             free_disk(&app, &lanes).await; // every ~5 minutes
@@ -730,6 +747,14 @@ mod tests {
         let rows = super::biggest_dirs(&dir, 5);
         assert!(rows[0].0.ends_with("big"));
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+    #[test]
+    fn diskdiet_clears_idle_build_cache() {
+        let root = std::env::temp_dir().join(format!("tirith-builds-{}", std::process::id()));
+        ["tirith/cargo", "zoo/cargo"].map(|p| std::fs::create_dir_all(root.join(p)).unwrap());
+        assert_eq!(super::clear_idle_builds(&root, &["zoo".into()]), [root.join("tirith")]);
+        assert!(!root.join("tirith").exists() && root.join("zoo/cargo").is_dir());
+        std::fs::remove_dir_all(&root).unwrap();
     }
     #[test]
     fn lane_waits_for_payment_answer() {
