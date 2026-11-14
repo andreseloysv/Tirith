@@ -216,6 +216,28 @@ fn quiet_s(seen: &mut HashMap<String, (String, u64)>, id: &str, tail: &str, log_
     now.saturating_sub(e.1)
 }
 
+/// Written into a lane's log at every launch: the log is appended across attempts, so `run_completed` only counts a terminal after the last launch line (or, for a run started before these lines existed, after its last `run.lifecycle.started`).
+const RUN_START: &str = "--- tirith: lane run started ";
+
+/// Whether the lane's current run already ended in its log: a `run.terminal.completed` event (the top-level `payload_type` of its own stream line, so a mention inside a file or command output the agent read never counts). The process may still be alive.
+fn run_completed(tail: &str) -> bool {
+    let mut done = false;
+    for line in tail.lines() {
+        if line.starts_with(RUN_START) {
+            done = false;
+        } else if line.contains("run.terminal.completed") || line.contains("run.lifecycle.started") {
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(line) {
+                match v["payload_type"].as_str() {
+                    Some("run.lifecycle.started") => done = false,
+                    Some("run.terminal.completed") => done = true,
+                    _ => {}
+                }
+            }
+        }
+    }
+    done
+}
+
 /// Whether a running lane has gone `min` minutes since it started and was not reported yet (`min` 0: never).
 fn long_running_due(started_at: Option<&str>, now: u64, min: u64, reported: bool) -> bool {
     let start = started_at.and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok()).map_or(now, |t| t.timestamp().max(0) as u64);
@@ -262,6 +284,21 @@ pub async fn scheduler(app: Shared) {
         for l in lanes.iter().filter(|l| l.pid.is_some()) {
             let text = tail(&app.home.join(format!("logs/lanes/{}.log", l.id)), 200);
             let quiet = quiet_s(&mut seen, &l.id, &text, log_age(&app, &l.id), now_s());
+            if l.status == "running" && run_completed(&text) {
+                // Its run is over (it committed and said so) but its process lingers: end it like a process exit, so it goes to the merge queue instead of sitting `running` until the idle stop calls it stuck.
+                app.event(&l.id, &l.project, "ended", "", "its log says the run completed (run.terminal.completed) although its process is still alive", "");
+                app.update_lane(&l.id, |x| {
+                    if x.note.is_empty() {
+                        x.note = "run completed in its log (run.terminal.completed); its process was still alive".into();
+                    }
+                });
+                kill_group(l.pid.unwrap_or(0), libc::SIGKILL);
+                let has_waiter = app.children.lock().unwrap().contains(&l.id);
+                if !has_waiter {
+                    ended(&app, &l.id, None).await; // no waiter task (daemon restart): the killed process ends here, else its waiter ends it
+                }
+                continue;
+            }
             let key = format!("long_running:{}", l.id);
             if l.status == "running" && long_running_due(l.started_at.as_deref(), now_s(), cfg.long_running_min, app.kv(&key).is_some()) {
                 app.set_kv(&key, Some("1"));
@@ -414,7 +451,11 @@ async fn launch(app: &Shared, mut lane: Lane) -> Result<(), String> {
         lane.tried.push(used); // the fallback chain skips what this lane already used
     }
     let launch = sandbox::wrap(app, &lane.id, cmd.argv);
-    let log = std::fs::OpenOptions::new().create(true).append(true).open(app.home.join(format!("logs/lanes/{}.log", lane.id))).map_err(|e| e.to_string())?;
+    let mut log = std::fs::OpenOptions::new().create(true).append(true).open(app.home.join(format!("logs/lanes/{}.log", lane.id))).map_err(|e| e.to_string())?;
+    {
+        use std::io::Write as _;
+        let _ = writeln!(log, "{RUN_START}{}", now_iso());
+    }
     let mut command = launch.command(app);
     let mut child = command
         .current_dir(&ws)
@@ -633,6 +674,20 @@ mod tests {
     fn brief_warns_against_blind_waits() {
         let text = include_str!("../assets/brief.md");
         assert!(text.contains("Never wait blindly") && text.contains("two minutes") && text.contains("find out why"));
+    }
+
+    #[test]
+    fn codex_run_completed_ends_lane() {
+        // The shape of the real incident (forest-art-second-pass-docs-art-9728): its record clocks are not wall time, so only the order in the log counts.
+        let ev = |kind: &str, at: i64| format!("{{\"schema_version\":1,\"recorded_at\":{at},\"payload_type\":\"{kind}\",\"payload\":{{\"kind\":\"run_terminal\",\"terminal\":\"completed\",\"text\":\"done\"}}}}");
+        let (done, started, launch) = (ev("run.terminal.completed", 1780531400005239), ev("run.lifecycle.started", 1780531400000001), "--- tirith: lane run started 2026-11-14T12:00:00Z");
+        assert!(!super::run_completed("run.terminal.completed\n")); // a plain mention is not the event
+        let nested = "{\"payload_type\":\"tool.result\",\"payload\":{\"text\":\"\\\"payload_type\\\":\\\"run.terminal.completed\\\"\"}}";
+        assert!(!super::run_completed(&format!("{launch}\n{started}\n{nested}\n"))); // nor one inside output the agent read
+        assert!(super::run_completed(&done)); // the start of a long run fell out of the tail window
+        assert!(super::run_completed(&format!("{launch}\n{started}\n{done}\n")));
+        assert!(!super::run_completed(&format!("{done}\n{launch}\n{started}\n"))); // an earlier attempt's terminal, left in the appended log
+        assert!(!super::run_completed(&format!("{done}\n{started}\n"))); // a later run is under way (a launch line may predate this code)
     }
 
     #[test]
