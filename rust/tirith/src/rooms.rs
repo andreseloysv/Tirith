@@ -298,7 +298,7 @@ async fn poll(app: &Shared, r: &Room) -> Result<(), String> {
     for (author, text) in &out.deliver {
         // `o12: yes` from a paired phone answers that card by code (a phone writes `O12`); everything else is for the manager.
         let card = text.split_once(':').filter(|(_, answer)| author.ends_with(PHONE) && !answer.trim().is_empty());
-        if card.is_some_and(|(id, answer)| manager::owner_answer(app, &id.trim().to_lowercase(), answer.trim()).is_ok()) {
+        if card.is_some_and(|(id, answer)| manager::owner_answer(app, &id.trim().to_lowercase(), answer.trim(), false).is_ok()) {
             update(app, &r.id, |r| r.owed.retain(|o| o.1 != *text));
         } else {
             manager::from_room(app, &r.project, &r.id, author, text);
