@@ -37,8 +37,9 @@ end with code, and puts a model in the loop only where judgment is needed.
   `- [ ] item` lines, optionally `(check: \`cmd\`)`). Tirith is its only writer; agents add items with
   `tirith plan add`.
 - **Autopilot.** Code starts the open items of a project's current step (the first step with open work; steps
-  run in order, the items of a step in parallel), as far as the machine has room: `[lanes] max_parallel`, the load
-  per core, the merge backlog, free disk and an intact commit guard. Failed or stopped items wait for the manager.
+  run in order, the items of a step in parallel), as far as the machine has room: the load per core, the merge
+  backlog, free disk and an intact commit guard. There is no cap on lanes at once unless `[lanes] max_parallel`
+  sets one. Failed or stopped items wait for the manager.
 - **Lanes.** One agent, one item, one branch, in a reusable worktree whose build caches stay warm. The worktrees
   live in Tirith's own folder (`~/.tirith/lanes/<project>/slot-N`), not next to your repositories. A lane cannot end its turn with a question; it asks the manager with `tirith ask` and is resumed with
   the answer. Messages reach running lanes through their hooks ("main advanced: …").
@@ -147,7 +148,7 @@ port = 7717
 [autopilot]
 enabled = true                      # per project on the page or with `tirith autopilot`
 [lanes]
-max_parallel = 3
+# max_parallel = 8                  # optional cap on lanes at once; none by default
 max_load = 2.0                      # 1-minute load per core above which no new lane starts
 inactivity_minutes = 20
 [merge]
