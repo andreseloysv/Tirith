@@ -366,14 +366,23 @@ async fn land(app: &Shared, project: &Project, pipe: &Pipe, slot: &Path, base: &
         git(&repo, &["merge", "--ff-only", "-q", &sha]).await?;
         Ok(sha)
     };
+    // Main that cannot move (local changes in the checkout are in the way, say) is retried quietly, but its manager hears it once, with git's words, until main moves again.
+    let blocked = format!("main_blocked:{}", project.id);
     let sha = match result.await {
         Ok(sha) => sha,
         Err(e) => {
             close_pipeline(app, pipe, "failed");
             app.event("", &project.id, "error", "merge", &format!("main could not move: {e}"), "");
+            if app.kv(&blocked).is_none() {
+                app.set_kv(&blocked, Some(&now_iso()));
+                let ids = done.iter().map(|l| l.id.as_str()).collect::<Vec<_>>().join(", ");
+                let why = format!("main of {} cannot move, so lanes that passed their checks wait ({ids}). Git says: {e}\nTirith retries by itself. If files in {} are in the way, commit, move or discard them (ask the owner first when they may be the owner's work).", project.id, repo.display());
+                manager::notify(app, &project.id, &why);
+            }
             return requeue(app, &done, false, &format!("main could not move: {e}"));
         }
     };
+    app.set_kv(&blocked, None);
     // Main has moved: its deploy is owed from here on, so a daemon stopped before the end of this function deploys when it is back.
     let owed = format!("deploy_due:{}", project.id);
     if app.kv(&owed).is_none() {
