@@ -38,3 +38,7 @@
 
 /* a step nobody filled yet offers "Add item" without waiting for the pointer */
 .pitems li.none ~ li.padd { opacity: 1; }
+
+/* the agent a card's question is for: opens it */
+.nlane { display: block; margin-top: 4px; padding: 0; font-size: 12px; color: var(--mut); text-align: left; background: none; border: 0; cursor: pointer; }
+.nlane:hover { color: var(--blue); text-decoration: underline; }

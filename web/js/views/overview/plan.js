@@ -1,7 +1,8 @@
 // The Plan section of the Overview (old v-plan.js): one card per project, a row per step with its bar, the current
 // step unfolded to its open items, each with the state of its latest lane; the autopilot line and adding items.
 import { html, useState, useEffect, useRef } from '../../../vendor/preact-htm.js';
-import { api, onMessage } from '../../store.js';
+import { api, onMessage, useStore } from '../../store.js';
+import { openCards } from '../need.js';
 import { laneLabel, ACTIVE } from '../../common.js';
 import { memo, Svg, IC, OK, OPEN, PLUS, PAUSE, RESUME, Rich, hit } from './bits.js';
 
@@ -34,11 +35,13 @@ function Bar({ done, total, cls }) {
 
 /** The old item state chip, from the item's latest lane. */
 function LaneChip({ lane }) {
+  const st = useStore();
   if (!lane) return null;
   const s = lane.status;
+  const you = s === 'waiting' && openCards(st).some((o) => o.lane === lane.id && o.kind !== 'lane');
   const cls = s === 'running' || s === 'queued' ? 'progress' : s === 'failed' ? 'blocked' : s === 'stopped' ? 'reopened' : '';
   if (s === 'merged') return null;
-  return html`<span class=${`pstate ${cls}`} title=${`Lane ${lane.id}`}>${laneLabel(s)}</span>`;
+  return html`<span class=${`pstate ${cls}`} title=${`Lane ${lane.id}`}>${you ? 'Waiting for you' : laneLabel(s)}</span>`;
 }
 
 function Item({ i, lane }) {
