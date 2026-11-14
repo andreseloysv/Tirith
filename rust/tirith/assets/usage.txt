@@ -6,8 +6,8 @@ tirith lane start <project> <step> "<item>" [--agent <alias>]
 tirith lane stop <lane>
 tirith lane log <lane>
 tirith ask "<question>"                       (inside a lane) ask the manager, then end your turn
-tirith answer <lane> "<answer>"                (the manager) answer a waiting lane
-tirith ask-owner [--project P] --kind credentials|payment|account|device|decision "<question>"   (the manager)
+tirith answer <lane|card> "<answer>"           (the manager) answer a waiting lane, or close a card the owner answered in the chat
+tirith ask-owner [--project P] [--lane L] --kind credentials|payment|account|device|decision "<question>"   (the manager; with --lane the card carries that lane's question and the answer goes to the lane)
 tirith autopilot on|off <project>              let Tirith start the plan's items by itself, or not
 tirith project add <folder> [--name N] [--color #rrggbb]   add a folder as a project (the page's + does the same)
 tirith say [--project P] "<text>"              write to the project's manager (without one: the manager of no project)

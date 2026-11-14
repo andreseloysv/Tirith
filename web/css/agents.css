@@ -98,3 +98,7 @@
 .view:has(> .drawer) .lboard .acard.work .ahead { padding-right: 0; }
 :root[data-theme="dark"] .rb.running { color: #a9c3fb; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .rb.running { color: #a9c3fb; } }
+
+/* the question a waiting lane waits on, with the owner's answer box */
+.lneed { margin-top: 8px; }
+.sbadge.you { background: rgba(232,163,23,.16); color: var(--warn-fg); }
