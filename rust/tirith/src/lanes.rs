@@ -279,7 +279,7 @@ pub async fn scheduler(app: Shared) {
                 ended(&app, &l.id, None).await; // its process ended while the daemon was down
             }
         }
-        if running >= cfg.max_parallel || (running > 0 && load >= cfg.max_load) {
+        if cfg.max_parallel.is_some_and(|m| running >= m) || (running > 0 && load >= cfg.max_load) {
             continue;
         }
         let mut ok = |p: &Project| {
