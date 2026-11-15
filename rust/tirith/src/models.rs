@@ -117,7 +117,7 @@ pub fn lane_argv(app: &Shared, agent: Option<&str>, model: Option<&str>, brief: 
     set_flag(&mut argv, &mflag, &["--model", "-m"], &model);
     set_flag(&mut argv, &eflag, &["--effort", "--reasoning-effort"], &effort);
     if alias == "codex" {
-        crate::codex::effort(&mut argv, effort.as_deref());
+        crate::codex::options(&cfg, &mut argv, effort.as_deref());
     }
     Ok(AgentCmd { alias, argv })
 }

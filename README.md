@@ -150,6 +150,23 @@ resume native Codex threads; CEO reviews and Brain jobs use fresh read-only runs
 by selecting **Meta API** in its provider buttons. A paired phone receives confirmation over its encrypted chat;
 messages from other room agents do not run model commands.
 
+### Browser access with Codex
+
+Run `python3 scripts/setup-codex-browser.py` on the machine running Tirith (Python 3.11+, Node.js and npm).
+This installs a pinned Playwright MCP and sets `[agents.codex] profile = "tirith-browser"` for all four roles,
+including resumed conversations. Restart an older daemon after updating its binary. The profile replaces the
+desktop-only Browser integration for these runs; your other Codex sessions keep their existing configuration.
+
+Ask the chat to open the site, then sign in directly in the browser window on the computer. Tirith uses its own
+persistent profile in `~/.tirith/browser/profile`, with Edge on macOS when installed, otherwise Chrome. It does
+not import your everyday browser's accounts. New runs reuse that profile until the site expires the login.
+The paired phone controls the same browser on the computer, so the computer must remain awake and online.
+
+One agent can own this browser profile at a time. Agents should call `browser_close` when finished; if another
+agent is using it, let that turn finish before retrying. A busy profile is not a missing login. Browser traffic
+uses Tirith's network proxy when launched by Tirith. Never put passwords or exported browser cookies in chat.
+Re-running setup refreshes the installation and keeps timestamped backups of changed configuration files.
+
 ### Configuration file
 
 `~/.tirith/config.toml` (outside every repo; agents cannot edit it). Everything has a default. Add a project with
