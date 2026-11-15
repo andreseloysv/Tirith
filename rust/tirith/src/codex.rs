@@ -22,7 +22,10 @@ pub fn catalog() -> Vec<Value> {
         .collect()
 }
 
-pub fn effort(argv: &mut Vec<String>, effort: Option<&str>) {
+pub fn options(cfg: &crate::config::Config, argv: &mut Vec<String>, effort: Option<&str>) {
+    if let Some(profile) = crate::config::get::<String>(&cfg.raw, &["agents", "codex", "profile"]) {
+        argv.splice(1..1, ["--profile".into(), profile]);
+    }
     if let Some(e) = effort {
         // Replace only this config key; unrelated -c overrides must survive.
         argv.retain(|a| !a.starts_with("--config=model_reasoning_effort="));
@@ -49,7 +52,7 @@ pub async fn turn(app: &Shared, role: &str, project: &str, resume: Option<&str>,
     if let Some(m) = setting.model {
         argv.extend(["--model".into(), m]);
     }
-    effort(&mut argv, setting.effort.as_deref());
+    options(&cfg, &mut argv, setting.effort.as_deref());
     argv.extend(["-c".into(), format!("developer_instructions={}", toml::Value::String(instructions.into()))]);
     if let Some(id) = resume {
         argv.extend(["resume".into(), id.into()]);

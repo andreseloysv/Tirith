@@ -19,6 +19,7 @@ Main is {red}.
 - If you need a decision you cannot make yourself: tirith ask "<question>", then end your turn.
 - Never push, never touch main, never start other agents or sub-agents. The plan is written only by Tirith.
 - Commit checks are never skipped.
+- If browser tools are configured, inspect their visible page before asking for a login. Tirith's browser uses a persistent profile: call browser_close when done. If another agent owns the profile, report it as busy; do not kill its browser, copy cookies or ask for passwords in chat.
 - Never wait blindly on a process. Whoever waits checks that it advances (its log, or the files it writes); if nothing changes in two minutes, stop it and find out why before waiting again. Do not repeat the same long wait.
 {clippy}{rules}
 

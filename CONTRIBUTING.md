@@ -28,3 +28,7 @@ a lane through the merge queue without calling a live model. `--keep` leaves the
 encrypted phone save/reset and desktop-to-phone refresh. Set `AM_ROOT` to the AgentsMessenger checkout (the sibling
 folder by default) and `PLAYWRIGHT_MODULE` to an installed Playwright module with Chromium. It starts both servers
 with temporary state and does not call a model. Screenshots are left in its printed temporary directory.
+
+After browser setup, `python3 scripts/checks/browser.py` exercises the real MCP in a disposable profile. It checks
+tool discovery, persistence across browser restarts and an authenticated proxy including a blocked destination.
+On macOS it runs inside the same loopback-only network sandbox as Tirith; no real account or model is used.

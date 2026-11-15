@@ -220,6 +220,7 @@ try:
     (HOME / "config.toml").write_text(f'''
 [agents.codex]
 command = {json.dumps(str(mock))}
+profile = "test-browser"
 [agents.anthropic]
 command = {json.dumps(str(mock))}
 [models.manager]
@@ -266,6 +267,7 @@ repo = {json.dumps(str(repo))}
     wait(lambda: not api("/api/state")["busy"])
     assert calls()[-1]["argv"][-1] == "-"
     assert '--config=model_reasoning_effort="high"' in calls()[-1]["argv"]
+    assert calls()[-1]["argv"][:3] == ["--profile", "test-browser", "exec"]
     chat("second", "sample")
     wait(lambda: len(calls()) >= 2)
     wait(lambda: not api("/api/state")["busy"])
@@ -314,9 +316,11 @@ repo = {json.dumps(str(repo))}
     assert saved_lane["model"] == "gpt-test" and saved_lane["session"] == "thread-workers"
     brain = next(c for c in calls() if c["role"] == "brain")
     assert "read-only" in brain["argv"] and "--ephemeral" in brain["argv"]
+    assert brain["argv"][:3] == ["--profile", "test-browser", "exec"]
     worker = next(c for c in calls() if c["role"] == "workers")
     assert worker["argv"][worker["argv"].index("--model")+1] == "gpt-test"
     assert '--config=model_reasoning_effort="high"' in worker["argv"]
+    assert worker["argv"][:3] == ["--profile", "test-browser", "exec"]
     # The merge also schedules a plan-finished notification for the manager after two seconds.
     wait(lambda: any("The plan has no open item left" in c["input"] for c in calls()), 10)
     wait(lambda: not api("/api/state")["busy"])
@@ -366,6 +370,7 @@ repo = {json.dumps(str(repo))}
     wait(lambda: any(c["role"] == "ceo" for c in calls()), 75)
     ceo = next(c for c in calls() if c["role"] == "ceo")
     assert "read-only" in ceo["argv"] and "--dangerously-bypass-approvals-and-sandbox" not in ceo["argv"]
+    assert ceo["argv"][:3] == ["--profile", "test-browser", "exec"]
     before = roles()
     daemon.terminate()
     daemon.wait(10)
