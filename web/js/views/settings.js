@@ -60,7 +60,7 @@ function AutopilotCard({ project }) {
 function BrainCard() {
   const [b] = useFetch('/api/brain', ['models']);
   if (!b) return null;
-  return html`<div class="card scard"><div class="phead"><b>Brain status</b><span class="mut sm">Summaries of rooms and projects, through the model API</span></div>
+  return html`<div class="card scard"><div class="phead"><b>Brain status</b><span class="mut sm">Summaries of rooms and projects</span></div>
     <div class="scheck ${b.enabled ? 'ok' : 'bad'}"><span class=${`dot ${b.enabled ? 'green' : 'grey'}`}></span><b>${b.enabled ? 'On' : 'Off'}</b>
       <span class="mut sm">${b.enabled ? `· ${b.model}` : `· ${b.reason || ''}`}</span></div>
     <div class="bkv mut"><span>Model <b>${b.model}</b></span><span>API <b>${b.url}</b></span><span>Calls <b>${b.calls}</b></span><span>Cached answers <b>${b.cached}</b></span></div>

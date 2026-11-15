@@ -11,7 +11,7 @@ use serde_json::{json, Value};
 use std::{path::Path, sync::OnceLock};
 
 pub const ROLES: [&str; 4] = ["manager", "workers", "ceo", "brain"];
-const EFFORTS: [&str; 5] = ["low", "medium", "high", "xhigh", "max"];
+const EFFORTS: [&str; 6] = ["low", "medium", "high", "xhigh", "max", "ultra"];
 pub const BRAIN_MODEL: &str = "muse-spark-1.3";
 const PROMPT: &str = "Read the brief at {brief} and do it completely in {workspace}.";
 
@@ -45,8 +45,8 @@ pub fn role_with_source(app: &Shared, role: &str) -> (RoleSetting, &'static str)
     match table {
         Some(t) if role != "ceo" || t.contains_key("model") || t.contains_key("agent") => (
             RoleSetting {
-                agent: if role == "brain" { String::new() } else { s(&t, "agent").unwrap_or_else(default_agent) },
-                model: s(&t, "model").or_else(|| (role == "brain").then(|| BRAIN_MODEL.into())),
+                agent: s(&t, "agent").unwrap_or_else(|| if role == "brain" { String::new() } else { default_agent() }),
+                model: s(&t, "model").or_else(|| (role == "brain" && s(&t, "agent").is_none_or(|a| a != "codex")).then(|| BRAIN_MODEL.into())),
                 effort: s(&t, "effort"),
                 fallback: get(&cfg.raw, &["models", role, "fallback"]).unwrap_or_default(),
             },
@@ -116,6 +116,9 @@ pub fn lane_argv(app: &Shared, agent: Option<&str>, model: Option<&str>, brief: 
     };
     set_flag(&mut argv, &mflag, &["--model", "-m"], &model);
     set_flag(&mut argv, &eflag, &["--effort", "--reasoning-effort"], &effort);
+    if alias == "codex" {
+        crate::codex::effort(&mut argv, effort.as_deref());
+    }
     Ok(AgentCmd { alias, argv })
 }
 
@@ -171,29 +174,7 @@ pub fn save(app: &Shared, role_name: &str, b: Option<&Value>) -> Result<RoleSett
     (ROLES.contains(&role_name)).then_some(()).ok_or_else(|| format!("role must be one of {}", ROLES.join(", ")))?;
     let before = role(app, "manager");
     if let Some(b) = b {
-        let mut s = role(app, role_name);
-        let field = |k: &str, cur: Option<String>| match &b[k] {
-            Value::String(v) if v.trim().is_empty() => None,
-            Value::String(v) => Some(v.trim().to_string()),
-            _ => cur,
-        };
-        if role_name != "brain" {
-            s.agent = field("agent", Some(s.agent.clone())).unwrap_or_default();
-        }
-        s.model = field("model", s.model);
-        s.effort = field("effort", s.effort);
-        match &b["fallback"] {
-            Value::Array(a) => s.fallback = a.iter().filter_map(|x| x.as_str()).map(|x| x.trim().to_string()).filter(|x| !x.is_empty()).collect(),
-            Value::String(x) => s.fallback = x.split(',').map(|x| x.trim().to_string()).filter(|x| !x.is_empty()).collect(),
-            _ => {}
-        }
-        let cfg = app.cfg();
-        if let Some(v) = [&s.model, &s.effort].into_iter().flatten().chain(&s.fallback).find(|v| !valid(v)) {
-            return Err(format!("'{v}' is not a valid model, effort or fallback entry"));
-        }
-        if let Some(alias) = std::iter::once(&s.agent).filter(|_| role_name != "brain").chain(&s.fallback).map(|e| e.split(':').next().unwrap_or("")).find(|a| !cfg.agents.contains_key(*a)) {
-            return Err(format!("no agent alias '{alias}' in config.toml"));
-        }
+        let s = updated(app, role_name, b)?;
         app.set_kv(&format!("models:{role_name}"), Some(&serde_json::to_string(&s).unwrap_or_default()));
     } else {
         app.set_kv(&format!("models:{role_name}"), None);
@@ -207,12 +188,107 @@ pub fn save(app: &Shared, role_name: &str, b: Option<&Value>) -> Result<RoleSett
     Ok(now)
 }
 
+fn updated(app: &Shared, role_name: &str, b: &Value) -> Result<RoleSetting, String> {
+    let mut s = role(app, role_name);
+    let field = |k: &str, cur: Option<String>| match &b[k] {
+        Value::String(v) if v.trim().is_empty() => None,
+        Value::String(v) => Some(v.trim().to_string()),
+        _ => cur,
+    };
+    let agent = field("agent", Some(s.agent.clone())).unwrap_or_default();
+    if agent != s.agent {
+        s.model = None;
+        s.effort = None;
+    }
+    s.agent = agent;
+    s.model = field("model", s.model);
+    s.effort = field("effort", s.effort);
+    match &b["fallback"] {
+        Value::Array(a) => s.fallback = a.iter().filter_map(|x| x.as_str()).map(|x| x.trim().to_string()).filter(|x| !x.is_empty()).collect(),
+        Value::String(x) => s.fallback = x.split(',').map(|x| x.trim().to_string()).filter(|x| !x.is_empty()).collect(),
+        _ => {}
+    }
+    let cfg = app.cfg();
+    if let Some(v) = [&s.model, &s.effort].into_iter().flatten().chain(&s.fallback).find(|v| !valid(v)) {
+        return Err(format!("'{v}' is not a valid model, effort or fallback entry"));
+    }
+    if role_name == "brain" && !s.agent.is_empty() && s.agent != "codex" {
+        return Err("brain agent must be codex or empty (Meta API)".into());
+    }
+    if let Some(alias) = std::iter::once(&s.agent).filter(|a| !a.is_empty() || role_name != "brain").chain(&s.fallback).map(|e| e.split(':').next().unwrap_or("")).find(|a| !cfg.agents.contains_key(*a)) {
+        return Err(format!("no agent alias '{alias}' in config.toml"));
+    }
+    if s.agent == "codex" {
+        let catalog = crate::codex::catalog();
+        if let Some(m) = catalog.iter().find(|m| Some(m["slug"].as_str().unwrap_or("")) == s.model.as_deref()) {
+            if s.effort.as_ref().is_some_and(|e| !m["efforts"].as_array().is_some_and(|es| es.iter().any(|v| v == e))) {
+                return Err(format!("unsupported effort for {}: {}", s.model.as_deref().unwrap_or(""), m["efforts"]));
+            }
+        }
+    }
+    Ok(s)
+}
+
 fn line(s: &RoleSetting) -> String {
     let mut out = format!("agent={} model={} effort={}", s.agent, s.model.as_deref().unwrap_or("-"), s.effort.as_deref().unwrap_or("-"));
     if !s.fallback.is_empty() {
         out += &format!(" fallback={}", s.fallback.join(","));
     }
     out
+}
+
+/// Deterministic owner commands, available even when no model can answer.
+pub fn command(app: &Shared, text: &str) -> Option<Result<String, String>> {
+    let words: Vec<&str> = text.split_whitespace().collect();
+    if !matches!(words.first(), Some(&"/model" | &"/models" | &"/modelo" | &"/modelos")) {
+        return None;
+    }
+    let help = "Machine-wide models (all projects).\n/models — current settings and Codex models\n/model <manager|workers|ceo|brain|all> <agent>:<model> [effort]\n/model <role> reset — back to config.toml\nExample: /model manager codex (Codex's default model). Changes apply to the next turn or new lanes; running work finishes first.";
+    Some((|| {
+        if words.len() == 1 || words.get(1) == Some(&"help") {
+            let roles = ROLES.iter().map(|r| format!("{r}: {}", line(&role(app, r)))).collect::<Vec<_>>().join("\n");
+            let catalog = crate::codex::catalog()
+                .iter()
+                .map(|m| format!("{} ({})", m["slug"].as_str().unwrap_or(""), m["efforts"].as_array().into_iter().flatten().filter_map(Value::as_str).collect::<Vec<_>>().join(", ")))
+                .collect::<Vec<_>>()
+                .join("\n");
+            return Ok(format!("{roles}\n\nCodex models:\n{catalog}\n\n{help}"));
+        }
+        if !(3..=4).contains(&words.len()) {
+            return Err(help.into());
+        }
+        let r = match words[1] {
+            "todos" => "all",
+            "agentes" | "worker" => "workers",
+            "gerente" => "manager",
+            r => r,
+        };
+        let roles = if r == "all" {
+            ROLES.to_vec()
+        } else if ROLES.contains(&r) {
+            vec![r]
+        } else {
+            return Err(help.into());
+        };
+        let reset = words[2] == "reset";
+        if reset && words.len() != 3 {
+            return Err(help.into());
+        }
+        let mut body = json!({});
+        if !reset {
+            let (agent, model) = words[2].split_once(':').unwrap_or_else(|| if words[2].starts_with("gpt-") { ("codex", words[2]) } else { (words[2], "") });
+            body = json!({"agent": if agent == "meta" { "" } else { agent }, "model": model, "effort": words.get(3).copied().unwrap_or("")});
+            // Validate every role before saving any of them.
+            for r in &roles {
+                updated(app, r, &body)?;
+            }
+        }
+        let mut lines = Vec::new();
+        for r in roles {
+            lines.push(format!("{r}: {}", line(&save(app, r, (!reset).then_some(&body))?)));
+        }
+        Ok(format!("Saved for all projects:\n{}\nApplies to the next turn or new lanes; running work finishes first.", lines.join("\n")))
+    })())
 }
 
 /// GET /api/models: every role's effective setting with its source, and the choices the page offers.
@@ -227,8 +303,32 @@ pub fn state(app: &Shared) -> Value {
             (r.to_string(), v)
         })
         .collect();
-    json!({"roles": roles, "choices": {"agents": cfg.agents.keys().collect::<Vec<_>>(), "models": get::<Vec<String>>(&cfg.raw, &["models", "choices"]).unwrap_or_default(),
+    json!({"roles": roles, "choices": {"agents": cfg.agents.keys().collect::<Vec<_>>(), "codex": crate::codex::catalog(), "models": get::<Vec<String>>(&cfg.raw, &["models", "choices"]).unwrap_or_default(),
         "efforts": get::<Vec<String>>(&cfg.raw, &["models", "efforts"]).unwrap_or_else(|| EFFORTS.map(String::from).to_vec())}})
+}
+
+/// A paired phone's encrypted control request. Repeated save IDs cannot reapply old settings.
+pub fn phone_response(app: &Shared, peer: &str, b: &Value) -> Value {
+    let id = b["id"].as_str().unwrap_or("");
+    let key = format!("models.rpc:{peer}:{id}");
+    let result = if b["v"] != 1 || id.is_empty() || id.len() > 80 || !valid(id) {
+        Err("invalid model request".to_string())
+    } else if let Some(cached) = app.kv(&key).and_then(|s| serde_json::from_str::<Result<(), String>>(&s).ok()) {
+        cached
+    } else {
+        let role = b["role"].as_str().unwrap_or("");
+        let result = match b["action"].as_str() {
+            Some("get") => Ok(()),
+            Some("set") if b["setting"].is_object() => save(app, role, Some(&b["setting"])).map(|_| ()),
+            Some("reset") => save(app, role, None).map(|_| ()),
+            _ => Err("unknown model action".to_string()),
+        };
+        if b["action"] != "get" {
+            app.set_kv(&key, Some(&json!(result).to_string()));
+        }
+        result
+    };
+    json!({"v": 1, "id": id, "ok": result.is_ok(), "error": result.err(), "state": state(app)})
 }
 
 pub fn routes() -> Router<Shared> {
@@ -265,14 +365,5 @@ pub fn cli(pos: &[&str], flag: Flag) -> Option<Result<(), String>> {
 }
 
 #[cfg(test)]
-mod tests {
-    #[test]
-    fn codex_lane_runs_commands() {
-        let c = crate::config::Config::default();
-        let (_, _, resume, args) = super::flags(&c, "codex");
-        for a in [resume, args] {
-            assert!(a.iter().any(|x| x == super::NO_SANDBOX));
-            assert!(!a.iter().any(|x| x == "--sandbox"));
-        }
-    }
-}
+#[path = "../checks/models.rs"]
+mod tests;

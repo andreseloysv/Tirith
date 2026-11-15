@@ -75,7 +75,9 @@ end with code, and puts a model in the loop only where judgment is needed.
   that need you, which you answer there (`o12: yes`). `tirith room forget` cuts off a lost phone. Add other managers
   with a code, and watch public rooms with a summary.
 - **Models per role.** Agent, model and effort for the manager, the lanes, the CEO and the brain, with a fallback
-  chain when an agent runs out of credits.
+  chain for lanes when an agent runs out of credits. Codex works in every role. Choose models in the chat's
+  **Models** panel or Settings. The app and the paired phone both offer provider/model buttons and an effort
+  slider. `/models` also works in either chat.
 - **Brain.** Small text jobs on the Meta Model API (room summaries, an architecture summary in every brief),
   cached, never on a hot path.
 - **Commit guard.** Git hooks in every project refuse commits with your forbidden words; they are immutable,
@@ -112,6 +114,43 @@ tirith hook <Event> | hooks install
 ```
 
 ## Configuration
+
+### Codex and model changes from chat or phone
+
+Install the Codex CLI and sign in with `codex login` on the machine running Tirith. The `codex` agent alias is
+available by default; `[agents.codex] command = "/path/to/codex"` overrides its executable. The model selector
+reads the visible catalog from `$CODEX_HOME/models_cache.json` (normally `~/.codex/models_cache.json`), including
+each model's supported reasoning efforts. Open Codex once to populate or refresh that catalog. When Codex is
+selected, its selectors offer only catalog models and the chosen model's supported efforts. Select a model
+before choosing an effort, or leave both at the agent's defaults. Other agents also support custom model IDs.
+
+Open **Models** above the chat composer on the computer or paired phone. Pick **Manager**, **Workers**, **CEO**
+or **Brain**, tap a provider and model, then drag the effort slider or tap a level. **Save** applies the selection;
+editing the controls alone does not change the active setting. The phone waits for Tirith's encrypted confirmation.
+Settings keeps its original dropdown form; buttons and the effort slider belong to the chat.
+**Refresh** reads changes made on the computer; **Use configured defaults** restores that role's configuration.
+The phone's updated controls are served by AgentsMessenger, so both its server and the Tirith daemon must be current.
+
+These commands work directly in the app chat and in a project room on a paired phone, without calling a model:
+
+```text
+/models
+/model manager codex
+/model workers codex:<model-id> high
+/model ceo codex:<model-id> medium
+/model brain codex:<model-id> low
+/model all codex:<model-id> high
+/model workers reset
+```
+
+Replace `<model-id>` with an ID listed by `/models`. `/modelo` and `/modelos` also work, and `todos` means `all`.
+Settings apply to **all projects on this machine** and survive restarts. A manager finishes its current turn
+before changing; new messages wait for the new setting. Worker changes apply to new lanes. Codex manager turns
+resume native Codex threads; CEO reviews and Brain jobs use fresh read-only runs. Brain can still use Meta API
+by selecting **Meta API** in its provider buttons. A paired phone receives confirmation over its encrypted chat;
+messages from other room agents do not run model commands.
+
+### Configuration file
 
 `~/.tirith/config.toml` (outside every repo; agents cannot edit it). Everything has a default. Add a project with
 the **+** next to Projects on the page (or `tirith project add`): Tirith appends its `[[projects]]` block, creates a

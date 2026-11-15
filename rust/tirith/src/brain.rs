@@ -29,7 +29,8 @@ fn url(app: &Shared) -> String {
     crate::config::get::<String>(&app.cfg().raw, &["brain", "url"]).unwrap_or_else(|| DEFAULT_URL.into()).trim_end_matches('/').to_string()
 }
 fn model(app: &Shared) -> String {
-    models::role(app, "brain").model.unwrap_or_else(|| models::BRAIN_MODEL.into())
+    let r = models::role(app, "brain");
+    r.model.unwrap_or_else(|| if r.agent == "codex" { "Codex default".into() } else { models::BRAIN_MODEL.into() })
 }
 fn client() -> &'static reqwest::Client {
     static C: OnceLock<reqwest::Client> = OnceLock::new();
@@ -39,8 +40,10 @@ fn client() -> &'static reqwest::Client {
 /// One job ("room-summary", "architecture") on `input`: the model's answer, cached by the hash of (job, input). `None` without an API key or when the call fails.
 pub async fn ask(app: &Shared, job: &str, input: &str) -> Option<String> {
     let prompt = JOBS.iter().find(|(j, _)| *j == job)?.1;
-    let key = key()?;
-    let hash = sha_hex(format!("{job}\n{input}").as_bytes());
+    let role = models::role(app, "brain");
+    let codex = role.agent == "codex";
+    let key = if codex { String::new() } else { key()? };
+    let hash = sha_hex(format!("{}\n{job}\n{input}", serde_json::to_string(&role).ok()?).as_bytes());
     if let Ok(cached) = app.db.lock().unwrap().query_row("SELECT answer FROM brain_cache WHERE key = ?1", [&hash], |r| r.get::<_, String>(0)) {
         return Some(cached);
     }
@@ -49,6 +52,9 @@ pub async fn ask(app: &Shared, job: &str, input: &str) -> Option<String> {
         "messages": [{"role": "system", "content": prompt}, {"role": "user", "content": tail}]});
     CALLS.fetch_add(1, Ordering::Relaxed);
     let result = async {
+        if codex {
+            return crate::codex::turn(app, "brain", "", None, (prompt, &tail), |_| {}, |_| {}).await;
+        }
         let r = client().post(format!("{}/chat/completions", url(app))).bearer_auth(key).json(&body).send().await.map_err(|e| format!("call failed: {}", e.without_url()))?;
         (r.status().is_success()).then_some(()).ok_or_else(|| format!("model API returned HTTP {}", r.status().as_u16()))?;
         let v: Value = r.json().await.map_err(|_| "unexpected response".to_string())?;
@@ -65,8 +71,11 @@ pub async fn ask(app: &Shared, job: &str, input: &str) -> Option<String> {
 
 /// The project's architecture summary for lane briefs, for the current main commit; `None` until it exists (asking starts its computation in the background, at most once per project per minute).
 pub fn architecture(app: &Shared, project: &str) -> Option<String> {
-    key()?;
-    let last: Option<Value> = app.kv(&format!("brain.architecture.{project}")).and_then(|s| serde_json::from_str(&s).ok());
+    if models::role(app, "brain").agent != "codex" {
+        key()?;
+    }
+    let setting = json!(models::role(app, "brain"));
+    let last: Option<Value> = app.kv(&format!("brain.architecture.{project}")).and_then(|s| serde_json::from_str::<Value>(&s).ok()).filter(|v| v["setting"] == setting);
     let due = {
         let mut tried = ARCH_TRIED.lock().unwrap();
         (now_s().saturating_sub(tried.get(project).copied().unwrap_or(0)) >= 60).then(|| tried.insert(project.to_string(), now_s())).is_some()
@@ -88,7 +97,7 @@ pub fn architecture(app: &Shared, project: &str) -> Option<String> {
                 }
             }
             if let Some(summary) = ask(&app, "architecture", &input).await {
-                app.set_kv(&format!("brain.architecture.{project}"), Some(&json!({"commit": commit, "summary": summary}).to_string()));
+                app.set_kv(&format!("brain.architecture.{project}"), Some(&json!({"commit": commit, "summary": summary, "setting": setting}).to_string()));
             }
         });
     }
@@ -100,8 +109,9 @@ pub fn start(app: Shared) {
 }
 async fn info(State(app): State<Shared>) -> Json<Value> {
     let cached: i64 = app.db.lock().unwrap().query_row("SELECT COUNT(*) FROM brain_cache", [], |r| r.get(0)).unwrap_or(0);
-    let enabled = key().is_some();
-    Json(json!({"enabled": enabled, "model": model(&app), "url": url(&app), "cached": cached,
+    let codex = models::role(&app, "brain").agent == "codex";
+    let enabled = codex || key().is_some();
+    Json(json!({"enabled": enabled, "model": model(&app), "url": if codex { "Codex CLI".into() } else { url(&app) }, "cached": cached,
         "calls": CALLS.load(Ordering::Relaxed), "last_error": *LAST_ERROR.lock().unwrap(),
         "reason": if enabled { Value::Null } else { json!("no API key: set META_API_KEY or META_SI_API_KEY in the daemon's environment") }}))
 }
