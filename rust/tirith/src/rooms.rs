@@ -260,6 +260,7 @@ fn watch(app: &Shared, id: &str) {
 /// What one poll decided: sealed or plain messages to send (text, readers), and turns for the manager.
 #[derive(Default)]
 struct Out {
+    controls: Vec<(String, Value)>,
     send: Vec<(String, Vec<String>)>,
     deliver: Vec<(String, String)>,
     mentions: Vec<Value>,
@@ -295,7 +296,13 @@ async fn poll(app: &Shared, r: &Room) -> Result<(), String> {
         return Ok(());
     };
     out.send.iter().for_each(|(text, readers)| queue(&r.id, text, readers.clone()));
+    for (peer, request) in &out.controls {
+        queue(&r.id, &format!("tirith-models-state {}", crate::models::phone_response(app, peer, request)), vec![peer.clone()]);
+    }
     for (author, text) in &out.deliver {
+        if phone_model_command(app, r, author, text) {
+            continue;
+        }
         // `o12: yes` from a paired phone answers that card by code (a phone writes `O12`); everything else is for the manager.
         let card = text.split_once(':').filter(|(_, answer)| author.ends_with(PHONE) && !answer.trim().is_empty());
         if card.is_some_and(|(id, answer)| manager::owner_answer(app, &id.trim().to_lowercase(), answer.trim(), false).is_ok()) {
@@ -309,6 +316,16 @@ async fn poll(app: &Shared, r: &Room) -> Result<(), String> {
         summarize(app, &r.id);
     }
     Ok(())
+}
+
+fn phone_model_command(app: &Shared, r: &Room, author: &str, text: &str) -> bool {
+    if !author.ends_with(PHONE) || !matches!(text.split_whitespace().next(), Some("/model" | "/models" | "/modelo" | "/modelos")) {
+        return false;
+    }
+    app.chat("room", &format!("{author} ({}): {text}", r.id), &r.project);
+    manager::model_command(app, manager::here(app, &r.project), text);
+    update(app, &r.id, |r| r.owed.retain(|o| o != &(author.to_string(), text.to_string())));
+    true
 }
 
 /// Applies the rules to one message (not saved here: the caller's `update` saves).
@@ -339,8 +356,16 @@ fn handle(r: &mut Room, me: &sealed::Me, platform: &str, m: &Value, backlog: boo
         _ => return,
     };
     let text = text.strip_prefix("tirith-image ").map_or(text.clone(), |j| save_image(j, &r.id).unwrap_or_else(|| "[an image that could not be read]".into()));
+    if let Some(body) = text.strip_prefix("tirith-models ") {
+        if r.kind == "manager" && r.devices.iter().any(|d| d.key_id == id) {
+            if let Ok(request) = serde_json::from_str(body) {
+                out.controls.push((author, request));
+            }
+        }
+        return;
+    }
     let word = text.split_whitespace().next().unwrap_or("");
-    if word == "tirith-roster" || word == "tirith-rooms" || (word == "tirith-join" && mine) {
+    if word == "tirith-roster" || word == "tirith-rooms" || word == "tirith-models-state" || (word == "tirith-join" && mine) {
         return;
     }
     if r.private() && !mine && word == "tirith-pair" {
@@ -500,7 +525,11 @@ pub fn again(app: &Shared, project: Option<&str>) {
     let rooms: Vec<Room> = ROOMS.lock().unwrap().values().filter(|r| !r.owed.is_empty() && project.is_none_or(|p| manager::here(app, &r.project) == p)).cloned().collect();
     for r in rooms {
         let owed = update(app, &r.id, |r| std::mem::take(&mut r.owed)).unwrap_or_default();
-        owed.iter().for_each(|(author, text)| manager::from_room(app, &r.project, &r.id, &format!("{author}, handed to you again after a restart (do not repeat what is done)"), text));
+        for (author, text) in &owed {
+            if !phone_model_command(app, &r, author, text) {
+                manager::from_room(app, &r.project, &r.id, &format!("{author}, handed to you again after a restart (do not repeat what is done)"), text);
+            }
+        }
     }
 }
 
@@ -738,29 +767,5 @@ pub fn cli(pos: &[&str], flag: Flag) -> Option<Result<(), String>> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn room_attachment_saved_as_file() {
-        let home = std::env::temp_dir().join(format!("tirith-att-{}", std::process::id()));
-        std::env::set_var("TIRITH_HOME", &home);
-        let png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
-        let out = save_image(&json!({"mime": "image/png", "data": png}).to_string(), "sealed-abc").unwrap();
-        let path = out.strip_prefix("[imagen: ").unwrap().split(']').next().unwrap();
-        assert!(!out.contains(png) && path.starts_with(home.join("rooms/files/sealed-abc").to_str().unwrap()) && path.ends_with(".png"), "{out}");
-        assert!(std::fs::read(path).unwrap().starts_with(&[0x89, 0x50, 0x4e, 0x47]));
-        assert!(save_image("{\"mime\":\"image/png\",\"data\":\"AAAA\"}", "r").is_none());
-    }
-    #[test]
-    fn room_files_expire_after_24h() {
-        let (root, then) = (std::env::temp_dir().join(format!("tirith-exp-{}", std::process::id())), std::time::SystemTime::now() - Duration::from_secs(90000));
-        let (old, new) = (root.join("a/old.png"), root.join("b/new.png"));
-        for f in [&old, &new] {
-            std::fs::create_dir_all(f.parent().unwrap()).unwrap();
-            std::fs::write(f, b"x").unwrap();
-        }
-        std::fs::File::options().write(true).open(&old).unwrap().set_modified(then).unwrap();
-        expire_files(&root, Duration::from_secs(86400));
-        assert!(!old.exists() && !root.join("a").exists() && new.exists());
-    }
-}
+#[path = "../checks/rooms.rs"]
+mod tests;
