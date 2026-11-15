@@ -79,10 +79,12 @@ pub fn get<T: DeserializeOwned>(t: &toml::Table, path: &[&str]) -> Option<T> {
 impl Config {
     pub fn load() -> Config {
         let t: toml::Table = std::fs::read_to_string(tirith_home().join("config.toml")).ok().and_then(|s| s.parse().ok()).unwrap_or_default();
+        let mut agents: BTreeMap<String, Agent> = get(&t, &["agents"]).unwrap_or_default();
+        agents.entry("codex".into()).or_insert_with(|| Agent { command: "codex".into(), ..Default::default() });
         Config {
             raw: t.clone(),
             projects: get(&t, &["projects"]).unwrap_or_default(),
-            agents: get(&t, &["agents"]).unwrap_or_default(),
+            agents,
             launch: get(&t, &["launch", "command"]).unwrap_or_default(),
             workers_agent: get(&t, &["models", "workers", "agent"]),
             port: std::env::var("TIRITH_PORT").ok().and_then(|p| p.parse().ok()).or_else(|| get(&t, &["server", "port"])).unwrap_or(7717),

@@ -29,6 +29,7 @@ struct Talk {
     /// True while a turn runs (between a message handed to a live session and that session's `result`).
     busy: bool,
     pid: u32,
+    codex: bool,
     /// Rooms whose messages started the current turn (their answer goes back there) and the turn's text so far.
     reply_to: BTreeSet<String>,
     text: String,
@@ -72,7 +73,7 @@ fn deliver(app: &Shared, project: &str, text: &str) {
             return false;
         }
         let line = json!({"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": all.join("\n\n")}]}}).to_string();
-        if t.tx.as_ref().is_some_and(|tx| tx.send(line.clone()).is_ok()) {
+        if !t.stale && t.tx.as_ref().is_some_and(|tx| tx.send(line.clone()).is_ok()) {
             set_busy(app, project, t, true);
         } else {
             t.pending.push(line); // the session on its way takes it, and only then is the manager busy
@@ -105,9 +106,9 @@ fn with_cards(app: &Shared, project: &str, text: &str) -> String {
 /// Ends every session (the settings changed); one in the middle of a turn ends when the turn does, so its answer is not lost. Each one resumes its conversation at its next message.
 pub fn restart() {
     for t in TALKS.lock().unwrap().values_mut() {
-        if t.busy {
-            t.stale = true;
-        } else {
+        t.stale = true;
+        if !t.busy {
+            t.tx.take();
             kill_group(t.pid, libc::SIGTERM);
         }
     }
@@ -119,6 +120,15 @@ pub fn busy() -> Vec<String> {
 
 /// Stops the current turn of the conversation's session (the session lives on): a stream-json `control_request` with subtype `interrupt`, as the old collector sent. Err when no turn is running.
 pub fn interrupt(project: &str) -> Result<(), String> {
+    if talk(project, |t| {
+        if !t.codex || !t.busy {
+            return false;
+        }
+        kill_group(t.pid, libc::SIGTERM);
+        true
+    }) {
+        return Ok(());
+    }
     let tx = talk(project, |t| t.tx.clone().filter(|_| t.busy)).ok_or("the manager is not working on a turn")?;
     let line = json!({"type": "control_request", "request_id": format!("int-{:08x}", rand::random::<u32>()), "request": {"subtype": "interrupt"}});
     tx.send(line.to_string()).map_err(|_| "the manager session ended".to_string())
@@ -127,8 +137,18 @@ pub fn interrupt(project: &str) -> Result<(), String> {
 pub fn say(app: &Shared, project: &str, text: &str) -> Result<(), String> {
     known(app, project)?;
     app.chat("owner", text, project);
+    if model_command(app, project, text) {
+        return Ok(());
+    }
     deliver(app, project, &with_cards(app, project, text));
     Ok(())
+}
+
+/// Only the local owner chat and authenticated paired phones call this path.
+pub fn model_command(app: &Shared, project: &str, text: &str) -> bool {
+    let Some(result) = models::command(app, text) else { return false };
+    report(app, project, &result.unwrap_or_else(|e| format!("Model change failed: {e}")));
+    true
 }
 
 /// A report from Tirith that needs the manager (a lane asked or failed, a red main): shown in the project's chat at once and handed over together with every other report of the next 2 seconds, so many events cost one turn.
@@ -278,8 +298,9 @@ async fn run(app: Shared, project: String) {
     let mut backoff = 2;
     loop {
         let started = std::time::Instant::now();
-        if let Some(e) = session(&app, &project).await.err().filter(|_| backoff == 2) {
-            app.event("", &project, "error", "manager", &e, "");
+        let result = session(&app, &project).await;
+        if let Some(e) = result.as_ref().err().filter(|_| backoff == 2) {
+            app.event("", &project, "error", "manager", e, "");
             report(&app, &project, &format!("The manager could not start: {e}. Tirith keeps trying; what you wrote waits for it."));
         }
         let rest = talk(&project, |t| {
@@ -293,7 +314,7 @@ async fn run(app: Shared, project: String) {
             return;
         }
         // A session that ended young is started again more and more slowly; one that lived is started again at once.
-        backoff = if started.elapsed().as_secs() > 60 { 2 } else { (backoff * 2).min(60) };
+        backoff = if result.is_ok() || started.elapsed().as_secs() > 60 { 2 } else { (backoff * 2).min(60) };
         if backoff > 2 {
             tokio::time::sleep(Duration::from_secs(backoff)).await;
         }
@@ -329,8 +350,14 @@ pub fn control_reply(msg: &Value, behavior: Value) -> String {
 
 /// One session of a conversation, until it ends or rests. Err when it never got ready: its messages wait again.
 async fn session(app: &Shared, project: &str) -> Result<(), String> {
-    let key = format!("manager_session{}{project}", if project.is_empty() { "" } else { ":" });
+    if models::role(app, "manager").agent == "codex" {
+        return codex_session(app, project).await;
+    }
+    talk(project, |t| t.codex = false);
+    let alias = models::role(app, "manager").agent;
+    let key = session_key(app, project, &alias);
     let resumed = app.kv(&key);
+    let history = resumed.is_none().then(|| history(app, project));
     let mut cmd = models::chat_argv(app, "manager", resumed.as_deref())?;
     cmd.argv.extend(["--append-system-prompt".into(), prompt(app, project)]);
     let (mut child, mut stdin, stdout) = spawn_chat(app, "manager", project, cmd.argv)?;
@@ -339,7 +366,20 @@ async fn session(app: &Shared, project: &str) -> Result<(), String> {
     let sent: Vec<String> = talk(project, |t| {
         (t.pid, t.tx, t.stale) = (pid, Some(tx.clone()), false);
         set_busy(app, project, t, true);
-        t.pending.drain(..).inspect(|line| drop(tx.send(line.clone()))).collect()
+        t.pending
+            .drain(..)
+            .enumerate()
+            .map(|(i, line)| {
+                let mut v: Value = serde_json::from_str(&line).unwrap_or_default();
+                if let Some(h) = history.as_ref().filter(|_| i == 0) {
+                    if let Some(a) = v["message"]["content"].as_array_mut() {
+                        a.insert(0, json!({"type": "text", "text": h}));
+                    }
+                }
+                v.to_string()
+            })
+            .inspect(|line| drop(tx.send(line.clone())))
+            .collect()
     });
     let writer = tokio::spawn(async move {
         while let Some(line) = rx.recv().await {
@@ -422,20 +462,86 @@ async fn session(app: &Shared, project: &str) -> Result<(), String> {
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn restart_waits_for_a_running_turn() {
-        super::talk("restart-test", |t| (t.busy, t.pid) = (true, 0));
-        super::restart();
-        assert!(super::talk("restart-test", |t| t.stale));
+fn session_key(app: &Shared, project: &str, agent: &str) -> String {
+    let key = format!("manager_session:{agent}:{project}");
+    let provider = format!("manager_agent:{project}");
+    if app.kv(&provider).as_deref() != Some(agent) {
+        let legacy = (agent != "codex" && app.kv(&provider).is_none()).then(|| app.kv(&format!("manager_session{}{project}", if project.is_empty() { "" } else { ":" }))).flatten();
+        app.set_kv(&key, legacy.as_deref());
+        app.set_kv(&provider, Some(agent));
     }
-
-    #[test]
-    fn lane_ask_shows_in_open_questions() {
-        let lane = |id: &str, status: &str| crate::app::Lane { id: id.into(), status: status.into(), item: "Traducir".into(), question: "¿Aprobar 0,74 $?".into(), ..Default::default() };
-        let cards = super::waiting_cards(&[lane("l1", "waiting"), lane("l2", "running")]);
-        let q = cards[0]["question"].to_string();
-        assert!(cards.len() == 1 && cards[0]["id"] == "l1" && q.contains("lane bloqueada esperando al dueño") && q.contains("0,74"), "{q}");
-    }
+    key
 }
+
+fn history(app: &Shared, project: &str) -> String {
+    let mut rows: Vec<String> = app.query("SELECT role, text FROM chat WHERE project = ?1 ORDER BY id DESC LIMIT 30", [project], |r| Ok(format!("{}: {}", r.get::<_, String>(0)?, r.get::<_, String>(1)?)));
+    rows.reverse();
+    format!("Recent conversation for context (do not repeat completed work):\n{}\n\nNew messages:\n", rows.join("\n"))
+}
+
+async fn codex_session(app: &Shared, project: &str) -> Result<(), String> {
+    let key = session_key(app, project, "codex");
+    let resumed = app.kv(&key);
+    let sent = talk(project, |t| std::mem::take(&mut t.pending));
+    let mut input = if resumed.is_none() { history(app, project) } else { String::new() };
+    for line in &sent {
+        if let Ok(v) = serde_json::from_str::<Value>(line) {
+            for b in v["message"]["content"].as_array().into_iter().flatten() {
+                if let Some(s) = b["text"].as_str() {
+                    input += s;
+                    input += "\n";
+                }
+            }
+        }
+    }
+    let mut started = false;
+    let result = crate::codex::turn(
+        app,
+        "manager",
+        project,
+        resumed.as_deref(),
+        (&prompt(app, project), &input),
+        |msg| match msg["type"].as_str().unwrap_or("") {
+            "thread.started" => {
+                if let Some(id) = msg["thread_id"].as_str() {
+                    app.set_kv(&key, Some(id));
+                }
+            }
+            "item.completed" if msg["item"]["type"] == "agent_message" => {
+                let text = msg["item"]["text"].as_str().unwrap_or("");
+                app.chat("manager", text, project);
+                rooms::to_phones(app, project, text);
+            }
+            "item.started" if msg["item"]["type"] == "command_execution" => app.chat("tool", msg["item"]["command"].as_str().unwrap_or("command"), project),
+            _ => {}
+        },
+        |pid| {
+            started = true;
+            talk(project, |t| {
+                (t.pid, t.codex, t.stale) = (pid, true, false);
+                set_busy(app, project, t, true);
+            });
+        },
+    )
+    .await;
+    if !started {
+        talk(project, |t| drop(t.pending.splice(0..0, sent)));
+        return result.map(|_| ());
+    }
+    let rooms_now = talk(project, |t| {
+        set_busy(app, project, t, false);
+        std::mem::take(&mut t.reply_to)
+    });
+    let text = result.unwrap_or_else(|e| {
+        let text = format!("Codex: {e}. Send your message again to retry.");
+        report(app, project, &text);
+        app.set_kv(&key, None);
+        text
+    });
+    rooms::reply(app, &Vec::from_iter(rooms_now), &text);
+    Ok(())
+}
+
+#[cfg(test)]
+#[path = "../checks/manager.rs"]
+mod tests;
