@@ -4,6 +4,7 @@ mod app;
 mod attach;
 mod brain;
 mod client;
+mod codex;
 mod config;
 mod guard;
 mod lanes;

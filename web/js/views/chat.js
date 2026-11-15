@@ -6,6 +6,7 @@
 // them to the text); pictures show as thumbnails.
 import { html, Component, useState, useEffect, useLayoutEffect, useRef, useMemo } from '../../vendor/preact-htm.js';
 import { useStore, useTalk, api } from '../store.js';
+import { ChatModels } from './chat-models.js';
 import { clockTime, dur, elapsed, Span } from '../common.js';
 import { md, esc, boldLead, ctxHtml } from '../md.js';
 import { Need } from './need.js';
@@ -426,6 +427,7 @@ export function Chat({ project = '' }) {
       ${pending}
       ${out.map((o) => html`<${Local} key=${o.cid} o=${o} onRetry=${() => retry(o)} onCopy=${() => copy(o)} />`)}
     </div>
+    <${ChatModels} />
     <div class="mc-comp">
       ${err ? html`<div class="ierr mc-note">${err}</div>` : null}
       <div class="mc-box">
