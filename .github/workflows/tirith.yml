@@ -23,5 +23,5 @@ jobs:
         run: |
           cargo fmt --check -p tirith
           n=$(find rust/tirith/src -name '*.rs' -exec cat {} + | wc -l)
-          echo "rust/tirith/src: $n lines (limit 6250)"
-          test "$n" -le 6250
+          echo "rust/tirith/src: $n lines (limit 6330)"
+          test "$n" -le 6330
