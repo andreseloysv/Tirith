@@ -184,7 +184,7 @@ impl App {
 
     /// One row of a project's conversation with its manager (`project` "" is the conversation of no project).
     pub fn chat(&self, role: &str, text: &str, project: &str) {
-        let project = if self.cfg().project(project).is_some() { project } else { "" }; // a project that is gone
+        let project = if self.cfg().project(project).is_some() || crate::bots::bot(self, project).is_some() { project } else { "" }; // a project or bot that is gone
         let at = now_iso();
         let id = self.insert("INSERT INTO chat (at, role, text, project) VALUES (?1,?2,?3,?4)", params![at, role, text, project]);
         self.emit("chat", json!({"id": id, "at": at, "role": role, "text": text, "project": project}));

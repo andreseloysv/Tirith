@@ -196,8 +196,9 @@ pub fn start(app: Shared) {
 async fn provide(app: &Shared, said: &mut String) {
     let mine = || ROOMS.lock().unwrap().values().filter(|r| r.kind == "manager").cloned().collect::<Vec<Room>>();
     // The name a room has on the phones: its project's, or "All projects" for what belongs to none.
-    let label = |project: &str| app.cfg().project(project).map_or("All projects".to_string(), |p| if p.name.is_empty() { p.id.clone() } else { p.name.clone() });
-    let (mut failed, projects) = (String::new(), app.cfg().projects.iter().map(|p| p.id.clone()).chain([String::new()]).collect::<Vec<_>>());
+    let bot = |project: &str| crate::bots::bot(app, project).map_or("All projects".to_string(), |b| crate::server::s(&b, "name"));
+    let label = |project: &str| app.cfg().project(project).map_or_else(|| bot(project), |p| if p.name.is_empty() { p.id.clone() } else { p.name.clone() });
+    let (mut failed, projects) = (String::new(), app.cfg().projects.iter().map(|p| p.id.clone()).chain([String::new()]).chain(crate::bots::keys(app)).collect::<Vec<_>>());
     let phone = mine().iter().any(|r| !r.devices.is_empty()); // without a phone there is nothing to make
     for id in projects.iter().filter(|id| phone && !mine().iter().any(|r| manager::here(app, &r.project) == **id)) {
         // No code: nobody scans this one, the phones are added below. A project that gets none now gets it next time.
@@ -696,11 +697,22 @@ async fn api_invite(State(app): State<Shared>, Path(id): Path<String>) -> R {
 
 async fn api_leave(State(app): State<Shared>, Path(id): Path<String>) -> R {
     known(&id)?.private().then_some(()).ok_or_else(|| bad("a public room is listed in config.toml: remove it there".into()))?;
-    ROOMS.lock().unwrap().remove(&id);
-    let _ = app.db.lock().unwrap().execute("DELETE FROM am_rooms WHERE id = ?1", [&id]);
-    app.emit("room", json!({"id": id, "gone": true}));
-    WAKE.notify_one(); // the phones are told that it is gone
+    drop_rooms(&app, |r| r.id == id);
     Ok(Json(json!({"ok": true})))
+}
+
+/// The rooms of a conversation that is gone (a deleted bot) go too.
+pub fn forget(app: &Shared, project: &str) {
+    drop_rooms(app, |r| r.kind == "manager" && r.project == project);
+}
+fn drop_rooms(app: &Shared, gone: impl Fn(&Room) -> bool) {
+    let ids: Vec<String> = ROOMS.lock().unwrap().values().filter(|r| gone(r)).map(|r| r.id.clone()).collect();
+    for id in ids {
+        ROOMS.lock().unwrap().remove(&id);
+        let _ = app.db.lock().unwrap().execute("DELETE FROM am_rooms WHERE id = ?1", [&id]);
+        app.emit("room", json!({"id": id, "gone": true}));
+    }
+    WAKE.notify_one(); // the phones are told that it is gone
 }
 
 async fn api_say(State(app): State<Shared>, Path(id): Path<String>, Json(b): Json<Value>) -> R {
