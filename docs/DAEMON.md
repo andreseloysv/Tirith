@@ -33,6 +33,15 @@ or a `note` with its next turn, a line in the chat (`chat`), and whether that li
 event starts reach the phones (`phone`). A route on a missing event or role is invalid; routes in config.toml
 stand next to the factory's.
 
+Every version of the factory has a stamp (`Factory::version`): the main commit that last changed `factory/`,
+plus a short hash of what config.toml lays over it (`<commit>+<hash>`; `embedded` when no checkout is at hand).
+Every lane, chat (turn) row, owner card, event, review and score is born carrying it in its `factory` column,
+with `role_hash` next to it: a short hash of the setting of the role it ran with — its resolved table, its
+agent's table, its prompt texts and the page's model override for it (`Factory::role_hash`, `App::stamp_for`).
+A lane's events and cards carry the lane's stamp; a line no role wrote (the owner's, a room's, Tirith's own)
+keeps the version with an empty hash. Comparing two versions, two models or two prompts is then one query
+(`GROUP BY factory, role_hash` over `lanes`, `chat`, `owner_items`, `events` or `scores`), with no extra runs.
+
 ## `guard.rs`
 
 The commit guard: git hooks in every project that refuse a commit whose message, file names or added lines contain one of the owner's forbidden words (whole word, any case; a word may be a regex). The words come only from

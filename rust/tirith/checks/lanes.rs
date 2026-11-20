@@ -42,11 +42,16 @@ fn long_running_lane_is_reported_once() {
 }
 #[test]
 fn lane_runs_clippy_before_finish() {
+    let home = std::env::temp_dir().join(format!("tirith-clippy-home-{}", std::process::id()));
+    std::fs::create_dir_all(&home).unwrap();
+    std::env::set_var("TIRITH_HOME", &home);
+    let app = crate::app::App::open();
     let dir = std::env::temp_dir().join(format!("tirith-clippy-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    assert_eq!(super::clippy_rule(dir.to_str().unwrap()), "");
+    let lane = crate::app::Lane { workspace: dir.display().to_string(), ..Default::default() };
+    assert!(!super::brief(&app, &lane).contains("cargo clippy -- -D warnings"));
     std::fs::write(dir.join("Cargo.toml"), "").unwrap();
-    assert!(super::clippy_rule(dir.to_str().unwrap()).contains("cargo clippy -- -D warnings"));
+    assert!(super::brief(&app, &lane).contains("cargo clippy -- -D warnings"));
 }
 #[test]
 fn low_disk_asks_owner_once() {

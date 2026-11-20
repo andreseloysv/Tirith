@@ -37,6 +37,8 @@ pub struct Factory {
     raw: toml::Table,
     pub limits: Limits,
     prompts: BTreeMap<String, String>,
+    /// This version's stamp: the main commit that last changed `factory/`, plus a short hash of what config.toml lays over it (`<commit>+<hash>`; `embedded` when no checkout is at hand).
+    pub version: String,
 }
 
 impl Default for Factory {
@@ -52,6 +54,7 @@ fn embedded_prompts() -> BTreeMap<String, String> {
         ("one-project", include_str!("../../../factory/prompts/one-project.md")),
         ("no-project", include_str!("../../../factory/prompts/no-project.md")),
         ("brief", include_str!("../../../factory/prompts/brief.md")),
+        ("clippy", include_str!("../../../factory/prompts/clippy.md")),
         ("reviewer", include_str!("../../../factory/prompts/reviewer.md")),
         ("bot", include_str!("../../../factory/prompts/bot.md")),
     ]
@@ -66,6 +69,21 @@ pub(crate) fn merge(dst: &mut toml::Value, src: &toml::Value) {
         (Some(d), Some(s)) => s.iter().for_each(|(k, v)| merge(d.entry(k.clone()).or_insert_with(|| toml::Value::Table(Default::default())), v)),
         _ => *dst = src.clone(),
     }
+}
+
+/// An 8-hex-char hash of a text: short enough for a stamp, different whenever the text is.
+pub fn short_hash(text: &str) -> String {
+    crate::rooms::sealed::sha_hex(text.as_bytes())[..8].to_string()
+}
+
+/// The main commit that last changed the factory folder (its short hash), or `embedded` when no checkout is at hand.
+fn commit_of(overlay: &toml::Table) -> String {
+    let show = |rev: &str| -> Option<String> {
+        let out = std::process::Command::new("git").arg("-C").arg(dir(overlay)?).args(["log", "-1", "--format=%h", rev, "--", "."]).output().ok()?;
+        let text = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        (out.status.success() && !text.is_empty()).then_some(text)
+    };
+    show("main").or_else(|| show("HEAD")).unwrap_or_else(|| "embedded".into())
 }
 
 fn stem(path: &str) -> String {
@@ -116,7 +134,9 @@ pub fn parse(text: &str, prompts: BTreeMap<String, String>, overlay: &toml::Tabl
     }
     let raw = table.as_table().cloned().unwrap_or_default();
     let limits: Limits = raw.get("limits").cloned().map(|v| v.try_into()).transpose().map_err(|e| format!("factory: {e}"))?.unwrap_or_default();
-    let f = Factory { raw, limits, prompts };
+    let over: toml::Table = SECTIONS.into_iter().filter_map(|s| overlay.get(s).map(|v| (s.to_string(), v.clone()))).collect();
+    let version = format!("{}+{}", commit_of(overlay), short_hash(&serde_json::to_string(&over).unwrap_or_default()));
+    let f = Factory { raw, limits, prompts, version };
     f.validate()?;
     Ok(f)
 }
@@ -212,6 +232,13 @@ impl Factory {
 
     pub fn prompt(&self, name: &str) -> String {
         self.prompts.get(name).cloned().unwrap_or_else(|| embedded_prompts().get(name).cloned().unwrap_or_default())
+    }
+
+    /// A short hash of the setting `role` runs with: its resolved table (agent, model, effort, ...), its agent's table, its prompt texts and `extra` (the page's model override for it, when the caller has one). An unknown role has none (an empty stamp).
+    pub fn role_hash(&self, role: &str, extra: &str) -> String {
+        let Some(r) = self.raw.get("roles").and_then(|s| s.get(role)) else { return String::new() };
+        let json = |v: Option<&toml::Value>| serde_json::to_string(&v).unwrap_or_default();
+        short_hash(&format!("{}|{}|{}|{extra}", json(Some(r)), json(self.raw.get("agents").and_then(|s| s.get(str_of(r, "agent")))), self.prompts_of(role)))
     }
 
     /// A role's prompt files, one after another, with `{name}` its factory name (a bot's, from config.toml).
