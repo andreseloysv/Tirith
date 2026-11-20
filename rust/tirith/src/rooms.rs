@@ -112,9 +112,6 @@ struct PublicCfg {
     title: String,
 }
 
-fn public_cfg(app: &Shared) -> Vec<PublicCfg> {
-    cfg_get(&app.cfg().raw, &["rooms"]).unwrap_or_default()
-}
 fn room(id: &str) -> Option<Room> {
     ROOMS.lock().unwrap().get(id).cloned()
 }
@@ -172,7 +169,7 @@ pub fn start(app: Shared) {
                 expire_files(&crate::config::tirith_home().join("rooms/files"), Duration::from_secs(86400));
             }
             tick += 1;
-            for p in public_cfg(&app).into_iter().filter(|p| !p.id.is_empty()) {
+            for p in cfg_get::<Vec<PublicCfg>>(&app.cfg().raw, &["rooms"]).unwrap_or_default().into_iter().filter(|p| !p.id.is_empty()) {
                 let title = if p.title.is_empty() { p.id.clone() } else { p.title.clone() };
                 if room(&p.id).is_none() {
                     save(&app, &Room { id: p.id.clone(), title, project: p.project, kind: "public".into(), me: my_name(&app), ..Default::default() });
@@ -195,7 +192,10 @@ async fn provide(app: &Shared, said: &mut String) {
     // The name a room has on the phones: its project's, or "All projects" for what belongs to none.
     let bot = |project: &str| crate::bots::bot(app, project).map_or("All projects".to_string(), |b| crate::server::s(&b, "name"));
     let label = |project: &str| app.cfg().project(project).map_or_else(|| bot(project), |p| if p.name.is_empty() { p.id.clone() } else { p.name.clone() });
-    let (mut failed, projects) = (String::new(), app.cfg().projects.iter().map(|p| p.id.clone()).chain([String::new()]).chain(crate::bots::keys(app)).collect::<Vec<_>>());
+    let (mut failed, projects) = (
+        String::new(),
+        app.cfg().projects.iter().map(|p| p.id.clone()).chain([String::new()]).chain(app.cfg().factory.roles().into_iter().filter(|r| app.cfg().factory.role::<String>(r, "scope").as_deref() == Some("own"))).collect::<Vec<_>>(),
+    );
     let phone = mine().iter().any(|r| !r.devices.is_empty()); // without a phone there is nothing to make
     for id in projects.iter().filter(|id| phone && !mine().iter().any(|r| manager::here(app, &r.project) == **id)) {
         // No code: nobody scans this one, the phones are added below. A project that gets none now gets it next time.
@@ -231,7 +231,7 @@ fn watch(app: &Shared, id: &str) {
     tokio::spawn(async move {
         let mut backoff = 15;
         while let Some(r) = room(&id) {
-            if r.kind == "public" && !public_cfg(&app).iter().any(|p| p.id == id) {
+            if r.kind == "public" && !cfg_get::<Vec<PublicCfg>>(&app.cfg().raw, &["rooms"]).unwrap_or_default().iter().any(|p| p.id == id) {
                 ROOMS.lock().unwrap().remove(&id); // dropped from config.toml: keep the row, stop listening
                 break;
             }
@@ -496,13 +496,10 @@ pub fn again(app: &Shared, project: Option<&str>) {
     });
 }
 
-fn enc(s: &str) -> String {
-    s.bytes().map(|b| if b.is_ascii_alphanumeric() || b"-_.~".contains(&b) { (b as char).to_string() } else { format!("%{b:02X}") }).collect()
-}
-
 /// The chat page link: with `code` a one-use pairing QR, without it the permanent link of a phone in the room.
 fn chat_url(base: &str, r: &Room, code: Option<&str>) -> String {
     let c = code.map(|c| format!("&c={c}")).unwrap_or_default();
+    let enc = |s: &str| s.bytes().map(|b| if b.is_ascii_alphanumeric() || b"-_.~".contains(&b) { (b as char).to_string() } else { format!("%{b:02X}") }).collect::<String>();
     let t = if r.title.is_empty() || r.title == r.id { String::new() } else { format!("&t={}", enc(&r.title)) };
     format!("{base}/chat#r={}{c}&m={}{t}", r.id, r.me_id)
 }

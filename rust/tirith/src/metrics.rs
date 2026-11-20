@@ -1,6 +1,6 @@
 //! Health metrics computed every minute from the daemon's own data, and the turn-role review that a metric red for long enough starts (the factory's delayed `metric.red` route names the role); while everything is green no model is called.
 
-use crate::app::{log_age, now_iso, now_s, tail, Lane, Shared};
+use crate::app::{now_iso, now_s, tail, Lane, Shared};
 use crate::{manager, plan};
 use axum::{extract::State, routing::get, Json, Router};
 use serde_json::{json, Value};
@@ -35,20 +35,11 @@ struct Book {
 static BOOK: LazyLock<Mutex<Book>> = LazyLock::new(Mutex::default);
 static REVIEWING: AtomicBool = AtomicBool::new(false);
 
-fn secs(iso: &str) -> Option<i64> {
-    chrono::DateTime::parse_from_rfc3339(iso).ok().map(|d| d.timestamp())
-}
-fn iso(s: u64) -> String {
-    chrono::DateTime::from_timestamp(s as i64, 0).map(|d| d.format("%Y-%m-%dT%H:%M:%SZ").to_string()).unwrap_or_default()
-}
 fn owner_questions(app: &Shared) -> Vec<String> {
     manager::owner_open(app).iter().map(|o| format!("{}: {}", o["project"].as_str().unwrap_or(""), o["question"].as_str().unwrap_or("")).trim_start_matches(": ").to_string()).collect()
 }
 
 /// Why the autopilot starts no lane for the project (the scheduler's last «paused» reason) and the command that fixes it.
-fn paused_note(app: &Shared, project: &str) -> String {
-    app.kv(&format!("paused:{project}")).map(|w| paused_text(project, &w)).unwrap_or_default()
-}
 fn paused_text(project: &str, why: &str) -> String {
     format!(" [{project} paused: {why}; fix: {}]", crate::lanes::paused_fix(project, why))
 }
@@ -56,9 +47,6 @@ fn paused_text(project: &str, why: &str) -> String {
 /// Autopilot projects with nothing the autopilot can start in the plan, with the command that adds work.
 fn empty_plan_note(empty: &[String]) -> String {
     empty.iter().map(|p| format!(" [{p} plan empty: nothing startable; fix: tirith plan add {p} <step> \"<text>\"]")).collect()
-}
-fn merged_at(l: &Lane) -> Option<i64> {
-    l.merged_at.as_deref().or(l.ended_at.as_deref()).and_then(secs)
 }
 fn compute(app: &Shared) -> Vec<Metric> {
     let cfg = app.cfg();
@@ -72,6 +60,7 @@ fn compute(app: &Shared) -> Vec<Metric> {
         let red = live && target.is_some_and(|t| if at_least { value < t } else { value > t });
         Metric { id, label, value: value.round(), target, at_least, red, facts }
     };
+    let secs = |s: &str| chrono::DateTime::parse_from_rfc3339(s).ok().map(|d| d.timestamp());
     // Open items of the projects the autopilot works on.
     let mut open: Vec<(String, usize)> = vec![];
     let mut empty: Vec<String> = vec![];
@@ -85,7 +74,7 @@ fn compute(app: &Shared) -> Vec<Metric> {
         }
     }
     let work = !open.is_empty();
-    let merged: Vec<&Lane> = lanes.iter().filter(|l| l.status == "merged" && merged_at(l).is_some_and(|m| m >= day)).collect();
+    let merged: Vec<&Lane> = lanes.iter().filter(|l| l.status == "merged" && l.merged_at.as_deref().or(l.ended_at.as_deref()).and_then(secs).is_some_and(|m| m >= day)).collect();
     let ids = |v: &[&Lane]| v.iter().map(|l| l.id.as_str()).collect::<Vec<_>>().join(", ");
     let open_txt = open.iter().map(|(p, n)| format!("{p} {n}")).collect::<Vec<_>>().join(", ");
     let mut out = vec![];
@@ -95,11 +84,11 @@ fn compute(app: &Shared) -> Vec<Metric> {
         ids(&merged),
         if empty.is_empty() { "no empty plans: lanes that do not reach main are the problem" } else { "no startable work in the plan (not a lane failure) for:" },
         empty_plan_note(&empty),
-        open.iter().map(|(p, _)| paused_note(app, p)).collect::<String>()
+        open.iter().map(|(p, _)| app.kv(&format!("paused:{p}")).map(|w| paused_text(p, &w)).unwrap_or_default()).collect::<String>()
     );
     out.push(mk("merged", merged.len() as f64, work, facts));
 
-    let mut mins: Vec<(f64, &str)> = merged.iter().filter_map(|l| Some(((merged_at(l)? - secs(&l.created_at)?) as f64 / 60.0, l.id.as_str()))).collect();
+    let mut mins: Vec<(f64, &str)> = merged.iter().filter_map(|l| Some(((l.merged_at.as_deref().or(l.ended_at.as_deref()).and_then(secs)? - secs(&l.created_at)?) as f64 / 60.0, l.id.as_str()))).collect();
     mins.sort_by(|a, b| a.0.total_cmp(&b.0));
     let median = if mins.is_empty() { 0.0 } else { (mins[(mins.len() - 1) / 2].0 + mins[mins.len() / 2].0) / 2.0 };
     let facts = mins.iter().rev().take(8).map(|(m, id)| format!("{id} {m:.0} min")).collect::<Vec<_>>().join(", ");
@@ -125,7 +114,7 @@ fn compute(app: &Shared) -> Vec<Metric> {
         }
     }
     let worst = idle.iter().map(|i| i.2).max().unwrap_or(0) as f64;
-    let facts = idle.iter().map(|(p, n, m)| format!("{p}: {n} open items, nothing running for {m} min{}", paused_note(app, p))).collect::<Vec<_>>().join("; ");
+    let facts = idle.iter().map(|(p, n, m)| format!("{p}: {n} open items, nothing running for {m} min{}", app.kv(&format!("paused:{p}")).map(|w| paused_text(p, &w)).unwrap_or_default())).collect::<Vec<_>>().join("; ");
     out.push(mk("idle", worst, true, facts));
 
     let half = f.limits.inactivity_minutes * 30;
@@ -133,7 +122,8 @@ fn compute(app: &Shared) -> Vec<Metric> {
         .iter()
         .filter(|l| l.status == "running")
         .filter_map(|l| {
-            let quiet = (now as u64).saturating_sub(l.last_activity).min(log_age(app, &l.id));
+            let log_age = std::fs::metadata(app.home.join(format!("logs/lanes/{}.log", l.id))).and_then(|m| m.modified()).map(|t| t.elapsed().map(|d| d.as_secs()).unwrap_or(0)).unwrap_or(u64::MAX);
+            let quiet = (now as u64).saturating_sub(l.last_activity).min(log_age);
             (quiet > half).then(|| format!("{} ({}) quiet {} min", l.id, l.project, quiet / 60))
         })
         .collect();
@@ -163,6 +153,7 @@ fn describe(m: &Metric) -> String {
 
 /// One computation: episodes opened, fixed, noted and reviewed; the page gets the result.
 fn tick(app: &Shared) {
+    let iso = |s: u64| chrono::DateTime::from_timestamp(s as i64, 0).map(|d| d.format("%Y-%m-%dT%H:%M:%SZ").to_string()).unwrap_or_default();
     let metrics = compute(app);
     let now = now_s();
     let (reviewer, after) = delayed_review(app);
@@ -235,7 +226,7 @@ fn brief(app: &Shared, why: &str) -> String {
     let mut lanes: Vec<Lane> = app.lanes.lock().unwrap().values().cloned().collect();
     lanes.sort_by(|a, b| b.created_at.cmp(&a.created_at));
     let lanes: String = lanes.iter().take(20).map(|l| format!("- {} [{}] {}:{} \"{}\" tries {} created {}: {}\n", l.id, l.status, l.project, l.step, l.item, l.attempts + 1, l.created_at, l.note.lines().next().unwrap_or(""))).collect();
-    let day = iso(now_s().saturating_sub(86400));
+    let day = chrono::DateTime::from_timestamp(now_s().saturating_sub(86400) as i64, 0).map(|d| d.format("%Y-%m-%dT%H:%M:%SZ").to_string()).unwrap_or_default();
     let runs: String = app
         .query("SELECT lane, stage, status, COALESCE(log, '') FROM runs WHERE status IN ('failed', 'timeout') AND started_at >= ?1 ORDER BY id DESC LIMIT 5", [&day], |r| {
             Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, String>(3)?))

@@ -41,7 +41,7 @@ pub fn role_with_source(app: &Shared, role: &str) -> (RoleSetting, &'static str)
         return (s, "page");
     }
     let cfg = app.cfg();
-    if crate::bots::bot(app, role).is_some() {
+    if cfg.factory.role::<String>(role, "scope").as_deref() == Some("own") {
         let chat = cfg.factory.find_role("chat", Some("project")).unwrap_or_else(|| "manager".into());
         return (self::role(app, &chat), "managers"); // a bot without a model of its own has the project chat role's
     }
@@ -153,14 +153,10 @@ pub fn fallback(app: &Shared, role_name: &str, tried: &[String]) -> Option<(Stri
     })
 }
 
-fn valid(v: &str) -> bool {
-    v.chars().next().is_some_and(|c| c.is_ascii_alphanumeric()) && v.chars().all(|c| c.is_ascii_alphanumeric() || "._:/+-[]".contains(c))
-}
-
 /// Saves the owner's setting of a role (fields absent from `b` keep their effective value, "" clears them), or with `None` goes back to config.toml. A chat role whose setting changed restarts its sessions (after their current turn).
 pub fn save(app: &Shared, role_name: &str, b: Option<&Value>) -> Result<RoleSetting, String> {
     let roles = app.cfg().factory.roles();
-    (roles.iter().any(|r| r == role_name) || crate::bots::bot(app, role_name).is_some()).then_some(()).ok_or_else(|| format!("role must be one of {} or a bot", roles.join(", ")))?;
+    roles.iter().any(|r| r == role_name).then_some(()).ok_or_else(|| format!("role must be one of {}", roles.join(", ")))?; // the bots are factory roles too (scope = "own")
     let before = role(app, role_name);
     let saved = b.map(|b| updated(app, role_name, b)).transpose()?.map(|s| serde_json::to_string(&s).unwrap_or_default());
     app.set_kv(&format!("models:{role_name}"), saved.as_deref());
@@ -190,7 +186,7 @@ fn updated(app: &Shared, role_name: &str, b: &Value) -> Result<RoleSetting, Stri
         _ => {}
     }
     let cfg = app.cfg();
-    if let Some(v) = [&s.model, &s.effort].into_iter().flatten().chain(&s.fallback).find(|v| !valid(v)) {
+    if let Some(v) = [&s.model, &s.effort].into_iter().flatten().chain(&s.fallback).find(|v| !(v.chars().next().is_some_and(|c| c.is_ascii_alphanumeric()) && v.chars().all(|c| c.is_ascii_alphanumeric() || "._:/+-[]".contains(c)))) {
         return Err(format!("'{v}' is not a valid model, effort or fallback entry"));
     }
     if let Some(alias) = std::iter::once(&s.agent).chain(&s.fallback).map(|e| e.split(':').next().unwrap_or("")).find(|a| cfg.factory.command(a).is_none()) {
@@ -250,14 +246,13 @@ pub fn command(app: &Shared, text: &str) -> Option<Result<String, String>> {
     })())
 }
 
-/// GET /api/models: every factory role's effective setting with its source and its factory shape (session, scope, access, runs_on, name), the bots', and the choices the page offers.
+/// GET /api/models: every factory role's effective setting (the bots among them) with its source and its factory shape (session, scope, access, runs_on, name), and the choices the page offers.
 pub fn state(app: &Shared) -> Value {
     let cfg = app.cfg();
     let roles: serde_json::Map<String, Value> = cfg
         .factory
         .roles()
         .into_iter()
-        .chain(crate::bots::keys(app))
         .map(|r| {
             let (s, source) = role_with_source(app, &r);
             let mut v = json!(s);
@@ -278,7 +273,7 @@ pub fn state(app: &Shared) -> Value {
 pub fn phone_response(app: &Shared, peer: &str, b: &Value) -> Value {
     let id = b["id"].as_str().unwrap_or("");
     let key = format!("models.rpc:{peer}:{id}");
-    let result = if b["v"] != 1 || id.is_empty() || id.len() > 80 || !valid(id) {
+    let result = if b["v"] != 1 || id.is_empty() || id.len() > 80 || !(id.chars().next().is_some_and(|c| c.is_ascii_alphanumeric()) && id.chars().all(|c| c.is_ascii_alphanumeric() || "._:/+-[]".contains(c))) {
         Err("invalid model request".to_string())
     } else if let Some(cached) = app.kv(&key).and_then(|s| serde_json::from_str::<Result<(), String>>(&s).ok()) {
         cached

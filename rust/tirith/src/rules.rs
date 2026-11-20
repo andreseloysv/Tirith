@@ -35,7 +35,10 @@ pub fn check(app: &Shared, tool: &str, input: &Value, lane: Option<&Lane>, proje
     let manifest = project.map(|p| app.manifest(&p.repo()));
     if let (Some(p), Some(m)) = (project, &manifest) {
         let plan = format!("/{}", m.roadmap.trim_start_matches("./"));
-        if (edit && file.ends_with(&plan)) || (bash && writes_to(cmd, &m.roadmap)) {
+        // A shell command that writes to the plan: redirect, tee, in-place edit, move, copy, delete or restore.
+        let escaped = regex::escape(m.roadmap.trim_start_matches("./"));
+        let writes = bash && Regex::new(&format!(r"(>>?\s*|\btee\s+(-a\s+)?|\b(sed|perl)\s+-[a-zA-Z]*i\S*\s[^;&|]*|\b(mv|cp|rm|truncate)\s[^;&|]*|\bgit\s+(checkout|restore)\s[^;&|]*)\S*{escaped}")).map(|r| r.is_match(cmd)).unwrap_or(false);
+        if (edit && file.ends_with(&plan)) || writes {
             return Some(format!("The plan is written only by Tirith. Add an item with: tirith plan add {} <step> \"<text>\"", p.id));
         }
     }
@@ -70,10 +73,4 @@ pub fn summary(tool: &str, input: &Value) -> String {
     let short: String = detail.lines().next().unwrap_or("").chars().take(160).collect();
     let prefix = if tool.is_empty() { String::new() } else { format!("{tool}: ") };
     prefix + &short
-}
-
-/// True when a shell command writes to `path`: redirect, tee, in-place edit, move, copy, delete or restore.
-fn writes_to(cmd: &str, path: &str) -> bool {
-    let p = regex::escape(path.trim_start_matches("./"));
-    Regex::new(&format!(r"(>>?\s*|\btee\s+(-a\s+)?|\b(sed|perl)\s+-[a-zA-Z]*i\S*\s[^;&|]*|\b(mv|cp|rm|truncate)\s[^;&|]*|\bgit\s+(checkout|restore)\s[^;&|]*)\S*{p}")).map(|r| r.is_match(cmd)).unwrap_or(false)
 }

@@ -1,6 +1,6 @@
 //! Lanes: one agent, one plan item, one reusable worktree slot on its own branch; the autopilot starts open plan items, and a lane that ends goes to the merge queue, where the checks decide.
 
-use crate::app::{add_worktree, alive, git, kill_group, log_age, now_iso, now_s, tail, Lane, Shared};
+use crate::app::{add_worktree, alive, git, kill_group, now_iso, now_s, tail, Lane, Shared};
 use crate::{config::Project, guard, manager, models, plan, sandbox};
 use regex::Regex;
 use std::collections::{BTreeMap, HashMap};
@@ -28,7 +28,9 @@ pub(crate) fn slug(text: &str) -> String {
 
 pub fn start(app: &Shared, project: &str, step: &str, item: &str, agent: Option<String>) -> Result<Lane, String> {
     let item = plan::clean(item);
-    if !plan::is_open(app, project, step, &item)? {
+    let steps = plan::read(app, project)?;
+    let st = steps.iter().find(|s| s.num == step).ok_or(format!("the plan of {project} has no step {step}"))?;
+    if !st.items.iter().any(|i| !i.done && plan::same(&i.text, &item)) {
         return Err(format!("\"{item}\" is not an open item of step {step} of {project}. Add it first: tirith plan add {project} {step} \"<text>\""));
     }
     if let Some(l) = app.lanes.lock().unwrap().values().find(|l| l.active() && l.project == project && l.step == step && plan::same(&l.item, &item)) {
@@ -292,13 +294,14 @@ pub async fn scheduler(app: Shared) {
             warn_low_disk(&app).await;
             free_disk(&app, &lanes).await; // every ~5 minutes
         }
-        let _ = tick.is_multiple_of(10).then(|| manager::close_stale_questions(&app)); // every ~30 s
+        let _ = tick.is_multiple_of(10).then(|| (manager::close_stale_questions(&app), crate::bots::tick(&app))); // every ~30 s
         tick += 1;
         app.emit("load", serde_json::json!({"load": (load * 100.0).round() / 100.0, "running": running, "max": lim.max_parallel}));
         for l in lanes.iter().filter(|l| l.pid.is_some()) {
             let text = tail(&app.home.join(format!("logs/lanes/{}.log", l.id)), 200);
             let _ = (l.agent == "codex").then(|| codex_session(&app, &l.id, &text));
-            let quiet = quiet_s(&mut seen, &l.id, &text, log_age(&app, &l.id), now_s());
+            let log_age = std::fs::metadata(app.home.join(format!("logs/lanes/{}.log", l.id))).and_then(|m| m.modified()).map(|t| t.elapsed().map(|d| d.as_secs()).unwrap_or(0)).unwrap_or(u64::MAX); // seconds since its log last changed
+            let quiet = quiet_s(&mut seen, &l.id, &text, log_age, now_s());
             if l.status == "running" && run_completed(&text) {
                 // Its run is over (it committed and said so) but its process lingers: end it like a process exit, so it goes to the merge queue instead of sitting `running` until the idle stop calls it stuck.
                 app.event(&l.id, &l.project, "ended", "", "its log says the run completed (run.terminal.completed) although its process is still alive", "");
