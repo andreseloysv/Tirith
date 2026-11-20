@@ -76,7 +76,7 @@ fn owner(app: &Shared, who: &str) -> (String, String) {
     (id.to_string(), app.lane(id).map(|l| l.project).unwrap_or_default())
 }
 
-/// Wraps `argv` for a process Tirith starts on behalf of `who` (a lane id, "manager", "ceo" or "merge:<lane>"): `sandbox-exec -p <profile> argv…` with the proxy environment and the PATH with the tool wrappers first.
+/// Wraps `argv` for a process Tirith starts on behalf of `who` (a lane id, a role such as "manager" or "reviewer", or "merge:<lane>"): `sandbox-exec -p <profile> argv…` with the proxy environment and the PATH with the tool wrappers first.
 pub fn wrap(app: &Shared, who: &str, argv: Vec<String>) -> Launch {
     let mut it = argv.into_iter();
     let (program, args): (String, Vec<String>) = (it.next().unwrap_or_default(), it.collect());

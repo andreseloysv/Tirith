@@ -128,78 +128,77 @@ impl Factory {
         let unknown_in = |sec: &str, allowed: &[&str]| sub(sec).and_then(|m| m.iter().find_map(|(n, s)| s.as_table().and_then(|s| s.keys().find(|k| !allowed.contains(&k.as_str())).map(|k| format!("unknown key {sec}.{n}.{k}")))));
         let unknown_flat = |sec: &str, allowed: &[&str]| sub(sec).and_then(|m| m.keys().find(|k| !allowed.contains(&k.as_str())).map(|k| format!("unknown key {sec}.{k}")));
         let (agents, roles) = (sub("agents").cloned().unwrap_or_default(), sub("roles").cloned().unwrap_or_default());
-        let mut bad: Option<String> = None;
-        let mut chk = |o: Option<String>| {
-            if bad.is_none() {
-                bad = o
-            }
-        };
-        chk(t.keys().find(|k| !SECTIONS.contains(&k.as_str())).map(|k| format!("unknown section '{k}'")));
-        chk(unknown_in("agents", &["protocol", "model_flag", "effort_flag", "chat_args", "lane_args", "resume_args", "args", "command", "settings", "profile"]));
-        chk(unknown_in("roles", &["agent", "model", "effort", "fallback", "session", "scope", "extends", "access", "prompt", "idle_minutes", "max_per_day", "review_after_minutes", "runs_on", "name"]));
-        chk(unknown_in("metrics", &["label", "target", "at_least"]));
-        chk(unknown_flat("plan", &["role_prefixes", "owner_wait", "waits_for"]));
-        chk(unknown_flat("cards", &["kinds"]));
-        chk(agents.iter().find(|(_, a)| !matches!(str_of(a, "protocol"), "" | "stream-json" | "exec")).map(|(n, a)| format!("agent '{n}' has unknown protocol '{}'", str_of(a, "protocol"))));
-        chk(roles.iter().find(|(_, r)| r.get("extends").is_some()).map(|(n, _)| format!("role '{n}' extends a missing role")));
-        chk(roles.iter().find_map(|(n, r)| r.get("agent").and_then(|x| x.as_str()).filter(|a| !agents.contains_key(*a)).map(|a| format!("role '{n}' runs on missing agent '{a}'"))));
-        chk(roles
-            .iter()
-            .find(|(_, r)| !matches!(str_of(r, "session"), "" | "chat" | "turn" | "lane") || !matches!(str_of(r, "scope"), "" | "project" | "global" | "own"))
-            .map(|(n, r)| format!("role '{n}' has unknown session '{}' or scope '{}'", str_of(r, "session"), str_of(r, "scope"))));
-        chk(roles
-            .iter()
-            .find_map(|(n, r)| r.get("prompt").and_then(|p| p.as_array()).into_iter().flatten().filter_map(|p| p.as_str()).find(|p| !self.prompts.contains_key(&stem(p))).map(|p| format!("role '{n}' names missing prompt '{p}'"))));
-        chk(sub("metrics").and_then(|m| m.keys().find(|id| !MEASURES.contains(&id.as_str())).map(|id| format!("unknown measure '{id}'"))));
         let routes = t.get("routes").and_then(|r| r.as_array()).cloned().unwrap_or_default();
-        chk(routes.iter().find_map(|r| r.as_table().and_then(|r| r.keys().find(|k| !["on", "to", "mode", "chat", "phone", "after_minutes", "then", "days", "at", "task"].contains(&k.as_str())).map(|k| format!("unknown key routes.{k}")))));
         let is_role = |n: &str| n.is_empty() || roles.contains_key(n);
-        chk(routes
-            .iter()
-            .find(|r| !EVENTS.split(';').any(|e| e == str_of(r, "on")) || !is_role(str_of(r, "to")) || !is_role(str_of(r, "then")) || !matches!(str_of(r, "mode"), "" | "turn" | "note"))
-            .map(|r| format!("route on '{}' names a missing event, role or mode ('{}', '{}')", str_of(r, "on"), str_of(r, "to"), str_of(r, "mode"))));
-        match bad {
-            Some(e) => Err(format!("factory: {e}")),
-            None => Ok(()),
-        }
-    }
-
-    fn v<T: DeserializeOwned>(&self, path: &[&str]) -> Option<T> {
-        get(&self.raw, path)
+        let bad = [
+            t.keys().find(|k| !SECTIONS.contains(&k.as_str())).map(|k| format!("unknown section '{k}'")),
+            unknown_in("agents", &["protocol", "model_flag", "effort_flag", "chat_args", "lane_args", "resume_args", "args", "command", "settings", "profile"]),
+            unknown_in("roles", &["agent", "model", "effort", "fallback", "session", "scope", "extends", "access", "prompt", "idle_minutes", "max_per_day", "review_after_minutes", "runs_on", "name"]),
+            unknown_in("metrics", &["label", "target", "at_least"]),
+            unknown_flat("plan", &["role_prefixes", "owner_wait", "waits_for"]),
+            unknown_flat("cards", &["kinds"]),
+            agents.iter().find(|(_, a)| !matches!(str_of(a, "protocol"), "" | "stream-json" | "exec")).map(|(n, a)| format!("agent '{n}' has unknown protocol '{}'", str_of(a, "protocol"))),
+            roles.iter().find(|(_, r)| r.get("extends").is_some()).map(|(n, _)| format!("role '{n}' extends a missing role")),
+            roles.iter().find_map(|(n, r)| r.get("agent").and_then(|x| x.as_str()).filter(|a| !agents.contains_key(*a)).map(|a| format!("role '{n}' runs on missing agent '{a}'"))),
+            roles
+                .iter()
+                .find(|(_, r)| {
+                    !matches!(str_of(r, "session"), "chat" | "turn" | "lane")
+                        || !matches!(str_of(r, "scope"), "project" | "global" | "own")
+                        || !matches!(str_of(r, "access"), "" | "read" | "write")
+                        || !matches!(str_of(r, "runs_on"), "" | "local")
+                })
+                .map(|(n, r)| format!("role '{n}' has unknown session '{}', scope '{}', access '{}' or runs_on '{}'", str_of(r, "session"), str_of(r, "scope"), str_of(r, "access"), str_of(r, "runs_on"))),
+            roles
+                .iter()
+                .find_map(|(n, r)| r.get("prompt").and_then(|p| p.as_array()).into_iter().flatten().filter_map(|p| p.as_str()).find(|p| !self.prompts.contains_key(&stem(p))).map(|p| format!("role '{n}' names missing prompt '{p}'"))),
+            sub("metrics").and_then(|m| m.keys().find(|id| !MEASURES.contains(&id.as_str())).map(|id| format!("unknown measure '{id}'"))),
+            routes.iter().find_map(|r| r.as_table().and_then(|r| r.keys().find(|k| !["on", "to", "mode", "chat", "phone", "after_minutes", "then", "days", "at", "task"].contains(&k.as_str())).map(|k| format!("unknown key routes.{k}")))),
+            routes
+                .iter()
+                .find(|r| !EVENTS.split(';').any(|e| e == str_of(r, "on")) || !is_role(str_of(r, "to")) || !is_role(str_of(r, "then")) || !matches!(str_of(r, "mode"), "" | "turn" | "note"))
+                .map(|r| format!("route on '{}' names a missing event, role or mode ('{}', '{}')", str_of(r, "on"), str_of(r, "to"), str_of(r, "mode"))),
+        ]
+        .into_iter()
+        .flatten()
+        .next();
+        bad.map_or(Ok(()), |e| Err(format!("factory: {e}")))
     }
 
     pub fn agent<T: DeserializeOwned>(&self, alias: &str, key: &str) -> Option<T> {
         let alias = if self.raw["agents"].get(alias).is_some() { alias } else { "default" };
-        self.v(&["agents", alias, key])
+        get(&self.raw, &["agents", alias, key])
     }
 
     pub fn command(&self, alias: &str) -> Option<String> {
-        self.v(&["agents", alias, "command"])
+        get(&self.raw, &["agents", alias, "command"])
     }
 
     pub fn commands(&self) -> Vec<(String, String)> {
         self.raw["agents"].as_table().into_iter().flatten().filter_map(|(n, a)| a.get("command").and_then(|c| c.as_str()).map(|c| (n.clone(), c.to_string()))).collect()
     }
 
-    /// One key of a role, by the name the code uses today (`workers`, `ceo`) or its factory name (`worker`, `reviewer`).
+    /// One key of a role, by its factory name.
     pub fn role<T: DeserializeOwned>(&self, name: &str, key: &str) -> Option<T> {
-        self.v(&[
-            "roles",
-            match name {
-                "workers" => "worker",
-                "ceo" => "reviewer",
-                n => n,
-            },
-            key,
-        ])
+        get(&self.raw, &["roles", name, key])
+    }
+
+    /// Every role of the factory, in name order.
+    pub fn roles(&self) -> Vec<String> {
+        self.raw["roles"].as_table().into_iter().flatten().map(|(n, _)| n.clone()).collect()
+    }
+
+    /// The first role (in name order) with this `session` and, when given, this `scope`: how code finds who runs a lane, a project's chat or a turn without naming a role.
+    pub fn find_role(&self, session: &str, scope: Option<&str>) -> Option<String> {
+        self.roles().into_iter().find(|n| self.role::<String>(n, "session").as_deref() == Some(session) && scope.is_none_or(|s| self.role::<String>(n, "scope").as_deref() == Some(s)))
     }
 
     pub fn metric(&self, id: &str) -> (String, Option<f64>, bool) {
-        (self.v(&["metrics", id, "label"]).unwrap_or_default(), self.v(&["metrics", id, "target"]), self.v(&["metrics", id, "at_least"]).unwrap_or(false))
+        (get(&self.raw, &["metrics", id, "label"]).unwrap_or_default(), get(&self.raw, &["metrics", id, "target"]), get(&self.raw, &["metrics", id, "at_least"]).unwrap_or(false))
     }
 
     pub fn words(&self, sec: &str, key: &str) -> Vec<String> {
-        self.v(&[sec, key]).unwrap_or_default()
+        get(&self.raw, &[sec, key]).unwrap_or_default()
     }
 
     /// Who hears `on`: (to, mode, chat, phone, after_minutes) of every `[[routes]]` on it.

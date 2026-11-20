@@ -1,7 +1,7 @@
 // Overview: the old page's .ovg grid. With no project selected the main column shows everything: status (metrics
-// and the CEO's last review), every plan, what needs you, running pipelines, working agents. Inside a project it
+// and the reviewer's last review), every plan, what needs you, running pipelines, working agents. Inside a project it
 // shows that project only: its plan, its cards, and its setup, pipelines and agents when there is something to see;
-// the health of the whole and the CEO stay out. The chat on the right is the selected project's conversation.
+// the health of the whole and the reviewer stay out. The chat on the right is the selected project's conversation.
 import { html, useState } from '../../vendor/preact-htm.js';
 import { useStore, useFetch, api } from '../store.js';
 import { ICON, Icon, Span, ACTIVE, ago, clockTime, laneLabel, laneClass, go } from '../common.js';
@@ -11,7 +11,7 @@ import { memo, Svg, Avatar, Rich, CHEV, REFRESH, clip, hit } from './overview/bi
 import { Need, openCards } from './need.js';
 import { intentOf } from '../intent.js';
 
-/* ---------- status: metrics and the CEO ---------- */
+/* ---------- status: metrics and the reviewer ---------- */
 const num = (v) => (v == null ? '–' : Number.isInteger(v) ? String(v) : (Math.round(v * 10) / 10).toString());
 
 function Metric({ m }) {
@@ -19,7 +19,7 @@ function Metric({ m }) {
   return html`<span class="stm" title=${m.facts || m.label}><i class=${`dot ${m.target == null ? 'grey' : m.red ? 'red' : 'green'}`}></i>${m.label}${' '}<b class=${m.red ? 'bad' : ''}>${num(m.value)}</b>${target ? html`<span class="mut"> / ${target}</span>` : null}</span>`;
 }
 
-function Ceo({ reviews, reviewing }) {
+function Review({ reviews, reviewing }) {
   const [open, setOpen] = useState(false);
   const [err, setErr] = useState('');
   const [asked, setAsked] = useState(false);
@@ -27,14 +27,14 @@ function Ceo({ reviews, reviewing }) {
   const busy = reviewing || asked;
   const now = () => {
     setErr(''); setAsked(true);
-    api('POST', '/api/ceo/review').catch((e) => setErr(String(e.message || e))).finally(() => setTimeout(() => setAsked(false), 3000));
+    api('POST', '/api/review').catch((e) => setErr(String(e.message || e))).finally(() => setTimeout(() => setAsked(false), 3000));
   };
-  return html`<div class="stl stceo"><span class="stk">CEO</span>
+  return html`<div class="stl stceo"><span class="stk">Reviewer</span>
       ${busy ? html`<span class="ovlive"><i class="pdot2"></i>Reviewing how the work is run…</span>`
         : last ? html`<button class="iahead ovrev" aria-expanded=${open} onClick=${() => setOpen(!open)}>
             <${Svg} s=${CHEV} /><span><span class="mut">Last review ${clockTime(last.at)}${last.metric ? ` · ${last.metric}` : ''} ·</span> ${clip(last.text, 110)}</span></button>`
         : html`<span class="mut">No review yet</span>`}
-      <button class="ibtn ovnow" disabled=${busy} onClick=${now} title="Ask the CEO to review how the work is run now">
+      <button class="ibtn ovnow" disabled=${busy} onClick=${now} title="Ask the reviewer to review how the work is run now">
         <${Svg} s=${REFRESH} /><span>Review now</span></button></div>
     ${open && last && !busy ? html`<div class="ia ovrevbody">${last.text}</div>` : null}
     ${err ? html`<div class="ierr ovinl">${err}</div>` : null}`;
@@ -50,7 +50,7 @@ const Status = memo(function Status({ data, working }) {
   return html`<section class=${`card stcard ${red.length ? 'bad' : 'ok'}`}>
     <div class="stl stl1"><b>${red.length ? '🔴' : '🟢'} ${why}</b>${merged ? ` · ${num(merged.value)} on main in 24 h` : ''} · ${working} ${working === 1 ? 'agent' : 'agents'} working</div>
     <div class="stl stms"><span class="stk">Metrics</span><span class="stmlist">${list.map((m) => html`<${Metric} key=${m.id} m=${m} />`)}</span></div>
-    <${Ceo} reviews=${reviews} reviewing=${!!data.reviewing} />
+    <${Review} reviews=${reviews} reviewing=${!!data.reviewing} />
   </section>`;
 });
 
@@ -151,7 +151,7 @@ function Agents({ lanes, events, projects, project, q, needs }) {
 
 export function Overview({ project }) {
   const s = useStore();
-  const [metrics] = useFetch(project ? '' : '/api/metrics', ['metrics', 'ceo']);
+  const [metrics] = useFetch(project ? '' : '/api/metrics', ['metrics', 'review']);
   const q = String(s.q || '').trim().toLowerCase();
   const lanes = Object.values(s.lanes);
   const projects = project ? s.projects.filter((p) => p.id === project) : s.projects;

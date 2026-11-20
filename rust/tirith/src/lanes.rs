@@ -39,7 +39,7 @@ pub fn start(app: &Shared, project: &str, step: &str, item: &str, agent: Option<
         project: project.into(),
         step: step.into(),
         item,
-        agent: agent.unwrap_or_else(|| models::role(app, "workers").agent),
+        agent: agent.unwrap_or_else(|| models::role(app, &models::lane_role(&app.cfg())).agent),
         status: "queued".into(),
         created_at: now_iso(),
         ..Default::default()
@@ -449,7 +449,7 @@ async fn launch(app: &Shared, mut lane: Lane) -> Result<(), String> {
     if resume.is_none() {
         std::fs::write(&brief_path, brief(app, &lane) + &if msg.is_empty() { String::new() } else { format!("\n## Message from Tirith\n{msg}\n") }).map_err(|e| e.to_string())?;
     }
-    let role = models::role(app, "workers");
+    let role = models::role(app, &models::lane_role(&cfg));
     let over = (lane.agent != role.agent || lane.model.is_some()).then_some(lane.agent.as_str());
     let cmd = models::lane_argv(app, over, lane.model.as_deref(), &brief_path, &ws, resume)?;
     lane.model = lane.model.or_else(|| role.model.clone().filter(|_| lane.agent == role.agent));
@@ -507,7 +507,7 @@ async fn ended(app: &Shared, id: &str, code: Option<i32>) {
         .join("\n");
     let log = crate::app::redact_secrets(&log);
     if lane.status == "running" && models::out_of_credits(&log) {
-        let next = models::fallback(app, "workers", &lane.tried);
+        let next = models::fallback(app, &models::lane_role(&app.cfg()), &lane.tried);
         app.update_lane(id, |l| {
             l.pid = None;
             l.ended_at = Some(now_iso());
@@ -524,7 +524,7 @@ async fn ended(app: &Shared, id: &str, code: Option<i32>) {
             }
         });
         if next.is_none() {
-            manager::emit_event(app, &lane.project, "lane.failed", &format!("lane {id} ({}: {}) failed: out of credits on every agent of the workers role", lane.project, lane.item), None);
+            manager::emit_event(app, &lane.project, "lane.failed", &format!("lane {id} ({}: {}) failed: out of credits on every agent of the lane role", lane.project, lane.item), None);
         }
     } else if lane.status == "running" && no_commits(app, &lane).await && plan::find(app, &lane.project, &lane.step, &lane.item).is_none_or(|i| i.check.is_none()) {
         app.update_lane(id, |l| (l.pid, l.ended_at, l.status, l.note) = (None, Some(now_iso()), "failed".into(), format!("ended without commits (exit {}): nothing to merge", code.map(|c| c.to_string()).unwrap_or("?".into()))));
