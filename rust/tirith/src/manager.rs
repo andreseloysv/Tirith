@@ -17,10 +17,10 @@ fn conv_role(app: &Shared, project: &str) -> String {
     app.cfg().factory.find_role("chat", Some(scope)).unwrap_or_else(|| fallback.into())
 }
 
-/// The factory prompt of this conversation's role; a bot's own prompt wins.
+/// The factory prompt of this conversation's role (a bot's is its role's, with the shared skills folder filled in).
 fn prompt(app: &Shared, project: &str) -> String {
-    let text = app.cfg().factory.prompts_of(&conv_role(app, project));
-    bots::prompt(app, project).unwrap_or_else(|| app.cfg().project(project).map_or(text.clone(), |p| text.replace("{id}", &p.id).replace("{repo}", &p.repo().display().to_string())))
+    let text = app.cfg().factory.prompts_of(&conv_role(app, project)).replace("{shared}", &app.home.join("bots/skills").display().to_string());
+    app.cfg().project(project).map_or(text.clone(), |p| text.replace("{id}", &p.id).replace("{repo}", &p.repo().display().to_string()))
 }
 
 /// One conversation: a project's (under its id) or the one of no project (under "").
@@ -166,6 +166,7 @@ pub fn emit_event(app: &Shared, project: &str, on: &str, shown: &str, told: Opti
             rooms::to_phones(app, here_p, &format!("Tirith: {shown}"));
         }
     }
+    let mut heard: BTreeSet<String> = BTreeSet::new();
     for (to, mode, _, phone, _) in routes {
         // Only chat roles are handed text here, in the conversation of their scope; a turn role is run by whoever
         // watches its condition (the metrics run the reviewer through `run_turn`, like any turn role).
@@ -173,12 +174,17 @@ pub fn emit_event(app: &Shared, project: &str, on: &str, shown: &str, told: Opti
         if f.role::<String>(&to, "session").as_deref() != Some("chat") {
             continue;
         }
+        // A due routine (its bot's own `schedule` route) is for that bot's conversation alone, and a conversation
+        // that more than one route reaches (the factory's schedule route and the bot's) hears the event once.
+        if on == "schedule" && f.role::<String>(&to, "scope").as_deref() == Some("own") && to != here_p {
+            continue;
+        }
         let dest = match f.role::<String>(&to, "scope").as_deref() {
             Some("global") => "",
             Some("own") => &to,
             _ => here_p,
         };
-        queue(app, dest, told.unwrap_or(shown), &mode, phone);
+        let _ = heard.insert(dest.to_string()).then(|| queue(app, dest, told.unwrap_or(shown), &mode, phone));
     }
 }
 
@@ -432,7 +438,7 @@ async fn session(app: &Shared, project: &str) -> Result<(), String> {
     if alias == "codex" || alias == "muse" {
         return exec_session(app, project, alias == "muse").await;
     }
-    let key = session_key(project, &alias);
+    let key = format!("manager_session:{alias}:{project}");
     let resumed = app.kv(&key);
     let history = resumed.is_none().then(|| history(app, project));
     let mut cmd = models::chat_argv(app, &role, resumed.as_deref())?;
@@ -523,10 +529,6 @@ async fn session(app: &Shared, project: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn session_key(project: &str, agent: &str) -> String {
-    format!("manager_session:{agent}:{project}")
-}
-
 fn history(app: &Shared, project: &str) -> String {
     let mut rows: Vec<String> = app.query("SELECT role, text FROM chat WHERE project = ?1 ORDER BY id DESC LIMIT 30", [project], |r| Ok(format!("{}: {}", r.get::<_, String>(0)?, r.get::<_, String>(1)?)));
     rows.reverse();
@@ -534,7 +536,7 @@ fn history(app: &Shared, project: &str) -> String {
 }
 
 async fn exec_session(app: &Shared, project: &str, muse: bool) -> Result<(), String> {
-    let key = session_key(project, if muse { "muse" } else { "codex" });
+    let key = format!("manager_session:{}:{project}", if muse { "muse" } else { "codex" });
     let resumed = app.kv(&key);
     // The turn's message in plain text, with the recent conversation in front of it when the agent starts fresh; `sent` is handed over again when the turn never started.
     let sent = talk(project, |t| std::mem::take(&mut t.pending));

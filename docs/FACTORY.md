@@ -34,7 +34,8 @@ Like Terraform: the factory is the code, config.toml its variables.
   Rust, `[ceo] enabled`, `runs_per_day`, `upkeep_steps` and `upkeep_max_share` are read by nothing). Today's sections
   (`[models.<role>]`, `[lanes]`, `[merge]`, `[ceo]`, ...) are read in memory under the new names (`Config::load`); the
   file itself is not rewritten at start, since `toml::to_string` would drop the owner's comments and reorder its
-  blocks. Its sections are renamed in the file when the page writes it with `toml_edit`, keeping the comments (step 6).
+  blocks. The page writes that file with `toml_edit`, keeping its comments (the bots' roles and schedule routes,
+  step 6); yesterday's sections stay as they are in the file and are read under the new names.
 
 ## The file
 

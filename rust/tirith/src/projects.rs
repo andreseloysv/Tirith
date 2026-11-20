@@ -10,7 +10,7 @@ use std::{io::Write, os::unix::fs::OpenOptionsExt, time::Duration};
 
 const COLORS: [&str; 8] = ["#2f7d5b", "#3b6fd8", "#8a5cd0", "#d0663b", "#c2417c", "#b8860b", "#0e8aa0", "#64748b"];
 /// One config.toml write at a time, so two adds never lose one another; one folder picker on screen at a time.
-static WRITING: std::sync::Mutex<()> = std::sync::Mutex::new(());
+pub(crate) static WRITING: std::sync::Mutex<()> = std::sync::Mutex::new(());
 static PICKING: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 /// AppKit's open panel through JXA, floating above every window: since macOS 14 a helper process may not come to the front, so AppleScript's `choose folder` opened behind the page. It prints the folder, or nothing when cancelled.
 const PANEL: &str = include_str!("../assets/panel.js");

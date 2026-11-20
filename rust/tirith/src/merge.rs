@@ -101,16 +101,12 @@ async fn next_batch(app: &Shared) -> Vec<Lane> {
     queued.into_iter().filter(|l| l.project == first.project && !l.solo).take(app.cfg().factory.limits.merge_train).collect()
 }
 
-fn glob(pattern: &str) -> Regex {
-    let re = regex::escape(pattern).replace(r"\*\*/", "(.*/)?").replace(r"\*\*", ".*").replace(r"\*", "[^/]*").replace(r"\?", "[^/]");
-    Regex::new(&format!("^{re}$")).unwrap_or_else(|_| Regex::new("^$").unwrap())
-}
-
 /// A stage with `paths` runs only when a changed file matches them (`!pattern` excludes).
 fn wanted(stage: &Stage, changed: &[String]) -> bool {
     if stage.paths.is_empty() {
         return true;
     }
+    let glob = |pattern: &str| Regex::new(&format!("^{}$", regex::escape(pattern).replace(r"\*\*/", "(.*/)?").replace(r"\*\*", ".*").replace(r"\*", "[^/]*").replace(r"\?", "[^/]"))).unwrap_or_else(|_| Regex::new("^$").unwrap());
     let (neg, pos): (Vec<&String>, Vec<&String>) = stage.paths.iter().partition(|p| p.starts_with('!'));
     let neg: Vec<Regex> = neg.iter().map(|p| glob(&p[1..])).collect();
     let pos: Vec<Regex> = pos.iter().map(|p| glob(p)).collect();
@@ -158,9 +154,6 @@ fn limit_from(get: impl Fn(&str) -> Option<String>, project: &str, stage: &str, 
     set.or_else(|| get(&format!("stage_learned:{project}:{stage}")).and_then(|v| v.parse().ok())).unwrap_or(default)
 }
 
-pub fn stage_limit_min(app: &Shared, project: &str, stage: &str) -> u64 {
-    limit_from(|k| app.kv(k), project, stage, app.cfg().factory.limits.stage_timeout_minutes)
-}
 /// An item's check runs with the `VAR=value` words (JAVA_HOME, ANDROID_HOME) of the pipeline stage it belongs to: the stage named in it, or one running the same program.
 fn stage_env(stages: &[Stage], check: &str) -> Vec<(String, String)> {
     let said: Vec<String> = check.split(|c: char| !c.is_alphanumeric() && c != '_').map(str::to_lowercase).collect();
@@ -185,7 +178,7 @@ async fn run_stage(app: &Shared, pipe: &Pipe, dir: &Path, name: &str, run: &str)
         command.envs(stage_env(&Manifest::load(dir).stages, run));
     }
     let mut child = command.current_dir(dir).stdin(Stdio::null()).stdout(file.try_clone().map_err(|e| e.to_string())?).stderr(file).process_group(0).spawn().map_err(|e| e.to_string())?;
-    let limit = Duration::from_secs(stage_limit_min(app, &pipe.project, name) * 60);
+    let limit = Duration::from_secs(limit_from(|k| app.kv(k), &pipe.project, name, app.cfg().factory.limits.stage_timeout_minutes) * 60);
     let status = match tokio::time::timeout(limit, child.wait()).await {
         Ok(Ok(s)) if s.success() => "passed",
         Ok(_) => "failed",
@@ -193,7 +186,7 @@ async fn run_stage(app: &Shared, pipe: &Pipe, dir: &Path, name: &str, run: &str)
             child.id().into_iter().for_each(|pid| kill_group(pid, libc::SIGKILL));
             let _ = child.wait().await;
             // A stage that timed out gets a doubled limit next time, for that project and stage only.
-            app.set_kv(&format!("stage_learned:{}:{name}", pipe.project), Some(&(stage_limit_min(app, &pipe.project, name) * 2).to_string()));
+            app.set_kv(&format!("stage_learned:{}:{name}", pipe.project), Some(&(limit_from(|k| app.kv(k), &pipe.project, name, app.cfg().factory.limits.stage_timeout_minutes) * 2).to_string()));
             "timeout"
         }
     };

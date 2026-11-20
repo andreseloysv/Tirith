@@ -13,9 +13,10 @@ const LIMIT: usize = 25 * 1024 * 1024;
 
 /// The text appended to the owner's message so the manager can open the attached files (absolute paths).
 pub fn describe(paths: &[String]) -> String {
-    match paths {
-        [] => String::new(),
-        _ => format!("\n\nAttached files (open them with your file-reading tool):{}", paths.iter().map(|p| format!("\n- {p}")).collect::<String>()),
+    if paths.is_empty() {
+        String::new()
+    } else {
+        format!("\n\nAttached files (open them with your file-reading tool):{}", paths.iter().map(|p| format!("\n- {p}")).collect::<String>())
     }
 }
 
@@ -27,8 +28,8 @@ fn sanitize(name: &str) -> String {
     Some(s).filter(|s| !s.is_empty()).unwrap_or_else(|| "file".into())
 }
 
-fn content_type(name: &str) -> &'static str {
-    match name.rsplit('.').next().unwrap_or("").to_lowercase().as_str() {
+async fn fetch(State(app): State<Shared>, Path((id, name)): Path<(String, String)>) -> Response {
+    let kind = match name.rsplit('.').next().unwrap_or("").to_lowercase().as_str() {
         "png" => "image/png",
         "jpg" | "jpeg" => "image/jpeg",
         "gif" => "image/gif",
@@ -38,6 +39,11 @@ fn content_type(name: &str) -> &'static str {
         "json" => "application/json",
         "txt" | "md" | "log" | "csv" | "rs" | "py" | "js" | "ts" | "toml" | "yaml" | "yml" | "sh" | "html" | "htm" => "text/plain; charset=utf-8", // html too: never rendered as a page on this origin
         _ => "application/octet-stream",
+    };
+    let valid = !id.is_empty() && id.chars().all(|c| c.is_ascii_hexdigit()) && sanitize(&name) == name;
+    match if valid { tokio::fs::read(app.home.join("attachments").join(&id).join(&name)).await.ok() } else { None } {
+        Some(bytes) => ([("content-type", kind), ("x-content-type-options", "nosniff"), ("content-security-policy", "sandbox")], bytes).into_response(),
+        None => (StatusCode::NOT_FOUND, "no such attachment").into_response(),
     }
 }
 
@@ -51,14 +57,6 @@ async fn upload(State(app): State<Shared>, Query(q): Query<HashMap<String, Strin
     tokio::fs::create_dir_all(&dir).await.map_err(err)?;
     tokio::fs::write(&path, &body).await.map_err(err)?;
     Ok(Json(json!({"id": id, "name": name, "path": path.display().to_string(), "url": format!("/api/attachments/{id}/{name}")})))
-}
-
-async fn fetch(State(app): State<Shared>, Path((id, name)): Path<(String, String)>) -> Response {
-    let valid = !id.is_empty() && id.chars().all(|c| c.is_ascii_hexdigit()) && sanitize(&name) == name;
-    match if valid { tokio::fs::read(app.home.join("attachments").join(&id).join(&name)).await.ok() } else { None } {
-        Some(bytes) => ([("content-type", content_type(&name)), ("x-content-type-options", "nosniff"), ("content-security-policy", "sandbox")], bytes).into_response(),
-        None => (StatusCode::NOT_FOUND, "no such attachment").into_response(),
-    }
 }
 
 pub fn routes() -> Router<Shared> {
