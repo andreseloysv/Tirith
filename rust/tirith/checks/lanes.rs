@@ -1,6 +1,6 @@
 #[test]
 fn brief_warns_against_blind_waits() {
-    let text = include_str!("../assets/brief.md");
+    let text = crate::factory::current().prompt("brief");
     assert!(text.contains("Never wait blindly") && text.contains("two minutes") && text.contains("find out why"));
 }
 

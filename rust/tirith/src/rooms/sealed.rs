@@ -130,14 +130,10 @@ pub fn seal(me: &Me, text: &str, tag: &str, readers: &[String]) -> Value {
 pub fn unseal(me: &Me, e: &Value) -> Option<String> {
     let body = &e["body"];
     let author = e["author"].as_str()?;
-    if body["sender_pub"].as_str() != Some(author) || body["alg"] != ALG {
-        return None;
-    }
+    (body["sender_pub"].as_str() == Some(author) && body["alg"] == ALG).then_some(())?;
     let mine = body["recipients"].as_array()?.iter().find(|r| r["pub"].as_str() == Some(&me.public))?;
     let wrapped = B64.decode(mine["wrapped_key"].as_str()?).ok()?;
-    if wrapped.len() < 24 + 16 {
-        return None;
-    }
+    (wrapped.len() >= 24 + 16).then_some(())?;
     let key = SalsaBox::new(&curve_public(author)?, &me.curve_secret()).decrypt(GenericArray::from_slice(&wrapped[..24]), &wrapped[24..]).ok()?;
     let nonce = B64.decode(body["nonce"].as_str()?).ok().filter(|n| n.len() == 24)?;
     let cipher = B64.decode(body["ciphertext"].as_str()?).ok()?;
@@ -217,12 +213,10 @@ pub async fn keys(base: &str, room: &str, name: &str) -> Result<Vec<(String, Str
     loop {
         let got = page(base, room, Some(after), 0, name).await?;
         let list = got["messages"].as_array().cloned().unwrap_or_default();
-        for m in &list {
+        list.iter().for_each(|m| {
             let public = m["event"]["author"].as_str().unwrap_or("").to_string();
-            if m["signed_by"] == "self" && !out.iter().any(|(p, _)| *p == public) {
-                out.push((public, clean(m["from"].as_str().unwrap_or(""))));
-            }
-        }
+            let _ = (m["signed_by"] == "self" && !out.iter().any(|(p, _)| *p == public)).then(|| out.push((public, clean(m["from"].as_str().unwrap_or("")))));
+        });
         let last = list.last().and_then(|m| m["n"].as_u64()).unwrap_or(0);
         if list.is_empty() || last >= got["count"].as_u64().unwrap_or(0) {
             return Ok(out);

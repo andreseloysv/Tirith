@@ -64,7 +64,8 @@ pub struct App {
     pub merge_wake: Notify,
     pub children: Mutex<HashSet<String>>,
     manifests: Mutex<HashMap<PathBuf, (Option<SystemTime>, Manifest)>>,
-    cfg_mtime: Mutex<Option<SystemTime>>,
+    /// The last-seen changes of (config.toml, the factory folder).
+    cfg_mtime: Mutex<(Option<SystemTime>, Option<SystemTime>)>,
 }
 
 pub type R = Result<axum::Json<Value>, (axum::http::StatusCode, String)>;
@@ -90,20 +91,18 @@ fn mtime(p: &Path) -> Option<SystemTime> {
 impl App {
     pub fn open() -> Shared {
         let home = tirith_home();
-        for dir in ["logs/lanes", "logs/runs", "briefs", "lanes"] {
-            let _ = std::fs::create_dir_all(home.join(dir));
-        }
+        ["logs/lanes", "logs/runs", "briefs", "lanes"].into_iter().for_each(|dir| drop(std::fs::create_dir_all(home.join(dir))));
         let db = Connection::open(home.join("tirith.sqlite3")).expect("open tirith.sqlite3");
         db.execute_batch(include_str!("../assets/schema.sql")).expect("create tables");
         // Columns added later (each ALTER fails once its column exists). A chat row and an owner card belong to a project; '' is none. A card may carry a waiting lane's question.
         let owner = [("owner_items", "project TEXT NOT NULL DEFAULT ''"), ("owner_items", "lane TEXT NOT NULL DEFAULT ''")];
-        for (table, col) in [("runs", "pipeline TEXT"), ("runs", "sha TEXT"), ("chat", "project TEXT NOT NULL DEFAULT ''")].into_iter().chain(owner) {
-            let _ = db.execute(&format!("ALTER TABLE {table} ADD COLUMN {col}"), []);
-        }
+        [("runs", "pipeline TEXT"), ("runs", "sha TEXT"), ("chat", "project TEXT NOT NULL DEFAULT ''")].into_iter().chain(owner).for_each(|(table, col)| drop(db.execute(&format!("ALTER TABLE {table} ADD COLUMN {col}"), [])));
         let lanes: BTreeMap<String, Lane> =
             db.prepare("SELECT data FROM lanes").expect("read lanes").query_map([], |r| r.get::<_, String>(0)).expect("read lanes").flatten().filter_map(|s| serde_json::from_str::<Lane>(&s).ok()).map(|l| (l.id.clone(), l)).collect();
+        crate::config::migrate_file(); // yesterday's config.toml sections under their new names, once
         let cfg_mtime = mtime(&home.join("config.toml"));
         let cfg = Arc::new(Config::load());
+        let cfg_mtime = (cfg_mtime, crate::factory::stamp(&cfg.raw));
         Arc::new(App {
             home,
             cfg: RwLock::new(cfg.clone()),
@@ -124,14 +123,15 @@ impl App {
         self.cfg.read().unwrap().clone()
     }
 
-    /// Re-reads `config.toml` when it changed on disk (one stat) or when `force`d; true when it was re-read.
+    /// Re-reads `config.toml` and the factory when either changed on disk (a few stats) or when `force`d; true when re-read. A bad factory version keeps the last good one (see `factory::load`).
     pub fn reload_config(&self, force: bool) -> bool {
-        let now = mtime(&self.home.join("config.toml"));
+        let now = (mtime(&self.home.join("config.toml")), crate::factory::stamp(&self.cfg().raw));
         let mut last = self.cfg_mtime.lock().unwrap();
         if *last == now && !force {
             return false;
         }
         *last = now;
+        drop(last);
         *self.cfg.write().unwrap() = Arc::new(Config::load());
         true
     }
@@ -197,10 +197,7 @@ impl App {
 
     pub fn set_kv(&self, key: &str, value: Option<&str>) {
         let db = self.db.lock().unwrap();
-        let _ = match value {
-            Some(v) => db.execute("INSERT OR REPLACE INTO kv (key, value) VALUES (?1, ?2)", params![key, v]),
-            None => db.execute("DELETE FROM kv WHERE key = ?1", [key]),
-        };
+        let _ = value.map_or_else(|| db.execute("DELETE FROM kv WHERE key = ?1", [key]), |v| db.execute("INSERT OR REPLACE INTO kv (key, value) VALUES (?1, ?2)", params![key, v]));
     }
 
     /// The rows of a query, each mapped by `f`; a query that fails gives none.
@@ -285,10 +282,7 @@ pub async fn add_worktree(repo: &Path, dir: &Path, branch: Option<&str>, exclude
     }
     // Copy the git-ignored `local.properties` files (Android `sdk.dir`) from the main checkout into the new worktree.
     let args = ["ls-files", "--others", "--ignored", "--exclude-standard", "-z", "--", ":(glob)**/local.properties"];
-    for rel in git(repo, &args).await.unwrap_or_default().split('\0').filter(|r| !r.is_empty()) {
-        let to = dir.join(rel);
-        let _ = to.parent().map(std::fs::create_dir_all).map(|_| std::fs::copy(repo.join(rel), &to));
-    }
+    git(repo, &args).await.unwrap_or_default().split('\0').filter(|r| !r.is_empty()).for_each(|rel| drop(dir.join(rel).parent().map(|p| (std::fs::create_dir_all(p), std::fs::copy(repo.join(rel), dir.join(rel))))));
     Ok(())
 }
 

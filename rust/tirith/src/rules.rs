@@ -24,7 +24,7 @@ pub fn check(app: &Shared, tool: &str, input: &Value, lane: Option<&Lane>, proje
     if (bash && GUARD.is_match(cmd)) || hooks_write || (edit && file.contains("/.git/hooks/")) {
         return Some("Commit checks are never skipped (--no-verify, commit -n, core.hooksPath, .git/hooks). Fix what the check reports and commit again.".into());
     }
-    let mut protected: Vec<String> = cfg.agents.values().filter_map(|a| a.settings.as_deref()).map(|s| expand(s).display().to_string()).collect();
+    let mut protected: Vec<String> = cfg.factory.commands().iter().filter_map(|(alias, _)| cfg.factory.agent::<String>(alias, "settings")).map(|s| expand(&s).display().to_string()).collect();
     protected.push(format!("{}/", app.home.display()));
     // The lanes' worktrees live inside Tirith's home: with the bots' folders they are the parts of it agents write in. A path with `..` in it can end anywhere, so it is never taken for one of them.
     let path = std::path::Path::new(file);
@@ -47,7 +47,7 @@ pub fn check(app: &Shared, tool: &str, input: &Value, lane: Option<&Lane>, proje
         if bash && MAIN.is_match(cmd) {
             return Some("A lane never pushes or touches main. Commit on your branch and end your turn: Tirith runs the checks and merges.".into());
         }
-        let names: Vec<String> = cfg.agents.values().filter_map(|a| std::path::Path::new(&a.command).file_name().map(|n| regex::escape(&n.to_string_lossy()))).collect();
+        let names: Vec<String> = cfg.factory.commands().iter().filter_map(|(_, c)| std::path::Path::new(c).file_name().map(|n| regex::escape(&n.to_string_lossy()))).collect();
         let spawns = !names.is_empty() && Regex::new(&format!(r"(^|[;&|(]\s*|\bexec\s+|\bnohup\s+)({})\b", names.join("|"))).map(|r| r.is_match(cmd)).unwrap_or(false);
         if tool == "Task" || tool == "Agent" || (bash && spawns) {
             return Some("Agents start only through Tirith, so the owner sees them. If the item needs more hands, ask the manager: tirith ask \"<question>\".".into());

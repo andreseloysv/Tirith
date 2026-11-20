@@ -11,7 +11,6 @@ use serde_json::{json, Value};
 use std::path::{Path as FsPath, PathBuf};
 use std::sync::Mutex;
 
-const PROMPT: &str = include_str!("../assets/bot-prompt.txt");
 /// A bot's skills, in its folder: the agents read skills there (or, through a link, in their own .<command>/skills).
 const SKILLS: &str = ".agents/skills";
 static ONE: Mutex<()> = Mutex::new(());
@@ -27,7 +26,7 @@ pub fn keys(app: &App) -> Vec<String> {
     all(app).iter().map(|b| format!("bot-{}", s(b, "id"))).collect()
 }
 pub fn prompt(app: &App, key: &str) -> Option<String> {
-    bot(app, key).map(|b| PROMPT.replace("{name}", &s(&b, "name")).replace("{shared}", &shared(&app.home).display().to_string()))
+    bot(app, key).map(|b| app.cfg().factory.prompt("bot").replace("{name}", &s(&b, "name")).replace("{shared}", &shared(&app.home).display().to_string()))
 }
 
 /// A bot's folder, where its sessions run: memory.md, its working files and its skills.
@@ -62,7 +61,7 @@ pub fn context(app: &Shared, key: &str) -> Option<String> {
     let gone = std::fs::read_dir(&dir).into_iter().flatten().flatten().filter(|e| e.file_type().is_ok_and(|t| t.is_symlink()) && !e.path().join("SKILL.md").exists());
     gone.for_each(|e| drop(std::fs::remove_file(e.path())));
     skills(&common, true).iter().for_each(|(name, _)| drop(std::os::unix::fs::symlink(common.join(name), dir.join(name))));
-    let agent = app.cfg().agents.get(&crate::models::role(app, key).agent).and_then(|a| FsPath::new(&a.command).file_name().map(|n| folder(app, key).join(format!(".{}", n.to_string_lossy()))));
+    let agent = app.cfg().factory.command(&crate::models::role(app, key).agent).and_then(|c| FsPath::new(&c).file_name().map(|n| folder(app, key).join(format!(".{}", n.to_string_lossy()))));
     agent.into_iter().for_each(|d| drop(std::fs::create_dir_all(&d).and_then(|_| std::os::unix::fs::symlink(format!("../{SKILLS}"), d.join("skills")))));
     let names = |v: Vec<(String, String)>| Some(v.into_iter().map(|s| s.0).collect::<Vec<_>>().join(", ")).filter(|n| !n.is_empty()).unwrap_or("none".into());
     let memory = std::fs::read_to_string(folder(app, key).join("memory.md")).unwrap_or_default().chars().take(12000).collect::<String>();
@@ -145,9 +144,7 @@ pub fn start(app: Shared) {
     tokio::spawn(async move {
         loop {
             tokio::time::sleep(std::time::Duration::from_secs(20)).await;
-            for b in all(&app) {
-                b["routines"].as_array().into_iter().flatten().filter(|r| due(r, Local::now())).for_each(|r| drop(fire(&app, &s(&b, "id"), &s(r, "id"))));
-            }
+            all(&app).iter().for_each(|b| b["routines"].as_array().into_iter().flatten().filter(|r| due(r, Local::now())).for_each(|r| drop(fire(&app, &s(b, "id"), &s(r, "id")))));
         }
     });
 }
@@ -186,9 +183,7 @@ fn routine(app: &Shared, id: String, b: Value) -> Result<Value, String> {
         ok.then_some(()).ok_or("a routine needs a title, what to do and at least one day")?;
         Ok(if i.is_none() { format!("Created routine · {}", s(r, "title")) } else { String::new() })
     })?;
-    if !said.is_empty() {
-        app.chat("routine", &said, &format!("bot-{id}"));
-    }
+    let _ = (!said.is_empty()).then(|| app.chat("routine", &said, &format!("bot-{id}")));
     Ok(json!({"ok": true}))
 }
 
