@@ -56,29 +56,21 @@ pub async fn turn(app: &Shared, role: &str, project: &str, resume: Option<&str>,
     let muse = setting.agent == "muse";
     let name = if muse { "the muse agent" } else { "Codex" };
     let cfg = app.cfg();
-    let agent = cfg.agents.get(if muse { "muse" } else { "codex" }).ok_or(if muse { "no agent alias 'muse' in config.toml" } else { "Codex is not configured" })?;
+    let command = cfg.factory.command(if muse { "muse" } else { "codex" }).ok_or(if muse { "no agent alias 'muse' in config.toml" } else { "Codex is not configured" })?;
     let dir = app.home.join(role).join(project);
     // Muse takes the message from a file, and a fresh session of it has never seen the role's instructions: they ride in its first message.
     let file = muse.then(|| dir.join(".turn-prompt.txt"));
     let argv = if let Some(file) = &file {
         let _ = std::fs::create_dir_all(&dir);
         std::fs::write(file, if resume.is_some() { input.to_string() } else { format!("{instructions}\n\n{input}") }).map_err(|e| e.to_string())?;
-        muse_argv(&agent.command, role, setting.model.as_deref(), setting.effort.as_deref(), &dir.display().to_string(), resume, &file.display().to_string())
+        muse_argv(&command, role, setting.model.as_deref(), setting.effort.as_deref(), &dir.display().to_string(), resume, &file.display().to_string())
     } else {
-        let mut argv = vec![agent.command.clone(), "exec".into(), "--json".into(), "--skip-git-repo-check".into()];
-        if role == "manager" {
-            argv.push("--dangerously-bypass-approvals-and-sandbox".into())
-        } else {
-            argv.extend(["--sandbox".into(), "read-only".into(), "--ephemeral".into()])
-        }
-        if let Some(m) = setting.model {
-            argv.extend(["--model".into(), m])
-        }
+        let mut argv = vec![command, "exec".into(), "--json".into(), "--skip-git-repo-check".into()];
+        argv.extend(if role == "manager" { vec!["--dangerously-bypass-approvals-and-sandbox".into()] } else { vec!["--sandbox".into(), "read-only".into(), "--ephemeral".into()] });
+        argv.extend(setting.model.into_iter().flat_map(|m| ["--model".to_string(), m]));
         options(&cfg, &mut argv, setting.effort.as_deref());
         argv.extend(["-c".into(), format!("developer_instructions={}", toml::Value::String(instructions.into()))]);
-        if let Some(id) = resume {
-            argv.extend(["resume".into(), id.into()])
-        }
+        argv.extend(resume.into_iter().flat_map(|id| ["resume".to_string(), id.to_string()]));
         argv.push("-".into());
         argv
     };

@@ -119,9 +119,7 @@ pub fn check_problem(check: &str) -> Option<String> {
 
 pub async fn add(app: &Shared, project: &str, step: &str, text: &str) -> Result<(), String> {
     let text = clean(text);
-    if text.is_empty() {
-        return Err("the item needs a text".into());
-    }
+    (!text.is_empty()).then_some(()).ok_or("the item needs a text".to_string())?;
     CHECK.captures(&text).and_then(|c| check_problem(&c[1])).map_or(Ok(()), Err)?;
     // A forbidden word of the project's commit guard would make the plan uncommittable and block every merge.
     if let Some(p) = app.cfg().project(project).cloned() {
@@ -162,9 +160,7 @@ pub async fn flush(app: &Shared, only: Option<&str>) {
 
 /// `flush` of one project for a caller that already holds the plan lock.
 pub async fn flush_locked(app: &Shared, project: &str) {
-    if !app.plan_dirty.lock().unwrap().contains(project) {
-        return;
-    }
+    let Some(()) = app.plan_dirty.lock().unwrap().contains(project).then_some(()) else { return };
     let (Ok(file), Some(repo)) = (path(app, project), app.cfg().project(project).map(|p| p.repo())) else { return };
     let rel = file.strip_prefix(&repo).unwrap_or(&file).to_string_lossy().to_string();
     let pending = git(&repo, &["status", "--porcelain", "--", &rel]).await.unwrap_or_default();

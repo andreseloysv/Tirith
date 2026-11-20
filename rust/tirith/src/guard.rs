@@ -53,9 +53,7 @@ fn render(hook: &str, words: &[String]) -> String {
 /// Ok when the project's guard is installed and intact (or the project opts out); the reason otherwise. The scheduler calls it before it starts a lane of the project: a few small file reads, no git process.
 pub fn intact(app: &Shared, project: &Project) -> Result<(), String> {
     let words = words(app, project);
-    if words.is_empty() {
-        return Ok(());
-    }
+    let Some(words) = (!words.is_empty()).then_some(words) else { return Ok(()) };
     let git = git_dir(&project.repo()).ok_or(format!("commit guard: {} is not a git repo", project.repo().display()))?;
     let fix = format!("(tirith guard install {})", project.id);
     for hook in HOOKS {
@@ -84,9 +82,7 @@ fn immutable(_path: &std::path::Path, _on: bool) {}
 /// Writes both hooks (mode 755) where they are missing or ours (an older guard is replaced); never over a hook that is not ours.
 pub fn install(app: &Shared, project: &Project) -> Result<(), String> {
     let words = words(app, project);
-    if words.is_empty() {
-        return Ok(());
-    }
+    let Some(words) = (!words.is_empty()).then_some(words) else { return Ok(()) };
     let dir = git_dir(&project.repo()).ok_or(format!("{} is not a git repo", project.repo().display()))?.join("hooks");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let ours = |p: &std::path::Path| std::fs::read_to_string(p).is_ok_and(|t| t.contains(MARKER));
@@ -115,11 +111,8 @@ pub fn install(app: &Shared, project: &Project) -> Result<(), String> {
 pub fn start(app: Shared) {
     tokio::task::spawn_blocking(move || {
         for p in app.cfg().projects.iter() {
-            let missing = intact(&app, p).is_err_and(|e| e.contains("is missing"));
-            let installed = if missing { install(&app, p) } else { Ok(()) };
-            if let Err(why) = installed.and_then(|_| intact(&app, p)) {
-                app.event("", &p.id, "guard", "", &why, "");
-            }
+            let installed = if intact(&app, p).is_err_and(|e| e.contains("is missing")) { install(&app, p) } else { Ok(()) };
+            let _ = installed.and_then(|_| intact(&app, p)).map_err(|why| app.event("", &p.id, "guard", "", &why, ""));
         }
     });
 }

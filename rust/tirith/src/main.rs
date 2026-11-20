@@ -6,6 +6,7 @@ mod bots;
 mod client;
 mod codex;
 mod config;
+mod factory;
 mod guard;
 mod lanes;
 mod manager;
@@ -89,17 +90,13 @@ fn status(project: &str) -> Result<(), String> {
     let s: Value = serde_json::from_str(&call("GET", "/api/state", None)?).map_err(|e| e.to_string())?;
     let lanes: Vec<Value> = s["lanes"].as_array().into_iter().flatten().filter(|l| project.is_empty() || l["project"] == project).cloned().collect();
     let working: Vec<&Value> = lanes.iter().filter(|l| matches!(l["status"].as_str(), Some("queued" | "running" | "waiting" | "merge-queued" | "merging"))).collect();
-    for l in &working {
-        println!("{:<14} {:<40} {}:{} {}", l["status"].as_str().unwrap_or(""), l["id"].as_str().unwrap_or(""), l["project"].as_str().unwrap_or(""), l["step"].as_str().unwrap_or(""), l["item"].as_str().unwrap_or(""));
-    }
-    if working.is_empty() {
-        println!("no lane is working");
-    }
+    working
+        .iter()
+        .for_each(|l| println!("{:<14} {:<40} {}:{} {}", l["status"].as_str().unwrap_or(""), l["id"].as_str().unwrap_or(""), l["project"].as_str().unwrap_or(""), l["step"].as_str().unwrap_or(""), l["item"].as_str().unwrap_or("")));
+    let _ = working.is_empty().then(|| println!("no lane is working"));
     let mut ended: Vec<&Value> = lanes.iter().filter(|l| l["ended_at"].is_string() && !matches!(l["status"].as_str(), Some("merge-queued" | "merging"))).collect();
     ended.sort_by_key(|l| l["ended_at"].as_str().unwrap_or("").to_string());
-    for l in ended.iter().rev().take(8) {
-        println!("{:<14} {:<40} {}", l["status"].as_str().unwrap_or(""), l["id"].as_str().unwrap_or(""), l["note"].as_str().unwrap_or(""));
-    }
+    ended.iter().rev().take(8).for_each(|l| println!("{:<14} {:<40} {}", l["status"].as_str().unwrap_or(""), l["id"].as_str().unwrap_or(""), l["note"].as_str().unwrap_or("")));
     Ok(())
 }
 
@@ -139,8 +136,8 @@ fn hook(event: String) -> Result<(), String> {
 /// Rewrites the hooks of the configured agents whose settings file uses `tirith hook …` into HTTP hooks on the daemon (a backup of each file is kept next to it). Agents without HTTP hooks keep the command bridge.
 fn install_hooks() -> Result<(), String> {
     let cfg = config::Config::load();
-    let agent = cfg.agents.get("anthropic").ok_or("no [agents.anthropic] in config.toml")?;
-    let path = config::expand(agent.settings.as_deref().ok_or("[agents.anthropic] has no settings path")?);
+    cfg.factory.command("anthropic").ok_or("no [agents.anthropic] in config.toml")?;
+    let path = config::expand(cfg.factory.agent::<String>("anthropic", "settings").as_deref().ok_or("[agents.anthropic] has no settings path")?);
     let text = std::fs::read_to_string(&path).unwrap_or_else(|_| "{}".into());
     std::fs::write(path.with_extension("json.before-tirith-http"), &text).map_err(|e| e.to_string())?;
     let mut settings: Value = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
@@ -192,7 +189,7 @@ fn serve() -> Result<(), String> {
             loop {
                 plan::flush(&flusher, None).await;
                 flusher.trim();
-                tokio::time::sleep(Duration::from_secs(flusher.cfg().plan_commit_s)).await;
+                tokio::time::sleep(Duration::from_secs(flusher.cfg().factory.limits.plan_commit_seconds)).await;
             }
         });
         println!("tirith: http://127.0.0.1:{port}/ (home {})", app.home.display());

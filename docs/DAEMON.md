@@ -13,6 +13,20 @@ The bots' agent finds them natively: Muse reads `.agents/skills`, and the agent'
 A bot may have a model of its own (role `bot-<id>` of `models.rs`, chosen in its card); without one it has the managers'. A routine answer that starts with ∅ (nothing new)
 stays on the page and never reaches the phones (`rooms::to_phones`), so only news does.
 
+## `factory.rs`
+
+The factory file: `factory/factory.toml` and its prompts (`factory/prompts/*.md`) hold what used to be fixed in
+Rust — each agent's flags, the roles with their settings, `[limits]`, `[plan]`, `[cards]` and `[metrics.*]` — read
+as data (docs/FACTORY.md). The loader is strict: an unknown key (`deny_unknown_fields` for `[limits]`, key lists
+for the rest), a role on a missing agent or prompt, or an unknown measure makes a version invalid, and the daemon
+keeps the last good one while the error shows on the page (`factory_error` of `/api/state`) and is told to the
+manager of no project. It loads the repository's `factory/` at run time (`factory` in config.toml points
+elsewhere) and reloads when a file changes or config.toml does, with the embedded copy as the fallback.
+`~/.tirith/config.toml` is laid over it key by key and wins; at daemon start its yesterday's sections are
+rewritten into the factory's names once, with the old text kept as `config.toml.before-factory` (`config.rs`),
+and keys nothing reads are an error the owner sees. A role `extends` another (the lead and the reviewer extend
+the manager), and an agent the factory does not name runs with the `default` agent's flags.
+
 ## `guard.rs`
 
 The commit guard: git hooks in every project that refuse a commit whose message, file names or added lines contain one of the owner's forbidden words (whole word, any case; a word may be a regex). The words come only from
@@ -25,8 +39,8 @@ when the machine has room; a lane whose process ends goes to the merge queue, wh
 
 ## `manager.rs`
 
-The managers: one long-lived agent session per project (stream-json in and out), and one for what belongs to no project. A message goes to the session of its project, which starts with its first message and rests after 30 quiet
-minutes; its text, its tool calls and the end of each turn go straight to that project's chat on the page.
+The managers: one long-lived agent session per project (stream-json in and out), and one for what belongs to no project. A message goes to the session of its project, which starts with its first message and rests after the manager role's quiet
+`idle_minutes`; its text, its tool calls and the end of each turn go straight to that project's chat on the page.
 
 ## `merge.rs`
 
@@ -40,7 +54,7 @@ Health metrics and the CEO.
 
 Every minute code computes the metrics from the daemon's own data (lanes, runs, plans, kv). A metric that
 turns red starts an episode: the mechanical fix when there is one, then one note to the manager. Still red
-`[ceo] review_after_minutes` later, one CEO review runs for that episode: a fresh, independent, read-only
+the reviewer role's `review_after_minutes` later, one CEO review runs for that episode: a fresh, independent, read-only
 session whose answer goes to the owner's chat and to the manager. Back to green ends the episode.
 While everything is green no model is called.
 
@@ -50,9 +64,9 @@ Models per role and the fallback chain.
 
 Roles: "manager" (the chat session), "workers" (lanes) and "ceo" (one-shot review). Each has an agent alias, a model, an effort and a fallback
 chain. The effective setting is the owner's override from the page (kv `models:<role>`), else
-`[models.<role>]` of `config.toml`, else a default. Agents are aliases (`[agents.<alias>]`); the real command
-lives only in config.toml. Optional per alias: `model_flag`, `effort_flag` ("" = none) and `resume_args`
-(`{session}` and `{message}` are filled in); the known aliases have defaults.
+`[roles.<role>]` of `config.toml` (worker, reviewer), else the factory's role. Agents are aliases
+(`[agents.<alias>]`); the real command lives only in config.toml. Optional per alias: `model_flag`, `effort_flag` ("" = none) and `resume_args`
+(`{session}` and `{message}` are filled in); each alias's flags come from the factory.
 
 ## `plan.rs`
 

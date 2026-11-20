@@ -33,14 +33,12 @@ pub fn seed(app: &Shared) {
     let sql = "SELECT summary, lane, kind, COUNT(*), MAX(at) FROM events WHERE kind IN ('net', 'net-blocked') GROUP BY summary, lane, kind";
     let rows = app.query(sql, [], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, u64>(3)?, r.get::<_, String>(4)?)));
     let mut dests = DESTS.lock().unwrap();
-    for (dest, lane, kind, n, at) in rows {
-        let host = dest.rsplit_once(':').map(|(h, _)| h).unwrap_or(&dest).to_string();
-        let d = dests.entry(host).or_default();
-        let counter = if kind == "net" { &mut d.count } else { &mut d.refused };
-        *counter += n;
+    rows.into_iter().for_each(|(dest, lane, kind, n, at)| {
+        let d = dests.entry(dest.rsplit_once(':').map(|(h, _)| h).unwrap_or(&dest).to_string()).or_default();
+        *(if kind == "net" { &mut d.count } else { &mut d.refused }) += n;
         d.last = d.last.clone().max(at);
         d.lanes.insert(lane);
-    }
+    });
 }
 
 /// The destinations, newest first: host, connections, refusals, callers, last seen and the rule blocking it now.
@@ -67,9 +65,7 @@ pub async fn serve(app: Shared) {
             }
             Err(e) => {
                 *STATE.lock().unwrap() = format!("cannot listen on 127.0.0.1:{port}: {e}");
-                if !std::mem::replace(&mut told, true) {
-                    app.event("", "", "error", "proxy", &state(), "");
-                }
+                let _ = (!std::mem::replace(&mut told, true)).then(|| app.event("", "", "error", "proxy", &state(), ""));
                 tokio::time::sleep(Duration::from_secs(10)).await;
             }
         }
@@ -119,10 +115,7 @@ fn record(app: &Shared, who: &str, host: &str, port: u16, rule: Option<&str>) {
         Some(_) => REFUSED.lock().unwrap().insert(key, now_s()).is_none_or(|t| now_s() - t >= 60),
         None => SEEN.lock().unwrap().insert(key),
     };
-    if new {
-        let kind = if rule.is_some() { "net-blocked" } else { "net" };
-        app.event(&lane, &project, kind, "proxy", &format!("{host}:{port}"), "");
-    }
+    let _ = new.then(|| app.event(&lane, &project, if rule.is_some() { "net-blocked" } else { "net" }, "proxy", &format!("{host}:{port}"), ""));
 }
 
 async fn handle(app: Shared, mut c: TcpStream) -> Result<(), String> {
@@ -183,12 +176,10 @@ async fn handle(app: Shared, mut c: TcpStream) -> Result<(), String> {
         c.write_all(b"HTTP/1.1 200 Connection established\r\n\r\n").await.map_err(|e| e.to_string())?;
     } else {
         let mut out = format!("{method} {path} {version}\r\n");
-        for h in &headers {
-            let name = h.split(':').next().unwrap_or("").trim().to_ascii_lowercase();
-            if !(name.starts_with("proxy-") || name == "connection" || name == "keep-alive") {
-                out += &format!("{h}\r\n");
-            }
-        }
+        headers
+            .iter()
+            .filter(|h| !matches!(h.split(':').next().unwrap_or("").trim().to_ascii_lowercase().as_str(), "connection" | "keep-alive") && !h.split(':').next().unwrap_or("").trim().to_ascii_lowercase().starts_with("proxy-"))
+            .for_each(|h| out += &format!("{h}\r\n"));
         out += "Connection: close\r\n\r\n";
         up.write_all(out.as_bytes()).await.map_err(|e| e.to_string())?;
     }
