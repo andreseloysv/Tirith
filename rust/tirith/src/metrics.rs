@@ -194,7 +194,7 @@ fn tick(app: &Shared) {
 }
 
 fn payload(app: &Shared) -> Value {
-    json!({"metrics": BOOK.lock().unwrap().last.as_array().cloned().unwrap_or_default(), "reviews": app.recent("ceo_reviews", &["id", "at", "metric", "text"], None, 10), "reviewing": REVIEWING.load(Ordering::SeqCst)})
+    json!({"metrics": BOOK.lock().unwrap().last.as_array().cloned().unwrap_or_default(), "reviews": app.recent("ceo_reviews", &["id", "at", "metric", "text", "factory", "role_hash"], None, 10), "reviewing": REVIEWING.load(Ordering::SeqCst)})
 }
 
 /// Who reviews a long red stretch, and after how many seconds: the turn role of the delayed `metric.red` route (its `after_minutes`, or the role's `review_after_minutes`); without one, any turn role when asked, and never by itself.
@@ -213,7 +213,8 @@ fn start_review(app: &Shared, role: String, metric: String, why: String) {
         app.emit("review", json!({"running": true}));
         let result = manager::run_turn(&app, &role, "", &brief(&app, &why)).await;
         let text = result.clone().unwrap_or_else(|e| format!("(the review could not run: {e})"));
-        let _ = app.db.lock().unwrap().execute("INSERT INTO ceo_reviews (at, metric, text) VALUES (?1, ?2, ?3)", rusqlite::params![now_iso(), metric, text]);
+        let (factory, role_hash) = app.stamp_for(&role); // the review turn's stamp
+        let _ = app.db.lock().unwrap().execute("INSERT INTO ceo_reviews (at, metric, text, factory, role_hash) VALUES (?1, ?2, ?3, ?4, ?5)", rusqlite::params![now_iso(), metric, text, factory, role_hash]);
         app.chat(&role, &text, "");
         let _ = result.is_ok().then(|| manager::emit_event(&app, "", "review.done", &format!("Review: {text}"), None));
         REVIEWING.store(false, Ordering::SeqCst);
@@ -249,7 +250,7 @@ fn brief(app: &Shared, why: &str) -> String {
 }
 
 pub fn start(app: Shared) {
-    let _ = app.db.lock().unwrap().execute_batch("CREATE TABLE IF NOT EXISTS ceo_reviews (id INTEGER PRIMARY KEY, at TEXT, metric TEXT, text TEXT);");
+    let _ = app.db.lock().unwrap().execute_batch("CREATE TABLE IF NOT EXISTS ceo_reviews (id INTEGER PRIMARY KEY, at TEXT, metric TEXT, text TEXT, factory TEXT NOT NULL DEFAULT '', role_hash TEXT NOT NULL DEFAULT '');");
     tokio::spawn(async move {
         loop {
             tick(&app);

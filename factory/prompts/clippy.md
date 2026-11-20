@@ -1,0 +1,1 @@
+- Before you finish, run `cargo clippy -- -D warnings` and fix every warning: the queue's build stage runs it too.

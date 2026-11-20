@@ -203,9 +203,7 @@ fn updated(app: &Shared, role_name: &str, b: &Value) -> Result<RoleSetting, Stri
 }
 
 fn line(s: &RoleSetting) -> String {
-    let mut out = format!("agent={} model={} effort={}", s.agent, s.model.as_deref().unwrap_or("-"), s.effort.as_deref().unwrap_or("-"));
-    out += &if s.fallback.is_empty() { String::new() } else { format!(" fallback={}", s.fallback.join(",")) };
-    out
+    format!("agent={} model={} effort={}{}", s.agent, s.model.as_deref().unwrap_or("-"), s.effort.as_deref().unwrap_or("-"), if s.fallback.is_empty() { String::new() } else { format!(" fallback={}", s.fallback.join(",")) })
 }
 
 /// Deterministic owner commands, available even when no model can answer.

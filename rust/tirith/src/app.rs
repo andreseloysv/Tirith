@@ -39,6 +39,9 @@ pub struct Lane {
     pub tried: Vec<String>,
     /// Merged alone (its train was red).
     pub solo: bool,
+    /// Its factory stamp: the factory version and the hash of the lane role's setting it was created with.
+    pub factory: String,
+    pub role_hash: String,
     pub created_at: String,
     pub started_at: Option<String>,
     pub ended_at: Option<String>,
@@ -87,9 +90,10 @@ impl App {
         ["logs/lanes", "logs/runs", "briefs", "lanes"].into_iter().for_each(|dir| drop(std::fs::create_dir_all(home.join(dir))));
         let db = Connection::open(home.join("tirith.sqlite3")).expect("open tirith.sqlite3");
         db.execute_batch(include_str!("../assets/schema.sql")).expect("create tables");
-        // Columns added later (each ALTER fails once its column exists). A chat row and an owner card belong to a project; '' is none. A card may carry a waiting lane's question.
+        // Columns added later (each ALTER fails once its column exists). A chat row and an owner card belong to a project; '' is none. A card may carry a waiting lane's question. Every stamped table carries its factory version and role hash.
         let owner = [("owner_items", "project TEXT NOT NULL DEFAULT ''"), ("owner_items", "lane TEXT NOT NULL DEFAULT ''")];
         [("runs", "pipeline TEXT"), ("runs", "sha TEXT"), ("chat", "project TEXT NOT NULL DEFAULT ''")].into_iter().chain(owner).for_each(|(table, col)| drop(db.execute(&format!("ALTER TABLE {table} ADD COLUMN {col}"), [])));
+        ["lanes", "events", "chat", "owner_items", "ceo_reviews"].into_iter().for_each(|t| ["factory", "role_hash"].into_iter().for_each(|c| drop(db.execute(&format!("ALTER TABLE {t} ADD COLUMN {c} TEXT NOT NULL DEFAULT ''"), []))));
         let lanes: BTreeMap<String, Lane> =
             db.prepare("SELECT data FROM lanes").expect("read lanes").query_map([], |r| r.get::<_, String>(0)).expect("read lanes").flatten().filter_map(|s| serde_json::from_str::<Lane>(&s).ok()).map(|l| (l.id.clone(), l)).collect();
         let cfg_mtime = std::fs::metadata(home.join("config.toml")).and_then(|m| m.modified()).ok();
@@ -150,7 +154,7 @@ impl App {
 
     pub fn save_lane(&self, lane: &Lane) {
         let data = serde_json::to_string(lane).unwrap_or_default();
-        let _ = self.db.lock().unwrap().execute("INSERT INTO lanes (id, data) VALUES (?1, ?2) ON CONFLICT(id) DO UPDATE SET data = ?2", params![lane.id, data]);
+        self.insert("INSERT INTO lanes (id, data, factory, role_hash) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(id) DO UPDATE SET data = ?2, factory = ?3, role_hash = ?4", params![lane.id, data, lane.factory, lane.role_hash]);
         self.lanes.lock().unwrap().insert(lane.id.clone(), lane.clone());
         self.emit("lane", json!(lane));
     }
@@ -169,18 +173,45 @@ impl App {
         db.last_insert_rowid()
     }
 
-    pub fn event(&self, lane: &str, project: &str, kind: &str, tool: &str, summary: &str, session: &str) {
-        let at = now_iso();
-        let id = self.insert("INSERT INTO events (at, lane, project, kind, tool, summary, session) VALUES (?1,?2,?3,?4,?5,?6,?7)", params![at, lane, project, kind, tool, summary, session]);
-        self.emit("event", json!({"id": id, "at": at, "lane": lane, "project": project, "kind": kind, "tool": tool, "summary": summary}));
+    /// The conversation of `project` (a project or a bot), or the one of no project when there is no such project (any more).
+    pub fn conv<'a>(&self, project: &'a str) -> &'a str {
+        if self.cfg().project(project).is_some() || crate::bots::bot(self, project).is_some() {
+            project
+        } else {
+            ""
+        }
     }
 
-    /// One row of a project's conversation with its manager (`project` "" is the conversation of no project).
-    pub fn chat(&self, role: &str, text: &str, project: &str) {
-        let project = if self.cfg().project(project).is_some() || crate::bots::bot(self, project).is_some() { project } else { "" }; // a project or bot that is gone
+    /// The factory role of a conversation: a bot's own key, else the `session = "chat"` role of its scope (a project's, or the global one of no project).
+    pub fn chat_role(&self, project: &str) -> String {
+        if crate::bots::bot(self, project).is_some() {
+            return project.to_string();
+        }
+        let (scope, fallback) = if self.cfg().project(project).is_some() { ("project", "manager") } else { ("global", "lead") };
+        self.cfg().factory.find_role("chat", Some(scope)).unwrap_or_else(|| fallback.into())
+    }
+
+    /// The stamp a row made now by `role` carries: (the factory version, a hash of the role's setting with the page's model override for it folded in). A name that is no factory role (the owner, a room, Tirith itself) keeps an empty hash.
+    pub fn stamp_for(&self, role: &str) -> (String, String) {
+        let cfg = self.cfg();
+        (cfg.factory.version.clone(), cfg.factory.role_hash(role, &self.kv(&format!("models:{role}")).unwrap_or_default()))
+    }
+
+    pub fn event(&self, lane: &str, project: &str, kind: &str, tool: &str, summary: &str, session: &str) {
         let at = now_iso();
-        let id = self.insert("INSERT INTO chat (at, role, text, project) VALUES (?1,?2,?3,?4)", params![at, role, text, project]);
-        self.emit("chat", json!({"id": id, "at": at, "role": role, "text": text, "project": project}));
+        let (factory, role_hash) = (self.cfg().factory.version.clone(), self.lane(lane).map(|l| l.role_hash).unwrap_or_default()); // a lane's event carries its lane's stamp
+        let id = self.insert("INSERT INTO events (at, lane, project, kind, tool, summary, session, factory, role_hash) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)", params![at, lane, project, kind, tool, summary, session, factory, role_hash]);
+        self.emit("event", json!({"id": id, "at": at, "lane": lane, "project": project, "kind": kind, "tool": tool, "summary": summary, "factory": factory, "role_hash": role_hash}));
+    }
+
+    /// One row of a project's conversation with its manager (`project` "" is the conversation of no project). A row a role wrote while working (its turn's text and tool calls, a turn role's answer under its name, a bot's routine) carries that role's stamp; every row carries the factory version.
+    pub fn chat(&self, role: &str, text: &str, project: &str) {
+        let project = self.conv(project); // a project or bot that is gone talks in the conversation of no project
+        let at = now_iso();
+        let by = if matches!(role, "manager" | "tool" | "routine") { self.chat_role(project) } else { role.to_string() };
+        let (factory, role_hash) = self.stamp_for(&by);
+        let id = self.insert("INSERT INTO chat (at, role, text, project, factory, role_hash) VALUES (?1,?2,?3,?4,?5,?6)", params![at, role, text, project, factory, role_hash]);
+        self.emit("chat", json!({"id": id, "at": at, "role": role, "text": text, "project": project, "factory": factory, "role_hash": role_hash}));
     }
 
     pub fn kv(&self, key: &str) -> Option<String> {
@@ -202,12 +233,11 @@ impl App {
     /// The rows of a query as JSON objects named by `cols` (numbers and text; anything else is null).
     pub fn objects(&self, sql: &str, args: impl rusqlite::Params, cols: &[&str]) -> Vec<Value> {
         self.query(sql, args, |r| {
-            let mut obj = serde_json::Map::new();
-            for (i, c) in cols.iter().enumerate() {
-                let v = r.get_ref(i)?;
-                obj.insert(c.to_string(), v.as_i64().map(|n| json!(n)).or_else(|_| v.as_str().map(|s| json!(s))).unwrap_or(Value::Null));
-            }
-            Ok(Value::Object(obj))
+            cols.iter()
+                .enumerate()
+                .map(|(i, c)| r.get_ref(i).map(|v| (c.to_string(), v.as_i64().map(|n| json!(n)).or_else(|_| v.as_str().map(|s| json!(s))).unwrap_or(Value::Null))))
+                .collect::<rusqlite::Result<serde_json::Map<String, Value>>>()
+                .map(Value::Object)
         })
     }
 
