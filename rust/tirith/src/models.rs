@@ -1,4 +1,4 @@
-//! Models per role (manager, workers, ceo, brain) and the fallback chain: the owner's override from the page, else `[models.<role>]` of config.toml, else a default.
+//! Models per role (manager, workers, ceo) and the fallback chain: the owner's override from the page, else `[models.<role>]` of config.toml, else a default.
 
 use crate::app::{bad, Shared};
 use crate::client::{call, Flag};
@@ -10,9 +10,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{path::Path, sync::OnceLock};
 
-pub const ROLES: [&str; 4] = ["manager", "workers", "ceo", "brain"];
+pub const ROLES: [&str; 3] = ["manager", "workers", "ceo"];
 const EFFORTS: [&str; 6] = ["low", "medium", "high", "xhigh", "max", "ultra"];
-pub const BRAIN_MODEL: &str = "muse-spark-1.3";
 const PROMPT: &str = "Read the brief at {brief} and do it completely in {workspace}.";
 
 #[derive(Clone, Default, Serialize, Deserialize, PartialEq)]
@@ -45,16 +44,9 @@ pub fn role_with_source(app: &Shared, role: &str) -> (RoleSetting, &'static str)
     let table: Option<toml::Table> = get(&cfg.raw, &["models", role]).or_else(|| (role == "ceo").then(|| get(&cfg.raw, &["ceo"])).flatten());
     let s = |t: &toml::Table, k: &str| t.get(k).and_then(|v| v.as_str()).map(String::from).filter(|v| !v.is_empty());
     match table {
-        Some(t) if role != "ceo" || t.contains_key("model") || t.contains_key("agent") => (
-            RoleSetting {
-                agent: s(&t, "agent").unwrap_or_else(|| if role == "brain" { String::new() } else { default_agent() }),
-                model: s(&t, "model").or_else(|| (role == "brain" && s(&t, "agent").is_none_or(|a| a != "codex")).then(|| BRAIN_MODEL.into())),
-                effort: s(&t, "effort"),
-                fallback: get(&cfg.raw, &["models", role, "fallback"]).unwrap_or_default(),
-            },
-            "config",
-        ),
-        _ if role == "brain" => (RoleSetting { model: Some(BRAIN_MODEL.into()), ..Default::default() }, "default"),
+        Some(t) if role != "ceo" || t.contains_key("model") || t.contains_key("agent") => {
+            (RoleSetting { agent: s(&t, "agent").unwrap_or_else(default_agent), model: s(&t, "model"), effort: s(&t, "effort"), fallback: get(&cfg.raw, &["models", role, "fallback"]).unwrap_or_default() }, "config")
+        }
         _ => (RoleSetting { agent: default_agent(), ..Default::default() }, "default"),
     }
 }
@@ -218,10 +210,7 @@ fn updated(app: &Shared, role_name: &str, b: &Value) -> Result<RoleSetting, Stri
     if let Some(v) = [&s.model, &s.effort].into_iter().flatten().chain(&s.fallback).find(|v| !valid(v)) {
         return Err(format!("'{v}' is not a valid model, effort or fallback entry"));
     }
-    if role_name == "brain" && !s.agent.is_empty() && s.agent != "codex" {
-        return Err("brain agent must be codex or empty (Meta API)".into());
-    }
-    if let Some(alias) = std::iter::once(&s.agent).filter(|a| !a.is_empty() || role_name != "brain").chain(&s.fallback).map(|e| e.split(':').next().unwrap_or("")).find(|a| !cfg.agents.contains_key(*a)) {
+    if let Some(alias) = std::iter::once(&s.agent).chain(&s.fallback).map(|e| e.split(':').next().unwrap_or("")).find(|a| !cfg.agents.contains_key(*a)) {
         return Err(format!("no agent alias '{alias}' in config.toml"));
     }
     if s.agent == "codex" {
@@ -249,7 +238,7 @@ pub fn command(app: &Shared, text: &str) -> Option<Result<String, String>> {
     if !matches!(words.first(), Some(&"/model" | &"/models" | &"/modelo" | &"/modelos")) {
         return None;
     }
-    let help = "Machine-wide models (all projects).\n/models — current settings and Codex models\n/model <manager|workers|ceo|brain|all> <agent>:<model> [effort]\n/model <role> reset — back to config.toml\nExample: /model manager codex (Codex's default model). Changes apply to the next turn or new lanes; running work finishes first.";
+    let help = "Machine-wide models (all projects).\n/models — current settings and Codex models\n/model <manager|workers|ceo|all> <agent>:<model> [effort]\n/model <role> reset — back to config.toml\nExample: /model manager codex (Codex's default model). Changes apply to the next turn or new lanes; running work finishes first.";
     Some((|| {
         if words.len() == 1 || words.get(1) == Some(&"help") {
             let roles = ROLES.iter().map(|r| format!("{r}: {}", line(&role(app, r)))).collect::<Vec<_>>().join("\n");
@@ -283,7 +272,7 @@ pub fn command(app: &Shared, text: &str) -> Option<Result<String, String>> {
         let mut body = json!({});
         if !reset {
             let (agent, model) = words[2].split_once(':').unwrap_or_else(|| if words[2].starts_with("gpt-") { ("codex", words[2]) } else { (words[2], "") });
-            body = json!({"agent": if agent == "meta" { "" } else { agent }, "model": model, "effort": words.get(3).copied().unwrap_or("")});
+            body = json!({"agent": agent, "model": model, "effort": words.get(3).copied().unwrap_or("")});
             // Validate every role before saving any of them.
             for r in &roles {
                 updated(app, r, &body)?;

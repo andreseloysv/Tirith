@@ -12,7 +12,7 @@ Project: {project}. Plan step {step}.
 {others}
 
 Main is {red}.
-{architecture}
+
 ## How you work
 - You are in your own git worktree ({ws}) on branch {branch}. Change files only here.
 - Commit your work on this branch. When you are finished just end your turn: Tirith runs the checks and merges.

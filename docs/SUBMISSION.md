@@ -29,16 +29,7 @@ No servers and no ports: a local collector writes one state file; the page and t
 
 ## How Meta's models are used
 
-- **Muse Spark** (`muse-spark-1.3`, Meta Model API, `POST /chat/completions`) is the product's brain, in `collector/tirith/brain.py`, with seven jobs, each cached by input hash:
-  1. a one-sentence summary of each agent's recent log;
-  2. a detector for things that need the owner;
-  3. an architecture map of a project from its file tree and key files;
-  4. each agent's lasting epithet;
-  5. a one-line summary of each chat room;
-  6. a "needs the owner" check on room messages;
-  7. a short answer to the owner's question about a plan step.
-  The key is read only from the environment (`META_SI_API_KEY`) and is never logged or stored. Without a key everything still works with plain log lines.
-- **Muse Code** is a first-class agent alias (`muse`). `tirith lane run --agent muse` builds its headless `exec --json` command, reads its real output format (captured from a real run, covered by a test), shows its steps live, and uses its final answer as the lane's report. Its hooks install with `tirith hook install --agent muse`, and every rule applies to it. It can be the fallback when another agent is out of credits. Muse Code agents also built part of Tirith (the first collector, CLI, brain client and 3D world); the rest was built with other coding agents after the Muse Code quota ran out.
+- **Muse Code** is a first-class agent alias (`muse`). `tirith lane run --agent muse` builds its headless `exec --json` command, reads its real output format (captured from a real run, covered by a test), shows its steps live, and uses its final answer as the lane's report. Its hooks install with `tirith hook install --agent muse`, and every rule applies to it. It can be the fallback when another agent is out of credits. Muse Code agents also built part of Tirith (the first collector, CLI and 3D world); the rest was built with other coding agents after the Muse Code quota ran out.
 
 ## What's real, and what is not
 
@@ -55,7 +46,6 @@ Everything in the repository. The first commit is dated 2026-10-28, the first da
 ```bash
 git clone https://github.com/andreseloysv/Tirith && cd Tirith
 ./run --demo                 # the page on demo data: no agents, no collector
-export META_SI_API_KEY=...   # optional: switches the Muse Spark brain on
 ./run                        # collector in the background + Tirith in your browser
 ```
 
