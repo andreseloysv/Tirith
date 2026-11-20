@@ -824,6 +824,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [x] Tirith detecta el final de una lane de codex cuando su log trae run.terminal.completed aunque el proceso siga vivo, y la manda a la cola de merge: el 2026-11-14 la lane forest-art-second-pass-docs-art-9728 de caperusitaroja terminó y commiteó (04b0d75) pero siguió en running hasta saltar como atascada (check: `cargo test -q codex_run_completed_ends_lane`)
 - [x] Cuando el disco baja de 5 GB libres, la dieta de disco borra primero las cachés de compilación de ~/.tirith/build/<proyecto> de los proyectos sin lane ni etapa en marcha, antes de pausar el autopilot: el 2026-11-14 thegingerbreadman y caperusitaroja quedaron parados con 2,6 GB libres mientras ~/.tirith/build/tirith ocupaba 4,8 GB sin uso (check: `cargo test -q diskdiet_clears_idle_build_cache`)
 - [x] Traer a main la rama ya terminada `size-limit`, que sube el límite de tamaño del daemon a 6330 líneas para los bots y Muse: en tu rama ejecuta `git merge --no-ff size-limit` y no cambies nada más (check: `grep -q 'le 6330' tirith.toml`)
+- [ ] Traer a main la rama ya terminada `bots`: los bots con rutinas, memoria y skills, y el soporte de Muse como turnos exec de la rama `muse-exec`, que ya contiene. En tu rama ejecuta `git merge --no-ff bots` y no cambies nada más (check: `test -f rust/tirith/src/bots.rs && grep -q exec_session rust/tirith/src/manager.rs`)
 
 ## 18. Salas privadas: hablar con el manager desde el móvil
 
