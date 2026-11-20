@@ -28,9 +28,10 @@ fn default_routes_reproduce_today() {
     // Every call the daemon made when who-hears-what was fixed in Rust, as (to, mode, chat, phone, after_minutes):
     // `notify` was turn+chat+phone, `inform` note+chat+phone, `tell` a turn with no line of its own whose answer
     // reached the phones like every manager message; owner and room messages start turns whose answers do.
+    // Quieter phones (factory step 4): merge.landed, main.green and deploy.done keep chat+note, without phone.
     let f = Factory::default();
     let turn = |to: &str, chat: bool| vec![(to.to_string(), "turn".to_string(), chat, true, None)];
-    let note = |chat: bool| vec![("manager".to_string(), "note".to_string(), chat, true, None)];
+    let note = |chat: bool, phone: bool| vec![("manager".to_string(), "note".to_string(), chat, phone, None)];
     let table: Vec<(&str, Vec<Route>)> = vec![
         ("owner.message", turn("manager", false)),
         ("room.message", turn("manager", false)),
@@ -39,11 +40,11 @@ fn default_routes_reproduce_today() {
         ("lane.not_started", turn("manager", true)),
         ("lane.long", turn("manager", true)),
         ("merge.blocked", turn("manager", true)),
-        ("merge.landed", note(true)),
+        ("merge.landed", note(true, false)),
         ("main.red", turn("manager", true)),
-        ("main.green", note(true)),
+        ("main.green", note(true, false)),
         ("plan.empty", turn("manager", false)),
-        ("deploy.done", note(true)),
+        ("deploy.done", note(true, false)),
         ("deploy.failed", turn("manager", true)),
         ("schedule", turn("manager", false)),
         ("review.done", turn("lead", false)),
