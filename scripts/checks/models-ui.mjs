@@ -46,8 +46,6 @@ agent = "codex"
 agent = "codex"
 [models.ceo]
 agent = "codex"
-[models.brain]
-agent = "codex"
 [network]
 sandbox = false
 proxy_port = 0
@@ -94,12 +92,10 @@ try {
   assert.equal((await api('/api/models')).roles.workers.effort, 'max');
   await panel.getByRole('button', { name: 'CEO', exact: true }).click();
   await choose(panel, 'Astra'); await panel.getByRole('button', { name: 'High', exact: true }).click(); await save();
-  await panel.getByRole('button', { name: 'Brain', exact: true }).click();
-  await choose(panel, 'Luna'); await panel.getByRole('button', { name: 'Medium', exact: true }).click(); await save();
-  assert.deepEqual(Object.values((await api('/api/models')).roles).map(r => r.agent), Array(4).fill('codex'));
+  assert.deepEqual(Object.values((await api('/api/models')).roles).map(r => r.agent), Array(3).fill('codex'));
   await panel.getByRole('button', { name: 'Use configured defaults' }).click();
   await panel.getByText(/Saved on the computer/).waitFor();
-  assert.equal((await api('/api/models')).roles.brain.source, 'config');
+  assert.equal((await api('/api/models')).roles.ceo.source, 'config');
   console.log('PASS: encrypted visual phone controls, all roles, valid efforts, explicit save and reset');
 
   const desktop = await browser.newPage({ viewport: { width: 1440, height: 1000 } });

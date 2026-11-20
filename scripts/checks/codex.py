@@ -229,8 +229,6 @@ agent = "codex"
 agent = "codex"
 [models.ceo]
 agent = "codex"
-[models.brain]
-agent = "codex"
 [network]
 sandbox = false
 proxy_port = 0
@@ -307,16 +305,12 @@ repo = {json.dumps(str(repo))}
     wait(lambda: calls()[-1]["input"].rstrip().endswith("back to Codex"))
     wait(lambda: not api("/api/state")["busy"])
     assert "after provider switch" in calls()[-1]["input"] and "resume" not in calls()[-1]["argv"]
-    # A lane exercises model/effort flags, the Brain CLI, and the actual merge queue.
+    # A lane exercises model/effort flags and the actual merge queue.
     lane = api("/api/lanes", dict(project="sample", step="1", item="Create result.txt"))
     wait(lambda: any(c["role"] == "workers" for c in calls()), 30)
-    wait(lambda: any(c["role"] == "brain" for c in calls()), 15)
     wait(lambda: (repo / "result.txt").exists(), 30)
     saved_lane = next(l for l in api("/api/state")["lanes"] if l["id"] == lane["id"])
     assert saved_lane["model"] == "gpt-test" and saved_lane["session"] == "thread-workers"
-    brain = next(c for c in calls() if c["role"] == "brain")
-    assert "read-only" in brain["argv"] and "--ephemeral" in brain["argv"]
-    assert brain["argv"][:3] == ["--profile", "test-browser", "exec"]
     worker = next(c for c in calls() if c["role"] == "workers")
     assert worker["argv"][worker["argv"].index("--model")+1] == "gpt-test"
     assert '--config=model_reasoning_effort="high"' in worker["argv"]
@@ -324,7 +318,7 @@ repo = {json.dumps(str(repo))}
     # The merge also schedules a plan-finished notification for the manager after two seconds.
     wait(lambda: any("The plan has no open item left" in c["input"] for c in calls()), 10)
     wait(lambda: not api("/api/state")["busy"])
-    print("PASS: model commands, manager turns, lane merge and Brain", flush=True)
+    print("PASS: model commands, manager turns and lane merge", flush=True)
     # Pair through the real signed and encrypted room protocol, then change settings.
     room = api("/api/rooms", dict(project="sample", title="Phone check"))
     rid = room["id"]
@@ -378,7 +372,7 @@ repo = {json.dumps(str(repo))}
     wait(lambda: roles() == before)
     chat("/model workers reset")
     assert roles()["workers"]["source"] == "config"
-    print("PASS: catalog, all roles, validation, queue, resume, stop, failure, lane merge, Brain, encrypted phone, peer isolation, CEO, persistence, reset", flush=True)
+    print("PASS: catalog, all roles, validation, queue, resume, stop, failure, lane merge, encrypted phone, peer isolation, CEO, persistence, reset", flush=True)
     if "--keep" in sys.argv:
         print(f"Preview: {base} — artifacts: {HOME}", flush=True)
         while not (HOME / "stop").exists():
