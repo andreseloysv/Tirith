@@ -7,6 +7,7 @@ import { ICON, Icon, ACTIVE, route, go } from './common.js';
 import { Overview } from './views/overview.js';
 import { Pipelines } from './views/pipelines.js';
 import { Agents } from './views/agents.js';
+import { Bots } from './views/bots.js';
 import { Rooms } from './views/rooms.js';
 import { Access } from './views/access.js';
 import { Settings } from './views/settings.js';
@@ -16,6 +17,7 @@ const VIEWS = [
   ['overview', 'Overview', Overview],
   ['pipelines', 'Pipelines', Pipelines],
   ['agents', 'Agents', Agents],
+  ['bots', 'Bots', Bots],
   ['rooms', 'Rooms', Rooms],
   ['accesos', 'Access', Access],
   ['settings', 'Settings', Settings],
