@@ -1,4 +1,4 @@
-//! `~/.tirith/config.toml` (projects, agent aliases, this machine's overlay on the factory) and each project's `tirith.toml` (plan file, checks, lane excludes, extra rules). Unknown keys are an error the owner sees, never silently ignored; yesterday's sections are rewritten into the factory's names once, with the old file kept as `config.toml.before-factory`.
+//! `~/.tirith/config.toml` (projects, agent aliases, this machine's overlay on the factory) and each project's `tirith.toml` (plan file, checks, lane excludes, extra rules). Unknown keys are an error the owner sees, never silently ignored; yesterday's sections are read in memory under the factory's names, the file itself untouched.
 
 use serde::{de::DeserializeOwned, Deserialize};
 use std::path::{Path, PathBuf};
@@ -92,16 +92,6 @@ pub fn migrate(t: &mut toml::Table) -> bool {
         }
     }
     moved
-}
-
-/// Once, at start: `config.toml` is rewritten with its sections under the new names and the old text kept next to it. A file already rewritten (the copy exists), or one nothing moves in, is left alone.
-pub fn migrate_file() {
-    let (path, copy) = (tirith_home().join("config.toml"), tirith_home().join("config.toml.before-factory"));
-    let Ok(text) = std::fs::read_to_string(&path) else { return };
-    let rewritten = text.parse::<toml::Table>().ok().and_then(|mut t| migrate(&mut t).then(|| toml::to_string(&t).ok()).flatten());
-    if let Some(out) = rewritten.filter(|_| !copy.exists()) {
-        let _ = std::fs::write(&copy, &text).map(|_| std::fs::write(&path, out));
-    }
 }
 
 impl Config {
