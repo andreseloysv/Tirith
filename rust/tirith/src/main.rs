@@ -2,6 +2,7 @@
 
 mod app;
 mod attach;
+mod bots;
 mod brain;
 mod client;
 mod codex;
@@ -26,7 +27,7 @@ use std::{io::Read, time::Duration};
 const USAGE: &str = include_str!("../assets/usage.txt");
 
 type ModuleCli = fn(&[&str], client::Flag) -> Option<Result<(), String>>;
-const MODULE_CLI: [ModuleCli; 5] = [rooms::cli, sandbox::cli, models::cli, guard::cli, projects::cli];
+const MODULE_CLI: [ModuleCli; 6] = [rooms::cli, sandbox::cli, models::cli, guard::cli, projects::cli, bots::cli];
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -182,7 +183,7 @@ fn serve() -> Result<(), String> {
         let app = app::App::open();
         let port = app.cfg().port;
         let listener = tokio::net::TcpListener::bind(("127.0.0.1", port)).await.map_err(|e| format!("port {port} is taken (is tirith already running?): {e}"))?;
-        for start in [sandbox::start, rooms::start, brain::start, guard::start, metrics::start] {
+        for start in [sandbox::start, rooms::start, brain::start, guard::start, metrics::start, bots::start] {
             start(app.clone());
         }
         tokio::spawn(lanes::scheduler(app.clone()));

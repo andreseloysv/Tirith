@@ -1,7 +1,7 @@
 //! The managers: one long-lived agent session per project (and one for what belongs to no project); its text, tool calls and turn ends go straight to that project's chat.
 
 use crate::app::{kill_group, now_iso, Shared};
-use crate::{models, rooms, rules, sandbox};
+use crate::{bots, models, rooms, rules, sandbox};
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet};
 use std::{process::Stdio, sync::Mutex, time::Duration};
@@ -16,7 +16,7 @@ const REST: &str = "This conversation is not about one project: it gets the heal
 
 fn prompt(app: &Shared, project: &str) -> String {
     let scope = app.cfg().project(project).map_or(REST.into(), |p| ONE.replace("{id}", &p.id).replace("{repo}", &p.repo().display().to_string()));
-    format!("{PROMPT}\n{scope}")
+    bots::prompt(app, project).unwrap_or(format!("{PROMPT}\n{scope}"))
 }
 
 /// One conversation: a project's (under its id) or the one of no project (under "").
@@ -50,9 +50,13 @@ fn set_busy(app: &Shared, project: &str, t: &mut Talk, on: bool) {
     app.emit("busy", json!({"project": project, "on": on}));
 }
 
-/// The conversation of `project`: its own, or the one of no project when there is no such project (any more).
+/// The conversation of `project` (or of a bot): its own, or the one of no project when there is no such project (any more).
 pub(crate) fn here<'a>(app: &Shared, project: &'a str) -> &'a str {
-    app.cfg().project(project).map_or("", |_| project)
+    if app.cfg().project(project).is_some() || bots::bot(app, project).is_some() {
+        project
+    } else {
+        ""
+    }
 }
 
 fn report(app: &Shared, project: &str, text: &str) {
@@ -66,12 +70,13 @@ fn known(app: &Shared, project: &str) -> Result<(), String> {
 
 /// Hands the conversation its waiting reports and `text` as one message; its session starts when none runs.
 fn deliver(app: &Shared, project: &str, text: &str) {
+    let memory = bots::context(app, project); // a bot's memory, read at every turn
     let start = talk(project, |t| {
-        let mut all: Vec<String> = std::mem::take(&mut t.notes).into_iter().map(|n| format!("[tirith] {n}")).collect();
-        all.extend((!text.is_empty()).then(|| text.to_string()));
-        if all.is_empty() {
+        if t.notes.is_empty() && text.is_empty() {
             return false;
         }
+        let notes = std::mem::take(&mut t.notes).into_iter().map(|n| format!("[tirith] {n}"));
+        let all: Vec<String> = memory.into_iter().chain(notes).chain((!text.is_empty()).then(|| text.to_string())).collect();
         let line = json!({"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": all.join("\n\n")}]}}).to_string();
         if !t.stale && t.tx.as_ref().is_some_and(|tx| tx.send(line.clone()).is_ok()) {
             set_busy(app, project, t, true);
