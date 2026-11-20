@@ -1,19 +1,18 @@
-// The manager chat: the old page's right column (v-manager.js + livesteps.js), same markup and classes.
-// It shows ONE conversation: the selected project's with its own manager, or (no project selected) the one of no
-// project, where health reports, the CEO's reviews and questions across projects live. Rows ({id, at, role, text,
-// project}) come from useTalk(project); a run of manager/tool rows is one turn of the manager, drawn CLI-style
-// (livesteps) with its final text as a markdown bubble. Owner messages may list attached files (the daemon appends
-// them to the text); pictures show as thumbnails.
+// The manager chat. It shows ONE conversation: the selected project's with its own manager, a bot's, or (no project
+// selected) the one of no project, where health reports, the CEO's reviews and questions across projects live. Rows
+// ({id, at, role, text, project}) come from useTalk(project); a run of manager/tool rows is one turn. The owner never sees
+// its commands: while it runs, one tiny line says in plain words what it is doing (intent.js); once it ended, only its
+// answer shows. An answer that starts with ∅ (nothing new) is a quiet line. Owner messages may list attached files
+// (the daemon appends them to the text); pictures show as thumbnails.
 import { html, Component, useState, useEffect, useLayoutEffect, useRef, useMemo } from '../../vendor/preact-htm.js';
 import { useStore, useTalk, api } from '../store.js';
 import { ChatModels } from './chat-models.js';
-import { clockTime, dur, elapsed, Span } from '../common.js';
+import { clockTime } from '../common.js';
+import { intentOf } from '../intent.js';
 import { md, esc, boldLead, ctxHtml } from '../md.js';
 import { Need } from './need.js';
 
 const SHOWN = 200;        /* messages drawn at first; "Show earlier" adds as many */
-const STEPS_LIVE = 8;     /* steps of a running turn on screen */
-const DIFF_SHOWN = 20;
 const PIC_MAX = 6, FILE_BYTES = 25 * 1024 * 1024;
 const PIC_EXT = /\.(png|jpe?g|gif|webp)$/i;
 const ATTACHED = '\n\nAttached files (open them with your file-reading tool):\n';
@@ -83,54 +82,29 @@ function group(rows) {
   return out;
 }
 
-/** The steps of a turn and its answer: the manager's texts after the last tool call (only once it ended). */
-function splitTurn(rows, running) {
+/** What a turn shows once it ended: its texts after the last tool call, else its last text (so words said before a
+    final step are not lost); nothing while it runs. */
+function answerOf(rows, running) {
+  if (running) return [];
   let last = -1;
   rows.forEach((r, i) => { if (r.role === 'tool') last = i; });
-  if (running) return { steps: rows, answer: [] };
-  return { steps: rows.slice(0, last + 1), answer: rows.slice(last + 1) };
+  const after = rows.slice(last + 1);
+  return after.length ? after : rows.filter((r) => r.role === 'manager').slice(-1);
+}
+/** An answer with nothing new: one quiet line (it stays here and never reaches the phone). */
+export const quiet = (text) => /^\s*∅/.test(String(text || ''));
+
+/** The rows a conversation shows as messages of its agent (answers of ended turns, Tirith's notes), quiet ones left
+    out: what the unread badges count. `running`: its last turn still runs. */
+export function shownAnswers(rows, running) {
+  const items = group(rows);
+  return items.flatMap((it, i) => (it.kind === 'turn' ? answerOf(it.rows, running && i === items.length - 1) : it.m.role === 'tirith' ? [it.m] : []))
+    .filter((r) => !quiet(r.text));
 }
 
-/* ---------- one tool call, CLI style ---------- */
-/** "Read: docs/TODO.md" -> "Read docs/TODO.md"; "Grep: x" -> 'Grep "x"'; others stay as the daemon wrote them. */
-function toolLine(text) {
-  const m = /^(\w+): ([\s\S]*)$/.exec(text);
-  if (!m) return text;
-  const [, name, arg] = m;
-  if (/^(Read|Edit|MultiEdit|Write|NotebookEdit|Glob|LS|WebFetch)$/.test(name)) return `${name} ${arg}`;
-  if (name === 'Grep') return `Grep "${arg}"`;
-  return text;
-}
-/** A tool text whose later lines are +/- lines: the diff rows, else null. */
-function diffOf(text) {
-  const lines = String(text).split('\n');
-  if (lines.length < 2) return null;
-  const rows = lines.slice(1).filter((l) => l !== '');
-  if (!rows.length || !rows.every((l) => /^[+-]/.test(l))) return null;
-  const path = (/^\w+:? (\S+)/.exec(lines[0]) || [])[1] || '';
-  return { head: lines[0], path, rows: rows.map((l) => [l[0], l.slice(1).replace(/^ /, '')]) };
-}
-
-function Diff({ d }) {
-  const [open, setOpen] = useState(false);
-  const shown = open ? d.rows : d.rows.slice(0, DIFF_SHOWN);
-  const adds = d.rows.filter((r) => r[0] === '+').length, dels = d.rows.length - adds;
-  return html`<div class="ls-diff"><div class="ls-dh">${d.path} <span class="ls-dn">+${adds} −${dels}</span></div>
-    ${shown.map((r) => html`<div class=${`ls-dl ${r[0] === '+' ? 'add' : 'del'}`}><span class="ls-sg">${r[0] === '+' ? '+' : '−'}</span>${r[1]}</div>`)}
-    ${d.rows.length > DIFF_SHOWN ? html`<button type="button" class="ls-more" onClick=${() => setOpen(!open)}>${open ? 'collapse' : `show all ${d.rows.length} lines`}</button>` : null}</div>`;
-}
-
-function Step({ r, typing }) {
-  if (r.role === 'tool') {
-    const d = diffOf(r.text);
-    return html`<li class="ls-tool"><span class="ls-dot">●</span><span class="ls-t">${toolLine(d ? d.head : r.text)}${d ? html`<${Diff} d=${d} />` : null}</span></li>`;
-  }
-  return html`<li class=${`ls-say${typing ? ' typing' : ''}`}><span class="ls-t">${r.text}${typing ? html`<span class="ls-cur" aria-hidden="true">▍</span>` : null}</span></li>`;
-}
-
-function Working({ start, onStop, who }) {
-  return html`<div class="ls-line" role="status"><span class="ls-spin" aria-hidden="true"></span>${who || 'Manager'} is working · <${Span} start=${start} />
-    <button type="button" class="ls-stop" onClick=${onStop} title="Stop this turn (Esc)">Stop</button></div>`;
+/** While a turn runs: one tiny line with what it is doing, in plain words. */
+function Intent({ who, step }) {
+  return html`<div class="mc-intent" role="status" aria-live="polite"><i class="mc-pulse" aria-hidden="true"></i>${who ? html`<b>${who}</b>` : null}<span>${intentOf(step)}…</span></div>`;
 }
 
 /* ---------- messages ---------- */
@@ -183,8 +157,9 @@ const Msg = pure(({ m, project, projects, onZoom, open, ended }) => {
   /* a merge reads as one line; in the conversation of no project (rows from before the split) it names its project */
   if (merged) text = `On main${merged[1] === project ? '' : ` of ${projName(projects, merged[1])}`} (\`${merged[2]}\`): ${merged[3].replace(CHECKS, '')}`;
   if (m.role === 'room') {
-    const r = /^(.+?) \((.+?)\): ([\s\S]*)$/.exec(text);
-    if (r) { ctx = `${r[1]} · room ${r[2]}`; text = r[3]; } else ctx = 'Room';
+    /* "author (room): text"; the author of a paired phone reads "name (the owner's paired phone)" */
+    const r = /^(.*) \(([^()]*)\): ([\s\S]*)$/.exec(text);
+    if (r) { ctx = /paired phone\)$/.test(r[1]) ? 'Your phone' : r[1]; text = r[3]; } else ctx = 'Room';
     cls = 'mgr room';
   } else if (m.role === 'ceo') { ctx = 'CEO review'; cls = 'mgr ceo'; }
   else if (m.role !== 'tirith') { ctx = m.role; }
@@ -192,27 +167,14 @@ const Msg = pure(({ m, project, projects, onZoom, open, ended }) => {
     <div class="mc-meta" dangerouslySetInnerHTML=${{ __html: ctxHtml(ctx) + ' · ' + esc(time) }} /></div>`;
 }, (a, b) => a.m === b.m && a.projects === b.projects && a.open === b.open && a.ended === b.ended);
 
-/** One turn of the manager: its steps (live while running, a summary line once ended) and its answer. */
-const Turn = pure(({ rows, running, start, onStop, who }) => {
-  const [open, setOpen] = useState(false);
-  const { steps, answer } = splitTurn(rows, running);
-  let block = null;
-  if (running) {
-    const tail = steps.slice(-STEPS_LIVE), last = steps[steps.length - 1];
-    block = html`<div class="livesteps run">
-      ${tail.length ? html`<ul class="ls-list" aria-live="polite">${tail.map((r) => html`<${Step} key=${r.id} r=${r} typing=${r === last && r.role === 'manager'} />`)}</ul>` : null}
-      <${Working} start=${start} onStop=${onStop} who=${who} /></div>`;
-  } else if (steps.length) {
-    const end = answer.length ? answer[answer.length - 1].at : steps[steps.length - 1].at;
-    const total = elapsed(start || steps[0].at, end);
-    block = html`<div class=${`livesteps done${open ? ' open' : ''}`}>
-      <button type="button" class="ls-sum" aria-expanded=${open} onClick=${() => setOpen(!open)}>
-        ${steps.length} ${steps.length === 1 ? 'step' : 'steps'} · ${dur(total)} · <span class="ls-show">${open ? 'hide' : 'show'}</span></button>
-      ${open ? html`<ul class="ls-list">${steps.map((r) => html`<${Step} key=${r.id} r=${r} />`)}</ul>` : null}</div>`;
-  }
-  return html`${block}${answer.map((r) => html`<div class="mc-m mgr" key=${r.id}><div class="mc-b md" dangerouslySetInnerHTML=${{ __html: mdOf(r.id, r.text) }} />
-    <div class="mc-meta" dangerouslySetInnerHTML=${{ __html: ctxHtml(who || 'Manager') + ' · ' + esc(clockTime(r.at)) }} /></div>`)}`;
-}, (a, b) => a.k === b.k && a.n === b.n && a.running === b.running && a.start === b.start);
+/** One turn: the tiny intent line while it runs, then only its answer. */
+const Turn = pure(({ rows, running, who }) => {
+  if (running) return html`<${Intent} who=${who} step=${rows[rows.length - 1]} />`;
+  return html`${answerOf(rows, false).map((r) => (quiet(r.text)
+    ? html`<div class="mc-ev quiet" key=${r.id} title=${clockTime(r.at)}><span>${r.text.replace(/^\s*∅\s*/, '')}</span></div>`
+    : html`<div class="mc-m mgr" key=${r.id}><div class="mc-b md" dangerouslySetInnerHTML=${{ __html: mdOf(r.id, r.text) }} />
+      <div class="mc-meta" dangerouslySetInnerHTML=${{ __html: ctxHtml(who || 'Manager') + ' · ' + esc(clockTime(r.at)) }} /></div>`))}`;
+}, (a, b) => a.k === b.k && a.n === b.n && a.running === b.running);
 
 /** A message sent from this page that the daemon has not shown yet (sending) or refused (failed). */
 function Local({ o, onRetry, onCopy }) {
@@ -405,20 +367,15 @@ export function Chat({ project = '', who = '', hint = '', models = true }) {
   const cardOf = (m) => { const c = CARD.exec(m.text); return (c && s.owner.find((o) => o.id === c[1])) || null; };
   const lastItem = items[items.length - 1];
   const runningKey = busy && lastItem && lastItem.kind === 'turn' ? lastItem.key : null;
-  /* start of the running turn: the message that started it */
-  const trigger = (i) => { for (let k = i - 1; k >= 0; k--) if (items[k].kind === 'msg') return items[k].m.at; return null; };
-  const rows = items.map((it, i) => (it.kind === 'msg'
+  const rows = items.map((it) => (it.kind === 'msg'
     ? html`<${Msg} key=${it.key} m=${it.m} project=${project} projects=${s.projects} onZoom=${setZoom} open=${it.m.role === 'card' ? cardOf(it.m) : null} ended=${it.m.role === 'card' ? s.ended[(CARD.exec(it.m.text) || [])[1]] : null} />`
-    : html`<${Turn} key=${it.key} k=${it.key} rows=${it.rows} n=${it.rows.length} running=${it.key === runningKey}
-        start=${trigger(i) || it.rows[0].at} onStop=${interrupt} who=${who} />`));
-  /* busy but no output yet: the working line under the newest message */
-  const pending = busy && !runningKey && lastItem
-    ? html`<div class="livesteps run"><${Working} start=${lastItem.kind === 'msg' ? lastItem.m.at : null} onStop=${interrupt} who=${who} /></div>` : null;
+    : html`<${Turn} key=${it.key} k=${it.key} rows=${it.rows} n=${it.rows.length} running=${it.key === runningKey} who=${who} />`));
+  /* busy but no output yet: the tiny line under the newest message */
+  const pending = busy && !runningKey && lastItem ? html`<${Intent} who=${who} step=${null} />` : null;
 
   return html`<section class=${`mchat${drag ? ' drop' : ''}`}>
     <div class="mc-head"><h2>${who || html`Manager <span class="mc-of">${project ? name : 'all projects'}</span>`}</h2>
-      ${busy ? html`<span class="mc-presence work" role="status">Working…</span>
-        <button class="mc-stop" type="button" onClick=${interrupt} title="Stop the current turn (Esc)">Stop</button>` : null}</div>
+      ${busy ? html`<button class="mc-stop" type="button" onClick=${interrupt} title="Stop the current turn (Esc)">Stop</button>` : null}</div>
     <div class="mc-log" id="mc-log" ref=${log} onScroll=${onScroll}>
       ${hidden ? html`<button type="button" class="mc-earlier" onClick=${() => { const el = log.current; stick.current = false; anchor.current = el.scrollHeight - el.scrollTop; setShown(shown + SHOWN); }}>Show earlier (${hidden})</button>` : null}
       ${talk.error && !talk.loaded ? html`<div class="ierr mc-note">${/not found|not allowed/i.test(talk.error.message)

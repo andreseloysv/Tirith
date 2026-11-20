@@ -9,6 +9,7 @@ import { Chat } from './chat.js';
 import { Plan } from './overview/plan.js';
 import { memo, Svg, Avatar, Rich, CHEV, REFRESH, clip, hit } from './overview/bits.js';
 import { Need, openCards } from './need.js';
+import { intentOf } from '../intent.js';
 
 /* ---------- status: metrics and the CEO ---------- */
 const num = (v) => (v == null ? '–' : Number.isInteger(v) ? String(v) : (Math.round(v * 10) / 10).toString());
@@ -140,7 +141,7 @@ function Agents({ lanes, events, projects, project, q, needs }) {
   const act = lanes.filter((l) => ACTIVE.includes(l.status) && (!project || l.project === project) && hit(q, l.item, l.id, l.agent, l.project))
     .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
   const last = {};
-  for (let i = events.length - 1; i >= 0; i--) { const e = events[i]; if (e.lane && !last[e.lane] && e.summary) last[e.lane] = e.summary; }
+  for (let i = events.length - 1; i >= 0; i--) { const e = events[i]; if (e.lane && !last[e.lane] && e.summary) last[e.lane] = `${intentOf(e)}…`; }
   const pname = (id) => (project ? '' : (projects.find((x) => x.id === id) || {}).name || id);
   if (project && !act.length) return null;
   return html`<section><h2>Working agents <span class="n">${act.length}</span></h2>

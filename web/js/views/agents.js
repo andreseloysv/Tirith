@@ -8,6 +8,7 @@ import { Md, MdInline } from './boards/md.js';
 import { LogView } from './boards/logview.js';
 import { pipeName, laneIds, StageChip, glyph, sClass, startMs } from './boards/pipe.js';
 import { Need, openCards } from './need.js';
+import { intentOf } from '../intent.js';
 
 const DAY = 86400000;
 const CAP = 30;
@@ -76,7 +77,7 @@ function LaneCard({ a, sel, color, projName, onOpen, doing, q }) {
   const head = html`<span class="ahead"><${Avatar} a=${a} color=${color} /><span class="aname"><b title=${a.agent}>${a.agent || 'agent'}</b>
     <span class="pill" title=${a.id}>${a.model || a.id}</span></span></span>`;
   const now = q ? html`<span class="anow ask"><i class="pdot2"></i>${forYou(q) ? html`<b>For you: </b>` : null}<${MdInline} text=${q.question} /></span>`
-    : work && doing ? html`<span class=${`anow${live(a) ? ' live' : ''}`} title=${doing.summary}><i class="pdot2"></i><span class="md">${doing.summary}</span></span>`
+    : work && doing ? html`<span class=${`anow${live(a) ? ' live' : ''}`}><i class="pdot2"></i><span class="md">${intentOf(doing)}…</span></span>`
     : (work || a.status === 'failed') && a.note ? html`<span class=${`anow${live(a) ? ' live' : ''}${a.status === 'failed' ? ' bad' : ''}`}><i class="pdot2"></i><${MdInline} text=${a.note} /></span>` : null;
   return html`<button class=${`card acard${work ? ' work' : ''}${sel ? ' sel' : ''}`} onClick=${() => onOpen(a.id)}>
     ${head}<span class="afeat">${itemText(a.item)}</span>${now}

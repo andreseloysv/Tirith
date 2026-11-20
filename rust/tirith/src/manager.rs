@@ -356,7 +356,8 @@ pub fn control_reply(msg: &Value, behavior: Value) -> String {
 
 /// One session of a conversation, until it ends or rests. Err when it never got ready: its messages wait again.
 async fn session(app: &Shared, project: &str) -> Result<(), String> {
-    let alias = models::role(app, "manager").agent;
+    let role = if project.starts_with("bot-") { project } else { "manager" }; // a bot may have a model of its own
+    let alias = models::role(app, role).agent;
     if alias == "codex" || alias == "muse" {
         return exec_session(app, project, alias == "muse").await;
     }
@@ -364,7 +365,7 @@ async fn session(app: &Shared, project: &str) -> Result<(), String> {
     let key = session_key(app, project, &alias);
     let resumed = app.kv(&key);
     let history = resumed.is_none().then(|| history(app, project));
-    let mut cmd = models::chat_argv(app, "manager", resumed.as_deref())?;
+    let mut cmd = models::chat_argv(app, role, resumed.as_deref())?;
     cmd.argv.extend(["--append-system-prompt".into(), prompt(app, project)]);
     let (mut child, mut stdin, stdout) = spawn_chat(app, "manager", project, cmd.argv)?;
     let pid = child.id().unwrap_or(0);
