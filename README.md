@@ -165,8 +165,9 @@ Re-running setup refreshes the installation and keeps timestamped backups of cha
 
 ### The factory and the configuration file
 
-How the factory runs — each agent's flags, the roles (manager, lead, worker, reviewer) with their prompts, the
-limits, the plan words, the card kinds and the health measures with their targets — is data, not code:
+How the factory runs — each agent's flags, the roles (manager, lead, worker, reviewer) with their prompts, who
+hears each event (a lane failed, a merge landed, a measure turned red: as a turn or a note, in the chat, on your
+phone), the limits, the plan words, the card kinds and the health measures with their targets — is data, not code:
 `factory/factory.toml` and `factory/prompts/` in this repository (see `docs/FACTORY.md`). The daemon embeds them
 as its fallback, reloads them when they change (no rebuild, no restart), and keeps the last good version when a
 new one is invalid, with the error on the page.

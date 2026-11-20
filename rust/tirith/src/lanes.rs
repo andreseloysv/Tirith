@@ -279,7 +279,7 @@ pub async fn scheduler(app: Shared) {
         let cfg = app.cfg();
         if cfg.error != said_error {
             said_error.clone_from(&cfg.error);
-            said_error.iter().for_each(|e| manager::notify(&app, "", &format!("Configuration: {e}")));
+            said_error.iter().for_each(|e| manager::emit_event(&app, "", "factory.invalid", &format!("Configuration: {e}"), None));
         }
         let lim = &cfg.factory.limits;
         let load = load_per_core();
@@ -313,7 +313,8 @@ pub async fn scheduler(app: Shared) {
             if l.status == "running" && long_running_due(l.started_at.as_deref(), now_s(), lim.long_running_minutes, app.kv(&key).is_some()) {
                 app.set_kv(&key, Some("1"));
                 let cmds = last_commands(&text, 5).iter().map(|c| format!("- {c}")).collect::<Vec<_>>().join("\n");
-                manager::notify(&app, &l.project, &format!("lane {} has been running for more than {} min. Check that it advances or whether it waits on something stuck. Its last commands:\n{cmds}", l.id, lim.long_running_minutes));
+                let text = format!("lane {} has been running for more than {} min. Check that it advances or whether it waits on something stuck. Its last commands:\n{cmds}", l.id, lim.long_running_minutes);
+                manager::emit_event(&app, &l.project, "lane.long", &text, None);
             }
             if l.status == "running" && now_s().saturating_sub(l.last_activity).min(quiet) > lim.inactivity_minutes * 60 {
                 kill_group(l.pid.unwrap_or(0), libc::SIGKILL);
@@ -343,7 +344,7 @@ pub async fn scheduler(app: Shared) {
             Ok(()) => app.sched_wake.notify_one(),
             Err(e) => {
                 app.update_lane(&next.id, |x| (x.status, x.note, x.ended_at) = ("failed".into(), e.clone(), Some(now_iso())));
-                manager::notify(&app, &next.project, &format!("lane {} could not start: {e}", next.id));
+                manager::emit_event(&app, &next.project, "lane.not_started", &format!("lane {} could not start: {e}", next.id), None);
             }
         }
     }
@@ -523,11 +524,11 @@ async fn ended(app: &Shared, id: &str, code: Option<i32>) {
             }
         });
         if next.is_none() {
-            manager::notify(app, &lane.project, &format!("lane {id} ({}: {}) failed: out of credits on every agent of the workers role", lane.project, lane.item));
+            manager::emit_event(app, &lane.project, "lane.failed", &format!("lane {id} ({}: {}) failed: out of credits on every agent of the workers role", lane.project, lane.item), None);
         }
     } else if lane.status == "running" && no_commits(app, &lane).await && plan::find(app, &lane.project, &lane.step, &lane.item).is_none_or(|i| i.check.is_none()) {
         app.update_lane(id, |l| (l.pid, l.ended_at, l.status, l.note) = (None, Some(now_iso()), "failed".into(), format!("ended without commits (exit {}): nothing to merge", code.map(|c| c.to_string()).unwrap_or("?".into()))));
-        manager::notify(app, &lane.project, &format!("lane {id} ({}: {}) failed: it ended without commits, nothing to merge", lane.project, lane.item));
+        manager::emit_event(app, &lane.project, "lane.failed", &format!("lane {id} ({}: {}) failed: it ended without commits, nothing to merge", lane.project, lane.item), None);
     } else {
         app.update_lane(id, |l| {
             l.pid = None;
@@ -578,7 +579,7 @@ pub fn ask(app: &Shared, id: &str, question: &str) -> Result<Lane, String> {
     });
     let (q, owner) = (question.trim(), format!("tirith ask-owner --lane {id} --kind <kind> \"<the question, in the owner's words>\""));
     let told = format!("lane {id} ({}: {}) asks: {q}\nAnswer with: tirith answer {id} \"<answer>\". When only the owner can answer, ask them with {owner}: their answer goes straight to the lane.", lane.project, lane.item);
-    manager::notify_as(app, &lane.project, &format!("lane {id} asks the manager: {q}"), &told);
+    manager::emit_event(app, &lane.project, "lane.asked", &format!("lane {id} asks the manager: {q}"), Some(&told));
     updated.ok_or("lane vanished".into())
 }
 
@@ -663,7 +664,7 @@ pub fn send_back(app: &Shared, lane: &Lane, reason: &str) {
             l.status = "failed".into();
             l.note = reason.chars().take(2000).collect();
         });
-        manager::notify(app, &lane.project, &format!("lane {} ({}: {}) failed after {} tries: {}", lane.id, lane.project, lane.item, lane.attempts + 1, reason.lines().next().unwrap_or("")));
+        manager::emit_event(app, &lane.project, "lane.failed", &format!("lane {} ({}: {}) failed after {} tries: {}", lane.id, lane.project, lane.item, lane.attempts + 1, reason.lines().next().unwrap_or("")), None);
         return;
     }
     app.update_lane(&lane.id, |l| {

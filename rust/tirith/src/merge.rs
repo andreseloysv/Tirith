@@ -255,11 +255,11 @@ async fn train(app: &Shared, batch: Vec<Lane>) {
         Err(e) if disk_full(&e) => {
             // Out of disk is not the lanes' fault: they leave the queue (no slot held) and wait for space.
             batch.iter().for_each(|l| drop(app.update_lane(&l.id, |x| (x.status, x.note) = ("waiting-disk".into(), "the merge worktree could not be made: no space left on device".into()))));
-            return manager::notify(app, &pid, &format!("the merge of {pid} waits for disk: {e}"));
+            return manager::emit_event(app, &pid, "merge.blocked", &format!("the merge of {pid} waits for disk: {e}"), None);
         }
         Err(e) => {
             batch.iter().for_each(|l| drop(app.update_lane(&l.id, |x| x.status = "failed".into())));
-            return manager::notify(app, &pid, &format!("the merge slot of {pid} is broken: {e}"));
+            return manager::emit_event(app, &pid, "merge.blocked", &format!("the merge slot of {pid} is broken: {e}"), None);
         }
     };
     let ids: Vec<&str> = batch.iter().map(|l| l.id.as_str()).collect();
@@ -311,7 +311,7 @@ async fn train(app: &Shared, batch: Vec<Lane>) {
                     app.emit("plan", json!({"project": pid}));
                     requeue(app, &[lane], true, "main is red: waits for a green main");
                     if was.is_none() {
-                        manager::notify(app, &pid, &format!("main of {pid} is red: check '{name}' fails on main itself ({sha}). The autopilot pauses {pid} until main is green; fix main or retry the main pipeline."));
+                        manager::emit_event(app, &pid, "main.red", &format!("main of {pid} is red: check '{name}' fails on main itself ({sha}). The autopilot pauses {pid} until main is green; fix main or retry the main pipeline."), None);
                     }
                     return;
                 }
@@ -355,12 +355,11 @@ async fn land(app: &Shared, project: &Project, pipe: &Pipe, slot: &Path, base: &
         Ok(sha) => sha,
         Err(e) => {
             close_pipeline(app, pipe, "failed");
-            app.event("", &project.id, "error", "merge", &format!("main could not move: {e}"), "");
             if app.kv(&blocked).is_none() {
                 app.set_kv(&blocked, Some(&now_iso()));
                 let ids = done.iter().map(|l| l.id.as_str()).collect::<Vec<_>>().join(", ");
                 let why = format!("main of {} cannot move, so lanes that passed their checks wait ({ids}). Git says: {e}\nTirith retries by itself. If files in {} are in the way, commit, move or discard them (ask the owner first when they may be the owner's work).", project.id, repo.display());
-                manager::notify(app, &project.id, &why);
+                manager::emit_event(app, &project.id, "merge.blocked", &why, None);
             }
             return requeue(app, &done, false, &format!("main could not move: {e}"));
         }
@@ -391,9 +390,9 @@ async fn land(app: &Shared, project: &Project, pipe: &Pipe, slot: &Path, base: &
     let working: Vec<String> = app.lanes.lock().unwrap().values().filter(|l| l.project == project.id && l.pid.is_some()).map(|l| l.id.clone()).collect();
     working.iter().for_each(|id| lanes::tell(id, &format!("[tirith] main advanced: {} (files: {})", items.join("; "), changed.iter().take(10).map(String::as_str).collect::<Vec<_>>().join(", "))));
     // A merge is news, not a question: the manager gets a turn for it only when it leaves the plan without open work.
-    manager::inform(app, &project.id, &format!("merged on {} at {sha8}: {}", project.id, items.join("; ")));
+    manager::emit_event(app, &project.id, "merge.landed", &format!("merged on {} at {sha8}: {}", project.id, items.join("; ")), None);
     if plan::read(app, &project.id).is_ok_and(|steps| !steps.iter().flat_map(|s| &s.items).any(|i| !i.done && !lanes::is_autopilot_skipped(&i.text))) {
-        manager::tell(app, &project.id, "The plan has no open item left: tell the owner what is done, and ask for the next goal if the project needs one.");
+        manager::emit_event(app, &project.id, "plan.empty", "The plan has no open item left: tell the owner what is done, and ask for the next goal if the project needs one.", None);
     }
     app.emit("plan", json!({"project": project.id}));
     app.sched_wake.notify_one();
@@ -433,8 +432,10 @@ async fn deploy(app: &Shared, project: &Project, changed: &[String]) {
     let (wait, sha8, pid) = (if prev == 0 { 600 } else { (prev * 2).min(6 * 3600) }, &sha[..8.min(sha.len())], &project.id);
     app.set_kv(&key, failed.as_ref().map(|_| format!("{}@{wait}", now_s() + wait)).as_deref());
     match failed {
-        None => manager::inform(app, pid, &format!("deployed {pid} at {sha8}")),
-        Some(e) if prev == 0 => manager::notify(app, pid, &format!("the deploy of {pid} at {sha8} failed. The merge stays on main; Tirith tries the deploy again by itself until it passes (Retry on its pipeline: at once).\n{e}")),
+        None => manager::emit_event(app, pid, "deploy.done", &format!("deployed {pid} at {sha8}"), None),
+        Some(e) if prev == 0 => {
+            manager::emit_event(app, pid, "deploy.failed", &format!("the deploy of {pid} at {sha8} failed. The merge stays on main; Tirith tries the deploy again by itself until it passes (Retry on its pipeline: at once).\n{e}"), None)
+        }
         _ => {}
     }
 }
@@ -460,7 +461,7 @@ fn clear_red(app: &Shared, project: &str) {
     if app.kv(&key).is_some() {
         app.set_kv(&key, None);
         app.emit("plan", json!({"project": project}));
-        manager::inform(app, project, &format!("main of {project} is green again: the autopilot continues"));
+        manager::emit_event(app, project, "main.green", &format!("main of {project} is green again: the autopilot continues"), None);
         app.sched_wake.notify_one();
         app.merge_wake.notify_one();
     }

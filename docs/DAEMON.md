@@ -25,7 +25,11 @@ elsewhere) and reloads when a file changes or config.toml does, with the embedde
 `~/.tirith/config.toml` is laid over it key by key and wins; at daemon start its yesterday's sections are
 rewritten into the factory's names once, with the old text kept as `config.toml.before-factory` (`config.rs`),
 and keys nothing reads are an error the owner sees. A role `extends` another (the lead and the reviewer extend
-the manager), and an agent the factory does not name runs with the `default` agent's flags.
+the manager), and an agent the factory does not name runs with the `default` agent's flags. The `[[routes]]` of
+the factory say who hears each event the code emits (a closed list in `factory.rs`): which role, as a `turn` now
+or a `note` with its next turn, a line in the chat (`chat`), and whether that line and the answer of a turn the
+event starts reach the phones (`phone`). A route on a missing event or role is invalid; routes in config.toml
+stand next to the factory's.
 
 ## `guard.rs`
 
@@ -41,6 +45,9 @@ when the machine has room; a lane whose process ends goes to the merge queue, wh
 
 The managers: one long-lived agent session per project (stream-json in and out), and one for what belongs to no project. A message goes to the session of its project, which starts with its first message and rests after the manager role's quiet
 `idle_minutes`; its text, its tool calls and the end of each turn go straight to that project's chat on the page.
+Everything else the daemon has to say is an event: `emit_event` keeps its row, shows it on the page and passes it
+to the factory's routes. A turn's answer reaches the phones only when the owner started that turn or an event
+that started it has `phone = true` in its route.
 
 ## `merge.rs`
 

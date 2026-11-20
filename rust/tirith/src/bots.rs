@@ -136,7 +136,7 @@ fn fire(app: &Shared, id: &str, rid: &str) -> Result<(), String> {
         Ok((s(r, "title"), s(r, "prompt")))
     })?;
     app.chat("routine", &format!("Running routine · {title}"), &format!("bot-{id}"));
-    crate::manager::tell(app, &format!("bot-{id}"), &format!("Routine «{title}» is due now. Do it and report the result here in a few lines (when nothing is new, one line that starts with ∅); ask nothing: {task}"));
+    crate::manager::emit_event(app, &format!("bot-{id}"), "schedule", &format!("Routine «{title}» is due now. Do it and report the result here in a few lines (when nothing is new, one line that starts with ∅); ask nothing: {task}"), None);
     Ok(())
 }
 

@@ -72,10 +72,11 @@ fn compute(app: &Shared) -> Vec<Metric> {
     let day = now - 86400;
     let lanes: Vec<Lane> = app.lanes.lock().unwrap().values().cloned().collect();
     let f = &cfg.factory;
-    // A measure with the factory's label, target and side for its id.
-    let mk = |id: &'static str, value: f64, red: bool, facts: String| {
+    // A measure with the factory's label, target and side for its id; red when it counts now (`live`) and is on the wrong side of its target.
+    let mk = |id: &'static str, value: f64, live: bool, facts: String| {
         let (label, target, at_least) = f.metric(id);
-        Metric { id, label, value, target, at_least, red, facts }
+        let red = live && target.is_some_and(|t| if at_least { value < t } else { value > t });
+        Metric { id, label, value: value.round(), target, at_least, red, facts }
     };
     // Open items of the projects the autopilot works on.
     let mut open: Vec<(String, usize)> = vec![];
@@ -95,7 +96,6 @@ fn compute(app: &Shared) -> Vec<Metric> {
     let open_txt = open.iter().map(|(p, n)| format!("{p} {n}")).collect::<Vec<_>>().join(", ");
     let mut out = vec![];
 
-    let target = f.metric("merged").1.unwrap_or(0.0);
     let facts = format!(
         "merged in 24 h: [{}]; open items in autopilot projects: [{open_txt}]; {}{}{}",
         ids(&merged),
@@ -103,20 +103,18 @@ fn compute(app: &Shared) -> Vec<Metric> {
         empty_plan_note(&empty),
         open.iter().map(|(p, _)| paused_note(app, p)).collect::<String>()
     );
-    out.push(mk("merged", merged.len() as f64, work && (merged.len() as f64) < target, facts));
+    out.push(mk("merged", merged.len() as f64, work, facts));
 
     let mut mins: Vec<(f64, &str)> = merged.iter().filter_map(|l| Some(((merged_at(l)? - secs(&l.created_at)?) as f64 / 60.0, l.id.as_str()))).collect();
     mins.sort_by(|a, b| a.0.total_cmp(&b.0));
     let median = if mins.is_empty() { 0.0 } else { (mins[(mins.len() - 1) / 2].0 + mins[mins.len() / 2].0) / 2.0 };
-    let target = f.metric("median").1.unwrap_or(0.0);
     let facts = mins.iter().rev().take(8).map(|(m, id)| format!("{id} {m:.0} min")).collect::<Vec<_>>().join(", ");
-    out.push(mk("median", median.round(), !mins.is_empty() && median > target, facts));
+    out.push(mk("median", median, !mins.is_empty(), facts));
 
     let first: Vec<&Lane> = merged.iter().filter(|l| l.attempts == 0).copied().collect();
     let pct = if merged.is_empty() { 100.0 } else { (100 * first.len() / merged.len()) as f64 };
     let retried: Vec<&Lane> = merged.iter().filter(|l| l.attempts > 0).copied().collect();
-    let target = f.metric("first_try").1.unwrap_or(0.0);
-    out.push(mk("first_try", pct, !merged.is_empty() && pct < target, format!("merged after being sent back: [{}]", ids(&retried))));
+    out.push(mk("first_try", pct, !merged.is_empty(), format!("merged after being sent back: [{}]", ids(&retried))));
 
     // Idle: a project with open items, autopilot on and nothing queued, running or merging.
     let mut idle = vec![];
@@ -133,9 +131,8 @@ fn compute(app: &Shared) -> Vec<Metric> {
         }
     }
     let worst = idle.iter().map(|i| i.2).max().unwrap_or(0) as f64;
-    let target = f.metric("idle").1.unwrap_or(0.0);
     let facts = idle.iter().map(|(p, n, m)| format!("{p}: {n} open items, nothing running for {m} min{}", paused_note(app, p))).collect::<Vec<_>>().join("; ");
-    out.push(mk("idle", worst, worst > target, facts));
+    out.push(mk("idle", worst, true, facts));
 
     let half = f.limits.inactivity_minutes * 30;
     let stuck: Vec<String> = lanes
@@ -146,12 +143,10 @@ fn compute(app: &Shared) -> Vec<Metric> {
             (quiet > half).then(|| format!("{} ({}) quiet {} min", l.id, l.project, quiet / 60))
         })
         .collect();
-    let target = f.metric("stuck").1.unwrap_or(0.0);
-    out.push(mk("stuck", stuck.len() as f64, stuck.len() as f64 > target, stuck.join("; ")));
+    out.push(mk("stuck", stuck.len() as f64, true, stuck.join("; ")));
 
     let red: Vec<String> = cfg.projects.iter().filter_map(|p| flag(app, &format!("main_red:{}", p.id)).map(|v| format!("{}: {v}", p.id))).collect();
-    let target = f.metric("main_red").1.unwrap_or(0.0);
-    out.push(mk("main_red", red.len() as f64, red.len() as f64 > target, red.join("; ")));
+    out.push(mk("main_red", red.len() as f64, true, red.join("; ")));
 
     let failed: Vec<String> = lanes.iter().filter(|l| l.status == "failed" && l.ended_at.as_deref().and_then(secs).is_some_and(|e| e >= day)).map(|l| format!("{}: {}", l.id, l.note.lines().next().unwrap_or(""))).collect();
     out.push(mk("failed", failed.len() as f64, false, failed.join("; ")));
@@ -171,7 +166,7 @@ fn describe(m: &Metric) -> String {
 fn tick(app: &Shared) {
     let metrics = compute(app);
     let now = now_s();
-    let after = app.cfg().factory.role::<u64>("ceo", "review_after_minutes").unwrap_or(15) * 60;
+    let after = app.cfg().factory.routes_on("metric.red").iter().find(|r| r.0 == "reviewer").and_then(|r| r.4).or_else(|| app.cfg().factory.role::<u64>("ceo", "review_after_minutes")).unwrap_or(15) * 60;
     let (mut due, mut notes) = (vec![], vec![]);
     let list: Vec<Value> = {
         let mut book = BOOK.lock().unwrap();
@@ -200,7 +195,7 @@ fn tick(app: &Shared) {
     // A red main is not reported again here: its project's manager already got it from the merge queue, with the facts.
     notes.into_iter().filter(|m| m.id != "main_red").for_each(|m| {
         let _ = (m.id == "idle").then(|| app.sched_wake.notify_one()); // the mechanical fix: wake the scheduler and the autopilot
-        manager::notify(app, "", &format!("health: {}. Get it moving.", describe(m)));
+        manager::emit_event(app, "", "metric.red", &format!("health: {}. Get it moving.", describe(m)), None);
     });
     let max = app.cfg().factory.role::<u64>("ceo", "max_per_day").unwrap_or(6);
     let today: u64 = app.db.lock().unwrap().query_row("SELECT COUNT(*) FROM ceo_reviews WHERE at >= ?1 AND metric != 'owner'", [iso(now.saturating_sub(86400))], |r| r.get(0)).unwrap_or(0);
@@ -209,7 +204,7 @@ fn tick(app: &Shared) {
 }
 
 fn payload(app: &Shared, metrics: Vec<Value>) -> Value {
-    json!({"metrics": metrics, "reviews": app.recent("ceo_reviews", &["id", "at", "metric", "text"], None, 10)})
+    json!({"metrics": metrics, "reviews": app.recent("ceo_reviews", &["id", "at", "metric", "text"], None, 10), "reviewing": REVIEWING.load(Ordering::SeqCst)})
 }
 
 fn start_review(app: &Shared, metric: String, why: String) {
@@ -221,7 +216,7 @@ fn start_review(app: &Shared, metric: String, why: String) {
         let text = result.clone().unwrap_or_else(|e| format!("(the CEO review could not run: {e})"));
         let _ = app.db.lock().unwrap().execute("INSERT INTO ceo_reviews (at, metric, text) VALUES (?1, ?2, ?3)", rusqlite::params![now_iso(), metric, text]);
         app.chat("ceo", &text, "");
-        let _ = result.is_ok().then(|| manager::tell(&app, "", &format!("CEO review: {text}")));
+        let _ = result.is_ok().then(|| manager::emit_event(&app, "", "review.done", &format!("CEO review: {text}"), None));
         REVIEWING.store(false, Ordering::SeqCst);
         app.emit("ceo", json!({"running": false}));
         let metrics = BOOK.lock().unwrap().last.as_array().cloned().unwrap_or_default();
@@ -322,15 +317,8 @@ pub fn start(app: Shared) {
     });
 }
 
-async fn metrics(State(app): State<Shared>) -> Json<Value> {
-    let list = BOOK.lock().unwrap().last.as_array().cloned().unwrap_or_default();
-    let mut v = payload(&app, list);
-    v["reviewing"] = json!(REVIEWING.load(Ordering::SeqCst));
-    Json(v)
-}
-
 pub fn routes() -> Router<Shared> {
-    Router::new().route("/api/metrics", get(metrics))
+    Router::new().route("/api/metrics", get(|State(app): State<Shared>| async move { Json(payload(&app, BOOK.lock().unwrap().last.as_array().cloned().unwrap_or_default())) }))
 }
 
 #[cfg(test)]

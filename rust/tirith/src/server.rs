@@ -22,23 +22,48 @@ pub fn router(app: Shared, port: u16) -> Router {
     Router::new()
         .route("/api/state", get(state))
         .route("/api/stream", get(stream))
-        .route("/api/plan/{project}", get(plan_show).post(plan_add))
+        .route(
+            "/api/plan/{project}",
+            get(plan_show).post(|State(app): State<Shared>, Path(project): Path<String>, Json(b): Json<Value>| async move { plan::add(&app, &project, &s(&b, "step"), &s(&b, "text")).await.map(|_| Json(json!({"ok": true}))).map_err(bad) }),
+        )
         .route("/api/lanes", post(lane_start))
-        .route("/api/lanes/{id}/stop", post(lane_stop))
-        .route("/api/lanes/{id}/delete", post(lane_delete))
-        .route("/api/lanes/{id}/log", get(lane_log))
-        .route("/api/lanes/{id}/ask", post(lane_ask))
-        .route("/api/lanes/{id}/answer", post(lane_answer))
-        .route("/api/owner", post(owner_ask))
-        .route("/api/owner/{id}", post(owner_answer))
+        .route("/api/lanes/{id}/stop", post(|State(app): State<Shared>, Path(id): Path<String>| async move { lanes::stop(&app, &id).map(|l| Json(json!(l))).map_err(bad) }))
+        .route("/api/lanes/{id}/delete", post(|State(app): State<Shared>, Path(id): Path<String>| async move { lanes::delete(&app, &id).await.map(|_| Json(json!({"ok": true}))).map_err(bad) }))
+        .route(
+            "/api/lanes/{id}/log",
+            get(|State(app): State<Shared>, Path(id): Path<String>| async move {
+                crate::app::redact_secrets(&tail(&app.home.join(format!("logs/lanes/{}.log", id.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-').collect::<String>())), 400))
+            }),
+        )
+        .route("/api/lanes/{id}/ask", post(|State(app): State<Shared>, Path(id): Path<String>, Json(b): Json<Value>| async move { lanes::ask(&app, &id, &s(&b, "question")).map(|l| Json(json!(l))).map_err(bad) }))
+        .route("/api/lanes/{id}/answer", post(|State(app): State<Shared>, Path(id): Path<String>, Json(b): Json<Value>| async move { lanes::answer(&app, &id, &s(&b, "answer"), "the manager").map(|l| Json(json!(l))).map_err(bad) }))
+        .route("/api/owner", post(|State(app): State<Shared>, Json(b): Json<Value>| async move { manager::ask_owner(&app, &s(&b, "project"), &s(&b, "kind"), &s(&b, "question"), &s(&b, "lane")).map(Json).map_err(bad) }))
+        .route("/api/owner/{id}", post(|State(app): State<Shared>, Path(id): Path<String>, Json(b): Json<Value>| async move { manager::owner_answer(&app, &id, &s(&b, "answer"), s(&b, "by") == "manager").map(Json).map_err(bad) }))
         .route("/api/owner/{id}/close", post(owner_close))
         .route("/api/autopilot/{project}", post(autopilot))
-        .route("/api/pipelines", get(pipelines))
-        .route("/api/pipelines/{id}/retry", post(pipeline_retry))
+        .route(
+            "/api/pipelines",
+            get(|State(app): State<Shared>, Query(q): Query<std::collections::HashMap<String, String>>| async move {
+                Json(json!(merge::list(&app, q.get("project").map_or("", String::as_str), q.get("limit").and_then(|l| l.parse().ok()).unwrap_or(30u32).min(200))))
+            }),
+        )
+        .route("/api/pipelines/{id}/retry", post(|State(app): State<Shared>, Path(id): Path<String>| async move { merge::retry(&app, &id).map(|_| Json(json!({"ok": true}))).map_err(bad) }))
         .route("/api/stage-limit/{project}/{stage}", post(stage_limit))
-        .route("/api/runs/{id}/log", get(run_log))
-        .route("/api/chat", get(chat_rows).post(chat))
-        .route("/api/manager/interrupt", post(manager_interrupt))
+        .route(
+            "/api/runs/{id}/log",
+            get(|State(app): State<Shared>, Path(id): Path<i64>| async move {
+                app.db.lock().unwrap().query_row("SELECT log FROM runs WHERE id = ?1", [id], |r| r.get::<_, Option<String>>(0)).ok().flatten().map(|l| tail(std::path::Path::new(&l), 400)).unwrap_or_default()
+            }),
+        )
+        // The last rows of one conversation: `?project=<id>`, or the one of no project.
+        .route(
+            "/api/chat",
+            get(|State(app): State<Shared>, Query(q): Query<std::collections::HashMap<String, String>>| async move {
+                Json(json!(app.recent("chat", &["id", "at", "role", "text", "project"], Some(q.get("project").map_or("", String::as_str)), 300)))
+            })
+            .post(chat),
+        )
+        .route("/api/manager/interrupt", post(|Json(b): Json<Value>| async move { manager::interrupt(&s(&b, "project")).map(|_| Json(json!({"ok": true}))).map_err(bad) }))
         .route("/hook/{event}", post(hook))
         .merge(rooms::routes())
         .merge(sandbox::routes())
@@ -104,38 +129,13 @@ async fn plan_show(State(app): State<Shared>, Path(project): Path<String>) -> R 
     Ok(Json(json!({"project": project, "steps": steps, "autopilot": lanes::autopilot_on(&app, &project), "main_red": app.kv(&format!("main_red:{project}"))})))
 }
 
-async fn plan_add(State(app): State<Shared>, Path(project): Path<String>, Json(b): Json<Value>) -> R {
-    plan::add(&app, &project, &s(&b, "step"), &s(&b, "text")).await.map(|_| Json(json!({"ok": true}))).map_err(bad)
-}
 async fn lane_start(State(app): State<Shared>, Json(b): Json<Value>) -> R {
     let agent = b["agent"].as_str().filter(|a| !a.is_empty()).map(String::from);
     Ok(Json(json!(lanes::start(&app, &s(&b, "project"), &s(&b, "step"), &s(&b, "item"), agent).map_err(bad)?)))
 }
-async fn lane_delete(State(app): State<Shared>, Path(id): Path<String>) -> R {
-    lanes::delete(&app, &id).await.map(|_| Json(json!({"ok": true}))).map_err(bad)
-}
 async fn owner_close(State(app): State<Shared>, Path(id): Path<String>, Json(b): Json<Value>) -> R {
     let by = if s(&b, "by") == "manager" { "the manager" } else { "the owner" };
     manager::close_card(&app, &id, by, &s(&b, "why")).map(Json).map_err(bad)
-}
-async fn lane_stop(State(app): State<Shared>, Path(id): Path<String>) -> R {
-    Ok(Json(json!(lanes::stop(&app, &id).map_err(bad)?)))
-}
-async fn lane_log(State(app): State<Shared>, Path(id): Path<String>) -> String {
-    let safe: String = id.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-').collect();
-    crate::app::redact_secrets(&tail(&app.home.join(format!("logs/lanes/{safe}.log")), 400))
-}
-async fn lane_ask(State(app): State<Shared>, Path(id): Path<String>, Json(b): Json<Value>) -> R {
-    Ok(Json(json!(lanes::ask(&app, &id, &s(&b, "question")).map_err(bad)?)))
-}
-async fn lane_answer(State(app): State<Shared>, Path(id): Path<String>, Json(b): Json<Value>) -> R {
-    Ok(Json(json!(lanes::answer(&app, &id, &s(&b, "answer"), "the manager").map_err(bad)?)))
-}
-async fn owner_ask(State(app): State<Shared>, Json(b): Json<Value>) -> R {
-    manager::ask_owner(&app, &s(&b, "project"), &s(&b, "kind"), &s(&b, "question"), &s(&b, "lane")).map(Json).map_err(bad)
-}
-async fn owner_answer(State(app): State<Shared>, Path(id): Path<String>, Json(b): Json<Value>) -> R {
-    manager::owner_answer(&app, &id, &s(&b, "answer"), s(&b, "by") == "manager").map(Json).map_err(bad)
 }
 async fn autopilot(State(app): State<Shared>, Path(project): Path<String>, Json(b): Json<Value>) -> R {
     app.cfg().project(&project).ok_or(bad(format!("unknown project '{project}'")))?;
@@ -146,14 +146,6 @@ async fn autopilot(State(app): State<Shared>, Path(project): Path<String>, Json(
     Ok(Json(json!({"project": project, "on": on})))
 }
 
-async fn pipelines(State(app): State<Shared>, Query(q): Query<std::collections::HashMap<String, String>>) -> Json<Value> {
-    let limit = q.get("limit").and_then(|l| l.parse().ok()).unwrap_or(30u32).min(200);
-    Json(json!(merge::list(&app, q.get("project").map_or("", String::as_str), limit)))
-}
-async fn pipeline_retry(State(app): State<Shared>, Path(id): Path<String>) -> R {
-    merge::retry(&app, &id).map(|_| Json(json!({"ok": true}))).map_err(bad)
-}
-
 /// The manager sets a stage's time limit in minutes; it lasts until changed or 24 h.
 async fn stage_limit(State(app): State<Shared>, Path((project, stage)): Path<(String, String)>, Json(b): Json<Value>) -> R {
     let minutes = b["minutes"].as_u64().filter(|m| *m > 0).ok_or_else(|| bad("minutes must be a positive number".into()))?;
@@ -161,10 +153,6 @@ async fn stage_limit(State(app): State<Shared>, Path((project, stage)): Path<(St
     Ok(Json(json!({"project": project, "stage": stage, "minutes": minutes})))
 }
 
-async fn run_log(State(app): State<Shared>, Path(id): Path<i64>) -> String {
-    let log: Option<String> = app.db.lock().unwrap().query_row("SELECT log FROM runs WHERE id = ?1", [id], |r| r.get(0)).ok().flatten();
-    log.map(|l| tail(std::path::Path::new(&l), 400)).unwrap_or_default()
-}
 async fn chat(State(app): State<Shared>, Json(b): Json<Value>) -> R {
     let files: Vec<String> = b["attachments"].as_array().into_iter().flatten().filter_map(|f| f.as_str().map(String::from)).collect();
     let text = s(&b, "text") + &attach::describe(&files);
@@ -172,14 +160,6 @@ async fn chat(State(app): State<Shared>, Json(b): Json<Value>) -> R {
         return Err(bad("empty message".into()));
     }
     manager::say(&app, &s(&b, "project"), &text).map(|_| Json(json!({"ok": true}))).map_err(bad)
-}
-
-/// The last rows of one conversation: `?project=<id>`, or the one of no project.
-async fn chat_rows(State(app): State<Shared>, Query(q): Query<std::collections::HashMap<String, String>>) -> Json<Value> {
-    Json(json!(app.recent("chat", &["id", "at", "role", "text", "project"], Some(q.get("project").map_or("", String::as_str)), 300)))
-}
-async fn manager_interrupt(Json(b): Json<Value>) -> R {
-    manager::interrupt(&s(&b, "project")).map(|_| Json(json!({"ok": true}))).map_err(bad)
 }
 
 /// One agent hook call: record it, refuse a tool call that breaks a rule, hand a lane its live messages, and keep a lane from ending its turn on a question.
