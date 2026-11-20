@@ -29,7 +29,8 @@ struct Talk {
     /// True while a turn runs (between a message handed to a live session and that session's `result`).
     busy: bool,
     pid: u32,
-    codex: bool,
+    /// The running turn is a one-shot exec run (Codex, Muse): interrupting it means killing it, not a control line.
+    oneshot: bool,
     /// Rooms whose messages started the current turn (their answer goes back there) and the turn's text so far.
     reply_to: BTreeSet<String>,
     text: String,
@@ -121,7 +122,7 @@ pub fn busy() -> Vec<String> {
 /// Stops the current turn of the conversation's session (the session lives on): a stream-json `control_request` with subtype `interrupt`, as the old collector sent. Err when no turn is running.
 pub fn interrupt(project: &str) -> Result<(), String> {
     if talk(project, |t| {
-        if !t.codex || !t.busy {
+        if !t.oneshot || !t.busy {
             return false;
         }
         kill_group(t.pid, libc::SIGTERM);
@@ -350,11 +351,11 @@ pub fn control_reply(msg: &Value, behavior: Value) -> String {
 
 /// One session of a conversation, until it ends or rests. Err when it never got ready: its messages wait again.
 async fn session(app: &Shared, project: &str) -> Result<(), String> {
-    if models::role(app, "manager").agent == "codex" {
-        return codex_session(app, project).await;
-    }
-    talk(project, |t| t.codex = false);
     let alias = models::role(app, "manager").agent;
+    if alias == "codex" || alias == "muse" {
+        return exec_session(app, project, alias == "muse").await;
+    }
+    talk(project, |t| t.oneshot = false);
     let key = session_key(app, project, &alias);
     let resumed = app.kv(&key);
     let history = resumed.is_none().then(|| history(app, project));
@@ -479,21 +480,27 @@ fn history(app: &Shared, project: &str) -> String {
     format!("Recent conversation for context (do not repeat completed work):\n{}\n\nNew messages:\n", rows.join("\n"))
 }
 
-async fn codex_session(app: &Shared, project: &str) -> Result<(), String> {
-    let key = session_key(app, project, "codex");
-    let resumed = app.kv(&key);
+/// One exec turn's message: what waits for the manager, in plain text, with the recent conversation in front of it when the agent starts fresh. The waiting lines come back too, so a turn that never started can hand them over again.
+fn turn_input(app: &Shared, project: &str, fresh: bool) -> (Vec<String>, String) {
     let sent = talk(project, |t| std::mem::take(&mut t.pending));
-    let mut input = if resumed.is_none() { history(app, project) } else { String::new() };
+    let mut input = if fresh { history(app, project) } else { String::new() };
     for line in &sent {
         if let Ok(v) = serde_json::from_str::<Value>(line) {
             for b in v["message"]["content"].as_array().into_iter().flatten() {
                 if let Some(s) = b["text"].as_str() {
                     input += s;
-                    input += "\n";
+                    input += "\n"
                 }
             }
         }
     }
+    (sent, input)
+}
+
+async fn exec_session(app: &Shared, project: &str, muse: bool) -> Result<(), String> {
+    let key = session_key(app, project, if muse { "muse" } else { "codex" });
+    let resumed = app.kv(&key);
+    let (sent, input) = turn_input(app, project, resumed.is_none());
     let mut started = false;
     let result = crate::codex::turn(
         app,
@@ -501,24 +508,37 @@ async fn codex_session(app: &Shared, project: &str) -> Result<(), String> {
         project,
         resumed.as_deref(),
         (&prompt(app, project), &input),
-        |msg| match msg["type"].as_str().unwrap_or("") {
-            "thread.started" => {
-                if let Some(id) = msg["thread_id"].as_str() {
-                    app.set_kv(&key, Some(id));
+        |msg| {
+            if muse {
+                if let Some(id) = msg["stream"]["id"].as_str().filter(|_| msg["stream"]["kind"] == "session") {
+                    app.set_kv(&key, Some(id))
                 }
+                if msg["payload_type"] == "tool.result" {
+                    // The shell's own result text is its result JSON: the command it ran is the line worth showing.
+                    let detail = msg["payload"]["text"].as_str().and_then(|s| serde_json::from_str::<Value>(s).ok()).and_then(|v| v["command"].as_str().map(String::from));
+                    app.chat("tool", detail.as_deref().unwrap_or_else(|| msg["payload"]["correlation_facts"]["tool_name"].as_str().unwrap_or("tool")), project);
+                }
+                return;
             }
-            "item.completed" if msg["item"]["type"] == "agent_message" => {
-                let text = msg["item"]["text"].as_str().unwrap_or("");
-                app.chat("manager", text, project);
-                rooms::to_phones(app, project, text);
+            match msg["type"].as_str().unwrap_or("") {
+                "thread.started" => {
+                    if let Some(id) = msg["thread_id"].as_str() {
+                        app.set_kv(&key, Some(id))
+                    }
+                }
+                "item.completed" if msg["item"]["type"] == "agent_message" => {
+                    let text = msg["item"]["text"].as_str().unwrap_or("");
+                    app.chat("manager", text, project);
+                    rooms::to_phones(app, project, text);
+                }
+                "item.started" if msg["item"]["type"] == "command_execution" => app.chat("tool", msg["item"]["command"].as_str().unwrap_or("command"), project),
+                _ => {}
             }
-            "item.started" if msg["item"]["type"] == "command_execution" => app.chat("tool", msg["item"]["command"].as_str().unwrap_or("command"), project),
-            _ => {}
         },
         |pid| {
             started = true;
             talk(project, |t| {
-                (t.pid, t.codex, t.stale) = (pid, true, false);
+                (t.pid, t.oneshot, t.stale) = (pid, true, false);
                 set_busy(app, project, t, true);
             });
         },
@@ -532,12 +552,20 @@ async fn codex_session(app: &Shared, project: &str) -> Result<(), String> {
         set_busy(app, project, t, false);
         std::mem::take(&mut t.reply_to)
     });
-    let text = result.unwrap_or_else(|e| {
-        let text = format!("Codex: {e}. Send your message again to retry.");
-        report(app, project, &text);
-        app.set_kv(&key, None);
-        text
-    });
+    let (text, answered) = match result {
+        Ok(text) => (text, true),
+        Err(e) => {
+            let text = format!("{}: {e}. Send your message again to retry.", if muse { "The muse agent failed" } else { "Codex" });
+            report(app, project, &text);
+            app.set_kv(&key, None);
+            (text, false)
+        }
+    };
+    // Codex speaks while it works; an exec turn of the other agent answers once, at its end.
+    if muse && answered {
+        app.chat("manager", &text, project);
+        rooms::to_phones(app, project, &text);
+    }
     rooms::reply(app, &Vec::from_iter(rooms_now), &text);
     Ok(())
 }
