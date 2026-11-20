@@ -28,10 +28,7 @@ pub fn call_with(method: &str, path: &str, body: String, headers: &[(&str, Strin
 }
 
 pub fn print(r: Result<String, String>) -> Result<(), String> {
-    let body = r?;
-    match serde_json::from_str::<Value>(&body) {
-        Ok(v) if v.get("id").is_some() => println!("{} {} — {}", v["id"].as_str().unwrap_or(""), v["status"].as_str().unwrap_or(""), v["item"].as_str().unwrap_or("")),
-        _ => println!("ok"),
-    }
+    let v: Value = serde_json::from_str(&r?).unwrap_or_default();
+    println!("{}", if v.get("id").is_some() { format!("{} {} — {}", v["id"].as_str().unwrap_or(""), v["status"].as_str().unwrap_or(""), v["item"].as_str().unwrap_or("")) } else { "ok".into() });
     Ok(())
 }

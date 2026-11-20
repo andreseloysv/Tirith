@@ -159,3 +159,40 @@ fn config_sections_move_to_their_new_names() {
     assert!(g(&["models", "choices"]).is_some());
     assert!(g(&["ceo", "enabled"]).is_some()); // a dead key stays put, so the unknown-key error names it
 }
+
+#[test]
+fn stamp_is_factory_commit_plus_overlay_hash() {
+    let base = Factory::default();
+    let (commit, hash) = base.version.split_once('+').expect("version is <commit>+<hash>");
+    assert!(!commit.is_empty(), "the main commit that last changed factory/ (or `embedded`): {}", base.version);
+    assert_eq!(hash.len(), 8);
+    assert!(hash.bytes().all(|b| b.is_ascii_hexdigit()), "short hash of the overlay: {hash}");
+    // The same overlay stamps the same; a key config.toml lays over the factory changes the hash, not the commit.
+    let same = parse(TEXT, embedded_prompts(), &toml::Table::new()).unwrap();
+    assert_eq!(same.version, base.version);
+    let over = parse(TEXT, embedded_prompts(), &overlay("[limits]\nmax_load = 4.5\n")).unwrap();
+    assert_eq!(over.version.split_once('+').unwrap().0, commit);
+    assert_ne!(over.version, base.version);
+    // What is no factory section (the projects) does not restamp the factory.
+    let projects = parse(TEXT, embedded_prompts(), &overlay("[[projects]]\nid = \"x\"\n")).unwrap();
+    assert_eq!(projects.version, base.version);
+}
+
+#[test]
+fn role_hash_tracks_agent_model_and_prompt() {
+    let f = Factory::default();
+    let worker = f.role_hash("worker", "");
+    assert_eq!(worker.len(), 8);
+    assert_ne!(worker, f.role_hash("manager", ""), "each role its own hash");
+    assert_eq!(f.role_hash("owner", ""), "", "no factory role, no hash");
+    assert_ne!(worker, f.role_hash("worker", "{\"model\":\"other\"}"), "the page's model override is folded in");
+    // Another agent for the role (config.toml over the factory) is another hash.
+    let muse = parse(TEXT, embedded_prompts(), &overlay("[roles.worker]\nagent = \"muse\"\n")).unwrap();
+    assert_ne!(worker, muse.role_hash("worker", ""));
+    // Another prompt text is another hash.
+    let mut prompts = embedded_prompts();
+    prompts.insert("brief".to_string(), "a different brief".to_string());
+    let briefed = parse(TEXT, prompts, &toml::Table::new()).unwrap();
+    assert_ne!(worker, briefed.role_hash("worker", ""));
+    assert_eq!(f.role_hash("reviewer", ""), briefed.role_hash("reviewer", ""), "an untouched role keeps its hash");
+}

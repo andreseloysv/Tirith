@@ -8,18 +8,9 @@ use std::{process::Stdio, sync::Mutex, time::Duration};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::mpsc;
 
-/// This conversation's factory role: the `session = "chat"` role of its scope (a project's, or the global one of no project); a bot's conversation is its own key.
-fn conv_role(app: &Shared, project: &str) -> String {
-    if bots::bot(app, project).is_some() {
-        return project.to_string();
-    }
-    let (scope, fallback) = if app.cfg().project(project).is_some() { ("project", "manager") } else { ("global", "lead") };
-    app.cfg().factory.find_role("chat", Some(scope)).unwrap_or_else(|| fallback.into())
-}
-
 /// The factory prompt of this conversation's role (a bot's is its role's, with the shared skills folder filled in).
 fn prompt(app: &Shared, project: &str) -> String {
-    let text = app.cfg().factory.prompts_of(&conv_role(app, project)).replace("{shared}", &app.home.join("bots/skills").display().to_string());
+    let text = app.cfg().factory.prompts_of(&app.chat_role(project)).replace("{shared}", &app.home.join("bots/skills").display().to_string());
     app.cfg().project(project).map_or(text.clone(), |p| text.replace("{id}", &p.id).replace("{repo}", &p.repo().display().to_string()))
 }
 
@@ -55,18 +46,9 @@ fn set_busy(app: &Shared, project: &str, t: &mut Talk, on: bool) {
     app.emit("busy", json!({"project": project, "on": on}));
 }
 
-/// The conversation of `project` (or of a bot): its own, or the one of no project when there is no such project (any more).
-pub(crate) fn here<'a>(app: &Shared, project: &'a str) -> &'a str {
-    if app.cfg().project(project).is_some() || bots::bot(app, project).is_some() {
-        project
-    } else {
-        ""
-    }
-}
-
 fn report(app: &Shared, project: &str, text: &str) {
     app.chat("tirith", text, project);
-    rooms::to_phones(app, here(app, project), &format!("Tirith: {text}"));
+    rooms::to_phones(app, app.conv(project), &format!("Tirith: {text}"));
 }
 
 /// One user message as a stream-json line. `pending` keeps plain texts; only a live session's stdin sees lines.
@@ -97,7 +79,7 @@ fn deliver(app: &Shared, project: &str, text: &str, phones: bool) {
 
 /// A message from a room (a paired phone or another agent): shown in the chat of the room's project, handed to that project's manager, and the manager's answer to this turn goes back to that room.
 pub fn from_room(app: &Shared, project: &str, room: &str, author: &str, text: &str) {
-    let project = here(app, project);
+    let project = app.conv(project);
     app.event("", project, "room.message", "", &format!("{author} ({room}): {text}"), "");
     app.chat("room", &format!("{author} ({room}): {text}"), project);
     talk(project, |t| t.reply_to.insert(room.to_string()));
@@ -138,7 +120,7 @@ pub fn interrupt(project: &str) -> Result<(), String> {
 }
 
 pub fn say(app: &Shared, project: &str, text: &str) -> Result<(), String> {
-    (here(app, project) == project).then_some(()).ok_or(format!("unknown project '{project}'"))?;
+    (app.conv(project) == project).then_some(()).ok_or(format!("unknown project '{project}'"))?;
     app.event("", project, "owner.message", "", text, "");
     app.chat("owner", text, project);
     if model_command(app, project, text) {
@@ -159,7 +141,7 @@ pub fn model_command(app: &Shared, project: &str, text: &str) -> bool {
 pub fn emit_event(app: &Shared, project: &str, on: &str, shown: &str, told: Option<&str>) {
     app.event("", project, on, "", shown, "");
     let routes = app.cfg().factory.routes_on(on);
-    let here_p = here(app, project);
+    let here_p = app.conv(project);
     if routes.iter().any(|r| r.2) {
         app.chat("tirith", shown, here_p);
         if routes.iter().any(|r| r.2 && r.3) {
@@ -214,7 +196,7 @@ fn queue(app: &Shared, project: &str, text: &str, mode: &str, phone: bool) {
 /// A card's answer or closing, for the manager's next turn: a line in the project's chat and on the phones, and a note (no turn of its own).
 fn note_line(app: &Shared, project: &str, text: &str) {
     report(app, project, text);
-    queue(app, here(app, project), text, "note", false);
+    queue(app, app.conv(project), text, "note", false);
 }
 
 /// `tirith ask-owner`: a card in its project's chat (so on the owner's phones too) and among the open cards of the owner's page, until answered. With `lane` it carries that waiting lane's question: the lane shows it, and the answer goes straight to the lane.
@@ -224,16 +206,17 @@ pub fn ask_owner(app: &Shared, project: &str, kind: &str, question: &str, lane: 
         _ if lane.is_empty() => project.to_string(),
         _ => return Err(format!("lane {lane} is not waiting for an answer")),
     };
-    (here(app, &project) == project).then_some(()).ok_or(format!("unknown project '{project}'"))?;
+    (app.conv(&project) == project).then_some(()).ok_or(format!("unknown project '{project}'"))?;
     let question = question.trim();
     let kinds = app.cfg().factory.words("cards", "kinds");
     (kinds.iter().any(|k| k == kind) && !question.is_empty()).then_some(()).ok_or_else(|| format!("ask the owner with --kind {} and a question", kinds.join("|")))?;
+    let (factory, role_hash) = app.lane(lane).map(|l| (l.factory, l.role_hash)).unwrap_or_else(|| app.stamp_for(&app.chat_role(&project))); // a lane's card carries its lane's stamp, else its conversation role's
     let row = {
         let db = app.db.lock().unwrap();
         let n: i64 = db.query_row("SELECT COALESCE(MAX(CAST(SUBSTR(id, 2) AS INTEGER)), 0) FROM owner_items", [], |r| r.get(0)).unwrap_or(0);
-        let row = json!({"id": format!("o{}", n + 1), "at": now_iso(), "kind": kind, "project": project, "question": question, "status": "open", "answer": "", "lane": lane});
-        let sql = "INSERT INTO owner_items (id, at, kind, project, question, status, answer, lane) VALUES (?1,?2,?3,?4,?5,'open','',?6)";
-        db.execute(sql, rusqlite::params![row["id"].as_str(), row["at"].as_str(), kind, project, question, lane]).map_err(|e| e.to_string())?;
+        let row = json!({"id": format!("o{}", n + 1), "at": now_iso(), "kind": kind, "project": project, "question": question, "status": "open", "answer": "", "lane": lane, "factory": factory, "role_hash": role_hash});
+        let sql = "INSERT INTO owner_items (id, at, kind, project, question, status, answer, lane, factory, role_hash) VALUES (?1,?2,?3,?4,?5,'open','',?6,?7,?8)";
+        db.execute(sql, rusqlite::params![row["id"].as_str(), row["at"].as_str(), kind, project, question, lane, row["factory"].as_str(), row["role_hash"].as_str()]).map_err(|e| e.to_string())?;
         row
     };
     app.emit("owner", row.clone());
@@ -261,7 +244,7 @@ pub fn owner_answer(app: &Shared, id: &str, answer: &str, by_manager: bool) -> R
         note_line(app, &project, &format!("{text}\nIt went straight to lane {lane}."));
     } else {
         report(app, &project, &text);
-        let _ = (!by_manager).then(|| queue(app, here(app, &project), &text, "turn", true));
+        let _ = (!by_manager).then(|| queue(app, app.conv(&project), &text, "turn", true));
     }
     Ok(json!({"ok": true}))
 }
@@ -284,13 +267,13 @@ pub fn waiting_cards(lanes: &[crate::app::Lane]) -> Vec<Value> {
     lanes
         .iter()
         .filter(|l| l.status == "waiting")
-        .map(|l| json!({"id": l.id, "at": l.created_at, "kind": "lane", "project": l.project, "status": "open", "question": format!("lane bloqueada esperando al dueño ({}): {}", l.item, l.question)}))
+        .map(|l| json!({"id": l.id, "at": l.created_at, "kind": "lane", "project": l.project, "status": "open", "factory": l.factory, "role_hash": l.role_hash, "question": format!("lane bloqueada esperando al dueño ({}): {}", l.item, l.question)}))
         .collect()
 }
 
 pub fn owner_open(app: &Shared) -> Vec<Value> {
-    let cols = ["id", "at", "kind", "question", "project", "status", "lane"];
-    let cards = app.objects("SELECT id, at, kind, question, project, status, lane FROM owner_items WHERE status = 'open' ORDER BY rowid", [], &cols);
+    let cols = ["id", "at", "kind", "question", "project", "status", "lane", "factory", "role_hash"];
+    let cards = app.objects("SELECT id, at, kind, question, project, status, lane, factory, role_hash FROM owner_items WHERE status = 'open' ORDER BY rowid", [], &cols);
     // A lane whose question a card carries is that card.
     let carried: BTreeSet<&str> = cards.iter().filter_map(|c| c["lane"].as_str()).collect();
     let lanes: Vec<crate::app::Lane> = app.lanes.lock().unwrap().values().filter(|l| !carried.contains(l.id.as_str())).cloned().collect();
@@ -433,7 +416,7 @@ pub async fn run_turn(app: &Shared, role: &str, project: &str, input: &str) -> R
 
 /// One session of a conversation, until it ends or rests. Err when it never got ready: its messages wait again.
 async fn session(app: &Shared, project: &str) -> Result<(), String> {
-    let role = conv_role(app, project); // a bot may have a model of its own, under its key
+    let role = app.chat_role(project); // a bot may have a model of its own, under its key
     let alias = models::role(app, &role).agent;
     if alias == "codex" || alias == "muse" {
         return exec_session(app, project, alias == "muse").await;
@@ -545,7 +528,7 @@ async fn exec_session(app: &Shared, project: &str, muse: bool) -> Result<(), Str
     let mut started = false;
     let result = crate::codex::turn(
         app,
-        &conv_role(app, project),
+        &app.chat_role(project),
         project,
         resumed.as_deref(),
         (&prompt(app, project), &input),

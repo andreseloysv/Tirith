@@ -61,3 +61,38 @@ async fn sparse_zoo_lane() {
     let _ = std::fs::remove_dir_all(&wt);
     let _ = std::fs::remove_dir_all(&repo);
 }
+#[test]
+fn rows_carry_the_factory_stamp() {
+    let home = std::env::temp_dir().join(format!("tirith-stamp-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&home);
+    std::fs::create_dir_all(&home).unwrap();
+    std::env::set_var("TIRITH_HOME", &home);
+    let app = App::open();
+    let version = app.cfg().factory.version.clone();
+    assert!(version.contains('+'), "the running factory version: {version}");
+    let stamp = |table: &str, where_: &str| app.query(&format!("SELECT factory, role_hash FROM {table} WHERE {where_}"), [], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))).pop().expect("a stamped row");
+    // A lane: the stamp it was created with, in its JSON and in its columns (one GROUP BY factory, role_hash compares versions).
+    let (factory, role_hash) = app.stamp_for(&crate::models::lane_role(&app.cfg()));
+    assert_eq!(factory, version);
+    assert_eq!(role_hash.len(), 8);
+    app.save_lane(&Lane { id: "stamp-lane".into(), factory: factory.clone(), role_hash: role_hash.clone(), ..Default::default() });
+    assert_eq!(stamp("lanes", "id = 'stamp-lane'"), (factory, role_hash.clone()));
+    assert_eq!(app.lane("stamp-lane").map(|l| (l.factory, l.role_hash)), Some((version.clone(), role_hash.clone())));
+    // Its events carry its stamp; an event of no lane keeps the version with an empty role hash.
+    app.event("stamp-lane", "", "test.kind", "", "", "");
+    app.event("", "", "test.plain", "", "", "");
+    assert_eq!(stamp("events", "kind = 'test.kind'"), (version.clone(), role_hash));
+    assert_eq!(stamp("events", "kind = 'test.plain'"), (version.clone(), String::new()));
+    // A turn's rows carry its conversation role's hash; the owner's lines keep only the version.
+    app.chat("manager", "stamp turn text", "");
+    app.chat("owner", "stamp owner text", "");
+    assert_eq!(stamp("chat", "text = 'stamp turn text'"), (version.clone(), app.stamp_for(&app.chat_role("")).1));
+    assert_eq!(stamp("chat", "text = 'stamp owner text'"), (version.clone(), String::new()));
+    // A card carries its conversation role's stamp (the manager asked the owner).
+    crate::manager::ask_owner(&app, "", "decision", "stamped card?", "").unwrap();
+    assert_eq!(stamp("owner_items", "question = 'stamped card?'"), (version.clone(), app.stamp_for(&app.chat_role("")).1));
+    // A score row is born stamped (the evals fill the table; its stamp columns are these).
+    let (f2, h2) = app.stamp_for("reviewer");
+    app.insert("INSERT INTO scores (at, event, eval, label, factory, role_hash) VALUES (?1, 1, 'owner-mood', 'approval', ?2, ?3)", rusqlite::params![now_iso(), f2, h2]);
+    assert_eq!(stamp("scores", "eval = 'owner-mood'"), (version, h2));
+}

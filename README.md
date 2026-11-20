@@ -170,13 +170,17 @@ hears each event (a lane failed, a merge landed, a measure turned red: as a turn
 phone), the limits, the plan words, the card kinds and the health measures with their targets — is data, not code:
 `factory/factory.toml` and `factory/prompts/` in this repository (see `docs/FACTORY.md`). The daemon embeds them
 as its fallback, reloads them when they change (no rebuild, no restart), and keeps the last good version when a
-new one is invalid, with the error on the page.
+new one is invalid, with the error on the page. Each version has a stamp — the main commit that last changed
+`factory/`, plus a short hash of what your config lays over it — and every lane, turn, card, event and score
+keeps that stamp and a hash of its role's setting, so two versions, models or prompts compare with one query
+over the store (`GROUP BY factory, role_hash`), with no extra runs.
 
 `~/.tirith/config.toml` (outside every repo; agents cannot edit it) holds what is this machine's alone — projects,
 each agent's real command, model ids, keys — and is laid over the factory key by key, where its key wins.
-Everything has a default. Unknown keys are reported, never silently ignored. At the first start, yesterday's
-sections are rewritten into the factory's names (`[models.*]` → `[roles.*]`, the `[lanes]`/`[merge]` limits →
-`[limits]`, `[ceo]` → `[roles.reviewer]`), with the old file kept as `config.toml.before-factory`. Add a project with
+Everything has a default. Unknown keys are reported, never silently ignored. Yesterday's sections are read in
+memory under the factory's names (`[models.*]` → `[roles.*]`, the `[lanes]`/`[merge]` limits → `[limits]`,
+`[ceo]` → `[roles.reviewer]`); the file itself is never rewritten behind your back (the page writes it with
+`toml_edit`, keeping its comments). Add a project with
 the **+** next to Projects on the page (or `tirith project add`): Tirith appends its `[[projects]]` block, creates a
 git repository and a first plan when the folder has none, and installs the commit guard; a plan that already has
 open items waits for you to resume the autopilot.
