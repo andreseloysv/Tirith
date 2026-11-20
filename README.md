@@ -74,12 +74,10 @@ end with code, and puts a model in the loop only where judgment is needed.
   project's conversation: what the manager says, Tirith's reports (merged, failed, a lane's question) and the cards
   that need you, which you answer there (`o12: yes`). `tirith room forget` cuts off a lost phone. Add other managers
   with a code, and watch public rooms with a summary.
-- **Models per role.** Agent, model and effort for the manager, the lanes, the CEO and the brain, with a fallback
+- **Models per role.** Agent, model and effort for the manager, the lanes and the CEO, with a fallback
   chain for lanes when an agent runs out of credits. Codex works in every role. Choose models in the chat's
   **Models** panel or Settings. The app and the paired phone both offer provider/model buttons and an effort
   slider. `/models` also works in either chat.
-- **Brain.** Small text jobs on the Meta Model API (room summaries, an architecture summary in every brief),
-  cached, never on a hot path.
 - **Commit guard.** Git hooks in every project refuse commits with your forbidden words; they are immutable,
   and a lane only starts when they are intact.
 
@@ -124,8 +122,8 @@ each model's supported reasoning efforts. Open Codex once to populate or refresh
 selected, its selectors offer only catalog models and the chosen model's supported efforts. Select a model
 before choosing an effort, or leave both at the agent's defaults. Other agents also support custom model IDs.
 
-Open **Models** above the chat composer on the computer or paired phone. Pick **Manager**, **Workers**, **CEO**
-or **Brain**, tap a provider and model, then drag the effort slider or tap a level. **Save** applies the selection;
+Open **Models** above the chat composer on the computer or paired phone. Pick **Manager**, **Workers** or **CEO**,
+tap a provider and model, then drag the effort slider or tap a level. **Save** applies the selection;
 editing the controls alone does not change the active setting. The phone waits for Tirith's encrypted confirmation.
 Settings keeps its original dropdown form; buttons and the effort slider belong to the chat.
 **Refresh** reads changes made on the computer; **Use configured defaults** restores that role's configuration.
@@ -138,7 +136,6 @@ These commands work directly in the app chat and in a project room on a paired p
 /model manager codex
 /model workers codex:<model-id> high
 /model ceo codex:<model-id> medium
-/model brain codex:<model-id> low
 /model all codex:<model-id> high
 /model workers reset
 ```
@@ -146,14 +143,13 @@ These commands work directly in the app chat and in a project room on a paired p
 Replace `<model-id>` with an ID listed by `/models`. `/modelo` and `/modelos` also work, and `todos` means `all`.
 Settings apply to **all projects on this machine** and survive restarts. A manager finishes its current turn
 before changing; new messages wait for the new setting. Worker changes apply to new lanes. Codex manager turns
-resume native Codex threads; CEO reviews and Brain jobs use fresh read-only runs. Brain can still use Meta API
-by selecting **Meta API** in its provider buttons. A paired phone receives confirmation over its encrypted chat;
+resume native Codex threads; CEO reviews use fresh read-only runs. A paired phone receives confirmation over its encrypted chat;
 messages from other room agents do not run model commands.
 
 ### Browser access with Codex
 
 Run `python3 scripts/setup-codex-browser.py` on the machine running Tirith (Python 3.11+, Node.js and npm).
-This installs a pinned Playwright MCP and sets `[agents.codex] profile = "tirith-browser"` for all four roles,
+This installs a pinned Playwright MCP and sets `[agents.codex] profile = "tirith-browser"` for every role,
 including resumed conversations. Restart an older daemon after updating its binary. The profile replaces the
 desktop-only Browser integration for these runs; your other Codex sessions keep their existing configuration.
 
@@ -190,7 +186,7 @@ chat_args = ["-p", "--input-format", "stream-json", "--output-format", "stream-j
 [launch]                            # optional: the full lane command of the default worker agent
 command = ["…", "-p", "Read the brief at {brief} and implement it in {workspace}."]
 
-[models.manager]                    # also [models.workers], [models.ceo], [models.brain]; the page can override
+[models.manager]                    # also [models.workers] and [models.ceo]; the page can override
 agent = "anthropic"
 model = "…"
 effort = "medium"

@@ -13,11 +13,6 @@ The bots' agent finds them natively: Muse reads `.agents/skills`, and the agent'
 A bot may have a model of its own (role `bot-<id>` of `models.rs`, chosen in its card); without one it has the managers'. A routine answer that starts with ∅ (nothing new)
 stays on the page and never reaches the phones (`rooms::to_phones`), so only news does.
 
-## `brain.rs`
-
-The brain: small text jobs for a cheap, fast model of the Meta Model API (OpenAI-style `/chat/completions`). Never on a hot path: callers use the cached answer or a plain fallback. The key comes only from the environment
-(`META_API_KEY` or `META_SI_API_KEY`) and is never logged or stored.
-
 ## `guard.rs`
 
 The commit guard: git hooks in every project that refuse a commit whose message, file names or added lines contain one of the owner's forbidden words (whole word, any case; a word may be a regex). The words come only from
@@ -53,8 +48,7 @@ While everything is green no model is called.
 
 Models per role and the fallback chain.
 
-Roles: "manager" (the chat session), "workers" (lanes), "ceo" (one-shot review), "brain" (small text jobs
-through the model API: only its model matters). Each has an agent alias, a model, an effort and a fallback
+Roles: "manager" (the chat session), "workers" (lanes) and "ceo" (one-shot review). Each has an agent alias, a model, an effort and a fallback
 chain. The effective setting is the owner's override from the page (kv `models:<role>`), else
 `[models.<role>]` of `config.toml`, else a default. Agents are aliases (`[agents.<alias>]`); the real command
 lives only in config.toml. Optional per alias: `model_flag`, `effort_flag` ("" = none) and `resume_args`

@@ -4,7 +4,7 @@ pub(crate) mod sealed;
 
 use crate::app::{bad, now_iso, now_s, Shared, R};
 use crate::client::{call, Flag};
-use crate::{brain, config::get as cfg_get, manager};
+use crate::{config::get as cfg_get, manager};
 use axum::extract::{Path, Query, State};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
@@ -78,7 +78,6 @@ struct Room {
     owed: Vec<(String, String)>,
     messages: Vec<Msg>,
     here: Vec<String>,
-    summary: String,
     error: String,
 }
 
@@ -313,9 +312,6 @@ async fn poll(app: &Shared, r: &Room) -> Result<(), String> {
         }
     }
     out.mentions.into_iter().for_each(|m| app.emit("room-mention", m));
-    if !r.private() && !list.is_empty() {
-        summarize(app, &r.id);
-    }
     Ok(())
 }
 
@@ -535,17 +531,6 @@ pub fn again(app: &Shared, project: Option<&str>) {
     }
 }
 
-fn summarize(app: &Shared, id: &str) {
-    let Some(r) = room(id) else { return };
-    let transcript: Vec<String> = r.messages.iter().map(|m| format!("{}: {}", m.from, m.text)).collect();
-    let (app, id) = (app.clone(), id.to_string());
-    tokio::spawn(async move {
-        if let Some(s) = brain::ask(&app, "room-summary", &transcript.join("\n")).await {
-            update(&app, &id, |r| r.summary = s);
-        }
-    });
-}
-
 fn enc(s: &str) -> String {
     s.bytes().map(|b| if b.is_ascii_alphanumeric() || b"-_.~".contains(&b) { (b as char).to_string() } else { format!("%{b:02X}") }).collect()
 }
@@ -568,10 +553,7 @@ fn view(app: &Shared, r: &Room) -> Value {
         let e = people.entry(&m.from).or_default();
         *e = (e.0 + 1, &m.at);
     }
-    let summary = match (r.summary.as_str(), r.messages.last()) {
-        ("", Some(m)) => format!("Latest from {}: {}", m.from, m.text.chars().take(200).collect::<String>()),
-        (s, _) => s.to_string(),
-    };
+    let summary = r.messages.last().map(|m| format!("Latest from {}: {}", m.from, m.text.chars().take(200).collect::<String>())).unwrap_or_default();
     let manager = r.kind == "manager";
     json!({
         "id": r.id, "title": r.title, "project": r.project, "kind": r.kind, "private": r.private(),
