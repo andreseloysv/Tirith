@@ -1,8 +1,8 @@
-//! `~/.tirith/config.toml` (projects, agent aliases, limits) and each project's `tirith.toml` (plan file, checks, lane excludes, extra rules). Unknown keys are ignored, so older files keep working.
+//! `~/.tirith/config.toml` (projects, agent aliases, this machine's overlay on the factory) and each project's `tirith.toml` (plan file, checks, lane excludes, extra rules). Unknown keys are an error the owner sees, never silently ignored; yesterday's sections are rewritten into the factory's names once, with the old file kept as `config.toml.before-factory`.
 
 use serde::{de::DeserializeOwned, Deserialize};
-use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 pub fn expand(p: &str) -> PathBuf {
     p.strip_prefix("~/").map_or_else(|| PathBuf::from(p), |rest| home_dir().join(rest))
@@ -37,65 +37,102 @@ impl Project {
     }
 }
 
-#[derive(Deserialize, Clone, Default)]
-pub struct Agent {
-    pub command: String,
-    #[serde(default)]
-    pub settings: Option<String>,
-    #[serde(default)]
-    pub chat_args: Option<Vec<String>>,
-    /// Arguments of a lane run; `{brief}` and `{workspace}` are filled in.
-    #[serde(default)]
-    pub args: Option<Vec<String>>,
-}
-
 #[derive(Clone, Default)]
 pub struct Config {
-    /// The whole file, for modules that read their own sections (`[network]`, `[messenger]`, `[guard]`, ...).
+    /// The whole file (with yesterday's sections already under their new names), for modules that read their own sections (`[network]`, `[messenger]`, `[guard]`, ...).
     pub raw: toml::Table,
     pub projects: Vec<Project>,
-    pub agents: BTreeMap<String, Agent>,
     pub launch: Vec<String>,
-    /// `[models.workers] agent`; the models module reads the rest of `[models.*]`.
-    pub workers_agent: Option<String>,
     pub port: u16,
-    /// `[lanes] max_parallel`: a cap on lanes running at once; none unless set (the load per core still holds new lanes back).
-    pub max_parallel: Option<usize>,
-    pub max_load: f64,
-    pub inactivity_min: u64,
-    /// `[lanes] long_running_minutes`: a lane running this long is reported once to its project's manager (0 turns it off).
-    pub long_running_min: u64,
     pub push: bool,
-    pub stage_timeout_min: u64,
-    pub plan_commit_s: u64,
     /// `[autopilot] enabled`: the default of each project's autopilot switch.
     pub autopilot: bool,
+    /// The factory with this file laid over it (agents, roles, limits, plan words, cards, measures, prompts).
+    pub factory: Arc<crate::factory::Factory>,
+    /// Why this file or the factory is not as written (a parse error, an unknown key, an invalid factory): shown on the page and told to the manager of no project, never silently ignored.
+    pub error: Option<String>,
 }
 
 pub fn get<T: DeserializeOwned>(t: &toml::Table, path: &[&str]) -> Option<T> {
     path[1..].iter().try_fold(t.get(path[0])?, |v, key| v.get(key))?.clone().try_into().ok()
 }
 
+/// Yesterday's key -> today's: `[models.*]` and `[ceo]` become `[roles.*]` and `[metrics.*]`, the `[lanes]`/`[merge]`/`[plan]` limits become `[limits]`.
+const MOVES: &str = "models.manager>roles.manager;models.workers>roles.worker;models.ceo>roles.reviewer;ceo.agent>roles.reviewer.agent;ceo.model>roles.reviewer.model;ceo.effort>roles.reviewer.effort;ceo.fallback>roles.reviewer.fallback;ceo.max_per_day>roles.reviewer.max_per_day;ceo.review_after_minutes>roles.reviewer.review_after_minutes;ceo.targets.merged_per_day>metrics.merged.target;ceo.targets.median_merge_minutes>metrics.median.target;ceo.targets.first_try_pct>metrics.first_try.target;ceo.targets.idle_minutes>metrics.idle.target;ceo.targets.stuck>metrics.stuck.target;ceo.targets.main_red>metrics.main_red.target;lanes.max_load>limits.max_load;lanes.inactivity_minutes>limits.inactivity_minutes;lanes.long_running_minutes>limits.long_running_minutes;lanes.max_parallel>limits.max_parallel;autopilot.max_parallel>limits.max_parallel;merge.stage_timeout_minutes>limits.stage_timeout_minutes;plan.commit_seconds>limits.plan_commit_seconds";
+
+fn take(t: &mut toml::Table, path: &[&str]) -> Option<toml::Value> {
+    let (first, rest) = path.split_first()?;
+    if rest.is_empty() {
+        return t.remove(*first);
+    }
+    let child = t.get_mut(*first)?.as_table_mut()?;
+    let v = take(child, rest)?;
+    let _ = child.is_empty().then(|| t.remove(*first));
+    Some(v)
+}
+
+/// Puts `v` (yesterday's value) at `path`, under anything already written there under its new name.
+fn put(t: &mut toml::Table, path: &[&str], v: toml::Value) {
+    if path.len() == 1 {
+        let e = t.entry(path[0]).or_insert_with(|| v.clone());
+        let old = std::mem::replace(e, v);
+        crate::factory::merge(e, &old);
+    } else if let Some(child) = t.entry(path[0]).or_insert_with(|| toml::Value::Table(Default::default())).as_table_mut() {
+        put(child, &path[1..], v);
+    }
+}
+
+/// Moves yesterday's sections under their new names (a key already written under its new name wins); true when anything moved.
+pub fn migrate(t: &mut toml::Table) -> bool {
+    let mut moved = false;
+    for (from, to) in MOVES.split(';').filter_map(|m| m.split_once('>')) {
+        if let Some(v) = take(t, &from.split('.').collect::<Vec<_>>()) {
+            put(t, &to.split('.').collect::<Vec<_>>(), v);
+            moved = true;
+        }
+    }
+    moved
+}
+
+/// Once, at start: `config.toml` is rewritten with its sections under the new names and the old text kept next to it. A file already rewritten (the copy exists), or one nothing moves in, is left alone.
+pub fn migrate_file() {
+    let (path, copy) = (tirith_home().join("config.toml"), tirith_home().join("config.toml.before-factory"));
+    let Ok(text) = std::fs::read_to_string(&path) else { return };
+    let rewritten = text.parse::<toml::Table>().ok().and_then(|mut t| migrate(&mut t).then(|| toml::to_string(&t).ok()).flatten());
+    if let Some(out) = rewritten.filter(|_| !copy.exists()) {
+        let _ = std::fs::write(&copy, &text).map(|_| std::fs::write(&path, out));
+    }
+}
+
 impl Config {
     pub fn load() -> Config {
-        let t: toml::Table = std::fs::read_to_string(tirith_home().join("config.toml")).ok().and_then(|s| s.parse().ok()).unwrap_or_default();
-        let mut agents: BTreeMap<String, Agent> = get(&t, &["agents"]).unwrap_or_default();
-        agents.entry("codex".into()).or_insert_with(|| Agent { command: "codex".into(), ..Default::default() });
+        let text = std::fs::read_to_string(tirith_home().join("config.toml")).unwrap_or_default();
+        let (mut t, parsed) = match text.parse::<toml::Table>() {
+            Ok(t) => (t, None),
+            Err(_) if text.trim().is_empty() => (Default::default(), None),
+            Err(e) => (Default::default(), Some(format!("config.toml does not parse ({e}); the defaults run instead"))),
+        };
+        migrate(&mut t);
+        let factory = crate::factory::load(&t);
+        // Keys nothing reads any more, named for the owner: an unknown section, or a leftover `[models.*]` role (`choices`/`efforts` lists stay). The factory-shaped sections are checked by the factory loader itself.
+        const KNOWN: [&str; 19] = ["projects", "agents", "launch", "models", "server", "merge", "autopilot", "app", "network", "messenger", "owner", "rooms", "guard", "factory", "roles", "limits", "plan", "cards", "metrics"];
+        let mut unknown: Vec<String> = t.keys().filter(|k| !KNOWN.contains(&k.as_str())).cloned().collect();
+        if let Some(m) = t.get("models").and_then(|v| v.as_table()) {
+            unknown.extend(m.keys().filter(|k| !matches!(k.as_str(), "choices" | "efforts")).map(|k| format!("models.{k}")));
+        }
+        let error = [parsed, crate::factory::error().map(|e| format!("factory.invalid: {e} (the last good factory keeps running)")), (!unknown.is_empty()).then(|| format!("config.toml has keys nothing reads: {}", unknown.join(", ")))]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
         Config {
             raw: t.clone(),
             projects: get(&t, &["projects"]).unwrap_or_default(),
-            agents,
             launch: get(&t, &["launch", "command"]).unwrap_or_default(),
-            workers_agent: get(&t, &["models", "workers", "agent"]),
             port: std::env::var("TIRITH_PORT").ok().and_then(|p| p.parse().ok()).or_else(|| get(&t, &["server", "port"])).unwrap_or(7717),
-            max_parallel: get(&t, &["lanes", "max_parallel"]).or_else(|| get(&t, &["autopilot", "max_parallel"])),
-            max_load: get(&t, &["lanes", "max_load"]).unwrap_or(2.0),
-            inactivity_min: get(&t, &["lanes", "inactivity_minutes"]).unwrap_or(20),
-            long_running_min: get(&t, &["lanes", "long_running_minutes"]).unwrap_or(30),
             push: get(&t, &["merge", "push"]).unwrap_or(true),
-            stage_timeout_min: get(&t, &["merge", "stage_timeout_minutes"]).unwrap_or(30),
-            plan_commit_s: get(&t, &["plan", "commit_seconds"]).unwrap_or(120),
             autopilot: get(&t, &["autopilot", "enabled"]).unwrap_or(true),
+            factory,
+            error: (!error.is_empty()).then(|| error.join("; ")),
         }
     }
 
@@ -118,12 +155,6 @@ pub struct Stage {
     /// "deploy" marks a stage that publishes main: it runs after a merge, never as a check before it.
     #[serde(default)]
     pub kind: String,
-}
-
-#[derive(Deserialize, Clone, Default)]
-pub struct Pipeline {
-    #[serde(default)]
-    pub stages: Vec<Stage>,
 }
 
 #[derive(Deserialize, Clone, Default)]
@@ -151,7 +182,7 @@ impl Manifest {
         Manifest {
             roadmap: get(&t, &["roadmap"]).unwrap_or_else(|| "docs/TODO.md".into()),
             lane_exclude: get(&t, &["lane_exclude"]).unwrap_or_default(),
-            stages: get::<Vec<Pipeline>>(&t, &["pipelines"]).unwrap_or_default().into_iter().flat_map(|p| p.stages).collect(),
+            stages: get::<Vec<toml::Table>>(&t, &["pipelines"]).unwrap_or_default().iter().filter_map(|p| get::<Vec<Stage>>(p, &["stages"])).flatten().collect(),
             rules: get(&t, &["rules"]).unwrap_or_default(),
         }
     }

@@ -34,8 +34,7 @@ pub async fn worker(app: Shared) {
     {
         // ... and its pipeline and runs, left "running" by the restart, end as interrupted.
         let db = app.db.lock().unwrap();
-        let _ = db.execute("UPDATE pipelines SET status = 'interrupted', ended_at = ?1 WHERE status = 'running'", [now_iso()]);
-        let _ = db.execute("UPDATE runs SET status = 'interrupted', ended_at = ?1 WHERE status = 'running'", [now_iso()]);
+        ["pipelines", "runs"].into_iter().for_each(|t| drop(db.execute(&format!("UPDATE {t} SET status = 'interrupted', ended_at = ?1 WHERE status = 'running'"), [now_iso()])));
     }
     loop {
         recheck_red(&app).await;
@@ -90,10 +89,7 @@ async fn next_batch(app: &Shared) -> Vec<Lane> {
     red.dedup();
     for p in red {
         let Some(why) = app.kv(&format!("main_red:{p}")) else { continue };
-        let head = match app.cfg().project(&p).map(|p| p.repo()) {
-            Some(r) => git(&r, &["rev-parse", "HEAD"]).await.unwrap_or_default(),
-            None => String::new(),
-        };
+        let head = if let Some(r) = app.cfg().project(&p).map(|p| p.repo()) { git(&r, &["rev-parse", "HEAD"]).await.unwrap_or_default() } else { String::new() };
         if head.len() < 8 || why.ends_with(&head[..8]) {
             queued.retain(|l| l.project != p);
         }
@@ -102,7 +98,7 @@ async fn next_batch(app: &Shared) -> Vec<Lane> {
     if first.solo {
         return vec![first];
     }
-    queued.into_iter().filter(|l| l.project == first.project && !l.solo).take(5).collect()
+    queued.into_iter().filter(|l| l.project == first.project && !l.solo).take(app.cfg().factory.limits.merge_train).collect()
 }
 
 fn glob(pattern: &str) -> Regex {
@@ -163,7 +159,7 @@ fn limit_from(get: impl Fn(&str) -> Option<String>, project: &str, stage: &str, 
 }
 
 pub fn stage_limit_min(app: &Shared, project: &str, stage: &str) -> u64 {
-    limit_from(|k| app.kv(k), project, stage, app.cfg().stage_timeout_min)
+    limit_from(|k| app.kv(k), project, stage, app.cfg().factory.limits.stage_timeout_minutes)
 }
 /// An item's check runs with the `VAR=value` words (JAVA_HOME, ANDROID_HOME) of the pipeline stage it belongs to: the stage named in it, or one running the same program.
 fn stage_env(stages: &[Stage], check: &str) -> Vec<(String, String)> {
@@ -194,9 +190,7 @@ async fn run_stage(app: &Shared, pipe: &Pipe, dir: &Path, name: &str, run: &str)
         Ok(Ok(s)) if s.success() => "passed",
         Ok(_) => "failed",
         Err(_) => {
-            if let Some(pid) = child.id() {
-                kill_group(pid, libc::SIGKILL);
-            }
+            child.id().into_iter().for_each(|pid| kill_group(pid, libc::SIGKILL));
             let _ = child.wait().await;
             // A stage that timed out gets a doubled limit next time, for that project and stage only.
             app.set_kv(&format!("stage_learned:{}:{name}", pipe.project), Some(&(stage_limit_min(app, &pipe.project, name) * 2).to_string()));
@@ -207,11 +201,7 @@ async fn run_stage(app: &Shared, pipe: &Pipe, dir: &Path, name: &str, run: &str)
     row["status"] = json!(status);
     app.emit("run", row);
     app.emit("pipeline", pipeline(app, &pipe.id));
-    if status == "passed" {
-        Ok(())
-    } else {
-        Err(format!("check '{name}' {status}. Last lines of its log:\n{}", tail(&log, 60)))
-    }
+    (status == "passed").then_some(()).ok_or_else(|| format!("check '{name}' {status}. Last lines of its log:\n{}", tail(&log, 60)))
 }
 
 async fn merge_slot(project: &Project, manifest: &Manifest) -> Result<PathBuf, String> {
@@ -264,12 +254,7 @@ async fn train(app: &Shared, batch: Vec<Lane>) {
         Ok(x) => x,
         Err(e) if disk_full(&e) => {
             // Out of disk is not the lanes' fault: they leave the queue (no slot held) and wait for space.
-            for l in &batch {
-                app.update_lane(&l.id, |x| {
-                    x.status = "waiting-disk".into();
-                    x.note = "the merge worktree could not be made: no space left on device".into();
-                });
-            }
+            batch.iter().for_each(|l| drop(app.update_lane(&l.id, |x| (x.status, x.note) = ("waiting-disk".into(), "the merge worktree could not be made: no space left on device".into()))));
             return manager::notify(app, &pid, &format!("the merge of {pid} waits for disk: {e}"));
         }
         Err(e) => {
@@ -304,9 +289,7 @@ async fn train(app: &Shared, batch: Vec<Lane>) {
             }
         }
     }
-    if merged.is_empty() && ticks.is_empty() {
-        return close_pipeline(app, &pipe, "failed");
-    }
+    let Some(()) = (!merged.is_empty() || !ticks.is_empty()).then_some(()) else { return close_pipeline(app, &pipe, "failed") };
     let changed: Vec<String> = git(&slot, &["diff", "--name-only", &base, "HEAD"]).await.unwrap_or_default().lines().map(String::from).collect();
     let mut stages: Vec<(String, String)> = if merged.is_empty() { vec![] } else { manifest.stages.iter().filter(|s| !deploys(s) && wanted(s, &changed)).map(|s| (s.name.clone(), s.run.clone())).collect() };
     stages.extend(merged.iter().filter_map(|l| check(l).map(|c| (format!("check {}", l.id), c))));
@@ -385,16 +368,12 @@ async fn land(app: &Shared, project: &Project, pipe: &Pipe, slot: &Path, base: &
     app.set_kv(&blocked, None);
     // Main has moved: its deploy is owed from here on, so a daemon stopped before the end of this function deploys when it is back.
     let owed = format!("deploy_due:{}", project.id);
-    if app.kv(&owed).is_none() {
-        app.set_kv(&owed, Some("0@0"));
-    }
+    let _ = app.kv(&owed).is_none().then(|| app.set_kv(&owed, Some("0@0")));
     close_pipeline(app, pipe, "passed");
     clear_red(app, &project.id);
     let sha8 = &sha[..8.min(sha.len())];
     if app.cfg().push && git(&repo, &["remote", "get-url", "origin"]).await.is_ok() {
-        if let Err(e) = git(&repo, &["push", "-q", "origin", "HEAD"]).await {
-            app.event("", &project.id, "error", "push", &e, "");
-        }
+        drop(git(&repo, &["push", "-q", "origin", "HEAD"]).await.map_err(|e| app.event("", &project.id, "error", "push", &e, "")));
     }
     for l in &done {
         if !l.workspace.is_empty() {
@@ -409,11 +388,8 @@ async fn land(app: &Shared, project: &Project, pipe: &Pipe, slot: &Path, base: &
         });
     }
     let items: Vec<&str> = done.iter().map(|l| l.item.as_str()).collect();
-    let files: Vec<&str> = changed.iter().take(10).map(String::as_str).collect();
     let working: Vec<String> = app.lanes.lock().unwrap().values().filter(|l| l.project == project.id && l.pid.is_some()).map(|l| l.id.clone()).collect();
-    for id in working {
-        lanes::tell(&id, &format!("[tirith] main advanced: {} (files: {})", items.join("; "), files.join(", ")));
-    }
+    working.iter().for_each(|id| lanes::tell(id, &format!("[tirith] main advanced: {} (files: {})", items.join("; "), changed.iter().take(10).map(String::as_str).collect::<Vec<_>>().join(", "))));
     // A merge is news, not a question: the manager gets a turn for it only when it leaves the plan without open work.
     manager::inform(app, &project.id, &format!("merged on {} at {sha8}: {}", project.id, items.join("; ")));
     if plan::read(app, &project.id).is_ok_and(|steps| !steps.iter().flat_map(|s| &s.items).any(|i| !i.done && !lanes::is_autopilot_skipped(&i.text))) {
@@ -438,9 +414,7 @@ async fn deploy(app: &Shared, project: &Project, changed: &[String]) {
     let prev = app.kv(&key).and_then(|v| v.split_once('@')?.1.parse::<u64>().ok()).unwrap_or(0);
     let changed = if prev > 0 { &[][..] } else { changed };
     let stages: Vec<&Stage> = manifest.stages.iter().filter(|s| deploys(s) && (changed.is_empty() || wanted(s, changed))).collect();
-    if stages.is_empty() {
-        return app.set_kv(&key, None); // nothing to deploy for this merge, or no deploy stage at all: nothing is owed
-    }
+    let Some(()) = (!stages.is_empty()).then_some(()) else { return app.set_kv(&key, None) }; // nothing to deploy for this merge, or no deploy stage at all: nothing is owed
     app.set_kv(&key, Some(&format!("0@{prev}")));
     let sha = git(&project.repo(), &["rev-parse", "HEAD"]).await.unwrap_or_default();
     let pipe = open_pipeline(app, &project.id, "deploy", "", &sha);
@@ -476,7 +450,7 @@ async fn main_check(app: &Shared, project: &Project, slot: &Path, sha: &str, sta
     close_pipeline(app, &pipe, if ok { "passed" } else { "failed" });
     MAIN_OK.lock().unwrap().insert(key, ok);
     if ok {
-        clear_red(app, &project.id);
+        clear_red(app, &project.id)
     }
     ok
 }
@@ -498,9 +472,7 @@ pub fn retry(app: &Shared, id: &str) -> Result<(), String> {
     (!(p.is_null())).then_some(()).ok_or_else(|| format!("no pipeline '{id}'"))?;
     if p["kind"] == "merge" {
         let failed: Vec<Lane> = p["lanes"].as_str().unwrap_or("").split(',').filter_map(|l| app.lane(l)).filter(|l| l.status == "failed").collect();
-        if failed.is_empty() {
-            return Err("no lane of this pipeline is failed".into());
-        }
+        (!failed.is_empty()).then_some(()).ok_or("no lane of this pipeline is failed".to_string())?;
         failed.iter().for_each(|l| drop(app.update_lane(&l.id, |x| x.attempts = 0)));
         requeue(app, &failed, false, "retried");
         app.merge_wake.notify_one();

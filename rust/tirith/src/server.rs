@@ -85,6 +85,7 @@ async fn state(State(app): State<Shared>) -> Json<Value> {
         "events": app.recent("events", &["id", "at", "lane", "project", "kind", "tool", "summary"], None, 200),
         "owner": manager::owner_open(&app),
         "busy": manager::busy(),
+        "factory_error": app.cfg().error,
     }))
 }
 
@@ -196,9 +197,7 @@ async fn hook(State(app): State<Shared>, Path(event): Path<String>, headers: Hea
     let summary = if event == "UserPromptSubmit" { rules::summary("", &json!({"prompt": p["prompt"]})) } else { rules::summary(&tool, &p["tool_input"]) };
     let (lane_id, project_id) = (lane.as_ref().map(|l| l.id.clone()).unwrap_or_default(), project.as_ref().map(|p| p.id.clone()).unwrap_or_default());
     if let Some(l) = &lane {
-        if !session.is_empty() && l.session != session {
-            app.update_lane(&l.id, |x| x.session = session.clone());
-        }
+        drop((!session.is_empty() && l.session != session).then(|| app.update_lane(&l.id, |x| x.session = session.clone())));
         if let Some(m) = app.lanes.lock().unwrap().get_mut(&l.id) {
             m.last_activity = now_s(); // in memory only: activity is not worth a disk write per tool call
         }
@@ -213,21 +212,12 @@ async fn hook(State(app): State<Shared>, Path(event): Path<String>, headers: Hea
                 "permissionDecision": "deny", "permissionDecisionReason": why}}));
         }
     }
-    if event != "PostToolUse" {
-        app.event(&lane_id, &project_id, &event, &tool, &summary, &session);
-    }
+    let _ = (event != "PostToolUse").then(|| app.event(&lane_id, &project_id, &event, &tool, &summary, &session));
     let Some(l) = lane else { return Json(json!({})) };
     if event == "PostToolUse" {
         let lines = lanes::drain(&l.id);
-        if lines.is_empty() {
-            return Json(json!({}));
-        }
-        if l.status == "waiting" && !l.resume.is_empty() {
-            app.update_lane(&l.id, |x| {
-                x.status = "running".into(); // the answer reached the live agent
-                x.resume.clear();
-            });
-        }
+        let Some(lines) = (!lines.is_empty()).then_some(lines) else { return Json(json!({})) };
+        let _ = (l.status == "waiting" && !l.resume.is_empty()).then(|| app.update_lane(&l.id, |x| (x.status, x.resume) = ("running".into(), String::new()))); // the answer reached the live agent
         return Json(json!({"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": lines.join("\n")}}));
     }
     if event == "PreToolUse" {

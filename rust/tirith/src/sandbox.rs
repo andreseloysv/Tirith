@@ -94,9 +94,7 @@ pub fn wrap(app: &Shared, who: &str, argv: Vec<String>) -> Launch {
     let mut gradle = std::env::var("GRADLE_OPTS").unwrap_or_default();
     for scheme in ["http", "https"] {
         for (k, v) in [("proxyHost", "127.0.0.1"), ("proxyPort", &port.to_string()), ("proxyUser", &user), ("proxyPassword", &token), ("nonProxyHosts", "localhost|127.0.0.1")] {
-            if !gradle.contains(&format!("-D{scheme}.{k}=")) {
-                gradle += &format!(" -D{scheme}.{k}={v}");
-            }
+            gradle += &if gradle.contains(&format!("-D{scheme}.{k}=")) { String::new() } else { format!(" -D{scheme}.{k}={v}") };
         }
     }
     gradle += " -Djdk.http.auth.tunneling.disabledSchemes= -Djdk.http.auth.proxying.disabledSchemes=";
@@ -183,9 +181,7 @@ static HOSTS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)(?:^|[^a-z0-9_
 
 /// For agent sessions NOT started by Tirith (the owner's own sessions): the refusal when a tool call names a blocked destination (a URL or host in a Bash command, a WebFetch url), else `None`.
 pub fn check_command(tool: &str, input: &Value) -> Option<String> {
-    if BLOCKS.read().unwrap().is_empty() {
-        return None;
-    }
+    (!BLOCKS.read().unwrap().is_empty()).then_some(())?;
     let text = match tool {
         "Bash" => input["command"].as_str().filter(|c| !c.contains("tirith net "))?,
         "WebFetch" => input["url"].as_str()?,
@@ -226,15 +222,13 @@ pub fn tags(tool: &str, input: &Value) -> Vec<(&'static str, String)> {
     }
     out.extend(GIT_PUSH.captures_iter(cmd).map(|c| ("git_push", format!("git {}", c[1].trim()))));
     out.extend(GH.captures_iter(cmd).map(|c| ("gh", format!("gh {}", c[1].trim()))));
-    let mut names: Vec<&str> = vec![];
-    for n in ENV.captures_iter(cmd).filter_map(|c| c.get(1).or(c.get(2))).map(|m| m.as_str()) {
-        if !ENV_SKIP.contains(&n) && !n.starts_with("TIRITH") && !names.contains(&n) {
-            names.push(n);
+    let names: Vec<&str> = ENV.captures_iter(cmd).filter_map(|c| c.get(1).or(c.get(2))).map(|m| m.as_str()).filter(|n| !ENV_SKIP.contains(n) && !n.starts_with("TIRITH")).fold(vec![], |mut v, n| {
+        if !v.contains(&n) {
+            v.push(n)
         }
-    }
-    if !names.is_empty() {
-        out.push(("env", names.join(", ")));
-    }
+        v
+    });
+    out.extend((!names.is_empty()).then(|| ("env", names.join(", "))));
     out
 }
 
@@ -262,12 +256,7 @@ fn block(app: &Shared, rule: &str, on: bool) -> Result<String, String> {
     let db = app.db.lock().unwrap();
     let mut list = BLOCKS.write().unwrap();
     list.retain(|r| *r != rule);
-    if on {
-        let _ = db.execute("INSERT OR REPLACE INTO net_blocks (rule, at) VALUES (?1, ?2)", [&rule, &now_iso()]);
-        list.push(rule.clone());
-    } else {
-        let _ = db.execute("DELETE FROM net_blocks WHERE rule = ?1", [&rule]);
-    }
+    let _ = if on { db.execute("INSERT OR REPLACE INTO net_blocks (rule, at) VALUES (?1, ?2)", [&rule, &now_iso()]).map(|_| list.push(rule.clone())) } else { db.execute("DELETE FROM net_blocks WHERE rule = ?1", [&rule]).map(|_| ()) };
     drop((db, list));
     app.emit("net", json!({"blocks": *BLOCKS.read().unwrap()}));
     Ok(rule)
