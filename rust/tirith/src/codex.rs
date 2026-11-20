@@ -38,10 +38,10 @@ pub fn options(cfg: &crate::config::Config, argv: &mut Vec<String>, effort: Opti
     }
 }
 
-/// The argv of one Muse turn. It runs unattended inside Tirith's own sandbox, so its approvals and inner sandbox are off (`--yolo`, the parallel of the Codex bypass above); outside the manager its file-writing tools are off too.
-fn muse_argv(command: &str, role: &str, model: Option<&str>, effort: Option<&str>, workspace: &str, session: Option<&str>, prompt_file: &str) -> Vec<String> {
+/// The argv of one Muse turn. It runs unattended inside Tirith's own sandbox, so its approvals and inner sandbox are off (`--yolo`, the parallel of the Codex bypass above); a read-only role's file-writing tools are off too.
+fn muse_argv(command: &str, read_only: bool, model: Option<&str>, effort: Option<&str>, workspace: &str, session: Option<&str>, prompt_file: &str) -> Vec<String> {
     let mut a: Vec<String> = [command, "exec", "--json", "--yolo", "--workspace", workspace].map(String::from).to_vec();
-    a.extend((role != "manager").then(|| "--disable-write".to_string()));
+    a.extend(read_only.then(|| "--disable-write".to_string()));
     for (f, v) in [("--model", model), ("--reasoning-effort", effort), ("--session-id", session), ("--prompt-file", Some(prompt_file))] {
         if let Some(v) = v {
             a.extend([f.into(), v.into()]);
@@ -56,17 +56,21 @@ pub async fn turn(app: &Shared, role: &str, project: &str, resume: Option<&str>,
     let muse = setting.agent == "muse";
     let name = if muse { "the muse agent" } else { "Codex" };
     let cfg = app.cfg();
+    // The role's factory shape, not its name, decides: `access = "read"` runs read-only; a chat role (a bot's key counts as one) keeps the chats' folder and the longer turn.
+    let read_only = cfg.factory.role::<String>(role, "access").as_deref() == Some("read");
+    let chat = cfg.factory.role::<String>(role, "session").is_none_or(|s| s == "chat");
+    let who = if chat { "manager" } else { role };
     let command = cfg.factory.command(if muse { "muse" } else { "codex" }).ok_or(if muse { "no agent alias 'muse' in config.toml" } else { "Codex is not configured" })?;
-    let dir = app.home.join(role).join(project);
+    let dir = app.home.join(who).join(project);
     // Muse takes the message from a file, and a fresh session of it has never seen the role's instructions: they ride in its first message.
     let file = muse.then(|| dir.join(".turn-prompt.txt"));
     let argv = if let Some(file) = &file {
         let _ = std::fs::create_dir_all(&dir);
         std::fs::write(file, if resume.is_some() { input.to_string() } else { format!("{instructions}\n\n{input}") }).map_err(|e| e.to_string())?;
-        muse_argv(&command, role, setting.model.as_deref(), setting.effort.as_deref(), &dir.display().to_string(), resume, &file.display().to_string())
+        muse_argv(&command, read_only, setting.model.as_deref(), setting.effort.as_deref(), &dir.display().to_string(), resume, &file.display().to_string())
     } else {
         let mut argv = vec![command, "exec".into(), "--json".into(), "--skip-git-repo-check".into()];
-        argv.extend(if role == "manager" { vec!["--dangerously-bypass-approvals-and-sandbox".into()] } else { vec!["--sandbox".into(), "read-only".into(), "--ephemeral".into()] });
+        argv.extend(if read_only { vec!["--sandbox".into(), "read-only".into(), "--ephemeral".into()] } else { vec!["--dangerously-bypass-approvals-and-sandbox".into()] });
         argv.extend(setting.model.into_iter().flat_map(|m| ["--model".to_string(), m]));
         options(&cfg, &mut argv, setting.effort.as_deref());
         argv.extend(["-c".into(), format!("developer_instructions={}", toml::Value::String(instructions.into()))]);
@@ -74,7 +78,7 @@ pub async fn turn(app: &Shared, role: &str, project: &str, resume: Option<&str>,
         argv.push("-".into());
         argv
     };
-    let (mut child, mut stdin, stdout) = manager::spawn_chat(app, role, project, argv)?;
+    let (mut child, mut stdin, stdout) = manager::spawn_chat(app, who, project, argv)?;
     let pid = child.id().unwrap_or(0);
     started(pid);
     let work = async {
@@ -111,19 +115,17 @@ pub async fn turn(app: &Shared, role: &str, project: &str, resume: Option<&str>,
         }
         let status = child.wait().await.map_err(|e| e.to_string())?;
         if !complete || !status.success() {
-            return Err(failure.unwrap_or_else(|| format!("{name} ended without completing the turn ({status}); see logs/{role}.log")));
+            return Err(failure.unwrap_or_else(|| format!("{name} ended without completing the turn ({status}); see logs/{who}.log")));
         }
         if text.trim().is_empty() {
             return Err(format!("{name} returned an empty answer"));
         }
         Ok(text.trim().to_string())
     };
-    let result = tokio::time::timeout(Duration::from_secs(if role == "manager" { 1800 } else { 600 }), work).await;
+    let result = tokio::time::timeout(Duration::from_secs(if chat { 1800 } else { 600 }), work).await;
     kill_group(pid, libc::SIGKILL);
     let _ = child.wait().await;
-    if let Some(file) = &file {
-        let _ = std::fs::remove_file(file);
-    }
+    file.iter().for_each(|f| drop(std::fs::remove_file(f)));
     result.map_err(|_| format!("{name} timed out"))?
 }
 

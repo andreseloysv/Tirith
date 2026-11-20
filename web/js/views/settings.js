@@ -3,7 +3,7 @@
 // its own two cards (autopilot, commit guard) come first; the rest is the same for every project, and says so.
 import { html, useState } from '../../vendor/preact-htm.js';
 import { useStore, useFetch, api } from '../store.js';
-import { RoleCard, ROLES } from './settings/models.js';
+import { RoleCard, roleList } from './settings/models.js';
 import { useAction } from './settings/ui.js';
 
 const THEME_KEY = 'tirith.theme';
@@ -63,9 +63,9 @@ export function Settings({ project }) {
   return html`<section class="msettings">
     ${project ? html`${own}<h2 class="rsec">For all projects</h2>` : null}
     <${Appearance} />
-    <p class="mut sm mlead">Model and effort come from <code>config.toml</code> under <code>[models]</code>; what you save here overrides it until you go back to config.toml.</p>
+    <p class="mut sm mlead">Roles come from the factory; their model and effort from <code>config.toml</code> under <code>[roles]</code>. What you save here overrides it until you go back to config.toml.</p>
     ${err && !M ? html`<div class="ierr">Could not read the models: ${err.message}</div>` : null}
-    ${M ? ROLES.map(([id, label, note]) => html`<${RoleCard} key=${id} id=${id} label=${label} note=${note} M=${M} reload=${reload} />`) : null}
+    ${M ? roleList(M).map(([id, label, note]) => html`<${RoleCard} key=${id} id=${id} label=${label} note=${note} M=${M} reload=${reload} />`) : null}
     ${project ? null : own}
   </section>`;
 }
