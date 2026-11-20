@@ -133,7 +133,7 @@ impl Factory {
         let bad = [
             t.keys().find(|k| !SECTIONS.contains(&k.as_str())).map(|k| format!("unknown section '{k}'")),
             unknown_in("agents", &["protocol", "model_flag", "effort_flag", "chat_args", "lane_args", "resume_args", "args", "command", "settings", "profile"]),
-            unknown_in("roles", &["agent", "model", "effort", "fallback", "session", "scope", "extends", "access", "prompt", "idle_minutes", "max_per_day", "review_after_minutes", "runs_on", "name"]),
+            unknown_in("roles", &["agent", "model", "effort", "fallback", "session", "scope", "extends", "access", "prompt", "idle_minutes", "max_per_day", "review_after_minutes", "runs_on", "name", "face"]),
             unknown_in("metrics", &["label", "target", "at_least"]),
             unknown_flat("plan", &["role_prefixes", "owner_wait", "waits_for"]),
             unknown_flat("cards", &["kinds"]),
@@ -153,7 +153,9 @@ impl Factory {
                 .iter()
                 .find_map(|(n, r)| r.get("prompt").and_then(|p| p.as_array()).into_iter().flatten().filter_map(|p| p.as_str()).find(|p| !self.prompts.contains_key(&stem(p))).map(|p| format!("role '{n}' names missing prompt '{p}'"))),
             sub("metrics").and_then(|m| m.keys().find(|id| !MEASURES.contains(&id.as_str())).map(|id| format!("unknown measure '{id}'"))),
-            routes.iter().find_map(|r| r.as_table().and_then(|r| r.keys().find(|k| !["on", "to", "mode", "chat", "phone", "after_minutes", "then", "days", "at", "task"].contains(&k.as_str())).map(|k| format!("unknown key routes.{k}")))),
+            routes.iter().find_map(|r| {
+                r.as_table().and_then(|r| r.keys().find(|k| !["on", "to", "mode", "chat", "phone", "after_minutes", "then", "days", "at", "task", "title", "id", "enabled"].contains(&k.as_str())).map(|k| format!("unknown key routes.{k}")))
+            }),
             routes
                 .iter()
                 .find(|r| !EVENTS.split(';').any(|e| e == str_of(r, "on")) || !is_role(str_of(r, "to")) || !is_role(str_of(r, "then")) || !matches!(str_of(r, "mode"), "" | "turn" | "note"))
@@ -212,9 +214,9 @@ impl Factory {
         self.prompts.get(name).cloned().unwrap_or_else(|| embedded_prompts().get(name).cloned().unwrap_or_default())
     }
 
-    /// A role's prompt files, one after another.
+    /// A role's prompt files, one after another, with `{name}` its factory name (a bot's, from config.toml).
     pub fn prompts_of(&self, role: &str) -> String {
-        self.role::<Vec<String>>(role, "prompt").unwrap_or_default().iter().map(|p| self.prompt(&stem(p))).collect::<Vec<_>>().join("\n")
+        self.role::<Vec<String>>(role, "prompt").unwrap_or_default().iter().map(|p| self.prompt(&stem(p))).collect::<Vec<_>>().join("\n").replace("{name}", &self.role::<String>(role, "name").unwrap_or_else(|| role.to_string()))
     }
 }
 
@@ -227,16 +229,6 @@ pub fn stamp(overlay: &toml::Table) -> Option<SystemTime> {
     let dir = dir(overlay)?;
     let m = |p: &Path| std::fs::metadata(p).and_then(|x| x.modified()).ok();
     std::fs::read_dir(dir.join("prompts")).into_iter().flatten().flatten().filter_map(|e| m(&e.path())).chain(m(&dir.join("factory.toml"))).max()
-}
-
-fn read_prompts(dir: &Path) -> BTreeMap<String, String> {
-    std::fs::read_dir(dir.join("prompts"))
-        .into_iter()
-        .flatten()
-        .flatten()
-        .filter(|e| e.path().extension().is_some_and(|x| x == "md"))
-        .filter_map(|e| Some((stem(&e.path().to_string_lossy()), std::fs::read_to_string(e.path()).ok()?)))
-        .collect()
 }
 
 static CURRENT: RwLock<Option<Arc<Factory>>> = RwLock::new(None);
@@ -254,8 +246,17 @@ pub fn error() -> Option<String> {
 
 /// (Re)loads the factory under config.toml's overlay; a bad version keeps the last good one and is remembered in `error()`.
 pub fn load(overlay: &toml::Table) -> Arc<Factory> {
+    let prompts = |dir: &Path| -> BTreeMap<String, String> {
+        std::fs::read_dir(dir.join("prompts"))
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter(|e| e.path().extension().is_some_and(|x| x == "md"))
+            .filter_map(|e| Some((stem(&e.path().to_string_lossy()), std::fs::read_to_string(e.path()).ok()?)))
+            .collect()
+    };
     let attempt = match dir(overlay) {
-        Some(d) => std::fs::read_to_string(d.join("factory.toml")).map_err(|e| format!("factory: {}: {e}", d.display())).and_then(|text| parse(&text, read_prompts(&d), overlay)),
+        Some(d) => std::fs::read_to_string(d.join("factory.toml")).map_err(|e| format!("factory: {}: {e}", d.display())).and_then(|text| parse(&text, prompts(&d), overlay)),
         None => parse(TEXT, embedded_prompts(), overlay),
     };
     let f = match attempt {

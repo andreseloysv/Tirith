@@ -129,11 +129,6 @@ impl Config {
     pub fn project(&self, id: &str) -> Option<&Project> {
         self.projects.iter().find(|p| p.id == id)
     }
-
-    pub fn project_for(&self, cwd: &str) -> Option<&Project> {
-        let cwd = Path::new(cwd);
-        self.projects.iter().filter(|p| !p.repo.is_empty()).find(|p| cwd.starts_with(p.repo()) || cwd.starts_with(p.lanes_dir()))
-    }
 }
 
 #[derive(Deserialize, Clone, Default)]

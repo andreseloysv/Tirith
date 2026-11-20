@@ -52,7 +52,7 @@ fn muse_argv(command: &str, read_only: bool, model: Option<&str>, effort: Option
 
 pub async fn turn(app: &Shared, role: &str, project: &str, resume: Option<&str>, prompt: (&str, &str), mut event: impl FnMut(&Value), started: impl FnOnce(u32)) -> Result<String, String> {
     let (instructions, input) = prompt;
-    let setting = models::role(app, if project.starts_with("bot-") { project } else { role });
+    let setting = models::role(app, role); // a bot's conversation passes its own role (its key) here
     let muse = setting.agent == "muse";
     let name = if muse { "the muse agent" } else { "Codex" };
     let cfg = app.cfg();
