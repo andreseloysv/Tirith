@@ -8,8 +8,12 @@ use std::sync::{Arc, Mutex, OnceLock, RwLock};
 use std::time::SystemTime;
 
 const TEXT: &str = include_str!("../../../factory/factory.toml");
-const SECTIONS: [&str; 6] = ["agents", "roles", "limits", "plan", "cards", "metrics"];
+const SECTIONS: [&str; 7] = ["agents", "roles", "limits", "plan", "cards", "metrics", "routes"];
 const MEASURES: [&str; 8] = ["merged", "median", "first_try", "idle", "stuck", "main_red", "failed", "owner"];
+/// The closed list of events the code emits, `;`-joined like the moves in config.rs; a route on anything else never fires, so it is invalid.
+const EVENTS: &str = "owner.message;room.message;lane.asked;lane.failed;lane.not_started;lane.long;merge.blocked;merge.landed;main.red;main.green;plan.empty;deploy.done;deploy.failed;metric.red;review.done;schedule;card.opened;card.answered;card.closed;factory.invalid";
+/// One `[[routes]]` entry read for one event: (to, mode, chat, phone, after_minutes).
+pub type Route = (String, String, bool, bool, Option<u64>);
 
 #[derive(Deserialize, Clone, Default)]
 #[serde(default, deny_unknown_fields)]
@@ -90,7 +94,11 @@ fn resolved(roles: &toml::Table, name: &str, up: usize) -> toml::Value {
 pub fn parse(text: &str, prompts: BTreeMap<String, String>, overlay: &toml::Table) -> Result<Factory, String> {
     let mut table = toml::Value::Table(TEXT.parse().map_err(|e| format!("factory.toml: {e}"))?);
     merge(&mut table, &toml::Value::Table(text.parse().map_err(|e| format!("factory.toml: {e}"))?));
-    SECTIONS.into_iter().filter_map(|sec| overlay.get(sec).map(|o| (sec, o))).for_each(|(sec, o)| merge(&mut table[sec], o));
+    SECTIONS.into_iter().filter(|sec| *sec != "routes").filter_map(|sec| overlay.get(sec).map(|o| (sec, o))).for_each(|(sec, o)| merge(&mut table[sec], o));
+    // Routes of config.toml (a bot's routines) stand next to the factory's, never instead of them.
+    if let (Some(dst), Some(src)) = (table["routes"].as_array_mut(), overlay.get("routes").and_then(|r| r.as_array())) {
+        dst.extend(src.iter().cloned());
+    }
     let roles = table["roles"].as_table().cloned().unwrap_or_default();
     roles.keys().cloned().collect::<Vec<_>>().iter().for_each(|name| table["roles"][name] = resolved(&roles, name, 0));
     // The `default` agent under every other (never its chat args for an exec agent), and the codex command needs no config line, as before.
@@ -143,6 +151,13 @@ impl Factory {
             .iter()
             .find_map(|(n, r)| r.get("prompt").and_then(|p| p.as_array()).into_iter().flatten().filter_map(|p| p.as_str()).find(|p| !self.prompts.contains_key(&stem(p))).map(|p| format!("role '{n}' names missing prompt '{p}'"))));
         chk(sub("metrics").and_then(|m| m.keys().find(|id| !MEASURES.contains(&id.as_str())).map(|id| format!("unknown measure '{id}'"))));
+        let routes = t.get("routes").and_then(|r| r.as_array()).cloned().unwrap_or_default();
+        chk(routes.iter().find_map(|r| r.as_table().and_then(|r| r.keys().find(|k| !["on", "to", "mode", "chat", "phone", "after_minutes", "then", "days", "at", "task"].contains(&k.as_str())).map(|k| format!("unknown key routes.{k}")))));
+        let is_role = |n: &str| n.is_empty() || roles.contains_key(n);
+        chk(routes
+            .iter()
+            .find(|r| !EVENTS.split(';').any(|e| e == str_of(r, "on")) || !is_role(str_of(r, "to")) || !is_role(str_of(r, "then")) || !matches!(str_of(r, "mode"), "" | "turn" | "note"))
+            .map(|r| format!("route on '{}' names a missing event, role or mode ('{}', '{}')", str_of(r, "on"), str_of(r, "to"), str_of(r, "mode"))));
         match bad {
             Some(e) => Err(format!("factory: {e}")),
             None => Ok(()),
@@ -185,6 +200,13 @@ impl Factory {
 
     pub fn words(&self, sec: &str, key: &str) -> Vec<String> {
         self.v(&[sec, key]).unwrap_or_default()
+    }
+
+    /// Who hears `on`: (to, mode, chat, phone, after_minutes) of every `[[routes]]` on it.
+    pub fn routes_on(&self, on: &str) -> Vec<Route> {
+        let rows = self.raw.get("routes").and_then(|r| r.as_array()).into_iter().flatten().filter(|r| str_of(r, "on") == on);
+        let b = |r: &toml::Value, k: &str| r.get(k).and_then(|v| v.as_bool()).unwrap_or(false);
+        rows.map(|r| (str_of(r, "to").into(), str_of(r, "mode").into(), b(r, "chat"), b(r, "phone"), r.get("after_minutes").and_then(|v| v.as_integer()).and_then(|n| u64::try_from(n).ok()))).collect()
     }
 
     pub fn prompt(&self, name: &str) -> String {
