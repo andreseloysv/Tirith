@@ -44,15 +44,9 @@ pub fn role_with_source(app: &Shared, role: &str) -> (RoleSetting, &'static str)
     let table: Option<toml::Table> = get(&cfg.raw, &["models", role]).or_else(|| (role == "ceo").then(|| get(&cfg.raw, &["ceo"])).flatten());
     let s = |t: &toml::Table, k: &str| t.get(k).and_then(|v| v.as_str()).map(String::from).filter(|v| !v.is_empty());
     match table {
-        Some(t) if role != "ceo" || t.contains_key("model") || t.contains_key("agent") => (
-            RoleSetting {
-                agent: s(&t, "agent").unwrap_or_else(default_agent),
-                model: s(&t, "model"),
-                effort: s(&t, "effort"),
-                fallback: get(&cfg.raw, &["models", role, "fallback"]).unwrap_or_default(),
-            },
-            "config",
-        ),
+        Some(t) if role != "ceo" || t.contains_key("model") || t.contains_key("agent") => {
+            (RoleSetting { agent: s(&t, "agent").unwrap_or_else(default_agent), model: s(&t, "model"), effort: s(&t, "effort"), fallback: get(&cfg.raw, &["models", role, "fallback"]).unwrap_or_default() }, "config")
+        }
         _ => (RoleSetting { agent: default_agent(), ..Default::default() }, "default"),
     }
 }
