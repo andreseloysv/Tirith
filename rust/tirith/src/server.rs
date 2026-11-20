@@ -11,7 +11,7 @@ use axum::routing::{get, post};
 use axum::{body::Bytes, Json, Router};
 use serde_json::{json, Value};
 use std::{convert::Infallible, sync::OnceLock};
-use tokio_stream::{wrappers::BroadcastStream, Stream, StreamExt};
+use tokio_stream::{wrappers::BroadcastStream, StreamExt};
 
 static PORT: OnceLock<u16> = OnceLock::new();
 pub fn s(v: &Value, k: &str) -> String {
@@ -21,7 +21,7 @@ pub fn router(app: Shared, port: u16) -> Router {
     let _ = PORT.set(port);
     Router::new()
         .route("/api/state", get(state))
-        .route("/api/stream", get(stream))
+        .route("/api/stream", get(|State(app): State<Shared>| async move { Sse::new(BroadcastStream::new(app.tx.subscribe()).filter_map(|m| m.ok().map(|d| Ok::<Event, Infallible>(Event::default().data(d))))).keep_alive(KeepAlive::default()) }))
         .route(
             "/api/plan/{project}",
             get(plan_show).post(|State(app): State<Shared>, Path(project): Path<String>, Json(b): Json<Value>| async move { plan::add(&app, &project, &s(&b, "step"), &s(&b, "text")).await.map(|_| Json(json!({"ok": true}))).map_err(bad) }),
@@ -59,7 +59,7 @@ pub fn router(app: Shared, port: u16) -> Router {
         .route(
             "/api/chat",
             get(|State(app): State<Shared>, Query(q): Query<std::collections::HashMap<String, String>>| async move {
-                Json(json!(app.recent("chat", &["id", "at", "role", "text", "project"], Some(q.get("project").map_or("", String::as_str)), 300)))
+                Json(json!(app.recent("chat", &["id", "at", "role", "text", "project", "factory", "role_hash"], Some(q.get("project").map_or("", String::as_str)), 300)))
             })
             .post(chat),
         )
@@ -107,17 +107,13 @@ async fn state(State(app): State<Shared>) -> Json<Value> {
     Json(json!({
         "projects": projects::list(&app),
         "lanes": lanes,
-        "events": app.recent("events", &["id", "at", "lane", "project", "kind", "tool", "summary"], None, 200),
+        "events": app.recent("events", &["id", "at", "lane", "project", "kind", "tool", "summary", "factory", "role_hash"], None, 200),
         "owner": manager::owner_open(&app),
         "busy": manager::busy(),
         "factory_error": app.cfg().error,
     }))
 }
 
-async fn stream(State(app): State<Shared>) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
-    let rx = BroadcastStream::new(app.tx.subscribe());
-    Sse::new(rx.filter_map(|m| m.ok().map(|d| Ok(Event::default().data(d))))).keep_alive(KeepAlive::default())
-}
 async fn plan_show(State(app): State<Shared>, Path(project): Path<String>) -> R {
     let steps = plan::read(&app, &project).map_err(bad)?;
     let lanes = app.lanes.lock().unwrap().clone();

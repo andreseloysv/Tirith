@@ -197,7 +197,7 @@ async fn provide(app: &Shared, said: &mut String) {
         app.cfg().projects.iter().map(|p| p.id.clone()).chain([String::new()]).chain(app.cfg().factory.roles().into_iter().filter(|r| app.cfg().factory.role::<String>(r, "scope").as_deref() == Some("own"))).collect::<Vec<_>>(),
     );
     let phone = mine().iter().any(|r| !r.devices.is_empty()); // without a phone there is nothing to make
-    for id in projects.iter().filter(|id| phone && !mine().iter().any(|r| manager::here(app, &r.project) == **id)) {
+    for id in projects.iter().filter(|id| phone && !mine().iter().any(|r| app.conv(&r.project) == **id)) {
         // No code: nobody scans this one, the phones are added below. A project that gets none now gets it next time.
         failed = create(app, &label(id), id, String::new()).await.err().unwrap_or(failed);
     }
@@ -274,7 +274,9 @@ async fn poll(app: &Shared, r: &Room) -> Result<(), String> {
     let list = got["messages"].as_array().cloned().unwrap_or_default();
     let backlog = r.cursor.is_none() && !r.private();
     let here: Vec<String> = got["here"].as_array().into_iter().flatten().filter_map(|h| h["name"].as_str().map(String::from)).collect();
-    let (owner_names, host) = (owners(app), hostname());
+    let mut buf = [0u8; 256];
+    unsafe { libc::gethostname(buf.as_mut_ptr() as *mut libc::c_char, buf.len()) };
+    let (owner_names, host) = (owners(app), String::from_utf8_lossy(&buf[..buf.iter().position(|b| *b == 0).unwrap_or(0)]).into_owned());
     let mut out = Out::default();
     let Some(()) = update(app, &r.id, |r| {
         r.here = here;
@@ -286,7 +288,13 @@ async fn poll(app: &Shared, r: &Room) -> Result<(), String> {
             r.cursor = Some(n);
             handle(r, &me, &platform, m, backlog, &owner_names, &host, &mut out);
         }
-        sync_roster(r, &mut out);
+        // Sends `tirith-roster <ids>` to each paired phone when the set of phones and accepted managers changed.
+        let mut ids: Vec<String> = r.devices.iter().chain(r.managers.iter().filter(|m| m.accepted)).map(|p| p.key_id.clone()).collect();
+        ids.sort();
+        let sig = ids.join(",");
+        if r.kind == "manager" && std::mem::replace(&mut r.roster, sig.clone()) != sig {
+            r.devices.iter().for_each(|d| out.send.push((format!("tirith-roster {}", ids.iter().filter(|i| **i != d.key_id).map(String::as_str).collect::<Vec<_>>().join(",")), vec![d.public.clone()])));
+        }
         // Public rooms are only watched: nothing said there reaches the manager (it writes there with `tirith room say`).
         out.deliver.retain(|_| r.private());
         r.owed.extend(out.deliver.iter().cloned()); // saved with the cursor: a restart in between loses nothing
@@ -316,7 +324,7 @@ fn phone_model_command(app: &Shared, r: &Room, author: &str, text: &str) -> bool
         return false;
     }
     app.chat("room", &format!("{author} ({}): {text}", r.id), &r.project);
-    manager::model_command(app, manager::here(app, &r.project), text);
+    manager::model_command(app, app.conv(&r.project), text);
     update(app, &r.id, |r| r.owed.retain(|o| o != &(author.to_string(), text.to_string())));
     true
 }
@@ -430,25 +438,9 @@ fn burn(code: &mut String, text: &str, prefix: &str) -> bool {
     ok.then(|| code.clear()).is_some()
 }
 
-/// Sends `tirith-roster <ids>` to each paired phone when the set of phones and accepted managers changed.
-fn sync_roster(r: &mut Room, out: &mut Out) {
-    let mut ids: Vec<String> = r.devices.iter().chain(r.managers.iter().filter(|m| m.accepted)).map(|p| p.key_id.clone()).collect();
-    ids.sort();
-    let sig = ids.join(",");
-    if r.kind == "manager" && std::mem::replace(&mut r.roster, sig.clone()) != sig {
-        r.devices.iter().for_each(|d| out.send.push((format!("tirith-roster {}", ids.iter().filter(|i| **i != d.key_id).map(String::as_str).collect::<Vec<_>>().join(",")), vec![d.public.clone()])));
-    }
-}
-
 fn mentions(text: &str, name: &str) -> bool {
     let re = format!(r"(?i)(^|[^a-z0-9._-])@?{}($|[^a-z0-9._-])", regex::escape(name));
     !name.is_empty() && regex::Regex::new(&re).is_ok_and(|re| re.is_match(text))
-}
-
-fn hostname() -> String {
-    let mut buf = [0u8; 256];
-    unsafe { libc::gethostname(buf.as_mut_ptr() as *mut libc::c_char, buf.len()) };
-    String::from_utf8_lossy(&buf[..buf.iter().position(|b| *b == 0).unwrap_or(0)]).into_owned()
 }
 
 /// Posts `text` in the room as this Tirith: sealed for `readers` in a private room, plain in a public one.
@@ -475,7 +467,7 @@ fn queue(id: &str, text: &str, readers: Vec<String>) {
 /// What a project's conversation says (its manager's words, Tirith's reports, a card) goes to the phones of its rooms.
 pub fn to_phones(app: &Shared, project: &str, text: &str) {
     // An answer that starts with ∅ (a routine found nothing new) stays on the page: only news reaches the phones.
-    let rooms: Vec<Room> = ROOMS.lock().unwrap().values().filter(|r| r.kind == "manager" && manager::here(app, &r.project) == project && !text.trim_start().starts_with('∅')).cloned().collect();
+    let rooms: Vec<Room> = ROOMS.lock().unwrap().values().filter(|r| r.kind == "manager" && app.conv(&r.project) == project && !text.trim_start().starts_with('∅')).cloned().collect();
     rooms.iter().for_each(|r| queue(&r.id, text, r.devices.iter().map(|d| d.public.clone()).collect()));
 }
 
@@ -486,7 +478,7 @@ pub fn reply(app: &Shared, rooms: &[String], text: &str) {
 
 /// Hands the managers again what rooms wrote and no finished turn answered: the session ended, or the daemon was restarted, in between. `project` limits it to one conversation.
 pub fn again(app: &Shared, project: Option<&str>) {
-    let rooms: Vec<Room> = ROOMS.lock().unwrap().values().filter(|r| !r.owed.is_empty() && project.is_none_or(|p| manager::here(app, &r.project) == p)).cloned().collect();
+    let rooms: Vec<Room> = ROOMS.lock().unwrap().values().filter(|r| !r.owed.is_empty() && project.is_none_or(|p| app.conv(&r.project) == p)).cloned().collect();
     rooms.iter().for_each(|r| {
         update(app, &r.id, |r| std::mem::take(&mut r.owed))
             .unwrap_or_default()
@@ -562,13 +554,6 @@ async fn join(app: &Shared, code: &str, project: &str) -> Result<Room, String> {
     Ok(r)
 }
 
-/// The owner writes in a room (page or CLI): it counts as the owner for the brake.
-async fn say(app: &Shared, id: &str, text: &str) -> Result<(), String> {
-    let r = update(app, id, |r| (r.streak, r.braked) = (0, false)).and(room(id)).ok_or("no such room")?;
-    let readers: Vec<String> = r.devices.iter().chain(r.managers.iter().filter(|m| m.accepted)).map(|p| p.public.clone()).filter(|p| !p.is_empty()).collect(); // the paired phones and the accepted managers
-    send(app, &r, text, &readers).await
-}
-
 fn known(id: &str) -> Result<Room, (StatusCode, String)> {
     room(id).ok_or((StatusCode::NOT_FOUND, format!("no room {id}")))
 }
@@ -588,7 +573,7 @@ pub fn routes() -> Router<Shared> {
 /// A project has one room, where all the owner's phones are: asking for another gives that room a new one-use QR.
 async fn api_new(State(app): State<Shared>, Json(b): Json<Value>) -> R {
     let project = b["project"].as_str().unwrap_or("");
-    let old = ROOMS.lock().unwrap().values().find(|r| r.kind == "manager" && manager::here(&app, &r.project) == manager::here(&app, project)).map(|r| r.id.clone());
+    let old = ROOMS.lock().unwrap().values().find(|r| r.kind == "manager" && app.conv(&r.project) == app.conv(project)).map(|r| r.id.clone());
     let Some(id) = old else { return Ok(Json(view(&app, &create(&app, b["title"].as_str().unwrap_or(""), project, new_code()).await.map_err(bad)?))) };
     api_qr(State(app), Path(id)).await
 }
@@ -644,11 +629,14 @@ fn drop_rooms(app: &Shared, gone: impl Fn(&Room) -> bool) {
     WAKE.notify_one(); // the phones are told that it is gone
 }
 
+/// The owner writes in a room (page or CLI): it counts as the owner for the brake.
 async fn api_say(State(app): State<Shared>, Path(id): Path<String>, Json(b): Json<Value>) -> R {
     let text = b["text"].as_str().unwrap_or("").trim().to_string();
     (!text.is_empty()).then_some(()).ok_or_else(|| bad("empty message".into()))?;
     known(&id)?;
-    say(&app, &id, &text).await.map_err(bad)?;
+    let r = update(&app, &id, |r| (r.streak, r.braked) = (0, false)).and(room(&id)).ok_or_else(|| bad("no such room".into()))?;
+    let readers: Vec<String> = r.devices.iter().chain(r.managers.iter().filter(|m| m.accepted)).map(|p| p.public.clone()).filter(|p| !p.is_empty()).collect(); // the paired phones and the accepted managers
+    send(&app, &r, &text, &readers).await.map_err(bad)?;
     Ok(Json(json!({"ok": true})))
 }
 

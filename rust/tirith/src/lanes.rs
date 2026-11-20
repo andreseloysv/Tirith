@@ -36,12 +36,15 @@ pub fn start(app: &Shared, project: &str, step: &str, item: &str, agent: Option<
     if let Some(l) = app.lanes.lock().unwrap().values().find(|l| l.active() && l.project == project && l.step == step && plan::same(&l.item, &item)) {
         return Err(format!("lane {} already works on that item ({})", l.id, l.status));
     }
+    let (factory, role_hash) = app.stamp_for(&models::lane_role(&app.cfg()));
     let lane = Lane {
         id: format!("{}-{:04x}", slug(item.split(" (check:").next().unwrap_or("")), chrono::Utc::now().timestamp_subsec_nanos() & 0xffff),
         project: project.into(),
         step: step.into(),
         item,
         agent: agent.unwrap_or_else(|| models::role(app, &models::lane_role(&app.cfg())).agent),
+        factory,
+        role_hash,
         status: "queued".into(),
         created_at: now_iso(),
         ..Default::default()
@@ -54,12 +57,6 @@ pub fn start(app: &Shared, project: &str, step: &str, item: &str, agent: Option<
 pub fn autopilot_on(app: &Shared, project: &str) -> bool {
     app.kv(&format!("autopilot:{project}")).map(|v| v == "on").unwrap_or(app.cfg().autopilot)
 }
-fn load_per_core() -> f64 {
-    let mut l = [0f64; 3];
-    unsafe { libc::getloadavg(l.as_mut_ptr(), 3) }; // leaves zeros when it fails
-    l[0] / std::thread::available_parallelism().map_or(1, |c| c.get()) as f64
-}
-
 pub(crate) fn free_gb(dir: &Path) -> f64 {
     let Ok(c) = std::ffi::CString::new(dir.as_os_str().as_bytes()) else { return f64::MAX };
     let mut s: libc::statvfs = unsafe { std::mem::zeroed() };
@@ -284,7 +281,9 @@ pub async fn scheduler(app: Shared) {
             said_error.iter().for_each(|e| manager::emit_event(&app, "", "factory.invalid", &format!("Configuration: {e}"), None));
         }
         let lim = &cfg.factory.limits;
-        let load = load_per_core();
+        let mut avg = [0f64; 3];
+        unsafe { libc::getloadavg(avg.as_mut_ptr(), 3) }; // leaves zeros when it fails
+        let load = avg[0] / std::thread::available_parallelism().map_or(1, |c| c.get()) as f64;
         let lanes: Vec<Lane> = app.lanes.lock().unwrap().values().cloned().collect();
         let running = lanes.iter().filter(|l| l.pid.is_some()).count();
         if free_gb(&app.home.join("lanes")) < lim.low_disk_gb {
@@ -386,15 +385,6 @@ async fn take_slot(app: &Shared, project: &Project, lane: &Lane) -> Result<PathB
     Ok(slot)
 }
 
-/// Rust lanes run the same clippy gate as the queue's build stage, so a warning does not cost a second attempt.
-fn clippy_rule(workspace: &str) -> &'static str {
-    if std::path::Path::new(workspace).join("Cargo.toml").exists() {
-        "- Before you finish, run `cargo clippy -- -D warnings` and fix every warning: the queue's build stage runs it too.\n"
-    } else {
-        ""
-    }
-}
-
 fn brief(app: &Shared, lane: &Lane) -> String {
     let steps = plan::read(app, &lane.project).unwrap_or_default();
     let lanes: Vec<Lane> = app.lanes.lock().unwrap().values().filter(|l| l.project == lane.project).cloned().collect();
@@ -427,7 +417,7 @@ fn brief(app: &Shared, lane: &Lane) -> String {
         ("red", red.map(|r| format!("red ({r}): not your job unless your item is about it")).unwrap_or("green".into())),
         ("ws", lane.workspace.clone()),
         ("branch", lane.branch.clone()),
-        ("clippy", clippy_rule(&lane.workspace).into()),
+        ("clippy", if Path::new(&lane.workspace).join("Cargo.toml").exists() { app.cfg().factory.prompt("clippy") } else { String::new() }), // Rust lanes run the queue's clippy gate first, so a warning does not cost a second attempt
         ("rules", rules.join("\n")),
         ("at", now_iso()),
     ]);
@@ -563,10 +553,7 @@ fn codex_session(app: &Shared, id: &str, log: &str) {
 /// True when the lane's branch has no commit beyond the project's HEAD (it is known and countable). Without a check on its item such a lane failed; with one it may still be done (the check can already be true): it goes to the merge queue, where the check runs on main.
 async fn no_commits(app: &Shared, lane: &Lane) -> bool {
     let Some(p) = app.cfg().projects.iter().find(|p| p.id == lane.project).cloned() else { return false };
-    if lane.branch.is_empty() {
-        return false;
-    }
-    matches!(git(&p.repo(), &["rev-list", "--count", &format!("HEAD..{}", lane.branch)]).await.as_deref(), Ok("0"))
+    !lane.branch.is_empty() && matches!(git(&p.repo(), &["rev-list", "--count", &format!("HEAD..{}", lane.branch)]).await.as_deref(), Ok("0"))
 }
 
 /// `tirith ask` from a lane: it waits, and the manager is told how to answer.

@@ -13,11 +13,7 @@ const LIMIT: usize = 25 * 1024 * 1024;
 
 /// The text appended to the owner's message so the manager can open the attached files (absolute paths).
 pub fn describe(paths: &[String]) -> String {
-    if paths.is_empty() {
-        String::new()
-    } else {
-        format!("\n\nAttached files (open them with your file-reading tool):{}", paths.iter().map(|p| format!("\n- {p}")).collect::<String>())
-    }
+    paths.is_empty().then(String::new).unwrap_or_else(|| format!("\n\nAttached files (open them with your file-reading tool):{}", paths.iter().map(|p| format!("\n- {p}")).collect::<String>()))
 }
 
 /// A safe file name: the last path part, only letters, digits, `.`, `-`, `_`; no leading dots.
