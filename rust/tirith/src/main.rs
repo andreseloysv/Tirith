@@ -191,9 +191,9 @@ fn serve() -> Result<(), String> {
         let flusher = app.clone();
         tokio::spawn(async move {
             loop {
-                tokio::time::sleep(Duration::from_secs(flusher.cfg().plan_commit_s)).await;
                 plan::flush(&flusher, None).await;
                 flusher.trim();
+                tokio::time::sleep(Duration::from_secs(flusher.cfg().plan_commit_s)).await;
             }
         });
         println!("tirith: http://127.0.0.1:{port}/ (home {})", app.home.display());
