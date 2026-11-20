@@ -78,7 +78,9 @@ runs_on = "local"
 # limits.batch_seconds), note waits for its next turn. chat: a Tirith line in
 # the conversation. phone: that line, and the answer of a turn the event
 # starts, reach the owner's phones. These defaults reproduce the behaviour
-# the daemon had when the calls were fixed in Rust.
+# the daemon had when the calls were fixed in Rust, except merge.landed,
+# deploy.done and main.green: they stay on the page and in the manager's
+# notes but off the phones (111 merge notices reached them on 13-20 Nov).
 [[routes]]
 on = "owner.message"
 to = "manager"
@@ -131,7 +133,7 @@ on = "merge.landed"
 to = "manager"
 mode = "note"
 chat = true
-phone = true
+phone = false
 
 [[routes]]
 on = "main.red"
@@ -145,7 +147,7 @@ on = "main.green"
 to = "manager"
 mode = "note"
 chat = true
-phone = true
+phone = false
 
 [[routes]]
 on = "plan.empty"
@@ -158,7 +160,7 @@ on = "deploy.done"
 to = "manager"
 mode = "note"
 chat = true
-phone = true
+phone = false
 
 [[routes]]
 on = "deploy.failed"
