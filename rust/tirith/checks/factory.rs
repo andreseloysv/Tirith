@@ -24,6 +24,54 @@ fn embedded_factory_has_todays_values() {
 }
 
 #[test]
+fn default_routes_reproduce_today() {
+    // Every call the daemon made when who-hears-what was fixed in Rust, as (to, mode, chat, phone, after_minutes):
+    // `notify` was turn+chat+phone, `inform` note+chat+phone, `tell` a turn with no line of its own whose answer
+    // reached the phones like every manager message; owner and room messages start turns whose answers do.
+    let f = Factory::default();
+    let turn = |to: &str, chat: bool| vec![(to.to_string(), "turn".to_string(), chat, true, None)];
+    let note = |chat: bool| vec![("manager".to_string(), "note".to_string(), chat, true, None)];
+    let table: Vec<(&str, Vec<Route>)> = vec![
+        ("owner.message", turn("manager", false)),
+        ("room.message", turn("manager", false)),
+        ("lane.asked", turn("manager", true)),
+        ("lane.failed", turn("manager", true)),
+        ("lane.not_started", turn("manager", true)),
+        ("lane.long", turn("manager", true)),
+        ("merge.blocked", turn("manager", true)),
+        ("merge.landed", note(true)),
+        ("main.red", turn("manager", true)),
+        ("main.green", note(true)),
+        ("plan.empty", turn("manager", false)),
+        ("deploy.done", note(true)),
+        ("deploy.failed", turn("manager", true)),
+        ("schedule", turn("manager", false)),
+        ("review.done", turn("lead", false)),
+        ("factory.invalid", turn("lead", true)),
+        ("card.opened", vec![]),
+        ("card.answered", vec![]),
+        ("card.closed", vec![]),
+    ];
+    for (on, want) in table {
+        assert_eq!(f.routes_on(on), want, "routes on {on}");
+    }
+    // A red measure wakes the lead at once and, still red after 15 minutes, the reviewer.
+    assert_eq!(f.routes_on("metric.red"), vec![("lead".to_string(), "turn".to_string(), true, true, None), ("reviewer".to_string(), "turn".to_string(), false, false, Some(15))]);
+    // A route on a missing event, to a missing role, or with an unknown key or mode makes the version invalid.
+    let prompts = embedded_prompts();
+    let bad = |text: &str| parse(text, prompts.clone(), &toml::Table::new()).err().unwrap_or_default();
+    assert!(bad("[[routes]]\non = \"no.such.event\"\nto = \"manager\"\nmode = \"turn\"\n").contains("missing event"));
+    assert!(bad("[[routes]]\non = \"lane.failed\"\nto = \"ghost\"\nmode = \"turn\"\n").contains("missing event, role or mode"));
+    assert!(bad("[[routes]]\non = \"lane.failed\"\nto = \"manager\"\nmode = \"shout\"\n").contains("missing event, role or mode"));
+    assert!(bad("[[routes]]\non = \"lane.failed\"\nto = \"manager\"\nmode = \"turn\"\nbogus = 1\n").contains("unknown key routes.bogus"));
+    // Routes of config.toml (a bot's routines) stand next to the factory's, never instead of them.
+    let o = overlay("[[routes]]\non = \"schedule\"\nto = \"manager\"\nmode = \"turn\"\ntask = \"news\"\n");
+    let f = parse(TEXT, prompts, &o).unwrap();
+    assert_eq!(f.routes_on("schedule").len(), 2);
+    assert_eq!(f.routes_on("lane.failed").len(), 1);
+}
+
+#[test]
 fn roles_extend_and_prompts_resolve() {
     let f = Factory::default();
     assert_eq!(f.role::<String>("lead", "agent").as_deref(), Some("anthropic")); // extends manager

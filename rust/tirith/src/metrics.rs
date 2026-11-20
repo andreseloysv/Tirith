@@ -171,7 +171,7 @@ fn describe(m: &Metric) -> String {
 fn tick(app: &Shared) {
     let metrics = compute(app);
     let now = now_s();
-    let after = app.cfg().factory.role::<u64>("ceo", "review_after_minutes").unwrap_or(15) * 60;
+    let after = app.cfg().factory.routes_on("metric.red").iter().find(|r| r.0 == "reviewer").and_then(|r| r.4).or_else(|| app.cfg().factory.role::<u64>("ceo", "review_after_minutes")).unwrap_or(15) * 60;
     let (mut due, mut notes) = (vec![], vec![]);
     let list: Vec<Value> = {
         let mut book = BOOK.lock().unwrap();
@@ -200,7 +200,7 @@ fn tick(app: &Shared) {
     // A red main is not reported again here: its project's manager already got it from the merge queue, with the facts.
     notes.into_iter().filter(|m| m.id != "main_red").for_each(|m| {
         let _ = (m.id == "idle").then(|| app.sched_wake.notify_one()); // the mechanical fix: wake the scheduler and the autopilot
-        manager::notify(app, "", &format!("health: {}. Get it moving.", describe(m)));
+        manager::emit_event(app, "", "metric.red", &format!("health: {}. Get it moving.", describe(m)), None);
     });
     let max = app.cfg().factory.role::<u64>("ceo", "max_per_day").unwrap_or(6);
     let today: u64 = app.db.lock().unwrap().query_row("SELECT COUNT(*) FROM ceo_reviews WHERE at >= ?1 AND metric != 'owner'", [iso(now.saturating_sub(86400))], |r| r.get(0)).unwrap_or(0);
@@ -221,7 +221,7 @@ fn start_review(app: &Shared, metric: String, why: String) {
         let text = result.clone().unwrap_or_else(|e| format!("(the CEO review could not run: {e})"));
         let _ = app.db.lock().unwrap().execute("INSERT INTO ceo_reviews (at, metric, text) VALUES (?1, ?2, ?3)", rusqlite::params![now_iso(), metric, text]);
         app.chat("ceo", &text, "");
-        let _ = result.is_ok().then(|| manager::tell(&app, "", &format!("CEO review: {text}")));
+        let _ = result.is_ok().then(|| manager::emit_event(&app, "", "review.done", &format!("CEO review: {text}"), None));
         REVIEWING.store(false, Ordering::SeqCst);
         app.emit("ceo", json!({"running": false}));
         let metrics = BOOK.lock().unwrap().last.as_array().cloned().unwrap_or_default();

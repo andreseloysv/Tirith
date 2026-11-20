@@ -36,6 +36,8 @@ struct Talk {
     /// Reports from Tirith not yet handed over, and whether a hand-over is already on its way.
     notes: Vec<String>,
     due: bool,
+    /// The current (or next) turn was started by the owner or by an event whose route has `phone = true`: its answer reaches the phones.
+    phones: bool,
     /// The settings changed during a turn: the session ends when the turn does.
     stale: bool,
 }
@@ -69,9 +71,10 @@ fn known(app: &Shared, project: &str) -> Result<(), String> {
 }
 
 /// Hands the conversation its waiting reports and `text` as one message; its session starts when none runs.
-fn deliver(app: &Shared, project: &str, text: &str) {
+fn deliver(app: &Shared, project: &str, text: &str, phones: bool) {
     let memory = bots::context(app, project); // a bot's memory, read at every turn
     let start = talk(project, |t| {
+        t.phones |= phones;
         if t.notes.is_empty() && text.is_empty() {
             return false;
         }
@@ -91,9 +94,10 @@ fn deliver(app: &Shared, project: &str, text: &str) {
 /// A message from a room (a paired phone or another agent): shown in the chat of the room's project, handed to that project's manager, and the manager's answer to this turn goes back to that room.
 pub fn from_room(app: &Shared, project: &str, room: &str, author: &str, text: &str) {
     let project = here(app, project);
+    app.event("", project, "room.message", "", &format!("{author} ({room}): {text}"), "");
     app.chat("room", &format!("{author} ({room}): {text}"), project);
     talk(project, |t| t.reply_to.insert(room.to_string()));
-    deliver(app, project, &with_cards(app, project, &format!("[room {room}] {author}: {text}")));
+    deliver(app, project, &with_cards(app, project, &format!("[room {room}] {author}: {text}")), true);
 }
 
 /// What the owner wrote, and the project's cards still open: an answer in plain words is then closed by the manager.
@@ -131,11 +135,12 @@ pub fn interrupt(project: &str) -> Result<(), String> {
 
 pub fn say(app: &Shared, project: &str, text: &str) -> Result<(), String> {
     known(app, project)?;
+    app.event("", project, "owner.message", "", text, "");
     app.chat("owner", text, project);
     if model_command(app, project, text) {
         return Ok(());
     }
-    deliver(app, project, &with_cards(app, project, text));
+    deliver(app, project, &with_cards(app, project, text), true);
     Ok(())
 }
 
@@ -146,40 +151,63 @@ pub fn model_command(app: &Shared, project: &str, text: &str) -> bool {
     true
 }
 
-/// A report from Tirith that needs the manager (a lane asked or failed, a red main): shown in the project's chat at once and handed over together with every other report of the next batch (the factory's `limits.batch_seconds`), so many events cost one turn.
-pub fn notify(app: &Shared, project: &str, text: &str) {
-    notify_as(app, project, text, text);
+/// The one way code emits an event: its row is kept and shown on the page, and every `[[routes]]` on it in the factory decides who hears it — a `chat` line (on the phones too with `phone`), and for its role a `turn` now or a `note` with its next turn. `told` is what the role is handed when it differs from the line shown. A turn's answer reaches the phones only when an event that started it had `phone` (or the owner wrote).
+pub fn emit_event(app: &Shared, project: &str, on: &str, shown: &str, told: Option<&str>) {
+    app.event("", project, on, "", shown, "");
+    let routes = app.cfg().factory.routes_on(on);
+    let here_p = here(app, project);
+    if routes.iter().any(|r| r.2) {
+        app.chat("tirith", shown, here_p);
+        if routes.iter().any(|r| r.2 && r.3) {
+            rooms::to_phones(app, here_p, &format!("Tirith: {shown}"));
+        }
+    }
+    for (to, mode, _, phone, _) in routes {
+        // Only chat conversations are handed text here; a turn role (the reviewer) is run by its own mechanism today.
+        let dest = if to == "lead" {
+            ""
+        } else if to == "manager" {
+            here_p
+        } else {
+            continue;
+        };
+        queue(app, dest, told.unwrap_or(shown), &mode, phone);
+    }
 }
 
-/// `notify` with a shorter line for the chat and the phones than what the manager is told.
-pub fn notify_as(app: &Shared, project: &str, shown: &str, told: &str) {
-    report(app, project, shown);
-    tell(app, project, told);
-}
-
-/// A report that needs no decision (a merge, a green main): shown in the project's chat, and handed to the manager with its next message instead of costing a turn of its own.
-pub fn inform(app: &Shared, project: &str, text: &str) {
-    report(app, project, text);
-    talk(here(app, project), |t| {
-        t.notes.push(text.to_string());
-        t.notes.drain(..t.notes.len().saturating_sub(30));
-    });
-}
-
-/// Hands a report to the manager (gathered with the others of the next batch) without a chat line of its own.
-pub fn tell(app: &Shared, project: &str, text: &str) {
-    let project = here(app, project);
+/// A routed event for one conversation: with `turn` handed over (gathered with the other events of the next `limits.batch_seconds`, so many events cost one turn) and its `phone` marking that turn's answer; with `note` it waits for the conversation's next message. Anything else hears nothing.
+fn queue(app: &Shared, project: &str, text: &str, mode: &str, phone: bool) {
+    let turn = match mode {
+        "turn" => true,
+        "note" => false,
+        _ => return,
+    };
     let first = talk(project, |t| {
         t.notes.push(text.to_string());
-        !std::mem::replace(&mut t.due, true)
+        t.notes.drain(..t.notes.len().saturating_sub(30));
+        t.phones |= turn && phone;
+        turn && !std::mem::replace(&mut t.due, true)
     });
     if first {
         let (app, project, batch) = (app.clone(), project.to_string(), app.cfg().factory.limits.batch_seconds);
         tokio::spawn(async move {
             tokio::time::sleep(Duration::from_secs(batch)).await;
             talk(&project, |t| t.due = false);
-            deliver(&app, &project, "");
+            deliver(&app, &project, "", false);
         });
+    }
+}
+
+/// A card's answer or closing, for the manager's next turn: a line in the project's chat and on the phones, and a note (no turn of its own).
+fn note_line(app: &Shared, project: &str, text: &str) {
+    report(app, project, text);
+    queue(app, here(app, project), text, "note", false);
+}
+
+/// The manager's text of a turn, on the phones only when this turn's are marked (the owner wrote, or an event with `phone = true` started it).
+fn answer_phones(app: &Shared, project: &str, text: &str) {
+    if talk(project, |t| t.phones) {
+        rooms::to_phones(app, project, text);
     }
 }
 
@@ -204,6 +232,7 @@ pub fn ask_owner(app: &Shared, project: &str, kind: &str, question: &str, lane: 
     };
     app.emit("owner", row.clone());
     let id = row["id"].as_str().unwrap_or("");
+    emit_event(app, &project, "card.opened", &format!("{id} ({kind}): {question}"), None);
     app.chat("card", &format!("{id} ({kind}): {question}"), &project);
     rooms::to_phones(app, &project, &format!("❓ **Needs you** (card {id}, {kind})\n\n{question}\n\nAnswer here with `{id}: <your answer>`"));
     Ok(row)
@@ -213,7 +242,7 @@ pub fn ask_owner(app: &Shared, project: &str, kind: &str, question: &str, lane: 
 pub fn owner_answer(app: &Shared, id: &str, answer: &str, by_manager: bool) -> Result<Value, String> {
     if let Some(l) = app.lane(id).filter(|l| l.status == "waiting") {
         crate::lanes::answer(app, id, answer, "the owner")?;
-        inform(app, &l.project, &format!("The owner answered lane {id} ({}) directly: {answer}", l.question));
+        note_line(app, &l.project, &format!("The owner answered lane {id} ({}) directly: {answer}", l.question));
         return Ok(json!({"ok": true}));
     }
     let sql = "SELECT kind, project, question, lane FROM owner_items WHERE id = ?1 AND status = 'open'";
@@ -221,12 +250,14 @@ pub fn owner_answer(app: &Shared, id: &str, answer: &str, by_manager: bool) -> R
     let _ = app.db.lock().unwrap().execute("UPDATE owner_items SET status = 'answered', answer = ?1 WHERE id = ?2", rusqlite::params![answer, id]);
     app.emit("owner", json!({"id": id, "status": "answered", "answer": answer}));
     let text = format!("The owner answered {id} ({kind}: {question}): {answer}");
+    emit_event(app, &project, "card.answered", &text, None);
     if !lane.is_empty() && crate::lanes::answer(app, &lane, answer, "the owner").is_ok() {
-        inform(app, &project, &format!("{text}\nIt went straight to lane {lane}."));
+        note_line(app, &project, &format!("{text}\nIt went straight to lane {lane}."));
     } else if by_manager {
         report(app, &project, &text);
     } else {
-        notify(app, &project, &text);
+        report(app, &project, &text);
+        queue(app, here(app, &project), &text, "turn", true);
     }
     Ok(json!({"ok": true}))
 }
@@ -239,7 +270,8 @@ pub fn close_card(app: &Shared, id: &str, by: &str, why: &str) -> Result<Value, 
     let note = format!("closed by {by}{}", if why.trim().is_empty() { String::new() } else { format!(": {}", why.trim()) });
     let _ = app.db.lock().unwrap().execute("UPDATE owner_items SET status = 'closed', answer = ?1 WHERE id = ?2", rusqlite::params![note, id]);
     app.emit("owner", json!({"id": id, "status": "closed", "answer": note}));
-    inform(app, &project, &format!("Card {id} {note}"));
+    emit_event(app, &project, "card.closed", &format!("Card {id} {note}"), None);
+    note_line(app, &project, &format!("Card {id} {note}"));
     Ok(json!({"ok": true}))
 }
 
@@ -403,7 +435,7 @@ async fn session(app: &Shared, project: &str) -> Result<(), String> {
                         Some("text") => {
                             let text = block["text"].as_str().unwrap_or("");
                             app.chat("manager", text, project);
-                            rooms::to_phones(app, project, text);
+                            answer_phones(app, project, text);
                             talk(project, |t| t.text = format!("{}\n\n{text}", t.text).trim_start().to_string());
                         }
                         Some("tool_use") => app.chat("tool", &rules::summary(block["name"].as_str().unwrap_or(""), &block["input"]), project),
@@ -413,6 +445,7 @@ async fn session(app: &Shared, project: &str) -> Result<(), String> {
             }
             "result" => {
                 let (rooms_now, text) = talk(project, |t| {
+                    t.phones = false;
                     set_busy(app, project, t, false);
                     // A message that comes after this waits in `pending` for the next session, which has the new settings.
                     rest = std::mem::take(&mut t.stale) && t.tx.take().is_some();
@@ -500,7 +533,7 @@ async fn exec_session(app: &Shared, project: &str, muse: bool) -> Result<(), Str
                 "item.completed" if msg["item"]["type"] == "agent_message" => {
                     let text = msg["item"]["text"].as_str().unwrap_or("");
                     app.chat("manager", text, project);
-                    rooms::to_phones(app, project, text);
+                    answer_phones(app, project, text);
                 }
                 "item.started" if msg["item"]["type"] == "command_execution" => app.chat("tool", msg["item"]["command"].as_str().unwrap_or("command"), project),
                 _ => {}
@@ -519,9 +552,9 @@ async fn exec_session(app: &Shared, project: &str, muse: bool) -> Result<(), Str
         talk(project, |t| drop(t.pending.splice(0..0, sent)));
         return result.map(|_| ());
     }
-    let rooms_now = talk(project, |t| {
+    let (rooms_now, phones) = talk(project, |t| {
         set_busy(app, project, t, false);
-        std::mem::take(&mut t.reply_to)
+        (std::mem::take(&mut t.reply_to), std::mem::take(&mut t.phones))
     });
     let (text, answered) = match result {
         Ok(text) => (text, true),
@@ -533,7 +566,7 @@ async fn exec_session(app: &Shared, project: &str, muse: bool) -> Result<(), Str
         }
     };
     // Codex speaks while it works; an exec turn of the other agent answers once, at its end.
-    let _ = (muse && answered).then(|| app.chat("manager", &text, project)).map(|_| rooms::to_phones(app, project, &text));
+    let _ = (muse && answered).then(|| app.chat("manager", &text, project)).map(|_| phones.then(|| rooms::to_phones(app, project, &text)));
     rooms::reply(app, &Vec::from_iter(rooms_now), &text);
     Ok(())
 }
