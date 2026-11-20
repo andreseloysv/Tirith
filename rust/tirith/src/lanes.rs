@@ -1,7 +1,7 @@
 //! Lanes: one agent, one plan item, one reusable worktree slot on its own branch; the autopilot starts open plan items, and a lane that ends goes to the merge queue, where the checks decide.
 
 use crate::app::{add_worktree, alive, git, kill_group, log_age, now_iso, now_s, tail, Lane, Shared};
-use crate::{brain, config::Project, guard, manager, models, plan, sandbox};
+use crate::{config::Project, guard, manager, models, plan, sandbox};
 use regex::Regex;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
@@ -434,7 +434,6 @@ fn brief(app: &Shared, lane: &Lane) -> String {
         ("items", items.join("\n")),
         ("others", if others.is_empty() { "none".into() } else { others.join("\n") }),
         ("red", red.map(|r| format!("red ({r}): not your job unless your item is about it")).unwrap_or("green".into())),
-        ("architecture", brain::architecture(app, &lane.project).map(|a| format!("\n## Architecture\n{a}\n")).unwrap_or_default()),
         ("ws", lane.workspace.clone()),
         ("branch", lane.branch.clone()),
         ("clippy", clippy_rule(&lane.workspace).into()),
