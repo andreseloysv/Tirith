@@ -99,7 +99,6 @@ impl App {
         [("runs", "pipeline TEXT"), ("runs", "sha TEXT"), ("chat", "project TEXT NOT NULL DEFAULT ''")].into_iter().chain(owner).for_each(|(table, col)| drop(db.execute(&format!("ALTER TABLE {table} ADD COLUMN {col}"), [])));
         let lanes: BTreeMap<String, Lane> =
             db.prepare("SELECT data FROM lanes").expect("read lanes").query_map([], |r| r.get::<_, String>(0)).expect("read lanes").flatten().filter_map(|s| serde_json::from_str::<Lane>(&s).ok()).map(|l| (l.id.clone(), l)).collect();
-        crate::config::migrate_file(); // yesterday's config.toml sections under their new names, once
         let cfg_mtime = mtime(&home.join("config.toml"));
         let cfg = Arc::new(Config::load());
         let cfg_mtime = (cfg_mtime, crate::factory::stamp(&cfg.raw));
