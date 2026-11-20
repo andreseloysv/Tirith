@@ -577,24 +577,15 @@ fn known(id: &str) -> Result<Room, (StatusCode, String)> {
 }
 pub fn routes() -> Router<Shared> {
     Router::new()
-        .route("/api/rooms", get(list).post(api_new))
-        .route("/api/rooms/join", post(api_join))
+        .route("/api/rooms", get(|State(app): State<Shared>| async move { Json(json!({"rooms": ROOMS.lock().unwrap().values().cloned().collect::<Vec<_>>().iter().map(|r| view(&app, r)).collect::<Vec<_>>()})) }).post(api_new))
+        .route("/api/rooms/join", post(|State(app): State<Shared>, Json(b): Json<Value>| async move { join(&app, b["code"].as_str().unwrap_or(""), b["project"].as_str().unwrap_or("")).await.map(|r| Json(view(&app, &r))).map_err(bad) }))
         .route("/api/rooms/forget", post(api_forget))
-        .route("/api/rooms/{id}", get(api_one))
+        .route("/api/rooms/{id}", get(|State(app): State<Shared>, Path(id): Path<String>| async move { known(&id).map(|r| Json(view(&app, &r))) }))
         .route("/api/rooms/{id}/qr", post(api_qr))
         .route("/api/rooms/{id}/qr.svg", get(api_svg))
         .route("/api/rooms/{id}/invite", post(api_invite))
         .route("/api/rooms/{id}/leave", post(api_leave))
         .route("/api/rooms/{id}/say", post(api_say))
-}
-
-async fn list(State(app): State<Shared>) -> Json<Value> {
-    let rooms: Vec<Room> = ROOMS.lock().unwrap().values().cloned().collect();
-    Json(json!({"rooms": rooms.iter().map(|r| view(&app, r)).collect::<Vec<_>>()}))
-}
-
-async fn api_one(State(app): State<Shared>, Path(id): Path<String>) -> R {
-    Ok(Json(view(&app, &known(&id)?)))
 }
 
 /// A project has one room, where all the owner's phones are: asking for another gives that room a new one-use QR.
@@ -603,10 +594,6 @@ async fn api_new(State(app): State<Shared>, Json(b): Json<Value>) -> R {
     let old = ROOMS.lock().unwrap().values().find(|r| r.kind == "manager" && manager::here(&app, &r.project) == manager::here(&app, project)).map(|r| r.id.clone());
     let Some(id) = old else { return Ok(Json(view(&app, &create(&app, b["title"].as_str().unwrap_or(""), project, new_code()).await.map_err(bad)?))) };
     api_qr(State(app), Path(id)).await
-}
-
-async fn api_join(State(app): State<Shared>, Json(b): Json<Value>) -> R {
-    Ok(Json(view(&app, &join(&app, b["code"].as_str().unwrap_or(""), b["project"].as_str().unwrap_or("")).await.map_err(bad)?)))
 }
 
 /// Forgets a phone (by its key id, or 8 or more of its first characters) in every room: what it writes is no longer read and nothing more is sealed for it, until it is paired again with a new QR.

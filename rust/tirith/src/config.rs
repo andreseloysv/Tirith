@@ -105,7 +105,7 @@ impl Config {
         migrate(&mut t);
         let factory = crate::factory::load(&t);
         // Keys nothing reads any more, named for the owner: an unknown section, or a leftover `[models.*]` role (`choices`/`efforts` lists stay). The factory-shaped sections are checked by the factory loader itself.
-        const KNOWN: [&str; 19] = ["projects", "agents", "launch", "models", "server", "merge", "autopilot", "app", "network", "messenger", "owner", "rooms", "guard", "factory", "roles", "limits", "plan", "cards", "metrics"];
+        const KNOWN: [&str; 20] = ["projects", "agents", "launch", "models", "server", "merge", "autopilot", "app", "network", "messenger", "owner", "rooms", "guard", "factory", "roles", "limits", "plan", "cards", "metrics", "routes"];
         let mut unknown: Vec<String> = t.keys().filter(|k| !KNOWN.contains(&k.as_str())).cloned().collect();
         if let Some(m) = t.get("models").and_then(|v| v.as_table()) {
             unknown.extend(m.keys().filter(|k| !matches!(k.as_str(), "choices" | "efforts")).map(|k| format!("models.{k}")));

@@ -72,8 +72,133 @@ scope = "global"
 access = "read"
 prompt = ["prompts/reviewer.md"]
 max_per_day = 6
-review_after_minutes = 15
 runs_on = "local"
+
+# Who hears each event the code emits. mode: turn wakes the role (gathered over
+# limits.batch_seconds), note waits for its next turn. chat: a Tirith line in
+# the conversation. phone: that line, and the answer of a turn the event
+# starts, reach the owner's phones. These defaults reproduce the behaviour
+# the daemon had when the calls were fixed in Rust.
+[[routes]]
+on = "owner.message"
+to = "manager"
+mode = "turn"
+phone = true
+
+[[routes]]
+on = "room.message"
+to = "manager"
+mode = "turn"
+phone = true
+
+[[routes]]
+on = "lane.asked"
+to = "manager"
+mode = "turn"
+chat = true
+phone = true
+
+[[routes]]
+on = "lane.failed"
+to = "manager"
+mode = "turn"
+chat = true
+phone = true
+
+[[routes]]
+on = "lane.not_started"
+to = "manager"
+mode = "turn"
+chat = true
+phone = true
+
+[[routes]]
+on = "lane.long"
+to = "manager"
+mode = "turn"
+chat = true
+phone = true
+
+[[routes]]
+on = "merge.blocked"
+to = "manager"
+mode = "turn"
+chat = true
+phone = true
+
+[[routes]]
+on = "merge.landed"
+to = "manager"
+mode = "note"
+chat = true
+phone = true
+
+[[routes]]
+on = "main.red"
+to = "manager"
+mode = "turn"
+chat = true
+phone = true
+
+[[routes]]
+on = "main.green"
+to = "manager"
+mode = "note"
+chat = true
+phone = true
+
+[[routes]]
+on = "plan.empty"
+to = "manager"
+mode = "turn"
+phone = true
+
+[[routes]]
+on = "deploy.done"
+to = "manager"
+mode = "note"
+chat = true
+phone = true
+
+[[routes]]
+on = "deploy.failed"
+to = "manager"
+mode = "turn"
+chat = true
+phone = true
+
+[[routes]]
+on = "metric.red"
+to = "lead"
+mode = "turn"
+chat = true
+phone = true
+
+[[routes]]
+on = "metric.red"
+after_minutes = 15
+to = "reviewer"
+mode = "turn"
+then = "lead"
+
+[[routes]]
+on = "review.done"
+to = "lead"
+mode = "turn"
+phone = true
+
+[[routes]]
+on = "schedule"
+to = "manager"
+mode = "turn"
+phone = true
+
+[[routes]]
+on = "factory.invalid"
+to = "lead"
+mode = "turn"
+chat = true
+phone = true
 
 [limits]
 max_load = 2.0
