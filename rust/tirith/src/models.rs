@@ -37,6 +37,8 @@ pub struct AgentCmd {
 pub fn role_with_source(app: &Shared, role: &str) -> (RoleSetting, &'static str) {
     if let Some(s) = app.kv(&format!("models:{role}")).and_then(|j| serde_json::from_str(&j).ok()) {
         return (s, "page");
+    } else if crate::bots::bot(app, role).is_some() {
+        return (self::role(app, "manager"), "managers"); // a bot without a model of its own has the managers'
     }
     let cfg = app.cfg();
     let default_agent = || if role == "workers" { "anthropic".to_string() } else { role_with_source(app, "workers").0.agent };
@@ -175,7 +177,7 @@ fn valid(v: &str) -> bool {
 
 /// Saves the owner's setting of a role (fields absent from `b` keep their effective value, "" clears them), or with `None` goes back to config.toml. Restarts the manager session when its setting changed.
 pub fn save(app: &Shared, role_name: &str, b: Option<&Value>) -> Result<RoleSetting, String> {
-    (ROLES.contains(&role_name)).then_some(()).ok_or_else(|| format!("role must be one of {}", ROLES.join(", ")))?;
+    (ROLES.contains(&role_name) || crate::bots::bot(app, role_name).is_some()).then_some(()).ok_or_else(|| format!("role must be one of {} or a bot", ROLES.join(", ")))?;
     let before = role(app, "manager");
     if let Some(b) = b {
         let s = updated(app, role_name, b)?;
@@ -186,7 +188,7 @@ pub fn save(app: &Shared, role_name: &str, b: Option<&Value>) -> Result<RoleSett
     let (now, source) = role_with_source(app, role_name);
     app.event("", "", "models", role_name, &format!("{role_name}: {} ({source})", line(&now)), "");
     app.emit("models", state(app));
-    if role(app, "manager") != before {
+    if role(app, "manager") != before || role_name.starts_with("bot-") {
         crate::manager::restart();
     }
     Ok(now)
@@ -300,11 +302,13 @@ pub fn state(app: &Shared) -> Value {
     let cfg = app.cfg();
     let roles: serde_json::Map<String, Value> = ROLES
         .iter()
+        .map(|r| r.to_string())
+        .chain(crate::bots::keys(app))
         .map(|r| {
-            let (s, source) = role_with_source(app, r);
+            let (s, source) = role_with_source(app, &r);
             let mut v = json!(s);
             v["source"] = json!(source);
-            (r.to_string(), v)
+            (r, v)
         })
         .collect();
     json!({"roles": roles, "choices": {"agents": cfg.agents.keys().collect::<Vec<_>>(), "codex": crate::codex::catalog(), "models": get::<Vec<String>>(&cfg.raw, &["models", "choices"]).unwrap_or_default(),
