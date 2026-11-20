@@ -76,13 +76,33 @@ fn default_routes_reproduce_today() {
 fn roles_extend_and_prompts_resolve() {
     let f = Factory::default();
     assert_eq!(f.role::<String>("lead", "agent").as_deref(), Some("anthropic")); // extends manager
-    assert_eq!(f.role::<u64>("ceo", "max_per_day"), Some(6)); // today's name for the reviewer
-    assert_eq!(f.role::<String>("workers", "session").as_deref(), Some("lane"));
+    assert_eq!(f.role::<u64>("reviewer", "max_per_day"), Some(6));
+    assert_eq!(f.role::<String>("worker", "session").as_deref(), Some("lane"));
     assert!(f.prompts_of("manager").starts_with("You are the manager inside Tirith"));
     assert!(f.prompts_of("manager").contains("only about the project {id}"));
     assert!(f.prompts_of("lead").contains("not about one project"));
     assert!(f.prompt("reviewer").contains("CEO review"));
     assert!(f.prompt("brief").contains("# Lane {id}"));
+}
+
+#[test]
+fn factory_roles_carry_their_shape() {
+    let f = Factory::default();
+    assert_eq!(f.roles(), ["lead", "manager", "reviewer", "worker"]);
+    let shape = |r: &str| (f.role::<String>(r, "session"), f.role::<String>(r, "scope"), f.role::<String>(r, "runs_on"));
+    assert_eq!(shape("manager"), (Some("chat".into()), Some("project".into()), Some("local".into())));
+    assert_eq!(shape("lead"), (Some("chat".into()), Some("global".into()), Some("local".into()))); // runs_on and idle come through extends
+    assert_eq!(shape("worker"), (Some("lane".into()), Some("project".into()), Some("local".into())));
+    assert_eq!(shape("reviewer"), (Some("turn".into()), Some("global".into()), Some("local".into())));
+    assert_eq!(f.role::<String>("reviewer", "access").as_deref(), Some("read"));
+    assert_eq!(f.role::<u64>("manager", "idle_minutes"), Some(30));
+    assert_eq!(f.role::<u64>("lead", "idle_minutes"), Some(30));
+    // Code finds roles by shape, never by a fixed list of names.
+    assert_eq!(f.find_role("lane", None).as_deref(), Some("worker"));
+    assert_eq!(f.find_role("chat", Some("project")).as_deref(), Some("manager"));
+    assert_eq!(f.find_role("chat", Some("global")).as_deref(), Some("lead"));
+    assert_eq!(f.find_role("turn", None).as_deref(), Some("reviewer"));
+    assert_eq!(f.find_role("chat", Some("own")), None);
 }
 
 #[test]
@@ -93,7 +113,7 @@ fn overlay_wins_key_by_key() {
     assert_eq!(f.limits.merge_train, 5); // untouched keys keep the factory's value
     assert_eq!(f.metric("merged").1, Some(3.0));
     assert_eq!(f.metric("merged").0, "En main (24 h)");
-    assert_eq!(f.role::<String>("workers", "agent").as_deref(), Some("muse"));
+    assert_eq!(f.role::<String>("worker", "agent").as_deref(), Some("muse"));
     assert_eq!(f.command("anthropic").as_deref(), Some("agent-a-test"));
     assert_eq!(f.command("codex").as_deref(), Some("codex")); // no config line needed, as before
 }
@@ -110,6 +130,9 @@ fn invalid_factories_are_refused() {
     assert!(bad("[metrics.nope]\nlabel = \"x\"\n").contains("unknown measure"));
     assert!(bad("[agents.x]\nprotocol = \"smoke-signals\"\n").contains("unknown protocol"));
     assert!(bad("[roles.x]\nextends = \"ghost\"\n").contains("extends a missing role"));
+    assert!(bad("[roles.x]\nagent = \"anthropic\"\nsession = \"turn\"\nscope = \"global\"\nruns_on = \"the-moon\"\n").contains("runs_on 'the-moon'"));
+    assert!(bad("[roles.x]\nagent = \"anthropic\"\nsession = \"turn\"\nscope = \"global\"\naccess = \"root\"\n").contains("access 'root'"));
+    assert!(bad("[roles.x]\nagent = \"anthropic\"\n").contains("unknown session ''"));
     // An unknown key arriving through config.toml's overlay is refused too.
     let o = overlay("[limits]\nbogus = 1\n");
     assert!(parse(TEXT, prompts.clone(), &o).is_err());

@@ -54,7 +54,7 @@ end with code, and puts a model in the loop only where judgment is needed.
 - **Rules in code.** Every tool call of every agent passes the rules first, in 1–4 ms: commit checks are never
   skipped, the plan and the agents' settings are not edited by agents, a lane writes only in its own worktree,
   never pushes or touches main and never starts other agents. Projects add rules in `tirith.toml`.
-- **Network sandbox.** Everything Tirith starts (lanes, the manager, CEO reviews, merge checks) runs in a macOS
+- **Network sandbox.** Everything Tirith starts (lanes, the manager, reviews, merge checks) runs in a macOS
   sandbox that allows the network only through the daemon's own proxy, which records every destination by
   domain and refuses the ones you block (`tirith net block …`). Swift, Xcode, Gradle, npm, cargo and git work
   inside it. Tool calls that touch credentials, push or read secret variables are audited.
@@ -62,19 +62,19 @@ end with code, and puts a model in the loop only where judgment is needed.
   images can be attached): select the project and the chat, the cards that need you, the plan, the pipelines, the
   agents, the rooms and the access list show that project only (what belongs to the machine, such as the block list
   and the models, says so). With no project selected you see all of them, and talk to the manager of what belongs
-  to no single project (health, the CEO's reviews). The autopilot starts the work; a manager answers its project's lanes, keeps
+  to no single project (the lead: health, the reviewer's reviews). The autopilot starts the work; a manager answers its project's lanes, keeps
   its plan good and asks you only for credentials, payments, personal accounts, physical devices or real decisions
   (`tirith ask-owner --kind …`). A merge shows in the project's chat without costing a manager turn.
-- **Health and the CEO.** Metrics by code (items merged per day, time to merge, first-try rate, idle projects,
-  stuck lanes, red main). A red metric goes to the manager; still red 15 minutes later, an independent one-shot
-  review (the CEO) says what is wrong and what to do. No model runs while everything is green.
+- **Health and the reviewer.** Metrics by code (items merged per day, time to merge, first-try rate, idle projects,
+  stuck lanes, red main). A red metric goes to the lead; still red 15 minutes later, the reviewer role runs one
+  fresh read-only turn that says what is wrong and what to do. No model runs while everything is green.
 - **Rooms on agentsmessenger.com.** Work from your phone, end-to-end encrypted, with nothing to install: scan the
   QR on the Rooms page (it works once and for fifteen minutes, and the page shows the next one by itself)
   and the phone gets a chat with the manager of every project, also of those you add later. Each chat is that
   project's conversation: what the manager says, Tirith's reports (merged, failed, a lane's question) and the cards
   that need you, which you answer there (`o12: yes`). `tirith room forget` cuts off a lost phone. Add other managers
   with a code, and watch public rooms with a summary.
-- **Models per role.** Agent, model and effort for the manager, the lanes and the CEO, with a fallback
+- **Models per role.** Agent, model and effort for every role of the factory (manager, lead, worker, reviewer), with a fallback
   chain for lanes when an agent runs out of credits. Codex works in every role. Choose models in the chat's
   **Models** panel or Settings. The app and the paired phone both offer provider/model buttons and an effort
   slider. `/models` also works in either chat.
@@ -122,7 +122,7 @@ each model's supported reasoning efforts. Open Codex once to populate or refresh
 selected, its selectors offer only catalog models and the chosen model's supported efforts. Select a model
 before choosing an effort, or leave both at the agent's defaults. Other agents also support custom model IDs.
 
-Open **Models** above the chat composer on the computer or paired phone. Pick **Manager**, **Workers** or **CEO**,
+Open **Models** above the chat composer on the computer or paired phone. Pick a factory role (**Manager**, **Lead**, **Worker** or **Reviewer**),
 tap a provider and model, then drag the effort slider or tap a level. **Save** applies the selection;
 editing the controls alone does not change the active setting. The phone waits for Tirith's encrypted confirmation.
 Settings keeps its original dropdown form; buttons and the effort slider belong to the chat.
@@ -134,16 +134,16 @@ These commands work directly in the app chat and in a project room on a paired p
 ```text
 /models
 /model manager codex
-/model workers codex:<model-id> high
-/model ceo codex:<model-id> medium
+/model worker codex:<model-id> high
+/model reviewer codex:<model-id> medium
 /model all codex:<model-id> high
-/model workers reset
+/model worker reset
 ```
 
 Replace `<model-id>` with an ID listed by `/models`. `/modelo` and `/modelos` also work, and `todos` means `all`.
 Settings apply to **all projects on this machine** and survive restarts. A manager finishes its current turn
 before changing; new messages wait for the new setting. Worker changes apply to new lanes. Codex manager turns
-resume native Codex threads; CEO reviews use fresh read-only runs. A paired phone receives confirmation over its encrypted chat;
+resume native Codex threads; reviews use fresh read-only runs. A paired phone receives confirmation over its encrypted chat;
 messages from other room agents do not run model commands.
 
 ### Browser access with Codex
@@ -226,7 +226,7 @@ name = "tirith-manager"
 names = ["…"]                       # messages naming you in public rooms are highlighted
 [[rooms]]
 id = "some-public-room"             # watched only
-[roles.reviewer]                   # the health reviewer (the CEO review)
+[roles.reviewer]                   # the health reviewer (one fresh read-only turn)
 review_after_minutes = 15
 max_per_day = 6
 [metrics.merged]

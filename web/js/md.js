@@ -191,7 +191,7 @@ export function mdInline(text, opts) {
 }
 
 /* who speaks, bold for fast reading: a leading "CEO proposal:", "CEO directive d-1:" or "Autopilot:" of a text */
-const LEAD = /^(CEO proposal:|CEO directive [^\s:]+:|CEO review:|Autopilot:)/;
+const LEAD = /^(CEO proposal:|CEO directive [^\s:]+:|CEO review:|Review:|Autopilot:)/;
 export function boldLead(text) { return String(text == null ? '' : text).replace(LEAD, '**$1**'); }
 
 /** The speaker of a message line, bold: "Manager · tirith" -> <b>Manager</b> · tirith (escaped). */

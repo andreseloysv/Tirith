@@ -1,5 +1,5 @@
-// Settings, models per role (the old v-models.js): agent, model, effort and the fallback chain of the manager,
-// the workers and the CEO. Save: POST /api/models/{role}; back to config.toml: DELETE.
+// Settings, models per role (the old v-models.js): agent, model, effort and the fallback chain of every role
+// of the factory. Save: POST /api/models/{role}; back to config.toml: DELETE.
 import { html, useState } from '../../../vendor/preact-htm.js';
 import { api } from '../../store.js';
 import { useAction } from './ui.js';
@@ -7,11 +7,18 @@ import { optionsFor } from '../../model-controls.js';
 
 const BOLT = html`<svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true"><path d="M7 1.2L2.6 6.8h2.7L4.8 10.8 9.4 5H6.6z" fill="currentColor"/></svg>`;
 const OTHER = '__other__';
-export const ROLES = [
-  ['manager', 'Manager', 'The orchestrator session'],
-  ['workers', 'Workers', 'Agents the manager, autopilot or Plan button starts'],
-  ['ceo', 'CEO', 'The one-shot review of the whole company'],
-];
+/* The roles of the factory, from /api/models (the bots keep their own place): [id, label, note] with the
+   role's factory shape as its note, and its factory `name` — or its id, capitalised — as its label. */
+export function roleList(M) {
+  const notes = { chat: 'A long-lived conversation', lane: 'Runs plan items in lanes', turn: 'One fresh turn when routed' };
+  return Object.keys((M && M.roles) || {})
+    .filter((id) => !id.startsWith('bot-'))
+    .map((id) => {
+      const r = M.roles[id] || {};
+      const note = [notes[r.session] || r.session, r.scope, r.access === 'read' ? 'read-only' : ''].filter(Boolean).join(' · ');
+      return [id, r.name || id.charAt(0).toUpperCase() + id.slice(1), note];
+    });
+}
 const SOURCE = { page: ['Saved here', 'page'], config: ['From config.toml', ''], default: ['Default', ''] };
 
 function Options({ list, cur, blank, other, strict }) {
@@ -85,7 +92,7 @@ export function RoleCard({ id, label, note, M, reload }) {
       ${dirty ? html`<button class="scancel" disabled=${!!busy} onClick=${() => { setDraft({}); setFree({}); }}>Cancel</button>` : null}
       ${cur.source === 'page' ? html`<button class="mapply" disabled=${!!busy} title="Forget what was saved here and use config.toml again"
         onClick=${reset}>${BOLT}<span>Back to config.toml</span></button>` : null}
-      <span class="mnote mut sm">${id === 'manager' ? 'Applies after the current turn finishes.' : id === 'workers' ? 'New lanes use it; running lanes keep theirs.' : ''}</span>
+      <span class="mnote mut sm">${cur.session === 'chat' ? 'Applies after the current turn finishes.' : cur.session === 'lane' ? 'New lanes use it; running lanes keep theirs.' : ''}</span>
     </div>
     ${error ? html`<div class="ierr">${error}</div>` : null}
   </div>`;
