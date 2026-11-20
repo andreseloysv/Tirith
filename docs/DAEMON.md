@@ -10,6 +10,8 @@ bot makes them itself with `tirith routine add|remove|list`. A bot learns in its
 the start of every turn and routine, and skills in `.agents/skills/<name>/SKILL.md`, its own and the shared ones of `<tirith home>/bots/skills` (linked in before every turn).
 The bots' agent finds them natively: Muse reads `.agents/skills`, and the agent's own `.<command>/skills` is a link to the same folder. Agents may write in a bot's folder
 (never in its hidden folders, where agent settings live, except skills folders) and in the shared skills; the page's Library shows, corrects and deletes all of it.
+A bot may have a model of its own (role `bot-<id>` of `models.rs`, chosen in its card); without one it has the managers'. A routine answer that starts with ∅ (nothing new)
+stays on the page and never reaches the phones (`rooms::to_phones`), so only news does.
 
 ## `brain.rs`
 

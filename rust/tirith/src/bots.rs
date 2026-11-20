@@ -62,7 +62,7 @@ pub fn context(app: &Shared, key: &str) -> Option<String> {
     let gone = std::fs::read_dir(&dir).into_iter().flatten().flatten().filter(|e| e.file_type().is_ok_and(|t| t.is_symlink()) && !e.path().join("SKILL.md").exists());
     gone.for_each(|e| drop(std::fs::remove_file(e.path())));
     skills(&common, true).iter().for_each(|(name, _)| drop(std::os::unix::fs::symlink(common.join(name), dir.join(name))));
-    let agent = app.cfg().agents.get(&crate::models::role(app, "manager").agent).and_then(|a| FsPath::new(&a.command).file_name().map(|n| folder(app, key).join(format!(".{}", n.to_string_lossy()))));
+    let agent = app.cfg().agents.get(&crate::models::role(app, key).agent).and_then(|a| FsPath::new(&a.command).file_name().map(|n| folder(app, key).join(format!(".{}", n.to_string_lossy()))));
     agent.into_iter().for_each(|d| drop(std::fs::create_dir_all(&d).and_then(|_| std::os::unix::fs::symlink(format!("../{SKILLS}"), d.join("skills")))));
     let names = |v: Vec<(String, String)>| Some(v.into_iter().map(|s| s.0).collect::<Vec<_>>().join(", ")).filter(|n| !n.is_empty()).unwrap_or("none".into());
     let memory = std::fs::read_to_string(folder(app, key).join("memory.md")).unwrap_or_default().chars().take(12000).collect::<String>();
@@ -113,9 +113,6 @@ fn find<'a>(bots: &'a mut [Value], id: &str) -> Result<&'a mut Value, String> {
 fn routines<'a>(bots: &'a mut [Value], id: &str) -> Result<&'a mut Vec<Value>, String> {
     find(bots, id)?["routines"].as_array_mut().ok_or(format!("bot '{id}' has no routines"))
 }
-fn new_id(prefix: &str) -> String {
-    format!("{prefix}{:06x}", rand::random::<u32>() >> 8)
-}
 
 /// Weekdays 1 (Monday) to 7, from `[1, 3]`, "daily", "weekdays", "weekends" or names such as "mon,wed".
 pub fn days(v: &Value) -> Option<Vec<u64>> {
@@ -140,7 +137,7 @@ fn fire(app: &Shared, id: &str, rid: &str) -> Result<(), String> {
         Ok((s(r, "title"), s(r, "prompt")))
     })?;
     app.chat("routine", &format!("Running routine · {title}"), &format!("bot-{id}"));
-    crate::manager::tell(app, &format!("bot-{id}"), &format!("Routine «{title}» is due now. Do it and report the result here in a few lines (one line when nothing is new); ask nothing: {task}"));
+    crate::manager::tell(app, &format!("bot-{id}"), &format!("Routine «{title}» is due now. Do it and report the result here in a few lines (when nothing is new, one line that starts with ∅); ask nothing: {task}"));
     Ok(())
 }
 
@@ -160,7 +157,7 @@ fn save(app: &Shared, b: Value) -> Result<Value, String> {
     let (name, color) = (s(&b, "name").trim().to_string(), s(&b, "color"));
     (!name.is_empty() && color.len() == 7 && color.starts_with('#') && color[1..].bytes().all(|c| c.is_ascii_hexdigit())).then_some(()).ok_or("a bot needs a name and a colour #rrggbb")?;
     with(app, |bots| {
-        let (id, fresh) = (s(&b, "id"), s(&b, "id").is_empty().then(|| new_id("")));
+        let (id, fresh) = (s(&b, "id"), s(&b, "id").is_empty().then(|| format!("{:06x}", rand::random::<u32>() >> 8)));
         bots.extend(fresh.iter().map(|id| json!({"id": id, "routines": [], "created_at": now_iso()})));
         let bot = find(bots, fresh.as_deref().unwrap_or(&id))?;
         (bot["name"], bot["shape"], bot["color"]) = (json!(name), b["shape"].clone(), json!(color));
@@ -177,7 +174,7 @@ fn routine(app: &Shared, id: String, b: Value) -> Result<Value, String> {
         if b["delete"] == true {
             return Ok(format!("Removed routine · {}", s(&list.remove(i.ok_or("no such routine")?), "title")));
         }
-        list.extend(i.is_none().then(|| json!({"id": new_id("r"), "on": true})));
+        list.extend(i.is_none().then(|| json!({"id": format!("r{:06x}", rand::random::<u32>() >> 8), "on": true})));
         let last = list.len() - 1;
         let r = &mut list[i.unwrap_or(last)];
         ["title", "prompt", "at", "on"].into_iter().filter(|k| !b[*k].is_null()).for_each(|k| r[k] = b[k].clone());
