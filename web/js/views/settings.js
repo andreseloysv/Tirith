@@ -1,5 +1,5 @@
 // Settings view (the old v-models.js, v-theme.js and the setup cards): Appearance (System / Light / Dark), the
-// models of each role, the commit guard and the autopilot of each project, and the brain's status. Inside a project
+// models of each role, the commit guard and the autopilot of each project. Inside a project
 // its own two cards (autopilot, commit guard) come first; the rest is the same for every project, and says so.
 import { html, useState } from '../../vendor/preact-htm.js';
 import { useStore, useFetch, api } from '../store.js';
@@ -57,16 +57,6 @@ function AutopilotCard({ project }) {
     ${error ? html`<div class="ierr">${error}</div>` : null}</div>`;
 }
 
-function BrainCard() {
-  const [b] = useFetch('/api/brain', ['models']);
-  if (!b) return null;
-  return html`<div class="card scard"><div class="phead"><b>Brain status</b><span class="mut sm">Summaries of rooms and projects</span></div>
-    <div class="scheck ${b.enabled ? 'ok' : 'bad'}"><span class=${`dot ${b.enabled ? 'green' : 'grey'}`}></span><b>${b.enabled ? 'On' : 'Off'}</b>
-      <span class="mut sm">${b.enabled ? `· ${b.model}` : `· ${b.reason || ''}`}</span></div>
-    <div class="bkv mut"><span>Model <b>${b.model}</b></span><span>API <b>${b.url}</b></span><span>Calls <b>${b.calls}</b></span><span>Cached answers <b>${b.cached}</b></span></div>
-    ${b.last_error ? html`<div class="ierr">Last error: ${b.last_error}</div>` : null}</div>`;
-}
-
 export function Settings({ project }) {
   const [M, reload, err] = useFetch('/api/models', ['models']);
   const own = html`<${AutopilotCard} project=${project} /><${GuardCard} project=${project} />`;
@@ -77,6 +67,5 @@ export function Settings({ project }) {
     ${err && !M ? html`<div class="ierr">Could not read the models: ${err.message}</div>` : null}
     ${M ? ROLES.map(([id, label, note]) => html`<${RoleCard} key=${id} id=${id} label=${label} note=${note} M=${M} reload=${reload} />`) : null}
     ${project ? null : own}
-    <${BrainCard} />
   </section>`;
 }

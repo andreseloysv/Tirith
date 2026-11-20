@@ -13,7 +13,7 @@ function Selection({ role, M, reload }) {
   const { valid } = optionsFor(M.choices, value);
   useLayoutEffect(() => {
     ref.current.onChange = setDraft;
-    ref.current.configure({ choices: M.choices, value, brain: role === 'brain', disabled: !!busy });
+    ref.current.configure({ choices: M.choices, value, disabled: !!busy });
   });
   const save = async () => {
     if (!draft || !valid) return;

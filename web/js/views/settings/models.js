@@ -1,5 +1,5 @@
 // Settings, models per role (the old v-models.js): agent, model, effort and the fallback chain of the manager,
-// the workers, the CEO and the brain. Save: POST /api/models/{role}; back to config.toml: DELETE.
+// the workers and the CEO. Save: POST /api/models/{role}; back to config.toml: DELETE.
 import { html, useState } from '../../../vendor/preact-htm.js';
 import { api } from '../../store.js';
 import { useAction } from './ui.js';
@@ -11,7 +11,6 @@ export const ROLES = [
   ['manager', 'Manager', 'The orchestrator session'],
   ['workers', 'Workers', 'Agents the manager, autopilot or Plan button starts'],
   ['ceo', 'CEO', 'The one-shot review of the whole company'],
-  ['brain', 'Brain', 'Summaries through Meta API or Codex'],
 ];
 const SOURCE = { page: ['Saved here', 'page'], config: ['From config.toml', ''], default: ['Default', ''] };
 
@@ -56,13 +55,11 @@ export function RoleCard({ id, label, note, M, reload }) {
   const set = (k) => (val) => setDraft({ ...draft, [k]: val });
   const setF = (k) => (on) => setFree({ ...free, [k]: on });
   const dirty = Object.keys(draft).length > 0;
-  const brain = id === 'brain';
   const value = { agent: v('agent'), model: v('model'), effort: v('effort') };
   const { codex, models, efforts, valid } = optionsFor(ch, value);
   const save = async () => {
     if (!valid) return;
-    const body = { agent: v('agent'), model: v('model').trim(), effort: v('effort') };
-    if (!brain) body.fallback = v('fallback');
+    const body = { agent: v('agent'), model: v('model').trim(), effort: v('effort'), fallback: v('fallback') };
     if (await run('save', () => api('POST', `/api/models/${id}`, body))) { setDraft({}); setFree({}); }
     reload();
   };
@@ -76,13 +73,13 @@ export function RoleCard({ id, label, note, M, reload }) {
     <div class="sfields mfields">
       <label class="sf"><span>Agent</span><select aria-label="Agent" value=${v('agent')} disabled=${!!busy} onChange=${(e) => {
         setDraft({ ...draft, agent: e.target.value, model: '', effort: '' }); setFree({});
-      }}><${Options} list=${brain ? ['codex'] : ch.agents || []} cur=${v('agent')} blank=${brain ? 'Meta API' : '(choose)'} /></select></label>
-      <${Pick} label="Model" value=${v('model')} list=${models.map(m => m.slug)} blank=${brain ? '(default)' : '(from the agent)'}
+      }}><${Options} list=${ch.agents || []} cur=${v('agent')} blank="(choose)" /></select></label>
+      <${Pick} label="Model" value=${v('model')} list=${models.map(m => m.slug)} blank="(from the agent)"
         set=${model => setDraft({ ...draft, model, ...(codex ? { effort: '' } : {}) })} free=${free.model} setFree=${setF('model')} strict=${codex} disabled=${!!busy} />
-      ${brain && !codex ? null : html`<${Pick} label="Effort" value=${v('effort')} list=${efforts} blank="(from the agent)"
-        set=${set('effort')} free=${free.effort} setFree=${setF('effort')} strict=${codex} disabled=${!!busy} />`}
+      <${Pick} label="Effort" value=${v('effort')} list=${efforts} blank="(from the agent)"
+        set=${set('effort')} free=${free.effort} setFree=${setF('effort')} strict=${codex} disabled=${!!busy} />
     </div>
-    ${brain ? null : html`<${Fallback} list=${v('fallback')} main=${v('agent')} agents=${ch.agents || []} set=${set('fallback')} />`}
+    <${Fallback} list=${v('fallback')} main=${v('agent')} agents=${ch.agents || []} set=${set('fallback')} />
     <div class="sfoot">
       <button class="isend" disabled=${!dirty || !!busy || !valid} onClick=${save}>${busy === 'save' ? 'Saving…' : 'Save'}</button>
       ${dirty ? html`<button class="scancel" disabled=${!!busy} onClick=${() => { setDraft({}); setFree({}); }}>Cancel</button>` : null}
