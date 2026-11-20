@@ -1,22 +1,25 @@
-// Bots view: the owner's own bots. A rail of their faces, the selected bot's conversation (the manager chat, with the
-// bot's conversation `bot-<id>`) and its panel: the face (asleep, on watch or working) and two tabs. Routines: each with a
-// switch, Run now, Edit and Delete, and a form for a new one. Library: what the bot learned, its memory.md and its skills
-// (its own and the shared ones of every bot), to read, correct or delete. "New bot" and "Edit" open the bot's card.
-// Bots belong to no project: the project selected in the sidebar does not filter them.
-import { html, useState, useEffect, useRef } from '../../vendor/preact-htm.js';
-import { useStore, useFetch, api } from '../store.js';
+// Bots view: one bot (#/bots/<id>, chosen by its face in the sidebar): its conversation (the manager chat on the bot's
+// conversation `bot-<id>`) and its panel, in the content area like any other view: the face (asleep, on watch or
+// working) and three tabs. Routines: each with a switch, Run now, Edit and Delete, and a form for a new one. Library: what
+// the bot learned, its memory.md and its skills (its own and the shared ones of every bot), to read, correct or delete.
+// Phone: one QR that opens the bot's chat on the owner's phone. The sidebar's "+" and "Edit" open the bot's card (BotCard,
+// drawn by the app over any view): name, shape, colour and its model (the managers' unless it has one of its own).
+import { html, useState, useEffect, useRef, useLayoutEffect } from '../../vendor/preact-htm.js';
+import { S, useStore, useFetch, api, setUi } from '../store.js';
 import { ICON, Icon } from '../common.js';
 import { Chat } from './chat.js';
 import { md } from '../md.js';
+import { optionsFor } from '../model-controls.js';
+import { markSeen } from '../unread.js';
 import { Face, NewFace, SHAPES, COLORS } from './bots/face.js';
 
 const DAY = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const WEEKDAYS = [1, 2, 3, 4, 5], DAILY = [1, 2, 3, 4, 5, 6, 7];
 const SEL_KEY = 'tirith.bot';
-const keyOf = (b) => `bot-${b.id}`;
+export const keyOf = (b) => `bot-${b.id}`;
 const isOn = (r) => r.on !== false;
 
-function recall() { try { return localStorage.getItem(SEL_KEY) || ''; } catch { return ''; } }
+export function recall() { try { return localStorage.getItem(SEL_KEY) || ''; } catch { return ''; } }
 function remember(id) { try { if (id) localStorage.setItem(SEL_KEY, id); else localStorage.removeItem(SEL_KEY); } catch { /* private window */ } }
 
 export function daysLabel(d = []) {
@@ -44,15 +47,33 @@ function whenLabel(d) {
 }
 const soonest = (bot) => (bot.routines || []).map((r) => nextRun(r)).filter(Boolean).sort((a, b) => a - b)[0] || null;
 /** What the face shows: working on a turn, on watch (a routine is on) or asleep. */
-const stateOf = (bot, busy) => (busy ? 'work' : (bot.routines || []).some(isOn) ? 'watch' : 'sleep');
+export const stateOf = (bot, busy) => (busy ? 'work' : (bot.routines || []).some(isOn) ? 'watch' : 'sleep');
 
-/* ---------- the bot's card: name, shape and colour ---------- */
-function BotCard({ bot, onClose, onSaved }) {
+/* ---------- the bot's card: name, shape, colour and model ---------- */
+/** The model controls of Settings (a custom element), for one bot. */
+function ModelControls({ M, value, onChange }) {
+  const ref = useRef(null);
+  useLayoutEffect(() => {
+    ref.current.onChange = onChange;
+    ref.current.configure({ choices: M.choices, value: value || {} });
+  });
+  return html`<model-controls ref=${ref}></model-controls>`;
+}
+const modelName = (v) => (v ? v.model || v.agent || 'default' : '');
+
+export function BotCard({ bot, onClose, onSaved }) {
   const [name, setName] = useState(bot.name || '');
   const [shape, setShape] = useState(bot.shape || 'cloud');
   const [color, setColor] = useState(bot.color || '#ec4899');
   const [err, setErr] = useState('');
   const [ask, setAsk] = useState(false);
+  const [M] = useFetch('/api/models', ['models']);
+  const role = bot.id && M && M.roles[`bot-${bot.id}`];
+  const [own, setOwn] = useState(null);      /* null: as it is; true or false: the owner's choice */
+  const [model, setModel] = useState(null);  /* the model chosen here */
+  const hasOwn = own == null ? !!(role && role.source === 'page') : own;
+  const value = model || (role && role.source === 'page' ? role : M && M.roles.manager) || {};
+  const valid = !M || !hasOwn || optionsFor(M.choices, value).valid;
   const input = useRef(null);
   useEffect(() => {
     if (input.current) input.current.focus();
@@ -60,9 +81,14 @@ function BotCard({ bot, onClose, onSaved }) {
     addEventListener('keydown', key);
     return () => removeEventListener('keydown', key);
   }, []);
-  const save = () => {
-    if (!name.trim()) return;
-    api('POST', '/api/bots', { id: bot.id, name: name.trim(), shape, color }).then(onSaved, (e) => setErr(e.message));
+  const save = async () => {
+    if (!name.trim() || !valid) return;
+    try {
+      const b = await api('POST', '/api/bots', { id: bot.id, name: name.trim(), shape, color });
+      if (own === false && role && role.source === 'page') await api('DELETE', `/api/models/bot-${b.id}`);
+      else if (hasOwn && (model || own)) await api('POST', `/api/models/bot-${b.id}`, value);
+      onSaved(b);
+    } catch (e) { setErr(e.message); }
   };
   const del = () => api('POST', `/api/bots/${encodeURIComponent(bot.id)}/delete`).then(() => onSaved(null), (e) => setErr(e.message));
   return html`<div class="bmback" onClick=${onClose}>
@@ -73,9 +99,12 @@ function BotCard({ bot, onClose, onSaved }) {
         <input ref=${input} class="bnamein" placeholder="Name your bot" maxlength="40" aria-label="Name" value=${name}
           onInput=${(e) => setName(e.target.value)} onKeyDown=${(e) => e.key === 'Enter' && save()} />
         <div class="bshapes" role="radiogroup" aria-label="Shape">${Object.keys(SHAPES).map((k) => html`<button type="button" role="radio" key=${k}
-          aria-checked=${k === shape} aria-label=${k} class=${k === shape ? 'on' : ''} onClick=${() => setShape(k)}><${Face} shape=${k} color=${color} size=${46} /></button>`)}</div>
+          aria-checked=${k === shape} aria-label=${k} class=${k === shape ? 'on' : ''} onClick=${() => setShape(k)}><${Face} shape=${k} color=${color} size=${46} still /></button>`)}</div>
         <div class="bcolors" role="radiogroup" aria-label="Colour">${COLORS.map((c) => html`<button type="button" role="radio" key=${c}
           aria-checked=${c === color} aria-label=${c} class=${c === color ? 'on' : ''} style=${`--c:${c}`} onClick=${() => setColor(c)}><i></i></button>`)}</div>
+        ${M ? html`<details class="bmodel"><summary><span class="bcap">Model</span> ${hasOwn ? modelName(value) : `the managers' · ${modelName(M.roles.manager)}`}</summary>
+          <label class="bchk"><input type="checkbox" checked=${hasOwn} onChange=${(e) => setOwn(e.target.checked)} />A model of its own, not the managers'</label>
+          ${hasOwn ? html`<${ModelControls} M=${M} value=${value} onChange=${(v) => { setModel(v); setOwn(true); }} />` : null}</details>` : null}
         ${err ? html`<p class="berr">${err}</p>` : null}
       </div>
       <footer>
@@ -83,7 +112,7 @@ function BotCard({ bot, onClose, onSaved }) {
             <button type="button" class="bbtn" onClick=${() => setAsk(false)}>Keep</button>`
           : html`<button type="button" class="blink bdel" onClick=${() => setAsk(true)}>Delete bot</button>`) : null}
         ${ask ? null : html`<span class="bsp"></span><button type="button" class="bbtn" onClick=${onClose}>Cancel</button>
-          <button type="button" class="bbtn pri" disabled=${!name.trim()} onClick=${save}>${bot.id ? 'Save' : 'Create'}</button>`}
+          <button type="button" class="bbtn pri" disabled=${!name.trim() || !valid} onClick=${save}>${bot.id ? 'Save' : 'Create'}</button>`}
       </footer>
     </div>
   </div>`;
@@ -202,6 +231,38 @@ function Library({ bot }) {
   </div>`;
 }
 
+/* ---------- the bot on the phone: one QR that opens its chat there ---------- */
+function Phone({ bot }) {
+  const key = keyOf(bot);
+  const [data, reload, err] = useFetch('/api/rooms', ['room']);
+  const [fail, setFail] = useState('');
+  const asked = useRef(0);
+  const room = ((data && data.rooms) || []).find((r) => r.kind === 'manager' && r.project === key);
+  // The QR on the screen must be the one that works: the rooms are read again on a clock and when the window comes back.
+  useEffect(() => {
+    const again = () => { if (!document.hidden) reload(); };
+    const timer = setInterval(again, 15000);
+    addEventListener('focus', again);
+    return () => { clearInterval(timer); removeEventListener('focus', again); };
+  }, []);
+  // No room yet, or its QR was used or is old: the next one is asked for by itself, at most every 10 s.
+  useEffect(() => {
+    if (!data || (room && room.invite) || Date.now() - asked.current < 10000) return;
+    asked.current = Date.now();
+    api('POST', '/api/rooms', { project: key, title: bot.name }).then(() => { setFail(''); reload(); }, (e) => setFail(e.message));
+  });
+  const src = room && room.invite ? `/api/rooms/${encodeURIComponent(room.id)}/qr.svg?kind=invite&v=${encodeURIComponent(room.invite)}` : '';
+  const phones = room ? (room.devices || []).length : 0;
+  return html`<div class="bphone">
+    ${src ? html`<img class="bqr" src=${src} alt=${`QR code that opens ${bot.name} on your phone`} width="216" height="216" />`
+      : html`<div class="bqr bqrwait">${fail || (err && !data) ? 'No QR right now' : 'Making the QR…'}</div>`}
+    <p class="bscan">Scan it with your phone's camera to talk to ${bot.name} there.</p>
+    <p class="bnote">It works once; the next one appears here by itself.${phones ? ` ${phones} phone${phones > 1 ? 's' : ''} already in this chat.` : ''}</p>
+    ${fail ? html`<p class="berr">${fail}</p>` : null}
+  </div>`;
+}
+
+const TABS = [['routines', 'Routines'], ['library', 'Library'], ['phone', 'Phone']];
 function Panel({ bot, busy, onEdit }) {
   const [form, setForm] = useState(null); /* null, {} for a new routine, or the routine being changed */
   const [tab, setTab] = useState('routines');
@@ -216,10 +277,11 @@ function Panel({ bot, busy, onEdit }) {
       <button type="button" class="blink" onClick=${onEdit}>Edit bot</button>
     </div>
     <section class="bsec">
-      <header><div class="btabs" role="tablist">${[['routines', 'Routines'], ['library', 'Library']].map(([k, label]) => html`<button type="button" role="tab" key=${k}
+      <header><div class="btabs" role="tablist">${TABS.map(([k, label]) => html`<button type="button" role="tab" key=${k}
           aria-selected=${tab === k} class=${tab === k ? 'on' : ''} onClick=${() => setTab(k)}>${label}${k === 'routines' && list.length ? html` <span class="bn">${list.length}</span>` : null}</button>`)}</div>
-        ${form || tab !== 'routines' ? null : html`<button type="button" class="blink" onClick=${() => setForm({})}>+ New routine</button>`}</header>
-      ${tab === 'library' ? html`<${Library} bot=${bot} />` : null}
+      </header>
+      ${form || tab !== 'routines' ? null : html`<div class="baddrow"><button type="button" class="blink" onClick=${() => setForm({})}>+ New routine</button></div>`}
+      ${tab === 'library' ? html`<${Library} bot=${bot} />` : tab === 'phone' ? html`<${Phone} key=${bot.id} bot=${bot} />` : null}
       ${tab === 'routines' && form && !form.id ? html`<${RoutineForm} bot=${bot} r=${form} onDone=${done} />` : null}
       ${tab !== 'routines' ? null : list.length ? html`<ul class="brout">${list.map((r) => (form && form.id === r.id
           ? html`<li key=${r.id}><${RoutineForm} bot=${bot} r=${r} onDone=${done} /></li>`
@@ -238,7 +300,7 @@ function Intro({ onNew }) {
     <span class="bdash"></span>
     <p class="blead">Give a bot a name and a face, then tell it what to watch and when: “every weekday at 8, check my inbox for new job offers”. It sets the routine up itself and reports in its chat, here and on your phone.</p>
     <div class="blineup">${SAMPLE.map(([shape, color, state], i) => html`<span class="bpop" key=${shape} style=${`animation-delay:${0.2 + i * 0.12}s`}>
-      <${Face} shape=${shape} color=${color} state=${state} size=${[84, 90, 80, 76, 86, 80][i]} delay=${i * 0.4} /></span>`)}
+      <${Face} shape=${shape} color=${color} state=${state} size=${[84, 90, 80, 76, 86, 80][i]} /></span>`)}
       <button type="button" class="bpop bfirst" style="animation-delay:.95s" onClick=${onNew} aria-label="Create a bot"><${NewFace} size=${76} /></button></div>
     <button type="button" class="bbtn pri bbig" onClick=${onNew}>Create your first bot</button>
     <div class="bkeys"><div class="bk">Keywords</div>
@@ -248,32 +310,30 @@ function Intro({ onNew }) {
   </div>`;
 }
 
-export function Bots() {
+/** `project` is the second part of the address: the id of the bot to show (else the last one shown, else the first). */
+export function Bots({ project: wanted }) {
   const s = useStore();
-  const [bots, reload, err] = useFetch('/api/bots', ['bots']);
-  const [sel, setSel] = useState(recall);
-  const [card, setCard] = useState(null); /* null, {} for a new bot, or the bot being edited */
-  const pick = (id) => { setSel(id); remember(id); };
-  const saved = (b) => { setCard(null); pick(b ? b.id : ''); reload(); };
-  const modal = card ? html`<${BotCard} bot=${card} onClose=${() => setCard(null)} onSaved=${saved} />` : null;
+  const [bots, , err] = useFetch('/api/bots', ['bots']);
+  const bot = bots && (bots.find((b) => b.id === wanted) || bots.find((b) => b.id === recall()) || bots[0]);
+  const talk = bot && S.talks[keyOf(bot)];
+  useEffect(() => { if (bot) remember(bot.id); }, [bot && bot.id]);
+  /* what the owner has on the screen is read */
+  useEffect(() => {
+    const read = () => { if (bot && talk && talk.loaded && !document.hidden) markSeen(bot.id, talk.rows); };
+    read();
+    document.addEventListener('visibilitychange', read);
+    return () => document.removeEventListener('visibilitychange', read);
+  }, [bot && bot.id, talk && talk.rows.length, talk && talk.loaded]);
 
   if (!bots) {
-    return html`<div class="bstage bsolo"><p class="bnote">${err ? (/not found/i.test(err.message)
+    return html`<div class="bview bsolo"><p class="bnote">${err ? (/not found/i.test(err.message)
       ? 'The running Tirith daemon is older than this page and has no bots yet: rebuild and restart it (the page updates on its own).'
       : `Could not read the bots: ${err.message}`) : 'Loading…'}</p></div>`;
   }
-  if (!bots.length) return html`<div class="bstage bsolo"><${Intro} onNew=${() => setCard({})} /></div>${modal}`;
-  const bot = bots.find((b) => b.id === sel) || bots[0];
-  const busy = !!s.busy[keyOf(bot)];
-  return html`<div class="bstage">
-    <nav class="brail" aria-label="Bots">
-      ${bots.map((b) => html`<button type="button" key=${b.id} class=${b.id === bot.id ? 'on' : ''} title=${b.name} aria-label=${b.name} aria-current=${b.id === bot.id}
-        onClick=${() => pick(b.id)}><${Face} shape=${b.shape} color=${b.color} size=${44} state=${s.busy[keyOf(b)] ? 'work' : 'idle'} />
-        ${s.busy[keyOf(b)] ? html`<i class="bbusy" title="Working"></i>` : null}</button>`)}
-      <button type="button" class="bnew" title="New bot" aria-label="New bot" onClick=${() => setCard({})}><${NewFace} size=${40} /></button>
-    </nav>
+  if (!bots.length) return html`<div class="bview bsolo"><${Intro} onNew=${() => setUi('botCard', {})} /></div>`;
+  return html`<div class="bview">
     <div class="bchat"><${Chat} key=${keyOf(bot)} project=${keyOf(bot)} who=${bot.name} models=${false}
       hint=${`Say hello to ${bot.name}. Ask for anything that repeats, as “every weekday at 8, check my inbox for job offers”, and ${bot.name} sets up the routine itself.`} /></div>
-    <aside class="bside"><${Panel} bot=${bot} busy=${busy} onEdit=${() => setCard(bot)} /></aside>
-  </div>${modal}`;
+    <aside class="bside"><${Panel} bot=${bot} busy=${!!s.busy[keyOf(bot)]} onEdit=${() => setUi('botCard', bot)} /></aside>
+  </div>`;
 }
