@@ -506,7 +506,8 @@ fn queue(id: &str, text: &str, readers: Vec<String>) {
 
 /// What a project's conversation says (its manager's words, Tirith's reports, a card) goes to the phones of its rooms.
 pub fn to_phones(app: &Shared, project: &str, text: &str) {
-    let rooms: Vec<Room> = ROOMS.lock().unwrap().values().filter(|r| r.kind == "manager" && manager::here(app, &r.project) == project).cloned().collect();
+    // An answer that starts with ∅ (a routine found nothing new) stays on the page: only news reaches the phones.
+    let rooms: Vec<Room> = ROOMS.lock().unwrap().values().filter(|r| r.kind == "manager" && manager::here(app, &r.project) == project && !text.trim_start().starts_with('∅')).cloned().collect();
     rooms.iter().for_each(|r| queue(&r.id, text, r.devices.iter().map(|d| d.public.clone()).collect()));
 }
 
