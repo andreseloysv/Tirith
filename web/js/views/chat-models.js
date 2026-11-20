@@ -2,7 +2,7 @@
 import { html, useState, useLayoutEffect, useRef } from '../../vendor/preact-htm.js';
 import { useFetch, api } from '../store.js';
 import { optionsFor } from '../model-controls.js';
-import { ROLES } from './settings/models.js';
+import { roleList } from './settings/models.js';
 import { useAction } from './settings/ui.js';
 
 function Selection({ role, M, reload }) {
@@ -36,7 +36,7 @@ export function ChatModels() {
   const current = M?.roles[role];
   return html`<details class="mc-models"><summary>Models · ${current?.model || current?.agent || 'Manager'}</summary>
     <div class="model-roles" role="group" aria-label="Model role">
-      ${ROLES.map(([id, name]) => html`<button type="button" aria-pressed=${role === id} onClick=${() => setRole(id)}>${name}</button>`)}</div>
+      ${roleList(M).map(([id, name]) => html`<button type="button" aria-pressed=${role === id} onClick=${() => setRole(id)}>${name}</button>`)}</div>
     ${error ? html`<p class="ierr">${error.message}</p>` : null}
     ${M ? html`<${Selection} key=${role} role=${role} M=${M} reload=${reload} />` : null}
   </details>`;

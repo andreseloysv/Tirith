@@ -1,13 +1,4 @@
 #[test]
-fn ceo_read_only_allows_reads() {
-    for cmd in ["tirith status", "tirith plan show tirith", "tirith lane log some-lane", "tirith timeout get", "tirith merge status"] {
-        let input = serde_json::json!({"command": cmd});
-        assert_eq!(super::ceo_permission("Bash", &input)["behavior"], "allow", "{cmd}");
-    }
-    assert_eq!(super::ceo_permission("Read", &serde_json::json!({"file_path": "/x"}))["behavior"], "allow");
-    ["Write", "Edit", "MultiEdit", "NotebookEdit"].into_iter().for_each(|t| assert_eq!(super::ceo_permission(t, &serde_json::json!({}))["behavior"], "deny", "{t}"));
-}
-#[test]
 fn health_reports_paused_reason() {
     let t = super::paused_text("tirith", "commit guard: the pre-commit hook is outdated or has other words than config.toml (tirith guard install tirith)");
     assert!(t.contains("paused: commit guard"), "{t}");

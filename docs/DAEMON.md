@@ -57,21 +57,25 @@ deploy stages are no checks: they run after main has moved, on that main (`deplo
 
 ## `metrics.rs`
 
-Health metrics and the CEO.
+Health metrics and the reviewer.
 
 Every minute code computes the metrics from the daemon's own data (lanes, runs, plans, kv). A metric that
 turns red starts an episode: the mechanical fix when there is one, then one note to the manager. Still red
-the reviewer role's `review_after_minutes` later, one CEO review runs for that episode: a fresh, independent, read-only
-session whose answer goes to the owner's chat and to the manager. Back to green ends the episode.
+after the delayed `metric.red` route's `after_minutes`, one review runs for that episode: that route's turn
+role (the reviewer, `access = "read"`) runs one fresh turn like any turn role, and its answer goes to the
+owner's chat and, as `review.done`, to the lead. Back to green ends the episode.
 While everything is green no model is called.
 
 ## `models.rs`
 
 Models per role and the fallback chain.
 
-Roles: "manager" (the chat session), "workers" (lanes) and "ceo" (one-shot review). Each has an agent alias, a model, an effort and a fallback
+Roles are the factory's: "manager" (a project's chat), "lead" (the chat of no project), "worker" (lanes) and
+"reviewer" (one fresh turn), each with its `session`, `scope`, `extends`, `access`, `idle_minutes`,
+`max_per_day` and `runs_on` in `factory/factory.toml`; code finds a role by that shape, never by a fixed
+list of names. Each has an agent alias, a model, an effort and a fallback
 chain. The effective setting is the owner's override from the page (kv `models:<role>`), else
-`[roles.<role>]` of `config.toml` (worker, reviewer), else the factory's role. Agents are aliases
+`[roles.<role>]` of `config.toml` laid over the factory's role. Agents are aliases
 (`[agents.<alias>]`); the real command lives only in config.toml. Optional per alias: `model_flag`, `effort_flag` ("" = none) and `resume_args`
 (`{session}` and `{message}` are filled in); each alias's flags come from the factory.
 
@@ -101,7 +105,7 @@ ed25519 keys converted to curve25519, one wrapped key per reader).
 
 ## `sandbox.rs`
 
-Network sandbox. Every process Tirith starts (lane agents, the manager, CEO reviews, merge-queue checks) runs inside a macOS `sandbox-exec` profile that denies outbound network except loopback and local sockets, with its proxy
+Network sandbox. Every process Tirith starts (lane agents, the manager, turn-role reviews, merge-queue checks) runs inside a macOS `sandbox-exec` profile that denies outbound network except loopback and local sockets, with its proxy
 variables pointing at the daemon's own HTTP/CONNECT proxy (`sandbox/proxy.rs`). The proxy authenticates the caller (`who` + token), applies the block list, and records each new destination as an event.
 
 ## `sandbox/proxy.rs`

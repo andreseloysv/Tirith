@@ -1,4 +1,4 @@
-//! Models per role (manager, workers, ceo) and the fallback chain: the owner's override from the page, else `[roles.<role>]` of config.toml, else the factory's role.
+//! Models per factory role and the fallback chain: the owner's override from the page, else `[roles.<role>]` of config.toml laid over the factory's role, else that role as the factory defines it.
 
 use crate::app::{bad, Shared};
 use crate::client::{call, Flag};
@@ -10,8 +10,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{path::Path, sync::OnceLock};
 
-pub const ROLES: [&str; 3] = ["manager", "workers", "ceo"];
 const EFFORTS: [&str; 6] = ["low", "medium", "high", "xhigh", "max", "ultra"];
+
+/// The factory role that runs lanes (its `session = "lane"` one), by name.
+pub fn lane_role(cfg: &Config) -> String {
+    cfg.factory.find_role("lane", None).unwrap_or_else(|| "worker".into())
+}
 
 #[derive(Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct RoleSetting {
@@ -31,28 +35,22 @@ pub struct AgentCmd {
     pub argv: Vec<String>,
 }
 
-/// The effective setting of a role and where it comes from: "page", "config" or "default".
+/// The effective setting of a role and where it comes from: "page", "config" (config.toml's `[roles.<role>]` sets its agent, model, effort or fallback) or "default" (the factory's role alone, its `extends` resolved).
 pub fn role_with_source(app: &Shared, role: &str) -> (RoleSetting, &'static str) {
     if let Some(s) = app.kv(&format!("models:{role}")).and_then(|j| serde_json::from_str(&j).ok()) {
         return (s, "page");
-    } else if crate::bots::bot(app, role).is_some() {
-        return (self::role(app, "manager"), "managers"); // a bot without a model of its own has the managers'
     }
     let cfg = app.cfg();
-    let fname = match role {
-        "workers" => "worker",
-        "ceo" => "reviewer",
-        r => r,
-    };
-    let default_agent = || if role == "workers" { cfg.factory.role::<String>("workers", "agent").unwrap_or_else(|| "anthropic".into()) } else { role_with_source(app, "workers").0.agent };
-    let table: Option<toml::Table> = get(&cfg.raw, &["roles", fname]);
-    let s = |t: &toml::Table, k: &str| t.get(k).and_then(|v| v.as_str()).map(String::from).filter(|v| !v.is_empty());
-    match table {
-        Some(t) if role != "ceo" || t.contains_key("model") || t.contains_key("agent") => {
-            (RoleSetting { agent: s(&t, "agent").unwrap_or_else(default_agent), model: s(&t, "model"), effort: s(&t, "effort"), fallback: get(&cfg.raw, &["roles", fname, "fallback"]).unwrap_or_default() }, "config")
-        }
-        _ => (RoleSetting { agent: default_agent(), ..Default::default() }, "default"),
+    if crate::bots::bot(app, role).is_some() {
+        let chat = cfg.factory.find_role("chat", Some("project")).unwrap_or_else(|| "manager".into());
+        return (self::role(app, &chat), "managers"); // a bot without a model of its own has the project chat role's
     }
+    let f = &cfg.factory;
+    let from_config = get::<toml::Table>(&cfg.raw, &["roles", role]).is_some_and(|t| ["agent", "model", "effort", "fallback"].iter().any(|k| t.get(*k).is_some_and(|v| v.as_str().is_none_or(|s| !s.is_empty()))));
+    let empty = |v: Option<String>| v.filter(|s| !s.is_empty());
+    let agent = empty(f.role(role, "agent")).or_else(|| empty(f.role(&lane_role(&cfg), "agent"))).unwrap_or_else(|| "anthropic".into());
+    let s = RoleSetting { agent, model: empty(f.role(role, "model")), effort: empty(f.role(role, "effort")), fallback: f.role(role, "fallback").unwrap_or_default() };
+    (s, if from_config { "config" } else { "default" })
 }
 
 pub fn role(app: &Shared, role: &str) -> RoleSetting {
@@ -79,11 +77,12 @@ fn set_flag(argv: &mut Vec<String>, flag: &Option<String>, alts: &[&str], value:
     }
 }
 
-/// The argv of a lane run. `agent`/`model` override the workers role (a fallback relaunch passes them). `resume = Some((session_id, message))` continues that agent session with `message` instead of the brief;
+/// The argv of a lane run. `agent`/`model` override the lane role (a fallback relaunch passes them). `resume = Some((session_id, message))` continues that agent session with `message` instead of the brief;
 /// an alias without `resume_args` starts fresh with the brief.
 pub fn lane_argv(app: &Shared, agent: Option<&str>, model: Option<&str>, brief: &Path, workspace: &Path, resume: Option<(&str, &str)>) -> Result<AgentCmd, String> {
     let cfg = app.cfg();
-    let w = role(app, "workers");
+    let lane = lane_role(&cfg);
+    let w = role(app, &lane);
     let alias = agent.unwrap_or(&w.agent).to_string();
     let command = cfg.factory.command(&alias).ok_or(format!("no agent alias '{alias}' in config.toml"))?;
     let same = alias == w.agent;
@@ -95,7 +94,7 @@ pub fn lane_argv(app: &Shared, agent: Option<&str>, model: Option<&str>, brief: 
     let fill = |s: &String| s.replace("{brief}", &brief).replace("{workspace}", &ws).replace("{session}", session).replace("{message}", message);
     let mut argv: Vec<String> = if resume.is_some() && !resume_args.is_empty() {
         std::iter::once(command).chain(resume_args.iter().map(fill)).collect()
-    } else if Some(alias.as_str()) == get::<String>(&cfg.raw, &["roles", "worker", "agent"]).or_else(|| cfg.factory.role("workers", "agent")).as_deref() && !cfg.launch.is_empty() {
+    } else if Some(alias.as_str()) == get::<String>(&cfg.raw, &["roles", &lane, "agent"]).or_else(|| cfg.factory.role(&lane, "agent")).as_deref() && !cfg.launch.is_empty() {
         cfg.launch.iter().map(fill).collect()
     } else {
         std::iter::once(command).chain(args.iter().map(fill)).collect()
@@ -108,12 +107,12 @@ pub fn lane_argv(app: &Shared, agent: Option<&str>, model: Option<&str>, brief: 
     Ok(AgentCmd { alias, argv })
 }
 
-/// The argv of a streaming chat session (stream-json in and out) for "manager" or "ceo". `resume` continues that session id. The caller appends its own system prompt.
+/// The argv of a streaming chat session (stream-json in and out) for a role. `resume` continues that session id. The caller appends its own system prompt.
 pub fn chat_argv(app: &Shared, role_name: &str, resume: Option<&str>) -> Result<AgentCmd, String> {
     let cfg = app.cfg();
     let r = role(app, role_name);
     let mut argv = vec![cfg.factory.command(&r.agent).ok_or(format!("no agent alias '{}' in config.toml", r.agent))?];
-    // Exec agents do not speak this chat protocol: their manager and CEO turns run as exec turns. Never hand them the default flags of the other one.
+    // Exec agents do not speak this chat protocol: their chat and turn roles run as exec turns. Never hand them the default flags of the other one.
     let Some(chat) = cfg.factory.agent::<Vec<String>>(&r.agent, "chat_args") else {
         return Err(format!("agent '{}' has no stream-json chat mode; set chat_args for it in config.toml or run it as exec turns", r.agent));
     };
@@ -158,19 +157,18 @@ fn valid(v: &str) -> bool {
     v.chars().next().is_some_and(|c| c.is_ascii_alphanumeric()) && v.chars().all(|c| c.is_ascii_alphanumeric() || "._:/+-[]".contains(c))
 }
 
-/// Saves the owner's setting of a role (fields absent from `b` keep their effective value, "" clears them), or with `None` goes back to config.toml. Restarts the manager session when its setting changed.
+/// Saves the owner's setting of a role (fields absent from `b` keep their effective value, "" clears them), or with `None` goes back to config.toml. A chat role whose setting changed restarts its sessions (after their current turn).
 pub fn save(app: &Shared, role_name: &str, b: Option<&Value>) -> Result<RoleSetting, String> {
-    (ROLES.contains(&role_name) || crate::bots::bot(app, role_name).is_some()).then_some(()).ok_or_else(|| format!("role must be one of {} or a bot", ROLES.join(", ")))?;
-    let before = role(app, "manager");
-    let saved = match b {
-        Some(b) => Some(serde_json::to_string(&updated(app, role_name, b)?).unwrap_or_default()),
-        None => None,
-    };
+    let roles = app.cfg().factory.roles();
+    (roles.iter().any(|r| r == role_name) || crate::bots::bot(app, role_name).is_some()).then_some(()).ok_or_else(|| format!("role must be one of {} or a bot", roles.join(", ")))?;
+    let before = role(app, role_name);
+    let saved = b.map(|b| updated(app, role_name, b)).transpose()?.map(|s| serde_json::to_string(&s).unwrap_or_default());
     app.set_kv(&format!("models:{role_name}"), saved.as_deref());
     let (now, source) = role_with_source(app, role_name);
     app.event("", "", "models", role_name, &format!("{role_name}: {} ({source})", line(&now)), "");
     app.emit("models", state(app));
-    let _ = (role(app, "manager") != before || role_name.starts_with("bot-")).then(crate::manager::restart);
+    let chat = app.cfg().factory.role::<String>(role_name, "session").as_deref() == Some("chat");
+    let _ = (now != before && (chat || role_name.starts_with("bot-"))).then(crate::manager::restart);
     Ok(now)
 }
 
@@ -218,10 +216,11 @@ fn line(s: &RoleSetting) -> String {
 pub fn command(app: &Shared, text: &str) -> Option<Result<String, String>> {
     let words: Vec<&str> = text.split_whitespace().collect();
     matches!(words.first(), Some(&"/model" | &"/models" | &"/modelo" | &"/modelos")).then_some(())?;
-    let help = "Machine-wide models (all projects).\n/models — current settings and Codex models\n/model <manager|workers|ceo|all> <agent>:<model> [effort]\n/model <role> reset — back to config.toml\nExample: /model manager codex (Codex's default model). Changes apply to the next turn or new lanes; running work finishes first.";
+    let all_roles = app.cfg().factory.roles();
+    let help = format!("Machine-wide models (all projects).\n/models — current settings and Codex models\n/model <{}|all> <agent>:<model> [effort]\n/model <role> reset — back to config.toml\nExample: /model manager codex (Codex's default model). Changes apply to the next turn or new lanes; running work finishes first.", all_roles.join("|"));
     Some((|| {
         if words.len() == 1 || words.get(1) == Some(&"help") {
-            let roles = ROLES.iter().map(|r| format!("{r}: {}", line(&role(app, r)))).collect::<Vec<_>>().join("\n");
+            let roles = all_roles.iter().map(|r| format!("{r}: {}", line(&role(app, r)))).collect::<Vec<_>>().join("\n");
             let catalog = crate::codex::catalog()
                 .iter()
                 .map(|m| format!("{} ({})", m["slug"].as_str().unwrap_or(""), m["efforts"].as_array().into_iter().flatten().filter_map(Value::as_str).collect::<Vec<_>>().join(", ")))
@@ -229,44 +228,45 @@ pub fn command(app: &Shared, text: &str) -> Option<Result<String, String>> {
                 .join("\n");
             return Ok(format!("{roles}\n\nCodex models:\n{catalog}\n\n{help}"));
         }
-        ((3..=4).contains(&words.len())).then_some(()).ok_or_else(|| help.to_string())?;
-        let r = match words[1] {
-            "todos" => "all",
-            "agentes" | "worker" => "workers",
-            "gerente" => "manager",
-            r => r,
-        };
-        let roles = if r == "all" {
-            ROLES.to_vec()
-        } else if ROLES.contains(&r) {
-            vec![r]
+        ((3..=4).contains(&words.len())).then_some(()).ok_or_else(|| help.clone())?;
+        let r = if words[1] == "todos" { "all" } else { words[1] };
+        let roles: Vec<String> = if r == "all" {
+            all_roles.clone()
+        } else if all_roles.iter().any(|x| x == r) {
+            vec![r.to_string()]
         } else {
-            return Err(help.into());
+            return Err(help);
         };
         let reset = words[2] == "reset";
-        (!reset || words.len() == 3).then_some(()).ok_or_else(|| help.to_string())?;
+        (!reset || words.len() == 3).then_some(()).ok_or_else(|| help.clone())?;
         let mut body = json!({});
         if !reset {
             let (agent, model) = words[2].split_once(':').unwrap_or_else(|| if words[2].starts_with("gpt-") { ("codex", words[2]) } else { (words[2], "") });
             body = json!({"agent": agent, "model": model, "effort": words.get(3).copied().unwrap_or("")});
             roles.iter().try_for_each(|r| updated(app, r, &body).map(|_| ()))?; // validate every role before saving any of them
         }
-        let lines: Vec<String> = roles.into_iter().map(|r| save(app, r, (!reset).then_some(&body)).map(|s| format!("{r}: {}", line(&s)))).collect::<Result<_, _>>()?;
+        let lines: Vec<String> = roles.into_iter().map(|r| save(app, &r, (!reset).then_some(&body)).map(|s| format!("{r}: {}", line(&s)))).collect::<Result<_, _>>()?;
         Ok(format!("Saved for all projects:\n{}\nApplies to the next turn or new lanes; running work finishes first.", lines.join("\n")))
     })())
 }
 
-/// GET /api/models: every role's effective setting with its source, and the choices the page offers.
+/// GET /api/models: every factory role's effective setting with its source and its factory shape (session, scope, access, runs_on, name), the bots', and the choices the page offers.
 pub fn state(app: &Shared) -> Value {
     let cfg = app.cfg();
-    let roles: serde_json::Map<String, Value> = ROLES
-        .iter()
-        .map(|r| r.to_string())
+    let roles: serde_json::Map<String, Value> = cfg
+        .factory
+        .roles()
+        .into_iter()
         .chain(crate::bots::keys(app))
         .map(|r| {
             let (s, source) = role_with_source(app, &r);
             let mut v = json!(s);
             v["source"] = json!(source);
+            for k in ["session", "scope", "access", "runs_on", "name"] {
+                if let Some(x) = cfg.factory.role::<String>(&r, k) {
+                    v[k] = json!(x);
+                }
+            }
             (r, v)
         })
         .collect();
@@ -314,9 +314,9 @@ pub fn cli(pos: &[&str], flag: Flag) -> Option<Result<(), String>> {
     Some(match pos {
         ["models"] => call("GET", "/api/models", None).and_then(|b| {
             let v: Value = serde_json::from_str(&b).map_err(|e| e.to_string())?;
-            for r in ROLES {
-                let s: RoleSetting = serde_json::from_value(v["roles"][r].clone()).unwrap_or_default();
-                println!("{r:<8} {}  [{}]", line(&s), v["roles"][r]["source"].as_str().unwrap_or(""));
+            for (r, rv) in v["roles"].as_object().into_iter().flatten() {
+                let s: RoleSetting = serde_json::from_value(rv.clone()).unwrap_or_default();
+                println!("{r:<10} {}  [{}]", line(&s), rv["source"].as_str().unwrap_or(""));
             }
             Ok(())
         }),
