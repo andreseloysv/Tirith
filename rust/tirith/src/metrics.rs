@@ -281,7 +281,7 @@ fn ceo_permission(tool: &str, input: &Value) -> Value {
 
 /// One fresh, read-only session: one user message in, the assistant's text until the "result" event out.
 async fn review(app: &Shared, why: &str) -> Result<String, String> {
-    if models::role(app, "ceo").agent == "codex" {
+    if matches!(models::role(app, "ceo").agent.as_str(), "codex" | "muse") {
         return crate::codex::turn(app, "ceo", "", None, (PROMPT, &brief(app, why)), |_| {}, |_| {}).await;
     }
     let mut cmd = models::chat_argv(app, "ceo", None)?;
