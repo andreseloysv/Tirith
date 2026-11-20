@@ -103,13 +103,14 @@ impl App {
         let lanes: BTreeMap<String, Lane> =
             db.prepare("SELECT data FROM lanes").expect("read lanes").query_map([], |r| r.get::<_, String>(0)).expect("read lanes").flatten().filter_map(|s| serde_json::from_str::<Lane>(&s).ok()).map(|l| (l.id.clone(), l)).collect();
         let cfg_mtime = mtime(&home.join("config.toml"));
+        let cfg = Arc::new(Config::load());
         Arc::new(App {
             home,
-            cfg: RwLock::new(Arc::new(Config::load())),
+            cfg: RwLock::new(cfg.clone()),
             db: Mutex::new(db),
             lanes: Mutex::new(lanes),
             tx: broadcast::channel(1024).0,
-            plan_dirty: Mutex::new(BTreeSet::new()),
+            plan_dirty: Mutex::new(cfg.projects.iter().map(|p| p.id.clone()).collect()), // every project starts dirty: the first flush commits a plan a stopped daemon left uncommitted (flush skips a clean one)
             plan_lock: tokio::sync::Mutex::new(()),
             sched_wake: Notify::new(),
             merge_wake: Notify::new(),
