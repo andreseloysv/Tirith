@@ -1,4 +1,4 @@
-//! Bots: the owner's own agents, with routines, a memory and skills (docs/DAEMON.md).
+//! Bots: the owner's own agents — factory roles with `scope = "own"` and `schedule` routes in `~/.tirith/config.toml` (written with toml_edit, keeping its comments), each with a memory and skills (docs/DAEMON.md). A routine's last run stays in kv: it is a stamp, not configuration.
 
 use crate::app::{bad, now_iso, App, Shared, R};
 use crate::client::{call, print, Flag};
@@ -15,33 +15,43 @@ use std::sync::Mutex;
 const SKILLS: &str = ".agents/skills";
 static ONE: Mutex<()> = Mutex::new(());
 
+/// The bots of config.toml as the page has always seen them: every `[roles.bot-<id>]` with `scope = "own"` (its name and face), with its `schedule` routes as routines (`last` says a routine's last run).
+fn bots_of(raw: &Value, last: &dyn Fn(&str, &str) -> String) -> Vec<Value> {
+    let routes = raw["routes"].as_array().cloned().unwrap_or_default();
+    let or = |x: String, d: &str| Some(x).filter(|x| !x.is_empty()).unwrap_or_else(|| d.to_string());
+    let bot = |(key, role): (&String, &Value)| {
+        let id = key.strip_prefix("bot-").filter(|_| s(role, "scope") == "own")?;
+        let routines: Vec<Value> = routes
+            .iter()
+            .filter(|r| s(r, "on") == "schedule" && s(r, "to") == *key)
+            .enumerate()
+            .map(|(i, r)| {
+                let rid = or(s(r, "id"), &format!("r{i}"));
+                json!({"id": rid.clone(), "title": or(s(r, "title"), &s(r, "task")), "prompt": s(r, "task"), "days": days(&r["days"]).unwrap_or_default(), "at": s(r, "at"), "on": r["enabled"] != false, "last": last(id, &rid)})
+            })
+            .collect();
+        Some(json!({"id": id, "name": or(s(role, "name"), id), "shape": or(s(&role["face"], "shape"), "round"), "color": or(s(&role["face"], "color"), "#3b82f6"), "routines": routines}))
+    };
+    raw["roles"].as_object().into_iter().flatten().filter_map(bot).collect()
+}
 pub fn all(app: &App) -> Vec<Value> {
-    app.kv("bots").and_then(|j| serde_json::from_str(&j).ok()).unwrap_or_default()
+    bots_of(&serde_json::to_value(&app.cfg().raw).unwrap_or_default(), &|id, rid| app.kv(&format!("routine:{id}:{rid}")).unwrap_or_default())
 }
 /// The bot whose conversation is `key` (`bot-<id>`).
 pub fn bot(app: &App, key: &str) -> Option<Value> {
     key.strip_prefix("bot-").and_then(|id| all(app).into_iter().find(|b| b["id"] == id))
-}
-pub fn keys(app: &App) -> Vec<String> {
-    all(app).iter().map(|b| format!("bot-{}", s(b, "id"))).collect()
-}
-pub fn prompt(app: &App, key: &str) -> Option<String> {
-    bot(app, key).map(|b| app.cfg().factory.prompt("bot").replace("{name}", &s(&b, "name")).replace("{shared}", &shared(&app.home).display().to_string()))
 }
 
 /// A bot's folder, where its sessions run: memory.md, its working files and its skills.
 pub fn folder(app: &App, key: &str) -> PathBuf {
     app.home.join("manager").join(key)
 }
-fn shared(home: &FsPath) -> PathBuf {
-    home.join("bots/skills")
-}
 /// The one part of Tirith's home besides the lanes where agents write: the bots' folders and the shared skills. In a bot's folder a hidden folder is written only
 /// as a skills folder: an agent's settings there could turn Tirith's hooks off.
 pub fn writable(home: &FsPath, path: &FsPath) -> bool {
     let parts: Vec<String> = path.strip_prefix(home.join("manager")).map(|r| r.iter().map(|c| c.to_string_lossy().into_owned()).collect()).unwrap_or_default();
     let own = parts.first().is_some_and(|b| b.starts_with("bot-")) && parts.windows(2).all(|w| !w[0].starts_with('.') || w[1] == "skills");
-    own || path.starts_with(shared(home))
+    own || path.starts_with(home.join("bots/skills"))
 }
 /// The skills of a folder of skills, by name with the text of their SKILL.md; `links` false leaves out the shared ones linked into a bot's.
 fn skills(dir: &FsPath, links: bool) -> Vec<(String, String)> {
@@ -56,7 +66,7 @@ fn skills(dir: &FsPath, links: bool) -> Vec<(String, String)> {
 /// bots' agent (.<its command>/skills) is linked to its skills.
 pub fn context(app: &Shared, key: &str) -> Option<String> {
     bot(app, key)?;
-    let (dir, common) = (folder(app, key).join(SKILLS), shared(&app.home));
+    let (dir, common) = (folder(app, key).join(SKILLS), app.home.join("bots/skills"));
     let _ = std::fs::create_dir_all(&dir);
     let gone = std::fs::read_dir(&dir).into_iter().flatten().flatten().filter(|e| e.file_type().is_ok_and(|t| t.is_symlink()) && !e.path().join("SKILL.md").exists());
     gone.for_each(|e| drop(std::fs::remove_file(e.path())));
@@ -74,7 +84,7 @@ fn library(app: &App, id: &str) -> Result<Value, String> {
     let key = format!("bot-{id}");
     bot(app, &key).ok_or(format!("no bot '{id}'"))?;
     let list = |v: Vec<(String, String)>, shared: bool| v.into_iter().map(move |(name, text)| json!({"name": name, "text": text, "shared": shared}));
-    let all: Vec<Value> = list(skills(&folder(app, &key).join(SKILLS), false), false).chain(list(skills(&shared(&app.home), true), true)).collect();
+    let all: Vec<Value> = list(skills(&folder(app, &key).join(SKILLS), false), false).chain(list(skills(&app.home.join("bots/skills"), true), true)).collect();
     Ok(json!({"memory": std::fs::read_to_string(folder(app, &key).join("memory.md")).unwrap_or_default(), "skills": all}))
 }
 /// A change from the Library: the `memory`, or the skill `name` (`shared`: every bot's), gets `text`, or goes with `delete`.
@@ -82,7 +92,7 @@ fn learn(app: &App, id: &str, b: &Value) -> Result<Value, String> {
     let (key, name) = (format!("bot-{id}"), s(b, "name"));
     bot(app, &key).ok_or(format!("no bot '{id}'"))?;
     let named = name.len() <= 64 && name.starts_with(|c: char| c.is_ascii_lowercase()) && name.bytes().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'-');
-    let skill = (if b["shared"] == true { shared(&app.home) } else { folder(app, &key).join(SKILLS) }).join(&name);
+    let skill = (if b["shared"] == true { app.home.join("bots/skills") } else { folder(app, &key).join(SKILLS) }).join(&name);
     let dir = if b["memory"] == true { folder(app, &key) } else { skill };
     (b["memory"] == true || named).then_some(()).ok_or("a skill's name is lowercase letters, digits and dashes")?;
     let file = dir.join(if b["memory"] == true { "memory.md" } else { "SKILL.md" });
@@ -96,21 +106,54 @@ fn learn(app: &App, id: &str, b: &Value) -> Result<Value, String> {
     Ok(json!({"ok": true}))
 }
 
+/// Writes the bots into config.toml and reloads it.
+fn store(app: &App, bots: &[Value]) -> Result<(), String> {
+    let _writing = crate::projects::WRITING.lock().unwrap();
+    let path = app.home.join("config.toml");
+    let fail = |e: std::io::Error| format!("{}: {e}", path.display());
+    let text = std::fs::read_to_string(&path).or_else(|e| if e.kind() == std::io::ErrorKind::NotFound { Ok(String::new()) } else { Err(e) }).map_err(fail)?;
+    std::fs::write(&path, written(&text, bots)?).map_err(fail)?;
+    app.reload_config(true);
+    Ok(())
+}
+
+/// The text of config.toml (`text` as it is) with the bots laid into it by toml_edit, so its other sections and their comments stay as they are: each bot a `[roles.bot-<id>]` that extends the manager with its own scope, name and face, each routine a `[[routes]]` on `schedule`; a bot not in `bots` goes, with its routes.
+fn written(text: &str, bots: &[Value]) -> Result<String, String> {
+    use toml_edit::{ArrayOfTables, DocumentMut, Table};
+    let keep = bots.iter().map(|b| format!("bot-{}", s(b, "id"))).collect::<Vec<_>>();
+    let mut doc: DocumentMut = text.parse().map_err(|e| format!("config.toml: {e}"))?;
+    // The bots as a toml fragment (their roles and schedule routes), built with serde and parsed back as toml_edit items to lay into the file.
+    let frag: DocumentMut = {
+        let (mut roles, mut routes) = (serde_json::Map::new(), vec![]);
+        for b in bots {
+            roles.insert(format!("bot-{}", s(b, "id")), json!({"extends": "manager", "scope": "own", "name": s(b, "name"), "face": {"shape": s(b, "shape"), "color": s(b, "color")}, "prompt": ["prompts/bot.md"]}));
+            routes.extend(b["routines"].as_array().into_iter().flatten().map(|r| json!({"on": "schedule", "to": format!("bot-{}", s(b, "id")), "mode": "turn", "phone": true, "id": s(r, "id"), "title": s(r, "title"), "days": r["days"], "at": s(r, "at"), "task": s(r, "prompt"), "enabled": r["on"] != false})));
+        }
+        toml::Value::try_from(json!({"roles": roles, "routes": routes})).and_then(|v| toml::to_string(&v)).map_err(|e| e.to_string())?.parse().map_err(|e| format!("config.toml: {e}"))?
+    };
+    doc.get_mut("roles")
+        .and_then(|i| i.as_table_mut())
+        .into_iter()
+        .for_each(|roles| roles.retain(|k, v| !(k.starts_with("bot-") && v.as_table().and_then(|t| t.get("scope")).and_then(|i| i.as_str()) == Some("own")) || keep.iter().any(|x| x == k)));
+    let roles = doc["roles"].or_insert(Table::new().into()).as_table_mut().ok_or("config.toml: [roles] is not a table")?;
+    frag["roles"].as_table().into_iter().flat_map(|t| t.iter()).for_each(|(key, item)| roles[key] = item.clone());
+    let routes = doc["routes"].or_insert(ArrayOfTables::new().into()).as_array_of_tables_mut().ok_or("config.toml: routes is not [[routes]] tables")?;
+    routes.retain(|r| !(r.get("on").and_then(|i| i.as_str()) == Some("schedule") && r.get("to").and_then(|i| i.as_str()).is_some_and(|to| to.starts_with("bot-"))));
+    frag["routes"].as_array_of_tables().into_iter().flatten().for_each(|t| routes.push(t.clone()));
+    Ok(doc.to_string())
+}
+
 /// Reads the bots, changes them with `f` and keeps the result, one change at a time; an Err keeps them as they were.
 fn with<T>(app: &Shared, f: impl FnOnce(&mut Vec<Value>) -> Result<T, String>) -> Result<T, String> {
     let _one = ONE.lock().unwrap();
     let mut bots = all(app);
     let out = f(&mut bots)?;
-    app.set_kv("bots", Some(&json!(bots).to_string()));
+    store(app, &bots)?;
     app.emit("bots", json!({}));
     Ok(out)
 }
 fn find<'a>(bots: &'a mut [Value], id: &str) -> Result<&'a mut Value, String> {
     bots.iter_mut().find(|b| b["id"] == id).ok_or(format!("no bot '{id}'"))
-}
-/// Its routines (every bot is made with a list of them).
-fn routines<'a>(bots: &'a mut [Value], id: &str) -> Result<&'a mut Vec<Value>, String> {
-    find(bots, id)?["routines"].as_array_mut().ok_or(format!("bot '{id}' has no routines"))
 }
 
 /// Weekdays 1 (Monday) to 7, from `[1, 3]`, "daily", "weekdays", "weekends" or names such as "mon,wed".
@@ -130,23 +173,32 @@ pub fn due(r: &Value, now: DateTime<Local>) -> bool {
 
 /// Runs a routine now: the conversation shows it, and the bot is handed the task.
 fn fire(app: &Shared, id: &str, rid: &str) -> Result<(), String> {
-    let (title, task) = with(app, |bots| {
-        let r = routines(bots, id)?.iter_mut().find(|r| r["id"] == rid).ok_or("no such routine")?;
-        r["last"] = json!(now_iso());
-        Ok((s(r, "title"), s(r, "prompt")))
-    })?;
+    let mut bots = all(app);
+    let r = find(&mut bots, id)?["routines"].as_array().into_iter().flatten().find(|r| r["id"] == rid).ok_or("no such routine")?;
+    let (title, task) = (s(r, "title"), s(r, "prompt"));
+    app.set_kv(&format!("routine:{id}:{rid}"), Some(&now_iso()));
     app.chat("routine", &format!("Running routine · {title}"), &format!("bot-{id}"));
     crate::manager::emit_event(app, &format!("bot-{id}"), "schedule", &format!("Routine «{title}» is due now. Do it and report the result here in a few lines (when nothing is new, one line that starts with ∅); ask nothing: {task}"), None);
     Ok(())
 }
 
+/// At start, the bots that used to live in kv move to config.toml once: one that is already a role there wins, and their routines' last runs move to their own kv stamps; only then does the old entry go. The old key's name lives here alone, so nothing reads it as storage any more.
 pub fn start(app: Shared) {
-    tokio::spawn(async move {
-        loop {
-            tokio::time::sleep(std::time::Duration::from_secs(20)).await;
-            all(&app).iter().for_each(|b| b["routines"].as_array().into_iter().flatten().filter(|r| due(r, Local::now())).for_each(|r| drop(fire(&app, &s(b, "id"), &s(r, "id")))));
-        }
-    });
+    const OLD: &str = "bots";
+    let old: Vec<Value> = app.kv(OLD).and_then(|j| serde_json::from_str(&j).ok()).unwrap_or_default();
+    let Some(old) = (!old.is_empty()).then_some(old) else { return };
+    let mut bots = all(&app);
+    let have: Vec<String> = bots.iter().map(|b| s(b, "id")).collect();
+    bots.extend(old.iter().filter(|o| !have.contains(&s(o, "id"))).cloned());
+    if store(&app, &bots).is_ok() {
+        old.iter().for_each(|b| b["routines"].as_array().into_iter().flatten().filter(|r| !s(r, "last").is_empty()).for_each(|r| app.set_kv(&format!("routine:{}:{}", s(b, "id"), s(r, "id")), Some(&s(r, "last")))));
+        app.set_kv(OLD, None);
+    }
+}
+
+/// Fires the routines due now; the lanes scheduler calls it on its tick (every ~30 s), so the bots need no timer of their own.
+pub fn tick(app: &Shared) {
+    all(app).iter().for_each(|b| b["routines"].as_array().into_iter().flatten().filter(|r| due(r, Local::now())).for_each(|r| drop(fire(app, &s(b, "id"), &s(r, "id")))));
 }
 
 /// A new bot (no `id`), or a new name, shape or colour for one.
@@ -155,7 +207,7 @@ fn save(app: &Shared, b: Value) -> Result<Value, String> {
     (!name.is_empty() && color.len() == 7 && color.starts_with('#') && color[1..].bytes().all(|c| c.is_ascii_hexdigit())).then_some(()).ok_or("a bot needs a name and a colour #rrggbb")?;
     with(app, |bots| {
         let (id, fresh) = (s(&b, "id"), s(&b, "id").is_empty().then(|| format!("{:06x}", rand::random::<u32>() >> 8)));
-        bots.extend(fresh.iter().map(|id| json!({"id": id, "routines": [], "created_at": now_iso()})));
+        bots.extend(fresh.iter().map(|id| json!({"id": id, "routines": []})));
         let bot = find(bots, fresh.as_deref().unwrap_or(&id))?;
         (bot["name"], bot["shape"], bot["color"]) = (json!(name), b["shape"].clone(), json!(color));
         Ok(bot.clone())
@@ -165,11 +217,11 @@ fn save(app: &Shared, b: Value) -> Result<Value, String> {
 /// A new routine, or a change to one (found by `id` or by its title): `title`, `prompt`, `days`, `at` ("HH:MM"), `on`; with `delete` it goes. The conversation says when one is made or removed.
 fn routine(app: &Shared, id: String, b: Value) -> Result<Value, String> {
     let (rid, title) = (s(&b, "id"), s(&b, "title"));
-    let said = with(app, |bots| {
-        let list = routines(bots, &id)?;
+    let (said, changed) = with(app, |bots| {
+        let list = find(bots, &id)?["routines"].as_array_mut().ok_or(format!("bot '{id}' has no routines"))?;
         let i = list.iter().position(|r| (!rid.is_empty() && r["id"] == rid.as_str()) || (!title.is_empty() && s(r, "title").eq_ignore_ascii_case(&title)));
         if b["delete"] == true {
-            return Ok(format!("Removed routine · {}", s(&list.remove(i.ok_or("no such routine")?), "title")));
+            return Ok((format!("Removed routine · {}", s(&list.remove(i.ok_or("no such routine")?), "title")), String::new()));
         }
         list.extend(i.is_none().then(|| json!({"id": format!("r{:06x}", rand::random::<u32>() >> 8), "on": true})));
         let last = list.len() - 1;
@@ -177,12 +229,13 @@ fn routine(app: &Shared, id: String, b: Value) -> Result<Value, String> {
         ["title", "prompt", "at", "on"].into_iter().filter(|k| !b[*k].is_null()).for_each(|k| r[k] = b[k].clone());
         r["days"] = days(&b["days"]).map_or(r["days"].clone(), |d| json!(d));
         let at = NaiveTime::parse_from_str(s(r, "at").trim(), "%H:%M").map_err(|_| "the time must be HH:MM, as 08:00")?;
-        // A changed routine does not run for a time already past today.
-        (r["at"], r["last"]) = (json!(at.format("%H:%M").to_string()), json!(now_iso()));
+        r["at"] = json!(at.format("%H:%M").to_string());
         let ok = !s(r, "title").trim().is_empty() && !s(r, "prompt").trim().is_empty() && r["days"].as_array().is_some_and(|d| !d.is_empty());
         ok.then_some(()).ok_or("a routine needs a title, what to do and at least one day")?;
-        Ok(if i.is_none() { format!("Created routine · {}", s(r, "title")) } else { String::new() })
+        Ok((if i.is_none() { format!("Created routine · {}", s(r, "title")) } else { String::new() }, s(r, "id")))
     })?;
+    // A changed routine does not run for a time already past today.
+    let _ = (!changed.is_empty()).then(|| app.set_kv(&format!("routine:{id}:{changed}"), Some(&now_iso())));
     let _ = (!said.is_empty()).then(|| app.chat("routine", &said, &format!("bot-{id}")));
     Ok(json!({"ok": true}))
 }

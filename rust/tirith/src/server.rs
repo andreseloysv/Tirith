@@ -26,7 +26,7 @@ pub fn router(app: Shared, port: u16) -> Router {
             "/api/plan/{project}",
             get(plan_show).post(|State(app): State<Shared>, Path(project): Path<String>, Json(b): Json<Value>| async move { plan::add(&app, &project, &s(&b, "step"), &s(&b, "text")).await.map(|_| Json(json!({"ok": true}))).map_err(bad) }),
         )
-        .route("/api/lanes", post(lane_start))
+        .route("/api/lanes", post(|State(app): State<Shared>, Json(b): Json<Value>| async move { lanes::start(&app, &s(&b, "project"), &s(&b, "step"), &s(&b, "item"), b["agent"].as_str().filter(|a| !a.is_empty()).map(String::from)).map(|l| Json(json!(l))).map_err(bad) }))
         .route("/api/lanes/{id}/stop", post(|State(app): State<Shared>, Path(id): Path<String>| async move { lanes::stop(&app, &id).map(|l| Json(json!(l))).map_err(bad) }))
         .route("/api/lanes/{id}/delete", post(|State(app): State<Shared>, Path(id): Path<String>| async move { lanes::delete(&app, &id).await.map(|_| Json(json!({"ok": true}))).map_err(bad) }))
         .route(
@@ -39,7 +39,7 @@ pub fn router(app: Shared, port: u16) -> Router {
         .route("/api/lanes/{id}/answer", post(|State(app): State<Shared>, Path(id): Path<String>, Json(b): Json<Value>| async move { lanes::answer(&app, &id, &s(&b, "answer"), "the manager").map(|l| Json(json!(l))).map_err(bad) }))
         .route("/api/owner", post(|State(app): State<Shared>, Json(b): Json<Value>| async move { manager::ask_owner(&app, &s(&b, "project"), &s(&b, "kind"), &s(&b, "question"), &s(&b, "lane")).map(Json).map_err(bad) }))
         .route("/api/owner/{id}", post(|State(app): State<Shared>, Path(id): Path<String>, Json(b): Json<Value>| async move { manager::owner_answer(&app, &id, &s(&b, "answer"), s(&b, "by") == "manager").map(Json).map_err(bad) }))
-        .route("/api/owner/{id}/close", post(owner_close))
+        .route("/api/owner/{id}/close", post(|State(app): State<Shared>, Path(id): Path<String>, Json(b): Json<Value>| async move { manager::close_card(&app, &id, if s(&b, "by") == "manager" { "the manager" } else { "the owner" }, &s(&b, "why")).map(Json).map_err(bad) }))
         .route("/api/autopilot/{project}", post(autopilot))
         .route(
             "/api/pipelines",
@@ -129,14 +129,6 @@ async fn plan_show(State(app): State<Shared>, Path(project): Path<String>) -> R 
     Ok(Json(json!({"project": project, "steps": steps, "autopilot": lanes::autopilot_on(&app, &project), "main_red": app.kv(&format!("main_red:{project}"))})))
 }
 
-async fn lane_start(State(app): State<Shared>, Json(b): Json<Value>) -> R {
-    let agent = b["agent"].as_str().filter(|a| !a.is_empty()).map(String::from);
-    Ok(Json(json!(lanes::start(&app, &s(&b, "project"), &s(&b, "step"), &s(&b, "item"), agent).map_err(bad)?)))
-}
-async fn owner_close(State(app): State<Shared>, Path(id): Path<String>, Json(b): Json<Value>) -> R {
-    let by = if s(&b, "by") == "manager" { "the manager" } else { "the owner" };
-    manager::close_card(&app, &id, by, &s(&b, "why")).map(Json).map_err(bad)
-}
 async fn autopilot(State(app): State<Shared>, Path(project): Path<String>, Json(b): Json<Value>) -> R {
     app.cfg().project(&project).ok_or(bad(format!("unknown project '{project}'")))?;
     let on = b["on"].as_bool().unwrap_or(false);
@@ -171,7 +163,11 @@ async fn hook(State(app): State<Shared>, Path(event): Path<String>, headers: Hea
     let in_worktree = |l: &&crate::app::Lane| matches!(l.status.as_str(), "running" | "waiting") && !l.workspace.is_empty() && std::path::Path::new(&cwd).starts_with(&l.workspace);
     let lane = header("x-tirith-lane").and_then(|id| app.lane(&id)).or_else(|| app.lanes.lock().unwrap().values().find(in_worktree).cloned());
     let cfg = app.cfg();
-    let project = lane.as_ref().and_then(|l| cfg.project(&l.project)).or_else(|| cfg.project_for(&cwd)).cloned();
+    let project = lane
+        .as_ref()
+        .and_then(|l| cfg.project(&l.project))
+        .or_else(|| cfg.projects.iter().filter(|p| !p.repo.is_empty()).find(|p| std::path::Path::new(&cwd).starts_with(p.repo()) || std::path::Path::new(&cwd).starts_with(p.lanes_dir())))
+        .cloned();
     let tool = s(&p, "tool_name");
     let session = s(&p, "session_id");
     let summary = if event == "UserPromptSubmit" { rules::summary("", &json!({"prompt": p["prompt"]})) } else { rules::summary(&tool, &p["tool_input"]) };

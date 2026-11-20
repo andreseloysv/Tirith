@@ -32,6 +32,46 @@ fn a_routine_is_due_once_a_day_after_its_time() {
 }
 
 #[test]
+fn bots_live_in_config_as_own_roles_with_schedule_routes() {
+    // A bot in the page's shape, with a switched-off routine: written into a config.toml with the owner's comments.
+    let bots = json!([{"id": "abc123", "name": "Noticias", "shape": "drop", "color": "#22d3ee", "routines": [{"id": "r111111", "title": "News", "prompt": "Summarise the news", "days": [1, 2, 3, 4, 5], "at": "08:00", "on": false}]}]);
+    let text = super::written("# the owner's own comment\n[server]\nport = 7799 # keep this too\n", bots.as_array().unwrap()).unwrap();
+    assert!(text.contains("# the owner's own comment") && text.contains("# keep this too"), "the file's comments stay:\n{text}");
+    assert!(text.contains("[roles.bot-abc123]") && text.contains("scope = \"own\"") && text.contains("Noticias"), "the bot is a role:\n{text}");
+    assert!(text.contains("on = \"schedule\"") && text.contains("to = \"bot-abc123\"") && text.contains("Summarise the news") && text.contains("enabled = false"), "the routine is a schedule route:\n{text}");
+    // Read back as `all` does, with the routine's last run from its stamp.
+    let read = |text: &str| super::bots_of(&serde_json::to_value(&text.parse::<toml::Table>().unwrap()).unwrap(), &|id, rid| if (id, rid) == ("abc123", "r111111") { "2026-11-20T08:00:00Z".into() } else { String::new() });
+    let bots = read(&text);
+    assert_eq!(bots.len(), 1);
+    assert_eq!((bots[0]["name"].as_str(), bots[0]["shape"].as_str(), bots[0]["color"].as_str()), (Some("Noticias"), Some("drop"), Some("#22d3ee")));
+    assert_eq!((bots[0]["routines"][0]["title"].as_str(), bots[0]["routines"][0]["on"].as_bool(), bots[0]["routines"][0]["last"].as_str()), (Some("News"), Some(false), Some("2026-11-20T08:00:00Z")));
+    // The factory resolves the role over that config: a chat session of its own, the bot prompt with its name, its schedule routed to it.
+    let prompts: std::collections::BTreeMap<String, String> = [
+        ("manager", include_str!("../../../factory/prompts/manager.md")),
+        ("one-project", include_str!("../../../factory/prompts/one-project.md")),
+        ("no-project", include_str!("../../../factory/prompts/no-project.md")),
+        ("brief", include_str!("../../../factory/prompts/brief.md")),
+        ("reviewer", include_str!("../../../factory/prompts/reviewer.md")),
+        ("bot", include_str!("../../../factory/prompts/bot.md")),
+    ]
+    .into_iter()
+    .map(|(k, v)| (k.to_string(), v.to_string()))
+    .collect();
+    let f = crate::factory::parse(include_str!("../../../factory/factory.toml"), prompts, &text.parse::<toml::Table>().unwrap()).unwrap();
+    assert_eq!((f.role::<String>("bot-abc123", "session"), f.role::<String>("bot-abc123", "scope")), (Some("chat".into()), Some("own".into())));
+    assert!(f.prompts_of("bot-abc123").starts_with("You are Noticias"), "its prompt carries its name");
+    assert!(f.routes_on("schedule").iter().any(|r| r.0 == "bot-abc123"), "its routine routes to it");
+    // Written again with a rename and the routine on: still one role and one route, the comments still there; written with no bots, both go.
+    let mut renamed = bots.clone();
+    (renamed[0]["name"], renamed[0]["routines"][0]["on"]) = (json!("Renamed"), json!(true));
+    let text = super::written(&text, &renamed).unwrap();
+    assert_eq!((text.matches("[roles.bot-abc123]").count(), text.matches("to = \"bot-abc123\"").count()), (1, 1), "no duplicates:\n{text}");
+    assert!(text.contains("# the owner's own comment") && read(&text)[0]["name"] == "Renamed" && read(&text)[0]["routines"][0]["on"] == true);
+    let text = super::written(&text, &[]).unwrap();
+    assert!(read(&text).is_empty() && !text.contains("bot-abc123") && text.contains("# the owner's own comment"), "a deleted bot goes, with its routes:\n{text}");
+}
+
+#[test]
 fn bots_write_only_in_their_own_folders_and_the_shared_skills() {
     let home = std::path::Path::new("/Users/o/.tirith");
     for ok in ["manager/bot-ab12cd/memory.md", "manager/bot-ab12cd/.agents/skills/jobs/SKILL.md", "manager/bot-ab12cd/.codex/skills/jobs/SKILL.md", "bots/skills/report/SKILL.md", "manager/bot-ab12cd/.seen"] {

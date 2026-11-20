@@ -64,12 +64,6 @@ pub fn read(app: &Shared, project: &str) -> Result<Vec<Step>, String> {
     std::fs::read_to_string(&file).map(|text| parse(&text)).map_err(|_| format!("{} has no plan file ({})", project, file.display()))
 }
 
-pub fn is_open(app: &Shared, project: &str, step: &str, item: &str) -> Result<bool, String> {
-    let steps = read(app, project)?;
-    let s = steps.iter().find(|s| s.num == step).ok_or(format!("the plan of {project} has no step {step}"))?;
-    Ok(s.items.iter().any(|i| !i.done && same(&i.text, &clean(item))))
-}
-
 /// Two item texts that name the same item: equal once their `(check: ...)` is left out. A lane carries the text its item had when it started; when only the check is rewritten meanwhile, the lane still belongs to that item (it is
 /// checked with the check the plan has now, and ticked when it is merged).
 pub fn same(a: &str, b: &str) -> bool {

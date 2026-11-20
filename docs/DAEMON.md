@@ -4,9 +4,11 @@ The overview each module of `rust/tirith/src` carried in its header, kept here s
 
 ## `bots.rs`
 
-Bots: the owner's own agents. Each has a name, a face (shape and colour) and its own conversation (`bot-<id>`), run like a project's manager with the manager's model and
-its own room on the phones. Routines are tasks a bot does by itself at a time of chosen weekdays (the machine's local time); a timer hands a due one to the bot once a day, and the
-bot makes them itself with `tirith routine add|remove|list`. A bot learns in its folder (`<tirith home>/manager/bot-<id>`): `memory.md`, which Tirith hands it as it is now at
+Bots: the owner's own agents, factory roles with `scope = "own"` in `~/.tirith/config.toml` (`[roles.bot-<id>]`, extending the manager). Each has a name, a face (shape and
+colour) and its own conversation (`bot-<id>`), run like a project's manager with the manager's model and its own room on the phones. Routines are `[[routes]]` on `schedule`
+in that file (their last runs stay in kv as `routine:<id>:<routine>` stamps, not configuration): tasks a bot does by itself at a time of chosen weekdays (the machine's local
+time); the lanes scheduler's tick hands a due one to the bot once a day, and the bot makes them itself with `tirith routine add|remove|list`. The page writes config.toml
+with `toml_edit`, keeping its comments, and the bots that used to live in kv move there once, at daemon start. A bot learns in its folder (`<tirith home>/manager/bot-<id>`): `memory.md`, which Tirith hands it as it is now at
 the start of every turn and routine, and skills in `.agents/skills/<name>/SKILL.md`, its own and the shared ones of `<tirith home>/bots/skills` (linked in before every turn).
 The bots' agent finds them natively: Muse reads `.agents/skills`, and the agent's own `.<command>/skills` is a link to the same folder. Agents may write in a bot's folder
 (never in its hidden folders, where agent settings live, except skills folders) and in the shared skills; the page's Library shows, corrects and deletes all of it.
@@ -22,9 +24,9 @@ for the rest), a role on a missing agent or prompt, or an unknown measure makes 
 keeps the last good one while the error shows on the page (`factory_error` of `/api/state`) and is told to the
 manager of no project. It loads the repository's `factory/` at run time (`factory` in config.toml points
 elsewhere) and reloads when a file changes or config.toml does, with the embedded copy as the fallback.
-`~/.tirith/config.toml` is laid over it key by key and wins; at daemon start its yesterday's sections are
-rewritten into the factory's names once, with the old text kept as `config.toml.before-factory` (`config.rs`),
-and keys nothing reads are an error the owner sees. A role `extends` another (the lead and the reviewer extend
+`~/.tirith/config.toml` is laid over it key by key and wins; its yesterday's sections are read in memory under
+the factory's names (`config.rs`), the file itself untouched except by the page's `toml_edit` writes (the bots'
+roles and their schedule routes), and keys nothing reads are an error the owner sees. A role `extends` another (the lead and the reviewer extend
 the manager), and an agent the factory does not name runs with the `default` agent's flags. The `[[routes]]` of
 the factory say who hears each event the code emits (a closed list in `factory.rs`): which role, as a `turn` now
 or a `note` with its next turn, a line in the chat (`chat`), and whether that line and the answer of a turn the

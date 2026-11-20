@@ -74,18 +74,11 @@ pub fn bad(e: String) -> (axum::http::StatusCode, String) {
     (axum::http::StatusCode::BAD_REQUEST, e)
 }
 
-/// Seconds since the lane's log last changed (`u64::MAX` without a log).
-pub fn log_age(app: &Shared, id: &str) -> u64 {
-    std::fs::metadata(app.home.join(format!("logs/lanes/{id}.log"))).and_then(|m| m.modified()).map(|t| t.elapsed().map(|d| d.as_secs()).unwrap_or(0)).unwrap_or(u64::MAX)
-}
 pub fn now_iso() -> String {
     chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string()
 }
 pub fn now_s() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
-}
-fn mtime(p: &Path) -> Option<SystemTime> {
-    std::fs::metadata(p).and_then(|m| m.modified()).ok()
 }
 
 impl App {
@@ -99,7 +92,7 @@ impl App {
         [("runs", "pipeline TEXT"), ("runs", "sha TEXT"), ("chat", "project TEXT NOT NULL DEFAULT ''")].into_iter().chain(owner).for_each(|(table, col)| drop(db.execute(&format!("ALTER TABLE {table} ADD COLUMN {col}"), [])));
         let lanes: BTreeMap<String, Lane> =
             db.prepare("SELECT data FROM lanes").expect("read lanes").query_map([], |r| r.get::<_, String>(0)).expect("read lanes").flatten().filter_map(|s| serde_json::from_str::<Lane>(&s).ok()).map(|l| (l.id.clone(), l)).collect();
-        let cfg_mtime = mtime(&home.join("config.toml"));
+        let cfg_mtime = std::fs::metadata(home.join("config.toml")).and_then(|m| m.modified()).ok();
         let cfg = Arc::new(Config::load());
         let cfg_mtime = (cfg_mtime, crate::factory::stamp(&cfg.raw));
         Arc::new(App {
@@ -124,7 +117,7 @@ impl App {
 
     /// Re-reads `config.toml` and the factory when either changed on disk (a few stats) or when `force`d; true when re-read. A bad factory version keeps the last good one (see `factory::load`).
     pub fn reload_config(&self, force: bool) -> bool {
-        let now = (mtime(&self.home.join("config.toml")), crate::factory::stamp(&self.cfg().raw));
+        let now = (std::fs::metadata(self.home.join("config.toml")).and_then(|m| m.modified()).ok(), crate::factory::stamp(&self.cfg().raw));
         let mut last = self.cfg_mtime.lock().unwrap();
         if *last == now && !force {
             return false;
@@ -137,7 +130,7 @@ impl App {
 
     /// A project's `tirith.toml`, re-read only when its mtime changed.
     pub fn manifest(&self, repo: &Path) -> Manifest {
-        let stamp = mtime(&repo.join("tirith.toml"));
+        let stamp = std::fs::metadata(repo.join("tirith.toml")).and_then(|m| m.modified()).ok();
         let mut cache = self.manifests.lock().unwrap();
         if let Some((_, man)) = cache.get(repo).filter(|(m, _)| *m == stamp) {
             return man.clone();
