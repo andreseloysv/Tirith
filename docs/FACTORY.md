@@ -32,8 +32,9 @@ Like Terraform: the factory is the code, config.toml its variables.
   daemon keeps the last good version, shows the error on the page and emits `factory.invalid`.
 - config.toml: unknown keys are errors shown on the page and told to the lead, never silently ignored (since the port to
   Rust, `[ceo] enabled`, `runs_per_day`, `upkeep_steps` and `upkeep_max_share` are read by nothing). Today's sections
-  (`[models.<role>]`, `[lanes]`, `[merge]`, `[ceo]`, ...) are rewritten into the new names once, at start, with a copy
-  kept as `config.toml.before-factory`.
+  (`[models.<role>]`, `[lanes]`, `[merge]`, `[ceo]`, ...) are read in memory under the new names (`Config::load`); the
+  file itself is not rewritten at start, since `toml::to_string` would drop the owner's comments and reorder its
+  blocks. Its sections are renamed in the file when the page writes it with `toml_edit`, keeping the comments (step 6).
 
 ## The file
 
