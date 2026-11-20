@@ -128,6 +128,10 @@ pub fn chat_argv(app: &Shared, role_name: &str, resume: Option<&str>) -> Result<
     let r = role(app, role_name);
     let a = cfg.agents.get(&r.agent).ok_or(format!("no agent alias '{}' in config.toml", r.agent))?;
     let mut argv = vec![a.command.clone()];
+    // These two agents do not speak this chat protocol: their manager and CEO turns run as exec turns. Never hand them the default flags of the other one.
+    if a.chat_args.is_none() && matches!(r.agent.as_str(), "muse" | "codex") {
+        return Err(format!("agent '{}' has no stream-json chat mode; set chat_args for it in config.toml or run it as exec turns", r.agent));
+    }
     argv.extend(a.chat_args.clone().unwrap_or_else(|| ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose"].map(String::from).to_vec()));
     let (mflag, eflag, _, _) = flags(&cfg, &r.agent);
     set_flag(&mut argv, &mflag, &["--model", "-m"], &r.model);

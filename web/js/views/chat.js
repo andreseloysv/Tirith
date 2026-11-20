@@ -26,6 +26,7 @@ const ENDED = { answered: 'Answered', closed: 'Closed' };
 
 const SEND = html`<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M8 13V3.2M3.8 7.2L8 3l4.2 4.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const DOC = html`<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4 1.8h5l3 3v9.4H4z M9 1.8v3h3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>`;
+const CLOCK = html`<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M8 14.2A6.2 6.2 0 108 1.8a6.2 6.2 0 000 12.4zM8 4.6V8l2.2 1.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>`;
 const CLIP = html`<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M13.2 7.6L8 12.8a3 3 0 01-4.2-4.2l5.5-5.5a2 2 0 012.9 2.9L6.7 11.4a1 1 0 01-1.4-1.4l4.8-4.8" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
 /** A component that repaints only when `same(old props, new props)` says they differ. */
@@ -127,8 +128,8 @@ function Step({ r, typing }) {
   return html`<li class=${`ls-say${typing ? ' typing' : ''}`}><span class="ls-t">${r.text}${typing ? html`<span class="ls-cur" aria-hidden="true">▍</span>` : null}</span></li>`;
 }
 
-function Working({ start, onStop }) {
-  return html`<div class="ls-line" role="status"><span class="ls-spin" aria-hidden="true"></span>Manager is working · <${Span} start=${start} />
+function Working({ start, onStop, who }) {
+  return html`<div class="ls-line" role="status"><span class="ls-spin" aria-hidden="true"></span>${who || 'Manager'} is working · <${Span} start=${start} />
     <button type="button" class="ls-stop" onClick=${onStop} title="Stop this turn (Esc)">Stop</button></div>`;
 }
 
@@ -164,6 +165,7 @@ function FileChip({ name, bytes, title, href, onRemove }) {
     card of a card row while it waits for the owner). */
 const Msg = pure(({ m, project, projects, onZoom, open, ended }) => {
   const time = clockTime(m.at);
+  if (m.role === 'routine') return html`<div class="mc-ev" title=${time}>${CLOCK}<span>${m.text}</span></div>`;
   if (m.role === 'card') {
     const [, id, kind, question] = CARD.exec(m.text) || [null, '', 'decision', m.text];
     return html`<div class="mc-m mc-card"><ul class="nlist"><${Need} o=${open || { id, kind, question, at: m.at }} full done=${open ? false : ENDED[ended] || true} /></ul>
@@ -191,7 +193,7 @@ const Msg = pure(({ m, project, projects, onZoom, open, ended }) => {
 }, (a, b) => a.m === b.m && a.projects === b.projects && a.open === b.open && a.ended === b.ended);
 
 /** One turn of the manager: its steps (live while running, a summary line once ended) and its answer. */
-const Turn = pure(({ rows, running, start, onStop }) => {
+const Turn = pure(({ rows, running, start, onStop, who }) => {
   const [open, setOpen] = useState(false);
   const { steps, answer } = splitTurn(rows, running);
   let block = null;
@@ -199,7 +201,7 @@ const Turn = pure(({ rows, running, start, onStop }) => {
     const tail = steps.slice(-STEPS_LIVE), last = steps[steps.length - 1];
     block = html`<div class="livesteps run">
       ${tail.length ? html`<ul class="ls-list" aria-live="polite">${tail.map((r) => html`<${Step} key=${r.id} r=${r} typing=${r === last && r.role === 'manager'} />`)}</ul>` : null}
-      <${Working} start=${start} onStop=${onStop} /></div>`;
+      <${Working} start=${start} onStop=${onStop} who=${who} /></div>`;
   } else if (steps.length) {
     const end = answer.length ? answer[answer.length - 1].at : steps[steps.length - 1].at;
     const total = elapsed(start || steps[0].at, end);
@@ -209,7 +211,7 @@ const Turn = pure(({ rows, running, start, onStop }) => {
       ${open ? html`<ul class="ls-list">${steps.map((r) => html`<${Step} key=${r.id} r=${r} />`)}</ul>` : null}</div>`;
   }
   return html`${block}${answer.map((r) => html`<div class="mc-m mgr" key=${r.id}><div class="mc-b md" dangerouslySetInnerHTML=${{ __html: mdOf(r.id, r.text) }} />
-    <div class="mc-meta" dangerouslySetInnerHTML=${{ __html: ctxHtml('Manager') + ' · ' + esc(clockTime(r.at)) }} /></div>`)}`;
+    <div class="mc-meta" dangerouslySetInnerHTML=${{ __html: ctxHtml(who || 'Manager') + ' · ' + esc(clockTime(r.at)) }} /></div>`)}`;
 }, (a, b) => a.k === b.k && a.n === b.n && a.running === b.running && a.start === b.start);
 
 /** A message sent from this page that the daemon has not shown yet (sending) or refused (failed). */
@@ -229,8 +231,9 @@ function Local({ o, onRetry, onCopy }) {
 let cidN = 0;
 
 /** The conversation of `project` ('' or none: the one of no project). Mount it with key=project, so the draft, the
-    files being attached and the scroll position belong to one conversation. */
-export function Chat({ project = '' }) {
+    files being attached and the scroll position belong to one conversation. A bot's conversation (`bot-<id>`) passes
+    `who` (the bot's name, in place of "Manager"), `hint` (what an empty conversation says) and `models` false. */
+export function Chat({ project = '', who = '', hint = '', models = true }) {
   const s = useStore();
   const talk = useTalk(project);
   const name = projName(s.projects, project);
@@ -407,13 +410,13 @@ export function Chat({ project = '' }) {
   const rows = items.map((it, i) => (it.kind === 'msg'
     ? html`<${Msg} key=${it.key} m=${it.m} project=${project} projects=${s.projects} onZoom=${setZoom} open=${it.m.role === 'card' ? cardOf(it.m) : null} ended=${it.m.role === 'card' ? s.ended[(CARD.exec(it.m.text) || [])[1]] : null} />`
     : html`<${Turn} key=${it.key} k=${it.key} rows=${it.rows} n=${it.rows.length} running=${it.key === runningKey}
-        start=${trigger(i) || it.rows[0].at} onStop=${interrupt} />`));
+        start=${trigger(i) || it.rows[0].at} onStop=${interrupt} who=${who} />`));
   /* busy but no output yet: the working line under the newest message */
   const pending = busy && !runningKey && lastItem
-    ? html`<div class="livesteps run"><${Working} start=${lastItem.kind === 'msg' ? lastItem.m.at : null} onStop=${interrupt} /></div>` : null;
+    ? html`<div class="livesteps run"><${Working} start=${lastItem.kind === 'msg' ? lastItem.m.at : null} onStop=${interrupt} who=${who} /></div>` : null;
 
   return html`<section class=${`mchat${drag ? ' drop' : ''}`}>
-    <div class="mc-head"><h2>Manager <span class="mc-of">${project ? name : 'all projects'}</span></h2>
+    <div class="mc-head"><h2>${who || html`Manager <span class="mc-of">${project ? name : 'all projects'}</span>`}</h2>
       ${busy ? html`<span class="mc-presence work" role="status">Working…</span>
         <button class="mc-stop" type="button" onClick=${interrupt} title="Stop the current turn (Esc)">Stop</button>` : null}</div>
     <div class="mc-log" id="mc-log" ref=${log} onScroll=${onScroll}>
@@ -421,13 +424,13 @@ export function Chat({ project = '' }) {
       ${talk.error && !talk.loaded ? html`<div class="ierr mc-note">${/not found|not allowed/i.test(talk.error.message)
           ? 'The running Tirith daemon is older than this page: quit Tirith, stop the daemon (pkill -f "tirith serve") and open Tirith again.'
           : `Could not read this conversation: ${talk.error.message}`}</div>` : null}
-      ${rows.length || out.length ? rows : !talk.loaded ? null : html`<p class="quiet">${project
+      ${rows.length || out.length ? rows : !talk.loaded ? null : html`<p class="quiet">${hint || (project
         ? `Write to the manager of ${name} here. It works on this project only: its answers, its agents' questions and what lands on main show in this thread.`
-        : 'Write here about anything that is not one project\'s: this manager gets the health reports and the CEO\'s reviews. Every project has its own manager: select a project to talk to it.'}</p>`}
+        : 'Write here about anything that is not one project\'s: this manager gets the health reports and the CEO\'s reviews. Every project has its own manager: select a project to talk to it.')}</p>`}
       ${pending}
       ${out.map((o) => html`<${Local} key=${o.cid} o=${o} onRetry=${() => retry(o)} onCopy=${() => copy(o)} />`)}
     </div>
-    <${ChatModels} />
+    ${models ? html`<${ChatModels} />` : null}
     <div class="mc-comp">
       ${err ? html`<div class="ierr mc-note">${err}</div>` : null}
       <div class="mc-box">
@@ -436,13 +439,13 @@ export function Chat({ project = '' }) {
               <button type="button" aria-label=${`Remove ${p.name}`} title="Remove" onClick=${() => unpic(i)}>×</button></span>
               <span class="mc-thn">${p.name}</span><span class="mc-ths">${size(p.size)}</span></span>`
           : html`<${FileChip} name=${p.name} bytes=${p.size} title=${p.name} onRemove=${() => unpic(i)} />`))}</div>` : null}
-        <textarea ref=${ta} rows="1" maxlength="4000" placeholder=${project ? `Message the manager of ${name}…` : 'Message the manager…'} aria-label="Message to the manager"
+        <textarea ref=${ta} rows="1" maxlength="4000" placeholder=${who ? `Message ${who}…` : project ? `Message the manager of ${name}…` : 'Message the manager…'} aria-label=${`Message to ${who || 'the manager'}`}
           value=${draft} onInput=${(e) => edit(e.target.value)} onKeyDown=${onKey} onPaste=${onPaste}></textarea>
         <div class="mc-row">
           <button class="mc-clip" type="button" aria-label="Attach files" title="Attach images or files (or paste, or drop them here)" onClick=${() => file.current.click()}>${CLIP}</button>
           <input type="file" ref=${file} multiple hidden onChange=${(e) => { addFiles(e.target.files); e.target.value = ''; }} />
           <span class="mc-hint">Enter sends · Shift+Enter new line</span>
-          <button class="mc-send" type="button" aria-label="Send" title="Send to the manager" onClick=${send}>${SEND}</button>
+          <button class="mc-send" type="button" aria-label="Send" title=${`Send to ${who || 'the manager'}`} onClick=${send}>${SEND}</button>
         </div>
       </div>
     </div>
