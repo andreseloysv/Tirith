@@ -1,0 +1,133 @@
+# The factory: who works, on which agent, with which prompt, and the limits,
+# plan words, card kinds and measures the daemon runs with. Nothing personal
+# lives here (no commands, no model ids, no keys): ~/.tirith/config.toml is
+# laid over this file key by key and wins. The daemon embeds this file as its
+# fallback, reloads it when it changes, and keeps the last good version when
+# a new one is invalid (unknown key, missing agent or prompt).
+
+[agents.anthropic]
+protocol = "stream-json"
+model_flag = "--model"
+effort_flag = "--effort"
+chat_args = ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose"]
+lane_args = ["-p", "Read the brief at {brief} and do it completely in {workspace}."]
+resume_args = ["--resume", "{session}", "-p", "{message}"]
+
+[agents.muse]
+protocol = "exec"
+model_flag = "--model"
+effort_flag = "--reasoning-effort"
+lane_args = ["exec", "--json", "--workspace", "{workspace}", "--prompt-file", "{brief}"]
+resume_args = []
+
+# No own sandbox for this one: the lane already runs inside the daemon's
+# sandbox, and a nested one fails every command.
+[agents.codex]
+protocol = "exec"
+model_flag = "--model"
+effort_flag = ""
+lane_args = ["exec", "--json", "--dangerously-bypass-approvals-and-sandbox", "Read the brief at {brief} and do it completely in {workspace}."]
+resume_args = ["exec", "--json", "--dangerously-bypass-approvals-and-sandbox", "resume", "{session}", "{message}"]
+
+[agents.copilot]
+protocol = "stream-json"
+model_flag = "--model"
+effort_flag = "--reasoning-effort"
+lane_args = ["--output-format", "json", "--no-ask-user", "--allow-tool", "write", "--allow-tool", "shell", "-p", "Read the brief at {brief} and do it completely in {workspace}."]
+resume_args = ["--resume", "{session}", "-p", "{message}"]
+
+# An agent the factory does not name runs with these.
+[agents.default]
+protocol = "stream-json"
+model_flag = "--model"
+effort_flag = ""
+chat_args = ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose"]
+lane_args = ["-p", "Read the brief at {brief} and do it completely in {workspace}."]
+resume_args = ["--resume", "{session}", "-p", "{message}"]
+
+[roles.manager]
+agent = "anthropic"
+session = "chat"
+scope = "project"
+prompt = ["prompts/manager.md", "prompts/one-project.md"]
+idle_minutes = 30
+runs_on = "local"
+
+[roles.lead]
+extends = "manager"
+scope = "global"
+prompt = ["prompts/manager.md", "prompts/no-project.md"]
+
+[roles.worker]
+agent = "anthropic"
+session = "lane"
+scope = "project"
+prompt = ["prompts/brief.md"]
+runs_on = "local"
+
+[roles.reviewer]
+extends = "manager"
+session = "turn"
+scope = "global"
+access = "read"
+prompt = ["prompts/reviewer.md"]
+max_per_day = 6
+review_after_minutes = 15
+runs_on = "local"
+
+[limits]
+max_load = 2.0
+inactivity_minutes = 20
+long_running_minutes = 30
+stage_timeout_minutes = 30
+merge_train = 5
+merge_backlog = 3
+low_disk_gb = 5.0
+plan_commit_seconds = 120
+batch_seconds = 2
+agent_messages_in_a_row = 30
+# max_parallel: no cap on lanes at once unless config.toml sets one here.
+
+[plan]
+role_prefixes = ["manager de guardia:", "ceo:"]
+owner_wait = ["(espera:", "(espera :"]
+waits_for = ["wait until", "made by the item", "created by the item", "after the item", "espera a que", "hasta que"]
+
+[cards]
+kinds = ["credentials", "payment", "account", "device", "decision"]
+
+[metrics.merged]
+label = "En main (24 h)"
+target = 10
+at_least = true
+
+[metrics.median]
+label = "Mediana lanzar→main (min)"
+target = 120
+at_least = false
+
+[metrics.first_try]
+label = "A la primera (%)"
+target = 50
+at_least = true
+
+[metrics.idle]
+label = "Parado con trabajo (min)"
+target = 10
+at_least = false
+
+[metrics.stuck]
+label = "Lanes atascadas"
+target = 0
+at_least = false
+
+[metrics.main_red]
+label = "Main en rojo"
+target = 0
+at_least = false
+
+[metrics.failed]
+label = "Fallidas (24 h)"
+
+[metrics.owner]
+label = "Preguntas al dueño"

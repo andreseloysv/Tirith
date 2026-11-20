@@ -8,15 +8,14 @@ use std::{process::Stdio, sync::Mutex, time::Duration};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::mpsc;
 
-const PROMPT: &str = include_str!("../assets/manager-prompt.txt");
-const IDLE: Duration = Duration::from_secs(30 * 60);
-/// What a session's prompt adds about its conversation: a project's own, or the one of no project.
-const ONE: &str = "This conversation is only about the project {id} (repository {repo}). Every other project has its own manager: say and do nothing about them. tirith status lists this project's lanes, and the cards you send with tirith ask-owner belong to it.";
-const REST: &str = "This conversation is not about one project: it gets the health reports, the CEO's reviews, the rooms of no project and what the owner asks across projects. Each project also has its own manager, who gets that project's lane questions, failures and merges: leave those to it. You may still read and change any project with the commands above when the owner or a report asks for it. A card about one project is sent with tirith ask-owner --project <project> …, one project per card.";
-
+/// The factory prompt of this conversation's role: a project's manager, or the lead (no project); a bot's own prompt wins.
 fn prompt(app: &Shared, project: &str) -> String {
-    let scope = app.cfg().project(project).map_or(REST.into(), |p| ONE.replace("{id}", &p.id).replace("{repo}", &p.repo().display().to_string()));
-    bots::prompt(app, project).unwrap_or(format!("{PROMPT}\n{scope}"))
+    let (role, p) = match app.cfg().project(project) {
+        Some(p) => ("manager", Some(p.clone())),
+        None => ("lead", None),
+    };
+    let text = app.cfg().factory.prompts_of(role);
+    bots::prompt(app, project).unwrap_or_else(|| p.map_or(text.clone(), |p| text.replace("{id}", &p.id).replace("{repo}", &p.repo().display().to_string())))
 }
 
 /// One conversation: a project's (under its id) or the one of no project (under "").
@@ -86,9 +85,7 @@ fn deliver(app: &Shared, project: &str, text: &str) {
         }
         !std::mem::replace(&mut t.alive, true)
     });
-    if start {
-        tokio::spawn(run(app.clone(), project.to_string()));
-    }
+    let _ = start.then(|| tokio::spawn(run(app.clone(), project.to_string())));
 }
 
 /// A message from a room (a paired phone or another agent): shown in the chat of the room's project, handed to that project's manager, and the manager's answer to this turn goes back to that room.
@@ -111,13 +108,13 @@ fn with_cards(app: &Shared, project: &str, text: &str) -> String {
 
 /// Ends every session (the settings changed); one in the middle of a turn ends when the turn does, so its answer is not lost. Each one resumes its conversation at its next message.
 pub fn restart() {
-    for t in TALKS.lock().unwrap().values_mut() {
+    TALKS.lock().unwrap().values_mut().for_each(|t| {
         t.stale = true;
         if !t.busy {
             t.tx.take();
             kill_group(t.pid, libc::SIGTERM);
         }
-    }
+    });
 }
 
 pub fn busy() -> Vec<String> {
@@ -126,15 +123,7 @@ pub fn busy() -> Vec<String> {
 
 /// Stops the current turn of the conversation's session (the session lives on): a stream-json `control_request` with subtype `interrupt`, as the old collector sent. Err when no turn is running.
 pub fn interrupt(project: &str) -> Result<(), String> {
-    if talk(project, |t| {
-        if !t.oneshot || !t.busy {
-            return false;
-        }
-        kill_group(t.pid, libc::SIGTERM);
-        true
-    }) {
-        return Ok(());
-    }
+    let Some(()) = (!talk(project, |t| (t.oneshot && t.busy).then(|| kill_group(t.pid, libc::SIGTERM)).is_some())).then_some(()) else { return Ok(()) };
     let tx = talk(project, |t| t.tx.clone().filter(|_| t.busy)).ok_or("the manager is not working on a turn")?;
     let line = json!({"type": "control_request", "request_id": format!("int-{:08x}", rand::random::<u32>()), "request": {"subtype": "interrupt"}});
     tx.send(line.to_string()).map_err(|_| "the manager session ended".to_string())
@@ -157,7 +146,7 @@ pub fn model_command(app: &Shared, project: &str, text: &str) -> bool {
     true
 }
 
-/// A report from Tirith that needs the manager (a lane asked or failed, a red main): shown in the project's chat at once and handed over together with every other report of the next 2 seconds, so many events cost one turn.
+/// A report from Tirith that needs the manager (a lane asked or failed, a red main): shown in the project's chat at once and handed over together with every other report of the next batch (the factory's `limits.batch_seconds`), so many events cost one turn.
 pub fn notify(app: &Shared, project: &str, text: &str) {
     notify_as(app, project, text, text);
 }
@@ -177,7 +166,7 @@ pub fn inform(app: &Shared, project: &str, text: &str) {
     });
 }
 
-/// Hands a report to the manager (gathered with the others of the next 2 s) without a chat line of its own.
+/// Hands a report to the manager (gathered with the others of the next batch) without a chat line of its own.
 pub fn tell(app: &Shared, project: &str, text: &str) {
     let project = here(app, project);
     let first = talk(project, |t| {
@@ -185,16 +174,14 @@ pub fn tell(app: &Shared, project: &str, text: &str) {
         !std::mem::replace(&mut t.due, true)
     });
     if first {
-        let (app, project) = (app.clone(), project.to_string());
+        let (app, project, batch) = (app.clone(), project.to_string(), app.cfg().factory.limits.batch_seconds);
         tokio::spawn(async move {
-            tokio::time::sleep(Duration::from_secs(2)).await;
+            tokio::time::sleep(Duration::from_secs(batch)).await;
             talk(&project, |t| t.due = false);
             deliver(&app, &project, "");
         });
     }
 }
-
-const KINDS: [&str; 5] = ["credentials", "payment", "account", "device", "decision"];
 
 /// `tirith ask-owner`: a card in its project's chat (so on the owner's phones too) and among the open cards of the owner's page, until answered. With `lane` it carries that waiting lane's question: the lane shows it, and the answer goes straight to the lane.
 pub fn ask_owner(app: &Shared, project: &str, kind: &str, question: &str, lane: &str) -> Result<Value, String> {
@@ -205,7 +192,8 @@ pub fn ask_owner(app: &Shared, project: &str, kind: &str, question: &str, lane: 
     };
     known(app, &project)?;
     let question = question.trim();
-    (KINDS.contains(&kind) && !question.is_empty()).then_some(()).ok_or_else(|| format!("ask the owner with --kind {} and a question", KINDS.join("|")))?;
+    let kinds = app.cfg().factory.words("cards", "kinds");
+    (kinds.iter().any(|k| k == kind) && !question.is_empty()).then_some(()).ok_or_else(|| format!("ask the owner with --kind {} and a question", kinds.join("|")))?;
     let row = {
         let db = app.db.lock().unwrap();
         let n: i64 = db.query_row("SELECT COALESCE(MAX(CAST(SUBSTR(id, 2) AS INTEGER)), 0) FROM owner_items", [], |r| r.get(0)).unwrap_or(0);
@@ -316,9 +304,7 @@ async fn run(app: Shared, project: String) {
             t.alive = !t.pending.is_empty();
             !t.alive
         });
-        if rest {
-            return;
-        }
+        let Some(()) = (!rest).then_some(()) else { return };
         // A session that ended young is started again more and more slowly; one that lived is started again at once.
         backoff = if result.is_ok() || started.elapsed().as_secs() > 60 { 2 } else { (backoff * 2).min(60) };
         if backoff > 2 {
@@ -378,11 +364,7 @@ async fn session(app: &Shared, project: &str) -> Result<(), String> {
             .enumerate()
             .map(|(i, line)| {
                 let mut v: Value = serde_json::from_str(&line).unwrap_or_default();
-                if let Some(h) = history.as_ref().filter(|_| i == 0) {
-                    if let Some(a) = v["message"]["content"].as_array_mut() {
-                        a.insert(0, json!({"type": "text", "text": h}));
-                    }
-                }
+                let _ = history.as_ref().filter(|_| i == 0).and_then(|h| v["message"]["content"].as_array_mut().map(|a| a.insert(0, json!({"type": "text", "text": h}))));
                 v.to_string()
             })
             .inspect(|line| drop(tx.send(line.clone())))
@@ -397,12 +379,13 @@ async fn session(app: &Shared, project: &str) -> Result<(), String> {
         }
     });
     let (mut ready, mut rest) = (false, false);
+    let idle = Duration::from_secs(app.cfg().factory.role::<u64>("manager", "idle_minutes").unwrap_or(30) * 60);
     let mut lines = BufReader::new(stdout).lines();
     while !rest {
-        let line = match tokio::time::timeout(IDLE, lines.next_line()).await {
+        let line = match tokio::time::timeout(idle, lines.next_line()).await {
             Ok(Ok(Some(line))) => line,
             Ok(_) => break,
-            // 30 quiet minutes and no turn running: the session rests until the next message resumes it.
+            // Quiet for the role's idle_minutes and no turn running: the session rests until the next message resumes it.
             Err(_) => {
                 rest = talk(project, |t| !t.busy && t.tx.take().is_some());
                 continue;
@@ -412,9 +395,7 @@ async fn session(app: &Shared, project: &str) -> Result<(), String> {
         match msg["type"].as_str().unwrap_or("") {
             "system" if msg["subtype"] == "init" => {
                 ready = true;
-                if let Some(id) = msg["session_id"].as_str() {
-                    app.set_kv(&key, Some(id));
-                }
+                msg["session_id"].as_str().into_iter().for_each(|id| app.set_kv(&key, Some(id)));
             }
             "assistant" => {
                 for block in msg["message"]["content"].as_array().into_iter().flatten() {
@@ -451,20 +432,14 @@ async fn session(app: &Shared, project: &str) -> Result<(), String> {
         ready.then(|| t.reply_to.clear()); // a session that never got ready ran no turn: its lines wait, with their rooms
         t.tx.take().is_some() && ready && t.busy
     });
-    if died {
-        rooms::again(app, Some(project));
-    }
+    let _ = died.then(|| rooms::again(app, Some(project)));
     writer.abort();
     kill_group(pid, libc::SIGTERM);
     let _ = tokio::time::timeout(Duration::from_secs(10), child.wait()).await;
-    if ready || rest {
-        return Ok(());
-    }
+    let Some(()) = (!ready && !rest).then_some(()) else { return Ok(()) };
     // It ended before it was ready: what it was handed waits again. A resume that does not work becomes a fresh session.
     talk(project, |t| drop(t.pending.splice(0..0, sent)));
-    if resumed.is_none() {
-        return Err("its agent ended before it was ready (logs/manager.log says why)".into());
-    }
+    let Some(()) = resumed.is_some().then_some(()) else { return Err("its agent ended before it was ready (logs/manager.log says why)".into()) };
     app.set_kv(&key, None);
     Ok(())
 }
@@ -472,11 +447,8 @@ async fn session(app: &Shared, project: &str) -> Result<(), String> {
 fn session_key(app: &Shared, project: &str, agent: &str) -> String {
     let key = format!("manager_session:{agent}:{project}");
     let provider = format!("manager_agent:{project}");
-    if app.kv(&provider).as_deref() != Some(agent) {
-        let legacy = (agent != "codex" && app.kv(&provider).is_none()).then(|| app.kv(&format!("manager_session{}{project}", if project.is_empty() { "" } else { ":" }))).flatten();
-        app.set_kv(&key, legacy.as_deref());
-        app.set_kv(&provider, Some(agent));
-    }
+    let legacy = (agent != "codex" && app.kv(&provider).is_none()).then(|| app.kv(&format!("manager_session{}{project}", if project.is_empty() { "" } else { ":" }))).flatten();
+    let _ = (app.kv(&provider).as_deref() != Some(agent)).then(|| app.set_kv(&key, legacy.as_deref())).map(|_| app.set_kv(&provider, Some(agent)));
     key
 }
 
@@ -490,16 +462,9 @@ fn history(app: &Shared, project: &str) -> String {
 fn turn_input(app: &Shared, project: &str, fresh: bool) -> (Vec<String>, String) {
     let sent = talk(project, |t| std::mem::take(&mut t.pending));
     let mut input = if fresh { history(app, project) } else { String::new() };
-    for line in &sent {
-        if let Ok(v) = serde_json::from_str::<Value>(line) {
-            for b in v["message"]["content"].as_array().into_iter().flatten() {
-                if let Some(s) = b["text"].as_str() {
-                    input += s;
-                    input += "\n"
-                }
-            }
-        }
-    }
+    let texts: Vec<String> =
+        sent.iter().filter_map(|l| serde_json::from_str::<Value>(l).ok()).flat_map(|v| v["message"]["content"].as_array().cloned().unwrap_or_default()).filter_map(|b| b["text"].as_str().map(|s| format!("{s}\n"))).collect();
+    input += &texts.concat();
     (sent, input)
 }
 
@@ -568,10 +533,7 @@ async fn exec_session(app: &Shared, project: &str, muse: bool) -> Result<(), Str
         }
     };
     // Codex speaks while it works; an exec turn of the other agent answers once, at its end.
-    if muse && answered {
-        app.chat("manager", &text, project);
-        rooms::to_phones(app, project, &text);
-    }
+    let _ = (muse && answered).then(|| app.chat("manager", &text, project)).map(|_| rooms::to_phones(app, project, &text));
     rooms::reply(app, &Vec::from_iter(rooms_now), &text);
     Ok(())
 }

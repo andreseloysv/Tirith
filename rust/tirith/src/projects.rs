@@ -44,9 +44,7 @@ fn folder(raw: &str, projects: &[Project], tirith: &Path) -> Result<PathBuf, Str
 /// The project as it will be written: `name` (else the folder's), `color` (else the first one no project has), an id.
 fn project(dir: &Path, name: &str, color: &str, projects: &[Project]) -> Result<Project, String> {
     let name = Some(name.trim().to_string()).filter(|n| !n.is_empty()).or_else(|| Some(dir.file_name()?.to_string_lossy().into_owned())).unwrap_or_default();
-    if name.is_empty() || name.chars().count() > 80 || name.chars().any(char::is_control) {
-        return Err("the name is one line of 1 to 80 characters".into());
-    }
+    (!name.is_empty() && name.chars().count() <= 80 && !name.chars().any(char::is_control)).then_some(()).ok_or("the name is one line of 1 to 80 characters".to_string())?;
     let c = color.trim().to_lowercase();
     let free = COLORS.iter().find(|c| !projects.iter().any(|p| p.color.as_deref().is_some_and(|x| x.eq_ignore_ascii_case(c)))).unwrap_or(&COLORS[projects.len() % COLORS.len()]);
     let color = match c.as_str() {

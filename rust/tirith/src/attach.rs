@@ -42,9 +42,7 @@ fn content_type(name: &str) -> &'static str {
 }
 
 async fn upload(State(app): State<Shared>, Query(q): Query<HashMap<String, String>>, body: Bytes) -> Result<Json<Value>, (StatusCode, String)> {
-    if body.is_empty() {
-        return Err((StatusCode::BAD_REQUEST, "empty file".into()));
-    }
+    (!body.is_empty()).then_some(()).ok_or((StatusCode::BAD_REQUEST, "empty file".to_string()))?;
     let name = sanitize(q.get("name").map(String::as_str).unwrap_or(""));
     let id = format!("{:016x}", rand::thread_rng().gen::<u64>());
     let dir = app.home.join("attachments").join(&id);

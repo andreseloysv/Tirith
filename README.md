@@ -38,7 +38,7 @@ end with code, and puts a model in the loop only where judgment is needed.
   `tirith plan add`.
 - **Autopilot.** Code starts the open items of a project's current step (the first step with open work; steps
   run in order, the items of a step in parallel), as far as the machine has room: the load per core, the merge
-  backlog, free disk and an intact commit guard. There is no cap on lanes at once unless `[lanes] max_parallel`
+  backlog, free disk and an intact commit guard. There is no cap on lanes at once unless `[limits] max_parallel`
   sets one. Failed or stopped items wait for the manager.
 - **Lanes.** One agent, one item, one branch, in a reusable worktree whose build caches stay warm. The worktrees
   live in Tirith's own folder (`~/.tirith/lanes/<project>/slot-N`), not next to your repositories. A lane cannot end its turn with a question; it asks the manager with `tirith ask` and is resumed with
@@ -163,9 +163,19 @@ agent is using it, let that turn finish before retrying. A busy profile is not a
 uses Tirith's network proxy when launched by Tirith. Never put passwords or exported browser cookies in chat.
 Re-running setup refreshes the installation and keeps timestamped backups of changed configuration files.
 
-### Configuration file
+### The factory and the configuration file
 
-`~/.tirith/config.toml` (outside every repo; agents cannot edit it). Everything has a default. Add a project with
+How the factory runs — each agent's flags, the roles (manager, lead, worker, reviewer) with their prompts, the
+limits, the plan words, the card kinds and the health measures with their targets — is data, not code:
+`factory/factory.toml` and `factory/prompts/` in this repository (see `docs/FACTORY.md`). The daemon embeds them
+as its fallback, reloads them when they change (no rebuild, no restart), and keeps the last good version when a
+new one is invalid, with the error on the page.
+
+`~/.tirith/config.toml` (outside every repo; agents cannot edit it) holds what is this machine's alone — projects,
+each agent's real command, model ids, keys — and is laid over the factory key by key, where its key wins.
+Everything has a default. Unknown keys are reported, never silently ignored. At the first start, yesterday's
+sections are rewritten into the factory's names (`[models.*]` → `[roles.*]`, the `[lanes]`/`[merge]` limits →
+`[limits]`, `[ceo]` → `[roles.reviewer]`), with the old file kept as `config.toml.before-factory`. Add a project with
 the **+** next to Projects on the page (or `tirith project add`): Tirith appends its `[[projects]]` block, creates a
 git repository and a first plan when the folder has none, and installs the commit guard; a plan that already has
 open items waits for you to resume the autopilot.
@@ -186,7 +196,7 @@ chat_args = ["-p", "--input-format", "stream-json", "--output-format", "stream-j
 [launch]                            # optional: the full lane command of the default worker agent
 command = ["…", "-p", "Read the brief at {brief} and implement it in {workspace}."]
 
-[models.manager]                    # also [models.workers] and [models.ceo]; the page can override
+[roles.manager]                     # also [roles.worker] and [roles.reviewer]; the page can override
 agent = "anthropic"
 model = "…"
 effort = "medium"
@@ -199,15 +209,12 @@ words = ["…"]                       # your forbidden words (regexes allowed)
 port = 7717
 [autopilot]
 enabled = true                      # per project on the page or with `tirith autopilot`
-[lanes]
+[limits]                            # any limit of the factory, for this machine
 # max_parallel = 8                  # optional cap on lanes at once; none by default
 max_load = 2.0                      # 1-minute load per core above which no new lane starts
 inactivity_minutes = 20
 [merge]
 push = true
-stage_timeout_minutes = 30
-[plan]
-commit_seconds = 120
 [network]
 sandbox = true
 proxy_port = 47812
@@ -218,12 +225,13 @@ name = "tirith-manager"
 names = ["…"]                       # messages naming you in public rooms are highlighted
 [[rooms]]
 id = "some-public-room"             # watched only
-[ceo]
+[roles.reviewer]                   # the health reviewer (the CEO review)
 review_after_minutes = 15
 max_per_day = 6
-[ceo.targets]
-merged_per_day = 10
-median_merge_minutes = 120
+[metrics.merged]
+target = 10
+[metrics.median]
+target = 120
 ```
 
 Each project's `tirith.toml`:
