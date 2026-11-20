@@ -2,6 +2,15 @@
 
 The overview each module of `rust/tirith/src` carried in its header, kept here so the code stays short.
 
+## `bots.rs`
+
+Bots: the owner's own agents. Each has a name, a face (shape and colour) and its own conversation (`bot-<id>`), run like a project's manager with the manager's model and
+its own room on the phones. Routines are tasks a bot does by itself at a time of chosen weekdays (the machine's local time); a timer hands a due one to the bot once a day, and the
+bot makes them itself with `tirith routine add|remove|list`. A bot learns in its folder (`<tirith home>/manager/bot-<id>`): `memory.md`, which Tirith hands it as it is now at
+the start of every turn and routine, and skills in `.agents/skills/<name>/SKILL.md`, its own and the shared ones of `<tirith home>/bots/skills` (linked in before every turn).
+The bots' agent finds them natively: Muse reads `.agents/skills`, and the agent's own `.<command>/skills` is a link to the same folder. Agents may write in a bot's folder
+(never in its hidden folders, where agent settings live, except skills folders) and in the shared skills; the page's Library shows, corrects and deletes all of it.
+
 ## `brain.rs`
 
 The brain: small text jobs for a cheap, fast model of the Meta Model API (OpenAI-style `/chat/completions`). Never on a hot path: callers use the cached answer or a plain fallback. The key comes only from the environment
