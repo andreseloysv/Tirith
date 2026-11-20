@@ -491,20 +491,15 @@ fn history(app: &Shared, project: &str) -> String {
     format!("Recent conversation for context (do not repeat completed work):\n{}\n\nNew messages:\n", rows.join("\n"))
 }
 
-/// One exec turn's message: what waits for the manager, in plain text, with the recent conversation in front of it when the agent starts fresh. The waiting lines come back too, so a turn that never started can hand them over again.
-fn turn_input(app: &Shared, project: &str, fresh: bool) -> (Vec<String>, String) {
-    let sent = talk(project, |t| std::mem::take(&mut t.pending));
-    let mut input = if fresh { history(app, project) } else { String::new() };
-    let texts: Vec<String> =
-        sent.iter().filter_map(|l| serde_json::from_str::<Value>(l).ok()).flat_map(|v| v["message"]["content"].as_array().cloned().unwrap_or_default()).filter_map(|b| b["text"].as_str().map(|s| format!("{s}\n"))).collect();
-    input += &texts.concat();
-    (sent, input)
-}
-
 async fn exec_session(app: &Shared, project: &str, muse: bool) -> Result<(), String> {
     let key = session_key(app, project, if muse { "muse" } else { "codex" });
     let resumed = app.kv(&key);
-    let (sent, input) = turn_input(app, project, resumed.is_none());
+    // The turn's message in plain text, with the recent conversation in front of it when the agent starts fresh; `sent` is handed over again when the turn never started.
+    let sent = talk(project, |t| std::mem::take(&mut t.pending));
+    let mut input = if resumed.is_none() { history(app, project) } else { String::new() };
+    let texts: Vec<String> =
+        sent.iter().filter_map(|l| serde_json::from_str::<Value>(l).ok()).flat_map(|v| v["message"]["content"].as_array().cloned().unwrap_or_default()).filter_map(|b| b["text"].as_str().map(|s| format!("{s}\n"))).collect();
+    input += &texts.concat();
     let mut started = false;
     let result = crate::codex::turn(
         app,
