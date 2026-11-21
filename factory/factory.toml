@@ -66,7 +66,8 @@ prompt = ["prompts/brief.md"]
 runs_on = "local"
 
 # The improver (was the reviewer, and before it the CEO): the turn role of the
-# delayed metric.red route below. The daemon also runs it once a day. It
+# delayed metric.red route below; a schedule route below also runs it every
+# day at 07:00, with no red measure needed. It
 # reads the measures and eval scores by factory version and factory/ itself,
 # and proposes at most one change to factory/ per pass as a step 17 item of
 # the tirith plan with its lane started; a version whose first 10 merged
@@ -215,6 +216,15 @@ on = "schedule"
 to = "manager"
 mode = "turn"
 phone = true
+
+# The improver's daily pass: configuration, not code. It reads the same
+# brief as a red-measure pass (the measures, by factory version).
+[[routes]]
+on = "schedule"
+to = "improver"
+mode = "turn"
+days = [1, 2, 3, 4, 5, 6, 7]
+at = "07:00"
 
 [[routes]]
 on = "factory.invalid"
