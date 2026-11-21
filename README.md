@@ -62,16 +62,16 @@ end with code, and puts a model in the loop only where judgment is needed.
   images can be attached): select the project and the chat, the cards that need you, the plan, the pipelines, the
   agents, the rooms and the access list show that project only (what belongs to the machine, such as the block list
   and the models, says so). With no project selected you see all of them, and talk to the manager of what belongs
-  to no single project (the lead: health, the improver's passes). The autopilot starts the work; a manager answers its project's lanes, keeps
+  to no single project (the lead: health, the CEO's passes). The autopilot starts the work; a manager answers its project's lanes, keeps
   its plan good and asks you only for credentials, payments, personal accounts, physical devices or real decisions
   (`tirith ask-owner --kind …`). A merge shows in the project's chat without costing a manager turn.
-- **Health and the improver.** Metrics by code (items merged per day, time to merge, first-try rate, idle projects,
+- **Health and the CEO.** Metrics by code (items merged per day, time to merge, first-try rate, idle projects,
   stuck lanes, red main, and the owner's measures: interruptions per merged item — phone messages of turns the
   owner did not start, notices routed to the phones and cards, over 24 h — needless cards, closed without an
   answer or judged decidable alone by the `card-needed` eval, and the owner's satisfaction, judged per day by a
   cheap model from the owner's own messages (approvals minus corrections, repeats and noise complaints) and
   never by asking, each with its target in the factory). A red metric goes to the lead; still red 15 minutes later, and every day
-  at 07:00 by its `schedule` route in the factory anyway, the improver role runs one fresh read-only turn over the measures and eval scores by factory version
+  at 07:00 by its `schedule` route in the factory anyway, the CEO role runs one fresh read-only turn over the measures and eval scores by factory version
   and the factory itself: it says what is wrong and what to do, and may propose at most one change to
   `factory/` — a plan item with its check and its lane started, no owner's yes needed. A factory version whose
   first 10 merged items (or first 24 h) went worse than the one before it on satisfaction, interruptions or
@@ -82,7 +82,7 @@ end with code, and puts a model in the loop only where judgment is needed.
   project's conversation: what the manager says, Tirith's reports (merged, failed, a lane's question) and the cards
   that need you, which you answer there (`o12: yes`). `tirith room forget` cuts off a lost phone. Add other managers
   with a code, and watch public rooms with a summary.
-- **Models per role.** Agent, model and effort for every role of the factory (manager, lead, worker, improver, judge), with a fallback
+- **Models per role.** Agent, model and effort for every role of the factory (manager, lead, worker, ceo, judge), with a fallback
   chain for lanes when an agent runs out of credits. Codex works in every role. Choose models in the chat's
   **Models** panel or Settings. The app and the paired phone both offer provider/model buttons and an effort
   slider. `/models` also works in either chat.
@@ -130,7 +130,7 @@ each model's supported reasoning efforts. Open Codex once to populate or refresh
 selected, its selectors offer only catalog models and the chosen model's supported efforts. Select a model
 before choosing an effort, or leave both at the agent's defaults. Other agents also support custom model IDs.
 
-Open **Models** above the chat composer on the computer or paired phone. Pick a factory role (**Manager**, **Lead**, **Worker** or **Improver**),
+Open **Models** above the chat composer on the computer or paired phone. Pick a factory role (**Manager**, **Lead**, **Worker** or **CEO**),
 tap a provider and model, then drag the effort slider or tap a level. **Save** applies the selection;
 editing the controls alone does not change the active setting. The phone waits for Tirith's encrypted confirmation.
 Settings keeps its original dropdown form; buttons and the effort slider belong to the chat.
@@ -143,7 +143,7 @@ These commands work directly in the app chat and in a project room on a paired p
 /models
 /model manager codex
 /model worker codex:<model-id> high
-/model improver codex:<model-id> medium
+/model ceo codex:<model-id> medium
 /model all codex:<model-id> high
 /model worker reset
 ```
@@ -173,7 +173,7 @@ Re-running setup refreshes the installation and keeps timestamped backups of cha
 
 ### The factory and the configuration file
 
-How the factory runs — each agent's flags, the roles (manager, lead, worker, improver) with their prompts, who
+How the factory runs — each agent's flags, the roles (manager, lead, worker, ceo) with their prompts, who
 hears each event (a lane failed, a merge landed, a measure turned red: as a turn or a note, in the chat, on your
 phone), the limits, the plan words, the card kinds and the health measures with their targets — is data, not code:
 `factory/factory.toml` and `factory/prompts/` in this repository (see `docs/FACTORY.md`). The daemon embeds them
@@ -187,7 +187,7 @@ over the store (`GROUP BY factory, role_hash`), with no extra runs.
 each agent's real command, model ids, keys — and is laid over the factory key by key, where its key wins.
 Everything has a default. Unknown keys are reported, never silently ignored. Yesterday's sections are read in
 memory under the factory's names (`[models.*]` → `[roles.*]`, the `[lanes]`/`[merge]` limits → `[limits]`,
-`[ceo]` and `[roles.reviewer]` → `[roles.improver]`); the file itself is never rewritten behind your back (the page writes it with
+`[ceo]` and `[roles.reviewer]` → `[roles.ceo]`); the file itself is never rewritten behind your back (the page writes it with
 `toml_edit`, keeping its comments). Add a project with
 the **+** next to Projects on the page (or `tirith project add`): Tirith appends its `[[projects]]` block, creates a
 git repository and a first plan when the folder has none, and installs the commit guard; a plan that already has
@@ -209,7 +209,7 @@ chat_args = ["-p", "--input-format", "stream-json", "--output-format", "stream-j
 [launch]                            # optional: the full lane command of the default worker agent
 command = ["…", "-p", "Read the brief at {brief} and implement it in {workspace}."]
 
-[roles.manager]                     # also [roles.worker] and [roles.improver]; the page can override
+[roles.manager]                     # also [roles.worker] and [roles.ceo]; the page can override
 agent = "anthropic"
 model = "…"
 effort = "medium"
@@ -238,7 +238,7 @@ name = "tirith-manager"
 names = ["…"]                       # messages naming you in public rooms are highlighted
 [[rooms]]
 id = "some-public-room"             # watched only
-[roles.improver]                   # the improver (one fresh read-only turn; was [roles.reviewer])
+[roles.ceo]                   # the CEO (one fresh read-only turn)
 review_after_minutes = 15
 max_per_day = 6
 [metrics.merged]

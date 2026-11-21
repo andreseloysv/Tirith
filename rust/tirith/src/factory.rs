@@ -55,7 +55,7 @@ fn embedded_prompts() -> BTreeMap<String, String> {
         ("no-project", include_str!("../../../factory/prompts/no-project.md")),
         ("brief", include_str!("../../../factory/prompts/brief.md")),
         ("clippy", include_str!("../../../factory/prompts/clippy.md")),
-        ("improver", include_str!("../../../factory/prompts/improver.md")),
+        ("ceo", include_str!("../../../factory/prompts/ceo.md")),
         ("bot", include_str!("../../../factory/prompts/bot.md")),
         ("owner-mood", include_str!("../../../factory/evals/owner-mood.md")),
         ("card-needed", include_str!("../../../factory/evals/card-needed.md")),
@@ -233,7 +233,7 @@ impl Factory {
         get(&self.raw, &[sec, key]).unwrap_or_default()
     }
 
-    /// Every `schedule` route that names a time of day: (to, at, days). A bot's routines are fired from config.toml by bots.rs; one of the factory's own (the improver's daily pass) by whoever runs its role.
+    /// Every `schedule` route that names a time of day: (to, at, days). A bot's routines are fired from config.toml by bots.rs; one of the factory's own (the CEO's daily pass) by whoever runs its role.
     pub fn schedules(&self) -> Vec<(String, String, Vec<u64>)> {
         let rows = self.raw.get("routes").and_then(|r| r.as_array()).into_iter().flatten().filter(|r| str_of(r, "on") == "schedule" && !str_of(r, "at").is_empty() && r.get("enabled").and_then(|v| v.as_bool()) != Some(false));
         rows.map(|r| (str_of(r, "to").into(), str_of(r, "at").into(), r.get("days").and_then(|d| d.as_array()).into_iter().flatten().filter_map(|d| d.as_integer().and_then(|n| u64::try_from(n).ok())).collect())).collect()

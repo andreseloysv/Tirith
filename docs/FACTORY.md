@@ -18,7 +18,7 @@ This document is the target and the order of the migration (the last section).
   real agent commands and model ids are never written in it.
 - `~/.tirith/config.toml` on the machine, private: projects and their folders, rooms and phones, each agent's
   `command`, model ids, keys, the port, and the owner's own roles (the bots) with their routines. It is laid over the
-  factory key by key, and a key there wins. The page writes this file, keeping its comments; the improver writes
+  factory key by key, and a key there wins. The page writes this file, keeping its comments; the CEO writes
   `factory/`.
 
 Like Terraform: the factory is the code, config.toml its variables.
@@ -76,12 +76,12 @@ session = "lane"
 scope = "project"
 prompt = ["prompts/brief.md"]
 
-[roles.reviewer]                   # today's CEO
+[roles.ceo]
 extends = "manager"
 session = "turn"
 scope = "global"
 access = "read"                    # file-writing tools denied; tirith commands allowed
-prompt = ["prompts/reviewer.md"]
+prompt = ["prompts/ceo.md"]
 max_per_day = 6
 
 [[routes]]
@@ -94,8 +94,8 @@ phone = true                       # that line, and the answer of the turn it st
 [[routes]]
 on = "metric.red"
 after_minutes = 15                 # still red that long
-to = "reviewer"
-then = "lead"                      # where the reviewer's answer goes
+to = "ceo"
+then = "lead"                      # where the CEO's answer goes
 
 [limits]                           # config.toml may override any of them for this machine
 max_load = 2.0                     # per core
@@ -160,7 +160,7 @@ on the page, and goes to every route whose `on` matches it. The default routes r
 | `main.red` / `main.green` | a check fails / passes again on main | manager: turn / note, chat, phone |
 | `plan.empty` | no open item left | manager: turn |
 | `deploy.done` / `deploy.failed` | a deploy stage ran | manager: note / turn, chat, phone |
-| `metric.red` | a measure turned red | lead: turn, chat, phone; after 15 min the reviewer, then the lead |
+| `metric.red` | a measure turned red | lead: turn, chat, phone; after 15 min the CEO, then the lead |
 | `review.done` | a turn role answered | its route's `then` |
 | `schedule` | a routine is due | its role: turn |
 | `card.opened` / `card.answered` / `card.closed` | owner cards | none (measured) |
@@ -219,14 +219,14 @@ Every lane, turn, card, event and score carries the factory version (the main co
 a short hash of config.toml's overlay) and a hash of the role setting it ran with. Comparing two versions, two models or
 two prompts is then a query, with no extra runs.
 
-## The improver closes the loop
+## The CEO closes the loop
 
-The reviewer becomes the improver. Routed on `metric.red` (after 15 min) and on a `schedule` route (every day at 07:00),
+The reviewer becomes the CEO. Routed on `metric.red` (after 15 min) and on a `schedule` route (every day at 07:00),
 it reads the measures by factory
 version, the eval scores and `factory/`, and proposes at most one change to `factory/`: an item of this repo's plan with
 its check, and the lane started for it. The queue checks and lands it, and the daemon reloads the factory when main
 moves: no rebuild, no restart, no owner. A change whose next 10 merged items (or 24 h) are worse than the version before
-it on satisfaction, interruptions or first try is reverted by the improver's next run, as one more change. Nothing in the
+it on satisfaction, interruptions or first try is reverted by the CEO's next run, as one more change. Nothing in the
 factory needs the owner's yes.
 
 ## What stays in code
@@ -264,13 +264,13 @@ and the README. Nothing goes live in the running Tirith until its daemon is rebu
    tirith.toml. 6200 lines or less.
 2. **The factory file.** `factory/factory.toml` with the agents (today's `flags()`), the roles with today's settings,
    `[limits]`, `[plan]`, `[cards]` and `[metrics.*]`; `factory/prompts/` with the prompts of `rust/tirith/assets`
-   (manager, the CEO's as reviewer, bot, brief) and the two scope texts of manager.rs. The loader as above. Every value
+   (manager, the CEO's, bot, brief) and the two scope texts of manager.rs. The loader as above. Every value
    listed moves out of Rust. 6200 lines or less.
 3. **Events and routes.** One function emits an event; `[[routes]]` replace every call to `manager::notify`,
    `notify_as`, `inform` and `tell` outside manager.rs, including the rule for answers on the phones; the default routes
    reproduce today (a table test). 6200 lines or less.
 4. **Quieter phones**, in `factory/` only: `merge.landed`, `deploy.done` and `main.green` get `phone = false`.
-5. **Roles.** manager, lead, worker and reviewer as roles: `session`, `scope`, `extends`, `access`, `idle_minutes`,
+5. **Roles.** manager, lead, worker and ceo as roles: `session`, `scope`, `extends`, `access`, `idle_minutes`,
    `max_per_day`, `runs_on`. `ROLES` and every special case by role name go; the CEO review runs as any turn role; the
    page and `/model` list the factory's roles; role items of the plan come from `[plan] role_prefixes`. 6200 lines or less.
 6. **Bots in config.** Bots become roles with `scope = "own"` and their routines `schedule` routes in config.toml; the
@@ -280,7 +280,7 @@ and the README. Nothing goes live in the running Tirith until its daemon is rebu
 8. **Owner measures:** `interruptions` and `needless_cards`, with targets and routes in the factory. 6200 lines or less.
 9. **Evals and satisfaction:** `[[evals]]`, the `judge` role, the `scores` table, the two rubrics, `satisfaction`.
    6200 lines or less.
-10. **The improver, and 6000.** The reviewer becomes the improver; the daemon reloads the factory when main moves; the
+10. **The CEO, and 6000.** The reviewer becomes the CEO; the daemon reloads the factory when main moves; the
     limit of tirith.toml goes back to 6000. 6000 lines or less.
 
 Later: experiments.
