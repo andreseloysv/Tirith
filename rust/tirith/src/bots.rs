@@ -116,28 +116,26 @@ fn store(app: &App, bots: &[Value]) -> Result<(), String> {
 
 /// The text of config.toml (`text` as it is) with the bots laid into it by toml_edit, so its other sections and their comments stay as they are: each bot a `[roles.bot-<id>]` that extends the manager with its own scope, name and face, each routine a `[[routes]]` on `schedule`; a bot not in `bots` goes, with its routes.
 fn written(text: &str, bots: &[Value]) -> Result<String, String> {
-    use toml_edit::{ArrayOfTables, DocumentMut, Table};
-    let keep = bots.iter().map(|b| format!("bot-{}", s(b, "id"))).collect::<Vec<_>>();
+    use toml_edit::DocumentMut;
     let mut doc: DocumentMut = text.parse().map_err(|e| format!("config.toml: {e}"))?;
-    // The bots as a toml fragment (their roles and schedule routes), built with serde and parsed back as toml_edit items to lay into the file.
-    let frag: DocumentMut = {
-        let (mut roles, mut routes) = (serde_json::Map::new(), vec![]);
-        for b in bots {
-            roles.insert(format!("bot-{}", s(b, "id")), json!({"extends": "manager", "scope": "own", "name": s(b, "name"), "face": {"shape": s(b, "shape"), "color": s(b, "color")}, "prompt": ["prompts/bot.md"]}));
-            routes.extend(b["routines"].as_array().into_iter().flatten().map(|r| json!({"on": "schedule", "to": format!("bot-{}", s(b, "id")), "mode": "turn", "phone": true, "id": s(r, "id"), "title": s(r, "title"), "days": r["days"], "at": s(r, "at"), "task": s(r, "prompt"), "enabled": r["on"] != false})));
-        }
-        toml::Value::try_from(json!({"roles": roles, "routes": routes})).and_then(|v| toml::to_string(&v)).map_err(|e| e.to_string())?.parse().map_err(|e| format!("config.toml: {e}"))?
-    };
-    doc.get_mut("roles")
-        .and_then(|i| i.as_table_mut())
-        .into_iter()
-        .for_each(|roles| roles.retain(|k, v| !(k.starts_with("bot-") && v.as_table().and_then(|t| t.get("scope")).and_then(|i| i.as_str()) == Some("own")) || keep.iter().any(|x| x == k)));
-    let roles = doc["roles"].or_insert(Table::new().into()).as_table_mut().ok_or("config.toml: [roles] is not a table")?;
-    frag["roles"].as_table().into_iter().flat_map(|t| t.iter()).for_each(|(key, item)| roles[key] = item.clone());
-    let routes = doc["routes"].or_insert(ArrayOfTables::new().into()).as_array_of_tables_mut().ok_or("config.toml: routes is not [[routes]] tables")?;
-    routes.retain(|r| !(r.get("on").and_then(|i| i.as_str()) == Some("schedule") && r.get("to").and_then(|i| i.as_str()).is_some_and(|to| to.starts_with("bot-"))));
-    frag["routes"].as_array_of_tables().into_iter().flatten().for_each(|t| routes.push(t.clone()));
-    Ok(doc.to_string())
+    // Every bot role and schedule route goes out of the file; the bots are written again after the owner's sections, so they sit together at the end and no empty header stays behind.
+    if let Some(roles) = doc.get_mut("roles").and_then(|i| i.as_table_mut()) {
+        roles.retain(|k, v| !(k.starts_with("bot-") && v.as_table().and_then(|t| t.get("scope")).and_then(|i| i.as_str()) == Some("own")));
+    }
+    if let Some(routes) = doc.get_mut("routes").and_then(|i| i.as_array_of_tables_mut()) {
+        routes.retain(|r| !(r.get("on").and_then(|i| i.as_str()) == Some("schedule") && r.get("to").and_then(|i| i.as_str()).is_some_and(|to| to.starts_with("bot-"))));
+    }
+    doc.get("roles").and_then(|i| i.as_table()).is_some_and(|t| t.is_empty()).then(|| doc.remove("roles"));
+    doc.get("routes").and_then(|i| i.as_array_of_tables()).is_some_and(|t| t.is_empty()).then(|| doc.remove("routes"));
+    let (mut roles, mut routes) = (serde_json::Map::new(), vec![]);
+    for b in bots {
+        roles.insert(format!("bot-{}", s(b, "id")), json!({"extends": "manager", "scope": "own", "name": s(b, "name"), "face": {"shape": s(b, "shape"), "color": s(b, "color")}, "prompt": ["prompts/bot.md"]}));
+        routes.extend(b["routines"].as_array().into_iter().flatten().map(|r| json!({"on": "schedule", "to": format!("bot-{}", s(b, "id")), "mode": "turn", "phone": true, "id": s(r, "id"), "title": s(r, "title"), "days": r["days"], "at": s(r, "at"), "task": s(r, "prompt"), "enabled": r["on"] != false})));
+    }
+    let frag = if bots.is_empty() { String::new() } else { toml::Value::try_from(json!({"roles": roles, "routes": routes})).and_then(|v| toml::to_string(&v)).map_err(|e| e.to_string())? };
+    let head = doc.to_string();
+    let head = if frag.is_empty() { head.as_str() } else { head.trim_end() };
+    Ok(if head.is_empty() || frag.is_empty() { format!("{head}{frag}") } else { format!("{head}\n\n{frag}") })
 }
 
 /// Reads the bots, changes them with `f` and keeps the result, one change at a time; an Err keeps them as they were.
