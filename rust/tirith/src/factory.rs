@@ -6,8 +6,22 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
 use std::time::SystemTime;
 const TEXT: &str = include_str!("../../../factory/factory.toml");
-const SECTIONS: [&str; 8] = ["agents", "roles", "limits", "plan", "cards", "metrics", "routes", "evals"];
-const MEASURES: [&str; 11] = ["merged", "median", "first_try", "idle", "stuck", "main_red", "failed", "owner", "interruptions", "needless_cards", "satisfaction"];
+const SECTIONS: [&str; 8] = [
+    "agents", "roles", "limits", "plan", "cards", "metrics", "routes", "evals",
+];
+const MEASURES: [&str; 11] = [
+    "merged",
+    "median",
+    "first_try",
+    "idle",
+    "stuck",
+    "main_red",
+    "failed",
+    "owner",
+    "interruptions",
+    "needless_cards",
+    "satisfaction",
+];
 /// The closed list of events the code emits, `;`-joined like the moves in config.rs; a route on anything else never fires, so it is invalid. The page offers a bot's routes from this list (but `schedule`: a bot's routines are its schedule routes).
 pub(crate) const EVENTS: &str = "owner.message;room.message;lane.asked;lane.failed;lane.not_started;lane.long;merge.blocked;merge.landed;main.red;main.green;plan.empty;deploy.done;deploy.failed;metric.red;review.done;schedule;card.opened;card.answered;card.closed;factory.invalid";
 /// One `[[routes]]` entry read for one event: (to, mode, chat, phone, after_minutes).
@@ -45,15 +59,30 @@ impl Default for Factory {
 }
 fn embedded_prompts() -> BTreeMap<String, String> {
     [
-        ("manager", include_str!("../../../factory/prompts/manager.md")),
-        ("one-project", include_str!("../../../factory/prompts/one-project.md")),
-        ("no-project", include_str!("../../../factory/prompts/no-project.md")),
+        (
+            "manager",
+            include_str!("../../../factory/prompts/manager.md"),
+        ),
+        (
+            "one-project",
+            include_str!("../../../factory/prompts/one-project.md"),
+        ),
+        (
+            "no-project",
+            include_str!("../../../factory/prompts/no-project.md"),
+        ),
         ("brief", include_str!("../../../factory/prompts/brief.md")),
         ("clippy", include_str!("../../../factory/prompts/clippy.md")),
         ("ceo", include_str!("../../../factory/prompts/ceo.md")),
         ("bot", include_str!("../../../factory/prompts/bot.md")),
-        ("owner-mood", include_str!("../../../factory/evals/owner-mood.md")),
-        ("card-needed", include_str!("../../../factory/evals/card-needed.md")),
+        (
+            "owner-mood",
+            include_str!("../../../factory/evals/owner-mood.md"),
+        ),
+        (
+            "card-needed",
+            include_str!("../../../factory/evals/card-needed.md"),
+        ),
     ]
     .into_iter()
     .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -62,7 +91,13 @@ fn embedded_prompts() -> BTreeMap<String, String> {
 /// Lays `src` over `dst` key by key: tables merge, anything else replaces.
 pub(crate) fn merge(dst: &mut toml::Value, src: &toml::Value) {
     match (dst.as_table_mut(), src.as_table()) {
-        (Some(d), Some(s)) => s.iter().for_each(|(k, v)| merge(d.entry(k.clone()).or_insert_with(|| toml::Value::Table(Default::default())), v)),
+        (Some(d), Some(s)) => s.iter().for_each(|(k, v)| {
+            merge(
+                d.entry(k.clone())
+                    .or_insert_with(|| toml::Value::Table(Default::default())),
+                v,
+            )
+        }),
         _ => *dst = src.clone(),
     }
 }
@@ -73,53 +108,137 @@ pub fn short_hash(text: &str) -> String {
 /// The main commit that last changed the factory folder (its short hash), or `embedded` when no checkout is at hand.
 fn commit_of(overlay: &toml::Table) -> String {
     let show = |rev: &str| -> Option<String> {
-        let out = std::process::Command::new("git").arg("-C").arg(dir(overlay)?).args(["log", "-1", "--format=%h", rev, "--", "."]).output().ok()?;
+        let out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(dir(overlay)?)
+            .args(["log", "-1", "--format=%h", rev, "--", "."])
+            .output()
+            .ok()?;
         let text = String::from_utf8_lossy(&out.stdout).trim().to_string();
         (out.status.success() && !text.is_empty()).then_some(text)
     };
-    show("main").or_else(|| show("HEAD")).unwrap_or_else(|| "embedded".into())
+    show("main")
+        .or_else(|| show("HEAD"))
+        .unwrap_or_else(|| "embedded".into())
 }
 fn stem(path: &str) -> String {
-    Path::new(path).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default()
+    Path::new(path)
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default()
 }
 fn str_of<'a>(v: &'a toml::Value, k: &str) -> &'a str {
     v.get(k).and_then(|x| x.as_str()).unwrap_or("")
 }
 /// A role's table with what it extends under it, all the way up; a missing parent or a cycle keeps `extends` and fails validation.
 fn resolved(roles: &toml::Table, name: &str, up: usize) -> toml::Value {
-    let mut own = roles.get(name).cloned().unwrap_or(toml::Value::Table(Default::default()));
-    let Some(parent) = own.get("extends").and_then(|e| e.as_str()).filter(|_| up < 8).map(String::from) else { return own };
+    let mut own = roles
+        .get(name)
+        .cloned()
+        .unwrap_or(toml::Value::Table(Default::default()));
+    let Some(parent) = own
+        .get("extends")
+        .and_then(|e| e.as_str())
+        .filter(|_| up < 8)
+        .map(String::from)
+    else {
+        return own;
+    };
     own.as_table_mut().map(|t| t.remove("extends"));
     let mut base = resolved(roles, &parent, up + 1);
     merge(&mut base, &own);
-    let _ = (!(roles.contains_key(&parent) && base.get("extends").is_none())).then(|| base.as_table_mut().map(|t| t.insert("extends".into(), parent.into()))); // stays, so validation names it
+    let _ = (!(roles.contains_key(&parent) && base.get("extends").is_none())).then(|| {
+        base.as_table_mut()
+            .map(|t| t.insert("extends".into(), parent.into()))
+    }); // stays, so validation names it
     base
 }
 /// Parses and validates one factory version: the embedded text under the file's, its prompts (by file stem) and config.toml laid over both.
-pub fn parse(text: &str, prompts: BTreeMap<String, String>, overlay: &toml::Table) -> Result<Factory, String> {
+pub fn parse(
+    text: &str,
+    prompts: BTreeMap<String, String>,
+    overlay: &toml::Table,
+) -> Result<Factory, String> {
     let mut table = toml::Value::Table(TEXT.parse().map_err(|e| format!("factory.toml: {e}"))?);
-    merge(&mut table, &toml::Value::Table(text.parse().map_err(|e| format!("factory.toml: {e}"))?));
-    SECTIONS.into_iter().filter(|sec| *sec != "routes").filter_map(|sec| overlay.get(sec).map(|o| (sec, o))).for_each(|(sec, o)| merge(&mut table[sec], o));
+    merge(
+        &mut table,
+        &toml::Value::Table(text.parse().map_err(|e| format!("factory.toml: {e}"))?),
+    );
+    SECTIONS
+        .into_iter()
+        .filter(|sec| *sec != "routes")
+        .filter_map(|sec| overlay.get(sec).map(|o| (sec, o)))
+        .for_each(|(sec, o)| merge(&mut table[sec], o));
     // Routes config.toml writes to a role replace the factory's to that role, as a set (so the page can also take a factory route away from a bot); schedule routes (a bot's routines, a timed pass) stand next to them.
-    let laid: Vec<toml::Value> = overlay.get("routes").and_then(|r| r.as_array()).into_iter().flatten().cloned().collect();
-    let replaced: Vec<&str> = laid.iter().filter(|r| str_of(r, "on") != "schedule").map(|r| str_of(r, "to")).collect();
-    table["routes"].as_array_mut().into_iter().for_each(|dst| (dst.retain(|r| str_of(r, "on") == "schedule" || !replaced.contains(&str_of(r, "to"))), dst.extend(laid.iter().cloned())).1);
+    let laid: Vec<toml::Value> = overlay
+        .get("routes")
+        .and_then(|r| r.as_array())
+        .into_iter()
+        .flatten()
+        .cloned()
+        .collect();
+    let replaced: Vec<&str> = laid
+        .iter()
+        .filter(|r| str_of(r, "on") != "schedule")
+        .map(|r| str_of(r, "to"))
+        .collect();
+    table["routes"].as_array_mut().into_iter().for_each(|dst| {
+        (
+            dst.retain(|r| str_of(r, "on") == "schedule" || !replaced.contains(&str_of(r, "to"))),
+            dst.extend(laid.iter().cloned()),
+        )
+            .1
+    });
     let roles = table["roles"].as_table().cloned().unwrap_or_default();
-    roles.keys().cloned().collect::<Vec<_>>().iter().for_each(|name| table["roles"][name] = resolved(&roles, name, 0));
+    roles
+        .keys()
+        .cloned()
+        .collect::<Vec<_>>()
+        .iter()
+        .for_each(|name| table["roles"][name] = resolved(&roles, name, 0));
     // The `default` agent under every other (never its chat args for an exec agent), and the codex command needs no config line, as before.
     let default = table["agents"]["default"].clone();
-    for a in table["agents"].as_table_mut().into_iter().flat_map(|t| t.iter_mut()).filter(|(n, _)| *n != "default").map(|(_, a)| a) {
+    for a in table["agents"]
+        .as_table_mut()
+        .into_iter()
+        .flat_map(|t| t.iter_mut())
+        .filter(|(n, _)| *n != "default")
+        .map(|(_, a)| a)
+    {
         let mut under = default.clone();
-        let _ = (a.get("protocol").and_then(|p| p.as_str()) == Some("exec")).then(|| under.as_table_mut().map(|t| t.remove("chat_args")));
+        let _ = (a.get("protocol").and_then(|p| p.as_str()) == Some("exec"))
+            .then(|| under.as_table_mut().map(|t| t.remove("chat_args")));
         merge(&mut under, a);
         *a = under;
     }
-    let _ = table["agents"].as_table_mut().and_then(|a| a.get_mut("codex")).and_then(|c| c.as_table_mut()).map(|c| c.entry("command").or_insert_with(|| "codex".into()));
+    let _ = table["agents"]
+        .as_table_mut()
+        .and_then(|a| a.get_mut("codex"))
+        .and_then(|c| c.as_table_mut())
+        .map(|c| c.entry("command").or_insert_with(|| "codex".into()));
     let raw = table.as_table().cloned().unwrap_or_default();
-    let limits: Limits = raw.get("limits").cloned().map(|v| v.try_into()).transpose().map_err(|e| format!("factory: {e}"))?.unwrap_or_default();
-    let over: toml::Table = SECTIONS.into_iter().filter_map(|s| overlay.get(s).map(|v| (s.to_string(), v.clone()))).collect();
-    let version = format!("{}+{}", commit_of(overlay), short_hash(&serde_json::to_string(&over).unwrap_or_default()));
-    let f = Factory { raw, limits, prompts, version };
+    let limits: Limits = raw
+        .get("limits")
+        .cloned()
+        .map(|v| v.try_into())
+        .transpose()
+        .map_err(|e| format!("factory: {e}"))?
+        .unwrap_or_default();
+    let over: toml::Table = SECTIONS
+        .into_iter()
+        .filter_map(|s| overlay.get(s).map(|v| (s.to_string(), v.clone())))
+        .collect();
+    let version = format!(
+        "{}+{}",
+        commit_of(overlay),
+        short_hash(&serde_json::to_string(&over).unwrap_or_default())
+    );
+    let f = Factory {
+        raw,
+        limits,
+        prompts,
+        version,
+    };
     f.validate()?;
     Ok(f)
 }
@@ -127,14 +246,54 @@ impl Factory {
     fn validate(&self) -> Result<(), String> {
         let t = &self.raw;
         let sub = |sec: &str| t.get(sec).and_then(|v| v.as_table());
-        let unknown_in = |sec: &str, allowed: &[&str]| sub(sec).and_then(|m| m.iter().find_map(|(n, s)| s.as_table().and_then(|s| s.keys().find(|k| !allowed.contains(&k.as_str())).map(|k| format!("unknown key {sec}.{n}.{k}")))));
-        let unknown_flat = |sec: &str, allowed: &[&str]| sub(sec).and_then(|m| m.keys().find(|k| !allowed.contains(&k.as_str())).map(|k| format!("unknown key {sec}.{k}")));
-        let unknown_keys = |rows: &[toml::Value], allowed: &[&str], sec: &str| rows.iter().find_map(|r| r.as_table().and_then(|r| r.keys().find(|k| !allowed.contains(&k.as_str())).map(|k| format!("unknown key {sec}.{k}"))));
-        let (agents, roles) = (sub("agents").cloned().unwrap_or_default(), sub("roles").cloned().unwrap_or_default());
-        let routes = t.get("routes").and_then(|r| r.as_array()).cloned().unwrap_or_default();
-        let evals = t.get("evals").and_then(|e| e.as_array()).cloned().unwrap_or_default();
+        let unknown_in = |sec: &str, allowed: &[&str]| {
+            sub(sec).and_then(|m| {
+                m.iter().find_map(|(n, s)| {
+                    s.as_table().and_then(|s| {
+                        s.keys()
+                            .find(|k| !allowed.contains(&k.as_str()))
+                            .map(|k| format!("unknown key {sec}.{n}.{k}"))
+                    })
+                })
+            })
+        };
+        let unknown_flat = |sec: &str, allowed: &[&str]| {
+            sub(sec).and_then(|m| {
+                m.keys()
+                    .find(|k| !allowed.contains(&k.as_str()))
+                    .map(|k| format!("unknown key {sec}.{k}"))
+            })
+        };
+        let unknown_keys = |rows: &[toml::Value], allowed: &[&str], sec: &str| {
+            rows.iter().find_map(|r| {
+                r.as_table().and_then(|r| {
+                    r.keys()
+                        .find(|k| !allowed.contains(&k.as_str()))
+                        .map(|k| format!("unknown key {sec}.{k}"))
+                })
+            })
+        };
+        let (agents, roles) = (
+            sub("agents").cloned().unwrap_or_default(),
+            sub("roles").cloned().unwrap_or_default(),
+        );
+        let routes = t
+            .get("routes")
+            .and_then(|r| r.as_array())
+            .cloned()
+            .unwrap_or_default();
+        let evals = t
+            .get("evals")
+            .and_then(|e| e.as_array())
+            .cloned()
+            .unwrap_or_default();
         let is_role = |n: &str| n.is_empty() || roles.contains_key(n);
-        let shapes: [(&str, &[&str]); 4] = [("session", &["chat", "turn", "lane"]), ("scope", &["project", "own"]), ("access", &["", "read", "write"]), ("runs_on", &["", "local"])];
+        let shapes: [(&str, &[&str]); 4] = [
+            ("session", &["chat", "turn", "lane"]),
+            ("scope", &["project", "own"]),
+            ("access", &["", "read", "write"]),
+            ("runs_on", &["", "local"]),
+        ];
         let bad = [
             t.keys().find(|k| !SECTIONS.contains(&k.as_str())).map(|k| format!("unknown section '{k}'")),
             unknown_in("agents", &["protocol", "model_flag", "effort_flag", "chat_args", "lane_args", "resume_args", "args", "command", "settings", "profile", "model_prefix"]),
@@ -176,14 +335,27 @@ impl Factory {
         bad.map_or(Ok(()), |e| Err(format!("factory: {e}")))
     }
     pub fn agent<T: DeserializeOwned>(&self, alias: &str, key: &str) -> Option<T> {
-        let alias = if self.raw["agents"].get(alias).is_some() { alias } else { "default" };
+        let alias = if self.raw["agents"].get(alias).is_some() {
+            alias
+        } else {
+            "default"
+        };
         get(&self.raw, &["agents", alias, key])
     }
     pub fn command(&self, alias: &str) -> Option<String> {
         get(&self.raw, &["agents", alias, "command"])
     }
     pub fn commands(&self) -> Vec<(String, String)> {
-        self.raw["agents"].as_table().into_iter().flatten().filter_map(|(n, a)| a.get("command").and_then(|c| c.as_str()).map(|c| (n.clone(), c.to_string()))).collect()
+        self.raw["agents"]
+            .as_table()
+            .into_iter()
+            .flatten()
+            .filter_map(|(n, a)| {
+                a.get("command")
+                    .and_then(|c| c.as_str())
+                    .map(|c| (n.clone(), c.to_string()))
+            })
+            .collect()
     }
     /// One key of a role, by its factory name.
     pub fn role<T: DeserializeOwned>(&self, name: &str, key: &str) -> Option<T> {
@@ -191,63 +363,173 @@ impl Factory {
     }
     /// Every role of the factory, in name order.
     pub fn roles(&self) -> Vec<String> {
-        self.raw["roles"].as_table().into_iter().flatten().map(|(n, _)| n.clone()).collect()
+        self.raw["roles"]
+            .as_table()
+            .into_iter()
+            .flatten()
+            .map(|(n, _)| n.clone())
+            .collect()
     }
     /// The first role (in name order) with this `session` and, when given, this `scope`: how code finds who runs a lane, a project's chat or a turn without naming a role. A role with no prompt of its own (the evals' judge, whose instructions are each rubric) never runs standalone, so it is never found here.
     pub fn find_role(&self, session: &str, scope: Option<&str>) -> Option<String> {
-        self.roles().into_iter().find(|n| self.role::<String>(n, "session").as_deref() == Some(session) && scope.is_none_or(|s| self.role::<String>(n, "scope").as_deref() == Some(s)) && !self.prompts_of(n).is_empty())
+        self.roles().into_iter().find(|n| {
+            self.role::<String>(n, "session").as_deref() == Some(session)
+                && scope.is_none_or(|s| self.role::<String>(n, "scope").as_deref() == Some(s))
+                && !self.prompts_of(n).is_empty()
+        })
     }
     /// The evals that judge `on`: (id, judge role, rubric file stem, sample share) of every `[[evals]]` on it.
     pub fn evals_on(&self, on: &str) -> Vec<(String, String, String, f64)> {
-        let rows = self.raw.get("evals").and_then(|e| e.as_array()).into_iter().flatten().filter(|e| str_of(e, "on") == on);
-        rows.map(|e| (str_of(e, "id").into(), str_of(e, "judge").into(), stem(str_of(e, "rubric")), e.get("sample").and_then(|v| v.as_float()).unwrap_or(1.0))).collect()
+        let rows = self
+            .raw
+            .get("evals")
+            .and_then(|e| e.as_array())
+            .into_iter()
+            .flatten()
+            .filter(|e| str_of(e, "on") == on);
+        rows.map(|e| {
+            (
+                str_of(e, "id").into(),
+                str_of(e, "judge").into(),
+                stem(str_of(e, "rubric")),
+                e.get("sample").and_then(|v| v.as_float()).unwrap_or(1.0),
+            )
+        })
+        .collect()
     }
     pub fn metric(&self, id: &str) -> (String, Option<f64>, bool) {
-        (get(&self.raw, &["metrics", id, "label"]).unwrap_or_default(), get(&self.raw, &["metrics", id, "target"]), get(&self.raw, &["metrics", id, "at_least"]).unwrap_or(false))
+        (
+            get(&self.raw, &["metrics", id, "label"]).unwrap_or_default(),
+            get(&self.raw, &["metrics", id, "target"]),
+            get(&self.raw, &["metrics", id, "at_least"]).unwrap_or(false),
+        )
     }
     pub fn words(&self, sec: &str, key: &str) -> Vec<String> {
         get(&self.raw, &[sec, key]).unwrap_or_default()
     }
     /// Every `schedule` route that names a time of day: (to, at, days). A bot's routines are fired from config.toml by bots.rs; one of the factory's own (the CEO's daily pass) by whoever runs its role.
     pub fn schedules(&self) -> Vec<(String, String, Vec<u64>)> {
-        let rows = self.raw.get("routes").and_then(|r| r.as_array()).into_iter().flatten().filter(|r| str_of(r, "on") == "schedule" && !str_of(r, "at").is_empty() && r.get("enabled").and_then(|v| v.as_bool()) != Some(false));
-        rows.map(|r| (str_of(r, "to").into(), str_of(r, "at").into(), r.get("days").and_then(|d| d.as_array()).into_iter().flatten().filter_map(|d| d.as_integer().and_then(|n| u64::try_from(n).ok())).collect())).collect()
+        let rows = self
+            .raw
+            .get("routes")
+            .and_then(|r| r.as_array())
+            .into_iter()
+            .flatten()
+            .filter(|r| {
+                str_of(r, "on") == "schedule"
+                    && !str_of(r, "at").is_empty()
+                    && r.get("enabled").and_then(|v| v.as_bool()) != Some(false)
+            });
+        rows.map(|r| {
+            (
+                str_of(r, "to").into(),
+                str_of(r, "at").into(),
+                r.get("days")
+                    .and_then(|d| d.as_array())
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|d| d.as_integer().and_then(|n| u64::try_from(n).ok()))
+                    .collect(),
+            )
+        })
+        .collect()
     }
     /// Who hears `on`: (to, mode, chat, phone, after_minutes) of every `[[routes]]` on it.
     pub fn routes_on(&self, on: &str) -> Vec<Route> {
-        let rows = self.raw.get("routes").and_then(|r| r.as_array()).into_iter().flatten().filter(|r| str_of(r, "on") == on);
+        let rows = self
+            .raw
+            .get("routes")
+            .and_then(|r| r.as_array())
+            .into_iter()
+            .flatten()
+            .filter(|r| str_of(r, "on") == on);
         let b = |r: &toml::Value, k: &str| r.get(k).and_then(|v| v.as_bool()).unwrap_or(false);
-        rows.map(|r| (str_of(r, "to").into(), str_of(r, "mode").into(), b(r, "chat"), b(r, "phone"), r.get("after_minutes").and_then(|v| v.as_integer()).and_then(|n| u64::try_from(n).ok()))).collect()
+        rows.map(|r| {
+            (
+                str_of(r, "to").into(),
+                str_of(r, "mode").into(),
+                b(r, "chat"),
+                b(r, "phone"),
+                r.get("after_minutes")
+                    .and_then(|v| v.as_integer())
+                    .and_then(|n| u64::try_from(n).ok()),
+            )
+        })
+        .collect()
     }
     pub fn prompt(&self, name: &str) -> String {
-        self.prompts.get(name).cloned().unwrap_or_else(|| embedded_prompts().get(name).cloned().unwrap_or_default())
+        self.prompts
+            .get(name)
+            .cloned()
+            .unwrap_or_else(|| embedded_prompts().get(name).cloned().unwrap_or_default())
     }
     /// A short hash of the setting `role` runs with: its resolved table (agent, model, effort, ...), its agent's table, its prompt texts and `extra` (the page's model override for it, when the caller has one). An unknown role has none (an empty stamp).
     pub fn role_hash(&self, role: &str, extra: &str) -> String {
-        let Some(r) = self.raw.get("roles").and_then(|s| s.get(role)) else { return String::new() };
+        let Some(r) = self.raw.get("roles").and_then(|s| s.get(role)) else {
+            return String::new();
+        };
         let json = |v: Option<&toml::Value>| serde_json::to_string(&v).unwrap_or_default();
-        short_hash(&format!("{}|{}|{}|{extra}", json(Some(r)), json(self.raw.get("agents").and_then(|s| s.get(str_of(r, "agent")))), self.prompts_of(role)))
+        short_hash(&format!(
+            "{}|{}|{}|{extra}",
+            json(Some(r)),
+            json(
+                self.raw
+                    .get("agents")
+                    .and_then(|s| s.get(str_of(r, "agent")))
+            ),
+            self.prompts_of(role)
+        ))
     }
     /// A role's prompt files, one after another, with `{name}` its factory name (a bot's, from config.toml).
     pub fn prompts_of(&self, role: &str) -> String {
-        self.role::<Vec<String>>(role, "prompt").unwrap_or_default().iter().map(|p| self.prompt(&stem(p))).collect::<Vec<_>>().join("\n").replace("{name}", &self.role::<String>(role, "name").unwrap_or_else(|| role.to_string()))
+        self.role::<Vec<String>>(role, "prompt")
+            .unwrap_or_default()
+            .iter()
+            .map(|p| self.prompt(&stem(p)))
+            .collect::<Vec<_>>()
+            .join("\n")
+            .replace(
+                "{name}",
+                &self
+                    .role::<String>(role, "name")
+                    .unwrap_or_else(|| role.to_string()),
+            )
     }
 }
 fn dir(overlay: &toml::Table) -> Option<PathBuf> {
     let here = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../factory"));
-    overlay.get("factory").and_then(|v| v.as_str()).map(crate::config::expand).or_else(|| here.join("factory.toml").is_file().then_some(here))
+    overlay
+        .get("factory")
+        .and_then(|v| v.as_str())
+        .map(crate::config::expand)
+        .or_else(|| here.join("factory.toml").is_file().then_some(here))
 }
 pub fn stamp(overlay: &toml::Table) -> Option<SystemTime> {
     let dir = dir(overlay)?;
     let m = |p: &Path| std::fs::metadata(p).and_then(|x| x.modified()).ok();
-    let files = [dir.join("factory.toml"), dir.join("../.git/logs/HEAD"), dir.join("../.git/refs/heads/main")]; // main itself: when it moves, the factory reloads with no restart
-    ["prompts", "evals"].into_iter().filter_map(|d| std::fs::read_dir(dir.join(d)).ok()).flatten().flatten().filter_map(|e| m(&e.path())).chain(files.iter().filter_map(|p| m(p))).max()
+    let files = [
+        dir.join("factory.toml"),
+        dir.join("../.git/logs/HEAD"),
+        dir.join("../.git/refs/heads/main"),
+    ]; // main itself: when it moves, the factory reloads with no restart
+    ["prompts", "evals"]
+        .into_iter()
+        .filter_map(|d| std::fs::read_dir(dir.join(d)).ok())
+        .flatten()
+        .flatten()
+        .filter_map(|e| m(&e.path()))
+        .chain(files.iter().filter_map(|p| m(p)))
+        .max()
 }
 static CURRENT: RwLock<Option<Arc<Factory>>> = RwLock::new(None);
 static ERROR: Mutex<Option<String>> = Mutex::new(None);
 pub fn current() -> Arc<Factory> {
     static EMBEDDED: OnceLock<Arc<Factory>> = OnceLock::new();
-    CURRENT.read().unwrap().clone().unwrap_or_else(|| EMBEDDED.get_or_init(|| Arc::new(Factory::default())).clone())
+    CURRENT.read().unwrap().clone().unwrap_or_else(|| {
+        EMBEDDED
+            .get_or_init(|| Arc::new(Factory::default()))
+            .clone()
+    })
 }
 /// Why the newest factory version did not load; the last good one keeps running.
 pub fn error() -> Option<String> {
@@ -257,11 +539,29 @@ pub fn error() -> Option<String> {
 pub fn load(overlay: &toml::Table) -> Arc<Factory> {
     // The factory's texts by file stem: the prompts and the eval rubrics alike.
     let prompts = |dir: &Path| -> BTreeMap<String, String> {
-        let files = ["prompts", "evals"].into_iter().filter_map(|d| std::fs::read_dir(dir.join(d)).ok()).flatten().flatten().filter(|e| e.path().extension().is_some_and(|x| x == "md"));
-        files.filter_map(|e| Some((stem(&e.path().to_string_lossy()), std::fs::read_to_string(e.path()).ok()?))).collect()
+        let files = ["prompts", "evals"]
+            .into_iter()
+            .filter_map(|d| std::fs::read_dir(dir.join(d)).ok())
+            .flatten()
+            .flatten()
+            .filter(|e| e.path().extension().is_some_and(|x| x == "md"));
+        files
+            .filter_map(|e| {
+                Some((
+                    stem(&e.path().to_string_lossy()),
+                    std::fs::read_to_string(e.path()).ok()?,
+                ))
+            })
+            .collect()
     };
-    let attempt =
-        dir(overlay).map_or_else(|| parse(TEXT, embedded_prompts(), overlay), |d| std::fs::read_to_string(d.join("factory.toml")).map_err(|e| format!("factory: {}: {e}", d.display())).and_then(|text| parse(&text, prompts(&d), overlay)));
+    let attempt = dir(overlay).map_or_else(
+        || parse(TEXT, embedded_prompts(), overlay),
+        |d| {
+            std::fs::read_to_string(d.join("factory.toml"))
+                .map_err(|e| format!("factory: {}: {e}", d.display()))
+                .and_then(|text| parse(&text, prompts(&d), overlay))
+        },
+    );
     let f = match attempt {
         Ok(f) => Arc::new(f),
         Err(e) => {

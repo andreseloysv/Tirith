@@ -28,7 +28,15 @@ use std::{io::Read, time::Duration};
 const USAGE: &str = include_str!("../assets/usage.txt");
 
 type ModuleCli = fn(&[&str], client::Flag) -> Option<Result<(), String>>;
-const MODULE_CLI: [ModuleCli; 7] = [rooms::cli, sandbox::cli, models::cli, guard::cli, projects::cli, bots::cli, chat::cli];
+const MODULE_CLI: [ModuleCli; 7] = [
+    rooms::cli,
+    sandbox::cli,
+    models::cli,
+    guard::cli,
+    projects::cli,
+    bots::cli,
+    chat::cli,
+];
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -36,9 +44,16 @@ fn main() {
         // A CLI command piped into `head` ends quietly instead of panicking on the closed pipe.
         unsafe { libc::signal(libc::SIGPIPE, libc::SIG_DFL) };
     }
-    let flag = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).cloned();
+    let flag = |name: &str| {
+        args.iter()
+            .position(|a| a == name)
+            .and_then(|i| args.get(i + 1))
+            .cloned()
+    };
     // The project a command is about: `--project`, else the project of the session Tirith started it in.
-    let project = flag("--project").or_else(|| std::env::var("TIRITH_PROJECT").ok()).unwrap_or_default();
+    let project = flag("--project")
+        .or_else(|| std::env::var("TIRITH_PROJECT").ok())
+        .unwrap_or_default();
     let (mut pos, mut rest): (Vec<&str>, _) = (vec![], args.iter());
     while let Some(a) = rest.next() {
         if a.starts_with("--") {
@@ -89,15 +104,49 @@ fn main() {
 
 fn status(project: &str) -> Result<(), String> {
     let s = client::call_json("GET", "/api/state", None)?;
-    let lanes: Vec<Value> = s["lanes"].as_array().into_iter().flatten().filter(|l| project.is_empty() || l["project"] == project).cloned().collect();
-    let working: Vec<&Value> = lanes.iter().filter(|l| matches!(l["status"].as_str(), Some("queued" | "running" | "waiting" | "merge-queued" | "merging"))).collect();
-    working
+    let lanes: Vec<Value> = s["lanes"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|l| project.is_empty() || l["project"] == project)
+        .cloned()
+        .collect();
+    let working: Vec<&Value> = lanes
         .iter()
-        .for_each(|l| println!("{:<14} {:<40} {}:{} {}", l["status"].as_str().unwrap_or(""), l["id"].as_str().unwrap_or(""), l["project"].as_str().unwrap_or(""), l["step"].as_str().unwrap_or(""), l["item"].as_str().unwrap_or("")));
+        .filter(|l| {
+            matches!(
+                l["status"].as_str(),
+                Some("queued" | "running" | "waiting" | "merge-queued" | "merging")
+            )
+        })
+        .collect();
+    working.iter().for_each(|l| {
+        println!(
+            "{:<14} {:<40} {}:{} {}",
+            l["status"].as_str().unwrap_or(""),
+            l["id"].as_str().unwrap_or(""),
+            l["project"].as_str().unwrap_or(""),
+            l["step"].as_str().unwrap_or(""),
+            l["item"].as_str().unwrap_or("")
+        )
+    });
     let _ = working.is_empty().then(|| println!("no lane is working"));
-    let mut ended: Vec<&Value> = lanes.iter().filter(|l| l["ended_at"].is_string() && !matches!(l["status"].as_str(), Some("merge-queued" | "merging"))).collect();
+    let mut ended: Vec<&Value> = lanes
+        .iter()
+        .filter(|l| {
+            l["ended_at"].is_string()
+                && !matches!(l["status"].as_str(), Some("merge-queued" | "merging"))
+        })
+        .collect();
     ended.sort_by_key(|l| l["ended_at"].as_str().unwrap_or("").to_string());
-    ended.iter().rev().take(8).for_each(|l| println!("{:<14} {:<40} {}", l["status"].as_str().unwrap_or(""), l["id"].as_str().unwrap_or(""), l["note"].as_str().unwrap_or("")));
+    ended.iter().rev().take(8).for_each(|l| {
+        println!(
+            "{:<14} {:<40} {}",
+            l["status"].as_str().unwrap_or(""),
+            l["id"].as_str().unwrap_or(""),
+            l["note"].as_str().unwrap_or("")
+        )
+    });
     Ok(())
 }
 
@@ -106,8 +155,27 @@ fn plan_show(project: &str) -> Result<(), String> {
     p["steps"].as_array().into_iter().flatten().for_each(|st| {
         let items = st["items"].as_array().cloned().unwrap_or_default();
         let open: Vec<&Value> = items.iter().filter(|i| i["done"] != true).collect();
-        println!("## {}. {}  ({} open, {} done)", st["num"].as_str().unwrap_or(""), st["title"].as_str().unwrap_or(""), open.len(), items.len() - open.len());
-        open.iter().for_each(|it| println!("  - [ ] {}{}", it["text"].as_str().unwrap_or(""), it["lane"].as_object().map(|l| format!("  [{} {}]", l["status"].as_str().unwrap_or(""), l["id"].as_str().unwrap_or(""))).unwrap_or_default()));
+        println!(
+            "## {}. {}  ({} open, {} done)",
+            st["num"].as_str().unwrap_or(""),
+            st["title"].as_str().unwrap_or(""),
+            open.len(),
+            items.len() - open.len()
+        );
+        open.iter().for_each(|it| {
+            println!(
+                "  - [ ] {}{}",
+                it["text"].as_str().unwrap_or(""),
+                it["lane"]
+                    .as_object()
+                    .map(|l| format!(
+                        "  [{} {}]",
+                        l["status"].as_str().unwrap_or(""),
+                        l["id"].as_str().unwrap_or("")
+                    ))
+                    .unwrap_or_default()
+            )
+        });
     });
     Ok(())
 }
@@ -116,36 +184,80 @@ fn plan_show(project: &str) -> Result<(), String> {
 fn hook(event: String) -> Result<(), String> {
     let mut input = String::new();
     let _ = std::io::stdin().read_to_string(&mut input);
-    let headers = [("X-Tirith-Lane", std::env::var("TIRITH_LANE").unwrap_or_default()), ("X-Tirith-Role", std::env::var("TIRITH_ROLE").unwrap_or_default())];
-    let Ok(body) = call_with("POST", &format!("/hook/{event}"), input, &headers, Duration::from_secs(5)) else { return Ok(()) };
+    let headers = [
+        (
+            "X-Tirith-Lane",
+            std::env::var("TIRITH_LANE").unwrap_or_default(),
+        ),
+        (
+            "X-Tirith-Role",
+            std::env::var("TIRITH_ROLE").unwrap_or_default(),
+        ),
+    ];
+    let Ok(body) = call_with(
+        "POST",
+        &format!("/hook/{event}"),
+        input,
+        &headers,
+        Duration::from_secs(5),
+    ) else {
+        return Ok(());
+    };
     let v: Value = serde_json::from_str(&body).unwrap_or(json!({}));
-    let deny = v["hookSpecificOutput"]["permissionDecisionReason"].as_str().filter(|_| v["hookSpecificOutput"]["permissionDecision"] == "deny");
+    let deny = v["hookSpecificOutput"]["permissionDecisionReason"]
+        .as_str()
+        .filter(|_| v["hookSpecificOutput"]["permissionDecision"] == "deny");
     let block = v["reason"].as_str().filter(|_| v["decision"] == "block");
     if let Some(why) = deny.or(block) {
         eprintln!("{why}");
         std::process::exit(2);
     }
-    let _ = v["hookSpecificOutput"].is_object().then(|| println!("{body}")); // an allow decision or context for the agent
+    let _ = v["hookSpecificOutput"]
+        .is_object()
+        .then(|| println!("{body}")); // an allow decision or context for the agent
     Ok(())
 }
 
 /// Rewrites the hooks of the configured agents whose settings file uses `tirith hook …` into HTTP hooks on the daemon (a backup of each file is kept next to it). Agents without HTTP hooks keep the command bridge.
 fn install_hooks() -> Result<(), String> {
     let cfg = config::Config::load_at(&config::tirith_home());
-    cfg.factory.command("anthropic").ok_or("no [agents.anthropic] in config.toml")?;
-    let path = config::expand(cfg.factory.agent::<String>("anthropic", "settings").as_deref().ok_or("[agents.anthropic] has no settings path")?);
+    cfg.factory
+        .command("anthropic")
+        .ok_or("no [agents.anthropic] in config.toml")?;
+    let path = config::expand(
+        cfg.factory
+            .agent::<String>("anthropic", "settings")
+            .as_deref()
+            .ok_or("[agents.anthropic] has no settings path")?,
+    );
     let text = std::fs::read_to_string(&path).unwrap_or_else(|_| "{}".into());
-    std::fs::write(path.with_extension("json.before-tirith-http"), &text).map_err(|e| e.to_string())?;
-    let mut settings: Value = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
+    std::fs::write(path.with_extension("json.before-tirith-http"), &text)
+        .map_err(|e| e.to_string())?;
+    let mut settings: Value =
+        serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
     for event in ["PreToolUse", "PostToolUse", "UserPromptSubmit", "Stop"] {
         let ours = json!({"type": "http", "url": format!("http://127.0.0.1:{}/hook/{event}", cfg.port),
             "headers": {"X-Tirith-Lane": "$TIRITH_LANE", "X-Tirith-Role": "$TIRITH_ROLE"},
             "allowedEnvVars": ["TIRITH_LANE", "TIRITH_ROLE"], "timeout": 5});
-        let groups = settings["hooks"][event].as_array().cloned().unwrap_or_default();
+        let groups = settings["hooks"][event]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
         let mut kept: Vec<Value> = groups
             .into_iter()
             .filter_map(|mut g| {
-                let hs: Vec<Value> = g["hooks"].as_array()?.iter().filter(|h| !h["command"].as_str().unwrap_or("").starts_with("tirith hook") && !h["url"].as_str().unwrap_or("").contains("/hook/")).cloned().collect();
+                let hs: Vec<Value> = g["hooks"]
+                    .as_array()?
+                    .iter()
+                    .filter(|h| {
+                        !h["command"]
+                            .as_str()
+                            .unwrap_or("")
+                            .starts_with("tirith hook")
+                            && !h["url"].as_str().unwrap_or("").contains("/hook/")
+                    })
+                    .cloned()
+                    .collect();
                 g["hooks"] = json!(hs);
                 (!hs.is_empty()).then_some(g)
             })
@@ -155,21 +267,56 @@ fn install_hooks() -> Result<(), String> {
     }
     let out = serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?;
     std::fs::write(&path, out + "\n").map_err(|e| e.to_string())?;
-    println!("{}: hooks now call http://127.0.0.1:{}/hook/<event>", path.display(), cfg.port);
+    println!(
+        "{}: hooks now call http://127.0.0.1:{}/hook/<event>",
+        path.display(),
+        cfg.port
+    );
     Ok(())
 }
 
 fn serve() -> Result<(), String> {
     // Started by the desktop app, the daemon has launchd's short PATH and its checks find no node, npm or brew tools. The PATH of the owner's login shell goes first, so a check runs as it does in the owner's terminal.
-    let out = std::process::Command::new(std::env::var("SHELL").unwrap_or("/bin/zsh".into())).args(["-lc", "printf '\\n%s' \"$PATH\""]).output();
-    let login = out.map(|o| String::from_utf8_lossy(&o.stdout).lines().last().unwrap_or("").trim().to_string()).unwrap_or_default();
-    let _ = (!login.is_empty()).then(|| std::env::set_var("PATH", format!("{login}:{}", std::env::var("PATH").unwrap_or_default())));
-    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().map_err(|e| e.to_string())?;
+    let out = std::process::Command::new(std::env::var("SHELL").unwrap_or("/bin/zsh".into()))
+        .args(["-lc", "printf '\\n%s' \"$PATH\""])
+        .output();
+    let login = out
+        .map(|o| {
+            String::from_utf8_lossy(&o.stdout)
+                .lines()
+                .last()
+                .unwrap_or("")
+                .trim()
+                .to_string()
+        })
+        .unwrap_or_default();
+    let _ = (!login.is_empty()).then(|| {
+        std::env::set_var(
+            "PATH",
+            format!("{login}:{}", std::env::var("PATH").unwrap_or_default()),
+        )
+    });
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| e.to_string())?;
     rt.block_on(async {
         let app = app::App::open_at(config::tirith_home());
         let port = app.cfg().port;
-        let listener = tokio::net::TcpListener::bind(("127.0.0.1", port)).await.map_err(|e| format!("port {port} is taken (is tirith already running?): {e}"))?;
-        [sandbox::start, rooms::start, guard::start, metrics::start, bots::start, chat::start, models::start].into_iter().for_each(|start| start(app.clone()));
+        let listener = tokio::net::TcpListener::bind(("127.0.0.1", port))
+            .await
+            .map_err(|e| format!("port {port} is taken (is tirith already running?): {e}"))?;
+        [
+            sandbox::start,
+            rooms::start,
+            guard::start,
+            metrics::start,
+            bots::start,
+            chat::start,
+            models::start,
+        ]
+        .into_iter()
+        .for_each(|start| start(app.clone()));
         tokio::spawn(lanes::scheduler(app.clone()));
         tokio::spawn(merge::worker(app.clone()));
         let flusher = app.clone();
@@ -177,10 +324,18 @@ fn serve() -> Result<(), String> {
             loop {
                 plan::flush(&flusher, None).await;
                 flusher.trim();
-                tokio::time::sleep(Duration::from_secs(flusher.cfg().factory.limits.plan_commit_seconds)).await;
+                tokio::time::sleep(Duration::from_secs(
+                    flusher.cfg().factory.limits.plan_commit_seconds,
+                ))
+                .await;
             }
         });
-        println!("tirith: http://127.0.0.1:{port}/ (home {})", app.home.display());
-        axum::serve(listener, server::router(app, port)).await.map_err(|e| e.to_string())
+        println!(
+            "tirith: http://127.0.0.1:{port}/ (home {})",
+            app.home.display()
+        );
+        axum::serve(listener, server::router(app, port))
+            .await
+            .map_err(|e| e.to_string())
     })
 }

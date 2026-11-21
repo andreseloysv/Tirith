@@ -8,19 +8,46 @@ use serde_json::{json, Value};
 use std::path::{Component, Path, PathBuf};
 use std::{io::Write, os::unix::fs::OpenOptionsExt, time::Duration};
 
-pub(crate) const COLORS: [&str; 8] = ["#2f7d5b", "#3b6fd8", "#8a5cd0", "#d0663b", "#c2417c", "#b8860b", "#0e8aa0", "#64748b"];
+pub(crate) const COLORS: [&str; 8] = [
+    "#2f7d5b", "#3b6fd8", "#8a5cd0", "#d0663b", "#c2417c", "#b8860b", "#0e8aa0", "#64748b",
+];
 /// The colour a project is shown with: its own `[[projects]]` colour, else a stable one from `COLORS` (its id hashed, so a project added by hand without a colour gets the same one every time).
 pub(crate) fn color_for(p: &Project) -> String {
-    p.color.as_deref().map(str::trim).filter(|c| !c.is_empty()).map_or_else(|| COLORS[p.id.bytes().fold(0usize, |a, b| a.wrapping_mul(31).wrapping_add(b as usize)) % COLORS.len()].into(), str::to_string)
+    p.color
+        .as_deref()
+        .map(str::trim)
+        .filter(|c| !c.is_empty())
+        .map_or_else(
+            || {
+                COLORS[p
+                    .id
+                    .bytes()
+                    .fold(0usize, |a, b| a.wrapping_mul(31).wrapping_add(b as usize))
+                    % COLORS.len()]
+                .into()
+            },
+            str::to_string,
+        )
 }
 /// One config.toml write at a time, so two adds never lose one another; one folder picker on screen at a time.
 pub(crate) static WRITING: std::sync::Mutex<()> = std::sync::Mutex::new(());
 /// Rewrites config.toml with `edit` under that lock and reloads it; a file that is not there yet reads as empty, and a reading or writing error names the file.
-pub(crate) fn rewrite(app: &App, edit: impl FnOnce(&str) -> Result<String, String>) -> Result<(), String> {
+pub(crate) fn rewrite(
+    app: &App,
+    edit: impl FnOnce(&str) -> Result<String, String>,
+) -> Result<(), String> {
     let _writing = WRITING.lock().unwrap();
     let path = app.home.join("config.toml");
     let fail = |e: std::io::Error| format!("{}: {e}", path.display());
-    let text = std::fs::read_to_string(&path).or_else(|e| if e.kind() == std::io::ErrorKind::NotFound { Ok(String::new()) } else { Err(e) }).map_err(fail)?;
+    let text = std::fs::read_to_string(&path)
+        .or_else(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                Ok(String::new())
+            } else {
+                Err(e)
+            }
+        })
+        .map_err(fail)?;
     std::fs::write(&path, edit(&text)?).map_err(fail)?;
     app.reload_config(true);
     Ok(())
@@ -35,52 +62,155 @@ pub fn list(app: &Shared) -> Vec<Value> {
 
 /// The real folder behind `raw` (a full path or `~/…`), or why it cannot be a project; a project's own folder passes.
 fn folder(raw: &str, projects: &[Project], tirith: &Path) -> Result<PathBuf, String> {
-    let path = if raw.trim() == "~" { home_dir() } else { expand(raw.trim()) };
-    let missing = if path.is_absolute() { format!("there is no folder {raw:?}") } else { format!("{raw:?} is not the full path of a folder (/Users/… or ~/…)") };
-    let dir = path.canonicalize().ok().filter(|d| path.is_absolute() && d.is_dir()).ok_or(missing)?;
-    let temp = ["/tmp", "/private/tmp", "/var/tmp", "/private/var/tmp", "/var/folders", "/private/var/folders"].map(PathBuf::from).into_iter().chain([std::env::temp_dir()]);
-    let named = |p: &Project, what: &str| format!("{what} {}", if p.name.is_empty() { &p.id } else { &p.name });
+    let path = if raw.trim() == "~" {
+        home_dir()
+    } else {
+        expand(raw.trim())
+    };
+    let missing = if path.is_absolute() {
+        format!("there is no folder {raw:?}")
+    } else {
+        format!("{raw:?} is not the full path of a folder (/Users/… or ~/…)")
+    };
+    let dir = path
+        .canonicalize()
+        .ok()
+        .filter(|d| path.is_absolute() && d.is_dir())
+        .ok_or(missing)?;
+    let temp = [
+        "/tmp",
+        "/private/tmp",
+        "/var/tmp",
+        "/private/var/tmp",
+        "/var/folders",
+        "/private/var/folders",
+    ]
+    .map(PathBuf::from)
+    .into_iter()
+    .chain([std::env::temp_dir()]);
+    let named = |p: &Project, what: &str| {
+        format!("{what} {}", if p.name.is_empty() { &p.id } else { &p.name })
+    };
     let why = temp
         .map(|t| t.canonicalize().unwrap_or(t))
         .any(|t| dir.starts_with(t))
         .then(|| "is a temporary folder".to_string())
-        .or_else(|| home_dir().canonicalize().unwrap_or_else(|_| home_dir()).starts_with(&dir).then(|| "holds your home folder".into()))
-        .or_else(|| (dir.components().any(|c| c.as_os_str() == ".git") || dir.join(".git").is_file()).then(|| "is a git worktree or inside a .git folder".into()))
-        .or_else(|| dir.starts_with(tirith.canonicalize().unwrap_or_else(|_| tirith.into())).then(|| "is Tirith's own folder (the agents' copies of the projects live there)".into()))
         .or_else(|| {
-            projects.iter().filter(|p| !p.repo.is_empty() && p.repo() != dir).find_map(|p| dir.starts_with(p.repo()).then(|| named(p, "is inside the project")).or_else(|| p.repo().starts_with(&dir).then(|| named(p, "holds the project"))))
+            home_dir()
+                .canonicalize()
+                .unwrap_or_else(|_| home_dir())
+                .starts_with(&dir)
+                .then(|| "holds your home folder".into())
+        })
+        .or_else(|| {
+            (dir.components().any(|c| c.as_os_str() == ".git") || dir.join(".git").is_file())
+                .then(|| "is a git worktree or inside a .git folder".into())
+        })
+        .or_else(|| {
+            dir.starts_with(tirith.canonicalize().unwrap_or_else(|_| tirith.into()))
+                .then(|| {
+                    "is Tirith's own folder (the agents' copies of the projects live there)".into()
+                })
+        })
+        .or_else(|| {
+            projects
+                .iter()
+                .filter(|p| !p.repo.is_empty() && p.repo() != dir)
+                .find_map(|p| {
+                    dir.starts_with(p.repo())
+                        .then(|| named(p, "is inside the project"))
+                        .or_else(|| {
+                            p.repo()
+                                .starts_with(&dir)
+                                .then(|| named(p, "holds the project"))
+                        })
+                })
         });
-    why.map_or(Ok(()), |w| Err(format!("{} {w}: pick a project's own folder", dir.display())))?;
+    why.map_or(Ok(()), |w| {
+        Err(format!(
+            "{} {w}: pick a project's own folder",
+            dir.display()
+        ))
+    })?;
     Ok(dir)
 }
 
 /// The project as it will be written: `name` (else the folder's), `color` (else the first one no project has), an id.
 fn project(dir: &Path, name: &str, color: &str, projects: &[Project]) -> Result<Project, String> {
-    let name = Some(name.trim().to_string()).filter(|n| !n.is_empty()).or_else(|| Some(dir.file_name()?.to_string_lossy().into_owned())).unwrap_or_default();
-    (!name.is_empty() && name.chars().count() <= 80 && !name.chars().any(char::is_control)).then_some(()).ok_or("the name is one line of 1 to 80 characters".to_string())?;
+    let name = Some(name.trim().to_string())
+        .filter(|n| !n.is_empty())
+        .or_else(|| Some(dir.file_name()?.to_string_lossy().into_owned()))
+        .unwrap_or_default();
+    (!name.is_empty() && name.chars().count() <= 80 && !name.chars().any(char::is_control))
+        .then_some(())
+        .ok_or("the name is one line of 1 to 80 characters".to_string())?;
     let c = color.trim().to_lowercase();
-    let free = COLORS.iter().find(|c| !projects.iter().any(|p| p.color.as_deref().is_some_and(|x| x.eq_ignore_ascii_case(c)))).unwrap_or(&COLORS[projects.len() % COLORS.len()]);
+    let free = COLORS
+        .iter()
+        .find(|c| {
+            !projects.iter().any(|p| {
+                p.color
+                    .as_deref()
+                    .is_some_and(|x| x.eq_ignore_ascii_case(c))
+            })
+        })
+        .unwrap_or(&COLORS[projects.len() % COLORS.len()]);
     let color = match c.as_str() {
         "" => free.to_string(),
-        _ if c.len() == 7 && c.starts_with('#') && c[1..].chars().all(|h| h.is_ascii_hexdigit()) => c,
+        _ if c.len() == 7
+            && c.starts_with('#')
+            && c[1..].chars().all(|h| h.is_ascii_hexdigit()) =>
+        {
+            c
+        }
         _ => return Err(format!("the color must look like #2f7d5b, not {color:?}")),
     };
-    Ok(Project { id: unique_id(&name, projects), name, repo: dir.display().to_string(), color: Some(color), chat_keep: String::new() })
+    Ok(Project {
+        id: unique_id(&name, projects),
+        name,
+        repo: dir.display().to_string(),
+        color: Some(color),
+        chat_keep: String::new(),
+    })
 }
 
 /// `name` in lowercase letters, digits and dashes, with -2, -3… when that id is taken.
 fn unique_id(name: &str, projects: &[Project]) -> String {
-    let base = Some(crate::lanes::slug(name)).filter(|s| !s.is_empty()).unwrap_or_else(|| "project".into());
-    (1..).map(|n| if n == 1 { base.clone() } else { format!("{base}-{n}") }).find(|id| !projects.iter().any(|p| p.id == *id)).unwrap_or(base)
+    let base = Some(crate::lanes::slug(name))
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "project".into());
+    (1..)
+        .map(|n| {
+            if n == 1 {
+                base.clone()
+            } else {
+                format!("{base}-{n}")
+            }
+        })
+        .find(|id| !projects.iter().any(|p| p.id == *id))
+        .unwrap_or(base)
 }
 
 /// What to append to config.toml (`text`) for the project, checked to parse with the project in it.
 fn block(text: &str, p: &Project) -> Result<String, String> {
     let q = |s: &str| toml::Value::String(s.into()).to_string();
-    let sep = if text.trim().is_empty() { "" } else { &"\n\n"[usize::from(text.ends_with('\n'))..] }; // one blank line before the block
-    let block = format!("{sep}[[projects]]\nid = {}\nname = {}\nrepo = {}\ncolor = {}\n", q(&p.id), q(&p.name), q(&p.repo), q(p.color.as_deref().unwrap_or("")));
-    let t: toml::Table = format!("{text}{block}").parse().map_err(|e| format!("config.toml would not parse with the project: {e}"))?;
-    let added = crate::config::get::<Vec<Project>>(&t, &["projects"]).is_some_and(|ps| ps.iter().any(|x| x.id == p.id && x.repo == p.repo));
+    let sep = if text.trim().is_empty() {
+        ""
+    } else {
+        &"\n\n"[usize::from(text.ends_with('\n'))..]
+    }; // one blank line before the block
+    let block = format!(
+        "{sep}[[projects]]\nid = {}\nname = {}\nrepo = {}\ncolor = {}\n",
+        q(&p.id),
+        q(&p.name),
+        q(&p.repo),
+        q(p.color.as_deref().unwrap_or(""))
+    );
+    let t: toml::Table = format!("{text}{block}")
+        .parse()
+        .map_err(|e| format!("config.toml would not parse with the project: {e}"))?;
+    let added = crate::config::get::<Vec<Project>>(&t, &["projects"])
+        .is_some_and(|ps| ps.iter().any(|x| x.id == p.id && x.repo == p.repo));
     added.then_some(block).ok_or("config.toml has a `projects` key that is not [[projects]] tables: add the project there by hand".into())
 }
 
@@ -89,15 +219,33 @@ fn register(app: &Shared, mut p: Project) -> Result<(Project, bool), String> {
     let _one = WRITING.lock().unwrap();
     app.reload_config(true);
     let cfg = app.cfg();
-    if let Some(old) = cfg.projects.iter().find(|o| !o.repo.is_empty() && o.repo() == p.repo()) {
+    if let Some(old) = cfg
+        .projects
+        .iter()
+        .find(|o| !o.repo.is_empty() && o.repo() == p.repo())
+    {
         return Ok((old.clone(), false));
     }
     p.id = unique_id(&p.name, &cfg.projects);
     let file = app.home.join("config.toml");
     let fail = |e: std::io::Error| format!("{}: {e}", file.display());
-    let text = std::fs::read_to_string(&file).or_else(|e| if e.kind() == std::io::ErrorKind::NotFound { Ok(String::new()) } else { Err(e) }).map_err(fail)?;
+    let text = std::fs::read_to_string(&file)
+        .or_else(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                Ok(String::new())
+            } else {
+                Err(e)
+            }
+        })
+        .map_err(fail)?;
     let more = block(&text, &p)?;
-    std::fs::OpenOptions::new().create(true).append(true).mode(0o600).open(&file).and_then(|mut f| f.write_all(more.as_bytes())).map_err(fail)?;
+    std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .mode(0o600)
+        .open(&file)
+        .and_then(|mut f| f.write_all(more.as_bytes()))
+        .map_err(fail)?;
     app.reload_config(true);
     Ok((p, true))
 }
@@ -107,22 +255,56 @@ async fn add(app: &Shared, raw: &str, name: &str, color: &str, dry: bool) -> Res
     let cfg = app.cfg();
     let dir = folder(raw, &cfg.projects, &app.home)?;
     let shown = |p: &Project, exists: bool, notes: &[String]| json!({"id": p.id, "name": p.name, "folder": dir, "color": p.color, "exists": exists, "notes": notes});
-    if let Some(p) = cfg.projects.iter().find(|p| !p.repo.is_empty() && p.repo() == dir) {
+    if let Some(p) = cfg
+        .projects
+        .iter()
+        .find(|p| !p.repo.is_empty() && p.repo() == dir)
+    {
         return Ok(shown(p, true, &[]));
     }
     // A repo git cannot read is an error, not a folder to init; a home folder kept in git is no project's repo.
     let home = home_dir().canonicalize().unwrap_or_else(|_| home_dir());
     let top = match git(&dir, &["rev-parse", "--show-toplevel"]).await {
         Err(e) if dir.join(".git").exists() => return Err(e),
-        r => r.ok().map(|t| PathBuf::from(&t).canonicalize().unwrap_or_else(|_| t.into())).filter(|t| !home.starts_with(t)),
+        r => r
+            .ok()
+            .map(|t| {
+                PathBuf::from(&t)
+                    .canonicalize()
+                    .unwrap_or_else(|_| t.into())
+            })
+            .filter(|t| !home.starts_with(t)),
     };
-    top.as_ref().filter(|t| **t != dir).map_or(Ok(()), |t| Err(format!("{} is inside the git repository {}: add that folder instead", dir.display(), t.display())))?;
+    top.as_ref().filter(|t| **t != dir).map_or(Ok(()), |t| {
+        Err(format!(
+            "{} is inside the git repository {}: add that folder instead",
+            dir.display(),
+            t.display()
+        ))
+    })?;
     let p = project(&dir, name, color, &cfg.projects)?;
-    block(&std::fs::read_to_string(app.home.join("config.toml")).unwrap_or_default(), &p)?; // config.toml takes it: only then touch the folder
+    block(
+        &std::fs::read_to_string(app.home.join("config.toml")).unwrap_or_default(),
+        &p,
+    )?; // config.toml takes it: only then touch the folder
     let plan = dir.join(app.manifest(&dir).roadmap);
-    let open = std::fs::read_to_string(&plan).map(|t| crate::plan::parse(&t).iter().flat_map(|s| &s.items).filter(|i| !i.done).count()).unwrap_or(0);
-    let start = !plan.exists() && plan.starts_with(&dir) && !plan.components().any(|c| c == Component::ParentDir); // never outside the folder
-    let Some(()) = (!dry).then_some(()) else { return Ok(json!({"id": p.id, "name": p.name, "folder": dir, "color": p.color, "git": top.is_some(), "plan": !start, "open": open})) };
+    let open = std::fs::read_to_string(&plan)
+        .map(|t| {
+            crate::plan::parse(&t)
+                .iter()
+                .flat_map(|s| &s.items)
+                .filter(|i| !i.done)
+                .count()
+        })
+        .unwrap_or(0);
+    let start = !plan.exists()
+        && plan.starts_with(&dir)
+        && !plan.components().any(|c| c == Component::ParentDir); // never outside the folder
+    let Some(()) = (!dry).then_some(()) else {
+        return Ok(
+            json!({"id": p.id, "name": p.name, "folder": dir, "color": p.color, "git": top.is_some(), "plan": !start, "open": open}),
+        );
+    };
     let mut notes = vec![];
     if top.is_none() {
         git(&dir, &["init", "-q"]).await?;
@@ -130,14 +312,37 @@ async fn add(app: &Shared, raw: &str, name: &str, color: &str, dry: bool) -> Res
     }
     notes.extend(crate::guard::install(app, &p).err());
     if start {
-        let rel = plan.strip_prefix(&dir).unwrap_or(&plan).display().to_string();
+        let rel = plan
+            .strip_prefix(&dir)
+            .unwrap_or(&plan)
+            .display()
+            .to_string();
         let started: Result<String, String> = async {
-            plan.parent().map_or(Ok(()), std::fs::create_dir_all).and_then(|_| std::fs::write(&plan, "# Plan\n\n## 1. First steps\n")).map_err(|e| e.to_string())?;
+            plan.parent()
+                .map_or(Ok(()), std::fs::create_dir_all)
+                .and_then(|_| std::fs::write(&plan, "# Plan\n\n## 1. First steps\n"))
+                .map_err(|e| e.to_string())?;
             git(&dir, &["-c", "core.fsmonitor=false", "add", "--", &rel]).await?;
-            git(&dir, &["-c", "core.fsmonitor=false", "commit", "-q", "-m", "Plan: start the plan", "--", &rel]).await
+            git(
+                &dir,
+                &[
+                    "-c",
+                    "core.fsmonitor=false",
+                    "commit",
+                    "-q",
+                    "-m",
+                    "Plan: start the plan",
+                    "--",
+                    &rel,
+                ],
+            )
+            .await
         }
         .await;
-        notes.push(started.map_or_else(|e| format!("Its plan {rel} could not be started: {e}"), |_| format!("Started its plan in {rel}: add the first items on the Overview.")));
+        notes.push(started.map_or_else(
+            |e| format!("Its plan {rel} could not be started: {e}"),
+            |_| format!("Started its plan in {rel}: add the first items on the Overview."),
+        ));
     }
     // A plan that already has open items: agents start on it only once the owner resumes the autopilot.
     let hold = |id: &str| (open > 0).then(|| app.set_kv(&format!("autopilot:{id}"), Some("off")));
@@ -152,46 +357,141 @@ async fn add(app: &Shared, raw: &str, name: &str, color: &str, dry: bool) -> Res
 
 /// Git repositories next to the projects or in the home folder that are no project yet, the most recently used first.
 async fn folders(State(app): State<Shared>) -> Json<Value> {
-    let repos: Vec<PathBuf> = app.cfg().projects.iter().filter(|p| !p.repo.is_empty()).map(Project::repo).collect();
-    let mut roots: Vec<PathBuf> = repos.iter().filter_map(|r| r.parent().map(Path::to_path_buf)).chain([home_dir()]).collect();
+    let repos: Vec<PathBuf> = app
+        .cfg()
+        .projects
+        .iter()
+        .filter(|p| !p.repo.is_empty())
+        .map(Project::repo)
+        .collect();
+    let mut roots: Vec<PathBuf> = repos
+        .iter()
+        .filter_map(|r| r.parent().map(Path::to_path_buf))
+        .chain([home_dir()])
+        .collect();
     roots.sort();
     roots.dedup();
-    let entries = roots.iter().flat_map(|r| std::fs::read_dir(r).into_iter().flatten().flatten()).map(|e| e.path());
-    let used = |d: PathBuf| Some((std::fs::metadata(d.join(".git")).ok().filter(|m| m.is_dir())?.modified().ok()?, d));
-    let mut found: Vec<_> = entries.filter(|d| !repos.contains(d) && !d.file_name().is_some_and(|n| n.to_string_lossy().starts_with('.'))).filter_map(used).collect();
+    let entries = roots
+        .iter()
+        .flat_map(|r| std::fs::read_dir(r).into_iter().flatten().flatten())
+        .map(|e| e.path());
+    let used = |d: PathBuf| {
+        Some((
+            std::fs::metadata(d.join(".git"))
+                .ok()
+                .filter(|m| m.is_dir())?
+                .modified()
+                .ok()?,
+            d,
+        ))
+    };
+    let mut found: Vec<_> = entries
+        .filter(|d| {
+            !repos.contains(d)
+                && !d
+                    .file_name()
+                    .is_some_and(|n| n.to_string_lossy().starts_with('.'))
+        })
+        .filter_map(used)
+        .collect();
     found.sort_by_key(|f| std::cmp::Reverse(f.0));
-    Json(json!(found.iter().take(200).map(|(_, d)| json!({"folder": d, "name": d.file_name().map(|n| n.to_string_lossy())})).collect::<Vec<_>>()))
+    Json(json!(found
+        .iter()
+        .take(200)
+        .map(|(_, d)| json!({"folder": d, "name": d.file_name().map(|n| n.to_string_lossy())}))
+        .collect::<Vec<_>>()))
 }
 
 /// The macOS folder picker, opened by the daemon in the owner's session (one at a time): the folder, or "" when cancelled.
 async fn pick(State(app): State<Shared>) -> R {
-    let Ok(_one) = PICKING.try_lock() else { return Err(bad("the folder picker is already open".into())) };
-    let start = app.cfg().projects.iter().find(|p| !p.repo.is_empty()).and_then(|p| p.repo().parent().map(Path::to_path_buf)).filter(|d| d.is_dir()).unwrap_or_else(home_dir);
-    let out = tokio::process::Command::new("osascript").args(["-l", "JavaScript", "-e", PANEL]).arg(start).kill_on_drop(true).output();
-    let out = tokio::time::timeout(Duration::from_secs(600), out).await.map_err(|_| bad("the folder picker was open too long".into()))?.map_err(|e| bad(format!("no folder picker here ({e}): type the path")))?;
-    out.status.success().then_some(()).ok_or_else(|| bad(format!("the folder picker did not open: {}", String::from_utf8_lossy(&out.stderr).trim())))?;
-    Ok(Json(json!({"folder": String::from_utf8_lossy(&out.stdout).trim()})))
+    let Ok(_one) = PICKING.try_lock() else {
+        return Err(bad("the folder picker is already open".into()));
+    };
+    let start = app
+        .cfg()
+        .projects
+        .iter()
+        .find(|p| !p.repo.is_empty())
+        .and_then(|p| p.repo().parent().map(Path::to_path_buf))
+        .filter(|d| d.is_dir())
+        .unwrap_or_else(home_dir);
+    let out = tokio::process::Command::new("osascript")
+        .args(["-l", "JavaScript", "-e", PANEL])
+        .arg(start)
+        .kill_on_drop(true)
+        .output();
+    let out = tokio::time::timeout(Duration::from_secs(600), out)
+        .await
+        .map_err(|_| bad("the folder picker was open too long".into()))?
+        .map_err(|e| bad(format!("no folder picker here ({e}): type the path")))?;
+    out.status.success().then_some(()).ok_or_else(|| {
+        bad(format!(
+            "the folder picker did not open: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ))
+    })?;
+    Ok(Json(
+        json!({"folder": String::from_utf8_lossy(&out.stdout).trim()}),
+    ))
 }
 
 pub fn routes() -> Router<Shared> {
     let add_route = |State(app): State<Shared>, Json(b): Json<Value>| async move {
         let s = |k: &str| crate::server::s(&b, k);
-        add(&app, &s("folder"), &s("name"), &s("color"), b["dry"] == true).await.map(Json).map_err(bad)
+        add(
+            &app,
+            &s("folder"),
+            &s("name"),
+            &s("color"),
+            b["dry"] == true,
+        )
+        .await
+        .map(Json)
+        .map_err(bad)
     };
-    Router::new().route("/api/projects", post(add_route)).route("/api/projects/folders", get(folders)).route("/api/projects/pick", post(pick))
+    Router::new()
+        .route("/api/projects", post(add_route))
+        .route("/api/projects/folders", get(folders))
+        .route("/api/projects/pick", post(pick))
 }
 
 /// `tirith project add <folder> [--name N] [--color #rrggbb]`.
 pub fn cli(pos: &[&str], flag: crate::client::Flag) -> Option<Result<(), String>> {
-    let ["project", "add", raw] = pos else { return None };
-    let Some(()) = (!std::env::var("TIRITH_LANE").is_ok_and(|l| !l.is_empty())).then_some(()) else { return Some(Err("a lane does not add projects: ask the manager with tirith ask \"<question>\"".into())) };
-    let full = std::env::current_dir().map(|d| d.join(raw).display().to_string()).unwrap_or(raw.to_string()); // an absolute path stays
+    let ["project", "add", raw] = pos else {
+        return None;
+    };
+    let Some(()) = (!std::env::var("TIRITH_LANE").is_ok_and(|l| !l.is_empty())).then_some(())
+    else {
+        return Some(Err(
+            "a lane does not add projects: ask the manager with tirith ask \"<question>\"".into(),
+        ));
+    };
+    let full = std::env::current_dir()
+        .map(|d| d.join(raw).display().to_string())
+        .unwrap_or(raw.to_string()); // an absolute path stays
     let body = json!({"folder": if raw.starts_with('~') { raw.to_string() } else { full }, "name": flag("--name").unwrap_or_default(), "color": flag("--color").unwrap_or_default()});
-    Some(crate::client::call_json("POST", "/api/projects", Some(body)).map(|v| {
-        let (id, dir) = (v["id"].as_str().unwrap_or(""), v["folder"].as_str().unwrap_or(""));
-        println!("{}", if v["exists"] == true { format!("{dir} is already the project {id}") } else { format!("{id}: {dir}") });
-        v["notes"].as_array().into_iter().flatten().filter_map(Value::as_str).for_each(|n| println!("  {n}"));
-    }))
+    Some(
+        crate::client::call_json("POST", "/api/projects", Some(body)).map(|v| {
+            let (id, dir) = (
+                v["id"].as_str().unwrap_or(""),
+                v["folder"].as_str().unwrap_or(""),
+            );
+            println!(
+                "{}",
+                if v["exists"] == true {
+                    format!("{dir} is already the project {id}")
+                } else {
+                    format!("{id}: {dir}")
+                }
+            );
+            v["notes"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+                .for_each(|n| println!("  {n}"));
+        }),
+    )
 }
 
 #[cfg(test)]
