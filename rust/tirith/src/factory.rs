@@ -9,7 +9,7 @@ use std::time::SystemTime;
 
 const TEXT: &str = include_str!("../../../factory/factory.toml");
 const SECTIONS: [&str; 7] = ["agents", "roles", "limits", "plan", "cards", "metrics", "routes"];
-const MEASURES: [&str; 8] = ["merged", "median", "first_try", "idle", "stuck", "main_red", "failed", "owner"];
+const MEASURES: [&str; 10] = ["merged", "median", "first_try", "idle", "stuck", "main_red", "failed", "owner", "interruptions", "needless_cards"];
 /// The closed list of events the code emits, `;`-joined like the moves in config.rs; a route on anything else never fires, so it is invalid.
 const EVENTS: &str = "owner.message;room.message;lane.asked;lane.failed;lane.not_started;lane.long;merge.blocked;merge.landed;main.red;main.green;plan.empty;deploy.done;deploy.failed;metric.red;review.done;schedule;card.opened;card.answered;card.closed;factory.invalid";
 /// One `[[routes]]` entry read for one event: (to, mode, chat, phone, after_minutes).

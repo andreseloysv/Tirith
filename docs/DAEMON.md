@@ -70,7 +70,13 @@ deploy stages are no checks: they run after main has moved, on that main (`deplo
 
 Health metrics and the reviewer.
 
-Every minute code computes the metrics from the daemon's own data (lanes, runs, plans, kv). A metric that
+Every minute code computes the metrics from the daemon's own data (lanes, runs, plans, kv). The owner's measures
+come from the store too: `interruptions` counts, per item merged in 24 h, what reached the owner unasked — phone
+messages of turns no owner message started (the events and chat timeline, classified by the factory routes with
+`phone = true`), notices whose route has `phone = true`, and cards opened — and `needless_cards` is the share of
+the cards opened in 24 h and already resolved that were closed without an answer. Their labels and targets are
+`[metrics.interruptions]` and `[metrics.needless_cards]` of the factory; they show with the other metrics on the
+page, and a red one is routed as `metric.red` like any other. A metric that
 turns red starts an episode: the mechanical fix when there is one, then one note to the manager. Still red
 after the delayed `metric.red` route's `after_minutes`, one review runs for that episode: that route's turn
 role (the reviewer, `access = "read"`) runs one fresh turn like any turn role, and its answer goes to the
