@@ -38,8 +38,8 @@ fn dest_of(f: &Factory, to: &str, on: &str, here_p: &str) -> Option<String> {
     // Only chat roles are handed text here, in the conversation of their scope; a turn role is run by whoever watches its condition (the metrics run the CEO through `run_turn`, like any turn role).
     (f.role::<String>(to, "session").as_deref() == Some("chat")).then_some(())?;
     let own = f.role::<String>(to, "scope").as_deref() == Some("own");
-    // A due routine (its bot's own `schedule` route) is for that bot's conversation alone, and a conversation that more than one route reaches (the factory's schedule route and the bot's) hears the event once.
-    (!(on == "schedule" && own && to != here_p)).then_some(())?;
+    // A due routine (its bot's own `schedule` or `webhook` route) is for that bot's conversation alone, and a conversation that more than one route reaches (the factory's schedule route and the bot's) hears the event once.
+    (!(matches!(on, "schedule" | "webhook") && own && to != here_p)).then_some(())?;
     Some(if own { to } else { here_p }.to_string())
 }
 /// A routed event for one conversation: with `turn` handed over (gathered with the other events of the next `limits.batch_seconds`, so many events cost one turn) and its `phone` marking that turn's answer; with `note` it waits for the conversation's next message. Anything else hears nothing.

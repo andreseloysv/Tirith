@@ -27,6 +27,7 @@ async fn delete(State(app): State<Shared>, Path(id): Path<String>) -> R {
     })
     .map_err(bad)?;
     crate::rooms::forget(&app, &key);
+    app.set_kv(&format!("webhook:{id}"), None); // its room is gone, and with it what the webhook posts
     let _ = std::fs::remove_dir_all(folder(&app, &key)); // its memory and its own skills
     reply(Ok(json!({"ok": true})))
 }
@@ -56,5 +57,6 @@ pub fn routes() -> Router<Shared> {
         .route("/api/bots/{id}/routines", get(list).post(change))
         .route("/api/bots/{id}/run/{routine}", post(run))
         .merge(crate::turns::routes())
+        .merge(super::hook_api::routes())
         .route("/api/bots/{id}/library", get(|State(app): State<Shared>, Path(id): Path<String>| async move { reply(library(&app, &id)) }).post(lib))
 }

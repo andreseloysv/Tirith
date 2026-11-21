@@ -17,11 +17,27 @@ async fn register(base: &str, me: &Me) -> Result<(), String> {
     .map(|_| ())
     .map_err(|e| e.1)
 }
-/// Posts one signed event in `room` (registering the key when the platform does not know it yet).
-pub async fn post(base: &str, me: &Me, kind: &str, room: &str, body: Value) -> Result<(), String> {
+/// One event of `kind` in `room`, signed by `me`, with no refs.
+fn signed(me: &Me, kind: &str, room: &str, body: Value) -> Value {
     let mut e = json!({"author": me.public, "kind": kind, "tag": format!("#{room}"), "refs": [], "body": body, "ts": chrono::Utc::now().timestamp_millis() as u64});
     e["id"] = json!(event_id(&e));
     e["sig"] = json!(me.sign(e["id"].as_str().unwrap_or("")));
+    e
+}
+/// A signed `request` event in `room` whose body is the JSON text of `body`, sent to `path` (as `/hooks`); the platform's answer. Checked there and never stored.
+pub async fn request(
+    base: &str,
+    me: &Me,
+    room: &str,
+    path: &str,
+    body: &Value,
+) -> Result<Value, String> {
+    let e = signed(me, "request", room, json!(body.to_string()));
+    api(base, path, Some(&e), 60).await.map_err(|e| e.1)
+}
+/// Posts one signed event in `room` (registering the key when the platform does not know it yet).
+pub async fn post(base: &str, me: &Me, kind: &str, room: &str, body: Value) -> Result<(), String> {
+    let e = signed(me, kind, room, body);
     match api(base, "/events", Some(&e), 60).await {
         Err((403, _)) => {
             register(base, me).await?;

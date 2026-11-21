@@ -4,6 +4,7 @@ import { html, useState, useEffect } from '../../../vendor/preact-htm.js';
 import { useFetch, api } from '../../store.js';
 import { SKILL_START, Editor, Skill, titlesOf } from './skills.js';
 import { Memory } from './memory.js';
+import { MailScript } from './mailscript.js';
 
 export function Library({ bot }) {
   const path = `/api/bots/${encodeURIComponent(bot.id)}/library`;
@@ -31,5 +32,6 @@ export function Library({ bot }) {
     ${list(lib.skills.filter((s) => !s.shared), `No skill yet. When ${bot.name} works out a procedure it will repeat, it writes it down here and uses it next time.`)}
     <h4><span>Shared skills · every bot</span></h4>
     ${list(lib.skills.filter((s) => s.shared), 'None yet. A skill shared here is in every bot\'s skills.')}
+    <${MailScript} bot=${bot} />
   </div>`;
 }

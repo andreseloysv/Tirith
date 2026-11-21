@@ -22,7 +22,7 @@ pub fn state(app: &Shared) -> Value {
         .cloned()
         .filter_map(|m| agent_of(&cfg, &m).map(|a| (m, json!(a))))
         .collect();
-    json!({"roles": roles, "events": crate::factory::EVENTS.split(';').filter(|e| *e != "schedule").collect::<Vec<_>>(), "choices": {"agents": cfg.factory.commands().iter().map(|(k, _)| k).collect::<Vec<_>>(), "codex": crate::codex::catalog(), "models": &models, "owners": owners,
+    json!({"roles": roles, "events": crate::factory::EVENTS.split(';').filter(|e| !matches!(*e, "schedule" | "webhook")).collect::<Vec<_>>(), "choices": {"agents": cfg.factory.commands().iter().map(|(k, _)| k).collect::<Vec<_>>(), "codex": crate::codex::catalog(), "models": &models, "owners": owners,
         "efforts": get::<Vec<String>>(&cfg.raw, &["models", "efforts"]).unwrap_or_else(|| EFFORTS.map(String::from).to_vec())}})
 }
 /// A role's setting with its source and its factory shape.

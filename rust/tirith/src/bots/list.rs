@@ -9,7 +9,11 @@ fn or(x: String, d: &str) -> String {
         .filter(|x| !x.is_empty())
         .unwrap_or_else(|| d.to_string())
 }
-/// The bot's `schedule` routes as routines (`last` says a routine's last run).
+/// A route that is one of a bot's routines: on `schedule` (a time) or on `webhook` (an event from outside).
+pub(super) fn routine_on(r: &Value) -> bool {
+    matches!(s(r, "on").as_str(), "schedule" | "webhook")
+}
+/// The bot's `schedule` and `webhook` routes as routines (`last` says a routine's last run).
 fn routines_of(
     routes: &[Value],
     key: &str,
@@ -18,11 +22,11 @@ fn routines_of(
 ) -> Vec<Value> {
     routes
         .iter()
-        .filter(|r| s(r, "on") == "schedule" && s(r, "to") == key && !s(r, "task").is_empty())
+        .filter(|r| routine_on(r) && s(r, "to") == key && !s(r, "task").is_empty())
         .enumerate()
         .map(|(i, r)| {
             let rid = or(s(r, "id"), &format!("r{i}"));
-            json!({"id": rid.clone(), "title": or(s(r, "title"), &s(r, "task")), "prompt": s(r, "task"), "days": days(&r["days"]).unwrap_or_default(), "at": s(r, "at"), "on": r["enabled"] != false, "last": last(id, &rid)})
+            json!({"id": rid.clone(), "title": or(s(r, "title"), &s(r, "task")), "prompt": s(r, "task"), "trigger": s(r, "on"), "when": s(r, "when"), "days": days(&r["days"]).unwrap_or_default(), "at": s(r, "at"), "on": r["enabled"] != false, "last": last(id, &rid)})
         })
         .collect()
 }
@@ -30,7 +34,7 @@ fn routines_of(
 fn hears_of(routes: &[Value], key: &str) -> Vec<Value> {
     routes
         .iter()
-        .filter(|r| s(r, "on") != "schedule" && s(r, "to") == key)
+        .filter(|r| !routine_on(r) && s(r, "to") == key)
         .cloned()
         .collect()
 }
