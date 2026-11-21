@@ -1,9 +1,12 @@
 name: pages
 
-# Deploys site/ (the landing page) to GitHub Pages on every push to main.
+# Deploys site/ (the landing page) to GitHub Pages when the site changes.
 on:
   push:
     branches: [main]
+    paths:
+      - site/**
+      - .github/workflows/pages.yml
   workflow_dispatch:
 
 permissions:
