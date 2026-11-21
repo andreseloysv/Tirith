@@ -422,6 +422,40 @@ async fn send(app: &Shared, r: &Room, text: &str, readers: &[String]) -> Result<
 fn queue(id: &str, text: &str, readers: Vec<String>) {
     let _ = (!text.trim().is_empty() && !readers.is_empty()).then(|| OUT.get().map(|tx| tx.send((id.to_string(), text.to_string(), readers))));
 }
+/// One turn's live progress for the phones in its rooms, as `tirith-chat` controls a phone page that does not know them ignores: typing on at the start, at most one short tool line every 5 s (never the same twice in a row, 120 chars at most), typing off at the end. Each call says what to send, to the turn's rooms alone; no rooms, nothing. It is no message: `handle` drops `tirith-chat`, so it keeps no history, counts no streak and wakes no phone like an answer does.
+#[derive(Default)]
+pub(crate) struct Typing {
+    rooms: Vec<String>,
+    last: String,
+    at: Option<u64>,
+}
+impl Typing {
+    pub(crate) fn start(&mut self, rooms: Vec<String>) -> Option<(Vec<String>, Value)> {
+        (self.rooms.is_empty() && !rooms.is_empty()).then_some(())?;
+        *self = Typing { rooms, ..Default::default() };
+        Some((self.rooms.clone(), json!({"v": 1, "typing": 1})))
+    }
+    pub(crate) fn line(&mut self, line: &str, now: u64) -> Option<(Vec<String>, Value)> {
+        let line: String = line.trim().chars().take(120).collect();
+        (!self.rooms.is_empty() && !line.is_empty() && line != self.last && self.at.is_none_or(|at| now.saturating_sub(at) >= 5)).then_some(())?;
+        (self.last, self.at) = (line.clone(), Some(now));
+        Some((self.rooms.clone(), json!({"v": 1, "typing": 1, "line": line})))
+    }
+    pub(crate) fn stop(&mut self) -> Option<(Vec<String>, Value)> {
+        let rooms = std::mem::take(&mut self.rooms);
+        (!rooms.is_empty()).then(|| (rooms, json!({"v": 1, "typing": 0})))
+    }
+}
+/// Sends one turn's `tirith-chat` control to its rooms alone, sealed for whoever is in them (their phones and accepted managers).
+pub fn typing(sent: Option<(Vec<String>, Value)>) {
+    let Some((rooms, body)) = sent else { return };
+    let text = format!("tirith-chat {body}");
+    rooms.iter().filter_map(|id| room(id).map(|r| (id, r))).for_each(|(id, r)| queue(id, &text, r.devices.iter().chain(r.managers.iter().filter(|m| m.accepted)).map(|p| p.public.clone()).collect()));
+}
+/// The ids of a conversation's own rooms, the ones its phones are in.
+pub fn phone_rooms(app: &Shared, project: &str) -> Vec<String> {
+    ROOMS.lock().unwrap().values().filter(|r| r.kind == "manager" && app.conv(&r.project) == project).map(|r| r.id.clone()).collect()
+}
 /// What a project's conversation says (its manager's words, Tirith's reports, a card) goes to the phones of its rooms.
 pub fn to_phones(app: &Shared, project: &str, text: &str) {
     // An answer that starts with ∅ (a routine found nothing new) stays on the page: only news reaches the phones.
