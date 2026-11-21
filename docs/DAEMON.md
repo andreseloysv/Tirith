@@ -268,11 +268,11 @@ with the factory's `[lab]` rule. An experiment is a branch of the bot's reposito
 one commit over its main; the Coach makes it in a draft worktree under `<home>/lab` and removes that worktree
 (`factory/prompts/coach.md`), then starts it:
 
-- `tirith lab start <bot> <branch> --routine <id> --mode live --hypothesis "<text>"` → `POST /api/lab/start`: the
-  bot (key, id or name), a routine of its own with no experiment running (one at a time per routine), the mode
-  (`live`; `replay` and `shadow` are refused for now), a hypothesis, and a branch that exists, has one commit over the
-  bot's main and is checked out nowhere. A row in `experiments` (its `change` is the commit's subject) and a worktree
-  `<home>/lab/<bot>/<experiment>` on the branch.
+- `tirith lab start <bot> <branch> --routine <id> --mode live|replay --hypothesis "<text>"` → `POST /api/lab/start`:
+  the bot (key, id or name), a routine of its own with no experiment running (one at a time per routine, either
+  mode), the mode (`live` or `replay`; `shadow` is refused for now), a hypothesis, and a branch that exists, has one
+  commit over the bot's main and is checked out nowhere. A row in `experiments` (its `change` is the commit's subject);
+  live, a worktree `<home>/lab/<bot>/<experiment>` on the branch; replay, its pairs start running.
 - `tirith lab list [<bot>]` → `GET /api/lab?bot=<id or key>`: the experiments, newest first (change, hypothesis, mode,
   status, the comparisons judged, the numbers once decided), and the rule; the bot's tab «Mejoras» shows them.
 
@@ -287,7 +287,33 @@ routine's task and the two answers as «Answer a» and «Answer b» in an order 
 under kept in `lab_comparisons` (`b_is`), and the eval `ab-compare` (rubric `factory/evals/ab-compare.md`, judge
 `judge`) answers `a`, `b` or `tie`, mapped back to B's `win`, `lose` or `tie` (`manager/evals.rs` calls `lab::judged`).
 
-**The decision.** With `inputs` comparisons judged, or `max_days` after its start (the scheduler's tick), and no run of
+**Captures.** Every turn of a bot (`turns/capture*.rs`) keeps what it read in `<home>/captures/<turn>.jsonl`: a first
+line with what started it — the event or task handed over, the notes and the owner's words, never the memory Tirith
+lays before them (`manager/deliver.rs` calls `turns::told`) — with its conversation, routine and trigger, then one line
+per tool call in order: the tool as its agent named it, its input and its result as the agent saw it (Anthropic's
+`tool_use` blocks matched with the `tool_result` blocks of its `user` lines; Muse's `tool.result`, its command as the
+input). A capture stops at 256 KB (a result is cut on a character, and `full` says so). The captures of the last 10
+runs of each routine of the bot are kept (its turns outside a routine count as one routine more); older ones go.
+
+**Replay.** `--mode replay` (`replay.rs`, `replay_side.rs`) commits the bot's folder and takes the routine's last
+`inputs` captured runs (none: refused). For each, oldest first, A (a detached worktree of the bot's main) and then B
+(one of the branch) under `<home>/lab/<bot>/<experiment>/<a|b>-<turn>` do the capture's start again as a loose turn
+of the bot's role (`manager::run_turn`), handed that worktree's memory and skills. A tokio task-local marks the turn:
+`lab::seat` resolves every folder of the bot to the worktree (the session's folder, its context, Muse's workspace),
+and `sandbox::wrap` gives its processes the proxy caller `replay:<experiment>`, to which the proxy refuses every
+destination. In Tirith's `PreToolUse` hook (`server/hook.rs`, Anthropic's and Muse's alike) a call from the
+worktree that reads outside — the web, a browser or any MCP tool, `tirith safari` or `tirith teach`, shell commands
+with network such as curl, ssh or git fetch (`outside.rs`) — is refused with the next unanswered call of the same
+tool in the capture as its reason, «Recorded result (replay): <its result>» (`answers.rs`); one the capture has no
+more of is refused as «not available in a replay». Local calls (its worktree, which the rules let it write in as its
+own folder, and its skills) run as always. Nothing of a replay reaches the owner: its turns run in a conversation of
+their own, `replay-<experiment>-<turn>-<A|B>`, which no chat, phone, room or card knows (`tirith say` and
+`ask-owner` refuse it as an unknown project), and the hook refuses `tirith say`, `ask`, `ask-owner` and `chat` in it.
+Each turn's row gets `experiment`, `variant`, the routine and the trigger `replay`; the worktrees go after each turn,
+and each B is compared with its A like a live run (`lab.compare`, `ab-compare`). Once every pair has run (kv
+`lab:replayed:<experiment>`) and been judged, it is due.
+
+**The decision.** With `inputs` comparisons judged, a replay's pairs all run and judged, or `max_days` after its start (the scheduler's tick), and no run of
 the bot on its way, B is adopted when it is not worse (wins and ties at least `not_worse_share` of the comparisons, and
 wins at least as many as it loses), has no new failure (a B run failed where its A did not) and no 👎, and saves at
 least `min_saving` of A's mean tokens, dollars or time. Adopted, the bot's folder is committed and the branch is merged
@@ -300,15 +326,19 @@ tokens, dollars and time, the tally, the savings and the line), and one line is 
 
 Files:
 
+- `answers.rs`: A replay's tool calls in the hook: an outside read answered from its capture, one it lacks or one for the owner refused.
 - `api.rs`: The lab's commands and routes: `tirith lab start` and `tirith lab list`, `POST /api/lab/start` and `GET /api/lab`.
 - `compare.rs`: A B run against the A run before it, judged blind by `ab-compare`, and the judge's answer mapped back to B's verdict.
 - `decide.rs`: The decision once an experiment is due: the numbers read, the rule applied, the branch merged or deleted, the line emitted.
 - `git.rs`: Git in a bot's repository as Tirith: the branch's one commit checked, the adopted branch merged (its text winning where main moved on the same lines), the worktree and the branch removed.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
-- `numbers.rs`: An experiment's numbers from the store: each side's runs (mean tokens, dollars, time) and B's comparisons, new failures and 👎.
+- `numbers.rs`: An experiment's numbers from the store: each side's runs (mean tokens, dollars, time), B's comparisons, new failures and 👎, and the comparisons the judge has not answered.
+- `outside.rs`: Which tool calls read outside (web, browser, MCP, `tirith safari`, network commands) and which would reach the owner.
+- `replay.rs`: Replay mode: the task-local that marks a replay's turn, the proxy's closed caller, and the pairs run one after another.
+- `replay_side.rs`: One side of a replayed run: its throwaway worktree, its turn on the capture's start, its row's experiment and variant.
 - `rule.rs`: The `[lab]` rule applied to A's and B's numbers and the comparisons, and the one line that says the decision.
-- `seat.rs`: Which folder a bot's turn runs in during a live experiment: A, its own; B, the branch's worktree.
-- `start.rs`: `tirith lab start`: the request checked, the experiment's row and its worktree.
+- `seat.rs`: Which folder a bot's turn runs in during an experiment: live A, its own; live B, the branch's worktree; a replay's turn, its worktree.
+- `start.rs`: `tirith lab start`: the request checked, the experiment's row, and its worktree (live) or its captured runs (replay).
 - `store.rs`: The experiments' rows: one, the running ones, their worktree and the list the page shows.
 - `turn.rs`: A bot's turn ended: a run of an experiment keeps its variant, a B run is compared, the experiment may be decided.
 
@@ -758,7 +788,7 @@ HTTP on 127.0.0.1: the page (`web/`), its JSON API, the change stream (SSE) and 
 Files:
 
 - `chat.rs`: A new line in a conversation, from the owner's page or from an agent.
-- `hook.rs`: One agent hook call: recorded, refused when it breaks a rule, a lane's live messages handed over.
+- `hook.rs`: One agent hook call: recorded, a replay's outside read answered from its capture (`lab::answer`), refused when it breaks a rule, a lane's live messages handed over.
 - `hook_find.rs`: Which lane and project a hook call comes from.
 - `hook_lane.rs`: What a hook call is about: its lane and project, its tool call under the rules' names, and its summary.
 - `hook_reply.rs`: What a lane's agent hears back from a hook call that was not refused.
@@ -859,7 +889,9 @@ Anthropic's `Skill` tool, Muse's `read_skill`, or any tool whose input names `sk
 each call's name and the short line the chat shows, 50 at most), `versions` (JSON: the git blob hash, as
 `git hash-object` gives it, of its `memory.md`, of `<home>/bots/memory.md` when it exists and of each skill's
 `SKILL.md`), `answer` (cut at 4000 characters), `event` (its event's id), its stamp (`factory`, `role_hash`) and,
-for a run of a live experiment, its `experiment` and `variant` (`A` or `B`, set by `lab::finished` at its end).
+for a run of an experiment, its `experiment` and `variant` (`A` or `B`, set by `lab::finished` at the end of a live
+run, by the replay for its own). A bot's turn also keeps what it read in `<home>/captures/<turn>.jsonl` (see `lab/`,
+«Captures»).
 
 Tokens and cost come from what each agent already prints: Anthropic's `result` line (`usage.input_tokens`,
 `output_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens`, `total_cost_usd`, `is_error`); Muse's
@@ -909,6 +941,10 @@ Files:
 
 - `api.rs`: `GET /api/turns?conv=<key>&limit=<n>`: a conversation's turns, the last first.
 - `approval.rs`: Approvals: a turn ending with its approval card open waits, and what the `unapproved` eval reads of a turn.
+- `capture.rs`: What a turn read as its agent saw it: what was handed to it and each tool call with its input and result, up to 256 KB.
+- `capture_fit.rs`: Fitting a capture in its size: a result's text, cut on a character to the room left.
+- `capture_keep.rs`: The captures on disk: written at a bot's turn's end, the last 10 runs of each routine kept, read back for a replay.
+- `capture_told.rs`: What was handed to a conversation's agent (never the memory), waiting for the turn it starts.
 - `checks.rs`: The bot's own validation, `tirith turn checks`, kept on the open turn of its conversation or the last one.
 - `live.rs`: The turns of the conversations as they run: who started the next one, the one open now, and its end.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.

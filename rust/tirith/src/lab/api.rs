@@ -10,9 +10,9 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 
 const START: &str =
-    "use: tirith lab start <bot> <branch> --routine <id> --mode live --hypothesis \"<text>\"";
+    "use: tirith lab start <bot> <branch> --routine <id> --mode live|replay --hypothesis \"<text>\"";
 
-/// `tirith lab start <bot> <branch> --routine <id> --mode live --hypothesis "<text>"` and `tirith lab list [<bot>]`.
+/// `tirith lab start <bot> <branch> --routine <id> --mode live|replay --hypothesis "<text>"` and `tirith lab list [<bot>]`.
 pub fn cli(pos: &[&str], flag: Flag) -> Option<Result<(), String>> {
     let body = |bot: &str, branch: &str| json!({"bot": bot, "branch": branch, "routine": flag("--routine"), "mode": flag("--mode"), "hypothesis": flag("--hypothesis")});
     match pos {
@@ -33,6 +33,10 @@ pub fn cli(pos: &[&str], flag: Flag) -> Option<Result<(), String>> {
 fn started(r: Result<Value, String>) -> Result<(), String> {
     let v = r?;
     let (id, t) = (v["id"].as_i64().unwrap_or(0), |k: &str| s(&v, k));
+    if t("mode") == "replay" {
+        println!("experiment {id} replays the last {} captured runs of routine {} of {}: «{}»; the bot's main and {} each do them again offline, in throwaway worktrees", v["replays"], t("routine"), t("bot"), t("change"), t("branch"));
+        return Ok(());
+    }
     println!("experiment {id} runs on routine {} of {}: «{}»; its runs alternate the bot's main and {} (in {})", t("routine"), t("bot"), t("change"), t("branch"), t("tree"));
     Ok(())
 }

@@ -46,12 +46,17 @@ pub(super) fn one_commit(dir: &Path, branch: &str) -> Result<String, String> {
     git(dir, &["log", "-1", "--format=%s", branch])
 }
 
-/// The worktree goes and the branch with it: what an experiment leaves when it ends, adopted or not.
-pub(super) fn clear(dir: &Path, tree: &Path, branch: &str) {
+/// The worktree `tree` of the repository at `dir` goes.
+pub(super) fn drop_tree(dir: &Path, tree: &Path) {
     let path = tree.display().to_string();
     let _ = git(dir, &["worktree", "remove", "--force", &path]);
     let _ = std::fs::remove_dir_all(tree);
     let _ = git(dir, &["worktree", "prune"]);
+}
+
+/// The worktree goes and the branch with it: what an experiment leaves when it ends, adopted or not.
+pub(super) fn clear(dir: &Path, tree: &Path, branch: &str) {
+    drop_tree(dir, tree);
     let _ = git(dir, &["branch", "-D", branch]);
 }
 

@@ -32,3 +32,12 @@ pub fn tally(app: &Shared, id: i64) -> Tally {
     });
     rows.into_iter().next().unwrap_or_default()
 }
+
+/// How many of experiment `id`'s comparisons wait for the judge's verdict.
+pub fn unjudged(app: &Shared, id: i64) -> i64 {
+    let sql = "SELECT COUNT(*) FROM lab_comparisons WHERE experiment = ?1 AND verdict IS NULL";
+    app.query(sql, [id], |r| r.get(0))
+        .into_iter()
+        .next()
+        .unwrap_or(0)
+}

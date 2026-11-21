@@ -28,7 +28,8 @@ pub fn writable(home: &FsPath, path: &FsPath) -> bool {
     }) && parts
         .windows(2)
         .all(|w| !w[0].starts_with('.') || w[1] == "skills");
-    own || path.starts_with(home.join("bots/skills"))
+    own || path.starts_with(home.join("bots/skills")) || crate::lab::in_replay(path)
+    // a replay's worktree is its bot's folder for that turn
 }
 /// The skills of a folder of skills, by name with the text of their SKILL.md; `links` false leaves out the shared ones linked into a bot's.
 pub fn skills(dir: &FsPath, links: bool) -> Vec<(String, String)> {

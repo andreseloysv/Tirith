@@ -24,11 +24,11 @@ pub fn deliver(app: &Shared, project: &str, text: &str, phones: bool) {
         let notes = std::mem::take(&mut t.notes)
             .into_iter()
             .map(|n| format!("[tirith] {n}"));
-        let all: Vec<String> = memory
-            .into_iter()
-            .chain(notes)
+        let asked: Vec<String> = notes
             .chain((!text.is_empty()).then(|| text.to_string()))
             .collect();
+        crate::turns::told(project, &asked.join("\n\n")); // what started the turn, for its capture
+        let all: Vec<String> = memory.into_iter().chain(asked).collect();
         let text = all.join("\n\n");
         let sent = !t.stale
             && t.tx
