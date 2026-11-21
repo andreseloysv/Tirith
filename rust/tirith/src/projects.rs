@@ -52,7 +52,7 @@ fn project(dir: &Path, name: &str, color: &str, projects: &[Project]) -> Result<
         _ if c.len() == 7 && c.starts_with('#') && c[1..].chars().all(|h| h.is_ascii_hexdigit()) => c,
         _ => return Err(format!("the color must look like #2f7d5b, not {color:?}")),
     };
-    Ok(Project { id: unique_id(&name, projects), name, repo: dir.display().to_string(), color: Some(color) })
+    Ok(Project { id: unique_id(&name, projects), name, repo: dir.display().to_string(), color: Some(color), chat_keep: String::new() })
 }
 
 /// `name` in lowercase letters, digits and dashes, with -2, -3… when that id is taken.

@@ -108,6 +108,8 @@ function apply(m) {
       t.rows = t.rows.concat(d).slice(-TALK_ROWS);
       break;
     }
+    case 'chat-clear': { const t = S.talks[d.project || '']; if (t) t.rows = []; break; } // the chat was cleared (here, by its bot, or from the phone)
+    case 'chat-trim': { const t = S.talks[d.project || '']; if (t) t.rows = t.rows.filter((r) => r.at >= d.before); break; } // its longest life dropped the older rows
     case 'busy': if (d && d.on) S.busy[d.project || ''] = true; else if (d) delete S.busy[d.project || '']; break;
     case 'load': S.load = d; break;
     case 'owner':
