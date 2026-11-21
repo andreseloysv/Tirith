@@ -69,12 +69,8 @@ fn at_s(iso: Option<&str>) -> u64 {
 /// Moves one git-ignored file of a lane to the same path in the project, never over what is there: an identical file there needs no move, a different one keeps its place and the lane's lands next to it with the lane's id in its name (`doc-<lane>.pdf`). The path it ends at.
 fn move_ignored(src: &Path, repo: &Path, rel: &Path, lane: &str) -> Option<PathBuf> {
     let side = |d: &Path| {
-        d.with_file_name(
-            d.extension()
-                .and_then(|e| e.to_str())
-                .filter(|e| !e.is_empty())
-                .map_or_else(|| format!("{}-{lane}", d.file_name().unwrap_or_default().to_string_lossy()), |e| format!("{}-{lane}.{e}", d.file_stem().unwrap_or_default().to_string_lossy())),
-        )
+        let n = d.file_name().unwrap_or_default().to_string_lossy();
+        d.with_file_name(n.rfind('.').filter(|&i| i > 0 && i + 1 < n.len()).map_or_else(|| format!("{n}-{lane}"), |i| format!("{}-{lane}.{}", &n[..i], &n[i + 1..])))
     };
     let dest = std::iter::successors(Some(repo.join(rel)), |d| Some(side(d))).find(|d| !d.exists() || std::fs::read(d).ok() == std::fs::read(src).ok())?;
     let Some(()) = (!dest.exists()).then_some(()) else { return Some(dest) };
@@ -83,12 +79,13 @@ fn move_ignored(src: &Path, repo: &Path, rel: &Path, lane: &str) -> Option<PathB
 fn files_under(p: &Path, out: &mut Vec<PathBuf>) {
     std::fs::read_dir(p).into_iter().flatten().flatten().map(|e| e.path()).for_each(|e| ((e.is_symlink() || e.is_file()).then(|| out.push(e.clone())), (!e.is_symlink() && e.is_dir()).then(|| files_under(&e, out))).0.unwrap_or(()));
 }
-/// Keeps a file moved in from a lane out of git for good: when the project does not already ignore it, its path joins `.git/info/exclude` there, so it is never committed or pushed from the project folder.
-async fn ensure_excluded(repo: &Path, dest: &Path) {
-    let Ok(rel) = dest.strip_prefix(repo).map(|r| r.to_string_lossy().into_owned()) else { return };
+/// Keeps what a lane moved in out of git for good: when the project does not already ignore it, one line for the whole ignored folder moved (or for a lone file) joins `.git/info/exclude` there, with the pattern characters escaped (`\` in a name would escape the next character and the file would stay visible), so it is never committed or pushed from the project folder.
+async fn ensure_excluded(repo: &Path, rel: &Path) {
+    let (dir, rel, esc) =
+        (repo.join(rel).is_dir() && !repo.join(rel).is_symlink(), rel.to_string_lossy().into_owned(), ['\\', '*', '?', '[', ']', ' '].iter().fold(rel.to_string_lossy().into_owned(), |s, c| s.replace(*c, &format!("\\{c}"))));
     let Some(()) = git(repo, &["check-ignore", "-q", "--", &rel]).await.is_err().then_some(()) else { return };
     let Ok(gitdir) = git(repo, &["rev-parse", "--git-common-dir"]).await else { return };
-    let (file, line) = (repo.join(gitdir).join("info").join("exclude"), format!("/{rel}"));
+    let (file, line) = (repo.join(gitdir).join("info").join("exclude"), format!("/{esc}{}", if dir { "/" } else { "" }));
     let text = std::fs::read_to_string(&file).unwrap_or_default();
     let _ = (!text.lines().any(|l| l.trim() == line)).then(|| (file.parent().map(std::fs::create_dir_all), std::fs::write(&file, format!("{text}{}{line}\n", if text.is_empty() || text.ends_with('\n') { "" } else { "\n" }))));
 }
@@ -111,12 +108,15 @@ pub async fn cleanup_lane(app: &Shared, lane: &Lane, merged: bool) {
             drop(git(&ws, &["add", "-A"]).await);
             drop(git(&ws, &["commit", "-qm", "Saved by Tirith"]).await.map_err(|e| app.event(&lane.id, &lane.project, "error", "cleanup", &format!("could not save the work left in {}: {e}", ws.display()), "")));
         }
-        let (listed, mut files) = (git(&ws, &["ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z"]).await.unwrap_or_default(), Vec::<PathBuf>::new());
-        let entries = listed.split('\0').filter(|r| !r.is_empty() && !is_cache(Path::new(r.trim_end_matches('/')))).map(|r| ws.join(r.trim_end_matches('/')));
-        entries.for_each(|p| ((p.is_symlink() || p.is_file()).then(|| files.push(p.clone())), (!p.is_symlink() && p.is_dir()).then(|| files_under(&p, &mut files))).0.unwrap_or(()));
-        let moved: Vec<PathBuf> = files.iter().filter_map(|p| p.strip_prefix(&ws).ok().filter(|rel| !is_cache(rel)).and_then(|rel| move_ignored(p, &repo, rel, &lane.id))).collect();
-        for dest in &moved {
-            ensure_excluded(&repo, dest).await;
+        let (listed, mut targets) = (git(&ws, &["ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z"]).await.unwrap_or_default(), Vec::<PathBuf>::new());
+        for top in &listed.split('\0').filter(|r| !r.is_empty() && !is_cache(Path::new(r.trim_end_matches('/')))).map(|r| PathBuf::from(r.trim_end_matches('/'))).collect::<Vec<_>>() {
+            let (src, is_dir, mut files) = (ws.join(top), ws.join(top).is_dir() && !ws.join(top).is_symlink(), Vec::<PathBuf>::new());
+            ((src.is_symlink() || src.is_file()).then(|| files.push(src.clone())), is_dir.then(|| files_under(&src, &mut files))).0.unwrap_or(());
+            let moved: Vec<PathBuf> = files.iter().filter_map(|p| p.strip_prefix(&ws).ok().filter(|rel| !is_cache(rel)).and_then(|rel| move_ignored(p, &repo, rel, &lane.id))).collect();
+            targets.extend(if is_dir { (!moved.is_empty()).then(|| top.clone()).into_iter().collect::<Vec<_>>() } else { moved.iter().filter_map(|d| d.strip_prefix(&repo).ok().map(Path::to_path_buf)).collect() });
+        }
+        for rel in &targets {
+            ensure_excluded(&repo, rel).await;
         }
         remove_worktree(&repo, &ws).await;
     }
@@ -141,7 +141,7 @@ fn last_activity(app: &Shared, project: &Project, lanes: &[Lane], build: &Path) 
     let dir_at = std::fs::metadata(build).and_then(|m| m.modified()).map(|t| t.duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)).unwrap_or(0);
     lanes.iter().filter(|l| l.project == project.id).map(|l| at_s(l.ended_at.as_deref()).max(at_s(l.started_at.as_deref())).max(l.last_activity)).max().unwrap_or(0).max(run_at).max(dir_at)
 }
-/// The pass at startup and then every few minutes, applying the same rules to everything that already meets them: a merged, stopped or failed lane still holding a worktree loses it now, the logs and brief of one stopped or failed more than 24 h ago go, and a project's build cache and merge folder go after `limits.build_idle_minutes` with no lane, stage or manager of it working.
+/// The pass at startup and then every few minutes, applying the same rules to everything that already meets them: a merged, stopped or failed lane still holding a worktree loses it now, the logs and brief of one stopped or failed more than 24 h ago go, what earlier cleanups moved into a project but git still sees as new (a `\`, space or `[` in its name broke its per-file exclude line) gets its folder excluded, and a project's build cache and merge folder go after `limits.build_idle_minutes` with no lane, stage or manager of it working.
 async fn sweep_cleanups(app: &Shared, lanes: &[Lane]) {
     for l in lanes.iter().filter(|l| matches!(l.status.as_str(), "merged" | "stopped" | "failed")) {
         let (log, brief, ended) = (app.home.join(format!("logs/lanes/{}.log", l.id)), app.home.join(format!("briefs/{}.md", l.id)), at_s(l.ended_at.as_deref()));
@@ -153,18 +153,23 @@ async fn sweep_cleanups(app: &Shared, lanes: &[Lane]) {
     }
     let (now, minutes, talking, pipelines) = (now_s(), app.cfg().factory.limits.build_idle_minutes, manager::busy(), app.query("SELECT project FROM pipelines WHERE status = 'running'", [], |r| r.get::<_, String>(0)));
     for p in &app.cfg().projects {
+        let (repo, Ok(gitdir)) = (p.repo(), git(&p.repo(), &["rev-parse", "--git-common-dir"]).await) else { continue };
+        let moved_lines: Vec<String> = std::fs::read_to_string(repo.join(gitdir).join("info/exclude")).unwrap_or_default().lines().filter_map(|l| l.strip_prefix('/').map(|r| r.trim_end_matches('/').to_string())).collect();
+        let fresh = git(&repo, &["ls-files", "--others", "--exclude-standard", "-z"]).await.unwrap_or_default();
+        for rel in fresh.split('\0').filter(|r| !r.is_empty() && moved_lines.iter().any(|m| m == r || r.starts_with(&format!("{m}/")))) {
+            ensure_excluded(&repo, Path::new(rel).parent().filter(|q| !q.as_os_str().is_empty()).unwrap_or(Path::new(rel))).await;
+        }
         let (build, merge_dir) = (app.home.join("build").join(&p.id), p.lanes_dir().join("merge"));
         let Some(()) = (build.exists() || merge_dir.exists()).then_some(()) else { continue };
         let busy = talking.contains(&p.id) || pipelines.contains(&p.id) || lanes.iter().any(|l| l.project == p.id && (l.pid.is_some() || matches!(l.status.as_str(), "running" | "merging")));
-        if drop_idle_cache(&p.repo(), &build, &merge_dir, busy, last_activity(app, p, lanes, &build), now, minutes).await {
+        if drop_idle_cache(&repo, &build, &merge_dir, busy, last_activity(app, p, lanes, &build), now, minutes).await {
             app.event("", &p.id, "disk", "diet", &format!("removed {} and its merge folder ({minutes} min with no lane, stage or manager working)", build.display()), "");
         }
     }
 }
 /// Below the factory's `limits.low_disk_gb` free, before the autopilot pauses: the shared build caches (`<home>/build/<project>`) of projects with no lane or stage under way are removed; the next build makes them again.
 fn clear_idle_builds(root: &Path, busy: &[String]) -> Vec<PathBuf> {
-    let dirs = std::fs::read_dir(root).into_iter().flatten().flatten().map(|e| e.path());
-    dirs.filter(|d| d.is_dir() && !busy.iter().any(|b| d.file_name() == Some(b.as_ref()))).filter(|d| std::fs::remove_dir_all(d).is_ok()).collect()
+    std::fs::read_dir(root).into_iter().flatten().flatten().map(|e| e.path()).filter(|d| d.is_dir() && !busy.iter().any(|b| d.file_name() == Some(b.as_ref()))).filter(|d| std::fs::remove_dir_all(d).is_ok()).collect()
 }
 async fn free_idle_builds(app: &Shared, lanes: &[Lane]) {
     let mut busy: Vec<String> = lanes.iter().filter(|l| l.pid.is_some() || matches!(l.status.as_str(), "running" | "waiting" | "merging")).map(|l| l.project.clone()).collect();
@@ -176,23 +181,17 @@ async fn free_idle_builds(app: &Shared, lanes: &[Lane]) {
 /// Ask once per low-disk spell: `asked` is whether a card is already out; it re-arms after the disk recovers (2 GB above the factory's limit).
 fn low_disk_ask(free: f64, asked: bool) -> Option<bool> {
     let low = crate::factory::current().limits.low_disk_gb;
-    match (free < low, free >= low + 2.0, asked) {
-        (true, _, false) => Some(true),
-        (_, true, true) => Some(false),
-        _ => None,
-    }
+    (!asked && free < low).then_some(true).or((asked && free >= low + 2.0).then_some(false))
 }
 fn biggest_dirs(dir: &Path, n: usize) -> Vec<(String, u64)> {
-    let out = std::process::Command::new("du").arg("-sk").args(std::fs::read_dir(dir).into_iter().flatten().flatten().map(|e| e.path())).output();
-    let text = out.map(|o| String::from_utf8_lossy(&o.stdout).into_owned()).unwrap_or_default();
+    let text = std::process::Command::new("du").arg("-sk").args(std::fs::read_dir(dir).into_iter().flatten().flatten().map(|e| e.path())).output().map(|o| String::from_utf8_lossy(&o.stdout).into_owned()).unwrap_or_default();
     let mut rows: Vec<(String, u64)> = text.lines().filter_map(|l| l.split_once('\t')).filter_map(|(k, p)| Some((p.to_string(), k.trim().parse().ok()?))).collect();
     rows.sort_by_key(|a| std::cmp::Reverse(a.1));
     rows.into_iter().take(n).collect()
 }
 /// Below the factory's low-disk limit on the disk of the lanes' worktrees: one ask-owner card (kind device, of no project, since every project shares that disk) naming the biggest of Tirith's own folders.
 async fn warn_low_disk(app: &Shared) {
-    let (home, key) = (app.home.clone(), "low_disk_asked");
-    let free = free_gb(&home.join("lanes"));
+    let (home, key, free) = (app.home.clone(), "low_disk_asked", free_gb(&app.home.join("lanes")));
     match low_disk_ask(free, app.kv(key).is_some()) {
         Some(true) => {
             app.set_kv(key, Some("1"));
@@ -207,15 +206,11 @@ async fn warn_low_disk(app: &Shared) {
 }
 /// Why a project cannot start a lane now (merge backlog, disk, commit guard), or `None`.
 fn blocked(app: &Shared, p: &Project, lanes: &[Lane]) -> Option<String> {
-    let lim = &app.cfg().factory.limits;
-    let backlog = lanes.iter().filter(|l| l.project == p.id && matches!(l.status.as_str(), "merge-queued" | "merging")).count();
-    if backlog >= lim.merge_backlog {
-        Some(format!("{backlog} lanes wait for the merge queue"))
-    } else if free_gb(&app.home.join("lanes")) < lim.low_disk_gb {
-        Some(format!("less than {} GB free on the disk of the lanes' worktrees", lim.low_disk_gb))
-    } else {
-        guard::intact(app, p).err()
-    }
+    let (lim, backlog) = (&app.cfg().factory.limits, lanes.iter().filter(|l| l.project == p.id && matches!(l.status.as_str(), "merge-queued" | "merging")).count());
+    (backlog >= lim.merge_backlog)
+        .then(|| format!("{backlog} lanes wait for the merge queue"))
+        .or_else(|| (free_gb(&app.home.join("lanes")) < lim.low_disk_gb).then(|| format!("less than {} GB free on the disk of the lanes' worktrees", lim.low_disk_gb)))
+        .or_else(|| guard::intact(app, p).err())
 }
 pub(crate) fn paused_fix(project: &str, why: &str) -> String {
     let said = why.find('(').zip(why.rfind(')')).map(|(a, b)| &why[a + 1..b]).filter(|f| f.starts_with("tirith ")).map(String::from);
