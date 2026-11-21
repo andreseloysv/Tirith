@@ -42,15 +42,10 @@ pub fn proxy_port(app: &Shared) -> u16 {
     config::get(&app.cfg().raw, &["network", "proxy_port"]).unwrap_or(DEFAULT_PORT)
 }
 fn enabled(app: &Shared) -> Result<(), String> {
-    if !config::get::<bool>(&app.cfg().raw, &["network", "sandbox"]).unwrap_or(true) {
-        Err("[network] sandbox = false in config.toml".into())
-    } else if !cfg!(target_os = "macos") || !std::path::Path::new(SANDBOX_EXEC).exists() {
-        Err("the sandbox needs macOS (sandbox-exec)".into())
-    } else if std::env::var("TIRITH_SANDBOXED").as_deref() == Ok("1") {
-        Err("the daemon itself runs in a sandbox and macOS cannot nest them (its own proxy settings stay)".into())
-    } else {
-        Ok(())
-    }
+    config::get::<bool>(&app.cfg().raw, &["network", "sandbox"]).unwrap_or(true).then_some(()).ok_or_else(|| "[network] sandbox = false in config.toml".to_string())?;
+    (cfg!(target_os = "macos") && std::path::Path::new(SANDBOX_EXEC).exists()).then_some(()).ok_or_else(|| "the sandbox needs macOS (sandbox-exec)".to_string())?;
+    (std::env::var("TIRITH_SANDBOXED").as_deref() != Ok("1")).then_some(()).ok_or_else(|| "the daemon itself runs in a sandbox and macOS cannot nest them (its own proxy settings stay)".to_string())?;
+    Ok(())
 }
 /// Whether a process Tirith starts runs inside the network sandbox: `wrap` puts it there, or the daemon itself already runs in one (macOS cannot nest them, so its children stay in the outer one and keep its proxy env). `[network] sandbox = false` means neither.
 pub fn sandboxed(app: &Shared) -> bool {
@@ -166,9 +161,7 @@ const ENV_SKIP: [&str; 8] = ["PATH", "HOME", "USER", "SHELL", "PWD", "TMPDIR", "
 /// The items with repeats removed, in first-seen order.
 fn unique<T: PartialEq>(items: impl IntoIterator<Item = T>) -> Vec<T> {
     items.into_iter().fold(vec![], |mut v, x| {
-        if !v.contains(&x) {
-            v.push(x)
-        }
+        let _ = (!v.contains(&x)).then(|| v.push(x));
         v
     })
 }

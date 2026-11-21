@@ -11,9 +11,7 @@ use std::time::Duration;
 pub fn parse_keep(words: &str) -> Result<Option<u64>, String> {
     let w = words.trim().trim_end_matches('.').to_lowercase();
     let err = || format!("no entiendo «{words}»: escribe un tiempo como 30m, 1h, 24 h, 2 días o una semana, o «siempre» para quitar el límite");
-    if matches!(w.as_str(), "" | "siempre" | "para siempre" | "always" | "forever") {
-        return Ok(None);
-    }
+    let Some(()) = (!matches!(w.as_str(), "" | "siempre" | "para siempre" | "always" | "forever")).then_some(()) else { return Ok(None) };
     let (num, unit) = match w.strip_prefix("una ").or_else(|| w.strip_prefix("un ")) {
         Some(u) => (1.0, u.trim()),
         None => {
@@ -83,12 +81,7 @@ pub fn set_keep(app: &Shared, project: &str, words: &str) -> Result<Value, Strin
     (project.is_empty() || app.conv(project) == project).then_some(()).ok_or(format!("unknown project '{project}'"))?;
     let conv = app.conv(project).to_string();
     let secs = parse_keep(words)?;
-    let _writing = crate::projects::WRITING.lock().unwrap();
-    let path = app.home.join("config.toml");
-    let fail = |e: std::io::Error| format!("{}: {e}", path.display());
-    let text = std::fs::read_to_string(&path).or_else(|e| if e.kind() == std::io::ErrorKind::NotFound { Ok(String::new()) } else { Err(e) }).map_err(fail)?;
-    std::fs::write(&path, written(&text, app.cfg().project(&conv).is_some(), &conv, secs.map(|_| words.trim()))?).map_err(fail)?;
-    app.reload_config(true);
+    crate::projects::rewrite(app, |text| written(text, app.cfg().project(&conv).is_some(), &conv, secs.map(|_| words.trim())))?;
     let now = keep_words(app, &conv);
     app.emit("chat-keep", json!({"project": conv, "keep": now, "keep_s": secs.unwrap_or(0)}));
     to_phones(app, &conv, json!({"v": 1, "keep_s": secs.unwrap_or(0)}));
