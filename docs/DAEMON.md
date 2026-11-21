@@ -28,7 +28,7 @@ elsewhere) and reloads when a file changes, config.toml does or main moves (its 
 `factory::stamp`), with no restart and the embedded copy as the fallback.
 `~/.tirith/config.toml` is laid over it key by key and wins; its yesterday's sections are read in memory under
 the factory's names (`config.rs`), the file itself untouched except by the page's `toml_edit` writes (the bots'
-roles and their schedule routes), and keys nothing reads are an error the owner sees. A role `extends` another (the lead and the improver extend
+roles and their schedule routes), and keys nothing reads are an error the owner sees. A role `extends` another (the lead and the CEO extend
 the manager), and an agent the factory does not name runs with the `default` agent's flags. The `[[routes]]` of
 the factory say who hears each event the code emits (a closed list in `factory.rs`): which role, as a `turn` now
 or a `note` with its next turn, a line in the chat (`chat`), and whether that line and the answer of a turn the
@@ -76,7 +76,7 @@ deploy stages are no checks: they run after main has moved, on that main (`deplo
 
 ## `metrics.rs`
 
-Health metrics and the improver.
+Health metrics and the CEO.
 
 Every minute code computes the metrics from the daemon's own data (lanes, runs, plans, kv). The owner's measures
 come from the store too: `interruptions` counts, per item merged in 24 h, what reached the owner unasked — phone
@@ -91,19 +91,19 @@ question is itself an interruption). Their labels and targets are
 page, and a red one is routed as `metric.red` like any other. A metric that
 turns red starts an episode: the mechanical fix when there is one, then one note to the manager. Still red
 after the delayed `metric.red` route's `after_minutes` (15), one pass runs for that episode: that route's turn
-role (the improver, `access = "read"`; it was the reviewer) runs one fresh turn like any turn role, and its
+role (the CEO, `access = "read"`) runs one fresh turn like any turn role, and its
 answer goes to the owner's chat and, as `review.done`, to the lead. Back to green ends the episode. The
-factory's `schedule` route to the improver also runs it every day at 07:00 with no red measure due — that
+factory's `schedule` route to the CEO also runs it every day at 07:00 with no red measure due — that
 when and who are configuration, not a decision in `metrics.rs`, and it is due like a bot's routine (its time
 came today and no daily pass ran since; its daily passes are the `ceo_reviews` rows whose `metric` names
 `daily`, counted in the same 24 h as its `max_per_day`). Either way its brief (`brief`) carries
 the measures, the measures and eval scores grouped by factory version — merged lanes and their first-try
 share, the `scores`, the cards and the events per stamp, oldest version first — the last lanes with their
-stamp, failing checks, plans and owner questions; the role's prompt (`factory/prompts/improver.md`) has it
+stamp, failing checks, plans and owner questions; the role's prompt (`factory/prompts/ceo.md`) has it
 read `factory/` and propose at most one change to it per pass, as an item of step 17 of this repo's plan with
 its check and its lane started (`tirith plan add` and `tirith lane start`, which its read access allows). A
 factory version whose first 10 merged items (or its first 24 h) went worse than the version before it on
-satisfaction, interruptions or first try is reverted by the improver's next pass, as one more such item;
+satisfaction, interruptions or first try is reverted by the CEO's next pass, as one more such item;
 nothing in the factory needs the owner's yes, and a landed change applies when main moves (the reload above).
 While everything is green and the day's pass ran, no model is called.
 
@@ -112,7 +112,7 @@ While everything is green and the day's pass ran, no model is called.
 Models per role and the fallback chain.
 
 Roles are the factory's: "manager" (a project's chat), "lead" (the chat of no project), "worker" (lanes),
-"improver" (one fresh turn) and "judge" (the evals' cheap turn role, with no prompt of its own, so code never
+"ceo" (one fresh turn) and "judge" (the evals' cheap turn role, with no prompt of its own, so code never
 picks it as a standalone turn role), each with its `session`, `scope`, `extends`, `access`, `idle_minutes`,
 `max_per_day` and `runs_on` in `factory/factory.toml`; code finds a role by that shape, never by a fixed
 list of names. Each has an agent alias, a model, an effort and a fallback

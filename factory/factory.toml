@@ -65,7 +65,7 @@ scope = "project"
 prompt = ["prompts/brief.md"]
 runs_on = "local"
 
-# The improver (was the reviewer, and before it the CEO): the turn role of the
+# The CEO: the turn role of the
 # delayed metric.red route below; a schedule route below also runs it every
 # day at 07:00, with no red measure needed. It
 # reads the measures and eval scores by factory version and factory/ itself,
@@ -75,12 +75,13 @@ runs_on = "local"
 # interruptions or first try is reverted by its next pass. Nothing in the
 # factory needs the owner's yes, and the daemon reloads the factory when
 # main moves, so a landed change applies with no rebuild and no restart.
-[roles.improver]
+[roles.ceo]
+name = "CEO"
 extends = "manager"
 session = "turn"
 scope = "global"
 access = "read"
-prompt = ["prompts/improver.md"]
+prompt = ["prompts/ceo.md"]
 max_per_day = 6
 runs_on = "local"
 
@@ -201,7 +202,7 @@ phone = true
 [[routes]]
 on = "metric.red"
 after_minutes = 15
-to = "improver"
+to = "ceo"
 mode = "turn"
 then = "lead"
 
@@ -217,11 +218,11 @@ to = "manager"
 mode = "turn"
 phone = true
 
-# The improver's daily pass: configuration, not code. It reads the same
+# The CEO's daily pass: configuration, not code. It reads the same
 # brief as a red-measure pass (the measures, by factory version).
 [[routes]]
 on = "schedule"
-to = "improver"
+to = "ceo"
 mode = "turn"
 days = [1, 2, 3, 4, 5, 6, 7]
 at = "07:00"
@@ -321,7 +322,7 @@ label = "Preguntas al dueño"
 # What reached the owner without the owner asking, per item merged in 24 h:
 # phone messages of turns no owner message started, notices whose route has
 # phone = true, and cards. It should fall toward 0; like every measure it is
-# routed as metric.red (to the lead, then the improver) when it turns red.
+# routed as metric.red (to the lead, then the CEO) when it turns red.
 [metrics.interruptions]
 label = "Interrupciones por ítem (24 h)"
 target = 1
