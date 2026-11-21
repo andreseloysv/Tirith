@@ -1,0 +1,43 @@
+/* ---------- type ---------- */
+h2 { font: 500 10.5px/1.6 var(--mono); text-transform: uppercase; letter-spacing: .1em; color: var(--mut); }
+h3 { font: 500 10px/1.6 var(--mono); text-transform: uppercase; letter-spacing: .1em; color: var(--mut); }
+h2 .n, h3 .n { color: var(--fg); }
+code { background: var(--soft); border-radius: 5px; }
+.quiet { color: var(--mut); }
+::selection { background: var(--sel); }
+
+/* ---------- surfaces: one hairline, no glass ---------- */
+.card, .scard, .ncard, .col, .node, .runcard, .rcard, .canvas, .sform, .pform, .stcard, .pia, .ap-card, .rules, .orgroot, .zbar, .seg, .chat-msg, .lcard, .ia, .sum {
+  background: transparent !important; border: 1px solid var(--line) !important; border-radius: 16px !important; box-shadow: none !important;
+  -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+.drawer, .acpop, .stoppop, .pwhopop, .pltip, .health-panel, .ap-ov, #chat {
+  background: var(--bg) !important; border: 1px solid var(--line) !important; border-radius: 16px !important; box-shadow: 0 20px 60px rgba(0,0,0,.35) !important;
+  -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+.drawer { border-width: 0 0 0 1px !important; border-radius: 18px 0 0 18px !important; }
+.col::before { display: none !important; }
+.col header b { font: 500 10.5px var(--mono); text-transform: uppercase; letter-spacing: .1em; }
+.canvas { background-image: radial-gradient(var(--line) 1px, transparent 1px) !important; background-size: 22px 22px !important; }
+
+/* ---------- buttons, chips, marks ---------- */
+.abtn, .ibtn, .sadd, .scancel, .mc-btn, .stopb, .pitbtn, .plaunch, .nclose, .seg button, .webpill button, .lshow, .ovnow, .rleave, .mapply {
+  font-family: var(--mono) !important; font-size: 10.5px !important; font-weight: 400 !important; text-transform: uppercase; letter-spacing: .08em;
+  background: transparent !important; color: var(--fg) !important; border: 1px solid var(--line) !important; border-radius: 999px !important; box-shadow: none !important; padding-left: 14px !important; padding-right: 14px !important; }
+.abtn:hover, .ibtn:hover, .sadd:hover, .scancel:hover, .mc-btn:hover, .pitbtn:hover, .plaunch:hover, .seg button:hover { border-color: var(--fg) !important; }
+.seg { padding: 3px !important; gap: 2px !important; border-radius: 999px !important; } .seg button { border: 0 !important; } .seg button.on { background: var(--fg) !important; color: var(--bg) !important; }
+.isend, .stopgo { font-family: var(--mono) !important; font-size: 10.5px !important; text-transform: uppercase; letter-spacing: .08em; background: var(--fg) !important; color: var(--bg) !important;
+  border: 1px solid var(--fg) !important; border-radius: 999px !important; box-shadow: none !important; padding-left: 16px !important; padding-right: 16px !important; }
+.stopb, .rleave { color: var(--red) !important; border-color: var(--red-line) !important; }
+.chip, .pill, .pchip, .ichip, .lchip, .nchip, .mc-chip, .rvchip, .fbchip, .achip, .sbadge, .stbadge, .rbadge, .dpill, .webpill, .pstat, .pchp, .pstate, .ssrc {
+  font-family: var(--mono) !important; font-size: 10px !important; font-weight: 400 !important; text-transform: uppercase; letter-spacing: .06em;
+  background: transparent !important; border: 1px solid var(--line) !important; border-radius: 999px !important; box-shadow: none !important; padding-left: 9px !important; padding-right: 9px !important; }
+.avatar, .pava { background: transparent !important; border: 1px solid var(--line) !important; color: var(--fg) !important; box-shadow: none !important; font-family: var(--mono); font-weight: 400 !important; }
+.gico { background: transparent !important; border: 1px solid var(--line) !important; border-radius: 14px !important; box-shadow: none !important; color: var(--fg) !important; }
+.gico svg { stroke: currentColor !important; }
+.stdbar, .bar { background: var(--line) !important; border-radius: 999px !important; height: 3px !important; }
+.stdbar i, .bar i { border-radius: 999px !important; }
+.stdbar i, .bar .green { background: var(--fg) !important; } .bar .blue { background: var(--blue) !important; }
+input, select, textarea { border-radius: 12px !important; }
+.rtitle, .sf input, .sf select, .iin, .envv { background: transparent !important; border: 1px solid var(--line) !important; box-shadow: none !important; }
+.ierr { border-radius: 12px !important; }
+.dot.blue, .pdot2 { background: var(--blue); }
+

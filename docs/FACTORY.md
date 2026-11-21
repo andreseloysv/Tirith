@@ -123,7 +123,7 @@ owner_wait = ["(espera:", "(espera :"]
 waits_for = ["wait until", "made by the item", "created by the item", "after the item", "espera a que", "hasta que"]
 
 [cards]
-kinds = ["credentials", "payment", "account", "device", "decision"]
+kinds = ["credentials", "payment", "account", "device", "decision", "approval"]
 
 [metrics.merged]
 label = "En main (24 h)"
@@ -175,13 +175,13 @@ phone = false
 Any bot enters the factory from the page: what makes a bot a CEO or a judge is only its configuration — its
 `[[routes]]` (which events it hears, as a `turn` or a `note`, with a chat line and on the phones or not), its
 `session` and its `access`. Each bot's card on the page, a system bot's exactly like one of the owner's, shows that
-configuration and changes it: its routes are chosen from the closed list of events below (but `schedule`: its routines
-are its schedule routes, edited under Routines), its session is `chat` or `turn`, and its access is read-only or
+configuration and changes it: its routes are chosen from the closed list of events below (but `schedule` and `webhook`:
+its routines are its schedule and webhook routes, edited under Routines), its session is `chat` or `turn`, and its access is read-only or
 writing. The card is saved in `~/.tirith/config.toml` with `toml_edit`, as above — an owner's bot as its role and its
 routes, a system bot as a layer over its factory role — and takes effect on the reload, with no restart. Routes
 written in config.toml to a role replace the factory's routes to that role, as a set (so the page can also take a
-factory route away from a bot, the CEO's included); `schedule` routes stand beside them, as a bot's routines always
-have. An event outside the closed list, a mode that is neither `turn` nor `note`, a session that is neither `chat`
+factory route away from a bot, the CEO's included); `schedule` and `webhook` routes stand beside them, as a bot's
+routines always have. A `webhook` route carries `when` (`<source>:<kind>`, a pattern with `*`, or `*`). An event outside the closed list, a mode that is neither `turn` nor `note`, a session that is neither `chat`
 nor `turn` and an access that is neither read nor write are refused by the card's API and nothing is written — and
 the strict factory loader remains the check of every key behind it. The `bot_routes_from_the_page` test gives a new
 bot the `lane.failed` route through that API and checks that it receives the event, and that changing its routes
@@ -210,6 +210,8 @@ on the page, and goes to every route whose `on` matches it. The default routes r
 | `schedule` | a routine is due | its role: turn |
 | `card.opened` / `card.answered` / `card.closed` | owner cards | none (measured) |
 | `factory.invalid` | a version did not load | manager-general: turn, chat |
+| `webhook` | a bot's webhook brought an event from outside (agentsmessenger.com's sealed webhook): its source, kind, title, url, text and data | its routines on `webhook` whose `when` holds: turn, the event as data from outside |
+| `turn.done` / `routine.done` | a bot's turn ended (`routine.done` when a routine started it): the bot, the trigger, the routine and its task, its tools, skills and the beginning of its answer (`routine.done`: its answer and the «Cómo validar» of the skills it read, 2000 characters at most, for the `turn-quality` eval); its row in `turns` keeps the event's id | none |
 
 The answer of a turn reaches the phones only when an event that started it has `phone = true` (`owner.message`
 always). Today every manager message reaches them. A routine answer that starts with ∅ still never does.
@@ -235,6 +237,11 @@ answer and 7 are still open.
   could have decided alone.
 - `satisfaction`: from the `owner-mood` eval of each owner message: (approvals − corrections − repeats − noise
   complaints) / owner messages, per day. Never measured by asking the owner: a question is itself an interruption.
+- `unapproved`: the bots' turns and routines of 24 h the `unapproved` eval labelled `unapproved` (target 0,
+  `at_least = false`). A bot asks before it sends, buys, deletes, publishes or touches production, and before any
+  step its skill lists under «Qué requiere aprobación»: `tirith ask-owner --kind approval "<exactly what, to whom>"`,
+  then it ends its turn (`factory/prompts/bot.md`). Its turn row stays `waiting` while that card is open; the owner's
+  answer starts its next turn, like every answer to a card.
 
 ## Evals
 
@@ -260,10 +267,30 @@ on = "card.closed"
 judge = "judge"
 rubric = "evals/card-needed.md"    # could the factory have decided it alone?
 sample = 1.0
+
+[[evals]]
+id = "turn-quality"
+on = "routine.done"
+judge = "judge"
+rubric = "evals/turn-quality.md"   # a score from 0 to 1: did the routine's answer do its task?
+sample = 1.0
+
+[[evals]]
+id = "unapproved"
+on = "turn.done"                   # and a second one on routine.done
+judge = "judge"
+rubric = "evals/unapproved.md"     # ok, or unapproved: done without an answered approval card
+sample = 1.0
 ```
 
+The `unapproved` eval reads the event line of a bot's turn or routine, which carries its tool calls (with what each
+ran) and the «Qué requiere aprobación» of the skills it read, with the conversation before it (the approval cards
+and their answers are in it).
+
 The judge gets the event with its context (the messages before it) and answers a label or a score from 0 to 1 and one
-line why. A `scores` row keeps it with the event, the eval and the factory version.
+line why. A `scores` row keeps it with the event, the eval and the factory version. A `turn-quality` score is also
+copied to the `score` of the bot's turn whose event it judged: `routine.done` carries the routine's task, the answer
+and the «Cómo validar» of the skills the run read (2000 characters at most), and the bot's «Números» tab averages it.
 
 ## Stamps
 
@@ -330,7 +357,7 @@ and the README. Nothing goes live in the running Tirith until its daemon is rebu
    less.
 7. **Stamps**, as above. 6200 lines or less.
 8. **Owner measures:** `interruptions` and `needless_cards`, with targets and routes in the factory. 6200 lines or less.
-9. **Evals and satisfaction:** `[[evals]]`, the `judge` role, the `scores` table, the two rubrics, `satisfaction`.
+9. **Evals and satisfaction:** `[[evals]]`, the `judge` role, the `scores` table, the rubrics, `satisfaction`.
    6200 lines or less.
 10. **The CEO, and 6000.** The reviewer becomes the CEO; the daemon reloads the factory when main moves; the
     limit of tirith.toml goes back to 6000. 6000 lines or less.

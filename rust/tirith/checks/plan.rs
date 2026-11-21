@@ -9,11 +9,11 @@ async fn repo_with_plan(repo: &std::path::Path, plan: &str) -> String {
         "add .",
         "commit -qm i",
     ] {
-        super::git(repo, &a.split(' ').collect::<Vec<_>>())
+        crate::app::git(repo, &a.split(' ').collect::<Vec<_>>())
             .await
             .unwrap();
     }
-    super::git(repo, &["rev-parse", "HEAD"]).await.unwrap()
+    crate::app::git(repo, &["rev-parse", "HEAD"]).await.unwrap()
 }
 #[tokio::test]
 async fn plan_flushes_on_start() {
@@ -45,17 +45,19 @@ async fn plan_flushes_on_start() {
     );
     super::flush(&app, None).await;
     assert_eq!(
-        super::git(&repo, &["status", "--porcelain", "--", "docs/TODO.md"])
+        crate::app::git(&repo, &["status", "--porcelain", "--", "docs/TODO.md"])
             .await
             .unwrap(),
         ""
     );
-    assert!(super::git(&repo, &["show", "HEAD:docs/TODO.md"])
+    assert!(crate::app::git(&repo, &["show", "HEAD:docs/TODO.md"])
         .await
         .unwrap()
         .contains("The ui-deck item"));
     assert_eq!(
-        super::git(&clean, &["rev-parse", "HEAD"]).await.unwrap(),
+        crate::app::git(&clean, &["rev-parse", "HEAD"])
+            .await
+            .unwrap(),
         clean_head,
         "a clean plan gets no start commit"
     );
@@ -64,7 +66,7 @@ async fn plan_flushes_on_start() {
 }
 #[test]
 fn plan_add_rejects_invalid_checks() {
-    let b = super::check_problem;
+    let b = super::check::check_problem;
     assert!(
         [
             "tirith run -s test",

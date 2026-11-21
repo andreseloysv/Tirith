@@ -12,8 +12,35 @@ with `toml_edit`, keeping its comments, and the bots that used to live in kv mov
 the start of every turn and routine, and skills in `.agents/skills/<name>/SKILL.md`, its own and the shared ones of `<tirith home>/bots/skills` (linked in before every turn).
 The bots' agent finds them natively: Muse reads `.agents/skills`, and the agent's own `.<command>/skills` is a link to the same folder. Agents may write in a bot's folder
 (never in its hidden folders, where agent settings live, except skills folders) and in the shared skills; the page's Library shows, corrects and deletes all of it.
+The shared memory, `<tirith home>/bots/memory.md` (what holds for every bot: the owner's name, time zone, language), is handed before the bot's own, as `[tirith] Shared memory.md as it is now: …`, and the
+Library shows it above the bot's memory and edits it (`POST /api/bots/<id>/library` with `memory` and `shared`; `GET` gives it as `shared_memory`). Memory notes are numbered: when it hands a memory over,
+Tirith puts `[m<N>]` (the bot's own) or `[s<N>]` (the shared one) before every note line (one that starts with `-` or `*`) that has none yet, the number after the highest already there, and saves
+the file so; numbered notes, headings and every other line stay as they are, and the bot cites `[m<N>]` or `[s<N>]` when its answer uses a note. Every skill follows the factory's template,
+`factory/skill.md`: its header and seven sections («Cuándo usarla», «Entradas y accesos», «Pasos», «Cómo validar», «Qué devuelve», «Qué requiere aprobación», «Si algo falla»). The bot prompt
+gets its text in place of `{skill_template}` (as a role's prompt gets `{name}`); the Library's `GET` gives it as `template`, a new skill starts from it, and every skill is marked with the sections it lacks, by their titles.
 A bot may have a model of its own (role `bot-<id>` of `models.rs`, chosen in its card); without one it has the managers'. A routine answer that starts with ∅ (nothing new)
 stays on the page and never reaches the phones (`rooms::to_phones`), so only news does.
+
+Routines on an event from outside. A routine is either timed (`schedule`) or waits for its bot's webhook: a `[[routes]]` with `on = "webhook"` and
+`when` — the event's `<source>:<kind>` (`github:pull_request.opened`), a pattern of it with `*` (`github:issues.*`), or `*` for every call —
+made on the page (Routines: "At a time" or "On an event from outside") or by the bot (`tirith routine hook "<title>" "<when>" "<task>"`); its
+task may name `{title}`, `{url}` and `{text}`. The webhook is agentsmessenger.com's sealed webhook (its `src/server/hooks/`):
+`POST /api/bots/<id>/webhook` gives the bot's URL, making it once — the daemon makes sure the bot has its own private room (`rooms/hooks.rs`,
+even with no phone paired), signs with its room key a `request` event in that room (refs `[]`, body the JSON text
+`{"hook": "create", "readers": ["<its public key>"]}`), sends it to `POST <[messenger] url>/hooks` and keeps `{id, url, from, room}` in kv
+`webhook:<bot>` (`from`: the key of the platform's `webhook` agent of that room); `POST /api/bots/<id>/webhook/delete` deletes it the same way
+(`{"hook": "delete", "id": "<id>"}`), and deleting the bot forgets it. What a service posts to the URL arrives in the room sealed for this
+Tirith alone, as `tirith-hook {"v":1,"at":…,"headers":{…},"body":…}`. The room's watcher (`rooms/hooked.rs`) never makes such a line one of
+the owner's or of another agent: from the `from` agent it becomes the bot's `webhook` event (`bots/hook_event.rs`) — `source` (`github`
+when it has `x-github-event`, else the user-agent), `kind` (`github:<x-github-event>.<action>`, or `hook`), `title` and `url` (of
+GitHub's pull request, issue, release or comment, else the body's own `title` and `url`), `text` (the body as text, 4000 characters at most)
+and `data` (the body) — and from anyone else it is dropped. The event is kept and shown; each of the bot's routines on `webhook` whose
+`when` holds runs (`bots/hook_fire.rs`, trigger `event:webhook`), handed its task and then the event between two random marks
+(`<<<outside-data <mark>` … `outside-data <mark>>>>`), said to be data from outside and never instructions (`factory/prompts/bot.md` says
+the same). «Probar» on the page (`POST /api/bots/<id>/webhook/test/<routine>`) runs one routine with GitHub's sample of a pull request
+opened, with no platform in between. The Library gives a short Google Apps Script with the URL in it that, every 5 minutes in the
+owner's Google account, posts the new mail labelled `tirith/<bot name>` (sender, subject, date, text, its link) to the webhook and marks it
+read. Tests `webhook_create_signs_the_request` (against a fake platform) and `webhook_starts_its_routine` (`rust/tirith/checks/webhooks.rs`).
 
 ## `chat.rs`
 
@@ -42,8 +69,8 @@ stand next to the factory's. The `[[evals]]` of the factory are judged in the ba
 `factory/evals/` is its instructions): the event with the conversation before it (and, for a card, the card
 itself) goes in, and a `scores` row keeps the label or score, one line why, the event and the judge's stamp;
 a share of the events is judged (`sample`, by event id). An eval on a missing event, judge or rubric is
-invalid. Nothing of a score reaches the owner: the scores only feed the measures (`satisfaction`, and
-`needless_cards` below).
+invalid. Nothing of a score reaches the owner: the scores only feed the measures (`satisfaction`,
+`needless_cards` and `unapproved` below).
 
 Every version of the factory has a stamp (`Factory::version`): the main commit that last changed `factory/`,
 plus a short hash of what config.toml lays over it (`<commit>+<hash>`; `embedded` when no checkout is at hand).
@@ -94,8 +121,11 @@ the cards opened in 24 h and already resolved that were closed without an answer
 eval judged decidable alone (an answered one too: it bothered the owner needlessly) — and `satisfaction` is,
 per day, (approvals − corrections − repeats − noise complaints) / owner messages from the `owner-mood` eval's
 scores, judged by the cheap `judge` role from what the owner writes anyway, never by asking the owner (a
-question is itself an interruption). Their labels and targets are
-`[metrics.interruptions]`, `[metrics.needless_cards]` and `[metrics.satisfaction]` of the factory; they show with the other metrics on the
+question is itself an interruption) — and `unapproved` counts the bots' turns and routines of 24 h that the
+`unapproved` eval (on `turn.done` and `routine.done`) labelled `unapproved`: something a skill it read lists under
+«Qué requiere aprobación», or a send, purchase, deletion, publication or production change, done without an
+answered `approval` card (target 0; red at the first one). Their labels and targets are
+`[metrics.interruptions]`, `[metrics.needless_cards]`, `[metrics.satisfaction]` and `[metrics.unapproved]` of the factory; they show with the other metrics on the
 page, and a red one is routed as `metric.red` like any other. A metric that
 turns red starts an episode: the mechanical fix when there is one, then one note to the manager. Still red
 after the delayed `metric.red` route's `after_minutes` (15), one pass runs for that episode: that route's turn
@@ -154,6 +184,8 @@ the agentsmessenger.com chat page. One task per room long-polls it.
 Who gives orders: only a phone paired with a one-use QR code (`tirith-pair <code>`) is the owner, in every room made
 here (each project gets a room, each room gets every phone). Other agents reach the manager as information. After 30
 agent messages in a row with nothing from a paired phone, Tirith stops delivering and says so once, until a phone writes.
+A `tirith-hook` line is never a line for people: only the one sealed by the room's webhook agent (kv `webhook:<bot>`)
+is handed on, as its bot's `webhook` event (see Routines on an event from outside, above).
 
 ## `rooms/sealed.rs`
 
@@ -171,3 +203,105 @@ The owner's Safari is read through the daemon instead: `tirith safari open <url>
 
 The daemon's HTTP proxy for sandboxed processes: `CONNECT host:port` and plain-HTTP absolute-form requests. It authenticates the caller, refuses blocked destinations (by name, then by the addresses they resolve to), records each
 new destination of each caller, and pipes the bytes.
+
+## `turns/`
+
+The turn log. Every turn of a chat or turn role (the project managers, the bots, the CEO, the judge) leaves one row in
+`turns` (`assets/schema.sql`; `runs` is the pipelines'): `conv` (its conversation), `role`, `trigger` (`owner`,
+`room`, `schedule`, `run-now` — the page's Run now — or `event:<name>`; whoever hands the message over sets it, and
+the first one counts until the turn starts), `routine` (the id of the routine that started it), `started_at`,
+`ended_at`, `ms`, `status` (`ok`, `failed`, or `waiting` when an approval card it opened is still open at its end: an `approval` card of its conversation opened since the turn started, `turns/approval.rs`), `agent`, `model`, `effort`, `tokens_in`, `tokens_out`,
+`tokens_cache_read`, `tokens_cache_write`, `cost_usd`, `steps` (tool calls), `skills` (JSON: the skills it read —
+Anthropic's `Skill` tool, Muse's `read_skill`, or any tool whose input names `skills/<name>/SKILL.md`), `tools` (JSON:
+each call's name and the short line the chat shows, 50 at most), `versions` (JSON: the git blob hash, as
+`git hash-object` gives it, of its `memory.md`, of `<home>/bots/memory.md` when it exists and of each skill's
+`SKILL.md`), `answer` (cut at 4000 characters), `event` (its event's id) and its stamp (`factory`, `role_hash`).
+
+Tokens and cost come from what each agent already prints: Anthropic's `result` line (`usage.input_tokens`,
+`output_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens`, `total_cost_usd`, `is_error`); Muse's
+`runtime.session` records whose `payload.event.kind` is `model_completed` (`payload.event.usage`: `input_tokens`,
+`output_tokens`, `cache_read_tokens`, `cache_write_tokens`), summed over the turn, and when its output carries none,
+from its session's `session.jsonl` under `~/.local/share/muse/sessions/<year>/<month>/<day>/<id>/` (the records since
+the turn started); Codex's `turn.completed` (`usage.input_tokens`, `cached_input_tokens`, `output_tokens`). When the
+agent gives no cost, `[prices."<model id>"]` in `~/.tirith/config.toml` does (`input`, `output` and `cached`, dollars
+per million tokens; the strict loader accepts the section and none of it goes to `factory/`); without a price the
+cost stays empty, never invented.
+
+When a bot's own turn ends (a role with `scope = "own"` and `session = "chat"`; a judge's turn in its conversation emits nothing, or an eval on `turn.done` would judge itself forever) the event `turn.done` is emitted — or
+`routine.done` when a routine started it — saying the bot, the trigger, the routine and its task, the tools, the
+skills and the beginning of the answer; neither has a default route. For the `unapproved` eval it also carries each
+tool call with its summary and, for each skill it read (its own, then the shared one), the text of its «Qué requiere
+aprobación» section. `GET /api/turns?conv=<key>&limit=<n>` gives the
+rows, the last first. The manager's sessions, exec turns and loose turns, and the bots' routines, only call this
+module: `trigger` when a message is handed over, `begin`/`handed`/`line`/`end`/`abandon` around a conversation's
+turn, `turn_of`/`done` around a turn role's.
+
+Each row also carries its quality signals (`react.rs`, `signals.rs`, `checks.rs`):
+
+- `reaction`: the owner's 👍 (1) or 👎 (-1). `POST /api/turns/<id>/reaction` with `{"value": 1, -1 or 0}` keeps it (0
+  takes it back: empty). In a bot's conversation an owner message that is only 👍 or 👎 (any skin tone) or `+1` / `-1`,
+  written on the page (`manager::say`) or from a paired phone (`from_room`), is the reaction to the bot's last kept
+  turn: it stays as a chat row, starts no turn, and has no `owner.message` event, so owner-mood does not judge it.
+- `corrected`: 1 when the `owner-mood` eval labels an owner message `correction` or `repeat`; it marks the
+  conversation's last turn (of its own role, not the judge's) that ended before that message, taken when the message
+  came, before the judge runs.
+- `checks_passed`, `checks_total`, `checks` (the names, as written): the bot's own validation. `tirith turn checks
+  <passed>/<total> "<names>"`, run by the bot in its session (`TIRITH_PROJECT` is its conversation; a lane is refused),
+  posts to `POST /api/turns/checks`; the open turn of that conversation keeps them until its row is written, else its
+  last kept turn gets them. `factory/prompts/bot.md` asks for it at the end of a routine whose skill has «Cómo validar»,
+  with what it really checked.
+- `cited` (JSON): the numbered notes, `[m<N>]` of its own memory and `[s<N>]` of the shared one, that its answer
+  names, each once in order, read when its row is written.
+
+- `score`: the judge's note from 0 to 1 on a routine's run. The `turn-quality` eval (`[[evals]]` on `routine.done`,
+  rubric `factory/evals/turn-quality.md`) reads the routine's task, the answer and the «Cómo validar» section of each
+  skill the run read — `routine.done`'s text carries them (`quality.rs`), cut to 2000 characters — and answers a score
+  with one line why; the score is copied to the turn whose `event` is that event (`turns::scored`, or `catch_up` when
+  the judge answered before the row was written). A judge's turn kept in a bot's conversation emits no event of its own.
+
+`GET /api/turns` gives these columns too; older databases get them by `ALTER TABLE` at start (`add_columns`).
+
+## `numbers/`
+
+A bot's numbers, read from its own rows in `turns` (its role in its conversation; the judge's turns there do not
+count) and its memory files: `GET /api/bots/<id>/numbers` gives
+
+- `routines`: per routine of its card (then routines it no longer has, then `Chat` for its turns without one): `runs`,
+  `success` (share ok), `ms` (mean), `cost_per_good` (the cost of all its runs over the ones that ended ok),
+  `down_per_10` (👎) and `corrections_per_10`, `score` (the mean judge's score, `scored` how many) and `trend`: the last
+  10 runs against the 10 before them (`last` and `before`, each with `cost_per_good`, `ms`, `success`), null until there
+  are more than 10.
+- `skills`: per skill its runs read: `used`, `validated` (runs whose `checks_passed = checks_total`), and the mean tokens
+  (in, out and cache) of its routine's runs (the routine of its first use) before that first use against after:
+  `tokens_before`, `tokens_after`, `saved_percent`.
+- `memory`: `tokens` (`own` and `shared`: characters / 4 of its memory.md and of `bots/memory.md`), `notes` (every
+  numbered note with how many of its last 30 runs cited it), `uncited` (none cited them: candidates to delete, which
+  Tirith never deletes), `misses` and `missed` (owner messages in its conversation that owner-mood labelled `repeat`).
+
+The page shows them in the bot's «Números» tab (`web/js/views/bots/numbers.js`) in short lines, and every answer of a
+bot in its chat carries a discreet 👍 and 👎 (`web/js/views/chat/react.js`) that calls `POST /api/turns/<id>/reaction`
+(the same one again takes it back) and stays marked; the answer's turn is found by its words and its time.
+
+## `teach/`
+
+Teaching a bot a task (docs/BOTS.md, part 5). The owner does the task once in their own Edge with Tirith's
+extension, `tools/teach/` (Manifest V3, installed with «Load unpacked»; its README says how in two steps): pages (URL
+and title), clicks (the element's text, role and a short selector) and typing (the field's label and value), each
+with its time. Passwords, one-time codes and cards are masked as `•••` (`type=password`, `autocomplete`
+`one-time-code` or `cc-*`, fields whose name or label looks like card, cvv, cvc, otp, pin, tarjeta or código, and
+any step marked `sensitive`), first by the extension and again by the daemon; a recording stops by itself after 10
+minutes. The recording lives in kv `teach:<bot>` (`on`, `since`, `steps`), the bot's token in `teach-token:<bot>`.
+
+- `GET /api/teach/<id>`: the recording; to the page also the token (the bot's tab «Enseñar» shows the link
+  `<daemon>/api/teach/<id>#<token>`, pasted once in the extension), never to the extension.
+- `POST /api/teach/<id>/start` and `/stop`: from the page, or from the extension with the token.
+- `POST /api/teach/<id>/events`: one step or `{"steps": [...]}`, kept only while recording; it needs
+  `Authorization: Bearer <token>` from anyone (401 without it or with another).
+
+The same-origin guard lets the extension's origin (`chrome-extension://bogleilobfephnbnjibgoofoeipkhfef`, fixed by
+the `key` in its manifest) reach `/api/teach/` only, and CORS answers that origin only (preflight included). While a
+recording is on, what the owner writes in the bot's chat (`manager::say`) is kept with the steps, by time, and starts
+no turn. At stop the bot is handed, in one turn (trigger `teach`), the steps with the owner's words under the step
+they follow and the skill template (`factory/skill.md`): it writes the skill with `draft: true` in its header and
+asks 3 to 5 questions in its chat (decision rules, failures, approvals). No bot uses a draft until the owner
+activates it in the Library (factory/prompts/bot.md says so; «Activate» takes the line out).

@@ -18,7 +18,7 @@ fn models_state_gives_face_and_show() {
 #[test]
 fn muse_lane_is_an_exec_run() {
     let c = crate::config::Config::default();
-    let (_, effort, resume, args) = super::flags(&c, "muse");
+    let (_, effort, resume, args) = super::flags::flags(&c, "muse");
     assert!(
         args[0] == "exec" && args.iter().any(|x| x == "--prompt-file"),
         "{args:?}"
@@ -33,7 +33,7 @@ fn muse_lane_is_an_exec_run() {
 #[test]
 fn codex_lane_runs_commands() {
     let c = crate::config::Config::default();
-    let (_, _, resume, args) = super::flags(&c, "codex");
+    let (_, _, resume, args) = super::flags::flags(&c, "codex");
     for a in [resume, args] {
         assert!(a
             .iter()
@@ -57,22 +57,22 @@ async fn models_agent_and_model_match() {
     let app = crate::app::App::open_at(dir.clone());
     let cfg = app.cfg();
     assert_eq!(
-        super::agent_of(&cfg, "sonnetish").as_deref(),
+        super::owners::agent_of(&cfg, "sonnetish").as_deref(),
         Some("anthropic"),
         "its group in [models.choices]"
     );
     assert_eq!(
-        super::agent_of(&cfg, "frontier-other").as_deref(),
+        super::owners::agent_of(&cfg, "frontier-other").as_deref(),
         Some("anthropic"),
         "unlisted, by its command's prefix"
     );
     assert_eq!(
-        super::agent_of(&cfg, "muse-wonder").as_deref(),
+        super::owners::agent_of(&cfg, "muse-wonder").as_deref(),
         Some("muse")
     );
-    assert_eq!(super::agent_of(&cfg, "something-else"), None);
+    assert_eq!(super::owners::agent_of(&cfg, "something-else"), None);
     // The crossed pair of 2026-11-21 is refused, by the API and the command line alike (both save through here), and nothing is saved.
-    let err = super::save(
+    let err = super::save::save(
         &app,
         "worker",
         Some(&json!({"agent": "muse", "model": "frontier-big-5", "effort": "medium"})),
@@ -85,7 +85,7 @@ async fn models_agent_and_model_match() {
     );
     assert!(app.kv("models:worker").is_none());
     assert!(
-        super::save(
+        super::save::save(
             &app,
             "worker",
             Some(&json!({"agent": "anthropic", "fallback": ["muse:frontier-big-5"]}))
@@ -94,9 +94,9 @@ async fn models_agent_and_model_match() {
         "a crossed fallback too"
     );
     // Choosing a model of another agent switches the agent to the one that has it.
-    let s = super::save(&app, "worker", Some(&json!({"agent": "muse"}))).unwrap();
+    let s = super::save::save(&app, "worker", Some(&json!({"agent": "muse"}))).unwrap();
     assert_eq!(s.agent, "muse");
-    let s = super::save(
+    let s = super::save::save(
         &app,
         "worker",
         Some(&json!({"model": "frontier-big-5", "effort": "medium"})),
@@ -107,7 +107,7 @@ async fn models_agent_and_model_match() {
         ("anthropic", Some("frontier-big-5"), Some("medium"))
     );
     // The good pair passes, and the page sees each model's agent.
-    assert!(super::save(
+    assert!(super::save::save(
         &app,
         "worker",
         Some(&json!({"agent": "muse", "model": "muse-spark-1.3"}))

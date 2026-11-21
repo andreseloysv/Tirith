@@ -1,0 +1,53 @@
+/* ---------- Pipelines ---------- */
+.v-pipelines .pv { padding-top: 4px; }
+.plist { min-height: 0; overflow-y: auto; padding: 2px 4px 16px 2px; margin: -2px -4px 0 -2px; }
+.pcol { display: flex; flex-direction: column; gap: 10px; }
+.runcard { text-align: left; }
+.runcard .rhead { display: flex; gap: 8px; } .runcard .rhead b { font-weight: 600; font-size: 14px; white-space: nowrap; }
+.runcard .rhead .sm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.runcard .rline { gap: 8px; } .runcard .rline > span:last-child { margin-left: auto; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.runcard .rmeta { font-size: 12px; }
+.runcard .pmini { display: flex; flex-wrap: wrap; gap: 4px; }
+.runcard .rerr b { font-weight: 650; }
+.stagearea { gap: 10px; }
+.stagearea > .zbar { position: absolute; bottom: 20px; white-space: nowrap; }
+.stagearea:has(.drawer) > .zbar { left: calc((100% - 452px) / 2); }
+.pinfo { display: flex; align-items: center; gap: 10px; min-height: 30px; flex-wrap: wrap; font-size: 13px; }
+.pinfo b { font-weight: 600; font-size: 14px; } .pinfo .pst { flex: none; }
+.psha { font-size: 11.5px; color: var(--ink3); background: rgba(120,135,160,.12); border-radius: 6px; padding: 0 6px; }
+.plns { display: flex; gap: 10px; min-width: 0; flex-wrap: wrap; } .plane { color: var(--blue); max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pinfo .pdacts { margin-left: auto; }
+.pinfo .srun.pact { color: var(--blue); background: rgba(47,111,237,.08); border: 1px solid rgba(47,111,237,.25); }
+.pinfo .srun.pact:hover:not(:disabled) { background: rgba(47,111,237,.16); } .pinfo .srun.pact:disabled { opacity: .6; }
+.pflow { display: flex; flex-direction: column; width: 380px; padding: 28px 24px 90px; }
+.pflow .conn { margin: 0 auto; }
+.snode { cursor: pointer; }
+.pds.s-passed { color: var(--ok-fg); } .pds.s-failed { color: var(--red-fg); } .pds.s-running { color: var(--blue); }
+.pnone { opacity: .85; }
+.stagearea .drawer header .rb { flex: none; }
+.plogh { margin: 0 0 8px; }
+.drawer .log.plog { max-height: none; }
+.stagearea .ierr { margin: 0; }
+@media (max-width: 700px) {
+  .pv { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(420px, 1fr); overflow-y: auto; }
+  .plist { overflow: visible; }
+}
+
+/* dark theme: the glass skin keeps working; only the new tinted boxes need a softer tone */
+:root[data-theme="dark"] .lquest, :root[data-theme="dark"] .anow.ask { background: rgba(232,163,23,.12); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .lquest { background: rgba(232,163,23,.12); } }
+
+/* style.css's glass skin sets .drawer and .zbar to position: relative after their absolute rule; the boards need
+   them floating over the view (the old screenshots), so put them back here. */
+.v-agents > .drawer, .stagearea > .drawer { position: absolute; }
+.stagearea > .drawer { top: 40px; right: 0; bottom: 0; }
+/* with the drawer open only the non-empty columns show, narrower, and Stop lives in the drawer */
+.view:has(> .drawer) .board.lboard { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+.view:has(> .drawer) .lboard .stopb.card { display: none; }
+.view:has(> .drawer) .lboard .acard.work .ahead { padding-right: 0; }
+:root[data-theme="dark"] .rb.running { color: #a9c3fb; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .rb.running { color: #a9c3fb; } }
+
+/* the question a waiting lane waits on, with the owner's answer box */
+.lneed { margin-top: 8px; }
+.sbadge.you { background: rgba(232,163,23,.16); color: var(--warn-fg); }

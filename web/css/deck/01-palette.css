@@ -1,0 +1,39 @@
+/* The deck: all of Tirith in the look of the "Agents, die aufpassen" deck and its bots. Black in the dark theme, paper in
+   the light one; hairlines instead of glass, gradients and shadows; small mono capitals for labels; light type; one cyan
+   accent and red for alarms. Loaded last: it redraws the parts of the older stylesheets without changing their markup. */
+:root {
+  --mono: ui-monospace, "SF Mono", "IBM Plex Mono", Menlo, monospace;
+  --bg: #fbfbfa; --page: #fbfbfa; --card: transparent; --fg: #111; --mut: #6b6b6b; --faint: #9a9a9a;
+  --line: rgba(0,0,0,.13); --line2: rgba(0,0,0,.24); --soft: rgba(0,0,0,.045); --sel: rgba(35,121,138,.18);
+  --blue: #23798a; --green: #2f8a57; --red: #d93a3f; --amber: #b7791f; --grey: #b4b4b4;
+  --ink1: #111; --ink2: #2b2b2b; --ink3: #555; --ink4: #666;
+  --accent-soft: rgba(35,121,138,.08); --accent-soft2: rgba(35,121,138,.12);
+  --warn-bg: transparent; --warn-bg2: transparent; --warn-line: rgba(183,121,31,.5); --warn-line2: #b7791f; --warn-fg: #8a5a00;
+  --red-bg: transparent; --red-line: rgba(217,58,63,.5); --red-fg: #c0312f; --ok-bg: transparent; --ok-fg: #2f8a57; --pur-bg: transparent; --pur-fg: #6b3fb0;
+  --neu: rgba(0,0,0,.05); --neu2: rgba(0,0,0,.08); --neu3: transparent;
+  --shadow: none; --w: 251 251 250; --hi: transparent; --nav-bg: #fbfbfa; --tip-bg: #111; --tip-fg: #fbfbfa;
+  --glass: transparent; --glass-line: rgba(0,0,0,.13); --gloss: none; --prism: none;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #000; --page: #000; --fg: #f2f2f2; --mut: #8c8c8c; --faint: #5f5f5f;
+    --line: rgba(255,255,255,.17); --line2: rgba(255,255,255,.3); --soft: rgba(255,255,255,.06); --sel: rgba(169,214,222,.25);
+    --blue: #a9d6de; --green: #6fcf8e; --red: #ff4545; --amber: #e9b949; --grey: #4a4a4a;
+    --ink1: #f2f2f2; --ink2: #dcdcdc; --ink3: #b4b4b4; --ink4: #9a9a9a;
+    --accent-soft: rgba(169,214,222,.1); --accent-soft2: rgba(169,214,222,.16);
+    --warn-line: rgba(233,185,73,.45); --warn-line2: #e9b949; --warn-fg: #e9b949; --red-line: rgba(255,69,69,.45); --red-fg: #ff6b6b;
+    --ok-fg: #6fcf8e; --pur-fg: #c4b0fb; --neu: rgba(255,255,255,.06); --neu2: rgba(255,255,255,.1);
+    --w: 0 0 0; --nav-bg: #000; --tip-bg: #f2f2f2; --tip-fg: #000; --glass-line: rgba(255,255,255,.17);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #000; --page: #000; --fg: #f2f2f2; --mut: #8c8c8c; --faint: #5f5f5f;
+  --line: rgba(255,255,255,.17); --line2: rgba(255,255,255,.3); --soft: rgba(255,255,255,.06); --sel: rgba(169,214,222,.25);
+  --blue: #a9d6de; --green: #6fcf8e; --red: #ff4545; --amber: #e9b949; --grey: #4a4a4a;
+  --ink1: #f2f2f2; --ink2: #dcdcdc; --ink3: #b4b4b4; --ink4: #9a9a9a;
+  --accent-soft: rgba(169,214,222,.1); --accent-soft2: rgba(169,214,222,.16);
+  --warn-line: rgba(233,185,73,.45); --warn-line2: #e9b949; --warn-fg: #e9b949; --red-line: rgba(255,69,69,.45); --red-fg: #ff6b6b;
+  --ok-fg: #6fcf8e; --pur-fg: #c4b0fb; --neu: rgba(255,255,255,.06); --neu2: rgba(255,255,255,.1);
+  --w: 0 0 0; --nav-bg: #000; --tip-bg: #f2f2f2; --tip-fg: #000; --glass-line: rgba(255,255,255,.17);
+}
+

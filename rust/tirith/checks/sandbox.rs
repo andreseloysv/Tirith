@@ -1,4 +1,4 @@
-use super::*;
+use super::{profile::PROFILE, safari::script::safari_script};
 
 #[test]
 fn safari_commands_only_for_chat_roles() {

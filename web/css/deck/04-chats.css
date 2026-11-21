@@ -1,0 +1,28 @@
+/* ---------- every chat: the bots' look ---------- */
+.mchat .mc-head h2 { font: 400 11px var(--mono); text-transform: uppercase; letter-spacing: .1em; color: var(--mut); }
+.mchat .mc-head h2 .mc-of { font: inherit; color: var(--fg); margin-left: 8px; }
+.mc-b { font-size: 14px; line-height: 1.55; }
+.mc-m.mgr .mc-b, .mc-m.note .mc-b, .mc-m.room .mc-b, .mc-m.ceo .mc-b { background: none !important; border: 1px solid var(--line) !important; border-radius: 18px !important; box-shadow: none !important; color: var(--fg); padding: 10px 15px; }
+.mc-m.note .mc-b, .mc-m.room .mc-b { border-style: dashed !important; color: var(--ink3); }
+.mc-m.ceo .mc-b { border-left: 2px solid var(--blue) !important; }
+.mc-m.me .mc-b { background: var(--fg) !important; color: var(--bg) !important; border-radius: 18px !important; box-shadow: none !important; padding: 10px 15px; }
+.mc-meta { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--mut); }
+.mc-box { background: none !important; border: 1px solid var(--line) !important; border-radius: 22px !important; box-shadow: none !important; padding: 10px 12px 10px 16px; }
+.mc-box:focus-within { border-color: var(--fg) !important; }
+.mc-box textarea { color: var(--fg); font-size: 14px; }
+.mc-send { background: var(--fg) !important; color: var(--bg) !important; box-shadow: none !important; }
+.mc-hint { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .06em; }
+.mc-stop { font: 400 10px var(--mono) !important; text-transform: uppercase; letter-spacing: .08em; color: var(--red) !important; border: 1px solid var(--red-line) !important; border-radius: 999px !important; background: none !important; padding: 0 10px; }
+.mc-log > .quiet { color: var(--mut); font-size: 14px; max-width: 46ch; margin: auto; }
+.mc-models { border-top: 1px solid var(--line); }
+/* while a turn runs: one tiny line, in plain words */
+.mc-intent { align-self: flex-start; display: flex; align-items: center; gap: 7px; padding: 2px 0; color: var(--mut); font-family: var(--mono); font-size: 10.5px; letter-spacing: .04em; }
+.mc-intent b { color: var(--fg); font-weight: 500; text-transform: uppercase; letter-spacing: .08em; }
+.mc-pulse { width: 6px; height: 6px; border-radius: 50%; background: var(--blue); animation: mc-pulse 1.6s ease-in-out infinite; }
+@keyframes mc-pulse { 0%, 100% { opacity: .25; transform: scale(.8); } 50% { opacity: 1; transform: scale(1); } }
+/* routine events and quiet answers */
+.mc-ev { align-self: center; display: flex; align-items: center; gap: 8px; padding: 2px 0; color: var(--mut); font-family: var(--mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; }
+.mc-ev svg { flex: none; }
+.mc-ev.quiet { text-transform: none; letter-spacing: .02em; color: var(--faint); }
+.mc-ev.quiet::before { content: "∅"; color: var(--mut); }
+

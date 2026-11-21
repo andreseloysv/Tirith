@@ -7,15 +7,21 @@ fn at(y: i32, m: u32, d: u32, h: u32, min: u32) -> chrono::DateTime<Local> {
 
 #[test]
 fn days_from_words_and_lists() {
-    assert_eq!(super::days(&json!("weekdays")), Some(vec![1, 2, 3, 4, 5]));
     assert_eq!(
-        super::days(&json!("daily")),
+        super::schedule::days(&json!("weekdays")),
+        Some(vec![1, 2, 3, 4, 5])
+    );
+    assert_eq!(
+        super::schedule::days(&json!("daily")),
         Some(vec![1, 2, 3, 4, 5, 6, 7])
     );
-    assert_eq!(super::days(&json!("weekends")), Some(vec![6, 7]));
-    assert_eq!(super::days(&json!("Mon, wed,FRI")), Some(vec![1, 3, 5]));
-    assert_eq!(super::days(&json!([2, 9, 4])), Some(vec![2, 4]));
-    assert_eq!(super::days(&json!(null)), None);
+    assert_eq!(super::schedule::days(&json!("weekends")), Some(vec![6, 7]));
+    assert_eq!(
+        super::schedule::days(&json!("Mon, wed,FRI")),
+        Some(vec![1, 3, 5])
+    );
+    assert_eq!(super::schedule::days(&json!([2, 9, 4])), Some(vec![2, 4]));
+    assert_eq!(super::schedule::days(&json!(null)), None);
 }
 
 #[test]
@@ -73,7 +79,7 @@ fn a_routine_is_due_once_a_day_after_its_time() {
 fn bots_live_in_config_as_own_roles_with_schedule_routes() {
     // A bot in the page's shape, with a switched-off routine: written into a config.toml with the owner's comments.
     let bots = json!([{"id": "abc123", "name": "Noticias", "shape": "drop", "color": "#22d3ee", "routines": [{"id": "r111111", "title": "News", "prompt": "Summarise the news", "days": [1, 2, 3, 4, 5], "at": "08:00", "on": false}]}]);
-    let text = super::written(
+    let text = super::written::written(
         "# the owner's own comment\n[server]\nport = 7799 # keep this too\n",
         bots.as_array().unwrap(),
     )
@@ -97,7 +103,7 @@ fn bots_live_in_config_as_own_roles_with_schedule_routes() {
     );
     // Read back as `all` does, with the routine's last run from its stamp.
     let read = |text: &str| {
-        super::bots_of(
+        super::list::bots_of(
             &serde_json::to_value(&text.parse::<toml::Table>().unwrap()).unwrap(),
             &|id, rid| {
                 if (id, rid) == ("abc123", "r111111") {
@@ -151,6 +157,14 @@ fn bots_live_in_config_as_own_roles_with_schedule_routes() {
             "card-needed",
             include_str!("../../../factory/evals/card-needed.md"),
         ),
+        (
+            "turn-quality",
+            include_str!("../../../factory/evals/turn-quality.md"),
+        ),
+        (
+            "unapproved",
+            include_str!("../../../factory/evals/unapproved.md"),
+        ),
     ]
     .into_iter()
     .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -179,7 +193,7 @@ fn bots_live_in_config_as_own_roles_with_schedule_routes() {
     // Written again with a rename and the routine on: still one role and one route, the comments still there; written with no bots, both go.
     let mut renamed = bots.clone();
     (renamed[0]["name"], renamed[0]["routines"][0]["on"]) = (json!("Renamed"), json!(true));
-    let text = super::written(&text, &renamed).unwrap();
+    let text = super::written::written(&text, &renamed).unwrap();
     assert_eq!(
         (
             text.matches("[roles.bot-abc123]").count(),
@@ -193,7 +207,7 @@ fn bots_live_in_config_as_own_roles_with_schedule_routes() {
             && read(&text)[0]["name"] == "Renamed"
             && read(&text)[0]["routines"][0]["on"] == true
     );
-    let text = super::written(&text, &[]).unwrap();
+    let text = super::written::written(&text, &[]).unwrap();
     assert!(
         read(&text).is_empty()
             && !text.contains("bot-abc123")
@@ -231,7 +245,10 @@ fn bots_write_only_in_their_own_folders_and_the_shared_skills() {
 #[test]
 fn skills_list_the_folders_with_a_skill_and_the_shared_links_only_when_asked() {
     let root = std::env::temp_dir().join(format!("tirith-skills-{}", std::process::id()));
-    let (own, common) = (root.join("bot").join(super::SKILLS), root.join("shared"));
+    let (own, common) = (
+        root.join("bot").join(super::folder::SKILLS),
+        root.join("shared"),
+    );
     for (dir, text) in [(own.join("jobs"), "own"), (common.join("report"), "shared")] {
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("SKILL.md"), text).unwrap();
@@ -239,14 +256,14 @@ fn skills_list_the_folders_with_a_skill_and_the_shared_links_only_when_asked() {
     std::fs::create_dir_all(own.join("half-written")).unwrap(); // no SKILL.md: not a skill
     std::os::unix::fs::symlink(common.join("report"), own.join("report")).unwrap();
     let names = |links| {
-        super::skills(&own, links)
+        super::folder::skills(&own, links)
             .into_iter()
             .map(|s| s.0)
             .collect::<Vec<_>>()
     };
     assert_eq!(names(false), ["jobs"]);
     assert_eq!(names(true), ["jobs", "report"]);
-    assert_eq!(super::skills(&own, true)[1].1, "shared");
+    assert_eq!(super::folder::skills(&own, true)[1].1, "shared");
     let _ = std::fs::remove_dir_all(&root);
 }
 
@@ -255,7 +272,7 @@ fn bots_written_at_the_end() {
     // A config.toml with several [[projects]], a bot's role, face and route between them, and an empty [roles] header at the end.
     let old = "# top comment\n[server]\nport = 7799\n\n[[projects]]\nname = \"a\" # keep\n\n[roles.bot-abc123]\nextends = \"manager\"\nscope = \"own\"\n\n[roles.bot-abc123.face]\nshape = \"drop\"\n\n[[routes]]\non = \"schedule\"\nto = \"bot-abc123\"\n\n[[projects]]\nname = \"b\"\n\n[roles]\n";
     let bots = json!([{"id": "abc123", "name": "N", "shape": "drop", "color": "#22d3ee", "routines": [{"id": "r1", "title": "T", "prompt": "P", "days": [1], "at": "08:00", "on": true}]}]);
-    let text = super::written(old, bots.as_array().unwrap()).unwrap();
+    let text = super::written::written(old, bots.as_array().unwrap()).unwrap();
     let at = |s: &str| {
         text.find(s)
             .unwrap_or_else(|| panic!("{s} missing:\n{text}"))
@@ -280,11 +297,13 @@ fn bots_written_at_the_end() {
         "comments stay:\n{text}"
     );
     assert_eq!(
-        super::written(&text, bots.as_array().unwrap()).unwrap(),
+        super::written::written(&text, bots.as_array().unwrap()).unwrap(),
         text,
         "writing again changes nothing"
     );
-    assert!(!super::written(&text, &[]).unwrap().contains("bot-abc123"));
+    assert!(!super::written::written(&text, &[])
+        .unwrap()
+        .contains("bot-abc123"));
 }
 
 #[test]
@@ -296,7 +315,7 @@ fn a_system_bot_change_is_a_layer_in_config() {
         {"id": "judge", "key": "judge", "system": true, "name": "Judge", "shape": "hex", "color": "#8c8c8c", "show": false, "routines": []},
         {"id": "abc123", "name": "N", "shape": "drop", "color": "#22d3ee", "routines": []}
     ]);
-    let text = super::written(old, bots.as_array().unwrap()).unwrap();
+    let text = super::written::written(old, bots.as_array().unwrap()).unwrap();
     assert!(
         text.contains("model = \"keep-me\" # and this") && text.contains("# keep"),
         "the CEO's other config keys and comments stay:\n{text}"
@@ -339,6 +358,14 @@ fn a_system_bot_change_is_a_layer_in_config() {
             "card-needed",
             include_str!("../../../factory/evals/card-needed.md"),
         ),
+        (
+            "turn-quality",
+            include_str!("../../../factory/evals/turn-quality.md"),
+        ),
+        (
+            "unapproved",
+            include_str!("../../../factory/evals/unapproved.md"),
+        ),
     ]
     .into_iter()
     .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -377,7 +404,8 @@ fn a_system_bot_change_is_a_layer_in_config() {
         Some("star")
     );
     // With no [roles] in the file at all, the layer is a plain table at the end (an inline `roles = {…}` would make a later [roles.bot-…] header unparseable).
-    let text = super::written("[server]\nport = 7799\n", &bots.as_array().unwrap()[..1]).unwrap();
+    let text =
+        super::written::written("[server]\nport = 7799\n", &bots.as_array().unwrap()[..1]).unwrap();
     assert!(
         text.contains("[roles.ceo]")
             && !text.contains("roles = {")
@@ -392,4 +420,135 @@ fn a_system_bot_change_is_a_layer_in_config() {
                 &home.join("manager/manager-general/.agents/skills/x/SKILL.md")
             )
     );
+}
+
+const TITLES: [&str; 7] = [
+    "Cuándo usarla",
+    "Entradas y accesos",
+    "Pasos",
+    "Cómo validar",
+    "Qué devuelve",
+    "Qué requiere aprobación",
+    "Si algo falla",
+];
+
+#[test]
+fn skill_template_in_the_factory() {
+    let template = include_str!("../../../factory/skill.md");
+    assert!(
+        template.starts_with("---\nname: {name}\ndescription: "),
+        "its header:\n{template}"
+    );
+    let lines: Vec<&str> = template.lines().collect();
+    for t in TITLES {
+        let at = lines
+            .iter()
+            .position(|l| *l == format!("## {t}"))
+            .unwrap_or_else(|| panic!("the section «{t}»:\n{template}"));
+        assert!(
+            lines
+                .get(at + 1)
+                .is_some_and(|l| !l.trim().is_empty() && !l.starts_with('#')),
+            "a line says what goes in «{t}»"
+        );
+    }
+    assert_eq!(lines.iter().filter(|l| l.starts_with("## ")).count(), 7);
+    // A bot's prompt gets the template's text where bot.md has {skill_template}; the template keeps its own {name}.
+    let text = "[roles.bot-x]\nextends = \"manager\"\nscope = \"own\"\nname = \"Ana\"\nprompt = [\"prompts/bot.md\"]\n";
+    let f = crate::factory::parse(
+        crate::factory::TEXT,
+        crate::factory::embedded_prompts(),
+        &text.parse().unwrap(),
+    )
+    .unwrap();
+    let prompt = f.prompts_of("bot-x");
+    assert!(
+        include_str!("../../../factory/prompts/bot.md").contains("{skill_template}"),
+        "bot.md asks for the template"
+    );
+    assert!(
+        !prompt.contains("{skill_template}") && prompt.contains(template.trim()),
+        "the bot's prompt holds the template:\n{prompt}"
+    );
+    assert!(prompt.contains("You are Ana"));
+}
+
+#[test]
+fn notes_are_numbered_once() {
+    let text = "# Owner\n- likes short answers\n- [m4] only remote jobs\n  * indented note\n\nSome prose.\n---\n**bold**\n-\n";
+    let once = super::notes::numbered(text, 'm');
+    assert_eq!(
+        once,
+        "# Owner\n- [m5] likes short answers\n- [m4] only remote jobs\n  * [m6] indented note\n\nSome prose.\n---\n**bold**\n-\n"
+    );
+    assert_eq!(
+        super::notes::numbered(&once, 'm'),
+        once,
+        "numbering twice changes nothing"
+    );
+    assert_eq!(
+        super::notes::numbered("- a\n- b", 's'),
+        "- [s1] a\n- [s2] b"
+    );
+    assert_eq!(super::notes::numbered("", 'm'), "");
+}
+
+#[tokio::test]
+async fn shared_memory_comes_first() {
+    let home = std::env::temp_dir().join(format!("tirith-shared-memory-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&home);
+    std::fs::create_dir_all(home.join("bots")).unwrap();
+    let app = crate::app::App::open_at(home.clone());
+    let card = json!({"name": "Notas", "shape": "drop", "color": "#22d3ee", "session": "chat", "access": "read", "routes": []});
+    let bot = super::save(&app, card).unwrap();
+    let key = format!("bot-{}", bot["id"].as_str().unwrap());
+    std::fs::write(
+        home.join("bots/memory.md"),
+        "# Owner\n- name: Ana\n- time zone: Europe/Madrid\n",
+    )
+    .unwrap();
+    let own = super::folder::folder(&app, &key).join("memory.md");
+    std::fs::create_dir_all(own.parent().unwrap()).unwrap();
+    std::fs::write(&own, "- [m2] only remote jobs\n- answer in Spanish\n").unwrap();
+    let ctx = super::context(&app, &key).expect("a bot's context");
+    let (shared, mine) = (
+        ctx.find("[tirith] Shared memory.md as it is now:\n# Owner\n- [s1] name: Ana\n- [s2] time zone: Europe/Madrid")
+            .expect(&ctx),
+        ctx.find("[tirith] Your memory.md as it is now:\n- [m2] only remote jobs\n- [m3] answer in Spanish")
+            .expect(&ctx),
+    );
+    assert!(shared < mine, "the shared memory comes first:\n{ctx}");
+    // Saved numbered, and handed again unchanged.
+    assert!(std::fs::read_to_string(&own)
+        .unwrap()
+        .contains("- [m3] answer in Spanish"));
+    assert!(std::fs::read_to_string(home.join("bots/memory.md"))
+        .unwrap()
+        .contains("- [s2] time zone"));
+    assert_eq!(super::context(&app, &key).unwrap(), ctx);
+    // The Library shows and edits the shared memory, and gives the template.
+    let lib = super::library::library(&app, bot["id"].as_str().unwrap()).unwrap();
+    assert!(lib["shared_memory"]
+        .as_str()
+        .unwrap()
+        .contains("[s1] name: Ana"));
+    assert!(lib["template"]
+        .as_str()
+        .unwrap()
+        .contains("## Cómo validar"));
+    super::library::learn(
+        &app,
+        bot["id"].as_str().unwrap(),
+        &json!({"memory": true, "shared": true, "text": "- language: es\n"}),
+    )
+    .unwrap();
+    assert_eq!(
+        std::fs::read_to_string(home.join("bots/memory.md")).unwrap(),
+        "- language: es\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&own).unwrap(),
+        "- [m2] only remote jobs\n- [m3] answer in Spanish\n"
+    );
+    let _ = std::fs::remove_dir_all(&home);
 }
