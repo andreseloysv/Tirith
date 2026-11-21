@@ -47,9 +47,15 @@ fn typing_rooms(app: &Shared, project: &str) -> Vec<String> {
     let (reply_to, phones) = talk(project, |t| (t.reply_to.clone(), t.phones));
     reply_to.into_iter().chain(phones.then(|| rooms::phone_rooms(app, project)).into_iter().flatten()).collect::<BTreeSet<_>>().into_iter().collect()
 }
-fn typing_start(app: &Shared, project: &str) {
+/// Shows a turn's typing in its rooms: at its start, and with `again` (another message for the running turn, whose phones may have been reopened) its current state once more, in every room of the turn by then.
+fn typing_start(app: &Shared, project: &str, again: bool) {
     let rooms = typing_rooms(app, project);
-    rooms::typing(talk(project, |t| t.typing.start(rooms)));
+    rooms::typing(talk(project, |t| t.typing.start(rooms, now_s(), again)));
+}
+/// Every busy turn's heartbeat (called by the rooms loop, about every 30 s): due ones resend their current state to their rooms alone, the rest send nothing; a stopped turn has no rooms left, so its heartbeat is over with it.
+pub fn typing_heartbeats() {
+    // Sent under the talk's lock, so a heartbeat that was due as its turn ended can never land after that turn's typing off.
+    busy().iter().for_each(|p| talk(p, |t| rooms::typing(t.typing.heartbeat(now_s()))));
 }
 fn typing_line(project: &str, line: &str) {
     rooms::typing(talk(project, |t| t.typing.line(line, now_s())));
@@ -91,7 +97,7 @@ fn deliver(app: &Shared, project: &str, text: &str, phones: bool) {
         }
         (!std::mem::replace(&mut t.alive, true), true)
     });
-    let _ = handed.then(|| typing_start(app, project)); // the phones see the turn start, even while its session is still on its way
+    let _ = handed.then(|| typing_start(app, project, true)); // the phones see the turn start (or, for a turn already running, its state again), even while its session is still on its way
     let _ = start.then(|| tokio::spawn(run(app.clone(), project.to_string())));
 }
 /// A message from a room (a paired phone or another agent): shown in the chat of the room's project, handed to that project's manager, and the manager's answer to this turn goes back to that room.
@@ -463,7 +469,7 @@ async fn session(app: &Shared, project: &str) -> Result<(), String> {
         sent.iter().enumerate().for_each(|(i, text)| drop(tx.send(user_line(&if i == 0 { format!("{}{text}", history.as_deref().unwrap_or("")) } else { text.clone() }))));
         sent
     });
-    let _ = (!sent.is_empty()).then(|| typing_start(app, project)); // a session restarted after a failure shows its waiting turn again
+    let _ = (!sent.is_empty()).then(|| typing_start(app, project, false)); // a session restarted after a failure shows its waiting turn again
     let writer = tokio::spawn(async move {
         while let Some(line) = rx.recv().await {
             let Some(()) = stdin.write_all(format!("{line}\n").as_bytes()).await.is_ok().then_some(()) else { break };
@@ -582,7 +588,7 @@ async fn exec_session(app: &Shared, project: &str, muse: bool) -> Result<(), Str
         |pid| {
             started = true;
             talk(project, |t| ((t.pid, t.stale) = (pid, false), set_busy(app, project, t, true)));
-            typing_start(app, project);
+            typing_start(app, project, false);
         },
     )
     .await;

@@ -13,8 +13,8 @@ fn room_attachment_saved_as_file() {
 fn typing_progress_for_a_room_turn_and_none_without_rooms() {
     // A room turn, with no network: the control is emitted at its start, with its first tool and at its end, for its rooms alone.
     let mut typing = Typing::default();
-    assert_eq!(typing.start(vec!["sealed-turn".into()]), Some((vec!["sealed-turn".to_string()], json!({"v": 1, "typing": 1}))), "typing on at the start");
-    assert_eq!(typing.start(vec!["sealed-turn".into()]), None, "a second start while it runs says nothing again");
+    assert_eq!(typing.start(vec!["sealed-turn".into()], 100, false), Some((vec!["sealed-turn".to_string()], json!({"v": 1, "typing": 1}))), "typing on at the start");
+    assert_eq!(typing.start(vec!["sealed-turn".into()], 101, false), None, "a second start while it runs says nothing again");
     assert_eq!(typing.line("Read: src/main.rs", 100), Some((vec!["sealed-turn".to_string()], json!({"v": 1, "typing": 1, "line": "Read: src/main.rs"}))), "the first tool line goes at once");
     assert_eq!(typing.line("Read: src/main.rs", 106), None, "the same line twice in a row is dropped");
     assert_eq!(typing.line("Bash: run the tests", 102), None, "at most one line every 5 s");
@@ -26,9 +26,44 @@ fn typing_progress_for_a_room_turn_and_none_without_rooms() {
     assert_eq!(typing.line("Read: late.rs", 200), None, "no line after the turn ended");
     // A turn with no rooms (only the page) emits nothing at all.
     let mut quiet = Typing::default();
-    assert_eq!(quiet.start(vec![]), None, "no rooms, no typing on");
+    assert_eq!(quiet.start(vec![], 100, false), None, "no rooms, no typing on");
     assert_eq!(quiet.line("Read: src/main.rs", 100), None, "no rooms, no tool line");
+    assert_eq!(quiet.heartbeat(1000), None, "no rooms, no heartbeat");
+    assert_eq!(quiet.start(vec![], 1000, true), None, "no rooms, no typing again either");
     assert_eq!(quiet.stop(), None, "no rooms, no typing off");
+}
+#[test]
+fn typing_heartbeat_reannounces() {
+    // A long turn with no new tool lines, a phone reopened and another message written while it runs: its typing is never lost.
+    let mut typing = Typing::default();
+    assert_eq!(typing.start(vec!["sealed-turn".into()], 100, false), Some((vec!["sealed-turn".to_string()], json!({"v": 1, "typing": 1}))), "start emits typing on");
+    assert_eq!(typing.line("Bash: run the tests", 100), Some((vec!["sealed-turn".to_string()], json!({"v": 1, "typing": 1, "line": "Bash: run the tests"}))), "the first tool line");
+    assert_eq!(typing.heartbeat(129), None, "before 30 s the heartbeat sends nothing");
+    assert_eq!(typing.heartbeat(130), Some((vec!["sealed-turn".to_string()], json!({"v": 1, "typing": 1, "line": "Bash: run the tests"}))), "at 30 s it resends the same line");
+    assert_eq!(typing.heartbeat(159), None, "the heartbeat itself restarts the 30 s");
+    assert_eq!(
+        typing.start(vec!["sealed-turn".into()], 160, true),
+        Some((vec!["sealed-turn".to_string()], json!({"v": 1, "typing": 1, "line": "Bash: run the tests"}))),
+        "another message in the same turn reannounces it without losing the line"
+    );
+    assert_eq!(
+        typing.start(vec!["sealed-turn".into(), "sealed-other".into()], 165, false),
+        Some((vec!["sealed-turn".to_string(), "sealed-other".to_string()], json!({"v": 1, "typing": 1, "line": "Bash: run the tests"}))),
+        "a new room for the turn is told its current state, line and all"
+    );
+    assert_eq!(typing.start(vec!["sealed-turn".into(), "sealed-other".into()], 166, false), None, "and that is no second start for rooms that already have it");
+    assert_eq!(typing.heartbeat(194), None, "before 30 s since it was shown again, nothing");
+    assert_eq!(typing.heartbeat(195), Some((vec!["sealed-turn".to_string(), "sealed-other".to_string()], json!({"v": 1, "typing": 1, "line": "Bash: run the tests"}))), "the heartbeat reaches every room of the turn by then");
+    assert_eq!(typing.stop(), Some((vec!["sealed-turn".to_string(), "sealed-other".to_string()], json!({"v": 1, "typing": 0}))), "stop turns typing off");
+    assert_eq!(typing.stop(), None, "only once");
+    assert_eq!(typing.heartbeat(1000), None, "after stop no heartbeat goes out");
+    // A turn whose long command never produced a line is kept typing too, with no line invented.
+    let mut quiet = Typing::default();
+    assert_eq!(quiet.start(vec!["sealed-long".into()], 0, false), Some((vec!["sealed-long".to_string()], json!({"v": 1, "typing": 1}))));
+    assert_eq!(quiet.heartbeat(29), None, "before 30 s, nothing");
+    assert_eq!(quiet.heartbeat(30), Some((vec!["sealed-long".to_string()], json!({"v": 1, "typing": 1}))), "at 30 s the bare typing is resent");
+    assert_eq!(quiet.stop(), Some((vec!["sealed-long".to_string()], json!({"v": 1, "typing": 0}))));
+    assert_eq!(quiet.heartbeat(60), None, "and after its stop, nothing more");
 }
 #[test]
 fn typing_control_is_queued_for_the_turns_room_alone() {
