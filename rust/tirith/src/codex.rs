@@ -37,8 +37,10 @@ pub fn options(cfg: &crate::config::Config, argv: &mut Vec<String>, effort: Opti
 }
 
 /// The argv of one Muse turn. It runs unattended inside Tirith's own sandbox, so its approvals and inner sandbox are off (`--yolo`, the parallel of the Codex bypass above); a read-only role's file-writing tools are off too.
-fn muse_argv(command: &str, read_only: bool, model: Option<&str>, effort: Option<&str>, workspace: &str, session: Option<&str>, prompt_file: &str) -> Vec<String> {
+fn muse_argv(command: &str, read_only: bool, model: (Option<&str>, Option<&str>), workspace: &str, session: Option<&str>, prompt_file: &str, browser: &[String]) -> Vec<String> {
+    let (model, effort) = model;
     let mut a: Vec<String> = [command, "exec", "--json", "--yolo", "--workspace", workspace].map(String::from).to_vec();
+    a.extend(browser.iter().cloned());
     a.extend(read_only.then(|| "--disable-write".to_string()));
     a.extend([("--model", model), ("--reasoning-effort", effort), ("--session-id", session), ("--prompt-file", Some(prompt_file))].into_iter().filter_map(|(f, v)| v.map(|v| [f.to_string(), v.to_string()])).flatten());
     a
@@ -61,7 +63,7 @@ pub async fn turn(app: &Shared, role: &str, project: &str, resume: Option<&str>,
     let argv = if let Some(file) = &file {
         let _ = std::fs::create_dir_all(&dir);
         std::fs::write(file, if resume.is_some() { input.to_string() } else { format!("{instructions}\n\n{input}") }).map_err(|e| e.to_string())?;
-        muse_argv(&command, read_only, setting.model.as_deref(), setting.effort.as_deref(), &dir.display().to_string(), resume, &file.display().to_string())
+        muse_argv(&command, read_only, (setting.model.as_deref(), setting.effort.as_deref()), &dir.display().to_string(), resume, &file.display().to_string(), &models::browser_args(app, false))
     } else {
         let mut argv = vec![command, "exec".into(), "--json".into(), "--skip-git-repo-check".into()];
         argv.extend(if read_only { vec!["--sandbox".into(), "read-only".into(), "--ephemeral".into()] } else { vec!["--dangerously-bypass-approvals-and-sandbox".into()] });
