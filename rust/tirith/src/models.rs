@@ -46,6 +46,25 @@ pub fn role_with_source(app: &Shared, role: &str) -> (RoleSetting, &'static str)
     let s = RoleSetting { agent, model: empty(f.role(role, "model")), effort: empty(f.role(role, "effort")), fallback: f.role(role, "fallback").unwrap_or_default() };
     (s, if from_config { "config" } else { "default" })
 }
+/// The agent a model belongs to, from the configuration alone: its group in `[models.choices]` (a table `alias = [models]`), Codex's catalog, or the `model_prefix` its `[agents.<alias>]` declares (by default its command's program name and "-"). None when no agent claims it.
+pub fn agent_of(cfg: &Config, model: &str) -> Option<String> {
+    let grouped = get::<std::collections::BTreeMap<String, Vec<String>>>(&cfg.raw, &["models", "choices"]).unwrap_or_default().into_iter().find(|(_, ms)| ms.iter().any(|m| m == model)).map(|(a, _)| a);
+    let prefix = |a: &str, c: &str| cfg.factory.agent::<String>(a, "model_prefix").unwrap_or_else(|| format!("{}-", c.rsplit('/').next().unwrap_or(c)));
+    let codex = || crate::codex::catalog().iter().any(|m| m["slug"] == model).then(|| "codex".to_string());
+    grouped.or_else(codex).or_else(|| cfg.factory.commands().into_iter().find(|(a, c)| Some(prefix(a, c)).filter(|p| !p.is_empty()).is_some_and(|p| model.starts_with(&p))).map(|(a, _)| a))
+}
+/// Why `agent` cannot run `model`: the model belongs to another agent (an empty model, the agent's default, always fits).
+pub fn mismatch(cfg: &Config, agent: &str, model: Option<&str>) -> Option<String> {
+    let m = model.filter(|m| !m.is_empty())?;
+    agent_of(cfg, m).filter(|a| a != agent).map(|a| format!("model '{m}' is agent {a}'s, not {agent}'s: choose a model of {agent} or the agent {a}"))
+}
+/// At start: every role whose saved setting pairs an agent with another agent's model is said once in the general manager's chat, so it is chosen again before a lane or a turn fails on it.
+pub fn start(app: Shared) {
+    let cfg = app.cfg();
+    let crossed = |r: String| Some(role_with_source(&app, &r)).filter(|(_, src)| *src != "managers").and_then(|(s, _)| mismatch(&cfg, &s.agent, s.model.as_deref())).map(|e| format!("{r}: {e}"));
+    let bad: Vec<String> = cfg.factory.roles().into_iter().filter_map(crossed).collect();
+    let _ = (!bad.is_empty()).then(|| crate::manager::emit_event(&app, "", "factory.invalid", &format!("Saved model settings that cannot run — {}. Choose them again in Settings.", bad.join("; ")), None));
+}
 pub fn role(app: &Shared, role: &str) -> RoleSetting {
     role_with_source(app, role).0
 }
@@ -117,6 +136,7 @@ pub fn lane_argv(app: &Shared, agent: Option<&str>, model: Option<&str>, brief: 
     let same = alias == w.agent;
     let model = model.map(String::from).or(if same { w.model } else { None });
     let effort = if same { w.effort } else { None };
+    mismatch(&cfg, &alias, model.as_deref()).map_or(Ok(()), Err)?;
     let (mflag, eflag, resume_args, args) = flags(&cfg, &alias);
     let (brief, ws, bin) = (brief.display().to_string(), workspace.display().to_string(), command.rsplit('/').next().unwrap_or(&command).to_string());
     let (session, message) = resume.unwrap_or_default();
@@ -188,13 +208,13 @@ pub fn save(app: &Shared, role_name: &str, b: Option<&Value>) -> Result<RoleSett
     Ok(now)
 }
 fn updated(app: &Shared, role_name: &str, b: &Value) -> Result<RoleSetting, String> {
-    let mut s = role(app, role_name);
+    let (mut s, cfg) = (role(app, role_name), app.cfg());
     let field = |k: &str, cur: Option<String>| match &b[k] {
         Value::String(v) if v.trim().is_empty() => None,
         Value::String(v) => Some(v.trim().to_string()),
         _ => cur,
     };
-    let agent = field("agent", Some(s.agent.clone())).unwrap_or_default();
+    let agent = field("agent", b["model"].as_str().and_then(|m| agent_of(&cfg, m.trim())).or(Some(s.agent.clone()))).unwrap_or_default(); // a model alone brings its own agent
     let _ = (agent != s.agent).then(|| (s.model, s.effort) = (None, None));
     s.agent = agent;
     s.model = field("model", s.model);
@@ -204,24 +224,16 @@ fn updated(app: &Shared, role_name: &str, b: &Value) -> Result<RoleSetting, Stri
         Value::String(x) => s.fallback = x.split(',').map(|x| x.trim().to_string()).filter(|x| !x.is_empty()).collect(),
         _ => {}
     }
-    let cfg = app.cfg();
-    [&s.model, &s.effort]
-        .into_iter()
-        .flatten()
-        .chain(&s.fallback)
-        .find(|v| !(v.chars().next().is_some_and(|c| c.is_ascii_alphanumeric()) && v.chars().all(|c| c.is_ascii_alphanumeric() || "._:/+-[]".contains(c))))
-        .map_or(Ok(()), |v| Err(format!("'{v}' is not a valid model, effort or fallback entry")))?;
+    [&s.model, &s.effort].into_iter().flatten().chain(&s.fallback).find(|v| !token(v)).map_or(Ok(()), |v| Err(format!("'{v}' is not a valid model, effort or fallback entry")))?;
     std::iter::once(&s.agent).chain(&s.fallback).map(|e| e.split(':').next().unwrap_or("")).find(|a| cfg.factory.command(a).is_none()).map_or(Ok(()), |alias| Err(format!("no agent alias '{alias}' in config.toml")))?;
-    (s.agent == "codex")
-        .then(crate::codex::catalog)
-        .and_then(|c| {
-            c.iter()
-                .find(|m| Some(m["slug"].as_str().unwrap_or("")) == s.model.as_deref())
-                .filter(|m| s.effort.as_ref().is_some_and(|e| !m["efforts"].as_array().is_some_and(|es| es.iter().any(|v| v == e))))
-                .map(|m| format!("unsupported effort for {}: {}", s.model.as_deref().unwrap_or(""), m["efforts"]))
-        })
-        .map_or(Ok(()), Err)?;
+    let listed = (s.agent == "codex").then(crate::codex::catalog).and_then(|c| c.into_iter().find(|m| m["slug"].as_str() == s.model.as_deref())); // a Codex model lists its efforts
+    listed.filter(|m| s.effort.as_ref().is_some_and(|e| !m["efforts"].as_array().is_some_and(|es| es.iter().any(|v| v == e)))).map_or(Ok(()), |m| Err(format!("unsupported effort for {}: {}", m["slug"], m["efforts"])))?;
+    std::iter::once(format!("{}:{}", s.agent, s.model.as_deref().unwrap_or(""))).chain(s.fallback.clone()).find_map(|e| e.split_once(':').and_then(|(a, m)| mismatch(&cfg, a, Some(m)))).map_or(Ok(()), Err)?;
     Ok(s)
+}
+/// A model, effort, fallback entry or request id: a letter or digit first, then only those and `._:/+-[]`.
+fn token(v: &str) -> bool {
+    v.chars().next().is_some_and(|c| c.is_ascii_alphanumeric()) && v.chars().all(|c| c.is_ascii_alphanumeric() || "._:/+-[]".contains(c))
 }
 fn line(s: &RoleSetting) -> String {
     format!("agent={} model={} effort={}{}", s.agent, s.model.as_deref().unwrap_or("-"), s.effort.as_deref().unwrap_or("-"), if s.fallback.is_empty() { String::new() } else { format!(" fallback={}", s.fallback.join(",")) })
@@ -235,12 +247,9 @@ pub fn command(app: &Shared, text: &str) -> Option<Result<String, String>> {
     Some((|| {
         if words.len() == 1 || words.get(1) == Some(&"help") {
             let roles = all_roles.iter().map(|r| format!("{r}: {}", line(&role(app, r)))).collect::<Vec<_>>().join("\n");
-            let catalog = crate::codex::catalog()
-                .iter()
-                .map(|m| format!("{} ({})", m["slug"].as_str().unwrap_or(""), m["efforts"].as_array().into_iter().flatten().filter_map(Value::as_str).collect::<Vec<_>>().join(", ")))
-                .collect::<Vec<_>>()
-                .join("\n");
-            return Ok(format!("{roles}\n\nCodex models:\n{catalog}\n\n{help}"));
+            let catalog: Vec<String> =
+                crate::codex::catalog().iter().map(|m| format!("{} ({})", m["slug"].as_str().unwrap_or(""), m["efforts"].as_array().into_iter().flatten().filter_map(Value::as_str).collect::<Vec<_>>().join(", "))).collect();
+            return Ok(format!("{roles}\n\nCodex models:\n{}\n\n{help}", catalog.join("\n")));
         }
         ((3..=4).contains(&words.len())).then_some(()).ok_or_else(|| help.clone())?;
         let r = if words[1] == "todos" { "all" } else { words[1] };
@@ -253,7 +262,7 @@ pub fn command(app: &Shared, text: &str) -> Option<Result<String, String>> {
         (!reset || words.len() == 3).then_some(()).ok_or_else(|| help.clone())?;
         let mut body = json!({});
         if !reset {
-            let (agent, model) = words[2].split_once(':').unwrap_or_else(|| if words[2].starts_with("gpt-") { ("codex", words[2]) } else { (words[2], "") });
+            let (agent, model) = words[2].split_once(':').map(|(a, m)| (a.to_string(), m)).unwrap_or_else(|| agent_of(&app.cfg(), words[2]).map_or((words[2].to_string(), ""), |a| (a, words[2])));
             body = json!({"agent": agent, "model": model, "effort": words.get(3).copied().unwrap_or("")});
             roles.iter().try_for_each(|r| updated(app, r, &body).map(|_| ()))?; // validate every role before saving any of them
         }
@@ -278,14 +287,17 @@ pub fn state(app: &Shared) -> Value {
             (r, v)
         })
         .collect();
-    json!({"roles": roles, "events": crate::factory::EVENTS.split(';').filter(|e| *e != "schedule").collect::<Vec<_>>(), "choices": {"agents": cfg.factory.commands().iter().map(|(k, _)| k).collect::<Vec<_>>(), "codex": crate::codex::catalog(), "models": get::<Vec<String>>(&cfg.raw, &["models", "choices"]).unwrap_or_default(),
+    let listed = get::<toml::Value>(&cfg.raw, &["models", "choices"]).map(|c| c.as_table().map_or(vec![c.clone()], |t| t.values().cloned().collect()));
+    let models: Vec<String> = listed.into_iter().flatten().filter_map(|v| v.try_into::<Vec<String>>().ok()).flatten().collect();
+    let owners: serde_json::Map<String, Value> = models.iter().cloned().filter_map(|m| agent_of(&cfg, &m).map(|a| (m, json!(a)))).collect();
+    json!({"roles": roles, "events": crate::factory::EVENTS.split(';').filter(|e| *e != "schedule").collect::<Vec<_>>(), "choices": {"agents": cfg.factory.commands().iter().map(|(k, _)| k).collect::<Vec<_>>(), "codex": crate::codex::catalog(), "models": &models, "owners": owners,
         "efforts": get::<Vec<String>>(&cfg.raw, &["models", "efforts"]).unwrap_or_else(|| EFFORTS.map(String::from).to_vec())}})
 }
 /// A paired phone's encrypted control request. Repeated save IDs cannot reapply old settings.
 pub fn phone_response(app: &Shared, peer: &str, b: &Value) -> Value {
     let id = b["id"].as_str().unwrap_or("");
     let key = format!("models.rpc:{peer}:{id}");
-    let result = if b["v"] != 1 || id.is_empty() || id.len() > 80 || !(id.chars().next().is_some_and(|c| c.is_ascii_alphanumeric()) && id.chars().all(|c| c.is_ascii_alphanumeric() || "._:/+-[]".contains(c))) {
+    let result = if b["v"] != 1 || id.is_empty() || id.len() > 80 || !token(id) {
         Err("invalid model request".to_string())
     } else if let Some(cached) = app.kv(&key).and_then(|s| serde_json::from_str::<Result<(), String>>(&s).ok()) {
         cached

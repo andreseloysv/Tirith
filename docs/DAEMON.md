@@ -128,6 +128,13 @@ chain. The effective setting is the owner's override from the page (kv `models:<
 `[roles.<role>]` of `config.toml` laid over the factory's role. Agents are aliases
 (`[agents.<alias>]`); the real command lives only in config.toml. Optional per alias: `model_flag`, `effort_flag` ("" = none) and `resume_args`
 (`{session}` and `{message}` are filled in); each alias's flags come from the factory.
+Every model knows its agent from the configuration alone: its group in `[models.choices]` (a table
+`alias = ["model", …]`), Codex's catalog, or the `model_prefix` its `[agents.<alias>]` declares (by default
+its command's program name and `-`). A pair of an agent with another agent's model is refused by
+`POST /api/models/<role>`, `tirith models set` and `/model`; a model sent alone brings its agent; a lane on
+such a pair fails at once with the reason, without spending a try; and at start a saved one is said in the
+general manager's chat. The page lists each model with its agent and switches the agent when a model of
+another one is chosen.
 
 ## `plan.rs`
 

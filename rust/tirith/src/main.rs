@@ -169,7 +169,7 @@ fn serve() -> Result<(), String> {
         let app = app::App::open_at(config::tirith_home());
         let port = app.cfg().port;
         let listener = tokio::net::TcpListener::bind(("127.0.0.1", port)).await.map_err(|e| format!("port {port} is taken (is tirith already running?): {e}"))?;
-        [sandbox::start, rooms::start, guard::start, metrics::start, bots::start, chat::start].into_iter().for_each(|start| start(app.clone()));
+        [sandbox::start, rooms::start, guard::start, metrics::start, bots::start, chat::start, models::start].into_iter().for_each(|start| start(app.clone()));
         tokio::spawn(lanes::scheduler(app.clone()));
         tokio::spawn(merge::worker(app.clone()));
         let flusher = app.clone();

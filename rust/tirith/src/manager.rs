@@ -394,7 +394,6 @@ pub fn spawn_chat(app: &Shared, role: &str, project: &str, argv: Vec<String>) ->
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(log)
-        .process_group(0)
         .kill_on_drop(true)
         .spawn()
         .map_err(|e| format!("cannot start the {role} ({}): {e}", launch.program))?;
