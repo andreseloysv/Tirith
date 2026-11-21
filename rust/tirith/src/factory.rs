@@ -134,6 +134,7 @@ impl Factory {
         let routes = t.get("routes").and_then(|r| r.as_array()).cloned().unwrap_or_default();
         let evals = t.get("evals").and_then(|e| e.as_array()).cloned().unwrap_or_default();
         let is_role = |n: &str| n.is_empty() || roles.contains_key(n);
+        let shapes: [(&str, &[&str]); 4] = [("session", &["chat", "turn", "lane"]), ("scope", &["project", "own"]), ("access", &["", "read", "write"]), ("runs_on", &["", "local"])];
         let bad = [
             t.keys().find(|k| !SECTIONS.contains(&k.as_str())).map(|k| format!("unknown section '{k}'")),
             unknown_in("agents", &["protocol", "model_flag", "effort_flag", "chat_args", "lane_args", "resume_args", "args", "command", "settings", "profile"]),
@@ -146,11 +147,7 @@ impl Factory {
             roles.iter().find_map(|(n, r)| r.get("agent").and_then(|x| x.as_str()).filter(|a| !agents.contains_key(*a)).map(|a| format!("role '{n}' runs on missing agent '{a}'"))),
             roles
                 .iter()
-                .find(|(_, r)| {
-                    [("session", ["chat", "turn", "lane"].as_slice()), ("scope", ["project", "own"].as_slice()), ("access", ["", "read", "write"].as_slice()), ("runs_on", ["", "local"].as_slice())]
-                        .iter()
-                        .any(|(k, ok)| !ok.contains(&str_of(r, k)))
-                })
+                .find(|(_, r)| shapes.iter().any(|(k, ok)| !ok.contains(&str_of(r, k))))
                 .map(|(n, r)| format!("role '{n}' has unknown session '{}', scope '{}', access '{}' or runs_on '{}'", str_of(r, "session"), str_of(r, "scope"), str_of(r, "access"), str_of(r, "runs_on"))),
             roles
                 .iter()
@@ -266,15 +263,13 @@ pub fn load(overlay: &toml::Table) -> Arc<Factory> {
     let attempt =
         dir(overlay).map_or_else(|| parse(TEXT, embedded_prompts(), overlay), |d| std::fs::read_to_string(d.join("factory.toml")).map_err(|e| format!("factory: {}: {e}", d.display())).and_then(|text| parse(&text, prompts(&d), overlay)));
     let f = match attempt {
-        Ok(f) => {
-            *ERROR.lock().unwrap() = None;
-            Arc::new(f)
-        }
+        Ok(f) => Arc::new(f),
         Err(e) => {
             *ERROR.lock().unwrap() = Some(e);
             return current();
         }
     };
+    *ERROR.lock().unwrap() = None;
     *CURRENT.write().unwrap() = Some(f.clone());
     f
 }

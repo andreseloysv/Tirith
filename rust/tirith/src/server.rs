@@ -81,13 +81,11 @@ pub fn router(app: Shared, port: u16) -> Router {
 
 /// A browser page from another origin may not call the API (no CSRF against 127.0.0.1). It also checks Host, so a DNS-rebinding page (Host: evil.example) cannot read the API either.
 async fn same_origin(req: Request, next: Next) -> Response {
-    let ok = {
-        let h = |k: &str| req.headers().get(k).map(|v| v.to_str().unwrap_or("\u{0}"));
-        origin_host_ok(h("host"), h("origin"), PORT.get().copied().unwrap_or(0))
-    };
-    match ok {
-        true => next.run(req).await,
-        false => (StatusCode::FORBIDDEN, "foreign origin").into_response(),
+    let ok = origin_host_ok(req.headers().get("host").map(|v| v.to_str().unwrap_or("\u{0}")), req.headers().get("origin").map(|v| v.to_str().unwrap_or("\u{0}")), PORT.get().copied().unwrap_or(0));
+    if ok {
+        next.run(req).await
+    } else {
+        (StatusCode::FORBIDDEN, "foreign origin").into_response()
     }
 }
 
@@ -102,10 +100,9 @@ fn origin_host_ok(host: Option<&str>, origin: Option<&str>, port: u16) -> bool {
 mod tests;
 
 async fn state(State(app): State<Shared>) -> Json<Value> {
-    let lanes: Vec<Value> = app.lanes.lock().unwrap().values().map(|l| json!(l)).collect();
     Json(json!({
         "projects": projects::list(&app),
-        "lanes": lanes,
+        "lanes": app.lanes.lock().unwrap().values().map(|l| json!(l)).collect::<Vec<_>>(),
         "events": app.recent("events", &["id", "at", "lane", "project", "kind", "tool", "summary", "factory", "role_hash"], None, 200),
         "owner": manager::owner_open(&app),
         "busy": manager::busy(),
@@ -163,17 +160,19 @@ async fn hook(State(app): State<Shared>, Path(event): Path<String>, headers: Hea
         .cloned();
     let tool = s(&p, "tool_name");
     let session = s(&p, "session_id");
-    let summary = if event == "UserPromptSubmit" { rules::summary("", &json!({"prompt": p["prompt"]})) } else { rules::summary(&tool, &p["tool_input"]) };
+    // The rules and the sandbox audit see every agent's call under the names they know; the events below keep `tool`, the name the agent used.
+    let (known, input) = rules::normalize(&tool, &p["tool_input"], &cwd);
+    let summary = if event == "UserPromptSubmit" { rules::summary("", &json!({"prompt": p["prompt"]})) } else { rules::summary(&tool, &input) };
     let (lane_id, project_id) = (lane.as_ref().map(|l| l.id.clone()).unwrap_or_default(), project.as_ref().map(|p| p.id.clone()).unwrap_or_default());
     if let Some(l) = &lane {
         drop((!session.is_empty() && l.session != session).then(|| app.update_lane(&l.id, |x| x.session = session.clone())));
         app.lanes.lock().unwrap().get_mut(&l.id).into_iter().for_each(|m| m.last_activity = now_s());
         // in memory only: activity is not worth a disk write per tool call
     }
-    sandbox::tags(&tool, &p["tool_input"]).into_iter().for_each(|(tag, target)| _ = app.event(&lane_id, &project_id, "access", tag, &target, &session));
+    sandbox::tags(&known, &input).into_iter().for_each(|(tag, target)| _ = app.event(&lane_id, &project_id, "access", tag, &target, &session));
     if event == "PreToolUse" {
-        let role = header("x-tirith-role");
-        let refusal = rules::check(&app, &tool, &p["tool_input"], lane.as_ref(), project.as_ref(), role.as_deref()).or_else(|| if lane.is_none() && role.is_none() { sandbox::check_command(&tool, &p["tool_input"]) } else { None });
+        let role = header("x-tirith-role").or_else(|| rules::role_at(&app, &cwd));
+        let refusal = rules::check(&app, &known, &input, lane.as_ref(), project.as_ref(), role.as_deref()).or_else(|| if lane.is_none() && role.is_none() { sandbox::check_command(&known, &input) } else { None });
         if let Some(why) = refusal {
             app.event(&lane_id, &project_id, "blocked", &tool, &format!("{summary} — {why}"), &session);
             return Json(json!({"hookSpecificOutput": {"hookEventName": "PreToolUse",

@@ -27,17 +27,22 @@ fn home(tag: &str) -> crate::app::Shared {
     app
 }
 
-/// One `PreToolUse` Bash hook call as the daemon gets it: with the caller's `X-Tirith-Role` and/or `X-Tirith-Lane` header (empty for none), from the project's folder.
-async fn pre_bash(app: &crate::app::Shared, role: &str, lane: &str, cmd: &str) -> serde_json::Value {
+/// One `PreToolUse` hook call as the daemon gets it: with the caller's `X-Tirith-Role` and/or `X-Tirith-Lane` header (empty for none), from `cwd`, with the tool name and input the agent used.
+async fn pre(app: &crate::app::Shared, role: &str, lane: &str, cwd: &str, tool: &str, input: serde_json::Value) -> serde_json::Value {
     let mut headers = axum::http::HeaderMap::new();
     for (k, v) in [("x-tirith-role", role), ("x-tirith-lane", lane)] {
         if !v.is_empty() {
             headers.insert(k, v.parse().unwrap());
         }
     }
-    let repo = app.cfg().project("p1").unwrap().repo.clone();
-    let body = serde_json::json!({"cwd": repo, "tool_name": "Bash", "session_id": "s1", "tool_input": {"command": cmd}});
+    let body = serde_json::json!({"cwd": cwd, "tool_name": tool, "session_id": "s1", "tool_input": input});
     hook(axum::extract::State(app.clone()), axum::extract::Path("PreToolUse".to_string()), headers, axum::body::Bytes::from(body.to_string())).await.0
+}
+
+/// One `PreToolUse` Bash hook call from the project's folder.
+async fn pre_bash(app: &crate::app::Shared, role: &str, lane: &str, cmd: &str) -> serde_json::Value {
+    let repo = app.cfg().project("p1").unwrap().repo.clone();
+    pre(app, role, lane, &repo, "Bash", serde_json::json!({"command": cmd})).await
 }
 
 #[tokio::test]
@@ -66,4 +71,62 @@ async fn chat_roles_may_not_wait() {
         assert!(!deny(&v), "a lane's `{cmd}` passes: {v}");
         assert_eq!(v["hookSpecificOutput"]["permissionDecision"], "allow", "a lane's allowed call needs no prompt: {v}");
     }
+}
+
+#[tokio::test]
+async fn every_agent_obeys_the_rules() {
+    let app = home("agents");
+    let deny = |v: &serde_json::Value| v["hookSpecificOutput"]["permissionDecision"] == "deny";
+    let reason = |v: &serde_json::Value| v["hookSpecificOutput"]["permissionDecisionReason"].as_str().unwrap_or("").to_string();
+    let repo = app.cfg().project("p1").unwrap().repo.clone();
+    let wait = "no esperes dentro del turno: contesta y termina; Tirith te avisa cuando una lane entre, falle o pregunte";
+    let cmd = |c: &str| serde_json::json!({"command": c});
+    // The muse names for a shell: `bash` (its command in `command`) and `monitor`. A manager waiting in either is refused, as with `clocksleep`, its tool for waiting outright.
+    let looped = pre(&app, "manager", "", &repo, "bash", cmd("for i in 1 2 3 4 5; do tirith status; sleep 30; done")).await;
+    assert!(deny(&looped), "a manager's bash for loop with sleep 30 is refused: {looped}");
+    assert_eq!(reason(&looped), wait);
+    let watched = pre(&app, "manager", "", &repo, "monitor", cmd("while true; do tirith status; sleep 30; done")).await;
+    assert!(deny(&watched), "a manager's monitor while loop with sleep 30 is refused: {watched}");
+    assert_eq!(reason(&watched), wait);
+    let slept = pre(&app, "manager", "", &repo, "clocksleep", serde_json::json!({"seconds": 30})).await;
+    assert!(deny(&slept), "a manager's clocksleep is refused: {slept}");
+    assert_eq!(reason(&slept), wait);
+    // A short sleep of the manager is no wait, whatever the agent calls the shell.
+    assert!(!deny(&pre(&app, "manager", "", &repo, "bash", cmd("sleep 2")).await), "a manager's bash sleep 2 passes");
+    // From a lane, the muse names obey the other rules too: no skipping the commit checks, no writing the plan or Tirith's own files, by `edit_file` (the file in `path`) or by `apply_patch` (its files on the patch's `*** … File:` lines, relative to its folder).
+    let ws = "/tmp/ws-lane-agents";
+    app.save_lane(&crate::app::Lane { id: "lane-agents".into(), project: "p1".into(), status: "running".into(), workspace: ws.into(), ..Default::default() });
+    let skipped = pre(&app, "", "lane-agents", ws, "bash", cmd("git commit --no-verify -m x")).await;
+    assert!(deny(&skipped), "a lane's bash git commit --no-verify is refused: {skipped}");
+    assert!(reason(&skipped).contains("Commit checks are never skipped"), "the refusal names the commit checks: {skipped}");
+    let config = app.home.join("config.toml").display().to_string();
+    for (what, tool, input) in [
+        ("an edit_file on the plan", "edit_file", serde_json::json!({"path": "docs/TODO.md", "find": "a", "replace": "b"})),
+        ("a write_file on the plan", "write_file", serde_json::json!({"path": format!("{ws}/docs/TODO.md"), "content": "x"})),
+        ("an edit_file on <home>/config.toml", "edit_file", serde_json::json!({"path": config.clone(), "find": "a", "replace": "b"})),
+        ("an apply_patch on the plan (not its first file)", "apply_patch", serde_json::json!({"patch": "*** Begin Patch\n*** Update File: src/x.rs\n@@\n-a\n+b\n*** Update File: docs/TODO.md\n@@\n-a\n+b\n*** End Patch"})),
+        ("an apply_patch on <home>/config.toml (not its first file)", "apply_patch", serde_json::json!({"patch": format!("*** Begin Patch\n*** Add File: src/y.rs\n+x\n*** Update File: {config}\n@@\n-a\n+b\n*** End Patch")})),
+        ("an apply_patch moving a file onto <home>/config.toml", "apply_patch", serde_json::json!({"patch": format!("*** Begin Patch\n*** Update File: src/z.rs\n*** Move to: {config}\n@@\n-a\n+b\n*** End Patch")})),
+    ] {
+        let v = pre(&app, "", "lane-agents", ws, tool, input).await;
+        assert!(deny(&v), "{what} from a lane is refused: {v}");
+    }
+    // The same waiting loop from a lane passes, allowed by the rules as before.
+    let lane_loop = pre(&app, "", "lane-agents", ws, "bash", cmd("for i in 1 2 3 4 5; do tirith status; sleep 30; done")).await;
+    assert!(!deny(&lane_loop), "a lane's bash for loop with sleep 30 passes: {lane_loop}");
+    assert_eq!(lane_loop["hookSpecificOutput"]["permissionDecision"], "allow", "a lane's allowed call needs no prompt: {lane_loop}");
+    // Without any role header, the hook's folder names the chat role: <home>/manager/tirith is the manager's, so its bash wait is refused just the same.
+    let mgr_dir = app.home.join("manager/tirith").display().to_string();
+    let by_folder = pre(&app, "", "", &mgr_dir, "bash", cmd("for i in 1 2 3; do tirith status; sleep 30; done")).await;
+    assert!(deny(&by_folder), "a bash wait from <home>/manager/tirith with no role header is refused: {by_folder}");
+    assert_eq!(reason(&by_folder), wait);
+    // The sandbox audit annotates a muse shell's and editor's accesses too, and the events keep the names the agent used, not the translated ones.
+    let _ = pre(&app, "manager", "", &repo, "bash", cmd("cat ~/.ssh/id_rsa")).await;
+    let _ = pre(&app, "", "lane-agents", ws, "edit_file", serde_json::json!({"path": "/home/owner/.ssh/id_rsa", "find": "a", "replace": "b"})).await;
+    assert_eq!(app.query("SELECT COUNT(*) FROM events WHERE kind = 'access' AND tool = 'credential'", [], |r| r.get::<_, i64>(0)), [2], "the manager's bash credential read and the lane's edit_file on a credential are annotated");
+    let blocked: Vec<String> = app.query("SELECT tool FROM events WHERE kind = 'blocked' ORDER BY id", [], |r| r.get::<_, String>(0));
+    for tool in ["bash", "monitor", "clocksleep", "edit_file", "write_file", "apply_patch"] {
+        assert!(blocked.iter().any(|t| t == tool), "a blocked {tool} call is recorded under its own name: {blocked:?}");
+    }
+    assert!(!blocked.iter().any(|t| t == "Bash" || t == "Edit" || t == "Write"), "no event carries a translated name: {blocked:?}");
 }

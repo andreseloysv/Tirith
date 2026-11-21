@@ -99,14 +99,12 @@ pub fn seal(me: &Me, text: &str, tag: &str, readers: &[String]) -> Value {
     let mut pubs: Vec<&String> = readers.iter().chain([&me.public]).collect();
     pubs.sort();
     pubs.dedup();
-    let wrapped: Vec<Value> = pubs
-        .into_iter()
-        .filter_map(|p| {
-            let wrap: [u8; 24] = rand::random();
-            let boxed = SalsaBox::new(&curve_public(p)?, &mine).encrypt(GenericArray::from_slice(&wrap), &key[..]).ok()?;
-            Some(json!({"pub": p, "wrapped_key": B64.encode([&wrap[..], &boxed].concat())}))
-        })
-        .collect();
+    let wrap_for = |p: &String| {
+        let wrap: [u8; 24] = rand::random();
+        let boxed = SalsaBox::new(&curve_public(p)?, &mine).encrypt(GenericArray::from_slice(&wrap), &key[..]).ok()?;
+        Some(json!({"pub": p, "wrapped_key": B64.encode([&wrap[..], &boxed].concat())}))
+    };
+    let wrapped: Vec<Value> = pubs.into_iter().filter_map(wrap_for).collect();
     let cipher = XSalsa20Poly1305::new(GenericArray::from_slice(&key)).encrypt(GenericArray::from_slice(&nonce), inner.as_bytes()).unwrap_or_default();
     json!({"v": 1, "alg": ALG, "sender_pub": me.public, "recipients": wrapped, "nonce": B64.encode(nonce), "ciphertext": B64.encode(cipher)})
 }
@@ -137,11 +135,8 @@ async fn api(base: &str, path: &str, body: Option<&Value>, secs: u64) -> Result<
     let res = req.timeout(Duration::from_secs(secs)).send().await.map_err(|e| (0, format!("cannot reach {base}: {e}")))?;
     let status = res.status().as_u16();
     let v: Value = res.json().await.unwrap_or(Value::Null);
-    if (200..300).contains(&status) {
-        Ok(v)
-    } else {
-        Err((status, v["error"].as_str().map_or(format!("HTTP {status}"), |m| if status >= 500 { format!("HTTP {status}: {m}") } else { m.into() })))
-    }
+    let Some(()) = (200..300).contains(&status).then_some(()) else { return Err((status, v["error"].as_str().map_or(format!("HTTP {status}"), |m| if status >= 500 { format!("HTTP {status}: {m}") } else { m.into() }))) };
+    Ok(v)
 }
 /// The platform's public key, checked against its signed description (cached per platform).
 pub async fn platform(base: &str) -> Result<String, String> {
