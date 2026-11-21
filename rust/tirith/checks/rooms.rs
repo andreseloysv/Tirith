@@ -86,13 +86,28 @@ shape = \"\"
 color = \"\"
 ";
     let raw: toml::Table = toml.parse().unwrap();
-    assert_eq!(listed_room(&raw, "sealed-bot", "Noticias", "bot-abc123"), json!({"r": "sealed-bot", "t": "Noticias", "f": {"shape": "drop", "color": "#22d3ee"}}), "a bot room carries the bot's face");
-    assert_eq!(listed_room(&raw, "sealed-proj", "My project", "manager"), json!({"r": "sealed-proj", "t": "My project", "f": {"shape": "hex", "color": "#8e7cf0"}}), "a project room carries the Project Manager's face");
-    assert_eq!(listed_room(&raw, "sealed-all", "All projects", "manager-general"), json!({"r": "sealed-all", "t": "All projects", "f": {"shape": "dome", "color": "#3fb6a8"}}), "All projects carries the Manager's face");
-    assert_eq!(listed_room(&raw, "sealed-x", "X", "worker")["f"], json!({"shape": "round", "color": "#3b82f6"}), "a role with no face gets round blue");
-    assert_eq!(listed_room(&raw, "sealed-x", "X", "no-such-role")["f"], json!({"shape": "round", "color": "#3b82f6"}), "an unknown role gets round blue");
-    assert_eq!(listed_room(&raw, "sealed-x", "X", "partial")["f"], json!({"shape": "burst", "color": "#3b82f6"}), "a missing colour alone defaults");
-    assert_eq!(listed_room(&raw, "sealed-x", "X", "blank")["f"], json!({"shape": "round", "color": "#3b82f6"}), "an empty face defaults");
-    let list = json!([listed_room(&raw, "sealed-bot", "Noticias", "bot-abc123"), listed_room(&raw, "sealed-all", "All projects", "manager-general")]).to_string();
+    let proj = |id: &str, color: Option<&str>| crate::config::Project { id: id.into(), color: color.map(Into::into), ..Default::default() };
+    assert_eq!(listed_room(&raw, "sealed-bot", "Noticias", "bot-abc123", None), json!({"r": "sealed-bot", "t": "Noticias", "f": {"shape": "drop", "color": "#22d3ee"}}), "a bot room carries the bot's face");
+    assert_eq!(listed_room(&raw, "sealed-proj", "My project", "manager", None), json!({"r": "sealed-proj", "t": "My project", "f": {"shape": "hex", "color": "#8e7cf0"}}), "with no project, the Project Manager's face");
+    let (zoo, rela) = (proj("zoo", Some("#2f7d5b")), proj("rela", Some("#d0663b")));
+    assert_eq!(
+        listed_room(&raw, "sealed-zoo", "Zoo", "manager", Some(&zoo)),
+        json!({"r": "sealed-zoo", "t": "Zoo", "f": {"shape": "hex", "color": "#2f7d5b"}}),
+        "a project room keeps the Project Manager's shape in the project's own colour"
+    );
+    assert_eq!(listed_room(&raw, "sealed-rela", "Rela", "manager", Some(&rela))["f"], json!({"shape": "hex", "color": "#d0663b"}), "a second project comes out in its own distinct colour, not the first's");
+    let plain = proj("handmade", None);
+    let stable = listed_room(&raw, "sealed-hand", "Handmade", "manager", Some(&plain));
+    assert_eq!(stable["f"], json!({"shape": "hex", "color": "#c2417c"}), "a project with no colour gets its stable palette colour");
+    assert!(crate::projects::COLORS.contains(&stable["f"]["color"].as_str().unwrap()), "the stable colour is one of the palette: {stable}");
+    assert_eq!(listed_room(&raw, "sealed-hand", "Handmade", "manager", Some(&plain)), stable, "the same project gets the same stable colour in every list");
+    assert_eq!(listed_room(&raw, "sealed-hand", "Handmade", "manager", Some(&proj("handmade", Some(""))))["f"], stable["f"], "a project added by hand with an empty colour gets the same stable colour and does not break the list");
+    assert_eq!(listed_room(&raw, "sealed-all", "All projects", "manager-general", None), json!({"r": "sealed-all", "t": "All projects", "f": {"shape": "dome", "color": "#3fb6a8"}}), "All projects carries the Manager's face");
+    assert_eq!(listed_room(&raw, "sealed-x", "X", "worker", None)["f"], json!({"shape": "round", "color": "#3b82f6"}), "a role with no face gets round blue");
+    assert_eq!(listed_room(&raw, "sealed-x", "X", "no-such-role", None)["f"], json!({"shape": "round", "color": "#3b82f6"}), "an unknown role gets round blue");
+    assert_eq!(listed_room(&raw, "sealed-x", "X", "partial", None)["f"], json!({"shape": "burst", "color": "#3b82f6"}), "a missing colour alone defaults");
+    assert_eq!(listed_room(&raw, "sealed-x", "X", "blank", None)["f"], json!({"shape": "round", "color": "#3b82f6"}), "an empty face defaults");
+    let list = json!([listed_room(&raw, "sealed-bot", "Noticias", "bot-abc123", None), listed_room(&raw, "sealed-zoo", "Zoo", "manager", Some(&zoo)), listed_room(&raw, "sealed-all", "All projects", "manager-general", None)]).to_string();
     assert!(list.contains("\"f\":{\"color\":\"#22d3ee\",\"shape\":\"drop\"}") || list.contains("\"f\":{\"shape\":\"drop\",\"color\":\"#22d3ee\"}"), "the list the phones get carries f: {list}");
+    assert!(list.contains("#2f7d5b") && list.contains("#3fb6a8"), "the list carries the project's colour and All projects' own: {list}");
 }
