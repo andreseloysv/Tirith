@@ -19,16 +19,9 @@ struct Metric {
     facts: String,
 }
 
-/// A red stretch of one metric: since when (the manager was told then) and whether its review ran.
-struct Episode {
-    since: u64,
-    reviewed: bool,
-}
-
 #[derive(Default)]
 struct Book {
     last: Value,
-    episodes: HashMap<String, Episode>,
     idle_since: HashMap<String, u64>,
 }
 
@@ -169,27 +162,31 @@ fn describe(m: &Metric) -> String {
     )
 }
 
+/// One metric's red episode — since when (the manager was told then) and whether its review ran — kept in `kv` (`metric_red:<id>` = "<since>@<reviewed>") so a daemon restart neither announces `metric.red` again nor repeats the review of a measure already red; back to green clears it. Returns (fresh, review due, since).
+fn episode(app: &Shared, id: &str, red: bool, now: u64, after: u64) -> (bool, bool, Option<u64>) {
+    let key = format!("metric_red:{id}");
+    let cur = app.kv(&key).and_then(|v| v.split_once('@').and_then(|(s, r)| s.parse::<u64>().ok().map(|s| (s, r == "1"))));
+    let (since, reviewed) = cur.unwrap_or((now, false));
+    let due = red && cur.is_some() && !reviewed && now >= since.saturating_add(after);
+    let _ = (!red).then(|| app.set_kv(&key, None));
+    let _ = (red && (cur.is_none() || due)).then(|| app.set_kv(&key, Some(&format!("{since}@{}", due as u8))));
+    (red && cur.is_none(), due, red.then_some(since))
+}
+
 /// One computation: episodes opened, fixed, noted and reviewed; the page gets the result.
 fn tick(app: &Shared) {
     let iso = |s: u64| chrono::DateTime::from_timestamp(s as i64, 0).map(|d| d.format("%Y-%m-%dT%H:%M:%SZ").to_string()).unwrap_or_default();
     let metrics = compute(app);
     let now = now_s();
     let (ceo, after) = delayed_review(app);
-    let (mut due, mut notes) = (vec![], vec![]);
-    {
-        let mut book = BOOK.lock().unwrap();
-        book.episodes.retain(|id, _| metrics.iter().any(|m| m.id == id && m.red)); // back to green ends the episode
-        for m in metrics.iter().filter(|m| m.red) {
-            let fresh = !book.episodes.contains_key(m.id);
-            let e = book.episodes.entry(m.id.to_string()).or_insert(Episode { since: now, reviewed: false });
-            let _ = fresh.then(|| notes.push(m));
-            let _ = (!fresh && !e.reviewed && now >= e.since + after).then(|| (e.reviewed = true, due.push((m.id, describe(m)))).1);
-        }
-        book.last = json!(metrics
-            .iter()
-            .map(|m| json!({"id": m.id, "label": m.label, "value": m.value, "target": m.target, "at_least": m.at_least, "red": m.red, "since": book.episodes.get(m.id).map(|e| iso(e.since)), "facts": m.facts}))
-            .collect::<Vec<_>>());
+    let (mut due, mut notes, mut last) = (vec![], vec![], vec![]);
+    for m in &metrics {
+        let (fresh, due_now, from) = episode(app, m.id, m.red, now, after);
+        let _ = fresh.then(|| notes.push(m));
+        let _ = due_now.then(|| due.push((m.id, describe(m))));
+        last.push(json!({"id": m.id, "label": m.label, "value": m.value, "target": m.target, "at_least": m.at_least, "red": m.red, "since": from.map(iso), "facts": m.facts}));
     }
+    BOOK.lock().unwrap().last = json!(last);
     // A red main is not reported again here: its project's manager already got it from the merge queue, with the facts.
     notes.into_iter().filter(|m| m.id != "main_red").for_each(|m| {
         let _ = (m.id == "idle").then(|| app.sched_wake.notify_one()); // the mechanical fix: wake the scheduler and the autopilot
