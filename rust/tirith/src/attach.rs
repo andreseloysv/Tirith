@@ -10,6 +10,18 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 
 const LIMIT: usize = 25 * 1024 * 1024;
+/// Content kinds by file extension, `ext:kind|…` (the ones only a page file gets are named in `content_kind`).
+const KINDS: &str = "png:image/png|jpg:image/jpeg|jpeg:image/jpeg|gif:image/gif|webp:image/webp|svg:image/svg+xml|pdf:application/pdf|json:application/json|html:text/html; charset=utf-8|css:text/css; charset=utf-8|js:application/javascript; charset=utf-8|mjs:application/javascript; charset=utf-8|woff2:font/woff2";
+
+/// The Content-Type of a file named `name`: as a page file (`page`), or as an attachment, where text-shaped files (html too) are plain text, never rendered as a page on this origin, and page-only kinds (css, mjs, woff2) do not apply.
+pub fn content_kind(name: &str, page: bool) -> &'static str {
+    let ext = name.rsplit('.').next().unwrap_or("").to_lowercase();
+    let plain = "txt md log csv rs py js ts toml yaml yml sh html htm".split(' ').any(|e| e == ext);
+    match (page, plain) {
+        (false, true) => "text/plain; charset=utf-8",
+        _ => KINDS.split('|').filter_map(|kv| kv.split_once(':')).find(|(e, _)| *e == ext && (page || !matches!(*e, "html" | "css" | "mjs" | "woff2"))).map(|(_, k)| k).unwrap_or("application/octet-stream"),
+    }
+}
 
 /// The text appended to the owner's message so the manager can open the attached files (absolute paths).
 pub fn describe(paths: &[String]) -> String {
@@ -23,17 +35,7 @@ fn sanitize(name: &str) -> String {
 }
 
 async fn fetch(State(app): State<Shared>, Path((id, name)): Path<(String, String)>) -> Response {
-    let kind = match name.rsplit('.').next().unwrap_or("").to_lowercase().as_str() {
-        "png" => "image/png",
-        "jpg" | "jpeg" => "image/jpeg",
-        "gif" => "image/gif",
-        "webp" => "image/webp",
-        "svg" => "image/svg+xml",
-        "pdf" => "application/pdf",
-        "json" => "application/json",
-        "txt" | "md" | "log" | "csv" | "rs" | "py" | "js" | "ts" | "toml" | "yaml" | "yml" | "sh" | "html" | "htm" => "text/plain; charset=utf-8", // html too: never rendered as a page on this origin
-        _ => "application/octet-stream",
-    };
+    let kind = content_kind(&name, false);
     let bytes = if !id.is_empty() && id.chars().all(|c| c.is_ascii_hexdigit()) && sanitize(&name) == name { tokio::fs::read(app.home.join("attachments").join(&id).join(&name)).await.ok() } else { None };
     bytes.map_or_else(|| (StatusCode::NOT_FOUND, "no such attachment").into_response(), |bytes| ([("content-type", kind), ("x-content-type-options", "nosniff"), ("content-security-policy", "sandbox")], bytes).into_response())
 }

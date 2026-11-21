@@ -55,7 +55,7 @@ pub async fn turn(app: &Shared, role: &str, project: &str, resume: Option<&str>,
     let chat = cfg.factory.role::<String>(role, "session").is_none_or(|s| s == "chat");
     let who = if chat { "manager" } else { role };
     let command = cfg.factory.command(if muse { "muse" } else { "codex" }).ok_or(if muse { "no agent alias 'muse' in config.toml" } else { "Codex is not configured" })?;
-    let dir = app.home.join(who).join(project);
+    let dir = if cfg.factory.role::<String>(role, "scope").as_deref() == Some("own") && !chat { app.home.join("manager").join(role) } else { app.home.join(who).join(project) };
     // Muse takes the message from a file, and a fresh session of it has never seen the role's instructions: they ride in its first message.
     let file = muse.then(|| dir.join(".turn-prompt.txt"));
     let argv = if let Some(file) = &file {

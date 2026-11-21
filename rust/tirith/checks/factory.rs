@@ -49,8 +49,8 @@ fn default_routes_reproduce_today() {
         ("deploy.done", note(true, false)),
         ("deploy.failed", turn("manager", true)),
         ("schedule", vec![("manager".to_string(), "turn".to_string(), false, true, None), ("ceo".to_string(), "turn".to_string(), false, false, None)]),
-        ("review.done", turn("lead", false)),
-        ("factory.invalid", turn("lead", true)),
+        ("review.done", turn("manager-general", false)),
+        ("factory.invalid", turn("manager-general", true)),
         ("card.opened", vec![]),
         ("card.answered", vec![]),
         ("card.closed", vec![]),
@@ -58,8 +58,8 @@ fn default_routes_reproduce_today() {
     for (on, want) in table {
         assert_eq!(f.routes_on(on), want, "routes on {on}");
     }
-    // A red measure wakes the lead at once and, still red after 15 minutes, the CEO.
-    assert_eq!(f.routes_on("metric.red"), vec![("lead".to_string(), "turn".to_string(), true, true, None), ("ceo".to_string(), "turn".to_string(), false, false, Some(15))]);
+    // A red measure wakes the manager of no project at once and, still red after 15 minutes, the CEO.
+    assert_eq!(f.routes_on("metric.red"), vec![("manager-general".to_string(), "turn".to_string(), true, true, None), ("ceo".to_string(), "turn".to_string(), false, false, Some(15))]);
     // The CEO's daily pass is this schedule route (07:00 every day), not a decision in Rust; it is due like a bot's routine.
     assert_eq!(f.schedules(), vec![("ceo".to_string(), "07:00".to_string(), vec![1, 2, 3, 4, 5, 6, 7])]);
     let (_, at, days) = &f.schedules()[0];
@@ -87,12 +87,12 @@ fn default_routes_reproduce_today() {
 #[test]
 fn roles_extend_and_prompts_resolve() {
     let f = Factory::default();
-    assert_eq!(f.role::<String>("lead", "agent").as_deref(), Some("anthropic")); // extends manager
+    assert_eq!(f.role::<String>("manager-general", "agent").as_deref(), Some("anthropic")); // extends manager
     assert_eq!(f.role::<u64>("ceo", "max_per_day"), Some(6));
     assert_eq!(f.role::<String>("worker", "session").as_deref(), Some("lane"));
     assert!(f.prompts_of("manager").starts_with("You are the manager inside Tirith"));
     assert!(f.prompts_of("manager").contains("only about the project {id}"));
-    assert!(f.prompts_of("lead").contains("not about one project"));
+    assert!(f.prompts_of("manager-general").contains("not about one project"));
     // The CEO closes the loop: by-version measures, at most one factory change as a step 17 item with its lane, and the revert rule.
     let ceo = f.prompt("ceo");
     assert!(ceo.contains("You are the CEO") && ceo.contains("at most one change to `factory/`"), "one change at most:\n{ceo}");
@@ -105,13 +105,13 @@ fn roles_extend_and_prompts_resolve() {
 #[test]
 fn factory_roles_carry_their_shape() {
     let f = Factory::default();
-    assert_eq!(f.roles(), ["ceo", "judge", "lead", "manager", "worker"]);
+    assert_eq!(f.roles(), ["ceo", "judge", "manager", "manager-general", "worker"]);
     let shape = |r: &str| (f.role::<String>(r, "session"), f.role::<String>(r, "scope"), f.role::<String>(r, "runs_on"));
     assert_eq!(shape("manager"), (Some("chat".into()), Some("project".into()), Some("local".into())));
-    assert_eq!(shape("lead"), (Some("chat".into()), Some("global".into()), Some("local".into()))); // runs_on and idle come through extends
+    assert_eq!(shape("manager-general"), (Some("chat".into()), Some("own".into()), Some("local".into()))); // runs_on and idle come through extends
     assert_eq!(shape("worker"), (Some("lane".into()), Some("project".into()), Some("local".into())));
-    assert_eq!(shape("ceo"), (Some("turn".into()), Some("global".into()), Some("local".into())));
-    assert_eq!(shape("judge"), (Some("turn".into()), Some("global".into()), Some("local".into())));
+    assert_eq!(shape("ceo"), (Some("turn".into()), Some("own".into()), Some("local".into())));
+    assert_eq!(shape("judge"), (Some("turn".into()), Some("own".into()), Some("local".into())));
     assert_eq!(
         (f.role::<String>("judge", "agent").as_deref(), f.role::<String>("judge", "effort").as_deref(), f.role::<String>("judge", "access").as_deref()),
         (Some("muse"), Some("low"), Some("read")),
@@ -120,13 +120,18 @@ fn factory_roles_carry_their_shape() {
     assert!(f.prompts_of("judge").is_empty(), "no prompt of its own: each eval's rubric is its instructions");
     assert_eq!(f.role::<String>("ceo", "access").as_deref(), Some("read"));
     assert_eq!(f.role::<u64>("manager", "idle_minutes"), Some(30));
-    assert_eq!(f.role::<u64>("lead", "idle_minutes"), Some(30));
+    assert_eq!(f.role::<u64>("manager-general", "idle_minutes"), Some(30));
     // Code finds roles by shape, never by a fixed list of names.
     assert_eq!(f.find_role("lane", None).as_deref(), Some("worker"));
     assert_eq!(f.find_role("chat", Some("project")).as_deref(), Some("manager"));
-    assert_eq!(f.find_role("chat", Some("global")).as_deref(), Some("lead"));
+    assert_eq!(f.find_role("chat", Some("own")).as_deref(), Some("manager-general"));
     assert_eq!(f.find_role("turn", None).as_deref(), Some("ceo"));
-    assert_eq!(f.find_role("chat", Some("own")), None);
+    // The system bots are own roles with a name, a face and show: the judge is not shown, the others are.
+    let bot = |r: &str| (f.role::<String>(r, "name"), f.role::<bool>(r, "show"), f.role::<toml::Table>(r, "face").is_some_and(|t| t.get("shape").is_some()));
+    assert_eq!(bot("ceo"), (Some("CEO".into()), Some(true), true));
+    assert_eq!(bot("judge"), (Some("Judge".into()), Some(false), true));
+    assert_eq!(bot("manager-general"), (Some("Manager".into()), Some(true), true));
+    assert!(f.roles().iter().all(|r| f.role::<String>(r, "scope").as_deref() != Some("global")), "no global scope is left");
 }
 
 #[test]
@@ -149,13 +154,13 @@ fn invalid_factories_are_refused() {
     assert!(bad("[bogus]\nx = 1\n").contains("unknown section"), "unknown section");
     assert!(bad("[limits]\nbogus = 1\n").contains("unknown field"), "unknown key in limits (deny_unknown_fields)");
     assert!(bad("[agents.anthropic]\nbogus = 1\n").contains("unknown key agents.anthropic.bogus"));
-    assert!(bad("[roles.x]\nagent = \"ghost\"\nsession = \"chat\"\nscope = \"global\"\n").contains("missing agent"));
-    assert!(bad("[roles.x]\nagent = \"anthropic\"\nsession = \"chat\"\nscope = \"global\"\nprompt = [\"prompts/nope.md\"]\n").contains("missing prompt"));
+    assert!(bad("[roles.x]\nagent = \"ghost\"\nsession = \"chat\"\nscope = \"own\"\n").contains("missing agent"));
+    assert!(bad("[roles.x]\nagent = \"anthropic\"\nsession = \"chat\"\nscope = \"own\"\nprompt = [\"prompts/nope.md\"]\n").contains("missing prompt"));
     assert!(bad("[metrics.nope]\nlabel = \"x\"\n").contains("unknown measure"));
     assert!(bad("[agents.x]\nprotocol = \"smoke-signals\"\n").contains("unknown protocol"));
     assert!(bad("[roles.x]\nextends = \"ghost\"\n").contains("extends a missing role"));
-    assert!(bad("[roles.x]\nagent = \"anthropic\"\nsession = \"turn\"\nscope = \"global\"\nruns_on = \"the-moon\"\n").contains("runs_on 'the-moon'"));
-    assert!(bad("[roles.x]\nagent = \"anthropic\"\nsession = \"turn\"\nscope = \"global\"\naccess = \"root\"\n").contains("access 'root'"));
+    assert!(bad("[roles.x]\nagent = \"anthropic\"\nsession = \"turn\"\nscope = \"own\"\nruns_on = \"the-moon\"\n").contains("runs_on 'the-moon'"));
+    assert!(bad("[roles.x]\nagent = \"anthropic\"\nsession = \"turn\"\nscope = \"own\"\naccess = \"root\"\n").contains("access 'root'"));
     assert!(bad("[roles.x]\nagent = \"anthropic\"\n").contains("unknown session ''"));
     // An unknown key arriving through config.toml's overlay is refused too.
     let o = overlay("[limits]\nbogus = 1\n");

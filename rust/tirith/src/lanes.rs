@@ -116,8 +116,7 @@ fn biggest_dirs(dir: &Path, n: usize) -> Vec<(String, u64)> {
     let text = out.map(|o| String::from_utf8_lossy(&o.stdout).into_owned()).unwrap_or_default();
     let mut rows: Vec<(String, u64)> = text.lines().filter_map(|l| l.split_once('\t')).filter_map(|(k, p)| Some((p.to_string(), k.trim().parse().ok()?))).collect();
     rows.sort_by_key(|a| std::cmp::Reverse(a.1));
-    rows.truncate(n);
-    rows
+    rows.into_iter().take(n).collect()
 }
 
 /// Below the factory's low-disk limit on the disk of the lanes' worktrees: one ask-owner card (kind device, of no project, since every project shares that disk) naming the biggest of Tirith's own folders.
@@ -151,18 +150,9 @@ fn blocked(app: &Shared, p: &Project, lanes: &[Lane]) -> Option<String> {
 }
 
 pub(crate) fn paused_fix(project: &str, why: &str) -> String {
-    if let Some(fix) = why.find('(').zip(why.rfind(')')).map(|(a, b)| &why[a + 1..b]).filter(|f| f.starts_with("tirith ")) {
-        return fix.to_string();
-    }
-    if why.contains("merge queue") {
-        "wait for the merges (tirith status shows them)".into()
-    } else if why.contains("GB free") {
-        "free disk space".into()
-    } else if why.contains("core.hooksPath") || why.contains("not Tirith's") {
-        "fix the git hooks by hand, then tirith guard install ".to_string() + project
-    } else {
-        format!("tirith guard install {project}")
-    }
+    let said = why.find('(').zip(why.rfind(')')).map(|(a, b)| &why[a + 1..b]).filter(|f| f.starts_with("tirith ")).map(String::from);
+    let known = [("merge queue", "wait for the merges (tirith status shows them)"), ("GB free", "free disk space")].into_iter().find(|(w, _)| why.contains(w)).map(|(_, f)| f.to_string());
+    said.or(known).unwrap_or_else(|| if why.contains("core.hooksPath") || why.contains("not Tirith's") { "fix the git hooks by hand, then tirith guard install ".to_string() + project } else { format!("tirith guard install {project}") })
 }
 
 /// Role items (the factory's `[plan] role_prefixes`) are attended by a role, and items marked as waiting for the owner (`[plan] owner_wait`) wait: the autopilot starts no lane for either.

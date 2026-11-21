@@ -30,7 +30,7 @@ Like Terraform: the factory is the code, config.toml its variables.
   main moves: no rebuild, no restart.
 - Strict: an unknown key, a route to a missing role, or a role on a missing agent or prompt makes a version invalid. The
   daemon keeps the last good version, shows the error on the page and emits `factory.invalid`.
-- config.toml: unknown keys are errors shown on the page and told to the lead, never silently ignored (since the port to
+- config.toml: unknown keys are errors shown on the page and told to the manager of no project, never silently ignored (since the port to
   Rust, `[ceo] enabled`, `runs_per_day`, `upkeep_steps` and `upkeep_max_share` are read by nothing). Today's sections
   (`[models.<role>]`, `[lanes]`, `[merge]`, `[ceo]`, ...) are read in memory under the new names (`Config::load`); the
   file itself is not rewritten at start, since `toml::to_string` would drop the owner's comments and reorder its
@@ -60,15 +60,18 @@ lane_args = ["exec", "--json", "--workspace", "{workspace}", "--prompt-file", "{
 [roles.manager]                    # runs one project's work and talks with the owner
 agent = "anthropic"
 session = "chat"                   # chat: long-lived, resumed; turn: one fresh run; lane: a plan item in a worktree
-scope = "project"                  # project: one per project; global: one for all; own: a conversation of its own
+scope = "project"                  # only two scopes: project (one per project) and own (one bot, a conversation of its own)
 prompt = ["prompts/manager.md", "prompts/one-project.md"]
 idle_minutes = 30
 runs_on = "local"                  # the only value for now
 
-[roles.lead]                       # the conversation of no project: health, reviews, what spans projects
+[roles.manager-general]            # a system bot: the manager of no project (health, reviews, what spans projects)
+name = "Manager"
 extends = "manager"
-scope = "global"
+scope = "own"
 prompt = ["prompts/manager.md", "prompts/no-project.md"]
+show = true                        # the sidebar paints every own role with show = true
+face = { shape = "dome", color = "#3fb6a8" }
 
 [roles.worker]
 agent = "anthropic"
@@ -76,10 +79,11 @@ session = "lane"
 scope = "project"
 prompt = ["prompts/brief.md"]
 
-[roles.ceo]
+[roles.ceo]                        # a system bot too, like the judge below
+name = "CEO"
 extends = "manager"
 session = "turn"
-scope = "global"
+scope = "own"
 access = "read"                    # file-writing tools denied; tirith commands allowed
 prompt = ["prompts/ceo.md"]
 max_per_day = 6
@@ -95,7 +99,7 @@ phone = true                       # that line, and the answer of the turn it st
 on = "metric.red"
 after_minutes = 15                 # still red that long
 to = "ceo"
-then = "lead"                      # where the CEO's answer goes
+then = "manager-general"           # where the CEO's answer goes (it also stands in the CEO's own conversation)
 
 [limits]                           # config.toml may override any of them for this machine
 max_load = 2.0                     # per core
@@ -125,6 +129,17 @@ at_least = true
 ```
 
 A bot, in config.toml:
+
+The factory's own system bots — the CEO (`ceo`, name CEO), the judge (`judge`, name Judge, `show = false`) and the
+manager of no project (`manager-general`, name Manager) — are `own` roles of `factory/factory.toml` with a `name`, a
+`face` and `show`, exactly like the owner's bots below. The left bar paints every `own` role with `show = true`; on the
+page a system bot is seen and edited like any of the owner's bots, and what the owner changes of it (its name, face and
+show) is saved as a layer in `~/.tirith/config.toml` over its factory role. Every bot has its folder in
+`~/.tirith/manager/<key>`, its `memory.md` and its skills. The conversation of no project is manager-general's (its
+chat rows, its phone room and its sessions moved there at start, history intact), and the CEO's reviews stand in the
+CEO's own conversation. A list of renames (workers → worker, reviewer and improver → ceo, lead → manager-general)
+copies, at start, each page model choice `models:<old>` to `models:<new>` when the new one has none, so a renamed
+role never loses the model the owner chose for it.
 
 ```toml
 [roles.bot-1a2b3c]
@@ -160,11 +175,11 @@ on the page, and goes to every route whose `on` matches it. The default routes r
 | `main.red` / `main.green` | a check fails / passes again on main | manager: turn / note, chat, phone |
 | `plan.empty` | no open item left | manager: turn |
 | `deploy.done` / `deploy.failed` | a deploy stage ran | manager: note / turn, chat, phone |
-| `metric.red` | a measure turned red | lead: turn, chat, phone; after 15 min the CEO, then the lead |
+| `metric.red` | a measure turned red | manager-general: turn, chat, phone; after 15 min the CEO, then manager-general |
 | `review.done` | a turn role answered | its route's `then` |
 | `schedule` | a routine is due | its role: turn |
 | `card.opened` / `card.answered` / `card.closed` | owner cards | none (measured) |
-| `factory.invalid` | a version did not load | lead: turn, chat |
+| `factory.invalid` | a version did not load | manager-general: turn, chat |
 
 The answer of a turn reaches the phones only when an event that started it has `phone = true` (`owner.message`
 always). Today every manager message reaches them. A routine answer that starts with ∅ still never does.
@@ -189,11 +204,13 @@ answer and 7 are still open.
 ## Evals
 
 ```toml
-[roles.judge]                      # small text jobs on a cheap, fast model
+[roles.judge]                      # a system bot: small text jobs on a cheap, fast model
+name = "Judge"
 agent = "muse"
 session = "turn"
-scope = "global"
+scope = "own"
 access = "read"
+show = false                       # not painted in the sidebar
 
 [[evals]]
 id = "owner-mood"
@@ -270,7 +287,7 @@ and the README. Nothing goes live in the running Tirith until its daemon is rebu
    `notify_as`, `inform` and `tell` outside manager.rs, including the rule for answers on the phones; the default routes
    reproduce today (a table test). 6200 lines or less.
 4. **Quieter phones**, in `factory/` only: `merge.landed`, `deploy.done` and `main.green` get `phone = false`.
-5. **Roles.** manager, lead, worker and ceo as roles: `session`, `scope`, `extends`, `access`, `idle_minutes`,
+5. **Roles.** manager, manager-general, worker and ceo as roles: `session`, `scope`, `extends`, `access`, `idle_minutes`,
    `max_per_day`, `runs_on`. `ROLES` and every special case by role name go; the CEO review runs as any turn role; the
    page and `/model` list the factory's roles; role items of the plan come from `[plan] role_prefixes`. 6200 lines or less.
 6. **Bots in config.** Bots become roles with `scope = "own"` and their routines `schedule` routes in config.toml; the

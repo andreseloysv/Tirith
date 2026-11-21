@@ -102,9 +102,8 @@ fn resolved(roles: &toml::Table, name: &str, up: usize) -> toml::Value {
     let Some(parent) = own.get("extends").and_then(|e| e.as_str()).filter(|_| up < 8).map(String::from) else { return own };
     own.as_table_mut().map(|t| t.remove("extends"));
     let mut base = resolved(roles, &parent, up + 1);
-    let solved = roles.contains_key(&parent) && base.get("extends").is_none();
     merge(&mut base, &own);
-    let _ = (!solved).then(|| base.as_table_mut().map(|t| t.insert("extends".into(), parent.into()))); // stays, so validation names it
+    let _ = (!(roles.contains_key(&parent) && base.get("extends").is_none())).then(|| base.as_table_mut().map(|t| t.insert("extends".into(), parent.into()))); // stays, so validation names it
     base
 }
 
@@ -149,7 +148,7 @@ impl Factory {
         let bad = [
             t.keys().find(|k| !SECTIONS.contains(&k.as_str())).map(|k| format!("unknown section '{k}'")),
             unknown_in("agents", &["protocol", "model_flag", "effort_flag", "chat_args", "lane_args", "resume_args", "args", "command", "settings", "profile"]),
-            unknown_in("roles", &["agent", "model", "effort", "fallback", "session", "scope", "extends", "access", "prompt", "idle_minutes", "max_per_day", "review_after_minutes", "runs_on", "name", "face"]),
+            unknown_in("roles", &["agent", "model", "effort", "fallback", "session", "scope", "extends", "access", "prompt", "idle_minutes", "max_per_day", "review_after_minutes", "runs_on", "name", "face", "show"]),
             unknown_in("metrics", &["label", "target", "at_least"]),
             unknown_flat("plan", &["role_prefixes", "owner_wait", "waits_for"]),
             unknown_flat("cards", &["kinds"]),
@@ -159,7 +158,7 @@ impl Factory {
             roles
                 .iter()
                 .find(|(_, r)| {
-                    [("session", ["chat", "turn", "lane"].as_slice()), ("scope", ["project", "global", "own"].as_slice()), ("access", ["", "read", "write"].as_slice()), ("runs_on", ["", "local"].as_slice())]
+                    [("session", ["chat", "turn", "lane"].as_slice()), ("scope", ["project", "own"].as_slice()), ("access", ["", "read", "write"].as_slice()), ("runs_on", ["", "local"].as_slice())]
                         .iter()
                         .any(|(k, ok)| !ok.contains(&str_of(r, k)))
                 })
@@ -209,6 +208,10 @@ impl Factory {
         get(&self.raw, &["roles", name, key])
     }
 
+    /// The whole merged table (embedded, the folder's file and config.toml, extends resolved), for a reader that walks it as data (the bots).
+    pub fn table(&self) -> &toml::Table {
+        &self.raw
+    }
     /// Every role of the factory, in name order.
     pub fn roles(&self) -> Vec<String> {
         self.raw["roles"].as_table().into_iter().flatten().map(|(n, _)| n.clone()).collect()

@@ -203,7 +203,7 @@ export function Rooms({ project }) {
     const mine = rooms.filter((r) => !project || r.project === project).sort(byTitle);
     // the phone connects through the selected project's own room, else through the room of no project
     const own = rooms.filter((r) => r.kind === 'manager');
-    return [mine.filter((r) => r.private), mine.filter((r) => !r.private), own.find((r) => r.project === (project || '')) || (project ? null : own[0]) || null];
+    return [mine.filter((r) => r.private), mine.filter((r) => !r.private), own.find((r) => r.project === (project || 'manager-general')) || (project ? null : own[0]) || null];
   }, [data, project]);
   /* a room without a name of its own goes by its project's, as it does on the phone (the room of no project: All projects) */
   const titleOf = (r) => r.title || (s.projects.find((p) => p.id === r.project) || {}).name || (r.kind === 'manager' && !r.project ? 'All projects' : r.id);
