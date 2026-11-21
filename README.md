@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="site/img/logo-3d.png" srcset="site/img/logo-3d.png 1x, site/img/logo-3d@2x.png 2x" alt="Tirith: a stone tower with a lit window" width="220">
+<img src="site/img/tirith-logo.png" alt="The Tirith logo: a large smiling luminous bot in front, with many smaller glowing bots streaming out from behind it with trails of light against a starry sky." width="220">
 
 # Tirith
 
