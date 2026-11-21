@@ -59,14 +59,46 @@ async fn chat_roles_may_not_wait() {
     let looped = pre_bash(&app, "manager", "", "for i in 1 2 3 4 5; do tirith status; sleep 2; done").await;
     assert!(deny(&looped), "a manager's for loop with sleep is refused: {looped}");
     assert_eq!(reason(&looped), reason(&long), "the loop is refused for the same reason");
+    // Following a log or watching something until it happens is waiting too: today's `tail -F` of a lane's log, each watch command in command position (also after `;`, `&&` or `do`), the shell's `wait`, `gh run watch` and any `--watch`.
+    let watching = [
+        "tail -n 0 -F /tmp/lane.log | grep -E --line-buffered run.lifecycle.completed",
+        "tail -f /tmp/x.log",
+        "tail -fn0 /tmp/x.log",
+        "tail -n0F /tmp/x.log",
+        "tail --follow /tmp/x.log",
+        "watch -n 5 git status",
+        "fswatch .",
+        "inotifywait -m .",
+        "gh run watch",
+        "npm test -- --watch",
+        "wait",
+        "echo start; tail -f /tmp/x.log",
+        "true && watch git status",
+        "false || wait",
+        "echo hi | tail -f /tmp/x.log",
+        "(tail -f /tmp/x.log)",
+        "echo $(wait)",
+        "for i in 1; do tail -f /tmp/x.log; done",
+        "if true; then watch git status; fi",
+    ];
+    for cmd in watching {
+        let v = pre_bash(&app, "manager", "", cmd).await;
+        assert!(deny(&v), "a manager's `{cmd}` is refused: {v}");
+        assert_eq!(reason(&v), reason(&long), "a manager's `{cmd}` is refused for the same reason");
+    }
     // A bot in its own chat is a chat role too: the same wait is refused under its role.
     assert!(deny(&pre_bash(&app, "bot-abc", "", "sleep 30").await), "a bot's sleep 30 is refused");
+    assert!(deny(&pre_bash(&app, "bot-abc", "", "tail -f /tmp/x.log").await), "a bot's tail -f is refused");
     // A short sleep outside a loop is no wait for the owner: it passes (no denial).
     assert!(!deny(&pre_bash(&app, "manager", "", "sleep 2").await), "a manager's sleep 2 passes");
     assert!(!deny(&pre_bash(&app, "manager", "", "sleep 4; echo ok").await), "a manager's sleep 4 passes");
+    // Reading a log's tail, git's own `--follow`, the word as a mere argument and the quoted text of a message are no wait: they pass.
+    for cmd in ["tail -n 50 /tmp/x.log", "git log --follow src/lib.rs", "echo \"watch this\"", "tirith say \"please wait; watch this\"", "echo watch"] {
+        assert!(!deny(&pre_bash(&app, "manager", "", cmd).await), "a manager's `{cmd}` passes");
+    }
     // A lane does not change: the same waiting commands from a lane (X-Tirith-Lane, no role) pass, allowed by the rules as before.
     app.save_lane(&crate::app::Lane { id: "lane-wait".into(), project: "p1".into(), status: "running".into(), workspace: "/tmp/ws-lane-wait".into(), ..Default::default() });
-    for cmd in ["sleep 30; tirith status", "for i in 1 2 3 4 5; do tirith status; sleep 2; done"] {
+    for cmd in ["sleep 30; tirith status", "for i in 1 2 3 4 5; do tirith status; sleep 2; done"].into_iter().chain(watching) {
         let v = pre_bash(&app, "", "lane-wait", cmd).await;
         assert!(!deny(&v), "a lane's `{cmd}` passes: {v}");
         assert_eq!(v["hookSpecificOutput"]["permissionDecision"], "allow", "a lane's allowed call needs no prompt: {v}");
@@ -88,6 +120,9 @@ async fn every_agent_obeys_the_rules() {
     let watched = pre(&app, "manager", "", &repo, "monitor", cmd("while true; do tirith status; sleep 30; done")).await;
     assert!(deny(&watched), "a manager's monitor while loop with sleep 30 is refused: {watched}");
     assert_eq!(reason(&watched), wait);
+    let followed = pre(&app, "manager", "", &repo, "monitor", cmd("tail -n 0 -F /tmp/lane.log | grep -E --line-buffered run.lifecycle.completed")).await;
+    assert!(deny(&followed), "a manager's monitor tail -F of a lane's log is refused: {followed}");
+    assert_eq!(reason(&followed), wait);
     let slept = pre(&app, "manager", "", &repo, "clocksleep", serde_json::json!({"seconds": 30})).await;
     assert!(deny(&slept), "a manager's clocksleep is refused: {slept}");
     assert_eq!(reason(&slept), wait);
