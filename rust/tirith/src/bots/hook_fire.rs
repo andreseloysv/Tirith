@@ -40,6 +40,7 @@ pub(super) fn fire(app: &Shared, b: &Value, r: &Value, e: &Value, trigger: &str)
         &key,
     );
     crate::turns::trigger(&key, trigger, &rid);
-    crate::lab::fired(app, &key, &rid); // a live experiment on it: this run is its A or its B
-    crate::manager::emit_event(app, &key, "webhook", &told(r, e), None);
+    let told = told(r, e);
+    crate::lab::fired(app, &key, &rid, &told); // an experiment on it: this run is its A or its B, or a shadow B runs beside it
+    crate::manager::emit_event(app, &key, "webhook", &told, None);
 }

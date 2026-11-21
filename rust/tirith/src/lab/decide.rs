@@ -20,9 +20,11 @@ fn due(app: &Shared, e: &Experiment, t: &Tally) -> bool {
     t.wins + t.ties + t.losses >= lab.inputs as i64 || replayed || days >= lab.max_days as i64
 }
 
-/// Decides experiment `id` when it is due and no run of its bot is on its way.
+/// Decides experiment `id` when it is due and no run of its bot is on its way (nor a shadow B beside one).
 pub fn decide(app: &Shared, id: i64) {
-    let Some(e) = running_one(app, id).filter(|e| !seated(&live(app, &e.bot))) else {
+    let on_way =
+        |e: &Experiment| seated(&live(app, &e.bot)) || super::shadow_open::running(&tree(app, e));
+    let Some(e) = running_one(app, id).filter(|e| !on_way(e)) else {
         return;
     };
     let t = tally(app, id);
@@ -54,6 +56,7 @@ pub fn decide(app: &Shared, id: i64) {
     let sql = "UPDATE experiments SET status = ?1, ended_at = ?2, numbers = ?3 WHERE id = ?4";
     app.insert(sql, params![status, now_iso(), numbers.to_string(), id]);
     app.set_kv(&format!("lab:last:{id}"), None);
+    app.set_kv(&format!("lab:pairs:{id}"), None);
     app.set_kv(&super::replay::done_key(id), None);
     let on = if adopt {
         "lab.adopted"

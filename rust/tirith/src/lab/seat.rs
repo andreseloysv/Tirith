@@ -1,6 +1,6 @@
 //! Which folder a bot's turn runs in during a live experiment: a run of the routine is A (the bot's own folder, its main) or B (the branch's worktree, which is the bot's folder for that turn), alternating. A live session of the bot ends before a B run (at once, or at the end of the turn it runs) and after it, so each run's session starts in its own folder.
 use super::store::{running, tree};
-use crate::app::App;
+use crate::app::{App, Shared};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -12,6 +12,8 @@ pub struct Seat {
     pub routine: String,
     pub variant: &'static str,
     pub tree: PathBuf,
+    /// A shadow run's pair (its B runs beside it, `shadow.rs`); 0 in live mode.
+    pub pair: i64,
 }
 
 /// The seats on their way, under the bot's own folder (a path, so two Tirith homes never share one).
@@ -27,6 +29,9 @@ pub fn seat(dir: PathBuf) -> PathBuf {
     if let Some(replay) = super::replay::dir() {
         return replay; // inside a replay's turn, its worktree is every folder of the bot
     }
+    if let Some(shadow) = super::shadow_open::dir() {
+        return shadow; // inside a shadow B run, the branch's worktree is every folder of the bot
+    }
     let seats = SEATS.lock().unwrap();
     let b = seats.get(&dir).filter(|s| s.variant == "B");
     b.map_or(dir, |s| s.tree.clone())
@@ -37,11 +42,14 @@ pub fn seated(dir: &Path) -> bool {
     SEATS.lock().unwrap().contains_key(dir)
 }
 
-/// Routine `routine` of the bot `key` fires: with a live experiment running on it, this run is the variant after the last one (A first, then B, then A…), and a B run moves the bot into the branch's worktree until its turn ends.
-pub fn fired(app: &App, key: &str, routine: &str) {
-    let Some(e) = running(app, key, routine).filter(|e| e.mode == "live") else {
+/// Routine `routine` of the bot `key` fires with `task`: with a live experiment running on it, this run is the variant after the last one (A first, then B, then A…), and a B run moves the bot into the branch's worktree until its turn ends; with a shadow one, this run is A and its B starts beside it.
+pub fn fired(app: &Shared, key: &str, routine: &str, task: &str) {
+    let Some(e) = running(app, key, routine).filter(|e| e.mode != "replay") else {
         return;
     };
+    if e.mode == "shadow" {
+        return super::shadow::fired(app, e, task);
+    }
     let last = format!("lab:last:{}", e.id);
     let variant = match app.kv(&last).as_deref() {
         Some("A") => "B",
@@ -53,9 +61,15 @@ pub fn fired(app: &App, key: &str, routine: &str) {
         routine: routine.into(),
         variant,
         tree: tree(app, &e),
+        pair: 0,
     };
-    SEATS.lock().unwrap().insert(live(app, key), s);
+    sit(app, key, s);
     let _ = (variant == "B").then(|| crate::manager::end_session(key));
+}
+
+/// The run of the bot `key` on its way is `s`.
+pub(super) fn sit(app: &App, key: &str, s: Seat) {
+    SEATS.lock().unwrap().insert(live(app, key), s);
 }
 
 /// The turn of `key` that ran routine `routine` ended: the seat of its run, taken (the bot is back in its own folder).

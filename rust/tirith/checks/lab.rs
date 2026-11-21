@@ -272,7 +272,7 @@ fn lab_live_alternates() {
     let tree = home.join("lab").join(KEY).join(e.to_string());
     let mut seen = vec![];
     for _ in 0..4 {
-        crate::lab::fired(&app, KEY, "r1");
+        crate::lab::fired(&app, KEY, "r1", "");
         let folder = crate::bots::folder(&app, KEY);
         let handed = crate::bots::context(&app, KEY).unwrap();
         let id = run(&app, 0, "", 100, 1000, "ok", None);
@@ -313,7 +313,7 @@ fn lab_live_alternates() {
         "UPDATE turns SET experiment = NULL, variant = NULL WHERE id = ?1",
         params![other],
     );
-    crate::lab::fired(&app, KEY, "r1");
+    crate::lab::fired(&app, KEY, "r1", "");
     crate::lab::finished(&app, other, KEY, "");
     let marks: Vec<Option<String>> =
         app.query("SELECT variant FROM turns WHERE id = ?1", [other], |r| {

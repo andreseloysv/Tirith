@@ -17,7 +17,7 @@ fn bot_of(app: &App, who: &str) -> Result<(String, Vec<Value>), String> {
     Ok((s(b, "key"), routines))
 }
 
-/// What `tirith lab start` asks for, checked: the bot, a routine of its own with no experiment running, the mode (live, or replay on its captured runs) and a branch with one commit over its main. Its row and, live, its worktree, or why not; a replay starts running its pairs.
+/// What `tirith lab start` asks for, checked: the bot, a routine of its own with no experiment running, the mode (live, shadow, or replay on its captured runs) and a branch with one commit over its main. Its row and, live or shadow, its worktree, or why not; a replay starts running its pairs.
 pub fn start(app: &Shared, b: &Value) -> Result<Value, String> {
     let (key, routines) = bot_of(app, &s(b, "bot"))?;
     let (branch, routine) = (s(b, "branch"), s(b, "routine"));
@@ -30,8 +30,7 @@ pub fn start(app: &Shared, b: &Value) -> Result<Value, String> {
     let mode = Some(s(b, "mode")).filter(|m| !m.is_empty());
     let mode = mode.unwrap_or("live".into());
     match mode.as_str() {
-        "live" | "replay" => Ok(()),
-        "shadow" => Err("only --mode live or replay runs for now".to_string()),
+        "live" | "replay" | "shadow" => Ok(()),
         m => Err(format!("no mode '{m}': live, replay or shadow")),
     }?;
     (!hypothesis.is_empty())
