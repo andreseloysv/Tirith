@@ -3,6 +3,7 @@ mod api;
 mod cors;
 mod hand;
 mod mask;
+mod record;
 mod state;
 pub use api::routes;
 pub use cors::ORIGIN;

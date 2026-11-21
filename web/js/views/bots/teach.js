@@ -15,7 +15,7 @@ function stepLine(s) {
 function Steps({ steps }) {
   if (!steps.length) return html`<p class="bnote">No step yet. Do the task in Edge; each page, click and value typed shows up here.</p>`;
   return html`<ol class="tsteps">${steps.map((s, i) => html`<li key=${i} class=${s.kind === 'said' ? 'said' : ''}>
-      <time>${(s.at || '').slice(11, 19)}</time>${stepLine(s)}</li>`)}</ol>`;
+      <time>${s.at ? new Date(s.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : ''}</time>${stepLine(s)}</li>`)}</ol>`;
 }
 
 function Link({ link }) {

@@ -1,9 +1,9 @@
 //! The teach API: the recording read, started and stopped (by the page, or by the extension with the token), and the extension's steps.
 use super::cors::{allow, from_extension, has_token, preflight, refused};
-use super::hand::over;
 use super::mask::kept;
-use super::state::{change, live, now_ms, push, read, token, MOST_S};
-use crate::app::{now_iso, now_s, Shared};
+use super::record::{start_now, stop_now};
+use super::state::{live, now_ms, push, read, token};
+use crate::app::Shared;
 use axum::body::Bytes;
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode};
@@ -29,34 +29,6 @@ async fn show(State(app): State<Shared>, h: HeaderMap, Path(id): Path<String>) -
     rec["on"] = json!(live(&rec));
     let _ = (!from_extension(&h)).then(|| rec["token"] = json!(token(&app, &key)));
     allow(&h, Json(rec))
-}
-/// Stops the recording `since` (any, when empty) and hands it over; false when none was on.
-fn stop_now(app: &Shared, key: &str, since: &str) -> bool {
-    let rec = change(app, key, |rec| {
-        let on = rec["on"] == true && (since.is_empty() || rec["since"] == since);
-        rec["on"] = json!(false);
-        on.then(|| rec.clone())
-    });
-    let _ = rec.as_ref().map(|r| over(app, key, r));
-    app.emit("teach", json!({"bot": key}));
-    rec.is_some()
-}
-fn start_now(app: &Shared, key: &str) -> Value {
-    let since = now_ms();
-    change(
-        app,
-        key,
-        |rec| *rec = json!({"on": true, "since": since, "since_s": now_s(), "steps": []}),
-    );
-    app.chat("tirith", "Recording in Edge: do the task once; what you write here meanwhile goes with the steps. It stops by itself in 10 minutes.", key);
-    app.emit("teach", json!({"bot": key}));
-    let (app, key2) = (app.clone(), key.to_string());
-    let since2 = since.clone();
-    tokio::spawn(async move {
-        tokio::time::sleep(std::time::Duration::from_secs(MOST_S)).await;
-        stop_now(&app, &key2, &since2);
-    });
-    json!({"ok": true, "on": true, "since": since, "at": now_iso()})
 }
 async fn start(State(app): State<Shared>, h: HeaderMap, Path(id): Path<String>) -> Response {
     match key(&app, &h, &id, false) {
