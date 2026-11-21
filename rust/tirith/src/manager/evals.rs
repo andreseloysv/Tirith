@@ -23,6 +23,7 @@ pub(super) fn judge_evals(app: &Shared, project: &str, on: &str, shown: &str, ev
         shown.to_string(),
     );
     let on = on.to_string(); // the judge's turn says the event it judges
+    let before = crate::turns::last(&app, &project); // the turn a correction is about
     tokio::spawn(async move {
         let card = card_context(&app, &shown);
         let input = format!(
@@ -43,6 +44,7 @@ pub(super) fn judge_evals(app: &Shared, project: &str, on: &str, shown: &str, ev
                 continue;
             };
             let (label, score, why) = judged(&text);
+            crate::turns::judged(&app, before, &id, &label);
             let (factory, role_hash) = app.stamp_for(&judge);
             app.insert("INSERT INTO scores (at, event, eval, label, score, why, factory, role_hash) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)", rusqlite::params![now_iso(), event, id, label, score, why, factory, role_hash]);
         }

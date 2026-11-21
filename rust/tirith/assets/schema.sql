@@ -28,10 +28,14 @@ CREATE TABLE IF NOT EXISTS net_blocks (rule TEXT PRIMARY KEY, at TEXT);
 -- One row per turn of a chat or turn role (the project managers, the bots, the CEO, the judge; `runs` is the
 -- pipelines'): its conversation, what started it (`trigger`: owner, room, schedule, run-now or event:<name>, and the
 -- routine), its time, status, agent, model and effort, its tokens and cost, its tool calls (`steps`), the skills and
--- tools it used and the versions (git blob hashes) of its memory and skills (JSON), its answer, its event and its stamp.
+-- tools it used and the versions (git blob hashes) of its memory and skills (JSON), its answer, its event and its stamp;
+-- its quality signals: the owner's reaction (1, -1), corrected (1 when owner-mood labelled the owner's next message a
+-- correction or repeat), its own checks (passed, total, names) and the numbered notes its answer cites (JSON).
 CREATE TABLE IF NOT EXISTS turns (id INTEGER PRIMARY KEY, conv TEXT, role TEXT, "trigger" TEXT, routine TEXT,
     started_at TEXT, ended_at TEXT, ms INTEGER, status TEXT, agent TEXT, model TEXT, effort TEXT,
     tokens_in INTEGER, tokens_out INTEGER, tokens_cache_read INTEGER, tokens_cache_write INTEGER, cost_usd REAL,
     steps INTEGER, skills TEXT, tools TEXT, versions TEXT, answer TEXT, event INTEGER,
-    factory TEXT NOT NULL DEFAULT '', role_hash TEXT NOT NULL DEFAULT '');
+    factory TEXT NOT NULL DEFAULT '', role_hash TEXT NOT NULL DEFAULT '',
+    reaction INTEGER, corrected INTEGER NOT NULL DEFAULT 0, checks_passed INTEGER, checks_total INTEGER,
+    checks TEXT, cited TEXT);
 CREATE INDEX IF NOT EXISTS turns_conv ON turns (conv, id);

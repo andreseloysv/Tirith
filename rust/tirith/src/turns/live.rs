@@ -8,13 +8,13 @@ use std::sync::Mutex;
 
 /// One conversation's turns: the trigger waiting for its next turn, the turn open now, and whether more was handed to it while it ran.
 #[derive(Default)]
-struct Conv {
+pub(super) struct Conv {
     trigger: Option<(String, String)>,
-    open: Option<Turn>,
+    pub(super) open: Option<Turn>,
     more: bool,
 }
 static CONVS: Mutex<BTreeMap<String, Conv>> = Mutex::new(BTreeMap::new());
-fn with<T>(conv: &str, f: impl FnOnce(&mut Conv) -> T) -> T {
+pub(super) fn with<T>(conv: &str, f: impl FnOnce(&mut Conv) -> T) -> T {
     f(CONVS.lock().unwrap().entry(conv.to_string()).or_default())
 }
 
