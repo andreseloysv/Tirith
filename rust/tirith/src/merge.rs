@@ -136,7 +136,7 @@ async fn run_stage(app: &Shared, pipe: &Pipe, dir: &Path, name: &str, run: &str)
     let mut command = launch.command(app);
     command.env("CARGO_TARGET_DIR", crate::lanes::shared_target(app, &pipe.project));
     let _ = name.starts_with("check ").then(|| command.envs(stage_env(&Manifest::load(dir).stages, run)));
-    let mut child = command.current_dir(dir).stdin(Stdio::null()).stdout(file.try_clone().map_err(|e| e.to_string())?).stderr(file).process_group(0).spawn().map_err(|e| e.to_string())?;
+    let mut child = command.current_dir(dir).stdin(Stdio::null()).stdout(file.try_clone().map_err(|e| e.to_string())?).stderr(file).spawn().map_err(|e| e.to_string())?;
     let limit = Duration::from_secs(limit_from(|k| app.kv(k), &pipe.project, name, app.cfg().factory.limits.stage_timeout_minutes) * 60);
     let status = match tokio::time::timeout(limit, child.wait()).await {
         Ok(Ok(s)) if s.success() => "passed",

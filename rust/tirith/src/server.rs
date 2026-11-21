@@ -19,7 +19,8 @@ pub fn s(v: &Value, k: &str) -> String {
 }
 pub fn router(app: Shared, port: u16) -> Router {
     let _ = PORT.set(port);
-    Router::new()
+    let modules = [rooms::routes(), sandbox::routes(), models::routes(), guard::routes(), metrics::routes(), attach::routes(), projects::routes(), bots::routes(), chat::routes()];
+    modules.into_iter().fold(Router::new(), Router::merge)
         .route("/api/state", get(state))
         .route("/api/stream", get(|State(app): State<Shared>| async move { Sse::new(BroadcastStream::new(app.tx.subscribe()).filter_map(|m| m.ok().map(|d| Ok::<Event, Infallible>(Event::default().data(d))))).keep_alive(KeepAlive::default()) }))
         .route(
@@ -65,15 +66,6 @@ pub fn router(app: Shared, port: u16) -> Router {
         )
         .route("/api/manager/interrupt", post(|State(app): State<Shared>, Json(b): Json<Value>| async move { manager::interrupt(app.conv(&s(&b, "project"))).map(|_| Json(json!({"ok": true}))).map_err(bad) }))
         .route("/hook/{event}", post(hook))
-        .merge(rooms::routes())
-        .merge(sandbox::routes())
-        .merge(models::routes())
-        .merge(guard::routes())
-        .merge(metrics::routes())
-        .merge(attach::routes())
-        .merge(projects::routes())
-        .merge(bots::routes())
-        .merge(chat::routes())
         .fallback(web_file)
         .layer(middleware::from_fn(same_origin))
         .with_state(app)
