@@ -124,7 +124,10 @@ color = "#8c8c8c"
 # starts, reach the owner's phones. These defaults reproduce the behaviour
 # the daemon had when the calls were fixed in Rust, except merge.landed,
 # deploy.done and main.green: they stay on the page and in the manager's
-# notes but off the phones (111 merge notices reached them on 13-20 Nov).
+# notes but off the phones (111 merge notices reached them on 13-20 Nov),
+# and factory.invalid: a version the running daemon does not know yet, a
+# minute before its restart, reached the phones on 2026-11-21 while the
+# last good factory kept running; the manager and the page still hear it.
 [[routes]]
 on = "owner.message"
 to = "manager"
@@ -253,7 +256,7 @@ on = "factory.invalid"
 to = "manager-general"
 mode = "turn"
 chat = true
-phone = true
+phone = false
 
 # Evals: a judge role reads an event with the conversation before it and
 # answers the label (or score) of its rubric in factory/evals/, kept as a
