@@ -5,7 +5,7 @@ use super::long::report_long_running;
 use super::send_back::send_back;
 use super::session::codex_session;
 use crate::app::{alive, kill_group, now_s, tail, Lane, Shared};
-use crate::factory::Limits;
+use crate::factory::Factory;
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -32,11 +32,11 @@ async fn end_completed(app: &Shared, l: &Lane) {
     }
 }
 /// No new output for `limits.inactivity_minutes`: the agent is stopped and the lane goes back to it.
-fn stop_idle(app: &Shared, l: &Lane, lim: &Limits) {
+fn stop_idle(app: &Shared, l: &Lane, f: &Factory) {
     kill_group(l.pid.unwrap_or(0), libc::SIGKILL);
     let why = format!(
         "no new output for {} min (an agent stuck retrying its API call counts as silent)",
-        lim.inactivity_minutes
+        f.limits.inactivity_minutes
     );
     app.event(
         &l.id,
@@ -58,7 +58,7 @@ pub(super) async fn watch_lane(
     app: &Shared,
     l: &Lane,
     seen: &mut HashMap<String, (String, u64)>,
-    lim: &Limits,
+    f: &Factory,
 ) {
     let path = app.home.join(format!("logs/lanes/{}.log", l.id));
     let text = tail(&path, 200);
@@ -68,11 +68,11 @@ pub(super) async fn watch_lane(
     if l.status == "running" && run_completed(&text) {
         return end_completed(app, l).await;
     }
-    report_long_running(app, l, &text, lim);
+    report_long_running(app, l, &text, f);
     if l.status == "running"
-        && now_s().saturating_sub(l.last_activity).min(quiet) > lim.inactivity_minutes * 60
+        && now_s().saturating_sub(l.last_activity).min(quiet) > f.limits.inactivity_minutes * 60
     {
-        stop_idle(app, l, lim);
+        stop_idle(app, l, f);
     } else if !app.children.lock().unwrap().contains(&l.id) && !l.pid.is_some_and(alive) {
         ended(app, &l.id, None).await; // its process ended while the daemon was down
     }

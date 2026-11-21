@@ -4,7 +4,7 @@ use super::spawn::spawn_agent;
 use super::worktree::take_slot;
 use crate::app::{Lane, Shared};
 use crate::config::Project;
-use crate::models::{self, RoleSetting};
+use crate::models;
 use std::path::{Path, PathBuf};
 
 /// A lane without a live worktree gets a fresh slot on `lane/<id>`.
@@ -31,15 +31,21 @@ fn write_brief(app: &Shared, lane: &Lane, msg: &str, path: &Path) -> Result<(), 
     .map_err(|e| e.to_string())
 }
 /// The model the lane runs, joined to its tried list: the fallback chain skips what this lane already used.
-fn note_model(lane: &mut Lane, role: RoleSetting, overridden: bool, alias: &str) {
+fn note_model(
+    lane: &mut Lane,
+    role_agent: &str,
+    role_model: Option<String>,
+    overridden: bool,
+    alias: &str,
+) {
     lane.model = lane
         .model
         .take()
-        .or_else(|| role.model.clone().filter(|_| lane.agent == role.agent));
+        .or_else(|| role_model.clone().filter(|_| lane.agent == role_agent));
     let used = lane
         .model
         .clone()
-        .or(role.model.filter(|_| !overridden))
+        .or(role_model.filter(|_| !overridden))
         .map_or_else(|| alias.to_string(), |m| format!("{alias}:{m}"));
     let _ = (!lane.tried.contains(&used)).then(|| lane.tried.push(used));
 }
@@ -60,6 +66,6 @@ pub(super) async fn launch(app: &Shared, mut lane: Lane) -> Result<(), String> {
     let over = (lane.agent != role.agent || lane.model.is_some()).then_some(lane.agent.as_str());
     let cmd = models::lane_argv(app, over, lane.model.as_deref(), &brief_path, &ws, resume)?;
     let overridden = over.is_some();
-    note_model(&mut lane, role, overridden, &cmd.alias);
+    note_model(&mut lane, &role.agent, role.model, overridden, &cmd.alias);
     spawn_agent(app, lane, &ws, cmd.argv)
 }

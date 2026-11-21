@@ -1,7 +1,7 @@
 //! A lane running for long is reported to the manager once, with its last commands.
 use super::logscan::last_commands;
 use crate::app::{now_s, Lane, Shared};
-use crate::{factory::Limits, manager};
+use crate::{factory::Factory, manager};
 
 /// Whether a running lane has gone `min` minutes since it started and was not reported yet (`min` 0: never).
 pub(super) fn long_running_due(
@@ -16,13 +16,13 @@ pub(super) fn long_running_due(
     min > 0 && !reported && now.saturating_sub(start) >= min * 60
 }
 /// Tells the manager once that the running lane has gone past `limits.long_running_minutes`.
-pub(super) fn report_long_running(app: &Shared, l: &Lane, text: &str, lim: &Limits) {
+pub(super) fn report_long_running(app: &Shared, l: &Lane, text: &str, f: &Factory) {
     let key = format!("long_running:{}", l.id);
     if !(l.status == "running"
         && long_running_due(
             l.started_at.as_deref(),
             now_s(),
-            lim.long_running_minutes,
+            f.limits.long_running_minutes,
             app.kv(&key).is_some(),
         ))
     {
@@ -34,6 +34,6 @@ pub(super) fn report_long_running(app: &Shared, l: &Lane, text: &str, lim: &Limi
         .map(|c| format!("- {c}"))
         .collect::<Vec<_>>()
         .join("\n");
-    let text = format!("lane {} has been running for more than {} min. Check that it advances or whether it waits on something stuck. Its last commands:\n{cmds}", l.id, lim.long_running_minutes);
+    let text = format!("lane {} has been running for more than {} min. Check that it advances or whether it waits on something stuck. Its last commands:\n{cmds}", l.id, f.limits.long_running_minutes);
     manager::emit_event(app, &l.project, "lane.long", &text, None);
 }
