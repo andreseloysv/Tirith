@@ -128,6 +128,9 @@ color = "#8c8c8c"
 # and factory.invalid: a version the running daemon does not know yet, a
 # minute before its restart, reached the phones on 2026-11-21 while the
 # last good factory kept running; the manager and the page still hear it.
+# metric.red and review.done to the manager are phone = false too: nobody
+# asked for that answer, and when the owner is needed the manager opens
+# a card.
 [[routes]]
 on = "owner.message"
 to = "manager"
@@ -221,7 +224,7 @@ on = "metric.red"
 to = "manager-general"
 mode = "turn"
 chat = true
-phone = true
+phone = false
 
 [[routes]]
 on = "metric.red"
@@ -234,7 +237,7 @@ then = "manager-general"
 on = "review.done"
 to = "manager-general"
 mode = "turn"
-phone = true
+phone = false
 
 [[routes]]
 on = "schedule"
