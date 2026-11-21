@@ -26,8 +26,7 @@ fn owner_measures_count_interruptions_and_needless_cards() {
     let home = std::env::temp_dir().join(format!("tirith-owner-measures-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&home);
     std::fs::create_dir_all(&home).unwrap();
-    std::env::set_var("TIRITH_HOME", &home);
-    let app = crate::app::App::open();
+    let app = crate::app::App::open_at(home.clone());
     let at = |ago: u64| chrono::DateTime::from_timestamp(crate::app::now_s().saturating_sub(ago) as i64, 0).unwrap().format("%Y-%m-%dT%H:%M:%SZ").to_string();
     for id in ["m1", "m2"] {
         app.save_lane(&crate::app::Lane { id: id.into(), project: "p".into(), status: "merged".into(), created_at: at(3600), merged_at: Some(at(60)), ..Default::default() });
@@ -99,8 +98,7 @@ fn improver_brief_groups_measures_and_scores_by_factory_version() {
     let home = std::env::temp_dir().join(format!("tirith-improver-brief-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&home);
     std::fs::create_dir_all(&home).unwrap();
-    std::env::set_var("TIRITH_HOME", &home);
-    let app = crate::app::App::open();
+    let app = crate::app::App::open_at(home.clone());
     // The delayed metric.red route names the improver, still red after 15 minutes.
     assert_eq!(super::delayed_review(&app), ("improver".to_string(), 15 * 60));
     let at = |ago: u64| chrono::DateTime::from_timestamp(crate::app::now_s().saturating_sub(ago) as i64, 0).unwrap().format("%Y-%m-%dT%H:%M:%SZ").to_string();

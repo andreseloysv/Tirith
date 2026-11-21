@@ -22,8 +22,7 @@ async fn plan_flushes_on_start() {
     std::fs::create_dir_all(&home).unwrap();
     let cfg = format!("[[projects]]\nid = \"p\"\nrepo = \"{}\"\n[[projects]]\nid = \"q\"\nrepo = \"{}\"\n", repo.display(), clean.display());
     std::fs::write(home.join("config.toml"), cfg).unwrap();
-    std::env::set_var("TIRITH_HOME", &home);
-    let app = crate::app::App::open();
+    let app = crate::app::App::open_at(home);
     assert!(app.plan_dirty.lock().unwrap().contains("p"), "a fresh daemon starts with every project plan-dirty");
     super::flush(&app, None).await;
     assert_eq!(super::git(&repo, &["status", "--porcelain", "--", "docs/TODO.md"]).await.unwrap(), "");

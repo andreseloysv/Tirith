@@ -86,7 +86,9 @@ pub fn now_s() -> u64 {
 
 impl App {
     pub fn open() -> Shared {
-        let home = tirith_home();
+        Self::open_at(tirith_home())
+    }
+    pub fn open_at(home: PathBuf) -> Shared {
         ["logs/lanes", "logs/runs", "briefs", "lanes"].into_iter().for_each(|dir| drop(std::fs::create_dir_all(home.join(dir))));
         let db = Connection::open(home.join("tirith.sqlite3")).expect("open tirith.sqlite3");
         db.execute_batch(include_str!("../assets/schema.sql")).expect("create tables");
@@ -97,7 +99,7 @@ impl App {
         let lanes: BTreeMap<String, Lane> =
             db.prepare("SELECT data FROM lanes").expect("read lanes").query_map([], |r| r.get::<_, String>(0)).expect("read lanes").flatten().filter_map(|s| serde_json::from_str::<Lane>(&s).ok()).map(|l| (l.id.clone(), l)).collect();
         let cfg_mtime = std::fs::metadata(home.join("config.toml")).and_then(|m| m.modified()).ok();
-        let cfg = Arc::new(Config::load());
+        let cfg = Arc::new(Config::load_at(&home));
         let cfg_mtime = (cfg_mtime, crate::factory::stamp(&cfg.raw));
         Arc::new(App {
             home,
@@ -128,7 +130,7 @@ impl App {
         }
         *last = now;
         drop(last);
-        *self.cfg.write().unwrap() = Arc::new(Config::load());
+        *self.cfg.write().unwrap() = Arc::new(Config::load_at(&self.home));
         true
     }
 
