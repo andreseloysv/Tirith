@@ -158,6 +158,12 @@ fn lab_live_decides_by_the_rule() {
     super::decide(&app, e);
     assert_eq!(super::list(&app, KEY)[0]["status"], "running");
     compared(&app, e, &["tie"], (620, "ok"));
+    // Meanwhile the bot's main moved on the same line (its notes numbered at a turn): B's tested text still lands.
+    std::fs::write(
+        dir.join("memory.md"),
+        "# Memory\n- [m1] open every mail\n- [m2] the owner signs as Ana\n",
+    )
+    .unwrap();
     super::decide(&app, e);
     let row = &super::list(&app, KEY)[0];
     assert_eq!(row["status"], "adopted", "{row}");

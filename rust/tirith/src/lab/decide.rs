@@ -1,42 +1,13 @@
 //! Tirith decides an experiment alone, by the factory's `[lab]` rule, once it has `inputs` comparisons or is `max_days` old: adopted, its branch is merged into the bot's main (its own folder is that checkout, so the bot uses it from its next run); discarded, it goes. The worktree and the branch go in both cases, and the bot's chat gets one line.
-use super::git::{clear, git};
-use super::rule::{savings, Side, Tally};
+use super::git::{clear, merge};
+use super::numbers::{side, tally};
+use super::rule::{savings, Tally};
 use super::seat::{live, seated};
 use super::store::{all_running, running_one, tree, Experiment};
 use crate::app::{now_iso, Shared};
 use crate::server::s;
 use rusqlite::params;
 use serde_json::json;
-
-const SIDE: &str = "SELECT COUNT(*), AVG(COALESCE(tokens_in, 0) + COALESCE(tokens_out, 0)), CASE WHEN COUNT(cost_usd) = COUNT(*) THEN AVG(cost_usd) END, AVG(COALESCE(ms, 0)) FROM turns WHERE experiment = ?1 AND variant = ?2";
-const TALLY: &str = "SELECT COALESCE(SUM(verdict = 'win'), 0), COALESCE(SUM(verdict = 'tie'), 0), COALESCE(SUM(verdict = 'lose'), 0), COALESCE(SUM(b.status = 'failed' AND a.status <> 'failed'), 0), (SELECT COUNT(*) FROM turns WHERE experiment = ?1 AND variant = 'B' AND reaction = -1) FROM lab_comparisons c JOIN turns a ON a.id = c.a_turn JOIN turns b ON b.id = c.b_turn WHERE c.experiment = ?1";
-
-/// One side's runs in experiment `id`.
-pub fn side(app: &Shared, id: i64, variant: &str) -> Side {
-    let rows = app.query(SIDE, params![id, variant], |r| {
-        Ok(Side {
-            runs: r.get(0)?,
-            tokens: r.get::<_, Option<f64>>(1)?.unwrap_or(0.0),
-            cost: r.get(2)?,
-            ms: r.get::<_, Option<f64>>(3)?.unwrap_or(0.0),
-        })
-    });
-    rows.into_iter().next().unwrap_or_default()
-}
-
-/// B's comparisons in experiment `id`, its new failures and its 👎.
-pub fn tally(app: &Shared, id: i64) -> Tally {
-    let rows = app.query(TALLY, [id], |r| {
-        Ok(Tally {
-            wins: r.get(0)?,
-            ties: r.get(1)?,
-            losses: r.get(2)?,
-            new_failures: r.get(3)?,
-            down: r.get(4)?,
-        })
-    });
-    rows.into_iter().next().unwrap_or_default()
-}
 
 /// Whether experiment `e` is due: `inputs` comparisons judged, or `max_days` since it started.
 fn due(app: &Shared, e: &Experiment, t: &Tally) -> bool {
@@ -67,9 +38,7 @@ pub fn decide(app: &Shared, id: i64) {
     if adopt {
         let dir = live(app, &e.bot);
         crate::bots::versioned(app, &e.bot, "before the lab"); // what the bot's folder holds now is in its main first
-        let msg = format!("lab: adopt experiment {} ({})", e.id, e.branch);
-        if git(&dir, &["merge", "-q", "--no-edit", "-m", &msg, &e.branch]).is_err() {
-            let _ = git(&dir, &["merge", "--abort"]);
+        if !merge(&dir, &e.branch, &format!("lab: adopt experiment {id}")) {
             (adopt, line) = (
                 false,
                 format!("Descarté {name}: no entra en su main (conflicto)"),

@@ -1,6 +1,7 @@
 //! The lab's commands and routes: `tirith lab start` and `tirith lab list` (the Coach's), POST /api/lab/start and GET /api/lab?bot=<id or key> (the bot's «Mejoras» tab).
 use crate::app::Shared;
 use crate::client::{call, call_json, Flag};
+use crate::server::s;
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::routing::{get, post};
@@ -31,8 +32,8 @@ pub fn cli(pos: &[&str], flag: Flag) -> Option<Result<(), String>> {
 
 fn started(r: Result<Value, String>) -> Result<(), String> {
     let v = r?;
-    let id = v["id"].as_i64().unwrap_or(0);
-    println!("experiment {id} runs on routine {} of {}: «{}»; its runs alternate the bot's main and {} (in {})", v["routine"], v["bot"], v["change"].as_str().unwrap_or(""), v["branch"], v["tree"]);
+    let (id, t) = (v["id"].as_i64().unwrap_or(0), |k: &str| s(&v, k));
+    println!("experiment {id} runs on routine {} of {}: «{}»; its runs alternate the bot's main and {} (in {})", t("routine"), t("bot"), t("change"), t("branch"), t("tree"));
     Ok(())
 }
 

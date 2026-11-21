@@ -54,3 +54,20 @@ pub(super) fn clear(dir: &Path, tree: &Path, branch: &str) {
     let _ = git(dir, &["worktree", "prune"]);
     let _ = git(dir, &["branch", "-D", branch]);
 }
+
+/// Merges `branch` into the main checked out at `dir`; where main moved on the same lines (its notes numbered, a turn's own notes), the branch's tested text wins. False, and nothing merged, when it cannot.
+pub(super) fn merge(dir: &Path, branch: &str, msg: &str) -> bool {
+    let args = [
+        "merge",
+        "-q",
+        "--no-edit",
+        "-X",
+        "theirs",
+        "-m",
+        msg,
+        branch,
+    ];
+    let merged = git(dir, &args).is_ok();
+    let _ = (!merged).then(|| git(dir, &["merge", "--abort"]));
+    merged
+}

@@ -1,0 +1,8 @@
+/* the Mejoras tab: one experiment per entry, in short lines a phone reads; its state a small word, its decision the
+   line Tirith said in the chat */
+.blab .blabh { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.blabs { flex: none; font-style: normal; font-family: var(--b-mono); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--b-mut); }
+.blabs.adopted { color: var(--b-acc, #4fb86e); } .blabs.discarded { color: var(--b-red); }
+.blab .blabv { font-family: var(--b-mono); font-size: 11px; font-weight: 500; margin-right: 4px; }
+.blab .blabd { margin-top: 4px; font-size: 13.5px; overflow-wrap: anywhere; }
+.blab .bnn { margin: 2px 0; }
