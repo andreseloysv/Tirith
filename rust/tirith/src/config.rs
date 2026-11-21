@@ -84,14 +84,7 @@ fn put(t: &mut toml::Table, path: &[&str], v: toml::Value) {
 
 /// Moves yesterday's sections under their new names (a key already written under its new name wins); true when anything moved.
 pub fn migrate(t: &mut toml::Table) -> bool {
-    let mut moved = false;
-    for (from, to) in MOVES.split(';').filter_map(|m| m.split_once('>')) {
-        if let Some(v) = take(t, &from.split('.').collect::<Vec<_>>()) {
-            put(t, &to.split('.').collect::<Vec<_>>(), v);
-            moved = true;
-        }
-    }
-    moved
+    MOVES.split(';').filter_map(|m| m.split_once('>')).filter_map(|(from, to)| take(t, &from.split('.').collect::<Vec<_>>()).map(|v| put(t, &to.split('.').collect::<Vec<_>>(), v))).count() > 0
 }
 
 impl Config {
@@ -105,7 +98,8 @@ impl Config {
         migrate(&mut t);
         let factory = crate::factory::load(&t);
         // Keys nothing reads any more, named for the owner: an unknown section, or a leftover `[models.*]` role (`choices`/`efforts` lists stay). The factory-shaped sections are checked by the factory loader itself.
-        const KNOWN: [&str; 20] = ["projects", "agents", "launch", "models", "server", "merge", "autopilot", "app", "network", "messenger", "owner", "rooms", "guard", "factory", "roles", "limits", "plan", "cards", "metrics", "routes"];
+        const KNOWN: [&str; 21] =
+            ["projects", "agents", "launch", "models", "server", "merge", "autopilot", "app", "network", "messenger", "owner", "rooms", "guard", "factory", "roles", "limits", "plan", "cards", "metrics", "routes", "evals"];
         let mut unknown: Vec<String> = t.keys().filter(|k| !KNOWN.contains(&k.as_str())).cloned().collect();
         if let Some(m) = t.get("models").and_then(|v| v.as_table()) {
             unknown.extend(m.keys().filter(|k| !matches!(k.as_str(), "choices" | "efforts")).map(|k| format!("models.{k}")));

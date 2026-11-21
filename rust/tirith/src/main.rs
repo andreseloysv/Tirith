@@ -102,15 +102,12 @@ fn status(project: &str) -> Result<(), String> {
 
 fn plan_show(project: &str) -> Result<(), String> {
     let p: Value = serde_json::from_str(&call("GET", &format!("/api/plan/{project}"), None)?).map_err(|e| e.to_string())?;
-    for st in p["steps"].as_array().into_iter().flatten() {
+    p["steps"].as_array().into_iter().flatten().for_each(|st| {
         let items = st["items"].as_array().cloned().unwrap_or_default();
         let open: Vec<&Value> = items.iter().filter(|i| i["done"] != true).collect();
         println!("## {}. {}  ({} open, {} done)", st["num"].as_str().unwrap_or(""), st["title"].as_str().unwrap_or(""), open.len(), items.len() - open.len());
-        for it in open {
-            let lane = it["lane"].as_object().map(|l| format!("  [{} {}]", l["status"].as_str().unwrap_or(""), l["id"].as_str().unwrap_or(""))).unwrap_or_default();
-            println!("  - [ ] {}{lane}", it["text"].as_str().unwrap_or(""));
-        }
-    }
+        open.iter().for_each(|it| println!("  - [ ] {}{}", it["text"].as_str().unwrap_or(""), it["lane"].as_object().map(|l| format!("  [{} {}]", l["status"].as_str().unwrap_or(""), l["id"].as_str().unwrap_or(""))).unwrap_or_default()));
+    });
     Ok(())
 }
 
