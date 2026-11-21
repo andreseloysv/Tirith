@@ -67,6 +67,24 @@ fn set_flag(argv: &mut Vec<String>, flag: &Option<String>, alts: &[&str], value:
         argv.extend([flag.clone(), value.clone()]);
     }
 }
+/// The browser MCP (Playwright, `tools/browser/launch.mjs` of this repo; its node_modules stay in `<home>/browser-mcp`) every Muse run carries as one `-c mcpServers.tirith_browser=…` (Muse refuses the whole map at once; the owner's own Muse settings stay untouched). Lanes always get `--isolated` (several at once, nothing left behind, never the owner's browser); managers, bots and the CEO get Tirith's persistent profile (`<home>/browser/profile`, the launcher's default), `--isolated` instead while another live session holds that profile, or `--extension` (the owner's own Edge) with `[browser] use = "mine"` in config.toml. No node or no launcher: no browser, and the run goes on without one.
+pub fn browser_args(app: &Shared, lane: bool) -> Vec<String> {
+    let launch = Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../tools/browser/launch.mjs"));
+    let Some(node) = launch.is_file().then(|| node_bin(app)).flatten() else { return Vec::new() };
+    let lock = std::fs::read_link(app.home.join("browser/profile/SingletonLock")).unwrap_or_default();
+    let busy = lock.to_string_lossy().rsplit('-').next().and_then(|p| p.parse().ok()).is_some_and(crate::app::alive);
+    let mine = !lane && get::<String>(&app.cfg().raw, &["browser", "use"]).as_deref() == Some("mine");
+    let mode = mine.then_some("--extension").or((lane || busy).then_some("--isolated"));
+    let args: Vec<String> = [launch.display().to_string()].into_iter().chain(mode.map(String::from)).collect();
+    // Muse counts env values as secrets: only a whole-value `${TIRITH_HOME}` passes, and both spawns (lanes, chats) set that variable to this home.
+    vec!["-c".into(), format!("mcpServers.tirith_browser={}", json!({"command": node, "args": args, "env": {"TIRITH_HOME": "${TIRITH_HOME}"}}))]
+}
+/// Node for the browser launcher: on the children's PATH, else the newest `~/.nvm` install (the daemon's own PATH may have neither).
+fn node_bin(app: &Shared) -> Option<String> {
+    let on_path = app.child_path().split(':').map(|d| Path::new(d).join("node")).find(|p| p.is_file());
+    let nvm = std::fs::read_dir(crate::config::home_dir().join(".nvm/versions/node")).ok().into_iter().flatten().flatten().map(|e| e.path().join("bin/node")).filter(|p| p.is_file()).max();
+    on_path.or(nvm).map(|p| p.display().to_string())
+}
 /// The argv of a lane run. `agent`/`model` override the lane role (a fallback relaunch passes them). `resume = Some((session_id, message))` continues that agent session with `message` instead of the brief; an alias without `resume_args` starts fresh with the brief.
 pub fn lane_argv(app: &Shared, agent: Option<&str>, model: Option<&str>, brief: &Path, workspace: &Path, resume: Option<(&str, &str)>) -> Result<AgentCmd, String> {
     let cfg = app.cfg();
@@ -91,6 +109,7 @@ pub fn lane_argv(app: &Shared, agent: Option<&str>, model: Option<&str>, brief: 
     set_flag(&mut argv, &mflag, &["--model", "-m"], &model);
     set_flag(&mut argv, &eflag, &["--effort", "--reasoning-effort"], &effort);
     let _ = (alias == "codex").then(|| crate::codex::options(&cfg, &mut argv, effort.as_deref()));
+    argv.extend((alias == "muse" && argv.first().is_some_and(|a| a.rsplit('/').next() == Some("muse"))).then(|| browser_args(app, true)).into_iter().flatten()); // a custom [launch] line naming another binary never gets Muse's -c
     Ok(AgentCmd { alias, argv })
 }
 /// The argv of a streaming chat session (stream-json in and out) for a role. `resume` continues that session id. The caller appends its own system prompt.
@@ -107,6 +126,7 @@ pub fn chat_argv(app: &Shared, role_name: &str, resume: Option<&str>) -> Result<
     set_flag(&mut argv, &mflag, &["--model", "-m"], &r.model);
     set_flag(&mut argv, &eflag, &["--effort", "--reasoning-effort"], &r.effort);
     argv.extend(resume.into_iter().flat_map(|id| ["--resume".to_string(), id.to_string()]));
+    argv.extend((r.agent == "muse").then(|| browser_args(app, false)).into_iter().flatten());
     Ok(AgentCmd { alias: r.agent, argv })
 }
 /// True when an agent's output says it ran out of credits or hit its usage limit.
