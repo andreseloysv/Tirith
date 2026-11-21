@@ -23,6 +23,9 @@ pub struct Project {
     pub repo: String,
     #[serde(default)]
     pub color: Option<String>,
+    /// How long this project's chat lives, in the owner's own words ("24h", "2 días"; empty is forever) — see chat.rs.
+    #[serde(default)]
+    pub chat_keep: String,
 }
 
 impl Project {

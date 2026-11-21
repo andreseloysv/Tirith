@@ -1,7 +1,7 @@
 //! HTTP on 127.0.0.1: the page, its JSON API, the change stream (SSE) and the agents' hooks.
 
 use crate::app::{bad, now_s, tail, Shared, R};
-use crate::{attach, bots, guard, lanes, manager, merge, metrics, models, plan, projects, rooms, rules, sandbox};
+use crate::{attach, bots, chat, guard, lanes, manager, merge, metrics, models, plan, projects, rooms, rules, sandbox};
 use axum::extract::{Path, Query, Request, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::middleware::{self, Next};
@@ -73,6 +73,7 @@ pub fn router(app: Shared, port: u16) -> Router {
         .merge(attach::routes())
         .merge(projects::routes())
         .merge(bots::routes())
+        .merge(chat::routes())
         .fallback(web_file)
         .layer(middleware::from_fn(same_origin))
         .with_state(app)
