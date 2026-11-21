@@ -323,12 +323,19 @@ pub fn stale_reason(question: &str, autopilot_on: bool, free_gb: f64) -> Option<
 }
 
 pub fn close_stale_questions(app: &Shared) {
-    let stale = owner_open(app).into_iter().filter_map(|o| {
-        let (id, project, q, lane) = (o["id"].as_str().unwrap_or(""), o["project"].as_str().unwrap_or(""), o["question"].as_str().unwrap_or(""), o["lane"].as_str().unwrap_or(""));
-        let moot = (!lane.is_empty() && !app.lane(lane).is_some_and(|l| l.status == "waiting")).then_some("its lane no longer waits for an answer");
-        moot.or_else(|| stale_reason(q, if project.is_empty() { app.cfg().autopilot } else { crate::lanes::autopilot_on(app, project) }, crate::lanes::free_gb(&app.home.join("lanes")))).map(|why| (id.to_string(), why))
-    });
-    stale.for_each(|(id, why)| card_done(app, &id, "closed", &format!("closed by Tirith: {why}")));
+    for mut o in owner_open(app) {
+        let (id, project, q, lane) = (o["id"].as_str().unwrap_or("").to_string(), o["project"].as_str().unwrap_or("").to_string(), o["question"].as_str().unwrap_or("").to_string(), o["lane"].as_str().unwrap_or("").to_string());
+        if !lane.is_empty() && !app.lane(&lane).is_some_and(|l| l.status == "waiting") {
+            // Its lane no longer waits (answered, merged, closed): the card stays open for the owner as a card of its project, same id, kind and question; only a card of no lane can go stale.
+            let _ = app.db.lock().unwrap().execute("UPDATE owner_items SET lane = '' WHERE id = ?1 AND status = 'open'", rusqlite::params![id]);
+            o["lane"] = json!("");
+            app.emit("owner", o);
+        } else if lane.is_empty() {
+            stale_reason(&q, if project.is_empty() { app.cfg().autopilot } else { crate::lanes::autopilot_on(app, &project) }, crate::lanes::free_gb(&app.home.join("lanes")))
+                .into_iter()
+                .for_each(|why| card_done(app, &id, "closed", &format!("closed by Tirith: {why}")));
+        }
+    }
 }
 
 async fn run(app: Shared, project: String) {

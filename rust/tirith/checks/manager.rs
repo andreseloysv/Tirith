@@ -85,6 +85,39 @@ async fn bot_routes_from_the_page() {
 }
 
 #[test]
+fn lane_card_becomes_project_card() {
+    let home = std::env::temp_dir().join(format!("tirith-lane-card-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&home);
+    std::fs::create_dir_all(&home).unwrap();
+    let app = crate::app::App::open_at(home.clone());
+    // A blocked audit lane, waiting, with its owner card (opened with --lane).
+    app.save_lane(&crate::app::Lane { id: "audit-lane".into(), project: "jobs".into(), status: "waiting".into(), item: "auditoría bloqueada".into(), question: "¿sigo?".into(), ..Default::default() });
+    app.insert("INSERT INTO owner_items (id, at, kind, project, question, status, answer, lane) VALUES ('o33', '2026-11-20T10:00:00Z', 'decision', 'jobs', '¿Apruebas el gasto de la auditoría?', 'open', '', 'audit-lane')", &[]);
+    let row = |app: &crate::app::Shared| {
+        app.query("SELECT status, lane, project, kind, question FROM owner_items WHERE id = 'o33'", [], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, String>(3)?, r.get::<_, String>(4)?)))
+            .into_iter()
+            .next()
+            .expect("card o33")
+    };
+    // While its lane still waits, nothing touches the card.
+    super::close_stale_questions(&app);
+    assert_eq!(row(&app).0.as_str(), "open");
+    assert_eq!(row(&app).1.as_str(), "audit-lane");
+    // The lane is answered (no longer waiting) and the sweep runs: the card is not closed unanswered, it becomes a card of its project.
+    crate::lanes::answer(&app, "audit-lane", "verified: the audit stays blocked", "the manager").unwrap();
+    assert_ne!(app.lane("audit-lane").unwrap().status, "waiting");
+    super::close_stale_questions(&app);
+    let (status, lane, project, kind, question) = row(&app);
+    assert_eq!((status.as_str(), lane.as_str(), project.as_str(), kind.as_str(), question.as_str()), ("open", "", "jobs", "decision", "¿Apruebas el gasto de la auditoría?"));
+    // Still open for the owner under its own id, and a second sweep does not close it either: its question is not stale.
+    assert!(super::owner_open(&app).iter().any(|o| o["id"] == "o33" && o["lane"] == ""), "o33 stays among the open cards");
+    super::close_stale_questions(&app);
+    assert_eq!(row(&app).0.as_str(), "open");
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
 fn card_id_of_reads_the_card_an_event_line_names() {
     assert_eq!(super::card_id_of("Card o12 closed by the manager: ya no hace falta").as_deref(), Some("o12"));
     assert_eq!(super::card_id_of("The owner answered o3 (decision: ¿sigo?): sí").as_deref(), Some("o3"));

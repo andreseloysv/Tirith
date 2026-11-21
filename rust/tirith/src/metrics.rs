@@ -138,7 +138,8 @@ fn compute(app: &Shared) -> Vec<Metric> {
     let facts = format!("unasked in 24 h: {turns} phone messages of turns no owner message started, {notices} notices with phone = true, {cards} cards, over {} merged items", merged.len());
     out.push(mk("interruptions", (turns + notices + cards) as f64 / merged.len().max(1) as f64, turns + notices + cards > 0, facts));
 
-    let resolved = app.query("SELECT id, status FROM owner_items WHERE at >= ?1 AND status != 'open'", [&since], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)));
+    // An autoclose («its lane no longer waits») whose question a later card of the same project and kind reopened (its question names the closed card's id) counts nowhere: the same question still waits, under the new card.
+    let resolved = app.query("SELECT c.id, c.status FROM owner_items c WHERE c.at >= ?1 AND c.status != 'open' AND NOT (c.status = 'closed' AND COALESCE(c.answer, '') LIKE '%its lane no longer waits%' AND EXISTS (SELECT 1 FROM owner_items s WHERE s.rowid > c.rowid AND s.kind = c.kind AND s.project = c.project AND instr(COALESCE(s.question, ''), c.id) > 0 AND substr(COALESCE(s.question, ''), instr(COALESCE(s.question, ''), c.id) + length(c.id), 1) NOT GLOB '[0-9]' AND substr(COALESCE(s.question, ''), instr(COALESCE(s.question, ''), c.id) - 1, 1) NOT GLOB '[A-Za-z0-9]'))", [&since], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)));
     let closed: Vec<&str> = resolved.iter().filter(|c| c.1 == "closed").map(|c| c.0.as_str()).collect();
     // Plus the resolved cards the card-needed eval judged decidable alone (an answered one too: it bothered the owner needlessly), named by their event's line.
     let judged = app.query("SELECT events.summary FROM scores JOIN events ON events.id = scores.event WHERE scores.eval = 'card-needed' AND scores.label = 'alone' AND scores.at >= ?1", [&since], |r| r.get::<_, String>(0));
