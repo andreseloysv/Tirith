@@ -59,12 +59,14 @@ lane_args = ["exec", "--json", "--workspace", "{workspace}", "--prompt-file", "{
 # [agents.codex] and [agents.copilot]: today's flags() of models.rs
 
 [roles.manager]                    # runs one project's work and talks with the owner
+name = "Project Manager"           # its face and name head each project's chat and sit beside its messages
 agent = "anthropic"
 session = "chat"                   # chat: long-lived, resumed; turn: one fresh run; lane: a plan item in a worktree
 scope = "project"                  # only two scopes: project (one per project) and own (one bot, a conversation of its own)
 prompt = ["prompts/manager.md", "prompts/one-project.md"]
 idle_minutes = 30
 runs_on = "local"                  # the only value for now
+face = { shape = "hex", color = "#8e7cf0" }   # its own, distinct from the sidebar bots' (they override it)
 
 [roles.manager-general]            # a system bot: the manager of no project (health, reviews, what spans projects)
 name = "Manager"
@@ -110,6 +112,7 @@ stage_timeout_minutes = 30
 merge_train = 5
 merge_backlog = 3
 low_disk_gb = 5
+build_idle_minutes = 30            # with no lane, stage or manager working that long, a project's build cache and merge folder go
 plan_commit_seconds = 120
 batch_seconds = 2
 agent_messages_in_a_row = 30
@@ -140,7 +143,10 @@ show, routes, `session` and `access`) is saved as a layer in `~/.tirith/config.t
 chat rows, its phone room and its sessions moved there at start, history intact), and the CEO's reviews stand in the
 CEO's own conversation. A list of renames (workers → worker, reviewer and improver → ceo, lead → manager-general)
 copies, at start, each page model choice `models:<old>` to `models:<new>` when the new one has none, so a renamed
-role never loses the model the owner chose for it.
+role never loses the model the owner chose for it. Each role with a screen picks its model there — the Project
+Manager in each project's chat (one choice for every project) and each bot on its bot screen; Settings keeps only
+the roles with no screen of their own (today worker and judge), and `/api/models` gives every role's `face` and
+`show` with its setting so the page can tell them apart.
 
 ```toml
 [roles.bot-1a2b3c]
