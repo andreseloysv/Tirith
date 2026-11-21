@@ -94,6 +94,17 @@ fn with_cards(app: &Shared, project: &str, text: &str) -> String {
     format!("{text}\n\n[tirith] Cards still open here: {}. If this answers one, close it with tirith answer <card> \"<the answer>\".", open.join(" | "))
 }
 
+/// Ends one conversation's live session (its chat was cleared), like `restart` for one: a turn in the middle ends when the turn does, and the next message starts a fresh session.
+pub fn end_session(project: &str) {
+    talk(project, |t| {
+        t.stale = true;
+        if !t.busy {
+            t.tx.take();
+            kill_group(t.pid, libc::SIGTERM);
+        }
+    });
+}
+
 /// Ends every session (the settings changed); one in the middle of a turn ends when the turn does, so its answer is not lost. Each one resumes its conversation at its next message.
 pub fn restart() {
     TALKS.lock().unwrap().values_mut().for_each(|t| {
