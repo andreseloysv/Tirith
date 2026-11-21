@@ -1,4 +1,4 @@
-//! Health metrics computed every minute from the daemon's own data, and the turn-role pass that a metric red for long enough starts (the factory's delayed `metric.red` route names the role: the improver, which also runs once a day with no red measure); while everything is green and the day's pass ran, no model is called.
+//! Health metrics computed every minute from the daemon's own data, and the turn-role pass that a metric red for long enough starts (the factory's delayed `metric.red` route names the role: the improver; the factory's `schedule` route to it runs its daily pass, at 07:00, with no red measure); while everything is green and the day's pass ran, no model is called.
 
 use crate::app::{now_iso, now_s, tail, Lane, Shared};
 use crate::{manager, plan};
@@ -205,9 +205,11 @@ fn tick(app: &Shared) {
         manager::emit_event(app, "", "metric.red", &format!("health: {}. Get it moving.", describe(m)), None);
     });
     let max = app.cfg().factory.role::<u64>(&improver, "max_per_day").unwrap_or(6);
-    let count = |what: &str| app.db.lock().unwrap().query_row(&format!("SELECT COUNT(*) FROM ceo_reviews WHERE at >= ?1 AND metric {what}"), [iso(now.saturating_sub(86400))], |r| r.get::<_, u64>(0)).unwrap_or(0);
-    let (today, daily) = (count("!= 'owner'"), count("LIKE '%daily%'")); // daily: its daily passes in 24 h, kept as rows naming it
-    let _ = (daily == 0).then(|| due.push(("daily", format!("Daily improver pass (no red measure needed).\n{}", metrics.iter().map(describe).collect::<Vec<_>>().join("\n")))));
+    let today = app.db.lock().unwrap().query_row("SELECT COUNT(*) FROM ceo_reviews WHERE at >= ?1 AND metric != 'owner'", [iso(now.saturating_sub(86400))], |r| r.get::<_, u64>(0)).unwrap_or(0);
+    let last_daily = app.db.lock().unwrap().query_row("SELECT COALESCE(MAX(at), '') FROM ceo_reviews WHERE metric LIKE '%daily%'", [], |r| r.get::<_, String>(0)).unwrap_or_default();
+    // The daily pass is configuration, not a decision here: the factory's `schedule` route to this role, due like a bot's routine when its time came today and no daily pass (kept as rows naming it) ran since.
+    let daily = app.cfg().factory.schedules().into_iter().any(|(to, at, days)| to == improver && crate::bots::due(&json!({"at": at, "days": days, "last": last_daily}), chrono::Local::now()));
+    let _ = daily.then(|| due.push(("daily", format!("Scheduled improver pass (no red measure needed).\n{}", metrics.iter().map(describe).collect::<Vec<_>>().join("\n")))));
     let _ = (!due.is_empty() && !improver.is_empty() && today < max).then(|| start_review(app, improver, due.iter().map(|d| d.0).collect::<Vec<_>>().join(","), due.iter().map(|d| d.1.as_str()).collect::<Vec<_>>().join("\n")));
     app.emit("metrics", payload(app));
 }
@@ -241,7 +243,7 @@ fn start_review(app: &Shared, role: String, metric: String, why: String) {
     });
 }
 
-/// The facts an improver pass reads: the red metrics (or all of them, on the daily pass), the measures and eval scores by factory version (the stamps), the last lanes with their stamp, failing checks, plan progress, owner questions.
+/// The facts an improver pass reads: the red metrics (or all of them, on the scheduled daily pass), the measures and eval scores by factory version (the stamps), the last lanes with their stamp, failing checks, plan progress, owner questions.
 fn brief(app: &Shared, why: &str) -> String {
     let mut lanes: Vec<Lane> = app.lanes.lock().unwrap().values().cloned().collect();
     lanes.sort_by(|a, b| b.created_at.cmp(&a.created_at));

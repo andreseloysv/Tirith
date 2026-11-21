@@ -221,7 +221,8 @@ two prompts is then a query, with no extra runs.
 
 ## The improver closes the loop
 
-The reviewer becomes the improver. Routed on `metric.red` (after 15 min) and once a day, it reads the measures by factory
+The reviewer becomes the improver. Routed on `metric.red` (after 15 min) and on a `schedule` route (every day at 07:00),
+it reads the measures by factory
 version, the eval scores and `factory/`, and proposes at most one change to `factory/`: an item of this repo's plan with
 its check, and the lane started for it. The queue checks and lands it, and the daemon reloads the factory when main
 moves: no rebuild, no restart, no owner. A change whose next 10 merged items (or 24 h) are worse than the version before
