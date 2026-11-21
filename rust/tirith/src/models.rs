@@ -121,13 +121,10 @@ pub fn lane_argv(app: &Shared, agent: Option<&str>, model: Option<&str>, brief: 
     let (brief, ws, bin) = (brief.display().to_string(), workspace.display().to_string(), command.rsplit('/').next().unwrap_or(&command).to_string());
     let (session, message) = resume.unwrap_or_default();
     let fill = |s: &String| s.replace("{brief}", &brief).replace("{workspace}", &ws).replace("{session}", session).replace("{message}", message);
-    let mut argv: Vec<String> = if resume.is_some() && !resume_args.is_empty() {
-        std::iter::once(command).chain(resume_args.iter().map(fill)).collect()
-    } else if Some(alias.as_str()) == get::<String>(&cfg.raw, &["roles", &lane, "agent"]).or_else(|| cfg.factory.role(&lane, "agent")).as_deref() && !cfg.launch.is_empty() {
-        cfg.launch.iter().map(fill).collect()
-    } else {
-        std::iter::once(command).chain(args.iter().map(fill)).collect()
-    };
+    let resumed = resume.is_some() && !resume_args.is_empty();
+    let words = if resumed { &resume_args } else { &args };
+    let launch = !resumed && Some(alias.as_str()) == get::<String>(&cfg.raw, &["roles", &lane, "agent"]).or_else(|| cfg.factory.role(&lane, "agent")).as_deref() && !cfg.launch.is_empty();
+    let mut argv: Vec<String> = if launch { cfg.launch.iter().map(fill).collect() } else { std::iter::once(command).chain(words.iter().map(fill)).collect() };
     set_flag(&mut argv, &mflag, &["--model", "-m"], &model);
     set_flag(&mut argv, &eflag, &["--effort", "--reasoning-effort"], &effort);
     let _ = (alias == "codex").then(|| crate::codex::options(&cfg, &mut argv, effort.as_deref()));
@@ -277,7 +274,7 @@ pub fn state(app: &Shared) -> Value {
             v["source"] = json!(source);
             ["session", "scope", "access", "runs_on", "name"].into_iter().filter_map(|k| cfg.factory.role::<String>(&r, k).map(|x| (k, x))).for_each(|(k, x)| v[k] = json!(x));
             v["show"] = json!(cfg.factory.role::<bool>(&r, "show"));
-            v["face"] = json!({"shape": get::<String>(cfg.factory.table(), &["roles", &r, "face", "shape"]), "color": get::<String>(cfg.factory.table(), &["roles", &r, "face", "color"])});
+            v["face"] = json!({"shape": get::<String>(&cfg.factory.raw, &["roles", &r, "face", "shape"]), "color": get::<String>(&cfg.factory.raw, &["roles", &r, "face", "color"])});
             (r, v)
         })
         .collect();
