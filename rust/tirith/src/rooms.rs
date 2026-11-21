@@ -66,8 +66,9 @@ struct Room {
     listed: String,
     /// Agents whose messages started the manager's current turn: its answer is sealed for them too.
     turn: Vec<String>,
-    /// What was handed to the manager and no finished turn has answered: (author, text). Handed again, once, after a restart.
+    /// What was handed to the manager and no finished turn has answered: (author, text). Handed again, once, after a restart. `answering` is the part of it the turn now running received when it started: only that part stops being owed when that turn ends.
     owed: Vec<(String, String)>,
+    answering: Vec<(String, String)>,
     messages: Vec<Msg>,
     here: Vec<String>,
     error: String,
@@ -231,9 +232,8 @@ fn watch(app: &Shared, id: &str) {
                 Ok(()) => {
                     backoff = 15;
                     update(&app, &id, |r| r.error.clear());
-                    if started.elapsed() < Duration::from_secs(1) && r.cursor.is_some() {
-                        tokio::time::sleep(Duration::from_secs(2)).await; // the platform did not hold the poll
-                    }
+                    // A poll that came back at once was not held by the platform: do not spin on it.
+                    tokio::time::sleep(Duration::from_secs(if started.elapsed() < Duration::from_secs(1) && r.cursor.is_some() { 2 } else { 0 })).await;
                 }
                 Err(e) => {
                     update(&app, &id, |r| r.error = e);
@@ -279,9 +279,8 @@ async fn poll(app: &Shared, r: &Room) -> Result<(), String> {
         let mut ids: Vec<String> = r.devices.iter().chain(r.managers.iter().filter(|m| m.accepted)).map(|p| p.key_id.clone()).collect();
         ids.sort();
         let sig = ids.join(",");
-        if r.kind == "manager" && std::mem::replace(&mut r.roster, sig.clone()) != sig {
-            r.devices.iter().for_each(|d| out.send.push((format!("tirith-roster {}", ids.iter().filter(|i| **i != d.key_id).map(String::as_str).collect::<Vec<_>>().join(",")), vec![d.public.clone()])));
-        }
+        let _ = (r.kind == "manager" && std::mem::replace(&mut r.roster, sig.clone()) != sig)
+            .then(|| r.devices.iter().for_each(|d| out.send.push((format!("tirith-roster {}", ids.iter().filter(|i| **i != d.key_id).map(String::as_str).collect::<Vec<_>>().join(",")), vec![d.public.clone()]))));
         // Public rooms are only watched: nothing said there reaches the manager (it writes there with `tirith room say`).
         out.deliver.retain(|_| r.private());
         r.owed.extend(out.deliver.iter().cloned()); // saved with the cursor: a restart in between loses nothing
@@ -294,11 +293,9 @@ async fn poll(app: &Shared, r: &Room) -> Result<(), String> {
         let Some(()) = (!phone_model_command(app, r, author, text)).then_some(()) else { continue };
         // `o12: yes` from a paired phone answers that card by code (a phone writes `O12`); everything else is for the manager.
         let card = text.split_once(':').filter(|(_, answer)| author.ends_with(PHONE) && !answer.trim().is_empty());
-        if card.is_some_and(|(id, answer)| manager::owner_answer(app, &id.trim().to_lowercase(), answer.trim(), false).is_ok()) {
-            update(app, &r.id, |r| r.owed.retain(|o| o.1 != *text));
-        } else {
-            manager::from_room(app, &r.project, &r.id, author, text);
-        }
+        let carded = card.is_some_and(|(id, answer)| manager::owner_answer(app, &id.trim().to_lowercase(), answer.trim(), false).is_ok());
+        let _ = carded.then(|| update(app, &r.id, |r| (r.owed.retain(|o| o.1 != *text), r.answering.retain(|o| o.1 != *text))));
+        let _ = (!carded).then(|| manager::from_room(app, &r.project, &r.id, author, text));
     }
     out.mentions.into_iter().for_each(|m| app.emit("room-mention", m));
     Ok(())
@@ -333,10 +330,9 @@ fn handle(r: &mut Room, me: &sealed::Me, platform: &str, m: &Value, backlog: boo
         return;
     };
     let text = text.strip_prefix("tirith-image ").map_or(text.clone(), |j| save_image_at(&crate::config::tirith_home(), j, &r.id).unwrap_or_else(|| "[an image that could not be read]".into()));
-    if let Some(body) = text.strip_prefix("tirith-models ") {
-        (r.kind == "manager" && r.devices.iter().any(|d| d.key_id == id)).then(|| serde_json::from_str(body).ok()).flatten().into_iter().for_each(|request| out.controls.push((author.clone(), request)));
-        return;
-    }
+    let models = text.strip_prefix("tirith-models ");
+    models.into_iter().for_each(|body| (r.kind == "manager" && r.devices.iter().any(|d| d.key_id == id)).then(|| serde_json::from_str(body).ok()).flatten().into_iter().for_each(|request| out.controls.push((author.clone(), request))));
+    let Some(()) = models.is_none().then_some(()) else { return };
     let word = text.split_whitespace().next().unwrap_or("");
     let Some(()) = (!matches!(word, "tirith-roster" | "tirith-rooms" | "tirith-models-state" | "tirith-chat") && !(word == "tirith-join" && mine)).then_some(()) else { return };
     if r.private() && !mine && word == "tirith-pair" {
@@ -349,10 +345,9 @@ fn handle(r: &mut Room, me: &sealed::Me, platform: &str, m: &Value, backlog: boo
         }
         return;
     }
-    if r.private() && !mine && word == "tirith-join" {
-        let _ = (r.kind == "manager" && burn(&mut r.peer_code, &text, "tirith-join")).then(|| r.managers.iter_mut().find(|p| p.key_id == id).into_iter().for_each(|p| p.accepted = true));
-        return;
-    }
+    let join = r.private() && !mine && word == "tirith-join";
+    let _ = (join && r.kind == "manager" && burn(&mut r.peer_code, &text, "tirith-join")).then(|| r.managers.iter_mut().find(|p| p.key_id == id).into_iter().for_each(|p| p.accepted = true));
+    let Some(()) = (!join).then_some(()) else { return };
     let Some(()) = (!r.managers.iter().any(|p| p.blocked && p.key_id == id)).then_some(()) else { return };
     let device = r.devices.iter().position(|d| d.key_id == id);
     r.messages.push(Msg { n: m["n"].as_u64().unwrap_or(0), at: at.clone(), from: from.clone(), text: text.chars().take(2000).collect(), device: device.is_some() });
@@ -481,15 +476,24 @@ pub fn to_phones(app: &Shared, project: &str, text: &str) {
     let rooms: Vec<Room> = ROOMS.lock().unwrap().values().filter(|r| r.kind == "manager" && app.conv(&r.project) == project && !text.trim_start().starts_with('∅')).cloned().collect();
     rooms.iter().for_each(|r| queue(&r.id, text, r.devices.iter().map(|d| d.public.clone()).collect()));
 }
-/// The end of a turn that `rooms` started: nothing is owed to them any more, and the agents there (the accepted managers and whoever wrote for this turn) get the manager's answer. The phones have it already (`to_phones`).
-pub fn reply(app: &Shared, rooms: &[String], text: &str) {
-    rooms.iter().for_each(|id| queue(id, text, update(app, id, |r| (r.owed.clear(), r.managers.iter().filter(|m| m.accepted).map(|m| m.public.clone()).chain(std::mem::take(&mut r.turn)).collect::<Vec<_>>()).1).unwrap_or_default()));
+/// A turn that `rooms` started begins: what they are owed now is what it received (`answering`, kept with the cursor), and only that stops being owed at its end; what arrives while it runs is a later turn's.
+pub fn begin(app: &Shared, rooms: &[String]) {
+    rooms.iter().for_each(|id| (update(app, id, |r| r.answering = r.owed.clone()), ()).1);
 }
-/// Hands the managers again what rooms wrote and no finished turn answered: the session ended, or the daemon was restarted, in between. `project` limits it to one conversation.
+/// A finishing turn's leaving of a room: what it received stops being owed (one copy each, so an identical line that arrived during it stays), and these readers get its answer.
+fn answered(r: &mut Room) -> Vec<String> {
+    std::mem::take(&mut r.answering).iter().for_each(|a| drop(r.owed.iter().position(|o| o == a).map(|i| r.owed.remove(i))));
+    r.managers.iter().filter(|m| m.accepted).map(|m| m.public.clone()).chain(std::mem::take(&mut r.turn)).collect()
+}
+/// The end of a turn that `rooms` started: the agents there (the accepted managers and whoever wrote for this turn) get the manager's answer. The phones have it already (`to_phones`).
+pub fn reply(app: &Shared, rooms: &[String], text: &str) {
+    rooms.iter().for_each(|id| queue(id, text, update(app, id, answered).unwrap_or_default()));
+}
+/// Hands the managers again, once, what rooms wrote and no finished turn answered: the session ended, or the daemon was restarted, in between. It stays owed until a turn that received it ends. `project` limits it to one conversation.
 pub fn again(app: &Shared, project: Option<&str>) {
     let rooms: Vec<Room> = ROOMS.lock().unwrap().values().filter(|r| !r.owed.is_empty() && project.is_none_or(|p| app.conv(&r.project) == p)).cloned().collect();
     rooms.iter().for_each(|r| {
-        update(app, &r.id, |r| std::mem::take(&mut r.owed))
+        update(app, &r.id, |r| (r.answering.clear(), r.owed.clone()).1)
             .unwrap_or_default()
             .iter()
             .filter(|(a, t)| !phone_model_command(app, r, a, t))
