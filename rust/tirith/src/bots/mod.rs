@@ -27,7 +27,7 @@ pub use api::routes;
 pub(crate) use card::save;
 pub use cli::cli;
 pub use context::context;
-pub use folder::{folder, skills, writable, SKILLS};
+pub use folder::{folder, skill_file, skills, writable, SKILLS};
 pub use hook::{hook_from, webhook};
 pub use list::{all, bot, key_for};
 pub use migrate::start;

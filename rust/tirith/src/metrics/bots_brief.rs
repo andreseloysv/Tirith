@@ -71,17 +71,8 @@ fn bot_part(app: &Shared, b: &Value, titles: &[String]) -> String {
 
 /// The last pass `role` made: its time and its answer.
 fn last_pass(app: &Shared, role: &str) -> String {
-    let rows = app.query(
-        "SELECT at, text FROM ceo_reviews WHERE role = ?1 ORDER BY id DESC LIMIT 1",
-        [role],
-        |r| {
-            Ok(format!(
-                "{}: {}",
-                r.get::<_, String>(0)?,
-                r.get::<_, String>(1)?
-            ))
-        },
-    );
+    let sql = "SELECT at || ': ' || text FROM ceo_reviews WHERE role = ?1 ORDER BY id DESC LIMIT 1";
+    let rows = app.query(sql, [role], |r| r.get::<_, String>(0));
     rows.into_iter().next().unwrap_or_else(|| "none yet".into())
 }
 

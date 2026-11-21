@@ -1,7 +1,8 @@
 // The Enseñar tab: the link the Edge extension is given once (address and token), Grabar/Parar, and the steps as
-// they arrive, with what the owner wrote in the chat under the step it follows.
+// they arrive, with what the owner wrote in the chat under the step it follows; then the bot's rehearsals of the draft.
 import { html, useState } from '../../../vendor/preact-htm.js';
 import { useFetch, api } from '../../store.js';
+import { Rehearsals } from './rehearsals.js';
 
 const MOST_MS = 10 * 60 * 1000;
 
@@ -25,7 +26,7 @@ function Link({ link }) {
     <button type="button" class="blink" onClick=${copy}>${copied ? 'Copied' : 'Copy'}</button></div>`;
 }
 
-export function Teach({ bot }) {
+export function Teach({ bot, onRoutine }) {
   const path = `/api/teach/${encodeURIComponent(bot.id)}`;
   const [rec, reload, err] = useFetch(path, ['teach'], [bot.id]);
   const [fail, setFail] = useState('');
@@ -44,5 +45,6 @@ export function Teach({ bot }) {
     ${fail ? html`<p class="berr">${fail}</p>` : null}
     <h4><span>${on ? 'Steps so far' : 'Last recording'}</span>${steps.length ? html` <span class="bn">${steps.filter((s) => s.kind !== 'said').length}</span>` : null}</h4>
     <${Steps} steps=${steps} />
+    <${Rehearsals} path=${path} list=${rec.rehearsals} onRoutine=${onRoutine} />
   </div>`;
 }

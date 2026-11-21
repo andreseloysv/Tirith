@@ -12,7 +12,12 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde_json::{json, Value};
 /// The bot's conversation, if `id` is a bot and the caller may act for it: the page, or the extension with its token (`always`: the token is needed from anyone).
-fn key(app: &Shared, h: &HeaderMap, id: &str, always: bool) -> Result<String, Box<Response>> {
+pub(super) fn key(
+    app: &Shared,
+    h: &HeaderMap,
+    id: &str,
+    always: bool,
+) -> Result<String, Box<Response>> {
     let key = crate::bots::key_for(app, id)
         .ok_or_else(|| allow(h, (StatusCode::NOT_FOUND, format!("no bot '{id}'"))))?;
     let needs = always || from_extension(h);
@@ -27,6 +32,7 @@ async fn show(State(app): State<Shared>, h: HeaderMap, Path(id): Path<String>) -
     };
     let mut rec = read(&app, &key);
     rec["on"] = json!(live(&rec));
+    rec["rehearsals"] = json!(super::rehearsal::all(&app, &key));
     let _ = (!from_extension(&h)).then(|| rec["token"] = json!(token(&app, &key)));
     allow(&h, Json(rec))
 }
@@ -75,4 +81,6 @@ pub fn routes() -> Router<Shared> {
         .route("/api/teach/{id}/start", post(start).options(preflight))
         .route("/api/teach/{id}/stop", post(stop).options(preflight))
         .route("/api/teach/{id}/events", post(events).options(preflight))
+        .route("/api/teach/{id}/approve", post(super::approve::approve))
+        .merge(super::rehearse_api::routes())
 }
