@@ -268,11 +268,11 @@ with the factory's `[lab]` rule. An experiment is a branch of the bot's reposito
 one commit over its main; the Coach makes it in a draft worktree under `<home>/lab` and removes that worktree
 (`factory/prompts/coach.md`), then starts it:
 
-- `tirith lab start <bot> <branch> --routine <id> --mode live|replay --hypothesis "<text>"` → `POST /api/lab/start`:
+- `tirith lab start <bot> <branch> --routine <id> --mode live|replay|shadow --hypothesis "<text>"` → `POST /api/lab/start`:
   the bot (key, id or name), a routine of its own with no experiment running (one at a time per routine, either
-  mode), the mode (`live` or `replay`; `shadow` is refused for now), a hypothesis, and a branch that exists, has one
+  mode), the mode (`live`, `replay` or `shadow`, as `factory/prompts/coach.md` chooses: replay when the captures are enough, live when not and the change is small, shadow when not and the change touches what is sent), a hypothesis, and a branch that exists, has one
   commit over the bot's main and is checked out nowhere. A row in `experiments` (its `change` is the commit's subject);
-  live, a worktree `<home>/lab/<bot>/<experiment>` on the branch; replay, its pairs start running.
+  live or shadow, a worktree `<home>/lab/<bot>/<experiment>` on the branch; replay, its pairs start running.
 - `tirith lab list [<bot>]` → `GET /api/lab?bot=<id or key>`: the experiments, newest first (change, hypothesis, mode,
   status, the comparisons judged, the numbers once decided), and the rule; the bot's tab «Mejoras» shows them.
 
@@ -313,6 +313,26 @@ Each turn's row gets `experiment`, `variant`, the routine and the trigger `repla
 and each B is compared with its A like a live run (`lab.compare`, `ab-compare`). Once every pair has run (kv
 `lab:replayed:<experiment>`) and been judged, it is due.
 
+**Shadow.** `--mode shadow` (`shadow.rs`) keeps every real run of the routine as it is — A, in the bot's own folder,
+its answer to the owner as always — and starts its B beside it at the same moment (`lab::fired` from `bots/run.rs`
+and `bots/hook_fire.rs`, handed the same task): a loose turn of the bot's role (`manager::run_turn`) in the
+experiment's worktree, handed its memory and skills, in a conversation of its own, `shadow-<experiment>-<pair>`, that
+no chat, phone, room or card knows (kv `lab:pairs:<experiment>` counts the pairs; while a B is still on its way, a
+new real run is no pair). A tokio task-local makes the worktree every folder of the bot for B's turn (`lab::seat`),
+and the rules let it write there (`lab::in_replay`). Its reads are live (the web, a browser, `tirith safari read`),
+but Tirith's `PreToolUse` hook refuses every outward action from that worktree (`shadow_open.rs`) as «not
+available in a shadow run»: a `tirith` command that is not a plain read — `say`, `ask`, `ask-owner`, `chat`,
+`safari open`, `teach`, rooms, cards, lanes — and shell commands that send, buy, delete or publish (curl or wget
+with a writing method, data or a form, `gh` writes, a push or a publish, mail, ssh and rsync, `open`, AppleScript, a
+deletion outside the worktree: `outward.rs`); in a browser a click on a control that sends, buys, deletes or
+publishes (English or Spanish), a submitted text, Enter, a form, an upload, an accepted dialog or code in the page,
+and any other MCP tool whose name sends, writes or deletes (`outward_browser.rs`). The run in the bot's own folder
+is never touched by it. B's row gets `experiment`, `variant` B, the routine and the trigger `shadow`; A's row
+`experiment` and `variant` A at its end (`turn.rs`). Each pair — the same input at the same time — is compared once
+both have ended, in either order (`shadow_pair.rs`, then `lab.compare` and `ab-compare` as above), and decided by
+the same `[lab]` rule, never while a run of the pair is on its way. The «Mejoras» tab says, while it runs, that the
+shadow costs double.
+
 **The decision.** With `inputs` comparisons judged, a replay's pairs all run and judged, or `max_days` after its start (the scheduler's tick), and no run of
 the bot on its way, B is adopted when it is not worse (wins and ties at least `not_worse_share` of the comparisons, and
 wins at least as many as it loses), has no new failure (a B run failed where its A did not) and no 👎, and saves at
@@ -328,7 +348,7 @@ Files:
 
 - `answers.rs`: A replay's tool calls in the hook: an outside read answered from its capture, one it lacks or one for the owner refused.
 - `api.rs`: The lab's commands and routes: `tirith lab start` and `tirith lab list`, `POST /api/lab/start` and `GET /api/lab`.
-- `compare.rs`: A B run against the A run before it, judged blind by `ab-compare`, and the judge's answer mapped back to B's verdict.
+- `compare.rs`: A B run against the A run before it (or against the A of its shadow pair), judged blind by `ab-compare`, and the judge's answer mapped back to B's verdict.
 - `decide.rs`: The decision once an experiment is due: the numbers read, the rule applied, the branch merged or deleted, the line emitted.
 - `git.rs`: Git in a bot's repository as Tirith: the branch's one commit checked, the adopted branch merged (its text winning where main moved on the same lines), the worktree and the branch removed.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
@@ -337,8 +357,13 @@ Files:
 - `replay.rs`: Replay mode: the task-local that marks a replay's turn, the proxy's closed caller, and the pairs run one after another.
 - `replay_side.rs`: One side of a replayed run: its throwaway worktree, its turn on the capture's start, its row's experiment and variant.
 - `rule.rs`: The `[lab]` rule applied to A's and B's numbers and the comparisons, and the one line that says the decision.
-- `seat.rs`: Which folder a bot's turn runs in during an experiment: live A, its own; live B, the branch's worktree; a replay's turn, its worktree.
-- `start.rs`: `tirith lab start`: the request checked, the experiment's row, and its worktree (live) or its captured runs (replay).
+- `outward.rs`: Which shell calls of a shadow run act outward: `tirith` commands that are not plain reads, and commands that send, buy, delete or publish.
+- `outward_browser.rs`: Which browser and MCP calls of a shadow run act outward: a click on «Send» or «Comprar», a submit, a form, an upload, code in the page.
+- `seat.rs`: Which folder a bot's turn runs in during an experiment: live A, its own; live B, the branch's worktree; a replay's or a shadow B's turn, its worktree; a shadow run is A, its B started beside it.
+- `shadow.rs`: Shadow mode: B of each real run started beside it in the worktree, in its own conversation, its row marked.
+- `shadow_open.rs`: The worktrees shadow B runs are in now, the task-local of B's turn, and the hook's refusal of an outward action from one.
+- `shadow_pair.rs`: A shadow pair's two ends, in either order; once both ended, B is compared with that A.
+- `start.rs`: `tirith lab start`: the request checked, the experiment's row, and its worktree (live, shadow) or its captured runs (replay).
 - `store.rs`: The experiments' rows: one, the running ones, their worktree and the list the page shows.
 - `turn.rs`: A bot's turn ended: a run of an experiment keeps its variant, a B run is compared, the experiment may be decided.
 

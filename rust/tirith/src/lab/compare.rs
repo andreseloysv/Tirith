@@ -38,16 +38,24 @@ fn task(app: &Shared, e: &Experiment) -> String {
     r.map(|r| s(r, "prompt")).unwrap_or_default()
 }
 
-/// B run `b` ended: it is compared with the A run of its experiment before it (none yet: nothing to compare), the judge's input kept as event `lab.compare` in the bot's conversation.
+/// B run `b` ended: it is compared with the A run of its experiment before it (none yet: nothing to compare).
 pub(super) fn compare(app: &Shared, e: &Experiment, b: i64) {
-    let sql = "SELECT id, COALESCE(answer, '') FROM turns WHERE experiment = ?1 AND variant = ?2 AND id <= ?3 ORDER BY id DESC LIMIT 1";
-    let side = |v: &str| {
-        let rows = app.query(sql, params![e.id, v, b], |r| {
-            Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?))
-        });
-        rows.into_iter().next()
+    let sql = "SELECT id FROM turns WHERE experiment = ?1 AND variant = 'A' AND id <= ?2 ORDER BY id DESC LIMIT 1";
+    let a = app.query(sql, params![e.id, b], |r| r.get::<_, i64>(0));
+    if let Some(a) = a.into_iter().next() {
+        compare_pair(app, e, a, b);
+    }
+}
+
+/// A run `a` against B run `b`, the judge's input kept as event `lab.compare` in the bot's conversation.
+pub(super) fn compare_pair(app: &Shared, e: &Experiment, a: i64, b: i64) {
+    let answer = |id: i64| {
+        let sql = "SELECT COALESCE(answer, '') FROM turns WHERE id = ?1";
+        app.query(sql, [id], |r| r.get::<_, String>(0))
+            .into_iter()
+            .next()
     };
-    let (Some((a, a_text)), Some((_, b_text))) = (side("A"), side("B")) else {
+    let (Some(a_text), Some(b_text)) = (answer(a), answer(b)) else {
         return;
     };
     let (text, b_is) = blind(&task(app, e), &a_text, &b_text, rand::random());

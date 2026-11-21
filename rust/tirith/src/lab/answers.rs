@@ -32,8 +32,11 @@ pub(super) fn close(dir: &Path) {
     OPEN.lock().unwrap().remove(dir);
 }
 
-/// True for a path inside the worktree of a replay's turn running now: its bot writes there as in its own folder.
+/// True for a path inside the worktree of a replay's turn or a shadow B run on its way: its bot writes there as in its own folder.
 pub fn in_replay(path: &Path) -> bool {
+    if super::shadow_open::inside(path) {
+        return true;
+    }
     let open = OPEN.lock().unwrap();
     open.iter()
         .any(|(dir, o)| path.starts_with(dir) || path.starts_with(&o.real))

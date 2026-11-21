@@ -1,6 +1,6 @@
 // The Mejoras tab: the bot's experiments from /api/lab?bot=<id> (the Coach's, docs/BOTS.md part 3), newest first, in
 // short lines a phone reads: the change and its hypothesis, the mode and the routine, the comparisons judged against
-// the factory's rule, A's and B's numbers once decided, and Tirith's decision in the one line it said in the chat.
+// the factory's rule (a running shadow says it costs double), A's and B's numbers once decided, and Tirith's decision in the one line it said in the chat.
 import { html } from '../../../vendor/preact-htm.js';
 import { useFetch } from '../../store.js';
 
@@ -33,6 +33,7 @@ function experiment(e, bot, rule) {
     <span class="bnn">${e.hypothesis}</span>
     <span class="bmut">${e.mode} · ${r ? r.title : e.routine} · branch <span class="bmono">${e.branch}</span></span>
     <span class="bmut">${compared(e, rule)}</span>
+    ${e.mode === 'shadow' && e.status === 'running' ? html`<span class="bmut">Shadow: B runs beside every real run, so this routine costs double while it lasts.</span>` : null}
     ${e.status === 'running' ? null : html`${side('A', nb.a)}${side('B', nb.b)}`}
     ${nb.line ? html`<span class="blabd">${nb.line}</span>` : null}
   </li>`;

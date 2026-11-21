@@ -16,7 +16,10 @@ pub fn finished(app: &Shared, id: i64, conv: &str, routine: &str) {
     let Some(e) = running_one(app, seat.experiment) else {
         return;
     };
-    if seat.variant == "B" {
+    if e.mode == "shadow" {
+        super::shadow_pair::done(app, &e, (&seat.tree, seat.pair), (Some(id), None));
+    // compared once its B ended too
+    } else if seat.variant == "B" {
         crate::manager::end_session(conv); // its next session starts in the bot's own folder again
         super::compare::compare(app, &e, id);
     }
