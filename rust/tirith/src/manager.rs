@@ -153,7 +153,11 @@ pub fn emit_event(app: &Shared, project: &str, on: &str, shown: &str, told: Opti
     let event = app.event("", project, on, "", shown, "");
     let routes = app.cfg().factory.routes_on(on);
     let here_p = app.conv(project);
-    let _ = routes.iter().any(|r| r.2 && r.3).then(|| report(app, here_p, shown)).or_else(|| routes.iter().any(|r| r.2).then(|| app.chat("tirith", shown, here_p)));
+    if routes.iter().any(|r| r.2 && r.3) {
+        report(app, here_p, shown);
+    } else if routes.iter().any(|r| r.2) {
+        app.chat("tirith", shown, here_p);
+    }
     let mut heard: BTreeSet<String> = BTreeSet::new();
     for (to, mode, _, phone, _) in routes {
         // Only chat roles are handed text here, in the conversation of their scope; a turn role is run by whoever watches its condition (the metrics run the CEO through `run_turn`, like any turn role).
