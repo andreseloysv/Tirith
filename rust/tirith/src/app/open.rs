@@ -48,6 +48,7 @@ fn open_db(home: &Path) -> Connection {
     db.execute_batch(include_str!("../../assets/schema.sql"))
         .expect("create tables");
     add_later_columns(&db);
+    crate::turns::add_columns(&db);
     migrate(&db);
     add_stamp_columns(&db);
     db

@@ -27,6 +27,8 @@ pub struct Turn {
     pub session: String,
     /// Some line of its agent came during it.
     pub seen: bool,
+    /// Its own validation (`tirith turn checks`): passed, total and the names of the checks.
+    pub checks: Option<(i64, i64, String)>,
 }
 
 impl Turn {
@@ -51,6 +53,7 @@ impl Turn {
             text: String::new(),
             session: String::new(),
             seen: false,
+            checks: None,
         }
     }
 
