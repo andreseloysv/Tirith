@@ -1,5 +1,4 @@
 //! The commit guard: git hooks in every project that refuse a commit containing one of the owner's forbidden words (from config.toml only; `guard = false` opts a project out).
-
 use crate::app::Shared;
 use crate::config::{home_dir, Project};
 use axum::extract::{Path, State};
@@ -7,19 +6,13 @@ use axum::routing::{get, post};
 use axum::{http::StatusCode, Json, Router};
 use serde_json::{json, Value};
 use std::path::PathBuf;
-
 const MARKER: &str = "FORBIDDEN_WORDS_GUARD";
 const HOOKS: [&str; 2] = ["pre-commit", "commit-msg"];
-
 const HEAD: &str = "#!/bin/bash\n# FORBIDDEN_WORDS_GUARD\n# {what}\n# Installed by Tirith; words: {words}\nset -euo pipefail\nexport TIRITH_GUARD_RE='{re}'\n";
-
 const PRE_COMMIT: &str = include_str!("../assets/pre-commit.sh");
-
 const COMMIT_MSG: &str = include_str!("../assets/commit-msg.sh");
-
 /// The repository's own hook, kept next to ours as `<hook>.local` when the guard was installed, still runs.
 const LOCAL: &str = include_str!("../assets/local-hook.sh");
-
 pub fn words(app: &Shared, project: &Project) -> Vec<String> {
     let cfg = app.cfg();
     let entry = cfg.raw.get("projects").and_then(|p| p.as_array()).and_then(|ps| ps.iter().find(|p| p.get("id").and_then(|i| i.as_str()) == Some(project.id.as_str())).cloned()).unwrap_or(toml::Value::Table(Default::default()));
@@ -27,7 +20,6 @@ pub fn words(app: &Shared, project: &Project) -> Vec<String> {
     let list = |v: Option<&toml::Value>| -> Option<Vec<String>> { v?.clone().try_into().ok() };
     list(entry.get("guard_words")).or_else(|| list(cfg.raw.get("guard").and_then(|g| g.get("words")))).unwrap_or_default().into_iter().filter(|w| !w.trim().is_empty()).collect()
 }
-
 /// The repo's common git dir, by reading `.git` (a folder, or a file pointing into a worktree's git dir).
 pub fn git_dir(repo: &std::path::Path) -> Option<PathBuf> {
     let dot = repo.join(".git");
@@ -36,7 +28,6 @@ pub fn git_dir(repo: &std::path::Path) -> Option<PathBuf> {
     let dir = repo.join(text.strip_prefix("gitdir:")?.trim());
     Some(std::fs::read_to_string(dir.join("commondir")).map_or_else(|_| dir.clone(), |c| dir.join(c.trim())))
 }
-
 fn render(hook: &str, words: &[String]) -> String {
     let (what, body) = match hook {
         "pre-commit" => ("Blocks the commit when a staged file name or an added line contains a forbidden word (whole word, any case).", PRE_COMMIT),
@@ -45,7 +36,6 @@ fn render(hook: &str, words: &[String]) -> String {
     let re = words.join("|").replace('\'', "'\\''");
     HEAD.replace("{what}", what).replace("{words}", &words.join(",")).replace("{re}", &re) + body + LOCAL
 }
-
 /// Ok when the project's guard is installed and intact (or the project opts out); the reason otherwise. The scheduler calls it before it starts a lane of the project: a few small file reads, no git process.
 pub fn intact(app: &Shared, project: &Project) -> Result<(), String> {
     let words = words(app, project);
@@ -61,7 +51,6 @@ pub fn intact(app: &Shared, project: &Project) -> Result<(), String> {
     let skips = |f: &PathBuf| std::fs::read_to_string(f).is_ok_and(|t| t.lines().any(|l| l.trim().to_lowercase().replace(' ', "").starts_with("hookspath=")));
     [git.join("config"), home_dir().join(".gitconfig")].into_iter().find(skips).map_or(Ok(()), |f| Err(format!("commit guard: core.hooksPath in {} makes git skip the guard", f.display())))
 }
-
 /// Sets or clears the immutable flag (macOS `uchg`): installed hooks cannot be changed or deleted, by agents or anyone, until the installer clears it. Elsewhere a no-op.
 #[cfg(target_os = "macos")]
 fn immutable(path: &std::path::Path, on: bool) {
@@ -70,10 +59,8 @@ fn immutable(path: &std::path::Path, on: bool) {
         unsafe { libc::chflags(c.as_ptr(), if on { m.st_flags() | libc::UF_IMMUTABLE } else { m.st_flags() & !libc::UF_IMMUTABLE }) };
     });
 }
-
 #[cfg(not(target_os = "macos"))]
 fn immutable(_path: &std::path::Path, _on: bool) {}
-
 /// Writes both hooks (mode 755) where they are missing or ours (an older guard is replaced); never over a hook that is not ours.
 pub fn install(app: &Shared, project: &Project) -> Result<(), String> {
     let words = words(app, project);
@@ -101,7 +88,6 @@ pub fn install(app: &Shared, project: &Project) -> Result<(), String> {
     }
     intact(app, project)
 }
-
 /// Installs the guard where it is missing (never over a foreign hook); an event for each project that needs attention.
 pub fn start(app: Shared) {
     tokio::task::spawn_blocking(move || {
@@ -111,7 +97,6 @@ pub fn start(app: Shared) {
         }
     });
 }
-
 async fn list(State(app): State<Shared>) -> Json<Value> {
     let rows: Vec<Value> = app
         .cfg()
@@ -125,7 +110,6 @@ async fn list(State(app): State<Shared>) -> Json<Value> {
         .collect();
     Json(json!(rows))
 }
-
 pub fn routes() -> Router<Shared> {
     let install_one = |State(app): State<Shared>, Path(project): Path<String>| async move {
         let p = app.cfg().project(&project).cloned().ok_or((StatusCode::NOT_FOUND, format!("unknown project {project}")))?;
@@ -134,7 +118,6 @@ pub fn routes() -> Router<Shared> {
     };
     Router::new().route("/api/guard", get(list)).route("/api/guard/{project}/install", post(install_one))
 }
-
 /// `tirith guard …` commands.
 pub fn cli(pos: &[&str], _flag: crate::client::Flag) -> Option<Result<(), String>> {
     use crate::client::call;
@@ -161,7 +144,6 @@ pub fn cli(pos: &[&str], _flag: crate::client::Flag) -> Option<Result<(), String
         _ => return None,
     })
 }
-
 #[cfg(test)]
 #[path = "../checks/guard.rs"]
 mod tests;

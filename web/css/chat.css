@@ -26,6 +26,22 @@ a.mc-file { text-decoration: none; }
 .mc-m.mc-card { align-self: stretch; max-width: 100%; }
 .mc-m.mc-card .nlist { width: 100%; }
 .mc-m.mc-card .ncard:not(.done) { border-left: 3px solid var(--amber); }
+/* the chat's own menu (clear it, how long it lives), at the head next to Stop */
+.mc-tools { display: flex; align-items: center; gap: 6px; flex: none; }
+.mc-menu { position: relative; }
+.mc-menu > summary { list-style: none; cursor: pointer; font-size: 15px; line-height: 20px; padding: 0 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--mut); }
+.mc-menu > summary::-webkit-details-marker { display: none; }
+.mc-menu > summary:hover { background: var(--soft); }
+.mc-mpanel { position: absolute; right: 0; top: calc(100% + 6px); z-index: 40; width: 272px; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.18); display: flex; flex-direction: column; gap: 8px; }
+.mc-mlab { font-size: 12px; font-weight: 600; }
+.mc-mrow { display: flex; gap: 6px; }
+.mc-mrow input { flex: 1; min-width: 0; font: inherit; font-size: 13px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: inherit; }
+.mc-mrow button, .mc-mlink { font: inherit; font-size: 12.5px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--soft); cursor: pointer; }
+.mc-mlink { align-self: flex-start; }
+.mc-mhint { margin: 0; font-size: 12px; color: var(--mut); }
+.mc-mrow .mc-danger { border-color: var(--red); color: var(--red); background: transparent; }
+.mc-mrow .mc-danger:hover { background: var(--red); color: #fff; }
+
 /* Model controls stay in the conversation on desktop and narrow screens. */
 .mc-models { flex: 0 0 auto; padding: 8px 12px; border-top: 1px solid var(--line); max-height: 65vh; overflow: auto; }
 .mc-models summary { cursor: pointer; font-size: 12px; }

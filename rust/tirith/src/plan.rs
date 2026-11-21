@@ -1,14 +1,11 @@
 //! The plan: the project's markdown checklist, written by the daemon only; an item may carry its own `(check: `cmd`)` that the merge queue runs.
-
 use crate::app::{git, Shared};
 use regex::Regex;
 use serde::Serialize;
 use serde_json::json;
 use std::{path::PathBuf, sync::LazyLock};
-
 static CHECK: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\(check:\s*`([^`]+)`\s*\)").unwrap());
 static STATUS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s*\((en curso|hecho|en revisión|falló|bloqueado|parcial|in progress|done)\b[^)]*\)\s*$").unwrap());
-
 #[derive(Serialize, Clone)]
 pub struct Item {
     pub text: String,
@@ -18,7 +15,6 @@ pub struct Item {
     #[serde(skip)]
     line: usize,
 }
-
 #[derive(Serialize, Clone)]
 pub struct Step {
     pub num: String,
@@ -27,13 +23,11 @@ pub struct Step {
     #[serde(skip)]
     line: usize,
 }
-
 /// An item's text without Tirith's old annotations (status notes, `<!-- tirith:… -->`).
 pub fn clean(text: &str) -> String {
     let text = text.split("<!--").next().unwrap_or("").trim();
     STATUS.replace(text, "").trim().to_string()
 }
-
 pub fn parse(text: &str) -> Vec<Step> {
     let mut steps: Vec<Step> = text.lines().enumerate().fold(vec![], |mut steps, (i, line)| {
         if let Some(head) = line.strip_prefix("## ") {
@@ -53,26 +47,21 @@ pub fn parse(text: &str) -> Vec<Step> {
     steps.retain(|s| !s.num.is_empty());
     steps
 }
-
 pub fn path(app: &Shared, project: &str) -> Result<PathBuf, String> {
     let repo = app.cfg().project(project).ok_or(format!("unknown project '{project}'"))?.repo();
     Ok(repo.join(app.manifest(&repo).roadmap))
 }
-
 pub fn read(app: &Shared, project: &str) -> Result<Vec<Step>, String> {
     let file = path(app, project)?;
     std::fs::read_to_string(&file).map(|text| parse(&text)).map_err(|_| format!("{} has no plan file ({})", project, file.display()))
 }
-
 /// Two item texts that name the same item: equal once their `(check: ...)` is left out. A lane carries the text its item had when it started; when only the check is rewritten meanwhile, the lane still belongs to that item (it is checked with the check the plan has now, and ticked when it is merged).
 pub fn same(a: &str, b: &str) -> bool {
     a == b || CHECK.replace(a, "").trim() == CHECK.replace(b, "").trim()
 }
-
 pub fn find(app: &Shared, project: &str, step: &str, item: &str) -> Option<Item> {
     read(app, project).ok()?.into_iter().find(|s| s.num == step)?.items.into_iter().find(|i| same(&i.text, item))
 }
-
 /// Ticks the open `(step, item)` pairs in a plan text: the new text and how many were ticked.
 pub fn tick_text(text: &str, items: &[(String, String)]) -> (String, usize) {
     let mut lines: Vec<String> = text.lines().map(String::from).collect();
@@ -80,7 +69,6 @@ pub fn tick_text(text: &str, items: &[(String, String)]) -> (String, usize) {
     tick.iter().for_each(|&l| lines[l] = lines[l].replacen("- [ ] ", "- [x] ", 1));
     (lines.join("\n") + "\n", tick.len())
 }
-
 /// Applies `edit` to the plan's lines under the writer lock, then queues the commit.
 async fn change(app: &Shared, project: &str, edit: impl FnOnce(&mut Vec<String>, &[Step]) -> Result<(), String>) -> Result<(), String> {
     let _guard = app.plan_lock.lock().await;
@@ -93,7 +81,6 @@ async fn change(app: &Shared, project: &str, edit: impl FnOnce(&mut Vec<String>,
     app.emit("plan", json!({ "project": project }));
     Ok(())
 }
-
 /// Why an item's check can never pass: it calls a tirith subcommand that does not exist, or the removed `collector/`.
 pub fn check_problem(check: &str) -> Option<String> {
     static CALL: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?:^|[\s;&|(])(?:(cd\s+(?:\./)?collector(?:[/\s;&]|$))|tirith\s+([A-Za-z-][\w-]*))").unwrap());
@@ -104,7 +91,6 @@ pub fn check_problem(check: &str) -> Option<String> {
         })
     })
 }
-
 pub async fn add(app: &Shared, project: &str, step: &str, text: &str) -> Result<(), String> {
     let text = clean(text);
     (!text.is_empty()).then_some(()).ok_or("the item needs a text".to_string())?;
@@ -123,7 +109,6 @@ pub async fn add(app: &Shared, project: &str, step: &str, text: &str) -> Result<
     })
     .await
 }
-
 /// Takes an open item out of the plan (its lane was deleted).
 pub async fn drop_item(app: &Shared, project: &str, step: &str, item: &str) -> Result<(), String> {
     change(app, project, |lines, steps| {
@@ -133,7 +118,6 @@ pub async fn drop_item(app: &Shared, project: &str, step: &str, item: &str) -> R
     })
     .await
 }
-
 /// Commits the plan files changed since the last commit: one commit per project, whatever the number of changes.
 pub async fn flush(app: &Shared, only: Option<&str>) {
     let projects: Vec<String> = app.plan_dirty.lock().unwrap().iter().filter(|p| only.is_none_or(|o| o == *p)).cloned().collect();
@@ -142,7 +126,6 @@ pub async fn flush(app: &Shared, only: Option<&str>) {
         flush_locked(app, &project).await;
     }
 }
-
 /// `flush` of one project for a caller that already holds the plan lock.
 pub async fn flush_locked(app: &Shared, project: &str) {
     let Some(()) = app.plan_dirty.lock().unwrap().contains(project).then_some(()) else { return };
@@ -152,7 +135,6 @@ pub async fn flush_locked(app: &Shared, project: &str) {
     let result = if pending.is_empty() { Ok(String::new()) } else { git(&repo, &["commit", "-q", "-m", "Plan: update from Tirith", "--", &rel]).await };
     let _ = result.map(|_| app.plan_dirty.lock().unwrap().remove(project)).map_err(|e| app.event("", project, "error", "plan", &format!("plan commit failed: {e}"), ""));
 }
-
 #[cfg(test)]
 #[path = "../checks/plan.rs"]
 mod tests;
