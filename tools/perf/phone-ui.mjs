@@ -84,7 +84,7 @@ function apiAnswer(path, url) {
   if (path === '/api/chat/keep') return { keep: '', keep_s: 0 };
   if (path === '/api/rooms') return ROOMS;
   if (path.startsWith('/api/plan/')) return PLAN;
-  if (path === '/api/guard' || path === '/api/pipelines') return [];
+  if (path === '/api/guard' || path === '/api/pipelines' || path === '/api/turns') return [];
   if (path.includes('/library')) return { memory: '', skills: [] };
   return {};
 }
