@@ -48,7 +48,7 @@ fn default_routes_reproduce_today() {
         ("plan.empty", turn("manager", false)),
         ("deploy.done", note(true, false)),
         ("deploy.failed", turn("manager", true)),
-        ("schedule", vec![("manager".to_string(), "turn".to_string(), false, true, None), ("improver".to_string(), "turn".to_string(), false, false, None)]),
+        ("schedule", vec![("manager".to_string(), "turn".to_string(), false, true, None), ("ceo".to_string(), "turn".to_string(), false, false, None)]),
         ("review.done", turn("lead", false)),
         ("factory.invalid", turn("lead", true)),
         ("card.opened", vec![]),
@@ -58,10 +58,10 @@ fn default_routes_reproduce_today() {
     for (on, want) in table {
         assert_eq!(f.routes_on(on), want, "routes on {on}");
     }
-    // A red measure wakes the lead at once and, still red after 15 minutes, the improver.
-    assert_eq!(f.routes_on("metric.red"), vec![("lead".to_string(), "turn".to_string(), true, true, None), ("improver".to_string(), "turn".to_string(), false, false, Some(15))]);
-    // The improver's daily pass is this schedule route (07:00 every day), not a decision in Rust; it is due like a bot's routine.
-    assert_eq!(f.schedules(), vec![("improver".to_string(), "07:00".to_string(), vec![1, 2, 3, 4, 5, 6, 7])]);
+    // A red measure wakes the lead at once and, still red after 15 minutes, the CEO.
+    assert_eq!(f.routes_on("metric.red"), vec![("lead".to_string(), "turn".to_string(), true, true, None), ("ceo".to_string(), "turn".to_string(), false, false, Some(15))]);
+    // The CEO's daily pass is this schedule route (07:00 every day), not a decision in Rust; it is due like a bot's routine.
+    assert_eq!(f.schedules(), vec![("ceo".to_string(), "07:00".to_string(), vec![1, 2, 3, 4, 5, 6, 7])]);
     let (_, at, days) = &f.schedules()[0];
     let stamp = |d: u32| chrono::TimeZone::with_ymd_and_hms(&chrono::Local, 2026, 11, d, 7, 0, 0).unwrap().with_timezone(&chrono::Utc).format("%Y-%m-%dT%H:%M:%SZ").to_string(); // a ceo_reviews `at`
     let due = |last: &str, h: u32| crate::bots::due(&serde_json::json!({"at": at, "days": days, "last": last}), chrono::TimeZone::with_ymd_and_hms(&chrono::Local, 2026, 11, 23, h, 0, 0).unwrap());
@@ -80,7 +80,7 @@ fn default_routes_reproduce_today() {
     // Routes of config.toml (a bot's routines) stand next to the factory's, never instead of them.
     let o = overlay("[[routes]]\non = \"schedule\"\nto = \"manager\"\nmode = \"turn\"\ntask = \"news\"\n");
     let f = parse(TEXT, prompts, &o).unwrap();
-    assert_eq!(f.routes_on("schedule").len(), 3); // the factory's two (manager, the improver's daily pass) plus the overlay's
+    assert_eq!(f.routes_on("schedule").len(), 3); // the factory's two (manager, the CEO's daily pass) plus the overlay's
     assert_eq!(f.routes_on("lane.failed").len(), 1);
 }
 
@@ -88,29 +88,29 @@ fn default_routes_reproduce_today() {
 fn roles_extend_and_prompts_resolve() {
     let f = Factory::default();
     assert_eq!(f.role::<String>("lead", "agent").as_deref(), Some("anthropic")); // extends manager
-    assert_eq!(f.role::<u64>("improver", "max_per_day"), Some(6));
+    assert_eq!(f.role::<u64>("ceo", "max_per_day"), Some(6));
     assert_eq!(f.role::<String>("worker", "session").as_deref(), Some("lane"));
     assert!(f.prompts_of("manager").starts_with("You are the manager inside Tirith"));
     assert!(f.prompts_of("manager").contains("only about the project {id}"));
     assert!(f.prompts_of("lead").contains("not about one project"));
-    // The improver closes the loop: by-version measures, at most one factory change as a step 17 item with its lane, and the revert rule.
-    let improver = f.prompt("improver");
-    assert!(improver.contains("You are the improver") && improver.contains("at most one change to `factory/`"), "one change at most:\n{improver}");
-    assert!(improver.contains("tirith plan add tirith 17") && improver.contains("tirith lane start tirith 17"), "as a step 17 item with its lane started");
-    assert!(improver.contains("first 10 merged items, or 24 h") && improver.contains("satisfaction") && improver.contains("interruptions") && improver.contains("first try"), "the revert window and its three measures");
-    assert!(improver.contains("revert the factory change"), "a worse version is reverted by its next pass");
+    // The CEO closes the loop: by-version measures, at most one factory change as a step 17 item with its lane, and the revert rule.
+    let ceo = f.prompt("ceo");
+    assert!(ceo.contains("You are the CEO") && ceo.contains("at most one change to `factory/`"), "one change at most:\n{ceo}");
+    assert!(ceo.contains("tirith plan add tirith 17") && ceo.contains("tirith lane start tirith 17"), "as a step 17 item with its lane started");
+    assert!(ceo.contains("first 10 merged items, or 24 h") && ceo.contains("satisfaction") && ceo.contains("interruptions") && ceo.contains("first try"), "the revert window and its three measures");
+    assert!(ceo.contains("revert the factory change"), "a worse version is reverted by its next pass");
     assert!(f.prompt("brief").contains("# Lane {id}"));
 }
 
 #[test]
 fn factory_roles_carry_their_shape() {
     let f = Factory::default();
-    assert_eq!(f.roles(), ["improver", "judge", "lead", "manager", "worker"]);
+    assert_eq!(f.roles(), ["ceo", "judge", "lead", "manager", "worker"]);
     let shape = |r: &str| (f.role::<String>(r, "session"), f.role::<String>(r, "scope"), f.role::<String>(r, "runs_on"));
     assert_eq!(shape("manager"), (Some("chat".into()), Some("project".into()), Some("local".into())));
     assert_eq!(shape("lead"), (Some("chat".into()), Some("global".into()), Some("local".into()))); // runs_on and idle come through extends
     assert_eq!(shape("worker"), (Some("lane".into()), Some("project".into()), Some("local".into())));
-    assert_eq!(shape("improver"), (Some("turn".into()), Some("global".into()), Some("local".into())));
+    assert_eq!(shape("ceo"), (Some("turn".into()), Some("global".into()), Some("local".into())));
     assert_eq!(shape("judge"), (Some("turn".into()), Some("global".into()), Some("local".into())));
     assert_eq!(
         (f.role::<String>("judge", "agent").as_deref(), f.role::<String>("judge", "effort").as_deref(), f.role::<String>("judge", "access").as_deref()),
@@ -118,14 +118,14 @@ fn factory_roles_carry_their_shape() {
         "the judge: small text jobs on a cheap, fast model, read-only"
     );
     assert!(f.prompts_of("judge").is_empty(), "no prompt of its own: each eval's rubric is its instructions");
-    assert_eq!(f.role::<String>("improver", "access").as_deref(), Some("read"));
+    assert_eq!(f.role::<String>("ceo", "access").as_deref(), Some("read"));
     assert_eq!(f.role::<u64>("manager", "idle_minutes"), Some(30));
     assert_eq!(f.role::<u64>("lead", "idle_minutes"), Some(30));
     // Code finds roles by shape, never by a fixed list of names.
     assert_eq!(f.find_role("lane", None).as_deref(), Some("worker"));
     assert_eq!(f.find_role("chat", Some("project")).as_deref(), Some("manager"));
     assert_eq!(f.find_role("chat", Some("global")).as_deref(), Some("lead"));
-    assert_eq!(f.find_role("turn", None).as_deref(), Some("improver"));
+    assert_eq!(f.find_role("turn", None).as_deref(), Some("ceo"));
     assert_eq!(f.find_role("chat", Some("own")), None);
 }
 
@@ -166,7 +166,7 @@ fn invalid_factories_are_refused() {
 
 #[test]
 fn config_sections_move_to_their_new_names() {
-    let mut t: toml::Table = "[models.workers]\nagent = \"muse\"\nmodel = \"m1\"\n[models]\nchoices = [\"m1\"]\n[lanes]\nmax_load = 3.5\nmax_parallel = 7\n[merge]\npush = false\nstage_timeout_minutes = 9\n[plan]\ncommit_seconds = 33\n[ceo]\nmax_per_day = 2\nenabled = true\n[ceo.targets]\nmerged_per_day = 4\n[roles.worker]\neffort = \"high\"\n[roles.reviewer]\neffort = \"low\"\n".parse().unwrap();
+    let mut t: toml::Table = "[models.workers]\nagent = \"muse\"\nmodel = \"m1\"\n[models]\nchoices = [\"m1\"]\n[lanes]\nmax_load = 3.5\nmax_parallel = 7\n[merge]\npush = false\nstage_timeout_minutes = 9\n[plan]\ncommit_seconds = 33\n[ceo]\nmax_per_day = 2\nenabled = true\n[ceo.targets]\nmerged_per_day = 4\n[roles.worker]\neffort = \"high\"\n[roles.reviewer]\neffort = \"low\"\n[roles.improver]\nmodel = \"m-old\"\n".parse().unwrap();
     assert!(crate::config::migrate(&mut t));
     assert!(!crate::config::migrate(&mut t)); // once is enough: nothing left to move
     let g = |p: &[&str]| crate::config::get::<toml::Value>(&t, p);
@@ -176,9 +176,10 @@ fn config_sections_move_to_their_new_names() {
     assert_eq!(g(&["limits", "max_parallel"]).and_then(|v| v.as_integer()), Some(7));
     assert_eq!(g(&["limits", "stage_timeout_minutes"]).and_then(|v| v.as_integer()), Some(9));
     assert_eq!(g(&["limits", "plan_commit_seconds"]).and_then(|v| v.as_integer()), Some(33));
-    assert_eq!(g(&["roles", "improver", "max_per_day"]).and_then(|v| v.as_integer()), Some(2));
-    assert_eq!(g(&["roles", "improver", "effort"]).and_then(|v| v.as_str().map(String::from)), Some("low".into())); // yesterday's reviewer is today's improver, its keys moved with it
-    assert!(g(&["roles", "reviewer"]).is_none());
+    assert_eq!(g(&["roles", "ceo", "max_per_day"]).and_then(|v| v.as_integer()), Some(2));
+    assert_eq!(g(&["roles", "ceo", "effort"]).and_then(|v| v.as_str().map(String::from)), Some("low".into())); // yesterday's reviewer is today's CEO, its keys moved with it
+    assert_eq!(g(&["roles", "ceo", "model"]).and_then(|v| v.as_str().map(String::from)), Some("m-old".into())); // the role's former name moves too
+    assert!(g(&["roles", "reviewer"]).is_none() && g(&["roles", "improver"]).is_none());
     assert_eq!(g(&["metrics", "merged", "target"]).and_then(|v| v.as_integer()), Some(4));
     assert!(t.get("lanes").is_none() && t.get("plan").is_none());
     assert_eq!(g(&["merge", "push"]).and_then(|v| v.as_bool()), Some(false)); // what stays, stays
@@ -240,7 +241,7 @@ fn role_hash_tracks_agent_model_and_prompt() {
     prompts.insert("brief".to_string(), "a different brief".to_string());
     let briefed = parse(TEXT, prompts, &toml::Table::new()).unwrap();
     assert_ne!(worker, briefed.role_hash("worker", ""));
-    assert_eq!(f.role_hash("improver", ""), briefed.role_hash("improver", ""), "an untouched role keeps its hash");
+    assert_eq!(f.role_hash("ceo", ""), briefed.role_hash("ceo", ""), "an untouched role keeps its hash");
 }
 
 #[test]

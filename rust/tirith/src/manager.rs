@@ -146,7 +146,7 @@ pub fn emit_event(app: &Shared, project: &str, on: &str, shown: &str, told: Opti
     }
     let mut heard: BTreeSet<String> = BTreeSet::new();
     for (to, mode, _, phone, _) in routes {
-        // Only chat roles are handed text here, in the conversation of their scope; a turn role is run by whoever watches its condition (the metrics run the improver through `run_turn`, like any turn role).
+        // Only chat roles are handed text here, in the conversation of their scope; a turn role is run by whoever watches its condition (the metrics run the CEO through `run_turn`, like any turn role).
         let f = &app.cfg().factory;
         let Some(()) = (f.role::<String>(&to, "session").as_deref() == Some("chat")).then_some(()) else { continue };
         // A due routine (its bot's own `schedule` route) is for that bot's conversation alone, and a conversation that more than one route reaches (the factory's schedule route and the bot's) hears the event once.
@@ -399,7 +399,7 @@ fn turn_permission(read_only: bool, tool: &str, input: &Value) -> Value {
     }
 }
 
-/// One fresh turn of a `session = "turn"` role: its factory prompt as its instructions, `input` as its one message, its `access` deciding whether it may write; the assistant's text until the turn ends is the answer. Any turn role runs this way (the improver included).
+/// One fresh turn of a `session = "turn"` role: its factory prompt as its instructions, `input` as its one message, its `access` deciding whether it may write; the assistant's text until the turn ends is the answer. Any turn role runs this way (the CEO included).
 pub async fn run_turn(app: &Shared, role: &str, project: &str, input: &str) -> Result<String, String> {
     let prompt = app.cfg().factory.prompts_of(role);
     let Some(()) = (!matches!(models::role(app, role).agent.as_str(), "codex" | "muse")).then_some(()) else { return crate::codex::turn(app, role, project, None, (&prompt, input), |_| {}, |_| {}).await };
