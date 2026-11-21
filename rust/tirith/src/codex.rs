@@ -15,10 +15,7 @@ pub fn catalog() -> Vec<Value> {
         .into_iter()
         .flatten()
         .filter(|m| m["visibility"] == "list")
-        .filter_map(|m| {
-            Some(json!({"slug": m["slug"].as_str()?, "name": m["display_name"],
-            "efforts": m["supported_reasoning_levels"].as_array().into_iter().flatten().filter_map(|e| e["effort"].as_str()).collect::<Vec<_>>()}))
-        })
+        .filter_map(|m| m["slug"].as_str().map(|slug| json!({"slug": slug, "name": m["display_name"], "efforts": m["supported_reasoning_levels"].as_array().into_iter().flatten().filter_map(|e| e["effort"].as_str()).collect::<Vec<_>>()})))
         .collect()
 }
 
@@ -89,10 +86,7 @@ pub async fn turn(app: &Shared, role: &str, project: &str, resume: Option<&str>,
             event(&msg);
             // Each agent names its event kind its own way; the shapes do not collide.
             match msg["payload_type"].as_str().or_else(|| msg["type"].as_str()).unwrap_or("") {
-                "item.completed" if msg["item"]["type"] == "agent_message" => {
-                    text.push_str(msg["item"]["text"].as_str().unwrap_or(""));
-                    text.push('\n');
-                }
+                "item.completed" if msg["item"]["type"] == "agent_message" => text.push_str(&format!("{}\n", msg["item"]["text"].as_str().unwrap_or(""))),
                 "run.output.delta" => text.push_str(msg["payload"]["text"].as_str().unwrap_or("")),
                 t if t.starts_with("run.terminal.") => {
                     complete = msg["payload"]["terminal"] == "completed";

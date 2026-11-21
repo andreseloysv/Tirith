@@ -94,15 +94,12 @@ fn compute(app: &Shared) -> Vec<Metric> {
     let facts = idle.iter().map(|(p, n, m)| format!("{p}: {n} open items, nothing running for {m} min{}", app.kv(&format!("paused:{p}")).map(|w| paused_text(p, &w)).unwrap_or_default())).collect::<Vec<_>>().join("; ");
     out.push(mk("idle", worst, true, facts));
     let half = f.limits.inactivity_minutes * 30;
-    let stuck: Vec<String> = lanes
-        .iter()
-        .filter(|l| l.status == "running")
-        .filter_map(|l| {
-            let log_age = std::fs::metadata(app.home.join(format!("logs/lanes/{}.log", l.id))).and_then(|m| m.modified()).map(|t| t.elapsed().map(|d| d.as_secs()).unwrap_or(0)).unwrap_or(u64::MAX);
-            let quiet = (now as u64).saturating_sub(l.last_activity).min(log_age);
-            (quiet > half).then(|| format!("{} ({}) quiet {} min", l.id, l.project, quiet / 60))
-        })
-        .collect();
+    let stuck_note = |l: &Lane| {
+        let log_age = std::fs::metadata(app.home.join(format!("logs/lanes/{}.log", l.id))).and_then(|m| m.modified()).map(|t| t.elapsed().map(|d| d.as_secs()).unwrap_or(0)).unwrap_or(u64::MAX);
+        let quiet = (now as u64).saturating_sub(l.last_activity).min(log_age);
+        (quiet > half).then(|| format!("{} ({}) quiet {} min", l.id, l.project, quiet / 60))
+    };
+    let stuck: Vec<String> = lanes.iter().filter(|l| l.status == "running").filter_map(stuck_note).collect();
     out.push(mk("stuck", stuck.len() as f64, true, stuck.join("; ")));
     let red: Vec<String> = cfg.projects.iter().filter_map(|p| app.kv(&format!("main_red:{}", p.id)).map(|v| format!("{}: {v}", p.id))).collect();
     out.push(mk("main_red", red.len() as f64, true, red.join("; ")));
@@ -180,10 +177,8 @@ fn payload(app: &Shared) -> Value {
 /// Who reviews a long red stretch, and after how many seconds: the turn role of the delayed `metric.red` route (its `after_minutes`, or the role's `review_after_minutes`); without one, any turn role when asked, and never by itself.
 fn delayed_review(app: &Shared) -> (String, u64) {
     let f = &app.cfg().factory;
-    f.routes_on("metric.red")
-        .into_iter()
-        .find(|r| f.role::<String>(&r.0, "session").as_deref() == Some("turn"))
-        .map_or_else(|| (f.find_role("turn", None).unwrap_or_default(), u64::MAX), |r| (r.0.clone(), r.4.or_else(|| f.role::<u64>(&r.0, "review_after_minutes")).unwrap_or(15) * 60))
+    let turn = |r: &crate::factory::Route| f.role::<String>(&r.0, "session").as_deref() == Some("turn");
+    f.routes_on("metric.red").into_iter().find(turn).map_or_else(|| (f.find_role("turn", None).unwrap_or_default(), u64::MAX), |r| (r.0.clone(), r.4.or_else(|| f.role::<u64>(&r.0, "review_after_minutes")).unwrap_or(15) * 60))
 }
 fn start_review(app: &Shared, role: String, metric: String, why: String) {
     let Some(()) = (!REVIEWING.swap(true, Ordering::SeqCst)).then_some(()) else { return };
@@ -206,25 +201,21 @@ fn brief(app: &Shared, why: &str) -> String {
     lanes.sort_by(|a, b| b.created_at.cmp(&a.created_at));
     let lanes: String = lanes.iter().take(30).map(|l| format!("- {} [{}] {}:{} {} tries {} {} {}: {}\n", l.id, l.status, l.project, l.step, l.item, l.attempts + 1, l.created_at, l.factory, l.note.lines().next().unwrap_or(""))).collect();
     let day = chrono::DateTime::from_timestamp(now_s().saturating_sub(86400) as i64, 0).map(|d| d.format("%Y-%m-%dT%H:%M:%SZ").to_string()).unwrap_or_default();
-    let runs: String = app
-        .objects("SELECT lane, stage, status, COALESCE(log, '') FROM runs WHERE status IN ('failed', 'timeout') AND started_at >= ?1 ORDER BY id DESC LIMIT 5", [&day], &["lane", "stage", "status", "log"])
-        .iter()
-        .map(|r| format!("- {} check '{}' {}:\n```\n{}\n```\n", r["lane"].as_str().unwrap_or(""), r["stage"].as_str().unwrap_or(""), r["status"].as_str().unwrap_or(""), tail(std::path::Path::new(r["log"].as_str().unwrap_or("")), 15)))
-        .collect();
+    let run_line =
+        |r: &Value| format!("- {} check '{}' {}:\n```\n{}\n```\n", r["lane"].as_str().unwrap_or(""), r["stage"].as_str().unwrap_or(""), r["status"].as_str().unwrap_or(""), tail(std::path::Path::new(r["log"].as_str().unwrap_or("")), 15));
+    let runs: String =
+        app.objects("SELECT lane, stage, status, COALESCE(log, '') FROM runs WHERE status IN ('failed', 'timeout') AND started_at >= ?1 ORDER BY id DESC LIMIT 5", [&day], &["lane", "stage", "status", "log"]).iter().map(run_line).collect();
     let grouped = |sql: &str, cols: &[&str]| app.objects(sql, [], cols).iter().map(|r| format!("- {r}\n")).collect::<String>(); // by factory version (the stamps), so two versions compare here
     let versions = grouped("SELECT factory, COUNT(*) AS merged, CAST(100 * AVG(json_extract(data, '$.attempts') = 0) AS INTEGER) AS first_try_pct, MIN(json_extract(data, '$.created_at')) AS first_lane FROM lanes WHERE factory != '' AND json_extract(data, '$.status') = 'merged' GROUP BY factory ORDER BY first_lane", &["factory", "merged", "first_try_pct", "first_lane"]);
     let scores = grouped("SELECT factory, eval, label, COUNT(*) AS n FROM scores WHERE factory != '' GROUP BY factory, eval, label ORDER BY factory, eval, label", &["factory", "eval", "label", "n"]);
     let stamped = grouped("SELECT factory, 'card.opened' AS kind, COUNT(*) AS n FROM owner_items WHERE factory != '' GROUP BY factory UNION ALL SELECT factory, kind, COUNT(*) AS n FROM events WHERE factory != '' GROUP BY factory, kind ORDER BY factory, kind", &["factory", "kind", "n"]);
     let cfg = app.cfg();
-    let plans: String = cfg
-        .projects
-        .iter()
-        .map(|p| {
-            let steps: String =
-                plan::read(app, &p.id).unwrap_or_default().iter().map(|st| format!("- step {}. {}: {} open, {} done\n", st.num, st.title, st.items.iter().filter(|i| !i.done).count(), st.items.iter().filter(|i| i.done).count())).collect();
-            format!("## {} (repo {}, autopilot {}, main {})\n{steps}", p.id, p.repo().display(), if crate::lanes::autopilot_on(app, &p.id) { "on" } else { "off" }, app.kv(&format!("main_red:{}", p.id)).as_deref().unwrap_or("green"))
-        })
-        .collect();
+    let plan_of = |p: &crate::config::Project| {
+        let steps: String =
+            plan::read(app, &p.id).unwrap_or_default().iter().map(|st| format!("- step {}. {}: {} open, {} done\n", st.num, st.title, st.items.iter().filter(|i| !i.done).count(), st.items.iter().filter(|i| i.done).count())).collect();
+        format!("## {} (repo {}, autopilot {}, main {})\n{steps}", p.id, p.repo().display(), if crate::lanes::autopilot_on(app, &p.id) { "on" } else { "off" }, app.kv(&format!("main_red:{}", p.id)).as_deref().unwrap_or("green"))
+    };
+    let plans: String = cfg.projects.iter().map(plan_of).collect();
     let qs: String = owner_questions(app).iter().map(|q| format!("- {q}\n")).collect();
     format!("# Red metrics\n{why}\n\n# By factory version (oldest first)\n{versions}# Eval scores by factory version\n{scores}# Cards and events by factory version and kind\n{stamped}\n# Last lanes (newest first: id, status, project:step, item, tries, created, factory stamp, note)\n{lanes}\n# Failing checks (last 24 h)\n{runs}\n# Plans\n{plans}\n# Open owner questions\n{qs}")
 }
