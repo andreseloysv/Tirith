@@ -131,6 +131,12 @@
 
 /* the faces: their motion is the animator's (face.js); the CSS only draws */
 .bot { display: inline-block; flex: none; overflow: visible; vertical-align: middle; }
+/* a face is HTML layers stacking small SVGs: the blurred glow and body rasterize once into their layer and only the
+   layers' transform/opacity move (face.js), so the blurs are not re-rendered per frame; eyes and z's ride on top */
+.bot.face { position: relative; width: var(--fs); height: var(--fs); }
+.bot.face .ffloat { position: absolute; inset: 0; transform-origin: 50% 82.258%; will-change: transform; }
+.bot.face .fhalo { position: absolute; inset: 0; will-change: opacity; }
+.bot.face .fsvg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .bot .z { font-family: var(--b-mono, ui-monospace, Menlo, monospace); font-weight: 500; fill: var(--b-mut, #8c8c8c); }
 .bot .ring { transform-box: fill-box; transform-origin: center; animation: b-spin 14s linear infinite; }
 @keyframes b-spin { to { transform: rotate(360deg); } }
