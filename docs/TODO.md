@@ -384,6 +384,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Un resultado de acción del dueño reabre la petición para el manager (aviso al instante y respuesta obligatoria).
 - [x] Renombrar «steward» a «manager» en toda la UI, la CLI y la documentación.
 - [x] Settings: modelo y esfuerzo del manager y de los agentes que crea (por defecto, por proyecto y por paso).
+- [ ] En el menú de proyectos de la barra, volver a pulsar un proyecto abierto lo cierra (pedido del dueño el 2026-11-21: «en el menú de proyectos se abre pero si le vuelvo a dar no se cierra»). En web/js/app.js el proyecto en el que estás queda siempre abierto (isOpen = here || open.has(p.id)), así que ni la flecha ni el nombre lo cierran. Ahora la flecha abre y cierra siempre, también el proyecto actual, y pulsar el nombre de un proyecto abierto en el que ya estás lo cierra sin cambiar de vista; pulsar el nombre de uno cerrado lo abre y lleva a su vista como hoy. Compruébalo en la página con un navegador sin cabeza: abrir, volver a pulsar y que se cierre, con la flecha y con el nombre (check: `node --check web/js/app.js && ! grep -q 'isOpen = here || open.has' web/js/app.js`)
 
 ## 13. Configuración del proyecto visible y editable
 
