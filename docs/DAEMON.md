@@ -171,3 +171,33 @@ The owner's Safari is read through the daemon instead: `tirith safari open <url>
 
 The daemon's HTTP proxy for sandboxed processes: `CONNECT host:port` and plain-HTTP absolute-form requests. It authenticates the caller, refuses blocked destinations (by name, then by the addresses they resolve to), records each
 new destination of each caller, and pipes the bytes.
+
+## `turns/`
+
+The turn log. Every turn of a chat or turn role (the project managers, the bots, the CEO, the judge) leaves one row in
+`turns` (`assets/schema.sql`; `runs` is the pipelines'): `conv` (its conversation), `role`, `trigger` (`owner`,
+`room`, `schedule`, `run-now` — the page's Run now — or `event:<name>`; whoever hands the message over sets it, and
+the first one counts until the turn starts), `routine` (the id of the routine that started it), `started_at`,
+`ended_at`, `ms`, `status` (`ok` or `failed`), `agent`, `model`, `effort`, `tokens_in`, `tokens_out`,
+`tokens_cache_read`, `tokens_cache_write`, `cost_usd`, `steps` (tool calls), `skills` (JSON: the skills it read —
+Anthropic's `Skill` tool, Muse's `read_skill`, or any tool whose input names `skills/<name>/SKILL.md`), `tools` (JSON:
+each call's name and the short line the chat shows, 50 at most), `versions` (JSON: the git blob hash, as
+`git hash-object` gives it, of its `memory.md`, of `<home>/bots/memory.md` when it exists and of each skill's
+`SKILL.md`), `answer` (cut at 4000 characters), `event` (its event's id) and its stamp (`factory`, `role_hash`).
+
+Tokens and cost come from what each agent already prints: Anthropic's `result` line (`usage.input_tokens`,
+`output_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens`, `total_cost_usd`, `is_error`); Muse's
+`runtime.session` records whose `payload.event.kind` is `model_completed` (`payload.event.usage`: `input_tokens`,
+`output_tokens`, `cache_read_tokens`, `cache_write_tokens`), summed over the turn, and when its output carries none,
+from its session's `session.jsonl` under `~/.local/share/muse/sessions/<year>/<month>/<day>/<id>/` (the records since
+the turn started); Codex's `turn.completed` (`usage.input_tokens`, `cached_input_tokens`, `output_tokens`). When the
+agent gives no cost, `[prices."<model id>"]` in `~/.tirith/config.toml` does (`input`, `output` and `cached`, dollars
+per million tokens; the strict loader accepts the section and none of it goes to `factory/`); without a price the
+cost stays empty, never invented.
+
+When a bot's turn ends (a role with `scope = "own"` and `session = "chat"`) the event `turn.done` is emitted — or
+`routine.done` when a routine started it — saying the bot, the trigger, the routine and its task, the tools, the
+skills and the beginning of the answer; neither has a default route. `GET /api/turns?conv=<key>&limit=<n>` gives the
+rows, the last first. The manager's sessions, exec turns and loose turns, and the bots' routines, only call this
+module: `trigger` when a message is handed over, `begin`/`handed`/`line`/`end`/`abandon` around a conversation's
+turn, `turn_of`/`done` around a turn role's.

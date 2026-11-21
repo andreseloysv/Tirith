@@ -1,6 +1,6 @@
 //! The sections of config.toml something reads, and the keys nothing does.
 
-const KNOWN: [&str; 22] = [
+const KNOWN: [&str; 23] = [
     "projects",
     "agents",
     "launch",
@@ -23,6 +23,7 @@ const KNOWN: [&str; 22] = [
     "routes",
     "evals",
     "browser",
+    "prices",
 ];
 
 /// Keys nothing reads any more, named for the owner: an unknown section, or a leftover `[models.*]` role (`choices`/`efforts` lists stay). The factory-shaped sections are checked by the factory loader itself.

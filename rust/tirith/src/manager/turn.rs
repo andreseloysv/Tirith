@@ -15,11 +15,14 @@ pub async fn run_turn(
     input: &str,
 ) -> Result<String, String> {
     let prompt = app.cfg().factory.prompts_of(role);
+    let mut rec = crate::turns::turn_of(app, role, project);
     let Some(()) =
         (!matches!(models::role(app, role).agent.as_str(), "codex" | "muse")).then_some(())
     else {
-        return crate::codex::turn(app, role, project, None, (&prompt, input), |_| {}, |_| {})
-            .await;
+        let each = |m: &Value| rec.line(m);
+        let result = crate::codex::turn(app, role, project, None, (&prompt, input), each, |_| {});
+        let result = result.await;
+        return crate::turns::done(app, rec, result);
     };
     let read_only = app.cfg().factory.role::<String>(role, "access").as_deref() == Some("read");
     let mut cmd = models::chat_argv(app, role, None)?;
@@ -32,12 +35,12 @@ pub async fn run_turn(
         .await
         .map_err(|e| e.to_string())?;
     let mut text = String::new();
-    let read = read_turn(&mut lines, &mut stdin, read_only, &mut text);
+    let read = read_turn(&mut lines, &mut stdin, read_only, (&mut text, &mut rec));
     let finished = tokio::time::timeout(Duration::from_secs(600), read).await;
     kill_group(pid, libc::SIGKILL);
     let _ = child.wait().await;
     let text = text.trim().to_string();
-    finished
+    let result = finished
         .map_err(|_| {
             format!(
                 "no answer within 10 minutes{}",
@@ -52,7 +55,8 @@ pub async fn run_turn(
             (!text.is_empty())
                 .then_some(text)
                 .ok_or_else(|| "the session ended without an answer".to_string())
-        })
+        });
+    crate::turns::done(app, rec, result)
 }
 fn send(line: String) -> Vec<u8> {
     (line + "\n").into_bytes()
@@ -62,12 +66,13 @@ async fn read_turn(
     lines: &mut Lines<BufReader<ChildStdout>>,
     stdin: &mut ChildStdin,
     read_only: bool,
-    text: &mut String,
+    (text, rec): (&mut String, &mut crate::turns::Turn),
 ) -> bool {
     while let Ok(Some(line)) = lines.next_line().await {
         let Ok(msg) = serde_json::from_str::<Value>(&line) else {
             continue;
         };
+        rec.line(&msg);
         match msg["type"].as_str().unwrap_or("") {
             "assistant" => msg["message"]["content"]
                 .as_array()

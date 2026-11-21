@@ -39,6 +39,7 @@ pub(super) async fn session(app: &Shared, project: &str) -> Result<(), String> {
     };
     let (ready, rest) = read(&stream, idle_of(app, &role), stdout).await;
     close(app, project, Live { child, pid, writer }, ready).await;
+    crate::turns::abandon(app, project); // a turn the session left unanswered failed
     let Some(()) = (!ready && !rest).then_some(()) else {
         return Ok(());
     };
@@ -65,6 +66,7 @@ fn hand_pending(
         });
         sent
     });
+    let _ = (!sent.is_empty()).then(|| crate::turns::begin(app, project));
     let _ =
         (!sent.is_empty()).then(|| (begin_turn(app, project), typing_start(app, project, false))); // the waiting turn starts now; a session restarted after a failure shows it again
     sent
