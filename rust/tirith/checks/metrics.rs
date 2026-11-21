@@ -112,7 +112,7 @@ fn improver_brief_groups_measures_and_scores_by_factory_version() {
     app.insert("INSERT INTO scores (at, event, eval, label, score, why, factory, role_hash) VALUES (?1, 2, 'owner-mood', 'correction', NULL, 'no', 'v2+bbbb2222', 'j')", rusqlite::params![at(3000)]);
     app.insert("INSERT INTO owner_items (id, at, kind, project, question, status, answer, lane, factory, role_hash) VALUES ('o9', ?1, 'decision', 'tirith', 'q?', 'closed', '', '', 'v2+bbbb2222', '')", rusqlite::params![at(3000)]);
     app.insert("INSERT INTO events (at, lane, project, kind, tool, summary, session, factory, role_hash) VALUES (?1, '', 'tirith', 'lane.failed', '', '', '', 'v2+bbbb2222', '')", rusqlite::params![at(3000)]);
-    let brief = super::brief(&app, "Daily improver pass (no red measure needed).");
+    let brief = super::brief(&app, "Scheduled improver pass (no red measure needed).");
     // The by-version tables the improver compares: merged and first try per stamp (oldest first), scores, cards and events per stamp.
     assert!(brief.contains("# By factory version (oldest first)"), "{brief}");
     let v1 = brief.find("\"factory\":\"v1+aaaa1111\"").unwrap_or_else(|| panic!("v1 row in:\n{brief}"));
