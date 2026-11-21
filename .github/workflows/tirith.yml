@@ -19,9 +19,5 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Build and lint
         run: cargo build -q -p tirith && cargo clippy -q -p tirith -- -D warnings
-      - name: Size limit
-        run: |
-          cargo fmt --check -p tirith
-          n=$(find rust/tirith/src -name '*.rs' -exec cat {} + | wc -l)
-          echo "rust/tirith/src: $n lines (limit 6000)"
-          test "$n" -le 6000
+      - name: Small files
+        run: sh tools/size.sh

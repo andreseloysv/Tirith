@@ -296,12 +296,12 @@ embedded fallback). The loader cannot be turned off from the factory: it is what
   stamps, the measures and the evals. Later, experiments split real traffic between two settings of a role
   (`[[experiments]] role = "worker"`, `share = 0.2`, `agent = "muse"`), compared by stamp.
 
-## Line budget
+## Size
 
-`rust/tirith/src` had 6329 lines on 2026-11-20 (limit 6330). The migration brings it back to 6000: step 1 ends at 6200
-or less, no later step ends above 6200, and step 10 ends at 6000 or less and sets the limit of `tirith.toml` back to 6000.
-Configuration replaces special cases: a step that adds a mechanism removes the code it makes general. Real simplification
-only: formatted code (`cargo fmt -p tirith`), no joined lines.
+Configuration replaces special cases: a step that adds a mechanism removes the code it makes general. The migration
+below ran under a limit on the whole of `rust/tirith/src` (6000 lines). Since 2026-11-21 the limit is per file instead:
+every code file that is not a test has 100 lines or less, as `cargo fmt` writes it with rustfmt's defaults
+(`tools/size.sh`, docs/BOTS.md part 0). The figures of the steps below are history.
 
 ## Migration
 

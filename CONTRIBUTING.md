@@ -13,11 +13,12 @@ that lists a scratch git repo as a project.
 
 Rules of the codebase:
 
-- `rust/tirith/src` has a size limit (tirith.toml and CI): simplify before adding.
+- Small files: every code file that is not a test has 100 lines or less, Rust as `cargo fmt -p tirith` writes it
+  (`sh tools/size.sh`, run by tirith.toml and CI). Split by responsibility; see docs/BOTS.md, part 0.
 - No unit tests: check a change by running it (the daemon, a lane through the merge queue, the page).
 - Commit messages, file names and added lines never contain the words the commit guard forbids.
 
-The existing unit checks live in `rust/tirith/checks/`, outside the daemon source size budget. Run them with
+The existing unit checks live in `rust/tirith/checks/`, which the size rule does not count. Run them with
 `cargo test -p tirith`. For the Codex integration, build the daemon and run `scripts/checks/codex.py` in a Python
 environment with PyNaCl installed. It uses a temporary home, a fake Codex executable and a local signed,
 encrypted phone service; it checks model changes, all four roles, queued turns, interruption, persistence and
