@@ -1,0 +1,10 @@
+/* a bot's memory citation in its chat: a small raised number, its note shown on hover or tap, never copied */
+.mc-cite { position: relative; padding: 0 1px; font-size: 9px; line-height: 0; vertical-align: super;
+  color: var(--mut, #6b7280); opacity: .7; cursor: help; user-select: none; -webkit-user-select: none; border-radius: 4px; outline: none; }
+.mc-cite.shared { font-style: italic; }
+.mc-cite:hover, .mc-cite:focus { opacity: 1; background: var(--soft, rgba(127, 127, 127, .14)); }
+.mc-cite::after { content: attr(data-note); position: absolute; left: 50%; bottom: calc(100% + 6px); transform: translateX(-50%);
+  width: max-content; max-width: min(280px, 70vw); padding: 6px 9px; border-radius: 8px; font-size: 12px; line-height: 1.4;
+  font-style: normal; white-space: normal; color: var(--fg, #111); background: var(--card, #fff); border: 1px solid var(--line, #eceef1);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .25); opacity: 0; pointer-events: none; transition: opacity .15s; z-index: 5; }
+.mc-cite:hover::after, .mc-cite:focus::after { opacity: 1; }

@@ -31,6 +31,7 @@ mod svg;
 mod tophones;
 mod turns;
 mod typing;
+mod uncite;
 mod view;
 mod watch;
 mod words;
@@ -44,6 +45,9 @@ pub use tophones::{phone_rooms, to_phones};
 pub use turns::{again, begin, reply};
 pub use typing::typing;
 pub(crate) use typing::Typing;
+#[cfg(test)]
+#[path = "../../checks/citations.rs"]
+mod citation_tests;
 #[cfg(test)]
 #[path = "../../checks/rooms.rs"]
 mod tests;
