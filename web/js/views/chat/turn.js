@@ -7,23 +7,24 @@ import { pure } from './util.js';
 import { answerOf, quiet, Intent } from './turns.js';
 import { mdOf, FileChip } from './files.js';
 import { Reactions, turnOf } from './react.js';
+import { cited } from './cite.js';
 
-/** One answer of an ended turn: a quiet line, or the words with the speaker's face beside them (and a bot's 👍 / 👎 under the turn's last one). */
-function answer(r, who, face, turn) {
+/** One answer of an ended turn: a quiet line, or the words with the speaker's face beside them (and a bot's 👍 / 👎 under the turn's last one; its memory citations as small marks). */
+function answer(r, who, face, turn, notes) {
   if (quiet(r.text)) return html`<div class="mc-ev quiet" key=${r.id} title=${clockTime(r.at)}><span>${r.text.replace(/^\s*∅\s*/, '')}</span></div>`;
   return html`<div class="mc-m mgr" key=${r.id}><div class="mc-line">
       ${face && face.shape ? html`<span class="mc-face"><${Face} shape=${face.shape} color=${face.color || '#3b82f6'} size=${22} still /></span>` : null}
-      <div class="mc-col"><div class="mc-b md" dangerouslySetInnerHTML=${{ __html: mdOf(r.id, r.text) }} />
+      <div class="mc-col"><div class="mc-b md" dangerouslySetInnerHTML=${{ __html: cited(mdOf(r.id, r.text), notes) }} />
       <div class="mc-meta"><span dangerouslySetInnerHTML=${{ __html: ctxHtml(who || 'Manager') + ' · ' + esc(clockTime(r.at)) }} />${turn ? html`<${Reactions} turn=${turn} />` : null}</div></div></div></div>`;
 }
 
 /** One turn: the tiny intent line while it runs, then only its answer, with the face and name of who speaks beside it. */
-export const Turn = pure(({ rows, running, who, face, turns }) => {
+export const Turn = pure(({ rows, running, who, face, turns, notes }) => {
   if (running) return html`<${Intent} who=${who} step=${rows[rows.length - 1]} />`;
   const shown = answerOf(rows, false), last = shown[shown.length - 1];
   const turn = turns && last && !quiet(last.text) ? turnOf(turns, last) : null;
-  return html`${shown.map((r) => answer(r, who, face, r === last ? turn : null))}`;
-}, (a, b) => a.k === b.k && a.n === b.n && a.running === b.running && a.who === b.who && a.fk === b.fk && a.turns === b.turns);
+  return html`${shown.map((r) => answer(r, who, face, r === last ? turn : null, notes))}`;
+}, (a, b) => a.k === b.k && a.n === b.n && a.running === b.running && a.who === b.who && a.fk === b.fk && a.turns === b.turns && a.notes === b.notes);
 
 /** A message sent from this page that the daemon has not shown yet (sending) or refused (failed). */
 export function Local({ o, onRetry, onCopy }) {
