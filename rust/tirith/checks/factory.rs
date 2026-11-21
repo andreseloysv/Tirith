@@ -19,6 +19,8 @@ fn embedded_factory_has_todays_values() {
     assert_eq!(f.words("plan", "role_prefixes"), ["manager de guardia:", "ceo:"]);
     assert_eq!(f.words("cards", "kinds").len(), 5);
     assert_eq!(f.metric("merged"), ("En main (24 h)".to_string(), Some(10.0), true));
+    assert_eq!(f.metric("interruptions"), ("Interrupciones por ítem (24 h)".to_string(), Some(1.0), false));
+    assert_eq!(f.metric("needless_cards"), ("Tarjetas innecesarias (%)".to_string(), Some(25.0), false));
     assert_eq!(f.metric("failed").1, None);
     assert!(!f.metric("idle").2);
 }

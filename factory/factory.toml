@@ -258,3 +258,19 @@ label = "Fallidas (24 h)"
 
 [metrics.owner]
 label = "Preguntas al dueño"
+
+# What reached the owner without the owner asking, per item merged in 24 h:
+# phone messages of turns no owner message started, notices whose route has
+# phone = true, and cards. It should fall toward 0; like every measure it is
+# routed as metric.red (to the lead, then the reviewer) when it turns red.
+[metrics.interruptions]
+label = "Interrupciones por ítem (24 h)"
+target = 1
+at_least = false
+
+# Of the cards opened in 24 h that are already resolved, the share closed
+# without an answer: a card nobody needed in the end.
+[metrics.needless_cards]
+label = "Tarjetas innecesarias (%)"
+target = 25
+at_least = false
