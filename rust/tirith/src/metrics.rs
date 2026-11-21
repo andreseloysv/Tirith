@@ -141,12 +141,8 @@ fn compute(app: &Shared) -> Vec<Metric> {
     let resolved = app.query("SELECT id, status FROM owner_items WHERE at >= ?1 AND status != 'open'", [&since], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)));
     let closed: Vec<&str> = resolved.iter().filter(|c| c.1 == "closed").map(|c| c.0.as_str()).collect();
     // Plus the resolved cards the card-needed eval judged decidable alone (an answered one too: it bothered the owner needlessly), named by their event's line.
-    let alone: Vec<String> = app
-        .query("SELECT events.summary FROM scores JOIN events ON events.id = scores.event WHERE scores.eval = 'card-needed' AND scores.label = 'alone' AND scores.at >= ?1", [&since], |r| r.get::<_, String>(0))
-        .iter()
-        .filter_map(|s| manager::card_id_of(s))
-        .filter(|id| resolved.iter().any(|c| &c.0 == id) && !closed.contains(&id.as_str()))
-        .collect();
+    let judged = app.query("SELECT events.summary FROM scores JOIN events ON events.id = scores.event WHERE scores.eval = 'card-needed' AND scores.label = 'alone' AND scores.at >= ?1", [&since], |r| r.get::<_, String>(0));
+    let alone: Vec<String> = judged.iter().filter_map(|s| manager::card_id_of(s)).filter(|id| resolved.iter().any(|c| &c.0 == id) && !closed.contains(&id.as_str())).collect();
     let share = if resolved.is_empty() { 0.0 } else { 100.0 * (closed.len() + alone.len()) as f64 / resolved.len() as f64 };
     out.push(mk("needless_cards", share, !resolved.is_empty(), format!("closed without an answer in 24 h: [{}]; answered {}; judged decidable alone: [{}]", closed.join(", "), resolved.len() - closed.len(), alone.join(", "))));
 
@@ -162,9 +158,14 @@ fn compute(app: &Shared) -> Vec<Metric> {
 }
 
 fn describe(m: &Metric) -> String {
-    let target = m.target.map(|t| format!(" (target: {} {t})", if m.at_least { "at least" } else { "at most" })).unwrap_or_default();
-    let facts = if m.facts.is_empty() { String::new() } else { format!(". Facts: {}", m.facts) };
-    format!("{} [{}] is {}{target}{facts}", m.label, m.id, m.value)
+    format!(
+        "{} [{}] is {}{}{}",
+        m.label,
+        m.id,
+        m.value,
+        m.target.map(|t| format!(" (target: {} {t})", if m.at_least { "at least" } else { "at most" })).unwrap_or_default(),
+        if m.facts.is_empty() { String::new() } else { format!(". Facts: {}", m.facts) }
+    )
 }
 
 /// One computation: episodes opened, fixed, noted and reviewed; the page gets the result.
@@ -204,8 +205,8 @@ fn tick(app: &Shared) {
         manager::emit_event(app, "", "metric.red", &format!("health: {}. Get it moving.", describe(m)), None);
     });
     let max = app.cfg().factory.role::<u64>(&improver, "max_per_day").unwrap_or(6);
-    let today: u64 = app.db.lock().unwrap().query_row("SELECT COUNT(*) FROM ceo_reviews WHERE at >= ?1 AND metric != 'owner'", [iso(now.saturating_sub(86400))], |r| r.get(0)).unwrap_or(0);
-    let daily: u64 = app.db.lock().unwrap().query_row("SELECT COUNT(*) FROM ceo_reviews WHERE at >= ?1 AND metric LIKE '%daily%'", [iso(now.saturating_sub(86400))], |r| r.get(0)).unwrap_or(0); // its daily passes in 24 h, kept as rows naming it
+    let count = |what: &str| app.db.lock().unwrap().query_row(&format!("SELECT COUNT(*) FROM ceo_reviews WHERE at >= ?1 AND metric {what}"), [iso(now.saturating_sub(86400))], |r| r.get::<_, u64>(0)).unwrap_or(0);
+    let (today, daily) = (count("!= 'owner'"), count("LIKE '%daily%'")); // daily: its daily passes in 24 h, kept as rows naming it
     let _ = (daily == 0).then(|| due.push(("daily", format!("Daily improver pass (no red measure needed).\n{}", metrics.iter().map(describe).collect::<Vec<_>>().join("\n")))));
     let _ = (!due.is_empty() && !improver.is_empty() && today < max).then(|| start_review(app, improver, due.iter().map(|d| d.0).collect::<Vec<_>>().join(","), due.iter().map(|d| d.1.as_str()).collect::<Vec<_>>().join("\n")));
     app.emit("metrics", payload(app));
@@ -218,10 +219,10 @@ fn payload(app: &Shared) -> Value {
 /// Who reviews a long red stretch, and after how many seconds: the turn role of the delayed `metric.red` route (its `after_minutes`, or the role's `review_after_minutes`); without one, any turn role when asked, and never by itself.
 fn delayed_review(app: &Shared) -> (String, u64) {
     let f = &app.cfg().factory;
-    match f.routes_on("metric.red").into_iter().find(|r| f.role::<String>(&r.0, "session").as_deref() == Some("turn")) {
-        Some(r) => (r.0.clone(), r.4.or_else(|| f.role::<u64>(&r.0, "review_after_minutes")).unwrap_or(15) * 60),
-        None => (f.find_role("turn", None).unwrap_or_default(), u64::MAX),
-    }
+    f.routes_on("metric.red")
+        .into_iter()
+        .find(|r| f.role::<String>(&r.0, "session").as_deref() == Some("turn"))
+        .map_or_else(|| (f.find_role("turn", None).unwrap_or_default(), u64::MAX), |r| (r.0.clone(), r.4.or_else(|| f.role::<u64>(&r.0, "review_after_minutes")).unwrap_or(15) * 60))
 }
 
 fn start_review(app: &Shared, role: String, metric: String, why: String) {
@@ -270,7 +271,6 @@ fn brief(app: &Shared, why: &str) -> String {
 }
 
 pub fn start(app: Shared) {
-    let _ = app.db.lock().unwrap().execute_batch("CREATE TABLE IF NOT EXISTS ceo_reviews (id INTEGER PRIMARY KEY, at TEXT, metric TEXT, text TEXT, factory TEXT NOT NULL DEFAULT '', role_hash TEXT NOT NULL DEFAULT '');");
     tokio::spawn(async move {
         loop {
             tick(&app);

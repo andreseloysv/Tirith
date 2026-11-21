@@ -139,7 +139,6 @@ fn update<T>(app: &Shared, id: &str, f: impl FnOnce(&mut Room) -> T) -> Option<T
 }
 
 pub fn start(app: Shared) {
-    let _ = app.db.lock().unwrap().execute("CREATE TABLE IF NOT EXISTS am_rooms (id TEXT PRIMARY KEY, data TEXT NOT NULL)", []);
     let rows: Vec<String> = app.query("SELECT data FROM am_rooms", [], |r| r.get(0));
     ROOMS.lock().unwrap().extend(rows.iter().filter_map(|s| serde_json::from_str::<Room>(s).ok()).map(|r| (r.id.clone(), r)));
     let (tx, mut rx) = mpsc::unbounded_channel();
@@ -185,17 +184,15 @@ pub fn start(app: Shared) {
     });
 }
 
-/// A phone paired in one room is the owner's in all of them: every project, and what belongs to none, gets a room; each of those rooms gets every phone; and the phones are told the list (`tirith-rooms [{"r": room, "t": name}]`),
-/// which the chat page shows as one chat per project. So one QR opens every project, also those added later. `said` is the last failure reported, so a platform that is away is said once, not every half minute.
+/// A phone paired in one room is the owner's in all of them: every project, and what belongs to none, gets a room; each of those rooms gets every phone; and the phones are told the list (`tirith-rooms [{"r": room, "t": name}]`), which the chat page shows as one chat per project. So one QR opens every project, also those added later. `said` is the last failure reported, so a platform that is away is said once, not every half minute.
 async fn provide(app: &Shared, said: &mut String) {
     let mine = || ROOMS.lock().unwrap().values().filter(|r| r.kind == "manager").cloned().collect::<Vec<Room>>();
     // The name a room has on the phones: its project's, or "All projects" for what belongs to none.
     let bot = |project: &str| crate::bots::bot(app, project).map_or("All projects".to_string(), |b| crate::server::s(&b, "name"));
     let label = |project: &str| app.cfg().project(project).map_or_else(|| bot(project), |p| if p.name.is_empty() { p.id.clone() } else { p.name.clone() });
-    let (mut failed, projects) = (
-        String::new(),
-        app.cfg().projects.iter().map(|p| p.id.clone()).chain([String::new()]).chain(app.cfg().factory.roles().into_iter().filter(|r| app.cfg().factory.role::<String>(r, "scope").as_deref() == Some("own"))).collect::<Vec<_>>(),
-    );
+    let mut failed = String::new();
+    let projects: Vec<String> =
+        app.cfg().projects.iter().map(|p| p.id.clone()).chain([String::new()]).chain(app.cfg().factory.roles().into_iter().filter(|r| app.cfg().factory.role::<String>(r, "scope").as_deref() == Some("own"))).collect();
     let phone = mine().iter().any(|r| !r.devices.is_empty()); // without a phone there is nothing to make
     for id in projects.iter().filter(|id| phone && !mine().iter().any(|r| app.conv(&r.project) == **id)) {
         // No code: nobody scans this one, the phones are added below. A project that gets none now gets it next time.
@@ -282,9 +279,7 @@ async fn poll(app: &Shared, r: &Room) -> Result<(), String> {
         r.here = here;
         for m in &list {
             let n = m["n"].as_u64().unwrap_or(0);
-            if r.cursor.is_some_and(|c| n <= c) {
-                continue;
-            }
+            let Some(()) = (!r.cursor.is_some_and(|c| n <= c)).then_some(()) else { continue };
             r.cursor = Some(n);
             handle(r, &me, &platform, m, backlog, &owner_names, &host, &mut out);
         }
@@ -304,9 +299,7 @@ async fn poll(app: &Shared, r: &Room) -> Result<(), String> {
     out.send.iter().for_each(|(text, readers)| queue(&r.id, text, readers.clone()));
     out.controls.iter().for_each(|(peer, request)| queue(&r.id, &format!("tirith-models-state {}", crate::models::phone_response(app, peer, request)), vec![peer.clone()]));
     for (author, text) in &out.deliver {
-        if phone_model_command(app, r, author, text) {
-            continue;
-        }
+        let Some(()) = (!phone_model_command(app, r, author, text)).then_some(()) else { continue };
         // `o12: yes` from a paired phone answers that card by code (a phone writes `O12`); everything else is for the manager.
         let card = text.split_once(':').filter(|(_, answer)| author.ends_with(PHONE) && !answer.trim().is_empty());
         if card.is_some_and(|(id, answer)| manager::owner_answer(app, &id.trim().to_lowercase(), answer.trim(), false).is_ok()) {
@@ -320,9 +313,7 @@ async fn poll(app: &Shared, r: &Room) -> Result<(), String> {
 }
 
 fn phone_model_command(app: &Shared, r: &Room, author: &str, text: &str) -> bool {
-    if !author.ends_with(PHONE) || !matches!(text.split_whitespace().next(), Some("/model" | "/models" | "/modelo" | "/modelos")) {
-        return false;
-    }
+    let Some(()) = (author.ends_with(PHONE) && matches!(text.split_whitespace().next(), Some("/model" | "/models" | "/modelo" | "/modelos"))).then_some(()) else { return false };
     app.chat("room", &format!("{author} ({}): {text}", r.id), &r.project);
     manager::model_command(app, app.conv(&r.project), text);
     update(app, &r.id, |r| r.owed.retain(|o| o != &(author.to_string(), text.to_string())));
@@ -352,7 +343,7 @@ fn handle(r: &mut Room, me: &sealed::Me, platform: &str, m: &Value, backlog: boo
         },
         _ => return,
     };
-    let text = text.strip_prefix("tirith-image ").map_or(text.clone(), |j| save_image(j, &r.id).unwrap_or_else(|| "[an image that could not be read]".into()));
+    let text = text.strip_prefix("tirith-image ").map_or(text.clone(), |j| save_image_at(&crate::config::tirith_home(), j, &r.id).unwrap_or_else(|| "[an image that could not be read]".into()));
     if let Some(body) = text.strip_prefix("tirith-models ") {
         (r.kind == "manager" && r.devices.iter().any(|d| d.key_id == id)).then(|| serde_json::from_str(body).ok()).flatten().into_iter().for_each(|request| out.controls.push((author.clone(), request)));
         return;
@@ -388,12 +379,12 @@ fn handle(r: &mut Room, me: &sealed::Me, platform: &str, m: &Value, backlog: boo
     r.streak += 1;
     let brake = crate::factory::current().limits.agent_messages_in_a_row;
     if r.streak > brake {
-        if !std::mem::replace(&mut r.braked, true) {
+        let _ = (!std::mem::replace(&mut r.braked, true)).then(|| {
             out.send.push((
                 format!("I stopped answering: {brake} messages in a row came from agents and none from the owner. I answer again when the owner writes from a paired phone."),
                 r.devices.iter().chain(&r.managers).map(|p| p.public.clone()).collect(),
-            ));
-        }
+            ))
+        });
         return;
     }
     let _ = (r.private() && !r.turn.contains(&author)).then(|| r.turn.push(author));
@@ -402,9 +393,6 @@ fn handle(r: &mut Room, me: &sealed::Me, platform: &str, m: &Value, backlog: boo
 }
 
 /// A picture from a phone (`tirith-image {"mime","data"(base64)}`, as in am.mjs) is saved under `<home>/rooms/files/<room>/`; the manager gets its path.
-fn save_image(json: &str, room: &str) -> Option<String> {
-    save_image_at(&crate::config::tirith_home(), json, room)
-}
 fn save_image_at(home: &std::path::Path, json: &str, room: &str) -> Option<String> {
     use base64::{engine::general_purpose::STANDARD as B64, Engine};
     let j: Value = serde_json::from_str(json).ok()?;
@@ -445,14 +433,11 @@ fn mentions(text: &str, name: &str) -> bool {
 /// Posts `text` in the room as this Tirith: sealed for `readers` in a private room, plain in a public one.
 async fn send(app: &Shared, r: &Room, text: &str, readers: &[String]) -> Result<(), String> {
     let (base, me) = (base(app), sealed::identity(&app.home, &r.me)?);
-    if !r.private() {
-        return sealed::post(&base, &me, "message", &r.id, json!(text)).await;
-    }
     let readers: Vec<String> = readers.iter().filter(|p| !r.managers.iter().any(|m| m.blocked && m.public == **p)).cloned().collect(); // forgotten while this waited
-    if readers.is_empty() {
-        Err("nobody in this room can read it yet: pair a phone first".into())
-    } else {
-        sealed::post(&base, &me, "message", &r.id, sealed::seal(&me, text, &format!("#{}", r.id), &readers)).await
+    match (r.private(), readers.is_empty()) {
+        (false, _) => sealed::post(&base, &me, "message", &r.id, json!(text)).await,
+        (true, true) => Err("nobody in this room can read it yet: pair a phone first".into()),
+        (true, false) => sealed::post(&base, &me, "message", &r.id, sealed::seal(&me, text, &format!("#{}", r.id), &readers)).await,
     }
 }
 
@@ -642,42 +627,38 @@ async fn api_svg(State(app): State<Shared>, Path(id): Path<String>, Query(q): Qu
     let Ok(r) = known(&id) else { return (StatusCode::NOT_FOUND, "no such room").into_response() };
     let Some(url) = view(&app, &r)[if q.get("kind").map(String::as_str) == Some("invite") { "invite" } else { "link" }].as_str().map(String::from) else { return (StatusCode::NOT_FOUND, "no such link").into_response() };
     let svg = |c: qrcode::QrCode| c.render::<qrcode::render::svg::Color>().min_dimensions(220, 220).dark_color(qrcode::render::svg::Color("#000")).light_color(qrcode::render::svg::Color("#fff")).build();
-    match qrcode::QrCode::new(url.as_bytes()) {
-        Ok(code) => ([("content-type", "image/svg+xml"), ("cache-control", "no-store")], svg(code)).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
-    }
+    qrcode::QrCode::new(url.as_bytes()).map_or_else(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(), |code| ([("content-type", "image/svg+xml"), ("cache-control", "no-store")], svg(code)).into_response())
 }
 
 const USAGE: &str = include_str!("../assets/usage-room.txt");
 
 fn one(id: &str) -> Result<Value, String> {
-    serde_json::from_str(&call("GET", &format!("/api/rooms/{id}"), None)?).map_err(|e| e.to_string())
+    crate::client::call_json("GET", &format!("/api/rooms/{id}"), None)
 }
 fn show_link(v: &Value, key: &str, label: &str) {
-    match v[key].as_str() {
-        Some(url) => println!("{label}: {url}\n{}", qrcode::QrCode::new(url.as_bytes()).map(|c| c.render::<qrcode::render::unicode::Dense1x2>().quiet_zone(true).build()).unwrap_or_default()),
-        None => println!("{label}: none (the last QR was used: tirith room qr {})", v["id"].as_str().unwrap_or("")),
-    }
+    v[key].as_str().map_or_else(
+        || println!("{label}: none (the last QR was used: tirith room qr {})", v["id"].as_str().unwrap_or("")),
+        |url| println!("{label}: {url}\n{}", qrcode::QrCode::new(url.as_bytes()).map(|c| c.render::<qrcode::render::unicode::Dense1x2>().quiet_zone(true).build()).unwrap_or_default()),
+    )
 }
 
 /// `tirith room …` commands; `None` when `pos` is not one of this module's commands.
 pub fn cli(pos: &[&str], flag: Flag) -> Option<Result<(), String>> {
-    let parse = |s: String| serde_json::from_str::<Value>(&s).map_err(|e| e.to_string());
     let r = match pos {
         ["room", "new"] => {
-            call("POST", "/api/rooms", Some(json!({"title": flag("--title").unwrap_or_default(), "project": flag("--project").or_else(|| std::env::var("TIRITH_PROJECT").ok()).unwrap_or_default()}))).and_then(parse).map(|v| {
+            crate::client::call_json("POST", "/api/rooms", Some(json!({"title": flag("--title").unwrap_or_default(), "project": flag("--project").or_else(|| std::env::var("TIRITH_PROJECT").ok()).unwrap_or_default()}))).map(|v| {
                 println!("{}  (open on my phone: tirith room link {0})", v["id"].as_str().unwrap_or(""));
                 show_link(&v, "invite", "Connect a phone (one use)");
             })
         }
         ["room", "forget", key] => call("POST", "/api/rooms/forget", Some(json!({"key_id": key}))).map(|_| println!("forgot {key}")),
         ["room", "link", id] => one(id).map(|v| show_link(&v, "link", "Open on my phone")),
-        ["room", "qr", id] => call("POST", &format!("/api/rooms/{id}/qr"), None).and_then(parse).map(|v| show_link(&v, "invite", "Connect another phone (one use)")),
-        ["room", "invite", id] => call("POST", &format!("/api/rooms/{id}/invite"), None).and_then(parse).map(|v| println!("{}\nThe other Tirith runs: tirith room join <that code>", v["peer_code"].as_str().unwrap_or(""))),
-        ["room", "join", code] => call("POST", "/api/rooms/join", Some(json!({"code": code}))).and_then(parse).map(|v| println!("joined {}", v["id"].as_str().unwrap_or(""))),
+        ["room", "qr", id] => crate::client::call_json("POST", &format!("/api/rooms/{id}/qr"), None).map(|v| show_link(&v, "invite", "Connect another phone (one use)")),
+        ["room", "invite", id] => crate::client::call_json("POST", &format!("/api/rooms/{id}/invite"), None).map(|v| println!("{}\nThe other Tirith runs: tirith room join <that code>", v["peer_code"].as_str().unwrap_or(""))),
+        ["room", "join", code] => crate::client::call_json("POST", "/api/rooms/join", Some(json!({"code": code}))).map(|v| println!("joined {}", v["id"].as_str().unwrap_or(""))),
         ["room", "leave", id] => call("POST", &format!("/api/rooms/{id}/leave"), None).map(|_| println!("left {id}")),
         ["room", "say", id, text] => call("POST", &format!("/api/rooms/{id}/say"), Some(json!({"text": text}))).map(|_| println!("ok")),
-        ["room", "list"] => call("GET", "/api/rooms", None).and_then(parse).map(|v| {
+        ["room", "list"] => crate::client::call_json("GET", "/api/rooms", None).map(|v| {
             v["rooms"].as_array().into_iter().flatten().for_each(|r| {
                 let err = r["error"].as_str().filter(|e| !e.is_empty()).map(|e| format!("  error: {e}")).unwrap_or_default();
                 println!("{:<8} {:<44} {} ({} phones){err}", r["kind"].as_str().unwrap_or(""), r["id"].as_str().unwrap_or(""), r["title"].as_str().unwrap_or(""), r["devices"].as_array().map_or(0, Vec::len));

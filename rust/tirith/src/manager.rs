@@ -61,9 +61,7 @@ fn deliver(app: &Shared, project: &str, text: &str, phones: bool) {
     let memory = bots::context(app, project); // a bot's memory, read at every turn
     let start = talk(project, |t| {
         t.phones |= phones;
-        if t.notes.is_empty() && text.is_empty() {
-            return false;
-        }
+        let Some(()) = (!t.notes.is_empty() || !text.is_empty()).then_some(()) else { return false };
         let notes = std::mem::take(&mut t.notes).into_iter().map(|n| format!("[tirith] {n}"));
         let all: Vec<String> = memory.into_iter().chain(notes).chain((!text.is_empty()).then(|| text.to_string())).collect();
         let text = all.join("\n\n");
@@ -124,10 +122,7 @@ pub fn say(app: &Shared, project: &str, text: &str) -> Result<(), String> {
     let event = app.event("", project, "owner.message", "", text, "");
     app.chat("owner", text, project);
     judge_evals(app, project, "owner.message", text, event);
-    if model_command(app, project, text) {
-        return Ok(());
-    }
-    deliver(app, project, &with_cards(app, project, text), true);
+    let _ = (!model_command(app, project, text)).then(|| deliver(app, project, &with_cards(app, project, text), true));
     Ok(())
 }
 
@@ -151,17 +146,11 @@ pub fn emit_event(app: &Shared, project: &str, on: &str, shown: &str, told: Opti
     }
     let mut heard: BTreeSet<String> = BTreeSet::new();
     for (to, mode, _, phone, _) in routes {
-        // Only chat roles are handed text here, in the conversation of their scope; a turn role is run by whoever
-        // watches its condition (the metrics run the improver through `run_turn`, like any turn role).
+        // Only chat roles are handed text here, in the conversation of their scope; a turn role is run by whoever watches its condition (the metrics run the improver through `run_turn`, like any turn role).
         let f = &app.cfg().factory;
-        if f.role::<String>(&to, "session").as_deref() != Some("chat") {
-            continue;
-        }
-        // A due routine (its bot's own `schedule` route) is for that bot's conversation alone, and a conversation
-        // that more than one route reaches (the factory's schedule route and the bot's) hears the event once.
-        if on == "schedule" && f.role::<String>(&to, "scope").as_deref() == Some("own") && to != here_p {
-            continue;
-        }
+        let Some(()) = (f.role::<String>(&to, "session").as_deref() == Some("chat")).then_some(()) else { continue };
+        // A due routine (its bot's own `schedule` route) is for that bot's conversation alone, and a conversation that more than one route reaches (the factory's schedule route and the bot's) hears the event once.
+        let Some(()) = (!(on == "schedule" && f.role::<String>(&to, "scope").as_deref() == Some("own") && to != here_p)).then_some(()) else { continue };
         let dest = match f.role::<String>(&to, "scope").as_deref() {
             Some("global") => "",
             Some("own") => &to,
@@ -240,6 +229,12 @@ fn note_line(app: &Shared, project: &str, text: &str) {
     queue(app, app.conv(project), text, "note", false);
 }
 
+/// Sets a card's final state in the table and on the page.
+fn card_done(app: &Shared, id: &str, status: &str, answer: &str) {
+    let _ = app.db.lock().unwrap().execute("UPDATE owner_items SET status = ?1, answer = ?2 WHERE id = ?3", rusqlite::params![status, answer, id]);
+    app.emit("owner", json!({"id": id, "status": status, "answer": answer}));
+}
+
 /// `tirith ask-owner`: a card in its project's chat (so on the owner's phones too) and among the open cards of the owner's page, until answered. With `lane` it carries that waiting lane's question: the lane shows it, and the answer goes straight to the lane.
 pub fn ask_owner(app: &Shared, project: &str, kind: &str, question: &str, lane: &str) -> Result<Value, String> {
     let project = match app.lane(lane) {
@@ -277,8 +272,7 @@ pub fn owner_answer(app: &Shared, id: &str, answer: &str, by_manager: bool) -> R
     }
     let sql = "SELECT kind, project, question, lane FROM owner_items WHERE id = ?1 AND status = 'open'";
     let (kind, project, question, lane): (String, String, String, String) = app.db.lock().unwrap().query_row(sql, [id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))).map_err(|_| format!("no open question '{id}'"))?;
-    let _ = app.db.lock().unwrap().execute("UPDATE owner_items SET status = 'answered', answer = ?1 WHERE id = ?2", rusqlite::params![answer, id]);
-    app.emit("owner", json!({"id": id, "status": "answered", "answer": answer}));
+    card_done(app, id, "answered", answer);
     let text = format!("The owner answered {id} ({kind}: {question}): {answer}");
     emit_event(app, &project, "card.answered", &text, None);
     if !lane.is_empty() && crate::lanes::answer(app, &lane, answer, "the owner").is_ok() {
@@ -290,14 +284,12 @@ pub fn owner_answer(app: &Shared, id: &str, answer: &str, by_manager: bool) -> R
     Ok(json!({"ok": true}))
 }
 
-/// `tirith card close` (`by` the manager) or the card's Close (`by` the owner): an open card that is no longer needed is closed with its reason,
-/// said in its project's chat and on the phones, so nobody is told to ignore it.
+/// `tirith card close` (`by` the manager) or the card's Close (`by` the owner): an open card that is no longer needed is closed with its reason, said in its project's chat and on the phones, so nobody is told to ignore it.
 pub fn close_card(app: &Shared, id: &str, by: &str, why: &str) -> Result<Value, String> {
     let sql = "SELECT project FROM owner_items WHERE id = ?1 AND status = 'open'";
     let project: String = app.db.lock().unwrap().query_row(sql, [id], |r| r.get(0)).map_err(|_| format!("no open card '{id}'"))?;
     let note = format!("closed by {by}{}", if why.trim().is_empty() { String::new() } else { format!(": {}", why.trim()) });
-    let _ = app.db.lock().unwrap().execute("UPDATE owner_items SET status = 'closed', answer = ?1 WHERE id = ?2", rusqlite::params![note, id]);
-    app.emit("owner", json!({"id": id, "status": "closed", "answer": note}));
+    card_done(app, id, "closed", &note);
     emit_event(app, &project, "card.closed", &format!("Card {id} {note}"), None);
     note_line(app, &project, &format!("Card {id} {note}"));
     Ok(json!({"ok": true}))
@@ -342,9 +334,7 @@ pub fn close_stale_questions(app: &Shared) {
         let lane = o["lane"].as_str().unwrap_or("");
         let moot = (!lane.is_empty() && !app.lane(lane).is_some_and(|l| l.status == "waiting")).then_some("its lane no longer waits for an answer");
         let Some(why) = moot.or_else(|| stale_reason(q, if project.is_empty() { app.cfg().autopilot } else { crate::lanes::autopilot_on(app, project) }, crate::lanes::free_gb(&app.home.join("lanes")))) else { continue };
-        let answer = format!("closed by Tirith: {why}");
-        let _ = app.db.lock().unwrap().execute("UPDATE owner_items SET status = 'closed', answer = ?1 WHERE id = ?2", rusqlite::params![answer, id]);
-        app.emit("owner", json!({"id": id, "status": "closed", "answer": answer}));
+        card_done(app, id, "closed", &format!("closed by Tirith: {why}"));
     }
 }
 
@@ -412,9 +402,7 @@ fn turn_permission(read_only: bool, tool: &str, input: &Value) -> Value {
 /// One fresh turn of a `session = "turn"` role: its factory prompt as its instructions, `input` as its one message, its `access` deciding whether it may write; the assistant's text until the turn ends is the answer. Any turn role runs this way (the improver included).
 pub async fn run_turn(app: &Shared, role: &str, project: &str, input: &str) -> Result<String, String> {
     let prompt = app.cfg().factory.prompts_of(role);
-    if matches!(models::role(app, role).agent.as_str(), "codex" | "muse") {
-        return crate::codex::turn(app, role, project, None, (&prompt, input), |_| {}, |_| {}).await;
-    }
+    let Some(()) = (!matches!(models::role(app, role).agent.as_str(), "codex" | "muse")).then_some(()) else { return crate::codex::turn(app, role, project, None, (&prompt, input), |_| {}, |_| {}).await };
     let read_only = app.cfg().factory.role::<String>(role, "access").as_deref() == Some("read");
     let mut cmd = models::chat_argv(app, role, None)?;
     cmd.argv.extend(["--append-system-prompt".into(), prompt]);
@@ -448,20 +436,16 @@ pub async fn run_turn(app: &Shared, role: &str, project: &str, input: &str) -> R
     kill_group(pid, libc::SIGKILL);
     let _ = child.wait().await;
     let text = text.trim().to_string();
-    match finished {
-        Err(_) => Err(format!("no answer within 10 minutes{}", if text.is_empty() { String::new() } else { format!(": {text}") })),
-        _ if text.is_empty() => Err("the session ended without an answer".into()),
-        _ => Ok(text),
-    }
+    finished
+        .map_err(|_| format!("no answer within 10 minutes{}", if text.is_empty() { String::new() } else { format!(": {text}") }))
+        .and_then(|_| (!text.is_empty()).then_some(text).ok_or_else(|| "the session ended without an answer".to_string()))
 }
 
 /// One session of a conversation, until it ends or rests. Err when it never got ready: its messages wait again.
 async fn session(app: &Shared, project: &str) -> Result<(), String> {
     let role = app.chat_role(project); // a bot may have a model of its own, under its key
     let alias = models::role(app, &role).agent;
-    if alias == "codex" || alias == "muse" {
-        return exec_session(app, project, alias == "muse").await;
-    }
+    let Some(()) = (!matches!(alias.as_str(), "codex" | "muse")).then_some(()) else { return exec_session(app, project, alias == "muse").await };
     let key = format!("manager_session:{alias}:{project}");
     let resumed = app.kv(&key);
     let history = resumed.is_none().then(|| history(app, project));
@@ -474,19 +458,12 @@ async fn session(app: &Shared, project: &str) -> Result<(), String> {
         (t.pid, t.tx, t.stale) = (pid, Some(tx.clone()), false);
         set_busy(app, project, t, true);
         let sent: Vec<String> = std::mem::take(&mut t.pending);
-        sent.iter().enumerate().for_each(|(i, text)| {
-            drop(tx.send(user_line(&match (i, &history) {
-                (0, Some(h)) => format!("{h}{text}"),
-                _ => text.clone(),
-            })))
-        });
+        sent.iter().enumerate().for_each(|(i, text)| drop(tx.send(user_line(&if i == 0 { format!("{}{text}", history.as_deref().unwrap_or("")) } else { text.clone() }))));
         sent
     });
     let writer = tokio::spawn(async move {
         while let Some(line) = rx.recv().await {
-            if stdin.write_all(format!("{line}\n").as_bytes()).await.is_err() {
-                break;
-            }
+            let Some(()) = stdin.write_all(format!("{line}\n").as_bytes()).await.is_ok().then_some(()) else { break };
             let _ = stdin.flush().await;
         }
     });
@@ -537,10 +514,7 @@ async fn session(app: &Shared, project: &str) -> Result<(), String> {
         }
     }
     // What a dead turn left is never sent to a room with a later answer; what rooms wrote for it is handed over again, once, and before the wait below, so a line that arrives during it (and waits in `pending`) is not handed twice.
-    let died = talk(project, |t| {
-        ready.then(|| t.reply_to.clear()); // a session that never got ready ran no turn: its lines wait, with their rooms
-        t.tx.take().is_some() && ready && t.busy
-    });
+    let died = talk(project, |t| (ready.then(|| t.reply_to.clear()), t.tx.take().is_some() && ready && t.busy).1); // a session that never got ready ran no turn: its lines wait, with their rooms
     let _ = died.then(|| rooms::again(app, Some(project)));
     writer.abort();
     kill_group(pid, libc::SIGTERM);
@@ -574,9 +548,7 @@ async fn exec_session(app: &Shared, project: &str, muse: bool) -> Result<(), Str
         (&prompt(app, project), &input),
         |msg| {
             if muse {
-                if let Some(id) = msg["stream"]["id"].as_str().filter(|_| msg["stream"]["kind"] == "session") {
-                    app.set_kv(&key, Some(id))
-                }
+                msg["stream"]["id"].as_str().filter(|_| msg["stream"]["kind"] == "session").into_iter().for_each(|id| app.set_kv(&key, Some(id)));
                 if msg["payload_type"] == "tool.result" {
                     // The shell's own result text is its result JSON: the command it ran is the line worth showing.
                     let detail = msg["payload"]["text"].as_str().and_then(|s| serde_json::from_str::<Value>(s).ok()).and_then(|v| v["command"].as_str().map(String::from));
@@ -585,11 +557,7 @@ async fn exec_session(app: &Shared, project: &str, muse: bool) -> Result<(), Str
                 return;
             }
             match msg["type"].as_str().unwrap_or("") {
-                "thread.started" => {
-                    if let Some(id) = msg["thread_id"].as_str() {
-                        app.set_kv(&key, Some(id))
-                    }
-                }
+                "thread.started" => msg["thread_id"].as_str().into_iter().for_each(|id| app.set_kv(&key, Some(id))),
                 "item.completed" if msg["item"]["type"] == "agent_message" => {
                     let text = msg["item"]["text"].as_str().unwrap_or("");
                     app.chat("manager", text, project);
@@ -602,10 +570,7 @@ async fn exec_session(app: &Shared, project: &str, muse: bool) -> Result<(), Str
         },
         |pid| {
             started = true;
-            talk(project, |t| {
-                (t.pid, t.stale) = (pid, false);
-                set_busy(app, project, t, true);
-            });
+            talk(project, |t| ((t.pid, t.stale) = (pid, false), set_busy(app, project, t, true)));
         },
     )
     .await;
@@ -613,10 +578,7 @@ async fn exec_session(app: &Shared, project: &str, muse: bool) -> Result<(), Str
         talk(project, |t| drop(t.pending.splice(0..0, sent)));
         return result.map(|_| ());
     }
-    let (rooms_now, phones) = talk(project, |t| {
-        set_busy(app, project, t, false);
-        (std::mem::take(&mut t.reply_to), std::mem::take(&mut t.phones))
-    });
+    let (rooms_now, phones) = talk(project, |t| (set_busy(app, project, t, false), (std::mem::take(&mut t.reply_to), std::mem::take(&mut t.phones))).1);
     let (text, answered) = match result {
         Ok(text) => (text, true),
         Err(e) => {

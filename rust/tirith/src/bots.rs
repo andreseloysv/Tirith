@@ -46,8 +46,7 @@ pub fn bot(app: &App, key: &str) -> Option<Value> {
 pub fn folder(app: &App, key: &str) -> PathBuf {
     app.home.join("manager").join(key)
 }
-/// The one part of Tirith's home besides the lanes where agents write: the bots' folders and the shared skills. In a bot's folder a hidden folder is written only
-/// as a skills folder: an agent's settings there could turn Tirith's hooks off.
+/// The one part of Tirith's home besides the lanes where agents write: the bots' folders and the shared skills. In a bot's folder a hidden folder is written only as a skills folder: an agent's settings there could turn Tirith's hooks off.
 pub fn writable(home: &FsPath, path: &FsPath) -> bool {
     let parts: Vec<String> = path.strip_prefix(home.join("manager")).map(|r| r.iter().map(|c| c.to_string_lossy().into_owned()).collect()).unwrap_or_default();
     let own = parts.first().is_some_and(|b| b.starts_with("bot-")) && parts.windows(2).all(|w| !w[0].starts_with('.') || w[1] == "skills");
@@ -61,9 +60,7 @@ fn skills(dir: &FsPath, links: bool) -> Vec<(String, String)> {
     out
 }
 
-/// What a bot is handed at the start of every turn and routine: its memory as it is now (the owner may have changed it) and the names of its skills.
-/// The shared skills are linked into its skills first (a skill of its own with the same name wins), links to removed ones go, and the skills folder of the
-/// bots' agent (.<its command>/skills) is linked to its skills.
+/// What a bot is handed at the start of every turn and routine: its memory as it is now (the owner may have changed it) and the names of its skills. The shared skills are linked into its skills first (a skill of its own with the same name wins), links to removed ones go, and the skills folder of the bots' agent (.<its command>/skills) is linked to its skills.
 pub fn context(app: &Shared, key: &str) -> Option<String> {
     bot(app, key)?;
     let (dir, common) = (folder(app, key).join(SKILLS), app.home.join("bots/skills"));
@@ -220,9 +217,7 @@ fn routine(app: &Shared, id: String, b: Value) -> Result<Value, String> {
     let (said, changed) = with(app, |bots| {
         let list = find(bots, &id)?["routines"].as_array_mut().ok_or(format!("bot '{id}' has no routines"))?;
         let i = list.iter().position(|r| (!rid.is_empty() && r["id"] == rid.as_str()) || (!title.is_empty() && s(r, "title").eq_ignore_ascii_case(&title)));
-        if b["delete"] == true {
-            return Ok((format!("Removed routine · {}", s(&list.remove(i.ok_or("no such routine")?), "title")), String::new()));
-        }
+        let Some(()) = (b["delete"] != true).then_some(()) else { return Ok((format!("Removed routine · {}", s(&list.remove(i.ok_or("no such routine")?), "title")), String::new())) };
         list.extend(i.is_none().then(|| json!({"id": format!("r{:06x}", rand::random::<u32>() >> 8), "on": true})));
         let last = list.len() - 1;
         let r = &mut list[i.unwrap_or(last)];

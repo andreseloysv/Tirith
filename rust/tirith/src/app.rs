@@ -1,6 +1,6 @@
 //! The daemon's shared state: config, SQLite, the lanes in memory and the change feed the page listens to.
 
-use crate::config::{tirith_home, Config, Manifest};
+use crate::config::{Config, Manifest};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -85,9 +85,6 @@ pub fn now_s() -> u64 {
 }
 
 impl App {
-    pub fn open() -> Shared {
-        Self::open_at(tirith_home())
-    }
     pub fn open_at(home: PathBuf) -> Shared {
         ["logs/lanes", "logs/runs", "briefs", "lanes"].into_iter().for_each(|dir| drop(std::fs::create_dir_all(home.join(dir))));
         let db = Connection::open(home.join("tirith.sqlite3")).expect("open tirith.sqlite3");
@@ -125,9 +122,7 @@ impl App {
     pub fn reload_config(&self, force: bool) -> bool {
         let now = (std::fs::metadata(self.home.join("config.toml")).and_then(|m| m.modified()).ok(), crate::factory::stamp(&self.cfg().raw));
         let mut last = self.cfg_mtime.lock().unwrap();
-        if *last == now && !force {
-            return false;
-        }
+        let Some(()) = (*last != now || force).then_some(()) else { return false };
         *last = now;
         drop(last);
         *self.cfg.write().unwrap() = Arc::new(Config::load_at(&self.home));
@@ -138,12 +133,11 @@ impl App {
     pub fn manifest(&self, repo: &Path) -> Manifest {
         let stamp = std::fs::metadata(repo.join("tirith.toml")).and_then(|m| m.modified()).ok();
         let mut cache = self.manifests.lock().unwrap();
-        if let Some((_, man)) = cache.get(repo).filter(|(m, _)| *m == stamp) {
-            return man.clone();
-        }
-        let man = Manifest::load(repo);
-        cache.insert(repo.to_path_buf(), (stamp, man.clone()));
-        man
+        cache.get(repo).filter(|(m, _)| *m == stamp).map(|(_, man)| man.clone()).unwrap_or_else(|| {
+            let man = Manifest::load(repo);
+            cache.insert(repo.to_path_buf(), (stamp, man.clone()));
+            man
+        })
     }
 
     pub fn emit(&self, t: &str, d: Value) {
@@ -289,14 +283,10 @@ pub async fn add_worktree(repo: &Path, dir: &Path, branch: Option<&str>, exclude
     let d = dir.to_string_lossy().to_string();
     let mut args = vec!["worktree", "add"];
     args.extend((!exclude.is_empty()).then_some("--no-checkout"));
-    match branch {
-        Some(b) => args.extend(["-b", b, &d, "HEAD"]),
-        None => args.extend(["--detach", &d, "HEAD"]),
-    }
+    args.extend(branch.map_or(vec!["--detach", &d, "HEAD"], |b| vec!["-b", b, &d, "HEAD"]));
     git(repo, &args).await?;
     if !exclude.is_empty() {
-        let mut sparse: Vec<String> = vec!["sparse-checkout".into(), "set".into(), "--no-cone".into(), "/*".into()];
-        sparse.extend(exclude.iter().map(|p| format!("!/{}/", p.trim_matches('/'))));
+        let sparse: Vec<String> = ["sparse-checkout", "set", "--no-cone", "/*"].into_iter().map(String::from).chain(exclude.iter().map(|p| format!("!/{}/", p.trim_matches('/')))).collect();
         git(dir, &sparse.iter().map(String::as_str).collect::<Vec<_>>()).await?;
         git(dir, &["checkout", "-q"]).await?;
     }
@@ -319,8 +309,7 @@ pub fn alive(pid: u32) -> bool {
     unsafe { libc::kill(pid as i32, 0) == 0 }
 }
 
-/// Hides whole secret values in log text: the value of any `*KEY*`/`*TOKEN*`/`*SECRET*`/`*PASSWORD*` variable (`NAME=value`, `NAME: value`, `"NAME":"value"`) and bare well-known key shapes. Nothing of the value is kept,
-/// not even its first characters.
+/// Hides whole secret values in log text: the value of any `*KEY*`/`*TOKEN*`/`*SECRET*`/`*PASSWORD*` variable (`NAME=value`, `NAME: value`, `"NAME":"value"`) and bare well-known key shapes. Nothing of the value is kept, not even its first characters.
 pub fn redact_secrets(text: &str) -> String {
     use regex::Regex;
     use std::sync::LazyLock;

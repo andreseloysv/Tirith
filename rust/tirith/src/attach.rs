@@ -34,11 +34,8 @@ async fn fetch(State(app): State<Shared>, Path((id, name)): Path<(String, String
         "txt" | "md" | "log" | "csv" | "rs" | "py" | "js" | "ts" | "toml" | "yaml" | "yml" | "sh" | "html" | "htm" => "text/plain; charset=utf-8", // html too: never rendered as a page on this origin
         _ => "application/octet-stream",
     };
-    let valid = !id.is_empty() && id.chars().all(|c| c.is_ascii_hexdigit()) && sanitize(&name) == name;
-    match if valid { tokio::fs::read(app.home.join("attachments").join(&id).join(&name)).await.ok() } else { None } {
-        Some(bytes) => ([("content-type", kind), ("x-content-type-options", "nosniff"), ("content-security-policy", "sandbox")], bytes).into_response(),
-        None => (StatusCode::NOT_FOUND, "no such attachment").into_response(),
-    }
+    let bytes = if !id.is_empty() && id.chars().all(|c| c.is_ascii_hexdigit()) && sanitize(&name) == name { tokio::fs::read(app.home.join("attachments").join(&id).join(&name)).await.ok() } else { None };
+    bytes.map_or_else(|| (StatusCode::NOT_FOUND, "no such attachment").into_response(), |bytes| ([("content-type", kind), ("x-content-type-options", "nosniff"), ("content-security-policy", "sandbox")], bytes).into_response())
 }
 
 async fn upload(State(app): State<Shared>, Query(q): Query<HashMap<String, String>>, body: Bytes) -> Result<Json<Value>, (StatusCode, String)> {

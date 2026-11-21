@@ -23,9 +23,7 @@ pub fn catalog() -> Vec<Value> {
 }
 
 pub fn options(cfg: &crate::config::Config, argv: &mut Vec<String>, effort: Option<&str>) {
-    if let Some(profile) = crate::config::get::<String>(&cfg.raw, &["agents", "codex", "profile"]) {
-        argv.splice(1..1, ["--profile".into(), profile]);
-    }
+    crate::config::get::<String>(&cfg.raw, &["agents", "codex", "profile"]).into_iter().for_each(|profile| drop(argv.splice(1..1, ["--profile".into(), profile])));
     if let Some(e) = effort {
         // Replace only this config key; unrelated -c overrides must survive.
         argv.retain(|a| !a.starts_with("--config=model_reasoning_effort="));
@@ -96,12 +94,8 @@ pub async fn turn(app: &Shared, role: &str, project: &str, resume: Option<&str>,
                 "run.output.delta" => text.push_str(msg["payload"]["text"].as_str().unwrap_or("")),
                 t if t.starts_with("run.terminal.") => {
                     complete = msg["payload"]["terminal"] == "completed";
-                    if let Some(s) = msg["payload"]["text"].as_str().filter(|s| !s.is_empty()) {
-                        text = s.to_string()
-                    }
-                    if !complete {
-                        failure = Some(msg["payload"]["reason"].as_str().or_else(|| msg["payload"]["text"].as_str()).unwrap_or("the turn did not complete").to_string())
-                    }
+                    text = msg["payload"]["text"].as_str().filter(|s| !s.is_empty()).map(String::from).unwrap_or(text);
+                    failure = (!complete).then(|| msg["payload"]["reason"].as_str().or_else(|| msg["payload"]["text"].as_str()).unwrap_or("the turn did not complete").to_string()).or(failure);
                 }
                 "turn.completed" => complete = true,
                 "turn.failed" => failure = Some(msg["error"]["message"].as_str().unwrap_or("Codex turn failed").to_string()),
@@ -110,12 +104,8 @@ pub async fn turn(app: &Shared, role: &str, project: &str, resume: Option<&str>,
             }
         }
         let status = child.wait().await.map_err(|e| e.to_string())?;
-        if !complete || !status.success() {
-            return Err(failure.unwrap_or_else(|| format!("{name} ended without completing the turn ({status}); see logs/{who}.log")));
-        }
-        if text.trim().is_empty() {
-            return Err(format!("{name} returned an empty answer"));
-        }
+        (complete && status.success()).then_some(()).ok_or_else(|| failure.unwrap_or_else(|| format!("{name} ended without completing the turn ({status}); see logs/{who}.log")))?;
+        (!text.trim().is_empty()).then_some(()).ok_or_else(|| format!("{name} returned an empty answer"))?;
         Ok(text.trim().to_string())
     };
     let result = tokio::time::timeout(Duration::from_secs(if chat { 1800 } else { 600 }), work).await;

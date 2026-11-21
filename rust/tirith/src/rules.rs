@@ -65,6 +65,5 @@ pub fn check(app: &Shared, tool: &str, input: &Value, lane: Option<&Lane>, proje
 pub fn summary(tool: &str, input: &Value) -> String {
     let detail = ["command", "file_path", "notebook_path", "pattern", "url", "description", "prompt", "skill"].iter().find_map(|k| input[*k].as_str()).unwrap_or("");
     let short: String = detail.lines().next().unwrap_or("").chars().take(160).collect();
-    let prefix = if tool.is_empty() { String::new() } else { format!("{tool}: ") };
-    prefix + &short
+    format!("{}{short}", if tool.is_empty() { String::new() } else { format!("{tool}: ") })
 }

@@ -143,8 +143,6 @@ pub fn unseal(me: &Me, e: &Value) -> Option<String> {
     verify(&inner_message(author, e["tag"].as_str()?, text), inner["sig"].as_str()?, author).then(|| text.to_string())
 }
 
-// ---- the platform ----------------------------------------------------------------------------------------
-
 fn http() -> &'static reqwest::Client {
     static C: OnceLock<reqwest::Client> = OnceLock::new();
     C.get_or_init(|| reqwest::Client::builder().user_agent("tirith-room/2").build().unwrap_or_default())
@@ -166,14 +164,14 @@ async fn api(base: &str, path: &str, body: Option<&Value>, secs: u64) -> Result<
 
 /// The platform's public key, checked against its signed description (cached per platform).
 pub async fn platform(base: &str) -> Result<String, String> {
-    static KEYS: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
-    if let Some(k) = KEYS.lock().unwrap().as_ref().and_then(|m| m.get(base).cloned()) {
+    static KEYS: std::sync::LazyLock<Mutex<HashMap<String, String>>> = std::sync::LazyLock::new(Default::default);
+    if let Some(k) = KEYS.lock().unwrap().get(base).cloned() {
         return Ok(k);
     }
     let v = api(base, "/.well-known/agentsmessenger.json", None, 30).await.map_err(|e| e.1)?;
     let public = v["doc"]["platform_pub"].as_str().unwrap_or("").to_string();
     verify(&sha_hex(canonical(&v["doc"]).as_bytes()), v["sig"].as_str().unwrap_or(""), &public).then_some(()).ok_or("this platform does not prove who it is")?;
-    KEYS.lock().unwrap().get_or_insert_with(HashMap::new).insert(base.to_string(), public.clone());
+    KEYS.lock().unwrap().insert(base.to_string(), public.clone());
     Ok(public)
 }
 
@@ -215,9 +213,7 @@ pub async fn keys(base: &str, room: &str, name: &str) -> Result<Vec<(String, Str
             let _ = (m["signed_by"] == "self" && !out.iter().any(|(p, _)| *p == public)).then(|| out.push((public, clean(m["from"].as_str().unwrap_or("")))));
         });
         let last = list.last().and_then(|m| m["n"].as_u64()).unwrap_or(0);
-        if list.is_empty() || last >= got["count"].as_u64().unwrap_or(0) {
-            return Ok(out);
-        }
+        let Some(()) = (!list.is_empty() && last < got["count"].as_u64().unwrap_or(0)).then_some(()) else { return Ok(out) };
         after = last;
     }
 }
