@@ -162,9 +162,9 @@ async fn sweep_cleanups(app: &Shared, lanes: &[Lane]) {
         let (build, merge_dir) = (app.home.join("build").join(&p.id), p.lanes_dir().join("merge"));
         let Some(()) = (build.exists() || merge_dir.exists()).then_some(()) else { continue };
         let busy = talking.contains(&p.id) || pipelines.contains(&p.id) || lanes.iter().any(|l| l.project == p.id && (l.pid.is_some() || matches!(l.status.as_str(), "running" | "merging")));
-        if drop_idle_cache(&repo, &build, &merge_dir, busy, last_activity(app, p, lanes, &build), now, minutes).await {
-            app.event("", &p.id, "disk", "diet", &format!("removed {} and its merge folder ({minutes} min with no lane, stage or manager working)", build.display()), "");
-        }
+        let _ = drop_idle_cache(&repo, &build, &merge_dir, busy, last_activity(app, p, lanes, &build), now, minutes)
+            .await
+            .then(|| app.event("", &p.id, "disk", "diet", &format!("removed {} and its merge folder ({minutes} min with no lane, stage or manager working)", build.display()), ""));
     }
 }
 /// Below the factory's `limits.low_disk_gb` free, before the autopilot pauses: the shared build caches (`<home>/build/<project>`) of projects with no lane or stage under way are removed; the next build makes them again.

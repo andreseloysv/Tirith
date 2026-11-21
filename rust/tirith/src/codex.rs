@@ -25,9 +25,7 @@ pub fn options(cfg: &crate::config::Config, argv: &mut Vec<String>, effort: Opti
         // Replace only this config key; unrelated -c overrides must survive.
         argv.retain(|a| !a.starts_with("--config=model_reasoning_effort="));
         for i in (1..argv.len()).rev() {
-            if argv[i].starts_with("model_reasoning_effort=") && matches!(argv[i - 1].as_str(), "-c" | "--config") {
-                argv.drain(i - 1..=i);
-            }
+            let _ = (argv[i].starts_with("model_reasoning_effort=") && matches!(argv[i - 1].as_str(), "-c" | "--config")).then(|| argv.drain(i - 1..=i));
         }
         argv.push(format!("--config=model_reasoning_effort={}", toml::Value::String(e.into())));
     }
