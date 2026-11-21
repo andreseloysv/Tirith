@@ -55,7 +55,7 @@ fn embedded_prompts() -> BTreeMap<String, String> {
         ("no-project", include_str!("../../../factory/prompts/no-project.md")),
         ("brief", include_str!("../../../factory/prompts/brief.md")),
         ("clippy", include_str!("../../../factory/prompts/clippy.md")),
-        ("reviewer", include_str!("../../../factory/prompts/reviewer.md")),
+        ("improver", include_str!("../../../factory/prompts/improver.md")),
         ("bot", include_str!("../../../factory/prompts/bot.md")),
         ("owner-mood", include_str!("../../../factory/evals/owner-mood.md")),
         ("card-needed", include_str!("../../../factory/evals/card-needed.md")),
@@ -104,9 +104,7 @@ fn resolved(roles: &toml::Table, name: &str, up: usize) -> toml::Value {
     let mut base = resolved(roles, &parent, up + 1);
     let solved = roles.contains_key(&parent) && base.get("extends").is_none();
     merge(&mut base, &own);
-    if !solved {
-        base.as_table_mut().map(|t| t.insert("extends".into(), parent.into())); // stays, so validation names it
-    }
+    let _ = (!solved).then(|| base.as_table_mut().map(|t| t.insert("extends".into(), parent.into()))); // stays, so validation names it
     base
 }
 
@@ -123,17 +121,13 @@ pub fn parse(text: &str, prompts: BTreeMap<String, String>, overlay: &toml::Tabl
     roles.keys().cloned().collect::<Vec<_>>().iter().for_each(|name| table["roles"][name] = resolved(&roles, name, 0));
     // The `default` agent under every other (never its chat args for an exec agent), and the codex command needs no config line, as before.
     let default = table["agents"]["default"].clone();
-    if let Some(agents) = table["agents"].as_table_mut() {
-        for a in agents.iter_mut().filter(|(n, _)| *n != "default").map(|(_, a)| a) {
-            let mut under = default.clone();
-            let _ = (a.get("protocol").and_then(|p| p.as_str()) == Some("exec")).then(|| under.as_table_mut().map(|t| t.remove("chat_args")));
-            merge(&mut under, a);
-            *a = under;
-        }
+    for a in table["agents"].as_table_mut().into_iter().flat_map(|t| t.iter_mut()).filter(|(n, _)| *n != "default").map(|(_, a)| a) {
+        let mut under = default.clone();
+        let _ = (a.get("protocol").and_then(|p| p.as_str()) == Some("exec")).then(|| under.as_table_mut().map(|t| t.remove("chat_args")));
+        merge(&mut under, a);
+        *a = under;
     }
-    if let Some(c) = table["agents"].as_table_mut().and_then(|a| a.get_mut("codex")).and_then(|c| c.as_table_mut()) {
-        c.entry("command").or_insert_with(|| "codex".into());
-    }
+    let _ = table["agents"].as_table_mut().and_then(|a| a.get_mut("codex")).and_then(|c| c.as_table_mut()).map(|c| c.entry("command").or_insert_with(|| "codex".into()));
     let raw = table.as_table().cloned().unwrap_or_default();
     let limits: Limits = raw.get("limits").cloned().map(|v| v.try_into()).transpose().map_err(|e| format!("factory: {e}"))?.unwrap_or_default();
     let over: toml::Table = SECTIONS.into_iter().filter_map(|s| overlay.get(s).map(|v| (s.to_string(), v.clone()))).collect();
@@ -281,7 +275,8 @@ fn dir(overlay: &toml::Table) -> Option<PathBuf> {
 pub fn stamp(overlay: &toml::Table) -> Option<SystemTime> {
     let dir = dir(overlay)?;
     let m = |p: &Path| std::fs::metadata(p).and_then(|x| x.modified()).ok();
-    ["prompts", "evals"].into_iter().filter_map(|d| std::fs::read_dir(dir.join(d)).ok()).flatten().flatten().filter_map(|e| m(&e.path())).chain(m(&dir.join("factory.toml"))).max()
+    let files = [dir.join("factory.toml"), dir.join("../.git/logs/HEAD"), dir.join("../.git/refs/heads/main")]; // main itself: when it moves, the factory reloads with no restart
+    ["prompts", "evals"].into_iter().filter_map(|d| std::fs::read_dir(dir.join(d)).ok()).flatten().flatten().filter_map(|e| m(&e.path())).chain(files.iter().filter_map(|p| m(p))).max()
 }
 
 static CURRENT: RwLock<Option<Arc<Factory>>> = RwLock::new(None);

@@ -1,4 +1,4 @@
-//! Health metrics computed every minute from the daemon's own data, and the turn-role review that a metric red for long enough starts (the factory's delayed `metric.red` route names the role); while everything is green no model is called.
+//! Health metrics computed every minute from the daemon's own data, and the turn-role pass that a metric red for long enough starts (the factory's delayed `metric.red` route names the role: the improver, which also runs once a day with no red measure); while everything is green and the day's pass ran, no model is called.
 
 use crate::app::{now_iso, now_s, tail, Lane, Shared};
 use crate::{manager, plan};
@@ -172,7 +172,7 @@ fn tick(app: &Shared) {
     let iso = |s: u64| chrono::DateTime::from_timestamp(s as i64, 0).map(|d| d.format("%Y-%m-%dT%H:%M:%SZ").to_string()).unwrap_or_default();
     let metrics = compute(app);
     let now = now_s();
-    let (reviewer, after) = delayed_review(app);
+    let (improver, after) = delayed_review(app);
     let (mut due, mut notes) = (vec![], vec![]);
     {
         let mut book = BOOK.lock().unwrap();
@@ -203,9 +203,11 @@ fn tick(app: &Shared) {
         let _ = (m.id == "idle").then(|| app.sched_wake.notify_one()); // the mechanical fix: wake the scheduler and the autopilot
         manager::emit_event(app, "", "metric.red", &format!("health: {}. Get it moving.", describe(m)), None);
     });
-    let max = app.cfg().factory.role::<u64>(&reviewer, "max_per_day").unwrap_or(6);
+    let max = app.cfg().factory.role::<u64>(&improver, "max_per_day").unwrap_or(6);
     let today: u64 = app.db.lock().unwrap().query_row("SELECT COUNT(*) FROM ceo_reviews WHERE at >= ?1 AND metric != 'owner'", [iso(now.saturating_sub(86400))], |r| r.get(0)).unwrap_or(0);
-    let _ = (!due.is_empty() && !reviewer.is_empty() && today < max).then(|| start_review(app, reviewer, due.iter().map(|d| d.0).collect::<Vec<_>>().join(","), due.iter().map(|d| d.1.as_str()).collect::<Vec<_>>().join("\n")));
+    let daily: u64 = app.db.lock().unwrap().query_row("SELECT COUNT(*) FROM ceo_reviews WHERE at >= ?1 AND metric LIKE '%daily%'", [iso(now.saturating_sub(86400))], |r| r.get(0)).unwrap_or(0); // its daily passes in 24 h, kept as rows naming it
+    let _ = (daily == 0).then(|| due.push(("daily", format!("Daily improver pass (no red measure needed).\n{}", metrics.iter().map(describe).collect::<Vec<_>>().join("\n")))));
+    let _ = (!due.is_empty() && !improver.is_empty() && today < max).then(|| start_review(app, improver, due.iter().map(|d| d.0).collect::<Vec<_>>().join(","), due.iter().map(|d| d.1.as_str()).collect::<Vec<_>>().join("\n")));
     app.emit("metrics", payload(app));
 }
 
@@ -238,17 +240,21 @@ fn start_review(app: &Shared, role: String, metric: String, why: String) {
     });
 }
 
-/// The facts a review reads: the red metrics, the last lanes, failing checks, plan progress, owner questions.
+/// The facts an improver pass reads: the red metrics (or all of them, on the daily pass), the measures and eval scores by factory version (the stamps), the last lanes with their stamp, failing checks, plan progress, owner questions.
 fn brief(app: &Shared, why: &str) -> String {
     let mut lanes: Vec<Lane> = app.lanes.lock().unwrap().values().cloned().collect();
     lanes.sort_by(|a, b| b.created_at.cmp(&a.created_at));
-    let lanes: String = lanes.iter().take(20).map(|l| format!("- {} [{}] {}:{} \"{}\" tries {} created {}: {}\n", l.id, l.status, l.project, l.step, l.item, l.attempts + 1, l.created_at, l.note.lines().next().unwrap_or(""))).collect();
+    let lanes: String = lanes.iter().take(30).map(|l| format!("- {} [{}] {}:{} {} tries {} {} {}: {}\n", l.id, l.status, l.project, l.step, l.item, l.attempts + 1, l.created_at, l.factory, l.note.lines().next().unwrap_or(""))).collect();
     let day = chrono::DateTime::from_timestamp(now_s().saturating_sub(86400) as i64, 0).map(|d| d.format("%Y-%m-%dT%H:%M:%SZ").to_string()).unwrap_or_default();
     let runs: String = app
         .objects("SELECT lane, stage, status, COALESCE(log, '') FROM runs WHERE status IN ('failed', 'timeout') AND started_at >= ?1 ORDER BY id DESC LIMIT 5", [&day], &["lane", "stage", "status", "log"])
         .iter()
         .map(|r| format!("- {} check '{}' {}:\n```\n{}\n```\n", r["lane"].as_str().unwrap_or(""), r["stage"].as_str().unwrap_or(""), r["status"].as_str().unwrap_or(""), tail(std::path::Path::new(r["log"].as_str().unwrap_or("")), 15)))
         .collect();
+    let grouped = |sql: &str, cols: &[&str]| app.objects(sql, [], cols).iter().map(|r| format!("- {r}\n")).collect::<String>(); // by factory version (the stamps), so two versions compare here
+    let versions = grouped("SELECT factory, COUNT(*) AS merged, CAST(100 * AVG(json_extract(data, '$.attempts') = 0) AS INTEGER) AS first_try_pct, MIN(json_extract(data, '$.created_at')) AS first_lane FROM lanes WHERE factory != '' AND json_extract(data, '$.status') = 'merged' GROUP BY factory ORDER BY first_lane", &["factory", "merged", "first_try_pct", "first_lane"]);
+    let scores = grouped("SELECT factory, eval, label, COUNT(*) AS n FROM scores WHERE factory != '' GROUP BY factory, eval, label ORDER BY factory, eval, label", &["factory", "eval", "label", "n"]);
+    let stamped = grouped("SELECT factory, 'card.opened' AS kind, COUNT(*) AS n FROM owner_items WHERE factory != '' GROUP BY factory UNION ALL SELECT factory, kind, COUNT(*) AS n FROM events WHERE factory != '' GROUP BY factory, kind ORDER BY factory, kind", &["factory", "kind", "n"]);
     let cfg = app.cfg();
     let plans: String = cfg
         .projects
@@ -256,11 +262,11 @@ fn brief(app: &Shared, why: &str) -> String {
         .map(|p| {
             let steps: String =
                 plan::read(app, &p.id).unwrap_or_default().iter().map(|st| format!("- step {}. {}: {} open, {} done\n", st.num, st.title, st.items.iter().filter(|i| !i.done).count(), st.items.iter().filter(|i| i.done).count())).collect();
-            format!("## {} (autopilot {}, main {})\n{steps}", p.id, if crate::lanes::autopilot_on(app, &p.id) { "on" } else { "off" }, app.kv(&format!("main_red:{}", p.id)).as_deref().unwrap_or("green"))
+            format!("## {} (repo {}, autopilot {}, main {})\n{steps}", p.id, p.repo().display(), if crate::lanes::autopilot_on(app, &p.id) { "on" } else { "off" }, app.kv(&format!("main_red:{}", p.id)).as_deref().unwrap_or("green"))
         })
         .collect();
     let qs: String = owner_questions(app).iter().map(|q| format!("- {q}\n")).collect();
-    format!("# Red metrics\n{why}\n\n# Last lanes (newest first)\n{lanes}\n# Failing checks (last 24 h)\n{runs}\n# Plans\n{plans}\n# Open owner questions\n{qs}")
+    format!("# Red metrics\n{why}\n\n# By factory version (oldest first)\n{versions}# Eval scores by factory version\n{scores}# Cards and events by factory version and kind\n{stamped}\n# Last lanes (newest first: id, status, project:step, item, tries, created, factory stamp, note)\n{lanes}\n# Failing checks (last 24 h)\n{runs}\n# Plans\n{plans}\n# Open owner questions\n{qs}")
 }
 
 pub fn start(app: Shared) {
@@ -273,11 +279,11 @@ pub fn start(app: Shared) {
     });
 }
 
-/// The page's "review now": the review turn role runs at once, asked by the owner (it does not count toward its `max_per_day`).
+/// The page's "improver now": the improver turn role runs at once, asked by the owner (it does not count toward its `max_per_day`).
 async fn review_now(State(app): State<Shared>) -> crate::app::R {
     let role = delayed_review(&app).0;
     (!role.is_empty()).then_some(()).ok_or_else(|| crate::app::bad("the factory has no turn role to review with".into()))?;
-    start_review(&app, role, "owner".into(), "The owner asked for a review now.".into());
+    start_review(&app, role, "owner".into(), "The owner asked for an improver pass now.".into());
     Ok(Json(json!({"ok": true})))
 }
 
