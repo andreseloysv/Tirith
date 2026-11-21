@@ -7,7 +7,7 @@ use rusqlite::types::ValueRef;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 
-const COLS: [&str; 25] = [
+const COLS: [&str; 31] = [
     "id",
     "conv",
     "role",
@@ -33,6 +33,12 @@ const COLS: [&str; 25] = [
     "event",
     "factory",
     "role_hash",
+    "reaction",
+    "corrected",
+    "checks_passed",
+    "checks_total",
+    "checks",
+    "cited",
 ];
 
 /// One cell as JSON: a number, a text (the JSON columns parsed), or null.
@@ -42,7 +48,7 @@ fn cell(col: &str, v: ValueRef) -> Value {
         ValueRef::Real(f) => json!(f),
         ValueRef::Text(t) => {
             let t = String::from_utf8_lossy(t);
-            let parsed = matches!(col, "skills" | "tools" | "versions")
+            let parsed = matches!(col, "skills" | "tools" | "versions" | "cited")
                 .then(|| serde_json::from_str(&t).ok())
                 .flatten();
             parsed.unwrap_or_else(|| json!(t))
@@ -68,7 +74,8 @@ pub fn turns(app: &Shared, conv: &str, limit: u32) -> Vec<Value> {
 }
 
 pub fn routes() -> Router<Shared> {
-    Router::new().route(
+    let signals = super::react::routes().merge(super::checks::routes());
+    signals.route(
         "/api/turns",
         get(
             |State(app): State<Shared>, Query(q): Query<HashMap<String, String>>| async move {

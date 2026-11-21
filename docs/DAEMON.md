@@ -207,3 +207,22 @@ skills and the beginning of the answer; neither has a default route. `GET /api/t
 rows, the last first. The manager's sessions, exec turns and loose turns, and the bots' routines, only call this
 module: `trigger` when a message is handed over, `begin`/`handed`/`line`/`end`/`abandon` around a conversation's
 turn, `turn_of`/`done` around a turn role's.
+
+Each row also carries its quality signals (`react.rs`, `signals.rs`, `checks.rs`):
+
+- `reaction`: the owner's 👍 (1) or 👎 (-1). `POST /api/turns/<id>/reaction` with `{"value": 1, -1 or 0}` keeps it (0
+  takes it back: empty). In a bot's conversation an owner message that is only 👍 or 👎 (any skin tone) or `+1` / `-1`,
+  written on the page (`manager::say`) or from a paired phone (`from_room`), is the reaction to the bot's last kept
+  turn: it stays as a chat row, starts no turn, and has no `owner.message` event, so owner-mood does not judge it.
+- `corrected`: 1 when the `owner-mood` eval labels an owner message `correction` or `repeat`; it marks the
+  conversation's last turn (of its own role, not the judge's) that ended before that message, taken when the message
+  came, before the judge runs.
+- `checks_passed`, `checks_total`, `checks` (the names, as written): the bot's own validation. `tirith turn checks
+  <passed>/<total> "<names>"`, run by the bot in its session (`TIRITH_PROJECT` is its conversation; a lane is refused),
+  posts to `POST /api/turns/checks`; the open turn of that conversation keeps them until its row is written, else its
+  last kept turn gets them. `factory/prompts/bot.md` asks for it at the end of a routine whose skill has «Cómo validar»,
+  with what it really checked.
+- `cited` (JSON): the numbered notes, `[m<N>]` of its own memory and `[s<N>]` of the shared one, that its answer
+  names, each once in order, read when its row is written.
+
+`GET /api/turns` gives these columns too; older databases get them by `ALTER TABLE` at start (`add_columns`).
