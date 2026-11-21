@@ -21,6 +21,12 @@ a.mc-file { text-decoration: none; }
 
 /* whose conversation the chat shows: the selected project's, or the one of no project */
 .mc-head h2 .mc-of { margin-left: 6px; font-size: 12.5px; font-weight: 500; color: var(--mut); }
+/* who speaks: its face in the head and beside each of its messages */
+.mc-id { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.mc-face { flex: none; line-height: 0; }
+.mc-line { display: flex; gap: 7px; align-items: flex-start; min-width: 0; max-width: 100%; }
+.mc-line .mc-face { margin-top: 2px; }
+.mc-col { display: flex; flex-direction: column; gap: 3px; align-items: flex-start; min-width: 0; max-width: 100%; }
 
 /* a card the manager sent (tirith ask-owner): the card itself, with its answer box while it waits for the owner */
 .mc-m.mc-card { align-self: stretch; max-width: 100%; }
@@ -45,6 +51,7 @@ a.mc-file { text-decoration: none; }
 /* Model controls stay in the conversation on desktop and narrow screens. */
 .mc-models { flex: 0 0 auto; padding: 8px 12px; border-top: 1px solid var(--line); max-height: 65vh; overflow: auto; }
 .mc-models summary { cursor: pointer; font-size: 12px; }
+.mc-models .mc-mnote { margin: 8px 0 10px; }
 .mc-models .model-roles { display: flex; flex-wrap: wrap; gap: 5px; margin: 8px 0 12px; }
 .mc-models .model-roles button { flex: 1; padding: 7px 9px; border-radius: 7px; border: 1px solid var(--line); background: var(--soft); }
 .mc-models .model-roles button[aria-pressed=true] { border-color: var(--blue); color: var(--blue); }

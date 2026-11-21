@@ -1,5 +1,6 @@
 // Settings view (the old v-models.js, v-theme.js and the setup cards): Appearance (System / Light / Dark), the
-// models of each role, the commit guard and the autopilot of each project. Inside a project
+// models of the roles with no screen of their own (the rest pick theirs on their screen), the commit guard and
+// the autopilot of each project. Inside a project
 // its own two cards (autopilot, commit guard) come first; the rest is the same for every project, and says so.
 import { html, useState } from '../../vendor/preact-htm.js';
 import { useStore, useFetch, api } from '../store.js';
@@ -64,6 +65,7 @@ export function Settings({ project }) {
     ${project ? html`${own}<h2 class="rsec">For all projects</h2>` : null}
     <${Appearance} />
     <p class="mut sm mlead">Roles come from the factory; their model and effort from <code>config.toml</code> under <code>[roles]</code>. What you save here overrides it until you go back to config.toml.</p>
+    <p class="mut sm mlead">Only the roles with no screen of their own are here. The others choose their model on their own screen: the Project Manager in each project's chat, and each bot on its bot screen.</p>
     ${err && !M ? html`<div class="ierr">Could not read the models: ${err.message}</div>` : null}
     ${M ? roleList(M).map(([id, label, note]) => html`<${RoleCard} key=${id} id=${id} label=${label} note=${note} M=${M} reload=${reload} />`) : null}
     ${project ? null : own}
