@@ -15,7 +15,11 @@ fn browser_home(tag: &str, use_mine: bool) -> crate::app::Shared {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let browser = if use_mine { "[browser]\nuse = \"mine\"\n" } else { "" };
-    std::fs::write(dir.join("config.toml"), format!("# the owner's\n[agents.muse]\ncommand = \"muse\"\n{browser}[[projects]]\nid = \"p1\"\nrepo = \"/tmp\"\n")).unwrap();
+    std::fs::write(
+        dir.join("config.toml"),
+        format!("# the owner's\n[agents.muse]\ncommand = \"muse\"\n[agents.codex]\ncommand = \"codex\"\n[agents.anthropic]\ncommand = \"anthropic-agent\"\n{browser}[[projects]]\nid = \"p1\"\nrepo = \"/tmp\"\n"),
+    )
+    .unwrap();
     let app = crate::app::App::open_at(dir);
     assert_eq!(app.cfg().error, None, "config with [browser] must not read as unknown keys");
     app
@@ -38,24 +42,82 @@ fn muse_runs_get_the_browser_mcp() {
     assert!(server["args"][0].as_str().is_some_and(|a| a.ends_with("tools/browser/launch.mjs")), "the repo's launcher: {server}");
     assert_eq!(server["args"][1], "--isolated", "a lane never shares or keeps a profile: {server}");
     assert_eq!(server["env"]["TIRITH_HOME"], "${TIRITH_HOME}", "the whole-value variable both spawns set (Muse refuses a literal env value): {server}");
-    let bot = super::muse_argv("muse", false, (None, None), "/w", None, "/w/p.txt", &crate::models::browser_args(&app, false));
+    let bot = super::muse_argv("muse", false, (None, None), "/w", None, "/w/p.txt", &crate::models::browser_args_for(&app, "muse", false));
     let server = browser_of(&bot);
     assert_eq!(server["args"].as_array().map(|a| a.len()), Some(1), "a bot gets the persistent profile, no mode flag: {server}");
     // While a live session holds that profile (its SingletonLock names this very process), a bot falls back to --isolated instead of failing.
     let profile = app.home.join("browser/profile");
     std::fs::create_dir_all(&profile).unwrap();
     std::os::unix::fs::symlink(format!("somehost-{}", std::process::id()), profile.join("SingletonLock")).unwrap();
-    let server = browser_of(&crate::models::browser_args(&app, false));
+    let server = browser_of(&crate::models::browser_args_for(&app, "muse", false));
     assert_eq!(server["args"][1], "--isolated", "a held profile means isolated, not an error: {server}");
     // use = "mine": a bot connects to the owner's Edge (--extension); a lane still never touches the owner's browser.
     let app = browser_home("mine", true);
-    let bot = super::muse_argv("muse", false, (None, None), "/w", None, "/w/p.txt", &crate::models::browser_args(&app, false));
+    let bot = super::muse_argv("muse", false, (None, None), "/w", None, "/w/p.txt", &crate::models::browser_args_for(&app, "muse", false));
     let server = browser_of(&bot);
     assert_eq!(server["args"][1], "--extension", "a bot with use = \"mine\" drives the owner's Edge: {server}");
     let lane = crate::models::lane_argv(&app, Some("muse"), None, std::path::Path::new("/tmp/brief.md"), std::path::Path::new("/tmp"), None).unwrap();
     let server = browser_of(&lane.argv);
     assert_eq!(server["args"][1], "--isolated", "a lane is isolated even with use = \"mine\": {server}");
     assert!(!lane.argv.iter().any(|a| a.contains("--extension")), "no lane ever gets the owner's browser: {:?}", lane.argv);
+}
+
+/// The `tirith_browser` of a Codex argv: the TOML value after `-c mcp_servers.tirith_browser=`, parsed as Codex parses it.
+fn codex_browser_of(argv: &[String]) -> toml::Value {
+    let pair = argv.windows(2).find(|w| w[0] == "-c" && w[1].starts_with("mcp_servers.tirith_browser=")).unwrap_or_else(|| panic!("no tirith_browser in {argv:?}"));
+    assert!(argv.windows(2).any(|w| w[0] == "-c" && w[1] == "mcp_servers.node_repl.enabled=false"), "the desktop-app browser is off: {argv:?}");
+    format!("v = {}", pair[1].strip_prefix("mcp_servers.tirith_browser=").unwrap()).parse::<toml::Table>().unwrap()["v"].clone()
+}
+
+/// The `tirith_browser` server of an anthropic argv: the JSON of its `--mcp-config=…`.
+fn anthropic_browser_of(argv: &[String]) -> serde_json::Value {
+    assert!(argv.iter().any(|a| a == "--allowedTools=mcp__tirith_browser__*"), "its tools are allowed: {argv:?}");
+    let json = argv.iter().find_map(|a| a.strip_prefix("--mcp-config=")).unwrap_or_else(|| panic!("no --mcp-config in {argv:?}"));
+    serde_json::from_str::<serde_json::Value>(json).unwrap()["mcpServers"]["tirith_browser"].clone()
+}
+
+#[test]
+fn browser_mcp_for_every_agent() {
+    let lane = |app: &crate::app::Shared, alias: &str| crate::models::lane_argv(app, Some(alias), None, std::path::Path::new("/tmp/brief.md"), std::path::Path::new("/tmp"), None).unwrap().argv;
+    // Muse, as before: a lane isolated, a bot on the persistent profile.
+    let app = browser_home("every", false);
+    assert_eq!(browser_of(&lane(&app, "muse"))["args"][1], "--isolated");
+    let bot = super::muse_argv("muse", false, (None, None), "/w", None, "/w/p.txt", &crate::models::browser_args_for(&app, "muse", false));
+    assert_eq!(browser_of(&bot)["args"].as_array().map(|a| a.len()), Some(1));
+    // Codex, with no ~/.codex profile anywhere in its config: a lane carries the launcher with --isolated in the -c TOML, a bot's turn carries it bare (persistent profile), and no --profile rides along.
+    let argv = lane(&app, "codex");
+    let server = codex_browser_of(&argv);
+    assert!(server["command"].as_str().is_some_and(|c| c.ends_with("node")), "node runs it: {server}");
+    assert!(server["args"][0].as_str().is_some_and(|a| a.ends_with("tools/browser/launch.mjs")), "the repo's launcher: {server}");
+    assert_eq!(server["args"][1].as_str(), Some("--isolated"), "a lane never shares or keeps a profile: {server}");
+    assert_eq!(server["env"]["TIRITH_HOME"].as_str(), Some(app.home.display().to_string().as_str()), "its home rides in the server env: {server}");
+    assert!(!argv.iter().any(|a| a == "--profile"), "no profile is needed or passed: {argv:?}");
+    let cfg = app.cfg();
+    let bot = super::codex_argv("codex", false, (None, None), &cfg, "be a bot", Some("t-1"), &crate::models::browser_args_for(&app, "codex", false));
+    let server = codex_browser_of(&bot);
+    assert_eq!(server["args"].as_array().map(|a| a.len()), Some(1), "a bot gets the persistent profile, no mode flag: {server}");
+    assert!(bot.iter().position(|a| a.starts_with("mcp_servers.")).unwrap() < bot.iter().position(|a| a == "resume").unwrap(), "the -c pair configures exec, not resume: {bot:?}");
+    // The anthropic agent: a lane isolated, a bot's chat session on the persistent profile, the browser tools allowed both times.
+    let server = anthropic_browser_of(&lane(&app, "anthropic"));
+    assert_eq!(server["args"][1], "--isolated", "a lane is isolated: {server}");
+    assert!(server["command"].as_str().is_some_and(|c| c.ends_with("node")) && server["args"][0].as_str().is_some_and(|a| a.ends_with("tools/browser/launch.mjs")), "the same launcher: {server}");
+    assert_eq!(server["env"]["TIRITH_HOME"], app.home.display().to_string(), "its home rides in the server env: {server}");
+    let bot = crate::models::chat_argv(&app, "manager", None).unwrap().argv; // the manager role runs on the anthropic agent
+    let server = anthropic_browser_of(&bot);
+    assert_eq!(server["args"].as_array().map(|a| a.len()), Some(1), "a bot gets the persistent profile, no mode flag: {server}");
+    // use = "mine": bots of Codex and anthropic drive the owner's Edge; lanes of either still never do.
+    let app = browser_home("everymine", true);
+    let cfg = app.cfg();
+    let bot = super::codex_argv("codex", false, (None, None), &cfg, "be a bot", None, &crate::models::browser_args_for(&app, "codex", false));
+    assert_eq!(codex_browser_of(&bot)["args"][1].as_str(), Some("--extension"), "a Codex bot with use = \"mine\" drives the owner's Edge");
+    let bot = crate::models::chat_argv(&app, "manager", None).unwrap().argv;
+    assert_eq!(anthropic_browser_of(&bot)["args"][1], "--extension", "an anthropic bot with use = \"mine\" drives the owner's Edge");
+    for alias in ["codex", "anthropic"] {
+        let argv = lane(&app, alias);
+        assert!(!argv.iter().any(|a| a.contains("--extension")), "no lane ever gets the owner's browser: {argv:?}");
+    }
+    assert_eq!(codex_browser_of(&lane(&app, "codex"))["args"][1].as_str(), Some("--isolated"));
+    assert_eq!(anthropic_browser_of(&lane(&app, "anthropic"))["args"][1], "--isolated");
 }
 
 #[test]

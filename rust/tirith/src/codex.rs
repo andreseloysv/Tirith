@@ -40,17 +40,24 @@ pub fn options(cfg: &crate::config::Config, argv: &mut Vec<String>, effort: Opti
 fn muse_argv(command: &str, read_only: bool, model: (Option<&str>, Option<&str>), workspace: &str, session: Option<&str>, prompt_file: &str, browser: &[String]) -> Vec<String> {
     let (model, effort) = model;
     let mut a: Vec<String> = [command, "exec", "--json", "--yolo", "--workspace", workspace].map(String::from).to_vec();
-    a.extend(browser.iter().cloned());
-    a.extend(read_only.then(|| "--disable-write".to_string()));
+    a.extend(browser.iter().cloned().chain(read_only.then(|| "--disable-write".to_string())));
     a.extend([("--model", model), ("--reasoning-effort", effort), ("--session-id", session), ("--prompt-file", Some(prompt_file))].into_iter().filter_map(|(f, v)| v.map(|v| [f.to_string(), v.to_string()])).flatten());
+    a
+}
+
+fn codex_argv(command: &str, read_only: bool, model: (Option<&str>, Option<&str>), cfg: &crate::config::Config, instructions: &str, resume: Option<&str>, browser: &[String]) -> Vec<String> {
+    let mut a: Vec<String> = [command, "exec", "--json", "--skip-git-repo-check"].map(String::from).to_vec();
+    a.extend(if read_only { vec!["--sandbox".into(), "read-only".into(), "--ephemeral".into()] } else { vec!["--dangerously-bypass-approvals-and-sandbox".into()] });
+    a.extend(browser.iter().cloned().chain(model.0.into_iter().flat_map(|m| ["--model".to_string(), m.to_string()])));
+    options(cfg, &mut a, model.1);
+    a.extend(["-c".to_string(), format!("developer_instructions={}", toml::Value::String(instructions.into()))].into_iter().chain(resume.into_iter().flat_map(|id| ["resume".to_string(), id.to_string()])).chain(["-".to_string()]));
     a
 }
 
 pub async fn turn(app: &Shared, role: &str, project: &str, resume: Option<&str>, prompt: (&str, &str), mut event: impl FnMut(&Value), started: impl FnOnce(u32)) -> Result<String, String> {
     let (instructions, input) = prompt;
     let setting = models::role(app, role); // a bot's conversation passes its own role (its key) here
-    let muse = setting.agent == "muse";
-    let name = if muse { "the muse agent" } else { "Codex" };
+    let (muse, name) = if setting.agent == "muse" { (true, "the muse agent") } else { (false, "Codex") };
     let cfg = app.cfg();
     // The role's factory shape, not its name, decides: `access = "read"` runs read-only; a chat role (a bot's key counts as one) keeps the chats' folder and the longer turn.
     let read_only = cfg.factory.role::<String>(role, "access").as_deref() == Some("read");
@@ -63,16 +70,9 @@ pub async fn turn(app: &Shared, role: &str, project: &str, resume: Option<&str>,
     let argv = if let Some(file) = &file {
         let _ = std::fs::create_dir_all(&dir);
         std::fs::write(file, if resume.is_some() { input.to_string() } else { format!("{instructions}\n\n{input}") }).map_err(|e| e.to_string())?;
-        muse_argv(&command, read_only, (setting.model.as_deref(), setting.effort.as_deref()), &dir.display().to_string(), resume, &file.display().to_string(), &models::browser_args(app, false))
+        muse_argv(&command, read_only, (setting.model.as_deref(), setting.effort.as_deref()), &dir.display().to_string(), resume, &file.display().to_string(), &models::browser_args_for(app, "muse", false))
     } else {
-        let mut argv = vec![command, "exec".into(), "--json".into(), "--skip-git-repo-check".into()];
-        argv.extend(if read_only { vec!["--sandbox".into(), "read-only".into(), "--ephemeral".into()] } else { vec!["--dangerously-bypass-approvals-and-sandbox".into()] });
-        argv.extend(setting.model.into_iter().flat_map(|m| ["--model".to_string(), m]));
-        options(&cfg, &mut argv, setting.effort.as_deref());
-        argv.extend(["-c".into(), format!("developer_instructions={}", toml::Value::String(instructions.into()))]);
-        argv.extend(resume.into_iter().flat_map(|id| ["resume".to_string(), id.to_string()]));
-        argv.push("-".into());
-        argv
+        codex_argv(&command, read_only, (setting.model.as_deref(), setting.effort.as_deref()), &cfg, instructions, resume, &models::browser_args_for(app, "codex", false))
     };
     let (mut child, mut stdin, stdout) = manager::spawn_chat(app, who, project, argv)?;
     let pid = child.id().unwrap_or(0);
