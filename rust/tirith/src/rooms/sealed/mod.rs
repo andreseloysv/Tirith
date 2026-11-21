@@ -7,8 +7,10 @@ mod reading;
 mod signed;
 mod text;
 pub use envelope::{seal, unseal};
-pub use events::post;
+pub use events::{post, request};
 pub use identity::{identity, Me};
 pub use reading::{keys, new_room, page, platform};
 pub use signed::genuine;
+#[cfg(test)]
+pub use signed::{event_id, verify};
 pub use text::{clean, hex, key_id, sha_hex};

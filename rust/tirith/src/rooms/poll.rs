@@ -11,6 +11,8 @@ pub(super) struct Out {
     pub(super) send: Vec<(String, Vec<String>)>,
     pub(super) deliver: Vec<(String, String)>,
     pub(super) mentions: Vec<Value>,
+    /// What the room's webhook brought (`tirith-hook` JSON), for its bot.
+    pub(super) hooks: Vec<String>,
 }
 pub(super) async fn poll(app: &Shared, r: &Room) -> Result<(), String> {
     let base = base(app);
@@ -27,12 +29,14 @@ pub(super) async fn poll(app: &Shared, r: &Room) -> Result<(), String> {
     .await?;
     let list = got["messages"].as_array().cloned().unwrap_or_default();
     let (owners, host) = (owners(app), host());
+    let hook_from = crate::bots::hook_from(app, &r.project);
     let seen = Seen {
         me: &me,
         platform: &platform,
         backlog: r.cursor.is_none() && !r.private(),
         owners: &owners,
         host: &host,
+        hook_from: &hook_from,
     };
     let mut out = Out::default();
     let here = here(&got);

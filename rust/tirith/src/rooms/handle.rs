@@ -1,6 +1,7 @@
 //! The rules for one message of a room, in order: only genuine events, who wrote it, what it says, pairing, history, and who it is for.
 use super::agents::from_agent;
 use super::history::{blocked, record};
+use super::hooked::hooked;
 use super::words::{not_for_people, words};
 use super::{pair::pairing, poll::Out, sealed, Peer, Room, PHONE};
 use serde_json::Value;
@@ -11,6 +12,8 @@ pub(super) struct Seen<'a> {
     pub(super) backlog: bool,
     pub(super) owners: &'a [String],
     pub(super) host: &'a str,
+    /// The key of the agent that posts this room's webhook (`webhook:<bot>`), or empty.
+    pub(super) hook_from: &'a str,
 }
 /// Who wrote one message.
 pub(super) struct Who {
@@ -41,6 +44,9 @@ pub(super) fn handle(r: &mut Room, seen: &Seen, m: &Value, out: &mut Out) {
     let who = Who::of(m, seen.me);
     note_manager(r, m, &who);
     let Some(text) = words(r, seen.me, e) else {
+        return;
+    };
+    let Some(()) = (!hooked(seen, &who, &text, out)).then_some(()) else {
         return;
     };
     let Some(()) = (!not_for_people(r, &who, &text, out)).then_some(()) else {

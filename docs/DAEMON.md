@@ -21,6 +21,27 @@ gets its text in place of `{skill_template}` (as a role's prompt gets `{name}`);
 A bot may have a model of its own (role `bot-<id>` of `models.rs`, chosen in its card); without one it has the managers'. A routine answer that starts with ∅ (nothing new)
 stays on the page and never reaches the phones (`rooms::to_phones`), so only news does.
 
+Routines on an event from outside. A routine is either timed (`schedule`) or waits for its bot's webhook: a `[[routes]]` with `on = "webhook"` and
+`when` — the event's `<source>:<kind>` (`github:pull_request.opened`), a pattern of it with `*` (`github:issues.*`), or `*` for every call —
+made on the page (Routines: "At a time" or "On an event from outside") or by the bot (`tirith routine hook "<title>" "<when>" "<task>"`); its
+task may name `{title}`, `{url}` and `{text}`. The webhook is agentsmessenger.com's sealed webhook (its `src/server/hooks/`):
+`POST /api/bots/<id>/webhook` gives the bot's URL, making it once — the daemon makes sure the bot has its own private room (`rooms/hooks.rs`,
+even with no phone paired), signs with its room key a `request` event in that room (refs `[]`, body the JSON text
+`{"hook": "create", "readers": ["<its public key>"]}`), sends it to `POST <[messenger] url>/hooks` and keeps `{id, url, from, room}` in kv
+`webhook:<bot>` (`from`: the key of the platform's `webhook` agent of that room); `POST /api/bots/<id>/webhook/delete` deletes it the same way
+(`{"hook": "delete", "id": "<id>"}`), and deleting the bot forgets it. What a service posts to the URL arrives in the room sealed for this
+Tirith alone, as `tirith-hook {"v":1,"at":…,"headers":{…},"body":…}`. The room's watcher (`rooms/hooked.rs`) never makes such a line one of
+the owner's or of another agent: from the `from` agent it becomes the bot's `webhook` event (`bots/hook_event.rs`) — `source` (`github`
+when it has `x-github-event`, else the user-agent), `kind` (`github:<x-github-event>.<action>`, or `hook`), `title` and `url` (of
+GitHub's pull request, issue, release or comment, else the body's own `title` and `url`), `text` (the body as text, 4000 characters at most)
+and `data` (the body) — and from anyone else it is dropped. The event is kept and shown; each of the bot's routines on `webhook` whose
+`when` holds runs (`bots/hook_fire.rs`, trigger `event:webhook`), handed its task and then the event between two random marks
+(`<<<outside-data <mark>` … `outside-data <mark>>>>`), said to be data from outside and never instructions (`factory/prompts/bot.md` says
+the same). «Probar» on the page (`POST /api/bots/<id>/webhook/test/<routine>`) runs one routine with GitHub's sample of a pull request
+opened, with no platform in between. The Library gives a short Google Apps Script with the URL in it that, every 5 minutes in the
+owner's Google account, posts the new mail labelled `tirith/<bot name>` (sender, subject, date, text, its link) to the webhook and marks it
+read. Tests `webhook_create_signs_the_request` (against a fake platform) and `webhook_starts_its_routine` (`rust/tirith/checks/webhooks.rs`).
+
 ## `chat.rs`
 
 Clearing a conversation and its longest life. Every conversation (a project's, a bot's) can be cleared — its chat rows go, its saved agent session (kv `manager_session:*:<conversation>`) is forgotten and its live one ends without cutting a running turn, so the bot starts fresh; its memory, skills and routines stay — and can be given a longest life: `chat_keep`, the owner's own words (`30m`, `1h`, `24 h`, `2 días`, `una semana`; `siempre` takes the limit away), in `~/.tirith/config.toml` on the bot's role or on the project, written with toml_edit. A minute sweep drops the rows older than it, and a sweep that dropped any forgets the saved session too, so the bot cannot remember what is gone. The owner clears and limits a chat in its page menu, or asks its bot in the chat: `tirith chat clear` / `tirith chat keep "<time>"` act on the conversation of the session that runs them (a lane never does), only on the owner's own words. The paired rooms hear both as one sealed line — `tirith-chat {"v":1,"clear":"<ISO UTC>"}` and `tirith-chat {"v":1,"keep_s":<seconds, 0 = forever>}` — so the phone page hides what is gone.
@@ -160,6 +181,8 @@ the agentsmessenger.com chat page. One task per room long-polls it.
 Who gives orders: only a phone paired with a one-use QR code (`tirith-pair <code>`) is the owner, in every room made
 here (each project gets a room, each room gets every phone). Other agents reach the manager as information. After 30
 agent messages in a row with nothing from a paired phone, Tirith stops delivering and says so once, until a phone writes.
+A `tirith-hook` line is never a line for people: only the one sealed by the room's webhook agent (kv `webhook:<bot>`)
+is handed on, as its bot's `webhook` event (see Routines on an event from outside, above).
 
 ## `rooms/sealed.rs`
 

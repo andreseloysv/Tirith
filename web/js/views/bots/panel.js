@@ -4,7 +4,8 @@ import { html, useState, useEffect } from '../../../vendor/preact-htm.js';
 import { Face } from './face.js';
 import { stateOf, factoryLine } from './state.js';
 import { soonest, whenLabel } from './when.js';
-import { RoutineForm, Routine } from './routines.js';
+import { RoutineForm, Routine, isHook } from './routines.js';
+import { Webhook } from './webhook.js';
 import { Library } from './library.js';
 import { Phone } from './phone.js';
 
@@ -46,5 +47,6 @@ export function Panel({ bot, busy, onEdit }) {
       ${tab === 'library' ? html`<${Library} bot=${bot} />` : tab === 'phone' ? html`<${Phone} key=${bot.id} bot=${bot} />` : null}
       ${tab === 'routines' && form && !form.id ? html`<${RoutineForm} bot=${bot} r=${form} onDone=${done} />` : null}
       ${tab !== 'routines' ? null : routineList(bot, list, form, setForm, done)}
+      ${tab === 'routines' && !form && list.some(isHook) ? html`<${Webhook} bot=${bot} />` : null}
     </section>`;
 }
