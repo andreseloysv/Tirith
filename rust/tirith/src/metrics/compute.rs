@@ -1,6 +1,6 @@
 //! One computation of every measure, in the order the page shows them, from what one moment of the daemon holds.
 use super::metric::{iso, Metric};
-use super::{cards, flow, idle, interruptions, mood, trouble, work};
+use super::{cards, flow, idle, interruptions, mood, trouble, unapproved, work};
 use crate::app::{now_s, Lane, Shared};
 use std::sync::Arc;
 /// The moment the measures are computed at: the configuration, now, a day ago (also as a database time) and the lanes.
@@ -48,5 +48,6 @@ pub(super) fn compute(app: &Shared) -> Vec<Metric> {
         interruptions::metric(&c, merged.len()),
         cards::needless(&c),
         mood::satisfaction(&c),
+        unapproved::unapproved(&c),
     ]
 }

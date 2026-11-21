@@ -5,7 +5,7 @@ use serde_json::{Map, Value};
 use std::path::{Path, PathBuf};
 
 /// The folder a role's sessions run in, as `manager::spawn_chat` chooses it: a bot's own, else its conversation's below the role's.
-fn folder(app: &Shared, t: &Turn) -> PathBuf {
+pub(super) fn folder(app: &Shared, t: &Turn) -> PathBuf {
     let own = app
         .cfg()
         .factory
