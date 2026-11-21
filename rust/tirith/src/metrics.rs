@@ -177,22 +177,12 @@ fn tick(app: &Shared) {
     let (mut due, mut notes) = (vec![], vec![]);
     {
         let mut book = BOOK.lock().unwrap();
-        for m in &metrics {
-            if !m.red {
-                book.episodes.remove(m.id);
-                continue;
-            }
-            match book.episodes.get_mut(m.id) {
-                None => {
-                    book.episodes.insert(m.id.to_string(), Episode { since: now, reviewed: false });
-                    notes.push(m);
-                }
-                Some(e) if !e.reviewed && now >= e.since + after => {
-                    e.reviewed = true;
-                    due.push((m.id, describe(m)));
-                }
-                _ => {}
-            }
+        book.episodes.retain(|id, _| metrics.iter().any(|m| m.id == id && m.red)); // back to green ends the episode
+        for m in metrics.iter().filter(|m| m.red) {
+            let fresh = !book.episodes.contains_key(m.id);
+            let e = book.episodes.entry(m.id.to_string()).or_insert(Episode { since: now, reviewed: false });
+            let _ = fresh.then(|| notes.push(m));
+            let _ = (!fresh && !e.reviewed && now >= e.since + after).then(|| (e.reviewed = true, due.push((m.id, describe(m)))).1);
         }
         book.last = json!(metrics
             .iter()
@@ -232,12 +222,12 @@ fn start_review(app: &Shared, role: String, metric: String, why: String) {
     let app = app.clone();
     tokio::spawn(async move {
         app.emit("review", json!({"running": true}));
-        let result = manager::run_turn(&app, &role, "", &brief(&app, &why)).await;
+        let result = manager::run_turn(&app, &role, &role, &brief(&app, &why)).await;
         let text = result.clone().unwrap_or_else(|e| format!("(the review could not run: {e})"));
         let (factory, role_hash) = app.stamp_for(&role); // the review turn's stamp
         let _ = app.db.lock().unwrap().execute("INSERT INTO ceo_reviews (at, metric, text, factory, role_hash) VALUES (?1, ?2, ?3, ?4, ?5)", rusqlite::params![now_iso(), metric, text, factory, role_hash]);
-        app.chat(&role, &text, "");
-        let _ = result.is_ok().then(|| manager::emit_event(&app, "", "review.done", &format!("Review: {text}"), None));
+        app.chat("manager", &text, &role); // the review appears in the CEO's own conversation, as its answer there
+        let _ = result.is_ok().then(|| manager::emit_event(&app, &role, "review.done", &format!("Review: {text}"), None));
         REVIEWING.store(false, Ordering::SeqCst);
         app.emit("review", json!({"running": false})); // the page refetches the metrics on it, reviews included
     });

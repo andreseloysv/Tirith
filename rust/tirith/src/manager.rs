@@ -118,7 +118,8 @@ pub fn interrupt(project: &str) -> Result<(), String> {
 }
 
 pub fn say(app: &Shared, project: &str, text: &str) -> Result<(), String> {
-    (app.conv(project) == project).then_some(()).ok_or(format!("unknown project '{project}'"))?;
+    (project.is_empty() || app.conv(project) == project).then_some(()).ok_or(format!("unknown project '{project}'"))?;
+    let project = app.conv(project);
     let event = app.event("", project, "owner.message", "", text, "");
     app.chat("owner", text, project);
     judge_evals(app, project, "owner.message", text, event);
@@ -151,11 +152,7 @@ pub fn emit_event(app: &Shared, project: &str, on: &str, shown: &str, told: Opti
         let Some(()) = (f.role::<String>(&to, "session").as_deref() == Some("chat")).then_some(()) else { continue };
         // A due routine (its bot's own `schedule` route) is for that bot's conversation alone, and a conversation that more than one route reaches (the factory's schedule route and the bot's) hears the event once.
         let Some(()) = (!(on == "schedule" && f.role::<String>(&to, "scope").as_deref() == Some("own") && to != here_p)).then_some(()) else { continue };
-        let dest = match f.role::<String>(&to, "scope").as_deref() {
-            Some("global") => "",
-            Some("own") => &to,
-            _ => here_p,
-        };
+        let dest = if f.role::<String>(&to, "scope").as_deref() == Some("own") { &to } else { here_p };
         let _ = heard.insert(dest.to_string()).then(|| queue(app, dest, told.unwrap_or(shown), &mode, phone));
     }
     judge_evals(app, project, on, shown, event);
@@ -242,7 +239,8 @@ pub fn ask_owner(app: &Shared, project: &str, kind: &str, question: &str, lane: 
         _ if lane.is_empty() => project.to_string(),
         _ => return Err(format!("lane {lane} is not waiting for an answer")),
     };
-    (app.conv(&project) == project).then_some(()).ok_or(format!("unknown project '{project}'"))?;
+    (project.is_empty() || app.conv(&project) == project).then_some(()).ok_or(format!("unknown project '{project}'"))?;
+    let project = app.conv(&project).to_string();
     let question = question.trim();
     let kinds = app.cfg().factory.words("cards", "kinds");
     (kinds.iter().any(|k| k == kind) && !question.is_empty()).then_some(()).ok_or_else(|| format!("ask the owner with --kind {} and a question", kinds.join("|")))?;
@@ -329,13 +327,12 @@ pub fn stale_reason(question: &str, autopilot_on: bool, free_gb: f64) -> Option<
 }
 
 pub fn close_stale_questions(app: &Shared) {
-    for o in owner_open(app) {
-        let (id, project, q) = (o["id"].as_str().unwrap_or(""), o["project"].as_str().unwrap_or(""), o["question"].as_str().unwrap_or(""));
-        let lane = o["lane"].as_str().unwrap_or("");
+    let stale = owner_open(app).into_iter().filter_map(|o| {
+        let (id, project, q, lane) = (o["id"].as_str().unwrap_or(""), o["project"].as_str().unwrap_or(""), o["question"].as_str().unwrap_or(""), o["lane"].as_str().unwrap_or(""));
         let moot = (!lane.is_empty() && !app.lane(lane).is_some_and(|l| l.status == "waiting")).then_some("its lane no longer waits for an answer");
-        let Some(why) = moot.or_else(|| stale_reason(q, if project.is_empty() { app.cfg().autopilot } else { crate::lanes::autopilot_on(app, project) }, crate::lanes::free_gb(&app.home.join("lanes")))) else { continue };
-        card_done(app, id, "closed", &format!("closed by Tirith: {why}"));
-    }
+        moot.or_else(|| stale_reason(q, if project.is_empty() { app.cfg().autopilot } else { crate::lanes::autopilot_on(app, project) }, crate::lanes::free_gb(&app.home.join("lanes")))).map(|why| (id.to_string(), why))
+    });
+    stale.for_each(|(id, why)| card_done(app, &id, "closed", &format!("closed by Tirith: {why}")));
 }
 
 async fn run(app: Shared, project: String) {
@@ -343,10 +340,12 @@ async fn run(app: Shared, project: String) {
     loop {
         let started = std::time::Instant::now();
         let result = session(&app, &project).await;
-        if let Some(e) = result.as_ref().err().filter(|_| backoff == 2) {
-            app.event("", &project, "error", "manager", e, "");
-            report(&app, &project, &format!("The manager could not start: {e}. Tirith keeps trying; what you wrote waits for it."));
-        }
+        result
+            .as_ref()
+            .err()
+            .filter(|_| backoff == 2)
+            .into_iter()
+            .for_each(|e| (app.event("", &project, "error", "manager", e, ""), report(&app, &project, &format!("The manager could not start: {e}. Tirith keeps trying; what you wrote waits for it."))).1);
         let rest = talk(&project, |t| {
             (t.tx, t.pid) = (None, 0);
             t.text.clear();
@@ -363,10 +362,10 @@ async fn run(app: Shared, project: String) {
     }
 }
 
-/// Starts a streaming chat agent on behalf of `role` in `<home>/<role>` (a project's chat in its own folder below it, so the agent's own notes stay with the project), sandboxed, logging to `logs/<role>.log`.
+/// Starts a streaming chat agent on behalf of `role` in `<home>/<role>` (a project's chat in its own folder below it, so the agent's own notes stay with the project), sandboxed, logging to `logs/<role>.log`. A bot's own turn role (the CEO, the judge) runs in its bot folder `<home>/manager/<role>`, like its conversation does.
 pub fn spawn_chat(app: &Shared, role: &str, project: &str, argv: Vec<String>) -> Result<(tokio::process::Child, tokio::process::ChildStdin, tokio::process::ChildStdout), String> {
     let launch = sandbox::wrap(app, role, argv);
-    let dir = app.home.join(role).join(project);
+    let dir = if app.cfg().factory.role::<String>(role, "scope").as_deref() == Some("own") { app.home.join("manager").join(role) } else { app.home.join(role).join(project) };
     let _ = std::fs::create_dir_all(&dir);
     let log = std::fs::OpenOptions::new().create(true).append(true).open(app.home.join(format!("logs/{role}.log"))).map_err(|e| e.to_string())?;
     let mut child = launch
@@ -416,12 +415,7 @@ pub async fn run_turn(app: &Shared, role: &str, project: &str, input: &str) -> R
         while let Ok(Some(line)) = lines.next_line().await {
             let Ok(msg) = serde_json::from_str::<Value>(&line) else { continue };
             match msg["type"].as_str().unwrap_or("") {
-                "assistant" => {
-                    for b in msg["message"]["content"].as_array().into_iter().flatten().filter(|b| b["type"] == "text") {
-                        text += b["text"].as_str().unwrap_or("");
-                        text += "\n";
-                    }
-                }
+                "assistant" => msg["message"]["content"].as_array().into_iter().flatten().filter(|b| b["type"] == "text").for_each(|b| text += &format!("{}\n", b["text"].as_str().unwrap_or(""))),
                 "result" => return true,
                 "control_request" if msg["request"]["subtype"] == "can_use_tool" => {
                     let behavior = turn_permission(read_only, msg["request"]["tool_name"].as_str().unwrap_or(""), &msg["request"]["input"]);

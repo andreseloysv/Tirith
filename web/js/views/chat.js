@@ -195,6 +195,7 @@ let cidN = 0;
     files being attached and the scroll position belong to one conversation. A bot's conversation (`bot-<id>`) passes
     `who` (the bot's name, in place of "Manager"), `hint` (what an empty conversation says) and `models` false. */
 export function Chat({ project = '', who = '', hint = '', models = true }) {
+  project = project || 'manager-general';   /* no project: the manager of no project's conversation */
   const s = useStore();
   const talk = useTalk(project);
   const name = projName(s.projects, project);

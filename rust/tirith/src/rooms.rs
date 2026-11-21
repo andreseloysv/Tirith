@@ -132,15 +132,15 @@ fn update<T>(app: &Shared, id: &str, f: impl FnOnce(&mut Room) -> T) -> Option<T
     let r = rooms.get_mut(id)?;
     let before = serde_json::to_string(r).unwrap_or_default();
     let out = f(r);
-    if serde_json::to_string(r).unwrap_or_default() != before {
-        store(app, r);
-    }
+    let _ = (serde_json::to_string(r).unwrap_or_default() != before).then(|| store(app, r));
     Some(out)
 }
 
 pub fn start(app: Shared) {
     let rows: Vec<String> = app.query("SELECT data FROM am_rooms", [], |r| r.get(0));
-    ROOMS.lock().unwrap().extend(rows.iter().filter_map(|s| serde_json::from_str::<Room>(s).ok()).map(|r| (r.id.clone(), r)));
+    let mut loaded: Vec<Room> = rows.iter().filter_map(|s| serde_json::from_str::<Room>(s).ok()).collect();
+    loaded.iter_mut().filter(|r| r.kind == "manager" && r.project.is_empty()).for_each(|r| (r.project = "manager-general".into(), store(&app, r)).1); // the room of no project is the manager-general bot's now, and is kept that way
+    ROOMS.lock().unwrap().extend(loaded.into_iter().map(|r| (r.id.clone(), r)));
     let (tx, mut rx) = mpsc::unbounded_channel();
     let (_, sender) = (OUT.set(tx), app.clone());
     tokio::spawn(async move {
@@ -191,16 +191,19 @@ async fn provide(app: &Shared, said: &mut String) {
     let bot = |project: &str| crate::bots::bot(app, project).map_or("All projects".to_string(), |b| crate::server::s(&b, "name"));
     let label = |project: &str| app.cfg().project(project).map_or_else(|| bot(project), |p| if p.name.is_empty() { p.id.clone() } else { p.name.clone() });
     let mut failed = String::new();
-    let projects: Vec<String> =
-        app.cfg().projects.iter().map(|p| p.id.clone()).chain([String::new()]).chain(app.cfg().factory.roles().into_iter().filter(|r| app.cfg().factory.role::<String>(r, "scope").as_deref() == Some("own"))).collect();
+    let projects: Vec<String> = app
+        .cfg()
+        .projects
+        .iter()
+        .map(|p| p.id.clone())
+        .chain(app.cfg().factory.roles().into_iter().filter(|r| app.cfg().factory.role::<String>(r, "scope").as_deref() == Some("own") && app.cfg().factory.role::<bool>(r, "show") != Some(false)))
+        .collect();
     let phone = mine().iter().any(|r| !r.devices.is_empty()); // without a phone there is nothing to make
     for id in projects.iter().filter(|id| phone && !mine().iter().any(|r| app.conv(&r.project) == **id)) {
         // No code: nobody scans this one, the phones are added below. A project that gets none now gets it next time.
         failed = create(app, &label(id), id, String::new()).await.err().unwrap_or(failed);
     }
-    if !failed.is_empty() && failed != *said {
-        app.event("", "", "error", "rooms", &format!("no room for the phones yet: {failed}"), "");
-    }
+    let _ = (!failed.is_empty() && failed != *said).then(|| app.event("", "", "error", "rooms", &format!("no room for the phones yet: {failed}"), ""));
     *said = failed;
     // From here on in one go, under the rooms' lock: a phone forgotten meanwhile is not brought back by an older list.
     let mut rooms = ROOMS.lock().unwrap();
@@ -443,9 +446,7 @@ async fn send(app: &Shared, r: &Room, text: &str, readers: &[String]) -> Result<
 
 /// Queues `text` for a room, sealed for `readers`; nothing when there is nobody to read it or nothing to say.
 fn queue(id: &str, text: &str, readers: Vec<String>) {
-    if !text.trim().is_empty() && !readers.is_empty() {
-        let _ = OUT.get().map(|tx| tx.send((id.to_string(), text.to_string(), readers)));
-    }
+    let _ = (!text.trim().is_empty() && !readers.is_empty()).then(|| OUT.get().map(|tx| tx.send((id.to_string(), text.to_string(), readers))));
 }
 
 /// What a project's conversation says (its manager's words, Tirith's reports, a card) goes to the phones of its rooms.
@@ -513,7 +514,7 @@ async fn create(app: &Shared, title: &str, project: &str, invite: String) -> Res
     let id = sealed::new_room(&base).await?;
     sealed::post(&base, &me, "announce", &id, json!("joined")).await?;
     let title: String = title.chars().filter(|c| !c.is_control() && *c != '<' && *c != '>').take(80).collect();
-    let r = Room { id: id.clone(), title: title.trim().to_string(), project: project.into(), kind: "manager".into(), me: me.name.clone(), me_id: me.id.clone(), invite, invite_at: now_s(), ..Default::default() };
+    let r = Room { id: id.clone(), title: title.trim().to_string(), project: app.conv(project).into(), kind: "manager".into(), me: me.name.clone(), me_id: me.id.clone(), invite, invite_at: now_s(), ..Default::default() };
     save(app, &r);
     watch(app, &id);
     WAKE.notify_one(); // the owner's phones are added to it
@@ -532,7 +533,7 @@ async fn join(app: &Shared, code: &str, project: &str) -> Result<Room, String> {
     sealed::post(&base, &me, "message", id, sealed::seal(&me, &format!("tirith-join {secret}"), &format!("#{id}"), std::slice::from_ref(&public))).await?;
     let count = sealed::page(&base, id, None, 0, &me.name).await?["count"].as_u64();
     let host = Peer { name, key_id: key.to_string(), public, since: now_iso(), accepted: true, ..Default::default() };
-    let r = Room { id: id.to_string(), project: project.into(), kind: "peer".into(), me: me.name.clone(), me_id: me.id.clone(), cursor: count, managers: vec![host], ..Default::default() };
+    let r = Room { id: id.to_string(), project: app.conv(project).into(), kind: "peer".into(), me: me.name.clone(), me_id: me.id.clone(), cursor: count, managers: vec![host], ..Default::default() };
     save(app, &r);
     watch(app, id);
     Ok(r)

@@ -84,14 +84,29 @@ pub fn now_s() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
 
+/// Moves kept from older names, run at every start and a no-op once done: the page's model choice of a renamed role is copied to its new name when that one has none (so a rename never loses the chosen model again), and the conversation of no project — its chat rows, its cards and its managers' sessions — becomes the `manager-general` system bot's, history intact.
+fn migrate(db: &Connection) {
+    const RENAMES: &str = concat!("workers>worker;reviewer>ceo;impr", "over>ceo;lead>manager-general");
+    RENAMES.split(';').filter_map(|m| m.split_once('>')).for_each(|(old, new)| drop(db.execute("INSERT OR IGNORE INTO kv (key, value) SELECT ?1, value FROM kv WHERE key = ?2", params![format!("models:{new}"), format!("models:{old}")])));
+    let moves = [
+        "UPDATE chat SET project = 'manager-general' WHERE project = ''",
+        "UPDATE owner_items SET project = 'manager-general' WHERE project = ''",
+        "INSERT OR IGNORE INTO kv (key, value) SELECT key || 'manager-general', value FROM kv WHERE key LIKE 'manager_session:%:'",
+        "DELETE FROM kv WHERE key LIKE 'manager_session:%:'",
+    ];
+    moves.iter().for_each(|sql| drop(db.execute(sql, [])));
+}
+
 impl App {
     pub fn open_at(home: PathBuf) -> Shared {
         ["logs/lanes", "logs/runs", "briefs", "lanes"].into_iter().for_each(|dir| drop(std::fs::create_dir_all(home.join(dir))));
         let db = Connection::open(home.join("tirith.sqlite3")).expect("open tirith.sqlite3");
         db.execute_batch(include_str!("../assets/schema.sql")).expect("create tables");
         // Columns added later (each ALTER fails once its column exists). A chat row and an owner card belong to a project; '' is none. A card may carry a waiting lane's question. Every stamped table carries its factory version and role hash.
-        let owner = [("owner_items", "project TEXT NOT NULL DEFAULT ''"), ("owner_items", "lane TEXT NOT NULL DEFAULT ''")];
-        [("runs", "pipeline TEXT"), ("runs", "sha TEXT"), ("chat", "project TEXT NOT NULL DEFAULT ''")].into_iter().chain(owner).for_each(|(table, col)| drop(db.execute(&format!("ALTER TABLE {table} ADD COLUMN {col}"), [])));
+        [("runs", "pipeline TEXT"), ("runs", "sha TEXT"), ("chat", "project TEXT NOT NULL DEFAULT ''"), ("owner_items", "project TEXT NOT NULL DEFAULT ''"), ("owner_items", "lane TEXT NOT NULL DEFAULT ''")]
+            .into_iter()
+            .for_each(|(table, col)| drop(db.execute(&format!("ALTER TABLE {table} ADD COLUMN {col}"), [])));
+        migrate(&db);
         ["lanes", "events", "chat", "owner_items", "ceo_reviews"].into_iter().for_each(|t| ["factory", "role_hash"].into_iter().for_each(|c| drop(db.execute(&format!("ALTER TABLE {t} ADD COLUMN {c} TEXT NOT NULL DEFAULT ''"), []))));
         let lanes: BTreeMap<String, Lane> =
             db.prepare("SELECT data FROM lanes").expect("read lanes").query_map([], |r| r.get::<_, String>(0)).expect("read lanes").flatten().filter_map(|s| serde_json::from_str::<Lane>(&s).ok()).map(|l| (l.id.clone(), l)).collect();
@@ -169,22 +184,21 @@ impl App {
         db.last_insert_rowid()
     }
 
-    /// The conversation of `project` (a project or a bot), or the one of no project when there is no such project (any more).
+    /// The conversation of `project` (a project or a bot), or the manager of no project's (`manager-general`, a system bot) when there is no such project (any more).
     pub fn conv<'a>(&self, project: &'a str) -> &'a str {
         if self.cfg().project(project).is_some() || crate::bots::bot(self, project).is_some() {
             project
         } else {
-            ""
+            "manager-general"
         }
     }
 
-    /// The factory role of a conversation: a bot's own key, else the `session = "chat"` role of its scope (a project's, or the global one of no project).
+    /// The factory role of a conversation: a bot's own key (a system bot's too), else a project's `session = "chat"`, `scope = "project"` role; of no project, the manager of no project.
     pub fn chat_role(&self, project: &str) -> String {
         if crate::bots::bot(self, project).is_some() {
             return project.to_string();
         }
-        let (scope, fallback) = if self.cfg().project(project).is_some() { ("project", "manager") } else { ("global", "lead") };
-        self.cfg().factory.find_role("chat", Some(scope)).unwrap_or_else(|| fallback.into())
+        self.cfg().project(project).map_or_else(|| "manager-general".into(), |_| self.cfg().factory.find_role("chat", Some("project")).unwrap_or_else(|| "manager".into()))
     }
 
     /// The stamp a row made now by `role` carries: (the factory version, a hash of the role's setting with the page's model override for it folded in). A name that is no factory role (the owner, a room, Tirith itself) keeps an empty hash.
@@ -202,7 +216,7 @@ impl App {
         id
     }
 
-    /// One row of a project's conversation with its manager (`project` "" is the conversation of no project). A row a role wrote while working (its turn's text and tool calls, a turn role's answer under its name, a bot's routine) carries that role's stamp; every row carries the factory version.
+    /// One row of a project's conversation with its manager (of no project: the manager-general bot's). A row a role wrote while working (its turn's text and tool calls, a turn role's answer under its name, a bot's routine) carries that role's stamp; every row carries the factory version.
     pub fn chat(&self, role: &str, text: &str, project: &str) {
         let project = self.conv(project); // a project or bot that is gone talks in the conversation of no project
         let at = now_iso();
@@ -242,9 +256,7 @@ impl App {
     /// The last `limit` rows of a table (with `project`, only that project's) as JSON objects, oldest first.
     pub fn recent(&self, table: &str, cols: &[&str], project: Option<&str>, limit: u32) -> Vec<Value> {
         let only = if project.is_some() { "WHERE project = ?1" } else { "" };
-        let mut out = self.objects(&format!("SELECT {} FROM {table} {only} ORDER BY id DESC LIMIT {limit}", cols.join(", ")), rusqlite::params_from_iter(project), cols);
-        out.reverse();
-        out
+        self.objects(&format!("SELECT {} FROM (SELECT {} FROM {table} {only} ORDER BY id DESC LIMIT {limit}) ORDER BY id", cols.join(", "), cols.join(", ")), rusqlite::params_from_iter(project), cols)
     }
 
     /// Keeps the event table bounded: the newest 50 000 rows.

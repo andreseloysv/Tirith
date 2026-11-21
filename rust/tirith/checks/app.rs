@@ -95,3 +95,32 @@ fn rows_carry_the_factory_stamp() {
     app.insert("INSERT INTO scores (at, event, eval, label, factory, role_hash) VALUES (?1, 1, 'owner-mood', 'approval', ?2, ?3)", rusqlite::params![now_iso(), f2, h2]);
     assert_eq!(stamp("scores", "eval = 'owner-mood'"), (version, h2));
 }
+#[test]
+fn renames_move_the_model_and_the_conversation_of_no_project() {
+    let home = std::env::temp_dir().join(format!("tirith-renames-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&home);
+    std::fs::create_dir_all(&home).unwrap();
+    let app = App::open_at(home);
+    // The page's choices under yesterday's role names, one already under its new name (it wins).
+    app.set_kv("models:lead", Some("{\"agent\":\"anthropic\",\"model\":\"m-lead\"}"));
+    app.set_kv("models:reviewer", Some("{\"agent\":\"anthropic\",\"model\":\"m-rev\"}"));
+    app.set_kv("models:workers", Some("{\"agent\":\"anthropic\",\"model\":\"m-old\"}"));
+    app.set_kv("models:worker", Some("{\"agent\":\"anthropic\",\"model\":\"m-new\"}"));
+    app.insert("INSERT INTO chat (at, role, text, project) VALUES ('2026-11-01T00:00:00Z', 'owner', 'old line', '')", &[]);
+    app.set_kv("manager_session:anthropic:", Some("sess-1"));
+    migrate(&app.db.lock().unwrap());
+    assert!(app.kv("models:manager-general").unwrap().contains("m-lead"), "lead's model is manager-general's now");
+    assert!(app.kv("models:ceo").unwrap().contains("m-rev"), "the reviewer's model is the CEO's now");
+    assert!(app.kv("models:worker").unwrap().contains("m-new"), "a choice under the new name is never overwritten");
+    assert_eq!(app.kv("manager_session:anthropic:manager-general").as_deref(), Some("sess-1"), "its session resumes under its new key");
+    assert_eq!(app.kv("manager_session:anthropic:"), None);
+    assert_eq!(app.query("SELECT project FROM chat WHERE text = 'old line'", [], |r| r.get::<_, String>(0)), ["manager-general"], "its chat rows keep their history under the new conversation");
+    assert_eq!((app.conv(""), app.chat_role("manager-general").as_str()), ("manager-general", "manager-general"));
+    // The system bots are bots: the CEO and the manager of no project shown, the judge not.
+    let bots = crate::bots::all(&app);
+    let shown = |k: &str| bots.iter().find(|b| b["key"] == k).map(|b| (b["name"].clone(), b["show"].clone(), b["system"].clone()));
+    assert_eq!(shown("ceo"), Some((serde_json::json!("CEO"), serde_json::json!(true), serde_json::json!(true))));
+    assert_eq!(shown("judge"), Some((serde_json::json!("Judge"), serde_json::json!(false), serde_json::json!(true))));
+    assert_eq!(shown("manager-general"), Some((serde_json::json!("Manager"), serde_json::json!(true), serde_json::json!(true))));
+    assert_eq!(crate::models::role(&app, "judge").agent, "muse", "the judge keeps its cheap factory agent, not the managers'");
+}
