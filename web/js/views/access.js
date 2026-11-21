@@ -10,7 +10,7 @@ import { useAction } from './settings/ui.js';
 
 const MAX_ROWS = 200;
 const IP = /^[0-9.]+$|:/;
-/** Who reached a destination, by role as the old page showed it: "Manager, Reviewer, 48 lanes" (hover lists them all).
+/** Who reached a destination, by role as the old page showed it: "Manager, Improver, 48 lanes" (hover lists them all).
  *  A lane is its id (`<slug>-<4 hex>`) or `merge:<lane>`; anything else that reached out is a factory role. */
 const whoText = (who) => {
   const laneLike = (w) => w.startsWith('merge:') || /-[0-9a-f]{4}$/.test(w);
