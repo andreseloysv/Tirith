@@ -38,7 +38,7 @@ impl Factory {
             .unwrap_or_else(|| embedded_prompts().get(name).cloned().unwrap_or_default())
     }
 
-    /// A role's prompt files, one after another, with `{name}` its factory name (a bot's, from config.toml).
+    /// A role's prompt files, one after another, with `{name}` its factory name (a bot's, from config.toml) and `{skill_template}` the text of skill.md (after `{name}`: the template keeps its own).
     pub fn prompts_of(&self, role: &str) -> String {
         self.role::<Vec<String>>(role, "prompt")
             .unwrap_or_default()
@@ -52,5 +52,6 @@ impl Factory {
                     .role::<String>(role, "name")
                     .unwrap_or_else(|| role.to_string()),
             )
+            .replace("{skill_template}", self.prompt("skill").trim())
     }
 }

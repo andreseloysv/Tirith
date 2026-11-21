@@ -30,7 +30,7 @@ pub use stamp::stamp;
 pub(crate) use values::merge;
 
 #[cfg(test)]
-use embedded::{embedded_prompts, TEXT};
+pub(crate) use embedded::{embedded_prompts, TEXT};
 
 #[cfg(test)]
 #[path = "../../checks/factory.rs"]

@@ -12,6 +12,12 @@ with `toml_edit`, keeping its comments, and the bots that used to live in kv mov
 the start of every turn and routine, and skills in `.agents/skills/<name>/SKILL.md`, its own and the shared ones of `<tirith home>/bots/skills` (linked in before every turn).
 The bots' agent finds them natively: Muse reads `.agents/skills`, and the agent's own `.<command>/skills` is a link to the same folder. Agents may write in a bot's folder
 (never in its hidden folders, where agent settings live, except skills folders) and in the shared skills; the page's Library shows, corrects and deletes all of it.
+The shared memory, `<tirith home>/bots/memory.md` (what holds for every bot: the owner's name, time zone, language), is handed before the bot's own, as `[tirith] Shared memory.md as it is now: …`, and the
+Library shows it above the bot's memory and edits it (`POST /api/bots/<id>/library` with `memory` and `shared`; `GET` gives it as `shared_memory`). Memory notes are numbered: when it hands a memory over,
+Tirith puts `[m<N>]` (the bot's own) or `[s<N>]` (the shared one) before every note line (one that starts with `-` or `*`) that has none yet, the number after the highest already there, and saves
+the file so; numbered notes, headings and every other line stay as they are, and the bot cites `[m<N>]` or `[s<N>]` when its answer uses a note. Every skill follows the factory's template,
+`factory/skill.md`: its header and seven sections («Cuándo usarla», «Entradas y accesos», «Pasos», «Cómo validar», «Qué devuelve», «Qué requiere aprobación», «Si algo falla»). The bot prompt
+gets its text in place of `{skill_template}` (as a role's prompt gets `{name}`); the Library's `GET` gives it as `template`, a new skill starts from it, and every skill is marked with the sections it lacks, by their titles.
 A bot may have a model of its own (role `bot-<id>` of `models.rs`, chosen in its card); without one it has the managers'. A routine answer that starts with ∅ (nothing new)
 stays on the page and never reaches the phones (`rooms::to_phones`), so only news does.
 

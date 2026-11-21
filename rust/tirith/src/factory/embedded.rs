@@ -1,10 +1,10 @@
 //! The repo's factory, built into the binary: what runs when no factory folder is found, and what every folder's file is laid over.
 use std::collections::BTreeMap;
 
-pub(super) const TEXT: &str = include_str!("../../../../factory/factory.toml");
+pub(crate) const TEXT: &str = include_str!("../../../../factory/factory.toml");
 
 /// The embedded prompts and eval rubrics, by file stem.
-pub(super) fn embedded_prompts() -> BTreeMap<String, String> {
+pub(crate) fn embedded_prompts() -> BTreeMap<String, String> {
     [
         (
             "manager",
@@ -28,6 +28,7 @@ pub(super) fn embedded_prompts() -> BTreeMap<String, String> {
         ),
         ("ceo", include_str!("../../../../factory/prompts/ceo.md")),
         ("bot", include_str!("../../../../factory/prompts/bot.md")),
+        ("skill", include_str!("../../../../factory/skill.md")),
         (
             "owner-mood",
             include_str!("../../../../factory/evals/owner-mood.md"),

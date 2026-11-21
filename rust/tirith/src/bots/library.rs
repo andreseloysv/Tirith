@@ -1,11 +1,11 @@
 //! The page's Library: a bot's memory, its own skills and the shared ones, read and changed.
-use super::folder::{folder, skills, SKILLS};
+use super::folder::{folder, skills, SHARED, SKILLS};
 use super::list::key_for;
 use crate::app::App;
 use crate::server::s;
 use serde_json::{json, Value};
 use std::path::PathBuf;
-/// The page's Library: the bot's memory, its own skills and the shared ones.
+/// The page's Library: the shared memory of every bot, the bot's own memory, its own skills and the shared ones, and the factory's skill template (a new skill starts from it, and its section titles are the ones a skill is marked for lacking).
 pub(super) fn library(app: &App, id: &str) -> Result<Value, String> {
     let key = key_for(app, id).ok_or(format!("no bot '{id}'"))?;
     let list = |v: Vec<(String, String)>, shared: bool| {
@@ -16,8 +16,11 @@ pub(super) fn library(app: &App, id: &str) -> Result<Value, String> {
         .chain(list(skills(&app.home.join("bots/skills"), true), true))
         .collect();
     Ok(
-        json!({"memory": std::fs::read_to_string(folder(app, &key).join("memory.md")).unwrap_or_default(), "skills": all}),
+        json!({"memory": read(&folder(app, &key).join("memory.md")), "shared_memory": read(&app.home.join(SHARED)), "skills": all, "template": app.cfg().factory.prompt("skill")}),
     )
+}
+fn read(file: &std::path::Path) -> String {
+    std::fs::read_to_string(file).unwrap_or_default()
 }
 /// A skill's name is lowercase letters, digits and dashes, up to 64.
 fn named(name: &str) -> bool {
@@ -27,7 +30,7 @@ fn named(name: &str) -> bool {
             .bytes()
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'-')
 }
-/// The folder the change lands in: the bot's own for its memory, else the skill's (`shared`: every bot's).
+/// The folder the change lands in: the bot's own for its memory (`shared`: the bots' folder, for the shared memory), else the skill's (`shared`: every bot's).
 fn target(app: &App, key: &str, name: &str, b: &Value) -> PathBuf {
     let skill = (if b["shared"] == true {
         app.home.join("bots/skills")
@@ -35,13 +38,15 @@ fn target(app: &App, key: &str, name: &str, b: &Value) -> PathBuf {
         folder(app, key).join(SKILLS)
     })
     .join(name);
-    if b["memory"] == true {
+    if b["memory"] == true && b["shared"] == true {
+        app.home.join("bots")
+    } else if b["memory"] == true {
         folder(app, key)
     } else {
         skill
     }
 }
-/// A change from the Library: the `memory`, or the skill `name` (`shared`: every bot's), gets `text`, or goes with `delete`.
+/// A change from the Library: the `memory` (`shared`: every bot's), or the skill `name` (`shared`: every bot's), gets `text`, or goes with `delete`.
 pub(super) fn learn(app: &App, id: &str, b: &Value) -> Result<Value, String> {
     let (key, name) = (
         key_for(app, id).ok_or(format!("no bot '{id}'"))?,
