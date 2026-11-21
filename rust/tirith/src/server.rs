@@ -80,10 +80,9 @@ pub fn router(app: Shared, port: u16) -> Router {
 
 /// A browser page from another origin may not call the API (no CSRF against 127.0.0.1). It also checks Host, so a DNS-rebinding page (Host: evil.example) cannot read the API either.
 async fn same_origin(req: Request, next: Next) -> Response {
-    let port = PORT.get().copied().unwrap_or(0);
     let ok = {
         let h = |k: &str| req.headers().get(k).map(|v| v.to_str().unwrap_or("\u{0}"));
-        origin_host_ok(h("host"), h("origin"), port)
+        origin_host_ok(h("host"), h("origin"), PORT.get().copied().unwrap_or(0))
     };
     match ok {
         true => next.run(req).await,
@@ -143,9 +142,7 @@ async fn stage_limit(State(app): State<Shared>, Path((project, stage)): Path<(St
 async fn chat(State(app): State<Shared>, Json(b): Json<Value>) -> R {
     let files: Vec<String> = b["attachments"].as_array().into_iter().flatten().filter_map(|f| f.as_str().map(String::from)).collect();
     let text = s(&b, "text") + &attach::describe(&files);
-    if text.trim().is_empty() {
-        return Err(bad("empty message".into()));
-    }
+    (!text.trim().is_empty()).then_some(()).ok_or_else(|| bad("empty message".into()))?;
     manager::say(&app, &s(&b, "project"), &text).map(|_| Json(json!({"ok": true}))).map_err(bad)
 }
 
@@ -169,9 +166,8 @@ async fn hook(State(app): State<Shared>, Path(event): Path<String>, headers: Hea
     let (lane_id, project_id) = (lane.as_ref().map(|l| l.id.clone()).unwrap_or_default(), project.as_ref().map(|p| p.id.clone()).unwrap_or_default());
     if let Some(l) = &lane {
         drop((!session.is_empty() && l.session != session).then(|| app.update_lane(&l.id, |x| x.session = session.clone())));
-        if let Some(m) = app.lanes.lock().unwrap().get_mut(&l.id) {
-            m.last_activity = now_s(); // in memory only: activity is not worth a disk write per tool call
-        }
+        app.lanes.lock().unwrap().get_mut(&l.id).into_iter().for_each(|m| m.last_activity = now_s());
+        // in memory only: activity is not worth a disk write per tool call
     }
     sandbox::tags(&tool, &p["tool_input"]).into_iter().for_each(|(tag, target)| _ = app.event(&lane_id, &project_id, "access", tag, &target, &session));
     if event == "PreToolUse" {
@@ -198,9 +194,7 @@ async fn hook(State(app): State<Shared>, Path(event): Path<String>, headers: Hea
     }
     if event == "Stop" {
         let last = s(&p, "last_assistant_message");
-        if !last.trim().is_empty() {
-            app.update_lane(&l.id, |x| x.note = last.trim().chars().take(2000).collect());
-        }
+        drop((!last.trim().is_empty()).then(|| app.update_lane(&l.id, |x| x.note = last.trim().chars().take(2000).collect())));
         if l.status == "running" && p["stop_hook_active"].as_bool() != Some(true) && last.trim().ends_with('?') {
             return Json(json!({"decision": "block", "reason":
                 "Do not end with a question: decide yourself. If you truly need the manager, run: tirith ask \"<question>\" and end your turn."}));
@@ -212,9 +206,7 @@ async fn hook(State(app): State<Shared>, Path(event): Path<String>, headers: Hea
 /// The page: the files of `web/` (`[app] web_dir` of config.toml, else this repository's), read from disk on each request so a change to the page shows on reload. Nothing outside that folder is ever served.
 async fn web_file(State(app): State<Shared>, uri: axum::http::Uri) -> Response {
     let rel = Some(uri.path().trim_start_matches('/')).filter(|r| !r.is_empty()).unwrap_or("index.html");
-    if rel.split('/').any(|p| p.is_empty() || p == ".." || p.starts_with('.')) {
-        return (StatusCode::NOT_FOUND, "not found").into_response();
-    }
+    let Some(()) = (!rel.split('/').any(|p| p.is_empty() || p == ".." || p.starts_with('.'))).then_some(()) else { return (StatusCode::NOT_FOUND, "not found").into_response() };
     let dir = crate::config::get::<String>(&app.cfg().raw, &["app", "web_dir"]).map(|d| crate::config::expand(&d)).unwrap_or_else(|| std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../web")));
     let Ok(body) = tokio::fs::read(dir.join(rel)).await else { return (StatusCode::NOT_FOUND, "not found").into_response() };
     let kind = match rel.rsplit('.').next().unwrap_or("") {

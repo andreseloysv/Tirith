@@ -87,7 +87,7 @@ fn main() {
 }
 
 fn status(project: &str) -> Result<(), String> {
-    let s: Value = serde_json::from_str(&call("GET", "/api/state", None)?).map_err(|e| e.to_string())?;
+    let s = client::call_json("GET", "/api/state", None)?;
     let lanes: Vec<Value> = s["lanes"].as_array().into_iter().flatten().filter(|l| project.is_empty() || l["project"] == project).cloned().collect();
     let working: Vec<&Value> = lanes.iter().filter(|l| matches!(l["status"].as_str(), Some("queued" | "running" | "waiting" | "merge-queued" | "merging"))).collect();
     working
@@ -101,7 +101,7 @@ fn status(project: &str) -> Result<(), String> {
 }
 
 fn plan_show(project: &str) -> Result<(), String> {
-    let p: Value = serde_json::from_str(&call("GET", &format!("/api/plan/{project}"), None)?).map_err(|e| e.to_string())?;
+    let p = client::call_json("GET", &format!("/api/plan/{project}"), None)?;
     p["steps"].as_array().into_iter().flatten().for_each(|st| {
         let items = st["items"].as_array().cloned().unwrap_or_default();
         let open: Vec<&Value> = items.iter().filter(|i| i["done"] != true).collect();
@@ -132,7 +132,7 @@ fn hook(event: String) -> Result<(), String> {
 
 /// Rewrites the hooks of the configured agents whose settings file uses `tirith hook …` into HTTP hooks on the daemon (a backup of each file is kept next to it). Agents without HTTP hooks keep the command bridge.
 fn install_hooks() -> Result<(), String> {
-    let cfg = config::Config::load();
+    let cfg = config::Config::load_at(&config::tirith_home());
     cfg.factory.command("anthropic").ok_or("no [agents.anthropic] in config.toml")?;
     let path = config::expand(cfg.factory.agent::<String>("anthropic", "settings").as_deref().ok_or("[agents.anthropic] has no settings path")?);
     let text = std::fs::read_to_string(&path).unwrap_or_else(|_| "{}".into());
@@ -169,12 +169,10 @@ fn serve() -> Result<(), String> {
     }
     let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().map_err(|e| e.to_string())?;
     rt.block_on(async {
-        let app = app::App::open();
+        let app = app::App::open_at(config::tirith_home());
         let port = app.cfg().port;
         let listener = tokio::net::TcpListener::bind(("127.0.0.1", port)).await.map_err(|e| format!("port {port} is taken (is tirith already running?): {e}"))?;
-        for start in [sandbox::start, rooms::start, guard::start, metrics::start, bots::start] {
-            start(app.clone());
-        }
+        [sandbox::start, rooms::start, guard::start, metrics::start, bots::start].into_iter().for_each(|start| start(app.clone()));
         tokio::spawn(lanes::scheduler(app.clone()));
         tokio::spawn(merge::worker(app.clone()));
         let flusher = app.clone();

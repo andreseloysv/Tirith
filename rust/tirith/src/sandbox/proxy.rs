@@ -123,16 +123,12 @@ async fn handle(app: Shared, mut c: TcpStream) -> Result<(), String> {
     let end = loop {
         let mut chunk = [0u8; 4096];
         let n = tokio::time::timeout(Duration::from_secs(30), c.read(&mut chunk)).await.map_err(|_| "slow client")?.map_err(|e| e.to_string())?;
-        if n == 0 {
-            return Ok(());
-        }
+        let Some(()) = (n > 0).then_some(()) else { return Ok(()) };
         buf.extend_from_slice(&chunk[..n]);
         if let Some(i) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
             break i + 4;
         }
-        if buf.len() > 65536 {
-            return answer(&mut c, "431 Request Header Fields Too Large", "", "").await;
-        }
+        let Some(()) = (buf.len() <= 65536).then_some(()) else { return answer(&mut c, "431 Request Header Fields Too Large", "", "").await };
     };
     let head = String::from_utf8_lossy(&buf[..end]).to_string();
     let mut lines = head.split("\r\n");
