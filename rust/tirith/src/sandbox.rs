@@ -31,9 +31,11 @@ impl Launch {
         c
     }
 }
-/// Outbound network only to this machine: the daemon's port, the proxy and local sockets.
-const PROFILE: &str = "(version 1)\n(allow default)\n(deny network-outbound)\n\
-(allow network-outbound (remote ip \"localhost:*\"))\n(allow network-outbound (remote unix-socket))\n";
+/// The sandbox profile of `who`: outbound network only to this machine (the daemon's port, the proxy and local sockets) and no Apple Events — except that a chat role (the managers and the bots; never the CEO, a lane or a stage) may send Apple Events to the owner's Safari alone, so it can read a tab with `osascript`. The owner's Automation permission still decides in the end.
+fn profile(app: &Shared, who: &str) -> String {
+    let safari = if app.cfg().factory.role::<String>(who, "session").as_deref() == Some("chat") { "(allow appleevent-send (appleevent-destination \"com.apple.Safari\"))\n" } else { "" };
+    format!("(version 1)\n(allow default)\n(deny network-outbound)\n(deny appleevent-send)\n(allow network-outbound (remote ip \"localhost:*\"))\n(allow network-outbound (remote unix-socket))\n{safari}")
+}
 const SANDBOX_EXEC: &str = "/usr/bin/sandbox-exec";
 const NO_PROXY: &str = "localhost,127.0.0.1,::1";
 const DEFAULT_PORT: u16 = 47812;
@@ -90,7 +92,7 @@ pub fn wrap(app: &Shared, who: &str, argv: Vec<String>) -> Launch {
     std::env::current_exe().ok().filter(|_| std::env::var_os("GIT_SSH_COMMAND").is_none()).into_iter().for_each(|exe| env.push(("GIT_SSH_COMMAND".into(), format!("ssh -o ProxyCommand='{} net tunnel %h %p'", exe.display()))));
     env.push(("PATH".into(), format!("{}:{}", app.home.join("net/bin").display(), app.child_path())));
     env.push(("ZDOTDIR".into(), app.home.join("net/zdot").display().to_string()));
-    Launch { program: SANDBOX_EXEC.into(), args: ["-p".to_string(), PROFILE.to_string(), program].into_iter().chain(args).collect(), env }
+    Launch { program: SANDBOX_EXEC.into(), args: ["-p".to_string(), profile(app, who), program].into_iter().chain(args).collect(), env }
 }
 /// The wrappers in `<home>/net/bin`: tools that start a sandbox of their own (macOS refuses to nest them) get it turned off, since the outer sandbox confines them already. Each wrapper takes its own folder off PATH.
 fn write_wrappers(app: &Shared) {
@@ -287,3 +289,7 @@ fn tunnel(host: &str, port: &str) -> Result<(), String> {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "../checks/sandbox.rs"]
+mod tests;
