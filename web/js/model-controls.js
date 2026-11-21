@@ -1,5 +1,12 @@
 // Shared with AgentsMessenger's phone chat. Keep model-controls.js and .css identical in both apps.
 export const PROVIDERS = { codex: 'OpenAI · Codex', anthropic: 'Anthropic', muse: 'Meta · Muse', copilot: 'GitHub · Copilot' };
+/** The agent a listed model belongs to (/api/models `choices.owners`, read from config.toml), or '' when none claims it. */
+export const ownerOf = (choices = {}, model = '') => (choices.owners || {})[model] || '';
+/** A model of another agent brings its agent along: the patch that picks `model` without pairing it with the wrong agent. */
+export const pickModel = (choices, value, model) => {
+  const owner = ownerOf(choices, model);
+  return owner && owner !== value.agent ? { agent: owner, model, effort: '' } : { model };
+};
 export function optionsFor(choices, value) {
   const { agent = '', model = '', effort = '' } = value;
   const codex = agent === 'codex';
@@ -53,9 +60,11 @@ export class ModelControls extends HTMLElement {
     const list = element('div', 'models'); list.setAttribute('role', 'group'); list.setAttribute('aria-label', 'Models');
     list.append(button('Agent default', !value.model, () => this.change({ model: '', effort: '' })));
     for (const m of models) {
-      const b = button(m.name || m.slug, m.slug === value.model, () => this.change({ model: m.slug, effort: '' }));
-      b.title = m.slug; b.dataset.search = `${m.name || ''} ${m.slug}`.toLowerCase();
+      const b = button(m.name || m.slug, m.slug === value.model, () => this.change({ ...pickModel(choices, value, m.slug), effort: '' }));
+      const owner = ownerOf(choices, m.slug);
+      b.title = m.slug; b.dataset.search = `${m.name || ''} ${m.slug} ${owner}`.toLowerCase();
       if (m.name && m.name !== m.slug) b.append(element('small', '', m.slug));
+      if (owner && !codex) b.append(element('small', 'owner', PROVIDERS[owner] || owner));
       list.append(b);
     }
     search.oninput = () => { for (const b of list.children) b.hidden = !`${b.dataset.search || b.textContent.toLowerCase()}`.includes(search.value.toLowerCase()); };

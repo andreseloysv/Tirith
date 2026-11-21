@@ -137,7 +137,7 @@ impl Factory {
         let shapes: [(&str, &[&str]); 4] = [("session", &["chat", "turn", "lane"]), ("scope", &["project", "own"]), ("access", &["", "read", "write"]), ("runs_on", &["", "local"])];
         let bad = [
             t.keys().find(|k| !SECTIONS.contains(&k.as_str())).map(|k| format!("unknown section '{k}'")),
-            unknown_in("agents", &["protocol", "model_flag", "effort_flag", "chat_args", "lane_args", "resume_args", "args", "command", "settings", "profile"]),
+            unknown_in("agents", &["protocol", "model_flag", "effort_flag", "chat_args", "lane_args", "resume_args", "args", "command", "settings", "profile", "model_prefix"]),
             unknown_in("roles", &["agent", "model", "effort", "fallback", "session", "scope", "extends", "access", "prompt", "idle_minutes", "max_per_day", "review_after_minutes", "runs_on", "name", "face", "show", "chat_keep"]),
             unknown_in("metrics", &["label", "target", "at_least"]),
             unknown_flat("plan", &["role_prefixes", "owner_wait", "waits_for"]),
