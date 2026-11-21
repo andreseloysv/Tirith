@@ -1,5 +1,4 @@
 //! The daemon's shared state: config, SQLite, the lanes in memory and the change feed the page listens to.
-
 use crate::config::{Config, Manifest};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
@@ -9,9 +8,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::{broadcast, Notify};
-
 pub type Shared = Arc<App>;
-
 #[derive(Serialize, Deserialize, Clone, Default)]
 #[serde(default)]
 pub struct Lane {
@@ -48,13 +45,11 @@ pub struct Lane {
     pub merged_at: Option<String>,
     pub last_activity: u64,
 }
-
 impl Lane {
     pub fn active(&self) -> bool {
         matches!(self.status.as_str(), "queued" | "running" | "waiting" | "merge-queued" | "merging")
     }
 }
-
 pub struct App {
     pub home: PathBuf,
     pub cfg: RwLock<Arc<Config>>,
@@ -70,20 +65,16 @@ pub struct App {
     /// The last-seen changes of (config.toml, the factory folder).
     cfg_mtime: Mutex<(Option<SystemTime>, Option<SystemTime>)>,
 }
-
 pub type R = Result<axum::Json<Value>, (axum::http::StatusCode, String)>;
-
 pub fn bad(e: String) -> (axum::http::StatusCode, String) {
     (axum::http::StatusCode::BAD_REQUEST, e)
 }
-
 pub fn now_iso() -> String {
     chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string()
 }
 pub fn now_s() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
-
 /// Moves kept from older names, run at every start and a no-op once done: the page's model choice of a renamed role is copied to its new name when that one has none (so a rename never loses the chosen model again), and the conversation of no project — its chat rows, its cards and its managers' sessions — becomes the `manager-general` system bot's, history intact.
 fn migrate(db: &Connection) {
     const RENAMES: &str = concat!("workers>worker;reviewer>ceo;impr", "over>ceo;lead>manager-general");
@@ -96,7 +87,6 @@ fn migrate(db: &Connection) {
     ];
     moves.iter().for_each(|sql| drop(db.execute(sql, [])));
 }
-
 impl App {
     pub fn open_at(home: PathBuf) -> Shared {
         ["logs/lanes", "logs/runs", "briefs", "lanes"].into_iter().for_each(|dir| drop(std::fs::create_dir_all(home.join(dir))));
@@ -268,7 +258,6 @@ impl App {
         path_with_cargo(exe_dir.as_deref(), &std::env::var("PATH").unwrap_or_default(), &crate::config::home_dir(), &["/opt/homebrew/bin", "/usr/local/bin"])
     }
 }
-
 fn path_with_cargo(exe_dir: Option<&Path>, rest: &str, home: &Path, tool_dirs: &[&str]) -> String {
     let cargo = home.join(".cargo/bin");
     let mut parts: Vec<String> = exe_dir.iter().map(|d| d.display().to_string()).chain(rest.split(':').filter(|p| !p.is_empty()).map(String::from)).collect();
@@ -279,14 +268,12 @@ fn path_with_cargo(exe_dir: Option<&Path>, rest: &str, home: &Path, tool_dirs: &
     }
     parts.join(":")
 }
-
 /// `git -C dir args…`: stdout on success, the error text otherwise.
 pub async fn git(dir: &Path, args: &[&str]) -> Result<String, String> {
     let out = tokio::process::Command::new("git").arg("-C").arg(dir).args(args).stdin(std::process::Stdio::null()).output().await.map_err(|e| e.to_string())?;
     let text = |b: &[u8]| String::from_utf8_lossy(b).trim().to_string();
     out.status.success().then(|| text(&out.stdout)).ok_or_else(|| format!("git {}: {} {}", args.join(" "), text(&out.stderr), text(&out.stdout)).trim().to_string())
 }
-
 /// A worktree at `base` (a new branch when `branch` is given), without the manifest's `lane_exclude` paths.
 pub async fn add_worktree(repo: &Path, dir: &Path, branch: Option<&str>, exclude: &[String]) -> Result<(), String> {
     let _ = dir.parent().map(std::fs::create_dir_all);
@@ -305,20 +292,16 @@ pub async fn add_worktree(repo: &Path, dir: &Path, branch: Option<&str>, exclude
     git(repo, &args).await.unwrap_or_default().split('\0').filter(|r| !r.is_empty()).for_each(|rel| drop(dir.join(rel).parent().map(|p| (std::fs::create_dir_all(p), std::fs::copy(repo.join(rel), dir.join(rel))))));
     Ok(())
 }
-
 #[cfg(test)]
 #[path = "../checks/app.rs"]
 mod tests;
-
 /// Signals a process group; pid 0 would be the daemon's own group, so it is never signalled.
 pub fn kill_group(pid: u32, signal: i32) {
     let _ = (pid != 0).then(|| unsafe { libc::kill(-(pid as i32), signal) });
 }
-
 pub fn alive(pid: u32) -> bool {
     unsafe { libc::kill(pid as i32, 0) == 0 }
 }
-
 /// Hides whole secret values in log text: the value of any `*KEY*`/`*TOKEN*`/`*SECRET*`/`*PASSWORD*` variable (`NAME=value`, `NAME: value`, `"NAME":"value"`) and bare well-known key shapes. Nothing of the value is kept, not even its first characters.
 pub fn redact_secrets(text: &str) -> String {
     use regex::Regex;
@@ -328,7 +311,6 @@ pub fn redact_secrets(text: &str) -> String {
     let step = NAMED.replace_all(text, "${1}[redacted]");
     BARE.replace_all(&step, "[redacted]").into_owned()
 }
-
 /// The last `lines` lines of a file.
 pub fn tail(path: &Path, lines: usize) -> String {
     let text = std::fs::read(path).map(|b| String::from_utf8_lossy(&b).into_owned()).unwrap_or_default();

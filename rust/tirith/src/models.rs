@@ -1,5 +1,4 @@
 //! Models per factory role and the fallback chain: the owner's override from the page, else `[roles.<role>]` of config.toml laid over the factory's role, else that role as the factory defines it.
-
 use crate::app::{bad, Shared};
 use crate::client::{call, Flag};
 use crate::config::{get, Config};
@@ -9,14 +8,11 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{path::Path, sync::OnceLock};
-
 const EFFORTS: [&str; 6] = ["low", "medium", "high", "xhigh", "max", "ultra"];
-
 /// The factory role that runs lanes (its `session = "lane"` one), by name.
 pub fn lane_role(cfg: &Config) -> String {
     cfg.factory.find_role("lane", None).unwrap_or_else(|| "worker".into())
 }
-
 #[derive(Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct RoleSetting {
     pub agent: String,
@@ -28,13 +24,11 @@ pub struct RoleSetting {
     #[serde(default)]
     pub fallback: Vec<String>,
 }
-
 /// An agent command line: the alias it belongs to and the full argv (program first).
 pub struct AgentCmd {
     pub alias: String,
     pub argv: Vec<String>,
 }
-
 /// The effective setting of a role and where it comes from: "page", "config" (config.toml's `[roles.<role>]` sets its agent, model, effort or fallback) or "default" (the factory's role alone, its `extends` resolved).
 pub fn role_with_source(app: &Shared, role: &str) -> (RoleSetting, &'static str) {
     if let Some(s) = app.kv(&format!("models:{role}")).and_then(|j| serde_json::from_str(&j).ok()) {
@@ -52,18 +46,15 @@ pub fn role_with_source(app: &Shared, role: &str) -> (RoleSetting, &'static str)
     let s = RoleSetting { agent, model: empty(f.role(role, "model")), effort: empty(f.role(role, "effort")), fallback: f.role(role, "fallback").unwrap_or_default() };
     (s, if from_config { "config" } else { "default" })
 }
-
 pub fn role(app: &Shared, role: &str) -> RoleSetting {
     role_with_source(app, role).0
 }
-
 /// Per alias: (model flag, effort flag, resume args, lane args) from the factory's `[agents.<alias>]`, with config.toml laid over it; an empty flag is no flag.
 fn flags(cfg: &Config, alias: &str) -> (Option<String>, Option<String>, Vec<String>, Vec<String>) {
     let f = &cfg.factory;
     let key = |k: &str| f.agent::<String>(alias, k).filter(|s| !s.is_empty());
     (key("model_flag"), key("effort_flag"), f.agent(alias, "resume_args").unwrap_or_default(), f.agent::<Vec<String>>(alias, "args").or_else(|| f.agent(alias, "lane_args")).unwrap_or_default())
 }
-
 /// Sets `flag value` in argv: replaces the value of an existing `flag`/`alt` (also `flag=value`), else appends.
 fn set_flag(argv: &mut Vec<String>, flag: &Option<String>, alts: &[&str], value: &Option<String>) {
     let (Some(flag), Some(value)) = (flag, value) else { return };
@@ -76,7 +67,6 @@ fn set_flag(argv: &mut Vec<String>, flag: &Option<String>, alts: &[&str], value:
         argv.extend([flag.clone(), value.clone()]);
     }
 }
-
 /// The argv of a lane run. `agent`/`model` override the lane role (a fallback relaunch passes them). `resume = Some((session_id, message))` continues that agent session with `message` instead of the brief; an alias without `resume_args` starts fresh with the brief.
 pub fn lane_argv(app: &Shared, agent: Option<&str>, model: Option<&str>, brief: &Path, workspace: &Path, resume: Option<(&str, &str)>) -> Result<AgentCmd, String> {
     let cfg = app.cfg();
@@ -103,7 +93,6 @@ pub fn lane_argv(app: &Shared, agent: Option<&str>, model: Option<&str>, brief: 
     let _ = (alias == "codex").then(|| crate::codex::options(&cfg, &mut argv, effort.as_deref()));
     Ok(AgentCmd { alias, argv })
 }
-
 /// The argv of a streaming chat session (stream-json in and out) for a role. `resume` continues that session id. The caller appends its own system prompt.
 pub fn chat_argv(app: &Shared, role_name: &str, resume: Option<&str>) -> Result<AgentCmd, String> {
     let cfg = app.cfg();
@@ -120,7 +109,6 @@ pub fn chat_argv(app: &Shared, role_name: &str, resume: Option<&str>) -> Result<
     argv.extend(resume.into_iter().flat_map(|id| ["--resume".to_string(), id.to_string()]));
     Ok(AgentCmd { alias: r.agent, argv })
 }
-
 /// True when an agent's output says it ran out of credits or hit its usage limit.
 pub fn out_of_credits(text: &str) -> bool {
     static RE: OnceLock<Regex> = OnceLock::new();
@@ -135,7 +123,6 @@ pub fn out_of_credits(text: &str) -> bool {
     })
     .is_match(text)
 }
-
 /// The next choice of a role's chain (its own agent, then `fallback`) that is not in `tried`: (alias, model). `tried` holds "alias" (every model of it is skipped) or "alias:model" (that one only).
 pub fn fallback(app: &Shared, role_name: &str, tried: &[String]) -> Option<(String, Option<String>)> {
     let cfg = app.cfg();
@@ -147,7 +134,6 @@ pub fn fallback(app: &Shared, role_name: &str, tried: &[String]) -> Option<(Stri
         (!used && cfg.factory.command(&alias).is_some()).then_some((alias, model))
     })
 }
-
 /// Saves the owner's setting of a role (fields absent from `b` keep their effective value, "" clears them), or with `None` goes back to config.toml. A chat role whose setting changed restarts its sessions (after their current turn).
 pub fn save(app: &Shared, role_name: &str, b: Option<&Value>) -> Result<RoleSetting, String> {
     let roles = app.cfg().factory.roles();
@@ -162,7 +148,6 @@ pub fn save(app: &Shared, role_name: &str, b: Option<&Value>) -> Result<RoleSett
     let _ = (now != before && (chat || app.cfg().factory.role::<String>(role_name, "scope").as_deref() == Some("own"))).then(crate::manager::restart);
     Ok(now)
 }
-
 fn updated(app: &Shared, role_name: &str, b: &Value) -> Result<RoleSetting, String> {
     let mut s = role(app, role_name);
     let field = |k: &str, cur: Option<String>| match &b[k] {
@@ -197,11 +182,9 @@ fn updated(app: &Shared, role_name: &str, b: &Value) -> Result<RoleSetting, Stri
     bad.map_or(Ok(()), Err)?;
     Ok(s)
 }
-
 fn line(s: &RoleSetting) -> String {
     format!("agent={} model={} effort={}{}", s.agent, s.model.as_deref().unwrap_or("-"), s.effort.as_deref().unwrap_or("-"), if s.fallback.is_empty() { String::new() } else { format!(" fallback={}", s.fallback.join(",")) })
 }
-
 /// Deterministic owner commands, available even when no model can answer.
 pub fn command(app: &Shared, text: &str) -> Option<Result<String, String>> {
     let words: Vec<&str> = text.split_whitespace().collect();
@@ -237,7 +220,6 @@ pub fn command(app: &Shared, text: &str) -> Option<Result<String, String>> {
         Ok(format!("Saved for all projects:\n{}\nApplies to the next turn or new lanes; running work finishes first.", lines.join("\n")))
     })())
 }
-
 /// GET /api/models: every factory role's effective setting (the bots among them) with its source and its factory shape (session, scope, access, runs_on, name), the choices the page offers, and the closed list of events a bot's card offers its routes from (but `schedule`: its routines).
 pub fn state(app: &Shared) -> Value {
     let cfg = app.cfg();
@@ -256,7 +238,6 @@ pub fn state(app: &Shared) -> Value {
     json!({"roles": roles, "events": crate::factory::EVENTS.split(';').filter(|e| *e != "schedule").collect::<Vec<_>>(), "choices": {"agents": cfg.factory.commands().iter().map(|(k, _)| k).collect::<Vec<_>>(), "codex": crate::codex::catalog(), "models": get::<Vec<String>>(&cfg.raw, &["models", "choices"]).unwrap_or_default(),
         "efforts": get::<Vec<String>>(&cfg.raw, &["models", "efforts"]).unwrap_or_else(|| EFFORTS.map(String::from).to_vec())}})
 }
-
 /// A paired phone's encrypted control request. Repeated save IDs cannot reapply old settings.
 pub fn phone_response(app: &Shared, peer: &str, b: &Value) -> Value {
     let id = b["id"].as_str().unwrap_or("");
@@ -278,7 +259,6 @@ pub fn phone_response(app: &Shared, peer: &str, b: &Value) -> Value {
     };
     json!({"v": 1, "id": id, "ok": result.is_ok(), "error": result.err(), "state": state(app)})
 }
-
 pub fn routes() -> Router<Shared> {
     Router::new().route("/api/models", GET(|State(app): State<Shared>| async move { Json(state(&app)) })).route(
         "/api/models/{role}",
@@ -286,7 +266,6 @@ pub fn routes() -> Router<Shared> {
             .delete(|State(app): State<Shared>, UrlPath(r): UrlPath<String>| async move { save(&app, &r, None).map(|s| Json(json!(s))).map_err(bad) }),
     )
 }
-
 /// `tirith models`, `tirith models set <role> [--agent A] [--model M] [--effort E] [--fallback "a:m,b"]`, `tirith models reset <role>`; `None` when `pos` is not one of this module's commands.
 pub fn cli(pos: &[&str], flag: Flag) -> Option<Result<(), String>> {
     let show = |body: Result<String, String>| -> Result<(), String> {
@@ -308,7 +287,6 @@ pub fn cli(pos: &[&str], flag: Flag) -> Option<Result<(), String>> {
         _ => return None,
     })
 }
-
 #[cfg(test)]
 #[path = "../checks/models.rs"]
 mod tests;

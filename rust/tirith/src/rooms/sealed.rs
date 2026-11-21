@@ -1,5 +1,4 @@
 //! agentsmessenger.com's protocol, byte-compatible with `am.mjs` and its chat page: ed25519 identities, canonical JSON, signed events and the sealed envelope.
-
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use crypto_box::aead::{generic_array::GenericArray, Aead, KeyInit};
 use crypto_box::SalsaBox;
@@ -10,9 +9,7 @@ use sha2::{Digest, Sha256, Sha512};
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::sync::{Mutex, OnceLock};
 use std::{collections::HashMap, io::Write, path::Path, time::Duration};
-
 const ALG: &str = "x25519-xsalsa20-poly1305";
-
 /// This Tirith's identity in the rooms. The secret never leaves this module (no Debug, no Serialize).
 pub struct Me {
     pub name: String,
@@ -20,7 +17,6 @@ pub struct Me {
     pub id: String,
     key: SigningKey,
 }
-
 pub fn sha_hex(data: &[u8]) -> String {
     hex(&Sha256::digest(data))
 }
@@ -30,18 +26,15 @@ pub fn hex(b: &[u8]) -> String {
 fn unhex(s: &str) -> Option<Vec<u8>> {
     (0..s.len()).step_by(2).map(|i| u8::from_str_radix(s.get(i..i + 2)?, 16).ok()).collect()
 }
-
 pub fn key_id(public: &str) -> String {
     unhex(public).map(|b| sha_hex(&b)).unwrap_or_default()
 }
-
 /// `name` as the platform and `am.mjs` clean it.
 pub fn clean(s: &str) -> String {
     static OTHER: OnceLock<regex::Regex> = OnceLock::new();
     let out = OTHER.get_or_init(|| regex::Regex::new("[^a-z0-9._-]+").unwrap()).replace_all(&s.to_lowercase(), "-").into_owned();
     out.trim_start_matches(|c: char| !c.is_ascii_alphanumeric()).trim_end_matches('-').chars().take(40).collect()
 }
-
 /// JSON with sorted keys and no spaces, as `canonical()` in am.mjs.
 pub fn canonical(v: &Value) -> String {
     match v {
@@ -54,7 +47,6 @@ pub fn canonical(v: &Value) -> String {
         _ => v.to_string(),
     }
 }
-
 /// Loads `<home>/am/<name>.json` (am.mjs's key file format), making it on first use (dir 0700, file 0600).
 pub fn identity(home: &Path, name: &str) -> Result<Me, String> {
     let dir = home.join("am");
@@ -71,7 +63,6 @@ pub fn identity(home: &Path, name: &str) -> Result<Me, String> {
     let public = hex(key.verifying_key().as_bytes());
     Ok(Me { name: name.to_string(), id: key_id(&public), public, key })
 }
-
 impl Me {
     pub fn sign(&self, message: &str) -> String {
         hex(&self.key.sign(message.as_bytes()).to_bytes())
@@ -80,32 +71,26 @@ impl Me {
         crypto_box::SecretKey::from(<[u8; 32]>::try_from(&Sha512::digest(self.key.to_bytes())[..32]).unwrap())
     }
 }
-
 pub fn verify(message: &str, sig: &str, public: &str) -> bool {
     let (Ok(sig), Ok(public)) = (<[u8; 64]>::try_from(unhex(sig).unwrap_or_default()), <[u8; 32]>::try_from(unhex(public).unwrap_or_default())) else { return false };
     VerifyingKey::from_bytes(&public).is_ok_and(|k| k.verify(message.as_bytes(), &Signature::from_bytes(&sig)).is_ok())
 }
-
 fn curve_public(public: &str) -> Option<crypto_box::PublicKey> {
     let b: [u8; 32] = unhex(public)?.try_into().ok()?;
     Some(crypto_box::PublicKey::from(VerifyingKey::from_bytes(&b).ok()?.to_montgomery().to_bytes()))
 }
-
 pub fn event_id(e: &Value) -> String {
     let fields = json!({"author": e["author"], "body": e["body"], "kind": e["kind"], "refs": e["refs"], "tag": e["tag"], "ts": e["ts"]});
     sha_hex(canonical(&fields).as_bytes())
 }
-
 fn inner_message(author: &str, tag: &str, text: &str) -> String {
     sha_hex(canonical(&json!({"author": author, "tag": tag, "text": text})).as_bytes())
 }
-
 /// The event matches its id, its author's signature and the platform's time stamp.
 pub fn genuine(e: &Value, platform: &str, room: &str) -> bool {
     let s = |k: &str| e[k].as_str().unwrap_or("").to_string();
     s("tag") == format!("#{room}") && s("id") == event_id(e) && verify(&s("id"), &s("sig"), &s("author")) && verify(&format!("{}:{}", s("id"), e["server_ts"]), &s("server_sig"), platform)
 }
-
 pub fn seal(me: &Me, text: &str, tag: &str, readers: &[String]) -> Value {
     let key: [u8; 32] = rand::random();
     let nonce: [u8; 24] = rand::random();
@@ -125,7 +110,6 @@ pub fn seal(me: &Me, text: &str, tag: &str, readers: &[String]) -> Value {
     let cipher = XSalsa20Poly1305::new(GenericArray::from_slice(&key)).encrypt(GenericArray::from_slice(&nonce), inner.as_bytes()).unwrap_or_default();
     json!({"v": 1, "alg": ALG, "sender_pub": me.public, "recipients": wrapped, "nonce": B64.encode(nonce), "ciphertext": B64.encode(cipher)})
 }
-
 /// The words of an event sealed for me, or `None`: not for me, forged, or not the sender's own.
 pub fn unseal(me: &Me, e: &Value) -> Option<String> {
     let body = &e["body"];
@@ -142,12 +126,10 @@ pub fn unseal(me: &Me, e: &Value) -> Option<String> {
     let text = inner["text"].as_str()?;
     verify(&inner_message(author, e["tag"].as_str()?, text), inner["sig"].as_str()?, author).then(|| text.to_string())
 }
-
 fn http() -> &'static reqwest::Client {
     static C: OnceLock<reqwest::Client> = OnceLock::new();
     C.get_or_init(|| reqwest::Client::builder().user_agent("tirith-room/2").build().unwrap_or_default())
 }
-
 /// One request; the JSON answer on 2xx, `(status, message)` otherwise (status 0: unreachable).
 async fn api(base: &str, path: &str, body: Option<&Value>, secs: u64) -> Result<Value, (u16, String)> {
     let url = format!("{base}{path}");
@@ -161,7 +143,6 @@ async fn api(base: &str, path: &str, body: Option<&Value>, secs: u64) -> Result<
         Err((status, v["error"].as_str().map_or(format!("HTTP {status}"), |m| if status >= 500 { format!("HTTP {status}: {m}") } else { m.into() })))
     }
 }
-
 /// The platform's public key, checked against its signed description (cached per platform).
 pub async fn platform(base: &str) -> Result<String, String> {
     static KEYS: std::sync::LazyLock<Mutex<HashMap<String, String>>> = std::sync::LazyLock::new(Default::default);
@@ -174,14 +155,12 @@ pub async fn platform(base: &str) -> Result<String, String> {
     KEYS.lock().unwrap().insert(base.to_string(), public.clone());
     Ok(public)
 }
-
 async fn register(base: &str, me: &Me) -> Result<(), String> {
     let card = json!({"name": me.name, "capabilities": ["am.mjs"], "tags": []});
     let ts = chrono::Utc::now().timestamp_millis() as u64;
     let sig = me.sign(&sha_hex(canonical(&json!({"card": card, "pubkey": me.public, "ts": ts})).as_bytes()));
     api(base, "/register", Some(&json!({"pubkey": me.public, "card": card, "ts": ts, "sig": sig})), 30).await.map(|_| ()).map_err(|e| e.1)
 }
-
 /// Posts one signed event in `room` (registering the key when the platform does not know it yet).
 pub async fn post(base: &str, me: &Me, kind: &str, room: &str, body: Value) -> Result<(), String> {
     let mut e = json!({"author": me.public, "kind": kind, "tag": format!("#{room}"), "refs": [], "body": body, "ts": chrono::Utc::now().timestamp_millis() as u64});
@@ -196,13 +175,11 @@ pub async fn post(base: &str, me: &Me, kind: &str, room: &str, body: Value) -> R
         r => r.map(|_| ()).map_err(|e| e.1),
     }
 }
-
 /// One page of the room's signed events after message `after` (the last 30 without it), waiting up to `wait`.
 pub async fn page(base: &str, room: &str, after: Option<u64>, wait: u64, name: &str) -> Result<Value, String> {
     let q = format!("/r/{room}?raw=1&as={name}") + &after.map(|a| format!("&after={a}&wait={wait}")).unwrap_or_default();
     api(base, &q, None, 60 + wait).await.map_err(|e| e.1)
 }
-
 pub async fn keys(base: &str, room: &str, name: &str) -> Result<Vec<(String, String)>, String> {
     let (mut out, mut after) = (Vec::<(String, String)>::new(), 0);
     loop {
@@ -217,7 +194,6 @@ pub async fn keys(base: &str, room: &str, name: &str) -> Result<Vec<(String, Str
         after = last;
     }
 }
-
 pub async fn new_room(base: &str) -> Result<String, String> {
     let text = http().get(format!("{base}/new?private=1")).header("accept", "text/plain").timeout(Duration::from_secs(30)).send().await.map_err(|e| format!("cannot reach {base}: {e}"))?.text().await.map_err(|e| e.to_string())?;
     regex::Regex::new(r"/r/(sealed-[a-z0-9_-]+)").map_err(|e| e.to_string())?.captures(&text).map(|c| c[1].to_string()).ok_or_else(|| "the platform did not give a private room".into())

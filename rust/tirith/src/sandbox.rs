@@ -1,7 +1,5 @@
 //! Network sandbox: every process Tirith starts runs inside a macOS `sandbox-exec` profile that only allows loopback, with proxy variables pointing at the daemon's own proxy (`sandbox/proxy.rs`).
-
 mod proxy;
-
 use crate::{
     app::{bad, now_iso, Shared, R},
     client::Flag,
@@ -17,13 +15,11 @@ use std::{
     net::IpAddr,
     sync::{LazyLock, OnceLock, RwLock},
 };
-
 pub struct Launch {
     pub program: String,
     pub args: Vec<String>,
     pub env: Vec<(String, String)>,
 }
-
 impl Launch {
     pub fn command(&self, app: &Shared) -> tokio::process::Command {
         let mut c = tokio::process::Command::new(&self.program);
@@ -35,7 +31,6 @@ impl Launch {
         c
     }
 }
-
 /// Outbound network only to this machine: the daemon's port, the proxy and local sockets.
 const PROFILE: &str = "(version 1)\n(allow default)\n(deny network-outbound)\n\
 (allow network-outbound (remote ip \"localhost:*\"))\n(allow network-outbound (remote unix-socket))\n";
@@ -43,15 +38,12 @@ const SANDBOX_EXEC: &str = "/usr/bin/sandbox-exec";
 const NO_PROXY: &str = "localhost,127.0.0.1,::1";
 const DEFAULT_PORT: u16 = 47812;
 const XCODE_FLAGS: &str = "-IDEPackageSupportDisableManifestSandbox=YES -IDEPackageSupportDisablePluginExecutionSandbox=YES";
-
 /// The block list in memory (mirrors the `net_blocks` table) and the secret every proxy token derives from.
 static BLOCKS: RwLock<Vec<String>> = RwLock::new(Vec::new());
 static SECRET: OnceLock<String> = OnceLock::new();
-
 pub fn proxy_port(app: &Shared) -> u16 {
     config::get(&app.cfg().raw, &["network", "proxy_port"]).unwrap_or(DEFAULT_PORT)
 }
-
 fn enabled(app: &Shared) -> Result<(), String> {
     if !config::get::<bool>(&app.cfg().raw, &["network", "sandbox"]).unwrap_or(true) {
         Err("[network] sandbox = false in config.toml".into())
@@ -63,19 +55,16 @@ fn enabled(app: &Shared) -> Result<(), String> {
         Ok(())
     }
 }
-
 /// The proxy password of `who`: derived from a random secret kept in the daemon's database, so processes started before a daemon restart keep their access.
 fn token(who: &str) -> String {
     let secret = SECRET.get().map(String::as_str).unwrap_or("");
     sha_hex(format!("{secret}\n{who}").as_bytes())[..32].to_string()
 }
-
 /// The lane and project an event of `who` belongs to ("merge:<lane>" is the lane's; "manager" stays itself).
 fn owner(app: &Shared, who: &str) -> (String, String) {
     let id = who.strip_prefix("merge:").unwrap_or(who);
     (id.to_string(), app.lane(id).map(|l| l.project).unwrap_or_default())
 }
-
 /// Wraps `argv` for a process Tirith starts on behalf of `who` (a lane id, a role such as "manager" or "ceo", or "merge:<lane>"): `sandbox-exec -p <profile> argv…` with the proxy environment and the PATH with the tool wrappers first.
 pub fn wrap(app: &Shared, who: &str, argv: Vec<String>) -> Launch {
     let mut it = argv.into_iter();
@@ -103,7 +92,6 @@ pub fn wrap(app: &Shared, who: &str, argv: Vec<String>) -> Launch {
     env.push(("ZDOTDIR".into(), app.home.join("net/zdot").display().to_string()));
     Launch { program: SANDBOX_EXEC.into(), args: ["-p".to_string(), PROFILE.to_string(), program].into_iter().chain(args).collect(), env }
 }
-
 /// The wrappers in `<home>/net/bin`: tools that start a sandbox of their own (macOS refuses to nest them) get it turned off, since the outer sandbox confines them already. Each wrapper takes its own folder off PATH.
 fn write_wrappers(app: &Shared) {
     let dir = app.home.join("net/bin");
@@ -122,7 +110,6 @@ fn write_wrappers(app: &Shared) {
     let _ = std::fs::create_dir_all(&zdot);
     [".zshenv", ".zprofile", ".zshrc", ".zlogin"].into_iter().for_each(|file| drop(std::fs::write(zdot.join(file), format!("[ -f \"$HOME/{file}\" ] && . \"$HOME/{file}\"\nexport PATH=\"{}:$PATH\"\n", dir.display()))));
 }
-
 /// `https://api.example.com:443/x` -> `api.example.com`; `*.x.com` -> `x.com`; addresses and ranges stay.
 fn clean(rule: &str) -> String {
     let t = rule.trim().to_lowercase();
@@ -131,7 +118,6 @@ fn clean(rule: &str) -> String {
     let t = if t.matches(':').count() == 1 { t.split(':').next().unwrap_or("") } else { t };
     t.trim_start_matches("*.").trim_matches(['.', '[', ']']).to_string()
 }
-
 /// An address or a CIDR range: the network address and its prefix length.
 fn cidr(text: &str) -> Option<(IpAddr, u32)> {
     let (a, b) = text.split_once('/').unwrap_or((text, ""));
@@ -140,7 +126,6 @@ fn cidr(text: &str) -> Option<(IpAddr, u32)> {
     let bits = if b.is_empty() { max } else { b.parse().ok().filter(|n| *n <= max)? };
     Some((ip, bits))
 }
-
 fn in_range(ip: IpAddr, (net, bits): (IpAddr, u32)) -> bool {
     let mask = |w: u32| if bits == 0 { 0 } else { u128::MAX << (w - bits) };
     match (ip, net) {
@@ -150,16 +135,13 @@ fn in_range(ip: IpAddr, (net, bits): (IpAddr, u32)) -> bool {
         _ => false,
     }
 }
-
 /// The rule that blocks `host` (a domain and its subdomains, or an address inside a rule's range), else `None`.
 pub fn blocked(host: &str) -> Option<String> {
     let host = host.trim().trim_matches(['.', '[', ']']).to_lowercase();
     let ip: Option<IpAddr> = host.parse().ok();
     BLOCKS.read().unwrap().iter().find(|rule| ip.zip(cidr(rule)).is_some_and(|(ip, range)| in_range(ip, range)) || (ip.is_none() && cidr(rule).is_none() && (host == **rule || host.ends_with(&format!(".{rule}"))))).cloned()
 }
-
 static HOSTS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)(?:^|[^a-z0-9_.-])((?:[a-z0-9-]+\.)+[a-z0-9-]+|\[[0-9a-f:.]+\])").unwrap());
-
 /// For agent sessions NOT started by Tirith (the owner's own sessions): the refusal when a tool call names a blocked destination (a URL or host in a Bash command, a WebFetch url), else `None`.
 pub fn check_command(tool: &str, input: &Value) -> Option<String> {
     (!BLOCKS.read().unwrap().is_empty()).then_some(())?;
@@ -178,7 +160,6 @@ pub fn check_command(tool: &str, input: &Value) -> Option<String> {
         })
     })
 }
-
 static CRED: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"[^\s'";|&<>]*/\.(?:ssh|aws|gnupg|kube|docker)(?:/[^\s'";|&<>]*)?|[^\s'";|&<>]*\.config/gh(?:/[^\s'";|&<>]*)?|(?:^|[\s/'"=])\.env(?:\.[\w-]+)*\b|[^\s'";|&<>]*\.(?:netrc|git-credentials|npmrc|pypirc)\b|\bsecurity\s+(?:find-[a-z-]+|dump-keychain)\b[^;&|\n]*"#).unwrap()
 });
@@ -186,7 +167,6 @@ static GIT_PUSH: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\bgit\b[^;&|\n]
 static GH: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?:^|[;&|(\n]\s*|\bxargs\s+)gh\s+([a-z-]+(?:\s+[a-z-]+)?)").unwrap());
 static ENV: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\$\{?([A-Z][A-Z0-9_]{2,})|\bprintenv\s+([A-Z][A-Z0-9_]{2,})").unwrap());
 const ENV_SKIP: [&str; 8] = ["PATH", "HOME", "USER", "SHELL", "PWD", "TMPDIR", "LANG", "TERM"];
-
 /// The items with repeats removed, in first-seen order.
 fn unique<T: PartialEq>(items: impl IntoIterator<Item = T>) -> Vec<T> {
     items.into_iter().fold(vec![], |mut v, x| {
@@ -196,7 +176,6 @@ fn unique<T: PartialEq>(items: impl IntoIterator<Item = T>) -> Vec<T> {
         v
     })
 }
-
 /// Access-audit tags of one tool call: `(category, target)` with category one of "credential", "git_push", "gh", "env" (target = variable names, never values). Recorded by the hook handler as `access` events.
 pub fn tags(tool: &str, input: &Value) -> Vec<(&'static str, String)> {
     let mut out = vec![];
@@ -212,7 +191,6 @@ pub fn tags(tool: &str, input: &Value) -> Vec<(&'static str, String)> {
     out.extend((!names.is_empty()).then(|| ("env", names.join(", "))));
     out
 }
-
 /// Starts the proxy inside the daemon, with the block list, the token secret and the tool wrappers ready.
 pub fn start(app: Shared) {
     *BLOCKS.write().unwrap() = app.query("SELECT rule FROM net_blocks ORDER BY at", [], |r| r.get(0));
@@ -226,7 +204,6 @@ pub fn start(app: Shared) {
     proxy::seed(&app);
     tokio::spawn(proxy::serve(app));
 }
-
 fn block(app: &Shared, rule: &str, on: bool) -> Result<String, String> {
     let rule = clean(rule);
     let domain = rule.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-');
@@ -239,7 +216,6 @@ fn block(app: &Shared, rule: &str, on: bool) -> Result<String, String> {
     app.emit("net", json!({"blocks": *BLOCKS.read().unwrap()}));
     Ok(rule)
 }
-
 pub fn routes() -> Router<Shared> {
     async fn change(app: Shared, b: Value, on: bool) -> R {
         let rule = block(&app, b["rule"].as_str().unwrap_or(""), on).map_err(bad)?;
@@ -259,7 +235,6 @@ pub fn routes() -> Router<Shared> {
         )
         .route("/api/net/destinations", get(|| async { Json(proxy::destinations()) }))
 }
-
 /// `tirith net …` commands; `None` when `pos` is not one of this module's commands.
 pub fn cli(pos: &[&str], _flag: Flag) -> Option<Result<(), String>> {
     Some(match pos {
@@ -285,7 +260,6 @@ pub fn cli(pos: &[&str], _flag: Flag) -> Option<Result<(), String>> {
         _ => return None,
     })
 }
-
 /// `tirith net tunnel <host> <port>`: stdin/stdout through the proxy (ssh's ProxyCommand inside the sandbox).
 fn tunnel(host: &str, port: &str) -> Result<(), String> {
     let url = std::env::var("HTTPS_PROXY").map_err(|_| "no HTTPS_PROXY: the tunnel works inside Tirith's sandbox")?;

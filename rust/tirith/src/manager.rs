@@ -94,6 +94,17 @@ fn with_cards(app: &Shared, project: &str, text: &str) -> String {
     format!("{text}\n\n[tirith] Cards still open here: {}. If this answers one, close it with tirith answer <card> \"<the answer>\".", open.join(" | "))
 }
 
+/// Ends one conversation's live session (its chat was cleared), like `restart` for one: a turn in the middle ends when the turn does, and the next message starts a fresh session.
+pub fn end_session(project: &str) {
+    talk(project, |t| {
+        t.stale = true;
+        if !t.busy {
+            t.tx.take();
+            kill_group(t.pid, libc::SIGTERM);
+        }
+    });
+}
+
 /// Ends every session (the settings changed); one in the middle of a turn ends when the turn does, so its answer is not lost. Each one resumes its conversation at its next message.
 pub fn restart() {
     TALKS.lock().unwrap().values_mut().for_each(|t| {
@@ -117,9 +128,12 @@ pub fn interrupt(project: &str) -> Result<(), String> {
     tx.send(json!({"type": "control_request", "request_id": format!("int-{:08x}", rand::random::<u32>()), "request": {"subtype": "interrupt"}}).to_string()).map_err(|_| "the manager session ended".to_string())
 }
 
-pub fn say(app: &Shared, project: &str, text: &str) -> Result<(), String> {
+/// What `tirith say` and the page's chat write. `agent` is the role or lane of the Tirith session it ran in (`TIRITH_ROLE`/`TIRITH_LANE`), empty for the owner: an agent's words go in the chat under its name and to the manager marked as its, never as an owner message (no `owner.message`, no owner-mood eval, no `/model`, which is the owner's alone).
+pub fn say(app: &Shared, project: &str, text: &str, agent: &str) -> Result<(), String> {
     (project.is_empty() || app.conv(project) == project).then_some(()).ok_or(format!("unknown project '{project}'"))?;
     let project = app.conv(project);
+    let _ = (!agent.is_empty()).then(|| (app.chat(agent, text, project), deliver(app, project, &format!("[agent {agent}] {text}"), false)));
+    let Some(()) = agent.is_empty().then_some(()) else { return Ok(()) };
     let event = app.event("", project, "owner.message", "", text, "");
     app.chat("owner", text, project);
     judge_evals(app, project, "owner.message", text, event);
@@ -139,9 +153,10 @@ pub fn emit_event(app: &Shared, project: &str, on: &str, shown: &str, told: Opti
     let event = app.event("", project, on, "", shown, "");
     let routes = app.cfg().factory.routes_on(on);
     let here_p = app.conv(project);
-    if routes.iter().any(|r| r.2) {
+    if routes.iter().any(|r| r.2 && r.3) {
+        report(app, here_p, shown);
+    } else if routes.iter().any(|r| r.2) {
         app.chat("tirith", shown, here_p);
-        let _ = routes.iter().any(|r| r.2 && r.3).then(|| rooms::to_phones(app, here_p, &format!("Tirith: {shown}")));
     }
     let mut heard: BTreeSet<String> = BTreeSet::new();
     for (to, mode, _, phone, _) in routes {
@@ -560,7 +575,6 @@ async fn exec_session(app: &Shared, project: &str, muse: bool) -> Result<(), Str
                     let text = msg["item"]["text"].as_str().unwrap_or("");
                     app.chat("manager", text, project);
                     let _ = talk(project, |t| t.phones).then(|| rooms::to_phones(app, project, text));
-                    // on the phones only when this turn is marked (owner, or phone = true)
                 }
                 "item.started" if msg["item"]["type"] == "command_execution" => app.chat("tool", msg["item"]["command"].as_str().unwrap_or("command"), project),
                 _ => {}
