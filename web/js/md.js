@@ -1,6 +1,7 @@
 // A small, safe markdown renderer for agent-written text (port of the old page's md.js, same output and classes).
 // All HTML in the source is escaped first; the only tags that come out are the ones built here, and links keep
-// only http, https and file URLs. md(text) -> block HTML, mdInline(text) -> inline HTML (strings, for
+// only http://, https:// and file:// URLs; a bare domain (ejemplo.com/ruta) links to https://… md(text) ->
+// block HTML, mdInline(text) -> inline HTML (strings, for
 // dangerouslySetInnerHTML). With opts {file(path) -> bool, project}, confirmed paths become file links
 // (a.fref); with opts {lane(id) -> bool}, known lane ids become lane links (a.lref, data-key = the lane id).
 
@@ -43,6 +44,43 @@ function laneWord(s, at, m, pre, slash, id) {
   return /[-_\d]/.test(id) || !!slash || /\blanes?\s$/i.test(s.slice(0, at + pre.length)) || (pre === '*' && s.charAt(at + m.length) === '*');
 }
 
+/* ---------- bare domains ---------- */
+/* a loose word whose last label is a known file extension is a local file (palabra.txt, notas.md, cli.py),
+   not a domain; a www. prefix overrides this. A bare host with no tail also needs a two-letter or known TLD,
+   so hola.mundo (or a full stop missing its space: vale.Luego) is not linked. */
+const FILE_EXT = new Set('txt text md markdown js mjs cjs ts tsx jsx json jsonl ndjson rs py pyw rb go java class c h cpp hpp css scss sass less html htm shtml xml xsl yml yaml toml ini cfg conf log csv tsv png jpg jpeg jpe gif svg webp avif ico bmp tif tiff mp3 mp4 m4a wav ogg ogv mov webm pdf zip gz tgz tar bz2 xz 7z rar sh bash zsh fish exe dll dmg pkg iso img db sqlite sqlite3 sql php swift kt kts scala hs lhs lua jl ex exs erl clj cljs vue svelte lock diff patch bin dat bak tmp temp cache doc docx xls xlsx ppt pptx odt key pem crt cer der wasm'.split(' '));
+const KNOWN_TLD = new Set('com net org edu gov mil int info biz name pro aero asia coop jobs mobi museum post tel travel app dev xyz online site website top club shop store tech blog news media art audio video cloud digital social chat live studio design games game play zone world today life space agency company business solutions services support help guide guru expert academy school center centre group team network systems software technology ventures capital finance money health care legal global email link page web click direct express gallery graphics photo photography photos pictures press pub review reviews science show software solar solutions stream studio style supply support surgery systems tax taxi team tennis theater theatre tickets tips tires today tools tours town toys trade trading training travel tube university vacations ventures video villas vision vodka vote voting voyage watch webcam wedding wiki wine works yoga zone'.split(' '));
+const BARE = /(^|[\s(\[{;*¿¡«“])((?:[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\.)+[A-Za-z]{2,24}(?::\d+)?(?:[/?#](?:[^\s<\u0001\u0002&*"'`]|&amp;)*)?)/g;
+const CLOSE_OF = { ')': '(', ']': '[', '}': '{' };
+/** End of a URL as written: sentence punctuation and an unbalanced closing bracket stay outside the link,
+    a balanced one (ejemplo.com/wiki/Foo_(bar)) stays inside. */
+function trimUrlEnd(url) {
+  let u = String(url);
+  while (u) {
+    const last = u.charAt(u.length - 1), open = CLOSE_OF[last];
+    if ('.,;:!?'.indexOf(last) >= 0) { u = /&amp;$/i.test(u) ? u.slice(0, -5) : u.slice(0, -1); continue; }
+    if ('»”'.indexOf(last) >= 0) { u = u.slice(0, -1); continue; }
+    if (!open) break;
+    let opens = 0, closes = 0;
+    for (const c of u) { if (c === open) opens++; else if (c === last) closes++; }
+    if (closes <= opens) break;
+    u = u.slice(0, -1);
+  }
+  return u;
+}
+function isBareDomain(url) {
+  const host = /^[^/?#:]+/.exec(String(url || ''))?.[0] || '';
+  if (!host || host.indexOf('@') >= 0) return false;
+  const labels = host.split('.');
+  if (labels.length < 2 || labels.some((l) => !/^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$/.test(l))) return false;
+  const tld = labels[labels.length - 1].toLowerCase();
+  if (!/^[a-z]{2,24}$/.test(tld)) return false;
+  if (labels[0].toLowerCase() === 'www' && labels.length >= 3) return true;
+  if (FILE_EXT.has(tld)) return false;
+  if (url.length > host.length) return true; /* a port, path, query or fragment follows the host */
+  return tld.length === 2 || KNOWN_TLD.has(tld);
+}
+
 /* ---------- inline ---------- */
 function inline(src) {
   const hold = [];
@@ -53,12 +91,16 @@ function inline(src) {
     return keep((ref && !ref.rest && fileLink(ref, c)) || laneLink(code.trim(), c) || c);
   });
   s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, label, url) => {
-    if (/^(https?:|file:)/i.test(url)) return keep(`<a href="${url}" target="_blank" rel="noopener">${label}</a>`);
+    if (/^(?:https?:\/\/|file:\/\/)/i.test(url)) return keep(`<a href="${url}" target="_blank" rel="noopener">${label}</a>`);
     const ref = refs ? splitRef(url) : null, h = (ref && !ref.rest && fileLink(ref, label)) || laneLink(url.replace(/^lane[:\/]/, ''), label);
-    return h ? keep(h) : m;
+    if (h) return keep(h);
+    return isBareDomain(url) ? keep(`<a href="https://${url}" target="_blank" rel="noopener">${label}</a>`) : m;
   });
-  s = s.replace(/(^|[\s(])((?:https?|file):\/\/[^\s<]*[^\s<.,;:!?)\]'"&])/gi, (m, pre, url) =>
-    pre + keep(`<a href="${url}" target="_blank" rel="noopener">${url}</a>`));
+  s = s.replace(/(^|[\s(\[{;*¿¡«“])((?:https?|file):\/\/(?:[^\s<\u0001\u0002&*"'`]|&amp;)+)/gi, (m, pre, raw) => {
+    const url = trimUrlEnd(raw);
+    return !/[A-Za-z0-9]/.test(url.replace(/^(?:https?|file):\/\//i, '')) ? m :
+      pre + keep(`<a href="${url}" target="_blank" rel="noopener">${url}</a>`) + raw.slice(url.length);
+  });
   if (refs && refs.file) s = s.replace(PLAIN, (m, pre, tok) => {
     const ref = splitRef(tok), h = ref && fileLink(ref, tok.slice(0, tok.length - ref.rest.length));
     return h ? pre + keep(h) + ref.rest : m;
@@ -66,6 +108,13 @@ function inline(src) {
   if (refs && refs.lane) s = s.replace(LANE, (m, pre, slash, id, at, all) => {
     const h = laneWord(all, at, m, pre, slash, id) && laneLink(id, (slash || '') + id);
     return h ? pre + keep(h) : m;
+  });
+  /* after code, markdown links, scheme URLs, file refs and lanes, so a bare domain steals none of them;
+     the prefix it needs (start, space or an opening bracket) is never @, : or /, so emails and a scheme
+     written without // (javascript:, data:, file:) never reach it */
+  s = s.replace(BARE, (m, pre, raw) => {
+    const url = trimUrlEnd(raw);
+    return isBareDomain(url) ? pre + keep(`<a href="https://${url}" target="_blank" rel="noopener">${url}</a>`) + raw.slice(url.length) : m;
   });
   s = s.replace(/\*\*(?=\S)([\s\S]*?\S)\*\*/g, '<strong>$1</strong>')
     .replace(/(^|[^\w])__(?=\S)([\s\S]*?\S)__(?!\w)/g, '$1<strong>$2</strong>')
