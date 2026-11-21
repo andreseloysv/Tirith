@@ -10,11 +10,24 @@ fn safari_commands_only_for_chat_roles() {
     let app = crate::app::App::open_at(dir);
     assert_eq!(app.cfg().error, None, "the bot's role must read as valid");
     // Nobody sends Apple Events from inside the sandbox any more (macOS refuses them there anyway).
-    assert!(!PROFILE.contains("Safari") && PROFILE.contains("(deny appleevent-send)"), "the profile has no Safari exception:\n{PROFILE}");
+    assert!(
+        !PROFILE.contains("Safari") && PROFILE.contains("(deny appleevent-send)"),
+        "the profile has no Safari exception:\n{PROFILE}"
+    );
     // A lane gets an error, whatever role it names; so do the CEO, a lane worker, the judge and no role at all.
-    for (lane, role) in [("a-lane-id", "manager"), ("a-lane-id", "bot-test"), ("", "ceo"), ("", "worker"), ("", "judge"), ("", "")] {
+    for (lane, role) in [
+        ("a-lane-id", "manager"),
+        ("a-lane-id", "bot-test"),
+        ("", "ceo"),
+        ("", "worker"),
+        ("", "judge"),
+        ("", ""),
+    ] {
         let err = safari_script(&app, lane, role, "read", "").unwrap_err();
-        assert!(err.contains("managers and bots"), "lane={lane:?} role={role:?} is refused as not a chat role: {err}");
+        assert!(
+            err.contains("managers and bots"),
+            "lane={lane:?} role={role:?} is refused as not a chat role: {err}"
+        );
     }
     // For a bot (and the managers), the fixed AppleScript the daemon would run, without opening Safari.
     for role in ["bot-test", "manager", "manager-general"] {
@@ -26,10 +39,29 @@ fn safari_commands_only_for_chat_roles() {
         assert_eq!(open, "tell application \"Safari\"\nactivate\nopen location \"https://example.com/x\"\nend tell", "{role} opens a page");
     }
     // Only a URL rides in, escaped: a quote in it cannot end the string and start the agent's own script.
-    let evil = safari_script(&app, "", "bot-test", "open", "https://x/\" & (do shell script \"id\") & \"").unwrap();
-    assert!(evil.contains("open location \"https://x/\\\" & (do shell script \\\"id\\\") & \\\"\""), "the URL is escaped into the fixed script:\n{evil}");
+    let evil = safari_script(
+        &app,
+        "",
+        "bot-test",
+        "open",
+        "https://x/\" & (do shell script \"id\") & \"",
+    )
+    .unwrap();
+    assert!(
+        evil.contains("open location \"https://x/\\\" & (do shell script \\\"id\\\") & \\\"\""),
+        "the URL is escaped into the fixed script:\n{evil}"
+    );
     // And the command's own shape is checked.
-    assert!(safari_script(&app, "", "bot-test", "open", "").is_err(), "open needs a URL");
-    assert!(safari_script(&app, "", "bot-test", "eval", "1").is_err(), "only open and read exist");
-    assert!(safari_script(&app, "", "bot-test", "read", "https://x/\n").is_err(), "no control characters in a URL");
+    assert!(
+        safari_script(&app, "", "bot-test", "open", "").is_err(),
+        "open needs a URL"
+    );
+    assert!(
+        safari_script(&app, "", "bot-test", "eval", "1").is_err(),
+        "only open and read exist"
+    );
+    assert!(
+        safari_script(&app, "", "bot-test", "read", "https://x/\n").is_err(),
+        "no control characters in a URL"
+    );
 }

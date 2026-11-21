@@ -1,7 +1,19 @@
 use super::*;
 use std::process::Command;
 fn git(dir: &std::path::Path, args: &[&str]) -> std::process::Output {
-    Command::new("git").current_dir(dir).args(["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"]).args(args).output().unwrap()
+    Command::new("git")
+        .current_dir(dir)
+        .args([
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@t",
+            "-c",
+            "commit.gpgsign=false",
+        ])
+        .args(args)
+        .output()
+        .unwrap()
 }
 #[test]
 fn guard_merge_ignores_parent_content() {
@@ -31,12 +43,19 @@ fn guard_merge_ignores_parent_content() {
     std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
     // The merge brings the parent's forbidden line: allowed.
     let m = git(&dir, &["merge", "-q", "side", "-m", "merge"]);
-    assert!(m.status.success(), "merge with parent content must pass: {}", String::from_utf8_lossy(&m.stderr));
+    assert!(
+        m.status.success(),
+        "merge with parent content must pass: {}",
+        String::from_utf8_lossy(&m.stderr)
+    );
     // A plain commit adding the word is still blocked.
     assert!(!save("b.txt", &format!("{w}\n"), "x"));
     git(&dir, &["reset", "-q", "--hard", "HEAD"]);
     // A merge that adds a forbidden line of its own is still blocked.
     git(&dir, &["merge", "-q", "--no-commit", "--no-ff", "other"]);
-    assert!(!save("c.txt", &format!("c\n{w}\n"), "merge2"), "merge-added content must still be blocked");
+    assert!(
+        !save("c.txt", &format!("c\n{w}\n"), "merge2"),
+        "merge-added content must still be blocked"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
