@@ -93,8 +93,10 @@ turns red starts an episode: the mechanical fix when there is one, then one note
 after the delayed `metric.red` route's `after_minutes` (15), one pass runs for that episode: that route's turn
 role (the improver, `access = "read"`; it was the reviewer) runs one fresh turn like any turn role, and its
 answer goes to the owner's chat and, as `review.done`, to the lead. Back to green ends the episode. The
-improver also runs once a day with no red measure due (its daily passes are the `ceo_reviews` rows whose
-`metric` names `daily`, counted in the same 24 h as its `max_per_day`). Either way its brief (`brief`) carries
+factory's `schedule` route to the improver also runs it every day at 07:00 with no red measure due — that
+when and who are configuration, not a decision in `metrics.rs`, and it is due like a bot's routine (its time
+came today and no daily pass ran since; its daily passes are the `ceo_reviews` rows whose `metric` names
+`daily`, counted in the same 24 h as its `max_per_day`). Either way its brief (`brief`) carries
 the measures, the measures and eval scores grouped by factory version — merged lanes and their first-try
 share, the `scores`, the cards and the events per stamp, oldest version first — the last lanes with their
 stamp, failing checks, plans and owner questions; the role's prompt (`factory/prompts/improver.md`) has it

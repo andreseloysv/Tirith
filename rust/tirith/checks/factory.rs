@@ -48,7 +48,7 @@ fn default_routes_reproduce_today() {
         ("plan.empty", turn("manager", false)),
         ("deploy.done", note(true, false)),
         ("deploy.failed", turn("manager", true)),
-        ("schedule", turn("manager", false)),
+        ("schedule", vec![("manager".to_string(), "turn".to_string(), false, true, None), ("improver".to_string(), "turn".to_string(), false, false, None)]),
         ("review.done", turn("lead", false)),
         ("factory.invalid", turn("lead", true)),
         ("card.opened", vec![]),
@@ -60,6 +60,16 @@ fn default_routes_reproduce_today() {
     }
     // A red measure wakes the lead at once and, still red after 15 minutes, the improver.
     assert_eq!(f.routes_on("metric.red"), vec![("lead".to_string(), "turn".to_string(), true, true, None), ("improver".to_string(), "turn".to_string(), false, false, Some(15))]);
+    // The improver's daily pass is this schedule route (07:00 every day), not a decision in Rust; it is due like a bot's routine.
+    assert_eq!(f.schedules(), vec![("improver".to_string(), "07:00".to_string(), vec![1, 2, 3, 4, 5, 6, 7])]);
+    let (_, at, days) = &f.schedules()[0];
+    let stamp = |d: u32| chrono::TimeZone::with_ymd_and_hms(&chrono::Local, 2026, 11, d, 7, 0, 0).unwrap().with_timezone(&chrono::Utc).format("%Y-%m-%dT%H:%M:%SZ").to_string(); // a ceo_reviews `at`
+    let due = |last: &str, h: u32| crate::bots::due(&serde_json::json!({"at": at, "days": days, "last": last}), chrono::TimeZone::with_ymd_and_hms(&chrono::Local, 2026, 11, 23, h, 0, 0).unwrap());
+    assert!(!due(&stamp(22), 6), "before 07:00 no daily pass");
+    assert!(due(&stamp(22), 7), "at 07:00, last one yesterday: due");
+    assert!(due(&stamp(22), 15), "the daemon was down at 07:00: due later the same day");
+    assert!(!due(&stamp(23), 8), "today's pass ran: not again");
+    assert!(due("", 7), "never ran: due at 07:00");
     // A route on a missing event, to a missing role, or with an unknown key or mode makes the version invalid.
     let prompts = embedded_prompts();
     let bad = |text: &str| parse(text, prompts.clone(), &toml::Table::new()).err().unwrap_or_default();
@@ -70,7 +80,7 @@ fn default_routes_reproduce_today() {
     // Routes of config.toml (a bot's routines) stand next to the factory's, never instead of them.
     let o = overlay("[[routes]]\non = \"schedule\"\nto = \"manager\"\nmode = \"turn\"\ntask = \"news\"\n");
     let f = parse(TEXT, prompts, &o).unwrap();
-    assert_eq!(f.routes_on("schedule").len(), 2);
+    assert_eq!(f.routes_on("schedule").len(), 3); // the factory's two (manager, the improver's daily pass) plus the overlay's
     assert_eq!(f.routes_on("lane.failed").len(), 1);
 }
 

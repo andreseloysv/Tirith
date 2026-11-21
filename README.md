@@ -70,8 +70,8 @@ end with code, and puts a model in the loop only where judgment is needed.
   owner did not start, notices routed to the phones and cards, over 24 h — needless cards, closed without an
   answer or judged decidable alone by the `card-needed` eval, and the owner's satisfaction, judged per day by a
   cheap model from the owner's own messages (approvals minus corrections, repeats and noise complaints) and
-  never by asking, each with its target in the factory). A red metric goes to the lead; still red 15 minutes later, and once a day
-  anyway, the improver role runs one fresh read-only turn over the measures and eval scores by factory version
+  never by asking, each with its target in the factory). A red metric goes to the lead; still red 15 minutes later, and every day
+  at 07:00 by its `schedule` route in the factory anyway, the improver role runs one fresh read-only turn over the measures and eval scores by factory version
   and the factory itself: it says what is wrong and what to do, and may propose at most one change to
   `factory/` — a plan item with its check and its lane started, no owner's yes needed. A factory version whose
   first 10 merged items (or first 24 h) went worse than the one before it on satisfaction, interruptions or
