@@ -166,7 +166,7 @@ pub fn start(app: Shared) {
         loop {
             // At start and then every hour (120 rounds of at most 30 s) the attachments older than 24 h go.
             if tick % 120 == 0 {
-                expire_files(&crate::config::tirith_home().join("rooms/files"), Duration::from_secs(86400));
+                expire_files(&app.home.join("rooms/files"), Duration::from_secs(86400));
             }
             tick += 1;
             for p in cfg_get::<Vec<PublicCfg>>(&app.cfg().raw, &["rooms"]).unwrap_or_default().into_iter().filter(|p| !p.id.is_empty()) {
@@ -403,6 +403,9 @@ fn handle(r: &mut Room, me: &sealed::Me, platform: &str, m: &Value, backlog: boo
 
 /// A picture from a phone (`tirith-image {"mime","data"(base64)}`, as in am.mjs) is saved under `<home>/rooms/files/<room>/`; the manager gets its path.
 fn save_image(json: &str, room: &str) -> Option<String> {
+    save_image_at(&crate::config::tirith_home(), json, room)
+}
+fn save_image_at(home: &std::path::Path, json: &str, room: &str) -> Option<String> {
     use base64::{engine::general_purpose::STANDARD as B64, Engine};
     let j: Value = serde_json::from_str(json).ok()?;
     let (ext, magic): (&str, &[u8]) = match j["mime"].as_str()? {
@@ -412,7 +415,7 @@ fn save_image(json: &str, room: &str) -> Option<String> {
         _ => return None,
     };
     let bytes = B64.decode(j["data"].as_str().filter(|d| d.len() < 1_400_000)?).ok().filter(|b| b.len() <= 1 << 20 && b.starts_with(magic))?;
-    let dir = crate::config::tirith_home().join("rooms/files").join(room.replace(|c: char| !c.is_ascii_alphanumeric() && c != '-', "_"));
+    let dir = home.join("rooms/files").join(room.replace(|c: char| !c.is_ascii_alphanumeric() && c != '-', "_"));
     std::fs::create_dir_all(&dir).ok()?;
     let path = dir.join(format!("{}.{ext}", &sealed::sha_hex(&bytes)[..16]));
     std::fs::write(&path, &bytes).ok()?;

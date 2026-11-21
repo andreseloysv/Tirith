@@ -66,8 +66,7 @@ fn rows_carry_the_factory_stamp() {
     let home = std::env::temp_dir().join(format!("tirith-stamp-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&home);
     std::fs::create_dir_all(&home).unwrap();
-    std::env::set_var("TIRITH_HOME", &home);
-    let app = App::open();
+    let app = App::open_at(home);
     let version = app.cfg().factory.version.clone();
     assert!(version.contains('+'), "the running factory version: {version}");
     let stamp = |table: &str, where_: &str| app.query(&format!("SELECT factory, role_hash FROM {table} WHERE {where_}"), [], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))).pop().expect("a stamped row");
