@@ -13,6 +13,7 @@ import { thread } from './thread.js';
 import { composer } from './composer.js';
 import { Lightbox } from './lightbox.js';
 import { useBotTurns } from './react.js';
+import { useNotes } from './cite.js';
 
 const SHOWN = 200;        /* messages drawn at first; "Show earlier" adds as many */
 const DRAFT_KEY = 'tirith.chat.draft';
@@ -45,10 +46,11 @@ export function Chat({ project = '', who = '', hint = '' }) {
   const keys = boxKeys({ chat, busy, pics: att.pics, lastSent: send.lastSent, send: send.send, interrupt, edit, addFiles: att.addFiles });
   const onEarlier = () => scroll.earlier(() => setShown(shown + SHOWN));
   const turns = useBotTurns(project, !!sp.bot);   /* a bot's answers carry 👍 / 👎 */
+  const notes = useNotes(sp.bot);   /* and its memory citations show their notes */
 
   return html`<section class=${`mchat${att.drag ? ' drop' : ''}`}>
     ${head(sp, project, interrupt)}
-    ${thread({ sp, project, hint, items, hidden, scroll, onEarlier, setZoom, send, turns })}
+    ${thread({ sp, project, hint, items, hidden, scroll, onEarlier, setZoom, send, turns, notes })}
     <${ChatModels} role=${role} label=${whoName} note=${isProject ? `The model of the ${whoName}: it applies to all projects.` : `The model of ${whoName}.`} />
     ${composer({ sp, err, att, ta, file, draft, edit, keys, send: send.send })}
     ${zoom ? html`<${Lightbox} src=${zoom} onClose=${() => setZoom(null)} />` : null}

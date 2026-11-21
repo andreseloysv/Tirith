@@ -62,7 +62,9 @@ The bots' agent finds them natively: Muse reads `.agents/skills`, and the agent'
 The shared memory, `<tirith home>/bots/memory.md` (what holds for every bot: the owner's name, time zone, language), is handed before the bot's own, as `[tirith] Shared memory.md as it is now: …`, and the
 Library shows it above the bot's memory and edits it (`POST /api/bots/<id>/library` with `memory` and `shared`; `GET` gives it as `shared_memory`). Memory notes are numbered: when it hands a memory over,
 Tirith puts `[m<N>]` (the bot's own) or `[s<N>]` (the shared one) before every note line (one that starts with `-` or `*`) that has none yet, the number after the highest already there, and saves
-the file so; numbered notes, headings and every other line stay as they are, and the bot cites `[m<N>]` or `[s<N>]` when its answer uses a note. Every skill follows the factory's template,
+the file so; numbered notes, headings and every other line stay as they are, and the bot cites `[m<N>]` or `[s<N>]` when its answer uses a note. The chat and turns keep
+those marks (the `cited` count needs them); the page draws each as a small raised number on the word before it that shows its note on hover or tap and is left out of a copy
+(`web/js/views/chat/cite.js`), and what goes to the phones and answers a room has them taken out with the spaces before them (`rooms/uncite.rs`). Every skill follows the factory's template,
 `factory/skill.md`: its header and seven sections («Cuándo usarla», «Entradas y accesos», «Pasos», «Cómo validar», «Qué devuelve», «Qué requiere aprobación», «Si algo falla»). The bot prompt
 gets its text in place of `{skill_template}` (as a role's prompt gets `{name}`); the Library's `GET` gives it as `template`, a new skill starts from it, and every skill is marked with the sections it lacks, by their titles.
 A bot may have a model of its own (role `bot-<id>` of `models/`, chosen in its card); without one it has the managers'. A routine answer that starts with ∅ (nothing new)

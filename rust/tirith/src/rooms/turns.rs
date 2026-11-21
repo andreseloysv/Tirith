@@ -1,5 +1,7 @@
 //! The manager's turns for rooms: what a turn received stops being owed only when it ends, and what no turn answered is handed again.
-use super::{deliver::phone_model_command, outbox::queue, store::update, store::ROOMS, Room};
+use super::{
+    deliver::phone_model_command, outbox::queue, store::update, store::ROOMS, uncite::uncited, Room,
+};
 use crate::{app::Shared, manager};
 /// A turn that `rooms` started begins: what they are owed now is what it received (`answering`, kept with the cursor), and only that stops being owed at its end; what arrives while it runs is a later turn's.
 pub fn begin(app: &Shared, rooms: &[String]) {
@@ -25,11 +27,12 @@ fn answered(r: &mut Room) -> Vec<String> {
         .chain(std::mem::take(&mut r.owes.turn))
         .collect()
 }
-/// The end of a turn that `rooms` started: the agents there (the accepted managers and whoever wrote for this turn) get the manager's answer. The phones have it already (`to_phones`).
+/// The end of a turn that `rooms` started: the agents there (the accepted managers and whoever wrote for this turn) get the manager's answer, without its memory citations. The phones have it already (`to_phones`).
 pub fn reply(app: &Shared, rooms: &[String], text: &str) {
+    let text = uncited(text);
     rooms
         .iter()
-        .for_each(|id| queue(id, text, update(app, id, answered).unwrap_or_default()));
+        .for_each(|id| queue(id, &text, update(app, id, answered).unwrap_or_default()));
 }
 /// Hands the managers again, once, what rooms wrote and no finished turn answered: the session ended, or the daemon was restarted, in between. It stays owed until a turn that received it ends. `project` limits it to one conversation.
 pub fn again(app: &Shared, project: Option<&str>) {

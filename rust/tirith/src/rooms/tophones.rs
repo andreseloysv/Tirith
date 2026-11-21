@@ -1,5 +1,5 @@
 //! What a project's conversation says reaches the phones in its rooms.
-use super::{outbox::queue, store::ROOMS, Room};
+use super::{outbox::queue, store::ROOMS, uncite::uncited, Room};
 use crate::app::Shared;
 /// The ids of a conversation's own rooms, the ones its phones are in.
 pub fn phone_rooms(app: &Shared, project: &str) -> Vec<String> {
@@ -11,7 +11,7 @@ pub fn phone_rooms(app: &Shared, project: &str) -> Vec<String> {
         .map(|r| r.id.clone())
         .collect()
 }
-/// What a project's conversation says (its manager's words, Tirith's reports, a card) goes to the phones of its rooms.
+/// What a project's conversation says (its manager's words, Tirith's reports, a card) goes to the phones of its rooms, without a bot's memory citations.
 pub fn to_phones(app: &Shared, project: &str, text: &str) {
     // An answer that starts with ∅ (a routine found nothing new) stays on the page: only news reaches the phones.
     let rooms: Vec<Room> = ROOMS
@@ -25,10 +25,11 @@ pub fn to_phones(app: &Shared, project: &str, text: &str) {
         })
         .cloned()
         .collect();
+    let text = uncited(text);
     rooms.iter().for_each(|r| {
         queue(
             &r.id,
-            text,
+            &text,
             r.devices.iter().map(|d| d.public.clone()).collect(),
         )
     });
