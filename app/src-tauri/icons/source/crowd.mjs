@@ -34,6 +34,7 @@ const rnd = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
 const pick = (a) => a[Math.floor(rnd() * a.length)];
 
 let uid = 0;
+const HALO = Number(process.env.HALO || 0.9); // the app's faces: 0.5 idle, 0.55 on watch, 0.62 working
 function face(shape, color, x, y, size, rot, look) {
   const [body, e, round] = SHAPES[shape];
   const id = `f${uid++}`, eye = light(color) ? '#16171c' : '#fff';
@@ -41,12 +42,14 @@ function face(shape, color, x, y, size, rot, look) {
   const [lx, ly] = look;
   const eyes = `<ellipse cx="${e[0] + lx}" cy="${e[2] + ly}" rx="${e[3]}" ry="${e[4]}" fill="${eye}"/><ellipse cx="${e[1] + lx}" cy="${e[2] + ly}" rx="${e[3]}" ry="${e[4]}" fill="${eye}"/>`;
   const s = size / 100;
-  return `<g transform="translate(${(x - size / 2).toFixed(1)} ${(y - size / 2).toFixed(1)}) scale(${s.toFixed(3)}) rotate(${rot.toFixed(1)} 50 50)">`
-    + `<defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${mix(color, 255, 0.3)}"/><stop offset="1" stop-color="${mix(color, 0, 0.14)}"/></linearGradient></defs>`
-    + `<g transform="translate(0 5)" fill="#000" opacity=".35"${round ? ' stroke="#000" stroke-width="12" stroke-linejoin="round"' : ''}>${body}</g>`
+  const at = `<g transform="translate(${(x - size / 2).toFixed(1)} ${(y - size / 2).toFixed(1)}) scale(${s.toFixed(3)}) rotate(${rot.toFixed(1)} 50 50)">`;
+  const glow = mix(color, 255, 0.2);
+  const halo = at + `<g fill="${glow}" opacity="${HALO}"${round ? ` stroke="${glow}" stroke-width="12" stroke-linejoin="round"` : ''} filter="url(#halo)">${body}</g></g>`;
+  return [halo, at
+    + `<defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${mix(color, 255, 0.28)}"/><stop offset="1" stop-color="${mix(color, 0, 0.12)}"/></linearGradient></defs>`
     + `<g fill="url(#${id})"${fill}>${body}</g>`
-    + (shape === 'cloud' ? '' : '<ellipse cx="34" cy="28" rx="9" ry="4" fill="#fff" opacity=".25" transform="rotate(-30 34 28)"/>')
-    + eyes + '</g>';
+    + (shape === 'cloud' ? '' : '<ellipse cx="34" cy="28" rx="9" ry="4" fill="#fff" opacity=".22" transform="rotate(-30 34 28)"/>')
+    + eyes + '</g>'];
 }
 
 // A crowd in depth: tiny far away at the top, big in front and cut by the icon's edge; rows staggered and overlapping.
@@ -54,6 +57,7 @@ const names = Object.keys(SHAPES);
 const BG = '#14151b';
 const R = Number(process.argv[4] || 8);
 let bots = '';
+let allHalos = '';
 let last = '';
 const recent = [];
 let y = 70, size = 58;
@@ -62,6 +66,7 @@ for (let k = 0; k < R; k++) {
   const n = Math.ceil(1024 / (size * 0.86)) + 1;
   const step = 1024 / (n - 1);
   const off = (k % 2) * step * 0.5 - step * 0.25;
+  let halos = '', bodies = '';
   for (let i = 0; i < n; i++) {
     let shape = pick(names);
     while (shape === last) shape = pick(names);
@@ -73,19 +78,23 @@ for (let k = 0; k < R; k++) {
     while (recent.includes(base)) base = pick(COLORS);
     recent.push(base); if (recent.length > 3) recent.shift();
     const color = mix(base, 0x14, 0.5 * (1 - t) ** 1.4);
-    bots += face(shape, color, x, yy, size * (0.9 + rnd() * 0.2), (rnd() - 0.5) * 18, look);
+    const [h, b] = face(shape, color, x, yy, size * (0.9 + rnd() * 0.2), (rnd() - 0.5) * 18, look);
+    halos += h; bodies += b;
   }
+  allHalos += halos; bots += bodies; // every halo under every body: the glow shows in the dark gaps, as around the app's faces, and never over a face
   y += size * 0.62;
   size *= 1.36;
 }
 
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
 <defs>
+  <filter id="halo" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="9"/></filter>
   <clipPath id="icon"><rect x="0" y="0" width="1024" height="1024" rx="230"/></clipPath>
   <radialGradient id="bg" cx="50%" cy="30%" r="80%"><stop offset="0" stop-color="#2a2d38"/><stop offset="1" stop-color="#0d0e12"/></radialGradient>
 </defs>
 <g clip-path="url(#icon)">
   <rect width="1024" height="1024" fill="url(#bg)"/>
+  ${allHalos}
   ${bots}
 </g>
 </svg>`;
