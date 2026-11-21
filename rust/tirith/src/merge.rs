@@ -248,9 +248,9 @@ async fn train(app: &Shared, batch: Vec<Lane>) {
                     app.set_kv(&key, Some(&format!("{name} at {sha}")));
                     app.emit("plan", json!({"project": pid}));
                     requeue(app, &[lane], true, "main is red: waits for a green main");
-                    if was.is_none() {
-                        manager::emit_event(app, &pid, "main.red", &format!("main of {pid} is red: check '{name}' fails on main itself ({sha}). The autopilot pauses {pid} until main is green; fix main or retry the main pipeline."), None);
-                    }
+                    let _ = was.is_none().then(|| {
+                        manager::emit_event(app, &pid, "main.red", &format!("main of {pid} is red: check '{name}' fails on main itself ({sha}). The autopilot pauses {pid} until main is green; fix main or retry the main pipeline."), None)
+                    });
                     return;
                 }
             }
@@ -319,9 +319,9 @@ async fn land(app: &Shared, project: &Project, pipe: &Pipe, slot: &Path, base: &
     working.iter().for_each(|id| lanes::tell(id, &format!("[tirith] main advanced: {} (files: {})", items.join("; "), changed.iter().take(10).map(String::as_str).collect::<Vec<_>>().join(", "))));
     // A merge is news, not a question: the manager gets a turn for it only when it leaves the plan without open work.
     manager::emit_event(app, &project.id, "merge.landed", &merged_note(&project.id, sha8, &items), None);
-    if plan::read(app, &project.id).is_ok_and(|steps| !steps.iter().flat_map(|s| &s.items).any(|i| !i.done && !lanes::is_autopilot_skipped(&i.text))) {
-        manager::emit_event(app, &project.id, "plan.empty", "The plan has no open item left: tell the owner what is done, and ask for the next goal if the project needs one.", None);
-    }
+    let _ = plan::read(app, &project.id)
+        .is_ok_and(|steps| !steps.iter().flat_map(|s| &s.items).any(|i| !i.done && !lanes::is_autopilot_skipped(&i.text)))
+        .then(|| manager::emit_event(app, &project.id, "plan.empty", "The plan has no open item left: tell the owner what is done, and ask for the next goal if the project needs one.", None));
     app.emit("plan", json!({"project": project.id}));
     app.sched_wake.notify_one();
     deploy(app, project, changed).await;
