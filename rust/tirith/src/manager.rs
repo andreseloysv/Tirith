@@ -152,7 +152,7 @@ pub fn emit_event(app: &Shared, project: &str, on: &str, shown: &str, told: Opti
     let mut heard: BTreeSet<String> = BTreeSet::new();
     for (to, mode, _, phone, _) in routes {
         // Only chat roles are handed text here, in the conversation of their scope; a turn role is run by whoever
-        // watches its condition (the metrics run the reviewer through `run_turn`, like any turn role).
+        // watches its condition (the metrics run the improver through `run_turn`, like any turn role).
         let f = &app.cfg().factory;
         if f.role::<String>(&to, "session").as_deref() != Some("chat") {
             continue;
@@ -409,7 +409,7 @@ fn turn_permission(read_only: bool, tool: &str, input: &Value) -> Value {
     }
 }
 
-/// One fresh turn of a `session = "turn"` role: its factory prompt as its instructions, `input` as its one message, its `access` deciding whether it may write; the assistant's text until the turn ends is the answer. Any turn role runs this way (the reviewer included).
+/// One fresh turn of a `session = "turn"` role: its factory prompt as its instructions, `input` as its one message, its `access` deciding whether it may write; the assistant's text until the turn ends is the answer. Any turn role runs this way (the improver included).
 pub async fn run_turn(app: &Shared, role: &str, project: &str, input: &str) -> Result<String, String> {
     let prompt = app.cfg().factory.prompts_of(role);
     if matches!(models::role(app, role).agent.as_str(), "codex" | "muse") {

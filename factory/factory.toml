@@ -65,12 +65,21 @@ scope = "project"
 prompt = ["prompts/brief.md"]
 runs_on = "local"
 
-[roles.reviewer]
+# The improver (was the reviewer, and before it the CEO): the turn role of the
+# delayed metric.red route below. The daemon also runs it once a day. It
+# reads the measures and eval scores by factory version and factory/ itself,
+# and proposes at most one change to factory/ per pass as a step 17 item of
+# the tirith plan with its lane started; a version whose first 10 merged
+# items (or first 24 h) went worse than the one before it on satisfaction,
+# interruptions or first try is reverted by its next pass. Nothing in the
+# factory needs the owner's yes, and the daemon reloads the factory when
+# main moves, so a landed change applies with no rebuild and no restart.
+[roles.improver]
 extends = "manager"
 session = "turn"
 scope = "global"
 access = "read"
-prompt = ["prompts/reviewer.md"]
+prompt = ["prompts/improver.md"]
 max_per_day = 6
 runs_on = "local"
 
@@ -191,7 +200,7 @@ phone = true
 [[routes]]
 on = "metric.red"
 after_minutes = 15
-to = "reviewer"
+to = "improver"
 mode = "turn"
 then = "lead"
 
@@ -302,7 +311,7 @@ label = "Preguntas al dueño"
 # What reached the owner without the owner asking, per item merged in 24 h:
 # phone messages of turns no owner message started, notices whose route has
 # phone = true, and cards. It should fall toward 0; like every measure it is
-# routed as metric.red (to the lead, then the reviewer) when it turns red.
+# routed as metric.red (to the lead, then the improver) when it turns red.
 [metrics.interruptions]
 label = "Interrupciones por ítem (24 h)"
 target = 1
