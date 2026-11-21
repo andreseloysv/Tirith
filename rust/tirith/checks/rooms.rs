@@ -146,3 +146,49 @@ color = \"\"
     assert!(list.contains("\"f\":{\"color\":\"#22d3ee\",\"shape\":\"drop\"}") || list.contains("\"f\":{\"shape\":\"drop\",\"color\":\"#22d3ee\"}"), "the list the phones get carries f: {list}");
     assert!(list.contains("#2f7d5b") && list.contains("#3fb6a8"), "the list carries the project's colour and All projects' own: {list}");
 }
+#[tokio::test]
+async fn owed_waits_for_its_own_turn() {
+    let home = std::env::temp_dir().join(format!("tirith-owed-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&home);
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::write(home.join("config.toml"), format!("[[projects]]\nid = \"owedproj\"\nrepo = \"{}\"\n", home.display())).unwrap();
+    let app = crate::app::App::open_at(home.clone());
+    // No agent ever starts in this test: the chat role runs on an alias that does not exist, so a handed message only waits in its talk.
+    let role = app.chat_role("owedproj");
+    app.set_kv(&format!("models:{role}"), Some(&json!({"agent": "owedtest-no-such-agent", "model": null, "effort": null, "fallback": []}).to_string()));
+    assert_eq!(crate::models::role(&app, &role).agent, "owedtest-no-such-agent", "the test's manager has no agent to start");
+    assert!(crate::models::chat_argv(&app, &role, None).is_err(), "and no chat session can be built for it");
+    let (first, second) = ((format!("Eloy {PHONE}"), "primero: mira el zoo".to_string()), (format!("Eloy {PHONE}"), "segundo: y la granja".to_string()));
+    save(&app, &Room { id: "sealed-owed".into(), project: "owedproj".into(), kind: "manager".into(), owed: vec![first.clone()], ..Default::default() });
+    let owed = || room("sealed-owed").unwrap().owed;
+    // The first message was delivered and its turn starts: it alone is what that turn received.
+    begin(&app, &["sealed-owed".to_string()]);
+    assert_eq!(room("sealed-owed").unwrap().answering, vec![first.clone()], "the running turn received the first message");
+    // The owner writes again while that turn is still running (as `poll` saves it, with the cursor).
+    update(&app, "sealed-owed", |r| r.owed.push(second.clone()));
+    assert_eq!(owed(), vec![first.clone(), second.clone()], "both are owed while the first turn runs");
+    // The first turn ends with its answer: only what it received stops being owed.
+    reply(&app, &["sealed-owed".to_string()], "respuesta al primero");
+    assert_eq!(owed(), vec![second.clone()], "the second message is still owed after the first turn's reply");
+    assert!(room("sealed-owed").unwrap().answering.is_empty(), "and no turn is answering it yet");
+    let kept: Value = serde_json::from_str(&app.query("SELECT data FROM am_rooms WHERE id = 'sealed-owed'", [], |r| r.get::<_, String>(0)).pop().unwrap()).unwrap();
+    assert_eq!(kept["owed"], json!([[second.0, second.1]]), "kept with the room's record, so a restart loses nothing: {kept}");
+    // The next turn starts on the second message, then dies with its session (a restart) before answering.
+    begin(&app, &["sealed-owed".to_string()]);
+    assert_eq!(room("sealed-owed").unwrap().answering, vec![second.clone()], "the next turn received the second message");
+    // After the restart `again` hands it over once more — the second one, never the first — and it stays owed.
+    again(&app, Some("owedproj"));
+    let handed = app.query("SELECT text FROM chat WHERE role = 'room' AND project = 'owedproj' ORDER BY id", [], |r| r.get::<_, String>(0));
+    assert_eq!(handed.len(), 1, "handed again exactly once: {handed:?}");
+    assert!(handed[0].contains("handed to you again") && handed[0].contains(&second.1) && !handed[0].contains(&first.1), "the second message alone comes back: {handed:?}");
+    assert_eq!(owed(), vec![second.clone()], "still owed until a turn that received it ends");
+    // The turn that received it after the restart ends: nothing is owed any more, and `again` has nothing left.
+    begin(&app, &["sealed-owed".to_string()]);
+    reply(&app, &["sealed-owed".to_string()], "respuesta al segundo");
+    assert!(owed().is_empty() && room("sealed-owed").unwrap().answering.is_empty(), "nothing owed once its own turn answered");
+    again(&app, Some("owedproj"));
+    assert_eq!(app.query("SELECT COUNT(*) FROM chat WHERE role = 'room' AND project = 'owedproj'", [], |r| r.get::<_, i64>(0)), [1], "nothing is handed again after it was answered");
+    drop(ROOMS.lock().unwrap().remove("sealed-owed"));
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}

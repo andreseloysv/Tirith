@@ -34,9 +34,7 @@ pub fn parse(text: &str) -> Vec<Step> {
             let (num, title) = head.split_once(". ").filter(|(n, _)| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit())).unwrap_or(("", head));
             steps.push(Step { num: num.into(), title: title.trim().into(), items: vec![], line: i });
         } else if let Some((done, rest)) = line.strip_prefix("- [ ] ").map(|r| (false, r)).or_else(|| line.strip_prefix("- [x] ").or_else(|| line.strip_prefix("- [X] ")).map(|r| (true, r))) {
-            if let Some(step) = steps.last_mut() {
-                step.items.push(Item { text: clean(rest), done, check: CHECK.captures(rest).map(|c| c[1].to_string()), line: i });
-            }
+            steps.last_mut().into_iter().for_each(|step| step.items.push(Item { text: clean(rest), done, check: CHECK.captures(rest).map(|c| c[1].to_string()), line: i }));
         }
         steps
     });

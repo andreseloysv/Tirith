@@ -21,8 +21,9 @@ struct Talk {
     /// True while a turn runs (between a message handed to a live session and that session's `result`).
     busy: bool,
     pid: u32,
-    /// Rooms whose messages started the current turn (their answer goes back there) and the turn's text so far.
+    /// Rooms whose messages wait for the next turn (`reply_to`, their answer goes back there), the rooms of the turn now running (`turn_rooms`: only what they were owed when it started stops being owed at its end) and the turn's text so far.
     reply_to: BTreeSet<String>,
+    turn_rooms: BTreeSet<String>,
     text: String,
     /// Reports from Tirith not yet handed over, and whether a hand-over is already on its way.
     notes: Vec<String>,
@@ -44,7 +45,7 @@ fn set_busy(app: &Shared, project: &str, t: &mut Talk, on: bool) {
 }
 /// The rooms a starting turn shows its progress in: the rooms that started it, and, for a turn marked for the phones, its conversation's own rooms. A turn with neither (only the page) writes in no room.
 fn typing_rooms(app: &Shared, project: &str) -> Vec<String> {
-    let (reply_to, phones) = talk(project, |t| (t.reply_to.clone(), t.phones));
+    let (reply_to, phones) = talk(project, |t| (t.reply_to.iter().chain(t.turn_rooms.iter()).cloned().collect::<BTreeSet<_>>(), t.phones));
     reply_to.into_iter().chain(phones.then(|| rooms::phone_rooms(app, project)).into_iter().flatten()).collect::<BTreeSet<_>>().into_iter().collect()
 }
 /// Shows a turn's typing in its rooms: at its start, and with `again` (another message for the running turn, whose phones may have been reopened) its current state once more, in every room of the turn by then.
@@ -62,6 +63,11 @@ fn typing_line(project: &str, line: &str) {
 }
 fn typing_stop(project: &str) {
     rooms::typing(talk(project, |t| t.typing.stop()));
+}
+/// A turn starts (a live session took its message, a session took its waiting ones, or an exec turn took its input): its rooms are the ones waiting by then, and only what they were owed at this moment stops being owed when it ends.
+fn begin_turn(app: &Shared, project: &str) {
+    let rooms: Vec<String> = talk(project, |t| t.turn_rooms.is_empty().then(|| (t.turn_rooms.append(&mut t.reply_to), Vec::from_iter(t.turn_rooms.clone())).1).into_iter().flatten().collect());
+    rooms::begin(app, &rooms);
 }
 /// The short line a tool call shows on the phones: its own summary (a description, a file, a pattern, a url) when it has one, never its raw command; without one, only the tool's name.
 fn progress_line(tool: &str, input: &Value) -> String {
@@ -84,19 +90,21 @@ fn user_line(text: &str) -> String {
 /// Hands the conversation its waiting reports and `text` as one message; its session starts when none runs.
 fn deliver(app: &Shared, project: &str, text: &str, phones: bool) {
     let memory = bots::context(app, project); // a bot's memory, read at every turn
-    let (start, handed) = talk(project, |t| {
-        t.phones |= phones;
-        let Some(()) = (!t.notes.is_empty() || !text.is_empty()).then_some(()) else { return (false, false) };
+    let (start, handed, began) = talk(project, |t| {
+        let was_busy = (t.phones |= phones, t.busy).1;
+        let Some(()) = (!t.notes.is_empty() || !text.is_empty()).then_some(()) else { return (false, false, false) };
         let notes = std::mem::take(&mut t.notes).into_iter().map(|n| format!("[tirith] {n}"));
         let all: Vec<String> = memory.into_iter().chain(notes).chain((!text.is_empty()).then(|| text.to_string())).collect();
         let text = all.join("\n\n");
-        if !t.stale && t.tx.as_ref().is_some_and(|tx| tx.send(user_line(&text)).is_ok()) {
+        let sent = !t.stale && t.tx.as_ref().is_some_and(|tx| tx.send(user_line(&text)).is_ok());
+        if sent {
             set_busy(app, project, t, true);
         } else {
             t.pending.push(text); // the session on its way takes it, and only then is the manager busy
         }
-        (!std::mem::replace(&mut t.alive, true), true)
+        (!std::mem::replace(&mut t.alive, true), true, sent && !was_busy)
     });
+    let _ = began.then(|| begin_turn(app, project)); // a message a live, idle session took starts its turn now; one for a running turn begins at that turn's end
     let _ = handed.then(|| typing_start(app, project, true)); // the phones see the turn start (or, for a turn already running, its state again), even while its session is still on its way
     let _ = start.then(|| tokio::spawn(run(app.clone(), project.to_string())));
 }
@@ -120,10 +128,7 @@ fn with_cards(app: &Shared, project: &str, text: &str) -> String {
 /// Ends a conversation's live session at its turn's end (now, when no turn runs), so its next message starts a fresh one and a running turn's answer is not lost.
 fn end(t: &mut Talk) {
     t.stale = true;
-    if !t.busy {
-        t.tx.take();
-        kill_group(t.pid, libc::SIGTERM);
-    }
+    let _ = (!t.busy).then(|| (t.tx.take(), kill_group(t.pid, libc::SIGTERM)));
 }
 /// Ends one conversation's live session (its chat was cleared), like `restart` for one.
 pub fn end_session(project: &str) {
@@ -374,9 +379,7 @@ async fn run(app: Shared, project: String) {
         let Some(()) = (!rest).then_some(()) else { return };
         // A session that ended young is started again more and more slowly; one that lived is started again at once.
         backoff = if result.is_ok() || started.elapsed().as_secs() > 60 { 2 } else { (backoff * 2).min(60) };
-        if backoff > 2 {
-            tokio::time::sleep(Duration::from_secs(backoff)).await;
-        }
+        tokio::time::sleep(Duration::from_secs(if backoff > 2 { backoff } else { 0 })).await;
     }
 }
 /// Starts a streaming chat agent on behalf of `role` in `<home>/<role>` (a project's chat in its own folder below it, so the agent's own notes stay with the project), sandboxed, logging to `logs/<role>.log`. A bot's own turn role (the CEO, the judge) runs in its bot folder `<home>/manager/<role>`, like its conversation does.
@@ -469,7 +472,7 @@ async fn session(app: &Shared, project: &str) -> Result<(), String> {
         sent.iter().enumerate().for_each(|(i, text)| drop(tx.send(user_line(&if i == 0 { format!("{}{text}", history.as_deref().unwrap_or("")) } else { text.clone() }))));
         sent
     });
-    let _ = (!sent.is_empty()).then(|| typing_start(app, project, false)); // a session restarted after a failure shows its waiting turn again
+    let _ = (!sent.is_empty()).then(|| (begin_turn(app, project), typing_start(app, project, false))); // the waiting turn starts now; a session restarted after a failure shows it again
     let writer = tokio::spawn(async move {
         while let Some(line) = rx.recv().await {
             let Some(()) = stdin.write_all(format!("{line}\n").as_bytes()).await.is_ok().then_some(()) else { break };
@@ -514,10 +517,11 @@ async fn session(app: &Shared, project: &str) -> Result<(), String> {
                     set_busy(app, project, t, false);
                     // A message that comes after this waits in `pending` for the next session, which has the new settings.
                     rest = std::mem::take(&mut t.stale) && t.tx.take().is_some();
-                    (std::mem::take(&mut t.reply_to), std::mem::take(&mut t.text))
+                    (std::mem::take(&mut t.turn_rooms), std::mem::take(&mut t.text))
                 });
                 typing_stop(project);
                 rooms::reply(app, &Vec::from_iter(rooms_now), &text);
+                let _ = (!rest).then(|| begin_turn(app, project)); // what rooms sent during that turn is the next turn's, and in this session it starts now
             }
             "control_request" if msg["request"]["subtype"] == "can_use_tool" => {
                 // The rules already ran in the PreToolUse hook; anything that reaches here is allowed.
@@ -527,8 +531,8 @@ async fn session(app: &Shared, project: &str) -> Result<(), String> {
         }
     }
     // What a dead turn left is never sent to a room with a later answer; what rooms wrote for it is handed over again, once, and before the wait below, so a line that arrives during it (and waits in `pending`) is not handed twice.
-    let died = talk(project, |t| (ready.then(|| t.reply_to.clear()), t.tx.take().is_some() && ready && t.busy).1); // a session that never got ready ran no turn: its lines wait, with their rooms
-    let _ = died.then(|| rooms::again(app, Some(project)));
+    let died = talk(project, |t| (t.tx.take().is_some() && t.busy || !t.turn_rooms.is_empty()) && ready); // a session that never got ready ran no turn: its lines wait, with their rooms; a promoted turn it never answered counts as died too
+    let _ = died.then(|| (talk(project, |t| (t.reply_to.clear(), t.turn_rooms.clear())), rooms::again(app, Some(project))));
     writer.abort();
     kill_group(pid, libc::SIGTERM);
     let _ = tokio::time::timeout(Duration::from_secs(10), child.wait()).await;
@@ -548,6 +552,7 @@ async fn exec_session(app: &Shared, project: &str, muse: bool) -> Result<(), Str
     let resumed = app.kv(&key);
     // The turn's message in plain text, with the recent conversation in front of it when the agent starts fresh; `sent` is handed over again when the turn never started.
     let sent = talk(project, |t| std::mem::take(&mut t.pending));
+    begin_turn(app, project); // this exec turn received exactly that waiting input; what arrives while it runs waits for the next one
     let mut input = if resumed.is_none() { history(app, project) } else { String::new() };
     input += &sent.iter().map(|s| format!("{s}\n")).collect::<String>();
     let mut started = false;
@@ -593,10 +598,10 @@ async fn exec_session(app: &Shared, project: &str, muse: bool) -> Result<(), Str
     )
     .await;
     if !started {
-        talk(project, |t| drop(t.pending.splice(0..0, sent)));
+        talk(project, |t| (t.reply_to.append(&mut t.turn_rooms), drop(t.pending.splice(0..0, sent)))); // no turn ran: its rooms wait again with its input
         return result.map(|_| ());
     }
-    let (rooms_now, phones) = talk(project, |t| (set_busy(app, project, t, false), (std::mem::take(&mut t.reply_to), std::mem::take(&mut t.phones))).1);
+    let (rooms_now, phones) = talk(project, |t| (set_busy(app, project, t, false), (std::mem::take(&mut t.turn_rooms), std::mem::take(&mut t.phones))).1);
     let (text, answered) = match result {
         Ok(text) => (text, true),
         Err(e) => {
