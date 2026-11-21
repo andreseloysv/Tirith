@@ -81,8 +81,8 @@ fn files_under(p: &Path, out: &mut Vec<PathBuf>) {
 }
 /// Keeps what a lane moved in out of git for good: when the project does not already ignore it, one line for the whole ignored folder moved (or for a lone file) joins `.git/info/exclude` there, with the pattern characters escaped (`\` in a name would escape the next character and the file would stay visible), so it is never committed or pushed from the project folder.
 async fn ensure_excluded(repo: &Path, rel: &Path) {
-    let dest = repo.join(rel);
-    let (dir, rel, esc) = (dest.is_dir() && !dest.is_symlink(), rel.to_string_lossy().into_owned(), rel.to_string_lossy().replace('\\', "\\\\").replace('*', "\\*").replace('?', "\\?").replace('[', "\\[").replace(']', "\\]").replace(' ', "\\ "));
+    let (dir, rel, esc) =
+        (repo.join(rel).is_dir() && !repo.join(rel).is_symlink(), rel.to_string_lossy().into_owned(), ['\\', '*', '?', '[', ']', ' '].iter().fold(rel.to_string_lossy().into_owned(), |s, c| s.replace(*c, &format!("\\{c}"))));
     let Some(()) = git(repo, &["check-ignore", "-q", "--", &rel]).await.is_err().then_some(()) else { return };
     let Ok(gitdir) = git(repo, &["rev-parse", "--git-common-dir"]).await else { return };
     let (file, line) = (repo.join(gitdir).join("info").join("exclude"), format!("/{esc}{}", if dir { "/" } else { "" }));
