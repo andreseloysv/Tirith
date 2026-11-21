@@ -5,7 +5,7 @@ use axum::extract::{Path, State};
 use axum::routing::{get, post};
 use axum::{http::StatusCode, Json, Router};
 use serde_json::{json, Value};
-use std::path::PathBuf;
+use std::{os::unix::fs::PermissionsExt, path::PathBuf};
 const MARKER: &str = "FORBIDDEN_WORDS_GUARD";
 const HOOKS: [&str; 2] = ["pre-commit", "commit-msg"];
 const HEAD: &str = "#!/bin/bash\n# FORBIDDEN_WORDS_GUARD\n# {what}\n# Installed by Tirith; words: {words}\nset -euo pipefail\nexport TIRITH_GUARD_RE='{re}'\n";
@@ -82,7 +82,6 @@ pub fn install(app: &Shared, project: &Project) -> Result<(), String> {
         let path = dir.join(hook);
         immutable(&path, false);
         std::fs::write(&path, render(hook, &words)).map_err(|e| format!("{}: {e}", path.display()))?;
-        use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).map_err(|e| e.to_string())?;
         immutable(&path, true);
     }
@@ -98,17 +97,11 @@ pub fn start(app: Shared) {
     });
 }
 async fn list(State(app): State<Shared>) -> Json<Value> {
-    let rows: Vec<Value> = app
-        .cfg()
-        .projects
-        .iter()
-        .map(|p| {
-            let n = words(&app, p).len();
-            let r = intact(&app, p);
-            json!({"project": p.id, "name": p.name, "words": n, "ok": r.is_ok(), "reason": r.err().unwrap_or_else(|| if n == 0 { "sin guarda".into() } else { "ok".into() })})
-        })
-        .collect();
-    Json(json!(rows))
+    let row = |p: &Project| {
+        let (n, r) = (words(&app, p).len(), intact(&app, p));
+        json!({"project": p.id, "name": p.name, "words": n, "ok": r.is_ok(), "reason": r.err().unwrap_or_else(|| if n == 0 { "sin guarda".into() } else { "ok".into() })})
+    };
+    Json(json!(app.cfg().projects.iter().map(row).collect::<Vec<_>>()))
 }
 pub fn routes() -> Router<Shared> {
     let install_one = |State(app): State<Shared>, Path(project): Path<String>| async move {
