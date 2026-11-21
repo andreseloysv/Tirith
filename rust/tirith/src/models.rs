@@ -100,9 +100,7 @@ pub fn lane_argv(app: &Shared, agent: Option<&str>, model: Option<&str>, brief: 
     };
     set_flag(&mut argv, &mflag, &["--model", "-m"], &model);
     set_flag(&mut argv, &eflag, &["--effort", "--reasoning-effort"], &effort);
-    if alias == "codex" {
-        crate::codex::options(&cfg, &mut argv, effort.as_deref());
-    }
+    let _ = (alias == "codex").then(|| crate::codex::options(&cfg, &mut argv, effort.as_deref()));
     Ok(AgentCmd { alias, argv })
 }
 
@@ -240,7 +238,7 @@ pub fn command(app: &Shared, text: &str) -> Option<Result<String, String>> {
     })())
 }
 
-/// GET /api/models: every factory role's effective setting (the bots among them) with its source and its factory shape (session, scope, access, runs_on, name), and the choices the page offers.
+/// GET /api/models: every factory role's effective setting (the bots among them) with its source and its factory shape (session, scope, access, runs_on, name), the choices the page offers, and the closed list of events a bot's card offers its routes from (but `schedule`: its routines).
 pub fn state(app: &Shared) -> Value {
     let cfg = app.cfg();
     let roles: serde_json::Map<String, Value> = cfg
@@ -255,7 +253,7 @@ pub fn state(app: &Shared) -> Value {
             (r, v)
         })
         .collect();
-    json!({"roles": roles, "choices": {"agents": cfg.factory.commands().iter().map(|(k, _)| k).collect::<Vec<_>>(), "codex": crate::codex::catalog(), "models": get::<Vec<String>>(&cfg.raw, &["models", "choices"]).unwrap_or_default(),
+    json!({"roles": roles, "events": crate::factory::EVENTS.split(';').filter(|e| *e != "schedule").collect::<Vec<_>>(), "choices": {"agents": cfg.factory.commands().iter().map(|(k, _)| k).collect::<Vec<_>>(), "codex": crate::codex::catalog(), "models": get::<Vec<String>>(&cfg.raw, &["models", "choices"]).unwrap_or_default(),
         "efforts": get::<Vec<String>>(&cfg.raw, &["models", "efforts"]).unwrap_or_else(|| EFFORTS.map(String::from).to_vec())}})
 }
 

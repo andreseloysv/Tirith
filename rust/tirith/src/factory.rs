@@ -10,8 +10,8 @@ use std::time::SystemTime;
 const TEXT: &str = include_str!("../../../factory/factory.toml");
 const SECTIONS: [&str; 8] = ["agents", "roles", "limits", "plan", "cards", "metrics", "routes", "evals"];
 const MEASURES: [&str; 11] = ["merged", "median", "first_try", "idle", "stuck", "main_red", "failed", "owner", "interruptions", "needless_cards", "satisfaction"];
-/// The closed list of events the code emits, `;`-joined like the moves in config.rs; a route on anything else never fires, so it is invalid.
-const EVENTS: &str = "owner.message;room.message;lane.asked;lane.failed;lane.not_started;lane.long;merge.blocked;merge.landed;main.red;main.green;plan.empty;deploy.done;deploy.failed;metric.red;review.done;schedule;card.opened;card.answered;card.closed;factory.invalid";
+/// The closed list of events the code emits, `;`-joined like the moves in config.rs; a route on anything else never fires, so it is invalid. The page offers a bot's routes from this list (but `schedule`: a bot's routines are its schedule routes).
+pub(crate) const EVENTS: &str = "owner.message;room.message;lane.asked;lane.failed;lane.not_started;lane.long;merge.blocked;merge.landed;main.red;main.green;plan.empty;deploy.done;deploy.failed;metric.red;review.done;schedule;card.opened;card.answered;card.closed;factory.invalid";
 /// One `[[routes]]` entry read for one event: (to, mode, chat, phone, after_minutes).
 pub type Route = (String, String, bool, bool, Option<u64>);
 
@@ -112,8 +112,10 @@ pub fn parse(text: &str, prompts: BTreeMap<String, String>, overlay: &toml::Tabl
     let mut table = toml::Value::Table(TEXT.parse().map_err(|e| format!("factory.toml: {e}"))?);
     merge(&mut table, &toml::Value::Table(text.parse().map_err(|e| format!("factory.toml: {e}"))?));
     SECTIONS.into_iter().filter(|sec| *sec != "routes").filter_map(|sec| overlay.get(sec).map(|o| (sec, o))).for_each(|(sec, o)| merge(&mut table[sec], o));
-    // Routes of config.toml (a bot's routines) stand next to the factory's, never instead of them.
-    table["routes"].as_array_mut().into_iter().for_each(|dst| dst.extend(overlay.get("routes").and_then(|r| r.as_array()).into_iter().flatten().cloned()));
+    // Routes config.toml writes to a role replace the factory's to that role, as a set (so the page can also take a factory route away from a bot); schedule routes (a bot's routines, a timed pass) stand next to them.
+    let laid: Vec<toml::Value> = overlay.get("routes").and_then(|r| r.as_array()).into_iter().flatten().cloned().collect();
+    let replaced: Vec<&str> = laid.iter().filter(|r| str_of(r, "on") != "schedule").map(|r| str_of(r, "to")).collect();
+    table["routes"].as_array_mut().into_iter().for_each(|dst| (dst.retain(|r| str_of(r, "on") == "schedule" || !replaced.contains(&str_of(r, "to"))), dst.extend(laid.iter().cloned())).1);
     let roles = table["roles"].as_table().cloned().unwrap_or_default();
     roles.keys().cloned().collect::<Vec<_>>().iter().for_each(|name| table["roles"][name] = resolved(&roles, name, 0));
     // The `default` agent under every other (never its chat args for an exec agent), and the codex command needs no config line, as before.

@@ -141,9 +141,7 @@ pub fn emit_event(app: &Shared, project: &str, on: &str, shown: &str, told: Opti
     let here_p = app.conv(project);
     if routes.iter().any(|r| r.2) {
         app.chat("tirith", shown, here_p);
-        if routes.iter().any(|r| r.2 && r.3) {
-            rooms::to_phones(app, here_p, &format!("Tirith: {shown}"));
-        }
+        let _ = routes.iter().any(|r| r.2 && r.3).then(|| rooms::to_phones(app, here_p, &format!("Tirith: {shown}")));
     }
     let mut heard: BTreeSet<String> = BTreeSet::new();
     for (to, mode, _, phone, _) in routes {
@@ -314,9 +312,7 @@ pub fn owner_open(app: &Shared) -> Vec<Value> {
 /// Why an open question no longer applies: it proposes turning its project's autopilot off (on) and that is already so.
 pub fn stale_reason(question: &str, autopilot_on: bool, free_gb: f64) -> Option<&'static str> {
     let q = question.to_lowercase();
-    if q.contains("gb free on this disk") && free_gb > 10.0 {
-        return Some("the disk has more than 10 GB free again");
-    }
+    let Some(()) = (!(q.contains("gb free on this disk") && free_gb > 10.0)).then_some(()) else { return Some("the disk has more than 10 GB free again") };
     let has = |ws: &[&str]| ws.iter().any(|w| q.contains(w));
     let (off, on) = (has(&["turn off", "switch off", "disable", "apagar", "desactivar", "pausar"]), has(&["turn on", "switch on", "enable", "encender", "activar", "reanudar"]));
     match (q.contains("autopilot"), off, on, autopilot_on) {
