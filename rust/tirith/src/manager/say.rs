@@ -16,6 +16,9 @@ pub fn from_room(app: &Shared, project: &str, room: &str, author: &str, text: &s
         "",
     );
     app.chat("room", &format!("{author} ({room}): {text}"), project);
+    if crate::turns::reacted(app, project, text) {
+        return; // a 👍/👎 on the bot's last turn starts none
+    }
     talk(project, |t| t.reply_to.insert(room.to_string()));
     crate::turns::trigger(project, "room", "");
     deliver(
@@ -55,6 +58,10 @@ pub fn say(app: &Shared, project: &str, text: &str, agent: &str) -> Result<(), S
     let Some(()) = agent.is_empty().then_some(()) else {
         return Ok(());
     };
+    if crate::turns::reacted(app, project, text) {
+        app.chat("owner", text, project); // a 👍/👎 on the bot's last turn: no turn, no owner-mood
+        return Ok(());
+    }
     let event = app.event("", project, "owner.message", "", text, "");
     app.chat("owner", text, project);
     judge_evals(app, project, "owner.message", text, event);
