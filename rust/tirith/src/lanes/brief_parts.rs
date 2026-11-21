@@ -13,7 +13,7 @@ pub(super) fn project_lanes(app: &Shared, project: &str) -> Vec<Lane> {
         .collect()
 }
 /// The items of the lane's step as checklist lines, each open one with the newest lane on it.
-pub(super) fn step_items(step: Option<&plan::Step>, lane: &Lane, lanes: &[Lane]) -> Vec<String> {
+pub(super) fn step_items(items: Option<&[plan::Item]>, lane: &Lane, lanes: &[Lane]) -> Vec<String> {
     let tag = |i: &plan::Item| {
         lanes
             .iter()
@@ -23,7 +23,7 @@ pub(super) fn step_items(step: Option<&plan::Step>, lane: &Lane, lanes: &[Lane])
             .map(|l| format!("  ({}: {})", l.id, l.status))
             .unwrap_or_default()
     };
-    step.map(|s| &s.items[..])
+    items
         .unwrap_or_default()
         .iter()
         .map(|i| {

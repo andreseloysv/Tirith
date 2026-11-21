@@ -8,8 +8,9 @@ use std::path::Path;
 use std::sync::LazyLock;
 
 /// The check of the lane's item, said as the brief says it.
-fn check_line(step: Option<&plan::Step>, lane: &Lane) -> String {
-    step.and_then(|s| s.items.iter().find(|i| plan::same(&i.text, &lane.item)))
+fn check_line(items: Option<&[plan::Item]>, lane: &Lane) -> String {
+    items
+        .and_then(|s| s.iter().find(|i| plan::same(&i.text, &lane.item)))
         .and_then(|i| i.check.clone())
         .map(|c| format!("\nIts check (must pass on the merged result): `{c}`\n"))
         .unwrap_or_default()
@@ -31,14 +32,17 @@ fn clippy(app: &Shared, lane: &Lane) -> String {
 fn vars(app: &Shared, lane: &Lane) -> HashMap<&'static str, String> {
     let steps = plan::read(app, &lane.project).unwrap_or_default();
     let lanes = project_lanes(app, &lane.project);
-    let step = steps.iter().find(|s| s.num == lane.step);
+    let items = steps
+        .iter()
+        .find(|s| s.num == lane.step)
+        .map(|s| &s.items[..]);
     HashMap::from([
         ("id", lane.id.clone()),
         ("project", lane.project.clone()),
         ("step", lane.step.clone()),
         ("item", lane.item.clone()),
-        ("check", check_line(step, lane)),
-        ("items", step_items(step, lane, &lanes).join("\n")),
+        ("check", check_line(items, lane)),
+        ("items", step_items(items, lane, &lanes).join("\n")),
         ("others", others(lane, &lanes)),
         ("red", main_state(app, lane)),
         ("ws", lane.workspace.clone()),
