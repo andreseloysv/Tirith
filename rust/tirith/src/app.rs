@@ -197,11 +197,13 @@ impl App {
         (cfg.factory.version.clone(), cfg.factory.role_hash(role, &self.kv(&format!("models:{role}")).unwrap_or_default()))
     }
 
-    pub fn event(&self, lane: &str, project: &str, kind: &str, tool: &str, summary: &str, session: &str) {
+    /// One event row, shown on the page; its id, so an eval's score can keep it.
+    pub fn event(&self, lane: &str, project: &str, kind: &str, tool: &str, summary: &str, session: &str) -> i64 {
         let at = now_iso();
         let (factory, role_hash) = (self.cfg().factory.version.clone(), self.lane(lane).map(|l| l.role_hash).unwrap_or_default()); // a lane's event carries its lane's stamp
         let id = self.insert("INSERT INTO events (at, lane, project, kind, tool, summary, session, factory, role_hash) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)", params![at, lane, project, kind, tool, summary, session, factory, role_hash]);
         self.emit("event", json!({"id": id, "at": at, "lane": lane, "project": project, "kind": kind, "tool": tool, "summary": summary, "factory": factory, "role_hash": role_hash}));
+        id
     }
 
     /// One row of a project's conversation with its manager (`project` "" is the conversation of no project). A row a role wrote while working (its turn's text and tool calls, a turn role's answer under its name, a bot's routine) carries that role's stamp; every row carries the factory version.
@@ -276,11 +278,7 @@ fn path_with_cargo(exe_dir: Option<&Path>, rest: &str, home: &Path, tool_dirs: &
 pub async fn git(dir: &Path, args: &[&str]) -> Result<String, String> {
     let out = tokio::process::Command::new("git").arg("-C").arg(dir).args(args).stdin(std::process::Stdio::null()).output().await.map_err(|e| e.to_string())?;
     let text = |b: &[u8]| String::from_utf8_lossy(b).trim().to_string();
-    if out.status.success() {
-        Ok(text(&out.stdout))
-    } else {
-        Err(format!("git {}: {} {}", args.join(" "), text(&out.stderr), text(&out.stdout)).trim().to_string())
-    }
+    out.status.success().then(|| text(&out.stdout)).ok_or_else(|| format!("git {}: {} {}", args.join(" "), text(&out.stderr), text(&out.stdout)).trim().to_string())
 }
 
 /// A worktree at `base` (a new branch when `branch` is given), without the manifest's `lane_exclude` paths.
@@ -288,9 +286,7 @@ pub async fn add_worktree(repo: &Path, dir: &Path, branch: Option<&str>, exclude
     let _ = dir.parent().map(std::fs::create_dir_all);
     let d = dir.to_string_lossy().to_string();
     let mut args = vec!["worktree", "add"];
-    if !exclude.is_empty() {
-        args.push("--no-checkout");
-    }
+    args.extend((!exclude.is_empty()).then_some("--no-checkout"));
     match branch {
         Some(b) => args.extend(["-b", b, &d, "HEAD"]),
         None => args.extend(["--detach", &d, "HEAD"]),
@@ -314,9 +310,7 @@ mod tests;
 
 /// Signals a process group; pid 0 would be the daemon's own group, so it is never signalled.
 pub fn kill_group(pid: u32, signal: i32) {
-    if pid != 0 {
-        unsafe { libc::kill(-(pid as i32), signal) };
-    }
+    let _ = (pid != 0).then(|| unsafe { libc::kill(-(pid as i32), signal) });
 }
 
 pub fn alive(pid: u32) -> bool {

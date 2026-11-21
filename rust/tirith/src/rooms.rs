@@ -421,13 +421,9 @@ fn save_image(json: &str, room: &str) -> Option<String> {
 
 /// Deletes the files older than `max` under `dir`, and the folders left empty (`dir` too: saving a file makes it again).
 fn expire_files(dir: &std::path::Path, max: Duration) {
-    for p in std::fs::read_dir(dir).into_iter().flatten().flatten().map(|e| e.path()) {
-        if p.is_dir() {
-            expire_files(&p, max);
-        } else {
-            let _ = p.metadata().and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).is_some_and(|a| a > max).then(|| std::fs::remove_file(&p));
-        }
-    }
+    std::fs::read_dir(dir).into_iter().flatten().flatten().map(|e| e.path()).for_each(|p| {
+        let _ = p.is_dir().then(|| expire_files(&p, max)).or_else(|| p.metadata().and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).is_some_and(|a| a > max).then(|| drop(std::fs::remove_file(&p))));
+    });
     let _ = std::fs::remove_dir(dir);
 }
 
@@ -620,12 +616,11 @@ pub fn forget(app: &Shared, project: &str) {
     drop_rooms(app, |r| r.kind == "manager" && r.project == project);
 }
 fn drop_rooms(app: &Shared, gone: impl Fn(&Room) -> bool) {
-    let ids: Vec<String> = ROOMS.lock().unwrap().values().filter(|r| gone(r)).map(|r| r.id.clone()).collect();
-    for id in ids {
-        ROOMS.lock().unwrap().remove(&id);
-        let _ = app.db.lock().unwrap().execute("DELETE FROM am_rooms WHERE id = ?1", [&id]);
+    ROOMS.lock().unwrap().values().filter(|r| gone(r)).map(|r| r.id.clone()).collect::<Vec<_>>().iter().for_each(|id| {
+        ROOMS.lock().unwrap().remove(id);
+        app.insert("DELETE FROM am_rooms WHERE id = ?1", rusqlite::params![id]);
         app.emit("room", json!({"id": id, "gone": true}));
-    }
+    });
     WAKE.notify_one(); // the phones are told that it is gone
 }
 
@@ -680,11 +675,10 @@ pub fn cli(pos: &[&str], flag: Flag) -> Option<Result<(), String>> {
         ["room", "leave", id] => call("POST", &format!("/api/rooms/{id}/leave"), None).map(|_| println!("left {id}")),
         ["room", "say", id, text] => call("POST", &format!("/api/rooms/{id}/say"), Some(json!({"text": text}))).map(|_| println!("ok")),
         ["room", "list"] => call("GET", "/api/rooms", None).and_then(parse).map(|v| {
-            for r in v["rooms"].as_array().into_iter().flatten() {
-                let who = r["devices"].as_array().map_or(0, Vec::len);
+            v["rooms"].as_array().into_iter().flatten().for_each(|r| {
                 let err = r["error"].as_str().filter(|e| !e.is_empty()).map(|e| format!("  error: {e}")).unwrap_or_default();
-                println!("{:<8} {:<44} {} ({who} phones){err}", r["kind"].as_str().unwrap_or(""), r["id"].as_str().unwrap_or(""), r["title"].as_str().unwrap_or(""));
-            }
+                println!("{:<8} {:<44} {} ({} phones){err}", r["kind"].as_str().unwrap_or(""), r["id"].as_str().unwrap_or(""), r["title"].as_str().unwrap_or(""), r["devices"].as_array().map_or(0, Vec::len));
+            })
         }),
         ["room", "tail", id] => one(id).map(|v| {
             v["messages"].as_array().into_iter().flatten().for_each(|m| println!("#{} {} {}: {}", m["n"], m["at"].as_str().unwrap_or(""), m["from"].as_str().unwrap_or(""), m["text"].as_str().unwrap_or("")));

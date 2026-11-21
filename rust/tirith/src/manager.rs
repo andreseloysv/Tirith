@@ -121,8 +121,9 @@ pub fn interrupt(project: &str) -> Result<(), String> {
 
 pub fn say(app: &Shared, project: &str, text: &str) -> Result<(), String> {
     (app.conv(project) == project).then_some(()).ok_or(format!("unknown project '{project}'"))?;
-    app.event("", project, "owner.message", "", text, "");
+    let event = app.event("", project, "owner.message", "", text, "");
     app.chat("owner", text, project);
+    judge_evals(app, project, "owner.message", text, event);
     if model_command(app, project, text) {
         return Ok(());
     }
@@ -139,7 +140,7 @@ pub fn model_command(app: &Shared, project: &str, text: &str) -> bool {
 
 /// The one way code emits an event: its row is kept and shown on the page, and every `[[routes]]` on it in the factory decides who hears it — a `chat` line (on the phones too with `phone`), and for its role a `turn` now or a `note` with its next turn. `told` is what the role is handed when it differs from the line shown. A turn's answer reaches the phones only when an event that started it had `phone` (or the owner wrote).
 pub fn emit_event(app: &Shared, project: &str, on: &str, shown: &str, told: Option<&str>) {
-    app.event("", project, on, "", shown, "");
+    let event = app.event("", project, on, "", shown, "");
     let routes = app.cfg().factory.routes_on(on);
     let here_p = app.conv(project);
     if routes.iter().any(|r| r.2) {
@@ -168,6 +169,46 @@ pub fn emit_event(app: &Shared, project: &str, on: &str, shown: &str, told: Opti
         };
         let _ = heard.insert(dest.to_string()).then(|| queue(app, dest, told.unwrap_or(shown), &mode, phone));
     }
+    judge_evals(app, project, on, shown, event);
+}
+
+/// The card an event's line names (`Card o12 …`, `The owner answered o12 …`): its first word shaped like one.
+pub fn card_id_of(shown: &str) -> Option<String> {
+    shown.split(|c: char| !c.is_ascii_alphanumeric()).find(|w| w.len() > 1 && w.starts_with('o') && w[1..].bytes().all(|b| b.is_ascii_digit())).map(String::from)
+}
+
+/// A judge's answer read as (label, score, why): its first word, a number when the rubric asks for a score from 0 to 1, and the rest of its first line.
+fn judged(text: &str) -> (String, Option<f64>, String) {
+    let line = text.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or_default();
+    let head = line.split_whitespace().next().unwrap_or_default().trim_matches(|c: char| !c.is_ascii_alphanumeric() && c != '.' && c != '-').to_lowercase();
+    let why = line[line.to_lowercase().find(&head).map(|i| i + head.len()).unwrap_or(0)..].trim_start_matches(|c: char| c.is_whitespace() || "—–-|:,.;".contains(c)).to_string();
+    match head.parse::<f64>() {
+        Ok(n) if (0.0..=1.0).contains(&n) => (String::new(), Some(n), why),
+        _ => (head, None, why),
+    }
+}
+
+/// Every `[[evals]]` on this event, judged in the background by its judge role (a cheap turn role whose instructions are the rubric): the event with the conversation before it (and, for a card, the card itself) goes in, and a `scores` row — the label or score, one line why, the event, the eval and the judge's factory stamp — is kept. Nothing reaches the owner: the scores only feed the measures. A share of the events is judged (`sample`, by event id, so a restart judges no event twice for that share).
+fn judge_evals(app: &Shared, project: &str, on: &str, shown: &str, event: i64) {
+    let evals: Vec<_> = app.cfg().factory.evals_on(on).into_iter().filter(|e| event.rem_euclid(100) < (e.3 * 100.0) as i64).collect();
+    let Some(()) = (!evals.is_empty() && tokio::runtime::Handle::try_current().is_ok()).then_some(()) else { return };
+    let (app, project, shown) = (app.clone(), app.conv(project).to_string(), shown.to_string());
+    tokio::spawn(async move {
+        let card = card_id_of(&shown).and_then(|id| {
+            app.query("SELECT kind, question, status, answer FROM owner_items WHERE id = ?1", [&id], |r| {
+                Ok(format!("Card {id} ({}, {}): {}\nIts answer or closing note: {}", r.get::<_, String>(0)?, r.get::<_, String>(2)?, r.get::<_, String>(1)?, r.get::<_, String>(3)?))
+            })
+            .into_iter()
+            .next()
+        });
+        let input = format!("{}\nThe event to judge: {shown}\n{}", history(&app, &project), card.map(|c| format!("\n{c}\n")).unwrap_or_default());
+        for (id, judge, rubric, _) in evals {
+            let Ok(text) = run_turn(&app, &judge, &project, &format!("{}\n\n{input}", app.cfg().factory.prompt(&rubric))).await else { continue };
+            let (label, score, why) = judged(&text);
+            let (factory, role_hash) = app.stamp_for(&judge);
+            app.insert("INSERT INTO scores (at, event, eval, label, score, why, factory, role_hash) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)", rusqlite::params![now_iso(), event, id, label, score, why, factory, role_hash]);
+        }
+    });
 }
 
 /// A routed event for one conversation: with `turn` handed over (gathered with the other events of the next `limits.batch_seconds`, so many events cost one turn) and its `phone` marking that turn's answer; with `note` it waits for the conversation's next message. Anything else hears nothing.
@@ -513,9 +554,8 @@ async fn session(app: &Shared, project: &str) -> Result<(), String> {
 }
 
 fn history(app: &Shared, project: &str) -> String {
-    let mut rows: Vec<String> = app.query("SELECT role, text FROM chat WHERE project = ?1 ORDER BY id DESC LIMIT 30", [project], |r| Ok(format!("{}: {}", r.get::<_, String>(0)?, r.get::<_, String>(1)?)));
-    rows.reverse();
-    format!("Recent conversation for context (do not repeat completed work):\n{}\n\nNew messages:\n", rows.join("\n"))
+    let rows: Vec<String> = app.query("SELECT role, text FROM chat WHERE project = ?1 ORDER BY id DESC LIMIT 30", [project], |r| Ok(format!("{}: {}", r.get::<_, String>(0)?, r.get::<_, String>(1)?)));
+    format!("Recent conversation for context (do not repeat completed work):\n{}\n\nNew messages:\n", rows.into_iter().rev().collect::<Vec<_>>().join("\n"))
 }
 
 async fn exec_session(app: &Shared, project: &str, muse: bool) -> Result<(), String> {

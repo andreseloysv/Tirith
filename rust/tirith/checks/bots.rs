@@ -53,6 +53,8 @@ fn bots_live_in_config_as_own_roles_with_schedule_routes() {
         ("brief", include_str!("../../../factory/prompts/brief.md")),
         ("reviewer", include_str!("../../../factory/prompts/reviewer.md")),
         ("bot", include_str!("../../../factory/prompts/bot.md")),
+        ("owner-mood", include_str!("../../../factory/evals/owner-mood.md")),
+        ("card-needed", include_str!("../../../factory/evals/card-needed.md")),
     ]
     .into_iter()
     .map(|(k, v)| (k.to_string(), v.to_string()))

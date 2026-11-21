@@ -56,16 +56,10 @@ pub fn check(app: &Shared, tool: &str, input: &Value, lane: Option<&Lane>, proje
             return Some("Agents start only through Tirith, so the owner sees them. If the item needs more hands, ask the manager: tirith ask \"<question>\".".into());
         }
     }
-    for r in manifest.map(|m| m.rules).unwrap_or_default() {
-        if (r.lanes_only && lane.is_none()) || (!r.tools.is_empty() && !r.tools.iter().any(|t| t == tool)) {
-            continue;
-        }
-        let text = if bash { cmd } else { file };
-        if Regex::new(&r.pattern).map(|re| re.is_match(text)).unwrap_or(false) {
-            return Some(format!("{} ({})", r.message, r.id));
-        }
-    }
-    None
+    manifest.map(|m| m.rules).unwrap_or_default().into_iter().find_map(|r| {
+        let applies = !(r.lanes_only && lane.is_none()) && (r.tools.is_empty() || r.tools.iter().any(|t| t == tool));
+        (applies && Regex::new(&r.pattern).is_ok_and(|re| re.is_match(if bash { cmd } else { file }))).then(|| format!("{} ({})", r.message, r.id))
+    })
 }
 
 pub fn summary(tool: &str, input: &Value) -> String {
