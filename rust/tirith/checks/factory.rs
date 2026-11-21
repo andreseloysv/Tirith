@@ -46,7 +46,8 @@ fn embedded_factory_has_todays_values() {
         f.words("plan", "role_prefixes"),
         ["manager de guardia:", "ceo:"]
     );
-    assert_eq!(f.words("cards", "kinds").len(), 5);
+    assert_eq!(f.words("cards", "kinds").len(), 6);
+    assert!(f.words("cards", "kinds").contains(&"approval".to_string()));
     assert_eq!(
         f.metric("merged"),
         ("En main (24 h)".to_string(), Some(10.0), true)

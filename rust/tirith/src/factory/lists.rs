@@ -3,7 +3,7 @@ pub(super) const SECTIONS: [&str; 8] = [
     "agents", "roles", "limits", "plan", "cards", "metrics", "routes", "evals",
 ];
 
-pub(super) const MEASURES: [&str; 11] = [
+pub(super) const MEASURES: [&str; 12] = [
     "merged",
     "median",
     "first_try",
@@ -15,6 +15,7 @@ pub(super) const MEASURES: [&str; 11] = [
     "interruptions",
     "needless_cards",
     "satisfaction",
+    "unapproved",
 ];
 
 /// The closed list of events the code emits, `;`-joined like the moves in config.rs; a route on anything else never fires, so it is invalid. The page offers a bot's routes from this list (but `schedule`: a bot's routines are its schedule routes).

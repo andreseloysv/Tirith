@@ -123,7 +123,7 @@ owner_wait = ["(espera:", "(espera :"]
 waits_for = ["wait until", "made by the item", "created by the item", "after the item", "espera a que", "hasta que"]
 
 [cards]
-kinds = ["credentials", "payment", "account", "device", "decision"]
+kinds = ["credentials", "payment", "account", "device", "decision", "approval"]
 
 [metrics.merged]
 label = "En main (24 h)"
@@ -236,6 +236,11 @@ answer and 7 are still open.
   could have decided alone.
 - `satisfaction`: from the `owner-mood` eval of each owner message: (approvals − corrections − repeats − noise
   complaints) / owner messages, per day. Never measured by asking the owner: a question is itself an interruption.
+- `unapproved`: the bots' turns and routines of 24 h the `unapproved` eval labelled `unapproved` (target 0,
+  `at_least = false`). A bot asks before it sends, buys, deletes, publishes or touches production, and before any
+  step its skill lists under «Qué requiere aprobación»: `tirith ask-owner --kind approval "<exactly what, to whom>"`,
+  then it ends its turn (`factory/prompts/bot.md`). Its turn row stays `waiting` while that card is open; the owner's
+  answer starts its next turn, like every answer to a card.
 
 ## Evals
 
@@ -261,7 +266,18 @@ on = "card.closed"
 judge = "judge"
 rubric = "evals/card-needed.md"    # could the factory have decided it alone?
 sample = 1.0
+
+[[evals]]
+id = "unapproved"
+on = "turn.done"                   # and a second one on routine.done
+judge = "judge"
+rubric = "evals/unapproved.md"     # ok, or unapproved: done without an answered approval card
+sample = 1.0
 ```
+
+The `unapproved` eval reads the event line of a bot's turn or routine, which carries its tool calls (with what each
+ran) and the «Qué requiere aprobación» of the skills it read, with the conversation before it (the approval cards
+and their answers are in it).
 
 The judge gets the event with its context (the messages before it) and answers a label or a score from 0 to 1 and one
 line why. A `scores` row keeps it with the event, the eval and the factory version.

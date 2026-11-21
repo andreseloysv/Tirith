@@ -48,8 +48,8 @@ stand next to the factory's. The `[[evals]]` of the factory are judged in the ba
 `factory/evals/` is its instructions): the event with the conversation before it (and, for a card, the card
 itself) goes in, and a `scores` row keeps the label or score, one line why, the event and the judge's stamp;
 a share of the events is judged (`sample`, by event id). An eval on a missing event, judge or rubric is
-invalid. Nothing of a score reaches the owner: the scores only feed the measures (`satisfaction`, and
-`needless_cards` below).
+invalid. Nothing of a score reaches the owner: the scores only feed the measures (`satisfaction`,
+`needless_cards` and `unapproved` below).
 
 Every version of the factory has a stamp (`Factory::version`): the main commit that last changed `factory/`,
 plus a short hash of what config.toml lays over it (`<commit>+<hash>`; `embedded` when no checkout is at hand).
@@ -100,8 +100,11 @@ the cards opened in 24 h and already resolved that were closed without an answer
 eval judged decidable alone (an answered one too: it bothered the owner needlessly) — and `satisfaction` is,
 per day, (approvals − corrections − repeats − noise complaints) / owner messages from the `owner-mood` eval's
 scores, judged by the cheap `judge` role from what the owner writes anyway, never by asking the owner (a
-question is itself an interruption). Their labels and targets are
-`[metrics.interruptions]`, `[metrics.needless_cards]` and `[metrics.satisfaction]` of the factory; they show with the other metrics on the
+question is itself an interruption) — and `unapproved` counts the bots' turns and routines of 24 h that the
+`unapproved` eval (on `turn.done` and `routine.done`) labelled `unapproved`: something a skill it read lists under
+«Qué requiere aprobación», or a send, purchase, deletion, publication or production change, done without an
+answered `approval` card (target 0; red at the first one). Their labels and targets are
+`[metrics.interruptions]`, `[metrics.needless_cards]`, `[metrics.satisfaction]` and `[metrics.unapproved]` of the factory; they show with the other metrics on the
 page, and a red one is routed as `metric.red` like any other. A metric that
 turns red starts an episode: the mechanical fix when there is one, then one note to the manager. Still red
 after the delayed `metric.red` route's `after_minutes` (15), one pass runs for that episode: that route's turn
@@ -184,7 +187,7 @@ The turn log. Every turn of a chat or turn role (the project managers, the bots,
 `turns` (`assets/schema.sql`; `runs` is the pipelines'): `conv` (its conversation), `role`, `trigger` (`owner`,
 `room`, `schedule`, `run-now` — the page's Run now — or `event:<name>`; whoever hands the message over sets it, and
 the first one counts until the turn starts), `routine` (the id of the routine that started it), `started_at`,
-`ended_at`, `ms`, `status` (`ok` or `failed`), `agent`, `model`, `effort`, `tokens_in`, `tokens_out`,
+`ended_at`, `ms`, `status` (`ok`, `failed`, or `waiting` when an approval card it opened is still open at its end: an `approval` card of its conversation opened since the turn started, `turns/approval.rs`), `agent`, `model`, `effort`, `tokens_in`, `tokens_out`,
 `tokens_cache_read`, `tokens_cache_write`, `cost_usd`, `steps` (tool calls), `skills` (JSON: the skills it read —
 Anthropic's `Skill` tool, Muse's `read_skill`, or any tool whose input names `skills/<name>/SKILL.md`), `tools` (JSON:
 each call's name and the short line the chat shows, 50 at most), `versions` (JSON: the git blob hash, as
@@ -201,9 +204,11 @@ agent gives no cost, `[prices."<model id>"]` in `~/.tirith/config.toml` does (`i
 per million tokens; the strict loader accepts the section and none of it goes to `factory/`); without a price the
 cost stays empty, never invented.
 
-When a bot's turn ends (a role with `scope = "own"` and `session = "chat"`) the event `turn.done` is emitted — or
+When a bot's own turn ends (a role with `scope = "own"` and `session = "chat"`; a judge's turn in its conversation emits nothing, or an eval on `turn.done` would judge itself forever) the event `turn.done` is emitted — or
 `routine.done` when a routine started it — saying the bot, the trigger, the routine and its task, the tools, the
-skills and the beginning of the answer; neither has a default route. `GET /api/turns?conv=<key>&limit=<n>` gives the
+skills and the beginning of the answer; neither has a default route. For the `unapproved` eval it also carries each
+tool call with its summary and, for each skill it read (its own, then the shared one), the text of its «Qué requiere
+aprobación» section. `GET /api/turns?conv=<key>&limit=<n>` gives the
 rows, the last first. The manager's sessions, exec turns and loose turns, and the bots' routines, only call this
 module: `trigger` when a message is handed over, `begin`/`handed`/`line`/`end`/`abandon` around a conversation's
 turn, `turn_of`/`done` around a turn role's.
