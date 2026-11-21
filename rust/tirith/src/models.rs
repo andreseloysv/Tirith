@@ -67,17 +67,32 @@ fn set_flag(argv: &mut Vec<String>, flag: &Option<String>, alts: &[&str], value:
         argv.extend([flag.clone(), value.clone()]);
     }
 }
-/// The browser MCP (Playwright, `tools/browser/launch.mjs` of this repo; its node_modules stay in `<home>/browser-mcp`) every Muse run carries as one `-c mcpServers.tirith_browser=…` (Muse refuses the whole map at once; the owner's own Muse settings stay untouched). Lanes always get `--isolated` (several at once, nothing left behind, never the owner's browser); managers, bots and the CEO get Tirith's persistent profile (`<home>/browser/profile`, the launcher's default), `--isolated` instead while another live session holds that profile, or `--extension` (the owner's own Edge) with `[browser] use = "mine"` in config.toml. No node or no launcher: no browser, and the run goes on without one.
-pub fn browser_args(app: &Shared, lane: bool) -> Vec<String> {
+/// The browser MCP (Playwright, `tools/browser/launch.mjs` of this repo; its node_modules stay in `<home>/browser-mcp`) every agent run carries in its own dialect, so no agent's settings file is touched: Muse one `-c mcpServers.tirith_browser=…` at the argv's end (never the whole map; its env takes only the whole-value `${TIRITH_HOME}` both spawns set), Codex and anthropic right after the program (Codex `-c mcp_servers.tirith_browser={…}` plus desktop-only `node_repl` off, no `~/.codex` profile; anthropic `--mcp-config=`/`--allowedTools=` for `mcp__tirith_browser__*`, `=` so its variadic flags swallow nothing later). Lanes always get `--isolated` (several at once, nothing left behind, never the owner's browser); managers, bots and the CEO get Tirith's persistent profile (`<home>/browser/profile`, the launcher's default), `--isolated` instead while another live session holds that profile, or `--extension` (the owner's own Edge) with `[browser] use = "mine"` in config.toml. No node or no launcher: no browser, and the run goes on without one.
+fn browser_server(app: &Shared, lane: bool) -> Option<(String, Vec<String>)> {
     let launch = Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../tools/browser/launch.mjs"));
-    let Some(node) = launch.is_file().then(|| node_bin(app)).flatten() else { return Vec::new() };
-    let lock = std::fs::read_link(app.home.join("browser/profile/SingletonLock")).unwrap_or_default();
-    let busy = lock.to_string_lossy().rsplit('-').next().and_then(|p| p.parse().ok()).is_some_and(crate::app::alive);
-    let mine = !lane && get::<String>(&app.cfg().raw, &["browser", "use"]).as_deref() == Some("mine");
-    let mode = mine.then_some("--extension").or((lane || busy).then_some("--isolated"));
-    let args: Vec<String> = [launch.display().to_string()].into_iter().chain(mode.map(String::from)).collect();
-    // Muse counts env values as secrets: only a whole-value `${TIRITH_HOME}` passes, and both spawns (lanes, chats) set that variable to this home.
-    vec!["-c".into(), format!("mcpServers.tirith_browser={}", json!({"command": node, "args": args, "env": {"TIRITH_HOME": "${TIRITH_HOME}"}}))]
+    let node = launch.is_file().then(|| node_bin(app)).flatten()?;
+    let busy = std::fs::read_link(app.home.join("browser/profile/SingletonLock")).unwrap_or_default().to_string_lossy().rsplit('-').next().and_then(|p| p.parse().ok()).is_some_and(crate::app::alive);
+    let mode = (!lane && get::<String>(&app.cfg().raw, &["browser", "use"]).as_deref() == Some("mine")).then_some("--extension").or((lane || busy).then_some("--isolated"));
+    Some((node, [launch.display().to_string()].into_iter().chain(mode.map(String::from)).collect()))
+}
+pub fn browser_args_for(app: &Shared, alias: &str, lane: bool) -> Vec<String> {
+    let Some((node, args)) = browser_server(app, lane) else { return Vec::new() };
+    let (home, t) = (app.home.display().to_string(), |s: &str| toml::Value::String(s.into()).to_string());
+    match alias {
+        "muse" => vec!["-c".into(), format!("mcpServers.tirith_browser={}", json!({"command": node, "args": args, "env": {"TIRITH_HOME": "${TIRITH_HOME}"}}))],
+        "anthropic" => vec![format!("--mcp-config={}", json!({"mcpServers": {"tirith_browser": {"command": node, "args": args, "env": {"TIRITH_HOME": home}}}})), "--allowedTools=mcp__tirith_browser__*".into()],
+        "codex" => Vec::from([
+            "-c".to_string(),
+            format!("mcp_servers.tirith_browser={{command = {}, args = [{}], startup_timeout_sec = 30, tool_timeout_sec = 90, env = {{TIRITH_HOME = {}}}}}", t(&node), args.iter().map(|a| t(a)).collect::<Vec<_>>().join(", "), t(&home)),
+            "-c".into(),
+            "mcp_servers.node_repl.enabled=false".into(),
+        ]),
+        _ => Vec::new(),
+    }
+}
+fn add_browser(app: &Shared, argv: &mut Vec<String>, alias: &str, lane: bool) {
+    let at = if alias == "muse" { argv.len() } else { 1 }; // Muse's -c only works after its subcommand, the others' flags belong right after the program
+    drop(argv.splice(at..at, browser_args_for(app, alias, lane)));
 }
 /// Node for the browser launcher: on the children's PATH, else the newest `~/.nvm` install (the daemon's own PATH may have neither).
 fn node_bin(app: &Shared) -> Option<String> {
@@ -96,7 +111,7 @@ pub fn lane_argv(app: &Shared, agent: Option<&str>, model: Option<&str>, brief: 
     let model = model.map(String::from).or(if same { w.model } else { None });
     let effort = if same { w.effort } else { None };
     let (mflag, eflag, resume_args, args) = flags(&cfg, &alias);
-    let (brief, ws) = (brief.display().to_string(), workspace.display().to_string());
+    let (brief, ws, bin) = (brief.display().to_string(), workspace.display().to_string(), command.rsplit('/').next().unwrap_or(&command).to_string());
     let (session, message) = resume.unwrap_or_default();
     let fill = |s: &String| s.replace("{brief}", &brief).replace("{workspace}", &ws).replace("{session}", session).replace("{message}", message);
     let mut argv: Vec<String> = if resume.is_some() && !resume_args.is_empty() {
@@ -109,7 +124,7 @@ pub fn lane_argv(app: &Shared, agent: Option<&str>, model: Option<&str>, brief: 
     set_flag(&mut argv, &mflag, &["--model", "-m"], &model);
     set_flag(&mut argv, &eflag, &["--effort", "--reasoning-effort"], &effort);
     let _ = (alias == "codex").then(|| crate::codex::options(&cfg, &mut argv, effort.as_deref()));
-    argv.extend((alias == "muse" && argv.first().is_some_and(|a| a.rsplit('/').next() == Some("muse"))).then(|| browser_args(app, true)).into_iter().flatten()); // a custom [launch] line naming another binary never gets Muse's -c
+    let _ = argv.first().is_some_and(|a| a.rsplit('/').next() == Some(bin.as_str())).then(|| add_browser(app, &mut argv, &alias, true)); // a custom [launch] line naming another binary than the alias's command never gets its agent's browser flags
     Ok(AgentCmd { alias, argv })
 }
 /// The argv of a streaming chat session (stream-json in and out) for a role. `resume` continues that session id. The caller appends its own system prompt.
@@ -126,7 +141,7 @@ pub fn chat_argv(app: &Shared, role_name: &str, resume: Option<&str>) -> Result<
     set_flag(&mut argv, &mflag, &["--model", "-m"], &r.model);
     set_flag(&mut argv, &eflag, &["--effort", "--reasoning-effort"], &r.effort);
     argv.extend(resume.into_iter().flat_map(|id| ["--resume".to_string(), id.to_string()]));
-    argv.extend((r.agent == "muse").then(|| browser_args(app, false)).into_iter().flatten());
+    add_browser(app, &mut argv, &r.agent, false);
     Ok(AgentCmd { alias: r.agent, argv })
 }
 /// True when an agent's output says it ran out of credits or hit its usage limit.
