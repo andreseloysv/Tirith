@@ -1,4 +1,4 @@
-use super::{hook, origin_host_ok};
+use super::{hook, origin_host_ok, web_file};
 #[test]
 fn same_origin_checks_host() {
     let ok = |host, origin| origin_host_ok(Some(host), origin, 7777);
@@ -14,6 +14,44 @@ fn content_kinds_split_page_from_attachment() {
     assert_eq!((k("a.PNG", false), k("a.jpg", true), k("x.bin", true)), ("image/png", "image/jpeg", "application/octet-stream"));
     assert_eq!((k("i.html", true), k("i.html", false), k("s.js", false), k("s.js", true)), ("text/html; charset=utf-8", "text/plain; charset=utf-8", "text/plain; charset=utf-8", "application/javascript; charset=utf-8"));
     assert_eq!((k("f.woff2", true), k("f.woff2", false), k("d.json", false), k("n.txt", true)), ("font/woff2", "application/octet-stream", "application/json", "application/octet-stream"));
+}
+
+/// A face in a list or a head is an avatar in one fixed box: the served CSS sizes it and keeps its glow and its
+/// float inside that box (`overflow: hidden` on the face and on its SVG layers), so no face can grow its row,
+/// mount its neighbours or cover the name and text beside it — as the owner's 2026-11-21 phone captures showed.
+/// The motion itself stays: the served face script still carries the size as `--fs` and still moves the floating
+/// layer by transform. Read through `web_file`, the handler that serves the page, so what is pinned is what is served.
+#[tokio::test]
+async fn face_avatars_stay_in_their_box() {
+    let app = home("faces");
+    let served = |path: &'static str| {
+        let app = app.clone();
+        async move {
+            let res = web_file(axum::extract::State(app), path.parse().unwrap()).await;
+            assert_eq!(res.status(), axum::http::StatusCode::OK, "{path} is served");
+            let body = axum::body::to_bytes(res.into_body(), 1 << 20).await.unwrap();
+            String::from_utf8(body.to_vec()).unwrap().split_whitespace().collect::<Vec<_>>().join(" ")
+        }
+    };
+    let bots = served("/css/bots.css").await;
+    let chat = served("/css/chat.css").await;
+    let face = served("/js/views/bots/face.js").await;
+    // The box itself: a face is exactly its `--fs` square, never the size its glow would paint.
+    assert!(bots.contains(".bot.face { position: relative; width: var(--fs); height: var(--fs); }"), "a face's box is its --fs square: {bots:.200}");
+    assert!(face.contains("--fs:${size}px"), "the face script carries its size as --fs");
+    // In a list, a picker and a head the paint stays in the box: the face and every SVG layer in it clip.
+    assert!(bots.contains(".nbot .bot.face, .mc-face .bot.face, .rface .bot.face, .bshapes .bot.face { overflow: hidden; }"), "list, head and picker faces clip to their box");
+    assert!(bots.contains(".nbot .bot.face .fsvg, .mc-face .bot.face .fsvg, .rface .bot.face .fsvg, .bshapes .bot.face .fsvg { overflow: hidden; }"), "their SVG layers clip too, glow included");
+    // And the box is fixed by the stylesheet, whatever size a caller asks the script for.
+    assert!(bots.contains(".nbot .bot.face { width: 64px; height: 64px; }"), "the sidebar list's avatars are 64px");
+    assert!(bots.contains(".rface .bot.face { width: 40px; height: 40px; }"), "a room card's avatar is 40px");
+    assert!(bots.contains(".bshapes .bot.face { width: 46px; height: 46px; }"), "the shape picker's faces are 46px");
+    assert!(bots.contains(".mc-line .bot.face { width: 22px; height: 22px; }"), "a message's face is 22px");
+    assert!(chat.contains(".mc-head .mc-face .bot { width: 26px; height: 26px; }"), "a chat head's avatar is 26px on the desktop");
+    assert!(chat.contains(".mc-head .mc-face .bot { width: 64px; height: 64px; }"), "and the phone head's big face is a fixed 64px");
+    // The movement is not the price: the float still moves as a composited layer inside the box.
+    assert!(bots.contains(".bot.face .ffloat { position: absolute; inset: 0; transform-origin: 50% 82.258%; will-change: transform; }"), "the floating layer still rides the compositor");
+    assert!(face.contains("this.float.style.transform"), "the animator still moves the face by transform");
 }
 
 /// An app at a fresh home with one project `p1` in a folder of its own (no tirith.toml: the default manifest, no project rules).
