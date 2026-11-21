@@ -32,6 +32,7 @@ fn default_routes_reproduce_today() {
     // reached the phones like every manager message; owner and room messages start turns whose answers do.
     // Quieter phones (factory step 4): merge.landed, main.green and deploy.done keep chat+note, without phone.
     // Factory step 16: factory.invalid keeps turn+chat to the manager of no project, without phone.
+    // Factory step 17: metric.red and review.done to that manager lose the phone too — nobody asked for that answer.
     let f = Factory::default();
     let turn = |to: &str, chat: bool| vec![(to.to_string(), "turn".to_string(), chat, true, None)];
     let note = |chat: bool, phone: bool| vec![("manager".to_string(), "note".to_string(), chat, phone, None)];
@@ -50,7 +51,7 @@ fn default_routes_reproduce_today() {
         ("deploy.done", note(true, false)),
         ("deploy.failed", turn("manager", true)),
         ("schedule", vec![("manager".to_string(), "turn".to_string(), false, true, None), ("ceo".to_string(), "turn".to_string(), false, false, None)]),
-        ("review.done", turn("manager-general", false)),
+        ("review.done", vec![("manager-general".to_string(), "turn".to_string(), false, false, None)]),
         ("factory.invalid", vec![("manager-general".to_string(), "turn".to_string(), true, false, None)]),
         ("card.opened", vec![]),
         ("card.answered", vec![]),
@@ -60,7 +61,7 @@ fn default_routes_reproduce_today() {
         assert_eq!(f.routes_on(on), want, "routes on {on}");
     }
     // A red measure wakes the manager of no project at once and, still red after 15 minutes, the CEO.
-    assert_eq!(f.routes_on("metric.red"), vec![("manager-general".to_string(), "turn".to_string(), true, true, None), ("ceo".to_string(), "turn".to_string(), false, false, Some(15))]);
+    assert_eq!(f.routes_on("metric.red"), vec![("manager-general".to_string(), "turn".to_string(), true, false, None), ("ceo".to_string(), "turn".to_string(), false, false, Some(15))]);
     // The CEO's daily pass is this schedule route (07:00 every day), not a decision in Rust; it is due like a bot's routine.
     assert_eq!(f.schedules(), vec![("ceo".to_string(), "07:00".to_string(), vec![1, 2, 3, 4, 5, 6, 7])]);
     let (_, at, days) = &f.schedules()[0];
