@@ -8,6 +8,16 @@ fn role_of(b: &Value) -> Value {
     let _ = (!s(b, "chat_keep").is_empty()).then(|| role["chat_keep"] = json!(s(b, "chat_keep"))); // the chat's longest life, kept as written (see chat.rs)
     role
 }
+/// A routine as its route: on `schedule` with its days and time, or on `webhook` with its `when`.
+fn routine_of(key: &str, r: &Value) -> Value {
+    let mut route = json!({"on": "schedule", "to": key, "mode": "turn", "phone": true, "id": s(r, "id"), "title": s(r, "title"), "task": s(r, "prompt"), "enabled": r["on"] != false});
+    if s(r, "trigger") == "webhook" {
+        (route["on"], route["when"]) = (json!("webhook"), json!(s(r, "when")));
+    } else {
+        (route["days"], route["at"]) = (r["days"].clone(), json!(s(r, "at")));
+    }
+    route
+}
 /// A bot's routes (when it is written here), each with its `to` set to the bot, then its routines as `schedule` routes.
 fn routes_of(bots: &[Value], b: &Value) -> Vec<Value> {
     let routes = b["routes"]
@@ -21,7 +31,7 @@ fn routes_of(bots: &[Value], b: &Value) -> Vec<Value> {
         .as_array()
         .into_iter()
         .flatten()
-        .map(|r| json!({"on": "schedule", "to": key_of(b), "mode": "turn", "phone": true, "id": s(r, "id"), "title": s(r, "title"), "days": r["days"], "at": s(r, "at"), "task": s(r, "prompt"), "enabled": r["on"] != false}));
+        .map(|r| routine_of(&key_of(b), r));
     routes.chain(routines).collect()
 }
 /// The bots' roles and routes as TOML; an empty half stays out of the fragment: a bare `routes = []` (or `roles`) would land inside the file's last section instead of at its root.

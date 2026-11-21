@@ -22,16 +22,20 @@ pub(super) fn sections(table: &mut toml::Value, overlay: &toml::Table) {
         .for_each(|(sec, o)| merge(&mut table[sec], o));
 }
 
-/// Routes config.toml writes to a role replace the factory's to that role, as a set (so the page can also take a factory route away from a bot); schedule routes (a bot's routines, a timed pass) stand next to them.
+/// A bot's routine (or a timed pass): a route on `schedule` or on `webhook`.
+fn routine(r: &toml::Value) -> bool {
+    matches!(str_of(r, "on"), "schedule" | "webhook")
+}
+/// Routes config.toml writes to a role replace the factory's to that role, as a set (so the page can also take a factory route away from a bot); routines (`schedule` and `webhook` routes) stand next to them.
 pub(super) fn routes(table: &mut toml::Value, overlay: &toml::Table) {
     let laid: Vec<toml::Value> = rows(overlay, "routes").cloned().collect();
     let replaced: Vec<&str> = laid
         .iter()
-        .filter(|r| str_of(r, "on") != "schedule")
+        .filter(|r| !routine(r))
         .map(|r| str_of(r, "to"))
         .collect();
     table["routes"].as_array_mut().into_iter().for_each(|dst| {
-        dst.retain(|r| str_of(r, "on") == "schedule" || !replaced.contains(&str_of(r, "to")));
+        dst.retain(|r| routine(r) || !replaced.contains(&str_of(r, "to")));
         dst.extend(laid.iter().cloned());
     });
 }

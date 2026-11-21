@@ -175,13 +175,13 @@ phone = false
 Any bot enters the factory from the page: what makes a bot a CEO or a judge is only its configuration — its
 `[[routes]]` (which events it hears, as a `turn` or a `note`, with a chat line and on the phones or not), its
 `session` and its `access`. Each bot's card on the page, a system bot's exactly like one of the owner's, shows that
-configuration and changes it: its routes are chosen from the closed list of events below (but `schedule`: its routines
-are its schedule routes, edited under Routines), its session is `chat` or `turn`, and its access is read-only or
+configuration and changes it: its routes are chosen from the closed list of events below (but `schedule` and `webhook`:
+its routines are its schedule and webhook routes, edited under Routines), its session is `chat` or `turn`, and its access is read-only or
 writing. The card is saved in `~/.tirith/config.toml` with `toml_edit`, as above — an owner's bot as its role and its
 routes, a system bot as a layer over its factory role — and takes effect on the reload, with no restart. Routes
 written in config.toml to a role replace the factory's routes to that role, as a set (so the page can also take a
-factory route away from a bot, the CEO's included); `schedule` routes stand beside them, as a bot's routines always
-have. An event outside the closed list, a mode that is neither `turn` nor `note`, a session that is neither `chat`
+factory route away from a bot, the CEO's included); `schedule` and `webhook` routes stand beside them, as a bot's
+routines always have. A `webhook` route carries `when` (`<source>:<kind>`, a pattern with `*`, or `*`). An event outside the closed list, a mode that is neither `turn` nor `note`, a session that is neither `chat`
 nor `turn` and an access that is neither read nor write are refused by the card's API and nothing is written — and
 the strict factory loader remains the check of every key behind it. The `bot_routes_from_the_page` test gives a new
 bot the `lane.failed` route through that API and checks that it receives the event, and that changing its routes
@@ -210,6 +210,7 @@ on the page, and goes to every route whose `on` matches it. The default routes r
 | `schedule` | a routine is due | its role: turn |
 | `card.opened` / `card.answered` / `card.closed` | owner cards | none (measured) |
 | `factory.invalid` | a version did not load | manager-general: turn, chat |
+| `webhook` | a bot's webhook brought an event from outside (agentsmessenger.com's sealed webhook): its source, kind, title, url, text and data | its routines on `webhook` whose `when` holds: turn, the event as data from outside |
 | `turn.done` / `routine.done` | a bot's turn ended (`routine.done` when a routine started it): the bot, the trigger, the routine and its task, its tools, skills and the beginning of its answer; its row in `turns` keeps the event's id | none |
 
 The answer of a turn reaches the phones only when an event that started it has `phone = true` (`owner.message`

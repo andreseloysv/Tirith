@@ -45,5 +45,6 @@ pub(super) const ROUTE_KEYS: &[&str] = &[
     "title",
     "id",
     "enabled",
+    "when",
 ];
 pub(super) const EVAL_KEYS: &[&str] = &["id", "on", "judge", "rubric", "sample"];

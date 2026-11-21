@@ -8,6 +8,8 @@ mod files;
 mod forget;
 mod handle;
 mod history;
+mod hooked;
+mod hooks;
 mod join;
 mod keeper;
 mod listing;
@@ -34,6 +36,7 @@ mod watch;
 mod words;
 pub use api::forget;
 pub use cli::cli;
+pub use hooks::{hook_create, hook_delete};
 pub use keeper::start;
 use record::{Msg, Peer, Room, CODE_SECS, KEPT, PHONE};
 pub use routes::routes;
@@ -44,3 +47,6 @@ pub(crate) use typing::Typing;
 #[cfg(test)]
 #[path = "../../checks/rooms.rs"]
 mod tests;
+#[cfg(test)]
+#[path = "../../checks/webhooks.rs"]
+mod webhook_tests;

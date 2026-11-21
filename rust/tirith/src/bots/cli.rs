@@ -1,7 +1,7 @@
 //! A bot's own commands, in its conversation.
 use crate::client::{call, print, Flag};
 use serde_json::json;
-/// A bot's own commands, in its conversation (`TIRITH_PROJECT` is `bot-<id>`): `tirith routine add|remove|list`.
+/// A bot's own commands, in its conversation (`TIRITH_PROJECT` is `bot-<id>`): `tirith routine add|hook|remove|list`.
 pub fn cli(pos: &[&str], _: Flag) -> Option<Result<(), String>> {
     let key = std::env::var("TIRITH_PROJECT").unwrap_or_default();
     let path = format!(
@@ -13,6 +13,11 @@ pub fn cli(pos: &[&str], _: Flag) -> Option<Result<(), String>> {
             "POST",
             &path,
             Some(json!({"title": title, "days": days, "at": at, "prompt": task})),
+        ))),
+        ["routine", "hook", title, when, task] => Some(print(call(
+            "POST",
+            &path,
+            Some(json!({"title": title, "trigger": "webhook", "when": when, "prompt": task})),
         ))),
         ["routine", "remove", title] => Some(print(call(
             "POST",

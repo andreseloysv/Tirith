@@ -22,6 +22,9 @@ pub(super) fn act(app: &Shared, r: &Room, out: Out) {
         let _ = (!answers_a_card(app, r, author, text))
             .then(|| manager::from_room(app, &r.project, &r.id, author, text));
     }
+    out.hooks
+        .iter()
+        .for_each(|h| crate::bots::webhook(app, &r.project, h));
     out.mentions
         .into_iter()
         .for_each(|m| app.emit("room-mention", m));

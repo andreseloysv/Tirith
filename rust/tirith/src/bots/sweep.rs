@@ -2,7 +2,7 @@
 use super::written::has;
 use serde_json::Value;
 use toml_edit::DocumentMut;
-/// The owner's bot roles go, and every route to one of them, and the schedule routes (and other routes, if changed) of the system bots in `bots`.
+/// The owner's bot roles go, and every route to one of them, and the schedule and webhook routes — its routines — (and other routes, if changed) of the system bots in `bots`.
 pub(super) fn drop_bots(doc: &mut DocumentMut, bots: &[Value]) {
     doc.get_mut("roles")
         .and_then(|i| i.as_table_mut())
@@ -26,7 +26,10 @@ pub(super) fn drop_bots(doc: &mut DocumentMut, bots: &[Value]) {
                         || has(
                             bots,
                             to,
-                            r.get("on").and_then(|i| i.as_str()) != Some("schedule"),
+                            !matches!(
+                                r.get("on").and_then(|i| i.as_str()),
+                                Some("schedule" | "webhook")
+                            ),
                         )
                 })
             })

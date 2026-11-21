@@ -3,14 +3,14 @@ use super::store::{find, with};
 use crate::app::Shared;
 use crate::server::s;
 use serde_json::{json, Value};
-/// Each route is on an event of the closed list but `schedule` (those are its routines), as a turn or a note.
+/// Each route is on an event of the closed list but `schedule` and `webhook` (those are its routines), as a turn or a note.
 fn hears_ok(b: &Value) -> bool {
     b["routes"].is_null()
         || b["routes"].as_array().is_some_and(|rs| {
             rs.iter().all(|r| {
                 crate::factory::EVENTS
                     .split(';')
-                    .any(|e| e == s(r, "on") && e != "schedule")
+                    .any(|e| e == s(r, "on") && e != "schedule" && e != "webhook")
                     && matches!(s(r, "mode").as_str(), "" | "turn" | "note")
             })
         })
