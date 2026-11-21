@@ -5,7 +5,7 @@
 // answer shows. An answer that starts with ∅ (nothing new) is a quiet line. Owner messages may list attached files
 // (the daemon appends them to the text); pictures show as thumbnails.
 import { html, Component, useState, useEffect, useLayoutEffect, useRef, useMemo } from '../../vendor/preact-htm.js';
-import { useStore, useTalk, api } from '../store.js';
+import { useStore, useTalk, useFetch, api } from '../store.js';
 import { ChatModels } from './chat-models.js';
 import { clockTime } from '../common.js';
 import { intentOf } from '../intent.js';
@@ -186,6 +186,41 @@ function Local({ o, onRetry, onCopy }) {
     <div class="mc-meta">${o.state === 'failed'
       ? html`<b class="mc-bad">Not sent</b> · <button type="button" class="mc-lnk" onClick=${onRetry}>Retry</button> · <button type="button" class="mc-lnk" onClick=${onCopy}>Copy text</button>${o.err ? html`<br /><span class="mc-why">${o.err}</span>` : null}`
       : html`Sending… · ${clockTime(new Date(o.at).toISOString())}`}</div></div>`;
+}
+
+/** The menu of one chat: clear it (asked once, in the panel), and how long it lives — the owner's own words
+    ("24h", "2 días", "una semana"; "siempre" takes the limit away), the current one shown in the field.
+    Clearing deletes the conversation's messages and its bot starts fresh; its memory and skills stay. */
+function ChatMenu({ project }) {
+  const [keep, reloadKeep] = useFetch(`/api/chat/keep?project=${encodeURIComponent(project)}`, ['chat-keep'], [project]);
+  const [val, setVal] = useState(null);   /* null: not being edited, the field shows what is saved */
+  const [ask, setAsk] = useState(false);
+  const [err, setErr] = useState(null);
+  const box = useRef(null);
+  const close = () => { if (box.current) box.current.open = false; setAsk(false); };
+  const doClear = () => api('POST', '/api/chat/clear', { project })
+    .then(() => { setErr(null); close(); }, (e) => setErr(`Could not clear: ${e.message}`));
+  const doKeep = () => api('POST', '/api/chat/keep', { project, keep: (val || '').trim() })
+    .then(() => { setVal(null); setErr(null); reloadKeep(); close(); }, (e) => setErr(e.message));
+  return html`<details class="mc-menu" ref=${box}>
+    <summary aria-label="Chat options" title="Chat options">⋯</summary>
+    <div class="mc-mpanel">
+      <label class="mc-mlab" for=${`keep-${project}`}>Chat duration</label>
+      <div class="mc-mrow">
+        <input id=${`keep-${project}`} type="text" value=${val != null ? val : (keep && keep.keep) || ''} placeholder="30m, 1h, 24 h, 2 días…"
+          onInput=${(e) => setVal(e.target.value)} onKeyDown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); doKeep(); } }} />
+        <button type="button" onClick=${doKeep}>Save</button>
+      </div>
+      <p class="mc-mhint">${keep && keep.keep_s
+        ? 'Messages older than this are deleted and the bot forgets them.'
+        : 'No limit: the chat keeps everything.'} Write «siempre» for no limit.</p>
+      ${ask ? html`<p class="mc-mhint">Clear this chat? Its messages are deleted and the bot starts fresh. Its memory, skills and routines stay.</p>
+        <div class="mc-mrow"><button type="button" class="mc-danger" onClick=${doClear}>Clear chat</button>
+          <button type="button" onClick=${() => setAsk(false)}>Cancel</button></div>`
+        : html`<button type="button" class="mc-mlink" onClick=${() => { setErr(null); setAsk(true); }}>Clear chat…</button>`}
+      ${err ? html`<div class="ierr">${err}</div>` : null}
+    </div>
+  </details>`;
 }
 
 /* ---------- the chat ---------- */
@@ -375,7 +410,7 @@ export function Chat({ project = '', who = '', hint = '', models = true }) {
 
   return html`<section class=${`mchat${drag ? ' drop' : ''}`}>
     <div class="mc-head"><h2>${who || html`Manager <span class="mc-of">${project ? name : 'all projects'}</span>`}</h2>
-      ${busy ? html`<button class="mc-stop" type="button" onClick=${interrupt} title="Stop the current turn (Esc)">Stop</button>` : null}</div>
+      <span class="mc-tools">${busy ? html`<button class="mc-stop" type="button" onClick=${interrupt} title="Stop the current turn (Esc)">Stop</button>` : null}<${ChatMenu} project=${project} /></span></div>
     <div class="mc-log" id="mc-log" ref=${log} onScroll=${onScroll}>
       ${hidden ? html`<button type="button" class="mc-earlier" onClick=${() => { const el = log.current; stick.current = false; anchor.current = el.scrollHeight - el.scrollTop; setShown(shown + SHOWN); }}>Show earlier (${hidden})</button>` : null}
       ${talk.error && !talk.loaded ? html`<div class="ierr mc-note">${/not found|not allowed/i.test(talk.error.message)
