@@ -1,4 +1,6 @@
-use super::*;
+use super::{block::block, colors::COLORS, folder::folder, project::project};
+use crate::config::Project;
+use std::path::{Path, PathBuf};
 #[test]
 fn project_add_appends_a_block_and_keeps_the_file() {
     let old = "# mine\n[[projects]]\nid = \"a\"\nrepo = \"~/a\"\n\n[guard]\nwords = [\"x\"]";
