@@ -148,6 +148,7 @@ fn bots_live_in_config_as_own_roles_with_schedule_routes() {
         ),
         ("brief", include_str!("../../../factory/prompts/brief.md")),
         ("ceo", include_str!("../../../factory/prompts/ceo.md")),
+        ("coach", include_str!("../../../factory/prompts/coach.md")),
         ("bot", include_str!("../../../factory/prompts/bot.md")),
         (
             "owner-mood",
@@ -349,6 +350,7 @@ fn a_system_bot_change_is_a_layer_in_config() {
         ),
         ("brief", include_str!("../../../factory/prompts/brief.md")),
         ("ceo", include_str!("../../../factory/prompts/ceo.md")),
+        ("coach", include_str!("../../../factory/prompts/coach.md")),
         ("bot", include_str!("../../../factory/prompts/bot.md")),
         (
             "owner-mood",

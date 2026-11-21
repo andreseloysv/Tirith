@@ -2,7 +2,7 @@
 use crate::app::App;
 use std::path::{Path as FsPath, PathBuf};
 /// A bot's skills, in its folder: the agents read skills there (or, through a link, in their own .<command>/skills).
-pub(super) const SKILLS: &str = ".agents/skills";
+pub const SKILLS: &str = ".agents/skills";
 /// The memory of every bot, in Tirith's home: what holds for all of them (the owner's name, time zone, language).
 pub(super) const SHARED: &str = "bots/memory.md";
 /// A bot's folder, where its sessions run: memory.md, its working files and its skills.
@@ -27,7 +27,7 @@ pub fn writable(home: &FsPath, path: &FsPath) -> bool {
     own || path.starts_with(home.join("bots/skills"))
 }
 /// The skills of a folder of skills, by name with the text of their SKILL.md; `links` false leaves out the shared ones linked into a bot's.
-pub(super) fn skills(dir: &FsPath, links: bool) -> Vec<(String, String)> {
+pub fn skills(dir: &FsPath, links: bool) -> Vec<(String, String)> {
     let mut out: Vec<(String, String)> = std::fs::read_dir(dir)
         .into_iter()
         .flatten()

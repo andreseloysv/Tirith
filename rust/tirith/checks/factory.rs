@@ -100,7 +100,12 @@ fn default_routes_reproduce_today() {
             vec![
                 ("manager".to_string(), "turn".to_string(), false, true, None),
                 ("ceo".to_string(), "turn".to_string(), false, false, None),
+                ("coach".to_string(), "turn".to_string(), false, false, None),
             ],
+        ),
+        (
+            "routine.worse",
+            vec![("coach".to_string(), "turn".to_string(), false, false, None)],
         ),
         (
             "review.done",
@@ -149,14 +154,17 @@ fn default_routes_reproduce_today() {
             )
         ]
     );
-    // The CEO's daily pass is this schedule route (07:00 every day), not a decision in Rust; it is due like a bot's routine.
+    // The CEO's daily pass is this schedule route (07:00 every day), not a decision in Rust; it is due like a bot's routine. The Coach's weekly one is the same mechanism.
     assert_eq!(
         f.schedules(),
-        vec![(
-            "ceo".to_string(),
-            "07:00".to_string(),
-            vec![1, 2, 3, 4, 5, 6, 7]
-        )]
+        vec![
+            (
+                "ceo".to_string(),
+                "07:00".to_string(),
+                vec![1, 2, 3, 4, 5, 6, 7]
+            ),
+            ("coach".to_string(), "09:00".to_string(), vec![1])
+        ]
     );
     let (_, at, days) = &f.schedules()[0];
     let stamp = |d: u32| {
@@ -208,7 +216,7 @@ fn default_routes_reproduce_today() {
         "[[routes]]\non = \"schedule\"\nto = \"manager\"\nmode = \"turn\"\ntask = \"news\"\n",
     );
     let f = parse(TEXT, prompts.clone(), &o).unwrap();
-    assert_eq!(f.routes_on("schedule").len(), 3); // the factory's two (manager, the CEO's daily pass) plus the overlay's
+    assert_eq!(f.routes_on("schedule").len(), 4); // the factory's three (manager, the CEO's daily pass, the Coach's weekly one) plus the overlay's
     assert_eq!(f.routes_on("lane.failed").len(), 1);
     let o =
         overlay("[[routes]]\non = \"main.green\"\nto = \"ceo\"\nmode = \"note\"\nphone = true\n");
@@ -226,12 +234,12 @@ fn default_routes_reproduce_today() {
         "the factory's routes to the CEO are replaced, not kept beside config.toml's"
     );
     assert_eq!(
-        f.schedules(),
-        vec![(
+        f.schedules()[0],
+        (
             "ceo".to_string(),
             "07:00".to_string(),
             vec![1, 2, 3, 4, 5, 6, 7]
-        )],
+        ),
         "its timed daily pass, a schedule route, stands beside them still"
     );
     assert_eq!(
@@ -291,7 +299,14 @@ fn factory_roles_carry_their_shape() {
     let f = Factory::default();
     assert_eq!(
         f.roles(),
-        ["ceo", "judge", "manager", "manager-general", "worker"]
+        [
+            "ceo",
+            "coach",
+            "judge",
+            "manager",
+            "manager-general",
+            "worker"
+        ]
     );
     let shape = |r: &str| {
         (
@@ -331,6 +346,33 @@ fn factory_roles_carry_their_shape() {
             Some("own".into()),
             Some("local".into())
         )
+    );
+    // The Coach: a system bot run like the CEO, with the "bots" brief, writing only where `writes` says.
+    assert_eq!(
+        (
+            shape("coach"),
+            f.role::<String>("coach", "brief"),
+            f.role::<String>("coach", "access"),
+            f.role::<Vec<String>>("coach", "writes")
+        ),
+        (
+            (
+                Some("turn".into()),
+                Some("own".into()),
+                Some("local".into())
+            ),
+            Some("bots".into()),
+            Some("write".into()),
+            Some(vec!["bots".into(), "lab".into()])
+        )
+    );
+    let face = |r: &str| f.role::<toml::Table>(r, "face").unwrap_or_default();
+    assert!(
+        ["manager", "manager-general", "ceo", "judge"]
+            .iter()
+            .all(|r| face(r)["shape"] != face("coach")["shape"]
+                && face(r)["color"] != face("coach")["color"]),
+        "the Coach's face is its own"
     );
     assert_eq!(
         shape("judge"),

@@ -27,6 +27,10 @@ pub(crate) fn embedded_prompts() -> BTreeMap<String, String> {
             include_str!("../../../../factory/prompts/clippy.md"),
         ),
         ("ceo", include_str!("../../../../factory/prompts/ceo.md")),
+        (
+            "coach",
+            include_str!("../../../../factory/prompts/coach.md"),
+        ),
         ("bot", include_str!("../../../../factory/prompts/bot.md")),
         ("skill", include_str!("../../../../factory/skill.md")),
         (

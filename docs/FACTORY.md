@@ -134,8 +134,8 @@ at_least = true
 
 A bot, in config.toml:
 
-The factory's own system bots — the CEO (`ceo`, name CEO), the judge (`judge`, name Judge, `show = false`) and the
-manager of no project (`manager-general`, name Manager) — are `own` roles of `factory/factory.toml` with a `name`, a
+The factory's own system bots — the CEO (`ceo`, name CEO), the Coach (`coach`, name Coach), the judge (`judge`, name
+Judge, `show = false`) and the manager of no project (`manager-general`, name Manager) — are `own` roles of `factory/factory.toml` with a `name`, a
 `face` and `show`, exactly like the owner's bots below. The left bar paints every `own` role with `show = true`; on the
 page a system bot is seen and edited like any of the owner's bots, and what the owner changes of it (its name, face,
 show, routes, `session` and `access`) is saved as a layer in `~/.tirith/config.toml` over its factory role. Every bot has its folder in
@@ -211,6 +211,7 @@ on the page, and goes to every route whose `on` matches it. The default routes r
 | `card.opened` / `card.answered` / `card.closed` | owner cards | none (measured) |
 | `factory.invalid` | a version did not load | manager-general: turn, chat |
 | `webhook` | a bot's webhook brought an event from outside (agentsmessenger.com's sealed webhook): its source, kind, title, url, text and data | its routines on `webhook` whose `when` holds: turn, the event as data from outside |
+| `routine.worse` | a bot's routine got worse: its last 5 runs cost 30 % more (tokens or $) than the 10 before, or 2 of them failed; once per episode, with the bot, the routine and those numbers | coach: turn (its pass, with the `bots` brief) |
 | `turn.done` / `routine.done` | a bot's turn ended (`routine.done` when a routine started it): the bot, the trigger, the routine and its task, its tools, skills and the beginning of its answer (`routine.done`: its answer and the «Cómo validar» of the skills it read, 2000 characters at most, for the `turn-quality` eval); its row in `turns` keeps the event's id | none |
 
 The answer of a turn reaches the phones only when an event that started it has `phone = true` (`owner.message`
@@ -307,6 +308,20 @@ its check, and the lane started for it. The queue checks and lands it, and the d
 moves: no rebuild, no restart, no owner. A change whose next 10 merged items (or 24 h) are worse than the version before
 it on satisfaction, interruptions or first try is reverted by the CEO's next run, as one more change. Nothing in the
 factory needs the owner's yes.
+
+## The Coach makes the bots better
+
+The Coach is a system bot of the factory and a turn role like the CEO: `[roles.coach]` with name Coach, its own face
+(a green star), `session = "turn"`, `scope = "own"`, `show = true`, `access = "write"`, `prompt = ["prompts/coach.md"]`,
+`brief = "bots"` and `writes = ["bots", "lab"]` (the hooks' rules let it write only in the bots' folders, in
+`<home>/bots` and in `<home>/lab`). Its routes are a weekly `schedule` (`days = [1]`, `at = "09:00"`) and
+`routine.worse`. Which brief a turn role reads is its `brief` key: `ceo` (the default: the measures by factory version)
+or `bots` (each bot's numbers, routines, skills with the sections they lack and memory sizes). Each runs within its
+`max_per_day`, its answer in its own conversation. The Coach reads the run log and proposes one change per experiment,
+with its hypothesis and the gain it expects; until `tirith lab` exists it leaves it in its answer, in 3 lines at most,
+touching nothing, and answers «Sin novedad.» when nothing changed since its last pass. The bots' folders and
+`<home>/bots` are git repositories Tirith commits after each turn that changed them and each Library change, so every
+run's `versions` are in their history.
 
 ## What stays in code
 

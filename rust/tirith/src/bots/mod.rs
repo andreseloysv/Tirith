@@ -19,19 +19,24 @@ mod run;
 mod schedule;
 mod store;
 mod sweep;
+mod versioned;
 mod written;
 pub use api::routes;
+/// The app's and the manager's checks read the list and save cards.
+#[cfg(test)]
+pub(crate) use card::save;
 pub use cli::cli;
 pub use context::context;
-pub use folder::writable;
+pub use folder::{folder, skills, writable, SKILLS};
 pub use hook::{hook_from, webhook};
-pub use list::{bot, key_for};
+pub use list::{all, bot, key_for};
 pub use migrate::start;
 pub use run::tick;
 pub use schedule::due;
-/// The app's and the manager's checks read the list and save cards.
+pub use versioned::versioned;
 #[cfg(test)]
-pub(crate) use {card::save, list::all};
+#[path = "../../checks/bot_git.rs"]
+mod git_tests;
 #[cfg(test)]
 #[path = "../../checks/bots.rs"]
 mod tests;

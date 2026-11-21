@@ -67,6 +67,7 @@ pub(super) fn learn(app: &App, id: &str, b: &Value) -> Result<Value, String> {
         _ => std::fs::create_dir_all(&dir).and_then(|_| std::fs::write(&file, s(b, "text"))),
     };
     done.map_err(|e| format!("{}: {e}", file.display()))?;
+    super::versioned(app, &key, "library");
     app.emit("library", json!({"bot": id}));
     Ok(json!({"ok": true}))
 }

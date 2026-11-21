@@ -1,4 +1,4 @@
-//! A turn ended: its row in `turns` (`waiting` while an approval card it opened is open), and for a bot its `turn.done` (or `routine.done`) event.
+//! A turn ended: its row in `turns` (`waiting` while an approval card it opened is open), for a bot its `turn.done` (or `routine.done`) event and the commit of what it changed in its folder and the shared one.
 use super::price::cost;
 use super::record::Turn;
 use super::usage::from_muse_session;
@@ -33,6 +33,14 @@ pub fn finish(app: &Shared, mut t: Turn, ok: Option<bool>, answer: Option<&str>)
     let id = app.insert("INSERT INTO turns (conv, role, \"trigger\", routine, started_at, ended_at, ms, status, agent, model, effort, tokens_in, tokens_out, tokens_cache_read, tokens_cache_write, cost_usd, steps, skills, tools, versions, answer, event, factory, role_hash) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24)", params![t.conv, t.role, t.trigger, t.routine, t.started_at, now_iso(), ms, status, t.agent, t.model, t.effort, u.input, u.output, u.cache_read, u.cache_write, cost_usd, t.steps, skills, tools, versions, answer, event, factory, role_hash]);
     super::signals::keep(app, id, &t, &answer);
     super::quality::catch_up(app, id, event);
+    let own = app
+        .cfg()
+        .factory
+        .role::<String>(&t.role, "scope")
+        .as_deref()
+        == Some("own");
+    let _ = (own && t.role == t.conv)
+        .then(|| crate::bots::versioned(app, &t.conv, &format!("turn {id}"))); // a bot's folder and the shared one, committed when this turn changed them
     app.emit("turn", json!({"id": id, "conv": t.conv, "status": status}));
     id
 }
