@@ -1,4 +1,21 @@
 #[test]
+fn models_state_gives_face_and_show() {
+    let dir = std::env::temp_dir().join(format!("tirith-models-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("config.toml"), "# the owner's\n").unwrap();
+    let app = crate::app::App::open_at(dir);
+    let v = super::state(&app);
+    let manager = &v["roles"]["manager"];
+    assert_eq!(manager["name"], "Project Manager");
+    assert_eq!(manager["face"]["shape"], "hex");
+    assert_eq!(manager["face"]["color"], "#8e7cf0");
+    assert_eq!(v["roles"]["judge"]["show"], false);
+    assert_eq!(v["roles"]["ceo"]["show"], true);
+    assert_eq!(v["roles"]["manager-general"]["face"]["shape"], "dome"); // its own face, not the project manager's it extends
+}
+
+#[test]
 fn muse_lane_is_an_exec_run() {
     let c = crate::config::Config::default();
     let (_, effort, resume, args) = super::flags(&c, "muse");

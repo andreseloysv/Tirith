@@ -240,7 +240,7 @@ pub fn command(app: &Shared, text: &str) -> Option<Result<String, String>> {
         Ok(format!("Saved for all projects:\n{}\nApplies to the next turn or new lanes; running work finishes first.", lines.join("\n")))
     })())
 }
-/// GET /api/models: every factory role's effective setting (the bots among them) with its source and its factory shape (session, scope, access, runs_on, name), the choices the page offers, and the closed list of events a bot's card offers its routes from (but `schedule`: its routines).
+/// GET /api/models: every factory role's effective setting (the bots among them) with its source and its factory shape (session, scope, access, runs_on, name, face, show), the choices the page offers, and the closed list of events a bot's card offers its routes from (but `schedule`: its routines).
 pub fn state(app: &Shared) -> Value {
     let cfg = app.cfg();
     let roles: serde_json::Map<String, Value> = cfg
@@ -252,6 +252,8 @@ pub fn state(app: &Shared) -> Value {
             let mut v = json!(s);
             v["source"] = json!(source);
             ["session", "scope", "access", "runs_on", "name"].into_iter().filter_map(|k| cfg.factory.role::<String>(&r, k).map(|x| (k, x))).for_each(|(k, x)| v[k] = json!(x));
+            v["show"] = json!(cfg.factory.role::<bool>(&r, "show"));
+            v["face"] = json!({"shape": get::<String>(cfg.factory.table(), &["roles", &r, "face", "shape"]), "color": get::<String>(cfg.factory.table(), &["roles", &r, "face", "color"])});
             (r, v)
         })
         .collect();

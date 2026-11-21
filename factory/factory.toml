@@ -46,12 +46,17 @@ lane_args = ["-p", "Read the brief at {brief} and do it completely in {workspace
 resume_args = ["--resume", "{session}", "-p", "{message}"]
 
 [roles.manager]
+name = "Project Manager"
 agent = "anthropic"
 session = "chat"
 scope = "project"
 prompt = ["prompts/manager.md", "prompts/one-project.md"]
 idle_minutes = 30
 runs_on = "local"
+
+[roles.manager.face]
+shape = "hex"
+color = "#8e7cf0"
 
 # The manager of no project: a system bot (like the CEO and the judge below, a
 # role with scope "own", a name, a face and `show`) whose conversation is the
