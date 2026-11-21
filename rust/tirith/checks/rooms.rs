@@ -10,6 +10,51 @@ fn room_attachment_saved_as_file() {
     assert!(save_image_at(&home, "{\"mime\":\"image/png\",\"data\":\"AAAA\"}", "r").is_none());
 }
 #[test]
+fn typing_progress_for_a_room_turn_and_none_without_rooms() {
+    // A room turn, with no network: the control is emitted at its start, with its first tool and at its end, for its rooms alone.
+    let mut typing = Typing::default();
+    assert_eq!(typing.start(vec!["sealed-turn".into()]), Some((vec!["sealed-turn".to_string()], json!({"v": 1, "typing": 1}))), "typing on at the start");
+    assert_eq!(typing.start(vec!["sealed-turn".into()]), None, "a second start while it runs says nothing again");
+    assert_eq!(typing.line("Read: src/main.rs", 100), Some((vec!["sealed-turn".to_string()], json!({"v": 1, "typing": 1, "line": "Read: src/main.rs"}))), "the first tool line goes at once");
+    assert_eq!(typing.line("Read: src/main.rs", 106), None, "the same line twice in a row is dropped");
+    assert_eq!(typing.line("Bash: run the tests", 102), None, "at most one line every 5 s");
+    assert_eq!(typing.line("Bash: run the tests", 105).map(|s| s.1), Some(json!({"v": 1, "typing": 1, "line": "Bash: run the tests"})), "the next line after 5 s goes");
+    let long = typing.line(&"x".repeat(300), 111).unwrap().1;
+    assert_eq!(long["line"].as_str().unwrap().chars().count(), 120, "120 chars at most: {long}");
+    assert_eq!(typing.stop(), Some((vec!["sealed-turn".to_string()], json!({"v": 1, "typing": 0}))), "typing off at the end");
+    assert_eq!(typing.stop(), None, "and only once");
+    assert_eq!(typing.line("Read: late.rs", 200), None, "no line after the turn ended");
+    // A turn with no rooms (only the page) emits nothing at all.
+    let mut quiet = Typing::default();
+    assert_eq!(quiet.start(vec![]), None, "no rooms, no typing on");
+    assert_eq!(quiet.line("Read: src/main.rs", 100), None, "no rooms, no tool line");
+    assert_eq!(quiet.stop(), None, "no rooms, no typing off");
+}
+#[test]
+fn typing_control_is_queued_for_the_turns_room_alone() {
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    assert!(OUT.set(tx).is_ok(), "the rooms' sender is this test's alone");
+    let room = |id: &str, project: &str| Room { id: id.into(), project: project.into(), kind: "manager".into(), devices: vec![Peer { public: "phone-key".into(), ..Default::default() }], ..Default::default() };
+    ROOMS.lock().unwrap().extend([room("sealed-typing-a", "typingproj"), room("sealed-typing-b", "otherproj")].map(|r| (r.id.clone(), r)));
+    let home = std::env::temp_dir().join(format!("tirith-typing-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&home);
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::write(home.join("config.toml"), format!("[[projects]]\nid = \"typingproj\"\nrepo = \"{}\"\n[[projects]]\nid = \"otherproj\"\nrepo = \"{}\"\n", home.display(), home.display())).unwrap();
+    let app = crate::app::App::open_at(home.clone());
+    assert_eq!(phone_rooms(&app, "typingproj"), ["sealed-typing-a"], "a conversation's phone rooms are its own alone");
+    typing(Some((vec!["sealed-typing-a".into()], json!({"v": 1, "typing": 1}))));
+    typing(Some((vec!["sealed-typing-a".into()], json!({"v": 1, "typing": 1, "line": "Read: a.rs"}))));
+    typing(Some((vec!["sealed-typing-a".into()], json!({"v": 1, "typing": 0}))));
+    typing(None);
+    let sent: Vec<(String, String, Vec<String>)> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
+    let bodies: Vec<Value> = sent.iter().map(|(_, text, _)| serde_json::from_str(text.strip_prefix("tirith-chat ").unwrap()).unwrap()).collect();
+    assert!(sent.iter().all(|(id, _, readers)| id == "sealed-typing-a" && readers == &["phone-key".to_string()]), "queued for the turn's room alone, sealed for its phone: {sent:?}");
+    assert_eq!(bodies, [json!({"v": 1, "typing": 1}), json!({"v": 1, "typing": 1, "line": "Read: a.rs"}), json!({"v": 1, "typing": 0})], "start, first tool and end, in order");
+    ["sealed-typing-a", "sealed-typing-b"].iter().for_each(|id| drop(ROOMS.lock().unwrap().remove(*id)));
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}
+#[test]
 fn room_files_expire_after_24h() {
     let (root, then) = (std::env::temp_dir().join(format!("tirith-exp-{}", std::process::id())), std::time::SystemTime::now() - Duration::from_secs(90000));
     let (old, new) = (root.join("a/old.png"), root.join("b/new.png"));

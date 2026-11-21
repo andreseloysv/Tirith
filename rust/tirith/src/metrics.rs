@@ -1,5 +1,4 @@
 //! Health metrics computed every minute from the daemon's own data, and the turn-role pass that a metric red for long enough starts (the factory's delayed `metric.red` route names the role: the CEO; the factory's `schedule` route to it runs its daily pass, at 07:00, with no red measure); while everything is green and the day's pass ran, no model is called.
-
 use crate::app::{now_iso, now_s, tail, Lane, Shared};
 use crate::{manager, plan};
 use axum::{extract::State, routing::get, Json, Router};
@@ -7,7 +6,6 @@ use serde_json::{json, Value};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{LazyLock, Mutex};
 use std::{collections::HashMap, time::Duration};
-
 struct Metric {
     id: &'static str,
     label: String,
@@ -18,25 +16,20 @@ struct Metric {
     red: bool,
     facts: String,
 }
-
 #[derive(Default)]
 struct Book {
     last: Value,
     idle_since: HashMap<String, u64>,
 }
-
 static BOOK: LazyLock<Mutex<Book>> = LazyLock::new(Mutex::default);
 static REVIEWING: AtomicBool = AtomicBool::new(false);
-
 fn owner_questions(app: &Shared) -> Vec<String> {
     manager::owner_open(app).iter().map(|o| format!("{}: {}", o["project"].as_str().unwrap_or(""), o["question"].as_str().unwrap_or("")).trim_start_matches(": ").to_string()).collect()
 }
-
 /// Why the autopilot starts no lane for the project (the scheduler's last «paused» reason) and the command that fixes it.
 fn paused_text(project: &str, why: &str) -> String {
     format!(" [{project} paused: {why}; fix: {}]", crate::lanes::paused_fix(project, why))
 }
-
 /// Autopilot projects with nothing the autopilot can start in the plan, with the command that adds work.
 fn empty_plan_note(empty: &[String]) -> String {
     empty.iter().map(|p| format!(" [{p} plan empty: nothing startable; fix: tirith plan add {p} <step> \"<text>\"]")).collect()
@@ -45,7 +38,6 @@ fn empty_plan_note(empty: &[String]) -> String {
 fn unasked(marks: &[(String, String, bool)], msgs: &[(String, String, String)]) -> usize {
     msgs.iter().filter(|m| !m.2.trim_start().starts_with('∅') && marks.iter().rposition(|k| k.1 == m.1 && k.0 <= m.0).is_some_and(|i| marks[i].2)).count()
 }
-
 /// What reached the owner unasked since `since`: (phone messages of unasked turns, notices whose route has `phone = true`, cards opened).
 fn interruptions(app: &Shared, since: &str) -> (usize, usize, usize) {
     let f = &app.cfg().factory;
@@ -80,21 +72,17 @@ fn compute(app: &Shared) -> Vec<Metric> {
     let ids = |v: &[&Lane]| v.iter().map(|l| l.id.as_str()).collect::<Vec<_>>().join(", ");
     let open_txt = open.iter().map(|(p, n)| format!("{p} {n}")).collect::<Vec<_>>().join(", ");
     let mut out = vec![];
-
     let why = if empty.is_empty() { "no empty plans: lanes that do not reach main are the problem" } else { "no startable work in the plan (not a lane failure) for:" };
     let paused: String = open.iter().map(|(p, _)| app.kv(&format!("paused:{p}")).map(|w| paused_text(p, &w)).unwrap_or_default()).collect();
     let facts = format!("merged in 24 h: [{}]; open items in autopilot projects: [{open_txt}]; {why}{}{paused}", ids(&merged), empty_plan_note(&empty));
     out.push(mk("merged", merged.len() as f64, work, facts));
-
     let mut mins: Vec<(f64, &str)> = merged.iter().filter_map(|l| Some(((l.merged_at.as_deref().or(l.ended_at.as_deref()).and_then(secs)? - secs(&l.created_at)?) as f64 / 60.0, l.id.as_str()))).collect();
     mins.sort_by(|a, b| a.0.total_cmp(&b.0));
     let median = if mins.is_empty() { 0.0 } else { (mins[(mins.len() - 1) / 2].0 + mins[mins.len() / 2].0) / 2.0 };
     out.push(mk("median", median, !mins.is_empty(), mins.iter().rev().take(8).map(|(m, id)| format!("{id} {m:.0} min")).collect::<Vec<_>>().join(", ")));
-
     let pct = if merged.is_empty() { 100.0 } else { (100 * merged.iter().filter(|l| l.attempts == 0).count() / merged.len()) as f64 };
     let retried: Vec<&Lane> = merged.iter().filter(|l| l.attempts > 0).copied().collect();
     out.push(mk("first_try", pct, !merged.is_empty(), format!("merged after being sent back: [{}]", ids(&retried))));
-
     // Idle: a project with open items, autopilot on and nothing queued, running or merging, and since when.
     let idle: Vec<(String, usize, u64)> = {
         let mut book = BOOK.lock().unwrap();
@@ -105,7 +93,6 @@ fn compute(app: &Shared) -> Vec<Metric> {
     let worst = idle.iter().map(|i| i.2).max().unwrap_or(0) as f64;
     let facts = idle.iter().map(|(p, n, m)| format!("{p}: {n} open items, nothing running for {m} min{}", app.kv(&format!("paused:{p}")).map(|w| paused_text(p, &w)).unwrap_or_default())).collect::<Vec<_>>().join("; ");
     out.push(mk("idle", worst, true, facts));
-
     let half = f.limits.inactivity_minutes * 30;
     let stuck: Vec<String> = lanes
         .iter()
@@ -117,20 +104,15 @@ fn compute(app: &Shared) -> Vec<Metric> {
         })
         .collect();
     out.push(mk("stuck", stuck.len() as f64, true, stuck.join("; ")));
-
     let red: Vec<String> = cfg.projects.iter().filter_map(|p| app.kv(&format!("main_red:{}", p.id)).map(|v| format!("{}: {v}", p.id))).collect();
     out.push(mk("main_red", red.len() as f64, true, red.join("; ")));
-
     let failed: Vec<String> = lanes.iter().filter(|l| l.status == "failed" && l.ended_at.as_deref().and_then(secs).is_some_and(|e| e >= day)).map(|l| format!("{}: {}", l.id, l.note.lines().next().unwrap_or(""))).collect();
     out.push(mk("failed", failed.len() as f64, false, failed.join("; ")));
-
     let qs = owner_questions(app);
     out.push(mk("owner", qs.len() as f64, false, qs.join("; ")));
-
     let (turns, notices, cards) = interruptions(app, &since);
     let facts = format!("unasked in 24 h: {turns} phone messages of turns no owner message started, {notices} notices with phone = true, {cards} cards, over {} merged items", merged.len());
     out.push(mk("interruptions", (turns + notices + cards) as f64 / merged.len().max(1) as f64, turns + notices + cards > 0, facts));
-
     // An autoclose («its lane no longer waits») whose question a later card of the same project and kind reopened (its question names the closed card's id) counts nowhere: the same question still waits, under the new card.
     let resolved = app.query("SELECT c.id, c.status FROM owner_items c WHERE c.at >= ?1 AND c.status != 'open' AND NOT (c.status = 'closed' AND COALESCE(c.answer, '') LIKE '%its lane no longer waits%' AND EXISTS (SELECT 1 FROM owner_items s WHERE s.rowid > c.rowid AND s.kind = c.kind AND s.project = c.project AND instr(COALESCE(s.question, ''), c.id) > 0 AND substr(COALESCE(s.question, ''), instr(COALESCE(s.question, ''), c.id) + length(c.id), 1) NOT GLOB '[0-9]' AND substr(COALESCE(s.question, ''), instr(COALESCE(s.question, ''), c.id) - 1, 1) NOT GLOB '[A-Za-z0-9]'))", [&since], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)));
     let closed: Vec<&str> = resolved.iter().filter(|c| c.1 == "closed").map(|c| c.0.as_str()).collect();
@@ -139,7 +121,6 @@ fn compute(app: &Shared) -> Vec<Metric> {
     let alone: Vec<String> = judged.iter().filter_map(|s| manager::card_id_of(s)).filter(|id| resolved.iter().any(|c| &c.0 == id) && !closed.contains(&id.as_str())).collect();
     let share = if resolved.is_empty() { 0.0 } else { 100.0 * (closed.len() + alone.len()) as f64 / resolved.len() as f64 };
     out.push(mk("needless_cards", share, !resolved.is_empty(), format!("closed without an answer in 24 h: [{}]; answered {}; judged decidable alone: [{}]", closed.join(", "), resolved.len() - closed.len(), alone.join(", "))));
-
     // Satisfaction from the owner-mood scores of the last 24 h, per owner message; judged from what the owner writes anyway, never asked.
     let moods = app.query("SELECT label, COUNT(*) FROM scores WHERE eval = 'owner-mood' AND at >= ?1 GROUP BY label", [&since], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)));
     let mood = |label: &str| moods.iter().find(|m| m.0 == label).map(|m| m.1).unwrap_or(0);
@@ -150,13 +131,11 @@ fn compute(app: &Shared) -> Vec<Metric> {
     out.push(mk("satisfaction", sat, msgs > 0 && !moods.is_empty(), facts));
     out
 }
-
 fn describe(m: &Metric) -> String {
     let target = m.target.map(|t| format!(" (target: {} {t})", if m.at_least { "at least" } else { "at most" })).unwrap_or_default();
     let facts = if m.facts.is_empty() { String::new() } else { format!(". Facts: {}", m.facts) };
     format!("{} [{}] is {}{}{}", m.label, m.id, m.value, target, facts)
 }
-
 /// One metric's red episode — since when (the manager was told then) and whether its review ran — kept in `kv` (`metric_red:<id>` = "<since>@<reviewed>") so a daemon restart neither announces `metric.red` again nor repeats the review of a measure already red; back to green clears it. Returns (fresh, review due, since).
 fn episode(app: &Shared, id: &str, red: bool, now: u64, after: u64) -> (bool, bool, Option<u64>) {
     let key = format!("metric_red:{id}");
@@ -167,7 +146,6 @@ fn episode(app: &Shared, id: &str, red: bool, now: u64, after: u64) -> (bool, bo
     let _ = (red && (cur.is_none() || due)).then(|| app.set_kv(&key, Some(&format!("{since}@{}", due as u8))));
     (red && cur.is_none(), due, red.then_some(since))
 }
-
 /// One computation: episodes opened, fixed, noted and reviewed; the page gets the result.
 fn tick(app: &Shared) {
     let iso = |s: u64| chrono::DateTime::from_timestamp(s as i64, 0).map(|d| d.format("%Y-%m-%dT%H:%M:%SZ").to_string()).unwrap_or_default();
@@ -196,11 +174,9 @@ fn tick(app: &Shared) {
     let _ = (!due.is_empty() && !ceo.is_empty() && today < max).then(|| start_review(app, ceo, due.iter().map(|d| d.0).collect::<Vec<_>>().join(","), due.iter().map(|d| d.1.as_str()).collect::<Vec<_>>().join("\n")));
     app.emit("metrics", payload(app));
 }
-
 fn payload(app: &Shared) -> Value {
     json!({"metrics": BOOK.lock().unwrap().last.as_array().cloned().unwrap_or_default(), "reviews": app.recent("ceo_reviews", &["id", "at", "metric", "text", "factory", "role_hash"], None, 10), "reviewing": REVIEWING.load(Ordering::SeqCst)})
 }
-
 /// Who reviews a long red stretch, and after how many seconds: the turn role of the delayed `metric.red` route (its `after_minutes`, or the role's `review_after_minutes`); without one, any turn role when asked, and never by itself.
 fn delayed_review(app: &Shared) -> (String, u64) {
     let f = &app.cfg().factory;
@@ -209,7 +185,6 @@ fn delayed_review(app: &Shared) -> (String, u64) {
         .find(|r| f.role::<String>(&r.0, "session").as_deref() == Some("turn"))
         .map_or_else(|| (f.find_role("turn", None).unwrap_or_default(), u64::MAX), |r| (r.0.clone(), r.4.or_else(|| f.role::<u64>(&r.0, "review_after_minutes")).unwrap_or(15) * 60))
 }
-
 fn start_review(app: &Shared, role: String, metric: String, why: String) {
     let Some(()) = (!REVIEWING.swap(true, Ordering::SeqCst)).then_some(()) else { return };
     let app = app.clone();
@@ -225,7 +200,6 @@ fn start_review(app: &Shared, role: String, metric: String, why: String) {
         app.emit("review", json!({"running": false})); // the page refetches the metrics on it, reviews included
     });
 }
-
 /// The facts a CEO pass reads: the red metrics (or all of them, on the scheduled daily pass), the measures and eval scores by factory version (the stamps), the last lanes with their stamp, failing checks, plan progress, owner questions.
 fn brief(app: &Shared, why: &str) -> String {
     let mut lanes: Vec<Lane> = app.lanes.lock().unwrap().values().cloned().collect();
@@ -254,7 +228,6 @@ fn brief(app: &Shared, why: &str) -> String {
     let qs: String = owner_questions(app).iter().map(|q| format!("- {q}\n")).collect();
     format!("# Red metrics\n{why}\n\n# By factory version (oldest first)\n{versions}# Eval scores by factory version\n{scores}# Cards and events by factory version and kind\n{stamped}\n# Last lanes (newest first: id, status, project:step, item, tries, created, factory stamp, note)\n{lanes}\n# Failing checks (last 24 h)\n{runs}\n# Plans\n{plans}\n# Open owner questions\n{qs}")
 }
-
 pub fn start(app: Shared) {
     tokio::spawn(async move {
         loop {
@@ -263,7 +236,6 @@ pub fn start(app: Shared) {
         }
     });
 }
-
 /// The page's "CEO now": the CEO turn role runs at once, asked by the owner (it does not count toward its `max_per_day`).
 async fn review_now(State(app): State<Shared>) -> crate::app::R {
     let role = delayed_review(&app).0;
@@ -271,11 +243,9 @@ async fn review_now(State(app): State<Shared>) -> crate::app::R {
     start_review(&app, role, "owner".into(), "The owner asked for a CEO pass now.".into());
     Ok(Json(json!({"ok": true})))
 }
-
 pub fn routes() -> Router<Shared> {
     Router::new().route("/api/metrics", get(|State(app): State<Shared>| async move { Json(payload(&app)) })).route("/api/review", axum::routing::post(review_now))
 }
-
 #[cfg(test)]
 #[path = "../checks/metrics.rs"]
 mod tests;

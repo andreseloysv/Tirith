@@ -187,6 +187,32 @@ async fn agent_say_is_not_the_owner_over_http() {
 }
 
 #[test]
+fn progress_line_never_sends_a_raw_command_when_a_summary_exists() {
+    let bash = serde_json::json!({"command": "curl -H 'Authorization: Bearer secret' https://example.com", "description": "Check the service is up"});
+    assert_eq!(super::progress_line("Bash", &bash), "Bash: Check the service is up", "the tool's own summary, not its command");
+    assert_eq!(super::progress_line("Read", &serde_json::json!({"file_path": "/repo/src/main.rs"})), "Read: /repo/src/main.rs");
+    assert_eq!(super::progress_line("Bash", &serde_json::json!({"command": "rm -rf /tmp/x"})), "Bash", "no summary: only the tool's name, still no raw command");
+    assert_eq!(super::progress_line("Grep", &serde_json::json!({"pattern": "typing\nsecond line"})), "Grep: typing", "one short line");
+}
+
+#[test]
+fn typing_rooms_are_the_turns_rooms_alone() {
+    let home = std::env::temp_dir().join(format!("tirith-typing-rooms-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&home);
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::write(home.join("config.toml"), format!("[[projects]]\nid = \"typingturn\"\nrepo = \"{}\"\n", home.display())).unwrap();
+    let app = crate::app::App::open_at(home.clone());
+    // A turn a room started shows its progress in that room, also when the turn is not marked for the phones.
+    super::talk("typingturn", |t| (t.reply_to, t.phones) = (["sealed-room".to_string()].into(), false));
+    assert_eq!(super::typing_rooms(&app, "typingturn"), ["sealed-room"]);
+    // A page turn with no rooms and no phone mark writes in no room.
+    super::talk("typingturn", |t| (t.reply_to, t.phones) = (Default::default(), false));
+    assert!(super::typing_rooms(&app, "typingturn").is_empty(), "a turn without rooms emits no control");
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
 fn card_id_of_reads_the_card_an_event_line_names() {
     assert_eq!(super::card_id_of("Card o12 closed by the manager: ya no hace falta").as_deref(), Some("o12"));
     assert_eq!(super::card_id_of("The owner answered o3 (decision: ¿sigo?): sí").as_deref(), Some("o3"));
