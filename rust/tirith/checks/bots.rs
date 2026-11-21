@@ -100,3 +100,17 @@ fn skills_list_the_folders_with_a_skill_and_the_shared_links_only_when_asked() {
     assert_eq!(super::skills(&own, true)[1].1, "shared");
     let _ = std::fs::remove_dir_all(&root);
 }
+
+#[test]
+fn bots_written_at_the_end() {
+    // A config.toml with several [[projects]], a bot's role, face and route between them, and an empty [roles] header at the end.
+    let old = "# top comment\n[server]\nport = 7799\n\n[[projects]]\nname = \"a\" # keep\n\n[roles.bot-abc123]\nextends = \"manager\"\nscope = \"own\"\n\n[roles.bot-abc123.face]\nshape = \"drop\"\n\n[[routes]]\non = \"schedule\"\nto = \"bot-abc123\"\n\n[[projects]]\nname = \"b\"\n\n[roles]\n";
+    let bots = json!([{"id": "abc123", "name": "N", "shape": "drop", "color": "#22d3ee", "routines": [{"id": "r1", "title": "T", "prompt": "P", "days": [1], "at": "08:00", "on": true}]}]);
+    let text = super::written(old, bots.as_array().unwrap()).unwrap();
+    let at = |s: &str| text.find(s).unwrap_or_else(|| panic!("{s} missing:\n{text}"));
+    assert!(at("[roles.bot-abc123]") > at("name = \"b\"") && at("[roles.bot-abc123.face]") > at("[roles.bot-abc123]") && at("[[routes]]") > at("[roles.bot-abc123.face]"), "bots after the owner's sections:\n{text}");
+    assert_eq!((text.matches("[roles]").count(), text.matches("[[routes]]").count(), text.matches("[roles.bot-abc123]").count()), (0, 1, 1), "no empty header:\n{text}");
+    assert!(text.contains("# top comment") && text.contains("name = \"a\" # keep"), "comments stay:\n{text}");
+    assert_eq!(super::written(&text, bots.as_array().unwrap()).unwrap(), text, "writing again changes nothing");
+    assert!(!super::written(&text, &[]).unwrap().contains("bot-abc123"));
+}
