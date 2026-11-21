@@ -21,6 +21,7 @@ mod rooms;
 mod rules;
 mod sandbox;
 mod server;
+mod teach;
 mod turns;
 
 fn main() {

@@ -11,8 +11,13 @@ pub(super) fn set_port(port: u16) {
     let _ = PORT.set(port);
 }
 
-/// A browser page from another origin may not call the API (no CSRF against 127.0.0.1). It also checks Host, so a DNS-rebinding page (Host: evil.example) cannot read the API either.
+/// A browser page from another origin may not call the API (no CSRF against 127.0.0.1). It also checks Host, so a DNS-rebinding page (Host: evil.example) cannot read the API either. Tirith's own extension may call the teach API only, where its token is checked.
 pub(super) async fn same_origin(req: Request, next: Next) -> Response {
+    let extension = req.uri().path().starts_with("/api/teach/")
+        && req
+            .headers()
+            .get("origin")
+            .is_some_and(|o| o == crate::teach::ORIGIN);
     let ok = origin_host_ok(
         req.headers()
             .get("host")
@@ -22,11 +27,15 @@ pub(super) async fn same_origin(req: Request, next: Next) -> Response {
             .map(|v| v.to_str().unwrap_or("\u{0}")),
         PORT.get().copied().unwrap_or(0),
     );
-    if ok {
+    if ok || extension && host_ok(req.headers().get("host"), PORT.get().copied().unwrap_or(0)) {
         next.run(req).await
     } else {
         (StatusCode::FORBIDDEN, "foreign origin").into_response()
     }
+}
+
+fn host_ok(host: Option<&axum::http::HeaderValue>, port: u16) -> bool {
+    origin_host_ok(host.map(|v| v.to_str().unwrap_or("\u{0}")), None, port)
 }
 
 pub(super) fn origin_host_ok(host: Option<&str>, origin: Option<&str>, port: u16) -> bool {
