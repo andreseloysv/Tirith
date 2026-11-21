@@ -1,6 +1,6 @@
 //! Adding a project (the page's "+", `tirith project add`): git repository, commit guard, a plan with a first step, then a `[[projects]]` block appended to config.toml.
 
-use crate::app::{bad, git, Shared, R};
+use crate::app::{bad, git, App, Shared, R};
 use crate::config::{expand, home_dir, Project};
 use axum::routing::{get, post};
 use axum::{extract::State, Json, Router};
@@ -15,6 +15,16 @@ pub(crate) fn color_for(p: &Project) -> String {
 }
 /// One config.toml write at a time, so two adds never lose one another; one folder picker on screen at a time.
 pub(crate) static WRITING: std::sync::Mutex<()> = std::sync::Mutex::new(());
+/// Rewrites config.toml with `edit` under that lock and reloads it; a file that is not there yet reads as empty, and a reading or writing error names the file.
+pub(crate) fn rewrite(app: &App, edit: impl FnOnce(&str) -> Result<String, String>) -> Result<(), String> {
+    let _writing = WRITING.lock().unwrap();
+    let path = app.home.join("config.toml");
+    let fail = |e: std::io::Error| format!("{}: {e}", path.display());
+    let text = std::fs::read_to_string(&path).or_else(|e| if e.kind() == std::io::ErrorKind::NotFound { Ok(String::new()) } else { Err(e) }).map_err(fail)?;
+    std::fs::write(&path, edit(&text)?).map_err(fail)?;
+    app.reload_config(true);
+    Ok(())
+}
 static PICKING: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 /// AppKit's open panel through JXA, floating above every window: since macOS 14 a helper process may not come to the front, so AppleScript's `choose folder` opened behind the page. It prints the folder, or nothing when cancelled.
 const PANEL: &str = include_str!("../assets/panel.js");
@@ -29,18 +39,17 @@ fn folder(raw: &str, projects: &[Project], tirith: &Path) -> Result<PathBuf, Str
     let missing = if path.is_absolute() { format!("there is no folder {raw:?}") } else { format!("{raw:?} is not the full path of a folder (/Users/… or ~/…)") };
     let dir = path.canonicalize().ok().filter(|d| path.is_absolute() && d.is_dir()).ok_or(missing)?;
     let temp = ["/tmp", "/private/tmp", "/var/tmp", "/private/var/tmp", "/var/folders", "/private/var/folders"].map(PathBuf::from).into_iter().chain([std::env::temp_dir()]);
-    let why = if temp.map(|t| t.canonicalize().unwrap_or(t)).any(|t| dir.starts_with(t)) {
-        Some("is a temporary folder".to_string())
-    } else if home_dir().canonicalize().unwrap_or_else(|_| home_dir()).starts_with(&dir) {
-        Some("holds your home folder".into())
-    } else if dir.components().any(|c| c.as_os_str() == ".git") || dir.join(".git").is_file() {
-        Some("is a git worktree or inside a .git folder".into())
-    } else if dir.starts_with(tirith.canonicalize().unwrap_or_else(|_| tirith.into())) {
-        Some("is Tirith's own folder (the agents' copies of the projects live there)".into())
-    } else {
-        let named = |p: &Project, what: &str| format!("{what} {}", if p.name.is_empty() { &p.id } else { &p.name });
-        projects.iter().filter(|p| !p.repo.is_empty() && p.repo() != dir).find_map(|p| dir.starts_with(p.repo()).then(|| named(p, "is inside the project")).or_else(|| p.repo().starts_with(&dir).then(|| named(p, "holds the project"))))
-    };
+    let named = |p: &Project, what: &str| format!("{what} {}", if p.name.is_empty() { &p.id } else { &p.name });
+    let why = temp
+        .map(|t| t.canonicalize().unwrap_or(t))
+        .any(|t| dir.starts_with(t))
+        .then(|| "is a temporary folder".to_string())
+        .or_else(|| home_dir().canonicalize().unwrap_or_else(|_| home_dir()).starts_with(&dir).then(|| "holds your home folder".into()))
+        .or_else(|| (dir.components().any(|c| c.as_os_str() == ".git") || dir.join(".git").is_file()).then(|| "is a git worktree or inside a .git folder".into()))
+        .or_else(|| dir.starts_with(tirith.canonicalize().unwrap_or_else(|_| tirith.into())).then(|| "is Tirith's own folder (the agents' copies of the projects live there)".into()))
+        .or_else(|| {
+            projects.iter().filter(|p| !p.repo.is_empty() && p.repo() != dir).find_map(|p| dir.starts_with(p.repo()).then(|| named(p, "is inside the project")).or_else(|| p.repo().starts_with(&dir).then(|| named(p, "holds the project"))))
+        });
     why.map_or(Ok(()), |w| Err(format!("{} {w}: pick a project's own folder", dir.display())))?;
     Ok(dir)
 }

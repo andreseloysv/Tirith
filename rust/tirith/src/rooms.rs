@@ -149,9 +149,7 @@ pub fn start(app: Shared) {
         let (mut said, mut tick) = (String::new(), 0u32);
         loop {
             // At start and then every hour (120 rounds of at most 30 s) the attachments older than 24 h go.
-            if tick % 120 == 0 {
-                expire_files(&app.home.join("rooms/files"), Duration::from_secs(86400));
-            }
+            let _ = (tick % 120 == 0).then(|| expire_files(&app.home.join("rooms/files"), Duration::from_secs(86400)));
             tick += 1;
             for p in cfg_get::<Vec<PublicCfg>>(&app.cfg().raw, &["rooms"]).unwrap_or_default().into_iter().filter(|p| !p.id.is_empty()) {
                 let title = if p.title.is_empty() { p.id.clone() } else { p.title.clone() };
@@ -162,6 +160,7 @@ pub fn start(app: Shared) {
                 }
             }
             provide(&app, &mut said).await;
+            manager::typing_heartbeats(); // about every 30 s: a busy turn's phones are shown it is still typing
             let ids: Vec<String> = ROOMS.lock().unwrap().keys().cloned().collect();
             ids.iter().for_each(|id| watch(&app, id));
             let _ = tokio::time::timeout(Duration::from_secs(30), WAKE.notified()).await;
@@ -214,9 +213,7 @@ async fn provide(app: &Shared, said: &mut String) {
             r.devices.extend(new);
             store(app, r);
         }
-        if std::mem::replace(&mut r.listed, sig.clone()) != sig {
-            queue(&r.id, &format!("tirith-rooms {list}"), r.devices.iter().map(|d| d.public.clone()).collect());
-        }
+        let _ = (std::mem::replace(&mut r.listed, sig.clone()) != sig).then(|| queue(&r.id, &format!("tirith-rooms {list}"), r.devices.iter().map(|d| d.public.clone()).collect()));
     }
 }
 fn watch(app: &Shared, id: &str) {
@@ -428,24 +425,40 @@ async fn send(app: &Shared, r: &Room, text: &str, readers: &[String]) -> Result<
 fn queue(id: &str, text: &str, readers: Vec<String>) {
     let _ = (!text.trim().is_empty() && !readers.is_empty()).then(|| OUT.get().map(|tx| tx.send((id.to_string(), text.to_string(), readers))));
 }
-/// One turn's live progress for the phones in its rooms, as `tirith-chat` controls a phone page that does not know them ignores: typing on at the start, at most one short tool line every 5 s (never the same twice in a row, 120 chars at most), typing off at the end. Each call says what to send, to the turn's rooms alone; no rooms, nothing. It is no message: `handle` drops `tirith-chat`, so it keeps no history, counts no streak and wakes no phone like an answer does.
+/// One turn's live progress for the phones in its rooms, as `tirith-chat` controls a phone page that does not know them ignores: typing on at the start, at most one short tool line every 5 s (never the same twice in a row, 120 chars at most), its current state resent as a heartbeat when 30 s passed since the last control (so a long command without lines never looks stopped and a reopened phone sees it again), typing off at the end. Another message for the running turn, or a new room for it, reannounces that same state without resetting its line or repeating its start. Each call says what to send, to the turn's rooms alone; no rooms, nothing. It is no message: `handle` drops `tirith-chat`, so it keeps no history, counts no streak and wakes no phone like an answer does.
 #[derive(Default)]
 pub(crate) struct Typing {
     rooms: Vec<String>,
     last: String,
     at: Option<u64>,
+    sent: Option<u64>,
 }
 impl Typing {
-    pub(crate) fn start(&mut self, rooms: Vec<String>) -> Option<(Vec<String>, Value)> {
-        (self.rooms.is_empty() && !rooms.is_empty()).then_some(())?;
-        *self = Typing { rooms, ..Default::default() };
-        Some((self.rooms.clone(), json!({"v": 1, "typing": 1})))
+    fn current(&self) -> (Vec<String>, Value) {
+        (self.rooms.clone(), if self.last.is_empty() { json!({"v": 1, "typing": 1}) } else { json!({"v": 1, "typing": 1, "line": self.last}) })
+    }
+    /// The turn's start, in `rooms`; with `again`, another message for a turn that already runs. A running turn takes in any room it gains and shows its current state again only for such a room or with `again`: nobody sees a second start, and its line is never reset.
+    pub(crate) fn start(&mut self, rooms: Vec<String>, now: u64, again: bool) -> Option<(Vec<String>, Value)> {
+        if self.rooms.is_empty() {
+            (!rooms.is_empty()).then_some(())?;
+            *self = Typing { rooms, sent: Some(now), ..Default::default() };
+            return Some(self.current());
+        }
+        let new: Vec<String> = rooms.into_iter().filter(|r| !self.rooms.contains(r)).collect();
+        let added = !new.is_empty();
+        self.rooms.extend(new);
+        (again || added).then(|| (self.sent = Some(now), self.current()).1)
+    }
+    pub(crate) fn heartbeat(&mut self, now: u64) -> Option<(Vec<String>, Value)> {
+        (!self.rooms.is_empty() && self.sent.is_none_or(|sent| now.saturating_sub(sent) >= 30)).then_some(())?;
+        self.sent = Some(now);
+        Some(self.current())
     }
     pub(crate) fn line(&mut self, line: &str, now: u64) -> Option<(Vec<String>, Value)> {
         let line: String = line.trim().chars().take(120).collect();
         (!self.rooms.is_empty() && !line.is_empty() && line != self.last && self.at.is_none_or(|at| now.saturating_sub(at) >= 5)).then_some(())?;
-        (self.last, self.at) = (line.clone(), Some(now));
-        Some((self.rooms.clone(), json!({"v": 1, "typing": 1, "line": line})))
+        (self.last, self.at, self.sent) = (line, Some(now), Some(now));
+        Some(self.current())
     }
     pub(crate) fn stop(&mut self) -> Option<(Vec<String>, Value)> {
         let rooms = std::mem::take(&mut self.rooms);
