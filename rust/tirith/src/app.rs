@@ -262,9 +262,7 @@ fn path_with_cargo(exe_dir: Option<&Path>, rest: &str, home: &Path, tool_dirs: &
     let cargo = home.join(".cargo/bin");
     let mut parts: Vec<String> = exe_dir.iter().map(|d| d.display().to_string()).chain(rest.split(':').filter(|p| !p.is_empty()).map(String::from)).collect();
     for dir in [cargo, home.join(".local/bin")].into_iter().chain(tool_dirs.iter().map(PathBuf::from)) {
-        if dir.is_dir() && !parts.iter().any(|p| Path::new(p) == dir) {
-            parts.push(dir.display().to_string());
-        }
+        let _ = (dir.is_dir() && !parts.iter().any(|p| Path::new(p) == dir)).then(|| parts.push(dir.display().to_string()));
     }
     parts.join(":")
 }

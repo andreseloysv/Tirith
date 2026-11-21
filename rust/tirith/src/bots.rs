@@ -108,13 +108,7 @@ fn learn(app: &App, id: &str, b: &Value) -> Result<Value, String> {
 }
 /// Writes the bots into config.toml and reloads it.
 fn store(app: &App, bots: &[Value]) -> Result<(), String> {
-    let _writing = crate::projects::WRITING.lock().unwrap();
-    let path = app.home.join("config.toml");
-    let fail = |e: std::io::Error| format!("{}: {e}", path.display());
-    let text = std::fs::read_to_string(&path).or_else(|e| if e.kind() == std::io::ErrorKind::NotFound { Ok(String::new()) } else { Err(e) }).map_err(fail)?;
-    std::fs::write(&path, written(&text, bots)?).map_err(fail)?;
-    app.reload_config(true);
-    Ok(())
+    crate::projects::rewrite(app, |text| written(text, bots))
 }
 /// The text of config.toml (`text` as it is) with the bots laid into it by toml_edit, so its other sections and their comments stay as they are: each of the owner's bots a `[roles.bot-<id>]` that extends the manager with its own scope, name, face, session and access, each routine a `[[routes]]` on `schedule` and each of its routes a `[[routes]]` of its own; a bot not in `bots` goes, with its routes. A system bot has no role of its own here: only what the owner changed of it (`dirty`: its name, face, show, session and access, and its routes with them) is laid into its factory role's table (a real table, created with `entry` — an inline one would make a later `[roles.bot-…]` header unparseable) as a layer over the factory, its other keys (a model, say) untouched; an untouched system bot's routes in the file stay as they are.
 fn written(text: &str, bots: &[Value]) -> Result<String, String> {
