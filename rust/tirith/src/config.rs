@@ -5,13 +5,18 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 pub fn expand(p: &str) -> PathBuf {
-    p.strip_prefix("~/").map_or_else(|| PathBuf::from(p), |rest| home_dir().join(rest))
+    p.strip_prefix("~/")
+        .map_or_else(|| PathBuf::from(p), |rest| home_dir().join(rest))
 }
 pub fn home_dir() -> PathBuf {
-    std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("."))
+    std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("."))
 }
 pub fn tirith_home() -> PathBuf {
-    std::env::var_os("TIRITH_HOME").map(PathBuf::from).unwrap_or_else(|| home_dir().join(".tirith"))
+    std::env::var_os("TIRITH_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| home_dir().join(".tirith"))
 }
 
 #[derive(Deserialize, Clone, Default)]
@@ -36,7 +41,10 @@ impl Project {
     /// Where the lanes' worktrees live: `<tirith home>/lanes/<id>`, out of the owner's own folders.
     pub fn lanes_dir(&self) -> PathBuf {
         let home = tirith_home();
-        home.canonicalize().unwrap_or(home).join("lanes").join(&self.id)
+        home.canonicalize()
+            .unwrap_or(home)
+            .join("lanes")
+            .join(&self.id)
     }
 }
 
@@ -57,7 +65,12 @@ pub struct Config {
 }
 
 pub fn get<T: DeserializeOwned>(t: &toml::Table, path: &[&str]) -> Option<T> {
-    path[1..].iter().try_fold(t.get(path[0])?, |v, key| v.get(key))?.clone().try_into().ok()
+    path[1..]
+        .iter()
+        .try_fold(t.get(path[0])?, |v, key| v.get(key))?
+        .clone()
+        .try_into()
+        .ok()
 }
 
 /// Yesterday's key -> today's: `[models.*]` and `[ceo]` become `[roles.*]` and `[metrics.*]`, the `[lanes]`/`[merge]`/`[plan]` limits become `[limits]`.
@@ -65,7 +78,9 @@ const MOVES: &str = concat!("models.manager>roles.manager;models.workers>roles.w
 
 fn take(t: &mut toml::Table, path: &[&str]) -> Option<toml::Value> {
     let (first, rest) = path.split_first()?;
-    let Some(()) = (!rest.is_empty()).then_some(()) else { return t.remove(*first) };
+    let Some(()) = (!rest.is_empty()).then_some(()) else {
+        return t.remove(*first);
+    };
     let child = t.get_mut(*first)?.as_table_mut()?;
     let v = take(child, rest)?;
     let _ = child.is_empty().then(|| t.remove(*first));
@@ -78,14 +93,26 @@ fn put(t: &mut toml::Table, path: &[&str], v: toml::Value) {
         let e = t.entry(path[0]).or_insert_with(|| v.clone());
         let old = std::mem::replace(e, v);
         crate::factory::merge(e, &old);
-    } else if let Some(child) = t.entry(path[0]).or_insert_with(|| toml::Value::Table(Default::default())).as_table_mut() {
+    } else if let Some(child) = t
+        .entry(path[0])
+        .or_insert_with(|| toml::Value::Table(Default::default()))
+        .as_table_mut()
+    {
         put(child, &path[1..], v);
     }
 }
 
 /// Moves yesterday's sections under their new names (a key already written under its new name wins); true when anything moved.
 pub fn migrate(t: &mut toml::Table) -> bool {
-    MOVES.split(';').filter_map(|m| m.split_once('>')).filter_map(|(from, to)| take(t, &from.split('.').collect::<Vec<_>>()).map(|v| put(t, &to.split('.').collect::<Vec<_>>(), v))).count() > 0
+    MOVES
+        .split(';')
+        .filter_map(|m| m.split_once('>'))
+        .filter_map(|(from, to)| {
+            take(t, &from.split('.').collect::<Vec<_>>())
+                .map(|v| put(t, &to.split('.').collect::<Vec<_>>(), v))
+        })
+        .count()
+        > 0
 }
 
 impl Config {
@@ -95,24 +122,72 @@ impl Config {
         let (mut t, parsed) = match text.parse::<toml::Table>() {
             Ok(t) => (t, None),
             Err(_) if text.trim().is_empty() => (Default::default(), None),
-            Err(e) => (Default::default(), Some(format!("config.toml does not parse ({e}); the defaults run instead"))),
+            Err(e) => (
+                Default::default(),
+                Some(format!(
+                    "config.toml does not parse ({e}); the defaults run instead"
+                )),
+            ),
         };
         migrate(&mut t);
         let factory = crate::factory::load(&t);
         // Keys nothing reads any more, named for the owner: an unknown section, or a leftover `[models.*]` role (`choices`/`efforts` lists stay). The factory-shaped sections are checked by the factory loader itself.
-        const KNOWN: [&str; 22] =
-            ["projects", "agents", "launch", "models", "server", "merge", "autopilot", "app", "network", "messenger", "owner", "rooms", "guard", "factory", "roles", "limits", "plan", "cards", "metrics", "routes", "evals", "browser"];
-        let mut unknown: Vec<String> = t.keys().filter(|k| !KNOWN.contains(&k.as_str())).cloned().collect();
-        unknown.extend(t.get("models").and_then(|v| v.as_table()).into_iter().flat_map(|m| m.keys()).filter(|k| !matches!(k.as_str(), "choices" | "efforts")).map(|k| format!("models.{k}")));
-        let error = [parsed, crate::factory::error().map(|e| format!("factory.invalid: {e} (the last good factory keeps running)")), (!unknown.is_empty()).then(|| format!("config.toml has keys nothing reads: {}", unknown.join(", ")))]
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>();
+        const KNOWN: [&str; 22] = [
+            "projects",
+            "agents",
+            "launch",
+            "models",
+            "server",
+            "merge",
+            "autopilot",
+            "app",
+            "network",
+            "messenger",
+            "owner",
+            "rooms",
+            "guard",
+            "factory",
+            "roles",
+            "limits",
+            "plan",
+            "cards",
+            "metrics",
+            "routes",
+            "evals",
+            "browser",
+        ];
+        let mut unknown: Vec<String> = t
+            .keys()
+            .filter(|k| !KNOWN.contains(&k.as_str()))
+            .cloned()
+            .collect();
+        unknown.extend(
+            t.get("models")
+                .and_then(|v| v.as_table())
+                .into_iter()
+                .flat_map(|m| m.keys())
+                .filter(|k| !matches!(k.as_str(), "choices" | "efforts"))
+                .map(|k| format!("models.{k}")),
+        );
+        let error = [
+            parsed,
+            crate::factory::error()
+                .map(|e| format!("factory.invalid: {e} (the last good factory keeps running)")),
+            (!unknown.is_empty())
+                .then(|| format!("config.toml has keys nothing reads: {}", unknown.join(", "))),
+        ]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
         Config {
             raw: t.clone(),
             projects: get(&t, &["projects"]).unwrap_or_default(),
             launch: get(&t, &["launch", "command"]).unwrap_or_default(),
-            port: std::env::var("TIRITH_PORT").ok().and_then(|p| p.parse().ok()).or_else(|| get(&t, &["server", "port"])).unwrap_or(7717),
+            port: std::env::var("TIRITH_PORT")
+                .ok()
+                .and_then(|p| p.parse().ok())
+                .or_else(|| get(&t, &["server", "port"]))
+                .unwrap_or(7717),
             push: get(&t, &["merge", "push"]).unwrap_or(true),
             autopilot: get(&t, &["autopilot", "enabled"]).unwrap_or(true),
             factory,
@@ -157,11 +232,19 @@ pub struct Manifest {
 
 impl Manifest {
     pub fn load(repo: &Path) -> Manifest {
-        let t: toml::Table = std::fs::read_to_string(repo.join("tirith.toml")).ok().and_then(|s| s.parse().ok()).unwrap_or_default();
+        let t: toml::Table = std::fs::read_to_string(repo.join("tirith.toml"))
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or_default();
         Manifest {
             roadmap: get(&t, &["roadmap"]).unwrap_or_else(|| "docs/TODO.md".into()),
             lane_exclude: get(&t, &["lane_exclude"]).unwrap_or_default(),
-            stages: get::<Vec<toml::Table>>(&t, &["pipelines"]).unwrap_or_default().iter().filter_map(|p| get::<Vec<Stage>>(p, &["stages"])).flatten().collect(),
+            stages: get::<Vec<toml::Table>>(&t, &["pipelines"])
+                .unwrap_or_default()
+                .iter()
+                .filter_map(|p| get::<Vec<Stage>>(p, &["stages"]))
+                .flatten()
+                .collect(),
             rules: get(&t, &["rules"]).unwrap_or_default(),
         }
     }

@@ -10,22 +10,57 @@ pub type Flag<'a> = &'a dyn Fn(&str) -> Option<String>;
 
 /// One request to the daemon; the body on 2xx, the daemon's message otherwise. Inside a Tirith session it names its lane or role, like the hooks do, so the daemon knows an agent (not the owner) is speaking.
 pub fn call(method: &str, path: &str, body: Option<Value>) -> Result<String, String> {
-    let who = [("X-Tirith-Lane", std::env::var("TIRITH_LANE").unwrap_or_default()), ("X-Tirith-Role", std::env::var("TIRITH_ROLE").unwrap_or_default())];
-    call_with(method, path, body.map(|b| b.to_string()).unwrap_or_default(), &who, Duration::from_secs(30))
+    let who = [
+        (
+            "X-Tirith-Lane",
+            std::env::var("TIRITH_LANE").unwrap_or_default(),
+        ),
+        (
+            "X-Tirith-Role",
+            std::env::var("TIRITH_ROLE").unwrap_or_default(),
+        ),
+    ];
+    call_with(
+        method,
+        path,
+        body.map(|b| b.to_string()).unwrap_or_default(),
+        &who,
+        Duration::from_secs(30),
+    )
 }
-pub fn call_with(method: &str, path: &str, body: String, headers: &[(&str, String)], timeout: Duration) -> Result<String, String> {
-    let addr = SocketAddr::from(([127, 0, 0, 1], crate::config::Config::load_at(&crate::config::tirith_home()).port));
-    let mut s = TcpStream::connect_timeout(&addr, Duration::from_secs(2)).map_err(|_| "tirith is not running: start it with `tirith serve`".to_string())?;
+pub fn call_with(
+    method: &str,
+    path: &str,
+    body: String,
+    headers: &[(&str, String)],
+    timeout: Duration,
+) -> Result<String, String> {
+    let addr = SocketAddr::from((
+        [127, 0, 0, 1],
+        crate::config::Config::load_at(&crate::config::tirith_home()).port,
+    ));
+    let mut s = TcpStream::connect_timeout(&addr, Duration::from_secs(2))
+        .map_err(|_| "tirith is not running: start it with `tirith serve`".to_string())?;
     s.set_read_timeout(Some(timeout)).ok();
-    let extra: String = headers.iter().map(|(k, v)| format!("{k}: {v}\r\n")).collect();
+    let extra: String = headers
+        .iter()
+        .map(|(k, v)| format!("{k}: {v}\r\n"))
+        .collect();
     let req = format!("{method} {path} HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: {}\r\n{extra}Connection: close\r\n\r\n{body}", body.len());
     s.write_all(req.as_bytes()).map_err(|e| e.to_string())?;
     let mut raw = Vec::new();
     s.read_to_end(&mut raw).map_err(|e| e.to_string())?;
     let raw = String::from_utf8_lossy(&raw);
     let (head, body) = raw.split_once("\r\n\r\n").unwrap_or((&raw, ""));
-    let code: u16 = head.split_whitespace().nth(1).and_then(|c| c.parse().ok()).unwrap_or(0);
-    (200..300).contains(&code).then(|| body.to_string()).ok_or_else(|| body.trim().to_string())
+    let code: u16 = head
+        .split_whitespace()
+        .nth(1)
+        .and_then(|c| c.parse().ok())
+        .unwrap_or(0);
+    (200..300)
+        .contains(&code)
+        .then(|| body.to_string())
+        .ok_or_else(|| body.trim().to_string())
 }
 
 /// One request whose JSON answer is read as a value.
@@ -35,6 +70,18 @@ pub fn call_json(method: &str, path: &str, body: Option<Value>) -> Result<Value,
 
 pub fn print(r: Result<String, String>) -> Result<(), String> {
     let v: Value = serde_json::from_str(&r?).unwrap_or_default();
-    println!("{}", if v.get("id").is_some() { format!("{} {} — {}", v["id"].as_str().unwrap_or(""), v["status"].as_str().unwrap_or(""), v["item"].as_str().unwrap_or("")) } else { "ok".into() });
+    println!(
+        "{}",
+        if v.get("id").is_some() {
+            format!(
+                "{} {} — {}",
+                v["id"].as_str().unwrap_or(""),
+                v["status"].as_str().unwrap_or(""),
+                v["item"].as_str().unwrap_or("")
+            )
+        } else {
+            "ok".into()
+        }
+    );
     Ok(())
 }

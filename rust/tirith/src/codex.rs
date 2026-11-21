@@ -8,8 +8,13 @@ use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
 pub fn catalog() -> Vec<Value> {
-    let home = std::env::var_os("CODEX_HOME").map(std::path::PathBuf::from).unwrap_or_else(|| crate::config::home_dir().join(".codex"));
-    let data: Value = std::fs::read(home.join("models_cache.json")).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
+    let home = std::env::var_os("CODEX_HOME")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| crate::config::home_dir().join(".codex"));
+    let data: Value = std::fs::read(home.join("models_cache.json"))
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or_default();
     data["models"]
         .as_array()
         .into_iter()
@@ -20,89 +25,257 @@ pub fn catalog() -> Vec<Value> {
 }
 
 pub fn options(cfg: &crate::config::Config, argv: &mut Vec<String>, effort: Option<&str>) {
-    crate::config::get::<String>(&cfg.raw, &["agents", "codex", "profile"]).into_iter().for_each(|profile| drop(argv.splice(1..1, ["--profile".into(), profile])));
+    crate::config::get::<String>(&cfg.raw, &["agents", "codex", "profile"])
+        .into_iter()
+        .for_each(|profile| drop(argv.splice(1..1, ["--profile".into(), profile])));
     if let Some(e) = effort {
         // Replace only this config key; unrelated -c overrides must survive.
         argv.retain(|a| !a.starts_with("--config=model_reasoning_effort="));
         for i in (1..argv.len()).rev() {
-            let _ = (argv[i].starts_with("model_reasoning_effort=") && matches!(argv[i - 1].as_str(), "-c" | "--config")).then(|| argv.drain(i - 1..=i));
+            let _ = (argv[i].starts_with("model_reasoning_effort=")
+                && matches!(argv[i - 1].as_str(), "-c" | "--config"))
+            .then(|| argv.drain(i - 1..=i));
         }
-        argv.push(format!("--config=model_reasoning_effort={}", toml::Value::String(e.into())));
+        argv.push(format!(
+            "--config=model_reasoning_effort={}",
+            toml::Value::String(e.into())
+        ));
     }
 }
 
 /// The argv of one Muse turn. It runs unattended inside Tirith's own sandbox, so its approvals and inner sandbox are off (`--yolo`, the parallel of the Codex bypass above); a read-only role's file-writing tools are off too.
-fn muse_argv(command: &str, read_only: bool, model: (Option<&str>, Option<&str>), workspace: &str, session: Option<&str>, prompt_file: &str, browser: &[String]) -> Vec<String> {
+fn muse_argv(
+    command: &str,
+    read_only: bool,
+    model: (Option<&str>, Option<&str>),
+    workspace: &str,
+    session: Option<&str>,
+    prompt_file: &str,
+    browser: &[String],
+) -> Vec<String> {
     let (model, effort) = model;
-    let mut a: Vec<String> = [command, "exec", "--json", "--yolo", "--workspace", workspace].map(String::from).to_vec();
-    a.extend(browser.iter().cloned().chain(read_only.then(|| "--disable-write".to_string())));
-    a.extend([("--model", model), ("--reasoning-effort", effort), ("--session-id", session), ("--prompt-file", Some(prompt_file))].into_iter().filter_map(|(f, v)| v.map(|v| [f.to_string(), v.to_string()])).flatten());
+    let mut a: Vec<String> = [
+        command,
+        "exec",
+        "--json",
+        "--yolo",
+        "--workspace",
+        workspace,
+    ]
+    .map(String::from)
+    .to_vec();
+    a.extend(
+        browser
+            .iter()
+            .cloned()
+            .chain(read_only.then(|| "--disable-write".to_string())),
+    );
+    a.extend(
+        [
+            ("--model", model),
+            ("--reasoning-effort", effort),
+            ("--session-id", session),
+            ("--prompt-file", Some(prompt_file)),
+        ]
+        .into_iter()
+        .filter_map(|(f, v)| v.map(|v| [f.to_string(), v.to_string()]))
+        .flatten(),
+    );
     a
 }
 
-fn codex_argv(command: &str, read_only: bool, model: (Option<&str>, Option<&str>), cfg: &crate::config::Config, instructions: &str, resume: Option<&str>, browser: &[String]) -> Vec<String> {
-    let mut a: Vec<String> = [command, "exec", "--json", "--skip-git-repo-check"].map(String::from).to_vec();
-    a.extend(if read_only { vec!["--sandbox".into(), "read-only".into(), "--ephemeral".into()] } else { vec!["--dangerously-bypass-approvals-and-sandbox".into()] });
-    a.extend(browser.iter().cloned().chain(model.0.into_iter().flat_map(|m| ["--model".to_string(), m.to_string()])));
+fn codex_argv(
+    command: &str,
+    read_only: bool,
+    model: (Option<&str>, Option<&str>),
+    cfg: &crate::config::Config,
+    instructions: &str,
+    resume: Option<&str>,
+    browser: &[String],
+) -> Vec<String> {
+    let mut a: Vec<String> = [command, "exec", "--json", "--skip-git-repo-check"]
+        .map(String::from)
+        .to_vec();
+    a.extend(if read_only {
+        vec!["--sandbox".into(), "read-only".into(), "--ephemeral".into()]
+    } else {
+        vec!["--dangerously-bypass-approvals-and-sandbox".into()]
+    });
+    a.extend(
+        browser.iter().cloned().chain(
+            model
+                .0
+                .into_iter()
+                .flat_map(|m| ["--model".to_string(), m.to_string()]),
+        ),
+    );
     options(cfg, &mut a, model.1);
-    a.extend(["-c".to_string(), format!("developer_instructions={}", toml::Value::String(instructions.into()))].into_iter().chain(resume.into_iter().flat_map(|id| ["resume".to_string(), id.to_string()])).chain(["-".to_string()]));
+    a.extend(
+        [
+            "-c".to_string(),
+            format!(
+                "developer_instructions={}",
+                toml::Value::String(instructions.into())
+            ),
+        ]
+        .into_iter()
+        .chain(
+            resume
+                .into_iter()
+                .flat_map(|id| ["resume".to_string(), id.to_string()]),
+        )
+        .chain(["-".to_string()]),
+    );
     a
 }
 
-pub async fn turn(app: &Shared, role: &str, project: &str, resume: Option<&str>, prompt: (&str, &str), mut event: impl FnMut(&Value), started: impl FnOnce(u32)) -> Result<String, String> {
+pub async fn turn(
+    app: &Shared,
+    role: &str,
+    project: &str,
+    resume: Option<&str>,
+    prompt: (&str, &str),
+    mut event: impl FnMut(&Value),
+    started: impl FnOnce(u32),
+) -> Result<String, String> {
     let (instructions, input) = prompt;
     let setting = models::role(app, role); // a bot's conversation passes its own role (its key) here
-    let (muse, name) = if setting.agent == "muse" { (true, "the muse agent") } else { (false, "Codex") };
+    let (muse, name) = if setting.agent == "muse" {
+        (true, "the muse agent")
+    } else {
+        (false, "Codex")
+    };
     let cfg = app.cfg();
     // The role's factory shape, not its name, decides: `access = "read"` runs read-only; a chat role (a bot's key counts as one) keeps the chats' folder and the longer turn.
     let read_only = cfg.factory.role::<String>(role, "access").as_deref() == Some("read");
-    let chat = cfg.factory.role::<String>(role, "session").is_none_or(|s| s == "chat");
+    let chat = cfg
+        .factory
+        .role::<String>(role, "session")
+        .is_none_or(|s| s == "chat");
     let who = if chat { "manager" } else { role };
-    let command = cfg.factory.command(if muse { "muse" } else { "codex" }).ok_or(if muse { "no agent alias 'muse' in config.toml" } else { "Codex is not configured" })?;
-    let dir = if cfg.factory.role::<String>(role, "scope").as_deref() == Some("own") && !chat { app.home.join("manager").join(role) } else { app.home.join(who).join(project) };
+    let command = cfg
+        .factory
+        .command(if muse { "muse" } else { "codex" })
+        .ok_or(if muse {
+            "no agent alias 'muse' in config.toml"
+        } else {
+            "Codex is not configured"
+        })?;
+    let dir = if cfg.factory.role::<String>(role, "scope").as_deref() == Some("own") && !chat {
+        app.home.join("manager").join(role)
+    } else {
+        app.home.join(who).join(project)
+    };
     // Muse takes the message from a file, and a fresh session of it has never seen the role's instructions: they ride in its first message.
     let file = muse.then(|| dir.join(".turn-prompt.txt"));
     let argv = if let Some(file) = &file {
         let _ = std::fs::create_dir_all(&dir);
-        std::fs::write(file, if resume.is_some() { input.to_string() } else { format!("{instructions}\n\n{input}") }).map_err(|e| e.to_string())?;
-        muse_argv(&command, read_only, (setting.model.as_deref(), setting.effort.as_deref()), &dir.display().to_string(), resume, &file.display().to_string(), &models::browser_args_for(app, "muse", false))
+        std::fs::write(
+            file,
+            if resume.is_some() {
+                input.to_string()
+            } else {
+                format!("{instructions}\n\n{input}")
+            },
+        )
+        .map_err(|e| e.to_string())?;
+        muse_argv(
+            &command,
+            read_only,
+            (setting.model.as_deref(), setting.effort.as_deref()),
+            &dir.display().to_string(),
+            resume,
+            &file.display().to_string(),
+            &models::browser_args_for(app, "muse", false),
+        )
     } else {
-        codex_argv(&command, read_only, (setting.model.as_deref(), setting.effort.as_deref()), &cfg, instructions, resume, &models::browser_args_for(app, "codex", false))
+        codex_argv(
+            &command,
+            read_only,
+            (setting.model.as_deref(), setting.effort.as_deref()),
+            &cfg,
+            instructions,
+            resume,
+            &models::browser_args_for(app, "codex", false),
+        )
     };
     let (mut child, mut stdin, stdout) = manager::spawn_chat(app, who, project, argv)?;
     let pid = child.id().unwrap_or(0);
     started(pid);
     let work = async {
         if !muse {
-            stdin.write_all(input.as_bytes()).await.map_err(|e| e.to_string())?
+            stdin
+                .write_all(input.as_bytes())
+                .await
+                .map_err(|e| e.to_string())?
         }
         drop(stdin);
         let mut lines = BufReader::new(stdout).lines();
         let (mut text, mut complete, mut failure) = (String::new(), false, None);
         while let Some(line) = lines.next_line().await.map_err(|e| e.to_string())? {
-            let Ok(msg) = serde_json::from_str::<Value>(&line) else { continue };
+            let Ok(msg) = serde_json::from_str::<Value>(&line) else {
+                continue;
+            };
             event(&msg);
             // Each agent names its event kind its own way; the shapes do not collide.
-            match msg["payload_type"].as_str().or_else(|| msg["type"].as_str()).unwrap_or("") {
-                "item.completed" if msg["item"]["type"] == "agent_message" => text.push_str(&format!("{}\n", msg["item"]["text"].as_str().unwrap_or(""))),
+            match msg["payload_type"]
+                .as_str()
+                .or_else(|| msg["type"].as_str())
+                .unwrap_or("")
+            {
+                "item.completed" if msg["item"]["type"] == "agent_message" => {
+                    text.push_str(&format!("{}\n", msg["item"]["text"].as_str().unwrap_or("")))
+                }
                 "run.output.delta" => text.push_str(msg["payload"]["text"].as_str().unwrap_or("")),
                 t if t.starts_with("run.terminal.") => {
                     complete = msg["payload"]["terminal"] == "completed";
-                    text = msg["payload"]["text"].as_str().filter(|s| !s.is_empty()).map(String::from).unwrap_or(text);
-                    failure = (!complete).then(|| msg["payload"]["reason"].as_str().or_else(|| msg["payload"]["text"].as_str()).unwrap_or("the turn did not complete").to_string()).or(failure);
+                    text = msg["payload"]["text"]
+                        .as_str()
+                        .filter(|s| !s.is_empty())
+                        .map(String::from)
+                        .unwrap_or(text);
+                    failure = (!complete)
+                        .then(|| {
+                            msg["payload"]["reason"]
+                                .as_str()
+                                .or_else(|| msg["payload"]["text"].as_str())
+                                .unwrap_or("the turn did not complete")
+                                .to_string()
+                        })
+                        .or(failure);
                 }
                 "turn.completed" => complete = true,
-                "turn.failed" => failure = Some(msg["error"]["message"].as_str().unwrap_or("Codex turn failed").to_string()),
-                "error" => failure = Some(msg["message"].as_str().unwrap_or("Codex error").to_string()),
+                "turn.failed" => {
+                    failure = Some(
+                        msg["error"]["message"]
+                            .as_str()
+                            .unwrap_or("Codex turn failed")
+                            .to_string(),
+                    )
+                }
+                "error" => {
+                    failure = Some(msg["message"].as_str().unwrap_or("Codex error").to_string())
+                }
                 _ => {}
             }
         }
         let status = child.wait().await.map_err(|e| e.to_string())?;
-        (complete && status.success()).then_some(()).ok_or_else(|| failure.unwrap_or_else(|| format!("{name} ended without completing the turn ({status}); see logs/{who}.log")))?;
-        (!text.trim().is_empty()).then_some(()).ok_or_else(|| format!("{name} returned an empty answer"))?;
+        (complete && status.success())
+            .then_some(())
+            .ok_or_else(|| {
+                failure.unwrap_or_else(|| {
+                    format!(
+                        "{name} ended without completing the turn ({status}); see logs/{who}.log"
+                    )
+                })
+            })?;
+        (!text.trim().is_empty())
+            .then_some(())
+            .ok_or_else(|| format!("{name} returned an empty answer"))?;
         Ok(text.trim().to_string())
     };
-    let result = tokio::time::timeout(Duration::from_secs(if chat { 1800 } else { 600 }), work).await;
+    let result =
+        tokio::time::timeout(Duration::from_secs(if chat { 1800 } else { 600 }), work).await;
     kill_group(pid, libc::SIGKILL);
     let _ = child.wait().await;
     file.iter().for_each(|f| drop(std::fs::remove_file(f)));
