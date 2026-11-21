@@ -24,9 +24,7 @@ impl Launch {
     pub fn command(&self, app: &Shared) -> tokio::process::Command {
         let mut c = tokio::process::Command::new(&self.program);
         c.args(&self.args);
-        if !self.env.iter().any(|(k, _)| k == "PATH") {
-            c.env("PATH", app.child_path());
-        }
+        let _ = (!self.env.iter().any(|(k, _)| k == "PATH")).then(|| c.env("PATH", app.child_path()));
         c.envs(self.env.iter().map(|(k, v)| (k, v)));
         c
     }
@@ -57,15 +55,17 @@ fn enabled(app: &Shared) -> Result<(), String> {
         Ok(())
     }
 }
+/// Whether a process Tirith starts runs inside the network sandbox: `wrap` puts it there, or the daemon itself already runs in one (macOS cannot nest them, so its children stay in the outer one and keep its proxy env). `[network] sandbox = false` means neither.
+pub fn sandboxed(app: &Shared) -> bool {
+    config::get::<bool>(&app.cfg().raw, &["network", "sandbox"]).unwrap_or(true) && (std::env::var("TIRITH_SANDBOXED").as_deref() == Ok("1") || (cfg!(target_os = "macos") && std::path::Path::new(SANDBOX_EXEC).exists()))
+}
 /// The proxy password of `who`: derived from a random secret kept in the daemon's database, so processes started before a daemon restart keep their access.
 fn token(who: &str) -> String {
-    let secret = SECRET.get().map(String::as_str).unwrap_or("");
-    sha_hex(format!("{secret}\n{who}").as_bytes())[..32].to_string()
+    sha_hex(format!("{}\n{who}", SECRET.get().map(String::as_str).unwrap_or("")).as_bytes())[..32].to_string()
 }
 /// The lane and project an event of `who` belongs to ("merge:<lane>" is the lane's; "manager" stays itself).
 fn owner(app: &Shared, who: &str) -> (String, String) {
-    let id = who.strip_prefix("merge:").unwrap_or(who);
-    (id.to_string(), app.lane(id).map(|l| l.project).unwrap_or_default())
+    (who.strip_prefix("merge:").unwrap_or(who).to_string(), app.lane(who.strip_prefix("merge:").unwrap_or(who)).map(|l| l.project).unwrap_or_default())
 }
 /// Wraps `argv` for a process Tirith starts on behalf of `who` (a lane id, a role such as "manager" or "ceo", or "merge:<lane>"): `sandbox-exec -p <profile> argv…` with the proxy environment and the PATH with the tool wrappers first.
 pub fn wrap(app: &Shared, who: &str, argv: Vec<String>) -> Launch {
@@ -83,15 +83,12 @@ pub fn wrap(app: &Shared, who: &str, argv: Vec<String>) -> Launch {
     env.extend([("NO_PROXY", NO_PROXY), ("no_proxy", NO_PROXY), ("NODE_USE_ENV_PROXY", "1"), ("TIRITH_SANDBOXED", "1")].map(|(k, v)| (k.to_string(), v.to_string())));
     // Gradle and the JVM ignore HTTPS_PROXY; the JDK refuses Basic proxy auth on tunnels unless re-enabled.
     let port = port.to_string();
-    let pairs = [("proxyHost", "127.0.0.1"), ("proxyPort", &port), ("proxyUser", &user), ("proxyPassword", &token), ("nonProxyHosts", "localhost|127.0.0.1")];
-    let rows = ["http", "https"].into_iter().flat_map(|scheme| pairs.map(|(k, v)| (scheme, k, v)));
-    let mut gradle = rows.fold(std::env::var("GRADLE_OPTS").unwrap_or_default(), |g, (scheme, k, v)| if g.contains(&format!("-D{scheme}.{k}=")) { g } else { format!("{g} -D{scheme}.{k}={v}") });
-    gradle += " -Djdk.http.auth.tunneling.disabledSchemes= -Djdk.http.auth.proxying.disabledSchemes=";
-    env.push(("GRADLE_OPTS".into(), gradle.trim().into()));
+    let rows = ["http", "https"].into_iter().flat_map(|scheme| [("proxyHost", "127.0.0.1"), ("proxyPort", &port), ("proxyUser", &user), ("proxyPassword", &token), ("nonProxyHosts", "localhost|127.0.0.1")].map(|(k, v)| (scheme, k, v)));
+    let gradle = rows.fold(std::env::var("GRADLE_OPTS").unwrap_or_default(), |g, (scheme, k, v)| if g.contains(&format!("-D{scheme}.{k}=")) { g } else { format!("{g} -D{scheme}.{k}={v}") });
+    env.push(("GRADLE_OPTS".into(), format!("{gradle} -Djdk.http.auth.tunneling.disabledSchemes= -Djdk.http.auth.proxying.disabledSchemes=").trim().to_string()));
     // ssh ignores proxy variables: git over ssh goes through the proxy with `tirith net tunnel`.
     std::env::current_exe().ok().filter(|_| std::env::var_os("GIT_SSH_COMMAND").is_none()).into_iter().for_each(|exe| env.push(("GIT_SSH_COMMAND".into(), format!("ssh -o ProxyCommand='{} net tunnel %h %p'", exe.display()))));
-    env.push(("PATH".into(), format!("{}:{}", app.home.join("net/bin").display(), app.child_path())));
-    env.push(("ZDOTDIR".into(), app.home.join("net/zdot").display().to_string()));
+    env.extend([("PATH".into(), format!("{}:{}", app.home.join("net/bin").display(), app.child_path())), ("ZDOTDIR".into(), app.home.join("net/zdot").display().to_string())]);
     Launch { program: SANDBOX_EXEC.into(), args: ["-p".to_string(), profile(app, who), program].into_iter().chain(args).collect(), env }
 }
 /// The wrappers in `<home>/net/bin`: tools that start a sandbox of their own (macOS refuses to nest them) get it turned off, since the outer sandbox confines them already. Each wrapper takes its own folder off PATH.

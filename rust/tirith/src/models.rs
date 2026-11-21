@@ -51,9 +51,8 @@ pub fn role(app: &Shared, role: &str) -> RoleSetting {
 }
 /// Per alias: (model flag, effort flag, resume args, lane args) from the factory's `[agents.<alias>]`, with config.toml laid over it; an empty flag is no flag.
 fn flags(cfg: &Config, alias: &str) -> (Option<String>, Option<String>, Vec<String>, Vec<String>) {
-    let f = &cfg.factory;
-    let key = |k: &str| f.agent::<String>(alias, k).filter(|s| !s.is_empty());
-    (key("model_flag"), key("effort_flag"), f.agent(alias, "resume_args").unwrap_or_default(), f.agent::<Vec<String>>(alias, "args").or_else(|| f.agent(alias, "lane_args")).unwrap_or_default())
+    let key = |k: &str| cfg.factory.agent::<String>(alias, k).filter(|s| !s.is_empty());
+    (key("model_flag"), key("effort_flag"), cfg.factory.agent(alias, "resume_args").unwrap_or_default(), cfg.factory.agent::<Vec<String>>(alias, "args").or_else(|| cfg.factory.agent(alias, "lane_args")).unwrap_or_default())
 }
 /// Sets `flag value` in argv: replaces the value of an existing `flag`/`alt` (also `flag=value`), else appends.
 fn set_flag(argv: &mut Vec<String>, flag: &Option<String>, alts: &[&str], value: &Option<String>) {
@@ -67,7 +66,7 @@ fn set_flag(argv: &mut Vec<String>, flag: &Option<String>, alts: &[&str], value:
         argv.extend([flag.clone(), value.clone()]);
     }
 }
-/// The browser MCP (Playwright, `tools/browser/launch.mjs` of this repo; its node_modules stay in `<home>/browser-mcp`) every agent run carries in its own dialect, so no agent's settings file is touched: Muse one `-c mcpServers.tirith_browser=…` at the argv's end (never the whole map; its env takes only the whole-value `${TIRITH_HOME}` both spawns set), Codex and anthropic right after the program (Codex `-c mcp_servers.tirith_browser={…}` plus desktop-only `node_repl` off, no `~/.codex` profile; anthropic `--mcp-config=`/`--allowedTools=` for `mcp__tirith_browser__*`, `=` so its variadic flags swallow nothing later). Lanes always get `--isolated` (several at once, nothing left behind, never the owner's browser); managers, bots and the CEO get Tirith's persistent profile (`<home>/browser/profile`, the launcher's default), `--isolated` instead while another live session holds that profile, or `--extension` (the owner's own Edge) with `[browser] use = "mine"` in config.toml. No node or no launcher: no browser, and the run goes on without one.
+/// The browser MCP (Playwright, `tools/browser/launch.mjs` of this repo; its node_modules stay in `<home>/browser-mcp`) every agent run carries in its own dialect, so no agent's settings file is touched: Muse one `-c mcpServers.tirith_browser=…` at the argv's end (never the whole map; its env takes only the whole-value `${TIRITH_HOME}` both spawns set), Codex and anthropic right after the program (Codex `-c mcp_servers.tirith_browser={…}` plus desktop-only `node_repl` off, no `~/.codex` profile; anthropic `--mcp-config=`/`--allowedTools=` for `mcp__tirith_browser__*`, `=` so its variadic flags swallow nothing later). Lanes always get `--isolated` (several at once, nothing left behind, never the owner's browser); managers, bots and the CEO get Tirith's persistent profile (`<home>/browser/profile`, the launcher's default), `--isolated` instead while another live session holds that profile, or `--extension` (the owner's own Edge) with `[browser] use = "mine"` in config.toml. No node or no launcher: no browser, and the run goes on without one. Agents spawn MCP servers with a clean env (only the variables named in this config), so inside Tirith's sandbox the server env also names `TIRITH_SANDBOXED` (1) and the four proxy variables, forwarded by name and resolved by each agent from its own env, where `wrap` put them (Muse and anthropic as a whole-value `${VAR}`, Codex through `env_vars`): without them the launcher never learns it runs sandboxed (Chromium starts its own sandbox, macOS refuses to nest it — "sandbox init: Operation not permitted" — and Edge dies) nor which proxy to leave through. Muse accepts no literal env value, so its flag rides as `${TIRITH_SANDBOXED}`; the launcher still sees plain "1".
 fn browser_server(app: &Shared, lane: bool) -> Option<(String, Vec<String>)> {
     let launch = Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../tools/browser/launch.mjs"));
     let node = launch.is_file().then(|| node_bin(app)).flatten()?;
@@ -78,12 +77,21 @@ fn browser_server(app: &Shared, lane: bool) -> Option<(String, Vec<String>)> {
 pub fn browser_args_for(app: &Shared, alias: &str, lane: bool) -> Vec<String> {
     let Some((node, args)) = browser_server(app, lane) else { return Vec::new() };
     let (home, t) = (app.home.display().to_string(), |s: &str| toml::Value::String(s.into()).to_string());
+    let proxy = ["HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY", "NO_PROXY"];
+    let boxed = crate::sandbox::sandboxed(app);
+    let env = |home: &str, sandboxed: &str| -> Value {
+        let extra = if boxed { proxy.iter().map(|k| (k.to_string(), json!(format!("${{{k}}}")))).chain([("TIRITH_SANDBOXED".to_string(), json!(sandboxed))]).collect::<Vec<_>>() } else { Vec::new() };
+        Value::Object([("TIRITH_HOME".to_string(), json!(home))].into_iter().chain(extra).collect())
+    };
+    let list = args.iter().map(|a| t(a)).collect::<Vec<_>>().join(", ");
+    let named = if boxed { format!(", env_vars = [{}]", proxy.iter().map(|k| t(k)).collect::<Vec<_>>().join(", ")) } else { String::new() };
+    let flag = if boxed { ", TIRITH_SANDBOXED = \"1\"" } else { "" };
     match alias {
-        "muse" => vec!["-c".into(), format!("mcpServers.tirith_browser={}", json!({"command": node, "args": args, "env": {"TIRITH_HOME": "${TIRITH_HOME}"}}))],
-        "anthropic" => vec![format!("--mcp-config={}", json!({"mcpServers": {"tirith_browser": {"command": node, "args": args, "env": {"TIRITH_HOME": home}}}})), "--allowedTools=mcp__tirith_browser__*".into()],
+        "muse" => vec!["-c".into(), format!("mcpServers.tirith_browser={}", json!({"command": node, "args": args, "env": env("${TIRITH_HOME}", "${TIRITH_SANDBOXED}")}))],
+        "anthropic" => vec![format!("--mcp-config={}", json!({"mcpServers": {"tirith_browser": {"command": node, "args": args, "env": env(&home, "1")}}})), "--allowedTools=mcp__tirith_browser__*".into()],
         "codex" => Vec::from([
             "-c".to_string(),
-            format!("mcp_servers.tirith_browser={{command = {}, args = [{}], startup_timeout_sec = 30, tool_timeout_sec = 90, env = {{TIRITH_HOME = {}}}}}", t(&node), args.iter().map(|a| t(a)).collect::<Vec<_>>().join(", "), t(&home)),
+            format!("mcp_servers.tirith_browser={{command = {}, args = [{}], startup_timeout_sec = 30, tool_timeout_sec = 90, env = {{TIRITH_HOME = {}{}}}{}}}", t(&node), list, t(&home), flag, named),
             "-c".into(),
             "mcp_servers.node_repl.enabled=false".into(),
         ]),
@@ -97,8 +105,7 @@ fn add_browser(app: &Shared, argv: &mut Vec<String>, alias: &str, lane: bool) {
 /// Node for the browser launcher: on the children's PATH, else the newest `~/.nvm` install (the daemon's own PATH may have neither).
 fn node_bin(app: &Shared) -> Option<String> {
     let on_path = app.child_path().split(':').map(|d| Path::new(d).join("node")).find(|p| p.is_file());
-    let nvm = std::fs::read_dir(crate::config::home_dir().join(".nvm/versions/node")).ok().into_iter().flatten().flatten().map(|e| e.path().join("bin/node")).filter(|p| p.is_file()).max();
-    on_path.or(nvm).map(|p| p.display().to_string())
+    on_path.or_else(|| std::fs::read_dir(crate::config::home_dir().join(".nvm/versions/node")).ok().into_iter().flatten().flatten().map(|e| e.path().join("bin/node")).filter(|p| p.is_file()).max()).map(|p| p.display().to_string())
 }
 /// The argv of a lane run. `agent`/`model` override the lane role (a fallback relaunch passes them). `resume = Some((session_id, message))` continues that agent session with `message` instead of the brief; an alias without `resume_args` starts fresh with the brief.
 pub fn lane_argv(app: &Shared, agent: Option<&str>, model: Option<&str>, brief: &Path, workspace: &Path, resume: Option<(&str, &str)>) -> Result<AgentCmd, String> {
@@ -208,13 +215,15 @@ fn updated(app: &Shared, role_name: &str, b: &Value) -> Result<RoleSetting, Stri
         .find(|v| !(v.chars().next().is_some_and(|c| c.is_ascii_alphanumeric()) && v.chars().all(|c| c.is_ascii_alphanumeric() || "._:/+-[]".contains(c))))
         .map_or(Ok(()), |v| Err(format!("'{v}' is not a valid model, effort or fallback entry")))?;
     std::iter::once(&s.agent).chain(&s.fallback).map(|e| e.split(':').next().unwrap_or("")).find(|a| cfg.factory.command(a).is_none()).map_or(Ok(()), |alias| Err(format!("no agent alias '{alias}' in config.toml")))?;
-    let bad = (s.agent == "codex").then(crate::codex::catalog).and_then(|c| {
-        c.iter()
-            .find(|m| Some(m["slug"].as_str().unwrap_or("")) == s.model.as_deref())
-            .filter(|m| s.effort.as_ref().is_some_and(|e| !m["efforts"].as_array().is_some_and(|es| es.iter().any(|v| v == e))))
-            .map(|m| format!("unsupported effort for {}: {}", s.model.as_deref().unwrap_or(""), m["efforts"]))
-    });
-    bad.map_or(Ok(()), Err)?;
+    (s.agent == "codex")
+        .then(crate::codex::catalog)
+        .and_then(|c| {
+            c.iter()
+                .find(|m| Some(m["slug"].as_str().unwrap_or("")) == s.model.as_deref())
+                .filter(|m| s.effort.as_ref().is_some_and(|e| !m["efforts"].as_array().is_some_and(|es| es.iter().any(|v| v == e))))
+                .map(|m| format!("unsupported effort for {}: {}", s.model.as_deref().unwrap_or(""), m["efforts"]))
+        })
+        .map_or(Ok(()), Err)?;
     Ok(s)
 }
 fn line(s: &RoleSetting) -> String {
@@ -305,17 +314,11 @@ pub fn routes() -> Router<Shared> {
 }
 /// `tirith models`, `tirith models set <role> [--agent A] [--model M] [--effort E] [--fallback "a:m,b"]`, `tirith models reset <role>`; `None` when `pos` is not one of this module's commands.
 pub fn cli(pos: &[&str], flag: Flag) -> Option<Result<(), String>> {
-    let show = |body: Result<String, String>| -> Result<(), String> {
-        let s: RoleSetting = serde_json::from_str(&body?).map_err(|e| e.to_string())?;
-        println!("{}", line(&s));
-        Ok(())
-    };
+    let show = |body: Result<String, String>| serde_json::from_str::<RoleSetting>(&body?).map_err(|e| e.to_string()).map(|s| println!("{}", line(&s)));
     Some(match pos {
-        ["models"] => call("GET", "/api/models", None).and_then(|b| {
-            let v: Value = serde_json::from_str(&b).map_err(|e| e.to_string())?;
-            v["roles"].as_object().into_iter().flatten().for_each(|(r, rv)| println!("{r:<10} {}  [{}]", line(&serde_json::from_value(rv.clone()).unwrap_or_default()), rv["source"].as_str().unwrap_or("")));
-            Ok(())
-        }),
+        ["models"] => call("GET", "/api/models", None)
+            .and_then(|b| serde_json::from_str::<Value>(&b).map_err(|e| e.to_string()))
+            .map(|v| v["roles"].as_object().into_iter().flatten().for_each(|(r, rv)| println!("{r:<10} {}  [{}]", line(&serde_json::from_value(rv.clone()).unwrap_or_default()), rv["source"].as_str().unwrap_or("")))),
         ["models", "set", r] => {
             let body: serde_json::Map<String, Value> = ["agent", "model", "effort", "fallback"].iter().filter_map(|k| flag(&format!("--{k}")).map(|v| (k.to_string(), json!(v)))).collect();
             show(call("POST", &format!("/api/models/{r}"), Some(Value::Object(body))))
