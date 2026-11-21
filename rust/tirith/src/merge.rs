@@ -223,7 +223,7 @@ async fn train(app: &Shared, batch: Vec<Lane>) {
             return manager::emit_event(app, &pid, "merge.blocked", &format!("the merge of {pid} waits for disk: {e}"), None);
         }
         Err(e) => {
-            batch.iter().for_each(|l| drop(app.update_lane(&l.id, |x| x.status = "failed".into())));
+            batch.iter().for_each(|l| drop(app.update_lane(&l.id, |x| x.status = "failed".into()).inspect(|l| lanes::cleanup_later(app, l.clone(), false, 0))));
             return manager::emit_event(app, &pid, "merge.blocked", &format!("the merge slot of {pid} is broken: {e}"), None);
         }
     };
@@ -338,12 +338,9 @@ async fn land(app: &Shared, project: &Project, pipe: &Pipe, slot: &Path, base: &
         drop(git(&repo, &["push", "-q", "origin", "HEAD"]).await.map_err(|e| app.event("", &project.id, "error", "push", &e, "")));
     }
     for l in &done {
-        if !l.workspace.is_empty() {
-            let _ = git(Path::new(&l.workspace), &["checkout", "-q", "--detach"]).await;
-        }
-        let _ = git(&repo, &["branch", "-D", &l.branch]).await;
         let tick_only = ticks.iter().any(|t| t.id == l.id);
         app.update_lane(&l.id, |x| (x.status, x.merged_at, x.note) = ("merged".into(), Some(now_iso()), if tick_only { "already true on main".into() } else { format!("on main at {sha8}") }));
+        lanes::cleanup_lane(app, l, true).await; // merged: its worktree, branch, logs and brief go now (its ignored files move to the project first)
     }
     let items: Vec<&str> = done.iter().map(|l| l.item.as_str()).collect();
     let working: Vec<String> = app.lanes.lock().unwrap().values().filter(|l| l.project == project.id && l.pid.is_some()).map(|l| l.id.clone()).collect();
