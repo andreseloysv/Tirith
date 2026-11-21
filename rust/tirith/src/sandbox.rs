@@ -4,7 +4,7 @@ mod proxy;
 
 use crate::{
     app::{bad, now_iso, Shared, R},
-    client::{call, Flag},
+    client::Flag,
     config,
     rooms::sealed::{hex, sha_hex},
 };
@@ -93,17 +93,12 @@ pub fn wrap(app: &Shared, who: &str, argv: Vec<String>) -> Launch {
     // Gradle and the JVM ignore HTTPS_PROXY; the JDK refuses Basic proxy auth on tunnels unless re-enabled.
     let port = port.to_string();
     let pairs = [("proxyHost", "127.0.0.1"), ("proxyPort", &port), ("proxyUser", &user), ("proxyPassword", &token), ("nonProxyHosts", "localhost|127.0.0.1")];
-    let mut gradle =
-        ["http", "https"]
-            .into_iter()
-            .flat_map(|scheme| pairs.map(|(k, v)| (scheme, k, v)))
-            .fold(std::env::var("GRADLE_OPTS").unwrap_or_default(), |g, (scheme, k, v)| if g.contains(&format!("-D{scheme}.{k}=")) { g } else { format!("{g} -D{scheme}.{k}={v}") });
+    let rows = ["http", "https"].into_iter().flat_map(|scheme| pairs.map(|(k, v)| (scheme, k, v)));
+    let mut gradle = rows.fold(std::env::var("GRADLE_OPTS").unwrap_or_default(), |g, (scheme, k, v)| if g.contains(&format!("-D{scheme}.{k}=")) { g } else { format!("{g} -D{scheme}.{k}={v}") });
     gradle += " -Djdk.http.auth.tunneling.disabledSchemes= -Djdk.http.auth.proxying.disabledSchemes=";
     env.push(("GRADLE_OPTS".into(), gradle.trim().into()));
     // ssh ignores proxy variables: git over ssh goes through the proxy with `tirith net tunnel`.
-    if let Some(exe) = std::env::current_exe().ok().filter(|_| std::env::var_os("GIT_SSH_COMMAND").is_none()) {
-        env.push(("GIT_SSH_COMMAND".into(), format!("ssh -o ProxyCommand='{} net tunnel %h %p'", exe.display())));
-    }
+    std::env::current_exe().ok().filter(|_| std::env::var_os("GIT_SSH_COMMAND").is_none()).into_iter().for_each(|exe| env.push(("GIT_SSH_COMMAND".into(), format!("ssh -o ProxyCommand='{} net tunnel %h %p'", exe.display()))));
     env.push(("PATH".into(), format!("{}:{}", app.home.join("net/bin").display(), app.child_path())));
     env.push(("ZDOTDIR".into(), app.home.join("net/zdot").display().to_string()));
     Launch { program: SANDBOX_EXEC.into(), args: ["-p".to_string(), PROFILE.to_string(), program].into_iter().chain(args).collect(), env }
@@ -160,16 +155,7 @@ fn in_range(ip: IpAddr, (net, bits): (IpAddr, u32)) -> bool {
 pub fn blocked(host: &str) -> Option<String> {
     let host = host.trim().trim_matches(['.', '[', ']']).to_lowercase();
     let ip: Option<IpAddr> = host.parse().ok();
-    BLOCKS
-        .read()
-        .unwrap()
-        .iter()
-        .find(|rule| match (ip, cidr(rule)) {
-            (Some(ip), Some(range)) => in_range(ip, range),
-            (None, None) => host == **rule || host.ends_with(&format!(".{rule}")),
-            _ => false,
-        })
-        .cloned()
+    BLOCKS.read().unwrap().iter().find(|rule| ip.zip(cidr(rule)).is_some_and(|(ip, range)| in_range(ip, range)) || (ip.is_none() && cidr(rule).is_none() && (host == **rule || host.ends_with(&format!(".{rule}"))))).cloned()
 }
 
 static HOSTS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)(?:^|[^a-z0-9_.-])((?:[a-z0-9-]+\.)+[a-z0-9-]+|\[[0-9a-f:.]+\])").unwrap());
@@ -201,6 +187,16 @@ static GH: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?:^|[;&|(\n]\s*|\bxa
 static ENV: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\$\{?([A-Z][A-Z0-9_]{2,})|\bprintenv\s+([A-Z][A-Z0-9_]{2,})").unwrap());
 const ENV_SKIP: [&str; 8] = ["PATH", "HOME", "USER", "SHELL", "PWD", "TMPDIR", "LANG", "TERM"];
 
+/// The items with repeats removed, in first-seen order.
+fn unique<T: PartialEq>(items: impl IntoIterator<Item = T>) -> Vec<T> {
+    items.into_iter().fold(vec![], |mut v, x| {
+        if !v.contains(&x) {
+            v.push(x)
+        }
+        v
+    })
+}
+
 /// Access-audit tags of one tool call: `(category, target)` with category one of "credential", "git_push", "gh", "env" (target = variable names, never values). Recorded by the hook handler as `access` events.
 pub fn tags(tool: &str, input: &Value) -> Vec<(&'static str, String)> {
     let mut out = vec![];
@@ -209,30 +205,17 @@ pub fn tags(tool: &str, input: &Value) -> Vec<(&'static str, String)> {
         return (!file.is_empty() && CRED.is_match(file) && !file.ends_with(".example")).then(|| ("credential", file.to_string())).into_iter().collect();
     }
     let cmd = input["command"].as_str().unwrap_or("");
-    for m in CRED.find_iter(cmd) {
-        let t = m.as_str().trim_start_matches([' ', '\'', '"', '=']).trim().to_string();
-        if !t.ends_with(".example") && !out.iter().any(|(_, x)| *x == t) {
-            out.push(("credential", t));
-        }
-    }
+    out.extend(unique(CRED.find_iter(cmd).map(|m| m.as_str().trim_start_matches([' ', '\'', '"', '=']).trim().to_string()).filter(|t| !t.ends_with(".example"))).into_iter().map(|t| ("credential", t)));
     out.extend(GIT_PUSH.captures_iter(cmd).map(|c| ("git_push", format!("git {}", c[1].trim()))));
     out.extend(GH.captures_iter(cmd).map(|c| ("gh", format!("gh {}", c[1].trim()))));
-    let names: Vec<&str> = ENV.captures_iter(cmd).filter_map(|c| c.get(1).or(c.get(2))).map(|m| m.as_str()).filter(|n| !ENV_SKIP.contains(n) && !n.starts_with("TIRITH")).fold(vec![], |mut v, n| {
-        if !v.contains(&n) {
-            v.push(n)
-        }
-        v
-    });
+    let names: Vec<&str> = unique(ENV.captures_iter(cmd).filter_map(|c| c.get(1).or(c.get(2))).map(|m| m.as_str()).filter(|n| !ENV_SKIP.contains(n) && !n.starts_with("TIRITH")));
     out.extend((!names.is_empty()).then(|| ("env", names.join(", "))));
     out
 }
 
 /// Starts the proxy inside the daemon, with the block list, the token secret and the tool wrappers ready.
 pub fn start(app: Shared) {
-    {
-        let _ = app.db.lock().unwrap().execute("CREATE TABLE IF NOT EXISTS net_blocks (rule TEXT PRIMARY KEY, at TEXT)", []);
-        *BLOCKS.write().unwrap() = app.query("SELECT rule FROM net_blocks ORDER BY at", [], |r| r.get(0));
-    }
+    *BLOCKS.write().unwrap() = app.query("SELECT rule FROM net_blocks ORDER BY at", [], |r| r.get(0));
     let secret = app.kv("net_secret").unwrap_or_else(|| {
         let s = hex(&rand::random::<[u8; 32]>());
         app.set_kv("net_secret", Some(&s));
@@ -279,25 +262,24 @@ pub fn routes() -> Router<Shared> {
 
 /// `tirith net …` commands; `None` when `pos` is not one of this module's commands.
 pub fn cli(pos: &[&str], _flag: Flag) -> Option<Result<(), String>> {
-    let parse = |r: Result<String, String>| r.and_then(|b| serde_json::from_str::<Value>(&b).map_err(|e| e.to_string()));
     Some(match pos {
-        ["net", "status"] => parse(call("GET", "/api/net/status", None)).map(|s| {
+        ["net", "status"] => crate::client::call_json("GET", "/api/net/status", None).map(|s| {
             let on = if s["sandbox"] == true { "on".to_string() } else { format!("off ({})", s["why"].as_str().unwrap_or("")) };
             println!("sandbox: {on}\nproxy: 127.0.0.1:{} {}", s["proxy_port"], s["proxy"].as_str().unwrap_or(""));
         }),
-        ["net", "list"] => parse(call("GET", "/api/net/destinations", None)).and_then(|d| {
+        ["net", "list"] => crate::client::call_json("GET", "/api/net/destinations", None).and_then(|d| {
             for x in d.as_array().into_iter().flatten().take(40) {
                 let lanes: Vec<&str> = x["lanes"].as_array().into_iter().flatten().filter_map(Value::as_str).collect();
                 let rule = x["rule"].as_str().map(|r| format!("  BLOCKED by {r}")).unwrap_or_default();
                 let n = format!("{}{}", x["count"], if x["refused"] == 0 { String::new() } else { format!("+{} refused", x["refused"]) });
                 println!("{:<40} {n:>12}  {}  {}{rule}", x["host"].as_str().unwrap_or(""), x["last"].as_str().unwrap_or(""), lanes.join(","));
             }
-            let blocks = parse(call("GET", "/api/net/blocks", None))?;
+            let blocks = crate::client::call_json("GET", "/api/net/blocks", None)?;
             println!("blocked: {}", blocks.as_array().map(|b| b.iter().filter_map(Value::as_str).collect::<Vec<_>>().join(" ")).unwrap_or_default());
             Ok(())
         }),
-        ["net", "block", rule] => parse(call("POST", "/api/net/blocks", Some(json!({"rule": rule})))).map(|v| println!("blocked {}", v["rule"].as_str().unwrap_or(""))),
-        ["net", "unblock", rule] => parse(call("DELETE", "/api/net/blocks", Some(json!({"rule": rule})))).map(|v| println!("unblocked {}", v["rule"].as_str().unwrap_or(""))),
+        ["net", "block", rule] => crate::client::call_json("POST", "/api/net/blocks", Some(json!({"rule": rule}))).map(|v| println!("blocked {}", v["rule"].as_str().unwrap_or(""))),
+        ["net", "unblock", rule] => crate::client::call_json("DELETE", "/api/net/blocks", Some(json!({"rule": rule}))).map(|v| println!("unblocked {}", v["rule"].as_str().unwrap_or(""))),
         ["net", "tunnel", host, port] => tunnel(host, port),
         ["net", ..] => Err("tirith net status|list|block <domain|ip|cidr>|unblock <rule>|tunnel <host> <port>".into()),
         _ => return None,

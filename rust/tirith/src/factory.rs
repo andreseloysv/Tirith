@@ -114,9 +114,7 @@ pub fn parse(text: &str, prompts: BTreeMap<String, String>, overlay: &toml::Tabl
     merge(&mut table, &toml::Value::Table(text.parse().map_err(|e| format!("factory.toml: {e}"))?));
     SECTIONS.into_iter().filter(|sec| *sec != "routes").filter_map(|sec| overlay.get(sec).map(|o| (sec, o))).for_each(|(sec, o)| merge(&mut table[sec], o));
     // Routes of config.toml (a bot's routines) stand next to the factory's, never instead of them.
-    if let (Some(dst), Some(src)) = (table["routes"].as_array_mut(), overlay.get("routes").and_then(|r| r.as_array())) {
-        dst.extend(src.iter().cloned());
-    }
+    table["routes"].as_array_mut().into_iter().for_each(|dst| dst.extend(overlay.get("routes").and_then(|r| r.as_array()).into_iter().flatten().cloned()));
     let roles = table["roles"].as_table().cloned().unwrap_or_default();
     roles.keys().cloned().collect::<Vec<_>>().iter().for_each(|name| table["roles"][name] = resolved(&roles, name, 0));
     // The `default` agent under every other (never its chat args for an exec agent), and the codex command needs no config line, as before.
@@ -143,6 +141,7 @@ impl Factory {
         let sub = |sec: &str| t.get(sec).and_then(|v| v.as_table());
         let unknown_in = |sec: &str, allowed: &[&str]| sub(sec).and_then(|m| m.iter().find_map(|(n, s)| s.as_table().and_then(|s| s.keys().find(|k| !allowed.contains(&k.as_str())).map(|k| format!("unknown key {sec}.{n}.{k}")))));
         let unknown_flat = |sec: &str, allowed: &[&str]| sub(sec).and_then(|m| m.keys().find(|k| !allowed.contains(&k.as_str())).map(|k| format!("unknown key {sec}.{k}")));
+        let unknown_keys = |rows: &[toml::Value], allowed: &[&str], sec: &str| rows.iter().find_map(|r| r.as_table().and_then(|r| r.keys().find(|k| !allowed.contains(&k.as_str())).map(|k| format!("unknown key {sec}.{k}"))));
         let (agents, roles) = (sub("agents").cloned().unwrap_or_default(), sub("roles").cloned().unwrap_or_default());
         let routes = t.get("routes").and_then(|r| r.as_array()).cloned().unwrap_or_default();
         let evals = t.get("evals").and_then(|e| e.as_array()).cloned().unwrap_or_default();
@@ -160,24 +159,21 @@ impl Factory {
             roles
                 .iter()
                 .find(|(_, r)| {
-                    !matches!(str_of(r, "session"), "chat" | "turn" | "lane")
-                        || !matches!(str_of(r, "scope"), "project" | "global" | "own")
-                        || !matches!(str_of(r, "access"), "" | "read" | "write")
-                        || !matches!(str_of(r, "runs_on"), "" | "local")
+                    [("session", ["chat", "turn", "lane"].as_slice()), ("scope", ["project", "global", "own"].as_slice()), ("access", ["", "read", "write"].as_slice()), ("runs_on", ["", "local"].as_slice())]
+                        .iter()
+                        .any(|(k, ok)| !ok.contains(&str_of(r, k)))
                 })
                 .map(|(n, r)| format!("role '{n}' has unknown session '{}', scope '{}', access '{}' or runs_on '{}'", str_of(r, "session"), str_of(r, "scope"), str_of(r, "access"), str_of(r, "runs_on"))),
             roles
                 .iter()
                 .find_map(|(n, r)| r.get("prompt").and_then(|p| p.as_array()).into_iter().flatten().filter_map(|p| p.as_str()).find(|p| !self.prompts.contains_key(&stem(p))).map(|p| format!("role '{n}' names missing prompt '{p}'"))),
             sub("metrics").and_then(|m| m.keys().find(|id| !MEASURES.contains(&id.as_str())).map(|id| format!("unknown measure '{id}'"))),
-            routes.iter().find_map(|r| {
-                r.as_table().and_then(|r| r.keys().find(|k| !["on", "to", "mode", "chat", "phone", "after_minutes", "then", "days", "at", "task", "title", "id", "enabled"].contains(&k.as_str())).map(|k| format!("unknown key routes.{k}")))
-            }),
+            unknown_keys(&routes, &["on", "to", "mode", "chat", "phone", "after_minutes", "then", "days", "at", "task", "title", "id", "enabled"], "routes"),
             routes
                 .iter()
                 .find(|r| !EVENTS.split(';').any(|e| e == str_of(r, "on")) || !is_role(str_of(r, "to")) || !is_role(str_of(r, "then")) || !matches!(str_of(r, "mode"), "" | "turn" | "note"))
                 .map(|r| format!("route on '{}' names a missing event, role or mode ('{}', '{}')", str_of(r, "on"), str_of(r, "to"), str_of(r, "mode"))),
-            evals.iter().find_map(|e| e.as_table().and_then(|e| e.keys().find(|k| !["id", "on", "judge", "rubric", "sample"].contains(&k.as_str())).map(|k| format!("unknown key evals.{k}")))),
+            unknown_keys(&evals, &["id", "on", "judge", "rubric", "sample"], "evals"),
             evals
                 .iter()
                 .find(|e| {
@@ -225,14 +221,8 @@ impl Factory {
 
     /// The evals that judge `on`: (id, judge role, rubric file stem, sample share) of every `[[evals]]` on it.
     pub fn evals_on(&self, on: &str) -> Vec<(String, String, String, f64)> {
-        self.raw
-            .get("evals")
-            .and_then(|e| e.as_array())
-            .into_iter()
-            .flatten()
-            .filter(|e| str_of(e, "on") == on)
-            .map(|e| (str_of(e, "id").into(), str_of(e, "judge").into(), stem(str_of(e, "rubric")), e.get("sample").and_then(|v| v.as_float()).unwrap_or(1.0)))
-            .collect()
+        let rows = self.raw.get("evals").and_then(|e| e.as_array()).into_iter().flatten().filter(|e| str_of(e, "on") == on);
+        rows.map(|e| (str_of(e, "id").into(), str_of(e, "judge").into(), stem(str_of(e, "rubric")), e.get("sample").and_then(|v| v.as_float()).unwrap_or(1.0))).collect()
     }
 
     pub fn metric(&self, id: &str) -> (String, Option<f64>, bool) {
@@ -296,19 +286,11 @@ pub fn error() -> Option<String> {
 pub fn load(overlay: &toml::Table) -> Arc<Factory> {
     // The factory's texts by file stem: the prompts and the eval rubrics alike.
     let prompts = |dir: &Path| -> BTreeMap<String, String> {
-        ["prompts", "evals"]
-            .into_iter()
-            .filter_map(|d| std::fs::read_dir(dir.join(d)).ok())
-            .flatten()
-            .flatten()
-            .filter(|e| e.path().extension().is_some_and(|x| x == "md"))
-            .filter_map(|e| Some((stem(&e.path().to_string_lossy()), std::fs::read_to_string(e.path()).ok()?)))
-            .collect()
+        let files = ["prompts", "evals"].into_iter().filter_map(|d| std::fs::read_dir(dir.join(d)).ok()).flatten().flatten().filter(|e| e.path().extension().is_some_and(|x| x == "md"));
+        files.filter_map(|e| Some((stem(&e.path().to_string_lossy()), std::fs::read_to_string(e.path()).ok()?))).collect()
     };
-    let attempt = match dir(overlay) {
-        Some(d) => std::fs::read_to_string(d.join("factory.toml")).map_err(|e| format!("factory: {}: {e}", d.display())).and_then(|text| parse(&text, prompts(&d), overlay)),
-        None => parse(TEXT, embedded_prompts(), overlay),
-    };
+    let attempt =
+        dir(overlay).map_or_else(|| parse(TEXT, embedded_prompts(), overlay), |d| std::fs::read_to_string(d.join("factory.toml")).map_err(|e| format!("factory: {}: {e}", d.display())).and_then(|text| parse(&text, prompts(&d), overlay)));
     let f = match attempt {
         Ok(f) => {
             *ERROR.lock().unwrap() = None;

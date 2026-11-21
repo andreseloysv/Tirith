@@ -103,17 +103,13 @@ async fn add(app: &Shared, raw: &str, name: &str, color: &str, dry: bool) -> Res
         Err(e) if dir.join(".git").exists() => return Err(e),
         r => r.ok().map(|t| PathBuf::from(&t).canonicalize().unwrap_or_else(|_| t.into())).filter(|t| !home.starts_with(t)),
     };
-    if let Some(t) = top.as_ref().filter(|t| **t != dir) {
-        return Err(format!("{} is inside the git repository {}: add that folder instead", dir.display(), t.display()));
-    }
+    top.as_ref().filter(|t| **t != dir).map_or(Ok(()), |t| Err(format!("{} is inside the git repository {}: add that folder instead", dir.display(), t.display())))?;
     let p = project(&dir, name, color, &cfg.projects)?;
     block(&std::fs::read_to_string(app.home.join("config.toml")).unwrap_or_default(), &p)?; // config.toml takes it: only then touch the folder
     let plan = dir.join(app.manifest(&dir).roadmap);
     let open = std::fs::read_to_string(&plan).map(|t| crate::plan::parse(&t).iter().flat_map(|s| &s.items).filter(|i| !i.done).count()).unwrap_or(0);
     let start = !plan.exists() && plan.starts_with(&dir) && !plan.components().any(|c| c == Component::ParentDir); // never outside the folder
-    if dry {
-        return Ok(json!({"id": p.id, "name": p.name, "folder": dir, "color": p.color, "git": top.is_some(), "plan": !start, "open": open}));
-    }
+    let Some(()) = (!dry).then_some(()) else { return Ok(json!({"id": p.id, "name": p.name, "folder": dir, "color": p.color, "git": top.is_some(), "plan": !start, "open": open})) };
     let mut notes = vec![];
     if top.is_none() {
         git(&dir, &["init", "-q"]).await?;
@@ -160,9 +156,7 @@ async fn pick(State(app): State<Shared>) -> R {
     let start = app.cfg().projects.iter().find(|p| !p.repo.is_empty()).and_then(|p| p.repo().parent().map(Path::to_path_buf)).filter(|d| d.is_dir()).unwrap_or_else(home_dir);
     let out = tokio::process::Command::new("osascript").args(["-l", "JavaScript", "-e", PANEL]).arg(start).kill_on_drop(true).output();
     let out = tokio::time::timeout(Duration::from_secs(600), out).await.map_err(|_| bad("the folder picker was open too long".into()))?.map_err(|e| bad(format!("no folder picker here ({e}): type the path")))?;
-    if !out.status.success() {
-        return Err(bad(format!("the folder picker did not open: {}", String::from_utf8_lossy(&out.stderr).trim())));
-    }
+    out.status.success().then_some(()).ok_or_else(|| bad(format!("the folder picker did not open: {}", String::from_utf8_lossy(&out.stderr).trim())))?;
     Ok(Json(json!({"folder": String::from_utf8_lossy(&out.stdout).trim()})))
 }
 
@@ -177,12 +171,10 @@ pub fn routes() -> Router<Shared> {
 /// `tirith project add <folder> [--name N] [--color #rrggbb]`.
 pub fn cli(pos: &[&str], flag: crate::client::Flag) -> Option<Result<(), String>> {
     let ["project", "add", raw] = pos else { return None };
-    if std::env::var("TIRITH_LANE").is_ok_and(|l| !l.is_empty()) {
-        return Some(Err("a lane does not add projects: ask the manager with tirith ask \"<question>\"".into()));
-    }
+    let Some(()) = (!std::env::var("TIRITH_LANE").is_ok_and(|l| !l.is_empty())).then_some(()) else { return Some(Err("a lane does not add projects: ask the manager with tirith ask \"<question>\"".into())) };
     let full = std::env::current_dir().map(|d| d.join(raw).display().to_string()).unwrap_or(raw.to_string()); // an absolute path stays
     let body = json!({"folder": if raw.starts_with('~') { raw.to_string() } else { full }, "name": flag("--name").unwrap_or_default(), "color": flag("--color").unwrap_or_default()});
-    Some(crate::client::call("POST", "/api/projects", Some(body)).and_then(|b| serde_json::from_str::<Value>(&b).map_err(|e| e.to_string())).map(|v| {
+    Some(crate::client::call_json("POST", "/api/projects", Some(body)).map(|v| {
         let (id, dir) = (v["id"].as_str().unwrap_or(""), v["folder"].as_str().unwrap_or(""));
         println!("{}", if v["exists"] == true { format!("{dir} is already the project {id}") } else { format!("{id}: {dir}") });
         v["notes"].as_array().into_iter().flatten().filter_map(Value::as_str).for_each(|n| println!("  {n}"));

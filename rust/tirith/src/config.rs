@@ -88,9 +88,6 @@ pub fn migrate(t: &mut toml::Table) -> bool {
 }
 
 impl Config {
-    pub fn load() -> Config {
-        Self::load_at(&tirith_home())
-    }
     /// The config of one Tirith home, named instead of read from the process-wide `TIRITH_HOME` (a test opens its App at its own folder; moving the variable would move every parallel test's home too).
     pub fn load_at(home: &Path) -> Config {
         let text = std::fs::read_to_string(home.join("config.toml")).unwrap_or_default();
@@ -105,9 +102,7 @@ impl Config {
         const KNOWN: [&str; 21] =
             ["projects", "agents", "launch", "models", "server", "merge", "autopilot", "app", "network", "messenger", "owner", "rooms", "guard", "factory", "roles", "limits", "plan", "cards", "metrics", "routes", "evals"];
         let mut unknown: Vec<String> = t.keys().filter(|k| !KNOWN.contains(&k.as_str())).cloned().collect();
-        if let Some(m) = t.get("models").and_then(|v| v.as_table()) {
-            unknown.extend(m.keys().filter(|k| !matches!(k.as_str(), "choices" | "efforts")).map(|k| format!("models.{k}")));
-        }
+        unknown.extend(t.get("models").and_then(|v| v.as_table()).into_iter().flat_map(|m| m.keys()).filter(|k| !matches!(k.as_str(), "choices" | "efforts")).map(|k| format!("models.{k}")));
         let error = [parsed, crate::factory::error().map(|e| format!("factory.invalid: {e} (the last good factory keeps running)")), (!unknown.is_empty()).then(|| format!("config.toml has keys nothing reads: {}", unknown.join(", ")))]
             .into_iter()
             .flatten()
