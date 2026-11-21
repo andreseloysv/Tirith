@@ -61,8 +61,12 @@ config.toml: the project's `guard_words`, else `[guard] words`; `guard = false` 
 
 ## `lanes.rs`
 
-Lanes: one agent, one plan item, one reusable worktree slot (`<tirith home>/lanes/<project>/slot-N`) on its own branch. The autopilot starts a project's open plan items
-when the machine has room; a lane whose process ends goes to the merge queue, where the checks (never the agent) decide that its item is done.
+Lanes: one agent, one plan item, one worktree slot of its own (`<tirith home>/lanes/<project>/slot-N`) on its own branch; no slot is kept or reused — every lane makes a fresh one.
+The autopilot starts a project's open plan items when the machine has room; a lane whose process ends goes to the merge queue, where the checks (never the agent) decide that its item is done. A lane that merges, stops or
+fails for good leaves nothing on disk: its uncommitted work is committed on its branch first (a merged lane's branch then goes), its git-ignored files that are no build cache move to the same path in the project (never
+overwriting, kept ignored there), and its worktree is removed and pruned; its log, check logs and brief go at the merge, or 24 h after a stop or final failure. A project's shared build cache (`<home>/build/<project>`,
+where lanes, stages and every manager, bot and CEO session build through `CARGO_TARGET_DIR`) and its merge folder go after `limits.build_idle_minutes` with no lane, stage or manager of it working; the same pass at
+startup applies all of this to whatever already meets the rules.
 
 ## `manager.rs`
 

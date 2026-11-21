@@ -182,7 +182,16 @@ async fn private_files_move_to_project() {
     std::fs::write(repo.join("evidence/same.txt"), "same").unwrap();
     let lane = cleanup_lane_fixture(&app, &repo, "priv-1").await;
     let ws = std::path::PathBuf::from(&lane.workspace);
-    for (file, text) in [("private/doc.txt", "lane doc"), ("private/existing.txt", "lane version"), ("evidence/same.txt", "same"), ("evidence/nested/deep.txt", "deep"), ("target/junk", "x"), ("node_modules/pkg.js", "x"), ("sub/build/out", "x"), ("secret.txt", "s3cret")] {
+    for (file, text) in [
+        ("private/doc.txt", "lane doc"),
+        ("private/existing.txt", "lane version"),
+        ("evidence/same.txt", "same"),
+        ("evidence/nested/deep.txt", "deep"),
+        ("target/junk", "x"),
+        ("node_modules/pkg.js", "x"),
+        ("sub/build/out", "x"),
+        ("secret.txt", "s3cret"),
+    ] {
         let p = ws.join(file);
         std::fs::create_dir_all(p.parent().unwrap()).unwrap();
         std::fs::write(p, text).unwrap();
