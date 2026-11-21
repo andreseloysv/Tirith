@@ -10,10 +10,11 @@ static GUARD: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"--no-verify|\bgit\
 /// A shell command that changes files: with `.git/hooks` in it, it is refused (reading the hooks stays allowed).
 static WRITES: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b(rm|mv|cp|ln|chmod|chflags|chown|tee|truncate|touch|install|unlink|rsync)\b|>|\b(sed|perl)\s+-[a-zA-Z]*i").unwrap());
 static MAIN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\bgit\b[^;&|]*\b(push|update-ref)\b|\bgit\b[^;&|]*\b(checkout|switch)\s+(main|master)\b|\bgit\b[^;&|]*\bbranch\s+-[fDM]\b[^;&|]*\b(main|master)\b").unwrap());
+static WAIT: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?s)\bsleep\s+(?:[5-9]|[1-9]\d+)(?:\.\d+)?s?\b|\bsleep\s+[1-9]\d*(?:\.\d+)?[mhd]\b|\b(?:for|while|until)\b.*\bsleep\s").unwrap()); // sleep >= 5s, or a loop's sleep
 
 pub const EDIT_TOOLS: [&str; 4] = ["Edit", "Write", "MultiEdit", "NotebookEdit"];
 
-pub fn check(app: &Shared, tool: &str, input: &Value, lane: Option<&Lane>, project: Option<&Project>) -> Option<String> {
+pub fn check(app: &Shared, tool: &str, input: &Value, lane: Option<&Lane>, project: Option<&Project>, role: Option<&str>) -> Option<String> {
     let cfg = app.cfg();
     let cmd = input["command"].as_str().unwrap_or("");
     let file = ["file_path", "notebook_path"].iter().find_map(|k| input[*k].as_str()).unwrap_or("");
@@ -24,6 +25,7 @@ pub fn check(app: &Shared, tool: &str, input: &Value, lane: Option<&Lane>, proje
     if (bash && GUARD.is_match(cmd)) || hooks_write || (edit && file.contains("/.git/hooks/")) {
         return Some("Commit checks are never skipped (--no-verify, commit -n, core.hooksPath, .git/hooks). Fix what the check reports and commit again.".into());
     }
+    let Some(()) = (!(bash && lane.is_none() && role.is_some() && WAIT.is_match(cmd))).then_some(()) else { return Some("no esperes dentro del turno: contesta y termina; Tirith te avisa cuando una lane entre, falle o pregunte".into()) };
     let mut protected: Vec<String> = cfg.factory.commands().iter().filter_map(|(alias, _)| cfg.factory.agent::<String>(alias, "settings")).map(|s| expand(&s).display().to_string()).collect();
     protected.push(format!("{}/", app.home.display()));
     // The lanes' worktrees live inside Tirith's home: with the bots' folders they are the parts of it agents write in. A path with `..` in it can end anywhere, so it is never taken for one of them.
@@ -58,6 +60,5 @@ pub fn check(app: &Shared, tool: &str, input: &Value, lane: Option<&Lane>, proje
 
 pub fn summary(tool: &str, input: &Value) -> String {
     let detail = ["command", "file_path", "notebook_path", "pattern", "url", "description", "prompt", "skill"].iter().find_map(|k| input[*k].as_str()).unwrap_or("");
-    let short: String = detail.lines().next().unwrap_or("").chars().take(160).collect();
-    format!("{}{short}", if tool.is_empty() { String::new() } else { format!("{tool}: ") })
+    format!("{}{}", if tool.is_empty() { String::new() } else { format!("{tool}: ") }, detail.lines().next().unwrap_or("").chars().take(160).collect::<String>())
 }
