@@ -16,6 +16,9 @@ tirith say [--project P] "<text>"              write to the project's manager (w
 tirith chat clear [--project P]                clear a conversation (this session's, or P's): its bot starts fresh
 tirith chat keep [<time>] [--project P]        how long a chat lives, in your words (30m, 1h, 24 h, 2 días, una semana; "siempre" = no limit); without a time it says the current one
 tirith turn checks <passed>/<total> "<names>"  (a bot, in its session) keep what its own validation checked on its turn now
+tirith lab start <bot> <branch> --routine <id> --mode live --hypothesis "<text>"
+                                              (the Coach) start an experiment: the branch (one commit on the bot's main) against its main, on the routine's real runs, decided by the factory's [lab]
+tirith lab list [<bot>]                       the experiments (a bot's, or every bot's): change, hypothesis, mode, comparisons, numbers and decision
 tirith teach rehearse "<skill>"                (a bot, in its session) start a rehearsal of a draft in the owner's Edge (10 minutes at most)
 tirith teach do open "<url>"                   (a bot, rehearsing) open the page in the rehearsal's tab: the result and a screenshot's path
 tirith teach do click "<selector or text>"     (a bot, rehearsing) click it there: the result and a screenshot's path

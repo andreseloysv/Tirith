@@ -32,12 +32,23 @@ CREATE TABLE IF NOT EXISTS net_blocks (rule TEXT PRIMARY KEY, at TEXT);
 -- tools it used and the versions (git blob hashes) of its memory and skills (JSON), its answer, its event and its stamp;
 -- its quality signals: the owner's reaction (1, -1), corrected (1 when owner-mood labelled the owner's next message a
 -- correction or repeat), its own checks (passed, total, names), the numbered notes its answer cites (JSON) and, for
--- a routine's turn, the judge's turn-quality score of its routine.done (0 to 1).
+-- a routine's turn, the judge's turn-quality score of its routine.done (0 to 1); a run of a live experiment keeps
+-- its `experiment` and its `variant` (A, the bot's main, or B, the branch).
 CREATE TABLE IF NOT EXISTS turns (id INTEGER PRIMARY KEY, conv TEXT, role TEXT, "trigger" TEXT, routine TEXT,
     started_at TEXT, ended_at TEXT, ms INTEGER, status TEXT, agent TEXT, model TEXT, effort TEXT,
     tokens_in INTEGER, tokens_out INTEGER, tokens_cache_read INTEGER, tokens_cache_write INTEGER, cost_usd REAL,
     steps INTEGER, skills TEXT, tools TEXT, versions TEXT, answer TEXT, event INTEGER,
     factory TEXT NOT NULL DEFAULT '', role_hash TEXT NOT NULL DEFAULT '',
     reaction INTEGER, corrected INTEGER NOT NULL DEFAULT 0, checks_passed INTEGER, checks_total INTEGER,
-    checks TEXT, cited TEXT, score REAL);
+    checks TEXT, cited TEXT, score REAL, experiment INTEGER, variant TEXT);
 CREATE INDEX IF NOT EXISTS turns_conv ON turns (conv, id);
+-- The lab (docs/BOTS.md, part 3): one row per experiment of the Coach on a bot's routine — the bot's key, the
+-- routine, the branch of the bot's repository and its one commit (`change`), the hypothesis, the mode, its status
+-- (running, adopted, discarded), its times, the numbers it was decided with (JSON) and the factory that decided it;
+-- and one row per comparison of a B run with the A run before it: the letter B was shown under to the judge (`b_is`,
+-- a or b, drawn at random), the event the judge read and B's verdict (win, lose or tie) with the judge's line.
+CREATE TABLE IF NOT EXISTS experiments (id INTEGER PRIMARY KEY, bot TEXT, routine TEXT, branch TEXT, change TEXT,
+    hypothesis TEXT, mode TEXT, status TEXT, created_at TEXT, ended_at TEXT, numbers TEXT,
+    factory TEXT NOT NULL DEFAULT '');
+CREATE TABLE IF NOT EXISTS lab_comparisons (id INTEGER PRIMARY KEY, experiment INTEGER, a_turn INTEGER,
+    b_turn INTEGER, event INTEGER, b_is TEXT, verdict TEXT, why TEXT);

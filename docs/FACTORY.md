@@ -213,6 +213,8 @@ on the page, and goes to every route whose `on` matches it. The default routes r
 | `webhook` | a bot's webhook brought an event from outside (agentsmessenger.com's sealed webhook): its source, kind, title, url, text and data | its routines on `webhook` whose `when` holds: turn, the event as data from outside |
 | `routine.worse` | a bot's routine got worse: its last 5 runs cost 30 % more (tokens or $) than the 10 before, or 2 of them failed; once per episode, with the bot, the routine and those numbers | coach: turn (its pass, with the `bots` brief) |
 | `turn.done` / `routine.done` | a bot's turn ended (`routine.done` when a routine started it): the bot, the trigger, the routine and its task, its tools, skills and the beginning of its answer (`routine.done`: its answer and the «Cómo validar» of the skills it read, 2000 characters at most, for the `turn-quality` eval); its row in `turns` keeps the event's id | none |
+| `lab.compare` | a B run of a live experiment ended: the routine's task and the B and A answers as «Answer a» and «Answer b», in an order drawn at random | none (judged by `ab-compare`) |
+| `lab.adopted` / `lab.discarded` | Tirith decided an experiment by `[lab]`: one line, as «Adopté gmail-safari v3: −38 % tokens, misma calidad (8/8)» | manager: note, the bot's chat; `lab.adopted` on the phones too |
 
 The answer of a turn reaches the phones only when an event that started it has `phone = true` (`owner.message`
 always). Today every manager message reaches them. A routine answer that starts with ∅ still never does.
@@ -282,7 +284,18 @@ on = "turn.done"                   # and a second one on routine.done
 judge = "judge"
 rubric = "evals/unapproved.md"     # ok, or unapproved: done without an answered approval card
 sample = 1.0
+
+[[evals]]
+id = "ab-compare"
+on = "lab.compare"
+judge = "judge"
+rubric = "evals/ab-compare.md"     # a, b or tie: which of two answers does the task better
+sample = 1.0
 ```
+
+The `ab-compare` eval reads a live experiment's B run and the A run before it, blind: the two answers come as «Answer
+a» and «Answer b» in an order Tirith drew at random and kept, and its label is mapped back to B winning, losing or
+tying (see the lab below).
 
 The `unapproved` eval reads the event line of a bot's turn or routine, which carries its tool calls (with what each
 ran) and the «Qué requiere aprobación» of the skills it read, with the conversation before it (the approval cards
@@ -318,10 +331,32 @@ The Coach is a system bot of the factory and a turn role like the CEO: `[roles.c
 `routine.worse`. Which brief a turn role reads is its `brief` key: `ceo` (the default: the measures by factory version)
 or `bots` (each bot's numbers, routines, skills with the sections they lack and memory sizes). Each runs within its
 `max_per_day`, its answer in its own conversation. The Coach reads the run log and proposes one change per experiment,
-with its hypothesis and the gain it expects; until `tirith lab` exists it leaves it in its answer, in 3 lines at most,
-touching nothing, and answers «Sin novedad.» when nothing changed since its last pass. The bots' folders and
+with its hypothesis and the gain it expects, and starts it: a branch of the bot's repository with that one commit (made
+in a draft worktree under `<home>/lab` it removes), then `tirith lab start <bot> <branch> --routine <id> --mode live
+--hypothesis "<text>"`; its answer says so in 3 lines at most, or «Sin novedad.» when nothing changed since its last
+pass. The bots' folders and
 `<home>/bots` are git repositories Tirith commits after each turn that changed them and each Library change, so every
 run's `versions` are in their history.
+
+## The lab decides by a rule fixed before the test
+
+`[lab]` is the rule, the factory's and never the Coach's, read by the strict loader (`deny_unknown_fields`, shares from
+0 to 1):
+
+```toml
+[lab]
+inputs = 8              # comparisons before Tirith decides
+not_worse_share = 0.5   # B must win or tie this share of them (and win at least as often as it loses)
+min_saving = 0.15       # and save this share of the mean cost (tokens or $) or time
+max_days = 7            # decided with what it has after this many days
+```
+
+A live experiment alternates the routine's real runs between A (the bot's main) and B (the branch, in a worktree of
+the lab that is the bot's folder for that turn); each B is compared with the A before it by `ab-compare`. With
+`inputs` comparisons or after `max_days`, B is adopted when it is not worse, has no new failure and no 👎, and saves
+at least `min_saving`; adopted, its branch is merged into the bot's main, else deleted, and the bot's chat gets the
+line of `lab.adopted` or `lab.discarded`. The bot's «Mejoras» tab lists every experiment with its numbers and decision
+(docs/DAEMON.md, `lab/`).
 
 ## What stays in code
 

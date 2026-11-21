@@ -1,5 +1,5 @@
-// The bot's panel beside its chat: the face (asleep, on watch or working), its name and state, and three tabs —
-// Routines, Library, Enseñar, Números and Phone.
+// The bot's panel beside its chat: the face (asleep, on watch or working), its name and state, and its tabs —
+// Routines, Library, Enseñar, Números, Mejoras (the Coach's experiments) and Phone.
 import { html, useState, useEffect } from '../../../vendor/preact-htm.js';
 import { Face } from './face.js';
 import { stateOf, factoryLine } from './state.js';
@@ -10,8 +10,9 @@ import { Library } from './library.js';
 import { Phone } from './phone.js';
 import { Teach } from './teach.js';
 import { Numbers } from './numbers.js';
+import { Lab } from './lab.js';
 
-const TABS = [['routines', 'Routines'], ['library', 'Library'], ['teach', 'Enseñar'], ['numbers', 'Números'], ['phone', 'Phone']];
+const TABS = [['routines', 'Routines'], ['library', 'Library'], ['teach', 'Enseñar'], ['numbers', 'Números'], ['lab', 'Mejoras'], ['phone', 'Phone']];
 
 /** The Routines tab's list, with the form in place of the routine being changed. */
 function routineList(bot, list, form, setForm, done) {
@@ -46,7 +47,7 @@ export function Panel({ bot, busy, onEdit }) {
           aria-selected=${tab === k} class=${tab === k ? 'on' : ''} onClick=${() => setTab(k)}>${label}${k === 'routines' && list.length ? html` <span class="bn">${list.length}</span>` : null}</button>`)}</div>
       </header>
       ${form || tab !== 'routines' ? null : html`<div class="baddrow"><button type="button" class="blink" onClick=${() => setForm({})}>+ New routine</button></div>`}
-      ${tab === 'library' ? html`<${Library} bot=${bot} />` : tab === 'teach' ? html`<${Teach} key=${bot.id} bot=${bot} onRoutine=${(r) => { setTab('routines'); setForm(r); }} />` : tab === 'numbers' ? html`<${Numbers} key=${bot.id} bot=${bot} />` : tab === 'phone' ? html`<${Phone} key=${bot.id} bot=${bot} />` : null}
+      ${tab === 'library' ? html`<${Library} bot=${bot} />` : tab === 'teach' ? html`<${Teach} key=${bot.id} bot=${bot} onRoutine=${(r) => { setTab('routines'); setForm(r); }} />` : tab === 'numbers' ? html`<${Numbers} key=${bot.id} bot=${bot} />` : tab === 'lab' ? html`<${Lab} key=${bot.id} bot=${bot} />` : tab === 'phone' ? html`<${Phone} key=${bot.id} bot=${bot} />` : null}
       ${tab === 'routines' && form && !form.id ? html`<${RoutineForm} bot=${bot} r=${form} onDone=${done} />` : null}
       ${tab !== 'routines' ? null : routineList(bot, list, form, setForm, done)}
       ${tab === 'routines' && !form && list.some(isHook) ? html`<${Webhook} bot=${bot} />` : null}

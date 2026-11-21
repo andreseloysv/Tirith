@@ -97,7 +97,7 @@ Files:
 - `card.rs`: A bot's card saved: a new bot, or a change to one.
 - `cli.rs`: A bot's own commands, in its conversation.
 - `context.rs`: What a bot is handed at the start of every turn and routine, and the skill links laid before it.
-- `folder.rs`: A bot's folder and skills: where its sessions run, where agents may write, and the skills a folder holds.
+- `folder.rs`: A bot's folder and skills: where its sessions run (the lab's worktree during a B run), where agents may write, and the skills a folder holds.
 - `fragment.rs`: The bots as a TOML fragment: the owner's bots' roles, and every written bot's routes and routines.
 - `hook.rs`: A bot's webhook as Tirith keeps it (kv `webhook:<bot>`: the platform's id, url and from, and the room), and what arrives through it.
 - `hook_api.rs`: A bot's webhook from the page: its URL (made once on the platform), deleted, and «Probar».
@@ -110,7 +110,7 @@ Files:
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `notes.rs`: Numbered memory notes: `[m<N>]` and `[s<N>]` put before every note line that has none.
 - `routine.rs`: A routine made, changed or removed from a bot's card or its own commands.
-- `run.rs`: Routines run: one now, or every one due on the scheduler's tick.
+- `run.rs`: Routines run: one now, or every one due on the scheduler's tick (which also decides the lab's experiments that are due).
 - `schedule.rs`: When a routine runs: its days of the week, and whether it is due now.
 - `store.rs`: Keeping the bots: one change at a time, written into config.toml and reloaded.
 - `sweep.rs`: What goes out of config.toml before the bots are written again: their roles and routes, then the sections left empty.
@@ -204,7 +204,8 @@ stand next to the factory's. The `[[evals]]` of the factory are judged in the ba
 `factory/evals/` is its instructions): the event with the conversation before it (and, for a card, the card
 itself) goes in, and a `scores` row keeps the label or score, one line why, the event and the judge's stamp;
 a share of the events is judged (`sample`, by event id). An eval on a missing event, judge or rubric is
-invalid. Nothing of a score reaches the owner: the scores only feed the measures (`satisfaction`,
+invalid. `[lab]` is the rule the lab decides experiments by (`lab/` below), read with `deny_unknown_fields` and
+its shares checked (from 0 to 1, `inputs` at least 1). Nothing of a score reaches the owner: the scores only feed the measures (`satisfaction`,
 `needless_cards` and `unapproved` below).
 
 Every version of the factory has a stamp (`Factory::version`): the main commit that last changed `factory/`,
@@ -225,6 +226,7 @@ Files:
 - `extends.rs`: Roles that extend another role: each is laid over its parent, all the way up.
 - `keys.rs`: The keys a factory section may hold.
 - `layers.rs`: The layers of one factory version: the embedded text, the folder's file, config.toml's sections and routes, and the `default` agent under every other.
+- `lab.rs`: The factory's `[lab]`: the rule an experiment is decided by (`inputs`, `not_worse_share`, `min_saving`, `max_days`), strictly read.
 - `limits.rs`: The factory's `[limits]`: load, time and size limits the daemon runs under.
 - `lists.rs`: The closed lists a factory is checked against: its sections, its measures and the events the code emits.
 - `loaded.rs`: One loaded factory version.
@@ -258,6 +260,57 @@ Files:
 - `routes.rs`: The guard's HTTP API: every project's state, and installing one.
 - `start.rs`: The guard at the daemon's start.
 - `words.rs`: A project's forbidden words, from config.toml.
+
+## `lab/`
+
+The lab (docs/BOTS.md, part 3): the Coach's experiments on a bot's routine, one change each, decided by Tirith alone
+with the factory's `[lab]` rule. An experiment is a branch of the bot's repository (`bots/versioned.rs`) with exactly
+one commit over its main; the Coach makes it in a draft worktree under `<home>/lab` and removes that worktree
+(`factory/prompts/coach.md`), then starts it:
+
+- `tirith lab start <bot> <branch> --routine <id> --mode live --hypothesis "<text>"` → `POST /api/lab/start`: the
+  bot (key, id or name), a routine of its own with no experiment running (one at a time per routine), the mode
+  (`live`; `replay` and `shadow` are refused for now), a hypothesis, and a branch that exists, has one commit over the
+  bot's main and is checked out nowhere. A row in `experiments` (its `change` is the commit's subject) and a worktree
+  `<home>/lab/<bot>/<experiment>` on the branch.
+- `tirith lab list [<bot>]` → `GET /api/lab?bot=<id or key>`: the experiments, newest first (change, hypothesis, mode,
+  status, the comparisons judged, the numbers once decided), and the rule; the bot's tab «Mejoras» shows them.
+
+**Live.** Each real run of that routine (`bots/run.rs`, `bots/hook_fire.rs`) is the variant after the last one (kv
+`lab:last:<experiment>`; A first): A in the bot's own folder (its main), B in the worktree, which is the bot's folder
+for that turn — `lab::seat` maps `<home>/manager/<key>` to it for the session's folder (`manager/spawn.rs`,
+`codex/setup.rs`), the memory and skills it is handed (`bots/context.rs`), the versions its row keeps and the commit
+of what it changed (on the branch). A live session of the bot ends before a B run and after it, so each run's session
+starts in its own folder. The answer reaches the owner as always. At the turn's end (`turns/save.rs`) its row gets
+`experiment` and `variant`; a B run is compared with the A run before it: the event `lab.compare` (no route) carries the
+routine's task and the two answers as «Answer a» and «Answer b» in an order drawn at random, the letter B was shown
+under kept in `lab_comparisons` (`b_is`), and the eval `ab-compare` (rubric `factory/evals/ab-compare.md`, judge
+`judge`) answers `a`, `b` or `tie`, mapped back to B's `win`, `lose` or `tie` (`manager/evals.rs` calls `lab::judged`).
+
+**The decision.** With `inputs` comparisons judged, or `max_days` after its start (the scheduler's tick), and no run of
+the bot on its way, B is adopted when it is not worse (wins and ties at least `not_worse_share` of the comparisons, and
+wins at least as many as it loses), has no new failure (a B run failed where its A did not) and no 👎, and saves at
+least `min_saving` of A's mean tokens, dollars or time. Adopted, the bot's folder is committed and the branch is merged
+into its main (the live folder is that checkout, so the next run uses it; where main moved on the same lines, B's
+tested text wins, and a merge that still fails discards it instead); in both
+cases the worktree and the branch go. The row keeps the status, the end and the numbers (A's and B's runs, mean
+tokens, dollars and time, the tally, the savings and the line), and one line is emitted in the bot's conversation:
+`lab.adopted` (routed to its chat and the phones) or `lab.discarded` (its chat only), as «Adopté gmail-safari v3:
+−38 % tokens, misma calidad (8/8)» or «Descarté gmail-safari v4: peor calidad (3/8), −70 % tokens».
+
+Files:
+
+- `api.rs`: The lab's commands and routes: `tirith lab start` and `tirith lab list`, `POST /api/lab/start` and `GET /api/lab`.
+- `compare.rs`: A B run against the A run before it, judged blind by `ab-compare`, and the judge's answer mapped back to B's verdict.
+- `decide.rs`: The decision once an experiment is due: the numbers read, the rule applied, the branch merged or deleted, the line emitted.
+- `git.rs`: Git in a bot's repository as Tirith: the branch's one commit checked, the adopted branch merged (its text winning where main moved on the same lines), the worktree and the branch removed.
+- `mod.rs`: Declares the folder's files and re-exports what other modules use.
+- `numbers.rs`: An experiment's numbers from the store: each side's runs (mean tokens, dollars, time) and B's comparisons, new failures and 👎.
+- `rule.rs`: The `[lab]` rule applied to A's and B's numbers and the comparisons, and the one line that says the decision.
+- `seat.rs`: Which folder a bot's turn runs in during a live experiment: A, its own; B, the branch's worktree.
+- `start.rs`: `tirith lab start`: the request checked, the experiment's row and its worktree.
+- `store.rs`: The experiments' rows: one, the running ones, their worktree and the list the page shows.
+- `turn.rs`: A bot's turn ended: a run of an experiment keeps its variant, a B run is compared, the experiment may be decided.
 
 ## `lanes/`
 
@@ -805,7 +858,8 @@ the first one counts until the turn starts), `routine` (the id of the routine th
 Anthropic's `Skill` tool, Muse's `read_skill`, or any tool whose input names `skills/<name>/SKILL.md`), `tools` (JSON:
 each call's name and the short line the chat shows, 50 at most), `versions` (JSON: the git blob hash, as
 `git hash-object` gives it, of its `memory.md`, of `<home>/bots/memory.md` when it exists and of each skill's
-`SKILL.md`), `answer` (cut at 4000 characters), `event` (its event's id) and its stamp (`factory`, `role_hash`).
+`SKILL.md`), `answer` (cut at 4000 characters), `event` (its event's id), its stamp (`factory`, `role_hash`) and,
+for a run of a live experiment, its `experiment` and `variant` (`A` or `B`, set by `lab::finished` at its end).
 
 Tokens and cost come from what each agent already prints: Anthropic's `result` line (`usage.input_tokens`,
 `output_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens`, `total_cost_usd`, `is_error`); Muse's

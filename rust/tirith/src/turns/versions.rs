@@ -12,11 +12,11 @@ pub(super) fn folder(app: &Shared, t: &Turn) -> PathBuf {
         .role::<String>(&t.role, "scope")
         .as_deref()
         == Some("own");
-    if own {
+    crate::lab::seat(if own {
         app.home.join("manager").join(&t.role)
     } else {
         app.home.join(&t.role).join(&t.conv)
-    }
+    })
 }
 
 /// The git blob hash of a file, if it exists.

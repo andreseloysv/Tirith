@@ -6,6 +6,7 @@
 @import "bots/04-teach.css";
 @import "bots/05-numbers.css";
 @import "bots/06-cite.css";
+@import "bots/07-lab.css";
 /* the faces: their motion is the animator's (face.js); the CSS only draws */
 .bot { display: inline-block; flex: none; overflow: visible; vertical-align: middle; }
 /* a face is HTML layers stacking small SVGs: the blurred glow and body rasterize once into their layer and only the

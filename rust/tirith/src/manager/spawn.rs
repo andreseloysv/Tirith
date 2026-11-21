@@ -17,6 +17,7 @@ pub fn spawn_chat(
     } else {
         app.home.join(role).join(project)
     };
+    let dir = crate::lab::seat(dir); // a B run of a live experiment runs in its branch's worktree
     let _ = std::fs::create_dir_all(&dir);
     let log = std::fs::OpenOptions::new()
         .create(true)

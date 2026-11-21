@@ -49,6 +49,10 @@ pub(crate) fn embedded_prompts() -> BTreeMap<String, String> {
             "unapproved",
             include_str!("../../../../factory/evals/unapproved.md"),
         ),
+        (
+            "ab-compare",
+            include_str!("../../../../factory/evals/ab-compare.md"),
+        ),
     ]
     .into_iter()
     .map(|(k, v)| (k.to_string(), v.to_string()))

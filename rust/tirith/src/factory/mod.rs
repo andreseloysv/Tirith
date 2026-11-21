@@ -5,6 +5,7 @@ mod embedded;
 mod evals;
 mod extends;
 mod keys;
+mod lab;
 mod layers;
 mod limits;
 mod lists;
@@ -22,6 +23,7 @@ mod values;
 mod words;
 
 pub use current::{current, error, load};
+pub use lab::Lab;
 pub(crate) use lists::EVENTS;
 pub use loaded::Factory;
 pub use parse::parse;

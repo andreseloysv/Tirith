@@ -10,7 +10,7 @@
 .mc-react button { padding: 0 4px; font-size: 12px; line-height: 18px; border-radius: 9px; filter: grayscale(1); opacity: .35; transition: opacity .2s, filter .2s; }
 .mc-react button:hover { opacity: .8; }
 .mc-react button.on { filter: none; opacity: 1; background: var(--soft, rgba(127, 127, 127, .12)); }
-/* five tabs: they scroll sideways when the panel is narrow, the underline still on the header's line */
-.bsec header .btabs { gap: 16px; overflow-x: auto; scrollbar-width: none; margin-bottom: -11px; }
-.bsec header .btabs::-webkit-scrollbar { display: none; }
+/* the tabs always fit: they wrap to a second line when the panel is narrow (never cut, never a hidden scroll),
+   the underline of the last line still on the header's line */
+.bsec header .btabs { flex-wrap: wrap; gap: 12px 16px; min-width: 0; margin-bottom: -11px; }
 .bsec header .btabs button { margin-bottom: 0; }
