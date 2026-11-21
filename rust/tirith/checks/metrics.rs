@@ -1,11 +1,14 @@
 #[test]
 fn health_reports_paused_reason() {
-    let t = super::paused_text("tirith", "commit guard: the pre-commit hook is outdated or has other words than config.toml (tirith guard install tirith)");
+    let t = super::facts::paused_text("tirith", "commit guard: the pre-commit hook is outdated or has other words than config.toml (tirith guard install tirith)");
     assert!(t.contains("paused: commit guard"), "{t}");
     assert!(t.contains("fix: tirith guard install tirith"), "{t}");
-    assert!(super::paused_text("p", "3 lanes wait for the merge queue")
-        .contains("fix: wait for the merges"));
-    assert!(super::paused_text("p", "less than 5 GB free on /x").contains("fix: free disk space"));
+    assert!(
+        super::facts::paused_text("p", "3 lanes wait for the merge queue")
+            .contains("fix: wait for the merges")
+    );
+    assert!(super::facts::paused_text("p", "less than 5 GB free on /x")
+        .contains("fix: free disk space"));
 }
 #[test]
 fn unasked_turns_follow_the_last_mark_of_their_conversation() {
@@ -41,7 +44,7 @@ fn unasked_turns_follow_the_last_mark_of_their_conversation() {
             "the owner asked again: not counted",
         ),
     ];
-    assert_eq!(super::unasked(&marks, &msgs), 1);
+    assert_eq!(super::interruptions::unasked(&marks, &msgs), 1);
 }
 #[test]
 fn owner_measures_count_interruptions_and_needless_cards() {
@@ -92,7 +95,7 @@ fn owner_measures_count_interruptions_and_needless_cards() {
     card("o2", 390, "closed");
     card("o3", 380, "closed");
     card("o4", 370, "open");
-    let metrics = super::compute(&app);
+    let metrics = super::compute::compute(&app);
     let get = |id: &str| {
         metrics
             .iter()
@@ -174,7 +177,7 @@ fn owner_measures_count_interruptions_and_needless_cards() {
     score(answered, "card-needed", "alone");
     let closed_ev = app.insert("INSERT INTO events (at, lane, project, kind, tool, summary, session) VALUES (?1,'','p','card.closed','','Card o2 closed by the manager: no longer needed','')", rusqlite::params![at(110)]);
     score(closed_ev, "card-needed", "alone"); // already counted as closed without an answer: never twice
-    let metrics = super::compute(&app);
+    let metrics = super::compute::compute(&app);
     let get = |id: &str| {
         metrics
             .iter()
@@ -268,7 +271,7 @@ fn needless_cards_ignores_superseded() {
         "answered",
         "sí",
     );
-    let metrics = super::compute(&app);
+    let metrics = super::compute::compute(&app);
     let needless = metrics
         .iter()
         .find(|m| m.id == "needless_cards")
@@ -292,7 +295,10 @@ fn ceo_brief_groups_measures_and_scores_by_factory_version() {
     std::fs::create_dir_all(&home).unwrap();
     let app = crate::app::App::open_at(home.clone());
     // The delayed metric.red route names the CEO, still red after 15 minutes.
-    assert_eq!(super::delayed_review(&app), ("ceo".to_string(), 15 * 60));
+    assert_eq!(
+        super::review::delayed_review(&app),
+        ("ceo".to_string(), 15 * 60)
+    );
     let at = |ago: u64| {
         chrono::DateTime::from_timestamp(crate::app::now_s().saturating_sub(ago) as i64, 0)
             .unwrap()
@@ -318,7 +324,7 @@ fn ceo_brief_groups_measures_and_scores_by_factory_version() {
     app.insert("INSERT INTO scores (at, event, eval, label, score, why, factory, role_hash) VALUES (?1, 2, 'owner-mood', 'correction', NULL, 'no', 'v2+bbbb2222', 'j')", rusqlite::params![at(3000)]);
     app.insert("INSERT INTO owner_items (id, at, kind, project, question, status, answer, lane, factory, role_hash) VALUES ('o9', ?1, 'decision', 'tirith', 'q?', 'closed', '', '', 'v2+bbbb2222', '')", rusqlite::params![at(3000)]);
     app.insert("INSERT INTO events (at, lane, project, kind, tool, summary, session, factory, role_hash) VALUES (?1, '', 'tirith', 'lane.failed', '', '', '', 'v2+bbbb2222', '')", rusqlite::params![at(3000)]);
-    let brief = super::brief(&app, "Scheduled CEO pass (no red measure needed).");
+    let brief = super::brief::brief(&app, "Scheduled CEO pass (no red measure needed).");
     // The by-version tables the CEO compares: merged and first try per stamp (oldest first), scores, cards and events per stamp.
     assert!(
         brief.contains("# By factory version (oldest first)"),
@@ -365,7 +371,7 @@ fn red_episode_survives_restart() {
     let (t0, after) = (1_000_000u64, 900u64); // red since t0, its CEO pass after 15 min
     let app = crate::app::App::open_at(home.clone());
     assert_eq!(
-        super::episode(&app, "needless_cards", true, t0, after),
+        super::episode::episode(&app, "needless_cards", true, t0, after),
         (true, false, Some(t0)),
         "a measure turning red is fresh: metric.red is announced"
     );
@@ -376,27 +382,27 @@ fn red_episode_survives_restart() {
     );
     drop(app); // the daemon restarts: only kv survives
     let app = crate::app::App::open_at(home.clone());
-    assert_eq!(super::episode(&app, "needless_cards", true, t0 + 60, after), (false, false, Some(t0)), "still the same episode after the restart: no second metric.red, and its start did not move");
+    assert_eq!(super::episode::episode(&app, "needless_cards", true, t0 + 60, after), (false, false, Some(t0)), "still the same episode after the restart: no second metric.red, and its start did not move");
     assert_eq!(
-        super::episode(&app, "needless_cards", true, t0 + after, after),
+        super::episode::episode(&app, "needless_cards", true, t0 + after, after),
         (false, true, Some(t0)),
         "15 min red: its one CEO pass is due"
     );
     drop(app); // and it restarts again, after that pass
     let app = crate::app::App::open_at(home.clone());
     assert_eq!(
-        super::episode(&app, "needless_cards", true, t0 + 3600, after),
+        super::episode::episode(&app, "needless_cards", true, t0 + 3600, after),
         (false, false, Some(t0)),
         "the pass already ran: it is not repeated"
     );
     // Back to green clears the episode, so a later red stretch is a new one, announced and reviewed again.
     assert_eq!(
-        super::episode(&app, "needless_cards", false, t0 + 3700, after),
+        super::episode::episode(&app, "needless_cards", false, t0 + 3700, after),
         (false, false, None)
     );
     assert_eq!(app.kv("metric_red:needless_cards"), None);
     assert_eq!(
-        super::episode(&app, "needless_cards", true, t0 + 3800, after),
+        super::episode::episode(&app, "needless_cards", true, t0 + 3800, after),
         (true, false, Some(t0 + 3800))
     );
     drop(app);
@@ -404,11 +410,11 @@ fn red_episode_survives_restart() {
 }
 #[test]
 fn health_merged_reports_empty_plans() {
-    let t = super::empty_plan_note(&["tirith".to_string(), "p2".to_string()]);
+    let t = super::facts::empty_plan_note(&["tirith".to_string(), "p2".to_string()]);
     assert!(
         t.contains("tirith plan empty") && t.contains("fix: tirith plan add tirith <step>"),
         "{t}"
     );
     assert!(t.contains("p2 plan empty"), "{t}");
-    assert!(super::empty_plan_note(&[]).is_empty());
+    assert!(super::facts::empty_plan_note(&[]).is_empty());
 }
