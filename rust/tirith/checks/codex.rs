@@ -120,6 +120,50 @@ fn browser_mcp_for_every_agent() {
     assert_eq!(anthropic_browser_of(&lane(&app, "anthropic"))["args"][1], "--isolated");
 }
 
+/// An app like `browser_home` whose config turns the network sandbox off, so its agents run outside it.
+fn browser_home_unsandboxed(tag: &str) -> crate::app::Shared {
+    let dir = std::env::temp_dir().join(format!("tirith-browser-{tag}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join("config.toml"),
+        "# the owner's\n[agents.muse]\ncommand = \"muse\"\n[agents.codex]\ncommand = \"codex\"\n[agents.anthropic]\ncommand = \"anthropic-agent\"\n[network]\nsandbox = false\n[[projects]]\nid = \"p1\"\nrepo = \"/tmp\"\n",
+    )
+    .unwrap();
+    let app = crate::app::App::open_at(dir);
+    assert_eq!(app.cfg().error, None, "config with [network] must not read as unknown keys");
+    app
+}
+
+#[test]
+fn browser_mcp_env_reaches_the_sandbox() {
+    let lane = |app: &crate::app::Shared, alias: &str| crate::models::lane_argv(app, Some(alias), None, std::path::Path::new("/tmp/brief.md"), std::path::Path::new("/tmp"), None).unwrap().argv;
+    let proxy = ["HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY", "NO_PROXY"];
+    // Inside the sandbox (the default config): every agent's server env names TIRITH_SANDBOXED and the four proxy variables, forwarded by name — Muse and anthropic as a whole-value ${VAR}, Codex in env_vars — so the launcher passes --no-sandbox and Edge leaves through Tirith's proxy.
+    let app = browser_home("sandboxed", false);
+    let env = browser_of(&lane(&app, "muse"))["env"].clone();
+    assert_eq!(env["TIRITH_SANDBOXED"], "${TIRITH_SANDBOXED}", "muse takes the flag from its own env: {env}");
+    for k in proxy {
+        assert_eq!(env[k], format!("${{{k}}}"), "muse forwards {k} by name: {env}");
+    }
+    let server = codex_browser_of(&lane(&app, "codex"));
+    assert_eq!(server["env"]["TIRITH_SANDBOXED"].as_str(), Some("1"), "codex gets the flag as a value: {server}");
+    assert_eq!(server["env_vars"].as_array().unwrap().iter().filter_map(|v| v.as_str()).collect::<Vec<_>>(), proxy.to_vec(), "codex forwards the proxies by name: {server}");
+    let env = anthropic_browser_of(&lane(&app, "anthropic"))["env"].clone();
+    assert_eq!(env["TIRITH_SANDBOXED"], "1", "anthropic gets the flag as a value: {env}");
+    for k in proxy {
+        assert_eq!(env[k], format!("${{{k}}}"), "anthropic forwards {k} by name: {env}");
+    }
+    // Outside the sandbox ([network] sandbox = false): no sandbox flag and no proxy forwarding, for any of the three agents.
+    let app = browser_home_unsandboxed("outside");
+    let env = browser_of(&lane(&app, "muse"))["env"].clone();
+    assert!(env.get("TIRITH_SANDBOXED").is_none() && proxy.iter().all(|k| env.get(*k).is_none()), "muse outside the sandbox names neither: {env}");
+    let server = codex_browser_of(&lane(&app, "codex"));
+    assert!(server["env"].as_table().is_some_and(|t| !t.contains_key("TIRITH_SANDBOXED")) && server.as_table().is_some_and(|t| !t.contains_key("env_vars")), "codex outside the sandbox names neither: {server}");
+    let env = anthropic_browser_of(&lane(&app, "anthropic"))["env"].clone();
+    assert!(env.get("TIRITH_SANDBOXED").is_none() && proxy.iter().all(|k| env.get(*k).is_none()), "anthropic outside the sandbox names neither: {env}");
+}
+
 #[test]
 fn muse_read_only_turn_is_read_only_and_fresh_without_a_session() {
     let a = super::muse_argv("muse", true, (None, None), "/w", None, "/w/p.txt", &[]);
