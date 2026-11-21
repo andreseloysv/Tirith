@@ -152,14 +152,9 @@ fn compute(app: &Shared) -> Vec<Metric> {
 }
 
 fn describe(m: &Metric) -> String {
-    format!(
-        "{} [{}] is {}{}{}",
-        m.label,
-        m.id,
-        m.value,
-        m.target.map(|t| format!(" (target: {} {t})", if m.at_least { "at least" } else { "at most" })).unwrap_or_default(),
-        if m.facts.is_empty() { String::new() } else { format!(". Facts: {}", m.facts) }
-    )
+    let target = m.target.map(|t| format!(" (target: {} {t})", if m.at_least { "at least" } else { "at most" })).unwrap_or_default();
+    let facts = if m.facts.is_empty() { String::new() } else { format!(". Facts: {}", m.facts) };
+    format!("{} [{}] is {}{}{}", m.label, m.id, m.value, target, facts)
 }
 
 /// One metric's red episode — since when (the manager was told then) and whether its review ran — kept in `kv` (`metric_red:<id>` = "<since>@<reviewed>") so a daemon restart neither announces `metric.red` again nor repeats the review of a measure already red; back to green clears it. Returns (fresh, review due, since).

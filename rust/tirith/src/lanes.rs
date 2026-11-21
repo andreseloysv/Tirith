@@ -192,17 +192,13 @@ fn biggest_dirs(dir: &Path, n: usize) -> Vec<(String, u64)> {
 /// Below the factory's low-disk limit on the disk of the lanes' worktrees: one ask-owner card (kind device, of no project, since every project shares that disk) naming the biggest of Tirith's own folders.
 async fn warn_low_disk(app: &Shared) {
     let (home, key, free) = (app.home.clone(), "low_disk_asked", free_gb(&app.home.join("lanes")));
-    match low_disk_ask(free, app.kv(key).is_some()) {
-        Some(true) => {
-            app.set_kv(key, Some("1"));
-            let rows = tokio::task::spawn_blocking(move || biggest_dirs(&home, 5)).await.unwrap_or_default();
-            let list = rows.iter().map(|(p, k)| format!("{p} ({:.1} GB)", *k as f64 / 1e6)).collect::<Vec<_>>().join(", ");
-            let q = format!("Only {free:.1} GB free on this disk: lanes will fail with No space left on device. The biggest of Tirith's own folders: {list}. Free some space (delete what you no longer need).");
-            let _ = crate::manager::ask_owner(app, "", "device", &q, "");
-        }
-        Some(false) => app.set_kv(key, None),
-        None => {}
-    }
+    let Some(ask) = low_disk_ask(free, app.kv(key).is_some()) else { return };
+    let Some(()) = ask.then_some(()) else { return app.set_kv(key, None) };
+    app.set_kv(key, Some("1"));
+    let rows = tokio::task::spawn_blocking(move || biggest_dirs(&home, 5)).await.unwrap_or_default();
+    let list = rows.iter().map(|(p, k)| format!("{p} ({:.1} GB)", *k as f64 / 1e6)).collect::<Vec<_>>().join(", ");
+    let q = format!("Only {free:.1} GB free on this disk: lanes will fail with No space left on device. The biggest of Tirith's own folders: {list}. Free some space (delete what you no longer need).");
+    let _ = crate::manager::ask_owner(app, "", "device", &q, "");
 }
 /// Why a project cannot start a lane now (merge backlog, disk, commit guard), or `None`.
 fn blocked(app: &Shared, p: &Project, lanes: &[Lane]) -> Option<String> {

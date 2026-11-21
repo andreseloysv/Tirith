@@ -17,4 +17,6 @@ tirith chat clear [--project P]                clear a conversation (this sessio
 tirith chat keep [<time>] [--project P]        how long a chat lives, in your words (30m, 1h, 24 h, 2 días, una semana; "siempre" = no limit); without a time it says the current one
 tirith hook <Event>                            agent hook bridge (stdin JSON; also --agent A --event E)
 tirith hooks install                           point the agents' hooks at the daemon over HTTP
+tirith safari open <url>                       (the managers and bots) open the page in the owner's Safari, through the daemon
+tirith safari read [<url>]                     (the managers and bots) URL, title and text of Safari's current tab (or of the tab whose URL starts with <url>)
 (modules add: tirith room …, tirith net …, tirith models …, tirith guard …)

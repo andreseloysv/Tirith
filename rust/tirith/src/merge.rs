@@ -160,10 +160,7 @@ async fn run_stage(app: &Shared, pipe: &Pipe, dir: &Path, name: &str, run: &str)
 async fn merge_slot(project: &Project, manifest: &Manifest) -> Result<PathBuf, String> {
     let slot = project.lanes_dir().join("merge");
     if !slot.exists() {
-        if let Err(e) = add_worktree(&project.repo(), &slot, None, &manifest.lane_exclude).await {
-            drop_half_made(&slot, &e);
-            return Err(e);
-        }
+        add_worktree(&project.repo(), &slot, None, &manifest.lane_exclude).await.map_err(|e| (drop_half_made(&slot, &e), e).1)?;
     }
     Ok(slot)
 }
