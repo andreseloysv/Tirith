@@ -148,6 +148,45 @@ async fn agent_say_is_not_the_owner() {
     let _ = std::fs::remove_dir_all(&home);
 }
 
+/// One raw POST /api/chat against the test daemon, as the `tirith say` CLI sends it (with the session's lane/role headers).
+async fn post_chat(port: u16, headers: &str, body: &str) -> String {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let mut s = tokio::net::TcpStream::connect(("127.0.0.1", port)).await.unwrap();
+    s.write_all(format!("POST /api/chat HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: {}\r\n{headers}Connection: close\r\n\r\n{body}", body.len()).as_bytes()).await.unwrap();
+    let mut out = String::new();
+    s.read_to_string(&mut out).await.unwrap();
+    out
+}
+
+#[tokio::test]
+async fn agent_say_is_not_the_owner_over_http() {
+    let home = std::env::temp_dir().join(format!("tirith-agent-say-http-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&home);
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::write(home.join("config.toml"), format!("[[projects]]\nid = \"sayhttp\"\nrepo = \"{}\"\n", home.display())).unwrap();
+    let app = crate::app::App::open_at(home.clone());
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+    super::talk("sayhttp", |t| (t.tx, t.alive) = (Some(tx), true));
+    let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let app2 = app.clone();
+    let srv = tokio::spawn(async move { drop(axum::serve(listener, crate::server::router(app2, port)).await) });
+    // `tirith say` from a manager session (X-Tirith-Role set, as client::call sends it): the daemon reads the agent from the headers.
+    let out = post_chat(port, "X-Tirith-Lane: \r\nX-Tirith-Role: manager\r\n", r#"{"text": "nota del manager por http", "project": "sayhttp"}"#).await;
+    assert!(out.contains(" 200"), "{out}");
+    let handed: Vec<_> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
+    assert!(handed.join("\n").contains("[agent manager] nota del manager por http"), "handed to the manager as the agent's: {handed:?}");
+    assert_eq!(app.query("SELECT role FROM chat WHERE text = 'nota del manager por http'", [], |r| r.get::<_, String>(0)), ["manager"]);
+    // From a lane both headers may ride; the lane is the name that counts.
+    let out = post_chat(port, "X-Tirith-Lane: lane-http-1\r\nX-Tirith-Role: manager\r\n", r#"{"text": "nota de la lane por http", "project": "sayhttp"}"#).await;
+    assert!(out.contains(" 200"), "{out}");
+    assert_eq!(app.query("SELECT role FROM chat WHERE text = 'nota de la lane por http'", [], |r| r.get::<_, String>(0)), ["lane-http-1"]);
+    assert_eq!(app.query("SELECT COUNT(*) FROM events WHERE kind = 'owner.message'", [], |r| r.get::<_, i64>(0)), [0], "neither say was the owner's");
+    srv.abort();
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}
+
 #[test]
 fn card_id_of_reads_the_card_an_event_line_names() {
     assert_eq!(super::card_id_of("Card o12 closed by the manager: ya no hace falta").as_deref(), Some("o12"));
