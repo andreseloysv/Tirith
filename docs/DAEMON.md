@@ -15,6 +15,10 @@ The bots' agent finds them natively: Muse reads `.agents/skills`, and the agent'
 A bot may have a model of its own (role `bot-<id>` of `models.rs`, chosen in its card); without one it has the managers'. A routine answer that starts with ∅ (nothing new)
 stays on the page and never reaches the phones (`rooms::to_phones`), so only news does.
 
+## `chat.rs`
+
+Clearing a conversation and its longest life. Every conversation (a project's, a bot's) can be cleared — its chat rows go, its saved agent session (kv `manager_session:*:<conversation>`) is forgotten and its live one ends without cutting a running turn, so the bot starts fresh; its memory, skills and routines stay — and can be given a longest life: `chat_keep`, the owner's own words (`30m`, `1h`, `24 h`, `2 días`, `una semana`; `siempre` takes the limit away), in `~/.tirith/config.toml` on the bot's role or on the project, written with toml_edit. A minute sweep drops the rows older than it, and a sweep that dropped any forgets the saved session too, so the bot cannot remember what is gone. The owner clears and limits a chat in its page menu, or asks its bot in the chat: `tirith chat clear` / `tirith chat keep "<time>"` act on the conversation of the session that runs them (a lane never does), only on the owner's own words. The paired rooms hear both as one sealed line — `tirith-chat {"v":1,"clear":"<ISO UTC>"}` and `tirith-chat {"v":1,"keep_s":<seconds, 0 = forever>}` — so the phone page hides what is gone.
+
 ## `factory.rs`
 
 The factory file: `factory/factory.toml`, its prompts (`factory/prompts/*.md`) and its eval rubrics
