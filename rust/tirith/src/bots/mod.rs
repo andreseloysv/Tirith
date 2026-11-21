@@ -20,7 +20,7 @@ pub use api::routes;
 pub use cli::cli;
 pub use context::context;
 pub use folder::writable;
-pub use list::bot;
+pub use list::{bot, key_for};
 pub use migrate::start;
 pub use run::tick;
 pub use schedule::due;

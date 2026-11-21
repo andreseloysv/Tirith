@@ -14,7 +14,7 @@ pub(super) fn user_line(text: &str) -> String {
     json!({"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": text}]}}).to_string()
 }
 /// Hands the conversation its waiting reports and `text` as one message; its session starts when none runs.
-pub(super) fn deliver(app: &Shared, project: &str, text: &str, phones: bool) {
+pub fn deliver(app: &Shared, project: &str, text: &str, phones: bool) {
     let memory = bots::context(app, project); // a bot's memory, read at every turn
     let (start, handed, began) = talk(project, |t| {
         let was_busy = (t.phones |= phones, t.busy).1;

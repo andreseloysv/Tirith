@@ -59,7 +59,7 @@ pub fn say(app: &Shared, project: &str, text: &str, agent: &str) -> Result<(), S
     app.chat("owner", text, project);
     judge_evals(app, project, "owner.message", text, event);
     crate::turns::trigger(project, "owner", "");
-    let _ = (!model_command(app, project, text))
+    let _ = (!model_command(app, project, text) && !crate::teach::heard(app, project, text)) // while it is taught a task, the owner's words go with the steps
         .then(|| deliver(app, project, &with_cards(app, project, text), true));
     Ok(())
 }

@@ -2,7 +2,7 @@
 // and the shared ones of every bot) — to read, correct or delete.
 import { html, useState, useEffect } from '../../../vendor/preact-htm.js';
 import { useFetch, api } from '../../store.js';
-import { SKILL_START, Editor, Skill, titlesOf } from './skills.js';
+import { SKILL_START, Editor, Skill, titlesOf, activated } from './skills.js';
 import { Memory } from './memory.js';
 
 export function Library({ bot }) {
@@ -18,7 +18,7 @@ export function Library({ bot }) {
   const list = (skills, none) => (skills.length ? html`<ul class="brout">${skills.map((s) => (edit && !edit.memory && edit.name === s.name && edit.shared === s.shared
     ? html`<li key=${s.name}>${editor(s)}</li>`
     : html`<${Skill} key=${(s.shared ? 's:' : '') + s.name} s=${s} titles=${titles} open=${open === s.name + s.shared} onOpen=${() => setOpen(open === s.name + s.shared ? '' : s.name + s.shared)}
-        onEdit=${() => setEdit(s)} onDelete=${() => save({ name: s.name, shared: s.shared, delete: true })} />`))}</ul>` : html`<p class="bnote">${none}</p>`);
+        onEdit=${() => setEdit(s)} onActivate=${() => save({ name: s.name, shared: s.shared, text: activated(s.text) })} onDelete=${() => save({ name: s.name, shared: s.shared, delete: true })} />`))}</ul>` : html`<p class="bnote">${none}</p>`);
   const titles = titlesOf(lib.template);
   const mem = { edit, setEdit, editor, save };
   return html`<div class="blib">

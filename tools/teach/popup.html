@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Tirith · Enseñar</title>
+  <style>
+    body { font: 14px system-ui, sans-serif; width: 280px; margin: 0; padding: 14px; color: #e5e7eb; background: #111318; }
+    h1 { font-size: 15px; margin: 0 0 10px; }
+    button { width: 100%; padding: 10px; border: 0; border-radius: 10px; font: inherit; font-weight: 600; cursor: pointer; background: #3b82f6; color: #fff; }
+    button.rec { background: #ef4444; }
+    input { width: 100%; box-sizing: border-box; padding: 8px; border-radius: 8px; border: 1px solid #374151; background: #0b0d11; color: inherit; margin: 6px 0; }
+    p { color: #9ca3af; margin: 8px 0 0; line-height: 1.4; }
+    .err { color: #f87171; }
+    details { margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <h1>Enseñar a tu bot</h1>
+  <button id="go" type="button">Grabar</button>
+  <p id="say">Haz la tarea una vez. Contraseñas, códigos y tarjetas quedan tapados (•••). Para solo a los 10 minutos.</p>
+  <p id="err" class="err"></p>
+  <details id="setup">
+    <summary>Enlace del bot</summary>
+    <input id="link" placeholder="Pega el enlace de la pestaña «Enseñar»" autocomplete="off">
+    <button id="save" type="button">Guardar</button>
+  </details>
+  <script src="popup.js"></script>
+</body>
+</html>
