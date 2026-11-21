@@ -349,13 +349,18 @@ async fn land(app: &Shared, project: &Project, pipe: &Pipe, slot: &Path, base: &
     let working: Vec<String> = app.lanes.lock().unwrap().values().filter(|l| l.project == project.id && l.pid.is_some()).map(|l| l.id.clone()).collect();
     working.iter().for_each(|id| lanes::tell(id, &format!("[tirith] main advanced: {} (files: {})", items.join("; "), changed.iter().take(10).map(String::as_str).collect::<Vec<_>>().join(", "))));
     // A merge is news, not a question: the manager gets a turn for it only when it leaves the plan without open work.
-    manager::emit_event(app, &project.id, "merge.landed", &format!("merged on {} at {sha8}: {}", project.id, items.join("; ")), None);
+    manager::emit_event(app, &project.id, "merge.landed", &merged_note(&project.id, sha8, &items), None);
     if plan::read(app, &project.id).is_ok_and(|steps| !steps.iter().flat_map(|s| &s.items).any(|i| !i.done && !lanes::is_autopilot_skipped(&i.text))) {
         manager::emit_event(app, &project.id, "plan.empty", "The plan has no open item left: tell the owner what is done, and ask for the next goal if the project needs one.", None);
     }
     app.emit("plan", json!({"project": project.id}));
     app.sched_wake.notify_one();
     deploy(app, project, changed).await;
+}
+
+/// The `merged on …` note: only the beginning of each item — up to its first ": ", " (" or ". ", 120 chars at most — never the whole item (one reached 1,826 chars).
+fn merged_note(project: &str, sha8: &str, items: &[&str]) -> String {
+    format!("merged on {project} at {sha8}: {}", items.iter().map(|i| i[..[": ", " (", ". "].iter().filter_map(|d| i.find(d)).min().unwrap_or(i.len())].chars().take(120).collect::<String>()).collect::<Vec<_>>().join("; "))
 }
 
 /// A deploy stage (its `kind`, else a name that says so) is no check of a lane: it publishes main.
