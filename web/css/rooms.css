@@ -71,3 +71,11 @@
   :root:not([data-theme="light"]) .chip.xk.blk { background: rgba(255,123,128,.14); color: #ff9da1; }
 }
 .rjoin .rcode { flex: 1 1 260px; max-width: 420px; } .mrooms .phead > b { white-space: nowrap; }
+/* a project's card is headed by the face of the agent that runs it (touching it opens its chat); encrypted is a word now */
+.rface { flex: none; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border-radius: 14px; color: var(--mut); line-height: 0; }
+button.rface { cursor: pointer; } button.rface:hover { background: var(--soft); color: var(--fg); }
+.rhash { flex: none; }
+@media (max-width: 800px) {
+  .mrooms .phead { flex-wrap: wrap; min-width: 0; }
+  .mrooms .phead > b { white-space: normal; min-width: 0; overflow-wrap: anywhere; }
+}

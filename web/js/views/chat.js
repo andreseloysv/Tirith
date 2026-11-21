@@ -6,6 +6,7 @@
 // (the daemon appends them to the text); pictures show as thumbnails.
 import { html, Component, useState, useEffect, useLayoutEffect, useRef, useMemo } from '../../vendor/preact-htm.js';
 import { useStore, useTalk, useFetch, api } from '../store.js';
+import { useUnread } from '../unread.js';
 import { ChatModels } from './chat-models.js';
 import { Face } from './bots/face.js';
 import { clockTime } from '../common.js';
@@ -243,6 +244,7 @@ export function Chat({ project = '', who = '', hint = '' }) {
   const isProject = s.projects.some((p) => p.id === project);
   const role = isProject ? 'manager' : project;   /* the factory role that speaks in this conversation */
   const [M] = useFetch('/api/models', ['models', 'bots']);
+  const unread = useUnread();   /* the bots and their unread answers, as the sidebar's Faces show them */
   const entry = (M && M.roles[role]) || null;
   const whoName = who || (entry && entry.name) || (isProject ? 'Project Manager' : 'Manager');
   const face = (entry && entry.face && entry.face.shape && entry.face) || (isProject ? { shape: 'hex', color: '#8e7cf0' } : null);
@@ -259,6 +261,11 @@ export function Chat({ project = '', who = '', hint = '' }) {
 
   const chat = talk.rows, lastId = chat.length ? chat[chat.length - 1].id : 0;
   const busy = !!s.busy[project];
+  /* the head's face, as in Faces: working on a turn, else on watch (a bot with nothing on sleeps), with its unread answers */
+  const bot = unread.bots.find((b) => (b.key || `bot-${b.id}`) === project) || null;
+  const unseen = bot ? unread.by[bot.id] || 0 : 0;
+  const faceState = busy ? 'work' : bot && !(bot.routines || []).some((r) => r.on !== false) && !(bot.routes || []).length ? 'sleep' : 'watch';
+  const stateLabel = { work: 'Working', watch: 'Waiting', sleep: 'Asleep' }[faceState];
   const items = useMemo(() => group(chat.slice(-shown)), [chat.length, lastId, shown]);
   const hidden = Math.max(0, chat.length - shown);
 
@@ -422,7 +429,7 @@ export function Chat({ project = '', who = '', hint = '' }) {
   const pending = busy && !runningKey && lastItem ? html`<${Intent} who=${whoName} step=${null} />` : null;
 
   return html`<section class=${`mchat${drag ? ' drop' : ''}`}>
-    <div class="mc-head"><h2 class="mc-id">${face ? html`<span class="mc-face"><${Face} shape=${face.shape} color=${face.color || '#3b82f6'} size=${26} still /></span>` : null}<span>${whoName}${isProject ? html` <span class="mc-of">${name}</span>` : null}</span></h2>
+    <div class="mc-head"><h2 class="mc-id">${face ? html`<span class="mc-face"><${Face} shape=${face.shape} color=${face.color || '#3b82f6'} size=${64} state=${faceState} />${unseen ? html`<em class="nunread">${unseen > 9 ? '9+' : unseen}</em>` : null}</span>` : null}<span class="mc-who"><span class="mc-name">${whoName}${isProject ? html` <span class="mc-of">${name}</span>` : null}</span><span class="mc-state">${stateLabel}</span></span></h2>
       <span class="mc-tools">${busy ? html`<button class="mc-stop" type="button" onClick=${interrupt} title="Stop the current turn (Esc)">Stop</button>` : null}<${ChatMenu} project=${project} /></span></div>
     <div class="mc-log" id="mc-log" ref=${log} onScroll=${onScroll}>
       ${hidden ? html`<button type="button" class="mc-earlier" onClick=${() => { const el = log.current; stick.current = false; anchor.current = el.scrollHeight - el.scrollTop; setShown(shown + SHOWN); }}>Show earlier (${hidden})</button>` : null}
