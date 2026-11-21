@@ -62,7 +62,7 @@ end with code, and puts a model in the loop only where judgment is needed.
   images can be attached): select the project and the chat, the cards that need you, the plan, the pipelines, the
   agents, the rooms and the access list show that project only (what belongs to the machine, such as the block list
   and the models, says so). With no project selected you see all of them, and talk to the manager of what belongs
-  to no single project (the lead: health, the CEO's passes). The autopilot starts the work; a manager answers its project's lanes, keeps
+  to no single project (the Manager system bot: health, the CEO's passes). The autopilot starts the work; a manager answers its project's lanes, keeps
   its plan good and asks you only for credentials, payments, personal accounts, physical devices or real decisions
   (`tirith ask-owner --kind …`). A merge shows in the project's chat without costing a manager turn.
 - **Health and the CEO.** Metrics by code (items merged per day, time to merge, first-try rate, idle projects,
@@ -70,7 +70,7 @@ end with code, and puts a model in the loop only where judgment is needed.
   owner did not start, notices routed to the phones and cards, over 24 h — needless cards, closed without an
   answer or judged decidable alone by the `card-needed` eval, and the owner's satisfaction, judged per day by a
   cheap model from the owner's own messages (approvals minus corrections, repeats and noise complaints) and
-  never by asking, each with its target in the factory). A red metric goes to the lead; still red 15 minutes later, and every day
+  never by asking, each with its target in the factory). A red metric goes to the manager of no project; still red 15 minutes later, and every day
   at 07:00 by its `schedule` route in the factory anyway, the CEO role runs one fresh read-only turn over the measures and eval scores by factory version
   and the factory itself: it says what is wrong and what to do, and may propose at most one change to
   `factory/` — a plan item with its check and its lane started, no owner's yes needed. A factory version whose
@@ -82,7 +82,7 @@ end with code, and puts a model in the loop only where judgment is needed.
   project's conversation: what the manager says, Tirith's reports (merged, failed, a lane's question) and the cards
   that need you, which you answer there (`o12: yes`). `tirith room forget` cuts off a lost phone. Add other managers
   with a code, and watch public rooms with a summary.
-- **Models per role.** Agent, model and effort for every role of the factory (manager, lead, worker, ceo, judge), with a fallback
+- **Models per role.** Agent, model and effort for every role of the factory (manager, manager-general, worker, ceo, judge), with a fallback
   chain for lanes when an agent runs out of credits. Codex works in every role. Choose models in the chat's
   **Models** panel or Settings. The app and the paired phone both offer provider/model buttons and an effort
   slider. `/models` also works in either chat.
@@ -173,7 +173,7 @@ Re-running setup refreshes the installation and keeps timestamped backups of cha
 
 ### The factory and the configuration file
 
-How the factory runs — each agent's flags, the roles (manager, lead, worker, ceo) with their prompts, who
+How the factory runs — each agent's flags, the roles (manager, manager-general, worker, ceo, judge) with their prompts, who
 hears each event (a lane failed, a merge landed, a measure turned red: as a turn or a note, in the chat, on your
 phone), the limits, the plan words, the card kinds and the health measures with their targets — is data, not code:
 `factory/factory.toml` and `factory/prompts/` in this repository (see `docs/FACTORY.md`). The daemon embeds them

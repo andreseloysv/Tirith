@@ -114,3 +114,41 @@ fn bots_written_at_the_end() {
     assert_eq!(super::written(&text, bots.as_array().unwrap()).unwrap(), text, "writing again changes nothing");
     assert!(!super::written(&text, &[]).unwrap().contains("bot-abc123"));
 }
+
+#[test]
+fn a_system_bot_change_is_a_layer_in_config() {
+    // The CEO renamed and re-faced on the page; the judge untouched; an owner's bot as ever.
+    let old = "# keep\n[roles.ceo]\nmodel = \"keep-me\" # and this\n";
+    let bots = json!([
+        {"id": "ceo", "key": "ceo", "system": true, "dirty": true, "name": "Boss", "shape": "star", "color": "#e5484d", "show": true, "routines": []},
+        {"id": "judge", "key": "judge", "system": true, "name": "Judge", "shape": "hex", "color": "#8c8c8c", "show": false, "routines": []},
+        {"id": "abc123", "name": "N", "shape": "drop", "color": "#22d3ee", "routines": []}
+    ]);
+    let text = super::written(old, bots.as_array().unwrap()).unwrap();
+    assert!(text.contains("model = \"keep-me\" # and this") && text.contains("# keep"), "the CEO's other config keys and comments stay:\n{text}");
+    assert!(text.contains("Boss") && text.contains("[roles.bot-abc123]"), "the change and the owner's bot are written:\n{text}");
+    assert!(!text.contains("judge"), "an untouched system bot leaves no layer:\n{text}");
+    assert_eq!(text.matches("[roles.ceo]").count(), 1, "one CEO table, no duplicate:\n{text}");
+    // The layer wins over the factory, key by key, and system folders are writable like a bot's.
+    let prompts: std::collections::BTreeMap<String, String> = [
+        ("manager", include_str!("../../../factory/prompts/manager.md")),
+        ("one-project", include_str!("../../../factory/prompts/one-project.md")),
+        ("no-project", include_str!("../../../factory/prompts/no-project.md")),
+        ("brief", include_str!("../../../factory/prompts/brief.md")),
+        ("ceo", include_str!("../../../factory/prompts/ceo.md")),
+        ("bot", include_str!("../../../factory/prompts/bot.md")),
+        ("owner-mood", include_str!("../../../factory/evals/owner-mood.md")),
+        ("card-needed", include_str!("../../../factory/evals/card-needed.md")),
+    ]
+    .into_iter()
+    .map(|(k, v)| (k.to_string(), v.to_string()))
+    .collect();
+    let f = crate::factory::parse(include_str!("../../../factory/factory.toml"), prompts, &text.parse::<toml::Table>().unwrap()).unwrap();
+    assert_eq!(f.role::<String>("ceo", "name").as_deref(), Some("Boss"));
+    assert_eq!(f.role::<toml::Table>("ceo", "face").and_then(|t| t.get("shape").and_then(|v| v.as_str()).map(String::from)).as_deref(), Some("star"));
+    // With no [roles] in the file at all, the layer is a plain table at the end (an inline `roles = {…}` would make a later [roles.bot-…] header unparseable).
+    let text = super::written("[server]\nport = 7799\n", &bots.as_array().unwrap()[..1]).unwrap();
+    assert!(text.contains("[roles.ceo]") && !text.contains("roles = {") && text.parse::<toml::Table>().is_ok(), "a real table:\n{text}");
+    let home = std::path::Path::new("/Users/o/.tirith");
+    assert!(super::writable(home, &home.join("manager/ceo/memory.md")) && super::writable(home, &home.join("manager/manager-general/.agents/skills/x/SKILL.md")));
+}

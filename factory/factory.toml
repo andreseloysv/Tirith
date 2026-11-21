@@ -53,10 +53,20 @@ prompt = ["prompts/manager.md", "prompts/one-project.md"]
 idle_minutes = 30
 runs_on = "local"
 
-[roles.lead]
+# The manager of no project: a system bot (like the CEO and the judge below, a
+# role with scope "own", a name, a face and `show`) whose conversation is the
+# one where health, reviews and what spans projects live. Only two scopes are
+# left: project (the manager of each project and the worker) and own (one bot).
+[roles.manager-general]
+name = "Manager"
 extends = "manager"
-scope = "global"
+scope = "own"
 prompt = ["prompts/manager.md", "prompts/no-project.md"]
+show = true
+
+[roles.manager-general.face]
+shape = "dome"
+color = "#3fb6a8"
 
 [roles.worker]
 agent = "anthropic"
@@ -79,23 +89,34 @@ runs_on = "local"
 name = "CEO"
 extends = "manager"
 session = "turn"
-scope = "global"
+scope = "own"
 access = "read"
 prompt = ["prompts/ceo.md"]
 max_per_day = 6
 runs_on = "local"
+show = true
+
+[roles.ceo.face]
+shape = "burst"
+color = "#f2a93b"
 
 # Small text jobs on a cheap, fast model: the judge of the evals below. It
 # has no prompt of its own (each eval's rubric is its instructions), so code
 # never picks it as a standalone turn role; config.toml or the page can put
 # it on any cheaper model without touching the factory.
 [roles.judge]
+name = "Judge"
 agent = "muse"
 effort = "low"
 session = "turn"
-scope = "global"
+scope = "own"
 access = "read"
 runs_on = "local"
+show = false
+
+[roles.judge.face]
+shape = "hex"
+color = "#8c8c8c"
 
 # Who hears each event the code emits. mode: turn wakes the role (gathered over
 # limits.batch_seconds), note waits for its next turn. chat: a Tirith line in
@@ -194,7 +215,7 @@ phone = true
 
 [[routes]]
 on = "metric.red"
-to = "lead"
+to = "manager-general"
 mode = "turn"
 chat = true
 phone = true
@@ -204,11 +225,11 @@ on = "metric.red"
 after_minutes = 15
 to = "ceo"
 mode = "turn"
-then = "lead"
+then = "manager-general"
 
 [[routes]]
 on = "review.done"
-to = "lead"
+to = "manager-general"
 mode = "turn"
 phone = true
 
@@ -229,7 +250,7 @@ at = "07:00"
 
 [[routes]]
 on = "factory.invalid"
-to = "lead"
+to = "manager-general"
 mode = "turn"
 chat = true
 phone = true
@@ -322,7 +343,7 @@ label = "Preguntas al dueño"
 # What reached the owner without the owner asking, per item merged in 24 h:
 # phone messages of turns no owner message started, notices whose route has
 # phone = true, and cards. It should fall toward 0; like every measure it is
-# routed as metric.red (to the lead, then the CEO) when it turns red.
+# routed as metric.red (to the manager of no project, then the CEO) when it turns red.
 [metrics.interruptions]
 label = "Interrupciones por ítem (24 h)"
 target = 1

@@ -46,7 +46,7 @@ function Faces({ r }) {
   const sel = r.view === 'bots' ? r.project || recall() || (unread.bots[0] || {}).id : '';
   return html`<nav class="nbots" aria-label="Bots">
     <div class="nlogo" title="Tirith">${BRAND}</div>
-    ${unread.bots.map((b) => {
+    ${unread.bots.filter((b) => b.show !== false).map((b) => {
       const n = b.id === sel ? 0 : unread.by[b.id] || 0;
       return html`<button type="button" key=${b.id} class=${`nbot${b.id === sel ? ' on' : ''}`} title=${b.name} aria-label=${n ? `${b.name}, ${n} new` : b.name}
         aria-current=${b.id === sel} onClick=${() => go('bots', b.id)}><${Face} shape=${b.shape} color=${b.color} size=${64} state=${stateOf(b, !!s.busy[keyOf(b)])} />
