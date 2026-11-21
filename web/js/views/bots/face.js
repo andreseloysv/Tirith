@@ -1,7 +1,8 @@
-// The bots' faces: an SVG character in one of SHAPES and one of COLORS (the look of the "Agents, die aufpassen" deck:
-// a soft gradient body with a glow, white eyes, a slow float). `state` is what the bot is doing: 'work' (a turn runs),
-// 'watch' (a routine is on), 'sleep' (nothing to do: eyes shut, z z) or 'idle'. Shapes live in a 100x100 box; `round`
-// shapes get a thick stroke of their own fill, which rounds their corners.
+// The bots' faces: an SVG character in one of SHAPES and one of COLORS, in the luminous style (the body emits light:
+// a radial gradient with a light core, a strong bloom of its own colour, dark eyes with a catchlight, a smile — the
+// reference is ~/.tirith/logo-source/glowface.mjs). `state` is what the bot is doing: 'work' (a turn runs: a wide open
+// grin), 'watch' (a routine is on), 'sleep' (nothing to do: eyes shut, z z) or 'idle'. Shapes live in a 100x100 box;
+// `round` shapes get a thicker stroke of their own fill, which rounds their corners.
 //
 // Motion: every face has an animator of its own, a small state machine. Its float is a sum of slow waves whose periods
 // never line up, so no loop can be seen; on top of it, at random moments, it plays one act of its state's repertoire
@@ -20,41 +21,50 @@ const star = (n, ro, ri) => '<polygon points="' + Array.from({ length: n * 2 }, 
   return `${(50 + r * Math.cos(a)).toFixed(1)},${(51 + r * Math.sin(a)).toFixed(1)}`;
 }).join(' ') + '"/>';
 
-/** name: [svg body, eyes [left x, right x, y, rx, ry], round corners] */
+/** name: [svg body, eyes [left x, right x, y, rx, ry], round corners] — eyes sit high and small, leaving room for the mouth */
 export const SHAPES = {
-  round: ['<circle cx="50" cy="50" r="42"/>', [36, 62, 46, 8, 13]],
-  dome: ['<path d="M50 10c26 0 42 18 42 44v16c0 11-9 20-20 20H28C17 90 8 81 8 70V54C8 28 24 10 50 10z"/>', [37, 63, 56, 8, 13]],
-  cloud: ['<circle cx="33" cy="44" r="23"/><circle cx="60" cy="36" r="24"/><circle cx="76" cy="58" r="20"/><circle cx="50" cy="66" r="24"/><circle cx="24" cy="64" r="17"/>', [40, 64, 50, 8, 12]],
-  tile: ['<rect x="16" y="16" width="68" height="68" rx="20" transform="rotate(-12 50 50)"/>', [38, 62, 50, 8, 12]],
-  star: ['<path d="M50 8Q62 38 92 50Q62 62 50 92Q38 62 8 50Q38 38 50 8z"/>', [41, 59, 50, 5, 9], true],
-  flower: [petals(5, 26, 19), [39, 61, 52, 7, 11]],
-  drop: ['<path d="M22 14c18-6 46-4 60 12 14 16 12 44-4 56-16 12-44 12-58-2C6 66 4 30 22 14z"/>', [37, 61, 50, 8, 12]],
-  pill: ['<rect x="4" y="24" width="92" height="60" rx="30"/>', [37, 63, 54, 9, 14]],
-  tri: ['<polygon points="50,14 90,82 10,82"/>', [41, 59, 62, 6, 10], true],
-  hex: ['<polygon points="50,9 86,30 86,70 50,91 14,70 14,30"/>', [38, 62, 50, 8, 12], true],
-  burst: [star(9, 44, 34), [39, 61, 51, 7, 11], true],
-  blob: ['<path d="M50 8c22 0 42 16 42 40s-14 44-42 44S8 74 8 50 28 8 50 8z"/>', [36, 62, 48, 9, 14]],
+  round: ['<circle cx="50" cy="50" r="42"/>', [36, 62, 44, 7, 10]],
+  dome: ['<path d="M50 10c26 0 42 18 42 44v16c0 11-9 20-20 20H28C17 90 8 81 8 70V54C8 28 24 10 50 10z"/>', [37, 63, 52, 7, 10]],
+  cloud: ['<circle cx="33" cy="44" r="23"/><circle cx="60" cy="36" r="24"/><circle cx="76" cy="58" r="20"/><circle cx="50" cy="66" r="24"/><circle cx="24" cy="64" r="17"/>', [40, 64, 48, 7, 9.5]],
+  tile: ['<rect x="16" y="16" width="68" height="68" rx="20" transform="rotate(-12 50 50)"/>', [38, 62, 46, 7, 9.5]],
+  star: ['<path d="M50 8Q62 38 92 50Q62 62 50 92Q38 62 8 50Q38 38 50 8z"/>', [42, 58, 46, 4.5, 7], true],
+  flower: [petals(5, 26, 19), [39, 61, 48, 6, 9]],
+  drop: ['<path d="M22 14c18-6 46-4 60 12 14 16 12 44-4 56-16 12-44 12-58-2C6 66 4 30 22 14z"/>', [37, 61, 46, 7, 9.5]],
+  pill: ['<rect x="4" y="24" width="92" height="60" rx="30"/>', [37, 63, 49, 7.5, 10.5]],
+  tri: ['<polygon points="50,14 90,82 10,82"/>', [42, 58, 58, 5, 7.5], true],
+  hex: ['<polygon points="50,9 86,30 86,70 50,91 14,70 14,30"/>', [38, 62, 46, 7, 9.5], true],
+  burst: [star(9, 44, 34), [39, 61, 47, 6, 9], true],
+  blob: ['<path d="M50 8c22 0 42 16 42 40s-14 44-42 44S8 74 8 50 28 8 50 8z"/>', [36, 62, 45, 7.5, 10.5]],
 };
 export const COLORS = ['#f2f2f2', '#9a6b45', '#e5484d', '#f07a3a', '#f2a93b', '#4fb86e', '#3fb6a8', '#3b82f6', '#8b5cf6', '#ec4899', '#8c8c8c'];
 
 const rgb = (hex) => { const n = parseInt(String(hex).slice(1, 7), 16) || 0; return [n >> 16, (n >> 8) & 255, n & 255]; };
 const mix = (hex, to, t) => '#' + rgb(hex).map((c) => Math.round(c + (to - c) * t).toString(16).padStart(2, '0')).join('');
-const light = (hex) => { const [r, g, b] = rgb(hex); return 0.2126 * r + 0.7152 * g + 0.0722 * b > 190; };
 
 let uid = 0;
 function markup(shape, color, state) {
   const [body, e, round] = SHAPES[shape] || SHAPES.round;
-  const id = `bf${uid++}`, eye = light(color) ? '#1b1b1b' : '#fff', glow = mix(color, 255, 0.2);
-  const fill = round ? ` stroke="url(#${id}g)" stroke-width="12" stroke-linejoin="round"` : '';
+  const id = `bf${uid++}`, ink = '#1d1030';
+  const core = mix(color, 255, 0.78), mid = mix(color, 255, 0.18), edge = mix(color, 0, 0.08), halo = mix(color, 255, 0.25);
+  const soft = ` stroke="url(#${id}b)" stroke-width="${round ? 14 : 6}" stroke-linejoin="round"`; /* every shape a little puffy */
   const eyes = state === 'sleep'
-    ? `<g class="look" stroke="${eye}" stroke-width="3" stroke-linecap="round" fill="none"><path d="M${e[0] - 6} ${e[2]}q6 5 12 0M${e[1] - 6} ${e[2]}q6 5 12 0"/></g>`
-    : `<ellipse cx="${e[0]}" cy="${e[2]}" rx="${e[3]}" ry="${e[4]}" fill="${eye}"/><ellipse cx="${e[1]}" cy="${e[2]}" rx="${e[3]}" ry="${e[4]}" fill="${eye}"/>`;
-  return `<defs><linearGradient id="${id}g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${mix(color, 255, 0.28)}"/><stop offset="1" stop-color="${mix(color, 0, 0.12)}"/></linearGradient>`
-    + `<filter id="${id}f" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="9"/></filter></defs>`
-    + `<g class="float"><g class="halo" fill="${glow}"${round ? ` stroke="${glow}" stroke-width="12" stroke-linejoin="round"` : ''} filter="url(#${id}f)">${body}</g>`
-    + `<g fill="url(#${id}g)"${fill}>${body}</g>`
-    + (shape === 'cloud' ? '' : '<ellipse cx="34" cy="28" rx="9" ry="4" fill="#fff" opacity=".22" transform="rotate(-30 34 28)"/>')
-    + `<g class="eyes" data-y="${e[2]}">${state === 'sleep' ? eyes : `<g class="look">${eyes}</g>`}</g></g><g class="zs"></g>`;
+    ? `<path d="M${e[0] - 6} ${e[2]}q6 5 12 0M${e[1] - 6} ${e[2]}q6 5 12 0" stroke="${ink}" stroke-width="3.2" stroke-linecap="round" fill="none"/>`
+    : [e[0], e[1]].map((x) => `<ellipse cx="${x}" cy="${e[2]}" rx="${e[3]}" ry="${e[4]}" fill="${ink}"/><circle cx="${x + e[3] * 0.35}" cy="${e[2] - e[4] * 0.45}" r="${Math.max(1.4, e[3] * 0.28)}" fill="#fff"/>`).join('');
+  const mx = (e[0] + e[1]) / 2, my = e[2] + e[4] + 6, w = (e[1] - e[0]) * 0.5;
+  const mouth = state === 'work' /* a wide D, with the tongue inside */
+    ? `<path d="M${mx - w} ${my}C${mx - w} ${my + w * 1.35} ${mx + w} ${my + w * 1.35} ${mx + w} ${my}Q${mx} ${my + w * 0.16} ${mx - w} ${my}z" fill="${ink}"/><path d="M${mx - w * 0.55} ${my + w * 0.86}C${mx - w * 0.3} ${my + w * 0.45} ${mx + w * 0.3} ${my + w * 0.45} ${mx + w * 0.55} ${my + w * 0.86}C${mx + w * 0.3} ${my + w * 1.06} ${mx - w * 0.3} ${my + w * 1.06} ${mx - w * 0.55} ${my + w * 0.86}z" fill="#d2405d"/>`
+    : state === 'sleep'
+      ? `<path d="M${mx - w * 0.35} ${my}q${w * 0.35} ${w * 0.3} ${w * 0.7} 0" stroke="${ink}" stroke-width="2.6" stroke-linecap="round" fill="none"/>`
+      : `<path d="M${mx - w * 0.6} ${my - 1}q${w * 0.6} ${w * 0.65} ${w * 1.2} 0" stroke="${ink}" stroke-width="3" stroke-linecap="round" fill="none"/>`;
+  return `<defs><radialGradient id="${id}b" cx="46%" cy="42%" r="62%"><stop offset="0" stop-color="${core}"/><stop offset=".5" stop-color="${mid}"/><stop offset="1" stop-color="${edge}"/></radialGradient>`
+    + `<filter id="${id}w" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="14"/></filter>`
+    + `<filter id="${id}n" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="4"/></filter>`
+    + `<filter id="${id}s" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="0.7"/></filter></defs>`
+    + `<g class="float"><g class="halo"><g opacity=".85" fill="${halo}" stroke="${halo}" stroke-width="16" stroke-linejoin="round" filter="url(#${id}w)">${body}</g>`
+    + `<g opacity=".9" fill="${halo}" stroke="${halo}" stroke-width="8" stroke-linejoin="round" filter="url(#${id}n)">${body}</g></g>`
+    + `<g fill="url(#${id}b)"${soft} filter="url(#${id}s)">${body}</g>`
+    + `<g opacity=".35" fill="none" stroke="#fff" stroke-width="2" filter="url(#${id}n)">${body}</g>` /* a faint inner rim of light */
+    + `<g class="look"><g class="eyes" data-y="${e[2]}">${eyes}</g>${mouth}</g></g><g class="zs"></g>`;
 }
 
 /* ---------- the animators ---------- */
