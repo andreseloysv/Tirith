@@ -36,7 +36,7 @@ fn bots_of(raw: &Value, last: &dyn Fn(&str, &str) -> String) -> Vec<Value> {
     raw["roles"].as_object().into_iter().flatten().filter_map(bot).collect()
 }
 pub fn all(app: &App) -> Vec<Value> {
-    bots_of(&serde_json::to_value(app.cfg().factory.table()).unwrap_or_default(), &|id, rid| app.kv(&format!("routine:{id}:{rid}")).unwrap_or_default())
+    bots_of(&serde_json::to_value(&app.cfg().factory.raw).unwrap_or_default(), &|id, rid| app.kv(&format!("routine:{id}:{rid}")).unwrap_or_default())
 }
 /// The bot whose conversation is `key` (`bot-<id>`, or a system bot's key).
 pub fn bot(app: &App, key: &str) -> Option<Value> {

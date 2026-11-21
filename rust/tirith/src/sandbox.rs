@@ -29,11 +29,8 @@ impl Launch {
         c
     }
 }
-/// The sandbox profile of `who`: outbound network only to this machine (the daemon's port, the proxy and local sockets) and no Apple Events — except that a chat role (the managers and the bots; never the CEO, a lane or a stage) may send Apple Events to the owner's Safari alone, so it can read a tab with `osascript`. The owner's Automation permission still decides in the end.
-fn profile(app: &Shared, who: &str) -> String {
-    let safari = if app.cfg().factory.role::<String>(who, "session").as_deref() == Some("chat") { "(allow appleevent-send (appleevent-destination \"com.apple.Safari\"))\n" } else { "" };
-    format!("(version 1)\n(allow default)\n(deny network-outbound)\n(deny appleevent-send)\n(allow network-outbound (remote ip \"localhost:*\"))\n(allow network-outbound (remote unix-socket))\n{safari}")
-}
+/// The sandbox profile: outbound network only to this machine (the daemon's port, the proxy and local sockets) and no Apple Events (macOS refuses them from `sandbox-exec` anyway; managers and bots read the owner's Safari through the daemon, see `safari_script`).
+const PROFILE: &str = "(version 1)\n(allow default)\n(deny network-outbound)\n(deny appleevent-send)\n(allow network-outbound (remote ip \"localhost:*\"))\n(allow network-outbound (remote unix-socket))\n";
 const SANDBOX_EXEC: &str = "/usr/bin/sandbox-exec";
 const NO_PROXY: &str = "localhost,127.0.0.1,::1";
 const DEFAULT_PORT: u16 = 47812;
@@ -89,7 +86,7 @@ pub fn wrap(app: &Shared, who: &str, argv: Vec<String>) -> Launch {
     // ssh ignores proxy variables: git over ssh goes through the proxy with `tirith net tunnel`.
     std::env::current_exe().ok().filter(|_| std::env::var_os("GIT_SSH_COMMAND").is_none()).into_iter().for_each(|exe| env.push(("GIT_SSH_COMMAND".into(), format!("ssh -o ProxyCommand='{} net tunnel %h %p'", exe.display()))));
     env.extend([("PATH".into(), format!("{}:{}", app.home.join("net/bin").display(), app.child_path())), ("ZDOTDIR".into(), app.home.join("net/zdot").display().to_string())]);
-    Launch { program: SANDBOX_EXEC.into(), args: ["-p".to_string(), profile(app, who), program].into_iter().chain(args).collect(), env }
+    Launch { program: SANDBOX_EXEC.into(), args: ["-p".to_string(), PROFILE.to_string(), program].into_iter().chain(args).collect(), env }
 }
 /// The wrappers in `<home>/net/bin`: tools that start a sandbox of their own (macOS refuses to nest them) get it turned off, since the outer sandbox confines them already. Each wrapper takes its own folder off PATH.
 fn write_wrappers(app: &Shared) {
@@ -215,6 +212,32 @@ fn block(app: &Shared, rule: &str, on: bool) -> Result<String, String> {
     app.emit("net", json!({"blocks": *BLOCKS.read().unwrap()}));
     Ok(rule)
 }
+/// The fixed AppleScript of `tirith safari open <url>` / `read [<url>]`: the daemon (outside the sandbox, where macOS accepts its Apple Events) runs it against Safari for a chat role — the managers and bots, never a lane or the CEO. The agent gives only a URL, escaped into the fixed text; it never sends a script. A read gives URL, title and text of the current tab, or of the first tab whose URL starts with the one given.
+fn safari_script(app: &Shared, lane: &str, role: &str, cmd: &str, url: &str) -> Result<String, String> {
+    let chat = lane.is_empty() && app.cfg().factory.role::<String>(role, "session").as_deref() == Some("chat");
+    chat.then_some(()).ok_or("tirith safari is for the managers and bots (the chat roles), not a lane or the CEO")?;
+    let url = url.replace('\\', "\\\\").replace('"', "\\\"");
+    match (cmd, url.is_empty(), url.chars().any(|c| c.is_control())) {
+        ("open", false, false) => Ok(format!("tell application \"Safari\"\nactivate\nopen location \"{url}\"\nend tell")),
+        ("read", true, false) => Ok("tell application \"Safari\" to return (URL of current tab of front window) & linefeed & (name of current tab of front window) & linefeed & (text of current tab of front window)".into()),
+        ("read", false, false) => Ok(format!("tell application \"Safari\"\nrepeat with w in windows\nrepeat with t in tabs of w\nif (URL of t) starts with \"{url}\" then return (URL of t) & linefeed & (name of t) & linefeed & (text of t)\nend repeat\nend repeat\nerror \"no tab starts with that URL\"\nend tell")),
+        _ => Err("tirith safari open <url> | tirith safari read [<url>]".into()),
+    }
+}
+/// Runs `safari_script` outside the sandbox; a read's page text is cut at 20,000 characters.
+async fn safari(app: &Shared, lane: &str, role: &str, cmd: &str, url: &str) -> Result<String, String> {
+    let script = safari_script(app, lane, role, cmd, url)?;
+    let out = tokio::process::Command::new("/usr/bin/osascript").args(["-e", &script]).output().await.map_err(|e| e.to_string())?;
+    let text = String::from_utf8_lossy(if out.status.success() { &out.stdout } else { &out.stderr }).trim_end().to_string();
+    out.status.success().then_some(()).ok_or_else(|| format!("Safari: {}", text.trim()))?;
+    let Some(()) = (cmd != "open").then_some(()) else { return Ok(format!("opened {url}")) };
+    let cut = |s: &str| s.chars().take(20_000).collect::<String>();
+    Ok(text.split_once('\n').and_then(|(u, rest)| rest.split_once('\n').map(|(t, body)| format!("{u}\n{t}\n{}", cut(body)))).unwrap_or_else(|| cut(&text)))
+}
+async fn safari_route(State(app): State<Shared>, headers: axum::http::HeaderMap, Json(b): Json<Value>) -> Result<String, (axum::http::StatusCode, String)> {
+    let h = |k: &str| headers.get(k).and_then(|v| v.to_str().ok()).unwrap_or("").to_string();
+    safari(&app, &h("x-tirith-lane"), &h("x-tirith-role"), b["cmd"].as_str().unwrap_or(""), b["url"].as_str().unwrap_or("")).await.map_err(bad)
+}
 pub fn routes() -> Router<Shared> {
     async fn change(app: Shared, b: Value, on: bool) -> R {
         let rule = block(&app, b["rule"].as_str().unwrap_or(""), on).map_err(bad)?;
@@ -233,8 +256,9 @@ pub fn routes() -> Router<Shared> {
             get(|| async { Json(json!(*BLOCKS.read().unwrap())) }).post(|State(app): State<Shared>, Json(b): Json<Value>| change(app, b, true)).delete(|State(app): State<Shared>, Json(b): Json<Value>| change(app, b, false)),
         )
         .route("/api/net/destinations", get(|| async { Json(proxy::destinations()) }))
+        .route("/api/safari", axum::routing::post(safari_route))
 }
-/// `tirith net …` commands; `None` when `pos` is not one of this module's commands.
+/// `tirith net …` and `tirith safari …` commands; `None` when `pos` is not one of this module's commands.
 pub fn cli(pos: &[&str], _flag: Flag) -> Option<Result<(), String>> {
     Some(match pos {
         ["net", "status"] => crate::client::call_json("GET", "/api/net/status", None).map(|s| {
@@ -256,6 +280,8 @@ pub fn cli(pos: &[&str], _flag: Flag) -> Option<Result<(), String>> {
         ["net", "unblock", rule] => crate::client::call_json("DELETE", "/api/net/blocks", Some(json!({"rule": rule}))).map(|v| println!("unblocked {}", v["rule"].as_str().unwrap_or(""))),
         ["net", "tunnel", host, port] => tunnel(host, port),
         ["net", ..] => Err("tirith net status|list|block <domain|ip|cidr>|unblock <rule>|tunnel <host> <port>".into()),
+        ["safari", cmd @ ("open" | "read"), rest @ ..] => crate::client::call("POST", "/api/safari", Some(json!({"cmd": cmd, "url": rest.join(" ")}))).map(|b| println!("{b}")),
+        ["safari", ..] => Err("tirith safari open <url> | tirith safari read [<url>]".into()),
         _ => return None,
     })
 }

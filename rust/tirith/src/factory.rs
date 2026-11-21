@@ -28,10 +28,10 @@ pub struct Limits {
     pub agent_messages_in_a_row: u32,
     pub max_parallel: Option<usize>, // a cap on lanes at once; none unless config.toml sets one
 }
-/// One loaded factory version: the merged table (embedded, then the folder's file, then config.toml), its limits read from it, and its prompts by file stem.
+/// One loaded factory version: the merged table (embedded, then the folder's file, then config.toml, extends resolved), its limits read from it, and its prompts by file stem. `raw` is that table, for a reader that walks it as data (the bots).
 #[derive(Clone)]
 pub struct Factory {
-    raw: toml::Table,
+    pub raw: toml::Table,
     pub limits: Limits,
     prompts: BTreeMap<String, String>,
     /// This version's stamp: the main commit that last changed `factory/`, plus a short hash of what config.toml lays over it (`<commit>+<hash>`; `embedded` when no checkout is at hand).
@@ -191,10 +191,6 @@ impl Factory {
     /// One key of a role, by its factory name.
     pub fn role<T: DeserializeOwned>(&self, name: &str, key: &str) -> Option<T> {
         get(&self.raw, &["roles", name, key])
-    }
-    /// The whole merged table (embedded, the folder's file and config.toml, extends resolved), for a reader that walks it as data (the bots).
-    pub fn table(&self) -> &toml::Table {
-        &self.raw
     }
     /// Every role of the factory, in name order.
     pub fn roles(&self) -> Vec<String> {
