@@ -1,6 +1,6 @@
 use serde_json::{json, Value};
 
-fn home(name: &str) -> std::path::PathBuf {
+pub(super) fn home(name: &str) -> std::path::PathBuf {
     let home = std::env::temp_dir().join(format!("tirith-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&home);
     std::fs::create_dir_all(&home).unwrap();
@@ -8,7 +8,7 @@ fn home(name: &str) -> std::path::PathBuf {
 }
 
 /// The daemon on a free port, with one bot: its page id, its conversation and the port.
-async fn daemon(app: &crate::app::Shared) -> (String, String, u16) {
+pub(super) async fn daemon(app: &crate::app::Shared) -> (String, String, u16) {
     let bot = crate::bots::save(app, json!({"name": "Aprende", "shape": "drop", "color": "#22d3ee", "session": "chat", "access": "read"})).unwrap();
     let id = bot["id"].as_str().unwrap().to_string();
     let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
@@ -23,7 +23,7 @@ async fn daemon(app: &crate::app::Shared) -> (String, String, u16) {
 }
 
 /// A call to the teach API: `origin` and `token` as the extension sends them (empty: not sent).
-async fn call(
+pub(super) async fn call(
     port: u16,
     method: &str,
     path: &str,
@@ -61,7 +61,7 @@ async fn call(
     (code, res.json().await.unwrap_or(Value::Null), cors)
 }
 
-const EXT: &str = super::ORIGIN;
+pub(super) const EXT: &str = super::ORIGIN;
 
 #[tokio::test]
 async fn teach_records_and_masks() {

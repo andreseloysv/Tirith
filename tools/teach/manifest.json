@@ -2,13 +2,13 @@
   "manifest_version": 3,
   "name": "Tirith · Enseñar",
   "version": "0.1.0",
-  "description": "Records a task you do once (pages, clicks, typing) for one of your Tirith bots to learn it. Passwords, codes and cards are masked.",
+  "description": "Records a task you do once (pages, clicks, typing) for one of your Tirith bots to learn it. Passwords, codes and cards are masked. Your bot rehearses the draft in its own tab, under a visible notice.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxetDj3QWWAGUCvwMxN/kaBb08+mw3CxvvCC8l+2xkSG3MNqOQ4gM7rjjdX2yRzR8cRPcPlZz0YHftwQXdgo0LKAOhsklexFwwvJ3XZ7XNko/mfN2G+sfTcPnmNBUqzp0clMt9aAb+ZdMhpky8PswggZLbP6J5UIm1aO/ZbEqD/btPDwQlhihBg1rWHIZfPM2QBInfHxhKBvE1Bw/pTHyQLVR5t+fF7zjIX+b7JjQiDPLTH4NuFhpNcDgqCAeAXM3bEERXG7jnrVKm16xZlft40r2ZQ5RafZOYLDgt7fIPV95xIPPvewBPFH1CM65gxC4yCBbTH7Q9ItUNQ8BolhEXQIDAQAB",
   "permissions": ["storage", "alarms"],
   "host_permissions": ["<all_urls>"],
   "background": { "service_worker": "background.js" },
   "action": { "default_title": "Tirith · Enseñar", "default_popup": "popup.html" },
   "content_scripts": [
-    { "matches": ["http://*/*", "https://*/*"], "js": ["mask.js", "content.js"], "run_at": "document_idle" }
+    { "matches": ["http://*/*", "https://*/*"], "js": ["mask.js", "content.js", "act.js"], "run_at": "document_idle" }
   ]
 }

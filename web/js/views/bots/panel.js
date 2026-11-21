@@ -46,7 +46,7 @@ export function Panel({ bot, busy, onEdit }) {
           aria-selected=${tab === k} class=${tab === k ? 'on' : ''} onClick=${() => setTab(k)}>${label}${k === 'routines' && list.length ? html` <span class="bn">${list.length}</span>` : null}</button>`)}</div>
       </header>
       ${form || tab !== 'routines' ? null : html`<div class="baddrow"><button type="button" class="blink" onClick=${() => setForm({})}>+ New routine</button></div>`}
-      ${tab === 'library' ? html`<${Library} bot=${bot} />` : tab === 'teach' ? html`<${Teach} key=${bot.id} bot=${bot} />` : tab === 'numbers' ? html`<${Numbers} key=${bot.id} bot=${bot} />` : tab === 'phone' ? html`<${Phone} key=${bot.id} bot=${bot} />` : null}
+      ${tab === 'library' ? html`<${Library} bot=${bot} />` : tab === 'teach' ? html`<${Teach} key=${bot.id} bot=${bot} onRoutine=${(r) => { setTab('routines'); setForm(r); }} />` : tab === 'numbers' ? html`<${Numbers} key=${bot.id} bot=${bot} />` : tab === 'phone' ? html`<${Phone} key=${bot.id} bot=${bot} />` : null}
       ${tab === 'routines' && form && !form.id ? html`<${RoutineForm} bot=${bot} r=${form} onDone=${done} />` : null}
       ${tab !== 'routines' ? null : routineList(bot, list, form, setForm, done)}
       ${tab === 'routines' && !form && list.some(isHook) ? html`<${Webhook} bot=${bot} />` : null}

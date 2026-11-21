@@ -23,7 +23,7 @@ mod written;
 pub use api::routes;
 pub use cli::cli;
 pub use context::context;
-pub use folder::writable;
+pub use folder::{folder, skill_file, writable};
 pub use hook::{hook_from, webhook};
 pub use list::{bot, key_for};
 pub use migrate::start;
