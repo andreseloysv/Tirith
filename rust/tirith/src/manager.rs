@@ -391,6 +391,7 @@ pub fn spawn_chat(app: &Shared, role: &str, project: &str, argv: Vec<String>) ->
         .current_dir(&dir)
         .env("TIRITH_ROLE", role)
         .env("TIRITH_PROJECT", project)
+        .env("CARGO_TARGET_DIR", crate::lanes::shared_target(app, if project.is_empty() { role } else { project })) // managers, bots and the CEO build into the shared cache: a cargo of theirs in a project folder leaves no target/ there
         .env("TIRITH_HOME", &app.home)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

@@ -110,6 +110,7 @@ stage_timeout_minutes = 30
 merge_train = 5
 merge_backlog = 3
 low_disk_gb = 5
+build_idle_minutes = 30            # with no lane, stage or manager working that long, a project's build cache and merge folder go
 plan_commit_seconds = 120
 batch_seconds = 2
 agent_messages_in_a_row = 30

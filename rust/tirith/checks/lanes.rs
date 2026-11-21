@@ -108,3 +108,143 @@ fn low_disk_question_closes_when_freed() {
     assert_eq!(stale_reason(q, true, 9.0), None); // not above 10 GB yet
     assert!(stale_reason(q, true, 39.0).is_some());
 }
+/// A temp project `clnp` known to a fresh App at its own home: (app, repo, base). Its committed .gitignore ignores the owner's folders and the build caches.
+async fn cleanup_fixture(name: &str) -> (crate::app::Shared, std::path::PathBuf, std::path::PathBuf) {
+    let base = std::env::temp_dir().join(format!("tirith-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    std::fs::create_dir_all(&base).unwrap();
+    let base = base.canonicalize().unwrap();
+    let (repo, home) = (base.join("repo"), base.join("home"));
+    std::fs::create_dir_all(&repo).unwrap();
+    std::fs::write(repo.join(".gitignore"), "private/\nevidence/\ntarget/\nnode_modules/\nbuild/\n").unwrap();
+    std::fs::write(repo.join("README"), "hello\n").unwrap();
+    for a in ["init -q", "config user.email t@t", "config user.name t", "add .", "commit -qm i"] {
+        super::git(&repo, &a.split(' ').collect::<Vec<_>>()).await.unwrap();
+    }
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::write(home.join("config.toml"), format!("[[projects]]\nid = \"clnp\"\nrepo = \"{}\"\n", repo.display())).unwrap();
+    (crate::app::App::open_at(home), repo, base)
+}
+/// A lane of the fixture project in its own worktree on `lane/<id>`, saved in the app.
+async fn cleanup_lane_fixture(app: &crate::app::Shared, repo: &std::path::Path, id: &str) -> crate::app::Lane {
+    let ws = repo.parent().unwrap().join(format!("ws-{id}"));
+    super::add_worktree(repo, &ws, Some(&format!("lane/{id}")), &[]).await.unwrap();
+    let lane = crate::app::Lane { id: id.into(), project: "clnp".into(), workspace: ws.display().to_string(), branch: format!("lane/{id}"), status: "failed".into(), ..Default::default() };
+    app.save_lane(&lane);
+    lane
+}
+#[tokio::test]
+async fn lane_done_leaves_no_worktree() {
+    let (app, repo, base) = cleanup_fixture("done").await;
+    // A merged lane: worktree, branch, log, brief and its run logs go at once; its ignored files still reach the project.
+    let lane = cleanup_lane_fixture(&app, &repo, "done-1").await;
+    let ws = std::path::PathBuf::from(&lane.workspace);
+    std::fs::create_dir_all(ws.join("private")).unwrap();
+    std::fs::write(ws.join("private/keep.txt"), "owner doc").unwrap();
+    let (log, brief, run_log, other_log) = (app.home.join("logs/lanes/done-1.log"), app.home.join("briefs/done-1.md"), app.home.join("logs/runs/77.log"), app.home.join("logs/runs/78.log"));
+    [&log, &brief, &run_log, &other_log].iter().for_each(|p| std::fs::write(p, "x").unwrap());
+    app.insert("INSERT INTO runs (lane, project, stage, status, log) VALUES ('done-1', 'clnp', 'check done-1', 'passed', ?1)", rusqlite::params![run_log.display().to_string()]);
+    app.insert("INSERT INTO runs (lane, project, stage, status, log) VALUES ('done-1b', 'clnp', 'test', 'passed', ?1)", rusqlite::params![other_log.display().to_string()]);
+    super::cleanup_lane(&app, &lane, true).await;
+    assert!(!ws.exists(), "a merged lane's worktree goes at once");
+    assert!(super::git(&repo, &["rev-parse", "--verify", "-q", "lane/done-1"]).await.is_err(), "a merged lane's branch goes");
+    assert!(!log.exists() && !brief.exists() && !run_log.exists(), "a merged lane's log, brief and check logs go at once");
+    assert!(other_log.exists(), "another lane's run log (an id containing this one's) stays");
+    assert_eq!(app.lane("done-1").map(|l| l.workspace), Some(String::new()));
+    assert_eq!(std::fs::read_to_string(repo.join("private/keep.txt")).unwrap(), "owner doc");
+    assert!(!super::git(&repo, &["worktree", "list", "--porcelain"]).await.unwrap().contains(&ws.display().to_string()), "pruned: git holds no registration of it");
+    // A stopped lane: its uncommitted work is saved on its (kept) branch, the worktree goes, and its log goes only after 24 h.
+    let mut lane2 = cleanup_lane_fixture(&app, &repo, "done-2").await;
+    let ws2 = std::path::PathBuf::from(&lane2.workspace);
+    std::fs::write(ws2.join("README"), "changed\n").unwrap();
+    std::fs::write(ws2.join("loose.txt"), "new\n").unwrap();
+    let log2 = app.home.join("logs/lanes/done-2.log");
+    std::fs::write(&log2, "x").unwrap();
+    super::cleanup_lane(&app, &lane2, false).await;
+    assert!(!ws2.exists(), "a stopped lane's worktree goes at once");
+    assert_eq!(super::git(&repo, &["show", "lane/done-2:README"]).await.unwrap(), "changed", "its uncommitted work was saved on its branch");
+    assert_eq!(super::git(&repo, &["show", "lane/done-2:loose.txt"]).await.unwrap(), "new");
+    assert!(log2.exists(), "a stopped lane keeps its log for now");
+    lane2 = app.lane("done-2").unwrap();
+    lane2.ended_at = Some((chrono::Utc::now() - chrono::Duration::hours(25)).format("%Y-%m-%dT%H:%M:%SZ").to_string());
+    app.save_lane(&lane2);
+    super::sweep_cleanups(&app, &[lane2]).await;
+    assert!(!log2.exists(), "a stopped lane's log goes after 24 h");
+    drop(app);
+    let _ = std::fs::remove_dir_all(&base);
+}
+#[tokio::test]
+async fn private_files_move_to_project() {
+    let (app, repo, base) = cleanup_fixture("priv").await;
+    std::fs::create_dir_all(repo.join("private")).unwrap();
+    std::fs::write(repo.join("private/existing.txt"), "project version").unwrap();
+    std::fs::create_dir_all(repo.join("evidence")).unwrap();
+    std::fs::write(repo.join("evidence/same.txt"), "same").unwrap();
+    let lane = cleanup_lane_fixture(&app, &repo, "priv-1").await;
+    let ws = std::path::PathBuf::from(&lane.workspace);
+    for (file, text) in [
+        ("private/doc.txt", "lane doc"),
+        ("private/existing.txt", "lane version"),
+        ("evidence/same.txt", "same"),
+        ("evidence/nested/deep.txt", "deep"),
+        ("target/junk", "x"),
+        ("node_modules/pkg.js", "x"),
+        ("sub/build/out", "x"),
+        ("secret.txt", "s3cret"),
+    ] {
+        let p = ws.join(file);
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(p, text).unwrap();
+    }
+    // Ignored only by the lane's own .gitignore (not on main): it must land in the project kept out of git there.
+    std::fs::write(ws.join(".gitignore"), "private/\nevidence/\ntarget/\nnode_modules/\nbuild/\nsecret.txt\n").unwrap();
+    super::cleanup_lane(&app, &lane, false).await;
+    assert!(!ws.exists());
+    assert_eq!(std::fs::read_to_string(repo.join("private/doc.txt")).unwrap(), "lane doc");
+    assert_eq!(std::fs::read_to_string(repo.join("private/existing.txt")).unwrap(), "project version", "nothing in the project is overwritten");
+    assert_eq!(std::fs::read_to_string(repo.join("private/existing-priv-1.txt")).unwrap(), "lane version", "a different file lands next to it with the lane's id in its name");
+    assert!(!repo.join("evidence/same-priv-1.txt").exists(), "an identical file needs no side copy");
+    assert_eq!(std::fs::read_to_string(repo.join("evidence/nested/deep.txt")).unwrap(), "deep");
+    assert!(!repo.join("target").exists() && !repo.join("node_modules").exists() && !repo.join("sub").exists(), "the ignored build caches go with the worktree, never to the project");
+    assert_eq!(std::fs::read_to_string(repo.join("secret.txt")).unwrap(), "s3cret");
+    assert!(std::fs::read_to_string(repo.join(".git/info/exclude")).unwrap().contains("/secret.txt"), "a path the project does not ignore joins .git/info/exclude");
+    assert!(super::git(&repo, &["check-ignore", "-q", "--", "secret.txt"]).await.is_ok());
+    assert_eq!(super::git(&repo, &["status", "--porcelain"]).await.unwrap(), "", "everything moved in stays out of git in the project");
+    assert!(super::git(&repo, &["show", "lane/priv-1:.gitignore"]).await.unwrap().contains("secret.txt"), "its uncommitted work was saved on its branch");
+    drop(app);
+    let _ = std::fs::remove_dir_all(&base);
+}
+#[tokio::test]
+async fn idle_build_cache_goes() {
+    let (app, repo, base) = cleanup_fixture("idle").await;
+    assert_eq!(crate::factory::current().limits.build_idle_minutes, 30, "the factory's idle limit");
+    let build = base.join("build/clnp");
+    std::fs::create_dir_all(build.join("cargo/debug")).unwrap();
+    std::fs::write(build.join("cargo/debug/x"), "x").unwrap();
+    let merge_dir = base.join("merge-wt");
+    super::add_worktree(&repo, &merge_dir, None, &[]).await.unwrap();
+    let now = super::now_s();
+    assert!(!super::drop_idle_cache(&repo, &build, &merge_dir, true, now - 7200, now, 30).await, "a project with work under way keeps its cache and merge folder");
+    assert!(!super::drop_idle_cache(&repo, &build, &merge_dir, false, now - 60, now, 30).await, "idle for less than the limit keeps them");
+    assert!(build.exists() && merge_dir.exists());
+    assert!(super::drop_idle_cache(&repo, &build, &merge_dir, false, now - 7200, now, 30).await, "idle for longer than the limit: both go");
+    assert!(!build.exists() && !merge_dir.exists());
+    assert!(!super::git(&repo, &["worktree", "list", "--porcelain"]).await.unwrap().contains(&merge_dir.display().to_string()), "the merge folder is pruned, not just deleted");
+    drop(app);
+    let _ = std::fs::remove_dir_all(&base);
+}
+#[tokio::test]
+async fn manager_sessions_build_in_the_shared_cache() {
+    use tokio::io::AsyncReadExt;
+    let (app, _repo, base) = cleanup_fixture("cargoenv").await;
+    for (role, project, want) in [("manager", "clnp", app.home.join("build/clnp/cargo")), ("ceo", "", app.home.join("build/ceo/cargo"))] {
+        let argv = ["sh", "-c", "printf %s \"$CARGO_TARGET_DIR\""].map(String::from).into();
+        let (mut child, _stdin, mut stdout) = crate::manager::spawn_chat(&app, role, project, argv).unwrap();
+        let mut out = String::new();
+        stdout.read_to_string(&mut out).await.unwrap();
+        let _ = child.wait().await;
+        assert_eq!(out, want.display().to_string(), "a {role} session builds into the shared cache, so its cargo leaves no target/ in a project folder");
+    }
+    drop(app);
+    let _ = std::fs::remove_dir_all(&base);
+}
