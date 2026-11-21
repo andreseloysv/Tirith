@@ -44,8 +44,7 @@ fn long_running_lane_is_reported_once() {
 fn lane_runs_clippy_before_finish() {
     let home = std::env::temp_dir().join(format!("tirith-clippy-home-{}", std::process::id()));
     std::fs::create_dir_all(&home).unwrap();
-    std::env::set_var("TIRITH_HOME", &home);
-    let app = crate::app::App::open();
+    let app = crate::app::App::open_at(home);
     let dir = std::env::temp_dir().join(format!("tirith-clippy-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let lane = crate::app::Lane { workspace: dir.display().to_string(), ..Default::default() };

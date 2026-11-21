@@ -89,7 +89,11 @@ pub fn migrate(t: &mut toml::Table) -> bool {
 
 impl Config {
     pub fn load() -> Config {
-        let text = std::fs::read_to_string(tirith_home().join("config.toml")).unwrap_or_default();
+        Self::load_at(&tirith_home())
+    }
+    /// The config of one Tirith home, named instead of read from the process-wide `TIRITH_HOME` (a test opens its App at its own folder; moving the variable would move every parallel test's home too).
+    pub fn load_at(home: &Path) -> Config {
+        let text = std::fs::read_to_string(home.join("config.toml")).unwrap_or_default();
         let (mut t, parsed) = match text.parse::<toml::Table>() {
             Ok(t) => (t, None),
             Err(_) if text.trim().is_empty() => (Default::default(), None),
