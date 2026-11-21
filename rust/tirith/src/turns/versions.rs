@@ -31,6 +31,14 @@ fn hash(path: &Path) -> Option<String> {
     (out.status.success() && !id.is_empty()).then_some(id)
 }
 
+/// The SKILL.md of skill `name` the turn read: a bot's own (its agent's skills folder links there), else the shared one.
+pub(super) fn skill_file(app: &Shared, t: &Turn, name: &str) -> Option<PathBuf> {
+    [folder(app, t).join(".agents/skills"), app.home.join("bots/skills")]
+        .into_iter()
+        .map(|d| d.join(name).join("SKILL.md"))
+        .find(|p| p.is_file())
+}
+
 /// `{"memory.md": …, "bots/memory.md": …, "skills/<name>": …}`, each file that exists.
 pub fn versions(app: &Shared, t: &Turn) -> Value {
     let dir = folder(app, t);
@@ -39,12 +47,7 @@ pub fn versions(app: &Shared, t: &Turn) -> Value {
         ("bots/memory.md".into(), app.home.join("bots/memory.md")),
     ];
     for name in &t.skills {
-        // a bot's own skills (its agent's skills folder links there), then the shared ones
-        let mut places = [dir.join(".agents/skills"), app.home.join("bots/skills")]
-            .into_iter()
-            .map(|d| d.join(name).join("SKILL.md"));
-        let found = places.find(|p| p.is_file());
-        files.extend(found.map(|p| (format!("skills/{name}"), p)));
+        files.extend(skill_file(app, t, name).map(|p| (format!("skills/{name}"), p)));
     }
     let hashed = files
         .into_iter()

@@ -7,7 +7,7 @@ use rusqlite::types::ValueRef;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 
-const COLS: [&str; 31] = [
+const COLS: [&str; 32] = [
     "id",
     "conv",
     "role",
@@ -39,6 +39,7 @@ const COLS: [&str; 31] = [
     "checks_total",
     "checks",
     "cited",
+    "score",
 ];
 
 /// One cell as JSON: a number, a text (the JSON columns parsed), or null.

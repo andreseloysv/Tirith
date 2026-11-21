@@ -15,6 +15,7 @@ mod manager;
 mod merge;
 mod metrics;
 mod models;
+mod numbers;
 mod plan;
 mod projects;
 mod rooms;

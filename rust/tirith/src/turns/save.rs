@@ -28,12 +28,15 @@ pub fn finish(app: &Shared, mut t: Turn, ok: Option<bool>, answer: Option<&str>)
     let status = if ok { "ok" } else { "failed" };
     let id = app.insert("INSERT INTO turns (conv, role, \"trigger\", routine, started_at, ended_at, ms, status, agent, model, effort, tokens_in, tokens_out, tokens_cache_read, tokens_cache_write, cost_usd, steps, skills, tools, versions, answer, event, factory, role_hash) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24)", params![t.conv, t.role, t.trigger, t.routine, t.started_at, now_iso(), ms, status, t.agent, t.model, t.effort, u.input, u.output, u.cache_read, u.cache_write, cost_usd, t.steps, skills, tools, versions, answer, event, factory, role_hash]);
     super::signals::keep(app, id, &t, &answer);
+    super::quality::catch_up(app, id, event);
     app.emit("turn", json!({"id": id, "conv": t.conv, "status": status}));
     id
 }
 
 /// A bot's turn (a role with `scope = "own"` and `session = "chat"`) emits `turn.done`, or `routine.done` when a routine started it: its id, else none.
 fn event(app: &Shared, t: &Turn, answer: &str) -> Option<i64> {
+    // the bot's own turns: a judge's turn on its events is kept in its conversation too, and emits nothing
+    (t.role == t.conv).then_some(())?;
     let bot = crate::bots::bot(app, &t.conv).filter(|b| b["session"] == "chat")?;
     let routine = bot["routines"]
         .as_array()
@@ -51,11 +54,12 @@ fn event(app: &Shared, t: &Turn, answer: &str) -> Option<i64> {
         " · skills: {}",
         names(t.skills.clone()).unwrap_or("none".into())
     );
-    text += &format!(" · {}", answer.chars().take(200).collect::<String>());
-    let on = if routine.is_some() {
-        "routine.done"
+    let (on, text) = if routine.is_some() {
+        let text = super::quality::routine_text(app, t, &text, answer);
+        ("routine.done", text)
     } else {
-        "turn.done"
+        let start = answer.chars().take(200).collect::<String>();
+        ("turn.done", format!("{text} · {start}"))
     };
     Some(crate::manager::emitted(app, &t.conv, on, &text, None))
 }

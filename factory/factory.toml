@@ -294,6 +294,16 @@ judge = "judge"
 rubric = "evals/card-needed.md"
 sample = 1.0
 
+# A routine's run is graded: its task, its answer and the «Cómo validar» of
+# the skills it read (routine.done carries them) give a score from 0 to 1,
+# copied to the score of the turn whose event it is (the Numbers tab).
+[[evals]]
+id = "turn-quality"
+on = "routine.done"
+judge = "judge"
+rubric = "evals/turn-quality.md"
+sample = 1.0
+
 [limits]
 max_load = 2.0
 inactivity_minutes = 20
