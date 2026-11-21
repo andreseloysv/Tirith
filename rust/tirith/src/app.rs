@@ -195,9 +195,7 @@ impl App {
 
     /// The factory role of a conversation: a bot's own key (a system bot's too), else a project's `session = "chat"`, `scope = "project"` role; of no project, the manager of no project.
     pub fn chat_role(&self, project: &str) -> String {
-        if crate::bots::bot(self, project).is_some() {
-            return project.to_string();
-        }
+        let Some(()) = crate::bots::bot(self, project).is_none().then_some(()) else { return project.to_string() };
         self.cfg().project(project).map_or_else(|| "manager-general".into(), |_| self.cfg().factory.find_role("chat", Some("project")).unwrap_or_else(|| "manager".into()))
     }
 

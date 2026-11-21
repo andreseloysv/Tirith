@@ -78,11 +78,17 @@ fn default_routes_reproduce_today() {
     assert!(bad("[[routes]]\non = \"lane.failed\"\nto = \"ghost\"\nmode = \"turn\"\n").contains("missing event, role or mode"));
     assert!(bad("[[routes]]\non = \"lane.failed\"\nto = \"manager\"\nmode = \"shout\"\n").contains("missing event, role or mode"));
     assert!(bad("[[routes]]\non = \"lane.failed\"\nto = \"manager\"\nmode = \"turn\"\nbogus = 1\n").contains("unknown key routes.bogus"));
-    // Routes of config.toml (a bot's routines) stand next to the factory's, never instead of them.
+    // Schedule routes of config.toml (a bot's routines) stand next to the factory's; its other routes to a role replace the factory's to that role, as a set.
     let o = overlay("[[routes]]\non = \"schedule\"\nto = \"manager\"\nmode = \"turn\"\ntask = \"news\"\n");
-    let f = parse(TEXT, prompts, &o).unwrap();
+    let f = parse(TEXT, prompts.clone(), &o).unwrap();
     assert_eq!(f.routes_on("schedule").len(), 3); // the factory's two (manager, the CEO's daily pass) plus the overlay's
     assert_eq!(f.routes_on("lane.failed").len(), 1);
+    let o = overlay("[[routes]]\non = \"main.green\"\nto = \"ceo\"\nmode = \"note\"\nphone = true\n");
+    let f = parse(TEXT, prompts, &o).unwrap();
+    assert_eq!(f.routes_on("main.green"), vec![("manager".to_string(), "note".to_string(), true, false, None), ("ceo".to_string(), "note".to_string(), false, true, None)], "the written route hears its event");
+    assert!(f.routes_on("metric.red").iter().all(|r| r.0 != "ceo"), "the factory's routes to the CEO are replaced, not kept beside config.toml's");
+    assert_eq!(f.schedules(), vec![("ceo".to_string(), "07:00".to_string(), vec![1, 2, 3, 4, 5, 6, 7])], "its timed daily pass, a schedule route, stands beside them still");
+    assert_eq!(f.routes_on("lane.failed").len(), 1, "other roles' factory routes are untouched");
 }
 
 #[test]

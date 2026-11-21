@@ -38,18 +38,12 @@ pub fn check(app: &Shared, tool: &str, input: &Value, lane: Option<&Lane>, proje
         // A shell command that writes to the plan: redirect, tee, in-place edit, move, copy, delete or restore.
         let escaped = regex::escape(m.roadmap.trim_start_matches("./"));
         let writes = bash && Regex::new(&format!(r"(>>?\s*|\btee\s+(-a\s+)?|\b(sed|perl)\s+-[a-zA-Z]*i\S*\s[^;&|]*|\b(mv|cp|rm|truncate)\s[^;&|]*|\bgit\s+(checkout|restore)\s[^;&|]*)\S*{escaped}")).map(|r| r.is_match(cmd)).unwrap_or(false);
-        if (edit && file.ends_with(&plan)) || writes {
-            return Some(format!("The plan is written only by Tirith. Add an item with: tirith plan add {} <step> \"<text>\"", p.id));
-        }
+        let Some(()) = (!((edit && file.ends_with(&plan)) || writes)).then_some(()) else { return Some(format!("The plan is written only by Tirith. Add an item with: tirith plan add {} <step> \"<text>\"", p.id)) };
     }
     if let Some(l) = lane {
         let in_projects = in_lanes || cfg.projects.iter().any(|p| path.starts_with(p.repo()));
-        if edit && in_projects && !path.starts_with(&l.workspace) {
-            return Some(format!("A lane writes only inside its own copy: {}. Change the file there.", l.workspace));
-        }
-        if bash && MAIN.is_match(cmd) {
-            return Some("A lane never pushes or touches main. Commit on your branch and end your turn: Tirith runs the checks and merges.".into());
-        }
+        let Some(()) = (!(edit && in_projects && !path.starts_with(&l.workspace))).then_some(()) else { return Some(format!("A lane writes only inside its own copy: {}. Change the file there.", l.workspace)) };
+        let Some(()) = (!(bash && MAIN.is_match(cmd))).then_some(()) else { return Some("A lane never pushes or touches main. Commit on your branch and end your turn: Tirith runs the checks and merges.".into()) };
         let names: Vec<String> = cfg.factory.commands().iter().filter_map(|(_, c)| std::path::Path::new(c).file_name().map(|n| regex::escape(&n.to_string_lossy()))).collect();
         let spawns = !names.is_empty() && Regex::new(&format!(r"(^|[;&|(]\s*|\bexec\s+|\bnohup\s+)({})\b", names.join("|"))).map(|r| r.is_match(cmd)).unwrap_or(false);
         if tool == "Task" || tool == "Agent" || (bash && spawns) {
