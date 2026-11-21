@@ -2,7 +2,8 @@
 // left the bots' big faces (each in its state, with its unread answers; the "+" adds a bot), and next to them the menu:
 // Overview, Settings and the projects, folded. A face opens its bot (#/bots/<id>); a project opens into its own Pipelines,
 // Agents, Rooms and Access (#/<view>/<project>), and its name opens its overview (plan and manager). Which projects are
-// open is remembered; the selected one always is. The bot's card (new or edit) is drawn here, over any view.
+// open is remembered, and so is folding one: the project you are in opens on arrival unless you folded it, and its arrow
+// or its name folds it again while you stay there. The bot's card (new or edit) is drawn here, over any view.
 import { html, render, useState, useEffect } from '../vendor/preact-htm.js';
 import { useStore, useFetch, setUi } from './store.js';
 import { useUnread } from './unread.js';
@@ -23,9 +24,10 @@ const BOTS = ['bots', 'Bots', Bots];
 const SUB = [['pipelines', 'Pipelines', Pipelines], ['agents', 'Agents', Agents], ['rooms', 'Rooms', Rooms], ['accesos', 'Access', Access]];
 const VIEWS = [...TOP, BOTS, ...SUB];
 const OPEN_KEY = 'tirith.nav.open';
+const FOLDED_KEY = 'tirith.nav.folded';
 const CHEV = 'M9 6l6 6-6 6';
-function loadOpen() { try { return new Set(JSON.parse(localStorage.getItem(OPEN_KEY) || '[]')); } catch { return new Set(); } }
-function saveOpen(s) { try { localStorage.setItem(OPEN_KEY, JSON.stringify([...s])); } catch { /* private window */ } }
+function loadSet(key) { try { return new Set(JSON.parse(localStorage.getItem(key) || '[]')); } catch { return new Set(); } }
+function saveSet(key, s) { try { localStorage.setItem(key, JSON.stringify([...s])); } catch { /* private window */ } }
 
 const BRAND = html`<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6fdccb"/><stop offset=".45" stop-color="#79a8ff"/><stop offset=".75" stop-color="#c79bf2"/><stop offset="1" stop-color="#ffb299"/></linearGradient></defs><path d="M12 2l8 8-8 12L4 10z" fill="url(#lg)" fill-opacity=".85"/><path d="M12 2l8 8H4z" fill="#fff" fill-opacity=".45"/><path d="M12 2l8 8-8 12L4 10z" fill="none" stroke="#fff" stroke-opacity=".9"/></svg>`;
 
@@ -58,9 +60,23 @@ function Faces({ r }) {
 
 function Nav({ r, onAdd }) {
   const s = useStore();
-  const [open, setOpen] = useState(loadOpen);
+  const [open, setOpen] = useState(() => loadSet(OPEN_KEY));
+  const [folded, setFolded] = useState(() => loadSet(FOLDED_KEY));
   const lanes = Object.values(s.lanes);
-  const toggle = (id) => { const n = new Set(open); if (n.has(id)) n.delete(id); else n.add(id); setOpen(n); saveOpen(n); };
+  /* Remember one project as open (`want`) or folded; the two sets stay disjoint, so a folded current
+     project stays folded on arrival and an opened one stays open. The arrow toggles what is shown. */
+  const remember = (id, want) => {
+    const o = new Set(open); if (want) o.add(id); else o.delete(id); setOpen(o); saveSet(OPEN_KEY, o);
+    const f = new Set(folded); if (want) f.delete(id); else f.add(id); setFolded(f); saveSet(FOLDED_KEY, f);
+  };
+  const toggle = (p, isOpen) => remember(p.id, !isOpen);
+  /* A name: an open project you are already in folds (same view); a closed one opens and goes to its overview;
+     an open one you are not in just goes to its overview. */
+  const onName = (p, here, isOpen) => {
+    if (here && isOpen) { remember(p.id, false); return; }
+    if (!isOpen) remember(p.id, true);
+    go('overview', p.id);
+  };
   return html`<aside id="nav">
     <${Faces} r=${r} />
     <div class="nmenu">
@@ -73,12 +89,12 @@ function Nav({ r, onAdd }) {
             onClick=${onAdd}><${Icon} d="M12 5v14 M5 12h14" size=${14} w=${2} /></button></div>
           ${s.projects.map((p) => {
             const n = lanes.filter((l) => l.project === p.id && ACTIVE.includes(l.status)).length;
-            const here = r.view !== 'bots' && r.project === p.id, isOpen = here || open.has(p.id);
+            const here = r.view !== 'bots' && r.project === p.id, isOpen = open.has(p.id) || (here && !folded.has(p.id));
             return html`<div class=${`nproj${isOpen ? ' open' : ''}`} key=${p.id}>
               <div class=${`nav nprow${here && r.view === 'overview' ? ' on' : here ? ' here' : ''}`}>
                 <button type="button" class="nchev" aria-expanded=${isOpen} aria-label=${isOpen ? `Fold ${p.name || p.id}` : `Open ${p.name || p.id}`}
-                  onClick=${() => toggle(p.id)}><${Icon} d=${CHEV} size=${12} w=${1.8} /></button>
-                <button type="button" class="nname" onClick=${() => go('overview', p.id)}><i class="pdot" style=${`background:${p.color || '#9ca3af'}`}></i>
+                  onClick=${() => toggle(p, isOpen)}><${Icon} d=${CHEV} size=${12} w=${1.8} /></button>
+                <button type="button" class="nname" onClick=${() => onName(p, here, isOpen)}><i class="pdot" style=${`background:${p.color || '#9ca3af'}`}></i>
                   <span>${p.name || p.id}</span>${n ? html`<em title="Agents working">${n}</em>` : null}</button>
               </div>
               ${isOpen ? html`<div class="nsub">${SUB.map(([id, label]) => html`<button type="button" class=${`nav nsubi${here && r.view === id ? ' on' : ''}`}
