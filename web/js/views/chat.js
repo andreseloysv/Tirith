@@ -161,7 +161,7 @@ const Msg = pure(({ m, project, projects, onZoom, open, ended }) => {
     const r = /^(.*) \(([^()]*)\): ([\s\S]*)$/.exec(text);
     if (r) { ctx = /paired phone\)$/.test(r[1]) ? 'Your phone' : r[1]; text = r[3]; } else ctx = 'Room';
     cls = 'mgr room';
-  } else if (m.role !== 'tirith') { ctx = 'CEO'; cls = 'mgr ceo'; } /* a turn role's rows: the CEO's passes, under whatever name the role had when written */
+  } else if (m.role !== 'tirith') { ctx = ['ceo', 'reviewer', 'improver'].includes(m.role) ? 'CEO' : m.role; cls = 'mgr ceo'; } /* a turn role's rows (the CEO's passes, under whatever name the role had) and an agent's `tirith say`, under its role or lane */
   return html`<div class=${`mc-m ${cls}`}><div class="mc-b md" dangerouslySetInnerHTML=${{ __html: mdOf(m.id, text) }} />
     <div class="mc-meta" dangerouslySetInnerHTML=${{ __html: ctxHtml(ctx) + ' · ' + esc(time) }} /></div>`;
 }, (a, b) => a.m === b.m && a.projects === b.projects && a.open === b.open && a.ended === b.ended);
