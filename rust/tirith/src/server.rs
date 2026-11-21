@@ -172,8 +172,8 @@ async fn hook(State(app): State<Shared>, Path(event): Path<String>, headers: Hea
     }
     sandbox::tags(&tool, &p["tool_input"]).into_iter().for_each(|(tag, target)| _ = app.event(&lane_id, &project_id, "access", tag, &target, &session));
     if event == "PreToolUse" {
-        let unsandboxed = lane.is_none() && header("x-tirith-role").is_none();
-        let refusal = rules::check(&app, &tool, &p["tool_input"], lane.as_ref(), project.as_ref()).or_else(|| if unsandboxed { sandbox::check_command(&tool, &p["tool_input"]) } else { None });
+        let role = header("x-tirith-role");
+        let refusal = rules::check(&app, &tool, &p["tool_input"], lane.as_ref(), project.as_ref(), role.as_deref()).or_else(|| if lane.is_none() && role.is_none() { sandbox::check_command(&tool, &p["tool_input"]) } else { None });
         if let Some(why) = refusal {
             app.event(&lane_id, &project_id, "blocked", &tool, &format!("{summary} — {why}"), &session);
             return Json(json!({"hookSpecificOutput": {"hookEventName": "PreToolUse",
