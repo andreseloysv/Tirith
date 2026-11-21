@@ -42,6 +42,7 @@ pub fn finish(app: &Shared, mut t: Turn, ok: Option<bool>, answer: Option<&str>)
     let _ = (own && t.role == t.conv)
         .then(|| crate::bots::versioned(app, &t.conv, &format!("turn {id}"))); // a bot's folder and the shared one, committed when this turn changed them
     app.emit("turn", json!({"id": id, "conv": t.conv, "status": status}));
+    crate::lab::finished(app, id, &t.conv, &t.routine); // a run of a live experiment: its variant, its comparison
     id
 }
 

@@ -1,5 +1,6 @@
 //! One loaded factory version.
 use super::embedded::{embedded_prompts, TEXT};
+use super::lab::Lab;
 use super::limits::Limits;
 use std::collections::BTreeMap;
 
@@ -8,6 +9,8 @@ use std::collections::BTreeMap;
 pub struct Factory {
     pub raw: toml::Table,
     pub limits: Limits,
+    /// Its `[lab]`: the rule experiments are decided by.
+    pub lab: Lab,
     pub(super) prompts: BTreeMap<String, String>,
     /// This version's stamp: the main commit that last changed `factory/`, plus a short hash of what config.toml lays over it (`<commit>+<hash>`; `embedded` when no checkout is at hand).
     pub version: String,

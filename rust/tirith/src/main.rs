@@ -10,6 +10,7 @@ mod codex;
 mod config;
 mod factory;
 mod guard;
+mod lab;
 mod lanes;
 mod manager;
 mod merge;

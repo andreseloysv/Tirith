@@ -1,7 +1,7 @@
 //! Parsing one factory version, layer by layer, and validating it.
 use super::extends::resolve_roles;
 use super::loaded::Factory;
-use super::{layers, limits, stamp};
+use super::{lab, layers, limits, stamp};
 use std::collections::BTreeMap;
 
 /// Parses and validates one factory version: the embedded text under the file's, its prompts (by file stem) and config.toml laid over both.
@@ -18,6 +18,7 @@ pub fn parse(
     let raw = table.as_table().cloned().unwrap_or_default();
     let f = Factory {
         limits: limits::read(&raw)?,
+        lab: lab::read(&raw)?,
         raw,
         prompts,
         version: stamp::version(overlay),

@@ -5,9 +5,9 @@ use std::path::{Path as FsPath, PathBuf};
 pub const SKILLS: &str = ".agents/skills";
 /// The memory of every bot, in Tirith's home: what holds for all of them (the owner's name, time zone, language).
 pub(super) const SHARED: &str = "bots/memory.md";
-/// A bot's folder, where its sessions run: memory.md, its working files and its skills.
+/// A bot's folder, where its sessions run: memory.md, its working files and its skills (during a B run of a live experiment, the branch's worktree in the lab).
 pub fn folder(app: &App, key: &str) -> PathBuf {
-    app.home.join("manager").join(key)
+    crate::lab::seat(app.home.join("manager").join(key))
 }
 /// A bot's own skill `name`: its SKILL.md.
 pub fn skill_file(app: &App, key: &str, name: &str) -> PathBuf {

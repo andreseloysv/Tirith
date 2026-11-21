@@ -299,6 +299,23 @@ on = "routine.worse"
 to = "coach"
 mode = "turn"
 
+# The lab's decisions reach the bot's chat as one line (an experiment of the
+# Coach, decided by the [lab] rule): an adoption on the phones too, a
+# discarded one only in the chat. The bot hears either with its next turn.
+[[routes]]
+on = "lab.adopted"
+to = "manager"
+mode = "note"
+chat = true
+phone = true
+
+[[routes]]
+on = "lab.discarded"
+to = "manager"
+mode = "note"
+chat = true
+phone = false
+
 [[routes]]
 on = "factory.invalid"
 to = "manager-general"
@@ -360,6 +377,28 @@ on = "routine.done"
 judge = "judge"
 rubric = "evals/unapproved.md"
 sample = 1.0
+
+# A live experiment's run of B (the branch) against the run of A (the bot's
+# main) before it: the judge reads the task and the two answers in an order
+# Tirith draws at random and keeps, and says a, b or tie; Tirith maps it
+# back to B winning, losing or tying (the lab's comparisons, never shown).
+[[evals]]
+id = "ab-compare"
+on = "lab.compare"
+judge = "judge"
+rubric = "evals/ab-compare.md"
+sample = 1.0
+
+# The lab's rule, fixed before any test and never by the Coach: after
+# `inputs` comparisons (or `max_days` days) B, the branch, is adopted when
+# it is not worse (wins and ties at least `not_worse_share` of them, and
+# wins at least as many as it loses), has no new failure and no 👎, and
+# saves at least `min_saving` of the mean cost or time. Otherwise it goes.
+[lab]
+inputs = 8
+not_worse_share = 0.5
+min_saving = 0.15
+max_days = 7
 
 [limits]
 max_load = 2.0

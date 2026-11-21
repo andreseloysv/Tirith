@@ -22,11 +22,13 @@ pub(super) fn fire(app: &Shared, id: &str, rid: &str) -> Result<(), String> {
     app.set_kv(&format!("routine:{id}:{rid}"), Some(&now_iso()));
     app.chat("routine", &format!("Running routine · {title}"), &key);
     crate::turns::trigger(&key, "schedule", rid); // the page's Run now said run-now first
+    crate::lab::fired(app, &key, rid); // a live experiment on it: this run is its A or its B
     crate::manager::emit_event(app, &key, "schedule", &format!("Routine «{title}» is due now. Do it and report the result here in a few lines (when nothing is new, one line that starts with ∅); ask nothing: {task}"), None);
     Ok(())
 }
-/// Fires the routines due now; the lanes scheduler calls it on its tick (every ~30 s), so the bots need no timer of their own.
+/// Fires the routines due now, and decides the experiments due; the lanes scheduler calls it on its tick (every ~30 s), so the bots need no timer of their own.
 pub fn tick(app: &Shared) {
+    crate::lab::tick(app);
     all(app).iter().for_each(|b| {
         b["routines"]
             .as_array()

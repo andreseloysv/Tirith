@@ -55,6 +55,7 @@ impl Setup {
         } else {
             app.home.join(who).join(project)
         };
+        let dir = crate::lab::seat(dir); // a B run of a live experiment runs in its branch's worktree
         Ok(Setup {
             agent,
             read_only,

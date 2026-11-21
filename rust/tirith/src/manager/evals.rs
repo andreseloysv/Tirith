@@ -48,6 +48,7 @@ pub(super) fn judge_evals(app: &Shared, project: &str, on: &str, shown: &str, ev
             let (factory, role_hash) = app.stamp_for(&judge);
             app.insert("INSERT INTO scores (at, event, eval, label, score, why, factory, role_hash) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)", rusqlite::params![now_iso(), event, id, label, score, why, factory, role_hash]);
             crate::turns::scored(&app, event, &id, score);
+            crate::lab::judged(&app, event, &id, &label, &why); // an ab-compare: B's verdict
         }
     });
 }
