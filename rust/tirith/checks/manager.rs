@@ -25,3 +25,22 @@ fn lane_ask_shows_in_open_questions() {
     let q = cards[0]["question"].to_string();
     assert!(cards.len() == 1 && cards[0]["id"] == "l1" && q.contains("lane bloqueada esperando al dueño") && q.contains("0,74"), "{q}");
 }
+
+#[test]
+fn judged_reads_a_label_or_a_score_and_one_line_why() {
+    assert_eq!(super::judged("approval — el dueño da las gracias por el arreglo"), ("approval".to_string(), None, "el dueño da las gracias por el arreglo".to_string()));
+    assert_eq!(super::judged("Correction: pide rehacer la portada").0, "correction");
+    assert_eq!(super::judged("`noise` — se queja de los avisos").0, "noise");
+    assert_eq!(super::judged("\n\n0.25 — mostly not needed\n"), (String::new(), Some(0.25), "mostly not needed".to_string()));
+    assert_eq!(super::judged("alone — era un valor por defecto reversible").0, "alone");
+    assert_eq!(super::judged("").0, "");
+}
+
+#[test]
+fn card_id_of_reads_the_card_an_event_line_names() {
+    assert_eq!(super::card_id_of("Card o12 closed by the manager: ya no hace falta").as_deref(), Some("o12"));
+    assert_eq!(super::card_id_of("The owner answered o3 (decision: ¿sigo?): sí").as_deref(), Some("o3"));
+    assert_eq!(super::card_id_of("o7 (payment): ¿pago 3 $?").as_deref(), Some("o7"));
+    assert_eq!(super::card_id_of("merged lane lo-que-sea into main"), None);
+    assert_eq!(super::card_id_of("owner without a card number"), None);
+}

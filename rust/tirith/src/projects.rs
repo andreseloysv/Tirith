@@ -82,10 +82,7 @@ fn register(app: &Shared, mut p: Project) -> Result<(Project, bool), String> {
     p.id = unique_id(&p.name, &cfg.projects);
     let file = app.home.join("config.toml");
     let fail = |e: std::io::Error| format!("{}: {e}", file.display());
-    let text = match std::fs::read_to_string(&file) {
-        Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(fail(e)),
-        r => r.unwrap_or_default(),
-    };
+    let text = std::fs::read_to_string(&file).or_else(|e| if e.kind() == std::io::ErrorKind::NotFound { Ok(String::new()) } else { Err(e) }).map_err(fail)?;
     let more = block(&text, &p)?;
     std::fs::OpenOptions::new().create(true).append(true).mode(0o600).open(&file).and_then(|mut f| f.write_all(more.as_bytes())).map_err(fail)?;
     app.reload_config(true);

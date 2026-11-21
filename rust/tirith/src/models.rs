@@ -255,11 +255,7 @@ pub fn state(app: &Shared) -> Value {
             let (s, source) = role_with_source(app, &r);
             let mut v = json!(s);
             v["source"] = json!(source);
-            for k in ["session", "scope", "access", "runs_on", "name"] {
-                if let Some(x) = cfg.factory.role::<String>(&r, k) {
-                    v[k] = json!(x);
-                }
-            }
+            ["session", "scope", "access", "runs_on", "name"].into_iter().filter_map(|k| cfg.factory.role::<String>(&r, k).map(|x| (k, x))).for_each(|(k, x)| v[k] = json!(x));
             (r, v)
         })
         .collect();
@@ -307,10 +303,7 @@ pub fn cli(pos: &[&str], flag: Flag) -> Option<Result<(), String>> {
     Some(match pos {
         ["models"] => call("GET", "/api/models", None).and_then(|b| {
             let v: Value = serde_json::from_str(&b).map_err(|e| e.to_string())?;
-            for (r, rv) in v["roles"].as_object().into_iter().flatten() {
-                let s: RoleSetting = serde_json::from_value(rv.clone()).unwrap_or_default();
-                println!("{r:<10} {}  [{}]", line(&s), rv["source"].as_str().unwrap_or(""));
-            }
+            v["roles"].as_object().into_iter().flatten().for_each(|(r, rv)| println!("{r:<10} {}  [{}]", line(&serde_json::from_value(rv.clone()).unwrap_or_default()), rv["source"].as_str().unwrap_or("")));
             Ok(())
         }),
         ["models", "set", r] => {

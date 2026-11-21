@@ -17,8 +17,9 @@ stays on the page and never reaches the phones (`rooms::to_phones`), so only new
 
 ## `factory.rs`
 
-The factory file: `factory/factory.toml` and its prompts (`factory/prompts/*.md`) hold what used to be fixed in
-Rust — each agent's flags, the roles with their settings, `[limits]`, `[plan]`, `[cards]` and `[metrics.*]` — read
+The factory file: `factory/factory.toml`, its prompts (`factory/prompts/*.md`) and its eval rubrics
+(`factory/evals/*.md`) hold what used to be fixed in
+Rust — each agent's flags, the roles with their settings, `[limits]`, `[plan]`, `[cards]`, `[metrics.*]` and `[[evals]]` — read
 as data (docs/FACTORY.md). The loader is strict: an unknown key (`deny_unknown_fields` for `[limits]`, key lists
 for the rest), a role on a missing agent or prompt, or an unknown measure makes a version invalid, and the daemon
 keeps the last good one while the error shows on the page (`factory_error` of `/api/state`) and is told to the
@@ -31,7 +32,13 @@ the manager), and an agent the factory does not name runs with the `default` age
 the factory say who hears each event the code emits (a closed list in `factory.rs`): which role, as a `turn` now
 or a `note` with its next turn, a line in the chat (`chat`), and whether that line and the answer of a turn the
 event starts reach the phones (`phone`). A route on a missing event or role is invalid; routes in config.toml
-stand next to the factory's.
+stand next to the factory's. The `[[evals]]` of the factory are judged in the background by their `judge` role
+(small text jobs on a cheap, fast model, `access = "read"`, no prompt of its own: each rubric in
+`factory/evals/` is its instructions): the event with the conversation before it (and, for a card, the card
+itself) goes in, and a `scores` row keeps the label or score, one line why, the event and the judge's stamp;
+a share of the events is judged (`sample`, by event id). An eval on a missing event, judge or rubric is
+invalid. Nothing of a score reaches the owner: the scores only feed the measures (`satisfaction`, and
+`needless_cards` below).
 
 Every version of the factory has a stamp (`Factory::version`): the main commit that last changed `factory/`,
 plus a short hash of what config.toml lays over it (`<commit>+<hash>`; `embedded` when no checkout is at hand).
@@ -73,9 +80,13 @@ Health metrics and the reviewer.
 Every minute code computes the metrics from the daemon's own data (lanes, runs, plans, kv). The owner's measures
 come from the store too: `interruptions` counts, per item merged in 24 h, what reached the owner unasked — phone
 messages of turns no owner message started (the events and chat timeline, classified by the factory routes with
-`phone = true`), notices whose route has `phone = true`, and cards opened — and `needless_cards` is the share of
-the cards opened in 24 h and already resolved that were closed without an answer. Their labels and targets are
-`[metrics.interruptions]` and `[metrics.needless_cards]` of the factory; they show with the other metrics on the
+`phone = true`), notices whose route has `phone = true`, and cards opened — `needless_cards` is the share of
+the cards opened in 24 h and already resolved that were closed without an answer, plus those the `card-needed`
+eval judged decidable alone (an answered one too: it bothered the owner needlessly) — and `satisfaction` is,
+per day, (approvals − corrections − repeats − noise complaints) / owner messages from the `owner-mood` eval's
+scores, judged by the cheap `judge` role from what the owner writes anyway, never by asking the owner (a
+question is itself an interruption). Their labels and targets are
+`[metrics.interruptions]`, `[metrics.needless_cards]` and `[metrics.satisfaction]` of the factory; they show with the other metrics on the
 page, and a red one is routed as `metric.red` like any other. A metric that
 turns red starts an episode: the mechanical fix when there is one, then one note to the manager. Still red
 after the delayed `metric.red` route's `after_minutes`, one review runs for that episode: that route's turn
@@ -87,8 +98,9 @@ While everything is green no model is called.
 
 Models per role and the fallback chain.
 
-Roles are the factory's: "manager" (a project's chat), "lead" (the chat of no project), "worker" (lanes) and
-"reviewer" (one fresh turn), each with its `session`, `scope`, `extends`, `access`, `idle_minutes`,
+Roles are the factory's: "manager" (a project's chat), "lead" (the chat of no project), "worker" (lanes),
+"reviewer" (one fresh turn) and "judge" (the evals' cheap turn role, with no prompt of its own, so code never
+picks it as a standalone turn role), each with its `session`, `scope`, `extends`, `access`, `idle_minutes`,
 `max_per_day` and `runs_on` in `factory/factory.toml`; code finds a role by that shape, never by a fixed
 list of names. Each has an agent alias, a model, an effort and a fallback
 chain. The effective setting is the owner's override from the page (kv `models:<role>`), else

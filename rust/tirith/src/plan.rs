@@ -35,21 +35,21 @@ pub fn clean(text: &str) -> String {
 }
 
 pub fn parse(text: &str) -> Vec<Step> {
-    let mut steps: Vec<Step> = vec![];
-    for (i, line) in text.lines().enumerate() {
+    let mut steps: Vec<Step> = text.lines().enumerate().fold(vec![], |mut steps, (i, line)| {
         if let Some(head) = line.strip_prefix("## ") {
             let (num, title) = head.split_once(". ").filter(|(n, _)| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit())).unwrap_or(("", head));
             steps.push(Step { num: num.into(), title: title.trim().into(), items: vec![], line: i });
-        } else if let Some(step) = steps.last_mut() {
-            let (done, rest) = match line.get(..6) {
-                Some("- [ ] ") => (false, &line[6..]),
-                Some("- [x] ") | Some("- [X] ") => (true, &line[6..]),
-                _ => continue,
-            };
-            let check = CHECK.captures(rest).map(|c| c[1].to_string());
-            step.items.push(Item { text: clean(rest), done, check, line: i });
+        } else if let Some(((done, rest), step)) = (match line.get(..6) {
+            Some("- [ ] ") => Some((false, &line[6..])),
+            Some("- [x] ") | Some("- [X] ") => Some((true, &line[6..])),
+            _ => None,
+        })
+        .zip(steps.last_mut())
+        {
+            step.items.push(Item { text: clean(rest), done, check: CHECK.captures(rest).map(|c| c[1].to_string()), line: i });
         }
-    }
+        steps
+    });
     steps.retain(|s| !s.num.is_empty());
     steps
 }
@@ -77,14 +77,9 @@ pub fn find(app: &Shared, project: &str, step: &str, item: &str) -> Option<Item>
 /// Ticks the open `(step, item)` pairs in a plan text: the new text and how many were ticked.
 pub fn tick_text(text: &str, items: &[(String, String)]) -> (String, usize) {
     let mut lines: Vec<String> = text.lines().map(String::from).collect();
-    let mut n = 0;
-    for s in parse(text) {
-        for it in s.items.iter().filter(|it| !it.done && items.iter().any(|(st, i)| *st == s.num && same(i, &it.text))) {
-            lines[it.line] = lines[it.line].replacen("- [ ] ", "- [x] ", 1);
-            n += 1;
-        }
-    }
-    (lines.join("\n") + "\n", n)
+    let tick: Vec<usize> = parse(text).iter().flat_map(|s| s.items.iter().filter(move |it| !it.done && items.iter().any(|(st, i)| *st == s.num && same(i, &it.text))).map(|it| it.line)).collect();
+    tick.iter().for_each(|&l| lines[l] = lines[l].replacen("- [ ] ", "- [x] ", 1));
+    (lines.join("\n") + "\n", tick.len())
 }
 
 /// Applies `edit` to the plan's lines under the writer lock, then queues the commit.
@@ -161,7 +156,7 @@ pub async fn flush_locked(app: &Shared, project: &str) {
     let result = if pending.is_empty() { Ok(String::new()) } else { git(&repo, &["commit", "-q", "-m", "Plan: update from Tirith", "--", &rel]).await };
     match result {
         Ok(_) => _ = app.plan_dirty.lock().unwrap().remove(project),
-        Err(e) => app.event("", project, "error", "plan", &format!("plan commit failed: {e}"), ""),
+        Err(e) => _ = app.event("", project, "error", "plan", &format!("plan commit failed: {e}"), ""),
     }
 }
 

@@ -155,16 +155,16 @@ pub fn cli(pos: &[&str], _flag: crate::client::Flag) -> Option<Result<(), String
                 Some(id) => vec![id.to_string()],
                 None => all().map(|ps| ps.iter().filter(|p| p["ok"] != true).filter_map(|p| p["project"].as_str().map(String::from)).collect()).unwrap_or_default(),
             };
-            let mut failed = false;
-            for id in ids {
-                match call("POST", &format!("/api/guard/{id}/install"), None) {
-                    Ok(_) => println!("{id}: installed"),
-                    Err(e) => {
-                        eprintln!("{id}: {e}");
-                        failed = true;
-                    }
+            let failed = ids.iter().fold(false, |failed, id| match call("POST", &format!("/api/guard/{id}/install"), None) {
+                Ok(_) => {
+                    println!("{id}: installed");
+                    failed
                 }
-            }
+                Err(e) => {
+                    eprintln!("{id}: {e}");
+                    true
+                }
+            });
             (!failed).then_some(()).ok_or_else(|| "some guards were not installed".into())
         }
         _ => return None,

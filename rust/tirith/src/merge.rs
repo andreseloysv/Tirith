@@ -31,11 +31,8 @@ struct Pipe {
 pub async fn worker(app: Shared) {
     let cut: Vec<String> = app.lanes.lock().unwrap().values().filter(|l| l.status == "merging").map(|l| l.id.clone()).collect();
     cut.iter().for_each(|id| drop(app.update_lane(id, |l| l.status = "merge-queued".into()))); // a merge cut short by a restart starts over
-    {
-        // ... and its pipeline and runs, left "running" by the restart, end as interrupted.
-        let db = app.db.lock().unwrap();
-        ["pipelines", "runs"].into_iter().for_each(|t| drop(db.execute(&format!("UPDATE {t} SET status = 'interrupted', ended_at = ?1 WHERE status = 'running'"), [now_iso()])));
-    }
+                                                                                               // ... and its pipeline and runs, left "running" by the restart, end as interrupted.
+    ["pipelines", "runs"].into_iter().for_each(|t| _ = app.insert(&format!("UPDATE {t} SET status = 'interrupted', ended_at = ?1 WHERE status = 'running'"), params![now_iso()]));
     loop {
         recheck_red(&app).await;
         let batch = next_batch(&app).await;
@@ -114,13 +111,9 @@ fn wanted(stage: &Stage, changed: &[String]) -> bool {
 }
 
 fn open_pipeline(app: &Shared, project: &str, kind: &str, lanes: &str, sha: &str) -> Pipe {
-    let id = {
-        let db = app.db.lock().unwrap();
-        let n: i64 = db.query_row("SELECT COUNT(*) FROM pipelines WHERE project = ?1", [project], |r| r.get(0)).unwrap_or(0);
-        let id = format!("{project}-{}", n + 1);
-        let _ = db.execute("INSERT INTO pipelines (id, project, kind, lanes, sha, status, started_at) VALUES (?1,?2,?3,?4,?5,'running',?6)", params![id, project, kind, lanes, sha, now_iso()]);
-        id
-    };
+    let n = app.query("SELECT COUNT(*) FROM pipelines WHERE project = ?1", [project], |r| r.get::<_, i64>(0)).into_iter().next().unwrap_or(0);
+    let id = format!("{project}-{}", n + 1);
+    app.insert("INSERT INTO pipelines (id, project, kind, lanes, sha, status, started_at) VALUES (?1,?2,?3,?4,?5,'running',?6)", params![id, project, kind, lanes, sha, now_iso()]);
     let p = Pipe { id, project: project.into(), lanes: lanes.into(), sha: sha.into() };
     app.emit("pipeline", pipeline(app, &p.id));
     p
@@ -222,13 +215,7 @@ async fn reset(slot: &Path, sha: &str) -> Result<(), String> {
 }
 
 fn requeue(app: &Shared, lanes: &[Lane], solo: bool, note: &str) {
-    for l in lanes {
-        app.update_lane(&l.id, |x| {
-            x.status = "merge-queued".into();
-            x.solo = solo;
-            x.note = note.into();
-        });
-    }
+    lanes.iter().for_each(|l| drop(app.update_lane(&l.id, |x| (x.status, x.solo, x.note) = ("merge-queued".into(), solo, note.into()))));
 }
 
 async fn train(app: &Shared, batch: Vec<Lane>) {

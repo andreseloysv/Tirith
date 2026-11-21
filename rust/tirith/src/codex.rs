@@ -42,11 +42,7 @@ pub fn options(cfg: &crate::config::Config, argv: &mut Vec<String>, effort: Opti
 fn muse_argv(command: &str, read_only: bool, model: Option<&str>, effort: Option<&str>, workspace: &str, session: Option<&str>, prompt_file: &str) -> Vec<String> {
     let mut a: Vec<String> = [command, "exec", "--json", "--yolo", "--workspace", workspace].map(String::from).to_vec();
     a.extend(read_only.then(|| "--disable-write".to_string()));
-    for (f, v) in [("--model", model), ("--reasoning-effort", effort), ("--session-id", session), ("--prompt-file", Some(prompt_file))] {
-        if let Some(v) = v {
-            a.extend([f.into(), v.into()]);
-        }
-    }
+    a.extend([("--model", model), ("--reasoning-effort", effort), ("--session-id", session), ("--prompt-file", Some(prompt_file))].into_iter().filter_map(|(f, v)| v.map(|v| [f.to_string(), v.to_string()])).flatten());
     a
 }
 
