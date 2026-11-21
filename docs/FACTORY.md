@@ -195,7 +195,7 @@ on the page, and goes to every route whose `on` matches it. The default routes r
 | `lane.not_started` | the scheduler could not start it | manager: turn, chat, phone |
 | `lane.long` | running longer than `long_running_minutes` | manager: turn, chat, phone |
 | `merge.blocked` | no disk, a broken slot, main cannot move | manager: turn, chat, phone |
-| `merge.landed` | items reached main | manager: note, chat, phone |
+| `merge.landed` | items reached main (its note carries each item's beginning only: up to its first `: `, ` (` or `. `, 120 chars at most) | manager: note, chat, phone |
 | `main.red` / `main.green` | a check fails / passes again on main | manager: turn / note, chat, phone |
 | `plan.empty` | no open item left | manager: turn |
 | `deploy.done` / `deploy.failed` | a deploy stage ran | manager: note / turn, chat, phone |
@@ -207,12 +207,17 @@ on the page, and goes to every route whose `on` matches it. The default routes r
 
 The answer of a turn reaches the phones only when an event that started it has `phone = true` (`owner.message`
 always). Today every manager message reaches them. A routine answer that starts with ∅ still never does.
+`tirith say` run inside a Tirith session (with `TIRITH_ROLE` or `TIRITH_LANE`) is that agent's, not the owner's:
+it lands in the chat under its role or lane and reaches the manager marked as the agent's, with no
+`owner.message`, no owner-mood judging and no `/model` command (that one is the owner's alone).
 
 ## Measures
 
 Code computes a closed set of measures from the store; the factory gives each one its label, target and side, and
 `metric.red` is routed like any event. Today's: merged in 24 h, median launch to main, first try, idle with work, stuck
-lanes, main red, failed lanes, owner questions.
+lanes, main red, failed lanes, owner questions. A red episode (when it started and whether its CEO pass already
+ran) is kept in `kv` and cleared when the measure is green again, so a daemon restart neither announces
+`metric.red` again nor repeats the pass for a measure that was already red.
 
 The owner comes first. From 2026-11-13 to 2026-11-20 Tirith wrote 227 notices to the owner's chats and phones (111 of
 them merges) and the managers 260 messages; the owner wrote 62. Of 32 cards, 11 were answered, 14 closed without an
