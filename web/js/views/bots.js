@@ -361,7 +361,7 @@ export function Bots({ project: wanted }) {
   }
   if (!bots.length) return html`<div class="bview bsolo"><${Intro} onNew=${() => setUi('botCard', {})} /></div>`;
   return html`<div class="bview">
-    <div class="bchat"><${Chat} key=${keyOf(bot)} project=${keyOf(bot)} who=${bot.name} models=${false}
+    <div class="bchat"><${Chat} key=${keyOf(bot)} project=${keyOf(bot)} who=${bot.name}
       hint=${`Say hello to ${bot.name}. Ask for anything that repeats, as “every weekday at 8, check my inbox for job offers”, and ${bot.name} sets up the routine itself.`} /></div>
     <aside class="bside"><${Panel} bot=${bot} busy=${!!s.busy[keyOf(bot)]} onEdit=${() => setUi('botCard', bot)} /></aside>
   </div>`;

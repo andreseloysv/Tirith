@@ -7,6 +7,7 @@
 import { html, Component, useState, useEffect, useLayoutEffect, useRef, useMemo } from '../../vendor/preact-htm.js';
 import { useStore, useTalk, useFetch, api } from '../store.js';
 import { ChatModels } from './chat-models.js';
+import { Face } from './bots/face.js';
 import { clockTime } from '../common.js';
 import { intentOf } from '../intent.js';
 import { md, esc, boldLead, ctxHtml } from '../md.js';
@@ -166,14 +167,16 @@ const Msg = pure(({ m, project, projects, onZoom, open, ended }) => {
     <div class="mc-meta" dangerouslySetInnerHTML=${{ __html: ctxHtml(ctx) + ' · ' + esc(time) }} /></div>`;
 }, (a, b) => a.m === b.m && a.projects === b.projects && a.open === b.open && a.ended === b.ended);
 
-/** One turn: the tiny intent line while it runs, then only its answer. */
-const Turn = pure(({ rows, running, who }) => {
+/** One turn: the tiny intent line while it runs, then only its answer, with the face and name of who speaks beside it. */
+const Turn = pure(({ rows, running, who, face }) => {
   if (running) return html`<${Intent} who=${who} step=${rows[rows.length - 1]} />`;
   return html`${answerOf(rows, false).map((r) => (quiet(r.text)
     ? html`<div class="mc-ev quiet" key=${r.id} title=${clockTime(r.at)}><span>${r.text.replace(/^\s*∅\s*/, '')}</span></div>`
-    : html`<div class="mc-m mgr" key=${r.id}><div class="mc-b md" dangerouslySetInnerHTML=${{ __html: mdOf(r.id, r.text) }} />
-      <div class="mc-meta" dangerouslySetInnerHTML=${{ __html: ctxHtml(who || 'Manager') + ' · ' + esc(clockTime(r.at)) }} /></div>`))}`;
-}, (a, b) => a.k === b.k && a.n === b.n && a.running === b.running);
+    : html`<div class="mc-m mgr" key=${r.id}><div class="mc-line">
+      ${face && face.shape ? html`<span class="mc-face"><${Face} shape=${face.shape} color=${face.color || '#3b82f6'} size=${22} still /></span>` : null}
+      <div class="mc-col"><div class="mc-b md" dangerouslySetInnerHTML=${{ __html: mdOf(r.id, r.text) }} />
+      <div class="mc-meta" dangerouslySetInnerHTML=${{ __html: ctxHtml(who || 'Manager') + ' · ' + esc(clockTime(r.at)) }} /></div></div></div>`))}`;
+}, (a, b) => a.k === b.k && a.n === b.n && a.running === b.running && a.who === b.who && a.fk === b.fk);
 
 /** A message sent from this page that the daemon has not shown yet (sending) or refused (failed). */
 function Local({ o, onRetry, onCopy }) {
@@ -227,13 +230,23 @@ function ChatMenu({ project }) {
 let cidN = 0;
 
 /** The conversation of `project` ('' or none: the one of no project). Mount it with key=project, so the draft, the
-    files being attached and the scroll position belong to one conversation. A bot's conversation (`bot-<id>`) passes
-    `who` (the bot's name, in place of "Manager"), `hint` (what an empty conversation says) and `models` false. */
-export function Chat({ project = '', who = '', hint = '', models = true }) {
+    files being attached and the scroll position belong to one conversation. A bot's conversation (`bot-<id>`, or a
+    system bot's key) passes `who` (the bot's name) and `hint` (what an empty conversation says). Who speaks here —
+    a project's Project Manager, or the bot — has its face and name in the head and beside its messages, and the
+    model picker under the thread chooses only that one's model: a project's chat picks the Project Manager's
+    (for every project), a bot's screen its bot's. The face and name come from /api/models (the factory role). */
+export function Chat({ project = '', who = '', hint = '' }) {
   project = project || 'manager-general';   /* no project: the manager of no project's conversation */
   const s = useStore();
   const talk = useTalk(project);
   const name = projName(s.projects, project);
+  const isProject = s.projects.some((p) => p.id === project);
+  const role = isProject ? 'manager' : project;   /* the factory role that speaks in this conversation */
+  const [M] = useFetch('/api/models', ['models', 'bots']);
+  const entry = (M && M.roles[role]) || null;
+  const whoName = who || (entry && entry.name) || (isProject ? 'Project Manager' : 'Manager');
+  const face = (entry && entry.face && entry.face.shape && entry.face) || (isProject ? { shape: 'hex', color: '#8e7cf0' } : null);
+  const faceKey = face ? `${face.shape}:${face.color || ''}` : '';
   const draftKey = project ? `${DRAFT_KEY}:${project}` : DRAFT_KEY;
   const [shown, setShown] = useState(SHOWN);
   const [draft, setDraft] = useState(() => store(draftKey));
@@ -404,25 +417,25 @@ export function Chat({ project = '', who = '', hint = '', models = true }) {
   const runningKey = busy && lastItem && lastItem.kind === 'turn' ? lastItem.key : null;
   const rows = items.map((it) => (it.kind === 'msg'
     ? html`<${Msg} key=${it.key} m=${it.m} project=${project} projects=${s.projects} onZoom=${setZoom} open=${it.m.role === 'card' ? cardOf(it.m) : null} ended=${it.m.role === 'card' ? s.ended[(CARD.exec(it.m.text) || [])[1]] : null} />`
-    : html`<${Turn} key=${it.key} k=${it.key} rows=${it.rows} n=${it.rows.length} running=${it.key === runningKey} who=${who} />`));
+    : html`<${Turn} key=${it.key} k=${it.key} rows=${it.rows} n=${it.rows.length} running=${it.key === runningKey} who=${whoName} face=${face} fk=${faceKey} />`));
   /* busy but no output yet: the tiny line under the newest message */
-  const pending = busy && !runningKey && lastItem ? html`<${Intent} who=${who} step=${null} />` : null;
+  const pending = busy && !runningKey && lastItem ? html`<${Intent} who=${whoName} step=${null} />` : null;
 
   return html`<section class=${`mchat${drag ? ' drop' : ''}`}>
-    <div class="mc-head"><h2>${who || html`Manager <span class="mc-of">${project ? name : 'all projects'}</span>`}</h2>
+    <div class="mc-head"><h2 class="mc-id">${face ? html`<span class="mc-face"><${Face} shape=${face.shape} color=${face.color || '#3b82f6'} size=${26} still /></span>` : null}<span>${whoName}${isProject ? html` <span class="mc-of">${name}</span>` : null}</span></h2>
       <span class="mc-tools">${busy ? html`<button class="mc-stop" type="button" onClick=${interrupt} title="Stop the current turn (Esc)">Stop</button>` : null}<${ChatMenu} project=${project} /></span></div>
     <div class="mc-log" id="mc-log" ref=${log} onScroll=${onScroll}>
       ${hidden ? html`<button type="button" class="mc-earlier" onClick=${() => { const el = log.current; stick.current = false; anchor.current = el.scrollHeight - el.scrollTop; setShown(shown + SHOWN); }}>Show earlier (${hidden})</button>` : null}
       ${talk.error && !talk.loaded ? html`<div class="ierr mc-note">${/not found|not allowed/i.test(talk.error.message)
           ? 'The running Tirith daemon is older than this page: quit Tirith, stop the daemon (pkill -f "tirith serve") and open Tirith again.'
           : `Could not read this conversation: ${talk.error.message}`}</div>` : null}
-      ${rows.length || out.length ? rows : !talk.loaded ? null : html`<p class="quiet">${hint || (project
-        ? `Write to the manager of ${name} here. It works on this project only: its answers, its agents' questions and what lands on main show in this thread.`
-        : 'Write here about anything that is not one project\'s: this manager gets the health reports and the CEO\'s passes. Every project has its own manager: select a project to talk to it.')}</p>`}
+      ${rows.length || out.length ? rows : !talk.loaded ? null : html`<p class="quiet">${hint || (isProject
+        ? `Write to the ${whoName} of ${name} here. It works on this project only: its answers, its agents' questions and what lands on main show in this thread.`
+        : 'Write here about anything that is not one project\'s: this manager gets the health reports and the CEO\'s passes. Every project has its own Project Manager: select a project to talk to it.')}</p>`}
       ${pending}
       ${out.map((o) => html`<${Local} key=${o.cid} o=${o} onRetry=${() => retry(o)} onCopy=${() => copy(o)} />`)}
     </div>
-    ${models ? html`<${ChatModels} />` : null}
+    <${ChatModels} role=${role} label=${whoName} note=${isProject ? `The model of the ${whoName}: it applies to all projects.` : `The model of ${whoName}.`} />
     <div class="mc-comp">
       ${err ? html`<div class="ierr mc-note">${err}</div>` : null}
       <div class="mc-box">
@@ -431,13 +444,13 @@ export function Chat({ project = '', who = '', hint = '', models = true }) {
               <button type="button" aria-label=${`Remove ${p.name}`} title="Remove" onClick=${() => unpic(i)}>×</button></span>
               <span class="mc-thn">${p.name}</span><span class="mc-ths">${size(p.size)}</span></span>`
           : html`<${FileChip} name=${p.name} bytes=${p.size} title=${p.name} onRemove=${() => unpic(i)} />`))}</div>` : null}
-        <textarea ref=${ta} rows="1" maxlength="4000" placeholder=${who ? `Message ${who}…` : project ? `Message the manager of ${name}…` : 'Message the manager…'} aria-label=${`Message to ${who || 'the manager'}`}
+        <textarea ref=${ta} rows="1" maxlength="4000" placeholder=${isProject ? `Message the ${whoName} of ${name}…` : `Message ${whoName}…`} aria-label=${`Message to ${whoName}`}
           value=${draft} onInput=${(e) => edit(e.target.value)} onKeyDown=${onKey} onPaste=${onPaste}></textarea>
         <div class="mc-row">
           <button class="mc-clip" type="button" aria-label="Attach files" title="Attach images or files (or paste, or drop them here)" onClick=${() => file.current.click()}>${CLIP}</button>
           <input type="file" ref=${file} multiple hidden onChange=${(e) => { addFiles(e.target.files); e.target.value = ''; }} />
           <span class="mc-hint">Enter sends · Shift+Enter new line</span>
-          <button class="mc-send" type="button" aria-label="Send" title=${`Send to ${who || 'the manager'}`} onClick=${send}>${SEND}</button>
+          <button class="mc-send" type="button" aria-label="Send" title=${`Send to ${whoName}`} onClick=${send}>${SEND}</button>
         </div>
       </div>
     </div>
