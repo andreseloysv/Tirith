@@ -1,4 +1,16 @@
 use super::*;
+use super::{
+    files::{expire_files, save_image_at},
+    listing::listed_room,
+    outbox::OUT,
+};
+use super::{
+    record::Owed,
+    store::{room, save, update, ROOMS},
+};
+use serde_json::{json, Value};
+use std::time::Duration;
+use tokio::sync::mpsc;
 #[test]
 fn room_attachment_saved_as_file() {
     let home = std::env::temp_dir().join(format!("tirith-att-{}", std::process::id()));
@@ -467,20 +479,23 @@ async fn owed_waits_for_its_own_turn() {
             id: "sealed-owed".into(),
             project: "owedproj".into(),
             kind: "manager".into(),
-            owed: vec![first.clone()],
+            owes: Owed {
+                owed: vec![first.clone()],
+                ..Default::default()
+            },
             ..Default::default()
         },
     );
-    let owed = || room("sealed-owed").unwrap().owed;
+    let owed = || room("sealed-owed").unwrap().owes.owed;
     // The first message was delivered and its turn starts: it alone is what that turn received.
     begin(&app, &["sealed-owed".to_string()]);
     assert_eq!(
-        room("sealed-owed").unwrap().answering,
+        room("sealed-owed").unwrap().owes.answering,
         vec![first.clone()],
         "the running turn received the first message"
     );
     // The owner writes again while that turn is still running (as `poll` saves it, with the cursor).
-    update(&app, "sealed-owed", |r| r.owed.push(second.clone()));
+    update(&app, "sealed-owed", |r| r.owes.owed.push(second.clone()));
     assert_eq!(
         owed(),
         vec![first.clone(), second.clone()],
@@ -494,7 +509,7 @@ async fn owed_waits_for_its_own_turn() {
         "the second message is still owed after the first turn's reply"
     );
     assert!(
-        room("sealed-owed").unwrap().answering.is_empty(),
+        room("sealed-owed").unwrap().owes.answering.is_empty(),
         "and no turn is answering it yet"
     );
     let kept: Value = serde_json::from_str(
@@ -515,7 +530,7 @@ async fn owed_waits_for_its_own_turn() {
     // The next turn starts on the second message, then dies with its session (a restart) before answering.
     begin(&app, &["sealed-owed".to_string()]);
     assert_eq!(
-        room("sealed-owed").unwrap().answering,
+        room("sealed-owed").unwrap().owes.answering,
         vec![second.clone()],
         "the next turn received the second message"
     );
@@ -542,7 +557,7 @@ async fn owed_waits_for_its_own_turn() {
     begin(&app, &["sealed-owed".to_string()]);
     reply(&app, &["sealed-owed".to_string()], "respuesta al segundo");
     assert!(
-        owed().is_empty() && room("sealed-owed").unwrap().answering.is_empty(),
+        owed().is_empty() && room("sealed-owed").unwrap().owes.answering.is_empty(),
         "nothing owed once its own turn answered"
     );
     again(&app, Some("owedproj"));
