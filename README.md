@@ -279,7 +279,7 @@ lanes_only = true
 
 ## Layout
 
-`rust/tirith/` the daemon and CLI (`src/`, one file per module) and its page (`ui/`) · `app/` the desktop app, a
-window on the daemon · `docs/` the plan and the hackathon submission · `site/` the landing page.
+`rust/tirith/` the daemon and CLI (`src/`, one folder per module, see docs/DAEMON.md; `checks/` its tests) ·
+`web/` its page · `app/` the desktop app, a window on the daemon · `docs/` the plan and the hackathon submission · `site/` the landing page.
 
 License: MIT. See [LICENSE](LICENSE).
