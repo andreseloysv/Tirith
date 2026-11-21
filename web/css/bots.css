@@ -137,6 +137,8 @@
 .bot.face .ffloat { position: absolute; inset: 0; transform-origin: 50% 82.258%; will-change: transform; }
 .bot.face .fhalo { position: absolute; inset: 0; will-change: opacity; }
 .bot.face .fsvg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+/* the 3D face: one canvas, the bot's box grown by the halo's margin (face.js draws it at 170%) */
+.bot.face .botcv { position: absolute; left: -35%; top: -35%; width: 170%; height: 170%; pointer-events: none; }
 /* in a list, a picker or a head a face is an avatar: one fixed box the glow and the float may paint and move in but
    never out of, so a face cannot grow its row, mount the ones beside it or cover the name and text next to it;
    display faces (the hero, the preview, the intro lineup) keep the glow's spill into the empty space around them */
@@ -153,6 +155,10 @@
 /* and the halo itself fades to nothing at the box's edge, so no blur, however wide, can end in a visible square */
 .nbot .bot.face .fhalo, .mc-face .bot.face .fhalo, .rface .bot.face .fhalo, .bshapes .bot.face .fhalo {
   -webkit-mask-image: radial-gradient(closest-side, #000 60%, transparent 98%); mask-image: radial-gradient(closest-side, #000 60%, transparent 98%); }
+/* the same fade for the 3D canvas: its halo reaches the canvas edge, past the avatar box that clips it —
+   closest-side is the canvas's own half, and the box edge sits at 59% of it (the canvas is 170% of the box) */
+.nbot .bot.face .botcv, .mc-face .bot.face .botcv, .rface .bot.face .botcv, .bshapes .bot.face .botcv {
+  -webkit-mask-image: radial-gradient(closest-side, #000 40%, transparent 59%); mask-image: radial-gradient(closest-side, #000 40%, transparent 59%); }
 .bot .z { font-family: var(--b-mono, ui-monospace, Menlo, monospace); font-weight: 500; fill: var(--b-mut, #8c8c8c); }
 .bot .ring { transform-box: fill-box; transform-origin: center; animation: b-spin 14s linear infinite; }
 @keyframes b-spin { to { transform: rotate(360deg); } }
