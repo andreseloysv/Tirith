@@ -1,4 +1,4 @@
-//! Lanes: one agent, one plan item, one reusable worktree slot on its own branch; the autopilot starts open plan items, and a lane that ends goes to the merge queue, where the checks decide.
+//! Lanes: one agent, one plan item, one worktree slot of its own on its own branch (removed the moment the lane ends for good); the autopilot starts open plan items, and a lane that ends goes to the merge queue, where the checks decide.
 
 use crate::app::{add_worktree, alive, git, kill_group, now_iso, now_s, tail, Lane, Shared};
 use crate::{config::Project, guard, manager, models, plan, sandbox};
@@ -65,20 +65,134 @@ pub fn shared_target(app: &Shared, project: &str) -> PathBuf {
     app.home.join("build").join(project).join("cargo")
 }
 
-/// With less than 10 GB free: the build caches git ignores (target, .build, node_modules, build, .gradle) are removed from the lanes' worktrees that no active lane holds. Nothing tracked is touched.
-async fn free_disk(app: &Shared, lanes: &[Lane]) {
-    let Some(()) = (free_gb(&app.home.join("lanes")) < 10.0).then_some(()) else { return };
+/// Folders git ignores that are only build caches: they go with the worktree and are never moved to the project.
+const CACHES: [&str; 8] = ["target", "node_modules", ".build", "build", ".gradle", "__pycache__", "venv", ".venv"];
+fn is_cache(rel: &Path) -> bool {
+    rel.components().any(|c| CACHES.contains(&c.as_os_str().to_str().unwrap_or("")))
+}
+fn at_s(iso: Option<&str>) -> u64 {
+    iso.and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok()).map_or(0, |t| t.timestamp().max(0) as u64)
+}
+
+/// `dest` with the lane's id in its name (`doc-<lane>.pdf`): where a lane's ignored file lands when the project already holds a different one at its path.
+fn side_path(dest: &Path, lane: &str) -> PathBuf {
+    let name = dest.file_name().unwrap_or_default().to_string_lossy().into_owned();
+    dest.with_file_name(name.rsplit_once('.').filter(|(s, _)| !s.is_empty()).map_or_else(|| format!("{name}-{lane}"), |(s, e)| format!("{s}-{lane}.{e}")))
+}
+
+/// Moves one git-ignored file of a lane to the same path in the project, never over what is there: an identical file there needs no move, a different one keeps its place and the lane's lands next to it. The path it ends at.
+fn move_ignored(src: &Path, repo: &Path, rel: &Path, lane: &str) -> Option<PathBuf> {
+    let dest = std::iter::successors(Some(repo.join(rel)), |d| Some(side_path(d, lane))).find(|d| !d.exists() || std::fs::read(d).ok() == std::fs::read(src).ok())?;
+    let Some(()) = (!dest.exists()).then_some(()) else { return Some(dest) };
+    dest.parent().map(|p| std::fs::create_dir_all(p))?.ok()?;
+    std::fs::rename(src, &dest).or_else(|_| std::fs::copy(src, &dest).and_then(|_| std::fs::remove_file(src))).ok().map(|_| dest)
+}
+
+fn files_under(p: &Path, out: &mut Vec<PathBuf>) {
+    std::fs::read_dir(p).into_iter().flatten().flatten().map(|e| e.path()).for_each(|e| drop(((e.is_symlink() || e.is_file()).then(|| out.push(e.clone())), (!e.is_symlink() && e.is_dir()).then(|| files_under(&e, out)))));
+}
+
+/// Keeps a file moved in from a lane out of git for good: when the project does not already ignore it, its path joins `.git/info/exclude` there, so it is never committed or pushed from the project folder.
+async fn ensure_excluded(repo: &Path, dest: &Path) {
+    let Ok(rel) = dest.strip_prefix(repo).map(|r| r.to_string_lossy().into_owned()) else { return };
+    let Some(()) = git(repo, &["check-ignore", "-q", "--", &rel]).await.is_err().then_some(()) else { return };
+    let Ok(gitdir) = git(repo, &["rev-parse", "--git-common-dir"]).await else { return };
+    let (file, line) = (repo.join(gitdir).join("info").join("exclude"), format!("/{rel}"));
+    let text = std::fs::read_to_string(&file).unwrap_or_default();
+    let _ = (!text.lines().any(|l| l.trim() == line)).then(|| {
+        use std::io::Write;
+        let _ = file.parent().map(|p| std::fs::create_dir_all(p));
+        std::fs::OpenOptions::new().create(true).append(true).open(&file).and_then(|mut f| write!(f, "{}{line}\n", if text.is_empty() || text.ends_with('\n') { "" } else { "\n" }))
+    });
+}
+
+/// Takes one worktree away in full (`git worktree remove`, then prune; a folder git will not remove is deleted): no folder and no registration left.
+pub(crate) async fn remove_worktree(repo: &Path, ws: &Path) {
+    let _ = (ws.exists() && git(repo, &["worktree", "remove", "--force", &ws.to_string_lossy()]).await.is_err()).then(|| std::fs::remove_dir_all(ws));
+    let _ = git(repo, &["worktree", "prune"]).await;
+}
+
+/// A finished lane's paper: its log, the logs of its checks and stages, and its brief.
+fn drop_lane_logs(app: &Shared, id: &str) {
+    let _ = (std::fs::remove_file(app.home.join(format!("logs/lanes/{id}.log"))), std::fs::remove_file(app.home.join(format!("briefs/{id}.md"))));
+    app.query("SELECT log FROM runs WHERE COALESCE(log, '') <> '' AND ',' || lane || ',' LIKE '%,' || ?1 || ',%'", [id], |r| r.get::<_, String>(0)).iter().for_each(|log| drop(std::fs::remove_file(log)));
+}
+
+/// A lane that merged, stopped or failed for good leaves nothing behind: first its uncommitted work is committed on its branch (a merged lane's work is on main already, and its branch goes below), the git-ignored files of its worktree that are no build cache move to the same path in the project (kept ignored there, never overwriting), then the worktree goes with its caches (`git worktree remove` and prune). A merged lane's branch, logs and brief go at once; a stopped or failed one keeps its branch, and its logs go after 24 h (the sweep).
+pub async fn cleanup_lane(app: &Shared, lane: &Lane, merged: bool) {
+    let Some(()) = (!lane.pid.is_some_and(alive)).then_some(()) else { return };
+    let Some(project) = app.cfg().project(&lane.project).cloned() else { return };
+    let (repo, ws) = (project.repo(), PathBuf::from(&lane.workspace));
+    if !lane.workspace.is_empty() && ws.is_dir() && !app.lanes.lock().unwrap().values().any(|l| l.active() && l.id != lane.id && l.workspace == lane.workspace) {
+        let dirty = !merged && !git(&ws, &["status", "--porcelain"]).await.unwrap_or_default().is_empty();
+        for _ in dirty.then_some(()) {
+            drop(git(&ws, &["add", "-A"]).await);
+        }
+        for _ in dirty.then_some(()) {
+            drop(git(&ws, &["commit", "-qm", "Saved by Tirith"]).await.map_err(|e| app.event(&lane.id, &lane.project, "error", "cleanup", &format!("could not save the work left in {}: {e}", ws.display()), "")));
+        }
+        let (listed, mut files) = (git(&ws, &["ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z"]).await.unwrap_or_default(), Vec::<PathBuf>::new());
+        listed
+            .split('\0')
+            .filter(|r| !r.is_empty() && !is_cache(Path::new(r.trim_end_matches('/'))))
+            .map(|r| ws.join(r.trim_end_matches('/')))
+            .for_each(|p| drop(((p.is_symlink() || p.is_file()).then(|| files.push(p.clone())), (!p.is_symlink() && p.is_dir()).then(|| files_under(&p, &mut files)))));
+        let moved: Vec<PathBuf> = files.iter().filter_map(|p| p.strip_prefix(&ws).ok().filter(|rel| !is_cache(rel)).and_then(|rel| move_ignored(p, &repo, rel, &lane.id))).collect();
+        for dest in &moved {
+            ensure_excluded(&repo, dest).await;
+        }
+        remove_worktree(&repo, &ws).await;
+    }
+    for _ in (merged && !lane.branch.is_empty()).then_some(()) {
+        drop(git(&repo, &["branch", "-D", &lane.branch]).await);
+    }
+    let _ = merged.then(|| drop_lane_logs(app, &lane.id));
+    app.update_lane(&lane.id, |l| l.workspace = if l.workspace == lane.workspace { String::new() } else { l.workspace.clone() });
+}
+
+/// The cleanup of a lane that just ended for good, off the caller's path: after `wait_s` (a stopped lane's agent is gone first).
+pub fn cleanup_later(app: &Shared, lane: Lane, merged: bool, wait_s: u64) {
+    let app = app.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_secs(wait_s)).await;
+        cleanup_lane(&app, &lane, merged).await;
+    });
+}
+
+/// An idle project's build cache and merge folder go together once it has been `minutes` without work; busy, or not that long yet, keeps both.
+async fn drop_idle_cache(repo: &Path, build: &Path, merge_dir: &Path, busy: bool, last: u64, now: u64, minutes: u64) -> bool {
+    let Some(()) = (!busy && now.saturating_sub(last) >= minutes * 60).then_some(()) else { return false };
+    let gone = !build.exists() || std::fs::remove_dir_all(build).is_ok();
+    remove_worktree(repo, merge_dir).await;
+    gone && !merge_dir.exists()
+}
+
+/// The last time a project was seen working: the newest of its lanes' and stage runs' stamps, and its build cache's own age.
+fn last_activity(app: &Shared, project: &Project, lanes: &[Lane], build: &Path) -> u64 {
+    let run_at = app.query("SELECT MAX(COALESCE(ended_at, started_at)) FROM runs WHERE project = ?1", [&project.id], |r| r.get::<_, String>(0)).first().map(|s| at_s(Some(s))).unwrap_or(0);
+    let dir_at = std::fs::metadata(build).and_then(|m| m.modified()).map(|t| t.duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)).unwrap_or(0);
+    lanes.iter().filter(|l| l.project == project.id).map(|l| at_s(l.ended_at.as_deref()).max(at_s(l.started_at.as_deref())).max(l.last_activity)).max().unwrap_or(0).max(run_at).max(dir_at)
+}
+
+/// The pass at startup and then every few minutes, applying the same rules to everything that already meets them: a merged, stopped or failed lane still holding a worktree loses it now, the logs and brief of one stopped or failed more than 24 h ago go, and a project's build cache and merge folder go after `limits.build_idle_minutes` with no lane, stage or manager of it working.
+async fn sweep_cleanups(app: &Shared, lanes: &[Lane]) {
+    for l in lanes.iter().filter(|l| matches!(l.status.as_str(), "merged" | "stopped" | "failed")) {
+        let (log, brief, ended) = (app.home.join(format!("logs/lanes/{}.log", l.id)), app.home.join(format!("briefs/{}.md", l.id)), at_s(l.ended_at.as_deref()));
+        let (merged, held_dir) = (l.status == "merged", !l.workspace.is_empty() && Path::new(&l.workspace).is_dir());
+        for _ in ((merged && (held_dir || log.exists() || brief.exists())) || (!merged && held_dir && now_s().saturating_sub(ended) > 60)).then_some(()) {
+            cleanup_lane(app, l, merged).await;
+        }
+        let _ = (l.status != "merged" && (log.exists() || brief.exists()) && ended > 0 && now_s().saturating_sub(ended) >= 24 * 3600).then(|| drop_lane_logs(app, &l.id));
+    }
+    let (now, minutes, talking) = (now_s(), app.cfg().factory.limits.build_idle_minutes, manager::busy());
     for p in &app.cfg().projects {
-        let merging = lanes.iter().any(|l| l.project == p.id && l.status == "merging");
-        for slot in std::fs::read_dir(p.lanes_dir()).into_iter().flatten().flatten().map(|e| e.path()) {
-            let name = slot.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-            let held = lanes.iter().any(|l| l.active() && Path::new(&l.workspace) == slot) || (name == "merge" && merging);
-            let Some(()) = (!held && (name.starts_with("slot-") || name == "merge")).then_some(()) else { continue };
-            for cache in ["target", ".build", "node_modules", "build", ".gradle", "android/build", "android/app/build", "android/.gradle"] {
-                let path = slot.join(cache);
-                let _ =
-                    (path.is_dir() && git(&slot, &["check-ignore", "-q", cache]).await.is_ok()).then(|| std::fs::remove_dir_all(&path)).map(|_| app.event("", &p.id, "disk", "diet", &format!("removed {} (low disk)", path.display()), ""));
-            }
+        let (build, merge_dir) = (app.home.join("build").join(&p.id), p.lanes_dir().join("merge"));
+        let Some(()) = (build.exists() || merge_dir.exists()).then_some(()) else { continue };
+        let busy = talking.contains(&p.id)
+            || lanes.iter().any(|l| l.project == p.id && (l.pid.is_some() || matches!(l.status.as_str(), "running" | "merging")))
+            || !app.query("SELECT id FROM pipelines WHERE project = ?1 AND status = 'running'", [&p.id], |r| r.get::<_, String>(0)).is_empty();
+        for _ in drop_idle_cache(&p.repo(), &build, &merge_dir, busy, last_activity(app, p, lanes, &build), now, minutes).await.then_some(()) {
+            app.event("", &p.id, "disk", "diet", &format!("removed {} and its merge folder ({minutes} min with no lane, stage or manager working)", build.display()), "");
         }
     }
 }
@@ -260,7 +374,7 @@ pub async fn scheduler(app: Shared) {
         }
         if tick.is_multiple_of(100) {
             warn_low_disk(&app).await;
-            free_disk(&app, &lanes).await; // every ~5 minutes
+            sweep_cleanups(&app, &lanes).await; // every ~5 minutes; the first pass runs at startup, applying the rules to everything that already meets them
         }
         let _ = tick.is_multiple_of(10).then(|| (manager::close_stale_questions(&app), crate::bots::tick(&app))); // every ~30 s
         tick += 1;
@@ -312,43 +426,26 @@ pub async fn scheduler(app: Shared) {
         match launch(&app, next.clone()).await {
             Ok(()) => app.sched_wake.notify_one(),
             Err(e) => {
-                app.update_lane(&next.id, |x| (x.status, x.note, x.ended_at) = ("failed".into(), e.clone(), Some(now_iso())));
+                app.update_lane(&next.id, |x| (x.status, x.note, x.ended_at) = ("failed".into(), e.clone(), Some(now_iso()))).into_iter().for_each(|l| cleanup_later(&app, l, false, 0));
                 manager::emit_event(&app, &next.project, "lane.not_started", &format!("lane {} could not start: {e}", next.id), None);
             }
         }
     }
 }
 
-/// A free slot of the project checked out on a fresh `lane/<id>` branch at main. A slot is free when no active lane holds it; uncommitted work of a stopped or failed lane is first committed on that lane's branch.
+/// A fresh worktree slot of the project for this lane alone, checked out on its `lane/<id>` branch: at main for a new branch, where the branch stands when a lane continues after its old worktree went. No slot is kept free or reused: a finished lane's slot is already gone (see `cleanup_lane`).
 async fn take_slot(app: &Shared, project: &Project, lane: &Lane) -> Result<PathBuf, String> {
     let (repo, dir) = (project.repo(), project.lanes_dir());
-    let all: Vec<Lane> = app.lanes.lock().unwrap().values().cloned().collect();
     let mut nums: Vec<u32> = std::fs::read_dir(&dir).into_iter().flatten().flatten().filter_map(|e| e.file_name().to_str()?.strip_prefix("slot-")?.parse().ok()).collect();
     nums.sort();
-    let main = git(&repo, &["rev-parse", "HEAD"]).await?;
-    let held = |s: &Path| all.iter().any(|l| l.active() && l.id != lane.id && Path::new(&l.workspace) == s);
-    let slot = match nums.iter().map(|n| dir.join(format!("slot-{n}"))).find(|s| !held(s)) {
-        Some(s) => {
-            let prev = all.iter().filter(|l| Path::new(&l.workspace) == s).max_by(|a, b| a.created_at.cmp(&b.created_at));
-            if let Some(p) = prev.filter(|p| matches!(p.status.as_str(), "stopped" | "failed")) {
-                if !git(&s, &["status", "--porcelain"]).await.unwrap_or_default().is_empty() {
-                    let save = async {
-                        git(&s, &["add", "-A"]).await?;
-                        git(&s, &["commit", "-qm", "Saved by Tirith"]).await
-                    };
-                    drop(save.await.map_err(|e| app.event(&p.id, &p.project, "error", "slot", &format!("could not save the work left in {}: {e}", s.display()), "")));
-                }
-            }
-            s
-        }
-        None => {
-            let s = dir.join(format!("slot-{}", nums.last().map_or(1, |n| n + 1)));
-            add_worktree(&repo, &s, None, &app.manifest(&repo).lane_exclude).await?;
-            s
-        }
-    };
-    git(&slot, &["checkout", "-q", "-f", "-B", &lane.branch, &main]).await?;
-    git(&slot, &["clean", "-fdq"]).await?;
+    let slot = dir.join(format!("slot-{}", nums.last().map_or(1, |n| n + 1)));
+    add_worktree(&repo, &slot, None, &app.manifest(&repo).lane_exclude).await.map_err(|e| {
+        let _ = std::fs::remove_dir_all(&slot);
+        e
+    })?;
+    let (known, main) = (git(&repo, &["rev-parse", "--verify", "-q", &lane.branch]).await.is_ok(), git(&repo, &["rev-parse", "HEAD"]).await?);
+    let args: Vec<&str> = if known { vec!["checkout", "-q", "-f", &lane.branch] } else { vec!["checkout", "-q", "-f", "-B", &lane.branch, &main] };
+    git(&slot, &args).await?;
     Ok(slot)
 }
 
@@ -473,10 +570,12 @@ async fn ended(app: &Shared, id: &str, code: Option<i32>) {
         });
         if next.is_none() {
             manager::emit_event(app, &lane.project, "lane.failed", &format!("lane {id} ({}: {}) failed: out of credits on every agent of the lane role", lane.project, lane.item), None);
+            app.lane(id).into_iter().for_each(|l| cleanup_later(app, l, false, 0));
         }
     } else if lane.status == "running" && no_commits(app, &lane).await && plan::find(app, &lane.project, &lane.step, &lane.item).is_none_or(|i| i.check.is_none()) {
         app.update_lane(id, |l| (l.pid, l.ended_at, l.status, l.note) = (None, Some(now_iso()), "failed".into(), format!("ended without commits (exit {}): nothing to merge", code.map(|c| c.to_string()).unwrap_or("?".into()))));
         manager::emit_event(app, &lane.project, "lane.failed", &format!("lane {id} ({}: {}) failed: it ended without commits, nothing to merge", lane.project, lane.item), None);
+        app.lane(id).into_iter().for_each(|l| cleanup_later(app, l, false, 0));
     } else {
         app.update_lane(id, |l| {
             l.pid = None;
@@ -555,7 +654,7 @@ pub fn stop(app: &Shared, id: &str) -> Result<Lane, String> {
     let lane = app.lane(id).ok_or(format!("no lane '{id}'"))?;
     matches!(lane.status.as_str(), "queued" | "running" | "waiting" | "merge-queued").then_some(()).ok_or_else(|| format!("lane {id} is {}", lane.status))?;
     kill_agent(lane.pid);
-    app.update_lane(id, |l| (l.status, l.ended_at, l.pid) = ("stopped".into(), Some(now_iso()), None)).ok_or("lane vanished".into())
+    app.update_lane(id, |l| (l.status, l.ended_at, l.pid) = ("stopped".into(), Some(now_iso()), None)).inspect(|l| cleanup_later(app, l.clone(), false, if lane.pid.is_some() { 6 } else { 0 })).ok_or("lane vanished".into())
 }
 
 /// `tirith lane delete`: the lane is thrown away. Its agent stops, its branch and unsaved work go, it leaves every list, and its open item leaves the plan, so nothing starts it again (stopping keeps all that: the autopilot only skips the item).
@@ -573,14 +672,13 @@ pub async fn delete(app: &Shared, id: &str) -> Result<(), String> {
     if lane.pid.is_some() {
         tokio::time::sleep(Duration::from_secs(6)).await; // the agent is gone (kill_agent) before its folder is touched
     }
-    let ws = Path::new(&lane.workspace);
-    // Its slot, unless another lane has it now: off the branch (a branch checked out cannot be deleted), without the files it left.
-    if !lane.branch.is_empty() && ws.is_dir() && git(ws, &["rev-parse", "--abbrev-ref", "HEAD"]).await.is_ok_and(|b| b == lane.branch) {
-        let _ = git(ws, &["checkout", "-q", "-f", "--detach"]).await;
-        let _ = git(ws, &["clean", "-fdq"]).await;
+    // Its worktree goes in full, unless another lane has that folder now (this lane is out of the map already); with it gone, its branch can be deleted.
+    let held = app.lanes.lock().unwrap().values().any(|l| l.workspace == lane.workspace);
+    for _ in (!held && !lane.workspace.is_empty()).then_some(()) {
+        remove_worktree(&p.repo(), Path::new(&lane.workspace)).await;
     }
-    if !lane.branch.is_empty() {
-        let _ = git(&p.repo(), &["branch", "-D", &lane.branch]).await;
+    for _ in (!lane.branch.is_empty()).then_some(()) {
+        drop(git(&p.repo(), &["branch", "-D", &lane.branch]).await);
     }
     Ok(())
 }
@@ -588,7 +686,7 @@ pub async fn delete(app: &Shared, id: &str) -> Result<(), String> {
 /// The merge failed because of the lane: the same agent continues in its slot with the reason, twice at most.
 pub fn send_back(app: &Shared, lane: &Lane, reason: &str) {
     if lane.attempts >= 2 {
-        app.update_lane(&lane.id, |l| (l.status, l.note) = ("failed".into(), reason.chars().take(2000).collect()));
+        app.update_lane(&lane.id, |l| (l.status, l.note) = ("failed".into(), reason.chars().take(2000).collect())).into_iter().for_each(|l| cleanup_later(app, l, false, 0));
         manager::emit_event(app, &lane.project, "lane.failed", &format!("lane {} ({}: {}) failed after {} tries: {}", lane.id, lane.project, lane.item, lane.attempts + 1, reason.lines().next().unwrap_or("")), None);
         return;
     }

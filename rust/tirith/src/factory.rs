@@ -25,6 +25,7 @@ pub struct Limits {
     pub merge_train: usize,
     pub merge_backlog: usize,
     pub low_disk_gb: f64,
+    pub build_idle_minutes: u64, // minutes with no lane, stage or manager working before a project's build cache and merge folder go
     pub plan_commit_seconds: u64,
     pub batch_seconds: u64,
     pub agent_messages_in_a_row: u32,

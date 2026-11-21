@@ -23,7 +23,7 @@ pub struct Lane {
     pub model: Option<String>,
     /// queued, running, waiting (asked the manager), merge-queued, merging, waiting-disk (outside the queue), merged, failed, stopped
     pub status: String,
-    /// Its worktree slot (`<tirith home>/lanes/<project>/slot-N`), kept until the lane is merged, failed or stopped.
+    /// Its worktree slot (`<tirith home>/lanes/<project>/slot-N`); emptied once the lane ends for good and its worktree is removed.
     pub workspace: String,
     pub branch: String,
     pub pid: Option<u32>,
