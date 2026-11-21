@@ -1,7 +1,9 @@
 //! The whole router: every module's routes, the daemon's own, the page and the same-origin guard.
 use super::{origin, routes, web::web_file};
 use crate::app::Shared;
-use crate::{attach, bots, chat, guard, metrics, models, numbers, projects, rooms, sandbox};
+use crate::{
+    attach, bots, chat, guard, metrics, models, numbers, projects, rooms, sandbox, teach,
+};
 use axum::{middleware, Router};
 
 pub fn router(app: Shared, port: u16) -> Router {
@@ -17,6 +19,7 @@ pub fn router(app: Shared, port: u16) -> Router {
         bots::routes(),
         numbers::routes(),
         chat::routes(),
+        teach::routes(),
     ];
     let own = [
         routes::state(),

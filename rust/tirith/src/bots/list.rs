@@ -73,7 +73,7 @@ pub fn all(app: &App) -> Vec<Value> {
 pub fn bot(app: &App, key: &str) -> Option<Value> {
     all(app).into_iter().find(|b| b["key"] == key)
 }
-pub(super) fn key_for(app: &App, id: &str) -> Option<String> {
+pub fn key_for(app: &App, id: &str) -> Option<String> {
     all(app)
         .into_iter()
         .find(|b| b["id"] == id)

@@ -249,3 +249,27 @@ Each row also carries its quality signals (`react.rs`, `signals.rs`, `checks.rs`
   names, each once in order, read when its row is written.
 
 `GET /api/turns` gives these columns too; older databases get them by `ALTER TABLE` at start (`add_columns`).
+
+## `teach/`
+
+Teaching a bot a task (docs/BOTS.md, part 5). The owner does the task once in their own Edge with Tirith's
+extension, `tools/teach/` (Manifest V3, installed with «Load unpacked»; its README says how in two steps): pages (URL
+and title), clicks (the element's text, role and a short selector) and typing (the field's label and value), each
+with its time. Passwords, one-time codes and cards are masked as `•••` (`type=password`, `autocomplete`
+`one-time-code` or `cc-*`, fields whose name or label looks like card, cvv, cvc, otp, pin, tarjeta or código, and
+any step marked `sensitive`), first by the extension and again by the daemon; a recording stops by itself after 10
+minutes. The recording lives in kv `teach:<bot>` (`on`, `since`, `steps`), the bot's token in `teach-token:<bot>`.
+
+- `GET /api/teach/<id>`: the recording; to the page also the token (the bot's tab «Enseñar» shows the link
+  `<daemon>/api/teach/<id>#<token>`, pasted once in the extension), never to the extension.
+- `POST /api/teach/<id>/start` and `/stop`: from the page, or from the extension with the token.
+- `POST /api/teach/<id>/events`: one step or `{"steps": [...]}`, kept only while recording; it needs
+  `Authorization: Bearer <token>` from anyone (401 without it or with another).
+
+The same-origin guard lets the extension's origin (`chrome-extension://bogleilobfephnbnjibgoofoeipkhfef`, fixed by
+the `key` in its manifest) reach `/api/teach/` only, and CORS answers that origin only (preflight included). While a
+recording is on, what the owner writes in the bot's chat (`manager::say`) is kept with the steps, by time, and starts
+no turn. At stop the bot is handed, in one turn (trigger `teach`), the steps with the owner's words under the step
+they follow and the skill template (`factory/skill.md`): it writes the skill with `draft: true` in its header and
+asks 3 to 5 questions in its chat (decision rules, failures, approvals). No bot uses a draft until the owner
+activates it in the Library (factory/prompts/bot.md says so; «Activate» takes the line out).

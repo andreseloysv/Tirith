@@ -26,6 +26,7 @@ mod typing;
 pub use answer::owner_answer;
 pub use ask::ask_owner;
 pub use cards::close_card;
+pub use deliver::deliver;
 pub use events::{emit_event, emitted};
 pub use interrupt::interrupt;
 pub use judged::card_id_of;

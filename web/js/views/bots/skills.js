@@ -4,6 +4,9 @@ import { md } from '../../md.js';
 
 export const SKILL_START = '---\nname: {name}\ndescription: When to use it, in one sentence.\n---\n\n1. ';
 const descOf = (t) => (/^description:\s*(.+)$/m.exec(t || '') || [])[1] || '';
+/** A draft (`draft: true` in its header, as a taught task is written): no bot uses it until the owner activates it. */
+export const isDraft = (t) => /^---\n[\s\S]*?^draft:\s*true\s*$[\s\S]*?\n---/m.test(String(t || ''));
+export const activated = (t) => String(t || '').replace(/^draft:\s*true\s*\n/m, '');
 const bodyOf = (t) => String(t || '').replace(/^---\n[\s\S]*?\n---\n?/, '').trim();
 /** The section titles of the skill template (factory/skill.md): its `## ` headings. */
 export const titlesOf = (t) => [...String(t || '').matchAll(/^##\s+(.+?)\s*$/gm)].map((m) => m[1]);
@@ -29,11 +32,13 @@ export function Editor({ e, onSave, onCancel, err }) {
   </div>`;
 }
 
-export function Skill({ s, titles = [], open, onOpen, onEdit, onDelete }) {
+export function Skill({ s, titles = [], open, onOpen, onEdit, onDelete, onActivate }) {
   const [ask, setAsk] = useState(false);
   const missing = missingIn(s.text, titles);
   return html`<li class="bsk">
     <button type="button" class="bskh" aria-expanded=${open} onClick=${onOpen}><b>${s.name}</b><span class="bmut">${descOf(s.text)}</span></button>
+    ${isDraft(s.text) ? html`<p class="bnote bmiss">Draft · no bot uses it until you activate it.
+      <button type="button" class="blink" onClick=${onActivate}>Activate</button></p>` : null}
     ${missing.length ? html`<p class="berr bmiss">Missing: ${missing.join(' · ')}</p>` : null}
     ${open ? html`<div class="bskb md" dangerouslySetInnerHTML=${{ __html: md(bodyOf(s.text)) }} />` : null}
     <span class="bacts">${ask ? html`<span class="bask">Delete ${s.shared ? 'this skill for every bot' : 'this skill'}?</span>
