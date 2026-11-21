@@ -232,13 +232,8 @@ impl App {
 
     /// The rows of a query as JSON objects named by `cols` (numbers and text; anything else is null).
     pub fn objects(&self, sql: &str, args: impl rusqlite::Params, cols: &[&str]) -> Vec<Value> {
-        self.query(sql, args, |r| {
-            cols.iter()
-                .enumerate()
-                .map(|(i, c)| r.get_ref(i).map(|v| (c.to_string(), v.as_i64().map(|n| json!(n)).or_else(|_| v.as_str().map(|s| json!(s))).unwrap_or(Value::Null))))
-                .collect::<rusqlite::Result<serde_json::Map<String, Value>>>()
-                .map(Value::Object)
-        })
+        let cell = |(i, c): (usize, &&str), r: &rusqlite::Row| r.get_ref(i).map(|v| (c.to_string(), v.as_i64().map(|n| json!(n)).or_else(|_| v.as_str().map(|s| json!(s))).unwrap_or(Value::Null)));
+        self.query(sql, args, |r| cols.iter().enumerate().map(|pair| cell(pair, r)).collect::<rusqlite::Result<serde_json::Map<String, Value>>>().map(Value::Object))
     }
 
     /// The last `limit` rows of a table (with `project`, only that project's) as JSON objects, oldest first.
