@@ -1,6 +1,8 @@
 // The extension's worker: keeps the bot's link (the address and token from its tab «Enseñar», pasted once), starts
 // and stops the recording with the daemon, and sends it each step the pages record. It stops by itself after 10
-// minutes, and follows a Grabar/Parar pressed on Tirith's page.
+// minutes, and follows a Grabar/Parar pressed on Tirith's page. A bot's rehearsal of a draft runs in rehearse.js.
+/* global rehearseLoop, rehearsing */
+importScripts('rehearse.js');
 var MOST_MS = 10 * 60 * 1000;
 var lastSync = 0;
 
@@ -61,17 +63,18 @@ var handlers = {
   stop: stop,
   save: function (m) { return save(m.save); },
   state: function () { return chrome.storage.local.get(['teach', 'link']); },
+  rehearsing: function (_m, sender) { return rehearsing(sender); },
 };
 
 chrome.runtime.onMessage.addListener(function (m, _sender, reply) {
   var name = Object.keys(handlers).find(function (k) { return k in m; });
   if (!name) return false;
-  handlers[name](m).then(function (r) { reply({ ok: true, r: r }); }, function (e) { reply({ ok: false, error: e.message }); });
+  handlers[name](m, _sender).then(function (r) { reply({ ok: true, r: r }); }, function (e) { reply({ ok: false, error: e.message }); });
   return true; // the reply comes later
 });
 
 chrome.alarms.create('teach-sync', { periodInMinutes: 0.5 });
 chrome.alarms.onAlarm.addListener(function (a) {
   if (a.name === 'teach-stop') stop().catch(function () { setState(false); });
-  if (a.name === 'teach-sync') sync().catch(function () {});
+  if (a.name === 'teach-sync') { sync().catch(function () {}); rehearseLoop(); }
 });

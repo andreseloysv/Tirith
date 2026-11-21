@@ -9,6 +9,10 @@ pub(super) const SHARED: &str = "bots/memory.md";
 pub fn folder(app: &App, key: &str) -> PathBuf {
     app.home.join("manager").join(key)
 }
+/// A bot's own skill `name`: its SKILL.md.
+pub fn skill_file(app: &App, key: &str, name: &str) -> PathBuf {
+    folder(app, key).join(SKILLS).join(name).join("SKILL.md")
+}
 /// The one part of Tirith's home besides the lanes where agents write: the bots' folders and the shared skills. In a bot's folder a hidden folder is written only as a skills folder: an agent's settings there could turn Tirith's hooks off.
 pub fn writable(home: &FsPath, path: &FsPath) -> bool {
     let parts: Vec<String> = path

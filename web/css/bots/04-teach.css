@@ -12,3 +12,11 @@
 .tsteps i { color: var(--b-mut); font-style: normal; font-size: 11.5px; }
 .tsteps .tsaid { color: var(--b-acc); }
 .tsteps .tmask { letter-spacing: .1em; color: var(--b-mut); }
+.trehs { list-style: none; margin: 0; padding: 0; }
+.treh { padding: 10px 0 4px; border-top: 1px solid var(--b-hair); }
+.treh .trehh { margin: 0 0 6px; font-size: 13.5px; }
+.tshots { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.tshots li { display: grid; gap: 6px; font-size: 13px; line-height: 1.45; }
+.tshots li.bad .tdo b { color: var(--b-red, #f87171); }
+.tshots .tdo { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.tshot { display: block; width: 100%; max-width: 420px; border-radius: 10px; border: 1px solid var(--b-hair); }
