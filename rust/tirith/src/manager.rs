@@ -73,11 +73,7 @@ fn begin_turn(app: &Shared, project: &str) {
 fn progress_line(tool: &str, input: &Value) -> String {
     let detail = ["description", "file_path", "notebook_path", "pattern", "url", "prompt", "skill"].iter().find_map(|k| input[*k].as_str()).unwrap_or("");
     let short = detail.lines().next().unwrap_or("").trim();
-    if short.is_empty() {
-        tool.to_string()
-    } else {
-        format!("{}{short}", if tool.is_empty() { String::new() } else { format!("{tool}: ") })
-    }
+    Some(short).filter(|s| !s.is_empty()).map_or_else(|| tool.to_string(), |short| format!("{}{short}", if tool.is_empty() { String::new() } else { format!("{tool}: ") }))
 }
 fn report(app: &Shared, project: &str, text: &str) {
     app.chat("tirith", text, project);
