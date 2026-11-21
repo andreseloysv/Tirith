@@ -157,6 +157,10 @@ fn bots_live_in_config_as_own_roles_with_schedule_routes() {
             "card-needed",
             include_str!("../../../factory/evals/card-needed.md"),
         ),
+        (
+            "turn-quality",
+            include_str!("../../../factory/evals/turn-quality.md"),
+        ),
     ]
     .into_iter()
     .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -349,6 +353,10 @@ fn a_system_bot_change_is_a_layer_in_config() {
         (
             "card-needed",
             include_str!("../../../factory/evals/card-needed.md"),
+        ),
+        (
+            "turn-quality",
+            include_str!("../../../factory/evals/turn-quality.md"),
         ),
     ]
     .into_iter()

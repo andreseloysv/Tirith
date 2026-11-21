@@ -1,0 +1,16 @@
+/* the Números tab: short lines a phone reads, no tables; and the discreet 👍 / 👎 under a bot's answer */
+.bnr { display: flex; flex-direction: column; gap: 3px; padding: 14px 0; border-bottom: 1px solid var(--b-hair); }
+.bnr b { font-weight: 500; font-size: 14px; overflow-wrap: anywhere; }
+.bnr .bcap { margin-top: 3px; }
+.bmono { font-family: var(--b-mono); font-size: 12.5px !important; }
+.bnm { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.bnm li { display: flex; flex-direction: column; gap: 4px; }
+.bnn { padding-left: 12px; border-left: 1px solid var(--b-hair); font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.mc-react { display: inline-flex; gap: 2px; margin-left: 6px; vertical-align: middle; }
+.mc-react button { padding: 0 4px; font-size: 12px; line-height: 18px; border-radius: 9px; filter: grayscale(1); opacity: .35; transition: opacity .2s, filter .2s; }
+.mc-react button:hover { opacity: .8; }
+.mc-react button.on { filter: none; opacity: 1; background: var(--soft, rgba(127, 127, 127, .12)); }
+/* five tabs: they scroll sideways when the panel is narrow, the underline still on the header's line */
+.bsec header .btabs { gap: 16px; overflow-x: auto; scrollbar-width: none; margin-bottom: -11px; }
+.bsec header .btabs::-webkit-scrollbar { display: none; }
+.bsec header .btabs button { margin-bottom: 0; }

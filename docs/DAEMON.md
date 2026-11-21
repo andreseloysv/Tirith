@@ -248,7 +248,34 @@ Each row also carries its quality signals (`react.rs`, `signals.rs`, `checks.rs`
 - `cited` (JSON): the numbered notes, `[m<N>]` of its own memory and `[s<N>]` of the shared one, that its answer
   names, each once in order, read when its row is written.
 
+- `score`: the judge's note from 0 to 1 on a routine's run. The `turn-quality` eval (`[[evals]]` on `routine.done`,
+  rubric `factory/evals/turn-quality.md`) reads the routine's task, the answer and the «Cómo validar» section of each
+  skill the run read — `routine.done`'s text carries them (`quality.rs`), cut to 2000 characters — and answers a score
+  with one line why; the score is copied to the turn whose `event` is that event (`turns::scored`, or `catch_up` when
+  the judge answered before the row was written). A judge's turn kept in a bot's conversation emits no event of its own.
+
 `GET /api/turns` gives these columns too; older databases get them by `ALTER TABLE` at start (`add_columns`).
+
+## `numbers/`
+
+A bot's numbers, read from its own rows in `turns` (its role in its conversation; the judge's turns there do not
+count) and its memory files: `GET /api/bots/<id>/numbers` gives
+
+- `routines`: per routine of its card (then routines it no longer has, then `Chat` for its turns without one): `runs`,
+  `success` (share ok), `ms` (mean), `cost_per_good` (the cost of all its runs over the ones that ended ok),
+  `down_per_10` (👎) and `corrections_per_10`, `score` (the mean judge's score, `scored` how many) and `trend`: the last
+  10 runs against the 10 before them (`last` and `before`, each with `cost_per_good`, `ms`, `success`), null until there
+  are more than 10.
+- `skills`: per skill its runs read: `used`, `validated` (runs whose `checks_passed = checks_total`), and the mean tokens
+  (in, out and cache) of its routine's runs (the routine of its first use) before that first use against after:
+  `tokens_before`, `tokens_after`, `saved_percent`.
+- `memory`: `tokens` (`own` and `shared`: characters / 4 of its memory.md and of `bots/memory.md`), `notes` (every
+  numbered note with how many of its last 30 runs cited it), `uncited` (none cited them: candidates to delete, which
+  Tirith never deletes), `misses` and `missed` (owner messages in its conversation that owner-mood labelled `repeat`).
+
+The page shows them in the bot's «Números» tab (`web/js/views/bots/numbers.js`) in short lines, and every answer of a
+bot in its chat carries a discreet 👍 and 👎 (`web/js/views/chat/react.js`) that calls `POST /api/turns/<id>/reaction`
+(the same one again takes it back) and stays marked; the answer's turn is found by its words and its time.
 
 ## `teach/`
 

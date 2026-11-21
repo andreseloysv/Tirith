@@ -28,5 +28,5 @@ export function useSpeaker(project, who) {
   const bot = unread.bots.find((b) => (b.key || `bot-${b.id}`) === project) || null;
   const unseen = bot ? unread.by[bot.id] || 0 : 0;
   const faceState = faceStateOf(busy, bot);
-  return { s, talk, name, isProject, role, whoName, face, faceKey, busy, unseen, faceState, stateLabel: LABEL[faceState] };
+  return { s, talk, name, isProject, role, whoName, face, faceKey, busy, bot, unseen, faceState, stateLabel: LABEL[faceState] };
 }

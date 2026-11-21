@@ -211,7 +211,7 @@ on the page, and goes to every route whose `on` matches it. The default routes r
 | `card.opened` / `card.answered` / `card.closed` | owner cards | none (measured) |
 | `factory.invalid` | a version did not load | manager-general: turn, chat |
 | `webhook` | a bot's webhook brought an event from outside (agentsmessenger.com's sealed webhook): its source, kind, title, url, text and data | its routines on `webhook` whose `when` holds: turn, the event as data from outside |
-| `turn.done` / `routine.done` | a bot's turn ended (`routine.done` when a routine started it): the bot, the trigger, the routine and its task, its tools, skills and the beginning of its answer; its row in `turns` keeps the event's id | none |
+| `turn.done` / `routine.done` | a bot's turn ended (`routine.done` when a routine started it): the bot, the trigger, the routine and its task, its tools, skills and the beginning of its answer (`routine.done`: its answer and the «Cómo validar» of the skills it read, 2000 characters at most, for the `turn-quality` eval); its row in `turns` keeps the event's id | none |
 
 The answer of a turn reaches the phones only when an event that started it has `phone = true` (`owner.message`
 always). Today every manager message reaches them. A routine answer that starts with ∅ still never does.
@@ -262,10 +262,19 @@ on = "card.closed"
 judge = "judge"
 rubric = "evals/card-needed.md"    # could the factory have decided it alone?
 sample = 1.0
+
+[[evals]]
+id = "turn-quality"
+on = "routine.done"
+judge = "judge"
+rubric = "evals/turn-quality.md"   # a score from 0 to 1: did the routine's answer do its task?
+sample = 1.0
 ```
 
 The judge gets the event with its context (the messages before it) and answers a label or a score from 0 to 1 and one
-line why. A `scores` row keeps it with the event, the eval and the factory version.
+line why. A `scores` row keeps it with the event, the eval and the factory version. A `turn-quality` score is also
+copied to the `score` of the bot's turn whose event it judged: `routine.done` carries the routine's task, the answer
+and the «Cómo validar» of the skills the run read (2000 characters at most), and the bot's «Números» tab averages it.
 
 ## Stamps
 
@@ -332,7 +341,7 @@ and the README. Nothing goes live in the running Tirith until its daemon is rebu
    less.
 7. **Stamps**, as above. 6200 lines or less.
 8. **Owner measures:** `interruptions` and `needless_cards`, with targets and routes in the factory. 6200 lines or less.
-9. **Evals and satisfaction:** `[[evals]]`, the `judge` role, the `scores` table, the two rubrics, `satisfaction`.
+9. **Evals and satisfaction:** `[[evals]]`, the `judge` role, the `scores` table, the rubrics, `satisfaction`.
    6200 lines or less.
 10. **The CEO, and 6000.** The reviewer becomes the CEO; the daemon reloads the factory when main moves; the
     limit of tirith.toml goes back to 6000. 6000 lines or less.

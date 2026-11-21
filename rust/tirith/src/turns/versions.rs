@@ -33,10 +33,13 @@ fn hash(path: &Path) -> Option<String> {
 
 /// The SKILL.md of skill `name` the turn read: a bot's own (its agent's skills folder links there), else the shared one.
 pub(super) fn skill_file(app: &Shared, t: &Turn, name: &str) -> Option<PathBuf> {
-    [folder(app, t).join(".agents/skills"), app.home.join("bots/skills")]
-        .into_iter()
-        .map(|d| d.join(name).join("SKILL.md"))
-        .find(|p| p.is_file())
+    [
+        folder(app, t).join(".agents/skills"),
+        app.home.join("bots/skills"),
+    ]
+    .into_iter()
+    .map(|d| d.join(name).join("SKILL.md"))
+    .find(|p| p.is_file())
 }
 
 /// `{"memory.md": …, "bots/memory.md": …, "skills/<name>": …}`, each file that exists.

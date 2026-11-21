@@ -12,6 +12,8 @@ mod tools;
 mod usage;
 mod versions;
 pub use api::routes;
+#[cfg(test)]
+pub(crate) use api::turns as rows_of;
 pub use checks::cli;
 pub use live::{abandon, begin, done, end, handed, line, on_event, trigger, turn_of};
 pub use quality::scored;
