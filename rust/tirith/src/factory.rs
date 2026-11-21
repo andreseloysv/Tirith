@@ -1,12 +1,10 @@
 //! The factory file (`factory/factory.toml`, its prompts and its eval rubrics): agents, roles, limits, plan words, card kinds, measures and evals, read as data instead of Rust. Strict loading: an unknown key, a role on a missing agent or prompt, or an unknown measure makes a version invalid; the daemon keeps the last good one and reports the error. The repo's factory is embedded under the folder's as its fallback; `~/.tirith/config.toml` is laid over both key by key and wins.
-
 use crate::config::get;
 use serde::{de::DeserializeOwned, Deserialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
 use std::time::SystemTime;
-
 const TEXT: &str = include_str!("../../../factory/factory.toml");
 const SECTIONS: [&str; 8] = ["agents", "roles", "limits", "plan", "cards", "metrics", "routes", "evals"];
 const MEASURES: [&str; 11] = ["merged", "median", "first_try", "idle", "stuck", "main_red", "failed", "owner", "interruptions", "needless_cards", "satisfaction"];
@@ -14,7 +12,6 @@ const MEASURES: [&str; 11] = ["merged", "median", "first_try", "idle", "stuck", 
 pub(crate) const EVENTS: &str = "owner.message;room.message;lane.asked;lane.failed;lane.not_started;lane.long;merge.blocked;merge.landed;main.red;main.green;plan.empty;deploy.done;deploy.failed;metric.red;review.done;schedule;card.opened;card.answered;card.closed;factory.invalid";
 /// One `[[routes]]` entry read for one event: (to, mode, chat, phone, after_minutes).
 pub type Route = (String, String, bool, bool, Option<u64>);
-
 #[derive(Deserialize, Clone, Default)]
 #[serde(default, deny_unknown_fields)]
 pub struct Limits {
@@ -30,7 +27,6 @@ pub struct Limits {
     pub agent_messages_in_a_row: u32,
     pub max_parallel: Option<usize>, // a cap on lanes at once; none unless config.toml sets one
 }
-
 /// One loaded factory version: the merged table (embedded, then the folder's file, then config.toml), its limits read from it, and its prompts by file stem.
 #[derive(Clone)]
 pub struct Factory {
@@ -40,14 +36,12 @@ pub struct Factory {
     /// This version's stamp: the main commit that last changed `factory/`, plus a short hash of what config.toml lays over it (`<commit>+<hash>`; `embedded` when no checkout is at hand).
     pub version: String,
 }
-
 impl Default for Factory {
     // The embedded factory: what runs when no factory folder is found.
     fn default() -> Self {
         parse(TEXT, embedded_prompts(), &toml::Table::new()).expect("the embedded factory parses")
     }
 }
-
 fn embedded_prompts() -> BTreeMap<String, String> {
     [
         ("manager", include_str!("../../../factory/prompts/manager.md")),
@@ -64,7 +58,6 @@ fn embedded_prompts() -> BTreeMap<String, String> {
     .map(|(k, v)| (k.to_string(), v.to_string()))
     .collect()
 }
-
 /// Lays `src` over `dst` key by key: tables merge, anything else replaces.
 pub(crate) fn merge(dst: &mut toml::Value, src: &toml::Value) {
     match (dst.as_table_mut(), src.as_table()) {
@@ -72,12 +65,10 @@ pub(crate) fn merge(dst: &mut toml::Value, src: &toml::Value) {
         _ => *dst = src.clone(),
     }
 }
-
 /// An 8-hex-char hash of a text: short enough for a stamp, different whenever the text is.
 pub fn short_hash(text: &str) -> String {
     crate::rooms::sealed::sha_hex(text.as_bytes())[..8].to_string()
 }
-
 /// The main commit that last changed the factory folder (its short hash), or `embedded` when no checkout is at hand.
 fn commit_of(overlay: &toml::Table) -> String {
     let show = |rev: &str| -> Option<String> {
@@ -87,15 +78,12 @@ fn commit_of(overlay: &toml::Table) -> String {
     };
     show("main").or_else(|| show("HEAD")).unwrap_or_else(|| "embedded".into())
 }
-
 fn stem(path: &str) -> String {
     Path::new(path).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default()
 }
-
 fn str_of<'a>(v: &'a toml::Value, k: &str) -> &'a str {
     v.get(k).and_then(|x| x.as_str()).unwrap_or("")
 }
-
 /// A role's table with what it extends under it, all the way up; a missing parent or a cycle keeps `extends` and fails validation.
 fn resolved(roles: &toml::Table, name: &str, up: usize) -> toml::Value {
     let mut own = roles.get(name).cloned().unwrap_or(toml::Value::Table(Default::default()));
@@ -106,7 +94,6 @@ fn resolved(roles: &toml::Table, name: &str, up: usize) -> toml::Value {
     let _ = (!(roles.contains_key(&parent) && base.get("extends").is_none())).then(|| base.as_table_mut().map(|t| t.insert("extends".into(), parent.into()))); // stays, so validation names it
     base
 }
-
 /// Parses and validates one factory version: the embedded text under the file's, its prompts (by file stem) and config.toml laid over both.
 pub fn parse(text: &str, prompts: BTreeMap<String, String>, overlay: &toml::Table) -> Result<Factory, String> {
     let mut table = toml::Value::Table(TEXT.parse().map_err(|e| format!("factory.toml: {e}"))?);
@@ -135,7 +122,6 @@ pub fn parse(text: &str, prompts: BTreeMap<String, String>, overlay: &toml::Tabl
     f.validate()?;
     Ok(f)
 }
-
 impl Factory {
     fn validate(&self) -> Result<(), String> {
         let t = &self.raw;
@@ -150,7 +136,7 @@ impl Factory {
         let bad = [
             t.keys().find(|k| !SECTIONS.contains(&k.as_str())).map(|k| format!("unknown section '{k}'")),
             unknown_in("agents", &["protocol", "model_flag", "effort_flag", "chat_args", "lane_args", "resume_args", "args", "command", "settings", "profile"]),
-            unknown_in("roles", &["agent", "model", "effort", "fallback", "session", "scope", "extends", "access", "prompt", "idle_minutes", "max_per_day", "review_after_minutes", "runs_on", "name", "face", "show"]),
+            unknown_in("roles", &["agent", "model", "effort", "fallback", "session", "scope", "extends", "access", "prompt", "idle_minutes", "max_per_day", "review_after_minutes", "runs_on", "name", "face", "show", "chat_keep"]),
             unknown_in("metrics", &["label", "target", "at_least"]),
             unknown_flat("plan", &["role_prefixes", "owner_wait", "waits_for"]),
             unknown_flat("cards", &["kinds"]),
@@ -267,32 +253,26 @@ impl Factory {
         self.role::<Vec<String>>(role, "prompt").unwrap_or_default().iter().map(|p| self.prompt(&stem(p))).collect::<Vec<_>>().join("\n").replace("{name}", &self.role::<String>(role, "name").unwrap_or_else(|| role.to_string()))
     }
 }
-
 fn dir(overlay: &toml::Table) -> Option<PathBuf> {
     let here = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../factory"));
     overlay.get("factory").and_then(|v| v.as_str()).map(crate::config::expand).or_else(|| here.join("factory.toml").is_file().then_some(here))
 }
-
 pub fn stamp(overlay: &toml::Table) -> Option<SystemTime> {
     let dir = dir(overlay)?;
     let m = |p: &Path| std::fs::metadata(p).and_then(|x| x.modified()).ok();
     let files = [dir.join("factory.toml"), dir.join("../.git/logs/HEAD"), dir.join("../.git/refs/heads/main")]; // main itself: when it moves, the factory reloads with no restart
     ["prompts", "evals"].into_iter().filter_map(|d| std::fs::read_dir(dir.join(d)).ok()).flatten().flatten().filter_map(|e| m(&e.path())).chain(files.iter().filter_map(|p| m(p))).max()
 }
-
 static CURRENT: RwLock<Option<Arc<Factory>>> = RwLock::new(None);
 static ERROR: Mutex<Option<String>> = Mutex::new(None);
-
 pub fn current() -> Arc<Factory> {
     static EMBEDDED: OnceLock<Arc<Factory>> = OnceLock::new();
     CURRENT.read().unwrap().clone().unwrap_or_else(|| EMBEDDED.get_or_init(|| Arc::new(Factory::default())).clone())
 }
-
 /// Why the newest factory version did not load; the last good one keeps running.
 pub fn error() -> Option<String> {
     ERROR.lock().unwrap().clone()
 }
-
 /// (Re)loads the factory under config.toml's overlay; a bad version keeps the last good one and is remembered in `error()`.
 pub fn load(overlay: &toml::Table) -> Arc<Factory> {
     // The factory's texts by file stem: the prompts and the eval rubrics alike.
@@ -315,7 +295,6 @@ pub fn load(overlay: &toml::Table) -> Arc<Factory> {
     *CURRENT.write().unwrap() = Some(f.clone());
     f
 }
-
 #[cfg(test)]
 #[path = "../checks/factory.rs"]
 mod tests;

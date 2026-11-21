@@ -1,5 +1,4 @@
 //! Bots: agents of their own — factory roles with `scope = "own"` (the owner's `bot-<id>` ones and the factory's system bots: CEO, judge, manager of no project) with `schedule` routes in `~/.tirith/config.toml` (written with toml_edit, keeping its comments; a change to a system bot is laid over the factory there), each with a memory and skills (docs/DAEMON.md). A routine's last run stays in kv: it is a stamp, not configuration. What makes a bot a CEO or a judge is only this configuration — its `[[routes]]` (which events it hears, as a turn or a note, on the phones or not), its `session` and its `access` — and its card on the page shows and changes all of it, saved here; routes config.toml writes to a role replace the factory's to that role (see factory.rs).
-
 use crate::app::{bad, now_iso, App, Shared, R};
 use crate::client::{call, print, Flag};
 use crate::server::s;
@@ -10,11 +9,9 @@ use chrono::{DateTime, Datelike, Local, NaiveTime};
 use serde_json::{json, Value};
 use std::path::{Path as FsPath, PathBuf};
 use std::sync::Mutex;
-
 /// A bot's skills, in its folder: the agents read skills there (or, through a link, in their own .<command>/skills).
 const SKILLS: &str = ".agents/skills";
 static ONE: Mutex<()> = Mutex::new(());
-
 /// The bots as the page sees them: every role of `raw` with `scope = "own"` (an owner's `bot-<id>`, in config.toml, or a system bot by its key; its name, face and `show`), with its `schedule` routes as routines (`last` says a routine's last run), its other routes as `routes` (each as written; writing one back sets its `to` to this bot), and its `session` and `access`: the whole configuration its card shows and changes. `key` is its conversation; `id` is its page id (a system bot's key).
 fn bots_of(raw: &Value, last: &dyn Fn(&str, &str) -> String) -> Vec<Value> {
     // `all` reads them from the effective factory table: the owner's bots through config.toml's overlay, the system bots as factory roles
@@ -33,7 +30,7 @@ fn bots_of(raw: &Value, last: &dyn Fn(&str, &str) -> String) -> Vec<Value> {
             .collect();
         let hears: Vec<Value> = routes.iter().filter(|r| s(r, "on") != "schedule" && s(r, "to") == *key).cloned().collect();
         Some(
-            json!({"id": id, "key": key, "system": !key.starts_with("bot-"), "show": role["show"] != false, "name": or(s(role, "name"), id), "shape": or(s(&role["face"], "shape"), "round"), "color": or(s(&role["face"], "color"), "#3b82f6"), "session": or(s(role, "session"), "chat"), "access": s(role, "access"), "routes": hears, "routines": routines}),
+            json!({"id": id, "key": key, "system": !key.starts_with("bot-"), "show": role["show"] != false, "name": or(s(role, "name"), id), "shape": or(s(&role["face"], "shape"), "round"), "color": or(s(&role["face"], "color"), "#3b82f6"), "session": or(s(role, "session"), "chat"), "access": s(role, "access"), "chat_keep": s(role, "chat_keep"), "routes": hears, "routines": routines}),
         )
     };
     raw["roles"].as_object().into_iter().flatten().filter_map(bot).collect()
@@ -48,7 +45,6 @@ pub fn bot(app: &App, key: &str) -> Option<Value> {
 fn key_for(app: &App, id: &str) -> Option<String> {
     all(app).into_iter().find(|b| b["id"] == id).map(|b| s(&b, "key"))
 }
-
 /// A bot's folder, where its sessions run: memory.md, its working files and its skills.
 pub fn folder(app: &App, key: &str) -> PathBuf {
     app.home.join("manager").join(key)
@@ -71,7 +67,6 @@ fn skills(dir: &FsPath, links: bool) -> Vec<(String, String)> {
     out.sort();
     out
 }
-
 /// What a bot is handed at the start of every turn and routine: its memory as it is now (the owner may have changed it) and the names of its skills. The shared skills are linked into its skills first (a skill of its own with the same name wins), links to removed ones go, and the skills folder of the bots' agent (.<its command>/skills) is linked to its skills.
 pub fn context(app: &Shared, key: &str) -> Option<String> {
     bot(app, key)?;
@@ -87,7 +82,6 @@ pub fn context(app: &Shared, key: &str) -> Option<String> {
     let memory = if memory.trim().is_empty() { "(empty)" } else { memory.trim() };
     Some(format!("[tirith] Your memory.md as it is now:\n{memory}\n[tirith] Your skills: {}. Shared skills: {}.", names(skills(&dir, false)), names(skills(&common, true))))
 }
-
 /// The page's Library: the bot's memory, its own skills and the shared ones.
 fn library(app: &App, id: &str) -> Result<Value, String> {
     let key = key_for(app, id).ok_or(format!("no bot '{id}'"))?;
@@ -112,7 +106,6 @@ fn learn(app: &App, id: &str, b: &Value) -> Result<Value, String> {
     app.emit("library", json!({"bot": id}));
     Ok(json!({"ok": true}))
 }
-
 /// Writes the bots into config.toml and reloads it.
 fn store(app: &App, bots: &[Value]) -> Result<(), String> {
     let _writing = crate::projects::WRITING.lock().unwrap();
@@ -123,7 +116,6 @@ fn store(app: &App, bots: &[Value]) -> Result<(), String> {
     app.reload_config(true);
     Ok(())
 }
-
 /// The text of config.toml (`text` as it is) with the bots laid into it by toml_edit, so its other sections and their comments stay as they are: each of the owner's bots a `[roles.bot-<id>]` that extends the manager with its own scope, name, face, session and access, each routine a `[[routes]]` on `schedule` and each of its routes a `[[routes]]` of its own; a bot not in `bots` goes, with its routes. A system bot has no role of its own here: only what the owner changed of it (`dirty`: its name, face, show, session and access, and its routes with them) is laid into its factory role's table (a real table, created with `entry` — an inline one would make a later `[roles.bot-…]` header unparseable) as a layer over the factory, its other keys (a model, say) untouched; an untouched system bot's routes in the file stay as they are.
 fn written(text: &str, bots: &[Value]) -> Result<String, String> {
     use toml_edit::DocumentMut;
@@ -148,7 +140,11 @@ fn written(text: &str, bots: &[Value]) -> Result<String, String> {
     ["roles", "routes"].into_iter().for_each(|k| drop(doc.get(k).and_then(|i| i.as_table().map(|t| t.is_empty()).or_else(|| i.as_array_of_tables().map(|t| t.is_empty()))).is_some_and(|e| e).then(|| doc.remove(k))));
     let (mut roles, mut routes) = (serde_json::Map::new(), vec![]);
     for b in bots {
-        let _ = (b["system"] != true).then(|| roles.insert(key_of(b), json!({"extends": "manager", "scope": "own", "name": s(b, "name"), "face": {"shape": s(b, "shape"), "color": s(b, "color")}, "prompt": ["prompts/bot.md"], "session": Some(s(b, "session")).filter(|x| !x.is_empty()).unwrap_or_else(|| "chat".into()), "access": s(b, "access")})));
+        let _ = (b["system"] != true).then(|| {
+            let mut role = json!({"extends": "manager", "scope": "own", "name": s(b, "name"), "face": {"shape": s(b, "shape"), "color": s(b, "color")}, "prompt": ["prompts/bot.md"], "session": Some(s(b, "session")).filter(|x| !x.is_empty()).unwrap_or_else(|| "chat".into()), "access": s(b, "access")});
+            let _ = (!s(b, "chat_keep").is_empty()).then(|| role["chat_keep"] = json!(s(b, "chat_keep"))); // the chat's longest life, kept as written (see chat.rs)
+            roles.insert(key_of(b), role)
+        });
         routes.extend(b["routes"].as_array().into_iter().flatten().filter(|_| has(&key_of(b), true)).cloned().map(|mut r| (r["to"] = json!(key_of(b)), r).1));
         routes.extend(
             b["routines"]
@@ -171,7 +167,6 @@ fn written(text: &str, bots: &[Value]) -> Result<String, String> {
         format!("{}\n\n{frag}", head.trim_end())
     })
 }
-
 /// Reads the bots, changes them with `f` and keeps the result, one change at a time; an Err keeps them as they were.
 fn with<T>(app: &Shared, f: impl FnOnce(&mut Vec<Value>) -> Result<T, String>) -> Result<T, String> {
     let _one = ONE.lock().unwrap();
@@ -184,14 +179,12 @@ fn with<T>(app: &Shared, f: impl FnOnce(&mut Vec<Value>) -> Result<T, String>) -
 fn find<'a>(bots: &'a mut [Value], id: &str) -> Result<&'a mut Value, String> {
     bots.iter_mut().find(|b| b["id"] == id).ok_or(format!("no bot '{id}'"))
 }
-
 /// Weekdays 1 (Monday) to 7, from `[1, 3]`, "daily", "weekdays", "weekends" or names such as "mon,wed".
 pub fn days(v: &Value) -> Option<Vec<u64>> {
     let t = v.as_str().map(str::to_lowercase);
     let named = |d: &u64| t.as_deref().is_some_and(|t| t == "daily" || (t == "weekdays" && *d < 6) || (t == "weekends" && *d > 5) || t.contains(["mon", "tue", "wed", "thu", "fri", "sat", "sun"][*d as usize - 1]));
     v.as_array().map(|a| a.iter().filter_map(Value::as_u64).filter(|d| (1..=7).contains(d)).collect()).or_else(|| t.is_some().then(|| (1..=7).filter(named).collect()))
 }
-
 /// Due once a day: it is on, today is one of its days, its time has come and it has not run since then. A daemon that was down at that time runs it when it is back the same day.
 pub fn due(r: &Value, now: DateTime<Local>) -> bool {
     let Ok(at) = NaiveTime::parse_from_str(&s(r, "at"), "%H:%M") else { return false };
@@ -199,7 +192,6 @@ pub fn due(r: &Value, now: DateTime<Local>) -> bool {
     let last = DateTime::parse_from_rfc3339(&s(r, "last")).ok().map(|t| t.with_timezone(&Local).naive_local());
     r["on"] != false && r["days"].as_array().is_some_and(|d| d.contains(&json!(now.weekday().number_from_monday()))) && now.naive_local() >= today && last.is_none_or(|l| l < today)
 }
-
 /// Runs a routine now: the conversation shows it, and the bot is handed the task.
 fn fire(app: &Shared, id: &str, rid: &str) -> Result<(), String> {
     let mut bots = all(app);
@@ -211,7 +203,6 @@ fn fire(app: &Shared, id: &str, rid: &str) -> Result<(), String> {
     crate::manager::emit_event(app, &key, "schedule", &format!("Routine «{title}» is due now. Do it and report the result here in a few lines (when nothing is new, one line that starts with ∅); ask nothing: {task}"), None);
     Ok(())
 }
-
 /// At start, the bots that used to live in kv move to config.toml once: one that is already a role there wins, and their routines' last runs move to their own kv stamps; only then does the old entry go. The old key's name lives here alone, so nothing reads it as storage any more.
 pub fn start(app: Shared) {
     const OLD: &str = "bots";
@@ -226,12 +217,10 @@ pub fn start(app: Shared) {
         app.set_kv(OLD, None);
     }
 }
-
 /// Fires the routines due now; the lanes scheduler calls it on its tick (every ~30 s), so the bots need no timer of their own.
 pub fn tick(app: &Shared) {
     all(app).iter().for_each(|b| b["routines"].as_array().into_iter().flatten().filter(|r| due(r, Local::now())).for_each(|r| drop(fire(app, &s(b, "id"), &s(r, "id")))));
 }
-
 /// A new bot (no `id`), or a change to one's card: its name, shape and colour, its `session` and `access`, and its routes (each on an event of the closed list but `schedule` — those are its routines — as a turn or a note, with its chat line and phones as written). What the body does not carry stays as it was.
 pub(crate) fn save(app: &Shared, b: Value) -> Result<Value, String> {
     let (name, color) = (s(&b, "name").trim().to_string(), s(&b, "color"));
@@ -250,7 +239,6 @@ pub(crate) fn save(app: &Shared, b: Value) -> Result<Value, String> {
         Ok(bot.clone())
     })
 }
-
 /// A new routine, or a change to one (found by `id` or by its title): `title`, `prompt`, `days`, `at` ("HH:MM"), `on`; with `delete` it goes. The conversation says when one is made or removed.
 fn routine(app: &Shared, id: String, b: Value) -> Result<Value, String> {
     let (rid, title) = (s(&b, "id"), s(&b, "title"));
@@ -274,11 +262,9 @@ fn routine(app: &Shared, id: String, b: Value) -> Result<Value, String> {
     let _ = (!said.is_empty()).then(|| app.chat("routine", &said, &key_for(app, &id).unwrap_or_default()));
     Ok(json!({"ok": true}))
 }
-
 fn reply(res: Result<Value, String>) -> R {
     res.map(Json).map_err(bad)
 }
-
 pub fn routes() -> Router<Shared> {
     let delete = |State(app): State<Shared>, Path(id): Path<String>| async move {
         let key = key_for(&app, &id).filter(|k| k.starts_with("bot-")).ok_or_else(|| bad(format!("no bot '{id}' (a system bot stays)")))?;
@@ -298,7 +284,6 @@ pub fn routes() -> Router<Shared> {
         .route("/api/bots/{id}/run/{routine}", post(run))
         .route("/api/bots/{id}/library", get(|State(app): State<Shared>, Path(id): Path<String>| async move { reply(library(&app, &id)) }).post(lib))
 }
-
 /// A bot's own commands, in its conversation (`TIRITH_PROJECT` is `bot-<id>`): `tirith routine add|remove|list`.
 pub fn cli(pos: &[&str], _: Flag) -> Option<Result<(), String>> {
     let key = std::env::var("TIRITH_PROJECT").unwrap_or_default();
@@ -310,7 +295,6 @@ pub fn cli(pos: &[&str], _: Flag) -> Option<Result<(), String>> {
         _ => None,
     }
 }
-
 #[cfg(test)]
 #[path = "../checks/bots.rs"]
 mod tests;

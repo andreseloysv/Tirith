@@ -1,5 +1,4 @@
 //! Lanes: one agent, one plan item, one reusable worktree slot on its own branch; the autopilot starts open plan items, and a lane that ends goes to the merge queue, where the checks decide.
-
 use crate::app::{add_worktree, alive, git, kill_group, now_iso, now_s, tail, Lane, Shared};
 use crate::{config::Project, guard, manager, models, plan, sandbox};
 use regex::Regex;
@@ -11,9 +10,7 @@ use std::{
     sync::{LazyLock, Mutex},
     time::Duration,
 };
-
 static LIVE: Mutex<BTreeMap<String, Vec<String>>> = Mutex::new(BTreeMap::new());
-
 pub fn tell(id: &str, text: &str) {
     LIVE.lock().unwrap().entry(id.into()).or_default().push(text.into());
 }
@@ -25,7 +22,6 @@ pub(crate) fn slug(text: &str) -> String {
     let s = s.split('-').filter(|p| !p.is_empty()).collect::<Vec<_>>().join("-");
     s.chars().take(32).collect::<String>().trim_end_matches('-').to_string()
 }
-
 pub fn start(app: &Shared, project: &str, step: &str, item: &str, agent: Option<String>) -> Result<Lane, String> {
     let item = plan::clean(item);
     let steps = plan::read(app, project)?;
@@ -49,7 +45,6 @@ pub fn start(app: &Shared, project: &str, step: &str, item: &str, agent: Option<
     app.sched_wake.notify_one();
     Ok(lane)
 }
-
 pub fn autopilot_on(app: &Shared, project: &str) -> bool {
     app.kv(&format!("autopilot:{project}")).map(|v| v == "on").unwrap_or(app.cfg().autopilot)
 }
@@ -59,12 +54,10 @@ pub(crate) fn free_gb(dir: &Path) -> f64 {
     let Some(()) = (unsafe { libc::statvfs(c.as_ptr(), &mut s) } == 0).then_some(()) else { return f64::MAX };
     s.f_bavail as f64 * s.f_frsize as f64 / 1e9
 }
-
 /// One cargo build folder per project, shared by its lanes and checks: a folder per worktree costs gigabytes each.
 pub fn shared_target(app: &Shared, project: &str) -> PathBuf {
     app.home.join("build").join(project).join("cargo")
 }
-
 /// With less than 10 GB free: the build caches git ignores (target, .build, node_modules, build, .gradle) are removed from the lanes' worktrees that no active lane holds. Nothing tracked is touched.
 async fn free_disk(app: &Shared, lanes: &[Lane]) {
     let Some(()) = (free_gb(&app.home.join("lanes")) < 10.0).then_some(()) else { return };
@@ -82,7 +75,6 @@ async fn free_disk(app: &Shared, lanes: &[Lane]) {
         }
     }
 }
-
 /// Below the factory's `limits.low_disk_gb` free, before the autopilot pauses: the shared build caches (`<home>/build/<project>`) of projects with no lane or stage under way are removed; the next build makes them again.
 fn clear_idle_builds(root: &Path, busy: &[String]) -> Vec<PathBuf> {
     let dirs = std::fs::read_dir(root).into_iter().flatten().flatten().map(|e| e.path());
@@ -98,7 +90,6 @@ async fn free_idle_builds(app: &Shared, lanes: &[Lane]) {
         .iter()
         .for_each(|d| _ = app.event("", &d.file_name().unwrap_or_default().to_string_lossy(), "disk", "diet", &format!("removed {} (less than 5 GB free; no lane or stage of its project under way)", d.display()), ""));
 }
-
 /// Ask once per low-disk spell: `asked` is whether a card is already out; it re-arms after the disk recovers (2 GB above the factory's limit).
 fn low_disk_ask(free: f64, asked: bool) -> Option<bool> {
     let low = crate::factory::current().limits.low_disk_gb;
@@ -108,7 +99,6 @@ fn low_disk_ask(free: f64, asked: bool) -> Option<bool> {
         _ => None,
     }
 }
-
 fn biggest_dirs(dir: &Path, n: usize) -> Vec<(String, u64)> {
     let out = std::process::Command::new("du").arg("-sk").args(std::fs::read_dir(dir).into_iter().flatten().flatten().map(|e| e.path())).output();
     let text = out.map(|o| String::from_utf8_lossy(&o.stdout).into_owned()).unwrap_or_default();
@@ -116,7 +106,6 @@ fn biggest_dirs(dir: &Path, n: usize) -> Vec<(String, u64)> {
     rows.sort_by_key(|a| std::cmp::Reverse(a.1));
     rows.into_iter().take(n).collect()
 }
-
 /// Below the factory's low-disk limit on the disk of the lanes' worktrees: one ask-owner card (kind device, of no project, since every project shares that disk) naming the biggest of Tirith's own folders.
 async fn warn_low_disk(app: &Shared) {
     let (home, key) = (app.home.clone(), "low_disk_asked");
@@ -133,7 +122,6 @@ async fn warn_low_disk(app: &Shared) {
         None => {}
     }
 }
-
 /// Why a project cannot start a lane now (merge backlog, disk, commit guard), or `None`.
 fn blocked(app: &Shared, p: &Project, lanes: &[Lane]) -> Option<String> {
     let lim = &app.cfg().factory.limits;
@@ -146,20 +134,17 @@ fn blocked(app: &Shared, p: &Project, lanes: &[Lane]) -> Option<String> {
         guard::intact(app, p).err()
     }
 }
-
 pub(crate) fn paused_fix(project: &str, why: &str) -> String {
     let said = why.find('(').zip(why.rfind(')')).map(|(a, b)| &why[a + 1..b]).filter(|f| f.starts_with("tirith ")).map(String::from);
     let known = [("merge queue", "wait for the merges (tirith status shows them)"), ("GB free", "free disk space")].into_iter().find(|(w, _)| why.contains(w)).map(|(_, f)| f.to_string());
     said.or(known).unwrap_or_else(|| if why.contains("core.hooksPath") || why.contains("not Tirith's") { "fix the git hooks by hand, then tirith guard install ".to_string() + project } else { format!("tirith guard install {project}") })
 }
-
 /// Role items (the factory's `[plan] role_prefixes`) are attended by a role, and items marked as waiting for the owner (`[plan] owner_wait`) wait: the autopilot starts no lane for either.
 pub(crate) fn is_autopilot_skipped(text: &str) -> bool {
     let t = text.trim_start().to_lowercase();
     let f = crate::factory::current();
     f.words("plan", "role_prefixes").iter().any(|p| t.starts_with(&p.to_lowercase())) || f.words("plan", "owner_wait").iter().any(|w| t.contains(&w.to_lowercase()))
 }
-
 /// Items that wait for another open item (the factory's `[plan] waits_for` words) by quoting it or sharing most of its words.
 fn waits_for_open_item(text: &str, open: &[&str]) -> bool {
     let t = text.to_lowercase();
@@ -170,7 +155,6 @@ fn waits_for_open_item(text: &str, open: &[&str]) -> bool {
             ol != t.trim() && !ol.is_empty() && (t.contains(&ol) || (ow.len() >= 3 && ow.iter().filter(|w| t.contains(w.as_str())).count() * 10 >= ow.len() * 6))
         })
 }
-
 /// The autopilot's next item: in round-robin over the projects, an open item of the project's current step (the first step with an open item that did not fail or stop) that no lane works on.
 fn next_item(app: &Shared, lanes: &[Lane], rr: &mut usize, ok: &mut dyn FnMut(&Project) -> bool) -> Option<Lane> {
     let cfg = app.cfg();
@@ -193,7 +177,6 @@ fn next_item(app: &Shared, lanes: &[Lane], rr: &mut usize, ok: &mut dyn FnMut(&P
     }
     None
 }
-
 /// Seconds since the agent's log last got a line other than an `api_retry` one (those keep the file fresh while the agent is stuck). `seen` remembers per lane the last real line and when it appeared.
 fn quiet_s(seen: &mut HashMap<String, (String, u64)>, id: &str, tail: &str, log_age: u64, now: u64) -> u64 {
     let last = tail.lines().rev().find(|l| !l.contains("\"api_retry\"")).unwrap_or("");
@@ -201,10 +184,8 @@ fn quiet_s(seen: &mut HashMap<String, (String, u64)>, id: &str, tail: &str, log_
     let _ = (e.0 != last).then(|| *e = (last.to_string(), now));
     now.saturating_sub(e.1)
 }
-
 /// Written into a lane's log at every launch: the log is appended across attempts, so `run_completed` only counts a terminal after the last launch line (or, for a run started before these lines existed, after its last `run.lifecycle.started`).
 const RUN_START: &str = "--- tirith: lane run started ";
-
 /// Whether the lane's current run already ended in its log: a `run.terminal.completed` event (the top-level `payload_type` of its own stream line, so a mention inside a file or command output the agent read never counts). The process may still be alive.
 fn run_completed(tail: &str) -> bool {
     tail.lines().fold(false, |done, line| match serde_json::from_str::<serde_json::Value>(line).ok().and_then(|v| v["payload_type"].as_str().map(String::from)).as_deref() {
@@ -214,13 +195,11 @@ fn run_completed(tail: &str) -> bool {
         _ => done,
     })
 }
-
 /// Whether a running lane has gone `min` minutes since it started and was not reported yet (`min` 0: never).
 fn long_running_due(started_at: Option<&str>, now: u64, min: u64, reported: bool) -> bool {
     let start = started_at.and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok()).map_or(now, |t| t.timestamp().max(0) as u64);
     min > 0 && !reported && now.saturating_sub(start) >= min * 60
 }
-
 /// The last `n` shell commands the agent ran, from the tail of its stream-json log (oldest first).
 fn last_commands(tail: &str, n: usize) -> Vec<String> {
     let mut cmds: Vec<String> = tail
@@ -232,7 +211,6 @@ fn last_commands(tail: &str, n: usize) -> Vec<String> {
     cmds.drain(..cmds.len().saturating_sub(n));
     cmds
 }
-
 /// Every few seconds (or when woken): stop idle lanes, pick up ended processes, and when the machine has room start the oldest queued lane (manual, sent back or answered) or else the autopilot's next item.
 pub async fn scheduler(app: Shared) {
     let mut rr = 0;
@@ -318,7 +296,6 @@ pub async fn scheduler(app: Shared) {
         }
     }
 }
-
 /// A free slot of the project checked out on a fresh `lane/<id>` branch at main. A slot is free when no active lane holds it; uncommitted work of a stopped or failed lane is first committed on that lane's branch.
 async fn take_slot(app: &Shared, project: &Project, lane: &Lane) -> Result<PathBuf, String> {
     let (repo, dir) = (project.repo(), project.lanes_dir());
@@ -351,7 +328,6 @@ async fn take_slot(app: &Shared, project: &Project, lane: &Lane) -> Result<PathB
     git(&slot, &["clean", "-fdq"]).await?;
     Ok(slot)
 }
-
 fn brief(app: &Shared, lane: &Lane) -> String {
     let steps = plan::read(app, &lane.project).unwrap_or_default();
     let lanes: Vec<Lane> = app.lanes.lock().unwrap().values().filter(|l| l.project == lane.project).cloned().collect();
@@ -381,7 +357,6 @@ fn brief(app: &Shared, lane: &Lane) -> String {
     static PLACEHOLDER: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\{(\w+)\}").unwrap());
     PLACEHOLDER.replace_all(&app.cfg().factory.prompt("brief"), |c: &regex::Captures| vars[&c[1]].clone()).into_owned()
 }
-
 /// Runs the lane's agent in its slot (a new slot for a lane without one): the brief, or a resume of its session with the pending message.
 async fn launch(app: &Shared, mut lane: Lane) -> Result<(), String> {
     let cfg = app.cfg();
@@ -432,7 +407,6 @@ async fn launch(app: &Shared, mut lane: Lane) -> Result<(), String> {
     });
     Ok(())
 }
-
 /// The agent's process is gone: a working lane goes to the merge queue (or, out of credits, to the next agent of the fallback chain); a waiting lane waits for its answer.
 async fn ended(app: &Shared, id: &str, code: Option<i32>) {
     let Some(lane) = app.lane(id) else { return };
@@ -494,19 +468,16 @@ async fn ended(app: &Shared, id: &str, code: Option<i32>) {
     }
     app.sched_wake.notify_one();
 }
-
 fn codex_session(app: &Shared, id: &str, log: &str) {
     let run = log.rsplit(RUN_START).next().unwrap_or(log);
     let session = run.lines().filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok()).filter(|v| v["type"] == "thread.started").filter_map(|v| v["thread_id"].as_str().map(String::from)).next_back();
     session.filter(|s| app.lane(id).is_some_and(|l| l.session != *s)).into_iter().for_each(|s| drop(app.update_lane(id, |l| l.session = s)));
 }
-
 /// True when the lane's branch has no commit beyond the project's HEAD (it is known and countable). Without a check on its item such a lane failed; with one it may still be done (the check can already be true): it goes to the merge queue, where the check runs on main.
 async fn no_commits(app: &Shared, lane: &Lane) -> bool {
     let Some(p) = app.cfg().projects.iter().find(|p| p.id == lane.project).cloned() else { return false };
     !lane.branch.is_empty() && matches!(git(&p.repo(), &["rev-list", "--count", &format!("HEAD..{}", lane.branch)]).await.as_deref(), Ok("0"))
 }
-
 /// `tirith ask` from a lane: it waits, and the manager is told how to answer.
 pub fn ask(app: &Shared, id: &str, question: &str) -> Result<Lane, String> {
     let lane = app.lane(id).ok_or(format!("no lane '{id}'"))?;
@@ -521,7 +492,6 @@ pub fn ask(app: &Shared, id: &str, question: &str) -> Result<Lane, String> {
     manager::emit_event(app, &lane.project, "lane.asked", &format!("lane {id} asks the manager: {q}"), Some(&told));
     updated.ok_or("lane vanished".into())
 }
-
 /// `tirith answer` from the manager, or the owner's answer (`who`): a live message when the agent still runs, else a resumed run.
 pub fn answer(app: &Shared, id: &str, text: &str, who: &str) -> Result<Lane, String> {
     let lane = app.lane(id).ok_or(format!("no lane '{id}'"))?;
@@ -535,7 +505,6 @@ pub fn answer(app: &Shared, id: &str, text: &str, who: &str) -> Result<Lane, Str
     app.sched_wake.notify_one();
     lane.ok_or("lane vanished".into())
 }
-
 /// SIGTERM to the agent's group, SIGKILL five seconds later.
 fn kill_agent(pid: Option<u32>) {
     let Some(pid) = pid else { return };
@@ -545,19 +514,16 @@ fn kill_agent(pid: Option<u32>) {
         kill_group(pid, libc::SIGKILL);
     });
 }
-
 pub fn is_payment(question: &str) -> bool {
     let q = question.to_lowercase();
     ["$", "€", "usd", "eur", "pay", "paid", "spend", "cost", "price", "charge", "billing", "pago", "pagar", "gasto", "gastar", "coste", "precio", "cuesta"].iter().any(|w| q.contains(w))
 }
-
 pub fn stop(app: &Shared, id: &str) -> Result<Lane, String> {
     let lane = app.lane(id).ok_or(format!("no lane '{id}'"))?;
     matches!(lane.status.as_str(), "queued" | "running" | "waiting" | "merge-queued").then_some(()).ok_or_else(|| format!("lane {id} is {}", lane.status))?;
     kill_agent(lane.pid);
     app.update_lane(id, |l| (l.status, l.ended_at, l.pid) = ("stopped".into(), Some(now_iso()), None)).ok_or("lane vanished".into())
 }
-
 /// `tirith lane delete`: the lane is thrown away. Its agent stops, its branch and unsaved work go, it leaves every list, and its open item leaves the plan, so nothing starts it again (stopping keeps all that: the autopilot only skips the item).
 pub async fn delete(app: &Shared, id: &str) -> Result<(), String> {
     let lane = app.lane(id).ok_or(format!("no lane '{id}'"))?;
@@ -584,7 +550,6 @@ pub async fn delete(app: &Shared, id: &str) -> Result<(), String> {
     }
     Ok(())
 }
-
 /// The merge failed because of the lane: the same agent continues in its slot with the reason, twice at most.
 pub fn send_back(app: &Shared, lane: &Lane, reason: &str) {
     if lane.attempts >= 2 {
@@ -598,7 +563,6 @@ pub fn send_back(app: &Shared, lane: &Lane, reason: &str) {
     });
     app.sched_wake.notify_one();
 }
-
 #[cfg(test)]
 #[path = "../checks/lanes.rs"]
 mod tests;
