@@ -1,0 +1,32 @@
+/* the phone: one QR that opens the bot's chat there */
+.bphone { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; padding: 18px 0 4px; }
+.bqr { display: block; width: 216px; height: 216px; padding: 12px; background: #fff; border-radius: 20px; }
+.bqrwait { display: grid; place-items: center; color: #555; font: 400 10.5px var(--b-mono); text-transform: uppercase; letter-spacing: .08em; }
+.bscan { margin: 6px 0 0; font-size: 15px; font-weight: 400; max-width: 30ch; }
+/* the bot's model, in its card */
+.bmodel { width: 100%; border-top: 1px solid var(--b-hair); padding-top: 12px; }
+.bmodel summary { cursor: pointer; font-size: 13px; color: var(--b-ink); }
+.bmodel summary .bcap { margin-right: 8px; }
+.bmodel .bchk { margin: 12px 0 10px; }
+
+/* the bot's factory shape, in its card: session, access and the events it hears */
+.bfactory .bfrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; margin-top: 12px; }
+.bsel { font: inherit; font-size: 13px; font-weight: 300; color: var(--b-ink); background: transparent; border: 1px solid var(--b-hair); border-radius: 10px; padding: 7px 9px; min-width: 0; max-width: 100%; }
+.bsel:focus { outline: none; border-color: var(--b-ink); }
+.broute { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; width: 100%; padding: 10px 0; border-top: 1px solid var(--b-hair); }
+.broute .bchk { margin: 0; }
+.bfactory > .blink { margin-top: 10px; }
+
+@media (max-width: 1100px) { .bview { grid-template-columns: minmax(0, 1fr) 300px; } .bside { padding: 24px 18px; } }
+@media (max-width: 820px) {
+  /* one column that scrolls: the bot and its routines, then its chat */
+  .bview { display: flex; flex-direction: column; overflow-y: auto; }
+  .bside { order: 1; flex: none; overflow: visible; padding: 22px 18px; gap: 22px; border-left: 0; border-bottom: 1px solid var(--b-hair); }
+  .bhero .bot { width: 96px; height: 96px; }
+  .bchat { order: 2; flex: none; height: 82vh; min-height: 420px; padding: 14px 14px; }
+  .bkeys { grid-template-columns: 1fr; gap: 12px; } .bkeys > div:not(.bk) { border-left: 0; padding: 0; }
+  .btop { grid-template-columns: 1fr auto; } .btop span:nth-child(2) { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bot *, .bpop, .bmback, .bmodal, .bintro *, .brule, .bbusy, .bdot { animation: none !important; transition: none !important; }
+}

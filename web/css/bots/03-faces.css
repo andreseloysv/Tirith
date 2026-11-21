@@ -1,0 +1,39 @@
+/* the faces: their motion is the animator's (face.js); the CSS only draws */
+.bot { display: inline-block; flex: none; overflow: visible; vertical-align: middle; }
+/* a face is HTML layers stacking small SVGs: the blurred glow and body rasterize once into their layer and only the
+   layers' transform/opacity move (face.js), so the blurs are not re-rendered per frame; eyes and z's ride on top */
+.bot.face { position: relative; width: var(--fs); height: var(--fs); }
+.bot.face .ffloat { position: absolute; inset: 0; transform-origin: 50% 82.258%; will-change: transform; }
+.bot.face .fhalo { position: absolute; inset: 0; will-change: opacity; }
+.bot.face .fsvg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+/* the 3D face: one canvas, the bot's box grown by the halo's margin (face.js draws it at 170%) */
+.bot.face .botcv { position: absolute; left: -35%; top: -35%; width: 170%; height: 170%; pointer-events: none; }
+/* in a list, a picker or a head a face is an avatar: one fixed box the glow and the float may paint and move in but
+   never out of, so a face cannot grow its row, mount the ones beside it or cover the name and text next to it;
+   display faces (the hero, the preview, the intro lineup) keep the glow's spill into the empty space around them */
+.nbot .bot.face, .mc-face .bot.face, .rface .bot.face, .bshapes .bot.face { overflow: hidden; }
+.nbot .bot.face .fsvg, .mc-face .bot.face .fsvg, .rface .bot.face .fsvg, .bshapes .bot.face .fsvg { overflow: hidden; }
+.nbot .bot.face { width: 64px; height: 64px; }
+.rface .bot.face { width: 40px; height: 40px; }
+.bshapes .bot.face { width: 46px; height: 46px; }
+.mc-line .bot.face { width: 22px; height: 22px; }
+/* inside that box the layers keep a margin, so the blurred glow fades out before the clip edge:
+   clipped at inset 0 it ended in a hard dark square around every avatar (the 2026-11-21 phone captures) */
+.nbot .bot.face .ffloat, .mc-face .bot.face .ffloat, .rface .bot.face .ffloat, .bshapes .bot.face .ffloat { inset: 10%; }
+.nbot .bot.face > .fzs, .mc-face .bot.face > .fzs, .rface .bot.face > .fzs, .bshapes .bot.face > .fzs { inset: 10%; }
+/* and the halo itself fades to nothing at the box's edge, so no blur, however wide, can end in a visible square */
+.nbot .bot.face .fhalo, .mc-face .bot.face .fhalo, .rface .bot.face .fhalo, .bshapes .bot.face .fhalo {
+  -webkit-mask-image: radial-gradient(closest-side, #000 60%, transparent 98%); mask-image: radial-gradient(closest-side, #000 60%, transparent 98%); }
+/* the same fade for the 3D canvas: its halo reaches the canvas edge, past the avatar box that clips it —
+   closest-side is the canvas's own half, and the box edge sits at 59% of it (the canvas is 170% of the box) */
+.nbot .bot.face .botcv, .mc-face .bot.face .botcv, .rface .bot.face .botcv, .bshapes .bot.face .botcv {
+  -webkit-mask-image: radial-gradient(closest-side, #000 40%, transparent 59%); mask-image: radial-gradient(closest-side, #000 40%, transparent 59%); }
+.bot .z { font-family: var(--b-mono, ui-monospace, Menlo, monospace); font-weight: 500; fill: var(--b-mut, #8c8c8c); }
+.bot .ring { transform-box: fill-box; transform-origin: center; animation: b-spin 14s linear infinite; }
+@keyframes b-spin { to { transform: rotate(360deg); } }
+@keyframes b-pop { from { opacity: 0; transform: translateY(20px) scale(.8); } to { opacity: 1; transform: none; } }
+@keyframes b-in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes b-rule { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes b-fade { from { opacity: 0; } }
+@keyframes b-up { from { opacity: 0; transform: translateY(16px) scale(.98); } }
+

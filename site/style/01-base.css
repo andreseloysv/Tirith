@@ -1,0 +1,54 @@
+:root {
+  --bg: #f4f8fb;
+  --ink: #14202e;
+  --muted: #53647a;
+  --card: rgba(255, 255, 255, 0.72);
+  --line: rgba(20, 32, 46, 0.12);
+  --accent: #2563eb;
+  --accent-ink: #ffffff;
+  --code: rgba(20, 32, 46, 0.07);
+  --g1: rgba(94, 234, 212, 0.35);
+  --g2: rgba(251, 191, 160, 0.35);
+  --g3: rgba(167, 139, 250, 0.3);
+  --shadow: 0 18px 50px -20px rgba(30, 50, 90, 0.35);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1520;
+    --ink: #e8eef6;
+    --muted: #9db0c6;
+    --card: rgba(24, 36, 52, 0.72);
+    --line: rgba(232, 238, 246, 0.14);
+    --accent: #6ea0ff;
+    --accent-ink: #0a1220;
+    --code: rgba(232, 238, 246, 0.09);
+    --g1: rgba(20, 184, 166, 0.22);
+    --g2: rgba(251, 146, 60, 0.16);
+    --g3: rgba(139, 92, 246, 0.24);
+    --shadow: 0 18px 50px -20px rgba(0, 0, 0, 0.7);
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 70px; }
+body {
+  margin: 0;
+  color: var(--ink);
+  background:
+    radial-gradient(60rem 40rem at 0% -10%, var(--g1), transparent 60%),
+    radial-gradient(50rem 40rem at 100% 0%, var(--g2), transparent 60%),
+    radial-gradient(60rem 50rem at 80% 100%, var(--g3), transparent 60%),
+    var(--bg);
+  background-attachment: fixed;
+  font: 17px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--accent); }
+img { max-width: 100%; height: auto; display: block; }
+code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+code { background: var(--code); padding: 0.1em 0.35em; border-radius: 5px; font-size: 0.92em; overflow-wrap: anywhere; }
+pre { background: var(--code); border: 1px solid var(--line); border-radius: 12px; padding: 1rem 1.1rem; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.9rem; line-height: 1.55; margin: 0; }
+pre code { background: none; padding: 0; overflow-wrap: anywhere; }
+.wrap { width: min(1080px, 100% - 32px); margin-inline: auto; }
+.skip { position: absolute; left: -999px; }
+.skip:focus { left: 8px; top: 8px; background: var(--bg); padding: 8px 12px; z-index: 10; }
+

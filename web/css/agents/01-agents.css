@@ -1,0 +1,51 @@
+/* Agents and Pipelines views (js/views/agents.js, pipelines.js, views/boards/*). The old classes come from
+   style.css; this file only adds what the lane board and the new data need. */
+
+/* ---------- Agents: six lane columns ---------- */
+.board.lboard { grid-template-columns: repeat(6, minmax(172px, 1fr)); overflow-x: auto; }
+.lboard .col { min-width: 0; }
+.col.purple::before { background: linear-gradient(90deg, #8b5cf6, rgba(139,92,246,.15)); }
+.col.grey::before { background: linear-gradient(90deg, #9aa3b2, rgba(154,163,178,.15)); }
+.lboard .col header { gap: 2px; } .lboard .col header b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.lboard .acard { gap: 8px; padding: 12px 14px; }
+.lboard .acard .afeat { min-height: 0; }
+.lboard .acard.work .afeat { font-size: 13.5px; }
+.lboard .afoot { flex-wrap: wrap; gap: 6px 8px; }
+.lboard .aproj { display: inline-flex; align-items: center; gap: 5px; }
+.lboard .acard .afoot .aproj { flex: 1 0 auto; }
+.lboard .aproj .pdot, .lv .pdot { width: 7px; height: 7px; }
+.avatar.lava { color: #fff; font-weight: 650; letter-spacing: -.01em; text-shadow: 0 1px 1px rgba(0,0,0,.18); }
+.atry { font-size: 11.5px; line-height: 18px; padding: 0 8px; color: var(--warn-fg); background: var(--warn-bg); border-color: var(--warn-line, rgba(232,163,23,.35)); }
+.anow.ask { background: rgba(232,163,23,.1); border-color: rgba(232,163,23,.3); } .anow.ask .pdot2 { background: var(--amber); animation: none; }
+.anow.bad { background: rgba(229,72,77,.07); border-color: rgba(229,72,77,.22); } .anow.bad .pdot2 { background: var(--red); animation: none; }
+.lshow { align-self: center; margin: 2px 0 4px; }
+.lboard .stopb.card { top: 12px; right: 12px; }
+.lboard .acard.work .ahead { padding-right: 62px; }
+.lboard .aname b { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.anow .md { white-space: normal; }
+@media (max-width: 1100px) {
+  .board.lboard { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: max-content; align-content: start; overflow-x: hidden; overflow-y: auto; }
+  .lboard .col { min-height: 120px; } .lboard .cbody { overflow: visible; flex: none; }
+}
+@media (max-width: 700px) { .board.lboard { grid-template-columns: minmax(0, 1fr); grid-auto-rows: max-content; } .lboard .col { min-height: auto; } .lboard .cbody { overflow: visible; flex: none; } }
+
+/* list mode */
+.v-agents .listwrap > .link { margin: 10px 0 0 16px; }
+.v-agents .head.agent { text-align: left; }
+.v-agents .detail .activity { padding-right: 8px; }
+@media (max-width: 900px) { .v-agents .head.agent { grid-template-columns: 12px 10px 170px minmax(0, 1fr) 70px; } .v-agents .head.agent .proj { display: none; } }
+
+/* drawer */
+.v-agents .le .lt { display: none; }
+.v-agents .llist { max-height: 520px; }
+.lcheck { margin: 6px 0 0; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; } .lcheck code { font-size: 11.5px; overflow-wrap: anywhere; }
+.lstep { margin: 4px 0 0; }
+.lquest { padding: 8px 10px; border-radius: 9px; background: rgba(232,163,23,.1); border: 1px solid rgba(232,163,23,.3); }
+.asec .sum.lbad .md { color: var(--red-fg); }
+.lv code { font-size: 11.5px; background: none; padding: 0; overflow-wrap: anywhere; }
+.lpipes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.lprow { display: flex; align-items: center; gap: 8px; width: 100%; padding: 4px 8px; border-radius: 8px; text-align: left; background: rgb(var(--w) / .5); border: 1px solid var(--glass-line); }
+.lprow:hover { background: rgb(var(--w) / .85); } .lprow b { font-weight: 600; white-space: nowrap; font-size: 12.5px; }
+.lprow .pst { width: 18px; height: 18px; flex: none; } .lprow .pmini { flex: 1; min-width: 0; display: flex; }
+.lpwhen { white-space: nowrap; }
+

@@ -1,0 +1,43 @@
+/* the bot's card: new bot and edit */
+.bmback { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 16px; background: rgba(0,0,0,.5);
+  -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); animation: b-fade .25s ease-out; }
+.bmodal { width: min(470px, 100%); max-height: 100%; overflow-y: auto; color: var(--b-ink); background: var(--b-bg); border: 1px solid var(--b-hair); border-radius: 24px;
+  font-weight: 300; box-shadow: 0 30px 80px rgba(0,0,0,.35); animation: b-up .4s var(--b-ease); }
+.bmodal header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 14px 22px; border-bottom: 1px solid var(--b-hair); }
+.bmodal header h2 { margin: 0; color: var(--b-mut); letter-spacing: .12em; }
+.bx { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; color: var(--b-mut); } .bx:hover { color: var(--b-ink); background: var(--b-soft); }
+.bmbody { display: flex; flex-direction: column; align-items: center; gap: 22px; padding: 22px 26px 26px; }
+.bprev { height: 140px; display: grid; place-items: center; }
+.bnamein { width: 100%; text-align: center; font-size: 17px; padding: 12px; border-radius: 14px !important; }
+.bshapes { display: grid; grid-template-columns: repeat(6, 1fr); gap: 2px; width: 100%; }
+.bshapes button { aspect-ratio: 1; display: grid; place-items: center; border-radius: 12px; transition: background .2s; }
+.bshapes button:hover { background: var(--b-soft); } .bshapes button.on { box-shadow: inset 0 0 0 1px var(--b-ink); }
+.bcolors { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; max-width: 300px; }
+.bcolors button { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; }
+.bcolors i { width: 26px; height: 26px; border-radius: 50%; background: var(--c); box-shadow: inset 0 0 0 1px rgba(127,127,127,.35); }
+.bcolors button.on { box-shadow: 0 0 0 1px var(--b-ink); } .bcolors button:hover:not(.on) { box-shadow: 0 0 0 1px var(--b-hair); }
+.bmodal footer { display: flex; align-items: center; gap: 8px; padding: 14px 16px 14px 22px; border-top: 1px solid var(--b-hair); }
+.bmodal footer .bask { font-size: 13px; margin-right: auto; }
+.bsp { flex: 1; }
+
+/* no bot yet: the deck's last slide */
+.bintro { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; align-items: flex-start; padding: 26px clamp(20px, 5vw, 64px) 26px; }
+.btop { display: grid; grid-template-columns: 1fr 1fr auto; width: 100%; color: var(--b-mut); }
+.btop .bnum { color: var(--b-ink); text-align: right; }
+.btop .bnum::before { content: ""; display: block; width: 28px; height: 1px; background: var(--b-ink); margin: 0 0 .8em auto; }
+.brule { width: 100%; height: 1px; background: var(--b-hair); margin: 16px 0 6vh; transform-origin: left; animation: b-rule 1.2s var(--b-ease) .1s both; }
+.bintro h1 { margin: 0; font-size: clamp(34px, 4.8vw, 76px); font-weight: 400; line-height: 1; letter-spacing: -.01em; text-transform: uppercase; animation: b-in .7s var(--b-ease) both; }
+.bsub { margin: 20px 0 0; font-size: clamp(16px, 1.6vw, 24px); color: var(--b-acc); animation: b-in .7s var(--b-ease) .2s both; }
+.bsub b { color: var(--b-ink); font-weight: 400; }
+.bdash { display: block; width: 22px; height: 1px; background: var(--b-mut); margin: 22px 0; }
+.blead { margin: 0; max-width: 52ch; font-size: clamp(14px, 1.2vw, 18px); line-height: 1.5; animation: b-in .7s var(--b-ease) .4s both; }
+.blineup { display: flex; flex-wrap: wrap; align-items: flex-end; gap: clamp(8px, 1.6vw, 26px); margin: 5vh 0 4vh; }
+.bpop { display: inline-grid; animation: b-pop .6s cubic-bezier(.3,1.6,.5,1) both; }
+.bfirst { color: var(--b-mut); } .bfirst:hover { color: var(--b-acc); }
+.bbig { padding: 12px 20px; }
+.bkeys { margin-top: auto; width: 100%; display: grid; grid-template-columns: auto repeat(3, 1fr); border-top: 1px solid var(--b-hair); padding-top: 18px; margin-top: max(5vh, 30px); }
+.bk { color: var(--b-acc); padding-right: 3vw; }
+.bkeys > div:not(.bk) { padding: 0 1.6vw; border-left: 1px solid var(--b-hair); }
+.bkeys h4 { margin: 0 0 4px; font-weight: 500; }
+.bkeys p { margin: 0; font-size: 13px; color: var(--b-mut); line-height: 1.4; }
+
