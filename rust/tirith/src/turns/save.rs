@@ -1,4 +1,4 @@
-//! A turn ended: its row in `turns`, and for a bot its `turn.done` (or `routine.done`) event.
+//! A turn ended: its row in `turns` (`waiting` while an approval card it opened is open), and for a bot its `turn.done` (or `routine.done`) event.
 use super::price::cost;
 use super::record::Turn;
 use super::usage::from_muse_session;
@@ -25,7 +25,11 @@ pub fn finish(app: &Shared, mut t: Turn, ok: Option<bool>, answer: Option<&str>)
     let ms = t.started.elapsed().as_millis() as i64;
     let (skills, tools) = (json!(t.skills).to_string(), json!(t.tools).to_string());
     let versions = versions(app, &t).to_string();
-    let status = if ok { "ok" } else { "failed" };
+    let status = match (super::approval::waits(app, &t), ok) {
+        (true, _) => "waiting", // its approval card is still open: the owner's answer starts its next turn
+        (_, true) => "ok",
+        _ => "failed",
+    };
     let id = app.insert("INSERT INTO turns (conv, role, \"trigger\", routine, started_at, ended_at, ms, status, agent, model, effort, tokens_in, tokens_out, tokens_cache_read, tokens_cache_write, cost_usd, steps, skills, tools, versions, answer, event, factory, role_hash) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24)", params![t.conv, t.role, t.trigger, t.routine, t.started_at, now_iso(), ms, status, t.agent, t.model, t.effort, u.input, u.output, u.cache_read, u.cache_write, cost_usd, t.steps, skills, tools, versions, answer, event, factory, role_hash]);
     super::signals::keep(app, id, &t, &answer);
     super::quality::catch_up(app, id, event);
@@ -33,9 +37,9 @@ pub fn finish(app: &Shared, mut t: Turn, ok: Option<bool>, answer: Option<&str>)
     id
 }
 
-/// A bot's turn (a role with `scope = "own"` and `session = "chat"`) emits `turn.done`, or `routine.done` when a routine started it: its id, else none.
+/// A bot's own turn (a role with `scope = "own"` and `session = "chat"`, in its conversation) emits `turn.done`, or `routine.done` when a routine started it: its id, else none.
 fn event(app: &Shared, t: &Turn, answer: &str) -> Option<i64> {
-    // the bot's own turns: a judge's turn on its events is kept in its conversation too, and emits nothing
+    // Only the bot's own role: a judge's turn in its conversation emits nothing (an eval on turn.done would judge itself forever).
     (t.role == t.conv).then_some(())?;
     let bot = crate::bots::bot(app, &t.conv).filter(|b| b["session"] == "chat")?;
     let routine = bot["routines"]
@@ -54,12 +58,13 @@ fn event(app: &Shared, t: &Turn, answer: &str) -> Option<i64> {
         " · skills: {}",
         names(t.skills.clone()).unwrap_or("none".into())
     );
+    let approval = super::approval::context(app, t);
     let (on, text) = if routine.is_some() {
-        let text = super::quality::routine_text(app, t, &text, answer);
+        let text = super::quality::routine_text(app, t, &text, answer, &approval);
         ("routine.done", text)
     } else {
         let start = answer.chars().take(200).collect::<String>();
-        ("turn.done", format!("{text} · {start}"))
+        ("turn.done", format!("{text}{approval} · {start}"))
     };
     Some(crate::manager::emitted(app, &t.conv, on, &text, None))
 }

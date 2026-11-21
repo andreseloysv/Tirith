@@ -16,8 +16,12 @@ mod plans;
 mod review;
 mod tick;
 mod trouble;
+mod unapproved;
 mod work;
 pub use api::{routes, start};
 #[cfg(test)]
 #[path = "../../checks/metrics.rs"]
 mod tests;
+#[cfg(test)]
+#[path = "../../checks/unapproved.rs"]
+mod unapproved_tests;

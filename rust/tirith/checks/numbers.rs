@@ -266,15 +266,12 @@ async fn bot_numbers() {
 #[tokio::test]
 async fn turn_quality_score_lands_on_its_turn() {
     let f = crate::factory::Factory::default();
-    assert_eq!(
-        f.evals_on("routine.done"),
-        vec![(
-            "turn-quality".to_string(),
-            "judge".to_string(),
-            "turn-quality".to_string(),
-            1.0
-        )]
-    );
+    assert!(f.evals_on("routine.done").contains(&(
+        "turn-quality".to_string(),
+        "judge".to_string(),
+        "turn-quality".to_string(),
+        1.0
+    )));
     assert!(f.prompt("turn-quality").contains("Cómo validar"));
     // A bot and its judge on one fake agent that reads the skill «ofertas» and answers with a score.
     let home = home("turn-quality");

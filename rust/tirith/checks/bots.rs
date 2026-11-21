@@ -161,6 +161,10 @@ fn bots_live_in_config_as_own_roles_with_schedule_routes() {
             "turn-quality",
             include_str!("../../../factory/evals/turn-quality.md"),
         ),
+        (
+            "unapproved",
+            include_str!("../../../factory/evals/unapproved.md"),
+        ),
     ]
     .into_iter()
     .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -357,6 +361,10 @@ fn a_system_bot_change_is_a_layer_in_config() {
         (
             "turn-quality",
             include_str!("../../../factory/evals/turn-quality.md"),
+        ),
+        (
+            "unapproved",
+            include_str!("../../../factory/evals/unapproved.md"),
         ),
     ]
     .into_iter()

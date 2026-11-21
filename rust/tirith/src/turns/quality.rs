@@ -21,8 +21,14 @@ pub(super) fn how_to_validate(text: &str) -> Option<String> {
     Some(body.join("\n").trim().to_string()).filter(|b| !b.is_empty())
 }
 
-/// The text of a routine's `routine.done`: `head` (the bot, the trigger, the routine and its task, the tools and skills), its answer, and the «Cómo validar» of each skill it read, cut to 2000 characters.
-pub(super) fn routine_text(app: &Shared, t: &Turn, head: &str, answer: &str) -> String {
+/// The text of a routine's `routine.done`: `head` (the bot, the trigger, the routine and its task, the tools and skills), its answer, the «Cómo validar» of each skill it read, then `approval` (what the `unapproved` eval reads), cut to 2000 characters.
+pub(super) fn routine_text(
+    app: &Shared,
+    t: &Turn,
+    head: &str,
+    answer: &str,
+    approval: &str,
+) -> String {
     let mut text = format!(
         "{head} · answer: {}",
         answer.chars().take(1000).collect::<String>()
@@ -35,6 +41,7 @@ pub(super) fn routine_text(app: &Shared, t: &Turn, head: &str, answer: &str) -> 
             .into_iter()
             .for_each(|v| text += &format!("\n· how to validate «{name}»: {v}"));
     }
+    text += approval;
     text.chars().take(2000).collect()
 }
 
