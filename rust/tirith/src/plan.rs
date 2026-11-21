@@ -33,14 +33,10 @@ pub fn parse(text: &str) -> Vec<Step> {
         if let Some(head) = line.strip_prefix("## ") {
             let (num, title) = head.split_once(". ").filter(|(n, _)| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit())).unwrap_or(("", head));
             steps.push(Step { num: num.into(), title: title.trim().into(), items: vec![], line: i });
-        } else if let Some(((done, rest), step)) = (match line.get(..6) {
-            Some("- [ ] ") => Some((false, &line[6..])),
-            Some("- [x] ") | Some("- [X] ") => Some((true, &line[6..])),
-            _ => None,
-        })
-        .zip(steps.last_mut())
-        {
-            step.items.push(Item { text: clean(rest), done, check: CHECK.captures(rest).map(|c| c[1].to_string()), line: i });
+        } else if let Some((done, rest)) = line.strip_prefix("- [ ] ").map(|r| (false, r)).or_else(|| line.strip_prefix("- [x] ").or_else(|| line.strip_prefix("- [X] ")).map(|r| (true, r))) {
+            if let Some(step) = steps.last_mut() {
+                step.items.push(Item { text: clean(rest), done, check: CHECK.captures(rest).map(|c| c[1].to_string()), line: i });
+            }
         }
         steps
     });
@@ -86,9 +82,10 @@ pub fn check_problem(check: &str) -> Option<String> {
     static CALL: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?:^|[\s;&|(])(?:(cd\s+(?:\./)?collector(?:[/\s;&]|$))|tirith\s+([A-Za-z-][\w-]*))").unwrap());
     const OK: [&str; 18] = ["serve", "hook", "hooks", "status", "plan", "lane", "ask", "answer", "ask-owner", "card", "autopilot", "say", "room", "net", "models", "guard", "project", "help"];
     CALL.captures_iter(check).find_map(|c| {
-        c.get(2).map_or(Some("the check does `cd collector`, a removed folder (the daemon is Rust: use cargo test -q <name>)".to_string()), |s| {
-            (!OK.contains(&s.as_str())).then(|| format!("the check calls `tirith {}`, which is not a tirith command", s.as_str()))
-        })
+        c.get(2).map_or_else(
+            || Some("the check does `cd collector`, a removed folder (the daemon is Rust: use cargo test -q <name>)".to_string()),
+            |s| (!OK.contains(&s.as_str())).then(|| format!("the check calls `tirith {}`, which is not a tirith command", s.as_str())),
+        )
     })
 }
 pub async fn add(app: &Shared, project: &str, step: &str, text: &str) -> Result<(), String> {

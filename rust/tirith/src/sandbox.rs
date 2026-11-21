@@ -169,8 +169,7 @@ fn unique<T: PartialEq>(items: impl IntoIterator<Item = T>) -> Vec<T> {
 pub fn tags(tool: &str, input: &Value) -> Vec<(&'static str, String)> {
     let mut out = vec![];
     if tool != "Bash" {
-        let file = ["file_path", "path", "notebook_path"].iter().find_map(|k| input[*k].as_str()).unwrap_or("");
-        return (!file.is_empty() && CRED.is_match(file) && !file.ends_with(".example")).then(|| ("credential", file.to_string())).into_iter().collect();
+        return input["file_paths"].as_array().into_iter().flatten().filter_map(|v| v.as_str()).filter(|f| CRED.is_match(f) && !f.ends_with(".example")).map(|f| ("credential", f.to_string())).collect();
     }
     let cmd = input["command"].as_str().unwrap_or("");
     out.extend(unique(CRED.find_iter(cmd).map(|m| m.as_str().trim_start_matches([' ', '\'', '"', '=']).trim().to_string()).filter(|t| !t.ends_with(".example"))).into_iter().map(|t| ("credential", t)));
