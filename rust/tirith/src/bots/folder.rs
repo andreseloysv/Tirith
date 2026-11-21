@@ -3,6 +3,8 @@ use crate::app::App;
 use std::path::{Path as FsPath, PathBuf};
 /// A bot's skills, in its folder: the agents read skills there (or, through a link, in their own .<command>/skills).
 pub(super) const SKILLS: &str = ".agents/skills";
+/// The memory of every bot, in Tirith's home: what holds for all of them (the owner's name, time zone, language).
+pub(super) const SHARED: &str = "bots/memory.md";
 /// A bot's folder, where its sessions run: memory.md, its working files and its skills.
 pub fn folder(app: &App, key: &str) -> PathBuf {
     app.home.join("manager").join(key)

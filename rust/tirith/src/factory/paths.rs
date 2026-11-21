@@ -22,9 +22,9 @@ pub(super) fn text_files(dir: &Path) -> impl Iterator<Item = std::fs::DirEntry> 
         .flatten()
 }
 
-/// The factory's texts by file stem: the prompts and the eval rubrics alike.
+/// The factory's texts by file stem: the prompts and the eval rubrics alike, and the skill template (skill.md) as `skill`.
 pub(super) fn prompts(dir: &Path) -> BTreeMap<String, String> {
-    text_files(dir)
+    let mut all: BTreeMap<String, String> = text_files(dir)
         .filter(|e| e.path().extension().is_some_and(|x| x == "md"))
         .filter_map(|e| {
             Some((
@@ -32,5 +32,9 @@ pub(super) fn prompts(dir: &Path) -> BTreeMap<String, String> {
                 std::fs::read_to_string(e.path()).ok()?,
             ))
         })
-        .collect()
+        .collect();
+    if let Ok(t) = std::fs::read_to_string(dir.join("skill.md")) {
+        all.insert("skill".into(), t);
+    }
+    all
 }

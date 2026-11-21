@@ -405,3 +405,134 @@ fn a_system_bot_change_is_a_layer_in_config() {
             )
     );
 }
+
+const TITLES: [&str; 7] = [
+    "Cuándo usarla",
+    "Entradas y accesos",
+    "Pasos",
+    "Cómo validar",
+    "Qué devuelve",
+    "Qué requiere aprobación",
+    "Si algo falla",
+];
+
+#[test]
+fn skill_template_in_the_factory() {
+    let template = include_str!("../../../factory/skill.md");
+    assert!(
+        template.starts_with("---\nname: {name}\ndescription: "),
+        "its header:\n{template}"
+    );
+    let lines: Vec<&str> = template.lines().collect();
+    for t in TITLES {
+        let at = lines
+            .iter()
+            .position(|l| *l == format!("## {t}"))
+            .unwrap_or_else(|| panic!("the section «{t}»:\n{template}"));
+        assert!(
+            lines
+                .get(at + 1)
+                .is_some_and(|l| !l.trim().is_empty() && !l.starts_with('#')),
+            "a line says what goes in «{t}»"
+        );
+    }
+    assert_eq!(lines.iter().filter(|l| l.starts_with("## ")).count(), 7);
+    // A bot's prompt gets the template's text where bot.md has {skill_template}; the template keeps its own {name}.
+    let text = "[roles.bot-x]\nextends = \"manager\"\nscope = \"own\"\nname = \"Ana\"\nprompt = [\"prompts/bot.md\"]\n";
+    let f = crate::factory::parse(
+        crate::factory::TEXT,
+        crate::factory::embedded_prompts(),
+        &text.parse().unwrap(),
+    )
+    .unwrap();
+    let prompt = f.prompts_of("bot-x");
+    assert!(
+        include_str!("../../../factory/prompts/bot.md").contains("{skill_template}"),
+        "bot.md asks for the template"
+    );
+    assert!(
+        !prompt.contains("{skill_template}") && prompt.contains(template.trim()),
+        "the bot's prompt holds the template:\n{prompt}"
+    );
+    assert!(prompt.contains("You are Ana"));
+}
+
+#[test]
+fn notes_are_numbered_once() {
+    let text = "# Owner\n- likes short answers\n- [m4] only remote jobs\n  * indented note\n\nSome prose.\n---\n**bold**\n-\n";
+    let once = super::notes::numbered(text, 'm');
+    assert_eq!(
+        once,
+        "# Owner\n- [m5] likes short answers\n- [m4] only remote jobs\n  * [m6] indented note\n\nSome prose.\n---\n**bold**\n-\n"
+    );
+    assert_eq!(
+        super::notes::numbered(&once, 'm'),
+        once,
+        "numbering twice changes nothing"
+    );
+    assert_eq!(
+        super::notes::numbered("- a\n- b", 's'),
+        "- [s1] a\n- [s2] b"
+    );
+    assert_eq!(super::notes::numbered("", 'm'), "");
+}
+
+#[tokio::test]
+async fn shared_memory_comes_first() {
+    let home = std::env::temp_dir().join(format!("tirith-shared-memory-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&home);
+    std::fs::create_dir_all(home.join("bots")).unwrap();
+    let app = crate::app::App::open_at(home.clone());
+    let card = json!({"name": "Notas", "shape": "drop", "color": "#22d3ee", "session": "chat", "access": "read", "routes": []});
+    let bot = super::save(&app, card).unwrap();
+    let key = format!("bot-{}", bot["id"].as_str().unwrap());
+    std::fs::write(
+        home.join("bots/memory.md"),
+        "# Owner\n- name: Ana\n- time zone: Europe/Madrid\n",
+    )
+    .unwrap();
+    let own = super::folder::folder(&app, &key).join("memory.md");
+    std::fs::create_dir_all(own.parent().unwrap()).unwrap();
+    std::fs::write(&own, "- [m2] only remote jobs\n- answer in Spanish\n").unwrap();
+    let ctx = super::context(&app, &key).expect("a bot's context");
+    let (shared, mine) = (
+        ctx.find("[tirith] Shared memory.md as it is now:\n# Owner\n- [s1] name: Ana\n- [s2] time zone: Europe/Madrid")
+            .expect(&ctx),
+        ctx.find("[tirith] Your memory.md as it is now:\n- [m2] only remote jobs\n- [m3] answer in Spanish")
+            .expect(&ctx),
+    );
+    assert!(shared < mine, "the shared memory comes first:\n{ctx}");
+    // Saved numbered, and handed again unchanged.
+    assert!(std::fs::read_to_string(&own)
+        .unwrap()
+        .contains("- [m3] answer in Spanish"));
+    assert!(std::fs::read_to_string(home.join("bots/memory.md"))
+        .unwrap()
+        .contains("- [s2] time zone"));
+    assert_eq!(super::context(&app, &key).unwrap(), ctx);
+    // The Library shows and edits the shared memory, and gives the template.
+    let lib = super::library::library(&app, bot["id"].as_str().unwrap()).unwrap();
+    assert!(lib["shared_memory"]
+        .as_str()
+        .unwrap()
+        .contains("[s1] name: Ana"));
+    assert!(lib["template"]
+        .as_str()
+        .unwrap()
+        .contains("## Cómo validar"));
+    super::library::learn(
+        &app,
+        bot["id"].as_str().unwrap(),
+        &json!({"memory": true, "shared": true, "text": "- language: es\n"}),
+    )
+    .unwrap();
+    assert_eq!(
+        std::fs::read_to_string(home.join("bots/memory.md")).unwrap(),
+        "- language: es\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&own).unwrap(),
+        "- [m2] only remote jobs\n- [m3] answer in Spanish\n"
+    );
+    let _ = std::fs::remove_dir_all(&home);
+}

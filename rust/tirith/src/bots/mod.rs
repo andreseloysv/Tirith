@@ -9,6 +9,7 @@ mod layer;
 mod library;
 mod list;
 mod migrate;
+mod notes;
 mod routine;
 mod run;
 mod schedule;

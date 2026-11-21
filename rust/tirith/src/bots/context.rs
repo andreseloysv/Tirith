@@ -1,6 +1,7 @@
 //! What a bot is handed at the start of every turn and routine, and the skill links laid before it.
-use super::folder::{folder, skills, SKILLS};
+use super::folder::{folder, skills, SHARED, SKILLS};
 use super::list::bot;
+use super::notes::numbered_file;
 use crate::app::Shared;
 use std::path::Path as FsPath;
 /// Links to removed shared skills go, and every shared skill is linked into the bot's (a skill of its own with the same name wins).
@@ -45,10 +46,9 @@ fn names(v: Vec<(String, String)>) -> String {
         .filter(|n| !n.is_empty())
         .unwrap_or("none".into())
 }
-/// The bot's memory.md as it is now (the owner may have changed it), up to 12000 characters.
-fn memory(app: &Shared, key: &str) -> String {
-    let memory = std::fs::read_to_string(folder(app, key).join("memory.md"))
-        .unwrap_or_default()
+/// A memory.md as it is now (the owner may have changed it), its notes numbered with `tag` first, up to 12000 characters.
+fn memory(file: &FsPath, tag: char) -> String {
+    let memory = numbered_file(file, tag)
         .chars()
         .take(12000)
         .collect::<String>();
@@ -58,12 +58,13 @@ fn memory(app: &Shared, key: &str) -> String {
         memory.trim().into()
     }
 }
-/// What a bot is handed at the start of every turn and routine: its memory as it is now and the names of its skills. The shared skills are linked into its skills first, links to removed ones go, and the skills folder of the bots' agent is linked to its skills.
+/// What a bot is handed at the start of every turn and routine: the shared memory of every bot, then its own (both as they are now, their notes numbered), and the names of its skills. The shared skills are linked into its skills first, links to removed ones go, and the skills folder of the bots' agent is linked to its skills.
 pub fn context(app: &Shared, key: &str) -> Option<String> {
     bot(app, key)?;
     let (dir, common) = (folder(app, key).join(SKILLS), app.home.join("bots/skills"));
     link_shared(&dir, &common);
     link_agent(app, key);
-    let memory = memory(app, key);
-    Some(format!("[tirith] Your memory.md as it is now:\n{memory}\n[tirith] Your skills: {}. Shared skills: {}.", names(skills(&dir, false)), names(skills(&common, true))))
+    let shared = memory(&app.home.join(SHARED), 's');
+    let memory = memory(&folder(app, key).join("memory.md"), 'm');
+    Some(format!("[tirith] Shared memory.md as it is now:\n{shared}\n[tirith] Your memory.md as it is now:\n{memory}\n[tirith] Your skills: {}. Shared skills: {}.", names(skills(&dir, false)), names(skills(&common, true))))
 }
