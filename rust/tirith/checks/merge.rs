@@ -1,4 +1,12 @@
-use super::*;
+use super::env::stage_env;
+use super::limits::{limit_from, MANAGER_LIMIT_SECS};
+use super::locks::stage_lock;
+use super::news::merged_note;
+use super::red::red_stage_if_stale;
+use super::slot::{disk_full, drop_half_made};
+use crate::app::now_s;
+use crate::config::Stage;
+use std::time::Duration;
 #[test]
 fn stage_timeouts_per_project() {
     let kv = std::collections::HashMap::from([
@@ -46,7 +54,9 @@ async fn project_test_stages_serialized() {
     for t in tasks {
         t.await.unwrap();
     }
-    assert!(include_str!("merge.rs").contains("let _one_at_a_time = lock.lock().await;"));
+    assert!(
+        include_str!("../src/merge/stage.rs").contains("let _one_at_a_time = lock.lock().await;")
+    );
 }
 #[test]
 fn merged_note_is_short() {
