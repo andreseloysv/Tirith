@@ -168,11 +168,12 @@ pub fn start(app: Shared) {
         }
     });
 }
-fn listed_room(raw: &toml::Table, id: &str, title: &str, role: &str) -> Value {
+fn listed_room(raw: &toml::Table, id: &str, title: &str, role: &str, project: Option<&crate::config::Project>) -> Value {
     let get = |k: &str| cfg_get::<String>(raw, &["roles", role, "face", k]).filter(|x| !x.is_empty());
-    json!({"r": id, "t": title, "f": {"shape": get("shape").unwrap_or_else(|| "round".into()), "color": get("color").unwrap_or_else(|| "#3b82f6".into())}})
+    let color = project.map(crate::projects::color_for).or_else(|| get("color")).unwrap_or_else(|| "#3b82f6".into());
+    json!({"r": id, "t": title, "f": {"shape": get("shape").unwrap_or_else(|| "round".into()), "color": color}})
 }
-/// A phone paired in one room is the owner's in all of them: every project, and what belongs to none, gets a room; each of those rooms gets every phone; and the phones are told the list (`tirith-rooms [{"r": room, "t": name, "f": face}]` by `listed_room`, the face of the role that carries the conversation; a phone page that does not know `f` ignores it), which the chat page shows as one chat per project. So one QR opens every project, also those added later. `said` is the last failure reported, so a platform that is away is said once, not every half minute.
+/// A phone paired in one room is the owner's in all of them: every project, and what belongs to none, gets a room; each of those rooms gets every phone; and the phones are told the list (`tirith-rooms [{"r": room, "t": name, "f": face}]` by `listed_room`, the face of the role that carries the conversation, a project's room keeping the Project Manager's shape in the project's own colour; a phone page that does not know `f` ignores it), which the chat page shows as one chat per project. So one QR opens every project, also those added later. `said` is the last failure reported, so a platform that is away is said once, not every half minute.
 async fn provide(app: &Shared, said: &mut String) {
     let mine = || ROOMS.lock().unwrap().values().filter(|r| r.kind == "manager").cloned().collect::<Vec<Room>>();
     // The name a room has on the phones: its project's, or "All projects" for what belongs to none.
@@ -199,7 +200,12 @@ async fn provide(app: &Shared, said: &mut String) {
     phones.sort_by(|a, b| a.key_id.cmp(&b.key_id));
     phones.dedup_by(|a, b| a.key_id == b.key_id);
     let raw = app.cfg().factory.raw.clone();
-    let list = json!(rooms.values().filter(|r| r.kind == "manager").map(|r| listed_room(&raw, &r.id, &label(&r.project), &app.chat_role(&r.project))).collect::<Vec<_>>()).to_string();
+    let list = json!(rooms
+        .values()
+        .filter(|r| r.kind == "manager")
+        .map(|r| listed_room(&raw, &r.id, &label(&r.project), &app.chat_role(&r.project), app.cfg().project(&r.project).filter(|_| crate::bots::bot(app, &r.project).is_none())))
+        .collect::<Vec<_>>())
+    .to_string();
     let sig = format!("{list}{}", phones.iter().map(|d| d.key_id.as_str()).collect::<String>());
     for r in rooms.values_mut().filter(|r| r.kind == "manager") {
         let new: Vec<Peer> = phones.iter().filter(|p| !r.devices.iter().any(|d| d.key_id == p.key_id)).cloned().collect();
