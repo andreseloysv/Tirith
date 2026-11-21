@@ -49,17 +49,24 @@ async fn worktree_local_properties() {
     assert_eq!(std::fs::read_to_string(wt.join("android/local.properties")).unwrap(), "sdk.dir=/sdk\n");
     let _ = std::fs::remove_dir_all(&base);
 }
+/// Removes its folder when dropped, so a failing (panicking) test leaves nothing behind either.
+struct RemoveOnDrop(std::path::PathBuf);
+impl Drop for RemoveOnDrop {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
 #[tokio::test]
 async fn sparse_zoo_lane() {
-    let repo = std::env::temp_dir().join(format!("tirith-sp-{}", std::process::id()));
+    let base = std::env::temp_dir().join(format!("tirith-sp-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    let _clean = RemoveOnDrop(base.clone());
+    let (repo, wt) = (base.join("repo"), base.join("wt"));
     let ex: Vec<String> = ["output/research", "tools/content", "ZooBundles"].map(String::from).into();
     let files: Vec<(String, &str)> = ex.iter().map(String::as_str).chain(["cms"]).map(|d| (format!("{d}/f"), "x")).collect();
     committed(&repo, &files.iter().map(|(f, t)| (f.as_str(), *t)).collect::<Vec<_>>()).await;
-    let wt = repo.join("../wt-sp");
     add_worktree(&repo, &wt, Some("lane/z"), &ex).await.unwrap();
     assert!(wt.join("cms/f").exists() && ex.iter().all(|p| !wt.join(p).exists()));
-    let _ = std::fs::remove_dir_all(&wt);
-    let _ = std::fs::remove_dir_all(&repo);
 }
 #[test]
 fn rows_carry_the_factory_stamp() {
