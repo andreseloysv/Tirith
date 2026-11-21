@@ -1,0 +1,65 @@
+// One live 3D bot: its scene (camera, halo, body, eyes, mouths), the little canvas in its element that the
+// shared sheet (sheet.js) copies its picture into, and its pointer.
+import * as THREE from '../../../../vendor/three/three.module.min.js';
+import { SHAPES3D } from '../shapes3d.js';
+import { still } from './clock.js';
+import { FREEZE } from './config.js';
+import { bodyGeometry3 } from './geometry.js';
+import { bodyMaterial3 } from './materials.js';
+import { camera3, halo3, eyes3, mouths3 } from './bot3d-parts.js';
+import { frozenPose, stillPose, livePose } from './bot3d-pose.js';
+import { bots3, seen3 } from './registry.js';
+
+export class Bot3D {
+  constructor(el, name, color, mood, frozen) {
+    this.el = el; this.name = SHAPES3D[name] ? name : 'round'; this.sh = SHAPES3D[this.name]; this.color = color;
+    this.reduced = !!(still && still.matches);
+    this.quiet = !!frozen || this.reduced; // drawn once; moves only under the pointer (never, with reduced motion)
+    this.drawnOnce = false; this.dirty = true; this.settled = true; this.pointerOver = false; this.hovered = false;
+    this.scene = new THREE.Scene();
+    this.cam = camera3(this.sh);
+    this.halo = halo3(this.color);
+    this.scene.add(this.halo);
+    this.rig = new THREE.Group(); this.scene.add(this.rig);
+    const seg = el.offsetWidth > 90 ? 128 : 64;
+    this.body = new THREE.Mesh(bodyGeometry3(this.name, seg), bodyMaterial3(this.color)); this.rig.add(this.body);
+    this.eyes = eyes3(this.sh);
+    this.eyes.forEach((eye) => this.rig.add(eye));
+    Object.assign(this, mouths3(this.sh));
+    this.rig.add(this.grin, this.smile, this.sleepy);
+    this.yaw = 0; this.pitch = 0; this.ty = 0; this.tp = 0; this.nextLook = 0; this.nextBlink = 1 + Math.random() * 3; this.blinkAt = -1;
+    this.phase = Math.random() * 10; this.setMood(mood);
+    this.mountCanvas(el);
+  }
+  /** Its own little canvas in the element, the element's observer and its pointer. */
+  mountCanvas(el) {
+    this.cv = el.querySelector('canvas.botcv');
+    if (!this.cv) { this.cv = document.createElement('canvas'); this.cv.className = 'botcv'; el.append(this.cv); }
+    this.ctx = this.cv.getContext('2d');
+    this.visible = true; el.bot3d = this; if (seen3) seen3.observe(el); this.id = Bot3D.n = (Bot3D.n || 0) + 1;
+    this.onEnter = () => { this.pointerOver = true; };
+    this.onLeave = () => { this.pointerOver = false; };
+    el.addEventListener('pointerenter', this.onEnter);
+    el.addEventListener('pointerleave', this.onLeave);
+  }
+  setMood(m) { this.mood = m; this.grin.visible = m === 'work'; this.smile.visible = m === 'idle' || m === 'watch'; this.sleepy.visible = m === 'sleep'; this.eyes.forEach((x) => (x.visible = m !== 'sleep')); this.dirty = true; }
+  update(t, dt, pointer) {
+    const r = this.el.getBoundingClientRect();
+    if (FREEZE) { frozenPose(this); return r; }
+    const near = !this.reduced && pointer && pointer.x >= r.left && pointer.x <= r.right && pointer.y >= r.top && pointer.y <= r.bottom; // only the bot under the pointer
+    this.hovered = !!near;
+    if (this.quiet && !near) stillPose(this, dt);
+    else livePose(this, t, dt, pointer, near, r);
+    return r;
+  }
+  dispose() {
+    bots3.delete(this);
+    if (seen3) seen3.unobserve(this.el);
+    this.el.removeEventListener('pointerenter', this.onEnter);
+    this.el.removeEventListener('pointerleave', this.onLeave);
+    if (this.el.bot3d === this) this.el.bot3d = null;
+    this.body.material.dispose(); this.halo.material.dispose();
+    for (const g of [this.grin, this.sleepy]) g.children.forEach((m) => m.geometry.dispose());
+    this.smile.geometry.dispose();
+  }
+}
