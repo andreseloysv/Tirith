@@ -305,3 +305,31 @@ no turn. At stop the bot is handed, in one turn (trigger `teach`), the steps wit
 they follow and the skill template (`factory/skill.md`): it writes the skill with `draft: true` in its header and
 asks 3 to 5 questions in its chat (decision rules, failures, approvals). No bot uses a draft until the owner
 activates it in the Library (factory/prompts/bot.md says so; «Activate» takes the line out).
+
+**Rehearsal.** The bot then rehearses the draft in the owner's Edge through the same extension, in a tab of its own
+(factory/prompts/bot.md: it follows the draft's steps and stops before any step its skill lists under «Qué requiere
+aprobación», or that sends, buys, deletes or publishes, and says in its chat where it stopped; the `unapproved` evals
+judge a `tirith teach do` step like any other action). From its session (`TIRITH_PROJECT` is its conversation):
+
+- `tirith teach rehearse "<skill>"` → `POST /api/teach/<id>/rehearse` `{skill}`: a new rehearsal (the one before
+  stops); a line in its chat says until when. `tirith teach stop` → `POST /api/teach/<id>/rehearse/stop`.
+- `tirith teach do open "<url>"`, `do click "<selector or text>"`, `do type "<field>" "<value>"` →
+  `POST /api/teach/<id>/do` `{kind, target, value}`: the daemon holds the step (one at a time per bot, `teach/relay.rs`)
+  until the extension takes it, waits up to 40 s for its answer, keeps the step and answers with the result and the
+  path of its screenshot (`<bot folder>/rehearsals/<time>.jpg`, where the bot can look at it). 409 with no rehearsal
+  on, 410 once its 10 minutes are over, 504 when the extension does not answer.
+- The extension, with the bot's token (401 without it): `GET /api/teach/<id>/next` is its long poll (20 s; `{on,
+  until, cmd}`, `on` false once the rehearsal is over) and `POST /api/teach/<id>/done` `{id, ok, result, shot}` its
+  answer, the screenshot a data URL from `chrome.tabs.captureVisibleTab` (16 MB at most). Its worker
+  (`tools/teach/rehearse.js`) polls while a rehearsal is on, waking on its 30 s alarm, opens the page in the
+  rehearsal's tab, and `act.js` clicks (a selector, else the shown element with that text) or types (a selector, else
+  the field with that label, placeholder or name) there, under the visible notice «Tirith está ensayando» until the
+  rehearsal ends.
+- The calls that start, stop or send steps, and the screenshots (`GET /api/teach/<id>/shot/<file>`), are refused to
+  the extension's origin (403). Rehearsals live in kv `rehearse:<bot>` (the last 5: `skill`, `since`, `on`, `steps`
+  with `n`, `kind`, `target`, `value` (a secret field's masked), `ok`, `result`, `shot`), and `GET /api/teach/<id>`
+  gives them as `rehearsals`.
+
+The tab «Enseñar» shows each rehearsal with its screenshots in order and two buttons: «Aprobar» →
+`POST /api/teach/<id>/approve` `{skill}` takes `draft: true` out of the skill's header (400 when it is no draft), so
+the bot uses it from then on, and says so in its chat; «Crear rutina» opens the routine form with the task written.
