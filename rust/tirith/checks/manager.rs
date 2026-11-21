@@ -36,6 +36,54 @@ fn judged_reads_a_label_or_a_score_and_one_line_why() {
     assert_eq!(super::judged("").0, "");
 }
 
+#[tokio::test]
+async fn bot_routes_from_the_page() {
+    let home = std::env::temp_dir().join(format!("tirith-bot-routes-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&home);
+    std::fs::create_dir_all(&home).unwrap();
+    let app = crate::app::App::open_at(home.clone());
+    // The closed list of events the card offers (from /api/models): lane.failed is in it, schedule (the routines) is not.
+    let events = crate::models::state(&app)["events"].clone();
+    assert!(events.as_array().is_some_and(|es| es.iter().any(|e| e == "lane.failed") && es.iter().all(|e| e != "schedule")), "the page's events: {events}");
+    // A new bot from its card on the page (POST /api/bots): a chat session of its own, read-only, hearing lane.failed as a note.
+    let card = |routes: serde_json::Value| serde_json::json!({"name": "Avisos", "shape": "drop", "color": "#22d3ee", "session": "chat", "access": "read", "routes": routes});
+    let bot = crate::bots::save(&app, card(serde_json::json!([{"on": "lane.failed", "mode": "note", "chat": false, "phone": false}]))).unwrap();
+    let (id, key) = (bot["id"].as_str().unwrap().to_string(), format!("bot-{}", bot["id"].as_str().unwrap()));
+    // Saved in ~/.tirith/config.toml (by toml_edit): its role with its session and access, and its route.
+    let text = std::fs::read_to_string(home.join("config.toml")).unwrap();
+    assert!(text.contains(&format!("[roles.{key}]")) && text.contains("session = \"chat\"") && text.contains("access = \"read\""), "its role:\n{text}");
+    assert!(text.contains("on = \"lane.failed\"") && text.contains(&format!("to = \"{key}\"")) && text.contains("mode = \"note\""), "its route:\n{text}");
+    // And read back as the page sees it, over the factory.
+    let shown = crate::bots::all(&app).into_iter().find(|b| b["key"] == key.as_str()).expect("the bot, as the page sees it");
+    assert_eq!((shown["session"].as_str(), shown["access"].as_str(), shown["routes"][0]["on"].as_str(), shown["routes"][0]["mode"].as_str()), (Some("chat"), Some("read"), Some("lane.failed"), Some("note")));
+    let f = &app.cfg().factory;
+    assert_eq!((f.role::<String>(&key, "session").as_deref(), f.role::<String>(&key, "access").as_deref()), (Some("chat"), Some("read")));
+    assert!(f.routes_on("lane.failed").iter().any(|r| r.0 == key && r.1 == "note"), "the factory routes lane.failed to it");
+    // The closed list is closed: an unnamed event, schedule (its routines) and a lane session are refused by the API, and nothing is written.
+    for bad in [serde_json::json!([{"on": "no.such.event", "mode": "turn"}]), serde_json::json!([{"on": "schedule", "mode": "turn"}]), serde_json::json!([{"on": "lane.failed", "mode": "shout"}])] {
+        let mut b = card(bad);
+        b["id"] = serde_json::json!(id);
+        assert!(crate::bots::save(&app, b).is_err());
+    }
+    let mut b = card(serde_json::json!([]));
+    (b["id"], b["session"]) = (serde_json::json!(id.clone()), serde_json::json!("lane"));
+    assert!(crate::bots::save(&app, b).is_err(), "a bot's session is chat or turn");
+    assert_eq!(std::fs::read_to_string(home.join("config.toml")).unwrap(), text, "a refused card changes nothing");
+    // It receives the event it hears (a note handed to its conversation for its next turn), and not one it does not.
+    super::emit_event(&app, "some-project", "lane.failed", "lane x failed: no commits", None);
+    super::emit_event(&app, "some-project", "main.red", "main is red", None);
+    assert_eq!(super::talk(&key, |t| t.notes.clone()), ["lane x failed: no commits"], "the bot received lane.failed, by its page route alone");
+    // Changed from the page again, its routes are replaced, not added beside: it hears main.red now, lane.failed no longer.
+    let mut b = card(serde_json::json!([{"on": "main.red", "mode": "note", "chat": false, "phone": true}]));
+    b["id"] = serde_json::json!(id);
+    crate::bots::save(&app, b).unwrap();
+    assert!(app.cfg().factory.routes_on("lane.failed").iter().all(|r| r.0 != key), "the old route is gone from the factory it runs with");
+    super::emit_event(&app, "some-project", "lane.failed", "lane y failed", None);
+    super::emit_event(&app, "some-project", "main.red", "main is red again", None);
+    assert_eq!(super::talk(&key, |t| t.notes.clone()), ["lane x failed: no commits", "main is red again"]);
+    let _ = std::fs::remove_dir_all(&home);
+}
+
 #[test]
 fn card_id_of_reads_the_card_an_event_line_names() {
     assert_eq!(super::card_id_of("Card o12 closed by the manager: ya no hace falta").as_deref(), Some("o12"));

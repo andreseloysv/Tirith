@@ -35,7 +35,8 @@ Like Terraform: the factory is the code, config.toml its variables.
   (`[models.<role>]`, `[lanes]`, `[merge]`, `[ceo]`, ...) are read in memory under the new names (`Config::load`); the
   file itself is not rewritten at start, since `toml::to_string` would drop the owner's comments and reorder its
   blocks. The page writes that file with `toml_edit`, keeping its comments (the bots' roles and schedule routes,
-  step 6); yesterday's sections stay as they are in the file and are read under the new names.
+  step 6; and, from each bot's card, its routes, its `session` and its `access`); yesterday's sections stay as they
+  are in the file and are read under the new names.
 
 ## The file
 
@@ -133,8 +134,8 @@ A bot, in config.toml:
 The factory's own system bots — the CEO (`ceo`, name CEO), the judge (`judge`, name Judge, `show = false`) and the
 manager of no project (`manager-general`, name Manager) — are `own` roles of `factory/factory.toml` with a `name`, a
 `face` and `show`, exactly like the owner's bots below. The left bar paints every `own` role with `show = true`; on the
-page a system bot is seen and edited like any of the owner's bots, and what the owner changes of it (its name, face and
-show) is saved as a layer in `~/.tirith/config.toml` over its factory role. Every bot has its folder in
+page a system bot is seen and edited like any of the owner's bots, and what the owner changes of it (its name, face,
+show, routes, `session` and `access`) is saved as a layer in `~/.tirith/config.toml` over its factory role. Every bot has its folder in
 `~/.tirith/manager/<key>`, its `memory.md` and its skills. The conversation of no project is manager-general's (its
 chat rows, its phone room and its sessions moved there at start, history intact), and the CEO's reviews stand in the
 CEO's own conversation. A list of renames (workers → worker, reviewer and improver → ceo, lead → manager-general)
@@ -148,6 +149,8 @@ scope = "own"
 name = "Noticias"
 face = { shape = "drop", color = "#22d3ee" }
 prompt = ["prompts/bot.md"]
+session = "chat"
+access = "read"
 
 [[routes]]
 on = "schedule"
@@ -155,7 +158,28 @@ days = "weekdays"
 at = "08:00"
 to = "bot-1a2b3c"
 task = "Lo nuevo de mis proyectos, en cinco líneas."
+
+[[routes]]
+on = "lane.failed"
+to = "bot-1a2b3c"
+mode = "note"
+phone = false
 ```
+
+Any bot enters the factory from the page: what makes a bot a CEO or a judge is only its configuration — its
+`[[routes]]` (which events it hears, as a `turn` or a `note`, with a chat line and on the phones or not), its
+`session` and its `access`. Each bot's card on the page, a system bot's exactly like one of the owner's, shows that
+configuration and changes it: its routes are chosen from the closed list of events below (but `schedule`: its routines
+are its schedule routes, edited under Routines), its session is `chat` or `turn`, and its access is read-only or
+writing. The card is saved in `~/.tirith/config.toml` with `toml_edit`, as above — an owner's bot as its role and its
+routes, a system bot as a layer over its factory role — and takes effect on the reload, with no restart. Routes
+written in config.toml to a role replace the factory's routes to that role, as a set (so the page can also take a
+factory route away from a bot, the CEO's included); `schedule` routes stand beside them, as a bot's routines always
+have. An event outside the closed list, a mode that is neither `turn` nor `note`, a session that is neither `chat`
+nor `turn` and an access that is neither read nor write are refused by the card's API and nothing is written — and
+the strict factory loader remains the check of every key behind it. The `bot_routes_from_the_page` test gives a new
+bot the `lane.failed` route through that API and checks that it receives the event, and that changing its routes
+replaces the old one.
 
 ## Events and routes
 

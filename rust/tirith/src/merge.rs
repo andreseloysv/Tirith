@@ -407,9 +407,7 @@ async fn main_check(app: &Shared, project: &Project, slot: &Path, sha: &str, sta
     let ok = reset(slot, sha).await.is_ok() && run_stage(app, &pipe, slot, &stage.name, &stage.run).await.is_ok();
     close_pipeline(app, &pipe, if ok { "passed" } else { "failed" });
     MAIN_OK.lock().unwrap().insert(key, ok);
-    if ok {
-        clear_red(app, &project.id)
-    }
+    let _ = ok.then(|| clear_red(app, &project.id));
     ok
 }
 

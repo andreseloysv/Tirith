@@ -56,9 +56,7 @@ pub fn autopilot_on(app: &Shared, project: &str) -> bool {
 pub(crate) fn free_gb(dir: &Path) -> f64 {
     let Ok(c) = std::ffi::CString::new(dir.as_os_str().as_bytes()) else { return f64::MAX };
     let mut s: libc::statvfs = unsafe { std::mem::zeroed() };
-    if unsafe { libc::statvfs(c.as_ptr(), &mut s) } != 0 {
-        return f64::MAX;
-    }
+    let Some(()) = (unsafe { libc::statvfs(c.as_ptr(), &mut s) } == 0).then_some(()) else { return f64::MAX };
     s.f_bavail as f64 * s.f_frsize as f64 / 1e9
 }
 
@@ -200,9 +198,7 @@ fn next_item(app: &Shared, lanes: &[Lane], rr: &mut usize, ok: &mut dyn FnMut(&P
 fn quiet_s(seen: &mut HashMap<String, (String, u64)>, id: &str, tail: &str, log_age: u64, now: u64) -> u64 {
     let last = tail.lines().rev().find(|l| !l.contains("\"api_retry\"")).unwrap_or("");
     let e = seen.entry(id.to_string()).or_insert((last.to_string(), now.saturating_sub(log_age)));
-    if e.0 != last {
-        *e = (last.to_string(), now);
-    }
+    let _ = (e.0 != last).then(|| *e = (last.to_string(), now));
     now.saturating_sub(e.1)
 }
 
@@ -531,14 +527,10 @@ pub fn answer(app: &Shared, id: &str, text: &str, who: &str) -> Result<Lane, Str
     let lane = app.lane(id).ok_or(format!("no lane '{id}'"))?;
     (lane.status == "waiting").then_some(()).ok_or_else(|| format!("lane {id} is {}, not waiting for an answer", lane.status))?;
     let live = lane.pid.is_some_and(alive);
-    if live {
-        tell(id, &format!("Answer from {who}: {text}"));
-    }
+    let _ = live.then(|| tell(id, &format!("Answer from {who}: {text}")));
     let lane = app.update_lane(id, |l| {
         l.resume = if l.session.is_empty() { format!("You asked the manager: {}\nAnswer from {who}: {text}", l.question) } else { format!("Answer from {who}: {text}") };
-        if !live {
-            l.status = "queued".into();
-        }
+        let _ = (!live).then(|| l.status = "queued".into());
     });
     app.sched_wake.notify_one();
     lane.ok_or("lane vanished".into())
