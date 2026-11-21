@@ -1,0 +1,60 @@
+// How one 3D bot (bot3d.js) moves each frame: frozen for still pictures, a still face easing back to front off
+// the pointer, or alive — turned whole towards the pointer over it, else floating, breathing, looking around and
+// blinking.
+import * as THREE from '../../../../vendor/three/three.module.min.js';
+import { FREEZE } from './config.js';
+
+/** The rest pose: upright, its own size, the halo at rest and the eyes open. */
+function rest(b) {
+  b.rig.position.y = 0; b.rig.scale.set(1, 1, 1);
+  b.halo.material.uniforms.amount.value = 0.82;
+  for (const eye of b.eyes) eye.scale.set(...eye.userData.s);
+}
+
+/** No motion, no blink, the given angle: the same picture every time. */
+export function frozenPose(b) {
+  if (FREEZE.mood && b.mood !== FREEZE.mood) b.setMood(FREEZE.mood);
+  b.rig.rotation.set(FREEZE.pitch, FREEZE.yaw, 0);
+  rest(b);
+}
+
+/** A still face off the pointer: ease back to front and hold the pose. */
+export function stillPose(b, dt) {
+  const easeBack = Math.min(1, dt * 3.5);
+  b.yaw += (0 - b.yaw) * easeBack; b.pitch += (0 - b.pitch) * easeBack;
+  b.settled = Math.abs(b.yaw) < 0.002 && Math.abs(b.pitch) < 0.002;
+  if (b.settled) { b.yaw = 0; b.pitch = 0; }
+  b.rig.rotation.set(b.pitch, b.yaw, 0);
+  rest(b);
+}
+
+/** Where it wants to look: towards the pointer over it, or now and then somewhere of its own. */
+function aim(b, t, pointer, near, r) {
+  const lim = b.mood === 'sleep' ? 0.3 : 1;
+  if (near) { // it turns, all of it, towards the pointer
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    b.ty = THREE.MathUtils.clamp((pointer.x - cx) / (r.width / 2), -1, 1) * 0.62 * lim;
+    b.tp = THREE.MathUtils.clamp((pointer.y - cy) / (r.height / 2), -1, 1) * 0.42 * lim;
+    b.nextLook = t + 0.8;
+  } else if (t > b.nextLook) { // on its own: it looks around now and then
+    const busy = b.mood === 'work';
+    b.ty = (Math.random() * 2 - 1) * (busy ? 0.45 : 0.32) * lim; b.tp = (Math.random() * 2 - 1) * 0.18 * lim;
+    b.nextLook = t + (busy ? 0.6 + Math.random() : 1.6 + Math.random() * 2.6);
+  }
+}
+
+export function livePose(b, t, dt, pointer, near, r) {
+  b.settled = false;
+  aim(b, t, pointer, near, r);
+  const easeAmt = Math.min(1, dt * (near ? 9 : 3.5));
+  b.yaw += (b.ty - b.yaw) * easeAmt; b.pitch += (b.tp - b.pitch) * easeAmt;
+  const sp = b.mood === 'work' ? 2.2 : b.mood === 'sleep' ? 0.45 : 1, ph = b.phase + t * sp;
+  b.rig.rotation.set(b.pitch + 0.04 * Math.sin(ph * 0.9), b.yaw, 0.05 * Math.sin(ph * 0.63));
+  b.rig.position.y = 0.05 * Math.sin(ph * 1.1);
+  const br = 1 + 0.025 * Math.sin(ph * 1.7); b.rig.scale.set(2 - br, br, 1);
+  b.halo.material.uniforms.amount.value = 0.82 + 0.2 * Math.sin(ph * (b.mood === 'work' ? 2.4 : 1.2));
+  // blinks
+  if (t > b.nextBlink) { b.blinkAt = t; b.nextBlink = t + 2.2 + Math.random() * 4.5; }
+  const k = b.blinkAt < 0 ? 1 : Math.min(1, Math.abs(t - b.blinkAt - 0.08) / 0.08);
+  for (const eye of b.eyes) eye.scale.set(eye.userData.s[0], eye.userData.s[1] * Math.max(0.08, k), eye.userData.s[2]);
+}

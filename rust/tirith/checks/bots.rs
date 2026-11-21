@@ -7,15 +7,21 @@ fn at(y: i32, m: u32, d: u32, h: u32, min: u32) -> chrono::DateTime<Local> {
 
 #[test]
 fn days_from_words_and_lists() {
-    assert_eq!(super::days(&json!("weekdays")), Some(vec![1, 2, 3, 4, 5]));
     assert_eq!(
-        super::days(&json!("daily")),
+        super::schedule::days(&json!("weekdays")),
+        Some(vec![1, 2, 3, 4, 5])
+    );
+    assert_eq!(
+        super::schedule::days(&json!("daily")),
         Some(vec![1, 2, 3, 4, 5, 6, 7])
     );
-    assert_eq!(super::days(&json!("weekends")), Some(vec![6, 7]));
-    assert_eq!(super::days(&json!("Mon, wed,FRI")), Some(vec![1, 3, 5]));
-    assert_eq!(super::days(&json!([2, 9, 4])), Some(vec![2, 4]));
-    assert_eq!(super::days(&json!(null)), None);
+    assert_eq!(super::schedule::days(&json!("weekends")), Some(vec![6, 7]));
+    assert_eq!(
+        super::schedule::days(&json!("Mon, wed,FRI")),
+        Some(vec![1, 3, 5])
+    );
+    assert_eq!(super::schedule::days(&json!([2, 9, 4])), Some(vec![2, 4]));
+    assert_eq!(super::schedule::days(&json!(null)), None);
 }
 
 #[test]
@@ -73,7 +79,7 @@ fn a_routine_is_due_once_a_day_after_its_time() {
 fn bots_live_in_config_as_own_roles_with_schedule_routes() {
     // A bot in the page's shape, with a switched-off routine: written into a config.toml with the owner's comments.
     let bots = json!([{"id": "abc123", "name": "Noticias", "shape": "drop", "color": "#22d3ee", "routines": [{"id": "r111111", "title": "News", "prompt": "Summarise the news", "days": [1, 2, 3, 4, 5], "at": "08:00", "on": false}]}]);
-    let text = super::written(
+    let text = super::written::written(
         "# the owner's own comment\n[server]\nport = 7799 # keep this too\n",
         bots.as_array().unwrap(),
     )
@@ -97,7 +103,7 @@ fn bots_live_in_config_as_own_roles_with_schedule_routes() {
     );
     // Read back as `all` does, with the routine's last run from its stamp.
     let read = |text: &str| {
-        super::bots_of(
+        super::list::bots_of(
             &serde_json::to_value(&text.parse::<toml::Table>().unwrap()).unwrap(),
             &|id, rid| {
                 if (id, rid) == ("abc123", "r111111") {
@@ -179,7 +185,7 @@ fn bots_live_in_config_as_own_roles_with_schedule_routes() {
     // Written again with a rename and the routine on: still one role and one route, the comments still there; written with no bots, both go.
     let mut renamed = bots.clone();
     (renamed[0]["name"], renamed[0]["routines"][0]["on"]) = (json!("Renamed"), json!(true));
-    let text = super::written(&text, &renamed).unwrap();
+    let text = super::written::written(&text, &renamed).unwrap();
     assert_eq!(
         (
             text.matches("[roles.bot-abc123]").count(),
@@ -193,7 +199,7 @@ fn bots_live_in_config_as_own_roles_with_schedule_routes() {
             && read(&text)[0]["name"] == "Renamed"
             && read(&text)[0]["routines"][0]["on"] == true
     );
-    let text = super::written(&text, &[]).unwrap();
+    let text = super::written::written(&text, &[]).unwrap();
     assert!(
         read(&text).is_empty()
             && !text.contains("bot-abc123")
@@ -231,7 +237,10 @@ fn bots_write_only_in_their_own_folders_and_the_shared_skills() {
 #[test]
 fn skills_list_the_folders_with_a_skill_and_the_shared_links_only_when_asked() {
     let root = std::env::temp_dir().join(format!("tirith-skills-{}", std::process::id()));
-    let (own, common) = (root.join("bot").join(super::SKILLS), root.join("shared"));
+    let (own, common) = (
+        root.join("bot").join(super::folder::SKILLS),
+        root.join("shared"),
+    );
     for (dir, text) in [(own.join("jobs"), "own"), (common.join("report"), "shared")] {
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("SKILL.md"), text).unwrap();
@@ -239,14 +248,14 @@ fn skills_list_the_folders_with_a_skill_and_the_shared_links_only_when_asked() {
     std::fs::create_dir_all(own.join("half-written")).unwrap(); // no SKILL.md: not a skill
     std::os::unix::fs::symlink(common.join("report"), own.join("report")).unwrap();
     let names = |links| {
-        super::skills(&own, links)
+        super::folder::skills(&own, links)
             .into_iter()
             .map(|s| s.0)
             .collect::<Vec<_>>()
     };
     assert_eq!(names(false), ["jobs"]);
     assert_eq!(names(true), ["jobs", "report"]);
-    assert_eq!(super::skills(&own, true)[1].1, "shared");
+    assert_eq!(super::folder::skills(&own, true)[1].1, "shared");
     let _ = std::fs::remove_dir_all(&root);
 }
 
@@ -255,7 +264,7 @@ fn bots_written_at_the_end() {
     // A config.toml with several [[projects]], a bot's role, face and route between them, and an empty [roles] header at the end.
     let old = "# top comment\n[server]\nport = 7799\n\n[[projects]]\nname = \"a\" # keep\n\n[roles.bot-abc123]\nextends = \"manager\"\nscope = \"own\"\n\n[roles.bot-abc123.face]\nshape = \"drop\"\n\n[[routes]]\non = \"schedule\"\nto = \"bot-abc123\"\n\n[[projects]]\nname = \"b\"\n\n[roles]\n";
     let bots = json!([{"id": "abc123", "name": "N", "shape": "drop", "color": "#22d3ee", "routines": [{"id": "r1", "title": "T", "prompt": "P", "days": [1], "at": "08:00", "on": true}]}]);
-    let text = super::written(old, bots.as_array().unwrap()).unwrap();
+    let text = super::written::written(old, bots.as_array().unwrap()).unwrap();
     let at = |s: &str| {
         text.find(s)
             .unwrap_or_else(|| panic!("{s} missing:\n{text}"))
@@ -280,11 +289,13 @@ fn bots_written_at_the_end() {
         "comments stay:\n{text}"
     );
     assert_eq!(
-        super::written(&text, bots.as_array().unwrap()).unwrap(),
+        super::written::written(&text, bots.as_array().unwrap()).unwrap(),
         text,
         "writing again changes nothing"
     );
-    assert!(!super::written(&text, &[]).unwrap().contains("bot-abc123"));
+    assert!(!super::written::written(&text, &[])
+        .unwrap()
+        .contains("bot-abc123"));
 }
 
 #[test]
@@ -296,7 +307,7 @@ fn a_system_bot_change_is_a_layer_in_config() {
         {"id": "judge", "key": "judge", "system": true, "name": "Judge", "shape": "hex", "color": "#8c8c8c", "show": false, "routines": []},
         {"id": "abc123", "name": "N", "shape": "drop", "color": "#22d3ee", "routines": []}
     ]);
-    let text = super::written(old, bots.as_array().unwrap()).unwrap();
+    let text = super::written::written(old, bots.as_array().unwrap()).unwrap();
     assert!(
         text.contains("model = \"keep-me\" # and this") && text.contains("# keep"),
         "the CEO's other config keys and comments stay:\n{text}"
@@ -377,7 +388,8 @@ fn a_system_bot_change_is_a_layer_in_config() {
         Some("star")
     );
     // With no [roles] in the file at all, the layer is a plain table at the end (an inline `roles = {…}` would make a later [roles.bot-…] header unparseable).
-    let text = super::written("[server]\nport = 7799\n", &bots.as_array().unwrap()[..1]).unwrap();
+    let text =
+        super::written::written("[server]\nport = 7799\n", &bots.as_array().unwrap()[..1]).unwrap();
     assert!(
         text.contains("[roles.ceo]")
             && !text.contains("roles = {")
