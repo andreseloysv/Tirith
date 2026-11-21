@@ -66,7 +66,9 @@ end with code, and puts a model in the loop only where judgment is needed.
   its plan good and asks you only for credentials, payments, personal accounts, physical devices or real decisions
   (`tirith ask-owner --kind …`). A merge shows in the project's chat without costing a manager turn.
 - **Health and the reviewer.** Metrics by code (items merged per day, time to merge, first-try rate, idle projects,
-  stuck lanes, red main). A red metric goes to the lead; still red 15 minutes later, the reviewer role runs one
+  stuck lanes, red main, and the owner's measures: interruptions per merged item — phone messages of turns the
+  owner did not start, notices routed to the phones and cards, over 24 h — and needless cards, closed without an
+  answer, each with its target in the factory). A red metric goes to the lead; still red 15 minutes later, the reviewer role runs one
   fresh read-only turn that says what is wrong and what to do. No model runs while everything is green.
 - **Rooms on agentsmessenger.com.** Work from your phone, end-to-end encrypted, with nothing to install: scan the
   QR on the Rooms page (it works once and for fifteen minutes, and the page shows the next one by itself)
