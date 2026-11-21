@@ -117,6 +117,37 @@ fn lane_card_becomes_project_card() {
     let _ = std::fs::remove_dir_all(&home);
 }
 
+#[tokio::test]
+async fn agent_say_is_not_the_owner() {
+    let home = std::env::temp_dir().join(format!("tirith-agent-say-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&home);
+    std::fs::create_dir_all(&home).unwrap();
+    let app = crate::app::App::open_at(home.clone());
+    // A live session's stdin, so what the manager is handed can be read here instead of starting an agent.
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+    super::talk("manager-general", |t| (t.tx, t.alive) = (Some(tx), true));
+    let handed = |rx: &mut tokio::sync::mpsc::UnboundedReceiver<String>| std::iter::from_fn(|| rx.try_recv().ok()).collect::<Vec<_>>().join("\n");
+    // The Manager's note from inside its session (its role set), even one shaped like the owner's /model: the manager gets it marked as the agent's, and nothing is the owner's.
+    super::say(&app, "", "/model manager other", "manager").unwrap();
+    let got = handed(&mut rx);
+    assert!(got.contains("[agent manager] /model manager other"), "handed to the manager as the agent's, not run as a model command: {got}");
+    let chats = app.query("SELECT role FROM chat WHERE text = '/model manager other'", [], |r| r.get::<_, String>(0));
+    assert_eq!(chats, ["manager"], "in the chat under its role, not as the owner");
+    let owners = app.query("SELECT COUNT(*) FROM events WHERE kind = 'owner.message'", [], |r| r.get::<_, i64>(0));
+    assert_eq!(owners, [0], "no owner.message, so no owner-mood judging and no satisfaction from it");
+    // A lane's say is under its lane's name the same way.
+    super::say(&app, "", "ya terminé la parte del login", "lane-login-1").unwrap();
+    assert!(handed(&mut rx).contains("[agent lane-login-1] ya terminé la parte del login"));
+    assert_eq!(app.query("SELECT role FROM chat WHERE text = 'ya terminé la parte del login'", [], |r| r.get::<_, String>(0)), ["lane-login-1"]);
+    // Without a role or lane it still is the owner: an owner.message and an owner chat row.
+    super::say(&app, "", "hola, soy el dueño", "").unwrap();
+    assert!(handed(&mut rx).contains("hola, soy el dueño"));
+    assert_eq!(app.query("SELECT role FROM chat WHERE text = 'hola, soy el dueño'", [], |r| r.get::<_, String>(0)), ["owner"]);
+    assert_eq!(app.query("SELECT COUNT(*) FROM events WHERE kind = 'owner.message'", [], |r| r.get::<_, i64>(0)), [1]);
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}
+
 #[test]
 fn card_id_of_reads_the_card_an_event_line_names() {
     assert_eq!(super::card_id_of("Card o12 closed by the manager: ya no hace falta").as_deref(), Some("o12"));

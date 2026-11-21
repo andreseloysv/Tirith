@@ -31,6 +31,23 @@ async fn project_test_stages_serialized() {
     assert!(include_str!("merge.rs").contains("let _one_at_a_time = lock.lock().await;"));
 }
 #[test]
+fn merged_note_is_short() {
+    let long = format!("Fábrica 18, sin ruido repetido: {}", "el detalle entero del ítem, ".repeat(60));
+    assert!(long.chars().count() > 1700, "the whole item, as the note used to carry it");
+    let note = merged_note("tirith", "abc12345", &[&long]);
+    assert_eq!(note, "merged on tirith at abc12345: Fábrica 18, sin ruido repetido", "only up to the first ': '");
+    // Each cut: the first of ': ', ' (' and '. ' in the item, whichever comes first.
+    assert!(merged_note("p", "s", &["Arreglar el login (check: cargo test) y más"]).ends_with(": Arreglar el login"));
+    assert!(merged_note("p", "s", &["Subir la versión. Después avisar al dueño"]).ends_with(": Subir la versión"));
+    assert!(merged_note("p", "s", &["Con paréntesis (antes: que los dos puntos)"]).ends_with(": Con paréntesis"));
+    assert!(merged_note("p", "s", &["Sin cortes"]).ends_with(": Sin cortes"), "a short item without a cut stays whole");
+    // No cut in the first 120 chars: still 120 chars at most per item (chars, not bytes).
+    let note = merged_note("p", "s", &[&"á".repeat(300), "Otro: ítem"]);
+    let heads: Vec<&str> = note.split(": ").nth(1).unwrap().split("; ").collect();
+    assert_eq!(heads[0].chars().count(), 120, "{note}");
+    assert_eq!(heads[1], "Otro", "each item is cut on its own: {note}");
+}
+#[test]
 fn main_red_uses_latest_main() {
     let head = "0e89bb4aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     assert_eq!(red_stage_if_stale("test at d7fa7cd8", head), Some("test".into()));

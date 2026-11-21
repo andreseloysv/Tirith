@@ -8,9 +8,10 @@ use std::time::Duration;
 /// `flag("--name")`: the value after a `--name` argument.
 pub type Flag<'a> = &'a dyn Fn(&str) -> Option<String>;
 
-/// One request to the daemon; the body on 2xx, the daemon's message otherwise.
+/// One request to the daemon; the body on 2xx, the daemon's message otherwise. Inside a Tirith session it names its lane or role, like the hooks do, so the daemon knows an agent (not the owner) is speaking.
 pub fn call(method: &str, path: &str, body: Option<Value>) -> Result<String, String> {
-    call_with(method, path, body.map(|b| b.to_string()).unwrap_or_default(), &[], Duration::from_secs(30))
+    let who = [("X-Tirith-Lane", std::env::var("TIRITH_LANE").unwrap_or_default()), ("X-Tirith-Role", std::env::var("TIRITH_ROLE").unwrap_or_default())];
+    call_with(method, path, body.map(|b| b.to_string()).unwrap_or_default(), &who, Duration::from_secs(30))
 }
 pub fn call_with(method: &str, path: &str, body: String, headers: &[(&str, String)], timeout: Duration) -> Result<String, String> {
     let addr = SocketAddr::from(([127, 0, 0, 1], crate::config::Config::load_at(&crate::config::tirith_home()).port));
