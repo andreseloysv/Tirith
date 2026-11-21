@@ -45,12 +45,18 @@ Files:
 
 ## `bots/`
 
-Bots: agents of their own, factory roles with `scope = "own"` — the owner's in `~/.tirith/config.toml` (`[roles.bot-<id>]`, extending the manager) and the factory's system bots (`ceo`, `judge` with `show = false`, and `manager-general`, the manager of no project), which the page edits the same way, saving the change as a layer in config.toml. Each has a name, a face (shape and
+Bots: agents of their own, factory roles with `scope = "own"` — the owner's in `~/.tirith/config.toml` (`[roles.bot-<id>]`, extending the manager) and the factory's system bots (`ceo`, `coach`, `judge` with `show = false`, and `manager-general`, the manager of no project), which the page edits the same way, saving the change as a layer in config.toml. Each has a name, a face (shape and
 colour) and its own conversation (its key), run like a project's manager with its own room on the phones; the sidebar paints every `own` role with `show = true`. Routines are `[[routes]]` on `schedule`
 in that file (their last runs stay in kv as `routine:<id>:<routine>` stamps, not configuration): tasks a bot does by itself at a time of chosen weekdays (the machine's local
 time); the lanes scheduler's tick hands a due one to the bot once a day, and the bot makes them itself with `tirith routine add|remove|list`. The page writes config.toml
 with `toml_edit`, keeping its comments, and the bots that used to live in kv move there once, at daemon start. A bot learns in its folder (`<tirith home>/manager/<key>`): `memory.md`, which Tirith hands it as it is now at
 the start of every turn and routine, and skills in `.agents/skills/<name>/SKILL.md`, its own and the shared ones of `<tirith home>/bots/skills` (linked in before every turn).
+Both are git repositories (`bots/versioned.rs`): a bot's folder follows only its `memory.md` and its own skills — its `.gitignore`
+says so, and leaves out the links to the shared skills and its working files — and `<tirith home>/bots` (the shared
+`memory.md` and `skills/`) is another. Tirith commits, as Tirith, when a turn of the bot's own role in its own
+conversation ends having changed them (message «turn <id>», the turn's row id), and after each change from the Library
+(«library»); nothing changed, nothing is committed. So the `versions` of a turn (git blob hashes) are blobs of that
+history, and `git log` in a bot's folder says which memory and skills each run used.
 The bots' agent finds them natively: Muse reads `.agents/skills`, and the agent's own `.<command>/skills` is a link to the same folder. Agents may write in a bot's folder
 (never in its hidden folders, where agent settings live, except skills folders) and in the shared skills; the page's Library shows, corrects and deletes all of it.
 The shared memory, `<tirith home>/bots/memory.md` (what holds for every bot: the owner's name, time zone, language), is handed before the bot's own, as `[tirith] Shared memory.md as it is now: …`, and the
@@ -106,6 +112,7 @@ Files:
 - `schedule.rs`: When a routine runs: its days of the week, and whether it is due now.
 - `store.rs`: Keeping the bots: one change at a time, written into config.toml and reloaded.
 - `sweep.rs`: What goes out of config.toml before the bots are written again: their roles and routes, then the sections left empty.
+- `versioned.rs`: The bots' folders and `<home>/bots` as git repositories: only the memories and the own skills followed, a commit after each turn or Library change that changed them.
 - `written.rs`: The text of config.toml with the bots laid into it.
 
 ## `chat/`
@@ -364,7 +371,7 @@ Files:
 
 ## `metrics/`
 
-Health metrics and the CEO.
+Health metrics, and the passes of the turn roles (the CEO, the Coach).
 
 Every minute code computes the metrics from the daemon's own data (lanes, runs, plans, kv). The owner's measures
 come from the store too: `interruptions` counts, per item merged in 24 h, what reached the owner unasked — phone
@@ -398,10 +405,31 @@ satisfaction, interruptions or first try is reverted by the CEO's next pass, as 
 nothing in the factory needs the owner's yes, and a landed change applies when main moves (the reload above).
 While everything is green and the day's pass ran, no model is called.
 
+Running a turn role by its `schedule` route or by an event is the general mechanism, not a second CEO
+(`metrics/roles.rs`, `pass.rs`, `review.rs`): every turn role with a prompt runs its pass with the brief its
+`brief` key names — `ceo` (the default, the CEO's above) or `bots` (`bots_brief.rs`: why it runs, its own last pass,
+and per bot the numbers of `GET /api/bots/<id>/numbers`, its routines, its own skills with the sections of
+`factory/skill.md` they lack, the shared skills likewise, and the size of each memory) — within its own
+`max_per_day`, one pass of a role at a time, its trigger in `turns` (`schedule`, or `event:<name>`), its answer in
+its own conversation and its row in `ceo_reviews` with its `role` (the rows from before that column count as the
+CEO's; the page's reviews and the CEO's budget are the CEO's rows only). Its `schedule` route runs it when due (like
+the CEO's daily pass, its rows naming `daily`); an event routed to it as a turn with no `after_minutes` runs it at
+once (`manager/events.rs` hands it here: a turn role is never handed text in a conversation). Only a `ceo` brief's
+answer is told on as `review.done`. The Coach (`coach`, `factory/prompts/coach.md`, `brief = "bots"`) runs weekly
+(Mondays 09:00) and on `routine.worse`; until `tirith lab` exists it proposes one experiment in at most 3 lines and
+changes nothing, or answers «Sin novedad.». Its `writes = ["bots", "lab"]` confines it (`rules/confined.rs`): its
+edits land only in the bots' folders, `<home>/bots` and `<home>/lab`, never in a hidden folder there.
+
+`routine.worse` (`metrics/worse.rs`): every computation looks at each bot's routines with runs in `turns` (the bot's
+own role in its own conversation); one whose last 5 runs cost 30 % more than the 10 before (mean tokens, all four
+kinds, or mean dollars) or of which 2 failed is emitted once per episode — kv `routine_worse:<bot>:<routine>`, cleared
+when it no longer holds — with the bot, the routine and those numbers.
+
 Files:
 
 - `api.rs`: The metrics' clock and the page's API: the computation every minute, the last result and the reviews.
-- `book.rs`: What the metrics keep between computations: the last result the page gets, since when each project is idle, and whether a review runs.
+- `book.rs`: What the metrics keep between computations: the last result the page gets, since when each project is idle, and the turn roles whose pass runs now.
+- `bots_brief.rs`: The "bots" brief a pass reads (the Coach's): each bot's numbers, routines, skills with the sections they lack and memory sizes, and the role's own last pass.
 - `brief.rs`: The facts a CEO pass reads: red measures, measures and scores by factory version, last lanes, failing checks, plans, questions.
 - `cards.rs`: Needless cards: the share of the cards resolved in 24 h that were closed without an answer or judged decidable alone.
 - `compute.rs`: One computation of every measure, in the order the page shows them, from what one moment of the daemon holds.
@@ -413,12 +441,14 @@ Files:
 - `metric.rs`: One health measure: how it is built from the factory's description of its id, and the line a CEO pass reads.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `mood.rs`: Satisfaction from the owner-mood scores of the last 24 h, per owner message; judged from what the owner writes anyway, never asked.
-- `pass.rs`: When the CEO pass may run by itself: its daily budget, and its scheduled daily pass.
+- `pass.rs`: When a turn role's pass may run by itself: its daily budget, and its scheduled pass.
 - `plans.rs`: The plans as a CEO pass reads them: each project's steps with their open and done items, its autopilot and its main.
-- `review.rs`: The CEO pass: who reviews a long red stretch and when, the review turn itself, and the page's "CEO now".
-- `tick.rs`: One computation: episodes opened, fixed, noted and reviewed; the page gets the result.
+- `review.rs`: The pass of a turn role: who reviews a long red stretch and when, the pass turn itself with the brief its role names, and the page's "CEO now".
+- `roles.rs`: Any turn role's pass: the brief its `brief` key names, its `schedule` route and the events routed to it.
+- `tick.rs`: One computation: episodes opened, fixed, noted and reviewed, the other turn roles' scheduled passes and the routines gone worse; the page gets the result.
 - `trouble.rs`: What went wrong or waits: projects whose main is red, lanes failed in 24 h, questions open for the owner.
 - `unapproved.rs`: The `unapproved` measure: bots' turns of 24 h the eval says acted without an answered approval card.
+- `worse.rs`: A bot's routine gone worse (its last 5 runs 30 % dearer than the 10 before, or 2 failed): `routine.worse`, once per episode.
 - `work.rs`: The work there is and what of it reached main: the autopilot projects with and without startable items, and the lanes merged in 24 h.
 
 ## `models/`
@@ -603,6 +633,7 @@ Files:
 
 - `call.rs`: A normalized tool call as the rules read it.
 - `check.rs`: One tool call against every rule, in order: the first refusal wins.
+- `confined.rs`: A role confined by its `writes` key (the Coach): its edits land only in the bots' folders and the folders `writes` names.
 - `hooks.rs`: The rules about the turn itself: commit checks are never skipped, and a chat's turn never waits.
 - `lane.rs`: A lane's rules: it writes only in its own copy, never touches main and never starts agents.
 - `manifest.rs`: The rules a project's tirith.toml brings: its plan is written only by Tirith, and its own `[[rules]]`.
@@ -829,7 +860,7 @@ Files:
 - `quality.rs`: The judge's note on a routine's turn: what `routine.done` carries for `turn-quality`, and the score copied to the turn.
 - `react.rs`: The owner's 👍/👎 on a turn: by `POST /api/turns/<id>/reaction` or a message that is only 👍 or 👎.
 - `record.rs`: One turn while it runs: who runs it and why, and what its lines say (its usage, tools, skills and text).
-- `save.rs`: A turn ended: its row in `turns` (`waiting` while an approval card it opened is open), and for a bot its `turn.done` (or `routine.done`) event.
+- `save.rs`: A turn ended: its row in `turns` (`waiting` while an approval card it opened is open), for a bot its `turn.done` (or `routine.done`) event and the commit of what it changed in its folder and the shared one.
 - `signals.rs`: The quality signals on a turn's row: `reaction`, `corrected`, the checks and the cited notes.
 - `tools.rs`: The tool calls a line of any agent's output makes, the short line the chat shows for each, and the skills they read.
 - `usage.rs`: What a turn used, read from what its agent prints (Anthropic's `result`, Muse's `model_completed`, Codex's `turn.completed`).

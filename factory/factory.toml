@@ -97,6 +97,7 @@ session = "turn"
 scope = "own"
 access = "read"
 prompt = ["prompts/ceo.md"]
+brief = "ceo"
 max_per_day = 6
 runs_on = "local"
 show = true
@@ -104,6 +105,31 @@ show = true
 [roles.ceo.face]
 shape = "burst"
 color = "#f2a93b"
+
+# The Coach: a system bot that makes the bots better, one experiment at a
+# time. A turn role like the CEO, run by the same pass (rust/tirith/src/
+# metrics/): weekly by its schedule route and when a routine gets worse
+# (routine.worse), with the "bots" brief (each bot's numbers, routines,
+# skills with the sections they lack and memory sizes), its max_per_day and
+# its answer in its own conversation. It may write only in the bots'
+# folders and in the folders of Tirith's home `writes` names: <home>/bots
+# and <home>/lab (the hooks' rules refuse the rest).
+[roles.coach]
+name = "Coach"
+extends = "manager"
+session = "turn"
+scope = "own"
+access = "write"
+prompt = ["prompts/coach.md"]
+brief = "bots"
+writes = ["bots", "lab"]
+max_per_day = 3
+runs_on = "local"
+show = true
+
+[roles.coach.face]
+shape = "star"
+color = "#4fb86e"
 
 # Small text jobs on a cheap, fast model: the judge of the evals below. It
 # has no prompt of its own (each eval's rubric is its instructions), so code
@@ -258,6 +284,20 @@ to = "ceo"
 mode = "turn"
 days = [1, 2, 3, 4, 5, 6, 7]
 at = "07:00"
+
+# The Coach's weekly pass, Mondays at 09:00, and its pass when a routine of a
+# bot gets worse: the same mechanism as the CEO's, with its own brief.
+[[routes]]
+on = "schedule"
+to = "coach"
+mode = "turn"
+days = [1]
+at = "09:00"
+
+[[routes]]
+on = "routine.worse"
+to = "coach"
+mode = "turn"
 
 [[routes]]
 on = "factory.invalid"

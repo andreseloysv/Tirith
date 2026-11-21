@@ -36,6 +36,7 @@ pub(super) fn approve_skill(app: &Shared, key: &str, skill: &str) -> Result<(), 
     let text = std::fs::read_to_string(&file).map_err(|_| format!("no skill «{skill}»"))?;
     let out = activated(&text).ok_or(format!("«{skill}» is not a draft"))?;
     std::fs::write(&file, out).map_err(|e| format!("{}: {e}", file.display()))?;
+    crate::bots::versioned(app, key, "library"); // a change of its skills from the Library's side
     app.chat(
         "tirith",
         &format!("The owner approved «{skill}»: it is no longer a draft, use it from now on."),

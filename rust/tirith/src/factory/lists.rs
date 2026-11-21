@@ -19,7 +19,7 @@ pub(super) const MEASURES: [&str; 12] = [
 ];
 
 /// The closed list of events the code emits, `;`-joined like the moves in config.rs; a route on anything else never fires, so it is invalid. The page offers a bot's routes from this list (but `schedule` and `webhook`: a bot's routines are its schedule and webhook routes).
-pub(crate) const EVENTS: &str = "owner.message;room.message;lane.asked;lane.failed;lane.not_started;lane.long;merge.blocked;merge.landed;main.red;main.green;plan.empty;deploy.done;deploy.failed;metric.red;review.done;schedule;card.opened;card.answered;card.closed;factory.invalid;turn.done;routine.done;webhook";
+pub(crate) const EVENTS: &str = "owner.message;room.message;lane.asked;lane.failed;lane.not_started;lane.long;merge.blocked;merge.landed;main.red;main.green;plan.empty;deploy.done;deploy.failed;metric.red;review.done;schedule;card.opened;card.answered;card.closed;factory.invalid;turn.done;routine.done;routine.worse;webhook";
 
 /// True when `on` is one of the events the code emits.
 pub(super) fn is_event(on: &str) -> bool {

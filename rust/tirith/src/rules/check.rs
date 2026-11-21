@@ -1,5 +1,5 @@
 //! One tool call against every rule, in order: the first refusal wins.
-use super::{call::Call, hooks, lane, manifest, owned};
+use super::{call::Call, confined, hooks, lane, manifest, owned};
 use crate::app::{Lane, Shared};
 use crate::config::Project;
 use serde_json::Value;
@@ -16,7 +16,8 @@ pub fn check(
     let call = Call::new(tool, input);
     let first = hooks::skipped(&call)
         .or_else(|| hooks::waiting(&call, lane.is_some(), role))
-        .or_else(|| owned::guarded(app, &cfg, &call));
+        .or_else(|| confined::refused(app, &call, role))
+        .or_else(|| owned::guarded(app, &cfg, &call, role));
     if first.is_some() {
         return first;
     }

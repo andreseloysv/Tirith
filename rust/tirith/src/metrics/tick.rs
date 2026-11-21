@@ -1,4 +1,4 @@
-//! One computation: episodes opened, fixed, noted and reviewed; the page gets the result.
+//! One computation: episodes opened, fixed, noted and reviewed, the other turn roles' scheduled passes and the routines gone worse; the page gets the result.
 use super::api::payload;
 use super::book::BOOK;
 use super::compute::compute;
@@ -56,7 +56,9 @@ pub(super) fn tick(app: &Shared) {
     let _ = (!due.is_empty() && !ceo.is_empty() && budget).then(|| {
         let ids = due.iter().map(|d| d.0).collect::<Vec<_>>().join(",");
         let why = due.iter().map(|d| d.1.as_str()).collect::<Vec<_>>();
-        start_review(app, ceo, ids, why.join("\n"))
+        start_review(app, ceo.clone(), ids, why.join("\n"))
     });
+    super::roles::scheduled(app, &ceo, now);
+    super::worse::check(app);
     app.emit("metrics", payload(app));
 }

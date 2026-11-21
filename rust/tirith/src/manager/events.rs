@@ -21,7 +21,10 @@ pub fn emitted(app: &Shared, project: &str, on: &str, shown: &str, told: Option<
         app.chat("tirith", shown, here_p);
     }
     let mut heard: BTreeSet<String> = BTreeSet::new();
-    for (to, mode, _, phone, _) in routes {
+    for (to, mode, _, phone, after) in routes {
+        // A turn role heard as a turn runs its own pass now (the metrics run it, like the CEO's).
+        let _ = (mode == "turn" && after.is_none())
+            .then(|| crate::metrics::heard(app, &to, on, told.unwrap_or(shown)));
         let Some(dest) = dest_of(&app.cfg().factory, &to, on, here_p) else {
             continue;
         };

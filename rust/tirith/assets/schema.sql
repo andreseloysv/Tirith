@@ -22,8 +22,9 @@ CREATE TABLE IF NOT EXISTS owner_items (id TEXT PRIMARY KEY, at TEXT, kind TEXT,
 CREATE TABLE IF NOT EXISTS scores (id INTEGER PRIMARY KEY, at TEXT, event INTEGER, eval TEXT,
     label TEXT, score REAL, why TEXT, factory TEXT NOT NULL DEFAULT '', role_hash TEXT NOT NULL DEFAULT '');
 CREATE TABLE IF NOT EXISTS am_rooms (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+-- One row per pass of a turn role (the CEO, the Coach): its measures or trigger, its answer, its stamp and its role.
 CREATE TABLE IF NOT EXISTS ceo_reviews (id INTEGER PRIMARY KEY, at TEXT, metric TEXT, text TEXT,
-    factory TEXT NOT NULL DEFAULT '', role_hash TEXT NOT NULL DEFAULT '');
+    factory TEXT NOT NULL DEFAULT '', role_hash TEXT NOT NULL DEFAULT '', role TEXT NOT NULL DEFAULT '');
 CREATE TABLE IF NOT EXISTS net_blocks (rule TEXT PRIMARY KEY, at TEXT);
 -- One row per turn of a chat or turn role (the project managers, the bots, the CEO, the judge; `runs` is the
 -- pipelines'): its conversation, what started it (`trigger`: owner, room, schedule, run-now or event:<name>, and the

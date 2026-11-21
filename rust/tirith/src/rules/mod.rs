@@ -1,6 +1,7 @@
 //! Rules as code, checked in memory on every `PreToolUse`. A refusal says what to do instead.
 mod call;
 mod check;
+mod confined;
 mod hooks;
 mod lane;
 mod manifest;

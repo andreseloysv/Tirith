@@ -30,6 +30,8 @@ pub(super) const ROLE_KEYS: &[&str] = &[
     "face",
     "show",
     "chat_keep",
+    "brief",
+    "writes",
 ];
 pub(super) const ROUTE_KEYS: &[&str] = &[
     "on",
