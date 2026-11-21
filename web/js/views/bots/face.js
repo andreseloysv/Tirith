@@ -10,6 +10,12 @@
 // settling, a twitch, a yawn, drifting z's). Phases and schedules are random per face, so faces on one screen never
 // move in step. A new state blends in over a moment (and waking up plays a little hop). Faces off screen do not move;
 // with reduced motion none do. `still` faces (the shape picker) are drawn without an animator.
+//
+// Layers (the 2026-11-21 fix): the blurred glow and body live in their own small SVGs inside HTML layers with
+// will-change (bots.css), so each face's feGaussianBlurs rasterize once — again only when shape, colour or state
+// changes its markup — and the animator moves those layers with CSS transform/opacity only. Eyes and mouth sit in a
+// filter-less SVG on top; the z's in another. The shared loop steps at most 30 times a second and not at all while
+// the page is hidden. Animating attributes inside the filtered SVG, as before, re-blurred every face every frame.
 import { html, useRef, useEffect, useMemo } from '../../../vendor/preact-htm.js';
 
 const petals = (n, r, pr, cy = 52) => Array.from({ length: n }, (_, i) => {
@@ -56,15 +62,19 @@ function markup(shape, color, state) {
     : state === 'sleep'
       ? `<path d="M${mx - w * 0.35} ${my}q${w * 0.35} ${w * 0.3} ${w * 0.7} 0" stroke="${ink}" stroke-width="2.6" stroke-linecap="round" fill="none"/>`
       : `<path d="M${mx - w * 0.6} ${my - 1}q${w * 0.6} ${w * 0.65} ${w * 1.2} 0" stroke="${ink}" stroke-width="3" stroke-linecap="round" fill="none"/>`;
-  return `<defs><radialGradient id="${id}b" cx="46%" cy="42%" r="62%"><stop offset="0" stop-color="${core}"/><stop offset=".5" stop-color="${mid}"/><stop offset="1" stop-color="${edge}"/></radialGradient>`
-    + `<filter id="${id}w" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="14"/></filter>`
-    + `<filter id="${id}n" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="4"/></filter>`
-    + `<filter id="${id}s" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="0.7"/></filter></defs>`
-    + `<g class="float"><g class="halo"><g opacity=".85" fill="${halo}" stroke="${halo}" stroke-width="16" stroke-linejoin="round" filter="url(#${id}w)">${body}</g>`
-    + `<g opacity=".9" fill="${halo}" stroke="${halo}" stroke-width="8" stroke-linejoin="round" filter="url(#${id}n)">${body}</g></g>`
-    + `<g fill="url(#${id}b)"${soft} filter="url(#${id}s)">${body}</g>`
-    + `<g opacity=".35" fill="none" stroke="#fff" stroke-width="2" filter="url(#${id}n)">${body}</g>` /* a faint inner rim of light */
-    + `<g class="look"><g class="eyes" data-y="${e[2]}">${eyes}</g>${mouth}</g></g><g class="zs"></g>`;
+  /* three layers, each its own SVG with its own defs: the glow (both blurs of the halo), the body (gradient, its
+     soft edge and the rim of light) and, filter-less on top, the eyes and mouth */
+  const blur4 = (f) => `<filter id="${f}" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="4"/></filter>`;
+  return {
+    halo: `<defs><filter id="${id}w" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="14"/></filter>${blur4(`${id}n`)}</defs>`
+      + `<g opacity=".85" fill="${halo}" stroke="${halo}" stroke-width="16" stroke-linejoin="round" filter="url(#${id}w)">${body}</g>`
+      + `<g opacity=".9" fill="${halo}" stroke="${halo}" stroke-width="8" stroke-linejoin="round" filter="url(#${id}n)">${body}</g>`,
+    body: `<defs><radialGradient id="${id}b" cx="46%" cy="42%" r="62%"><stop offset="0" stop-color="${core}"/><stop offset=".5" stop-color="${mid}"/><stop offset="1" stop-color="${edge}"/></radialGradient>`
+      + `<filter id="${id}s" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="0.7"/></filter>${blur4(`${id}m`)}</defs>`
+      + `<g fill="url(#${id}b)"${soft} filter="url(#${id}s)">${body}</g>`
+      + `<g opacity=".35" fill="none" stroke="#fff" stroke-width="2" filter="url(#${id}m)">${body}</g>`, /* a faint inner rim of light */
+    eyes: `<g class="look"><g class="eyes" data-y="${e[2]}">${eyes}</g>${mouth}</g>`,
+  };
 }
 
 /* ---------- the animators ---------- */
@@ -104,17 +114,22 @@ const ACTS = {
 
 const live = new Set();
 const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)');
-let frame = 0;
+let pageHidden = typeof document !== 'undefined' && document.hidden;
+if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => { pageHidden = document.hidden; });
+let frame = 0, lastStep = 0;
 function loop(now) {
   frame = 0;
-  for (const a of live) a.step(now / 1000);
+  if (now - lastStep >= 1000 / 30) { /* at most 30 steps a second, however fast the screen refreshes */
+    lastStep = now;
+    if (!pageHidden) for (const a of live) a.step(now / 1000);
+  }
   if (live.size) frame = requestAnimationFrame(loop);
 }
 const seen = typeof IntersectionObserver === 'function'
   ? new IntersectionObserver((list) => list.forEach((e) => { if (e.target.animator) e.target.animator.visible = e.isIntersecting; })) : null;
 
 class Animator {
-  constructor(svg, state) {
+  constructor(root, state) {
     this.mood = { ...MOOD[state] || MOOD.idle };
     this.target = MOOD[state] || MOOD.idle;
     this.state = state;
@@ -126,16 +141,18 @@ class Animator {
     this.eye = { x: 0, y: 0, fx: 0, fy: 0, tx: 0, ty: 0, at: 0, d: 1 };
     this.next = { blink: R(0.5, 4), look: R(0.3, 2), act: R(1.5, 7), z: R(0.5, 2) };
     this.blinks = []; this.act = null; this.zs = [];
-    this.bind(svg, state);
+    this.bind(root, state);
     live.add(this);
-    if (seen) { svg.animator = this; seen.observe(svg); }
+    if (seen) { root.animator = this; seen.observe(root); }
     if (!frame) frame = requestAnimationFrame(loop);
   }
   /** New markup (another state, shape or colour): the same motion goes on in it. */
-  bind(svg, state) {
-    this.svg = svg;
-    this.float = svg.querySelector('.float'); this.eyes = svg.querySelector('.eyes'); this.look = svg.querySelector('.look');
-    this.halo = svg.querySelector('.halo'); this.zg = svg.querySelector('.zs'); this.zs = [];
+  bind(root, state) {
+    this.root = root;
+    this.float = root.querySelector('.ffloat'); this.eyes = root.querySelector('.eyes'); this.look = root.querySelector('.look');
+    this.halo = root.querySelector('.fhalo'); this.zg = root.querySelector('.zs');
+    this.zs.forEach((z) => z.el.remove()); this.zs = [];
+    this.lookT = this.eyesT = null; /* the last eye transforms written: unchanged ones are not written again */
     this.ey = Number(this.eyes && this.eyes.dataset.y) || 50;
     if (state !== this.state) {
       if (this.state === 'sleep' && state !== 'sleep') { this.act = { ...ACTS.wake(), at: this.clock }; this.blinks.push(this.clock + 0.05); }
@@ -143,7 +160,7 @@ class Animator {
       this.next.act = this.clock + R(1.5, 4);
     }
   }
-  stop() { live.delete(this); if (seen && this.svg) seen.unobserve(this.svg); }
+  stop() { live.delete(this); if (seen && this.root) seen.unobserve(this.root); }
   step(t) {
     const dt = this.t == null ? 0 : Math.min(0.1, t - this.t);
     this.t = t;
@@ -182,16 +199,25 @@ class Animator {
     const rot = m.tilt * Math.sin(c * w4 + p4) + o.rot;
     const br = 1 + m.breath * Math.sin(c * w5 + p5);
     const sx = o.sx * (2 - br), sy = o.sy * br;
-    if (this.float) this.float.setAttribute('transform', `translate(${x.toFixed(2)} ${y.toFixed(2)}) translate(50 90) rotate(${rot.toFixed(2)}) scale(${sx.toFixed(4)} ${sy.toFixed(4)}) translate(-50 -90)`);
-    if (this.halo) this.halo.setAttribute('opacity', (m.halo + 0.06 * Math.sin(c * w2 + p5)).toFixed(3));
+    /* the float and the halo pulse move HTML layers only (CSS transform/opacity on will-change elements), never
+       attributes inside the filtered SVGs: 124 viewBox units span the layer, so a unit is 100/124 % of it, and the
+       pivot (50 90) is the layers' transform-origin in bots.css */
+    if (this.float) this.float.style.transform = `translate(${(x * 100 / 124).toFixed(3)}%, ${(y * 100 / 124).toFixed(3)}%) rotate(${rot.toFixed(2)}deg) scale(${sx.toFixed(4)}, ${sy.toFixed(4)})`;
+    if (this.halo) this.halo.style.opacity = (m.halo + 0.06 * Math.sin(c * w2 + p5)).toFixed(3);
     /* the eyes: where they look (with a quick ease, like a glance) and their blinks */
     const e = this.eye, k = ease(Math.min(1, (now - e.at) / e.d));
     e.x = e.fx + (e.tx - e.fx) * k; e.y = e.fy + (e.ty - e.fy) * k;
-    if (this.look && this.state !== 'sleep') this.look.setAttribute('transform', `translate(${(e.x + o.ex).toFixed(2)} ${(e.y + o.ey).toFixed(2)})`);
+    if (this.look && this.state !== 'sleep') {
+      const tr = `translate(${(e.x + o.ex).toFixed(2)} ${(e.y + o.ey).toFixed(2)})`;
+      if (tr !== this.lookT) { this.lookT = tr; this.look.setAttribute('transform', tr); }
+    }
     let lid = 1;
     this.blinks = this.blinks.filter((b) => now - b < 0.16);
     for (const b of this.blinks) if (now >= b) lid = Math.min(lid, 1 - 0.92 * bell((now - b) / 0.16));
-    if (this.eyes && this.state !== 'sleep') this.eyes.setAttribute('transform', `translate(0 ${this.ey}) scale(1 ${lid.toFixed(3)}) translate(0 ${-this.ey})`);
+    if (this.eyes && this.state !== 'sleep') {
+      const tr = `translate(0 ${this.ey}) scale(1 ${lid.toFixed(3)}) translate(0 ${-this.ey})`;
+      if (tr !== this.eyesT) { this.eyesT = tr; this.eyes.setAttribute('transform', tr); }
+    }
     this.zs = this.zs.filter((z) => {
       const x2 = (now - z.at) / z.d;
       if (x2 >= 1 || this.state !== 'sleep') { z.el.remove(); return false; }
@@ -208,17 +234,18 @@ class Animator {
   }
 }
 
-/** One bot's face. */
+/** One bot's face: the glow, body and eyes as stacked layers (see the header). The size travels as the --fs
+ *  custom property, so the stylesheet's own `.bot` sizes still win where they apply, as the svg's did. */
 export function Face({ shape = 'round', color = '#3b82f6', size = 64, state = 'idle', still: frozen = false }) {
   const ref = useRef(null), anim = useRef(null);
-  const svg = useMemo(() => markup(shape, color, state), [shape, color, state]);
+  const parts = useMemo(() => markup(shape, color, state), [shape, color, state]);
   useEffect(() => {
     if (frozen || !ref.current) return undefined;
     anim.current = new Animator(ref.current, state);
     return () => anim.current.stop();
   }, [frozen]);
-  useEffect(() => { if (anim.current && ref.current) anim.current.bind(ref.current, state); }, [svg]);
-  return html`<svg ref=${ref} class=${`bot ${state}`} width=${size} height=${size} viewBox="-12 -12 124 124" aria-hidden="true" dangerouslySetInnerHTML=${{ __html: svg }} />`;
+  useEffect(() => { if (anim.current && ref.current) anim.current.bind(ref.current, state); }, [parts]);
+  return html`<span ref=${ref} class=${`bot face ${state}`} style=${`--fs:${size}px`} aria-hidden="true"><span class="ffloat"><span class="fhalo"><svg class="fsvg" viewBox="-12 -12 124 124" dangerouslySetInnerHTML=${{ __html: parts.halo }} /></span><svg class="fsvg" viewBox="-12 -12 124 124" dangerouslySetInnerHTML=${{ __html: parts.body }} /><svg class="fsvg" viewBox="-12 -12 124 124" dangerouslySetInnerHTML=${{ __html: parts.eyes }} /></span><svg class="fsvg fzs" viewBox="-12 -12 124 124" dangerouslySetInnerHTML=${{ __html: '<g class="zs"></g>' }} /></span>`;
 }
 
 /** The "new bot" mark: a dashed outline that turns slowly around a plus. */
