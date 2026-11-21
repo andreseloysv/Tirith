@@ -17,6 +17,7 @@ pub fn from_room(app: &Shared, project: &str, room: &str, author: &str, text: &s
     );
     app.chat("room", &format!("{author} ({room}): {text}"), project);
     talk(project, |t| t.reply_to.insert(room.to_string()));
+    crate::turns::trigger(project, "room", "");
     deliver(
         app,
         project,
@@ -57,6 +58,7 @@ pub fn say(app: &Shared, project: &str, text: &str, agent: &str) -> Result<(), S
     let event = app.event("", project, "owner.message", "", text, "");
     app.chat("owner", text, project);
     judge_evals(app, project, "owner.message", text, event);
+    crate::turns::trigger(project, "owner", "");
     let _ = (!model_command(app, project, text))
         .then(|| deliver(app, project, &with_cards(app, project, text), true));
     Ok(())

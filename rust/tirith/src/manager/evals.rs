@@ -22,6 +22,7 @@ pub(super) fn judge_evals(app: &Shared, project: &str, on: &str, shown: &str, ev
         app.conv(project).to_string(),
         shown.to_string(),
     );
+    let on = on.to_string(); // the judge's turn says the event it judges
     tokio::spawn(async move {
         let card = card_context(&app, &shown);
         let input = format!(
@@ -30,6 +31,7 @@ pub(super) fn judge_evals(app: &Shared, project: &str, on: &str, shown: &str, ev
             card.map(|c| format!("\n{c}\n")).unwrap_or_default()
         );
         for (id, judge, rubric, _) in evals {
+            crate::turns::trigger(&format!("turn:{judge}"), &format!("event:{on}"), "");
             let Ok(text) = run_turn(
                 &app,
                 &judge,

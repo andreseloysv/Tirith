@@ -8,6 +8,10 @@ use std::collections::BTreeSet;
 use std::time::Duration;
 /// The one way code emits an event: its row is kept and shown on the page, and every `[[routes]]` on it in the factory decides who hears it — a `chat` line (on the phones too with `phone`), and for its role a `turn` now or a `note` with its next turn. `told` is what the role is handed when it differs from the line shown. A turn's answer reaches the phones only when an event that started it had `phone` (or the owner wrote).
 pub fn emit_event(app: &Shared, project: &str, on: &str, shown: &str, told: Option<&str>) {
+    emitted(app, project, on, shown, told);
+}
+/// `emit_event`, with the event's id back (a turn's row keeps it).
+pub fn emitted(app: &Shared, project: &str, on: &str, shown: &str, told: Option<&str>) -> i64 {
     let event = app.event("", project, on, "", shown, "");
     let routes = app.cfg().factory.routes_on(on);
     let here_p = app.conv(project);
@@ -23,9 +27,11 @@ pub fn emit_event(app: &Shared, project: &str, on: &str, shown: &str, told: Opti
         };
         let _ = heard
             .insert(dest.clone())
-            .then(|| queue(app, &dest, told.unwrap_or(shown), &mode, phone));
+            .then(|| crate::turns::on_event(&dest, on, &mode))
+            .map(|_| queue(app, &dest, told.unwrap_or(shown), &mode, phone));
     }
     judge_evals(app, project, on, shown, event);
+    event
 }
 /// The conversation a route to role `to` hands its event to, if any.
 fn dest_of(f: &Factory, to: &str, on: &str, here_p: &str) -> Option<String> {

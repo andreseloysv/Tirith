@@ -34,6 +34,7 @@ pub(super) async fn read(s: &Stream<'_>, idle: Duration, stdout: ChildStdout) ->
         let Ok(msg) = serde_json::from_str::<Value>(&line) else {
             continue;
         };
+        crate::turns::line(s.project, &msg);
         match msg["type"].as_str().unwrap_or("") {
             "system" if msg["subtype"] == "init" => {
                 ready = true;
@@ -43,7 +44,10 @@ pub(super) async fn read(s: &Stream<'_>, idle: Duration, stdout: ChildStdout) ->
                     .for_each(|id| s.app.set_kv(s.key, Some(id)));
             }
             "assistant" => assistant(s.app, s.project, &msg),
-            "result" => rest = turn_end(s.app, s.project),
+            "result" => {
+                crate::turns::end(s.app, s.project, None, None);
+                rest = turn_end(s.app, s.project)
+            }
             "control_request" if msg["request"]["subtype"] == "can_use_tool" => {
                 // The rules already ran in the PreToolUse hook; anything that reaches here is allowed.
                 let _ = s.tx.send(control_reply(

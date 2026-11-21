@@ -29,6 +29,7 @@ pub(super) async fn exec_session(app: &Shared, project: &str, muse: bool) -> Res
         resumed.as_deref(),
         (&prompt(app, project), &input),
         |msg| {
+            crate::turns::line(project, msg);
             if muse {
                 on_muse(app, project, &key, msg)
             } else {
@@ -37,6 +38,7 @@ pub(super) async fn exec_session(app: &Shared, project: &str, muse: bool) -> Res
         },
         |pid| {
             started = true;
+            crate::turns::begin(app, project);
             exec_started(app, project, pid);
         },
     )
@@ -78,19 +80,14 @@ fn exec_end(app: &Shared, project: &str, key: &str, muse: bool, result: Result<S
     let (text, answered) = match result {
         Ok(text) => (text, true),
         Err(e) => {
-            let text = format!(
-                "{}: {e}. Send your message again to retry.",
-                if muse {
-                    "The muse agent failed"
-                } else {
-                    "Codex"
-                }
-            );
+            let who = ["Codex", "The muse agent failed"][usize::from(muse)];
+            let text = format!("{who}: {e}. Send your message again to retry.");
             report(app, project, &text);
             app.set_kv(key, None);
             (text, false)
         }
     };
+    crate::turns::end(app, project, Some(answered), Some(&text));
     // Codex speaks while it works; an exec turn of the other agent answers once, at its end.
     let _ = (muse && answered)
         .then(|| app.chat("manager", &text, project))

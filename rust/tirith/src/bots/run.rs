@@ -21,6 +21,7 @@ pub(super) fn fire(app: &Shared, id: &str, rid: &str) -> Result<(), String> {
     let (title, task) = (s(r, "title"), s(r, "prompt"));
     app.set_kv(&format!("routine:{id}:{rid}"), Some(&now_iso()));
     app.chat("routine", &format!("Running routine · {title}"), &key);
+    crate::turns::trigger(&key, "schedule", rid); // the page's Run now said run-now first
     crate::manager::emit_event(app, &key, "schedule", &format!("Routine «{title}» is due now. Do it and report the result here in a few lines (when nothing is new, one line that starts with ∅); ask nothing: {task}"), None);
     Ok(())
 }

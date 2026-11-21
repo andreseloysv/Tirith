@@ -35,6 +35,7 @@ pub(super) fn deliver(app: &Shared, project: &str, text: &str, phones: bool) {
                 .as_ref()
                 .is_some_and(|tx| tx.send(user_line(&text)).is_ok());
         if sent {
+            crate::turns::handed(app, project);
             set_busy(app, project, t, true);
         } else {
             t.pending.push(text); // the session on its way takes it, and only then is the manager busy

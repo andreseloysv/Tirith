@@ -210,6 +210,7 @@ on the page, and goes to every route whose `on` matches it. The default routes r
 | `schedule` | a routine is due | its role: turn |
 | `card.opened` / `card.answered` / `card.closed` | owner cards | none (measured) |
 | `factory.invalid` | a version did not load | manager-general: turn, chat |
+| `turn.done` / `routine.done` | a bot's turn ended (`routine.done` when a routine started it): the bot, the trigger, the routine and its task, its tools, skills and the beginning of its answer; its row in `turns` keeps the event's id | none |
 
 The answer of a turn reaches the phones only when an event that started it has `phone = true` (`owner.message`
 always). Today every manager message reaches them. A routine answer that starts with ∅ still never does.
