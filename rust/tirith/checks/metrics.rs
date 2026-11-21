@@ -94,6 +94,32 @@ fn owner_measures_count_interruptions_and_needless_cards() {
     let _ = std::fs::remove_dir_all(&home);
 }
 #[test]
+fn needless_cards_ignores_superseded() {
+    let home = std::env::temp_dir().join(format!("tirith-superseded-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&home);
+    std::fs::create_dir_all(&home).unwrap();
+    let app = crate::app::App::open_at(home.clone());
+    let at = |ago: u64| chrono::DateTime::from_timestamp(crate::app::now_s().saturating_sub(ago) as i64, 0).unwrap().format("%Y-%m-%dT%H:%M:%SZ").to_string();
+    let auto = "closed by Tirith: its lane no longer waits for an answer";
+    let card = |id: &str, ago: u64, kind: &str, project: &str, question: &str, status: &str, answer: &str| {
+        app.insert("INSERT INTO owner_items (id, at, kind, project, question, status, answer, lane) VALUES (?1,?2,?3,?4,?5,?6,?7,'')", rusqlite::params![id, at(ago), kind, project, question, status, answer])
+    };
+    // o33 was autoclosed unanswered and reopened as o37, whose question names o33: the same question, still waiting.
+    card("o33", 400, "decision", "jobs", "¿Apruebas el gasto de la auditoría?", "closed", auto);
+    card("o37", 300, "decision", "jobs", "¿Apruebas el gasto de la auditoría? (reabierta: o33 se autocerró sin respuesta)", "open", "");
+    // o50 was autoclosed with no equivalent after it (the only later card naming it is of another project and kind).
+    card("o50", 390, "decision", "jobs", "¿Otra cosa?", "closed", auto);
+    card("o52", 200, "payment", "zoo", "¿Pago lo de o50?", "open", "");
+    card("o51", 250, "decision", "jobs", "¿Una tercera?", "answered", "sí");
+    let metrics = super::compute(&app);
+    let needless = metrics.iter().find(|m| m.id == "needless_cards").expect("needless_cards");
+    // Only o50 and o51 count: 1 closed without an answer of 2; o33 is nowhere in the count or the facts.
+    assert_eq!(needless.value, 50.0, "{}", needless.facts);
+    assert!(needless.facts.contains("[o50]") && needless.facts.contains("answered 1") && !needless.facts.contains("o33"), "{}", needless.facts);
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}
+#[test]
 fn ceo_brief_groups_measures_and_scores_by_factory_version() {
     let home = std::env::temp_dir().join(format!("tirith-ceo-brief-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&home);
