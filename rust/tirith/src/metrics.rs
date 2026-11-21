@@ -48,71 +48,67 @@ fn paused_text(project: &str, why: &str) -> String {
 fn empty_plan_note(empty: &[String]) -> String {
     empty.iter().map(|p| format!(" [{p} plan empty: nothing startable; fix: tirith plan add {p} <step> \"<text>\"]")).collect()
 }
+/// Phone messages of turns no owner message started: a manager message (at, project, text) counts when the last mark (at, project, unasked) of its conversation before it is unasked — an owner or room message asks, a `turn` route with `phone = true` does not — and a ∅ routine silence never reaches the phones.
+fn unasked(marks: &[(String, String, bool)], msgs: &[(String, String, String)]) -> usize {
+    msgs.iter().filter(|m| !m.2.trim_start().starts_with('∅') && marks.iter().rposition(|k| k.1 == m.1 && k.0 <= m.0).is_some_and(|i| marks[i].2)).count()
+}
+
+/// What reached the owner unasked since `since`: (phone messages of unasked turns, notices whose route has `phone = true`, cards opened).
+fn interruptions(app: &Shared, since: &str) -> (usize, usize, usize) {
+    let f = &app.cfg().factory;
+    let phone = |k: &str, chat: bool| f.routes_on(k).iter().any(|r| r.3 && if chat { r.2 } else { r.1 == "turn" });
+    let q = |sql: &str| app.query(sql, [since], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?)));
+    let evs = q("SELECT at, project, kind FROM events WHERE at >= ?1 AND (kind LIKE '%.%' OR kind = 'schedule') ORDER BY id");
+    let asked = |k: &str| matches!(k, "owner.message" | "room.message" | "card.answered"); // a card answer is the owner's word too: the turn it starts was asked for
+    let marks: Vec<_> = evs.iter().filter(|e| asked(&e.2) || phone(&e.2, false)).map(|e| (e.0.clone(), e.1.clone(), !asked(&e.2))).collect();
+    let cards = app.query("SELECT COUNT(*) FROM owner_items WHERE at >= ?1", [since], |r| r.get::<_, i64>(0)).first().copied().unwrap_or(0) as usize;
+    (unasked(&marks, &q("SELECT at, project, text FROM chat WHERE at >= ?1 AND role = 'manager' ORDER BY id")), evs.iter().filter(|e| phone(&e.2, true)).count(), cards)
+}
 fn compute(app: &Shared) -> Vec<Metric> {
     let cfg = app.cfg();
     let now = now_s() as i64;
     let day = now - 86400;
+    let since = chrono::DateTime::from_timestamp(day, 0).map(|d| d.format("%Y-%m-%dT%H:%M:%SZ").to_string()).unwrap_or_default();
     let lanes: Vec<Lane> = app.lanes.lock().unwrap().values().cloned().collect();
     let f = &cfg.factory;
     // A measure with the factory's label, target and side for its id; red when it counts now (`live`) and is on the wrong side of its target.
     let mk = |id: &'static str, value: f64, live: bool, facts: String| {
         let (label, target, at_least) = f.metric(id);
         let red = live && target.is_some_and(|t| if at_least { value < t } else { value > t });
-        Metric { id, label, value: value.round(), target, at_least, red, facts }
+        Metric { id, label, value: (value * 10.0).round() / 10.0, target, at_least, red, facts }
     };
     let secs = |s: &str| chrono::DateTime::parse_from_rfc3339(s).ok().map(|d| d.timestamp());
-    // Open items of the projects the autopilot works on.
-    let mut open: Vec<(String, usize)> = vec![];
-    let mut empty: Vec<String> = vec![];
-    for p in cfg.projects.iter().filter(|p| crate::lanes::autopilot_on(app, &p.id)) {
-        // Only items the autopilot can start: no step-0 role items, no owner-wait items.
-        let n = plan::read(app, &p.id).map(|s| s.iter().flat_map(|s| &s.items).filter(|i| !i.done && !crate::lanes::is_autopilot_skipped(&i.text)).count()).unwrap_or(0);
-        if n > 0 {
-            open.push((p.id.clone(), n));
-        } else {
-            empty.push(p.id.clone());
-        }
-    }
+    // Open items of the projects the autopilot works on: only items it can start (no step-0 role items, no owner-wait items), split into projects with work and projects with none.
+    let startable = |p: &crate::config::Project| plan::read(app, &p.id).map(|s| s.iter().flat_map(|s| &s.items).filter(|i| !i.done && !crate::lanes::is_autopilot_skipped(&i.text)).count()).unwrap_or(0);
+    let (open, empty): (Vec<(String, usize)>, Vec<_>) = cfg.projects.iter().filter(|p| crate::lanes::autopilot_on(app, &p.id)).map(|p| (p.id.clone(), startable(p))).partition(|(_, n)| *n > 0);
+    let empty: Vec<String> = empty.into_iter().map(|(p, _)| p).collect();
     let work = !open.is_empty();
     let merged: Vec<&Lane> = lanes.iter().filter(|l| l.status == "merged" && l.merged_at.as_deref().or(l.ended_at.as_deref()).and_then(secs).is_some_and(|m| m >= day)).collect();
     let ids = |v: &[&Lane]| v.iter().map(|l| l.id.as_str()).collect::<Vec<_>>().join(", ");
     let open_txt = open.iter().map(|(p, n)| format!("{p} {n}")).collect::<Vec<_>>().join(", ");
     let mut out = vec![];
 
-    let facts = format!(
-        "merged in 24 h: [{}]; open items in autopilot projects: [{open_txt}]; {}{}{}",
-        ids(&merged),
-        if empty.is_empty() { "no empty plans: lanes that do not reach main are the problem" } else { "no startable work in the plan (not a lane failure) for:" },
-        empty_plan_note(&empty),
-        open.iter().map(|(p, _)| app.kv(&format!("paused:{p}")).map(|w| paused_text(p, &w)).unwrap_or_default()).collect::<String>()
-    );
+    let why = if empty.is_empty() { "no empty plans: lanes that do not reach main are the problem" } else { "no startable work in the plan (not a lane failure) for:" };
+    let paused: String = open.iter().map(|(p, _)| app.kv(&format!("paused:{p}")).map(|w| paused_text(p, &w)).unwrap_or_default()).collect();
+    let facts = format!("merged in 24 h: [{}]; open items in autopilot projects: [{open_txt}]; {why}{}{paused}", ids(&merged), empty_plan_note(&empty));
     out.push(mk("merged", merged.len() as f64, work, facts));
 
     let mut mins: Vec<(f64, &str)> = merged.iter().filter_map(|l| Some(((l.merged_at.as_deref().or(l.ended_at.as_deref()).and_then(secs)? - secs(&l.created_at)?) as f64 / 60.0, l.id.as_str()))).collect();
     mins.sort_by(|a, b| a.0.total_cmp(&b.0));
     let median = if mins.is_empty() { 0.0 } else { (mins[(mins.len() - 1) / 2].0 + mins[mins.len() / 2].0) / 2.0 };
-    let facts = mins.iter().rev().take(8).map(|(m, id)| format!("{id} {m:.0} min")).collect::<Vec<_>>().join(", ");
-    out.push(mk("median", median, !mins.is_empty(), facts));
+    out.push(mk("median", median, !mins.is_empty(), mins.iter().rev().take(8).map(|(m, id)| format!("{id} {m:.0} min")).collect::<Vec<_>>().join(", ")));
 
-    let first: Vec<&Lane> = merged.iter().filter(|l| l.attempts == 0).copied().collect();
-    let pct = if merged.is_empty() { 100.0 } else { (100 * first.len() / merged.len()) as f64 };
+    let pct = if merged.is_empty() { 100.0 } else { (100 * merged.iter().filter(|l| l.attempts == 0).count() / merged.len()) as f64 };
     let retried: Vec<&Lane> = merged.iter().filter(|l| l.attempts > 0).copied().collect();
     out.push(mk("first_try", pct, !merged.is_empty(), format!("merged after being sent back: [{}]", ids(&retried))));
 
-    // Idle: a project with open items, autopilot on and nothing queued, running or merging.
-    let mut idle = vec![];
-    {
+    // Idle: a project with open items, autopilot on and nothing queued, running or merging, and since when.
+    let idle: Vec<(String, usize, u64)> = {
         let mut book = BOOK.lock().unwrap();
-        book.idle_since.retain(|p, _| open.iter().any(|(o, _)| o == p));
-        for (p, n) in &open {
-            if lanes.iter().any(|l| &l.project == p && l.active()) {
-                book.idle_since.remove(p);
-            } else {
-                let since = *book.idle_since.entry(p.clone()).or_insert(now as u64);
-                idle.push((p.clone(), *n, (now as u64 - since) / 60));
-            }
-        }
-    }
+        let active = |p: &String| lanes.iter().any(|l| &l.project == p && l.active());
+        book.idle_since.retain(|p, _| open.iter().any(|(o, _)| o == p) && !active(p));
+        open.iter().filter(|(p, _)| !active(p)).map(|(p, n)| (p.clone(), *n, (now as u64 - *book.idle_since.entry(p.clone()).or_insert(now as u64)) / 60)).collect()
+    };
     let worst = idle.iter().map(|i| i.2).max().unwrap_or(0) as f64;
     let facts = idle.iter().map(|(p, n, m)| format!("{p}: {n} open items, nothing running for {m} min{}", app.kv(&format!("paused:{p}")).map(|w| paused_text(p, &w)).unwrap_or_default())).collect::<Vec<_>>().join("; ");
     out.push(mk("idle", worst, true, facts));
@@ -137,18 +133,22 @@ fn compute(app: &Shared) -> Vec<Metric> {
 
     let qs = owner_questions(app);
     out.push(mk("owner", qs.len() as f64, false, qs.join("; ")));
+
+    let (turns, notices, cards) = interruptions(app, &since);
+    let facts = format!("unasked in 24 h: {turns} phone messages of turns no owner message started, {notices} notices with phone = true, {cards} cards, over {} merged items", merged.len());
+    out.push(mk("interruptions", (turns + notices + cards) as f64 / merged.len().max(1) as f64, turns + notices + cards > 0, facts));
+
+    let resolved = app.query("SELECT id, status FROM owner_items WHERE at >= ?1 AND status != 'open'", [&since], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)));
+    let closed: Vec<&str> = resolved.iter().filter(|c| c.1 == "closed").map(|c| c.0.as_str()).collect();
+    let share = if resolved.is_empty() { 0.0 } else { 100.0 * closed.len() as f64 / resolved.len() as f64 };
+    out.push(mk("needless_cards", share, !resolved.is_empty(), format!("closed without an answer in 24 h: [{}]; answered {}", closed.join(", "), resolved.len() - closed.len())));
     out
 }
 
 fn describe(m: &Metric) -> String {
-    format!(
-        "{} [{}] is {}{}{}",
-        m.label,
-        m.id,
-        m.value,
-        m.target.map(|t| format!(" (target: {} {t})", if m.at_least { "at least" } else { "at most" })).unwrap_or_default(),
-        if m.facts.is_empty() { String::new() } else { format!(". Facts: {}", m.facts) }
-    )
+    let target = m.target.map(|t| format!(" (target: {} {t})", if m.at_least { "at least" } else { "at most" })).unwrap_or_default();
+    let facts = if m.facts.is_empty() { String::new() } else { format!(". Facts: {}", m.facts) };
+    format!("{} [{}] is {}{target}{facts}", m.label, m.id, m.value)
 }
 
 /// One computation: episodes opened, fixed, noted and reviewed; the page gets the result.
@@ -229,14 +229,12 @@ fn brief(app: &Shared, why: &str) -> String {
     let lanes: String = lanes.iter().take(20).map(|l| format!("- {} [{}] {}:{} \"{}\" tries {} created {}: {}\n", l.id, l.status, l.project, l.step, l.item, l.attempts + 1, l.created_at, l.note.lines().next().unwrap_or(""))).collect();
     let day = chrono::DateTime::from_timestamp(now_s().saturating_sub(86400) as i64, 0).map(|d| d.format("%Y-%m-%dT%H:%M:%SZ").to_string()).unwrap_or_default();
     let runs: String = app
-        .query("SELECT lane, stage, status, COALESCE(log, '') FROM runs WHERE status IN ('failed', 'timeout') AND started_at >= ?1 ORDER BY id DESC LIMIT 5", [&day], |r| {
-            Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, String>(3)?))
-        })
+        .objects("SELECT lane, stage, status, COALESCE(log, '') FROM runs WHERE status IN ('failed', 'timeout') AND started_at >= ?1 ORDER BY id DESC LIMIT 5", [&day], &["lane", "stage", "status", "log"])
         .iter()
-        .map(|(lane, stage, status, log)| format!("- {lane} check '{stage}' {status}:\n```\n{}\n```\n", tail(std::path::Path::new(log), 15)))
+        .map(|r| format!("- {} check '{}' {}:\n```\n{}\n```\n", r["lane"].as_str().unwrap_or(""), r["stage"].as_str().unwrap_or(""), r["status"].as_str().unwrap_or(""), tail(std::path::Path::new(r["log"].as_str().unwrap_or("")), 15)))
         .collect();
-    let plans: String = app
-        .cfg()
+    let cfg = app.cfg();
+    let plans: String = cfg
         .projects
         .iter()
         .map(|p| {
