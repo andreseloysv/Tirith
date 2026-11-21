@@ -215,6 +215,43 @@ async fn private_files_move_to_project() {
     let _ = std::fs::remove_dir_all(&base);
 }
 #[tokio::test]
+async fn moved_folder_stays_excluded() {
+    let (app, repo, base) = cleanup_fixture("moved").await;
+    // As in the incident, the `.private` folder sits beside tracked work, so git reports it itself as the ignored folder.
+    std::fs::create_dir_all(repo.join("research/konsens")).unwrap();
+    std::fs::write(repo.join("research/konsens/README"), "tracked\n").unwrap();
+    super::git(&repo, &["add", "research"]).await.unwrap();
+    super::git(&repo, &["commit", "-qm", "research"]).await.unwrap();
+    let lane = cleanup_lane_fixture(&app, &repo, "moved-1").await;
+    let ws = std::path::PathBuf::from(&lane.workspace);
+    // The incident's shape: a Windows-zip name with `\`, spaces and `[` inside a folder only the lane ignores. A per-file exclude line would let `\` escape the next character and git would still see it as new.
+    let rel = "research/konsens/.private/documents/Unterlagen\\Vergabe [1].pdf";
+    let p = ws.join(rel);
+    std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+    std::fs::write(&p, "pdf").unwrap();
+    std::fs::write(p.parent().unwrap().join("Otro\\Doc [2].pdf"), "pdf2").unwrap();
+    std::fs::write(ws.join(".gitignore"), "private/\nevidence/\ntarget/\nnode_modules/\nbuild/\n.private/\n").unwrap();
+    super::cleanup_lane(&app, &lane, false).await;
+    assert_eq!(std::fs::read_to_string(repo.join(rel)).unwrap(), "pdf");
+    let exclude = std::fs::read_to_string(repo.join(".git/info/exclude")).unwrap();
+    assert_eq!(exclude.lines().filter(|l| l.contains(".private")).collect::<Vec<_>>(), ["/research/konsens/.private/"], "one line for the whole folder moved, not one per file: {exclude}");
+    assert!(super::git(&repo, &["check-ignore", "-q", "--", rel]).await.is_ok(), "a name with \\, spaces and [ stays ignored");
+    assert_eq!(super::git(&repo, &["status", "--porcelain"]).await.unwrap(), "", "git add -A in the project would take nothing moved in");
+    // Already moved before the fix, with its broken per-file line: the startup sweep heals it by excluding its folder.
+    let old = "old/.private/documents/Bad\\Name [2].pdf";
+    let p = repo.join(old);
+    std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+    std::fs::write(&p, "old").unwrap();
+    std::fs::write(repo.join(".git/info/exclude"), format!("{exclude}/{old}\n")).unwrap();
+    assert!(super::git(&repo, &["check-ignore", "-q", "--", old]).await.is_err(), "the broken per-file line leaves it visible");
+    super::sweep_cleanups(&app, &[]).await;
+    assert!(super::git(&repo, &["check-ignore", "-q", "--", old]).await.is_ok(), "the startup sweep excludes its folder");
+    assert!(std::fs::read_to_string(repo.join(".git/info/exclude")).unwrap().contains("/old/.private/documents/"));
+    assert_eq!(super::git(&repo, &["status", "--porcelain"]).await.unwrap(), "");
+    drop(app);
+    let _ = std::fs::remove_dir_all(&base);
+}
+#[tokio::test]
 async fn idle_build_cache_goes() {
     let (app, repo, base) = cleanup_fixture("idle").await;
     assert_eq!(crate::factory::current().limits.build_idle_minutes, 30, "the factory's idle limit");

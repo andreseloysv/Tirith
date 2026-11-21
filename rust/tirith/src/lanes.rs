@@ -83,12 +83,12 @@ fn move_ignored(src: &Path, repo: &Path, rel: &Path, lane: &str) -> Option<PathB
 fn files_under(p: &Path, out: &mut Vec<PathBuf>) {
     std::fs::read_dir(p).into_iter().flatten().flatten().map(|e| e.path()).for_each(|e| ((e.is_symlink() || e.is_file()).then(|| out.push(e.clone())), (!e.is_symlink() && e.is_dir()).then(|| files_under(&e, out))).0.unwrap_or(()));
 }
-/// Keeps a file moved in from a lane out of git for good: when the project does not already ignore it, its path joins `.git/info/exclude` there, so it is never committed or pushed from the project folder.
-async fn ensure_excluded(repo: &Path, dest: &Path) {
-    let Ok(rel) = dest.strip_prefix(repo).map(|r| r.to_string_lossy().into_owned()) else { return };
+/// Keeps what a lane moved in out of git for good: when the project does not already ignore it, one line for the whole ignored folder moved (or for a lone file) joins `.git/info/exclude` there, with the pattern characters escaped (`\` in a name would escape the next character and the file would stay visible), so it is never committed or pushed from the project folder.
+async fn ensure_excluded(repo: &Path, rel: &Path, dir: bool) {
+    let (rel, esc) = (rel.to_string_lossy().into_owned(), rel.to_string_lossy().replace('\\', "\\\\").replace('*', "\\*").replace('?', "\\?").replace('[', "\\[").replace(']', "\\]").replace(' ', "\\ "));
     let Some(()) = git(repo, &["check-ignore", "-q", "--", &rel]).await.is_err().then_some(()) else { return };
     let Ok(gitdir) = git(repo, &["rev-parse", "--git-common-dir"]).await else { return };
-    let (file, line) = (repo.join(gitdir).join("info").join("exclude"), format!("/{rel}"));
+    let (file, line) = (repo.join(gitdir).join("info").join("exclude"), format!("/{esc}{}", if dir { "/" } else { "" }));
     let text = std::fs::read_to_string(&file).unwrap_or_default();
     let _ = (!text.lines().any(|l| l.trim() == line)).then(|| (file.parent().map(std::fs::create_dir_all), std::fs::write(&file, format!("{text}{}{line}\n", if text.is_empty() || text.ends_with('\n') { "" } else { "\n" }))));
 }
@@ -111,12 +111,15 @@ pub async fn cleanup_lane(app: &Shared, lane: &Lane, merged: bool) {
             drop(git(&ws, &["add", "-A"]).await);
             drop(git(&ws, &["commit", "-qm", "Saved by Tirith"]).await.map_err(|e| app.event(&lane.id, &lane.project, "error", "cleanup", &format!("could not save the work left in {}: {e}", ws.display()), "")));
         }
-        let (listed, mut files) = (git(&ws, &["ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z"]).await.unwrap_or_default(), Vec::<PathBuf>::new());
-        let entries = listed.split('\0').filter(|r| !r.is_empty() && !is_cache(Path::new(r.trim_end_matches('/')))).map(|r| ws.join(r.trim_end_matches('/')));
-        entries.for_each(|p| ((p.is_symlink() || p.is_file()).then(|| files.push(p.clone())), (!p.is_symlink() && p.is_dir()).then(|| files_under(&p, &mut files))).0.unwrap_or(()));
-        let moved: Vec<PathBuf> = files.iter().filter_map(|p| p.strip_prefix(&ws).ok().filter(|rel| !is_cache(rel)).and_then(|rel| move_ignored(p, &repo, rel, &lane.id))).collect();
-        for dest in &moved {
-            ensure_excluded(&repo, dest).await;
+        let (listed, mut targets) = (git(&ws, &["ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z"]).await.unwrap_or_default(), Vec::<(PathBuf, bool)>::new());
+        for top in &listed.split('\0').filter(|r| !r.is_empty() && !is_cache(Path::new(r.trim_end_matches('/')))).map(|r| PathBuf::from(r.trim_end_matches('/'))).collect::<Vec<_>>() {
+            let (src, is_dir, mut files) = (ws.join(top), ws.join(top).is_dir() && !ws.join(top).is_symlink(), Vec::<PathBuf>::new());
+            ((src.is_symlink() || src.is_file()).then(|| files.push(src.clone())), is_dir.then(|| files_under(&src, &mut files))).0.unwrap_or(());
+            let moved: Vec<PathBuf> = files.iter().filter_map(|p| p.strip_prefix(&ws).ok().filter(|rel| !is_cache(rel)).and_then(|rel| move_ignored(p, &repo, rel, &lane.id))).collect();
+            targets.extend(if is_dir { (!moved.is_empty()).then(|| (top.clone(), true)).into_iter().collect::<Vec<_>>() } else { moved.iter().filter_map(|d| d.strip_prefix(&repo).ok().map(|r| (r.to_path_buf(), false))).collect() });
+        }
+        for (rel, dir) in &targets {
+            ensure_excluded(&repo, rel, *dir).await;
         }
         remove_worktree(&repo, &ws).await;
     }
@@ -141,7 +144,7 @@ fn last_activity(app: &Shared, project: &Project, lanes: &[Lane], build: &Path) 
     let dir_at = std::fs::metadata(build).and_then(|m| m.modified()).map(|t| t.duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)).unwrap_or(0);
     lanes.iter().filter(|l| l.project == project.id).map(|l| at_s(l.ended_at.as_deref()).max(at_s(l.started_at.as_deref())).max(l.last_activity)).max().unwrap_or(0).max(run_at).max(dir_at)
 }
-/// The pass at startup and then every few minutes, applying the same rules to everything that already meets them: a merged, stopped or failed lane still holding a worktree loses it now, the logs and brief of one stopped or failed more than 24 h ago go, and a project's build cache and merge folder go after `limits.build_idle_minutes` with no lane, stage or manager of it working.
+/// The pass at startup and then every few minutes, applying the same rules to everything that already meets them: a merged, stopped or failed lane still holding a worktree loses it now, the logs and brief of one stopped or failed more than 24 h ago go, what earlier cleanups moved into a project but git still sees as new (a `\`, space or `[` in its name broke its per-file exclude line) gets its folder excluded, and a project's build cache and merge folder go after `limits.build_idle_minutes` with no lane, stage or manager of it working.
 async fn sweep_cleanups(app: &Shared, lanes: &[Lane]) {
     for l in lanes.iter().filter(|l| matches!(l.status.as_str(), "merged" | "stopped" | "failed")) {
         let (log, brief, ended) = (app.home.join(format!("logs/lanes/{}.log", l.id)), app.home.join(format!("briefs/{}.md", l.id)), at_s(l.ended_at.as_deref()));
@@ -153,10 +156,17 @@ async fn sweep_cleanups(app: &Shared, lanes: &[Lane]) {
     }
     let (now, minutes, talking, pipelines) = (now_s(), app.cfg().factory.limits.build_idle_minutes, manager::busy(), app.query("SELECT project FROM pipelines WHERE status = 'running'", [], |r| r.get::<_, String>(0)));
     for p in &app.cfg().projects {
+        let (repo, Ok(gitdir)) = (p.repo(), git(&p.repo(), &["rev-parse", "--git-common-dir"]).await) else { continue };
+        let moved_lines: Vec<String> = std::fs::read_to_string(repo.join(gitdir).join("info/exclude")).unwrap_or_default().lines().filter_map(|l| l.strip_prefix('/').map(|r| r.trim_end_matches('/').to_string())).collect();
+        for rel in moved_lines.iter().filter(|r| repo.join(r).exists()) {
+            let Some(()) = git(&repo, &["check-ignore", "-q", "--", rel]).await.is_err().then_some(()) else { continue };
+            let (folder, dir) = if repo.join(rel).is_dir() { (Path::new(rel.as_str()), true) } else { Path::new(rel.as_str()).parent().filter(|p| !p.as_os_str().is_empty()).map_or((Path::new(rel.as_str()), false), |p| (p, true)) };
+            ensure_excluded(&repo, folder, dir).await;
+        }
         let (build, merge_dir) = (app.home.join("build").join(&p.id), p.lanes_dir().join("merge"));
         let Some(()) = (build.exists() || merge_dir.exists()).then_some(()) else { continue };
         let busy = talking.contains(&p.id) || pipelines.contains(&p.id) || lanes.iter().any(|l| l.project == p.id && (l.pid.is_some() || matches!(l.status.as_str(), "running" | "merging")));
-        if drop_idle_cache(&p.repo(), &build, &merge_dir, busy, last_activity(app, p, lanes, &build), now, minutes).await {
+        if drop_idle_cache(&repo, &build, &merge_dir, busy, last_activity(app, p, lanes, &build), now, minutes).await {
             app.event("", &p.id, "disk", "diet", &format!("removed {} and its merge folder ({minutes} min with no lane, stage or manager working)", build.display()), "");
         }
     }
