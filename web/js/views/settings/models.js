@@ -3,7 +3,7 @@
 import { html, useState } from '../../../vendor/preact-htm.js';
 import { api } from '../../store.js';
 import { useAction } from './ui.js';
-import { optionsFor } from '../../model-controls.js';
+import { optionsFor, ownerOf, pickModel } from '../../model-controls.js';
 
 const BOLT = html`<svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true"><path d="M7 1.2L2.6 6.8h2.7L4.8 10.8 9.4 5H6.6z" fill="currentColor"/></svg>`;
 const OTHER = '__other__';
@@ -25,15 +25,15 @@ export function roleList(M) {
 }
 const SOURCE = { page: ['Saved here', 'page'], config: ['From config.toml', ''], default: ['Default', ''] };
 
-function Options({ list, cur, blank, other, strict }) {
+function Options({ list, cur, blank, other, strict, owner = () => '' }) {
   const all = !strict && cur && !list.includes(cur) ? [cur, ...list] : list;
   return html`${blank != null ? html`<option value="">${blank}</option>` : null}
-    ${all.map((o) => html`<option value=${o} selected=${o === cur}>${o}</option>`)}
+    ${all.map((o) => html`<option value=${o} selected=${o === cur}>${owner(o) ? `${o} · ${owner(o)}` : o}</option>`)}
     ${other ? html`<option value=${OTHER}>Other…</option>` : null}`;
 }
 
 /** Settings keeps its original selects and optional custom text fields. */
-function Pick({ label, value, list, blank, set, free, setFree, strict, disabled }) {
+function Pick({ label, value, list, blank, set, free, setFree, strict, disabled, owner }) {
   if (!strict && (free || !list.length)) {
     return html`<label class="sf"><span>${label}</span><input type="text" value=${value} placeholder=${blank || label} spellcheck="false"
       aria-label=${label} disabled=${disabled} onInput=${(e) => set(e.target.value)} />
@@ -41,7 +41,7 @@ function Pick({ label, value, list, blank, set, free, setFree, strict, disabled 
   }
   return html`<label class="sf"><span>${label}</span><select aria-label=${label} value=${value} disabled=${disabled || (strict && !list.length)} onChange=${(e) => {
     if (e.target.value === OTHER) { setFree(true); set(''); } else set(e.target.value);
-  }}><${Options} list=${list} cur=${value} blank=${blank} other=${!strict} strict=${strict} /></select></label>`;
+  }}><${Options} list=${list} cur=${value} blank=${blank} other=${!strict} strict=${strict} owner=${owner} /></select></label>`;
 }
 
 function Fallback({ list, main, agents, set }) {
@@ -86,7 +86,8 @@ export function RoleCard({ id, label, note, M, reload }) {
         setDraft({ ...draft, agent: e.target.value, model: '', effort: '' }); setFree({});
       }}><${Options} list=${ch.agents || []} cur=${v('agent')} blank="(choose)" /></select></label>
       <${Pick} label="Model" value=${v('model')} list=${models.map(m => m.slug)} blank="(from the agent)"
-        set=${model => setDraft({ ...draft, model, ...(codex ? { effort: '' } : {}) })} free=${free.model} setFree=${setF('model')} strict=${codex} disabled=${!!busy} />
+        owner=${(m) => ownerOf(ch, m)} set=${model => setDraft({ ...draft, ...pickModel(ch, value, model), ...(codex ? { effort: '' } : {}) })}
+        free=${free.model} setFree=${setF('model')} strict=${codex} disabled=${!!busy} />
       <${Pick} label="Effort" value=${v('effort')} list=${efforts} blank="(from the agent)"
         set=${set('effort')} free=${free.effort} setFree=${setF('effort')} strict=${codex} disabled=${!!busy} />
     </div>

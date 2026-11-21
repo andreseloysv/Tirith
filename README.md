@@ -205,6 +205,11 @@ command = "…"
 settings = "~/…/settings.json"      # protected from agents; `tirith hooks install` edits it
 chat_args = ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose"]
 # args, model_flag, effort_flag, resume_args: how a lane runs this agent ({brief} {workspace} {session} {message})
+# model_prefix = "…-"              # its models' prefix (default: the command's program name and "-")
+
+[models.choices]                    # the models the page offers, by agent; a model never runs on another agent
+anthropic = ["…"]
+muse = ["…"]
 
 [launch]                            # optional: the full lane command of the default worker agent
 command = ["…", "-p", "Read the brief at {brief} and implement it in {workspace}."]

@@ -448,7 +448,6 @@ async fn launch(app: &Shared, mut lane: Lane) -> Result<(), String> {
         .stdin(Stdio::null())
         .stdout(log.try_clone().map_err(|e| e.to_string())?)
         .stderr(log)
-        .process_group(0)
         .spawn()
         .map_err(|e| format!("cannot start {}: {e}", launch.program))?;
     (lane.pid, lane.status, lane.started_at, lane.ended_at, lane.last_activity) = (child.id(), "running".into(), Some(now_iso()), None, now_s());
