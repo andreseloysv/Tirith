@@ -1,7 +1,7 @@
 //! HTTP on 127.0.0.1: the page, its JSON API, the change stream (SSE) and the agents' hooks.
 
 use crate::app::{bad, now_s, tail, Shared, R};
-use crate::{attach, bots, guard, lanes, manager, merge, metrics, models, plan, projects, rooms, rules, sandbox};
+use crate::{attach, bots, chat, guard, lanes, manager, merge, metrics, models, plan, projects, rooms, rules, sandbox};
 use axum::extract::{Path, Query, Request, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::middleware::{self, Next};
@@ -73,6 +73,7 @@ pub fn router(app: Shared, port: u16) -> Router {
         .merge(attach::routes())
         .merge(projects::routes())
         .merge(bots::routes())
+        .merge(chat::routes())
         .fallback(web_file)
         .layer(middleware::from_fn(same_origin))
         .with_state(app)
@@ -139,11 +140,11 @@ async fn stage_limit(State(app): State<Shared>, Path((project, stage)): Path<(St
     Ok(Json(json!({"project": project, "stage": stage, "minutes": minutes})))
 }
 
-async fn chat(State(app): State<Shared>, Json(b): Json<Value>) -> R {
-    let files: Vec<String> = b["attachments"].as_array().into_iter().flatten().filter_map(|f| f.as_str().map(String::from)).collect();
-    let text = s(&b, "text") + &attach::describe(&files);
+async fn chat(State(app): State<Shared>, headers: HeaderMap, Json(b): Json<Value>) -> R {
+    let text = s(&b, "text") + &attach::describe(&b["attachments"].as_array().into_iter().flatten().filter_map(|f| f.as_str().map(String::from)).collect::<Vec<_>>());
     (!text.trim().is_empty()).then_some(()).ok_or_else(|| bad("empty message".into()))?;
-    manager::say(&app, &s(&b, "project"), &text).map(|_| Json(json!({"ok": true}))).map_err(bad)
+    let agent = ["x-tirith-lane", "x-tirith-role"].iter().find_map(|k| headers.get(*k).and_then(|v| v.to_str().ok()).filter(|v| !v.is_empty() && !v.starts_with('$'))).unwrap_or("");
+    manager::say(&app, &s(&b, "project"), &text, agent).map(|_| Json(json!({"ok": true}))).map_err(bad)
 }
 
 /// One agent hook call: record it, refuse a tool call that breaks a rule, hand a lane its live messages, and keep a lane from ending its turn on a question.

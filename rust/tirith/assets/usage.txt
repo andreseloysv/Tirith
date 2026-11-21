@@ -13,6 +13,8 @@ tirith ask-owner [--project P] [--lane L] --kind credentials|payment|account|dev
 tirith autopilot on|off <project>              let Tirith start the plan's items by itself, or not
 tirith project add <folder> [--name N] [--color #rrggbb]   add a folder as a project (the page's + does the same)
 tirith say [--project P] "<text>"              write to the project's manager (without one: the manager of no project)
+tirith chat clear [--project P]                clear a conversation (this session's, or P's): its bot starts fresh
+tirith chat keep [<time>] [--project P]        how long a chat lives, in your words (30m, 1h, 24 h, 2 días, una semana; "siempre" = no limit); without a time it says the current one
 tirith hook <Event>                            agent hook bridge (stdin JSON; also --agent A --event E)
 tirith hooks install                           point the agents' hooks at the daemon over HTTP
 (modules add: tirith room …, tirith net …, tirith models …, tirith guard …)

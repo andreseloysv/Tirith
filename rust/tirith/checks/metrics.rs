@@ -153,6 +153,29 @@ fn ceo_brief_groups_measures_and_scores_by_factory_version() {
     let _ = std::fs::remove_dir_all(&home);
 }
 #[test]
+fn red_episode_survives_restart() {
+    let home = std::env::temp_dir().join(format!("tirith-red-episode-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&home);
+    std::fs::create_dir_all(&home).unwrap();
+    let (t0, after) = (1_000_000u64, 900u64); // red since t0, its CEO pass after 15 min
+    let app = crate::app::App::open_at(home.clone());
+    assert_eq!(super::episode(&app, "needless_cards", true, t0, after), (true, false, Some(t0)), "a measure turning red is fresh: metric.red is announced");
+    assert_eq!(app.kv("metric_red:needless_cards").as_deref(), Some("1000000@0"), "its start and that no review ran are kept in kv");
+    drop(app); // the daemon restarts: only kv survives
+    let app = crate::app::App::open_at(home.clone());
+    assert_eq!(super::episode(&app, "needless_cards", true, t0 + 60, after), (false, false, Some(t0)), "still the same episode after the restart: no second metric.red, and its start did not move");
+    assert_eq!(super::episode(&app, "needless_cards", true, t0 + after, after), (false, true, Some(t0)), "15 min red: its one CEO pass is due");
+    drop(app); // and it restarts again, after that pass
+    let app = crate::app::App::open_at(home.clone());
+    assert_eq!(super::episode(&app, "needless_cards", true, t0 + 3600, after), (false, false, Some(t0)), "the pass already ran: it is not repeated");
+    // Back to green clears the episode, so a later red stretch is a new one, announced and reviewed again.
+    assert_eq!(super::episode(&app, "needless_cards", false, t0 + 3700, after), (false, false, None));
+    assert_eq!(app.kv("metric_red:needless_cards"), None);
+    assert_eq!(super::episode(&app, "needless_cards", true, t0 + 3800, after), (true, false, Some(t0 + 3800)));
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}
+#[test]
 fn health_merged_reports_empty_plans() {
     let t = super::empty_plan_note(&["tirith".to_string(), "p2".to_string()]);
     assert!(t.contains("tirith plan empty") && t.contains("fix: tirith plan add tirith <step>"), "{t}");
