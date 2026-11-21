@@ -140,8 +140,24 @@ fn compute(app: &Shared) -> Vec<Metric> {
 
     let resolved = app.query("SELECT id, status FROM owner_items WHERE at >= ?1 AND status != 'open'", [&since], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)));
     let closed: Vec<&str> = resolved.iter().filter(|c| c.1 == "closed").map(|c| c.0.as_str()).collect();
-    let share = if resolved.is_empty() { 0.0 } else { 100.0 * closed.len() as f64 / resolved.len() as f64 };
-    out.push(mk("needless_cards", share, !resolved.is_empty(), format!("closed without an answer in 24 h: [{}]; answered {}", closed.join(", "), resolved.len() - closed.len())));
+    // Plus the resolved cards the card-needed eval judged decidable alone (an answered one too: it bothered the owner needlessly), named by their event's line.
+    let alone: Vec<String> = app
+        .query("SELECT events.summary FROM scores JOIN events ON events.id = scores.event WHERE scores.eval = 'card-needed' AND scores.label = 'alone' AND scores.at >= ?1", [&since], |r| r.get::<_, String>(0))
+        .iter()
+        .filter_map(|s| manager::card_id_of(s))
+        .filter(|id| resolved.iter().any(|c| &c.0 == id) && !closed.contains(&id.as_str()))
+        .collect();
+    let share = if resolved.is_empty() { 0.0 } else { 100.0 * (closed.len() + alone.len()) as f64 / resolved.len() as f64 };
+    out.push(mk("needless_cards", share, !resolved.is_empty(), format!("closed without an answer in 24 h: [{}]; answered {}; judged decidable alone: [{}]", closed.join(", "), resolved.len() - closed.len(), alone.join(", "))));
+
+    // Satisfaction from the owner-mood scores of the last 24 h, per owner message; judged from what the owner writes anyway, never asked.
+    let moods = app.query("SELECT label, COUNT(*) FROM scores WHERE eval = 'owner-mood' AND at >= ?1 GROUP BY label", [&since], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)));
+    let mood = |label: &str| moods.iter().find(|m| m.0 == label).map(|m| m.1).unwrap_or(0);
+    let msgs = app.query("SELECT COUNT(*) FROM events WHERE kind = 'owner.message' AND at >= ?1", [&since], |r| r.get::<_, i64>(0)).into_iter().next().unwrap_or(0);
+    let sat = if msgs > 0 { (mood("approval") - mood("correction") - mood("repeat") - mood("noise")) as f64 / msgs as f64 } else { 0.0 };
+    let facts =
+        format!("owner mood judged in 24 h: {} approvals, {} corrections, {} repeats, {} noise complaints, {} neutral, over {msgs} owner messages", mood("approval"), mood("correction"), mood("repeat"), mood("noise"), mood("neutral"));
+    out.push(mk("satisfaction", sat, msgs > 0 && !moods.is_empty(), facts));
     out
 }
 

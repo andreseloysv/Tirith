@@ -67,8 +67,10 @@ end with code, and puts a model in the loop only where judgment is needed.
   (`tirith ask-owner --kind …`). A merge shows in the project's chat without costing a manager turn.
 - **Health and the reviewer.** Metrics by code (items merged per day, time to merge, first-try rate, idle projects,
   stuck lanes, red main, and the owner's measures: interruptions per merged item — phone messages of turns the
-  owner did not start, notices routed to the phones and cards, over 24 h — and needless cards, closed without an
-  answer, each with its target in the factory). A red metric goes to the lead; still red 15 minutes later, the reviewer role runs one
+  owner did not start, notices routed to the phones and cards, over 24 h — needless cards, closed without an
+  answer or judged decidable alone by the `card-needed` eval, and the owner's satisfaction, judged per day by a
+  cheap model from the owner's own messages (approvals minus corrections, repeats and noise complaints) and
+  never by asking, each with its target in the factory). A red metric goes to the lead; still red 15 minutes later, the reviewer role runs one
   fresh read-only turn that says what is wrong and what to do. No model runs while everything is green.
 - **Rooms on agentsmessenger.com.** Work from your phone, end-to-end encrypted, with nothing to install: scan the
   QR on the Rooms page (it works once and for fifteen minutes, and the page shows the next one by itself)
@@ -76,7 +78,7 @@ end with code, and puts a model in the loop only where judgment is needed.
   project's conversation: what the manager says, Tirith's reports (merged, failed, a lane's question) and the cards
   that need you, which you answer there (`o12: yes`). `tirith room forget` cuts off a lost phone. Add other managers
   with a code, and watch public rooms with a summary.
-- **Models per role.** Agent, model and effort for every role of the factory (manager, lead, worker, reviewer), with a fallback
+- **Models per role.** Agent, model and effort for every role of the factory (manager, lead, worker, reviewer, judge), with a fallback
   chain for lanes when an agent runs out of credits. Codex works in every role. Choose models in the chat's
   **Models** panel or Settings. The app and the paired phone both offer provider/model buttons and an effort
   slider. `/models` also works in either chat.

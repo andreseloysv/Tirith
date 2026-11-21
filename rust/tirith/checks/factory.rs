@@ -90,12 +90,19 @@ fn roles_extend_and_prompts_resolve() {
 #[test]
 fn factory_roles_carry_their_shape() {
     let f = Factory::default();
-    assert_eq!(f.roles(), ["lead", "manager", "reviewer", "worker"]);
+    assert_eq!(f.roles(), ["judge", "lead", "manager", "reviewer", "worker"]);
     let shape = |r: &str| (f.role::<String>(r, "session"), f.role::<String>(r, "scope"), f.role::<String>(r, "runs_on"));
     assert_eq!(shape("manager"), (Some("chat".into()), Some("project".into()), Some("local".into())));
     assert_eq!(shape("lead"), (Some("chat".into()), Some("global".into()), Some("local".into()))); // runs_on and idle come through extends
     assert_eq!(shape("worker"), (Some("lane".into()), Some("project".into()), Some("local".into())));
     assert_eq!(shape("reviewer"), (Some("turn".into()), Some("global".into()), Some("local".into())));
+    assert_eq!(shape("judge"), (Some("turn".into()), Some("global".into()), Some("local".into())));
+    assert_eq!(
+        (f.role::<String>("judge", "agent").as_deref(), f.role::<String>("judge", "effort").as_deref(), f.role::<String>("judge", "access").as_deref()),
+        (Some("muse"), Some("low"), Some("read")),
+        "the judge: small text jobs on a cheap, fast model, read-only"
+    );
+    assert!(f.prompts_of("judge").is_empty(), "no prompt of its own: each eval's rubric is its instructions");
     assert_eq!(f.role::<String>("reviewer", "access").as_deref(), Some("read"));
     assert_eq!(f.role::<u64>("manager", "idle_minutes"), Some(30));
     assert_eq!(f.role::<u64>("lead", "idle_minutes"), Some(30));
@@ -197,4 +204,36 @@ fn role_hash_tracks_agent_model_and_prompt() {
     let briefed = parse(TEXT, prompts, &toml::Table::new()).unwrap();
     assert_ne!(worker, briefed.role_hash("worker", ""));
     assert_eq!(f.role_hash("reviewer", ""), briefed.role_hash("reviewer", ""), "an untouched role keeps its hash");
+}
+
+#[test]
+fn evals_judge_the_owners_mood_and_whether_a_card_was_needed() {
+    let f = Factory::default();
+    assert_eq!(f.evals_on("owner.message"), vec![("owner-mood".to_string(), "judge".to_string(), "owner-mood".to_string(), 1.0)]);
+    assert_eq!(f.evals_on("card.closed"), vec![("card-needed".to_string(), "judge".to_string(), "card-needed".to_string(), 1.0)]);
+    assert_eq!(f.evals_on("card.answered"), f.evals_on("card.closed"), "an answered card is judged too");
+    assert!(f.evals_on("merge.landed").is_empty());
+    // The rubrics name every label the measures count.
+    for label in ["approval", "neutral", "correction", "repeat", "noise"] {
+        assert!(f.prompt("owner-mood").contains(label), "owner-mood rubric names {label}");
+    }
+    for label in ["needed", "alone"] {
+        assert!(f.prompt("card-needed").contains(label), "card-needed rubric names {label}");
+    }
+    // Satisfaction is a measure like any other: label, target and side in the factory.
+    assert_eq!(f.metric("satisfaction"), ("Satisfacción del dueño (24 h)".to_string(), Some(0.0), true));
+    // An eval on a missing event, with a missing judge or rubric, a sample outside 0 to 1, or an unknown key is invalid.
+    let prompts = embedded_prompts();
+    let bad = |text: &str| parse(text, prompts.clone(), &toml::Table::new()).err().unwrap_or_default();
+    assert!(bad("[[evals]]\nid = \"x\"\non = \"no.such.event\"\njudge = \"judge\"\nrubric = \"evals/owner-mood.md\"\n").contains("missing event, judge role or rubric"));
+    assert!(bad("[[evals]]\nid = \"x\"\non = \"owner.message\"\njudge = \"ghost\"\nrubric = \"evals/owner-mood.md\"\n").contains("missing event, judge role or rubric"));
+    assert!(bad("[[evals]]\nid = \"x\"\non = \"owner.message\"\njudge = \"judge\"\nrubric = \"evals/nope.md\"\n").contains("missing event, judge role or rubric"));
+    assert!(bad("[[evals]]\nid = \"x\"\non = \"owner.message\"\njudge = \"judge\"\nrubric = \"evals/owner-mood.md\"\nsample = 2.0\n").contains("sample outside 0 to 1"));
+    assert!(bad("[[evals]]\nid = \"x\"\non = \"owner.message\"\njudge = \"judge\"\nrubric = \"evals/owner-mood.md\"\nbogus = 1\n").contains("unknown key evals.bogus"));
+    // An eval arriving through config.toml's overlay replaces the factory's evals and restamps the factory.
+    let o = overlay("[[evals]]\nid = \"owner-mood\"\non = \"owner.message\"\njudge = \"judge\"\nrubric = \"evals/owner-mood.md\"\nsample = 0.5\n");
+    let f = parse(TEXT, prompts, &o).unwrap();
+    assert_eq!(f.evals_on("owner.message")[0].3, 0.5);
+    assert!(f.evals_on("card.closed").is_empty());
+    assert_ne!(f.version, Factory::default().version);
 }

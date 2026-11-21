@@ -91,12 +91,13 @@ pub fn wrap(app: &Shared, who: &str, argv: Vec<String>) -> Launch {
     let mut env: Vec<(String, String)> = ["HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY", "https_proxy", "http_proxy", "all_proxy"].iter().map(|k| (k.to_string(), url.clone())).collect();
     env.extend([("NO_PROXY", NO_PROXY), ("no_proxy", NO_PROXY), ("NODE_USE_ENV_PROXY", "1"), ("TIRITH_SANDBOXED", "1")].map(|(k, v)| (k.to_string(), v.to_string())));
     // Gradle and the JVM ignore HTTPS_PROXY; the JDK refuses Basic proxy auth on tunnels unless re-enabled.
-    let mut gradle = std::env::var("GRADLE_OPTS").unwrap_or_default();
-    for scheme in ["http", "https"] {
-        for (k, v) in [("proxyHost", "127.0.0.1"), ("proxyPort", &port.to_string()), ("proxyUser", &user), ("proxyPassword", &token), ("nonProxyHosts", "localhost|127.0.0.1")] {
-            gradle += &if gradle.contains(&format!("-D{scheme}.{k}=")) { String::new() } else { format!(" -D{scheme}.{k}={v}") };
-        }
-    }
+    let port = port.to_string();
+    let pairs = [("proxyHost", "127.0.0.1"), ("proxyPort", &port), ("proxyUser", &user), ("proxyPassword", &token), ("nonProxyHosts", "localhost|127.0.0.1")];
+    let mut gradle =
+        ["http", "https"]
+            .into_iter()
+            .flat_map(|scheme| pairs.map(|(k, v)| (scheme, k, v)))
+            .fold(std::env::var("GRADLE_OPTS").unwrap_or_default(), |g, (scheme, k, v)| if g.contains(&format!("-D{scheme}.{k}=")) { g } else { format!("{g} -D{scheme}.{k}={v}") });
     gradle += " -Djdk.http.auth.tunneling.disabledSchemes= -Djdk.http.auth.proxying.disabledSchemes=";
     env.push(("GRADLE_OPTS".into(), gradle.trim().into()));
     // ssh ignores proxy variables: git over ssh goes through the proxy with `tirith net tunnel`.
@@ -115,22 +116,16 @@ fn write_wrappers(app: &Shared) {
     let head = include_str!("../assets/net-head.sh").replace("{dir}", &dir.display().to_string());
     let mut files: Vec<(String, String)> = [("swift", include_str!("../assets/net-swift.sh")), ("xcodebuild", include_str!("../assets/net-xcodebuild.sh"))].map(|(n, b)| (n.to_string(), b.replace("{flags}", XCODE_FLAGS))).into();
     files.extend(["swift-build", "swift-test", "swift-run", "swift-package"].map(|tool| (tool.into(), include_str!("../assets/net-tool.sh").replace("{tool}", tool))));
-    for (name, body) in files {
-        let path = dir.join(name);
-        let text = format!("{head}{body}");
-        if std::fs::read_to_string(&path).ok().as_deref() != Some(text.as_str()) {
-            let _ = std::fs::write(&path, text);
-        }
+    files.into_iter().for_each(|(name, body)| {
         use std::os::unix::fs::PermissionsExt;
+        let (path, text) = (dir.join(name), format!("{head}{body}"));
+        let _ = (std::fs::read_to_string(&path).ok().as_deref() != Some(text.as_str())).then(|| std::fs::write(&path, text));
         let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755));
-    }
+    });
     // Agents run commands in zsh login shells, where macOS's path_helper puts /usr/bin before the wrappers again: the ZDOTDIR given to sandboxed processes loads the owner's own startup files, then puts the wrappers first.
     let zdot = app.home.join("net/zdot");
     let _ = std::fs::create_dir_all(&zdot);
-    for file in [".zshenv", ".zprofile", ".zshrc", ".zlogin"] {
-        let text = format!("[ -f \"$HOME/{file}\" ] && . \"$HOME/{file}\"\nexport PATH=\"{}:$PATH\"\n", dir.display());
-        let _ = std::fs::write(zdot.join(file), text);
-    }
+    [".zshenv", ".zprofile", ".zshrc", ".zlogin"].into_iter().for_each(|file| drop(std::fs::write(zdot.join(file), format!("[ -f \"$HOME/{file}\" ] && . \"$HOME/{file}\"\nexport PATH=\"{}:$PATH\"\n", dir.display()))));
 }
 
 /// `https://api.example.com:443/x` -> `api.example.com`; `*.x.com` -> `x.com`; addresses and ranges stay.

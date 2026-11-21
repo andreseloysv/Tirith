@@ -60,6 +60,37 @@ fn owner_measures_count_interruptions_and_needless_cards() {
     let needless = get("needless_cards");
     assert_eq!((needless.label.as_str(), needless.value, needless.target, needless.red), ("Tarjetas innecesarias (%)", 66.7, Some(25.0), true), "{}", needless.facts);
     assert!(needless.facts.contains("[o2, o3]") && needless.facts.contains("answered 1"), "{}", needless.facts);
+    // No mood judged yet: satisfaction sits at 0 and is not red, whatever the owner wrote.
+    let satisfaction = get("satisfaction");
+    assert_eq!((satisfaction.label.as_str(), satisfaction.value, satisfaction.target, satisfaction.red), ("Satisfacción del dueño (24 h)", 0.0, Some(0.0), false), "{}", satisfaction.facts);
+
+    // The judge's scores land (each with its factory stamp): 5 owner messages judged 1 approval, 2 corrections,
+    // 1 repeat and 1 noise complaint, and the one answered card judged decidable alone.
+    for ago in [150, 140, 130] {
+        event(ago, "owner.message");
+    }
+    let score = |event: i64, eval: &str, label: &str| {
+        app.insert("INSERT INTO scores (at, event, eval, label, score, why, factory, role_hash) VALUES (?1, ?2, ?3, ?4, NULL, 'why', 'v1+abc12345', 'judge123')", rusqlite::params![at(100), event, eval, label])
+    };
+    for (i, label) in ["approval", "correction", "correction", "repeat", "noise"].iter().enumerate() {
+        score(i as i64 + 1, "owner-mood", label);
+    }
+    score(90000, "owner-mood", "approval"); // its `at` below is what counts, so move it out of the day
+    app.insert("UPDATE scores SET at = ?1 WHERE event = 90000", rusqlite::params![at(90000)]);
+    let answered = app.insert("INSERT INTO events (at, lane, project, kind, tool, summary, session) VALUES (?1,'','p','card.answered','','The owner answered o1 (decision: q?): yes','')", rusqlite::params![at(120)]);
+    score(answered, "card-needed", "alone");
+    let closed_ev = app.insert("INSERT INTO events (at, lane, project, kind, tool, summary, session) VALUES (?1,'','p','card.closed','','Card o2 closed by the manager: no longer needed','')", rusqlite::params![at(110)]);
+    score(closed_ev, "card-needed", "alone"); // already counted as closed without an answer: never twice
+    let metrics = super::compute(&app);
+    let get = |id: &str| metrics.iter().find(|m| m.id == id).unwrap_or_else(|| panic!("no metric {id}"));
+    // (1 approval − 2 corrections − 1 repeat − 1 noise) / 5 owner messages, judged, never asked.
+    let satisfaction = get("satisfaction");
+    assert_eq!((satisfaction.value, satisfaction.red), (-0.6, true), "{}", satisfaction.facts);
+    assert!(satisfaction.facts.contains("1 approvals") && satisfaction.facts.contains("2 corrections") && satisfaction.facts.contains("over 5 owner messages"), "{}", satisfaction.facts);
+    // The answered card the eval says the factory could have decided alone joins the needless ones: 3 of 3.
+    let needless = get("needless_cards");
+    assert_eq!(needless.value, 100.0, "{}", needless.facts);
+    assert!(needless.facts.contains("judged decidable alone: [o1]"), "{}", needless.facts);
     drop(app);
     let _ = std::fs::remove_dir_all(&home);
 }

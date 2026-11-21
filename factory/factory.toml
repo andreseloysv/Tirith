@@ -74,6 +74,18 @@ prompt = ["prompts/reviewer.md"]
 max_per_day = 6
 runs_on = "local"
 
+# Small text jobs on a cheap, fast model: the judge of the evals below. It
+# has no prompt of its own (each eval's rubric is its instructions), so code
+# never picks it as a standalone turn role; config.toml or the page can put
+# it on any cheaper model without touching the factory.
+[roles.judge]
+agent = "muse"
+effort = "low"
+session = "turn"
+scope = "global"
+access = "read"
+runs_on = "local"
+
 # Who hears each event the code emits. mode: turn wakes the role (gathered over
 # limits.batch_seconds), note waits for its next turn. chat: a Tirith line in
 # the conversation. phone: that line, and the answer of a turn the event
@@ -202,6 +214,34 @@ mode = "turn"
 chat = true
 phone = true
 
+# Evals: a judge role reads an event with the conversation before it and
+# answers the label (or score) of its rubric in factory/evals/, kept as a
+# scores row with the event and the factory stamp. Nothing is ever shown
+# to the owner: satisfaction is judged from what the owner writes anyway,
+# never asked (a question is itself an interruption).
+[[evals]]
+id = "owner-mood"
+on = "owner.message"
+judge = "judge"
+rubric = "evals/owner-mood.md"
+sample = 1.0
+
+[[evals]]
+id = "card-needed"
+on = "card.closed"
+judge = "judge"
+rubric = "evals/card-needed.md"
+sample = 1.0
+
+# An answered card is judged too: one the factory could have decided alone
+# was needless however it ended.
+[[evals]]
+id = "card-needed"
+on = "card.answered"
+judge = "judge"
+rubric = "evals/card-needed.md"
+sample = 1.0
+
 [limits]
 max_load = 2.0
 inactivity_minutes = 20
@@ -269,8 +309,18 @@ target = 1
 at_least = false
 
 # Of the cards opened in 24 h that are already resolved, the share closed
-# without an answer: a card nobody needed in the end.
+# without an answer, plus those the card-needed eval says the factory
+# could have decided alone: a card nobody needed in the end.
 [metrics.needless_cards]
 label = "Tarjetas innecesarias (%)"
 target = 25
 at_least = false
+
+# From the owner-mood eval of each owner message, per day:
+# (approvals − corrections − repeats − noise complaints) / owner messages,
+# from -1 to 1. Judged by a cheap model from what the owner writes anyway;
+# the owner is never asked.
+[metrics.satisfaction]
+label = "Satisfacción del dueño (24 h)"
+target = 0
+at_least = true

@@ -102,7 +102,7 @@ async fn free_idle_builds(app: &Shared, lanes: &[Lane]) {
         .await
         .unwrap_or_default()
         .iter()
-        .for_each(|d| app.event("", &d.file_name().unwrap_or_default().to_string_lossy(), "disk", "diet", &format!("removed {} (less than 5 GB free; no lane or stage of its project under way)", d.display()), ""));
+        .for_each(|d| _ = app.event("", &d.file_name().unwrap_or_default().to_string_lossy(), "disk", "diet", &format!("removed {} (less than 5 GB free; no lane or stage of its project under way)", d.display()), ""));
 }
 
 /// Ask once per low-disk spell: `asked` is whether a card is already out; it re-arms after the disk recovers (2 GB above the factory's limit).
@@ -229,21 +229,19 @@ const RUN_START: &str = "--- tirith: lane run started ";
 
 /// Whether the lane's current run already ended in its log: a `run.terminal.completed` event (the top-level `payload_type` of its own stream line, so a mention inside a file or command output the agent read never counts). The process may still be alive.
 fn run_completed(tail: &str) -> bool {
-    let mut done = false;
-    for line in tail.lines() {
+    tail.lines().fold(false, |done, line| {
         if line.starts_with(RUN_START) {
-            done = false;
+            false
         } else if line.contains("run.terminal.completed") || line.contains("run.lifecycle.started") {
-            if let Ok(v) = serde_json::from_str::<serde_json::Value>(line) {
-                match v["payload_type"].as_str() {
-                    Some("run.lifecycle.started") => done = false,
-                    Some("run.terminal.completed") => done = true,
-                    _ => {}
-                }
+            match serde_json::from_str::<serde_json::Value>(line).ok().and_then(|v| v["payload_type"].as_str().map(String::from)).as_deref() {
+                Some("run.lifecycle.started") => false,
+                Some("run.terminal.completed") => true,
+                _ => done,
             }
+        } else {
+            done
         }
-    }
-    done
+    })
 }
 
 /// Whether a running lane has gone `min` minutes since it started and was not reported yet (`min` 0: never).
@@ -333,7 +331,7 @@ pub async fn scheduler(app: Shared) {
         }
         let mut ok = |p: &Project| {
             let why = blocked(&app, p, &lanes);
-            why.as_ref().filter(|w| said.get(&p.id) != Some(*w)).into_iter().for_each(|w| app.event("", &p.id, "paused", "", &format!("no new lane: {w}"), ""));
+            why.as_ref().filter(|w| said.get(&p.id) != Some(*w)).into_iter().for_each(|w| _ = app.event("", &p.id, "paused", "", &format!("no new lane: {w}"), ""));
             app.set_kv(&format!("paused:{}", p.id), why.as_deref());
             said.insert(p.id.clone(), why.clone().unwrap_or_default());
             why.is_none()
@@ -390,19 +388,9 @@ fn brief(app: &Shared, lane: &Lane) -> String {
     let lanes: Vec<Lane> = app.lanes.lock().unwrap().values().filter(|l| l.project == lane.project).cloned().collect();
     let step = steps.iter().find(|s| s.num == lane.step);
     let check = step.and_then(|s| s.items.iter().find(|i| plan::same(&i.text, &lane.item))).and_then(|i| i.check.clone());
-    let items: Vec<String> = step
-        .map(|s| &s.items[..])
-        .unwrap_or_default()
-        .iter()
-        .map(|i| {
-            format!(
-                "- [{}] {}{}",
-                if i.done { "x" } else { " " },
-                i.text,
-                lanes.iter().filter(|l| l.step == lane.step && plan::same(&l.item, &i.text)).max_by(|a, b| a.created_at.cmp(&b.created_at)).filter(|_| !i.done).map(|l| format!("  ({}: {})", l.id, l.status)).unwrap_or_default()
-            )
-        })
-        .collect();
+    let tag =
+        |i: &plan::Item| lanes.iter().filter(|l| l.step == lane.step && plan::same(&l.item, &i.text)).max_by(|a, b| a.created_at.cmp(&b.created_at)).filter(|_| !i.done).map(|l| format!("  ({}: {})", l.id, l.status)).unwrap_or_default();
+    let items: Vec<String> = step.map(|s| &s.items[..]).unwrap_or_default().iter().map(|i| format!("- [{}] {}{}", if i.done { "x" } else { " " }, i.text, tag(i))).collect();
     let others: Vec<String> = lanes.iter().filter(|l| l.id != lane.id && matches!(l.status.as_str(), "running" | "waiting")).map(|l| format!("- {} ({}): {}", l.id, l.status, l.item)).collect();
     let red = app.kv(&format!("main_red:{}", lane.project));
     let rules: Vec<String> = app.cfg().project(&lane.project).map(|p| app.manifest(&p.repo()).rules).unwrap_or_default().iter().map(|r| format!("- {}", r.message)).collect();
@@ -485,16 +473,15 @@ async fn ended(app: &Shared, id: &str, code: Option<i32>) {
     let log = raw
         .lines()
         .filter_map(|l| {
-            if !l.trim_start().starts_with('{') {
-                return Some(l.to_string());
-            }
-            let v: serde_json::Value = serde_json::from_str(l).ok()?;
-            match v["type"].as_str()? {
-                "result" if v["is_error"] == true => Some(l.to_string()),
-                "turn.failed" => v["error"]["message"].as_str().map(String::from),
-                "error" => v["message"].as_str().map(String::from),
-                _ => None,
-            }
+            (!l.trim_start().starts_with('{')).then(|| l.to_string()).or_else(|| {
+                let v: serde_json::Value = serde_json::from_str(l).ok()?;
+                match v["type"].as_str()? {
+                    "result" if v["is_error"] == true => Some(l.to_string()),
+                    "turn.failed" => v["error"]["message"].as_str().map(String::from),
+                    "error" => v["message"].as_str().map(String::from),
+                    _ => None,
+                }
+            })
         })
         .collect::<Vec<_>>()
         .join("\n");
@@ -545,9 +532,7 @@ async fn ended(app: &Shared, id: &str, code: Option<i32>) {
 fn codex_session(app: &Shared, id: &str, log: &str) {
     let run = log.rsplit(RUN_START).next().unwrap_or(log);
     let session = run.lines().filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok()).filter(|v| v["type"] == "thread.started").filter_map(|v| v["thread_id"].as_str().map(String::from)).next_back();
-    if let Some(s) = session.filter(|s| app.lane(id).is_some_and(|l| l.session != *s)) {
-        app.update_lane(id, |l| l.session = s);
-    }
+    session.filter(|s| app.lane(id).is_some_and(|l| l.session != *s)).into_iter().for_each(|s| drop(app.update_lane(id, |l| l.session = s)));
 }
 
 /// True when the lane's branch has no commit beyond the project's HEAD (it is known and countable). Without a check on its item such a lane failed; with one it may still be done (the check can already be true): it goes to the merge queue, where the check runs on main.

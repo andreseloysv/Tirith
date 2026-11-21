@@ -1,4 +1,4 @@
-//! The factory file (`factory/factory.toml` and its prompts): agents, roles, limits, plan words, card kinds and measures, read as data instead of Rust. Strict loading: an unknown key, a role on a missing agent or prompt, or an unknown measure makes a version invalid; the daemon keeps the last good one and reports the error. The repo's factory is embedded under the folder's as its fallback; `~/.tirith/config.toml` is laid over both key by key and wins.
+//! The factory file (`factory/factory.toml`, its prompts and its eval rubrics): agents, roles, limits, plan words, card kinds, measures and evals, read as data instead of Rust. Strict loading: an unknown key, a role on a missing agent or prompt, or an unknown measure makes a version invalid; the daemon keeps the last good one and reports the error. The repo's factory is embedded under the folder's as its fallback; `~/.tirith/config.toml` is laid over both key by key and wins.
 
 use crate::config::get;
 use serde::{de::DeserializeOwned, Deserialize};
@@ -8,8 +8,8 @@ use std::sync::{Arc, Mutex, OnceLock, RwLock};
 use std::time::SystemTime;
 
 const TEXT: &str = include_str!("../../../factory/factory.toml");
-const SECTIONS: [&str; 7] = ["agents", "roles", "limits", "plan", "cards", "metrics", "routes"];
-const MEASURES: [&str; 10] = ["merged", "median", "first_try", "idle", "stuck", "main_red", "failed", "owner", "interruptions", "needless_cards"];
+const SECTIONS: [&str; 8] = ["agents", "roles", "limits", "plan", "cards", "metrics", "routes", "evals"];
+const MEASURES: [&str; 11] = ["merged", "median", "first_try", "idle", "stuck", "main_red", "failed", "owner", "interruptions", "needless_cards", "satisfaction"];
 /// The closed list of events the code emits, `;`-joined like the moves in config.rs; a route on anything else never fires, so it is invalid.
 const EVENTS: &str = "owner.message;room.message;lane.asked;lane.failed;lane.not_started;lane.long;merge.blocked;merge.landed;main.red;main.green;plan.empty;deploy.done;deploy.failed;metric.red;review.done;schedule;card.opened;card.answered;card.closed;factory.invalid";
 /// One `[[routes]]` entry read for one event: (to, mode, chat, phone, after_minutes).
@@ -57,6 +57,8 @@ fn embedded_prompts() -> BTreeMap<String, String> {
         ("clippy", include_str!("../../../factory/prompts/clippy.md")),
         ("reviewer", include_str!("../../../factory/prompts/reviewer.md")),
         ("bot", include_str!("../../../factory/prompts/bot.md")),
+        ("owner-mood", include_str!("../../../factory/evals/owner-mood.md")),
+        ("card-needed", include_str!("../../../factory/evals/card-needed.md")),
     ]
     .into_iter()
     .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -149,6 +151,7 @@ impl Factory {
         let unknown_flat = |sec: &str, allowed: &[&str]| sub(sec).and_then(|m| m.keys().find(|k| !allowed.contains(&k.as_str())).map(|k| format!("unknown key {sec}.{k}")));
         let (agents, roles) = (sub("agents").cloned().unwrap_or_default(), sub("roles").cloned().unwrap_or_default());
         let routes = t.get("routes").and_then(|r| r.as_array()).cloned().unwrap_or_default();
+        let evals = t.get("evals").and_then(|e| e.as_array()).cloned().unwrap_or_default();
         let is_role = |n: &str| n.is_empty() || roles.contains_key(n);
         let bad = [
             t.keys().find(|k| !SECTIONS.contains(&k.as_str())).map(|k| format!("unknown section '{k}'")),
@@ -180,6 +183,17 @@ impl Factory {
                 .iter()
                 .find(|r| !EVENTS.split(';').any(|e| e == str_of(r, "on")) || !is_role(str_of(r, "to")) || !is_role(str_of(r, "then")) || !matches!(str_of(r, "mode"), "" | "turn" | "note"))
                 .map(|r| format!("route on '{}' names a missing event, role or mode ('{}', '{}')", str_of(r, "on"), str_of(r, "to"), str_of(r, "mode"))),
+            evals.iter().find_map(|e| e.as_table().and_then(|e| e.keys().find(|k| !["id", "on", "judge", "rubric", "sample"].contains(&k.as_str())).map(|k| format!("unknown key evals.{k}")))),
+            evals
+                .iter()
+                .find(|e| {
+                    str_of(e, "id").is_empty()
+                        || !EVENTS.split(';').any(|x| x == str_of(e, "on"))
+                        || !roles.contains_key(str_of(e, "judge"))
+                        || !self.prompts.contains_key(&stem(str_of(e, "rubric")))
+                        || !(0.0..=1.0).contains(&e.get("sample").and_then(|v| v.as_float()).unwrap_or(1.0))
+                })
+                .map(|e| format!("eval '{}' names a missing event, judge role or rubric, or a sample outside 0 to 1 ('{}', '{}', '{}')", str_of(e, "id"), str_of(e, "on"), str_of(e, "judge"), str_of(e, "rubric"))),
         ]
         .into_iter()
         .flatten()
@@ -210,9 +224,21 @@ impl Factory {
         self.raw["roles"].as_table().into_iter().flatten().map(|(n, _)| n.clone()).collect()
     }
 
-    /// The first role (in name order) with this `session` and, when given, this `scope`: how code finds who runs a lane, a project's chat or a turn without naming a role.
+    /// The first role (in name order) with this `session` and, when given, this `scope`: how code finds who runs a lane, a project's chat or a turn without naming a role. A role with no prompt of its own (the evals' judge, whose instructions are each rubric) never runs standalone, so it is never found here.
     pub fn find_role(&self, session: &str, scope: Option<&str>) -> Option<String> {
-        self.roles().into_iter().find(|n| self.role::<String>(n, "session").as_deref() == Some(session) && scope.is_none_or(|s| self.role::<String>(n, "scope").as_deref() == Some(s)))
+        self.roles().into_iter().find(|n| self.role::<String>(n, "session").as_deref() == Some(session) && scope.is_none_or(|s| self.role::<String>(n, "scope").as_deref() == Some(s)) && !self.prompts_of(n).is_empty())
+    }
+
+    /// The evals that judge `on`: (id, judge role, rubric file stem, sample share) of every `[[evals]]` on it.
+    pub fn evals_on(&self, on: &str) -> Vec<(String, String, String, f64)> {
+        self.raw
+            .get("evals")
+            .and_then(|e| e.as_array())
+            .into_iter()
+            .flatten()
+            .filter(|e| str_of(e, "on") == on)
+            .map(|e| (str_of(e, "id").into(), str_of(e, "judge").into(), stem(str_of(e, "rubric")), e.get("sample").and_then(|v| v.as_float()).unwrap_or(1.0)))
+            .collect()
     }
 
     pub fn metric(&self, id: &str) -> (String, Option<f64>, bool) {
@@ -255,7 +281,7 @@ fn dir(overlay: &toml::Table) -> Option<PathBuf> {
 pub fn stamp(overlay: &toml::Table) -> Option<SystemTime> {
     let dir = dir(overlay)?;
     let m = |p: &Path| std::fs::metadata(p).and_then(|x| x.modified()).ok();
-    std::fs::read_dir(dir.join("prompts")).into_iter().flatten().flatten().filter_map(|e| m(&e.path())).chain(m(&dir.join("factory.toml"))).max()
+    ["prompts", "evals"].into_iter().filter_map(|d| std::fs::read_dir(dir.join(d)).ok()).flatten().flatten().filter_map(|e| m(&e.path())).chain(m(&dir.join("factory.toml"))).max()
 }
 
 static CURRENT: RwLock<Option<Arc<Factory>>> = RwLock::new(None);
@@ -273,9 +299,11 @@ pub fn error() -> Option<String> {
 
 /// (Re)loads the factory under config.toml's overlay; a bad version keeps the last good one and is remembered in `error()`.
 pub fn load(overlay: &toml::Table) -> Arc<Factory> {
+    // The factory's texts by file stem: the prompts and the eval rubrics alike.
     let prompts = |dir: &Path| -> BTreeMap<String, String> {
-        std::fs::read_dir(dir.join("prompts"))
+        ["prompts", "evals"]
             .into_iter()
+            .filter_map(|d| std::fs::read_dir(dir.join(d)).ok())
             .flatten()
             .flatten()
             .filter(|e| e.path().extension().is_some_and(|x| x == "md"))
