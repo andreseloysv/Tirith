@@ -4,11 +4,11 @@ The overview each module of `rust/tirith/src` carried in its header, kept here s
 
 ## `bots.rs`
 
-Bots: the owner's own agents, factory roles with `scope = "own"` in `~/.tirith/config.toml` (`[roles.bot-<id>]`, extending the manager). Each has a name, a face (shape and
-colour) and its own conversation (`bot-<id>`), run like a project's manager with the manager's model and its own room on the phones. Routines are `[[routes]]` on `schedule`
+Bots: agents of their own, factory roles with `scope = "own"` — the owner's in `~/.tirith/config.toml` (`[roles.bot-<id>]`, extending the manager) and the factory's system bots (`ceo`, `judge` with `show = false`, and `manager-general`, the manager of no project), which the page edits the same way, saving the change as a layer in config.toml. Each has a name, a face (shape and
+colour) and its own conversation (its key), run like a project's manager with its own room on the phones; the sidebar paints every `own` role with `show = true`. Routines are `[[routes]]` on `schedule`
 in that file (their last runs stay in kv as `routine:<id>:<routine>` stamps, not configuration): tasks a bot does by itself at a time of chosen weekdays (the machine's local
 time); the lanes scheduler's tick hands a due one to the bot once a day, and the bot makes them itself with `tirith routine add|remove|list`. The page writes config.toml
-with `toml_edit`, keeping its comments, and the bots that used to live in kv move there once, at daemon start. A bot learns in its folder (`<tirith home>/manager/bot-<id>`): `memory.md`, which Tirith hands it as it is now at
+with `toml_edit`, keeping its comments, and the bots that used to live in kv move there once, at daemon start. A bot learns in its folder (`<tirith home>/manager/<key>`): `memory.md`, which Tirith hands it as it is now at
 the start of every turn and routine, and skills in `.agents/skills/<name>/SKILL.md`, its own and the shared ones of `<tirith home>/bots/skills` (linked in before every turn).
 The bots' agent finds them natively: Muse reads `.agents/skills`, and the agent's own `.<command>/skills` is a link to the same folder. Agents may write in a bot's folder
 (never in its hidden folders, where agent settings live, except skills folders) and in the shared skills; the page's Library shows, corrects and deletes all of it.
@@ -28,7 +28,7 @@ elsewhere) and reloads when a file changes, config.toml does or main moves (its 
 `factory::stamp`), with no restart and the embedded copy as the fallback.
 `~/.tirith/config.toml` is laid over it key by key and wins; its yesterday's sections are read in memory under
 the factory's names (`config.rs`), the file itself untouched except by the page's `toml_edit` writes (the bots'
-roles and their schedule routes), and keys nothing reads are an error the owner sees. A role `extends` another (the lead and the CEO extend
+roles and their schedule routes), and keys nothing reads are an error the owner sees. A role `extends` another (manager-general and the CEO extend
 the manager), and an agent the factory does not name runs with the `default` agent's flags. The `[[routes]]` of
 the factory say who hears each event the code emits (a closed list in `factory.rs`): which role, as a `turn` now
 or a `note` with its next turn, a line in the chat (`chat`), and whether that line and the answer of a turn the
@@ -92,7 +92,7 @@ page, and a red one is routed as `metric.red` like any other. A metric that
 turns red starts an episode: the mechanical fix when there is one, then one note to the manager. Still red
 after the delayed `metric.red` route's `after_minutes` (15), one pass runs for that episode: that route's turn
 role (the CEO, `access = "read"`) runs one fresh turn like any turn role, and its
-answer goes to the owner's chat and, as `review.done`, to the lead. Back to green ends the episode. The
+answer goes to the CEO's own conversation and, as `review.done`, to the manager of no project. Back to green ends the episode. The
 factory's `schedule` route to the CEO also runs it every day at 07:00 with no red measure due — that
 when and who are configuration, not a decision in `metrics.rs`, and it is due like a bot's routine (its time
 came today and no daily pass ran since; its daily passes are the `ceo_reviews` rows whose `metric` names
@@ -111,7 +111,7 @@ While everything is green and the day's pass ran, no model is called.
 
 Models per role and the fallback chain.
 
-Roles are the factory's: "manager" (a project's chat), "lead" (the chat of no project), "worker" (lanes),
+Roles are the factory's: "manager" (a project's chat), "manager-general" (the system bot of no project), "worker" (lanes),
 "ceo" (one fresh turn) and "judge" (the evals' cheap turn role, with no prompt of its own, so code never
 picks it as a standalone turn role), each with its `session`, `scope`, `extends`, `access`, `idle_minutes`,
 `max_per_day` and `runs_on` in `factory/factory.toml`; code finds a role by that shape, never by a fixed

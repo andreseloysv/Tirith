@@ -69,10 +69,7 @@ async fn recheck_red(app: &Shared) {
         let _busy = BUSY.lock().await;
         let manifest = app.manifest(&project.repo());
         let (Some(st), Ok(slot)) = (manifest.stages.iter().find(|s| s.name == stage), merge_slot(project, &manifest).await) else { continue };
-        if !main_check(app, project, &slot, &head, st, false).await {
-            app.set_kv(&format!("main_red:{}", project.id), Some(&format!("{stage} at {}", &head[..8])));
-            app.emit("plan", json!({"project": project.id}));
-        }
+        let _ = (!main_check(app, project, &slot, &head, st, false).await).then(|| (app.set_kv(&format!("main_red:{}", project.id), Some(&format!("{stage} at {}", &head[..8]))), app.emit("plan", json!({"project": project.id}))).1);
     }
 }
 
@@ -84,9 +81,7 @@ async fn next_batch(app: &Shared) -> Vec<Lane> {
     for p in red {
         let Some(why) = app.kv(&format!("main_red:{p}")) else { continue };
         let head = if let Some(r) = app.cfg().project(&p).map(|p| p.repo()) { git(&r, &["rev-parse", "HEAD"]).await.unwrap_or_default() } else { String::new() };
-        if head.len() < 8 || why.ends_with(&head[..8]) {
-            queued.retain(|l| l.project != p);
-        }
+        let _ = (head.len() < 8 || why.ends_with(&head[..8])).then(|| queued.retain(|l| l.project != p));
     }
     let Some(first) = queued.first().cloned() else { return vec![] };
     let Some(()) = (!first.solo).then_some(()) else { return vec![first] };

@@ -16,7 +16,7 @@ import { Face, NewFace, SHAPES, COLORS } from './bots/face.js';
 const DAY = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const WEEKDAYS = [1, 2, 3, 4, 5], DAILY = [1, 2, 3, 4, 5, 6, 7];
 const SEL_KEY = 'tirith.bot';
-export const keyOf = (b) => `bot-${b.id}`;
+export const keyOf = (b) => b.key || `bot-${b.id}`;   /* its conversation: bot-<id>, or a system bot's key (ceo, manager-general…) */
 const isOn = (r) => r.on !== false;
 
 export function recall() { try { return localStorage.getItem(SEL_KEY) || ''; } catch { return ''; } }
@@ -68,7 +68,7 @@ export function BotCard({ bot, onClose, onSaved }) {
   const [err, setErr] = useState('');
   const [ask, setAsk] = useState(false);
   const [M] = useFetch('/api/models', ['models']);
-  const role = bot.id && M && M.roles[`bot-${bot.id}`];
+  const role = bot.id && M && M.roles[keyOf(bot)];
   const [own, setOwn] = useState(null);      /* null: as it is; true or false: the owner's choice */
   const [model, setModel] = useState(null);  /* the model chosen here */
   const hasOwn = own == null ? !!(role && role.source === 'page') : own;
@@ -85,8 +85,8 @@ export function BotCard({ bot, onClose, onSaved }) {
     if (!name.trim() || !valid) return;
     try {
       const b = await api('POST', '/api/bots', { id: bot.id, name: name.trim(), shape, color });
-      if (own === false && role && role.source === 'page') await api('DELETE', `/api/models/bot-${b.id}`);
-      else if (hasOwn && (model || own)) await api('POST', `/api/models/bot-${b.id}`, value);
+      if (own === false && role && role.source === 'page') await api('DELETE', `/api/models/${keyOf(b)}`);
+      else if (hasOwn && (model || own)) await api('POST', `/api/models/${keyOf(b)}`, value);
       onSaved(b);
     } catch (e) { setErr(e.message); }
   };
@@ -108,7 +108,7 @@ export function BotCard({ bot, onClose, onSaved }) {
         ${err ? html`<p class="berr">${err}</p>` : null}
       </div>
       <footer>
-        ${bot.id ? (ask ? html`<span class="bask">Delete ${bot.name} with its routines, memory and own skills?</span><button type="button" class="bbtn bdel" onClick=${del}>Delete</button>
+        ${bot.id && !bot.system ? (ask ? html`<span class="bask">Delete ${bot.name} with its routines, memory and own skills?</span><button type="button" class="bbtn bdel" onClick=${del}>Delete</button>
             <button type="button" class="bbtn" onClick=${() => setAsk(false)}>Keep</button>`
           : html`<button type="button" class="blink bdel" onClick=${() => setAsk(true)}>Delete bot</button>`) : null}
         ${ask ? null : html`<span class="bsp"></span><button type="button" class="bbtn" onClick=${onClose}>Cancel</button>

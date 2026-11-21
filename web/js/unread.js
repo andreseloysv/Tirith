@@ -4,6 +4,7 @@
 import { useEffect } from '../vendor/preact-htm.js';
 import { S, useStore, useFetch, openTalk, setUi } from './store.js';
 import { shownAnswers } from './views/chat.js';
+import { keyOf } from './views/bots.js';
 
 const KEY = 'tirith.bots.seen';
 let seen = {};
@@ -18,14 +19,14 @@ export function useUnread() {
   const [bots] = useFetch('/api/bots', ['bots']);
   useEffect(() => {
     for (const b of bots || []) {
-      const key = `bot-${b.id}:${s.boots}`;
-      if (!opened.has(key)) { opened.add(key); openTalk(`bot-${b.id}`); }
+      const key = `${keyOf(b)}:${s.boots}`;
+      if (!opened.has(key)) { opened.add(key); openTalk(keyOf(b)); }
     }
   }, [bots, s.boots]);
   const by = {};
   let total = 0;
   for (const b of bots || []) {
-    const k = `bot-${b.id}`, t = S.talks[k];
+    const k = keyOf(b), t = S.talks[k];
     if (!t || !t.loaded) continue;
     if (seen[b.id] == null) { seen[b.id] = lastId(t.rows); save(); }
     by[b.id] = shownAnswers(t.rows, !!S.busy[k]).filter((r) => r.id > seen[b.id]).length;

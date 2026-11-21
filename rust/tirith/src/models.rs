@@ -41,9 +41,9 @@ pub fn role_with_source(app: &Shared, role: &str) -> (RoleSetting, &'static str)
         return (s, "page");
     }
     let cfg = app.cfg();
-    if cfg.factory.role::<String>(role, "scope").as_deref() == Some("own") {
+    if role.starts_with("bot-") {
         let chat = cfg.factory.find_role("chat", Some("project")).unwrap_or_else(|| "manager".into());
-        return (self::role(app, &chat), "managers"); // a bot without a model of its own has the project chat role's
+        return (self::role(app, &chat), "managers"); // one of the owner's bots without a model of its own has the project chat role's (a system bot keeps its factory role's below)
     }
     let f = &cfg.factory;
     let from_config = get::<toml::Table>(&cfg.raw, &["roles", role]).is_some_and(|t| ["agent", "model", "effort", "fallback"].iter().any(|k| t.get(*k).is_some_and(|v| v.as_str().is_none_or(|s| !s.is_empty()))));
@@ -161,7 +161,7 @@ pub fn save(app: &Shared, role_name: &str, b: Option<&Value>) -> Result<RoleSett
     app.event("", "", "models", role_name, &format!("{role_name}: {} ({source})", line(&now)), "");
     app.emit("models", state(app));
     let chat = app.cfg().factory.role::<String>(role_name, "session").as_deref() == Some("chat");
-    let _ = (now != before && (chat || role_name.starts_with("bot-"))).then(crate::manager::restart);
+    let _ = (now != before && (chat || app.cfg().factory.role::<String>(role_name, "scope").as_deref() == Some("own"))).then(crate::manager::restart);
     Ok(now)
 }
 
@@ -222,12 +222,10 @@ pub fn command(app: &Shared, text: &str) -> Option<Result<String, String>> {
         }
         ((3..=4).contains(&words.len())).then_some(()).ok_or_else(|| help.clone())?;
         let r = if words[1] == "todos" { "all" } else { words[1] };
-        let roles: Vec<String> = if r == "all" {
-            all_roles.clone()
-        } else if all_roles.iter().any(|x| x == r) {
-            vec![r.to_string()]
-        } else {
-            return Err(help);
+        let roles: Vec<String> = match r {
+            "all" => all_roles.clone(),
+            _ if all_roles.iter().any(|x| x == r) => vec![r.to_string()],
+            _ => return Err(help),
         };
         let reset = words[2] == "reset";
         (!reset || words.len() == 3).then_some(()).ok_or_else(|| help.clone())?;

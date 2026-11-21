@@ -59,11 +59,11 @@ pub fn router(app: Shared, port: u16) -> Router {
         .route(
             "/api/chat",
             get(|State(app): State<Shared>, Query(q): Query<std::collections::HashMap<String, String>>| async move {
-                Json(json!(app.recent("chat", &["id", "at", "role", "text", "project", "factory", "role_hash"], Some(q.get("project").map_or("", String::as_str)), 300)))
+                Json(json!(app.recent("chat", &["id", "at", "role", "text", "project", "factory", "role_hash"], Some(app.conv(q.get("project").map_or("", String::as_str))), 300)))
             })
             .post(chat),
         )
-        .route("/api/manager/interrupt", post(|Json(b): Json<Value>| async move { manager::interrupt(&s(&b, "project")).map(|_| Json(json!({"ok": true}))).map_err(bad) }))
+        .route("/api/manager/interrupt", post(|State(app): State<Shared>, Json(b): Json<Value>| async move { manager::interrupt(app.conv(&s(&b, "project"))).map(|_| Json(json!({"ok": true}))).map_err(bad) }))
         .route("/hook/{event}", post(hook))
         .merge(rooms::routes())
         .merge(sandbox::routes())
@@ -209,15 +209,6 @@ async fn web_file(State(app): State<Shared>, uri: axum::http::Uri) -> Response {
     let Some(()) = (!rel.split('/').any(|p| p.is_empty() || p == ".." || p.starts_with('.'))).then_some(()) else { return (StatusCode::NOT_FOUND, "not found").into_response() };
     let dir = crate::config::get::<String>(&app.cfg().raw, &["app", "web_dir"]).map(|d| crate::config::expand(&d)).unwrap_or_else(|| std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../web")));
     let Ok(body) = tokio::fs::read(dir.join(rel)).await else { return (StatusCode::NOT_FOUND, "not found").into_response() };
-    let kind = match rel.rsplit('.').next().unwrap_or("") {
-        "html" => "text/html; charset=utf-8",
-        "css" => "text/css; charset=utf-8",
-        "js" | "mjs" => "application/javascript; charset=utf-8",
-        "svg" => "image/svg+xml",
-        "png" => "image/png",
-        "json" => "application/json",
-        "woff2" => "font/woff2",
-        _ => "application/octet-stream",
-    };
+    let kind = attach::content_kind(rel, true);
     ([("content-type", kind), ("cache-control", "no-cache")], body).into_response()
 }
