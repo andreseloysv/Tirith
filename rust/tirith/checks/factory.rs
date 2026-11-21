@@ -58,8 +58,8 @@ fn default_routes_reproduce_today() {
     for (on, want) in table {
         assert_eq!(f.routes_on(on), want, "routes on {on}");
     }
-    // A red measure wakes the lead at once and, still red after 15 minutes, the reviewer.
-    assert_eq!(f.routes_on("metric.red"), vec![("lead".to_string(), "turn".to_string(), true, true, None), ("reviewer".to_string(), "turn".to_string(), false, false, Some(15))]);
+    // A red measure wakes the lead at once and, still red after 15 minutes, the improver.
+    assert_eq!(f.routes_on("metric.red"), vec![("lead".to_string(), "turn".to_string(), true, true, None), ("improver".to_string(), "turn".to_string(), false, false, Some(15))]);
     // A route on a missing event, to a missing role, or with an unknown key or mode makes the version invalid.
     let prompts = embedded_prompts();
     let bad = |text: &str| parse(text, prompts.clone(), &toml::Table::new()).err().unwrap_or_default();
@@ -78,24 +78,29 @@ fn default_routes_reproduce_today() {
 fn roles_extend_and_prompts_resolve() {
     let f = Factory::default();
     assert_eq!(f.role::<String>("lead", "agent").as_deref(), Some("anthropic")); // extends manager
-    assert_eq!(f.role::<u64>("reviewer", "max_per_day"), Some(6));
+    assert_eq!(f.role::<u64>("improver", "max_per_day"), Some(6));
     assert_eq!(f.role::<String>("worker", "session").as_deref(), Some("lane"));
     assert!(f.prompts_of("manager").starts_with("You are the manager inside Tirith"));
     assert!(f.prompts_of("manager").contains("only about the project {id}"));
     assert!(f.prompts_of("lead").contains("not about one project"));
-    assert!(f.prompt("reviewer").contains("CEO review"));
+    // The improver closes the loop: by-version measures, at most one factory change as a step 17 item with its lane, and the revert rule.
+    let improver = f.prompt("improver");
+    assert!(improver.contains("You are the improver") && improver.contains("at most one change to `factory/`"), "one change at most:\n{improver}");
+    assert!(improver.contains("tirith plan add tirith 17") && improver.contains("tirith lane start tirith 17"), "as a step 17 item with its lane started");
+    assert!(improver.contains("first 10 merged items, or 24 h") && improver.contains("satisfaction") && improver.contains("interruptions") && improver.contains("first try"), "the revert window and its three measures");
+    assert!(improver.contains("revert the factory change"), "a worse version is reverted by its next pass");
     assert!(f.prompt("brief").contains("# Lane {id}"));
 }
 
 #[test]
 fn factory_roles_carry_their_shape() {
     let f = Factory::default();
-    assert_eq!(f.roles(), ["judge", "lead", "manager", "reviewer", "worker"]);
+    assert_eq!(f.roles(), ["improver", "judge", "lead", "manager", "worker"]);
     let shape = |r: &str| (f.role::<String>(r, "session"), f.role::<String>(r, "scope"), f.role::<String>(r, "runs_on"));
     assert_eq!(shape("manager"), (Some("chat".into()), Some("project".into()), Some("local".into())));
     assert_eq!(shape("lead"), (Some("chat".into()), Some("global".into()), Some("local".into()))); // runs_on and idle come through extends
     assert_eq!(shape("worker"), (Some("lane".into()), Some("project".into()), Some("local".into())));
-    assert_eq!(shape("reviewer"), (Some("turn".into()), Some("global".into()), Some("local".into())));
+    assert_eq!(shape("improver"), (Some("turn".into()), Some("global".into()), Some("local".into())));
     assert_eq!(shape("judge"), (Some("turn".into()), Some("global".into()), Some("local".into())));
     assert_eq!(
         (f.role::<String>("judge", "agent").as_deref(), f.role::<String>("judge", "effort").as_deref(), f.role::<String>("judge", "access").as_deref()),
@@ -103,14 +108,14 @@ fn factory_roles_carry_their_shape() {
         "the judge: small text jobs on a cheap, fast model, read-only"
     );
     assert!(f.prompts_of("judge").is_empty(), "no prompt of its own: each eval's rubric is its instructions");
-    assert_eq!(f.role::<String>("reviewer", "access").as_deref(), Some("read"));
+    assert_eq!(f.role::<String>("improver", "access").as_deref(), Some("read"));
     assert_eq!(f.role::<u64>("manager", "idle_minutes"), Some(30));
     assert_eq!(f.role::<u64>("lead", "idle_minutes"), Some(30));
     // Code finds roles by shape, never by a fixed list of names.
     assert_eq!(f.find_role("lane", None).as_deref(), Some("worker"));
     assert_eq!(f.find_role("chat", Some("project")).as_deref(), Some("manager"));
     assert_eq!(f.find_role("chat", Some("global")).as_deref(), Some("lead"));
-    assert_eq!(f.find_role("turn", None).as_deref(), Some("reviewer"));
+    assert_eq!(f.find_role("turn", None).as_deref(), Some("improver"));
     assert_eq!(f.find_role("chat", Some("own")), None);
 }
 
@@ -151,7 +156,7 @@ fn invalid_factories_are_refused() {
 
 #[test]
 fn config_sections_move_to_their_new_names() {
-    let mut t: toml::Table = "[models.workers]\nagent = \"muse\"\nmodel = \"m1\"\n[models]\nchoices = [\"m1\"]\n[lanes]\nmax_load = 3.5\nmax_parallel = 7\n[merge]\npush = false\nstage_timeout_minutes = 9\n[plan]\ncommit_seconds = 33\n[ceo]\nmax_per_day = 2\nenabled = true\n[ceo.targets]\nmerged_per_day = 4\n[roles.worker]\neffort = \"high\"\n".parse().unwrap();
+    let mut t: toml::Table = "[models.workers]\nagent = \"muse\"\nmodel = \"m1\"\n[models]\nchoices = [\"m1\"]\n[lanes]\nmax_load = 3.5\nmax_parallel = 7\n[merge]\npush = false\nstage_timeout_minutes = 9\n[plan]\ncommit_seconds = 33\n[ceo]\nmax_per_day = 2\nenabled = true\n[ceo.targets]\nmerged_per_day = 4\n[roles.worker]\neffort = \"high\"\n[roles.reviewer]\neffort = \"low\"\n".parse().unwrap();
     assert!(crate::config::migrate(&mut t));
     assert!(!crate::config::migrate(&mut t)); // once is enough: nothing left to move
     let g = |p: &[&str]| crate::config::get::<toml::Value>(&t, p);
@@ -161,7 +166,9 @@ fn config_sections_move_to_their_new_names() {
     assert_eq!(g(&["limits", "max_parallel"]).and_then(|v| v.as_integer()), Some(7));
     assert_eq!(g(&["limits", "stage_timeout_minutes"]).and_then(|v| v.as_integer()), Some(9));
     assert_eq!(g(&["limits", "plan_commit_seconds"]).and_then(|v| v.as_integer()), Some(33));
-    assert_eq!(g(&["roles", "reviewer", "max_per_day"]).and_then(|v| v.as_integer()), Some(2));
+    assert_eq!(g(&["roles", "improver", "max_per_day"]).and_then(|v| v.as_integer()), Some(2));
+    assert_eq!(g(&["roles", "improver", "effort"]).and_then(|v| v.as_str().map(String::from)), Some("low".into())); // yesterday's reviewer is today's improver, its keys moved with it
+    assert!(g(&["roles", "reviewer"]).is_none());
     assert_eq!(g(&["metrics", "merged", "target"]).and_then(|v| v.as_integer()), Some(4));
     assert!(t.get("lanes").is_none() && t.get("plan").is_none());
     assert_eq!(g(&["merge", "push"]).and_then(|v| v.as_bool()), Some(false)); // what stays, stays
@@ -188,6 +195,26 @@ fn stamp_is_factory_commit_plus_overlay_hash() {
 }
 
 #[test]
+fn stamp_moves_when_main_moves() {
+    // The reload stamp covers main itself (its reflog and ref), so a landed factory change applies with no restart.
+    let root = std::env::temp_dir().join(format!("tirith-factory-stamp-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    for d in ["factory/prompts", "factory/evals", ".git/logs", ".git/refs/heads"] {
+        std::fs::create_dir_all(root.join(d)).unwrap();
+    }
+    std::fs::write(root.join("factory/factory.toml"), "").unwrap();
+    std::fs::write(root.join(".git/logs/HEAD"), "old\n").unwrap();
+    let over = overlay(&format!("factory = {:?}", root.join("factory").display().to_string()));
+    let before = stamp(&over).expect("a stamp");
+    let touched = std::process::Command::new("touch").args(["-t", "203001010000"]).arg(root.join(".git/logs/HEAD")).status().unwrap();
+    assert!(touched.success());
+    let after = stamp(&over).expect("a stamp after main moved");
+    assert!(after > before, "main moving moves the stamp");
+    assert!(after.duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() > 1_893_000_000, "the stamp is main's reflog time (2030 in the test)");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
 fn role_hash_tracks_agent_model_and_prompt() {
     let f = Factory::default();
     let worker = f.role_hash("worker", "");
@@ -203,7 +230,7 @@ fn role_hash_tracks_agent_model_and_prompt() {
     prompts.insert("brief".to_string(), "a different brief".to_string());
     let briefed = parse(TEXT, prompts, &toml::Table::new()).unwrap();
     assert_ne!(worker, briefed.role_hash("worker", ""));
-    assert_eq!(f.role_hash("reviewer", ""), briefed.role_hash("reviewer", ""), "an untouched role keeps its hash");
+    assert_eq!(f.role_hash("improver", ""), briefed.role_hash("improver", ""), "an untouched role keeps its hash");
 }
 
 #[test]

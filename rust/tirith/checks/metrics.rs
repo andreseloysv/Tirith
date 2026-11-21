@@ -95,6 +95,40 @@ fn owner_measures_count_interruptions_and_needless_cards() {
     let _ = std::fs::remove_dir_all(&home);
 }
 #[test]
+fn improver_brief_groups_measures_and_scores_by_factory_version() {
+    let home = std::env::temp_dir().join(format!("tirith-improver-brief-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&home);
+    std::fs::create_dir_all(&home).unwrap();
+    std::env::set_var("TIRITH_HOME", &home);
+    let app = crate::app::App::open();
+    // The delayed metric.red route names the improver, still red after 15 minutes.
+    assert_eq!(super::delayed_review(&app), ("improver".to_string(), 15 * 60));
+    let at = |ago: u64| chrono::DateTime::from_timestamp(crate::app::now_s().saturating_sub(ago) as i64, 0).unwrap().format("%Y-%m-%dT%H:%M:%SZ").to_string();
+    let merged = |id: &str, factory: &str, attempts: u32, ago: u64| {
+        app.save_lane(&crate::app::Lane { id: id.into(), project: "tirith".into(), status: "merged".into(), attempts, factory: factory.into(), created_at: at(ago + 3600), merged_at: Some(at(ago)), ..Default::default() })
+    };
+    merged("old-first", "v1+aaaa1111", 0, 90000);
+    merged("old-retried", "v1+aaaa1111", 2, 80000);
+    merged("new-first", "v2+bbbb2222", 0, 3600);
+    app.insert("INSERT INTO scores (at, event, eval, label, score, why, factory, role_hash) VALUES (?1, 1, 'owner-mood', 'approval', NULL, 'ok', 'v1+aaaa1111', 'j')", rusqlite::params![at(80000)]);
+    app.insert("INSERT INTO scores (at, event, eval, label, score, why, factory, role_hash) VALUES (?1, 2, 'owner-mood', 'correction', NULL, 'no', 'v2+bbbb2222', 'j')", rusqlite::params![at(3000)]);
+    app.insert("INSERT INTO owner_items (id, at, kind, project, question, status, answer, lane, factory, role_hash) VALUES ('o9', ?1, 'decision', 'tirith', 'q?', 'closed', '', '', 'v2+bbbb2222', '')", rusqlite::params![at(3000)]);
+    app.insert("INSERT INTO events (at, lane, project, kind, tool, summary, session, factory, role_hash) VALUES (?1, '', 'tirith', 'lane.failed', '', '', '', 'v2+bbbb2222', '')", rusqlite::params![at(3000)]);
+    let brief = super::brief(&app, "Daily improver pass (no red measure needed).");
+    // The by-version tables the improver compares: merged and first try per stamp (oldest first), scores, cards and events per stamp.
+    assert!(brief.contains("# By factory version (oldest first)"), "{brief}");
+    let v1 = brief.find("\"factory\":\"v1+aaaa1111\"").unwrap_or_else(|| panic!("v1 row in:\n{brief}"));
+    let v2 = brief.find("\"factory\":\"v2+bbbb2222\"").unwrap_or_else(|| panic!("v2 row in:\n{brief}"));
+    assert!(v1 < v2, "oldest version first:\n{brief}");
+    assert!(brief.contains("\"first_try_pct\":50,\"merged\":2"), "{brief}");
+    assert!(brief.contains("\"first_try_pct\":100,\"merged\":1"), "{brief}");
+    assert!(brief.contains("# Eval scores by factory version") && brief.contains("\"label\":\"correction\",\"n\":1"), "{brief}");
+    assert!(brief.contains("# Cards and events by factory version and kind") && brief.contains("\"kind\":\"card.opened\",\"n\":1") && brief.contains("\"kind\":\"lane.failed\",\"n\":1"), "{brief}");
+    assert!(brief.contains("new-first") && brief.contains("v2+bbbb2222: "), "lane lines carry their stamp:\n{brief}");
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}
+#[test]
 fn health_merged_reports_empty_plans() {
     let t = super::empty_plan_note(&["tirith".to_string(), "p2".to_string()]);
     assert!(t.contains("tirith plan empty") && t.contains("fix: tirith plan add tirith <step>"), "{t}");

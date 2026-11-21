@@ -119,7 +119,7 @@ impl App {
         self.cfg.read().unwrap().clone()
     }
 
-    /// Re-reads `config.toml` and the factory when either changed on disk (a few stats) or when `force`d; true when re-read. A bad factory version keeps the last good one (see `factory::load`).
+    /// Re-reads `config.toml` and the factory when either changed on disk or main moved (a few stats, see `factory::stamp`) or when `force`d; true when re-read. A bad factory version keeps the last good one (see `factory::load`).
     pub fn reload_config(&self, force: bool) -> bool {
         let now = (std::fs::metadata(self.home.join("config.toml")).and_then(|m| m.modified()).ok(), crate::factory::stamp(&self.cfg().raw));
         let mut last = self.cfg_mtime.lock().unwrap();

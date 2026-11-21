@@ -92,7 +92,7 @@ fn rows_carry_the_factory_stamp() {
     crate::manager::ask_owner(&app, "", "decision", "stamped card?", "").unwrap();
     assert_eq!(stamp("owner_items", "question = 'stamped card?'"), (version.clone(), app.stamp_for(&app.chat_role("")).1));
     // A score row is born stamped (the evals fill the table; its stamp columns are these).
-    let (f2, h2) = app.stamp_for("reviewer");
+    let (f2, h2) = app.stamp_for("improver");
     app.insert("INSERT INTO scores (at, event, eval, label, factory, role_hash) VALUES (?1, 1, 'owner-mood', 'approval', ?2, ?3)", rusqlite::params![now_iso(), f2, h2]);
     assert_eq!(stamp("scores", "eval = 'owner-mood'"), (version, h2));
 }

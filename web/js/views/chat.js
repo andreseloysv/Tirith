@@ -1,5 +1,5 @@
 // The manager chat. It shows ONE conversation: the selected project's with its own manager, a bot's, or (no project
-// selected) the one of no project, where health reports, the reviewer's reviews and questions across projects live. Rows
+// selected) the one of no project, where health reports, the improver's passes and questions across projects live. Rows
 // ({id, at, role, text, project}) come from useTalk(project); a run of manager/tool rows is one turn. The owner never sees
 // its commands: while it runs, one tiny line says in plain words what it is doing (intent.js); once it ended, only its
 // answer shows. An answer that starts with ∅ (nothing new) is a quiet line. Owner messages may list attached files
@@ -161,7 +161,7 @@ const Msg = pure(({ m, project, projects, onZoom, open, ended }) => {
     const r = /^(.*) \(([^()]*)\): ([\s\S]*)$/.exec(text);
     if (r) { ctx = /paired phone\)$/.test(r[1]) ? 'Your phone' : r[1]; text = r[3]; } else ctx = 'Room';
     cls = 'mgr room';
-  } else if (m.role === 'reviewer' || m.role === 'ceo') { ctx = 'Review'; cls = 'mgr ceo'; } /* 'ceo': rows written before the role was renamed */
+  } else if (m.role === 'improver' || m.role === 'reviewer' || m.role === 'ceo') { ctx = 'Improver'; cls = 'mgr ceo'; } /* 'reviewer'/'ceo': rows written before the role was renamed */
   else if (m.role !== 'tirith') { ctx = m.role; }
   return html`<div class=${`mc-m ${cls}`}><div class="mc-b md" dangerouslySetInnerHTML=${{ __html: mdOf(m.id, text) }} />
     <div class="mc-meta" dangerouslySetInnerHTML=${{ __html: ctxHtml(ctx) + ' · ' + esc(time) }} /></div>`;
@@ -383,7 +383,7 @@ export function Chat({ project = '', who = '', hint = '', models = true }) {
           : `Could not read this conversation: ${talk.error.message}`}</div>` : null}
       ${rows.length || out.length ? rows : !talk.loaded ? null : html`<p class="quiet">${hint || (project
         ? `Write to the manager of ${name} here. It works on this project only: its answers, its agents' questions and what lands on main show in this thread.`
-        : 'Write here about anything that is not one project\'s: this manager gets the health reports and the reviewer\'s reviews. Every project has its own manager: select a project to talk to it.')}</p>`}
+        : 'Write here about anything that is not one project\'s: this manager gets the health reports and the improver\'s passes. Every project has its own manager: select a project to talk to it.')}</p>`}
       ${pending}
       ${out.map((o) => html`<${Local} key=${o.cid} o=${o} onRetry=${() => retry(o)} onCopy=${() => copy(o)} />`)}
     </div>
