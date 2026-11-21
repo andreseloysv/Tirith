@@ -120,7 +120,7 @@ fn a_system_bot_change_is_a_layer_in_config() {
     // The CEO renamed and re-faced on the page; the judge untouched; an owner's bot as ever.
     let old = "# keep\n[roles.ceo]\nmodel = \"keep-me\" # and this\n";
     let bots = json!([
-        {"id": "ceo", "key": "ceo", "system": true, "dirty": true, "name": "Boss", "shape": "star", "color": "#e5484d", "show": true, "routines": []},
+        {"id": "ceo", "key": "ceo", "system": true, "dirty": true, "name": "Boss", "shape": "star", "color": "#e5484d", "show": true, "session": "chat", "access": "", "routes": [{"on": "lane.failed", "to": "ceo", "mode": "note", "chat": false, "phone": true}], "routines": []},
         {"id": "judge", "key": "judge", "system": true, "name": "Judge", "shape": "hex", "color": "#8c8c8c", "show": false, "routines": []},
         {"id": "abc123", "name": "N", "shape": "drop", "color": "#22d3ee", "routines": []}
     ]);
@@ -145,6 +145,9 @@ fn a_system_bot_change_is_a_layer_in_config() {
     .collect();
     let f = crate::factory::parse(include_str!("../../../factory/factory.toml"), prompts, &text.parse::<toml::Table>().unwrap()).unwrap();
     assert_eq!(f.role::<String>("ceo", "name").as_deref(), Some("Boss"));
+    assert_eq!((f.role::<String>("ceo", "session").as_deref(), f.role::<String>("ceo", "access").as_deref()), (Some("chat"), Some("")), "its session and access are the layer's, not the factory's turn/read");
+    assert_eq!(f.routes_on("lane.failed"), vec![("manager".to_string(), "turn".to_string(), true, true, None), ("ceo".to_string(), "note".to_string(), false, true, None)], "the changed CEO hears lane.failed as written");
+    assert!(f.routes_on("metric.red").iter().all(|r| r.0 != "ceo"), "and the factory's routes to it are replaced, not kept beside the layer's");
     assert_eq!(f.role::<toml::Table>("ceo", "face").and_then(|t| t.get("shape").and_then(|v| v.as_str()).map(String::from)).as_deref(), Some("star"));
     // With no [roles] in the file at all, the layer is a plain table at the end (an inline `roles = {…}` would make a later [roles.bot-…] header unparseable).
     let text = super::written("[server]\nport = 7799\n", &bots.as_array().unwrap()[..1]).unwrap();

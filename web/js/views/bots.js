@@ -3,7 +3,10 @@
 // working) and three tabs. Routines: each with a switch, Run now, Edit and Delete, and a form for a new one. Library: what
 // the bot learned, its memory.md and its skills (its own and the shared ones of every bot), to read, correct or delete.
 // Phone: one QR that opens the bot's chat on the owner's phone. The sidebar's "+" and "Edit" open the bot's card (BotCard,
-// drawn by the app over any view): name, shape, colour and its model (the managers' unless it has one of its own).
+// drawn by the app over any view): name, shape, colour, its model (the managers' unless it has one of its own) and its
+// factory shape — the events it hears (chosen from the closed list, each as a turn or a note, with its chat line and
+// phones), its session and its access: all that makes a bot a CEO or a judge is that configuration, for a system bot
+// exactly as for one of the owner's, saved in config.toml where its routes replace the factory's for it.
 import { html, useState, useEffect, useRef, useLayoutEffect } from '../../vendor/preact-htm.js';
 import { S, useStore, useFetch, api, setUi } from '../store.js';
 import { ICON, Icon } from '../common.js';
@@ -46,8 +49,10 @@ function whenLabel(d) {
   return `${diff === 0 ? 'today' : diff === 1 ? 'tomorrow' : DAY[(d.getDay() + 6) % 7]} ${t}`;
 }
 const soonest = (bot) => (bot.routines || []).map((r) => nextRun(r)).filter(Boolean).sort((a, b) => a - b)[0] || null;
-/** What the face shows: working on a turn, on watch (a routine is on) or asleep. */
-export const stateOf = (bot, busy) => (busy ? 'work' : (bot.routines || []).some(isOn) ? 'watch' : 'sleep');
+/** What the face shows: working on a turn, on watch (a routine is on, or it hears factory events) or asleep. */
+export const stateOf = (bot, busy) => (busy ? 'work' : (bot.routines || []).some(isOn) || (bot.routes || []).length ? 'watch' : 'sleep');
+/** A bot's factory shape in one line: its session, its access and the events it hears. */
+const factoryLine = (bot) => `${bot.session || 'chat'} · ${bot.access === 'read' ? 'read-only' : 'can write'} · hears ${(bot.routes || []).map((r) => r.on).join(', ') || 'no events'}`;
 
 /* ---------- the bot's card: name, shape, colour and model ---------- */
 /** The model controls of Settings (a custom element), for one bot. */
@@ -65,6 +70,9 @@ export function BotCard({ bot, onClose, onSaved }) {
   const [name, setName] = useState(bot.name || '');
   const [shape, setShape] = useState(bot.shape || 'cloud');
   const [color, setColor] = useState(bot.color || '#ec4899');
+  const [session, setSession] = useState(bot.session || 'chat');
+  const [access, setAccess] = useState(bot.access === 'read' ? 'read' : '');
+  const [routes, setRoutes] = useState(bot.routes || []);
   const [err, setErr] = useState('');
   const [ask, setAsk] = useState(false);
   const [M] = useFetch('/api/models', ['models']);
@@ -81,10 +89,12 @@ export function BotCard({ bot, onClose, onSaved }) {
     addEventListener('keydown', key);
     return () => removeEventListener('keydown', key);
   }, []);
+  const EVENTS = (M && M.events) || [];
+  const setRoute = (i, patch) => setRoutes(routes.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   const save = async () => {
     if (!name.trim() || !valid) return;
     try {
-      const b = await api('POST', '/api/bots', { id: bot.id, name: name.trim(), shape, color });
+      const b = await api('POST', '/api/bots', { id: bot.id, name: name.trim(), shape, color, session, access, routes });
       if (own === false && role && role.source === 'page') await api('DELETE', `/api/models/${keyOf(b)}`);
       else if (hasOwn && (model || own)) await api('POST', `/api/models/${keyOf(b)}`, value);
       onSaved(b);
@@ -105,6 +115,24 @@ export function BotCard({ bot, onClose, onSaved }) {
         ${M ? html`<details class="bmodel"><summary><span class="bcap">Model</span> ${hasOwn ? modelName(value) : `the managers' · ${modelName(M.roles.manager)}`}</summary>
           <label class="bchk"><input type="checkbox" checked=${hasOwn} onChange=${(e) => setOwn(e.target.checked)} />A model of its own, not the managers'</label>
           ${hasOwn ? html`<${ModelControls} M=${M} value=${value} onChange=${(v) => { setModel(v); setOwn(true); }} />` : null}</details>` : null}
+        ${M ? html`<details class="bmodel bfactory"><summary><span class="bcap">Factory</span> ${factoryLine({ session, access, routes })}</summary>
+          <p class="bnote">All that makes a bot a CEO or a judge is this configuration${bot.system ? ' — this is a system bot, changed like any other' : ''}. It is saved in config.toml, where its routes replace the factory's for it. Its routines stay its schedule routes, under Routines.</p>
+          <label class="bfrow"><span class="bcap">Session</span><select class="bsel" aria-label="Session" value=${session} onChange=${(e) => setSession(e.target.value)}>
+            <option value="chat">chat — a long-lived conversation</option><option value="turn">turn — one fresh run, like the CEO</option></select></label>
+          <label class="bfrow"><span class="bcap">Access</span><select class="bsel" aria-label="Access" value=${access} onChange=${(e) => setAccess(e.target.value)}>
+            <option value="">can write</option><option value="read">read-only, like the CEO and the judge</option></select></label>
+          <div class="bfrow"><span class="bcap">Heard events</span></div>
+          ${routes.map((r, i) => html`<div class="broute" key=${i}>
+            <select class="bsel" aria-label="Event" value=${r.on} onChange=${(e) => setRoute(i, { on: e.target.value })}>${EVENTS.map((ev) => html`<option key=${ev} value=${ev}>${ev}</option>`)}</select>
+            <select class="bsel" aria-label="Mode" value=${r.mode || 'turn'} onChange=${(e) => setRoute(i, { mode: e.target.value })}>
+              <option value="turn">turn — wake it now</option><option value="note">note — with its next turn</option></select>
+            <label class="bchk"><input type="checkbox" checked=${!!r.chat} onChange=${(e) => setRoute(i, { chat: e.target.checked })} />chat line</label>
+            <label class="bchk"><input type="checkbox" checked=${!!r.phone} onChange=${(e) => setRoute(i, { phone: e.target.checked })} />phone</label>
+            ${r.after_minutes ? html`<span class="bcap">after ${r.after_minutes} min</span>` : null}
+            <button type="button" class="blink bdel" onClick=${() => setRoutes(routes.filter((_, j) => j !== i))}>Remove</button>
+          </div>`)}
+          <button type="button" class="blink" onClick=${() => setRoutes([...routes, { on: EVENTS.includes('lane.failed') ? 'lane.failed' : EVENTS[0], mode: 'turn', chat: true, phone: false }])}>+ Hear an event</button>
+        </details>` : null}
         ${err ? html`<p class="berr">${err}</p>` : null}
       </div>
       <footer>
@@ -268,12 +296,13 @@ function Panel({ bot, busy, onEdit }) {
   const [tab, setTab] = useState('routines');
   useEffect(() => setForm(null), [bot.id]);
   const st = stateOf(bot, busy), next = soonest(bot), list = bot.routines || [];
-  const status = st === 'work' ? 'Working' : st === 'watch' ? `On watch${next ? ` · next ${whenLabel(next)}` : ''}` : 'Asleep · no routine on';
+  const status = st === 'work' ? 'Working' : st === 'watch' ? `On watch${next ? ` · next ${whenLabel(next)}` : ''}` : 'Asleep · no routine on, hears no events';
   const done = () => setForm(null);
   return html`<div class="bhero">
       <${Face} shape=${bot.shape} color=${bot.color} size=${136} state=${st} />
       <h2>${bot.name}</h2>
       <p class="bstat"><i class=${`bdot ${st}`}></i>${status}</p>
+      <p class="bcap">${factoryLine(bot)}</p>
       <button type="button" class="blink" onClick=${onEdit}>Edit bot</button>
     </div>
     <section class="bsec">
