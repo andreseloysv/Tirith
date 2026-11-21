@@ -31,6 +31,7 @@ fn default_routes_reproduce_today() {
     // `notify` was turn+chat+phone, `inform` note+chat+phone, `tell` a turn with no line of its own whose answer
     // reached the phones like every manager message; owner and room messages start turns whose answers do.
     // Quieter phones (factory step 4): merge.landed, main.green and deploy.done keep chat+note, without phone.
+    // Factory step 16: factory.invalid keeps turn+chat to the manager of no project, without phone.
     let f = Factory::default();
     let turn = |to: &str, chat: bool| vec![(to.to_string(), "turn".to_string(), chat, true, None)];
     let note = |chat: bool, phone: bool| vec![("manager".to_string(), "note".to_string(), chat, phone, None)];
@@ -50,7 +51,7 @@ fn default_routes_reproduce_today() {
         ("deploy.failed", turn("manager", true)),
         ("schedule", vec![("manager".to_string(), "turn".to_string(), false, true, None), ("ceo".to_string(), "turn".to_string(), false, false, None)]),
         ("review.done", turn("manager-general", false)),
-        ("factory.invalid", turn("manager-general", true)),
+        ("factory.invalid", vec![("manager-general".to_string(), "turn".to_string(), true, false, None)]),
         ("card.opened", vec![]),
         ("card.answered", vec![]),
         ("card.closed", vec![]),
