@@ -11,6 +11,11 @@ static GUARD: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"--no-verify|\bgit\
 static WRITES: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b(rm|mv|cp|ln|chmod|chflags|chown|tee|truncate|touch|install|unlink|rsync)\b|>|\b(sed|perl)\s+-[a-zA-Z]*i").unwrap());
 static MAIN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\bgit\b[^;&|]*\b(push|update-ref)\b|\bgit\b[^;&|]*\b(checkout|switch)\s+(main|master)\b|\bgit\b[^;&|]*\bbranch\s+-[fDM]\b[^;&|]*\b(main|master)\b").unwrap());
 static WAIT: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?s)\bsleep\s+(?:[5-9]|[1-9]\d+)(?:\.\d+)?s?\b|\bsleep\s+[1-9]\d*(?:\.\d+)?[mhd]\b|\b(?:for|while|until)\b.*\bsleep\s").unwrap()); // sleep >= 5s, or a loop's sleep
+/// Following or watching something until it happens, only in command position (at the start or after `;`, `&&`, `||`, `|`, `(`, `$(`, `do` or `then`), with quoted text taken out first (`QUOTED`) so a message that says «watch» or «wait» passes: `tail` with `-f`/`-F`/`--follow` (in a joined cluster too, as `-fn0` or `-n0F`), `watch`, `fswatch`, `inotifywait`, the shell's `wait`, `gh run watch`, and any `--watch`.
+static QUOTED: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"(?s)'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*""#).unwrap());
+static FOLLOW: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?:^|[;&|(\n]|\b(?:do|then)\b)\s*(?:\S*/)?(?:(?:watch|fswatch|inotifywait|wait)(?:$|[\s;&|()])|tail\b[^;&|()\n]*?(?:\s--follow(?:[=\s]|$)|\s-[A-Za-z0-9]*[fF][A-Za-z0-9]*)|gh\s+run\s+watch(?:$|[\s;&|()]))|(?:^|\s)--watch(?:[=\s]|$)").unwrap()
+});
 
 pub const EDIT_TOOLS: [&str; 7] = ["Edit", "Write", "MultiEdit", "NotebookEdit", "edit_file", "write_file", "apply_patch"];
 
@@ -58,7 +63,7 @@ pub fn check(app: &Shared, tool: &str, input: &Value, lane: Option<&Lane>, proje
     let hooks_write = bash && cmd.contains(".git/hooks") && WRITES.is_match(&cmd.replace("2>/dev/null", "").replace(">/dev/null", ""));
     let skips = (bash && GUARD.is_match(cmd)) || hooks_write || (edit && files.iter().any(|f| f.contains("/.git/hooks/")));
     let Some(()) = (!skips).then_some(()) else { return Some("Commit checks are never skipped (--no-verify, commit -n, core.hooksPath, .git/hooks). Fix what the check reports and commit again.".into()) };
-    let waiting = lane.is_none() && role.is_some() && ((bash && WAIT.is_match(cmd)) || tool == "clocksleep");
+    let waiting = lane.is_none() && role.is_some() && ((bash && (WAIT.is_match(cmd) || FOLLOW.is_match(&QUOTED.replace_all(cmd, " ")))) || tool == "clocksleep");
     let Some(()) = (!waiting).then_some(()) else { return Some("no esperes dentro del turno: contesta y termina; Tirith te avisa cuando una lane entre, falle o pregunte".into()) };
     let mut protected: Vec<String> = cfg.factory.commands().iter().filter_map(|(alias, _)| cfg.factory.agent::<String>(alias, "settings")).map(|s| expand(&s).display().to_string()).collect();
     protected.push(format!("{}/", app.home.display()));
