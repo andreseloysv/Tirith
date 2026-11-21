@@ -178,25 +178,20 @@ impl Factory {
         .next();
         bad.map_or(Ok(()), |e| Err(format!("factory: {e}")))
     }
-
     pub fn agent<T: DeserializeOwned>(&self, alias: &str, key: &str) -> Option<T> {
         let alias = if self.raw["agents"].get(alias).is_some() { alias } else { "default" };
         get(&self.raw, &["agents", alias, key])
     }
-
     pub fn command(&self, alias: &str) -> Option<String> {
         get(&self.raw, &["agents", alias, "command"])
     }
-
     pub fn commands(&self) -> Vec<(String, String)> {
         self.raw["agents"].as_table().into_iter().flatten().filter_map(|(n, a)| a.get("command").and_then(|c| c.as_str()).map(|c| (n.clone(), c.to_string()))).collect()
     }
-
     /// One key of a role, by its factory name.
     pub fn role<T: DeserializeOwned>(&self, name: &str, key: &str) -> Option<T> {
         get(&self.raw, &["roles", name, key])
     }
-
     /// The whole merged table (embedded, the folder's file and config.toml, extends resolved), for a reader that walks it as data (the bots).
     pub fn table(&self) -> &toml::Table {
         &self.raw
@@ -205,50 +200,41 @@ impl Factory {
     pub fn roles(&self) -> Vec<String> {
         self.raw["roles"].as_table().into_iter().flatten().map(|(n, _)| n.clone()).collect()
     }
-
     /// The first role (in name order) with this `session` and, when given, this `scope`: how code finds who runs a lane, a project's chat or a turn without naming a role. A role with no prompt of its own (the evals' judge, whose instructions are each rubric) never runs standalone, so it is never found here.
     pub fn find_role(&self, session: &str, scope: Option<&str>) -> Option<String> {
         self.roles().into_iter().find(|n| self.role::<String>(n, "session").as_deref() == Some(session) && scope.is_none_or(|s| self.role::<String>(n, "scope").as_deref() == Some(s)) && !self.prompts_of(n).is_empty())
     }
-
     /// The evals that judge `on`: (id, judge role, rubric file stem, sample share) of every `[[evals]]` on it.
     pub fn evals_on(&self, on: &str) -> Vec<(String, String, String, f64)> {
         let rows = self.raw.get("evals").and_then(|e| e.as_array()).into_iter().flatten().filter(|e| str_of(e, "on") == on);
         rows.map(|e| (str_of(e, "id").into(), str_of(e, "judge").into(), stem(str_of(e, "rubric")), e.get("sample").and_then(|v| v.as_float()).unwrap_or(1.0))).collect()
     }
-
     pub fn metric(&self, id: &str) -> (String, Option<f64>, bool) {
         (get(&self.raw, &["metrics", id, "label"]).unwrap_or_default(), get(&self.raw, &["metrics", id, "target"]), get(&self.raw, &["metrics", id, "at_least"]).unwrap_or(false))
     }
-
     pub fn words(&self, sec: &str, key: &str) -> Vec<String> {
         get(&self.raw, &[sec, key]).unwrap_or_default()
     }
-
     /// Every `schedule` route that names a time of day: (to, at, days). A bot's routines are fired from config.toml by bots.rs; one of the factory's own (the CEO's daily pass) by whoever runs its role.
     pub fn schedules(&self) -> Vec<(String, String, Vec<u64>)> {
         let rows = self.raw.get("routes").and_then(|r| r.as_array()).into_iter().flatten().filter(|r| str_of(r, "on") == "schedule" && !str_of(r, "at").is_empty() && r.get("enabled").and_then(|v| v.as_bool()) != Some(false));
         rows.map(|r| (str_of(r, "to").into(), str_of(r, "at").into(), r.get("days").and_then(|d| d.as_array()).into_iter().flatten().filter_map(|d| d.as_integer().and_then(|n| u64::try_from(n).ok())).collect())).collect()
     }
-
     /// Who hears `on`: (to, mode, chat, phone, after_minutes) of every `[[routes]]` on it.
     pub fn routes_on(&self, on: &str) -> Vec<Route> {
         let rows = self.raw.get("routes").and_then(|r| r.as_array()).into_iter().flatten().filter(|r| str_of(r, "on") == on);
         let b = |r: &toml::Value, k: &str| r.get(k).and_then(|v| v.as_bool()).unwrap_or(false);
         rows.map(|r| (str_of(r, "to").into(), str_of(r, "mode").into(), b(r, "chat"), b(r, "phone"), r.get("after_minutes").and_then(|v| v.as_integer()).and_then(|n| u64::try_from(n).ok()))).collect()
     }
-
     pub fn prompt(&self, name: &str) -> String {
         self.prompts.get(name).cloned().unwrap_or_else(|| embedded_prompts().get(name).cloned().unwrap_or_default())
     }
-
     /// A short hash of the setting `role` runs with: its resolved table (agent, model, effort, ...), its agent's table, its prompt texts and `extra` (the page's model override for it, when the caller has one). An unknown role has none (an empty stamp).
     pub fn role_hash(&self, role: &str, extra: &str) -> String {
         let Some(r) = self.raw.get("roles").and_then(|s| s.get(role)) else { return String::new() };
         let json = |v: Option<&toml::Value>| serde_json::to_string(&v).unwrap_or_default();
         short_hash(&format!("{}|{}|{}|{extra}", json(Some(r)), json(self.raw.get("agents").and_then(|s| s.get(str_of(r, "agent")))), self.prompts_of(role)))
     }
-
     /// A role's prompt files, one after another, with `{name}` its factory name (a bot's, from config.toml).
     pub fn prompts_of(&self, role: &str) -> String {
         self.role::<Vec<String>>(role, "prompt").unwrap_or_default().iter().map(|p| self.prompt(&stem(p))).collect::<Vec<_>>().join("\n").replace("{name}", &self.role::<String>(role, "name").unwrap_or_else(|| role.to_string()))

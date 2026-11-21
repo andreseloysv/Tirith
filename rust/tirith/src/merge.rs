@@ -1,5 +1,4 @@
 //! The merge queue: up to five lanes of one project ride one train in the project's merge slot; only a green train moves main (fast-forward), then the deploy stages run on that main.
-
 use crate::app::{add_worktree, git, kill_group, now_iso, now_s, tail, Lane, Shared};
 use crate::config::{Manifest, Project, Stage};
 use crate::{lanes, manager, plan, sandbox};
@@ -8,26 +7,21 @@ use rusqlite::params;
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use std::{collections::BTreeMap, process::Stdio, sync::Mutex, time::Duration};
-
 /// Held while something uses a merge slot (a train or a main check).
 static BUSY: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 /// Main checks already run: (project, main sha, stage) → green.
 static MAIN_OK: Mutex<BTreeMap<(String, String, String), bool>> = Mutex::new(BTreeMap::new());
-
 /// One lock per project: test stages of one project never run at the same time (servers on one port, one folder).
 static STAGE_LOCKS: Mutex<BTreeMap<String, std::sync::Arc<tokio::sync::Mutex<()>>>> = Mutex::new(BTreeMap::new());
-
 fn stage_lock(project: &str) -> std::sync::Arc<tokio::sync::Mutex<()>> {
     STAGE_LOCKS.lock().unwrap().entry(project.to_string()).or_default().clone()
 }
-
 struct Pipe {
     id: String,
     project: String,
     lanes: String,
     sha: String,
 }
-
 pub async fn worker(app: Shared) {
     let cut: Vec<String> = app.lanes.lock().unwrap().values().filter(|l| l.status == "merging").map(|l| l.id.clone()).collect();
     cut.iter().for_each(|id| drop(app.update_lane(id, |l| l.status = "merge-queued".into()))); // a merge cut short by a restart starts over
@@ -52,13 +46,11 @@ pub async fn worker(app: Shared) {
         train(&app, batch).await;
     }
 }
-
 /// A `main_red` value is "<stage> at <sha8>": it is stale when main's head is another commit.
 fn red_stage_if_stale(why: &str, head: &str) -> Option<String> {
     (head.len() >= 8 && !why.ends_with(&head[..8])).then_some(())?;
     why.rsplit_once(" at ").map(|(stage, _)| stage.to_string())
 }
-
 /// After main moves while it is red (a merge, a manual commit), the queue tests the latest main again, so the health «Main en rojo» names the current commit and clears when it passes.
 async fn recheck_red(app: &Shared) {
     let cfg = app.cfg();
@@ -72,7 +64,6 @@ async fn recheck_red(app: &Shared) {
         let _ = (!main_check(app, project, &slot, &head, st, false).await).then(|| (app.set_kv(&format!("main_red:{}", project.id), Some(&format!("{stage} at {}", &head[..8]))), app.emit("plan", json!({"project": project.id}))).1);
     }
 }
-
 /// The oldest merge-queued lane alone when it is solo, else up to five non-solo lanes of its project. Projects whose main is red wait until main changes (then the main check decides again).
 async fn next_batch(app: &Shared) -> Vec<Lane> {
     let mut queued: Vec<Lane> = app.lanes.lock().unwrap().values().filter(|l| l.status == "merge-queued").cloned().collect();
@@ -87,7 +78,6 @@ async fn next_batch(app: &Shared) -> Vec<Lane> {
     let Some(()) = (!first.solo).then_some(()) else { return vec![first] };
     queued.into_iter().filter(|l| l.project == first.project && !l.solo).take(app.cfg().factory.limits.merge_train).collect()
 }
-
 /// A stage with `paths` runs only when a changed file matches them (`!pattern` excludes).
 fn wanted(stage: &Stage, changed: &[String]) -> bool {
     let Some(()) = (!stage.paths.is_empty()).then_some(()) else { return true };
@@ -97,7 +87,6 @@ fn wanted(stage: &Stage, changed: &[String]) -> bool {
     let pos: Vec<Regex> = pos.iter().map(|p| glob(p)).collect();
     changed.iter().any(|f| (pos.is_empty() || pos.iter().any(|r| r.is_match(f))) && !neg.iter().any(|r| r.is_match(f)))
 }
-
 fn open_pipeline(app: &Shared, project: &str, kind: &str, lanes: &str, sha: &str) -> Pipe {
     let n = app.query("SELECT COUNT(*) FROM pipelines WHERE project = ?1", [project], |r| r.get::<_, i64>(0)).into_iter().next().unwrap_or(0);
     let id = format!("{project}-{}", n + 1);
@@ -106,32 +95,26 @@ fn open_pipeline(app: &Shared, project: &str, kind: &str, lanes: &str, sha: &str
     app.emit("pipeline", pipeline(app, &p.id));
     p
 }
-
 fn close_pipeline(app: &Shared, p: &Pipe, status: &str) {
     let _ = app.db.lock().unwrap().execute("UPDATE pipelines SET status = ?1, ended_at = ?2 WHERE id = ?3", params![status, now_iso(), p.id]);
     app.emit("pipeline", pipeline(app, &p.id));
 }
-
 fn pipeline(app: &Shared, id: &str) -> Value {
     let mut rows = app.objects("SELECT id, project, kind, lanes, sha, status, started_at, ended_at FROM pipelines WHERE id = ?1", [id], &["id", "project", "kind", "lanes", "sha", "status", "started_at", "ended_at"]);
     let Some(mut row) = rows.pop() else { return Value::Null };
     row["stages"] = json!(app.objects("SELECT id, stage, status, started_at, ended_at FROM runs WHERE pipeline = ?1 ORDER BY id", [id], &["id", "stage", "status", "started_at", "ended_at"]));
     row
 }
-
 pub fn list(app: &Shared, project: &str, limit: u32) -> Vec<Value> {
     let sql = format!("SELECT id FROM pipelines WHERE ?1 = '' OR project = ?1 ORDER BY rowid DESC LIMIT {limit}");
     app.query(&sql, [project], |r| r.get::<_, String>(0)).iter().map(|id| pipeline(app, id)).collect()
 }
-
 const MANAGER_LIMIT_SECS: u64 = 24 * 3600;
-
 /// The limit in minutes for a stage: the manager's (within 24 h), else the one learned from past timeouts, else the default. Each project and stage has its own.
 fn limit_from(get: impl Fn(&str) -> Option<String>, project: &str, stage: &str, default: u64) -> u64 {
     let set = get(&format!("stage_limit:{project}:{stage}")).and_then(|v| v.split_once('@').and_then(|(m, at)| (now_s().saturating_sub(at.parse().ok()?) < MANAGER_LIMIT_SECS).then(|| m.parse().ok()).flatten()));
     set.or_else(|| get(&format!("stage_learned:{project}:{stage}")).and_then(|v| v.parse().ok())).unwrap_or(default)
 }
-
 /// An item's check runs with the `VAR=value` words (JAVA_HOME, ANDROID_HOME) of the pipeline stage it belongs to: the stage named in it, or one running the same program.
 fn stage_env(stages: &[Stage], check: &str) -> Vec<(String, String)> {
     let said: Vec<String> = check.split(|c: char| !c.is_alphanumeric() && c != '_').map(str::to_lowercase).collect();
@@ -174,7 +157,6 @@ async fn run_stage(app: &Shared, pipe: &Pipe, dir: &Path, name: &str, run: &str)
     app.emit("pipeline", pipeline(app, &pipe.id));
     (status == "passed").then_some(()).ok_or_else(|| format!("check '{name}' {status}. Last lines of its log:\n{}", tail(&log, 60)))
 }
-
 async fn merge_slot(project: &Project, manifest: &Manifest) -> Result<PathBuf, String> {
     let slot = project.lanes_dir().join("merge");
     if !slot.exists() {
@@ -185,11 +167,9 @@ async fn merge_slot(project: &Project, manifest: &Manifest) -> Result<PathBuf, S
     }
     Ok(slot)
 }
-
 fn disk_full(e: &str) -> bool {
     e.to_lowercase().contains("no space left on device")
 }
-
 /// A merge slot that failed to be made for lack of disk is deleted, so nothing half-made stays to eat space.
 fn drop_half_made(slot: &Path, e: &str) -> bool {
     disk_full(e) && std::fs::remove_dir_all(slot).is_ok()
@@ -198,11 +178,9 @@ async fn reset(slot: &Path, sha: &str) -> Result<(), String> {
     git(slot, &["checkout", "-q", "-f", "--detach", sha]).await?;
     git(slot, &["clean", "-fdq"]).await.map(|_| ())
 }
-
 fn requeue(app: &Shared, lanes: &[Lane], solo: bool, note: &str) {
     lanes.iter().for_each(|l| drop(app.update_lane(&l.id, |x| (x.status, x.solo, x.note) = ("merge-queued".into(), solo, note.into()))));
 }
-
 async fn train(app: &Shared, batch: Vec<Lane>) {
     let pid = batch[0].project.clone();
     batch.iter().for_each(|l| drop(app.update_lane(&l.id, |x| x.status = "merging".into())));
@@ -286,7 +264,6 @@ async fn train(app: &Shared, batch: Vec<Lane>) {
     }
     land(app, &project, &pipe, &slot, &base, merged, ticks, &changed).await;
 }
-
 /// A green train: under the plan lock, pending plan edits are committed on main, the items are ticked in the merge slot, and main fast-forwards to the result.
 #[allow(clippy::too_many_arguments)]
 async fn land(app: &Shared, project: &Project, pipe: &Pipe, slot: &Path, base: &str, merged: Vec<Lane>, ticks: Vec<Lane>, changed: &[String]) {
@@ -354,18 +331,15 @@ async fn land(app: &Shared, project: &Project, pipe: &Pipe, slot: &Path, base: &
     app.sched_wake.notify_one();
     deploy(app, project, changed).await;
 }
-
 /// The `merged on …` note: only the beginning of each item — up to its first ": ", " (" or ". ", 120 chars at most — never the whole item (one reached 1,826 chars).
 fn merged_note(project: &str, sha8: &str, items: &[&str]) -> String {
     format!("merged on {project} at {sha8}: {}", items.iter().map(|i| i[..[": ", " (", ". "].iter().filter_map(|d| i.find(d)).min().unwrap_or(i.len())].chars().take(120).collect::<String>()).collect::<Vec<_>>().join("; "))
 }
-
 /// A deploy stage (its `kind`, else a name that says so) is no check of a lane: it publishes main.
 fn deploys(s: &Stage) -> bool {
     let kind = s.kind.trim().to_ascii_lowercase();
     kind == "deploy" || (kind.is_empty() && ["deploy", "release", "publish", "ship"].contains(&s.name.as_str()))
 }
-
 /// Runs the project's deploy stages on main as it is now, in the merge slot, so what is on main is what is deployed. After a merge only the stages whose `paths` match what it changed run; with no files named, or while an earlier deploy has not passed yet, all of them do. A failure never undoes or holds back a merge: the manager is told once, and the worker tries again after ten minutes, then after twice as long each time, six hours at most. `deploy_due:<project>` is "<when to try again>@<the wait since the last failure, 0 for none>"; "0@.." while a deploy is owed or runs, so one that a restart cut short is due at once.
 async fn deploy(app: &Shared, project: &Project, changed: &[String]) {
     let (manifest, key) = (app.manifest(&project.repo()), format!("deploy_due:{}", project.id));
@@ -398,7 +372,6 @@ async fn deploy(app: &Shared, project: &Project, changed: &[String]) {
         _ => {}
     }
 }
-
 /// Runs one stage on a main commit in the merge slot (cached per commit unless `fresh`); green clears main_red.
 async fn main_check(app: &Shared, project: &Project, slot: &Path, sha: &str, stage: &Stage, fresh: bool) -> bool {
     let key = (project.id.clone(), sha.to_string(), stage.name.clone());
@@ -412,7 +385,6 @@ async fn main_check(app: &Shared, project: &Project, slot: &Path, sha: &str, sta
     let _ = ok.then(|| clear_red(app, &project.id));
     ok
 }
-
 fn clear_red(app: &Shared, project: &str) {
     let key = format!("main_red:{project}");
     if app.kv(&key).is_some() {
@@ -423,7 +395,6 @@ fn clear_red(app: &Shared, project: &str) {
         app.merge_wake.notify_one();
     }
 }
-
 /// Retry from the page: a merge pipeline's failed lanes go back to the queue; a main pipeline runs its checks again on the current main; a deploy pipeline deploys the current main.
 pub fn retry(app: &Shared, id: &str) -> Result<(), String> {
     let p = pipeline(app, id);
@@ -450,7 +421,6 @@ pub fn retry(app: &Shared, id: &str) -> Result<(), String> {
     });
     Ok(())
 }
-
 #[cfg(test)]
 #[path = "../checks/merge.rs"]
 mod tests;
