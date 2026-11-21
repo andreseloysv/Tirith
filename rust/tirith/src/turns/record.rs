@@ -29,6 +29,8 @@ pub struct Turn {
     pub seen: bool,
     /// Its own validation (`tirith turn checks`): passed, total and the names of the checks.
     pub checks: Option<(i64, i64, String)>,
+    /// What it read: its start and each tool call with its result (`<home>/captures`).
+    pub capture: super::capture::Capture,
 }
 
 impl Turn {
@@ -54,6 +56,7 @@ impl Turn {
             session: String::new(),
             seen: false,
             checks: None,
+            capture: super::capture::Capture::of(conv),
         }
     }
 
@@ -61,6 +64,7 @@ impl Turn {
     pub fn line(&mut self, msg: &Value) {
         self.seen = true;
         self.usage.take(msg);
+        self.capture.take(msg);
         for call in calls(msg) {
             self.steps += 1;
             let skill = skill_of(&call).filter(|s| !self.skills.contains(s));

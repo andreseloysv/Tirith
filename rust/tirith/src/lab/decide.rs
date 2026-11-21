@@ -9,12 +9,15 @@ use crate::server::s;
 use rusqlite::params;
 use serde_json::json;
 
-/// Whether experiment `e` is due: `inputs` comparisons judged, or `max_days` since it started.
+/// Whether experiment `e` is due: `inputs` comparisons judged, a replay's pairs all run and judged, or `max_days` since it started.
 fn due(app: &Shared, e: &Experiment, t: &Tally) -> bool {
     let lab = app.cfg().factory.lab.clone();
     let started = chrono::DateTime::parse_from_rfc3339(&e.created_at).ok();
     let days = started.map_or(0, |s| (chrono::Utc::now() - s.to_utc()).num_days());
-    t.wins + t.ties + t.losses >= lab.inputs as i64 || days >= lab.max_days as i64
+    let replayed = e.mode == "replay"
+        && app.kv(&super::replay::done_key(e.id)).is_some()
+        && super::numbers::unjudged(app, e.id) == 0;
+    t.wins + t.ties + t.losses >= lab.inputs as i64 || replayed || days >= lab.max_days as i64
 }
 
 /// Decides experiment `id` when it is due and no run of its bot is on its way.
@@ -51,6 +54,7 @@ pub fn decide(app: &Shared, id: i64) {
     let sql = "UPDATE experiments SET status = ?1, ended_at = ?2, numbers = ?3 WHERE id = ?4";
     app.insert(sql, params![status, now_iso(), numbers.to_string(), id]);
     app.set_kv(&format!("lab:last:{id}"), None);
+    app.set_kv(&super::replay::done_key(id), None);
     let on = if adopt {
         "lab.adopted"
     } else {

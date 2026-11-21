@@ -18,6 +18,11 @@ pub(super) async fn hook(
     call.note_activity(&app);
     call.record_access(&app);
     if event == "PreToolUse" {
+        // A replay's call that reads outside is answered from its capture, as the reason it is refused.
+        if let Some(why) = crate::lab::answer(&call.cwd, &call.tool, &call.known, &call.input) {
+            return Json(json!({"hookSpecificOutput": {"hookEventName": "PreToolUse",
+                "permissionDecision": "deny", "permissionDecisionReason": why}}));
+        }
         if let Some(denied) = hook_rules::refuse(&app, &call, &headers) {
             return denied;
         }

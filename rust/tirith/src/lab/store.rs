@@ -12,9 +12,10 @@ pub struct Experiment {
     pub routine: String,
     pub branch: String,
     pub created_at: String,
+    pub mode: String,
 }
 
-const COLS: &str = "id, bot, routine, branch, created_at";
+const COLS: &str = "id, bot, routine, branch, created_at, mode";
 
 fn row(r: &rusqlite::Row) -> rusqlite::Result<Experiment> {
     Ok(Experiment {
@@ -23,6 +24,7 @@ fn row(r: &rusqlite::Row) -> rusqlite::Result<Experiment> {
         routine: r.get(2)?,
         branch: r.get(3)?,
         created_at: r.get(4)?,
+        mode: r.get(5)?,
     })
 }
 
@@ -32,9 +34,11 @@ pub fn running_one(app: &App, id: i64) -> Option<Experiment> {
     app.query(&sql, [id], row).into_iter().next()
 }
 
-/// The live experiment running on routine `routine` of the bot whose conversation is `bot`.
+/// The experiment (live or replay) running on routine `routine` of the bot whose conversation is `bot`.
 pub fn running(app: &App, bot: &str, routine: &str) -> Option<Experiment> {
-    let sql = format!("SELECT {COLS} FROM experiments WHERE bot = ?1 AND routine = ?2 AND status = 'running' AND mode = 'live'");
+    let sql = format!(
+        "SELECT {COLS} FROM experiments WHERE bot = ?1 AND routine = ?2 AND status = 'running'"
+    );
     let rows = app.query(&sql, params![bot, routine], row);
     rows.into_iter().next()
 }

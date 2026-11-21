@@ -14,7 +14,7 @@ pub fn wrap(app: &Shared, who: &str, argv: Vec<String>) -> Launch {
     if let Err(why) = enabled(app) {
         return unsandboxed(app, who, &why, program, args);
     }
-    let env = sandboxed_env(app, who);
+    let env = sandboxed_env(app, &crate::lab::proxy_caller(who)); // a replay's turn reaches nothing outside
     Launch {
         program: SANDBOX_EXEC.into(),
         args: ["-p".to_string(), PROFILE.to_string(), program]

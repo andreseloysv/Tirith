@@ -1,0 +1,66 @@
+//! Replay mode: for each of the routine's last `inputs` captured runs, A (the bot's main) and B (the branch) do its task again, each in a throwaway worktree, with the network closed (the sandbox's proxy refuses everything to a replay) and every call that reads outside answered from the capture (`answers.rs`). Each pair is compared like a live one and decided by the same `[lab]` rule. Nothing of a replay reaches the owner: its turns run in a conversation of their own that no chat, phone, room or card knows (`replay-<experiment>-<turn>-<A|B>`), and the hook refuses `tirith say`, `ask` and `ask-owner` in it.
+use super::store::Experiment;
+use crate::app::Shared;
+use std::path::PathBuf;
+
+/// The replay a turn runs in: its experiment, and the worktree that is the bot's folder for it.
+#[derive(Clone)]
+pub(super) struct Replay {
+    pub experiment: i64,
+    pub dir: PathBuf,
+}
+
+tokio::task_local! {
+    pub(super) static REPLAY: Replay;
+}
+
+/// Inside a replay's turn, the worktree every folder of the bot resolves to.
+pub(super) fn dir() -> Option<PathBuf> {
+    REPLAY.try_with(|r| r.dir.clone()).ok()
+}
+
+/// Inside a replay's turn, its experiment.
+pub(super) fn replaying() -> Option<i64> {
+    REPLAY.try_with(|r| r.experiment).ok()
+}
+
+/// The proxy's caller for a process started inside a replay's turn, `replay:<experiment>`; else `who`.
+pub fn proxy_caller(who: &str) -> String {
+    replaying().map_or(who.to_string(), |e| format!("replay:{e}"))
+}
+
+/// True for the proxy's caller of a replay: every destination is refused to it.
+pub fn closed(who: &str) -> bool {
+    who.starts_with("replay:")
+}
+
+/// The kv key that says the pairs of replay `id` were all run.
+pub(super) fn done_key(id: i64) -> String {
+    format!("lab:replayed:{id}")
+}
+
+/// Runs the pairs of experiment `e` on the captured runs `turns`, one after another, then decides it when it is due.
+pub(super) fn launch(app: &Shared, e: Experiment, turns: Vec<i64>) {
+    let app = app.clone();
+    tokio::spawn(async move {
+        for turn in turns {
+            pair(&app, &e, turn).await;
+        }
+        app.set_kv(&done_key(e.id), Some("done"));
+        super::decide::decide(&app, e.id);
+    });
+}
+
+/// One captured run done again by A, then by B, and B compared with that A.
+async fn pair(app: &Shared, e: &Experiment, turn: i64) {
+    let Some(cap) = crate::turns::capture_of(app, turn) else {
+        return;
+    };
+    let Some(_) = super::replay_side::side(app, e, &cap, "A").await else {
+        return;
+    };
+    let Some(b) = super::replay_side::side(app, e, &cap, "B").await else {
+        return;
+    };
+    super::compare::compare(app, e, b);
+}

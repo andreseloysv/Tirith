@@ -22,8 +22,11 @@ pub fn live(app: &App, key: &str) -> PathBuf {
     app.home.join("manager").join(key)
 }
 
-/// The folder a session or a read of `dir` (a bot's own folder or any other) uses now: the branch's worktree while a B run of that bot is on its way, else `dir` itself.
+/// The folder a session or a read of `dir` (a bot's own folder or any other) uses now: inside a replay's turn its worktree; the branch's worktree while a live B run of that bot is on its way; else `dir` itself.
 pub fn seat(dir: PathBuf) -> PathBuf {
+    if let Some(replay) = super::replay::dir() {
+        return replay; // inside a replay's turn, its worktree is every folder of the bot
+    }
     let seats = SEATS.lock().unwrap();
     let b = seats.get(&dir).filter(|s| s.variant == "B");
     b.map_or(dir, |s| s.tree.clone())
@@ -36,7 +39,7 @@ pub fn seated(dir: &Path) -> bool {
 
 /// Routine `routine` of the bot `key` fires: with a live experiment running on it, this run is the variant after the last one (A first, then B, then A…), and a B run moves the bot into the branch's worktree until its turn ends.
 pub fn fired(app: &App, key: &str, routine: &str) {
-    let Some(e) = running(app, key, routine) else {
+    let Some(e) = running(app, key, routine).filter(|e| e.mode == "live") else {
         return;
     };
     let last = format!("lab:last:{}", e.id);
