@@ -23,7 +23,22 @@ a.mc-file { text-decoration: none; }
 .mc-head h2 .mc-of { margin-left: 6px; font-size: 12.5px; font-weight: 500; color: var(--mut); }
 /* who speaks: its face in the head and beside each of its messages */
 .mc-id { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.mc-face { flex: none; line-height: 0; }
+.mc-face { position: relative; flex: none; line-height: 0; }
+/* the head's face is drawn at the sidebar's 64 px and shrunk on the desktop, where the sidebar shows it big;
+   on a phone there is no sidebar, so the head keeps the big face with its state and its unread count */
+.mc-head .mc-face .bot { width: 26px; height: 26px; }
+.mc-head .mc-face .nunread { top: -5px; right: -5px; }
+.mc-who { min-width: 0; }
+.mc-state { display: none; }
+.mchat { min-width: 0; }
+@media (max-width: 800px) {
+  .mc-head { min-height: 64px; gap: 10px; }
+  .mc-head .mc-face .bot { width: 64px; height: 64px; }
+  .mc-head .mc-id { flex: 1 1 auto; min-width: 0; }
+  .mc-who { display: flex; flex-direction: column; gap: 3px; min-width: 0; overflow-wrap: anywhere; }
+  .mc-name { min-width: 0; overflow-wrap: anywhere; }
+  .mc-state { display: block; color: var(--mut); }
+}
 .mc-line { display: flex; gap: 7px; align-items: flex-start; min-width: 0; max-width: 100%; }
 .mc-line .mc-face { margin-top: 2px; }
 .mc-col { display: flex; flex-direction: column; gap: 3px; align-items: flex-start; min-width: 0; max-width: 100%; }

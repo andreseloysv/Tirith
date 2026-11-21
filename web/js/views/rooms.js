@@ -6,10 +6,15 @@
 // Data: GET /api/rooms, refetched on SSE "room" / "room-mention", every 15 s and when the window comes back.
 import { html, useState, useMemo, useEffect, useRef } from '../../vendor/preact-htm.js';
 import { useFetch, useStore, api } from '../store.js';
+import { ICON, Icon, go } from '../common.js';
+import { Face } from './bots/face.js';
 import { agoText, CopyBtn, useAction } from './settings/ui.js';
 
-const LOCK = html`<svg class="rlock" viewBox="0 0 16 16" width="13" height="13" role="img" aria-label="Encrypted" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><title>Encrypted</title><rect x="3.2" y="7" width="9.6" height="6.4" rx="1.6"/><path d="M5.4 7V5.2a2.6 2.6 0 015.2 0V7"/></svg>`;
-const HASH = html`<svg class="rlock rpub" viewBox="0 0 16 16" width="13" height="13" role="img" aria-label="Public" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><title>Public</title><path d="M3 6h10M3 10h10M6.5 2.5l-1 11M10.5 2.5l-1 11"/></svg>`;
+/* a bot's conversation and what its face shows, as in bots.js (kept local so this view does not pull the Bots view in) */
+const keyOf = (b) => b.key || `bot-${b.id}`;
+const stateOf = (b, busy) => (busy ? 'work' : (b.routines || []).some((r) => r.on !== false) || (b.routes || []).length ? 'watch' : 'sleep');
+
+const HASH = html`<svg class="rhash rpub" viewBox="0 0 16 16" width="13" height="13" role="img" aria-label="Public" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><title>Public</title><path d="M3 6h10M3 10h10M6.5 2.5l-1 11M10.5 2.5l-1 11"/></svg>`;
 const MAX_SHOWN = 8;      // messages shown per public room
 const short = (id) => String(id || '').slice(0, 8);
 const enc = encodeURIComponent;
@@ -18,6 +23,18 @@ const clip = (t, n) => { t = String(t == null ? '' : t).replace(/\s+/g, ' '); re
 function Status({ r }) {
   const ok = !r.error;
   return html`<span class=${`rconn ${ok ? 'on' : 'off'}`}><i class=${`dot ${ok ? 'green' : 'grey'}`}></i>${ok ? 'Connected' : 'Not connected'}</span>`;
+}
+
+/** The face of the agent that runs a project (its manager, or the bot whose room this is), in its state; the agent
+    icon when it has no face of its own. Touching it opens that agent's chat. */
+function AgentFace({ a }) {
+  if (!a) return null;
+  const inner = a.shape
+    ? html`<${Face} shape=${a.shape} color=${a.color || '#3b82f6'} size=${40} state=${a.state || 'watch'} />`
+    : html`<${Icon} d=${ICON.agents} size=${22} w=${1.6} />`;
+  return a.open
+    ? html`<button type="button" class="rface" title=${a.label} aria-label=${a.label} onClick=${a.open}>${inner}</button>`
+    : html`<span class="rface" title=${a.label}>${inner}</span>`;
 }
 
 /** The phones of a room (`phones`), or the other managers in it. A forgotten phone is not shown: it is out, and the
@@ -68,7 +85,7 @@ function Popover({ r, ask, close, act }) {
 
 /** The owner's phone: the QR of `r` (the selected project's room, or the room of no project) and the phones that are
     connected. The QR works once; when it is used, or none was made yet, the next one is asked for without a click. */
-function PhoneCard({ r, reload, title }) {
+function PhoneCard({ r, reload, title, agent }) {
   const act = useRoomAction(reload);
   const [busy, error, run] = act;
   const [ask, setAsk] = useState('');
@@ -84,7 +101,7 @@ function PhoneCard({ r, reload, title }) {
   // the url is part of the src so a new code draws a new picture
   const src = `/api/rooms/${enc(r.id)}/qr.svg?kind=invite&v=${enc(r.invite || '')}`;
   return html`<div class="card scard rphone" data-room=${r.id}>
-    <div class="phead">${LOCK}<b>Your phone</b><${Status} r=${r} /></div>
+    <div class="phead"><${AgentFace} a=${agent} /><b>Your phone</b><span class="chip">Encrypted</span><${Status} r=${r} /></div>
     ${r.error ? html`<div class="ierr rerr">Tirith cannot reach agentsmessenger.com now, so a phone connects when it can again: ${r.error}</div>` : null}
     <div class="rscan">
       ${shown ? html`<img class="qr" src=${src} alt="QR code that connects a phone to Tirith" width="232" height="232" onError=${() => setBad(r.invite)} />`
@@ -102,10 +119,10 @@ function PhoneCard({ r, reload, title }) {
 }
 
 /** Before the first room: Tirith opens rooms on the platform only when the owner asks, so the first QR takes one click. */
-function NoRoom({ reload, project }) {
+function NoRoom({ reload, project, agent }) {
   const [busy, error, run] = useRoomAction(reload);
   return html`<div class="card scard rphone">
-    <div class="phead">${LOCK}<b>Your phone</b></div>
+    <div class="phead"><${AgentFace} a=${agent} /><b>Your phone</b><span class="chip">Encrypted</span></div>
     <p class="rlead">Work from your phone.</p>
     <p>Tirith opens an encrypted room on agentsmessenger.com and shows a QR here: scan it with the phone's camera and the phone has a chat with the manager of every project, with nothing to install.</p>
     <div class="sfoot"><button class="isend" disabled=${busy === 'new'} onClick=${() => run('new', () => api('POST', '/api/rooms', { title: '', project: project || '' }))}>${busy === 'new' ? 'Making the room…' : 'Show the QR'}</button></div>
@@ -113,12 +130,12 @@ function NoRoom({ reload, project }) {
   </div>`;
 }
 
-function PrivateCard({ r, reload, title }) {
+function PrivateCard({ r, reload, title, agent }) {
   const [ask, setAsk] = useState('');
   const act = useRoomAction(reload);
   const toggle = (k) => setAsk(ask === k ? '' : k);
   return html`<div class="card scard rcard" data-room=${r.id}>
-    <div class="phead">${LOCK}<b>${title}</b><${Status} r=${r} />
+    <div class="phead"><${AgentFace} a=${agent} /><b>${title}</b><span class="chip">Encrypted</span><${Status} r=${r} />
       ${r.kind === 'peer' ? html`<span class="chip">peer</span>` : null}
       ${r.me && r.me.name ? html`<span class="mut sm rme" title="Your key id here">you: ${r.me.name} <code>${short(r.me.key_id)}</code></span>` : null}</div>
     ${r.error ? html`<div class="ierr rerr">${r.error}</div>` : null}
@@ -188,6 +205,8 @@ function PublicCard({ r, reload }) {
 export function Rooms({ project }) {
   const s = useStore();
   const [data, reload, err] = useFetch('/api/rooms', ['room', 'room-mention']);
+  const [M] = useFetch('/api/models', ['models', 'bots']);
+  const [bots] = useFetch('/api/bots', ['bots']);
   // The QR on the screen must be the one that works: the rooms are also read on a clock and when the window comes
   // back, in case the stream missed the moment a QR was used.
   useEffect(() => {
@@ -207,10 +226,28 @@ export function Rooms({ project }) {
   }, [data, project]);
   /* a room without a name of its own goes by its project's, as it does on the phone (the room of no project: All projects) */
   const titleOf = (r) => r.title || (s.projects.find((p) => p.id === r.project) || {}).name || (r.kind === 'manager' && !r.project ? 'All projects' : r.id);
+  /* who runs a room's project: the bot whose chat it is (its own face), a project's Project Manager (the manager
+     role's face), or (no project) the manager of no project. Its face opens that agent's chat. */
+  const agentFor = (key) => {
+    key = key || 'manager-general';
+    const bot = (bots || []).find((b) => keyOf(b) === key);
+    if (bot) return { shape: bot.shape, color: bot.color, state: stateOf(bot, !!s.busy[keyOf(bot)]), label: `Chat with ${bot.name}`, open: () => go('bots', bot.id) };
+    const roleFace = (role) => (M && M.roles[role] && M.roles[role].face) || {};
+    if (s.projects.some((p) => p.id === key)) {
+      const f = roleFace('manager'), pname = (s.projects.find((p) => p.id === key) || {}).name || key;
+      const who = (M && M.roles.manager && M.roles.manager.name) || 'Project Manager';
+      return { shape: f.shape || null, color: f.color || '#8e7cf0', state: s.busy[key] ? 'work' : 'watch', label: `Chat with the ${who} of ${pname}`, open: () => go('overview', key) };
+    }
+    if (key === 'manager-general') {
+      const f = roleFace('manager-general');
+      return { shape: f.shape || null, color: f.color || '#3fb6a8', state: s.busy[key] ? 'work' : 'watch', label: 'Chat with the Manager', open: () => go('overview', '') };
+    }
+    return { shape: null, state: 'watch', label: 'Agent', open: null };
+  };
   return html`<div class="msettings mrooms">
     ${err && !data ? html`<div class="ierr">Could not read the rooms: ${err.message}</div>` : null}
-    ${phone ? html`<${PhoneCard} key=${phone.id} r=${phone} reload=${reload} title=${titleOf(phone)} />` : data ? html`<${NoRoom} reload=${reload} project=${project} />` : null}
-    ${priv.map((r) => html`<${PrivateCard} key=${r.id} r=${r} reload=${reload} title=${titleOf(r)} />`)}
+    ${phone ? html`<${PhoneCard} key=${phone.id} r=${phone} reload=${reload} title=${titleOf(phone)} agent=${agentFor(phone.project)} />` : data ? html`<${NoRoom} reload=${reload} project=${project} agent=${agentFor(project)} />` : null}
+    ${priv.map((r) => html`<${PrivateCard} key=${r.id} r=${r} reload=${reload} title=${titleOf(r)} agent=${agentFor(r.project)} />`)}
     ${data ? html`<${JoinCard} reload=${reload} project=${project} />` : null}
     ${pub.length ? html`<h2 class="rsec">Public rooms <span class="n">${pub.length}</span></h2>
       ${pub.map((r) => html`<${PublicCard} key=${r.id} r=${r} reload=${reload} />`)}` : null}
