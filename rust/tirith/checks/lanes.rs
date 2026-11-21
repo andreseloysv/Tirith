@@ -19,19 +19,21 @@ fn codex_run_completed_ends_lane() {
         ev("run.lifecycle.started", 1780531400000001),
         "--- tirith: lane run started 2026-11-14T12:00:00Z",
     );
-    assert!(!super::run_completed("run.terminal.completed\n")); // a plain mention is not the event
+    assert!(!super::logscan::run_completed("run.terminal.completed\n")); // a plain mention is not the event
     let nested = "{\"payload_type\":\"tool.result\",\"payload\":{\"text\":\"\\\"payload_type\\\":\\\"run.terminal.completed\\\"\"}}";
-    assert!(!super::run_completed(&format!(
+    assert!(!super::logscan::run_completed(&format!(
         "{launch}\n{started}\n{nested}\n"
     ))); // nor one inside output the agent read
-    assert!(super::run_completed(&done)); // the start of a long run fell out of the tail window
-    assert!(super::run_completed(&format!(
+    assert!(super::logscan::run_completed(&done)); // the start of a long run fell out of the tail window
+    assert!(super::logscan::run_completed(&format!(
         "{launch}\n{started}\n{done}\n"
     )));
-    assert!(!super::run_completed(&format!(
+    assert!(!super::logscan::run_completed(&format!(
         "{done}\n{launch}\n{started}\n"
     ))); // an earlier attempt's terminal, left in the appended log
-    assert!(!super::run_completed(&format!("{done}\n{started}\n"))); // a later run is under way (a launch line may predate this code)
+    assert!(!super::logscan::run_completed(&format!(
+        "{done}\n{started}\n"
+    ))); // a later run is under way (a launch line may predate this code)
 }
 
 #[test]
@@ -41,13 +43,13 @@ fn idle_lane_after_api_retry_is_stopped() {
         "{\"type\":\"assistant\"}\n",
         "{\"subtype\":\"api_retry\"}\n",
     );
-    assert_eq!(super::quiet_s(&mut seen, "a", real, 0, 1000), 0);
+    assert_eq!(super::logscan::quiet_s(&mut seen, "a", real, 0, 1000), 0);
     assert_eq!(
-        super::quiet_s(&mut seen, "a", &format!("{real}{retry}{retry}"), 0, 2200),
+        super::logscan::quiet_s(&mut seen, "a", &format!("{real}{retry}{retry}"), 0, 2200),
         1200
     );
     assert_eq!(
-        super::quiet_s(&mut seen, "a", &format!("{real}{retry}x\n"), 0, 2201),
+        super::logscan::quiet_s(&mut seen, "a", &format!("{real}{retry}x\n"), 0, 2201),
         0
     );
 }
@@ -58,34 +60,34 @@ fn long_running_lane_is_reported_once() {
     let t0 = chrono::DateTime::parse_from_rfc3339(start)
         .unwrap()
         .timestamp() as u64;
-    assert!(!super::long_running_due(
+    assert!(!super::long::long_running_due(
         Some(start),
         t0 + 29 * 60,
         30,
         false
     ));
-    assert!(super::long_running_due(
+    assert!(super::long::long_running_due(
         Some(start),
         t0 + 30 * 60,
         30,
         false
     ));
-    assert!(!super::long_running_due(
+    assert!(!super::long::long_running_due(
         Some(start),
         t0 + 40 * 60,
         30,
         true
     )); // once
-    assert!(!super::long_running_due(
+    assert!(!super::long::long_running_due(
         Some(start),
         t0 + 40 * 60,
         0,
         false
     )); // off
-    assert!(!super::long_running_due(None, t0, 30, false));
+    assert!(!super::long::long_running_due(None, t0, 30, false));
     let log = "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"tool_use\",\"input\":{\"command\":\"sleep 590\"}}]}}\nnot json\n{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"tool_use\",\"input\":{\"command\":\"ls\"}}]}}\n";
-    assert_eq!(super::last_commands(log, 1), ["ls"]);
-    assert_eq!(super::last_commands(log, 5), ["sleep 590", "ls"]);
+    assert_eq!(super::logscan::last_commands(log, 1), ["ls"]);
+    assert_eq!(super::logscan::last_commands(log, 5), ["sleep 590", "ls"]);
 }
 #[test]
 fn lane_runs_clippy_before_finish() {
@@ -98,9 +100,9 @@ fn lane_runs_clippy_before_finish() {
         workspace: dir.display().to_string(),
         ..Default::default()
     };
-    assert!(!super::brief(&app, &lane).contains("cargo clippy -- -D warnings"));
+    assert!(!super::brief::brief(&app, &lane).contains("cargo clippy -- -D warnings"));
     std::fs::write(dir.join("Cargo.toml"), "").unwrap();
-    assert!(super::brief(&app, &lane).contains("cargo clippy -- -D warnings"));
+    assert!(super::brief::brief(&app, &lane).contains("cargo clippy -- -D warnings"));
 }
 #[test]
 fn low_disk_asks_owner_once() {
@@ -111,12 +113,12 @@ fn low_disk_asks_owner_once() {
         (5.5, true),
         (9.0, true),
     ]
-    .map(|(gb, asked)| super::low_disk_ask(gb, asked));
+    .map(|(gb, asked)| super::disk::low_disk_ask(gb, asked));
     assert_eq!(asks, [None, Some(true), None, None, Some(false)]);
     let dir = std::env::temp_dir().join(format!("tirith-lowdisk-{}", std::process::id()));
     std::fs::create_dir_all(dir.join("big")).unwrap();
     std::fs::write(dir.join("big/f"), vec![1u8; 300_000]).unwrap();
-    let rows = super::biggest_dirs(&dir, 5);
+    let rows = super::disk::biggest_dirs(&dir, 5);
     assert!(rows[0].0.ends_with("big"));
     std::fs::remove_dir_all(&dir).unwrap();
 }
@@ -127,7 +129,7 @@ fn diskdiet_clears_idle_build_cache() {
         .iter()
         .for_each(|p| std::fs::create_dir_all(root.join(p)).unwrap());
     assert_eq!(
-        super::clear_idle_builds(&root, &["zoo".into()]),
+        super::builds::clear_idle_builds(&root, &["zoo".into()]),
         [root.join("tirith")]
     );
     assert!(!root.join("tirith").exists() && root.join("zoo/cargo").is_dir());
@@ -136,8 +138,8 @@ fn diskdiet_clears_idle_build_cache() {
 #[test]
 fn lane_waits_for_payment_answer() {
     assert!(
-        super::is_payment("¿Aprobar 0,74 $ de voces TTS de pago?")
-            && !super::is_payment("Which name?")
+        super::ask::is_payment("¿Aprobar 0,74 $ de voces TTS de pago?")
+            && !super::ask::is_payment("Which name?")
     );
 }
 #[test]
@@ -147,10 +149,10 @@ fn autopilot_skips_owner_wait_items() {
         "CEO: revisar",
         "Manager de guardia: atender el chat",
     ];
-    assert!(skipped.iter().all(|t| super::is_autopilot_skipped(t)));
+    assert!(skipped.iter().all(|t| super::skip::is_autopilot_skipped(t)));
     assert!(
-        !super::is_autopilot_skipped("Arreglar el parser")
-            && !super::is_autopilot_skipped("Arreglar el CEO: bug")
+        !super::skip::is_autopilot_skipped("Arreglar el parser")
+            && !super::skip::is_autopilot_skipped("Arreglar el CEO: bug")
     );
 }
 #[test]
@@ -160,9 +162,12 @@ fn autopilot_waits_for_dependency_items() {
         "Subir a YouTube",
     ];
     let up = "Subir los vídeos de la demo a YouTube: wait until they are on main, made by the item «Generar los vídeos de la demo en 3 idiomas»";
-    assert!(super::waits_for_open_item(up, &open));
-    assert!(!super::waits_for_open_item(up, &["Subir a YouTube"]));
-    assert!(!super::waits_for_open_item("Arreglar el parser", &open));
+    assert!(super::skip::waits_for_open_item(up, &open));
+    assert!(!super::skip::waits_for_open_item(up, &["Subir a YouTube"]));
+    assert!(!super::skip::waits_for_open_item(
+        "Arreglar el parser",
+        &open
+    ));
 }
 #[test]
 fn stale_owner_questions_close() {
@@ -212,7 +217,7 @@ async fn cleanup_fixture(
         "add .",
         "commit -qm i",
     ] {
-        super::git(&repo, &a.split(' ').collect::<Vec<_>>())
+        crate::app::git(&repo, &a.split(' ').collect::<Vec<_>>())
             .await
             .unwrap();
     }
@@ -234,7 +239,7 @@ async fn cleanup_lane_fixture(
     id: &str,
 ) -> crate::app::Lane {
     let ws = repo.parent().unwrap().join(format!("ws-{id}"));
-    super::add_worktree(repo, &ws, Some(&format!("lane/{id}")), &[])
+    crate::app::add_worktree(repo, &ws, Some(&format!("lane/{id}")), &[])
         .await
         .unwrap();
     let lane = crate::app::Lane {
@@ -267,10 +272,10 @@ async fn lane_done_leaves_no_worktree() {
         .for_each(|p| std::fs::write(p, "x").unwrap());
     app.insert("INSERT INTO runs (lane, project, stage, status, log) VALUES ('done-1', 'clnp', 'check done-1', 'passed', ?1)", rusqlite::params![run_log.display().to_string()]);
     app.insert("INSERT INTO runs (lane, project, stage, status, log) VALUES ('done-1b', 'clnp', 'test', 'passed', ?1)", rusqlite::params![other_log.display().to_string()]);
-    super::cleanup_lane(&app, &lane, true).await;
+    super::cleanup::cleanup_lane(&app, &lane, true).await;
     assert!(!ws.exists(), "a merged lane's worktree goes at once");
     assert!(
-        super::git(&repo, &["rev-parse", "--verify", "-q", "lane/done-1"])
+        crate::app::git(&repo, &["rev-parse", "--verify", "-q", "lane/done-1"])
             .await
             .is_err(),
         "a merged lane's branch goes"
@@ -289,7 +294,7 @@ async fn lane_done_leaves_no_worktree() {
         "owner doc"
     );
     assert!(
-        !super::git(&repo, &["worktree", "list", "--porcelain"])
+        !crate::app::git(&repo, &["worktree", "list", "--porcelain"])
             .await
             .unwrap()
             .contains(&ws.display().to_string()),
@@ -302,17 +307,17 @@ async fn lane_done_leaves_no_worktree() {
     std::fs::write(ws2.join("loose.txt"), "new\n").unwrap();
     let log2 = app.home.join("logs/lanes/done-2.log");
     std::fs::write(&log2, "x").unwrap();
-    super::cleanup_lane(&app, &lane2, false).await;
+    super::cleanup::cleanup_lane(&app, &lane2, false).await;
     assert!(!ws2.exists(), "a stopped lane's worktree goes at once");
     assert_eq!(
-        super::git(&repo, &["show", "lane/done-2:README"])
+        crate::app::git(&repo, &["show", "lane/done-2:README"])
             .await
             .unwrap(),
         "changed",
         "its uncommitted work was saved on its branch"
     );
     assert_eq!(
-        super::git(&repo, &["show", "lane/done-2:loose.txt"])
+        crate::app::git(&repo, &["show", "lane/done-2:loose.txt"])
             .await
             .unwrap(),
         "new"
@@ -325,7 +330,7 @@ async fn lane_done_leaves_no_worktree() {
             .to_string(),
     );
     app.save_lane(&lane2);
-    super::sweep_cleanups(&app, &[lane2]).await;
+    super::sweep::sweep_cleanups(&app, &[lane2]).await;
     assert!(!log2.exists(), "a stopped lane's log goes after 24 h");
     drop(app);
     let _ = std::fs::remove_dir_all(&base);
@@ -359,7 +364,7 @@ async fn private_files_move_to_project() {
         "private/\nevidence/\ntarget/\nnode_modules/\nbuild/\nsecret.txt\n",
     )
     .unwrap();
-    super::cleanup_lane(&app, &lane, false).await;
+    super::cleanup::cleanup_lane(&app, &lane, false).await;
     assert!(!ws.exists());
     assert_eq!(
         std::fs::read_to_string(repo.join("private/doc.txt")).unwrap(),
@@ -400,17 +405,19 @@ async fn private_files_move_to_project() {
         "a path the project does not ignore joins .git/info/exclude"
     );
     assert!(
-        super::git(&repo, &["check-ignore", "-q", "--", "secret.txt"])
+        crate::app::git(&repo, &["check-ignore", "-q", "--", "secret.txt"])
             .await
             .is_ok()
     );
     assert_eq!(
-        super::git(&repo, &["status", "--porcelain"]).await.unwrap(),
+        crate::app::git(&repo, &["status", "--porcelain"])
+            .await
+            .unwrap(),
         "",
         "everything moved in stays out of git in the project"
     );
     assert!(
-        super::git(&repo, &["show", "lane/priv-1:.gitignore"])
+        crate::app::git(&repo, &["show", "lane/priv-1:.gitignore"])
             .await
             .unwrap()
             .contains("secret.txt"),
@@ -425,8 +432,8 @@ async fn moved_folder_stays_excluded() {
     // As in the incident, the `.private` folder sits beside tracked work, so git reports it itself as the ignored folder.
     std::fs::create_dir_all(repo.join("research/konsens")).unwrap();
     std::fs::write(repo.join("research/konsens/README"), "tracked\n").unwrap();
-    super::git(&repo, &["add", "research"]).await.unwrap();
-    super::git(&repo, &["commit", "-qm", "research"])
+    crate::app::git(&repo, &["add", "research"]).await.unwrap();
+    crate::app::git(&repo, &["commit", "-qm", "research"])
         .await
         .unwrap();
     let lane = cleanup_lane_fixture(&app, &repo, "moved-1").await;
@@ -442,7 +449,7 @@ async fn moved_folder_stays_excluded() {
         "private/\nevidence/\ntarget/\nnode_modules/\nbuild/\n.private/\n",
     )
     .unwrap();
-    super::cleanup_lane(&app, &lane, false).await;
+    super::cleanup::cleanup_lane(&app, &lane, false).await;
     assert_eq!(std::fs::read_to_string(repo.join(rel)).unwrap(), "pdf");
     let exclude = std::fs::read_to_string(repo.join(".git/info/exclude")).unwrap();
     assert_eq!(
@@ -454,13 +461,15 @@ async fn moved_folder_stays_excluded() {
         "one line for the whole folder moved, not one per file: {exclude}"
     );
     assert!(
-        super::git(&repo, &["check-ignore", "-q", "--", rel])
+        crate::app::git(&repo, &["check-ignore", "-q", "--", rel])
             .await
             .is_ok(),
         "a name with \\, spaces and [ stays ignored"
     );
     assert_eq!(
-        super::git(&repo, &["status", "--porcelain"]).await.unwrap(),
+        crate::app::git(&repo, &["status", "--porcelain"])
+            .await
+            .unwrap(),
         "",
         "git add -A in the project would take nothing moved in"
     );
@@ -471,14 +480,14 @@ async fn moved_folder_stays_excluded() {
     std::fs::write(&p, "old").unwrap();
     std::fs::write(repo.join(".git/info/exclude"), format!("{exclude}/{old}\n")).unwrap();
     assert!(
-        super::git(&repo, &["check-ignore", "-q", "--", old])
+        crate::app::git(&repo, &["check-ignore", "-q", "--", old])
             .await
             .is_err(),
         "the broken per-file line leaves it visible"
     );
-    super::sweep_cleanups(&app, &[]).await;
+    super::sweep::sweep_cleanups(&app, &[]).await;
     assert!(
-        super::git(&repo, &["check-ignore", "-q", "--", old])
+        crate::app::git(&repo, &["check-ignore", "-q", "--", old])
             .await
             .is_ok(),
         "the startup sweep excludes its folder"
@@ -487,7 +496,9 @@ async fn moved_folder_stays_excluded() {
         .unwrap()
         .contains("/old/.private/documents/"));
     assert_eq!(
-        super::git(&repo, &["status", "--porcelain"]).await.unwrap(),
+        crate::app::git(&repo, &["status", "--porcelain"])
+            .await
+            .unwrap(),
         ""
     );
     drop(app);
@@ -505,26 +516,26 @@ async fn idle_build_cache_goes() {
     std::fs::create_dir_all(build.join("cargo/debug")).unwrap();
     std::fs::write(build.join("cargo/debug/x"), "x").unwrap();
     let merge_dir = base.join("merge-wt");
-    super::add_worktree(&repo, &merge_dir, None, &[])
+    crate::app::add_worktree(&repo, &merge_dir, None, &[])
         .await
         .unwrap();
-    let now = super::now_s();
+    let now = crate::app::now_s();
     assert!(
-        !super::drop_idle_cache(&repo, &build, &merge_dir, true, now - 7200, now, 30).await,
+        !super::idle::drop_idle_cache(&repo, &build, &merge_dir, true, now - 7200, now, 30).await,
         "a project with work under way keeps its cache and merge folder"
     );
     assert!(
-        !super::drop_idle_cache(&repo, &build, &merge_dir, false, now - 60, now, 30).await,
+        !super::idle::drop_idle_cache(&repo, &build, &merge_dir, false, now - 60, now, 30).await,
         "idle for less than the limit keeps them"
     );
     assert!(build.exists() && merge_dir.exists());
     assert!(
-        super::drop_idle_cache(&repo, &build, &merge_dir, false, now - 7200, now, 30).await,
+        super::idle::drop_idle_cache(&repo, &build, &merge_dir, false, now - 7200, now, 30).await,
         "idle for longer than the limit: both go"
     );
     assert!(!build.exists() && !merge_dir.exists());
     assert!(
-        !super::git(&repo, &["worktree", "list", "--porcelain"])
+        !crate::app::git(&repo, &["worktree", "list", "--porcelain"])
             .await
             .unwrap()
             .contains(&merge_dir.display().to_string()),
