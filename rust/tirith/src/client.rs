@@ -13,7 +13,7 @@ pub fn call(method: &str, path: &str, body: Option<Value>) -> Result<String, Str
     call_with(method, path, body.map(|b| b.to_string()).unwrap_or_default(), &[], Duration::from_secs(30))
 }
 pub fn call_with(method: &str, path: &str, body: String, headers: &[(&str, String)], timeout: Duration) -> Result<String, String> {
-    let addr = SocketAddr::from(([127, 0, 0, 1], crate::config::Config::load().port));
+    let addr = SocketAddr::from(([127, 0, 0, 1], crate::config::Config::load_at(&crate::config::tirith_home()).port));
     let mut s = TcpStream::connect_timeout(&addr, Duration::from_secs(2)).map_err(|_| "tirith is not running: start it with `tirith serve`".to_string())?;
     s.set_read_timeout(Some(timeout)).ok();
     let extra: String = headers.iter().map(|(k, v)| format!("{k}: {v}\r\n")).collect();
@@ -25,6 +25,11 @@ pub fn call_with(method: &str, path: &str, body: String, headers: &[(&str, Strin
     let (head, body) = raw.split_once("\r\n\r\n").unwrap_or((&raw, ""));
     let code: u16 = head.split_whitespace().nth(1).and_then(|c| c.parse().ok()).unwrap_or(0);
     (200..300).contains(&code).then(|| body.to_string()).ok_or_else(|| body.trim().to_string())
+}
+
+/// One request whose JSON answer is read as a value.
+pub fn call_json(method: &str, path: &str, body: Option<Value>) -> Result<Value, String> {
+    serde_json::from_str(&call(method, path, body)?).map_err(|e| e.to_string())
 }
 
 pub fn print(r: Result<String, String>) -> Result<(), String> {

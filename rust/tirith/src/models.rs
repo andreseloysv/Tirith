@@ -77,8 +77,7 @@ fn set_flag(argv: &mut Vec<String>, flag: &Option<String>, alts: &[&str], value:
     }
 }
 
-/// The argv of a lane run. `agent`/`model` override the lane role (a fallback relaunch passes them). `resume = Some((session_id, message))` continues that agent session with `message` instead of the brief;
-/// an alias without `resume_args` starts fresh with the brief.
+/// The argv of a lane run. `agent`/`model` override the lane role (a fallback relaunch passes them). `resume = Some((session_id, message))` continues that agent session with `message` instead of the brief; an alias without `resume_args` starts fresh with the brief.
 pub fn lane_argv(app: &Shared, agent: Option<&str>, model: Option<&str>, brief: &Path, workspace: &Path, resume: Option<(&str, &str)>) -> Result<AgentCmd, String> {
     let cfg = app.cfg();
     let lane = lane_role(&cfg);
@@ -120,9 +119,7 @@ pub fn chat_argv(app: &Shared, role_name: &str, resume: Option<&str>) -> Result<
     let (mflag, eflag, _, _) = flags(&cfg, &r.agent);
     set_flag(&mut argv, &mflag, &["--model", "-m"], &r.model);
     set_flag(&mut argv, &eflag, &["--effort", "--reasoning-effort"], &r.effort);
-    if let Some(id) = resume {
-        argv.extend(["--resume".into(), id.into()]);
-    }
+    argv.extend(resume.into_iter().flat_map(|id| ["--resume".to_string(), id.to_string()]));
     Ok(AgentCmd { alias: r.agent, argv })
 }
 
@@ -186,12 +183,13 @@ fn updated(app: &Shared, role_name: &str, b: &Value) -> Result<RoleSetting, Stri
         _ => {}
     }
     let cfg = app.cfg();
-    if let Some(v) = [&s.model, &s.effort].into_iter().flatten().chain(&s.fallback).find(|v| !(v.chars().next().is_some_and(|c| c.is_ascii_alphanumeric()) && v.chars().all(|c| c.is_ascii_alphanumeric() || "._:/+-[]".contains(c)))) {
-        return Err(format!("'{v}' is not a valid model, effort or fallback entry"));
-    }
-    if let Some(alias) = std::iter::once(&s.agent).chain(&s.fallback).map(|e| e.split(':').next().unwrap_or("")).find(|a| cfg.factory.command(a).is_none()) {
-        return Err(format!("no agent alias '{alias}' in config.toml"));
-    }
+    [&s.model, &s.effort]
+        .into_iter()
+        .flatten()
+        .chain(&s.fallback)
+        .find(|v| !(v.chars().next().is_some_and(|c| c.is_ascii_alphanumeric()) && v.chars().all(|c| c.is_ascii_alphanumeric() || "._:/+-[]".contains(c))))
+        .map_or(Ok(()), |v| Err(format!("'{v}' is not a valid model, effort or fallback entry")))?;
+    std::iter::once(&s.agent).chain(&s.fallback).map(|e| e.split(':').next().unwrap_or("")).find(|a| cfg.factory.command(a).is_none()).map_or(Ok(()), |alias| Err(format!("no agent alias '{alias}' in config.toml")))?;
     let bad = (s.agent == "codex").then(crate::codex::catalog).and_then(|c| {
         c.iter()
             .find(|m| Some(m["slug"].as_str().unwrap_or("")) == s.model.as_deref())

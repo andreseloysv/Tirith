@@ -33,9 +33,7 @@ pub fn words(app: &Shared, project: &Project) -> Vec<String> {
 /// The repo's common git dir, by reading `.git` (a folder, or a file pointing into a worktree's git dir).
 pub fn git_dir(repo: &std::path::Path) -> Option<PathBuf> {
     let dot = repo.join(".git");
-    if dot.is_dir() {
-        return Some(dot);
-    }
+    let Some(()) = (!dot.is_dir()).then_some(()) else { return Some(dot) };
     let text = std::fs::read_to_string(&dot).ok()?;
     let dir = repo.join(text.strip_prefix("gitdir:")?.trim());
     Some(std::fs::read_to_string(dir.join("commondir")).map_or_else(|_| dir.clone(), |c| dir.join(c.trim())))
@@ -59,7 +57,7 @@ pub fn intact(app: &Shared, project: &Project) -> Result<(), String> {
     for hook in HOOKS {
         let text = std::fs::read_to_string(git.join("hooks").join(hook)).map_err(|_| format!("commit guard: the {hook} hook is missing {fix}"))?;
         (text.contains(MARKER)).then_some(()).ok_or_else(|| format!("commit guard: the {hook} hook is not Tirith's; merge the guard into it by hand"))?;
-        (!(text != render(hook, &words))).then_some(()).ok_or_else(|| format!("commit guard: the {hook} hook is outdated or has other words than config.toml {fix}"))?;
+        (text == render(hook, &words)).then_some(()).ok_or_else(|| format!("commit guard: the {hook} hook is outdated or has other words than config.toml {fix}"))?;
     }
     // A `core.hooksPath` in the repo's or the user's git config makes git skip the guard.
     let skips = |f: &PathBuf| std::fs::read_to_string(f).is_ok_and(|t| t.lines().any(|l| l.trim().to_lowercase().replace(' ', "").starts_with("hookspath=")));
@@ -70,10 +68,9 @@ pub fn intact(app: &Shared, project: &Project) -> Result<(), String> {
 #[cfg(target_os = "macos")]
 fn immutable(path: &std::path::Path, on: bool) {
     use std::os::macos::fs::MetadataExt;
-    if let (Ok(m), Ok(c)) = (std::fs::metadata(path), std::ffi::CString::new(path.as_os_str().as_encoded_bytes())) {
-        let flags = if on { m.st_flags() | libc::UF_IMMUTABLE } else { m.st_flags() & !libc::UF_IMMUTABLE };
-        unsafe { libc::chflags(c.as_ptr(), flags) };
-    }
+    std::fs::metadata(path).ok().zip(std::ffi::CString::new(path.as_os_str().as_encoded_bytes()).ok()).into_iter().for_each(|(m, c)| {
+        unsafe { libc::chflags(c.as_ptr(), if on { m.st_flags() | libc::UF_IMMUTABLE } else { m.st_flags() & !libc::UF_IMMUTABLE }) };
+    });
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -131,40 +128,36 @@ async fn list(State(app): State<Shared>) -> Json<Value> {
     Json(json!(rows))
 }
 
-async fn install_one(State(app): State<Shared>, Path(project): Path<String>) -> Result<Json<Value>, (StatusCode, String)> {
-    let p = app.cfg().project(&project).cloned().ok_or((StatusCode::NOT_FOUND, format!("unknown project {project}")))?;
-    install(&app, &p).map_err(|e| (StatusCode::CONFLICT, e))?;
-    Ok(Json(json!({"project": project, "ok": true})))
-}
-
 pub fn routes() -> Router<Shared> {
+    let install_one = |State(app): State<Shared>, Path(project): Path<String>| async move {
+        let p = app.cfg().project(&project).cloned().ok_or((StatusCode::NOT_FOUND, format!("unknown project {project}")))?;
+        install(&app, &p).map_err(|e| (StatusCode::CONFLICT, e))?;
+        Ok::<_, (StatusCode, String)>(Json(json!({"project": project, "ok": true})))
+    };
     Router::new().route("/api/guard", get(list)).route("/api/guard/{project}/install", post(install_one))
 }
 
 /// `tirith guard …` commands.
 pub fn cli(pos: &[&str], _flag: crate::client::Flag) -> Option<Result<(), String>> {
     use crate::client::call;
-    let all = || -> Result<Vec<Value>, String> { serde_json::from_str(&call("GET", "/api/guard", None)?).map_err(|e| e.to_string()) };
+    let all = || -> Result<Vec<Value>, String> { serde_json::from_value(crate::client::call_json("GET", "/api/guard", None)?).map_err(|e| e.to_string()) };
     Some(match pos {
         ["guard", "check"] => all().and_then(|ps| {
             ps.iter().for_each(|p| println!("{:<20} {}", p["project"].as_str().unwrap_or(""), p["reason"].as_str().unwrap_or("")));
             ps.iter().all(|p| p["ok"] == true).then_some(()).ok_or_else(|| "some project's guard needs attention".into())
         }),
         ["guard", "install", rest @ ..] if rest.len() <= 1 => {
-            let ids: Vec<String> = match rest.first() {
-                Some(id) => vec![id.to_string()],
-                None => all().map(|ps| ps.iter().filter(|p| p["ok"] != true).filter_map(|p| p["project"].as_str().map(String::from)).collect()).unwrap_or_default(),
-            };
-            let failed = ids.iter().fold(false, |failed, id| match call("POST", &format!("/api/guard/{id}/install"), None) {
-                Ok(_) => {
-                    println!("{id}: installed");
-                    failed
+            let ids: Vec<String> = rest.first().map_or_else(|| all().map(|ps| ps.iter().filter(|p| p["ok"] != true).filter_map(|p| p["project"].as_str().map(String::from)).collect()).unwrap_or_default(), |id| vec![id.to_string()]);
+            let mut failed = false;
+            for id in &ids {
+                match call("POST", &format!("/api/guard/{id}/install"), None) {
+                    Ok(_) => println!("{id}: installed"),
+                    Err(e) => {
+                        eprintln!("{id}: {e}");
+                        failed = true;
+                    }
                 }
-                Err(e) => {
-                    eprintln!("{id}: {e}");
-                    true
-                }
-            });
+            }
             (!failed).then_some(()).ok_or_else(|| "some guards were not installed".into())
         }
         _ => return None,

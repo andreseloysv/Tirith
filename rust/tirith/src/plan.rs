@@ -64,8 +64,7 @@ pub fn read(app: &Shared, project: &str) -> Result<Vec<Step>, String> {
     std::fs::read_to_string(&file).map(|text| parse(&text)).map_err(|_| format!("{} has no plan file ({})", project, file.display()))
 }
 
-/// Two item texts that name the same item: equal once their `(check: ...)` is left out. A lane carries the text its item had when it started; when only the check is rewritten meanwhile, the lane still belongs to that item (it is
-/// checked with the check the plan has now, and ticked when it is merged).
+/// Two item texts that name the same item: equal once their `(check: ...)` is left out. A lane carries the text its item had when it started; when only the check is rewritten meanwhile, the lane still belongs to that item (it is checked with the check the plan has now, and ticked when it is merged).
 pub fn same(a: &str, b: &str) -> bool {
     a == b || CHECK.replace(a, "").trim() == CHECK.replace(b, "").trim()
 }
@@ -111,12 +110,9 @@ pub async fn add(app: &Shared, project: &str, step: &str, text: &str) -> Result<
     (!text.is_empty()).then_some(()).ok_or("the item needs a text".to_string())?;
     CHECK.captures(&text).and_then(|c| check_problem(&c[1])).map_or(Ok(()), Err)?;
     // A forbidden word of the project's commit guard would make the plan uncommittable and block every merge.
-    if let Some(p) = app.cfg().project(project).cloned() {
-        let words = crate::guard::words(app, &p);
-        if let Some(m) = regex::Regex::new(&format!(r"(?i)\b({})\b", words.join("|"))).ok().filter(|_| !words.is_empty()).and_then(|r| r.find(&text)) {
-            return Err(format!("\"{}\" is a forbidden word of this project's commit guard: say it another way", m.as_str()));
-        }
-    }
+    let hit =
+        app.cfg().project(project).map(|p| crate::guard::words(app, p)).filter(|w| !w.is_empty()).and_then(|w| regex::Regex::new(&format!(r"(?i)\b({})\b", w.join("|"))).ok()).and_then(|r| r.find(&text).map(|m| m.as_str().to_string()));
+    hit.map_or(Ok(()), |word| Err(format!("\"{word}\" is a forbidden word of this project's commit guard: say it another way")))?;
     change(app, project, |lines, steps| {
         let i = steps.iter().position(|s| s.num == step).ok_or(format!("the plan has no step {step}"))?;
         (!(steps[i].items.iter().any(|it| same(&it.text, &text)))).then_some(()).ok_or_else(|| format!("step {step} already has that item"))?;
@@ -154,10 +150,7 @@ pub async fn flush_locked(app: &Shared, project: &str) {
     let rel = file.strip_prefix(&repo).unwrap_or(&file).to_string_lossy().to_string();
     let pending = git(&repo, &["status", "--porcelain", "--", &rel]).await.unwrap_or_default();
     let result = if pending.is_empty() { Ok(String::new()) } else { git(&repo, &["commit", "-q", "-m", "Plan: update from Tirith", "--", &rel]).await };
-    match result {
-        Ok(_) => _ = app.plan_dirty.lock().unwrap().remove(project),
-        Err(e) => _ = app.event("", project, "error", "plan", &format!("plan commit failed: {e}"), ""),
-    }
+    let _ = result.map(|_| app.plan_dirty.lock().unwrap().remove(project)).map_err(|e| app.event("", project, "error", "plan", &format!("plan commit failed: {e}"), ""));
 }
 
 #[cfg(test)]

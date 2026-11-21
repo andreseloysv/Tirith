@@ -30,12 +30,8 @@ pub fn start(app: &Shared, project: &str, step: &str, item: &str, agent: Option<
     let item = plan::clean(item);
     let steps = plan::read(app, project)?;
     let st = steps.iter().find(|s| s.num == step).ok_or(format!("the plan of {project} has no step {step}"))?;
-    if !st.items.iter().any(|i| !i.done && plan::same(&i.text, &item)) {
-        return Err(format!("\"{item}\" is not an open item of step {step} of {project}. Add it first: tirith plan add {project} {step} \"<text>\""));
-    }
-    if let Some(l) = app.lanes.lock().unwrap().values().find(|l| l.active() && l.project == project && l.step == step && plan::same(&l.item, &item)) {
-        return Err(format!("lane {} already works on that item ({})", l.id, l.status));
-    }
+    st.items.iter().any(|i| !i.done && plan::same(&i.text, &item)).then_some(()).ok_or_else(|| format!("\"{item}\" is not an open item of step {step} of {project}. Add it first: tirith plan add {project} {step} \"<text>\""))?;
+    app.lanes.lock().unwrap().values().find(|l| l.active() && l.project == project && l.step == step && plan::same(&l.item, &item)).map_or(Ok(()), |l| Err(format!("lane {} already works on that item ({})", l.id, l.status)))?;
     let (factory, role_hash) = app.stamp_for(&models::lane_role(&app.cfg()));
     let lane = Lane {
         id: format!("{}-{:04x}", slug(item.split(" (check:").next().unwrap_or("")), chrono::Utc::now().timestamp_subsec_nanos() & 0xffff),
@@ -193,9 +189,7 @@ fn next_item(app: &Shared, lanes: &[Lane], rr: &mut usize, ok: &mut dyn FnMut(&P
     let n = cfg.projects.len();
     for k in 0..n {
         let p = &cfg.projects[(*rr + k) % n];
-        if !autopilot_on(app, &p.id) || app.kv(&format!("main_red:{}", p.id)).is_some() {
-            continue;
-        }
+        let Some(()) = (autopilot_on(app, &p.id) && app.kv(&format!("main_red:{}", p.id)).is_none()).then_some(()) else { continue };
         let Ok(steps) = plan::read(app, &p.id) else { continue };
         let open: Vec<&str> = steps.iter().flat_map(|s| s.items.iter()).filter(|i| !i.done).map(|i| i.text.as_str()).collect();
         let latest = |step: &str, item: &str| lanes.iter().filter(|l| l.project == p.id && l.step == step && plan::same(&l.item, item)).max_by(|a, b| a.created_at.cmp(&b.created_at));
@@ -203,9 +197,7 @@ fn next_item(app: &Shared, lanes: &[Lane], rr: &mut usize, ok: &mut dyn FnMut(&P
         let startable = |i: &plan::Item| !i.done && !is_autopilot_skipped(&i.text) && !waits_for_open_item(&i.text, &open);
         let Some(st) = steps.iter().find(|s| s.items.iter().any(|i| startable(i) && !skipped(latest(&s.num, &i.text)))) else { continue };
         let Some(it) = st.items.iter().find(|i| startable(i) && latest(&st.num, &i.text).is_none_or(|l| !l.active() && !skipped(Some(l)))) else { continue };
-        if !ok(p) {
-            continue;
-        }
+        let Some(()) = ok(p).then_some(()) else { continue };
         *rr = (*rr + k + 1) % n;
         if let Ok(l) = start(app, &p.id, &st.num, &it.text, None).map_err(|e| app.event("", &p.id, "error", "autopilot", &e, "")) {
             return Some(l);
@@ -229,18 +221,11 @@ const RUN_START: &str = "--- tirith: lane run started ";
 
 /// Whether the lane's current run already ended in its log: a `run.terminal.completed` event (the top-level `payload_type` of its own stream line, so a mention inside a file or command output the agent read never counts). The process may still be alive.
 fn run_completed(tail: &str) -> bool {
-    tail.lines().fold(false, |done, line| {
-        if line.starts_with(RUN_START) {
-            false
-        } else if line.contains("run.terminal.completed") || line.contains("run.lifecycle.started") {
-            match serde_json::from_str::<serde_json::Value>(line).ok().and_then(|v| v["payload_type"].as_str().map(String::from)).as_deref() {
-                Some("run.lifecycle.started") => false,
-                Some("run.terminal.completed") => true,
-                _ => done,
-            }
-        } else {
-            done
-        }
+    tail.lines().fold(false, |done, line| match serde_json::from_str::<serde_json::Value>(line).ok().and_then(|v| v["payload_type"].as_str().map(String::from)).as_deref() {
+        Some("run.lifecycle.started") => false,
+        Some("run.terminal.completed") => true,
+        _ if line.starts_with(RUN_START) => false,
+        _ => done,
     })
 }
 
@@ -326,9 +311,7 @@ pub async fn scheduler(app: Shared) {
                 ended(&app, &l.id, None).await; // its process ended while the daemon was down
             }
         }
-        if lim.max_parallel.is_some_and(|m| running >= m) || (running > 0 && load >= lim.max_load) {
-            continue;
-        }
+        let Some(()) = (!lim.max_parallel.is_some_and(|m| running >= m) && !(running > 0 && load >= lim.max_load)).then_some(()) else { continue };
         let mut ok = |p: &Project| {
             let why = blocked(&app, p, &lanes);
             why.as_ref().filter(|w| said.get(&p.id) != Some(*w)).into_iter().for_each(|w| _ = app.event("", &p.id, "paused", "", &format!("no new lane: {w}"), ""));
@@ -363,11 +346,11 @@ async fn take_slot(app: &Shared, project: &Project, lane: &Lane) -> Result<PathB
             let prev = all.iter().filter(|l| Path::new(&l.workspace) == s).max_by(|a, b| a.created_at.cmp(&b.created_at));
             if let Some(p) = prev.filter(|p| matches!(p.status.as_str(), "stopped" | "failed")) {
                 if !git(&s, &["status", "--porcelain"]).await.unwrap_or_default().is_empty() {
-                    let added = git(&s, &["add", "-A"]).await;
-                    drop(
-                        (if added.is_ok() { git(&s, &["commit", "-qm", "Saved by Tirith"]).await } else { added })
-                            .map_err(|e| app.event(&p.id, &p.project, "error", "slot", &format!("could not save the work left in {}: {e}", s.display()), "")),
-                    );
+                    let save = async {
+                        git(&s, &["add", "-A"]).await?;
+                        git(&s, &["commit", "-qm", "Saved by Tirith"]).await
+                    };
+                    drop(save.await.map_err(|e| app.event(&p.id, &p.project, "error", "slot", &format!("could not save the work left in {}: {e}", s.display()), "")));
                 }
             }
             s
@@ -472,16 +455,15 @@ async fn ended(app: &Shared, id: &str, code: Option<i32>) {
     // Only what the agent program itself said counts: its plain-text output and its final result event, never the files and command output it read (a lane working on Tirith reads the very patterns that detect it).
     let log = raw
         .lines()
-        .filter_map(|l| {
-            (!l.trim_start().starts_with('{')).then(|| l.to_string()).or_else(|| {
-                let v: serde_json::Value = serde_json::from_str(l).ok()?;
-                match v["type"].as_str()? {
-                    "result" if v["is_error"] == true => Some(l.to_string()),
-                    "turn.failed" => v["error"]["message"].as_str().map(String::from),
-                    "error" => v["message"].as_str().map(String::from),
-                    _ => None,
-                }
-            })
+        .filter_map(|l| match serde_json::from_str::<serde_json::Value>(l) {
+            Ok(v) if l.trim_start().starts_with('{') => match v["type"].as_str() {
+                Some("result") if v["is_error"] == true => Some(l.to_string()),
+                Some("turn.failed") => v["error"]["message"].as_str().map(String::from),
+                Some("error") => v["message"].as_str().map(String::from),
+                _ => None,
+            },
+            _ if !l.trim_start().starts_with('{') => Some(l.to_string()),
+            _ => None,
         })
         .collect::<Vec<_>>()
         .join("\n");
@@ -516,9 +498,7 @@ async fn ended(app: &Shared, id: &str, code: Option<i32>) {
                 "running" => {
                     l.status = "merge-queued".into();
                     l.ended_at = Some(now_iso());
-                    if l.note.is_empty() {
-                        l.note = format!("ended (exit {})", code.map(|c| c.to_string()).unwrap_or("?".into()));
-                    }
+                    l.note = if l.note.is_empty() { format!("ended (exit {})", code.map(|c| c.to_string()).unwrap_or("?".into())) } else { std::mem::take(&mut l.note) };
                 }
                 "waiting" if !l.resume.is_empty() => l.status = "queued".into(), // answered while it ended its turn
                 _ => {}
@@ -544,9 +524,7 @@ async fn no_commits(app: &Shared, lane: &Lane) -> bool {
 /// `tirith ask` from a lane: it waits, and the manager is told how to answer.
 pub fn ask(app: &Shared, id: &str, question: &str) -> Result<Lane, String> {
     let lane = app.lane(id).ok_or(format!("no lane '{id}'"))?;
-    if lane.status != "running" || question.trim().is_empty() {
-        return Err(format!("lane {id} is {}: only a working lane asks, with a question", lane.status));
-    }
+    (lane.status == "running" && !question.trim().is_empty()).then_some(()).ok_or_else(|| format!("lane {id} is {}: only a working lane asks, with a question", lane.status))?;
     // A question about money stops the agent: it must not spend before the answer (it resumes with it).
     let updated = app.update_lane(id, |l| {
         (l.status, l.question, l.resume) = ("waiting".into(), question.trim().into(), String::new());
@@ -561,9 +539,7 @@ pub fn ask(app: &Shared, id: &str, question: &str) -> Result<Lane, String> {
 /// `tirith answer` from the manager, or the owner's answer (`who`): a live message when the agent still runs, else a resumed run.
 pub fn answer(app: &Shared, id: &str, text: &str, who: &str) -> Result<Lane, String> {
     let lane = app.lane(id).ok_or(format!("no lane '{id}'"))?;
-    if lane.status != "waiting" {
-        return Err(format!("lane {id} is {}, not waiting for an answer", lane.status));
-    }
+    (lane.status == "waiting").then_some(()).ok_or_else(|| format!("lane {id} is {}, not waiting for an answer", lane.status))?;
     let live = lane.pid.is_some_and(alive);
     if live {
         tell(id, &format!("Answer from {who}: {text}"));
@@ -595,20 +571,15 @@ pub fn is_payment(question: &str) -> bool {
 
 pub fn stop(app: &Shared, id: &str) -> Result<Lane, String> {
     let lane = app.lane(id).ok_or(format!("no lane '{id}'"))?;
-    if !matches!(lane.status.as_str(), "queued" | "running" | "waiting" | "merge-queued") {
-        return Err(format!("lane {id} is {}", lane.status));
-    }
+    matches!(lane.status.as_str(), "queued" | "running" | "waiting" | "merge-queued").then_some(()).ok_or_else(|| format!("lane {id} is {}", lane.status))?;
     kill_agent(lane.pid);
     app.update_lane(id, |l| (l.status, l.ended_at, l.pid) = ("stopped".into(), Some(now_iso()), None)).ok_or("lane vanished".into())
 }
 
-/// `tirith lane delete`: the lane is thrown away. Its agent stops, its branch and unsaved work go, it leaves every list, and its open item leaves the
-/// plan, so nothing starts it again (stopping keeps all that: the autopilot only skips the item).
+/// `tirith lane delete`: the lane is thrown away. Its agent stops, its branch and unsaved work go, it leaves every list, and its open item leaves the plan, so nothing starts it again (stopping keeps all that: the autopilot only skips the item).
 pub async fn delete(app: &Shared, id: &str) -> Result<(), String> {
     let lane = app.lane(id).ok_or(format!("no lane '{id}'"))?;
-    if lane.status == "merging" {
-        return Err(format!("lane {id} is being merged right now: try again in a minute"));
-    }
+    (lane.status != "merging").then_some(()).ok_or_else(|| format!("lane {id} is being merged right now: try again in a minute"))?;
     kill_agent(lane.pid);
     app.lanes.lock().unwrap().remove(id);
     let _ = app.db.lock().unwrap().execute("DELETE FROM lanes WHERE id = ?1", [id]);
@@ -635,16 +606,13 @@ pub async fn delete(app: &Shared, id: &str) -> Result<(), String> {
 /// The merge failed because of the lane: the same agent continues in its slot with the reason, twice at most.
 pub fn send_back(app: &Shared, lane: &Lane, reason: &str) {
     if lane.attempts >= 2 {
-        app.update_lane(&lane.id, |l| {
-            l.status = "failed".into();
-            l.note = reason.chars().take(2000).collect();
-        });
+        app.update_lane(&lane.id, |l| (l.status, l.note) = ("failed".into(), reason.chars().take(2000).collect()));
         manager::emit_event(app, &lane.project, "lane.failed", &format!("lane {} ({}: {}) failed after {} tries: {}", lane.id, lane.project, lane.item, lane.attempts + 1, reason.lines().next().unwrap_or("")), None);
         return;
     }
     app.update_lane(&lane.id, |l| {
-        l.attempts += 1;
-        (l.solo, l.resume, l.note, l.status) = (false, format!("Tirith sent your work back:\n\n{reason}\n\nFix it on your branch, commit, and end your turn."), format!("sent back: {}", reason.lines().next().unwrap_or("")), "queued".into());
+        (l.attempts, l.solo, l.resume, l.note, l.status) =
+            (l.attempts + 1, false, format!("Tirith sent your work back:\n\n{reason}\n\nFix it on your branch, commit, and end your turn."), format!("sent back: {}", reason.lines().next().unwrap_or("")), "queued".into())
     });
     app.sched_wake.notify_one();
 }
