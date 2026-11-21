@@ -38,6 +38,10 @@ pub(crate) fn embedded_prompts() -> BTreeMap<String, String> {
             include_str!("../../../../factory/evals/card-needed.md"),
         ),
         (
+            "turn-quality",
+            include_str!("../../../../factory/evals/turn-quality.md"),
+        ),
+        (
             "unapproved",
             include_str!("../../../../factory/evals/unapproved.md"),
         ),
