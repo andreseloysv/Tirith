@@ -1,14 +1,12 @@
 //! One program started for a caller: under the one profile, on the caller's own stdin, stdout and stderr.
-use super::{limits::profile, Request};
+use super::limits::{profile, Around};
+use super::Request;
 use std::os::fd::OwnedFd;
 use std::os::unix::process::CommandExt;
 use std::process::{Child, Command, Stdio};
 
-pub(super) fn spawn(r: &Request, ports: &[u16], io: [OwnedFd; 3]) -> Result<Child, String> {
-    if !r.program.starts_with('/') || !r.cwd.starts_with('/') {
-        return Err("a program and a folder by their whole paths".into()); // a program named like an option would be one
-    }
-    let (text, params) = profile(r, ports);
+pub(super) fn spawn(r: &Request, around: &Around, io: [OwnedFd; 3]) -> Result<Child, String> {
+    let (text, params) = profile(r, around);
     let mut command = Command::new(super::super::profile::SANDBOX_EXEC);
     for (name, value) in params {
         command.arg("-D").arg(format!("{name}={value}"));

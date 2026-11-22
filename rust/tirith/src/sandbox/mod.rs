@@ -31,7 +31,9 @@ mod tunnel;
 mod wrap;
 mod wrappers;
 
+#[cfg(test)]
 pub use caller::confined;
+pub use caller::who;
 pub use check::check_command;
 pub use cli::cli;
 pub use git::{git, prepare};

@@ -1,4 +1,4 @@
-//! What a `codex exec` command line asks of Codex's sandbox, and that line without the words that ask it.
+//! What a `codex exec` or `codex review` command line asks of Codex's sandbox, and that line without the words that ask it. `codex review` is `codex exec review`, which takes the limit.
 use super::flags::{option, valued};
 use super::mode::Mode;
 
@@ -19,7 +19,7 @@ pub(super) struct Asked {
     pub at: usize,
 }
 
-/// None for a command that is no `exec` (nothing runs commands unattended there).
+/// None for a command that is neither (other.rs says what becomes of those).
 pub(super) fn read(args: &[String]) -> Option<Asked> {
     let mut a = Asked::default();
     let (mut exec, mut i) = (false, 0);
@@ -32,9 +32,14 @@ pub(super) fn read(args: &[String]) -> Option<Asked> {
         }
         let Some((name, written)) = option(word).filter(|_| word.len() > 1) else {
             if !exec && !word.starts_with('-') {
-                matches!(word.as_str(), "exec" | "e").then_some(())?;
+                matches!(word.as_str(), "exec" | "e" | "review").then_some(())?;
                 exec = true;
-                a.at = a.args.len() + 1;
+                if word == "review" {
+                    a.args.push("exec".into());
+                    a.at = a.args.len();
+                } else {
+                    a.at = a.args.len() + 1;
+                }
             }
             a.args.push(word.clone());
             continue;
@@ -85,6 +90,7 @@ impl Asked {
             return true;
         };
         self.sets.push((key.trim().into(), value.trim().into()));
-        key.trim() != "sandbox_mode"
+        // both are given again as they are to be (settings.rs)
+        !matches!(key.trim(), "sandbox_mode" | "developer_instructions")
     }
 }

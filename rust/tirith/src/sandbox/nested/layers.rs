@@ -5,8 +5,8 @@ use std::path::{Path, PathBuf};
 use toml::{Table, Value};
 
 pub(super) struct Layers {
-    sets: Vec<(String, Value)>,
-    files: Vec<Table>,
+    pub(super) sets: Vec<(String, Value)>,
+    pub(super) files: Vec<Table>,
     /// The folder's project is one Codex was told about.
     pub known_project: bool,
 }
@@ -23,17 +23,18 @@ impl Layers {
             .find(|d| d.join(".git").exists())
             .unwrap_or(dir);
         let trust = |at: &Path| -> Option<String> {
-            let told = base.get("projects")?.get(at.to_string_lossy().as_ref())?;
+            let of = |at: &Path| base.get("projects")?.get(at.to_string_lossy().as_ref());
+            let told = of(at).or_else(|| of(&at.canonicalize().ok()?))?;
             Some(told.get("trust_level")?.as_str()?.to_string())
         };
         let (told, mut files) = (trust(dir).or_else(|| trust(repo)), vec![]);
-        if let Some(name) = a.profile.as_deref().filter(|n| !n.contains('/')) {
+        if let Some(name) = super::profiles::chosen(a, &base).filter(|n| !n.contains('/')) {
             files.push(file(
                 &home.join(PathBuf::from(format!("{name}.config.toml"))),
             ));
             let old = base
                 .get("profiles")
-                .and_then(|p| p.get(name))
+                .and_then(|p| p.get(&name))
                 .and_then(|p| p.as_table());
             files.extend(old.cloned());
         }

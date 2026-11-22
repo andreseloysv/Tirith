@@ -65,6 +65,7 @@ fn the_limit_is_what_was_asked_then_the_settings_then_codexs_default() {
         cwd: &work,
         home: &home,
         tmp: None,
+        role: false,
     };
     let limit = |line: &str| settings::limit(&asked::read(&words(line)).unwrap(), &at).unwrap();
     let write = |line: &str| limit(line).map(|(r, _)| r.write);
@@ -153,7 +154,15 @@ fn the_one_profile_only_takes_away() {
         state: "/nonexistent/state".into(),
         ..Default::default()
     };
-    let (text, params) = limits::profile(&r, &[7717, 47812]);
+    let r = super::Request {
+        program: "/usr/bin/true".into(),
+        ..r
+    };
+    let around = limits::Around {
+        port: 7717,
+        kept: vec!["/nonexistent/socket".into()],
+    };
+    let (text, params) = limits::profile(&r, &around);
     assert!(
         text.starts_with(super::super::profile::PROFILE),
         "Tirith's comes first, whole"
@@ -165,27 +174,69 @@ fn the_one_profile_only_takes_away() {
     assert!(params.iter().any(|(_, v)| v == odd));
     let added = &text[super::super::profile::PROFILE.len()..];
     for allow in added.lines().filter(|l| l.starts_with("(allow")) {
-        let narrow = allow.contains("file-write*")
-            || allow.contains("\"localhost:7717\"")
-            || allow.contains("\"localhost:47812\"");
+        // each gives back only what Tirith's own profile allows: the loopback, syslog's socket, names and files
+        let op = allow
+            .trim_start_matches("(allow ")
+            .split(' ')
+            .next()
+            .unwrap();
+        let narrow = match op {
+            "network-outbound" => {
+                allow.contains("\"localhost:") || allow.contains("/private/var/run/syslog")
+            }
+            "appleevent-send" => false,
+            _ => [
+                "file-write*",
+                "file-write-data",
+                "signal",
+                "mach-lookup",
+                "mach-register",
+                "iokit-open",
+                "network-bind",
+                "network-inbound",
+            ]
+            .contains(&op),
+        };
         assert!(
             narrow,
             "nothing Tirith's profile denies is allowed: {allow}"
         );
     }
     assert!(
-        added.contains("(deny file-write*)") && added.contains("unix-socket"),
+        added.contains("(deny file-write*)")
+            && added.contains("(deny network-outbound (remote ip \"localhost:*\"))")
+            && added.contains("(deny network-outbound (remote unix-socket))"),
         "{added}"
     );
+    let last = |rule: &str| added.rfind(rule).unwrap_or_else(|| panic!("no {rule}"));
     assert!(
-        params
-            .iter()
-            .any(|(_, v)| v.ends_with("/state/config.toml"))
-            && params.iter().any(|(_, v)| v.ends_with("/.git"))
+        last("(deny mach-lookup (global-name \"app.tirith.outside\"))")
+            > last("(allow mach-lookup"),
+        "the daemon's mark is denied last"
     );
+    assert!(
+        params.iter().any(|(_, v)| v.ends_with("/.git"))
+            && !params
+                .iter()
+                .any(|(_, v)| v.ends_with("/state/config.toml"))
+    );
+    for allow in added
+        .lines()
+        .filter(|l| l.starts_with("(allow file-write*"))
+    {
+        let state = params.iter().find(|(_, v)| v.ends_with("/state")).unwrap();
+        let names_state = allow.contains(&format!("\"{}\"", state.0));
+        assert!(
+            !names_state || allow.contains("(process-path"),
+            "Codex's state is its own process's alone: {allow}"
+        );
+    }
     let ro = super::Request { write: false, ..r };
     assert!(
-        !limits::profile(&ro, &[]).1.iter().any(|(_, v)| v == odd),
+        !limits::profile(&ro, &around)
+            .1
+            .iter()
+            .any(|(_, v)| v == odd),
         "read-only opens no folder"
     );
 }
@@ -199,10 +250,16 @@ fn what_runs_under_the_one_profile_is_still_an_agents() {
         return; // the tests themselves run confined, and profiles do not nest
     }
     let r = super::Request {
+        program: "/usr/bin/true".into(), // so what runs below is a command, not Codex
         state: std::env::temp_dir().display().to_string(),
         ..Default::default()
     };
-    let (text, params) = limits::profile(&r, &[7717]);
+    let around = limits::Around {
+        port: 7717,
+        kept: vec![],
+    };
+    let (text, params) = limits::profile(&r, &around);
+    let params_again = params.clone();
     assert!(text.contains(limits::TIGHTER));
     let mut command = std::process::Command::new(super::super::profile::SANDBOX_EXEC);
     for (name, value) in params {
@@ -217,10 +274,180 @@ fn what_runs_under_the_one_profile_is_still_an_agents() {
         std::thread::sleep(std::time::Duration::from_millis(50));
         mac::ours(pid) && mac::tighter(pid)
     });
+    let shell = std::process::Command::new(super::super::profile::SANDBOX_EXEC)
+        .args(
+            params_again
+                .iter()
+                .flat_map(|(name, value)| ["-D".to_string(), format!("{name}={value}")]),
+        )
+        .args(["-p", &text, "/bin/zsh", "-c", "echo ran"])
+        .output()
+        .unwrap();
+    assert_eq!(
+        String::from_utf8_lossy(&shell.stdout).trim(),
+        "ran",
+        "the owner's shell runs under it"
+    );
+    let refused: Vec<bool> = ["job-creation", "user-preference-write"]
+        .map(|op| refuses(pid, op))
+        .to_vec();
+    assert_eq!(
+        refused,
+        [true, true],
+        "jobs and preferences, as Codex's own sandbox"
+    );
+    assert!(
+        refuses_service(pid, "com.apple.pasteboard.1"),
+        "no service beyond Codex's own list"
+    );
     let alive = child.try_wait().unwrap().is_none();
     let _ = (child.kill(), child.wait());
     assert!(
         seen && alive,
         "confined for the daemon, and known as tighter"
     );
+}
+
+#[cfg(target_os = "macos")]
+extern "C" {
+    fn sandbox_check(
+        pid: libc::pid_t,
+        op: *const libc::c_char,
+        kind: libc::c_int,
+        ...
+    ) -> libc::c_int;
+}
+
+/// Whether the kernel refuses `pid` this operation: asking does nothing else.
+#[cfg(target_os = "macos")]
+fn refuses(pid: libc::pid_t, op: &str) -> bool {
+    let op = std::ffi::CString::new(op).unwrap();
+    // SAFETY: the string lives through the call, which only reads it; no filter, no further argument.
+    unsafe { sandbox_check(pid, op.as_ptr(), 0x4000_0000) == 1 }
+}
+
+#[cfg(target_os = "macos")]
+fn refuses_service(pid: libc::pid_t, name: &str) -> bool {
+    let name = std::ffi::CString::new(name).unwrap();
+    // SAFETY: as above, with the name the filter reads.
+    unsafe { sandbox_check(pid, c"mach-lookup".as_ptr(), 2 | 0x4000_0000, name.as_ptr()) == 1 }
+}
+
+#[test]
+fn codex_review_takes_the_limit_too() {
+    let a = asked::read(&words("review --uncommitted")).expect("it runs commands unattended");
+    assert_eq!(
+        (a.args.clone(), a.at),
+        (words("exec review --uncommitted"), 1)
+    );
+    let a = asked::read(&words("-c sandbox_mode=\"read-only\" review")).unwrap();
+    assert_eq!(a.args.last().map(String::as_str), Some("review"));
+}
+
+#[test]
+fn a_profile_named_in_the_settings_is_read_and_servers_are_named() {
+    let d = folder("profile");
+    let (home, work) = (d.join("codex"), d.join("work"));
+    std::fs::write(home.join("config.toml"), "sandbox_mode = \"workspace-write\"\nprofile = \"careful\"\n[profiles.careful]\nsandbox_mode = \"read-only\"\n[mcp_servers.notes]\ncommand = \"notes-server\"\n").unwrap();
+    let at = settings::Where {
+        cwd: &work,
+        home: &home,
+        tmp: None,
+        role: false,
+    };
+    let (r, note) = settings::limit(&asked::read(&words("exec hi")).unwrap(), &at)
+        .unwrap()
+        .unwrap();
+    assert!(!r.write, "the profile's limit wins");
+    assert!(note.contains("notes"), "said, not silent: {note}");
+    let briefed = words("exec -c developer_instructions=Brief. hi");
+    let (said, _) = settings::limit(&asked::read(&briefed).unwrap(), &at)
+        .unwrap()
+        .unwrap();
+    let told: Vec<&String> = said
+        .args
+        .iter()
+        .filter(|a| a.starts_with("developer_instructions="))
+        .collect();
+    assert!(
+        told.len() == 1 && told[0].contains("Brief.") && told[0].contains("write nothing"),
+        "the caller's words, then the true limit, once: {told:?}"
+    );
+    assert!(
+        r.args
+            .iter()
+            .any(|a| a == "include_permissions_instructions=false"),
+        "the model is not told that it has full access"
+    );
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn only_codexs_own_process_reaches_this_machines_ports() {
+    use crate::sandbox::mac;
+    // SAFETY: getpid only reads this process's own id.
+    if mac::ours(unsafe { libc::getpid() }) {
+        return; // confined already
+    }
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port().to_string();
+    let around = limits::Around {
+        port: 1,
+        kept: vec![],
+    };
+    let connects = |program: &str| {
+        let r = super::Request {
+            program: program.into(),
+            ..Default::default()
+        };
+        let (text, params) = limits::profile(&r, &around);
+        std::process::Command::new(super::super::profile::SANDBOX_EXEC)
+            .args(
+                params
+                    .iter()
+                    .flat_map(|(name, value)| ["-D".to_string(), format!("{name}={value}")]),
+            )
+            .args([
+                "-p",
+                &text,
+                "/usr/bin/nc",
+                "-z",
+                "-G",
+                "2",
+                "127.0.0.1",
+                &port,
+            ])
+            .output()
+            .unwrap()
+            .status
+            .success()
+    };
+    assert!(
+        connects("/usr/bin/nc"),
+        "the program the limit is around keeps its loopback"
+    );
+    assert!(!connects("/usr/bin/true"), "a command of it has none");
+
+    let r = super::Request {
+        program: "/bin/sleep".into(),
+        ..Default::default()
+    };
+    let (text, params) = limits::profile(&r, &around);
+    let mut child = std::process::Command::new(super::super::profile::SANDBOX_EXEC)
+        .args(
+            params
+                .iter()
+                .flat_map(|(name, value)| ["-D".to_string(), format!("{name}={value}")]),
+        )
+        .args(["-p", &text, "/bin/sleep", "20"])
+        .spawn()
+        .unwrap();
+    let pid = child.id() as libc::pid_t;
+    let marked = (0..100).any(|_| {
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        mac::ours(pid) && mac::tighter(pid)
+    });
+    let _ = (child.kill(), child.wait());
+    assert!(marked, "Codex's own process keeps the daemon's marks too");
 }
