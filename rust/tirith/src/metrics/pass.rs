@@ -62,9 +62,22 @@ pub(super) fn daily_due(app: &Shared, role: &str) -> bool {
 /// When this home's daemon first started.
 const BORN: &str = "born";
 
-/// The daemon starts: the first time, it keeps when.
+/// The daemon starts: the first time, it keeps when (for a home from before this was kept, its oldest event).
 pub fn born(app: &Shared) {
-    if app.kv(BORN).is_none() {
-        app.set_kv(BORN, Some(&crate::app::now_iso()));
+    if app.kv(BORN).is_some() {
+        return;
     }
+    let sql = "SELECT COALESCE(MIN(at), '') FROM events";
+    let oldest = app.query(sql, [], |r| r.get::<_, String>(0)).pop();
+    let at = oldest
+        .filter(|at| !at.is_empty())
+        .unwrap_or_else(crate::app::now_iso);
+    app.set_kv(BORN, Some(&at));
+}
+
+/// Whether this home is younger than `day` (the start of the last 24 h): a day's count has nothing to be held to yet.
+pub(super) fn younger(app: &Shared, day: i64) -> bool {
+    app.kv(BORN)
+        .and_then(|at| super::metric::secs(&at))
+        .is_some_and(|born| born > day)
 }

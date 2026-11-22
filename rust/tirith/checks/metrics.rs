@@ -440,3 +440,24 @@ fn a_new_home_owes_no_pass_from_before_it_existed() {
     drop(app);
     let _ = std::fs::remove_dir_all(&home);
 }
+
+#[test]
+fn a_first_day_is_not_held_to_a_days_count() {
+    let home = std::env::temp_dir().join(format!("tirith-first-day-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&home);
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::write(home.join("config.toml"), "[network]\nsandbox = false\n").unwrap();
+    let app = crate::app::App::open_at(home.clone());
+    let day = crate::app::now_s() as i64 - 86400;
+    super::born(&app);
+    assert!(super::pass::younger(&app, day), "set up now");
+    app.set_kv("born", None);
+    app.insert("INSERT INTO events (at, lane, project, kind, tool, summary, session, factory, role_hash) VALUES ('2000-01-01T00:00:00Z', '', '', 'x', '', '', '', '', '')", &[]);
+    super::born(&app);
+    assert!(
+        !super::pass::younger(&app, day),
+        "a home that was here before is as old as its oldest event"
+    );
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}

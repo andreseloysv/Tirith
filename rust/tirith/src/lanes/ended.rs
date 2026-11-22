@@ -1,5 +1,6 @@
 //! The agent's process is gone: where the lane goes next.
 use super::failed::{no_commits, out_of_credits, without_commits};
+use super::logscan::this_run;
 use super::session::codex_session;
 use crate::app::{now_iso, tail, Lane, Shared};
 use crate::{models, plan};
@@ -53,7 +54,8 @@ async fn nothing_to_merge(app: &Shared, lane: &Lane) -> bool {
 /// The agent's process is gone: a working lane goes to the merge queue (or, out of credits, to the next agent of the fallback chain); a waiting lane waits for its answer.
 pub(super) async fn ended(app: &Shared, id: &str, code: Option<i32>) {
     let Some(lane) = app.lane(id) else { return };
-    let raw = tail(&app.home.join(format!("logs/lanes/{id}.log")), 200);
+    let text = tail(&app.home.join(format!("logs/lanes/{id}.log")), 200);
+    let raw = this_run(&text).to_string();
     let _ = (lane.agent == "codex").then(|| codex_session(app, id, &raw));
     let log = crate::app::redact_secrets(&agent_said(&raw));
     if lane.status == "running" && models::out_of_credits(&log) {

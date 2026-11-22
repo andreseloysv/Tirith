@@ -63,5 +63,6 @@ pub(super) fn merged_metric(c: &Ctx, w: &Work, merged: &[&Lane]) -> Metric {
         ids(merged),
         empty_plan_note(&w.empty)
     );
-    c.mk("merged", merged.len() as f64, !w.open.is_empty(), facts)
+    let live = !w.open.is_empty() && !super::pass::younger(c.app, c.day); // ten a day asks nothing of a first day
+    c.mk("merged", merged.len() as f64, live, facts)
 }

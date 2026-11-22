@@ -458,7 +458,7 @@ Files:
 - `keep.rs`: Before a worktree goes: its git-ignored files that are no build cache move to the project, kept out of git there.
 - `launch.rs`: Launching a lane's agent in its slot: a new slot for a lane without one, the brief or a resume of its session.
 - `live.rs`: Live messages for a lane whose agent still runs: told while it works, taken once.
-- `logscan.rs`: Reading a lane's agent log: how long it has been quiet, whether its run ended, and its last commands.
+- `logscan.rs`: Reading a lane's agent log: how long it has been quiet, whether its run ended, and its last commands (an end is judged by the current run's lines alone: never by an earlier agent's «out of credits»).
 - `long.rs`: A lane running for long is reported to the manager once, with its last commands.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `pick.rs`: Starting the next lane: the oldest queued one, or else the autopilot's next item, in a project not blocked now.
@@ -634,7 +634,7 @@ Files:
 - `metric.rs`: One health measure: how it is built from the factory's description of its id, and the line a CEO pass reads.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `mood.rs`: Satisfaction from the owner-mood scores of the last 24 h, per owner message; judged from what the owner writes anyway, never asked.
-- `pass.rs`: When a turn role's pass may run by itself: its daily budget, and its scheduled pass (none is owed from before the home first started, kv `born`).
+- `pass.rs`: When a turn role's pass may run by itself: its daily budget, and its scheduled pass (none is owed from before the home first started, kv `born`; until it is a day old «En main (24 h)» is never red).
 - `queued.rs`: The passes an event asked for while a pass of the same role ran: kept, run as one when it ends.
 - `plans.rs`: The plans as a CEO pass reads them: each project's steps with their open and done items, its autopilot and its main.
 - `review.rs`: The pass of a turn role: who reviews a long red stretch and when, the pass turn itself with the brief its role names, and the page's "CEO now".

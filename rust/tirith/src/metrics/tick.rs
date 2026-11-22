@@ -34,7 +34,7 @@ fn announce(app: &Shared, notes: Vec<&Metric>) {
                 app,
                 "",
                 "metric.red",
-                &format!("health: {}. Get it moving.", describe(m)),
+                &format!("health: {}. Get it moving, and never stop a lane that works: it is how things move.", describe(m)),
                 None,
             );
         });

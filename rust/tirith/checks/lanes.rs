@@ -565,3 +565,16 @@ async fn manager_sessions_build_in_the_shared_cache() {
     drop(app);
     let _ = std::fs::remove_dir_all(&base);
 }
+
+#[test]
+fn a_lanes_next_agent_does_not_inherit_out_of_credits() {
+    let start = super::logscan::RUN_START;
+    let log = format!("{start}t1\nCredit balance is too low\n{start}t2\nDone: committed ok.txt\n");
+    let now = super::logscan::this_run(&log);
+    assert!(!crate::models::out_of_credits(now), "{now}");
+    assert!(
+        crate::models::out_of_credits(&log),
+        "which is what failed every fallback"
+    );
+    assert_eq!(super::logscan::this_run("no mark"), "no mark");
+}
