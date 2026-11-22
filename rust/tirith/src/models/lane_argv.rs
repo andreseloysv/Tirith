@@ -33,6 +33,10 @@ pub fn lane_argv(
             .chain(words.iter().map(filled))
             .collect()
     };
+    let effort = match alias.as_str() {
+        "copilot" => crate::codex::effort_of(model.as_deref(), effort.as_deref()).map(String::from),
+        _ => effort,
+    };
     set_model_and_effort(&mut argv, (&mflag, &eflag), &model, &effort);
     let _ = (alias == "codex").then(|| crate::codex::options(&cfg, &mut argv, effort.as_deref()));
     let _ = argv

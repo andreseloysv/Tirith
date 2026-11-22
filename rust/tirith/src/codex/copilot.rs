@@ -26,7 +26,7 @@ pub(super) fn copilot_argv(
     a.push(usage.display().to_string());
     a.extend(resume.is_none().then(|| "--trust-folder".to_string())); // a new session's only: refused on a resume
     a.extend(read_only.then(|| "--deny-tool=write".to_string()));
-    let (model, effort) = model;
+    let (model, effort) = (model.0, effort_of(model.0, model.1));
     for (flag, value) in [("--model", model), ("--reasoning-effort", effort)] {
         a.extend(
             value
@@ -36,6 +36,11 @@ pub(super) fn copilot_argv(
     }
     a.extend(resume.map(|id| format!("--resume={id}")));
     a
+}
+
+/// The effort Copilot can be told: only beside a named model. Its `auto` (all a free plan has, and what runs when none is named) refuses one, and the turn with it.
+pub fn effort_of<'a>(model: Option<&str>, effort: Option<&'a str>) -> Option<&'a str> {
+    effort.filter(|_| model.is_some_and(|m| !m.eq_ignore_ascii_case("auto")))
 }
 
 /// The words of a message of the agent itself (a subagent's are no answer).

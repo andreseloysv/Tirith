@@ -498,3 +498,15 @@ fn a_github_token_of_the_new_kind_is_redacted() {
     let shown = crate::app::redact_secrets("sent github_pat_11ABCDEFG0madeupmadeupmadeup to it");
     assert!(!shown.contains("madeup"), "{shown}");
 }
+
+#[test]
+fn copilots_auto_is_never_told_an_effort() {
+    let told = |model| crate::codex::effort_of(model, Some("low"));
+    assert_eq!(
+        told(Some("auto")),
+        None,
+        "a free plan's only model refuses one"
+    );
+    assert_eq!(told(None), None, "none named is auto there");
+    assert_eq!(told(Some("gpt-5.6-luna")), Some("low"));
+}

@@ -50,7 +50,7 @@ impl Turn {
             started: Instant::now(),
             start_us: chrono::Utc::now().timestamp_micros(),
             agent: setting.agent,
-            model: setting.model.unwrap_or_default(),
+            model: setting.model.filter(|m| m != "auto").unwrap_or_default(), // auto: its lines name the one it chose
             effort: setting.effort.unwrap_or_default(),
             usage: Usage::default(),
             steps: 0,

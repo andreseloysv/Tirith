@@ -11,7 +11,7 @@ mod setup;
 mod turn;
 
 pub use catalog::catalog;
-pub use copilot::said;
+pub use copilot::{effort_of, said};
 pub use kind::Exec;
 pub use options::options;
 pub use turn::turn;

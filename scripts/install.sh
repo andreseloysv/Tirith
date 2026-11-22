@@ -25,13 +25,14 @@ target() {
 
 tools() {
   miss='' need='curl tar openssl'
-  [ "$(id -u)" != 0 ] || need="$need git bash" # root installs now what the guide would ask sudo for
+  [ "$(id -u)$(uname -s)" != 0Linux ] || need="$need git bash runuser" # what the guide would ask sudo for, and what leaves root
   for t in $need; do have "$t" || miss="$miss $t"; done
   [ -n "$miss" ] || return 0
   if have apt-get; then how='apt-get install -y -q ca-certificates'
   elif have dnf; then how='dnf install -y -q ca-certificates'
-  elif have apk; then how='apk add ca-certificates'
+  elif have apk; then how='apk add ca-certificates coreutils' # Copilot's installer wants GNU's sha256sum
   else die "install$miss first"; fi
+  have apk || miss=$(echo "$miss" | sed 's/runuser/util-linux/') # its package elsewhere
   [ "$(id -u)" = 0 ] || die "install$miss first: sudo $how$miss"
   echo "Installing$miss..."
   if have apt-get; then apt-get update -q >/dev/null; fi
@@ -60,7 +61,6 @@ verified() {
 service_user() {
   id tirith >/dev/null 2>&1 || { have useradd && useradd --create-home --shell /bin/sh tirith; } ||
     adduser -D -s /bin/sh tirith || die "cannot make the user tirith"
-  have runuser || die "runuser is missing (util-linux): run this as an ordinary user instead"
   have loginctl && loginctl enable-linger tirith 2>/dev/null || true # the guide waits for its systemd
   [ "$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null || echo 0)" != 1 ] ||
     "$bin/tirith" net allow || echo "install: the network sandbox needs: $bin/tirith net allow" >&2
