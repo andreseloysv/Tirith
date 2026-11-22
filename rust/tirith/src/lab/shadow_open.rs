@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 tokio::task_local! {
-    pub(super) static SHADOW: PathBuf;
+    pub(super) static SHADOW: (PathBuf, String);
 }
 
 /// The worktrees of the B runs on their way, as given, with the disk's path for them.
@@ -12,7 +12,7 @@ static OPEN: Mutex<BTreeMap<PathBuf, PathBuf>> = Mutex::new(BTreeMap::new());
 
 /// Inside a shadow B run, the worktree every folder of the bot resolves to.
 pub(super) fn dir() -> Option<PathBuf> {
-    SHADOW.try_with(|d| d.clone()).ok()
+    SHADOW.try_with(|d| d.0.clone()).ok()
 }
 
 /// A B run starts in `dir`; false when one is on its way there already.
@@ -57,4 +57,9 @@ pub fn refused(cwd: &str, tool: &str, known: &str, input: &serde_json::Value) ->
     out.then(|| {
         format!("{tool}: not available in a shadow run — it may read, but nothing it sends, buys, deletes or publishes leaves Tirith; its answer only goes to the experiment")
     })
+}
+
+/// Inside a shadow B run, its worktree and the routine it runs.
+pub(super) fn run() -> Option<(PathBuf, String)> {
+    SHADOW.try_with(|d| d.clone()).ok()
 }

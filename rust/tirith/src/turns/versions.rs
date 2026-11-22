@@ -32,11 +32,15 @@ pub(super) fn skill_file(app: &Shared, t: &Turn, name: &str) -> Option<PathBuf> 
 
 const MEMORY: [&str; 2] = ["memory.md", "bots/memory.md"];
 
-/// As the turn starts: its memory, the shared one and every skill it could read (its own before a shared one of the same name). A bot's folder is committed first, so each of those versions is in its history.
+/// Before a bot is handed the message of a new turn: its folder committed, so each version that turn starts with is in its history.
+pub fn prepare(app: &Shared, conv: &str) {
+    let due = super::live::idle(conv) && crate::bots::bot(app, conv).is_some();
+    let _ = due.then(|| crate::bots::versioned(app, conv, "before a turn"));
+}
+
+/// As the turn starts: its memory, the shared one and every skill it could read (its own before a shared one of the same name).
 pub(super) fn at_start(app: &Shared, t: &Turn) -> Map<String, Value> {
     let dir = folder(app, t);
-    let own = t.role == t.conv && crate::bots::bot(app, &t.conv).is_some();
-    let _ = own.then(|| crate::bots::versioned(app, &t.conv, "before a turn"));
     let mut files = vec![
         (MEMORY[0].to_string(), dir.join("memory.md")),
         (MEMORY[1].to_string(), app.home.join("bots/memory.md")),

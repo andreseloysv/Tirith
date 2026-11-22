@@ -179,3 +179,97 @@ done
     drop(app);
     let _ = std::fs::remove_dir_all(&home);
 }
+
+#[test]
+fn worse_counts_neither_waiting_nor_b_runs() {
+    let home = home("coach-waiting");
+    std::fs::write(home.join("config.toml"), "[network]\nsandbox = false\n").unwrap();
+    let app = crate::app::App::open_at(home.clone());
+    let bot = crate::bots::save(&app, json!({"name": "Espera", "shape": "drop", "color": "#22d3ee", "session": "chat", "access": "read"})).unwrap();
+    let key = format!("bot-{}", bot["id"].as_str().unwrap());
+    let seed = |status: &str, tokens: i64, variant: Option<&str>| {
+        app.insert("INSERT INTO turns (conv, role, \"trigger\", routine, started_at, status, tokens_in, tokens_out, variant) VALUES (?1, ?1, 'schedule', 'r1', '2026-11-21T08:00:00Z', ?2, ?3, 0, ?4)", rusqlite::params![key, status, tokens, variant]);
+    };
+    (0..10).for_each(|_| seed("ok", 100, None));
+    // The last 5 runs of the routine: two wait for the owner's yes (neither failed nor good), three are fine; the experiment's B runs, failed and dear, are no runs of the routine.
+    (0..3).for_each(|_| seed("ok", 100, None));
+    (0..2).for_each(|_| seed("waiting", 100, None));
+    (0..4).for_each(|_| seed("failed", 900, Some("B")));
+    let worse =
+        |app: &crate::app::Shared| super::worse::worse(&super::worse::runs(app, &key, "r1"));
+    assert_eq!(worse(&app), None);
+    // The same two as failures are worse: that is what waiting is not.
+    app.insert(
+        "UPDATE turns SET status = 'failed' WHERE status = 'waiting'",
+        &[],
+    );
+    assert!(worse(&app).is_some_and(|w| w.contains("2 of the last 5 runs failed")));
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[tokio::test]
+async fn a_worse_routine_heard_during_a_pass_is_not_lost() {
+    // The Coach on a fake agent that keeps each brief it gets and waits for a gate file before it answers.
+    let home = home("coach-queued");
+    let agent = home.join("fake-agent.sh");
+    std::fs::write(&agent, r#"#!/bin/sh
+echo '{"type":"system","subtype":"init","session_id":"fake-coach"}'
+while read -r line; do
+  n=$(( $(ls "$TIRITH_HOME" | grep -c '^coach-brief-') + 1 ))
+  printf '%s\n' "$line" > "$TIRITH_HOME/coach-brief-$n.json"
+  while [ ! -e "$TIRITH_HOME/go-$n" ]; do sleep 0.05; done
+  echo '{"type":"assistant","message":{"content":[{"type":"text","text":"Sin novedad."}]}}'
+  echo '{"type":"result","subtype":"success","is_error":false,"usage":{"input_tokens":3,"output_tokens":2}}'
+done
+"#).unwrap();
+    std::fs::set_permissions(&agent, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+    std::fs::write(
+        home.join("config.toml"),
+        format!(
+            "[agents.fake]\ncommand = \"{}\"\nchat_args = []\n[network]\nsandbox = false\n\n[roles.coach2]\nextends = \"coach\"\n",
+            agent.display()
+        ),
+    )
+    .unwrap();
+    let app = crate::app::App::open_at(home.clone());
+    app.set_kv("models:coach2", Some(r#"{"agent":"fake"}"#));
+    let passes = |app: &crate::app::Shared| -> i64 {
+        let sql = "SELECT COUNT(*) FROM ceo_reviews WHERE role = 'coach2'";
+        app.query(sql, [], |r| r.get(0)).remove(0)
+    };
+    // A routine goes worse and the Coach starts its pass; while it runs, two more routines go worse.
+    super::heard(&app, "coach2", "routine.worse", "Routine worse: first");
+    until("the first brief", || {
+        home.join("coach-brief-1.json").exists()
+    })
+    .await;
+    super::heard(&app, "coach2", "routine.worse", "Routine worse: second");
+    super::heard(&app, "coach2", "routine.worse", "Routine worse: third");
+    assert_eq!(passes(&app), 0);
+    std::fs::write(home.join("go-1"), "").unwrap();
+    until("the second pass", || {
+        home.join("coach-brief-2.json").exists()
+    })
+    .await;
+    std::fs::write(home.join("go-2"), "").unwrap();
+    until("both passes kept", || passes(&app) == 2).await;
+    let second = std::fs::read_to_string(home.join("coach-brief-2.json")).unwrap();
+    assert!(
+        second.contains("Routine worse: second") && second.contains("Routine worse: third"),
+        "the events heard during the pass are run together once it ends: {second}"
+    );
+    assert!(!home.join("coach-brief-3.json").exists(), "and only once");
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+async fn until(what: &str, mut f: impl FnMut() -> bool) {
+    for _ in 0..300 {
+        if f() {
+            return;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    panic!("never happened: {what}");
+}

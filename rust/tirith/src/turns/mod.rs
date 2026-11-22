@@ -8,8 +8,11 @@ mod capture_told;
 mod checks;
 mod codex_log;
 mod exec_items;
+mod follow;
 mod hashes;
+mod interrupted;
 mod live;
+mod loose;
 mod muse_log;
 mod price;
 mod quality;
@@ -28,17 +31,22 @@ mod versions;
 pub use api::routes;
 #[cfg(test)]
 pub(crate) use api::turns as rows_of;
+pub use approval::released;
 #[cfg(test)]
 pub use capture_keep::keep as keep_capture;
 pub use capture_keep::{capture_of, captured, Captured};
 pub use capture_told::told;
 pub use checks::cli;
-pub use live::{abandon, begin, done, end, handed, line, on_event, trigger, turn_of};
+pub use follow::follow;
+pub use interrupted::start;
+pub use live::{abandon, end, handed, idle, line, on_event, take_trigger, trigger, By};
+pub use loose::{done, turn_of};
 pub use quality::scored;
 pub use react::reacted;
 pub use record::Turn;
 pub use signals::{add_columns, judged, last};
 pub use spent::fresh;
+pub use versions::prepare;
 #[cfg(test)]
 use {api::turns, checks::request, signals::cited};
 #[cfg(test)]

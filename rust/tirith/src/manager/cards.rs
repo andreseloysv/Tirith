@@ -1,6 +1,7 @@
 //! A card's end: its final state, the line that says so, and closing one that is no longer needed.
 use super::deliver::report;
-use super::events::{emit_event, queue};
+use super::events::emit_event;
+use super::queue::queue;
 use crate::app::Shared;
 use serde_json::{json, Value};
 /// A card's answer or closing, for the manager's next turn: a line in the project's chat and on the phones, and a note (no turn of its own).
@@ -14,6 +15,7 @@ pub(super) fn card_done(app: &Shared, id: &str, status: &str, answer: &str) {
         "UPDATE owner_items SET status = ?1, answer = ?2 WHERE id = ?3",
         rusqlite::params![status, answer, id],
     );
+    crate::turns::released(app, id); // a turn that waited for this card as its approval is done
     app.emit(
         "owner",
         json!({"id": id, "status": status, "answer": answer}),

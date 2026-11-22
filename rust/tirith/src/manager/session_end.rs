@@ -1,5 +1,5 @@
 //! The end of a stream-json session: what its dead turn left, its process, and what waits again when it never got ready.
-use super::talk::talk;
+use super::talk::{talk, Msg};
 use crate::app::{kill_group, Shared};
 use crate::rooms;
 use std::time::Duration;
@@ -32,7 +32,7 @@ pub(super) fn not_ready(
     app: &Shared,
     project: &str,
     key: &str,
-    sent: Vec<String>,
+    sent: Vec<Msg>,
     resumed: bool,
 ) -> Result<(), String> {
     talk(project, |t| drop(t.pending.splice(0..0, sent)));

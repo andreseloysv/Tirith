@@ -1,17 +1,37 @@
 //! Events and their routes: who hears an event, as a chat line, a turn now or a note with the next turn.
-use super::deliver::{deliver, report};
+use super::deliver::report;
 use super::evals::judge_evals;
-use super::talk::talk;
+use super::jobs::queue_job;
+use super::queue::queue;
+use super::talk::Job;
 use crate::app::Shared;
 use crate::factory::Factory;
+use crate::turns::By;
 use std::collections::BTreeSet;
-use std::time::Duration;
+
 /// The one way code emits an event: its row is kept and shown on the page, and every `[[routes]]` on it in the factory decides who hears it — a `chat` line (on the phones too with `phone`), and for its role a `turn` now or a `note` with its next turn. `told` is what the role is handed when it differs from the line shown. A turn's answer reaches the phones only when an event that started it had `phone` (or the owner wrote).
 pub fn emit_event(app: &Shared, project: &str, on: &str, shown: &str, told: Option<&str>) {
     emitted(app, project, on, shown, told);
 }
 /// `emit_event`, with the event's id back (a turn's row keeps it).
 pub fn emitted(app: &Shared, project: &str, on: &str, shown: &str, told: Option<&str>) -> i64 {
+    emit_by(app, project, (on, shown, told), None)
+}
+/// A routine is due (`on` is `schedule` or `webhook`, `task` what its bot is handed): its run is a turn of its own, begun by `by` (the trigger and the routine's id), after the runs and messages before it in that conversation.
+pub fn run_routine(app: &Shared, project: &str, on: &str, task: &str, by: (&str, &str)) {
+    emit_by(
+        app,
+        project,
+        (on, task, None),
+        Some((by.0.into(), by.1.into())),
+    );
+}
+fn emit_by(
+    app: &Shared,
+    project: &str,
+    (on, shown, told): (&str, &str, Option<&str>),
+    job: Option<By>,
+) -> i64 {
     let event = app.event("", project, on, "", shown, "");
     let routes = app.cfg().factory.routes_on(on);
     let here_p = app.conv(project);
@@ -28,10 +48,25 @@ pub fn emitted(app: &Shared, project: &str, on: &str, shown: &str, told: Option<
         let Some(dest) = dest_of(&app.cfg().factory, &to, on, here_p) else {
             continue;
         };
-        let _ = heard
-            .insert(dest.clone())
-            .then(|| crate::turns::on_event(&dest, on, &mode))
-            .map(|_| queue(app, &dest, told.unwrap_or(shown), &mode, phone));
+        if !heard.insert(dest.clone()) {
+            continue;
+        }
+        let text = told.unwrap_or(shown);
+        match job.clone().filter(|_| mode == "turn") {
+            Some(by) => queue_job(
+                app,
+                &dest,
+                Job {
+                    text: text.into(),
+                    by,
+                    phones: phone,
+                },
+            ),
+            None => {
+                crate::turns::on_event(&dest, on, &mode);
+                queue(app, &dest, text, &mode, phone);
+            }
+        }
     }
     judge_evals(app, project, on, shown, event);
     event
@@ -44,30 +79,4 @@ fn dest_of(f: &Factory, to: &str, on: &str, here_p: &str) -> Option<String> {
     // A due routine (its bot's own `schedule` or `webhook` route) is for that bot's conversation alone, and a conversation that more than one route reaches (the factory's schedule route and the bot's) hears the event once.
     (!(matches!(on, "schedule" | "webhook") && own && to != here_p)).then_some(())?;
     Some(if own { to } else { here_p }.to_string())
-}
-/// A routed event for one conversation: with `turn` handed over (gathered with the other events of the next `limits.batch_seconds`, so many events cost one turn) and its `phone` marking that turn's answer; with `note` it waits for the conversation's next message. Anything else hears nothing.
-pub(super) fn queue(app: &Shared, project: &str, text: &str, mode: &str, phone: bool) {
-    let turn = match mode {
-        "turn" => true,
-        "note" => false,
-        _ => return,
-    };
-    let first = talk(project, |t| {
-        t.notes.push(text.to_string());
-        t.notes.drain(..t.notes.len().saturating_sub(30));
-        t.phones |= turn && phone;
-        turn && !std::mem::replace(&mut t.due, true)
-    });
-    if first {
-        let (app, project, batch) = (
-            app.clone(),
-            project.to_string(),
-            app.cfg().factory.limits.batch_seconds,
-        );
-        tokio::spawn(async move {
-            tokio::time::sleep(Duration::from_secs(batch)).await;
-            talk(&project, |t| t.due = false);
-            deliver(&app, &project, "", false);
-        });
-    }
 }

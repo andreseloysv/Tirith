@@ -377,3 +377,250 @@ fn ab_compare_is_blind() {
     drop(app);
     let _ = std::fs::remove_dir_all(&home);
 }
+
+#[test]
+fn the_rule_is_fixed_before_the_test_and_expiry_needs_enough_comparisons() {
+    let (app, home) = app_with_a_bot("fixed");
+    branch(&home, "v3", "# Memory\n- search with a filter\n");
+    let e = start(&app, "v3").unwrap();
+    let exp = super::store::running_one(&app, e).unwrap();
+    // The factory's rule changes while the experiment runs: the experiment keeps the one it started with.
+    std::fs::write(
+        home.join("config.toml"),
+        std::fs::read_to_string(home.join("config.toml")).unwrap()
+            + "\n[lab]\ninputs = 2\nmin_saving = 0.99\nmax_days = 1\n",
+    )
+    .unwrap();
+    assert!(app.reload_config(true));
+    assert_eq!(app.cfg().factory.lab.min_saving, 0.99);
+    let kept = super::fixed::of(&app, &exp);
+    assert_eq!((kept.inputs, kept.min_saving, kept.max_days), (8, 0.15, 7));
+    // Two comparisons are not due by the old rule (8), though the new one asks for 2.
+    compared(&app, e, &["tie", "tie"], (620, "ok"));
+    super::decide(&app, e);
+    assert_eq!(super::list(&app, KEY)[0]["status"], "running");
+    // Its 7 days run out with 2 comparisons, fewer than min(5, inputs): it proves nothing and is discarded, saying so.
+    app.insert(
+        "UPDATE experiments SET created_at = '2000-01-01T00:00:00Z' WHERE id = ?1",
+        params![e],
+    );
+    super::decide(&app, e);
+    let row = &super::list(&app, KEY)[0];
+    assert_eq!(row["status"], "discarded", "{row}");
+    let line = &lines(&app, "lab.discarded")[0];
+    assert!(
+        line.contains("solo 2 comparaciones") && line.contains("mínimo 5"),
+        "{line}"
+    );
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn days_that_ran_out_decide_with_enough_comparisons() {
+    let (app, home) = app_with_a_bot("expired");
+    branch(&home, "v3", "# Memory\n- search with a filter\n");
+    let e = start(&app, "v3").unwrap();
+    compared(&app, e, &["tie"; 5], (620, "ok"));
+    app.insert(
+        "UPDATE experiments SET created_at = '2000-01-01T00:00:00Z' WHERE id = ?1",
+        params![e],
+    );
+    super::decide(&app, e);
+    let line = &lines(&app, "lab.adopted")[0];
+    assert!(
+        line.starts_with("Adopté") && line.contains("(5/5)"),
+        "{line}"
+    );
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn adopting_never_loses_a_note_written_during_the_experiment() {
+    let (app, home) = app_with_a_bot("notes");
+    let dir = home.join("manager").join(KEY);
+    // The branch rewrites the line; meanwhile the owner and the bot add notes right beside it.
+    branch(&home, "v3", "# Memory\n- search with a filter\n");
+    std::fs::write(
+        dir.join("memory.md"),
+        "# Memory\n- open every mail\n- [m2] never on Mondays\n- el dueño duerme tarde\n",
+    )
+    .unwrap();
+    crate::bots::versioned(&app, KEY, "turn 7");
+    assert!(super::adopt::adopt(&dir, "v3", "lab: adopt"));
+    let memory = std::fs::read_to_string(dir.join("memory.md")).unwrap();
+    assert!(
+        memory.contains("search with a filter"),
+        "the branch's tested text: {memory}"
+    );
+    assert!(
+        memory.contains("never on Mondays") && memory.contains("el dueño duerme tarde"),
+        "both notes survive: {memory}"
+    );
+    assert!(
+        !memory.contains("[m2]"),
+        "a note that comes back is numbered again, never twice: {memory}"
+    );
+    assert!(
+        git(&dir, &["status", "--porcelain"]).is_empty(),
+        "committed"
+    );
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn a_seat_is_freed_when_its_run_ends_without_a_turn() {
+    let (app, home) = app_with_a_bot("seat");
+    let live = home.join("manager").join(KEY);
+    branch(&home, "v3", "# Memory\n- the branch's memory\n");
+    let e = start(&app, "v3").unwrap();
+    app.set_kv(&format!("lab:last:{e}"), Some("A")); // the next run is B's
+    crate::lab::fired(&app, KEY, "r1", "");
+    let tree = home.join("lab").join(KEY).join(e.to_string());
+    assert_eq!(
+        crate::bots::folder(&app, KEY),
+        tree,
+        "B's run moved the bot into the branch"
+    );
+    // Its session never got ready (or ended before its turn): the run is released, and the bot is home again.
+    crate::manager::release_run(&app, KEY);
+    assert_eq!(crate::bots::folder(&app, KEY), live);
+    super::decide(&app, e); // nothing on its way: the experiment can be decided
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn a_routines_tuning_is_read_from_the_folder_of_its_run() {
+    let (app, home) = app_with_a_bot("tuning");
+    let dir = home.join("manager").join(KEY);
+    std::fs::write(
+        dir.join("routines.toml"),
+        "[r1]\neffort = \"high\"\n\n[r2]\nmodel = \"small\"\neffort = \"low\"\n",
+    )
+    .unwrap();
+    assert_eq!(
+        crate::bots::tuning_of(&dir, "r1"),
+        Some((Some("high".into()), None))
+    );
+    assert_eq!(
+        crate::bots::tuning_of(&dir, "r2"),
+        Some((Some("low".into()), Some("small".into())))
+    );
+    assert_eq!(crate::bots::tuning_of(&dir, "r3"), None);
+    // A branch can change it, and a live B run reads the branch's, while A reads the main's.
+    let draft = home.join("lab").join(KEY).join("draft");
+    git(&dir, &["add", "-A"]);
+    git(&dir, &["commit", "-q", "-m", "main"]);
+    git(
+        &dir,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "medium",
+            &draft.display().to_string(),
+        ],
+    );
+    std::fs::write(draft.join("routines.toml"), "[r1]\neffort = \"medium\"\n").unwrap();
+    git(&draft, &["commit", "-q", "-am", "r1 with medium effort"]);
+    git(&dir, &["worktree", "remove", &draft.display().to_string()]);
+    let e = start(&app, "medium").unwrap();
+    app.set_kv(&format!("lab:last:{e}"), Some("A"));
+    crate::lab::fired(&app, KEY, "r1", ""); // B
+    crate::bots::tune(&app, KEY, "r1");
+    let mut effort = Some("high".to_string());
+    crate::bots::tuned(KEY, &mut effort, &mut None);
+    assert_eq!(effort.as_deref(), Some("medium"));
+    crate::manager::release_run(&app, KEY);
+    let mut effort = Some("high".to_string());
+    crate::bots::tuned(KEY, &mut effort, &mut None);
+    assert_eq!(
+        effort.as_deref(),
+        Some("high"),
+        "no run on its way: no tuning"
+    );
+    crate::lab::fired(&app, KEY, "r1", ""); // A: the main's
+    crate::bots::tune(&app, KEY, "r1");
+    let mut effort = Some("low".to_string());
+    crate::bots::tuned(KEY, &mut effort, &mut None);
+    assert_eq!(effort.as_deref(), Some("high"));
+    crate::manager::release_run(&app, KEY);
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_b_run_whose_agent_never_starts_leaves_no_seat() {
+    // One agent that cannot start at all, one that ends before it is ready.
+    never_starts("never-1", "/nonexistent/agent").await;
+    never_starts("never-2", "/usr/bin/false").await;
+}
+
+async fn never_starts(name: &str, command: &str) {
+    let (app, home) = app_with_a_bot(name);
+    let live = home.join("manager").join(KEY);
+    // The bot's agent ends at once: its session never gets ready.
+    let config = std::fs::read_to_string(home.join("config.toml")).unwrap();
+    let agent = format!(
+        "[agents.fake]\ncommand = \"{command}\"\nchat_args = []\n[network]\nsandbox = false\n\n"
+    );
+    std::fs::write(home.join("config.toml"), format!("{agent}{config}")).unwrap();
+    assert!(app.reload_config(true));
+    app.set_kv(&format!("models:{KEY}"), Some(r#"{"agent":"fake"}"#));
+    branch(&home, "v3", "# Memory\n- the branch's memory\n");
+    let e = start(&app, "v3").unwrap();
+    app.set_kv(&format!("lab:last:{e}"), Some("A")); // the next run is B's
+    crate::manager::run_routine(&app, KEY, "schedule", "check the inbox", ("schedule", "r1"));
+    let tree = home.join("lab").join(KEY).join(e.to_string());
+    let mut home_again = false;
+    for _ in 0..100 {
+        home_again = crate::bots::folder(&app, KEY) == live;
+        if home_again {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    assert!(
+        home_again,
+        "the seat is freed when the run never starts (still in {})",
+        tree.display()
+    );
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[tokio::test]
+async fn a_replay_is_ended_when_the_daemon_restarted_in_its_middle() {
+    let (app, home) = app_with_a_bot("restarted");
+    app.set_kv("test:network-closed", Some("1"));
+    branch(&home, "v3", "# Memory\n- the branch's memory\n");
+    let b = serde_json::json!({"bot": KEY, "branch": "v3", "routine": "r1", "mode": "replay", "hypothesis": "x"});
+    // A replay whose pairs were being run when the daemon went down: one pair done, the rest never.
+    let e = app.insert("INSERT INTO experiments (bot, routine, branch, change, hypothesis, mode, status, created_at, factory) VALUES (?1, 'r1', 'v3', 'c', 'h', 'replay', 'running', '2026-11-21T08:00:00Z', '')", params![KEY]);
+    let tree = home.join("lab").join(KEY).join(e.to_string());
+    std::fs::create_dir_all(&tree).unwrap();
+    let (a, b2) = (
+        run(&app, e, "A", 1000, 1000, "ok", None),
+        run(&app, e, "B", 500, 1000, "ok", None),
+    );
+    app.insert("INSERT INTO lab_comparisons (experiment, a_turn, b_turn, b_is, verdict) VALUES (?1, ?2, ?3, 'a', 'win')", params![e, a, b2]);
+    let _ = b;
+    super::interrupted(app.clone());
+    let row = &super::list(&app, KEY)[0];
+    assert_eq!(
+        row["status"], "discarded",
+        "never decided later on the pairs it had: {row}"
+    );
+    let line = &lines(&app, "lab.discarded")[0];
+    assert!(
+        line.contains("se reinició") && line.contains("1 pares"),
+        "{line}"
+    );
+    assert!(!tree.exists());
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}

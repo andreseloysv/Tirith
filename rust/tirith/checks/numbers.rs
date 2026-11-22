@@ -246,7 +246,8 @@ async fn bot_numbers() {
         (Some(json!(1)), Some(json!(1)), Some(json!(0))),
         "{m}"
     );
-    assert_eq!(m["uncited"], json!(["m2"]), "{m}");
+    // No note of this memory is 30 runs old (it has no history yet), so none is a candidate to delete.
+    assert_eq!(m["uncited"], json!([]), "{m}");
     assert!(
         std::fs::read_to_string(home.join("manager").join(&key).join("memory.md"))
             .unwrap()
@@ -360,6 +361,110 @@ done
                 .iter()
                 .all(|r| r["score"].is_null() && r["event"].is_null()),
         "{judge:?}"
+    );
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[tokio::test]
+async fn waiting_and_b_runs_are_not_in_the_routines_numbers() {
+    let home = home("numbers-waiting");
+    std::fs::write(home.join("config.toml"), "[network]\nsandbox = false\n").unwrap();
+    let app = crate::app::App::open_at(home.clone());
+    let (id, key, rid, _) = bot_with_routine(&app, "Espera", "busca ofertas").await;
+    let seed_as = |status: &str, variant: Option<&str>| {
+        app.insert("INSERT INTO turns (conv, role, routine, status, ms, cost_usd, tokens_in, tokens_out, variant) VALUES (?1, ?1, ?2, ?3, 1000, 0.1, 900, 100, ?4)", rusqlite::params![key, rid, status, variant]);
+    };
+    // 3 ok, 1 failed, 2 waiting for the owner's yes, and 5 failed B runs of an experiment.
+    (0..3).for_each(|_| seed_as("ok", None));
+    seed_as("failed", None);
+    (0..2).for_each(|_| seed_as("waiting", None));
+    (0..5).for_each(|_| seed_as("failed", Some("B")));
+    let n = super::numbers(&app, &id).unwrap();
+    let r = &n["routines"][0];
+    assert_eq!(
+        (r["runs"].as_i64(), r["waiting"].as_i64()),
+        (Some(6), Some(2)),
+        "the B runs are no runs of the routine: {r}"
+    );
+    assert!(
+        close(&r["success"], 0.75),
+        "3 of the 4 that ended; the waiting ones are neither: {r}"
+    );
+    // Not a good run either: the cost per good run divides all the cost by the 3 ok ones.
+    assert!(close(&r["cost_per_good"], 0.6 / 3.0), "{r}");
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[tokio::test]
+async fn memory_candidates_wait_for_thirty_runs_after_the_note() {
+    let home = home("numbers-age");
+    std::fs::write(home.join("config.toml"), "[network]\nsandbox = false\n").unwrap();
+    let app = crate::app::App::open_at(home.clone());
+    let (id, key, rid, _) = bot_with_routine(&app, "Notas", "busca ofertas").await;
+    let at = |started: &str, cited: &str| {
+        app.insert("INSERT INTO turns (conv, role, routine, status, started_at, cited) VALUES (?1, ?1, ?2, 'ok', ?3, ?4)", rusqlite::params![key, rid, started, cited]);
+    };
+    let dir = home.join("manager").join(&key);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::create_dir_all(home.join("bots")).unwrap();
+    std::fs::write(
+        home.join("bots/memory.md"),
+        "- [s1] el dueño se llama Ana\n",
+    )
+    .unwrap();
+    // Two notes written now, then 31 runs after them (one cites m1).
+    std::fs::write(
+        dir.join("memory.md"),
+        "- [m1] usa el portal\n- [m2] nunca los lunes\n",
+    )
+    .unwrap();
+    crate::bots::versioned(&app, &key, "library");
+    (0..30).for_each(|_| at("2080-01-01T00:00:00Z", "[]"));
+    at("2080-01-01T00:00:00Z", "[\"m1\"]");
+    let candidates =
+        |app: &crate::app::Shared| super::numbers(app, &id).unwrap()["memory"]["uncited"].clone();
+    // m2 is 31 runs old and nobody cites it; the shared note nobody cites is no candidate of this bot's runs.
+    assert_eq!(candidates(&app), json!(["m2"]));
+    // A note written later (a commit after those runs) is not a candidate until 30 runs came after it, cited or not.
+    std::fs::write(
+        dir.join("memory.md"),
+        "- [m1] usa el portal\n- [m2] nunca los lunes\n- [m3] antes de las 9\n",
+    )
+    .unwrap();
+    let git = |args: &[&str]| {
+        let out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&dir)
+            .args([
+                "-c",
+                "user.name=T",
+                "-c",
+                "user.email=t@t",
+                "-c",
+                "commit.gpgsign=false",
+            ])
+            .args(args)
+            .env("GIT_COMMITTER_DATE", "2090-01-01T00:00:00Z")
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    };
+    git(&["add", "-A"]);
+    git(&["commit", "-q", "-m", "turn 99"]);
+    (0..5).for_each(|_| at("2091-01-01T00:00:00Z", "[]"));
+    assert_eq!(candidates(&app), json!(["m2"]), "m3 is 5 runs old");
+    (0..25).for_each(|_| at("2091-01-01T00:00:00Z", "[]"));
+    // (m1's one citation is out of the last 30 runs by now, and it is older than that: a candidate too.)
+    assert_eq!(
+        candidates(&app),
+        json!(["m1", "m2", "m3"]),
+        "m3 is 30 runs old now"
     );
     drop(app);
     let _ = std::fs::remove_dir_all(&home);

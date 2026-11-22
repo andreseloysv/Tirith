@@ -45,7 +45,7 @@ async fn beside(app: &Shared, e: &Experiment, pair: i64, task: &str) -> Option<i
         let input = memory.map_or(String::new(), |m| format!("{m}\n\n")) + task;
         crate::manager::run_turn(app, &e.bot, &conv, &input).await
     };
-    let _ = SHADOW.scope(tree(app, e), run).await;
+    let _ = SHADOW.scope((tree(app, e), e.routine.clone()), run).await;
     let sql = "UPDATE turns SET experiment = ?1, variant = 'B', routine = ?2, \"trigger\" = 'shadow' WHERE conv = ?3";
     app.insert(sql, params![e.id, e.routine, conv]);
     let sql = "SELECT MAX(id) FROM turns WHERE conv = ?1";

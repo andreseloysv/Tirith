@@ -1,5 +1,6 @@
 //! Reading a stream-json session's output: its start, its words and tools, its turn ends and permission requests.
 use super::blocks::assistant;
+use super::deliver::deliver;
 use super::spawn::control_reply;
 use super::talk::{set_busy, talk};
 use super::typing::{begin_turn, typing_stop};
@@ -34,6 +35,7 @@ pub(super) async fn read(s: &Stream<'_>, idle: Duration, stdout: ChildStdout) ->
         let Ok(msg) = serde_json::from_str::<Value>(&line) else {
             continue;
         };
+        crate::turns::follow(s.app, s.project, &msg);
         crate::turns::line(s.project, &msg);
         match msg["type"].as_str().unwrap_or("") {
             "system" if msg["subtype"] == "init" => {
@@ -76,5 +78,6 @@ fn turn_end(app: &Shared, project: &str) -> bool {
     typing_stop(project);
     rooms::reply(app, &Vec::from_iter(rooms_now), &text);
     let _ = (!rest).then(|| begin_turn(app, project)); // what rooms sent during that turn is the next turn's, and in this session it starts now
+    deliver(app, project, "", false); // the next routine's run waiting, if the conversation is free
     rest
 }

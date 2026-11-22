@@ -9,9 +9,9 @@ pub(super) struct Run {
     pub(super) cost: Option<f64>,
 }
 
-/// The last 15 runs of routine `routine` of the bot whose conversation is `conv`, newest first.
-fn runs(app: &Shared, conv: &str, routine: &str) -> Vec<Run> {
-    let sql = "SELECT status = 'failed', COALESCE(tokens_in, 0) + COALESCE(tokens_out, 0) + COALESCE(tokens_cache_read, 0) + COALESCE(tokens_cache_write, 0), cost_usd FROM turns WHERE conv = ?1 AND role = ?1 AND routine = ?2 ORDER BY id DESC LIMIT 15";
+/// The last 15 runs of routine `routine` of the bot whose conversation is `conv`, newest first: a B run of an experiment is no run of the routine, and one that waits for the owner's yes (`waiting`) is no failure.
+pub(super) fn runs(app: &Shared, conv: &str, routine: &str) -> Vec<Run> {
+    let sql = "SELECT status = 'failed', COALESCE(tokens_in, 0) + COALESCE(tokens_out, 0) + COALESCE(tokens_cache_read, 0) + COALESCE(tokens_cache_write, 0), cost_usd FROM turns WHERE conv = ?1 AND role = ?1 AND routine = ?2 AND COALESCE(variant, '') <> 'B' ORDER BY id DESC LIMIT 15";
     app.query(sql, [conv, routine], |r| {
         Ok(Run {
             failed: r.get(0)?,

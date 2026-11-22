@@ -73,3 +73,118 @@ fn approval_turn_waits() {
     drop(app);
     let _ = std::fs::remove_dir_all(&home);
 }
+
+/// A home with a bot whose skill `correo` has a «Cómo validar» and a «Qué requiere aprobación»: (the app, its home, its key).
+fn bot_with_a_skill(name: &str) -> (crate::app::Shared, std::path::PathBuf, String) {
+    let home = std::env::temp_dir().join(format!("tirith-approval-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&home);
+    std::fs::create_dir_all(&home).unwrap();
+    let app = crate::app::App::open_at(home.clone());
+    let bot = crate::bots::save(&app, json!({"name": "Correo", "shape": "drop", "color": "#22d3ee", "session": "chat", "access": "read"})).unwrap();
+    let key = format!("bot-{}", bot["id"].as_str().unwrap());
+    let skill = home
+        .join("manager")
+        .join(&key)
+        .join(".agents/skills/correo");
+    std::fs::create_dir_all(&skill).unwrap();
+    std::fs::write(skill.join("SKILL.md"), "---\nname: correo\n---\n\n## Cómo validar\nCada correo tiene asunto.\n\n## Qué requiere aprobación\nEnviar cualquier correo.\n").unwrap();
+    (app, home, key)
+}
+
+#[test]
+fn the_judge_keeps_the_tool_calls_and_the_approvals_of_a_long_run() {
+    let (app, home, key) = bot_with_a_skill("evidence");
+    let mut t = super::Turn::new(&app, &key, &key, ("schedule".into(), "r1".into()));
+    t.skills.push("correo".into());
+    // A routine with a long task, many calls and a long answer: the last call is the one that sent.
+    (0..40).for_each(|i| t.tools.push(json!({"name": "Bash", "summary": format!("curl https://example.com/{i} {}", "x".repeat(150))})));
+    t.tools
+        .push(json!({"name": "Bash", "summary": "tirith send --to ana LAST-CALL"}));
+    let id = super::save::finish(&app, t, Some(true), Some(&"r".repeat(4000)));
+    let (_, summary) = row(&app, id);
+    assert!(
+        summary.contains("LAST-CALL")
+            && summary.contains("«correo» requires approval for: Enviar cualquier correo.")
+            && summary.contains("how to validate «correo»: Cada correo tiene asunto."),
+        "the judge reads the whole evidence: {} characters",
+        summary.len()
+    );
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn only_a_chat_turn_that_read_a_skill_is_graded() {
+    let (app, home, key) = bot_with_a_skill("graded");
+    let kind = |id: i64| -> String {
+        let sql = "SELECT e.kind FROM turns t JOIN events e ON e.id = t.event WHERE t.id = ?1";
+        app.query(sql, [id], |r| r.get(0)).remove(0)
+    };
+    let chat = |skills: &[&str]| {
+        let mut t = super::Turn::new(&app, &key, &key, ("owner".into(), String::new()));
+        skills.iter().for_each(|s| t.skills.push(s.to_string()));
+        super::save::finish(&app, t, Some(true), Some("hecho"))
+    };
+    let plain = chat(&[]);
+    assert_eq!(
+        kind(plain),
+        "turn.done",
+        "no skill: no judge turn for the grade"
+    );
+    let with = chat(&["correo"]);
+    assert_eq!(
+        kind(with),
+        "routine.done",
+        "a skill: graded with its «Cómo validar»"
+    );
+    assert!(row(&app, with)
+        .1
+        .contains("how to validate «correo»: Cada correo tiene asunto."));
+    // The factory grades routine.done and does not grade turn.done.
+    let f = &app.cfg().factory;
+    assert!(f
+        .evals_on("routine.done")
+        .iter()
+        .any(|e| e.0 == "turn-quality"));
+    assert!(f
+        .evals_on("turn.done")
+        .iter()
+        .all(|e| e.0 != "turn-quality"));
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn the_owners_answer_ends_the_wait() {
+    let (app, home, key) = bot_with_a_skill("answer");
+    let waiting = |app: &crate::app::Shared| -> Vec<String> {
+        let sql = "SELECT status FROM turns WHERE conv = ?1 AND role = ?1 ORDER BY id";
+        app.query(sql, [&key], |r| r.get(0))
+    };
+    let card = |question: &str| {
+        let t = super::Turn::new(&app, &key, &key, ("schedule".into(), "r1".into()));
+        let c = crate::manager::ask_owner(&app, &key, "approval", question, "").unwrap();
+        (
+            super::save::finish(&app, t, Some(true), Some("Espero tu sí.")),
+            c["id"].as_str().unwrap().to_string(),
+        )
+    };
+    let (_, first) = card("Enviar a ana el presupuesto");
+    let (_, second) = card("Enviar a luis el contrato");
+    assert_eq!(waiting(&app), ["waiting", "waiting"]);
+    // Each turn waits while any approval card opened since it started is open.
+    crate::manager::owner_answer(&app, &first, "sí", true).unwrap(); // the manager closes it: no turn is started here
+    assert_eq!(
+        waiting(&app),
+        ["waiting", "waiting"],
+        "a card is still open"
+    );
+    crate::manager::close_card(&app, &second, "the owner", "ya no").unwrap();
+    assert_eq!(
+        waiting(&app),
+        ["ok", "ok"],
+        "no approval card is open: no turn waits"
+    );
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}

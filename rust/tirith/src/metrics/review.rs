@@ -46,7 +46,7 @@ fn trigger(role: &str, metric: &str) {
 /// One pass of turn role `role` (one at a time per role), with the brief its `brief` key names and `why` it runs.
 pub(super) fn start_review(app: &Shared, role: String, metric: String, why: String) {
     let Some(()) = RUNNING.lock().unwrap().insert(role.clone()).then_some(()) else {
-        return;
+        return super::queued::keep(&role, &metric, &why); // an event heard during a pass is run when it ends
     };
     let app = app.clone();
     tokio::spawn(async move {
@@ -62,6 +62,9 @@ pub(super) fn start_review(app: &Shared, role: String, metric: String, why: Stri
         });
         RUNNING.lock().unwrap().remove(&role);
         app.emit("review", json!({"running": false, "role": role})); // the page refetches the metrics on it, reviews included
+        if let Some((metric, why)) = super::queued::take(&role) {
+            start_review(&app, role, metric, why);
+        }
     });
 }
 /// The page's "CEO now": the CEO turn role runs at once, asked by the owner (it does not count toward its `max_per_day`).

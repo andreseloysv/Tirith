@@ -1,4 +1,5 @@
-//! A replay's tool calls answered from its capture, in Tirith's `PreToolUse` hook (`server/hook.rs`, Anthropic's and Muse's alike): a call that reads outside gets the next call of that tool in the capture, in order, as the reason of its refusal («Recorded result (replay): …»); one the capture does not have left is refused as not available in a replay, and so is one that would reach the owner. Local calls (its folder, its skills) run as always.
+//! A replay's tool calls answered from its capture, in Tirith's `PreToolUse` hook (`server/hook.rs`, Anthropic's and Muse's alike): a call that reads outside gets the capture's call that asked for the same thing (`call_key.rs`: the tool and its URL, query or command), as the reason of its refusal («Recorded result (replay): …»); one the capture has no such call for is refused as not available in a replay, and counted as missed (the pair proves nothing, `replay.rs`); so is one that would reach the owner refused. Local calls (its folder, its skills) run as always.
+use super::call_key::key;
 use super::outside::{outside, to_owner};
 use crate::server::s;
 use serde_json::Value;
@@ -6,30 +7,46 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-/// A worktree a replay's turn runs in, as given and as the disk resolves it, with the capture's outside calls not answered yet.
+/// One outside call of the capture: its tool as its agent named it, what it asked for, its result, and whether a call of the replay took it.
+struct Call {
+    tool: String,
+    key: String,
+    result: String,
+    used: bool,
+}
+
+/// A worktree a replay's turn runs in, as given and as the disk resolves it, with the capture's outside calls and how many calls of the replay found none.
 struct Open {
     real: PathBuf,
-    calls: Vec<Option<Value>>,
+    calls: Vec<Call>,
+    missed: usize,
 }
 
 static OPEN: Mutex<BTreeMap<PathBuf, Open>> = Mutex::new(BTreeMap::new());
 
 /// The replay's turn in `dir` starts: the capture's calls that read outside wait for it.
 pub(super) fn open(dir: &Path, calls: &[Value]) {
-    let out = calls.iter().filter(|c| {
-        let (known, input) = crate::rules::normalize(&s(c, "tool"), &c["input"], "");
-        outside(&known, &input)
-    });
+    let norm = |c: &Value| crate::rules::normalize(&s(c, "tool"), &c["input"], "");
+    let out = calls.iter().filter(|c| outside(&norm(c).0, &norm(c).1));
     let real = dir.canonicalize().unwrap_or(dir.to_path_buf());
-    let calls = out.cloned().map(Some).collect();
-    OPEN.lock()
-        .unwrap()
-        .insert(dir.to_path_buf(), Open { real, calls });
+    let calls = out.map(|c| Call {
+        tool: s(c, "tool"),
+        key: key(&norm(c).0, &norm(c).1),
+        result: s(c, "result"),
+        used: false,
+    });
+    let open = Open {
+        real,
+        calls: calls.collect(),
+        missed: 0,
+    };
+    OPEN.lock().unwrap().insert(dir.to_path_buf(), open);
 }
 
-/// The replay's turn in `dir` ended.
-pub(super) fn close(dir: &Path) {
-    OPEN.lock().unwrap().remove(dir);
+/// The replay's turn in `dir` ended: how many of its outside calls the capture had no answer for.
+pub(super) fn close(dir: &Path) -> usize {
+    let open = OPEN.lock().unwrap().remove(dir);
+    open.map_or(0, |o| o.missed)
 }
 
 /// True for a path inside the worktree of a replay's turn or a shadow B run on its way: its bot writes there as in its own folder.
@@ -55,12 +72,18 @@ pub fn answer(cwd: &str, tool: &str, known: &str, input: &Value) -> Option<Strin
         ));
     }
     outside(known, input).then_some(())?; // a local call runs as always
-    let next = o
+    let asked = key(known, input);
+    let same = |c: &&mut Call| !c.used && c.tool == tool && c.key == asked;
+    let found = o
         .calls
         .iter_mut()
-        .find(|c| c.as_ref().is_some_and(|c| c["tool"] == tool));
-    Some(match next.and_then(Option::take) {
-        Some(c) => format!("Recorded result (replay): {}", s(&c, "result")),
-        None => format!("{tool}: not available in a replay (its capture has no such call left)"),
+        .find(same)
+        .map(|c| (c.used = true, c.result.clone()).1);
+    let _ = found.is_none().then(|| o.missed += 1);
+    Some(match found {
+        Some(result) => format!("Recorded result (replay): {result}"),
+        None => format!(
+            "{tool}: not available in a replay (its capture has no call that asked for this)"
+        ),
     })
 }

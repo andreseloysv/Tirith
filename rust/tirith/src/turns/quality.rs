@@ -21,7 +21,7 @@ pub(super) fn how_to_validate(text: &str) -> Option<String> {
     Some(body.join("\n").trim().to_string()).filter(|b| !b.is_empty())
 }
 
-/// The text of a routine's `routine.done`: `head` (the bot, the trigger, the routine and its task, the tools and skills), its answer, the «Cómo validar» of each skill it read, then `approval` (what the `unapproved` eval reads), cut to 2000 characters.
+/// The text of a `routine.done` (a routine's turn, or a chat turn that read a skill): `head` (the bot, the trigger, the routine and its task, the tools and skills), its answer (cut to 1000 characters), `approval` (every tool call and every skill's «Qué requiere aprobación», whole: what the `unapproved` eval reads is never cut) and the «Cómo validar» of each skill it read (each cut to 1500).
 pub(super) fn routine_text(
     app: &Shared,
     t: &Turn,
@@ -29,20 +29,17 @@ pub(super) fn routine_text(
     answer: &str,
     approval: &str,
 ) -> String {
-    let mut text = format!(
-        "{head} · answer: {}",
-        answer.chars().take(1000).collect::<String>()
-    );
+    let cut = |text: &str, n: usize| text.chars().take(n).collect::<String>();
+    let mut text = format!("{head} · answer: {}{approval}", cut(answer, 1000));
     for name in &t.skills {
         let file = skill_file(app, t, name);
         let read = file.and_then(|f| std::fs::read_to_string(f).ok());
         read.as_deref()
             .and_then(how_to_validate)
             .into_iter()
-            .for_each(|v| text += &format!("\n· how to validate «{name}»: {v}"));
+            .for_each(|v| text += &format!("\n· how to validate «{name}»: {}", cut(&v, 1500)));
     }
-    text += approval;
-    text.chars().take(2000).collect()
+    text
 }
 
 /// A judge's `score` of `eval` on event `event`: a `turn-quality` one is copied to the turn whose event it is.

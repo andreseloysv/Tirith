@@ -5,7 +5,7 @@ use super::prompt::{history, prompt};
 use super::session_end::{close, not_ready, Live};
 use super::spawn::spawn_chat;
 use super::stream::{read, Stream};
-use super::talk::{set_busy, talk};
+use super::talk::{set_busy, talk, Msg};
 use super::typing::{begin_turn, typing_start};
 use crate::app::Shared;
 use crate::models;
@@ -46,28 +46,25 @@ pub(super) async fn session(app: &Shared, project: &str) -> Result<(), String> {
     };
     not_ready(app, project, &key, sent, resumed.is_some())
 }
-/// The new session takes the conversation's waiting messages (the first with the recent chat in front when it starts fresh), and the turn they make starts now.
+/// The new session takes the conversation's waiting messages (the first with the recent chat in front when it starts fresh), each beginning a turn of its own in order.
 fn hand_pending(
     app: &Shared,
     project: &str,
     pid: u32,
     tx: &mpsc::UnboundedSender<String>,
     history: Option<&str>,
-) -> Vec<String> {
-    let sent: Vec<String> = talk(project, |t| {
+) -> Vec<Msg> {
+    let sent: Vec<Msg> = talk(project, |t| {
         (t.pid, t.tx, t.stale) = (pid, Some(tx.clone()), false);
         set_busy(app, project, t, true);
-        let sent: Vec<String> = std::mem::take(&mut t.pending);
-        sent.iter().enumerate().for_each(|(i, text)| {
-            drop(tx.send(user_line(&if i == 0 {
-                format!("{}{text}", history.unwrap_or(""))
-            } else {
-                text.clone()
-            })))
+        let sent: Vec<Msg> = std::mem::take(&mut t.pending);
+        sent.iter().enumerate().for_each(|(i, m)| {
+            let first = if i == 0 { history.unwrap_or("") } else { "" };
+            drop(tx.send(user_line(&format!("{first}{}", m.text))));
+            crate::turns::handed(app, project, m.by.clone());
         });
         sent
     });
-    let _ = (!sent.is_empty()).then(|| crate::turns::begin(app, project));
     let _ =
         (!sent.is_empty()).then(|| (begin_turn(app, project), typing_start(app, project, false))); // the waiting turn starts now; a session restarted after a failure shows it again
     sent

@@ -49,11 +49,18 @@ fn git(dir: &Path, args: &[&str]) {
 
 /// A Tirith home with the bot «Correo» and its routine `r1`, on the fake agent (the judge too) that calls the hook on `port`.
 fn app_with_a_bot(name: &str, port: u16) -> (crate::app::Shared, PathBuf) {
+    app_with_agent(name, port, AGENT)
+}
+
+/// `app_with_a_bot` with another fake agent.
+fn app_with_agent(name: &str, port: u16, agent_script: &str) -> (crate::app::Shared, PathBuf) {
     let home = std::env::temp_dir().join(format!("tirith-replay-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&home);
     std::fs::create_dir_all(&home).unwrap();
     let agent = home.join("fake-agent.sh");
-    let script = AGENT.replace("PORT", &port.to_string()).replace("KEY", KEY);
+    let script = agent_script
+        .replace("PORT", &port.to_string())
+        .replace("KEY", KEY);
     std::fs::write(&agent, script).unwrap();
     std::fs::set_permissions(&agent, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
     std::fs::write(
@@ -65,6 +72,7 @@ fn app_with_a_bot(name: &str, port: u16) -> (crate::app::Shared, PathBuf) {
     for role in [KEY, "judge"] {
         app.set_kv(&format!("models:{role}"), Some(r#"{"agent":"fake"}"#));
     }
+    app.set_kv("test:network-closed", Some("1")); // the fake agent runs with no sandbox here
     let dir = home.join("manager").join(KEY);
     std::fs::create_dir_all(dir.join(".agents/skills/inbox")).unwrap();
     std::fs::write(dir.join("memory.md"), "# Memory\n- open every mail\n").unwrap();
@@ -183,11 +191,16 @@ fn captures_keep_the_last_ten() {
 
 /// A bot with two captured runs, a branch, a server for its hooks and a replay of it run to its end: the app, its home and the experiment.
 async fn replayed(name: &str) -> (crate::app::Shared, PathBuf, i64, Vec<i64>) {
+    replayed_with(name, AGENT).await
+}
+
+/// `replayed`, the bot's fake agent being `script`.
+async fn replayed_with(name: &str, script: &str) -> (crate::app::Shared, PathBuf, i64, Vec<i64>) {
     let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
         .await
         .unwrap();
     let port = listener.local_addr().unwrap().port();
-    let (app, home) = app_with_a_bot(name, port);
+    let (app, home) = app_with_agent(name, port, script);
     let app2 = app.clone();
     tokio::spawn(
         async move { drop(axum::serve(listener, crate::server::router(app2, port)).await) },
@@ -313,6 +326,7 @@ async fn replay_answers_from_the_capture() {
     assert_eq!(crate::lab::proxy_caller(KEY), KEY);
     let r = super::replay::Replay {
         experiment: e,
+        routine: "r1".into(),
         dir: home.clone(),
     };
     let inside = super::replay::REPLAY
@@ -353,6 +367,152 @@ async fn replay_reaches_nobody() {
     assert!(
         turns.iter().all(|c| c.starts_with("replay-")),
         "its turns are in conversations of their own: {turns:?}"
+    );
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+/// An agent that asks only for what the captures hold: the inbox, with a different prompt and a slash at the end of the address.
+const FAIR: &str = r#"#!/bin/sh
+read -r line
+if [ "$TIRITH_ROLE" != "KEY" ]; then
+  echo '{"type":"assistant","message":{"content":[{"type":"text","text":"tie — both list the same offers"}]}}'
+  echo '{"type":"result","subtype":"success","is_error":false,"usage":{"input_tokens":3,"output_tokens":2}}'
+  exit 0
+fi
+here=$(pwd)
+out="$TIRITH_HOME/heard-$TIRITH_PROJECT.txt"
+curl -s --noproxy '*' -X POST "http://127.0.0.1:PORT/hook/PreToolUse" -H 'Host: 127.0.0.1' -H "X-Tirith-Role: $TIRITH_ROLE" -H 'Content-Type: application/json' --data-binary "{\"cwd\":\"$here\",\"session_id\":\"r\",\"tool_name\":\"WebFetch\",\"tool_input\":{\"url\":\"https://mail.example/inbox/\",\"prompt\":\"list the offers\"}}" >> "$out"
+echo '{"type":"assistant","message":{"content":[{"type":"text","text":"3 offers listed"}]}}'
+echo '{"type":"result","subtype":"success","is_error":false,"usage":{"input_tokens":10,"output_tokens":5}}'
+"#;
+
+#[tokio::test(flavor = "multi_thread")]
+async fn replay_compares_only_what_asked_for_the_same() {
+    // Both sides ask for the captured inbox (another prompt, a slash more): it is answered, and the pairs are compared and judged.
+    let (app, home, e, _) = replayed_with("fair", FAIR).await;
+    let tally = |v: &str| -> i64 {
+        let sql = "SELECT COUNT(*) FROM lab_comparisons WHERE experiment = ?1 AND verdict = ?2";
+        app.query(sql, params![e, v], |r| r.get(0)).remove(0)
+    };
+    assert_eq!((tally("tie"), tally("void")), (2, 0));
+    let heard = std::fs::read_to_string(home.join(format!("heard-replay-{e}-1-A.txt"))).unwrap();
+    assert!(
+        heard.contains("Recorded result (replay): 3 new offers"),
+        "{heard}"
+    );
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn replay_pairs_that_asked_for_more_prove_nothing() {
+    // The default fake agent also asks for a second page and a search the captures lack: every pair proves nothing.
+    let (app, home, e, _) = replayed("void").await;
+    let verdicts: Vec<Option<String>> = app.query(
+        "SELECT verdict FROM lab_comparisons WHERE experiment = ?1",
+        [e],
+        |r| r.get(0),
+    );
+    assert_eq!(
+        verdicts,
+        vec![Some("void".to_string()); 2],
+        "never a tie or a win for B"
+    );
+    let row = &super::list(&app, KEY)[0];
+    let line = row["numbers"]["line"].as_str().unwrap();
+    assert_eq!(row["status"], "discarded", "{row}");
+    assert!(
+        line.contains("sin comparaciones") && line.contains("2 par(es) sin comparar"),
+        "{line}"
+    );
+    assert_eq!(row["numbers"]["tally"]["voids"], 2, "{row}");
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn a_call_is_the_same_by_what_it_asks_for() {
+    let key = |t: &str, i: serde_json::Value| super::call_key::key(t, &i);
+    assert_eq!(
+        key(
+            "WebFetch",
+            json!({"url": "https://a.example/x/", "prompt": "one"})
+        ),
+        key(
+            "WebFetch",
+            json!({"url": "https://a.example/x", "prompt": "two"})
+        )
+    );
+    assert_ne!(
+        key("WebFetch", json!({"url": "https://a.example/x"})),
+        key("WebFetch", json!({"url": "https://a.example/y"}))
+    );
+    assert_eq!(
+        key("WebSearch", json!({"query": " new  offers "})),
+        key("WebSearch", json!({"query": "new offers"}))
+    );
+    assert_eq!(
+        key(
+            "Bash",
+            json!({"command": "curl  -s x\n", "description": "fetch"})
+        ),
+        key(
+            "Bash",
+            json!({"command": "curl -s x", "description": "other words"})
+        )
+    );
+    assert_ne!(
+        key("Bash", json!({"command": "curl -s x"})),
+        key("Bash", json!({"command": "curl -s y"}))
+    );
+    assert_eq!(
+        key("mcp__x__go", json!({"a": 1, "reason": "why"})),
+        key("mcp__x__go", json!({"a": 1}))
+    );
+}
+
+#[test]
+fn a_replay_needs_the_network_closed() {
+    let (app, home) = app_with_a_bot("closed", 0);
+    app.set_kv("test:network-closed", None);
+    branch(&home, "v3", "# Memory\n- a filter\n");
+    captured_run(&app, "r1", "3 new offers");
+    let b =
+        json!({"bot": KEY, "branch": "v3", "routine": "r1", "mode": "replay", "hypothesis": "x"});
+    let refused = super::start(&app, &b).unwrap_err();
+    assert!(
+        refused.contains("network closed") && refused.contains("[network] sandbox = false"),
+        "{refused}"
+    );
+    assert!(super::list(&app, KEY).is_empty(), "no experiment was made");
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[tokio::test]
+async fn a_replays_branch_may_change_the_routines_effort() {
+    let (app, home) = app_with_a_bot("tuned", 0);
+    app.set_kv(
+        &format!("models:{KEY}"),
+        Some(r#"{"agent":"fake","effort":"high"}"#),
+    );
+    // B's worktree carries the branch's `routines.toml`: its turn runs with that effort, and no other turn does.
+    let tree = home.join("tree-b");
+    std::fs::create_dir_all(&tree).unwrap();
+    std::fs::write(tree.join("routines.toml"), "[r1]\neffort = \"medium\"\n").unwrap();
+    let r = super::replay::Replay {
+        experiment: 1,
+        routine: "r1".into(),
+        dir: tree,
+    };
+    let inside = super::replay::REPLAY
+        .scope(r, async { crate::models::role(&app, KEY).effort })
+        .await;
+    assert_eq!(inside.as_deref(), Some("medium"));
+    assert_eq!(
+        crate::models::role(&app, KEY).effort.as_deref(),
+        Some("high")
     );
     drop(app);
     let _ = std::fs::remove_dir_all(&home);

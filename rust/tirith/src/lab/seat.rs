@@ -81,3 +81,11 @@ pub fn taken(app: &App, key: &str, routine: &str) -> Option<Seat> {
         .is_some_and(|s| !routine.is_empty() && s.routine == routine);
     mine.then(|| seats.remove(&dir)).flatten()
 }
+
+/// The run of the bot `key` on its way ended without its turn's row (it never started, or its session ended): its seat is taken back, and a B run's session ends so the next starts in the bot's own folder.
+pub fn released(app: &App, key: &str) {
+    let seat = SEATS.lock().unwrap().remove(&live(app, key));
+    let _ = seat
+        .filter(|s| s.variant == "B")
+        .map(|_| crate::manager::end_session(key));
+}

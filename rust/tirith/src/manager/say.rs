@@ -1,5 +1,5 @@
 //! What the owner, a room or an agent writes to a conversation.
-use super::deliver::{deliver, report};
+use super::deliver::{deliver, hand, report};
 use super::evals::judge_evals;
 use super::talk::talk;
 use crate::app::Shared;
@@ -7,7 +7,7 @@ use crate::models;
 /// A message from a room (a paired phone or another agent): shown in the chat of the room's project, handed to that project's manager, and the manager's answer to this turn goes back to that room.
 pub fn from_room(app: &Shared, project: &str, room: &str, author: &str, text: &str) {
     let project = app.conv(project);
-    app.event(
+    let event = app.event(
         "",
         project,
         "room.message",
@@ -20,13 +20,12 @@ pub fn from_room(app: &Shared, project: &str, room: &str, author: &str, text: &s
         return; // a 👍/👎 on the bot's last turn starts none
     }
     talk(project, |t| t.reply_to.insert(room.to_string()));
-    crate::turns::trigger(project, "room", "");
-    deliver(
-        app,
-        project,
-        &with_cards(app, project, &format!("[room {room}] {author}: {text}")),
-        true,
-    );
+    // What the owner writes from a paired phone is the owner's: owner-mood judges it (a correction counts); another agent's line never is.
+    let _ = crate::rooms::paired_phone(author)
+        .then(|| judge_evals(app, project, "owner.message", text, event));
+    let by = Some(("room".to_string(), String::new()));
+    let text = with_cards(app, project, &format!("[room {room}] {author}: {text}"));
+    hand(app, project, &text, true, by);
 }
 /// What the owner wrote, and the project's cards still open: an answer in plain words is then closed by the manager.
 fn with_cards(app: &Shared, project: &str, text: &str) -> String {
@@ -65,9 +64,12 @@ pub fn say(app: &Shared, project: &str, text: &str, agent: &str) -> Result<(), S
     let event = app.event("", project, "owner.message", "", text, "");
     app.chat("owner", text, project);
     judge_evals(app, project, "owner.message", text, event);
-    crate::turns::trigger(project, "owner", "");
+    // A message that starts no turn (`/model`, words kept while a task is taught) leaves no trigger behind.
     let _ = (!model_command(app, project, text) && !crate::teach::heard(app, project, text)) // while it is taught a task, the owner's words go with the steps
-        .then(|| deliver(app, project, &with_cards(app, project, text), true));
+        .then(|| {
+            let by = Some(("owner".to_string(), String::new()));
+            hand(app, project, &with_cards(app, project, text), true, by)
+        });
     Ok(())
 }
 /// Only the local owner chat and authenticated paired phones call this path.

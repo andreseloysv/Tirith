@@ -22,6 +22,7 @@ mod run;
 mod schedule;
 mod store;
 mod sweep;
+mod tuning;
 mod versioned;
 mod written;
 pub use api::routes;
@@ -39,6 +40,9 @@ pub use list::{all, bot, key_for};
 pub use migrate::start;
 pub use run::tick;
 pub use schedule::due;
+#[cfg(test)]
+pub use tuning::read as tuning_of;
+pub use tuning::{tune, tuned, untune};
 pub use versioned::versioned;
 #[cfg(test)]
 #[path = "../../checks/bot_git.rs"]

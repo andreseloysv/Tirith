@@ -18,6 +18,20 @@ pub(super) fn waits(app: &Shared, t: &Turn) -> bool {
     .is_some_and(|n| *n > 0)
 }
 
+/// An approval card is no longer open (answered or closed): the turns of its conversation that waited only for it stop waiting and count as done, ok.
+pub fn released(app: &Shared, card: &str) {
+    let sql =
+        "SELECT project FROM owner_items WHERE id = ?1 AND kind = 'approval' AND status <> 'open'";
+    for project in app.query(sql, [card], |r| r.get::<_, String>(0)) {
+        let sql = "UPDATE turns SET status = 'ok' WHERE status = 'waiting' AND conv = ?1 AND NOT EXISTS (SELECT 1 FROM owner_items WHERE kind = 'approval' AND status = 'open' AND project = ?1 AND at >= turns.started_at)";
+        app.insert(sql, rusqlite::params![app.conv(&project)]);
+        app.emit(
+            "turn",
+            serde_json::json!({"conv": project, "released": card}),
+        );
+    }
+}
+
 /// The text of a skill's «Qué requiere aprobación» section, up to the next `## ` title.
 pub(super) fn section(skill: &str) -> String {
     let Some(at) = skill.find(SECTION) else {

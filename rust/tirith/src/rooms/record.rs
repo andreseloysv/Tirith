@@ -5,6 +5,10 @@ pub(super) const KEPT: usize = 40;
 pub(super) const CODE_SECS: u64 = 900; // how long a pairing code is good for: a picture of the page is soon worth nothing
 /// How the manager is told that a room's line is the owner's own.
 pub(super) const PHONE: &str = "(the owner's paired phone)";
+/// True for the author of a line the owner's paired phone wrote (another agent in the room never is).
+pub fn paired_phone(author: &str) -> bool {
+    author.ends_with(PHONE)
+}
 #[derive(Serialize, Deserialize, Clone, Default)]
 #[serde(default)]
 pub(super) struct Peer {

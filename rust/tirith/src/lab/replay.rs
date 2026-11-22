@@ -7,6 +7,7 @@ use std::path::PathBuf;
 #[derive(Clone)]
 pub(super) struct Replay {
     pub experiment: i64,
+    pub routine: String,
     pub dir: PathBuf,
 }
 
@@ -17,6 +18,11 @@ tokio::task_local! {
 /// Inside a replay's turn, the worktree every folder of the bot resolves to.
 pub(super) fn dir() -> Option<PathBuf> {
     REPLAY.try_with(|r| r.dir.clone()).ok()
+}
+
+/// Inside a replay's turn, its worktree and the routine it runs.
+pub(super) fn run() -> Option<(PathBuf, String)> {
+    REPLAY.try_with(|r| (r.dir.clone(), r.routine.clone())).ok()
 }
 
 /// Inside a replay's turn, its experiment.
@@ -56,11 +62,20 @@ async fn pair(app: &Shared, e: &Experiment, turn: i64) {
     let Some(cap) = crate::turns::capture_of(app, turn) else {
         return;
     };
-    let Some(_) = super::replay_side::side(app, e, &cap, "A").await else {
+    let Some((a, a_missed)) = super::replay_side::side(app, e, &cap, "A").await else {
         return;
     };
-    let Some(b) = super::replay_side::side(app, e, &cap, "B").await else {
+    let Some((b, b_missed)) = super::replay_side::side(app, e, &cap, "B").await else {
         return;
     };
-    super::compare::compare(app, e, b);
+    // A side that asked for something the capture lacks was refused: the pair proves nothing, and is neither a tie nor a win.
+    match a_missed + b_missed {
+        0 => super::compare::compare(app, e, b),
+        n => super::void::void(
+            app,
+            e,
+            (a, b),
+            &format!("{n} call(s) asked for something the capture lacks"),
+        ),
+    }
 }

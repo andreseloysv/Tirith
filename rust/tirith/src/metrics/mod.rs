@@ -14,6 +14,7 @@ mod metric;
 mod mood;
 mod pass;
 mod plans;
+mod queued;
 mod review;
 mod roles;
 mod tick;
