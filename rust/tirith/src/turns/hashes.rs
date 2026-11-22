@@ -9,7 +9,7 @@ pub(super) fn hashes(files: Vec<(String, PathBuf)>) -> Map<String, Value> {
     if files.is_empty() {
         return out;
     }
-    let run = std::process::Command::new("git")
+    let run = crate::sandbox::git()
         .arg("hash-object")
         .args(files.iter().map(|(_, p)| p))
         .output();

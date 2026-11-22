@@ -1,12 +1,12 @@
 //! How old a note of a bot's memory is, in runs: the bot's folder is a git repository, and the commit that last wrote the note says when.
 use crate::app::Shared;
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
 /// When the last commit that touched the line of note `id` (`m3`) in `memory.md` was made, as a UTC time written like the turns' (`2026-11-21T08:00:00Z`); none when the note is not in the history (not committed yet, no repository).
 fn written_at(dir: &Path, id: &str) -> Option<String> {
     let pick = format!("^[[:space:]]*[-*] \\[{id}\\]");
-    let out = Command::new("git")
+    let out = crate::sandbox::git()
         .arg("-C")
         .arg(dir)
         .args(["log", "-1", "--format=%ct", "-G", &pick, "--", "memory.md"])

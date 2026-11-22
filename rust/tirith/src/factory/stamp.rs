@@ -12,10 +12,19 @@ pub(super) fn short_hash(text: &str) -> String {
 /// The main commit that last changed the factory folder (its short hash), or `embedded` when no checkout is at hand.
 fn commit_of(overlay: &toml::Table) -> String {
     let show = |rev: &str| -> Option<String> {
-        let out = std::process::Command::new("git")
-            .arg("-C")
+        let out = crate::sandbox::git() // the CLI runs it unconfined, in a checkout lanes write
+            .env("GIT_NO_LAZY_FETCH", "1")
+            .args(["-c", "core.fsmonitor=false", "-C"])
             .arg(dir(overlay)?)
-            .args(["log", "-1", "--format=%h", rev, "--", "."])
+            .args([
+                "log",
+                "--no-show-signature",
+                "-1",
+                "--format=%h",
+                rev,
+                "--",
+                ".",
+            ])
             .output()
             .ok()?;
         let text = String::from_utf8_lossy(&out.stdout).trim().to_string();

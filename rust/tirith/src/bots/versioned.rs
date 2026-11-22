@@ -1,7 +1,7 @@
 //! The bots' folders as git repositories: each bot's (`<home>/manager/<key>`) follows only its memory.md and its own skills (its `.gitignore` leaves out the links to the shared ones), and `<home>/bots` (the shared memory and skills) is another. Tirith commits each turn that changed them («turn <id>») and each change from the Library («library»), so the versions a turn keeps (git blob hashes, turns/versions.rs) are in this history.
 use crate::app::App;
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::sync::Mutex;
 
 /// One commit at a time: the shared folder is every bot's.
@@ -14,7 +14,7 @@ const SHARED: &str = "# Tirith versions only the shared memory and the shared sk
 
 /// `git -C dir args…` as Tirith (its own name, no signing): its stdout, if it succeeded.
 fn git(dir: &Path, args: &[&str]) -> Option<String> {
-    let out = Command::new("git")
+    let out = crate::sandbox::git()
         .arg("-C")
         .arg(dir)
         .args([

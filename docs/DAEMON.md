@@ -865,6 +865,7 @@ Files:
 - `cli/mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `cli/status.rs`: `tirith net status`.
 - `caller.rs`: Whether a connection to the daemon comes from inside the sandbox, as the kernel tells it.
+- `git.rs`: The git the daemon itself runs, confined like the rest: what a repository agents write in makes git run is an agent's.
 - `confine.rs`: How this system confines (macOS's profile, Linux's namespace), and the launcher's way in from the command line.
 - `env.rs`: The environment of a sandboxed process: the proxy for every tool that reads one, ssh through the proxy and the tool wrappers first on PATH.
 - `jvm.rs`: Gradle and the JVM ignore HTTPS_PROXY; the JDK refuses Basic proxy auth on tunnels unless re-enabled.
@@ -940,7 +941,10 @@ inside the sandbox is one whatever it sends: Linux's relay calls the daemon's po
 socket is looked up and its profile read (a caller nobody of this user holds is not the owner either). An agent's
 `tirith answer` of an approval or payment card needs the owner's own words, written after it was asked, and keeps those; its
 words in a chat are never the owner's; it gets neither the teach extension's token nor a phone's pairing code, and
-it neither approves a draft nor gives a 👍. The limit: a program of the same user that reads Tirith's files, or
+it neither approves a draft nor gives a 👍. Git the daemon runs is confined too (`sandbox/git.rs`): a hook, an fsmonitor or a filter left in a bot's or a
+project's repository is an agent's, so its `git push` also goes through the proxy and the block list, with
+`GIT_SSH_COMMAND` as the lanes have it. The limit: a program of the same user that reads or writes that user's files (the store, start-up
+files, programs on the PATH), or
 drives the owner's own browser, is not stopped by this; another user account is the boundary for that.
 
 Files:
