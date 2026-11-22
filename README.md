@@ -98,7 +98,7 @@ One resident process, `tirith serve`, holds the state in memory and in one SQLit
 
 - **Hooks over HTTP.** `tirith hooks install` points the Anthropic CLI's hooks at the daemon; other agents use
   the command bridge `tirith hook <Event>` (about 10 ms). No process starts per tool call.
-- **A thin CLI.** Every `tirith` command is one HTTP call (about 20 ms).
+- **A thin CLI.** Every `tirith` command but `tirith service` is one HTTP call (about 20 ms).
 - **Changes, not snapshots.** The page loads the state once and then receives only what changed (SSE).
 - **Events, not polling.** No model runs on a timer; the autopilot and the merge queue react to what happens.
 
@@ -106,6 +106,7 @@ One resident process, `tirith serve`, holds the state in memory and in one SQLit
 
 ```
 tirith serve | status [--project P]
+tirith service install | uninstall | status  the daemon starts by itself and comes back when it ends (launchd, systemd)
 tirith plan show <project> | plan add <project> <step> "<text>"
 tirith plan step <project> <number> "<title>" ["<intro paragraph>"]   create the plan's next step, at its end
 tirith lane start <project> <step> "<item>" [--agent <alias>] | lane stop <lane> | lane log <lane>
