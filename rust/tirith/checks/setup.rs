@@ -223,3 +223,30 @@ fn copilot_is_the_agent_with_a_host() {
     );
     assert!(super::catalog::known("codex").unwrap().host_env.is_empty());
 }
+
+#[test]
+fn a_token_never_follows_to_another_host() {
+    use super::host::changed;
+    assert!(
+        changed(None, "name.ghe.com"),
+        "a token with no host named was github.com's"
+    );
+    assert!(changed(Some("name.ghe.com"), "github.com"));
+    assert!(!changed(None, "github.com") && !changed(Some("name.ghe.com"), "name.ghe.com"));
+    let home = dir("forget");
+    super::auth::keep(
+        &home,
+        "copilot",
+        "COPILOT_GITHUB_TOKEN",
+        "github_pat_madeupmadeup",
+    )
+    .unwrap();
+    super::auth::keep(&home, "copilot", "COPILOT_GH_HOST", "name.ghe.com").unwrap();
+    assert!(super::auth::forget(&home, "copilot", "COPILOT_GITHUB_TOKEN").unwrap());
+    let left = super::auth::env(&home, "copilot");
+    assert_eq!(
+        left,
+        [("COPILOT_GH_HOST".to_string(), "name.ghe.com".to_string())]
+    );
+    let _ = std::fs::remove_dir_all(&home);
+}

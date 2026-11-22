@@ -1,4 +1,5 @@
 //! Which browser and MCP calls of a shadow run act outward. A browser may look (open a page, read it, take a picture of it, find, wait) and click or type what does not send; a click on «Send», «Comprar», «Delete» or «Publicar», a typed text submitted, Enter, a form filled, an upload, a dialog accepted or code run in the page are refused. Another MCP tool is refused unless its name says that it reads and nothing in it sends, writes or deletes.
+use super::outward_words::{READ, VERBS};
 use regex::Regex;
 use serde_json::Value;
 use std::sync::LazyLock;
@@ -24,18 +25,6 @@ const LOOKS: [&str; 14] = [
 static SENDS: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)\b(?:send|enviar|env[ií]a\w*|submit|buy|comprar?|purchase|pay|pagar?|checkout|order|pedir|delete|borrar?|elimina\w*|remove|quitar?|trash|papelera|publish|publica\w*|post|reply|responder?|forward|reenviar?|share|compartir|archive|archivar?|confirm|confirmar?|accept|aceptar?)\b").unwrap()
 });
-/// The words of an MCP tool's name that change something outside.
-const VERBS: [&str; 24] = [
-    "send", "post", "reply", "publish", "delete", "remove", "create", "update", "write", "upload",
-    "buy", "pay", "order", "share", "invite", "say", "message", "comment", "archive", "move",
-    "trash", "submit", "edit", "forward",
-];
-
-/// The words of an MCP tool's name that say it reads.
-const READ: [&str; 18] = [
-    "get", "list", "search", "read", "fetch", "find", "query", "view", "show", "describe", "check",
-    "lookup", "count", "status", "browse", "resolve", "look", "info",
-];
 
 /// A name's words, «getUser» and «get_user» alike.
 fn words(name: &str) -> Vec<String> {

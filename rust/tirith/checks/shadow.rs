@@ -297,3 +297,29 @@ fn a_shadow_runs_tool_must_say_it_reads() {
     assert!(outward("~/.local/bin/tirith say hola"));
     assert!(outward("cd /tmp && tirith lane start x 1 y"));
 }
+
+#[test]
+fn a_shadow_run_cannot_act_by_a_path_or_a_word_that_reads() {
+    let dir = Path::new("/home/tirith/w");
+    let outward = |cmd: &str| super::outward::outward("Bash", &json!({"command": cmd}), dir);
+    for cmd in [
+        "/Applications/Tirith.app/Contents/MacOS/tirith lane start p 1 x",
+        "\"/opt/x/tirith\" say hola",
+        "cd /tmp\n./tirith room say r hola",
+    ] {
+        assert!(outward(cmd), "{cmd}");
+    }
+    assert!(!outward("ls /home/tirith -la") && !outward("cat /home/tirith/notes.md"));
+    for tool in [
+        "mcp__mail__mark_as_read",
+        "mcp__tracker__resolve_issue",
+        "mcp__x__check_in",
+        "mcp__cal__set_status",
+    ] {
+        assert!(super::outward_browser::acts(tool, &json!({})), "{tool}");
+    }
+    assert!(!super::outward_browser::acts(
+        "mcp__mail__read_thread",
+        &json!({})
+    ));
+}

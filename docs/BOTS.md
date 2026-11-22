@@ -130,7 +130,7 @@ What the bot's screen shows, in a tab «Números» (`GET /api/bots/<id>/numbers`
      outside world answered from the capture by Tirith's hooks (a call the capture lacks is refused: «not available
      in a replay»). It needs at least 5 such captures, and two failed runs are no tie. Nothing of it reaches the owner.
   2. **Live.** The bot's real runs of that routine alternate A and B (B in the branch's worktree), for when inputs
-     cannot be replayed; each run starts a session of its own; its answers reach the owner as always.
+     cannot be replayed; each run starts a session of its own and is handed the memory and skills of its side; its answers reach the owner as always. An adopted skill is used from the next run: a changed skill is read again, in a new session.
   3. **Shadow.** B runs beside each real run of A, in its worktree, with live reads and every outward action
      refused (no cards, no `tirith say`, no phones, no `safari open`). It costs double while it lasts.
   Both sides always start alike: a replay warms the cache with an uncounted turn and alternates which side

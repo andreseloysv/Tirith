@@ -2,7 +2,7 @@
 use crate::app::Shared;
 
 /// The next turn of bot `key` starts with no session to resume.
-pub(super) fn session(app: &Shared, key: &str) {
+pub fn session(app: &Shared, key: &str) {
     crate::manager::end_session(key);
     forget(app, key);
 }

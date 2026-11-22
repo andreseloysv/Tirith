@@ -1,0 +1,53 @@
+//! The words in an MCP tool's name that say whether a shadow run may call it.
+
+/// The words of an MCP tool's name that change something outside.
+pub(super) const VERBS: [&str; 42] = [
+    "mark",
+    "set",
+    "add",
+    "cancel",
+    "approve",
+    "merge",
+    "close",
+    "checkout",
+    "reject",
+    "accept",
+    "book",
+    "resolve",
+    "star",
+    "subscribe",
+    "revoke",
+    "run",
+    "execute",
+    "reserve",
+    "send",
+    "post",
+    "reply",
+    "publish",
+    "delete",
+    "remove",
+    "create",
+    "update",
+    "write",
+    "upload",
+    "buy",
+    "pay",
+    "order",
+    "share",
+    "invite",
+    "say",
+    "message",
+    "comment",
+    "archive",
+    "move",
+    "trash",
+    "submit",
+    "edit",
+    "forward",
+];
+
+/// The words of an MCP tool's name that say it reads.
+pub(super) const READ: [&str; 16] = [
+    "get", "list", "search", "read", "fetch", "find", "query", "view", "show", "describe",
+    "lookup", "count", "status", "browse", "look", "info",
+];

@@ -6,6 +6,7 @@ mod context;
 mod drafts;
 mod folder;
 mod fragment;
+mod handed;
 mod hook;
 mod hook_api;
 mod hook_clean;
@@ -33,6 +34,7 @@ pub use cli::cli;
 pub use context::context;
 pub use drafts::{activated, draft_file, is_draft, sweep as sweep_drafts};
 pub use folder::{folder, skill_file, skills, writable, SKILLS};
+pub use handed::handed;
 pub use hook::{hook_from, webhook};
 #[cfg(test)]
 pub(crate) use library::{learn, library};

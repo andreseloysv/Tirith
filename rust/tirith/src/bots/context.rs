@@ -23,7 +23,7 @@ fn link_shared(dir: &FsPath, common: &FsPath) {
     });
 }
 /// The skills folder of the bots' agent (.<its command>/skills) is linked to the bot's skills.
-fn link_agent(app: &Shared, key: &str) {
+fn link_agent(app: &Shared, key: &str, dir: &FsPath) {
     let agent = app
         .cfg()
         .factory
@@ -31,7 +31,7 @@ fn link_agent(app: &Shared, key: &str) {
         .and_then(|c| {
             FsPath::new(&c)
                 .file_name()
-                .map(|n| folder(app, key).join(format!(".{}", n.to_string_lossy())))
+                .map(|n| dir.join(format!(".{}", n.to_string_lossy())))
         });
     agent.into_iter().for_each(|d| {
         drop(
@@ -60,12 +60,16 @@ fn memory(file: &FsPath, tag: char) -> String {
 }
 /// What a bot is handed at the start of every turn and routine: the shared memory of every bot, then its own (both as they are now, their notes numbered), and the names of its skills. The shared skills are linked into its skills first, links to removed ones go, and the skills folder of the bots' agent is linked to its skills.
 pub fn context(app: &Shared, key: &str) -> Option<String> {
+    context_at(app, key, &folder(app, key))
+}
+/// `context`, of the bot whose turn runs in `home`.
+pub(super) fn context_at(app: &Shared, key: &str, home: &FsPath) -> Option<String> {
     bot(app, key)?;
-    let (dir, common) = (folder(app, key).join(SKILLS), app.home.join("bots/skills"));
+    let (dir, common) = (home.join(SKILLS), app.home.join("bots/skills"));
     super::drafts::sweep(app, key); // a draft written where an agent loads skills goes to the drafts folder
     link_shared(&dir, &common);
-    link_agent(app, key);
+    link_agent(app, key, home);
     let shared = memory(&app.home.join(SHARED), 's');
-    let memory = memory(&folder(app, key).join("memory.md"), 'm');
+    let memory = memory(&home.join("memory.md"), 'm');
     Some(format!("[tirith] Shared memory.md as it is now:\n{shared}\n[tirith] Your memory.md as it is now:\n{memory}\n[tirith] Your skills: {}. Shared skills: {}.", names(skills(&dir, false)), names(skills(&common, true))))
 }

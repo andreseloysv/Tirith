@@ -23,10 +23,10 @@ pub fn deliver(app: &Shared, project: &str, text: &str, phones: bool) {
 }
 /// `deliver`, the turn it starts begun by `by` (the owner, a room), not by what waited.
 pub(super) fn hand(app: &Shared, project: &str, text: &str, phones: bool, by: Option<By>) {
-    let memory = bots::context(app, project); // a bot's memory, read at every turn
     let job = text.is_empty().then(|| reserve(project)).flatten();
-    job.iter().for_each(|j| start_run(app, project, j));
+    job.iter().for_each(|j| start_run(app, project, j)); // its seat first: an experiment's B reads the branch's
     let says = !text.is_empty() || job.is_some() || talk(project, |t| t.notes_due);
+    let memory = bots::handed(app, project, job.is_some(), says); // a bot's memory, read at every turn
     let _ = says.then(|| crate::turns::prepare(app, project)); // (git runs here, not under the conversations' lock)
     let (start, handed, began) = talk(project, |t| {
         let was_busy = t.busy;

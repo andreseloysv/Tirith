@@ -407,3 +407,76 @@ async fn noted(name: String) {
     drop(app);
     let _ = std::fs::remove_dir_all(&home);
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_live_bs_run_is_handed_the_branchs_memory() {
+    let (app, home, key) = app_with_two_routines("seated");
+    std::fs::write(home.join("fake-agent.sh"), HEARS).unwrap();
+    let sql = "INSERT INTO experiments (bot, routine, branch, change, hypothesis, mode, status, created_at, factory) VALUES (?1, 'r1', 'v3', 'c', 'h', 'live', 'running', '2999-01-01T00:00:00Z', '')";
+    let id = app.insert(sql, rusqlite::params![key]);
+    app.set_kv(&format!("lab:last:{id}"), Some("A")); // the next run is B's
+    let tree = home.join("lab").join(&key).join(id.to_string());
+    let main = home.join("manager").join(&key);
+    for (dir, note) in [(&main, "the-mains-note"), (&tree, "the-branchs-note")] {
+        std::fs::create_dir_all(dir).unwrap();
+        std::fs::write(dir.join("memory.md"), format!("# Memory\n- {note}\n")).unwrap();
+    }
+    crate::bots::tick(&app);
+    let file = home.join("fake-agent.sh.heard");
+    let handed = || {
+        let heard = std::fs::read_to_string(&file).unwrap_or_default();
+        heard
+            .lines()
+            .find(|l| l.contains("look at uno") && !l.contains("The event to judge"))
+            .map(String::from)
+    };
+    until("B's turn", || handed().is_some()).await;
+    let line = handed().unwrap();
+    assert!(
+        line.contains("the-branchs-note") && !line.contains("the-mains-note"),
+        "{line}"
+    );
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_changed_skill_is_read_again_in_a_session_of_its_own() {
+    let (app, home, key) = app_with_two_routines("relearn");
+    let file = home
+        .join("manager")
+        .join(&key)
+        .join(".agents/skills/check/SKILL.md");
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    std::fs::write(&file, "do it the old way\n").unwrap();
+    let session = format!("manager_session:fake:{key}");
+    app.set_kv(&session, Some("what the chat learned"));
+    let first = crate::bots::handed(&app, &key, false, true).unwrap();
+    assert!(!first.contains("Changed since"), "nothing changed yet");
+    assert!(app.kv(&session).is_some());
+    std::fs::write(&file, "do it the new way\n").unwrap();
+    assert!(
+        !crate::bots::handed(&app, &key, false, false)
+            .unwrap()
+            .contains("Changed since"),
+        "nothing goes: nothing is used up"
+    );
+    let next = crate::bots::handed(&app, &key, false, true).unwrap();
+    assert!(
+        next.contains("Changed since your last turn: check"),
+        "{next}"
+    );
+    assert_eq!(
+        app.kv(&session),
+        None,
+        "and the session that learned the old one is not resumed"
+    );
+    assert!(
+        !crate::bots::handed(&app, &key, false, true)
+            .unwrap()
+            .contains("Changed since"),
+        "said once"
+    );
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}

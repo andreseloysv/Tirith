@@ -30,11 +30,19 @@ pub(super) fn choose(cx: &Context, known: &Known) -> Result<(), String> {
     if kept.as_deref() == Some(host.as_str()) {
         return Ok(());
     }
+    if changed(kept.as_deref(), &host) && auth::forget(&cx.home, &known.alias, &known.token_env)? {
+        println!("  the token kept was the other host's: it is forgotten (give this one's: tirith connect {} --token)", known.alias);
+    }
     auth::keep(&cx.home, &known.alias, &known.host_env, &host)?;
     if host != PUBLIC {
         println!("  that host is kept in {}/auth, for its login and all its processes (it is never shown)", cx.home.display());
     }
     Ok(())
+}
+
+/// True when `host` is another than the one a kept token was made on (none named is github.com).
+pub(super) fn changed(kept: Option<&str>, host: &str) -> bool {
+    kept.unwrap_or(PUBLIC) != host
 }
 
 fn kept(cx: &Context, known: &Known) -> Option<String> {

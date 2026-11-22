@@ -6,7 +6,7 @@ use std::sync::LazyLock;
 
 /// A `tirith` command and its first word (a folder called tirith, like a server's home, is none).
 static TIRITH: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?:^|[^\w./-]|bin/)tirith\s+([a-z][a-z-]*)(?:\s+([a-z-]+))?").unwrap()
+    Regex::new(r#"(?:(?:^|[;&|(`\n])\s*["']?(?:[^\s"']*/)?|[^\w./-]|bin/)tirith["']?\s+([a-z][a-z-]*)(?:\s+([a-z-]+))?"#).unwrap()
 });
 /// The `tirith` commands that only read or report on their own run: (command, its word, or any when empty).
 const READS: [(&str, &str); 11] = [

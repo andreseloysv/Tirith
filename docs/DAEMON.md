@@ -106,6 +106,7 @@ Files:
 - `drafts.rs`: Draft skills (a taught task not yet approved): kept in the bot's `drafts/` folder (shared ones in `<home>/bots/drafts`), outside every folder an agent loads by itself; one found among the skills is moved there (by `context`, `versioned` and the Library's read).
 - `folder.rs`: A bot's folder and skills: where its sessions run (the lab's worktree during a B run), where agents may write, and the skills a folder holds.
 - `fragment.rs`: The bots as a TOML fragment: the owner's bots' roles, and every written bot's routes and routines.
+- `handed.rs`: What a bot is handed with its next message, from the folder that turn runs in (an experiment's B: the branch's); a skill that changed is read again in a session of its own.
 - `hook.rs`: A bot's webhook as Tirith keeps it (kv `webhook:<bot>`: the platform's id, url and from, and the room), and what arrives through it.
 - `hook_api.rs`: A bot's webhook from the page: its URL (made once on the platform), deleted, and «Probar».
 - `hook_clean.rs`: What a webhook event shows outside its data block: a label of name characters only, a title as one quoted line, and a value fenced inside a task.
@@ -385,7 +386,7 @@ saying so (`due.rs`). B is adopted when it is not worse (wins and ties at least 
 wins at least as many as it loses), has no new failure (a B run failed where its A did not) and no 👎, and saves at
 least `min_saving` of A's mean tokens, dollars or time (time, which one slow answer moves, only when most pairs saved
 that much one by one: `saved.rs`). Adopted, the bot's folder is committed and the branch is merged
-into its main (the live folder is that checkout, so the next run uses it; where main moved on the same lines, B's
+into its main (the live folder is that checkout, so the next run uses it: a changed skill is read again, in a session of its own, `bots/handed.rs`; where main moved on the same lines, B's
 tested text wins, but a note main added to `memory.md` meanwhile that the merge lost is written back as a new note,
 `adopt.rs`; a merge that still fails discards it instead); in both
 cases the worktree and the branch go. The row keeps the status, the end and the numbers (A's and B's runs, mean
@@ -421,6 +422,7 @@ Files:
 - `rule.rs`: The `[lab]` rule applied to A's and B's numbers and the comparisons, and the one line that says the decision.
 - `outward.rs`: Which shell calls of a shadow run act outward: `tirith` commands that are not plain reads, and commands that send, buy, delete or publish; a replay refuses them too.
 - `outward_browser.rs`: Which browser and MCP calls of a shadow run act outward: a click on «Send» or «Comprar», a submit, a form, an upload, code in the page; an MCP tool that does not say it reads.
+- `outward_words.rs`: The words in an MCP tool's name that say whether a shadow run may call it.
 - `seat.rs`: Which folder a bot's turn runs in during an experiment, taken when its run starts and freed when it ends or never starts: live A, its own; live B, the branch's worktree; a replay's or a shadow B's turn, its worktree; a shadow run is A, its B started beside it.
 - `shadow.rs`: Shadow mode: B of each real run started beside it in the worktree, in its own conversation, its row marked.
 - `shadow_open.rs`: The worktrees shadow B runs are in now, the task-local of B's turn, and the hook's refusal of an outward action from one.

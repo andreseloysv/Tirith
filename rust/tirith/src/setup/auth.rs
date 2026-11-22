@@ -46,6 +46,20 @@ pub fn keep(home: &Path, alias: &str, var: &str, value: &str) -> Result<(), Stri
         .map_err(failed)
 }
 
+/// The agent's `var` goes, the rest stay; whether it was there.
+pub fn forget(home: &Path, alias: &str, var: &str) -> Result<bool, String> {
+    let vars = env(home, alias);
+    let left: Vec<&(String, String)> = vars.iter().filter(|(k, _)| k != var).collect();
+    if left.len() == vars.len() {
+        return Ok(false);
+    }
+    let text: String = left.iter().map(|(k, v)| format!("{k}={v}\n")).collect();
+    let path = file(home, alias);
+    let failed = |e: std::io::Error| format!("{}: {e}", path.display());
+    std::fs::write(&path, text).map_err(failed)?; // (it stays 0600)
+    Ok(true)
+}
+
 /// The variables of the agent whose command `program` is; none for any other program.
 pub fn for_program(app: &Shared, program: &str) -> Vec<(String, String)> {
     let base = |p: &str| p.rsplit('/').next().unwrap_or(p).to_string();
