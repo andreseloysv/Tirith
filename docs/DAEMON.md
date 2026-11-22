@@ -1004,6 +1004,7 @@ Files:
 - `mod.rs`: The commands' way in from the command line.
 - `needs.rs`: What the machine must have first.
 - `one.rs`: `tirith connect`: one agent, or the list of them.
+- `npm.rs`: A maker's npm installer where its script's build cannot run (Copilot on musl).
 - `opts.rs`: The options of these commands.
 - `private.rs`: What never reaches a log, an event or an answer: the values kept for the agents (tokens, an enterprise's host).
 - `packages.rs`: The system's programs installed with its package manager, when the owner says so.

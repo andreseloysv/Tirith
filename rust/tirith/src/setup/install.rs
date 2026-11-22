@@ -4,6 +4,9 @@ use std::path::Path;
 
 /// Downloads the installer over HTTPS into Tirith's home, then runs it: never a pipe into a shell, which would run half a script of a cut download.
 pub fn install(ask: &Ask, known: &Known, home: &Path) -> Result<(), String> {
+    if let Some(package) = super::npm::package(known) {
+        return super::npm::install(ask, package);
+    }
     let (bash, curl) = (
         find::program("bash").ok_or("bash is missing")?,
         find::program("curl").ok_or("curl is missing")?,

@@ -30,7 +30,7 @@ tools() {
   [ -n "$miss" ] || return 0
   if have apt-get; then how='apt-get install -y -q ca-certificates'
   elif have dnf; then how='dnf install -y -q ca-certificates'
-  elif have apk; then how='apk add ca-certificates coreutils' # Copilot's installer wants GNU's sha256sum
+  elif have apk; then how='apk add ca-certificates npm' # Copilot's official installer for musl is npm's
   else die "install$miss first"; fi
   have apk || miss=$(echo "$miss" | sed 's/runuser/util-linux/') # its package elsewhere
   [ "$(id -u)" = 0 ] || die "install$miss first: sudo $how$miss"

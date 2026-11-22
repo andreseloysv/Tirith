@@ -5,6 +5,7 @@
 #   status   the arguments that exit 0 only when it is signed in (none: only a real turn tells)
 #   hooks    the shape of its hooks file: groups, copilot, or codex (groups that must also be trusted)
 #   host_*   the variable all its processes get, and the login's flag, for an enterprise's host
+#   npm_on_musl  its maker's npm package, installed instead on Alpine (the script brings a glibc build there)
 #   check_*  the cheap setting of its connection check
 
 [anthropic]
@@ -32,6 +33,7 @@ name = "GitHub Copilot"
 order = 3
 bin = "copilot"
 install = "https://gh.io/copilot-install"
+npm_on_musl = "@github/copilot"
 signin = ["login", "--device-code"]
 settings = "~/.copilot/hooks/tirith.json"
 hooks = "copilot"

@@ -19,6 +19,7 @@ mod host;
 mod install;
 mod login;
 mod needs;
+mod npm;
 mod one;
 mod opts;
 mod packages;

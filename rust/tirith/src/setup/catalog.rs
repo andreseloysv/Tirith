@@ -16,6 +16,8 @@ pub struct Known {
     /// Its maker's installer, a script.
     pub install: String,
     pub installer_env: toml::Table,
+    /// Its maker's npm package, installed instead on musl (`npm.rs`).
+    pub npm_on_musl: String,
     pub signin: Vec<String>,
     pub status: Vec<String>,
     pub settings: String,
