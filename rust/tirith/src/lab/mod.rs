@@ -2,6 +2,7 @@
 mod adopt;
 mod answers;
 mod api;
+mod blind;
 mod call_key;
 mod compare;
 mod decide;
@@ -46,7 +47,7 @@ pub use shadow_open::refused;
 pub use turn::finished;
 #[cfg(test)]
 use {
-    compare::{blind, verdict},
+    blind::{blind, verdict},
     decide::decide,
     rule::{Side, Tally},
     start::start,

@@ -319,6 +319,7 @@ ended, it was abandoned, or its agent never started), by `lab::released` (`manag
 routine's task and the two answers as «Answer a» and «Answer b» in an order drawn at random, the letter B was shown
 under kept in `lab_comparisons` (`b_is`), and the eval `ab-compare` (rubric `factory/evals/ab-compare.md`, judge
 `judge`) answers `a`, `b` or `tie`, mapped back to B's `win`, `lose` or `tie` (`manager/evals.rs` calls `lab::judged`).
+A pair whose two answers are the same words is a `tie` at once, with no event and no judge.
 
 **Captures.** Every turn of a bot (`turns/capture*.rs`) keeps what it read in `<home>/captures/<turn>.jsonl`: a first
 line with what started it — the event or task handed over, the notes and the owner's words, never the memory Tirith
@@ -409,6 +410,7 @@ Files:
 - `scope.rs`: Inside a replay's or a shadow B run's turn, its worktree and routine, where the routine's `routines.toml` is read from.
 - `void.rs`: A pair that proves nothing (both failed, a read the capture lacks, calls no hook heard): kept with the verdict `void`.
 - `api.rs`: The lab's commands and routes: `tirith lab start` and `tirith lab list`, `POST /api/lab/start` and `GET /api/lab`.
+- `blind.rs`: What the judge reads of a pair and what its answer means for B; when two answers are the same, so none is needed.
 - `compare.rs`: A B run against the A run before it (or against the A of its shadow pair), judged blind by `ab-compare`, and the judge's answer mapped back to B's verdict.
 - `decide.rs`: The decision once an experiment is due: the numbers read, the rule it started with applied, the branch merged or deleted, the line emitted.
 - `git.rs`: Git in a bot's repository as Tirith: the branch's one commit checked, a branch merged (its text winning where main moved on the same lines), the worktree and the branch removed.

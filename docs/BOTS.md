@@ -136,7 +136,8 @@ What the bot's screen shows, in a tab «Números» (`GET /api/bots/<id>/numbers`
   Both sides always start alike: a replay warms the cache with an uncounted turn and alternates which side
   goes first; live and shadow runs resume no session.
 - **Comparison:** the judge reads the input and the two answers in random order (eval `ab-compare`) and says `a`,
-  `b` or `tie`; Tirith maps it back. Tokens, cost and time come from the `turns` rows of both.
+  `b` or `tie`; Tirith maps it back. Two answers of the same text are a tie, without the judge. Tokens, cost and
+  time come from the `turns` rows of both.
 - **What the owner gets:** one line in the bot's chat, on the phones only for an adoption: «Adopté gmail-safari v3:
   −38 % tokens, misma calidad (8/8)» (events `lab.adopted`, phone true, and `lab.discarded`, phone false). The
   bot's tab «Mejoras» lists every experiment: change, hypothesis, mode, comparisons, the numbers, the decision.

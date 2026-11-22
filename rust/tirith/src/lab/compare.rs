@@ -1,4 +1,5 @@
-//! A B run against the A run before it, judged blind by the `ab-compare` eval: the two answers in an order drawn at random (kept as the letter B was shown under), the judge's a, b or tie mapped back to B winning, losing or tying.
+//! A B run against the A run before it: a tie when both answers are the same, else judged blind by the `ab-compare` eval, the two answers in an order drawn at random (kept as the letter B was shown under) and the judge's a, b or tie mapped back to B winning, losing or tying (`blind.rs`).
+use super::blind::{blind, same, verdict};
 use super::store::Experiment;
 use crate::app::Shared;
 use crate::server::s;
@@ -6,29 +7,6 @@ use rusqlite::params;
 
 /// The eval that judges a comparison (factory.toml `[[evals]]` on `lab.compare`).
 const EVAL: &str = "ab-compare";
-
-/// What the judge reads: the task, then the two answers as «Answer a» and «Answer b», B's first when `b_first`. With the letter B was shown under.
-pub fn blind(task: &str, a: &str, b: &str, b_first: bool) -> (String, &'static str) {
-    let (first, second, b_is) = if b_first { (b, a, "a") } else { (a, b, "b") };
-    let cut = |t: &str| t.chars().take(1500).collect::<String>();
-    let text = format!(
-        "Two answers to one task of a routine, in no particular order.\nThe task: {}\n<<<Answer a\n{}\nAnswer a>>>\n<<<Answer b\n{}\nAnswer b>>>",
-        cut(task),
-        cut(first),
-        cut(second)
-    );
-    (text, b_is)
-}
-
-/// The judge's `label` (a, b or tie) as B's verdict, B having been shown as `b_is`: win, lose or tie; anything else is no verdict.
-pub fn verdict(label: &str, b_is: &str) -> Option<&'static str> {
-    match label {
-        "tie" => Some("tie"),
-        "a" | "b" if label == b_is => Some("win"),
-        "a" | "b" => Some("lose"),
-        _ => None,
-    }
-}
 
 /// The task of the experiment's routine, as its bot holds it.
 fn task(app: &Shared, e: &Experiment) -> String {
@@ -60,6 +38,11 @@ pub(super) fn compare_pair(app: &Shared, e: &Experiment, a: i64, b: i64) {
     };
     if let Some(why) = super::void::pair(app, e, (a, b), a_failed && b_failed) {
         return super::void::void(app, e, (a, b), &why);
+    }
+    if same(&a_text, &b_text) {
+        let sql = "INSERT INTO lab_comparisons (experiment, a_turn, b_turn, b_is, verdict, why) VALUES (?1, ?2, ?3, '', 'tie', 'the same answer')";
+        app.insert(sql, params![e.id, a, b]); // whoever called decides, as after a void pair
+        return;
     }
     let (text, b_is) = blind(&task(app, e), &a_text, &b_text, rand::random());
     let row = app.insert(

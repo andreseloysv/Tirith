@@ -706,3 +706,28 @@ fn two_models_are_no_measure_unless_the_branch_chose_one() {
     drop(app);
     let _ = std::fs::remove_dir_all(&home);
 }
+
+#[test]
+fn the_same_answer_is_a_tie_without_the_judge() {
+    let (app, home) = app_with_a_bot("same");
+    app.insert("INSERT INTO experiments (id, bot, routine, branch, change, hypothesis, mode, status, created_at) VALUES (9, ?1, 'r1', 'v', 'c', 'h', 'live', 'running', ?2)", params![KEY, crate::app::now_iso()]);
+    let run = |answer: &str, variant: &str| {
+        app.insert("INSERT INTO turns (role, started_at, status, answer, experiment, variant) VALUES (?1, ?2, 'ok', ?3, 9, ?4)", params![KEY, crate::app::now_iso(), answer, variant])
+    };
+    let (a, b) = (run("∅ 2026", "A"), run(" ∅  2026\n", "B"));
+    let e = super::store::running_one(&app, 9).unwrap();
+    super::compare::compare(&app, &e, b);
+    let sql = "SELECT a_turn, verdict FROM lab_comparisons WHERE experiment = 9";
+    let kept: Vec<(i64, Option<String>)> = app.query(sql, [], |r| Ok((r.get(0)?, r.get(1)?)));
+    assert_eq!(kept, vec![(a, Some("tie".to_string()))]);
+    assert!(lines(&app, "lab.compare").is_empty(), "no judge was asked");
+    let b = run("2025", "B");
+    super::compare::compare(&app, &e, b);
+    assert_eq!(
+        lines(&app, "lab.compare").len(),
+        1,
+        "another answer is judged"
+    );
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}
