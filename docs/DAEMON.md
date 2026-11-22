@@ -941,6 +941,7 @@ Files:
 - `git.rs`: The git the daemon itself runs, confined like the rest: what a repository agents write in makes git run is an agent's.
 - `confine.rs`: How this system confines (macOS's profile, Linux's namespace), and the launcher's way in from the command line.
 - `env.rs`: The environment of a sandboxed process: the proxy for every tool that reads one, ssh through the proxy and the tool wrappers first on PATH.
+- `handover.rs`: Handing descriptors to another process over a Unix socket (SCM_RIGHTS): Linux's launcher gets its relay's sockets, macOS's broker its caller's stdio.
 - `jvm.rs`: Gradle and the JVM ignore HTTPS_PROXY; the JDK refuses Basic proxy auth on tunnels unless re-enabled.
 - `launch.rs`: What a process Tirith starts runs as: the program, its arguments and the environment the sandbox adds.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
@@ -948,6 +949,7 @@ Files:
 - `mac/mod.rs`: macOS: whether a process runs under Tirith's own profile (a browser's sandbox is told apart).
 - `mac/socket.rs`: macOS: which processes of this user hold a loopback connection (libproc).
 - `profile.rs`: The sandbox profile, the proxy's port and whether processes run inside the sandbox.
+- `quiet.rs`: `tirith quiet`: an agent that was given private values (a token, an enterprise's host) starts through it, and they are hidden in all it writes before that reaches a log, a chat or an event.
 - `replay.rs`: Whether a replay's turn can run with the network closed: the sandbox must be in force for the processes Tirith starts.
 - `routes.rs`: The sandbox's HTTP routes: its status, the block list, the destinations seen and Safari.
 - `rules.rs`: The shape of a block rule: a domain, an address or a CIDR range.
@@ -977,7 +979,6 @@ Files:
 
 - `allow.rs`: `sudo tirith net allow`: the AppArmor profile that lets this binary make user namespaces.
 - `child.rs`: The confined side: into its own network, its ports handed out, then the program.
-- `handover.rs`: The listeners handed to the launcher over a Unix socket.
 - `mod.rs`: Declares the folder's files, and the launcher's command line.
 - `source.rs`: The address the relay calls from (127.0.0.2) at the daemon's port alone, by which the daemon knows a confined caller.
 - `namespace.rs`: The namespaces entered: the same user, a loopback that is up.
@@ -988,21 +989,17 @@ Files:
 
 ## `sandbox/nested/`
 
-macOS: a Codex that an agent starts inside Tirith's sandbox. Codex's own sandbox cannot start there (macOS applies no second
-profile: `sandbox_apply: Operation not permitted`, and `codex exec` still exits 0), so Tirith's sandbox stays on and the limit
-the caller asked for is kept in a profile. A `codex` first on the sandboxed PATH (`<home>/net/bin`) reads what `codex exec` or
-`codex review` asks: its words, else its settings, else Codex's default (read-only, workspace-write in a project marked trusted
-or untrusted). It then asks the daemon, which answers only a caller under exactly Tirith's profile and never gives a wider one.
-With danger-full-access Codex runs under Tirith's profile alone. With read-only and workspace-write it is two processes: its own
-keeps its sign-in and state and writes in none of the folders, and its `exec-server` runs the model's commands and patches under
-the limit, with none of that state. Both are still the agent's to the daemon. Whatever cannot be given its limit is refused, and
-says so (`tirith: Codex could not be started with its limit: …`, which fails a routine's run).
+macOS alone: Codex inside Tirith's sandbox. macOS refuses a sandbox inside another ("sandbox_apply: Operation not permitted"),
+so a `codex exec` or `codex review` found by its name on the sandboxed PATH asks the daemon, which starts it as two processes under
+Tirith's profile plus the limit it was asked: Codex's own, which alone keeps its state and renews its sign-in and writes in no
+folder, and its exec-server, which alone runs the model's commands and patches. On Linux Codex's sandbox nests by itself.
 
-What differs from Codex's own sandbox: MCP servers that are programs run under the commands' limit, so with no network unless it
-was asked; a message over 16 MiB is refused; a limited Codex's tool calls meet the rules and leave no `access` events; by an
-absolute path Codex still fails with `sandbox_apply`, and the subcommands other than `exec` and `review` run no commands there;
-a permission profile or an administrator's managed settings count as read-only. It leans on the experimental `exec-server` and
-`CODEX_EXEC_SERVER_URL` of Codex 0.165. On Linux none of this is used.
+What differs from Codex by itself on macOS: its commands get nothing of Tirith but, for a role of Tirith's, its API; MCP servers
+that are programs run under the commands' limit; its other subcommands that run commands do not get a sandbox there, and the caller
+is told; started by its whole path, so round the wrapper, it fails loudly; one message between the two parts holds 16 MiB at most.
+It leans on the exec-server of Codex 0.165: a Codex without it is refused a limit, and says so.
+With danger-full-access there is no limit to keep: it runs under Tirith's profile alone. A permission profile or an
+administrator's managed settings count as read-only, and a limited Codex's tool calls leave no `access` events.
 
 Files:
 
@@ -1026,7 +1023,7 @@ Files:
 - `limits.rs`: The profiles of a limited Codex's two parts (`pair.rs`): Tirith's, then the limit that was asked. macOS lets a rule name the program it is for (`process-path`), so in Codex's own part what its process needs (its state, the proxy, the system's services) is that binary's alone, and not its children's. They only take away from Tirith's.
 - `line.rs`: The command line Codex is started with: its own sandbox off, and its model told the true limit.
 - `listen.rs`: What the broker opens when the daemon starts: its socket, and the rules' door for the limited ones.
-- `mod.rs`: Declares the folder's files, and what every one of them shares.
+- `mod.rs`: macOS: Codex inside Tirith's sandbox. Its own sandbox cannot start there (macOS refuses any profile but the same one again: «sandbox_apply: Operation not permitted»), and no flag keeps both. So the limit its caller asked for becomes part of the profile: a `codex` on the sandboxed PATH reads what was asked (`asked.rs`, `settings.rs`), and the daemon, from outside, starts Codex under Tirith's profile plus that limit (`limits.rs`, `broker.rs`), its own sandbox off only there, as two processes (`pair.rs`): Codex's own, which alone has its state, and its `exec-server`, which alone runs the model's commands and patches. Such a profile is never looser than Tirith's, the broker serves only a caller under Tirith's, and what runs under one gets no other. On Linux Codex's sandbox nests by itself: nothing here runs.
 - `mode.rs`: The three limits Codex's sandbox knows.
 - `network.rs`: What a limit leaves of this machine's ports: none of them the commands', unless the network was asked for, and the daemon's only a role's.
 - `notice.rs`: What the daemon says to a caller while its Codex runs, on that caller's own stderr: Codex's report of a failed patch drops the reason it was given.
@@ -1068,7 +1065,6 @@ Files:
 - `request.rs`: A request's head: the first line, the headers and where it goes.
 - `serve.rs`: Listening for the proxy's callers.
 - `upstream.rs`: Reaching the destination: refused if blocked by name or by any of its addresses, and to a replay unless it is its agent's model; never the daemon's own port (there the sandbox is known).
-- `quiet.rs`: `tirith quiet`: an agent given private values starts through it, and they are hidden in all it writes.
 
 ## `server/`
 

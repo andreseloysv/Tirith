@@ -38,7 +38,7 @@ fn guard_merge_ignores_parent_content() {
     let hooks = dir.join(".git").join("hooks");
     std::fs::create_dir_all(&hooks).unwrap();
     let hook = hooks.join("pre-commit");
-    std::fs::write(&hook, render("pre-commit", &[w.clone()])).unwrap();
+    std::fs::write(&hook, render("pre-commit", std::slice::from_ref(&w))).unwrap();
     use std::os::unix::fs::PermissionsExt;
     std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
     // The merge brings the parent's forbidden line: allowed.

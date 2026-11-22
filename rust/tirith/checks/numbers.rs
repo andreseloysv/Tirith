@@ -99,7 +99,7 @@ async fn bot_numbers() {
             (4000, 0.2, 2000)
         };
         let checks = late
-            .then(|| if i == 19 { (2, 3) } else { (3, 3) })
+            .then_some(if i == 19 { (2, 3) } else { (3, 3) })
             .filter(|_| i != 20);
         let reaction = [3, 12].contains(&i).then_some(-1);
         let score = if late {

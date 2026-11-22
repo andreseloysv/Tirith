@@ -636,7 +636,24 @@ fn both_sides_of_a_live_experiment_start_fresh() {
         app.set_kv(&session, Some("what the chat gathered"));
         super::fired(&app, KEY, "r1", "the task");
         assert_eq!(app.kv(&session), None, "{side}");
+        app.set_kv(&session, Some("the run's own, with no recent chat"));
         super::released(&app, KEY);
+        assert_eq!(
+            app.kv(&session),
+            None,
+            "{side} released: the owner's next message has the recent chat again"
+        );
+    }
+    for side in ["A", "B"] {
+        super::fired(&app, KEY, "r1", "the task");
+        app.set_kv(&session, Some("the run's own, with no recent chat"));
+        let turn = run(&app, 0, "", 100, 1000, "ok", None);
+        super::finished(&app, turn, KEY, "r1");
+        assert_eq!(
+            app.kv(&session),
+            None,
+            "{side} ended: the owner's next message has the recent chat again"
+        );
     }
     drop(app);
     let _ = std::fs::remove_dir_all(&home);
@@ -762,7 +779,8 @@ fn a_skill_changed_meanwhile_is_not_overwritten() {
     let git = |args: &[&str]| assert!(super::git::git(&home, args).is_ok(), "{args:?}");
     let put = |file: &str, text: &str| std::fs::write(home.join(file), text).unwrap();
     git(&["init", "-q", "-b", "main"]);
-    (put("SKILL.md", "one\n"), put("memory.md", "- note\n"));
+    put("SKILL.md", "one\n");
+    put("memory.md", "- note\n");
     git(&["add", "-A"]);
     git(&["commit", "-q", "-m", "start"]);
     for branch in ["skill", "memory"] {
@@ -774,10 +792,8 @@ fn a_skill_changed_meanwhile_is_not_overwritten() {
         git(&["commit", "-q", "-am", branch]);
     }
     git(&["checkout", "-q", "main"]);
-    (
-        put("SKILL.md", "the owner's\n"),
-        put("memory.md", "- note\n- a later note\n"),
-    );
+    put("SKILL.md", "the owner's\n");
+    put("memory.md", "- note\n- a later note\n");
     git(&["commit", "-q", "-am", "meanwhile"]);
     assert!(
         !super::adopt::adopt(&home, "skill", "adopt"),

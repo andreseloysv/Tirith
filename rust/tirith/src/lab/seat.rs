@@ -85,11 +85,12 @@ pub fn taken(app: &App, key: &str, routine: &str) -> Option<Seat> {
     mine.then(|| seats.remove(&dir)).flatten()
 }
 
-/// The run of the bot `key` on its way ended without its turn's row (it never started, or its session ended): its seat is taken back, and a B run's session ends so the next starts in the bot's own folder.
+/// The run of the bot `key` on its way ended without its turn's row (it never started, or its session ended): its seat is taken back, and its session ends, so the next starts in the bot's own folder with the recent chat.
 pub fn released(app: &Shared, key: &str) {
     let seat = SEATS.lock().unwrap().remove(&live(app, key));
-    if let Some(s) = seat.filter(|s| s.variant == "B") {
+    let Some(s) = seat else { return };
+    if s.variant == "B" {
         super::workfiles::back(&live(app, key), &s.tree);
-        super::fresh::session(app, key);
     }
+    super::fresh::session(app, key);
 }

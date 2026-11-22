@@ -209,7 +209,7 @@ fn bots_live_in_config_as_own_roles_with_schedule_routes() {
     // Read back as `all` does, with the routine's last run from its stamp.
     let read = |text: &str| {
         super::list::bots_of(
-            &serde_json::to_value(&text.parse::<toml::Table>().unwrap()).unwrap(),
+            &serde_json::to_value(text.parse::<toml::Table>().unwrap()).unwrap(),
             &|id, rid| {
                 if (id, rid) == ("abc123", "r111111") {
                     "2026-11-20T08:00:00Z".into()
