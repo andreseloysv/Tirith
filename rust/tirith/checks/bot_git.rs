@@ -69,8 +69,12 @@ done
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     }
     crate::manager::end_session(&key);
-    // The turn that changed memory.md left a commit named after it.
-    assert_eq!(log.trim(), format!("turn {}", row["id"]), "{row}");
+    // The turn started from a committed state, and, having changed memory.md, left a commit named after it.
+    assert_eq!(
+        log.trim(),
+        format!("turn {}\nbefore a turn", row["id"]),
+        "{row}"
+    );
     let files = git(&dir, &["ls-files"]);
     assert_eq!(
         files.lines().collect::<Vec<_>>(),
@@ -78,11 +82,11 @@ done
         "only the memory and its own skills; not the link to the shared skill nor its working files"
     );
     assert!(git(&dir, &["show", "HEAD:memory.md"]).contains("short answers"));
-    // The turn's version of memory.md is the blob in that commit.
+    // The turn's version of memory.md is the one it ran with, the blob committed as it started.
     assert_eq!(
         row["versions"]["memory.md"].as_str().map(str::to_string),
         Some(
-            git(&dir, &["rev-parse", "HEAD:memory.md"])
+            git(&dir, &["rev-parse", "HEAD~1:memory.md"])
                 .trim()
                 .to_string()
         ),

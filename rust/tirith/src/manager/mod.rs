@@ -7,6 +7,7 @@ mod deliver;
 mod evals;
 mod events;
 mod exec;
+mod exec_copilot;
 mod exec_stream;
 mod interrupt;
 mod judged;

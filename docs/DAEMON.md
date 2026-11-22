@@ -168,16 +168,20 @@ Files:
 
 ## `codex/`
 
-Codex's local catalog and the JSONL exec turns of the agents without a streaming chat mode (Codex, Muse). Conversations resume their native sessions; text jobs run read-only.
+Codex's local catalog and the JSONL exec turns of the agents without a streaming chat mode (Codex, GitHub Copilot, Muse: `kind.rs`). Conversations resume their native sessions; text jobs run read-only. A turn's small files
+(Muse's prompt, Copilot's usage) carry that turn's own name, so a role's turns can run at the same time.
 
 Files:
 
-- `argv.rs`: The command line of one exec turn, for each agent that runs one (Muse and Codex).
+- `argv.rs`: The command line of one exec turn of Muse and of Codex.
 - `catalog.rs`: The models Codex lists in its local cache, with the reasoning efforts each one supports.
-- `command.rs`: The command line that starts one exec turn, and the prompt file Muse reads.
+- `command.rs`: The command line that starts one exec turn, and how the agent gets its message and gives its usage.
+- `copilot.rs`: The command line of one Copilot turn, and what its stream says of the answer.
+- `kind.rs`: Which agents run exec turns, and how each is named.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `options.rs`: The options every Codex command line gets from config.toml: its profile and the reasoning effort.
 - `reading.rs`: Reading an exec turn's JSONL events: the answer's text, whether the turn completed, and why it failed.
+- `scratch.rs`: The small files of one exec turn, named for it alone and gone with it.
 - `setup.rs`: What one exec turn is: which agent runs it, in which folder, and how its role's factory shape sets it up.
 - `turn.rs`: One exec turn: set it up, start the agent, read its answer within the turn's time, and clean up.
 
@@ -445,8 +449,9 @@ Files:
 - `deliver.rs`: Handing a conversation its messages: to its live session, or waiting for the session that starts for them.
 - `evals.rs`: The evals: an event judged in the background by its judge role, kept as a score.
 - `events.rs`: Events and their routes: who hears an event, as a chat line, a turn now or a note with the next turn.
-- `exec.rs`: The exec session: one exec turn of Codex or Muse per hand-over, resumed under its kept session id.
-- `exec_stream.rs`: What an exec turn says while it runs: Muse's stream and Codex's events, in the chat and on the phones.
+- `exec.rs`: The exec session: one exec turn of Codex, Copilot or Muse per hand-over, resumed under its kept session id.
+- `exec_copilot.rs`: What a Copilot turn says while it runs: its messages and its tools' calls.
+- `exec_stream.rs`: What an exec turn says while it runs: Muse's stream, Codex's and Copilot's events, in the chat and on the phones.
 - `interrupt.rs`: Stopping the turn a conversation runs now.
 - `judged.rs`: Reading what a judge answered, and which card an event's line names.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
@@ -959,15 +964,21 @@ for a run of an experiment, its `experiment` and `variant` (`A` or `B`, set by `
 run, by the replay for its own). A bot's turn also keeps what it read in `<home>/captures/<turn>.jsonl` (see `lab/`,
 «Captures»).
 
-Tokens and cost come from what each agent already prints: Anthropic's `result` line (`usage.input_tokens`,
-`output_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens`, `total_cost_usd`, `is_error`); Muse's
-`runtime.session` records whose `payload.event.kind` is `model_completed` (`payload.event.usage`: `input_tokens`,
-`output_tokens`, `cache_read_tokens`, `cache_write_tokens`), summed over the turn, and when its output carries none,
-from its session's `session.jsonl` under `~/.local/share/muse/sessions/<year>/<month>/<day>/<id>/` (the records since
-the turn started); Codex's `turn.completed` (`usage.input_tokens`, `cached_input_tokens`, `output_tokens`). When the
+Tokens and cost come from what each agent already prints (`usage.rs`), each measured against the real CLI:
+Anthropic's `result` (tokens of the turn, with the cache apart; `total_cost_usd` of the whole session, also after a
+resume), Muse's `run.usage` (the turn's, its cached tokens inside `input_tokens`; without it the `model_completed`
+records, else those of its session's `session.jsonl` under `~/.local/share/muse/sessions/`), Codex's `turn.completed`
+(the thread's totals since it began, the cache inside) and Copilot's `--usage-output-file` (the session's totals, the
+cache inside). `settle.rs` makes them comparable before the row is kept: a turn gets its own share of a session's
+totals (what was spent before is kv `spent:<conversation>`; when that is not known, none rather than a guess), and
+`tokens_in` is always the fresh input, what the cache gave being `tokens_cache_read` alone, so no sum counts it
+twice. The model is the one the role sets, else the one the agent says (Codex's from its thread's rollout). When the
 agent gives no cost, `[prices."<model id>"]` in `~/.tirith/config.toml` does (`input`, `output` and `cached`, dollars
 per million tokens; the strict loader accepts the section and none of it goes to `factory/`); without a price the
 cost stays empty, never invented.
+
+The versions are the files as the turn found them (`versions.rs`): a bot's folder is committed as each turn starts
+(«before a turn») and when it ends having changed it, so every one of those blobs is in its history.
 
 When a bot's own turn ends (a role with `scope = "own"` and `session = "chat"`; a judge's turn in its conversation emits nothing, or an eval on `turn.done` would judge itself forever) the event `turn.done` is emitted — or
 `routine.done` when a routine started it — saying the bot, the trigger, the routine and its task, the tools, the
@@ -1012,14 +1023,23 @@ Files:
 - `capture_keep.rs`: The captures on disk: written at a bot's turn's end, the last 10 runs of each routine kept, read back for a replay.
 - `capture_told.rs`: What was handed to a conversation's agent (never the memory), waiting for the turn it starts.
 - `checks.rs`: The bot's own validation, `tirith turn checks`, kept on the open turn of its conversation or the last one.
+- `codex_log.rs`: Codex's own log of a thread, for the model a turn ran on.
+- `exec_items.rs`: The tool calls in the exec agents' lines, under the names their hooks use.
+- `hashes.rs`: The git blob hashes of files as they are now.
 - `live.rs`: The turns of the conversations as they run: who started the next one, the one open now, and its end.
+- `muse_log.rs`: Muse's own log of a session, for a turn whose output carried no usage.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `price.rs`: A turn's cost when its agent gives none: `[prices."<model id>"]` of config.toml, in dollars per million tokens.
 - `quality.rs`: The judge's note on a routine's turn: what `routine.done` carries for `turn-quality`, and the score copied to the turn.
 - `react.rs`: The owner's 👍/👎 on a turn: by `POST /api/turns/<id>/reaction` or a message that is only 👍 or 👎.
 - `record.rs`: One turn while it runs: who runs it and why, and what its lines say (its usage, tools, skills and text).
 - `save.rs`: A turn ended: its row in `turns` (`waiting` while an approval card it opened is open), for a bot its `turn.done` (or `routine.done`) event and the commit of what it changed in its folder and the shared one.
+- `said.rs`: What any agent's line says of its turn: its session, its model and the answer's words.
+- `settle.rs`: A turn's numbers made comparable across the agents before its row is kept.
+- `shell.rs`: A shell call as the agent asked for it, out of Codex's `sh -lc` wrapper.
+- `spent.rs`: The turn's own share of what an agent gives as its session's totals.
 - `signals.rs`: The quality signals on a turn's row: `reaction`, `corrected`, the checks and the cited notes.
 - `tools.rs`: The tool calls a line of any agent's output makes, the short line the chat shows for each, and the skills they read.
-- `usage.rs`: What a turn used, read from what its agent prints (Anthropic's `result`, Muse's `model_completed`, Codex's `turn.completed`).
+- `usage.rs`: What a turn used, read from what each agent prints.
+- `usage_keys.rs`: How each agent names its counts of tokens.
 - `versions.rs`: The versions a turn ran with: the git blob hash (`git hash-object`) of its memory.md, the bots' shared memory and each skill it read.

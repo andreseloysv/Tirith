@@ -4,7 +4,10 @@ use serde_json::{json, Value};
 use std::{io::Read, time::Duration};
 
 /// The command-hook bridge for agents without HTTP hooks: never breaks the agent (any failure lets the call through); a refusal is exit 2 with the reason on stderr, which every supported agent understands.
-pub(super) fn hook(event: String) -> Result<(), String> {
+pub(super) fn hook(event: String, home: Option<String>) -> Result<(), String> {
+    if let Some(home) = home.filter(|h| !h.is_empty()) {
+        std::env::set_var("TIRITH_HOME", home); // an agent may hand its hooks none of the variables it was given (Muse)
+    }
     let mut input = String::new();
     let _ = std::io::stdin().read_to_string(&mut input);
     let headers = [
@@ -32,11 +35,23 @@ pub(super) fn hook(event: String) -> Result<(), String> {
         .filter(|_| v["hookSpecificOutput"]["permissionDecision"] == "deny");
     let block = v["reason"].as_str().filter(|_| v["decision"] == "block");
     if let Some(why) = deny.or(block) {
-        eprintln!("{why}");
-        std::process::exit(2);
+        refuse(why, deny.is_some(), &v);
     }
     let _ = v["hookSpecificOutput"]
         .is_object()
         .then(|| println!("{body}")); // an allow decision or context for the agent
     Ok(())
+}
+
+/// A refusal said both ways at once: exit 2 with the reason on stderr (Codex, Muse), and as JSON on stdout, the only place Copilot takes the reason from.
+fn refuse(why: &str, denied: bool, body: &Value) -> ! {
+    let said = if denied {
+        json!({"permissionDecision": "deny", "permissionDecisionReason": why,
+            "hookSpecificOutput": body["hookSpecificOutput"]})
+    } else {
+        body.clone()
+    };
+    println!("{said}");
+    eprintln!("{why}");
+    std::process::exit(2);
 }

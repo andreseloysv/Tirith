@@ -4,7 +4,7 @@ use crate::{
     app::{kill_group, Shared},
     manager, models,
 };
-use serde_json::Value;
+use serde_json::{json, Value};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, ChildStdout};
 
@@ -20,16 +20,22 @@ pub async fn turn(
     let setting = models::role(app, role); // a bot's conversation passes its own role (its key) here
     let setup = Setup::new(app, role, project, &setting.agent)?;
     let model = (setting.model.as_deref(), setting.effort.as_deref());
-    let (argv, file) = command_line(app, &setup, model, resume, prompt)?;
-    let (mut child, stdin, stdout) = manager::spawn_chat(app, &setup.who, project, argv)?;
+    let line = command_line(app, &setup, model, resume, prompt)?;
+    let (mut child, stdin, stdout) =
+        manager::spawn_chat(app, &setup.who, project, line.argv.clone())?;
     let pid = child.id().unwrap_or(0);
     started(pid);
-    let input = (!setup.agent.muse).then_some(prompt.1);
+    let input = line.stdin.as_deref();
     let work = read(&mut child, stdin, stdout, input, &mut event, &setup);
     let result = tokio::time::timeout(setup.limit(), work).await;
     kill_group(pid, libc::SIGKILL);
     let _ = child.wait().await;
-    file.iter().for_each(|f| drop(std::fs::remove_file(f)));
+    // Copilot writes what the turn used into a file as it ends.
+    let used = line.usage.as_deref().and_then(|f| std::fs::read(f).ok());
+    if let Some(data) = used.and_then(|b| serde_json::from_slice::<Value>(&b).ok()) {
+        event(&json!({"type": "copilot.usage", "data": data}));
+    }
+    drop(line.scratch);
     result.map_err(|_| format!("{} timed out", setup.agent.name))?
 }
 

@@ -461,3 +461,34 @@ fn muse_read_only_turn_is_read_only_and_fresh_without_a_session() {
         "{a:?}"
     );
 }
+
+#[test]
+fn copilot_chat_turn_is_an_exec_run() {
+    use super::super::{copilot::copilot_argv, kind::Exec, scratch::Scratch};
+    let usage = std::path::Path::new("/w/u.json");
+    let a = copilot_argv(
+        "copilot",
+        true,
+        (Some("m"), Some("low")),
+        Some("s-1"),
+        usage,
+    );
+    let has = |x: &str| a.iter().any(|y| y == x);
+    assert!(
+        has("--output-format") && has("--no-ask-user") && has("--usage-output-file"),
+        "{a:?}"
+    );
+    assert!(
+        has("--resume=s-1") && has("--deny-tool=write") && has("--model"),
+        "{a:?}"
+    );
+    assert!(
+        !has("--input-format") && !has("--append-system-prompt") && !has("-p"),
+        "{a:?}"
+    );
+    assert_eq!(Exec::of("copilot"), Some(Exec::Copilot));
+    assert_eq!(Exec::of("anthropic"), None);
+    // two turns of one role at the same time never share a file
+    let (mut s, dir) = (Scratch::default(), std::env::temp_dir());
+    assert_ne!(s.path(&dir, "prompt.txt"), s.path(&dir, "prompt.txt"));
+}

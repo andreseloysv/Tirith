@@ -1,4 +1,4 @@
-//! What a turn read, as its agent saw it: the message that started it (without the memory Tirith lays before it) and, in order, each tool call with its input and its result — Anthropic's `tool_result` blocks in its `user` lines, Muse's `tool.result` — up to 256 KB a turn.
+//! What a turn read, as its agent saw it: the message that started it (without the memory Tirith lays before it) and, in order, each tool call with its input and its result — Anthropic's `tool_result` blocks in its `user` lines, Muse's `tool.result`, Codex's and Copilot's calls — up to 256 KB a turn.
 use super::capture_fit::{fitted, text_of};
 use super::capture_told::taken;
 use serde_json::{json, Value};
@@ -47,15 +47,20 @@ impl Capture {
                 .filter(|b| b["type"] == "tool_result")
                 .for_each(|b| self.result(&b["tool_use_id"], text_of(&b["content"]))),
             Some("tool.result") => {
-                let p = &msg["payload"];
-                let text = text_of(&p["text"]);
-                let ran = serde_json::from_str::<Value>(&text).ok();
-                let ran = ran.and_then(|v| v["command"].as_str().map(String::from));
-                let input = ran.map_or(json!({}), |c| json!({"command": c}));
-                let tool = &p["correlation_facts"]["tool_name"];
-                self.add(json!({"tool": tool, "input": input}), Some(text))
+                let (call, text) = super::exec_items::muse(&msg["payload"]);
+                self.add(call, Some(text))
             }
-            _ => {}
+            _ => self.exec(msg),
+        }
+    }
+
+    /// A line of Codex or Copilot: a call that starts, or one's result.
+    fn exec(&mut self, msg: &Value) {
+        if let Some((id, tool, input)) = super::exec_items::started(msg) {
+            self.add(json!({"tool": tool, "id": id, "input": input}), None);
+        }
+        if let Some((id, text)) = super::exec_items::ended(msg) {
+            self.result(&id, text);
         }
     }
 

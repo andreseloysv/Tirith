@@ -23,7 +23,10 @@ pub fn normalize(tool: &str, input: &Value, cwd: &str) -> (String, Value) {
                 .to_string()
         }
     };
-    let files: Vec<String> = if tool == "apply_patch" {
+    let no_path = ["file_path", "notebook_path", "path"]
+        .iter()
+        .all(|k| input[*k].is_null());
+    let files: Vec<String> = if tool == "apply_patch" || (tool == "Edit" && no_path) {
         patch_files(input).into_iter().map(&at).collect()
     } else {
         ["file_path", "notebook_path", "path"]

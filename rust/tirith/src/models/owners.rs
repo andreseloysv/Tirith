@@ -40,9 +40,11 @@ fn prefix(cfg: &Config, alias: &str, command: &str) -> String {
         .agent::<String>(alias, "model_prefix")
         .unwrap_or_else(|| format!("{}-", command.rsplit('/').next().unwrap_or(command)))
 }
-/// Why `agent` cannot run `model`: the model belongs to another agent (an empty model, the agent's default, always fits).
+/// Why `agent` cannot run `model`: the model belongs to another agent (an empty model, the agent's default, always fits, and so does any to an agent with `any_model`, which serves several vendors').
 pub fn mismatch(cfg: &Config, agent: &str, model: Option<&str>) -> Option<String> {
     let m = model.filter(|m| !m.is_empty())?;
+    let any = cfg.factory.agent::<bool>(agent, "any_model") == Some(true);
+    (!any).then_some(())?;
     agent_of(cfg, m).filter(|a| a != agent).map(|a| {
         format!(
             "model '{m}' is agent {a}'s, not {agent}'s: choose a model of {agent} or the agent {a}"

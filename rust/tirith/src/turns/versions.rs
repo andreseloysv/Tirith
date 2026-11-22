@@ -1,8 +1,8 @@
-//! The versions a turn ran with: the git blob hash (`git hash-object`) of its memory.md, the bots' shared memory and each skill it read.
+//! The versions a turn ran with: the git blob hash (`git hash-object`) of its memory.md, the bots' shared memory and each skill it read, as they were when it started.
 use super::record::Turn;
 use crate::app::Shared;
 use serde_json::{Map, Value};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 /// The folder a role's sessions run in, as `manager::spawn_chat` chooses it: a bot's own, else its conversation's below the role's.
 pub(super) fn folder(app: &Shared, t: &Turn) -> PathBuf {
@@ -19,18 +19,6 @@ pub(super) fn folder(app: &Shared, t: &Turn) -> PathBuf {
     })
 }
 
-/// The git blob hash of a file, if it exists.
-fn hash(path: &Path) -> Option<String> {
-    path.is_file().then_some(())?;
-    let out = std::process::Command::new("git")
-        .arg("hash-object")
-        .arg(path)
-        .output()
-        .ok()?;
-    let id = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    (out.status.success() && !id.is_empty()).then_some(id)
-}
-
 /// The SKILL.md of skill `name` the turn read: a bot's own (its agent's skills folder links there), else the shared one.
 pub(super) fn skill_file(app: &Shared, t: &Turn, name: &str) -> Option<PathBuf> {
     [
@@ -42,18 +30,42 @@ pub(super) fn skill_file(app: &Shared, t: &Turn, name: &str) -> Option<PathBuf> 
     .find(|p| p.is_file())
 }
 
-/// `{"memory.md": …, "bots/memory.md": …, "skills/<name>": …}`, each file that exists.
-pub fn versions(app: &Shared, t: &Turn) -> Value {
+const MEMORY: [&str; 2] = ["memory.md", "bots/memory.md"];
+
+/// As the turn starts: its memory, the shared one and every skill it could read (its own before a shared one of the same name). A bot's folder is committed first, so each of those versions is in its history.
+pub(super) fn at_start(app: &Shared, t: &Turn) -> Map<String, Value> {
     let dir = folder(app, t);
+    let own = t.role == t.conv && crate::bots::bot(app, &t.conv).is_some();
+    let _ = own.then(|| crate::bots::versioned(app, &t.conv, "before a turn"));
     let mut files = vec![
-        ("memory.md".to_string(), dir.join("memory.md")),
-        ("bots/memory.md".into(), app.home.join("bots/memory.md")),
+        (MEMORY[0].to_string(), dir.join("memory.md")),
+        (MEMORY[1].to_string(), app.home.join("bots/memory.md")),
     ];
-    for name in &t.skills {
-        files.extend(skill_file(app, t, name).map(|p| (format!("skills/{name}"), p)));
+    for skills in [app.home.join("bots/skills"), dir.join(".agents/skills")] {
+        for e in std::fs::read_dir(&skills).into_iter().flatten().flatten() {
+            let name = format!("skills/{}", e.file_name().to_string_lossy());
+            files.push((name, e.path().join("SKILL.md")));
+        }
     }
-    let hashed = files
-        .into_iter()
-        .filter_map(|(k, p)| hash(&p).map(|h| (k, Value::String(h))));
-    Value::Object(hashed.collect::<Map<String, Value>>())
+    super::hashes::hashes(files)
+}
+
+/// `{"memory.md": ..., "bots/memory.md": ..., "skills/<name>": ...}` as the turn found them, the skills only those it read (one it wrote meanwhile as it is now).
+pub fn versions(app: &Shared, t: &Turn) -> Value {
+    let mut out = Map::new();
+    let mut later = vec![];
+    for key in MEMORY {
+        if let Some(hash) = t.began.get(key) {
+            out.insert(key.into(), hash.clone());
+        }
+    }
+    for name in &t.skills {
+        let key = format!("skills/{name}");
+        match t.began.get(&key) {
+            Some(hash) => _ = out.insert(key, hash.clone()),
+            None => later.extend(skill_file(app, t, name).map(|p| (key, p))),
+        }
+    }
+    out.extend(super::hashes::hashes(later));
+    Value::Object(out)
 }

@@ -6,15 +6,24 @@ mod capture_fit;
 mod capture_keep;
 mod capture_told;
 mod checks;
+mod codex_log;
+mod exec_items;
+mod hashes;
 mod live;
+mod muse_log;
 mod price;
 mod quality;
 mod react;
 mod record;
+mod said;
 mod save;
+mod settle;
+mod shell;
 mod signals;
+mod spent;
 mod tools;
 mod usage;
+mod usage_keys;
 mod versions;
 pub use api::routes;
 #[cfg(test)]
@@ -29,10 +38,14 @@ pub use quality::scored;
 pub use react::reacted;
 pub use record::Turn;
 pub use signals::{add_columns, judged, last};
+pub use spent::fresh;
 #[cfg(test)]
 use {api::turns, checks::request, signals::cited};
 #[cfg(test)]
 use {price::cost, usage::Usage};
+#[cfg(test)]
+#[path = "../../checks/agents.rs"]
+mod agents_tests;
 #[cfg(test)]
 #[path = "../../checks/approval.rs"]
 mod approval_tests;

@@ -12,6 +12,7 @@ fn agent_said(raw: &str) -> String {
                 Some("result") if v["is_error"] == true => Some(l.to_string()),
                 Some("turn.failed") => v["error"]["message"].as_str().map(String::from),
                 Some("error") => v["message"].as_str().map(String::from),
+                Some("session.error") => v["data"]["message"].as_str().map(String::from),
                 _ => None,
             },
             _ if !l.trim_start().starts_with('{') => Some(l.to_string()),

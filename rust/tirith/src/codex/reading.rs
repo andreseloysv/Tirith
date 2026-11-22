@@ -19,6 +19,11 @@ impl Reading {
             "item.completed" if msg["item"]["type"] == "agent_message" => self
                 .text
                 .push_str(&format!("{}\n", msg["item"]["text"].as_str().unwrap_or(""))),
+            "assistant.message" => super::said(msg)
+                .into_iter()
+                .for_each(|t| self.text.push_str(&format!("{t}\n"))),
+            "result" if msg["exitCode"].is_number() => self.complete = msg["exitCode"] == 0,
+            "session.error" => self.failure = msg["data"]["message"].as_str().map(String::from),
             "run.output.delta" => self
                 .text
                 .push_str(msg["payload"]["text"].as_str().unwrap_or("")),

@@ -16,8 +16,9 @@ pub async fn run_turn(
 ) -> Result<String, String> {
     let prompt = app.cfg().factory.prompts_of(role);
     let mut rec = crate::turns::turn_of(app, role, project);
-    let Some(()) =
-        (!matches!(models::role(app, role).agent.as_str(), "codex" | "muse")).then_some(())
+    let Some(()) = crate::codex::Exec::of(&models::role(app, role).agent)
+        .is_none()
+        .then_some(())
     else {
         let each = |m: &Value| rec.line(m);
         let result = crate::codex::turn(app, role, project, None, (&prompt, input), each, |_| {});

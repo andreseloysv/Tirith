@@ -1,10 +1,11 @@
 //! What one exec turn is: which agent runs it, in which folder, and how its role's factory shape sets it up.
+use super::kind::Exec;
 use crate::app::Shared;
 use std::path::PathBuf;
 
-/// The agent that runs a turn: Muse or Codex, and the name its errors give it.
+/// The agent that runs a turn, and the name its errors give it.
 pub(super) struct Agent {
-    pub muse: bool,
+    pub kind: Exec,
     pub name: &'static str,
     pub command: String,
 }
@@ -20,20 +21,17 @@ pub(super) struct Setup {
 }
 
 impl Agent {
-    fn of(app: &Shared, muse: bool) -> Result<Agent, String> {
-        let name = if muse { "the muse agent" } else { "Codex" };
-        let command = app
-            .cfg()
-            .factory
-            .command(if muse { "muse" } else { "codex" })
-            .ok_or(if muse {
-                "no agent alias 'muse' in config.toml"
-            } else {
-                "Codex is not configured"
-            })?;
+    fn of(app: &Shared, kind: Exec) -> Result<Agent, String> {
+        let command = app.cfg().factory.command(kind.alias()).ok_or_else(|| {
+            format!(
+                "no agent alias '{}' in config.toml: connect it with tirith connect {}",
+                kind.alias(),
+                kind.alias()
+            )
+        })?;
         Ok(Agent {
-            muse,
-            name,
+            kind,
+            name: kind.name(),
             command,
         })
     }
@@ -49,7 +47,8 @@ impl Setup {
             .role::<String>(role, "session")
             .is_none_or(|s| s == "chat");
         let who = if chat { "manager" } else { role };
-        let agent = Agent::of(app, agent == "muse")?;
+        let kind = Exec::of(agent).ok_or(format!("agent '{agent}' runs no exec turns"))?;
+        let agent = Agent::of(app, kind)?;
         let dir = if cfg.factory.role::<String>(role, "scope").as_deref() == Some("own") && !chat {
             app.home.join("manager").join(role)
         } else {

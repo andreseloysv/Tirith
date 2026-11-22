@@ -87,7 +87,9 @@ pub fn turn_of(app: &Shared, role: &str, project: &str) -> Turn {
         trigger
     };
     let conv = if project.is_empty() { role } else { project };
-    Turn::new(app, conv, role, (trigger, routine))
+    let mut turn = Turn::new(app, conv, role, (trigger, routine));
+    turn.loose = true;
+    turn
 }
 /// A turn role's turn ended with `result`: its row is kept, and the result goes back as it was.
 pub fn done(app: &Shared, t: Turn, result: Result<String, String>) -> Result<String, String> {

@@ -2,7 +2,7 @@
 use super::tools::{calls, skill_of};
 use super::usage::Usage;
 use crate::app::{now_iso, Shared};
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
 use std::time::Instant;
 
 /// One turn of a chat or turn role, from its start to its end.
@@ -23,8 +23,12 @@ pub struct Turn {
     pub skills: Vec<String>,
     pub tools: Vec<Value>,
     pub text: String,
-    /// Muse's session id, for its usage when its output carries none.
+    /// Its agent's session (Codex's thread).
     pub session: String,
+    /// A turn of its own (a turn role's): its whole session.
+    pub loose: bool,
+    /// The versions of its memory and skills as they were when it started.
+    pub began: Map<String, Value>,
     /// Some line of its agent came during it.
     pub seen: bool,
     /// Its own validation (`tirith turn checks`): passed, total and the names of the checks.
@@ -37,7 +41,7 @@ impl Turn {
     /// A turn of `role` in conversation `conv` starts now, started by `trigger` (and routine `routine`).
     pub fn new(app: &Shared, conv: &str, role: &str, (trigger, routine): (String, String)) -> Turn {
         let setting = crate::models::role(app, role);
-        Turn {
+        let mut turn = Turn {
             conv: conv.into(),
             role: role.into(),
             trigger,
@@ -54,10 +58,14 @@ impl Turn {
             tools: vec![],
             text: String::new(),
             session: String::new(),
+            loose: false,
+            began: Map::new(),
             seen: false,
             checks: None,
             capture: super::capture::Capture::of(conv),
-        }
+        };
+        turn.began = super::versions::at_start(app, &turn);
+        turn
     }
 
     /// Takes one line of its agent's output.
@@ -72,28 +80,14 @@ impl Turn {
             let short = json!({"name": call.name, "summary": call.summary});
             let _ = (self.tools.len() < 50).then(|| self.tools.push(short));
         }
-        self.text_of(msg);
-        let model = msg["model"].as_str().filter(|_| msg["type"] == "system");
-        let model = model.or_else(|| msg["payload"]["event"]["model"].as_str());
-        let _ = (self.model.is_empty()).then(|| self.model = model.unwrap_or("").into());
-        let session = msg["stream"]["id"]
-            .as_str()
-            .filter(|_| msg["stream"]["kind"] == "session");
-        session.into_iter().for_each(|id| self.session = id.into());
-    }
-
-    /// The answer's words: Anthropic's text blocks and Codex's messages (Muse's answer is handed over at its end).
-    fn text_of(&mut self, msg: &Value) {
-        let mut said = |t: &str| self.text = format!("{}\n\n{t}", self.text).trim().to_string();
-        if msg["type"] == "assistant" {
-            let blocks = msg["message"]["content"].as_array().cloned();
-            blocks
-                .into_iter()
-                .flatten()
-                .filter(|b| b["type"] == "text")
-                .for_each(|b| said(b["text"].as_str().unwrap_or("")));
-        } else if msg["type"] == "item.completed" && msg["item"]["type"] == "agent_message" {
-            said(msg["item"]["text"].as_str().unwrap_or(""));
+        for words in super::said::words(msg) {
+            self.text = format!("{}\n\n{words}", self.text).trim().to_string();
+        }
+        if let Some(model) = super::said::model(msg).filter(|_| self.model.is_empty()) {
+            self.model = model.into();
+        }
+        if let Some(id) = super::said::session(msg) {
+            self.session = id.into();
         }
     }
 }

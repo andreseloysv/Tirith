@@ -2,6 +2,10 @@
 use crate::app::App;
 use std::path::Path;
 use std::process::{Command, Stdio};
+use std::sync::Mutex;
+
+/// One commit at a time: the shared folder is every bot's.
+static COMMITTING: Mutex<()> = Mutex::new(());
 
 /// A bot's folder: its memory and the skill folders in `.agents/skills`; a link there (a shared skill) is no folder to git, so it stays out.
 const OWN: &str = "# Tirith versions only the memory and this bot's own skills; the links to the shared skills\n# (in <home>/bots, a repository of its own) and everything else stay out.\n*\n!/.gitignore\n!/memory.md\n!/.agents/\n/.agents/*\n!/.agents/skills/\n/.agents/skills/*\n!/.agents/skills/*/\n!/.agents/skills/*/**\n";
@@ -47,6 +51,7 @@ fn commit(dir: &Path, ignore: &str, message: &str) {
 
 /// Commits the folder of the bot whose conversation is `key` and the shared one, each only if it changed.
 pub fn versioned(app: &App, key: &str, message: &str) {
+    let _one = COMMITTING.lock().unwrap_or_else(|e| e.into_inner());
     commit(&super::folder(app, key), OWN, message);
     commit(&app.home.join("bots"), SHARED, message);
 }

@@ -17,12 +17,13 @@ use tokio::sync::mpsc;
 pub(super) async fn session(app: &Shared, project: &str) -> Result<(), String> {
     let role = app.chat_role(project); // a bot may have a model of its own, under its key
     let alias = models::role(app, &role).agent;
-    let Some(()) = (!matches!(alias.as_str(), "codex" | "muse")).then_some(()) else {
-        return exec_session(app, project, alias == "muse").await;
-    };
+    if let Some(kind) = crate::codex::Exec::of(&alias) {
+        return exec_session(app, project, kind).await;
+    }
     let key = format!("manager_session:{alias}:{project}");
     let resumed = app.kv(&key);
     let history = resumed.is_none().then(|| history(app, project));
+    let _ = resumed.is_none().then(|| crate::turns::fresh(app, project));
     let mut cmd = models::chat_argv(app, &role, resumed.as_deref())?;
     cmd.argv
         .extend(["--append-system-prompt".into(), prompt(app, project)]);

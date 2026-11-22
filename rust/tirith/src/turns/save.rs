@@ -1,7 +1,7 @@
 //! A turn ended: its row in `turns` (`waiting` while an approval card it opened is open), for a bot its `turn.done` (or `routine.done`) event and the commit of what it changed in its folder and the shared one.
 use super::price::cost;
 use super::record::Turn;
-use super::usage::from_muse_session;
+use super::settle::settle;
 use super::versions::versions;
 use crate::app::{now_iso, Shared};
 use crate::server::s;
@@ -10,9 +10,7 @@ use serde_json::json;
 
 /// Keeps the turn's row: `ok` and `answer` when its caller knows them, else what its lines said (Anthropic's `is_error`, the text so far). Its id.
 pub fn finish(app: &Shared, mut t: Turn, ok: Option<bool>, answer: Option<&str>) -> i64 {
-    if !t.usage.seen && t.agent == "muse" && !t.session.is_empty() {
-        t.usage = from_muse_session(&t.session, t.start_us);
-    }
+    settle(app, &mut t);
     let cost_usd = t
         .usage
         .cost

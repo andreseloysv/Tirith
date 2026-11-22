@@ -1,5 +1,5 @@
 //! The tool calls a line of any agent's output makes, the short line the chat shows for each, and the skills they read.
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::sync::LazyLock;
 
 /// One tool call: its name, the short line the chat shows, and its input.
@@ -9,7 +9,7 @@ pub struct Call {
     pub input: Value,
 }
 
-/// The tool calls of one line: Anthropic's `tool_use` blocks, Muse's `tool.result`, Codex's started commands.
+/// The tool calls of one line: Anthropic's `tool_use` blocks, Muse's `tool.result`, Codex's and Copilot's calls (`exec_items.rs`).
 pub fn calls(msg: &Value) -> Vec<Call> {
     let kind = msg["payload_type"]
         .as_str()
@@ -32,15 +32,17 @@ pub fn calls(msg: &Value) -> Vec<Call> {
             })
             .collect(),
         "tool.result" => vec![muse(&msg["payload"])],
-        "item.started" if msg["item"]["type"] == "command_execution" => {
-            let cmd = msg["item"]["command"].as_str().unwrap_or("command");
-            vec![Call {
-                name: "command".into(),
-                summary: cmd.into(),
-                input: json!({"command": cmd}),
-            }]
-        }
-        _ => vec![],
+        _ => super::exec_items::started(msg)
+            .map(|(_, name, input)| {
+                let command = input["command"].as_str().map(String::from);
+                Call {
+                    summary: command.unwrap_or_else(|| crate::rules::summary(&name, &input)),
+                    name,
+                    input,
+                }
+            })
+            .into_iter()
+            .collect(),
     }
 }
 

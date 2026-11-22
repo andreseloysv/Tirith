@@ -29,12 +29,16 @@ effort_flag = ""
 lane_args = ["exec", "--json", "--dangerously-bypass-approvals-and-sandbox", "Read the brief at {brief} and do it completely in {workspace}."]
 resume_args = ["exec", "--json", "--dangerously-bypass-approvals-and-sandbox", "resume", "{session}", "{message}"]
 
+# One process a turn, its message on stdin. Nothing can answer it when it asks:
+# like the two above, the daemon's sandbox and rules are the barrier. It serves
+# models of several vendors, so any model id fits it.
 [agents.copilot]
-protocol = "stream-json"
+protocol = "exec"
+any_model = true
 model_flag = "--model"
 effort_flag = "--reasoning-effort"
-lane_args = ["--output-format", "json", "--no-ask-user", "--allow-tool", "write", "--allow-tool", "shell", "-p", "Read the brief at {brief} and do it completely in {workspace}."]
-resume_args = ["--resume", "{session}", "-p", "{message}"]
+lane_args = ["--output-format", "json", "--no-ask-user", "--no-auto-update", "--allow-all", "-p", "Read the brief at {brief} and do it completely in {workspace}."]
+resume_args = ["--output-format", "json", "--no-ask-user", "--no-auto-update", "--allow-all", "--resume={session}", "-p", "{message}"]
 
 # An agent the factory does not name runs with these.
 [agents.default]

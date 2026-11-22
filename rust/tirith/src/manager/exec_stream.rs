@@ -1,11 +1,21 @@
-//! What an exec turn says while it runs: Muse's stream and Codex's events, in the chat and on the phones.
+//! What an exec turn says while it runs: Muse's stream, Codex's and Copilot's events, in the chat and on the phones.
+use super::exec_copilot::on_copilot;
 use super::talk::talk;
 use super::typing::typing_line;
 use crate::app::Shared;
+use crate::codex::Exec;
 use crate::rooms;
 use serde_json::Value;
+/// One event of the agent's stream.
+pub(super) fn on_event(app: &Shared, project: &str, key: &str, kind: Exec, msg: &Value) {
+    match kind {
+        Exec::Codex => on_codex(app, project, key, msg),
+        Exec::Copilot => on_copilot(app, project, key, msg),
+        Exec::Muse => on_muse(app, project, key, msg),
+    }
+}
 /// A Muse event: its session id is kept, and a tool's result shows the command it ran.
-pub(super) fn on_muse(app: &Shared, project: &str, key: &str, msg: &Value) {
+fn on_muse(app: &Shared, project: &str, key: &str, msg: &Value) {
     msg["stream"]["id"]
         .as_str()
         .filter(|_| msg["stream"]["kind"] == "session")
@@ -36,7 +46,7 @@ pub(super) fn on_muse(app: &Shared, project: &str, key: &str, msg: &Value) {
     }
 }
 /// A Codex event: its thread id is kept, its messages are said as they come, its commands shown.
-pub(super) fn on_codex(app: &Shared, project: &str, key: &str, msg: &Value) {
+fn on_codex(app: &Shared, project: &str, key: &str, msg: &Value) {
     match msg["type"].as_str().unwrap_or("") {
         "thread.started" => msg["thread_id"]
             .as_str()
