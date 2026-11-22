@@ -166,6 +166,7 @@ tirith service install [--boot] | status | start | stop | restart | uninstall | 
 tirith serve | open [link] | status [--project P]
 tirith plan show <project> | plan add <project> <step> "<text>"
 tirith plan step <project> <number> "<title>" ["<intro paragraph>"]   create the plan's next step, at its end
+tirith plan step delete <project> <number>   remove that step and its items (refused while one of its lanes is not merged)
 tirith lane start <project> <step> "<item>" [--agent <alias>] | lane stop <lane> | lane log <lane>
 tirith autopilot on|off <project>
 tirith project add <folder> [--name N] [--color #rrggbb]   add a folder as a project (the + next to Projects does the same)

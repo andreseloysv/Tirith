@@ -1,4 +1,4 @@
-//! A project's plan as the page shows it (each item with its newest lane), and the step a command adds to it.
+//! A project's plan as the page shows it (each item with its newest lane), and the steps a command adds or deletes.
 use crate::app::{bad, Shared, R};
 use crate::{lanes, plan};
 use axum::extract::{Path, State};
@@ -31,5 +31,13 @@ pub(super) async fn plan_step(
     plan::add_step(&app, &project, &num, &title, &intro)
         .await
         .map_err(bad)?;
+    Ok(Json(json!({"ok": true})))
+}
+
+pub(super) async fn plan_step_delete(
+    State(app): State<Shared>,
+    Path((project, num)): Path<(String, String)>,
+) -> R {
+    plan::delete_step(&app, &project, &num).await.map_err(bad)?;
     Ok(Json(json!({"ok": true})))
 }

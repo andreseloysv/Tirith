@@ -192,7 +192,7 @@ Files:
 - `hooks_token.rs`: The HTTP hook with `X-Tirith-Token`, and an older install's given it as the daemon starts.
 - `open.rs`: `tirith open [link]`: the page opened as the owner.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
-- `plan.rs`: `tirith plan show` (each step with its open items and their lanes) and `tirith plan step`.
+- `plan.rs`: `tirith plan show` (each step with its open items and their lanes) and `tirith plan step`; `tirith plan step delete` is in `dispatch.rs`.
 - `serve.rs`: `tirith serve`: the daemon.
 - `status.rs`: `tirith status`: the lanes working now and the last ones that ended.
 
@@ -791,7 +791,7 @@ Files:
 
 ## `plan/`
 
-The plan: the project's markdown checklist (`## N. Title` steps, `- [ ] item` lines). Its content changes (new step, new item, ticked item) are written to the file at once and committed in batches; which lane works on an item lives in the
+The plan: the project's markdown checklist (`## N. Title` steps, `- [ ] item` lines). Its content changes (new step, new item, ticked item, deleted step) are written to the file at once and committed in batches; which lane works on an item lives in the
 daemon, not in the file. The daemon is the only writer. An item may carry its own check: `- [ ] Text (check: `cmd`)`; the merge queue runs it, and ticks a merged item in the merge commit itself.
 
 Files:
@@ -799,6 +799,7 @@ Files:
 - `add.rs`: Adding an item to a step of the plan.
 - `change.rs`: Changing a plan's lines under the writer lock.
 - `check.rs`: Item checks that can never pass.
+- `delete.rs`: Removing an old step from the plan: its heading, prose and items, never renumbering the others. `tirith plan step delete <project> <number>` (`POST /api/plan/{project}/steps/{num}/delete`) refuses, without touching the file, a number that is not all digits, a step the plan lacks, or a step with a lane that is not merged (it names them); merged lanes do not block it.
 - `flush.rs`: Committing the plan files Tirith changed.
 - `item.rs`: A plan's steps and their items, with the line each one is on.
 - `lookup.rs`: Finding a project's plan and its items.

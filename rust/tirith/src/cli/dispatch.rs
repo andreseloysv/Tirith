@@ -43,6 +43,11 @@ fn daemon(pos: &[&str], flag: Flag, project: &str) -> Result<(), String> {
         ["open", "link"] => open::print(),
         ["status"] => status(project),
         ["plan", "show", project] => plan::plan_show(project),
+        ["plan", "step", "delete", project, num] => print(call(
+            "POST",
+            &format!("/api/plan/{project}/steps/{num}/delete"),
+            None,
+        )),
         ["plan", "step", project, num, title] => plan::plan_step(project, num, title, ""),
         ["plan", "step", project, num, title, intro] => plan::plan_step(project, num, title, intro),
         ["plan", "add", project, step, text] => print(call(
