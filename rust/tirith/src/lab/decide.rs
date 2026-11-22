@@ -1,9 +1,9 @@
 //! Tirith decides an experiment alone, by the `[lab]` rule it started with, once it has `inputs` comparisons or is `max_days` old: adopted, its branch is merged into the bot's main (its own folder is that checkout, so the bot uses it from its next run); discarded, it goes. The worktree and the branch go in both cases, and the bot's chat gets one line.
 use super::adopt::adopt;
-use super::due::{due, minimum, Due};
+use super::due::{due, minimum, on_way, Due};
 use super::git::clear;
 use super::numbers::{side, tally};
-use super::seat::{live, seated};
+use super::seat::live;
 use super::store::{all_running, running_one, tree, Experiment};
 use crate::app::{now_iso, Shared};
 use crate::server::s;
@@ -22,11 +22,9 @@ fn name_of(app: &Shared, e: &Experiment) -> String {
     )
 }
 
-/// Decides experiment `id` when it is due and no run of its bot is on its way (nor a shadow B beside one).
+/// Decides experiment `id` when it is due, no run of its bot is on its way (nor a shadow B beside one) and none waits for its judge, who may call it a failure.
 pub fn decide(app: &Shared, id: i64) {
-    let on_way =
-        |e: &Experiment| seated(&live(app, &e.bot)) || super::shadow_open::running(&tree(app, e));
-    let Some(e) = running_one(app, id).filter(|e| !on_way(e)) else {
+    let Some(e) = running_one(app, id).filter(|e| !on_way(app, e)) else {
         return;
     };
     let (lab, t) = (super::fixed::of(app, &e), tally(app, id));

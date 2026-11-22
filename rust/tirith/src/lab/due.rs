@@ -1,4 +1,4 @@
-//! Whether an experiment is ready to be decided, by the rule it started with.
+//! Whether an experiment is ready to be decided, by the rule it started with and by what is still on its way.
 use super::rule::Tally;
 use super::store::Experiment;
 use crate::app::Shared;
@@ -12,6 +12,13 @@ pub(super) enum Due {
     Yes,
     /// Its days ran out with too few comparisons (fewer than min(5, `inputs`)): it proves nothing and is discarded.
     Expired(i64),
+}
+
+/// What is still on its way: a run of its bot, a shadow B beside one, or the word of a run's judge, who may call it a failure.
+pub(super) fn on_way(app: &Shared, e: &Experiment) -> bool {
+    super::seat::seated(&super::seat::live(app, &e.bot))
+        || super::shadow_open::running(&super::store::tree(app, e))
+        || crate::expected::awaited(app, e.id)
 }
 
 /// The comparisons below which an experiment whose days ran out proves nothing.

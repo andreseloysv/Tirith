@@ -35,6 +35,7 @@ pub use passes::{blocked, pass_due};
 pub use restart::start;
 pub use stands::stands;
 pub use store::{expect, New};
+pub use unjudged::awaited;
 pub use verdict::verdict;
 pub use watch::tick;
 pub use words::first;

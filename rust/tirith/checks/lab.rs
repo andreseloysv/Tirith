@@ -960,3 +960,37 @@ fn a_pair_whose_two_runs_failed_late_proves_nothing() {
     drop(app);
     let _ = std::fs::remove_dir_all(&home);
 }
+
+#[test]
+fn an_experiment_waits_for_the_word_of_its_runs_judge() {
+    let (app, home) = app_with_a_bot("judge-first");
+    branch(
+        &home,
+        "v5",
+        "# Memory\n- search with a filter, never open each mail\n",
+    );
+    let e = start(&app, "v5").expect("one commit over main starts");
+    compared(&app, e, &["tie"; 8], (620, "ok"));
+    let last = app.query("SELECT MAX(id) FROM turns", [], |r| r.get::<_, i64>(0))[0];
+    app.insert("UPDATE turns SET event = 71 WHERE id = ?1", params![last]);
+    let now = crate::app::now_iso();
+    app.insert("INSERT INTO expected_runs (conv, routine, title, \"trigger\", kind, due, task, state, turn, ended_at, created_at) VALUES (?1, 'r1', 'gmail-safari', 'schedule', 'schedule', ?2, '', 'ok', ?3, ?2, ?2)", params![KEY, now, last]);
+    super::decide(&app, e);
+    assert_eq!(
+        super::list(&app, KEY)[0]["status"],
+        "running",
+        "its judge may still say it could not"
+    );
+    app.insert(
+        "INSERT INTO scores (at, event, eval, label, score) VALUES (?1, 71, ?2, 'ok', 0.9)",
+        params![now, crate::turns::GRADE],
+    );
+    super::decide(&app, e);
+    assert_eq!(
+        super::list(&app, KEY)[0]["status"],
+        "adopted",
+        "judged: decided"
+    );
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}

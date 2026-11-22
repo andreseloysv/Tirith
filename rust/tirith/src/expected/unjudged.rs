@@ -19,3 +19,15 @@ pub(super) fn check(app: &Shared, now: DateTime<Local>) {
         admitted(app, turn, &answer, None);
     }
 }
+
+/// Whether a run of experiment `experiment` still waits for its judge, whose word can make it a failure: no longer than a judge takes.
+pub fn awaited(app: &Shared, experiment: i64) -> bool {
+    let sql = "SELECT 1 FROM expected_runs e JOIN turns t ON t.id = e.turn WHERE t.experiment = ?1 AND e.state = ?2 AND e.ended_at > ?3 AND t.status = 'ok' AND t.event IS NOT NULL AND NOT EXISTS (SELECT 1 FROM scores s WHERE s.event = t.event AND s.eval = ?4) LIMIT 1";
+    let args = rusqlite::params![
+        experiment,
+        OK,
+        utc(Local::now() - WAITS),
+        crate::turns::GRADE
+    ];
+    !app.query(sql, args, |r| r.get::<_, i64>(0)).is_empty()
+}

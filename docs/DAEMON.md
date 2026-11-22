@@ -258,7 +258,7 @@ Files:
 - `store.rs`: The expected runs as kept (`expected_runs`): one row for each occurrence, waiting, running, then ok or failed.
 - `timed.rs`: Everything that has a time of day: the bots' routines and the turn roles' scheduled passes.
 - `told.rs`: Whose words an answer holds: what it quotes, and what it tells of someone's, are theirs. What it tells of its own tool or helper is its own.
-- `unjudged.rs`: A good run that no judge will read any more: code's plain words decide, as when a judge gave no verdict.
+- `unjudged.rs`: A good run that no judge will read any more: code's plain words decide, as when a judge gave no verdict; and whether an experiment's run still waits for its judge, before the experiment is decided.
 - `verdict.rs`: Whether a routine's turn did what it was started for, as far as code is certain: its agent ended well, it did not say in plain words that it could not, no tool's error proves it could not, and a «∅» comes from having looked.
 - `watch.rs`: The scheduler's tick: Tirith says it is alive, what was missed is written down, and what takes too long is ended.
 - `words.rs`: Times, days and texts as the owner reads them in one line.
@@ -466,10 +466,10 @@ Files:
 - `api.rs`: The lab's commands and routes: `tirith lab start` and `tirith lab list`, `POST /api/lab/start` and `GET /api/lab`.
 - `blind.rs`: What the judge reads of a pair and what its answer means for B; when two answers are the same, so none is needed.
 - `compare.rs`: A B run against the A run before it (or against the A of its shadow pair), judged blind by `ab-compare`, and the judge's answer mapped back to B's verdict.
-- `decide.rs`: The decision once an experiment is due: the numbers read, the rule it started with applied, the branch merged or deleted, the line emitted.
+- `decide.rs`: The decision once an experiment is due and none of its runs is on its way or waits for its judge: the numbers read, the rule it started with applied, the branch merged or deleted, the line emitted.
 - `git.rs`: Git in a bot's repository as Tirith: the branch's one commit checked, a branch merged (its text winning where main moved on the same lines), the worktree and the branch removed.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
-- `numbers.rs`: An experiment's numbers from the store: each side's runs (mean tokens, dollars, time; a void pair's left out), B's comparisons, new failures and 👎, the void pairs, and the comparisons the judge has not answered.
+- `numbers.rs`: An experiment's numbers from the store: each side's runs (mean tokens, dollars, time; left out those of a void pair or of one whose two runs failed, also late), B's comparisons, new failures and 👎, the void pairs, and the comparisons the judge has not answered.
 - `outside.rs`: Which tool calls read outside (web, browser, MCP, `tirith safari`, network commands) and which would reach the owner.
 - `replay.rs`: Replay mode: the task-local that marks a replay's turn, the proxy's closed caller, and the pairs run one after another.
 - `replay_side.rs`: One side of a replayed run: its throwaway worktree, its turn on the capture's start, its row's experiment and variant.
