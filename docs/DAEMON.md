@@ -135,7 +135,7 @@ Files:
 - `run.rs`: Routines run: one now, or every one due on the scheduler's tick (which also decides the lab's experiments that are due); each run is handed to the bot as a turn of its own (`manager::run_routine`).
 - `schedule.rs`: When a routine runs: its days of the week, whether it is due now, and how late.
 - `store.rs`: Keeping the bots: one change at a time, written into config.toml and reloaded.
-- `sweep.rs`: What goes out of config.toml before the bots are written again: their roles and routes, then the sections left empty.
+- `sweep.rs`: What goes out of config.toml before the bots are written again: their roles and routes (not a timed route with no task: that is a turn role's pass), then the sections left empty.
 - `template.rs`: A bot template read and checked: its name, face, routine, first words and skill.
 - `told.rs`: What a bot is handed when one of its routines is due.
 - `tuning.rs`: A routine's own effort and model: `routines.toml` in the bot's folder, read when its run starts and applied to its turns only.

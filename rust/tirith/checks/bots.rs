@@ -537,6 +537,27 @@ fn a_system_bot_change_is_a_layer_in_config() {
     );
 }
 
+#[test]
+fn saving_a_bot_keeps_a_pass_time_the_owner_wrote() {
+    // A schedule route with no task is a turn role's pass, not one of its routines: the page has no row to write it back from.
+    let old = "[[routes]]\non = \"schedule\"\nto = \"ceo\"\nmode = \"turn\"\ndays = [1, 3, 5]\nat = \"16:30\"\n\n[[routes]]\non = \"schedule\"\nto = \"ceo\"\nid = \"r1\"\ntitle = \"Regar\"\ntask = \"water\"\ndays = [2]\nat = \"08:00\"\n";
+    let bots = json!([
+        {"id": "ceo", "key": "ceo", "system": true, "name": "CEO", "routines": []},
+        {"id": "abc123", "name": "N", "shape": "drop", "color": "#22d3ee", "routines": [{"id": "r2", "title": "Mirar", "prompt": "look", "days": [1], "at": "09:00"}]}
+    ]);
+    let text = super::written::written(old, bots.as_array().unwrap()).unwrap();
+    assert!(
+        text.contains("16:30"),
+        "the CEO's pass time stays, or that pass is silently never due again:\n{text}"
+    );
+    assert!(
+        !text.contains("08:00") && text.contains("09:00"),
+        "its routines are still written again from the page:\n{text}"
+    );
+    let again = super::written::written(&text, bots.as_array().unwrap()).unwrap();
+    assert_eq!(again.matches("16:30").count(), 1, "kept once:\n{again}");
+}
+
 const TITLES: [&str; 7] = [
     "Cuándo usarla",
     "Entradas y accesos",
