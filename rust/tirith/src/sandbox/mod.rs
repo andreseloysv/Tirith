@@ -1,10 +1,13 @@
-//! Network sandbox: every process Tirith starts runs inside a macOS `sandbox-exec` profile that only allows loopback, with proxy variables pointing at the daemon's own proxy (`sandbox/proxy/`).
+//! Network sandbox: every process Tirith starts reaches the network only through the daemon's own proxy (`sandbox/proxy/`): a macOS `sandbox-exec` profile that only allows loopback, on Linux a network namespace of its own (`sandbox/linux/`).
 mod blocks;
 mod check;
 mod cli;
+mod confine;
 mod env;
 mod jvm;
 mod launch;
+#[cfg(target_os = "linux")]
+mod linux;
 mod owner;
 mod profile;
 mod proxy;
@@ -20,6 +23,7 @@ mod wrappers;
 
 pub use check::check_command;
 pub use cli::cli;
+pub use confine::launcher;
 pub use profile::sandboxed;
 pub use routes::routes;
 pub use start::start;

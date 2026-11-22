@@ -54,10 +54,10 @@ end with code, and puts a model in the loop only where judgment is needed.
 - **Rules in code.** Every tool call of every agent passes the rules first, in 1–4 ms: commit checks are never
   skipped, the plan and the agents' settings are not edited by agents, a lane writes only in its own worktree,
   never pushes or touches main and never starts other agents. Projects add rules in `tirith.toml`.
-- **Network sandbox.** Everything Tirith starts (lanes, the manager, reviews, merge checks) runs in a macOS
-  sandbox that allows the network only through the daemon's own proxy, which records every destination by
-  domain and refuses the ones you block (`tirith net block …`). Swift, Xcode, Gradle, npm, cargo and git work
-  inside it. Tool calls that touch credentials, push or read secret variables are audited.
+- **Network sandbox.** Everything Tirith starts (lanes, the manager, reviews, merge checks) runs in a sandbox
+  (macOS's, or on Linux a network namespace of its own, without root) that allows the network only through the
+  daemon's own proxy, which records every destination by domain and refuses the ones you block
+  (`tirith net block …`). Swift, Xcode, Gradle, npm, cargo and git work inside it. Tool calls that touch credentials, push or read secret variables are audited.
 - **A manager per project.** Every project has its own conversation with its own manager session (files and
   images can be attached): select the project and the chat, the cards that need you, the plan, the pipelines, the
   agents, the rooms and the access list show that project only (what belongs to the machine, such as the block list

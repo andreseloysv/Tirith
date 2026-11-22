@@ -25,6 +25,7 @@ tirith teach do open "<url>"                   (a bot, rehearsing) open the page
 tirith teach do click "<selector or text>"     (a bot, rehearsing) click it there: the result and a screenshot's path
 tirith teach do type "<field>" "<value>"       (a bot, rehearsing) type the value in the field (its label, placeholder, name or selector)
 tirith teach stop                              (a bot) end the rehearsal
+tirith net allow                               (Linux, with sudo, once) let this binary make the network sandbox where AppArmor forbids it
 tirith hook <Event>                            agent hook bridge (stdin JSON; also --agent A --event E)
 tirith hooks install                           point the agents' hooks at the daemon over HTTP
 tirith safari open <url>                       (the managers and bots) open the page in the owner's Safari, through the daemon

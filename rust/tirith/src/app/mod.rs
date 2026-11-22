@@ -19,6 +19,7 @@ mod worktree;
 
 pub use git::git;
 pub use lane::Lane;
+pub use path::exe;
 pub use process::{alive, kill_group};
 pub use reply::{bad, R};
 pub use state::{App, Shared};

@@ -2,6 +2,14 @@
 use super::App;
 use std::path::{Path, PathBuf};
 
+/// Where this binary is on disk, also after a newer one took its place (Linux then adds " (deleted)" to the path).
+pub fn exe() -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok()?.display().to_string();
+    Some(PathBuf::from(
+        exe.strip_suffix(" (deleted)").unwrap_or(&exe),
+    ))
+}
+
 impl App {
     /// PATH for agents and checks: this binary's folder first, so `tirith` is this daemon's client, and `~/.cargo/bin`, `/opt/homebrew/bin`, `/usr/local/bin` last when they exist.
     pub fn child_path(&self) -> String {

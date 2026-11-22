@@ -46,15 +46,29 @@ fn proxy_vars(url: &str) -> Vec<(String, String)> {
 
 /// ssh ignores proxy variables: git over ssh goes through the proxy with `tirith net tunnel`.
 fn ssh_command() -> Option<(String, String)> {
-    std::env::current_exe()
-        .ok()
+    crate::app::exe()
         .filter(|_| std::env::var_os("GIT_SSH_COMMAND").is_none())
         .map(|exe| {
+            let (own, exe) = (own_config(), exe.display());
             (
                 "GIT_SSH_COMMAND".into(),
-                format!("ssh -o ProxyCommand='{} net tunnel %h %p'", exe.display()),
+                format!("ssh{own} -o ProxyCommand='{exe} net tunnel %h %p'"),
             )
         })
+}
+
+/// In a user namespace root's files look like nobody's, and ssh refuses the system's included ones: it reads only the owner's config there.
+fn own_config() -> String {
+    let Some(()) = cfg!(target_os = "linux").then_some(()) else {
+        return String::new();
+    };
+    let file = crate::config::home_dir().join(".ssh/config");
+    let file = if file.is_file() {
+        file.display().to_string()
+    } else {
+        "/dev/null".into()
+    };
+    format!(" -F '{file}'")
 }
 
 /// PATH with the tool wrappers first, and the zsh startup folder that puts them first again.

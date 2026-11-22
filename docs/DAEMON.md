@@ -773,7 +773,7 @@ Files:
 
 ## `sandbox/`
 
-Network sandbox. Every process Tirith starts (lane agents, the manager, turn-role reviews, merge-queue checks) runs inside a macOS `sandbox-exec` profile that denies outbound network except loopback and local sockets and denies Apple Events (macOS refuses them from `sandbox-exec` anyway, whatever the profile says), with its proxy
+Network sandbox. Every process Tirith starts (lane agents, the manager, turn-role reviews, merge-queue checks) runs confined (`confine.rs`): on Linux in a network namespace of its own (`sandbox/linux/`, below), on macOS inside a `sandbox-exec` profile that denies outbound network except loopback and local sockets and denies Apple Events (macOS refuses them from `sandbox-exec` anyway, whatever the profile says), with its proxy
 variables pointing at the daemon's own HTTP/CONNECT proxy (`sandbox/proxy/`). The proxy authenticates the caller (`who` + token), applies the block list, and records each new destination as an event.
 
 The owner's Safari is read through the daemon instead: `tirith safari open <url>` and `tirith safari read [<url>]` (URL, title and text of the current tab, or of the first tab whose URL starts with the one given; the text is cut at 20,000 characters) ask the daemon — which runs outside the sandbox — to run that one fixed AppleScript, never a script the agent sends, and only for the chat roles (the managers and the bots, never a lane or the CEO).
@@ -786,6 +786,7 @@ Files:
 - `cli/list.rs`: `tirith net list`: the destinations seen, then the rules blocking.
 - `cli/mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `cli/status.rs`: `tirith net status`.
+- `confine.rs`: How this system confines (macOS's profile, Linux's namespace), and the launcher's way in from the command line.
 - `env.rs`: The environment of a sandboxed process: the proxy for every tool that reads one, ssh through the proxy and the tool wrappers first on PATH.
 - `jvm.rs`: Gradle and the JVM ignore HTTPS_PROXY; the JDK refuses Basic proxy auth on tunnels unless re-enabled.
 - `launch.rs`: What a process Tirith starts runs as: the program, its arguments and the environment the sandbox adds.
@@ -804,6 +805,29 @@ Files:
 - `tunnel.rs`: `tirith net tunnel <host> <port>`: stdin/stdout through the proxy (ssh's ProxyCommand inside the sandbox).
 - `wrap.rs`: Putting a process Tirith starts inside the sandbox.
 - `wrappers.rs`: The wrappers in `<home>/net/bin` that turn off the inner sandbox of tools that start their own.
+
+## `sandbox/linux/`
+
+Linux's confinement, with no root and nothing to install: `tirith net run <port…> -- <program>` forks, the child
+moves into a user and a network namespace of its own (the same uid and gid, a loopback and no other device), binds
+the forwarded ports there (the daemon's, the proxy's and `[network] loopback = [5432, …]`), hands the listeners
+to the launcher that stayed outside and becomes the program; the launcher copies their bytes to the same ports of
+the machine's loopback, passes signals on and exits as the program did. The program dies with its launcher. Where
+the kernel refuses user namespaces, `tirith net status` says so with the fix (on Ubuntu 23.10 and later, once:
+`sudo tirith net allow`, an AppArmor profile for this binary). Like macOS's profile it is a guard of the
+network: local Unix sockets stay reachable.
+
+Files:
+
+- `allow.rs`: `sudo tirith net allow`: the AppArmor profile that lets this binary make user namespaces.
+- `child.rs`: The confined side: into its own network, its ports handed out, then the program.
+- `handover.rs`: The listeners handed to the launcher over a Unix socket.
+- `mod.rs`: Declares the folder's files, and the launcher's command line.
+- `namespace.rs`: The namespaces entered: the same user, a loopback that is up.
+- `ready.rs`: Whether this Linux lets Tirith confine, by trying it, and what to do when it does not.
+- `relay.rs`: A forwarded port's connections copied to the machine's loopback.
+- `run.rs`: The launcher: fork, take the listeners, relay, wait.
+- `supervise.rs`: Signals passed on to the program, and its exit code.
 
 ## `sandbox/proxy/`
 

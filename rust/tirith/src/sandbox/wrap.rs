@@ -1,13 +1,8 @@
 //! Putting a process Tirith starts inside the sandbox.
-use super::{
-    env::sandboxed_env,
-    launch::Launch,
-    owner::owner,
-    profile::{enabled, PROFILE, SANDBOX_EXEC},
-};
+use super::{env::sandboxed_env, launch::Launch, owner::owner, profile::enabled};
 use crate::app::Shared;
 
-/// Wraps `argv` for a process Tirith starts on behalf of `who` (a lane id, a role such as "manager" or "ceo", or "merge:<lane>"): `sandbox-exec -p <profile> argv…` with the proxy environment and the PATH with the tool wrappers first.
+/// Wraps `argv` for a process Tirith starts on behalf of `who` (a lane id, a role such as "manager" or "ceo", or "merge:<lane>"): confined (`confine.rs`) with the proxy environment and the PATH with the tool wrappers first.
 pub fn wrap(app: &Shared, who: &str, argv: Vec<String>) -> Launch {
     let mut it = argv.into_iter();
     let (program, args): (String, Vec<String>) = (it.next().unwrap_or_default(), it.collect());
@@ -15,14 +10,8 @@ pub fn wrap(app: &Shared, who: &str, argv: Vec<String>) -> Launch {
         return unsandboxed(app, who, &why, program, args);
     }
     let env = sandboxed_env(app, &crate::lab::proxy_caller(who)); // a replay's turn reaches nothing outside
-    Launch {
-        program: SANDBOX_EXEC.into(),
-        args: ["-p".to_string(), PROFILE.to_string(), program]
-            .into_iter()
-            .chain(args)
-            .collect(),
-        env,
-    }
+    let (program, args) = super::confine::argv(app, program, args);
+    Launch { program, args, env }
 }
 
 /// The process as given, with an event saying why it runs without the sandbox.

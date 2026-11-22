@@ -11,8 +11,9 @@ pub fn cli(pos: &[&str], _flag: Flag) -> Option<Result<(), String>> {
         ["net", "block", rule] => change("POST", rule, "blocked"),
         ["net", "unblock", rule] => change("DELETE", rule, "unblocked"),
         ["net", "tunnel", host, port] => tunnel(host, port),
+        ["net", "allow"] => crate::sandbox::confine::allow(),
         ["net", ..] => Err(
-            "tirith net status|list|block <domain|ip|cidr>|unblock <rule>|tunnel <host> <port>"
+            "tirith net status|list|block <domain|ip|cidr>|unblock <rule>|tunnel <host> <port>|allow"
                 .into(),
         ),
         ["safari", cmd @ ("open" | "read"), rest @ ..] => crate::client::call(
