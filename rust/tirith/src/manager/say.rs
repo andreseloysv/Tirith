@@ -3,7 +3,7 @@ use super::deliver::{deliver, report};
 use super::evals::judge_evals;
 use super::talk::talk;
 use crate::app::Shared;
-use crate::models;
+use crate::{models, status};
 /// A message from a room (a paired phone or another agent): shown in the chat of the room's project, handed to that project's manager, and the manager's answer to this turn goes back to that room.
 pub fn from_room(app: &Shared, project: &str, room: &str, author: &str, text: &str) {
     let project = app.conv(project);
@@ -62,23 +62,28 @@ pub fn say(app: &Shared, project: &str, text: &str, agent: &str) -> Result<(), S
         app.chat("owner", text, project); // a 👍/👎 on the bot's last turn: no turn, no owner-mood
         return Ok(());
     }
+    if status::asked(text) {
+        app.chat("owner", text, project); // before the event, its evals and the trigger: each of them leads to a turn
+        owner_command(app, project, text);
+        return Ok(());
+    }
     let event = app.event("", project, "owner.message", "", text, "");
     app.chat("owner", text, project);
     judge_evals(app, project, "owner.message", text, event);
     crate::turns::trigger(project, "owner", "");
-    let _ = (!model_command(app, project, text) && !crate::teach::heard(app, project, text)) // while it is taught a task, the owner's words go with the steps
+    let _ = (!owner_command(app, project, text) && !crate::teach::heard(app, project, text)) // while it is taught a task, the owner's words go with the steps
         .then(|| deliver(app, project, &with_cards(app, project, text), true));
     Ok(())
 }
 /// Only the local owner chat and authenticated paired phones call this path.
-pub fn model_command(app: &Shared, project: &str, text: &str) -> bool {
-    let Some(result) = models::command(app, text) else {
+pub fn owner_command(app: &Shared, project: &str, text: &str) -> bool {
+    let answer = status::command(app, text).or_else(|| {
+        models::command(app, text)
+            .map(|r| r.unwrap_or_else(|e| format!("Model change failed: {e}")))
+    });
+    let Some(answer) = answer else {
         return false;
     };
-    report(
-        app,
-        project,
-        &result.unwrap_or_else(|e| format!("Model change failed: {e}")),
-    );
+    report(app, project, &answer);
     true
 }

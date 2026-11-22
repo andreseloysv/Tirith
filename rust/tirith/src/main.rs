@@ -25,6 +25,7 @@ mod rules;
 mod sandbox;
 mod server;
 mod service;
+mod status;
 mod teach;
 mod turns;
 

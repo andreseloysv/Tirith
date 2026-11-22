@@ -31,7 +31,7 @@ pub use events::{emit_event, emitted};
 pub use interrupt::interrupt;
 pub use judged::card_id_of;
 pub use open::owner_open;
-pub use say::{from_room, model_command, say};
+pub use say::{from_room, owner_command, say};
 pub use spawn::spawn_chat;
 pub use stale::close_stale_questions;
 #[cfg(test)]
