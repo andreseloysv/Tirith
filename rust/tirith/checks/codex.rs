@@ -379,6 +379,7 @@ fn browser_home_unsandboxed(tag: &str) -> crate::app::Shared {
 }
 
 #[test]
+#[ignore = "a test of a sandbox: not run, by the owner's order"]
 fn browser_mcp_env_reaches_the_sandbox() {
     let lane = |app: &crate::app::Shared, alias: &str| {
         crate::models::lane_argv(

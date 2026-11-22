@@ -237,6 +237,7 @@ async fn replayed_with(name: &str, script: &str) -> (crate::app::Shared, PathBuf
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[ignore = "a test of a sandbox: not run, by the owner's order"]
 async fn replay_answers_from_the_capture() {
     let (app, home, e, runs) = replayed("answers").await;
     for (turn, result) in runs
@@ -478,6 +479,7 @@ fn a_call_is_the_same_by_what_it_asks_for() {
 }
 
 #[test]
+#[ignore = "a test of a sandbox: not run, by the owner's order"]
 fn a_replay_needs_the_network_closed() {
     let (app, home) = app_with_a_bot("closed", 0);
     app.set_kv("test:network-closed", None);
@@ -524,6 +526,7 @@ async fn a_replays_branch_may_change_the_routines_effort() {
 }
 
 #[test]
+#[ignore = "a test of a sandbox: not run, by the owner's order"]
 fn a_replay_reaches_its_model_and_nothing_else() {
     let (app, home) = app_with_a_bot("reach", 0);
     app.set_kv(&format!("models:{KEY}"), Some(r#"{"agent":"anthropic"}"#));

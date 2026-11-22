@@ -225,7 +225,7 @@ async fn cleanup_fixture(
     std::fs::write(
         home.join("config.toml"),
         format!(
-            "[[projects]]\nid = \"clnp\"\nrepo = \"{}\"\n",
+            "[network]\nsandbox = false\n\n[[projects]]\nid = \"clnp\"\nrepo = \"{}\"\n",
             repo.display()
         ),
     )

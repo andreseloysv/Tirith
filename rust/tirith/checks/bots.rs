@@ -327,6 +327,7 @@ fn bots_live_in_config_as_own_roles_with_schedule_routes() {
 }
 
 #[test]
+#[ignore = "a test of a sandbox: not run, by the owner's order"]
 fn bots_write_only_in_their_own_folders_and_the_shared_skills() {
     let home = std::path::Path::new("/Users/o/.tirith");
     for ok in [

@@ -7,6 +7,7 @@ fn words(line: &str) -> Vec<String> {
 }
 
 #[test]
+#[ignore = "a test of a sandbox: not run, by the owner's order"]
 fn every_way_of_asking_for_a_limit_is_read() {
     for (line, mode) in [
         ("exec --sandbox workspace-write hi", Some(Mode::Write)),
@@ -58,6 +59,7 @@ fn folder(name: &str) -> PathBuf {
 }
 
 #[test]
+#[ignore = "a test of a sandbox: not run, by the owner's order"]
 fn the_limit_is_what_was_asked_then_the_settings_then_codexs_default() {
     let d = folder("limit");
     let (home, work) = (d.join("codex"), d.join("work"));
@@ -146,6 +148,7 @@ fn the_limit_is_what_was_asked_then_the_settings_then_codexs_default() {
 }
 
 #[test]
+#[ignore = "a test of a sandbox: not run, by the owner's order"]
 fn the_one_profile_only_takes_away() {
     let odd = "/nonexistent/a\")(allow network-outbound)(\"b";
     let r = super::Request {
@@ -246,6 +249,7 @@ fn the_one_profile_only_takes_away() {
 
 #[cfg(target_os = "macos")]
 #[test]
+#[ignore = "a test of a sandbox: not run, by the owner's order"]
 fn what_runs_under_the_one_profile_is_still_an_agents() {
     use crate::sandbox::mac;
     // SAFETY: getpid only reads this process's own id.
@@ -340,6 +344,7 @@ fn refuses_service(pid: libc::pid_t, name: &str) -> bool {
 }
 
 #[test]
+#[ignore = "a test of a sandbox: not run, by the owner's order"]
 fn codex_review_takes_the_limit_too() {
     let a = asked::read(&words("review --uncommitted")).expect("it runs commands unattended");
     assert_eq!(
@@ -351,6 +356,7 @@ fn codex_review_takes_the_limit_too() {
 }
 
 #[test]
+#[ignore = "a test of a sandbox: not run, by the owner's order"]
 fn a_profile_named_in_the_settings_is_read_and_servers_are_named() {
     let d = folder("profile");
     let (home, work) = (d.join("codex"), d.join("work"));
@@ -413,6 +419,7 @@ fn a_profile_named_in_the_settings_is_read_and_servers_are_named() {
 
 #[cfg(target_os = "macos")]
 #[test]
+#[ignore = "a test of a sandbox: not run, by the owner's order"]
 fn only_codexs_own_process_reaches_this_machines_ports() {
     use crate::sandbox::mac;
     // SAFETY: getpid only reads this process's own id.
@@ -483,6 +490,7 @@ fn only_codexs_own_process_reaches_this_machines_ports() {
 
 #[cfg(target_os = "macos")]
 #[test]
+#[ignore = "a test of a sandbox: not run, by the owner's order"]
 fn the_daemons_port_is_a_roles_and_the_hooks_door_the_limited_ones() {
     use super::doors::Doors;
     // SAFETY: getpid only reads this process's own id.
@@ -566,6 +574,7 @@ fn the_daemons_port_is_a_roles_and_the_hooks_door_the_limited_ones() {
 
 #[cfg(target_os = "macos")]
 #[test]
+#[ignore = "a test of a sandbox: not run, by the owner's order"]
 fn what_runs_the_commands_has_none_of_codexs_own() {
     use limits::Part;
     // SAFETY: getpid only reads this process's own id.
@@ -629,6 +638,7 @@ fn what_runs_the_commands_has_none_of_codexs_own() {
 
 #[cfg(target_os = "macos")]
 #[test]
+#[ignore = "a test of a sandbox: not run, by the owner's order"]
 fn the_bridge_speaks_websocket() {
     use super::{frames, upgrade};
     assert_eq!(

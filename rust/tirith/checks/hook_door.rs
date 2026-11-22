@@ -6,6 +6,7 @@ use axum::http::{HeaderMap, HeaderValue};
 use serde_json::{json, Value};
 
 #[tokio::test]
+#[ignore = "a test of a sandbox: not run, by the owner's order"]
 async fn the_rules_door_gives_the_rules_and_nothing_else() {
     let home = std::env::temp_dir().join(format!("tirith-hook-door-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&home);

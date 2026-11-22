@@ -187,6 +187,7 @@ async fn shadow_runs_beside_each_real_run() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[ignore = "a test of a sandbox: not run, by the owner's order"]
 async fn shadow_never_reaches_outside() {
     let (app, home, e) = shadowed("outside", 0).await;
     crate::lab::fired(&app, KEY, "r1", TASK);

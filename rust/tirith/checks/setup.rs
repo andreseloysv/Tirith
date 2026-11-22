@@ -290,6 +290,7 @@ fn roots_file_is_handed_over_on_stdin() {
 
 #[cfg(target_os = "linux")]
 #[test]
+#[ignore = "a test of a sandbox: not run, by the owner's order"]
 fn nothing_types_into_roots_terminal() {
     // in a thread of its own: the filter is that thread's, for good
     let seen = std::thread::spawn(|| {

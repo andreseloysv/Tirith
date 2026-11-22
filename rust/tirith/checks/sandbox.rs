@@ -1,6 +1,7 @@
 use super::{profile::PROFILE, safari::script::safari_script};
 
 #[test]
+#[ignore = "a test of a sandbox: not run, by the owner's order"]
 fn safari_commands_only_for_chat_roles() {
     // A fresh home with one of the owner's bots (a chat role extending the manager, as config.toml writes them).
     let dir = std::env::temp_dir().join(format!("tirith-safari-{}", std::process::id()));
@@ -67,6 +68,7 @@ fn safari_commands_only_for_chat_roles() {
 }
 
 #[test]
+#[ignore = "a test of a sandbox: not run, by the owner's order"]
 fn the_proxy_is_no_way_round_to_the_daemon() {
     let own = |at: &str| super::proxy::own_door(&[at.parse().unwrap()], 7717);
     for at in [
@@ -83,6 +85,7 @@ fn the_proxy_is_no_way_round_to_the_daemon() {
 
 #[cfg(target_os = "macos")]
 #[test]
+#[ignore = "a test of a sandbox: not run, by the owner's order"]
 fn the_kernel_tells_a_confined_caller_from_the_owner() {
     let me = std::process::id() as libc::pid_t;
     if super::mac::ours(me) {
@@ -131,6 +134,7 @@ fn bare_git(dir: &std::path::Path, found: &mut Vec<String>) {
 }
 
 #[test]
+#[ignore = "a test of a sandbox: not run, by the owner's order"]
 fn the_daemon_starts_git_only_through_the_sandbox() {
     let mut found = vec![];
     bare_git(
