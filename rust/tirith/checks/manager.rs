@@ -612,3 +612,40 @@ fn a_judge_that_corrected_itself_is_read_by_its_last_verdict() {
         "the answer is no score"
     );
 }
+
+#[tokio::test]
+async fn a_note_outlives_a_restart_until_a_message_hands_it_over() {
+    let key = "bot-note01";
+    let home = std::env::temp_dir().join(format!("tirith-note-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&home);
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::write(home.join("config.toml"), format!("[network]\nsandbox = false\n\n[roles.{key}]\nextends = \"manager\"\nscope = \"own\"\nsession = \"chat\"\nname = \"Notas\"\n")).unwrap();
+    let app = crate::app::App::open_at(home.clone());
+    assert_eq!(app.conv(key), key, "the bot's own conversation");
+    super::noted(&app, key, "it is no longer a draft");
+    super::talk(key, |t| t.notes.clear()); // a restart: what was in memory is gone
+    super::start(app.clone());
+    assert_eq!(
+        super::waiting_notes(key),
+        vec!["it is no longer a draft"],
+        "it waits again"
+    );
+    super::talk(key, |t| t.alive = true); // a session is on its way: none is started here
+    super::deliver(&app, key, "hola", false);
+    let said = super::talk(key, |t| {
+        t.pending
+            .iter()
+            .map(|m| m.text.clone())
+            .collect::<Vec<_>>()
+            .join("|")
+    });
+    assert!(
+        said.contains("it is no longer a draft"),
+        "the next message carries it: {said}"
+    );
+    super::start(app.clone());
+    assert!(super::waiting_notes(key).is_empty(), "handed once");
+    super::talk(key, |t| *t = Default::default());
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}

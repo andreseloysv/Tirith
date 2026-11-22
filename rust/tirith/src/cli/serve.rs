@@ -1,8 +1,8 @@
 //! `tirith serve`: the daemon.
 use crate::app::{App, Shared};
 use crate::{
-    bots, chat, config, expected, guard, lab, lanes, merge, metrics, models, plan, power, rooms,
-    sandbox, server, teach, turns,
+    bots, chat, config, expected, guard, lab, lanes, manager, merge, metrics, models, plan, power,
+    rooms, sandbox, server, teach, turns,
 };
 use std::time::Duration;
 
@@ -69,6 +69,7 @@ fn start_workers(app: &Shared) {
         rooms::start,
         expected::start, // after the rooms: the phones hear what was cut
         guard::start,
+        manager::start, // what a conversation was still to be told
         metrics::start,
         bots::start,
         teach::start,

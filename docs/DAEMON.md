@@ -579,6 +579,7 @@ Files:
 - `progress.rs`: The short line a tool call shows on the phones.
 - `prompt.rs`: What a conversation's agent is told besides its messages: its role's instructions and the recent chat.
 - `queue.rs`: Reports and events for a conversation that wait for its next turn: the newest 30 kept, the older ones counted.
+- `unheard.rs`: A note for a conversation's next message, in the store until a message hands it over, so a restart loses none.
 - `run.rs`: A conversation's sessions, one after another while messages wait, started again more slowly when they fail young.
 - `commands.rs`: The owner's commands that Tirith answers itself, with no turn (`/status`, `/models`, `/model`).
 - `say.rs`: What the owner, a room or an agent writes to a conversation (a paired phone's words are judged as the owner's).

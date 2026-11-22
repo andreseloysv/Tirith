@@ -5,7 +5,7 @@ use crate::app::Shared;
 use std::time::Duration;
 
 /// The reports kept for one conversation; older ones are counted and said, not forgotten silently.
-const KEPT: usize = 30;
+pub(super) const KEPT: usize = 30;
 
 /// A routed event for one conversation: with `turn` handed over (gathered with the other events of the next `limits.batch_seconds`, so many events cost one turn) and its `phone` marking that turn's answer; with `note` it waits for the conversation's next message. Anything else hears nothing.
 pub(super) fn queue(app: &Shared, project: &str, text: &str, mode: &str, phone: bool) {

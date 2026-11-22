@@ -21,10 +21,12 @@ pub fn notify(app: &Shared, project: &str, text: &str) {
     let to = if none { app.conv("") } else { conv };
     rooms::to_phones_surely(app, to, &format!("Tirith: {text}"));
 }
-/// A line of Tirith's that its agent must know: in the conversation, and with that agent's next message (it starts no turn and goes to no phone).
+/// A line of Tirith's that its agent must know: in the conversation, and with that agent's next message, also after a restart (it starts no turn and goes to no phone).
 pub fn noted(app: &Shared, project: &str, text: &str) {
     app.chat("tirith", text, project);
-    super::queue::queue(app, app.conv(project), text, "note", false);
+    let conv = app.conv(project);
+    super::unheard::keep(app, conv, text);
+    super::queue::queue(app, conv, text, "note", false);
 }
 /// One user message as a stream-json line. `pending` keeps plain texts; only a live session's stdin sees lines.
 pub(super) fn user_line(text: &str) -> String {
@@ -41,6 +43,7 @@ pub(super) fn hand(app: &Shared, project: &str, text: &str, phones: bool, by: Op
     let says = !text.is_empty() || job.is_some() || talk(project, |t| t.notes_due);
     let memory = bots::handed(app, project, job.is_some(), says); // a bot's memory, read at every turn
     let _ = says.then(|| crate::turns::prepare(app, project)); // (git runs here, not under the conversations' lock)
+    let mut heard = false;
     let (start, handed, began) = talk(project, |t| {
         let was_busy = t.busy;
         let msg = compose(t, project, (memory, text), (job.as_ref(), by));
@@ -49,7 +52,8 @@ pub(super) fn hand(app: &Shared, project: &str, text: &str, phones: bool, by: Op
             return (false, false, false);
         };
         msg.phones |= phones;
-        // Into a live session, unless a routine's run has it: then only that run itself.
+        heard = !msg.job; // (a run is its task alone: the notes wait)
+                          // Into a live session, unless a routine's run has it: then only that run itself.
         let may = msg.job || !held(t) && t.pending.is_empty();
         let live = t.tx.as_ref().filter(|_| may && !t.stale);
         let sent = live.is_some_and(|tx| tx.send(user_line(&msg.text)).is_ok());
@@ -69,6 +73,7 @@ pub(super) fn hand(app: &Shared, project: &str, text: &str, phones: bool, by: Op
             sent && !was_busy,
         )
     });
+    let _ = heard.then(|| super::unheard::handed(app, project));
     let _ = began.then(|| begin_turn(app, project)); // a message a live, idle session took starts its turn now; one for a running turn begins at that turn's end
     let _ = handed.then(|| typing_start(app, project, true)); // the phones see the turn start (or, for a turn already running, its state again), even while its session is still on its way
     let _ = start.then(|| tokio::spawn(run(app.clone(), project.to_string())));

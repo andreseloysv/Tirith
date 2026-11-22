@@ -33,6 +33,7 @@ mod talk;
 mod turn;
 mod turn_read;
 mod typing;
+mod unheard;
 mod unstarted;
 mod verdict;
 mod waiting;
@@ -58,6 +59,7 @@ pub use stale::stale_reason; // only the lanes' checks call it from outside
 pub use talk::{busy, end_session, restart};
 pub use turn::run_turn;
 pub use typing::typing_heartbeats;
+pub use unheard::start;
 pub use unstarted::{drop_run, stop_run};
 #[cfg(test)]
 use {
