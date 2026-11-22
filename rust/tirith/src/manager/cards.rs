@@ -30,7 +30,7 @@ pub fn close_card(app: &Shared, id: &str, by: &str, why: &str) -> Result<Value, 
         .unwrap()
         .query_row(sql, [id], |r| Ok((r.get(0)?, r.get(1)?)))
         .map_err(|_| format!("no open card '{id}'"))?;
-    let no_yes = kind == "approval" && by != "the owner";
+    let no_yes = matches!(kind.as_str(), "approval" | "payment") && by != "the owner";
     let note = format!(
         "closed by {by}{}{}",
         if no_yes {

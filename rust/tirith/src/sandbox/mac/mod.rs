@@ -30,6 +30,10 @@ pub(super) fn ours(pid: pid_t) -> bool {
 
 /// Whether the connection from port `from` to port `to` of this Mac is a confined process's. One nobody of this user holds is never the owner's.
 pub(super) fn confined(from: u16, to: u16) -> bool {
+    // SAFETY: getpid only reads this process's own id.
+    if ours(unsafe { libc::getpid() }) {
+        return false; // the daemon runs in such a sandbox itself (a lane's test): nothing tells them apart
+    }
     let holders = socket::holders(from, to);
     holders.is_empty() || holders.into_iter().any(ours)
 }

@@ -505,7 +505,8 @@ Files:
 - `answer.rs`: The owner's answer to an open card or to a waiting lane.
 - `ask.rs`: `tirith ask-owner`: a new card for the owner.
 - `blocks.rs`: An assistant message of a stream-json session: its text and its tool calls, in the chat and on the phones.
-- `relayed.rs`: An agent's answer of a card; an approval takes the owner's own words written after it was asked, and is kept in those words.
+- `relayed.rs`: An agent's answer of a card; an approval or a payment takes the owner's own words written after it was asked, and is kept in those words.
+- `owner_words.rs`: What the owner last wrote in each conversation (kv `owner_said:<conversation>`), kept as it comes in, never read back from the chat.
 - `cards.rs`: A card's end: its final state (an answered or closed approval ends the wait of the turns that waited for it), the line that says so, and closing one that is no longer needed.
 - `compose.rs`: The message a conversation is handed: the memory, the waiting reports and the words of the owner, a room, an event or a routine, with what starts its turn.
 - `deliver.rs`: Handing a conversation its messages: to its live session, or waiting for the session that starts for them; with nothing to say, the next routine's run when the conversation is free.
@@ -904,7 +905,7 @@ Files:
 - `child.rs`: The confined side: into its own network, its ports handed out, then the program.
 - `handover.rs`: The listeners handed to the launcher over a Unix socket.
 - `mod.rs`: Declares the folder's files, and the launcher's command line.
-- `source.rs`: The address the relay calls from (127.0.0.2), by which the daemon knows a confined caller.
+- `source.rs`: The address the relay calls from (127.0.0.2) at the daemon's port alone, by which the daemon knows a confined caller.
 - `namespace.rs`: The namespaces entered: the same user, a loopback that is up.
 - `ready.rs`: Whether this Linux lets Tirith confine, by trying it, and what to do when it does not.
 - `relay.rs`: A forwarded port's connections copied to the machine's loopback.
@@ -935,9 +936,9 @@ Files:
 HTTP on 127.0.0.1: the page (`web/`), its JSON API, the change stream (SSE) and the agents' hooks, behind one same-origin guard. Each module brings its own routes; `server/routes/` holds the daemon's own.
 
 The owner's yes never comes from an agent (`caller.rs`). An agent is one by the lane or role it names, and a caller
-inside the sandbox is one whatever it sends: Linux's relay calls from 127.0.0.2, and on macOS the holder of the
+inside the sandbox is one whatever it sends: Linux's relay calls the daemon's port from 127.0.0.2, and on macOS the holder of the
 socket is looked up and its profile read (a caller nobody of this user holds is not the owner either). An agent's
-`tirith answer` of an approval card needs the owner's own words, written after it was asked, and keeps those; its
+`tirith answer` of an approval or payment card needs the owner's own words, written after it was asked, and keeps those; its
 words in a chat are never the owner's; it gets neither the teach extension's token nor a phone's pairing code, and
 it neither approves a draft nor gives a 👍. The limit: a program of the same user that reads Tirith's files, or
 drives the owner's own browser, is not stopped by this; another user account is the boundary for that.

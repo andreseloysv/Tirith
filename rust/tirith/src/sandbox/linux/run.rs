@@ -26,9 +26,9 @@ pub(super) fn run(ports: &[u16], program: &[String]) -> i32 {
     drop(theirs);
     supervise::follow(pid);
     if let Some(fds) = handover::receive(&ours) {
-        for (fd, port) in fds.into_iter().zip(ports) {
+        for (n, (fd, port)) in fds.into_iter().zip(ports).enumerate() {
             let inside = unsafe { TcpListener::from_raw_fd(fd) };
-            relay::serve(inside, *port);
+            relay::serve(inside, *port, n == 0); // the first is the daemon's (`confine.rs`)
         }
         let _ = ours.write_all(&[1]);
     }

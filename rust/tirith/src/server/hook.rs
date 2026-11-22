@@ -30,7 +30,8 @@ pub(super) async fn hook(
             return denied;
         }
     }
-    let _ = (event != "PostToolUse").then(|| {
+    // a dot is in the daemon's own kinds (`owner.message`): no caller writes one of those
+    let _ = (event != "PostToolUse" && !event.contains('.')).then(|| {
         app.event(
             &call.lane_id,
             &call.project_id,

@@ -9,6 +9,8 @@ use std::net::SocketAddr;
 
 /// The daemon's own mark on a request from inside the sandbox: a caller's own is dropped.
 pub(crate) const CONFINED: &str = "x-tirith-confined";
+/// The chat's other speakers: an agent that calls itself one of them is just an agent.
+const SPEAKERS: [&str; 6] = ["owner", "room", "tirith", "card", "tool", "routine"];
 const OWNERS: &str =
     "that is the owner's, from the page or their own terminal, never an agent's: say in your chat what you need and end your turn";
 
@@ -30,11 +32,11 @@ pub fn agent_name(h: &HeaderMap) -> &str {
             .and_then(|v| v.to_str().ok())
             .filter(|v| !v.is_empty() && !v.starts_with('$'))
     });
-    named.unwrap_or(if h.contains_key(CONFINED) {
-        "agent"
-    } else {
-        ""
-    })
+    match named {
+        Some(name) if !SPEAKERS.contains(&name) => name,
+        None if !h.contains_key(CONFINED) => "",
+        _ => "agent",
+    }
 }
 
 /// Whether an agent calls.
