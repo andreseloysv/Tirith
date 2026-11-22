@@ -11,6 +11,9 @@ mod status;
 /// Runs the command of this process's arguments; a failed one prints why and exits 1.
 pub fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if let Some("--version" | "-V" | "version") = args.first().map(String::as_str) {
+        return println!("tirith {}", crate::bundle::VERSION);
+    }
     if args.first().map(String::as_str) != Some("serve") {
         // A CLI command piped into `head` ends quietly instead of panicking on the closed pipe.
         unsafe { libc::signal(libc::SIGPIPE, libc::SIG_DFL) };

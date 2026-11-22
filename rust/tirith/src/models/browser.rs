@@ -4,11 +4,8 @@ use crate::config::get;
 use std::path::Path;
 /// The browser MCP server's (node, args) for a lane or another run; None without node or the launcher. See `browser_args_for` for how each agent carries it.
 pub(super) fn browser_server(app: &Shared, lane: bool) -> Option<(String, Vec<String>)> {
-    let launch = Path::new(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../tools/browser/launch.mjs"
-    ));
-    let node = launch.is_file().then(|| node_bin(app)).flatten()?;
+    let launch = crate::bundle::launcher(&app.home)?;
+    let node = node_bin(app)?;
     let mode = profile_mode(app, lane);
     Some((
         node,

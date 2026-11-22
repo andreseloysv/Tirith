@@ -117,6 +117,22 @@ Files:
 - `versioned.rs`: The bots' folders and `<home>/bots` as git repositories: only the memories and the own skills followed, a commit after each turn or Library change that changed them.
 - `written.rs`: The text of config.toml with the bots laid into it.
 
+## `bundle/`
+
+What the binary carries so that it runs with no checkout beside it (`rust/tirith/build.rs` builds it in): the page
+(`web/`), the teach extension (`tools/teach/`, downloaded from the page as `/teach-extension.zip`) and the browser
+launcher, plus the version (`tirith --version`). A development build still reads its checkout (the page shows on
+reload, the factory follows main); one built with `TIRITH_DIST` (`scripts/release/build.sh`) never looks for one
+and holds no folder of the machine that built it.
+
+Files:
+
+- `checkout.rs`: The checkout a development build was built from, and none in a build to hand out.
+- `files.rs`: The carried files, by their path in the repository.
+- `launcher.rs`: The browser MCP's launcher: the checkout's, else the carried one written into Tirith's home.
+- `mod.rs`: Declares the folder's files and re-exports what other modules use.
+- `zip.rs`: A zip with its files stored as they are.
+
 ## `chat/`
 
 Clearing a conversation and its longest life. Every conversation (a project's, a bot's) can be cleared — its chat rows go, its saved agent session (kv `manager_session:*:<conversation>`) is forgotten and its live one ends without cutting a running turn, so the bot starts fresh; its memory, skills and routines stay — and can be given a longest life: `chat_keep`, the owner's own words (`30m`, `1h`, `24 h`, `2 días`, `una semana`; `siempre` takes the limit away), in `~/.tirith/config.toml` on the bot's role or on the project, written with toml_edit. A minute sweep drops the rows older than it, and a sweep that dropped any forgets the saved session too, so the bot cannot remember what is gone. The owner clears and limits a chat in its page menu, or asks its bot in the chat: `tirith chat clear` / `tirith chat keep "<time>"` act on the conversation of the session that runs them (a lane never does), only on the owner's own words. The paired rooms hear both as one sealed line — `tirith-chat {"v":1,"clear":"<ISO UTC>"}` and `tirith-chat {"v":1,"keep_s":<seconds, 0 = forever>}` — so the phone page hides what is gone.

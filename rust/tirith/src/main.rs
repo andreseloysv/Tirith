@@ -3,6 +3,7 @@
 mod app;
 mod attach;
 mod bots;
+mod bundle;
 mod chat;
 mod cli;
 mod client;

@@ -5,12 +5,11 @@ use std::path::{Path, PathBuf};
 
 /// The factory folder: config.toml's `factory` key, else the repo's own when this build sits in a checkout.
 pub(super) fn dir(overlay: &toml::Table) -> Option<PathBuf> {
-    let here = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../factory"));
     overlay
         .get("factory")
         .and_then(|v| v.as_str())
         .map(crate::config::expand)
-        .or_else(|| here.join("factory.toml").is_file().then_some(here))
+        .or_else(|| crate::bundle::checkout("factory").filter(|d| d.join("factory.toml").is_file()))
 }
 
 /// The files of the folder's `prompts` and `evals`.
