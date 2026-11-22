@@ -61,7 +61,7 @@ service_user() {
   id tirith >/dev/null 2>&1 || { have useradd && useradd --create-home --shell /bin/sh tirith; } ||
     adduser -D -s /bin/sh tirith || die "cannot make the user tirith"
   have runuser || die "runuser is missing (util-linux): run this as an ordinary user instead"
-  have loginctl && loginctl enable-linger tirith 2>/dev/null || true
+  have loginctl && loginctl enable-linger tirith 2>/dev/null || true # the guide waits for its systemd
   [ "$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null || echo 0)" != 1 ] ||
     "$bin/tirith" net allow || echo "install: the network sandbox needs: $bin/tirith net allow" >&2
 }

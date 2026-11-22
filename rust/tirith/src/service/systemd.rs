@@ -1,7 +1,9 @@
 //! On Linux: a systemd user service that starts at boot (linger) and needs no root.
 use super::{systemd_text, unit::Unit};
 use crate::setup::{find, run, Ask};
+use std::path::Path;
 use std::process::{Command, Stdio};
+use std::time::Duration;
 
 /// `systemctl --user`, also from a `su` shell that lost XDG_RUNTIME_DIR.
 fn systemctl(args: &[&str]) -> Result<(), String> {
@@ -19,8 +21,24 @@ fn systemctl(args: &[&str]) -> Result<(), String> {
         .ok_or_else(|| format!("systemctl --user {}: {why}", args.join(" ")))
 }
 
+/// Whether this user's systemd answers. Linger makes one for a user nobody signed in as (a server's), and it takes a moment.
 pub(super) fn usable() -> bool {
-    cfg!(target_os = "linux") && systemctl(&["show-environment"]).is_ok()
+    if !cfg!(target_os = "linux") || !Path::new("/run/systemd/system").is_dir() {
+        return false;
+    }
+    let ready = || systemctl(&["show-environment"]).is_ok();
+    if ready() {
+        return true;
+    }
+    let uid = unsafe { libc::geteuid() }.to_string();
+    let query = ["show-user", uid.as_str(), "--property=Linger", "--value"];
+    let lingers = run::output("loginctl", &["enable-linger"]).is_some()
+        || run::output("loginctl", &query).as_deref() == Some("yes");
+    lingers
+        && (0..30).any(|_| {
+            std::thread::sleep(Duration::from_millis(500));
+            ready()
+        })
 }
 
 pub(super) fn install(u: &Unit, ask: &Ask) -> Result<Vec<String>, String> {
