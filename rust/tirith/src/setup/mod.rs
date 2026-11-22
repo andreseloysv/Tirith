@@ -31,12 +31,14 @@ pub mod run;
 mod secret;
 mod signin;
 mod summary;
+#[cfg(target_os = "linux")]
+mod terminal;
 mod trust;
 mod trusted;
 mod why;
 
 pub use api::routes;
-pub use as_user::as_service_user;
+pub use as_user::{as_service_user, in_anothers_terminal};
 pub use ask::Ask;
 pub use auth::for_program;
 pub use catalog::model_hosts;

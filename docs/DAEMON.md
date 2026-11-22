@@ -1034,6 +1034,7 @@ Files:
 - `private.rs`: What never reaches a log, an event or an answer: the values kept for the agents (tokens, an enterprise's host).
 - `packages.rs`: The system's programs installed with its package manager, when the owner says so.
 - `program.rs`: An agent's program found, or installed now.
+- `terminal.rs`: Linux: the service's user, in root's terminal during the guide, cannot type into it (nor can what it starts).
 - `root.rs`: What the guide has root do through sudo: the system's own programs alone, and a file's text on stdin.
 - `prove.rs`: The connection check: one real turn by the same way work runs.
 - `why.rs`: Why a connection check failed: the telling lines of that turn's stderr.
