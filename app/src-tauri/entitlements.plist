@@ -10,5 +10,8 @@
   <!-- The app starts `uv` and agent executables that are not signed by us -->
   <key>com.apple.security.cs.disable-library-validation</key>
   <true/>
+  <!-- `tirith safari` asks Safari through Apple events, as scripts/release/tirith.entitlements lets the binary -->
+  <key>com.apple.security.automation.apple-events</key>
+  <true/>
 </dict>
 </plist>
