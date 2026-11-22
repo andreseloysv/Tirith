@@ -6,17 +6,21 @@ use crate::app::{now_iso, Shared};
 use crate::server::s;
 use chrono::NaiveTime;
 use serde_json::{json, Value};
-/// A timed routine's days and its time, written HH:MM.
+/// A timed routine's days, its time written HH:MM, and its catch_up.
 fn timed(r: &mut Value, b: &Value) -> Result<bool, String> {
+    let catch_up = &r["catch_up"];
+    (catch_up.is_null() || catch_up == "once" || catch_up == "skip")
+        .then_some(())
+        .ok_or("catch_up must be once or skip")?;
     r["days"] = days(&b["days"]).map_or(r["days"].clone(), |d| json!(d));
     let at = NaiveTime::parse_from_str(s(r, "at").trim(), "%H:%M")
         .map_err(|_| "the time must be HH:MM, as 08:00")?;
     r["at"] = json!(at.format("%H:%M").to_string());
     Ok(r["days"].as_array().is_some_and(|d| !d.is_empty()))
 }
-/// The fields `b` carries laid over the routine `r`: its `trigger` is `schedule` (a time on some days) or `webhook` (an event from outside whose `when` holds: `<source:kind>`, a pattern of it with `*`, or `*`); it must keep a title, what to do, and a day or a `when`.
+/// The fields `b` carries laid over the routine `r`: its `trigger` is `schedule` (a time on some days, and `catch_up` for the times missed) or `webhook` (an event from outside whose `when` holds: `<source:kind>`, a pattern of it with `*`, or `*`); it must keep a title, what to do, and a day or a `when`.
 fn set(r: &mut Value, b: &Value) -> Result<(), String> {
-    ["title", "prompt", "at", "on", "trigger", "when"]
+    ["title", "prompt", "at", "on", "trigger", "when", "catch_up"]
         .into_iter()
         .filter(|k| !b[*k].is_null())
         .for_each(|k| r[k] = b[k].clone());
@@ -70,7 +74,7 @@ fn edit(
         s(r, "id"),
     ))
 }
-/// A new routine, or a change to one (found by `id` or by its title): `title`, `prompt`, `trigger` (`schedule` or `webhook`), `days` and `at` ("HH:MM") or `when`, `on`; with `delete` it goes. The conversation says when one is made or removed.
+/// A new routine, or a change to one (found by `id` or by its title): `title`, `prompt`, `trigger` (`schedule` or `webhook`), `days`, `at` ("HH:MM") and `catch_up` (`once` or `skip`) or `when`, `on`; with `delete` it goes. The conversation says when one is made or removed.
 pub(super) fn routine(app: &Shared, id: String, b: Value) -> Result<Value, String> {
     let (rid, title) = (s(&b, "id"), s(&b, "title"));
     let (said, changed) = with(app, |bots| {

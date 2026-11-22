@@ -1,4 +1,4 @@
-//! The checks that a factory's routes and evals name a real event, role, mode, rubric and sample.
+//! The checks that a factory's routes and evals name a real event, role, mode, catch_up, rubric and sample.
 use super::lists::is_event;
 use super::values::{stem, str_of};
 use std::collections::BTreeMap;
@@ -20,6 +20,21 @@ pub(super) fn bad_route(routes: &[toml::Value], roles: &toml::Table) -> Option<S
                 str_of(r, "on"),
                 str_of(r, "to"),
                 str_of(r, "mode")
+            )
+        })
+}
+
+/// The first route with a `catch_up` that is neither once nor skip.
+pub(super) fn bad_catch_up(routes: &[toml::Value]) -> Option<String> {
+    routes
+        .iter()
+        .filter_map(|r| Some((r, r.get("catch_up")?)))
+        .find(|(_, v)| !matches!(v.as_str(), Some("once" | "skip")))
+        .map(|(r, v)| {
+            format!(
+                "route on '{}' to '{}' has catch_up {v}: it is \"once\" or \"skip\"",
+                str_of(r, "on"),
+                str_of(r, "to")
             )
         })
 }

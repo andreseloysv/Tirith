@@ -26,7 +26,7 @@ fn routines_of(
         .enumerate()
         .map(|(i, r)| {
             let rid = or(s(r, "id"), &format!("r{i}"));
-            json!({"id": rid.clone(), "title": or(s(r, "title"), &s(r, "task")), "prompt": s(r, "task"), "trigger": s(r, "on"), "when": s(r, "when"), "days": days(&r["days"]).unwrap_or_default(), "at": s(r, "at"), "on": r["enabled"] != false, "last": last(id, &rid)})
+            json!({"id": rid.clone(), "title": or(s(r, "title"), &s(r, "task")), "prompt": s(r, "task"), "trigger": s(r, "on"), "when": s(r, "when"), "days": days(&r["days"]).unwrap_or_default(), "at": s(r, "at"), "catch_up": or(s(r, "catch_up"), "once"), "on": r["enabled"] != false, "last": last(id, &rid)})
         })
         .collect()
 }

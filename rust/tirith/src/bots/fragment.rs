@@ -8,13 +8,14 @@ fn role_of(b: &Value) -> Value {
     let _ = (!s(b, "chat_keep").is_empty()).then(|| role["chat_keep"] = json!(s(b, "chat_keep"))); // the chat's longest life, kept as written (see chat.rs)
     role
 }
-/// A routine as its route: on `schedule` with its days and time, or on `webhook` with its `when`.
+/// A routine as its route: on `schedule` with its days, its time and a `catch_up` that is not the default, or on `webhook` with its `when`.
 fn routine_of(key: &str, r: &Value) -> Value {
     let mut route = json!({"on": "schedule", "to": key, "mode": "turn", "phone": true, "id": s(r, "id"), "title": s(r, "title"), "task": s(r, "prompt"), "enabled": r["on"] != false});
     if s(r, "trigger") == "webhook" {
         (route["on"], route["when"]) = (json!("webhook"), json!(s(r, "when")));
     } else {
         (route["days"], route["at"]) = (r["days"].clone(), json!(s(r, "at")));
+        let _ = (r["catch_up"] == "skip").then(|| route["catch_up"] = json!("skip"));
     }
     route
 }
