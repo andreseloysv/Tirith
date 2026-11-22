@@ -9,7 +9,9 @@
 protocol = "stream-json"
 model_flag = "--model"
 effort_flag = "--effort"
-chat_args = ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose"]
+# The permission prompts come to the daemon, which answers them (the rules ran in
+# the hook): without that a headless chat is refused every tool that would ask.
+chat_args = ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--permission-prompt-tool", "stdio"]
 lane_args = ["-p", "Read the brief at {brief} and do it completely in {workspace}."]
 resume_args = ["--resume", "{session}", "-p", "{message}"]
 
@@ -150,6 +152,20 @@ runs_on = "local"
 show = false
 
 [roles.judge.face]
+shape = "hex"
+color = "#8c8c8c"
+
+# The connection check of `tirith setup` and `tirith connect`: one short real
+# turn of the agent being connected, which the daemon names for that turn alone.
+[roles.check]
+name = "Connection check"
+session = "turn"
+scope = "own"
+access = "write"
+show = false
+runs_on = "local"
+
+[roles.check.face]
 shape = "hex"
 color = "#8c8c8c"
 

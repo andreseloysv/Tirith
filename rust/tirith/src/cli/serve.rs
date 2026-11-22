@@ -30,7 +30,12 @@ pub(super) fn serve() -> Result<(), String> {
 
 /// Started by the desktop app, the daemon has launchd's short PATH and its checks find no node, npm or brew tools. The PATH of the owner's login shell goes first, so a check runs as it does in the owner's terminal.
 fn use_login_path() {
-    let out = std::process::Command::new(std::env::var("SHELL").unwrap_or("/bin/zsh".into()))
+    let usual = if cfg!(target_os = "macos") {
+        "/bin/zsh"
+    } else {
+        "/bin/sh"
+    };
+    let out = std::process::Command::new(std::env::var("SHELL").unwrap_or(usual.into()))
         .args(["-lc", "printf '\\n%s' \"$PATH\""])
         .output();
     let login = out

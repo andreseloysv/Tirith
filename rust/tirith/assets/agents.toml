@@ -1,0 +1,52 @@
+# The agents `tirith setup` and `tirith connect` can guide: how each is found, installed (its maker's own
+# installer), signed in over SSH and checked, and where its hooks live. A release build may lay a file of its
+# own over this one (build.rs, TIRITH_AGENTS_FILE).
+#   signin   the arguments that sign it in, on a terminal with no browser
+#   status   the arguments that exit 0 only when it is signed in (none: only a real turn tells)
+#   hooks    the shape of its hooks file: groups, copilot, or codex (groups that must also be trusted)
+#   check_*  the cheap setting of its connection check
+
+[anthropic]
+name = "Anthropic CLI"
+order = 1
+signin = ["auth", "login"]
+status = ["auth", "status"]
+hooks = "groups"
+check_model = "haiku"
+
+[codex]
+name = "OpenAI Codex"
+order = 2
+bin = "codex"
+install = "https://chatgpt.com/codex/install.sh"
+installer_env = { CODEX_NON_INTERACTIVE = "1" }
+signin = ["login", "--device-auth"]
+status = ["login", "status"]
+settings = "~/.codex/hooks.json"
+hooks = "codex"
+check_effort = "low"
+
+[copilot]
+name = "GitHub Copilot"
+order = 3
+bin = "copilot"
+install = "https://gh.io/copilot-install"
+signin = ["login", "--device-code"]
+settings = "~/.copilot/hooks/tirith.json"
+hooks = "copilot"
+token_env = "COPILOT_GITHUB_TOKEN"
+token_hint = "a fine-grained GitHub token with the Copilot Requests permission"
+
+[muse]
+name = "Muse Code"
+order = 4
+bin = "muse"
+install = "https://dev.meta.ai/install.sh"
+signin = ["login"]
+status = ["usage"]
+settings = "~/.config/muse/settings.json"
+new_settings = { schema_version = 1 }
+hooks = "groups"
+token_env = "META_API_KEY"
+token_hint = "a Meta API key"
+check_effort = "low"

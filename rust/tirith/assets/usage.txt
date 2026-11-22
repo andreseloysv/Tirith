@@ -1,3 +1,8 @@
+tirith setup [--server] [--agents a,b]         the guide: this machine, server mode, and connecting the agents
+tirith connect [<agent>] [--token]             connect one agent (install, sign in, rules, one real turn)
+tirith service install [--boot]|status|start|stop|restart|uninstall|logs   server mode
+tirith doctor                                  what works on this machine and what does not, with the fix
+tirith --version                               the version of this binary
 tirith serve                                   run the daemon (page on http://127.0.0.1:<port>/)
 tirith status [--project P]                    lanes and the merge queue (of one project)
 tirith plan show <project>                     the plan with what works on each item

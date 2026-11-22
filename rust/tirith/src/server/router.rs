@@ -2,7 +2,8 @@
 use super::{origin, routes, web::web_file};
 use crate::app::Shared;
 use crate::{
-    attach, bots, chat, guard, lab, metrics, models, numbers, projects, rooms, sandbox, teach,
+    attach, bots, chat, guard, lab, metrics, models, numbers, projects, rooms, sandbox, setup,
+    teach,
 };
 use axum::{middleware, Router};
 
@@ -21,6 +22,7 @@ pub fn router(app: Shared, port: u16) -> Router {
         chat::routes(),
         teach::routes(),
         lab::routes(),
+        setup::routes(),
     ];
     let own = [
         routes::state(),

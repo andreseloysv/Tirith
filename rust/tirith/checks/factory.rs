@@ -301,6 +301,7 @@ fn factory_roles_carry_their_shape() {
         f.roles(),
         [
             "ceo",
+            "check",
             "coach",
             "judge",
             "manager",

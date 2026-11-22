@@ -14,6 +14,9 @@ pub fn main() {
     if let Some(code) = crate::sandbox::launcher(&args) {
         std::process::exit(code);
     }
+    if let Some(code) = crate::setup::cli(&args) {
+        std::process::exit(code);
+    }
     if let Some("--version" | "-V" | "version") = args.first().map(String::as_str) {
         return println!("tirith {}", crate::bundle::VERSION);
     }

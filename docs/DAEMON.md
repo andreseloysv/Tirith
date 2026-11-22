@@ -886,6 +886,69 @@ Files:
 - `state.rs`: The whole state the page starts from.
 - `web.rs`: The page's files.
 
+## `service/`
+
+Server mode (`tirith service …`, `tirith setup --server`): the daemon as a service of its machine, one per Tirith
+home. On Linux a systemd user unit with linger (no root, up from boot); on macOS a launchd job of the owner's, or
+with `--boot` one of the system's that runs as the owner with nobody logged in (sudo); where there is neither (a
+container) it is started in a session of its own and says that nothing brings it back. A restart leaves the
+running lanes alone: the next daemon takes them up.
+
+Files:
+
+- `cli.rs`: `tirith service install|status|start|stop|restart|uninstall|logs`.
+- `kind.rs`: Which way this home's daemon is kept running.
+- `launchctl.rs`: launchctl on one job, in the owner's domain or the system's.
+- `launchd.rs`: The launchd job installed, started, stopped and removed.
+- `mod.rs`: Installing, starting and stopping the service, each way.
+- `plain.rs`: The daemon started by hand in a session of its own, and stopped by the pid it gives.
+- `plist.rs`: The text of the launchd job.
+- `systemd.rs`: The systemd user unit installed, with linger.
+- `systemd_text.rs`: The text of that unit.
+- `unit.rs`: The service's names and files for one home.
+
+## `setup/`
+
+The guide (`tirith setup`, `tirith connect [<agent>]`, `tirith doctor`). It takes a bare Mac or Linux machine to
+agents that work: what the machine needs (git, curl, bash, a git identity, the sandbox), the daemon, then for each
+agent its program (or its maker's installer), its hooks at Tirith (for Codex also trusted, through its app-server),
+its sign-in (its own login, which works over SSH, or a token on stdin kept 0600 in `<home>/auth/` and handed to
+that agent's processes alone) and the proof: one cheap real turn as the hidden role `check`
+(`POST /api/setup/check/<agent>`), which is connected only when it answered **and** the rules heard its tool call.
+Roles whose agent is not connected move to the chosen one. The agents' catalog is `assets/agents.toml`; what the
+repository does not name a release build lays over it (`TIRITH_AGENTS_FILE`, read by build.rs).
+
+Files:
+
+- `api.rs`: The daemon's side: who it is (`GET /api/setup`) and the connection check.
+- `ask.rs`: Asking the owner on the terminal, also under `curl | sh`.
+- `auth.rs`: An agent's token, kept private and handed to its processes alone.
+- `catalog.rs`: The agents the guide knows.
+- `choose.rs`: Which agents the owner connects, and which one the work runs on.
+- `configure.rs`: What the guide writes in config.toml.
+- `connect.rs`: Connecting one agent, in order.
+- `context.rs`: What every step works with: the home, this binary, the terminal.
+- `daemon.rs`: The guide's talk with this home's daemon.
+- `doctor.rs`: `tirith doctor`: every part this machine needs, each with its fix.
+- `edit.rs`: config.toml changed one change at a time, its comments kept.
+- `find.rs`: Where a program is on this machine.
+- `guide.rs`: `tirith setup`: the whole guide.
+- `hook_lines.rs`: Tirith's hook in an agent's hooks, and telling it from everyone else's.
+- `hooks.rs`: An agent's hooks pointed at Tirith, the rest of its settings kept.
+- `install.rs`: An agent installed with its maker's installer.
+- `mod.rs`: The commands' way in from the command line.
+- `needs.rs`: What the machine must have first.
+- `one.rs`: `tirith connect`: one agent, or the list of them.
+- `opts.rs`: The options of these commands.
+- `packages.rs`: The system's programs installed with its package manager, when the owner says so.
+- `program.rs`: An agent's program found, or installed now.
+- `prove.rs`: The connection check: one real turn by the same way work runs.
+- `run.rs`: Running another program in the owner's sight, or quietly.
+- `secret.rs`: A secret read from stdin, not shown.
+- `signin.rs`: An agent signed in, then proven.
+- `summary.rs`: The guide's end: what is connected, what is left, how to open Tirith.
+- `trust.rs`: Tirith's hooks trusted in Codex through its app-server.
+
 ## `teach/`
 
 Teaching a bot a task (docs/BOTS.md, part 5). The owner does the task once in their own Edge with Tirith's

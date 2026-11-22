@@ -23,7 +23,7 @@ pub(super) fn install_hooks() -> Result<(), String> {
         let ours = json!({"type": "http", "url": format!("http://127.0.0.1:{}/hook/{event}", cfg.port),
             "headers": {"X-Tirith-Lane": "$TIRITH_LANE", "X-Tirith-Role": "$TIRITH_ROLE"},
             "allowedEnvVars": ["TIRITH_LANE", "TIRITH_ROLE"], "timeout": 5});
-        let mut kept = others(&settings["hooks"][event]);
+        let mut kept = crate::setup::others(&settings["hooks"][event]);
         kept.push(json!({"hooks": [ours]}));
         settings["hooks"][event] = json!(kept);
     }
@@ -35,30 +35,4 @@ pub(super) fn install_hooks() -> Result<(), String> {
         cfg.port
     );
     Ok(())
-}
-
-/// An event's hook groups without Tirith's own hooks (command or HTTP); a group left empty goes.
-fn others(groups: &Value) -> Vec<Value> {
-    let groups = groups.as_array().cloned().unwrap_or_default();
-    groups
-        .into_iter()
-        .filter_map(|mut g| {
-            let hs: Vec<Value> = g["hooks"]
-                .as_array()?
-                .iter()
-                .filter(|h| !tirith_hook(h))
-                .cloned()
-                .collect();
-            g["hooks"] = json!(hs);
-            (!hs.is_empty()).then_some(g)
-        })
-        .collect()
-}
-
-fn tirith_hook(h: &Value) -> bool {
-    h["command"]
-        .as_str()
-        .unwrap_or("")
-        .starts_with("tirith hook")
-        || h["url"].as_str().unwrap_or("").contains("/hook/")
 }

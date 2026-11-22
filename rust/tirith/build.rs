@@ -23,6 +23,7 @@ fn main() {
     let code = format!("pub(super) const FILES: &[(&str, &[u8])] = &[\n{rows}];\n");
     std::fs::write(out.join("carried.rs"), code).expect("write carried.rs");
     version(&root);
+    agents_more(&out);
     println!("cargo::rustc-check-cfg=cfg(tirith_dist)");
     println!("cargo::rerun-if-env-changed=TIRITH_DIST");
     if std::env::var("TIRITH_DIST").is_ok_and(|v| !v.is_empty()) {
@@ -74,4 +75,17 @@ fn version(root: &Path) {
         .unwrap_or_default();
     let target = var("TARGET");
     println!("cargo::rustc-env=TIRITH_VERSION={release}{commit} {target}");
+}
+
+/// `TIRITH_AGENTS_FILE`: what a release lays over assets/agents.toml (empty without one).
+fn agents_more(out: &Path) {
+    println!("cargo::rerun-if-env-changed=TIRITH_AGENTS_FILE");
+    let more = std::env::var("TIRITH_AGENTS_FILE")
+        .ok()
+        .filter(|f| !f.is_empty());
+    let text = more.map_or_else(String::new, |file| {
+        println!("cargo::rerun-if-changed={file}");
+        std::fs::read_to_string(&file).unwrap_or_else(|e| panic!("{file}: {e}"))
+    });
+    std::fs::write(out.join("agents-more.toml"), text).expect("write agents-more.toml");
 }

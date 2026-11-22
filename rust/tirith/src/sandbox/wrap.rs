@@ -6,10 +6,14 @@ use crate::app::Shared;
 pub fn wrap(app: &Shared, who: &str, argv: Vec<String>) -> Launch {
     let mut it = argv.into_iter();
     let (program, args): (String, Vec<String>) = (it.next().unwrap_or_default(), it.collect());
+    let signed = crate::setup::for_program(app, &program); // a token of this agent's own (tirith connect --token)
     if let Err(why) = enabled(app) {
-        return unsandboxed(app, who, &why, program, args);
+        let mut launch = unsandboxed(app, who, &why, program, args);
+        launch.env.extend(signed);
+        return launch;
     }
-    let env = sandboxed_env(app, &crate::lab::proxy_caller(who)); // a replay's turn reaches nothing outside
+    let mut env = sandboxed_env(app, &crate::lab::proxy_caller(who)); // a replay's turn reaches nothing outside
+    env.extend(signed);
     let (program, args) = super::confine::argv(app, program, args);
     Launch { program, args, env }
 }

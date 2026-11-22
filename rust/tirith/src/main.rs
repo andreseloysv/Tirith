@@ -24,6 +24,8 @@ mod rooms;
 mod rules;
 mod sandbox;
 mod server;
+mod service;
+mod setup;
 mod teach;
 mod turns;
 
