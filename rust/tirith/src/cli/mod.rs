@@ -14,6 +14,7 @@ pub fn main() {
     if let Some(code) = crate::sandbox::launcher(&args) {
         std::process::exit(code);
     }
+    crate::setup::as_service_user(&args);
     if let Some(code) = crate::setup::cli(&args) {
         std::process::exit(code);
     }

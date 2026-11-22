@@ -1,5 +1,6 @@
 //! The guide: `tirith setup`, `tirith connect`, `tirith doctor` (and `tirith service`, server mode, beside it). It takes a bare Mac or Linux machine to agents that are installed, signed in, held by the rules and proven with a real turn.
 mod api;
+mod as_user;
 mod ask;
 mod auth;
 mod catalog;
@@ -28,6 +29,7 @@ mod summary;
 mod trust;
 
 pub use api::routes;
+pub use as_user::as_service_user;
 pub use ask::Ask;
 pub use auth::for_program;
 pub use hook_lines::others;

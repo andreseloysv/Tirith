@@ -965,6 +965,7 @@ repository does not name a release build lays over it (`TIRITH_AGENTS_FILE`, rea
 Files:
 
 - `api.rs`: The daemon's side: who it is (`GET /api/setup`) and the connection check.
+- `as_user.rs`: root's `tirith` on a server goes on as the service's user, not as a second Tirith.
 - `ask.rs`: Asking the owner on the terminal, also under `curl | sh`.
 - `auth.rs`: An agent's token, kept private and handed to its processes alone.
 - `catalog.rs`: The agents the guide knows.

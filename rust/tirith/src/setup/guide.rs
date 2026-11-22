@@ -8,6 +8,7 @@ pub(super) fn setup(o: &Opts) -> Result<bool, String> {
     println!("Tirith {}", crate::bundle::VERSION);
     println!("Setting it up in {}.\n", cx.home.display());
     let mut pending = needs::machine(&cx);
+    pending.iter().for_each(|p| println!("! {p}")); // at once, not only at the end
     start(&cx, o, &mut pending)?;
     pending.extend(needs::sandbox(&cx));
 

@@ -4,13 +4,11 @@
 #   sh install.sh [--from <folder with a release>] [--no-setup] [options of `tirith setup`]
 # As root on Linux it makes the user `tirith`: agents never run as root. TIRITH_BASE_URL: another place to download.
 set -eu
-
 KEY='-----BEGIN PUBLIC KEY-----
 MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEEMqh12EKmR6Eeh0WfAy2RUc8O2XK
 0vydFEXZCLAwXgH8fRKBIyFIiZF8f2ZchMGUb52KgAT+Tz/T4NZXyF9Tbg==
 -----END PUBLIC KEY-----'
 BASE=${TIRITH_BASE_URL:-https://github.com/andreseloysv/Tirith/releases/latest/download}
-
 die() { echo "install: $*" >&2; exit 1; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
@@ -26,8 +24,9 @@ target() {
 }
 
 tools() {
-  miss=
-  for t in curl tar openssl; do have "$t" || miss="$miss $t"; done
+  miss='' need='curl tar openssl'
+  [ "$(id -u)" != 0 ] || need="$need git bash" # root installs now what the guide would ask sudo for
+  for t in $need; do have "$t" || miss="$miss $t"; done
   [ -n "$miss" ] || return 0
   if have apt-get; then how='apt-get install -y -q ca-certificates'
   elif have dnf; then how='dnf install -y -q ca-certificates'
@@ -90,7 +89,8 @@ main() {
   if [ "$asroot" = 1 ]; then
     service_user
     home=$(awk -F: '$1 == "tirith" { print $6 }' /etc/passwd)
-    set -- runuser -u tirith -- env HOME="$home" USER=tirith LOGNAME=tirith XDG_RUNTIME_DIR="/run/user/$(id -u tirith)" "$@"
+    set -- runuser -u tirith -- env HOME="$home" USER=tirith LOGNAME=tirith TIRITH_VIA="${SUDO_USER:-root}" \
+      XDG_RUNTIME_DIR="/run/user/$(id -u tirith)" "$@"
     cd "$home"
   fi
   [ "$setup" = 1 ] || { echo "Next: $*"; return 0; }

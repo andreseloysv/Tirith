@@ -82,6 +82,14 @@ fn hooks_keep_the_owners_own_and_never_pile_up() {
     std::fs::remove_dir_all(&d).unwrap();
 }
 
+#[test]
+fn root_finds_the_service_user_by_its_exact_name() {
+    let passwd = "root:x:0:0:root:/root:/bin/bash\ntirith2:x:1002:1002::/home/no:/bin/sh\ntirith:x:1001:1001::/home/tirith:/bin/sh\n";
+    let got = super::as_user::entry(passwd);
+    assert_eq!(got, Some(("1001".to_string(), "/home/tirith".to_string())));
+    assert_eq!(super::as_user::entry("root:x:0:0::/root:/bin/sh\n"), None);
+}
+
 fn own_without_ours() -> serde_json::Value {
     json!({"hooks": {"PreToolUse": [{"hooks": [{"type": "command", "command": "my-own-check"}]}]}})
 }

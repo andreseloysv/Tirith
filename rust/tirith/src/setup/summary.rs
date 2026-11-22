@@ -40,7 +40,11 @@ fn open(port: u16) {
         .map(String::from)
         .or_else(|| super::run::output("hostname", &[]))
         .unwrap_or_else(|| "this-server".into());
-    let user = super::run::output("id", &["-un"]).unwrap_or_else(|| "you".into());
+    let user = std::env::var(super::as_user::VIA) // the tunnel is for who signs in, not the service's user
+        .ok()
+        .filter(|u| !u.is_empty())
+        .or_else(|| super::run::output("id", &["-un"]))
+        .unwrap_or_else(|| "you".into());
     println!("\nOn your own computer (the page never listens on the network):");
     println!("  ssh -N -L {port}:127.0.0.1:{port} {user}@{at}");
     println!("  then open {page}");
