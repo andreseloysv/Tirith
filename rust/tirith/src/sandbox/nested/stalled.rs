@@ -14,5 +14,5 @@ pub(super) fn stalled(pid: u32) -> bool {
             size,
         )
     };
-    got == size && info.pbi_status == libc::SSTOP as u32
+    got == size && info.pbi_status == libc::SSTOP
 }
