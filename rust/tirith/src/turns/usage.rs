@@ -14,7 +14,7 @@ pub struct Usage {
     pub failed: bool,
     /// Some line carried usage.
     pub seen: bool,
-    /// Codex, Copilot and Muse count their cached tokens inside their input; Anthropic counts them apart.
+    /// Codex, Copilot and Muse count their cached tokens, read and written, inside their input; Anthropic counts them apart.
     pub input_has_cache: bool,
     /// The tokens are the session's so far, not the turn's (Codex, Copilot).
     pub session_totals: bool,

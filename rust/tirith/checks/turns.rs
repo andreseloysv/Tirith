@@ -498,3 +498,26 @@ fn a_turn_the_daemon_was_stopped_in_is_kept_as_failed() {
     drop(app);
     let _ = std::fs::remove_dir_all(&home);
 }
+
+#[test]
+fn a_cache_write_is_counted_once() {
+    let home = home("cache-write");
+    let app = crate::app::App::open_at(home.clone());
+    let mut t = super::Turn::new(&app, "c", "judge", Default::default());
+    t.loose = true;
+    // One real Copilot turn (gpt-5.6-luna, 2026-11-22), which its own billing splits as 6 fresh, 14393 read, 14505 written.
+    t.line(&json!({"type": "copilot.usage", "data": {"modelMetrics": {"gpt-5.6-luna": {"usage": {"inputTokens": 28904, "outputTokens": 69, "cacheReadTokens": 14393, "cacheWriteTokens": 14505}}}}}));
+    super::settle::settle(&app, &mut t);
+    let u = &t.usage;
+    assert_eq!(
+        (u.input, u.cache_read, u.cache_write, u.output),
+        (6, 14393, 14505, 69)
+    );
+    let raw: toml::Table = "[prices.\"m\"]\ninput = 1.0\noutput = 0.0\ncached = 0.0"
+        .parse()
+        .unwrap();
+    let cost = super::cost(&raw, "m", u).unwrap();
+    assert!((cost - 0.014511).abs() < 1e-9, "{cost}");
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}

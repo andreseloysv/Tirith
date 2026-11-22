@@ -1134,7 +1134,7 @@ Anthropic's `result` (tokens of the turn, with the cache apart; `total_cost_usd`
 resume), Muse's `run.usage` (the turn's, its cached tokens inside `input_tokens`; without it the `model_completed`
 records, else those of its session's `session.jsonl` under `~/.local/share/muse/sessions/`), Codex's `turn.completed`
 (the thread's totals since it began, the cache inside) and Copilot's `--usage-output-file` (the session's totals, the
-cache inside). `settle.rs` makes them comparable before the row is kept: a turn gets its own share of a session's
+cache read and written inside: both come off `tokens_in`). `settle.rs` makes them comparable before the row is kept: a turn gets its own share of a session's
 totals (what was spent before is kv `spent:<conversation>`; when that is not known, none rather than a guess), and
 `tokens_in` is always the fresh input, what the cache gave being `tokens_cache_read` alone, so no sum counts it
 twice. The model is the one the role sets, else the one the agent says (Codex's from its thread's rollout). When the

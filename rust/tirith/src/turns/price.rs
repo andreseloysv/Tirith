@@ -12,11 +12,7 @@ pub fn cost(raw: &toml::Table, model: &str, u: &Usage) -> Option<f64> {
     };
     let (input, output) = (rate("input")?, rate("output")?);
     let cached = rate("cached").unwrap_or(input);
-    let fresh = if u.input_has_cache {
-        (u.input - u.cache_read).max(0)
-    } else {
-        u.input
-    };
+    let fresh = super::settle::fresh(u);
     let dollars = fresh as f64 * input
         + u.cache_write as f64 * input
         + u.cache_read as f64 * cached
