@@ -6,6 +6,7 @@ mod context;
 mod drafts;
 mod folder;
 mod fragment;
+mod from_template;
 mod handed;
 mod hook;
 mod hook_api;
@@ -23,6 +24,7 @@ mod run;
 mod schedule;
 mod store;
 mod sweep;
+mod template;
 mod tuning;
 mod versioned;
 mod written;
@@ -43,6 +45,8 @@ pub(crate) use library::{learn, library};
 pub use list::{all, bot, key_for};
 pub use migrate::start;
 pub use run::tick;
+#[cfg(test)]
+pub(crate) use run::tick_at;
 pub use schedule::due;
 #[cfg(test)]
 pub use tuning::read as tuning_of;
@@ -58,6 +62,9 @@ mod hook_tests;
 #[cfg(test)]
 #[path = "../../checks/reschedule.rs"]
 mod reschedule_tests;
+#[cfg(test)]
+#[path = "../../checks/bot_templates.rs"]
+mod template_tests;
 #[cfg(test)]
 #[path = "../../checks/bots.rs"]
 mod tests;

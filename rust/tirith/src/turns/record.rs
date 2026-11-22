@@ -1,5 +1,6 @@
 //! One turn while it runs: who runs it and why, and what its lines say (its usage, tools, skills and text).
-use super::tools::{calls, skill_of};
+use super::skill_read::skill_of;
+use super::tools::calls;
 use super::usage::Usage;
 use crate::app::{now_iso, Shared};
 use serde_json::{json, Map, Value};

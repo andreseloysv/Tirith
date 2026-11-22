@@ -1,8 +1,8 @@
-// The shell: the sidebar, the header and the current view, with the add-project and bot cards over any view.
+// The shell: the sidebar, the header and the current view, with the add-project, bot and template cards over any view.
 import { html, useState, useEffect } from '../../vendor/preact-htm.js';
 import { useStore, setUi } from '../store.js';
 import { go } from '../common.js';
-import { BotCard } from '../views/bots.js';
+import { BotCard, BotTemplates } from '../views/bots.js';
 import { AddProject } from '../views/addproject.js';
 import { viewOf } from './views.js';
 import { useRoute } from './route.js';
@@ -13,6 +13,12 @@ import { Top } from './top.js';
 function botCard(card) {
   const saved = (b) => { setUi('botCard', null); go('bots', b ? b.id : ''); };
   return html`<${BotCard} key=${card.id || 'new'} bot=${card} onClose=${() => setUi('botCard', null)} onSaved=${saved} />`;
+}
+
+/* the bot templates, drawn here as the card is */
+function botTemplates() {
+  const made = (b) => { setUi('botTemplates', null); go('bots', b.id); };
+  return html`<${BotTemplates} onClose=${() => setUi('botTemplates', null)} onMade=${made} />`;
 }
 
 export function App() {
@@ -31,5 +37,6 @@ export function App() {
       <div id="view" class=${`view v-${r.view}`}>${s.loaded ? html`<${View} project=${project} />` : null}</div>
     </div>
   </div>${adding ? html`<${AddProject} onClose=${() => setAdding(false)} />` : null}
-  ${card ? botCard(card) : null}`;
+  ${card ? botCard(card) : null}
+  ${s.botTemplates ? botTemplates() : null}`;
 }

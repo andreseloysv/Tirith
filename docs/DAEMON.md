@@ -48,7 +48,10 @@ Files:
 Bots: agents of their own, factory roles with `scope = "own"` — the owner's in `~/.tirith/config.toml` (`[roles.bot-<id>]`, extending the manager) and the factory's system bots (`ceo`, `coach`, `judge` with `show = false`, and `manager-general`, the manager of no project), which the page edits the same way, saving the change as a layer in config.toml. Each has a name, a face (shape and
 colour) and its own conversation (its key), run like a project's manager with its own room on the phones; the sidebar paints every `own` role with `show = true`. Routines are `[[routes]]` on `schedule`
 in that file (their last runs stay in kv as `routine:<id>:<routine>` stamps, not configuration): tasks a bot does by itself at a time of chosen weekdays (the machine's local
-time); the lanes scheduler's tick hands a due one to the bot once a day, and the bot makes them itself with `tirith routine add|remove|list`. The page writes config.toml
+time); the lanes scheduler's tick hands a due one to the bot once for each of its times. Times missed (the daemon was down, the machine slept)
+follow the route's `catch_up`: `"once"`, the default, runs the routine one time, however many of its times passed since its last run, and tells the bot how late
+that is, counted from the latest of them; `"skip"` waits for the next time. Up to 5 minutes after its time is on time, and a routine that never ran only has
+today's time to catch up. `POST /api/bots/<id>/routines` takes `catch_up` too, and the bot makes them itself with `tirith routine add|remove|list`. The page writes config.toml
 with `toml_edit`, keeping its comments, and the bots that used to live in kv move there once, at daemon start. A bot learns in its folder (`<tirith home>/manager/<key>`): `memory.md`, which Tirith hands it as it is now at
 the start of every turn and routine, and skills in `.agents/skills/<name>/SKILL.md`, its own and the shared ones of `<tirith home>/bots/skills` (linked in before every turn).
 Both are git repositories (`bots/versioned.rs`): a bot's folder follows only its `memory.md` and its own skills — its `.gitignore`
@@ -97,6 +100,14 @@ to the webhook; it marks a message read only after a 2xx answer, goes on with th
 whatever the characters (`web/js/views/bots/mailtext.js`). One button there («Set it up») makes the address and the routine «Mail to <bot>» (`when`
 `mail:*`). Tests `webhook_create_signs_the_request` (against a fake platform) and `webhook_starts_its_routine` (`rust/tirith/checks/webhooks.rs`).
 
+Templates. `factory/bots/<id>/` is one bot template: `bot.toml` (`name`, `start` — what the bot says first, so the owner knows what it needs —,
+`[face]` with `shape` and `color`, and `[routine]` with the fields `POST /api/bots/<id>/routines` takes) and `SKILL.md`, the skill named `<id>`
+with the seven sections of `factory/skill.md`. The repo's three are built in (`factory/bot_templates.rs`) under the folder's, which is read on
+each call; one that does not load is an error, by its id. `GET /api/bots/templates` lists them and `POST /api/bots/from-template`
+(`{"template": "<id>"}`) makes the bot and answers it: an owner's bot like any other, with the skill in its folder and the routine stamped as
+just made, so it first runs at its next time. «Desde plantilla» in the Bots view shows them. Test `bot_templates_are_complete`
+(`rust/tirith/checks/bot_templates.rs`).
+
 Files:
 
 - `api.rs`: The bots' HTTP API: the list and its cards, a bot deleted, its routines, a routine run now, its Library.
@@ -107,6 +118,7 @@ Files:
 - `folder.rs`: A bot's folder and skills: where its sessions run (the lab's worktree during a B run), where agents may write, and the skills a folder holds.
 - `fragment.rs`: The bots as a TOML fragment: the owner's bots' roles, and every written bot's routes and routines.
 - `handed.rs`: What a bot is handed with its next message, from the folder that turn runs in (an experiment's B: the branch's); a skill that changed is read again in a session of its own.
+- `from_template.rs`: A bot made from a template: its card, its routine, its skill and its first words.
 - `hook.rs`: A bot's webhook as Tirith keeps it (kv `webhook:<bot>`: the platform's id, url and from, and the room), and what arrives through it.
 - `hook_api.rs`: A bot's webhook from the page: its URL (made once on the platform), deleted, and «Probar».
 - `hook_clean.rs`: What a webhook event shows outside its data block: a label of name characters only, a title as one quoted line, and a value fenced inside a task.
@@ -121,11 +133,12 @@ Files:
 - `notes.rs`: Numbered memory notes: `[m<N>]` and `[s<N>]` put before every note line that has none.
 - `routine.rs`: A routine made, changed or removed from a bot's card or its own commands.
 - `run.rs`: Routines run: one now, or every one due on the scheduler's tick (which also decides the lab's experiments that are due); each run is handed to the bot as a turn of its own (`manager::run_routine`).
-- `schedule.rs`: When a routine runs: its days of the week, and whether it is due now.
+- `schedule.rs`: When a routine runs: its days of the week, whether it is due now, and how late.
 - `store.rs`: Keeping the bots: one change at a time, written into config.toml and reloaded.
 - `sweep.rs`: What goes out of config.toml before the bots are written again: their roles and routes, then the sections left empty.
+- `template.rs`: A bot template read and checked: its name, face, routine, first words and skill.
 - `tuning.rs`: A routine's own effort and model: `routines.toml` in the bot's folder, read when its run starts and applied to its turns only.
-- `versioned.rs`: The bots' folders and `<home>/bots` as git repositories: only the memories and the own skills followed, a commit after each turn or Library change that changed them.
+- `versioned.rs`: The bots' folders and `<home>/bots` as git repositories: only the memories and the own skills followed, a commit after each turn, Library change or bot made from a template that changed them.
 - `written.rs`: The text of config.toml with the bots laid into it.
 
 ## `bundle/`
@@ -161,7 +174,7 @@ Files:
 
 ## `cli/`
 
-The command line. `main.rs` is the crate root: its `mod` lines and a `main` that hands the arguments to `cli/`. `tirith serve` is the daemon; every other command is one HTTP call to it on 127.0.0.1 (`client.rs`), so it starts in milliseconds. A module's own commands live in that module (`guard/cli.rs`, `rooms/cli.rs`, ...); `cli/dispatch.rs` asks them first.
+The command line. `main.rs` is the crate root: its `mod` lines and a `main` that hands the arguments to `cli/`. `tirith serve` is the daemon; every other command but the guide's (`setup`, `connect`, `doctor`, `service`) (see `service/`) is one HTTP call to it on 127.0.0.1 (`client.rs`), so it starts in milliseconds. A module's own commands live in that module (`guard/cli.rs`, `rooms/cli.rs`, ...); `cli/dispatch.rs` asks them first.
 
 Files:
 
@@ -251,6 +264,7 @@ keeps the version with an empty hash. Comparing two versions, two models or two 
 Files:
 
 - `agents.rs`: Reading a factory's agents: their keys and their commands.
+- `bot_templates.rs`: The bot templates' texts: `factory/bots/<id>/`, the repo's built in under the folder's.
 - `current.rs`: The factory version the daemon runs now, reloaded under config.toml's overlay; a bad version keeps the last good one.
 - `embedded.rs`: The repo's factory, built into the binary: what runs when no factory folder is found, and what every folder's file is laid over.
 - `evals.rs`: Reading a factory's evals, and the hash of the setting a role runs with (what an eval's verdict is tied to).
@@ -525,6 +539,7 @@ Files:
 - `prompt.rs`: What a conversation's agent is told besides its messages: its role's instructions and the recent chat.
 - `queue.rs`: Reports and events for a conversation that wait for its next turn: the newest 30 kept, the older ones counted.
 - `run.rs`: A conversation's sessions, one after another while messages wait, started again more slowly when they fail young.
+- `commands.rs`: The owner's commands that Tirith answers itself, with no turn (`/status`, `/models`, `/model`).
 - `say.rs`: What the owner, a room or an agent writes to a conversation (a paired phone's words are judged as the owner's).
 - `session.rs`: The stream-json session of a conversation: started with what waits for it, read until it ends or rests.
 - `session_end.rs`: The end of a stream-json session: what its dead turn left, its process, and what waits again when it never got ready.
@@ -592,8 +607,8 @@ after the delayed `metric.red` route's `after_minutes` (15), one pass runs for t
 role (the CEO, `access = "read"`) runs one fresh turn like any turn role, and its
 answer goes to the CEO's own conversation and, as `review.done`, to the manager of no project. Back to green ends the episode. The
 factory's `schedule` route to the CEO also runs it every day at 07:00 with no red measure due — that
-when and who are configuration, not a decision in `metrics/`, and it is due like a bot's routine (its time
-came today and no daily pass ran since; its daily passes are the `ceo_reviews` rows whose `metric` names
+when and who are configuration, not a decision in `metrics/`, and it is due like a bot's routine (one of its
+times came and no daily pass ran since, with the route's `catch_up`; its daily passes are the `ceo_reviews` rows whose `metric` names
 `daily`, counted in the same 24 h as its `max_per_day`). Either way its brief (`brief`) carries
 the measures, the measures and eval scores grouped by factory version — merged lanes and their first-try
 share, the `scores`, the cards and the events per stamp, oldest version first — the last lanes with their
@@ -742,6 +757,18 @@ Files:
 - `parse.rs`: Reading a plan's markdown into its steps and items.
 - `step.rs`: Creating the plan's next step.
 
+## `power/`
+
+`[power] keep_awake = true` in config.toml (false by default), read when the daemon starts: on macOS it runs
+`caffeinate -i -s -w <its pid>`, so the machine does not sleep while the daemon lives and may again once it ends,
+however it ends. `-s` holds on mains power only. On Linux nothing runs.
+
+Files:
+
+- `argv.rs`: The command that keeps the machine awake, when there is one to run.
+- `mod.rs`: Declares the folder's files and re-exports what other modules use.
+- `start.rs`: Keeping the machine awake from the daemon's start.
+
 ## `projects/`
 
 Adding a project (the page's "+", `tirith project add`): the folder gets a git repository, the commit guard and a
@@ -782,7 +809,7 @@ Files:
 - `api.rs`: The page's changes to a room: a new QR, a code for another manager, leaving it.
 - `cli.rs`: `tirith room …` commands.
 - `create.rs`: A private room this manager makes on the platform for a conversation, where its phones are paired.
-- `deliver.rs`: What a poll decided is done: lines sent, the phones' model controls answered, cards answered, the rest handed to the manager.
+- `deliver.rs`: What a poll decided is done: lines sent, the phones' model controls and commands answered, cards answered, the rest handed to the manager.
 - `files.rs`: The pictures the phones send, kept as files for a day.
 - `forget.rs`: The owner has Tirith forget a phone.
 - `handle.rs`: The rules for one message of a room, in order: only genuine events, who wrote it, what it says, pairing, history, and who it is for.
@@ -941,7 +968,8 @@ inside the sandbox is one whatever it sends: Linux's relay calls the daemon's po
 socket is looked up and its profile read (a caller nobody of this user holds is not the owner either). An agent's
 `tirith answer` of an approval or payment card needs the owner's own words, written after it was asked, and keeps those; its
 words in a chat are never the owner's; it gets neither the teach extension's token nor a phone's pairing code, and
-it neither approves a draft nor gives a 👍. Git the daemon runs is confined too (`sandbox/git.rs`): a hook, an fsmonitor or a filter left in a bot's or a
+it neither approves a draft nor gives a 👍,
+nor lifts one of the owner's network blocks (it may add one). Git the daemon runs is confined too (`sandbox/git.rs`): a hook, an fsmonitor or a filter left in a bot's or a
 project's repository is an agent's, so its `git push` also goes through the proxy and the block list, with
 `GIT_SSH_COMMAND` as the lanes have it. The limit: a program of the same user that reads or writes that user's files (the store, start-up
 files, programs on the PATH), or
@@ -977,11 +1005,13 @@ Files:
 Server mode (`tirith service …`, `tirith setup --server`): the daemon as a service of its machine, one per Tirith
 home. On Linux a systemd user unit with linger (no root, up from boot); on macOS a launchd job of the owner's, or
 with `--boot` one of the system's that runs as the owner with nobody logged in (sudo); where there is neither (a
-container) it is started in a session of its own and says that nothing brings it back. A restart leaves the
+container) it is started in a session of its own and says that nothing brings it back. Its launchd label is
+`com.tirith.serve` (a marked one for a home that is not the usual). A restart leaves the
 running lanes alone: the next daemon takes them up.
 
 Files:
 
+- `alive.rs`: Whether what answers is the service's own process (`alive:` in `tirith service status`).
 - `cli.rs`: `tirith service install|status|start|stop|restart|uninstall|logs`.
 - `kind.rs`: Which way this home's daemon is kept running.
 - `launchctl.rs`: launchctl on one job, in the owner's domain or the system's.
@@ -1033,6 +1063,8 @@ Files:
 - `private.rs`: What never reaches a log, an event or an answer: the values kept for the agents (tokens, an enterprise's host).
 - `packages.rs`: The system's programs installed with its package manager, when the owner says so.
 - `program.rs`: An agent's program found, or installed now.
+- `terminal.rs`: Linux: the service's user, in root's terminal during the guide, cannot type into it (nor can what it starts).
+- `root.rs`: What the guide has root do through sudo: the system's own programs alone, and a file's text on stdin.
 - `prove.rs`: The connection check: one real turn by the same way work runs.
 - `why.rs`: Why a connection check failed: the telling lines of that turn's stderr.
 - `run.rs`: Running another program in the owner's sight, or quietly.
@@ -1041,6 +1073,24 @@ Files:
 - `summary.rs`: The guide's end: what is connected, what is left, how to open Tirith.
 - `trust.rs`: Tirith's hooks trusted in Codex through its app-server.
 - `trusted.rs`: Who signs in on a server whose Tirith is another user's is added to `[server] users`, for their tunnel.
+
+## `status/`
+
+`/status`, written by the owner in a chat or from a paired phone in its room: Tirith answers it from its own data and no
+turn opens (no `owner.message` or `room.message` event, so no eval either, and no trigger for a next turn). It says how
+long the daemon has been up, each project's active lanes by state, today's timed routines of the bots and the last error.
+A routine is done when its own first run after its `schedule` event ended well; it is pending until then, unless it
+failed or a change to it after its time means it no longer runs today. The last error is the newest of the error and
+failure events and the failed turns, on one line with its secrets hidden.
+
+Files:
+
+- `command.rs`: The owner's `/status` command and the answer it gives.
+- `error.rs`: The last thing that went wrong: an error event or a failed turn.
+- `lanes.rs`: The active lanes of each project, counted by their state.
+- `mod.rs`: Declares the folder's files and re-exports what other modules use.
+- `routines.rs`: Today's timed routines of the bots: the ones done and the ones still to do.
+- `span.rs`: A length of time in a few characters.
 
 ## `teach/`
 
@@ -1233,7 +1283,8 @@ Files:
 - `shell.rs`: A shell call as the agent asked for it, out of Codex's `sh -lc` wrapper.
 - `spent.rs`: The turn's own share of what an agent gives as its session's totals.
 - `signals.rs`: The quality signals on a turn's row: `reaction`, `corrected`, the checks and the cited notes.
-- `tools.rs`: The tool calls a line of any agent's output makes, the short line the chat shows for each, and the skills they read.
+- `skill_read.rs`: The skill a call read: a path in what came back, in a prompt handed on or in a file written is no read.
+- `tools.rs`: The tool calls a line of any agent's output makes, and the short line the chat shows for each.
 - `usage.rs`: What a turn used, read from what each agent prints.
 - `usage_keys.rs`: How each agent names its counts of tokens.
 - `versions.rs`: The versions a turn ran with: the git blob hash (`git hash-object`) of its memory.md, the bots' shared memory and each skill it read.

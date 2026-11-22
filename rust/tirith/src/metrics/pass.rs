@@ -32,7 +32,7 @@ pub(super) fn under_budget(app: &Shared, role: &str, now: u64) -> bool {
         .unwrap_or(0);
     today < max
 }
-/// The scheduled pass is configuration, not a decision here: the factory's `schedule` route to this role, due like a bot's routine when its time came and no scheduled pass of this role (kept as rows naming `daily`) ran since.
+/// The scheduled pass is configuration, not a decision here: the factory's `schedule` route to this role, due like a bot's routine (its `catch_up` too), its last run being this role's last scheduled pass (kept as rows naming `daily`).
 pub(super) fn daily_due(app: &Shared, role: &str) -> bool {
     let sql = format!(
         "SELECT COALESCE(MAX(at), '') FROM ceo_reviews WHERE metric LIKE '%daily%' AND {}",
@@ -49,11 +49,11 @@ pub(super) fn daily_due(app: &Shared, role: &str) -> bool {
     } else {
         last_daily
     };
-    let schedules = app.cfg().factory.schedules();
-    schedules.into_iter().any(|(to, at, days)| {
+    let schedules = app.cfg().factory.passes();
+    schedules.into_iter().any(|(to, at, days, catch_up)| {
         to == role
             && crate::bots::due(
-                &json!({"at": at, "days": days, "last": last_daily}),
+                &json!({"at": at, "days": days, "catch_up": catch_up, "last": last_daily}),
                 chrono::Local::now(),
             )
     })

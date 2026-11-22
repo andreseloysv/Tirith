@@ -28,6 +28,7 @@ mod save;
 mod settle;
 mod shell;
 mod signals;
+mod skill_read;
 mod spent;
 mod tools;
 mod usage;

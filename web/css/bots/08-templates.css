@@ -1,0 +1,8 @@
+/* «Desde plantilla»: the button above the bot's panel and the list of templates */
+.btopen { align-self: flex-end; flex: none; margin-bottom: -18px; }
+.btpls:focus { outline: none; }
+.btlist { display: flex; flex-direction: column; gap: 4px; padding: 10px; }
+.btpl { display: flex; align-items: center; gap: 14px; width: 100%; padding: 12px; border-radius: 16px; text-align: left; transition: background .2s; }
+.btpl:hover:not(:disabled) { background: var(--b-soft); }
+.btpl:disabled { opacity: .5; cursor: default; }
+.btpl b { font-size: 15px; font-weight: 400; color: var(--b-ink); overflow-wrap: anywhere; }

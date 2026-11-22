@@ -121,7 +121,7 @@ fn lines(app: &crate::app::Shared, kind: &str) -> Vec<String> {
 
 #[test]
 fn lab_live_decides_by_the_rule() {
-    let lab = crate::factory::current().lab.clone();
+    let lab = crate::factory::Factory::default().lab.clone(); // not current(): other tests load their own
     assert_eq!(
         (
             lab.inputs,
@@ -644,7 +644,7 @@ fn both_sides_of_a_live_experiment_start_fresh() {
 
 #[test]
 fn time_is_saved_only_when_most_pairs_saved_it() {
-    let lab = crate::factory::current().lab.clone();
+    let lab = crate::factory::Factory::default().lab.clone(); // not current(): other tests load their own
     let side = |ms: f64| super::Side {
         runs: 5,
         tokens: 1000.0,
@@ -734,7 +734,7 @@ fn the_same_answer_is_a_tie_without_the_judge() {
 
 #[test]
 fn one_dear_run_is_no_saving_in_tokens_or_dollars() {
-    let lab = crate::factory::current().lab.clone();
+    let lab = crate::factory::Factory::default().lab.clone(); // not current(): other tests load their own
     let side = |tokens: f64| super::Side {
         runs: 2,
         tokens,

@@ -46,6 +46,9 @@ pub fn agent(h: &HeaderMap) -> bool {
 
 /// Where the answer depends on who calls (asking the kernel costs some milliseconds, so only there).
 pub(super) fn asked(method: &Method, path: &str) -> bool {
+    if unblocks(method, path) {
+        return true;
+    }
     let reads = ["/api/teach/", "/api/rooms"];
     let changes = ["/api/owner/", "/api/setup/check/"];
     reads.iter().any(|p| path.starts_with(p))
@@ -56,11 +59,18 @@ pub(super) fn asked(method: &Method, path: &str) -> bool {
                 || path.ends_with("/reaction"))
 }
 
-/// What no agent does at all: pairing a phone, which is then the owner, and the owner's 👍 or 👎.
-pub(super) fn owners_alone(path: &str) -> bool {
+/// Lifting one of the owner's network blocks.
+fn unblocks(method: &Method, path: &str) -> bool {
+    method == Method::DELETE && path == "/api/net/blocks"
+}
+
+/// What no agent does at all: pairing a phone, which is then the owner, the owner's 👍 or 👎, and lifting their blocks.
+pub(super) fn owners_alone(method: &Method, path: &str) -> bool {
     let pairs =
         path.starts_with("/api/rooms/") && (path.ends_with("/qr") || path.ends_with("/qr.svg"));
-    pairs || (path.starts_with("/api/turns/") && path.ends_with("/reaction"))
+    pairs
+        || unblocks(method, path)
+        || (path.starts_with("/api/turns/") && path.ends_with("/reaction"))
 }
 
 /// Marks a confined caller, and refuses an agent what is the owner's alone.
@@ -78,7 +88,7 @@ pub(super) async fn mark(mut req: Request, next: Next) -> Response {
                 .insert(CONFINED, HeaderValue::from_static("1"));
         }
     }
-    if owners_alone(&path) && agent(req.headers()) {
+    if owners_alone(req.method(), &path) && agent(req.headers()) {
         return (StatusCode::FORBIDDEN, OWNERS).into_response();
     }
     next.run(req).await

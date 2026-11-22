@@ -1,5 +1,5 @@
 //! What this machine must have before the agents can work: the programs, a git identity, the sandbox.
-use super::{context::Context, find, packages, run};
+use super::{context::Context, find, packages, root, run};
 
 pub(super) const PROGRAMS: [&str; 3] = ["git", "curl", "bash"];
 
@@ -52,7 +52,7 @@ pub(super) fn sandbox(cx: &Context) -> Vec<String> {
         return vec![];
     };
     println!("Network sandbox: off ({why}).");
-    let sudo = find::program("sudo").filter(|_| why.contains("net allow") && cx.ask.person());
+    let sudo = root::sudo().filter(|_| why.contains("net allow") && cx.ask.person());
     if let Some(sudo) = sudo {
         let exe = cx.exe.display().to_string();
         let yes = cx

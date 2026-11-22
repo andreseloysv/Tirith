@@ -13,10 +13,10 @@ pub fn pass_due(app: &Shared, role: &str, due: bool, now: DateTime<Local>) -> bo
     let times: Vec<(String, Vec<u64>)> = app
         .cfg()
         .factory
-        .schedules()
+        .passes()
         .into_iter()
-        .filter(|(to, _, _)| to == role)
-        .map(|(_, at, days)| (at, days))
+        .filter(|(to, ..)| to == role)
+        .map(|(_, at, days, _)| (at, days))
         .collect();
     let Some(at) = calendar::latest(&times, now) else {
         return false;

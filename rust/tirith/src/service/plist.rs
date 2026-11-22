@@ -28,6 +28,9 @@ pub(super) fn text(u: &Unit, log: &Path, user: Option<&str>) -> String {
     env += &key("HOME", &show(&u.user_home));
     env += &key("PATH", &u.path());
     env += &key("SHELL", &shell);
+    if let Some(port) = u.port {
+        env += &key("TIRITH_PORT", &port.to_string());
+    }
     body += &format!("  <key>EnvironmentVariables</key>\n  <dict>\n{env}  </dict>\n");
     body += &key("WorkingDirectory", &show(&u.user_home));
     body += &key("StandardOutPath", &show(log));

@@ -1,6 +1,6 @@
 //! The manager's turns for rooms: what a turn received stops being owed only when it ends, and what no turn answered is handed again.
 use super::{
-    deliver::phone_model_command, outbox::queue, store::update, store::ROOMS, uncite::uncited, Room,
+    deliver::phone_command, outbox::queue, store::update, store::ROOMS, uncite::uncited, Room,
 };
 use crate::{app::Shared, manager};
 /// A turn that `rooms` started begins: what they are owed now is what it received (`answering`, kept with the cursor), and only that stops being owed at its end; what arrives while it runs is a later turn's.
@@ -51,7 +51,7 @@ fn hand_again(app: &Shared, r: &Room) {
     })
     .unwrap_or_default()
     .iter()
-    .filter(|(a, t)| !phone_model_command(app, r, a, t))
+    .filter(|(a, t)| !phone_command(app, r, a, t))
     .for_each(|(author, text)| {
         manager::from_room(
             app,

@@ -11,6 +11,8 @@ pub type Shared = Arc<App>;
 
 pub struct App {
     pub home: PathBuf,
+    /// When this daemon started, in seconds since the epoch (an `Instant` stands still while the Mac sleeps).
+    pub started: u64,
     pub cfg: RwLock<Arc<Config>>,
     pub db: Mutex<Connection>,
     pub lanes: Mutex<BTreeMap<String, crate::app::Lane>>,

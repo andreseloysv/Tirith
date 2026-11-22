@@ -26,7 +26,7 @@ pub fn cli(opts: &Opts) -> Result<bool, String> {
             super::uninstall(&u, &ask)?;
             println!("The service is gone. {} stays as it is.", u.home.display());
         }
-        Some("status") => return Ok(status(&u)),
+        Some("status") => return Ok(status(&u, &ask)),
         Some("logs") => println!("{}", crate::app::tail(&u.log()?, 60)),
         _ => return Err(USE.into()),
     }
@@ -34,8 +34,9 @@ pub fn cli(opts: &Opts) -> Result<bool, String> {
 }
 
 /// Prints how it runs; whether it answers.
-fn status(u: &Unit) -> bool {
-    println!("service: {}", Kind::installed(u).said());
+fn status(u: &Unit, ask: &Ask) -> bool {
+    let kind = Kind::installed(u);
+    println!("service: {}", kind.said());
     let said = daemon::answering();
     let ours = said.as_ref().filter(|v| daemon::is_of(v, &u.home));
     match (ours, &said) {
@@ -48,6 +49,12 @@ fn status(u: &Unit) -> bool {
             println!("daemon:  not this home's: another Tirith answers on this port")
         }
         (None, None) => println!("daemon:  does not answer"),
+    }
+    if kind != Kind::Plain {
+        println!(
+            "alive:   {}",
+            super::alive::said(super::alive::pid(u, ask, kind), said.as_ref())
+        );
     }
     ours.is_some()
 }

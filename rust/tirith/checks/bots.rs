@@ -76,6 +76,111 @@ fn a_routine_is_due_once_a_day_after_its_time() {
 }
 
 #[test]
+fn routines_catch_up_once() {
+    let stamp = |t: chrono::DateTime<Local>| t.with_timezone(&chrono::Utc).to_rfc3339();
+    let r = |catch_up: &str, days: &[u64], last: &str| json!({"at": "08:00", "days": days, "catch_up": catch_up, "last": last});
+    let (daily, ran) = ([1, 2, 3, 4, 5, 6, 7], stamp(at(2026, 11, 18, 8, 0)));
+    // Every 30 s from `back` to `until`, as the scheduler does: each run with the delay it tells.
+    let runs = |mut r: serde_json::Value, back, until| {
+        let (mut now, mut ran): (chrono::DateTime<Local>, Vec<_>) = (back, vec![]);
+        while now <= until {
+            if super::due(&r, now) {
+                ran.push((now, super::schedule::late(&r, now)));
+                r["last"] = json!(stamp(now));
+            }
+            now += chrono::TimeDelta::seconds(30);
+        }
+        ran
+    };
+
+    // Down two days, back on Friday at 10:15: one run, saying how late; with skip, none.
+    let (back, night) = (at(2026, 11, 20, 10, 15), at(2026, 11, 20, 23, 59));
+    let late = ", 2 h 15 min late (it was for Fri 2026-11-20 08:00)".to_string();
+    assert_eq!(
+        runs(r("once", &daily, &ran), back, night),
+        [(back, late.clone())]
+    );
+    assert!(runs(r("skip", &daily, &ran), back, night).is_empty());
+    let mut unset = r("once", &daily, &ran);
+    unset.as_object_mut().unwrap().remove("catch_up");
+    assert_eq!(
+        runs(unset, back, night),
+        [(back, late)],
+        "once is the default"
+    );
+
+    // Back before that day's time: the missed run at once, then the day's own; with skip only the day's own.
+    let (early, eight) = (at(2026, 11, 20, 6, 0), at(2026, 11, 20, 8, 0));
+    let missed = ", 22 h 0 min late (it was for Thu 2026-11-19 08:00)".to_string();
+    assert_eq!(
+        runs(r("once", &daily, &ran), early, night),
+        [(early, missed), (eight, String::new())]
+    );
+    assert_eq!(
+        runs(r("skip", &daily, &ran), early, night),
+        [(eight, String::new())]
+    );
+
+    // A Monday routine missed is caught up on a day that is not its own, even weeks after its last run.
+    let old = stamp(at(2026, 11, 2, 8, 0));
+    let wed = at(2026, 11, 18, 10, 0);
+    assert_eq!(
+        runs(r("once", &[1], &old), wed, night),
+        [(
+            wed,
+            ", 2 d 2 h late (it was for Mon 2026-11-16 08:00)".to_string()
+        )]
+    );
+    assert!(runs(r("skip", &[1], &old), wed, night).is_empty());
+
+    // Nothing is missed when none of its days passed, it is off, or it never ran and today's time has not come.
+    let monday = stamp(at(2026, 11, 16, 8, 0));
+    assert!(!super::due(&r("once", &[1], &monday), wed));
+    assert!(!super::due(&r("once", &daily, ""), early));
+    let mut off = r("once", &daily, &ran);
+    off["on"] = json!(false);
+    assert!(!super::due(&off, back));
+
+    // With skip, a tick a little behind is still on time.
+    assert!(super::due(&r("skip", &daily, &ran), at(2026, 11, 20, 8, 5)));
+    assert!(!super::due(
+        &r("skip", &daily, &ran),
+        at(2026, 11, 20, 8, 6)
+    ));
+}
+
+#[test]
+fn catch_up_lives_in_config() {
+    let saved = |catch_up: &str| {
+        let bots = json!([{"id": "abc123", "name": "N", "shape": "drop", "color": "#22d3ee", "routines": [{"id": "r1", "title": "T", "prompt": "P", "days": [1], "at": "08:00", "catch_up": catch_up}]}]);
+        let text = super::written::written("", bots.as_array().unwrap()).unwrap();
+        let table = text.parse::<toml::Table>().unwrap();
+        let read = super::list::bots_of(&json!(table), &|_, _| String::new());
+        assert_eq!(read[0]["routines"][0]["catch_up"], catch_up, "{text}");
+        text
+    };
+    assert!(
+        !saved("once").contains("catch_up"),
+        "the default is not written"
+    );
+    let parse = |text: &str| {
+        crate::factory::parse(
+            crate::factory::TEXT,
+            crate::factory::embedded_prompts(),
+            &text.parse().unwrap(),
+        )
+    };
+    let text = saved("skip");
+    let f = parse(&text).unwrap();
+    assert!(f
+        .schedules()
+        .iter()
+        .any(|s| s.0 == "bot-abc123" && s.3 == "skip"));
+    let bad = parse(&text.replace("\"skip\"", "\"twice\"")).err();
+    assert!(bad.unwrap_or_default().contains("catch_up"));
+}
+
+#[test]
 fn bots_live_in_config_as_own_roles_with_schedule_routes() {
     // A bot in the page's shape, with a switched-off routine: written into a config.toml with the owner's comments.
     let bots = json!([{"id": "abc123", "name": "Noticias", "shape": "drop", "color": "#22d3ee", "routines": [{"id": "r111111", "title": "News", "prompt": "Summarise the news", "days": [1, 2, 3, 4, 5], "at": "08:00", "on": false}]}]);

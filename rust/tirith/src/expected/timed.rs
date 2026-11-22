@@ -39,7 +39,7 @@ pub(super) fn timed(app: &Shared) -> Vec<Timed> {
     }
     let cfg = app.cfg();
     let turn = |role: &str| cfg.factory.role::<String>(role, "session").as_deref() == Some("turn");
-    for (role, at, days) in cfg.factory.schedules() {
+    for (role, at, days, _) in cfg.factory.passes() {
         if turn(&role) {
             out.push(Timed {
                 conv: role,

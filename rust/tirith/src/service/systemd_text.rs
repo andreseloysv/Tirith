@@ -23,6 +23,9 @@ pub(super) fn text(u: &Unit, log: &Path) -> Result<String, String> {
     let home = quoted(&format!("TIRITH_HOME={}", u.home.display()), false)?;
     let path = quoted(&format!("PATH={}", u.path()), false)?;
     let log = log.display().to_string().replace('%', "%%");
+    let port = u.port.map_or(String::new(), |p| {
+        format!("Environment=\"TIRITH_PORT={p}\"\n")
+    });
     Ok(format!(
         "# Written by `tirith service install`.
 [Unit]
@@ -34,7 +37,7 @@ StartLimitIntervalSec=0
 ExecStart={exe} serve
 Environment={home}
 Environment={path}
-Restart=always
+{port}Restart=always
 RestartSec=3
 # A restart of the daemon leaves the running lanes alone: it takes them up again.
 KillMode=process

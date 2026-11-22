@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tirith: an autonomous manager for your coding agents</title>
-<meta name="description" content="Tirith keeps a plan, starts coding agents only from plan items, enforces rules in code, and asks you only what only you can decide. Built for the Meta Global AI Developer Hackathon.">
+<title>Tirith: Agents that finish the work, your code and your office tasks, on your own machine.</title>
+<meta name="description" content="Agents that finish the work, your code and your office tasks, on your own machine. Code is checked before it merges. Bots are told to ask before they send or buy.">
 <meta name="color-scheme" content="light dark">
-<meta property="og:title" content="Tirith: an autonomous manager for your coding agents">
-<meta property="og:description" content="They finish the plan; you see everything and decide only what only you can.">
+<meta property="og:title" content="Tirith: Agents that finish the work, your code and your office tasks, on your own machine.">
+<meta property="og:description" content="Code is checked before it merges. Bots are told to ask before they send or buy.">
 <link rel="icon" href="img/tirith-logo-64.png" type="image/png">
 <meta property="og:image" content="https://andreseloysv.github.io/Tirith/img/social-preview.png">
 <link rel="stylesheet" href="style.css">
@@ -19,6 +19,8 @@
   <div class="wrap">
     <a class="brand" href="#top"><img src="img/tirith-logo-64.png" width="32" height="32" alt="">Tirith</a>
     <nav aria-label="Sections">
+      <a class="opt" href="#bots">Bots</a>
+      <a class="opt" href="#compare">Compare</a>
       <a class="opt" href="#features">What it does</a>
       <a class="opt" href="#meta">Meta models</a>
       <a class="opt" href="#how">How it works</a>
@@ -33,8 +35,8 @@
     <img src="img/tirith-logo.png" width="220" height="220" alt="The Tirith logo: a large smiling luminous bot in front, with many smaller glowing bots streaming out from behind it with trails of light against a starry sky.">
   </div>
   <span class="eyebrow">Meta Global AI Developer Hackathon · Build for Your World</span>
-  <h1>Your coding agents finish the plan. You decide only what only you can.</h1>
-  <p class="lede">Tirith is an autonomous manager for the coding agents you already run. It keeps a plan, starts agents only from plan items, checks what they report, merges what passes, and answers your questions in a chat.</p>
+  <h1>Agents that finish the work, your code and your office tasks, on your own machine. <span class="promise">Code is checked before it merges. Bots are told to ask before they send or buy.</span></h1>
+  <p class="lede">Tirith manages the agents you already run. For code, it keeps a plan, starts an agent per item and merges what passes. For office tasks, it gives you bots that learn how you want them done.</p>
   <div class="cta">
     <a class="btn primary" href="https://github.com/andreseloysv/Tirith">View on GitHub</a>
     <a class="btn" href="https://github.com/andreseloysv/Tirith/releases/latest">Download for macOS</a>
@@ -55,6 +57,69 @@
     <div class="card"><span class="num">3</span><h3>Everything visible</h3><p>Chat, plan, agents and pipelines in one app. You are asked only for a password, a payment or a choice that is yours.</p></div>
   </div>
   <figure class="render"><picture><source type="image/webp" srcset="img/render-agents.webp"><img loading="lazy" src="img/render-agents.png" width="1000" height="625" alt="A stone castle tower at dusk, its window glowing amber and joined by arcs of light to six floating blue crystals: agents working under one manager."></picture></figure>
+</section>
+
+<section class="wrap" id="bots">
+  <h2>Bots that learn</h2>
+  <p class="sub">For the office half of your work: inboxes, websites, reports, the things you do again every week. Each bot has its own chat, memory and skills.</p>
+  <div class="three">
+    <div class="card"><h3>Bots</h3><p>A bot saves your corrections in its memory and writes down a procedure it will repeat as a skill. You can read and edit both.</p></div>
+    <div class="card"><h3>Routines</h3><p>Ask for "every weekday at 7" and it becomes a routine. When there is nothing new, your phone stays quiet.</p></div>
+    <div class="card"><h3>Webhooks</h3><p>GitHub, a mail script or any service can start a routine through agentsmessenger.com. The bot is told that what arrives is data, never instructions.</p></div>
+    <div class="card"><h3>Teach</h3><p>Do a task once in Edge with Tirith's extension. The bot drafts a skill, asks you questions and rehearses it. It is a draft until you approve it.</p></div>
+    <div class="card"><h3>The Coach</h3><p>Every week, and when a routine gets worse, it reads how the bots' runs went and proposes one change to test.</p></div>
+    <div class="card"><h3>The lab</h3><p>It compares the change with the current version. A change stays only if it is no worse, adds no failure or thumbs-down and saves at least 15% of cost or time.</p></div>
+  </div>
+  <p class="note">Asking before sending, buying, deleting or publishing is an instruction to each bot, not a technical block. A judge model reviews their turns afterwards and flags what had no approval.</p>
+</section>
+
+<section class="wrap" id="agents">
+  <h2>Bring your own agents</h2>
+  <p class="sub">Tirith runs the command-line agents installed on your computer, signed in with the accounts you already have. Their plans and limits apply.</p>
+  <div class="three">
+    <div class="card"><h3>The anthropic agent</h3><p>Anthropic's command-line agent, with the account it is signed in to. It is the default for managers and workers.</p></div>
+    <div class="card"><h3>Codex</h3><p>OpenAI's agent, after <code>codex login</code>. Tirith offers the models and efforts in its local catalog.</p></div>
+    <div class="card"><h3>Muse</h3><p>Meta's agent, with the account it is signed in to. It is the default judge of the bots' work.</p></div>
+  </div>
+  <p class="note">Choose agent and model per role, and a fallback for when a worker runs out of credits. Replays in the lab need the anthropic agent or Muse.</p>
+</section>
+
+<section class="wrap" id="compare">
+  <h2>Tirith and Grok Bot</h2>
+  <p class="sub">Both give you bots with routines. These are the differences to know before you choose.</p>
+  <table class="compare">
+    <caption>Checked on <time datetime="2026-11-22">22 November 2026</time> against <a href="https://cursor.com/docs/grok-bot">Grok Bot's official documentation</a> (cursor.com/docs/grok-bot, which redirects to docs.x.ai) and its terms. Each Grok Bot cell links to its source.</caption>
+    <thead>
+      <tr><td></td><th scope="col">Tirith</th><th scope="col">Grok Bot</th></tr>
+    </thead>
+    <tbody>
+        <tr>
+          <th scope="row">Plan it needs</th>
+          <td>None of its own. You pay for the agent accounts you use.</td>
+          <td><a href="https://docs.x.ai/grok-bot/faq#do-i-need-a-separate-grok-bot-subscription">Premium, Super or Ultra on The X Subscription, or an eligible Cursor, SuperGrok, X Premium+ or Grok Business plan.</a> <a href="https://docs.x.ai/grok-bot/faq#is-there-a-free-trial">Some accounts get a trial.</a></td>
+        </tr>
+        <tr>
+          <th scope="row">Where it runs</th>
+          <td>The daemon and the agents run on your computer. Their models run at each provider.</td>
+          <td><a href="https://docs.x.ai/grok-bot/security-faq#can-we-run-grok-bot-on-premises-or-from-our-own-image">On cloud computers hosted by Cursor, with no on-premises option.</a> <a href="https://docs.x.ai/grok-bot/approvals-security-and-privacy#control-access-to-your-local-computer">With your permission, Bots can also run commands on your computer.</a></td>
+        </tr>
+        <tr>
+          <th scope="row">Can you choose the model?</th>
+          <td>Yes: agent and model per role. Your bots use the manager's.</td>
+          <td><a href="https://docs.x.ai/grok-bot/faq#can-i-pick-the-model">No. Grok Bot picks the model for each task.</a></td>
+        </tr>
+        <tr>
+          <th scope="row">Agents it uses</th>
+          <td>The anthropic agent, Codex and Muse, through their own command lines.</td>
+          <td><a href="https://docs.x.ai/grok-bot/how-grok-bot-works">Its own Bots, which can hand coding work to Cursor Cloud Agents.</a></td>
+        </tr>
+        <tr>
+          <th scope="row">Open source?</th>
+          <td><a href="https://github.com/andreseloysv/Tirith/blob/main/LICENSE">Yes, MIT license.</a></td>
+          <td><a href="https://cursor.com/terms-of-service">No. The terms of service forbid trying to get at its source code</a> (<a href="https://cursor.com/terms/grok-bot">Grok Bot is part of that service</a>).</td>
+        </tr>
+    </tbody>
+  </table>
 </section>
 
 <div id="features"></div>

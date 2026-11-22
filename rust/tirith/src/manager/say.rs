@@ -1,9 +1,10 @@
 //! What the owner, a room or an agent writes to a conversation.
-use super::deliver::{hand, report};
+use super::commands::owner_command;
+use super::deliver::hand;
 use super::evals::judge_evals;
 use super::talk::talk;
 use crate::app::Shared;
-use crate::models;
+use crate::status;
 /// A message from a room (a paired phone or another agent): shown in the chat of the room's project, handed to that project's manager, and the manager's answer to this turn goes back to that room.
 pub fn from_room(app: &Shared, project: &str, room: &str, author: &str, text: &str) {
     let project = app.conv(project);
@@ -70,27 +71,20 @@ pub fn say(app: &Shared, project: &str, text: &str, agent: &str) -> Result<(), S
         app.chat("owner", text, project); // a 👍/👎 on the bot's last turn: no turn, no owner-mood
         return Ok(());
     }
+    if status::asked(text) {
+        app.chat("owner", text, project); // before the event, its evals and the trigger: each of them leads to a turn
+        owner_command(app, project, text);
+        return Ok(());
+    }
     let event = app.event("", project, "owner.message", "", text, "");
     judge_evals(app, project, "owner.message", text, event); // before it is in the chat: else it looks said twice
     app.chat("owner", text, project);
-    // A message that starts no turn (`/model`, words kept while a task is taught) leaves no trigger behind.
-    let _ = (!model_command(app, project, text) && !crate::teach::heard(app, project, text)) // while it is taught a task, the owner's words go with the steps
+    // A message that starts no turn (`/model`, `/status`, words kept while a task is taught) leaves no trigger behind.
+    let _ = (!owner_command(app, project, text) && !crate::teach::heard(app, project, text)) // while it is taught a task, the owner's words go with the steps
         .then(|| {
             let by = Some(("owner".to_string(), String::new()));
             super::owner_words::heard(app, project, text);
             hand(app, project, &with_cards(app, project, text), true, by)
         });
     Ok(())
-}
-/// Only the local owner chat and authenticated paired phones call this path.
-pub fn model_command(app: &Shared, project: &str, text: &str) -> bool {
-    let Some(result) = models::command(app, text) else {
-        return false;
-    };
-    report(
-        app,
-        project,
-        &result.unwrap_or_else(|e| format!("Model change failed: {e}")),
-    );
-    true
 }

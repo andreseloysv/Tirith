@@ -1,12 +1,27 @@
 //! Routines run: one now, or every one due on the scheduler's tick.
 use super::list::all;
-use super::schedule::due;
+use super::schedule::{due, late};
 use super::store::find;
 use crate::app::{now_iso, Shared};
 use crate::server::s;
-use chrono::Local;
-/// Runs a routine (`trigger` is `schedule` or `run-now`): the conversation shows it, and the bot is handed the task as a turn of its own, after what runs before it.
-pub(super) fn fire(app: &Shared, id: &str, rid: &str, trigger: &str) -> Result<(), String> {
+use chrono::{DateTime, Local};
+/// Runs a routine (`trigger` is `schedule` or `run-now`), `late` when it is not on time: the conversation shows it, and the bot is handed the task as a turn of its own, after what runs before it.
+pub(super) fn fire(
+    app: &Shared,
+    id: &str,
+    rid: &str,
+    trigger: &str,
+    late: &str,
+) -> Result<(), String> {
+    fire_at(app, (id, rid), trigger, late, Local::now())
+}
+fn fire_at(
+    app: &Shared,
+    (id, rid): (&str, &str),
+    trigger: &str,
+    late: &str,
+    now: DateTime<Local>,
+) -> Result<(), String> {
     let mut bots = all(app);
     let bot = find(&mut bots, id)?;
     let (key, r) = (
@@ -19,7 +34,7 @@ pub(super) fn fire(app: &Shared, id: &str, rid: &str, trigger: &str) -> Result<(
             .ok_or("no such routine")?,
     );
     let (title, task) = (s(r, "title"), s(r, "prompt"));
-    let (now, timed) = (Local::now(), trigger == "schedule");
+    let timed = trigger == "schedule";
     let due = timed
         .then(|| crate::expected::today(&s(r, "at"), now))
         .flatten();
@@ -35,7 +50,7 @@ pub(super) fn fire(app: &Shared, id: &str, rid: &str, trigger: &str) -> Result<(
     } else {
         ""
     };
-    let told = format!("Routine «{title}» is due now.{its} Do it and report the result here in a few lines ({}); ask nothing: {task}", super::REPORT);
+    let told = format!("Routine «{title}» is due now{late}.{its} Do it and report the result here in a few lines ({}); ask nothing: {task}", super::REPORT);
     let new = crate::expected::New {
         conv: &key,
         routine: rid,
@@ -47,12 +62,16 @@ pub(super) fn fire(app: &Shared, id: &str, rid: &str, trigger: &str) -> Result<(
     };
     crate::expected::expect(app, &new); // written down before anything starts
     app.set_kv(&stamp, Some(&now_iso()));
-    let late = if timed {
+    let noted = if timed {
         crate::expected::late(app, &due, now)
     } else {
         String::new()
     };
-    app.chat("routine", &format!("Running routine · {title}{late}"), &key);
+    app.chat(
+        "routine",
+        &format!("Running routine · {title}{noted}"),
+        &key,
+    );
     if !crate::manager::run_routine(app, &key, "schedule", &told, (trigger, rid)) {
         crate::expected::unhanded(app, &key, rid); // an experiment on it makes the run its A or its B when it starts
     }
@@ -60,14 +79,17 @@ pub(super) fn fire(app: &Shared, id: &str, rid: &str, trigger: &str) -> Result<(
 }
 /// Writes down what was missed, fires the routines due now, and decides the experiments due; the lanes scheduler calls it on its tick (every ~30 s), so the bots need no timer of their own.
 pub fn tick(app: &Shared) {
-    crate::expected::tick(app, Local::now());
+    tick_at(app, Local::now());
+}
+/// The tick, as of `now`.
+pub(crate) fn tick_at(app: &Shared, now: DateTime<Local>) {
+    crate::expected::tick(app, now);
     crate::lab::tick(app);
-    all(app).iter().for_each(|b| {
-        b["routines"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .filter(|r| due(r, Local::now()))
-            .for_each(|r| drop(fire(app, &s(b, "id"), &s(r, "id"), "schedule")))
-    });
+    for b in all(app) {
+        let (id, routines) = (s(&b, "id"), b["routines"].as_array().into_iter().flatten());
+        for r in routines.filter(|r| due(r, now)) {
+            let (rid, told) = (s(r, "id"), late(r, now));
+            drop(fire_at(app, (&id, &rid), "schedule", &told, now));
+        }
+    }
 }

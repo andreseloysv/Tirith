@@ -44,7 +44,7 @@ async fn change(State(app): State<Shared>, Path(id): Path<String>, Json(b): Json
     reply(routine(&app, id, b))
 }
 async fn run(State(app): State<Shared>, Path((id, rid)): Path<(String, String)>) -> R {
-    reply(fire(&app, &id, &rid, "run-now").map(|_| json!({"ok": true})))
+    reply(fire(&app, &id, &rid, "run-now", "").map(|_| json!({"ok": true})))
 }
 async fn lib(
     State(app): State<Shared>,
@@ -62,5 +62,6 @@ pub fn routes() -> Router<Shared> {
         .route("/api/bots/{id}/run/{routine}", post(run))
         .merge(crate::turns::routes())
         .merge(super::hook_api::routes())
+        .merge(super::from_template::routes())
         .route("/api/bots/{id}/library", get(|State(app): State<Shared>, Path(id): Path<String>| async move { reply(library(&app, &id)) }).post(lib))
 }

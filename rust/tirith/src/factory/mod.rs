@@ -1,5 +1,6 @@
 //! The factory file (`factory/factory.toml`, its prompts and its eval rubrics): agents, roles, limits, plan words, card kinds, measures and evals, read as data instead of Rust. Strict loading: an unknown key, a role on a missing agent or prompt, or an unknown measure makes a version invalid; the daemon keeps the last good one and reports the error. The repo's factory is embedded under the folder's as its fallback; `~/.tirith/config.toml` is laid over both key by key and wins.
 mod agents;
+mod bot_templates;
 mod current;
 mod embedded;
 mod evals;
@@ -22,6 +23,7 @@ mod validate;
 mod values;
 mod words;
 
+pub use bot_templates::bot_templates;
 pub use current::{current, error, load};
 pub use lab::Lab;
 pub(crate) use lists::EVENTS;
@@ -31,6 +33,8 @@ pub use routes::Route;
 pub use stamp::stamp;
 pub(crate) use values::merge;
 
+#[cfg(test)]
+pub(crate) use bot_templates::embedded_templates;
 #[cfg(test)]
 pub(crate) use embedded::{embedded_prompts, TEXT};
 

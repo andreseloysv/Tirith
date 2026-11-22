@@ -1,4 +1,4 @@
-//! What a poll decided is done: lines sent, the phones' model controls answered, cards answered, the rest handed to the manager.
+//! What a poll decided is done: lines sent, the phones' model controls and commands answered, cards answered, the rest handed to the manager.
 use super::{outbox::queue, poll::Out, store::update, Room, PHONE};
 use crate::{app::Shared, manager};
 pub(super) fn act(app: &Shared, r: &Room, out: Out) {
@@ -16,7 +16,7 @@ pub(super) fn act(app: &Shared, r: &Room, out: Out) {
         )
     });
     for (author, text) in &out.deliver {
-        let Some(()) = (!phone_model_command(app, r, author, text)).then_some(()) else {
+        let Some(()) = (!phone_command(app, r, author, text)).then_some(()) else {
             continue;
         };
         let _ = (!answers_a_card(app, r, author, text))
@@ -47,18 +47,19 @@ fn answers_a_card(app: &Shared, r: &Room, author: &str, text: &str) -> bool {
     });
     carded
 }
-/// `/model` and the like from a paired phone are run here, not handed to the manager.
-pub(super) fn phone_model_command(app: &Shared, r: &Room, author: &str, text: &str) -> bool {
+/// `/status`, `/model` and the like from a paired phone are run here, not handed to the manager.
+pub(super) fn phone_command(app: &Shared, r: &Room, author: &str, text: &str) -> bool {
     let Some(()) = (author.ends_with(PHONE)
-        && matches!(
-            text.split_whitespace().next(),
-            Some("/model" | "/models" | "/modelo" | "/modelos")
-        ))
+        && (crate::status::asked(text)
+            || matches!(
+                text.split_whitespace().next(),
+                Some("/model" | "/models" | "/modelo" | "/modelos")
+            )))
     .then_some(()) else {
         return false;
     };
     app.chat("room", &format!("{author} ({}): {text}", r.id), &r.project);
-    manager::model_command(app, app.conv(&r.project), text);
+    manager::owner_command(app, app.conv(&r.project), text);
     update(app, &r.id, |r| {
         r.owes
             .owed

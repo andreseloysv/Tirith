@@ -26,16 +26,19 @@ mod packages;
 mod private;
 mod program;
 mod prove;
+pub mod root;
 pub mod run;
 mod secret;
 mod signin;
 mod summary;
+#[cfg(target_os = "linux")]
+mod terminal;
 mod trust;
 mod trusted;
 mod why;
 
 pub use api::routes;
-pub use as_user::as_service_user;
+pub use as_user::{as_service_user, in_anothers_terminal};
 pub use ask::Ask;
 pub use auth::for_program;
 pub use catalog::model_hosts;
@@ -55,7 +58,8 @@ pub fn cli(args: &[String]) -> Option<i32> {
     let agent = ["TIRITH_LANE", "TIRITH_ROLE"]
         .iter()
         .any(|k| std::env::var(k).is_ok_and(|v| !v.is_empty()));
-    if agent && command != "doctor" {
+    let looks = matches!(rest.first().map(String::as_str), Some("status" | "logs"));
+    if agent && command != "doctor" && !(command == "service" && looks) {
         eprintln!(
             "tirith {command} is the owner's: run it in your own terminal, not from an agent"
         );
