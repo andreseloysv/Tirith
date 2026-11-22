@@ -1,21 +1,20 @@
 //! A limited Codex is two processes. Its own keeps what is its alone (its state with the sign-in it renews, the proxy) and writes in none of the folders; what runs the model's commands and patches, `apply_patch` too, is its `exec-server`, under the limit and with nothing of that state. A patch cannot be told apart inside one process, so it is not in that process.
 use super::bridge::Bridge;
+use super::broken::broken;
 use super::capable::{capable, URL};
 use super::limits::{Around, Part};
-use super::stalled::stalled;
 use super::{ending::end, line::NO_NET, spawn::spawn, watch::Watch, Request};
+use super::{notice::Notice, too_big};
 use std::os::fd::OwnedFd;
 use std::os::unix::process::ExitStatusExt;
 use std::process::{Child, Stdio};
-use std::time::{Duration, Instant};
-
-/// Codex connects at its start, before it reads a prompt or asks its model.
-const CONNECTS_WITHIN: Duration = Duration::from_secs(20);
+use std::time::Instant;
 
 pub(super) struct Pair {
     codex: Child,
     runs: Child,
     bridge: Bridge,
+    notice: Notice,
     watches: Vec<Watch>,
     began: Instant,
     over: bool,
@@ -25,6 +24,7 @@ impl Pair {
     pub(super) fn start(mut r: Request, around: &Around, io: [OwnedFd; 3]) -> Result<Pair, String> {
         capable(&r.program, &r.state)?;
         let mut bridge = Bridge::open()?;
+        let notice = Notice::to(&io[2]);
         r.env.retain(|(name, _)| name != URL);
         let mut theirs = r.clone();
         theirs.args = ["exec-server", "--listen", "stdio"]
@@ -51,6 +51,7 @@ impl Pair {
             codex,
             runs,
             bridge,
+            notice,
             watches: vec![],
             began: Instant::now(),
             over: false,
@@ -63,6 +64,9 @@ impl Pair {
 
     /// Its exit code once it is over.
     pub(super) fn ended(&mut self) -> Result<Option<i32>, String> {
+        if self.bridge.cut() {
+            self.notice.say(&too_big::why());
+        }
         if let Some(status) = self.codex.try_wait().map_err(|e| e.to_string())? {
             crate::app::kill_group(self.codex.id(), libc::SIGTERM); // nothing it left outlives it
             self.watches.clear();
@@ -71,12 +75,7 @@ impl Pair {
             let code = status.code().unwrap_or(128 + status.signal().unwrap_or(0));
             return Ok(Some(code));
         }
-        let late = !self.bridge.linked() && self.began.elapsed() > CONNECTS_WITHIN;
-        let why = if self.bridge.lost() || stalled(self.runs.id()) {
-            "the process that runs its commands ended or was stopped, so Codex was stopped: none of them runs in its own process"
-        } else if late {
-            "this Codex did not hand its commands to the process that has their limit, so it was stopped"
-        } else {
+        let Some(why) = broken(&self.bridge, self.runs.id(), self.began) else {
             return Ok(None);
         };
         self.end();

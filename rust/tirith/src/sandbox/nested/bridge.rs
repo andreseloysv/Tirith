@@ -15,6 +15,8 @@ pub(super) struct Seen {
     pub left: AtomicBool,
     /// The other went first: nothing can run any more.
     pub lost: AtomicBool,
+    /// A call was over the cap and was refused.
+    pub cut: AtomicBool,
 }
 
 pub(super) struct Bridge {
@@ -71,6 +73,11 @@ impl Bridge {
     /// Whether what runs its commands is gone while Codex is not.
     pub(super) fn lost(&self) -> bool {
         self.seen.lost.load(SeqCst)
+    }
+
+    /// Whether a call was refused for its size since this was last asked.
+    pub(super) fn cut(&self) -> bool {
+        self.seen.cut.swap(false, SeqCst)
     }
 }
 

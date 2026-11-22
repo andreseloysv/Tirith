@@ -366,6 +366,21 @@ fn a_profile_named_in_the_settings_is_read_and_servers_are_named() {
         .unwrap();
     assert!(!r.write, "the profile's limit wins");
     assert!(note.contains("notes"), "said, not silent: {note}");
+    let inline = words("exec -c mcp_servers.inline={command=\"inline-server\"} -- hi");
+    let (with, _) = settings::limit(&asked::read(&inline).unwrap(), &at)
+        .unwrap()
+        .unwrap();
+    let find = |word: &str| with.args.iter().position(|a| a.starts_with(word));
+    let moved =
+        find("mcp_servers.inline.environment_id=\"remote\"").expect("it runs with the commands");
+    assert!(
+        find("mcp_servers.inline={") < Some(moved)
+            && Some(moved) < with.args.iter().position(|a| a == "--")
+            && find("mcp_servers.inline.cwd=\"/").is_some()
+            && find("mcp_servers.notes.environment_id=").is_some(),
+        "after the caller's own table, before the prompt, from a whole path: {:?}",
+        with.args
+    );
     let briefed = words("exec -c developer_instructions=Brief. hi");
     let (said, _) = settings::limit(&asked::read(&briefed).unwrap(), &at)
         .unwrap()

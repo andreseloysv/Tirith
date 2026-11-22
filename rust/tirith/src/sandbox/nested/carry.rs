@@ -30,7 +30,7 @@ pub(super) fn carry(
     let out: Out = Arc::new(Mutex::new(peer.try_clone().ok()?));
     let (back, over) = (out.clone(), seen.clone());
     std::thread::spawn(move || {
-        answers(from, &back);
+        answers(from, &back, &over);
         if !over.left.load(SeqCst) {
             over.lost.store(true, SeqCst); // before Codex can come back for another
         }
@@ -55,6 +55,7 @@ fn asks(peer: &mut TcpStream, mut to: ChildStdin, out: &Out, seen: &Seen) -> Opt
             frames::Got::Whole(message) => message,
             frames::Got::TooBig(start) => match refusal(&start) {
                 Some(error) => {
+                    seen.cut.store(true, SeqCst);
                     send(out, frames::TEXT, &error).ok()?;
                     continue;
                 }

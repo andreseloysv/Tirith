@@ -9,6 +9,8 @@ mod asked;
 #[cfg(target_os = "macos")]
 mod bridge;
 #[cfg(target_os = "macos")]
+mod broken;
+#[cfg(target_os = "macos")]
 mod broker;
 #[cfg(target_os = "macos")]
 mod capable;
@@ -32,6 +34,8 @@ mod listen;
 mod mode;
 mod network;
 #[cfg(target_os = "macos")]
+mod notice;
+#[cfg(target_os = "macos")]
 mod other;
 #[cfg(target_os = "macos")]
 mod pair;
@@ -42,6 +46,7 @@ mod profiles;
 mod program;
 mod roots;
 mod sb;
+mod servers;
 mod services;
 mod settings;
 #[cfg(target_os = "macos")]

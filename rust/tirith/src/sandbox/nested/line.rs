@@ -37,5 +37,15 @@ pub(super) fn line(a: &Asked, set: &Layers, mode: Mode, net: bool, dir: &Path) -
     }
     let mut line = a.args.clone();
     line.splice(a.at..a.at, words);
+    let end = line
+        .iter()
+        .position(|word| word == "--")
+        .unwrap_or(line.len());
+    line.splice(end..end, super::servers::words(set, &folder(dir)));
     line
+}
+
+/// `dir` by its whole path.
+fn folder(dir: &Path) -> std::path::PathBuf {
+    dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf())
 }
