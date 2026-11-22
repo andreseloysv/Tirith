@@ -1,6 +1,6 @@
 //! On macOS: a launchd job of the owner's, or one that starts at boot with nobody logged in (--boot, with sudo).
 use super::{launchctl::Launchctl, plist, unit::Unit};
-use crate::setup::{find, run, Ask};
+use crate::setup::{root, run, Ask};
 use std::time::Duration;
 
 pub(super) fn install(u: &Unit, ask: &Ask, boot: bool) -> Result<Vec<String>, String> {
@@ -8,19 +8,10 @@ pub(super) fn install(u: &Unit, ask: &Ask, boot: bool) -> Result<Vec<String>, St
     let ctl = Launchctl::new(u, ask, boot);
     if boot {
         let user = run::output("id", &["-un"]).ok_or("cannot tell who you are")?;
-        let draft = u.home.join("setup/boot.plist");
-        std::fs::create_dir_all(u.home.join("setup")).map_err(|e| e.to_string())?;
-        std::fs::write(&draft, plist::text(u, &log, Some(&user))).map_err(|e| e.to_string())?;
-        let sudo = find::program("sudo").ok_or("sudo is missing")?;
-        let (from, to) = (
-            draft.display().to_string(),
-            u.boot_file().display().to_string(),
-        );
+        let sudo = root::sudo().ok_or("sudo is missing")?;
         println!("  To start at boot with nobody logged in, sudo asks for your password:");
-        let args = [
-            "install", "-m", "644", "-o", "root", "-g", "wheel", &from, &to,
-        ];
-        run::shown(ask, &sudo, &args, &[])
+        // straight to root's hands: a draft in Tirith's home could be swapped while the password is typed
+        root::write(&sudo, &u.boot_file(), &plist::text(u, &log, Some(&user)))
             .then_some(())
             .ok_or("sudo could not install the boot service")?;
     } else {
@@ -57,7 +48,7 @@ pub(super) fn uninstall(u: &Unit, ask: &Ask, boot: bool) -> Result<(), String> {
         std::thread::sleep(Duration::from_millis(300));
     }
     if boot {
-        let sudo = find::program("sudo").ok_or("sudo is missing")?;
+        let sudo = root::sudo().ok_or("sudo is missing")?;
         let file = u.boot_file().display().to_string();
         return run::shown(ask, &sudo, &["rm", "--", &file], &[])
             .then_some(())

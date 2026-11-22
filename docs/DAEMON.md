@@ -941,7 +941,8 @@ inside the sandbox is one whatever it sends: Linux's relay calls the daemon's po
 socket is looked up and its profile read (a caller nobody of this user holds is not the owner either). An agent's
 `tirith answer` of an approval or payment card needs the owner's own words, written after it was asked, and keeps those; its
 words in a chat are never the owner's; it gets neither the teach extension's token nor a phone's pairing code, and
-it neither approves a draft nor gives a 👍. Git the daemon runs is confined too (`sandbox/git.rs`): a hook, an fsmonitor or a filter left in a bot's or a
+it neither approves a draft nor gives a 👍,
+nor lifts one of the owner's network blocks (it may add one). Git the daemon runs is confined too (`sandbox/git.rs`): a hook, an fsmonitor or a filter left in a bot's or a
 project's repository is an agent's, so its `git push` also goes through the proxy and the block list, with
 `GIT_SSH_COMMAND` as the lanes have it. The limit: a program of the same user that reads or writes that user's files (the store, start-up
 files, programs on the PATH), or
@@ -1033,6 +1034,7 @@ Files:
 - `private.rs`: What never reaches a log, an event or an answer: the values kept for the agents (tokens, an enterprise's host).
 - `packages.rs`: The system's programs installed with its package manager, when the owner says so.
 - `program.rs`: An agent's program found, or installed now.
+- `root.rs`: What the guide has root do through sudo: the system's own programs alone, and a file's text on stdin.
 - `prove.rs`: The connection check: one real turn by the same way work runs.
 - `why.rs`: Why a connection check failed: the telling lines of that turn's stderr.
 - `run.rs`: Running another program in the owner's sight, or quietly.
@@ -1233,7 +1235,8 @@ Files:
 - `shell.rs`: A shell call as the agent asked for it, out of Codex's `sh -lc` wrapper.
 - `spent.rs`: The turn's own share of what an agent gives as its session's totals.
 - `signals.rs`: The quality signals on a turn's row: `reaction`, `corrected`, the checks and the cited notes.
-- `tools.rs`: The tool calls a line of any agent's output makes, the short line the chat shows for each, and the skills they read.
+- `skill_read.rs`: The skill a call read: a path in what came back, in a prompt handed on or in a file written is no read.
+- `tools.rs`: The tool calls a line of any agent's output makes, and the short line the chat shows for each.
 - `usage.rs`: What a turn used, read from what each agent prints.
 - `usage_keys.rs`: How each agent names its counts of tokens.
 - `versions.rs`: The versions a turn ran with: the git blob hash (`git hash-object`) of its memory.md, the bots' shared memory and each skill it read.

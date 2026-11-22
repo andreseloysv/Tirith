@@ -1,5 +1,5 @@
 //! What Tirith needs of the system, installed with its package manager when the owner says so.
-use super::{ask::Ask, find, run};
+use super::{ask::Ask, find, root, run};
 
 const MANAGERS: [(&str, &[&str]); 5] = [
     ("apt-get", &["install", "-y"]),
@@ -22,14 +22,14 @@ pub(super) fn provide(ask: &Ask, missing: &[&str]) -> Result<(), String> {
     else {
         return Err(format!("{names} missing: install them"));
     };
-    let root = unsafe { libc::geteuid() } == 0;
+    let as_root = unsafe { libc::geteuid() } == 0;
     let shown = format!(
         "{}{manager} {} {names}",
-        if root { "" } else { "sudo " },
+        if as_root { "" } else { "sudo " },
         how.join(" ")
     );
-    let sudo = find::program("sudo").filter(|_| !root);
-    let may = if root {
+    let sudo = root::sudo().filter(|_| !as_root);
+    let may = if as_root {
         ask.yes_no(&format!("  {names} missing. Run `{shown}`?"), true)
     } else {
         sudo.is_some()
@@ -38,7 +38,7 @@ pub(super) fn provide(ask: &Ask, missing: &[&str]) -> Result<(), String> {
     };
     let failed = || format!("{names} missing: {shown}");
     may.then_some(()).ok_or_else(failed)?;
-    let program = find::program(manager).ok_or_else(failed)?;
+    let program = root::program(manager).ok_or_else(failed)?; // root runs it: never one of the PATH's
     let manager_path = program.display().to_string();
     let mut args: Vec<&str> = if sudo.is_some() {
         vec![&manager_path]

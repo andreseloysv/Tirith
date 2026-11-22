@@ -256,3 +256,34 @@ fn a_token_never_follows_to_another_host() {
     );
     let _ = std::fs::remove_dir_all(&home);
 }
+
+#[test]
+fn roots_file_is_handed_over_on_stdin() {
+    let d = dir("root-put");
+    let to = d.join("app.tirith.daemon.plist");
+    // `env` stands in for sudo: the same shell gets the same text, as this user
+    let put = super::root::write(Path::new("/usr/bin/env"), &to, "<plist>the job</plist>\n");
+    assert!(put, "written");
+    assert_eq!(
+        std::fs::read_to_string(&to).unwrap(),
+        "<plist>the job</plist>\n"
+    );
+    use std::os::unix::fs::PermissionsExt;
+    assert_eq!(
+        std::fs::metadata(&to).unwrap().permissions().mode() & 0o777,
+        0o644
+    );
+    assert_eq!(std::fs::read_dir(&d).unwrap().count(), 1, "no draft stays");
+    assert!(
+        !super::root::write(Path::new("/usr/bin/env"), &to, ""),
+        "an empty file never replaces one"
+    );
+    let found = super::root::program("sh").unwrap();
+    assert!(
+        ["/usr/bin/sh", "/bin/sh"]
+            .iter()
+            .any(|p| found == Path::new(p)),
+        "a system one"
+    );
+    let _ = std::fs::remove_dir_all(&d);
+}

@@ -26,6 +26,7 @@ mod packages;
 mod private;
 mod program;
 mod prove;
+pub mod root;
 pub mod run;
 mod secret;
 mod signin;

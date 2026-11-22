@@ -1,6 +1,6 @@
 //! On Linux: a systemd user service that starts at boot (linger) and needs no root.
 use super::{systemd_text, unit::Unit};
-use crate::setup::{find, run, Ask};
+use crate::setup::{root, run, Ask};
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::Duration;
@@ -63,7 +63,7 @@ fn linger(ask: &Ask) -> Option<String> {
         return None;
     }
     let user = run::output("id", &["-un"]).unwrap_or(uid.clone());
-    if let Some(sudo) = find::program("sudo").filter(|_| ask.person()) {
+    if let Some(sudo) = root::sudo().filter(|_| ask.person()) {
         println!(
             "  So that Tirith starts at boot, with nobody logged in, sudo asks for your password:"
         );

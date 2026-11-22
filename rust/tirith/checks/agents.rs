@@ -139,3 +139,79 @@ fn codex_shell_wrappers_come_off() {
         assert_eq!(super::shell::inner(shown), asked, "{shown}");
     }
 }
+
+#[test]
+fn a_skill_is_read_where_it_is_named_as_the_thing_read() {
+    let skill = |line: serde_json::Value| -> Vec<String> {
+        super::tools::calls(&line)
+            .iter()
+            .filter_map(super::skill_read::skill_of)
+            .collect()
+    };
+    let muse = |tool: &str, result: serde_json::Value| {
+        skill(serde_json::json!({"payload_type": "tool.result", "payload":
+            {"correlation_facts": {"tool_name": tool}, "text": result.to_string()}}))
+    };
+    let shell = |command: &str, output: &str| {
+        muse(
+            "bash",
+            serde_json::json!({"command": command, "output": output}),
+        )
+    };
+    let path = ".agents/skills/offers/SKILL.md";
+    for command in [
+        format!("cat {path}"),
+        format!("cat '/home/t/{path}'; date"),
+        format!("cd /tmp && head -50 \"$HOME/{path}\""),
+    ] {
+        assert_eq!(shell(&command, "text"), ["offers"], "{command}");
+    }
+    assert_eq!(
+        muse(
+            "read_skill",
+            serde_json::json!({"output": format!("from {path}")})
+        ),
+        ["offers"]
+    );
+    assert_eq!(
+        muse(
+            "read_file",
+            serde_json::json!({"path": path, "content": "see skills/other/SKILL.md"})
+        ),
+        ["offers"]
+    );
+    // Seen with a real routine: the path stood only in what came back, or in the prompt another agent was given.
+    assert!(
+        shell("codex exec 'look for offers'", &format!("read {path}")).is_empty(),
+        "in the output"
+    );
+    let handed = format!("codex exec --sandbox workspace-write \"follow {path} and report\"");
+    assert!(shell(&handed, "failed").is_empty(), "in a prompt handed on");
+    assert!(
+        shell(&format!("cat draft.md > {path}"), "").is_empty(),
+        "written"
+    );
+    assert!(muse(
+        "read_file",
+        serde_json::json!({"path": "notes.md", "content": path})
+    )
+    .is_empty());
+    let anthropic = |name: &str, input: serde_json::Value| {
+        skill(
+            serde_json::json!({"type": "assistant", "message": {"content": [{"type": "tool_use", "name": name, "input": input}]}}),
+        )
+    };
+    assert_eq!(
+        anthropic("Read", serde_json::json!({"file_path": path})),
+        ["offers"]
+    );
+    assert_eq!(
+        anthropic("Skill", serde_json::json!({"skill": "offers"})),
+        ["offers"]
+    );
+    assert!(anthropic(
+        "Write",
+        serde_json::json!({"file_path": path, "content": "x"})
+    )
+    .is_empty());
+}
