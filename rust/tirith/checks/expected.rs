@@ -794,6 +794,9 @@ fn a_judge_uses_no_tool_whatever_the_data_it_reads_says() {
         assert!(check(tool, input.clone(), &key).is_none(), "a bot's {tool}");
         assert!(check(tool, input, "ceo").is_none(), "the CEO's {tool}");
     }
+    // Muse ends each turn with this one of its own: it touches nothing, and a refusal would be a «blocked» at every judgement.
+    let own = check("submit_reminder_decision", json!({}), "judge");
+    assert!(own.is_none(), "the agent's own book-keeping: {own:?}");
     let _ = std::fs::remove_dir_all(&home);
 }
 
