@@ -816,3 +816,106 @@ fn an_answer_cannot_close_its_own_fence() {
     let (other, _) = super::blind("the task", "A", "B", true);
     assert!(!other.contains(mark), "another mark each time");
 }
+
+/// Git holds a bot's memory and skills alone: a real agent's B run found no data, worked in A's folder and did A's way.
+#[test]
+fn a_live_b_run_works_on_the_bots_own_working_files() {
+    let (app, home) = app_with_a_bot("workfiles");
+    let live = home.join("manager").join(KEY);
+    std::fs::create_dir_all(live.join("inventory")).unwrap();
+    std::fs::write(live.join("inventory/part-1.txt"), "state low\n").unwrap();
+    std::fs::write(live.join("seen.md"), "- one\n").unwrap();
+    branch(&home, "v3", "# Memory\n- the branch's memory\n");
+    start(&app, "v3").unwrap();
+    super::fired(&app, KEY, "r1", ""); // A
+    super::released(&app, KEY);
+    super::fired(&app, KEY, "r1", ""); // B
+    let tree = crate::bots::folder(&app, KEY);
+    assert_ne!(tree, live, "B is in the branch's worktree");
+    let data = std::fs::read_to_string(tree.join("inventory/part-1.txt")).unwrap_or_default();
+    assert_eq!(data, "state low\n", "the task's data is in B's folder");
+    let edits = |file: &str| crate::bots::writable(&home, &tree.join(file));
+    assert!(
+        edits("seen.md") && edits("memory.md"),
+        "B edits what is its folder for that turn"
+    );
+    assert!(
+        !edits(".codex/config.toml"),
+        "and no agent's settings there"
+    );
+    std::fs::write(tree.join("inventory/part-2.txt"), "state fine\n").unwrap();
+    std::fs::write(tree.join("seen.tmp"), "- one\n- two\n").unwrap();
+    std::fs::rename(tree.join("seen.tmp"), tree.join("seen.md")).unwrap();
+    std::fs::write(tree.join("new.md"), "new\n").unwrap();
+    super::released(&app, KEY);
+    let kept = |file: &str| std::fs::read_to_string(live.join(file)).unwrap_or_default();
+    assert_eq!(
+        kept("inventory/part-2.txt"),
+        "state fine\n",
+        "a live run is a real run"
+    );
+    assert_eq!(
+        kept("seen.md"),
+        "- one\n- two\n",
+        "also what it wrote by replacing"
+    );
+    assert_eq!(kept("new.md"), "new\n");
+    assert!(
+        kept("memory.md").contains("open every mail"),
+        "what is versioned stays main's"
+    );
+    assert!(!live.join("inventory").is_symlink());
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn a_shadow_or_replayed_run_works_on_a_copy_that_does_not_stay() {
+    let home = home("copied");
+    let (main, tree) = (home.join("main"), home.join("tree"));
+    std::fs::create_dir_all(main.join("inventory")).unwrap();
+    std::fs::create_dir_all(main.join(".codex")).unwrap();
+    std::fs::create_dir_all(&tree).unwrap();
+    std::fs::write(main.join("inventory/part-1.txt"), "state low\n").unwrap();
+    std::fs::write(home.join("outside"), "outside\n").unwrap();
+    std::os::unix::fs::symlink(home.join("outside"), main.join("leads-out")).unwrap();
+    super::workfiles::copied(&main, &tree);
+    let copy = tree.join("inventory/part-1.txt");
+    assert_eq!(std::fs::read_to_string(&copy).unwrap(), "state low\n");
+    assert!(!tree.join(".codex").exists() && !tree.join("leads-out").exists());
+    std::fs::write(&copy, "changed\n").unwrap();
+    std::fs::write(tree.join("made.md"), "made\n").unwrap();
+    super::workfiles::copied(&main, &tree);
+    assert_eq!(
+        std::fs::read_to_string(&copy).unwrap(),
+        "state low\n",
+        "as main is now"
+    );
+    assert!(!tree.join("made.md").exists() && !main.join("made.md").exists());
+    assert_eq!(
+        std::fs::read_to_string(home.join("outside")).unwrap(),
+        "outside\n"
+    );
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+/// The daemon runs outside the sandbox: a worktree an agent swapped for a link is not worked in.
+#[test]
+fn a_worktree_that_became_a_link_is_left_alone() {
+    let home = home("linkedtree");
+    let (main, other, tree) = (home.join("main"), home.join("other"), home.join("tree"));
+    std::fs::create_dir_all(&main).unwrap();
+    std::fs::create_dir_all(&other).unwrap();
+    std::fs::write(main.join("seen.md"), "- one\n").unwrap();
+    std::fs::write(other.join("theirs.md"), "theirs\n").unwrap();
+    std::os::unix::fs::symlink(&other, &tree).unwrap();
+    super::workfiles::back(&main, &tree);
+    super::workfiles::share(&main, &tree);
+    super::workfiles::copied(&main, &tree);
+    assert_eq!(
+        std::fs::read_to_string(other.join("theirs.md")).unwrap(),
+        "theirs\n"
+    );
+    assert!(!main.join("theirs.md").exists() && !other.join("seen.md").exists());
+    let _ = std::fs::remove_dir_all(&home);
+}

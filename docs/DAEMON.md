@@ -453,6 +453,7 @@ Files:
 - `adopt.rs`: Adopting a branch: merged into the bot's main without losing a note written in memory.md meanwhile.
 - `answers.rs`: A replay's tool calls in the hook: an outside read answered from the capture's call that asked for the same, one it lacks (counted) or one for the owner refused.
 - `call_key.rs`: What a tool call asks for (the tool and its URL, query or command), so a replay answers only a call that asks for the same thing.
+- `own_folder.rs`: What a run of an experiment is to the rest of Tirith: a live B's worktree stands for the bot's own folder, and no history is handed to either side.
 - `reach.rs`: What a replay's processes may reach (its agent's model and nothing else), and what its agent is also started with.
 - `recorded.rs`: A capture's calls that read outside, as a replay answers them, and whether each has an answer.
 - `replay_runs.rs`: The captured runs a replay does again: enough of them, each answerable.
@@ -485,6 +486,7 @@ Files:
 - `start.rs`: `tirith lab start`: the request checked, the experiment's row, and its worktree (live, shadow) or the captured runs of `replay_runs.rs` (replay).
 - `store.rs`: The experiments' rows: one, the running ones, their worktree and the list the page shows.
 - `turn.rs`: A bot's turn ended: a run of an experiment keeps its variant, a B run is compared, the experiment may be decided.
+- `workfiles.rs`: The bot's working files in a worktree, which git does not hold: the bot's own for a live B run, a copy that does not stay for a shadow or replayed one.
 
 ## `lanes/`
 
@@ -1299,8 +1301,8 @@ Each row also carries its quality signals (`react.rs`, `signals.rs`, `checks.rs`
   A routine of a turn role (the CEO's) emits `routine.done` too. A why that starts with `could not:`, at 0.3 or less,
   says that the run could not do its task in words no list holds: the run and its turn end `failed` with that cause,
   and the owner gets the one line of any failed run (`could_not.rs`, `expected/admitted.rs`). Code alone fails a run
-  only where it is certain: the agent's own failure, ✗, a first-person "I could not", a ∅ with no look or one that failed,
-  a nested agent's or a sandbox's own error. Any other failure in an answer may be the news the task asks for (what is down),
+  only where it is certain: the agent's own failure, ✗, a ∅ that says "could not" on its line or comes from no look or one that failed,
+  a nested agent's or a sandbox's own error (and a first-person "I could not" where nothing grades the turn). Any other failure in an answer may be the news the task asks for (what is down),
   so the judge reads whose it is; when no judge gives a score (none within 25 minutes, `expected/unjudged.rs`), plain words of trouble
   count as a failure. The answer and what the calls gave are fenced as data, and a judge uses no tool (`rules/judge.rs`).
 

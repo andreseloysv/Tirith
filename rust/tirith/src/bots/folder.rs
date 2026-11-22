@@ -15,6 +15,8 @@ pub fn skill_file(app: &App, key: &str, name: &str) -> PathBuf {
 }
 /// The one part of Tirith's home besides the lanes where agents write: the bots' folders and the shared skills. In a bot's folder a hidden folder is written only as a skills folder: an agent's settings there could turn Tirith's hooks off.
 pub fn writable(home: &FsPath, path: &FsPath) -> bool {
+    let its_own = crate::lab::stands_for(path); // a live B run's worktree is its bot's folder for that turn
+    let path = its_own.as_deref().unwrap_or(path);
     let parts: Vec<String> = path
         .strip_prefix(home.join("manager"))
         .map(|r| r.iter().map(|c| c.to_string_lossy().into_owned()).collect())

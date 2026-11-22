@@ -68,7 +68,9 @@ pub(super) fn close(app: &Shared, e: &Experiment, adopt_it: bool, line: &str) {
             );
         }
     }
-    clear(&live(app, &e.bot), &tree(app, e), &e.branch);
+    let (own, its) = (live(app, &e.bot), tree(app, e));
+    let _ = (e.mode == "live").then(|| super::workfiles::back(&own, &its)); // a restart mid-run left it there
+    clear(&own, &its, &e.branch);
     let numbers =
         json!({"a": a, "b": b, "tally": t, "savings": super::saved::savings(&a, &b), "line": line});
     let status = if adopted { "adopted" } else { "discarded" };

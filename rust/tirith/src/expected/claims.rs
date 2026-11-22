@@ -66,10 +66,15 @@ pub(super) fn after(answer: &str, mark: char) -> Option<&str> {
     })
 }
 
-/// The text as it is kept and sent: a «∅» that says it could not begins with «✗» instead, so nothing treats it as silence.
+/// The line that a mark begins, of what follows it: what the mark claims is said there. Below it may be remarks, which the run's judge reads.
+pub(super) fn line(rest: &str) -> &str {
+    rest.trim_start().lines().next().unwrap_or("")
+}
+
+/// The text as it is kept and sent: a «∅» whose line says it could not begins with «✗» instead, so nothing treats it as silence.
 pub fn honest(text: &str) -> Cow<'_, str> {
     match text.trim_start().strip_prefix(NOTHING) {
-        Some(rest) if could_not(rest) => Cow::Owned(format!("{FAILED}{rest}")),
+        Some(rest) if could_not(line(rest)) => Cow::Owned(format!("{FAILED}{rest}")),
         _ => Cow::Borrowed(text),
     }
 }

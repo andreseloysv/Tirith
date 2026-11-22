@@ -15,8 +15,11 @@ pub(super) fn instructions(app: &Shared, role: &str) -> String {
         &app.home.join("bots/skills").display().to_string(),
     )
 }
-/// What a fresh session of `project` is handed before its first message.
-pub fn recent(app: &Shared, project: &str) -> String {
+/// What a fresh session of `project` is handed before its first message: the recent chat, but in a run of an experiment, where each side would read the other's folder and calls there and do the same.
+pub(super) fn opening(app: &Shared, project: &str) -> String {
+    if crate::lab::experimenting(app, project) {
+        return String::new();
+    }
     history(app, project)
 }
 pub(super) fn history(app: &Shared, project: &str) -> String {

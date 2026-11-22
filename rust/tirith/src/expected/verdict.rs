@@ -1,6 +1,6 @@
-//! Whether a routine's turn did what it was started for, as far as code is certain: its agent ended well, it did not say in plain words that it could not, no tool's error proves it could not, and a «∅» comes from having looked.
+//! Whether a routine's turn did what it was started for, as far as code is certain: its agent ended well, no «✗», no tool's error proves it could not, and a «∅» says no "could not" on its line and comes from having looked.
 use super::admits::admits;
-use super::claims::{after, could_not, FAILED, NOTHING};
+use super::claims::{after, could_not, line, FAILED, NOTHING};
 use super::found::oldest;
 use super::store::RUNNING;
 use super::{reasons::failure, words::short};
@@ -53,11 +53,11 @@ pub(super) fn judged(
         return error(); // the tool's own error is proof enough, whatever the words
     }
     let Some(rest) = after(answer, NOTHING) else {
-        // other words may be the news the task asks for (what is down, what failed): its judge reads whose failure it is
-        let mine = admits(answer);
-        return mine.then(|| error().unwrap_or(format!("no pudo: {}", shown(answer, 160))));
+        // words are for the judge to read: "I can't see why it fired twice" beside the result is no failure, and what is down may be the news
+        return None;
     };
-    if admits(answer) || could_not(answer) {
+    let claim = line(rest);
+    if admits(claim) || could_not(claim) {
         error().or_else(|| Some(format!("dijo ∅, pero no pudo: {}", shown(rest, 160))))
     } else if let Some(look) = looks.blind() {
         error().or_else(|| Some(format!("dijo ∅, pero no pudo mirar ({})", shown(look, 80))))

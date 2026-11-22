@@ -2,7 +2,7 @@
 use super::deliver::user_line;
 use super::exec::exec_session;
 use super::jobs::take_group;
-use super::prompt::{history, prompt};
+use super::prompt::{opening, prompt};
 use super::session_end::{close, not_ready, Live};
 use super::spawn::spawn_chat;
 use super::stream::{read, Stream};
@@ -24,7 +24,7 @@ pub(super) async fn session(app: &Shared, project: &str) -> Result<(), String> {
     }
     let key = format!("manager_session:{alias}:{project}");
     let resumed = app.kv(&key);
-    let history = resumed.is_none().then(|| history(app, project));
+    let history = resumed.is_none().then(|| opening(app, project));
     let _ = resumed.is_none().then(|| crate::turns::fresh(app, project));
     let mut cmd = models::chat_argv(app, &role, resumed.as_deref())?;
     cmd.argv

@@ -2,7 +2,7 @@
 use super::exec_end::{exec_end, exec_started};
 use super::exec_stream::on_event;
 use super::jobs::take_group;
-use super::prompt::{history, prompt};
+use super::prompt::{opening, prompt};
 use super::talk::talk;
 use super::typing::begin_turn;
 use crate::app::Shared;
@@ -19,7 +19,7 @@ pub(super) async fn exec_session(app: &Shared, project: &str, kind: Exec) -> Res
     });
     begin_turn(app, project); // this exec turn received exactly that waiting input; what arrives while it runs waits for the next one
     let mut input = if resumed.is_none() {
-        history(app, project)
+        opening(app, project)
     } else {
         String::new()
     };

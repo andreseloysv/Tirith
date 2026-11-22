@@ -26,7 +26,7 @@ static TROUBLE: LazyLock<Regex> = LazyLock::new(|| {
     .unwrap()
 });
 
-/// True when it admits that it could not.
+/// True when it admits that it could not. Code takes that for certain only on a «∅»'s line, and otherwise only where no judge reads the run.
 pub(super) fn admits(answer: &str) -> bool {
     let mine = own_words(answer);
     mine.lines()
