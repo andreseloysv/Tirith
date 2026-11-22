@@ -61,3 +61,10 @@ CREATE TABLE IF NOT EXISTS experiments (id INTEGER PRIMARY KEY, bot TEXT, routin
     factory TEXT NOT NULL DEFAULT '');
 CREATE TABLE IF NOT EXISTS lab_comparisons (id INTEGER PRIMARY KEY, experiment INTEGER, a_turn INTEGER,
     b_turn INTEGER, event INTEGER, b_is TEXT, verdict TEXT, why TEXT);
+-- Every call a bot's connector gateway was asked for (docs/DAEMON.md, `gateway/`): when, the bot, its conversation
+-- and the start (µs) of the turn open then (0: none), the connector and the tool, the sha256 of the canonical
+-- arguments and of the result (empty when nothing ran), never their content, and the verdict: ran, approval
+-- required, refused by deny, refused by scope or refused by block.
+CREATE TABLE IF NOT EXISTS connector_calls (id INTEGER PRIMARY KEY, at TEXT, bot TEXT, conv TEXT, turn INTEGER,
+    connector TEXT, tool TEXT, args_sha TEXT, result_sha TEXT, verdict TEXT);
+CREATE INDEX IF NOT EXISTS connector_calls_conv ON connector_calls (conv, id);

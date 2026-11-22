@@ -2,7 +2,6 @@
 use super::loaded::Factory;
 use crate::connectors::{grant_of, Connector, Grant};
 
-#[allow(dead_code)] // the gateway (plan step 38) calls them
 impl Factory {
     /// The connector with this id.
     pub fn connector(&self, id: &str) -> Option<&Connector> {

@@ -12,6 +12,7 @@ mod config;
 mod connectors;
 mod expected;
 mod factory;
+mod gateway;
 mod guard;
 mod lab;
 mod lanes;

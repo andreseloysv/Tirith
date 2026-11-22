@@ -17,6 +17,7 @@ mod store;
 pub use api::{route, routes};
 pub use cli::cli;
 pub use forget::forgotten;
+pub use lookup::value;
 
 #[cfg(test)]
 #[path = "../../checks/secrets.rs"]

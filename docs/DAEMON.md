@@ -247,7 +247,7 @@ unknown key in a connector or a grant, a missing or malformed `id`, `command` an
 not a list of strings, a url that is not http(s), a secret that is not a variable name, an id defined twice, a grant of
 an unknown connector or a `connectors` table on a role that is not a `bot-<id>` makes the version invalid, like any
 factory error. The bots' writer keeps a bot's grants when its card is saved and drops them with its role when the bot
-is deleted (`bots/grants.rs`). Tests `bot_rules_cannot_loosen_the_connector` (`rust/tirith/checks/connectors.rs`) and
+is deleted (`bots/grants.rs`). The connector gateway (`gateway/`) is the verdict's caller. Tests `bot_rules_cannot_loosen_the_connector` (`rust/tirith/checks/connectors.rs`) and
 `deleting_a_bot_drops_its_grants` (`rust/tirith/checks/bots.rs`), on fake tool catalogs and config fixtures, with no model.
 
 Files:
@@ -376,6 +376,66 @@ Files:
 - `validate.rs`: The strict check of one factory version: the first thing wrong in it, in a fixed order, makes it invalid.
 - `values.rs`: Small readers and writers of TOML values the factory uses everywhere.
 - `words.rs`: Reading a factory's measures and its word lists (plan words, card kinds).
+
+## `gateway/`
+
+The connector gateway: `tirith mcp --bot <id>`, the one MCP server a bot's run carries for its connectors
+(`connectors/`). `models/gateway_args.rs` adds it, as `tirith_connectors`, to the runs of a `bot-<id>` role granted at
+least one connector, in the anthropic (`--mcp-config=` and `--allowedTools=mcp__tirith_connectors__*`), Codex
+(`-c mcp_servers.tirith_connectors={…}`, `env_vars = ["TIRITH_TOKEN"]`) and Muse (`-c mcpServers.tirith_connectors=…`,
+optional) dialects, where the browser's flags go (`models/browser_args.rs`): stream-json chat sessions and turns
+(`models/chat_argv.rs`) and exec turns (`codex/command.rs`). A lane, a manager, the CEO and every other role get none.
+Its env names only `TIRITH_HOME` and the run's own `TIRITH_TOKEN`; no secret is in it or in its arguments.
+
+The process the agent starts holds nothing. It opens a session at the daemon (`POST /api/mcp/open` with its bot) with
+the caller token of its run, and the daemon proves it from that token alone: the token must be a run of that very bot
+(`<role>@bot-<id>`, no lane), else 403 and the gateway exits before serving anything — another bot's run, a lane, a
+manager (a system bot holds no grant) or the owner. It answers `initialize` and `ping` itself and hands `tools/list`
+and every `tools/call` to the daemon (`/api/mcp/<session>/tools`, `/api/mcp/<session>/call`; `DELETE
+/api/mcp/<session>` when the agent closes it), where only the run that opened a session finds it again.
+
+The daemon keeps the session's connectors open: each one the bot's role is granted and not `blocked`. A local one
+(`command`) is started through `sandbox::wrap` as the bot's run, in its sandbox, with the bot's values of the
+connector's `secrets` added to that process's environment alone; a remote one (`url`, MCP's streamable HTTP: a POST
+per message, the answer JSON or an event stream, `Mcp-Session-Id` kept) is reached always through Tirith's proxy with
+the bot's run's credentials (`sandbox/proxy_url.rs`), so the proxy counts it as the bot's, never the daemon's; its
+first secret goes as `Authorization: Bearer <value>` and any other as a header of its own name (`_` as `-`), marked
+sensitive. The values come from the per-bot store (`secrets::value`) at open time and stay in the daemon. A connector
+that does not open is the owner's `error` event (with why) and missing from the list, never the end of the others.
+
+The agent is listed each open connector's tools as `<connector>__<tool>`, only those the verdict lets this bot reach
+(one that asks first says "(asks the owner first)"), by the grants of now. Every `tools/call` asks the verdict again,
+with config.toml re-read when it changed, never trusting the list it gave: a refusal (`refused by deny`, `refused by
+scope` — a connector the bot is not granted too — or `refused by block`) answers the refusal's line as a failed tool
+result; an approval match answers `approval required` and does not run yet; only `ran` reaches the connector. Every
+attempt, each repeated one too, is a row of `connector_calls` (`assets/schema.sql`): `at`, `bot` (its id), `conv`
+(its key), `turn` (the start in µs of the conversation's turn open then, 0 for none), `connector`, `tool`,
+`args_sha` (sha256 of the arguments as canonical JSON: keys sorted, no spaces), `result_sha` (of what ran answered;
+empty when nothing ran) and `verdict` — never the arguments or the result themselves. A session whose gateway
+process is gone is closed, its connectors' processes killed, at the next open. Tests `mcp_gateway_scopes_tools`,
+`gateway_hides_secrets` and `refused_calls_are_recorded` (`rust/tirith/checks/gateway.rs`), with a fake stdio and a
+fake HTTP MCP server (`checks/gateway_fakes.rs`), the daemon's proxy and no model.
+
+Files:
+
+- `api.rs`: The gateway's routes, for the bot run whose token opened it alone: open, the tools of now, one call, close.
+- `auth.rs`: A remote connector's secrets as its auth headers, each marked sensitive.
+- `call.rs`: One `tools/call`: the verdict asked again with the grants of now, a refusal or an approval match answered without running, and every attempt recorded.
+- `canon.rs`: Canonical JSON (keys sorted at every depth, no spaces) and its sha256.
+- `cli.rs`: `tirith mcp --bot <id>`: its stdout is the protocol's alone; why it stops goes to stderr.
+- `door.rs`: The gateway process's way to the daemon: its port and its run's caller token, nothing else.
+- `given.rs`: The bot's values of a connector's secrets, read from its store for that connector alone.
+- `link.rs`: One connector of an open gateway: its connection, local or remote, and the tools it listed.
+- `list.rs`: What the agent is listed: each open connector's tools the verdict lets this bot reach now.
+- `local.rs`: A local connector: started in the bot's sandbox with its secrets in its own environment, JSON-RPC one line each way.
+- `mod.rs`: Declares the folder's files and re-exports what other modules use.
+- `names.rs`: The names the agent sees: `<connector>__<tool>`.
+- `open.rs`: Opening a bot's gateway: the caller proven by its token alone, then every connector its role is granted.
+- `record.rs`: Every attempt as a row of `connector_calls`: hashes and the verdict, never the content.
+- `remote.rs`: A remote connector: MCP's streamable HTTP through Tirith's proxy as the bot.
+- `rpc.rs`: JSON-RPC 2.0 as MCP speaks it, both ways.
+- `session.rs`: The gateways open now, each found again only by the run that opened it.
+- `stdio.rs`: The gateway's side facing the agent: MCP over stdio, every tools message handed to the daemon.
 
 ## `guard/`
 
@@ -787,6 +847,7 @@ Files:
 
 - `browser.rs`: Where the browser MCP's server runs from: node, the launcher of this repo and its profile mode.
 - `browser_args.rs`: The browser MCP every agent run carries, in its own dialect.
+- `gateway_args.rs`: The connector gateway (`tirith mcp --bot <id>`) a bot's run carries, in its agent's own dialect; a lane or a manager never gets it.
 - `chat_argv.rs`: The argv of a streaming chat session for a role.
 - `command.rs`: The owner's `/model` and `/models` chat commands.
 - `credits.rs`: Running out of credits, and the next choice of a role's fallback chain.
@@ -1002,6 +1063,7 @@ Files:
 - `mac/mod.rs`: macOS: whether a process runs under Tirith's own profile (a browser's sandbox is told apart).
 - `mac/socket.rs`: macOS: which processes of this user hold a loopback connection (libproc).
 - `profile.rs`: The sandbox profile, the proxy's port and whether processes run inside the sandbox.
+- `proxy_url.rs`: The proxy's address with a caller's credentials, for what the daemon reaches on that caller's behalf (a bot's remote connector).
 - `quiet.rs`: `tirith quiet`: an agent that was given private values (a token, an enterprise's host) starts through it, and they are hidden in all it writes before that reaches a log, a chat or an event.
 - `replay.rs`: Whether a replay's turn can run with the network closed: the sandbox must be in force for the processes Tirith starts.
 - `routes.rs`: The sandbox's HTTP routes: its status, the block list, the destinations seen and Safari.
@@ -1128,7 +1190,9 @@ A bot's secrets. The owner's commands are `tirith secret set <bot> <NAME>`, `tir
 the value from stdin, typed unseen or piped whole less its last line end, and takes none from argv; `list` prints
 names alone. Their routes (`/api/secrets/<bot>`) are the owner's alone, by `server/scope.rs` and by a check of their own: a
 bot, a lane and a manager get 403, for their own secrets too. No route and no command answers a value. The daemon's lookup
-(`lookup.rs`) is by bot and name, and nothing puts a secret in a bot's environment.
+(`lookup.rs`) is by bot and name; only the connector gateway asks it (`gateway/`), and puts a value only in that
+connector's own process environment or its auth headers, never in the agent's environment, its MCP arguments, a
+transcript or a capture.
 
 A value lies in the system's credential store when there is one, called in-process: macOS's login Keychain, Windows
 Credential Manager, Linux's Secret Service, as service `tirith.bot.<id>` and account `<NAME>@<tag>` (the tag keeps
@@ -1155,7 +1219,7 @@ Files:
 - `index.rs`: A bot's names and where each value lies, never a value.
 - `input.rs`: A value as it comes on stdin.
 - `key.rs`: The fallback's private files and the daemon's key material in them.
-- `lookup.rs`: The daemon's own lookup of one value, by bot and name.
+- `lookup.rs`: The daemon's own lookup of one value, by bot and name, for the connector gateway alone.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `names.rs`: What may be a bot, a name and a value.
 - `os.rs`: The OS's credential store, in-process.
@@ -1526,6 +1590,7 @@ Files:
 - `loose.rs`: The loose turn of a turn role (`run_turn`): started by what waits under `turn:<role>`, kept with its result.
 - `muse_log.rs`: Muse's own log of a session, for a turn whose output carried no usage.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
+- `open_start.rs`: The start of the turn of a conversation open now, for what is recorded against it from outside its lines (the gateway's calls).
 - `price.rs`: A turn's cost when its agent gives none: `[prices."<model id>"]` of config.toml, in dollars per million tokens.
 - `proof.rs`: What a turn's calls prove of a run: a look that did not work, and an error that nothing after it undid.
 - `quality.rs`: The judge's note on a routine's turn (or a chat turn that read a skill): what `routine.done` carries for `turn-quality`, and the score copied to the turn.

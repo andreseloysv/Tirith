@@ -7,7 +7,8 @@ use serde_json::json;
 const USAGE: &str = include_str!("../../assets/usage.txt");
 
 type ModuleCli = fn(&[&str], Flag) -> Option<Result<(), String>>;
-const MODULE_CLI: [ModuleCli; 10] = [
+const MODULE_CLI: [ModuleCli; 11] = [
+    crate::gateway::cli,
     rooms::cli,
     sandbox::cli,
     models::cli,

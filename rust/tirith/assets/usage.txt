@@ -22,6 +22,7 @@ tirith autopilot on|off <project>              let Tirith start the plan's items
 tirith secret set <bot> <NAME>                  (the owner) keep a bot's secret: the value comes on stdin (typed unseen, or piped), never as an argument
 tirith secret list <bot>                       (the owner) the names of a bot's secrets, never their values
 tirith secret remove <bot> <NAME>              (the owner) delete one; deleting the bot deletes all of its own
+tirith mcp --bot <id>                          (a bot's run, started by Tirith) the MCP server of the connectors granted to that bot: it lists and calls only what their verdict allows
 tirith project add <folder> [--name N] [--color #rrggbb]   add a folder as a project (the page's + does the same)
 tirith say [--project P] "<text>"              write to the project's manager (without one: the manager of no project)
 tirith chat clear [--project P]                clear a conversation (this session's, or P's): its bot starts fresh
