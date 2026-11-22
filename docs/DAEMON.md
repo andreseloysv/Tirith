@@ -258,6 +258,7 @@ Files:
 - `store.rs`: The expected runs as kept (`expected_runs`): one row for each occurrence, waiting, running, then ok or failed.
 - `timed.rs`: Everything that has a time of day: the bots' routines and the turn roles' scheduled passes.
 - `told.rs`: Whose words an answer holds: what it quotes, and what it tells of someone's, are theirs. What it tells of its own tool or helper is its own.
+- `unjudged.rs`: A good run that no judge will read any more: code's plain words decide, as when a judge gave no verdict.
 - `verdict.rs`: Whether a routine's turn did what it was started for, as far as code is certain: its agent ended well, it did not say in plain words that it could not, no tool's error proves it could not, and a «∅» comes from having looked.
 - `watch.rs`: The scheduler's tick: Tirith says it is alive, what was missed is written down, and what takes too long is ended.
 - `words.rs`: Times, days and texts as the owner reads them in one line.
@@ -909,6 +910,7 @@ Files:
 - `check.rs`: One tool call against every rule, in order: the first refusal wins.
 - `confined.rs`: A role confined by its `writes` key (the Coach): its edits land only in the bots' folders and the folders `writes` names; of the hidden folders only a skill's (`.agents/skills`).
 - `hooks.rs`: The rules about the turn itself: commit checks are never skipped, and a chat's turn never waits.
+- `judge.rs`: A judge (an eval's read-only turn role that nobody talks to) uses no tool: what it is handed is data.
 - `lane.rs`: A lane's rules: it writes only in its own copy, never touches main and never starts agents.
 - `manifest.rs`: The rules a project's tirith.toml brings: its plan is written only by Tirith, and its own `[[rules]]`.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
@@ -1299,7 +1301,8 @@ Each row also carries its quality signals (`react.rs`, `signals.rs`, `checks.rs`
   and the owner gets the one line of any failed run (`could_not.rs`, `expected/admitted.rs`). Code alone fails a run
   only where it is certain: the agent's own failure, ✗, a first-person "I could not", a ∅ with no look or one that failed,
   a nested agent's or a sandbox's own error. Any other failure in an answer may be the news the task asks for (what is down),
-  so the judge reads whose it is; when no judge gives a score, plain words of trouble count as a failure.
+  so the judge reads whose it is; when no judge gives a score (none within 25 minutes, `expected/unjudged.rs`), plain words of trouble
+  count as a failure. The answer and what the calls gave are fenced as data, and a judge uses no tool (`rules/judge.rs`).
 
 `GET /api/turns` gives these columns too; older databases get them by `ALTER TABLE` at start (`add_columns`).
 

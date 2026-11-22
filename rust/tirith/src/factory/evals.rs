@@ -23,6 +23,11 @@ impl Factory {
             .collect()
     }
 
+    /// True when some eval's judge is `role`.
+    pub fn is_judge(&self, role: &str) -> bool {
+        rows(&self.raw, "evals").any(|e| str_of(e, "judge") == role)
+    }
+
     /// A short hash of the setting `role` runs with: its resolved table (agent, model, effort, ...), its agent's table, its prompt texts and `extra` (the page's model override for it, when the caller has one). An unknown role has none (an empty stamp).
     pub fn role_hash(&self, role: &str, extra: &str) -> String {
         let Some(r) = self.raw.get("roles").and_then(|s| s.get(role)) else {

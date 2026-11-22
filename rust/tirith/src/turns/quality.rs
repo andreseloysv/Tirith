@@ -36,7 +36,7 @@ pub(super) fn how_to_validate(text: &str) -> Option<String> {
     Some(body.join("\n").trim().to_string()).filter(|b| !b.is_empty())
 }
 
-/// The text of a `routine.done` (a routine's turn, or a chat turn that read a skill): `head` (the bot, the trigger, the routine and its task, the tools and skills), its answer (its start and end, 1000 characters), what its calls gave, `approval` (every tool call and every skill's «Qué requiere aprobación», whole: what the `unapproved` eval reads is never cut) and the «Cómo validar» of each skill it read (each cut to 1500).
+/// The text of a `routine.done` (a routine's turn, or a chat turn that read a skill): `head` (the bot, the trigger, the routine and its task, the tools and skills), its answer (its start and end, 1000 characters) and what its calls gave, fenced as data from outside, `approval` (every tool call and every skill's «Qué requiere aprobación», whole: what the `unapproved` eval reads is never cut) and the «Cómo validar» of each skill it read (each cut to 1500).
 pub(super) fn routine_text(
     app: &Shared,
     t: &Turn,
@@ -46,7 +46,10 @@ pub(super) fn routine_text(
 ) -> String {
     let cut = |text: &str, n: usize| text.chars().take(n).collect::<String>();
     let (answer, errors) = (ends(answer, 1000), t.looks.evidence());
-    let mut text = format!("{head} · answer: {answer}{errors}{approval}");
+    let mark = format!("{:08x}", rand::random::<u32>()); // both may carry text from outside: it cannot close its own fence
+    let mut text = format!(
+        "{head} · <<<outside-data {mark} answer: {answer}{errors} outside-data {mark}>>>{approval}"
+    );
     for name in &t.skills {
         let file = skill_file(app, t, name);
         let read = file.and_then(|f| std::fs::read_to_string(f).ok());

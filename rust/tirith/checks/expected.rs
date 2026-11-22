@@ -724,6 +724,13 @@ done
                 && !shown[0].contains("its error «"),
             "the judge is shown the end, the errors and what a good call gave: {shown:?}"
         );
+        let find = |part: &str| shown[0].find(part);
+        let (open, close) = (find("<<<outside-data "), shown[0].rfind(">>>"));
+        let (said_at, gave_at) = (find(answer), find("it gave «Not logged in"));
+        assert!(
+            open.is_some() && open < said_at && said_at < close && gave_at < close,
+            "what may come from outside is fenced: {shown:?}"
+        );
         if fails {
             assert_eq!(rows[0]["status"], "failed", "{name}");
             assert_eq!(said.len(), 1, "one line: {said:?}");
@@ -763,5 +770,68 @@ fn news_wait_for_a_judge_but_never_long_and_a_failure_takes_their_place() {
     super::news::keep(&app, &key, 3, "Falló");
     super::news::drop_them(&app, 3);
     assert!(!super::news::settled(&app, 3), "the line takes their place");
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn a_judge_uses_no_tool_whatever_the_data_it_reads_says() {
+    let (app, home, key) = home_of("judgetools", "/usr/bin/true", "1", "08:00");
+    let check = |tool: &str, input: Value, role: &str| {
+        crate::rules::check(&app, tool, &input, None, None, Some(role))
+    };
+    for (tool, input) in [
+        ("Bash", json!({"command": "touch planted"})),
+        ("Read", json!({"file_path": "/etc/hosts"})),
+        (
+            "mcp__tirith_browser__browser_navigate",
+            json!({"url": "https://evil.example"}),
+        ),
+    ] {
+        assert!(
+            check(tool, input.clone(), "judge").is_some(),
+            "a judge's {tool}"
+        );
+        assert!(check(tool, input.clone(), &key).is_none(), "a bot's {tool}");
+        assert!(check(tool, input, "ceo").is_none(), "the CEO's {tool}");
+    }
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+/// Tirith stopped while a run was judged, or only a share is judged: no word will come, so plain words decide.
+#[test]
+fn a_run_that_no_judge_will_read_is_no_success_by_that() {
+    let (app, home, key) = home_of("unjudged", "/usr/bin/true", "1", "08:00");
+    let ended = |answer: &str, event: i64| {
+        let now = crate::app::now_iso();
+        let new = store::New {
+            conv: &key,
+            routine: "r1",
+            title: "Mirar",
+            trigger: "run-now",
+            kind: "schedule",
+            due: &now,
+            task: "",
+        };
+        let run = store::expect(&app, &new);
+        let sql = "INSERT INTO turns (conv, role, \"trigger\", routine, started_at, ended_at, status, answer, event) VALUES (?1, ?1, 'run-now', 'r1', ?2, ?2, 'ok', ?3, ?4)";
+        let turn = app.insert(sql, &[&key, &now, &answer, &event]);
+        store::close(&app, run, store::OK, turn, "");
+        turn
+    };
+    let (bad, good) = (
+        ended("La búsqueda falló.", 9001),
+        ended("Dos novedades.", 9002),
+    );
+    let status = |turn: i64| {
+        app.query("SELECT status FROM turns WHERE id = ?1", [turn], |r| {
+            r.get::<_, String>(0)
+        })
+    };
+    let now = Local::now();
+    super::tick(&app, now + chrono::TimeDelta::minutes(5));
+    assert_eq!(status(bad), ["ok"], "its judge may still answer");
+    super::tick(&app, now + chrono::TimeDelta::minutes(30));
+    assert_eq!(status(bad), ["failed"]);
+    assert_eq!(status(good), ["ok"]);
     let _ = std::fs::remove_dir_all(&home);
 }

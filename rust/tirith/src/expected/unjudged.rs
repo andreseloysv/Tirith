@@ -1,0 +1,21 @@
+//! A good run that no judge will read any more (Tirith stopped while it was judged, or only a share is judged) is no success by that: code's plain words decide, as when a judge gave no verdict.
+use super::admitted::admitted;
+use super::calendar::utc;
+use super::store::OK;
+use crate::app::Shared;
+use chrono::{DateTime, Local, TimeDelta};
+
+/// The longest a judge's turns take, both tries.
+const WAITS: TimeDelta = TimeDelta::minutes(25);
+/// How far back one is still looked at.
+const BACK: TimeDelta = TimeDelta::days(1);
+
+pub(super) fn check(app: &Shared, now: DateTime<Local>) {
+    let sql = "SELECT e.turn, COALESCE(t.answer, '') FROM expected_runs e JOIN turns t ON t.id = e.turn WHERE e.state = ?1 AND e.ended_at > ?2 AND e.ended_at <= ?3 AND t.status = 'ok' AND t.event IS NOT NULL AND NOT EXISTS (SELECT 1 FROM scores s WHERE s.event = t.event AND s.eval = ?4)";
+    let (since, until) = (utc(now - BACK), utc(now - WAITS));
+    let args = rusqlite::params![OK, since, until, crate::turns::GRADE];
+    let unread: Vec<(i64, String)> = app.query(sql, args, |r| Ok((r.get(0)?, r.get(1)?)));
+    for (turn, answer) in unread {
+        admitted(app, turn, &answer, None);
+    }
+}

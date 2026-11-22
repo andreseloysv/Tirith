@@ -19,6 +19,7 @@ mod stands;
 mod store;
 mod timed;
 mod told;
+mod unjudged;
 mod verdict;
 mod watch;
 mod words;
