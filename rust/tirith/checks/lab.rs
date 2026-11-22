@@ -779,7 +779,8 @@ fn a_skill_changed_meanwhile_is_not_overwritten() {
     let git = |args: &[&str]| assert!(super::git::git(&home, args).is_ok(), "{args:?}");
     let put = |file: &str, text: &str| std::fs::write(home.join(file), text).unwrap();
     git(&["init", "-q", "-b", "main"]);
-    (put("SKILL.md", "one\n"), put("memory.md", "- note\n"));
+    put("SKILL.md", "one\n");
+    put("memory.md", "- note\n");
     git(&["add", "-A"]);
     git(&["commit", "-q", "-m", "start"]);
     for branch in ["skill", "memory"] {
@@ -791,10 +792,8 @@ fn a_skill_changed_meanwhile_is_not_overwritten() {
         git(&["commit", "-q", "-am", branch]);
     }
     git(&["checkout", "-q", "main"]);
-    (
-        put("SKILL.md", "the owner's\n"),
-        put("memory.md", "- note\n- a later note\n"),
-    );
+    put("SKILL.md", "the owner's\n");
+    put("memory.md", "- note\n- a later note\n");
     git(&["commit", "-q", "-am", "meanwhile"]);
     assert!(
         !super::adopt::adopt(&home, "skill", "adopt"),

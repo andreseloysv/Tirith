@@ -74,7 +74,7 @@ fn what_the_chat_and_the_event_show_is_neutral() {
         super::hook_clean::ident("Mozilla/5.0 (a b): hook\n"),
         "Mozilla_5.0__a_b_:_hook_"
     );
-    let shown = super::hook_clean::quoted(&e["title"].as_str().unwrap());
+    let shown = super::hook_clean::quoted(e["title"].as_str().unwrap());
     assert!(
         shown.starts_with('«')
             && shown.ends_with('»')
