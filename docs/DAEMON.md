@@ -407,7 +407,8 @@ The agent is listed each open connector's tools as `<connector>__<tool>`, only t
 (one that asks first says "(asks the owner first)"), by the grants of now. Every `tools/call` asks the verdict again,
 with config.toml re-read when it changed, never trusting the list it gave: a refusal (`refused by deny`, `refused by
 scope` — a connector the bot is not granted too — or `refused by block`) answers the refusal's line as a failed tool
-result; an approval match answers `approval required` and does not run yet; only `ran` reaches the connector. Every
+result; an approval match runs only on the owner's permit for that very call (below); only `ran` and `approved and
+ran` reach the connector. Every
 attempt, each repeated one too, is a row of `connector_calls` (`assets/schema.sql`): `at`, `bot` (its id), `conv`
 (its key), `turn` (the start in µs of the conversation's turn open then, 0 for none), `connector`, `tool`,
 `args_sha` (sha256 of the arguments as canonical JSON: keys sorted, no spaces), `result_sha` (of what ran answered;
@@ -416,11 +417,33 @@ process is gone is closed, its connectors' processes killed, at the next open. T
 `gateway_hides_secrets` and `refused_calls_are_recorded` (`rust/tirith/checks/gateway.rs`), with a fake stdio and a
 fake HTTP MCP server (`checks/gateway_fakes.rs`), the daemon's proxy and no model.
 
+A call that matches `approval` (the connector's or the bot's) does not run on its own (`approve.rs`, `permit.rs`). Its
+key is the sha256 of the canonical JSON of `[connector id, tool name, arguments]`, in the bot's conversation. Without a
+granted permit for that key the daemon opens an `approval` card in the bot's conversation (`manager::ask_owner`, so on
+the page, in the chat and on the phones; one still open for the same call is reused, not doubled) naming the bot, the
+connector and the tool with a short summary of the arguments (`summary.rs`: top-level keys and short values; a value
+under a key that names a secret — token, secret, password, key, auth, cookie, credential — or holding one of the
+connector's secret values for this bot is `(hidden)`), keeps a `connector_permits` row `asked` for it, records
+`waiting for approval`, and answers the bot a failed result naming the card and telling it to end its turn: the turn is
+kept `waiting` while the card is open (`turns/approval.rs`), and the owner's answer starts the bot's next one. Only the
+owner's own answer on that card grants the permit: `card_done` (`manager/cards.rs`) settles it — `granted` when the
+answer's first word is one of the factory's `[cards] yes` (the page's Yes button sends `yes`; `o12: yes` from a paired
+phone), `refused` for any other answer or a closed card. An agent's `tirith answer` of such a card is refused outright
+(`manager/relayed.rs`), even with the owner's words in the chat, and nothing a caller sends to the gateway (a role, a
+card id, an `approved` flag) counts. The next call with the same key takes the permit (`used`, under the database lock,
+so only one call can) and runs once: its result carries `_meta["tirith/approval"] = {verdict: "approved and ran",
+card}`, the owner gets a `gateway` event, and the record says `approved and ran`, never the plain `ran`. Changed
+arguments, another tool or connector, or a second identical call find no permit and ask again with a new card; a no
+leaves none. Test `approval_is_bound_to_the_call` (`rust/tirith/checks/gateway_approval.rs`): the fake stdio server,
+no run before yes, one after, no reuse, changed arguments and another tool ask again, a no runs nothing, and the bot's
+own caller token cannot answer the card (as itself, in the owner's chat words, or with a forged gateway request).
+
 Files:
 
 - `api.rs`: The gateway's routes, for the bot run whose token opened it alone: open, the tools of now, one call, close.
 - `auth.rs`: A remote connector's secrets as its auth headers, each marked sensitive.
-- `call.rs`: One `tools/call`: the verdict asked again with the grants of now, a refusal or an approval match answered without running, and every attempt recorded.
+- `approve.rs`: A call that asks the owner first: run once on its permit, said `approved and ran`, else a card and `waiting for approval`.
+- `call.rs`: One `tools/call`: the verdict asked again with the grants of now, a refusal answered without running, an approval match handed to its permit, and every attempt recorded.
 - `canon.rs`: Canonical JSON (keys sorted at every depth, no spaces) and its sha256.
 - `cli.rs`: `tirith mcp --bot <id>`: its stdout is the protocol's alone; why it stops goes to stderr.
 - `door.rs`: The gateway process's way to the daemon: its port and its run's caller token, nothing else.
@@ -431,11 +454,13 @@ Files:
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `names.rs`: The names the agent sees: `<connector>__<tool>`.
 - `open.rs`: Opening a bot's gateway: the caller proven by its token alone, then every connector its role is granted.
+- `permit.rs`: One-use permits keyed by the sha256 of connector, tool and canonical arguments, bound to their card: granted by the owner's yes alone, used by one call.
 - `record.rs`: Every attempt as a row of `connector_calls`: hashes and the verdict, never the content.
 - `remote.rs`: A remote connector: MCP's streamable HTTP through Tirith's proxy as the bot.
 - `rpc.rs`: JSON-RPC 2.0 as MCP speaks it, both ways.
 - `session.rs`: The gateways open now, each found again only by the run that opened it.
 - `stdio.rs`: The gateway's side facing the agent: MCP over stdio, every tools message handed to the daemon.
+- `summary.rs`: The short, secret-free summary of a call's arguments an approval card shows.
 
 ## `guard/`
 
@@ -671,9 +696,9 @@ Files:
 - `ask.rs`: `tirith ask-owner`: a new card for the owner.
 - `blocks.rs`: An assistant message of a stream-json session: its text and its tool calls, in the chat and on the phones.
 - `held.rs`: What a routine's run says waits for its end: on the phones only when the run was good and has news. A failed one is the one line of `expected/`.
-- `relayed.rs`: An agent's answer of a card; an approval or a payment takes the owner's own words written after it was asked, and is kept in those words.
+- `relayed.rs`: An agent's answer of a card; an approval or a payment takes the owner's own words written after it was asked, and is kept in those words; a card asking for a connector call is never the agent's to answer.
 - `owner_words.rs`: What the owner last wrote in each conversation (kv `owner_said:<conversation>`), kept as it comes in, never read back from the chat.
-- `cards.rs`: A card's end: its final state (an answered or closed approval ends the wait of the turns that waited for it), the line that says so, and closing one that is no longer needed.
+- `cards.rs`: A card's end: its final state (an answered or closed approval ends the wait of the turns that waited for it, and settles a gateway call's permit), the line that says so, and closing one that is no longer needed.
 - `compose.rs`: The message a conversation is handed: the memory, the waiting reports and the words of the owner, a room, an event or a routine, with what starts its turn.
 - `deliver.rs`: Handing a conversation its messages: to its live session, or waiting for the session that starts for them; with nothing to say, the next routine's run when the conversation is free.
 - `evals.rs`: The evals: an event judged in the background by its judge role, kept as a score.

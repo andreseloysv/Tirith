@@ -15,6 +15,7 @@ pub(super) fn card_done(app: &Shared, id: &str, status: &str, answer: &str) {
         "UPDATE owner_items SET status = ?1, answer = ?2 WHERE id = ?3",
         rusqlite::params![status, answer, id],
     );
+    crate::gateway::settled(app, id, status, answer); // a gateway call's permit: granted by the owner's yes alone
     crate::turns::released(app, id); // a turn that waited for this card as its approval is done
     app.emit(
         "owner",
