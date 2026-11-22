@@ -507,7 +507,8 @@ fn an_ordinary_run_is_no_failure() {
     let no_match = format!("curl -s {list} | grep -i remote");
     let look = format!("curl -s {list}");
     let fine = || vec![(look.as_str(), "3 offers", 0)];
-    let cases: Vec<(&str, Vec<(&str, &str, i64)>)> = vec![
+    type Call<'a> = (&'a str, &'a str, i64);
+    let cases: Vec<(&str, Vec<Call>)> = vec![
         ("∅ No new offers.", vec![(no_match.as_str(), "", 1)]),
         (
             "∅ Sin novedades en los PR.",
