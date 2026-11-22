@@ -24,6 +24,7 @@ pub(super) async fn side(
     let _ = std::fs::create_dir_all(dir.parent()?);
     let path = dir.display().to_string();
     git(&main, &["worktree", "add", "-q", "--detach", &path, rev]).ok()?;
+    super::workfiles::copied(&main, &dir);
     let conv = format!("replay-{}-{}-{variant}", e.id, cap.turn);
     super::answers::open(&dir, &cap.calls);
     let run = async {

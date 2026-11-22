@@ -453,6 +453,7 @@ Files:
 - `adopt.rs`: Adopting a branch: merged into the bot's main without losing a note written in memory.md meanwhile.
 - `answers.rs`: A replay's tool calls in the hook: an outside read answered from the capture's call that asked for the same, one it lacks (counted) or one for the owner refused.
 - `call_key.rs`: What a tool call asks for (the tool and its URL, query or command), so a replay answers only a call that asks for the same thing.
+- `own_folder.rs`: What a run of an experiment is to the rest of Tirith: a live B's worktree stands for the bot's own folder, and no history is handed to either side.
 - `reach.rs`: What a replay's processes may reach (its agent's model and nothing else), and what its agent is also started with.
 - `recorded.rs`: A capture's calls that read outside, as a replay answers them, and whether each has an answer.
 - `replay_runs.rs`: The captured runs a replay does again: enough of them, each answerable.
@@ -485,6 +486,7 @@ Files:
 - `start.rs`: `tirith lab start`: the request checked, the experiment's row, and its worktree (live, shadow) or the captured runs of `replay_runs.rs` (replay).
 - `store.rs`: The experiments' rows: one, the running ones, their worktree and the list the page shows.
 - `turn.rs`: A bot's turn ended: a run of an experiment keeps its variant, a B run is compared, the experiment may be decided.
+- `workfiles.rs`: The bot's working files in a worktree, which git does not hold: the bot's own for a live B run, a copy that does not stay for a shadow or replayed one.
 
 ## `lanes/`
 

@@ -17,7 +17,7 @@ pub struct Seat {
 }
 
 /// The seats on their way, under the bot's own folder (a path, so two Tirith homes never share one).
-static SEATS: Mutex<BTreeMap<PathBuf, Seat>> = Mutex::new(BTreeMap::new());
+pub(super) static SEATS: Mutex<BTreeMap<PathBuf, Seat>> = Mutex::new(BTreeMap::new());
 
 /// A bot's own folder, its main's checkout: `<home>/manager/<key>`.
 pub fn live(app: &App, key: &str) -> PathBuf {
@@ -63,6 +63,9 @@ pub fn fired(app: &Shared, key: &str, routine: &str, task: &str) {
         tree: tree(app, &e),
         pair: 0,
     };
+    if variant == "B" {
+        super::workfiles::share(&live(app, key), &s.tree);
+    }
     sit(app, key, s);
     super::fresh::session(app, key); // A and B alike
 }
@@ -85,7 +88,8 @@ pub fn taken(app: &App, key: &str, routine: &str) -> Option<Seat> {
 /// The run of the bot `key` on its way ended without its turn's row (it never started, or its session ended): its seat is taken back, and a B run's session ends so the next starts in the bot's own folder.
 pub fn released(app: &Shared, key: &str) {
     let seat = SEATS.lock().unwrap().remove(&live(app, key));
-    let _ = seat
-        .filter(|s| s.variant == "B")
-        .map(|_| super::fresh::session(app, key));
+    if let Some(s) = seat.filter(|s| s.variant == "B") {
+        super::workfiles::back(&live(app, key), &s.tree);
+        super::fresh::session(app, key);
+    }
 }

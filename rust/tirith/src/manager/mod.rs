@@ -49,7 +49,6 @@ pub use interrupt::interrupt;
 pub use jobs::release_run;
 pub use judged::card_id_of;
 pub use open::owner_open;
-pub use prompt::recent;
 pub use relayed::relayed;
 pub use say::{from_room, say};
 pub use spawn::spawn_chat;

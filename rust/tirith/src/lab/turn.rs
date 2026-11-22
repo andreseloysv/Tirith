@@ -1,5 +1,5 @@
 //! A bot's turn ended: a run of a live experiment keeps its experiment and variant on its row, a B run is compared with the A before it, and the experiment may be decided.
-use super::seat::taken;
+use super::seat::{live, taken};
 use super::store::running_one;
 use crate::app::Shared;
 use rusqlite::params;
@@ -13,6 +13,9 @@ pub fn finished(app: &Shared, id: i64, conv: &str, routine: &str) {
         "UPDATE turns SET experiment = ?1, variant = ?2 WHERE id = ?3",
         params![seat.experiment, seat.variant, id],
     );
+    if seat.variant == "B" {
+        super::workfiles::back(&live(app, conv), &seat.tree);
+    }
     let Some(e) = running_one(app, seat.experiment) else {
         return;
     };
