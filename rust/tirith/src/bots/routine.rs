@@ -8,19 +8,20 @@ use chrono::NaiveTime;
 use serde_json::{json, Value};
 /// A timed routine's days, its time written HH:MM, and its catch_up.
 fn timed(r: &mut Value, b: &Value) -> Result<bool, String> {
-    let catch_up = &r["catch_up"];
-    (catch_up.is_null() || catch_up == "once" || catch_up == "skip")
-        .then_some(())
-        .ok_or("catch_up must be once or skip")?;
+    match &b["catch_up"] {
+        Value::Null => {}
+        v if v == "once" || v == "skip" => r["catch_up"] = v.clone(),
+        _ => return Err("catch_up must be once or skip".into()),
+    }
     r["days"] = days(&b["days"]).map_or(r["days"].clone(), |d| json!(d));
     let at = NaiveTime::parse_from_str(s(r, "at").trim(), "%H:%M")
         .map_err(|_| "the time must be HH:MM, as 08:00")?;
     r["at"] = json!(at.format("%H:%M").to_string());
     Ok(r["days"].as_array().is_some_and(|d| !d.is_empty()))
 }
-/// The fields `b` carries laid over the routine `r`: its `trigger` is `schedule` (a time on some days, and `catch_up` for the times missed) or `webhook` (an event from outside whose `when` holds: `<source:kind>`, a pattern of it with `*`, or `*`); it must keep a title, what to do, and a day or a `when`.
+/// The fields `b` carries laid over the routine `r`: its `trigger` is `schedule` (a time on some days) or `webhook` (an event from outside whose `when` holds: `<source:kind>`, a pattern of it with `*`, or `*`); it must keep a title, what to do, and a day or a `when`.
 fn set(r: &mut Value, b: &Value) -> Result<(), String> {
-    ["title", "prompt", "at", "on", "trigger", "when", "catch_up"]
+    ["title", "prompt", "at", "on", "trigger", "when"]
         .into_iter()
         .filter(|k| !b[*k].is_null())
         .for_each(|k| r[k] = b[k].clone());
