@@ -82,6 +82,35 @@ fn plan_add_rejects_invalid_checks() {
     );
 }
 #[test]
+fn plan_add_accepts_cargo_test_filter() {
+    let b = super::check::check_problem;
+    for good in [
+        "cargo test -q -p tirith mi_test",
+        "grep -rq x rust/tirith/checks && cargo test -q -p tirith",
+        "cargo test -q -p tirith mi_test && sh tools/size.sh",
+        "grep -qE 'cargo|tirith comando_inventado' README.md",
+        "grep -q \"; tirith comando_inventado\" README.md",
+    ] {
+        assert_eq!(b(good), None, "{good}");
+    }
+    for bad in [
+        "tirith comando_inventado",
+        "  tirith comando_inventado",
+        "true;tirith comando_inventado",
+        "true && tirith comando_inventado",
+        "false || tirith comando_inventado",
+        "echo x | tirith comando_inventado",
+        "echo 'x' && tirith comando_inventado",
+        "(tirith comando_inventado)",
+        "! tirith comando_inventado",
+        "for i in 1; do tirith comando_inventado; done",
+        "if true; then tirith comando_inventado; fi",
+        "test -n \"$(tirith comando_inventado)\"",
+    ] {
+        assert!(b(bad).is_some(), "{bad}");
+    }
+}
+#[test]
 fn a_rewritten_check_keeps_the_lane_on_its_item() {
     let (old, now) = (
         "Make the chat a PWA (check: `npm test`)",
