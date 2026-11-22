@@ -18,6 +18,20 @@ pub(super) fn waits(app: &Shared, t: &Turn) -> bool {
     .is_some_and(|n| *n > 0)
 }
 
+/// Turn `turn` asked for the owner's yes: an approval card of its conversation from while it ran, whatever became of it since.
+pub fn asked(app: &Shared, turn: i64) -> bool {
+    let sql =
+        "SELECT conv, COALESCE(started_at, ''), COALESCE(ended_at, '') FROM turns WHERE id = ?1";
+    let ran: Vec<(String, String, String)> =
+        app.query(sql, [turn], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)));
+    let sql = "SELECT COUNT(*) FROM owner_items WHERE kind = 'approval' AND project = ?1 AND at BETWEEN ?2 AND ?3";
+    ran.iter().any(|(conv, from, to)| {
+        let with = [app.conv(conv), from.as_str(), to.as_str()];
+        let cards = app.query(sql, with, |r| r.get::<_, i64>(0));
+        cards.first().is_some_and(|n| *n > 0)
+    })
+}
+
 /// An approval card is no longer open (answered or closed): the turns of its conversation that waited only for it stop waiting and count as done, ok.
 pub fn released(app: &Shared, card: &str) {
     let sql =

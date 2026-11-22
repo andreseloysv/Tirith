@@ -39,7 +39,7 @@ mod versions;
 pub use api::routes;
 #[cfg(test)]
 pub(crate) use api::turns as rows_of;
-pub use approval::released;
+pub use approval::{asked, released};
 #[cfg(test)]
 pub use capture_keep::keep as keep_capture;
 pub use capture_keep::{capture_of, captured, Captured};

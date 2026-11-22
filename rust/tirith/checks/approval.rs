@@ -188,3 +188,52 @@ fn the_owners_answer_ends_the_wait() {
     drop(app);
     let _ = std::fs::remove_dir_all(&home);
 }
+
+#[test]
+fn waiting_for_the_owners_yes_is_no_could_not_also_once_answered() {
+    let home =
+        std::env::temp_dir().join(format!("tirith-approval-no-failure-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&home);
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::write(home.join("config.toml"), "[network]\nsandbox = false\n").unwrap();
+    let app = crate::app::App::open_at(home.clone());
+    let bot = crate::bots::save(&app, json!({"name": "Correo", "shape": "drop", "color": "#22d3ee", "session": "chat", "access": "read"})).unwrap();
+    let key = format!("bot-{}", bot["id"].as_str().unwrap());
+    crate::manager::ask_owner(&app, &key, "approval", "Enviar a ana el acuse", "")
+        .expect("an approval card");
+    app.insert(
+        "UPDATE owner_items SET status = 'answered' WHERE kind = 'approval'",
+        &[],
+    );
+    let now = crate::app::now_iso();
+    let answer =
+        "No he enviado el correo: el envío necesita tu aprobación. Te he dejado una tarjeta.";
+    let judged = |from: &str, to: &str| {
+        let sql = "INSERT INTO turns (conv, role, \"trigger\", routine, started_at, ended_at, status, answer) VALUES (?1, ?1, 'event:webhook', 'r1', ?2, ?3, 'ok', ?4)";
+        let turn = app.insert(sql, rusqlite::params![key, from, to, answer]);
+        let sql = "INSERT INTO expected_runs (conv, routine, title, \"trigger\", kind, due, task, state, turn, ended_at, created_at) VALUES (?1, 'r1', 'Responder', 'event:webhook', 'webhook', ?2, '', 'ok', ?3, ?2, ?2)";
+        app.insert(sql, rusqlite::params![key, to, turn]);
+        crate::expected::admitted(
+            &app,
+            turn,
+            answer,
+            Some("el envío necesita aprobación del owner"),
+        );
+        app.query("SELECT status FROM turns WHERE id = ?1", [turn], |r| {
+            r.get::<_, String>(0)
+        })[0]
+            .clone()
+    };
+    assert_eq!(
+        judged("2000-01-01T00:00:00Z", &now),
+        "ok",
+        "it asked for the owner's yes: no failure"
+    );
+    assert_eq!(
+        judged("2000-01-01T00:00:00Z", "2000-01-01T00:00:09Z"),
+        "failed",
+        "with no card it could not"
+    );
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}

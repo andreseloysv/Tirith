@@ -237,8 +237,8 @@ once it is judged, three minutes later at most: a failure it finds is the one li
 
 Files:
 
-- `admits.rs`: An answer that says in the first person that the task could not be done: not someone's words that it quotes or tells, and not the failure of someone or something that the task reports.
-- `admitted.rs`: A run that code found good and that its judge read as "I could not", in words no list holds: it ends as a failure, once. Where no judge could read it, plain words of trouble do the same, so it is never kept as a success in silence.
+- `admits.rs`: An answer that says in the first person that the task could not be done: not someone's words that it quotes or tells, and not the failure of someone or something that the task reports. Of a scheduled pass, only where it begins or of what it tried: proposing nothing is no failure.
+- `admitted.rs`: A run that code found good and that its judge read as "I could not", in words no list holds: it ends as a failure, once. Where no judge could read it, plain words of trouble do the same, so it is never kept as a success in silence. A run that asked for the owner's yes is none of these.
 - `calendar.rs`: When something scheduled was due, in this machine's time, kept as UTC instants.
 - `changed.rs`: What the conversation is told when a routine's schedule changes: nobody waits for it on a day, or at a time, it no longer has.
 - `claims.rs`: What an answer claims. «∅» is "I looked and nothing is new"; «✗» is "I could not"; a «∅» that says it could not is a «✗».
@@ -1374,7 +1374,7 @@ Each row also carries its quality signals (`react.rs`, `signals.rs`, `checks.rs`
 Files:
 
 - `api.rs`: `GET /api/turns?conv=<key>&limit=<n>`: a conversation's turns, the last first.
-- `approval.rs`: Approvals: a turn ending with its approval card open waits until the card is answered or closed, and what the `unapproved` eval reads of a turn.
+- `approval.rs`: Approvals: a turn ending with its approval card open waits until the card is answered or closed (and never becomes a could-not for that), and what the `unapproved` eval reads of a turn.
 - `broke.rs`: A tool's own error in what it printed. An exit status alone does not tell: `codex exec` ends well when every command it ran was refused.
 - `capture.rs`: What a turn read as its agent saw it: what was handed to it and each tool call with its input and result, up to 256 KB.
 - `capture_fit.rs`: Fitting a capture in its size: a result's text, cut on a character to the room left.

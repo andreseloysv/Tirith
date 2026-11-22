@@ -15,6 +15,15 @@ static SELF: LazyLock<Regex> = LazyLock::new(|| {
     ))
     .unwrap()
 });
+/// Saying of what one tried that it could not be done.
+static TRIED: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(concat!(
+        r"(?i)\bno (pude|pudimos|he podido|hemos podido|logré|conseguí|he logrado|he conseguido|fui capaz|he sido capaz)\b",
+        r"|\bno me (fue|ha sido) posible\b|\bme (fue|ha sido|resultó) imposible\b",
+        r"|\b(i|we) (could not|couldn['’]t|was not able to|wasn['’]t able to|was unable to|were unable to|failed to|didn['’]t manage to)\b",
+    ))
+    .unwrap()
+});
 /// Words of trouble: they count only where no judge read the run.
 static TROUBLE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(concat!(
@@ -31,6 +40,13 @@ pub(super) fn admits(answer: &str) -> bool {
     let mine = own_words(answer);
     mine.lines()
         .any(|said| SELF.is_match(&super::claims::but_found_none(said)))
+}
+
+/// The same of a scheduled pass, which reports on others and may propose nothing: it says so where it begins, or of what it tried. Further on, "so I can't start an experiment there" is its reason to propose nothing.
+pub(super) fn pass_admits(answer: &str) -> bool {
+    let opening = answer.trim().split(['.', ':', '\n']).next().unwrap_or("");
+    let tried = |said: &str| TRIED.is_match(&super::claims::but_found_none(said));
+    admits(opening) || own_words(answer).lines().any(tried)
 }
 
 /// True when it speaks of trouble.

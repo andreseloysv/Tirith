@@ -889,3 +889,44 @@ fn a_turn_no_judge_grades_still_admits_in_the_first_person() {
     );
     let _ = std::fs::remove_dir_all(&home);
 }
+
+#[test]
+fn a_pass_that_proposes_nothing_is_no_failure() {
+    let (app, home, key) = home_of("proposes-nothing", "/usr/bin/true", "1", "08:00");
+    let passed = |answer: &str| {
+        let now = crate::app::now_iso();
+        let new = store::New {
+            conv: &key,
+            routine: super::PASS,
+            title: super::PASS_TITLE,
+            trigger: "schedule",
+            kind: "schedule",
+            due: &now,
+            task: "",
+        };
+        let run = store::expect(&app, &new);
+        let sql = "INSERT INTO turns (conv, role, \"trigger\", routine, started_at, ended_at, status, answer) VALUES (?1, ?1, 'schedule', 'pass', ?2, ?2, 'ok', ?3)";
+        let turn = app.insert(sql, &[&key, &now, &answer]);
+        store::close(&app, run, store::OK, turn, "");
+        super::ungraded(&app, turn);
+        app.query("SELECT status FROM turns WHERE id = ?1", [turn], |r| {
+            r.get::<_, String>(0)
+        })[0]
+            .clone()
+    };
+    for answer in [
+        "Ninguna propuesta: los números no sostienen un cambio. Su único fallo es el de la aprobación, que es correcto.\nLas demás rutinas tienen 1 o 2 ejecuciones, así que no puedo arrancar un experimento allí.",
+        "Nothing to propose. The other routines have 2 runs each, so I can't start an experiment there yet.",
+        "Sin novedad.",
+    ] {
+        assert_eq!(passed(answer), "ok", "{answer}");
+    }
+    for answer in [
+        "No puedo leer los números: el almacén está bloqueado.",
+        "Revisé un bot. Del otro no pude leer sus turnos.",
+        "Checked one bot. I could not open the other's log.",
+    ] {
+        assert_eq!(passed(answer), "failed", "{answer}");
+    }
+    let _ = std::fs::remove_dir_all(&home);
+}
