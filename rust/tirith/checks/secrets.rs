@@ -253,9 +253,27 @@ async fn no_agent_reads_lists_or_changes(app: &Shared, a: &str, b: &str) {
             assert!(!said.contains("TOKEN"));
         }
     }
+    the_routes_refuse_by_themselves(app, a, callers).await;
     let store = Store::of(app);
     assert_eq!(store.value(a, "TOKEN").unwrap().as_deref(), Some(A_TOKEN));
     assert_eq!(store.value(b, "TOKEN").unwrap().as_deref(), Some(B_TOKEN));
+}
+
+/// With no list of the server's in front: a change to that list does not open them.
+async fn the_routes_refuse_by_themselves(app: &Shared, a: &str, callers: [(&str, &str); 5]) {
+    let at = served(super::routes().with_state(app.clone())).await;
+    let all = format!("{at}/api/secrets/{a}");
+    for who in callers {
+        let new = json!({"name": "TOKEN", "value": "an agent's"});
+        for (method, url, body) in [
+            ("GET", all.clone(), None),
+            ("POST", all.clone(), Some(new)),
+            ("DELETE", format!("{all}/TOKEN"), None),
+        ] {
+            let (code, _) = sent(method, url, Some(who), body).await;
+            assert_eq!(code, 403, "the route alone: {who:?} {method}");
+        }
+    }
 }
 
 fn without_an_os_store_it_is_sealed(app: &Shared, a: &str, b: &str) {

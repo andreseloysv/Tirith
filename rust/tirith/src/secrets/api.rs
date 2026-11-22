@@ -1,7 +1,10 @@
-//! The owner's routes (`server/caller.rs` refuses every agent): a value comes in, and only names go out.
+//! The owner's routes, which refuse every agent themselves too (besides `server/caller.rs`): a value comes in, and only names go out.
 use super::store::Store;
 use crate::app::{bad, Shared, R};
-use axum::extract::{Path, State};
+use axum::extract::{Path, Request, State};
+use axum::http::StatusCode;
+use axum::middleware::{from_fn, Next};
+use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, get};
 use axum::{Json, Router};
 use serde_json::{json, Value};
@@ -15,6 +18,19 @@ pub fn routes() -> Router<Shared> {
     Router::new()
         .route("/api/secrets/{bot}", get(list).post(set))
         .route("/api/secrets/{bot}/{name}", delete(remove))
+        .route_layer(from_fn(owner_only))
+}
+
+/// Here as well as in the server's list: a list that lost these routes would give them to every agent.
+async fn owner_only(req: Request, next: Next) -> Response {
+    if crate::server::agent(req.headers()) {
+        return (
+            StatusCode::FORBIDDEN,
+            "a bot's secrets are the owner's alone",
+        )
+            .into_response();
+    }
+    next.run(req).await
 }
 
 /// The stores block, and the Keychain may wait for the owner: never on an async thread.

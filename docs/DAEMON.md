@@ -1072,8 +1072,8 @@ Files:
 A bot's secrets. The owner's commands are `tirith secret set <bot> <NAME>`, `tirith secret list <bot>` and
 `tirith secret remove <bot> <NAME>` (`<bot>` is its id, as in `#/bots/<id>`; NAME is A-Z, 0-9 and _). `set` reads
 the value from stdin, typed unseen or piped whole less its last line end, and takes none from argv; `list` prints
-names alone. Their routes (`/api/secrets/<bot>`) are the owner's alone (`server/caller.rs`): a bot, a lane and a
-manager get 403, for their own secrets too. No route and no command answers a value. The daemon's lookup
+names alone. Their routes (`/api/secrets/<bot>`) are the owner's alone, by `server/caller.rs` and by a check of their own: a
+bot, a lane and a manager get 403, for their own secrets too. No route and no command answers a value. The daemon's lookup
 (`lookup.rs`) is by bot and name, and nothing puts a secret in a bot's environment.
 
 A value lies in the system's credential store when there is one, called in-process: macOS's login Keychain, Windows
