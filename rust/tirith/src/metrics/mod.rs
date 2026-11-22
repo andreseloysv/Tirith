@@ -23,6 +23,7 @@ mod unapproved;
 mod work;
 mod worse;
 pub use api::{routes, start};
+pub use pass::born;
 pub use roles::heard;
 #[cfg(test)]
 #[path = "../../checks/coach.rs"]

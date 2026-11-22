@@ -33,17 +33,12 @@ pub(super) fn judge_evals(app: &Shared, project: &str, on: &str, shown: &str, ev
         );
         for (id, judge, rubric, _) in evals {
             crate::turns::trigger(&format!("turn:{judge}"), &format!("event:{on}"), "");
-            let Ok(text) = run_turn(
-                &app,
-                &judge,
-                &project,
-                &format!("{}\n\n{input}", app.cfg().factory.prompt(&rubric)),
-            )
-            .await
-            else {
+            let rules = app.cfg().factory.prompt(&rubric);
+            let asked = format!("{rules}\n\n{input}");
+            let Ok(text) = run_turn(&app, &judge, &project, &asked).await else {
                 continue;
             };
-            let (label, score, why) = judged(&text);
+            let (label, score, why) = judged(super::verdict::last(&text, &rules));
             crate::turns::judged(&app, before, &id, &label);
             let (factory, role_hash) = app.stamp_for(&judge);
             app.insert("INSERT INTO scores (at, event, eval, label, score, why, factory, role_hash) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)", rusqlite::params![now_iso(), event, id, label, score, why, factory, role_hash]);

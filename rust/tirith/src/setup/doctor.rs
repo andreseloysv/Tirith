@@ -58,9 +58,14 @@ pub(super) fn doctor() -> Result<bool, String> {
         };
         any = true;
         let fix = format!("tirith connect {}", known.alias);
+        let signed = signin::signed_in(&cx, &known, &path);
+        let what = match signed {
+            Some(_) => "is signed in",
+            None => "is installed (only a real turn tells its sign-in: tirith connect)",
+        };
         line(
-            signin::signed_in(&cx, &known, &path) != Some(false),
-            &format!("{} is signed in", known.name),
+            signed != Some(false),
+            &format!("{} {what}", known.name),
             &fix,
         );
         let hooked = cx

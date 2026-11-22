@@ -265,3 +265,35 @@ async fn shadow_never_reaches_outside() {
     drop(app);
     let _ = std::fs::remove_dir_all(&home);
 }
+
+#[test]
+fn a_shadow_runs_tool_must_say_it_reads() {
+    let acts = |tool: &str| super::outward_browser::acts(tool, &json!({}));
+    for tool in [
+        "mcp__mail__search_threads",
+        "mcp__crm__getUser",
+        "mcp__apps__gmail_search_emails",
+    ] {
+        assert!(!acts(tool), "{tool} reads");
+    }
+    for tool in [
+        "mcp__mail__sendEmail",
+        "mcp__crm__approve_invoice",
+        "mcp__x__go",
+        "mcp__crm__get_and_delete",
+    ] {
+        assert!(acts(tool), "{tool} may act");
+    }
+    let dir = Path::new("/home/tirith/w");
+    let outward = |cmd: &str| super::outward::outward("Bash", &json!({"command": cmd}), dir);
+    assert!(
+        !outward("ls /home/tirith -la"),
+        "a server's home is no command"
+    );
+    assert!(
+        !outward("tirith turn checks 1/1 \"marker file\""),
+        "a run's own validation"
+    );
+    assert!(outward("~/.local/bin/tirith say hola"));
+    assert!(outward("cd /tmp && tirith lane start x 1 y"));
+}

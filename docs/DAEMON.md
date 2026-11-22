@@ -328,26 +328,30 @@ input). A capture stops at 256 KB (a result is cut on a character, and `full` sa
 runs of each routine of the bot are kept (its turns outside a routine count as one routine more); older ones go.
 
 **Replay.** `--mode replay` (`replay.rs`, `replay_side.rs`) commits the bot's folder and takes the routine's last
-`inputs` captured runs (none: refused). For each, oldest first, A (a detached worktree of the bot's main) and then B
+`inputs` captured runs whose outside reads all kept a result (`replay_runs.rs`; fewer than min(5, `inputs`): refused,
+saying to use live or shadow). For each, oldest first, A (a detached worktree of the bot's main) and then B
 (one of the branch) under `<home>/lab/<bot>/<experiment>/<a|b>-<turn>` do the capture's start again as a loose turn
 of the bot's role (`manager::run_turn`), handed that worktree's memory and skills. A tokio task-local marks the turn:
 `lab::seat` resolves every folder of the bot to the worktree (the session's folder, its context, Muse's workspace),
 and `sandbox::wrap` gives its processes the proxy caller `replay:<experiment>`, to which the proxy refuses every
-destination. In Tirith's `PreToolUse` hook (`server/hook.rs`, Anthropic's and Muse's alike) a call from the
+destination but, over TLS, the `model_hosts` of the bot's agent (factory.toml, plus the agents' catalog: `reach.rs`),
+since a cloud agent cannot think without them; an agent with none is not replayed. Its `replay_args` are added
+(Codex's own web search and apps, which no hook hears, are off). In Tirith's `PreToolUse` hook (`server/hook.rs`, Anthropic's and Muse's alike) a call from the
 worktree that reads outside — the web, a browser or any MCP tool, `tirith safari` or `tirith teach`, shell commands
 with network such as curl, ssh or git fetch (`outside.rs`) — is refused with the next unanswered call of the same
 call in the capture that asks for the same thing as its reason, «Recorded result (replay): <its result>»
 (`answers.rs`; what a call asks for is its tool and its URL, query or command with its spaces normalised, never its
 descriptive fields, `call_key.rs`); one the capture has no such call for is refused as «not available in a replay» and
-counted as missed. Local calls (its worktree, which the rules let it write in as its
+counted as missed. A call that would change something outside the worktree (`outward.rs`) is refused. Local calls (its worktree, which the rules let it write in as its
 own folder, and its skills) run as always. Nothing of a replay reaches the owner: its turns run in a conversation of
 their own, `replay-<experiment>-<turn>-<A|B>`, which no chat, phone, room or card knows (`tirith say` and
 `ask-owner` refuse it as an unknown project), and the hook refuses `tirith say`, `ask`, `ask-owner` and `chat` in it.
 Each turn's row gets `experiment`, `variant`, the routine and the trigger `replay`; the worktrees go after each turn,
-and each B is compared with its A like a live run (`lab.compare`, `ab-compare`), unless a side missed a call: that pair
-proves nothing, is kept as a comparison with the verdict `void` (`void.rs`) and is never a tie, a win or a loss
-(the decision line says how many). A replay is refused, with the reason, when the network cannot be closed for it
-(`sandbox::closes_network`: the sandbox is off, or not macOS, or the daemon itself runs in one). A replay the daemon was
+and each B is compared with its A like a live run (`lab.compare`, `ab-compare`), unless a side missed a call, used tools no hook heard, or both sides failed (that last
+holds in live and shadow too): that pair proves nothing, is kept as a comparison with the verdict `void` (`void.rs`)
+and is never a tie, a win or a loss (the decision line says how many). Under min(5, `inputs`) comparisons nothing
+is adopted. A replay is refused, with the reason, when the network cannot be closed for it
+(`sandbox::closes_network`: the sandbox is off or cannot run here, or the daemon itself runs in one). A replay the daemon was
 restarted in the middle of (its pairs ran in memory) is decided at the next start when all its pairs ran and were
 judged, and discarded with a line saying so otherwise (`interrupted.rs`), never later on the pairs it happened to have.
 Once every pair has run (kv `lab:replayed:<experiment>`) and been judged, it is due.
@@ -365,7 +369,7 @@ available in a shadow run»: a `tirith` command that is not a plain read — `sa
 with a writing method, data or a form, `gh` writes, a push or a publish, mail, ssh and rsync, `open`, AppleScript, a
 deletion outside the worktree: `outward.rs`); in a browser a click on a control that sends, buys, deletes or
 publishes (English or Spanish), a submitted text, Enter, a form, an upload, an accepted dialog or code in the page,
-and any other MCP tool whose name sends, writes or deletes (`outward_browser.rs`). The run in the bot's own folder
+and any other MCP tool unless its name says that it reads and none of its words sends, writes or deletes (`outward_browser.rs`). The run in the bot's own folder
 is never touched by it. B's row gets `experiment`, `variant` B, the routine and the trigger `shadow`; A's row
 `experiment` and `variant` A at its end (`turn.rs`). Each pair — the same input at the same time — is compared once
 both have ended, in either order (`shadow_pair.rs`, then `lab.compare` and `ab-compare` as above), and decided by
@@ -392,11 +396,14 @@ Files:
 - `adopt.rs`: Adopting a branch: merged into the bot's main without losing a note written in memory.md meanwhile.
 - `answers.rs`: A replay's tool calls in the hook: an outside read answered from the capture's call that asked for the same, one it lacks (counted) or one for the owner refused.
 - `call_key.rs`: What a tool call asks for (the tool and its URL, query or command), so a replay answers only a call that asks for the same thing.
+- `reach.rs`: What a replay's processes may reach (its agent's model and nothing else), and what its agent is also started with.
+- `recorded.rs`: A capture's calls that read outside, as a replay answers them, and whether each has an answer.
+- `replay_runs.rs`: The captured runs a replay does again: enough of them, each answerable.
 - `due.rs`: Whether an experiment is ready to be decided by the rule it started with: due, not yet, or expired with too few comparisons.
 - `fixed.rs`: The `[lab]` rule an experiment started with, kept in its row and read back to decide it.
 - `interrupted.rs`: A replay the daemon was restarted in the middle of: decided if all its pairs were judged, ended honestly otherwise.
 - `scope.rs`: Inside a replay's or a shadow B run's turn, its worktree and routine, where the routine's `routines.toml` is read from.
-- `void.rs`: A replay pair that proves nothing: kept with the verdict `void`.
+- `void.rs`: A pair that proves nothing (both failed, a read the capture lacks, calls no hook heard): kept with the verdict `void`.
 - `api.rs`: The lab's commands and routes: `tirith lab start` and `tirith lab list`, `POST /api/lab/start` and `GET /api/lab`.
 - `compare.rs`: A B run against the A run before it (or against the A of its shadow pair), judged blind by `ab-compare`, and the judge's answer mapped back to B's verdict.
 - `decide.rs`: The decision once an experiment is due: the numbers read, the rule it started with applied, the branch merged or deleted, the line emitted.
@@ -407,13 +414,13 @@ Files:
 - `replay.rs`: Replay mode: the task-local that marks a replay's turn, the proxy's closed caller, and the pairs run one after another.
 - `replay_side.rs`: One side of a replayed run: its throwaway worktree, its turn on the capture's start, its row's experiment and variant.
 - `rule.rs`: The `[lab]` rule applied to A's and B's numbers and the comparisons, and the one line that says the decision.
-- `outward.rs`: Which shell calls of a shadow run act outward: `tirith` commands that are not plain reads, and commands that send, buy, delete or publish.
-- `outward_browser.rs`: Which browser and MCP calls of a shadow run act outward: a click on «Send» or «Comprar», a submit, a form, an upload, code in the page.
+- `outward.rs`: Which shell calls of a shadow run act outward: `tirith` commands that are not plain reads, and commands that send, buy, delete or publish; a replay refuses them too.
+- `outward_browser.rs`: Which browser and MCP calls of a shadow run act outward: a click on «Send» or «Comprar», a submit, a form, an upload, code in the page; an MCP tool that does not say it reads.
 - `seat.rs`: Which folder a bot's turn runs in during an experiment, taken when its run starts and freed when it ends or never starts: live A, its own; live B, the branch's worktree; a replay's or a shadow B's turn, its worktree; a shadow run is A, its B started beside it.
 - `shadow.rs`: Shadow mode: B of each real run started beside it in the worktree, in its own conversation, its row marked.
 - `shadow_open.rs`: The worktrees shadow B runs are in now, the task-local of B's turn, and the hook's refusal of an outward action from one.
 - `shadow_pair.rs`: A shadow pair's two ends, in either order; once both ended, B is compared with that A.
-- `start.rs`: `tirith lab start`: the request checked, the experiment's row, and its worktree (live, shadow) or its captured runs (replay).
+- `start.rs`: `tirith lab start`: the request checked, the experiment's row, and its worktree (live, shadow) or the captured runs of `replay_runs.rs` (replay).
 - `store.rs`: The experiments' rows: one, the running ones, their worktree and the list the page shows.
 - `turn.rs`: A bot's turn ended: a run of an experiment keeps its variant, a B run is compared, the experiment may be decided.
 
@@ -498,7 +505,7 @@ Files:
 - `exec_end.rs`: The two ends of an exec turn: its process runs, and its answer goes to the chat, the phones and its rooms.
 - `exec_stream.rs`: What an exec turn says while it runs: Muse's stream, Codex's and Copilot's events, in the chat and on the phones.
 - `interrupt.rs`: Stopping the turn a conversation runs now.
-- `jobs.rs`: The runs of routines waiting for their conversation: queued, handed over alone when it is free, their seat and effort taken when they start and released when they end without a turn.
+- `jobs.rs`: The runs of routines waiting for their conversation: queued, handed over alone when it is free (nothing joins a run: `waiting.rs`), their seat and effort taken when they start and released when they end without a turn.
 - `judged.rs`: Reading what a judge answered, and which card an event's line names.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `open.rs`: The open questions: the cards still open and the lanes that wait for an answer.
@@ -514,6 +521,9 @@ Files:
 - `stream.rs`: Reading a stream-json session's output: its start, its words and tools, its turn ends and permission requests.
 - `talk.rs`: One conversation's state, kept under its project's id (or "" for the one of no project): its session, its messages on their way, its waiting reports and routine runs, and what lists or ends its sessions.
 - `turn.rs`: The loose turn: one fresh turn of a `session = "turn"` role, its text the answer.
+- `turn_read.rs`: Reading a loose turn of a stream-json agent: its text, its usage and its permission requests.
+- `verdict.rs`: A judge's verdict: the last line it wrote in its rubric's shape.
+- `waiting.rs`: A routine's run has its agent's turn to itself: what comes meanwhile waits and is handed when that turn ends.
 - `typing.rs`: A turn's rooms and its typing on the phones: where it shows its progress, when it starts and stops.
 
 ## `merge/`
@@ -619,7 +629,7 @@ Files:
 - `metric.rs`: One health measure: how it is built from the factory's description of its id, and the line a CEO pass reads.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `mood.rs`: Satisfaction from the owner-mood scores of the last 24 h, per owner message; judged from what the owner writes anyway, never asked.
-- `pass.rs`: When a turn role's pass may run by itself: its daily budget, and its scheduled pass.
+- `pass.rs`: When a turn role's pass may run by itself: its daily budget, and its scheduled pass (none is owed from before the home first started, kv `born`).
 - `queued.rs`: The passes an event asked for while a pass of the same role ran: kept, run as one when it ends.
 - `plans.rs`: The plans as a CEO pass reads them: each project's steps with their open and done items, its autopilot and its main.
 - `review.rs`: The pass of a turn role: who reviews a long red stretch and when, the pass turn itself with the brief its role names, and the page's "CEO now".
@@ -641,7 +651,7 @@ picks it as a standalone turn role), each with its `session`, `scope`, `extends`
 list of names. Each has an agent alias, a model, an effort and a fallback
 chain. The effective setting is the owner's override from the page (kv `models:<role>`), else
 `[roles.<role>]` of `config.toml` laid over the factory's role. Agents are aliases
-(`[agents.<alias>]`); the real command lives only in config.toml. Optional per alias: `model_flag`, `effort_flag` ("" = none) and `resume_args`
+(`[agents.<alias>]`); the real command lives only in config.toml. Optional per alias: `model_hosts` and `replay_args` (for the lab's replays), `model_flag`, `effort_flag` ("" = none) and `resume_args`
 (`{session}` and `{message}` are filled in); each alias's flags come from the factory.
 Every model knows its agent from the configuration alone: its group in `[models.choices]` (a table
 `alias = ["model", …]`), Codex's catalog, or the `model_prefix` its `[agents.<alias>]` declares (by default
@@ -902,7 +912,7 @@ Files:
 - `record.rs`: Counting each connection and refusal, and an event for each new one.
 - `request.rs`: A request's head: the first line, the headers and where it goes.
 - `serve.rs`: Listening for the proxy's callers.
-- `upstream.rs`: Reaching the destination: refused if blocked by name or by any of its addresses.
+- `upstream.rs`: Reaching the destination: refused if blocked by name or by any of its addresses, and to a replay unless it is its agent's model.
 
 ## `server/`
 
@@ -988,6 +998,7 @@ Files:
 - `packages.rs`: The system's programs installed with its package manager, when the owner says so.
 - `program.rs`: An agent's program found, or installed now.
 - `prove.rs`: The connection check: one real turn by the same way work runs.
+- `why.rs`: Why a connection check failed: the telling lines of that turn's stderr.
 - `run.rs`: Running another program in the owner's sight, or quietly.
 - `secret.rs`: A secret read from stdin, not shown.
 - `signin.rs`: An agent signed in, then proven.
@@ -1094,7 +1105,7 @@ Files:
 
 The turn log. Every turn of a chat or turn role (the project managers, the bots, the CEO, the judge) leaves one row in
 `turns` (`assets/schema.sql`; `runs` is the pipelines'): `conv` (its conversation), `role`, `trigger` (`owner`,
-`room`, `schedule`, `run-now` — the page's Run now — or `event:<name>`; each message carries its own, taken when it is
+`room`, `agent`, `schedule`, `run-now` — the page's Run now — or `event:<name>`; each message carries its own, taken when it is
 composed, so it never outlives its message), `routine` (the id of the routine that started it), `started_at`,
 `ended_at`, `ms`, `status` (`ok`, `failed`, or `waiting` when an approval card it opened is still open at its end: an `approval` card of its conversation opened since the turn started, `turns/approval.rs`; once no such card is open, because the owner answered it or it was closed, the row becomes `ok`; a turn the daemon was stopped in is kept as `failed` at the next start, `interrupted.rs`), `agent`, `model`, `effort`, `tokens_in`, `tokens_out`,
 `tokens_cache_read`, `tokens_cache_write`, `cost_usd`, `steps` (tool calls), `skills` (JSON: the skills it read —

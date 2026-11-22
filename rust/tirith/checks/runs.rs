@@ -291,3 +291,68 @@ async fn an_exec_agent_runs_each_routine_alone() {
     drop(app);
     let _ = std::fs::remove_dir_all(&home);
 }
+
+/// A fake stream-json agent that does what the real one was seen to do: what comes during a turn joins it, one result for all.
+const FOLDS: &str = r#"#!/bin/bash
+echo '{"type":"system","subtype":"init","session_id":"fake-folds"}'
+while read -r line; do
+  all="$line"
+  while read -r -t 1 more; do all="$all $more"; done
+  who=$(printf '%s' "$all" | grep -o 'Routine «[a-z]*»' | sort -u | tr '\n' ' ')
+  owner=$(printf '%s' "$all" | grep -o 'codename' | head -1)
+  echo "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"got $who $owner\"}]}}"
+  echo '{"type":"result","subtype":"success","is_error":false,"usage":{"input_tokens":1,"output_tokens":1}}'
+done
+"#;
+
+#[tokio::test(flavor = "multi_thread")]
+async fn nothing_joins_a_routines_run() {
+    attempts("alone", alone).await;
+}
+
+async fn alone(name: String) {
+    let (app, home, key) = app_with_two_routines(&name);
+    std::fs::write(home.join("fake-agent.sh"), FOLDS).unwrap();
+    crate::bots::tick(&app);
+    until("the first run", || {
+        super::talk(&key, |t| t.tx.is_some() && t.busy)
+    })
+    .await;
+    crate::manager::say(&app, &key, "what is my codename?", "").unwrap();
+    until("three turns", || own(&app, &key).len() == 3).await;
+    let rows = own(&app, &key);
+    let triggers: Vec<&str> = rows
+        .iter()
+        .map(|r| r["trigger"].as_str().unwrap())
+        .collect();
+    assert_eq!(triggers, ["schedule", "owner", "schedule"], "{rows:?}");
+    let said: Vec<&str> = rows.iter().map(|r| r["answer"].as_str().unwrap()).collect();
+    assert!(
+        said[0].contains("«uno»") && !said[0].contains("codename"),
+        "{said:?}"
+    );
+    assert!(
+        said[1].contains("codename") && !said[1].contains("Routine"),
+        "{said:?}"
+    );
+    assert!(
+        said[2].contains("«dos»") && !said[2].contains("codename"),
+        "{said:?}"
+    );
+    assert!(super::talk(&key, |t| !t.in_run
+        && !t.taken
+        && t.pending.is_empty()));
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_answer_to_a_card_is_a_turn_with_its_trigger() {
+    let (app, home, key) = app_with_two_routines("card");
+    let card = crate::manager::ask_owner(&app, &key, "approval", "Send it?", "").unwrap();
+    crate::manager::owner_answer(&app, card["id"].as_str().unwrap(), "no", false).unwrap();
+    until("its turn", || !own(&app, &key).is_empty()).await;
+    assert_eq!(own(&app, &key)[0]["trigger"], "event:card.answered");
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}

@@ -45,7 +45,10 @@ pub fn owner_answer(
         );
     } else {
         report(app, &project, &text);
-        let _ = (!by_manager).then(|| queue(app, app.conv(&project), &text, "turn", true));
+        if !by_manager {
+            crate::turns::on_event(app.conv(&project), "card.answered", "turn");
+            queue(app, app.conv(&project), &text, "turn", true);
+        }
     }
     Ok(json!({"ok": true}))
 }

@@ -12,7 +12,11 @@ pub(super) async fn exec_session(app: &Shared, project: &str, kind: Exec) -> Res
     let resumed = app.kv(&key);
     let _ = resumed.is_none().then(|| crate::turns::fresh(app, project));
     // The turn's message in plain text, with the recent conversation in front of it when the agent starts fresh; `sent` is handed over again when the turn never started.
-    let sent = talk(project, |t| take_group(&mut t.pending));
+    let sent = talk(project, |t| {
+        let sent = take_group(&mut t.pending);
+        super::waiting::starts(t, &sent);
+        sent
+    });
     begin_turn(app, project); // this exec turn received exactly that waiting input; what arrives while it runs waits for the next one
     let mut input = if resumed.is_none() {
         history(app, project)

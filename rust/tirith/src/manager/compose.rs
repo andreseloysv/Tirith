@@ -23,6 +23,7 @@ pub(super) fn compose(
     (memory, text): (Option<String>, &str),
     (job, by): (Option<&Job>, Option<By>),
 ) -> Option<Msg> {
+    let noted = !t.notes.is_empty() && std::mem::take(&mut t.notes_phones);
     let asked = asked(t, text, job);
     (!asked.is_empty()).then_some(())?;
     let waiting = crate::turns::take_trigger(project);
@@ -37,5 +38,6 @@ pub(super) fn compose(
         text: all.join("\n\n"),
         by,
         job: job.is_some(),
+        phones: noted || job.is_some_and(|j| j.phones),
     })
 }

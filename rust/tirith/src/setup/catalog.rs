@@ -24,6 +24,8 @@ pub struct Known {
     /// The variable that signs it in without a login, and where its value comes from.
     pub token_env: String,
     pub token_hint: String,
+    /// Hosts its model needs beyond the factory's `model_hosts`.
+    pub model_hosts: Vec<String>,
     pub check_model: String,
     pub check_effort: String,
 }
@@ -48,6 +50,10 @@ pub(super) fn read(text: &str, more: &str) -> Result<Vec<Known>, String> {
     }
     all.sort_by_key(|k| k.order);
     Ok(all)
+}
+
+pub fn model_hosts(alias: &str) -> Vec<String> {
+    known(alias).map(|k| k.model_hosts).unwrap_or_default()
 }
 
 pub fn known(alias: &str) -> Option<Known> {

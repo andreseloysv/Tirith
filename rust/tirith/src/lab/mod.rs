@@ -1,4 +1,4 @@
-//! The lab (docs/BOTS.md, part 3): the Coach's experiments on a bot's routine, each a branch of the bot's repository with one commit. In `live` mode the routine's real runs alternate A (the bot's own folder, its main) and B (the branch, in a worktree `<home>/lab/<bot>/<experiment>` that is the bot's folder for that turn); each B is judged blind against the A before it (eval `ab-compare`); in `replay` mode A and B do the routine's last captured runs again in throwaway worktrees, offline, every outside read answered from the capture (`replay.rs`), and Tirith decides alone by the factory's `[lab]` rule: the branch is merged into the bot's main or deleted, and the bot's chat gets one line (`lab.adopted`, `lab.discarded`); in `shadow` mode B runs beside each real run of A, at the same time, in the branch's worktree, its reads live and every outward action refused (`shadow.rs`), and each pair is compared and decided the same way.
+//! The lab (docs/BOTS.md, part 3): the Coach's experiments on a bot's routine, each a branch of the bot's repository with one commit. In `live` mode the routine's real runs alternate A (the bot's own folder, its main) and B (the branch, in a worktree `<home>/lab/<bot>/<experiment>` that is the bot's folder for that turn); each B is judged blind against the A before it (eval `ab-compare`); in `replay` mode A and B do the routine's last captured runs again in throwaway worktrees, reaching their agent's model and nothing else (`reach.rs`), every outside read answered from the capture (`replay.rs`), and Tirith decides alone by the factory's `[lab]` rule: the branch is merged into the bot's main or deleted, and the bot's chat gets one line (`lab.adopted`, `lab.discarded`); in `shadow` mode B runs beside each real run of A, at the same time, in the branch's worktree, its reads live and every outward action refused (`shadow.rs`), and each pair is compared and decided the same way.
 mod adopt;
 mod answers;
 mod api;
@@ -13,7 +13,10 @@ mod numbers;
 mod outside;
 mod outward;
 mod outward_browser;
+mod reach;
+mod recorded;
 mod replay;
+mod replay_runs;
 mod replay_side;
 mod rule;
 mod scope;
@@ -30,6 +33,7 @@ pub use api::{cli, routes};
 pub use compare::judged;
 pub use decide::tick;
 pub use interrupted::interrupted;
+pub use reach::{reaches, replay_args};
 pub use replay::{closed, proxy_caller};
 pub use scope::scope;
 pub use seat::{fired, released, seat};

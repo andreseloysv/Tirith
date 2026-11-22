@@ -1,5 +1,5 @@
 //! What the owner, a room or an agent writes to a conversation.
-use super::deliver::{deliver, hand, report};
+use super::deliver::{hand, report};
 use super::evals::judge_evals;
 use super::talk::talk;
 use crate::app::Shared;
@@ -51,7 +51,13 @@ pub fn say(app: &Shared, project: &str, text: &str, agent: &str) -> Result<(), S
     let _ = (!agent.is_empty()).then(|| {
         (
             app.chat(agent, text, project),
-            deliver(app, project, &format!("[agent {agent}] {text}"), false),
+            hand(
+                app,
+                project,
+                &format!("[agent {agent}] {text}"),
+                false,
+                Some(("agent".into(), String::new())),
+            ),
         )
     });
     let Some(()) = agent.is_empty().then_some(()) else {

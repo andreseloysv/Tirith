@@ -418,3 +418,25 @@ fn health_merged_reports_empty_plans() {
     assert!(t.contains("p2 plan empty"), "{t}");
     assert!(super::facts::empty_plan_note(&[]).is_empty());
 }
+
+#[test]
+fn a_new_home_owes_no_pass_from_before_it_existed() {
+    let home = std::env::temp_dir().join(format!("tirith-born-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&home);
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::write(home.join("config.toml"), "[network]\nsandbox = false\n[[routes]]\non = \"schedule\"\nto = \"ceo\"\nmode = \"turn\"\ndays = [1, 2, 3, 4, 5, 6, 7]\nat = \"00:00\"\n").unwrap();
+    let app = crate::app::App::open_at(home.clone());
+    app.set_kv("born", Some("2000-01-01T00:00:00Z"));
+    assert!(
+        super::pass::daily_due(&app, "ceo"),
+        "an old home owes today's"
+    );
+    app.set_kv("born", None);
+    super::born(&app);
+    assert!(
+        !super::pass::daily_due(&app, "ceo"),
+        "a home set up now owes none of today's"
+    );
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}

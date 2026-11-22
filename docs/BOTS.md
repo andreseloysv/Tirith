@@ -126,8 +126,9 @@ What the bot's screen shows, in a tab «Números» (`GET /api/bots/<id>/numbers`
      `tool_result` blocks, Muse's `tool.result` texts) and the event that started it — up to 256 KB, for the last 10
      runs of each routine, in `<tirith home>/captures/<turn>.jsonl`. A replay runs the routine on the same last
      `inputs` captures twice, the bot repository's main (A) and the branch (B), each in a throwaway worktree, with
-     the network closed and every tool call that reads the outside world answered from the capture by Tirith's
-     hooks (a call the capture lacks is refused: «not available in a replay»). Nothing of it reaches the owner.
+     the network closed to all but the model of the bot's agent (`model_hosts`) and every tool call that reads the
+     outside world answered from the capture by Tirith's hooks (a call the capture lacks is refused: «not available
+     in a replay»). It needs at least 5 such captures, and two failed runs are no tie. Nothing of it reaches the owner.
   2. **Live.** The bot's real runs of that routine alternate A and B (B in the branch's worktree), for when inputs
      cannot be replayed; its answers reach the owner as always.
   3. **Shadow.** B runs beside each real run of A, in its worktree, with live reads and every outward action

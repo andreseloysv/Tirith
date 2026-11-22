@@ -24,7 +24,8 @@ pub(super) fn command_line(
         Some(_) => input.to_string(),
         None => format!("{instructions}\n\n{input}"),
     };
-    let browser = models::browser_args_for(app, agent.kind.alias(), false);
+    let mut browser = models::browser_args_for(app, agent.kind.alias(), false);
+    browser.extend(crate::lab::replay_args(app, agent.kind.alias()));
     let (argv, stdin, usage) = match agent.kind {
         Exec::Codex => {
             let cfg = app.cfg();

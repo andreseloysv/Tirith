@@ -1,6 +1,6 @@
 //! The sections of config.toml something reads, and the keys nothing does.
 
-const KNOWN: [&str; 23] = [
+const KNOWN: [&str; 24] = [
     "projects",
     "agents",
     "launch",
@@ -22,6 +22,7 @@ const KNOWN: [&str; 23] = [
     "metrics",
     "routes",
     "evals",
+    "lab",
     "browser",
     "prices",
 ];

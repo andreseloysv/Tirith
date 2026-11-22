@@ -45,11 +45,10 @@ pub(super) fn typing_line(project: &str, line: &str) {
 pub(super) fn typing_stop(project: &str) {
     rooms::typing(talk(project, |t| t.typing.stop()));
 }
-/// A turn starts (a live session took its message, a session took its waiting ones, or an exec turn took its input): its rooms are the ones waiting by then, and only what they were owed at this moment stops being owed when it ends.
+/// A turn starts (a live session took its message, a session took its waiting ones, or an exec turn took its input): its rooms are the ones waiting by then, and only what they were owed at this moment stops being owed when it ends. A routine's run has none: they wait with their message.
 pub(super) fn begin_turn(app: &Shared, project: &str) {
     let rooms: Vec<String> = talk(project, |t| {
-        t.turn_rooms
-            .is_empty()
+        (t.turn_rooms.is_empty() && !super::waiting::held(t))
             .then(|| {
                 (
                     t.turn_rooms.append(&mut t.reply_to),

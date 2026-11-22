@@ -7,13 +7,13 @@ use crate::app::Shared;
 use crate::turns::Captured;
 use rusqlite::params;
 
-/// Runs side `variant` of capture `cap` in experiment `e`: its turn's id and how many of its outside calls the capture had no answer for, none when it could not run.
+/// Runs side `variant` of capture `cap` in experiment `e`: its turn's id and why it proves nothing (none when it does), none when it could not run.
 pub(super) async fn side(
     app: &Shared,
     e: &Experiment,
     cap: &Captured,
     variant: &str,
-) -> Option<(i64, usize)> {
+) -> Option<(i64, Option<String>)> {
     let main = live(app, &e.bot);
     let dir = tree(app, e).join(format!("{}-{}", variant.to_lowercase(), cap.turn));
     let rev = if variant == "B" {
@@ -37,11 +37,12 @@ pub(super) async fn side(
         dir: dir.clone(),
     };
     let _ = REPLAY.scope(r, run).await;
-    let missed = super::answers::close(&dir);
+    let calls = super::answers::close(&dir);
     drop_tree(&main, &dir);
     let sql = "UPDATE turns SET experiment = ?1, variant = ?2, routine = ?3, \"trigger\" = 'replay' WHERE conv = ?4";
     app.insert(sql, params![e.id, variant, e.routine, conv]);
     let sql = "SELECT MAX(id) FROM turns WHERE conv = ?1";
     let id = app.query(sql, [&conv], |r| r.get::<_, Option<i64>>(0));
-    id.into_iter().next().flatten().map(|id| (id, missed))
+    let id = id.into_iter().next().flatten()?;
+    Some((id, super::void::why(app, id, calls)))
 }

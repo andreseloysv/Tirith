@@ -59,8 +59,11 @@ pub fn decide(lab: &Lab, t: &Tally, a: &Side, b: &Side, name: &str) -> (bool, St
     };
     let quality = format!("{quality} ({}/{n})", t.wins + t.ties);
     let saving = best.map_or("sin números de coste".into(), shown);
+    let least = super::due::minimum(lab);
     let why = if n == 0 {
         "sin comparaciones".to_string()
+    } else if n < least {
+        format!("solo {n} comparaciones (mínimo {least})")
     } else if t.new_failures > 0 {
         format!("{} fallo(s) nuevo(s)", t.new_failures)
     } else if t.down > 0 {
@@ -82,7 +85,7 @@ pub fn decide(lab: &Lab, t: &Tally, a: &Side, b: &Side, name: &str) -> (bool, St
     };
     let voids = (t.voids > 0).then(|| {
         format!(
-            " · {} par(es) sin comparar: pedían algo que la captura no tiene",
+            " · {} par(es) sin comparar: fallaron o pedían algo que la captura no tiene",
             t.voids
         )
     });

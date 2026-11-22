@@ -1,6 +1,7 @@
 //! The runs of routines waiting for their conversation: each is a turn of its own, handed over alone, in the order they were due, when the conversation is free.
 use super::deliver::deliver;
 use super::talk::{talk, Job, Msg};
+use super::waiting::held;
 use crate::app::Shared;
 
 /// A run of a routine is due for `project`: it waits its turn, and starts at once when nothing else runs.
@@ -9,12 +10,14 @@ pub(super) fn queue_job(app: &Shared, project: &str, job: Job) {
     deliver(app, project, "", false);
 }
 
-/// The next run waiting, when the conversation is free (no turn, no message on its way, no report waiting): taken from the queue.
+/// The next run waiting, when the conversation is free (no turn, no message on its way, no report waiting): taken from the queue, and the conversation is its own from this moment.
 pub(super) fn reserve(project: &str) -> Option<Job> {
     talk(project, |t| {
-        let free = !t.busy && t.pending.is_empty() && t.notes.is_empty();
+        let free = !t.busy && !held(t) && t.pending.is_empty() && t.notes.is_empty();
         let free = free && crate::turns::idle(project);
-        free.then(|| t.jobs.pop_front()).flatten()
+        let job = free.then(|| t.jobs.pop_front()).flatten();
+        t.taken |= job.is_some();
+        job
     })
 }
 

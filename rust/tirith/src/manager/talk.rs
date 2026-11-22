@@ -5,11 +5,12 @@ use serde_json::json;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::sync::Mutex;
 use tokio::sync::mpsc;
-/// One message waiting for the session on its way: its text, what starts its turn, and whether it is a routine's run (which a turn takes alone).
+/// One message waiting for its turn: its text, what starts that turn, whether it is a routine's run (which a turn takes alone) and whether the answer reaches the phones.
 pub(super) struct Msg {
     pub(super) text: String,
     pub(super) by: crate::turns::By,
     pub(super) job: bool,
+    pub(super) phones: bool,
 }
 /// One run of a routine waiting for its conversation to be free: its task, what starts its turn (trigger and routine) and whether its answer reaches the phones.
 pub(super) struct Job {
@@ -38,6 +39,11 @@ pub(super) struct Talk {
     pub(super) left_out: usize,
     /// The routines' runs, in the order they were due; each is handed over alone when the conversation is free.
     pub(super) jobs: VecDeque<Job>,
+    /// A routine's run has the conversation, taken from the queue (`taken`) or with its turn running (`in_run`): nothing joins it (`waiting.rs`).
+    pub(super) taken: bool,
+    pub(super) in_run: bool,
+    /// A waiting report's answer reaches the phones.
+    pub(super) notes_phones: bool,
     /// The current (or next) turn was started by the owner or by an event whose route has `phone = true`: its answer reaches the phones.
     pub(super) phones: bool,
     /// The settings changed during a turn: the session ends when the turn does.

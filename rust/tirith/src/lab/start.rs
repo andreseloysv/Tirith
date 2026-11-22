@@ -40,6 +40,9 @@ pub fn start(app: &Shared, b: &Value) -> Result<Value, String> {
         .then(|| crate::sandbox::closes_network(app))
         .transpose()
         .map_err(|why| format!("a replay needs the network closed and it cannot be: {why}"))?;
+    if mode == "replay" {
+        super::reach::ready(app, &key)?;
+    }
     let on = running(app, &key, &routine);
     on.map_or(Ok(()), |e| {
         Err(format!(
@@ -49,7 +52,7 @@ pub fn start(app: &Shared, b: &Value) -> Result<Value, String> {
     })?;
     let dir = crate::bots::folder(app, &key);
     let change = one_commit(&dir, &branch)?;
-    let replays = replays(app, &key, &routine, &mode)?;
+    let replays = super::replay_runs::runs(app, &key, &routine, &mode)?;
     let (factory, _) = app.stamp_for(&key);
     let id = app.insert("INSERT INTO experiments (bot, routine, branch, change, hypothesis, mode, status, created_at, factory) VALUES (?1, ?2, ?3, ?4, ?5, ?8, 'running', ?6, ?7)", params![key, routine, branch, change, hypothesis, now_iso(), factory, mode]);
     super::fixed::keep(app, id); // the rule is fixed before the test
@@ -78,15 +81,4 @@ pub fn start(app: &Shared, b: &Value) -> Result<Value, String> {
     }
     app.emit("lab", json!({"id": id, "bot": key, "status": "running"}));
     Ok(out)
-}
-
-/// A replay's captured runs of the routine (its last `inputs`, oldest first; at least one), after the bot's folder is committed so A is its main as it is now. None for a live experiment.
-fn replays(app: &App, key: &str, routine: &str, mode: &str) -> Result<Vec<i64>, String> {
-    let Some(()) = (mode == "replay").then_some(()) else {
-        return Ok(vec![]);
-    };
-    crate::bots::versioned(app, key, "before the replay");
-    let turns = crate::turns::captured(app, key, routine, app.cfg().factory.lab.inputs as usize);
-    let none = format!("routine '{routine}' has no captured run to replay yet");
-    (!turns.is_empty()).then_some(turns).ok_or(none)
 }

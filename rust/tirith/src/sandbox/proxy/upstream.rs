@@ -15,8 +15,8 @@ pub async fn upstream(
     host: &str,
     port: u16,
 ) -> Result<Option<TcpStream>, String> {
-    let closed =
-        crate::lab::closed(who).then(|| "replay (a replay reads nothing outside)".to_string());
+    let closed = (crate::lab::closed(who) && !crate::lab::reaches(app, who, host, port))
+        .then(|| "replay (a replay reads nothing outside)".to_string());
     let addrs: Vec<SocketAddr> = match closed.or_else(|| blocked(host)) {
         Some(rule) => return refuse(app, c, who, host, port, &rule).await.map(|_| None),
         None => match tokio::net::lookup_host((host, port)).await {

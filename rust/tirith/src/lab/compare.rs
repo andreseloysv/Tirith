@@ -49,15 +49,18 @@ pub(super) fn compare(app: &Shared, e: &Experiment, b: i64) {
 
 /// A run `a` against B run `b`, the judge's input kept as event `lab.compare` in the bot's conversation.
 pub(super) fn compare_pair(app: &Shared, e: &Experiment, a: i64, b: i64) {
-    let answer = |id: i64| {
-        let sql = "SELECT COALESCE(answer, '') FROM turns WHERE id = ?1";
-        app.query(sql, [id], |r| r.get::<_, String>(0))
-            .into_iter()
-            .next()
+    let sql =
+        "SELECT COALESCE(answer, ''), COALESCE(status, '') = 'failed' FROM turns WHERE id = ?1";
+    let ran = |id: i64| {
+        app.query(sql, [id], |r| Ok((r.get::<_, String>(0)?, r.get(1)?)))
+            .pop()
     };
-    let (Some(a_text), Some(b_text)) = (answer(a), answer(b)) else {
+    let (Some((a_text, a_failed)), Some((b_text, b_failed))) = (ran(a), ran(b)) else {
         return;
     };
+    if a_failed && b_failed {
+        return super::void::void(app, e, (a, b), "both runs failed"); // two failures are no tie
+    }
     let (text, b_is) = blind(&task(app, e), &a_text, &b_text, rand::random());
     let row = app.insert(
         "INSERT INTO lab_comparisons (experiment, a_turn, b_turn, b_is) VALUES (?1, ?2, ?3, ?4)",

@@ -27,6 +27,8 @@ pub async fn prove(app: &Shared, alias: &str) -> Result<Value, String> {
         })
         .pop()
         .unwrap_or(0);
+    let log = app.home.join(format!("logs/{ROLE}.log"));
+    let logged = std::fs::metadata(&log).map_or(0, |m| m.len());
     let turn = crate::manager::run_turn(app, ROLE, ROLE, ASK).await;
     let model = app
         .query(
@@ -46,10 +48,11 @@ pub async fn prove(app: &Shared, alias: &str) -> Result<Value, String> {
         .first()
         .is_some_and(|n| *n > 0);
     let answered = turn.as_ref().is_ok_and(|t| t.contains(WORD));
-    let said: String = redact_secrets(&turn.unwrap_or_else(|e| e))
-        .chars()
-        .take(400)
-        .collect();
+    let said = turn.unwrap_or_else(|e| match super::why::since(&log, logged) {
+        why if why.is_empty() => e,
+        why => format!("{e}: {why}"),
+    });
+    let said: String = redact_secrets(&said).chars().take(600).collect();
     Ok(
         json!({"ok": answered && hooks, "answered": answered, "hooks": hooks, "said": said, "model": model}),
     )

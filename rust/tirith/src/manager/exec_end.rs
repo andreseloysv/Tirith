@@ -24,6 +24,7 @@ pub(super) fn exec_end(
     result: Result<String, String>,
 ) {
     let (rooms_now, phones) = talk(project, |t| {
+        t.in_run = false;
         (
             set_busy(app, project, t, false),
             (

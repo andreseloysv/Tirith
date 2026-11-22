@@ -20,7 +20,7 @@ pub(super) async fn run(app: Shared, project: String) {
         let _ = result.is_err().then(|| release_run(&app, &project)); // a session that never started held what its run took
         typing_stop(&project); // a session that ended, failed or never got ready leaves no turn typing on the phones
         let rest = talk(&project, |t| {
-            (t.tx, t.pid) = (None, 0);
+            (t.tx, t.pid, t.in_run) = (None, 0, false);
             t.text.clear();
             set_busy(&app, &project, t, false);
             t.alive = !t.pending.is_empty();

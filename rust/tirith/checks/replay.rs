@@ -65,7 +65,7 @@ fn app_with_agent(name: &str, port: u16, agent_script: &str) -> (crate::app::Sha
     std::fs::set_permissions(&agent, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
     std::fs::write(
         home.join("config.toml"),
-        format!("[agents.fake]\ncommand = \"{}\"\nchat_args = []\n[network]\nsandbox = false\n\n[roles.{KEY}]\nextends = \"manager\"\nscope = \"own\"\nsession = \"chat\"\nname = \"Correo\"\n\n[[routes]]\non = \"schedule\"\nto = \"{KEY}\"\nmode = \"turn\"\nid = \"r1\"\ntitle = \"gmail-safari\"\ntask = \"Check the inbox and list the new offers\"\ndays = [1]\nat = \"08:00\"\n", agent.display()),
+        format!("[agents.fake]\ncommand = \"{}\"\nchat_args = []\nmodel_hosts = []\n[lab]\ninputs = 2\n[network]\nsandbox = false\n\n[roles.{KEY}]\nextends = \"manager\"\nscope = \"own\"\nsession = \"chat\"\nname = \"Correo\"\n\n[[routes]]\non = \"schedule\"\nto = \"{KEY}\"\nmode = \"turn\"\nid = \"r1\"\ntitle = \"gmail-safari\"\ntask = \"Check the inbox and list the new offers\"\ndays = [1]\nat = \"08:00\"\n", agent.display()),
     )
     .unwrap();
     let app = crate::app::App::open_at(home.clone());
@@ -514,6 +514,143 @@ async fn a_replays_branch_may_change_the_routines_effort() {
         crate::models::role(&app, KEY).effort.as_deref(),
         Some("high")
     );
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn a_replay_reaches_its_model_and_nothing_else() {
+    let (app, home) = app_with_a_bot("reach", 0);
+    app.set_kv(&format!("models:{KEY}"), Some(r#"{"agent":"anthropic"}"#));
+    let sql = "INSERT INTO experiments (bot, routine, branch, change, hypothesis, mode, status, created_at, factory) VALUES (?1, 'r1', 'v3', 'c', 'h', 'replay', 'running', '2026-11-22T08:00:00Z', '')";
+    let e = app.insert(sql, params![KEY]);
+    let who = format!("replay:{e}");
+    let reaches = |who: &str, host: &str, port: u16| crate::lab::reaches(&app, who, host, port);
+    assert!(
+        reaches(&who, "api.anthropic.com", 443),
+        "its agent must think"
+    );
+    for (host, port) in [
+        ("example.com", 443),
+        ("api.anthropic.com.evil.example", 443),
+        ("mcp-proxy.anthropic.com", 443),
+        ("chatgpt.com", 443),
+        ("api.anthropic.com", 80),
+    ] {
+        assert!(!reaches(&who, host, port), "{host}:{port}");
+    }
+    assert!(!reaches("replay:999", "api.anthropic.com", 443));
+    app.insert(
+        "UPDATE experiments SET status = 'discarded' WHERE id = ?1",
+        params![e],
+    );
+    assert!(
+        !reaches(&who, "api.anthropic.com", 443),
+        "an ended replay reaches nothing"
+    );
+    // An agent nobody gave a model host is not replayed, and the refusal says what to use instead.
+    app.set_kv(&format!("models:{KEY}"), Some(r#"{"agent":"copilot"}"#));
+    let refused = super::reach::ready(&app, KEY).unwrap_err();
+    assert!(
+        refused.contains("model_hosts") && refused.contains("live or shadow"),
+        "{refused}"
+    );
+    // What a replay's agent is also started with, and only inside one.
+    assert!(crate::lab::replay_args(&app, "codex").is_empty());
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[tokio::test]
+async fn a_replayed_codex_has_no_search_of_its_own() {
+    let (app, home) = app_with_a_bot("searchless", 0);
+    let r = super::replay::Replay {
+        experiment: 1,
+        routine: "r1".into(),
+        dir: home.clone(),
+    };
+    let args = super::replay::REPLAY
+        .scope(r, async { crate::lab::replay_args(&app, "codex") })
+        .await;
+    assert!(
+        args.iter().any(|a| a.starts_with("web_search=")),
+        "{args:?}"
+    );
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+/// An agent whose every turn fails: what a replay got from a real one that could not reach its model.
+const FAILING: &str = r#"#!/bin/sh
+read -r line
+if [ "$TIRITH_ROLE" != "KEY" ]; then
+  echo '{"type":"assistant","message":{"content":[{"type":"text","text":"tie — both say the same"}]}}'
+fi
+echo '{"type":"result","subtype":"success","is_error":false}'
+"#;
+
+#[tokio::test(flavor = "multi_thread")]
+async fn two_failed_runs_are_no_tie() {
+    let (app, home, _, _) = replayed_with("failing", FAILING).await;
+    let row = &super::list(&app, KEY)[0];
+    assert_eq!(row["numbers"]["tally"]["voids"], 2, "{row}");
+    assert_eq!(row["numbers"]["tally"]["ties"], 0, "{row}");
+    let line = row["numbers"]["line"].as_str().unwrap();
+    assert!(!line.contains("misma calidad"), "{line}");
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn a_replay_needs_enough_runs_it_can_answer() {
+    let (app, home) = app_with_a_bot("few", 0);
+    captured_run(&app, "r1", "3 new offers");
+    let few = super::replay_runs::runs(&app, KEY, "r1", "replay").unwrap_err();
+    assert!(
+        few.contains("needs 2") && few.contains("live or shadow"),
+        "{few}"
+    );
+    let searched = [json!({"tool": "WebSearch", "input": {"query": "offers"}})];
+    assert!(
+        !super::recorded::answerable(&searched),
+        "a search with no result cannot be answered"
+    );
+    assert!(super::recorded::answerable(&[
+        json!({"tool": "Bash", "input": {"command": "ls"}})
+    ]));
+    // A side whose tool calls the hook never heard proves nothing.
+    let id = app.insert("INSERT INTO turns (conv, role, \"trigger\", routine, started_at, status, steps) VALUES ('c', 'c', 'replay', 'r1', '2026-11-22T08:00:00Z', 'ok', 2)", &[]);
+    assert!(super::void::why(&app, id, (0, 0)).unwrap().contains("hook"));
+    assert!(super::void::why(&app, id, (0, 2)).is_none());
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+/// An agent that says its turn failed, with the error as its words: the real one with no way to its model.
+const SAYS_ERROR: &str = r#"#!/bin/sh
+read -r line
+echo '{"type":"assistant","message":{"content":[{"type":"text","text":"API Error: proxy refused"}]}}'
+echo '{"type":"result","subtype":"success","is_error":true,"usage":{"input_tokens":0,"output_tokens":0}}'
+"#;
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_turn_that_says_it_failed_is_no_answer() {
+    let (app, home) = app_with_agent("says-error", 0, SAYS_ERROR);
+    let result = crate::manager::run_turn(&app, "judge", "judge", "grade it").await;
+    assert!(result.unwrap_err().contains("API Error"));
+    let status: Vec<String> = app.query("SELECT status FROM turns WHERE role = 'judge'", [], |r| {
+        r.get(0)
+    });
+    assert_eq!(status, ["failed"]);
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn the_labs_rule_is_a_known_key_of_the_config() {
+    let (app, home) = app_with_a_bot("known", 0);
+    let problem = app.cfg().error.clone().unwrap_or_default();
+    assert!(!problem.contains("lab"), "{problem}");
     drop(app);
     let _ = std::fs::remove_dir_all(&home);
 }

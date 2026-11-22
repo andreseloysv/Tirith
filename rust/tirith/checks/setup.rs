@@ -157,3 +157,13 @@ fn a_pasted_token_loses_the_terminals_key_codes() {
     }
     assert_eq!(clean("two words"), "two words"); // still refused as a token, not glued
 }
+
+#[test]
+fn a_failed_check_says_what_the_agent_said() {
+    let log = "starting\n  • Error: 401 Unauthorized\n  token lacks the Copilot Requests permission\nbye\n";
+    assert_eq!(
+        super::why::picked(log),
+        "Error: 401 Unauthorized | token lacks the Copilot Requests permission"
+    );
+    assert_eq!(super::why::picked("one\ntwo\n\n"), "two");
+}

@@ -1,4 +1,4 @@
-//! Replay mode: for each of the routine's last `inputs` captured runs, A (the bot's main) and B (the branch) do its task again, each in a throwaway worktree, with the network closed (the sandbox's proxy refuses everything to a replay) and every call that reads outside answered from the capture (`answers.rs`). Each pair is compared like a live one and decided by the same `[lab]` rule. Nothing of a replay reaches the owner: its turns run in a conversation of their own that no chat, phone, room or card knows (`replay-<experiment>-<turn>-<A|B>`), and the hook refuses `tirith say`, `ask` and `ask-owner` in it.
+//! Replay mode: for each of the routine's last `inputs` captured runs, A (the bot's main) and B (the branch) do its task again, each in a throwaway worktree, with the network closed but to its agent's model (the sandbox's proxy, `reach.rs`) and every call that reads outside answered from the capture (`answers.rs`). Each pair is compared like a live one and decided by the same `[lab]` rule. Nothing of a replay reaches the owner: its turns run in a conversation of their own that no chat, phone, room or card knows (`replay-<experiment>-<turn>-<A|B>`), and the hook refuses `tirith say`, `ask` and `ask-owner` in it.
 use super::store::Experiment;
 use crate::app::Shared;
 use std::path::PathBuf;
@@ -35,7 +35,7 @@ pub fn proxy_caller(who: &str) -> String {
     replaying().map_or(who.to_string(), |e| format!("replay:{e}"))
 }
 
-/// True for the proxy's caller of a replay: every destination is refused to it.
+/// True for the proxy's caller of a replay: the world is closed to it (`reach.rs` says what is not).
 pub fn closed(who: &str) -> bool {
     who.starts_with("replay:")
 }
@@ -62,20 +62,15 @@ async fn pair(app: &Shared, e: &Experiment, turn: i64) {
     let Some(cap) = crate::turns::capture_of(app, turn) else {
         return;
     };
-    let Some((a, a_missed)) = super::replay_side::side(app, e, &cap, "A").await else {
+    let Some((a, a_void)) = super::replay_side::side(app, e, &cap, "A").await else {
         return;
     };
-    let Some((b, b_missed)) = super::replay_side::side(app, e, &cap, "B").await else {
+    let Some((b, b_void)) = super::replay_side::side(app, e, &cap, "B").await else {
         return;
     };
-    // A side that asked for something the capture lacks was refused: the pair proves nothing, and is neither a tie nor a win.
-    match a_missed + b_missed {
-        0 => super::compare::compare(app, e, b),
-        n => super::void::void(
-            app,
-            e,
-            (a, b),
-            &format!("{n} call(s) asked for something the capture lacks"),
-        ),
+    // A side refused what the capture lacks, or unheard by the hook: the pair proves nothing, and is neither a tie nor a win.
+    match a_void.or(b_void) {
+        None => super::compare::compare(app, e, b),
+        Some(why) => super::void::void(app, e, (a, b), &why),
     }
 }

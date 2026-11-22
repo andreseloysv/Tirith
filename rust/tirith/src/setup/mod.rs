@@ -27,11 +27,13 @@ mod secret;
 mod signin;
 mod summary;
 mod trust;
+mod why;
 
 pub use api::routes;
 pub use as_user::as_service_user;
 pub use ask::Ask;
 pub use auth::for_program;
+pub use catalog::model_hosts;
 pub use hook_lines::others;
 pub use opts::Opts;
 

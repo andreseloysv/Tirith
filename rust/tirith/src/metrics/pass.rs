@@ -44,6 +44,11 @@ pub(super) fn daily_due(app: &Shared, role: &str) -> bool {
         .unwrap()
         .query_row(&sql, [], |r| r.get::<_, String>(0))
         .unwrap_or_default();
+    let last_daily = if last_daily.is_empty() {
+        app.kv(BORN).unwrap_or_default() // none yet: none is owed from before this Tirith existed
+    } else {
+        last_daily
+    };
     let schedules = app.cfg().factory.schedules();
     schedules.into_iter().any(|(to, at, days)| {
         to == role
@@ -52,4 +57,14 @@ pub(super) fn daily_due(app: &Shared, role: &str) -> bool {
                 chrono::Local::now(),
             )
     })
+}
+
+/// When this home's daemon first started.
+const BORN: &str = "born";
+
+/// The daemon starts: the first time, it keeps when.
+pub fn born(app: &Shared) {
+    if app.kv(BORN).is_none() {
+        app.set_kv(BORN, Some(&crate::app::now_iso()));
+    }
 }

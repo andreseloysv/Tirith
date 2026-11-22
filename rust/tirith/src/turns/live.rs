@@ -24,7 +24,7 @@ pub(super) fn with<T>(conv: &str, f: impl FnOnce(&mut Conv) -> T) -> T {
     f(CONVS.lock().unwrap().entry(conv.to_string()).or_default())
 }
 
-/// What starts the turn of the next message `conv` is handed: `owner`, `room`, `schedule`, `run-now` or `event:<name>`, with the routine's id. The first one counts, and whoever composes the next message takes it (`take_trigger`), so it never outlives that message.
+/// What starts the turn of the next message `conv` is handed: `owner`, `room`, `agent`, `schedule`, `run-now` or `event:<name>`, with the routine's id. The first one counts, and whoever composes the next message takes it (`take_trigger`), so it never outlives that message.
 pub fn trigger(conv: &str, trigger: &str, routine: &str) {
     with(conv, |c| {
         c.trigger

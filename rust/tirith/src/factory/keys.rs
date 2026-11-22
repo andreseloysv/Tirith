@@ -12,6 +12,8 @@ pub(super) const AGENT_KEYS: &[&str] = &[
     "profile",
     "model_prefix",
     "any_model",
+    "model_hosts",
+    "replay_args",
 ];
 pub(super) const ROLE_KEYS: &[&str] = &[
     "agent",

@@ -3,7 +3,8 @@ use super::blocks::assistant;
 use super::deliver::deliver;
 use super::spawn::control_reply;
 use super::talk::{set_busy, talk};
-use super::typing::{begin_turn, typing_stop};
+use super::typing::{begin_turn, typing_start, typing_stop};
+use super::waiting::hand_waiting;
 use crate::app::Shared;
 use crate::rooms;
 use serde_json::{json, Value};
@@ -64,20 +65,22 @@ pub(super) async fn read(s: &Stream<'_>, idle: Duration, stdout: ChildStdout) ->
 }
 /// A turn ended: its answer goes to its rooms, and the next turn of this session starts. True when the session rests (the settings changed during the turn).
 fn turn_end(app: &Shared, project: &str) -> bool {
-    let (rest, rooms_now, text) = talk(project, |t| {
-        t.phones = false;
+    let (rest, next, rooms_now, text) = talk(project, |t| {
+        (t.phones, t.in_run) = (false, false);
         set_busy(app, project, t, false);
         // A message that comes after this waits in `pending` for the next session, which has the new settings.
         let rest = std::mem::take(&mut t.stale) && t.tx.take().is_some();
-        (
-            rest,
+        let done = (
             std::mem::take(&mut t.turn_rooms),
             std::mem::take(&mut t.text),
-        )
+        );
+        let next = !rest && hand_waiting(app, project, t);
+        (rest, next, done.0, done.1)
     });
     typing_stop(project);
     rooms::reply(app, &Vec::from_iter(rooms_now), &text);
     let _ = (!rest).then(|| begin_turn(app, project)); // what rooms sent during that turn is the next turn's, and in this session it starts now
+    let _ = next.then(|| typing_start(app, project, false));
     deliver(app, project, "", false); // the next routine's run waiting, if the conversation is free
     rest
 }

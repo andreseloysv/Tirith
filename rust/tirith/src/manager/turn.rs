@@ -1,12 +1,12 @@
 //! The loose turn: one fresh turn of a `session = "turn"` role, its text the answer.
 use super::deliver::user_line;
-use super::spawn::{control_reply, spawn_chat, turn_permission};
+use super::spawn::spawn_chat;
+use super::turn_read::read_turn;
 use crate::app::{kill_group, Shared};
 use crate::models;
 use serde_json::Value;
 use std::time::Duration;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, Lines};
-use tokio::process::{ChildStdin, ChildStdout};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 /// One fresh turn of a `session = "turn"` role: its factory prompt as its instructions, `input` as its one message, its `access` deciding whether it may write; the assistant's text until the turn ends is the answer. Any turn role runs this way (the CEO included).
 pub async fn run_turn(
     app: &Shared,
@@ -27,6 +27,7 @@ pub async fn run_turn(
     };
     let read_only = app.cfg().factory.role::<String>(role, "access").as_deref() == Some("read");
     let mut cmd = models::chat_argv(app, role, None)?;
+    cmd.argv.extend(crate::lab::replay_args(app, &cmd.alias));
     cmd.argv.extend(["--append-system-prompt".into(), prompt]);
     let (mut child, mut stdin, stdout) = spawn_chat(app, role, project, cmd.argv)?;
     let pid = child.id().unwrap_or(0);
@@ -53,45 +54,15 @@ pub async fn run_turn(
             )
         })
         .and_then(|_| {
+            if rec.usage.failed {
+                return Err(format!("its agent failed: {text}")); // its text is the error
+            }
             (!text.is_empty())
                 .then_some(text)
                 .ok_or_else(|| "the session ended without an answer".to_string())
         });
     crate::turns::done(app, rec, result)
 }
-fn send(line: String) -> Vec<u8> {
+pub(super) fn send(line: String) -> Vec<u8> {
     (line + "\n").into_bytes()
-}
-/// Reads the turn until its `result` (true) or the end of its output (false), gathering its text and answering its permission requests.
-async fn read_turn(
-    lines: &mut Lines<BufReader<ChildStdout>>,
-    stdin: &mut ChildStdin,
-    read_only: bool,
-    (text, rec): (&mut String, &mut crate::turns::Turn),
-) -> bool {
-    while let Ok(Some(line)) = lines.next_line().await {
-        let Ok(msg) = serde_json::from_str::<Value>(&line) else {
-            continue;
-        };
-        rec.line(&msg);
-        match msg["type"].as_str().unwrap_or("") {
-            "assistant" => msg["message"]["content"]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .filter(|b| b["type"] == "text")
-                .for_each(|b| *text += &format!("{}\n", b["text"].as_str().unwrap_or(""))),
-            "result" => return true,
-            "control_request" if msg["request"]["subtype"] == "can_use_tool" => {
-                let behavior = turn_permission(
-                    read_only,
-                    msg["request"]["tool_name"].as_str().unwrap_or(""),
-                    &msg["request"]["input"],
-                );
-                let _ = stdin.write_all(&send(control_reply(&msg, behavior))).await;
-            }
-            _ => {}
-        }
-    }
-    false
 }

@@ -18,6 +18,7 @@ pub(super) fn serve() -> Result<(), String> {
         let listener = tokio::net::TcpListener::bind(("127.0.0.1", port))
             .await
             .map_err(|e| format!("port {port} is taken (is tirith already running?): {e}"))?;
+        metrics::born(&app);
         start_workers(&app);
         println!(
             "tirith: http://127.0.0.1:{port}/ (home {})",

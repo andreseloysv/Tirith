@@ -14,6 +14,9 @@ effort_flag = "--effort"
 chat_args = ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--permission-prompt-tool", "stdio"]
 lane_args = ["-p", "Read the brief at {brief} and do it completely in {workspace}."]
 resume_args = ["--resume", "{session}", "-p", "{message}"]
+# model_hosts: all a replay of the lab may reach, so its agent can think and nothing
+# else (an agent with none is never replayed: live or shadow then).
+model_hosts = ["api.anthropic.com"]
 
 [agents.muse]
 protocol = "exec"
@@ -21,6 +24,7 @@ model_flag = "--model"
 effort_flag = "--reasoning-effort"
 lane_args = ["exec", "--json", "--workspace", "{workspace}", "--prompt-file", "{brief}"]
 resume_args = []
+model_hosts = ["api.meta.ai"]
 
 # No own sandbox for this one: the lane already runs inside the daemon's
 # sandbox, and a nested one fails every command.
@@ -30,10 +34,14 @@ model_flag = "--model"
 effort_flag = ""
 lane_args = ["exec", "--json", "--dangerously-bypass-approvals-and-sandbox", "Read the brief at {brief} and do it completely in {workspace}."]
 resume_args = ["exec", "--json", "--dangerously-bypass-approvals-and-sandbox", "resume", "{session}", "{message}"]
+model_hosts = ["chatgpt.com", "auth.openai.com", "api.openai.com"]
+# No hook hears its web search, and its apps live on its model's host: off in a replay.
+replay_args = ["-c", "web_search=\"disabled\"", "-c", "features.apps=false"]
 
 # One process a turn, its message on stdin. Nothing can answer it when it asks:
 # like the two above, the daemon's sandbox and rules are the barrier. It serves
-# models of several vendors, so any model id fits it.
+# models of several vendors, so any model id fits it. It has no model_hosts: it
+# signs in on GitHub's own API, which a replay must not be able to write to.
 [agents.copilot]
 protocol = "exec"
 any_model = true

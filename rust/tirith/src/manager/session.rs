@@ -1,12 +1,14 @@
 //! The stream-json session of a conversation: started with what waits for it, read until it ends or rests.
 use super::deliver::user_line;
 use super::exec::exec_session;
+use super::jobs::take_group;
 use super::prompt::{history, prompt};
 use super::session_end::{close, not_ready, Live};
 use super::spawn::spawn_chat;
 use super::stream::{read, Stream};
 use super::talk::{set_busy, talk, Msg};
 use super::typing::{begin_turn, typing_start};
+use super::waiting::starts;
 use crate::app::Shared;
 use crate::models;
 use std::time::Duration;
@@ -57,7 +59,8 @@ fn hand_pending(
     let sent: Vec<Msg> = talk(project, |t| {
         (t.pid, t.tx, t.stale) = (pid, Some(tx.clone()), false);
         set_busy(app, project, t, true);
-        let sent: Vec<Msg> = std::mem::take(&mut t.pending);
+        let sent: Vec<Msg> = take_group(&mut t.pending); // a routine's run alone
+        starts(t, &sent);
         sent.iter().enumerate().for_each(|(i, m)| {
             let first = if i == 0 { history.unwrap_or("") } else { "" };
             drop(tx.send(user_line(&format!("{first}{}", m.text))));
