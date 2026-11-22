@@ -1,0 +1,41 @@
+//! Whether an experiment is ready to be decided, by the rule it started with.
+use super::rule::Tally;
+use super::store::Experiment;
+use crate::app::Shared;
+use crate::factory::Lab;
+
+/// What an experiment's numbers allow now.
+pub(super) enum Due {
+    /// Not yet: comparisons, a replay's pairs or days are still to come.
+    No,
+    /// Decide it by the rule.
+    Yes,
+    /// Its days ran out with too few comparisons (fewer than min(5, `inputs`)): it proves nothing and is discarded.
+    Expired(i64),
+}
+
+/// The comparisons below which an experiment whose days ran out proves nothing.
+pub(super) fn minimum(lab: &Lab) -> i64 {
+    i64::from(lab.inputs.min(5))
+}
+
+/// Whether experiment `e` is due: `inputs` comparisons judged, a replay's pairs all run and judged, or `max_days` since it started (expired when it has too few comparisons then).
+pub(super) fn due(app: &Shared, e: &Experiment, t: &Tally, lab: &Lab) -> Due {
+    let started = chrono::DateTime::parse_from_rfc3339(&e.created_at).ok();
+    let days = started.map_or(0, |s| (chrono::Utc::now() - s.to_utc()).num_days());
+    let n = t.wins + t.ties + t.losses;
+    let replayed = e.mode == "replay"
+        && app.kv(&super::replay::done_key(e.id)).is_some()
+        && super::numbers::unjudged(app, e.id) == 0;
+    if n >= i64::from(lab.inputs) || replayed {
+        Due::Yes
+    } else if days >= lab.max_days as i64 {
+        if n < minimum(lab) {
+            Due::Expired(n)
+        } else {
+            Due::Yes
+        }
+    } else {
+        Due::No
+    }
+}

@@ -11,7 +11,7 @@ pub struct Side {
     pub ms: f64,
 }
 
-/// B's comparisons with A (won, tied, lost), the runs where B failed and A did not, and B's 👎.
+/// B's comparisons with A (won, tied, lost), the runs where B failed and A did not, B's 👎 and the replay pairs that proved nothing (`voids`: counted in none of the others).
 #[derive(Serialize, Default, Clone)]
 pub struct Tally {
     pub wins: i64,
@@ -19,6 +19,7 @@ pub struct Tally {
     pub losses: i64,
     pub new_failures: i64,
     pub down: i64,
+    pub voids: i64,
 }
 
 /// What B saves against A, as a share of A's mean, by what it is measured in (tokens, $ or time), the largest first.
@@ -79,5 +80,11 @@ pub fn decide(lab: &Lab, t: &Tally, a: &Side, b: &Side, name: &str) -> (bool, St
     } else {
         format!("Descarté {name}: {why}, {quality}")
     };
-    (adopt, line)
+    let voids = (t.voids > 0).then(|| {
+        format!(
+            " · {} par(es) sin comparar: pedían algo que la captura no tiene",
+            t.voids
+        )
+    });
+    (adopt, line + &voids.unwrap_or_default())
 }

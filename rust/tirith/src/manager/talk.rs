@@ -2,15 +2,27 @@
 use crate::app::{kill_group, Shared};
 use crate::rooms;
 use serde_json::json;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::sync::Mutex;
 use tokio::sync::mpsc;
+/// One message waiting for the session on its way: its text, what starts its turn, and whether it is a routine's run (which a turn takes alone).
+pub(super) struct Msg {
+    pub(super) text: String,
+    pub(super) by: crate::turns::By,
+    pub(super) job: bool,
+}
+/// One run of a routine waiting for its conversation to be free: its task, what starts its turn (trigger and routine) and whether its answer reaches the phones.
+pub(super) struct Job {
+    pub(super) text: String,
+    pub(super) by: crate::turns::By,
+    pub(super) phones: bool,
+}
 /// One conversation: a project's (under its id) or the one of no project (under "").
 #[derive(Default)]
 pub(super) struct Talk {
     /// The live session's stdin. Without one, `pending` waits for the session that `alive` says is on its way.
     pub(super) tx: Option<mpsc::UnboundedSender<String>>,
-    pub(super) pending: Vec<String>,
+    pub(super) pending: Vec<Msg>,
     pub(super) alive: bool,
     /// True while a turn runs (between a message handed to a live session and that session's `result`).
     pub(super) busy: bool,
@@ -22,6 +34,10 @@ pub(super) struct Talk {
     /// Reports from Tirith not yet handed over, and whether a hand-over is already on its way.
     pub(super) notes: Vec<String>,
     pub(super) due: bool,
+    /// Reports cut from `notes` because it was full: said in the next message.
+    pub(super) left_out: usize,
+    /// The routines' runs, in the order they were due; each is handed over alone when the conversation is free.
+    pub(super) jobs: VecDeque<Job>,
     /// The current (or next) turn was started by the owner or by an event whose route has `phone = true`: its answer reaches the phones.
     pub(super) phones: bool,
     /// The settings changed during a turn: the session ends when the turn does.

@@ -1,7 +1,8 @@
 //! `tirith serve`: the daemon.
 use crate::app::{App, Shared};
 use crate::{
-    bots, chat, config, guard, lanes, merge, metrics, models, plan, rooms, sandbox, server,
+    bots, chat, config, guard, lab, lanes, merge, metrics, models, plan, rooms, sandbox, server,
+    turns,
 };
 use std::time::Duration;
 
@@ -54,6 +55,8 @@ fn use_login_path() {
 /// Every module's background work, the lane scheduler, the merge worker and the plan flusher.
 fn start_workers(app: &Shared) {
     [
+        turns::start,
+        lab::interrupted,
         sandbox::start,
         rooms::start,
         guard::start,

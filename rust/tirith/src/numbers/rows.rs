@@ -8,6 +8,8 @@ pub struct Row {
     pub id: i64,
     pub routine: String,
     pub ok: bool,
+    /// It ended with an approval card still open: neither a failure nor a good run until the owner answers.
+    pub waiting: bool,
     pub ms: i64,
     pub cost: Option<f64>,
     /// tokens_in + tokens_out + the cache's read and written tokens.
@@ -28,11 +30,13 @@ fn names(text: Option<String>) -> Vec<String> {
 }
 
 fn row(r: &SqlRow) -> rusqlite::Result<Row> {
+    let status = r.get::<_, Option<String>>(2)?;
     let (passed, total) = (r.get::<_, Option<i64>>(10)?, r.get::<_, Option<i64>>(11)?);
     Ok(Row {
         id: r.get(0)?,
         routine: r.get::<_, Option<String>>(1)?.unwrap_or_default(),
-        ok: r.get::<_, Option<String>>(2)?.as_deref() == Some("ok"),
+        ok: status.as_deref() == Some("ok"),
+        waiting: status.as_deref() == Some("waiting"),
         ms: r.get::<_, Option<i64>>(3)?.unwrap_or(0),
         cost: r.get(4)?,
         tokens: r.get::<_, Option<i64>>(5)?.unwrap_or(0),
@@ -45,8 +49,8 @@ fn row(r: &SqlRow) -> rusqlite::Result<Row> {
     })
 }
 
-/// The turns of the bot whose conversation is `key`, under its own role (the judge's turns on it are kept there too), the first first.
+/// The turns of the bot whose conversation is `key`, under its own role (the judge's turns on it are kept there too), the first first. The B runs of experiments are not its own runs, and a replay's or a shadow's run is in a conversation of its own.
 pub fn rows(app: &Shared, key: &str) -> Vec<Row> {
-    let sql = "SELECT id, routine, status, ms, cost_usd, COALESCE(tokens_in, 0) + COALESCE(tokens_out, 0) + COALESCE(tokens_cache_read, 0) + COALESCE(tokens_cache_write, 0), reaction, corrected, score, skills, checks_passed, checks_total, cited FROM turns WHERE conv = ?1 AND role = ?1 ORDER BY id";
+    let sql = "SELECT id, routine, status, ms, cost_usd, COALESCE(tokens_in, 0) + COALESCE(tokens_out, 0) + COALESCE(tokens_cache_read, 0) + COALESCE(tokens_cache_write, 0), reaction, corrected, score, skills, checks_passed, checks_total, cited FROM turns WHERE conv = ?1 AND role = ?1 AND COALESCE(variant, '') <> 'B' ORDER BY id";
     app.query(sql, [key], row)
 }

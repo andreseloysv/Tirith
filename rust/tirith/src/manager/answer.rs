@@ -1,7 +1,8 @@
 //! The owner's answer to an open card or to a waiting lane.
 use super::cards::{card_done, note_line};
 use super::deliver::report;
-use super::events::{emit_event, queue};
+use super::events::emit_event;
+use super::queue::queue;
 use crate::app::Shared;
 use serde_json::{json, Value};
 /// The owner's answer to an open card: straight to the lane whose question it carries (the manager is told), else to the manager of the card's project with the question it answers. `by_manager`: the manager closes a card the owner answered in the chat.

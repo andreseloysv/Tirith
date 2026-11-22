@@ -308,7 +308,7 @@ async fn agent_say_is_not_the_owner() {
     super::talk("sayagent", |t| {
         (t.tx, t.alive, t.pending, t.notes) = (None, true, vec![], vec![])
     });
-    let handed = || super::talk("sayagent", |t| std::mem::take(&mut t.pending)).join("\n");
+    let handed = || texts("sayagent");
     // The Manager's note from inside its session (its role set), even one shaped like the owner's /model: the manager gets it marked as the agent's, and nothing is the owner's.
     super::say(&app, "sayagent", "/model manager other", "manager").unwrap();
     let got = handed();
@@ -421,7 +421,7 @@ async fn agent_say_is_not_the_owner_over_http() {
     )
     .await;
     assert!(out.contains(" 200"), "{out}");
-    let handed = super::talk("sayhttp", |t| std::mem::take(&mut t.pending)).join("\n");
+    let handed = texts("sayhttp");
     assert!(
         handed.contains("[agent manager] nota del manager por http"),
         "handed to the manager as the agent's: {handed}"
@@ -541,4 +541,38 @@ fn card_id_of_reads_the_card_an_event_line_names() {
     );
     assert_eq!(super::card_id_of("merged lane lo-que-sea into main"), None);
     assert_eq!(super::card_id_of("owner without a card number"), None);
+}
+
+/// What a conversation's waiting messages say, taken.
+fn texts(project: &str) -> String {
+    let taken = super::talk(project, |t| std::mem::take(&mut t.pending));
+    taken
+        .into_iter()
+        .map(|m| m.text)
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[test]
+fn reports_are_never_dropped_silently() {
+    let home = std::env::temp_dir().join(format!("tirith-notes-cut-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&home);
+    std::fs::create_dir_all(&home).unwrap();
+    let app = crate::app::App::open_at(home.clone());
+    // No live session: what the manager is handed waits in its talk's pending.
+    super::talk("notescut", |t| {
+        (t.tx, t.alive, t.pending, t.notes) = (None, true, vec![], vec![])
+    });
+    (0..35)
+        .for_each(|i| super::queue::queue(&app, "notescut", &format!("report {i}"), "note", false));
+    super::deliver(&app, "notescut", "hola", false);
+    let got = texts("notescut");
+    assert!(
+        got.contains("5 older reports were left out")
+            && got.contains("report 34")
+            && !got.contains("report 4\n"),
+        "the 30 newest are kept and the rest is said: {got}"
+    );
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
 }

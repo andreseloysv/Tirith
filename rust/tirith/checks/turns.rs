@@ -140,7 +140,7 @@ done
         row["ms"].as_i64().is_some() && !row["factory"].as_str().unwrap_or("").is_empty(),
         "{row}"
     );
-    // Its event: turn.done, in the bot's conversation, saying the bot, the trigger, the tool, the skill and the answer.
+    // Its event: routine.done (a chat turn that read a skill is graded with its «Cómo validar» too), in the bot's conversation, saying the bot, the trigger, the tool, the skill and the answer.
     let event = row["event"].as_i64().expect("its event");
     let (kind, project, summary) = app
         .query(
@@ -159,7 +159,7 @@ done
         .expect("the event row");
     assert_eq!(
         (kind.as_str(), project.as_str()),
-        ("turn.done", key.as_str())
+        ("routine.done", key.as_str())
     );
     assert!(
         summary.contains("Notas")
@@ -419,7 +419,7 @@ async fn turn_checks_from_the_cli() {
     let (status, body) = post("1/1", "x").await;
     assert!(status.contains(" 400"), "{status} {body}");
     // During its turn: the open turn keeps them, and its row has them at its end.
-    super::begin(&app, &key);
+    super::handed(&app, &key, Default::default());
     let (status, body) = post("3/4", "portal, filtros, fechas, enlaces").await;
     assert!(status.contains(" 200"), "{status} {body}");
     super::end(&app, &key, Some(true), Some("Hecho [s2]"));
@@ -456,4 +456,45 @@ fn cited_notes() {
         ["m3", "s1"]
     );
     assert!(super::cited("sin notas").is_empty());
+}
+
+#[test]
+fn a_turn_the_daemon_was_stopped_in_is_kept_as_failed() {
+    let home = home("turn-interrupted");
+    let app = crate::app::App::open_at(home.clone());
+    let bot = crate::bots::save(&app, json!({"name": "Corte", "shape": "drop", "color": "#22d3ee", "session": "chat", "access": "read"})).unwrap();
+    let key = format!("bot-{}", bot["id"].as_str().unwrap());
+    // One turn ended and was kept; one routine turn was running when the daemon died; one loose turn of a turn role too.
+    super::handed(&app, &key, ("owner".into(), String::new()));
+    super::end(&app, &key, Some(true), Some("hecho"));
+    super::handed(&app, &key, ("schedule".into(), "r1".into()));
+    let _ = super::turn_of(&app, "judge", &key);
+    assert_eq!(
+        own_rows(&app, &key).len(),
+        1,
+        "nothing of the running ones is kept yet"
+    );
+    // The daemon starts again.
+    super::start(app.clone());
+    let rows = super::rows_of(&app, &key, 10);
+    let by = |status: &str| rows.iter().filter(|r| r["status"] == status).count();
+    assert_eq!((rows.len(), by("ok"), by("failed")), (3, 1, 2), "{rows:?}");
+    let routine = rows.iter().find(|r| r["routine"] == "r1").unwrap();
+    assert_eq!(
+        (
+            routine["trigger"].as_str(),
+            routine["role"].as_str(),
+            routine["conv"].as_str()
+        ),
+        (Some("schedule"), Some(key.as_str()), Some(key.as_str()))
+    );
+    assert!(
+        routine["answer"].as_str().unwrap().contains("restarted"),
+        "{routine}"
+    );
+    // Once is enough: another start keeps nothing more.
+    super::start(app.clone());
+    assert_eq!(super::rows_of(&app, &key, 10).len(), 3);
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
 }

@@ -63,6 +63,7 @@ fn add_later_columns(db: &Connection) {
         ("owner_items", "project TEXT NOT NULL DEFAULT ''"),
         ("owner_items", "lane TEXT NOT NULL DEFAULT ''"),
         ("ceo_reviews", "role TEXT NOT NULL DEFAULT ''"),
+        ("experiments", "rule TEXT"),
     ]
     .into_iter()
     .for_each(|(table, col)| {

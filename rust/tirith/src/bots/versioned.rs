@@ -4,7 +4,7 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 
 /// A bot's folder: its memory and the skill folders in `.agents/skills`; a link there (a shared skill) is no folder to git, so it stays out.
-const OWN: &str = "# Tirith versions only the memory and this bot's own skills; the links to the shared skills\n# (in <home>/bots, a repository of its own) and everything else stay out.\n*\n!/.gitignore\n!/memory.md\n!/.agents/\n/.agents/*\n!/.agents/skills/\n/.agents/skills/*\n!/.agents/skills/*/\n!/.agents/skills/*/**\n";
+const OWN: &str = "# Tirith versions only the memory, the routines' own effort and this bot's own skills; the links to the shared skills\n# (in <home>/bots, a repository of its own) and everything else stay out.\n*\n!/.gitignore\n!/memory.md\n!/routines.toml\n!/.agents/\n/.agents/*\n!/.agents/skills/\n/.agents/skills/*\n!/.agents/skills/*/\n!/.agents/skills/*/**\n";
 /// The bots' shared folder: the shared memory and skills.
 const SHARED: &str = "# Tirith versions only the shared memory and the shared skills.\n*\n!/.gitignore\n!/memory.md\n!/skills/\n!/skills/**\n";
 

@@ -1,5 +1,6 @@
 //! A conversation's sessions, one after another while messages wait, started again more slowly when they fail young.
 use super::deliver::report;
+use super::jobs::release_run;
 use super::session::session;
 use super::talk::{set_busy, talk};
 use super::typing::typing_stop;
@@ -16,6 +17,7 @@ pub(super) async fn run(app: Shared, project: String) {
             .filter(|_| backoff == 2)
             .into_iter()
             .for_each(|e| (app.event("", &project, "error", "manager", e, ""), report(&app, &project, &format!("The manager could not start: {e}. Tirith keeps trying; what you wrote waits for it."))).1);
+        let _ = result.is_err().then(|| release_run(&app, &project)); // a session that never started held what its run took
         typing_stop(&project); // a session that ended, failed or never got ready leaves no turn typing on the phones
         let rest = talk(&project, |t| {
             (t.tx, t.pid) = (None, 0);

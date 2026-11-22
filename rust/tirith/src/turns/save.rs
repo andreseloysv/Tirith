@@ -10,6 +10,7 @@ use serde_json::json;
 
 /// Keeps the turn's row: `ok` and `answer` when its caller knows them, else what its lines said (Anthropic's `is_error`, the text so far). Its id.
 pub fn finish(app: &Shared, mut t: Turn, ok: Option<bool>, answer: Option<&str>) -> i64 {
+    super::interrupted::clear(app, &t);
     if !t.usage.seen && t.agent == "muse" && !t.session.is_empty() {
         t.usage = from_muse_session(&t.session, t.start_us);
     }
@@ -45,10 +46,11 @@ pub fn finish(app: &Shared, mut t: Turn, ok: Option<bool>, answer: Option<&str>)
     });
     app.emit("turn", json!({"id": id, "conv": t.conv, "status": status}));
     crate::lab::finished(app, id, &t.conv, &t.routine); // a run of a live experiment: its variant, its comparison
+    let _ = (t.role == t.conv).then(|| crate::bots::untune(app, &t.conv)); // the routine's own effort or model ends with its turn
     id
 }
 
-/// A bot's own turn (a role with `scope = "own"` and `session = "chat"`, in its conversation) emits `turn.done`, or `routine.done` when a routine started it: its id, else none.
+/// A bot's own turn (a role with `scope = "own"` and `session = "chat"`, in its conversation) emits `turn.done`, or `routine.done` when a routine started it or it read a skill: its id, else none.
 fn event(app: &Shared, t: &Turn, answer: &str) -> Option<i64> {
     // Only the bot's own role: a judge's turn in its conversation emits nothing (an eval on turn.done would judge itself forever).
     (t.role == t.conv).then_some(())?;
@@ -70,7 +72,8 @@ fn event(app: &Shared, t: &Turn, answer: &str) -> Option<i64> {
         names(t.skills.clone()).unwrap_or("none".into())
     );
     let approval = super::approval::context(app, t);
-    let (on, text) = if routine.is_some() {
+    // A routine's turn, or a chat turn that read a skill (graded with its «Cómo validar» too); a chat turn that read none is not graded.
+    let (on, text) = if routine.is_some() || !t.skills.is_empty() {
         let text = super::quality::routine_text(app, t, &text, answer, &approval);
         ("routine.done", text)
     } else {

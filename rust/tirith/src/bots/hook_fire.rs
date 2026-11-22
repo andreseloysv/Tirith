@@ -39,8 +39,6 @@ pub(super) fn fire(app: &Shared, b: &Value, r: &Value, e: &Value, trigger: &str)
         &format!("Running routine · {} · {}", s(r, "title"), label(e)),
         &key,
     );
-    crate::turns::trigger(&key, trigger, &rid);
     let told = told(r, e);
-    crate::lab::fired(app, &key, &rid, &told); // an experiment on it: this run is its A or its B, or a shadow B runs beside it
-    crate::manager::emit_event(app, &key, "webhook", &told, None);
+    crate::manager::run_routine(app, &key, "webhook", &told, (trigger, &rid)); // an experiment on it makes the run its A or its B when it starts
 }

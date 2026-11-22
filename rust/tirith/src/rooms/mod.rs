@@ -39,6 +39,7 @@ pub use api::forget;
 pub use cli::cli;
 pub use hooks::{hook_create, hook_delete};
 pub use keeper::start;
+pub use record::paired_phone;
 use record::{Msg, Peer, Room, CODE_SECS, KEPT, PHONE};
 pub use routes::routes;
 pub use tophones::{phone_rooms, to_phones};

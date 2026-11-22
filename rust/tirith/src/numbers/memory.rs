@@ -1,4 +1,4 @@
-//! A bot's memory in numbers: what loading it costs in tokens, how often its last 30 runs cited each numbered note, the notes none cited (candidates to delete; Tirith never deletes them) and the memory misses (owner messages owner-mood labelled `repeat`).
+//! A bot's memory in numbers: what loading it costs in tokens, how often its last 30 runs cited each numbered note, the bot's own notes none cited once 30 runs have happened since they were written (candidates to delete; Tirith never deletes them, and a shared note is never proposed from one bot's runs) and the memory misses (owner messages owner-mood labelled `repeat`).
 use super::rows::Row;
 use crate::app::Shared;
 use serde_json::{json, Value};
@@ -38,9 +38,11 @@ pub fn memory(app: &Shared, key: &str, rows: &[Row], (own, shared): (&str, &str)
         .iter()
         .map(|(id, text)| json!({"id": id, "text": text, "cited": cites(id)}))
         .collect();
+    let dir = app.home.join("manager").join(key);
+    let old = |id: &str| super::age::runs_since(app, key, &dir, id).is_some_and(|n| n >= LAST);
     let uncited: Vec<&String> = all
         .iter()
-        .filter(|(id, _)| cites(id) == 0)
+        .filter(|(id, _)| id.starts_with('m') && cites(id) == 0 && old(id))
         .map(|n| &n.0)
         .collect();
     let missed = misses(app, key);

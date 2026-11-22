@@ -42,6 +42,9 @@ CREATE TABLE IF NOT EXISTS turns (id INTEGER PRIMARY KEY, conv TEXT, role TEXT, 
     reaction INTEGER, corrected INTEGER NOT NULL DEFAULT 0, checks_passed INTEGER, checks_total INTEGER,
     checks TEXT, cited TEXT, score REAL, experiment INTEGER, variant TEXT);
 CREATE INDEX IF NOT EXISTS turns_conv ON turns (conv, id);
+-- A turn from its start to its row in `turns`: what a restart finds here was interrupted and is kept as failed.
+CREATE TABLE IF NOT EXISTS open_turns (conv TEXT, role TEXT, start_us INTEGER, "trigger" TEXT, routine TEXT,
+    started_at TEXT, agent TEXT, model TEXT, effort TEXT, PRIMARY KEY (conv, role, start_us));
 -- The lab (docs/BOTS.md, part 3): one row per experiment of the Coach on a bot's routine — the bot's key, the
 -- routine, the branch of the bot's repository and its one commit (`change`), the hypothesis, the mode, its status
 -- (running, adopted, discarded), its times, the numbers it was decided with (JSON) and the factory that decided it;

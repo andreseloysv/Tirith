@@ -36,6 +36,10 @@ pub fn start(app: &Shared, b: &Value) -> Result<Value, String> {
     (!hypothesis.is_empty())
         .then_some(())
         .ok_or("an experiment needs its hypothesis (--hypothesis \"<text>\")")?;
+    let _ = (mode == "replay")
+        .then(|| crate::sandbox::closes_network(app))
+        .transpose()
+        .map_err(|why| format!("a replay needs the network closed and it cannot be: {why}"))?;
     let on = running(app, &key, &routine);
     on.map_or(Ok(()), |e| {
         Err(format!(
@@ -48,6 +52,7 @@ pub fn start(app: &Shared, b: &Value) -> Result<Value, String> {
     let replays = replays(app, &key, &routine, &mode)?;
     let (factory, _) = app.stamp_for(&key);
     let id = app.insert("INSERT INTO experiments (bot, routine, branch, change, hypothesis, mode, status, created_at, factory) VALUES (?1, ?2, ?3, ?4, ?5, ?8, 'running', ?6, ?7)", params![key, routine, branch, change, hypothesis, now_iso(), factory, mode]);
+    super::fixed::keep(app, id); // the rule is fixed before the test
     let e = running_one(app, id).ok_or("the experiment was not kept")?;
     let path = tree(app, &e);
     let _ = std::fs::create_dir_all(path.parent().unwrap_or(&path));

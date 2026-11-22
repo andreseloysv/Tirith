@@ -1,4 +1,5 @@
-//! A bot's numbers, read from its rows in `turns` and its memory: `GET /api/bots/<id>/numbers` (docs/DAEMON.md). By routine: its runs, success rate, mean time, cost per good run, 👎 and corrections per 10, mean judge's score and the trend (the last 10 runs against the 10 before). By skill: its uses, its validated uses and its routine's tokens before its first use against after. Its memory: the tokens loading it costs, the notes its last 30 runs cited, the ones none cited and the memory misses.
+//! A bot's numbers, read from its rows in `turns` and its memory: `GET /api/bots/<id>/numbers` (docs/DAEMON.md). By routine: its runs, success rate, mean time, cost per good run, 👎 and corrections per 10, mean judge's score and the trend (the last 10 runs against the 10 before). By skill: its uses, its validated uses and its routine's tokens before its first use against after. Its memory: the tokens loading it costs, the notes its last 30 runs cited, its own notes none cited since 30 runs after they were written (shared ones are never proposed) and the memory misses.
+mod age;
 mod memory;
 mod routines;
 mod rows;

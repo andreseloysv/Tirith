@@ -3,16 +3,20 @@ mod answer;
 mod ask;
 mod blocks;
 mod cards;
+mod compose;
 mod deliver;
 mod evals;
 mod events;
 mod exec;
+mod exec_end;
 mod exec_stream;
 mod interrupt;
+mod jobs;
 mod judged;
 mod open;
 mod progress;
 mod prompt;
+mod queue;
 mod run;
 mod say;
 mod session;
@@ -27,8 +31,9 @@ pub use answer::owner_answer;
 pub use ask::ask_owner;
 pub use cards::close_card;
 pub use deliver::deliver;
-pub use events::{emit_event, emitted};
+pub use events::{emit_event, emitted, run_routine};
 pub use interrupt::interrupt;
+pub use jobs::release_run;
 pub use judged::card_id_of;
 pub use open::owner_open;
 pub use say::{from_room, model_command, say};
@@ -44,6 +49,9 @@ use {
     judged::judged, open::waiting_cards, progress::progress_line, spawn::turn_permission,
     talk::talk, typing::typing_rooms,
 };
+#[cfg(test)]
+#[path = "../../checks/runs.rs"]
+mod runs_tests;
 #[cfg(test)]
 #[path = "../../checks/manager.rs"]
 mod tests;

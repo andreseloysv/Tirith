@@ -18,7 +18,11 @@ pub fn cost_per_good(rows: &[&Row]) -> Option<f64> {
 
 /// Cost per good run, mean time and success of some runs.
 fn window(rows: &[&Row]) -> Value {
-    let success = mean(rows.iter().map(|r| f64::from(u8::from(r.ok))));
+    let success = mean(
+        rows.iter()
+            .filter(|r| !r.waiting)
+            .map(|r| f64::from(u8::from(r.ok))),
+    ); // a run that waits for the owner's yes is neither
     let ms = mean(rows.iter().map(|r| r.ms as f64));
     json!({"runs": rows.len(), "cost_per_good": cost_per_good(rows), "ms": ms, "success": success})
 }
@@ -46,6 +50,7 @@ fn routine(id: &str, title: &str, rows: &[&Row]) -> Value {
         "id": id,
         "title": title,
         "runs": rows.len(),
+        "waiting": rows.iter().filter(|r| r.waiting).count(),
         "success": all["success"],
         "ms": all["ms"],
         "cost_per_good": all["cost_per_good"],

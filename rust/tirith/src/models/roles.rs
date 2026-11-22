@@ -72,5 +72,7 @@ fn factory_setting(cfg: &Config, role: &str) -> RoleSetting {
     }
 }
 pub fn role(app: &Shared, role: &str) -> RoleSetting {
-    role_with_source(app, role).0
+    let mut setting = role_with_source(app, role).0;
+    crate::bots::tuned(role, &mut setting.effort, &mut setting.model); // a routine's own effort or model, while its run is on its way
+    setting
 }
