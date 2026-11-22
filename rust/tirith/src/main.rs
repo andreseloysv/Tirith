@@ -25,6 +25,7 @@ mod projects;
 mod rooms;
 mod rules;
 mod sandbox;
+mod secrets;
 mod server;
 mod service;
 mod setup;

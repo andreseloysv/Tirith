@@ -29,3 +29,13 @@ ed25519-dalek = "2"
 crypto_box = { version = "0.9", default-features = false, features = ["salsa20", "alloc"] }
 crypto_secretbox = { version = "0.1", default-features = false, features = ["salsa20", "alloc"] }
 qrcode = { version = "0.14", default-features = false, features = ["svg"] }
+
+# The bots' secrets in the system's credential store, called in-process. On Linux in pure Rust, so the binary stays static.
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3.6.3", default-features = false, features = ["apple-native"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3.6.3", default-features = false, features = ["async-secret-service", "tokio", "crypto-rust"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { version = "3.6.3", default-features = false, features = ["windows-native"] }
