@@ -1,5 +1,7 @@
 # Rust workspace build output
 /target/
+# The daemon built for the desktop bundle (app/sidecar.sh)
+/app/src-tauri/binaries/
 # macOS
 .DS_Store
 # Image tool lock files

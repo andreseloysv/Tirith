@@ -27,6 +27,8 @@ jobs:
         with:
           node-version: "22"
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ runner.os == 'macOS' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: .
@@ -34,7 +36,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev libsqlite3-dev patchelf
       - name: Install
         working-directory: app
         run: npm ci
@@ -54,6 +56,11 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -s -k "$pass" "$keychain"
           security list-keychains -d user -s "$keychain" login.keychain-db
           rm "$RUNNER_TEMP/cert.p12"
+      # Writes app/src-tauri/binaries/tirith-<target triple> (universal on macOS) for bundle.externalBin.
+      # The daemon is Unix-only: the Windows bundle has none (tauri.windows.conf.json).
+      - name: Daemon sidecar
+        if: runner.os != 'Windows'
+        run: sh app/sidecar.sh
       - name: Build
         working-directory: app
         env:
