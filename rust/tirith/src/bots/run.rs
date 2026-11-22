@@ -1,8 +1,8 @@
 //! Routines run: one now, or every one due on the scheduler's tick.
 use super::list::all;
-use super::schedule::{due, late};
+use super::schedule::{due, late, owed};
 use super::store::find;
-use crate::app::{now_iso, Shared};
+use crate::app::Shared;
 use crate::server::s;
 use chrono::{DateTime, Local};
 /// Runs a routine (`trigger` is `schedule` or `run-now`), `late` when it is not on time: the conversation shows it, and the bot is handed the task as a turn of its own, after what runs before it.
@@ -35,22 +35,19 @@ fn fire_at(
     );
     let (title, task) = (s(r, "title"), s(r, "prompt"));
     let timed = trigger == "schedule";
-    let due = timed
-        .then(|| crate::expected::today(&s(r, "at"), now))
-        .flatten();
-    let due = due.unwrap_or_else(now_iso);
+    let at = crate::expected::instant(now);
+    let due = if timed {
+        // the occurrence it runs for: not always today's (`catch_up`)
+        crate::expected::instant(owed(r, now).ok_or("it is not due")?)
+    } else {
+        at.clone()
+    };
     let stamp = format!("routine:{id}:{rid}");
     if timed && crate::expected::known(app, &key, rid, &due) {
-        app.set_kv(&stamp, Some(&now_iso())); // that occurrence is written down: never twice
+        app.set_kv(&stamp, Some(&at)); // that occurrence is written down: never twice
         return Ok(());
     }
-    let role_is_turn = bot["session"] == "turn";
-    let its = if role_is_turn {
-        " It is a task, not a review."
-    } else {
-        ""
-    };
-    let told = format!("Routine «{title}» is due now{late}.{its} Do it and report the result here in a few lines ({}); ask nothing: {task}", super::REPORT);
+    let told = super::told::told(bot, &title, &task, late);
     let new = crate::expected::New {
         conv: &key,
         routine: rid,
@@ -61,8 +58,8 @@ fn fire_at(
         task: &told,
     };
     crate::expected::expect(app, &new); // written down before anything starts
-    app.set_kv(&stamp, Some(&now_iso()));
-    let noted = if timed {
+    app.set_kv(&stamp, Some(&at));
+    let noted = if timed && !late.is_empty() {
         crate::expected::late(app, &due, now)
     } else {
         String::new()

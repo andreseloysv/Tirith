@@ -35,6 +35,11 @@ fn state(app: &Shared, key: &str, r: &Value, now: DateTime<Local>) -> Option<&'s
     let today = json!(now.weekday().number_from_monday());
     (r["trigger"] == "schedule" && r["days"].as_array()?.contains(&today)).then_some(())?;
     let slot = now.date_naive().and_time(at);
+    if let Some(due) = crate::expected::today(&s(r, "at"), now) {
+        if let Some(state) = crate::expected::stands(app, (key, &s(r, "id"), &due)) {
+            return Some(state); // the register's word, as the numbers and the notice have it
+        }
+    }
     if let Some(fired) = fired(app, key, &s(r, "title"), slot) {
         return Some(outcome(app, key, &s(r, "id"), &fired));
     }

@@ -60,5 +60,10 @@ pub fn late(app: &App, due: &str, now: DateTime<Local>) -> String {
         return String::new();
     };
     let why = over(app, due).map(|w| format!(", {w}")).unwrap_or_default();
-    format!(" · tarde: tocaba a las {}{why}", was.format("%H:%M"))
+    let was = if was.date_naive() == now.date_naive() {
+        format!("a las {}", was.format("%H:%M"))
+    } else {
+        format!("el {}", super::words::at(was))
+    };
+    format!(" · tarde: tocaba {was}{why}")
 }

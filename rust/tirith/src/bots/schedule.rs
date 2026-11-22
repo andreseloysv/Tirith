@@ -49,12 +49,20 @@ fn pending(r: &Value, now: DateTime<Local>) -> Option<DateTime<Local>> {
 }
 /// Due when it is on and one of its times is pending. Times missed (the daemon was down) are one run with `catch_up` "once", the default; with "skip" it runs only on time, so it waits for the next.
 pub fn due(r: &Value, now: DateTime<Local>) -> bool {
-    r["on"] != false
-        && pending(r, now).is_some_and(|time| r["catch_up"] != "skip" || now - time <= ON_TIME)
+    owed(r, now).is_some()
+}
+/// The one of its times it is to run for now, so the one that is not lost (`expected/missed.rs`).
+pub fn owed(r: &Value, now: DateTime<Local>) -> Option<DateTime<Local>> {
+    (r["on"] != false).then_some(())?;
+    pending(r, now).filter(|time| r["catch_up"] != "skip" || !past(*time, now))
+}
+/// Whether `time` is too long ago for a run of it to be on time.
+pub fn past(time: DateTime<Local>, now: DateTime<Local>) -> bool {
+    now - time > ON_TIME
 }
 /// What a run says of its delay, empty when it is on time.
 pub(super) fn late(r: &Value, now: DateTime<Local>) -> String {
-    let Some(time) = pending(r, now).filter(|time| now - *time > ON_TIME) else {
+    let Some(time) = pending(r, now).filter(|time| past(*time, now)) else {
         return String::new();
     };
     let by = now - time;

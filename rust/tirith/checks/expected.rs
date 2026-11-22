@@ -171,6 +171,10 @@ fn a_new_routine_says_when_it_first_runs() {
 #[test]
 fn days_tirith_was_away_leave_a_row_each_and_one_line() {
     let (app, home, key) = home_of("away", "/nonexistent/agent", "1, 2, 3, 4, 5, 6, 7", "08:00");
+    drop(app); // "skip": every time missed is lost (`checks/catch_up.rs` has "once")
+    let config = std::fs::read_to_string(home.join("config.toml")).unwrap();
+    std::fs::write(home.join("config.toml"), config + "catch_up = \"skip\"\n").unwrap();
+    let app = crate::app::App::open_at(home.clone());
     app.set_kv("routine:away:r1", Some("2026-01-01T07:00:00Z")); // its last run is long ago: nothing is invented from it
     super::tick(&app, at(11, 20, "18:00"));
     assert!(kept(&app, &key).0.is_empty(), "watched from now on");

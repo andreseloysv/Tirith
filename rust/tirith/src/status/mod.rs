@@ -6,5 +6,8 @@ mod routines;
 mod span;
 pub use command::{asked, command};
 #[cfg(test)]
+#[path = "../../checks/status_runs.rs"]
+mod run_tests;
+#[cfg(test)]
 #[path = "../../checks/status.rs"]
 mod tests;

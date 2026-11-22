@@ -1,12 +1,14 @@
-//! What a start finds open: a run Tirith was stopped in the middle of failed and is not done again (it may have acted); one that had not started is handed again the same day, and else is lost.
+//! What a start finds open: a run Tirith was stopped in the middle of failed and is not done again (it may have acted); one that had not started is handed again on the day it was due or caught up, and else is lost.
 use super::calendar::local;
 use super::life::never;
 use super::store::{close, select, Expected, FAILED, OK, RUNNING, WAITING};
 use super::{notice, PASS};
 use crate::app::Shared;
-use chrono::Local;
+use chrono::{Local, TimeDelta};
 use rusqlite::params;
 
+/// How far back `catch_up` looks (bots/schedule.rs).
+const CAUGHT_UP: i64 = 7;
 const MIDDLE: &str = "Tirith se paró o se reinició a mitad";
 
 /// At the daemon's start, after the rooms are open: the phones hear it.
@@ -42,7 +44,11 @@ fn cut(app: &Shared, run: &Expected) {
 
 /// It had not started.
 fn again(app: &Shared, run: &Expected) {
-    let today = local(&run.due).is_some_and(|d| d.date_naive() == Local::now().date_naive());
+    let now = Local::now().date_naive();
+    let is_now = |kept: &str| local(kept).is_some_and(|d| d.date_naive() == now);
+    let caught_up = is_now(&run.created_at)
+        && local(&run.due).is_some_and(|d| now - d.date_naive() <= TimeDelta::days(CAUGHT_UP));
+    let today = is_now(&run.due) || caught_up;
     let handed = today
         && crate::manager::run_routine(
             app,

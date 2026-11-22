@@ -5,7 +5,7 @@ use chrono::{DateTime, Datelike, Days, Local, NaiveDate, NaiveTime, TimeDelta, T
 const BACK: i64 = 31;
 
 /// An instant as the store keeps it.
-pub(super) fn utc<T: TimeZone>(t: DateTime<T>) -> String {
+pub fn utc<T: TimeZone>(t: DateTime<T>) -> String {
     t.with_timezone(&Utc)
         .format("%Y-%m-%dT%H:%M:%SZ")
         .to_string()
@@ -21,7 +21,11 @@ pub(super) fn local(kept: &str) -> Option<DateTime<Local>> {
 /// `at` (HH:MM) of `day` here; in the hour a clock skips in spring, an hour later.
 pub(super) fn on(day: NaiveDate, at: &str) -> Option<DateTime<Local>> {
     let t = day.and_time(NaiveTime::parse_from_str(at, "%H:%M").ok()?);
-    let there = |t| Local.from_local_datetime(&t).earliest();
+    // the first instant the clock shows it, as bots/schedule.rs names it
+    let there = |t| {
+        let shown = Local.from_local_datetime(&t);
+        shown.earliest().min(shown.latest())
+    };
     there(t).or_else(|| there(t + TimeDelta::hours(1)))
 }
 
@@ -51,15 +55,15 @@ pub(super) fn over(
     out
 }
 
-/// Today's latest occurrence among `times` that has come.
-pub(super) fn latest(times: &[(String, Vec<u64>)], now: DateTime<Local>) -> Option<String> {
+/// Today's occurrence, when it came after `since` and is too late to run on time.
+pub(super) fn gone_today(
+    (at, days): (&str, &[u64]),
+    since: DateTime<Local>,
+    now: DateTime<Local>,
+) -> Option<DateTime<Local>> {
     let today = now.date_naive();
-    let come = times
-        .iter()
-        .filter(|(_, days)| is_day(today, days))
-        .filter_map(|(at, _)| on(today, at))
-        .filter(|t| *t <= now);
-    come.max().map(utc)
+    let time = on(today, at).filter(|t| is_day(today, days) && *t > since)?;
+    crate::bots::past(time, now).then_some(time)
 }
 
 /// The first occurrence after `now`.
