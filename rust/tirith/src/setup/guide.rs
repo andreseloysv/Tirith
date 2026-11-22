@@ -44,6 +44,12 @@ fn start(cx: &Context, o: &Opts, pending: &mut Vec<String>) -> Result<(), String
             cfg!(target_os = "linux"),
         ) && cx.ask.person();
     if !server {
+        let older = daemon::answering()
+            .filter(|v| daemon::is_of(v, &cx.home))
+            .is_some_and(|v| v["version"] != crate::bundle::VERSION);
+        if older {
+            service::stop(&unit, &cx.ask)?; // installed over an older one: the new binary takes over
+        }
         println!("Tirith runs: {}.", service::start(&unit, &cx.ask)?.said());
         return Ok(());
     }
