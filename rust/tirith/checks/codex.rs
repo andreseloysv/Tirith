@@ -96,6 +96,14 @@ fn muse_runs_get_the_browser_mcp() {
         "a lane never shares or keeps a profile: {server}"
     );
     assert_eq!(
+        server["mode"], "optional",
+        "a browser that cannot start ends no turn (Muse's default is required): {server}"
+    );
+    assert!(
+        server["required"].is_null(),
+        "never both: Muse then drops every server: {server}"
+    );
+    assert_eq!(
         server["env"]["TIRITH_HOME"], "${TIRITH_HOME}",
         "the whole-value variable both spawns set (Muse refuses a literal env value): {server}"
     );
