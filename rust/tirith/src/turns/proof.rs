@@ -25,6 +25,9 @@ static NESTED: LazyLock<Regex> = LazyLock::new(|| {
 pub(super) fn outside(what: &str) -> bool {
     OUTSIDE.is_match(what)
 }
+/// An error that proves itself whoever printed it: macOS's and Linux's refusal of a sandbox, and Tirith's own.
+static ITSELF: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^(sandbox-exec: sandbox_apply|bwrap: |tirith: )").unwrap());
 
 fn books(what: &str) -> bool {
     BOOKS.is_match(what) || READS.is_match(what)
@@ -47,14 +50,14 @@ fn undone(after: &[Ended], broken: &Ended, hard: bool) -> bool {
 }
 
 impl Looks {
-    /// The look that did not work: one outside that failed and never worked after, one that never ended, or the last call when none worked at all.
+    /// The look that did not work: one outside that failed and that no look after it got over, one that never ended, or the last call when none worked at all.
     pub fn blind(&self) -> Option<&str> {
-        let retried = |at: usize, what: &str| {
+        let got_over = |at: usize, what: &str| {
             let mut after = self.ended[at + 1..].iter();
-            after.any(|e| e.what == what && !e.failed && e.broke.is_none())
+            after.any(|e| (e.what == what || outside(&e.what)) && !e.failed && e.broke.is_none())
         };
         let mut all = self.ended.iter().enumerate();
-        let failed = all.find(|(at, e)| e.failed && outside(&e.what) && !retried(*at, &e.what));
+        let failed = all.find(|(at, e)| e.failed && outside(&e.what) && !got_over(*at, &e.what));
         let none = || {
             self.ended
                 .last()
@@ -72,12 +75,12 @@ impl Looks {
         work.peek().is_some() && work.all(|e| e.failed)
     }
 
-    /// The error that stands: a hard one first. A soft one counts only of a call that failed, or of an agent's CLI.
+    /// The error that stands: a hard one first. One counts only of a call that failed or of an agent's CLI, or when it proves itself: a page that worked may show the same words.
     pub fn proof(&self) -> Option<Proof<'_>> {
         let standing = self.ended.iter().enumerate().filter_map(|(at, e)| {
             let broke = e.broke.as_ref()?;
             let content = !e.failed && READS.is_match(&e.what);
-            let counts = broke.hard || e.failed || NESTED.is_match(&e.what);
+            let counts = e.failed || NESTED.is_match(&e.what) || ITSELF.is_match(&broke.line);
             let stands = !content && counts && !undone(&self.ended[at + 1..], e, broke.hard);
             stands.then_some(Proof {
                 line: &broke.line,

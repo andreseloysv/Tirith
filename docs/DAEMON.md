@@ -1199,9 +1199,13 @@ Each row also carries its quality signals (`react.rs`, `signals.rs`, `checks.rs`
 
 - `score`: the judge's note from 0 to 1 on a routine's run. The `turn-quality` eval (`[[evals]]` on `routine.done`,
   rubric `factory/evals/turn-quality.md`) reads the routine's task, the answer and the «Cómo validar» section of each
-  skill the run read — `routine.done`'s text carries them (`quality.rs`: the answer cut to 1000 characters, each «Cómo validar» to 1500) — and answers a score
+  skill the run read — `routine.done`'s text carries them (`quality.rs`: the answer's start and end in 1000 characters, the errors its calls printed, each «Cómo validar» to 1500) — and answers a score
   with one line why; the score is copied to the turn whose `event` is that event (`turns::scored`, or `catch_up` when
   the judge answered before the row was written). A judge's turn kept in a bot's conversation emits no event of its own.
+  A routine of a turn role (the CEO's) emits `routine.done` too. A why that starts with `could not:`, at 0.3 or less,
+  says that the run could not do its task in words no list holds: the run and its turn end `failed` with that cause,
+  and the owner gets the one line of any failed run (`could_not.rs`, `expected/admitted.rs`). Code alone fails a run
+  only where it is certain: the agent's own failure, ✗, a ∅ with no look or one that failed, a tool's error that proves itself.
 
 `GET /api/turns` gives these columns too; older databases get them by `ALTER TABLE` at start (`add_columns`).
 
@@ -1214,7 +1218,9 @@ Files:
 - `capture_keep.rs`: The captures on disk: written at a bot's turn's end, the last 10 runs of each routine kept, read back for a replay.
 - `capture_told.rs`: What was handed to a conversation's agent (never the memory), waiting for the turn it starts.
 - `checks.rs`: The bot's own validation, `tirith turn checks`, kept on the open turn of its conversation or the last one.
+- `could_not.rs`: The judge's word that a routine's run could not do its task: that run becomes a failure.
 - `codex_log.rs`: Codex's own log of a thread, for the model a turn ran on.
+- `evidence.rs`: What a run's judge is shown of the calls that did not go well: their errors, as data.
 - `exec_items.rs`: The tool calls in the exec agents' lines, under the names their hooks use.
 - `follow.rs`: Which messages handed during a turn got turns of their own (the streaming CLI may fold them into the running one).
 - `hashes.rs`: The git blob hashes of files as they are now.

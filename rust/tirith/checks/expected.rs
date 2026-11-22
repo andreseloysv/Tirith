@@ -502,3 +502,169 @@ fn finding_nothing_or_quoting_someone_is_no_failure() {
         vec![None, None, None, None]
     );
 }
+
+#[test]
+fn an_ordinary_run_is_no_failure() {
+    let list = "https://jobs.example/list";
+    let no_match = format!("curl -s {list} | grep -i remote");
+    let look = format!("curl -s {list}");
+    let fine = || vec![(look.as_str(), "3 offers", 0)];
+    let cases: Vec<(&str, Vec<(&str, &str, i64)>)> = vec![
+        ("∅ No new offers.", vec![(no_match.as_str(), "", 1)]),
+        (
+            "∅ Sin novedades en los PR.",
+            vec![("gh pr list --state open | grep dependabot", "", 1)],
+        ),
+        (
+            "∅ No new offers.",
+            vec![
+                (
+                    "curl -sf https://jobs.example/old",
+                    "curl: (22) The requested URL returned error: 404",
+                    22,
+                ),
+                (look.as_str(), "3 offers", 0),
+            ],
+        ),
+        ("∅ I can't see any new offers today.", fine()),
+        ("∅ No puedo ver ninguna oferta nueva.", fine()),
+        (
+            "∅ Nada nuevo. No hay permisos pendientes de aprobar.",
+            fine(),
+        ),
+        (
+            "2 ofertas nuevas: A y B.\n\n✗ Descartada: C, pide alemán C2.",
+            fine(),
+        ),
+        (
+            "∅ Nothing new for you.",
+            vec![(
+                "curl -s https://wiki.example/Job",
+                "Not logged in\nTalk\nA job is work.",
+                0,
+            )],
+        ),
+        (
+            "∅ Nada nuevo en el blog.",
+            vec![(
+                "curl -s https://blog.example",
+                "Post of yesterday\nYou've reached your limit of free articles",
+                0,
+            )],
+        ),
+        (
+            "∅ Nada nuevo en el foro.",
+            vec![(
+                "curl -s https://forum.example",
+                "sandbox_apply: Operation not permitted is the thread's title",
+                0,
+            )],
+        ),
+    ];
+    for (answer, calls) in cases {
+        assert_eq!(verdicts(answer, &calls), vec![None; 4], "{answer}");
+    }
+}
+
+#[test]
+fn a_script_s_nested_refusal_still_proves_it_and_no_reason_shows_a_secret() {
+    let script = [(
+        "sh search-offers.sh",
+        "sandbox-exec: sandbox_apply: Operation not permitted",
+        0,
+    )];
+    for got in verdicts("∅ Nada nuevo", &script) {
+        assert!(got.unwrap().contains("sandbox_apply"));
+    }
+    let found = [("ls", "a", 0)];
+    for answer in [
+        "✗ No pude entrar con API_KEY=not-a-real-value",
+        "No pude entrar con API_KEY=not-a-real-value",
+        "∅ No pude entrar con API_KEY=not-a-real-value",
+    ] {
+        for got in verdicts(answer, &found) {
+            let why = got.unwrap();
+            assert!(!why.contains("not-a-real-value"), "{why}");
+        }
+    }
+}
+
+/// Words that no list holds: the judge of the run says that it could not, and the run ends as a failure, once.
+#[tokio::test]
+async fn the_judge_tells_a_could_not_in_other_words() {
+    let dir = std::env::temp_dir().join(format!("tirith-expected-agents-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    for (name, session, verdict, fails) in [
+        ("words", "chat", "0.1 — could not: Codex falló", true),
+        ("wordsturn", "turn", "0.1 — could not: Codex falló", true),
+        ("wordsgood", "chat", "0.8 — could not see one check", false),
+    ] {
+        let agent = dir.join(format!("{name}.sh"));
+        let script = r##"#!/bin/sh
+echo '{"type":"system","subtype":"init","session_id":"s"}'
+while read -r line; do
+  case "$line" in
+    *'grade how well'*) echo '{"type":"assistant","message":{"content":[{"type":"text","text":"VERDICT"}]}}' ;;
+    *)
+      echo '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"1","name":"Bash","input":{"command":"cat notes"}}]}}'
+      echo '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"1","is_error":true,"content":"cat: notes: no such helper"}]}}'
+      echo '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"2","name":"Bash","input":{"command":"ls"}}]}}'
+      echo '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"2","is_error":false,"content":"a"}]}}'
+      echo '{"type":"assistant","message":{"content":[{"type":"text","text":"PAD"}]}}'
+      echo '{"type":"assistant","message":{"content":[{"type":"text","text":"La búsqueda con el otro agente terminó mal."}]}}' ;;
+  esac
+  echo '{"type":"result","subtype":"success","is_error":false,"usage":{"input_tokens":1,"output_tokens":1}}'
+done
+"##
+        .replace("VERDICT", verdict)
+        .replace("PAD", &"Mirando. ".repeat(140));
+        std::fs::write(&agent, script).unwrap();
+        std::fs::set_permissions(&agent, std::os::unix::fs::PermissionsExt::from_mode(0o755))
+            .unwrap();
+        let (first, home, key) = home_of(
+            name,
+            &agent.display().to_string(),
+            "1, 2, 3, 4, 5, 6, 7",
+            "00:00",
+        );
+        drop(first);
+        let config = std::fs::read_to_string(home.join("config.toml")).unwrap();
+        let config = config.replace("session = \"chat\"", &format!("session = \"{session}\""));
+        std::fs::write(home.join("config.toml"), config).unwrap();
+        let app = crate::app::App::open_at(home.clone());
+        crate::bots::tick(&app);
+        let row = || kept(&app, &key).0.first().cloned().unwrap_or_default();
+        until("the judge's word", || {
+            row()["score"].is_number() && (!fails || row()["status"] == "failed")
+        })
+        .await;
+        let event = row()["event"].as_i64().unwrap();
+        crate::turns::scored(&app, event, "turn-quality", row()["score"].as_f64()); // said again: nothing twice
+        let (rows, said) = kept(&app, &key);
+        crate::manager::end_session(&key);
+        let shown = app.query("SELECT summary FROM events WHERE id = ?1", [event], |r| {
+            r.get::<_, String>(0)
+        });
+        assert!(
+            shown[0].contains("terminó mal") && shown[0].contains("no such helper"),
+            "the judge is shown the end and the errors: {shown:?}"
+        );
+        if fails {
+            assert_eq!(rows[0]["status"], "failed", "{name}");
+            assert_eq!(said.len(), 1, "one line: {said:?}");
+            assert!(
+                said[0].contains("no pudo") && said[0].contains("terminó mal"),
+                "{said:?}"
+            );
+            let sql = "SELECT state FROM expected_runs WHERE conv = ?1";
+            let states = app.query(sql, [&key], |r| r.get::<_, String>(0));
+            assert_eq!(states, ["failed"]);
+        } else {
+            assert_eq!(rows[0]["status"], "ok", "{name}");
+            assert!(said.is_empty(), "{said:?}");
+        }
+        drop(app);
+        let _ = std::fs::remove_dir_all(&home);
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}

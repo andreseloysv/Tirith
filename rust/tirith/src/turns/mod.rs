@@ -8,6 +8,8 @@ mod capture_keep;
 mod capture_told;
 mod checks;
 mod codex_log;
+mod could_not;
+mod evidence;
 mod exec_items;
 mod follow;
 mod hashes;

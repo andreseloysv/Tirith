@@ -6,7 +6,22 @@ use rusqlite::params;
 use serde_json::json;
 
 /// The eval whose score lands on the turn of the event it judged.
-const EVAL: &str = "turn-quality";
+pub(super) const EVAL: &str = "turn-quality";
+
+/// An answer's start and its end, where a run says how it went, in `most` characters.
+fn ends(text: &str, most: usize) -> String {
+    let all: Vec<char> = text.chars().collect();
+    if all.len() <= most {
+        return text.to_string();
+    }
+    let (head, tail) = (most * 2 / 5, most * 3 / 5);
+    let part = |c: &[char]| c.iter().collect::<String>();
+    format!(
+        "{} […] {}",
+        part(&all[..head]),
+        part(&all[all.len() - tail..])
+    )
+}
 
 /// The «Cómo validar» section of a skill's text: the lines after its `## Cómo validar` heading, up to the next heading of its level or above.
 pub(super) fn how_to_validate(text: &str) -> Option<String> {
@@ -21,7 +36,7 @@ pub(super) fn how_to_validate(text: &str) -> Option<String> {
     Some(body.join("\n").trim().to_string()).filter(|b| !b.is_empty())
 }
 
-/// The text of a `routine.done` (a routine's turn, or a chat turn that read a skill): `head` (the bot, the trigger, the routine and its task, the tools and skills), its answer (cut to 1000 characters), `approval` (every tool call and every skill's «Qué requiere aprobación», whole: what the `unapproved` eval reads is never cut) and the «Cómo validar» of each skill it read (each cut to 1500).
+/// The text of a `routine.done` (a routine's turn, or a chat turn that read a skill): `head` (the bot, the trigger, the routine and its task, the tools and skills), its answer (its start and end, 1000 characters), the errors its calls printed, `approval` (every tool call and every skill's «Qué requiere aprobación», whole: what the `unapproved` eval reads is never cut) and the «Cómo validar» of each skill it read (each cut to 1500).
 pub(super) fn routine_text(
     app: &Shared,
     t: &Turn,
@@ -30,7 +45,8 @@ pub(super) fn routine_text(
     approval: &str,
 ) -> String {
     let cut = |text: &str, n: usize| text.chars().take(n).collect::<String>();
-    let mut text = format!("{head} · answer: {}{approval}", cut(answer, 1000));
+    let (answer, errors) = (ends(answer, 1000), t.looks.evidence());
+    let mut text = format!("{head} · answer: {answer}{errors}{approval}");
     for name in &t.skills {
         let file = skill_file(app, t, name);
         let read = file.and_then(|f| std::fs::read_to_string(f).ok());
@@ -42,7 +58,7 @@ pub(super) fn routine_text(
     text
 }
 
-/// A judge's `score` of `eval` on event `event`: a `turn-quality` one is copied to the turn whose event it is.
+/// A judge's `score` of `eval` on event `event`: a `turn-quality` one is copied to the turn whose event it is, and may say that its run could not.
 pub fn scored(app: &Shared, event: i64, eval: &str, score: Option<f64>) {
     let Some(score) = score.filter(|_| eval == EVAL) else {
         return;
@@ -56,6 +72,7 @@ pub fn scored(app: &Shared, event: i64, eval: &str, score: Option<f64>) {
     });
     ids.into_iter()
         .for_each(|id| app.emit("turn", json!({"id": id, "score": score})));
+    super::could_not::check(app, event);
 }
 
 /// A turn row kept after its judge already answered (the judge runs as soon as the event is emitted): its score from `scores`.
@@ -67,4 +84,5 @@ pub(super) fn catch_up(app: &Shared, id: i64, event: Option<i64>) {
         "UPDATE turns SET score = (SELECT score FROM scores WHERE event = ?1 AND eval = ?2 AND score IS NOT NULL ORDER BY id DESC LIMIT 1) WHERE id = ?3 AND score IS NULL",
         params![event, EVAL, id],
     );
+    super::could_not::check(app, event);
 }
