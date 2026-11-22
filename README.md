@@ -35,7 +35,7 @@ end with code, and puts a model in the loop only where judgment is needed.
 
 - **Plan-driven.** Each project's plan is a markdown checklist (`docs/TODO.md`: `## N. Title` steps,
   `- [ ] item` lines, optionally `(check: \`cmd\`)`). Tirith is its only writer; agents add items with
-  `tirith plan add`.
+  `tirith plan add` and steps with `tirith plan step`.
 - **Autopilot.** Code starts the open items of a project's current step (the first step with open work; steps
   run in order, the items of a step in parallel), as far as the machine has room: the load per core, the merge
   backlog, free disk and an intact commit guard. There is no cap on lanes at once unless `[limits] max_parallel`
@@ -105,6 +105,7 @@ One resident process, `tirith serve`, holds the state in memory and in one SQLit
 ```
 tirith serve | status [--project P]
 tirith plan show <project> | plan add <project> <step> "<text>"
+tirith plan step <project> <number> "<title>" ["<intro paragraph>"]   create the plan's next step, at its end
 tirith lane start <project> <step> "<item>" [--agent <alias>] | lane stop <lane> | lane log <lane>
 tirith autopilot on|off <project>
 tirith project add <folder> [--name N] [--color #rrggbb]   add a folder as a project (the + next to Projects does the same)

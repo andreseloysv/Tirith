@@ -46,6 +46,11 @@ fn read_line(steps: &mut Vec<Step>, i: usize, line: &str) {
     }
 }
 
+/// Whether the parser reads `line` as a heading or an item, and not as a step's prose.
+pub(super) fn is_structure(line: &str) -> bool {
+    line.starts_with("## ") || checkbox(line).is_some()
+}
+
 /// The step a heading starts; one without a number is no step (it is dropped).
 fn heading(head: &str, i: usize) -> Step {
     let (num, title) = head

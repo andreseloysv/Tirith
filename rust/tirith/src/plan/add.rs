@@ -23,7 +23,7 @@ fn refused(app: &Shared, project: &str, text: &str) -> Option<String> {
 }
 
 /// A forbidden word of the project's commit guard would make the plan uncommittable and block every merge.
-fn forbidden(app: &Shared, project: &str, text: &str) -> Option<String> {
+pub(super) fn forbidden(app: &Shared, project: &str, text: &str) -> Option<String> {
     let hit = app
         .cfg()
         .project(project)

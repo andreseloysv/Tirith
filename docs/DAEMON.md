@@ -146,7 +146,7 @@ Files:
 - `hook.rs`: `tirith hook`: the command-hook bridge for agents without HTTP hooks.
 - `hooks.rs`: `tirith hooks install`: the agent's command hooks become HTTP hooks on the daemon.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
-- `plan.rs`: `tirith plan show`: each step with its open items and their lanes.
+- `plan.rs`: `tirith plan show` (each step with its open items and their lanes) and `tirith plan step`.
 - `serve.rs`: `tirith serve`: the daemon.
 - `status.rs`: `tirith status`: the lanes working now and the last ones that ended.
 
@@ -633,7 +633,7 @@ Files:
 
 ## `plan/`
 
-The plan: the project's markdown checklist (`## N. Title` steps, `- [ ] item` lines). Its content changes (new item, ticked item) are written to the file at once and committed in batches; which lane works on an item lives in the
+The plan: the project's markdown checklist (`## N. Title` steps, `- [ ] item` lines). Its content changes (new step, new item, ticked item) are written to the file at once and committed in batches; which lane works on an item lives in the
 daemon, not in the file. The daemon is the only writer. An item may carry its own check: `- [ ] Text (check: `cmd`)`; the merge queue runs it, and ticks a merged item in the merge commit itself.
 
 Files:
@@ -646,6 +646,7 @@ Files:
 - `lookup.rs`: Finding a project's plan and its items.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `parse.rs`: Reading a plan's markdown into its steps and items.
+- `step.rs`: Creating the plan's next step.
 
 ## `projects/`
 
@@ -820,7 +821,7 @@ Files:
 - `hook_rules.rs`: A tool call that breaks a rule is refused before it runs.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `origin.rs`: The same-origin guard in front of every route.
-- `plan.rs`: A project's plan as the page shows it: each item with its newest lane.
+- `plan.rs`: A project's plan as the page shows it (each item with its newest lane), and the step a command adds to it.
 - `router.rs`: The whole router: every module's routes, the daemon's own, the page and the same-origin guard.
 - `routes/lanes.rs`: A lane's routes: start, stop, delete, its log, its question and its answer.
 - `routes/mod.rs`: Declares the folder's files and re-exports what other modules use.
