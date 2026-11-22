@@ -76,7 +76,10 @@ tirith service status | restart | logs | uninstall
   leaves `~/.tirith` as it is.
 - **Known limits.** Copilot cannot be replayed by the bots' lab (its sign-in host would let a replay write to
   GitHub): its experiments run live or in shadow. GitHub's Copilot CLI 1.0.114 does not run on Alpine arm64 (its
-  x86_64 build does). A Muse sign-in made on a Mac lives in its keychain: sign in again on the server.
+  x86_64 build does). A Muse sign-in made on a Mac lives in its keychain: sign in again on the server. On a Mac,
+  Codex started by one of your agents cannot use its own sandbox inside Tirith's: started as `codex exec` or
+  `codex review`, by that bare name, Tirith keeps the limit it asked for; by an absolute path it fails, and its
+  other subcommands run no commands there (docs/DAEMON.md, `sandbox/nested/`).
 
 ## What it does
 

@@ -259,8 +259,8 @@ Files:
 - `timed.rs`: Everything that has a time of day: the bots' routines and the turn roles' scheduled passes.
 - `told.rs`: Whose words an answer holds: what it quotes, and what it tells of someone's, are theirs. What it tells of its own tool or helper is its own.
 - `unjudged.rs`: A good run that no judge will read any more: code's plain words decide, as when a judge gave no verdict; and whether an experiment's run still waits for its judge, before the experiment is decided.
-- `verdict.rs`: Whether a routine's turn did what it was started for, as far as code is certain: its agent ended well, it did not say in plain words that it could not, no tool's error proves it could not, and a «∅» comes from having looked.
-- `watch.rs`: The scheduler's tick: Tirith says it is alive, what was missed is written down, and what takes too long is ended.
+- `verdict.rs`: Whether a routine's turn did what it was started for, as far as code is certain: its agent ended well, no «✗», no tool's error proves it could not, and a «∅» says no "could not" on its line and comes from having looked.
+- `watch.rs`: The scheduler's tick: Tirith says it is alive, what was missed is written down, what takes too long is ended, news that waited too long for a judge go out, and a run no judge will read is looked at by code.
 - `words.rs`: Times, days and texts as the owner reads them in one line.
 
 ## `factory/`
@@ -963,7 +963,7 @@ Files:
 - `token.rs`: The proxy passwords: each derives from a random secret kept in the daemon's database.
 - `tunnel.rs`: `tirith net tunnel <host> <port>`: stdin/stdout through the proxy (ssh's ProxyCommand inside the sandbox).
 - `wrap.rs`: Putting a process Tirith starts inside the sandbox.
-- `wrappers.rs`: The wrappers in `<home>/net/bin` that turn off the inner sandbox of tools that start their own.
+- `wrappers.rs`: The wrappers in `<home>/net/bin` that turn off the inner sandbox of tools that start their own (on macOS Codex's is `sandbox/nested/`).
 
 ## `sandbox/linux/`
 
@@ -999,6 +999,8 @@ What differs from Codex by itself on macOS: its commands get nothing of Tirith b
 that are programs run under the commands' limit; its other subcommands that run commands do not get a sandbox there, and the caller
 is told; started by its whole path, so round the wrapper, it fails loudly; one message between the two parts holds 16 MiB at most.
 It leans on the exec-server of Codex 0.165: a Codex without it is refused a limit, and says so.
+With danger-full-access there is no limit to keep: it runs under Tirith's profile alone. A permission profile or an
+administrator's managed settings count as read-only, and a limited Codex's tool calls leave no `access` events.
 
 Files:
 

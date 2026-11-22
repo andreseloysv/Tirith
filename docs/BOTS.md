@@ -75,6 +75,19 @@ table `turns` (`runs` is the pipelines'):
   judge's grade of the answer, eval `turn-quality` on the new event `turn.done`, with the skill's «Cómo validar» as
   its rubric; `sample` in the factory keeps it cheap), `cited` (the memory notes the answer cites, below).
 - **Stamps:** `factory` and `role_hash`, as every other table.
+- **Every scheduled run:** a routine's run, and a turn role's scheduled pass (the CEO's, the Coach's), is written
+  down when it is due (table `expected_runs`), before anything starts, and ends as one row here, also when it never
+  started (Tirith was stopped, the machine slept, no agent could start). One that failed, was lost or could not has
+  `status` `failed` and `why`. The owner gets one line of it, written by code, so it needs no agent and no quota: in
+  that chat and on the paired phones, once, kept until it is sent.
+- **«∅» and «✗»:** «∅» means "I looked and nothing is new", never "I could not", which is «✗». Code fails what is
+  certain (the agent's own failure, «✗», a «∅» that says it could not or never looked, a tool's error that proves
+  it). The judge of `turn-quality` reads every other wording and starts its why with `could not:`; where no judge
+  gives a score, plain words decide. So a good run's news wait for the judge, three minutes at most, and a failure
+  it finds is that one line and no news.
+- **A missed time:** `catch_up = "once"` (the default) runs the latest time missed, one run, and says that it is
+  late; with "skip" a time is lost five minutes after it, and is a failed row. A run that a stop of Tirith cut is
+  failed and not done again (it may have acted); one that had not started is handed again.
 
 Memory notes are numbered: each note of a `memory.md` is one line `- [m<N>] …`, and an answer that used a note
 cites it as `[m<N>]` (the bot prompt says so; Tirith numbers unnumbered lines when it hands the memory over).
@@ -82,7 +95,8 @@ cites it as `[m<N>]` (the bot prompt says so; Tirith numbers unnumbered lines wh
 What the bot's screen shows, in a tab «Números» (`GET /api/bots/<id>/numbers`):
 
 - **Per routine:** cost per good run (total cost over `ok` runs), mean time, success rate, 👎 and corrections per 10
-  runs, and the trend (the last 10 runs against the 10 before).
+  runs, and the trend (the last 10 runs against the 10 before). A run that never started, or that a restart cut, is a
+  failure in the success rate and for `routine.worse`, and has no time, tokens or cost to compare.
 - **Per skill:** how often it is used, how often its validation passes, and the tokens it saves: the mean tokens of
   that routine's runs before the skill's first use against after.
 - **Memory:** what loading it costs per turn (characters / 4, in tokens), how often each note is cited, the notes no
