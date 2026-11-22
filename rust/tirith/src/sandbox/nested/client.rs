@@ -1,5 +1,5 @@
 //! `codex` inside Tirith's sandbox (the wrapper of `<home>/net/bin`): its limit is read and the daemon is asked to apply it.
-use super::{ask::ask, asked, program::whole, settings, WORD};
+use super::{ask::ask, asked, other, program, settings, ROLE, WORD};
 use crate::sandbox::mac;
 use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
@@ -9,26 +9,25 @@ pub fn launcher(args: &[String]) -> Option<i32> {
     let [word, program, rest @ ..] = args else {
         return None;
     };
-    (word == WORD).then(|| run(program, rest))
+    (word == WORD || word == ROLE).then(|| run(program, rest, word == ROLE))
 }
 
-/// `argv` of a Codex Tirith starts inside its sandbox, through this client.
+/// `argv` of a Codex that Tirith starts for a read-only role inside its sandbox, through this client.
 pub fn inside(argv: &mut Vec<String>) {
     if let Some(exe) = crate::app::exe() {
-        argv.splice(0..0, [exe.display().to_string(), WORD.to_string()]);
+        argv.splice(0..0, [exe.display().to_string(), ROLE.to_string()]);
     }
 }
 
-fn run(program: &str, args: &[String]) -> i32 {
+fn run(program: &str, args: &[String], role: bool) -> i32 {
     let said = |why: String| {
-        eprintln!("tirith: {why}");
+        eprintln!("tirith: Codex could not be started with its limit: {why}");
         71
     };
     let as_it_is = || {
-        said(format!(
-            "cannot start {program}: {}",
-            std::process::Command::new(program).args(args).exec()
-        ))
+        let e = std::process::Command::new(program).args(args).exec();
+        eprintln!("tirith: cannot start {program}: {e}");
+        71
     };
     // SAFETY: getpid only reads this process's own id.
     let me = unsafe { libc::getpid() };
@@ -36,6 +35,11 @@ fn run(program: &str, args: &[String]) -> i32 {
         return as_it_is(); // outside, Codex's own sandbox works
     }
     let Some(asked) = asked::read(args) else {
+        match other::said(args) {
+            Some((why, true)) => return said(why),
+            Some((note, false)) => eprintln!("tirith: {note}"),
+            None => {}
+        }
         return as_it_is();
     };
     let Ok(cwd) = std::env::current_dir() else {
@@ -49,6 +53,7 @@ fn run(program: &str, args: &[String]) -> i32 {
         cwd: &cwd,
         home: &cwd.join(home),
         tmp: tmp.as_deref(),
+        role,
     };
     let (mut request, note) = match settings::limit(&asked, &at) {
         Ok(Some(limited)) => limited,
@@ -58,14 +63,19 @@ fn run(program: &str, args: &[String]) -> i32 {
     if mac::tighter(me) {
         return said("a Codex already under a limit starts no other Codex".into());
     }
-    let Some(program) = whole(program, &cwd) else {
+    let Some(found) = program::whole(program, &cwd) else {
         return said(format!("no {program} on PATH"));
     };
-    request.program = program.display().to_string();
+    let Some(binary) = program::native(&found) else {
+        return said(format!(
+            "{} is a script and Codex's own binary is not beside it: put that binary first on PATH",
+            found.display()
+        ));
+    };
+    request.program = binary.display().to_string();
     request.env = std::env::vars_os()
         .filter_map(|(k, v)| Some((k.into_string().ok()?, v.into_string().ok()?)))
         .collect();
-    eprintln!("tirith: Codex's own sandbox cannot start inside Tirith's on macOS: {note}");
-    ask(&request)
-        .unwrap_or_else(|why| said(format!("Codex could not be started with its limit: {why}")))
+    eprintln!("tirith: {note}");
+    ask(&request).unwrap_or_else(said)
 }

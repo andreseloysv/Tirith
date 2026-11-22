@@ -1,6 +1,6 @@
-//! The client's talk with the broker: its own stdio and the request, then the exit code of what ran.
+//! The client's talk with the broker: its own stdio and the request, then the exit code of what ran. Nothing is handed to a socket a confined process put in the daemon's place: what is handed holds the caller's environment.
 use super::{place, Request};
-use crate::sandbox::handover;
+use crate::sandbox::{handover, mac};
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
 
@@ -8,7 +8,10 @@ pub(super) fn ask(request: &Request) -> Result<i32, String> {
     let path = place::socket(&crate::config::tirith_home()).ok_or("no folder for its socket")?;
     let mut s =
         UnixStream::connect(&path).map_err(|e| format!("Tirith's daemon does not answer ({e})"))?;
-    place::peer(&s).ok_or("that socket is not this user's")?;
+    let server = place::peer(&s).ok_or("that socket is not this user's")?;
+    if mac::ours(server) {
+        return Err("what holds the socket is not Tirith's daemon (it is confined itself)".into());
+    }
     handover::send(&s, &[0, 1, 2])?;
     let line = serde_json::to_string(request).map_err(|e| e.to_string())? + "\n";
     s.write_all(line.as_bytes()).map_err(|e| e.to_string())?;

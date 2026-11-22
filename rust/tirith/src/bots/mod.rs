@@ -48,7 +48,9 @@ pub use migrate::start;
 pub use run::tick;
 #[cfg(test)]
 pub(crate) use run::tick_at;
-pub use schedule::{due, owed, past};
+#[cfg(test)]
+pub use schedule::due;
+pub use schedule::{owed, past};
 #[cfg(test)]
 pub use tuning::read as tuning_of;
 pub use tuning::FILE as TUNING;

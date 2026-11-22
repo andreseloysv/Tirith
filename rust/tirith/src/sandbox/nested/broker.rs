@@ -1,7 +1,7 @@
-//! The daemon's side: it starts what a confined caller asks under a profile at least as tight as the caller's, waits, and gives its exit code. A caller that is gone takes it along.
-use super::{place, spawn::spawn, Request};
+//! The daemon's side: it starts what a caller under Tirith's own profile asks, under one at least as tight, waits, and gives its exit code. Anyone else gets nothing: it is no way out of another sandbox. A caller that is gone takes it along.
+use super::{around::around, place, spawn::spawn, Request};
 use crate::app::{kill_group, Shared};
-use crate::sandbox::{handover, mac, profile::proxy_port};
+use crate::sandbox::{handover, mac};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::os::fd::{FromRawFd, OwnedFd};
 use std::os::unix::fs::PermissionsExt;
@@ -63,23 +63,19 @@ fn answer(app: &Shared, caller: &UnixStream) -> Result<i32, String> {
         .into_iter()
         .map(|fd| unsafe { OwnedFd::from_raw_fd(fd) })
         .collect();
-    if mac::tighter(pid) {
-        return Err("what runs under a limit gets no other one".into());
+    if !mac::ours(pid) || mac::tighter(pid) {
+        return Err("only what runs under Tirith's own profile asks for a limit in it".into());
     }
     let mut line = String::new();
     BufReader::new(caller.take(MOST))
         .read_line(&mut line)
         .map_err(|e| e.to_string())?;
-    let r: Request = serde_json::from_str(&line).map_err(|e| e.to_string())?;
+    let asked: Request = serde_json::from_str(&line).map_err(|e| e.to_string())?;
     let io: [OwnedFd; 3] = io
         .try_into()
         .map_err(|_| "its stdin, stdout and stderr are missing")?;
-    let cfg = app.cfg();
-    let mut ports = vec![cfg.port, proxy_port(app)];
-    ports.extend(
-        crate::config::get::<Vec<u16>>(&cfg.raw, &["network", "loopback"]).unwrap_or_default(),
-    );
-    let mut child = spawn(&r, &ports, io)?;
+    let (r, around) = around(app, asked)?;
+    let mut child = spawn(&r, &around, io)?;
     let _ = caller.set_nonblocking(true);
     loop {
         if let Some(status) = child.try_wait().map_err(|e| e.to_string())? {

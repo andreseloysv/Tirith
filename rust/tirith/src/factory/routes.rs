@@ -18,6 +18,7 @@ fn count(v: &toml::Value) -> Option<u64> {
 
 impl Factory {
     /// Every `schedule` route that names a time of day: (to, at, days, catch_up). A bot's routines are fired from config.toml by bots.rs; one of the factory's own (the CEO's daily pass) by whoever runs its role.
+    #[cfg(test)]
     pub fn schedules(&self) -> Vec<Schedule> {
         self.timed(|_| true)
     }

@@ -13,16 +13,25 @@ const NO_NET: [&str; 7] = [
     "GRADLE_OPTS",
 ];
 const BYPASS: &str = "--dangerously-bypass-approvals-and-sandbox";
+/// With its sandbox off there Codex would tell its model that it has full access.
+const UNTOLD: &str = "include_permissions_instructions=false";
+/// Settings of an administrator's, which are not read here.
+const MANAGED: [&str; 2] = [
+    "/etc/codex/managed_config.toml",
+    "/etc/codex/requirements.toml",
+];
 
 /// Where Codex runs: its folder, its home and the caller's TMPDIR.
 pub(super) struct Where<'a> {
     pub cwd: &'a Path,
     pub home: &'a Path,
     pub tmp: Option<&'a Path>,
+    /// Tirith's own read-only role.
+    pub role: bool,
 }
 
 /// The request for the daemon, with what is said about it; none for full access, which asks for no limit.
-pub(super) fn limit(a: &Asked, at: &Where) -> Result<Option<(Request, &'static str)>, String> {
+pub(super) fn limit(a: &Asked, at: &Where) -> Result<Option<(Request, String)>, String> {
     let dir =
         a.cd.as_deref()
             .map_or(at.cwd.to_path_buf(), |d| at.cwd.join(d));
@@ -31,8 +40,9 @@ pub(super) fn limit(a: &Asked, at: &Where) -> Result<Option<(Request, &'static s
         set.get("sandbox_mode")
             .and_then(|v| Mode::named(v.as_str()?))
     };
-    // a permission profile cannot be read here: the strictest limit, never a looser one
-    let unread = a.mode.is_none() && (a.permissions || set.get("default_permissions").is_some());
+    // a permission profile or an administrator's settings are not read here: the strictest limit, never a looser one
+    let unread = MANAGED.iter().any(|f| Path::new(f).exists())
+        || a.mode.is_none() && (a.permissions || set.get("default_permissions").is_some());
     let default = if set.known_project {
         Mode::Write
     } else {
@@ -51,7 +61,7 @@ pub(super) fn limit(a: &Asked, at: &Where) -> Result<Option<(Request, &'static s
     }
     let write = mode == Mode::Write;
     let net = write && set.is("sandbox_workspace_write.network_access");
-    let mut args = vec![BYPASS.to_string()];
+    let mut args = [BYPASS, "-c", UNTOLD].map(String::from).to_vec();
     for name in NO_NET.iter().filter(|_| !net) {
         args.extend([
             "-c".into(),
@@ -76,7 +86,9 @@ pub(super) fn limit(a: &Asked, at: &Where) -> Result<Option<(Request, &'static s
             .map(|o| at.cwd.join(o).display().to_string())
             .unwrap_or_default(),
         net,
+        agent: at.role,
         ..Request::default()
     };
-    Ok(Some((request, said(mode, net, unread))))
+    let note = said(mode, net, unread, at.role, &set.stdio());
+    Ok(Some((request, note)))
 }
