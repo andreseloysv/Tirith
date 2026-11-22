@@ -16,13 +16,14 @@ pub(super) async fn daemon(app: &crate::app::Shared) -> (String, String, u16) {
         .unwrap();
     let port = listener.local_addr().unwrap().port();
     let app2 = app.clone();
+    crate::server::testing::serving(port, app);
     tokio::spawn(
         async move { drop(axum::serve(listener, crate::server::router(app2, port)).await) },
     );
     (id.clone(), format!("bot-{id}"), port)
 }
 
-/// A call to the teach API: `origin` and `token` as the extension sends them (empty: not sent).
+/// A call to the teach API: `origin` and `token` as the extension sends them (empty: not sent); with no origin, the page's as the owner.
 pub(super) async fn call(
     port: u16,
     method: &str,
@@ -37,7 +38,10 @@ pub(super) async fn call(
         .request(method.parse().unwrap(), url)
         .header("host", "127.0.0.1");
     req = if origin.is_empty() {
-        req
+        req.header(
+            crate::server::testing::HEADER,
+            crate::server::testing::owner(port),
+        )
     } else {
         req.header("origin", origin)
     };

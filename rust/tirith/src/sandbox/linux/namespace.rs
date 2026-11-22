@@ -1,17 +1,33 @@
-//! A network of one's own: a user and a network namespace with only a loopback, reached by nothing and reaching nothing.
+//! A network of one's own: a user and a network namespace with only a loopback, reached by nothing and reaching nothing; and mounts of one's own (`hide.rs`).
 use std::io::{Error, Write};
 
 /// Moves this process (it must have one thread) into new namespaces, as the same user and group, its loopback up.
 pub(super) fn enter() -> Result<(), String> {
     let (uid, gid) = unsafe { (libc::geteuid(), libc::getegid()) };
-    let flags = libc::CLONE_NEWUSER | libc::CLONE_NEWNET;
+    let flags = libc::CLONE_NEWUSER | libc::CLONE_NEWNET | libc::CLONE_NEWNS;
     if unsafe { libc::unshare(flags) } != 0 {
         return Err(failed("unshare"));
     }
+    mapped(uid, gid)?;
+    loopback_up()
+}
+
+/// root keeps its powers over its own mounts, so it goes one namespace further in, where they are locked.
+pub(super) fn locked() -> Result<(), String> {
+    let (uid, gid) = unsafe { (libc::geteuid(), libc::getegid()) };
+    if uid != 0 {
+        return Ok(()); // it loses them as the program starts
+    }
+    if unsafe { libc::unshare(libc::CLONE_NEWUSER | libc::CLONE_NEWNS) } != 0 {
+        return Err(failed("unshare"));
+    }
+    mapped(uid, gid)
+}
+
+fn mapped(uid: u32, gid: u32) -> Result<(), String> {
     write("/proc/self/setgroups", "deny")?;
     write("/proc/self/uid_map", &format!("{uid} {uid} 1"))?;
-    write("/proc/self/gid_map", &format!("{gid} {gid} 1"))?;
-    loopback_up()
+    write("/proc/self/gid_map", &format!("{gid} {gid} 1"))
 }
 
 fn failed(what: &str) -> String {

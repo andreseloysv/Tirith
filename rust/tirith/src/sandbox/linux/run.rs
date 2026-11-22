@@ -6,7 +6,7 @@ use std::os::fd::FromRawFd;
 use std::os::unix::net::UnixStream;
 
 /// Runs `program` in a network of its own in which only `ports` lead out, to the same ports of this machine's loopback; its exit code.
-pub(super) fn run(ports: &[u16], program: &[String]) -> i32 {
+pub(super) fn run(ports: &[u16], hidden: &[String], program: &[String]) -> i32 {
     if ports.len() > handover::MOST {
         return said(&format!("at most {} ports lead out", handover::MOST));
     }
@@ -21,7 +21,7 @@ pub(super) fn run(ports: &[u16], program: &[String]) -> i32 {
     }
     if pid == 0 {
         drop(ours);
-        child(theirs, ports, program, me);
+        child(theirs, ports, hidden, program, me);
     }
     drop(theirs);
     supervise::follow(pid);

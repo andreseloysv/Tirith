@@ -14,12 +14,8 @@ async fn who(State(app): State<Shared>) -> R {
     ))
 }
 
-async fn check(
-    State(app): State<Shared>,
-    Path(alias): Path<String>,
-    h: axum::http::HeaderMap,
-) -> R {
-    (!crate::server::agent(&h))
+async fn check(State(app): State<Shared>, Path(alias): Path<String>, who: crate::server::Who) -> R {
+    (!who.is_agent())
         .then_some(())
         .ok_or_else(|| bad("connecting agents is the owner's, not an agent's".into()))?;
     prove(&app, &alias).await.map(Json).map_err(bad)

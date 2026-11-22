@@ -19,6 +19,8 @@ pub(super) struct Around {
     pub doors: Doors,
     /// What nobody in there writes: the broker's socket, Tirith's program, its wrappers and its settings.
     pub kept: Vec<String>,
+    /// What nobody in there reads either (`app/keys.rs`).
+    pub hidden: Vec<std::path::PathBuf>,
 }
 
 /// The profile's text and its parameters.
@@ -34,6 +36,9 @@ pub(super) fn profile(r: &Request, around: &Around, part: Part) -> (String, Vec<
     // last, so nothing above gives them back
     for name in ["app.tirith.outside", TIGHTER] {
         sb.line(&format!("(deny mach-lookup (global-name \"{name}\"))"));
+    }
+    for rule in super::super::hidden::rules(&around.hidden).lines() {
+        sb.line(rule);
     }
     sb.done()
 }

@@ -50,10 +50,7 @@ pub fn cli(pos: &[&str], flag: Flag) -> Option<Result<(), String>> {
     };
     let id = conv.strip_prefix("bot-").unwrap_or(&conv).to_string();
     let sent = request(rest).and_then(|(path, body)| {
-        let who = [(
-            "X-Tirith-Role",
-            std::env::var("TIRITH_ROLE").unwrap_or_default(),
-        )];
+        let who = crate::client::caller();
         let path = format!("/api/teach/{id}/{path}");
         call_with(
             "POST",

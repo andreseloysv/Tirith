@@ -1,4 +1,4 @@
-//! The owner's routes, which refuse every agent themselves too (besides `server/caller.rs`): a value comes in, and only names go out.
+//! The owner's routes, which refuse whoever is not the owner themselves too (besides `server/scope.rs`): a value comes in, and only names go out.
 use super::store::Store;
 use crate::app::{bad, Shared, R};
 use axum::extract::{Path, Request, State};
@@ -23,7 +23,8 @@ pub fn routes() -> Router<Shared> {
 
 /// Here as well as in the server's list: a list that lost these routes would give them to every agent.
 async fn owner_only(req: Request, next: Next) -> Response {
-    if crate::server::agent(req.headers()) {
+    let who = req.extensions().get::<crate::server::Who>();
+    if !matches!(who, Some(crate::server::Who::Owner)) {
         return (
             StatusCode::FORBIDDEN,
             "a bot's secrets are the owner's alone",

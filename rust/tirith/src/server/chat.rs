@@ -3,11 +3,10 @@ use super::s;
 use crate::app::{bad, Shared, R};
 use crate::{attach, manager};
 use axum::extract::State;
-use axum::http::HeaderMap;
 use axum::Json;
 use serde_json::{json, Value};
 
-pub(super) async fn chat(State(app): State<Shared>, headers: HeaderMap, Json(b): Json<Value>) -> R {
+pub(super) async fn chat(State(app): State<Shared>, who: super::Who, Json(b): Json<Value>) -> R {
     let text = s(&b, "text")
         + &attach::describe(
             &b["attachments"]
@@ -20,8 +19,7 @@ pub(super) async fn chat(State(app): State<Shared>, headers: HeaderMap, Json(b):
     (!text.trim().is_empty())
         .then_some(())
         .ok_or_else(|| bad("empty message".into()))?;
-    let agent = super::agent_name(&headers);
-    manager::say(&app, &s(&b, "project"), &text, agent)
+    manager::say(&app, &s(&b, "project"), &text, who.name())
         .map(|_| Json(json!({"ok": true})))
         .map_err(bad)
 }

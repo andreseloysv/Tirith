@@ -16,7 +16,7 @@ pub async fn handle(app: Shared, mut c: TcpStream) -> Result<(), String> {
     };
     let head = String::from_utf8_lossy(&buf[..end]).to_string();
     let req = Request::parse(&head);
-    let Some(who) = caller(&req.headers) else {
+    let Some(who) = caller(&app, &req.headers) else {
         return answer(
             &mut c,
             "407 Proxy Authentication Required",

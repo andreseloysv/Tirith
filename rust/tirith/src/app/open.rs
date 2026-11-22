@@ -1,5 +1,5 @@
 //! Opening the shared state at a Tirith home: its folders, its database and the lanes it kept.
-use super::{migrate::migrate, state::Seen, App, Lane, Shared};
+use super::{migrate::migrate, state::Seen, App, Keys, Lane, Shared};
 use crate::config::Config;
 use rusqlite::Connection;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -12,6 +12,7 @@ impl App {
         make_folders(&home);
         let db = open_db(&home);
         let lanes = load_lanes(&db);
+        let keys = Keys::open(&home, &db);
         let cfg_mtime = std::fs::metadata(home.join("config.toml"))
             .and_then(|m| m.modified())
             .ok();
@@ -19,6 +20,7 @@ impl App {
         let cfg_mtime = (cfg_mtime, crate::factory::stamp(&cfg.raw));
         Arc::new(App {
             home,
+            keys,
             started: super::now_s(),
             cfg: RwLock::new(cfg.clone()),
             db: Mutex::new(db),

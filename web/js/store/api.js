@@ -9,7 +9,7 @@ export async function api(method, path, body) {
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const text = await r.text();
-  if (!r.ok) throw new Error(text || r.statusText);
+  if (!r.ok) throw Object.assign(new Error(text || r.statusText), { status: r.status });
   try { return JSON.parse(text); } catch { return text; }
 }
 

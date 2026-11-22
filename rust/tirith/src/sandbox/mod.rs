@@ -8,6 +8,8 @@ mod env;
 mod git;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 mod handover;
+#[cfg(any(test, not(target_os = "linux")))]
+mod hidden;
 mod jvm;
 mod launch;
 #[cfg(target_os = "linux")]
@@ -43,6 +45,9 @@ pub use replay::closes_network;
 pub use routes::routes;
 pub use start::start;
 pub use tags::tags;
+#[cfg(test)]
+pub use token::issued;
+pub use token::who_of;
 pub use wrap::wrap;
 
 #[cfg(test)]

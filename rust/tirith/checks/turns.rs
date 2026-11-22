@@ -216,7 +216,7 @@ async fn http(port: u16, method: &str, path: &str, body: &str) -> (String, Strin
     let mut s = tokio::net::TcpStream::connect(("127.0.0.1", port))
         .await
         .unwrap();
-    s.write_all(format!("{method} {path} HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).as_bytes()).await.unwrap();
+    s.write_all(format!("{method} {path} HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: {}\r\nX-Tirith-Token: {}\r\nConnection: close\r\n\r\n{body}", body.len(), crate::server::testing::owner(port)).as_bytes()).await.unwrap();
     let mut out = String::new();
     s.read_to_string(&mut out).await.unwrap();
     let (head, body) = out.split_once("\r\n\r\n").unwrap_or((&out, ""));
@@ -232,6 +232,7 @@ async fn serve(app: &crate::app::Shared) -> u16 {
         .await
         .unwrap();
     let port = listener.local_addr().unwrap().port();
+    crate::server::testing::serving(port, app);
     let app = app.clone();
     tokio::spawn(
         async move { drop(axum::serve(listener, crate::server::router(app, port)).await) },

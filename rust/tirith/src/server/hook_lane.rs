@@ -1,18 +1,18 @@
 //! What a hook call is about: its lane and project, its tool call under the rules' names, and its summary.
 use super::{
-    hook::header,
     hook_find::{lane_at, project_of},
     s,
+    who::Agent,
 };
 use crate::app::{now_s, Lane, Shared};
 use crate::config::Project;
 use crate::{rules, sandbox};
-use axum::http::HeaderMap;
 use serde_json::{json, Value};
 
 pub(super) struct Call {
     pub cwd: String,
     pub lane: Option<Lane>,
+    pub role: Option<String>,
     pub project: Option<Project>,
     /// The tool's name as the agent used it.
     pub tool: String,
@@ -26,11 +26,16 @@ pub(super) struct Call {
 }
 
 impl Call {
-    pub fn read(app: &Shared, event: &str, headers: &HeaderMap, p: &Value) -> Call {
+    pub fn read(app: &Shared, event: &str, agent: Option<&Agent>, p: &Value) -> Call {
         let cwd = s(p, "cwd");
-        let lane = header(headers, "x-tirith-lane")
-            .and_then(|id| app.lane(&id))
-            .or_else(|| lane_at(app, &cwd));
+        // A token alone says who it is; without one the folder only says which refusals hold there.
+        let (lane, role) = match agent {
+            Some(a) => (
+                app.lane(&a.lane),
+                Some(a.role.clone()).filter(|r| !r.is_empty()),
+            ),
+            None => (lane_at(app, &cwd), rules::role_at(app, &cwd)),
+        };
         let project = project_of(app, lane.as_ref(), &cwd);
         let tool = s(p, "tool_name");
         let session = s(p, "session_id");
@@ -46,6 +51,7 @@ impl Call {
         Call {
             cwd,
             lane,
+            role,
             project,
             tool,
             session,

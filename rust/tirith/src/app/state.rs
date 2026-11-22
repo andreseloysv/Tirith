@@ -11,6 +11,8 @@ pub type Shared = Arc<App>;
 
 pub struct App {
     pub home: PathBuf,
+    /// What proves who calls.
+    pub keys: crate::app::Keys,
     /// When this daemon started, in seconds since the epoch (an `Instant` stands still while the Mac sleeps).
     pub started: u64,
     pub cfg: RwLock<Arc<Config>>,

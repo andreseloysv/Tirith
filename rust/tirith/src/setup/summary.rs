@@ -31,7 +31,7 @@ fn open(port: u16) {
     let remote =
         ssh.is_some() || (cfg!(target_os = "linux") && std::env::var_os("DISPLAY").is_none());
     if !remote {
-        println!("\nOpen {page}");
+        println!("\nOpen it:  tirith open   ({page})");
         return;
     }
     let at = ssh
@@ -47,6 +47,6 @@ fn open(port: u16) {
         .unwrap_or_else(|| "you".into());
     println!("\nOn your own computer (the page never listens on the network):");
     println!("  ssh -N -L {port}:127.0.0.1:{port} {user}@{at}");
-    println!("  then open {page}");
+    println!("  then here: tirith open link, and open what it prints in that browser ({page}, once signed in)");
     println!("  (the port is the same at both ends; taken there, by a Tirith of that computer say: tirith setup --server --port {})", port.wrapping_add(84).max(1024));
 }

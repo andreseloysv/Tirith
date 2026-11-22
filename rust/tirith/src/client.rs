@@ -1,5 +1,10 @@
 //! The CLI side: one HTTP/1.1 request to the daemon on 127.0.0.1 per command.
 
+mod ancestry;
+mod token;
+
+pub use token::{command as caller, hook as hook_caller, VAR};
+
 use serde_json::Value;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream};
@@ -8,23 +13,13 @@ use std::time::Duration;
 /// `flag("--name")`: the value after a `--name` argument.
 pub type Flag<'a> = &'a dyn Fn(&str) -> Option<String>;
 
-/// One request to the daemon; the body on 2xx, the daemon's message otherwise. Inside a Tirith session it names its lane or role, like the hooks do, so the daemon knows an agent (not the owner) is speaking.
+/// One request to the daemon; the body on 2xx, the daemon's message otherwise. It carries a token, and the daemon knows who is speaking by that alone: an agent's, else the owner's (`client/token.rs`).
 pub fn call(method: &str, path: &str, body: Option<Value>) -> Result<String, String> {
-    let who = [
-        (
-            "X-Tirith-Lane",
-            std::env::var("TIRITH_LANE").unwrap_or_default(),
-        ),
-        (
-            "X-Tirith-Role",
-            std::env::var("TIRITH_ROLE").unwrap_or_default(),
-        ),
-    ];
     call_with(
         method,
         path,
         body.map(|b| b.to_string()).unwrap_or_default(),
-        &who,
+        &caller(),
         Duration::from_secs(30),
     )
 }

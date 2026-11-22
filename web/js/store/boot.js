@@ -35,7 +35,8 @@ function openStream() {
 export async function boot() {
   try {
     await loadState();
-  } catch {
+  } catch (e) {
+    if (e.status === 403) { location.replace('/'); return; } // no longer signed in: the daemon says how to open it
     setTimeout(boot, 2000);
     return;
   }

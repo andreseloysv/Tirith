@@ -1,5 +1,5 @@
-//! The confined side: into its own network, its forwarded ports handed out, then the program.
-use super::{handover, namespace};
+//! The confined side: into its own network and mounts, its forwarded ports handed out, then the program.
+use super::{handover, hide, namespace};
 use std::io::Read;
 use std::net::{Ipv4Addr, TcpListener};
 use std::os::fd::AsRawFd;
@@ -9,8 +9,14 @@ use std::os::unix::{net::UnixStream, process::CommandExt};
 const REFUSED: i32 = 125;
 
 /// Runs in the forked child and never returns. With no program it is only the probe of whether this works.
-pub(super) fn child(mut link: UnixStream, ports: &[u16], program: &[String], parent: i32) -> ! {
-    if let Err(why) = prepare(&mut link, ports, parent) {
+pub(super) fn child(
+    mut link: UnixStream,
+    ports: &[u16],
+    hidden: &[String],
+    program: &[String],
+    parent: i32,
+) -> ! {
+    if let Err(why) = prepare(&mut link, (ports, hidden), parent) {
         eprintln!("tirith sandbox: {why}");
         std::process::exit(REFUSED);
     }
@@ -23,18 +29,24 @@ pub(super) fn child(mut link: UnixStream, ports: &[u16], program: &[String], par
     std::process::exit(127);
 }
 
-fn prepare(link: &mut UnixStream, ports: &[u16], parent: i32) -> Result<(), String> {
+fn prepare(
+    link: &mut UnixStream,
+    (ports, hidden): (&[u16], &[String]),
+    parent: i32,
+) -> Result<(), String> {
     namespace::enter()?;
-    // After the namespaces (changing them clears it): it never outlives the launcher, its only way out.
-    unsafe { libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL) };
-    (unsafe { libc::getppid() } == parent)
-        .then_some(())
-        .ok_or("the launcher is gone")?;
+    hide::hide(hidden)?;
     let inside = ports
         .iter()
         .map(|p| TcpListener::bind((Ipv4Addr::LOCALHOST, *p)).map_err(|e| format!("port {p}: {e}")))
         .collect::<Result<Vec<_>, _>>()?;
     let fds: Vec<_> = inside.iter().map(AsRawFd::as_raw_fd).collect();
+    namespace::locked()?;
+    // After the namespaces (changing them clears it): it never outlives the launcher, its only way out.
+    unsafe { libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL) };
+    (unsafe { libc::getppid() } == parent)
+        .then_some(())
+        .ok_or("the launcher is gone")?;
     handover::send(link, &fds)?;
     link.read_exact(&mut [0u8])
         .map_err(|e| format!("the launcher did not take the ports: {e}"))

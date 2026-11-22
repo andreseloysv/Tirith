@@ -148,7 +148,7 @@ fn home(tag: &str) -> crate::app::Shared {
     app
 }
 
-/// One `PreToolUse` hook call as the daemon gets it: with the caller's `X-Tirith-Role` and/or `X-Tirith-Lane` header (empty for none), from `cwd`, with the tool name and input the agent used.
+/// One `PreToolUse` hook call as the daemon gets it: with the token of the caller's role or lane (none of both: no token), from `cwd`, with the tool name and input the agent used.
 async fn pre(
     app: &crate::app::Shared,
     role: &str,
@@ -158,17 +158,22 @@ async fn pre(
     input: serde_json::Value,
 ) -> serde_json::Value {
     let mut headers = axum::http::HeaderMap::new();
-    for (k, v) in [("x-tirith-role", role), ("x-tirith-lane", lane)] {
-        if !v.is_empty() {
-            headers.insert(k, v.parse().unwrap());
-        }
+    let caller = if lane.is_empty() {
+        (!role.is_empty()).then(|| format!("{role}@"))
+    } else {
+        Some(lane.to_string())
+    };
+    if let Some(caller) = caller {
+        let token = super::testing::token(app, &caller);
+        headers.insert(super::testing::HEADER, token.parse().unwrap());
     }
+    let who = super::identify::agent(app, &headers).map_or(super::Who::Nobody, super::Who::Agent);
     let body =
         serde_json::json!({"cwd": cwd, "tool_name": tool, "session_id": "s1", "tool_input": input});
     hook(
         axum::extract::State(app.clone()),
         axum::extract::Path("PreToolUse".to_string()),
-        headers,
+        who,
         axum::body::Bytes::from(body.to_string()),
     )
     .await
@@ -204,7 +209,7 @@ async fn chat_roles_may_not_wait() {
             .unwrap_or("")
             .to_string()
     };
-    // A manager (a chat role, named by X-Tirith-Role and no lane) waiting inside its turn is refused, with the reason that says what to do instead.
+    // A manager (a chat role, named by its token and no lane) waiting inside its turn is refused, with the reason that says what to do instead.
     let long = pre_bash(&app, "manager", "", "sleep 30; tirith status").await;
     assert!(deny(&long), "a manager's sleep 30 is refused: {long}");
     assert_eq!(reason(&long), "no esperes dentro del turno: contesta y termina; Tirith te avisa cuando una lane entre, falle o pregunte");
@@ -291,7 +296,7 @@ async fn chat_roles_may_not_wait() {
             "a manager's `{cmd}` passes"
         );
     }
-    // A lane does not change: the same waiting commands from a lane (X-Tirith-Lane, no role) pass, allowed by the rules as before.
+    // A lane does not change: the same waiting commands from a lane (by a lane's token, no role) pass, allowed by the rules as before.
     app.save_lane(&crate::app::Lane {
         id: "lane-wait".into(),
         project: "p1".into(),

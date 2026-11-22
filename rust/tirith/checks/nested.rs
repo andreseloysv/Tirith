@@ -162,6 +162,7 @@ fn the_one_profile_only_takes_away() {
         ..r
     };
     let around = limits::Around {
+        hidden: vec![],
         doors: super::doors::Doors {
             main: 7717,
             rules: 7718,
@@ -262,6 +263,7 @@ fn what_runs_under_the_one_profile_is_still_an_agents() {
         ..Default::default()
     };
     let around = limits::Around {
+        hidden: vec![],
         doors: super::doors::Doors {
             main: 7717,
             rules: 7718,
@@ -429,6 +431,7 @@ fn only_codexs_own_process_reaches_this_machines_ports() {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port().to_string();
     let around = limits::Around {
+        hidden: vec![],
         doors: super::doors::Doors { main: 1, rules: 2 },
         kept: vec![],
     };
@@ -508,6 +511,7 @@ fn the_daemons_port_is_a_roles_and_the_hooks_door_the_limited_ones() {
     };
     let connects = |r: &super::Request, port: u16| {
         let around = limits::Around {
+            hidden: vec![],
             doors,
             kept: vec![],
         };
@@ -592,6 +596,7 @@ fn what_runs_the_commands_has_none_of_codexs_own() {
         ..Default::default()
     };
     let around = limits::Around {
+        hidden: vec![],
         doors: super::doors::Doors { main: 1, rules: 2 },
         kept: vec![],
     };

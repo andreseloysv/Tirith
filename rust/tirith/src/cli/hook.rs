@@ -1,5 +1,5 @@
 //! `tirith hook`: the command-hook bridge for agents without HTTP hooks.
-use crate::client::call_with;
+use crate::client::{call_with, hook_caller};
 use serde_json::{json, Value};
 use std::{io::Read, time::Duration};
 
@@ -10,21 +10,11 @@ pub(super) fn hook(event: String, home: Option<String>, agent: String) -> Result
     }
     let mut input = String::new();
     let _ = std::io::stdin().read_to_string(&mut input);
-    let headers = [
-        (
-            "X-Tirith-Lane",
-            std::env::var("TIRITH_LANE").unwrap_or_default(),
-        ),
-        (
-            "X-Tirith-Role",
-            std::env::var("TIRITH_ROLE").unwrap_or_default(),
-        ),
-    ];
     let Ok(body) = call_with(
         "POST",
         &format!("/hook/{event}"),
         input,
-        &headers,
+        &hook_caller(),
         Duration::from_secs(5),
     ) else {
         return Ok(());

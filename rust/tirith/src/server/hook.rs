@@ -1,20 +1,22 @@
-//! One agent hook call: record it, refuse a tool call that breaks a rule, hand a lane its live messages, and keep a lane from ending its turn on a question.
-use super::{hook_lane::Call, hook_reply, hook_rules};
+//! One agent hook call: record it, refuse a tool call that breaks a rule, hand a lane its live messages, and keep a lane from ending its turn on a question. A call without an agent's token (the owner's own sessions) can only be refused.
+use super::{hook_lane::Call, hook_reply, hook_rules, who::Agent, Who};
 use crate::app::Shared;
 use axum::body::Bytes;
 use axum::extract::{Path, State};
-use axum::http::HeaderMap;
 use axum::Json;
 use serde_json::{json, Value};
 
 pub(super) async fn hook(
     State(app): State<Shared>,
     Path(event): Path<String>,
-    headers: HeaderMap,
+    who: Who,
     body: Bytes,
 ) -> Json<Value> {
     let p: Value = serde_json::from_slice(&body).unwrap_or(json!({}));
-    let call = Call::read(&app, &event, &headers, &p);
+    let Some(agent) = who.agent() else {
+        return refusals(&app, &event, None, &p);
+    };
+    let call = Call::read(&app, &event, Some(agent), &p);
     call.note_activity(&app);
     call.record_access(&app);
     if event == "PreToolUse" {
@@ -23,10 +25,9 @@ pub(super) async fn hook(
         let lab =
             lab.or_else(|| crate::lab::refused(&call.cwd, &call.tool, &call.known, &call.input));
         if let Some(why) = lab {
-            return Json(json!({"hookSpecificOutput": {"hookEventName": "PreToolUse",
-                "permissionDecision": "deny", "permissionDecisionReason": why}}));
+            return denied(&why);
         }
-        if let Some(denied) = hook_rules::refuse(&app, &call, &headers) {
+        if let Some(denied) = hook_rules::refuse(&app, &call) {
             return denied;
         }
     }
@@ -52,26 +53,27 @@ pub(super) async fn hook(
 pub(super) async fn rules_alone(
     State(app): State<Shared>,
     Path(event): Path<String>,
-    headers: HeaderMap,
+    headers: axum::http::HeaderMap,
     body: Bytes,
 ) -> Json<Value> {
+    let p: Value = serde_json::from_slice(&body).unwrap_or(json!({}));
+    let agent = super::identify::agent(&app, &headers);
+    refusals(&app, &event, agent.as_ref(), &p)
+}
+
+/// The rules' and the block list's refusals before a tool call, and nothing else of the hook.
+fn refusals(app: &Shared, event: &str, agent: Option<&Agent>, p: &Value) -> Json<Value> {
     if event != "PreToolUse" {
         return Json(json!({}));
     }
-    let p: Value = serde_json::from_slice(&body).unwrap_or(json!({}));
-    let call = Call::read(&app, &event, &headers, &p);
+    let call = Call::read(app, event, agent, p);
     if let Some(why) = crate::lab::refused(&call.cwd, &call.tool, &call.known, &call.input) {
-        return Json(json!({"hookSpecificOutput": {"hookEventName": "PreToolUse",
-            "permissionDecision": "deny", "permissionDecisionReason": why}}));
+        return denied(&why);
     }
-    hook_rules::refuse(&app, &call, &headers).unwrap_or(Json(json!({})))
+    hook_rules::refuse(app, &call).unwrap_or(Json(json!({})))
 }
 
-/// A header an agent filled in (an unset `$VAR` it passed through as is counts as none).
-pub(super) fn header(headers: &HeaderMap, k: &str) -> Option<String> {
-    headers
-        .get(k)
-        .and_then(|v| v.to_str().ok())
-        .filter(|v| !v.is_empty() && !v.starts_with('$'))
-        .map(String::from)
+fn denied(why: &str) -> Json<Value> {
+    Json(json!({"hookSpecificOutput": {"hookEventName": "PreToolUse",
+        "permissionDecision": "deny", "permissionDecisionReason": why}}))
 }

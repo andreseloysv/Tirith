@@ -1,31 +1,24 @@
 //! The rehearsal API: the bot (through `tirith teach`) starts and stops a rehearsal and sends its steps; the extension, with the token, asks for the next step and answers it with a result and a screenshot.
-use super::api::key;
-use super::cors::{from_extension, preflight};
+use super::caller::own;
+use super::cors::preflight;
 use super::rehearsal::{begin, end, last, live, until_s};
 use super::{ext_api, run};
 use crate::app::Shared;
-use crate::server::s;
+use crate::server::{s, Who};
 use axum::extract::{DefaultBodyLimit, Path, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde_json::{json, Value};
-/// The bot's conversation, for a call from the page or the bot's `tirith teach`, never from the extension.
-pub(super) fn own(app: &Shared, h: &HeaderMap, id: &str) -> Result<String, Box<Response>> {
-    match key(app, h, id, false) {
-        Ok(_) if from_extension(h) => Err(Box::new(StatusCode::FORBIDDEN.into_response())),
-        Ok(k) => Ok(k),
-        Err(r) => Err(r),
-    }
-}
 async fn rehearse(
     State(app): State<Shared>,
+    who: Who,
     h: HeaderMap,
     Path(id): Path<String>,
     Json(b): Json<Value>,
 ) -> Response {
-    let key = match own(&app, &h, &id) {
+    let key = match own(&app, &who, &h, &id) {
         Ok(k) => k,
         Err(r) => return *r,
     };
@@ -38,8 +31,13 @@ async fn rehearse(
     app.emit("teach", json!({"bot": key}));
     Json(json!({"ok": true, "since": r["since"], "until": until_s(&r) * 1000})).into_response()
 }
-async fn stop(State(app): State<Shared>, h: HeaderMap, Path(id): Path<String>) -> Response {
-    match own(&app, &h, &id) {
+async fn stop(
+    State(app): State<Shared>,
+    who: Who,
+    h: HeaderMap,
+    Path(id): Path<String>,
+) -> Response {
+    match own(&app, &who, &h, &id) {
         Ok(key) => {
             let was = end(&app, &key);
             app.emit("teach", json!({"bot": key}));
@@ -51,11 +49,12 @@ async fn stop(State(app): State<Shared>, h: HeaderMap, Path(id): Path<String>) -
 /// One step of the rehearsal: `open` a URL, `click` a selector or text, `type` a value in a field; answered with the extension's result and the screenshot's path.
 async fn step(
     State(app): State<Shared>,
+    who: Who,
     h: HeaderMap,
     Path(id): Path<String>,
     Json(b): Json<Value>,
 ) -> Response {
-    let key = match own(&app, &h, &id) {
+    let key = match own(&app, &who, &h, &id) {
         Ok(k) => k,
         Err(r) => return *r,
     };

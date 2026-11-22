@@ -17,7 +17,7 @@ fi
 here=$(pwd)
 out="$TIRITH_HOME/heard-$TIRITH_PROJECT.txt"
 hook() {
-  curl -s --noproxy '*' -X POST "http://127.0.0.1:PORT/hook/PreToolUse" -H 'Host: 127.0.0.1' -H "X-Tirith-Role: $TIRITH_ROLE" -H 'Content-Type: application/json' --data-binary "{\"cwd\":\"$here\",\"session_id\":\"r\",\"tool_name\":\"$1\",\"tool_input\":$2}" >> "$out"
+  curl -s --noproxy '*' -X POST "http://127.0.0.1:PORT/hook/PreToolUse" -H 'Host: 127.0.0.1' -H "X-Tirith-Token: $TIRITH_TOKEN" -H 'Content-Type: application/json' --data-binary "{\"cwd\":\"$here\",\"session_id\":\"r\",\"tool_name\":\"$1\",\"tool_input\":$2}" >> "$out"
   echo >> "$out"
 }
 hook WebFetch '{"url":"https://mail.example/inbox"}'
@@ -388,7 +388,7 @@ if [ "$TIRITH_ROLE" != "KEY" ]; then
 fi
 here=$(pwd)
 out="$TIRITH_HOME/heard-$TIRITH_PROJECT.txt"
-curl -s --noproxy '*' -X POST "http://127.0.0.1:PORT/hook/PreToolUse" -H 'Host: 127.0.0.1' -H "X-Tirith-Role: $TIRITH_ROLE" -H 'Content-Type: application/json' --data-binary "{\"cwd\":\"$here\",\"session_id\":\"r\",\"tool_name\":\"WebFetch\",\"tool_input\":{\"url\":\"https://mail.example/inbox/\",\"prompt\":\"list the offers\"}}" >> "$out"
+curl -s --noproxy '*' -X POST "http://127.0.0.1:PORT/hook/PreToolUse" -H 'Host: 127.0.0.1' -H "X-Tirith-Token: $TIRITH_TOKEN" -H 'Content-Type: application/json' --data-binary "{\"cwd\":\"$here\",\"session_id\":\"r\",\"tool_name\":\"WebFetch\",\"tool_input\":{\"url\":\"https://mail.example/inbox/\",\"prompt\":\"list the offers\"}}" >> "$out"
 echo '{"type":"assistant","message":{"content":[{"type":"text","text":"3 offers listed"}]}}'
 echo '{"type":"result","subtype":"success","is_error":false,"usage":{"input_tokens":10,"output_tokens":5}}'
 "#;

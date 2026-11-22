@@ -2,12 +2,12 @@
 use super::tests::{call, daemon, home, EXT};
 use serde_json::{json, Value};
 
-/// A POST from an agent's session: with its identity header.
-async fn post_as(port: u16, path: &str, header: &str, body: Value) -> u16 {
+/// A POST from an agent's session: with its token.
+async fn post_as(port: u16, path: &str, token: &str, body: Value) -> u16 {
     reqwest::Client::new()
         .post(format!("http://127.0.0.1:{port}/api/teach/{path}"))
         .header("host", "127.0.0.1")
-        .header(header, "bot-x")
+        .header(crate::server::testing::HEADER, token)
         .json(&body)
         .send()
         .await
@@ -122,11 +122,12 @@ async fn approve_is_the_owners_and_for_a_rehearsed_draft() {
     );
     super::rehearsal::end(&app, &key);
     let path = format!("{id}/approve");
-    for header in ["x-tirith-role", "x-tirith-lane"] {
+    for who in [format!("manager@{key}"), "some-lane".to_string()] {
+        let token = crate::server::testing::token(&app, &who);
         assert_eq!(
-            post_as(port, &path, header, json!({"skill": "ofertas"})).await,
+            post_as(port, &path, &token, json!({"skill": "ofertas"})).await,
             403,
-            "{header}"
+            "{who}"
         );
     }
     assert!(file.exists(), "refused: still a draft");
@@ -364,6 +365,10 @@ async fn the_page_downloads_the_extension_with_all_its_files() {
     let res = reqwest::Client::new()
         .get(format!("http://127.0.0.1:{port}/teach-extension.zip"))
         .header("host", "127.0.0.1")
+        .header(
+            crate::server::testing::HEADER,
+            crate::server::testing::owner(port),
+        )
         .send()
         .await
         .unwrap();

@@ -8,7 +8,6 @@ use super::run::fire;
 use super::store::with;
 use crate::app::{bad, Shared, R};
 use axum::extract::{Path, State};
-use axum::http::HeaderMap;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde_json::{json, Value};
@@ -55,11 +54,11 @@ async fn run(State(app): State<Shared>, Path((id, rid)): Path<(String, String)>)
 }
 async fn lib(
     State(app): State<Shared>,
-    h: HeaderMap,
+    who: crate::server::Who,
     Path(id): Path<String>,
     Json(b): Json<Value>,
 ) -> R {
-    reply(learn(&app, &id, &b, crate::server::agent(&h)))
+    reply(learn(&app, &id, &b, who.is_agent()))
 }
 pub fn routes() -> Router<Shared> {
     Router::new()
