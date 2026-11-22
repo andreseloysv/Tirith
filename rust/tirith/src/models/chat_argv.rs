@@ -1,6 +1,6 @@
 //! The argv of a streaming chat session for a role.
 use super::flags::{flags, set_model_and_effort, AgentCmd};
-use super::{browser::add_browser, roles::role};
+use super::{browser::add_browser, gateway_args::add_gateway, roles::role};
 use crate::app::Shared;
 /// The argv of a streaming chat session (stream-json in and out) for a role. `resume` continues that session id. The caller appends its own system prompt.
 pub fn chat_argv(app: &Shared, role_name: &str, resume: Option<&str>) -> Result<AgentCmd, String> {
@@ -23,6 +23,7 @@ pub fn chat_argv(app: &Shared, role_name: &str, resume: Option<&str>) -> Result<
             .flat_map(|id| ["--resume".to_string(), id.to_string()]),
     );
     add_browser(app, &mut argv, &r.agent, false);
+    add_gateway(app, &mut argv, &r.agent, role_name); // a bot's role alone
     Ok(AgentCmd {
         alias: r.agent,
         argv,

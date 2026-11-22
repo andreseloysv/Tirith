@@ -17,6 +17,8 @@ pub(super) struct Setup {
     pub chat: bool,
     /// The log and process name: "manager" for a chat role, the role otherwise.
     pub who: String,
+    /// Its role: a bot's key gives it the connector gateway.
+    pub role: String,
     pub dir: PathBuf,
 }
 
@@ -60,6 +62,7 @@ impl Setup {
             read_only,
             chat,
             who: who.to_string(),
+            role: role.to_string(),
             dir,
         })
     }

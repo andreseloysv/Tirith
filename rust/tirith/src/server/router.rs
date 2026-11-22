@@ -13,6 +13,7 @@ pub fn router(app: Shared, port: u16) -> Router {
         rooms::routes(),
         sandbox::routes(),
         secrets::routes(),
+        crate::gateway::routes(),
         models::routes(),
         guard::routes(),
         metrics::routes(),

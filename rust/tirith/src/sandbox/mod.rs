@@ -21,6 +21,7 @@ mod nested;
 mod owner;
 mod profile;
 mod proxy;
+mod proxy_url;
 mod quiet;
 mod replay;
 mod routes;
@@ -40,6 +41,9 @@ pub use git::{git, prepare};
 #[cfg(target_os = "macos")]
 pub use nested::inside;
 pub use profile::sandboxed;
+#[cfg(test)]
+pub(crate) use proxy::serve as serve_proxy;
+pub use proxy_url::proxy_url;
 pub use quiet::launcher;
 pub use replay::closes_network;
 pub use routes::routes;

@@ -30,10 +30,18 @@ pub fn call_with(
     headers: &[(&str, String)],
     timeout: Duration,
 ) -> Result<String, String> {
-    let addr = SocketAddr::from((
-        [127, 0, 0, 1],
-        crate::config::Config::load_at(&crate::config::tirith_home()).port,
-    ));
+    let port = crate::config::Config::load_at(&crate::config::tirith_home()).port;
+    call_on(port, (method, path), body, headers, timeout)
+}
+/// One request to the daemon on `port`.
+pub fn call_on(
+    port: u16,
+    (method, path): (&str, &str),
+    body: String,
+    headers: &[(&str, String)],
+    timeout: Duration,
+) -> Result<String, String> {
+    let addr = SocketAddr::from(([127, 0, 0, 1], port));
     let mut s = TcpStream::connect_timeout(&addr, Duration::from_secs(2))
         .map_err(|_| "tirith is not running: start it with `tirith serve`".to_string())?;
     s.set_read_timeout(Some(timeout)).ok();

@@ -1,10 +1,15 @@
-//! The daemon's own lookup of one value, by bot and name. No route and no command leads here, and nothing puts a value in a process's environment.
+//! The daemon's own lookup of one value, by bot and name. No route and no command leads here; only the connector gateway (`gateway/`) asks, and puts a value in nothing but its connector's own process or auth headers.
 use super::store::{alone, Store};
 use super::{index::Held, names};
+use crate::app::Shared;
+
+/// The value bot `bot` (its page id) has as `name`, from the system's store or the sealed file. It blocks.
+pub fn value(app: &Shared, bot: &str, name: &str) -> Result<Option<String>, String> {
+    Store::of(app).value(bot, name)
+}
 
 impl Store<'_> {
     /// The value bot `bot` has as `name`. It blocks: off the async threads (`spawn_blocking`).
-    #[cfg_attr(not(test), allow(dead_code))] // what hands a secret to its use is another item's
     pub fn value(&self, bot: &str, name: &str) -> Result<Option<String>, String> {
         names::secret(name)?;
         let _one = alone();
