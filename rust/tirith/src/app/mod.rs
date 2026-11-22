@@ -3,6 +3,7 @@ mod config;
 mod conv;
 mod feed;
 mod git;
+mod keys;
 mod lane;
 mod lanes;
 mod migrate;
@@ -18,6 +19,7 @@ mod time;
 mod worktree;
 
 pub use git::git;
+pub use keys::{kept, write as write_key, Keys, OWNER, PAGE};
 pub use lane::Lane;
 pub use path::exe;
 pub use process::{alive, kill_group};

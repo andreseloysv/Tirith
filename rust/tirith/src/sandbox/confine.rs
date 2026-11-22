@@ -29,14 +29,16 @@ pub(super) fn argv(app: &Shared, program: String, args: Vec<String>) -> (String,
             ports.push(port);
         }
     }
-    super::linux::argv(&ports, program, args)
+    let hidden = crate::app::kept(&app.home).map(|f| f.display().to_string());
+    super::linux::argv(&ports, &hidden, program, args)
 }
 
 #[cfg(not(target_os = "linux"))]
-pub(super) fn argv(_app: &Shared, program: String, args: Vec<String>) -> (String, Vec<String>) {
+pub(super) fn argv(app: &Shared, program: String, args: Vec<String>) -> (String, Vec<String>) {
+    let hidden = super::hidden::rules(&crate::app::kept(&app.home));
     let args = [
         "-p".to_string(),
-        super::profile::PROFILE.to_string(),
+        format!("{}{hidden}", super::profile::PROFILE),
         program,
     ]
     .into_iter()

@@ -1,7 +1,7 @@
 //! The sandbox profile, the proxy's port and whether processes run inside the sandbox.
 use crate::{app::Shared, config};
 
-/// The sandbox profile: outbound network only to this machine (the daemon's port, the proxy and local sockets) and a name nothing registers denied, by which the daemon knows a confined caller (`mac/`), and no Apple Events (macOS refuses them from `sandbox-exec` anyway; managers and bots read the owner's Safari through the daemon, see `safari_script`).
+/// The sandbox profile: outbound network only to this machine (the daemon's port, the proxy and local sockets) and a name nothing registers denied, by which the daemon knows a confined caller (`mac/`), and no Apple Events (macOS refuses them from `sandbox-exec` anyway; managers and bots read the owner's Safari through the daemon, see `safari_script`). Each home adds its own hidden files (`hidden.rs`).
 #[cfg_attr(target_os = "linux", allow(dead_code))] // macOS's
 pub const PROFILE: &str = "(version 1)\n(allow default)\n(deny network-outbound)\n(deny appleevent-send)\n(deny mach-lookup (global-name \"app.tirith.outside\"))\n(allow network-outbound (remote ip \"localhost:*\"))\n(allow network-outbound (remote unix-socket))\n";
 #[cfg_attr(target_os = "linux", allow(dead_code))] // macOS's

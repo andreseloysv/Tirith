@@ -134,8 +134,8 @@ async fn teach_approve_activates_the_skill() {
     let approve =
         |origin: &'static str| call(port, "POST", &path, origin, "", json!({"skill": "ofertas"}));
     // Not from the extension, even with its origin.
-    assert_eq!(approve(EXT).await.0, 401);
-    // Not rehearsed yet: refused, and it stays a draft.
+    assert_eq!(approve(EXT).await.0, 403); // no route of the extension's, and it has no caller's token
+                                           // Not rehearsed yet: refused, and it stays a draft.
     let (code, out, _) = approve("").await;
     assert!(
         code == 400 && out["error"].as_str().unwrap().contains("rehearsed"),

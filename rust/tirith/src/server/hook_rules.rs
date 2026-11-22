@@ -1,21 +1,20 @@
 //! A tool call that breaks a rule is refused before it runs.
-use super::{hook::header, hook_lane::Call};
+use super::hook_lane::Call;
 use crate::app::Shared;
 use crate::{rules, sandbox};
-use axum::http::HeaderMap;
 use axum::Json;
 use serde_json::{json, Value};
 
 /// The deny answer for a call the rules (or, outside a lane and a role, the sandbox) refuse; none when it may run.
-pub(super) fn refuse(app: &Shared, call: &Call, headers: &HeaderMap) -> Option<Json<Value>> {
-    let role = header(headers, "x-tirith-role").or_else(|| rules::role_at(app, &call.cwd));
+pub(super) fn refuse(app: &Shared, call: &Call) -> Option<Json<Value>> {
+    let role = call.role.as_deref();
     let why = rules::check(
         app,
         &call.known,
         &call.input,
         call.lane.as_ref(),
         call.project.as_ref(),
-        role.as_deref(),
+        role,
     )
     .or_else(|| {
         if call.lane.is_none() && role.is_none() {

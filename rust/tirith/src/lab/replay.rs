@@ -30,9 +30,9 @@ pub(super) fn replaying() -> Option<i64> {
     REPLAY.try_with(|r| r.experiment).ok()
 }
 
-/// The proxy's caller for a process started inside a replay's turn, `replay:<experiment>`; else `who`.
+/// The proxy's caller for a process started inside a replay's turn, `replay:<experiment>:<who>`; else `who`.
 pub fn proxy_caller(who: &str) -> String {
-    replaying().map_or(who.to_string(), |e| format!("replay:{e}"))
+    replaying().map_or(who.to_string(), |e| format!("replay:{e}:{who}"))
 }
 
 /// True for the proxy's caller of a replay: the world is closed to it (`reach.rs` says what is not).

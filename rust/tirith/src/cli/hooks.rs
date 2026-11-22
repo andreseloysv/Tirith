@@ -20,9 +20,7 @@ pub(super) fn install_hooks() -> Result<(), String> {
     let mut settings: Value =
         serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
     for event in ["PreToolUse", "PostToolUse", "UserPromptSubmit", "Stop"] {
-        let ours = json!({"type": "http", "url": format!("http://127.0.0.1:{}/hook/{event}", cfg.port),
-            "headers": {"X-Tirith-Lane": "$TIRITH_LANE", "X-Tirith-Role": "$TIRITH_ROLE"},
-            "allowedEnvVars": ["TIRITH_LANE", "TIRITH_ROLE"], "timeout": 5});
+        let ours = super::hooks_token::http(cfg.port, event);
         let mut kept = crate::setup::others(&settings["hooks"][event]);
         kept.push(json!({"hooks": [ours]}));
         settings["hooks"][event] = json!(kept);

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Starts Tirith with one command: builds the daemon if needed, starts it when nothing answers on its port,
-# and opens its page. The daemon keeps running after this script ends; `tirith status` shows what it does.
+# and opens its page as the owner (tirith open). The daemon keeps running after this script ends; `tirith status` shows what it does.
 #   TIRITH_HOME (default ~/.tirith) and TIRITH_PORT (default [server] port of config.toml, else 7717).
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")" && pwd)
@@ -18,4 +18,4 @@ else
     for _ in $(seq 1 50); do curl -s -o /dev/null "http://127.0.0.1:$PORT/api/state" && break; sleep 0.1; done
     echo "Tirith started (log: $HOME_DIR/logs/tirithd.log)."
 fi
-open "http://127.0.0.1:$PORT/" 2>/dev/null || xdg-open "http://127.0.0.1:$PORT/" 2>/dev/null || echo "Open http://127.0.0.1:$PORT/"
+"$BIN" open || echo "Open it with: $BIN open"

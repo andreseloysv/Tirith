@@ -1,9 +1,8 @@
 //! The owner's cards: asked, answered, closed.
-use super::super::s;
+use super::super::{s, Who};
 use crate::app::{bad, Shared, R};
 use crate::manager;
 use axum::extract::{Path, State};
-use axum::http::HeaderMap;
 use axum::routing::post;
 use axum::{Json, Router};
 use serde_json::Value;
@@ -33,12 +32,12 @@ pub fn owner() -> Router<Shared> {
 /// The owner's answer; an agent's is only what it may hand in for them (`manager/relayed.rs`).
 async fn answer(
     State(app): State<Shared>,
-    h: HeaderMap,
+    who: Who,
     Path(id): Path<String>,
     Json(b): Json<Value>,
 ) -> R {
     let (text, by_manager) = (s(&b, "answer"), s(&b, "by") == "manager");
-    let done = if super::super::agent(&h) {
+    let done = if who.is_agent() {
         manager::relayed(&app, &id, &text)
     } else {
         manager::owner_answer(&app, &id, &text, by_manager)
@@ -48,11 +47,11 @@ async fn answer(
 
 async fn close(
     State(app): State<Shared>,
-    h: HeaderMap,
+    who: Who,
     Path(id): Path<String>,
     Json(b): Json<Value>,
 ) -> R {
-    let manager = super::super::agent(&h) || s(&b, "by") == "manager";
+    let manager = who.is_agent() || s(&b, "by") == "manager";
     let by = if manager { "the manager" } else { "the owner" };
     manager::close_card(&app, &id, by, &s(&b, "why"))
         .map(Json)

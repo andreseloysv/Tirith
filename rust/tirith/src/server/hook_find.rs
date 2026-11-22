@@ -2,7 +2,7 @@
 use crate::app::{Lane, Shared};
 use crate::config::Project;
 
-/// Without the header, the working lane whose worktree holds the agent's cwd.
+/// For the refusals of a call without a token, the working lane whose worktree holds its cwd: it names nobody.
 pub(super) fn lane_at(app: &Shared, cwd: &str) -> Option<Lane> {
     let in_worktree = |l: &&Lane| {
         matches!(l.status.as_str(), "running" | "waiting")

@@ -4,10 +4,11 @@ use serde_json::Value;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-/// The daemon that answers on this home's port, as it says who it is (an older one says nothing of itself: null).
+/// The daemon that answers on this home's port, as it says who it is (an older one, and another home's, which refuses this one's token, say nothing of themselves: null).
 pub fn answering() -> Option<Value> {
     match call_json("GET", "/api/setup", None) {
         Ok(v) => Some(v),
+        Err(why) if why.starts_with(crate::server::NO_CALLER) => Some(Value::Null),
         Err(_) => call_json("GET", "/api/state", None)
             .ok()
             .map(|_| Value::Null),
@@ -56,7 +57,7 @@ pub fn check(alias: &str) -> Result<Value, String> {
         "POST",
         &format!("/api/setup/check/{alias}"),
         "{}".into(),
-        &[],
+        &crate::client::caller(),
         Duration::from_secs(620),
     )?;
     serde_json::from_str(&body).map_err(|e| e.to_string())

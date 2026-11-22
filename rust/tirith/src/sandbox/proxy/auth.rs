@@ -1,9 +1,9 @@
 //! Who is calling the proxy.
-use crate::sandbox::token::token;
+use crate::{app::App, sandbox::token};
 use base64::Engine;
 
-/// The caller of a request: the `who` of a valid `Proxy-Authorization: Basic who:token`.
-pub fn caller(headers: &[&str]) -> Option<String> {
+/// The caller of a request: whose the token in `Proxy-Authorization: Basic <anything>:token` is. The user name is for people to read.
+pub fn caller(app: &App, headers: &[&str]) -> Option<String> {
     let value = headers
         .iter()
         .find_map(|h| {
@@ -22,9 +22,5 @@ pub fn caller(headers: &[&str]) -> Option<String> {
     )
     .ok()?;
     let (user, pass) = raw.rsplit_once(':')?;
-    let who = user
-        .replace("%3A", ":")
-        .replace("%3a", ":")
-        .replace('~', ":");
-    (pass == token(&who)).then_some(who)
+    token::who_of(app, pass).or_else(|| token::retired(app, user, pass))
 }

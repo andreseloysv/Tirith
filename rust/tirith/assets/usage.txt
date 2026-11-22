@@ -4,6 +4,7 @@ tirith service install [--boot]|status|start|stop|restart|uninstall|logs   (the 
 tirith doctor                                  what works on this machine and what does not, with the fix
 tirith --version                               the version of this binary
 tirith serve                                   run the daemon (page on http://127.0.0.1:<port>/)
+tirith open [link]                             (the owner) open the page signed in as you; link: print a link that does it once, within 10 minutes
 tirith status [--project P]                    lanes and the merge queue (of one project)
 tirith plan show <project>                     the plan with what works on each item
 tirith plan add <project> <step> "<text>"      add an item to a step
@@ -34,8 +35,10 @@ tirith teach do click "<selector or text>"     (a bot, rehearsing) click it ther
 tirith teach do type "<field>" "<value>"       (a bot, rehearsing) type the value in the field (its label, placeholder, name or selector)
 tirith teach stop                              (a bot) end the rehearsal
 tirith net allow                               (Linux, with sudo, once) let this binary make the network sandbox where AppArmor forbids it
-tirith hook <Event>                            agent hook bridge (stdin JSON; also --agent A --event E)
-tirith hooks install                           point the agents' hooks at the daemon over HTTP
+tirith hook <Event>                            agent hook bridge (stdin JSON; also --agent A --event E); sends the agent's TIRITH_TOKEN, and without one only refuses
+tirith hooks install                           point the agents' hooks at the daemon over HTTP, each sending TIRITH_TOKEN
 tirith safari open <url>                       (the managers and bots) open the page in the owner's Safari, through the daemon
 tirith safari read [<url>]                     (the managers and bots) URL, title and text of Safari's current tab (or of the tab whose URL starts with <url>)
 (modules add: tirith room …, tirith net …, tirith models …, tirith guard …)
+Who calls is known by a token alone: yours is <home>/owner.token (0600, unreadable inside the sandbox), read by
+these commands in your terminal; an agent's is TIRITH_TOKEN, which says its lane, or its role, project and bot.

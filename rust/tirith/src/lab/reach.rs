@@ -19,7 +19,9 @@ pub(super) fn ready(app: &Shared, bot: &str) -> Result<(), String> {
 
 /// True when the proxy's caller `who` is a running replay and `host:port` is its bot's model, over TLS.
 pub fn reaches(app: &Shared, who: &str, host: &str, port: u16) -> bool {
-    let id = who.strip_prefix("replay:").and_then(|id| id.parse().ok());
+    let id = who
+        .strip_prefix("replay:")
+        .and_then(|rest| rest.split(':').next()?.parse().ok());
     let Some(e) = id
         .filter(|_| port == 443)
         .and_then(|id| running_one(app, id))

@@ -67,8 +67,16 @@ pub fn keep_checks(app: &Shared, conv: &str, checks: (i64, i64, String)) -> Resu
     Ok(id)
 }
 
-async fn post_checks(State(app): State<Shared>, Json(b): Json<Value>) -> (StatusCode, Json<Value>) {
+async fn post_checks(
+    State(app): State<Shared>,
+    who: crate::server::Who,
+    Json(b): Json<Value>,
+) -> (StatusCode, Json<Value>) {
     let conv = app.conv(b["conv"].as_str().unwrap_or("")).to_string();
+    if who.agent().is_some_and(|a| app.conv(&a.project) != conv) {
+        let e = json!({"error": "a bot keeps checks on its own conversation's turns"});
+        return (StatusCode::FORBIDDEN, Json(e));
+    }
     let (passed, total) = (b["passed"].as_i64(), b["total"].as_i64());
     let names = b["names"].as_str().unwrap_or("").to_string();
     let kept = match (passed, total) {

@@ -376,7 +376,7 @@ async fn agent_say_is_not_the_owner() {
     let _ = std::fs::remove_dir_all(&home);
 }
 
-/// One raw POST /api/chat against the test daemon, as the `tirith say` CLI sends it (with the session's lane/role headers).
+/// One raw POST /api/chat against the test daemon, as the `tirith say` CLI sends it (with the session's token).
 async fn post_chat(port: u16, headers: &str, body: &str) -> String {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     let mut s = tokio::net::TcpStream::connect(("127.0.0.1", port))
@@ -413,10 +413,13 @@ async fn agent_say_is_not_the_owner_over_http() {
     let srv = tokio::spawn(async move {
         drop(axum::serve(listener, crate::server::router(app2, port)).await)
     });
-    // `tirith say` from a manager session (X-Tirith-Role set, as client::call sends it): the daemon reads the agent from the headers.
+    // `tirith say` from a manager session (with its token, as client::call sends it): the daemon reads the agent from the token.
     let out = post_chat(
         port,
-        "X-Tirith-Lane: \r\nX-Tirith-Role: manager\r\n",
+        &format!(
+            "X-Tirith-Token: {}\r\n",
+            crate::server::testing::token(&app, "manager@sayhttp")
+        ),
         r#"{"text": "nota del manager por http", "project": "sayhttp"}"#,
     )
     .await;
@@ -434,10 +437,13 @@ async fn agent_say_is_not_the_owner_over_http() {
         ),
         ["manager"]
     );
-    // From a lane both headers may ride; the lane is the name that counts.
+    // A lane that says it is the manager is still the lane of its token.
     let out = post_chat(
         port,
-        "X-Tirith-Lane: lane-http-1\r\nX-Tirith-Role: manager\r\n",
+        &format!(
+            "X-Tirith-Token: {}\r\nX-Tirith-Role: manager\r\n",
+            crate::server::testing::token(&app, "lane-http-1")
+        ),
         r#"{"text": "nota de la lane por http", "project": "sayhttp"}"#,
     )
     .await;

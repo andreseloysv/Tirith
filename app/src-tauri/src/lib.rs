@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 
 #[cfg(unix)]
 mod cli_link;
+mod page;
 
 fn home_dir() -> PathBuf {
     std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("."))
@@ -85,7 +86,7 @@ pub fn run() {
                 eprintln!("tirith is not linked in ~/.local/bin: {e}");
             }
             ensure_daemon(port);
-            let url = format!("http://127.0.0.1:{port}/").parse().expect("valid daemon url");
+            let url = page::link(port, &tirith_bin()).parse().expect("valid daemon url");
             tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::External(url))
                 .title("Tirith")
                 .inner_size(1440.0, 900.0)

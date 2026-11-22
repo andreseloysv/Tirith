@@ -11,7 +11,7 @@ pub fn spawn_chat(
     project: &str,
     argv: Vec<String>,
 ) -> Result<(Child, ChildStdin, ChildStdout), String> {
-    let launch = sandbox::wrap(app, role, argv);
+    let launch = sandbox::wrap(app, &format!("{role}@{project}"), argv);
     let dir = if app.cfg().factory.role::<String>(role, "scope").as_deref() == Some("own") {
         app.home.join("manager").join(role)
     } else {

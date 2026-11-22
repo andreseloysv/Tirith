@@ -1,77 +1,5 @@
-// The owner's yes never comes from an agent (server/caller.rs, manager/relayed.rs).
-use super::caller::{agent_name, asked, owners_alone, CONFINED};
-use axum::http::{HeaderMap, HeaderValue, Method};
+// The owner's yes never comes from an agent (server/admit.rs, manager/relayed.rs).
 use serde_json::{json, Value};
-
-#[test]
-#[ignore = "a test of a sandbox: not run, by the owner's order"]
-fn an_agent_is_one_by_its_name_or_by_where_it_runs() {
-    let of = |pairs: &[(&'static str, &'static str)]| {
-        let mut h = HeaderMap::new();
-        for (k, v) in pairs {
-            h.insert(*k, HeaderValue::from_static(v));
-        }
-        agent_name(&h).to_string()
-    };
-    assert_eq!(of(&[]), "", "the owner");
-    assert_eq!(
-        of(&[("x-tirith-role", "$TIRITH_ROLE")]),
-        "",
-        "an unexpanded header"
-    );
-    assert_eq!(of(&[("x-tirith-role", "bot-1")]), "bot-1");
-    assert_eq!(
-        of(&[(CONFINED, "1")]),
-        "agent",
-        "confined, whatever it sends"
-    );
-    assert_eq!(of(&[(CONFINED, "1"), ("x-tirith-lane", "l1")]), "l1");
-    for speaker in ["owner", "room", "tirith", "card", "tool", "routine"] {
-        assert_eq!(of(&[("x-tirith-role", speaker)]), "agent", "{speaker}");
-    }
-}
-
-#[test]
-#[ignore = "a test of a sandbox: not run, by the owner's order"]
-fn the_kernel_is_asked_where_the_owner_is_needed() {
-    let (get, post) = (Method::GET, Method::POST);
-    for path in [
-        "/api/owner/o1",
-        "/api/owner/o1/close",
-        "/api/chat",
-        "/api/teach/b/approve",
-        "/api/bots/b/library",
-        "/api/turns/3/reaction",
-        "/api/setup/check/muse",
-        "/api/rooms",
-    ] {
-        assert!(asked(&post, path), "{path}");
-    }
-    assert!(
-        asked(&get, "/api/teach/b"),
-        "it holds the extension's token"
-    );
-    assert!(asked(&get, "/api/rooms/r1"), "it holds the pairing code");
-    assert!(
-        !asked(&get, "/api/chat")
-            && !asked(&get, "/api/state")
-            && !asked(&post, "/hook/PreToolUse")
-    );
-    assert!(
-        owners_alone(&post, "/api/rooms/r1/qr")
-            && owners_alone(&post, "/api/rooms/r1/qr.svg")
-            && owners_alone(&post, "/api/turns/3/reaction")
-    );
-    assert!(
-        owners_alone(&Method::DELETE, "/api/net/blocks")
-            && asked(&Method::DELETE, "/api/net/blocks")
-    );
-    assert!(
-        !owners_alone(&post, "/api/net/blocks"),
-        "an agent may block, never unblock"
-    );
-    assert!(!owners_alone(&post, "/api/rooms/r1/say") && !owners_alone(&post, "/api/owner/o1"));
-}
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "a test of a sandbox: not run, by the owner's order"]
@@ -114,10 +42,15 @@ async fn no_agent_gives_itself_the_owners_yes() {
     );
     let http = reqwest::Client::builder().no_proxy().build().unwrap();
     let post = |path: String, role: &'static str, body: Value| {
+        let token = if role.is_empty() {
+            app.keys.owner.clone()
+        } else {
+            super::testing::token(&app, &format!("{role}@"))
+        };
         let call = http
             .post(format!("http://127.0.0.1:{port}{path}"))
             .header("host", "127.0.0.1") // the guard keeps the first test's port
-            .header("x-tirith-role", role);
+            .header(super::testing::HEADER, token);
         async move { call.json(&body).send().await.unwrap().status().as_u16() }
     };
 

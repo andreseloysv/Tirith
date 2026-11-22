@@ -68,6 +68,7 @@ async fn daemon(name: &str, platform: &str) -> (crate::app::Shared, String, Stri
         .unwrap();
     let port = listener.local_addr().unwrap().port();
     let app2 = app.clone();
+    crate::server::testing::serving(port, &app);
     tokio::spawn(
         async move { drop(axum::serve(listener, crate::server::router(app2, port)).await) },
     );
@@ -80,6 +81,10 @@ async fn post(url: &str, body: Value) -> Value {
     let res = c
         .post(url)
         .header("host", "127.0.0.1")
+        .header(
+            crate::server::testing::HEADER,
+            crate::server::testing::owner(reqwest::Url::parse(url).unwrap().port().unwrap()),
+        )
         .json(&body)
         .send()
         .await

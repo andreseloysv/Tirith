@@ -163,9 +163,10 @@ async fn sent(
     (got.status().as_u16(), got.text().await.unwrap())
 }
 
-/// The module's routes as the owner reaches them, behind whatever tells the owner apart.
+/// The module's routes as the owner reaches them, behind the gate that tells the owner apart.
 async fn the_owner_sets_and_sees_names_only(app: &Shared, a: &str, b: &str) {
-    let at = served(super::routes().with_state(app.clone())).await;
+    let routes = super::routes().layer(axum::Extension(crate::server::Who::Owner));
+    let at = served(routes.with_state(app.clone())).await;
     let url = |bot: &str| format!("{at}/api/secrets/{bot}");
     for (bot, name, value) in [
         (a, "TOKEN", A_TOKEN),
@@ -223,15 +224,19 @@ fn each_bot_reaches_its_own_alone(app: &Shared, a: &str, b: &str) {
 
 async fn no_agent_reads_lists_or_changes(app: &Shared, a: &str, b: &str) {
     let at = served(crate::server::router(app.clone(), 0)).await;
-    let (own, other) = (format!("bot-{a}"), format!("bot-{b}"));
-    let callers = [
-        ("x-tirith-role", own.as_str()),
-        ("x-tirith-role", other.as_str()),
-        ("x-tirith-role", "manager"),
-        ("x-tirith-role", "owner"),
-        ("x-tirith-lane", "a-lane-1234"),
-    ];
-    for who in callers {
+    let tokens = [
+        format!("manager@bot-{a}"),
+        format!("manager@bot-{b}"),
+        "manager@".to_string(),
+        "owner@".to_string(),
+        "a-lane-1234".to_string(),
+    ]
+    .map(|who| crate::server::testing::token(app, &who));
+    let header = crate::server::testing::HEADER;
+    let mut callers: Vec<(&str, &str)> = tokens.iter().map(|t| (header, t.as_str())).collect();
+    // and one that only says it is the owner
+    callers.push(("x-tirith-role", "owner"));
+    for &who in &callers {
         for bot in [a, b] {
             let all = format!("{at}/api/secrets/{bot}");
             let one = format!("{all}/TOKEN");
@@ -253,17 +258,17 @@ async fn no_agent_reads_lists_or_changes(app: &Shared, a: &str, b: &str) {
             assert!(!said.contains("TOKEN"));
         }
     }
-    the_routes_refuse_by_themselves(app, a, callers).await;
+    the_routes_refuse_by_themselves(app, a, &callers).await;
     let store = Store::of(app);
     assert_eq!(store.value(a, "TOKEN").unwrap().as_deref(), Some(A_TOKEN));
     assert_eq!(store.value(b, "TOKEN").unwrap().as_deref(), Some(B_TOKEN));
 }
 
 /// With no list of the server's in front: a change to that list does not open them.
-async fn the_routes_refuse_by_themselves(app: &Shared, a: &str, callers: [(&str, &str); 5]) {
+async fn the_routes_refuse_by_themselves(app: &Shared, a: &str, callers: &[(&str, &str)]) {
     let at = served(super::routes().with_state(app.clone())).await;
     let all = format!("{at}/api/secrets/{a}");
-    for who in callers {
+    for &who in callers {
         let new = json!({"name": "TOKEN", "value": "an agent's"});
         for (method, url, body) in [
             ("GET", all.clone(), None),

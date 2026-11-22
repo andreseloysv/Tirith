@@ -1,5 +1,5 @@
 //! The environment of a sandboxed process: the proxy for every tool that reads one, ssh through the proxy and the tool wrappers first on PATH.
-use super::{jvm::gradle_opts, profile::proxy_port, token::token};
+use super::{jvm::gradle_opts, profile::proxy_port, token};
 use crate::app::Shared;
 
 const NO_PROXY: &str = "localhost,127.0.0.1,::1";
@@ -14,9 +14,10 @@ const PROXY_VARS: [&str; 6] = [
 
 /// Everything a process `who` gets inside the sandbox.
 pub fn sandboxed_env(app: &Shared, who: &str) -> Vec<(String, String)> {
-    // ':' is the proxy user/password separator, so "merge:x" travels as "merge~x".
-    let (port, user, token) = (proxy_port(app), who.replace(':', "~"), token(who));
+    let (port, user) = (proxy_port(app), token::user(who));
+    let token = token::issued(app, who);
     let mut env = proxy_vars(&format!("http://{user}:{token}@127.0.0.1:{port}"));
+    env.push((crate::client::VAR.into(), token.clone()));
     env.push((
         "GRADLE_OPTS".into(),
         gradle_opts(&port.to_string(), &user, &token),

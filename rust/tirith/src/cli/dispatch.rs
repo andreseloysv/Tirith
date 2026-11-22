@@ -1,5 +1,5 @@
 //! The command the positional words name: a module's own first, then the daemon's.
-use super::{ask, hook::hook, hooks::install_hooks, plan, serve::serve, status::status};
+use super::{ask, hook::hook, hooks::install_hooks, open, plan, serve::serve, status::status};
 use crate::client::{call, print, Flag};
 use crate::{bots, chat, guard, models, projects, rooms, sandbox};
 use serde_json::json;
@@ -39,6 +39,8 @@ fn daemon(pos: &[&str], flag: Flag, project: &str) -> Result<(), String> {
             flag("--agent").unwrap_or_default(),
         ),
         ["hooks", "install"] => install_hooks(),
+        ["open"] => open::open(),
+        ["open", "link"] => open::print(),
         ["status"] => status(project),
         ["plan", "show", project] => plan::plan_show(project),
         ["plan", "step", project, num, title] => plan::plan_step(project, num, title, ""),

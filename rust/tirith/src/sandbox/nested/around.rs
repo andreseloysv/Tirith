@@ -23,6 +23,7 @@ pub(super) fn around(
     let around = Around {
         doors,
         kept: kept.iter().map(|p| p.display().to_string()).collect(),
+        hidden: crate::app::kept(&app.home).to_vec(),
     };
     Ok((r, around))
 }

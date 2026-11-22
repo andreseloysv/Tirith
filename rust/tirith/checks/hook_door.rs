@@ -23,7 +23,8 @@ async fn the_rules_door_gives_the_rules_and_nothing_else() {
     app.lanes.lock().unwrap().insert(lane.id.clone(), lane);
     let ask = |event: &'static str, body: Value| {
         let mut headers = HeaderMap::new();
-        headers.insert("x-tirith-lane", HeaderValue::from_static("someones"));
+        let token = crate::server::testing::token(&app, "someones");
+        headers.insert("x-tirith-token", HeaderValue::from_str(&token).unwrap());
         let (app, body) = (app.clone(), Bytes::from(body.to_string()));
         async move {
             rules_alone(State(app), Path(event.to_string()), headers, body)

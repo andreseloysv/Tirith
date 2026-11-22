@@ -8,6 +8,8 @@ use std::time::Duration;
 
 pub(super) fn serve() -> Result<(), String> {
     use_login_path();
+    // The daemon is nobody's agent, wherever it was started from: what it starts gets a token of its own.
+    std::env::remove_var(crate::client::VAR);
     let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
@@ -19,6 +21,7 @@ pub(super) fn serve() -> Result<(), String> {
             .await
             .map_err(|e| format!("port {port} is taken (is tirith already running?): {e}"))?;
         sandbox::prepare(&app);
+        super::hooks_token::at_start(&app);
         metrics::born(&app);
         start_workers(&app);
         println!(

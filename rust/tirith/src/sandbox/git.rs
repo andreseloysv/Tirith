@@ -1,5 +1,5 @@
 //! The git the daemon itself runs, confined like everything it starts: a repository agents write in (a bot's, a project's with its lanes) can make git run a program, a hook, an fsmonitor or a filter. That program is then an agent's: known at the daemon's door, its network the proxy's.
-use super::{confine, env::sandboxed_env, launch::Launch, token::load_secret};
+use super::{confine, env::sandboxed_env, launch::Launch};
 use crate::app::Shared;
 use crate::config;
 use std::process::Command;
@@ -16,7 +16,6 @@ pub fn prepare(app: &Shared) {
     if !wanted || std::env::var("TIRITH_SANDBOXED").as_deref() == Ok("1") {
         return;
     }
-    load_secret(app); // the proxy's password of `git` derives from it
     let env = sandboxed_env(app, WHO);
     let (program, args) = confine::argv(app, WHO.into(), vec![]);
     let _ = INSIDE.set(Launch { program, args, env });

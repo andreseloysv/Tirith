@@ -28,7 +28,7 @@ fn tried() -> Result<(), String> {
 #[cfg(not(test))]
 fn tried() -> Result<(), String> {
     let out = std::process::Command::new(super::SELF)
-        .args(["net", "run", "--"])
+        .args(["net", "run", "--hide", "/dev/zero", "--"]) // both namespaces, tried
         .stdin(std::process::Stdio::null())
         .output()
         .map_err(|e| e.to_string())?;
@@ -44,5 +44,5 @@ fn explained(why: &str) -> String {
     } else {
         "it needs unprivileged user namespaces (kernel.unprivileged_userns_clone = 1; in Docker, a seccomp profile that allows unshare)".into()
     };
-    format!("no network namespace ({why}); {fix}")
+    format!("no namespaces to confine in ({why}); {fix}")
 }

@@ -2,9 +2,11 @@
 mod api;
 mod approvals;
 mod approve;
+mod caller;
 mod cli;
 mod clock;
 mod cors;
+mod door;
 mod events;
 mod ext_api;
 mod hand;
@@ -24,6 +26,7 @@ mod url;
 pub use api::routes;
 pub use cli::cli;
 pub use cors::ORIGIN;
+pub use door::own_token;
 pub use hand::heard;
 pub use record::start;
 #[cfg(test)]
