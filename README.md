@@ -88,6 +88,9 @@ end with code, and puts a model in the loop only where judgment is needed.
   chain for lanes when an agent runs out of credits. Codex works in every role. Choose models in the chat's
   **Models** panel or Settings. The app and the paired phone both offer provider/model buttons and an effort
   slider. `/models` also works in either chat.
+- **`/status`.** Type it in any chat, on the computer or on a paired phone: Tirith answers by itself, without a
+  model, with how long it has been up, the active lanes of each project, today's routines (done and pending) and
+  the last error.
 - **Commit guard.** Git hooks in every project refuse commits with your forbidden words; they are immutable,
   and a lane only starts when they are intact.
 

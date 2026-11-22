@@ -24,6 +24,8 @@ pub use capture_keep::keep as keep_capture;
 pub use capture_keep::{capture_of, captured, Captured};
 pub use capture_told::told;
 pub use checks::cli;
+#[cfg(test)]
+pub(crate) use live::take_trigger;
 pub use live::{abandon, begin, done, end, handed, line, on_event, trigger, turn_of};
 pub use quality::scored;
 pub use react::reacted;

@@ -452,7 +452,7 @@ Files:
 - `progress.rs`: The short line a tool call shows on the phones.
 - `prompt.rs`: What a conversation's agent is told besides its messages: its role's instructions and the recent chat.
 - `run.rs`: A conversation's sessions, one after another while messages wait, started again more slowly when they fail young.
-- `say.rs`: What the owner, a room or an agent writes to a conversation.
+- `say.rs`: What the owner, a room or an agent writes to a conversation, and the owner's commands that Tirith answers itself (`/status`, `/models`).
 - `session.rs`: The stream-json session of a conversation: started with what waits for it, read until it ends or rests.
 - `session_end.rs`: The end of a stream-json session: what its dead turn left, its process, and what waits again when it never got ready.
 - `spawn.rs`: Starting a streaming chat agent, and the answers to its permission requests.
@@ -714,7 +714,7 @@ Files:
 - `api.rs`: The page's changes to a room: a new QR, a code for another manager, leaving it.
 - `cli.rs`: `tirith room …` commands.
 - `create.rs`: A private room this manager makes on the platform for a conversation, where its phones are paired.
-- `deliver.rs`: What a poll decided is done: lines sent, the phones' model controls answered, cards answered, the rest handed to the manager.
+- `deliver.rs`: What a poll decided is done: lines sent, the phones' model controls and commands answered, cards answered, the rest handed to the manager.
 - `files.rs`: The pictures the phones send, kept as files for a day.
 - `forget.rs`: The owner has Tirith forget a phone.
 - `handle.rs`: The rules for one message of a room, in order: only genuine events, who wrote it, what it says, pairing, history, and who it is for.
@@ -876,6 +876,24 @@ Files:
 - `status.rs`: `tirith service status`: installed, loaded and alive.
 - `systemd.rs`: systemd: a user unit, in the user's own session like the LaunchAgent.
 - `unit.rs`: The systemd user unit.
+
+## `status/`
+
+`/status`, written by the owner in a chat or from a paired phone in its room: Tirith answers it from its own data and no
+turn opens (no `owner.message` or `room.message` event, so no eval either, and no trigger for a next turn). It says how
+long the daemon has been up, each project's active lanes by state, today's timed routines of the bots and the last error.
+A routine is done when its bot's first turn after its `schedule` event ended well; it is pending until then, unless it
+failed or a change to it after its time means it no longer runs today. The last error is the newest of the error and
+failure events and the failed turns, on one line with its secrets hidden.
+
+Files:
+
+- `command.rs`: The owner's `/status` command and the answer it gives.
+- `error.rs`: The last thing that went wrong: an error event or a failed turn.
+- `lanes.rs`: The active lanes of each project, counted by their state.
+- `mod.rs`: Declares the folder's files and re-exports what other modules use.
+- `routines.rs`: Today's timed routines of the bots: the ones done and the ones still to do.
+- `span.rs`: A length of time in a few characters.
 
 ## `teach/`
 
