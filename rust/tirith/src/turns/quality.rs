@@ -84,7 +84,7 @@ pub fn scored(app: &Shared, event: i64, eval: &str, score: Option<f64>) {
 /// A turn row kept after its judge already answered (the judge runs as soon as the event is emitted): its score from `scores`.
 pub(super) fn catch_up(app: &Shared, id: i64, event: Option<i64>) {
     let Some(event) = event else {
-        crate::expected::settled(app, id); // nothing grades it
+        crate::expected::ungraded(app, id);
         return;
     };
     app.insert(

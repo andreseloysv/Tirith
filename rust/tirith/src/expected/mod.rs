@@ -23,7 +23,7 @@ mod unjudged;
 mod verdict;
 mod watch;
 mod words;
-pub use admitted::admitted;
+pub use admitted::{admitted, ungraded};
 pub use calendar::{today, utc as instant};
 pub use changed::changed;
 pub use claims::{honest, quiet};

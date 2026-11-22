@@ -87,7 +87,11 @@ fn a_run_is_judged_by_what_it_did() {
         judged(true, "2 ofertas\n\n✗ el correo no abre", 2),
         "el correo no abre",
     );
-    no(judged(true, "No he podido entrar en la web", 1), "no pudo");
+    assert_eq!(
+        judged(true, "No he podido entrar en la web", 1),
+        None,
+        "its judge reads it"
+    );
     no(judged(true, "  ", 1), "sin responder");
     no(judged(false, "Credit balance is too low", 0), "sin cuota");
     no(
@@ -439,7 +443,7 @@ fn could_not_is_a_failure_in_any_words() {
             );
         }
     }
-    // Words alone, in both languages, with no mark.
+    // Words alone, in both languages, with no mark: the judge reads them, and code's words stand in where none does.
     for answer in [
         "Hoy no pude revisar las plantas.",
         "El sensor falló y no pudo leer la humedad.",
@@ -447,13 +451,24 @@ fn could_not_is_a_failure_in_any_words() {
         "I could not check the plants today.",
         "The helper failed and couldn't finish.",
     ] {
-        assert!(
-            verdicts(answer, &[("ls", "a", 0)])
-                .iter()
-                .all(Option::is_some),
+        assert_eq!(
+            verdicts(answer, &[("ls", "a", 0)]),
+            vec![None; 4],
             "{answer}"
         );
+        assert!(
+            super::admitted::suspects(answer, false),
+            "with no judge: {answer}"
+        );
     }
+    assert!(super::admitted::suspects(
+        "∅ Nada.\n\nNo pude abrir la otra web.",
+        true
+    ));
+    assert!(!super::admitted::suspects(
+        "∅ Sin errores en los logs.",
+        true
+    ));
 }
 
 #[test]
@@ -563,6 +578,11 @@ fn an_ordinary_run_is_no_failure() {
     let down = "curl: (7) Failed to connect to shop.example port 443";
     let mut cases = cases;
     cases.extend([
+        // A real agent's good runs, each ended as a failure for a remark beside the result: what a judge is for.
+        ("LOW 60\n\nPlease check the schedule on the page: I can't see why it keeps firing, and I have not changed it.", fine()),
+        ("LOW 60\n\nThe data is unchanged, so this is a count, not ∅.\n\nI can't confirm what triggers the extra runs from here.", fine()),
+        ("2 ofertas nuevas: A y B.\n\nNo puedo saber por qué se lanzó dos veces hoy.", fine()),
+        ("∅ Nada nuevo.\n\nI can't see why it fired twice today.", fine()),
         // What failed is the news the task asks for: the judge reads whose failure it is.
         (
             "Tu web está caída desde las 03:00.",
@@ -600,7 +620,6 @@ fn a_script_s_nested_refusal_still_proves_it_and_no_reason_shows_a_secret() {
     let found = [("ls", "a", 0)];
     for answer in [
         "✗ No pude entrar con API_KEY=not-a-real-value",
-        "No pude entrar con API_KEY=not-a-real-value",
         "∅ No pude entrar con API_KEY=not-a-real-value",
     ] {
         for got in verdicts(answer, &found) {
@@ -616,6 +635,7 @@ async fn the_judge_tells_a_could_not_in_other_words() {
     let dir = std::env::temp_dir().join(format!("tirith-expected-agents-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let ended = "La búsqueda con el otro agente terminó mal.";
+    let remark = "Dos novedades del otro agente. No puedo saber por qué se lanzó dos veces.";
     for (name, session, verdict, answer, fails) in [
         ("words", "chat", "0.1 — could not: Codex falló", ended, true),
         (
@@ -632,6 +652,7 @@ async fn the_judge_tells_a_could_not_in_other_words() {
             ended,
             false,
         ),
+        ("wordsremark", "chat", "0.9 — the whole task", remark, false),
         // No word from the judge: plain words of trouble are never kept as a success.
         (
             "wordsnojudge",
@@ -836,5 +857,35 @@ fn a_run_that_no_judge_will_read_is_no_success_by_that() {
     super::tick(&app, now + chrono::TimeDelta::minutes(30));
     assert_eq!(status(bad), ["failed"]);
     assert_eq!(status(good), ["ok"]);
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn a_turn_no_judge_grades_still_admits_in_the_first_person() {
+    let (app, home, key) = home_of("ungraded", "/usr/bin/true", "1", "08:00");
+    let now = crate::app::now_iso();
+    let new = store::New {
+        conv: &key,
+        routine: "r1",
+        title: "Mirar",
+        trigger: "run-now",
+        kind: "schedule",
+        due: &now,
+        task: "",
+    };
+    let run = store::expect(&app, &new);
+    let sql = "INSERT INTO turns (conv, role, \"trigger\", routine, started_at, ended_at, status, answer) VALUES (?1, ?1, 'run-now', 'r1', ?2, ?2, 'ok', ?3)";
+    let turn = app.insert(
+        sql,
+        &[&key, &now, &"No pude entrar con API_KEY=not-a-real-value"],
+    );
+    store::close(&app, run, store::OK, turn, "");
+    super::ungraded(&app, turn);
+    let sql = "SELECT status || ' ' || COALESCE(why, '') FROM turns WHERE id = ?1";
+    let kept = app.query(sql, [turn], |r| r.get::<_, String>(0));
+    assert!(
+        kept[0].starts_with("failed no pudo") && !kept[0].contains("not-a-real-value"),
+        "{kept:?}"
+    );
     let _ = std::fs::remove_dir_all(&home);
 }
