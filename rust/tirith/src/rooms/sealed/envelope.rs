@@ -1,4 +1,4 @@
-//! The sealed envelope: a message only its readers can open, signed inside by its sender.
+//! The sealed envelope: a message only its readers can open, signed inside by its author. Sealed once (`once`), the sender's key was made for that message and thrown away, so the author (agentsmessenger's webhook agent, whose key the platform holds) cannot open it either.
 use super::signed::{curve_public, inner_message, verify};
 use super::{text::canonical, Me};
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
@@ -33,14 +33,15 @@ pub fn seal(me: &Me, text: &str, tag: &str, readers: &[String]) -> Value {
 pub fn unseal(me: &Me, e: &Value) -> Option<String> {
     let body = &e["body"];
     let author = e["author"].as_str()?;
-    (body["sender_pub"].as_str() == Some(author) && body["alg"] == ALG).then_some(())?;
+    let sender = body["sender_pub"].as_str()?;
+    ((sender == author || body["once"] == true) && body["alg"] == ALG).then_some(())?;
     let mine = body["recipients"]
         .as_array()?
         .iter()
         .find(|r| r["pub"].as_str() == Some(&me.public))?;
     let wrapped = B64.decode(mine["wrapped_key"].as_str()?).ok()?;
     (wrapped.len() >= 24 + 16).then_some(())?;
-    let key = SalsaBox::new(&curve_public(author)?, &me.curve_secret())
+    let key = SalsaBox::new(&curve_public(sender)?, &me.curve_secret())
         .decrypt(GenericArray::from_slice(&wrapped[..24]), &wrapped[24..])
         .ok()?;
     let nonce = B64

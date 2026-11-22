@@ -3,6 +3,9 @@ mod envelope;
 mod events;
 mod http;
 mod identity;
+#[cfg(test)]
+#[path = "../../../checks/sealed_once.rs"]
+mod once_tests;
 mod reading;
 mod signed;
 mod text;

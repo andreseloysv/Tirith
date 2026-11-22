@@ -145,7 +145,8 @@ What the bot's screen shows, in a tab «Números» (`GET /api/bots/<id>/numbers`
 
 - **The webhook:** each bot gets a secret URL `https://agentsmessenger.com/hook/<secret>` (the platform is already
   on the internet with HTTPS). The platform seals what arrives for the bot's room (Tirith's key) at once and keeps
-  only the sealed copy; Tirith's room watcher turns it into the event `webhook` of that bot, with `source`, `kind`,
+  only the sealed copy, which it cannot open when it seals once (a key made for that call and thrown away; a platform
+  from before that ignores the request and seals with its webhook agent's key, which it holds); Tirith's room watcher turns it into the event `webhook` of that bot, with `source`, `kind`,
   `title`, `url`, `text` and its data (GitHub's `X-GitHub-Event` and `action` give `github:pull_request.opened`).
 - **The routine:** a routine may say `on = "webhook"` and `when = "github:pull_request.opened"`; its task may use
   `{title}`, `{url}` and `{text}`. A «Probar» button hands it a sample event without the platform.

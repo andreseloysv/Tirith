@@ -48,4 +48,5 @@ fn open(port: u16) {
     println!("\nOn your own computer (the page never listens on the network):");
     println!("  ssh -N -L {port}:127.0.0.1:{port} {user}@{at}");
     println!("  then open {page}");
+    println!("  (the port is the same at both ends; taken there, by a Tirith of that computer say: tirith setup --server --port {})", port.wrapping_add(84).max(1024));
 }

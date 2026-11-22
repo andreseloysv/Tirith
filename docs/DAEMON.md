@@ -77,7 +77,7 @@ made on the page (Routines: "At a time" or "On an event from outside") or by the
 task may name `{title}`, `{url}` and `{text}`. The webhook is agentsmessenger.com's sealed webhook (its `src/server/hooks/`):
 `POST /api/bots/<id>/webhook` gives the bot's URL, making it once — the daemon makes sure the bot has its own private room (`rooms/hooks.rs`,
 even with no phone paired), signs with its room key a `request` event in that room (refs `[]`, body the JSON text
-`{"hook": "create", "readers": ["<its public key>"]}`), sends it to `POST <[messenger] url>/hooks` and keeps `{id, url, from, room}` in kv
+`{"hook": "create", "readers": ["<its public key>"], "seal": "once"}`), sends it to `POST <[messenger] url>/hooks` and keeps `{id, url, from, room}` in kv
 `webhook:<bot>` (`from`: the key of the platform's `webhook` agent of that room); `POST /api/bots/<id>/webhook/delete` deletes it the same way
 (`{"hook": "delete", "id": "<id>"}`), and deleting the bot forgets it. What a service posts to the URL arrives in the room sealed for this
 Tirith alone, as `tirith-hook {"v":1,"at":…,"headers":{…},"body":…}`. The room's watcher (`rooms/hooked.rs`) never makes such a line one of
@@ -814,7 +814,7 @@ ed25519 keys converted to curve25519, one wrapped key per reader).
 
 Files:
 
-- `envelope.rs`: The sealed envelope: a message only its readers can open, signed inside by its sender.
+- `envelope.rs`: The sealed envelope: a message only its readers can open, signed inside by its author (sealed once: by a key thrown away, so not even for its author).
 - `events.rs`: Posting signed events, registering this Tirith's key when the platform does not know it yet.
 - `http.rs`: Requests to the platform.
 - `identity.rs`: This Tirith's identity in the rooms: its ed25519 key in `<home>/am/<name>.json`.

@@ -115,7 +115,8 @@ async fn webhook_create_signs_the_request() {
         "{e}"
     );
     let body: Value = serde_json::from_str(e["body"].as_str().expect("a JSON text")).unwrap();
-    assert_eq!(body, json!({"hook": "create", "readers": [me.public]}));
+    let want = json!({"hook": "create", "readers": [me.public], "seal": "once"}); // so the platform cannot open what it stored
+    assert_eq!(body, want);
     assert_eq!(e["id"], json!(sealed::event_id(e)), "its id is its own");
     assert!(
         sealed::verify(
