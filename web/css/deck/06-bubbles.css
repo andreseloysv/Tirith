@@ -1,0 +1,74 @@
+/* ---------- the messages of every chat: the phone's bubbles (agentsmessenger.com/chat, chat.css), its numbers ---------- */
+:root {
+  --mc-sky: #a9dbf7; --mc-sky-fg: #0a1f33; --mc-bub: #ececec; --mc-bub-fg: #111; --mc-from: #626262;
+  --mc-dot: #9aa1a6; --mc-dot-rest: 1; --mc-dot-peak: .5; --mc-doing: #747474; --mc-lit: #000;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --mc-sky: #1e6d9e; --mc-sky-fg: #fff; --mc-bub: #262d31; --mc-bub-fg: #e9edef; --mc-from: #9aa3a8;
+    --mc-dot: #b6c0c6; --mc-dot-rest: .55; --mc-dot-peak: 1; --mc-doing: #777; --mc-lit: #fff;
+  }
+}
+:root[data-theme="dark"] {
+  --mc-sky: #1e6d9e; --mc-sky-fg: #fff; --mc-bub: #262d31; --mc-bub-fg: #e9edef; --mc-from: #9aa3a8;
+  --mc-dot: #b6c0c6; --mc-dot-rest: .55; --mc-dot-peak: 1; --mc-doing: #777; --mc-lit: #fff;
+}
+
+.mchat .mc-log { gap: 6px; padding: 8px 4px 12px 2px; }
+/* a bubble takes up to 82% as on the phone; in a wide window no line grows past what is read at ease */
+.mc-log > .mc-m { max-width: min(82%, 640px); padding-left: 8px; align-items: flex-start; }
+.mc-log > .mc-m.me { align-self: flex-end; align-items: flex-end; padding: 0 8px 0 0; }
+.mc-log > .mc-m.mgr { align-self: flex-start; }
+.mc-b {
+  position: relative; max-width: 100%; padding: 8px 12px; border-radius: 16px; border-top-left-radius: 0;
+  background: var(--mc-bub); color: var(--mc-bub-fg); font-size: 16px; font-weight: 400; line-height: 1.4; text-align: left;
+}
+.mc-m.me .mc-b { background: var(--mc-sky); color: var(--mc-sky-fg); border-top-left-radius: 16px; border-top-right-radius: 0; }
+/* the tail, as the phone draws it: a small corner at the top, towards who speaks */
+.mc-b::before { content: ""; position: absolute; top: 0; left: -8px; width: 8px; height: 13px; background: inherit; clip-path: polygon(0 0, 100% 0, 100% 100%); }
+.mc-m.me .mc-b::before { left: auto; right: -8px; clip-path: polygon(0 0, 100% 0, 0 100%); }
+.mc-from { display: block; margin-bottom: 2px; color: var(--mc-from); font-size: 12px; font-weight: 600; }
+.mc-meta { display: flex; align-items: flex-end; gap: 10px; margin-top: 2px; font-size: 11px; line-height: 1.4; font-variant-numeric: tabular-nums; }
+.mc-time { margin-left: auto; opacity: .6; text-align: right; }
+.mc-meta .mc-react { margin: 0 0 -1px -4px; }
+.mc-meta .mc-react button { opacity: .5; } .mc-meta .mc-react button.on { opacity: 1; }
+
+/* on its way, and refused */
+.mc-m.local .mc-b { opacity: .6; }
+.mc-m.local.failed .mc-b { opacity: 1; outline: 1px solid var(--red); }
+.mc-unsent { text-align: left; } .mc-unsent .mc-bad { color: inherit; }
+.mc-unsent .mc-lnk { color: inherit; }
+
+/* Tirith's and other agents' notes are the same bubble, a size smaller */
+.mc-m.note .mc-text { font-size: 14px; }
+
+/* a card is a message with its question and answer box in it */
+.mc-log > .mc-m.mc-card { width: min(82%, 640px); }
+.mc-card .mc-b, .mc-card .nlist { width: 100%; }
+.mc-card .ncard { padding: 2px 0 0; border: 0 !important; border-radius: 0 !important; opacity: 1; }
+.mc-card .ntitle { font-size: 16px; font-weight: 400; }
+.mc-card .nhead { flex-wrap: wrap; row-gap: 8px; } .mc-card .ntitle { flex-basis: 100%; } /* the question, then its marks under it */
+.mc-card .nclose { width: 28px; margin-left: auto; padding: 0 !important; text-align: center; }
+.mc-card .nwrite { gap: 8px; } .mc-card .iin { color: inherit; border-color: rgba(127, 127, 127, .4); }
+.mc-card.open .mc-from { color: var(--warn-fg); }
+
+/* pictures and files inside their bubble */
+.mc-b .mc-pics { flex-flow: column nowrap; align-items: flex-start; margin: 2px 0 4px; }
+.mc-b .mc-pics:has(.mc-pic + .mc-pic) { flex-flow: row wrap; justify-content: flex-start; }
+.mc-b .mc-pics:last-child { margin-bottom: 0; }
+.mc-b .mc-pic { max-width: 100%; border: 0; border-radius: 10px; background: rgba(127, 127, 127, .15); }
+.mc-b .mc-pic img { width: auto; height: auto; max-width: 100%; max-height: 240px; border-radius: 10px; }
+.mc-b .mc-pic + .mc-pic img, .mc-b .mc-pic:has(+ .mc-pic) img { width: 120px; height: 100px; }
+.mc-b .mc-file { background: rgba(127, 127, 127, .2); border: 0; color: inherit; }
+.mc-b .mc-file svg { color: inherit; opacity: .7; }
+
+/* routines' lines and quiet answers: the phone's small centred status line */
+.mc-log > .mc-ev { max-width: 100%; margin: 0; padding: 4px 12px; font-family: inherit; font-size: 13px; font-weight: 400; line-height: 1.4; text-transform: none; letter-spacing: 0; text-align: center; }
+.mc-ev > span { min-width: 0; overflow-wrap: anywhere; }
+.mc-log > .mc-ev.quiet { color: var(--mut); }
+.mc-log > .mc-ev.quiet:last-child { min-height: 44px; }
+
+/* the written message grows out of where the face was, only the one that was waited for */
+.mc-m.arrive .mc-b { transform-origin: 0 0; animation: mc-arrive .26s cubic-bezier(.2, .9, .25, 1.15) both; }
+@keyframes mc-arrive { from { opacity: .2; transform: scale(.86); } }
+@media (prefers-reduced-motion: reduce) { .mc-m.arrive .mc-b { animation: none; } }

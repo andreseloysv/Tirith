@@ -21,7 +21,7 @@ const DRAFT_KEY = 'tirith.chat.draft';
 /** The conversation of `project` ('' or none: the one of no project). Mount it with key=project, so the draft, the
     files being attached and the scroll position belong to one conversation. A bot's conversation (`bot-<id>`, or a
     system bot's key) passes `who` (the bot's name) and `hint` (what an empty conversation says). Who speaks here —
-    a project's Project Manager, or the bot — has its face and name in the head and beside its messages, and the
+    a project's Project Manager, or the bot — has its face and name in the head and its name on its messages (its face beside it only while it works), and the
     model picker under the thread chooses only that one's model: a project's chat picks the Project Manager's
     (for every project), a bot's screen its bot's. The face and name come from /api/models (the factory role). */
 export function Chat({ project = '', who = '', hint = '' }) {

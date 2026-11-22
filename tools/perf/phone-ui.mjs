@@ -208,7 +208,7 @@ const MEASURE = `(() => {
   const dw = Math.max(document.documentElement.scrollWidth, document.body ? document.body.scrollWidth : 0);
   if (dw > innerWidth + EPS) prob('horizontal scroll: page is ' + dw + 'px wide on a ' + innerWidth + 'px phone');
   // 2. Every face: inside its row/head box, sized like an avatar there, clipped there, and not over the text by it.
-  const ROW = '.nbot,.rface,.mc-head,.mc-line,.bhero,.bprev,.bshapes button,.blineup,.bpop';
+  const ROW = '.nbot,.rface,.mc-head,.mc-work,.bhero,.bprev,.bshapes button,.blineup,.bpop';
   const faces = [...document.querySelectorAll('.bot.face')].filter(show);
   out.counts.faces = faces.length;
   if (!faces.length) prob('no faces rendered at all');

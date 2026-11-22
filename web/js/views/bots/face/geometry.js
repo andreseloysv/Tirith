@@ -31,15 +31,24 @@ function sphere3(seg) {
 export function bodyGeometry3(name, seg) {
   const key = name + seg; if (geoCache3[key]) return geoCache3[key];
   const sh = SHAPES3D[name] || SHAPES3D.round;
-  const { pos, idx } = sphere3(seg), arr = new Float32Array(pos);
+  const { pos, idx } = sphere3(seg);
+  const g = inflated(sh, pos, idx, 2 / P);
+  const ball = inflated(sh, pos, idx, 1); // the same outline with a ball's profile, for when it turns round
+  g.setAttribute('ballPosition', ball.getAttribute('position'));
+  g.setAttribute('ballNormal', ball.getAttribute('normal'));
+  return (geoCache3[key] = g);
+}
+/** The sphere's points inflated into the shape: `bend` says how cushioned its profile is (1: a ball's). */
+function inflated(sh, pos, idx, bend) {
+  const arr = new Float32Array(pos);
   for (let i = 0; i < arr.length; i += 3) {
     const a = arr[i], c = arr[i + 1], b = arr[i + 2];
-    const th = Math.atan2(c, a), m = Math.min(1, Math.hypot(a, c)), rr = radiusAt(sh, th) * Math.pow(m, 2 / P);
-    arr[i] = rr * Math.cos(th); arr[i + 1] = rr * Math.sin(th); arr[i + 2] = DEPTH * Math.sign(b) * Math.pow(Math.abs(b), 2 / P);
+    const th = Math.atan2(c, a), m = Math.min(1, Math.hypot(a, c)), rr = radiusAt(sh, th) * Math.pow(m, bend);
+    arr[i] = rr * Math.cos(th); arr[i + 1] = rr * Math.sin(th); arr[i + 2] = DEPTH * Math.sign(b) * Math.pow(Math.abs(b), bend);
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(arr, 3));
   g.setIndex(idx);
   g.computeVertexNormals();
-  return (geoCache3[key] = g);
+  return g;
 }

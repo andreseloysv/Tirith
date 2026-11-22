@@ -1,8 +1,6 @@
 // Grouping a conversation's rows: a run of manager / tool rows is one turn, and once it ended only its answer
-// shows. An answer that starts with ∅ (nothing new) is a quiet line. While a turn runs, one tiny line says what
-// it is doing in plain words (intent.js).
-import { html } from '../../../vendor/preact-htm.js';
-import { intentOf } from '../../intent.js';
+// shows. An answer that starts with ∅ (nothing new) is a quiet line. While a turn runs the bot is shown at work
+// (working.js).
 
 /** [{kind: 'msg', m} | {kind: 'turn', key, rows}] in order; a turn is a run of manager / tool messages. */
 export function group(rows) {
@@ -38,9 +36,4 @@ export function shownAnswers(rows, running) {
   const items = group(rows);
   return items.flatMap((it, i) => (it.kind === 'turn' ? answerOf(it.rows, running && i === items.length - 1) : it.m.role === 'tirith' ? [it.m] : []))
     .filter((r) => !quiet(r.text));
-}
-
-/** While a turn runs: one tiny line with what it is doing, in plain words. */
-export function Intent({ who, step }) {
-  return html`<div class="mc-intent" role="status" aria-live="polite"><i class="mc-pulse" aria-hidden="true"></i>${who ? html`<b>${who}</b>` : null}<span>${intentOf(step)}…</span></div>`;
 }

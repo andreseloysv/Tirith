@@ -1,8 +1,11 @@
-// The steps of one animator frame (animator.js): what happens now, the pose of the act playing, the float, the
-// eyes and the z's.
+// The steps of one animator frame (animator.js): what happens now, the pose of the sleeping act playing, the float
+// with the act of acts.js on it, the eyes and the z's.
 import { R, TAU, ease, bell, pick, ACTS } from './motion.js';
+import { showParts } from './features.js';
 
-/** Events of this state, each at its own random moment: blinks, glances, acts and z's. */
+const FEET = 40; /* the float turns about the feet, this far below the middle (bots.css) */
+
+/** Events of this state, each at its own random moment: blinks, glances, the sleeping acts and z's. */
 export function happen(a, now, g) {
   if (g.blink && now > a.next.blink) { a.blinks.push(now); if (Math.random() < 0.18) a.blinks.push(now + 0.24); a.next.blink = now + R(...g.blink); }
   if (g.look && now > a.next.look) {
@@ -13,18 +16,17 @@ export function happen(a, now, g) {
     e.ty = work ? R(-0.5, 1.5) : Math.random() < 0.4 ? 0 : R(-ry, ry * 0.6);
     a.next.look = now + R(...g.look);
   }
-  if (!a.act && now > a.next.act) {
-    const name = pick(g.acts), act = ACTS[name]();
+  if (g.acts && !a.act && now > a.next.act) {
+    const act = ACTS[pick(g.acts)]();
     a.act = { ...act, at: now };
-    if (act.blinks) act.blinks.forEach((o) => a.blinks.push(now + o));
     a.next.act = now + act.d + R(...g.act);
   }
   if (g.z && now > a.next.z && a.zg && a.zs.length < 3) { a.spawnZ(now); a.next.z = now + R(...g.z); }
 }
 
-/** The act now playing: what it adds to the pose. */
+/** The sleeping (or waking) act now playing: what it adds to the pose. */
 export function actPose(a, now) {
-  let o = { x: 0, y: 0, rot: 0, sx: 1, sy: 1, ex: 0, ey: 0 };
+  let o = { x: 0, y: 0, rot: 0, sx: 1, sy: 1 };
   if (a.act) {
     const x = (now - a.act.at) / a.act.d;
     if (x >= 1) a.act = null;
@@ -33,32 +35,29 @@ export function actPose(a, now) {
   return o;
 }
 
-/** The float: slow waves that never line up, plus the act; and the halo's pulse. */
-export function floatPose(a, m, c, o) {
+/** The float: slow waves that never line up, plus the acts; and the halo's pulse. */
+export function floatPose(a, m, c, o, p) {
   const [w1, w2, w3, w4, w5] = a.w, [p1, p2, p3, p4, p5] = a.p;
-  const y = m.bob * (0.62 * Math.sin(c * w1 + p1) + 0.38 * Math.sin(c * w2 + p2)) + o.y;
-  const x = m.sway * Math.sin(c * w3 + p3) + o.x;
-  const rot = m.tilt * Math.sin(c * w4 + p4) + o.rot;
   const br = 1 + m.breath * Math.sin(c * w5 + p5);
-  const sx = o.sx * (2 - br), sy = o.sy * br;
+  const sy = o.sy * p.sy * br;
+  const sx = o.sx * p.sx * (2 - br) * (1 - 0.08 * Math.abs(Math.sin(p.yaw)));
+  const up = FEET * sy; /* a roll goes round the middle: the feet make way for it */
+  const y = m.bob * (0.62 * Math.sin(c * w1 + p1) + 0.38 * Math.sin(c * w2 + p2)) + o.y + p.y + up * (Math.cos(p.roll) - 1);
+  const x = m.sway * Math.sin(c * w3 + p3) + o.x + p.x - up * Math.sin(p.roll);
+  const rot = m.tilt * Math.sin(c * w4 + p4) + o.rot + (p.roll * 360) / TAU;
   return { x, y, rot, sx, sy, halo: (m.halo + 0.06 * Math.sin(c * w2 + p5)).toFixed(3) };
 }
 
-/** The eyes: where they look (with a quick ease, like a glance) and their blinks. */
-export function moveEyes(a, now, o) {
+/** The eyes: where they look (with a quick ease, like a glance; an act has them to itself), and their blinks. */
+export function moveEyes(a, now, p) {
+  if (a.state === 'sleep') return;
   const e = a.eye, k = ease(Math.min(1, (now - e.at) / e.d));
   e.x = e.fx + (e.tx - e.fx) * k; e.y = e.fy + (e.ty - e.fy) * k;
-  if (a.look && a.state !== 'sleep') {
-    const tr = `translate(${(e.x + o.ex).toFixed(2)} ${(e.y + o.ey).toFixed(2)})`;
-    if (tr !== a.lookT) { a.lookT = tr; a.look.setAttribute('transform', tr); }
-  }
+  e.free += ((a.acts.playing ? 0 : 1) - e.free) * 0.2;
   let lid = 1;
   a.blinks = a.blinks.filter((b) => now - b < 0.16);
   for (const b of a.blinks) if (now >= b) lid = Math.min(lid, 1 - 0.92 * bell((now - b) / 0.16));
-  if (a.eyes && a.state !== 'sleep') {
-    const tr = `translate(0 ${a.ey}) scale(1 ${lid.toFixed(3)}) translate(0 ${-a.ey})`;
-    if (tr !== a.eyesT) { a.eyesT = tr; a.eyes.setAttribute('transform', tr); }
-  }
+  showParts(a.parts, p, [e.x * e.free, e.y * e.free], lid);
 }
 
 /** The sleeping z's rise and fade. */

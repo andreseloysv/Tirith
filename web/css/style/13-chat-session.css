@@ -28,7 +28,7 @@
 
 /* chat messages never clip or run past the right edge: flex children shrink, prose and code wrap, `pre` scrolls inside its bubble */
 .mc-m, .mc-b, .mc-acts, .mc-m .nacts, .mc-m .acts, .mc-m .act, .mc-meta { min-width: 0; max-width: 100%; }
-.mc-log > .mc-m { max-width: 92%; } .mc-log > .mc-m.turn { max-width: 96%; }
+.mc-log > .mc-m.turn { max-width: 96%; }
 .mc-b { overflow-wrap: anywhere; }
 .mc-b .md, .mc-b.md { min-width: 0; max-width: 100%; }
 .md p, .md li, .md blockquote, .md .mdh { overflow-wrap: anywhere; }
@@ -54,7 +54,7 @@
 .mchat { min-width: 0; max-width: 100%; overflow-x: hidden; }
 .mc-log { overflow-x: hidden; } .mc-comp, .mc-box, .mc-row, .mc-strip, .mc-pics { min-width: 0; max-width: 100%; box-sizing: border-box; }
 .mc-m, .mc-m .mc-b, .mc-m.turn { min-width: 0; box-sizing: border-box; }
-.mc-b pre, .mc-b code { max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; } .mc-b table { display: block; max-width: 100%; overflow-x: auto; }
+.mc-b code { max-width: 100%; overflow-wrap: anywhere; } .mc-b table { display: block; max-width: 100%; overflow-x: auto; }
 .mc-b img { max-width: 100%; height: auto; } .mc-box textarea { box-sizing: border-box; max-width: 100%; }
 
 /* Settings sits in the same page margin as the header */

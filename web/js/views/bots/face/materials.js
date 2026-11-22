@@ -8,6 +8,10 @@ export const hex3 = (h) => new THREE.Color(h);
 export const LIGHT3 = new THREE.Vector3(-0.55, 0.65, 0.75).normalize(); // soft key from the upper left, in view space
 const bodyVS = `varying vec3 vN; varying vec3 vV; varying vec3 vWN;
 void main(){ vec4 mv = modelViewMatrix * vec4(position,1.0); vN = normalize(normalMatrix * normal); vV = -mv.xyz; vWN = normalize(mat3(modelMatrix) * normal); gl_Position = projectionMatrix * mv; }`;
+// the body's own: the same, between its cushioned profile and a ball's (geometry.js) by `ball`
+const ballVS = `attribute vec3 ballPosition; attribute vec3 ballNormal; uniform float ball; varying vec3 vN; varying vec3 vV; varying vec3 vWN;
+void main(){ vec3 p = mix(position, ballPosition, ball), n = mix(normal, ballNormal, ball);
+  vec4 mv = modelViewMatrix * vec4(p,1.0); vN = normalize(normalMatrix * n); vV = -mv.xyz; vWN = normalize(mat3(modelMatrix) * n); gl_Position = projectionMatrix * mv; }`;
 const bodyFS = `uniform vec3 core; uniform vec3 edge; uniform vec3 low; uniform vec3 L; uniform float glow;
 varying vec3 vN; varying vec3 vV; varying vec3 vWN;
 void main(){
@@ -27,7 +31,7 @@ export function bodyMaterial3(color) {
   const base = hex3(color);
   const core = base.clone().lerp(new THREE.Color(1, 1, 1), 0.62);
   const low = base.clone().multiplyScalar(0.78).lerp(new THREE.Color(1, 0.55, 0.1), 0.18);
-  return new THREE.ShaderMaterial({ vertexShader: bodyVS, fragmentShader: bodyFS, uniforms: { core: { value: core }, edge: { value: base }, low: { value: low }, L: { value: LIGHT3 }, glow: { value: 1.12 } } });
+  return new THREE.ShaderMaterial({ vertexShader: ballVS, fragmentShader: bodyFS, uniforms: { ball: { value: 0 }, core: { value: core }, edge: { value: base }, low: { value: low }, L: { value: LIGHT3 }, glow: { value: 1.12 } } });
 }
 export const eyeMat3 = new THREE.ShaderMaterial({ vertexShader: bodyVS, uniforms: { L: { value: LIGHT3 } }, fragmentShader: `uniform vec3 L; varying vec3 vN; varying vec3 vV; varying vec3 vWN;
 void main(){ vec3 N = normalize(vN), V = normalize(vV), H = normalize(L + V);

@@ -23,16 +23,22 @@ export function halo3(color) {
   return halo;
 }
 
+/** Eye `i` set into the surface, `dx` and `dy` box units from where it rests (y down). */
+export function seatEye(eye, sh, i, dx = 0, dy = 0) {
+  const e = sh.eyes, [u, w] = boxPt(sh, e[i] + dx, e[2] + dy), rx = e[3] * PX / sh.rmax;
+  const n = normalAt(sh, u, w), p = frontPt(sh, u, w);
+  const z = n.clone(), xv = new THREE.Vector3(0, 1, 0).cross(z).normalize(), yv = z.clone().cross(xv);
+  eye.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(xv, yv, z));
+  eye.position.copy(p.addScaledVector(n, -0.12 * rx));
+}
+
 /** Eyes: glossy dark lenses set into the surface, each with its dot of light. */
 export function eyes3(sh) {
   const e = sh.eyes, out = [];
-  for (const x of [e[0], e[1]]) {
-    const [u, w] = boxPt(sh, x, e[2]), rx = e[3] * PX / sh.rmax, ry = e[4] * PX / sh.rmax;
-    const n = normalAt(sh, u, w), p = frontPt(sh, u, w);
+  for (let i = 0; i < 2; i++) {
+    const rx = e[3] * PX / sh.rmax, ry = e[4] * PX / sh.rmax;
     const eye = new THREE.Mesh(EYE_GEO3, eyeMat3);
-    const z = n.clone(), xv = new THREE.Vector3(0, 1, 0).cross(z).normalize(), yv = z.clone().cross(xv);
-    eye.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(xv, yv, z));
-    eye.position.copy(p.addScaledVector(n, -0.12 * rx));
+    seatEye(eye, sh, i);
     eye.userData.s = [rx * 0.9, ry * 0.9, 0.3 * rx];
     eye.scale.set(...eye.userData.s);
     const dot = new THREE.Mesh(DOT_GEO3, DOT_MAT3);
@@ -42,7 +48,7 @@ export function eyes3(sh) {
   return out;
 }
 
-/** Mouths for each mood, and the sleeping eyes: {grin, smile, sleepy}. */
+/** Mouths for each mood, the sleeping eyes and a yawn's mouth: {grin, smile, sleepy, yawn, shut}. */
 export function mouths3(sh) {
   const e = sh.eyes;
   const mx = (e[0] + e[1]) / 2, my = e[2] + e[4] + 6, hw = (e[1] - e[0]) * 0.5, k = (v) => boxPt(sh, v[0], v[1]);
@@ -54,5 +60,17 @@ export function mouths3(sh) {
   const sleepy = new THREE.Group();
   for (const x of [e[0], e[1]]) sleepy.add(tube3(sh, quad3([x - 6, e[2]], [x, e[2] + 5], [x + 6, e[2]], 10).concat([[x + 6, e[2]]]).map(k), lineW * 1.1, INK3));
   sleepy.add(tube3(sh, quad3([mx - hw * 0.35, my], [mx, my + hw * 0.3], [mx + hw * 0.35, my], 10).concat([[mx + hw * 0.35, my]]).map(k), lineW * 0.9, INK3));
-  return { grin, smile, sleepy };
+  const shut = [e[0], e[1]].map((x) => Object.assign(tube3(sh, quad3([x - e[3], e[2]], [x, e[2] + e[4] * 0.8], [x + e[3], e[2]], 10).concat([[x + e[3], e[2]]]).map(k), lineW * 1.35, INK3), { visible: false }));
+  return { grin, smile, sleepy, shut, yawn: yawn3(sh, mx, my + hw * 0.5, hw) };
+}
+
+/** A yawn's round mouth with its tongue, made about its own middle so that it opens from there. */
+function yawn3(sh, cx, cy, hw) {
+  const oval = (rx, ry, down = 0) => Array.from({ length: 24 }, (_, i) => { const a = i / 24 * TAU; return boxPt(sh, cx + rx * Math.cos(a), cy + down + ry * Math.sin(a)); });
+  const [u, w] = boxPt(sh, cx, cy), at = frontPt(sh, u, w);
+  const yawn = new THREE.Group();
+  yawn.add(decal3(sh, oval(hw * 0.6, hw * 0.78), 0.024, MOUTH3), decal3(sh, oval(hw * 0.34, hw * 0.22, hw * 0.4), 0.03, TONGUE3));
+  yawn.children.forEach((mesh) => mesh.geometry.translate(-at.x, -at.y, -at.z));
+  yawn.position.copy(at); yawn.visible = false;
+  return yawn;
 }

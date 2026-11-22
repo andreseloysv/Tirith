@@ -70,7 +70,7 @@
 
 /* dark rules above, again for System mode */
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .mc-m.mgr .mc-b, :root:not([data-theme="light"]) .mc-box, :root:not([data-theme="light"]) .mc-btn { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.14); box-shadow: none; }
+  :root:not([data-theme="light"]) .mc-box, :root:not([data-theme="light"]) .mc-btn { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.14); box-shadow: none; }
   :root:not([data-theme="light"]) .mchat.drop::after { background: rgba(20,32,58,.86); }
   :root:not([data-theme="light"]) .mc-file { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.14); }
   :root:not([data-theme="light"]) .mc-dot { border-color: #1b1f27; }

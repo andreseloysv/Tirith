@@ -1,0 +1,27 @@
+/* ---------- the words inside a bubble: the phone's Markdown ---------- */
+.mc-text { min-width: 0; max-width: 100%; white-space: normal; }
+.mc-text .md { color: inherit; font: inherit; line-height: inherit; }
+.mc-text .md strong { font-weight: 700; }
+.mc-text .md p, .mc-text .md ul, .mc-text .md ol, .mc-text .md .mdpre, .mc-text .md .mdtbl, .mc-text .md blockquote { margin: 0 0 .5em; }
+.mc-text .md > :last-child { margin-bottom: 0; }
+.mc-text .md li { margin: 0; }
+.mc-text .md li > ul, .mc-text .md li > ol { margin: 0; }
+.mc-text .md ul, .mc-text .md ol { padding-left: 1.4em; }
+.mc-text .md ul { list-style-type: circle; } /* as the phone's, whose bubbles are list items themselves */
+.mc-text .md ul ul { list-style-type: square; }
+.mc-text .md .mdh { margin: .4em 0 .3em; color: inherit; font-size: 1.05em; font-weight: 700; line-height: 1.25; letter-spacing: 0; text-transform: none; }
+.mc-text .md .mdh1 { font-size: 1.2em; }
+.mc-text .md > .mdh:first-child { margin-top: 0; }
+.mc-text .md a, .mc-text .md a.fref, .mc-text .md a.lref { color: inherit; text-decoration-line: underline; text-decoration-color: currentColor; overflow-wrap: anywhere; }
+.mc-text .md code { padding: 1px 4px; border-radius: 4px; background: rgba(127, 127, 127, .22); color: inherit; font-size: .9em; word-break: normal; }
+/* code keeps its lines and scrolls inside its bubble */
+.mc-text .md .mdpre { max-width: 100%; padding: 8px 10px; overflow-x: auto; border: 0; border-radius: 8px; background: rgba(127, 127, 127, .18); white-space: pre; }
+.mc-text .md .mdpre code { padding: 0; background: none; font-size: .85em; line-height: 1.4; white-space: pre; overflow-wrap: normal; }
+.mc-text .md blockquote { color: inherit; opacity: .85; border-left-color: rgba(127, 127, 127, .55); }
+.mc-text .md table { font-size: .875em; }
+.mc-text .md th, .mc-text .md td { border-color: rgba(127, 127, 127, .35); }
+.mc-text .md li.mdtask { margin-left: -1.4em; }
+.mc-text .md .mdtask.done { color: inherit; opacity: .65; }
+/* a citation's note is read over the bubbles: it needs a ground of its own */
+.mc-text .mc-cite { color: inherit; }
+.mc-text .mc-cite::after { background: var(--bg); }
