@@ -1,0 +1,14 @@
+# A bot template: what «Desde plantilla» makes. Its folder's name is its skill's name.
+# Its task names no {title} or {text}: what a pull request says stays inside the block marked as data from outside.
+name = "Revisar los PR nuevos"
+start = "Reviso cada PR nuevo y te lo cuento aquí, sin publicar nada. Para conectarme: en Routines pulsa «Make the address», copia la dirección y en GitHub (Settings › Webhooks del repositorio) añádela con Content type application/json y solo el evento Pull requests. Para repositorios privados necesito gh con sesión en este equipo."
+
+[face]
+shape = "cloud"
+color = "#8b5cf6"
+
+[routine]
+title = "Revisar el PR nuevo"
+trigger = "webhook"
+when = "github:pull_request.opened"
+prompt = "Usa la skill revisar-pr con el pull request del evento: lee su diff y di qué cambia y qué riesgos tiene. No ejecutes su código ni publiques nada."

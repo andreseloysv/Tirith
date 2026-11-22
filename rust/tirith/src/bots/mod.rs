@@ -5,6 +5,7 @@ mod cli;
 mod context;
 mod folder;
 mod fragment;
+mod from_template;
 mod hook;
 mod hook_api;
 mod hook_event;
@@ -19,6 +20,7 @@ mod run;
 mod schedule;
 mod store;
 mod sweep;
+mod template;
 mod versioned;
 mod written;
 pub use api::routes;
@@ -37,6 +39,9 @@ pub use versioned::versioned;
 #[cfg(test)]
 #[path = "../../checks/bot_git.rs"]
 mod git_tests;
+#[cfg(test)]
+#[path = "../../checks/bot_templates.rs"]
+mod template_tests;
 #[cfg(test)]
 #[path = "../../checks/bots.rs"]
 mod tests;

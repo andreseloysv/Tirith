@@ -91,6 +91,14 @@ opened, with no platform in between. The Library gives a short Google Apps Scrip
 owner's Google account, posts the new mail labelled `tirith/<bot name>` (sender, subject, date, text, its link) to the webhook and marks it
 read. Tests `webhook_create_signs_the_request` (against a fake platform) and `webhook_starts_its_routine` (`rust/tirith/checks/webhooks.rs`).
 
+Templates. `factory/bots/<id>/` is one bot template: `bot.toml` (`name`, `start` — what the bot says first, so the owner knows what it needs —,
+`[face]` with `shape` and `color`, and `[routine]` with the fields `POST /api/bots/<id>/routines` takes) and `SKILL.md`, the skill named `<id>`
+with the seven sections of `factory/skill.md`. The repo's three are built in (`factory/bot_templates.rs`) under the folder's, which is read on
+each call; one that does not load is an error, by its id. `GET /api/bots/templates` lists them and `POST /api/bots/from-template`
+(`{"template": "<id>"}`) makes the bot and answers it: an owner's bot like any other, with the skill in its folder and the routine stamped as
+just made, so it first runs at its next time. «Desde plantilla» in the Bots view shows them. Test `bot_templates_are_complete`
+(`rust/tirith/checks/bot_templates.rs`).
+
 Files:
 
 - `api.rs`: The bots' HTTP API: the list and its cards, a bot deleted, its routines, a routine run now, its Library.
@@ -99,6 +107,7 @@ Files:
 - `context.rs`: What a bot is handed at the start of every turn and routine, and the skill links laid before it.
 - `folder.rs`: A bot's folder and skills: where its sessions run (the lab's worktree during a B run), where agents may write, and the skills a folder holds.
 - `fragment.rs`: The bots as a TOML fragment: the owner's bots' roles, and every written bot's routes and routines.
+- `from_template.rs`: A bot made from a template: its card, its routine, its skill and its first words.
 - `hook.rs`: A bot's webhook as Tirith keeps it (kv `webhook:<bot>`: the platform's id, url and from, and the room), and what arrives through it.
 - `hook_api.rs`: A bot's webhook from the page: its URL (made once on the platform), deleted, and «Probar».
 - `hook_event.rs`: What a webhook call brought, as a bot's `webhook` event: where from, what kind, its title, link and text, and the body.
@@ -114,7 +123,8 @@ Files:
 - `schedule.rs`: When a routine runs: its days of the week, and whether it is due now.
 - `store.rs`: Keeping the bots: one change at a time, written into config.toml and reloaded.
 - `sweep.rs`: What goes out of config.toml before the bots are written again: their roles and routes, then the sections left empty.
-- `versioned.rs`: The bots' folders and `<home>/bots` as git repositories: only the memories and the own skills followed, a commit after each turn or Library change that changed them.
+- `template.rs`: A bot template read and checked: its name, face, routine, first words and skill.
+- `versioned.rs`: The bots' folders and `<home>/bots` as git repositories: only the memories and the own skills followed, a commit after each turn, Library change or bot made from a template that changed them.
 - `written.rs`: The text of config.toml with the bots laid into it.
 
 ## `chat/`
@@ -220,6 +230,7 @@ keeps the version with an empty hash. Comparing two versions, two models or two 
 Files:
 
 - `agents.rs`: Reading a factory's agents: their keys and their commands.
+- `bot_templates.rs`: The bot templates' texts: `factory/bots/<id>/`, the repo's built in under the folder's.
 - `current.rs`: The factory version the daemon runs now, reloaded under config.toml's overlay; a bad version keeps the last good one.
 - `embedded.rs`: The repo's factory, built into the binary: what runs when no factory folder is found, and what every folder's file is laid over.
 - `evals.rs`: Reading a factory's evals, and the hash of the setting a role runs with (what an eval's verdict is tied to).

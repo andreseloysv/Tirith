@@ -15,7 +15,7 @@ fn timed(r: &mut Value, b: &Value) -> Result<bool, String> {
     Ok(r["days"].as_array().is_some_and(|d| !d.is_empty()))
 }
 /// The fields `b` carries laid over the routine `r`: its `trigger` is `schedule` (a time on some days) or `webhook` (an event from outside whose `when` holds: `<source:kind>`, a pattern of it with `*`, or `*`); it must keep a title, what to do, and a day or a `when`.
-fn set(r: &mut Value, b: &Value) -> Result<(), String> {
+pub(super) fn set(r: &mut Value, b: &Value) -> Result<(), String> {
     ["title", "prompt", "at", "on", "trigger", "when"]
         .into_iter()
         .filter(|k| !b[*k].is_null())
