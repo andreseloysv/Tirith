@@ -1,12 +1,12 @@
 //! Routines run: one now, or every one due on the scheduler's tick.
 use super::list::all;
-use super::schedule::due;
+use super::schedule::{due, late};
 use super::store::find;
 use crate::app::{now_iso, Shared};
 use crate::server::s;
 use chrono::Local;
-/// Runs a routine now: the conversation shows it, and the bot is handed the task.
-pub(super) fn fire(app: &Shared, id: &str, rid: &str) -> Result<(), String> {
+/// Runs a routine now: the conversation shows it, and the bot is handed the task, with how `late` it is (empty when on time, or run by hand).
+pub(super) fn fire(app: &Shared, id: &str, rid: &str, late: &str) -> Result<(), String> {
     let mut bots = all(app);
     let bot = find(&mut bots, id)?;
     let (key, r) = (
@@ -22,7 +22,7 @@ pub(super) fn fire(app: &Shared, id: &str, rid: &str) -> Result<(), String> {
     app.set_kv(&format!("routine:{id}:{rid}"), Some(&now_iso()));
     app.chat("routine", &format!("Running routine · {title}"), &key);
     crate::turns::trigger(&key, "schedule", rid); // the page's Run now said run-now first
-    let told = format!("Routine «{title}» is due now. Do it and report the result here in a few lines (when nothing is new, one line that starts with ∅); ask nothing: {task}");
+    let told = format!("Routine «{title}» is due now{late}. Do it and report the result here in a few lines (when nothing is new, one line that starts with ∅); ask nothing: {task}");
     crate::lab::fired(app, &key, rid, &told); // an experiment on it: this run is its A or its B, or a shadow B runs beside it
     crate::manager::emit_event(app, &key, "schedule", &told, None);
     Ok(())
@@ -30,12 +30,13 @@ pub(super) fn fire(app: &Shared, id: &str, rid: &str) -> Result<(), String> {
 /// Fires the routines due now, and decides the experiments due; the lanes scheduler calls it on its tick (every ~30 s), so the bots need no timer of their own.
 pub fn tick(app: &Shared) {
     crate::lab::tick(app);
+    let now = Local::now();
     all(app).iter().for_each(|b| {
         b["routines"]
             .as_array()
             .into_iter()
             .flatten()
-            .filter(|r| due(r, Local::now()))
-            .for_each(|r| drop(fire(app, &s(b, "id"), &s(r, "id"))))
+            .filter(|r| due(r, now))
+            .for_each(|r| drop(fire(app, &s(b, "id"), &s(r, "id"), &late(r, now))))
     });
 }

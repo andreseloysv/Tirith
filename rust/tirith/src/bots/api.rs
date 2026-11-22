@@ -45,7 +45,7 @@ async fn change(State(app): State<Shared>, Path(id): Path<String>, Json(b): Json
 async fn run(State(app): State<Shared>, Path((id, rid)): Path<(String, String)>) -> R {
     let key = key_for(&app, &id).unwrap_or_default();
     crate::turns::trigger(&key, "run-now", &rid);
-    reply(fire(&app, &id, &rid).map(|_| json!({"ok": true})))
+    reply(fire(&app, &id, &rid, "").map(|_| json!({"ok": true})))
 }
 async fn lib(State(app): State<Shared>, Path(id): Path<String>, Json(b): Json<Value>) -> R {
     reply(learn(&app, &id, &b))

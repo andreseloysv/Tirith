@@ -48,7 +48,10 @@ Files:
 Bots: agents of their own, factory roles with `scope = "own"` — the owner's in `~/.tirith/config.toml` (`[roles.bot-<id>]`, extending the manager) and the factory's system bots (`ceo`, `coach`, `judge` with `show = false`, and `manager-general`, the manager of no project), which the page edits the same way, saving the change as a layer in config.toml. Each has a name, a face (shape and
 colour) and its own conversation (its key), run like a project's manager with its own room on the phones; the sidebar paints every `own` role with `show = true`. Routines are `[[routes]]` on `schedule`
 in that file (their last runs stay in kv as `routine:<id>:<routine>` stamps, not configuration): tasks a bot does by itself at a time of chosen weekdays (the machine's local
-time); the lanes scheduler's tick hands a due one to the bot once a day, and the bot makes them itself with `tirith routine add|remove|list`. The page writes config.toml
+time); the lanes scheduler's tick hands a due one to the bot once for each of its times. Times missed (the daemon was down, the machine slept)
+follow the route's `catch_up`: `"once"`, the default, runs the routine one time, however many of its times passed since its last run, and tells the bot how late
+that is, counted from the latest of them; `"skip"` waits for the next time. Up to 5 minutes after its time is on time, and a routine that never ran only has
+today's time to catch up. `POST /api/bots/<id>/routines` takes `catch_up` too, and the bot makes them itself with `tirith routine add|remove|list`. The page writes config.toml
 with `toml_edit`, keeping its comments, and the bots that used to live in kv move there once, at daemon start. A bot learns in its folder (`<tirith home>/manager/<key>`): `memory.md`, which Tirith hands it as it is now at
 the start of every turn and routine, and skills in `.agents/skills/<name>/SKILL.md`, its own and the shared ones of `<tirith home>/bots/skills` (linked in before every turn).
 Both are git repositories (`bots/versioned.rs`): a bot's folder follows only its `memory.md` and its own skills — its `.gitignore`
@@ -120,7 +123,7 @@ Files:
 - `notes.rs`: Numbered memory notes: `[m<N>]` and `[s<N>]` put before every note line that has none.
 - `routine.rs`: A routine made, changed or removed from a bot's card or its own commands.
 - `run.rs`: Routines run: one now, or every one due on the scheduler's tick (which also decides the lab's experiments that are due).
-- `schedule.rs`: When a routine runs: its days of the week, and whether it is due now.
+- `schedule.rs`: When a routine runs: its days of the week, whether it is due now, and how late.
 - `store.rs`: Keeping the bots: one change at a time, written into config.toml and reloaded.
 - `sweep.rs`: What goes out of config.toml before the bots are written again: their roles and routes, then the sections left empty.
 - `template.rs`: A bot template read and checked: its name, face, routine, first words and skill.
@@ -513,8 +516,8 @@ after the delayed `metric.red` route's `after_minutes` (15), one pass runs for t
 role (the CEO, `access = "read"`) runs one fresh turn like any turn role, and its
 answer goes to the CEO's own conversation and, as `review.done`, to the manager of no project. Back to green ends the episode. The
 factory's `schedule` route to the CEO also runs it every day at 07:00 with no red measure due — that
-when and who are configuration, not a decision in `metrics/`, and it is due like a bot's routine (its time
-came today and no daily pass ran since; its daily passes are the `ceo_reviews` rows whose `metric` names
+when and who are configuration, not a decision in `metrics/`, and it is due like a bot's routine (one of its
+times came and no daily pass ran since, with the route's `catch_up`; its daily passes are the `ceo_reviews` rows whose `metric` names
 `daily`, counted in the same 24 h as its `max_per_day`). Either way its brief (`brief`) carries
 the measures, the measures and eval scores grouped by factory version — merged lanes and their first-try
 share, the `scores`, the cards and the events per stamp, oldest version first — the last lanes with their
