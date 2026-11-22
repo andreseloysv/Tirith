@@ -46,24 +46,28 @@ fn days_of(days: &[u64]) -> String {
     }
 }
 
+fn days_in(r: &Value) -> Vec<u64> {
+    let days = r["days"].as_array().into_iter().flatten();
+    days.filter_map(Value::as_u64).collect()
+}
+
+/// « · lun a vie 08:00».
+pub(super) fn days_and_time(r: &Value) -> String {
+    format!(" · {} {}", days_of(&days_in(r)), s(r, "at"))
+}
+
+/// A timed routine's days and time, and when it next runs (`label`).
+pub(super) fn runs(r: &Value, now: DateTime<Local>, label: &str) -> String {
+    let Some(next) = next((&s(r, "at"), &days_in(r)), now) else {
+        return String::new();
+    };
+    format!("{} · {label}: {}", days_and_time(r), at(next))
+}
+
 /// What the line of a new timed routine adds: its days, its time and when it first runs, so nobody waits for it on a day it has none.
 pub fn first(r: &Value, now: DateTime<Local>) -> String {
     if s(r, "trigger") != "schedule" {
         return String::new();
     }
-    let at_time = s(r, "at");
-    let days: Vec<u64> = r["days"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_u64)
-        .collect();
-    let Some(next) = next((&at_time, &days), now) else {
-        return String::new();
-    };
-    format!(
-        " · {} {at_time} · primera vez: {}",
-        days_of(&days),
-        at(next)
-    )
+    runs(r, now, "primera vez")
 }

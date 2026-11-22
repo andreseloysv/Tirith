@@ -60,18 +60,20 @@ fn edit(
     );
     let last = list.len() - 1;
     let r = &mut list[i.unwrap_or(last)];
+    let was = r.clone();
     set(r, b)?;
-    Ok((
-        if i.is_none() {
-            let first = crate::expected::first(r, chrono::Local::now());
-            format!("Created routine · {}{first}", s(r, "title"))
-        } else {
-            String::new()
-        },
-        s(r, "id"),
-    ))
+    let (title, now) = (s(r, "title"), chrono::Local::now());
+    let said = if i.is_none() {
+        let first = crate::expected::first(r, now);
+        format!("Created routine · {title}{first}")
+    } else {
+        crate::expected::changed(&was, r, now).map_or(String::new(), |how| {
+            format!("Changed routine · {title}{how}")
+        })
+    };
+    Ok((said, s(r, "id")))
 }
-/// A new routine, or a change to one (found by `id` or by its title): `title`, `prompt`, `trigger` (`schedule` or `webhook`), `days` and `at` ("HH:MM") or `when`, `on`; with `delete` it goes. The conversation says when one is made or removed.
+/// A new routine, or a change to one (found by `id` or by its title): `title`, `prompt`, `trigger` (`schedule` or `webhook`), `days` and `at` ("HH:MM") or `when`, `on`; with `delete` it goes. The conversation says when one is made or removed, or its schedule changes (its days, its time and its next run).
 pub(super) fn routine(app: &Shared, id: String, b: Value) -> Result<Value, String> {
     let (rid, title) = (s(&b, "id"), s(&b, "title"));
     let (said, changed) = with(app, |bots| {

@@ -56,5 +56,8 @@ mod git_tests;
 #[path = "../../checks/hook_data.rs"]
 mod hook_tests;
 #[cfg(test)]
+#[path = "../../checks/reschedule.rs"]
+mod reschedule_tests;
+#[cfg(test)]
 #[path = "../../checks/bots.rs"]
 mod tests;
