@@ -648,6 +648,18 @@ Files:
 - `parse.rs`: Reading a plan's markdown into its steps and items.
 - `step.rs`: Creating the plan's next step.
 
+## `power/`
+
+`[power] keep_awake = true` in config.toml (false by default), read when the daemon starts: on macOS it runs
+`caffeinate -i -s -w <its pid>`, so the machine does not sleep while the daemon lives and may again once it ends,
+however it ends. `-s` holds on mains power only. On Linux nothing runs.
+
+Files:
+
+- `argv.rs`: The command that keeps the machine awake, when there is one to run.
+- `mod.rs`: Declares the folder's files and re-exports what other modules use.
+- `start.rs`: Keeping the machine awake from the daemon's start.
+
 ## `projects/`
 
 Adding a project (the page's "+", `tirith project add`): the folder gets a git repository, the commit guard and a

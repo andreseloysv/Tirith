@@ -18,6 +18,7 @@ mod metrics;
 mod models;
 mod numbers;
 mod plan;
+mod power;
 mod projects;
 mod rooms;
 mod rules;
