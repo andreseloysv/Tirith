@@ -1,7 +1,7 @@
 name: cli
 
-# The Linux binaries on version tags, on the tag's Release with their SHA-256. They are NOT signed: scripts/install.sh
-# installs only a release signed with Tirith's key (scripts/release/release.sh), never these.
+# That the Linux binaries build static on a version tag. They are NOT signed, so they stay the run's artifacts and go
+# on no Release: a Release holds only what scripts/release/release.sh signed, which is what scripts/install.sh takes.
 # They are static (musl, SQLite compiled in), so they need no particular glibc and no system library.
 on:
   push:
@@ -57,31 +57,3 @@ jobs:
           name: tirith-linux-${{ matrix.arch }}
           if-no-files-found: error
           path: dist/*
-
-  release:
-    name: release
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    env:
-      GH_TOKEN: ${{ github.token }}
-      GH_REPO: ${{ github.repository }}
-      TAG: ${{ github.ref_name }}
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: tirith-linux-*
-          path: dist
-          merge-multiple: true
-      - name: Create the Release if there is none
-        run: |
-          flags=(--verify-tag --generate-notes)
-          # A tag like v1.0.0-rc.1 must not become the latest Release, which is what the installer takes.
-          case "$TAG" in *-*) flags+=(--prerelease) ;; esac
-          # The second view is for another workflow creating it meanwhile.
-          gh release view "$TAG" > /dev/null 2>&1 ||
-            gh release create "$TAG" "${flags[@]}" ||
-            gh release view "$TAG" > /dev/null
-      - name: Upload
-        run: gh release upload "$TAG" dist/* --clobber

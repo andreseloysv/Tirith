@@ -271,3 +271,17 @@ fn renames_move_the_model_and_the_conversation_of_no_project() {
         "the judge keeps its cheap factory agent, not the managers'"
     );
 }
+
+#[test]
+fn a_signal_never_goes_to_every_process() {
+    // Only the choice of target: this check sends no signal.
+    use super::process::group;
+    assert_eq!(group(4242), Some(-4242), "a group as `kill` takes it");
+    assert_eq!(group(0), None, "not the daemon's own group");
+    assert_eq!(group(1), None, "kill(-1) is every process of the user");
+    assert_eq!(
+        group(u32::MAX),
+        None,
+        "no number that wraps to another process"
+    );
+}
