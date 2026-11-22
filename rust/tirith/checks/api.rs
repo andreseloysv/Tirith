@@ -138,10 +138,8 @@ async fn api_rejects_a_spoofed_role() {
             assert_eq!(code, 403, "a lane as {claimed:?}: {method} {path}");
         }
         // No script is reachable with this command, also for a role that may drive Safari.
-        let (code, said, _) = d
-            .call("POST", "/api/safari", &spoofed, json!({"cmd": "none"}))
-            .await;
-        assert!(code == 400 && said.contains("not a lane"), "{said}");
+        let safari = json!({"cmd": "none"});
+        assert_eq!(d.code("POST", "/api/safari", &spoofed, safari).await, 403);
         let yes = json!({"answer": "yes", "by": "owner"});
         let path = format!("/api/owner/{CARD}");
         assert_eq!(d.code("POST", &path, &spoofed, yes).await, 400, "{claimed}");

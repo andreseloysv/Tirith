@@ -2,7 +2,7 @@
 // AM_ROOT points at an AgentsMessenger checkout; PLAYWRIGHT_MODULE at an installed Playwright module.
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtemp, mkdir, writeFile, open } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile, open } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve, join } from 'node:path';
 import { createServer } from 'node:net';
@@ -18,7 +18,8 @@ const phoneBase = await platform.listen();
 const port = await new Promise(resolve => { const s = createServer(); s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => resolve(p)); }); });
 const base = `http://127.0.0.1:${port}`;
 const api = async (path, data, method) => {
-  const r = await fetch(base + path, { method: method || (data ? 'POST' : 'GET'), headers: { 'content-type': 'application/json' }, body: data ? JSON.stringify(data) : undefined });
+  const token = await readFile(join(home, 'owner.token'), 'utf8');
+  const r = await fetch(base + path, { method: method || (data ? 'POST' : 'GET'), headers: { 'content-type': 'application/json', 'x-tirith-token': token }, body: data ? JSON.stringify(data) : undefined });
   assert.ok(r.ok, `${path}: ${r.status}`); return r.json();
 };
 const wait = async fn => {

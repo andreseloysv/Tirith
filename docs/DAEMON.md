@@ -14,6 +14,7 @@ Files:
 - `conv.rs`: Which conversation and which factory role a row belongs to, and the stamp it carries.
 - `feed.rs`: The change feed the page listens to, and the event and chat rows it shows.
 - `git.rs`: Running git.
+- `keys.rs`: What proves who calls, 0600 in the home and hidden from the sandbox: `owner.token`, `net.secret`, `owner.html`.
 - `lane.rs`: One lane as the daemon keeps it in memory and in SQLite.
 - `lanes.rs`: The lanes in memory, each change written to SQLite and shown on the page.
 - `migrate.rs`: Moves kept from older names.
@@ -180,12 +181,16 @@ The command line. `main.rs` is the crate root: its `mod` lines and a `main` that
 Files:
 
 - `../main.rs`: The crate root: its `mod` lines and a short `main` that hands the work to `cli/`.
-- `../client.rs`: The CLI side: one HTTP/1.1 request to the daemon on 127.0.0.1 per command.
+- `../client.rs`: The CLI side: one HTTP/1.1 request to the daemon on 127.0.0.1 per command, with the caller's token.
+- `../client/ancestry.rs`: A variable from the environment this process's own ancestors started with.
+- `../client/token.rs`: The token this process calls with: its agent's, else the owner's; a hook's is never the owner's.
 - `args.rs`: Reading the arguments: a flag's value, the project a command is about, and the positional words.
 - `ask.rs`: Questions and answers: a lane asks the manager, the manager answers a lane or a card, the manager asks the owner.
 - `dispatch.rs`: The command the positional words name: a module's own first, then the daemon's.
 - `hook.rs`: `tirith hook`: the command-hook bridge for agents without HTTP hooks.
 - `hooks.rs`: `tirith hooks install`: the agent's command hooks become HTTP hooks on the daemon.
+- `hooks_token.rs`: The HTTP hook with `X-Tirith-Token`, and an older install's given it as the daemon starts.
+- `open.rs`: `tirith open [link]`: the page opened as the owner.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `plan.rs`: `tirith plan show` (each step with its open items and their lanes) and `tirith plan step`.
 - `serve.rs`: `tirith serve`: the daemon.
@@ -926,7 +931,7 @@ Files:
 ## `sandbox/`
 
 Network sandbox. Every process Tirith starts (lane agents, the manager, turn-role reviews, merge-queue checks) runs confined (`confine.rs`): on Linux in a network namespace of its own (`sandbox/linux/`, below), on macOS inside a `sandbox-exec` profile that denies outbound network except loopback and local sockets and denies Apple Events (macOS refuses them from `sandbox-exec` anyway, whatever the profile says), with its proxy
-variables pointing at the daemon's own HTTP/CONNECT proxy (`sandbox/proxy/`). The proxy authenticates the caller (`who` + token), applies the block list, and records each new destination as an event.
+variables pointing at the daemon's own HTTP/CONNECT proxy (`sandbox/proxy/`). The proxy authenticates the caller by its token (the user name is for people to read; the same token is its `TIRITH_TOKEN` at the daemon's door, see `server/`), applies the block list, and records each new destination as an event.
 
 The owner's Safari is read through the daemon instead: `tirith safari open <url>` and `tirith safari read [<url>]` (URL, title and text of the current tab, or of the first tab whose URL starts with the one given; the text is cut at 20,000 characters) ask the daemon — which runs outside the sandbox — to run that one fixed AppleScript, never a script the agent sends, and only for the chat roles (the managers and the bots, never a lane or the CEO).
 
@@ -955,12 +960,13 @@ Files:
 - `routes.rs`: The sandbox's HTTP routes: its status, the block list, the destinations seen and Safari.
 - `rules.rs`: The shape of a block rule: a domain, an address or a CIDR range.
 - `safari/mod.rs`: Declares the folder's files and re-exports what other modules use.
-- `safari/route.rs`: `POST /api/safari`: the lane and role come from the caller's headers.
+- `safari/route.rs`: `POST /api/safari`: the lane and role come from the caller's token.
 - `safari/run.rs`: Running the Safari script outside the sandbox.
 - `safari/script.rs`: The fixed AppleScript of `tirith safari open <url>` / `read [<url>]`.
 - `start.rs`: Starting the sandbox's part of the daemon.
 - `tags.rs`: Access-audit tags of one tool call, recorded by the hook handler as `access` events.
-- `token.rs`: The proxy passwords: each derives from a random secret kept in the daemon's database.
+- `hidden.rs`: macOS: the profile's rules that keep the owner's token, the secret and the page's file from everyone confined.
+- `token.rs`: The token of each who, its proxy password and its proof at the daemon's door: derived from `<home>/net.secret`, findable from itself alone.
 - `tunnel.rs`: `tirith net tunnel <host> <port>`: stdin/stdout through the proxy (ssh's ProxyCommand inside the sandbox).
 - `wrap.rs`: Putting a process Tirith starts inside the sandbox.
 - `wrappers.rs`: The wrappers in `<home>/net/bin` that turn off the inner sandbox of tools that start their own (on macOS Codex's is `sandbox/nested/`).
@@ -968,7 +974,7 @@ Files:
 ## `sandbox/linux/`
 
 Linux's confinement, with no root and nothing to install: `tirith net run <port…> -- <program>` forks, the child
-moves into a user and a network namespace of its own (the same uid and gid, a loopback and no other device), binds
+moves into a user, a mount (`hide.rs`) and a network namespace of its own (the same uid and gid, a loopback and no other device), binds
 the forwarded ports there (the daemon's, the proxy's and `[network] loopback = [5432, …]`), hands the listeners
 to the launcher that stayed outside and becomes the program; the launcher copies their bytes to the same ports of
 the machine's loopback, passes signals on and exits as the program did. The program dies with its launcher. Where
@@ -982,7 +988,8 @@ Files:
 - `child.rs`: The confined side: into its own network, its ports handed out, then the program.
 - `mod.rs`: Declares the folder's files, and the launcher's command line.
 - `source.rs`: The address the relay calls from (127.0.0.2) at the daemon's port alone, by which the daemon knows a confined caller.
-- `namespace.rs`: The namespaces entered: the same user, a loopback that is up.
+- `hide.rs`: The files that prove who calls bound over with /dev/null, in the confined process's own mounts.
+- `namespace.rs`: The namespaces entered (user, network, mounts): the same user, a loopback that is up; root one further in, where the mounts are locked.
 - `ready.rs`: Whether this Linux lets Tirith confine, by trying it, and what to do when it does not.
 - `relay.rs`: A forwarded port's connections copied to the machine's loopback.
 - `run.rs`: The launcher: fork, take the listeners, relay, wait.
@@ -1072,7 +1079,7 @@ Files:
 A bot's secrets. The owner's commands are `tirith secret set <bot> <NAME>`, `tirith secret list <bot>` and
 `tirith secret remove <bot> <NAME>` (`<bot>` is its id, as in `#/bots/<id>`; NAME is A-Z, 0-9 and _). `set` reads
 the value from stdin, typed unseen or piped whole less its last line end, and takes none from argv; `list` prints
-names alone. Their routes (`/api/secrets/<bot>`) are the owner's alone, by `server/caller.rs` and by a check of their own: a
+names alone. Their routes (`/api/secrets/<bot>`) are the owner's alone, by `server/scope.rs` and by a check of their own: a
 bot, a lane and a manager get 403, for their own secrets too. No route and no command answers a value. The daemon's lookup
 (`lookup.rs`) is by bot and name, and nothing puts a secret in a bot's environment.
 
@@ -1110,36 +1117,70 @@ Files:
 
 ## `server/`
 
-HTTP on 127.0.0.1: the page (`web/`), its JSON API, the change stream (SSE) and the agents' hooks, behind one same-origin guard. Each module brings its own routes; `server/routes/` holds the daemon's own.
+HTTP on 127.0.0.1: the page (`web/`), its JSON API, the change stream (SSE) and the agents' hooks, behind one same-origin guard and one gate that knows the caller by its token. Each module brings its own routes; `server/routes/` holds the daemon's own.
 
-The owner's yes never comes from an agent (`caller.rs`). An agent is one by the lane or role it names, and a caller
-inside the sandbox is one whatever it sends: Linux's relay calls the daemon's port from 127.0.0.2, and on macOS the holder of the
-socket is looked up and its profile read (a caller nobody of this user holds is not the owner either). An agent's
+Who calls is a token (`admit.rs`), never what a caller says of itself: no header names a lane, a role or the owner.
+The token goes as `X-Tirith-Token`.
+
+- **An agent.** `sandbox::wrap` gives each process it starts its per-who token, the proxy's password, in `TIRITH_TOKEN`,
+  confined or not. From that token alone (`identify.rs`) come the lane with its project, or the role with its project,
+  and the bot. Who it is: a lane's id, `<role>@<conversation>` for a chat or a turn, `merge:<lane>` for a check, `git`,
+  and any of them after `replay:<experiment>:` inside a replay. The token derives from `<home>/net.secret`; the database
+  holds only which who a token's hash may be, and the token is derived again, so a row written there proves nothing.
+- **The owner.** `<home>/owner.token` (0600), which the CLI reads in their terminal, and never from inside the sandbox:
+  there the file, the secret and `owner.html` are unreadable, and the kernel says where a caller is (Linux's relay calls
+  the daemon's port from 127.0.0.2; on macOS the socket's holder is looked up and its profile read; one nobody of this
+  user holds is not the owner either), asked once per connection that claims to be the owner.
+- **The page.** The same owner, by a cookie derived from that token. `tirith open` (the app does it as it starts; on a
+  server `tirith open link`) gets `/auth/<code>` from `POST /api/page`: it works once, for 10 minutes, and sets the
+  cookie (HttpOnly, SameSite=Lax). The API takes the cookie neither from another site or port nor for an address a
+  browser was made to visit. Without it even `/` is 403, and says how to open the page.
+- **A hook without a valid agent's token** (the owner's own sessions, whatever their token) can only be refused, as
+  those sessions always were: the rules of the folder it stands in and the block list. It is no lane and no role: it
+  gets no allow, no message, and writes no event but a refusal, no session and no note.
+- **Routes with a token of their own** keep it: the teach extension's (the bot's token; `teach/door.rs`) and the page's
+  link. They too are refused from inside the sandbox.
+- **Everything else** without a valid caller token is 403. `scope.rs` keeps a token from acting as another: a lane asks
+  only as itself and does nothing that is the manager's, a bot rehearses and keeps checks only as itself.
+
+An agent may hand its hooks and shells none of its variables (Muse): the CLI then takes `TIRITH_TOKEN` from the
+environment its own ancestors started with (`client/ancestry.rs`). A session of a lane or a role never falls back to
+the owner's token. Hooks installed over HTTP name the variable in `allowedEnvVars`; the daemon gives older ones the
+header as it starts (`cli/hooks_token.rs`). A process that started before this has no token: its hooks only refuse
+and its commands are 403 until it is started again (the proxy takes its old password until the daemon's next start).
+
+The owner's yes never comes from an agent. An agent's
 `tirith answer` of an approval or payment card needs the owner's own words, written after it was asked, and keeps those; its
 words in a chat are never the owner's; it gets neither the teach extension's token nor a phone's pairing code, and
 it neither approves a draft nor gives a 👍,
-nor lifts one of the owner's network blocks (it may add one), nor sets, lists or removes a bot's secret (`secrets/`). Git the daemon runs is confined too (`sandbox/git.rs`): a hook, an fsmonitor or a filter left in a bot's or a
+nor lifts one of the owner's network blocks (it may add one), nor sets, lists or removes a bot's secret (`secrets/`), nor gets a link to the page. Git the daemon runs is confined too (`sandbox/git.rs`): a hook, an fsmonitor or a filter left in a bot's or a
 project's repository is an agent's, so its `git push` also goes through the proxy and the block list, with
 `GIT_SSH_COMMAND` as the lanes have it. The limit: a program of the same user that reads or writes that user's files (the store, start-up
-files, programs on the PATH), or
+files, programs on the PATH), reads the environment or logs of another agent of the same user (its token is there), or
 drives the owner's own browser, is not stopped by this; another user account is the boundary for that.
 
 Files:
 
 - `chat.rs`: A new line in a conversation, from the owner's page or from an agent.
-- `hook.rs`: One agent hook call: recorded, a replay's outside read answered from its capture (`lab::answer`), refused when it breaks a rule, a lane's live messages handed over.
-- `hook_door.rs`: The door of a Codex under its caller's limit (sandbox/nested/): the rules' hook and nothing else. That limit's profile refuses the daemon's own port in the kernel, so no request of the page or an agent pays for a look at who calls.
-- `hook_find.rs`: Which lane and project a hook call comes from.
+- `admit.rs`: The gate in front of every route: the caller from its token, else 403.
+- `identify.rs`: From a token alone to its agent: lane, role with its project, and bot.
+- `page.rs`: The page opened as the owner: the link that works once, and the cookie.
+- `refused.rs`: What a caller hears that the gate does not let in.
+- `scope.rs`: What an agent's token does not open: the owner's alone, and another's name.
+- `who.rs`: The caller as each route is told, and the header its token comes in.
+- `hook.rs`: One agent hook call (without an agent's token only refusals): recorded, a replay's outside read answered from its capture (`lab::answer`), refused when it breaks a rule, a lane's live messages handed over.
+- `hook_door.rs`: The door of a Codex under its caller's limit (sandbox/nested/): the rules' hook and nothing else. That limit's profile refuses the daemon's own port in the kernel, so none of its requests needs a look at where it comes from.
+- `hook_find.rs`: The project of a hook call, and for one without a token the lane whose refusals hold in its folder.
 - `hook_lane.rs`: What a hook call is about: its lane and project, its tool call under the rules' names, and its summary.
 - `hook_reply.rs`: What a lane's agent hears back from a hook call that was not refused.
 - `hook_rules.rs`: A tool call that breaks a rule is refused before it runs.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `door.rs`: The daemon's door: loopback only, and on Linux only for this Tirith's own user, root and `[server] users`.
 - `origin.rs`: The same-origin guard in front of every route.
-- `caller.rs`: Who calls, the owner or an agent (a name it sends, or the sandbox it runs in), and what an agent may not do: the owner's yes, pairing a phone, the owner's 👍, the bots' secrets.
+- `caller.rs`: A caller's connection, and whether it comes from inside the sandbox, where nobody is the owner.
 - `peer.rs`: Who is at the other end of a loopback connection, from the kernel's table of sockets (Linux).
 - `plan.rs`: A project's plan as the page shows it (each item with its newest lane), and the step a command adds to it.
-- `router.rs`: The whole router: every module's routes, the daemon's own, the page and the same-origin guard.
+- `router.rs`: The whole router: every module's routes, the daemon's own, the page, the gate and the same-origin guard.
 - `routes/lanes.rs`: A lane's routes: start, stop, delete, its log, its question and its answer.
 - `routes/mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `routes/owner.rs`: The owner's cards: asked, answered, closed.
@@ -1310,7 +1351,7 @@ judge a `tirith teach do` step like any other action). From its session (`TIRITH
 The tab «Enseñar» shows each rehearsal with its screenshots in order and two buttons: «Aprobar» →
 `POST /api/teach/<id>/approve` `{skill}` moves the draft into the skills without `draft: true` (400 when it is no draft, or when no finished
 rehearsal of that skill had a step that worked), so the bot uses it from then on, and says so in its chat; it is the owner's: a call that carries
-an agent's identity (`x-tirith-role` or `x-tirith-lane`, which `tirith` run from a session sends) gets 403; «Crear rutina» opens the routine
+an agent's token (which `tirith` run from a session sends) gets 403; «Crear rutina» opens the routine
 form with the task written.
 
 Files:
@@ -1321,6 +1362,8 @@ Files:
 - `approve.rs`: «Aprobar» on the tab «Enseñar»: the draft rehearsed loses `draft: true` from its header, so from then on the bot uses it; it is told with its next message.
 - `clock.rs`: A step's time rebuilt on the daemon's clock from the extension's `at` and `sent`.
 - `cli.rs`: `tirith teach rehearse|do|stop`: a bot rehearses a draft in the owner's Edge, from its session (`TIRITH_PROJECT` is its conversation).
+- `caller.rs`: Who may act for a bot: the page, or that bot by its own token.
+- `door.rs`: The routes that carry the bot's own token, which the gate leaves to it.
 - `cors.rs`: Who may call the teach API: the page (same origin) and Tirith's extension with the bot's token. CORS answers only the extension's origin.
 - `events.rs`: The extension's steps: one, or `{"steps": [...]}`, kept only while recording, masked again and timed on the daemon's clock.
 - `ext_api.rs`: The extension's side of a rehearsal, with the bot's token: the long poll for the next step, and its answer with a result and a screenshot.

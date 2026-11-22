@@ -36,6 +36,7 @@ pub(super) fn refused(agent: &Agent, method: &Method, path: &str) -> Option<&'st
             | ["api", "lanes", _, "answer"]
             | ["api", "chat", "clear" | "keep"]
             | ["api", "turns", "checks"]
+            | ["api", "safari"]
     );
     (managers && !agent.lane.is_empty()).then_some(MANAGERS)
 }

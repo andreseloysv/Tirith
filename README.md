@@ -28,7 +28,7 @@ git clone https://github.com/andreseloysv/Tirith && cd Tirith && ./run
 ```
 
 Needs Rust (`cargo`) and git. `./run` builds the `tirith` binary, starts the daemon when nothing answers on its
-port and opens its page (`http://127.0.0.1:7717/`). The daemon keeps running; `tirith status` shows what it does.
+port and opens its page as you (`tirith open`; a bare `http://127.0.0.1:7717/` in a browser that never did is refused). The daemon keeps running; `tirith status` shows what it does.
 
 ## Install without building: a server on Linux or a Mac
 
@@ -62,10 +62,12 @@ tirith service status | restart | logs | uninstall
 - **macOS.** A launchd service that starts when you log in, or with nobody logged in with `--boot`. The binaries
   are signed ad hoc unless `TIRITH_SIGN_IDENTITY` was set when the release was built.
 - **The page.** It never listens on the network. From your computer:
-  `ssh -N -L 7717:127.0.0.1:7717 <you>@<server>`, then `http://127.0.0.1:7717/`. The port is the same at both
+  `ssh -N -L 7717:127.0.0.1:7717 <you>@<server>`, then open in your browser what `tirith open link` prints on the server
+  (it signs that browser in, once, within 10 minutes; later `http://127.0.0.1:7717/` is enough). The port is the same at both
   ends: if your computer runs a Tirith of its own, install the server with `--port 7801` and use that one.
-- **Who says yes.** An approval is yours, from the page, your phone or your own terminal: a call from inside an
-  agent's sandbox is known as the agent's, also from what the daemon's git runs for it. This is no wall against a
+- **Who says yes.** An approval is yours, from the page, your phone or your own terminal: you are known by
+  `~/.tirith/owner.token`, which nothing inside the sandbox can read, and an agent by a token of its own
+  (`TIRITH_TOKEN`), never by what it says it is; a call with neither is refused. This is no wall against a
   hostile program with your files: an agent can read and write what Tirith's user can (Tirith's store, shell
   start-up files, programs on the PATH), and a bot that drives your own browser could click for you.
 - **Who may use it.** On Linux only Tirith's user, root and `[server] users` (who installed it with sudo is
@@ -161,7 +163,7 @@ One resident process, `tirith serve`, holds the state in memory and in one SQLit
 ```
 tirith setup [--server] [--boot] [--port N] [--agents a,b] [--yes] | connect [<agent>] [--token] | doctor
 tirith service install [--boot] | status | start | stop | restart | uninstall | logs
-tirith serve | status [--project P]
+tirith serve | open [link] | status [--project P]
 tirith plan show <project> | plan add <project> <step> "<text>"
 tirith plan step <project> <number> "<title>" ["<intro paragraph>"]   create the plan's next step, at its end
 tirith lane start <project> <step> "<item>" [--agent <alias>] | lane stop <lane> | lane log <lane>

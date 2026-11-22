@@ -180,7 +180,7 @@ base = f"http://127.0.0.1:{port}"
 
 def api(path, data=None, method=None):
     req = Request(base + path, data=None if data is None else json.dumps(data).encode(),
-                  headers={"Content-Type": "application/json"}, method=method)
+                  headers={"Content-Type": "application/json", "X-Tirith-Token": (HOME / "owner.token").read_text()}, method=method)
     with urlopen(req, timeout=5) as r:
         return json.load(r)
 
