@@ -17,7 +17,7 @@ fn skill(name: &str, rows: &[Row]) -> Value {
     let first = used[0];
     let runs = rows
         .iter()
-        .filter(|r| r.routine == first.routine && !r.never);
+        .filter(|r| r.routine == first.routine && !r.unmeasured);
     let (after, before): (Vec<&Row>, Vec<&Row>) = runs.partition(|r| r.id >= first.id);
     let (before, after) = (tokens(&before), tokens(&after));
     let saved = before

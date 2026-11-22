@@ -23,7 +23,7 @@ fn window(rows: &[&Row]) -> Value {
             .filter(|r| !r.waiting)
             .map(|r| f64::from(u8::from(r.ok))),
     ); // a run that waits for the owner's yes is neither
-    let ms = mean(rows.iter().filter(|r| !r.never).map(|r| r.ms as f64));
+    let ms = mean(rows.iter().filter(|r| !r.unmeasured).map(|r| r.ms as f64));
     json!({"runs": rows.len(), "cost_per_good": cost_per_good(rows), "ms": ms, "success": success})
 }
 

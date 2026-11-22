@@ -469,3 +469,37 @@ async fn memory_candidates_wait_for_thirty_runs_after_the_note() {
     drop(app);
     let _ = std::fs::remove_dir_all(&home);
 }
+
+#[test]
+fn a_run_that_a_restart_cut_adds_no_time_and_no_tokens_to_compare() {
+    let home = home("numbers-cut");
+    std::fs::write(home.join("config.toml"), "[network]\nsandbox = false\n").unwrap();
+    let app = crate::app::App::open_at(home.clone());
+    let key = "bot-corta";
+    seed(
+        &app,
+        key,
+        key,
+        "r1",
+        true,
+        (4000, 0.1, 2000),
+        &["regar"],
+        None,
+        (None, 0, None),
+        &[],
+    );
+    // As turns/interrupted.rs keeps it: the agent that ran is known, what it took and spent is not.
+    app.insert(
+        "INSERT INTO turns (conv, role, routine, status, agent) VALUES (?1, ?1, 'r1', 'failed', 'fake')",
+        rusqlite::params![key],
+    );
+    let rows = super::rows::rows(&app, key);
+    let r = &super::routines::by_routine(&rows, &[("r1".to_string(), "Regar".to_string())])[0];
+    assert_eq!(r["runs"], 2, "{r}");
+    assert!(close(&r["success"], 0.5), "it is a failure: {r}");
+    assert!(close(&r["ms"], 4000.0), "and no run of zero seconds: {r}");
+    let skill = &super::skills::by_skill(&rows)[0];
+    assert_eq!(skill["tokens_after"], 2000, "nor of zero tokens: {skill}");
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}

@@ -21,8 +21,8 @@ pub struct Row {
     /// Its own validation passed: `checks_passed = checks_total`.
     pub validated: bool,
     pub cited: Vec<String>,
-    /// It never became a turn (`expected/lost.rs`): a failure with no time and no tokens.
-    pub never: bool,
+    /// A failure with nothing measured: it never became a turn (`expected/lost.rs`), or a restart cut it (`turns/interrupted.rs`). It has no time and no tokens to compare.
+    pub unmeasured: bool,
     /// Why it failed, and when it ended.
     pub why: String,
     pub at: String,
@@ -51,7 +51,7 @@ fn row(r: &SqlRow) -> rusqlite::Result<Row> {
         skills: names(r.get(9)?),
         validated: total.is_some() && passed == total,
         cited: names(r.get(12)?),
-        never: r.get(13)?,
+        unmeasured: r.get(13)?,
         why: r.get(14)?,
         at: r.get(15)?,
     })
@@ -59,6 +59,6 @@ fn row(r: &SqlRow) -> rusqlite::Result<Row> {
 
 /// The turns of the bot whose conversation is `key`, under its own role (the judge's turns on it are kept there too), the first first. The B runs of experiments are not its own runs, and a replay's or a shadow's run is in a conversation of its own.
 pub fn rows(app: &Shared, key: &str) -> Vec<Row> {
-    let sql = "SELECT id, routine, status, ms, cost_usd, COALESCE(tokens_in, 0) + COALESCE(tokens_out, 0) + COALESCE(tokens_cache_read, 0) + COALESCE(tokens_cache_write, 0), reaction, corrected, score, skills, checks_passed, checks_total, cited, COALESCE(status = 'failed', 0) AND ms IS NULL AND COALESCE(agent, '') = '', COALESCE(why, ''), COALESCE(ended_at, '') FROM turns WHERE conv = ?1 AND role = ?1 AND COALESCE(variant, '') <> 'B' ORDER BY id";
+    let sql = "SELECT id, routine, status, ms, cost_usd, COALESCE(tokens_in, 0) + COALESCE(tokens_out, 0) + COALESCE(tokens_cache_read, 0) + COALESCE(tokens_cache_write, 0), reaction, corrected, score, skills, checks_passed, checks_total, cited, COALESCE(status = 'failed', 0) AND ms IS NULL, COALESCE(why, ''), COALESCE(ended_at, '') FROM turns WHERE conv = ?1 AND role = ?1 AND COALESCE(variant, '') <> 'B' ORDER BY id";
     app.query(sql, [key], row)
 }
