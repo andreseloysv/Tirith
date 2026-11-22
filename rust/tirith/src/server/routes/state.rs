@@ -1,5 +1,10 @@
 //! What the page reads: the whole state, the change stream, a project's plan and its autopilot.
-use super::super::{plan::plan_show, s, settings::autopilot, state::state as whole};
+use super::super::{
+    plan::{plan_show, plan_step},
+    s,
+    settings::autopilot,
+    state::state as whole,
+};
 use crate::app::{bad, Shared};
 use crate::plan;
 use axum::extract::{Path, State};
@@ -18,5 +23,6 @@ pub fn state() -> Router<Shared> {
             "/api/plan/{project}",
             get(plan_show).post(|State(app): State<Shared>, Path(project): Path<String>, Json(b): Json<Value>| async move { plan::add(&app, &project, &s(&b, "step"), &s(&b, "text")).await.map(|_| Json(json!({"ok": true}))).map_err(bad) }),
         )
+        .route("/api/plan/{project}/steps", post(plan_step))
         .route("/api/autopilot/{project}", post(autopilot))
 }

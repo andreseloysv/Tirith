@@ -1,6 +1,6 @@
-//! `tirith plan show`: each step with its open items and their lanes.
+//! `tirith plan show` (each step with its open items and their lanes) and `tirith plan step`.
 use crate::client;
-use serde_json::Value;
+use serde_json::{json, Value};
 
 pub(super) fn plan_show(project: &str) -> Result<(), String> {
     let p = client::call_json("GET", &format!("/api/plan/{project}"), None)?;
@@ -17,6 +17,14 @@ pub(super) fn plan_show(project: &str) -> Result<(), String> {
         open.iter().for_each(|it| print_item(it));
     });
     Ok(())
+}
+
+pub(super) fn plan_step(project: &str, num: &str, title: &str, intro: &str) -> Result<(), String> {
+    client::print(client::call(
+        "POST",
+        &format!("/api/plan/{project}/steps"),
+        Some(json!({"step": num, "title": title, "intro": intro})),
+    ))
 }
 
 fn print_item(it: &Value) {

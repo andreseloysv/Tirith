@@ -1,4 +1,4 @@
-//! A project's plan as the page shows it: each item with its newest lane.
+//! A project's plan as the page shows it (each item with its newest lane), and the step a command adds to it.
 use crate::app::{bad, Shared, R};
 use crate::{lanes, plan};
 use axum::extract::{Path, State};
@@ -19,4 +19,17 @@ pub(super) async fn plan_show(State(app): State<Shared>, Path(project): Path<Str
     Ok(Json(
         json!({"project": project, "steps": steps, "autopilot": lanes::autopilot_on(&app, &project), "main_red": app.kv(&format!("main_red:{project}"))}),
     ))
+}
+
+pub(super) async fn plan_step(
+    State(app): State<Shared>,
+    Path(project): Path<String>,
+    Json(b): Json<Value>,
+) -> R {
+    let field = |key: &str| super::s(&b, key);
+    let (num, title, intro) = (field("step"), field("title"), field("intro"));
+    plan::add_step(&app, &project, &num, &title, &intro)
+        .await
+        .map_err(bad)?;
+    Ok(Json(json!({"ok": true})))
 }

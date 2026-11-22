@@ -106,3 +106,79 @@ fn a_rewritten_check_keeps_the_lane_on_its_item() {
         (1, true, true)
     );
 }
+#[tokio::test]
+async fn plan_step_creates_a_step() {
+    let base = std::env::temp_dir().join(format!("tirith-psc-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    let (repo, home) = (base.join("repo"), base.join("home"));
+    // The last step is not the last heading, and the file ends in blank lines.
+    let start = "## 1. One\n- [x] Old\n\n## 2. Two\n\n## Notes\nKept\n\n\n";
+    repo_with_plan(&repo, start).await;
+    std::fs::create_dir_all(&home).unwrap();
+    let cfg = format!(
+        "[[projects]]\nid = \"p\"\nrepo = \"{}\"\nguard_words = [\"secretword\"]\n",
+        repo.display()
+    );
+    std::fs::write(home.join("config.toml"), cfg).unwrap();
+    let app = crate::app::App::open_at(home);
+    super::flush(&app, None).await;
+    let file = repo.join("docs/TODO.md");
+    let plan = || std::fs::read_to_string(&file).unwrap();
+    let dirty = || app.plan_dirty.lock().unwrap().contains("p");
+
+    for (num, title, intro) in [
+        ("2", "Again", ""),
+        ("4", "Skips one", ""),
+        ("0", "Before the first", ""),
+        ("03", "Not its number", ""),
+        ("", "No number", ""),
+        ("3", "  ", ""),
+        ("3", "Two\nlines", ""),
+        ("3", "Title", "Prose\n## 9. Smuggled"),
+        ("3", "Title", "Prose\n- [ ] Smuggled"),
+        ("3", "A secretword", ""),
+        ("3", "Title", "A secretword"),
+    ] {
+        let refused = super::add_step(&app, "p", num, title, intro).await;
+        assert!(refused.is_err(), "{num:?} {title:?} {intro:?} is refused");
+        assert_eq!(plan(), start, "a refusal leaves the file as it was");
+        assert!(!dirty(), "a refusal queues no commit");
+    }
+
+    super::add_step(&app, "p", "3", "Tres", "Su párrafo.")
+        .await
+        .unwrap();
+    let three =
+        "## 1. One\n- [x] Old\n\n## 2. Two\n\n## Notes\nKept\n\n## 3. Tres\n\nSu párrafo.\n";
+    assert_eq!(plan(), three);
+    assert!(dirty(), "a new step queues its commit");
+
+    super::add(&app, "p", "3", "Its item").await.unwrap();
+    let with_item = format!("{three}- [ ] Its item\n");
+    assert_eq!(plan(), with_item);
+    for num in ["3", "5"] {
+        assert!(super::add_step(&app, "p", num, "No", "").await.is_err());
+        assert_eq!(plan(), with_item);
+    }
+
+    super::add_step(&app, "p", "4", "Cuatro", "").await.unwrap();
+    super::add(&app, "p", "4", "Last").await.unwrap();
+    let all = format!("{with_item}\n## 4. Cuatro\n- [ ] Last\n");
+    assert_eq!(plan(), all);
+
+    super::flush(&app, None).await;
+    let committed = crate::app::git(&repo, &["show", "HEAD:docs/TODO.md"])
+        .await
+        .unwrap();
+    assert_eq!(committed.trim_end(), all.trim_end());
+
+    std::fs::write(&file, "# Plan\n").unwrap();
+    super::add_step(&app, "p", "1", "First", "").await.unwrap();
+    assert_eq!(
+        plan(),
+        "# Plan\n\n## 1. First\n",
+        "a plan without steps starts at 1"
+    );
+    drop(app);
+    let _ = std::fs::remove_dir_all(&base);
+}
