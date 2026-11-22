@@ -641,3 +641,40 @@ fn both_sides_of_a_live_experiment_start_fresh() {
     drop(app);
     let _ = std::fs::remove_dir_all(&home);
 }
+
+#[test]
+fn time_is_saved_only_when_most_pairs_saved_it() {
+    let lab = crate::factory::current().lab.clone();
+    let side = |ms: f64| super::Side {
+        runs: 5,
+        tokens: 1000.0,
+        cost: None,
+        ms,
+    };
+    let tally = |pair_times: Vec<f64>| super::Tally {
+        ties: 5,
+        pair_times,
+        ..Default::default()
+    };
+    let (a, b) = (side(4000.0), side(3200.0));
+    let one = super::rule::decide(
+        &lab,
+        &tally(vec![0.9, 0.02, 0.01, 0.04, 0.03]),
+        &a,
+        &b,
+        "x v",
+    );
+    assert!(
+        !one.0 && one.1.contains("solo en alg"),
+        "one slow answer is no saving: {}",
+        one.1
+    );
+    let most = super::rule::decide(
+        &lab,
+        &tally(vec![0.2, 0.22, 0.01, 0.3, 0.19]),
+        &a,
+        &b,
+        "x v",
+    );
+    assert!(most.0, "{}", most.1);
+}

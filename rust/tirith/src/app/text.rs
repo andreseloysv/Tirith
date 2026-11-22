@@ -9,7 +9,7 @@ pub fn redact_secrets(text: &str) -> String {
         Regex::new(r#"(?i)(\b[A-Za-z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD)[A-Za-z0-9_]*\\?["']?\s*[=:]\s*\\?["']?)([^\s"'\\,;}&]+)"#).unwrap()
     });
     static BARE: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"\bAIza[0-9A-Za-z_\-]{10,}|\bsk-[0-9A-Za-z_\-]{10,}|\bgh[pousr]_[0-9A-Za-z]{10,}|\bxox[abpr]-[0-9A-Za-z\-]{10,}|\bAKIA[0-9A-Z]{12,}").unwrap()
+        Regex::new(r"\bAIza[0-9A-Za-z_\-]{10,}|\bsk-[0-9A-Za-z_\-]{10,}|\bgh[pousr]_[0-9A-Za-z]{10,}|\bgithub_pat_[0-9A-Za-z_]{10,}|\bxox[abpr]-[0-9A-Za-z\-]{10,}|\bAKIA[0-9A-Z]{12,}").unwrap()
     });
     let step = NAMED.replace_all(text, "${1}[redacted]");
     BARE.replace_all(&step, "[redacted]").into_owned()

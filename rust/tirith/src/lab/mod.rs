@@ -21,6 +21,7 @@ mod replay_runs;
 mod replay_side;
 mod replay_warm;
 mod rule;
+mod saved;
 mod scope;
 mod seat;
 mod shadow;

@@ -383,7 +383,8 @@ replay's pairs all run and judged, or `max_days` after its start (the scheduler'
 way, B is adopted; one whose days ran out with fewer than min(5, `inputs`) comparisons proves nothing and is discarded,
 saying so (`due.rs`). B is adopted when it is not worse (wins and ties at least `not_worse_share` of the comparisons, and
 wins at least as many as it loses), has no new failure (a B run failed where its A did not) and no 👎, and saves at
-least `min_saving` of A's mean tokens, dollars or time. Adopted, the bot's folder is committed and the branch is merged
+least `min_saving` of A's mean tokens, dollars or time (time, which one slow answer moves, only when most pairs saved
+that much one by one: `saved.rs`). Adopted, the bot's folder is committed and the branch is merged
 into its main (the live folder is that checkout, so the next run uses it; where main moved on the same lines, B's
 tested text wins, but a note main added to `memory.md` meanwhile that the merge lost is written back as a new note,
 `adopt.rs`; a merge that still fails discards it instead); in both
@@ -416,6 +417,7 @@ Files:
 - `replay.rs`: Replay mode: the task-local that marks a replay's turn, the proxy's closed caller, and the pairs run one after another.
 - `replay_side.rs`: One side of a replayed run: its throwaway worktree, its turn on the capture's start, its row's experiment and variant.
 - `replay_warm.rs`: A replay's uncounted first turn, so the side that runs first pays no cold cache for both.
+- `saved.rs`: What B saves against A, and which saving counts (time: only saved in most pairs too).
 - `rule.rs`: The `[lab]` rule applied to A's and B's numbers and the comparisons, and the one line that says the decision.
 - `outward.rs`: Which shell calls of a shadow run act outward: `tirith` commands that are not plain reads, and commands that send, buy, delete or publish; a replay refuses them too.
 - `outward_browser.rs`: Which browser and MCP calls of a shadow run act outward: a click on «Send» or «Comprar», a submit, a form, an upload, code in the page; an MCP tool that does not say it reads.
@@ -654,7 +656,7 @@ picks it as a standalone turn role), each with its `session`, `scope`, `extends`
 list of names. Each has an agent alias, a model, an effort and a fallback
 chain. The effective setting is the owner's override from the page (kv `models:<role>`), else
 `[roles.<role>]` of `config.toml` laid over the factory's role. Agents are aliases
-(`[agents.<alias>]`); the real command lives only in config.toml. Optional per alias: `model_hosts` and `replay_args` (for the lab's replays), `model_flag`, `effort_flag` ("" = none) and `resume_args`
+(`[agents.<alias>]`); the real command lives only in config.toml. Copilot's enterprise host is asked by the guide and kept in `<home>/auth` (`setup/host.rs`). Optional per alias: `model_hosts` and `replay_args` (for the lab's replays), `model_flag`, `effort_flag` ("" = none) and `resume_args`
 (`{session}` and `{message}` are filled in); each alias's flags come from the factory.
 Every model knows its agent from the configuration alone: its group in `[models.choices]` (a table
 `alias = ["model", …]`), Codex's catalog, or the `model_prefix` its `[agents.<alias>]` declares (by default
@@ -916,6 +918,7 @@ Files:
 - `request.rs`: A request's head: the first line, the headers and where it goes.
 - `serve.rs`: Listening for the proxy's callers.
 - `upstream.rs`: Reaching the destination: refused if blocked by name or by any of its addresses, and to a replay unless it is its agent's model.
+- `quiet.rs`: `tirith quiet`: an agent given private values starts through it, and they are hidden in all it writes.
 
 ## `server/`
 
@@ -995,11 +998,14 @@ Files:
 - `guide.rs`: `tirith setup`: the whole guide.
 - `hook_lines.rs`: Tirith's hook in an agent's hooks, and telling it from everyone else's.
 - `hooks.rs`: An agent's hooks pointed at Tirith, the rest of its settings kept.
+- `host.rs`: An agent that may live on an enterprise's GitHub host (Copilot): asked, kept with its token, given to its login and all its processes, never shown.
 - `install.rs`: An agent installed with its maker's installer.
+- `login.rs`: An agent's own login on the owner's terminal, and how to do it later.
 - `mod.rs`: The commands' way in from the command line.
 - `needs.rs`: What the machine must have first.
 - `one.rs`: `tirith connect`: one agent, or the list of them.
 - `opts.rs`: The options of these commands.
+- `private.rs`: What never reaches a log, an event or an answer: the values kept for the agents (tokens, an enterprise's host).
 - `packages.rs`: The system's programs installed with its package manager, when the owner says so.
 - `program.rs`: An agent's program found, or installed now.
 - `prove.rs`: The connection check: one real turn by the same way work runs.

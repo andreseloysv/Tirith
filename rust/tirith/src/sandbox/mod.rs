@@ -11,6 +11,7 @@ mod linux;
 mod owner;
 mod profile;
 mod proxy;
+mod quiet;
 mod replay;
 mod routes;
 mod rules;
@@ -24,8 +25,8 @@ mod wrappers;
 
 pub use check::check_command;
 pub use cli::cli;
-pub use confine::launcher;
 pub use profile::sandboxed;
+pub use quiet::launcher;
 pub use replay::closes_network;
 pub use routes::routes;
 pub use start::start;

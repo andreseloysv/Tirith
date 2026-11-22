@@ -3,8 +3,8 @@ use crate::client::call_with;
 use serde_json::{json, Value};
 use std::{io::Read, time::Duration};
 
-/// The command-hook bridge for agents without HTTP hooks: never breaks the agent (any failure lets the call through); a refusal is exit 2 with the reason on stderr, which every supported agent understands.
-pub(super) fn hook(event: String, home: Option<String>) -> Result<(), String> {
+/// The command-hook bridge for agents without HTTP hooks: never breaks the agent (any failure lets the call through); a refusal is exit 2 with the reason on stderr, and for Copilot its JSON alone.
+pub(super) fn hook(event: String, home: Option<String>, agent: String) -> Result<(), String> {
     if let Some(home) = home.filter(|h| !h.is_empty()) {
         std::env::set_var("TIRITH_HOME", home); // an agent may hand its hooks none of the variables it was given (Muse)
     }
@@ -35,7 +35,7 @@ pub(super) fn hook(event: String, home: Option<String>) -> Result<(), String> {
         .filter(|_| v["hookSpecificOutput"]["permissionDecision"] == "deny");
     let block = v["reason"].as_str().filter(|_| v["decision"] == "block");
     if let Some(why) = deny.or(block) {
-        refuse(why, deny.is_some(), &v);
+        refuse(why, deny.is_some(), &v, &agent);
     }
     let _ = v["hookSpecificOutput"]
         .is_object()
@@ -43,8 +43,8 @@ pub(super) fn hook(event: String, home: Option<String>) -> Result<(), String> {
     Ok(())
 }
 
-/// A refusal said both ways at once: exit 2 with the reason on stderr (Codex, Muse), and as JSON on stdout, the only place Copilot takes the reason from.
-fn refuse(why: &str, denied: bool, body: &Value) -> ! {
+/// A refusal said both ways at once: exit 2 with the reason on stderr (Codex, Muse), and as JSON on stdout. Copilot gets the JSON with exit 0: on exit 2 it drops the reason.
+fn refuse(why: &str, denied: bool, body: &Value, agent: &str) -> ! {
     let said = if denied {
         json!({"permissionDecision": "deny", "permissionDecisionReason": why,
             "hookSpecificOutput": body["hookSpecificOutput"]})
@@ -52,6 +52,9 @@ fn refuse(why: &str, denied: bool, body: &Value) -> ! {
         body.clone()
     };
     println!("{said}");
+    if agent == "copilot" {
+        std::process::exit(0);
+    }
     eprintln!("{why}");
     std::process::exit(2);
 }

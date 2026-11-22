@@ -15,11 +15,14 @@ pub mod find;
 mod guide;
 mod hook_lines;
 mod hooks;
+mod host;
 mod install;
+mod login;
 mod needs;
 mod one;
 mod opts;
 mod packages;
+mod private;
 mod program;
 mod prove;
 pub mod run;
@@ -37,6 +40,7 @@ pub use auth::for_program;
 pub use catalog::model_hosts;
 pub use hook_lines::others;
 pub use opts::Opts;
+pub use private::Hidden;
 
 /// These commands take options with no value, so they are read before the command line's `--flag value` pairs: the exit code, or none for another command.
 pub fn cli(args: &[String]) -> Option<i32> {

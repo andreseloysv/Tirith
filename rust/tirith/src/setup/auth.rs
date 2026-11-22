@@ -1,4 +1,4 @@
-//! A token that signs one agent in without a login: kept in `<home>/auth/<alias>.env` (0600) and handed to that agent's processes alone.
+//! What signs one agent in without a login (a token) or says where it lives (an enterprise's host): kept in `<home>/auth/<alias>.env` (0600) and handed to that agent's processes alone.
 use crate::app::Shared;
 use std::io::Write;
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
@@ -23,7 +23,11 @@ pub fn keep(home: &Path, alias: &str, var: &str, value: &str) -> Result<(), Stri
     let plain = !value.is_empty() && value.bytes().all(|b| b.is_ascii_graphic());
     plain
         .then_some(())
-        .ok_or("that is no token: it is one word, with no spaces")?;
+        .ok_or("that is no value for it: it is one word, with no spaces")?;
+    let mut vars = env(home, alias);
+    vars.retain(|(k, _)| k != var);
+    vars.push((var.to_string(), value.to_string()));
+    let text: String = vars.iter().map(|(k, v)| format!("{k}={v}\n")).collect();
     let path = file(home, alias);
     let failed = |e: std::io::Error| format!("{}: {e}", path.display());
     let dir = path.parent().ok_or("no folder for the token")?;
@@ -38,7 +42,7 @@ pub fn keep(home: &Path, alias: &str, var: &str, value: &str) -> Result<(), Stri
         .open(&path)
         .map_err(failed)?;
     out.set_permissions(PermissionsExt::from_mode(0o600))
-        .and_then(|_| writeln!(out, "{var}={value}"))
+        .and_then(|_| out.write_all(text.as_bytes()))
         .map_err(failed)
 }
 

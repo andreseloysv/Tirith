@@ -24,6 +24,9 @@ pub struct Known {
     /// The variable that signs it in without a login, and where its value comes from.
     pub token_env: String,
     pub token_hint: String,
+    /// The variable and the login's flag that point it at an enterprise's GitHub host (`host.rs`).
+    pub host_env: String,
+    pub host_flag: String,
     /// Hosts its model needs beyond the factory's `model_hosts`.
     pub model_hosts: Vec<String>,
     pub check_model: String,

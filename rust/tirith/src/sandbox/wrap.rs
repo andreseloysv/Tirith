@@ -8,13 +8,15 @@ pub fn wrap(app: &Shared, who: &str, argv: Vec<String>) -> Launch {
     let (program, args): (String, Vec<String>) = (it.next().unwrap_or_default(), it.collect());
     let signed = crate::setup::for_program(app, &program); // a token of this agent's own (tirith connect --token)
     if let Err(why) = enabled(app) {
+        let (program, args) = super::quiet::argv(&signed, program, args);
         let mut launch = unsandboxed(app, who, &why, program, args);
         launch.env.extend(signed);
         return launch;
     }
     let mut env = sandboxed_env(app, &crate::lab::proxy_caller(who)); // a replay's turn reaches nothing outside
-    env.extend(signed);
     let (program, args) = super::confine::argv(app, program, args);
+    let (program, args) = super::quiet::argv(&signed, program, args); // what it writes never shows them
+    env.extend(signed);
     Launch { program, args, env }
 }
 

@@ -19,6 +19,7 @@ impl App {
         session: &str,
     ) -> i64 {
         let at = now_iso();
+        let summary = &crate::setup::Hidden::in_home(&self.home).hide(summary);
         let (factory, role_hash) = (
             self.cfg().factory.version.clone(),
             self.lane(lane).map(|l| l.role_hash).unwrap_or_default(),

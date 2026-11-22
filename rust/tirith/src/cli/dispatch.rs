@@ -36,6 +36,7 @@ fn daemon(pos: &[&str], flag: Flag, project: &str) -> Result<(), String> {
                 .or(rest.first().map(|s| s.to_string()))
                 .unwrap_or_default(),
             flag("--home"),
+            flag("--agent").unwrap_or_default(),
         ),
         ["hooks", "install"] => install_hooks(),
         ["status"] => status(project),

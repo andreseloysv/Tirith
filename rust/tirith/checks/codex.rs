@@ -492,3 +492,9 @@ fn copilot_chat_turn_is_an_exec_run() {
     let (mut s, dir) = (Scratch::default(), std::env::temp_dir());
     assert_ne!(s.path(&dir, "prompt.txt"), s.path(&dir, "prompt.txt"));
 }
+
+#[test]
+fn a_github_token_of_the_new_kind_is_redacted() {
+    let shown = crate::app::redact_secrets("sent github_pat_11ABCDEFG0madeupmadeupmadeup to it");
+    assert!(!shown.contains("madeup"), "{shown}");
+}

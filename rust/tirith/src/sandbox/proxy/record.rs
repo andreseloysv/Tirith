@@ -13,6 +13,7 @@ static REFUSED: LazyLock<Mutex<HashMap<String, u64>>> = LazyLock::new(Default::d
 
 pub fn record(app: &Shared, who: &str, host: &str, port: u16, rule: Option<&str>) {
     let (lane, project) = owner(app, who);
+    let host = &crate::setup::Hidden::in_home(&app.home).hide(host); // blocks read the real one, people this
     count(host, &lane, rule.is_some());
     let _ = is_new(&format!("{who}|{host}:{port}"), rule.is_some()).then(|| {
         app.event(

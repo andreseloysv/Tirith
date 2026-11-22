@@ -70,7 +70,7 @@ pub(super) fn close(app: &Shared, e: &Experiment, adopt_it: bool, line: &str) {
     }
     clear(&live(app, &e.bot), &tree(app, e), &e.branch);
     let numbers =
-        json!({"a": a, "b": b, "tally": t, "savings": super::rule::savings(&a, &b), "line": line});
+        json!({"a": a, "b": b, "tally": t, "savings": super::saved::savings(&a, &b), "line": line});
     let status = if adopted { "adopted" } else { "discarded" };
     let sql = "UPDATE experiments SET status = ?1, ended_at = ?2, numbers = ?3 WHERE id = ?4";
     app.insert(sql, params![status, now_iso(), numbers.to_string(), e.id]);

@@ -1,4 +1,5 @@
 //! Signing an agent in (its own login, which works over SSH, or a token on stdin) and proving it with one real turn.
+use super::login::{how, login};
 use super::{auth, catalog::Known, context::Context, daemon, run, secret};
 use std::path::Path;
 use std::time::Duration;
@@ -29,24 +30,6 @@ pub(super) fn signed_in(cx: &Context, known: &Known, path: &Path) -> Option<bool
         let env = auth::env(&cx.home, &known.alias);
         run::quiet(path, &args, &env, Duration::from_secs(30))
     })
-}
-
-fn login(cx: &Context, known: &Known, path: &Path) -> bool {
-    println!("  Sign in: open the link it shows on any computer or phone, and follow it.");
-    let args: Vec<&str> = known.signin.iter().map(String::as_str).collect();
-    run::shown(&cx.ask, path, &args, &auth::env(&cx.home, &known.alias))
-}
-
-fn how(known: &Known) -> String {
-    let alias = &known.alias;
-    let mut text = format!("run tirith connect {alias} in a terminal");
-    if !known.token_env.is_empty() {
-        text += &format!(
-            ", or give it {} on stdin: tirith connect {alias} --token",
-            known.token_hint
-        );
-    }
-    text
 }
 
 /// The model that answered the real turn.

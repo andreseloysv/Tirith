@@ -4,6 +4,7 @@
 #   signin   the arguments that sign it in, on a terminal with no browser
 #   status   the arguments that exit 0 only when it is signed in (none: only a real turn tells)
 #   hooks    the shape of its hooks file: groups, copilot, or codex (groups that must also be trusted)
+#   host_*   the variable all its processes get, and the login's flag, for an enterprise's host
 #   check_*  the cheap setting of its connection check
 
 [anthropic]
@@ -34,6 +35,8 @@ install = "https://gh.io/copilot-install"
 signin = ["login", "--device-code"]
 settings = "~/.copilot/hooks/tirith.json"
 hooks = "copilot"
+host_env = "COPILOT_GH_HOST"
+host_flag = "--host"
 token_env = "COPILOT_GITHUB_TOKEN"
 token_hint = "a fine-grained GitHub token with the Copilot Requests permission"
 

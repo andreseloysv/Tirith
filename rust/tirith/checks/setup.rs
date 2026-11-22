@@ -180,3 +180,46 @@ fn who_installed_it_may_reach_the_page_through_a_tunnel() {
     assert!(text.contains("port = 7800"), "{text}");
     let _ = std::fs::remove_dir_all(&home);
 }
+
+#[test]
+fn an_enterprises_host_is_kept_with_the_token_and_never_shown() {
+    let home = dir("host");
+    let (host, token) = (
+        "Https://Made-Up-Corp.ghe.com/",
+        "github_pat_madeupmadeup1234",
+    );
+    let kept = super::host::cleaned(host).unwrap();
+    assert_eq!(kept, "made-up-corp.ghe.com");
+    super::auth::keep(&home, "copilot", "COPILOT_GH_HOST", &kept).unwrap();
+    super::auth::keep(&home, "copilot", "COPILOT_GITHUB_TOKEN", token).unwrap();
+    super::auth::keep(&home, "copilot", "COPILOT_GITHUB_TOKEN", token).unwrap();
+    let vars = super::auth::env(&home, "copilot");
+    assert_eq!(vars.len(), 2, "the token keeps the host, and itself once");
+    let hidden = super::private::Hidden::in_home(&home);
+    let line =
+        format!("GET https://api.MADE-UP-CORP.ghe.com/user as ana_made-up-corp with {token}");
+    let shown = hidden.hide(&line);
+    assert!(
+        !shown.to_lowercase().contains("made-up-corp") && !shown.contains(token),
+        "{shown}"
+    );
+    let public = [("COPILOT_GH_HOST".to_string(), "github.com".to_string())];
+    assert!(
+        super::private::Hidden::of(&public).none(),
+        "github.com is no secret"
+    );
+    for bad in ["two words.com", "nodots", "a.com/path", "$(id).com"] {
+        assert!(super::host::cleaned(bad).is_err(), "{bad}");
+    }
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn copilot_is_the_agent_with_a_host() {
+    let known = super::catalog::known("copilot").unwrap();
+    assert_eq!(
+        (known.host_env.as_str(), known.host_flag.as_str()),
+        ("COPILOT_GH_HOST", "--host")
+    );
+    assert!(super::catalog::known("codex").unwrap().host_env.is_empty());
+}

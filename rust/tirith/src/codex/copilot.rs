@@ -17,12 +17,14 @@ pub(super) fn copilot_argv(
         "--no-ask-user",
         "--no-auto-update",
         "--allow-all",
-        "--trust-folder",
+        "--log-level",
+        "none",
         "--usage-output-file",
     ]
     .map(String::from)
     .to_vec();
     a.push(usage.display().to_string());
+    a.extend(resume.is_none().then(|| "--trust-folder".to_string())); // a new session's only: refused on a resume
     a.extend(read_only.then(|| "--deny-tool=write".to_string()));
     let (model, effort) = model;
     for (flag, value) in [("--model", model), ("--reasoning-effort", effort)] {

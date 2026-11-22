@@ -1,5 +1,5 @@
 //! Connecting one agent, in order: installed, signed in, its hooks at Tirith, then one real turn as the proof.
-use super::{catalog::Known, context::Context, hooks, program, signin, trust};
+use super::{catalog::Known, context::Context, hooks, host, program, signin, trust};
 
 /// Connected, or what is still to do.
 pub enum State {
@@ -32,6 +32,7 @@ fn suffix(model: &str) -> String {
 }
 
 fn steps(cx: &Context, known: &Known, token: bool) -> Result<String, String> {
+    host::choose(cx, known)?;
     if token {
         signin::token(cx, known)?;
     }
