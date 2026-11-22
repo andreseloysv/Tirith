@@ -311,8 +311,8 @@ when the run's turn starts, not when it came due (`manager/jobs.rs` calls `lab::
 run waiting its turn holds no seat): A in the bot's own folder (its main), B in the worktree, which is the bot's folder
 for that turn — `lab::seat` maps `<home>/manager/<key>` to it for the session's folder (`manager/spawn.rs`,
 `codex/setup.rs`), the memory and skills it is handed (`bots/context.rs`), the versions its row keeps and the commit
-of what it changed (on the branch). A live session of the bot ends before a B run and after it, so each run's session
-starts in its own folder. The seat is always freed: at the turn's end, or, when the run ends without a row (its session
+of what it changed (on the branch). Each run, A or B, starts a session of its own (`fresh.rs`: nothing is resumed, so what
+the chat gathered weighs on neither side), in its folder, and B's session is never resumed. The seat is always freed: at the turn's end, or, when the run ends without a row (its session
 ended, it was abandoned, or its agent never started), by `lab::released` (`manager::release_run`). The answer reaches the owner as always. At the turn's end (`turns/save.rs`) its row gets
 `experiment` and `variant`; a B run is compared with the A run before it: the event `lab.compare` (no route) carries the
 routine's task and the two answers as «Answer a» and «Answer b» in an order drawn at random, the letter B was shown
@@ -347,7 +347,8 @@ own folder, and its skills) run as always. Nothing of a replay reaches the owner
 their own, `replay-<experiment>-<turn>-<A|B>`, which no chat, phone, room or card knows (`tirith say` and
 `ask-owner` refuse it as an unknown project), and the hook refuses `tirith say`, `ask`, `ask-owner` and `chat` in it.
 Each turn's row gets `experiment`, `variant`, the routine and the trigger `replay`; the worktrees go after each turn,
-and each B is compared with its A like a live run (`lab.compare`, `ab-compare`), unless a side missed a call, used tools no hook heard, or both sides failed (that last
+and an uncounted first turn warms what both sides share (`replay_warm.rs`, variant `W`), the pairs alternate
+which side goes first, and each B is compared with its A like a live run (`lab.compare`, `ab-compare`), unless a side missed a call, used tools no hook heard, or both sides failed (that last
 holds in live and shadow too): that pair proves nothing, is kept as a comparison with the verdict `void` (`void.rs`)
 and is never a tie, a win or a loss (the decision line says how many). Under min(5, `inputs`) comparisons nothing
 is adopted. A replay is refused, with the reason, when the network cannot be closed for it
@@ -359,7 +360,7 @@ Once every pair has run (kv `lab:replayed:<experiment>`) and been judged, it is 
 **Shadow.** `--mode shadow` (`shadow.rs`) keeps every real run of the routine as it is — A, in the bot's own folder,
 its answer to the owner as always — and starts its B beside it at the same moment (`lab::fired`, called as the run is
 handed over by `manager/jobs.rs`, handed the same task): a loose turn of the bot's role (`manager::run_turn`) in the
-experiment's worktree, handed its memory and skills, in a conversation of its own, `shadow-<experiment>-<pair>`, that
+experiment's worktree, with the same instructions and recent chat as A's fresh session, handed its memory and skills, in a conversation of its own, `shadow-<experiment>-<pair>`, that
 no chat, phone, room or card knows (kv `lab:pairs:<experiment>` counts the pairs; while a B is still on its way, a
 new real run is no pair). A tokio task-local makes the worktree every folder of the bot for B's turn (`lab::seat`),
 and the rules let it write there (`lab::in_replay`). Its reads are live (the web, a browser, `tirith safari read`),
@@ -401,6 +402,7 @@ Files:
 - `replay_runs.rs`: The captured runs a replay does again: enough of them, each answerable.
 - `due.rs`: Whether an experiment is ready to be decided by the rule it started with: due, not yet, or expired with too few comparisons.
 - `fixed.rs`: The `[lab]` rule an experiment started with, kept in its row and read back to decide it.
+- `fresh.rs`: A run of a live or shadow experiment starts a session of its own, as the run it is compared with does.
 - `interrupted.rs`: A replay the daemon was restarted in the middle of: decided if all its pairs were judged, ended honestly otherwise.
 - `scope.rs`: Inside a replay's or a shadow B run's turn, its worktree and routine, where the routine's `routines.toml` is read from.
 - `void.rs`: A pair that proves nothing (both failed, a read the capture lacks, calls no hook heard): kept with the verdict `void`.
@@ -413,6 +415,7 @@ Files:
 - `outside.rs`: Which tool calls read outside (web, browser, MCP, `tirith safari`, network commands) and which would reach the owner.
 - `replay.rs`: Replay mode: the task-local that marks a replay's turn, the proxy's closed caller, and the pairs run one after another.
 - `replay_side.rs`: One side of a replayed run: its throwaway worktree, its turn on the capture's start, its row's experiment and variant.
+- `replay_warm.rs`: A replay's uncounted first turn, so the side that runs first pays no cold cache for both.
 - `rule.rs`: The `[lab]` rule applied to A's and B's numbers and the comparisons, and the one line that says the decision.
 - `outward.rs`: Which shell calls of a shadow run act outward: `tirith` commands that are not plain reads, and commands that send, buy, delete or publish; a replay refuses them too.
 - `outward_browser.rs`: Which browser and MCP calls of a shadow run act outward: a click on «Send» or «Comprar», a submit, a form, an upload, code in the page; an MCP tool that does not say it reads.
@@ -927,7 +930,9 @@ Files:
 - `hook_reply.rs`: What a lane's agent hears back from a hook call that was not refused.
 - `hook_rules.rs`: A tool call that breaks a rule is refused before it runs.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
+- `door.rs`: The daemon's door: loopback only, and on Linux only for this Tirith's own user, root and `[server] users`.
 - `origin.rs`: The same-origin guard in front of every route.
+- `peer.rs`: Who is at the other end of a loopback connection, from the kernel's table of sockets (Linux).
 - `plan.rs`: A project's plan as the page shows it (each item with its newest lane), and the step a command adds to it.
 - `router.rs`: The whole router: every module's routes, the daemon's own, the page and the same-origin guard.
 - `routes/lanes.rs`: A lane's routes: start, stop, delete, its log, its question and its answer.
@@ -1004,6 +1009,7 @@ Files:
 - `signin.rs`: An agent signed in, then proven.
 - `summary.rs`: The guide's end: what is connected, what is left, how to open Tirith.
 - `trust.rs`: Tirith's hooks trusted in Codex through its app-server.
+- `trusted.rs`: Who signs in on a server whose Tirith is another user's is added to `[server] users`, for their tunnel.
 
 ## `teach/`
 

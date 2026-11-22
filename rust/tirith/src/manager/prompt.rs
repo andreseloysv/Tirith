@@ -2,18 +2,22 @@
 use crate::app::Shared;
 /// The factory prompt of this conversation's role (a bot's is its role's, with the shared skills folder filled in).
 pub(super) fn prompt(app: &Shared, project: &str) -> String {
-    let text = app
-        .cfg()
-        .factory
-        .prompts_of(&app.chat_role(project))
-        .replace(
-            "{shared}",
-            &app.home.join("bots/skills").display().to_string(),
-        );
+    let text = instructions(app, &app.chat_role(project));
     app.cfg().project(project).map_or(text.clone(), |p| {
         text.replace("{id}", &p.id)
             .replace("{repo}", &p.repo().display().to_string())
     })
+}
+/// A role's instructions, wherever its turn runs (its conversation, a loose turn of the lab).
+pub(super) fn instructions(app: &Shared, role: &str) -> String {
+    app.cfg().factory.prompts_of(role).replace(
+        "{shared}",
+        &app.home.join("bots/skills").display().to_string(),
+    )
+}
+/// What a fresh session of `project` is handed before its first message.
+pub fn recent(app: &Shared, project: &str) -> String {
+    history(app, project)
 }
 pub(super) fn history(app: &Shared, project: &str) -> String {
     let rows: Vec<String> = app.query(

@@ -64,7 +64,7 @@ pub fn fired(app: &Shared, key: &str, routine: &str, task: &str) {
         pair: 0,
     };
     sit(app, key, s);
-    let _ = (variant == "B").then(|| crate::manager::end_session(key));
+    super::fresh::session(app, key); // A and B alike
 }
 
 /// The run of the bot `key` on its way is `s`.
@@ -83,9 +83,9 @@ pub fn taken(app: &App, key: &str, routine: &str) -> Option<Seat> {
 }
 
 /// The run of the bot `key` on its way ended without its turn's row (it never started, or its session ended): its seat is taken back, and a B run's session ends so the next starts in the bot's own folder.
-pub fn released(app: &App, key: &str) {
+pub fn released(app: &Shared, key: &str) {
     let seat = SEATS.lock().unwrap().remove(&live(app, key));
     let _ = seat
         .filter(|s| s.variant == "B")
-        .map(|_| crate::manager::end_session(key));
+        .map(|_| super::fresh::session(app, key));
 }

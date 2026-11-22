@@ -24,7 +24,8 @@ pub(super) fn serve() -> Result<(), String> {
             "tirith: http://127.0.0.1:{port}/ (home {})",
             app.home.display()
         );
-        axum::serve(listener, server::router(app, port))
+        let door = server::door(listener, app.clone());
+        axum::serve(door, server::router(app, port))
             .await
             .map_err(|e| e.to_string())
     })

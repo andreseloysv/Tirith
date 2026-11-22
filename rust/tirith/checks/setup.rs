@@ -167,3 +167,16 @@ fn a_failed_check_says_what_the_agent_said() {
     );
     assert_eq!(super::why::picked("one\ntwo\n\n"), "two");
 }
+
+#[test]
+fn who_installed_it_may_reach_the_page_through_a_tunnel() {
+    let home = dir("trusted");
+    let file = home.join("config.toml");
+    std::fs::write(&file, "[server]\nport = 7800\n").unwrap();
+    super::trusted::add(&home, "deploy").unwrap();
+    super::trusted::add(&home, "deploy").unwrap();
+    let text = std::fs::read_to_string(&file).unwrap();
+    assert_eq!(text.matches("deploy").count(), 1, "{text}");
+    assert!(text.contains("port = 7800"), "{text}");
+    let _ = std::fs::remove_dir_all(&home);
+}

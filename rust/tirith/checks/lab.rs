@@ -624,3 +624,20 @@ async fn a_replay_is_ended_when_the_daemon_restarted_in_its_middle() {
     drop(app);
     let _ = std::fs::remove_dir_all(&home);
 }
+
+#[test]
+fn both_sides_of_a_live_experiment_start_fresh() {
+    let (app, home) = app_with_a_bot("fresh");
+    branch(&home, "v3", "# Memory\n- search with a filter\n");
+    start(&app, "v3").unwrap();
+    let agent = crate::models::role(&app, KEY).agent;
+    let session = format!("manager_session:{agent}:{KEY}");
+    for side in ["A", "B"] {
+        app.set_kv(&session, Some("what the chat gathered"));
+        super::fired(&app, KEY, "r1", "the task");
+        assert_eq!(app.kv(&session), None, "{side}");
+        super::released(&app, KEY);
+    }
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}

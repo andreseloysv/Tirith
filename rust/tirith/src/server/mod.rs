@@ -1,11 +1,13 @@
 //! HTTP on 127.0.0.1: the page, its JSON API, the change stream (SSE) and the agents' hooks.
 mod chat;
+mod door;
 mod hook;
 mod hook_find;
 mod hook_lane;
 mod hook_reply;
 mod hook_rules;
 mod origin;
+mod peer;
 mod plan;
 mod router;
 mod routes;
@@ -13,6 +15,7 @@ mod settings;
 mod state;
 mod web;
 
+pub use door::door;
 pub use router::router;
 
 pub fn s(v: &serde_json::Value, k: &str) -> String {
@@ -22,6 +25,9 @@ pub fn s(v: &serde_json::Value, k: &str) -> String {
 #[cfg(test)]
 use {hook::hook, origin::origin_host_ok, web::web_file};
 
+#[cfg(test)]
+#[path = "../../checks/door.rs"]
+mod door_tests;
 #[cfg(test)]
 #[path = "../../checks/server.rs"]
 mod tests;

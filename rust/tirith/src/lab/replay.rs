@@ -49,28 +49,37 @@ pub(super) fn done_key(id: i64) -> String {
 pub(super) fn launch(app: &Shared, e: Experiment, turns: Vec<i64>) {
     let app = app.clone();
     tokio::spawn(async move {
-        for turn in turns {
-            pair(&app, &e, turn).await;
+        if let Some(first) = turns.first() {
+            super::replay_warm::warm(&app, &e, *first).await;
+        }
+        for (n, turn) in turns.into_iter().enumerate() {
+            pair(&app, &e, turn, n % 2 == 1).await; // neither side always goes first
         }
         app.set_kv(&done_key(e.id), Some("done"));
         super::decide::decide(&app, e.id);
     });
 }
 
-/// One captured run done again by A, then by B, and B compared with that A.
-async fn pair(app: &Shared, e: &Experiment, turn: i64) {
+/// One captured run done again by A and by B, the first of them B when `b_first`, and B compared with that A.
+async fn pair(app: &Shared, e: &Experiment, turn: i64, b_first: bool) {
     let Some(cap) = crate::turns::capture_of(app, turn) else {
         return;
     };
-    let Some((a, a_void)) = super::replay_side::side(app, e, &cap, "A").await else {
+    let order = if b_first { ["B", "A"] } else { ["A", "B"] };
+    let Some(first) = super::replay_side::side(app, e, &cap, order[0]).await else {
         return;
     };
-    let Some((b, b_void)) = super::replay_side::side(app, e, &cap, "B").await else {
+    let Some(second) = super::replay_side::side(app, e, &cap, order[1]).await else {
         return;
+    };
+    let ((a, a_void), (b, b_void)) = if b_first {
+        (second, first)
+    } else {
+        (first, second)
     };
     // A side refused what the capture lacks, or unheard by the hook: the pair proves nothing, and is neither a tie nor a win.
     match a_void.or(b_void) {
-        None => super::compare::compare(app, e, b),
+        None => super::compare::compare_pair(app, e, a, b),
         Some(why) => super::void::void(app, e, (a, b), &why),
     }
 }

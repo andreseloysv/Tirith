@@ -27,6 +27,7 @@ mod secret;
 mod signin;
 mod summary;
 mod trust;
+mod trusted;
 mod why;
 
 pub use api::routes;

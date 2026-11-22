@@ -303,13 +303,18 @@ async fn replay_answers_from_the_capture() {
         |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
     );
     let want = |v: &str| (v.to_string(), "replay".to_string(), "r1".to_string());
-    assert_eq!(rows, vec![want("A"), want("B"), want("A"), want("B")]);
+    let order = ["W", "A", "B", "B", "A"]; // a warm-up nothing counts, then neither side always first
+    assert_eq!(rows, order.map(want).to_vec());
     let pairs: Vec<i64> = app.query(
         "SELECT b_turn - a_turn FROM lab_comparisons WHERE experiment = ?1",
         [e],
         |r| r.get(0),
     );
-    assert_eq!(pairs, vec![1, 1], "each B compared with its A");
+    assert_eq!(
+        pairs,
+        vec![1, -1],
+        "each B compared with its A, whichever ran first"
+    );
     let row = &super::list(&app, KEY)[0];
     assert!(
         matches!(row["status"].as_str(), Some("adopted" | "discarded")),

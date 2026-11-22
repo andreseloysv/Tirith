@@ -130,9 +130,11 @@ What the bot's screen shows, in a tab «Números» (`GET /api/bots/<id>/numbers`
      outside world answered from the capture by Tirith's hooks (a call the capture lacks is refused: «not available
      in a replay»). It needs at least 5 such captures, and two failed runs are no tie. Nothing of it reaches the owner.
   2. **Live.** The bot's real runs of that routine alternate A and B (B in the branch's worktree), for when inputs
-     cannot be replayed; its answers reach the owner as always.
+     cannot be replayed; each run starts a session of its own; its answers reach the owner as always.
   3. **Shadow.** B runs beside each real run of A, in its worktree, with live reads and every outward action
      refused (no cards, no `tirith say`, no phones, no `safari open`). It costs double while it lasts.
+  Both sides always start alike: a replay warms the cache with an uncounted turn and alternates which side
+  goes first; live and shadow runs resume no session.
 - **Comparison:** the judge reads the input and the two answers in random order (eval `ab-compare`) and says `a`,
   `b` or `tie`; Tirith maps it back. Tokens, cost and time come from the `turns` rows of both.
 - **What the owner gets:** one line in the bot's chat, on the phones only for an adoption: «Adopté gmail-safari v3:

@@ -20,7 +20,7 @@ pub fn finished(app: &Shared, id: i64, conv: &str, routine: &str) {
         super::shadow_pair::done(app, &e, (&seat.tree, seat.pair), (Some(id), None));
     // compared once its B ended too
     } else if seat.variant == "B" {
-        crate::manager::end_session(conv); // its next session starts in the bot's own folder again
+        super::fresh::session(app, conv); // its next session is a new one, in the bot's own folder again
         super::compare::compare(app, &e, id);
     }
     super::decide::decide(app, e.id);

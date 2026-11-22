@@ -9,6 +9,7 @@ pub(super) fn setup(o: &Opts) -> Result<bool, String> {
     println!("Setting it up in {}.\n", cx.home.display());
     let mut pending = needs::machine(&cx);
     pending.iter().for_each(|p| println!("! {p}")); // at once, not only at the end
+    super::trusted::keep(&cx.home)?;
     start(&cx, o, &mut pending)?;
     pending.extend(needs::sandbox(&cx));
 

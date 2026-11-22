@@ -14,7 +14,7 @@ pub async fn run_turn(
     project: &str,
     input: &str,
 ) -> Result<String, String> {
-    let prompt = app.cfg().factory.prompts_of(role);
+    let prompt = super::prompt::instructions(app, role);
     let mut rec = crate::turns::turn_of(app, role, project);
     let Some(()) = crate::codex::Exec::of(&models::role(app, role).agent)
         .is_none()

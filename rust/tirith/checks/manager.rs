@@ -594,4 +594,14 @@ fn a_judge_that_corrected_itself_is_read_by_its_last_verdict() {
         super::verdict::last("0.7 — a small gap", "- `1` — all"),
         "0.7 — a small gap"
     );
+    let thought =
+        "It ran the command and the year is 2026.\n\n0.9 — the year only, its check not shown";
+    let scored = super::judged(super::verdict::last(thought, "- `1` — all"));
+    assert_eq!(scored.1, Some(0.9));
+    let first = "The owner asks for a new thing, no reaction.\nneutral — a new task";
+    let moods = "- `approval` — pleased.\n- `neutral` — anything else.";
+    assert_eq!(
+        super::judged(super::verdict::last(first, moods)).0,
+        "neutral"
+    );
 }
