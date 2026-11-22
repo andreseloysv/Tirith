@@ -9,6 +9,7 @@ tirith status [--project P]                    lanes and the merge queue (of one
 tirith plan show <project>                     the plan with what works on each item
 tirith plan add <project> <step> "<text>"      add an item to a step
 tirith plan step <project> <number> "<title>" ["<intro paragraph>"]   create the plan's next step, at its end
+tirith plan step delete <project> <number>     remove that step with all its items (refused while a lane of it is not merged)
 tirith lane start <project> <step> "<item>" [--agent <alias>]
 tirith lane stop <lane>                        stop it: its work is kept and the autopilot skips its item
 tirith lane delete <lane>                      throw it away: agent, branch, unsaved work and its open plan item

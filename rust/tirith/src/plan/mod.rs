@@ -3,6 +3,7 @@
 mod add;
 mod change;
 mod check;
+mod delete;
 mod flush;
 mod item;
 mod lookup;
@@ -11,6 +12,7 @@ mod step;
 
 pub use add::add;
 pub use change::drop_item;
+pub use delete::delete_step;
 pub use flush::{flush, flush_locked};
 pub use item::Item;
 pub use lookup::{find, read, same, tick_text};

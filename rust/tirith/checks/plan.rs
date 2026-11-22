@@ -211,3 +211,87 @@ async fn plan_step_creates_a_step() {
     drop(app);
     let _ = std::fs::remove_dir_all(&base);
 }
+/// A daemon on a committed plan for project "p": the app, the plan file and the folder to remove.
+async fn delete_fixture(
+    tag: &str,
+    start: &str,
+) -> (crate::app::Shared, std::path::PathBuf, std::path::PathBuf) {
+    let base = std::env::temp_dir().join(format!("tirith-psd-{tag}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    let (repo, home) = (base.join("repo"), base.join("home"));
+    repo_with_plan(&repo, start).await;
+    std::fs::create_dir_all(&home).unwrap();
+    let cfg = format!("[[projects]]\nid = \"p\"\nrepo = \"{}\"\n", repo.display());
+    std::fs::write(home.join("config.toml"), cfg).unwrap();
+    let app = crate::app::App::open_at(home);
+    super::flush(&app, None).await;
+    (app, repo.join("docs/TODO.md"), base)
+}
+const FOUR: &str = "# Plan\n\nIntro.\n\n## 1. One\n- [x] Done one\n\n## 2. Two\n\nProse of two.\n- [x] Old\n- [ ] Open\n\n## Notes\nInside two\n\n## 3. Three\n- [ ] Third\n\n## 4. Four\n\nLast prose.\n- [ ] Fourth\n";
+#[tokio::test]
+async fn plan_step_delete_removes_only_that_step() {
+    let (app, file, base) = delete_fixture("rm", FOUR).await;
+    let plan = || std::fs::read_to_string(&file).unwrap();
+    let merged = crate::app::Lane {
+        id: "old-merged".into(),
+        project: "p".into(),
+        step: "2".into(),
+        status: "merged".into(),
+        ..Default::default()
+    };
+    app.lanes.lock().unwrap().insert(merged.id.clone(), merged);
+    super::delete_step(&app, "p", "2").await.unwrap();
+    let middle = "# Plan\n\nIntro.\n\n## 1. One\n- [x] Done one\n\n## 3. Three\n- [ ] Third\n\n## 4. Four\n\nLast prose.\n- [ ] Fourth\n";
+    assert_eq!(
+        plan(),
+        middle,
+        "a middle step goes with its prose and items"
+    );
+    assert!(
+        app.plan_dirty.lock().unwrap().contains("p"),
+        "the removal queues its commit"
+    );
+    super::delete_step(&app, "p", "4").await.unwrap();
+    let last = "# Plan\n\nIntro.\n\n## 1. One\n- [x] Done one\n\n## 3. Three\n- [ ] Third\n";
+    assert_eq!(plan(), last, "the last step goes and leaves no blank tail");
+    super::add(&app, "p", "3", "Another").await.unwrap();
+    assert_eq!(plan(), format!("{last}- [ ] Another\n"));
+    for gone in ["2", "4"] {
+        assert!(super::add(&app, "p", gone, "Nope").await.is_err());
+    }
+    assert_eq!(plan(), format!("{last}- [ ] Another\n"));
+    super::flush(&app, None).await;
+    drop(app);
+    let _ = std::fs::remove_dir_all(&base);
+}
+#[tokio::test]
+async fn plan_step_delete_refuses_a_live_step() {
+    let (app, file, base) = delete_fixture("live", FOUR).await;
+    let plan = || std::fs::read_to_string(&file).unwrap();
+    for (id, status) in [("lane-stopped", "stopped"), ("lane-merged", "merged")] {
+        let lane = crate::app::Lane {
+            id: id.into(),
+            project: "p".into(),
+            step: "3".into(),
+            status: status.into(),
+            ..Default::default()
+        };
+        app.lanes.lock().unwrap().insert(lane.id.clone(), lane);
+    }
+    for num in ["9", "", "3a", "-1", "03"] {
+        assert!(super::delete_step(&app, "p", num).await.is_err(), "{num:?}");
+        assert_eq!(plan(), FOUR);
+    }
+    let why = super::delete_step(&app, "p", "3").await.unwrap_err();
+    assert!(
+        why.contains("lane-stopped") && !why.contains("lane-merged"),
+        "{why}"
+    );
+    assert_eq!(plan(), FOUR, "a refusal leaves the bytes as they were");
+    assert!(
+        !app.plan_dirty.lock().unwrap().contains("p"),
+        "a refusal queues no commit"
+    );
+    drop(app);
+    let _ = std::fs::remove_dir_all(&base);
+}

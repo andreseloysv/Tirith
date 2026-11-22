@@ -1,6 +1,6 @@
 //! What the page reads: the whole state, the change stream, a project's plan and its autopilot.
 use super::super::{
-    plan::{plan_show, plan_step},
+    plan::{plan_show, plan_step, plan_step_delete},
     s,
     settings::autopilot,
     state::state as whole,
@@ -24,5 +24,6 @@ pub fn state() -> Router<Shared> {
             get(plan_show).post(|State(app): State<Shared>, Path(project): Path<String>, Json(b): Json<Value>| async move { plan::add(&app, &project, &s(&b, "step"), &s(&b, "text")).await.map(|_| Json(json!({"ok": true}))).map_err(bad) }),
         )
         .route("/api/plan/{project}/steps", post(plan_step))
+        .route("/api/plan/{project}/steps/{num}/delete", post(plan_step_delete))
         .route("/api/autopilot/{project}", post(autopilot))
 }
