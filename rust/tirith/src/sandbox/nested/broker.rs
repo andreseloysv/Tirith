@@ -1,5 +1,5 @@
-//! The daemon's side: it starts what a caller under Tirith's own profile asks, under one at least as tight, waits, and gives its exit code. Anyone else gets nothing: it is no way out of another sandbox. A caller that is gone takes it along.
-use super::{around::around, place, spawn::spawn, Request};
+//! The daemon's side: it starts what a caller under Tirith's own profile asks, under one at least as tight, waits, and gives its exit code. Anyone else gets nothing: it is no way out of another sandbox. A caller that is gone takes it along, and so does a daemon that stops (`watch.rs`).
+use super::{around::around, place, spawn::spawn, watch::Watch, Request};
 use crate::app::{kill_group, Shared};
 use crate::sandbox::{handover, mac};
 use std::io::{BufRead, BufReader, Read, Write};
@@ -76,6 +76,13 @@ fn answer(app: &Shared, caller: &UnixStream) -> Result<i32, String> {
         .map_err(|_| "its stdin, stdout and stderr are missing")?;
     let (r, around) = around(app, asked)?;
     let mut child = spawn(&r, &around, io)?;
+    let _watch = match Watch::over(child.id()) {
+        Ok(watch) => watch,
+        Err(why) => {
+            super::ending::end(&mut child);
+            return Err(why);
+        }
+    };
     let _ = caller.set_nonblocking(true);
     loop {
         if let Some(status) = child.try_wait().map_err(|e| e.to_string())? {

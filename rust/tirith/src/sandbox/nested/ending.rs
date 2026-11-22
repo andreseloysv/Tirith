@@ -5,17 +5,21 @@ use std::process::Child;
 
 /// `child` and all below it, ended now.
 pub(super) fn end(child: &mut Child) {
-    let pid = child.id() as pid_t;
+    end_all(child.id() as pid_t);
+    let _ = child.wait();
+}
+
+/// Process `pid`, a group's leader, and all below it, ended now.
+pub(super) fn end_all(pid: pid_t) {
     // SAFETY: kill only sends a signal; held still first, so it starts nothing while its children are counted.
     unsafe { libc::kill(pid, libc::SIGSTOP) };
     let mut below = vec![];
     collect(pid, &mut below);
-    kill_group(child.id(), libc::SIGKILL);
+    kill_group(pid as u32, libc::SIGKILL);
     for p in below {
         // SAFETY: as above, to a process counted a moment ago as this one's.
         unsafe { libc::kill(p, libc::SIGKILL) };
     }
-    let _ = child.wait();
 }
 
 fn collect(of: pid_t, all: &mut Vec<pid_t>) {

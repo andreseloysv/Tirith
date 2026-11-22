@@ -11,9 +11,8 @@ const FOLDERS: [&str; 8] = [
     "tmp/arg0",
     "tmp/arg0-macos",
 ];
-const FILES: [&str; 9] = [
+const FILES: [&str; 8] = [
     "tmp",
-    "auth.json", // it renews its sign-in there
     "installation_id",
     "models_cache.json",
     "history.jsonl",
@@ -22,6 +21,9 @@ const FILES: [&str; 9] = [
     ".sandbox_migration",
     ".personality_migration",
 ];
+
+/// Its sign-in, which it renews in the file that is there: none can be planted.
+const RENEWED: &str = "auth.json";
 
 /// Those, for the program `own` names alone.
 pub(super) fn own(sb: &mut Sb, state: &str, own: &str) {
@@ -39,5 +41,9 @@ pub(super) fn own(sb: &mut Sb, state: &str, own: &str) {
     sb.line(&format!(
         "(allow file-write* (require-all {own} (require-any {})))",
         what.join(" ")
+    ));
+    let renewed = sb.path(&format!("{state}/{RENEWED}"));
+    sb.line(&format!(
+        "(allow file-write-data file-write-times (require-all {own} (literal {renewed})))"
     ));
 }

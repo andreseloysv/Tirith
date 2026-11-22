@@ -6,6 +6,9 @@ use std::path::PathBuf;
 
 /// `tirith nested-codex <codex> args…`, answered before the command line is read.
 pub fn launcher(args: &[String]) -> Option<i32> {
+    if let Some(code) = super::watch::launcher(args) {
+        return Some(code);
+    }
     let [word, program, rest @ ..] = args else {
         return None;
     };

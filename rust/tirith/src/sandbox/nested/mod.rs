@@ -14,6 +14,7 @@ mod ending;
 mod flags;
 mod layers;
 mod limits;
+mod line;
 mod mode;
 #[cfg(target_os = "macos")]
 mod other;
@@ -31,6 +32,8 @@ mod spawn;
 mod state;
 mod told;
 mod values;
+#[cfg(target_os = "macos")]
+mod watch;
 mod writes;
 
 #[cfg(target_os = "macos")]

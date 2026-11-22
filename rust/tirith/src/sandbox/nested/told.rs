@@ -1,4 +1,4 @@
-//! What is said of a limit kept in one profile: it never changes in silence.
+//! What is said of a limit kept in one profile, to who called and to Codex's model: it never changes in silence.
 use super::mode::Mode;
 
 /// One line for whoever called. It is news, not an error, and has no words of one.
@@ -22,4 +22,23 @@ pub(super) fn said(mode: Mode, net: bool, unread: bool, role: bool, servers: &[S
         );
     }
     line
+}
+
+/// The model's instructions: the caller's (`theirs`), and the true limit, for Codex describes the sandbox it was started with, which is none.
+pub(super) fn instructions(theirs: &str, mode: Mode, net: bool) -> String {
+    let writes = match mode {
+        Mode::Write => "write only in the working directory, the folders added to it and the temporary folders (never in their .git, .codex or .agents)",
+        _ => "write nothing",
+    };
+    let network = if net {
+        "have the network"
+    } else {
+        "have no network"
+    };
+    let limit = format!("Your commands run in a sandbox, whatever else says they are unrestricted: they {writes}, and they {network}. Do not try to get around it: say what you could not do.");
+    if theirs.trim().is_empty() {
+        limit
+    } else {
+        format!("{theirs}\n\n{limit}")
+    }
 }

@@ -90,6 +90,7 @@ impl Asked {
             return true;
         };
         self.sets.push((key.trim().into(), value.trim().into()));
-        key.trim() != "sandbox_mode"
+        // both are given again as they are to be (settings.rs)
+        !matches!(key.trim(), "sandbox_mode" | "developer_instructions")
     }
 }

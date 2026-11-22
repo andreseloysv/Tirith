@@ -187,6 +187,7 @@ fn the_one_profile_only_takes_away() {
             "appleevent-send" => false,
             _ => [
                 "file-write*",
+                "file-write-data",
                 "signal",
                 "mach-lookup",
                 "mach-register",
@@ -359,6 +360,19 @@ fn a_profile_named_in_the_settings_is_read_and_servers_are_named() {
         .unwrap();
     assert!(!r.write, "the profile's limit wins");
     assert!(note.contains("notes"), "said, not silent: {note}");
+    let briefed = words("exec -c developer_instructions=Brief. hi");
+    let (said, _) = settings::limit(&asked::read(&briefed).unwrap(), &at)
+        .unwrap()
+        .unwrap();
+    let told: Vec<&String> = said
+        .args
+        .iter()
+        .filter(|a| a.starts_with("developer_instructions="))
+        .collect();
+    assert!(
+        told.len() == 1 && told[0].contains("Brief.") && told[0].contains("write nothing"),
+        "the caller's words, then the true limit, once: {told:?}"
+    );
     assert!(
         r.args
             .iter()
