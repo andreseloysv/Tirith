@@ -17,6 +17,8 @@ function useSeen(bot, talk) {
   }, [bot && bot.id, talk && talk.rows.length, talk && talk.loaded]);
 }
 
+const pickTemplate = () => setUi('botTemplates', true);
+
 /** `project` is the second part of the address: the id of the bot to show (else the last one shown, else the first). */
 export function Bots({ project: wanted }) {
   const s = useStore();
@@ -31,10 +33,11 @@ export function Bots({ project: wanted }) {
       ? 'The running Tirith daemon is older than this page and has no bots yet: rebuild and restart it (the page updates on its own).'
       : `Could not read the bots: ${err.message}`) : 'Loading…'}</p></div>`;
   }
-  if (!bots.length) return html`<div class="bview bsolo"><${Intro} onNew=${() => setUi('botCard', {})} /></div>`;
+  if (!bots.length) return html`<div class="bview bsolo"><${Intro} onNew=${() => setUi('botCard', {})} onTemplate=${pickTemplate} /></div>`;
   return html`<div class="bview">
     <div class="bchat"><${Chat} key=${keyOf(bot)} project=${keyOf(bot)} who=${bot.name}
       hint=${`Say hello to ${bot.name}. Ask for anything that repeats, as “every weekday at 8, check my inbox for job offers”, and ${bot.name} sets up the routine itself.`} /></div>
-    <aside class="bside"><${Panel} bot=${bot} busy=${!!s.busy[keyOf(bot)]} onEdit=${() => setUi('botCard', bot)} /></aside>
+    <aside class="bside"><button type="button" class="blink btopen" onClick=${pickTemplate}>Desde plantilla</button>
+      <${Panel} bot=${bot} busy=${!!s.busy[keyOf(bot)]} onEdit=${() => setUi('botCard', bot)} /></aside>
   </div>`;
 }

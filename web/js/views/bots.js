@@ -10,8 +10,10 @@
 // exactly as for one of the owner's, saved in config.toml where its routes replace the factory's for it.
 //
 // The parts live in bots/: view.js (the view), panel.js, routines.js, library.js, skills.js, phone.js and intro.js
-// (what it shows), card.js, card-model.js and card-factory.js (the card), when.js and state.js (what it computes).
+// (what it shows), card.js, card-model.js and card-factory.js (the card), templates.js («Desde plantilla»: a bot from
+// one of the factory's templates), when.js and state.js (what it computes).
 export { Bots } from './bots/view.js';
 export { BotCard } from './bots/card.js';
+export { BotTemplates } from './bots/templates.js';
 export { keyOf, recall, stateOf } from './bots/state.js';
 export { daysLabel, timeLabel, nextRun } from './bots/when.js';

@@ -1,0 +1,14 @@
+# A bot template: what «Desde plantilla» makes. Its folder's name is its skill's name.
+name = "Resumen del correo a las 07:00"
+start = "Cada día a las 07:00 te resumo el correo de las últimas 24 horas, sin abrirlo ni marcarlo como leído. Leo Gmail con el navegador de Tirith: dime «abre el correo» para iniciar sesión allí una vez. Si usas otro correo, dime su dirección web."
+
+[face]
+shape = "pill"
+color = "#3b82f6"
+
+[routine]
+title = "Resumen del correo"
+trigger = "schedule"
+days = "daily"
+at = "07:00"
+prompt = "Usa la skill resumen-correo: lee la bandeja de entrada con el navegador de Tirith y resume lo que llegó en las últimas 24 horas, primero lo que pide algo del dueño. No abras ni cambies ningún mensaje."

@@ -1,7 +1,6 @@
 //! When a turn role's pass may run by itself: its daily budget, and its scheduled pass.
 use super::metric::iso;
 use crate::app::Shared;
-use serde_json::json;
 /// The passes of `role` in `ceo_reviews`: the rows naming it, and for the CEO (the role of the delayed `metric.red` route) the rows kept before passes named their role.
 pub(super) fn mine(app: &Shared, role: &str) -> String {
     let ceo = super::review::delayed_review(app).0;
@@ -32,31 +31,9 @@ pub(super) fn under_budget(app: &Shared, role: &str, now: u64) -> bool {
         .unwrap_or(0);
     today < max
 }
-/// The scheduled pass is configuration, not a decision here: the factory's `schedule` route to this role, due like a bot's routine when its time came and no scheduled pass of this role (kept as rows naming `daily`) ran since.
+/// The scheduled pass is configuration, not a decision here: the factory's `schedule` route to this role, due like a bot's routine (its `catch_up` too), its last run being this role's last scheduled pass (kept as rows naming `daily`).
 pub(super) fn daily_due(app: &Shared, role: &str) -> bool {
-    let sql = format!(
-        "SELECT COALESCE(MAX(at), '') FROM ceo_reviews WHERE metric LIKE '%daily%' AND {}",
-        mine(app, role)
-    );
-    let last_daily = app
-        .db
-        .lock()
-        .unwrap()
-        .query_row(&sql, [], |r| r.get::<_, String>(0))
-        .unwrap_or_default();
-    let last_daily = if last_daily.is_empty() {
-        app.kv(BORN).unwrap_or_default() // none yet: none is owed from before this Tirith existed
-    } else {
-        last_daily
-    };
-    let schedules = app.cfg().factory.schedules();
-    schedules.into_iter().any(|(to, at, days)| {
-        to == role
-            && crate::bots::due(
-                &json!({"at": at, "days": days, "last": last_daily}),
-                chrono::Local::now(),
-            )
-    })
+    super::owed::owed_pass(app, role, chrono::Local::now()).is_some()
 }
 
 /// Whether the scheduled pass of `role` may start now: due (and so expected, `expected/`) and within its budget; else it waits, saying for what.
@@ -77,7 +54,7 @@ pub(super) fn may_start(app: &Shared, role: &str, now: u64) -> bool {
 }
 
 /// When this home's daemon first started.
-const BORN: &str = "born";
+pub(super) const BORN: &str = "born";
 
 /// The daemon starts: the first time, it keeps when (for a home from before this was kept, its oldest event).
 pub fn born(app: &Shared) {

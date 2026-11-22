@@ -29,6 +29,14 @@ pub(super) fn entry(passwd: &str) -> Option<(String, String)> {
     })
 }
 
+/// That user, in the terminal of whoever signed in: nothing from here on may type into it.
+pub fn in_anothers_terminal() {
+    #[cfg(target_os = "linux")]
+    if std::env::var_os(VIA).is_some() && unsafe { libc::geteuid() } != 0 {
+        super::terminal::keep();
+    }
+}
+
 /// Goes on as that user when root calls and that user has the Tirith of this machine; it returns only when it does not.
 pub fn as_service_user(args: &[String]) {
     let root = cfg!(target_os = "linux") && unsafe { libc::geteuid() } == 0;

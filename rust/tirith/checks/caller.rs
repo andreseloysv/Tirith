@@ -56,11 +56,19 @@ fn the_kernel_is_asked_where_the_owner_is_needed() {
             && !asked(&post, "/hook/PreToolUse")
     );
     assert!(
-        owners_alone("/api/rooms/r1/qr")
-            && owners_alone("/api/rooms/r1/qr.svg")
-            && owners_alone("/api/turns/3/reaction")
+        owners_alone(&post, "/api/rooms/r1/qr")
+            && owners_alone(&post, "/api/rooms/r1/qr.svg")
+            && owners_alone(&post, "/api/turns/3/reaction")
     );
-    assert!(!owners_alone("/api/rooms/r1/say") && !owners_alone("/api/owner/o1"));
+    assert!(
+        owners_alone(&Method::DELETE, "/api/net/blocks")
+            && asked(&Method::DELETE, "/api/net/blocks")
+    );
+    assert!(
+        !owners_alone(&post, "/api/net/blocks"),
+        "an agent may block, never unblock"
+    );
+    assert!(!owners_alone(&post, "/api/rooms/r1/say") && !owners_alone(&post, "/api/owner/o1"));
 }
 
 #[tokio::test(flavor = "multi_thread")]

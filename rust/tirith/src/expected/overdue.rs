@@ -1,4 +1,4 @@
-//! Runs that wait, or work, too long (`[limits] routine_minutes`), counted on a clock that stops while the machine sleeps; and a pass whose day ended while it waited.
+//! Runs that wait, or work, too long (`[limits] routine_minutes`), counted on a clock that stops while the machine sleeps; and a pass whose day ended while it waited and that `catch_up` runs no more.
 use super::calendar::local;
 use super::life::never;
 use super::store::{because, select, Expected, RUNNING, WAITING};
@@ -47,10 +47,14 @@ pub(super) fn check(app: &Shared, now: DateTime<Local>) {
     }
 }
 
-/// A pass that still waits when its day is over never ran.
+/// A pass that still waits when its day is over never ran, unless it is the one still owed (caught up).
 fn pass(app: &Shared, run: &Expected, now: DateTime<Local>) {
     let over = local(&run.due).is_some_and(|d| d.date_naive() < now.date_naive());
-    if run.state == WAITING && over {
+    let owed = || {
+        let due = crate::metrics::owed_pass(app, &run.conv, now).map(super::calendar::utc);
+        due.as_deref() == Some(run.due.as_str())
+    };
+    if run.state == WAITING && over && !owed() {
         let why = Some(run.why.as_str()).filter(|w| !w.is_empty());
         never(
             app,

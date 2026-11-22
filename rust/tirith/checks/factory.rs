@@ -161,12 +161,18 @@ fn default_routes_reproduce_today() {
             (
                 "ceo".to_string(),
                 "07:00".to_string(),
-                vec![1, 2, 3, 4, 5, 6, 7]
+                vec![1, 2, 3, 4, 5, 6, 7],
+                String::new()
             ),
-            ("coach".to_string(), "09:00".to_string(), vec![1])
+            (
+                "coach".to_string(),
+                "09:00".to_string(),
+                vec![1],
+                String::new()
+            )
         ]
     );
-    let (_, at, days) = &f.schedules()[0];
+    let (_, at, days, _) = &f.schedules()[0];
     let stamp = |d: u32| {
         chrono::TimeZone::with_ymd_and_hms(&chrono::Local, 2026, 11, d, 7, 0, 0)
             .unwrap()
@@ -238,7 +244,8 @@ fn default_routes_reproduce_today() {
         (
             "ceo".to_string(),
             "07:00".to_string(),
-            vec![1, 2, 3, 4, 5, 6, 7]
+            vec![1, 2, 3, 4, 5, 6, 7],
+            String::new()
         ),
         "its timed daily pass, a schedule route, stands beside them still"
     );

@@ -4,7 +4,7 @@ use super::loaded::Factory;
 use super::refs::{
     bad_protocol, bad_shape, missing_agent, missing_parent, missing_prompt, unknown_measure,
 };
-use super::rowrefs::{bad_eval, bad_route};
+use super::rowrefs::{bad_catch_up, bad_eval, bad_route};
 use super::unknown::{sub, unknown_flat, unknown_in, unknown_keys, unknown_section};
 use super::values::rows;
 
@@ -41,6 +41,7 @@ impl Factory {
             .or_else(|| unknown_measure(sub(t, "metrics")))
             .or_else(|| unknown_keys(&routes, ROUTE_KEYS, "routes"))
             .or_else(|| bad_route(&routes, &roles))
+            .or_else(|| bad_catch_up(&routes))
             .or_else(|| unknown_keys(&evals, EVAL_KEYS, "evals"))
             .or_else(|| bad_eval(&evals, &roles, &self.prompts))
     }

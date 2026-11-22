@@ -7,7 +7,9 @@ pub struct Unit {
     /// The owner's home folder.
     pub user_home: PathBuf,
     /// Empty for the usual home; else a mark of this one, so two homes are two services.
-    mark: String,
+    pub(super) mark: String,
+    /// `TIRITH_PORT`, when it was set at the install: a service inherits none of the shell's variables.
+    pub(super) port: Option<u16>,
 }
 
 impl Unit {
@@ -22,11 +24,15 @@ impl Unit {
             let hash = crate::rooms::sealed::sha_hex(home.display().to_string().as_bytes());
             format!("-{}", &hash[..8])
         };
+        let port = std::env::var("TIRITH_PORT")
+            .ok()
+            .and_then(|p| p.parse().ok());
         Ok(Unit {
             home,
             exe,
             user_home,
             mark,
+            port,
         })
     }
 
@@ -37,7 +43,7 @@ impl Unit {
 
     /// launchd's name of it.
     pub fn label(&self) -> String {
-        format!("app.tirith.daemon{}", self.mark)
+        format!("com.tirith.serve{}", self.mark)
     }
 
     pub fn systemd_file(&self) -> PathBuf {

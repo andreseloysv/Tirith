@@ -12,6 +12,7 @@ mod idle;
 mod interruptions;
 mod metric;
 mod mood;
+mod owed;
 mod pass;
 mod plans;
 mod queued;
@@ -23,6 +24,7 @@ mod unapproved;
 mod work;
 mod worse;
 pub use api::{routes, start};
+pub use owed::owed_pass;
 pub use pass::born;
 pub use roles::heard;
 #[cfg(test)]

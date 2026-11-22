@@ -37,7 +37,7 @@ fn read(file: &std::path::Path) -> String {
     std::fs::read_to_string(file).unwrap_or_default()
 }
 /// A skill's name is lowercase letters, digits and dashes, up to 64.
-fn named(name: &str) -> bool {
+pub(super) fn named(name: &str) -> bool {
     name.len() <= 64
         && name.starts_with(|c: char| c.is_ascii_lowercase())
         && name

@@ -256,3 +256,73 @@ fn a_token_never_follows_to_another_host() {
     );
     let _ = std::fs::remove_dir_all(&home);
 }
+
+#[test]
+fn roots_file_is_handed_over_on_stdin() {
+    let d = dir("root-put");
+    let to = d.join("com.tirith.serve.plist");
+    // `env` stands in for sudo: the same shell gets the same text, as this user
+    let put = super::root::write(Path::new("/usr/bin/env"), &to, "<plist>the job</plist>\n");
+    assert!(put, "written");
+    assert_eq!(
+        std::fs::read_to_string(&to).unwrap(),
+        "<plist>the job</plist>\n"
+    );
+    use std::os::unix::fs::PermissionsExt;
+    assert_eq!(
+        std::fs::metadata(&to).unwrap().permissions().mode() & 0o777,
+        0o644
+    );
+    assert_eq!(std::fs::read_dir(&d).unwrap().count(), 1, "no draft stays");
+    assert!(
+        !super::root::write(Path::new("/usr/bin/env"), &to, ""),
+        "an empty file never replaces one"
+    );
+    let found = super::root::program("sh").unwrap();
+    assert!(
+        ["/usr/bin/sh", "/bin/sh"]
+            .iter()
+            .any(|p| found == Path::new(p)),
+        "a system one"
+    );
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn nothing_types_into_roots_terminal() {
+    // in a thread of its own: the filter is that thread's, for good
+    let seen = std::thread::spawn(|| {
+        if !super::terminal::keep() {
+            return None; // a kernel, or an emulator, that takes no filter
+        }
+        let mut ends = [0; 2];
+        // SAFETY: the pipe's ends are closed below; each ioctl only reads `key` or writes `size`.
+        unsafe {
+            assert_eq!(libc::pipe(ends.as_mut_ptr()), 0);
+            let key = [b'x'];
+            let sti = libc::ioctl(ends[0], 0x5412 as _, key.as_ptr());
+            let sti = (sti, std::io::Error::last_os_error().raw_os_error());
+            let mut size: libc::winsize = std::mem::zeroed();
+            let other = libc::ioctl(ends[0], libc::TIOCGWINSZ, &mut size);
+            let other = (other, std::io::Error::last_os_error().raw_os_error());
+            (libc::close(ends[0]), libc::close(ends[1]));
+            Some((sti, other))
+        }
+    })
+    .join()
+    .unwrap();
+    let Some((sti, other)) = seen else { return };
+    if sti != (-1, Some(libc::ENOTTY)) || !cfg!(target_arch = "x86_64") {
+        assert_eq!(
+            sti,
+            (-1, Some(libc::EPERM)),
+            "typing into a terminal is refused"
+        );
+    } // (an emulated x86_64 hands the kernel another architecture's calls)
+    assert_eq!(
+        other,
+        (-1, Some(libc::ENOTTY)),
+        "every other ioctl is as before"
+    );
+}

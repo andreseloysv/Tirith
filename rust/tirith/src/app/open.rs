@@ -19,6 +19,7 @@ impl App {
         let cfg_mtime = (cfg_mtime, crate::factory::stamp(&cfg.raw));
         Arc::new(App {
             home,
+            started: super::now_s(),
             cfg: RwLock::new(cfg.clone()),
             db: Mutex::new(db),
             lanes: Mutex::new(lanes),

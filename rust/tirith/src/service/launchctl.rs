@@ -1,6 +1,6 @@
 //! launchctl on one job: in the owner's domain, or the system's with sudo.
 use super::unit::Unit;
-use crate::setup::{find, run, Ask};
+use crate::setup::{root, run, Ask};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -33,7 +33,7 @@ impl<'a> Launchctl<'a> {
     }
 
     fn run(&self, args: &[&str]) -> bool {
-        match find::program("sudo").filter(|_| self.boot) {
+        match root::sudo().filter(|_| self.boot) {
             Some(sudo) => run::shown(self.ask, &sudo, &[&[LAUNCHCTL][..], args].concat(), &[]),
             None => run::quiet(Path::new(LAUNCHCTL), args, &[], Duration::from_secs(30)),
         }
@@ -50,9 +50,17 @@ impl<'a> Launchctl<'a> {
         self.at().is_some()
     }
 
+    /// The process it runs now.
+    pub fn pid(&self) -> Option<u32> {
+        printed_pid(&run::output(LAUNCHCTL, &["print", &self.at()?])?)
+    }
+
     pub fn load(&self) -> Result<(), String> {
         let file = self.file.display().to_string();
-        for _ in 0..8 {
+        for domain in &self.domains {
+            self.run(&["enable", &format!("{domain}/{}", self.label)]); // bootstrap refuses a label that was ever disabled
+        }
+        for _ in 0..30 {
             if self
                 .domains
                 .iter()
@@ -83,4 +91,10 @@ impl<'a> Launchctl<'a> {
             .then_some(())
             .ok_or(format!("launchctl could not start {job}"))
     }
+}
+
+/// The pid in what `launchctl print` says of a job.
+pub(super) fn printed_pid(text: &str) -> Option<u32> {
+    text.lines()
+        .find_map(|line| line.trim().strip_prefix("pid = ")?.parse().ok())
 }

@@ -1,0 +1,87 @@
+name: cli
+
+# The Linux binaries on version tags, on the tag's Release with their SHA-256. They are NOT signed: scripts/install.sh
+# installs only a release signed with Tirith's key (scripts/release/release.sh), never these.
+# They are static (musl, SQLite compiled in), so they need no particular glibc and no system library.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build (${{ matrix.arch }})
+    strategy:
+      matrix:
+        include:
+          - arch: x86_64
+            os: ubuntu-24.04
+          - arch: aarch64
+            os: ubuntu-24.04-arm
+    runs-on: ${{ matrix.os }}
+    env:
+      TARGET: ${{ matrix.arch }}-unknown-linux-musl
+      ASSET: tirith-linux-${{ matrix.arch }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.arch }}-unknown-linux-musl
+      - name: Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+      - name: Build
+        run: cargo build --release --locked -p tirith --features rusqlite/bundled --target "$TARGET"
+      - name: Check and checksum
+        run: |
+          mkdir dist
+          cp "target/$TARGET/release/tirith" "dist/$ASSET"
+          cd dist
+          strip "$ASSET"
+          if readelf -l "$ASSET" | grep -q INTERP; then
+            echo "$ASSET is not static" >&2
+            exit 1
+          fi
+          # Without arguments it prints its usage and exits 1.
+          usage=$("./$ASSET" 2>&1 || true)
+          grep -q 'tirith serve' <<< "$usage"
+          sha256sum "$ASSET" > "$ASSET.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tirith-linux-${{ matrix.arch }}
+          if-no-files-found: error
+          path: dist/*
+
+  release:
+    name: release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: tirith-linux-*
+          path: dist
+          merge-multiple: true
+      - name: Create the Release if there is none
+        run: |
+          flags=(--verify-tag --generate-notes)
+          # A tag like v1.0.0-rc.1 must not become the latest Release, which is what the installer takes.
+          case "$TAG" in *-*) flags+=(--prerelease) ;; esac
+          # The second view is for another workflow creating it meanwhile.
+          gh release view "$TAG" > /dev/null 2>&1 ||
+            gh release create "$TAG" "${flags[@]}" ||
+            gh release view "$TAG" > /dev/null
+      - name: Upload
+        run: gh release upload "$TAG" dist/* --clobber

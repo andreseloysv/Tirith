@@ -2,6 +2,7 @@
 mod admits;
 mod admitted;
 mod calendar;
+mod changed;
 mod claims;
 mod found;
 mod gaps;
@@ -13,6 +14,7 @@ mod overdue;
 mod passes;
 mod reasons;
 mod restart;
+mod stands;
 mod store;
 mod timed;
 mod told;
@@ -20,13 +22,15 @@ mod verdict;
 mod watch;
 mod words;
 pub use admitted::admitted;
-pub use calendar::today;
+pub use calendar::{today, utc as instant};
+pub use changed::changed;
 pub use claims::{honest, quiet};
 pub use found::known;
 pub use gaps::late;
 pub use life::{ended, orphaned, started, unhanded, unstarted};
 pub use passes::{blocked, pass_due};
 pub use restart::start;
+pub use stands::stands;
 pub use store::{expect, New};
 pub use verdict::verdict;
 pub use watch::tick;
@@ -37,6 +41,9 @@ pub const PASS: &str = "pass";
 /// A pass as the owner and the numbers name it.
 pub const PASS_TITLE: &str = "Pasada programada";
 
+#[cfg(test)]
+#[path = "../../checks/catch_up.rs"]
+mod catch_up_tests;
 #[cfg(test)]
 #[path = "../../checks/expected.rs"]
 mod tests;

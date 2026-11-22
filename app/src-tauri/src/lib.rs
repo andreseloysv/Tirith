@@ -6,6 +6,9 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
+#[cfg(unix)]
+mod cli_link;
+
 fn home_dir() -> PathBuf {
     std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("."))
 }
@@ -32,11 +35,15 @@ fn answers(port: u16) -> bool {
     TcpStream::connect_timeout(&addr, Duration::from_millis(300)).is_ok()
 }
 
+/// `tirith` next to the app's executable: where a bundle carries it.
+fn beside() -> Option<PathBuf> {
+    Some(std::env::current_exe().ok()?.parent()?.join("tirith")).filter(|p| p.is_file())
+}
+
 /// The `tirith` binary: next to the app's executable, then `~/.local/bin`, then `PATH`.
 fn tirith_bin() -> PathBuf {
-    let beside = std::env::current_exe().ok().and_then(|exe| Some(exe.parent()?.join("tirith")));
     let local = home_dir().join(".local/bin/tirith");
-    beside.filter(|p| p.is_file()).or_else(|| Some(local).filter(|p| p.is_file())).unwrap_or_else(|| "tirith".into())
+    beside().or_else(|| Some(local).filter(|p| p.is_file())).unwrap_or_else(|| "tirith".into())
 }
 
 /// Starts the daemon in its own process group (it outlives the window) and waits up to 10 s for it.
@@ -73,6 +80,10 @@ pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
             let port = port();
+            #[cfg(unix)] // not in development: there the binary beside the app is a build, not a bundle
+            if let Some(Err(e)) = beside().filter(|_| !cfg!(dev)).map(|bin| cli_link::link(&bin, &home_dir())) {
+                eprintln!("tirith is not linked in ~/.local/bin: {e}");
+            }
             ensure_daemon(port);
             let url = format!("http://127.0.0.1:{port}/").parse().expect("valid daemon url");
             tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::External(url))

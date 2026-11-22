@@ -30,7 +30,7 @@ pub(super) fn scheduled(app: &Shared, ceo: &str, now: u64) {
     let mut roles: Vec<String> = app
         .cfg()
         .factory
-        .schedules()
+        .passes()
         .into_iter()
         .map(|s| s.0)
         .collect();

@@ -21,6 +21,7 @@ pub struct Expected {
     pub state: String,
     pub why: String,
     pub started_at: String,
+    pub created_at: String,
 }
 
 /// What is written down when an occurrence is due.
@@ -56,7 +57,7 @@ pub fn expect(app: &App, n: &New) -> i64 {
 
 /// The occurrences `rest` (an SQL WHERE and ORDER) selects.
 pub(super) fn select<P: Params>(app: &App, rest: &str, with: P) -> Vec<Expected> {
-    let sql = format!("SELECT id, conv, routine, title, \"trigger\", kind, due, COALESCE(task, ''), state, COALESCE(why, ''), COALESCE(started_at, '') FROM expected_runs WHERE {rest}");
+    let sql = format!("SELECT id, conv, routine, title, \"trigger\", kind, due, COALESCE(task, ''), state, COALESCE(why, ''), COALESCE(started_at, ''), COALESCE(created_at, '') FROM expected_runs WHERE {rest}");
     app.query(&sql, with, |r| {
         Ok(Expected {
             id: r.get(0)?,
@@ -70,6 +71,7 @@ pub(super) fn select<P: Params>(app: &App, rest: &str, with: P) -> Vec<Expected>
             state: r.get(8)?,
             why: r.get(9)?,
             started_at: r.get(10)?,
+            created_at: r.get(11)?,
         })
     })
 }

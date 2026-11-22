@@ -15,6 +15,7 @@ pub fn main() {
         std::process::exit(code);
     }
     crate::setup::as_service_user(&args);
+    crate::setup::in_anothers_terminal();
     if let Some(code) = crate::setup::cli(&args) {
         std::process::exit(code);
     }

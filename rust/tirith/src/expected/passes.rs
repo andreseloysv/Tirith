@@ -5,20 +5,12 @@ use super::{calendar, PASS, PASS_TITLE};
 use crate::app::Shared;
 use chrono::{DateTime, Local};
 
-/// Whether the pass of `role` due today is still to be started (`due`: no pass of it ran since its time); it is written down the first time.
+/// Whether the owed pass of `role` (today's, or one caught up) is still to be started (`due`: no pass of it ran since its time); it is written down the first time.
 pub fn pass_due(app: &Shared, role: &str, due: bool, now: DateTime<Local>) -> bool {
     if !due {
         return false;
     }
-    let times: Vec<(String, Vec<u64>)> = app
-        .cfg()
-        .factory
-        .schedules()
-        .into_iter()
-        .filter(|(to, _, _)| to == role)
-        .map(|(_, at, days)| (at, days))
-        .collect();
-    let Some(at) = calendar::latest(&times, now) else {
+    let Some(at) = crate::metrics::owed_pass(app, role, now).map(calendar::utc) else {
         return false;
     };
     if let Some(run) = occurrence(app, (role, PASS, &at)) {

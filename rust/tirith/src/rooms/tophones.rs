@@ -2,13 +2,13 @@
 use super::outbox::{queue, Line};
 use super::{store::ROOMS, uncite::uncited, unsent, Room};
 use crate::app::Shared;
-/// The ids of a conversation's own rooms, the ones its phones are in.
+/// The ids of a conversation's own rooms that a phone joined: with none of those, its notices go to the general conversation's.
 pub fn phone_rooms(app: &Shared, project: &str) -> Vec<String> {
     ROOMS
         .lock()
         .unwrap()
         .values()
-        .filter(|r| r.kind == "manager" && app.conv(&r.project) == project)
+        .filter(|r| r.kind == "manager" && !r.devices.is_empty() && app.conv(&r.project) == project)
         .map(|r| r.id.clone())
         .collect()
 }
@@ -26,7 +26,7 @@ pub fn to_phones_surely(app: &Shared, project: &str, text: &str) {
     }
 }
 /// What is sent where.
-fn lines(app: &Shared, project: &str, text: &str) -> Vec<Line> {
+pub(super) fn lines(app: &Shared, project: &str, text: &str) -> Vec<Line> {
     // A true ∅ (a routine looked and found nothing new) stays on the page: only news reaches the phones, and «∅ I could not» is news.
     if crate::expected::quiet(text) {
         return vec![];

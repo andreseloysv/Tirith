@@ -5,8 +5,8 @@ use super::values::{rows, str_of};
 /// One `[[routes]]` entry read for one event: (to, mode, chat, phone, after_minutes).
 pub type Route = (String, String, bool, bool, Option<u64>);
 
-/// One `schedule` route with a time of day: (to, at, days).
-pub type Schedule = (String, String, Vec<u64>);
+/// One `schedule` route with a time of day: (to, at, days, catch_up).
+pub type Schedule = (String, String, Vec<u64>, String);
 
 fn flag(r: &toml::Value, k: &str) -> bool {
     r.get(k).and_then(|v| v.as_bool()).unwrap_or(false)
@@ -17,13 +17,22 @@ fn count(v: &toml::Value) -> Option<u64> {
 }
 
 impl Factory {
-    /// Every `schedule` route that names a time of day and no task: (to, at, days). A route with a task is a routine, fired from config.toml by bots.rs; one of the factory's own (the CEO's daily pass) by whoever runs its role.
+    /// Every `schedule` route that names a time of day: (to, at, days, catch_up). A bot's routines are fired from config.toml by bots.rs; one of the factory's own (the CEO's daily pass) by whoever runs its role.
     pub fn schedules(&self) -> Vec<Schedule> {
+        self.timed(|_| true)
+    }
+
+    /// Those with no task, the turn roles' scheduled passes: a route with a task is a routine, whoever its role is.
+    pub fn passes(&self) -> Vec<Schedule> {
+        self.timed(|r| str_of(r, "task").is_empty())
+    }
+
+    fn timed(&self, wanted: impl Fn(&toml::Value) -> bool) -> Vec<Schedule> {
         rows(&self.raw, "routes")
+            .filter(|r| wanted(r))
             .filter(|r| {
                 str_of(r, "on") == "schedule"
                     && !str_of(r, "at").is_empty()
-                    && str_of(r, "task").is_empty()
                     && r.get("enabled").and_then(|v| v.as_bool()) != Some(false)
             })
             .map(|r| {
@@ -36,6 +45,7 @@ impl Factory {
                         .flatten()
                         .filter_map(count)
                         .collect(),
+                    str_of(r, "catch_up").into(),
                 )
             })
             .collect()

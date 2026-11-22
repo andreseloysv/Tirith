@@ -1,6 +1,5 @@
-//! The tool calls a line of any agent's output makes, the short line the chat shows for each, and the skills they read.
+//! The tool calls a line of any agent's output makes, and the short line the chat shows for each.
 use serde_json::Value;
-use std::sync::LazyLock;
 
 /// One tool call: its name, the short line the chat shows, and its input.
 pub struct Call {
@@ -59,28 +58,4 @@ fn muse(payload: &Value) -> Call {
         name,
         input: payload.clone(),
     }
-}
-
-static SKILL_MD: LazyLock<regex::Regex> =
-    LazyLock::new(|| regex::Regex::new(r"skills/([A-Za-z0-9_.:-]+)/SKILL\.md").unwrap());
-
-/// The skill a call read: Anthropic's `Skill` tool, Muse's `read_skill`, or any tool whose input names `skills/<name>/SKILL.md`.
-pub fn skill_of(call: &Call) -> Option<String> {
-    let named = |v: &Value| {
-        ["skill", "name"]
-            .iter()
-            .find_map(|k| v[*k].as_str().map(String::from))
-    };
-    let by_tool = match call.name.as_str() {
-        "Skill" => named(&call.input),
-        "read_skill" => [&call.input, &call.input["input"], &call.input["arguments"]]
-            .into_iter()
-            .find_map(named),
-        _ => None,
-    };
-    by_tool.or_else(|| {
-        SKILL_MD
-            .captures(&call.input.to_string())
-            .map(|c| c[1].to_string())
-    })
 }

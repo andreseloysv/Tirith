@@ -51,6 +51,12 @@ pub(crate) use typing::Typing;
 #[path = "../../checks/citations.rs"]
 mod citation_tests;
 #[cfg(test)]
+#[path = "../../checks/notices.rs"]
+mod notice_tests;
+#[cfg(test)]
+#[path = "../../checks/status_room.rs"]
+mod status_tests;
+#[cfg(test)]
 #[path = "../../checks/rooms.rs"]
 mod tests;
 #[cfg(test)]
