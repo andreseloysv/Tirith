@@ -26,7 +26,7 @@ Then, as the user who will run Tirith (no `sudo`):
 
 ```bash
 tirith service install
-tirith service status                                # installed, loaded and alive
+tirith service status                                # how it runs, and alive: its own process answers
 ```
 
 This writes `~/Library/LaunchAgents/com.tirith.serve.plist`: launchd starts the daemon at login and again whenever

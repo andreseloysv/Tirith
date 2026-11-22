@@ -16,7 +16,7 @@ fn hears_ok(b: &Value) -> bool {
         })
 }
 /// The card's name and colour, when the card is one a bot can have.
-fn checked(b: &Value) -> Result<(String, String), String> {
+pub(super) fn checked(b: &Value) -> Result<(String, String), String> {
     let (name, color) = (s(b, "name").trim().to_string(), s(b, "color"));
     (!name.is_empty()
         && color.len() == 7

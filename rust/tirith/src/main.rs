@@ -1,4 +1,4 @@
-//! `tirith`: the daemon (`tirith serve`) and its thin command-line client. Every other command is one HTTP call to the daemon on 127.0.0.1, so it starts in milliseconds.
+//! `tirith`: the daemon (`tirith serve`) and its thin command-line client. Every other command but the guide's (`setup`, `connect`, `doctor`, `service`) is one HTTP call to the daemon on 127.0.0.1, so it starts in milliseconds.
 
 mod app;
 mod attach;
@@ -19,6 +19,7 @@ mod metrics;
 mod models;
 mod numbers;
 mod plan;
+mod power;
 mod projects;
 mod rooms;
 mod rules;
@@ -26,6 +27,7 @@ mod sandbox;
 mod server;
 mod service;
 mod setup;
+mod status;
 mod teach;
 mod turns;
 

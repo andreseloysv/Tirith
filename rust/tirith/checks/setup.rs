@@ -260,7 +260,7 @@ fn a_token_never_follows_to_another_host() {
 #[test]
 fn roots_file_is_handed_over_on_stdin() {
     let d = dir("root-put");
-    let to = d.join("app.tirith.daemon.plist");
+    let to = d.join("com.tirith.serve.plist");
     // `env` stands in for sudo: the same shell gets the same text, as this user
     let put = super::root::write(Path::new("/usr/bin/env"), &to, "<plist>the job</plist>\n");
     assert!(put, "written");

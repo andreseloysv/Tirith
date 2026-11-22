@@ -6,7 +6,7 @@ use std::process::{Command, Stdio};
 use std::time::Duration;
 
 /// `systemctl --user`, also from a `su` shell that lost XDG_RUNTIME_DIR.
-fn systemctl(args: &[&str]) -> Result<(), String> {
+fn systemctl(args: &[&str]) -> Result<String, String> {
     let mut command = Command::new("systemctl");
     command.arg("--user").args(args).stdin(Stdio::null());
     let runtime = format!("/run/user/{}", unsafe { libc::geteuid() });
@@ -17,8 +17,14 @@ fn systemctl(args: &[&str]) -> Result<(), String> {
     let why = String::from_utf8_lossy(&out.stderr).trim().to_string();
     out.status
         .success()
-        .then_some(())
+        .then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
         .ok_or_else(|| format!("systemctl --user {}: {why}", args.join(" ")))
+}
+
+/// The process the unit runs now.
+pub(super) fn pid(u: &Unit) -> Option<u32> {
+    let shown = systemctl(&["show", "-p", "MainPID", "--value", &u.name()]).ok()?;
+    shown.parse().ok().filter(|pid| *pid != 0)
 }
 
 /// Whether this user's systemd answers. Linger makes one for a user nobody signed in as (a server's), and it takes a moment.
@@ -78,12 +84,12 @@ fn linger(ask: &Ask) -> Option<String> {
 }
 
 pub(super) fn act(u: &Unit, what: &str) -> Result<(), String> {
-    systemctl(&[what, &u.name()])
+    systemctl(&[what, &u.name()]).map(drop)
 }
 
 pub(super) fn uninstall(u: &Unit) -> Result<(), String> {
     systemctl(&["disable", "--now", &u.name()])?;
     let file = u.systemd_file();
     std::fs::remove_file(&file).map_err(|e| format!("{}: {e}", file.display()))?;
-    systemctl(&["daemon-reload"])
+    systemctl(&["daemon-reload"]).map(drop)
 }

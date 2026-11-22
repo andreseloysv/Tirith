@@ -1,4 +1,5 @@
 //! Server mode: the daemon as a service of this machine (systemd or launchd), or started by hand where there is neither.
+mod alive;
 mod cli;
 mod kind;
 mod launchctl;
@@ -14,6 +15,10 @@ pub use kind::Kind;
 pub use unit::Unit;
 
 use crate::setup::{daemon, Ask};
+
+#[cfg(test)]
+#[path = "../../checks/service.rs"]
+mod tests;
 
 /// Installs the service and waits until its daemon answers: how it runs, and what is left for the owner.
 pub fn install(u: &Unit, ask: &Ask, boot: bool) -> Result<(Kind, Vec<String>), String> {

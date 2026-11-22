@@ -6,6 +6,7 @@ mod context;
 mod drafts;
 mod folder;
 mod fragment;
+mod from_template;
 mod handed;
 mod hook;
 mod hook_api;
@@ -23,6 +24,7 @@ mod run;
 mod schedule;
 mod store;
 mod sweep;
+mod template;
 mod tuning;
 mod versioned;
 mod written;
@@ -53,6 +55,9 @@ mod git_tests;
 #[cfg(test)]
 #[path = "../../checks/hook_data.rs"]
 mod hook_tests;
+#[cfg(test)]
+#[path = "../../checks/bot_templates.rs"]
+mod template_tests;
 #[cfg(test)]
 #[path = "../../checks/bots.rs"]
 mod tests;

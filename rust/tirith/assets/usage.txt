@@ -1,6 +1,6 @@
 tirith setup [--server] [--agents a,b]         the guide: this machine, server mode, and connecting the agents
 tirith connect [<agent>] [--token]             connect one agent (install, sign in, rules, one real turn)
-tirith service install [--boot]|status|start|stop|restart|uninstall|logs   server mode
+tirith service install [--boot]|status|start|stop|restart|uninstall|logs   (the owner; status and logs anyone) the daemon starts by itself and comes back when it ends (launchd, systemd)
 tirith doctor                                  what works on this machine and what does not, with the fix
 tirith --version                               the version of this binary
 tirith serve                                   run the daemon (page on http://127.0.0.1:<port>/)

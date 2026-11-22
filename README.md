@@ -136,6 +136,9 @@ end with code, and puts a model in the loop only where judgment is needed.
   chain for lanes when an agent runs out of credits. Codex works in every role. Choose models in the chat's
   **Models** panel or Settings. The app and the paired phone both offer provider/model buttons and an effort
   slider. `/models` also works in either chat.
+- **`/status`.** Type it in any chat, on the computer or on a paired phone: Tirith answers by itself, without a
+  model, with how long it has been up, the active lanes of each project, today's routines (done and pending) and
+  the last error.
 - **Commit guard.** Git hooks in every project refuse commits with your forbidden words; they are immutable,
   and a lane only starts when they are intact.
 
@@ -146,7 +149,7 @@ One resident process, `tirith serve`, holds the state in memory and in one SQLit
 
 - **Hooks over HTTP.** `tirith hooks install` points the Anthropic CLI's hooks at the daemon; other agents use
   the command bridge `tirith hook <Event>` (about 10 ms). No process starts per tool call.
-- **A thin CLI.** Every `tirith` command is one HTTP call (about 20 ms).
+- **A thin CLI.** Every `tirith` command but the guide's (`setup`, `connect`, `doctor`, `service`) is one HTTP call (about 20 ms).
 - **Changes, not snapshots.** The page loads the state once and then receives only what changed (SSE).
 - **Events, not polling.** No model runs on a timer; the autopilot and the merge queue react to what happens.
 
@@ -289,6 +292,8 @@ push = true
 [network]
 sandbox = true
 proxy_port = 47812
+[power]
+keep_awake = false                  # true: a Mac does not sleep while the daemon runs (read when it starts)
 [messenger]
 url = "https://agentsmessenger.com"
 name = "tirith-manager"

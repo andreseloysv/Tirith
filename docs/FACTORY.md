@@ -162,6 +162,7 @@ access = "read"
 on = "schedule"
 days = "weekdays"
 at = "08:00"
+catch_up = "skip"   # times missed while the daemon was down: "once" (the default) runs one time, saying how late
 to = "bot-1a2b3c"
 task = "Lo nuevo de mis proyectos, en cinco líneas."
 
