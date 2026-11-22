@@ -73,6 +73,15 @@ pub(super) fn broke(output: &str, failed: bool) -> Option<Broke> {
     })
 }
 
+/// The last thing an output says, short: what the call gave.
+pub(super) fn end(output: &str) -> String {
+    let mut said = output
+        .lines()
+        .map(str::trim)
+        .filter(|l| !STATUS.is_match(l));
+    said.next_back().unwrap_or("").chars().take(160).collect()
+}
+
 /// True when nothing was printed but the status.
 pub(super) fn silent(output: &str) -> bool {
     output.lines().all(|l| STATUS.is_match(l.trim()))

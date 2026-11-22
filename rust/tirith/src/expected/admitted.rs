@@ -16,13 +16,16 @@ pub fn admitted(app: &Shared, turn: i64, answer: &str, cause: Option<&str>) {
     let sql = "UPDATE expected_runs SET state = ?1 WHERE turn = ?2 AND state = ?3 RETURNING id";
     let claimed: Vec<i64> = app.query(sql, params![FAILED, turn, OK], |r| r.get(0));
     for run in claimed.iter().flat_map(|id| select(app, "id = ?1", [*id])) {
-        let cause = cause.unwrap_or("lo dice su respuesta, y su juez no contestó");
-        let cause = short(&redact_secrets(cause), 120);
-        let why = if quiet {
-            format!("dijo ∅, pero no pudo: {cause}")
-        } else {
-            let said = answer.rsplit("\n\n").next().unwrap_or(answer);
-            format!("no pudo: {cause} («{}»)", short(&redact_secrets(said), 90))
+        let why = match cause.map(|c| short(&redact_secrets(c), 160)) {
+            Some(cause) if quiet => format!("dijo ∅, pero no pudo: {cause}"),
+            Some(cause) => format!("no pudo: {cause}"),
+            None => {
+                let said = answer.rsplit("\n\n").next().unwrap_or(answer);
+                format!(
+                    "no pudo, lo dice su respuesta: «{}»",
+                    short(&redact_secrets(said), 120)
+                )
+            }
         };
         close(app, run.id, FAILED, turn, &why);
         let sql = "UPDATE turns SET status = ?1, why = ?2 WHERE id = ?3";

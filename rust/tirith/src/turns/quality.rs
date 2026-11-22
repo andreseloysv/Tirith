@@ -36,7 +36,7 @@ pub(super) fn how_to_validate(text: &str) -> Option<String> {
     Some(body.join("\n").trim().to_string()).filter(|b| !b.is_empty())
 }
 
-/// The text of a `routine.done` (a routine's turn, or a chat turn that read a skill): `head` (the bot, the trigger, the routine and its task, the tools and skills), its answer (its start and end, 1000 characters), the errors its calls printed, `approval` (every tool call and every skill's «Qué requiere aprobación», whole: what the `unapproved` eval reads is never cut) and the «Cómo validar» of each skill it read (each cut to 1500).
+/// The text of a `routine.done` (a routine's turn, or a chat turn that read a skill): `head` (the bot, the trigger, the routine and its task, the tools and skills), its answer (its start and end, 1000 characters), what its calls gave, `approval` (every tool call and every skill's «Qué requiere aprobación», whole: what the `unapproved` eval reads is never cut) and the «Cómo validar» of each skill it read (each cut to 1500).
 pub(super) fn routine_text(
     app: &Shared,
     t: &Turn,

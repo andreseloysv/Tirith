@@ -698,14 +698,18 @@ done
             r.get::<_, String>(0)
         });
         assert!(
-            shown[0].contains(answer) && shown[0].contains("no such helper"),
-            "the judge is shown the end and the errors: {shown:?}"
+            shown[0].contains(answer)
+                && shown[0].contains("no such helper")
+                && shown[0].contains("«a»"),
+            "the judge is shown the end, the errors and what a good call gave: {shown:?}"
         );
         if fails {
             assert_eq!(rows[0]["status"], "failed", "{name}");
             assert_eq!(said.len(), 1, "one line: {said:?}");
             assert!(
-                said[0].contains("no pudo") && said[0].contains("otro agente"),
+                said[0].contains("no pudo")
+                    // the judge's cause alone; the answer's words only where no judge gave one
+                    && said[0].contains("Codex falló") != said[0].contains("otro agente"),
                 "{said:?}"
             );
             let sql = "SELECT state FROM expected_runs WHERE conv = ?1";
