@@ -150,3 +150,27 @@ async fn models_agent_and_model_match() {
     assert!(chat.iter().any(|t| t.contains("judge")), "{chat:?}");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn every_agents_words_for_a_spent_quota_start_the_fallback() {
+    // As the real CLIs word them (Copilot's are its 1.0.114's own).
+    for said in [
+        "You've used all your Copilot Free chat requests for the month.",
+        "No remaining quota for premium requests",
+        "You've reached your additional usage limit for your plan.",
+        "You've reached your weekly rate limit.",
+        "You've hit your session rate limit.",
+        "402: free_quota_exceeded",
+        "Credit balance is too low",
+        "You've hit your usage limit.",
+    ] {
+        assert!(super::out_of_credits(said), "{said}");
+    }
+    for said in [
+        "I read the docs about rate limits.",
+        "the test of the quota parser passes",
+        "Reached the end of the file",
+    ] {
+        assert!(!super::out_of_credits(said), "{said}");
+    }
+}

@@ -42,6 +42,7 @@ pub use run::tick;
 pub use schedule::due;
 #[cfg(test)]
 pub use tuning::read as tuning_of;
+pub use tuning::FILE as TUNING;
 pub use tuning::{tune, tuned, untune};
 pub use versioned::versioned;
 #[cfg(test)]

@@ -46,6 +46,12 @@ pub(super) fn one_commit(dir: &Path, branch: &str) -> Result<String, String> {
     git(dir, &["log", "-1", "--format=%s", branch])
 }
 
+/// True when `branch` changes `file` against the main at `dir`.
+pub(super) fn changes(dir: &Path, branch: &str, file: &str) -> bool {
+    let range = format!("HEAD...{branch}");
+    git(dir, &["diff", "--name-only", &range, "--", file]).is_ok_and(|names| !names.is_empty())
+}
+
 /// The worktree `tree` of the repository at `dir` goes.
 pub(super) fn drop_tree(dir: &Path, tree: &Path) {
     let path = tree.display().to_string();

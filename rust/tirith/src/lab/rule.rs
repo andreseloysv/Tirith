@@ -69,7 +69,7 @@ pub fn decide(lab: &Lab, t: &Tally, a: &Side, b: &Side, name: &str) -> (bool, St
     };
     let voids = (t.voids > 0).then(|| {
         format!(
-            " · {} par(es) sin comparar: fallaron o pedían algo que la captura no tiene",
+            " · {} par(es) sin comparar: fallaron, usaron otro modelo o pedían algo que la captura no tiene",
             t.voids
         )
     });

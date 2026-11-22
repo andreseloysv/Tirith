@@ -1,4 +1,4 @@
-//! A pair that proves nothing: both its runs failed, or in a replay a side asked for what its capture lacks or never reached the hook that answers it.
+//! A pair that proves nothing: both its runs failed, they ran on models the branch did not choose (an `auto`), or in a replay a side asked for what its capture lacks or never reached the hook that answers it.
 use super::store::Experiment;
 use crate::app::Shared;
 use rusqlite::params;
@@ -20,4 +20,26 @@ pub(super) fn why(app: &Shared, id: i64, (missed, heard): (usize, usize)) -> Opt
     let steps = app.query(sql, [id], |r| r.get::<_, i64>(0));
     let unheard = heard == 0 && steps.first().is_some_and(|n| *n > 0);
     unheard.then(|| "its tool calls never reached Tirith's hook".to_string())
+}
+
+/// Why a pair proves nothing whatever it asked for: two failures are no tie, and two models are no measure of a change that chose neither.
+pub(super) fn pair(
+    app: &Shared,
+    e: &Experiment,
+    (a, b): (i64, i64),
+    failed: bool,
+) -> Option<String> {
+    if failed {
+        return Some("both runs failed".into());
+    }
+    let sql = "SELECT COALESCE(model, '') FROM turns WHERE id = ?1";
+    let model = |id: i64| {
+        app.query(sql, [id], |r| r.get::<_, String>(0))
+            .pop()
+            .filter(|m| !m.is_empty())
+    };
+    let (a, b) = (model(a)?, model(b)?);
+    let main = super::seat::live(app, &e.bot);
+    let chosen = || super::git::changes(&main, &e.branch, crate::bots::TUNING);
+    (a != b && !chosen()).then(|| format!("two models: {a} and {b}"))
 }

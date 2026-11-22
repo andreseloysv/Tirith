@@ -11,6 +11,8 @@ pub fn out_of_credits(text: &str) -> bool {
             r"(?i)credit balance is too low|insufficient[ _-]?(credits?|quota|funds|balance)|out of credits",
             r"|no credits? (left|remaining)|(usage|spending|session|weekly|daily|monthly|[0-9]+-hour) limit (reached|exceeded|hit)",
             r"|(hit|reached|exceeded) (your|the) (usage |spending |current |monthly )?(limit|quota)|quota (exceeded|exhausted)",
+            r"|quota_(exceeded|exhausted)|overage_limit_reached|no remaining quota|used (all|up) (of )?your [^\n]{0,60}(requests|credits|quota)",
+            r"|(hit|reached|exceeded) your (session|weekly|daily|monthly|additional usage) (rate )?limit",
             r"|resource[_ ]exhausted|payment required|\b402\b[^\n]{0,40}(payment|credit|billing)|run out of (credits|usage|quota)",
         ))
         .unwrap()

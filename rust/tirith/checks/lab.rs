@@ -678,3 +678,31 @@ fn time_is_saved_only_when_most_pairs_saved_it() {
     );
     assert!(most.0, "{}", most.1);
 }
+
+#[test]
+fn two_models_are_no_measure_unless_the_branch_chose_one() {
+    let (app, home) = app_with_a_bot("mixed");
+    branch(&home, "v3", "# Memory\n- a harmless note\n");
+    let id = start(&app, "v3").unwrap();
+    let e = super::store::running_one(&app, id).unwrap();
+    let turn = |model: &str| {
+        app.insert("INSERT INTO turns (conv, role, \"trigger\", routine, started_at, status, model) VALUES ('c', 'c', 'run-now', 'r1', '2026-11-22T08:00:00Z', 'ok', ?1)", params![model])
+    };
+    let (a, b, same) = (
+        turn("mai-code-2-flash"),
+        turn("gpt-6-luna"),
+        turn("mai-code-2-flash"),
+    );
+    let why = |a, b| super::void::pair(&app, &e, (a, b), false);
+    assert!(why(a, b).unwrap().contains("two models"));
+    assert!(why(a, same).is_none());
+    // A branch that changes the routine's model is measured across the two: that is its change.
+    let main = home.join("manager").join(KEY);
+    let tree = home.join("lab").join(KEY).join(id.to_string());
+    std::fs::write(tree.join("routines.toml"), "[r1]\nmodel = \"gpt-6-luna\"\n").unwrap();
+    git(&tree, &["add", "-A"]);
+    git(&tree, &["commit", "-q", "-m", "the cheaper model"]);
+    assert!(why(a, b).is_none(), "{}", main.display());
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}

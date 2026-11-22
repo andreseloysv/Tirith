@@ -58,8 +58,8 @@ pub(super) fn compare_pair(app: &Shared, e: &Experiment, a: i64, b: i64) {
     let (Some((a_text, a_failed)), Some((b_text, b_failed))) = (ran(a), ran(b)) else {
         return;
     };
-    if a_failed && b_failed {
-        return super::void::void(app, e, (a, b), "both runs failed"); // two failures are no tie
+    if let Some(why) = super::void::pair(app, e, (a, b), a_failed && b_failed) {
+        return super::void::void(app, e, (a, b), &why);
     }
     let (text, b_is) = blind(&task(app, e), &a_text, &b_text, rand::random());
     let row = app.insert(
