@@ -12,7 +12,7 @@ static COULD_NOT: LazyLock<Regex> = LazyLock::new(|| {
         r"(?i)\bno (pude|puedo|pudo|pudimos|he podido|ha podido|he logrado|logré|he conseguido|conseguí|fue posible|ha sido posible|me fue posible)\b",
         r"|\bimposible (acceder|abrir|leer|comprobar|entrar|revisar|buscar|mirar)",
         r"|\bsin (acceso|permisos?|conexión|red|cuota|sesión)( al? \S+)?\s*([.,;:)!]|$)|\bsin permisos? (para|de (lectura|acceso))\b",
-        r"|\bno (tengo|tuve|había|hay) (acceso|permiso|permisos|conexión|red|sesión)\b",
+        r"|\bno (tengo|tuve|había) (acceso|permiso|permisos|conexión|red|sesión)\b|\bno hay (acceso|conexión|red|sesión)\b|\bno hay permisos? (para|de (lectura|acceso))\b",
         r"|\b(could not|couldn['’]t|cannot|can['’]t|was not able to|wasn['’]t able to|unable to|failed to)\b",
         r"|\bme (fue|ha sido|resultó) imposible\b|\bno access\b|\bnicht (erreichen|zugreifen|öffnen)\b|\bkonnte\b[^.\n]{0,60}\bnicht\b",
     ))
@@ -20,7 +20,7 @@ static COULD_NOT: LazyLock<Regex> = LazyLock::new(|| {
 });
 /// But not finding anything new is exactly «∅».
 static FOUND_NONE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)(no (pude|he podido|logré|conseguí|he conseguido)|could not|couldn['’]t|was not able to|unable to|failed to) (encontrar|hallar|find|spot) (nada|ningun\w*|ningún|any\w*|nothing|(\S+ ){0,3}(nuev\w*|new\b))(?P<rest>[^.;\n]*)").unwrap()
+    Regex::new(r"(?i)(no (pude|puedo|he podido|logré|conseguí|he conseguido)|could not|couldn['’]t|cannot|can['’]t|was not able to|unable to|failed to) (encontrar|hallar|ver|find|spot|see|locate) (nada|ningun\w*|ningún|any\w*|nothing|(\S+ ){0,3}(nuev\w*|new\b))(?P<rest>[^.;\n]*)").unwrap()
 });
 /// Unless it says why it found none, or it is the way in that it could not find.
 static CAUSE: LazyLock<Regex> = LazyLock::new(|| {
@@ -29,6 +29,10 @@ static CAUSE: LazyLock<Regex> = LazyLock::new(|| {
 /// And waiting for the owner's yes, or promising nothing, is no failure.
 static WAITS: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)(no puedo|no he podido|cannot|can['’]t)( \S+){0,6}? ((sin|without) (tu|your) (sí|ok|yes|visto bueno|aprobación|confirmación|approval|confirmation)|(hasta que|until) (lo |la )?(apruebes|confirmes|you approve|you confirm))|(no puedo|cannot|can['’]t) (garantizar|asegurar|prometer|guarantee|promise|wait)").unwrap()
+});
+/// Below other words, a mark before one of these begins a discarded item of a list.
+static ITEM: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)^(descartad|rechazad|no encaja|discarded|rejected|not a fit)").unwrap()
 });
 
 /// True when `text` says that something could not be done.
@@ -56,9 +60,10 @@ pub(super) fn but_found_none(text: &str) -> String {
 pub(super) fn after(answer: &str, mark: char) -> Option<&str> {
     let text = answer.trim();
     let mut begins = std::iter::once(0).chain(text.match_indices("\n\n").map(|(at, _)| at + 2));
-    begins
-        .find_map(|at| text[at..].trim_start().strip_prefix(mark))
-        .map(str::trim)
+    begins.find_map(|at| {
+        let rest = text[at..].trim_start().strip_prefix(mark)?.trim();
+        (at == 0 || !ITEM.is_match(rest)).then_some(rest)
+    })
 }
 
 /// The text as it is kept and sent: a «∅» that says it could not begins with «✗» instead, so nothing treats it as silence.

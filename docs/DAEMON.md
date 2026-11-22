@@ -137,13 +137,14 @@ Files:
 - `store.rs`: Keeping the bots: one change at a time, written into config.toml and reloaded.
 - `sweep.rs`: What goes out of config.toml before the bots are written again: their roles and routes, then the sections left empty.
 - `template.rs`: A bot template read and checked: its name, face, routine, first words and skill.
+- `told.rs`: What a bot is handed when one of its routines is due.
 - `tuning.rs`: A routine's own effort and model: `routines.toml` in the bot's folder, read when its run starts and applied to its turns only.
 - `versioned.rs`: The bots' folders and `<home>/bots` as git repositories: only the memories and the own skills followed, a commit after each turn, Library change or bot made from a template that changed them.
 - `written.rs`: The text of config.toml with the bots laid into it.
 
 ## `bundle/`
 
-What the binary carries so that it runs with no checkout beside it (`rust/tirith/build.rs` builds it in): the page
+What the binary carries so that it runs with no checkout beside it (`rust/tirith/build.rs` builds it in, and `rust/tirith/build/version.rs` its version, which follows each commit): the page
 (`web/`), the teach extension (`tools/teach/`, downloaded from the page as `/teach-extension.zip`) and the browser
 launcher, plus the version (`tirith --version`). A development build still reads its checkout (the page shows on
 reload, the factory follows main); one built with `TIRITH_DIST` (`scripts/release/build.sh`) never looks for one
@@ -224,6 +225,43 @@ Files:
 - `paths.rs`: The owner's home, Tirith's home, and paths written with `~/`.
 - `project.rs`: One `[[projects]]` entry of config.toml.
 - `table.rs`: Reading one typed value out of a TOML table by its path.
+
+## `expected/`
+
+What was due and how it ended. Every run of a routine and every scheduled pass of a turn role is written down when it is due
+(table `expected_runs`), before anything starts, and ends in a row of `turns` whether it ran or not. One that failed, was lost or
+never started says why, counts as a failure in the numbers the Coach reads, and is one line in the chat and on the phones, sent
+by code, so it needs no agent and no quota. «∅» means "I looked and nothing is new". Code fails a run only where it is certain;
+a "could not" in other words is told by the judge that grades the run (`turns/`, `score`), so a good run's news reach the phones
+once it is judged, three minutes later at most: a failure it finds is the one line.
+
+Files:
+
+- `admits.rs`: An answer that says in the first person that the task could not be done: not someone's words that it quotes or tells, and not the failure of someone or something that the task reports.
+- `admitted.rs`: A run that code found good and that its judge read as "I could not", in words no list holds: it ends as a failure, once. Where no judge could read it, plain words of trouble do the same, so it is never kept as a success in silence.
+- `calendar.rs`: When something scheduled was due, in this machine's time, kept as UTC instants.
+- `changed.rs`: What the conversation is told when a routine's schedule changes: nobody waits for it on a day, or at a time, it no longer has.
+- `claims.rs`: What an answer claims. «∅» is "I looked and nothing is new"; «✗» is "I could not"; a «∅» that says it could not is a «✗».
+- `found.rs`: Which occurrence a question is about: a scheduled one by when it was due, or a routine's oldest in a state.
+- `gaps.rs`: When Tirith was away: it keeps that it is alive, so what was missed says whether Tirith was stopped or the machine slept.
+- `life.rs`: An expected run's life: it starts, and its turn ends it; or it never becomes a turn and ends without one (`lost.rs`).
+- `lost.rs`: The row in `turns` of a run that never was a turn: failed, with no agent, no time and no tokens (the numbers count the failure and nothing else), and why.
+- `missed.rs`: Occurrences that nothing ever wrote down and that will not run: Tirith was stopped, or the machine slept, across them. The one `catch_up` still runs is not lost; with "skip" one is lost as soon as it is late. Each gets its row, and each routine one line.
+- `mod.rs`: Declares the folder's files and re-exports what other modules use.
+- `news.rs`: The news of a good run wait for its judge, so a "could not" that it finds is one line; never long, and in the store.
+- `notice.rs`: The one line the owner gets of a run that did not work, written by code and kept until the phones have it.
+- `overdue.rs`: Runs that wait, or work, too long (`[limits] routine_minutes`), counted on a clock that stops while the machine sleeps; and a pass whose day ended while it waited and that `catch_up` runs no more.
+- `passes.rs`: A turn role's scheduled pass as an expected run: written down when due, waiting while something keeps it, and never twice.
+- `reasons.rs`: Why a turn failed, in a few words for the owner: the kind of failure and the agent's own last line.
+- `restart.rs`: What a start finds open: a run Tirith was stopped in the middle of failed and is not done again (it may have acted); one that had not started is handed again on the day it was due or caught up, and else is lost.
+- `stands.rs`: Where one occurrence stands, for whoever reports it (`/status`): the register's word, and its turn's where it left one, so it is the truth the numbers and the notice have.
+- `store.rs`: The expected runs as kept (`expected_runs`): one row for each occurrence, waiting, running, then ok or failed.
+- `timed.rs`: Everything that has a time of day: the bots' routines and the turn roles' scheduled passes.
+- `told.rs`: Whose words an answer holds: what it quotes, and what it tells of someone's, are theirs. What it tells of its own tool or helper is its own.
+- `unjudged.rs`: A good run that no judge will read any more: code's plain words decide, as when a judge gave no verdict.
+- `verdict.rs`: Whether a routine's turn did what it was started for, as far as code is certain: its agent ended well, it did not say in plain words that it could not, no tool's error proves it could not, and a «∅» comes from having looked.
+- `watch.rs`: The scheduler's tick: Tirith says it is alive, what was missed is written down, and what takes too long is ended.
+- `words.rs`: Times, days and texts as the owner reads them in one line.
 
 ## `factory/`
 
@@ -519,6 +557,7 @@ Files:
 - `answer.rs`: The owner's answer to an open card or to a waiting lane.
 - `ask.rs`: `tirith ask-owner`: a new card for the owner.
 - `blocks.rs`: An assistant message of a stream-json session: its text and its tool calls, in the chat and on the phones.
+- `held.rs`: What a routine's run says waits for its end: on the phones only when the run was good and has news. A failed one is the one line of `expected/`.
 - `relayed.rs`: An agent's answer of a card; an approval or a payment takes the owner's own words written after it was asked, and is kept in those words.
 - `owner_words.rs`: What the owner last wrote in each conversation (kv `owner_said:<conversation>`), kept as it comes in, never read back from the chat.
 - `cards.rs`: A card's end: its final state (an answered or closed approval ends the wait of the turns that waited for it), the line that says so, and closing one that is no longer needed.
@@ -549,6 +588,7 @@ Files:
 - `talk.rs`: One conversation's state, kept under its project's id (or "" for the one of no project): its session, its messages on their way, its waiting reports and routine runs, and what lists or ends its sessions.
 - `turn.rs`: The loose turn: one fresh turn of a `session = "turn"` role, its text the answer.
 - `turn_read.rs`: Reading a loose turn of a stream-json agent: its text, its usage and its permission requests.
+- `unstarted.rs`: A routine's run whose agent does not start is tried a few times and then has failed (the owner's own words keep being tried), and one handed to a session that died without a word has failed too.
 - `verdict.rs`: A judge's verdict: the last line it wrote in its rubric's shape (none: it is asked once more).
 - `waiting.rs`: A routine's run has its agent's turn to itself: what comes meanwhile waits and is handed when that turn ends.
 - `typing.rs`: A turn's rooms and its typing on the phones: where it shows its progress, when it starts and stops.
@@ -656,6 +696,7 @@ Files:
 - `metric.rs`: One health measure: how it is built from the factory's description of its id, and the line a CEO pass reads.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `mood.rs`: Satisfaction from the owner-mood scores of the last 24 h, per owner message; judged from what the owner writes anyway, never asked.
+- `owed.rs`: Which time of its schedule a turn role's pass is owed for.
 - `pass.rs`: When a turn role's pass may run by itself: its daily budget, and its scheduled pass (none is owed from before the home first started, kv `born`; until it is a day old «En main (24 h)» is never red).
 - `queued.rs`: The passes an event asked for while a pass of the same role ran: kept, run as one when it ends.
 - `plans.rs`: The plans as a CEO pass reads them: each project's steps with their open and done items, its autopilot and its main.
@@ -837,6 +878,8 @@ Files:
 - `tophones.rs`: What a project's conversation says reaches the phones in its rooms.
 - `turns.rs`: The manager's turns for rooms: what a turn received stops being owed only when it ends, and what no turn answered is handed again.
 - `typing.rs`: The phones see a turn typing, and its tools, while it runs.
+- `uncite.rs`: A bot's memory citations (`[m<N>]`, `[s<N>]`) stay off the phones and the rooms: they are for Tirith's count of the notes that serve (`turns::cited`), noise for the owner. The chat and the turns keep them.
+- `unsent.rs`: Lines that must reach the phones (a routine that failed): kept (kv `rooms:unsent`) until sent, so a restart while the platform is away loses none.
 - `view.rs`: The page's view of a room (no secret but the current one-use QR, which the page shows), and its chat links.
 - `watch.rs`: One task per room listens to it, polling again and again, slower while the platform fails.
 - `words.rs`: What a message says: its words (unsealed, a picture saved as a file), and whether it is a control rather than a line for people.
@@ -867,6 +910,7 @@ Files:
 - `check.rs`: One tool call against every rule, in order: the first refusal wins.
 - `confined.rs`: A role confined by its `writes` key (the Coach): its edits land only in the bots' folders and the folders `writes` names; of the hidden folders only a skill's (`.agents/skills`).
 - `hooks.rs`: The rules about the turn itself: commit checks are never skipped, and a chat's turn never waits.
+- `judge.rs`: A judge (an eval's read-only turn role that nobody talks to) uses no tool: what it is handed is data.
 - `lane.rs`: A lane's rules: it writes only in its own copy, never touches main and never starts agents.
 - `manifest.rs`: The rules a project's tirith.toml brings: its plan is written only by Tirith, and its own `[[rules]]`.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
@@ -1249,9 +1293,16 @@ Each row also carries its quality signals (`react.rs`, `signals.rs`, `checks.rs`
 
 - `score`: the judge's note from 0 to 1 on a routine's run. The `turn-quality` eval (`[[evals]]` on `routine.done`,
   rubric `factory/evals/turn-quality.md`) reads the routine's task, the answer and the «Cómo validar» section of each
-  skill the run read — `routine.done`'s text carries them (`quality.rs`: the answer cut to 1000 characters, each «Cómo validar» to 1500) — and answers a score
+  skill the run read — `routine.done`'s text carries them (`quality.rs`: the answer's start and end in 1000 characters, what its calls gave, each «Cómo validar» to 1500) — and answers a score
   with one line why; the score is copied to the turn whose `event` is that event (`turns::scored`, or `catch_up` when
   the judge answered before the row was written). A judge's turn kept in a bot's conversation emits no event of its own.
+  A routine of a turn role (the CEO's) emits `routine.done` too. A why that starts with `could not:`, at 0.3 or less,
+  says that the run could not do its task in words no list holds: the run and its turn end `failed` with that cause,
+  and the owner gets the one line of any failed run (`could_not.rs`, `expected/admitted.rs`). Code alone fails a run
+  only where it is certain: the agent's own failure, ✗, a first-person "I could not", a ∅ with no look or one that failed,
+  a nested agent's or a sandbox's own error. Any other failure in an answer may be the news the task asks for (what is down),
+  so the judge reads whose it is; when no judge gives a score (none within 25 minutes, `expected/unjudged.rs`), plain words of trouble
+  count as a failure. The answer and what the calls gave are fenced as data, and a judge uses no tool (`rules/judge.rs`).
 
 `GET /api/turns` gives these columns too; older databases get them by `ALTER TABLE` at start (`add_columns`).
 
@@ -1259,21 +1310,28 @@ Files:
 
 - `api.rs`: `GET /api/turns?conv=<key>&limit=<n>`: a conversation's turns, the last first.
 - `approval.rs`: Approvals: a turn ending with its approval card open waits until the card is answered or closed, and what the `unapproved` eval reads of a turn.
+- `broke.rs`: A tool's own error in what it printed. An exit status alone does not tell: `codex exec` ends well when every command it ran was refused.
 - `capture.rs`: What a turn read as its agent saw it: what was handed to it and each tool call with its input and result, up to 256 KB.
 - `capture_fit.rs`: Fitting a capture in its size: a result's text, cut on a character to the room left.
 - `capture_keep.rs`: The captures on disk: written at a bot's turn's end, the last 10 runs of each routine kept, read back for a replay.
 - `capture_told.rs`: What was handed to a conversation's agent (never the memory), waiting for the turn it starts.
 - `checks.rs`: The bot's own validation, `tirith turn checks`, kept on the open turn of its conversation or the last one.
+- `could_not.rs`: The judge's word that a routine's run could not do its task: that run becomes a failure.
 - `codex_log.rs`: Codex's own log of a thread, for the model a turn ran on.
+- `evidence.rs`: What a run's judge is shown of its calls: those that failed or printed an error and the last two, and what each gave, as data.
 - `exec_items.rs`: The tool calls in the exec agents' lines, under the names their hooks use.
 - `follow.rs`: Which messages handed during a turn got turns of their own (the streaming CLI may fold them into the running one).
 - `hashes.rs`: The git blob hashes of files as they are now.
 - `interrupted.rs`: Turns the daemon was stopped in the middle of: marked when they start, kept as failed at the next start.
 - `live.rs`: The turns of the conversations as they run: the trigger waiting for the next message, the turn open now, and the messages handed during it, each with its own trigger.
+- `look_lines.rs`: How a tool call ended, as any agent's lines say it.
+- `look_muse.rs`: Muse's results. A command still running when its first result came ends only in Muse's own session log (`muse_log.rs`): its `--json` output never carries that end.
+- `looks.rs`: Whether a turn's calls worked: how each ended and what error it printed, in any agent's lines; and the agent's own error.
 - `loose.rs`: The loose turn of a turn role (`run_turn`): started by what waits under `turn:<role>`, kept with its result.
 - `muse_log.rs`: Muse's own log of a session, for a turn whose output carried no usage.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `price.rs`: A turn's cost when its agent gives none: `[prices."<model id>"]` of config.toml, in dollars per million tokens.
+- `proof.rs`: What a turn's calls prove of a run: a look that did not work, and an error that nothing after it undid.
 - `quality.rs`: The judge's note on a routine's turn (or a chat turn that read a skill): what `routine.done` carries for `turn-quality`, and the score copied to the turn.
 - `react.rs`: The owner's 👍/👎 on a turn: by `POST /api/turns/<id>/reaction` or a message that is only 👍 or 👎.
 - `record.rs`: One turn while it runs: who runs it and why, and what its lines say (its usage, tools, skills and text).

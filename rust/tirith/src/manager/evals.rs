@@ -48,8 +48,10 @@ pub(super) fn judge_evals(app: &Shared, project: &str, on: &str, shown: &str, ev
                 }
                 asked += super::verdict::AGAIN; // a small model may forget the shape: once more
             }
-            let Some(text) = said else {
-                continue;
+            let text = match said {
+                Some(text) => text,
+                None if id == crate::turns::GRADE => String::new(), // kept as no verdict: a run says whether it could
+                None => continue,
             };
             let (label, score, why) = judged(super::verdict::last(&text, &rules));
             crate::turns::judged(&app, before, &id, &label);

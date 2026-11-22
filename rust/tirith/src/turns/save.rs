@@ -17,11 +17,12 @@ pub fn finish(app: &Shared, mut t: Turn, ok: Option<bool>, answer: Option<&str>)
         .cost
         .or_else(|| cost(&app.cfg().raw, &t.model, &t.usage));
     let ok = ok.unwrap_or(!t.usage.failed);
-    let answer: String = answer.unwrap_or(&t.text).chars().take(4000).collect();
+    let whole = answer.unwrap_or(&t.text).to_string(); // how it went is said at its end
+    let answer: String = whole.chars().take(4000).collect();
     let waits = super::approval::waits(app, &t);
-    let judged = (!waits).then(|| crate::expected::verdict(app, &t, ok, &answer));
+    let judged = (!waits).then(|| crate::expected::verdict(app, &t, ok, &whole));
     let why = judged.flatten(); // a routine's run that did not do its task
-    let event = event(app, &t, &answer, why.as_deref());
+    let event = event(app, &t, &whole, why.as_deref());
     let (factory, role_hash) = app.stamp_for(&t.role);
     let u = &t.usage;
     let ms = t.started.elapsed().as_millis() as i64;
@@ -41,7 +42,6 @@ pub fn finish(app: &Shared, mut t: Turn, ok: Option<bool>, answer: Option<&str>)
         why.as_deref(),
     );
     super::signals::keep(app, id, &t, &answer);
-    super::quality::catch_up(app, id, event);
     let own = app
         .cfg()
         .factory
@@ -53,21 +53,23 @@ pub fn finish(app: &Shared, mut t: Turn, ok: Option<bool>, answer: Option<&str>)
         crate::bots::versioned(app, &t.conv, &format!("turn {id}")) // a bot's folder and the shared one, committed when this turn changed them
     });
     app.emit("turn", json!({"id": id, "conv": t.conv, "status": status}));
+    super::quality::catch_up(app, id, event); // after that line: a judge that was quicker may end it failed
     crate::lab::finished(app, id, &t.conv, &t.routine); // a run of a live experiment: its variant, its comparison
     let _ = (t.role == t.conv).then(|| crate::bots::untune(app, &t.conv)); // the routine's own effort or model ends with its turn
     id
 }
 
-/// A bot's own turn (a role with `scope = "own"` and `session = "chat"`, in its conversation) emits `turn.done`, or `routine.done` when a routine started it or it read a skill: its id, else none.
+/// A bot's own turn (a role with `scope = "own"` and `session = "chat"`, in its conversation) emits `turn.done`, or `routine.done` when a routine started it or it read a skill; a turn role's (the CEO's) emits only a routine's, so that is judged too: its id, else none.
 fn event(app: &Shared, t: &Turn, answer: &str, why: Option<&str>) -> Option<i64> {
     // Only the bot's own role: a judge's turn in its conversation emits nothing (an eval on turn.done would judge itself forever).
     (t.role == t.conv).then_some(())?;
-    let bot = crate::bots::bot(app, &t.conv).filter(|b| b["session"] == "chat")?;
+    let bot = crate::bots::bot(app, &t.conv)?;
     let routine = bot["routines"]
         .as_array()
         .into_iter()
         .flatten()
         .find(|r| !t.routine.is_empty() && r["id"] == t.routine.as_str());
+    (bot["session"] == "chat" || routine.is_some()).then_some(())?;
     let names = |v: Vec<String>| Some(v.join(", ")).filter(|s| !s.is_empty());
     let tools = t.tools.iter().map(|c| s(c, "name")).collect::<Vec<_>>();
     let mut text = format!("{} · {}", s(&bot, "name"), t.trigger);

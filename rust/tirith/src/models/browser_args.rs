@@ -50,7 +50,7 @@ fn env(boxed: bool, home: &str, sandboxed: &str) -> Value {
             .collect(),
     )
 }
-/// Codex's `-c mcp_servers.tirith_browser={…}` (the proxy through `env_vars`) and its desktop-only `node_repl` off.
+/// Codex's `-c mcp_servers.tirith_browser={…}` (the proxy through `env_vars`) and its desktop-only `node_repl` off, as a whole server: Codex refuses to load («invalid transport») a switched-off server with no command, which is what `.enabled=false` alone makes where the desktop app never wrote one.
 fn codex_args(node: &str, args: &[String], home: &str, boxed: bool) -> Vec<String> {
     let list = args.iter().map(|a| t(a)).collect::<Vec<_>>().join(", ");
     let named = if boxed {
@@ -70,6 +70,6 @@ fn codex_args(node: &str, args: &[String], home: &str, boxed: bool) -> Vec<Strin
         "-c".to_string(),
         format!("mcp_servers.tirith_browser={{command = {}, args = [{}], startup_timeout_sec = 30, tool_timeout_sec = 90, env = {{TIRITH_HOME = {}{}}}{}}}", t(node), list, t(home), flag, named),
         "-c".into(),
-        "mcp_servers.node_repl.enabled=false".into(),
+        "mcp_servers.node_repl={command=\"node_repl\",enabled=false}".into(),
     ])
 }

@@ -152,6 +152,8 @@ color = "#4fb86e"
 # has no prompt of its own (each eval's rubric is its instructions), so code
 # never picks it as a standalone turn role; config.toml or the page can put
 # it on any cheaper model without touching the factory.
+# An eval's hidden read-only turn role, like this one, uses no tool at all: what
+# it reads holds text from outside (rust/tirith/src/rules/judge.rs).
 [roles.judge]
 name = "Judge"
 agent = "muse"
@@ -385,6 +387,8 @@ sample = 1.0
 # A routine's run is graded: its task, its answer and the «Cómo validar» of
 # the skills it read (routine.done carries them) give a score from 0 to 1,
 # copied to the score of the turn whose event it is (the Numbers tab).
+# A why that starts with «could not:» makes that run a failure, said in one
+# line: no list of words knows every way of saying "I could not".
 [[evals]]
 id = "turn-quality"
 on = "routine.done"

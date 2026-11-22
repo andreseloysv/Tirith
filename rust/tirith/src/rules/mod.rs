@@ -3,6 +3,7 @@ mod call;
 mod check;
 mod confined;
 mod hooks;
+mod judge;
 mod lane;
 mod manifest;
 mod normalize;

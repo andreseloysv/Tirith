@@ -1,5 +1,5 @@
-//! Whether a routine's turn did what it was started for: its agent ended well, it did not say it could not (in any words, with or without a mark), no tool's error proves it could not, and a «∅» comes from having looked.
-use super::admits::{admits, repeats, trouble};
+//! Whether a routine's turn did what it was started for, as far as code is certain: its agent ended well, it did not say in plain words that it could not, no tool's error proves it could not, and a «∅» comes from having looked.
+use super::admits::admits;
 use super::claims::{after, could_not, FAILED, NOTHING};
 use super::found::oldest;
 use super::store::RUNNING;
@@ -17,7 +17,12 @@ pub fn verdict(app: &Shared, t: &Turn, ok: bool, answer: &str) -> Option<String>
     judged(run.kind == "webhook", ok, answer, (t.steps, &t.looks))
 }
 
-/// The rule itself. An event from outside is handed its data: nothing needs to be looked at for a «∅» on it.
+/// Text as a reason shows it: no secret, one line.
+fn shown(text: &str, most: usize) -> String {
+    short(&redact_secrets(text), most)
+}
+
+/// The rule itself: only what is certain without reading the words' meaning (the run's judge reads that, `admitted.rs`). An event from outside is handed its data: nothing needs to be looked at for a «∅» on it.
 pub(super) fn judged(
     handed_data: bool,
     ok: bool,
@@ -36,31 +41,26 @@ pub(super) fn judged(
         return Some("su agente terminó sin responder".into());
     }
     if let Some(rest) = after(answer, FAILED) {
-        return Some(format!("no pudo: {}", short(rest, 160)));
+        return Some(format!("no pudo: {}", shown(rest, 160)));
     }
     let proof = looks.proof();
     let error = || {
         proof
             .as_ref()
-            .map(|p| format!("no pudo: {}", short(&redact_secrets(p.line), 160)))
+            .map(|p| format!("no pudo: {}", shown(p.line, 160)))
     };
     if proof.as_ref().is_some_and(|p| p.hard) {
         return error(); // the tool's own error is proof enough, whatever the words
     }
     let Some(rest) = after(answer, NOTHING) else {
-        let worded = proof
-            .as_ref()
-            .is_some_and(|p| trouble(answer) || repeats(answer, p.line));
-        let nothing = !handed_data && looks.nothing_worked();
-        if worded || nothing || admits(answer) {
-            return error().or_else(|| Some(format!("no pudo: {}", short(answer, 160))));
-        }
-        return None;
+        // other words may be the news the task asks for (what is down, what failed): its judge reads whose failure it is
+        let mine = admits(answer);
+        return mine.then(|| error().unwrap_or(format!("no pudo: {}", shown(answer, 160))));
     };
     if admits(answer) || could_not(answer) {
-        error().or_else(|| Some(format!("dijo ∅, pero no pudo: {}", short(rest, 160))))
+        error().or_else(|| Some(format!("dijo ∅, pero no pudo: {}", shown(rest, 160))))
     } else if let Some(look) = looks.blind() {
-        error().or_else(|| Some(format!("dijo ∅, pero no pudo mirar ({})", short(look, 80))))
+        error().or_else(|| Some(format!("dijo ∅, pero no pudo mirar ({})", shown(look, 80))))
     } else if proof.is_some() {
         error() // ∅ over an error that stands is no silence
     } else if steps == 0 && !handed_data {

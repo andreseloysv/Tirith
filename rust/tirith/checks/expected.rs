@@ -446,7 +446,6 @@ fn could_not_is_a_failure_in_any_words() {
         "Lo intenté dos veces y no he podido entrar.",
         "I could not check the plants today.",
         "The helper failed and couldn't finish.",
-        "Sorry: the script was unable to read the sensor.",
     ] {
         assert!(
             verdicts(answer, &[("ls", "a", 0)])
@@ -455,11 +454,6 @@ fn could_not_is_a_failure_in_any_words() {
             "{answer}"
         );
     }
-    // Words of trouble beside a call that failed.
-    let failed = [("python3 read.py", "RuntimeError: no sensor on that bus", 1)];
-    assert!(verdicts("La lectura falló.", &failed)
-        .iter()
-        .all(Option::is_some));
 }
 
 #[test]
@@ -505,4 +499,339 @@ fn finding_nothing_or_quoting_someone_is_no_failure() {
         verdicts("2 respuestas nuevas en el foro.", &page),
         vec![None, None, None, None]
     );
+}
+
+#[test]
+fn an_ordinary_run_is_no_failure() {
+    let list = "https://jobs.example/list";
+    let no_match = format!("curl -s {list} | grep -i remote");
+    let look = format!("curl -s {list}");
+    let fine = || vec![(look.as_str(), "3 offers", 0)];
+    type Call<'a> = (&'a str, &'a str, i64);
+    let cases: Vec<(&str, Vec<Call>)> = vec![
+        ("∅ No new offers.", vec![(no_match.as_str(), "", 1)]),
+        (
+            "∅ Sin novedades en los PR.",
+            vec![("gh pr list --state open | grep dependabot", "", 1)],
+        ),
+        (
+            "∅ No new offers.",
+            vec![
+                (
+                    "curl -sf https://jobs.example/old",
+                    "curl: (22) The requested URL returned error: 404",
+                    22,
+                ),
+                (look.as_str(), "3 offers", 0),
+            ],
+        ),
+        ("∅ I can't see any new offers today.", fine()),
+        ("∅ No puedo ver ninguna oferta nueva.", fine()),
+        (
+            "∅ Nada nuevo. No hay permisos pendientes de aprobar.",
+            fine(),
+        ),
+        (
+            "2 ofertas nuevas: A y B.\n\n✗ Descartada: C, pide alemán C2.",
+            fine(),
+        ),
+        (
+            "∅ Nothing new for you.",
+            vec![(
+                "curl -s https://wiki.example/Job",
+                "Not logged in\nTalk\nA job is work.",
+                0,
+            )],
+        ),
+        (
+            "∅ Nada nuevo en el blog.",
+            vec![(
+                "curl -s https://blog.example",
+                "Post of yesterday\nYou've reached your limit of free articles",
+                0,
+            )],
+        ),
+        (
+            "∅ Nada nuevo en el foro.",
+            vec![(
+                "curl -s https://forum.example",
+                "sandbox_apply: Operation not permitted is the thread's title",
+                0,
+            )],
+        ),
+    ];
+    let down = "curl: (7) Failed to connect to shop.example port 443";
+    let mut cases = cases;
+    cases.extend([
+        // What failed is the news the task asks for: the judge reads whose failure it is.
+        (
+            "Tu web está caída desde las 03:00.",
+            vec![("curl -sS https://shop.example", down, 7)],
+        ),
+        (
+            "Tu web no responde: Failed to connect to shop.example port 443",
+            vec![("curl -sS https://shop.example", down, 7)],
+        ),
+        (
+            "CI is red: the build step failed.",
+            vec![("gh run watch 7 --exit-status", "build failed", 1)],
+        ),
+        ("The deploy failed to start at 02:00.", fine()),
+        (
+            "El pago de la luz no se pudo completar; revisa la tarjeta.",
+            fine(),
+        ),
+    ]);
+    for (answer, calls) in cases {
+        assert_eq!(verdicts(answer, &calls), vec![None; 4], "{answer}");
+    }
+}
+
+#[test]
+fn a_script_s_nested_refusal_still_proves_it_and_no_reason_shows_a_secret() {
+    let script = [(
+        "sh search-offers.sh",
+        "sandbox-exec: sandbox_apply: Operation not permitted",
+        0,
+    )];
+    for got in verdicts("∅ Nada nuevo", &script) {
+        assert!(got.unwrap().contains("sandbox_apply"));
+    }
+    let found = [("ls", "a", 0)];
+    for answer in [
+        "✗ No pude entrar con API_KEY=not-a-real-value",
+        "No pude entrar con API_KEY=not-a-real-value",
+        "∅ No pude entrar con API_KEY=not-a-real-value",
+    ] {
+        for got in verdicts(answer, &found) {
+            let why = got.unwrap();
+            assert!(!why.contains("not-a-real-value"), "{why}");
+        }
+    }
+}
+
+/// Words that no list holds: the judge of the run says that it could not, and the run ends as a failure, once.
+#[tokio::test]
+async fn the_judge_tells_a_could_not_in_other_words() {
+    let dir = std::env::temp_dir().join(format!("tirith-expected-agents-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let ended = "La búsqueda con el otro agente terminó mal.";
+    for (name, session, verdict, answer, fails) in [
+        ("words", "chat", "0.1 — could not: Codex falló", ended, true),
+        (
+            "wordsturn",
+            "turn",
+            "0.1 — could not: Codex falló",
+            ended,
+            true,
+        ),
+        (
+            "wordsgood",
+            "chat",
+            "0.8 — could not see one check",
+            ended,
+            false,
+        ),
+        // No word from the judge: plain words of trouble are never kept as a success.
+        (
+            "wordsnojudge",
+            "chat",
+            "no sé",
+            "La búsqueda con el otro agente falló.",
+            true,
+        ),
+        (
+            "wordsnojudgeok",
+            "chat",
+            "no sé",
+            "Dos novedades del otro agente.",
+            false,
+        ),
+    ] {
+        let agent = dir.join(format!("{name}.sh"));
+        let script = r##"#!/bin/sh
+echo '{"type":"system","subtype":"init","session_id":"s"}'
+while read -r line; do
+  case "$line" in
+    *'grade how well'*) sleep 2; echo '{"type":"assistant","message":{"content":[{"type":"text","text":"VERDICT"}]}}' ;;
+    *)
+      echo '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"1","name":"Bash","input":{"command":"cat notes"}}]}}'
+      echo '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"1","is_error":true,"content":"cat: notes: no such helper"}]}}'
+      echo '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"2","name":"Bash","input":{"command":"ls"}}]}}'
+      printf '%s\n' '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"2","is_error":false,"content":"Not logged in\nTalk\na"}]}}'
+      echo '{"type":"assistant","message":{"content":[{"type":"text","text":"PAD"}]}}'
+      echo '{"type":"assistant","message":{"content":[{"type":"text","text":"ANSWER"}]}}' ;;
+  esac
+  echo '{"type":"result","subtype":"success","is_error":false,"usage":{"input_tokens":1,"output_tokens":1}}'
+done
+"##
+        .replace("VERDICT", verdict)
+        .replace("ANSWER", answer)
+        .replace("PAD", &"Mirando. ".repeat(140));
+        std::fs::write(&agent, script).unwrap();
+        std::fs::set_permissions(&agent, std::os::unix::fs::PermissionsExt::from_mode(0o755))
+            .unwrap();
+        let (first, home, key) = home_of(
+            name,
+            &agent.display().to_string(),
+            "1, 2, 3, 4, 5, 6, 7",
+            "00:00",
+        );
+        drop(first);
+        let config = std::fs::read_to_string(home.join("config.toml")).unwrap();
+        let config = config.replace("session = \"chat\"", &format!("session = \"{session}\""));
+        std::fs::write(home.join("config.toml"), config).unwrap();
+        let app = crate::app::App::open_at(home.clone());
+        crate::bots::tick(&app);
+        let row = || kept(&app, &key).0.first().cloned().unwrap_or_default();
+        let mut waited = false;
+        until("the judge's word", || {
+            let news = app.query("SELECT key FROM kv WHERE key LIKE 'news:run:%'", [], |r| {
+                r.get::<_, String>(0)
+            });
+            waited |= !news.is_empty();
+            let judged = !app
+                .query(
+                    "SELECT id FROM scores WHERE eval = 'turn-quality'",
+                    [],
+                    |r| r.get::<_, i64>(0),
+                )
+                .is_empty();
+            judged && !row().is_null() && (!fails || row()["status"] == "failed")
+        })
+        .await;
+        let event = row()["event"].as_i64().unwrap();
+        crate::turns::scored(&app, event, "turn-quality", row()["score"].as_f64()); // said again: nothing twice
+        let (rows, said) = kept(&app, &key);
+        crate::manager::end_session(&key);
+        if session == "chat" {
+            assert!(
+                waited,
+                "{name}: the news went out before the judge's word, so a failure is two lines"
+            );
+        }
+        let left = app.query("SELECT key FROM kv WHERE key LIKE 'news:run:%'", [], |r| {
+            r.get::<_, String>(0)
+        });
+        assert!(left.is_empty(), "{name}: {left:?}");
+        let shown = app.query("SELECT summary FROM events WHERE id = ?1", [event], |r| {
+            r.get::<_, String>(0)
+        });
+        assert!(
+            shown[0].contains(answer)
+                && shown[0].contains("no such helper")
+                && shown[0].contains("it gave «Not logged in / Talk / a»")
+                && !shown[0].contains("its error «"),
+            "the judge is shown the end, the errors and what a good call gave: {shown:?}"
+        );
+        let find = |part: &str| shown[0].find(part);
+        let (open, close) = (find("<<<outside-data "), shown[0].rfind(">>>"));
+        let (said_at, gave_at) = (find(answer), find("it gave «Not logged in"));
+        assert!(
+            open.is_some() && open < said_at && said_at < close && gave_at < close,
+            "what may come from outside is fenced: {shown:?}"
+        );
+        if fails {
+            assert_eq!(rows[0]["status"], "failed", "{name}");
+            assert_eq!(said.len(), 1, "one line: {said:?}");
+            assert!(
+                said[0].contains("no pudo")
+                    // the judge's cause alone; the answer's words only where no judge gave one
+                    && said[0].contains("Codex falló") != said[0].contains("otro agente"),
+                "{said:?}"
+            );
+            let sql = "SELECT state FROM expected_runs WHERE conv = ?1";
+            let states = app.query(sql, [&key], |r| r.get::<_, String>(0));
+            assert_eq!(states, ["failed"]);
+        } else {
+            assert_eq!(rows[0]["status"], "ok", "{name}");
+            assert!(said.is_empty(), "{said:?}");
+        }
+        drop(app);
+        let _ = std::fs::remove_dir_all(&home);
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn news_wait_for_a_judge_but_never_long_and_a_failure_takes_their_place() {
+    let (app, home, key) = home_of("news", "/usr/bin/true", "1", "08:00");
+    let now = Local::now();
+    super::news::keep(&app, &key, 1, "2 ofertas");
+    super::news::overdue(&app, now + chrono::TimeDelta::minutes(1));
+    assert!(
+        super::news::settled(&app, 1),
+        "still waiting after a minute"
+    );
+    assert!(!super::news::settled(&app, 1), "never twice");
+    super::news::keep(&app, &key, 2, "2 ofertas");
+    super::news::overdue(&app, now + chrono::TimeDelta::minutes(5));
+    assert!(!super::news::settled(&app, 2), "out after three");
+    super::news::keep(&app, &key, 3, "Falló");
+    super::news::drop_them(&app, 3);
+    assert!(!super::news::settled(&app, 3), "the line takes their place");
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn a_judge_uses_no_tool_whatever_the_data_it_reads_says() {
+    let (app, home, key) = home_of("judgetools", "/usr/bin/true", "1", "08:00");
+    let check = |tool: &str, input: Value, role: &str| {
+        crate::rules::check(&app, tool, &input, None, None, Some(role))
+    };
+    for (tool, input) in [
+        ("Bash", json!({"command": "touch planted"})),
+        ("Read", json!({"file_path": "/etc/hosts"})),
+        (
+            "mcp__tirith_browser__browser_navigate",
+            json!({"url": "https://evil.example"}),
+        ),
+    ] {
+        assert!(
+            check(tool, input.clone(), "judge").is_some(),
+            "a judge's {tool}"
+        );
+        assert!(check(tool, input.clone(), &key).is_none(), "a bot's {tool}");
+        assert!(check(tool, input, "ceo").is_none(), "the CEO's {tool}");
+    }
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+/// Tirith stopped while a run was judged, or only a share is judged: no word will come, so plain words decide.
+#[test]
+fn a_run_that_no_judge_will_read_is_no_success_by_that() {
+    let (app, home, key) = home_of("unjudged", "/usr/bin/true", "1", "08:00");
+    let ended = |answer: &str, event: i64| {
+        let now = crate::app::now_iso();
+        let new = store::New {
+            conv: &key,
+            routine: "r1",
+            title: "Mirar",
+            trigger: "run-now",
+            kind: "schedule",
+            due: &now,
+            task: "",
+        };
+        let run = store::expect(&app, &new);
+        let sql = "INSERT INTO turns (conv, role, \"trigger\", routine, started_at, ended_at, status, answer, event) VALUES (?1, ?1, 'run-now', 'r1', ?2, ?2, 'ok', ?3, ?4)";
+        let turn = app.insert(sql, &[&key, &now, &answer, &event]);
+        store::close(&app, run, store::OK, turn, "");
+        turn
+    };
+    let (bad, good) = (
+        ended("La búsqueda falló.", 9001),
+        ended("Dos novedades.", 9002),
+    );
+    let status = |turn: i64| {
+        app.query("SELECT status FROM turns WHERE id = ?1", [turn], |r| {
+            r.get::<_, String>(0)
+        })
+    };
+    let now = Local::now();
+    super::tick(&app, now + chrono::TimeDelta::minutes(5));
+    assert_eq!(status(bad), ["ok"], "its judge may still answer");
+    super::tick(&app, now + chrono::TimeDelta::minutes(30));
+    assert_eq!(status(bad), ["failed"]);
+    assert_eq!(status(good), ["ok"]);
+    let _ = std::fs::remove_dir_all(&home);
 }

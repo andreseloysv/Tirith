@@ -30,7 +30,7 @@ mod tuning;
 mod versioned;
 mod written;
 /// What every routine is told of how to report.
-const REPORT: &str = "∅ at its start only when you looked and nothing is new; when you could not do all of it, one line that starts with ✗ and says what you could not and why, never ∅";
+const REPORT: &str = "∅ at its start only when you looked and nothing is new; when you could not do all of it, one line that starts with ✗ and says what you could not and why, never ∅; begin no other line with ✗";
 pub use api::routes;
 /// The app's and the manager's checks read the list and save cards.
 #[cfg(test)]

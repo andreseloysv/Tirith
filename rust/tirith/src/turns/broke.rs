@@ -37,6 +37,8 @@ static STATUS: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)^\W*(exit(ed with exit)? ?(code|status) \d+\W*)?$").unwrap());
 /// How many lines count as an output's end.
 const END: usize = 4;
+/// How much of what a call gave a judge is shown.
+const GAVE: usize = 160;
 /// A line longer than this is content, not an error.
 const LONG: usize = 300;
 
@@ -71,6 +73,24 @@ pub(super) fn broke(output: &str, failed: bool) -> Option<Broke> {
         line: line.into(),
         hard: soft,
     })
+}
+
+/// What a call gave, short: all of it when that is short, else its start and its end.
+pub(super) fn gave(output: &str) -> String {
+    let said = output
+        .lines()
+        .map(str::trim)
+        .filter(|l| !STATUS.is_match(l));
+    let lines: Vec<&str> = said.collect();
+    let whole = lines.join(" / ");
+    if whole.chars().count() <= GAVE {
+        return whole;
+    }
+    let cut = |line: &str| line.chars().take(GAVE / 2).collect::<String>();
+    match (lines.first(), lines.last()) {
+        (Some(first), Some(last)) if lines.len() > 1 => format!("{} … {}", cut(first), cut(last)),
+        _ => whole.chars().take(GAVE).collect(),
+    }
 }
 
 /// True when nothing was printed but the status.

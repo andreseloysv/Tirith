@@ -1,33 +1,33 @@
 //! How a tool call ended, as any agent's lines say it.
-use super::broke::{broke, silent, Broke};
+use super::broke::{broke, gave, silent, Broke};
 use super::capture_fit::text_of;
 use super::look_muse::{self, Said};
 use regex::Regex;
 use serde_json::Value;
 use std::sync::LazyLock;
 
-/// A local search: its status 1 with nothing printed is «no match», which is no failure.
+/// A search: its status 1 with nothing printed is «no match», which is no failure (what it searched is the judge's to doubt).
 static MATCHING: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(^|[|;&:(]\s*)([ef]?grep|rg|diff)\b[^|;&]*$").unwrap());
 
-/// One ended call: what it did, whether it failed, and the error it printed.
+/// One ended call: what it did, whether it failed, the error it printed and what it gave.
 #[derive(Clone, Debug)]
 pub(super) struct Ended {
     pub what: String,
     pub failed: bool,
     pub broke: Option<Broke>,
+    pub gave: String,
 }
 
 impl Ended {
     pub(super) fn of(what: String, failed: bool, output: &str) -> Ended {
-        // of a look outside the silence may be the failure itself (`curl -s … | grep`)
-        let none_matched = MATCHING.is_match(&what) && !super::proof::outside(&what);
-        let failed = failed && !(none_matched && silent(output));
+        let failed = failed && !(MATCHING.is_match(&what) && silent(output));
         let broke = broke(output, failed);
         Ended {
             what,
             failed,
             broke,
+            gave: gave(output),
         }
     }
 }

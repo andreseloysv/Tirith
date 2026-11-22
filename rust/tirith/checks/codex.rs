@@ -171,8 +171,8 @@ fn codex_browser_of(argv: &[String]) -> toml::Value {
         .find(|w| w[0] == "-c" && w[1].starts_with("mcp_servers.tirith_browser="))
         .unwrap_or_else(|| panic!("no tirith_browser in {argv:?}"));
     assert!(
-        argv.windows(2)
-            .any(|w| w[0] == "-c" && w[1] == "mcp_servers.node_repl.enabled=false"),
+        argv.windows(2).any(|w| w[0] == "-c"
+            && w[1] == "mcp_servers.node_repl={command=\"node_repl\",enabled=false}"),
         "the desktop-app browser is off: {argv:?}"
     );
     format!(
