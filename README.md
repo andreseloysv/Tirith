@@ -8,7 +8,7 @@
 
 [![CI](https://github.com/andreseloysv/Tirith/actions/workflows/tirith.yml/badge.svg)](https://github.com/andreseloysv/Tirith/actions/workflows/tirith.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-![Platform: macOS](https://img.shields.io/badge/platform-macOS-lightgrey?logo=apple)
+![Platform: macOS and Linux](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)
 ![Built for the Meta Global AI Developer Hackathon](https://img.shields.io/badge/built%20for-Meta%20AI%20Hackathon-0467DF?logo=meta&logoColor=white)
 [![GitHub stars](https://img.shields.io/github/stars/andreseloysv/Tirith?style=social)](https://github.com/andreseloysv/Tirith)
 
@@ -27,6 +27,48 @@ git clone https://github.com/andreseloysv/Tirith && cd Tirith && ./run
 
 Needs Rust (`cargo`) and git. `./run` builds the `tirith` binary, starts the daemon when nothing answers on its
 port and opens its page (`http://127.0.0.1:7717/`). The daemon keeps running; `tirith status` shows what it does.
+
+## Install without building: a server on Linux or a Mac
+
+A release is four signed binaries (Linux and macOS, arm64 and x86_64) and an installer that installs nothing
+unless the signature and the sums are right. The Linux ones are static.
+
+```bash
+sh install.sh --from <release folder> --server                     # a release you have (scripts/release/release.sh <version> <folder>)
+curl -fsSL https://github.com/andreseloysv/Tirith/releases/latest/download/install.sh | sh -s -- --server   # a published one
+```
+
+With `--server` Tirith stays up as a service, and the guide connects the agents you choose: the Anthropic CLI,
+OpenAI Codex, GitHub Copilot and Muse Code. For each it runs the maker's own installer, starts that agent's
+sign-in (a link and a code that work over SSH), points its hooks at Tirith and proves it with one short real
+turn: it is connected only when it answered and Tirith's rules heard its tool call.
+
+```bash
+tirith connect <anthropic|codex|copilot|muse>      # connect one later, or sign it in again
+tirith connect copilot --token < token-file        # no browser: a token, on stdin, kept 0600 for that agent alone
+tirith doctor                                      # every part, and how to fix what is missing
+tirith service status | restart | logs | uninstall
+```
+
+- **GitHub Enterprise.** The guide asks for Copilot's GitHub host (Enter is github.com; `name.ghe.com` for
+  Enterprise Cloud with data residency). Its login and all its processes use it, and Tirith hides it, like the
+  tokens, in its logs, answers and events.
+- **Linux.** Installed as root or with sudo, Tirith runs as the user `tirith`, never as root, and a project's
+  folder must be that user's to read and write. With systemd it starts at boot with nobody signed in; without it
+  (a container) `tirith service start` starts it by hand. The network sandbox needs no root; where Ubuntu's
+  AppArmor forbids it, `tirith doctor` says so and `sudo tirith net allow` allows it.
+- **macOS.** A launchd service that starts when you log in, or with nobody logged in with `--boot`. The binaries
+  are signed ad hoc unless `TIRITH_SIGN_IDENTITY` was set when the release was built.
+- **The page.** It never listens on the network. From your computer:
+  `ssh -N -L 7717:127.0.0.1:7717 <you>@<server>`, then `http://127.0.0.1:7717/`. The port is the same at both
+  ends: if your computer runs a Tirith of its own, install the server with `--port 7801` and use that one.
+- **Who may use it.** On Linux only Tirith's user, root and `[server] users` (who installed it with sudo is
+  added) reach the daemon. On macOS any user of that Mac could: do not install it on a Mac you share.
+- **Updating.** Run the installer again. Lanes at work go on across the restart, and uninstalling the service
+  leaves `~/.tirith` as it is.
+- **Known limits.** Copilot cannot be replayed by the bots' lab (its sign-in host would let a replay write to
+  GitHub): its experiments run live or in shadow. GitHub's Copilot CLI 1.0.114 does not run on Alpine arm64 (its
+  x86_64 build does). A Muse sign-in made on a Mac lives in its keychain: sign in again on the server.
 
 ## What it does
 
@@ -103,6 +145,8 @@ One resident process, `tirith serve`, holds the state in memory and in one SQLit
 ## Commands
 
 ```
+tirith setup [--server] [--boot] [--port N] [--agents a,b] [--yes] | connect [<agent>] [--token] | doctor
+tirith service install [--boot] | status | start | stop | restart | uninstall | logs
 tirith serve | status [--project P]
 tirith plan show <project> | plan add <project> <step> "<text>"
 tirith plan step <project> <number> "<title>" ["<intro paragraph>"]   create the plan's next step, at its end
