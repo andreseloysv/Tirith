@@ -24,8 +24,8 @@ pub(super) fn said(mode: Mode, net: bool, unread: bool, role: bool, servers: &[S
     line
 }
 
-/// The model's instructions: the caller's (`theirs`), and the true limit, for Codex describes the sandbox it was started with, which is none.
-pub(super) fn instructions(theirs: &str, mode: Mode, net: bool) -> String {
+/// The model's instructions: the caller's (`theirs`), where it runs (`here.rs`) and the true limit, for Codex describes the sandbox it was started with, which is none.
+pub(super) fn instructions(theirs: &str, mode: Mode, net: bool, here: &str) -> String {
     let writes = match mode {
         Mode::Write => "write only in the working directory, the folders added to it and the temporary folders (never in their .git, .codex or .agents)",
         _ => "write nothing",
@@ -35,7 +35,7 @@ pub(super) fn instructions(theirs: &str, mode: Mode, net: bool) -> String {
     } else {
         "have no network"
     };
-    let limit = format!("Your commands run in a sandbox, whatever else says they are unrestricted: they {writes}, and they {network}. Do not try to get around it: say what you could not do.");
+    let limit = format!("{here}\nYour commands run in a sandbox, whatever else says: they {writes}, and they {network}. Do not try to get around it: say what you could not do.");
     if theirs.trim().is_empty() {
         limit
     } else {

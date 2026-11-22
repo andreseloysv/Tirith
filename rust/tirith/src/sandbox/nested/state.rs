@@ -1,26 +1,14 @@
-//! What Codex's own process writes in its state folder, found by running the real CLI in empty ones: no settings, `.env`, profiles, rules, prompts, plugins or skills, which steer a later run.
+//! What Codex's own process writes in its state folder, found by running the real CLI in empty ones: no settings, `.env`, profiles, rules, prompts, plugins, skills or models' catalogue, which steer a later run.
 use super::sb::Sb;
 
-const FOLDERS: [&str; 8] = [
+const FOLDERS: [&str; 5] = [
     "sessions",
-    "archived_sessions",
-    "log",
-    "logs",
     "shell_snapshots",
     "thread-writer-locks",
     "tmp/arg0",
     "tmp/arg0-macos",
 ];
-const FILES: [&str; 8] = [
-    "tmp",
-    "installation_id",
-    "models_cache.json",
-    "history.jsonl",
-    "session_index.jsonl",
-    "version.json",
-    ".sandbox_migration",
-    ".personality_migration",
-];
+const FILES: [&str; 3] = ["tmp", "installation_id", ".sandbox_migration"];
 
 /// Its sign-in, which it renews in the file that is there: none can be planted.
 const RENEWED: &str = "auth.json";

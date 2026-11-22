@@ -380,6 +380,14 @@ fn a_profile_named_in_the_settings_is_read_and_servers_are_named() {
         "the caller's words, then the true limit, once: {told:?}"
     );
     assert!(
+        said.args
+            .iter()
+            .any(|a| a == "include_environment_context=false")
+            && told[0].contains("Working directory: ")
+            && !told[0].contains("unrestricted"),
+        "no note that calls the sandbox none, and its folder still said: {told:?}"
+    );
+    assert!(
         r.args
             .iter()
             .any(|a| a == "include_permissions_instructions=false"),

@@ -51,7 +51,7 @@ pub(super) fn limit(a: &Asked, at: &Where) -> Result<Option<(Request, String)>, 
     let write = mode == Mode::Write;
     let net = write && set.is("sandbox_workspace_write.network_access");
     let request = Request {
-        args: line(a, &set, mode, net),
+        args: line(a, &set, mode, net, &dir),
         cwd: at.cwd.display().to_string(),
         write,
         roots: if write {
