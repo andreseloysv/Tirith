@@ -259,8 +259,8 @@ Files:
 - `timed.rs`: Everything that has a time of day: the bots' routines and the turn roles' scheduled passes.
 - `told.rs`: Whose words an answer holds: what it quotes, and what it tells of someone's, are theirs. What it tells of its own tool or helper is its own.
 - `unjudged.rs`: A good run that no judge will read any more: code's plain words decide, as when a judge gave no verdict.
-- `verdict.rs`: Whether a routine's turn did what it was started for, as far as code is certain: its agent ended well, it did not say in plain words that it could not, no tool's error proves it could not, and a «∅» comes from having looked.
-- `watch.rs`: The scheduler's tick: Tirith says it is alive, what was missed is written down, and what takes too long is ended.
+- `verdict.rs`: Whether a routine's turn did what it was started for, as far as code is certain: its agent ended well, no «✗», no tool's error proves it could not, and a «∅» says no "could not" on its line and comes from having looked.
+- `watch.rs`: The scheduler's tick: Tirith says it is alive, what was missed is written down, what takes too long is ended, news that waited too long for a judge go out, and a run no judge will read is looked at by code.
 - `words.rs`: Times, days and texts as the owner reads them in one line.
 
 ## `factory/`
@@ -960,7 +960,7 @@ Files:
 - `token.rs`: The proxy passwords: each derives from a random secret kept in the daemon's database.
 - `tunnel.rs`: `tirith net tunnel <host> <port>`: stdin/stdout through the proxy (ssh's ProxyCommand inside the sandbox).
 - `wrap.rs`: Putting a process Tirith starts inside the sandbox.
-- `wrappers.rs`: The wrappers in `<home>/net/bin` that turn off the inner sandbox of tools that start their own.
+- `wrappers.rs`: The wrappers in `<home>/net/bin` that turn off the inner sandbox of tools that start their own (on macOS Codex's is `sandbox/nested/`).
 
 ## `sandbox/linux/`
 
@@ -985,6 +985,71 @@ Files:
 - `relay.rs`: A forwarded port's connections copied to the machine's loopback.
 - `run.rs`: The launcher: fork, take the listeners, relay, wait.
 - `supervise.rs`: Signals passed on to the program, and its exit code.
+
+## `sandbox/nested/`
+
+macOS: a Codex that an agent starts inside Tirith's sandbox. Codex's own sandbox cannot start there (macOS applies no second
+profile: `sandbox_apply: Operation not permitted`, and `codex exec` still exits 0), so Tirith's sandbox stays on and the limit
+the caller asked for is kept in a profile. A `codex` first on the sandboxed PATH (`<home>/net/bin`) reads what `codex exec` or
+`codex review` asks: its words, else its settings, else Codex's default (read-only, workspace-write in a project marked trusted
+or untrusted). It then asks the daemon, which answers only a caller under exactly Tirith's profile and never gives a wider one.
+With danger-full-access Codex runs under Tirith's profile alone. With read-only and workspace-write it is two processes: its own
+keeps its sign-in and state and writes in none of the folders, and its `exec-server` runs the model's commands and patches under
+the limit, with none of that state. Both are still the agent's to the daemon. Whatever cannot be given its limit is refused, and
+says so (`tirith: Codex could not be started with its limit: …`, which fails a routine's run).
+
+What differs from Codex's own sandbox: MCP servers that are programs run under the commands' limit, so with no network unless it
+was asked; a message over 16 MiB is refused; a limited Codex's tool calls meet the rules and leave no `access` events; by an
+absolute path Codex still fails with `sandbox_apply`, and the subcommands other than `exec` and `review` run no commands there;
+a permission profile or an administrator's managed settings count as read-only. It leans on the experimental `exec-server` and
+`CODEX_EXEC_SERVER_URL` of Codex 0.165. On Linux none of this is used.
+
+Files:
+
+- `answers.rs`: The bridge's way back: what runs a limited Codex's commands says it, a message a line.
+- `around.rs`: What the daemon adds to a request and takes from no caller, and the request as the kernel names its paths.
+- `ask.rs`: The client's talk with the broker: its own stdio and the request, then the exit code of what ran. Nothing is handed to a socket a confined process put in the daemon's place: what is handed holds the caller's environment.
+- `asked.rs`: What a `codex exec` or `codex review` command line asks of Codex's sandbox, and that line without the words that ask it. `codex review` is `codex exec review`, which takes the limit.
+- `bridge.rs`: The one way to the process that runs a limited Codex's commands and patches (`exec-server --listen stdio`): a WebSocket on loopback that takes one connection, of that Codex's own process as the kernel tells, and hands each message over that process's pipes. Nobody else reaches it: it listens nowhere. The bridge keeps its port for as long as the run lives, so nobody can stand in its place when Codex comes back for another connection.
+- `broken.rs`: When a limited Codex is stopped while it runs: what would run its commands is gone, or was never its.
+- `broker.rs`: The daemon's side: it starts what a caller under Tirith's own profile asks, under one at least as tight, waits, and gives its exit code. Anyone else gets nothing: it is no way out of another sandbox. A caller that is gone takes it along, and so does a daemon that stops (`watch.rs`).
+- `capable.rs`: Whether a Codex will hand its commands and patches to the process that has their limit. One that would not is never started under a limit: they would run in the process that holds its state.
+- `carry.rs`: The bridge's two ways, once Codex's own process is on it. Whichever end is gone first says whether the run is lost.
+- `client.rs`: `codex` inside Tirith's sandbox (the wrapper of `<home>/net/bin`): its limit is read and the daemon is asked to apply it.
+- `commands.rs`: What Codex's own sandbox refuses a command besides writing and the network; and the Codex program is no deputy of its commands.
+- `doors.rs`: The daemon's two ports as a limit's profile knows them.
+- `ending.rs`: Ending what the broker started. Codex gives each command a session of its own, so its process group is not all of it: every descendant goes.
+- `flags.rs`: Codex's options as a command line is read: which take a value, and one option's name and value.
+- `frames.rs`: The WebSocket frames (RFC 6455) of the bridge: one peer on this machine, whole messages, no extensions.
+- `here.rs`: Where and when Codex runs, as its own environment note would say it: that note goes, for it calls the sandbox none.
+- `layers.rs`: A setting as Codex reads it: `-c`, then the chosen profile, the trusted project's file, and its config.toml.
+- `limits.rs`: The profiles of a limited Codex's two parts (`pair.rs`): Tirith's, then the limit that was asked. macOS lets a rule name the program it is for (`process-path`), so in Codex's own part what its process needs (its state, the proxy, the system's services) is that binary's alone, and not its children's. They only take away from Tirith's.
+- `line.rs`: The command line Codex is started with: its own sandbox off, and its model told the true limit.
+- `listen.rs`: What the broker opens when the daemon starts: its socket, and the rules' door for the limited ones.
+- `mod.rs`: Declares the folder's files, and what every one of them shares.
+- `mode.rs`: The three limits Codex's sandbox knows.
+- `network.rs`: What a limit leaves of this machine's ports: none of them the commands', unless the network was asked for, and the daemon's only a role's.
+- `notice.rs`: What the daemon says to a caller while its Codex runs, on that caller's own stderr: Codex's report of a failed patch drops the reason it was given.
+- `other.rs`: The other `codex` subcommands that run commands: their sandbox does not nest in Tirith's on macOS, and the caller is told.
+- `pair.rs`: A limited Codex is two processes. Its own keeps what is its alone (its state with the sign-in it renews, the proxy) and writes in none of the folders; what runs the model's commands and patches, `apply_patch` too, is its `exec-server`, under the limit and with nothing of that state. A patch cannot be told apart inside one process, so it is not in that process.
+- `place.rs`: The broker's socket: in the user's own temporary folder of macOS (0700, whatever TMPDIR says), one for each Tirith home. Who calls is told by the kernel.
+- `profiles.rs`: Which profile of Codex's settings is chosen, and which MCP servers they start.
+- `program.rs`: Which program a name on the command line is, and Codex's own binary in it: the profile's rules name that one file.
+- `request.rs`: What a client and the broker pass between them.
+- `roots.rs`: The folders workspace-write opens for writing.
+- `sb.rs`: A profile's text as it is written: paths travel as parameters, never as profile text, each as the kernel names it.
+- `servers.rs`: MCP servers that are programs: Codex's own process takes none once it is told where commands run (it has no environment of its own then), so each runs where the commands do, under their limit, from a whole path.
+- `services.rs`: The system services a command may look up: those of Codex's own macOS policy. Codex's process keeps what Tirith's profile lets it.
+- `settings.rs`: The limit that holds for one `codex exec`: what it asked, else what its settings say, else Codex's own default.
+- `spawn.rs`: One process started for a caller under the profile of its part, with that environment alone.
+- `stalled.rs`: Whether what runs a limited Codex's commands was stopped: a command can signal its own sandbox, that process included, and a stopped one answers no more.
+- `state.rs`: What Codex's own process writes in its state folder, found by running the real CLI in empty ones: no settings, `.env`, profiles, rules, prompts, plugins, skills or models' catalogue, which steer a later run.
+- `told.rs`: What is said of a limit kept in one profile, to who called and to Codex's model: it never changes in silence.
+- `too_big.rs`: A message past the bridge's cap is not carried: its call is answered that it failed, and the daemon never holds more.
+- `upgrade.rs`: The bridge's half of a WebSocket's opening. A web page's is refused: it says where it comes from.
+- `values.rs`: TOML as Codex's settings are read from it.
+- `watch.rs`: A watch on what the broker started, outliving the daemon: when Tirith stops in the middle, also by force, that Codex and all below it are ended, never left running with nobody to answer to. The watcher is Tirith's own program with none of the caller's environment: it runs outside every sandbox.
+- `writes.rs`: What may be written: the folders workspace-write opens, less what it protects, but not by Codex's own process, whose writing is its state's alone (and only what it must). A folder above what stays cannot be renamed, or the rule would stay behind.
 
 ## `sandbox/proxy/`
 
@@ -1025,6 +1090,7 @@ Files:
 
 - `chat.rs`: A new line in a conversation, from the owner's page or from an agent.
 - `hook.rs`: One agent hook call: recorded, a replay's outside read answered from its capture (`lab::answer`), refused when it breaks a rule, a lane's live messages handed over.
+- `hook_door.rs`: The door of a Codex under its caller's limit (sandbox/nested/): the rules' hook and nothing else. That limit's profile refuses the daemon's own port in the kernel, so no request of the page or an agent pays for a look at who calls.
 - `hook_find.rs`: Which lane and project a hook call comes from.
 - `hook_lane.rs`: What a hook call is about: its lane and project, its tool call under the rules' names, and its summary.
 - `hook_reply.rs`: What a lane's agent hears back from a hook call that was not refused.
