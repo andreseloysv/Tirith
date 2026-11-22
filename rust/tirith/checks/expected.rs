@@ -442,7 +442,6 @@ fn could_not_is_a_failure_in_any_words() {
         "Lo intenté dos veces y no he podido entrar.",
         "I could not check the plants today.",
         "The helper failed and couldn't finish.",
-        "Sorry: the script was unable to read the sensor.",
     ] {
         assert!(
             verdicts(answer, &[("ls", "a", 0)])
@@ -451,11 +450,6 @@ fn could_not_is_a_failure_in_any_words() {
             "{answer}"
         );
     }
-    // Words of trouble beside a call that failed.
-    let failed = [("python3 read.py", "RuntimeError: no sensor on that bus", 1)];
-    assert!(verdicts("La lectura falló.", &failed)
-        .iter()
-        .all(Option::is_some));
 }
 
 #[test]
@@ -561,6 +555,28 @@ fn an_ordinary_run_is_no_failure() {
             )],
         ),
     ];
+    let down = "curl: (7) Failed to connect to shop.example port 443";
+    let mut cases = cases;
+    cases.extend([
+        // What failed is the news the task asks for: the judge reads whose failure it is.
+        (
+            "Tu web está caída desde las 03:00.",
+            vec![("curl -sS https://shop.example", down, 7)],
+        ),
+        (
+            "Tu web no responde: Failed to connect to shop.example port 443",
+            vec![("curl -sS https://shop.example", down, 7)],
+        ),
+        (
+            "CI is red: the build step failed.",
+            vec![("gh run watch 7 --exit-status", "build failed", 1)],
+        ),
+        ("The deploy failed to start at 02:00.", fine()),
+        (
+            "El pago de la luz no se pudo completar; revisa la tarjeta.",
+            fine(),
+        ),
+    ]);
     for (answer, calls) in cases {
         assert_eq!(verdicts(answer, &calls), vec![None; 4], "{answer}");
     }
@@ -594,10 +610,38 @@ fn a_script_s_nested_refusal_still_proves_it_and_no_reason_shows_a_secret() {
 async fn the_judge_tells_a_could_not_in_other_words() {
     let dir = std::env::temp_dir().join(format!("tirith-expected-agents-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    for (name, session, verdict, fails) in [
-        ("words", "chat", "0.1 — could not: Codex falló", true),
-        ("wordsturn", "turn", "0.1 — could not: Codex falló", true),
-        ("wordsgood", "chat", "0.8 — could not see one check", false),
+    let ended = "La búsqueda con el otro agente terminó mal.";
+    for (name, session, verdict, answer, fails) in [
+        ("words", "chat", "0.1 — could not: Codex falló", ended, true),
+        (
+            "wordsturn",
+            "turn",
+            "0.1 — could not: Codex falló",
+            ended,
+            true,
+        ),
+        (
+            "wordsgood",
+            "chat",
+            "0.8 — could not see one check",
+            ended,
+            false,
+        ),
+        // No word from the judge: plain words of trouble are never kept as a success.
+        (
+            "wordsnojudge",
+            "chat",
+            "no sé",
+            "La búsqueda con el otro agente falló.",
+            true,
+        ),
+        (
+            "wordsnojudgeok",
+            "chat",
+            "no sé",
+            "Dos novedades del otro agente.",
+            false,
+        ),
     ] {
         let agent = dir.join(format!("{name}.sh"));
         let script = r##"#!/bin/sh
@@ -611,12 +655,13 @@ while read -r line; do
       echo '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"2","name":"Bash","input":{"command":"ls"}}]}}'
       echo '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"2","is_error":false,"content":"a"}]}}'
       echo '{"type":"assistant","message":{"content":[{"type":"text","text":"PAD"}]}}'
-      echo '{"type":"assistant","message":{"content":[{"type":"text","text":"La búsqueda con el otro agente terminó mal."}]}}' ;;
+      echo '{"type":"assistant","message":{"content":[{"type":"text","text":"ANSWER"}]}}' ;;
   esac
   echo '{"type":"result","subtype":"success","is_error":false,"usage":{"input_tokens":1,"output_tokens":1}}'
 done
 "##
         .replace("VERDICT", verdict)
+        .replace("ANSWER", answer)
         .replace("PAD", &"Mirando. ".repeat(140));
         std::fs::write(&agent, script).unwrap();
         std::fs::set_permissions(&agent, std::os::unix::fs::PermissionsExt::from_mode(0o755))
@@ -635,7 +680,14 @@ done
         crate::bots::tick(&app);
         let row = || kept(&app, &key).0.first().cloned().unwrap_or_default();
         until("the judge's word", || {
-            row()["score"].is_number() && (!fails || row()["status"] == "failed")
+            let judged = !app
+                .query(
+                    "SELECT id FROM scores WHERE eval = 'turn-quality'",
+                    [],
+                    |r| r.get::<_, i64>(0),
+                )
+                .is_empty();
+            judged && !row().is_null() && (!fails || row()["status"] == "failed")
         })
         .await;
         let event = row()["event"].as_i64().unwrap();
@@ -646,14 +698,14 @@ done
             r.get::<_, String>(0)
         });
         assert!(
-            shown[0].contains("terminó mal") && shown[0].contains("no such helper"),
+            shown[0].contains(answer) && shown[0].contains("no such helper"),
             "the judge is shown the end and the errors: {shown:?}"
         );
         if fails {
             assert_eq!(rows[0]["status"], "failed", "{name}");
             assert_eq!(said.len(), 1, "one line: {said:?}");
             assert!(
-                said[0].contains("no pudo") && said[0].contains("terminó mal"),
+                said[0].contains("no pudo") && said[0].contains("otro agente"),
                 "{said:?}"
             );
             let sql = "SELECT state FROM expected_runs WHERE conv = ?1";

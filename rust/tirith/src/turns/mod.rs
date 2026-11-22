@@ -49,7 +49,7 @@ pub use interrupted::start;
 pub use live::{abandon, end, handed, idle, line, on_event, take_trigger, trigger, By};
 pub use looks::Looks;
 pub use loose::{done, turn_of};
-pub use quality::scored;
+pub use quality::{scored, EVAL as GRADE};
 pub use react::reacted;
 pub use record::Turn;
 pub use signals::{add_columns, judged, last};

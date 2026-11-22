@@ -1,5 +1,5 @@
 //! Whether a routine's turn did what it was started for, as far as code is certain: its agent ended well, it did not say in plain words that it could not, no tool's error proves it could not, and a «∅» comes from having looked.
-use super::admits::{admits, repeats, trouble};
+use super::admits::admits;
 use super::claims::{after, could_not, FAILED, NOTHING};
 use super::found::oldest;
 use super::store::RUNNING;
@@ -53,14 +53,9 @@ pub(super) fn judged(
         return error(); // the tool's own error is proof enough, whatever the words
     }
     let Some(rest) = after(answer, NOTHING) else {
-        let worded = proof
-            .as_ref()
-            .is_some_and(|p| trouble(answer) || repeats(answer, p.line));
-        let nothing = !handed_data && looks.nothing_worked();
-        if worded || nothing || admits(answer) {
-            return error().or_else(|| Some(format!("no pudo: {}", shown(answer, 160))));
-        }
-        return None;
+        // other words may be the news the task asks for (what is down, what failed): its judge reads whose failure it is
+        let mine = admits(answer);
+        return mine.then(|| error().unwrap_or(format!("no pudo: {}", shown(answer, 160))));
     };
     if admits(answer) || could_not(answer) {
         error().or_else(|| Some(format!("dijo ∅, pero no pudo: {}", shown(rest, 160))))

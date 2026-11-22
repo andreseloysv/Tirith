@@ -6,7 +6,7 @@ use rusqlite::params;
 use serde_json::json;
 
 /// The eval whose score lands on the turn of the event it judged.
-pub(super) const EVAL: &str = "turn-quality";
+pub const EVAL: &str = "turn-quality";
 
 /// An answer's start and its end, where a run says how it went, in `most` characters.
 fn ends(text: &str, most: usize) -> String {
@@ -60,8 +60,11 @@ pub(super) fn routine_text(
 
 /// A judge's `score` of `eval` on event `event`: a `turn-quality` one is copied to the turn whose event it is, and may say that its run could not.
 pub fn scored(app: &Shared, event: i64, eval: &str, score: Option<f64>) {
-    let Some(score) = score.filter(|_| eval == EVAL) else {
+    if eval != EVAL {
         return;
+    }
+    let Some(score) = score else {
+        return super::could_not::check(app, event); // no verdict: it is not left as a success by that
     };
     app.insert(
         "UPDATE turns SET score = ?1 WHERE event = ?2",

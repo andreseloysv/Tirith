@@ -17,16 +17,29 @@ fn cause(score: f64, why: &str) -> Option<&str> {
     marked.then(|| rest.strip_prefix(':'))?.map(str::trim)
 }
 
-/// The judge's last word on event `event`: a turn of a routine that it says could not ends as a failure.
+/// Event `event`'s run as its judge's last word leaves it. With no score in it, or with no such eval, code's loose words decide.
 pub(super) fn check(app: &Shared, event: i64) {
-    let sql = "SELECT t.id, COALESCE(t.answer, ''), s.score, COALESCE(s.why, '') FROM turns t JOIN scores s ON s.event = t.event AND s.eval = ?2 WHERE t.event = ?1 AND t.status = 'ok' AND t.routine <> '' AND s.score IS NOT NULL ORDER BY s.id DESC LIMIT 1";
-    let found = app.query(sql, params![event, EVAL], |r| {
-        let (turn, answer): (i64, String) = (r.get(0)?, r.get(1)?);
-        Ok((turn, answer, r.get::<_, f64>(2)?, r.get::<_, String>(3)?))
-    });
-    for (turn, answer, score, why) in found {
-        if let Some(cause) = cause(score, &why) {
-            crate::expected::admitted(app, turn, &answer, cause);
-        }
+    let sql = "SELECT id, COALESCE(answer, '') FROM turns WHERE event = ?1 AND status = 'ok' AND routine <> ''";
+    let found = app.query(sql, [event], |r| Ok((r.get(0)?, r.get(1)?)));
+    let Some((turn, answer)): Option<(i64, String)> = found.into_iter().next() else {
+        return;
+    };
+    let sql = "SELECT score, COALESCE(why, '') FROM scores WHERE event = ?1 AND eval = ?2 ORDER BY id DESC LIMIT 1";
+    let words = app.query(sql, params![event, EVAL], |r| Ok((r.get(0)?, r.get(1)?)));
+    let word: Option<(Option<f64>, String)> = words.into_iter().next();
+    let (judge, why) = match &word {
+        Some((Some(score), why)) => (true, cause(*score, why)),
+        Some((None, _)) => (false, None),
+        None if graded(app) => return, // it is still reading
+        None => (false, None),
+    };
+    if why.is_some() || !judge {
+        crate::expected::admitted(app, turn, &answer, why);
     }
+}
+
+/// True when some judge grades runs.
+fn graded(app: &Shared) -> bool {
+    let evals = app.cfg().factory.evals_on("routine.done");
+    evals.iter().any(|e| e.0 == EVAL)
 }

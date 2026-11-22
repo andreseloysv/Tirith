@@ -1205,7 +1205,9 @@ Each row also carries its quality signals (`react.rs`, `signals.rs`, `checks.rs`
   A routine of a turn role (the CEO's) emits `routine.done` too. A why that starts with `could not:`, at 0.3 or less,
   says that the run could not do its task in words no list holds: the run and its turn end `failed` with that cause,
   and the owner gets the one line of any failed run (`could_not.rs`, `expected/admitted.rs`). Code alone fails a run
-  only where it is certain: the agent's own failure, ✗, a ∅ with no look or one that failed, a tool's error that proves itself.
+  only where it is certain: the agent's own failure, ✗, a first-person "I could not", a ∅ with no look or one that failed,
+  a nested agent's or a sandbox's own error. Any other failure in an answer may be the news the task asks for (what is down),
+  so the judge reads whose it is; when no judge gives a score, plain words of trouble count as a failure.
 
 `GET /api/turns` gives these columns too; older databases get them by `ALTER TABLE` at start (`add_columns`).
 

@@ -69,22 +69,17 @@ impl Looks {
             .or_else(|| none().map(|e| e.what.as_str()))
     }
 
-    /// True when it tried to work and every try failed.
-    pub fn nothing_worked(&self) -> bool {
-        let mut work = self.ended.iter().filter(|e| !books(&e.what)).peekable();
-        work.peek().is_some() && work.all(|e| e.failed)
-    }
-
     /// The error that stands: a hard one first. One counts only of a call that failed or of an agent's CLI, or when it proves itself: a page that worked may show the same words.
     pub fn proof(&self) -> Option<Proof<'_>> {
         let standing = self.ended.iter().enumerate().filter_map(|(at, e)| {
             let broke = e.broke.as_ref()?;
             let content = !e.failed && READS.is_match(&e.what);
-            let counts = e.failed || NESTED.is_match(&e.what) || ITSELF.is_match(&broke.line);
-            let stands = !content && counts && !undone(&self.ended[at + 1..], e, broke.hard);
+            let own = NESTED.is_match(&e.what) || ITSELF.is_match(&broke.line);
+            let hard = broke.hard && own; // a look's own error may be the news: what is down
+            let stands = !content && (e.failed || own) && !undone(&self.ended[at + 1..], e, hard);
             stands.then_some(Proof {
                 line: &broke.line,
-                hard: broke.hard,
+                hard,
             })
         });
         let mut standing: Vec<Proof> = standing.collect();
