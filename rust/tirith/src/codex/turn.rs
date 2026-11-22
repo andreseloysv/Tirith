@@ -20,7 +20,12 @@ pub async fn turn(
     let setting = models::role(app, role); // a bot's conversation passes its own role (its key) here
     let setup = Setup::new(app, role, project, &setting.agent)?;
     let model = (setting.model.as_deref(), setting.effort.as_deref());
-    let line = command_line(app, &setup, model, resume, prompt)?;
+    #[cfg_attr(not(target_os = "macos"), allow(unused_mut))]
+    let mut line = command_line(app, &setup, model, resume, prompt)?;
+    #[cfg(target_os = "macos")]
+    if setup.read_only && setting.agent == "codex" && crate::sandbox::sandboxed(app) {
+        crate::sandbox::inside(&mut line.argv); // its own sandbox cannot start inside Tirith's: one profile keeps the limit
+    }
     let (mut child, stdin, stdout) =
         manager::spawn_chat(app, &setup.who, project, line.argv.clone())?;
     let pid = child.id().unwrap_or(0);

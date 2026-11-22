@@ -32,7 +32,13 @@ pub fn launcher(args: &[String]) -> Option<i32> {
         [word, names, dashes, program, rest @ ..] if word == WORD && dashes == "--" => {
             Some(run(names, program, rest))
         }
-        _ => super::confine::launcher(args),
+        _ => {
+            #[cfg(target_os = "macos")]
+            if let Some(code) = super::nested::launcher(args) {
+                return Some(code);
+            }
+            super::confine::launcher(args)
+        }
     }
 }
 

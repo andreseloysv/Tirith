@@ -205,8 +205,8 @@ fn days_tirith_was_away_leave_a_row_each_and_one_line() {
     );
     assert!(r["last_failure"]["why"].as_str().is_some(), "{r}");
     let worse = app.query(
-        "SELECT COUNT(*) FROM turns WHERE status = 'failed' AND why <> ''",
-        [],
+        "SELECT COUNT(*) FROM turns WHERE conv = ?1 AND status = 'failed' AND why <> ''",
+        [&key],
         |r| r.get::<_, i64>(0),
     );
     assert_eq!(worse, vec![3]);

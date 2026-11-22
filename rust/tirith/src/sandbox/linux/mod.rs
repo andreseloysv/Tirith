@@ -1,7 +1,7 @@
 //! Linux's confinement: each process in a user and network namespace of its own, where only the daemon's port, its proxy's and `[network] loopback` lead out.
 mod allow;
 mod child;
-mod handover;
+use super::handover;
 mod namespace;
 mod ready;
 mod relay;

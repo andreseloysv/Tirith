@@ -7,6 +7,8 @@ pub fn start(app: Shared) {
     blocks::load(&app);
     load_secret(&app);
     write_wrappers(&app);
+    #[cfg(target_os = "macos")]
+    super::nested::start(&app);
     proxy::seed(&app);
     tokio::spawn(proxy::serve(app));
 }

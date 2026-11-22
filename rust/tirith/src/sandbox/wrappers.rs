@@ -7,12 +7,13 @@ const XCODE_FLAGS: &str = "-IDEPackageSupportDisableManifestSandbox=YES -IDEPack
 pub fn write_wrappers(app: &Shared) {
     let dir = app.home.join("net/bin");
     let _ = std::fs::create_dir_all(&dir);
-    write_tools(&dir);
+    write_tools(app, &dir);
     write_zdot(app, &dir);
 }
 
 /// The wrapper scripts, each rewritten only when its text changed.
-fn write_tools(dir: &Path) {
+#[cfg_attr(not(target_os = "macos"), allow(unused_variables))] // Codex's wrapper is macOS's
+fn write_tools(app: &Shared, dir: &Path) {
     let head =
         include_str!("../../assets/net-head.sh").replace("{dir}", &dir.display().to_string());
     let mut files: Vec<(String, String)> = [
@@ -29,6 +30,13 @@ fn write_tools(dir: &Path) {
             )
         }),
     );
+    #[cfg(target_os = "macos")]
+    if let Some(exe) = crate::app::exe() {
+        let body = include_str!("../../assets/net-codex.sh")
+            .replace("{exe}", &exe.display().to_string())
+            .replace("{home}", &app.home.display().to_string()); // a tool's shell may get none of the environment
+        files.push(("codex".into(), body));
+    }
     files.into_iter().for_each(|(name, body)| {
         use std::os::unix::fs::PermissionsExt;
         let (path, text) = (dir.join(name), format!("{head}{body}"));

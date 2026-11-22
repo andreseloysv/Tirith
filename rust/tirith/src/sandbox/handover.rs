@@ -1,10 +1,16 @@
-//! Handing sockets from the confined child to the launcher outside, over a Unix socket (SCM_RIGHTS).
+//! Handing descriptors to another process over a Unix socket (SCM_RIGHTS): Linux's launcher gets its relay's sockets, macOS's broker its caller's stdio.
 use std::io::Error;
 use std::os::fd::{AsRawFd, RawFd};
 use std::os::unix::net::UnixStream;
 
 /// The most sockets handed over at once (one per forwarded port).
-pub(super) const MOST: usize = 32;
+#[cfg(target_os = "linux")]
+pub(in crate::sandbox) const MOST: usize = 32;
+
+#[cfg(target_os = "linux")]
+const CLOEXEC: libc::c_int = libc::MSG_CMSG_CLOEXEC;
+#[cfg(not(target_os = "linux"))]
+const CLOEXEC: libc::c_int = 0;
 
 /// Room for the control message, aligned as the kernel wants it.
 type Control = [u64; 32];
@@ -18,7 +24,7 @@ fn message(byte: &mut libc::iovec, control: &mut Control, space: usize) -> libc:
     msg
 }
 
-pub(super) fn send(sock: &UnixStream, fds: &[RawFd]) -> Result<(), String> {
+pub(in crate::sandbox) fn send(sock: &UnixStream, fds: &[RawFd]) -> Result<(), String> {
     let (mut byte, mut control) = ([1u8], [0u64; 32]);
     let mut iov = libc::iovec {
         iov_base: byte.as_mut_ptr().cast(),
@@ -45,7 +51,7 @@ pub(super) fn send(sock: &UnixStream, fds: &[RawFd]) -> Result<(), String> {
 }
 
 /// The sockets the child handed over; none when it ended without doing so.
-pub(super) fn receive(sock: &UnixStream) -> Option<Vec<RawFd>> {
+pub(in crate::sandbox) fn receive(sock: &UnixStream) -> Option<Vec<RawFd>> {
     let (mut byte, mut control) = ([0u8], [0u64; 32]);
     let mut iov = libc::iovec {
         iov_base: byte.as_mut_ptr().cast(),
@@ -54,7 +60,7 @@ pub(super) fn receive(sock: &UnixStream) -> Option<Vec<RawFd>> {
     let space = std::mem::size_of::<Control>();
     let mut msg = message(&mut iov, &mut control, space);
     unsafe {
-        let got = libc::recvmsg(sock.as_raw_fd(), &mut msg, libc::MSG_CMSG_CLOEXEC);
+        let got = libc::recvmsg(sock.as_raw_fd(), &mut msg, CLOEXEC);
         (got == 1).then_some(())?;
         let head = libc::CMSG_FIRSTHDR(&msg);
         if head.is_null() || (*head).cmsg_type != libc::SCM_RIGHTS {
@@ -63,6 +69,11 @@ pub(super) fn receive(sock: &UnixStream) -> Option<Vec<RawFd>> {
         let bytes = (*head).cmsg_len as usize - libc::CMSG_LEN(0) as usize;
         let data = libc::CMSG_DATA(head).cast::<RawFd>();
         let count = bytes / std::mem::size_of::<RawFd>();
-        Some((0..count).map(|i| data.add(i).read_unaligned()).collect())
+        let fds: Vec<RawFd> = (0..count).map(|i| data.add(i).read_unaligned()).collect();
+        #[cfg(target_os = "macos")]
+        for fd in &fds {
+            libc::fcntl(*fd, libc::F_SETFD, libc::FD_CLOEXEC); // no other child inherits a caller's
+        }
+        Some(fds)
     }
 }

@@ -6,12 +6,16 @@ mod cli;
 mod confine;
 mod env;
 mod git;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+mod handover;
 mod jvm;
 mod launch;
 #[cfg(target_os = "linux")]
 mod linux;
 #[cfg(target_os = "macos")]
 mod mac;
+#[cfg(any(test, target_os = "macos"))]
+mod nested;
 mod owner;
 mod profile;
 mod proxy;
@@ -31,6 +35,8 @@ pub use caller::confined;
 pub use check::check_command;
 pub use cli::cli;
 pub use git::{git, prepare};
+#[cfg(target_os = "macos")]
+pub use nested::inside;
 pub use profile::sandboxed;
 pub use quiet::launcher;
 pub use replay::closes_network;

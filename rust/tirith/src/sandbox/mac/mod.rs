@@ -7,6 +7,8 @@ use std::ffi::CStr;
 /// The name the profile denies (`profile.rs`), and one it does not.
 const OUTSIDE: &CStr = c"app.tirith.outside";
 const CONTROL: &CStr = c"app.tirith.control";
+/// What a tighter profile denies as well (`nested/limits.rs`).
+const TIGHTER: &CStr = c"app.tirith.tighter";
 /// A global Mach name as the filter, and no line in the system's log.
 const NAMED: c_int = 2 | 0x4000_0000;
 
@@ -25,6 +27,14 @@ pub(super) fn ours(pid: pid_t) -> bool {
     match (check(pid, OUTSIDE), check(pid, CONTROL)) {
         (-1, _) | (_, -1) => true,
         (outside, control) => outside != 0 && control == 0,
+    }
+}
+
+/// Whether `pid` runs under a profile tighter than Tirith's; a process that is gone counts as if it did.
+pub(super) fn tighter(pid: pid_t) -> bool {
+    match (check(pid, TIGHTER), check(pid, CONTROL)) {
+        (-1, _) | (_, -1) => true,
+        (inner, control) => inner != 0 && control == 0,
     }
 }
 
