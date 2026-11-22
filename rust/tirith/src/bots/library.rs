@@ -1,8 +1,8 @@
 //! The page's Library: a bot's memory, its own skills and the shared ones, drafts included, read and changed.
-use super::drafts::{drafts_dir, is_draft, sweep};
+use super::drafts::{drafts_dir, is_draft, sweep, told_active};
 use super::folder::{folder, skills, SHARED, SKILLS};
 use super::list::key_for;
-use crate::app::App;
+use crate::app::{App, Shared};
 use crate::server::s;
 use serde_json::{json, Value};
 use std::path::PathBuf;
@@ -52,8 +52,8 @@ fn skills_dir(app: &App, key: &str, shared: bool) -> PathBuf {
         folder(app, key).join(SKILLS)
     }
 }
-/// A change from the Library: the `memory` (`shared`: every bot's), or the skill `name` (`shared`: every bot's), gets `text`, or goes with `delete`. A text with `draft: true` is kept as a draft, where no agent loads it; the text of a draft without it activates it, which an agent's call may not do.
-pub(crate) fn learn(app: &App, id: &str, b: &Value, agent: bool) -> Result<Value, String> {
+/// A change from the Library: the `memory` (`shared`: every bot's), or the skill `name` (`shared`: every bot's), gets `text`, or goes with `delete`. A text with `draft: true` is kept as a draft, where no agent loads it; the text of a draft without it activates it, which an agent's call may not do, and the bot is told with its next message.
+pub(crate) fn learn(app: &Shared, id: &str, b: &Value, agent: bool) -> Result<Value, String> {
     let (key, name) = (
         key_for(app, id).ok_or(format!("no bot '{id}'"))?,
         s(b, "name"),
@@ -89,7 +89,8 @@ pub(crate) fn learn(app: &App, id: &str, b: &Value, agent: bool) -> Result<Value
         _ => std::fs::create_dir_all(&dir).and_then(|_| std::fs::write(&file, s(b, "text"))),
     };
     done.map_err(|e| format!("{}: {e}", file.display()))?;
-    let _ = (!memory && !draft && b["delete"] != true).then(|| std::fs::remove_dir_all(&held));
+    let gone = !memory && !draft && b["delete"] != true && std::fs::remove_dir_all(&held).is_ok();
+    let _ = gone.then(|| told_active(app, &key, &name));
     super::versioned(app, &key, "library");
     app.emit("library", json!({"bot": id}));
     Ok(json!({"ok": true}))

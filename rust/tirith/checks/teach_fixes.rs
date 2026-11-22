@@ -97,6 +97,11 @@ async fn a_draft_is_never_among_the_skills_an_agent_loads() {
         skills.join("otra/SKILL.md").is_file()
             && !crate::bots::draft_file(&app, &key, "otra").exists()
     );
+    let waiting = crate::manager::waiting_notes(&key);
+    assert!(
+        waiting.iter().any(|t| t.contains("activated «otra»")),
+        "a bot hears of it with its next message: {waiting:?}"
+    );
     learn(json!({"name": "ofertas", "delete": true}), false).unwrap();
     assert!(!held.exists());
     let _ = port;

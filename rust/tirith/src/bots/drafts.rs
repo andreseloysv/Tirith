@@ -81,3 +81,10 @@ pub fn sweep(app: &App, key: &str) -> Vec<String> {
 #[cfg(test)]
 #[path = "../../checks/draft_moves.rs"]
 mod tests;
+/// The bot `key` is told with its next message that the owner activated its draft `name` in the Library: its live session saw a draft.
+pub(super) fn told_active(app: &crate::app::Shared, key: &str, name: &str) {
+    let said = format!(
+        "The owner activated «{name}» in the Library: it is no longer a draft, use it from now on."
+    );
+    crate::manager::noted(app, key, &said);
+}

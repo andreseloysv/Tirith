@@ -40,7 +40,9 @@ pub use answer::owner_answer;
 pub use ask::ask_owner;
 pub use cards::close_card;
 pub use commands::owner_command;
-pub use deliver::{deliver, notify};
+#[cfg(test)]
+pub use deliver::waiting_notes;
+pub use deliver::{deliver, noted, notify};
 pub use events::{emit_event, emitted, run_routine};
 pub use held::run_over;
 pub use interrupt::interrupt;

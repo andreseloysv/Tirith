@@ -185,4 +185,10 @@ async fn teach_approve_activates_the_skill() {
         })
         .iter()
         .any(|t| t.contains("approved «ofertas»")));
+    // And the bot reads it with its next message: its live session took the skill for a draft still.
+    let waiting = crate::manager::waiting_notes(&key);
+    assert!(
+        waiting.iter().any(|t| t.contains("approved «ofertas»")),
+        "only the page was told: {waiting:?}"
+    );
 }
