@@ -117,6 +117,7 @@ Files:
 - `context.rs`: What a bot is handed at the start of every turn and routine, and the skill links laid before it.
 - `drafts.rs`: Draft skills (a taught task not yet approved): kept in the bot's `drafts/` folder (shared ones in `<home>/bots/drafts`), outside every folder an agent loads by itself; one found among the skills is moved there (by `context`, `versioned` and the Library's read). One activated in the Library is told to its bot with its next message.
 - `folder.rs`: A bot's folder and skills: where its sessions run (the lab's worktree during a B run), where agents may write, and the skills a folder holds.
+- `grants.rs`: A bot's connector grants through a rewrite of config.toml: kept under each bot still there on a card save, gone with a deleted bot's role (`connectors/`).
 - `fragment.rs`: The bots as a TOML fragment: the owner's bots' roles, and every written bot's routes and routines.
 - `handed.rs`: What a bot is handed with its next message, from the folder that turn runs in (an experiment's B: the branch's); a skill that changed is read again in a session of its own.
 - `from_template.rs`: A bot made from a template: its card, its routine, its skill and its first words.
@@ -215,6 +216,50 @@ Files:
 - `setup.rs`: What one exec turn is: which agent runs it, in which folder, and how its role's factory shape sets it up.
 - `turn.rs`: One exec turn: set it up, start the agent, read its answer within the turn's time, and clean up.
 
+## `connectors/`
+
+Connectors are MCP servers a bot may use, defined once in `~/.tirith/config.toml` — never in a repo: a `[[connectors]]`
+in a factory folder's file is an unknown section. What each bot may do with one lives under that bot's own role. The exact shape:
+
+```toml
+[[connectors]]
+id = "gmail"                          # lowercase letters, digits, - and _; unique
+command = ["node", "gmail-server.js"] # a local server: its argv (or url, never both)
+# url = "https://mcp.example.com/mcp" # a remote server: an http(s) address
+blocked = false                       # optional, default false: true refuses every tool for every bot
+deny = ["delete_*"]                   # optional globs (* any run, ? one character)
+approval = ["send_*"]                 # optional globs: a call asks the owner first
+secrets = ["GMAIL_TOKEN"]             # optional: variable names only (A-Z, 0-9, _), never values
+
+[roles.bot-<id>.connectors.gmail]     # the grant: without this table the bot has no gmail
+tools = ["read_*", "search"]          # optional: when set, all the bot may use
+deny = ["read_spam"]                  # optional: more refused
+approval = ["read_*"]                 # optional: more that asks first
+```
+
+An empty grant (`[roles.bot-<id>.connectors.gmail]` alone) is the connector as defined. A grant can only narrow:
+one verdict (`verdict.rs`) decides both what a bot is listed and what a call does, in this order — connector
+`blocked`; connector `deny`; bot `deny`; outside the bot's `tools` when it set them; connector `approval`; bot
+`approval`; otherwise run — so a bot's `tools = ["*"]` or empty `approval` reaches nothing the connector refuses or asks
+for. A refusal names the connector, the tool, why (`refused by block`, `refused by deny`, `refused by scope`) and the
+tools the bot may use, never a secret or the command. The loader is strict (`check.rs`, from `factory/parse.rs`): an
+unknown key in a connector or a grant, a missing or malformed `id`, `command` and `url` both or neither, an argv that is
+not a list of strings, a url that is not http(s), a secret that is not a variable name, an id defined twice, a grant of
+an unknown connector or a `connectors` table on a role that is not a `bot-<id>` makes the version invalid, like any
+factory error. The bots' writer keeps a bot's grants when its card is saved and drops them with its role when the bot
+is deleted (`bots/grants.rs`). Tests `bot_rules_cannot_loosen_the_connector` (`rust/tirith/checks/connectors.rs`) and
+`deleting_a_bot_drops_its_grants` (`rust/tirith/checks/bots.rs`), on fake tool catalogs and config fixtures, with no model.
+
+Files:
+
+- `check.rs`: The strict check of `[[connectors]]` and of the grants that name them: a typo, an unknown connector or a half-defined one is an error, never silence.
+- `glob.rs`: The globs of `tools`, `deny` and `approval`: `*` is any run of characters, `?` one; anything else matches itself.
+- `grants.rs`: The strict check of the grants under the roles: only a bot's role holds one, only of a defined connector, with only the keys a grant has.
+- `mod.rs`: The connector and grant types; declares the folder's files and re-exports what other modules use.
+- `read.rs`: Reading connectors and grants out of TOML that has already passed the checks.
+- `row.rs`: The strict check of one `[[connectors]]` row.
+- `verdict.rs`: The one verdict on a bot's use of a connector's tool: listing and calling both ask it, so a tool that is listed is one a call may reach.
+
 ## `config/`
 
 `~/.tirith/config.toml` (projects, agent aliases, this machine's overlay on the factory) and each project's `tirith.toml` (plan file, checks, lane excludes, extra rules). Unknown keys are an error the owner sees, never silently ignored; yesterday's sections are read in memory under the factory's names, the file itself untouched.
@@ -222,7 +267,7 @@ Files:
 Files:
 
 - `file.rs`: The config of one Tirith home, as read from its config.toml.
-- `known.rs`: The sections of config.toml something reads, and the keys nothing does.
+- `known.rs`: The sections of config.toml something reads (`connectors` among them, see `connectors/`), and the keys nothing does.
 - `load.rs`: Loading config.toml: parse it, move yesterday's sections, lay it over the factory and name what is wrong.
 - `manifest.rs`: A project's `tirith.toml`: its plan file, lane excludes, pipeline stages and extra rules.
 - `migrate.rs`: Yesterday's sections of config.toml read under today's names, in memory only.
@@ -308,6 +353,7 @@ Files:
 
 - `agents.rs`: Reading a factory's agents: their keys and their commands.
 - `bot_templates.rs`: The bot templates' texts: `factory/bots/<id>/`, the repo's built in under the folder's.
+- `connectors.rs`: A factory version's connectors (config.toml's `[[connectors]]`, checked on load) and the ones a bot is granted (`connectors/`).
 - `current.rs`: The factory version the daemon runs now, reloaded under config.toml's overlay; a bad version keeps the last good one.
 - `embedded.rs`: The repo's factory, built into the binary: what runs when no factory folder is found, and what every folder's file is laid over.
 - `evals.rs`: Reading a factory's evals, and the hash of the setting a role runs with (what an eval's verdict is tied to).

@@ -9,6 +9,7 @@ mod cli;
 mod client;
 mod codex;
 mod config;
+mod connectors;
 mod expected;
 mod factory;
 mod guard;
