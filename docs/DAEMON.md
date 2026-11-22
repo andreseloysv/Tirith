@@ -110,7 +110,7 @@ just made, so it first runs at its next time. «Desde plantilla» in the Bots vi
 
 Files:
 
-- `api.rs`: The bots' HTTP API: the list and its cards, a bot deleted, its routines, a routine run now, its Library.
+- `api.rs`: The bots' HTTP API: the list and its cards, a bot deleted (its secrets with it), its routines, a routine run now, its Library.
 - `card.rs`: A bot's card saved: a new bot, or a change to one.
 - `cli.rs`: A bot's own commands, in its conversation.
 - `context.rs`: What a bot is handed at the start of every turn and routine, and the skill links laid before it.
@@ -175,7 +175,7 @@ Files:
 
 ## `cli/`
 
-The command line. `main.rs` is the crate root: its `mod` lines and a `main` that hands the arguments to `cli/`. `tirith serve` is the daemon; every other command but the guide's (`setup`, `connect`, `doctor`, `service`) (see `service/`) is one HTTP call to it on 127.0.0.1 (`client.rs`), so it starts in milliseconds. A module's own commands live in that module (`guard/cli.rs`, `rooms/cli.rs`, ...); `cli/dispatch.rs` asks them first.
+The command line. `main.rs` is the crate root: its `mod` lines and a `main` that hands the arguments to `cli/`. `tirith serve` is the daemon; every other command but the guide's (`setup`, `connect`, `doctor`, `service`) (see `service/`) is one HTTP call to it on 127.0.0.1 (`client.rs`), so it starts in milliseconds. A module's own commands live in that module (`guard/cli.rs`, `rooms/cli.rs`, ...); `cli/dispatch.rs` asks them first, but `tirith secret`, which reads its raw argv (`secrets/cli.rs`) and so comes before it.
 
 Files:
 
@@ -1067,6 +1067,47 @@ Files:
 - `serve.rs`: Listening for the proxy's callers.
 - `upstream.rs`: Reaching the destination: refused if blocked by name or by any of its addresses, and to a replay unless it is its agent's model; never the daemon's own port (there the sandbox is known).
 
+## `secrets/`
+
+A bot's secrets. The owner's commands are `tirith secret set <bot> <NAME>`, `tirith secret list <bot>` and
+`tirith secret remove <bot> <NAME>` (`<bot>` is its id, as in `#/bots/<id>`; NAME is A-Z, 0-9 and _). `set` reads
+the value from stdin, typed unseen or piped whole less its last line end, and takes none from argv; `list` prints
+names alone. Their routes (`/api/secrets/<bot>`) are the owner's alone (`server/caller.rs`): a bot, a lane and a
+manager get 403, for their own secrets too. No route and no command answers a value. The daemon's lookup
+(`lookup.rs`) is by bot and name, and nothing puts a secret in a bot's environment.
+
+A value lies in the system's credential store when there is one, called in-process: macOS's login Keychain, Windows
+Credential Manager, Linux's Secret Service, as service `tirith.bot.<id>` and account `<NAME>@<tag>` (the tag keeps
+two Tirith homes of one user apart). Only where no store exists is it in `<home>/bot-secrets/`: one file per bot,
+0600 in a 0700 folder, sealed (XSalsa20-Poly1305) with a key of that bot's made from the daemon's random key there
+(`key`, 0600, refused when others could read it). A store that is there but refuses (locked, a prompt denied) is an
+error, never a move to the file; a value in the file moves up when it is set again and a store exists. Where each
+name lies is kv `secrets:<bot>`, with no value. Deleting a bot first removes its values, then its role: when one
+cannot be removed the bot stays and the error says why.
+
+The limits. The fallback's key is as private as the owner's files: a program of the same user can read it (see
+`server/`), so there the seal protects a copy of the sealed files without the key, not against that program. A
+Linux Secret Service that is unlocked answers any program of that user too. macOS lets the program that made an
+item read it, so a rebuilt, unsigned tirith asks the owner again; on a Mac with nobody logged in the Keychain may
+be locked. Windows takes 2560 bytes a value, and the daemon itself is built only for macOS and Linux today.
+
+Files:
+
+- `api.rs`: The owner's routes: a value comes in, only names go out.
+- `backend.rs`: The one shape of a place that keeps values, and which one is the system's (a fake in tests).
+- `cli.rs`: `tirith secret`, reading its own argv so that a value there is refused.
+- `fallback.rs`: One sealed file per bot where no OS store exists.
+- `forget.rs`: Removal: one value, or all of a bot's with its role.
+- `index.rs`: A bot's names and where each value lies, never a value.
+- `input.rs`: A value as it comes on stdin.
+- `key.rs`: The fallback's private files and the daemon's key material in them.
+- `lookup.rs`: The daemon's own lookup of one value, by bot and name.
+- `mod.rs`: Declares the folder's files and re-exports what other modules use.
+- `names.rs`: What may be a bot, a name and a value.
+- `os.rs`: The OS's credential store, in-process.
+- `seal.rs`: The fallback's cipher, with a key per bot.
+- `store.rs`: The store, one call at a time: a value set, and the names.
+
 ## `server/`
 
 HTTP on 127.0.0.1: the page (`web/`), its JSON API, the change stream (SSE) and the agents' hooks, behind one same-origin guard. Each module brings its own routes; `server/routes/` holds the daemon's own.
@@ -1077,7 +1118,7 @@ socket is looked up and its profile read (a caller nobody of this user holds is 
 `tirith answer` of an approval or payment card needs the owner's own words, written after it was asked, and keeps those; its
 words in a chat are never the owner's; it gets neither the teach extension's token nor a phone's pairing code, and
 it neither approves a draft nor gives a 👍,
-nor lifts one of the owner's network blocks (it may add one). Git the daemon runs is confined too (`sandbox/git.rs`): a hook, an fsmonitor or a filter left in a bot's or a
+nor lifts one of the owner's network blocks (it may add one), nor sets, lists or removes a bot's secret (`secrets/`). Git the daemon runs is confined too (`sandbox/git.rs`): a hook, an fsmonitor or a filter left in a bot's or a
 project's repository is an agent's, so its `git push` also goes through the proxy and the block list, with
 `GIT_SSH_COMMAND` as the lanes have it. The limit: a program of the same user that reads or writes that user's files (the store, start-up
 files, programs on the PATH), or
@@ -1095,7 +1136,7 @@ Files:
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `door.rs`: The daemon's door: loopback only, and on Linux only for this Tirith's own user, root and `[server] users`.
 - `origin.rs`: The same-origin guard in front of every route.
-- `caller.rs`: Who calls, the owner or an agent (a name it sends, or the sandbox it runs in), and what an agent may not do: the owner's yes, pairing a phone, the owner's 👍.
+- `caller.rs`: Who calls, the owner or an agent (a name it sends, or the sandbox it runs in), and what an agent may not do: the owner's yes, pairing a phone, the owner's 👍, the bots' secrets.
 - `peer.rs`: Who is at the other end of a loopback connection, from the kernel's table of sockets (Linux).
 - `plan.rs`: A project's plan as the page shows it (each item with its newest lane), and the step a command adds to it.
 - `router.rs`: The whole router: every module's routes, the daemon's own, the page and the same-origin guard.

@@ -45,6 +45,14 @@ pub use catalog::model_hosts;
 pub use hook_lines::others;
 pub use opts::Opts;
 pub use private::Hidden;
+pub use secret::read as read_secret;
+
+/// Whether this process is an agent's, by what Tirith names it.
+pub fn from_agent() -> bool {
+    ["TIRITH_LANE", "TIRITH_ROLE"]
+        .iter()
+        .any(|k| std::env::var(k).is_ok_and(|v| !v.is_empty()))
+}
 
 /// These commands take options with no value, so they are read before the command line's `--flag value` pairs: the exit code, or none for another command.
 pub fn cli(args: &[String]) -> Option<i32> {
@@ -55,11 +63,8 @@ pub fn cli(args: &[String]) -> Option<i32> {
         println!("{}", opts::USE);
         return Some(0);
     }
-    let agent = ["TIRITH_LANE", "TIRITH_ROLE"]
-        .iter()
-        .any(|k| std::env::var(k).is_ok_and(|v| !v.is_empty()));
     let looks = matches!(rest.first().map(String::as_str), Some("status" | "logs"));
-    if agent && command != "doctor" && !(command == "service" && looks) {
+    if from_agent() && command != "doctor" && !(command == "service" && looks) {
         eprintln!(
             "tirith {command} is the owner's: run it in your own terminal, not from an agent"
         );

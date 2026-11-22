@@ -2,8 +2,8 @@
 use super::{caller, origin, routes, web::web_file};
 use crate::app::Shared;
 use crate::{
-    attach, bots, chat, guard, lab, metrics, models, numbers, projects, rooms, sandbox, setup,
-    teach,
+    attach, bots, chat, guard, lab, metrics, models, numbers, projects, rooms, sandbox, secrets,
+    setup, teach,
 };
 use axum::{middleware, Router};
 
@@ -12,6 +12,7 @@ pub fn router(app: Shared, port: u16) -> Router {
     let modules = [
         rooms::routes(),
         sandbox::routes(),
+        secrets::routes(),
         models::routes(),
         guard::routes(),
         metrics::routes(),

@@ -46,7 +46,7 @@ pub fn agent(h: &HeaderMap) -> bool {
 
 /// Where the answer depends on who calls (asking the kernel costs some milliseconds, so only there).
 pub(super) fn asked(method: &Method, path: &str) -> bool {
-    if unblocks(method, path) {
+    if unblocks(method, path) || crate::secrets::route(path) {
         return true;
     }
     let reads = ["/api/teach/", "/api/rooms"];
@@ -64,11 +64,12 @@ fn unblocks(method: &Method, path: &str) -> bool {
     method == Method::DELETE && path == "/api/net/blocks"
 }
 
-/// What no agent does at all: pairing a phone, which is then the owner, the owner's 👍 or 👎, and lifting their blocks.
+/// What no agent does at all: pairing a phone, which is then the owner, the owner's 👍 or 👎, lifting their blocks, and the bots' secrets.
 pub(super) fn owners_alone(method: &Method, path: &str) -> bool {
     let pairs =
         path.starts_with("/api/rooms/") && (path.ends_with("/qr") || path.ends_with("/qr.svg"));
     pairs
+        || crate::secrets::route(path)
         || unblocks(method, path)
         || (path.starts_with("/api/turns/") && path.ends_with("/reaction"))
 }

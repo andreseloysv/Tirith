@@ -15,18 +15,25 @@ use serde_json::{json, Value};
 fn reply(res: Result<Value, String>) -> R {
     res.map(Json).map_err(bad)
 }
-/// An owner's bot goes, with its room, its memory and its own skills; a system bot stays.
+/// The bot's role out of config.toml.
+fn gone(app: &Shared, id: &str) -> Result<Value, String> {
+    with(app, |bots| {
+        bots.iter()
+            .position(|b| b["id"] == id)
+            .map(|i| bots.remove(i))
+            .ok_or(format!("no bot '{id}'"))
+    })
+}
+/// An owner's bot goes, with its secrets, its room, its memory and its own skills; a system bot stays.
 async fn delete(State(app): State<Shared>, Path(id): Path<String>) -> R {
     let key = key_for(&app, &id)
         .filter(|k| k.starts_with("bot-"))
         .ok_or_else(|| bad(format!("no bot '{id}' (a system bot stays)")))?;
-    with(&app, |bots| {
-        bots.iter()
-            .position(|b| b["id"] == id.as_str())
-            .map(|i| bots.remove(i))
-            .ok_or(format!("no bot '{id}'"))
-    })
-    .map_err(bad)?;
+    let (of, bot) = (app.clone(), id.clone());
+    tokio::task::spawn_blocking(move || crate::secrets::forgotten(&of, &bot, || gone(&of, &bot)))
+        .await
+        .map_err(|_| bad("deleting the bot stopped".into()))?
+        .map_err(bad)?;
     crate::rooms::forget(&app, &key);
     app.set_kv(&format!("webhook:{id}"), None); // its room is gone, and with it what the webhook posts
     let _ = std::fs::remove_dir_all(folder(&app, &key)); // its memory and its own skills
