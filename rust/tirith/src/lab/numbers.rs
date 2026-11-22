@@ -4,9 +4,16 @@ use super::saved::less;
 use crate::app::Shared;
 use rusqlite::params;
 
-const SIDE: &str = "SELECT COUNT(*), AVG(COALESCE(tokens_in, 0) + COALESCE(tokens_out, 0) + COALESCE(tokens_cache_read, 0) + COALESCE(tokens_cache_write, 0)), CASE WHEN COUNT(cost_usd) = COUNT(*) THEN AVG(cost_usd) END, AVG(COALESCE(ms, 0)) FROM turns WHERE experiment = ?1 AND variant = ?2 AND id NOT IN (SELECT a_turn FROM lab_comparisons WHERE experiment = ?1 AND verdict = 'void' UNION SELECT b_turn FROM lab_comparisons WHERE experiment = ?1 AND verdict = 'void')";
-const TALLY: &str = "SELECT COALESCE(SUM(verdict = 'win'), 0), COALESCE(SUM(verdict = 'tie'), 0), COALESCE(SUM(verdict = 'lose'), 0), COALESCE(SUM(COALESCE(verdict, '') <> 'void' AND b.status = 'failed' AND a.status <> 'failed'), 0), (SELECT COUNT(*) FROM turns WHERE experiment = ?1 AND variant = 'B' AND reaction = -1), COALESCE(SUM(verdict = 'void'), 0) FROM lab_comparisons c JOIN turns a ON a.id = c.a_turn JOIN turns b ON b.id = c.b_turn WHERE c.experiment = ?1";
-const PAIRS: &str = "SELECT COALESCE(a.tokens_in, 0) + COALESCE(a.tokens_out, 0) + COALESCE(a.tokens_cache_read, 0) + COALESCE(a.tokens_cache_write, 0), COALESCE(b.tokens_in, 0) + COALESCE(b.tokens_out, 0) + COALESCE(b.tokens_cache_read, 0) + COALESCE(b.tokens_cache_write, 0), a.cost_usd, b.cost_usd, COALESCE(a.ms, 0), COALESCE(b.ms, 0) FROM lab_comparisons c JOIN turns a ON a.id = c.a_turn JOIN turns b ON b.id = c.b_turn WHERE c.experiment = ?1 AND COALESCE(c.verdict, '') <> 'void'";
+/// A pair that proves nothing: void, or both its runs failed (a judge may say "could not" of them after it was compared).
+macro_rules! nothing {
+    () => {
+        "(COALESCE(c.verdict, '') = 'void' OR (a.status IS 'failed' AND b.status IS 'failed'))"
+    };
+}
+
+const SIDE: &str = concat!("SELECT COUNT(*), AVG(COALESCE(tokens_in, 0) + COALESCE(tokens_out, 0) + COALESCE(tokens_cache_read, 0) + COALESCE(tokens_cache_write, 0)), CASE WHEN COUNT(cost_usd) = COUNT(*) THEN AVG(cost_usd) END, AVG(COALESCE(ms, 0)) FROM turns WHERE experiment = ?1 AND variant = ?2 AND NOT EXISTS (SELECT 1 FROM lab_comparisons c JOIN turns a ON a.id = c.a_turn JOIN turns b ON b.id = c.b_turn WHERE c.experiment = ?1 AND turns.id IN (a.id, b.id) AND ", nothing!(), ")");
+const TALLY: &str = concat!("SELECT COALESCE(SUM(verdict = 'win' AND NOT ", nothing!(), "), 0), COALESCE(SUM(verdict = 'tie' AND NOT ", nothing!(), "), 0), COALESCE(SUM(verdict = 'lose' AND NOT ", nothing!(), "), 0), COALESCE(SUM(COALESCE(verdict, '') <> 'void' AND b.status = 'failed' AND a.status <> 'failed'), 0), (SELECT COUNT(*) FROM turns WHERE experiment = ?1 AND variant = 'B' AND reaction = -1), COALESCE(SUM(", nothing!(), "), 0) FROM lab_comparisons c JOIN turns a ON a.id = c.a_turn JOIN turns b ON b.id = c.b_turn WHERE c.experiment = ?1");
+const PAIRS: &str = concat!("SELECT COALESCE(a.tokens_in, 0) + COALESCE(a.tokens_out, 0) + COALESCE(a.tokens_cache_read, 0) + COALESCE(a.tokens_cache_write, 0), COALESCE(b.tokens_in, 0) + COALESCE(b.tokens_out, 0) + COALESCE(b.tokens_cache_read, 0) + COALESCE(b.tokens_cache_write, 0), a.cost_usd, b.cost_usd, COALESCE(a.ms, 0), COALESCE(b.ms, 0) FROM lab_comparisons c JOIN turns a ON a.id = c.a_turn JOIN turns b ON b.id = c.b_turn WHERE c.experiment = ?1 AND NOT ", nothing!());
 
 /// One side's runs in experiment `id`.
 pub fn side(app: &Shared, id: i64, variant: &str) -> Side {

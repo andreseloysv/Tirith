@@ -935,3 +935,28 @@ fn a_worktree_that_became_a_link_is_left_alone() {
     assert!(!main.join("theirs.md").exists() && !other.join("seen.md").exists());
     let _ = std::fs::remove_dir_all(&home);
 }
+
+#[test]
+fn a_pair_whose_two_runs_failed_late_proves_nothing() {
+    let (app, home) = app_with_a_bot("failed-late");
+    compared(&app, 11, &["tie"], (700, "ok"));
+    // Compared as two good runs; then their judge said of each that it could not.
+    let a = run(&app, 11, "A", 1000, 60_000, "failed", None);
+    let b = run(&app, 11, "B", 100, 1000, "failed", None);
+    app.insert("INSERT INTO lab_comparisons (experiment, a_turn, b_turn, b_is, verdict) VALUES (11, ?1, ?2, 'a', 'win')", params![a, b]);
+    let t = super::numbers::tally(&app, 11);
+    assert_eq!(
+        (t.wins, t.ties, t.voids, t.new_failures),
+        (0, 1, 1, 0),
+        "two failures are no win"
+    );
+    assert_eq!(t.pair_tokens.len(), 1, "and no saving");
+    let side = super::numbers::side(&app, 11, "B");
+    assert_eq!(
+        (side.runs, side.tokens),
+        (1, 700.0),
+        "nor in its side's mean"
+    );
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}
