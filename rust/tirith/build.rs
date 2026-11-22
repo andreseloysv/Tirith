@@ -2,7 +2,9 @@
 //! browser launcher, plus its version and commit. With `TIRITH_DIST` set it is a build to hand out: it also
 //! never looks for the checkout it was built from (and does not hold that folder's path).
 use std::path::{Path, PathBuf};
-use std::process::Command;
+
+#[path = "build/version.rs"]
+mod version;
 
 const CARRIED: [&str; 3] = ["web", "tools/teach", "tools/browser"];
 
@@ -22,7 +24,7 @@ fn main() {
         .collect();
     let code = format!("pub(super) const FILES: &[(&str, &[u8])] = &[\n{rows}];\n");
     std::fs::write(out.join("carried.rs"), code).expect("write carried.rs");
-    version(&root);
+    version::version(&root);
     agents_more(&out);
     println!("cargo::rustc-check-cfg=cfg(tirith_dist)");
     println!("cargo::rerun-if-env-changed=TIRITH_DIST");
@@ -58,23 +60,6 @@ fn row(root: &Path, out: &Path, i: usize, file: &Path) -> String {
         "    ({:?}, include_bytes!(concat!(env!(\"OUT_DIR\"), \"/{copy}\")).as_slice()),\n",
         name.to_string_lossy()
     )
-}
-
-/// `TIRITH_VERSION`: the release's (`TIRITH_RELEASE`) or the crate's, then the commit when git knows it.
-fn version(root: &Path) {
-    println!("cargo::rerun-if-env-changed=TIRITH_RELEASE");
-    let release = std::env::var("TIRITH_RELEASE").unwrap_or_else(|_| var("CARGO_PKG_VERSION"));
-    let commit = Command::new("git")
-        .arg("-C")
-        .arg(root)
-        .args(["rev-parse", "--short=8", "HEAD"])
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .map(|o| format!(" ({})", String::from_utf8_lossy(&o.stdout).trim()))
-        .unwrap_or_default();
-    let target = var("TARGET");
-    println!("cargo::rustc-env=TIRITH_VERSION={release}{commit} {target}");
 }
 
 /// `TIRITH_AGENTS_FILE`: what a release lays over assets/agents.toml (empty without one).

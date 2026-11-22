@@ -144,7 +144,7 @@ Files:
 
 ## `bundle/`
 
-What the binary carries so that it runs with no checkout beside it (`rust/tirith/build.rs` builds it in): the page
+What the binary carries so that it runs with no checkout beside it (`rust/tirith/build.rs` builds it in, and `rust/tirith/build/version.rs` its version, which follows each commit): the page
 (`web/`), the teach extension (`tools/teach/`, downloaded from the page as `/teach-extension.zip`) and the browser
 launcher, plus the version (`tirith --version`). A development build still reads its checkout (the page shows on
 reload, the factory follows main); one built with `TIRITH_DIST` (`scripts/release/build.sh`) never looks for one
