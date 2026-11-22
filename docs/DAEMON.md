@@ -4,6 +4,40 @@ What each folder of `rust/tirith/src` does, and one line per file. The code carr
 this is it. Every file has 100 lines or less (`tools/size.sh`, docs/BOTS.md part 0); a folder's `mod.rs` only
 declares its files and re-exports what the other modules use.
 
+## `access/`
+
+The connectors on the page's Access view (`web/js/views/access-connectors.js`), beside the network destinations, and
+the owner's alone (`/api/connectors/` is refused to every agent in `server/scope.rs` and again by the routes' own
+layer). `GET /api/connectors/calls` gives the gateway's `connector_calls` newest first (300 at most), each as `at`,
+`bot`, `call` (`connector.tool`) and `verdict`, narrowed by `?bot=<id>` and `?connector=<id>`; the page refetches it on
+the `connectors` feed message every recorded call sends. The proxy rows of a remote connector's call are the bot's too:
+its run's `<role>@bot-<id>` is named `bot-<id>` in the `net` events and the destinations (`sandbox/owner.rs`), never
+the manager role it runs on nor the daemon.
+
+`GET /api/connectors/blocks` gives each connector with `blocked` (for all bots) and its `bots` (`{bot, blocked}`: each
+granted one, and each one blocked alone). `POST` blocks and `DELETE` unblocks, with `{connector, bot}`, `bot` empty for
+all bots. Blocking one bot takes exactly its `[roles.bot-<id>.connectors.<connector>]` table out of config.toml and
+keeps it in the store (`kv` `connector-block:<bot>:<connector>`: its text, comments included, and its place in the
+file); its unblock lays that table back where it was (every table after it moves one place down), so the file reads
+as before, byte for byte when nothing else changed; a bot that is gone has nothing to get back and is forgotten.
+Blocking all bots sets `blocked = true` on the `[[connectors]]` row; its unblock takes that key off. Every change goes
+through the config writer (`projects::rewrite`, toml_edit, every comment kept), which reloads the config, so the next
+call of a gateway already open is refused (`refused by block`, the one-bot block too, not `refused by scope`) with no
+daemon restart; each is a `connector-block` event. Tests `connector_calls_show_the_bot` and
+`blocked_connector_refuses_next_call` (`rust/tirith/checks/connector_access.rs`) against the gateway checks' fake MCP
+servers: the rows, their filters and the proxy's bot rows; both scopes, the next call refused and running again, the
+exact file restored, comments kept.
+
+Files:
+
+- `block.rs`: The edits of a block in config.toml's text: one bot's grant taken out (with what and where it was) or laid back, `blocked` set or taken off a `[[connectors]]` row.
+- `calls.rs`: What the page shows: the recorded calls, newest first and narrowed, and each connector's block state.
+- `change.rs`: Block and Unblock, written by the config writer so the next call is refused or runs again, with no restart.
+- `kept.rs`: The grants a one-bot block took out, kept in the store until its unblock lays them back.
+- `mod.rs`: Declares the folder's files and re-exports what other modules use.
+- `place.rs`: Making room for a table laid back at its old place.
+- `routes.rs`: The owner's routes: the calls, the block state, Block and Unblock.
+
 ## `app/`
 
 The daemon's shared state (`Shared`): the config, SQLite, the lanes in memory and the change feed the page listens to, and the small helpers every module uses (git, time, log text, the PATH).
@@ -407,7 +441,7 @@ that does not open is the owner's `error` event (with why) and missing from the 
 The agent is listed each open connector's tools as `<connector>__<tool>`, only those the verdict lets this bot reach
 (one that asks first says "(asks the owner first)"), by the grants of now. Every `tools/call` asks the verdict again,
 with config.toml re-read when it changed, never trusting the list it gave: a refusal (`refused by deny`, `refused by
-scope` — a connector the bot is not granted too — or `refused by block`) answers the refusal's line as a failed tool
+scope` — a connector the bot is not granted too — or `refused by block`, also for a connector the owner blocked for this bot alone, `access/`) answers the refusal's line as a failed tool
 result; an approval match runs only on the owner's permit for that very call (below); only `ran` and `approved and
 ran` reach the connector. Every
 attempt, each repeated one too, is a row of `connector_calls` (`assets/schema.sql`): `at`, `bot` (its id), `conv`

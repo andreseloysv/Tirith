@@ -7,14 +7,16 @@ import { html, useState, useMemo } from '../../vendor/preact-htm.js';
 import { useFetch, useStore, api } from '../store.js';
 import { clockTime } from '../common.js';
 import { useAction } from './settings/ui.js';
+import { Connectors } from './access-connectors.js';
 
 const MAX_ROWS = 200;
 const IP = /^[0-9.]+$|:/;
-/** Who reached a destination, by role as the old page showed it: "Manager, CEO, 48 lanes" (hover lists them all).
- *  A lane is its id (`<slug>-<4 hex>`) or `merge:<lane>`; anything else that reached out is a factory role. */
+/** Who reached a destination, by role as the old page showed it: "Manager, CEO, Bot mail, 48 lanes" (hover lists them all).
+ *  A lane is its id (`<slug>-<4 hex>`) or `merge:<lane>`; a bot (its runs and its gateway's remote connectors) is `bot-<id>`;
+ *  anything else that reached out is a factory role. */
 const whoText = (who) => {
   const laneLike = (w) => w.startsWith('merge:') || /-[0-9a-f]{4}$/.test(w);
-  const roles = [...new Set(who.filter((w) => !laneLike(w)).map((w) => (w === 'ceo' ? 'CEO' : w.charAt(0).toUpperCase() + w.slice(1))))];
+  const roles = [...new Set(who.filter((w) => !laneLike(w)).map((w) => (w === 'ceo' ? 'CEO' : w.startsWith('bot-') ? `Bot ${w.slice(4)}` : w.charAt(0).toUpperCase() + w.slice(1))))];
   const lanes = who.filter(laneLike).length;
   return [...roles, ...(lanes ? [`${lanes} ${lanes === 1 ? 'lane' : 'lanes'}`] : [])].join(', ');
 };
@@ -88,5 +90,6 @@ export function Access({ project }) {
           ${rows.length > MAX_ROWS ? html`<p class="mut sm">Showing the newest ${MAX_ROWS} of ${rows.length}.</p>` : null}`
         : dests ? html`<p class="mut sm">${q ? 'No destination matches.' : project ? 'This project\'s agents reached nothing outside the machine yet.' : 'Nothing reached outside the machine yet.'}</p>` : null}
     </section>
+    <${Connectors} />
   </div>`;
 }

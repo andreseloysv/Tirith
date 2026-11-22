@@ -26,6 +26,9 @@ pub use cli::cli;
 pub use permit::{is_gateway_card, settled};
 
 #[cfg(test)]
+#[path = "../../checks/connector_access.rs"]
+mod access_tests;
+#[cfg(test)]
 #[path = "../../checks/gateway_approval.rs"]
 mod approval_tests;
 #[cfg(test)]

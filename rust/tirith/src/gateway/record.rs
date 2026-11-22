@@ -27,4 +27,5 @@ pub fn record(
         word
     ];
     let _ = app.db.lock().unwrap().execute(sql, row);
+    app.emit("connectors", serde_json::json!({})); // the Access page reads it again
 }
