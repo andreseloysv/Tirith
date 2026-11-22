@@ -135,7 +135,7 @@ What the bot's screen shows, in a tab «Números» (`GET /api/bots/<id>/numbers`
 - **The rule is fixed before the test, by the factory, not by the Coach:** `[lab]` in `factory.toml` —
   `inputs = 8`, `not_worse_share = 0.5`, `min_saving = 0.15`, `max_days = 7`. The variant is adopted when, over
   its comparisons, it is not worse (wins and ties at least half, and wins at least as many as it loses), it has no
-  new failure and no 👎, and it saves at least 15 % of cost or of time (in most pairs too: one slow answer, or one tool call too many, moves a mean). Otherwise it is discarded. Tirith decides
+  new failure and no 👎, and it saves at least 15 % of cost or of time (in most pairs too: one slow answer, or one tool call too many, moves a mean; of time, which varies by itself, in four of every five). Otherwise it is discarded. Tirith decides
   mechanically and merges the branch (adopted) or deletes it (discarded).
 - **Three ways to test,** best first:
   1. **Replay.** Every bot turn keeps what it read — the tool results as its agent saw them (the anthropic agent's

@@ -47,6 +47,9 @@ pub fn fired(app: &Shared, key: &str, routine: &str, task: &str) {
     let Some(e) = running(app, key, routine).filter(|e| e.mode != "replay") else {
         return;
     };
+    if super::due::enough(app, &e) {
+        return; // it waits to be decided: this run is the bot's own
+    }
     if e.mode == "shadow" {
         return super::shadow::fired(app, e, task);
     }

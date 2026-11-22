@@ -437,7 +437,7 @@ replay's pairs all run and judged, or `max_days` after its start (the scheduler'
 way, B is adopted; one whose days ran out with fewer than min(5, `inputs`) comparisons proves nothing and is discarded,
 saying so (`due.rs`). B is adopted when it is not worse (wins and ties at least `not_worse_share` of the comparisons, and
 wins at least as many as it loses), has no new failure (a B run failed where its A did not) and no 👎, and saves at
-least `min_saving` of A's mean tokens, dollars or time (each only when most pairs, one by one, saved
+least `min_saving` of A's mean tokens, dollars or time (each only when most pairs, one by one, or four of every five for time, saved
 that much too: `saved.rs`). Adopted, the bot's folder is committed and the branch is merged
 into its main (the live folder is that checkout, so the next run uses it: a changed skill is read again, in a session of its own, `bots/handed.rs`; where main moved on the same lines, B's
 tested text wins, but a note main added to `memory.md` meanwhile that the merge lost is written back as a new note,
@@ -474,7 +474,7 @@ Files:
 - `replay.rs`: Replay mode: the task-local that marks a replay's turn, the proxy's closed caller, and the pairs run one after another.
 - `replay_side.rs`: One side of a replayed run: its throwaway worktree, its turn on the capture's start, its row's experiment and variant.
 - `replay_warm.rs`: A replay's uncounted first turn, so the side that runs first pays no cold cache for both.
-- `saved.rs`: What B saves against A, and which saving counts (each measure: only saved in most pairs too).
+- `saved.rs`: What B saves against A, and which saving counts (each measure: only saved in most pairs too; time, in four of every five).
 - `rule.rs`: The `[lab]` rule applied to A's and B's numbers and the comparisons, and the one line that says the decision.
 - `outward.rs`: Which shell calls of a shadow run act outward: `tirith` commands that are not plain reads, and commands that send, buy, delete or publish; a replay refuses them too.
 - `outward_browser.rs`: Which browser and MCP calls of a shadow run act outward: a click on «Send» or «Comprar», a submit, a form, an upload, code in the page; an MCP tool that does not say it reads.

@@ -21,6 +21,12 @@ pub(super) fn on_way(app: &Shared, e: &Experiment) -> bool {
         || crate::expected::awaited(app, e.id)
 }
 
+/// Whether experiment `e` has every comparison it asked for: it only waits to be decided, so no more of its routine's runs are its own (else runs back to back keep it from ever being decided).
+pub(super) fn enough(app: &Shared, e: &Experiment) -> bool {
+    let t = super::numbers::tally(app, e.id);
+    t.wins + t.ties + t.losses >= i64::from(super::fixed::of(app, e).inputs)
+}
+
 /// The comparisons below which an experiment whose days ran out proves nothing.
 pub(super) fn minimum(lab: &Lab) -> i64 {
     i64::from(lab.inputs.min(5))

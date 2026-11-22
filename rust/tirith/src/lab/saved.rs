@@ -25,7 +25,7 @@ pub fn savings(a: &Side, b: &Side) -> Vec<(&'static str, f64)> {
     out
 }
 
-/// Whether a saving is one: at least `min_saving` of the mean, which one slow answer or one tool call too many moves, and also in most of the pairs one by one.
+/// Whether a saving is one: at least `min_saving` of the mean, which one slow answer or one tool call too many moves, and also in most of the pairs one by one. A model's time varies by itself, so time is one only in four of every five pairs.
 pub(super) fn counts(lab: &Lab, t: &Tally, (what, share): (&str, f64)) -> bool {
     let each = match what {
         TIME => &t.pair_times,
@@ -33,7 +33,11 @@ pub(super) fn counts(lab: &Lab, t: &Tally, (what, share): (&str, f64)) -> bool {
         _ => &t.pair_costs,
     };
     let saved = each.iter().filter(|s| **s >= lab.min_saving).count();
-    share >= lab.min_saving && (each.is_empty() || saved * 2 > each.len())
+    let steady = match what {
+        TIME => saved * 5 >= each.len() * 4,
+        _ => saved * 2 > each.len(),
+    };
+    share >= lab.min_saving && (each.is_empty() || steady)
 }
 
 /// A saving as the owner reads it: «−38 % tokens», «+12 % tiempo».

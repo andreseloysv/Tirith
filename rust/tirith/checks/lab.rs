@@ -994,3 +994,53 @@ fn an_experiment_waits_for_the_word_of_its_runs_judge() {
     drop(app);
     let _ = std::fs::remove_dir_all(&home);
 }
+
+#[test]
+fn an_experiment_with_its_comparisons_takes_no_more_runs() {
+    let (app, home) = app_with_a_bot("enough");
+    branch(
+        &home,
+        "v6",
+        "# Memory\n- search with a filter, never open each mail\n",
+    );
+    let e = start(&app, "v6").expect("one commit over main starts");
+    compared(&app, e, &["tie"; 8], (620, "ok"));
+    super::fired(&app, KEY, "r1", "Check the inbox");
+    let dir = super::seat::live(&app, KEY);
+    let taken = super::seat::seated(&dir);
+    super::released(&app, KEY);
+    assert!(
+        !taken,
+        "it waits only to be decided: the routine's runs are the bot's own again"
+    );
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn time_that_varies_by_itself_is_no_saving() {
+    let lab = crate::factory::Factory::default().lab.clone(); // not current(): other tests load their own
+    let side = |ms: f64| super::Side {
+        runs: 8,
+        tokens: 35_000.0,
+        cost: None,
+        ms,
+    };
+    let decided = |pair_times: Vec<f64>| {
+        let t = super::Tally {
+            ties: 8,
+            pair_times,
+            ..Default::default()
+        };
+        super::rule::decide(&lab, &t, &side(6428.0), &side(4821.0), "x v")
+    };
+    // Seen with a real agent: a note that changes nothing was adopted for "−25 % tiempo".
+    let noise = decided(vec![0.22, -0.1, 0.54, 0.34, -0.06, 0.18, 0.25, 0.2]);
+    assert!(
+        !noise.0,
+        "six of eight is how a model's time varies: {}",
+        noise.1
+    );
+    let real = decided(vec![0.22, 0.3, 0.54, 0.34, -0.06, 0.18, 0.25, 0.2]);
+    assert!(real.0, "seven of eight is a saving: {}", real.1);
+}
