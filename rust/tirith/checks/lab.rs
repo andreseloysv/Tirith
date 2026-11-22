@@ -636,7 +636,24 @@ fn both_sides_of_a_live_experiment_start_fresh() {
         app.set_kv(&session, Some("what the chat gathered"));
         super::fired(&app, KEY, "r1", "the task");
         assert_eq!(app.kv(&session), None, "{side}");
+        app.set_kv(&session, Some("the run's own, with no recent chat"));
         super::released(&app, KEY);
+        assert_eq!(
+            app.kv(&session),
+            None,
+            "{side} released: the owner's next message has the recent chat again"
+        );
+    }
+    for side in ["A", "B"] {
+        super::fired(&app, KEY, "r1", "the task");
+        app.set_kv(&session, Some("the run's own, with no recent chat"));
+        let turn = run(&app, 0, "", 100, 1000, "ok", None);
+        super::finished(&app, turn, KEY, "r1");
+        assert_eq!(
+            app.kv(&session),
+            None,
+            "{side} ended: the owner's next message has the recent chat again"
+        );
     }
     drop(app);
     let _ = std::fs::remove_dir_all(&home);

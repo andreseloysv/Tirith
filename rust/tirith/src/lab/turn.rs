@@ -1,4 +1,4 @@
-//! A bot's turn ended: a run of a live experiment keeps its experiment and variant on its row, a B run is compared with the A before it, and the experiment may be decided.
+//! A bot's turn ended: a run of a live experiment keeps its experiment and variant on its row, a B run is compared with the A before it, and the experiment may be decided. A run's session has no recent chat (`prompt.rs`, `opening`), so it ends with it.
 use super::seat::{live, taken};
 use super::store::running_one;
 use crate::app::Shared;
@@ -16,6 +16,7 @@ pub fn finished(app: &Shared, id: i64, conv: &str, routine: &str) {
     if seat.variant == "B" {
         super::workfiles::back(&live(app, conv), &seat.tree);
     }
+    super::fresh::session(app, conv); // the next is a new one, in the bot's own folder, with the recent chat again
     let Some(e) = running_one(app, seat.experiment) else {
         return;
     };
@@ -23,7 +24,6 @@ pub fn finished(app: &Shared, id: i64, conv: &str, routine: &str) {
         super::shadow_pair::done(app, &e, (&seat.tree, seat.pair), (Some(id), None));
     // compared once its B ended too
     } else if seat.variant == "B" {
-        super::fresh::session(app, conv); // its next session is a new one, in the bot's own folder again
         super::compare::compare(app, &e, id);
     }
     super::decide::decide(app, e.id);
