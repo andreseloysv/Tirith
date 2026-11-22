@@ -838,7 +838,7 @@ Files:
 
 - `call.rs`: A normalized tool call as the rules read it.
 - `check.rs`: One tool call against every rule, in order: the first refusal wins.
-- `confined.rs`: A role confined by its `writes` key (the Coach): its edits land only in the bots' folders and the folders `writes` names.
+- `confined.rs`: A role confined by its `writes` key (the Coach): its edits land only in the bots' folders and the folders `writes` names; of the hidden folders only a skill's (`.agents/skills`).
 - `hooks.rs`: The rules about the turn itself: commit checks are never skipped, and a chat's turn never waits.
 - `lane.rs`: A lane's rules: it writes only in its own copy, never touches main and never starts agents.
 - `manifest.rs`: The rules a project's tirith.toml brings: its plan is written only by Tirith, and its own `[[rules]]`.

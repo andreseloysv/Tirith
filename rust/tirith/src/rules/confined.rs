@@ -1,4 +1,4 @@
-//! A role confined by its `writes` key (the Coach): its edits land only in the bots' folders and in the folders of Tirith's home `writes` names (`bots`, `lab`), never in a hidden folder there (an agent's settings could turn Tirith's hooks off).
+//! A role confined by its `writes` key (the Coach): its edits land only in the bots' folders and in the folders of Tirith's home `writes` names (`bots`, `lab`), never in a hidden folder there but a skill's own (an agent's settings could turn Tirith's hooks off).
 use super::call::Call;
 use crate::app::Shared;
 use std::path::{Component, Path, PathBuf};
@@ -9,10 +9,15 @@ fn writes(app: &Shared, role: Option<&str>) -> Option<Vec<PathBuf>> {
     Some(names.iter().map(|n| app.home.join(n)).collect())
 }
 
-/// No `..` (it can end anywhere) and no hidden folder.
+/// No `..` (it can end anywhere) and no hidden folder but a skill's (`.agents/skills/…`, in a draft worktree of the lab as in a bot's folder).
 fn plain(rel: &Path) -> bool {
-    rel.components().all(|c| match c {
-        Component::Normal(n) => !n.to_string_lossy().starts_with('.'),
+    let parts: Vec<Component> = rel.components().collect();
+    parts.iter().enumerate().all(|(i, c)| match c {
+        Component::Normal(n) if n.to_string_lossy().starts_with('.') => {
+            let skills = Component::Normal("skills".as_ref());
+            *n == ".agents" && parts.get(i + 1) == Some(&skills) && parts.len() > i + 2
+        }
+        Component::Normal(_) => true,
         _ => false,
     })
 }

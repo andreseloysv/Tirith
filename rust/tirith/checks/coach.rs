@@ -64,6 +64,7 @@ fn coach_writes_only_in_the_bots_folders_and_the_lab() {
         "bots/memory.md",
         "bots/skills/x/SKILL.md",
         "lab/exp-1/notes.md",
+        "lab/bot-abc123/draft/.agents/skills/x/SKILL.md",
     ] {
         assert_eq!(write("coach", ok), None, "{ok}");
     }
@@ -72,6 +73,9 @@ fn coach_writes_only_in_the_bots_folders_and_the_lab() {
         "manager/tirith/notes.md",
         "bots/.git/config",
         "lab/.agent/settings.json",
+        "lab/bot-abc123/draft/.agents/settings.json",
+        "lab/bot-abc123/draft/.agents/skills/x/.git/config",
+        "lab/bot-abc123/draft/.git/.agents/skills/x/SKILL.md",
         "/tmp/elsewhere.md",
     ] {
         assert!(write("coach", refused).is_some(), "{refused}");
