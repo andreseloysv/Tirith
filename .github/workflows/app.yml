@@ -73,8 +73,12 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         shell: bash
         run: |
-          if [ "$RUNNER_OS" = macOS ] && [ -n "$APPLE_SIGNING_IDENTITY" ]; then
-            if [ -n "$APPLE_API_KEY_CONTENT" ]; then
+          # An absent secret comes as an empty variable, and Tauri signs with any identity it is given, "" too.
+          for name in $(compgen -e APPLE_ || true); do
+            [ -n "${!name}" ] || unset "$name"
+          done
+          if [ "$RUNNER_OS" = macOS ] && [ -n "${APPLE_SIGNING_IDENTITY:-}" ]; then
+            if [ -n "${APPLE_API_KEY_CONTENT:-}" ]; then
               umask 077
               printf '%s' "$APPLE_API_KEY_CONTENT" > "$RUNNER_TEMP/api_key.p8"
               export APPLE_API_KEY_PATH="$RUNNER_TEMP/api_key.p8"
