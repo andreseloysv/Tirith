@@ -57,6 +57,7 @@ says so, and leaves out the links to the shared skills and its working files —
 conversation ends having changed them (message «turn <id>», the turn's row id), and after each change from the Library
 («library»); nothing changed, nothing is committed. So the `versions` of a turn (git blob hashes) are blobs of that
 history, and `git log` in a bot's folder says which memory and skills each run used.
+A routine's own effort (and model): the bot's folder may also hold `routines.toml`, a table per routine id (`[r1]`, `effort = "medium"`, optionally `model`), tracked in the same history so a branch of the Coach's can change it. It holds for that routine's turns only (`tuning.rs`): when the run starts, a live session ends so a fresh one starts with it, `models::role` gives its turns the routine's values, and the end of the turn ends the session again; an exec agent takes it per turn, and a replay's or a shadow's B reads the branch's file from its worktree.
 The bots' agent finds them natively: Muse reads `.agents/skills`, and the agent's own `.<command>/skills` is a link to the same folder. Agents may write in a bot's folder
 (never in its hidden folders, where agent settings live, except skills folders) and in the shared skills; the page's Library shows, corrects and deletes all of it.
 The shared memory, `<tirith home>/bots/memory.md` (what holds for every bot: the owner's name, time zone, language), is handed before the bot's own, as `[tirith] Shared memory.md as it is now: …`, and the
@@ -110,10 +111,11 @@ Files:
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `notes.rs`: Numbered memory notes: `[m<N>]` and `[s<N>]` put before every note line that has none.
 - `routine.rs`: A routine made, changed or removed from a bot's card or its own commands.
-- `run.rs`: Routines run: one now, or every one due on the scheduler's tick (which also decides the lab's experiments that are due).
+- `run.rs`: Routines run: one now, or every one due on the scheduler's tick (which also decides the lab's experiments that are due); each run is handed to the bot as a turn of its own (`manager::run_routine`).
 - `schedule.rs`: When a routine runs: its days of the week, and whether it is due now.
 - `store.rs`: Keeping the bots: one change at a time, written into config.toml and reloaded.
 - `sweep.rs`: What goes out of config.toml before the bots are written again: their roles and routes, then the sections left empty.
+- `tuning.rs`: A routine's own effort and model: `routines.toml` in the bot's folder, read when its run starts and applied to its turns only.
 - `versioned.rs`: The bots' folders and `<home>/bots` as git repositories: only the memories and the own skills followed, a commit after each turn or Library change that changed them.
 - `written.rs`: The text of config.toml with the bots laid into it.
 
@@ -292,12 +294,14 @@ one commit over its main; the Coach makes it in a draft worktree under `<home>/l
 - `tirith lab list [<bot>]` → `GET /api/lab?bot=<id or key>`: the experiments, newest first (change, hypothesis, mode,
   status, the comparisons judged, the numbers once decided), and the rule; the bot's tab «Mejoras» shows them.
 
-**Live.** Each real run of that routine (`bots/run.rs`, `bots/hook_fire.rs`) is the variant after the last one (kv
-`lab:last:<experiment>`; A first): A in the bot's own folder (its main), B in the worktree, which is the bot's folder
+**Live.** Each real run of that routine is the variant after the last one (kv `lab:last:<experiment>`; A first), chosen
+when the run's turn starts, not when it came due (`manager/jobs.rs` calls `lab::fired` as the run is handed over, so a
+run waiting its turn holds no seat): A in the bot's own folder (its main), B in the worktree, which is the bot's folder
 for that turn — `lab::seat` maps `<home>/manager/<key>` to it for the session's folder (`manager/spawn.rs`,
 `codex/setup.rs`), the memory and skills it is handed (`bots/context.rs`), the versions its row keeps and the commit
 of what it changed (on the branch). A live session of the bot ends before a B run and after it, so each run's session
-starts in its own folder. The answer reaches the owner as always. At the turn's end (`turns/save.rs`) its row gets
+starts in its own folder. The seat is always freed: at the turn's end, or, when the run ends without a row (its session
+ended, it was abandoned, or its agent never started), by `lab::released` (`manager::release_run`). The answer reaches the owner as always. At the turn's end (`turns/save.rs`) its row gets
 `experiment` and `variant`; a B run is compared with the A run before it: the event `lab.compare` (no route) carries the
 routine's task and the two answers as «Answer a» and «Answer b» in an order drawn at random, the letter B was shown
 under kept in `lab_comparisons` (`b_is`), and the eval `ab-compare` (rubric `factory/evals/ab-compare.md`, judge
@@ -320,18 +324,25 @@ and `sandbox::wrap` gives its processes the proxy caller `replay:<experiment>`, 
 destination. In Tirith's `PreToolUse` hook (`server/hook.rs`, Anthropic's and Muse's alike) a call from the
 worktree that reads outside — the web, a browser or any MCP tool, `tirith safari` or `tirith teach`, shell commands
 with network such as curl, ssh or git fetch (`outside.rs`) — is refused with the next unanswered call of the same
-tool in the capture as its reason, «Recorded result (replay): <its result>» (`answers.rs`); one the capture has no
-more of is refused as «not available in a replay». Local calls (its worktree, which the rules let it write in as its
+call in the capture that asks for the same thing as its reason, «Recorded result (replay): <its result>»
+(`answers.rs`; what a call asks for is its tool and its URL, query or command with its spaces normalised, never its
+descriptive fields, `call_key.rs`); one the capture has no such call for is refused as «not available in a replay» and
+counted as missed. Local calls (its worktree, which the rules let it write in as its
 own folder, and its skills) run as always. Nothing of a replay reaches the owner: its turns run in a conversation of
 their own, `replay-<experiment>-<turn>-<A|B>`, which no chat, phone, room or card knows (`tirith say` and
 `ask-owner` refuse it as an unknown project), and the hook refuses `tirith say`, `ask`, `ask-owner` and `chat` in it.
 Each turn's row gets `experiment`, `variant`, the routine and the trigger `replay`; the worktrees go after each turn,
-and each B is compared with its A like a live run (`lab.compare`, `ab-compare`). Once every pair has run (kv
-`lab:replayed:<experiment>`) and been judged, it is due.
+and each B is compared with its A like a live run (`lab.compare`, `ab-compare`), unless a side missed a call: that pair
+proves nothing, is kept as a comparison with the verdict `void` (`void.rs`) and is never a tie, a win or a loss
+(the decision line says how many). A replay is refused, with the reason, when the network cannot be closed for it
+(`sandbox::closes_network`: the sandbox is off, or not macOS, or the daemon itself runs in one). A replay the daemon was
+restarted in the middle of (its pairs ran in memory) is decided at the next start when all its pairs ran and were
+judged, and discarded with a line saying so otherwise (`interrupted.rs`), never later on the pairs it happened to have.
+Once every pair has run (kv `lab:replayed:<experiment>`) and been judged, it is due.
 
 **Shadow.** `--mode shadow` (`shadow.rs`) keeps every real run of the routine as it is — A, in the bot's own folder,
-its answer to the owner as always — and starts its B beside it at the same moment (`lab::fired` from `bots/run.rs`
-and `bots/hook_fire.rs`, handed the same task): a loose turn of the bot's role (`manager::run_turn`) in the
+its answer to the owner as always — and starts its B beside it at the same moment (`lab::fired`, called as the run is
+handed over by `manager/jobs.rs`, handed the same task): a loose turn of the bot's role (`manager::run_turn`) in the
 experiment's worktree, handed its memory and skills, in a conversation of its own, `shadow-<experiment>-<pair>`, that
 no chat, phone, room or card knows (kv `lab:pairs:<experiment>` counts the pairs; while a B is still on its way, a
 new real run is no pair). A tokio task-local makes the worktree every folder of the bot for B's turn (`lab::seat`),
@@ -349,12 +360,16 @@ both have ended, in either order (`shadow_pair.rs`, then `lab.compare` and `ab-c
 the same `[lab]` rule, never while a run of the pair is on its way. The «Mejoras» tab says, while it runs, that the
 shadow costs double.
 
-**The decision.** With `inputs` comparisons judged, a replay's pairs all run and judged, or `max_days` after its start (the scheduler's tick), and no run of
-the bot on its way, B is adopted when it is not worse (wins and ties at least `not_worse_share` of the comparisons, and
+**The decision.** The rule is the factory's `[lab]` as it was when the experiment started (kept in `experiments.rule`,
+`fixed.rs`): a change of the factory never moves the goal of a test under way. With `inputs` comparisons judged, a
+replay's pairs all run and judged, or `max_days` after its start (the scheduler's tick), and no run of the bot on its
+way, B is adopted; one whose days ran out with fewer than min(5, `inputs`) comparisons proves nothing and is discarded,
+saying so (`due.rs`). B is adopted when it is not worse (wins and ties at least `not_worse_share` of the comparisons, and
 wins at least as many as it loses), has no new failure (a B run failed where its A did not) and no 👎, and saves at
 least `min_saving` of A's mean tokens, dollars or time. Adopted, the bot's folder is committed and the branch is merged
 into its main (the live folder is that checkout, so the next run uses it; where main moved on the same lines, B's
-tested text wins, and a merge that still fails discards it instead); in both
+tested text wins, but a note main added to `memory.md` meanwhile that the merge lost is written back as a new note,
+`adopt.rs`; a merge that still fails discards it instead); in both
 cases the worktree and the branch go. The row keeps the status, the end and the numbers (A's and B's runs, mean
 tokens, dollars and time, the tally, the savings and the line), and one line is emitted in the bot's conversation:
 `lab.adopted` (routed to its chat and the phones) or `lab.discarded` (its chat only), as «Adopté gmail-safari v3:
@@ -362,20 +377,27 @@ tokens, dollars and time, the tally, the savings and the line), and one line is 
 
 Files:
 
-- `answers.rs`: A replay's tool calls in the hook: an outside read answered from its capture, one it lacks or one for the owner refused.
+- `adopt.rs`: Adopting a branch: merged into the bot's main without losing a note written in memory.md meanwhile.
+- `answers.rs`: A replay's tool calls in the hook: an outside read answered from the capture's call that asked for the same, one it lacks (counted) or one for the owner refused.
+- `call_key.rs`: What a tool call asks for (the tool and its URL, query or command), so a replay answers only a call that asks for the same thing.
+- `due.rs`: Whether an experiment is ready to be decided by the rule it started with: due, not yet, or expired with too few comparisons.
+- `fixed.rs`: The `[lab]` rule an experiment started with, kept in its row and read back to decide it.
+- `interrupted.rs`: A replay the daemon was restarted in the middle of: decided if all its pairs were judged, ended honestly otherwise.
+- `scope.rs`: Inside a replay's or a shadow B run's turn, its worktree and routine, where the routine's `routines.toml` is read from.
+- `void.rs`: A replay pair that proves nothing: kept with the verdict `void`.
 - `api.rs`: The lab's commands and routes: `tirith lab start` and `tirith lab list`, `POST /api/lab/start` and `GET /api/lab`.
 - `compare.rs`: A B run against the A run before it (or against the A of its shadow pair), judged blind by `ab-compare`, and the judge's answer mapped back to B's verdict.
-- `decide.rs`: The decision once an experiment is due: the numbers read, the rule applied, the branch merged or deleted, the line emitted.
-- `git.rs`: Git in a bot's repository as Tirith: the branch's one commit checked, the adopted branch merged (its text winning where main moved on the same lines), the worktree and the branch removed.
+- `decide.rs`: The decision once an experiment is due: the numbers read, the rule it started with applied, the branch merged or deleted, the line emitted.
+- `git.rs`: Git in a bot's repository as Tirith: the branch's one commit checked, a branch merged (its text winning where main moved on the same lines), the worktree and the branch removed.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
-- `numbers.rs`: An experiment's numbers from the store: each side's runs (mean tokens, dollars, time), B's comparisons, new failures and 👎, and the comparisons the judge has not answered.
+- `numbers.rs`: An experiment's numbers from the store: each side's runs (mean tokens, dollars, time; a void pair's left out), B's comparisons, new failures and 👎, the void pairs, and the comparisons the judge has not answered.
 - `outside.rs`: Which tool calls read outside (web, browser, MCP, `tirith safari`, network commands) and which would reach the owner.
 - `replay.rs`: Replay mode: the task-local that marks a replay's turn, the proxy's closed caller, and the pairs run one after another.
 - `replay_side.rs`: One side of a replayed run: its throwaway worktree, its turn on the capture's start, its row's experiment and variant.
 - `rule.rs`: The `[lab]` rule applied to A's and B's numbers and the comparisons, and the one line that says the decision.
 - `outward.rs`: Which shell calls of a shadow run act outward: `tirith` commands that are not plain reads, and commands that send, buy, delete or publish.
 - `outward_browser.rs`: Which browser and MCP calls of a shadow run act outward: a click on «Send» or «Comprar», a submit, a form, an upload, code in the page.
-- `seat.rs`: Which folder a bot's turn runs in during an experiment: live A, its own; live B, the branch's worktree; a replay's or a shadow B's turn, its worktree; a shadow run is A, its B started beside it.
+- `seat.rs`: Which folder a bot's turn runs in during an experiment, taken when its run starts and freed when it ends or never starts: live A, its own; live B, the branch's worktree; a replay's or a shadow B's turn, its worktree; a shadow run is A, its B started beside it.
 - `shadow.rs`: Shadow mode: B of each real run started beside it in the worktree, in its own conversation, its row marked.
 - `shadow_open.rs`: The worktrees shadow B runs are in now, the task-local of B's turn, and the hook's refusal of an outward action from one.
 - `shadow_pair.rs`: A shadow pair's two ends, in either order; once both ended, B is compared with that A.
@@ -436,31 +458,48 @@ Everything else the daemon has to say is an event: `emit_event` keeps its row, s
 to the factory's routes. A turn's answer reaches the phones only when the owner started that turn or an event
 that started it has `phone = true` in its route.
 
+A routine's run (due on its schedule, the page's Run now, a webhook: `emit_event` for `schedule` or `webhook` through
+`run_routine`) is a turn of its own with its own trigger and routine, never gathered with another event or message: it
+waits in the conversation's queue of runs (`jobs.rs`), in the order they came due, and is handed over alone when the
+conversation is free (no turn running or waiting to start, no message on its way, no report waiting) — at once, or when
+the turn before it ends (`stream.rs`, `exec_end.rs`). Starting its turn is what seats it in a live experiment and applies
+its own effort (`bots/tuning.rs`). What the owner or a room writes meanwhile is handed over as soon as it comes, in a
+turn of its own, ahead of the runs still waiting; several messages handed to one live session are several turns, each
+with the trigger of its own message (`turns/live.rs`). Reports waiting for the next turn are never dropped silently: the
+newest 30 are kept and the message says how many older ones were left out. A trigger belongs to the message it was
+composed with (`compose.rs`): a message that starts no turn (`/model`, words kept while a task is taught) sets none.
+What a paired phone writes is the owner's words: `owner-mood` judges it like a line typed on the page (never another
+agent's line in the room).
+
 Files:
 
 - `answer.rs`: The owner's answer to an open card or to a waiting lane.
 - `ask.rs`: `tirith ask-owner`: a new card for the owner.
 - `blocks.rs`: An assistant message of a stream-json session: its text and its tool calls, in the chat and on the phones.
-- `cards.rs`: A card's end: its final state, the line that says so, and closing one that is no longer needed.
-- `deliver.rs`: Handing a conversation its messages: to its live session, or waiting for the session that starts for them.
+- `cards.rs`: A card's end: its final state (an answered or closed approval ends the wait of the turns that waited for it), the line that says so, and closing one that is no longer needed.
+- `compose.rs`: The message a conversation is handed: the memory, the waiting reports and the words of the owner, a room, an event or a routine, with what starts its turn.
+- `deliver.rs`: Handing a conversation its messages: to its live session, or waiting for the session that starts for them; with nothing to say, the next routine's run when the conversation is free.
 - `evals.rs`: The evals: an event judged in the background by its judge role, kept as a score.
-- `events.rs`: Events and their routes: who hears an event, as a chat line, a turn now or a note with the next turn.
-- `exec.rs`: The exec session: one exec turn of Codex or Muse per hand-over, resumed under its kept session id.
+- `events.rs`: Events and their routes: who hears an event, as a chat line, a turn now, a routine's run of its own or a note with the next turn.
+- `exec.rs`: The exec session: one exec turn of Codex or Muse per hand-over (a routine's run alone), resumed under its kept session id.
+- `exec_end.rs`: The two ends of an exec turn: its process runs, and its answer goes to the chat, the phones and its rooms.
 - `exec_stream.rs`: What an exec turn says while it runs: Muse's stream and Codex's events, in the chat and on the phones.
 - `interrupt.rs`: Stopping the turn a conversation runs now.
+- `jobs.rs`: The runs of routines waiting for their conversation: queued, handed over alone when it is free, their seat and effort taken when they start and released when they end without a turn.
 - `judged.rs`: Reading what a judge answered, and which card an event's line names.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `open.rs`: The open questions: the cards still open and the lanes that wait for an answer.
 - `progress.rs`: The short line a tool call shows on the phones.
 - `prompt.rs`: What a conversation's agent is told besides its messages: its role's instructions and the recent chat.
+- `queue.rs`: Reports and events for a conversation that wait for its next turn: the newest 30 kept, the older ones counted.
 - `run.rs`: A conversation's sessions, one after another while messages wait, started again more slowly when they fail young.
-- `say.rs`: What the owner, a room or an agent writes to a conversation.
+- `say.rs`: What the owner, a room or an agent writes to a conversation (a paired phone's words are judged as the owner's).
 - `session.rs`: The stream-json session of a conversation: started with what waits for it, read until it ends or rests.
 - `session_end.rs`: The end of a stream-json session: what its dead turn left, its process, and what waits again when it never got ready.
 - `spawn.rs`: Starting a streaming chat agent, and the answers to its permission requests.
 - `stale.rs`: Open questions that no longer apply, closed by Tirith.
 - `stream.rs`: Reading a stream-json session's output: its start, its words and tools, its turn ends and permission requests.
-- `talk.rs`: One conversation's state, kept under its project's id (or "" for the one of no project), and what lists or ends its sessions.
+- `talk.rs`: One conversation's state, kept under its project's id (or "" for the one of no project): its session, its messages on their way, its waiting reports and routine runs, and what lists or ends its sessions.
 - `turn.rs`: The loose turn: one fresh turn of a `session = "turn"` role, its text the answer.
 - `typing.rs`: A turn's rooms and its typing on the phones: where it shows its progress, when it starts and stops.
 
@@ -544,11 +583,11 @@ once (`manager/events.rs` hands it here: a turn role is never handed text in a c
 answer is told on as `review.done`. The Coach (`coach`, `factory/prompts/coach.md`, `brief = "bots"`) runs weekly
 (Mondays 09:00) and on `routine.worse`; until `tirith lab` exists it proposes one experiment in at most 3 lines and
 changes nothing, or answers «Sin novedad.». Its `writes = ["bots", "lab"]` confines it (`rules/confined.rs`): its
-edits land only in the bots' folders, `<home>/bots` and `<home>/lab`, never in a hidden folder there.
+edits land only in the bots' folders, `<home>/bots` and `<home>/lab`, never in a hidden folder there. An event heard while a pass of its role runs (a second `routine.worse`) is kept and run, with the others heard meanwhile, as one pass when it ends (`queued.rs`), never lost.
 
 `routine.worse` (`metrics/worse.rs`): every computation looks at each bot's routines with runs in `turns` (the bot's
 own role in its own conversation); one whose last 5 runs cost 30 % more than the 10 before (mean tokens, all four
-kinds, or mean dollars) or of which 2 failed is emitted once per episode — kv `routine_worse:<bot>:<routine>`, cleared
+kinds, or mean dollars) or of which 2 failed (a run that `waiting` for the owner's yes is not a failure; the B runs of experiments are not runs of the routine) is emitted once per episode — kv `routine_worse:<bot>:<routine>`, cleared
 when it no longer holds — with the bot, the routine and those numbers.
 
 Files:
@@ -568,6 +607,7 @@ Files:
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `mood.rs`: Satisfaction from the owner-mood scores of the last 24 h, per owner message; judged from what the owner writes anyway, never asked.
 - `pass.rs`: When a turn role's pass may run by itself: its daily budget, and its scheduled pass.
+- `queued.rs`: The passes an event asked for while a pass of the same role ran: kept, run as one when it ends.
 - `plans.rs`: The plans as a CEO pass reads them: each project's steps with their open and done items, its autopilot and its main.
 - `review.rs`: The pass of a turn role: who reviews a long red stretch and when, the pass turn itself with the brief its role names, and the page's "CEO now".
 - `roles.rs`: Any turn role's pass: the brief its `brief` key names, its `schedule` route and the events routed to it.
@@ -620,11 +660,12 @@ Files:
 
 ## `numbers/`
 
-A bot's numbers, read from its own rows in `turns` (its role in its conversation; the judge's turns there do not
-count) and its memory files: `GET /api/bots/<id>/numbers` gives
+A bot's numbers, read from its own rows in `turns` (its role in its conversation; the judge's turns there and the B
+runs of experiments do not count; a replay's or a shadow's run is in a conversation of its own) and its memory files: `GET /api/bots/<id>/numbers` gives
 
 - `routines`: per routine of its card (then routines it no longer has, then `Chat` for its turns without one): `runs`,
-  `success` (share ok), `ms` (mean), `cost_per_good` (the cost of all its runs over the ones that ended ok),
+  `success` (share ok of the runs that ended: one that `waiting` for the owner's yes is neither ok nor failed, and
+  `waiting` counts them), `ms` (mean), `cost_per_good` (the cost of all its runs over the ones that ended ok),
   `down_per_10` (👎) and `corrections_per_10`, `score` (the mean judge's score, `scored` how many) and `trend`: the last
   10 runs against the 10 before them (`last` and `before`, each with `cost_per_good`, `ms`, `success`), null until there
   are more than 10.
@@ -632,8 +673,9 @@ count) and its memory files: `GET /api/bots/<id>/numbers` gives
   (in, out and cache) of its routine's runs (the routine of its first use) before that first use against after:
   `tokens_before`, `tokens_after`, `saved_percent`.
 - `memory`: `tokens` (`own` and `shared`: characters / 4 of its memory.md and of `bots/memory.md`), `notes` (every
-  numbered note with how many of its last 30 runs cited it), `uncited` (none cited them: candidates to delete, which
-  Tirith never deletes), `misses` and `missed` (owner messages in its conversation that owner-mood labelled `repeat`).
+  numbered note with how many of its last 30 runs cited it), `uncited` (the bot's own notes none of those runs cited
+  and written at least 30 runs ago, by the history of its memory.md: candidates to delete, which Tirith never deletes;
+  a shared note is never proposed from one bot's runs), `misses` and `missed` (owner messages in its conversation that owner-mood labelled `repeat`).
 
 The page shows them in the bot's «Números» tab (`web/js/views/bots/numbers.js`) in short lines, and every answer of a
 bot in its chat carries a discreet 👍 and 👎 (`web/js/views/chat/react.js`) that calls `POST /api/turns/<id>/reaction`
@@ -641,7 +683,8 @@ bot in its chat carries a discreet 👍 and 👎 (`web/js/views/chat/react.js`) 
 
 Files:
 
-- `memory.rs`: A bot's memory in numbers: its loading cost in tokens, each note's citations, the uncited notes and the misses.
+- `age.rs`: How old a note of a bot's memory is, in runs, by the git history of its memory.md.
+- `memory.rs`: A bot's memory in numbers: its loading cost in tokens, each note's citations, its own notes uncited for 30 runs and the misses.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `routines.rs`: A bot's numbers by routine: its runs, success, time, cost per good run, 👎 and corrections per 10, mean score and trend.
 - `rows.rs`: A bot's own turns as the numbers read them, the first first.
@@ -792,6 +835,7 @@ Files:
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `owner.rs`: Who a sandboxed process belongs to.
 - `profile.rs`: The sandbox profile, the proxy's port and whether processes run inside the sandbox.
+- `replay.rs`: Whether a replay's turn can run with the network closed: the sandbox must be in force for the processes Tirith starts.
 - `routes.rs`: The sandbox's HTTP routes: its status, the block list, the destinations seen and Safari.
 - `rules.rs`: The shape of a block rule: a domain, an address or a CIDR range.
 - `safari/mod.rs`: Declares the folder's files and re-exports what other modules use.
@@ -923,9 +967,9 @@ Files:
 
 The turn log. Every turn of a chat or turn role (the project managers, the bots, the CEO, the judge) leaves one row in
 `turns` (`assets/schema.sql`; `runs` is the pipelines'): `conv` (its conversation), `role`, `trigger` (`owner`,
-`room`, `schedule`, `run-now` — the page's Run now — or `event:<name>`; whoever hands the message over sets it, and
-the first one counts until the turn starts), `routine` (the id of the routine that started it), `started_at`,
-`ended_at`, `ms`, `status` (`ok`, `failed`, or `waiting` when an approval card it opened is still open at its end: an `approval` card of its conversation opened since the turn started, `turns/approval.rs`), `agent`, `model`, `effort`, `tokens_in`, `tokens_out`,
+`room`, `schedule`, `run-now` — the page's Run now — or `event:<name>`; each message carries its own, taken when it is
+composed, so it never outlives its message), `routine` (the id of the routine that started it), `started_at`,
+`ended_at`, `ms`, `status` (`ok`, `failed`, or `waiting` when an approval card it opened is still open at its end: an `approval` card of its conversation opened since the turn started, `turns/approval.rs`; once no such card is open, because the owner answered it or it was closed, the row becomes `ok`; a turn the daemon was stopped in is kept as `failed` at the next start, `interrupted.rs`), `agent`, `model`, `effort`, `tokens_in`, `tokens_out`,
 `tokens_cache_read`, `tokens_cache_write`, `cost_usd`, `steps` (tool calls), `skills` (JSON: the skills it read —
 Anthropic's `Skill` tool, Muse's `read_skill`, or any tool whose input names `skills/<name>/SKILL.md`), `tools` (JSON:
 each call's name and the short line the chat shows, 50 at most), `versions` (JSON: the git blob hash, as
@@ -946,13 +990,13 @@ per million tokens; the strict loader accepts the section and none of it goes to
 cost stays empty, never invented.
 
 When a bot's own turn ends (a role with `scope = "own"` and `session = "chat"`; a judge's turn in its conversation emits nothing, or an eval on `turn.done` would judge itself forever) the event `turn.done` is emitted — or
-`routine.done` when a routine started it — saying the bot, the trigger, the routine and its task, the tools, the
+`routine.done` when a routine started it or it read a skill (graded with the skill's «Cómo validar»; a chat turn that read none is not graded) — saying the bot, the trigger, the routine and its task, the tools, the
 skills and the beginning of the answer; neither has a default route. For the `unapproved` eval it also carries each
 tool call with its summary and, for each skill it read (its own, then the shared one), the text of its «Qué requiere
-aprobación» section. `GET /api/turns?conv=<key>&limit=<n>` gives the
+aprobación» section; these are never cut. `GET /api/turns?conv=<key>&limit=<n>` gives the
 rows, the last first. The manager's sessions, exec turns and loose turns, and the bots' routines, only call this
-module: `trigger` when a message is handed over, `begin`/`handed`/`line`/`end`/`abandon` around a conversation's
-turn, `turn_of`/`done` around a turn role's.
+module: `trigger`/`take_trigger` around a message composed, `handed`/`line`/`end`/`abandon` around a conversation's
+turns (one per message handed to its session), `turn_of`/`done` around a turn role's.
 
 Each row also carries its quality signals (`react.rs`, `signals.rs`, `checks.rs`):
 
@@ -973,7 +1017,7 @@ Each row also carries its quality signals (`react.rs`, `signals.rs`, `checks.rs`
 
 - `score`: the judge's note from 0 to 1 on a routine's run. The `turn-quality` eval (`[[evals]]` on `routine.done`,
   rubric `factory/evals/turn-quality.md`) reads the routine's task, the answer and the «Cómo validar» section of each
-  skill the run read — `routine.done`'s text carries them (`quality.rs`), cut to 2000 characters — and answers a score
+  skill the run read — `routine.done`'s text carries them (`quality.rs`: the answer cut to 1000 characters, each «Cómo validar» to 1500) — and answers a score
   with one line why; the score is copied to the turn whose `event` is that event (`turns::scored`, or `catch_up` when
   the judge answered before the row was written). A judge's turn kept in a bot's conversation emits no event of its own.
 
@@ -982,16 +1026,18 @@ Each row also carries its quality signals (`react.rs`, `signals.rs`, `checks.rs`
 Files:
 
 - `api.rs`: `GET /api/turns?conv=<key>&limit=<n>`: a conversation's turns, the last first.
-- `approval.rs`: Approvals: a turn ending with its approval card open waits, and what the `unapproved` eval reads of a turn.
+- `approval.rs`: Approvals: a turn ending with its approval card open waits until the card is answered or closed, and what the `unapproved` eval reads of a turn.
 - `capture.rs`: What a turn read as its agent saw it: what was handed to it and each tool call with its input and result, up to 256 KB.
 - `capture_fit.rs`: Fitting a capture in its size: a result's text, cut on a character to the room left.
 - `capture_keep.rs`: The captures on disk: written at a bot's turn's end, the last 10 runs of each routine kept, read back for a replay.
 - `capture_told.rs`: What was handed to a conversation's agent (never the memory), waiting for the turn it starts.
 - `checks.rs`: The bot's own validation, `tirith turn checks`, kept on the open turn of its conversation or the last one.
-- `live.rs`: The turns of the conversations as they run: who started the next one, the one open now, and its end.
+- `interrupted.rs`: Turns the daemon was stopped in the middle of: marked when they start, kept as failed at the next start.
+- `live.rs`: The turns of the conversations as they run: the trigger waiting for the next message, the turn open now, and the messages handed during it, each with its own trigger.
+- `loose.rs`: The loose turn of a turn role (`run_turn`): started by what waits under `turn:<role>`, kept with its result.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `price.rs`: A turn's cost when its agent gives none: `[prices."<model id>"]` of config.toml, in dollars per million tokens.
-- `quality.rs`: The judge's note on a routine's turn: what `routine.done` carries for `turn-quality`, and the score copied to the turn.
+- `quality.rs`: The judge's note on a routine's turn (or a chat turn that read a skill): what `routine.done` carries for `turn-quality`, and the score copied to the turn.
 - `react.rs`: The owner's 👍/👎 on a turn: by `POST /api/turns/<id>/reaction` or a message that is only 👍 or 👎.
 - `record.rs`: One turn while it runs: who runs it and why, and what its lines say (its usage, tools, skills and text).
 - `save.rs`: A turn ended: its row in `turns` (`waiting` while an approval card it opened is open), for a bot its `turn.done` (or `routine.done`) event and the commit of what it changed in its folder and the shared one.
