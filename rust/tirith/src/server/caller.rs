@@ -73,22 +73,17 @@ pub(super) fn owners_alone(method: &Method, path: &str) -> bool {
         || (path.starts_with("/api/turns/") && path.ends_with("/reaction"))
 }
 
-/// Marks a confined caller; refuses an agent what is the owner's alone, and a command under Codex's limit every change (`limited.rs`).
+/// Marks a confined caller, and refuses an agent what is the owner's alone.
 pub(super) async fn mark(mut req: Request, next: Next) -> Response {
     req.headers_mut().remove(CONFINED);
     let path = req.uri().path().to_string();
-    let changes = super::limited::changes(req.method(), &path);
-    if !changes && !asked(req.method(), &path) {
+    if !asked(req.method(), &path) {
         return next.run(req).await;
     }
     let ends = req.extensions().get::<ConnectInfo<Caller>>().map(|c| c.0);
     if let Some(Caller(from, to)) = ends {
-        let look = tokio::task::spawn_blocking(move || crate::sandbox::who(from, to));
-        let (confined, limited) = look.await.unwrap_or((true, true));
-        if changes && limited {
-            return (StatusCode::FORBIDDEN, super::limited::WHY).into_response();
-        }
-        if confined {
+        let look = tokio::task::spawn_blocking(move || crate::sandbox::confined(from, to));
+        if look.await.unwrap_or(true) {
             req.headers_mut()
                 .insert(CONFINED, HeaderValue::from_static("1"));
         }
