@@ -6,7 +6,7 @@ use crate::app::Shared;
 use chrono::{DateTime, Local, TimeDelta};
 
 /// The longest a judge's turns take, both tries.
-const WAITS: TimeDelta = TimeDelta::minutes(25);
+pub(super) const WAITS: TimeDelta = TimeDelta::minutes(25);
 /// How far back one is still looked at.
 const BACK: TimeDelta = TimeDelta::days(1);
 

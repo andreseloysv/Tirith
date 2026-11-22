@@ -233,7 +233,7 @@ What was due and how it ended. Every run of a routine and every scheduled pass o
 never started says why, counts as a failure in the numbers the Coach reads, and is one line in the chat and on the phones, sent
 by code, so it needs no agent and no quota. «∅» means "I looked and nothing is new". Code fails a run only where it is certain;
 a "could not" in other words is told by the judge that grades the run (`turns/`, `score`), so a good run's news reach the phones
-once it is judged, three minutes later at most: a failure it finds is the one line.
+once it is judged, or when no word of its judge can come any more (26 minutes): a failure is the one line.
 
 Files:
 

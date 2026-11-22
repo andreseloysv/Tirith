@@ -775,19 +775,22 @@ done
 }
 
 #[test]
-fn news_wait_for_a_judge_but_never_long_and_a_failure_takes_their_place() {
+fn news_wait_as_long_as_a_judge_takes_and_a_failure_takes_their_place() {
     let (app, home, key) = home_of("news", "/usr/bin/true", "1", "08:00");
     let now = Local::now();
     super::news::keep(&app, &key, 1, "2 ofertas");
-    super::news::overdue(&app, now + chrono::TimeDelta::minutes(1));
+    super::news::overdue(&app, now + chrono::TimeDelta::minutes(24));
     assert!(
         super::news::settled(&app, 1),
-        "still waiting after a minute"
+        "still waiting while a judge may answer: out sooner, its word is a second notice"
     );
     assert!(!super::news::settled(&app, 1), "never twice");
     super::news::keep(&app, &key, 2, "2 ofertas");
-    super::news::overdue(&app, now + chrono::TimeDelta::minutes(5));
-    assert!(!super::news::settled(&app, 2), "out after three");
+    super::news::overdue(&app, now + chrono::TimeDelta::minutes(27));
+    assert!(
+        !super::news::settled(&app, 2),
+        "out when no judge's word will come"
+    );
     super::news::keep(&app, &key, 3, "Falló");
     super::news::drop_them(&app, 3);
     assert!(!super::news::settled(&app, 3), "the line takes their place");
@@ -851,12 +854,56 @@ fn a_run_that_no_judge_will_read_is_no_success_by_that() {
             r.get::<_, String>(0)
         })
     };
+    // Each run's news, and how that run stood when they stopped waiting: failed, its line took their place.
+    super::news::keep(&app, &key, bad, "La búsqueda falló.");
+    super::news::keep(&app, &key, good, "Dos novedades.");
+    app.insert("CREATE TABLE left_waiting (key TEXT, state TEXT)", &[]);
+    app.insert(
+        "CREATE TRIGGER news_left AFTER DELETE ON kv WHEN old.key LIKE 'news:run:%' BEGIN INSERT INTO left_waiting SELECT old.key, state FROM expected_runs WHERE 'news:run:' || turn = old.key; END",
+        &[],
+    );
+    let left = || {
+        app.query(
+            "SELECT key || ' ' || state FROM left_waiting ORDER BY key",
+            [],
+            |r| r.get::<_, String>(0),
+        )
+    };
     let now = Local::now();
     super::tick(&app, now + chrono::TimeDelta::minutes(5));
     assert_eq!(status(bad), ["ok"], "its judge may still answer");
+    assert!(
+        left().is_empty(),
+        "news out while a judge may still answer are a second notice: {:?}",
+        left()
+    );
     super::tick(&app, now + chrono::TimeDelta::minutes(30));
     assert_eq!(status(bad), ["failed"]);
     assert_eq!(status(good), ["ok"]);
+    let mut want = [
+        format!("news:run:{bad} failed"),
+        format!("news:run:{good} ok"),
+    ];
+    want.sort();
+    assert_eq!(left(), want, "one notice for each run");
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+/// Only a share is judged: no word comes for a run outside it, so its news wait for nobody.
+#[test]
+fn news_of_a_run_outside_the_judged_share_wait_for_nobody() {
+    let (first, home, key) = home_of("share", "/usr/bin/true", "1", "08:00");
+    drop(first);
+    let mut config = std::fs::read_to_string(home.join("config.toml")).unwrap();
+    config.push_str("\n[[evals]]\nid = \"turn-quality\"\non = \"routine.done\"\njudge = \"judge\"\nrubric = \"evals/turn-quality.md\"\nsample = 0.0\n");
+    std::fs::write(home.join("config.toml"), config).unwrap();
+    let app = crate::app::App::open_at(home.clone());
+    let (now, event) = (crate::app::now_iso(), 9003_i64);
+    let sql = "INSERT INTO turns (conv, role, \"trigger\", routine, started_at, ended_at, status, answer, event) VALUES (?1, ?1, 'run-now', 'r1', ?2, ?2, 'ok', 'Dos novedades.', ?3)";
+    let turn = app.insert(sql, &[&key, &now, &event]);
+    super::news::keep(&app, &key, turn, "Dos novedades.");
+    crate::turns::scored(&app, event, "turn-quality", None); // as when the turn is kept and has no score
+    assert!(!super::news::settled(&app, turn), "still waiting");
     let _ = std::fs::remove_dir_all(&home);
 }
 

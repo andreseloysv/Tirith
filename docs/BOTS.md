@@ -83,8 +83,8 @@ table `turns` (`runs` is the pipelines'):
 - **«∅» and «✗»:** «∅» means "I looked and nothing is new", never "I could not", which is «✗». Code fails what is
   certain (the agent's own failure, «✗», a «∅» that says it could not or never looked, a tool's error that proves
   it). The judge of `turn-quality` reads every other wording and starts its why with `could not:`; where no judge
-  gives a score, plain words decide. So a good run's news wait for the judge, three minutes at most, and a failure
-  it finds is that one line and no news.
+  gives a score, plain words decide. So a good run's news wait for the judge (its two tries take 20 minutes at
+  most; without its word they go out after 26), and a failure is that one line and no news.
 - **A missed time:** `catch_up = "once"` (the default) runs the latest time missed, one run, and says that it is
   late; with "skip" a time is lost five minutes after it, and is a failed row. A run that a stop of Tirith cut is
   failed and not done again (it may have acted); one that had not started is handed again.

@@ -35,7 +35,7 @@ pub(super) fn check(app: &Shared, event: i64) {
     let (judge, why) = match &word {
         Some((Some(score), why)) => (true, cause(*score, why)),
         Some((None, _)) => (false, None),
-        None if graded(app) => return, // it is still reading
+        None if graded(app, event) => return, // it is still reading
         None => (false, None),
     };
     if why.is_some() || !judge {
@@ -44,8 +44,8 @@ pub(super) fn check(app: &Shared, event: i64) {
     crate::expected::settled(app, turn);
 }
 
-/// True when some judge grades runs.
-fn graded(app: &Shared) -> bool {
-    let evals = app.cfg().factory.evals_on("routine.done");
+/// True when a judge grades the run of event `event`.
+fn graded(app: &Shared, event: i64) -> bool {
+    let evals = app.cfg().factory.evals_for("routine.done", event);
     evals.iter().any(|e| e.0 == EVAL)
 }

@@ -1,11 +1,12 @@
-//! The news of a good run wait for its judge, so a "could not" that it finds is the owner's one line and not a second one after the answer. They never wait long, and they wait in the store, so no restart loses them.
+//! The news of a good run wait for its judge, so a "could not" that it finds is the owner's one line and not a second one after the answer. They wait as long as a judge can take and no longer, and they wait in the store, so no restart loses them.
+use super::unjudged::WAITS;
 use crate::app::{now_iso, Shared};
 use chrono::{DateTime, Local, TimeDelta};
 use serde_json::{json, Value};
 
 const KEY: &str = "news:run:";
-/// The most they wait for a judge.
-const MOST: TimeDelta = TimeDelta::minutes(3);
+/// How much longer than a judge's turns they wait: code's plain words look first at a run that no judge read (`unjudged.rs`).
+const MARGIN: TimeDelta = TimeDelta::minutes(1);
 
 /// `text`, what the run of turn `turn` in `conv` has for the phones, waits.
 pub(super) fn keep(app: &Shared, conv: &str, turn: i64, text: &str) {
@@ -39,7 +40,7 @@ fn out(app: &Shared, key: &str) -> bool {
     true
 }
 
-/// Those whose judge took too long go out (its word still makes a failure, and a line, when it comes).
+/// Those that no judge's word will come for any more go out.
 pub(super) fn overdue(app: &Shared, now: DateTime<Local>) {
     let sql = "SELECT key, value FROM kv WHERE key LIKE ?1";
     let like = format!("{KEY}%");
@@ -49,7 +50,7 @@ pub(super) fn overdue(app: &Shared, now: DateTime<Local>) {
         let at = kept["at"]
             .as_str()
             .and_then(|t| DateTime::parse_from_rfc3339(t).ok());
-        if at.is_none_or(|at| now.signed_duration_since(at) > MOST) {
+        if at.is_none_or(|at| now.signed_duration_since(at) > WAITS + MARGIN) {
             out(app, &key);
         }
     }

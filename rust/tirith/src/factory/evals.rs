@@ -23,6 +23,12 @@ impl Factory {
             .collect()
     }
 
+    /// Those of them that judge event `event`: a share of the events is judged, by their ids.
+    pub fn evals_for(&self, on: &str, event: i64) -> Vec<Eval> {
+        let in_share = |e: &Eval| event.rem_euclid(100) < (e.3 * 100.0) as i64;
+        self.evals_on(on).into_iter().filter(in_share).collect()
+    }
+
     /// True when some eval's judge is `role`.
     pub fn is_judge(&self, role: &str) -> bool {
         rows(&self.raw, "evals").any(|e| str_of(e, "judge") == role)
