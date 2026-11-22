@@ -107,8 +107,8 @@ async fn face_avatars_stay_in_their_box() {
         "the shape picker's faces are 46px"
     );
     assert!(
-        bots.contains(".mc-line .bot.face { width: 22px; height: 22px; }"),
-        "a message's face is 22px"
+        bots.contains(".mc-wface .bot.face { width: 56px; height: 56px; }"),
+        "the face of a bot at work in a chat is 56px"
     );
     assert!(
         chat.contains(".mc-head .mc-face .bot { width: 26px; height: 26px; }"),

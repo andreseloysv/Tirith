@@ -4,27 +4,15 @@
 .mc-presence { margin: 0 auto 0 10px; font-size: 12px; opacity: .75; } .mc-presence.work { opacity: 1; color: var(--accent, #2f5fc4); } .mc-presence.live::before, .mc-presence.work::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; background: currentColor; vertical-align: 1px; }
 .mc-x { font-size: 20px; line-height: 1; color: var(--mut); padding: 2px 8px; border-radius: 8px; } .mc-x:hover { background: var(--soft); }
 .mc-log { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 4px 4px 8px 0; overflow-anchor: none; }
-.mc-log > .quiet { margin: auto 0; text-align: center; padding: 0 12px; }
+.mc-log > p.quiet { margin: auto 0; text-align: center; padding: 0 12px; }
 .mc-m { display: flex; flex-direction: column; gap: 3px; max-width: 92%; align-items: flex-start; }
 .mc-m.me { align-self: flex-end; align-items: flex-end; } .mc-m.mgr { align-self: flex-start; }
-.mc-b { padding: 8px 12px; border-radius: 14px; word-break: break-word; overflow-wrap: anywhere; }
-.mc-m.me .mc-b { color: #fff; background: linear-gradient(180deg, #4a85f5, #2f6fed); border-bottom-right-radius: 4px; white-space: normal; box-shadow: 0 2px 8px rgba(47,111,237,.22); }
-.mc-m.me.local .mc-b { opacity: .7; }
-.mc-m.me.sent .mc-b { opacity: 1; }
-.mc-wait { opacity: .75; }
-.mc-m.me.failed .mc-b { opacity: 1; background: linear-gradient(180deg, #e0605a, #c9443f); box-shadow: 0 2px 8px rgba(201,68,63,.22); }
+.mc-b { word-break: break-word; overflow-wrap: anywhere; }
 .mc-bad { color: #c9443f; font-weight: 600; } .mc-why { opacity: .85; }
 .mc-lnk { font: inherit; color: var(--acc, #2f6fed); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; }
-.mc-m.mgr .mc-b { background: rgb(var(--w) / .72); border: 1px solid rgb(var(--w) / .9); border-bottom-left-radius: 4px; box-shadow: inset 0 1px 0 var(--hi), 0 2px 10px rgba(70,95,130,.08); }
-.mc-meta { font-size: 11.5px; color: var(--mut); padding: 0 4px; font-variant-numeric: tabular-nums; }
 .mc-acts { width: 100%; } .mc-acts .acts { margin: 0; padding: 2px 10px; border-radius: 12px; background: rgb(var(--w) / .55); border: 1px solid var(--glass-line); }
 .mc-acts .arow { flex-wrap: wrap; } .mc-acts .alab { max-width: none; white-space: normal; } .mc-acts .acmd { flex-basis: 100%; order: 3; }
 .mc-acts .astat { margin-left: auto; flex-wrap: wrap; justify-content: flex-end; }
-.mc-typing { display: inline-flex; gap: 4px; align-items: center; padding: 11px 14px; }
-.mc-typing i { width: 6px; height: 6px; border-radius: 50%; background: var(--grey); animation: mcdot 1.2s infinite ease-in-out; }
-.mc-typing i:nth-child(2) { animation-delay: .15s; } .mc-typing i:nth-child(3) { animation-delay: .3s; }
-@keyframes mcdot { 0%, 60%, 100% { opacity: .35; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }
-@media (prefers-reduced-motion: reduce) { .mc-typing i { animation: none; } }
 .mc-wait, .mc-reason { font-size: 11.5px; color: var(--mut); padding: 2px 4px; font-variant-numeric: tabular-nums; }
 .mc-wait.late { color: var(--amber); }
 .mc-reason { font-size: 12.5px; color: var(--ink, inherit); } .mc-reason.bad { color: var(--red); }
@@ -46,11 +34,10 @@
 .mc-dot { display: none; position: absolute; top: -3px; right: -3px; width: 9px; height: 9px; border-radius: 50%; background: var(--amber); border: 2px solid var(--card); }
 .mc-btn.wait .mc-dot { display: block; }
 .chat-title { align-self: center; margin-right: auto; font-size: 12px; }
-:root[data-theme="dark"] .mc-m.mgr .mc-b, :root[data-theme="dark"] .mc-box, :root[data-theme="dark"] .mc-btn { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.14); box-shadow: none; }
+:root[data-theme="dark"] .mc-box, :root[data-theme="dark"] .mc-btn { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.14); box-shadow: none; }
 .mc-pics { display: flex; flex-wrap: wrap; gap: 6px; max-width: 100%; } .mc-m.me .mc-pics { justify-content: flex-end; }
 .mc-pic { padding: 0; border: 1px solid var(--glass-line, var(--line)); border-radius: 10px; overflow: hidden; background: var(--soft); cursor: zoom-in; line-height: 0; }
 .mc-pic img { width: 96px; height: 72px; object-fit: cover; display: block; } .mc-pic:hover { border-color: var(--blue); }
-.mc-m.local .mc-pics { opacity: .7; }
 .mc-strip { display: flex; flex-wrap: wrap; gap: 6px; }
 .mc-th { display: flex; flex-direction: column; gap: 2px; width: 76px; min-width: 0; line-height: 1.25; }
 .mc-thi { position: relative; display: block; width: 76px; height: 58px; line-height: 0; }

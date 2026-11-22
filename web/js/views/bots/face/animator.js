@@ -1,11 +1,15 @@
-// The 2D face's animator: the float, breathing, glances, blinks, acts and the sleeping z's of one face, in the
-// mood of its state. It computes the motion; `paint` (face.js) writes the float and the halo to the face's layers.
+// The 2D face's animator: the float, breathing, glances, blinks, the ten acts (acts.js, as the 3D face plays them)
+// and, asleep, its own small ones and the z's, in the mood of its state. It computes the motion; `paint` (face.js)
+// writes the float and the halo to the face's layers, features.js the eyes and the mouth.
 import { R, TAU, MOOD, NUM, ACTS } from './motion.js';
 import { still, start, stop } from './clock.js';
+import { Acts } from './schedule.js';
+import { partsOf } from './features.js';
 import { happen, actPose, floatPose, moveEyes, moveZs } from './animator-steps.js';
 
 export class Animator {
-  constructor(root, state) {
+  /** `play`: how it plays its acts ({lively, key}, schedule.js). */
+  constructor(root, state, play) {
     this.mood = { ...MOOD[state] || MOOD.idle };
     this.target = MOOD[state] || MOOD.idle;
     this.state = state;
@@ -14,20 +18,20 @@ export class Animator {
     this.p = this.w.map(() => R(0, TAU));
     this.t = null; this.clock = 0;
     this.visible = true;
-    this.eye = { x: 0, y: 0, fx: 0, fy: 0, tx: 0, ty: 0, at: 0, d: 1 };
+    this.eye = { x: 0, y: 0, fx: 0, fy: 0, tx: 0, ty: 0, at: 0, d: 1, free: 1 };
     this.next = { blink: R(0.5, 4), look: R(0.3, 2), act: R(1.5, 7), z: R(0.5, 2) };
     this.blinks = []; this.act = null; this.zs = [];
+    this.acts = new Acts(play);
     this.bind(root, state);
     start(this, root);
   }
   /** New markup (another state, shape or colour): the same motion goes on in it. */
   bind(root, state) {
     this.root = root;
-    this.float = root.querySelector('.ffloat'); this.eyes = root.querySelector('.eyes'); this.look = root.querySelector('.look');
+    this.float = root.querySelector('.ffloat');
     this.halo = root.querySelector('.fhalo'); this.zg = root.querySelector('.zs');
     this.zs.forEach((z) => z.el.remove()); this.zs = [];
-    this.lookT = this.eyesT = null; /* the last eye transforms written: unchanged ones are not written again */
-    this.ey = Number(this.eyes && this.eyes.dataset.y) || 50;
+    this.parts = partsOf(root);
     if (state !== this.state) {
       if (this.state === 'sleep' && state !== 'sleep') { this.act = { ...ACTS.wake(), at: this.clock }; this.blinks.push(this.clock + 0.05); }
       this.state = state; this.target = MOOD[state] || MOOD.idle;
@@ -43,9 +47,9 @@ export class Animator {
     for (const k of NUM) m[k] += (g[k] - m[k]) * Math.min(1, dt * 2.5); /* a new state blends in */
     const now = this.clock;
     happen(this, now, g);
-    const o = actPose(this, now);
-    this.paint(floatPose(this, m, c, o));
-    moveEyes(this, now, o);
+    const pose = this.acts.step(t, this.state); /* in real seconds, whatever the mood's pace */
+    this.paint(floatPose(this, m, c, actPose(this, now), pose));
+    moveEyes(this, now, pose);
     moveZs(this, now);
   }
   paint() { /* the layers' writer: face.js */ }

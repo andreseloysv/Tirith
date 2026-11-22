@@ -21,12 +21,12 @@ export function useSpeaker(project, who) {
   const unread = useUnread();   /* the bots and their unread answers, as the sidebar's Faces show them */
   const entry = (M && M.roles[role]) || null;
   const whoName = who || (entry && entry.name) || (isProject ? 'Project Manager' : 'Manager');
-  const face = (entry && entry.face && entry.face.shape && entry.face) || (isProject ? { shape: 'hex', color: '#8e7cf0' } : null);
-  const faceKey = face ? `${face.shape}:${face.color || ''}` : '';
   const busy = !!s.busy[project];
   /* with its unread answers */
   const bot = unread.bots.find((b) => (b.key || `bot-${b.id}`) === project) || null;
   const unseen = bot ? unread.by[bot.id] || 0 : 0;
+  /* a bot's own, until the models say it: the face at work is there from the first dot */
+  const face = (entry && entry.face && entry.face.shape && entry.face) || (bot && bot.shape && { shape: bot.shape, color: bot.color }) || (isProject ? { shape: 'hex', color: '#8e7cf0' } : null);
   const faceState = faceStateOf(busy, bot);
-  return { s, talk, name, isProject, role, whoName, face, faceKey, busy, bot, unseen, faceState, stateLabel: LABEL[faceState] };
+  return { s, talk, name, isProject, role, whoName, face, busy, bot, unseen, faceState, stateLabel: LABEL[faceState] };
 }

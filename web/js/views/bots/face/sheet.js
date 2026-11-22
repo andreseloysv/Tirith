@@ -1,6 +1,6 @@
 // One GPU renderer off screen draws every bot that is due into its own corner of one sheet; then each bot copies
 // its corner into its own little canvas, which scrolls with the page. One sheet means one snapshot per frame.
-// Bots under 64 px draw 15 times a second, the rest (and the one under the pointer) 30.
+// Bots under 64 px draw 15 times a second; the rest, one playing an act or at work in a chat 30; a fast act there 60.
 import * as THREE from '../../../../vendor/three/three.module.min.js';
 import { MARGIN, CAP, FREEZE } from './config.js';
 import { Bot3D } from './bot3d.js';
@@ -54,8 +54,8 @@ function dueBots(now) {
     const hoverActive = b.pointerOver && !b.reduced;
     if (FREEZE && b.drawnOnce && !b.dirty) continue; // frozen: the same picture, drawn once
     if (b.quiet && b.drawnOnce && !b.dirty && !hoverActive && b.settled) continue; // still: drawn once, moves only under the pointer
-    // small bots in lists move a pixel or two: 15 pictures a second are enough; big ones and the one under the pointer get 30
-    const every = b.hovered || hoverActive || b.el.offsetWidth >= 64 ? 1 / 30 : 1 / 15;
+    // small bots in lists move a pixel or two: 15 pictures a second are enough; big ones, acts and the pointed one get 30
+    const every = b.fast ? 1 / 60 : b.hovered || hoverActive || b.lively || b.acting || b.el.offsetWidth >= 64 ? 1 / 30 : 1 / 15;
     if (now - (b.drawnAt || 0) < every - 0.004) continue;
     const dt = Math.min(0.1, now - (b.drawnAt || now)); b.drawnAt = now;
     const r = b.update(now, dt, pointer3);
@@ -91,9 +91,9 @@ function frame3() {
 }
 /** Put a live 3D bot in an element (Face uses it; the test page web/bots3d-test.html too).
  *  Returns the bot (setMood, dispose), or null without WebGL. */
-export function attachBot3D(el, { shape = 'round', color = '#3b82f6', state = 'idle', still: frozen = false } = {}) {
+export function attachBot3D(el, { shape = 'round', color = '#3b82f6', state = 'idle', still: frozen = false, lively = false } = {}) {
   if (!el || !ensureGL()) return null;
-  const b = new Bot3D(el, shape, color, state, frozen);
+  const b = new Bot3D(el, shape, color, state, frozen, lively);
   bots3.add(b);
   if (!raf3) raf3 = requestAnimationFrame(frame3);
   return b;

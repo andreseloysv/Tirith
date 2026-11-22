@@ -8,10 +8,11 @@ import { bodyGeometry3 } from './geometry.js';
 import { bodyMaterial3 } from './materials.js';
 import { camera3, halo3, eyes3, mouths3 } from './bot3d-parts.js';
 import { frozenPose, stillPose, livePose } from './bot3d-pose.js';
+import { Acts } from './schedule.js';
 import { bots3, seen3 } from './registry.js';
 
 export class Bot3D {
-  constructor(el, name, color, mood, frozen) {
+  constructor(el, name, color, mood, frozen, lively = false) {
     this.el = el; this.name = SHAPES3D[name] ? name : 'round'; this.sh = SHAPES3D[this.name]; this.color = color;
     this.reduced = !!(still && still.matches);
     this.quiet = !!frozen || this.reduced; // drawn once; moves only under the pointer (never, with reduced motion)
@@ -21,12 +22,16 @@ export class Bot3D {
     this.halo = halo3(this.color);
     this.scene.add(this.halo);
     this.rig = new THREE.Group(); this.scene.add(this.rig);
+    this.rig.rotation.order = 'ZXY'; // turned, then nodded, then rolled as one sees it
+    this.lively = lively; this.acting = false; this.fast = false; this.gaze = [0, 0];
+    this.round = THREE.MathUtils.clamp((Math.min(...this.sh.r) - 0.68) / 0.3, 0, 1); // how far it can be a ball (a spin)
+    this.acts = new Acts({ lively, key: `${this.name}:${color}` });
     const seg = el.offsetWidth > 90 ? 128 : 64;
     this.body = new THREE.Mesh(bodyGeometry3(this.name, seg), bodyMaterial3(this.color)); this.rig.add(this.body);
     this.eyes = eyes3(this.sh);
     this.eyes.forEach((eye) => this.rig.add(eye));
     Object.assign(this, mouths3(this.sh));
-    this.rig.add(this.grin, this.smile, this.sleepy);
+    this.rig.add(this.grin, this.smile, this.sleepy, this.yawn, ...this.shut);
     this.yaw = 0; this.pitch = 0; this.ty = 0; this.tp = 0; this.nextLook = 0; this.nextBlink = 1 + Math.random() * 3; this.blinkAt = -1;
     this.phase = Math.random() * 10; this.setMood(mood);
     this.mountCanvas(el);
@@ -59,7 +64,7 @@ export class Bot3D {
     this.el.removeEventListener('pointerleave', this.onLeave);
     if (this.el.bot3d === this) this.el.bot3d = null;
     this.body.material.dispose(); this.halo.material.dispose();
-    for (const g of [this.grin, this.sleepy]) g.children.forEach((m) => m.geometry.dispose());
-    this.smile.geometry.dispose();
+    for (const g of [this.grin, this.sleepy, this.yawn]) g.children.forEach((m) => m.geometry.dispose());
+    for (const m of [this.smile, ...this.shut]) m.geometry.dispose();
   }
 }

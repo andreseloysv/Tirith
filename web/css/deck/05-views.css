@@ -4,7 +4,6 @@
 .pitems .pchk { display: none; } /* an item's check command: in its lane's drawer, not in the plan */
 .ovside { border-left: 1px solid var(--line); padding: 14px 20px 16px !important; }
 .v-bots { padding: 0; }
-@media (prefers-reduced-motion: reduce) { .mc-pulse { animation: none; } }
 @media (max-width: 800px) {
   :root { --page-pad: 14px; }
   /* The phone gets one rail of faces and no text menu: deck.css is loaded after style.css, so its

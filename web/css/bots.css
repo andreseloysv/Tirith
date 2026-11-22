@@ -26,7 +26,7 @@
 .nbot .bot.face { width: 64px; height: 64px; }
 .rface .bot.face { width: 40px; height: 40px; }
 .bshapes .bot.face { width: 46px; height: 46px; }
-.mc-line .bot.face { width: 22px; height: 22px; }
+.mc-wface .bot.face { width: 56px; height: 56px; }
 /* inside that box the layers keep a margin, so the blurred glow fades out before the clip edge:
    clipped at inset 0 it ended in a hard dark square around every avatar (the 2026-11-21 phone captures) */
 .nbot .bot.face .ffloat, .mc-face .bot.face .ffloat, .rface .bot.face .ffloat, .bshapes .bot.face .ffloat { inset: 10%; }
@@ -38,6 +38,13 @@
    closest-side is the canvas's own half, and the box edge sits at 59% of it (the canvas is 170% of the box) */
 .nbot .bot.face .botcv, .mc-face .bot.face .botcv, .rface .bot.face .botcv, .bshapes .bot.face .botcv {
   -webkit-mask-image: radial-gradient(closest-side, #000 40%, transparent 59%); mask-image: radial-gradient(closest-side, #000 40%, transparent 59%); }
+/* the face at work in a chat has room to hop: no box clips it, and its glow is gone before the thread's edge could cut it */
+.mc-wface .bot.face .botcv {
+  -webkit-mask-image: radial-gradient(closest-side, #000 56%, transparent 69%); mask-image: radial-gradient(closest-side, #000 56%, transparent 69%); }
+.mc-wface .bot.face .fhalo {
+  -webkit-mask-image: radial-gradient(closest-side, #000 70%, transparent 100%); mask-image: radial-gradient(closest-side, #000 70%, transparent 100%); }
+/* the eyes move in a layer of their own, so the blurred body under them is never painted again */
+.bot.face .feyes { will-change: transform; }
 .bot .z { font-family: var(--b-mono, ui-monospace, Menlo, monospace); font-weight: 500; fill: var(--b-mut, #8c8c8c); }
 .bot .ring { transform-box: fill-box; transform-origin: center; animation: b-spin 14s linear infinite; }
 @keyframes b-spin { to { transform: rotate(360deg); } }
