@@ -1,11 +1,10 @@
 //! The daemon's side: it starts what a caller under Tirith's own profile asks, under one at least as tight, waits, and gives its exit code. Anyone else gets nothing: it is no way out of another sandbox. A caller that is gone takes it along, and so does a daemon that stops (`watch.rs`).
-use super::{around::around, place, spawn::spawn, watch::Watch, Request};
+use super::{around::around, doors::Doors, place, spawn::spawn, watch::Watch, Request};
 use crate::app::{kill_group, Shared};
 use crate::sandbox::{handover, mac};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::os::fd::{FromRawFd, OwnedFd};
-use std::os::unix::fs::PermissionsExt;
-use std::os::unix::net::{UnixListener, UnixStream};
+use std::os::unix::net::UnixStream;
 use std::time::Duration;
 
 /// The most a request holds (its environment is in it).
@@ -18,13 +17,8 @@ pub(in crate::sandbox) fn start(app: &Shared) {
     let Some(path) = place::socket(&app.home) else {
         return;
     };
-    let _ = std::fs::remove_file(&path); // left by a daemon before
-    let listener = UnixListener::bind(&path).and_then(|l| {
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
-        Ok(l)
-    });
-    let listener = match listener {
-        Ok(l) => l,
+    let (listener, doors) = match super::listen::open(app, &path) {
+        Ok(opened) => opened,
         Err(e) => {
             app.event(
                 "",
@@ -41,20 +35,20 @@ pub(in crate::sandbox) fn start(app: &Shared) {
     std::thread::spawn(move || {
         for caller in listener.incoming().flatten() {
             let app = app.clone();
-            std::thread::spawn(move || serve(&app, caller));
+            std::thread::spawn(move || serve(&app, doors, caller));
         }
     });
 }
 
-fn serve(app: &Shared, mut caller: UnixStream) {
-    let code = match answer(app, &caller) {
+fn serve(app: &Shared, doors: Doors, mut caller: UnixStream) {
+    let code = match answer(app, doors, &caller) {
         Ok(code) => format!("{code}\n"),
         Err(why) => format!("{}\n", why.replace('\n', " ")),
     };
     let _ = caller.write_all(code.as_bytes());
 }
 
-fn answer(app: &Shared, caller: &UnixStream) -> Result<i32, String> {
+fn answer(app: &Shared, doors: Doors, caller: &UnixStream) -> Result<i32, String> {
     let pid = place::peer(caller).ok_or("only this user's processes")?;
     let _ = caller.set_read_timeout(Some(Duration::from_secs(10)));
     let fds = handover::receive(caller).unwrap_or_default();
@@ -74,7 +68,7 @@ fn answer(app: &Shared, caller: &UnixStream) -> Result<i32, String> {
     let io: [OwnedFd; 3] = io
         .try_into()
         .map_err(|_| "its stdin, stdout and stderr are missing")?;
-    let (r, around) = around(app, asked)?;
+    let (r, around) = around(app, asked, doors)?;
     let mut child = spawn(&r, &around, io)?;
     let _watch = match Watch::over(child.id()) {
         Ok(watch) => watch,

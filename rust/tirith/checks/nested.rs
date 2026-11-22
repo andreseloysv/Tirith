@@ -159,7 +159,10 @@ fn the_one_profile_only_takes_away() {
         ..r
     };
     let around = limits::Around {
-        port: 7717,
+        doors: super::doors::Doors {
+            main: 7717,
+            rules: 7718,
+        },
         kept: vec!["/nonexistent/socket".into()],
     };
     let (text, params) = limits::profile(&r, &around);
@@ -255,7 +258,10 @@ fn what_runs_under_the_one_profile_is_still_an_agents() {
         ..Default::default()
     };
     let around = limits::Around {
-        port: 7717,
+        doors: super::doors::Doors {
+            main: 7717,
+            rules: 7718,
+        },
         kept: vec![],
     };
     let (text, params) = limits::profile(&r, &around);
@@ -393,7 +399,7 @@ fn only_codexs_own_process_reaches_this_machines_ports() {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port().to_string();
     let around = limits::Around {
-        port: 1,
+        doors: super::doors::Doors { main: 1, rules: 2 },
         kept: vec![],
     };
     let connects = |program: &str| {
@@ -450,4 +456,87 @@ fn only_codexs_own_process_reaches_this_machines_ports() {
     });
     let _ = (child.kill(), child.wait());
     assert!(marked, "Codex's own process keeps the daemon's marks too");
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn the_daemons_port_is_a_roles_and_the_hooks_door_the_limited_ones() {
+    use super::doors::Doors;
+    // SAFETY: getpid only reads this process's own id.
+    if crate::sandbox::mac::ours(unsafe { libc::getpid() }) {
+        return; // confined already
+    }
+    let (api, hook) = (
+        std::net::TcpListener::bind("127.0.0.1:0").unwrap(),
+        std::net::TcpListener::bind("127.0.0.1:0").unwrap(),
+    );
+    let port = |l: &std::net::TcpListener| l.local_addr().unwrap().port();
+    let doors = Doors {
+        main: port(&api),
+        rules: port(&hook),
+    };
+    let connects = |r: &super::Request, port: u16| {
+        let around = limits::Around {
+            doors,
+            kept: vec![],
+        };
+        let (text, params) = limits::profile(r, &around);
+        std::process::Command::new(super::super::profile::SANDBOX_EXEC)
+            .args(
+                params
+                    .iter()
+                    .flat_map(|(name, value)| ["-D".to_string(), format!("{name}={value}")]),
+            )
+            .args([
+                "-p",
+                &text,
+                "/usr/bin/nc",
+                "-z",
+                "-G",
+                "2",
+                "127.0.0.1",
+                &port.to_string(),
+            ])
+            .output()
+            .unwrap()
+            .status
+            .success()
+    };
+    for (program, net) in [
+        ("/usr/bin/true", false),
+        ("/usr/bin/true", true),
+        ("/usr/bin/nc", false),
+        ("/usr/bin/nc", true),
+    ] {
+        let r = super::Request {
+            program: program.into(),
+            net,
+            ..Default::default()
+        };
+        assert!(
+            !connects(&r, doors.main),
+            "no API for a limited one: {program}, network {net}"
+        );
+        assert!(
+            connects(&r, doors.rules),
+            "the rules' hook has its door: {program}, network {net}"
+        );
+        let role = super::Request {
+            agent: true,
+            ..r.clone()
+        };
+        assert!(
+            connects(&role, doors.main),
+            "a role keeps its reads: {program}, network {net}"
+        );
+    }
+    let mut r = super::Request {
+        env: vec![("TIRITH_PORT".into(), doors.main.to_string())],
+        ..Default::default()
+    };
+    doors.told(&mut r);
+    assert_eq!(
+        r.env,
+        vec![("TIRITH_PORT".to_string(), doors.rules.to_string())]
+    );
 }

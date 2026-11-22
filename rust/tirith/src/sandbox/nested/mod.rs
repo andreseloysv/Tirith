@@ -9,12 +9,15 @@ mod broker;
 #[cfg(target_os = "macos")]
 mod client;
 mod commands;
+mod doors;
 #[cfg(target_os = "macos")]
 mod ending;
 mod flags;
 mod layers;
 mod limits;
 mod line;
+#[cfg(target_os = "macos")]
+mod listen;
 mod mode;
 #[cfg(target_os = "macos")]
 mod other;
