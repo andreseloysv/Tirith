@@ -2,7 +2,7 @@
 use super::written::has;
 use serde_json::Value;
 use toml_edit::DocumentMut;
-/// The owner's bot roles go, and every route to one of them, and the schedule and webhook routes — its routines — (and other routes, if changed) of the system bots in `bots`.
+/// The owner's bot roles go, and every route to one of them, and the schedule and webhook routes with a task — its routines — (and other routes, if changed) of the system bots in `bots`. A timed route with no task is a system bot's pass: nothing would write it again, so it stays.
 pub(super) fn drop_bots(doc: &mut DocumentMut, bots: &[Value]) {
     doc.get_mut("roles")
         .and_then(|i| i.as_table_mut())
@@ -21,17 +21,10 @@ pub(super) fn drop_bots(doc: &mut DocumentMut, bots: &[Value]) {
         .into_iter()
         .for_each(|routes| {
             routes.retain(|r| {
-                !r.get("to").and_then(|i| i.as_str()).is_some_and(|to| {
-                    to.starts_with("bot-")
-                        || has(
-                            bots,
-                            to,
-                            !matches!(
-                                r.get("on").and_then(|i| i.as_str()),
-                                Some("schedule" | "webhook")
-                            ),
-                        )
-                })
+                let said = |k: &str| r.get(k).and_then(|i| i.as_str()).unwrap_or("");
+                let (to, timed) = (said("to"), matches!(said("on"), "schedule" | "webhook"));
+                let pass = timed && said("task").is_empty();
+                !(to.starts_with("bot-") || (!pass && has(bots, to, !timed)))
             })
         });
 }
