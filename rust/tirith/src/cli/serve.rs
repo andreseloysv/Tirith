@@ -1,7 +1,7 @@
 //! `tirith serve`: the daemon.
 use crate::app::{App, Shared};
 use crate::{
-    bots, chat, config, guard, lanes, merge, metrics, models, plan, rooms, sandbox, server,
+    bots, chat, config, guard, lanes, merge, metrics, models, plan, power, rooms, sandbox, server,
 };
 use std::time::Duration;
 
@@ -61,6 +61,7 @@ fn start_workers(app: &Shared) {
         bots::start,
         chat::start,
         models::start,
+        power::start,
     ]
     .into_iter()
     .for_each(|start| start(app.clone()));

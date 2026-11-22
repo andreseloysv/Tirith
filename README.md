@@ -239,6 +239,8 @@ push = true
 [network]
 sandbox = true
 proxy_port = 47812
+[power]
+keep_awake = false                  # true: a Mac does not sleep while the daemon runs (read when it starts)
 [messenger]
 url = "https://agentsmessenger.com"
 name = "tirith-manager"
