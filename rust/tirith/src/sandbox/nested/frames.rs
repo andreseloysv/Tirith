@@ -1,8 +1,8 @@
 //! The WebSocket frames (RFC 6455) of the bridge: one peer on this machine, whole messages, no extensions.
 use std::io::{Read, Result, Write};
 
-/// The most one message holds, a whole file as JSON among them: the daemon holds one of them each way.
-pub(super) const MOST: u64 = 32 << 20;
+/// The most one message holds, a whole file as JSON among them: what Codex's own WebSocket takes (over it Codex drops its connection, and the run with it). The daemon holds one of them each way.
+pub(super) const MOST: u64 = 16 << 20;
 pub(super) const TEXT: u8 = 1;
 pub(super) const CLOSE: u8 = 8;
 const PING: u8 = 9;

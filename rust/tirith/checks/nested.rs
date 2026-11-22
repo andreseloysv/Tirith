@@ -660,7 +660,7 @@ fn the_bridge_speaks_websocket() {
     assert!(said["error"]["message"]
         .as_str()
         .unwrap()
-        .contains("more than 32 MiB"));
+        .contains("more than 16 MiB"));
     assert!(
         matches!(frames::next(&mut from, |_| {}), Some(frames::Got::Whole(next)) if next == b"after"),
         "and the bridge goes on"
