@@ -3,7 +3,7 @@ use regex::{Captures, Regex};
 use std::sync::LazyLock;
 
 /// The tirith subcommands a check may call.
-const OK: [&str; 18] = [
+const OK: [&str; 19] = [
     "serve",
     "hook",
     "hooks",
@@ -21,6 +21,7 @@ const OK: [&str; 18] = [
     "models",
     "guard",
     "project",
+    "service",
     "help",
 ];
 

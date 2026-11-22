@@ -1,4 +1,5 @@
 tirith serve                                   run the daemon (page on http://127.0.0.1:<port>/)
+tirith service install|uninstall|status        (the owner) the daemon starts by itself and comes back when it ends (launchd on macOS, systemd on Linux)
 tirith status [--project P]                    lanes and the merge queue (of one project)
 tirith plan show <project>                     the plan with what works on each item
 tirith plan add <project> <step> "<text>"      add an item to a step

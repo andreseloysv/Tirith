@@ -134,7 +134,7 @@ Files:
 
 ## `cli/`
 
-The command line. `main.rs` is the crate root: its `mod` lines and a `main` that hands the arguments to `cli/`. `tirith serve` is the daemon; every other command is one HTTP call to it on 127.0.0.1 (`client.rs`), so it starts in milliseconds. A module's own commands live in that module (`guard/cli.rs`, `rooms/cli.rs`, ...); `cli/dispatch.rs` asks them first.
+The command line. `main.rs` is the crate root: its `mod` lines and a `main` that hands the arguments to `cli/`. `tirith serve` is the daemon; every other command but `tirith service` (see `service/`) is one HTTP call to it on 127.0.0.1 (`client.rs`), so it starts in milliseconds. A module's own commands live in that module (`guard/cli.rs`, `rooms/cli.rs`, ...); `cli/dispatch.rs` asks them first.
 
 Files:
 
@@ -832,6 +832,24 @@ Files:
 - `settings.rs`: Settings the manager or the page change: a project's autopilot and a stage's time limit.
 - `state.rs`: The whole state the page starts from.
 - `web.rs`: The page's files.
+
+## `service/`
+
+`tirith service install|uninstall|status`: the daemon as the user's own service, so it starts by itself. These commands work on the machine, not through the daemon. On macOS it is the LaunchAgent `~/Library/LaunchAgents/com.tirith.serve.plist`, not a LaunchDaemon, because Safari, Edge and the keychain need the user's session; on Linux the user unit `~/.config/systemd/user/tirith.service`, which needs `loginctl enable-linger` to run without a session. The file names the binary that installed it and that shell's `TIRITH_HOME` and `TIRITH_PORT`: install again after moving any of them, which also restarts the daemon. A daemon started by hand keeps the port until it stops; the service retries and then takes over, and `status` calls the service alive only when the pid that `/api/state` answers is the service's. Agents cannot install or uninstall it. Test `service_files_keep_serve_alive` (`rust/tirith/checks/service.rs`).
+
+Files:
+
+- `cli.rs`: `tirith service install|uninstall|status`.
+- `launchd.rs`: launchd: a LaunchAgent in the user's `gui/<uid>` domain. A LaunchDaemon would have no Safari, no Edge and no keychain: they need the user's session.
+- `lifecycle.rs`: Installing and removing the service.
+- `manager.rs`: The service manager of this OS, as the commands use it.
+- `mod.rs`: Declares the folder's files and re-exports what other modules use.
+- `plist.rs`: The LaunchAgent's plist.
+- `run.rs`: Running the service manager's command.
+- `spec.rs`: What the service runs: this binary, for this Tirith home.
+- `status.rs`: `tirith service status`: installed, loaded and alive.
+- `systemd.rs`: systemd: a user unit, in the user's own session like the LaunchAgent.
+- `unit.rs`: The systemd user unit.
 
 ## `teach/`
 
