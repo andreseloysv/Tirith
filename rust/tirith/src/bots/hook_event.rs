@@ -2,20 +2,36 @@
 use serde_json::{json, Value};
 /// The longest `text` a webhook event carries.
 const TEXT: usize = 4000;
-/// The event of one `tirith-hook {"v":1,"at":…,"headers":{…},"body":…}` line (the part after the mark): `source` (github when GitHub sent it, else the user-agent), `kind` (`github:<event>.<action>`, or `hook`), `title`, `url`, `text` (the body as text, 4000 characters at most) and `data` (the body).
+/// The event of one `tirith-hook {"v":1,"at":…,"headers":{…},"body":…}` line (the part after the mark): `source` (github when GitHub sent it, mail for the owner's mail script, else the user-agent), `kind` (`github:<event>.<action>`, `mail:received`, or `hook`), `title`, `url`, `text` (the body as text, 4000 characters at most; a mail's sender, subject, date and body) and `data` (the body).
 pub(super) fn event_of(payload: &str) -> Option<Value> {
     let v: Value = serde_json::from_str(payload).ok()?;
     let (h, body) = (&v["headers"], v["body"].clone());
     let github = h["x-github-event"].as_str().filter(|e| !e.is_empty());
-    let source = github.map_or_else(|| agent(h), |_| "github".to_string());
-    let kind = github.map_or("hook".to_string(), |e| match body["action"].as_str() {
-        Some(a) => format!("github:{e}.{a}"),
-        None => format!("github:{e}"),
-    });
+    let mail = github.is_none() && body["from"].is_string() && body["subject"].is_string();
+    let source = match (github, mail) {
+        (Some(_), _) => "github".to_string(),
+        (_, true) => "mail".to_string(),
+        _ => agent(h),
+    };
+    let kind = match (github, mail) {
+        (Some(e), _) => match body["action"].as_str() {
+            Some(a) => format!("github:{e}.{a}"),
+            None => format!("github:{e}"),
+        },
+        (_, true) => "mail:received".to_string(),
+        _ => "hook".to_string(),
+    };
     let (title, url) = title_and_url(&body);
-    let text = match &body {
-        Value::String(s) => s.clone(),
-        b => serde_json::to_string_pretty(b).unwrap_or_default(),
+    let text = match (&body, mail) {
+        (_, true) => format!(
+            "From: {}\nSubject: {}\nDate: {}\n\n{}",
+            body["from"].as_str().unwrap_or(""),
+            body["subject"].as_str().unwrap_or(""),
+            body["date"].as_str().unwrap_or(""),
+            body["text"].as_str().unwrap_or("")
+        ),
+        (Value::String(s), _) => s.clone(),
+        (b, _) => serde_json::to_string_pretty(b).unwrap_or_default(),
     };
     Some(
         json!({"source": source, "kind": kind, "title": title, "url": url, "text": text.chars().take(TEXT).collect::<String>(), "data": body, "at": v["at"]}),
@@ -74,9 +90,4 @@ pub(super) fn matches(when: &str, e: &Value) -> bool {
     let (when, label) = (when.trim(), label(e));
     let pattern = format!("^{}$", regex::escape(when).replace(r"\*", ".*"));
     when == "*" || regex::Regex::new(&pattern).is_ok_and(|re| re.is_match(&label))
-}
-/// GitHub's call when a pull request is opened, as the page's «Probar» sends it: no platform in between.
-pub(super) fn sample() -> String {
-    json!({"v": 1, "at": crate::app::now_iso(), "headers": {"content-type": "application/json", "user-agent": "GitHub-Hookshot/tirith-test", "x-github-event": "pull_request"},
-        "body": {"action": "opened", "number": 1, "pull_request": {"title": "Example pull request", "html_url": "https://github.com/example/repo/pull/1", "body": "An example sent by «Probar» on the page.", "user": {"login": "example"}}, "repository": {"full_name": "example/repo"}}}).to_string()
 }

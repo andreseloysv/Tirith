@@ -1,7 +1,7 @@
 // In every page: while the bot is being taught (chrome.storage.local `teach.on`), the page (URL and title), each
 // click (the element's text, role and a short selector) and each value typed (the field's label and value, a
 // secret's masked) go to the background, which sends them to the daemon. When not recording, nothing is sent.
-/* global teachLabel, teachSecret, MASK */
+/* global teachLabel, teachSecret, teachMaskUrl, teachClickText, MASK */
 var recording = false;
 var lastHref = '';
 
@@ -14,7 +14,7 @@ function send(step) {
 function page() {
   if (!recording || location.href === lastHref) return;
   lastHref = location.href;
-  send({ kind: 'page', url: location.href, title: document.title });
+  send({ kind: 'page', url: teachMaskUrl(location.href), title: document.title });
 }
 
 /** A short selector: the tag with its id, or its name, or two classes, under at most one parent. */
@@ -48,7 +48,10 @@ document.addEventListener('click', function (ev) {
   el = el || ev.target;
   if (!recording || !el || !el.tagName) return;
   var field = /^(input|textarea)$/i.test(el.tagName) && !/^(button|submit|checkbox|radio)$/i.test(el.type || '');
-  send({ kind: 'click', text: field ? teachLabel(el) : textOf(el), role: roleOf(el), selector: selector(el) });
+  var editable = !!el.isContentEditable || el.getAttribute('role') === 'textbox'; // what is typed in it is never a click's text
+  var text = teachClickText({ editable: editable, aria: el.getAttribute('aria-label') || el.getAttribute('placeholder'),
+    field: field, label: field ? teachLabel(el) : '', text: editable || field ? '' : textOf(el) });
+  send({ kind: 'click', text: text, role: roleOf(el), selector: selector(el) });
 }, true);
 
 document.addEventListener('change', function (ev) {

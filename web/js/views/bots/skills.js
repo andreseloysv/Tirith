@@ -37,7 +37,7 @@ export function Skill({ s, titles = [], open, onOpen, onEdit, onDelete, onActiva
   const missing = missingIn(s.text, titles);
   return html`<li class="bsk">
     <button type="button" class="bskh" aria-expanded=${open} onClick=${onOpen}><b>${s.name}</b><span class="bmut">${descOf(s.text)}</span></button>
-    ${isDraft(s.text) ? html`<p class="bnote bmiss">Draft · no bot uses it until you activate it.
+    ${s.draft || isDraft(s.text) ? html`<p class="bnote bmiss">Draft · kept apart, where no bot loads it, until you activate it.
       <button type="button" class="blink" onClick=${onActivate}>Activate</button></p>` : null}
     ${missing.length ? html`<p class="berr bmiss">Missing: ${missing.join(' · ')}</p>` : null}
     ${open ? html`<div class="bskb md" dangerouslySetInnerHTML=${{ __html: md(bodyOf(s.text)) }} />` : null}

@@ -1,7 +1,8 @@
-//! A bot's webhook from the page: its URL (made once on the platform, then the same), deleted, and «Probar» — a sample GitHub event for one routine, with no platform in between.
+//! A bot's webhook from the page: its URL (made once on the platform, then the same), deleted, and «Probar» — a sample event (GitHub's or an e-mail) for one routine, with no platform in between.
 use super::hook::kept;
-use super::hook_event::{event_of, sample};
+use super::hook_event::{event_of, matches};
 use super::hook_fire::fire;
+use super::hook_sample::for_when;
 use super::list::{bot, key_for};
 use crate::app::{bad, Shared, R};
 use crate::server::s;
@@ -40,7 +41,7 @@ async fn delete(State(app): State<Shared>, Path(id): Path<String>) -> R {
     app.emit("bots", json!({}));
     Ok(Json(json!({"ok": true})))
 }
-/// «Probar»: routine `rid` runs now with GitHub's sample of a pull request opened, whatever its `when`.
+/// «Probar»: routine `rid` runs now with the sample that fits its `when` (an e-mail, or the GitHub event it names), whatever its `when`; `matches` says whether the `when` holds for it.
 async fn test(State(app): State<Shared>, Path((id, rid)): Path<(String, String)>) -> R {
     let b = key_for(&app, &id)
         .and_then(|k| bot(&app, &k))
@@ -52,9 +53,11 @@ async fn test(State(app): State<Shared>, Path((id, rid)): Path<(String, String)>
         .find(|r| r["id"] == rid.as_str())
         .cloned()
         .ok_or_else(|| bad("no such routine".into()))?;
-    let e = event_of(&sample()).ok_or_else(|| bad("no sample".into()))?;
+    let e = event_of(&for_when(&s(&r, "when"))).ok_or_else(|| bad("no sample".into()))?;
     fire(&app, &b, &r, &e, "run-now");
-    Ok(Json(json!({"ok": true, "event": e})))
+    Ok(Json(
+        json!({"ok": true, "event": e, "matches": matches(&s(&r, "when"), &e)}),
+    ))
 }
 pub(super) fn routes() -> Router<Shared> {
     Router::new()

@@ -34,10 +34,12 @@ export function Teach({ bot, onRoutine }) {
   const on = !!rec.on;
   const steps = rec.steps || [];
   const press = () => api('POST', `${path}/${on ? 'stop' : 'start'}`).then(() => { setFail(''); reload(); }, (e) => setFail(e.message));
-  const until = on ? new Date(Date.parse(rec.since) + MOST_MS).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+  /* the daemon says how long is left: its clock and this one may differ */
+  const until = on ? new Date(Date.now() + (rec.left_ms ?? MOST_MS)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
   return html`<div class="bteach">
-    <p class="bnote">Show ${bot.name} a task once in your Edge, and it writes the skill as a draft and asks what one example cannot show.
-      Install <code>tools/teach</code> in Edge (edge://extensions → Load unpacked) and paste this link in it once:</p>
+    <p class="bnote">Show ${bot.name} a task once in your Edge: it writes the skill as a draft and asks what one example cannot show.</p>
+    <a class="bbtn pri tdl" href="/teach-extension.zip" download>Download the extension</a>
+    <p class="bnote">Unzip it, open <code>edge://extensions</code>, turn on Developer mode and Load unpacked. Then paste this link in it once:</p>
     <${Link} link=${`${location.origin}${path}#${rec.token}`} />
     <div class="trow"><button type="button" class=${`bbtn ${on ? 'bdel' : 'pri'}`} onClick=${press}>${on ? 'Parar' : 'Grabar'}</button>
       <span class="bnote">${on ? `Recording · stops by itself at ${until}. What you write in the chat goes with the steps.`

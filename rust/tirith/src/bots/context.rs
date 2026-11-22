@@ -62,6 +62,7 @@ fn memory(file: &FsPath, tag: char) -> String {
 pub fn context(app: &Shared, key: &str) -> Option<String> {
     bot(app, key)?;
     let (dir, common) = (folder(app, key).join(SKILLS), app.home.join("bots/skills"));
+    super::drafts::sweep(app, key); // a draft written where an agent loads skills goes to the drafts folder
     link_shared(&dir, &common);
     link_agent(app, key);
     let shared = memory(&app.home.join(SHARED), 's');

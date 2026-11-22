@@ -52,6 +52,7 @@ fn commit(dir: &Path, ignore: &str, message: &str) {
 /// Commits the folder of the bot whose conversation is `key` and the shared one, each only if it changed.
 pub fn versioned(app: &App, key: &str, message: &str) {
     let _one = COMMITTING.lock().unwrap_or_else(|e| e.into_inner());
+    super::drafts::sweep(app, key); // never a draft among the skills the agents load, nor in their history
     commit(&super::folder(app, key), OWN, message);
     commit(&app.home.join("bots"), SHARED, message);
 }

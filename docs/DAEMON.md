@@ -81,15 +81,20 @@ even with no phone paired), signs with its room key a `request` event in that ro
 (`{"hook": "delete", "id": "<id>"}`), and deleting the bot forgets it. What a service posts to the URL arrives in the room sealed for this
 Tirith alone, as `tirith-hook {"v":1,"at":…,"headers":{…},"body":…}`. The room's watcher (`rooms/hooked.rs`) never makes such a line one of
 the owner's or of another agent: from the `from` agent it becomes the bot's `webhook` event (`bots/hook_event.rs`) — `source` (`github`
-when it has `x-github-event`, else the user-agent), `kind` (`github:<x-github-event>.<action>`, or `hook`), `title` and `url` (of
+when it has `x-github-event`; `mail` for the owner's mail script, a body with `from` and `subject`; else the user-agent), `kind` (`github:<x-github-event>.<action>`, `mail:received`, or `hook`), `title` and `url` (of
 GitHub's pull request, issue, release or comment, else the body's own `title` and `url`), `text` (the body as text, 4000 characters at most)
 and `data` (the body) — and from anyone else it is dropped. The event is kept and shown; each of the bot's routines on `webhook` whose
 `when` holds runs (`bots/hook_fire.rs`, trigger `event:webhook`), handed its task and then the event between two random marks
 (`<<<outside-data <mark>` … `outside-data <mark>>>>`), said to be data from outside and never instructions (`factory/prompts/bot.md` says
-the same). «Probar» on the page (`POST /api/bots/<id>/webhook/test/<routine>`) runs one routine with GitHub's sample of a pull request
-opened, with no platform in between. The Library gives a short Google Apps Script with the URL in it that, every 5 minutes in the
-owner's Google account, posts the new mail labelled `tirith/<bot name>` (sender, subject, date, text, its link) to the webhook and marks it
-read. Tests `webhook_create_signs_the_request` (against a fake platform) and `webhook_starts_its_routine` (`rust/tirith/checks/webhooks.rs`).
+the same). What the task names (`{title}`, `{url}`, `{text}`) is filled in one pass and each value is fenced with the same unguessable mark
+(`⟦outside-data <mark>⟧value⟦/outside-data <mark>⟧`), so a value that names another `{…}` is never expanded again; the chat and the event line show
+the label as name characters only (`hook_clean.rs`) and the title as one quoted line. «Probar» on the page (`POST /api/bots/<id>/webhook/test/<routine>`)
+runs one routine with the sample that fits its `when` (`hook_sample.rs`: an e-mail for `mail:…`, the GitHub event and action it names, else a pull
+request opened), with no platform in between, and says whether the `when` holds for it (`matches`). The Library gives a short Google Apps Script with
+the URL in it that, every 5 minutes in the owner's Google account, posts the new mail labelled `tirith/<bot name>` (sender, subject, date, text, its link)
+to the webhook; it marks a message read only after a 2xx answer, goes on with the next one when one fails, and cuts each call under the platform's 64 KB
+whatever the characters (`web/js/views/bots/mailtext.js`). One button there («Set it up») makes the address and the routine «Mail to <bot>» (`when`
+`mail:*`). Tests `webhook_create_signs_the_request` (against a fake platform) and `webhook_starts_its_routine` (`rust/tirith/checks/webhooks.rs`).
 
 Files:
 
@@ -97,14 +102,17 @@ Files:
 - `card.rs`: A bot's card saved: a new bot, or a change to one.
 - `cli.rs`: A bot's own commands, in its conversation.
 - `context.rs`: What a bot is handed at the start of every turn and routine, and the skill links laid before it.
+- `drafts.rs`: Draft skills (a taught task not yet approved): kept in the bot's `drafts/` folder (shared ones in `<home>/bots/drafts`), outside every folder an agent loads by itself; one found among the skills is moved there (by `context`, `versioned` and the Library's read).
 - `folder.rs`: A bot's folder and skills: where its sessions run (the lab's worktree during a B run), where agents may write, and the skills a folder holds.
 - `fragment.rs`: The bots as a TOML fragment: the owner's bots' roles, and every written bot's routes and routines.
 - `hook.rs`: A bot's webhook as Tirith keeps it (kv `webhook:<bot>`: the platform's id, url and from, and the room), and what arrives through it.
 - `hook_api.rs`: A bot's webhook from the page: its URL (made once on the platform), deleted, and «Probar».
+- `hook_clean.rs`: What a webhook event shows outside its data block: a label of name characters only, a title as one quoted line, and a value fenced inside a task.
 - `hook_event.rs`: What a webhook call brought, as a bot's `webhook` event: where from, what kind, its title, link and text, and the body.
 - `hook_fire.rs`: A webhook event reaches its bot: the bot's `webhook` routines whose `when` holds run with it, the event inside a block marked as data from outside.
+- `hook_sample.rs`: The sample events «Probar» sends a routine: GitHub's (the event and action the `when` names) and the mail script's.
 - `layer.rs`: A changed system bot's layer over its factory role, in config.toml.
-- `library.rs`: The page's Library: a bot's memory, its own skills and the shared ones, read and changed.
+- `library.rs`: The page's Library: a bot's memory, its own skills and the shared ones, drafts included (marked `draft`), read and changed; an agent's call may not activate a draft.
 - `list.rs`: The bots as the page sees them, read from the effective factory table, and how one is found.
 - `migrate.rs`: At start: every bot's folder, and the bots that used to live in kv moved to config.toml once.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
@@ -881,12 +889,22 @@ Files:
 ## `teach/`
 
 Teaching a bot a task (docs/BOTS.md, part 5). The owner does the task once in their own Edge with Tirith's
-extension, `tools/teach/` (Manifest V3, installed with «Load unpacked»; its README says how in two steps): pages (URL
+extension, `tools/teach/` (Manifest V3; the tab «Enseñar» downloads it from `/teach-extension.zip`, which the daemon serves from what it
+carries, so it works on a headless server reached through an SSH tunnel; installed with «Load unpacked», its README says how): pages (URL
 and title), clicks (the element's text, role and a short selector) and typing (the field's label and value), each
-with its time. Passwords, one-time codes and cards are masked as `•••` (`type=password`, `autocomplete`
-`one-time-code` or `cc-*`, fields whose name or label looks like card, cvv, cvc, otp, pin, tarjeta or código, and
-any step marked `sensitive`), first by the extension and again by the daemon; a recording stops by itself after 10
-minutes. The recording lives in kv `teach:<bot>` (`on`, `since`, `steps`), the bot's token in `teach-token:<bot>`.
+with its time. Passwords, one-time codes and cards are masked as `•••`, first by the extension and again by the daemon, by whole words
+(`names.rs`, `tools/teach/words.js`): `type=password` (also a field the page showed as text since), `autocomplete` `one-time-code`, `cc-*` or
+holding `password`, a name, id or label with a word such as pwd, pass, passwd, passcode, password, contraseña, clave, secret, token, otp, pin,
+cvv, tarjeta, card, código, or «verification code» / «security code» (not «passenger», not «company»), and any step marked `sensitive`. The
+secret parts of a recorded address are masked too (`url.rs`: the password of `user:password@`, and the value of a query or fragment parameter
+named code, token, key, password, sig, session and the like; ordinary ones stay), and what is typed in a contenteditable is never a click's
+text. Both sides pass the same table, `rust/tirith/checks/teach_table.json` (`scripts/checks/teach-words.test.mjs` runs it on the extension's
+words). A recording stops by itself after 10 minutes, also across a restart of the daemon (`teach::start` stops and hands over, once, a
+recording that ran out meanwhile, and arms the one still running). The recording lives in kv `teach:<bot>` (`on`, `since`, `steps`), the bot's
+token in `teach-token:<bot>`. The browser's clock may differ from the daemon's by minutes or hours: the daemon tells the extension how long is
+left (`left_ms`, in the recording, the start and the polls) instead of when it ends, and each step carries `at` and `sent` (the extension's two
+times), from which the daemon rebuilds the step's time on its own clock (`clock.rs`), so the 10 minutes and the order of steps and of the owner's
+words hold.
 
 - `GET /api/teach/<id>`: the recording; to the page also the token (the bot's tab «Enseñar» shows the link
   `<daemon>/api/teach/<id>#<token>`, pasted once in the extension), never to the extension.
@@ -898,9 +916,12 @@ The same-origin guard lets the extension's origin (`chrome-extension://bogleilob
 the `key` in its manifest) reach `/api/teach/` only, and CORS answers that origin only (preflight included). While a
 recording is on, what the owner writes in the bot's chat (`manager::say`) is kept with the steps, by time, and starts
 no turn. At stop the bot is handed, in one turn (trigger `teach`), the steps with the owner's words under the step
-they follow and the skill template (`factory/skill.md`): it writes the skill with `draft: true` in its header and
-asks 3 to 5 questions in its chat (decision rules, failures, approvals). No bot uses a draft until the owner
-activates it in the Library (factory/prompts/bot.md says so; «Activate» takes the line out).
+they follow (all between two unguessable marks, said to be data from outside, each page's words on one line: `steps.rs`) and the skill template
+(`factory/skill.md`): it writes the skill with `draft: true` in its header as `drafts/<name>/SKILL.md` and asks 3 to 5 questions in its chat
+(decision rules, failures, approvals). A draft is kept outside every folder an agent loads by itself (`bots/drafts.rs`): one found in
+`.agents/skills` is moved to `drafts/` at the start of every turn, at its end and when the Library is read; the Library lists drafts (marked)
+and «Activate» moves one into the skills, without the line. No bot uses a draft until the owner approves it on the tab «Enseñar» or
+activates it in the Library (factory/prompts/bot.md says so).
 
 **Rehearsal.** The bot then rehearses the draft in the owner's Edge through the same extension, in a tab of its own
 (factory/prompts/bot.md: it follows the draft's steps and stops before any step its skill lists under «Qué requiere
@@ -921,31 +942,44 @@ judge a `tirith teach do` step like any other action). From its session (`TIRITH
   rehearsal's tab, and `act.js` clicks (a selector, else the shown element with that text) or types (a selector, else
   the field with that label, placeholder or name) there, under the visible notice «Tirith está ensayando» until the
   rehearsal ends.
+- A click is refused by code before it reaches the extension (`outward.rs`, in `run.rs`) when its target's words send, buy, pay, delete or publish
+  (English and Spanish, as `tools/teach/outward.js` reads them) or name what the skill lists under «Qué requiere aprobación»; the extension
+  refuses the same by the element it found (its text, aria-label, title or value). The result starts «Refused:» and tells the bot to stop there
+  with `tirith teach stop`; the refused step is kept with `ok` false.
 - The calls that start, stop or send steps, and the screenshots (`GET /api/teach/<id>/shot/<file>`), are refused to
   the extension's origin (403). Rehearsals live in kv `rehearse:<bot>` (the last 5: `skill`, `since`, `on`, `steps`
   with `n`, `kind`, `target`, `value` (a secret field's masked), `ok`, `result`, `shot`), and `GET /api/teach/<id>`
   gives them as `rehearsals`.
 
 The tab «Enseñar» shows each rehearsal with its screenshots in order and two buttons: «Aprobar» →
-`POST /api/teach/<id>/approve` `{skill}` takes `draft: true` out of the skill's header (400 when it is no draft), so
-the bot uses it from then on, and says so in its chat; «Crear rutina» opens the routine form with the task written.
+`POST /api/teach/<id>/approve` `{skill}` moves the draft into the skills without `draft: true` (400 when it is no draft, or when no finished
+rehearsal of that skill had a step that worked), so the bot uses it from then on, and says so in its chat; it is the owner's: a call that carries
+an agent's identity (`x-tirith-role` or `x-tirith-lane`, which `tirith` run from a session sends) gets 403; «Crear rutina» opens the routine
+form with the task written.
 
 Files:
 
-- `api.rs`: The teach API: the recording read, started and stopped (by the page, or by the extension with the token), and the extension's steps.
+- `api.rs`: The teach API: the recording read, started and stopped (by the page, or by the extension with the token).
+- `approvals.rs`: What the skill lists under «Qué requiere aprobación»: the click a rehearsal must stop at because the skill names it.
 - `approve.rs`: «Aprobar» on the tab «Enseñar»: the draft rehearsed loses `draft: true` from its header, so from then on the bot uses it.
+- `clock.rs`: A step's time rebuilt on the daemon's clock from the extension's `at` and `sent`.
 - `cli.rs`: `tirith teach rehearse|do|stop`: a bot rehearses a draft in the owner's Edge, from its session (`TIRITH_PROJECT` is its conversation).
 - `cors.rs`: Who may call the teach API: the page (same origin) and Tirith's extension with the bot's token. CORS answers only the extension's origin.
+- `events.rs`: The extension's steps: one, or `{"steps": [...]}`, kept only while recording, masked again and timed on the daemon's clock.
 - `ext_api.rs`: The extension's side of a rehearsal, with the bot's token: the long poll for the next step, and its answer with a result and a screenshot.
 - `hand.rs`: The owner's words while recording, and the turn at stop: the steps with those words, the skill template, what to ask.
-- `mask.rs`: A recorded step as it is kept: its known fields only, cut short, and a secret's value masked.
+- `mask.rs`: A recorded step as it is kept: its known fields only, cut short, a secret's value and an address's secrets masked.
+- `names.rs`: Whole words that name a password, a code or a card in a field, label or parameter.
+- `outward.rs`: What a rehearsal never does by itself: a click whose words send, buy, pay, delete or publish (English and Spanish).
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `record.rs`: A recording started and stopped: by the page, the extension, or its 10 minutes running out; at stop the bot is handed it.
 - `rehearsal.rs`: A bot's rehearsals in kv (`rehearse:<bot>`): their skill, start, state and steps with result and screenshot.
 - `rehearse_api.rs`: The rehearsal API: the bot starts, stops and sends steps; the extension asks for the next one and answers it.
 - `relay.rs`: The relay between `tirith teach do` and the extension: one command at a time per bot, its answer handed back.
 - `run.rs`: One rehearsal step: checked, handed to the extension through the relay, and kept with its result and screenshot.
+- `url.rs`: A recorded address with its secrets masked (user:password@, secret query and fragment parameters).
 - `shots.rs`: A rehearsal's screenshots: kept as files in the bot's folder (`rehearsals/`), where the bot can look at them, and served to the page.
+- `steps.rs`: The recorded steps as the bot reads them: one line each, between two marks, as data from outside.
 - `state.rs`: A bot's recording in kv (`teach:<bot>`: on, since, steps, the owner's words) and its token (`teach-token:<bot>`).
 
 ## `turns/`

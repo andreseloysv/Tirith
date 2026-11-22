@@ -25,6 +25,14 @@ pub(super) fn has_token(h: &HeaderMap, token: &str) -> bool {
             .fold(0u8, |d, (a, b)| d | (a ^ b))
             == 0
 }
+/// Whether the call carries an agent's identity: a lane's or a role's (what `tirith` run from an agent's session sends). Only the owner, from the page, carries none.
+pub fn agent_call(h: &HeaderMap) -> bool {
+    ["x-tirith-lane", "x-tirith-role"].iter().any(|k| {
+        h.get(*k)
+            .and_then(|v| v.to_str().ok())
+            .is_some_and(|v| !v.is_empty() && !v.starts_with('$'))
+    })
+}
 /// 401 for a call without the token.
 pub(super) fn refused() -> Response {
     (StatusCode::UNAUTHORIZED, "no token, or not this bot's").into_response()

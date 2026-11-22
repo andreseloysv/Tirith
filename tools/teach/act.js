@@ -1,6 +1,6 @@
 // In every page: a rehearsal's click or typing, asked by the worker (rehearse.js), found by its selector or its text
 // or label; and, on the rehearsal's tab, the visible notice «Tirith está ensayando» until the rehearsal ends.
-/* global teachLabel, textOf */
+/* global teachLabel, textOf, teachOutward */
 var BANNER = 'tirith-rehearsal';
 
 function norm(t) { return String(t || '').replace(/\s+/g, ' ').trim().toLowerCase(); }
@@ -22,6 +22,8 @@ var FIELDS = 'input:not([type=hidden]):not([type=submit]):not([type=button]), te
 function click(cmd) {
   var el = bySelector(cmd.target) || byWords(cmd.target, CLICKABLE, function (e) { return [textOf(e)]; });
   if (!el) return { ok: false, result: 'nothing to click called «' + cmd.target + '» on «' + document.title + '»' };
+  var sends = teachOutward([el.innerText, el.getAttribute('aria-label'), el.getAttribute('title'), el.value, el.getAttribute('alt')]);
+  if (sends) return { ok: false, refused: true, result: 'the control «' + String(sends).replace(/\s+/g, ' ').trim().slice(0, 80) + '» sends, buys, pays, deletes or publishes' };
   el.scrollIntoView({ block: 'center' });
   el.click();
   return { ok: true, result: 'clicked «' + (textOf(el) || cmd.target) + '» on «' + document.title + '»' };

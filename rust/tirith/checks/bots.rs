@@ -550,6 +550,7 @@ async fn shared_memory_comes_first() {
         &app,
         bot["id"].as_str().unwrap(),
         &json!({"memory": true, "shared": true, "text": "- language: es\n"}),
+        false,
     )
     .unwrap();
     assert_eq!(

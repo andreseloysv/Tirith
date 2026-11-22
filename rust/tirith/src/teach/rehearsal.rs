@@ -11,6 +11,15 @@ pub(super) fn all(app: &App, key: &str) -> Vec<Value> {
         .and_then(|v| serde_json::from_str(&v).ok())
         .unwrap_or_default()
 }
+/// The rehearsals as the page reads them: each with whether it is `live` and how long it has left, on the daemon's clock.
+pub(super) fn shown(app: &App, key: &str) -> Vec<Value> {
+    let mut list = all(app, key);
+    list.iter_mut().for_each(|r| {
+        r["live"] = json!(live(r));
+        r["left_ms"] = json!(until_s(r).saturating_sub(now_s()) * 1000);
+    });
+    list
+}
 /// Changes the rehearsals under one lock, and says what `f` returned.
 pub(super) fn change<T>(app: &App, key: &str, f: impl FnOnce(&mut Vec<Value>) -> T) -> T {
     let _held = WRITING.lock().unwrap_or_else(|e| e.into_inner());

@@ -49,11 +49,11 @@ function shot(st) {
 
 function run(cmd) {
   return rehearsal().then(function (st) {
-    st.until = cmd.until;
+    st.until = Date.now() + (cmd.left_ms || 0); // the daemon says how long is left: this machine's clock may differ
     var did = cmd.kind === 'open' ? open(st, cmd.target) : act(st, cmd);
     return did.then(function (r) {
       if (st.tab) chrome.tabs.sendMessage(st.tab, { banner: st.until }).catch(function () {});
-      return shot(st).then(function (s) { return { id: cmd.id, ok: !!r.ok, result: r.result, shot: s }; });
+      return shot(st).then(function (s) { return { id: cmd.id, ok: !!r.ok, refused: !!r.refused, result: r.result, shot: s }; });
     });
   });
 }
@@ -73,7 +73,7 @@ function rehearseLoop() {
     return call('GET', '/next').then(function (r) {
       if (!r.on) return over();
       return chrome.storage.local.get('rehearse').then(function (g) { // an extension call: keeps the worker awake
-        return chrome.storage.local.set({ rehearse: Object.assign(g.rehearse || {}, { until: r.until }) });
+        return chrome.storage.local.set({ rehearse: Object.assign(g.rehearse || {}, { until: Date.now() + (r.left_ms || 0) }) });
       }).then(function () {
         if (r.cmd) return run(r.cmd).then(function (answer) { return call('POST', '/done', answer); }).then(turn);
         return turn();
