@@ -52,7 +52,7 @@ async fn lib(
     Path(id): Path<String>,
     Json(b): Json<Value>,
 ) -> R {
-    reply(learn(&app, &id, &b, crate::teach::agent_call(&h)))
+    reply(learn(&app, &id, &b, crate::server::agent(&h)))
 }
 pub fn routes() -> Router<Shared> {
     Router::new()

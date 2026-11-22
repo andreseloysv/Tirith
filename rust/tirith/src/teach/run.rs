@@ -67,7 +67,11 @@ pub(super) async fn step(
     until_ms: u64,
 ) -> Result<Value, (StatusCode, String)> {
     let cmd = command(b, until_ms).map_err(|e| (StatusCode::BAD_REQUEST, e))?;
-    if let Some(why) = why(app, key, &cmd) {
+    let own =
+        cmd["kind"] == "open" && super::own_page::own_page(&s(&cmd, "target"), app.cfg().port);
+    let own =
+        own.then(|| "that is Tirith's own page, where a click is the owner's yes".to_string());
+    if let Some(why) = own.or_else(|| why(app, key, &cmd)) {
         return Ok(refused(app, key, &cmd, &why));
     }
     let got = relay::ask(key, cmd.clone(), Duration::from_secs(RELAY_S))

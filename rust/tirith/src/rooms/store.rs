@@ -18,7 +18,9 @@ pub(super) fn store(app: &Shared, r: &Room) {
         "INSERT OR REPLACE INTO am_rooms (id, data) VALUES (?1, ?2)",
         [&r.id, &data],
     );
-    app.emit("room", view(app, r));
+    let mut seen = view(app, r);
+    seen["invite"] = serde_json::Value::Null; // every stream hears it: the page asks for the pairing code itself
+    app.emit("room", seen);
 }
 pub(super) fn save(app: &Shared, r: &Room) {
     ROOMS.lock().unwrap().insert(r.id.clone(), r.clone());

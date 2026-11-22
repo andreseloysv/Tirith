@@ -385,8 +385,8 @@ replay's pairs all run and judged, or `max_days` after its start (the scheduler'
 way, B is adopted; one whose days ran out with fewer than min(5, `inputs`) comparisons proves nothing and is discarded,
 saying so (`due.rs`). B is adopted when it is not worse (wins and ties at least `not_worse_share` of the comparisons, and
 wins at least as many as it loses), has no new failure (a B run failed where its A did not) and no 👎, and saves at
-least `min_saving` of A's mean tokens, dollars or time (time, which one slow answer moves, only when most pairs saved
-that much one by one: `saved.rs`). Adopted, the bot's folder is committed and the branch is merged
+least `min_saving` of A's mean tokens, dollars or time (each only when most pairs, one by one, saved
+that much too: `saved.rs`). Adopted, the bot's folder is committed and the branch is merged
 into its main (the live folder is that checkout, so the next run uses it: a changed skill is read again, in a session of its own, `bots/handed.rs`; where main moved on the same lines, B's
 tested text wins, but a note main added to `memory.md` meanwhile that the merge lost is written back as a new note,
 `adopt.rs`; a merge that still fails discards it instead); in both
@@ -420,7 +420,7 @@ Files:
 - `replay.rs`: Replay mode: the task-local that marks a replay's turn, the proxy's closed caller, and the pairs run one after another.
 - `replay_side.rs`: One side of a replayed run: its throwaway worktree, its turn on the capture's start, its row's experiment and variant.
 - `replay_warm.rs`: A replay's uncounted first turn, so the side that runs first pays no cold cache for both.
-- `saved.rs`: What B saves against A, and which saving counts (time: only saved in most pairs too).
+- `saved.rs`: What B saves against A, and which saving counts (each measure: only saved in most pairs too).
 - `rule.rs`: The `[lab]` rule applied to A's and B's numbers and the comparisons, and the one line that says the decision.
 - `outward.rs`: Which shell calls of a shadow run act outward: `tirith` commands that are not plain reads, and commands that send, buy, delete or publish; a replay refuses them too.
 - `outward_browser.rs`: Which browser and MCP calls of a shadow run act outward: a click on «Send» or «Comprar», a submit, a form, an upload, code in the page; an MCP tool that does not say it reads.
@@ -504,6 +504,7 @@ Files:
 - `answer.rs`: The owner's answer to an open card or to a waiting lane.
 - `ask.rs`: `tirith ask-owner`: a new card for the owner.
 - `blocks.rs`: An assistant message of a stream-json session: its text and its tool calls, in the chat and on the phones.
+- `relayed.rs`: An agent's answer of a card; an approval takes the owner's own words written after it was asked, and is kept in those words.
 - `cards.rs`: A card's end: its final state (an answered or closed approval ends the wait of the turns that waited for it), the line that says so, and closing one that is no longer needed.
 - `compose.rs`: The message a conversation is handed: the memory, the waiting reports and the words of the owner, a room, an event or a routine, with what starts its turn.
 - `deliver.rs`: Handing a conversation its messages: to its live session, or waiting for the session that starts for them; with nothing to say, the next routine's run when the conversation is free.
@@ -861,12 +862,15 @@ Files:
 - `cli/list.rs`: `tirith net list`: the destinations seen, then the rules blocking.
 - `cli/mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `cli/status.rs`: `tirith net status`.
+- `caller.rs`: Whether a connection to the daemon comes from inside the sandbox, as the kernel tells it.
 - `confine.rs`: How this system confines (macOS's profile, Linux's namespace), and the launcher's way in from the command line.
 - `env.rs`: The environment of a sandboxed process: the proxy for every tool that reads one, ssh through the proxy and the tool wrappers first on PATH.
 - `jvm.rs`: Gradle and the JVM ignore HTTPS_PROXY; the JDK refuses Basic proxy auth on tunnels unless re-enabled.
 - `launch.rs`: What a process Tirith starts runs as: the program, its arguments and the environment the sandbox adds.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `owner.rs`: Who a sandboxed process belongs to.
+- `mac/mod.rs`: macOS: whether a process runs under Tirith's own profile (a browser's sandbox is told apart).
+- `mac/socket.rs`: macOS: which processes of this user hold a loopback connection (libproc).
 - `profile.rs`: The sandbox profile, the proxy's port and whether processes run inside the sandbox.
 - `replay.rs`: Whether a replay's turn can run with the network closed: the sandbox must be in force for the processes Tirith starts.
 - `routes.rs`: The sandbox's HTTP routes: its status, the block list, the destinations seen and Safari.
@@ -899,6 +903,7 @@ Files:
 - `child.rs`: The confined side: into its own network, its ports handed out, then the program.
 - `handover.rs`: The listeners handed to the launcher over a Unix socket.
 - `mod.rs`: Declares the folder's files, and the launcher's command line.
+- `source.rs`: The address the relay calls from (127.0.0.2), by which the daemon knows a confined caller.
 - `namespace.rs`: The namespaces entered: the same user, a loopback that is up.
 - `ready.rs`: Whether this Linux lets Tirith confine, by trying it, and what to do when it does not.
 - `relay.rs`: A forwarded port's connections copied to the machine's loopback.
@@ -921,12 +926,20 @@ Files:
 - `record.rs`: Counting each connection and refusal, and an event for each new one.
 - `request.rs`: A request's head: the first line, the headers and where it goes.
 - `serve.rs`: Listening for the proxy's callers.
-- `upstream.rs`: Reaching the destination: refused if blocked by name or by any of its addresses, and to a replay unless it is its agent's model.
+- `upstream.rs`: Reaching the destination: refused if blocked by name or by any of its addresses, and to a replay unless it is its agent's model; never the daemon's own port (there the sandbox is known).
 - `quiet.rs`: `tirith quiet`: an agent given private values starts through it, and they are hidden in all it writes.
 
 ## `server/`
 
 HTTP on 127.0.0.1: the page (`web/`), its JSON API, the change stream (SSE) and the agents' hooks, behind one same-origin guard. Each module brings its own routes; `server/routes/` holds the daemon's own.
+
+The owner's yes never comes from an agent (`caller.rs`). An agent is one by the lane or role it names, and a caller
+inside the sandbox is one whatever it sends: Linux's relay calls from 127.0.0.2, and on macOS the holder of the
+socket is looked up and its profile read (a caller nobody of this user holds is not the owner either). An agent's
+`tirith answer` of an approval card needs the owner's own words, written after it was asked, and keeps those; its
+words in a chat are never the owner's; it gets neither the teach extension's token nor a phone's pairing code, and
+it neither approves a draft nor gives a 👍. The limit: a program of the same user that reads Tirith's files, or
+drives the owner's own browser, is not stopped by this; another user account is the boundary for that.
 
 Files:
 
@@ -939,6 +952,7 @@ Files:
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `door.rs`: The daemon's door: loopback only, and on Linux only for this Tirith's own user, root and `[server] users`.
 - `origin.rs`: The same-origin guard in front of every route.
+- `caller.rs`: Who calls, the owner or an agent (a name it sends, or the sandbox it runs in), and what an agent may not do: the owner's yes, pairing a phone, the owner's 👍.
 - `peer.rs`: Who is at the other end of a loopback connection, from the kernel's table of sockets (Linux).
 - `plan.rs`: A project's plan as the page shows it (each item with its newest lane), and the step a command adds to it.
 - `router.rs`: The whole router: every module's routes, the daemon's own, the page and the same-origin guard.
@@ -1096,6 +1110,7 @@ form with the task written.
 Files:
 
 - `api.rs`: The teach API: the recording read, started and stopped (by the page, or by the extension with the token).
+- `own_page.rs`: Tirith's own page is no step of a rehearsal.
 - `approvals.rs`: What the skill lists under «Qué requiere aprobación»: the click a rehearsal must stop at because the skill names it.
 - `approve.rs`: «Aprobar» on the tab «Enseñar»: the draft rehearsed loses `draft: true` from its header, so from then on the bot uses it.
 - `clock.rs`: A step's time rebuilt on the daemon's clock from the extension's `at` and `sent`.

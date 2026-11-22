@@ -1,5 +1,5 @@
 //! The whole router: every module's routes, the daemon's own, the page and the same-origin guard.
-use super::{origin, routes, web::web_file};
+use super::{caller, origin, routes, web::web_file};
 use crate::app::Shared;
 use crate::{
     attach, bots, chat, guard, lab, metrics, models, numbers, projects, rooms, sandbox, setup,
@@ -36,6 +36,7 @@ pub fn router(app: Shared, port: u16) -> Router {
         .chain(own)
         .fold(Router::new(), Router::merge)
         .fallback(web_file)
+        .layer(middleware::from_fn(caller::mark))
         .layer(middleware::from_fn(origin::same_origin))
         .with_state(app)
 }

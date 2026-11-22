@@ -11,6 +11,7 @@ mod hand;
 mod mask;
 mod names;
 mod outward;
+mod own_page;
 mod record;
 mod rehearsal;
 mod rehearse_api;
@@ -22,7 +23,7 @@ mod steps;
 mod url;
 pub use api::routes;
 pub use cli::cli;
-pub use cors::{agent_call, ORIGIN};
+pub use cors::ORIGIN;
 pub use hand::heard;
 pub use record::start;
 #[cfg(test)]

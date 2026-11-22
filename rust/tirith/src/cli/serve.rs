@@ -25,9 +25,9 @@ pub(super) fn serve() -> Result<(), String> {
             app.home.display()
         );
         let door = server::door(listener, app.clone());
-        axum::serve(door, server::router(app, port))
-            .await
-            .map_err(|e| e.to_string())
+        let page =
+            server::router(app, port).into_make_service_with_connect_info::<server::Caller>();
+        axum::serve(door, page).await.map_err(|e| e.to_string())
     })
 }
 

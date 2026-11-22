@@ -9,7 +9,7 @@ use axum::response::Response;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde_json::json;
-/// The bot's conversation, if `id` is a bot and the caller may act for it: the page, or the extension with its token (`always`: the token is needed from anyone).
+/// The bot's conversation, if `id` is a bot and the caller may act for it: the page, or the extension with its token (`always`: the token is needed from anyone, and an agent is never the extension).
 pub(super) fn key(
     app: &Shared,
     h: &HeaderMap,
@@ -19,7 +19,8 @@ pub(super) fn key(
     let key = crate::bots::key_for(app, id)
         .ok_or_else(|| allow(h, (StatusCode::NOT_FOUND, format!("no bot '{id}'"))))?;
     let needs = always || from_extension(h);
-    (!needs || has_token(h, &token(app, &key)))
+    let posing = always && crate::server::agent(h);
+    (!posing && (!needs || has_token(h, &token(app, &key))))
         .then_some(key)
         .ok_or_else(|| Box::new(allow(h, refused())))
 }
@@ -36,7 +37,8 @@ async fn show(State(app): State<Shared>, h: HeaderMap, Path(id): Path<String>) -
     rec["on"] = json!(live(&rec));
     rec["left_ms"] = json!(left_ms(&rec));
     rec["rehearsals"] = json!(super::rehearsal::shown(&app, &key));
-    let _ = (!from_extension(&h)).then(|| rec["token"] = json!(token(&app, &key)));
+    let page = !from_extension(&h) && !crate::server::agent(&h); // the token makes its holder the extension
+    let _ = page.then(|| rec["token"] = json!(token(&app, &key)));
     allow(&h, Json(rec))
 }
 async fn start(State(app): State<Shared>, h: HeaderMap, Path(id): Path<String>) -> Response {

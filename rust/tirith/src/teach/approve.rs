@@ -1,10 +1,9 @@
 //! «Aprobar» on the tab «Enseñar»: the owner's, for a draft the bot rehearsed (a finished rehearsal with a step that worked): it moves from the drafts folder to the skills, without `draft: true`, so from then on the bot uses it.
-use super::cors::agent_call;
 use super::rehearsal;
 use super::rehearse_api::own;
 use crate::app::Shared;
 use crate::bots::{activated, is_draft};
-use crate::server::s;
+use crate::server::{agent, s};
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
@@ -74,7 +73,7 @@ pub(super) async fn approve(
     Json(b): Json<Value>,
 ) -> Response {
     let key = match own(&app, &h, &id) {
-        Ok(_) if agent_call(&h) => {
+        Ok(_) if agent(&h) => {
             let e =
                 "approving is the owner's: it comes from the tab «Enseñar», never from an agent";
             return (StatusCode::FORBIDDEN, Json(json!({"error": e}))).into_response();

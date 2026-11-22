@@ -8,6 +8,8 @@ mod record;
 mod request;
 mod serve;
 mod upstream;
+#[cfg(test)]
+pub(super) use upstream::own_door;
 
 pub use dests::{destinations, seed};
 pub use serve::{serve, state};

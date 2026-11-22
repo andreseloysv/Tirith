@@ -6,10 +6,12 @@ mod namespace;
 mod ready;
 mod relay;
 mod run;
+mod source;
 mod supervise;
 
 pub(super) use allow::allow;
 pub(super) use ready::ready;
+pub(super) use source::FROM;
 
 /// The running binary itself, also when a newer one took its place on disk.
 const SELF: &str = "/proc/self/exe";

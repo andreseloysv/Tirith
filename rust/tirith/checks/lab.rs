@@ -731,3 +731,25 @@ fn the_same_answer_is_a_tie_without_the_judge() {
     drop(app);
     let _ = std::fs::remove_dir_all(&home);
 }
+
+#[test]
+fn one_dear_run_is_no_saving_in_tokens_or_dollars() {
+    let lab = crate::factory::current().lab.clone();
+    let side = |tokens: f64| super::Side {
+        runs: 2,
+        tokens,
+        cost: None,
+        ms: 1000.0,
+    };
+    // Seen with a real agent: one run of A read a skill too, and a harmless note was adopted.
+    let tally = |pair_tokens: Vec<f64>| super::Tally {
+        ties: 5,
+        pair_tokens,
+        ..Default::default()
+    };
+    let (a, b) = (side(93_000.0), side(74_000.0));
+    let one = super::rule::decide(&lab, &tally(vec![0.0, 0.34]), &a, &b, "x v");
+    assert!(!one.0 && one.1.contains("solo en alg"), "{}", one.1);
+    let most = super::rule::decide(&lab, &tally(vec![0.2, 0.34, 0.01, 0.3, 0.2]), &a, &b, "x v");
+    assert!(most.0, "{}", most.1);
+}

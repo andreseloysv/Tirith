@@ -62,6 +62,9 @@ tirith service status | restart | logs | uninstall
 - **The page.** It never listens on the network. From your computer:
   `ssh -N -L 7717:127.0.0.1:7717 <you>@<server>`, then `http://127.0.0.1:7717/`. The port is the same at both
   ends: if your computer runs a Tirith of its own, install the server with `--port 7801` and use that one.
+- **Who says yes.** An approval is yours, from the page, your phone or your own terminal: a call from inside an
+  agent's sandbox is known as the agent's. An agent is not walled off from Tirith's files, which are the same
+  user's, and a bot that drives your own browser could click for you.
 - **Who may use it.** On Linux only Tirith's user, root and `[server] users` (who installed it with sudo is
   added) reach the daemon. On macOS any user of that Mac could: do not install it on a Mac you share.
 - **Updating.** Run the installer again. Lanes at work go on across the restart, and uninstalling the service

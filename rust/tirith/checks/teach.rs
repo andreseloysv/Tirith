@@ -287,3 +287,28 @@ async fn teach_hands_the_steps() {
         )
         .is_empty());
 }
+
+#[test]
+fn a_rehearsal_never_opens_tiriths_own_page() {
+    let own = |url: &str| super::own_page::own_page(url, 7717);
+    for url in [
+        "http://127.0.0.1:7717/",
+        "HTTP://LOCALHOST:7717/#bots",
+        "127.0.0.1:7717/api",
+        "http://user@127.1:7717/",
+        "http://2130706433:7717/",
+        "http://0x7f.0.0.1:7717/",
+        "http://localhost.:7717/",
+        "http://[::1]:7717/",
+        "http:\\\\127.0.0.1:7717\\",
+    ] {
+        assert!(own(url), "{url}");
+    }
+    for url in [
+        "http://127.0.0.1:7718/",
+        "https://mail.example:7717/",
+        "https://example.com/127.0.0.1:7717",
+    ] {
+        assert!(!own(url), "{url}");
+    }
+}

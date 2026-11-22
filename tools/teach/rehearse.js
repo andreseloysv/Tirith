@@ -1,7 +1,7 @@
 // The rehearsal, in the worker: while the bot rehearses a draft, ask the daemon for its next step (a long poll with the
 // bot's token), do it in the rehearsal's own tab (open a page, or let act.js click or type there), and answer with the
 // result and a screenshot of the tab (chrome.tabs.captureVisibleTab). It ends with the rehearsal, at 10 minutes at most.
-/* global call */
+/* global call, link */
 /* exported rehearseLoop, rehearsing */
 var looping = false;
 
@@ -29,10 +29,15 @@ function open(st, url) {
   });
 }
 
-/** A click or a value typed, done by act.js in the tab; then the page a click may have opened gets time to load. */
+/** A click or a value typed, done by act.js in the tab, never on Tirith's own page; then the page a click may have opened gets time to load. */
 function act(st, cmd) {
   if (!st.tab) return Promise.resolve({ ok: false, result: 'no page is open in the rehearsal yet: open one first' });
-  return chrome.tabs.sendMessage(st.tab, { rehearse: cmd })
+  return Promise.all([chrome.tabs.get(st.tab), link()]).then(function (got) {
+    var at = new URL(got[0].url || 'about:blank');
+    var own = at.port === new URL(got[1].base).port && /^(localhost\.?|127\..*|\[.*\])$/.test(at.hostname);
+    if (own) return { ok: false, refused: true, result: 'that is Tirith\'s own page, where a click is the owner\'s yes' };
+    return chrome.tabs.sendMessage(st.tab, { rehearse: cmd });
+  })
     .catch(function () { return { ok: false, result: 'the rehearsal\'s tab is closed or still loading' }; })
     .then(function (r) {
       return pause(800).then(function () { return loaded(function () { return chrome.tabs.get(st.tab); }); })

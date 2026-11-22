@@ -27,7 +27,14 @@ pub async fn upstream(
             }
         },
     };
-    if let Some(rule) = addrs.iter().find_map(|a| blocked(&a.ip().to_string())) {
+    let own = app.cfg().port;
+    let rule = addrs.iter().find_map(|a| blocked(&a.ip().to_string()));
+    let door = || {
+        own_door(&addrs, own).then(|| {
+            "Tirith's own port (the sandbox reaches it directly, and is known there)".to_string()
+        })
+    };
+    if let Some(rule) = rule.or_else(door) {
         return refuse(app, c, who, host, port, &rule).await.map(|_| None);
     }
     record(app, who, host, port, None);
@@ -54,4 +61,12 @@ async fn connect(
             ),
         };
     answer(c, status, "", &body).await.map(|_| None)
+}
+
+/// Through the proxy a confined caller would look like the owner: the daemon's port on this machine is no destination.
+pub(in crate::sandbox) fn own_door(addrs: &[SocketAddr], port: u16) -> bool {
+    addrs.iter().any(|a| {
+        let ip = a.ip().to_canonical();
+        a.port() == port && (ip.is_loopback() || ip.is_unspecified())
+    })
 }

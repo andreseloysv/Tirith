@@ -65,6 +65,11 @@ fn summary(r: &Room) -> String {
         })
         .unwrap_or_default()
 }
+/// The view `v` for the caller of `h`: whoever holds the one-use pairing code becomes the owner, so no agent is shown it.
+pub(super) fn seen(h: &axum::http::HeaderMap, mut v: Value) -> Value {
+    let _ = crate::server::agent(h).then(|| v["invite"] = Value::Null);
+    v
+}
 pub(super) fn view(app: &Shared, r: &Room) -> Value {
     let base = base(app);
     let (needs, people, summary) = (needs_owner(app, r), participants(r), summary(r));

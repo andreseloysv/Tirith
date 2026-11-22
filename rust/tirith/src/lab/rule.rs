@@ -15,8 +15,10 @@ pub struct Side {
 /// B's comparisons with A (won, tied, lost), the runs where B failed and A did not, B's 👎 and the replay pairs that proved nothing (`voids`: counted in none of the others).
 #[derive(Serialize, Default, Clone)]
 pub struct Tally {
-    /// What each pair saved in time, by itself.
+    /// What each pair saved by itself: in time, in tokens, in dollars.
     pub pair_times: Vec<f64>,
+    pub pair_tokens: Vec<f64>,
+    pub pair_costs: Vec<f64>,
     pub wins: i64,
     pub ties: i64,
     pub losses: i64,
@@ -25,7 +27,7 @@ pub struct Tally {
     pub voids: i64,
 }
 
-/// The rule: B is adopted when it is no worse (wins and ties at least `not_worse_share` of the comparisons, and wins at least as many as it loses), has no new failure and no 👎, and saves at least `min_saving` of A's mean cost (tokens or $) or time (`saved.rs`: time in most pairs too). Whether it is, and the line that says so for `name` (the routine and the branch).
+/// The rule: B is adopted when it is no worse (wins and ties at least `not_worse_share` of the comparisons, and wins at least as many as it loses), has no new failure and no 👎, and saves at least `min_saving` of A's mean cost (tokens or $) or time (`saved.rs`: in most pairs too). Whether it is, and the line that says so for `name` (the routine and the branch).
 pub fn decide(lab: &Lab, t: &Tally, a: &Side, b: &Side, name: &str) -> (bool, String) {
     let n = t.wins + t.ties + t.losses;
     let share = (t.wins + t.ties) as f64 / n.max(1) as f64;
@@ -51,7 +53,7 @@ pub fn decide(lab: &Lab, t: &Tally, a: &Side, b: &Side, name: &str) -> (bool, St
     } else if t.down > 0 {
         format!("{} 👎", t.down)
     } else if no_worse && uneven {
-        format!("ahorra tiempo solo en algún par ({saving})")
+        format!("ahorra solo en algún par ({saving})")
     } else if no_worse && !saves {
         format!("ahorra poco ({saving})")
     } else {

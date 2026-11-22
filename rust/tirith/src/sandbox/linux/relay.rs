@@ -1,12 +1,12 @@
 //! The only ways out of a confined process: its loopback ports that reach the same port of this machine (the daemon, its proxy).
 use std::io::copy;
-use std::net::{Ipv4Addr, Shutdown, TcpListener, TcpStream};
+use std::net::{Shutdown, TcpListener, TcpStream};
 use std::thread::Builder;
 
 /// A relay's stack: it only copies.
 const STACK: usize = 256 * 1024;
 
-/// Serves `inside` (a listener in the confined network) from the launcher's network: each caller gets 127.0.0.1:`port` here.
+/// Serves `inside` (a listener in the confined network) from the launcher's network: each caller gets 127.0.0.1:`port` here, from the sandbox's own address (`source.rs`).
 pub(super) fn serve(inside: TcpListener, port: u16) {
     let work = move || {
         for caller in inside.incoming() {
@@ -25,7 +25,7 @@ pub(super) fn serve(inside: TcpListener, port: u16) {
 
 /// The bytes both ways until both sides closed.
 fn join(caller: TcpStream, port: u16) {
-    let Ok(there) = TcpStream::connect((Ipv4Addr::LOCALHOST, port)) else {
+    let Some(there) = (0..3).find_map(|_| super::source::connect(port)) else {
         return;
     };
     let _ = (caller.set_nodelay(true), there.set_nodelay(true));

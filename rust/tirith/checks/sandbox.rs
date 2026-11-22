@@ -65,3 +65,52 @@ fn safari_commands_only_for_chat_roles() {
         "no control characters in a URL"
     );
 }
+
+#[test]
+fn the_proxy_is_no_way_round_to_the_daemon() {
+    let own = |at: &str| super::proxy::own_door(&[at.parse().unwrap()], 7717);
+    for at in [
+        "127.0.0.1:7717",
+        "127.9.9.9:7717",
+        "0.0.0.0:7717",
+        "[::1]:7717",
+        "[::ffff:127.0.0.1]:7717",
+    ] {
+        assert!(own(at), "{at}");
+    }
+    assert!(!own("127.0.0.1:7718") && !own("93.184.216.34:7717"));
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn the_kernel_tells_a_confined_caller_from_the_owner() {
+    let me = std::process::id() as libc::pid_t;
+    if super::mac::ours(me) {
+        return; // the tests themselves run in Tirith's sandbox, and sandboxes do not nest
+    }
+    let mut child = std::process::Command::new(super::profile::SANDBOX_EXEC)
+        .args(["-p", PROFILE, "/bin/sleep", "5"])
+        .spawn()
+        .unwrap();
+    let pid = child.id() as libc::pid_t;
+    let seen = (0..100).any(|_| {
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        super::mac::ours(pid)
+    });
+    let _ = (child.kill(), child.wait());
+    assert!(seen, "a process under the profile");
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let to = listener.local_addr().unwrap();
+    let here = std::net::TcpStream::connect(to).unwrap();
+    let from = here.local_addr().unwrap();
+    let began = std::time::Instant::now();
+    assert!(
+        !super::confined(from, to),
+        "this test is no confined caller"
+    );
+    eprintln!("who holds a connection: {:?}", began.elapsed());
+    assert!(
+        super::confined("127.0.0.1:1".parse().unwrap(), to),
+        "a caller nobody holds is never the owner"
+    );
+}

@@ -20,15 +20,7 @@ pub(super) async fn chat(State(app): State<Shared>, headers: HeaderMap, Json(b):
     (!text.trim().is_empty())
         .then_some(())
         .ok_or_else(|| bad("empty message".into()))?;
-    let agent = ["x-tirith-lane", "x-tirith-role"]
-        .iter()
-        .find_map(|k| {
-            headers
-                .get(*k)
-                .and_then(|v| v.to_str().ok())
-                .filter(|v| !v.is_empty() && !v.starts_with('$'))
-        })
-        .unwrap_or("");
+    let agent = super::agent_name(&headers);
     manager::say(&app, &s(&b, "project"), &text, agent)
         .map(|_| Json(json!({"ok": true})))
         .map_err(bad)
