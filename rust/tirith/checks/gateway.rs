@@ -328,7 +328,7 @@ async fn mcp_gateway_scopes_tools() {
     assert_eq!(text(&out[3]), "fetched", "a remote tool ran: {:?}", out[3]);
     assert!(w.calls().contains("read_mail") && w.calls().contains("invoices"));
 
-    // The remote went out through the proxy as the bot: the proxy counted it under the bot's run.
+    // The remote went out through the proxy as the bot: the proxy counted it under the bot, never the manager role it runs on.
     let net: Vec<String> = w.app.query(
         "SELECT lane FROM events WHERE kind = 'net' AND summary = ?1",
         [format!("127.0.0.1:{}", w.web)],
@@ -336,7 +336,7 @@ async fn mcp_gateway_scopes_tools() {
     );
     assert_eq!(
         net,
-        ["manager"],
+        ["bot-mail"],
         "the proxy saw the bot's run reach the server"
     );
     let url = crate::sandbox::proxy_url(&w.app, BOT);

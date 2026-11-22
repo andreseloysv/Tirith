@@ -8,14 +8,15 @@ pub fn owner(app: &Shared, who: &str) -> (String, String) {
     (name, project)
 }
 
-/// `who` as the events name it: a role without its conversation, a replay by its experiment.
+/// `who` as the events name it: a bot's run (its gateway's remote calls too) by its bot, any other role without its conversation, a replay by its experiment.
 fn label(who: &str) -> String {
     let who = who.strip_prefix("merge:").unwrap_or(who);
     match who.strip_prefix("replay:") {
         Some(rest) => format!("replay:{}", rest.split(':').next().unwrap_or("")),
-        None => who
-            .split_once('@')
-            .map_or(who, |(role, _)| role)
-            .to_string(),
+        None => match who.split_once('@') {
+            Some((_, conv)) if conv.starts_with("bot-") => conv.to_string(),
+            Some((role, _)) => role.to_string(),
+            None => who.to_string(),
+        },
     }
 }

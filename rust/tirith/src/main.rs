@@ -1,5 +1,6 @@
 //! `tirith`: the daemon (`tirith serve`) and its thin command-line client. Every other command but the guide's (`setup`, `connect`, `doctor`, `service`) is one HTTP call to the daemon on 127.0.0.1, so it starts in milliseconds.
 
+mod access;
 mod app;
 mod attach;
 mod bots;
