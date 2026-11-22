@@ -142,3 +142,18 @@ fn a_token_is_kept_for_that_agent_alone_and_private() {
     assert!(super::auth::keep(&d, "copilot", "T", "two words").is_err());
     std::fs::remove_dir_all(&d).unwrap();
 }
+
+#[test]
+fn a_pasted_token_loses_the_terminals_key_codes() {
+    let clean = super::secret::cleaned;
+    for typed in [
+        "\x1b[Atok_A-1",
+        "\x1b[200~tok_A-1\x1b[201~",
+        "\u{feff}tok_A-1\r\n",
+        "\x1bOBtok_A-1 ",
+        "tok_A-1",
+    ] {
+        assert_eq!(clean(typed), "tok_A-1", "{typed:?}");
+    }
+    assert_eq!(clean("two words"), "two words"); // still refused as a token, not glued
+}
